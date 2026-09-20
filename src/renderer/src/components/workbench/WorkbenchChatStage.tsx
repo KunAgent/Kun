@@ -32,7 +32,7 @@ import type { PlanBuildOrchestration } from '../../plan/plan-build'
 import type { GuiPlanToolMeta } from '../../plan/plan-tool'
 import { useChatStore } from '../../store/chat-store'
 import { hasLivePendingUserInput } from '../../store/chat-store-runtime-helpers'
-import { shouldUseEmptyTaskLayout } from './workbench-chat-layout'
+import { isActiveThreadRefreshing, shouldUseEmptyTaskLayout } from './workbench-chat-layout'
 import { CircleHelp, Loader2 } from 'lucide-react'
 import type {
   GeneratedDocumentArtifact,
@@ -284,7 +284,7 @@ export function WorkbenchChatStage({
                   compact
                 />
               ) : null}
-              {threadRefreshingId === activeThreadId ? (
+              {isActiveThreadRefreshing(threadRefreshingId, activeThreadId) ? (
                 <span
                   className="inline-flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground"
                   role="status"

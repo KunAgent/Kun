@@ -142,6 +142,29 @@ describe('MessageTimelineEmptyHero — runtime status on the chat home', () => {
     expect(html).not.toContain('ds-chat-empty-hero')
     expect(html).not.toContain('data-runtime-home-status')
   })
+
+  it('keeps workspace selection and still surfaces retry when the runtime is offline', () => {
+    const html = renderEmptyHero({
+      ready: false,
+      hasWorkspace: false,
+      runtimeError: i18n.t('common:runtimePortConflict')
+    })
+
+    expect(html).toContain('Choose working directory')
+    expect(html).toContain('data-runtime-home-status')
+    expect(html).toContain('Cannot connect to the local runtime')
+    expect(html).toContain('Retry')
+    expect(html).toContain('Open Settings')
+    expect(html).not.toContain('ds-chat-empty-hero')
+  })
+
+  it('does not show runtime status on the workspace picker once the runtime is ready', () => {
+    const html = renderEmptyHero({ ready: true, hasWorkspace: false })
+
+    expect(html).toContain('Choose working directory')
+    expect(html).not.toContain('data-runtime-home-status')
+    expect(html).not.toContain('Retry')
+  })
 })
 
 describe('MessageTimelineEmptyHero — runtime status on the chat home (zh-CN)', () => {

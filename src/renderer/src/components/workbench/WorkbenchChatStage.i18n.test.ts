@@ -23,6 +23,11 @@ describe('WorkbenchChatStage refresh status i18n', () => {
     expect(source).not.toContain('sidebar:threadRefreshing')
   })
 
+  it('requires a selected thread before showing the refresh status', () => {
+    expect(source).toContain('isActiveThreadRefreshing(threadRefreshingId, activeThreadId)')
+    expect(source).not.toContain('threadRefreshingId === activeThreadId')
+  })
+
   it('keeps the trajectory Composer mounted but inert and outside pointer hit-testing', () => {
     expect(source).toContain("stack.style.setProperty('--trajectory-composer-height', '0px')")
     expect(source).toContain("'pointer-events-none invisible absolute inset-x-0 bottom-0 z-20'")

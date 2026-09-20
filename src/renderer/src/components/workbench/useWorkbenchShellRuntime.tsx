@@ -151,7 +151,6 @@ export function useWorkbenchShellRuntime(context: Context): {
     runtimeLogPath,
     runtimeError: error,
     runtimeErrorDetail,
-    activeThreadId,
     stageInsetClass,
     runtimeActionNeedsConnection: t('runtimeActionNeedsConnection'),
     t,

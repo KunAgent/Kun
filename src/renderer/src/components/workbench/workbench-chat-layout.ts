@@ -19,3 +19,11 @@ export function shouldUseEmptyTaskLayout(state: EmptyTaskLayoutState): boolean {
     && !hydratingActiveThread
     && state.hasWorkspace
 }
+
+/** True only while a real selected thread is hydrating its detail. */
+export function isActiveThreadRefreshing(
+  threadRefreshingId: string | null,
+  activeThreadId: string | null
+): boolean {
+  return Boolean(activeThreadId) && threadRefreshingId === activeThreadId
+}

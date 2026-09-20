@@ -264,6 +264,13 @@ export function MessageTimelineEmptyHero({
         >
           {t('selectWorkspace')}
         </button>
+        {!ready ? (
+          <RuntimeHomeStatus
+            runtimeError={runtimeError}
+            onRetry={onRetry}
+            onOpenSettings={onOpenSettings}
+          />
+        ) : null}
       </div>
     )
   }

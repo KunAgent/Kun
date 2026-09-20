@@ -11,6 +11,7 @@ import { modelProviderRequiresApiKey } from '@shared/app-settings-provider-core'
 import {
   useEffect
 } from 'react'
+import { subscribeModelConnectionWatch } from '../lib/model-connection-watch'
 import { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
 import {
   isSubscriptionProvider,
@@ -19,8 +20,8 @@ import {
 } from './settings-section-providers-profile'
 import {
   SharedModelConnectionConflictError,
-  parseSharedModelConnectionEvent,
-  requestSharedModelConnections
+  requestSharedModelConnections,
+  type SharedModelConnectionsSnapshot
 } from './settings-section-providers-shared-api'
 import {
   projectSharedModelConnections,
@@ -48,109 +49,94 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
   useEffect(() => {
     let disposed = false
     let hadRefreshError = false
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let revision = 0
-    const refresh = async (): Promise<void> => {
-      try {
-        const snapshot = revision === 0
-          ? await requestSharedModelConnections('/v1/model-connections')
-          : await window.kunGui.runtimeRequest(
-              `/v1/model-connections/events?since_revision=${revision}&wait_ms=25000`,
-              'GET'
-            ).then((result) => {
-              if (!result.ok) throw new Error(`Shared model connection event failed (HTTP ${result.status})`)
-              return parseSharedModelConnectionEvent(result.body)
-            })
-        if (!disposed) {
-          revision = snapshot.revision
-          setSharedConnections(snapshot)
-          setSharedConnectionsError('')
-          if (hadRefreshError) onSharedSyncRecovered?.()
-          hadRefreshError = false
-          const current = sharedProjectionInput.current
-          replaceMapContents(pendingSharedProviderDeletions.current, reconcilePendingSharedProviderDeletions(
-            snapshot,
-            pendingSharedProviderDeletions.current,
-            new Set((current.provider.providers as ModelProviderProfileV1[]).map((item) => item.id))
-          ))
-          replaceMapContents(pendingSharedProviderNames.current, reconcilePendingSharedProviderNames(
-            snapshot,
-            pendingSharedProviderNames.current
-          ))
-          replaceMapContents(pendingSharedProviderCatalogs.current, reconcilePendingSharedProviderCatalogs(
-            snapshot,
-            pendingSharedProviderCatalogs.current
-          ))
-          // Skip AppSettings writes while a catalog commit owns the queue so a
-          // stale registry snapshot cannot revert an in-flight Token Plan fetch
-          // (#1117). SharedConnections UI state above still refreshes.
-          if (hasInFlightSharedProviderCatalogMutation()) {
-            return
-          }
-          const projected = projectSharedModelConnections(
-            current.provider,
-            snapshot,
-            pendingSharedProviderDeletions.current,
-            pendingSharedProviderNames.current,
-            pendingSharedProviderCatalogs.current
-          )
-          const effectiveProjectedModel = projected.kun.model ?? current.kun.model
-          const fingerprint = sharedSettingsFingerprint({
-            providers: projected.provider.providers,
-            providerId: projected.kun.providerId,
-            model: effectiveProjectedModel,
-            proxy: projected.provider.proxy,
-            routePools: projected.provider.routePools,
-            localGateway: projected.provider.localGateway
-          })
-          sharedSyncFingerprint.current = fingerprint
-          const currentFingerprint = sharedSettingsFingerprint({
-            providers: current.provider.providers,
-            providerId: current.kun.providerId,
-            model: current.kun.model,
-            proxy: current.provider.proxy,
-            routePools: current.provider.routePools,
-            localGateway: current.provider.localGateway
-          })
-          if (fingerprint !== currentFingerprint) {
-            sharedProjectionPending.current = true
-            const committedDeletedProviderIds = new Set(
-              [...pendingSharedProviderDeletions.current]
-                .filter(([, deletion]) => deletion.committedRevision !== null)
-                .map(([providerId]) => providerId)
-            )
-            const kunPatch: KunRuntimeSettingsPatchV1 = { ...projected.kun }
-            const fallbackProvider = projected.provider.providers.find(
-              (item) => item.id === DEFAULT_MODEL_PROVIDER_ID
-            ) ?? projected.provider.providers[0]
-            Object.assign(kunPatch, modelProviderDeletionKunPatch({
-              currentKun: current.kun,
-              deletedProviderIds: committedDeletedProviderIds,
-              fallbackProvider
-            }))
-            const writePatch = modelProviderDeletionWritePatch(
-              current.form?.write?.inlineCompletion,
-              committedDeletedProviderIds
-            )
-            const settingsPatch: AppSettingsPatch = {
-              provider: projected.provider,
-              agents: { kun: kunPatch }
-            }
-            if (writePatch?.write) settingsPatch.write = writePatch.write
-            current.update(settingsPatch)
-          }
+    const applySnapshot = (snapshot: SharedModelConnectionsSnapshot): void => {
+      setSharedConnections(snapshot)
+      setSharedConnectionsError('')
+      if (hadRefreshError) onSharedSyncRecovered?.()
+      hadRefreshError = false
+      const current = sharedProjectionInput.current
+      replaceMapContents(pendingSharedProviderDeletions.current, reconcilePendingSharedProviderDeletions(
+        snapshot,
+        pendingSharedProviderDeletions.current,
+        new Set((current.provider.providers as ModelProviderProfileV1[]).map((item) => item.id))
+      ))
+      replaceMapContents(pendingSharedProviderNames.current, reconcilePendingSharedProviderNames(
+        snapshot,
+        pendingSharedProviderNames.current
+      ))
+      replaceMapContents(pendingSharedProviderCatalogs.current, reconcilePendingSharedProviderCatalogs(
+        snapshot,
+        pendingSharedProviderCatalogs.current
+      ))
+      // Skip AppSettings writes while a catalog commit owns the queue so a
+      // stale registry snapshot cannot revert an in-flight Token Plan fetch
+      // (#1117). SharedConnections UI state above still refreshes.
+      if (hasInFlightSharedProviderCatalogMutation()) return
+      const projected = projectSharedModelConnections(
+        current.provider,
+        snapshot,
+        pendingSharedProviderDeletions.current,
+        pendingSharedProviderNames.current,
+        pendingSharedProviderCatalogs.current
+      )
+      const effectiveProjectedModel = projected.kun.model ?? current.kun.model
+      const fingerprint = sharedSettingsFingerprint({
+        providers: projected.provider.providers,
+        providerId: projected.kun.providerId,
+        model: effectiveProjectedModel,
+        proxy: projected.provider.proxy,
+        routePools: projected.provider.routePools,
+        localGateway: projected.provider.localGateway
+      })
+      sharedSyncFingerprint.current = fingerprint
+      const currentFingerprint = sharedSettingsFingerprint({
+        providers: current.provider.providers,
+        providerId: current.kun.providerId,
+        model: current.kun.model,
+        proxy: current.provider.proxy,
+        routePools: current.provider.routePools,
+        localGateway: current.provider.localGateway
+      })
+      if (fingerprint !== currentFingerprint) {
+        sharedProjectionPending.current = true
+        const committedDeletedProviderIds = new Set(
+          [...pendingSharedProviderDeletions.current]
+            .filter(([, deletion]) => deletion.committedRevision !== null)
+            .map(([providerId]) => providerId)
+        )
+        const kunPatch: KunRuntimeSettingsPatchV1 = { ...projected.kun }
+        const fallbackProvider = projected.provider.providers.find(
+          (item) => item.id === DEFAULT_MODEL_PROVIDER_ID
+        ) ?? projected.provider.providers[0]
+        Object.assign(kunPatch, modelProviderDeletionKunPatch({
+          currentKun: current.kun,
+          deletedProviderIds: committedDeletedProviderIds,
+          fallbackProvider
+        }))
+        const writePatch = modelProviderDeletionWritePatch(
+          current.form?.write?.inlineCompletion,
+          committedDeletedProviderIds
+        )
+        const settingsPatch: AppSettingsPatch = {
+          provider: projected.provider,
+          agents: { kun: kunPatch }
         }
+        if (writePatch?.write) settingsPatch.write = writePatch.write
+        current.update(settingsPatch)
+      }
+    }
+    const stop = subscribeModelConnectionWatch((snapshot) => {
+      if (disposed) return
+      try {
+        applySnapshot(snapshot)
       } catch (error) {
         hadRefreshError = true
         if (!disposed) setSharedConnectionsError(error instanceof Error ? error.message : String(error))
-      } finally {
-        if (!disposed) timer = setTimeout(refresh, revision === 0 ? 2_000 : 0)
       }
-    }
-    void refresh()
+    })
     return () => {
       disposed = true
-      if (timer !== undefined) clearTimeout(timer)
+      stop()
     }
   }, [])
 
