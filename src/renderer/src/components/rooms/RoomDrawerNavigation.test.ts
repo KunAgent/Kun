@@ -44,6 +44,11 @@ describe('single Rooms drawer navigation stack', () => {
     expect(renderer.root.findByProps({ 'aria-label': 'reply' }).props.value).toBe('Unsent draft')
     expect(focus).toHaveBeenCalled()
   })
+  it('titles the run page as the Agent session', async () => {
+    await act(async () => { renderer = create(createElement(Harness, { roomId: 'room' })) })
+    act(() => navigation.open({ kind: 'run', runId: 'original-run' }))
+    expect(JSON.stringify(renderer.toJSON())).toContain('Agent session')
+  })
   it('clears the old room stack and never resurrects it by switching back', async () => {
     await act(async () => { renderer = create(createElement(Harness, { roomId: 'room' })) })
     act(() => navigation.open({ kind: 'reply', messageId: 'root' }))

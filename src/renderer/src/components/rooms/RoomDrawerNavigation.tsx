@@ -65,7 +65,7 @@ export function RoomDrawerNavigation({ frames, onBack, onClose, onSection, rende
   }, [current?.key])
   if (!current) return null
   const section = [...frames].reverse().find((frame) => frame.target.kind === 'section')?.target
-  const title = current.target.kind === 'handoffs' ? t('agentsHandoffs') : current.target.kind === 'agent' ? t(current.target.agentId ? 'agentsProfileAndMemory' : 'agentsCreate') : current.target.kind === 'reply' ? t('roomsReplyThreadTitle') : current.target.kind === 'content' ? t('roomsReplyContentTitle') : undefined
+  const title = current.target.kind === 'handoffs' ? t('agentsHandoffs') : current.target.kind === 'agent' ? t(current.target.agentId ? 'agentsProfileAndMemory' : 'agentsCreate') : current.target.kind === 'reply' ? t('roomsReplyThreadTitle') : current.target.kind === 'content' ? t('roomsReplyContentTitle') : current.target.kind === 'run' ? t('roomsAgentSession') : undefined
   return <RoomDetailsDrawer section={section?.kind === 'section' ? section.section : 'discussion'}
     onSection={onSection} onClose={onClose} onBack={onBack}
     taskOpen={current.target.kind === 'task'} runOpen={current.target.kind === 'run'}

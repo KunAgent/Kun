@@ -1,58 +1,71 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { ArrowDown, ExternalLink, RefreshCw } from 'lucide-react'
+import { ArrowDown, Lock, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { RoomMessageBody } from './RoomMessageBody'
 import { RoomRunItems } from './RoomRunItems'
+import { buildRoomRunConversation, buildRoomRunTranscript } from './room-run-conversation'
 import { useRoomRun } from './useRoomRun'
+import { WorkMetaRow } from '../chat/message-timeline-cards'
+import { formatDuration } from '../chat/message-timeline-tools'
 import './rooms-runs.css'
+
+const RUNNING_STATUSES = new Set(['queued', 'running', 'recovery_required'])
 
 export function RoomRunInspector({
   roomId,
   runId,
-  onOpenThread,
   active = true
 }: {
   roomId: string
   runId: string
-  onOpenThread: (threadId: string, turnId?: string) => void | Promise<void>
   active?: boolean
 }) {
   const { t } = useTranslation('common')
   const state = useRoomRun(roomId, runId, active)
-  const [navigationError, setNavigationError] = useState('')
-  const [processFilter, setProcessFilter] = useState('all'), [processSearch, setProcessSearch] = useState('')
+  const [processExpanded, setProcessExpanded] = useState(true)
+  const [copied, setCopied] = useState(false)
+  const [copyError, setCopyError] = useState('')
   const scroll = useRef<HTMLDivElement>(null)
   const anchor = useRef<{
     height: number
     top: number
     firstId?: string
   } | null>(null)
-  const atBottom = useRef(false)
+  const atBottom = useRef(true)
   const [away, setAway] = useState(false)
+
   useLayoutEffect(() => {
     if (!scroll.current) return
     if (anchor.current && anchor.current.firstId !== state.items[0]?.id) {
       scroll.current.scrollTop =
         anchor.current.top + scroll.current.scrollHeight - anchor.current.height
       anchor.current = null
-    } else if (atBottom.current)
+    } else if (atBottom.current) {
       scroll.current.scrollTop = scroll.current.scrollHeight
+    }
   }, [state.items])
+
   const detail = state.detail
   const run = detail?.run
-  const openCode = async () => {
-    if (!run?.threadId || !run.turnId) return
-    setNavigationError('')
+  const processing = run ? RUNNING_STATUSES.has(run.status) : false
+  const conversation = buildRoomRunConversation(state.items)
+  const transcript = buildRoomRunTranscript(conversation, run?.input)
+
+  const copyTranscript = async () => {
+    setCopyError('')
     try {
-      await onOpenThread(run.threadId, run.turnId)
-    } catch (cause) {
-      setNavigationError(String(cause))
+      await navigator.clipboard.writeText(transcript)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      setCopyError(t('roomsRunCopyFailed'))
     }
   }
+
   return (
     <section
       className="rooms-run-inspector"
-      aria-label={t('roomsRunDetails')}
+      aria-label={t('roomsAgentSession')}
       data-run-id={runId}
     >
       <div
@@ -73,33 +86,34 @@ export function RoomRunInspector({
         {run && detail ? (
           <>
             <header className="rooms-run-header">
-              <h3>
-                {run.memberLabel} · {t(`roomsRunPhase_${run.phase}`)}
-              </h3>
-              <p>
-                {t(`roomsRunStatus_${run.status}`)}
-                {run.outcome
-                  ? ` · ${t(`roomsRunOutcome_${run.outcome}`)}`
-                  : ''}{' '}
-                · {t('roomsRunAttempt', { count: run.attempt })}
-              </p>
-              <time dateTime={run.createdAt}>
-                {new Date(run.createdAt).toLocaleString()}
-              </time>
-              {run.threadId &&
-              run.turnId &&
-              detail.availability.status === 'available' ? (
-                <button
-                  type="button"
-                  className="rooms-run-secondary"
-                  data-thread-target-turn-id={run.turnId}
-                  onClick={() => void openCode()}
-                >
-                  <ExternalLink size={14} />
-                  {t('roomsRunOpenCode')}
+              <div className="rooms-run-header-main">
+                <div className="rooms-run-title">
+                  {processing ? <span className="rooms-run-status-dot is-running" /> : null}
+                  <span className="rooms-run-agent">{run.memberLabel}</span>
+                </div>
+                <div className="rooms-run-meta">
+                  <span className={processing ? 'is-running' : ''}>
+                    {t(`roomsRunStatus_${run.status}`, { defaultValue: run.status })}
+                  </span>
+                  {run.model ? <span className="rooms-run-model">{run.model}</span> : null}
+                  {run.elapsedMs !== undefined ? (
+                    <span className="rooms-run-elapsed">{formatDuration(run.elapsedMs)}</span>
+                  ) : null}
+                </div>
+              </div>
+              <div className="rooms-run-actions" aria-label={t('roomsRunTranscriptActions')}>
+                <button type="button" onClick={() => void copyTranscript()}>
+                  {copied ? t('roomsRunCopied') : t('roomsRunCopyTranscript')}
                 </button>
-              ) : null}
+                <button type="button" onClick={() => setProcessExpanded(true)}>
+                  {t('roomsRunExpandProcess')}
+                </button>
+                <button type="button" onClick={() => setProcessExpanded(false)}>
+                  {t('roomsRunCollapseProcess')}
+                </button>
+              </div>
             </header>
+
             {run.error || run.reason ? (
               <p
                 className={run.error ? 'rooms-run-error' : 'rooms-run-note'}
@@ -108,151 +122,118 @@ export function RoomRunInspector({
                 {run.error || run.reason}
               </p>
             ) : null}
+
             {detail.availability.status !== 'available' ? (
               <p className="rooms-run-unavailable">
                 {t(`roomsRunAvailability_${detail.availability.status}`)}
-                {detail.availability.reason
-                  ? ` · ${detail.availability.reason}`
-                  : ''}
+                {detail.availability.reason ? ` · ${detail.availability.reason}` : ''}
               </p>
             ) : null}
-            {detail.trigger ? (
-              <details className="rooms-run-trigger">
-                <summary>
-                  {t('roomsRunTrigger')} · {detail.trigger.authorLabelSnapshot}
-                </summary>
-                <RoomMessageBody
-                  body={detail.trigger.body}
-                  attachmentIds={detail.trigger.attachmentIds}
-                />
-              </details>
-            ) : null}
-            <section className="rooms-run-input">
-              <h4>{t('roomsRunInput')}</h4>
-              <RoomMessageBody
-                body={run.input || t('roomsRunInputUnavailable')}
-                attachmentIds={run.attachmentIds}
-              />
-            </section>
-            {detail.context?.prompt ? (
-              <details className="rooms-run-trigger">
-                <summary>{t('roomsRunContext')}</summary>
-                <RoomMessageBody
-                  body={detail.context.prompt}
-                  attachmentIds={detail.context.attachmentIds ?? []}
-                />
-              </details>
-            ) : null}
-            <h4 className="rooms-run-process-title">{t('roomsRunProcess')}</h4>
-            {state.itemsAvailability &&
-            state.itemsAvailability.status !== 'available' &&
-            state.itemsAvailability.status !== detail.availability.status ? (
-              <p className="rooms-run-unavailable">
-                {t(`roomsRunAvailability_${state.itemsAvailability.status}`)}
-                {state.itemsAvailability.reason
-                  ? ` · ${state.itemsAvailability.reason}`
-                  : ''}
-              </p>
-            ) : null}
-            {state.hasEarlier ? (
-              <button
-                type="button"
-                className="rooms-run-secondary"
-                disabled={state.moreBusy}
-                onClick={() => {
-                  if (scroll.current)
-                    anchor.current = {
-                      height: scroll.current.scrollHeight,
-                      top: scroll.current.scrollTop,
-                      firstId: state.items[0]?.id
-                    }
-                  void state.loadEarlier()
-                }}
-              >
-                {t(
-                  state.moreBusy
-                    ? 'roomsLoading'
-                    : state.hasGap
-                      ? 'roomsRunLoadGap'
-                      : 'roomsRunEarlier'
-                )}
-              </button>
-            ) : null}
-            <div className="rooms-run-process-filters">
-              <select aria-label={t('roomsRunFilter')} value={processFilter} onChange={(event) => setProcessFilter(event.target.value)}>
-                <option value="all">{t('roomsRunProcessAll')}</option><option value="tools">{t('roomsRunProcessTools')}</option><option value="errors">{t('roomsRunProcessErrors')}</option>
-              </select>
-              <input aria-label={t('roomsRunProcessSearch')} placeholder={t('roomsRunProcessSearch')} value={processSearch} onChange={(event) => setProcessSearch(event.target.value)} />
-            </div>
-            {processFilter !== 'all' || processSearch ? <p className="rooms-run-note">{t('roomsRunSearchLoadedOnly')}</p> : null}
-            <RoomRunItems roomId={roomId} runId={runId} items={state.items} filter={processFilter} query={processSearch} runStatus={run.status} />
-            {!state.items.length &&
-            !state.error &&
-            state.itemsAvailability?.status === 'available' ? (
-              <p className="rooms-run-note">{t('roomsRunNoItems')}</p>
-            ) : null}
-            <dl className="rooms-run-metrics">
-              {run.model ? (
-                <div>
-                  <dt>{t('roomsMemberModel')}</dt>
-                  <dd>{run.model}</dd>
-                </div>
-              ) : null}
-              {run.elapsedMs !== undefined ? (
-                <div>
-                  <dt>{t('roomsRunElapsed')}</dt>
-                  <dd>
-                    {t('roomsRunSeconds', {
-                      count: Math.round(run.elapsedMs / 100) / 10
-                    })}
-                  </dd>
-                </div>
-              ) : null}
-              <div>
-                <dt>{t('roomsRunUsage')}</dt>
-                <dd>
-                  {run.usage
-                    ? t('roomsRunTokens', { count: run.usage.totalTokens })
-                    : t('roomsRunUsageUnavailable')}
-                  {run.usageStatus === 'partial'
-                    ? ` · ${t('roomsRunUsagePartial')}`
-                    : ''}
-                </dd>
+
+            {run.input ? (
+              <div className="rooms-run-user-bubble">
+                <RoomMessageBody body={run.input} attachmentIds={run.attachmentIds} />
               </div>
-            </dl>
+            ) : null}
+
+            <WorkMetaRow
+              processing={processing}
+              durationMs={run.elapsedMs}
+              expanded={processExpanded}
+              onToggle={() => setProcessExpanded((value) => !value)}
+            />
+
+            {processExpanded ? (
+              <div className="rooms-run-process">
+                {state.hasEarlier ? (
+                  <button
+                    type="button"
+                    className="rooms-run-secondary"
+                    disabled={state.moreBusy}
+                    onClick={() => {
+                      if (scroll.current)
+                        anchor.current = {
+                          height: scroll.current.scrollHeight,
+                          top: scroll.current.scrollTop,
+                          firstId: state.items[0]?.id
+                        }
+                      void state.loadEarlier()
+                    }}
+                  >
+                    {t(
+                      state.moreBusy
+                        ? 'roomsLoading'
+                        : state.hasGap
+                          ? 'roomsRunLoadGap'
+                          : 'roomsRunEarlier'
+                    )}
+                  </button>
+                ) : null}
+
+                {state.itemsAvailability &&
+                state.itemsAvailability.status !== 'available' &&
+                state.itemsAvailability.status !== detail.availability.status ? (
+                  <p className="rooms-run-unavailable">
+                    {t(`roomsRunAvailability_${state.itemsAvailability.status}`)}
+                    {state.itemsAvailability.reason
+                      ? ` · ${state.itemsAvailability.reason}`
+                      : ''}
+                  </p>
+                ) : null}
+
+                <RoomRunItems roomId={roomId} runId={runId} items={state.items} runStatus={run.status} />
+
+                {!state.items.length &&
+                !state.error &&
+                state.itemsAvailability?.status === 'available' ? (
+                  <p className="rooms-run-note">{t('roomsRunNoItems')}</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {conversation.finalAnswer ? (
+              <div className="rooms-run-final">
+                <RoomMessageBody
+                  body={conversation.finalAnswer.text ?? ''}
+                  attachmentIds={conversation.finalAnswer.attachmentIds ?? []}
+                />
+              </div>
+            ) : null}
           </>
         ) : null}
-        {state.error || state.streamError || navigationError ? (
+
+        {state.error || state.streamError || copyError ? (
           <p role="alert" className="rooms-run-error">
-            {state.error || state.streamError || navigationError}
+            {state.error || state.streamError || copyError}
           </p>
         ) : null}
         {state.error || state.streamError ? (
-          <button
-            type="button"
-            className="rooms-run-secondary"
-            onClick={state.refresh}
-          >
+          <button type="button" className="rooms-run-secondary" onClick={state.refresh}>
             <RefreshCw size={13} />
             {t('roomsRefresh')}
           </button>
         ) : null}
       </div>
+
       {away && state.items.length ? (
         <button
           type="button"
           className="rooms-run-latest rooms-run-secondary"
           onClick={() => {
-            if (scroll.current)
-              scroll.current.scrollTop = scroll.current.scrollHeight
+            if (scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight
             atBottom.current = true
             setAway(false)
           }}
         >
           <ArrowDown size={13} />
-          {t('roomsRunLatestItems')}
+          {t('roomsRunScrollToBottom')}
         </button>
       ) : null}
+
+      <footer className="rooms-run-readonly-footer">
+        <Lock size={13} strokeWidth={1.9} />
+        <span>{t('roomsRunReadOnlyFooter')}</span>
+      </footer>
     </section>
   )
 }

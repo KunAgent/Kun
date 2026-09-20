@@ -1,161 +1,86 @@
+import { Brain } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { CoreTurnItemJson } from '../../agent/kun-contract'
 import { RoomMessageBody } from './RoomMessageBody'
 import { RoomRunItemContent } from './RoomRunItemContent'
-import { groupRoomRunItems, roomRunEntryMatches } from './room-run-groups'
+import { buildRoomRunConversation, runItemText } from './room-run-conversation'
 import { RoomRunToolCard } from './RoomRunToolCard'
 
-const hiddenKinds = new Set([
-  'model_context',
-  'runtime_context_source',
-  'goal_context',
-  'interruption_note'
-])
-
-function printable(value: unknown): string {
-  if (typeof value === 'string') return value
-  return JSON.stringify(value, null, 2) ?? ''
-}
-
-/** Deliberately uses only presentation: approval/input/tool records cannot execute actions here. */
+/**
+ * Renders a run as a Code-style chronological stream. This is presentation
+ * only: approvals, user inputs and tool records are shown as history and never
+ * gain submit/approve/cancel controls.
+ */
 export function RoomRunItems({
   items,
   roomId,
   runId,
-  filter = 'all', query = '', runStatus
+  runStatus
 }: {
   items: CoreTurnItemJson[]
   roomId: string
   runId: string
-  filter?: string
-  query?: string
   runStatus?: string
 }) {
   const { t } = useTranslation('common')
+  const conversation = buildRoomRunConversation(items)
   return (
-    <ol className="rooms-run-items">
-      {groupRoomRunItems(items.filter((item) => !hiddenKinds.has(item.kind)))
-        .filter((entry) => roomRunEntryMatches(entry, filter, query))
-        .map((entry) => {
-          if (entry.kind === 'tool') return <RoomRunToolCard key={entry.callId} roomId={roomId} runId={runId}
+    <ol className="rooms-run-stream">
+      {conversation.process.map((entry) => {
+        if (entry.kind === 'tool') {
+          return <RoomRunToolCard key={entry.callId} roomId={roomId} runId={runId}
             callId={entry.callId} call={entry.call} result={entry.result} runStatus={runStatus} />
-          const item = entry.item
-          const isTool =
-            item.kind === 'tool_call' || item.kind === 'tool_result'
-          const error =
-            item.kind === 'error' || item.status === 'failed' || item.isError
-          const raw = item as CoreTurnItemJson & {
-            message?: string
-            reason?: string
-            attachmentIds?: string[]
-            reviewText?: string
-          }
-          let body =
-            item.text ?? item.summary ?? raw.reviewText ?? raw.message ?? ''
-          if (item.kind === 'user_message')
-            body = item.displayText ?? item.text ?? ''
-          if (item.kind === 'approval')
-            body = [item.summary, raw.reason].filter(Boolean).join('\n\n')
-          if (item.kind === 'user_input')
-            body = [
-              item.prompt,
-              ...(item.questions ?? []).map(
-                (question) => question.question ?? question.prompt ?? ''
-              ),
-              ...(item.answers ?? []).map(
-                (answer) => `${answer.label}: ${answer.value ?? ''}`
-              )
-            ]
-              .filter(Boolean)
-              .join('\n\n')
+        }
+        const item = entry.item
+        if (entry.kind === 'reasoning') {
           return (
-            <li
-              key={item.id}
-              className={`rooms-run-item${error ? ' is-error' : ''}`}
-              data-run-item-id={item.id}
-            >
-              <div className="rooms-run-item-heading">
-                <strong>
-                  {isTool
-                    ? item.toolName
-                    : t(`roomsRunItem_${item.kind}`, {
-                        defaultValue: item.kind
-                      })}
-                </strong>
-                <span>
-                  {t(`roomsRunItemStatus_${item.status}`, {
-                    defaultValue: item.status
-                  })}
-                </span>
-                <time dateTime={item.createdAt}>
-                  {new Date(item.createdAt).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                  })}
-                </time>
-              </div>
-              {isTool ? (
-                <details open={Boolean(error)}>
-                  <summary>
-                    {t(
-                      item.kind === 'tool_call'
-                        ? 'roomsRunToolArguments'
-                        : 'roomsRunToolOutput'
-                    )}
-                  </summary>
-                  <RoomRunItemContent
-                    roomId={roomId}
-                    runId={runId}
-                    itemId={item.id}
-                    code
-                    preview={printable(
-                      item.kind === 'tool_call' ? item.arguments : item.output
-                    )}
-                  />
-                </details>
-              ) : item.kind === 'assistant_reasoning' ||
-                item.kind === 'user_message' ? (
-                <details>
-                  <summary>
-                    {t(
-                      item.kind === 'user_message'
-                        ? 'roomsRunRawInput'
-                        : 'roomsRunReasoning'
-                    )}
-                  </summary>
-                  <RoomRunItemContent
-                    roomId={roomId}
-                    runId={runId}
-                    itemId={item.id}
-                    preview={body}
-                  />
-                  {raw.attachmentIds?.length ? (
-                    <RoomMessageBody
-                      body=""
-                      attachmentIds={raw.attachmentIds}
-                    />
-                  ) : null}
-                </details>
-              ) : (
-                <>
-                  <RoomRunItemContent
-                    roomId={roomId}
-                    runId={runId}
-                    itemId={item.id}
-                    preview={body}
-                  />
-                  {raw.attachmentIds?.length ? (
-                    <RoomMessageBody
-                      body=""
-                      attachmentIds={raw.attachmentIds}
-                    />
-                  ) : null}
-                </>
-              )}
+            <li key={item.id} className="rooms-run-reasoning" data-run-item-id={item.id}>
+              <details>
+                <summary>
+                  <Brain size={14} strokeWidth={1.9} />
+                  {t('roomsRunReasoning')}
+                </summary>
+                <RoomRunItemContent roomId={roomId} runId={runId} itemId={item.id} preview={item.text ?? ''} />
+              </details>
             </li>
           )
-        })}
+        }
+        if (entry.kind === 'user') {
+          return (
+            <li key={item.id} className="rooms-run-user" data-run-item-id={item.id}>
+              <RoomMessageBody
+                body={item.displayText ?? item.text ?? ''}
+                attachmentIds={item.attachmentIds ?? []}
+              />
+            </li>
+          )
+        }
+        if (entry.kind === 'assistant') {
+          return (
+            <li key={item.id} className="rooms-run-intermediate" data-run-item-id={item.id}>
+              <div className="rooms-run-item-label">{t('roomsRunItem_assistant_text', { defaultValue: 'assistant_text' })}</div>
+              <RoomRunItemContent roomId={roomId} runId={runId} itemId={item.id} preview={item.text ?? ''} />
+            </li>
+          )
+        }
+        if (entry.kind === 'error') {
+          return (
+            <li key={item.id} className="rooms-run-error-row" data-run-item-id={item.id}>
+              <p role="alert" className="rooms-run-error">
+                {item.message ?? item.summary ?? item.text ?? t('roomsRunItem_error', { defaultValue: 'Error' })}
+              </p>
+            </li>
+          )
+        }
+        return (
+          <li key={item.id} className="rooms-run-record" data-run-item-id={item.id}>
+            <div className="rooms-run-item-label">
+              {t(`roomsRunItem_${item.kind}`, { defaultValue: item.kind })}
+            </div>
+            <RoomRunItemContent roomId={roomId} runId={runId} itemId={item.id} preview={runItemText(item)} />
+          </li>
+        )
+      })}
     </ol>
   )
 }

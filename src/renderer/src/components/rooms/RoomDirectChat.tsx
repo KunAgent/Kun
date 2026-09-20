@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, FolderOpen, Menu, MoreHorizontal, Search } from 'lucide-react'
+import { ChevronDown, FolderOpen, Menu, MoreHorizontal, PanelRightOpen, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room, RoomContentReference } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomPopover } from './RoomPopover'
 import { RoomModal } from './RoomModal'
 import { RoomExecutionGates } from './RoomTaskGates'
-import { RoomRunItems } from './RoomRunItems'
-import type { CoreTurnItemJson } from '../../agent/kun-contract'
 import { agentPath, useAgentResource } from './agent-client'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
 import { modelLabel, type AgentModels } from './AgentModelSettings'
@@ -61,25 +59,21 @@ export function RoomDirectHeader({ room, onSidebar, onSearch, onProfile, onModel
     </RoomPopover>
   </header>
 }
-export function RoomDirectProgress({ room, state, onRun, onModels }: { room: Room; state: ReturnType<typeof useDirectChat>; onRun: (id: string) => void; onModels: () => void }) {
+export function RoomDirectProgress({ room, state, onRun, openRunId, onModels }: { room: Room; state: ReturnType<typeof useDirectChat>; onRun: (id: string) => void; openRunId?: string; onModels: () => void }) {
   const { t } = useTranslation('common')
-  const [expanded, setExpanded] = useState(false)
   const active = state.data?.active
   const latest = state.data?.requests[0]
   const failed = !active && latest && ['failed', 'cancelled', 'recovery_required'].includes(latest.status) ? latest : undefined
   const runId = active?.runId
-  const items = useAgentResource<{ items: CoreTurnItemJson[]; nextCursor?: string }>(runId ? roomPath(room.id) + '/runs/' + runId + '/items?limit=30' : null, expanded)
   const queued = Math.max(0, (state.data?.pendingCount ?? 0) - 1)
   if (!active && !failed && !state.error && !room.privateWorkspace) return null
   return <div className="direct-progress">
     {room.privateWorkspace ? <p className="direct-project"><FolderOpen size={13} /><span title={room.privateWorkspace}>{room.privateWorkspace.split('/').at(-1)}</span></p> : null}
     {active ? <div className="direct-progress-line"><span role="status">{t(state.data?.approvals.length ? 'roomsState_needs_approval' : state.data?.userInputs.length ? 'roomsState_needs_input' : active.status === 'pending' ? 'directQueued' : active.status === 'recovery_required' ? 'directReconciling' : active.status === 'stopping' ? 'directStopping' : 'directResponding')}{queued ? ' · ' + t('directQueuedCount', { count: queued }) : ''}</span>
-      {runId ? <button aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{t('directToolProgress')}</button> : null}</div> : null}
-    {expanded && runId ? <div className="direct-tool-progress"><RoomRunItems items={items.data?.items ?? []} roomId={room.id} runId={runId} filter="tools" runStatus={active?.status} />
-      <button onClick={() => onRun(runId)}>{t('roomsViewRun')}</button></div> : null}
+      {runId ? <button type="button" aria-pressed={openRunId === runId} className={openRunId === runId ? 'is-active' : ''} onClick={() => onRun(runId)}><PanelRightOpen size={14} />{t('roomsViewAgentSession')}</button> : null}</div> : null}
     {state.data ? <RoomExecutionGates detail={{ ...state.data, userInputs: [] }} onUpdated={async () => state.refresh()} /> : null}
     {failed ? <div className="direct-failed" role="status"><span>{failed.error || t(failed.status === 'cancelled' ? 'directStopped' : 'directFailed')}</span>
-      {failed.runId ? <button onClick={() => onRun(failed.runId!)}>{t('roomsViewRun')}</button> : null}
+      {failed.runId ? <button type="button" aria-pressed={openRunId === failed.runId} className={openRunId === failed.runId ? 'is-active' : ''} onClick={() => onRun(failed.runId!)}><PanelRightOpen size={14} />{t('roomsViewAgentSession')}</button> : null}
       {failed.status !== 'recovery_required' ? <button onClick={() => void state.act('retry', failed)}>{t('directRetry')}</button> : null}
       <button onClick={onModels}>{t('directModels')}</button></div> : null}
     {state.error ? <p role="alert" className="rooms-run-error">{state.error}</p> : null}

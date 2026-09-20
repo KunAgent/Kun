@@ -49,13 +49,13 @@ export function RoomMessageRunButton({
       <button
         type="button"
         className="rooms-message-task"
-        title={t('roomsViewRun')}
-        aria-label={t('roomsViewRun')}
+        title={t('roomsViewAgentSession')}
+        aria-label={t('roomsViewAgentSession')}
         disabled={busy}
         onClick={() => void open()}
       >
         <ListTree size={13} />
-        {compact ? null : t(busy ? 'roomsLoading' : 'roomsViewRun')}
+        {compact ? null : t(busy ? 'roomsLoading' : 'roomsViewAgentSession')}
       </button>
       {error ? (
         <span role="alert" className="rooms-run-error">

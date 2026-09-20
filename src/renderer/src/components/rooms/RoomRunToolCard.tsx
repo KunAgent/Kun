@@ -1,18 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { RoomRunItemsPage } from '@shared/rooms-api'
 import type { CoreTurnItemJson } from '../../agent/kun-contract'
+import type { ToolBlock } from '../../agent/types'
+import { toolBlockFromItem } from '../../agent/kun-mapper-tools'
+import { summarizeToolBlock } from '../chat/message-timeline-process-detail'
+import { toolBlockIcon } from '../chat/message-timeline-process-summary'
 import { roomPath, roomsRequest } from './rooms-client'
 import { RoomRunItemContent } from './RoomRunItemContent'
-import { roomToolArgumentSummary } from './room-run-groups'
 
 const printable = (value: unknown) => typeof value === 'string' ? value : JSON.stringify(value, null, 2) ?? ''
+
 export function RoomRunToolCard({ roomId, runId, callId, call, result, runStatus }: {
   roomId: string; runId: string; callId: string; call?: CoreTurnItemJson; result?: CoreTurnItemJson; runStatus?: string
 }) {
   const { t } = useTranslation('common')
   const [loaded, setLoaded] = useState<CoreTurnItemJson[]>([]), [queried, setQueried] = useState(false)
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
+  const [expanded, setExpanded] = useState(false)
   const request = useRef<AbortController | null>(null)
   useEffect(() => () => request.current?.abort(), [])
   const input = call ?? loaded.find((item) => item.kind === 'tool_call')
@@ -22,6 +28,9 @@ export function RoomRunToolCard({ roomId, runId, callId, call, result, runStatus
   const status = failed ? 'failed' : output ? output.status : 'pending'
   const duration = input && output ? Math.max(0, Date.parse(output.finishedAt ?? output.createdAt) - Date.parse(input.createdAt)) : undefined
   const settled = runStatus && !['queued', 'running', 'recovery_required'].includes(runStatus)
+  const block: ToolBlock | null = representative ? toolBlockFromItem(representative) : null
+  const summary = block ? summarizeToolBlock(block, t) : (representative?.toolName ?? callId)
+  const Icon = block ? toolBlockIcon(block) : null
   const loadPair = async () => {
     request.current?.abort()
     const controller = new AbortController(); request.current = controller
@@ -33,22 +42,50 @@ export function RoomRunToolCard({ roomId, runId, callId, call, result, runStatus
     } catch (cause) { if (!controller.signal.aborted) setError(String(cause)) }
     finally { if (!controller.signal.aborted) setBusy(false) }
   }
-  return <li className={`rooms-run-item${failed ? ' is-error' : ''}`} data-run-tool-call-id={callId}>
-    <div className="rooms-run-item-heading">
-      <strong>{representative?.toolName ?? callId}</strong>
-      <span>{t(`roomsRunItemStatus_${status}`)}</span>
-      {representative ? <time dateTime={representative.createdAt}>{new Date(representative.createdAt).toLocaleTimeString()}</time> : null}
-    </div>
-    {input ? <p className="rooms-run-tool-summary">{roomToolArgumentSummary(input.arguments)}</p> : null}
-    {duration !== undefined && Number.isFinite(duration) ? <p className="rooms-run-note">{t('roomsRunToolDuration', { seconds: Math.round(duration / 100) / 10 })}</p> : null}
-    {input ? <details><summary>{t('roomsRunToolArguments')}</summary>
-      <RoomRunItemContent roomId={roomId} runId={runId} itemId={input.id} code preview={printable(input.arguments)} />
-    </details> : null}
-    {output ? <details open={Boolean(failed)}><summary>{t('roomsRunToolOutput')}</summary>
-      <RoomRunItemContent roomId={roomId} runId={runId} itemId={output.id} code preview={printable(output.output)} />
-    </details> : <p className="rooms-run-note">{t(settled && queried ? 'roomsRunToolUnavailable' : 'roomsRunToolWaiting')}</p>}
-    {!input || !output ? <button type="button" className="rooms-run-secondary" disabled={busy} onClick={() => void loadPair()}>{t(busy ? 'roomsLoading' : 'roomsRunLoadToolPair')}</button> : null}
-    {queried && !input ? <p className="rooms-run-note">{t('roomsRunToolPairMissing')}</p> : null}
-    {error ? <p role="alert" className="rooms-run-error">{error}</p> : null}
+  return <li className={`rooms-run-tool-row${failed ? ' is-error' : ''}`} data-run-tool-call-id={callId}>
+    <button
+      type="button"
+      className="rooms-run-tool-toggle"
+      aria-expanded={expanded}
+      onClick={() => setExpanded((value) => !value)}
+    >
+      {Icon ? <Icon className="rooms-run-tool-icon" size={14} strokeWidth={1.9} /> : null}
+      <span className="rooms-run-tool-summary">{summary}</span>
+      <span className={`rooms-run-tool-status is-${status}`}>
+        {t(`roomsRunItemStatus_${status}`, { defaultValue: status })}
+      </span>
+      {duration !== undefined && Number.isFinite(duration)
+        ? <span className="rooms-run-tool-duration">{Math.round(duration / 100) / 10}s</span>
+        : null}
+      {expanded
+        ? <ChevronDown className="rooms-run-tool-chevron" size={14} strokeWidth={1.8} />
+        : <ChevronRight className="rooms-run-tool-chevron" size={14} strokeWidth={1.8} />}
+    </button>
+    {expanded ? (
+      <div className="rooms-run-tool-details">
+        {!input || !output ? (
+          <div className="rooms-run-tool-pair">
+            {!input && !output ? <p className="rooms-run-note">{t(settled && queried ? 'roomsRunToolUnavailable' : 'roomsRunToolWaiting')}</p> : null}
+            <button type="button" className="rooms-run-secondary" disabled={busy} onClick={() => void loadPair()}>
+              {t(busy ? 'roomsLoading' : 'roomsRunLoadToolPair')}
+            </button>
+            {queried && !input ? <p className="rooms-run-note">{t('roomsRunToolPairMissing')}</p> : null}
+          </div>
+        ) : null}
+        {input ? (
+          <details>
+            <summary>{t('roomsRunToolArguments')}</summary>
+            <RoomRunItemContent roomId={roomId} runId={runId} itemId={input.id} code preview={printable(input.arguments)} />
+          </details>
+        ) : null}
+        {output ? (
+          <details open={Boolean(failed)}>
+            <summary>{t('roomsRunToolOutput')}</summary>
+            <RoomRunItemContent roomId={roomId} runId={runId} itemId={output.id} code preview={printable(output.output)} />
+          </details>
+        ) : null}
+        {error ? <p role="alert" className="rooms-run-error">{error}</p> : null}
+      </div>
+    ) : null}
   </li>
 }

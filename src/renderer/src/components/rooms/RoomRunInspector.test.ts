@@ -17,7 +17,7 @@ const api = vi.hoisted(() => ({
   start: vi.fn(),
   stop: vi.fn(),
   event: null as
-    null | ((value: { streamId: string; events: unknown[] }) => void),
+  null | ((value: { streamId: string; events: unknown[] }) => void),
   error: null as null | ((value: { streamId: string; message: string }) => void)
 }))
 vi.mock('./rooms-client', async (original) => ({
@@ -74,7 +74,7 @@ const runDetail = (
   availability: { status: 'available' },
   eventsCursor: 'cursor-' + id
 })
-const item = (id: string, text = id): RoomRunItemsPage['items'][number] => ({
+const item = (id: string, text = id, fields: Record<string, unknown> = {}): RoomRunItemsPage['items'][number] => ({
   id,
   threadId: 'thread-run-a',
   turnId: 'turn-run-a',
@@ -82,7 +82,8 @@ const item = (id: string, text = id): RoomRunItemsPage['items'][number] => ({
   kind: 'assistant_text',
   status: 'completed',
   createdAt: `2026-09-13T10:00:${id.padStart(2, '0')}Z`,
-  text
+  text,
+  ...fields
 })
 const page = (
   items: RoomRunItemsPage['items'],
@@ -98,7 +99,6 @@ const page = (
 
 describe('Rooms run inspector', () => {
   let renderer: ReactTestRenderer | undefined
-  const onOpenThread = vi.fn()
   beforeEach(async () => {
     await i18n.changeLanguage('en')
     api.request
@@ -112,8 +112,7 @@ describe('Rooms run inspector', () => {
     api.stop.mockReset().mockResolvedValue(true)
     api.event = null
     api.error = null
-    onOpenThread.mockReset().mockResolvedValue(undefined)
-    vi.stubGlobal('window', { kunGui: { startSse: vi.fn() } })
+    vi.stubGlobal('window', { kunGui: { startSse: vi.fn() }, setTimeout: () => 1 })
   })
   afterEach(() => {
     if (renderer) act(() => renderer!.unmount())
@@ -123,24 +122,9 @@ describe('Rooms run inspector', () => {
   })
   const render = async (runId = 'run-a', active = true) => {
     await act(async () => {
-      if (renderer)
-        renderer.update(
-          createElement(RoomRunInspector, {
-            roomId: 'room',
-            runId,
-            active,
-            onOpenThread
-          })
-        )
-      else
-        renderer = create(
-          createElement(RoomRunInspector, {
-            roomId: 'room',
-            runId,
-            active,
-            onOpenThread
-          })
-        )
+      const element = createElement(RoomRunInspector, { roomId: 'room', runId, active })
+      if (renderer) renderer.update(element)
+      else renderer = create(element)
     })
   }
   const button = (text: string) =>
@@ -161,14 +145,63 @@ describe('Rooms run inspector', () => {
     })
   }
 
-  it('opens only the exact recorded turn and shows a rejected Code navigation locally', async () => {
+  it('shows the request and reply as a read-only stream without execution controls', async () => {
     await render()
-    onOpenThread.mockRejectedValue(new Error('Original turn unavailable'))
-    await act(async () => button('Open this run in Code').props.onClick())
-    expect(onOpenThread).toHaveBeenCalledWith('thread-run-a', 'turn-run-a')
-    expect(texts()).toContain('Original turn unavailable')
+    expect(texts()).toContain('Original requirement run-a')
+    expect(texts()).toContain('Recorded response')
+    expect(texts()).toContain('Read-only · follows the live conversation')
+    expect(button('Open this run in Code')).toBeUndefined()
+    expect(button('Allow')).toBeUndefined()
+    expect(button('Deny')).toBeUndefined()
+    expect(button('Submit answers')).toBeUndefined()
+    expect(renderer!.root.findAllByType('input')).toHaveLength(0)
+    expect(renderer!.root.findAllByType('textarea')).toHaveLength(0)
+    expect(renderer!.root.findAllByType('select')).toHaveLength(0)
+    expect(renderer!.root.findAllByType('form')).toHaveLength(0)
+  })
+
+  it('shows running status with the blue running dot and keeps the read-only footer', async () => {
+    api.request.mockImplementation(async (path: string) =>
+      path.endsWith('/items')
+        ? page([item('20', 'Recorded response')])
+        : runDetail('run-a', { status: 'running', elapsedMs: 120_000 })
+    )
+    await render()
+    expect(texts()).toContain('Running')
+    expect(texts()).toContain('2m 0s')
+    expect(texts()).toContain('Read-only · follows the live conversation')
+  })
+
+  it('copies the visible transcript without issuing a write request', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    await render()
+    api.request.mockClear()
+    await act(async () => button('Copy session record').props.onClick())
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(String(writeText.mock.calls[0][0])).toContain('Original requirement run-a')
+    expect(String(writeText.mock.calls[0][0])).toContain('Recorded response')
     expect(api.request.mock.calls.every((call) => call[1] === 'GET')).toBe(true)
   })
+
+  it('collapses and re-expands the process section without issuing writes', async () => {
+    api.request.mockImplementation(async (path: string) =>
+      path.endsWith('/items')
+        ? page([
+            item('20', 'thinking', { kind: 'assistant_reasoning' }),
+            item('30', 'final reply')
+          ])
+        : runDetail()
+    )
+    await render()
+    expect(texts()).toContain('thinking')
+    await act(async () => button('Collapse process').props.onClick())
+    expect(texts()).not.toContain('thinking')
+    await act(async () => button('Expand process').props.onClick())
+    expect(texts()).toContain('thinking')
+    expect(api.request.mock.calls.every((call) => call[1] === 'GET')).toBe(true)
+  })
+
   it('retains the selected run but stops its subscription while another drawer child is active', async () => {
     await render()
     const streamId = api.start.mock.calls[0][2]
@@ -182,7 +215,7 @@ describe('Rooms run inspector', () => {
     expect(api.request).not.toHaveBeenCalled()
   })
 
-  it('keeps triage outcomes and unavailable usage visible without inventing a Code target', async () => {
+  it('keeps no-session availability visible without inventing a Code target', async () => {
     api.request.mockImplementation(async (path: string) =>
       path.endsWith('/items')
         ? page([])
@@ -197,10 +230,9 @@ describe('Rooms run inspector', () => {
           }
     )
     await render()
-    expect(button('Open this run in Code')).toBeUndefined()
-    expect(texts()).toContain('No response needed')
-    expect(texts()).toContain('Unavailable')
+    expect(texts()).toContain('This run has no conversation session.')
     expect(texts()).toContain('Original requirement run-a')
+    expect(texts()).toContain('Read-only · follows the live conversation')
   })
 
   it('ignores late replies and tears down the previous scoped subscription when the selection changes', async () => {
@@ -267,9 +299,7 @@ describe('Rooms run inspector', () => {
     api.request.mockResolvedValue(page([item('50'), item('60'), item('70')], 'middle'))
     await act(async () => button('Load missing process').props.onClick())
     expect(button('Load missing process')).toBeDefined()
-    api.request.mockResolvedValue(
-      page([item('20'), item('30'), item('40')], 'older')
-    )
+    api.request.mockResolvedValue(page([item('20'), item('30'), item('40')], 'older'))
     await act(async () => button('Load missing process').props.onClick())
     expect(
       renderer!.root
@@ -289,16 +319,15 @@ describe('Rooms run inspector', () => {
     expect(texts()).toContain('Process store unavailable')
     expect(button('Refresh')).toBeDefined()
   })
+
   it('shows item-history unavailability and merges crossed detail/item snapshot cursors without skipping either replay gap', async () => {
-    const encode = (revision: number, seq: number) => btoa(JSON.stringify({ v: 1, id: 'run-a', revision, seq, availability: 'available' }))
+    const encode = (revision: number, seq: number) =>
+      btoa(JSON.stringify({ v: 1, id: 'run-a', revision, seq, availability: 'available' }))
     api.request.mockImplementation(async (path: string) =>
       path.endsWith('/items')
         ? {
             ...page([]),
-            availability: {
-              status: 'history_unavailable',
-              reason: 'Recorded items removed'
-            },
+            availability: { status: 'history_unavailable', reason: 'Recorded items removed' },
             eventsCursor: encode(9, 20)
           }
         : { ...runDetail(), eventsCursor: encode(3, 50) }
@@ -306,8 +335,13 @@ describe('Rooms run inspector', () => {
     await render()
     expect(texts()).toContain('Recorded items removed')
     expect(texts()).not.toContain('No retained process items.')
-    expect(JSON.parse(atob(api.start.mock.calls[0][3].cursor))).toMatchObject({ revision: 3, seq: 20, id: 'run-a' })
+    expect(JSON.parse(atob(api.start.mock.calls[0][3].cursor))).toMatchObject({
+      revision: 3,
+      seq: 20,
+      id: 'run-a'
+    })
   })
+
   it('replaces cached pages and explicitly resubscribes after a server replay reset', async () => {
     await render()
     vi.useFakeTimers()
@@ -365,36 +399,27 @@ describe('Rooms run inspector', () => {
     expect(renderer!.root.findAllByType('form')).toHaveLength(0)
   })
 
-  it('loads long content only on request and follows bounded continuation offsets', async () => {
-    await render()
-    api.request.mockResolvedValue({
-      ...page([]),
-      content: {
-        itemId: '20',
-        field: 'text',
-        text: 'first ',
-        offset: 0,
-        nextOffset: 6,
-        totalChars: 10
+  it('loads long recorded content only on request and follows bounded continuation offsets', async () => {
+    api.request.mockImplementation(async (path: string) => {
+      if (path.includes('item_id=20&content_offset=6')) {
+        return { ...page([]), content: { itemId: '20', field: 'text', text: 'last', offset: 6, totalChars: 10 } }
       }
+      if (path.includes('item_id=20')) {
+        return { ...page([]), content: { itemId: '20', field: 'text', text: 'first ', offset: 0, nextOffset: 6, totalChars: 10 } }
+      }
+      if (path.endsWith('/items')) {
+        return page([item('20', 'long reasoning', { kind: 'assistant_reasoning' })])
+      }
+      return runDetail()
     })
+    await render()
     await act(async () => button('Read full recorded content').props.onClick())
-    expect(api.request).toHaveBeenLastCalledWith(
+    expect(api.request).toHaveBeenCalledWith(
       '/v1/rooms/room/runs/run-a/items?item_id=20&content_offset=0',
       'GET',
       undefined,
       expect.any(AbortSignal)
     )
-    api.request.mockResolvedValue({
-      ...page([]),
-      content: {
-        itemId: '20',
-        field: 'text',
-        text: 'last',
-        offset: 6,
-        totalChars: 10
-      }
-    })
     await act(async () => button('Load more').props.onClick())
     expect(texts()).toContain('first last')
     expect(button('Load more')).toBeUndefined()
@@ -410,7 +435,7 @@ describe('Rooms run inspector', () => {
     await act(async () => {
       renderer = create(createElement(RoomMessageRunButton, { message, onRun }))
     })
-    act(() => button('View this run').props.onClick())
+    act(() => button('View Agent session').props.onClick())
     expect(onRun).toHaveBeenCalledWith('original')
     expect(api.request).not.toHaveBeenCalled()
     onRun.mockClear()
@@ -423,7 +448,7 @@ describe('Rooms run inspector', () => {
         })
       )
     )
-    await act(async () => button('View this run').props.onClick())
+    await act(async () => button('View Agent session').props.onClick())
     expect(api.request).toHaveBeenCalledWith(
       '/v1/rooms/room/messages/message/run',
       'GET',

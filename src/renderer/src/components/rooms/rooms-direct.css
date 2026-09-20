@@ -46,8 +46,11 @@
 .rooms-workspace .rooms-message-bubble:has(.rooms-reactions:not(:has(> button))) .rooms-message-interactions { margin: 0; }
 .direct-progress { padding: 0 28px; max-height: 38vh; overflow-y: auto; flex-shrink: 0; font-size: 12px; color: var(--ds-text-muted); }
 .direct-progress-line, .direct-project { display: flex; gap: 10px; align-items: center; padding: 4px 0; }
-.direct-progress button, .direct-failed button { text-decoration: underline; text-underline-offset: 3px; }
-.direct-tool-progress { max-height: 200px; overflow: auto; }
+.direct-progress-line button { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 8px; text-decoration: none; color: var(--ds-text-muted); }
+.direct-progress-line button:hover, .direct-progress-line button.is-active { background: var(--ds-surface-hover); color: var(--ds-text); }
+.direct-progress-line button.is-active { color: var(--ds-accent, #4f46e5); }
+.direct-progress-line button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+.direct-failed button { text-decoration: underline; text-underline-offset: 3px; }
 .direct-failed { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 0; }
 .direct-failed > span { width: 100%; color: var(--ds-text-muted); }
 .direct-new-chat, .direct-model-settings { padding: 4px 24px 24px; }
