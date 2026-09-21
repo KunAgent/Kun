@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, FolderOpen, Menu, MoreHorizontal, PanelRightOpen, Search } from 'lucide-react'
+import { ChevronDown, FolderOpen, Menu, MoreHorizontal, PanelRight, PanelRightOpen, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room, RoomContentReference } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
@@ -34,9 +34,10 @@ export function useDirectChat(room: Room | null, onUpdated: () => Promise<void>)
   }
   return { ...resource, error: error || resource.error, act, context }
 }
-export function RoomDirectHeader({ room, onSidebar, onSearch, onProfile, onModels, onFiles, onReset, onConnect, onTasks }: {
+export function RoomDirectHeader({ room, onSidebar, onSearch, onProfile, onModels, onFiles, onReset, onConnect, onTasks, onSession, sessionOpen, sessionDisabled }: {
   room: Room; onSidebar: () => void; onSearch: () => void; onProfile: () => void; onModels: () => void
   onFiles: () => void; onReset: () => void; onConnect: () => void; onTasks: () => void
+  onSession: () => void; sessionOpen: boolean; sessionDisabled: boolean
 }) {
   const { t } = useTranslation('common')
   const member = room.members[0]
@@ -47,6 +48,8 @@ export function RoomDirectHeader({ room, onSidebar, onSearch, onProfile, onModel
     <button className="direct-current-model" aria-label={t('directModels')} onClick={onModels}><span title={modelLabel(models.data?.main)}>{modelLabel(models.data?.main)}</span><ChevronDown size={13} /></button>
     <div className="direct-header-spacer" />
     <button className="rooms-icon-button" aria-label={t('roomsSearchMessages')} onClick={onSearch}><Search size={18} /></button>
+    <button type="button" className="rooms-icon-button" aria-label={t('roomsViewAgentSession')} title={t('roomsViewAgentSession')}
+      aria-pressed={sessionOpen} disabled={sessionDisabled} onClick={onSession}><PanelRight size={18} /></button>
     <RoomPopover label={t('roomsMoreActions')} trigger={<MoreHorizontal size={20} />} align="end" className="rooms-icon-button">
       {(close) => <div className="rooms-menu-list">
         <button onClick={() => { close(); onProfile() }}>{t('agentsProfileAndMemory')}</button>

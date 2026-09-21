@@ -148,6 +148,11 @@ export function RoomsWorkspaceView({
   const openRun = (runId: string): void => drawer.open({ kind: 'run', runId })
 const topDrawerTarget = drawer.frames.at(-1)?.target
 const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : undefined
+  const latestRunId = privateChat ? direct.data?.active?.runId ?? direct.data?.requests[0]?.runId : undefined
+  const toggleSession = (): void => {
+    if (openRunId) drawer.back()
+    else if (latestRunId) openRun(latestRunId)
+  }
   const openTask = (taskId: string): void => drawer.open({ kind: 'task', taskId })
   const openMember = (memberId: string, rootRequestId?: string): void => drawer.open({ kind: 'section', section: 'members', memberId, rootRequestId })
   const openContent = (reference: RoomContentReference, messageId?: string): void => drawer.open({ kind: 'content', reference, messageId })
@@ -260,7 +265,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
         {privateChat && room ? <RoomDirectHeader room={room} onSidebar={() => setSidebarOpen(true)} onSearch={() => setSearchOpen(!searchOpen)}
           onProfile={() => drawer.open({ kind: 'agent', agentId: room.members[0].participantAgentId })} onModels={() => setModelsOpen(true)}
           onFiles={() => setFilesOpen(true)} onReset={() => void direct.context('reset')} onConnect={() => void direct.context('workspace')}
-          onTasks={() => drawer.section('tasks')} /> : <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
+          onTasks={() => drawer.section('tasks')} onSession={toggleSession} sessionOpen={Boolean(openRunId)} sessionDisabled={!latestRunId} /> : <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
           onSidebar={() => setSidebarOpen(true)}
           onSearch={() => setSearchOpen((value) => !value)}
           onDetails={() => drawer.section('discussion')}

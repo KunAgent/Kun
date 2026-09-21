@@ -296,6 +296,7 @@
   "roomsViewRun": "查看本次运行",
   "roomsAgentSession": "Agent 会话",
   "roomsViewAgentSession": "查看 Agent 会话",
+  "roomsRightSidebar": "右侧边栏",
   "roomsRunTranscriptActions": "会话操作",
   "roomsRunCopyTranscript": "复制会话记录",
   "roomsRunCopied": "已复制",

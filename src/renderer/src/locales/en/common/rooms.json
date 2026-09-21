@@ -298,6 +298,7 @@
   "roomsViewRun": "View this run",
   "roomsAgentSession": "Agent session",
   "roomsViewAgentSession": "View Agent session",
+  "roomsRightSidebar": "Right sidebar",
   "roomsRunTranscriptActions": "Session actions",
   "roomsRunCopyTranscript": "Copy session record",
   "roomsRunCopied": "Copied",
