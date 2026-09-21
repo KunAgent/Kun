@@ -62,6 +62,12 @@
   color: var(--ds-ink);
 }
 
+.ds-composer-usage-money-estimate {
+  margin-left: 0.5rem;
+  color: var(--ds-muted);
+  font-weight: 500;
+}
+
 .ds-composer-usage-cache {
   gap: 0.375rem;
 }
@@ -153,7 +159,8 @@
 
 @container (max-width: 560px) {
   .ds-composer-usage-ttft,
-  .ds-composer-usage-tps {
+  .ds-composer-usage-tps,
+  .ds-composer-usage-money-estimate {
     display: none;
   }
 }

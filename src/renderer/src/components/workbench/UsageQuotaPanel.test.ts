@@ -272,8 +272,8 @@ describe('UsageQuotaPanel', () => {
 
     const output = JSON.stringify(renderer.toJSON())
     expect(output).toContain('￥9.78')
-    expect(output).toContain('参考估值 ≈￥16,880.03')
-    expect(output).toContain('按参考 API 价格和参考汇率估算，并非订阅账户的实际扣费。')
+    expect(output).toContain('订阅折合 ≈￥16,880.03')
+    expect(output).toContain('订阅套餐用量按公开 API 标价折算，不是套餐扣费，也不是按量账单。')
     expect(output).not.toContain('￥9.78 · ≈￥16880.03')
     act(() => renderer.unmount())
   })
