@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, FolderOpen, Menu, MoreHorizontal, PanelRight, PanelRightOpen, Search } from 'lucide-react'
+import { ChevronDown, CircleAlert, FolderOpen, Menu, MoreHorizontal, PanelRight, PanelRightOpen, RotateCcw, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room, RoomContentReference } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
@@ -74,10 +74,12 @@ export function RoomDirectProgress({ room, state, onRun, openRunId, onModels }: 
     {active ? <div className="direct-progress-line"><span role="status">{t(state.data?.approvals.length ? 'roomsState_needs_approval' : state.data?.userInputs.length ? 'roomsState_needs_input' : active.status === 'pending' ? 'directQueued' : active.status === 'recovery_required' ? 'directReconciling' : active.status === 'stopping' ? 'directStopping' : 'directResponding')}{queued ? ' · ' + t('directQueuedCount', { count: queued }) : ''}</span>
       {runId ? <button type="button" aria-pressed={openRunId === runId} className={openRunId === runId ? 'is-active' : ''} onClick={() => onRun(runId)}><PanelRightOpen size={14} />{t('roomsViewAgentSession')}</button> : null}</div> : null}
     {state.data ? <RoomExecutionGates detail={{ ...state.data, userInputs: [] }} onUpdated={async () => state.refresh()} /> : null}
-    {failed ? <div className="direct-failed" role="status"><span>{failed.error || t(failed.status === 'cancelled' ? 'directStopped' : 'directFailed')}</span>
-      {failed.runId ? <button type="button" aria-pressed={openRunId === failed.runId} className={openRunId === failed.runId ? 'is-active' : ''} onClick={() => onRun(failed.runId!)}><PanelRightOpen size={14} />{t('roomsViewAgentSession')}</button> : null}
-      {failed.status !== 'recovery_required' ? <button onClick={() => void state.act('retry', failed)}>{t('directRetry')}</button> : null}
-      <button onClick={onModels}>{t('directModels')}</button></div> : null}
+    {failed ? <div className="direct-failed" role="status"><CircleAlert size={15} /><span>{failed.error || t(failed.status === 'cancelled' ? 'directStopped' : 'directFailed')}</span>
+      <span className="direct-failed-actions">
+        {failed.runId ? <button type="button" aria-pressed={openRunId === failed.runId} className={openRunId === failed.runId ? 'is-active' : ''} onClick={() => onRun(failed.runId!)}><PanelRightOpen size={13} />{t('roomsViewAgentSession')}</button> : null}
+        {failed.status !== 'recovery_required' ? <button type="button" onClick={() => void state.act('retry', failed)}><RotateCcw size={12} />{t('directRetry')}</button> : null}
+        <button type="button" onClick={onModels}>{t('directModels')}</button>
+      </span></div> : null}
     {state.error ? <p role="alert" className="rooms-run-error">{state.error}</p> : null}
   </div>
 }

@@ -46,9 +46,24 @@
 .direct-progress-line button:hover, .direct-progress-line button.is-active { background: var(--ds-surface-hover); color: var(--ds-text); }
 .direct-progress-line button.is-active { color: var(--ds-accent, #4f46e5); }
 .direct-progress-line button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
-.direct-failed button { text-decoration: underline; text-underline-offset: 3px; }
-.direct-failed { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 0; }
-.direct-failed > span { width: 100%; color: var(--ds-text-muted); }
+.direct-failed {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin: 4px 0 10px; padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--ds-danger) 28%, transparent);
+  border-radius: 12px; background: var(--ds-danger-soft);
+}
+.direct-failed > svg { flex-shrink: 0; color: var(--ds-danger); }
+.direct-failed > span { flex: 1; min-width: 0; color: var(--ds-text); line-height: 1.45; overflow-wrap: anywhere; }
+.direct-failed-actions { display: flex; flex-shrink: 0; gap: 6px; margin-left: auto; }
+.direct-failed-actions button {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border: 1px solid var(--ds-border); border-radius: 999px;
+  background: var(--ds-surface-card); color: var(--ds-text);
+  font-size: 11.5px; line-height: 1.35; white-space: nowrap;
+}
+.direct-failed-actions button:hover { background: var(--ds-surface-hover); }
+.direct-failed-actions button.is-active { color: var(--ds-accent, #4f46e5); border-color: color-mix(in srgb, var(--ds-accent, #4f46e5) 45%, var(--ds-border)); }
+.direct-failed-actions button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
 .direct-new-chat, .direct-model-settings { padding: 4px 24px 24px; }
 .direct-recipient { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--ds-border); padding: 10px 0 16px; }
 .direct-recipient input { flex: 1; min-width: 0; outline: none; background: transparent; color: var(--ds-text); }
