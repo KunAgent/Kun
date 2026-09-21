@@ -119,7 +119,7 @@ describe('WorkspaceModeTabs', () => {
   it('hides the rooms attention count after Rooms is opened', () => {
     attention.count = 3
     const html = renderToStaticMarkup(createElement(WorkspaceModeTabs, props('rooms')))
-    expect(html).toContain('title="Rooms"')
+    expect(html).toContain(`title="${i18n.t('roomsLabel')}"`)
     expect(html).not.toContain(' · 3')
     expect(html).not.toContain('>3<')
   })
@@ -148,7 +148,7 @@ describe('WorkspaceModeTabs', () => {
     expect(componentProps.onRoomsOpen).toHaveBeenCalledOnce()
     expect(componentProps.onCodeOpen).not.toHaveBeenCalled()
     act(() => renderer.unmount())
-    expect(renderToStaticMarkup(createElement(WorkspaceModeTabs, props('rooms')))).toContain('title="Rooms"')
+    expect(renderToStaticMarkup(createElement(WorkspaceModeTabs, props('rooms')))).toContain(`title="${i18n.t('roomsLabel')}"`)
   })
 
   it('uses Work as the trigger value in the Work workspace', () => {

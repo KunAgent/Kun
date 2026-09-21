@@ -112,7 +112,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     return { presets: [...presets.values()].map((preset) => {
       const available = !unsupportedProviderIds.includes(String(preset.providerId ?? defaults.providerId))
       return { ...preset, model: preset.model ?? defaults.model, providerId: preset.providerId ?? defaults.providerId,
-        available, ...(available ? {} : { reason: '该执行引擎尚不支持聊天室；请选择原生 API 模型。' }) }
+        available, ...(available ? {} : { reason: '该执行引擎尚不支持 bot；请选择原生 API 模型。' }) }
     }), defaultModel: defaults, unsupportedProviderIds }
   })
   add('GET', '/v1/rooms/attention', (rooms) => rooms.product.attention())
