@@ -65,16 +65,11 @@ export function RoomsWorkspaceView({
 }): ReactElement {
   const { t } = useTranslation('common')
   const state = useRooms('group', false)
-  const [newChatOpen, setNewChatOpen] = useState(false), [profileOpen, setProfileOpen] = useState(false)
+  const [newChatOpen, setNewChatOpen] = useState(false)
   const [sidebarActivity, setSidebarActivity] = useState<RoomSidebarEntry>()
   const receiveSidebarActivity = useCallback((entry: RoomSidebarEntry | undefined) => setSidebarActivity((previous) =>
     previous?.roomId === entry?.roomId && previous?.runningCount === entry?.runningCount && previous?.attentionCount === entry?.attentionCount ? previous : entry), [])
   useRoomUserProfileSync()
-  useEffect(() => {
-    const open = () => setProfileOpen(true)
-    window.addEventListener('kun-room-user-avatar', open)
-    return () => window.removeEventListener('kun-room-user-avatar', open)
-  }, [])
   const navigationSerial = useRef(0)
   const [agentRunTarget, setAgentRunTarget] = useState<{ roomId: string; runId: string } | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -85,6 +80,12 @@ export function RoomsWorkspaceView({
   const { selectedId } = state
   const topicState = useRoomTopics(selectedId)
   const drawer = useRoomDrawerNavigation(selectedId)
+  const openDrawer = drawer.open
+  useEffect(() => {
+    const open = () => openDrawer({ kind: 'profile' })
+    window.addEventListener('kun-room-user-avatar', open)
+    return () => window.removeEventListener('kun-room-user-avatar', open)
+  }, [openDrawer])
   const presentation = useRoomPresentationPreferences()
   const [searchTarget, setSearchTarget] = useState<RoomSearchHit | null>(null)
   useEffect(() => {
@@ -257,7 +258,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           onCreateAgent={() => setNewChatOpen(true)} onCreateGroup={() => setNewChatOpen(true)}
           onDetails={(agentId) => drawer.open({ kind: 'agent', agentId })}
           onSearch={(hit) => { chooseRoom(hit.roomId); setSearchTarget(hit) }}
-          onProfile={() => setProfileOpen(true)} onTeam={() => setNewChatOpen(true)} onManage={() => drawer.open({ kind: 'directory' })} />
+          onProfile={() => drawer.open({ kind: 'profile' })} onTeam={() => setNewChatOpen(true)} onManage={() => drawer.open({ kind: 'directory' })} />
       </aside>
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {privateChat && room ? <RoomDirectHeader room={room} onSidebar={() => setSidebarOpen(true)} onSearch={() => setSearchOpen(!searchOpen)}
@@ -391,6 +392,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
               kind: 'messages', id: messageId, roomId, roomName: '', title: '', preview: '', messageId }) }} />
           if (target.kind === 'directory') return <AgentDirectory key={key} onOpen={(id) => void openAgent(id)}
             onDetails={(agentId) => drawer.open({ kind: 'agent', agentId })} onCreate={() => { drawer.close(); setNewChatOpen(true) }} />
+          if (target.kind === 'profile') return <RoomUserAvatarEditor key={key} variant="panel" onClose={drawer.back} />
           if (!room) return null
           if (target.kind === 'handoffs') return <AgentHandoffPanel key={key} room={room} messages={messages} topics={topicState.topics}
             active={active} selectedId={target.selectedId} onOpenPair={(id) => { chooseRoom(id) }}
@@ -422,7 +424,6 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
         }} /> : null}
       {newChatOpen ? <RoomNewChat onClose={() => setNewChatOpen(false)} onOpen={chooseRoom} onAgent={(id) => void openAgent(id)}
         onFill={() => drawer.open({ kind: 'agent' })} /> : null}
-      {profileOpen ? <RoomUserAvatarEditor onClose={() => setProfileOpen(false)} /> : null}
     </div>
   )
 }

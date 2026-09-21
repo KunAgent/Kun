@@ -16,6 +16,7 @@ export type RoomDrawerTarget =
   | { kind: 'models' }
   | { kind: 'settings' }
   | { kind: 'directory' }
+  | { kind: 'profile' }
 export type RoomDrawerFrame = { key: number; target: RoomDrawerTarget; returnFocus: HTMLElement | null }
 
 export function useRoomDrawerNavigation(roomId: string | null) {
@@ -69,7 +70,7 @@ export function RoomDrawerNavigation({ frames, onBack, onClose, onSection, rende
   }, [current?.key])
   if (!current) return null
   const section = [...frames].reverse().find((frame) => frame.target.kind === 'section')?.target
-  const title = current.target.kind === 'handoffs' ? t('agentsHandoffs') : current.target.kind === 'agent' ? t(current.target.agentId ? 'agentsProfileAndMemory' : 'agentsCreate') : current.target.kind === 'reply' ? t('roomsReplyThreadTitle') : current.target.kind === 'content' ? t('roomsReplyContentTitle') : current.target.kind === 'run' ? t('roomsAgentSession') : current.target.kind === 'files' ? t('directFiles') : current.target.kind === 'models' ? t('directModels') : current.target.kind === 'settings' ? t('roomsSettings') : current.target.kind === 'directory' ? t('agentsDirectory') : undefined
+  const title = current.target.kind === 'handoffs' ? t('agentsHandoffs') : current.target.kind === 'agent' ? t(current.target.agentId ? 'agentsProfileAndMemory' : 'agentsCreate') : current.target.kind === 'reply' ? t('roomsReplyThreadTitle') : current.target.kind === 'content' ? t('roomsReplyContentTitle') : current.target.kind === 'run' ? t('roomsAgentSession') : current.target.kind === 'files' ? t('directFiles') : current.target.kind === 'models' ? t('directModels') : current.target.kind === 'settings' ? t('roomsSettings') : current.target.kind === 'directory' ? t('agentsDirectory') : current.target.kind === 'profile' ? t('roomsMyAvatar') : undefined
   return <RoomDetailsDrawer section={section?.kind === 'section' ? section.section : 'discussion'}
     onSection={onSection} onClose={onClose} onBack={onBack} frameKey={current.key}
     taskOpen={current.target.kind === 'task'} runOpen={current.target.kind === 'run'}

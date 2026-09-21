@@ -36,15 +36,15 @@
 .rooms-content-open { display: flex; align-items: center; gap: 6px; color: var(--ds-text-muted); font-size: 12px; }
 .rooms-content-open { justify-self: start; padding: 7px 10px; border: 1px solid var(--ds-border); border-radius: 8px; }
 .rooms-content-loading { padding: 14px; color: var(--ds-text-muted); font-size: 12px; }
-.rooms-lightbox-backdrop { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--ds-text) 45%, transparent); }
-.rooms-lightbox { display: flex; flex-direction: column; width: min(1100px, 94vw); max-height: 92vh; padding: 12px; border: 1px solid var(--ds-border); border-radius: 16px; background: var(--ds-surface-elevated); box-shadow: var(--ds-shadow-overlay); }
+.rooms-lightbox-backdrop { position: fixed; inset: 0; z-index: 2000; display: flex; justify-content: flex-end; background: color-mix(in srgb, var(--ds-text) 45%, transparent); }
+.rooms-lightbox { display: flex; flex-direction: column; width: min(640px, 100%); height: 100%; padding: 12px; border-left: 1px solid var(--ds-border); background: var(--ds-surface-elevated); box-shadow: var(--ds-shadow-overlay); }
 .rooms-lightbox header { display: flex; gap: 14px; align-items: center; padding: 2px 2px 12px; color: var(--ds-text); }
 .rooms-lightbox header > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .rooms-lightbox header > button,
 .rooms-lightbox header > a { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px; }
 .rooms-lightbox header > button:hover,
 .rooms-lightbox header > a:hover { background: var(--ds-surface-hover); }
-.rooms-lightbox > img { min-height: 0; max-width: 100%; max-height: calc(92vh - 80px); width: auto; height: auto; margin: auto; object-fit: contain; }
+.rooms-lightbox > img { min-height: 0; max-width: 100%; max-height: calc(100vh - 80px); width: auto; height: auto; margin: auto; object-fit: contain; }
 .rooms-link-preview-anchor:empty { height: 1px; }
 .rooms-link-preview { display: flex; gap: 10px; align-items: start; max-width: 420px; margin-top: 10px; padding: 11px; border: 1px solid var(--ds-border); border-radius: 10px; text-align: left; background: var(--ds-surface-card); }
 .rooms-link-preview > img { width: 70px; height: 70px; flex-shrink: 0; object-fit: cover; border-radius: 6px; }

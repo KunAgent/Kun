@@ -82,7 +82,8 @@ describe('single Rooms drawer navigation stack', () => {
       [{ kind: 'files' }, 'Conversation files'],
       [{ kind: 'models' }, 'Model settings'],
       [{ kind: 'settings' }, 'bot settings'],
-      [{ kind: 'directory' }, 'Agents']
+      [{ kind: 'directory' }, 'Agents'],
+      [{ kind: 'profile' }, 'My avatar']
     ]
     for (const [target, label] of titles) {
       act(() => navigation.open(target))
