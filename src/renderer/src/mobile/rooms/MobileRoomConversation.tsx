@@ -65,7 +65,7 @@ export function MobileRoomConversation(props: MobileRoomConversationProps) {
       <RoomTimeline room={room} messages={state.messages} tasks={state.tasks}
         cursor={state.messageCursor} moreBusy={state.moreBusy} loadEarlier={state.loadEarlier}
         onPin={(message) => { void pin(message) }} onTask={props.onTask} jumpMessageId={null} onJumped={() => undefined}
-        onRun={props.onRun} onReplyThread={props.onReply}
+        onRun={props.onRun} onReply={props.onReply}
         onOpenContent={(reference, messageId) => setContent({ reference, messageId })}
         afterMessages={pending.pending.map((item) => <RoomPendingSendRow key={item.clientRequestId}
           item={item} onRetry={retry} onDismiss={pending.dismiss} />)} />

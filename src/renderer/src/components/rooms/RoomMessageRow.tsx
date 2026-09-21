@@ -24,6 +24,7 @@ export function RoomMessageRow({
   task,
   referencedMessage,
   onReply,
+  onThread,
   onPin,
   onTask,
   onViewReply,
@@ -39,6 +40,7 @@ export function RoomMessageRow({
   task?: RoomTask
   referencedMessage?: RoomMessage
   onReply: (message: RoomMessage) => void
+  onThread?: (message: RoomMessage) => void
   onPin: (message: RoomMessage) => void
   onTask: (id: string) => void
   onViewReply: (id: string) => void
@@ -152,7 +154,7 @@ export function RoomMessageRow({
         </div>
         <div className="rooms-message-footer">
           {message.handoffId && onHandoff ? <button type="button" className="rooms-run-link" onClick={() => onHandoff(message.handoffId!)}>{t('agentsViewHandoff')}</button> : null}
-          {message.replyCount ? <button type="button" className="rooms-reply-count" onClick={() => onReply(message)}><Reply size={13} />{t('roomsReplyCount', { count: message.replyCount })}</button> : null}
+          {message.replyCount ? <button type="button" className="rooms-reply-count" onClick={() => (onThread ?? onReply)(message)}><Reply size={13} />{t('roomsReplyCount', { count: message.replyCount })}</button> : null}
           {message.taskId ? (
             <button
               type="button"

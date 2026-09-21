@@ -42,6 +42,7 @@ export function RoomTimeline({
   onMember,
   onRun,
   onHandoff,
+  onReply,
   onReplyThread,
   onOpenContent,
   afterMessages,
@@ -62,6 +63,7 @@ export function RoomTimeline({
   onMember?: (id: string, rootRequestId?: string) => void
   onRun?: (id: string) => void
   onHandoff?: (id: string) => void
+  onReply?: (message: RoomMessage) => void
   onReplyThread?: (message: RoomMessage) => void
   onOpenContent?: (reference: RoomContentReference, messageId?: string) => void
   afterMessages?: ReactNode
@@ -322,13 +324,14 @@ export function RoomTimeline({
         .then((result) => setFocused(result.message))
         .catch((cause) => setError(String(cause)))
   }
-  const actions = useRef({ onRun, onReplyThread, reply, viewReply, onTask, onMember })
-  actions.current = { onRun, onReplyThread, reply, viewReply, onTask, onMember }
+  const actions = useRef({ onRun, onReply, onReplyThread, reply, viewReply, onTask, onMember })
+  actions.current = { onRun, onReply, onReplyThread, reply, viewReply, onTask, onMember }
   const stableActions = useMemo(() => ({
     task: (id: string) => { setFocused(null); actions.current.onTask(id) },
     member: (id: string, rootRequestId?: string) => { setFocused(null); actions.current.onMember?.(id, rootRequestId) },
     run: (id: string) => { setFocused(null); actions.current.onRun?.(id) },
-    reply: (message: RoomMessage) => (actions.current.onReplyThread ?? actions.current.reply)(message),
+    reply: (message: RoomMessage) => (actions.current.onReply ?? actions.current.reply)(message),
+    thread: (message: RoomMessage) => (actions.current.onReplyThread ?? actions.current.onReply ?? actions.current.reply)(message),
     viewReply: (id: string) => actions.current.viewReply(id)
   }), [])
   const renderMessage = (message: RoomMessage) => (
@@ -348,6 +351,7 @@ export function RoomTimeline({
           : undefined
       }
       onReply={stableActions.reply}
+      onThread={stableActions.thread}
       onPin={onPin}
       onTask={stableActions.task}
       onViewReply={stableActions.viewReply}
@@ -571,4 +575,4 @@ export function RoomTimeline({
 const StableMessageRow = memo(function StableMessageRow(props: Parameters<typeof RoomMessageRow>[0]) {
   return <RoomMessageRow {...props} />
 }, (a, b) => a.message === b.message && a.room === b.room && a.member === b.member && a.task === b.task && a.referencedMessage === b.referencedMessage &&
-  a.onPin === b.onPin && a.onTask === b.onTask && a.onMember === b.onMember && a.onOpenContent === b.onOpenContent && a.onHandoff === b.onHandoff && a.onReply === b.onReply && a.onRun === b.onRun && a.onViewReply === b.onViewReply)
+  a.onPin === b.onPin && a.onTask === b.onTask && a.onMember === b.onMember && a.onOpenContent === b.onOpenContent && a.onHandoff === b.onHandoff && a.onReply === b.onReply && a.onThread === b.onThread && a.onRun === b.onRun && a.onViewReply === b.onViewReply)

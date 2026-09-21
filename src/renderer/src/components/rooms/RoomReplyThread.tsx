@@ -7,9 +7,10 @@ import { useRoomReplyThread } from './useRoomReplyThread'
 import { roomPath, roomsRequest } from './rooms-client'
 import './rooms-replies.css'
 
-export function RoomReplyThread({ room, messageId, tasks, active = true, autoFocus = true, onSend, onPin, onTask, onRun, onMember, onOpenContent }: {
+export function RoomReplyThread({ room, messageId, tasks, active = true, autoFocus = true, onSend, onReply, onPin, onTask, onRun, onMember, onOpenContent }: {
   room: Room; messageId: string; tasks: RoomTask[]; active?: boolean; autoFocus?: boolean
   onSend: (message: SendRoomMessage) => Promise<void>
+  onReply?: (message: RoomMessage) => void
   onPin: (message: RoomMessage) => void; onTask: (id: string) => void; onRun: (id: string) => void
   onMember: (id: string, rootRequestId?: string) => void
   onOpenContent: (reference: RoomContentReference, messageId?: string) => void
@@ -56,7 +57,7 @@ export function RoomReplyThread({ room, messageId, tasks, active = true, autoFoc
   const render = (message: RoomMessage) => <RoomMessageRow key={message.id} room={room} idPrefix={prefix} message={message}
     member={room.members.find((member) => member.id === message.authorMemberId)} task={tasks.find((task) => task.id === message.taskId)}
     referencedMessage={message.replyToMessageId ? byId.get(message.replyToMessageId) : undefined}
-    onReply={setReplyTarget} onPin={onPin} onTask={onTask} onRun={onRun} onMember={onMember}
+    onReply={onReply ?? setReplyTarget} onPin={onPin} onTask={onTask} onRun={onRun} onMember={onMember}
     onViewReply={(id) => void viewReply(id)} onOpenContent={onOpenContent} />
   const target = replyTarget ?? root
   return <section className="rooms-reply-thread" aria-label={t('roomsReplyThreadTitle')} data-display-thread-root-id={root?.id}>
@@ -76,7 +77,7 @@ export function RoomReplyThread({ room, messageId, tasks, active = true, autoFoc
       {state.error || jumpError ? <p className="rooms-message-error" role="alert">{state.error || jumpError}</p> : null}
       {state.error ? <button type="button" className="rooms-run-secondary" onClick={() => void state.refresh()}>{t('roomsRefresh')}</button> : null}
     </div>
-    {root && target && room.conversationKind !== 'agent_agent' ? <RoomComposer room={room} tasks={tasks} draftId={`reply:${room.id}:${root.id}`} autoFocus={autoFocus}
+    {!onReply && root && target && room.conversationKind !== 'agent_agent' ? <RoomComposer room={room} tasks={tasks} draftId={`reply:${room.id}:${root.id}`} autoFocus={autoFocus}
       replyTarget={{ messageId: target.id, body: target.body, rootRequestId: target.rootRequestId }}
       onSend={async (input) => {
         await onSend({ ...input, replyToMessageId: input.replyToMessageId ?? target.id })

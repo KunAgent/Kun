@@ -36,4 +36,15 @@ describe('room message row actions', () => {
     await act(async () => { renderer = create(createElement(RoomMessageRow, { message, ...props })) })
     expect(renderer!.root.findAllByType(RoomEmojiPicker)).toHaveLength(0)
   })
+
+  it('routes the reply-count badge to the thread viewer while the action button replies', async () => {
+    const onThread = vi.fn(), onReply = vi.fn()
+    const threaded = { ...message, replyCount: 3 }
+    await act(async () => { renderer = create(createElement(RoomMessageRow, { room, message: threaded, ...props, onReply, onThread })) })
+    act(() => renderer!.root.findByProps({ className: 'rooms-reply-count' }).props.onClick())
+    expect(onThread).toHaveBeenCalledWith(threaded)
+    expect(onReply).not.toHaveBeenCalled()
+    act(() => renderer!.root.findByProps({ 'aria-label': 'Reply' }).props.onClick())
+    expect(onReply).toHaveBeenCalledWith(threaded)
+  })
 })
