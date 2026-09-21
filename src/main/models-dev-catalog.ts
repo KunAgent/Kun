@@ -95,6 +95,7 @@ const PROFILE_MATCHES: Record<string, ModelsDevProviderMatch> = {
   'gemini-cli-subscription': catalogMatch('google', 'enrichment-only'),
   ollama: catalogMatch('ollama-cloud', 'enrichment-only'),
   'grok-subscription': catalogMatch('xai', 'enrichment-only'),
+  opper: catalogMatch('opper'),
   'vercel-ai-gateway': catalogMatch('vercel')
 }
 

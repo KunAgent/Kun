@@ -472,6 +472,19 @@ export const PROVIDER_CATALOG = [
     credentialUrl: 'https://accounts.x.ai'
   },
   {
+    id: 'opper',
+    name: 'Opper',
+    category: 'api',
+    kind: 'http',
+    authFlow: 'api-key',
+    authType: 'api-key',
+    baseUrl: 'https://api.opper.ai/v3/compat',
+    endpointFormat: 'chat_completions',
+    models: [],
+    docsUrl: 'https://docs.opper.ai',
+    credentialUrl: 'https://platform.opper.ai'
+  },
+  {
     id: 'vercel-ai-gateway',
     name: 'Vercel AI Gateway',
     category: 'api',
