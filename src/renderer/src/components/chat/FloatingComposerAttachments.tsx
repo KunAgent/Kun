@@ -112,6 +112,7 @@ function AttachmentImagePreview({
         title={title}
         downloadHref={previewUrl}
         downloadName={title}
+        copyDataUrl={previewUrl}
         onClose={() => setImagePreviewOpen(false)}
       />
     </span>

@@ -1,22 +1,18 @@
+import { clipboard, nativeImage } from 'electron'
 import { basename, extname } from 'node:path'
-import { resolveWriteMarkdownResource } from '../../shared/write-markdown-resource'
-import { X_ARTICLE_TITLE_MISSING } from '../../shared/write-export'
+import { fileURLToPath } from 'node:url'
+import sharp from 'sharp'
+import { resolveWriteMarkdownResource, resolveWriteMarkdownResourcePath } from '../../shared/write-markdown-resource'
+import {
+  X_ARTICLE_IMAGE_MISSING,
+  type WriteRichClipboardPayload,
+  type WriteRichClipboardResult
+} from '../../shared/write-export'
 
 export const X_ARTICLE_CHAR_LIMIT = 100_000
-export { X_ARTICLE_TITLE_MISSING }
+export { X_ARTICLE_IMAGE_MISSING }
 
 const STATIC_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp'])
-const LINK_MEDIA_EXTENSIONS = new Set([
-  'gif',
-  'svg',
-  'bmp',
-  'mp4',
-  'webm',
-  'mov',
-  'm4v',
-  'html',
-  'htm'
-])
 
 const HEADING_PATTERN = /^(#{1,6})[ \t]+(.+)$/
 const UNORDERED_LIST_PATTERN = /^[-*+][ \t]+(.+)$/
@@ -28,12 +24,18 @@ const TWEET_URL_PATTERN =
 const INLINE_TOKEN_PATTERN =
   /(!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]+\)|\*\*(?:[^*]|\*(?!\*))+?\*\*|~~[^~]+?~~|\*[^*\n]+?\*)/g
 
+export type XArticleClipboardImage = {
+  label: string
+  filePath: string
+}
+
 export type WriteXArticleClipboardFragment = {
   html: string
   text: string
   title: string
   simplified: boolean
   overLimit: boolean
+  images: XArticleClipboardImage[]
 }
 
 type MarkdownSanitizeResult = {
@@ -47,7 +49,7 @@ type InlineToken =
   | { type: 'italic'; text: string }
   | { type: 'strike'; text: string }
   | { type: 'link'; text: string; href: string }
-  | { type: 'image'; alt: string; src: string }
+  | { type: 'image'; alt: string; src: string; placeholder?: string }
 
 type XArticleBlock =
   | { type: 'heading'; level: 1 | 2 | 3 | 4 | 5 | 6; content: InlineToken[] }
@@ -70,6 +72,7 @@ export function buildWriteXArticleClipboardFragment(options: {
     blocks[0]?.type === 'heading' && blocks[0].level === 1 ? blocks[0] : undefined
   const title = titleBlock ? inlineToText(titleBlock.content) : ''
   const bodyBlocks = titleBlock ? blocks.slice(1) : blocks
+  const images = bindXArticleLocalImages(bodyBlocks, options.sourcePath)
   const text = serializeXArticleText(bodyBlocks)
   const html = wrapXArticleClipboardHtml(
     serializeXArticleHtml(bodyBlocks, options.sourcePath)
@@ -79,53 +82,72 @@ export function buildWriteXArticleClipboardFragment(options: {
     text,
     title,
     simplified: sanitized.simplified,
-    overLimit: text.length >= X_ARTICLE_CHAR_LIMIT
+    overLimit: text.length >= X_ARTICLE_CHAR_LIMIT,
+    images
   }
 }
 
-export function buildWriteXArticleTitleClipboard(title: string): {
-  html: string
-  text: string
-} {
-  const text = title.trim()
-  return {
-    html: wrapXArticleClipboardHtml(`<p>${escapeHtml(text)}</p>`),
-    text
-  }
-}
-
-export function resolveXArticleClipboardWrite(
+export function resolveXArticleImageClipboardWrite(
   fragment: WriteXArticleClipboardFragment,
-  profile: 'x-articles' | 'x-articles-title'
+  imageIndex: number
 ):
-  | {
-      ok: true
-      html: string
-      text: string
-      title: string
-      simplified: boolean
-      overLimit: boolean
-    }
+  | { ok: true; filePath: string; label: string; imageIndex: number; imageCount: number }
   | { ok: false; message: string } {
-  if (profile === 'x-articles-title') {
-    if (!fragment.title) return { ok: false, message: X_ARTICLE_TITLE_MISSING }
-    const titleClip = buildWriteXArticleTitleClipboard(fragment.title)
-    return {
-      ok: true,
-      html: titleClip.html,
-      text: titleClip.text,
-      title: fragment.title,
-      simplified: false,
-      overLimit: false
-    }
-  }
+  const image = fragment.images[imageIndex]
+  if (!image) return { ok: false, message: X_ARTICLE_IMAGE_MISSING }
   return {
     ok: true,
+    filePath: image.filePath,
+    label: image.label,
+    imageIndex,
+    imageCount: fragment.images.length
+  }
+}
+
+export async function writeXArticleImageToClipboard(filePath: string): Promise<void> {
+  let image = nativeImage.createFromPath(filePath)
+  if (image.isEmpty()) {
+    image = nativeImage.createFromBuffer(await sharp(filePath).png().toBuffer())
+  }
+  if (image.isEmpty()) {
+    throw new Error(`Unable to copy image ${basename(filePath)}`)
+  }
+  clipboard.writeImage(image)
+}
+
+export async function copyWriteXArticleToSystemClipboard(
+  payload: WriteRichClipboardPayload,
+  sourcePath: string
+): Promise<WriteRichClipboardResult> {
+  const fragment = buildWriteXArticleClipboardFragment({
+    sourcePath,
+    content: payload.content
+  })
+  const profile = payload.profile === 'x-articles-image' ? 'x-articles-image' : 'x-articles'
+  if (profile === 'x-articles-image') {
+    const selected = resolveXArticleImageClipboardWrite(fragment, payload.imageIndex ?? 0)
+    if (!selected.ok) return selected
+    await writeXArticleImageToClipboard(selected.filePath)
+    return {
+      ok: true,
+      copiedAt: new Date().toISOString(),
+      profile,
+      imageIndex: selected.imageIndex,
+      imageCount: selected.imageCount
+    }
+  }
+  clipboard.write({
     html: fragment.html,
-    text: fragment.text,
+    text: fragment.text
+  })
+  return {
+    ok: true,
+    copiedAt: new Date().toISOString(),
+    profile,
     title: fragment.title,
     simplified: fragment.simplified,
-    overLimit: fragment.overLimit
+    overLimit: fragment.overLimit,
+    imageCount: fragment.images.length
   }
 }
 
@@ -169,7 +191,8 @@ function buildPlainTextFragment(content: string): WriteXArticleClipboardFragment
     text,
     title: '',
     simplified: false,
-    overLimit: text.length >= X_ARTICLE_CHAR_LIMIT
+    overLimit: text.length >= X_ARTICLE_CHAR_LIMIT,
+    images: []
   }
 }
 
@@ -296,7 +319,7 @@ function serializeXArticleHtml(blocks: XArticleBlock[], sourcePath: string): str
 
 function serializeParagraphHtml(content: InlineToken[], sourcePath: string): string {
   if (content.length === 1 && content[0]?.type === 'image') {
-    return imageToHtml(content[0], sourcePath, true)
+    return imageToHtml(content[0], true)
   }
   if (content.length === 1 && content[0]?.type === 'text' && TWEET_URL_PATTERN.test(content[0].text.trim())) {
     const url = content[0].text.trim()
@@ -344,7 +367,7 @@ function inlineToHtml(tokens: InlineToken[], sourcePath: string): string {
         case 'link':
           return `<a href="${escapeAttribute(resolveHref(token.href, sourcePath))}">${escapeHtml(token.text)}</a>`
         case 'image':
-          return imageToHtml(token, sourcePath, false)
+          return imageToHtml(token, false)
       }
     })
     .join('')
@@ -355,26 +378,25 @@ function inlineToText(tokens: InlineToken[]): string {
     .map((token) => {
       if (token.type === 'link') return token.text
       if (token.type === 'image') {
-        return isXArticleInlineImageSrc(token.src)
-          ? token.alt || fileNameFromSrc(token.src)
-          : `📷 ${token.alt || fileNameFromSrc(token.src)}`
+        if (token.placeholder) return token.placeholder
+        if (isRemoteHttpUrl(token.src)) return token.alt || fileNameFromSrc(token.src)
+        return `📷 ${token.alt || fileNameFromSrc(token.src)}`
       }
       return token.text
     })
     .join('')
 }
 
-function imageToHtml(token: Extract<InlineToken, { type: 'image' }>, sourcePath: string, block: boolean): string {
-  const label = token.alt.trim() || fileNameFromSrc(token.src)
-  if (!isXArticleInlineImageSrc(token.src)) {
-    const inner = /^https?:\/\//i.test(token.src)
-      ? `<a href="${escapeAttribute(token.src)}">📷 ${escapeHtml(label)}</a>`
-      : `📷 ${escapeHtml(label)}`
-    return block ? `<p>${inner}</p>` : inner
+function imageToHtml(token: Extract<InlineToken, { type: 'image' }>, block: boolean): string {
+  if (isRemoteHttpUrl(token.src)) {
+    const img = `<img src="${escapeAttribute(token.src)}" alt="${escapeAttribute(token.alt)}">`
+    return block ? `<p>${img}</p>` : img
   }
-  const src = resolveWriteMarkdownResource(token.src, sourcePath) ?? token.src
-  const img = `<img src="${escapeAttribute(src)}" alt="${escapeAttribute(token.alt)}">`
-  return block ? `<p>${img}</p>` : img
+  if (token.placeholder) {
+    return block ? `<p>${escapeHtml(token.placeholder)}</p>` : escapeHtml(token.placeholder)
+  }
+  const label = token.alt.trim() || fileNameFromSrc(token.src)
+  return block ? `<p>📷 ${escapeHtml(label)}</p>` : `📷 ${escapeHtml(label)}`
 }
 
 function autolinkBareUrl(text: string): string | null {
@@ -385,6 +407,56 @@ function autolinkBareUrl(text: string): string | null {
 function resolveHref(href: string, sourcePath: string): string {
   if (/^https?:\/\//i.test(href) || href.startsWith('mailto:')) return href
   return resolveWriteMarkdownResource(href, sourcePath) ?? href
+}
+
+function bindXArticleLocalImages(blocks: XArticleBlock[], sourcePath: string): XArticleClipboardImage[] {
+  const images: XArticleClipboardImage[] = []
+  visitXArticleTokens(blocks, (token) => {
+    if (token.type !== 'image') return
+    const filePath = resolveCopyableLocalImagePath(token.src, sourcePath)
+    if (!filePath) return
+    token.placeholder = xArticleImagePlaceholderLabel(images.length + 1)
+    images.push({ label: token.placeholder, filePath })
+  })
+  return images
+}
+
+function visitXArticleTokens(blocks: XArticleBlock[], visit: (token: InlineToken) => void): void {
+  for (const block of blocks) {
+    if (block.type === 'hr') continue
+    if (block.type === 'list') {
+      for (const item of block.items) {
+        for (const token of item) visit(token)
+      }
+      continue
+    }
+    for (const token of block.content) visit(token)
+  }
+}
+
+function xArticleImagePlaceholderLabel(index: number): string {
+  return `图片 ${index}`
+}
+
+function resolveCopyableLocalImagePath(src: string, sourcePath: string): string | undefined {
+  const value = src.trim()
+  if (!value || isRemoteHttpUrl(value) || value.startsWith('data:')) return undefined
+  let filePath: string | undefined
+  if (/^file:/i.test(value)) {
+    try {
+      filePath = fileURLToPath(value)
+    } catch {
+      return undefined
+    }
+  } else {
+    filePath = resolveWriteMarkdownResourcePath(value, sourcePath)
+  }
+  if (!filePath) return undefined
+  return STATIC_IMAGE_EXTENSIONS.has(extensionOf(filePath)) ? filePath : undefined
+}
+
+function isRemoteHttpUrl(src: string): boolean {
+  return /^https?:\/\//i.test(src.trim())
 }
 
 function unwrapFencedCode(source: string): MarkdownSanitizeResult {
@@ -496,23 +568,6 @@ function fileNameFromSrc(src: string): string {
   const path = src.trim().split(/[?#]/)[0] ?? src
   const name = basename(path.replaceAll('\\', '/'))
   return name || src
-}
-
-function isXArticleInlineImageSrc(src: string | undefined): boolean {
-  if (!src?.trim()) return false
-  const value = src.trim()
-  if (value.startsWith('data:image/gif') || value.startsWith('data:image/svg')) return false
-  if (
-    value.startsWith('data:image/png') ||
-    value.startsWith('data:image/jpeg') ||
-    value.startsWith('data:image/webp')
-  ) {
-    return true
-  }
-  const extension = extensionOf(value)
-  if (!extension) return /^https?:\/\//i.test(value)
-  if (LINK_MEDIA_EXTENSIONS.has(extension)) return false
-  return STATIC_IMAGE_EXTENSIONS.has(extension)
 }
 
 function escapeHtml(value: string): string {

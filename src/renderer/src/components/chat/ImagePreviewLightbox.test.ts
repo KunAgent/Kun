@@ -1,5 +1,20 @@
-import { describe, expect, it } from 'vitest'
-import { imagePreviewDisplaySize, imagePreviewStageStyle } from './ImagePreviewLightbox'
+import { createElement, type ReactNode } from 'react'
+import { act, create } from 'react-test-renderer'
+import { describe, expect, it, vi } from 'vitest'
+import { ImagePreviewLightbox, imagePreviewDisplaySize, imagePreviewStageStyle } from './ImagePreviewLightbox'
+
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-i18next')>()),
+  useTranslation: () => ({ t: (key: string) => key })
+}))
+
+vi.mock('react-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-dom')>()
+  return {
+    ...actual,
+    createPortal: (node: ReactNode) => node
+  }
+})
 
 describe('ImagePreviewLightbox', () => {
   const portrait = { width: 1_000, height: 2_000 }
@@ -66,5 +81,44 @@ describe('ImagePreviewLightbox', () => {
       width: 400,
       height: 200
     })
+  })
+
+  it('renders a copy control when copy is enabled', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    vi.stubGlobal('document', { body: { style: { overflow: '' } } })
+    let renderer: ReturnType<typeof create>
+    await act(async () => {
+      renderer = create(
+        createElement(ImagePreviewLightbox, {
+          open: true,
+          src: 'data:image/png;base64,QQ==',
+          alt: 'hero',
+          onCopy: () => undefined,
+          onClose: () => undefined
+        })
+      )
+    })
+    expect(renderer!.root.findByProps({ 'aria-label': 'imagePreviewCopy' })).toBeTruthy()
+    await act(async () => renderer!.unmount())
+    vi.unstubAllGlobals()
+  })
+
+  it('does not render a copy control without a copy source', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    vi.stubGlobal('document', { body: { style: { overflow: '' } } })
+    let renderer: ReturnType<typeof create>
+    await act(async () => {
+      renderer = create(
+        createElement(ImagePreviewLightbox, {
+          open: true,
+          src: 'data:image/png;base64,QQ==',
+          alt: 'hero',
+          onClose: () => undefined
+        })
+      )
+    })
+    expect(() => renderer!.root.findByProps({ 'aria-label': 'imagePreviewCopy' })).toThrow()
+    await act(async () => renderer!.unmount())
+    vi.unstubAllGlobals()
   })
 })

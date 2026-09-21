@@ -1,6 +1,10 @@
 import type { RefObject } from 'react'
 import type { TFunction } from 'i18next'
-import { X_ARTICLE_TITLE_MISSING, type WriteExportFormat, type WriteRichClipboardProfile } from '@shared/write-export'
+import {
+  X_ARTICLE_IMAGE_MISSING,
+  type WriteExportFormat,
+  type WriteRichClipboardProfile
+} from '@shared/write-export'
 import { useWriteWorkspaceStore, writeJoinPath } from '../../write/write-workspace-store'
 import { pathsEqual } from '../../write/write-workspace-store-helpers'
 import { formatWorkspacePickerError } from '../../lib/format-workspace-picker-error'
@@ -40,6 +44,8 @@ type Params = {
   setExportMenuOpen: (value: boolean) => void
   setExportingFormat: (value: ExportInFlight) => void
   setPresentationInFlight: (value: boolean) => void
+  xArticleImageIndex: number
+  setXArticleImageState: (state: { count: number; index: number }) => void
 }
 
 export function createWriteWorkspaceFileActions({
@@ -67,7 +73,9 @@ export function createWriteWorkspaceFileActions({
   showExportNotice,
   setExportMenuOpen,
   setExportingFormat,
-  setPresentationInFlight
+  setPresentationInFlight,
+  xArticleImageIndex,
+  setXArticleImageState
 }: Params) {
   const pickWriteWorkspace = async (): Promise<void> => {
     try {
@@ -199,17 +207,26 @@ export function createWriteWorkspaceFileActions({
         path: activeFilePath,
         workspaceRoot,
         content: fileContent,
-        profile
+        profile,
+        ...(profile === 'x-articles-image' ? { imageIndex: xArticleImageIndex } : {})
       })
       if (!result.ok) {
         showExportNotice({
           tone: 'error',
-          message:
-            profile === 'x-articles-title' && result.message === X_ARTICLE_TITLE_MISSING
-              ? t('writeCopyXArticleTitleMissing')
-              : t('writeCopyRichTextFailed', { message: result.message })
+          message: copyRichTextErrorMessage(profile, result.message, t)
         })
         return
+      }
+      if (profile === 'x-articles') {
+        setXArticleImageState({ count: result.imageCount ?? 0, index: 0 })
+      }
+      if (profile === 'x-articles-image') {
+        const count = result.imageCount ?? 0
+        const current = result.imageIndex ?? 0
+        setXArticleImageState({
+          count,
+          index: count > 0 ? (current + 1) % count : 0
+        })
       }
       showExportNotice({
         tone: 'success',
@@ -230,7 +247,7 @@ export function createWriteWorkspaceFileActions({
   return {
     copyCurrentFileAsRichText,
     copyCurrentFileAsXArticle: () => copyCurrentFileAsRichText('x-articles'),
-    copyCurrentFileAsXArticleTitle: () => copyCurrentFileAsRichText('x-articles-title'),
+    copyCurrentFileAsXArticleImage: () => copyCurrentFileAsRichText('x-articles-image'),
     createDraftFile,
     exportCurrentFile,
     generatePresentation,
@@ -238,14 +255,34 @@ export function createWriteWorkspaceFileActions({
   }
 }
 
-function copyRichTextSuccessMessage(
+function copyRichTextErrorMessage(
   profile: WriteRichClipboardProfile,
-  result: { title?: string; simplified?: boolean; overLimit?: boolean },
+  message: string,
   t: TFunction<'common'>
 ): string {
-  if (profile === 'x-articles-title') return t('writeCopyXArticleTitleSuccess')
+  if (profile === 'x-articles-image' && message === X_ARTICLE_IMAGE_MISSING) {
+    return t('writeCopyXArticleImageMissing')
+  }
+  return t('writeCopyRichTextFailed', { message })
+}
+
+function copyRichTextSuccessMessage(
+  profile: WriteRichClipboardProfile,
+  result: { title?: string; simplified?: boolean; overLimit?: boolean; imageCount?: number; imageIndex?: number },
+  t: TFunction<'common'>
+): string {
+  if (profile === 'x-articles-image') {
+    const current = (result.imageIndex ?? 0) + 1
+    const total = result.imageCount ?? 0
+    return t('writeCopyXArticleImageSuccess', {
+      current,
+      total,
+      label: `图片 ${current}`
+    })
+  }
   if (profile !== 'x-articles') return t('writeCopyRichTextSuccess')
   if (result.overLimit) return t('writeCopyXArticleOverLimit')
+  if ((result.imageCount ?? 0) > 0) return t('writeCopyXArticleSuccessWithImages')
   if (!result.title) return t('writeCopyXArticleSuccessNoTitle')
   return t('writeCopyXArticleSuccess')
 }

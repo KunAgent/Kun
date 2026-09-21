@@ -24,6 +24,7 @@ import {
   streamIdSchema,
   workspaceDirectoryCreatePayloadSchema,
   workspaceClipboardImageSavePayloadSchema,
+  clipboardImageWritePayloadSchema,
   workspaceImageBytesSavePayloadSchema,
   workspaceImagePickPayloadSchema,
   workspaceDirectoryTargetPayloadSchema,
@@ -45,6 +46,7 @@ import {
   deleteWorkspaceEntry,
   listWorkspaceDirectory,
   readClipboardImage,
+  writeClipboardImage,
   readWorkspaceImage,
   readWorkspaceFile,
   readWorkspacePdf,
@@ -531,6 +533,11 @@ export function registerAppFileIpcHandlers(options: RegisterAppIpcHandlersOption
     )
   )
   ipcMain.handle('clipboard:read-image', async () => readClipboardImage())
+  ipcMain.handle('clipboard:write-image', async (_, payload: unknown) =>
+    writeClipboardImage(
+      parseIpcPayload('clipboard:write-image', clipboardImageWritePayloadSchema, payload)
+    )
+  )
   ipcMain.handle('file:rename-workspace-entry', async (_, payload: unknown) =>
     renameWorkspaceEntry(
       parseIpcPayload('file:rename-workspace-entry', workspaceEntryRenamePayloadSchema, payload)

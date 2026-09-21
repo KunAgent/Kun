@@ -20,6 +20,7 @@ import {
   workspaceEntryDeletePayloadSchema,
   workspaceEntryRenamePayloadSchema,
   workspaceImageBytesSavePayloadSchema,
+  clipboardImageWritePayloadSchema,
   workspaceImagePickPayloadSchema,
   writeExportPayloadSchema,
   writeRichClipboardPayloadSchema,
@@ -257,8 +258,12 @@ describe('app-ipc-schemas workspace and system', () => {
     expect(writeRichClipboardPayloadSchema.parse({
       path: '/tmp/workspace/draft.md',
       content: '# Draft',
-      profile: 'x-articles-title'
-    }).profile).toBe('x-articles-title')
+      profile: 'x-articles-image',
+      imageIndex: 2
+    })).toMatchObject({
+      profile: 'x-articles-image',
+      imageIndex: 2
+    })
     expect(() => writeRichClipboardPayloadSchema.parse({
       path: '/tmp/workspace/draft.md',
       content: '# Draft',
@@ -304,6 +309,28 @@ describe('app-ipc-schemas workspace and system', () => {
     })).toMatchObject({
       fileName: 'architecture-a1b2c3.png'
     })
+  })
+
+  it('requires exactly one clipboard image write source', () => {
+    expect(clipboardImageWritePayloadSchema.parse({
+      path: '/tmp/workspace/photo.png',
+      workspaceRoot: '/tmp/workspace'
+    })).toEqual({
+      path: '/tmp/workspace/photo.png',
+      workspaceRoot: '/tmp/workspace'
+    })
+    expect(clipboardImageWritePayloadSchema.parse({
+      dataBase64: 'aW1hZ2U=',
+      mimeType: 'image/png'
+    })).toEqual({
+      dataBase64: 'aW1hZ2U=',
+      mimeType: 'image/png'
+    })
+    expect(() => clipboardImageWritePayloadSchema.parse({})).toThrow(/Either path or dataBase64/)
+    expect(() => clipboardImageWritePayloadSchema.parse({
+      path: '/tmp/workspace/photo.png',
+      dataBase64: 'aW1hZ2U='
+    })).toThrow(/either path or dataBase64, not both/i)
   })
 
   it('validates workspace creation time payloads', () => {

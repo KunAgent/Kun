@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { Download, ExternalLink, Image as ImageIcon, Minus, Plus } from 'lucide-react'
+import { Check, Copy, Download, ExternalLink, Image as ImageIcon, Minus, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { writeBasenameFromPath, writeRelativeToWorkspace } from '../../write/write-workspace-store'
+import { copyImageToClipboard } from '../../lib/copy-image-to-clipboard'
 import { clamp, toolbarIconButtonClass, toolbarMenuButtonClass } from './write-workspace-view-utils'
 
 const IMAGE_MIN_ZOOM = 25
@@ -18,6 +19,7 @@ type WriteImagePreviewProps = {
 
 type WriteImageFitMode = 'fit' | 'actual'
 type WriteImageSaveState = 'idle' | 'saving'
+type WriteImageCopyState = 'idle' | 'copying' | 'copied' | 'failed'
 
 function clampImageZoom(value: number): number {
   return clamp(Math.round(value), IMAGE_MIN_ZOOM, IMAGE_MAX_ZOOM)
@@ -44,6 +46,7 @@ export function WriteImagePreview({
   const [fitMode, setFitMode] = useState<WriteImageFitMode>('fit')
   const [zoom, setZoom] = useState(100)
   const [saveState, setSaveState] = useState<WriteImageSaveState>('idle')
+  const [copyState, setCopyState] = useState<WriteImageCopyState>('idle')
   const fileName = writeBasenameFromPath(filePath)
   const relativePath = writeRelativeToWorkspace(workspaceRoot, filePath)
   const actualMode = fitMode === 'actual'
@@ -69,6 +72,27 @@ export function WriteImagePreview({
     } finally {
       setSaveState('idle')
     }
+  }
+  const copyLabel =
+    copyState === 'copied'
+      ? t('copySuccess')
+      : copyState === 'failed'
+        ? t('copyFailed')
+        : t('imagePreviewCopy')
+  const copyImage = async (): Promise<void> => {
+    if (copyState === 'copying') return
+    setCopyState('copying')
+    try {
+      const result = await copyImageToClipboard({
+        path: filePath,
+        workspaceRoot,
+        dataUrl: src
+      })
+      setCopyState(result.ok ? 'copied' : 'failed')
+    } catch {
+      setCopyState('failed')
+    }
+    window.setTimeout(() => setCopyState('idle'), 1400)
   }
 
   return (
@@ -152,6 +176,20 @@ export function WriteImagePreview({
               {fitMode === 'fit' ? t('writeImageFitShort') : `${zoom}%`}
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => void copyImage()}
+            disabled={copyState === 'copying'}
+            className={toolbarIconButtonClass()}
+            title={copyLabel}
+            aria-label={copyLabel}
+          >
+            {copyState === 'copied' ? (
+              <Check className="h-4 w-4" strokeWidth={2} />
+            ) : (
+              <Copy className="h-4 w-4" strokeWidth={1.85} />
+            )}
+          </button>
           <button
             type="button"
             onClick={() => void saveImageAs()}

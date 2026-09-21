@@ -159,6 +159,17 @@ export type ClipboardImageReadResult =
     }
   | { ok: false; message: string }
 
+export type ClipboardImageWritePayload = {
+  path?: string
+  workspaceRoot?: string
+  dataBase64?: string
+  mimeType?: string
+}
+
+export type ClipboardImageWriteResult =
+  | { ok: true }
+  | { ok: false; message: string }
+
 export type WorkspaceFileReadResult =
   | {
       ok: true

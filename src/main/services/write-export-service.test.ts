@@ -7,7 +7,12 @@ import { pathToFileURL } from 'node:url'
 vi.mock('electron', () => ({
   BrowserWindow: class BrowserWindow {},
   clipboard: {
-    write: vi.fn()
+    write: vi.fn(),
+    writeImage: vi.fn()
+  },
+  nativeImage: {
+    createFromPath: vi.fn(() => ({ isEmpty: () => false })),
+    createFromBuffer: vi.fn(() => ({ isEmpty: () => false }))
   },
   dialog: {
     showSaveDialog: vi.fn()
@@ -21,7 +26,8 @@ import {
   copyWriteDocumentAsRichText,
   exportWriteDocument
 } from './write-export-service'
-import { clipboard, dialog } from 'electron'
+import { clipboard, dialog, nativeImage } from 'electron'
+import { X_ARTICLE_IMAGE_MISSING } from '../../shared/write-export'
 
 describe('write-export-service helpers', () => {
   let workspaceRoot = ''
@@ -29,6 +35,11 @@ describe('write-export-service helpers', () => {
   beforeEach(async () => {
     workspaceRoot = await mkdtemp(join(tmpdir(), 'ds-gui-write-export-'))
     vi.mocked(clipboard.write).mockReset()
+    vi.mocked(clipboard.writeImage).mockReset()
+    vi.mocked(nativeImage.createFromPath).mockReset()
+    vi.mocked(nativeImage.createFromBuffer).mockReset()
+    vi.mocked(nativeImage.createFromPath).mockReturnValue({ isEmpty: () => false } as never)
+    vi.mocked(nativeImage.createFromBuffer).mockReturnValue({ isEmpty: () => false } as never)
     vi.mocked(dialog.showSaveDialog).mockReset()
   })
 
@@ -186,36 +197,57 @@ describe('write-export-service helpers', () => {
     expect(written.html).not.toContain('<code>')
     expect(written.html).not.toContain('<strong>')
     expect(written.html).toContain('<b>A</b>')
-    expect(written.html).toContain('src="data:image/png;base64,')
+    expect(written.html).toContain('<p>图片 1</p>')
+    expect(written.html).not.toContain('src="data:image/png;base64,')
+    expect(written.html).not.toContain('file://')
     expect(written.html).not.toMatch(/<img\b[^>]*loop\.gif/i)
     expect(written.html).toContain('📷 Loop')
     expect(written.text).not.toContain('**')
-    expect(result).toMatchObject({ title: 'Heading' })
+    expect(result).toMatchObject({ title: 'Heading', imageCount: 1 })
+    expect(clipboard.writeImage).not.toHaveBeenCalled()
   })
 
-  it('copies only the H1 for the x-articles-title profile', async () => {
-    const sourcePath = join(workspaceRoot, 'titled.md')
-    await writeFile(sourcePath, '# Hello title\n\nBody paragraph', 'utf8')
+  it('copies x-articles-image with writeImage and no html mix-in', async () => {
+    const sourcePath = join(workspaceRoot, 'photos.md')
+    const imagePath = join(workspaceRoot, 'cover.png')
+    await writeFile(sourcePath, '# Heading\n\n![Cover](./cover.png)', 'utf8')
+    await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
 
     const result = await copyWriteDocumentAsRichText({
       path: sourcePath,
       workspaceRoot,
-      content: '# Hello title\n\nBody paragraph',
-      profile: 'x-articles-title'
+      content: '# Heading\n\n![Cover](./cover.png)',
+      profile: 'x-articles-image',
+      imageIndex: 0
     })
 
     expect(result).toMatchObject({
       ok: true,
-      profile: 'x-articles-title',
-      title: 'Hello title'
+      profile: 'x-articles-image',
+      imageIndex: 0,
+      imageCount: 1
     })
-    expect(clipboard.write).toHaveBeenCalledWith(
-      expect.objectContaining({
-        html: expect.stringContaining('<p>Hello title</p>'),
-        text: 'Hello title'
-      })
-    )
-    const written = vi.mocked(clipboard.write).mock.calls[0]?.[0] as { html: string; text: string }
-    expect(written.html).not.toContain('Body paragraph')
+    expect(nativeImage.createFromPath).toHaveBeenCalledWith(expect.stringMatching(/cover\.png$/))
+    expect(clipboard.writeImage).toHaveBeenCalledOnce()
+    expect(clipboard.write).not.toHaveBeenCalled()
+  })
+
+  it('fails x-articles-image when there is no local image', async () => {
+    const sourcePath = join(workspaceRoot, 'plain.md')
+    await writeFile(sourcePath, '# Heading\n\nNo pictures', 'utf8')
+
+    const result = await copyWriteDocumentAsRichText({
+      path: sourcePath,
+      workspaceRoot,
+      content: '# Heading\n\nNo pictures',
+      profile: 'x-articles-image',
+      imageIndex: 0
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      message: X_ARTICLE_IMAGE_MISSING
+    })
+    expect(clipboard.writeImage).not.toHaveBeenCalled()
   })
 })

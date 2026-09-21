@@ -12,6 +12,7 @@ import type { WriteEditorSelectionState, WriteMarkdownEditorHandle } from './Wri
 import { WriteMarkdownEditor } from './WriteMarkdownEditor'
 import { WriteMarkdownPreview } from './WriteMarkdownPreview'
 import { WriteWorkspaceStart } from './WriteWorkspaceStart'
+import { WriteImageLightboxHost } from './WriteImageLightboxHost'
 import { WriteImagePreview } from './WriteImagePreview'
 import { WritePdfViewer } from './WritePdfViewer'
 import { WorkspaceOfficePreview } from '../WorkspaceOfficePreview'
@@ -516,6 +517,7 @@ export function WriteWorkspaceDocumentPane({
           </div>
         ) : null}
       </div>
+      <WriteImageLightboxHost workspaceRoot={workspaceRoot} />
     </div>
   )
 }

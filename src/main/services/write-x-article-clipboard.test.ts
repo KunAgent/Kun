@@ -2,13 +2,35 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { describe, expect, it } from 'vitest'
-import { X_ARTICLE_TITLE_MISSING } from '../../shared/write-export'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { X_ARTICLE_IMAGE_MISSING } from '../../shared/write-export'
+
+vi.mock('electron', () => ({
+  clipboard: {
+    write: vi.fn(),
+    writeImage: vi.fn()
+  },
+  nativeImage: {
+    createFromPath: vi.fn(() => ({ isEmpty: () => false })),
+    createFromBuffer: vi.fn(() => ({ isEmpty: () => false }))
+  }
+}))
+
+vi.mock('sharp', () => ({
+  default: vi.fn(() => ({
+    png: () => ({
+      toBuffer: async () => Buffer.from([0x89, 0x50, 0x4e, 0x47])
+    })
+  }))
+}))
+
+import { clipboard, nativeImage } from 'electron'
 import {
   X_ARTICLE_CHAR_LIMIT,
   buildWriteXArticleClipboardFragment,
-  resolveXArticleClipboardWrite,
-  sanitizeWriteXArticleMarkdown
+  resolveXArticleImageClipboardWrite,
+  sanitizeWriteXArticleMarkdown,
+  writeXArticleImageToClipboard
 } from './write-x-article-clipboard'
 
 describe('sanitizeWriteXArticleMarkdown', () => {
@@ -93,14 +115,53 @@ describe('buildWriteXArticleClipboardFragment', () => {
     expect(fragment.html).not.toContain('<pre>')
     expect(fragment.html).not.toContain('<code>')
     expect(fragment.html).toContain('<b>A</b>')
-    expect(fragment.html).toContain(`src="${pathToFileURL(imagePath).href}"`)
+    expect(fragment.html).toContain('<p>图片 1</p>')
+    expect(fragment.html).not.toContain('data:')
+    expect(fragment.html).not.toContain('file://')
+    expect(fragment.html).not.toMatch(/<img\b[^>]*cover\.png/i)
     expect(fragment.html).not.toMatch(/<img\b[^>]*loop\.gif/i)
     expect(fragment.html).toContain('📷 Loop')
     expect(fragment.html).toContain('href="https://x.com/kun/status/1234567890"')
+    expect(fragment.images).toEqual([{ label: '图片 1', filePath: imagePath }])
+    expect(fragment.text).toContain('图片 1')
     expect(fragment.text).not.toContain('#')
     expect(fragment.text).not.toContain('**')
     expect(fragment.text).toContain('const x = 1')
     expect(fragment.text).toContain('📷 Loop')
+  })
+
+  it('turns local static images into numbered placeholders and keeps remote https images', async () => {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'kun-x-article-img-'))
+    const sourcePath = join(workspaceRoot, 'draft.md')
+    const coverPath = join(workspaceRoot, 'cover.png')
+    const photoPath = join(workspaceRoot, 'photo.jpg')
+    await writeFile(coverPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    await writeFile(photoPath, Buffer.from([0xff, 0xd8, 0xff]))
+
+    const fragment = buildWriteXArticleClipboardFragment({
+      sourcePath,
+      content: [
+        '# Title',
+        '',
+        `![Cover](${pathToFileURL(coverPath).href})`,
+        '',
+        '![Photo](./photo.jpg)',
+        '',
+        '![Remote](https://cdn.example.com/hero.webp)'
+      ].join('\n')
+    })
+
+    expect(fragment.html).toContain('<p>图片 1</p>')
+    expect(fragment.html).toContain('<p>图片 2</p>')
+    expect(fragment.html).toContain('src="https://cdn.example.com/hero.webp"')
+    expect(fragment.html).not.toContain('data:')
+    expect(fragment.html).not.toContain('file://')
+    expect(fragment.text).toContain('图片 1')
+    expect(fragment.text).toContain('图片 2')
+    expect(fragment.images).toEqual([
+      { label: '图片 1', filePath: coverPath },
+      { label: '图片 2', filePath: photoPath }
+    ])
   })
 
   it('renders plain text files as separate paragraphs', () => {
@@ -126,27 +187,58 @@ describe('buildWriteXArticleClipboardFragment', () => {
   })
 })
 
-describe('resolveXArticleClipboardWrite', () => {
-  it('writes only the extracted title for x-articles-title', () => {
+describe('resolveXArticleImageClipboardWrite', () => {
+  it('selects the local image by index', async () => {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'kun-x-article-pick-'))
+    const sourcePath = join(workspaceRoot, 'draft.md')
+    const imagePath = join(workspaceRoot, 'cover.png')
+    await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
     const fragment = buildWriteXArticleClipboardFragment({
-      sourcePath: '/tmp/draft.md',
-      content: '# Hello title\n\nBody paragraph'
+      sourcePath,
+      content: '# Title\n\n![Cover](./cover.png)'
     })
-    const written = resolveXArticleClipboardWrite(fragment, 'x-articles-title')
-    expect(written).toMatchObject({ ok: true, text: 'Hello title', title: 'Hello title' })
-    if (!written.ok) return
-    expect(written.html).toContain('<p>Hello title</p>')
-    expect(written.html).not.toContain('Body paragraph')
+    expect(resolveXArticleImageClipboardWrite(fragment, 0)).toEqual({
+      ok: true,
+      filePath: imagePath,
+      label: '图片 1',
+      imageIndex: 0,
+      imageCount: 1
+    })
   })
 
-  it('fails title copy when the document has no H1', () => {
+  it('fails when the document has no copyable local images', () => {
     const fragment = buildWriteXArticleClipboardFragment({
       sourcePath: '/tmp/draft.md',
-      content: '## Only a section\n\nBody'
+      content: '# Title\n\nNo pictures'
     })
-    expect(resolveXArticleClipboardWrite(fragment, 'x-articles-title')).toEqual({
+    expect(resolveXArticleImageClipboardWrite(fragment, 0)).toEqual({
       ok: false,
-      message: X_ARTICLE_TITLE_MISSING
+      message: X_ARTICLE_IMAGE_MISSING
     })
+  })
+})
+
+describe('writeXArticleImageToClipboard', () => {
+  beforeEach(() => {
+    vi.mocked(clipboard.write).mockReset()
+    vi.mocked(clipboard.writeImage).mockReset()
+    vi.mocked(nativeImage.createFromPath).mockReset()
+    vi.mocked(nativeImage.createFromBuffer).mockReset()
+    vi.mocked(nativeImage.createFromPath).mockReturnValue({ isEmpty: () => false } as never)
+    vi.mocked(nativeImage.createFromBuffer).mockReturnValue({ isEmpty: () => false } as never)
+  })
+
+  it('writes a native image and does not mix html onto the clipboard', async () => {
+    await writeXArticleImageToClipboard('/tmp/cover.png')
+    expect(nativeImage.createFromPath).toHaveBeenCalledWith('/tmp/cover.png')
+    expect(clipboard.writeImage).toHaveBeenCalledOnce()
+    expect(clipboard.write).not.toHaveBeenCalled()
+  })
+
+  it('falls back to sharp when nativeImage cannot read the file', async () => {
+    vi.mocked(nativeImage.createFromPath).mockReturnValue({ isEmpty: () => true } as never)
+    await writeXArticleImageToClipboard('/tmp/cover.webp')
+    expect(nativeImage.createFromBuffer).toHaveBeenCalledOnce()
+    expect(clipboard.writeImage).toHaveBeenCalledOnce()
   })
 })

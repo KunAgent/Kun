@@ -195,6 +195,8 @@ export function WriteWorkspaceView({
   const [exportingFormat, setExportingFormat] = useState<WriteExportFormat | typeof WRITE_RICH_CLIPBOARD_ACTION | null>(null)
   const [exportNotice, setExportNotice] = useState<WriteNotice | null>(null)
   const [presentationInFlight, setPresentationInFlight] = useState(false)
+  const [xArticleImageCount, setXArticleImageCount] = useState(0)
+  const [xArticleImageIndex, setXArticleImageIndex] = useState(0)
   const [onboardingComplete, setOnboardingComplete] = useState(readWriteOnboardingComplete)
   const workspaceReady = workspaceRoot.trim().length > 0
   const activeFileIsImage = activeFileKind === 'image'
@@ -224,6 +226,11 @@ export function WriteWorkspaceView({
     const writeState = useWriteWorkspaceStore.getState()
     void writeState.setInlineCompletionEnabled(!writeState.inlineCompletion.enabled)
   }, [])
+
+  useEffect(() => {
+    setXArticleImageCount(0)
+    setXArticleImageIndex(0)
+  }, [activeFilePath])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -393,7 +400,7 @@ export function WriteWorkspaceView({
   const {
     copyCurrentFileAsRichText,
     copyCurrentFileAsXArticle,
-    copyCurrentFileAsXArticleTitle,
+    copyCurrentFileAsXArticleImage,
     createDraftFile,
     exportCurrentFile,
     generatePresentation,
@@ -423,7 +430,12 @@ export function WriteWorkspaceView({
     showExportNotice,
     setExportMenuOpen,
     setExportingFormat,
-    setPresentationInFlight
+    setPresentationInFlight,
+    xArticleImageIndex,
+    setXArticleImageState: ({ count, index }) => {
+      setXArticleImageCount(count)
+      setXArticleImageIndex(index)
+    }
   })
 
 
@@ -531,7 +543,9 @@ export function WriteWorkspaceView({
         setPreviewMode={setPreviewMode}
         onCopyRichText={() => void copyCurrentFileAsRichText()}
         onCopyXArticle={() => void copyCurrentFileAsXArticle()}
-        onCopyXArticleTitle={() => void copyCurrentFileAsXArticleTitle()}
+        onCopyXArticleImage={() => void copyCurrentFileAsXArticleImage()}
+        xArticleImageCount={xArticleImageCount}
+        xArticleImageIndex={xArticleImageIndex}
         onExportFile={(format) => void exportCurrentFile(format)}
         onGeneratePresentation={() => void generatePresentation()}
         onSave={() => {

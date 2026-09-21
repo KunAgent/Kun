@@ -19,10 +19,7 @@ import type {
 import type { DesignExportPayload, DesignExportResult } from '../../shared/design-export'
 import { resolveWriteMarkdownResource } from '../../shared/write-markdown-resource'
 import { resolveWorkspaceFile } from './workspace-service'
-import {
-  buildWriteXArticleClipboardFragment,
-  resolveXArticleClipboardWrite
-} from './write-x-article-clipboard'
+import { copyWriteXArticleToSystemClipboard } from './write-x-article-clipboard'
 
 type HtmlToDocxDocumentOptions = {
   title?: string
@@ -426,27 +423,8 @@ export async function copyWriteDocumentAsRichText(
     }
 
     const profile = payload.profile ?? 'online-docs'
-    if (profile === 'x-articles' || profile === 'x-articles-title') {
-      const built = resolveXArticleClipboardWrite(
-        buildWriteXArticleClipboardFragment({
-          sourcePath: resolved.path,
-          content: payload.content
-        }),
-        profile
-      )
-      if (!built.ok) return built
-      clipboard.write({
-        html: await inlineLocalImagesInHtml(built.html),
-        text: built.text
-      })
-      return {
-        ok: true,
-        copiedAt: new Date().toISOString(),
-        profile,
-        title: built.title,
-        simplified: built.simplified,
-        overLimit: built.overLimit
-      }
+    if (profile === 'x-articles' || profile === 'x-articles-image') {
+      return copyWriteXArticleToSystemClipboard(payload, resolved.path)
     }
 
     const html = await buildWriteClipboardHtmlFragment({

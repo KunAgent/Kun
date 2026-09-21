@@ -8,8 +8,9 @@ import {
   type ReactElement
 } from 'react'
 import { createPortal } from 'react-dom'
-import { Download, Minus, Plus, X } from 'lucide-react'
+import { Check, Copy, Download, Minus, Plus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { copyImageToClipboard } from '../../lib/copy-image-to-clipboard'
 
 type ImagePreviewLightboxProps = {
   open: boolean
@@ -21,6 +22,10 @@ type ImagePreviewLightboxProps = {
   downloadDisabled?: boolean
   downloadLabel?: string
   onDownload?: () => void | Promise<void>
+  copyPath?: string
+  copyWorkspaceRoot?: string
+  copyDataUrl?: string
+  onCopy?: () => void | Promise<void>
   onClose: () => void
 }
 
@@ -28,6 +33,12 @@ const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
 const ZOOM_STEP = 0.25
 const PREVIEW_PADDING = 16
+const COPY_RESET_MS = 1400
+
+const lightboxIconButtonClass =
+  'inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-zinc-700 shadow-[0_14px_34px_rgba(0,0,0,0.22)] transition hover:bg-zinc-50 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-800'
+
+type CopyState = 'idle' | 'copying' | 'copied' | 'failed'
 
 type ImagePreviewSize = {
   width: number
@@ -79,31 +90,79 @@ export function ImagePreviewLightbox({
   downloadDisabled = false,
   downloadLabel,
   onDownload,
+  copyPath,
+  copyWorkspaceRoot,
+  copyDataUrl,
+  onCopy,
   onClose
 }: ImagePreviewLightboxProps): ReactElement | null {
   const { t } = useTranslation('common')
   const [zoom, setZoom] = useState(1)
+  const [copyState, setCopyState] = useState<CopyState>('idle')
   const [naturalSize, setNaturalSize] = useState<ImagePreviewSize | null>(null)
   const [viewportSize, setViewportSize] = useState<ImagePreviewSize | null>(null)
   const frameRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
+  const copyResetRef = useRef<number | null>(null)
+  const copyHandlerRef = useRef<() => Promise<void>>(async () => undefined)
   const titleId = useId()
   const closeLabel = t('imagePreviewClose')
   const resolvedTitle = title || alt || t('imagePreviewTitle')
   const resolvedDownloadLabel = downloadLabel ?? t('imagePreviewDownload')
+  const canCopy = typeof onCopy === 'function' || Boolean(copyPath?.trim() || copyDataUrl?.trim())
+  const copyLabel =
+    copyState === 'copied'
+      ? t('copySuccess')
+      : copyState === 'failed'
+        ? t('copyFailed')
+        : t('imagePreviewCopy')
+
+  const handleCopy = async (): Promise<void> => {
+    if (!canCopy || copyState === 'copying') return
+    setCopyState('copying')
+    try {
+      if (onCopy) {
+        await onCopy()
+        setCopyState('copied')
+      } else {
+        const result = await copyImageToClipboard({
+          ...(copyPath?.trim() ? { path: copyPath.trim() } : {}),
+          ...(copyWorkspaceRoot?.trim() ? { workspaceRoot: copyWorkspaceRoot.trim() } : {}),
+          ...(copyDataUrl?.trim() ? { dataUrl: copyDataUrl.trim() } : {})
+        })
+        setCopyState(result.ok ? 'copied' : 'failed')
+      }
+    } catch {
+      setCopyState('failed')
+    }
+    if (copyResetRef.current !== null) window.clearTimeout(copyResetRef.current)
+    copyResetRef.current = window.setTimeout(() => {
+      setCopyState('idle')
+    }, COPY_RESET_MS)
+  }
+  copyHandlerRef.current = handleCopy
 
   useEffect(() => {
     if (!open || typeof window === 'undefined') return
     setZoom(1)
+    setCopyState('idle')
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        onClose()
+        return
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'c') {
+        event.preventDefault()
+        void copyHandlerRef.current()
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => {
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', onKeyDown)
+      if (copyResetRef.current !== null) window.clearTimeout(copyResetRef.current)
     }
   }, [open, onClose])
 
@@ -167,7 +226,7 @@ export function ImagePreviewLightbox({
       disabled={!canDownload}
       aria-label={resolvedDownloadLabel}
       title={resolvedDownloadLabel}
-      className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-zinc-700 shadow-[0_14px_34px_rgba(0,0,0,0.22)] transition hover:bg-zinc-50 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-800"
+      className={lightboxIconButtonClass}
     >
       <Download className="h-5 w-5" strokeWidth={1.9} />
     </button>
@@ -177,10 +236,26 @@ export function ImagePreviewLightbox({
       download={downloadName || resolvedTitle}
       aria-label={resolvedDownloadLabel}
       title={resolvedDownloadLabel}
-      className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-zinc-700 shadow-[0_14px_34px_rgba(0,0,0,0.22)] transition hover:bg-zinc-50 hover:text-zinc-950 dark:bg-zinc-100 dark:text-zinc-800"
+      className={lightboxIconButtonClass}
     >
       <Download className="h-5 w-5" strokeWidth={1.9} />
     </a>
+  ) : null
+  const copyControl = canCopy ? (
+    <button
+      type="button"
+      onClick={() => void handleCopy()}
+      disabled={copyState === 'copying'}
+      aria-label={copyLabel}
+      title={copyLabel}
+      className={lightboxIconButtonClass}
+    >
+      {copyState === 'copied' ? (
+        <Check className="h-5 w-5" strokeWidth={2} />
+      ) : (
+        <Copy className="h-5 w-5" strokeWidth={1.9} />
+      )}
+    </button>
   ) : null
 
   return createPortal(
@@ -197,6 +272,7 @@ export function ImagePreviewLightbox({
         {resolvedTitle}
       </h2>
       <div className="absolute right-3 top-3 z-10 flex items-center gap-2 sm:right-4 sm:top-4">
+        {copyControl}
         {downloadControl}
         <button
           type="button"

@@ -308,6 +308,8 @@ const api = {
     ipcRenderer.invoke('file:save-workspace-image-bytes', payload),
   readClipboardImage: () =>
     ipcRenderer.invoke('clipboard:read-image'),
+  writeClipboardImage: (payload) =>
+    ipcRenderer.invoke('clipboard:write-image', payload),
   getPathForFile: (file) =>
     webUtils.getPathForFile(file),
   renameWorkspaceEntry: (payload) =>

@@ -204,6 +204,9 @@ export function MediaPreviewTile({
           downloadDisabled={!canSave || saveState === 'saving'}
           downloadLabel={saveLabel}
           onDownload={() => void handleSaveAs()}
+          copyPath={filePath}
+          copyWorkspaceRoot={workspaceRoot}
+          copyDataUrl={previewUrl}
           onClose={() => setImagePreviewOpen(false)}
         />
       </figure>

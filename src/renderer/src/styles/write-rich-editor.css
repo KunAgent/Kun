@@ -240,6 +240,7 @@
   border-radius: 10px;
   display: block;
   margin: 0.4em 0;
+  cursor: zoom-in;
 }
 
 .write-rich-editor img.write-rich-image-error {
