@@ -15,6 +15,8 @@ import type {
 } from './turn-execution-types.js'
 
 export const MAX_SVG_COMPLETION_RECOVERY_STEPS = 3
+/** Bounded nudges toward send_im_message before a conversation run settles as skipped. */
+export const IM_PUBLICATION_MAX_RECOVERY_STEPS = 2
 export const GRAPH_CREATE_RUN_TOOL_NAME = 'graph_create_run'
 export const MAX_GRAPH_CREATE_RUN_ATTEMPTS = 3
 /** @deprecated Use MAX_GRAPH_CREATE_RUN_ATTEMPTS for the total request cap. */
@@ -80,6 +82,7 @@ export abstract class RoundOutcomeState {
   protected readonly pptNoToolRecoveryByTurn = new Map<string, number>()
   protected readonly postToolFailureRecoveryStepsByTurn = new Map<string, number>()
   protected readonly outputTruncationRecoveryStepsByTurn = new Map<string, number>()
+  protected readonly imPublicationRecoveryByTurn = new Map<string, number>()
 
   constructor(protected readonly deps: RoundOutcomeCoordinatorDeps) {}
 
@@ -101,6 +104,10 @@ export abstract class RoundOutcomeState {
 
   outputTruncationRecoverySteps(turnId: string): number {
     return this.outputTruncationRecoveryStepsByTurn.get(turnId) ?? 0
+  }
+
+  imPublicationRecoverySteps(turnId: string): number {
+    return this.imPublicationRecoveryByTurn.get(turnId) ?? 0
   }
 
   toolSuppressionRecoverySteps(turnId: string): number {
@@ -130,5 +137,6 @@ export abstract class RoundOutcomeState {
     this.pptNoToolRecoveryByTurn.delete(turnId)
     this.postToolFailureRecoveryStepsByTurn.delete(turnId)
     this.outputTruncationRecoveryStepsByTurn.delete(turnId)
+    this.imPublicationRecoveryByTurn.delete(turnId)
   }
 }

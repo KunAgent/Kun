@@ -1,4 +1,4 @@
-import { mkdtemp, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { join } from 'node:path'
@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Room } from '../contracts/rooms.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 import { RoomContentReferenceSchema } from '../contracts/room-content.js'
+import { agentStableId } from '../agents/agent-identity-service.js'
 import { resolveRoomContent } from './room-content-service.js'
 
 const roots: string[] = []
@@ -102,6 +103,52 @@ describe('room content authorization and readonly projection', () => {
       metadata.workspaces = [foreignWorkspace]
       expect((await resolveRoomContent(fixture, room, reference, 'preview', 'source')).state).toBe('unavailable')
     }
+    expect(resolveContent).not.toHaveBeenCalled()
+  })
+  it('serves audio and video agent files as inline media within the preview cap', async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'kun-room-media-')))
+    roots.push(root)
+    const workspace = join(root, 'workspace')
+    await mkdir(workspace)
+    await writeFile(join(workspace, 'note.mp3'), 'audio-bytes')
+    await writeFile(join(workspace, 'clip.mp4'), 'video-bytes')
+    const agentRoom = { ...room, conversationKind: 'user_agent', privateWorkspace: workspace,
+      members: [{ participantAgentId: 'agent-1' }] } as unknown as Room
+    const workspaceId = agentStableId('private-workspace', room.id, workspace)
+    const audio = await resolveRoomContent(runtime(), agentRoom,
+      { kind: 'agent_file', workspaceId, relativePath: 'note.mp3' }, 'preview')
+    expect(audio).toMatchObject({ state: 'available', kind: 'audio', mimeType: 'audio/mpeg',
+      preview: { type: 'media', mimeType: 'audio/mpeg' } })
+    const video = await resolveRoomContent(runtime(), agentRoom,
+      { kind: 'agent_file', workspaceId, relativePath: 'clip.mp4' }, 'preview')
+    expect(video).toMatchObject({ state: 'available', kind: 'video', mimeType: 'video/mp4',
+      preview: { type: 'media', mimeType: 'video/mp4' } })
+  })
+  it('degrades oversized media and unsupported audio attachments to file cards', async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'kun-room-media-big-')))
+    roots.push(root)
+    const workspace = join(root, 'workspace')
+    await mkdir(workspace)
+    await writeFile(join(workspace, 'big.mp4'), Buffer.alloc(12 * 1024 * 1024 + 1))
+    const agentRoom = { ...room, conversationKind: 'user_agent', privateWorkspace: workspace,
+      members: [{ participantAgentId: 'agent-1' }] } as unknown as Room
+    const workspaceId = agentStableId('private-workspace', room.id, workspace)
+    const oversized = await resolveRoomContent(runtime(), agentRoom,
+      { kind: 'agent_file', workspaceId, relativePath: 'big.mp4' }, 'preview')
+    expect(oversized).toMatchObject({ state: 'available', kind: 'file', byteSize: 12 * 1024 * 1024 + 1 })
+    expect(oversized.preview).toBeUndefined()
+    const records = new Map([['message:source', { roomId: room.id, value: { attachmentIds: ['voice', 'huge'] } }]])
+    const fixture = runtime(records)
+    const voice = { id: 'voice', name: 'Voice', kind: 'file', mimeType: 'audio/mpeg', byteSize: 100, threadIds: [], workspaces: [] }
+    const huge = { id: 'huge', name: 'Movie', kind: 'file', mimeType: 'video/mp4', byteSize: 13 * 1024 * 1024, threadIds: [], workspaces: [] }
+    const resolveContent = vi.fn(async (id: string) => ({ data: Buffer.from('x') }))
+    fixture.attachmentStore = { get: vi.fn(async (id: string) => (id === 'voice' ? voice : id === 'huge' ? huge : null)),
+      resolveContent } as never
+    expect(await resolveRoomContent(fixture, room, { kind: 'attachment', attachmentId: 'voice' }, 'preview', 'source'))
+      .toMatchObject({ state: 'available', kind: 'audio', preview: { type: 'media', mimeType: 'audio/mpeg' } })
+    resolveContent.mockClear()
+    expect(await resolveRoomContent(fixture, room, { kind: 'attachment', attachmentId: 'huge' }, 'preview', 'source'))
+      .toMatchObject({ state: 'available', kind: 'file' })
     expect(resolveContent).not.toHaveBeenCalled()
   })
 })

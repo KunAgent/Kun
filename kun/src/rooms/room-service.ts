@@ -267,7 +267,8 @@ export class RoomService {
     displayThreadRootId?: string
   }): Promise<void> {
     const text = input.body.slice(0, 64000)
-    if (!text.trim()) return
+    // An explicit send_im_message call may publish an attachment-only bubble.
+    if (!text.trim() && !input.references?.length) return
     const old = await this.store.get<RoomMessage>('message', input.messageId)
     if (old && (old.roomId !== id || old.value.authorMemberId !== input.memberId)) throw new Error('message identity mismatch')
     if (old && (old.value.status === 'final' || old.value.status === 'failed') && input.status === 'streaming') return

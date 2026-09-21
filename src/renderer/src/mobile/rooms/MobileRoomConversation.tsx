@@ -3,7 +3,7 @@ import { ArrowLeft, MoreHorizontal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { RoomContentOpenTarget, RoomContentReference, RoomMessage, SendRoomMessage } from '@shared/rooms-api'
 import { useRooms } from '../../components/rooms/useRooms'
-import { RoomStreamingTimeline } from '../../components/rooms/RoomStreamingTimeline'
+import { RoomTimeline } from '../../components/rooms/RoomTimeline'
 import { RoomComposer } from '../../components/rooms/RoomComposer'
 import { RoomPendingSendRow } from '../../components/rooms/RoomPendingSendRow'
 import { useRoomPendingSends } from '../../components/rooms/useRoomPendingSends'
@@ -62,7 +62,7 @@ export function MobileRoomConversation(props: MobileRoomConversationProps) {
     </header>
     {state.error ? <p className="kun-mobile-room-error" role="alert">{state.error}</p> : null}
     {state.loading || !room ? <p className="kun-mobile-room-loading" role="status">{t('roomsLoading')}</p> : <>
-      <RoomStreamingTimeline room={room} messages={state.messages} tasks={state.tasks}
+      <RoomTimeline room={room} messages={state.messages} tasks={state.tasks}
         cursor={state.messageCursor} moreBusy={state.moreBusy} loadEarlier={state.loadEarlier}
         onPin={(message) => { void pin(message) }} onTask={props.onTask} jumpMessageId={null} onJumped={() => undefined}
         onRun={props.onRun} onReplyThread={props.onReply}

@@ -1,12 +1,15 @@
 import { execFileSync } from 'node:child_process'
 import { setAgentPermissions, agentPermissions } from './agent-permissions.js'
-import { RoomRunTextStream } from '../server/routes/room-run-text-stream.js'
 import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { makeHarness } from '../../tests/loop-test-harness.js'
 import type { ModelClient, ModelRequest } from '../ports/model-client.js'
+import { CapabilityRegistry } from '../adapters/tool/capability-registry.js'
+import { defaultLocalTools } from '../adapters/tool/local-tool-host.js'
+import { roomResultProvider } from '../rooms/room-result-tools.js'
+import { IM_PUBLICATION_MAX_RECOVERY_STEPS } from '../loop/round-outcome-coordinator.js'
 import { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
 import { RoomRuntime } from '../rooms/room-runtime.js'
 import type { RoomRequestState, RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
@@ -17,17 +20,26 @@ import { enqueuePrivateContinuation } from '../rooms/room-continuation-service.j
 
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0)) await fn() })
-async function fixture(outputPath = 'hello.txt') {
+async function fixture(outputPath = 'hello.txt', model?: ModelClient) {
   const root = await mkdtemp(join(tmpdir(), 'kun-direct-'))
   const seen: ModelRequest[] = []
-  const client: ModelClient = { provider: 'test', model: 'first', async *stream(request) {
+  const client: ModelClient = model ?? { provider: 'test', model: 'first', async *stream(request) {
     seen.push(request)
-    const wrote = request.history.some((item) => item.turnId === request.turnId && item.kind === 'tool_result')
+    const results = request.history.filter((item): item is Extract<typeof item, { kind: 'tool_result' }> =>
+      item.turnId === request.turnId && item.kind === 'tool_result')
+    const wrote = results.some((item) => item.toolName === 'write')
+    const sent = results.some((item) => item.toolName === 'send_im_message' && item.isError !== true)
     if (!wrote) yield { kind: 'tool_call_complete', callId: 'write-' + request.turnId, toolName: 'write', arguments: { path: outputPath, content: request.model === 'second' ? 'updated' : 'hello' } }
-    else yield { kind: 'assistant_text_delta', text: 'The file is ready.' }
-    yield { kind: 'completed', stopReason: wrote ? 'stop' : 'tool_calls' }
+    else if (!sent) yield { kind: 'tool_call_complete', callId: 'say-' + request.turnId, toolName: 'send_im_message',
+      arguments: { text: 'The file is ready.', ...(outputPath.startsWith('/') ? {} : { attachments: [{ path: outputPath }] }) } }
+    yield { kind: 'completed', stopReason: wrote && !sent ? 'tool_calls' : 'stop' }
   } }
-  const h = makeHarness(client)
+  const h = makeHarness(model ? { provider: model.provider, model: model.model,
+    async *stream(request) { seen.push(request); yield* model.stream(request) } } : client)
+  h.toolHost.replaceRuntimeComponents({ registry: new CapabilityRegistry([
+    { id: 'builtin', kind: 'built-in', enabled: true, available: true, tools: defaultLocalTools },
+    roomResultProvider(h.threadStore)
+  ]) })
   const store = new SqliteRoomStore({ path: join(root, 'rooms.sqlite') })
   const deps: RoomRuntimeDeps = { dataDir: root, store, threads: h.threads, threadStore: h.threadStore,
     turns: h.turns, sessions: h.sessionStore, approvals: h.approvalGate, inputs: h.userInputGate,
@@ -210,41 +222,36 @@ it('keeps explicit reply branches while ordinary assistant messages have no auto
   expect(response.displayThreadRootId).toBe(first.message.id)
 })
 
-it('hydrates a scoped stream and drops late text after persisted cancellation without new execution', async () => {
+it('publishes text and workspace attachments as one visible room message', async () => {
   const f = await fixture()
-  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'stream', body: 'Create hello.txt' })
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'attach', body: 'Create hello.txt' })
   const done = await f.advance(sent.requestId)
-  const values: Array<import('../contracts/rooms.js').RoomMessage | null> = []
-  const feed = new RoomRunTextStream(f.deps, f.h.bus, f.created.roomId, done.privateRunId!, (message) => { values.push(message); return true })
-  await feed.start()
-  await vi.waitFor(() => expect(values.at(-1)?.body).toContain('The file is ready'))
-  const count = f.seen.length
-  const row = (await f.store.get<RoomRequestState>('request', done.id))!
-  await f.store.commit({ requestId: 'stream-stop', checks: [{ kind: 'request', id: done.id, expectedRevision: row.revision }],
-    puts: [{ kind: 'request', id: done.id, roomId: done.roomId, value: { ...row.value, cancellationRequested: true, status: 'cancelled' } }] })
-  f.h.bus.publish({ kind: 'assistant_text_delta', threadId: done.threadId, turnId: done.turnId,
-    seq: 99999, deltaOffset: 0, item: { id: 'late', threadId: done.threadId, turnId: done.turnId, kind: 'assistant_text', text: 'LATE_TEXT' } } as import('../contracts/events.js').RuntimeEvent)
-  await vi.waitFor(() => expect(values.at(-1)).toBeNull())
-  expect(JSON.stringify(values)).not.toContain('LATE_TEXT')
-  expect(f.seen.length).toBe(count)
-  feed.close()
+  expect(done.status).toBe('completed')
+  const published = (await f.store.list<import('../contracts/rooms.js').RoomMessage>('message'))
+    .find((row) => row.value.originRunId === done.privateRunId)
+  expect(published?.value.body).toBe('The file is ready.')
+  expect(published?.value.references).toEqual([
+    { kind: 'agent_file', workspaceId: expect.any(String), relativePath: 'hello.txt', titleSnapshot: 'hello.txt' }
+  ])
+  const run = await f.store.get<import('../contracts/room-runs.js').RoomRunRecord>('room_run', done.privateRunId!)
+  expect(run?.value.outcome).toBe('published')
+  expect(run?.value.publishedMessageId).toBe(published?.id)
 })
 
-it('replays durable deltas beyond a stale checkpoint without depending on bus history', async () => {
-  const f = await fixture()
-  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'checkpoint', body: 'Create hello.txt' })
+it('keeps ordinary assistant text internal and settles the run as skipped after bounded recovery', async () => {
+  const f = await fixture('hello.txt', { provider: 'test', model: 'first', async *stream() {
+    yield { kind: 'assistant_text_delta', text: 'The file is ready.' }
+    yield { kind: 'completed', stopReason: 'stop' }
+  } })
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'quiet', body: 'Say something' })
   const done = await f.advance(sent.requestId)
-  const load = f.h.sessionStore.loadItemPage.bind(f.h.sessionStore)
-  vi.spyOn(f.h.sessionStore, 'loadItemPage').mockImplementationOnce(async (...args) => {
-    const page = await load(...args)
-    return { ...page, replayAfterSeq: 0, items: page.items.map((item) => item.kind === 'assistant_text' ? { ...item, text: 'The' } : item) }
-  })
-  vi.spyOn(f.h.bus, 'snapshotSince').mockImplementation(() => { throw new Error('production has no bus tail') })
-  const values: Array<import('../contracts/rooms.js').RoomMessage | null> = []
-  const feed = new RoomRunTextStream(f.deps, f.h.bus, f.created.roomId, done.privateRunId!, (message) => { values.push(message); return true })
-  await feed.start()
-  await vi.waitFor(() => expect(values.at(-1)?.body).toBe('The file is ready.'))
-  feed.close()
+  expect(done.status).toBe('completed')
+  expect((await f.store.list<import('../contracts/rooms.js').RoomMessage>('message'))
+    .filter((row) => row.value.authorKind === 'member')).toHaveLength(0)
+  const run = await f.store.get<import('../contracts/room-runs.js').RoomRunRecord>('room_run', done.privateRunId!)
+  expect(run?.value.outcome).toBe('skipped')
+  expect(run?.value.publishedMessageId).toBeUndefined()
+  expect(f.seen).toHaveLength(1 + IM_PUBLICATION_MAX_RECOVERY_STEPS)
 })
 
 it('freezes accepted permissions and applies full access only to the next private turn', async () => {

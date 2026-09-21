@@ -24,9 +24,17 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
   const peerTools = policy.kind === 'discussion' && policy.collaborationProtocol === 'peer'
     ? ['read_room_updates', 'send_room_message'] : []
   const pollTools = policy.kind === 'discussion' && policy.allowedToolNames?.includes('vote_room_poll') ? ['vote_room_poll'] : []
-  const allowed = intersectAllowedToolNames(context.allowedToolNames,
-    intersectAllowedToolNames(policy.allowedToolNames ? [...policy.allowedToolNames, 'read_room_rules', ...peerTools, ...agentTools] : undefined, policy.kind === 'coordination' ? ['submit_room_plan', 'read_room_rules', ...agentTools] :
-      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', ...peerTools, ...pollTools, ...agentTools, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
+  // Replying in a conversation is intrinsic: even read-only or setup-scoped
+  // conversations must be able to publish their visible bubbles.
+  const conversationTools = policy.kind === 'conversation' ? ['send_im_message'] : []
+  const intersected = intersectAllowedToolNames(context.allowedToolNames,
+    intersectAllowedToolNames(policy.allowedToolNames ? [...policy.allowedToolNames, 'read_room_rules', ...peerTools, ...agentTools, ...conversationTools] : undefined, policy.kind === 'coordination' ? ['submit_room_plan', 'read_room_rules', ...agentTools] :
+      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', ...peerTools, ...pollTools, ...agentTools, ...conversationTools, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
+  // Replying is intrinsic to a conversation: a frozen setup or skill allow-list
+  // must not drop the publication tool. Explicit blockedToolNames still wins
+  // because it is enforced separately at resolution time.
+  const allowed = policy.kind === 'conversation' && intersected && !intersected.includes('send_im_message')
+    ? [...intersected, 'send_im_message'] : intersected
   return {
     ...context,
     roomStepKind: policy.kind, roomAgent: Boolean(policy.participantAgentId),

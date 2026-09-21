@@ -30,7 +30,7 @@ import { RoomMemberDetails } from './RoomMemberDetails'
 import { roomsClient } from './rooms-client'
 import { useRooms } from './useRooms'
 import './rooms.css'
-import { RoomStreamingTimeline } from './RoomStreamingTimeline'
+import { RoomTimeline } from './RoomTimeline'
 import { RoomTaskStrip } from './RoomTaskStrip'
 import { RoomOverview } from './RoomOverview'
 import { useRoomTopics } from './useRoomTopics'
@@ -54,7 +54,6 @@ import { useRoomPresentationPreferences } from './room-presentation-preferences'
 import { openRoomContentTarget } from './room-content-navigation'
 import { otherUserInputAnswers, RoomChoiceCard, submitRoomUserInput } from './RoomChoiceCard'
 import { RoomExcalidrawConsumer } from './useRoomExcalidrawConsumer'
-import { RoomRunArtifacts } from './RoomRunArtifacts'
 import { RoomExcalidrawPanel } from './RoomExcalidrawPanel'
 import { useRoomExcalidrawStore, roomExcalidrawBoard } from './room-excalidraw-store'
 
@@ -308,7 +307,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             {!messages.length && privateChat && !direct.data?.active?.runId && !choiceInputs.length ? <div className="direct-empty-chat"><h2>{t('directWelcome', { name: room.members[0].displayName })}</h2>
               <p>{t(setupPending ? 'directSetupWelcomeHint' : 'directWelcomeHint')}</p>
               {setupPending ? <button type="button" onClick={() => void skipSetup()}>{t('directSkipSetup')}</button> : null}
-            </div> : <RoomStreamingTimeline runId={privateChat ? direct.data?.active?.runId ?? (direct.data?.requests[0]?.status === 'completed' ? direct.data.requests[0].runId : undefined) : undefined}
+            </div> : <RoomTimeline
               key={room.id + '-timeline'}
               searchOpen={searchOpen}
               onSearchClose={() => setSearchOpen(false)}
@@ -337,8 +336,6 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
               renderChoice={(message) => <RoomChoiceCard input={choiceInputs.find((input) => input.id === message.clientRequestId)} title={message.body}
                 setupPending={setupPending} onUpdated={async () => { await direct.refresh(); await state.refresh() }} onSkipSetup={skipSetup} />}
             />}
-            {privateChat ? <RoomRunArtifacts roomId={room.id}
-              runId={direct.data?.active?.runId ?? (direct.data?.requests[0]?.status === 'completed' ? direct.data.requests[0].runId : undefined)} /> : null}
             {privateChat ? <RoomDirectProgress room={room} state={direct} onRun={openRun} openRunId={openRunId} onModels={() => setModelsOpen(true)} /> : null}
             {room.conversationKind === 'agent_agent' ? <p className="agent-conversation-note">{t('agentsPairReadOnly')}</p> : <>
               <RoomTypingRow

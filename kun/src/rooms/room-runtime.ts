@@ -24,6 +24,7 @@ import { roomActivitySummary } from './room-activity-summary.js'
 import { RoomContextPending } from './room-rule-compression.js'
 import { RoomPeerRunner } from './room-peer-runner.js'
 import { bindRoomPeerStore } from './room-peer-tools.js'
+import { bindImMessageService } from './room-im-message-tool.js'
 import { roomPeerTopicPage, roomPeerMetricPage, stopRoomPeerTopic, deliverRoomPeerTaskProgress } from './room-peer-api.js'
 import { roomDiscussionBusy, roomRequestDiscussionTarget, cancelSupersededRoomRequest } from './room-discussion-scheduler.js'
 import { pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
@@ -80,6 +81,7 @@ export class RoomRuntime {
     this.tasks = new RoomTaskRunner(deps, this.executionService)
     this.peers = new RoomPeerRunner(deps, () => this.wake())
     bindRoomPeerStore(deps.threadStore, deps.store)
+    bindImMessageService(deps.threadStore, this.executionService)
     this.unbindContinuations = bindRoomContinuationDispatcher(deps.threadStore, (input) =>
       this.exclusive(async () => {
         if (this.stopped || !this.held()) throw new Error('Room continuation owner is temporarily unavailable')

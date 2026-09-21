@@ -16,6 +16,8 @@
 .rooms-content-card-label small { font-size: 10px; }
 .rooms-content-thumbnail { display: flex; align-items: center; justify-content: center; height: 160px; background: var(--ds-surface-subtle); color: var(--ds-text-faint); }
 .rooms-content-thumbnail img { width: 100%; height: 100%; object-fit: contain; }
+.rooms-content-media-audio { display: block; width: 100%; padding: 10px 12px 2px; box-sizing: border-box; }
+.rooms-content-media-video { display: block; width: 100%; max-height: 240px; background: #000; }
 .rooms-content-card > p { padding: 6px 12px; color: var(--ds-danger); font-size: 11px; }
 .rooms-content-card button:focus-visible,
 .rooms-content-preview button:focus-visible,

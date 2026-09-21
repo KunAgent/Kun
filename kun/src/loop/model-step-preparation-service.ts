@@ -32,9 +32,11 @@ import {
   postToolFailureRecoveryInstruction,
   TOOL_SUPPRESSION_FINAL_ANSWER_RECOVERY_STEP,
   toolSuppressionRecoveryInstruction,
+  conversationDeliveryInstruction,
   emptyPostToolRecoveryInstruction,
   userInputUnavailableInstruction
 } from './continuation-instructions.js'
+import { SEND_IM_MESSAGE_TOOL_NAME } from '../rooms/room-im-message-tool.js'
 import { healLoadedHistoryItems } from './history-healing.js'
 import { memoryInstructions } from './memory-instructions.js'
 import { modelCapabilitiesForModel } from './model-context-profile.js'
@@ -45,7 +47,7 @@ import {
 } from './plan-mode.js'
 import { initialRuntimeContextInstruction } from './runtime-context.js'
 import { historyReferenceContextBlocks } from '../prompt/history-reference-context.js'
-import { GRAPH_CREATE_RUN_TOOL_NAME } from './round-outcome-coordinator.js'
+import { GRAPH_CREATE_RUN_TOOL_NAME, IM_PUBLICATION_MAX_RECOVERY_STEPS } from './round-outcome-coordinator.js'
 import { svgArtifactCompletionState } from './svg-artifact-completion.js'
 import { imageGenerationReferenceInstructions } from './turn-attachment-service.js'
 import { resolveTurnModeContext } from './turn-context-resolver.js'
@@ -457,6 +459,7 @@ export abstract class ModelStepPreparationService {
       forceEmptyPostToolFinalAnswerRecovery ||
       forceToolSuppressionFinalAnswerRecovery ||
       forcePostToolFailureFinalAnswerRecovery
+    const imPublicationRecoveryStep = this.deps.roundOutcome.imPublicationRecoverySteps(turnId)
     const planningToolSpecs = turn.orchestration === 'graph' && !graphCreateSatisfied
       ? effectiveToolSpecs.filter((tool) =>
           tool.name === GRAPH_DEFINE_PLAN_TOOL_NAME ||
@@ -473,6 +476,9 @@ export abstract class ModelStepPreparationService {
       : forceFinalAnswerRecovery || boundedFinalSynthesis
         ? []
         : planningToolSpecs
+    const conversationDeliveryAdvertised = toolContext.roomStepKind === 'conversation' &&
+      toolContext.roomAgent === true &&
+      requestToolSpecs.some((tool) => tool.name === SEND_IM_MESSAGE_TOOL_NAME)
     const promptCachePhase = resolvePromptCachePhase({
       svg: turn.guiDesignArtifact?.kind === 'svg',
       graph: turn.orchestration === 'graph',
@@ -575,6 +581,8 @@ export abstract class ModelStepPreparationService {
             postToolFailureRecoveryInstruction(postToolFailureRecoveryStep)
           )]
         : []),
+      ...(conversationDeliveryAdvertised ? [kunContextBlock('conversation-delivery', 'runtime',
+        conversationDeliveryInstruction(imPublicationRecoveryStep, IM_PUBLICATION_MAX_RECOVERY_STEPS))] : []),
       ...outputTruncationRecoveryBlocks(this.deps.roundOutcome.outputTruncationRecoverySteps(turnId)),
       ...imageGenerationReferenceInstructions({
         imageAttachments: attachments.imageAttachments,

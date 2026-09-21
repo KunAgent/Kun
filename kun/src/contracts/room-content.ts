@@ -42,7 +42,7 @@ export type RoomContentResult = {
   state: 'available' | 'unavailable'
   reason?: string
   title: string
-  kind?: 'image' | 'file' | 'task' | 'delivery' | 'board_card'
+  kind?: 'image' | 'file' | 'audio' | 'video' | 'task' | 'delivery' | 'board_card'
   description?: string
   mimeType?: string
   byteSize?: number
@@ -51,7 +51,8 @@ export type RoomContentResult = {
   status?: string
   version?: string
   thumbnail?: RoomPreviewImage
-  preview?: { type: 'text'; text: string; truncated: boolean } | { type: 'image'; image: RoomPreviewImage }
+  preview?: { type: 'text'; text: string; truncated: boolean } | { type: 'image'; image: RoomPreviewImage } |
+    { type: 'media'; dataBase64: string; mimeType: string }
   openTarget?: RoomContentOpenTarget
 }
 export type RoomLinkPreview = {

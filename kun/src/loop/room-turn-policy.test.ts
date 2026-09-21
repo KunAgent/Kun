@@ -116,6 +116,12 @@ describe('writable room general-capability parity', () => {
     expect(context.sandboxMode).toBe('workspace-write')
   })
 
+  it('keeps send_im_message available for a capability-frozen conversation', () => {
+    const context = applyRoomToolPolicy({ ...raw, allowedToolNames: ['read'] },
+      roomThread({ kind: 'conversation', participantAgentId: 'agent_one', allowedToolNames: ['read'] }))
+    expect(context.allowedToolNames).toEqual(expect.arrayContaining(['read', 'send_im_message']))
+  })
+
   it('keeps delegate/subagent available for a writable group execution thread', () => {
     const context = applyRoomToolPolicy(raw, roomThread({ kind: 'execution' }))
     for (const name of ['delegate_task', 'generate_subagent']) expect(context.blockedToolNames).not.toContain(name)
