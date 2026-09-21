@@ -46,6 +46,7 @@ export type ModelProviderPresetId =
   | 'minimax'
   | 'aliyun'
   | 'tencentcloud'
+  | 'opper'
   | 'vercel-ai-gateway'
   | 'stepfun'
 

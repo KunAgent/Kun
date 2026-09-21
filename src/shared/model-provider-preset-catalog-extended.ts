@@ -356,6 +356,15 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
     apiKeyUrl: 'https://accounts.x.ai'
   },
 {
+    id: 'opper',
+    name: 'Opper',
+    baseUrl: 'https://api.opper.ai/v3/compat',
+    endpointFormat: 'chat_completions',
+    models: [],
+    docsUrl: 'https://docs.opper.ai',
+    apiKeyUrl: 'https://platform.opper.ai'
+  },
+{
     id: 'vercel-ai-gateway',
     name: 'Vercel AI Gateway',
     baseUrl: 'https://ai-gateway.vercel.sh/v1',

@@ -35,6 +35,20 @@ make all of their models appear in the composer before credentials are set.
 
 ## Built-in Providers
 
+Opper:
+
+- id: `opper`
+- base URL: `https://api.opper.ai/v3/compat`
+- endpoint format: OpenAI Chat Completions
+- models: imported on demand from the gateway `GET /models` endpoint
+- model ids: a bare pool name such as `claude-sonnet-4-6` routes across every
+  provider serving that model; `<provider>/<model>` such as
+  `aws/claude-sonnet-4-6-eu` pins one provider or region
+- role: optional EU-hosted multi-provider gateway (Opper Technology AB,
+  Stockholm) billing each upstream provider's own token rates with no markup
+- behavior: direct providers remain the default; adding this preset does not
+  route existing providers through Opper
+
 Vercel AI Gateway:
 
 - id: `vercel-ai-gateway`
