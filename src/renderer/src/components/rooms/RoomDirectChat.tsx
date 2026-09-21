@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room, RoomContentReference } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomPopover } from './RoomPopover'
-import { RoomModal } from './RoomModal'
 import { RoomExecutionGates } from './RoomTaskGates'
 import { agentPath, useAgentResource } from './agent-client'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
@@ -82,12 +81,12 @@ export function RoomDirectProgress({ room, state, onRun, openRunId, onModels }: 
     {state.error ? <p role="alert" className="rooms-run-error">{state.error}</p> : null}
   </div>
 }
-export function RoomDirectFiles({ room, onOpen, onClose }: { room: Room; onOpen: (ref: RoomContentReference) => void; onClose: () => void }) {
+export function RoomDirectFiles({ room, onOpen }: { room: Room; onOpen: (ref: RoomContentReference) => void }) {
   const { t } = useTranslation('common')
   const resource = useAgentResource<{ files: RoomContentReference[] }>(roomPath(room.id) + '/files')
-  return <RoomModal title={t('directFiles')} onClose={onClose}><div className="direct-file-list">
-    {resource.data?.files.map((file) => <button key={JSON.stringify(file)} onClick={() => { onOpen(file); onClose() }}><FolderOpen size={16} />{file.titleSnapshot}</button>)}
+  return <div className="direct-file-list min-h-0 flex-1 overflow-y-auto">
+    {resource.data?.files.map((file) => <button key={JSON.stringify(file)} onClick={() => onOpen(file)}><FolderOpen size={16} />{file.titleSnapshot}</button>)}
     {!resource.data?.files.length ? <p>{t('directNoFiles')}</p> : null}
     {resource.error ? <p role="alert">{resource.error}</p> : null}
-  </div></RoomModal>
+  </div>
 }

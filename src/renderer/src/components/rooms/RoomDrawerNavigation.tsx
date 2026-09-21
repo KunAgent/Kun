@@ -12,6 +12,10 @@ export type RoomDrawerTarget =
   | { kind: 'reply'; messageId: string }
   | { kind: 'run'; runId: string }
   | { kind: 'content'; reference: RoomContentReference; messageId?: string }
+  | { kind: 'files' }
+  | { kind: 'models' }
+  | { kind: 'settings' }
+  | { kind: 'directory' }
 export type RoomDrawerFrame = { key: number; target: RoomDrawerTarget; returnFocus: HTMLElement | null }
 
 export function useRoomDrawerNavigation(roomId: string | null) {
@@ -65,11 +69,11 @@ export function RoomDrawerNavigation({ frames, onBack, onClose, onSection, rende
   }, [current?.key])
   if (!current) return null
   const section = [...frames].reverse().find((frame) => frame.target.kind === 'section')?.target
-  const title = current.target.kind === 'handoffs' ? t('agentsHandoffs') : current.target.kind === 'agent' ? t(current.target.agentId ? 'agentsProfileAndMemory' : 'agentsCreate') : current.target.kind === 'reply' ? t('roomsReplyThreadTitle') : current.target.kind === 'content' ? t('roomsReplyContentTitle') : current.target.kind === 'run' ? t('roomsAgentSession') : undefined
+  const title = current.target.kind === 'handoffs' ? t('agentsHandoffs') : current.target.kind === 'agent' ? t(current.target.agentId ? 'agentsProfileAndMemory' : 'agentsCreate') : current.target.kind === 'reply' ? t('roomsReplyThreadTitle') : current.target.kind === 'content' ? t('roomsReplyContentTitle') : current.target.kind === 'run' ? t('roomsAgentSession') : current.target.kind === 'files' ? t('directFiles') : current.target.kind === 'models' ? t('directModels') : current.target.kind === 'settings' ? t('roomsSettings') : current.target.kind === 'directory' ? t('agentsDirectory') : undefined
   return <RoomDetailsDrawer section={section?.kind === 'section' ? section.section : 'discussion'}
-    onSection={onSection} onClose={onClose} onBack={onBack}
+    onSection={onSection} onClose={onClose} onBack={onBack} frameKey={current.key}
     taskOpen={current.target.kind === 'task'} runOpen={current.target.kind === 'run'}
-    childOpen={current.target.kind === 'handoffs' || current.target.kind === 'agent' || current.target.kind === 'reply' || current.target.kind === 'content' || frames.length > 1}
+    childOpen={current.target.kind !== 'section' || frames.length > 1}
     title={title} backLabel={t('roomsReplyBack')}>
     <div ref={panel} className="rooms-drawer-pages">
       {frames.map((frame) => {

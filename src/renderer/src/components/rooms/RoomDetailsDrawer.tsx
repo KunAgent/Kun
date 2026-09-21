@@ -22,6 +22,7 @@ export function RoomDetailsDrawer({
   childOpen = false,
   title,
   backLabel,
+  frameKey,
   children
 }: {
   section: RoomDetailsSection
@@ -33,12 +34,14 @@ export function RoomDetailsDrawer({
   childOpen?: boolean
   title?: string
   backLabel?: string
+  frameKey?: number
   children: ReactNode
 }) {
   const { t } = useTranslation('common')
   const panel = useRef<HTMLElement>(null)
   const [expanded, setExpanded] = useState(false)
-  const sideDocked = runOpen && !expanded
+  useEffect(() => setExpanded(false), [frameKey])
+  const sideDocked = !expanded
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null
     const element = panel.current
@@ -93,18 +96,16 @@ export function RoomDetailsDrawer({
         <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-ds-ink">
           {title ?? t(runOpen ? 'roomsRunDetails' : taskOpen ? 'roomsDetails' : 'roomsRoomDetails')}
         </h2>
-        {runOpen ? (
-          <button
-            type="button"
-            className={`${roomButtonClass} xl:hidden`}
-            aria-pressed={!expanded}
-            aria-label={t('roomsRightSidebar')}
-            title={t('roomsRightSidebar')}
-            onClick={() => setExpanded((value) => !value)}
-          >
-            <PanelRight size={16} />
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className={`${roomButtonClass} xl:hidden`}
+          aria-pressed={!expanded}
+          aria-label={t('roomsRightSidebar')}
+          title={t('roomsRightSidebar')}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          <PanelRight size={16} />
+        </button>
         <button
           className={roomButtonClass}
           onClick={onClose}

@@ -9,14 +9,16 @@ import { useChatStore } from '../../store/chat-store'
 export type AgentModels = AgentModelOptions & { agent: AgentIdentity }
 export const modelLabel = (value?: AgentModelBinding) => value?.model ?? '—'
 const bindingKey = (value?: AgentModelBinding | null) => value ? JSON.stringify([value.providerId, value.accountId, value.model]) : ''
-export function AgentModelSettings({ agentId, room, onClose, onSaved }: { agentId: string; room?: Room; onClose: () => void; onSaved: () => void }) {
+export function AgentModelSettings({ agentId, room, onClose, onSaved, variant = 'modal' }: { agentId: string; room?: Room; onClose: () => void; onSaved: () => void; variant?: 'modal' | 'panel' }) {
   const { t } = useTranslation('common')
   const resource = useAgentResource<AgentModels>(agentPath(agentId) + '/models' + (room ? '?room_id=' + encodeURIComponent(room.id) : ''))
-  return <RoomModal title={t('directModels')} onClose={onClose}>
+  const body = <>
     {resource.data ? <ModelEditor key={agentId + ':' + resource.data.agent.revision} value={resource.data} onSaved={() => { resource.refresh(); onSaved() }} /> :
       <p className="rooms-run-note">{t('roomsLoading')}</p>}
     {resource.error ? <p role="alert" className="rooms-run-error">{resource.error}</p> : null}
-  </RoomModal>
+  </>
+  return variant === 'panel' ? <div className="min-h-0 flex-1 overflow-y-auto p-4">{body}</div>
+    : <RoomModal title={t('directModels')} onClose={onClose}>{body}</RoomModal>
 }
 function ModelEditor({ value, onSaved }: { value: AgentModels; onSaved: () => void }) {
   const { t } = useTranslation('common')

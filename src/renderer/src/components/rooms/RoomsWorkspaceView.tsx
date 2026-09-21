@@ -1,5 +1,4 @@
 import { RoomSidebar } from './RoomSidebar'
-import { RoomModal } from './RoomModal'
 import { useAgentChatEntry } from './useAgentChatEntry'
 import { RoomNewChat } from './RoomNewChat'
 import { AgentModelSettings } from './AgentModelSettings'
@@ -66,7 +65,7 @@ export function RoomsWorkspaceView({
 }): ReactElement {
   const { t } = useTranslation('common')
   const state = useRooms('group', false)
-  const [newChatOpen, setNewChatOpen] = useState(false), [modelsOpen, setModelsOpen] = useState(false), [filesOpen, setFilesOpen] = useState(false), [profileOpen, setProfileOpen] = useState(false), [manageOpen, setManageOpen] = useState(false)
+  const [newChatOpen, setNewChatOpen] = useState(false), [profileOpen, setProfileOpen] = useState(false)
   const [sidebarActivity, setSidebarActivity] = useState<RoomSidebarEntry>()
   const receiveSidebarActivity = useCallback((entry: RoomSidebarEntry | undefined) => setSidebarActivity((previous) =>
     previous?.roomId === entry?.roomId && previous?.runningCount === entry?.runningCount && previous?.attentionCount === entry?.attentionCount ? previous : entry), [])
@@ -78,7 +77,6 @@ export function RoomsWorkspaceView({
   }, [])
   const navigationSerial = useRef(0)
   const [agentRunTarget, setAgentRunTarget] = useState<{ roomId: string; runId: string } | null>(null)
-  const [settings, setSettings] = useState<'create' | 'edit' | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -98,7 +96,7 @@ export function RoomsWorkspaceView({
   }, [searchTarget, room?.id, drawer])
 
   useEffect(() => {
-    setSearchOpen(false); setModelsOpen(false); setFilesOpen(false)
+    setSearchOpen(false)
   }, [selectedId])
 
   const perform = async (action: () => Promise<unknown>): Promise<void> => {
@@ -259,18 +257,18 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           onCreateAgent={() => setNewChatOpen(true)} onCreateGroup={() => setNewChatOpen(true)}
           onDetails={(agentId) => drawer.open({ kind: 'agent', agentId })}
           onSearch={(hit) => { chooseRoom(hit.roomId); setSearchTarget(hit) }}
-          onProfile={() => setProfileOpen(true)} onTeam={() => setNewChatOpen(true)} onManage={() => setManageOpen(true)} />
+          onProfile={() => setProfileOpen(true)} onTeam={() => setNewChatOpen(true)} onManage={() => drawer.open({ kind: 'directory' })} />
       </aside>
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {privateChat && room ? <RoomDirectHeader room={room} onSidebar={() => setSidebarOpen(true)} onSearch={() => setSearchOpen(!searchOpen)}
-          onProfile={() => drawer.open({ kind: 'agent', agentId: room.members[0].participantAgentId })} onModels={() => setModelsOpen(true)}
-          onFiles={() => setFilesOpen(true)} onReset={() => void direct.context('reset')} onConnect={() => void direct.context('workspace')}
+          onProfile={() => drawer.open({ kind: 'agent', agentId: room.members[0].participantAgentId })} onModels={() => drawer.open({ kind: 'models' })}
+          onFiles={() => drawer.open({ kind: 'files' })} onReset={() => void direct.context('reset')} onConnect={() => void direct.context('workspace')}
           onTasks={() => drawer.section('tasks')} onSession={toggleSession} sessionOpen={Boolean(openRunId)} sessionDisabled={!latestRunId} /> : <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
           onSidebar={() => setSidebarOpen(true)}
           onSearch={() => setSearchOpen((value) => !value)}
           onDetails={() => drawer.section('discussion')}
           onMembers={() => drawer.section('members')}
-          onSettings={() => setSettings('edit')}
+          onSettings={() => drawer.open({ kind: 'settings' })}
           onUpdate={(patch) => { if (room) void perform(async () => {
             const result = await roomsClient.update(room, patch)
             state.saved(result.room)
@@ -341,7 +339,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
               renderChoice={(message) => <RoomChoiceCard input={choiceInputs.find((input) => input.id === message.clientRequestId)} title={message.body}
                 setupPending={setupPending} onUpdated={async () => { await direct.refresh(); await state.refresh() }} onSkipSetup={skipSetup} />}
             />}
-            {privateChat ? <RoomDirectProgress room={room} state={direct} onRun={openRun} openRunId={openRunId} onModels={() => setModelsOpen(true)} /> : null}
+            {privateChat ? <RoomDirectProgress room={room} state={direct} onRun={openRun} openRunId={openRunId} onModels={() => drawer.open({ kind: 'models' })} /> : null}
             {room.conversationKind === 'agent_agent' ? <p className="agent-conversation-note">{t('agentsPairReadOnly')}</p> : <>
               <RoomTypingRow
                 names={typingNames}
@@ -391,6 +389,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             onRun={(roomId, runId) => { chooseRoom(roomId); setAgentRunTarget({ roomId, runId }) }}
             onSource={(roomId, messageId) => { chooseRoom(roomId); if (messageId) setSearchTarget({
               kind: 'messages', id: messageId, roomId, roomName: '', title: '', preview: '', messageId }) }} />
+          if (target.kind === 'directory') return <AgentDirectory key={key} onOpen={(id) => void openAgent(id)}
+            onDetails={(agentId) => drawer.open({ kind: 'agent', agentId })} onCreate={() => { drawer.close(); setNewChatOpen(true) }} />
           if (!room) return null
           if (target.kind === 'handoffs') return <AgentHandoffPanel key={key} room={room} messages={messages} topics={topicState.topics}
             active={active} selectedId={target.selectedId} onOpenPair={(id) => { chooseRoom(id) }}
@@ -402,6 +402,11 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             onSend={send} onPin={pin} onTask={openTask} onRun={openRun} onMember={openMember} onOpenContent={openContent} />
           if (target.kind === 'content') return <RoomContentPreview key={key} room={room} reference={target.reference} messageId={target.messageId}
             onOpenCode={onOpenThread} onOpenTarget={onOpenContentTarget ?? ((value) => openRoomContentTarget(value, onOpenThread, room?.id))} />
+          if (target.kind === 'files') return <RoomDirectFiles key={key} room={room} onOpen={(reference) => openContent(reference)} />
+          if (target.kind === 'models') return agentId ? <AgentModelSettings key={key} agentId={agentId} room={room} variant="panel"
+            onClose={drawer.back} onSaved={() => void state.refresh()} /> : null
+          if (target.kind === 'settings') return <RoomSettings key={room.id} room={room} variant="panel"
+            onClose={drawer.back} onSaved={(value) => { state.saved(value); drawer.back() }} />
           if (target.section === 'discussion') return <RoomPeerActivity room={room} {...topicState} onUpdated={topicState.refresh}
             onMember={openMember} onOpenRun={openRun} onContinue={(rootRequestId) => { continueRoomTopic(room.id, rootRequestId); drawer.close() }} />
           if (target.section === 'overview') return <><RoomRunSummary roomId={room.id} topics={topicState.topics} />
@@ -417,26 +422,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
         }} /> : null}
       {newChatOpen ? <RoomNewChat onClose={() => setNewChatOpen(false)} onOpen={chooseRoom} onAgent={(id) => void openAgent(id)}
         onFill={() => drawer.open({ kind: 'agent' })} /> : null}
-      {modelsOpen && room?.members[0]?.participantAgentId ? <AgentModelSettings key={room.id} agentId={room.members[0].participantAgentId} room={room}
-        onClose={() => setModelsOpen(false)} onSaved={() => void state.refresh()} /> : null}
-      {filesOpen && room ? <RoomDirectFiles room={room} onClose={() => setFilesOpen(false)} onOpen={openContent} /> : null}
       {profileOpen ? <RoomUserAvatarEditor onClose={() => setProfileOpen(false)} /> : null}
-      {manageOpen ? <RoomModal title={t('agentsDirectory')} onClose={() => setManageOpen(false)}>
-        <AgentDirectory onOpen={(id) => { setManageOpen(false); void openAgent(id) }} onDetails={(agentId) => { setManageOpen(false); drawer.open({ kind: 'agent', agentId }) }}
-          onCreate={() => { setManageOpen(false); setNewChatOpen(true) }} />
-      </RoomModal> : null}
-      {settings ? (
-
-        <RoomSettings
-          key={`${settings}:${room?.id ?? 'new'}`}
-          room={settings === 'edit' ? room : null}
-          onClose={() => setSettings(null)}
-          onSaved={(value) => {
-            state.saved(value)
-            setSettings(null)
-          }}
-        />
-      ) : null}
     </div>
   )
 }
