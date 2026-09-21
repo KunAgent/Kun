@@ -50,6 +50,7 @@ type Props = {
   modeMenuRef: RefObject<HTMLDivElement | null>
   onCopyRichText: () => void
   onCopyXArticle: () => void
+  onCopyXArticleTitle: () => void
   onExportFile: (format: WriteExportFormat) => void
   onGeneratePresentation: () => void
   onSave: () => void
@@ -91,6 +92,7 @@ export function WriteWorkspaceToolbar({
   modeMenuRef,
   onCopyRichText,
   onCopyXArticle,
+  onCopyXArticleTitle,
   onExportFile,
   onGeneratePresentation,
   onSave,
@@ -389,6 +391,15 @@ export function WriteWorkspaceToolbar({
                     className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[13px] text-ds-ink transition hover:bg-ds-hover/80"
                   >
                     <span>{t('writeCopyXArticle')}</span>
+                    <Copy className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.9} />
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={onCopyXArticleTitle}
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[13px] text-ds-ink transition hover:bg-ds-hover/80"
+                  >
+                    <span>{t('writeCopyXArticleTitle')}</span>
                     <Copy className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.9} />
                   </button>
                   <div className="my-1 h-px bg-ds-border-muted" />

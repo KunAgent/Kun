@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
 import type { TFunction } from 'i18next'
-import type { WriteExportFormat, WriteRichClipboardProfile } from '@shared/write-export'
+import { X_ARTICLE_TITLE_MISSING, type WriteExportFormat, type WriteRichClipboardProfile } from '@shared/write-export'
 import { useWriteWorkspaceStore, writeJoinPath } from '../../write/write-workspace-store'
 import { pathsEqual } from '../../write/write-workspace-store-helpers'
 import { formatWorkspacePickerError } from '../../lib/format-workspace-picker-error'
@@ -204,7 +204,10 @@ export function createWriteWorkspaceFileActions({
       if (!result.ok) {
         showExportNotice({
           tone: 'error',
-          message: t('writeCopyRichTextFailed', { message: result.message })
+          message:
+            profile === 'x-articles-title' && result.message === X_ARTICLE_TITLE_MISSING
+              ? t('writeCopyXArticleTitleMissing')
+              : t('writeCopyRichTextFailed', { message: result.message })
         })
         return
       }
@@ -227,6 +230,7 @@ export function createWriteWorkspaceFileActions({
   return {
     copyCurrentFileAsRichText,
     copyCurrentFileAsXArticle: () => copyCurrentFileAsRichText('x-articles'),
+    copyCurrentFileAsXArticleTitle: () => copyCurrentFileAsRichText('x-articles-title'),
     createDraftFile,
     exportCurrentFile,
     generatePresentation,
@@ -236,11 +240,12 @@ export function createWriteWorkspaceFileActions({
 
 function copyRichTextSuccessMessage(
   profile: WriteRichClipboardProfile,
-  result: { simplified?: boolean; overLimit?: boolean },
+  result: { title?: string; simplified?: boolean; overLimit?: boolean },
   t: TFunction<'common'>
 ): string {
+  if (profile === 'x-articles-title') return t('writeCopyXArticleTitleSuccess')
   if (profile !== 'x-articles') return t('writeCopyRichTextSuccess')
   if (result.overLimit) return t('writeCopyXArticleOverLimit')
-  if (result.simplified) return t('writeCopyXArticleSimplified')
+  if (!result.title) return t('writeCopyXArticleSuccessNoTitle')
   return t('writeCopyXArticleSuccess')
 }

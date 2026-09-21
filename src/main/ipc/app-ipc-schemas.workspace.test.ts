@@ -254,6 +254,11 @@ describe('app-ipc-schemas workspace and system', () => {
       profile: 'x-articles'
     })
     expect(payload.profile).toBe('x-articles')
+    expect(writeRichClipboardPayloadSchema.parse({
+      path: '/tmp/workspace/draft.md',
+      content: '# Draft',
+      profile: 'x-articles-title'
+    }).profile).toBe('x-articles-title')
     expect(() => writeRichClipboardPayloadSchema.parse({
       path: '/tmp/workspace/draft.md',
       content: '# Draft',

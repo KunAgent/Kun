@@ -35,6 +35,7 @@ function textToolbarProps(inlineCompletionEnabled: boolean): ToolbarProps {
     modeMenuRef: createRef<HTMLDivElement>(),
     onCopyRichText: noop,
     onCopyXArticle: noop,
+    onCopyXArticleTitle: noop,
     onExportFile: noop,
     onGeneratePresentation: noop,
     onSave: noop,
@@ -77,6 +78,7 @@ describe('WriteWorkspaceToolbar code preview', () => {
       modeMenuRef: createRef<HTMLDivElement>(),
       onCopyRichText: noop,
       onCopyXArticle: noop,
+      onCopyXArticleTitle: noop,
       onExportFile: noop,
       onGeneratePresentation: noop,
       onSave: noop,
@@ -135,5 +137,6 @@ describe('WriteWorkspaceToolbar code preview', () => {
     }))
     expect(html).toContain('writeCopyRichText')
     expect(html).toContain('writeCopyXArticle')
+    expect(html).toContain('writeCopyXArticleTitle')
   })
 })

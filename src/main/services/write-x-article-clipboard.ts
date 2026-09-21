@@ -1,11 +1,9 @@
 import { basename, extname } from 'node:path'
-import { createElement, Fragment, type ComponentPropsWithoutRef, type ReactNode } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { resolveWriteMarkdownResource } from '../../shared/write-markdown-resource'
+import { X_ARTICLE_TITLE_MISSING } from '../../shared/write-export'
 
 export const X_ARTICLE_CHAR_LIMIT = 100_000
+export { X_ARTICLE_TITLE_MISSING }
 
 const STATIC_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp'])
 const LINK_MEDIA_EXTENSIONS = new Set([
@@ -20,9 +18,20 @@ const LINK_MEDIA_EXTENSIONS = new Set([
   'htm'
 ])
 
+const HEADING_PATTERN = /^(#{1,6})[ \t]+(.+)$/
+const UNORDERED_LIST_PATTERN = /^[-*+][ \t]+(.+)$/
+const ORDERED_LIST_PATTERN = /^\d+[.)][ \t]+(.+)$/
+const BLOCKQUOTE_PATTERN = /^>[ \t]?(.*)$/
+const HORIZONTAL_RULE_PATTERN = /^(?:-{3,}|\*{3,}|_{3,})$/
+const TWEET_URL_PATTERN =
+  /^https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/[A-Za-z0-9_]+\/status\/(\d+)(?:[?#][^\s]*)?$/i
+const INLINE_TOKEN_PATTERN =
+  /(!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]+\)|\*\*(?:[^*]|\*(?!\*))+?\*\*|~~[^~]+?~~|\*[^*\n]+?\*)/g
+
 export type WriteXArticleClipboardFragment = {
   html: string
   text: string
+  title: string
   simplified: boolean
   overLimit: boolean
 }
@@ -32,48 +41,114 @@ type MarkdownSanitizeResult = {
   simplified: boolean
 }
 
+type InlineToken =
+  | { type: 'text'; text: string }
+  | { type: 'bold'; text: string }
+  | { type: 'italic'; text: string }
+  | { type: 'strike'; text: string }
+  | { type: 'link'; text: string; href: string }
+  | { type: 'image'; alt: string; src: string }
+
+type XArticleBlock =
+  | { type: 'heading'; level: 1 | 2 | 3 | 4 | 5 | 6; content: InlineToken[] }
+  | { type: 'paragraph'; content: InlineToken[] }
+  | { type: 'blockquote'; content: InlineToken[] }
+  | { type: 'list'; ordered: boolean; items: InlineToken[][] }
+  | { type: 'hr' }
+
 export function buildWriteXArticleClipboardFragment(options: {
   sourcePath: string
   content: string
 }): WriteXArticleClipboardFragment {
   if (!isMarkdownFile(options.sourcePath)) {
-    const text = options.content
-    return {
-      html: wrapArticleHtml(renderPlainTextFragment(text)),
-      text,
-      simplified: false,
-      overLimit: text.length > X_ARTICLE_CHAR_LIMIT
-    }
+    return buildPlainTextFragment(options.content)
   }
 
   const sanitized = sanitizeWriteXArticleMarkdown(options.content)
-  const body = renderMarkdownFragment(sanitized.text, options.sourcePath)
+  const blocks = parseXArticleBlocks(sanitized.text)
+  const titleBlock =
+    blocks[0]?.type === 'heading' && blocks[0].level === 1 ? blocks[0] : undefined
+  const title = titleBlock ? inlineToText(titleBlock.content) : ''
+  const bodyBlocks = titleBlock ? blocks.slice(1) : blocks
+  const text = serializeXArticleText(bodyBlocks)
+  const html = wrapXArticleClipboardHtml(
+    serializeXArticleHtml(bodyBlocks, options.sourcePath)
+  )
   return {
-    html: wrapArticleHtml(body),
-    text: sanitized.text,
+    html,
+    text,
+    title,
     simplified: sanitized.simplified,
-    overLimit: sanitized.text.length > X_ARTICLE_CHAR_LIMIT
+    overLimit: text.length >= X_ARTICLE_CHAR_LIMIT
   }
 }
 
+export function buildWriteXArticleTitleClipboard(title: string): {
+  html: string
+  text: string
+} {
+  const text = title.trim()
+  return {
+    html: wrapXArticleClipboardHtml(`<p>${escapeHtml(text)}</p>`),
+    text
+  }
+}
+
+export function resolveXArticleClipboardWrite(
+  fragment: WriteXArticleClipboardFragment,
+  profile: 'x-articles' | 'x-articles-title'
+):
+  | {
+      ok: true
+      html: string
+      text: string
+      title: string
+      simplified: boolean
+      overLimit: boolean
+    }
+  | { ok: false; message: string } {
+  if (profile === 'x-articles-title') {
+    if (!fragment.title) return { ok: false, message: X_ARTICLE_TITLE_MISSING }
+    const titleClip = buildWriteXArticleTitleClipboard(fragment.title)
+    return {
+      ok: true,
+      html: titleClip.html,
+      text: titleClip.text,
+      title: fragment.title,
+      simplified: false,
+      overLimit: false
+    }
+  }
+  return {
+    ok: true,
+    html: fragment.html,
+    text: fragment.text,
+    title: fragment.title,
+    simplified: fragment.simplified,
+    overLimit: fragment.overLimit
+  }
+}
+
+export function wrapXArticleClipboardHtml(inner: string): string {
+  return [
+    '<meta charset="utf-8">',
+    '<html><body>',
+    '<!--StartFragment-->',
+    inner,
+    '<!--EndFragment-->',
+    '</body></html>'
+  ].join('\n')
+}
+
 export function sanitizeWriteXArticleMarkdown(content: string): MarkdownSanitizeResult {
-  const { text: withoutFences, simplified: fencesSimplified } = unwrapFencedCode(content)
+  const normalized = content.replaceAll('\r\n', '\n')
+  const { text: withoutFences, simplified: fencesSimplified } = unwrapFencedCode(normalized)
   const { text: withoutTables, simplified: tablesSimplified } = flattenMarkdownTables(withoutFences)
-  const { text: withoutDeepHeadings, simplified: headingsSimplified } =
-    demoteDeepHeadings(withoutTables)
-  const { text: withoutTasks, simplified: tasksSimplified } = unwrapTaskLists(withoutDeepHeadings)
-  const { text: withoutUnsupportedMedia, simplified: mediaSimplified } =
-    rewriteUnsupportedMedia(withoutTasks)
-  const { text, simplified: inlineCodeSimplified } = unwrapInlineCode(withoutUnsupportedMedia)
+  const { text: withoutTasks, simplified: tasksSimplified } = unwrapTaskLists(withoutTables)
+  const { text, simplified: inlineCodeSimplified } = unwrapInlineCode(withoutTasks)
   return {
     text,
-    simplified:
-      fencesSimplified ||
-      tablesSimplified ||
-      headingsSimplified ||
-      tasksSimplified ||
-      mediaSimplified ||
-      inlineCodeSimplified
+    simplified: fencesSimplified || tablesSimplified || tasksSimplified || inlineCodeSimplified
   }
 }
 
@@ -81,111 +156,235 @@ function isMarkdownFile(filePath: string): boolean {
   return /\.(md|markdown|mdx)$/i.test(filePath)
 }
 
-function wrapArticleHtml(body: string): string {
-  return `<article class="x-article-body">${body}</article>`
+function buildPlainTextFragment(content: string): WriteXArticleClipboardFragment {
+  const blocks: XArticleBlock[] = content
+    .replaceAll('\r\n', '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => ({ type: 'paragraph', content: [{ type: 'text', text: line }] }))
+  const text = serializeXArticleText(blocks)
+  return {
+    html: wrapXArticleClipboardHtml(serializeXArticleHtml(blocks, '')),
+    text,
+    title: '',
+    simplified: false,
+    overLimit: text.length >= X_ARTICLE_CHAR_LIMIT
+  }
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
+function parseXArticleBlocks(source: string): XArticleBlock[] {
+  const lines = source.split('\n')
+  const blocks: XArticleBlock[] = []
+  let index = 0
+
+  while (index < lines.length) {
+    const line = lines[index] ?? ''
+    if (!line.trim()) {
+      index += 1
+      continue
+    }
+
+    const heading = HEADING_PATTERN.exec(line)
+    if (heading) {
+      const level = Math.min(heading[1].length, 6) as 1 | 2 | 3 | 4 | 5 | 6
+      blocks.push({ type: 'heading', level, content: parseInline(heading[2].trim()) })
+      index += 1
+      continue
+    }
+
+    if (HORIZONTAL_RULE_PATTERN.test(line.trim())) {
+      blocks.push({ type: 'hr' })
+      index += 1
+      continue
+    }
+
+    if (BLOCKQUOTE_PATTERN.test(line)) {
+      const quoteLines: string[] = []
+      while (index < lines.length) {
+        const match = BLOCKQUOTE_PATTERN.exec(lines[index] ?? '')
+        if (!match) break
+        quoteLines.push(match[1].trim())
+        index += 1
+      }
+      blocks.push({ type: 'blockquote', content: parseInline(quoteLines.join(' ')) })
+      continue
+    }
+
+    if (UNORDERED_LIST_PATTERN.test(line) || ORDERED_LIST_PATTERN.test(line)) {
+      const ordered = ORDERED_LIST_PATTERN.test(line)
+      const items: InlineToken[][] = []
+      while (index < lines.length) {
+        const current = lines[index] ?? ''
+        const match = ordered
+          ? ORDERED_LIST_PATTERN.exec(current)
+          : UNORDERED_LIST_PATTERN.exec(current)
+        if (!match) break
+        items.push(parseInline(match[1].trim()))
+        index += 1
+      }
+      blocks.push({ type: 'list', ordered, items })
+      continue
+    }
+
+    blocks.push({ type: 'paragraph', content: parseInline(line.trim()) })
+    index += 1
+  }
+
+  return blocks
 }
 
-function renderPlainTextFragment(content: string): string {
-  const paragraphs = content.length > 0 ? content.split(/\n{2,}/) : ['']
-  return paragraphs
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replaceAll('\n', '<br/>')}</p>`)
+function parseInline(text: string): InlineToken[] {
+  const tokens: InlineToken[] = []
+  let cursor = 0
+  INLINE_TOKEN_PATTERN.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = INLINE_TOKEN_PATTERN.exec(text)) !== null) {
+    if (match.index > cursor) {
+      tokens.push({ type: 'text', text: text.slice(cursor, match.index) })
+    }
+    const raw = match[0]
+    if (raw.startsWith('![')) {
+      const image = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(raw)
+      if (image) {
+        tokens.push({ type: 'image', alt: image[1], src: firstMarkdownTarget(image[2]) })
+      }
+    } else if (raw.startsWith('[')) {
+      const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(raw)
+      if (link) {
+        tokens.push({ type: 'link', text: link[1], href: firstMarkdownTarget(link[2]) })
+      }
+    } else if (raw.startsWith('**') && raw.endsWith('**')) {
+      tokens.push({ type: 'bold', text: raw.slice(2, -2) })
+    } else if (raw.startsWith('~~') && raw.endsWith('~~')) {
+      tokens.push({ type: 'strike', text: raw.slice(2, -2) })
+    } else if (raw.startsWith('*') && raw.endsWith('*')) {
+      tokens.push({ type: 'italic', text: raw.slice(1, -1) })
+    }
+    cursor = match.index + raw.length
+  }
+  if (cursor < text.length) tokens.push({ type: 'text', text: text.slice(cursor) })
+  return tokens.length > 0 ? tokens : [{ type: 'text', text }]
+}
+
+function serializeXArticleHtml(blocks: XArticleBlock[], sourcePath: string): string {
+  return blocks
+    .map((block) => {
+      switch (block.type) {
+        case 'heading': {
+          const tag = block.level <= 2 ? 'h2' : 'h3'
+          return `<${tag}>${inlineToHtml(block.content, sourcePath)}</${tag}>`
+        }
+        case 'paragraph':
+          return serializeParagraphHtml(block.content, sourcePath)
+        case 'blockquote':
+          return `<blockquote>${inlineToHtml(block.content, sourcePath)}</blockquote>`
+        case 'list': {
+          const tag = block.ordered ? 'ol' : 'ul'
+          const items = block.items
+            .map((item) => `<li>${inlineToHtml(item, sourcePath)}</li>`)
+            .join('')
+          return `<${tag}>${items}</${tag}>`
+        }
+        case 'hr':
+          return '<hr>'
+      }
+    })
+    .filter(Boolean)
+    .join('\n')
+}
+
+function serializeParagraphHtml(content: InlineToken[], sourcePath: string): string {
+  if (content.length === 1 && content[0]?.type === 'image') {
+    return imageToHtml(content[0], sourcePath, true)
+  }
+  if (content.length === 1 && content[0]?.type === 'text' && TWEET_URL_PATTERN.test(content[0].text.trim())) {
+    const url = content[0].text.trim()
+    return `<p><a href="${escapeAttribute(url)}">${escapeHtml(url)}</a></p>`
+  }
+  if (content.length === 1 && content[0]?.type === 'text') {
+    const autolink = autolinkBareUrl(content[0].text.trim())
+    if (autolink) return `<p>${autolink}</p>`
+  }
+  return `<p>${inlineToHtml(content, sourcePath)}</p>`
+}
+
+function serializeXArticleText(blocks: XArticleBlock[]): string {
+  return blocks
+    .map((block) => {
+      switch (block.type) {
+        case 'heading':
+        case 'paragraph':
+        case 'blockquote':
+          return inlineToText(block.content)
+        case 'list':
+          return block.items
+            .map((item, index) => `${block.ordered ? `${index + 1}.` : '-'} ${inlineToText(item)}`)
+            .join('\n')
+        case 'hr':
+          return '---'
+      }
+    })
+    .filter((part) => part.trim().length > 0)
+    .join('\n\n')
+}
+
+function inlineToHtml(tokens: InlineToken[], sourcePath: string): string {
+  return tokens
+    .map((token) => {
+      switch (token.type) {
+        case 'text':
+          return escapeHtml(token.text)
+        case 'bold':
+          return `<b>${escapeHtml(token.text)}</b>`
+        case 'italic':
+          return `<i>${escapeHtml(token.text)}</i>`
+        case 'strike':
+          return `<s>${escapeHtml(token.text)}</s>`
+        case 'link':
+          return `<a href="${escapeAttribute(resolveHref(token.href, sourcePath))}">${escapeHtml(token.text)}</a>`
+        case 'image':
+          return imageToHtml(token, sourcePath, false)
+      }
+    })
     .join('')
 }
 
-function renderMarkdownFragment(content: string, sourcePath: string): string {
-  return renderToStaticMarkup(
-    createElement(ReactMarkdown, {
-      remarkPlugins: [remarkGfm],
-      components: {
-        h4: headingAsH3,
-        h5: headingAsH3,
-        h6: headingAsH3,
-        table: flattenTableNode,
-        thead: passthroughChildren,
-        tbody: passthroughChildren,
-        tr: tableRowAsParagraph,
-        th: strongCell,
-        td: passthroughChildren,
-        pre: unwrapPre,
-        code: unwrapCode,
-        input: omitNode,
-        img: ({
-          src,
-          alt,
-          ...props
-        }: ComponentPropsWithoutRef<'img'> & { src?: string; alt?: string | null }): ReactNode => {
-          const resolved = resolveWriteMarkdownResource(src, sourcePath) ?? src
-          if (!isXArticleInlineImageSrc(resolved)) {
-            const href = resolved?.trim() || src || '#'
-            const label = alt?.trim() || fileNameFromSrc(href)
-            return createElement('a', { href }, label)
-          }
-          return createElement('img', {
-            ...props,
-            src: resolved,
-            alt: alt ?? ''
-          })
-        },
-        a: ({
-          href,
-          children,
-          ...props
-        }: ComponentPropsWithoutRef<'a'> & { href?: string; children?: ReactNode }): ReactNode =>
-          createElement(
-            'a',
-            {
-              ...props,
-              href: resolveWriteMarkdownResource(href, sourcePath) ?? href
-            },
-            children
-          )
+function inlineToText(tokens: InlineToken[]): string {
+  return tokens
+    .map((token) => {
+      if (token.type === 'link') return token.text
+      if (token.type === 'image') {
+        return isXArticleInlineImageSrc(token.src)
+          ? token.alt || fileNameFromSrc(token.src)
+          : `📷 ${token.alt || fileNameFromSrc(token.src)}`
       }
-    }, content)
-  )
+      return token.text
+    })
+    .join('')
 }
 
-function headingAsH3({
-  children,
-  ...props
-}: ComponentPropsWithoutRef<'h3'> & { children?: ReactNode }): ReactNode {
-  return createElement('h3', props, children)
+function imageToHtml(token: Extract<InlineToken, { type: 'image' }>, sourcePath: string, block: boolean): string {
+  const label = token.alt.trim() || fileNameFromSrc(token.src)
+  if (!isXArticleInlineImageSrc(token.src)) {
+    const inner = /^https?:\/\//i.test(token.src)
+      ? `<a href="${escapeAttribute(token.src)}">📷 ${escapeHtml(label)}</a>`
+      : `📷 ${escapeHtml(label)}`
+    return block ? `<p>${inner}</p>` : inner
+  }
+  const src = resolveWriteMarkdownResource(token.src, sourcePath) ?? token.src
+  const img = `<img src="${escapeAttribute(src)}" alt="${escapeAttribute(token.alt)}">`
+  return block ? `<p>${img}</p>` : img
 }
 
-function passthroughChildren({ children }: { children?: ReactNode }): ReactNode {
-  return createElement(Fragment, null, children)
+function autolinkBareUrl(text: string): string | null {
+  if (!/^https?:\/\/\S+$/i.test(text)) return null
+  return `<a href="${escapeAttribute(text)}">${escapeHtml(text)}</a>`
 }
 
-function flattenTableNode({ children }: { children?: ReactNode }): ReactNode {
-  return createElement(Fragment, null, children)
-}
-
-function tableRowAsParagraph({ children }: { children?: ReactNode }): ReactNode {
-  return createElement('p', null, children)
-}
-
-function strongCell({ children }: { children?: ReactNode }): ReactNode {
-  return createElement('strong', null, children)
-}
-
-function unwrapPre({ children }: { children?: ReactNode }): ReactNode {
-  return createElement('p', null, children)
-}
-
-function unwrapCode({ children }: { children?: ReactNode }): ReactNode {
-  return children
-}
-
-function omitNode(): ReactNode {
-  return null
+function resolveHref(href: string, sourcePath: string): string {
+  if (/^https?:\/\//i.test(href) || href.startsWith('mailto:')) return href
+  return resolveWriteMarkdownResource(href, sourcePath) ?? href
 }
 
 function unwrapFencedCode(source: string): MarkdownSanitizeResult {
@@ -193,7 +392,6 @@ function unwrapFencedCode(source: string): MarkdownSanitizeResult {
   const out: string[] = []
   let fenceMarker: string | null = null
   let simplified = false
-
   for (const line of lines) {
     if (fenceMarker) {
       if (isFenceClose(line, fenceMarker)) {
@@ -211,7 +409,6 @@ function unwrapFencedCode(source: string): MarkdownSanitizeResult {
     }
     out.push(line)
   }
-
   return { text: out.join('\n'), simplified }
 }
 
@@ -230,7 +427,6 @@ function flattenMarkdownTables(source: string): MarkdownSanitizeResult {
   const out: string[] = []
   let simplified = false
   let index = 0
-
   while (index < lines.length) {
     const header = lines[index] ?? ''
     const separator = lines[index + 1] ?? ''
@@ -251,7 +447,6 @@ function flattenMarkdownTables(source: string): MarkdownSanitizeResult {
     out.push(header)
     index += 1
   }
-
   return { text: out.join('\n'), simplified }
 }
 
@@ -277,23 +472,8 @@ function stripOuterBold(value: string): string {
   return match?.[1] ?? value
 }
 
-function demoteDeepHeadings(source: string): MarkdownSanitizeResult {
-  const text = source.replace(/^#{4,6}[ \t]+/gm, '### ')
-  return { text, simplified: text !== source }
-}
-
 function unwrapTaskLists(source: string): MarkdownSanitizeResult {
   const text = source.replace(/^(\s*[-*+])[ \t]+\[[ xX]\][ \t]+/gm, '$1 ')
-  return { text, simplified: text !== source }
-}
-
-function rewriteUnsupportedMedia(source: string): MarkdownSanitizeResult {
-  const text = source.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (full, alt: string, target: string) => {
-    const src = firstMarkdownTarget(target)
-    if (isXArticleInlineImageSrc(src)) return full
-    const label = alt.trim() || fileNameFromSrc(src)
-    return `[${label}](${src})`
-  })
   return { text, simplified: text !== source }
 }
 
@@ -309,8 +489,7 @@ function firstMarkdownTarget(target: string): string {
 function extensionOf(src: string): string {
   const path = src.trim().split(/[?#]/)[0] ?? ''
   const base = basename(path)
-  const extension = extname(base).replace(/^\./, '').toLowerCase()
-  return extension
+  return extname(base).replace(/^\./, '').toLowerCase()
 }
 
 function fileNameFromSrc(src: string): string {
@@ -331,7 +510,20 @@ function isXArticleInlineImageSrc(src: string | undefined): boolean {
     return true
   }
   const extension = extensionOf(value)
-  if (!extension) return true
+  if (!extension) return /^https?:\/\//i.test(value)
   if (LINK_MEDIA_EXTENSIONS.has(extension)) return false
   return STATIC_IMAGE_EXTENSIONS.has(extension)
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function escapeAttribute(value: string): string {
+  return escapeHtml(value)
 }

@@ -175,16 +175,47 @@ describe('write-export-service helpers', () => {
     })
     expect(clipboard.write).toHaveBeenCalledWith(
       expect.objectContaining({
-        html: expect.stringContaining('<article class="x-article-body">'),
-        text: expect.stringContaining('**A**  **B**')
+        html: expect.stringContaining('<!--StartFragment-->'),
+        text: expect.stringContaining('A  B')
       })
     )
     const written = vi.mocked(clipboard.write).mock.calls[0]?.[0] as { html: string; text: string }
+    expect(written.html).not.toContain('<article')
     expect(written.html).not.toContain('<table>')
     expect(written.html).not.toContain('<pre>')
     expect(written.html).not.toContain('<code>')
+    expect(written.html).not.toContain('<strong>')
+    expect(written.html).toContain('<b>A</b>')
     expect(written.html).toContain('src="data:image/png;base64,')
     expect(written.html).not.toMatch(/<img\b[^>]*loop\.gif/i)
-    expect(written.html).toContain('>Loop</a>')
+    expect(written.html).toContain('📷 Loop')
+    expect(written.text).not.toContain('**')
+    expect(result).toMatchObject({ title: 'Heading' })
+  })
+
+  it('copies only the H1 for the x-articles-title profile', async () => {
+    const sourcePath = join(workspaceRoot, 'titled.md')
+    await writeFile(sourcePath, '# Hello title\n\nBody paragraph', 'utf8')
+
+    const result = await copyWriteDocumentAsRichText({
+      path: sourcePath,
+      workspaceRoot,
+      content: '# Hello title\n\nBody paragraph',
+      profile: 'x-articles-title'
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      profile: 'x-articles-title',
+      title: 'Hello title'
+    })
+    expect(clipboard.write).toHaveBeenCalledWith(
+      expect.objectContaining({
+        html: expect.stringContaining('<p>Hello title</p>'),
+        text: 'Hello title'
+      })
+    )
+    const written = vi.mocked(clipboard.write).mock.calls[0]?.[0] as { html: string; text: string }
+    expect(written.html).not.toContain('Body paragraph')
   })
 })

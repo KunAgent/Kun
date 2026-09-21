@@ -61,12 +61,13 @@ describe('Write presentation action', () => {
 })
 
 describe('Write X article clipboard action', () => {
-  it('copies with the x-articles profile and uses the simplified toast', async () => {
+  it('copies with the x-articles profile and uses the body toast', async () => {
     const showExportNotice = vi.fn()
     const copyWriteDocumentAsRichText = vi.fn(async () => ({
       ok: true as const,
       copiedAt: '2026-09-20T00:00:00.000Z',
       profile: 'x-articles' as const,
+      title: 'Brief',
       simplified: true,
       overLimit: false
     }))
@@ -85,7 +86,34 @@ describe('Write X article clipboard action', () => {
     })
     expect(showExportNotice).toHaveBeenCalledWith({
       tone: 'success',
-      message: 'writeCopyXArticleSimplified'
+      message: 'writeCopyXArticleSuccess'
+    })
+  })
+
+  it('copies the x-articles-title profile', async () => {
+    const showExportNotice = vi.fn()
+    const copyWriteDocumentAsRichText = vi.fn(async () => ({
+      ok: true as const,
+      copiedAt: '2026-09-20T00:00:00.000Z',
+      profile: 'x-articles-title' as const,
+      title: 'Brief'
+    }))
+    vi.stubGlobal('window', {
+      kunGui: { copyWriteDocumentAsRichText }
+    })
+    const actions = createWriteWorkspaceFileActions(actionParams({ showExportNotice }))
+
+    await actions.copyCurrentFileAsXArticleTitle()
+
+    expect(copyWriteDocumentAsRichText).toHaveBeenCalledWith({
+      path: '/workspace/brief.md',
+      workspaceRoot: '/workspace',
+      content: '# Brief',
+      profile: 'x-articles-title'
+    })
+    expect(showExportNotice).toHaveBeenCalledWith({
+      tone: 'success',
+      message: 'writeCopyXArticleTitleSuccess'
     })
   })
 })
