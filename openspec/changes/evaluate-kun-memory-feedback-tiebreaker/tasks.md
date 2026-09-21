@@ -27,7 +27,7 @@
 - [x] 4.3 Run the complete finite grid on development data and write a calibration report containing every evaluated configuration; verify configuration ordering and selected ids are reproducible.
 - [x] 4.4 Apply the pre-registered selection rule and write one candidate lock containing artifact hashes, evaluator identity, selected candidate, gates, seed, and resource ceilings; verify tampering with any dependency invalidates the lock.
 - [x] 4.5 Prevent holdout scoring without a valid lock and prevent overwriting completed holdout evidence for the same decision version; verify rejected attempts emit no holdout metrics or per-case results.
-- [x] 4.6 After independent review confirms the lock and frozen inputs, run holdout exactly once and publish immutable go/no-go evidence; verify the result applies every local-benefit, global, uncertainty, safety, privacy, determinism, and resource gate without post-hoc changes. Independent Opus 4.8 review was supplied on 2026-09-21; the single reviewed run selected the pre-registered foundation-control fallback and produced `kun/src/memory/fixtures/kun-memory-feedback-tiebreaker-v1.json` with a no-go decision. The review confirmed frozen artifact hashes and remained holdout-label-blind; its development-label assessment was summary-report based rather than a per-case label audit.
+- [ ] 4.6 After independent review confirms the lock and frozen inputs, run holdout exactly once and publish immutable go/no-go evidence; verify the result applies every local-benefit, global, uncertainty, safety, privacy, determinism, and resource gate without post-hoc changes. Independent review and a historical run exist, but the runner was later found to permit repeated temporary-directory executions and did not fully measure every holdout gate; see `holdout-execution-audit.md`. Do not treat the historical evidence as decision-grade.
 
 ## 5. Safety, Privacy, And Resource Coverage
 
@@ -52,7 +52,7 @@ The frozen fixtures and lock are unchanged; label concerns and holdout-label
 exposure are recorded in `development-review.md`, not silently resolved.
 
 - [x] 6.1 Fetch the latest `upstream/develop`, rebase this branch, and verify the final diff contains the P3-B evaluation capability plus the required P3-A canonical spec synchronization/archive closeout, with no importer or production-ranking changes.
-- [x] 6.2 Document the calibration method, candidate identities, local/global metrics, privacy model, resource results, and go/no-go interpretation; verify documentation states that go requires a separate production-integration change and no-go retains P3-A infrastructure. The immutable evidence records holdoutRunCount=1, selectedCandidateId=foundation-control, no-go, matching frozen dependency hashes and measured gate results.
+- [ ] 6.2 Document the calibration method, candidate identities, local/global metrics, privacy model, resource results, and go/no-go interpretation; verify documentation states that go requires a separate production-integration change and no-go retains P3-A infrastructure. Development documentation is complete; historical holdout evidence limitations are recorded, but a decision-grade holdout record is not claimed.
 - [ ] 6.3 Update `D:\learning\Review_md\kun-memory-roadmap.md` and create a stage note under `D:\learning\Review_md\codex` after the decision; verify both record the commit series, checks, immutable evidence hashes, holdout run count, and remaining P4-A work.
 
 ## 7. Validation And Delivery
