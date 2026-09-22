@@ -1,3 +1,4 @@
+import type { ToolCallProviderMetadata } from '../../contracts/items.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
 import type { ModelStreamChunk } from '../../ports/model-client.js'
 import {
@@ -5,6 +6,9 @@ import {
   type PendingToolCall
 } from './model-stream-resource-budget.js'
 import { resolvePendingToolCall } from './tool-call-stream-identity.js'
+
+const RESPONSES_REASONING_ITEM_MAX_BYTES = 262_144
+const RESPONSES_REASONING_ITEM_MAX_COUNT = 16
 
 type MaterializedResponses = {
   chunks: ModelStreamChunk[]
@@ -22,12 +26,21 @@ export type ResponsesContentTracker = {
   completedIdentities: Set<string>
   /** Text already emitted for each content block, used to stream only a done-item suffix. */
   deltaTextByIdentity: Map<string, string>
+  /**
+   * Opaque reasoning output items awaiting attachment to the next tool call.
+   * Responses requests run with `store: false`, so a replayed function_call
+   * must be preceded by the reasoning items that produced it.
+   */
+  pendingReasoningItems: Array<Record<string, unknown>>
+  capturedReasoningIds: Set<string>
 }
 
 export function createResponsesContentTracker(): ResponsesContentTracker {
   return {
     completedIdentities: new Set(),
-    deltaTextByIdentity: new Map()
+    deltaTextByIdentity: new Map(),
+    pendingReasoningItems: [],
+    capturedReasoningIds: new Set()
   }
 }
 
@@ -76,15 +89,20 @@ export function decodeResponsesStreamPayload(input: {
       if (type === 'response.output_item.done' && pending.name) {
         const raw = input.budget.pendingArguments(pending)
         input.budget.completeToolCall(raw)
+        const providerMetadata = takeResponsesReasoningProviderMetadata(input.contentTracker)
         chunks.push({
           kind: 'tool_call_complete', callId, toolName: pending.name,
-          arguments: input.parseToolArguments(raw || '{}')
+          arguments: input.parseToolArguments(raw || '{}'),
+          ...(providerMetadata ? { providerMetadata } : {})
         })
         input.completedToolCalls.add(callId)
         input.budget.removePendingCall(input.pendingArguments, callId)
         if (pending.index !== undefined) input.pendingByIndex.delete(pending.index)
       }
     } else if (type === 'response.output_item.done') {
+      if (itemType === 'reasoning') {
+        captureResponsesReasoningItem(input.contentTracker, item)
+      }
       const contentChunks = materializeResponsesItemContent({
         item,
         outputIndex,
@@ -193,6 +211,9 @@ function materializeResponsesOutput(
       : null
     if (!item) continue
     const itemType = recordString(item, 'type')
+    if (itemType === 'reasoning') {
+      captureResponsesReasoningItem(options.contentTracker, item)
+    }
     const contentChunks = materializeResponsesItemContent({
       item,
       outputIndex,
@@ -212,11 +233,13 @@ function materializeResponsesOutput(
       options.budget.removePendingCall(options.pendingArguments, callId)
     }
     options.completedToolCalls.add(callId)
+    const providerMetadata = takeResponsesReasoningProviderMetadata(options.contentTracker)
     chunks.push({
       kind: 'tool_call_complete',
       callId,
       toolName,
-      arguments: options.parseToolArguments(argsRaw)
+      arguments: options.parseToolArguments(argsRaw),
+      ...(providerMetadata ? { providerMetadata } : {})
     })
   }
   if (!options.skipText && !materializedText) {
@@ -378,6 +401,42 @@ function overlapLength(previous: string, finalText: string): number {
     if (previous.slice(-length) === finalText.slice(0, length)) return length
   }
   return 0
+}
+
+/**
+ * Retains a replayable copy of a completed `reasoning` output item. Only the
+ * fields the endpoint needs on replay are kept; the visible reasoning text is
+ * streamed separately as assistant_reasoning deltas.
+ */
+function captureResponsesReasoningItem(
+  tracker: ResponsesContentTracker,
+  item: Record<string, unknown>
+): void {
+  const replay: Record<string, unknown> = { type: 'reasoning' }
+  for (const key of ['id', 'summary', 'content', 'encrypted_content', 'status']) {
+    if (item[key] !== undefined) replay[key] = item[key]
+  }
+  try {
+    if (JSON.stringify(replay).length > RESPONSES_REASONING_ITEM_MAX_BYTES) return
+  } catch {
+    return
+  }
+  const identity = recordString(item, 'id') || JSON.stringify(replay.summary ?? replay.content ?? '')
+  if (tracker.capturedReasoningIds.has(identity)) return
+  tracker.capturedReasoningIds.add(identity)
+  tracker.pendingReasoningItems.push(replay)
+  if (tracker.pendingReasoningItems.length > RESPONSES_REASONING_ITEM_MAX_COUNT) {
+    tracker.pendingReasoningItems.shift()
+  }
+}
+
+function takeResponsesReasoningProviderMetadata(
+  tracker: ResponsesContentTracker
+): ToolCallProviderMetadata | undefined {
+  if (tracker.pendingReasoningItems.length === 0) return undefined
+  const reasoningItems = tracker.pendingReasoningItems.splice(0, RESPONSES_REASONING_ITEM_MAX_COUNT)
+  tracker.pendingReasoningItems.length = 0
+  return { responses: { reasoningItems } }
 }
 
 function responseError(payload: Record<string, unknown>): {

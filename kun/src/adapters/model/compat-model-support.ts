@@ -211,6 +211,73 @@ export function shouldRetryWithoutStreamUsage(
   return /\b(stream_options|include_usage)\b/i.test(text)
 }
 
+/**
+ * Stream-only endpoints (e.g. Codex Responses) reject explicit
+ * `stream: false` requests. The body can be resent unchanged with
+ * `stream: true` and consumed through the SSE decoder.
+ */
+export function isStreamRequiredError(status: number, text: string): boolean {
+  if (status !== 400 && status !== 422) return false
+  return /stream[^a-z0-9]{0,30}(must|required|only|unsupported)/i.test(text)
+}
+
+/**
+ * Chat-completions thinking endpoints require `reasoning_content` to be
+ * replayed on assistant messages. Retryable only when the body did not
+ * already carry it — otherwise the failure is unrelated and a retry would
+ * be identical.
+ */
+export function shouldRetryWithReasoningRoundTrip(
+  status: number,
+  text: string,
+  body: Record<string, unknown>
+): boolean {
+  if (status !== 400 && status !== 422) return false
+  if (!/reasoning_content|reasoning[^a-z]{0,60}(must|required|missing|passed back)/i.test(text)) {
+    return false
+  }
+  const messages = Array.isArray(body.messages) ? body.messages : []
+  return !messages.some(
+    (message) =>
+      message !== null &&
+      typeof message === 'object' &&
+      typeof (message as Record<string, unknown>).reasoning_content === 'string'
+  )
+}
+
+/**
+ * Responses endpoints with `store: false` reject a function_call that is not
+ * preceded by its reasoning items. Retryable when the input still contains a
+ * function_call with no reasoning item immediately ahead of it (history
+ * recorded before reasoning capture existed); the retry drops those rounds.
+ */
+export function shouldDropUnreplayableToolRounds(
+  status: number,
+  text: string,
+  body: Record<string, unknown>
+): boolean {
+  if (status !== 400 && status !== 422) return false
+  if (!/reasoning/i.test(text)) return false
+  const input = Array.isArray(body.input) ? body.input : []
+  let precededByReasoning = false
+  for (const item of input) {
+    const type = item !== null && typeof item === 'object'
+      ? (item as Record<string, unknown>).type
+      : undefined
+    if (type === 'reasoning') {
+      precededByReasoning = true
+      continue
+    }
+    if (type === 'function_call') {
+      if (!precededByReasoning) return true
+      precededByReasoning = false
+      continue
+    }
+    if (type === 'function_call_output' || type === 'message') precededByReasoning = false
+  }
+  return false
+}
+
 export {
   shouldRetryWithoutSamplingParams,
   stripSamplingFromBody

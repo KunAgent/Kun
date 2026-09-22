@@ -10,6 +10,7 @@ import { isDeepSeekHost, isGeminiOpenAiHost } from './model-error-probe.js'
 export const COMPAT_HISTORY_CONTEXT = Symbol('compat-history-context')
 export const COMPAT_ANTHROPIC_THINKING = Symbol('compat-anthropic-thinking')
 export const COMPAT_TOOL_RESULT_ERROR = Symbol('compat-tool-result-error')
+export const COMPAT_RESPONSES_REASONING = Symbol('compat-responses-reasoning')
 
 export type CompatChatMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool'
@@ -26,6 +27,12 @@ export type CompatChatMessage = {
     id: string
     type: 'function'
     function: { name: string; arguments: string }
+    /**
+     * Opaque Responses-API reasoning items that precede this call when the
+     * turn is replayed. Symbol-keyed so it never serializes into a
+     * chat-completions body.
+     */
+    [COMPAT_RESPONSES_REASONING]?: Array<Record<string, unknown>>
   }>
 }
 
@@ -50,6 +57,12 @@ export type CompatRequestCodecInput = {
   isCodexLite: boolean
   serviceTiers?: readonly ('priority' | 'flex')[]
   codexNativeImageGeneration: boolean
+  /**
+   * Drop function_call/tool-result rounds that carry no replayable reasoning
+   * items. Used by the reasoning-required error fallback so a turn recorded
+   * before reasoning capture existed does not brick the whole thread.
+   */
+  dropUnreplayableResponsesToolRounds?: boolean
 }
 
 export type CompatRequestCodecDeps = {
@@ -171,6 +184,9 @@ export class CompatRequestCodecs {
           (message) => message.role !== 'system' || message[COMPAT_HISTORY_CONTEXT] === true
         )
       : input.messages
+    const replayable = input.dropUnreplayableResponsesToolRounds === true
+      ? dropUnreplayableResponsesToolRounds(nonSystem)
+      : nonSystem
     let instructions = system
       .map((message) => this.deps.plainText(message.content).trim())
       .filter(Boolean)
@@ -178,7 +194,7 @@ export class CompatRequestCodecs {
     const responseTools = input.tools.map((tool) => ({
       type: 'function', name: tool.name, description: tool.description, parameters: tool.inputSchema
     }))
-    let responseInput = this.deps.responsesInput(this.deps.splitOpenAiMessages(nonSystem))
+    let responseInput = this.deps.responsesInput(this.deps.splitOpenAiMessages(replayable))
     if (input.isCodex && !input.isCodexLite && responseInput.length === 0 && instructions) {
       // The Responses endpoint requires input even when the request has only
       // system context. Move (rather than duplicate) that context into a
@@ -236,8 +252,11 @@ export class CompatRequestCodecs {
     )
     if (reasoning || input.isCodexLite) {
       body.reasoning = input.isCodexLite ? { ...(reasoning ?? {}), context: 'all_turns' } : reasoning!
-      if (input.isCodex) body.include = ['reasoning.encrypted_content']
     }
+    // Codex runs with store:false, so encrypted reasoning content must be
+    // requested on every call to keep tool-call rounds replayable — even
+    // when the resolved model advertises no explicit reasoning control.
+    if (input.isCodex) body.include = ['reasoning.encrypted_content']
     if (!input.isCodexLite && responseTools.length) body.tools = responseTools
     if (!input.isCodexLite && input.isCodex && input.codexNativeImageGeneration) {
       body.tools = [...((body.tools ?? []) as Record<string, unknown>[]), { type: 'image_generation' }]
@@ -290,6 +309,40 @@ export class CompatRequestCodecs {
     if (requiredToolChoice) body.tool_choice = { type: 'tool', name: requiredToolChoice }
     return body
   }
+}
+
+/**
+ * Drops tool-call rounds that carry no replayable Responses reasoning items,
+ * plus their orphaned function_call_output entries. Reasoning attached to
+ * ANY call in a round covers the whole round — OpenAI emits one reasoning
+ * item per assistant output block, not per call.
+ */
+function dropUnreplayableResponsesToolRounds(messages: CompatChatMessage[]): CompatChatMessage[] {
+  const droppedCallIds = new Set<string>()
+  const out: CompatChatMessage[] = []
+  for (const message of messages) {
+    if (message.role === 'assistant' && message.tool_calls?.length) {
+      const replayable = message.tool_calls.some(
+        (call) => (call[COMPAT_RESPONSES_REASONING]?.length ?? 0) > 0
+      )
+      if (!replayable) {
+        for (const call of message.tool_calls) droppedCallIds.add(call.id)
+        const content = message.content
+        const hasContent = typeof content === 'string'
+          ? content.trim().length > 0
+          : Array.isArray(content) && content.length > 0
+        if (hasContent) out.push({ ...message, tool_calls: undefined })
+        continue
+      }
+    }
+    if (
+      message.role === 'tool' &&
+      message.tool_call_id &&
+      droppedCallIds.has(message.tool_call_id)
+    ) continue
+    out.push(message)
+  }
+  return out
 }
 
 function namedToolChoice(input: CompatRequestCodecInput): string | undefined {

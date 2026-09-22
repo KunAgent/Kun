@@ -11,6 +11,7 @@ import {
   buildModelEndpointUrl,
   ignoreModelTraceFailure,
   isCodexEndpoint,
+  isStreamRequiredError,
   normalizeCodexResponsesUrl,
   normalizeModelStreamLimits,
   normalizeStreamIdleTimeoutMs,
@@ -18,8 +19,10 @@ import {
   readLimitedResponseJson,
   readLimitedResponseText,
   reasoningFromMessage,
+  shouldDropUnreplayableToolRounds,
   shouldRetryWithoutSamplingParams,
   shouldRetryWithoutStreamUsage,
+  shouldRetryWithReasoningRoundTrip,
   stripSamplingFromBody,
   warnModelTraceFailure
 } from './compat-model-support.js'
@@ -129,7 +132,9 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       return
     }
     const url = buildModelEndpointUrl(this.config.baseUrl, configuredEndpointFormat)
-    const stream = request.stream ?? !this.config.nonStreaming
+    // Codex Responses only accepts streamed requests; explicit stream:false
+    // callers (subagents, background distillations) get forced streaming.
+    const stream = isCodex ? true : (request.stream ?? !this.config.nonStreaming)
     const body = this.buildRequestBody(request, stream, { endpointFormat })
     let credentials: { apiKey: string; headers?: Record<string, string>; refreshable: boolean }
     try {
@@ -159,7 +164,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
     let attemptOrdinal = 0
     const post = (
       requestBody: Record<string, unknown>,
-      reason: 'initial' | 'transport_retry' | 'credential_refresh' | 'stream_options_fallback'
+      reason: 'initial' | 'transport_retry' | 'credential_refresh' | 'stream_options_fallback' | 'request_fallback'
     ) => this.postChatCompletion(url, headers, requestBody, request.abortSignal, {
       round,
       endpointFormat,
@@ -268,16 +273,38 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
         return
       }
       const text = errorBody.text
-      const retryBody = shouldRetryWithoutSamplingParams(response.status, text, body)
-        ? stripSamplingFromBody(body)
-        : (
-          usesChatCompletionsShape(endpointFormat) &&
-            shouldRetryWithoutStreamUsage(response.status, text, body)
-            ? this.buildRequestBody(request, stream, { endpointFormat, includeStreamUsage: false })
-            : null
-        )
+      let forcedStream = false
+      let retryBody: Record<string, unknown> | null = null
+      let retryReason: 'stream_options_fallback' | 'request_fallback' = 'request_fallback'
+      if (!stream && isStreamRequiredError(response.status, text)) {
+        forcedStream = true
+        headers = this.buildHeaders(true, endpointFormat, responsesLite, credentials, runtimeHeaders)
+        retryBody = this.buildRequestBody(request, true, { endpointFormat })
+      } else if (shouldRetryWithoutSamplingParams(response.status, text, body)) {
+        retryBody = stripSamplingFromBody(body)
+        retryReason = 'stream_options_fallback'
+      } else if (
+        usesChatCompletionsShape(endpointFormat) &&
+        shouldRetryWithoutStreamUsage(response.status, text, body)
+      ) {
+        retryBody = this.buildRequestBody(request, stream, { endpointFormat, includeStreamUsage: false })
+        retryReason = 'stream_options_fallback'
+      } else if (
+        usesChatCompletionsShape(endpointFormat) &&
+        shouldRetryWithReasoningRoundTrip(response.status, text, body)
+      ) {
+        retryBody = this.buildRequestBody(request, stream, { endpointFormat, forceReasoningRoundTrip: true })
+      } else if (
+        endpointFormat === 'responses' &&
+        shouldDropUnreplayableToolRounds(response.status, text, body)
+      ) {
+        retryBody = this.buildRequestBody(request, stream, {
+          endpointFormat,
+          dropUnreplayableResponsesToolRounds: true
+        })
+      }
       if (retryBody) {
-        const fallbackResult = await post(retryBody, 'stream_options_fallback')
+        const fallbackResult = await post(retryBody, retryReason)
         if (fallbackResult.kind === 'error') {
           yield {
             kind: 'error',
@@ -289,7 +316,10 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
         }
         response = fallbackResult.response
         if (response.ok) {
-          if (this.config.nonStreaming || response.headers.get('content-type')?.includes('application/json')) {
+          if (
+            (this.config.nonStreaming && !forcedStream) ||
+            response.headers.get('content-type')?.includes('application/json')
+          ) {
             const json = await readLimitedResponseJson(response, modelStreamLimits.maxTotalBytes)
             if (json.kind === 'limit') {
               yield {

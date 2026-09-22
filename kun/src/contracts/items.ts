@@ -261,6 +261,15 @@ export const ToolCallTurnItem = TurnItemBase.extend({
           data: z.string().min(1).max(262_144)
         }).strict()
       ])).min(1).max(16)
+    }).strict().optional(),
+    responses: z.object({
+      /**
+       * Opaque Responses-API reasoning items captured ahead of this tool
+       * call. Responses requests run with `store: false`, so the endpoint
+       * keeps no server-side state: replaying a function_call requires the
+       * reasoning items that preceded it (id/summary/encrypted_content).
+       */
+      reasoningItems: z.array(z.record(z.string(), z.unknown())).min(1).max(16)
     }).strict().optional()
   }).strict().optional(),
   summary: z.string().optional()
