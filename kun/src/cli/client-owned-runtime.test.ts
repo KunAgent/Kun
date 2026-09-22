@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -18,6 +19,7 @@ import {
   runtimeDiscoveryPath,
   type RuntimeDiscoveryRecord
 } from '../server/runtime-discovery.js'
+import { inspectRuntimeProcess } from '../server/runtime-process-identity.js'
 import {
   ClientOwnedRuntimeConflictError,
   stopExactClientOwnedRuntime,
@@ -108,6 +110,7 @@ describe('client-owned Runtime election', () => {
       dataDir,
       ownerKind: 'gui',
       controlDir: join(root, 'control'),
+      ownerExitGraceMs: 0,
       fetch: fetchMock as unknown as typeof fetch
     }, operation)).rejects.toBeInstanceOf(ClientOwnedRuntimeConflictError)
     expect(operation).not.toHaveBeenCalled()
@@ -129,6 +132,7 @@ describe('client-owned Runtime election', () => {
       dataDir,
       ownerKind: 'gui',
       controlDir: join(root, 'control'),
+      ownerExitGraceMs: 0,
       fetch: fetchMock as unknown as typeof fetch
     }, operation)).rejects.toBeInstanceOf(ClientOwnedRuntimeConflictError)
 
@@ -363,6 +367,7 @@ describe('client-owned Runtime election', () => {
       ownerKind: 'tui',
       controlDir,
       manager: stale,
+      ownerExitGraceMs: 0,
       fetch: fetchMock as unknown as typeof fetch
     }, operation)).rejects.toMatchObject({
       existing: {
@@ -405,6 +410,87 @@ describe('client-owned Runtime election', () => {
       fetch: fetchMock as unknown as typeof fetch
     }, operation)).rejects.toThrow('different canonical data directory')
     expect(operation).not.toHaveBeenCalled()
+  })
+
+  it('reclaims the slot when the recorded owner PID belongs to a newer unrelated process', async () => {
+    const root = await tempRoot()
+    const dataDir = join(root, 'data')
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => undefined, 30_000)'], {
+      stdio: 'ignore'
+    })
+    try {
+      if (child.pid === undefined || !inspectRuntimeProcess(child.pid)) return
+      const stale = runtimeRecord({
+        instanceId: 'reused-pid-owner',
+        pid: child.pid,
+        startedAt: '2000-01-01T00:00:00.000Z',
+        clientOwnerKind: 'gui'
+      })
+      await writeDiscovery(dataDir, stale)
+      const fetchMock = vi.fn(async () => new Response('', { status: 404 }))
+      const operation = vi.fn(async () => 'elected')
+
+      await expect(withClientOwnedRuntimeElection({
+        dataDir,
+        ownerKind: 'gui',
+        controlDir: join(root, 'control'),
+        fetch: fetchMock as unknown as typeof fetch
+      }, operation)).resolves.toBe('elected')
+      expect(operation).toHaveBeenCalledOnce()
+    } finally {
+      child.kill('SIGKILL')
+    }
+  })
+
+  it('waits for an unreachable owner to finish exiting before electing', async () => {
+    const root = await tempRoot()
+    const dataDir = join(root, 'data')
+    const owner = runtimeRecord({
+      instanceId: 'exiting-owner',
+      pid: 2_147_483_630,
+      clientOwnerKind: 'gui'
+    })
+    await writeDiscovery(dataDir, owner)
+    const liveness = mockProcessLiveness(owner.pid)
+    const fetchMock = vi.fn(async () => new Response('', { status: 503 }))
+    const timer = setTimeout(() => liveness.markExited(owner.pid), 150)
+    try {
+      const operation = vi.fn(async () => 'elected-after-exit')
+
+      await expect(withClientOwnedRuntimeElection({
+        dataDir,
+        ownerKind: 'gui',
+        controlDir: join(root, 'control'),
+        fetch: fetchMock as unknown as typeof fetch
+      }, operation)).resolves.toBe('elected-after-exit')
+      expect(operation).toHaveBeenCalledOnce()
+    } finally {
+      clearTimeout(timer)
+    }
+  })
+
+  it('still reports a conflict when an unreachable owner survives the exit grace window', async () => {
+    const root = await tempRoot()
+    const dataDir = join(root, 'data')
+    const owner = runtimeRecord({
+      instanceId: 'unreachable-owner',
+      pid: 2_147_483_631,
+      clientOwnerKind: 'gui'
+    })
+    await writeDiscovery(dataDir, owner)
+    mockProcessLiveness(owner.pid)
+    const fetchMock = vi.fn(async () => new Response('', { status: 503 }))
+    const operation = vi.fn(async () => undefined)
+
+    await expect(withClientOwnedRuntimeElection({
+      dataDir,
+      ownerKind: 'gui',
+      controlDir: join(root, 'control'),
+      ownerExitGraceMs: 300,
+      fetch: fetchMock as unknown as typeof fetch
+    }, operation)).rejects.toBeInstanceOf(ClientOwnedRuntimeConflictError)
+    expect(operation).not.toHaveBeenCalled()
+    expect((await readRuntimeDiscovery(dataDir))?.instanceId).toBe(owner.instanceId)
   })
 })
 

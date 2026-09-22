@@ -467,7 +467,8 @@ export function createMaintenanceInteractionActions(
           b.id === blockId && b.kind === 'user_input'
             ? {
                 ...b,
-                status: 'error' as const,
+                // Live requests can be retried after a transport failure. History stays read-only.
+                status: b.live === true && b.status === 'pending' ? 'pending' as const : 'error' as const,
                 errorMessage: msg,
                 // Keep the chosen answers on the record so the read-only bubble
                 // still echoes what the user picked when a submit RPC fails,
@@ -477,6 +478,7 @@ export function createMaintenanceInteractionActions(
             : b
         )
       }))
+      throw e
     }
   },
 

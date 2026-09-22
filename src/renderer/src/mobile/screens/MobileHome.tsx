@@ -45,9 +45,9 @@ export function MobileHome({
           <Settings size={20} aria-hidden />
         </button>
         {onWorkspace ? <button type="button" className="kun-mobile-workspace" onClick={onWorkspace}>
-          {labels.workspace}
+          <ArrowLeft size={18} aria-hidden /> {labels.workspace}
         </button> : <span className="kun-mobile-workspace">{labels.workspace}</span>}
-        <button type="button" className="kun-mobile-icon-button" onClick={onNewConversation} aria-label={labels.newConversation}>
+        <button type="button" className="kun-mobile-icon-button" onClick={onNewConversation} disabled={loading} aria-label={labels.newConversation}>
           <Plus size={22} aria-hidden />
         </button>
       </header>

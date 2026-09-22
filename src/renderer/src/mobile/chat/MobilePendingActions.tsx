@@ -1,12 +1,11 @@
 import { useTranslation } from 'react-i18next'
 import type { ChatBlock } from '../../agent/types'
-import { useComposerUserInput } from '../../components/chat/use-composer-user-input'
-import { FloatingComposerUserInputPanel } from '../../components/chat/FloatingComposerUserInputPanel'
+import { MobileUserInput } from './MobileUserInput'
+import { selectLivePendingUserInput } from '../../components/chat/user-input-panel-logic'
 import type { ChatState } from '../../store/chat-store-types'
 import './mobile-pending-actions.css'
 
 type PendingApproval = Extract<ChatBlock, { kind: 'approval' }>
-type PendingInput = Extract<ChatBlock, { kind: 'user_input' }>
 
 function lastMatching<T extends ChatBlock>(
   blocks: ChatBlock[], predicate: (block: ChatBlock) => block is T
@@ -26,10 +25,8 @@ export function MobilePendingActions({ blocks, resolveApproval, resolveUserInput
   const { t } = useTranslation('common')
   const approval = lastMatching(blocks, (block): block is PendingApproval =>
     block.kind === 'approval' && (block.status === 'pending' || block.status === 'submitting'))
-  const input = lastMatching(blocks, (block): block is PendingInput =>
-    block.kind === 'user_input' && block.status === 'pending' && block.live !== false)
-  const controller = useComposerUserInput(input, resolveUserInput)
-  if (input) return <FloatingComposerUserInputPanel controller={controller} t={t} variant="compact" />
+  const input = selectLivePendingUserInput(blocks)
+  if (input) return <MobileUserInput input={input} resolve={resolveUserInput} />
   if (!approval) return null
   const disabled = approval.status === 'submitting'
   return <section className="kun-mobile-approval" aria-label={t('approvalRequired')}>

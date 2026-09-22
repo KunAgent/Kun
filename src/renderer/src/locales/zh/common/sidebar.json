@@ -1,4 +1,13 @@
 {
+  "mobileInputCollapse": "收起",
+  "mobileInputAnswer": "你的回答",
+  "mobileInputAnswerPlaceholder": "输入你的回答…",
+  "mobileInputSelectionCount": "已选 {{count}} 项 · 请选择 {{min}}–{{max}} 项",
+  "mobileInputSent": "回答已提交",
+  "mobileInputCancelled": "请求已取消",
+  "mobileInputComposerHint": "请打开上方问题卡片回答",
+  "mobileCodeProjects": "项目",
+  "mobileCodeChooseProject": "选择项目查看会话，或打开一个工作目录。",
   "threadRefreshing": "正在刷新…",
   "sidebarWorkspaceLoading": "正在加载会话…",
   "sidebarWorkspaceLoadMore": "加载更多",

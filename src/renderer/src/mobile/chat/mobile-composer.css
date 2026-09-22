@@ -4,12 +4,12 @@
   max-height: 60%;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 12px var(--kun-mobile-safe-bottom, max(8px, env(safe-area-inset-bottom, 0px)));
   color: var(--ds-text);
-  background: var(--ds-surface-elevated);
-  border-top: 1px solid var(--ds-border);
+  background: var(--ds-bg-main);
 }
-.kun-mobile-composer-row { display: flex; align-items: flex-end; gap: 4px; min-width: 0; }
+.kun-mobile-composer-row { display: flex; align-items: flex-end; gap: 4px; min-width: 0; padding: 4px; border: 1px solid var(--ds-border); border-radius: 9999px; background: var(--ds-surface-elevated); }
+.kun-mobile-composer-row:focus-within { border-radius: 12px; }
 .kun-mobile-composer textarea {
   flex: 1;
   min-width: 0;

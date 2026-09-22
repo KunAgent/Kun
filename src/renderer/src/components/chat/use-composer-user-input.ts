@@ -174,7 +174,11 @@ export function useComposerUserInput(
   const cancel = useCallback(() => {
     if (!block || resolvedRef.current) return
     resolvedRef.current = true
-    void resolveUserInput(block.id, { kind: 'cancel' })
+    setSubmitting(true)
+    void resolveUserInput(block.id, { kind: 'cancel' }).catch(() => {
+      resolvedRef.current = false
+      setSubmitting(false)
+    })
   }, [block, resolveUserInput])
 
   const isSelected = useCallback(

@@ -10,6 +10,7 @@ import { useRoomPendingSends } from '../../components/rooms/useRoomPendingSends'
 import { roomsClient } from '../../components/rooms/rooms-client'
 import { RoomContentPreview } from '../../components/rooms/RoomContentPreview'
 import { MobileSheet } from '../sheets/MobileSheet'
+import { MobileRoomPendingActions } from './MobileRoomPendingActions'
 import './mobile-room-conversation.css'
 
 type MobileRoomConversationProps = {
@@ -53,7 +54,7 @@ export function MobileRoomConversation(props: MobileRoomConversationProps) {
     const message = pending.retry(id)
     if (message) void send(message).catch(() => undefined)
   }
-  return <section className="kun-mobile-room-conversation">
+  return <section className="kun-mobile-room-conversation" data-kind={room?.conversationKind}>
     <header>
       <button type="button" aria-label={t('back')} onClick={props.onBack}><ArrowLeft aria-hidden /></button>
       <div><h1>{room?.name ?? t('roomsLoading')}</h1>
@@ -69,6 +70,7 @@ export function MobileRoomConversation(props: MobileRoomConversationProps) {
         onOpenContent={(reference, messageId) => setContent({ reference, messageId })}
         afterMessages={pending.pending.map((item) => <RoomPendingSendRow key={item.clientRequestId}
           item={item} onRetry={retry} onDismiss={pending.dismiss} />)} />
+      {room.conversationKind === 'user_agent' ? <MobileRoomPendingActions key={room.id} room={room} onUpdated={state.refresh} /> : null}
       {room.conversationKind === 'agent_agent' ? <p className="kun-mobile-room-readonly">{t('agentsPairReadOnly')}</p> :
         <RoomComposer room={room} tasks={state.tasks} onSend={send} autoFocus={false} />}
     </>}

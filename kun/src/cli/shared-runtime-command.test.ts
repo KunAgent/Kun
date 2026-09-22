@@ -10,7 +10,9 @@ function discovery(overrides: Partial<RuntimeDiscoveryRecord> = {}): RuntimeDisc
     version: 2,
     instanceId: 'runtime-hosting-command',
     pid: process.pid,
-    startedAt: '2026-08-30T00:00:00.000Z',
+    // The OS start time must not postdate this field, or identity-aware
+    // liveness treats this very process as a recycled PID.
+    startedAt: new Date().toISOString(),
     host: '127.0.0.1',
     port: 18899,
     baseUrl: 'http://127.0.0.1:18899',

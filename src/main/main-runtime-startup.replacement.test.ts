@@ -321,6 +321,26 @@ describe('GUI Runtime startup preparation', () => {
     })
   })
 
+  it('drains verifiably-stale owners before relaunch after an owner-busy conflict', async () => {
+    const conflict = Object.assign(
+      new Error('Kun Runtime is already owned by gui process 1380'),
+      { code: 'client_runtime_owner_busy' }
+    )
+
+    await prepareGuiRuntimeForStartupRetry(conflict)
+
+    expect(harness.stopAndWait).toHaveBeenCalledOnce()
+    expect(desktopProcessStack.stopManager).toHaveBeenCalledOnce()
+    expect(harness.drainKunOwnersForHandoff).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'startup-retry',
+        dataDirs: ['/tmp/kun-data'],
+        settingsPath: '/tmp/kun-settings.json',
+        controlDir: '/tmp/kun-control'
+      })
+    )
+  })
+
   it('stops the owned Manager after a data-mutex HTTP 500 without launching a replacement before quit', async () => {
     await prepareGuiRuntimeForStartupRetry(new Error(
       'Kun Service Manager data mutex failed with HTTP 500: internal_error'

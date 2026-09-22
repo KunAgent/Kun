@@ -28,9 +28,18 @@ const body = ['### 手机布局测试', '这是一段用于验证手机长消息
 const messages = Array.from({length:4}, (_,i) => ({ id:'message-'+i, roomId:room.id, messageSeq:i+1,
   authorKind:'member', authorMemberId:'kun', authorLabelSnapshot:'小 Kun', body, bodyRevision:1,
   mentionMemberIds:[], attachmentIds:[], createdAt:now, status:'final' }));
-window.kunGui = { isRemoteWeb:true, platform:'web', runtimeRequest:async (path) => {
+window.mobileInputRequests = [];
+window.mobileInputSubmissions = [];
+window.failNextAnswer = false;
+window.kunGui = { isRemoteWeb:true, platform:'web', runtimeRequest:async (path, method, payload) => {
   let data = {};
-  if (path === '/v1/rooms/mobile-test') data = { room };
+  if (path === '/v1/rooms/mobile-test/direct') data = { userInputs:window.mobileInputRequests, approvals:[], requests:[], pendingCount:0 };
+  else if (path.startsWith('/v1/user-inputs/')) {
+    if (window.failNextAnswer) { window.failNextAnswer = false; return {ok:false,status:503,body:JSON.stringify({error:'Offline - retry'})}; }
+    window.mobileInputSubmissions.push(JSON.parse(payload));
+    window.mobileInputRequests = [];
+  }
+  else if (path === '/v1/rooms/mobile-test') data = { room };
   else if (path.includes('/direct/permissions')) data = { revision:1,
     policy:{ approvalPolicy:'never', sandboxMode:'danger-full-access', approvalReviewer:'user' } };
   else if (path.endsWith('/interactions')) data = { reactions:{revision:1,reactions:[]} };
@@ -150,6 +159,35 @@ try {
   await page.evaluate(() => window.resizeVisualViewport(670))
   await page.locator('.rooms-rich-input').fill('多行输入测试\n'.repeat(30))
   assert.ok((await geometry()).timelineHeight > 200)
+  const focused = await page.evaluate(() => {
+    const box = (selector) => document.querySelector(selector).getBoundingClientRect()
+    const input = box('.rooms-rich-input')
+    const send = box('.rooms-composer-send')
+    const plus = box('.rooms-composer-context-popover')
+    const overlap = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1
+      && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1
+    return {
+      overlapSend: overlap(input, send),
+      overlapPlus: overlap(input, plus),
+      sendBelow: send.top >= input.bottom - 1,
+      plusBelow: plus.top >= input.bottom - 1,
+      sendSize: send.height
+    }
+  })
+  assert.equal(focused.overlapSend, false, JSON.stringify(focused))
+  assert.equal(focused.overlapPlus, false, JSON.stringify(focused))
+  assert.equal(focused.sendBelow, true, JSON.stringify(focused))
+  assert.equal(focused.plusBelow, true, JSON.stringify(focused))
+  assert.equal(focused.sendSize, 44)
+  await page.locator('.kun-mobile-room-conversation > header h1').click()
+  const collapsed = await page.evaluate(() => {
+    const box = (selector) => document.querySelector(selector).getBoundingClientRect()
+    const input = box('.rooms-rich-input')
+    const send = box('.rooms-composer-send')
+    return { sendRightOf: send.left >= input.right - 1, sendSize: send.height }
+  })
+  assert.equal(collapsed.sendRightOf, true, JSON.stringify(collapsed))
+  assert.equal(collapsed.sendSize, 44)
   await page.locator('.rooms-composer-context-popover').click()
   await page.locator('.rooms-popover-surface').waitFor()
   const popover = await page.locator('.rooms-popover-surface').boundingBox()
@@ -180,6 +218,51 @@ try {
     assert.ok(nested.y >= top && nested.y + nested.height <= top + height)
   }
   await page.evaluate(() => window.closeNestedMenuFixture())
+  await page.evaluate(() => {
+    window.mobileInputRequests = [{ id:'ask-mobile', prompt:'Choose', questions:[
+      {id:'multi', question:'选择需要执行的操作', selectionMode:'multiple', minSelections:2, maxSelections:2,
+        options:Array.from({length:8}, (_,i) => ({label:'Option '+i, description:'Long description '.repeat(12)}))},
+      {id:'text', question:'补充说明', options:[]}
+    ]}];
+  })
+  await page.locator('.kun-mobile-room-gates .kun-mobile-input-trigger').waitFor({timeout:20_000})
+  await page.locator('.kun-mobile-room-gates .kun-mobile-input-trigger').click()
+  for (const [width,height] of [[320,568],[393,670],[852,393]]) {
+    await page.setViewportSize({width,height})
+    for (const [visible,top] of [[height,0],[280,24]]) {
+      await page.evaluate(([height,top]) => window.resizeVisualViewport(height,top), [visible,top])
+      const metrics = await page.evaluate(() => {
+        const sheet = document.querySelector('.kun-mobile-sheet').getBoundingClientRect();
+        const footer = document.querySelector('.kun-mobile-sheet-footer').getBoundingClientRect();
+        const body = document.querySelector('.kun-mobile-sheet-content');
+        return {top:sheet.top,bottom:sheet.bottom,footerTop:footer.top,footerBottom:footer.bottom,
+          scrollable:body.scrollHeight > body.clientHeight, overflow:document.documentElement.scrollWidth > innerWidth};
+      })
+      assert.ok(metrics.top >= top && metrics.bottom <= visible+top)
+      assert.ok(metrics.footerBottom <= visible+top && metrics.footerTop >= top)
+      assert.equal(metrics.scrollable,true)
+      assert.equal(metrics.overflow,false)
+    }
+  }
+  await page.setViewportSize({width:393,height:670})
+  await page.evaluate(() => window.resizeVisualViewport(670))
+  await page.locator('.kun-mobile-input-option input').nth(0).check()
+  assert.equal(await page.locator('.kun-mobile-input-primary').isDisabled(),true)
+  await page.locator('.kun-mobile-input-option input').nth(1).check()
+  assert.equal(await page.locator('.kun-mobile-input-option input').nth(2).isDisabled(),true)
+  await page.locator('.kun-mobile-input-primary').click()
+  await page.locator('.kun-mobile-input textarea').fill('独立回答\\n第二行')
+  await page.evaluate(() => { window.failNextAnswer = true; window.resizeVisualViewport(320) })
+  await page.locator('.kun-mobile-input-primary').click()
+  await page.getByRole('alert').filter({hasText:'Offline - retry'}).waitFor()
+  assert.equal(await page.locator('.kun-mobile-input textarea').inputValue(),'独立回答\\n第二行')
+  await page.locator('.kun-mobile-input-primary').click()
+  await page.locator('.kun-mobile-sheet').waitFor({state:'hidden'})
+  const submissions = await page.evaluate(() => window.mobileInputSubmissions)
+  assert.equal(submissions.length,1)
+  assert.deepEqual(submissions[0].answers[0].values,['Option 0','Option 1'])
+  assert.equal(submissions[0].answers[1].value,'独立回答\\n第二行')
+  console.log('Rooms pending input: visible footer, long options, multi-select, free text, retry PASS')
   await page.evaluate(() => {
     document.documentElement.dataset.remoteSurface = 'desktop'
     document.documentElement.style.setProperty('--ds-ui-scale', '.85')

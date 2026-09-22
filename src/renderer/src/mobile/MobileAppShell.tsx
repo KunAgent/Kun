@@ -6,7 +6,7 @@ import { useRoomAttentionCount } from '../components/rooms/useRoomEvents'
 import { useRoomSidebar } from '../components/rooms/useRoomSidebar'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { MobileModeNav } from './MobileModeNav'
-import { MobileHome } from './screens/MobileHome'
+import { MobileCodeHome } from './screens/MobileCodeHome'
 import { MobileRoomsHome } from './rooms/MobileRoomsHome'
 import { MobileWorkHome, type MobileWorkResource } from './work/MobileWorkHome'
 import { useMobileNavigation, type MobileNavigationGuard } from './navigation/use-mobile-navigation'
@@ -16,7 +16,6 @@ import type { RoomContentOpenTarget } from '@shared/rooms-api'
 import { openRoomContentTarget } from '../components/rooms/room-content-navigation'
 import { workFileResourceKey, workWhiteboardResourceKey } from './work/work-resource-key'
 import { useWorkBeforeUnloadGuard } from './use-work-before-unload-guard'
-import { workspaceRootIdentityKey } from '../lib/workspace-path'
 import { useMobileViewport } from './use-mobile-viewport'
 import './mobile-app-shell.css'
 
@@ -101,8 +100,6 @@ export function MobileAppShell(): ReactElement {
   })))
 
   const { route: currentRoute, setRoute } = chat
-  const codeThreads = chat.threads.filter((thread) => !thread.agentSurface || thread.agentSurface === 'code')
-  const codePage = chat.cursors[workspaceRootIdentityKey(chat.workspaceRoot)]
   const { initialize: initializeWork, loadSettings: loadWorkSettings, workspaceRoot: workRoot } = work
 
   useEffect(() => {
@@ -243,19 +240,7 @@ export function MobileAppShell(): ReactElement {
       onMenu={null} onCreate={null}
       onRetry={() => work.workspaceRoot ? void work.initialize(work.workspaceRoot) : undefined} />
   } else {
-    content = <MobileHome labels={{ title: 'Code', workspace: basename(chat.workspaceRoot) || 'Code', search: t('search'),
-      newConversation: t('newChat'), settings: t('settings'), more: t('more'), loadMore: t('loadMore'),
-      retry: t('retry'), empty: t('noSessions'), loading: t('loading'), back: t('back') }}
-      threads={codeThreads} search={chat.search} loading={chat.loading} error={chat.error}
-      hasMore={codePage?.hasMore === true}
-      onSearch={chat.setSearch} onOpenThread={(threadId) => { void chat.selectThread(threadId); navigate({ mode: 'code', kind: 'conversation', threadId }) }}
-      onThreadMenu={null} onWorkspace={() => { void chat.chooseWorkspace({ createThreadAfter: false, selectThreadAfter: false }) }}
-      onNewConversation={() => { void chat.createConversation().then(() => {
-        const threadId = useChatStore.getState().activeThreadId
-        if (threadId) navigate({ mode: 'code', kind: 'conversation', threadId })
-      }) }}
-      onSettings={() => chat.openSettings()}
-      onLoadMore={() => chat.workspaceRoot ? void chat.loadMore(chat.workspaceRoot) : undefined} onRetry={() => void chat.refresh()} />
+    content = <MobileCodeHome onOpen={(threadId) => navigate({ mode: 'code', kind: 'conversation', threadId })} />
   }
 
   return <div className="kun-mobile-app" data-mobile-mode={page.mode}>

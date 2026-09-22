@@ -21,7 +21,9 @@ function record(overrides: Partial<RuntimeDiscoveryRecord> = {}): RuntimeDiscove
     version: 2,
     instanceId: 'runtime-a',
     pid: process.pid,
-    startedAt: '2026-07-22T00:00:00.000Z',
+    // Identity-aware liveness compares the OS start time against this field;
+    // a past timestamp would misclassify this very process as a recycled PID.
+    startedAt: new Date().toISOString(),
     host: '127.0.0.1',
     port: 18899,
     baseUrl: 'http://127.0.0.1:18899',
@@ -40,7 +42,7 @@ function managerConnection(dataDir: string): ServiceManagerConnection {
       protocolVersion: 5,
       instanceId: 'manager-a',
       pid: process.pid,
-      startedAt: '2026-07-22T00:00:00.000Z',
+      startedAt: new Date().toISOString(),
       host: '127.0.0.1',
       port: 18700,
       baseUrl: 'http://127.0.0.1:18700',

@@ -1,4 +1,13 @@
 {
+  "mobileInputCollapse": "Minimize",
+  "mobileInputAnswer": "Your answer",
+  "mobileInputAnswerPlaceholder": "Type your answer…",
+  "mobileInputSelectionCount": "{{count}} selected · choose {{min}}–{{max}}",
+  "mobileInputSent": "Answer submitted",
+  "mobileInputCancelled": "Request cancelled",
+  "mobileInputComposerHint": "Open the question above to answer",
+  "mobileCodeProjects": "Projects",
+  "mobileCodeChooseProject": "Choose a project to see its conversations, or open a working directory.",
   "threadRefreshing": "Refreshing…",
   "sidebarWorkspaceLoading": "Loading threads…",
   "sidebarWorkspaceLoadMore": "Load more",

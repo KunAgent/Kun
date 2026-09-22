@@ -8,10 +8,11 @@ type MobileSheetProps = {
   closeLabel: string
   onClose: () => void
   children: ReactNode
+  footer?: ReactNode
 }
 
 /** The native modal owns focus containment and makes the underlying page inert. */
-export function MobileSheet({ open, title, closeLabel, onClose, children }: MobileSheetProps) {
+export function MobileSheet({ open, title, closeLabel, onClose, children, footer }: MobileSheetProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   const closeRef = useRef(onClose)
@@ -50,6 +51,7 @@ export function MobileSheet({ open, title, closeLabel, onClose, children }: Mobi
         <button type="button" onClick={onClose}>{closeLabel}</button>
       </header>
       <div className="kun-mobile-sheet-content">{children}</div>
+      {footer ? <footer className="kun-mobile-sheet-footer">{footer}</footer> : null}
     </dialog>,
     document.body
   )

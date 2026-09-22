@@ -1,3 +1,6 @@
+html[data-remote-surface='mobile'] {
+  --kun-mobile-safe-bottom: max(8px, calc(env(safe-area-inset-bottom, 0px) - var(--kun-mobile-bottom, 0px)));
+}
 .kun-mobile-app {
   position: fixed;
   inset: var(--kun-mobile-top, 0px) 0 auto;
@@ -51,10 +54,12 @@ html[data-remote-surface='mobile'] :is(.rooms-popover-surface, .ds-composer-perm
   top: auto !important;
   left: max(12px, env(safe-area-inset-left, 0px)) !important;
   right: max(12px, env(safe-area-inset-right, 0px));
-  bottom: calc(var(--kun-mobile-bottom, 0px) + max(8px, env(safe-area-inset-bottom, 0px)));
+  bottom: calc(var(--kun-mobile-bottom, 0px) + var(--kun-mobile-safe-bottom, 8px));
   width: auto !important;
   max-width: none;
-  max-height: calc(var(--kun-mobile-height, 100dvh) - max(8px, env(safe-area-inset-bottom, 0px)) - max(16px, env(safe-area-inset-top, 0px))) !important;
+  max-height: calc(var(--kun-mobile-height, 100dvh) - var(--kun-mobile-safe-bottom, 8px) - max(16px, env(safe-area-inset-top, 0px))) !important;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+html[data-remote-surface='mobile'] .direct-composer-menu { min-width: 0; width: 100%; }
+html[data-remote-surface='mobile'] .direct-composer-menu select { max-width: 100%; }

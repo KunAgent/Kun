@@ -50,6 +50,7 @@ function boundedExec(executable: string, args: string[]): string {
     timeout: PROCESS_INSPECTION_TIMEOUT_MS,
     maxBuffer: PROCESS_INSPECTION_MAX_BUFFER,
     windowsHide: true,
+    stdio: ['ignore', 'pipe', 'ignore'],
     env: { ...process.env, LANG: 'C', LC_ALL: 'C' }
   }).trim()
 }

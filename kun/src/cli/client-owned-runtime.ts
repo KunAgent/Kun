@@ -23,8 +23,12 @@ import {
   type SharedRuntimeInspection,
   type SharedRuntimeScope
 } from './shared-runtime.js'
+import { delay } from './shared-runtime-support.js'
 import { terminateSpawnedRuntime } from './shared-runtime-launch.js'
 import { isOwnedProcess, stopOwnedProcess } from '../process/owned-process.js'
+
+const UNREACHABLE_OWNER_EXIT_GRACE_MS = 10_000
+const UNREACHABLE_OWNER_POLL_MS = 200
 
 export class ClientOwnedRuntimeConflictError extends Error {
   readonly code = 'client_runtime_owner_busy'
@@ -62,6 +66,13 @@ export type ClientOwnedRuntimeElection = {
   manager?: ServiceManagerConnection
   fetch?: typeof fetch
   retireLegacyDaemon?: boolean
+  /**
+   * Bounded wait for a recorded owner that no longer answers its probe to
+   * finish exiting before the election reports a conflict. A live, responding
+   * owner is still reported immediately. Defaults to
+   * UNREACHABLE_OWNER_EXIT_GRACE_MS.
+   */
+  ownerExitGraceMs?: number
 }
 
 export async function withClientOwnedRuntimeElection<T>(
@@ -73,9 +84,18 @@ export async function withClientOwnedRuntimeElection<T>(
   const discoveryDir = runtimeDiscoveryDirectory(input.dataDir, runtimeFlavor, controlDir)
   const fetchImpl = input.fetch ?? fetch
   return withRuntimeStartLock(discoveryDir, async () => {
-    const { inspected: existing, scope } = await inspectForClientOwnedElection(
+    const { inspected, scope } = await inspectForClientOwnedElection(
       input, runtimeFlavor, controlDir, fetchImpl
     )
+    const existing = inspected?.connection === null
+      ? await waitForUnreachableOwnerExit(
+          input.dataDir,
+          inspected,
+          fetchImpl,
+          scope,
+          input.ownerExitGraceMs ?? UNREACHABLE_OWNER_EXIT_GRACE_MS
+        )
+      : inspected
     if (existing) {
       if (input.retireLegacyDaemon !== false && isExactLegacyDaemon(existing)) {
         await stopInspectedSharedRuntime(input.dataDir, existing, fetchImpl, scope)
@@ -229,6 +249,30 @@ async function inspectForClientOwnedElection(
     inspected: await inspectSharedRuntime(input.dataDir, fetchImpl, scope),
     scope
   }
+}
+
+/**
+ * A recorded owner that no longer answers its probe may already be exiting —
+ * a GUI relaunch races the previous instance's shutdown, and a Runtime that
+ * lost its process leaves only an unverifiable record. Give such an owner a
+ * bounded window to release the slot before surfacing a conflict. An owner
+ * that becomes reachable again, or stays alive past the deadline, is reported
+ * exactly as before; the wait never stops or signals it.
+ */
+async function waitForUnreachableOwnerExit(
+  dataDir: string,
+  inspected: SharedRuntimeInspection,
+  fetchImpl: typeof fetch,
+  scope: SharedRuntimeScope,
+  graceMs: number
+): Promise<SharedRuntimeInspection | null> {
+  const deadline = Date.now() + graceMs
+  let current: SharedRuntimeInspection | null = inspected
+  while (current && current.connection === null && Date.now() < deadline) {
+    await delay(UNREACHABLE_OWNER_POLL_MS)
+    current = await inspectSharedRuntime(dataDir, fetchImpl, scope)
+  }
+  return current
 }
 
 async function resolveSafeElectionScope(

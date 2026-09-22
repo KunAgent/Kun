@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { LazyMessageTimeline } from '../../components/chat/LazyMessageTimeline'
+import { selectLivePendingUserInput } from '../../components/chat/user-input-panel-logic'
 import { MobileComposer } from '../chat/MobileComposer'
 import { MobilePendingActions } from '../chat/MobilePendingActions'
 import { useMobileWorkAssistantSend } from './use-mobile-work-assistant-send'
@@ -36,7 +37,9 @@ export function MobileWorkAssistant({ expectedThreadId, onSettings }: {
   })))
   const hasSelection = write.selection.ranges.some((range) => range.text.trim().length > 0)
   const assistant = useMobileWorkAssistantSend()
+  const pendingInput = threadReady && selectLivePendingUserInput(state.blocks)
   const send = async (): Promise<void> => {
+    if (pendingInput) return
     if (await assistant.send(input)) setInput('')
   }
   return <section className="kun-mobile-work-assistant">
@@ -52,10 +55,10 @@ export function MobileWorkAssistant({ expectedThreadId, onSettings }: {
     <MobileComposer value={input} onChange={setInput} onSend={() => void send()}
       onStop={() => void state.interrupt()} onAttachments={null} onOptions={null}
       running={threadReady && state.busy} disabled={state.runtimeConnection !== 'ready'} sending={assistant.sending}
-      canSend={Boolean(input.trim())} error={assistant.error}
+      canSend={!pendingInput && Boolean(input.trim())} error={assistant.error}
       pendingActions={threadReady ? <MobilePendingActions blocks={state.blocks} resolveApproval={state.resolveApproval}
         resolveUserInput={state.resolveUserInput} /> : null}
-      labels={{ placeholder: t('composerPlaceholder'), send: t('send'), stop: t('stop'),
+      labels={{ placeholder: t(pendingInput ? 'mobileInputComposerHint' : 'composerPlaceholder'), send: t('send'), stop: t('stop'),
         attachments: t('attachments'), options: state.composerModel || t('auto') }} />
   </section>
 }

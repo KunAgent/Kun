@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useChatStore } from '../../store/chat-store'
 import { LazyMessageTimeline } from '../../components/chat/LazyMessageTimeline'
+import { selectLivePendingUserInput } from '../../components/chat/user-input-panel-logic'
 import { MobileComposer } from './MobileComposer'
 import { MobilePendingActions } from './MobilePendingActions'
 import { MobileCodeOptions } from './MobileCodeOptions'
@@ -60,7 +61,8 @@ export function MobileCodeConversation({ threadId, onBack, onDetails, onSettings
     workspaceRoot: state.workspaceRoot
   })
   const thread = state.threads.find((item) => item.id === threadId)
-  const hasSubmission = Boolean(draft.trim() || attachments.attachments.length)
+  const pendingInput = threadReady && selectLivePendingUserInput(state.blocks)
+  const hasSubmission = !pendingInput && Boolean(draft.trim() || attachments.attachments.length)
   const send = async (): Promise<void> => {
     const text = draft.trim()
     if (!threadReady || !hasSubmission || sending) return
@@ -104,7 +106,7 @@ export function MobileCodeConversation({ threadId, onBack, onDetails, onSettings
       pendingActions={threadReady ? <MobilePendingActions blocks={state.blocks} resolveApproval={state.resolveApproval}
         resolveUserInput={state.resolveUserInput} /> : null}
       canSend={hasSubmission}
-      labels={{ placeholder: t('composerPlaceholder'), send: t('send'), stop: t('stop'),
+      labels={{ placeholder: t(pendingInput ? 'mobileInputComposerHint' : 'composerPlaceholder'), send: t('send'), stop: t('stop'),
         attachments: t('attachments'), options: `${state.composerMode} · ${state.composerModel || t('auto')}` }} />
     <MobileCodeOptions open={optionsOpen} onClose={() => setOptionsOpen(false)}
       model={state.composerModel} providerId={state.composerProviderId} models={state.composerPickList}

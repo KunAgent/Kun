@@ -7,10 +7,23 @@ import { MobilePendingActions } from './MobilePendingActions'
 
 let root: Root
 let host: HTMLDivElement
-beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); host = document.createElement('div'); document.body.append(host); root = createRoot(host) })
+beforeEach(() => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: function () { this.setAttribute('open', '') } })
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value: function () { this.removeAttribute('open') } })
+  host = document.createElement('div'); document.body.append(host); root = createRoot(host)
+})
 afterEach(() => { act(() => root.unmount()); host.remove() })
 
 describe('mobile pending actions', () => {
+  it('never prompts from historical or timed-out input blocks', () => {
+    const resolve = vi.fn(async () => undefined)
+    const historical = { kind: 'user_input', id: 'history', requestId: 'old', status: 'pending',
+      questions: [{id:'q',header:'',question:'Old question',options:[]}] } as ChatBlock
+    act(() => root.render(createElement(MobilePendingActions, {blocks:[historical], resolveApproval:resolve, resolveUserInput:resolve})))
+    expect(host.textContent).toBe('')
+    expect(document.querySelector('dialog')).toBeNull()
+  })
   it('resolves the latest pending approval explicitly', () => {
     const resolveApproval = vi.fn(async () => undefined)
     const blocks = [{ kind: 'approval', id: 'block', approvalId: 'approval', summary: 'Run command', status: 'pending' }] as ChatBlock[]
