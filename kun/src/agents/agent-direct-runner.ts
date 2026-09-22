@@ -109,6 +109,7 @@ export class AgentDirectRunner {
       try {
         const admitted = await this.deps.turns.enqueueTurn({ threadId: thread.id, request: { prompt, clientRequestId: identity,
           ...request.privateModel, attachmentIds: request.message.attachmentIds, clientSurface: 'gui', agentSurface: 'code',
+          displayText: request.message.body.slice(0, 8000),
           mode: thread.mode, sandboxMode: thread.sandboxMode, enqueueIfBusy: true } })
         await updateRoomRun(this.deps.store, run.id, { turnId: admitted.turnId })
         const current = (await this.deps.store.get<RoomRequestState>('request', request.id))!

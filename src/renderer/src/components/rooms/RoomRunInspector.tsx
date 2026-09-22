@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { RoomMessageBody } from './RoomMessageBody'
 import { buildRoomRunConversation, buildRoomRunTranscript } from './room-run-conversation'
 import { loadRunItemContent, truncatedContentField } from './room-run-content'
+import { presentRoomRunItems } from './room-run-presentation'
 import { useRoomRun } from './useRoomRun'
 import { formatDuration } from '../chat/message-timeline-tools'
 import { TimelineFilePreviewWorkspaceProvider } from '../chat/timeline-file-preview-workspace'
@@ -63,11 +64,13 @@ export function RoomRunInspector({
   const run = detail?.run
   const processing = run ? RUNNING_STATUSES.has(run.status) : false
   const displayItems = useMemo(() => {
-    if (!Object.keys(loadedFields).length) return state.items
-    return state.items.map((item) => {
-      const patch = loadedFields[item.id]
-      return patch ? ({ ...item, [patch.field]: patch.text } as typeof item) : item
-    })
+    const patched = Object.keys(loadedFields).length
+      ? state.items.map((item) => {
+          const patch = loadedFields[item.id]
+          return patch ? ({ ...item, [patch.field]: patch.text } as typeof item) : item
+        })
+      : state.items
+    return presentRoomRunItems(patched)
   }, [state.items, loadedFields])
   const conversation = buildRoomRunConversation(displayItems)
   const transcript = buildRoomRunTranscript(conversation, run?.input)
