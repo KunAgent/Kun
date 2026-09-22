@@ -491,17 +491,17 @@ export const PROVIDER_CATALOG = [
     kind: 'http',
     authFlow: 'api-key',
     authType: 'api-key',
-    baseUrl: 'https://api.stepfun.ai/v1',
+    baseUrl: 'https://api.stepfun.com/v1',
     endpointFormat: 'chat_completions',
     models: ['step-3.7-flash', 'step-3.5-flash'],
-    docsUrl: 'https://platform.stepfun.ai/docs',
-    credentialUrl: 'https://platform.stepfun.ai/interface-key',
+    docsUrl: 'https://platform.stepfun.com/docs',
+    credentialUrl: 'https://platform.stepfun.com/interface-key',
     tokenPlan: {
       displayName: 'Step Plan',
-      baseUrl: 'https://api.stepfun.ai/step_plan/v1',
+      baseUrl: 'https://api.stepfun.com/step_plan/v1',
       endpointFormat: 'chat_completions',
       models: ['step-5-preview', 'step-3.7-flash', 'step-3.5-flash', 'step-3.5-flash-2603'],
-      credentialUrl: 'https://platform.stepfun.ai/interface-key'
+      credentialUrl: 'https://platform.stepfun.com/interface-key'
     }
   }
 ] as const satisfies readonly ProviderCatalogPreset[]

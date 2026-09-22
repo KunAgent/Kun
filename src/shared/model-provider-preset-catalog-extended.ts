@@ -368,7 +368,7 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
     id: 'stepfun',
     name: 'StepFun',
     subscriptionRegion: 'china',
-    baseUrl: 'https://api.stepfun.ai/v1',
+    baseUrl: 'https://api.stepfun.com/v1',
     endpointFormat: 'chat_completions',
     models: ['step-3.7-flash', 'step-3.5-flash'],
     modelProfiles: {
@@ -377,7 +377,7 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
     },
     tokenPlan: {
       displayName: 'Step Plan',
-      baseUrl: 'https://api.stepfun.ai/step_plan/v1',
+      baseUrl: 'https://api.stepfun.com/step_plan/v1',
       endpointFormat: 'chat_completions',
       models: ['step-5-preview', 'step-3.7-flash', 'step-3.5-flash', 'step-3.5-flash-2603'],
       modelProfiles: {
@@ -386,9 +386,9 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
         'step-3.5-flash': textChatProfile(262_144),
         'step-3.5-flash-2603': textChatProfile(262_144)
       },
-      apiKeyUrl: 'https://platform.stepfun.ai/interface-key'
+      apiKeyUrl: 'https://platform.stepfun.com/interface-key'
     },
-    docsUrl: 'https://platform.stepfun.ai/docs',
-    apiKeyUrl: 'https://platform.stepfun.ai/interface-key'
+    docsUrl: 'https://platform.stepfun.com/docs',
+    apiKeyUrl: 'https://platform.stepfun.com/interface-key'
   }
 ]
