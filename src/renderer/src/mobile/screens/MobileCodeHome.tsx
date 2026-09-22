@@ -7,6 +7,16 @@ import { workspaceRootIdentityKey } from '../../lib/workspace-path'
 import { MobileHome } from './MobileHome'
 import './mobile-projects.css'
 
+function projectName(root: string): string {
+  return root.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) || root
+}
+
+function projectContext(root: string, label: string): string {
+  const parts = root.replace(/\\/g, '/').split('/').filter(Boolean)
+  const parent = parts.length >= 2 ? parts[parts.length - 2] ?? '' : ''
+  return parent && parent.toLowerCase() !== label.toLowerCase() ? parent : ''
+}
+
 export function MobileCodeHome({ onOpen }: { onOpen: (threadId: string) => void }) {
   const { t } = useTranslation('common')
   const [project, setProject] = useState<string | null>(null)
@@ -22,7 +32,12 @@ export function MobileCodeHome({ onOpen }: { onOpen: (threadId: string) => void 
   })))
   const projects = useMemo(() => [...new Map([...chat.roots, chat.root].filter(Boolean)
     .map((root) => [workspaceRootIdentityKey(root), root])).values()], [chat.roots, chat.root])
-  const name = (root: string) => root.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) || root
+  const visible = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    if (!query) return projects
+    return projects.filter((root) =>
+      root.toLowerCase().includes(query) || projectName(root).toLowerCase().includes(query))
+  }, [projects, search])
   const enter = async (root: string) => {
     if (switching) return
     setSwitching(true)
@@ -34,13 +49,19 @@ export function MobileCodeHome({ onOpen }: { onOpen: (threadId: string) => void 
     } catch (cause) { setError(String(cause)) }
     finally { setSwitching(false) }
   }
+  const addProject = () => {
+    void chat.choose({ createThreadAfter: false, selectThreadAfter: false }).then((root) => {
+      if (root) { setProject(root); setSearch('') }
+      else setError(useChatStore.getState().error || '')
+    }).catch((cause) => setError(String(cause)))
+  }
   const threads = chat.threads.filter((thread) =>
     (!thread.agentSurface || thread.agentSurface === 'code')
     && workspaceRootIdentityKey(thread.workspace) === workspaceRootIdentityKey(project ?? '')
     && (!search.trim() || `${thread.title} ${thread.summary || thread.preview || ''}`.toLowerCase().includes(search.trim().toLowerCase())))
   const loading = switching || chat.status === 'loading' || chat.status === 'refreshing'
   if (project) return <MobileHome
-    labels={{ title: name(project), workspace: t('mobileCodeProjects'), search: t('search'),
+    labels={{ title: projectName(project), workspace: t('mobileCodeProjects'), search: t('search'),
       newConversation: t('newChat'), settings: t('settings'), more: t('more'), loadMore: t('loadMore'),
       retry: t('retry'), empty: t('noSessions'), loading: t('loading'), back: t('back') }}
     threads={threads} search={search} loading={loading} error={error || chat.error || null}
@@ -61,26 +82,37 @@ export function MobileCodeHome({ onOpen }: { onOpen: (threadId: string) => void 
         finally { setSwitching(false) }
       })()
     }} />
-  return <section className="kun-mobile-projects">
-    <header><div><span>Code</span><h1>{t('mobileCodeProjects')}</h1></div>
-      <button className="kun-mobile-icon-button" aria-label={t('settings')} onClick={() => chat.settings()}><Settings size={20} /></button>
+  return <section className="kun-mobile-projects" aria-label={t('mobileCodeProjects')}>
+    <header>
+      <h1>{t('mobileCodeProjects')}</h1>
+      <div>
+        <button type="button" className="kun-mobile-project-icon" aria-label={t('selectWorkspace')}
+          disabled={switching} onClick={addProject}><Plus size={22} aria-hidden /></button>
+        <button type="button" className="kun-mobile-project-icon" aria-label={t('settings')}
+          onClick={() => chat.settings()}><Settings size={20} aria-hidden /></button>
+      </div>
     </header>
-    <label className="kun-mobile-search"><Search size={18} aria-hidden />
-      <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('search')} aria-label={t('search')} />
+    <label className="kun-mobile-project-search"><Search size={18} aria-hidden />
+      <input type="search" value={search} onChange={(e) => setSearch(e.target.value)}
+        placeholder={t('search')} aria-label={t('search')} />
     </label>
     <div className="kun-mobile-project-list" aria-busy={switching}>
       {error ? <p role="alert">{error}</p> : null}
-      {projects.filter((root) => root.toLowerCase().includes(search.toLowerCase())).map((root) =>
-        <button className="kun-mobile-project-row" key={root} disabled={switching} onClick={() => { void enter(root) }}>
-          <Folder size={22} aria-hidden /><span><strong>{name(root)}</strong><small>{root}</small></span><ChevronRight size={18} aria-hidden />
-        </button>)}
-      {!projects.length ? <p className="kun-mobile-project-empty">{t('mobileCodeChooseProject')}</p> : null}
-      <button className="kun-mobile-project-add" disabled={switching} onClick={() => {
-        void chat.choose({ createThreadAfter: false, selectThreadAfter: false }).then((root) => {
-          if (root) { setProject(root); setSearch('') }
-          else setError(useChatStore.getState().error || '')
-        }).catch((cause) => setError(String(cause)))
-      }}><Plus size={18} aria-hidden />{t('selectWorkspace')}</button>
+      {visible.map((root) => {
+        const label = projectName(root)
+        const context = projectContext(root, label)
+        return <button type="button" className="kun-mobile-project-row" key={root} disabled={switching}
+          title={root} onClick={() => { void enter(root) }}>
+          <Folder size={20} aria-hidden />
+          <span><strong>{label}</strong>{context ? <small>{context}</small> : null}</span>
+          <ChevronRight size={18} aria-hidden />
+        </button>
+      })}
+      {!visible.length ? <div className="kun-mobile-project-empty">
+        <p>{projects.length ? t('composerWorkspaceNoMatch') : t('mobileCodeChooseProject')}</p>
+        {!projects.length ? <button type="button" className="kun-mobile-project-add" disabled={switching}
+          onClick={addProject}><Plus size={18} aria-hidden />{t('selectWorkspace')}</button> : null}
+      </div> : null}
     </div>
   </section>
 }
