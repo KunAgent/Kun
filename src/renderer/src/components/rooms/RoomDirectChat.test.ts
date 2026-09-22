@@ -61,4 +61,14 @@ describe('RoomDirectHeader session sidebar button', () => {
     })
     expect(renderer.root.findByProps({ 'aria-label': 'View Agent session' }).props.disabled).toBe(true)
   })
+
+  it('shows the supplied current model immediately', async () => {
+    await act(async () => {
+      renderer = create(createElement(RoomDirectHeader, {
+        ...baseProps(),
+        models: { main: { providerId: 'kimi', model: 'kimi-code' } } as never
+      }))
+    })
+    expect(renderer.root.findByProps({ 'aria-label': 'Model settings' }).findByType('span').children).toEqual(['kimi-code'])
+  })
 })

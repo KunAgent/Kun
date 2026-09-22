@@ -41,20 +41,25 @@
 .rooms-reactions:not(:has(> button)) { min-height: 0; padding: 0; margin: 0; }
 .rooms-workspace .rooms-message-bubble:has(.rooms-reactions:not(:has(> button))) .rooms-message-interactions { margin: 0; }
 .direct-progress { padding: 0 28px; max-height: 38vh; overflow-y: auto; flex-shrink: 0; font-size: 12px; color: var(--ds-text-muted); }
-.direct-progress-line, .direct-project { display: flex; gap: 10px; align-items: center; padding: 4px 0; }
-.direct-progress-line button { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 8px; text-decoration: none; color: var(--ds-text-muted); }
-.direct-progress-line button:hover, .direct-progress-line button.is-active { background: var(--ds-surface-hover); color: var(--ds-text); }
-.direct-progress-line button.is-active { color: var(--ds-accent, #4f46e5); }
-.direct-progress-line button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+.direct-progress-line, .direct-project { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
+.direct-progress-line button {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: auto; flex-shrink: 0;
+  padding: 3px 10px; border: 1px solid var(--ds-border); border-radius: 999px;
+  background: var(--ds-surface-card); color: var(--ds-text-muted);
+  font-size: 11px; line-height: 1.35; white-space: nowrap; text-decoration: none;
+}
+.direct-progress-line button:hover { background: var(--ds-surface-hover); color: var(--ds-text); }
+.direct-progress-line button.is-active { color: var(--ds-accent, #4f46e5); border-color: color-mix(in srgb, var(--ds-accent, #4f46e5) 45%, var(--ds-border)); }
+.direct-progress-line button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
 .direct-failed {
-  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
-  margin: 4px 0 10px; padding: 9px 12px;
+  display: flex; flex-wrap: wrap; column-gap: 8px; row-gap: 8px; align-items: flex-start;
+  margin: 4px 0 10px; padding: 10px 12px;
   border: 1px solid color-mix(in srgb, var(--ds-danger) 28%, transparent);
   border-radius: 12px; background: var(--ds-danger-soft);
 }
-.direct-failed > svg { flex-shrink: 0; color: var(--ds-danger); }
+.direct-failed > svg { flex-shrink: 0; color: var(--ds-danger); margin-top: 1px; }
 .direct-failed > span { flex: 1; min-width: 0; color: var(--ds-text); line-height: 1.45; overflow-wrap: anywhere; }
-.direct-failed-actions { display: flex; flex-shrink: 0; gap: 6px; margin-left: auto; }
+.direct-failed-actions { display: flex; flex-basis: 100%; gap: 6px; padding-left: 23px; }
 .direct-failed-actions button {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 4px 10px; border: 1px solid var(--ds-border); border-radius: 999px;

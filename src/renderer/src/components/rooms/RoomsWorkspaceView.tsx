@@ -1,7 +1,7 @@
 import { RoomSidebar } from './RoomSidebar'
 import { useAgentChatEntry } from './useAgentChatEntry'
 import { RoomNewChat } from './RoomNewChat'
-import { AgentModelSettings } from './AgentModelSettings'
+import { AgentModelSettings, type AgentModels } from './AgentModelSettings'
 import { useDirectChat, RoomDirectHeader, RoomDirectProgress, RoomDirectFiles } from './RoomDirectChat'
 import './rooms-direct.css'
 import { RoomUserAvatarEditor } from './RoomUserAvatarEditor'
@@ -142,6 +142,7 @@ export function RoomsWorkspaceView({
   const privateChat = room?.conversationKind === 'user_agent'
   const agentId = privateChat ? room?.members[0]?.participantAgentId : undefined
   const agentProfile = useAgentResource<{ agent: AgentIdentity }>(agentId ? agentPath(agentId) : null)
+  const agentModels = useAgentResource<AgentModels>(agentId ? agentPath(agentId) + '/models' : null)
   const setupPending = agentProfile.data?.agent.setup?.status === 'pending'
   const choiceInputs = privateChat ? direct.data?.userInputs ?? [] : []
   const openRun = (runId: string): void => drawer.open({ kind: 'run', runId })
@@ -187,14 +188,9 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
     [room]
   )
   const typingNames = useMemo(
-    () =>
-      privateChat
-        ? direct.data?.active
-          ? [room?.members[0]?.displayName ?? '']
-          : []
-        : roomRespondingMemberIds(topicState.topics).map(memberName),
-    [direct.data?.active, memberName, privateChat, room, topicState.topics]
-  ).filter(Boolean)
+    () => (privateChat ? [] : roomRespondingMemberIds(topicState.topics).map(memberName)).filter(Boolean),
+    [memberName, privateChat, topicState.topics]
+  )
   const waitingNames = useMemo(
     () =>
       privateChat || !pendingSends.hasUnsettled
@@ -261,7 +257,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           onProfile={() => drawer.open({ kind: 'profile' })} onTeam={() => setNewChatOpen(true)} onManage={() => drawer.open({ kind: 'directory' })} />
       </aside>
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-        {privateChat && room ? <RoomDirectHeader room={room} onSidebar={() => setSidebarOpen(true)} onSearch={() => setSearchOpen(!searchOpen)}
+        {privateChat && room ? <RoomDirectHeader room={room} models={agentModels.data} onSidebar={() => setSidebarOpen(true)} onSearch={() => setSearchOpen(!searchOpen)}
           onProfile={() => drawer.open({ kind: 'agent', agentId: room.members[0].participantAgentId })} onModels={() => drawer.open({ kind: 'models' })}
           onFiles={() => drawer.open({ kind: 'files' })} onReset={() => void direct.context('reset')} onConnect={() => void direct.context('workspace')}
           onTasks={() => drawer.section('tasks')} onSession={toggleSession} sessionOpen={Boolean(openRunId)} sessionDisabled={!latestRunId} /> : <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
@@ -345,7 +341,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
               <RoomTypingRow
                 names={typingNames}
                 waitingNames={waitingNames}
-                fallback={!typingNames.length && pendingSends.hasUnsettled ? t('roomsReceipt_fallback') : ''}
+                fallback={!typingNames.length && pendingSends.hasUnsettled && !(privateChat && direct.data?.active) ? t('roomsReceipt_fallback') : ''}
               />
               <RoomComposer
               key={room.id + '-composer'}
@@ -408,7 +404,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             onOpenCode={onOpenThread} onOpenTarget={onOpenContentTarget ?? ((value) => openRoomContentTarget(value, onOpenThread, room?.id))} />
           if (target.kind === 'files') return <RoomDirectFiles key={key} room={room} onOpen={(reference) => openContent(reference)} />
           if (target.kind === 'models') return agentId ? <AgentModelSettings key={key} agentId={agentId} room={room} variant="panel"
-            onClose={drawer.back} onSaved={() => void state.refresh()} /> : null
+            onClose={drawer.back} onSaved={() => { agentModels.refresh(); void state.refresh() }} /> : null
           if (target.kind === 'settings') return <RoomSettings key={room.id} room={room} variant="panel"
             onClose={drawer.back} onSaved={(value) => { state.saved(value); drawer.back() }} />
           if (target.section === 'discussion') return <RoomPeerActivity room={room} {...topicState} onUpdated={topicState.refresh}
