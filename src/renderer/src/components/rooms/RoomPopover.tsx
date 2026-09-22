@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { currentComposerBodyZoom } from '../chat/floating-composer-popover-placement'
+import './rooms-popover.css'
 
 type Placement = { left: number; top: number; width: number; maxHeight: number }
 export function roomPopoverPlacement(input: {

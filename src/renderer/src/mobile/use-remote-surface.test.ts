@@ -40,12 +40,15 @@ describe('remote surface browser integration', () => {
     const remove = vi.spyOn(window, 'removeEventListener')
     act(() => root.render(createElement(Harness)))
     expect(surface).toBe('desktop')
+    expect(document.documentElement.dataset.remoteSurface).toBe('desktop')
     act(() => {
       vi.stubGlobal('innerWidth', 390)
       window.dispatchEvent(new Event('resize'))
     })
     expect(surface).toBe('mobile')
+    expect(document.documentElement.dataset.remoteSurface).toBe('mobile')
     act(() => root.render(null))
+    expect(document.documentElement.dataset.remoteSurface).toBeUndefined()
     expect(remove).toHaveBeenCalledWith('resize', expect.any(Function))
     expect(remove).toHaveBeenCalledWith('orientationchange', expect.any(Function))
   })
@@ -60,6 +63,17 @@ describe('remote surface browser integration', () => {
       window.dispatchEvent(new Event('orientationchange'))
     })
     expect(surface).toBe('mobile')
+    expect(document.documentElement.dataset.remoteSurface).toBe('mobile')
+  })
+
+  it('restores desktop styling when a remote window becomes wide', () => {
+    vi.stubGlobal('innerWidth', 390)
+    act(() => root.render(createElement(Harness)))
+    act(() => {
+      vi.stubGlobal('innerWidth', 1280)
+      window.dispatchEvent(new Event('resize'))
+    })
+    expect(document.documentElement.dataset.remoteSurface).toBe('desktop')
   })
 
   it('does not inspect keyboard visual viewport dimensions', () => {

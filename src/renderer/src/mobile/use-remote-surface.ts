@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { resolveRemoteSurface, type RemoteSurface } from './remote-surface'
 
 export function currentRemoteSurface(): RemoteSurface {
@@ -15,6 +15,15 @@ export function currentRemoteSurface(): RemoteSurface {
 
 export function useRemoteSurface(): RemoteSurface {
   const [surface, setSurface] = useState(currentRemoteSurface)
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    const previous = root.dataset.remoteSurface
+    root.dataset.remoteSurface = surface
+    return () => {
+      if (previous === undefined) delete root.dataset.remoteSurface
+      else root.dataset.remoteSurface = previous
+    }
+  }, [surface])
   useEffect(() => {
     const update = (): void => setSurface(currentRemoteSurface())
     const pointer = typeof window.matchMedia === 'function'

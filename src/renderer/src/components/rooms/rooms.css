@@ -64,15 +64,6 @@
   font-size: .75rem; color: var(--ds-text-muted); text-overflow: ellipsis; }
 .rooms-mode-control > svg { position: absolute; right: .45rem; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--ds-text-muted); }
 .rooms-sidebar-toggle { display: none; }
-.rooms-popover-surface { position: fixed; z-index: 100; padding: .5rem; overflow-y: auto; overscroll-behavior: contain;
-  border: 1px solid var(--ds-border); border-radius: .875rem; background: var(--ds-surface-elevated);
-  color: var(--ds-text); box-shadow: var(--ds-shadow-overlay); font-size: .8125rem; -webkit-app-region: no-drag; }
-.rooms-menu-list { display: grid; gap: .125rem; }
-.rooms-menu-list > button { display: flex; align-items: center; gap: .625rem; width: 100%; padding: .625rem .75rem;
-  border-radius: .5rem; text-align: left; color: var(--ds-text-muted); }
-.rooms-menu-list > button:hover { background: var(--ds-surface-hover); color: var(--ds-text); }
-.rooms-menu-list > button:disabled { opacity: .45; }
-.rooms-menu-list svg { flex-shrink: 0; }
 .rooms-list-nav { padding: 0 .75rem .75rem; }
 .rooms-conversation-row { display: grid; grid-template-columns: 2.75rem minmax(0,1fr) auto;
   align-items: center; gap: .6875rem; width: 100%; min-height: 4.625rem; padding: .625rem .5rem;

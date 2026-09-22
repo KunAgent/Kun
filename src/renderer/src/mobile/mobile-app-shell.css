@@ -45,3 +45,16 @@
   outline-offset: -2px;
 }
 .kun-mobile-app .kun-mobile-notice { max-height: 25%; overflow-y: auto; }
+
+/* Portaled menus, including nested dialogs, share the shell's keyboard-safe viewport. */
+html[data-remote-surface='mobile'] :is(.rooms-popover-surface, .ds-composer-permission-menu) {
+  top: auto !important;
+  left: max(12px, env(safe-area-inset-left, 0px)) !important;
+  right: max(12px, env(safe-area-inset-right, 0px));
+  bottom: calc(var(--kun-mobile-bottom, 0px) + max(8px, env(safe-area-inset-bottom, 0px)));
+  width: auto !important;
+  max-width: none;
+  max-height: calc(var(--kun-mobile-height, 100dvh) - max(8px, env(safe-area-inset-bottom, 0px)) - max(16px, env(safe-area-inset-top, 0px))) !important;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
