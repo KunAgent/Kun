@@ -17,6 +17,7 @@ import { openRoomContentTarget } from '../components/rooms/room-content-navigati
 import { workFileResourceKey, workWhiteboardResourceKey } from './work/work-resource-key'
 import { useWorkBeforeUnloadGuard } from './use-work-before-unload-guard'
 import { workspaceRootIdentityKey } from '../lib/workspace-path'
+import { useMobileViewport } from './use-mobile-viewport'
 import './mobile-app-shell.css'
 
 const MobileRoomNew = lazy(() => import('./rooms/MobileRoomNew').then((module) => ({
@@ -66,6 +67,7 @@ function MobileRoomsRoot({ navigate }: { navigate: ReturnType<typeof useMobileNa
 }
 
 export function MobileAppShell(): ReactElement {
+  useMobileViewport()
   const { t } = useTranslation('common')
   const leaveGuardRef = useRef<MobileNavigationGuard | null>(null)
   const { page, navigate } = useMobileNavigation(

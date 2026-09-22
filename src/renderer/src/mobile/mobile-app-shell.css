@@ -1,7 +1,11 @@
 .kun-mobile-app {
+  position: fixed;
+  inset: var(--kun-mobile-top, 0px) 0 auto;
+  box-sizing: border-box;
   display: flex;
   width: 100%;
-  height: 100dvh;
+  height: var(--kun-mobile-height, 100dvh);
+  padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
@@ -14,4 +18,30 @@
 .kun-mobile-unavailable { display: grid; width: 100%; min-height: 0; place-content: center; gap: 12px; padding: 24px; text-align: center; }
 .kun-mobile-unavailable h1, .kun-mobile-unavailable p { margin: 0; }
 .kun-mobile-unavailable button { min-height: 44px; padding: 8px 16px; border: 1px solid var(--ds-border); border-radius: 9999px; color: inherit; background: var(--ds-surface-subtle); }
-@supports not (height: 100dvh) { .kun-mobile-app { height: 100vh; } }
+@supports not (height: 100dvh) { .kun-mobile-app { height: var(--kun-mobile-height, 100vh); } }
+
+/* Every route fills the available phone width, regardless of its content. */
+.kun-mobile-app-content > * { flex: 1; width: 100%; min-width: 0; }
+.kun-mobile-app :is(.kun-mobile-rooms-home, .kun-mobile-work-home) {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.kun-mobile-app-content > * > header { flex-shrink: 0; }
+.kun-mobile-app-content > * > header > div { min-width: 0; }
+.kun-mobile-app .kun-mobile-work-home > header div > button {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kun-mobile-app .ds-message-timeline-content {
+  padding: 16px 16px 24px;
+  gap: 20px;
+  overflow-wrap: anywhere;
+}
+.kun-mobile-app .timeline-jump-rail-anchor { display: none; }
+.kun-mobile-app :is(button, input, textarea, select):focus-visible {
+  outline: 2px solid var(--ds-accent);
+  outline-offset: -2px;
+}
+.kun-mobile-app .kun-mobile-notice { max-height: 25%; overflow-y: auto; }

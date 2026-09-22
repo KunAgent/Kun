@@ -3,11 +3,11 @@
   --kun-mobile-sheet-gutter: 16px;
   box-sizing: border-box;
   position: fixed;
-  inset: auto 0 0;
+  inset: auto 0 var(--kun-mobile-bottom, 0px);
   margin: 0 auto;
   width: 100%;
-  max-width: 40rem;
-  max-height: 85dvh;
+  max-width: min(40rem, calc(100% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+  max-height: calc(var(--kun-mobile-height, 100dvh) - max(16px, env(safe-area-inset-top, 0px)));
   padding: 0;
   color: var(--ds-text);
   background: var(--ds-surface-elevated);
@@ -23,10 +23,13 @@
 }
 
 .kun-mobile-sheet[open] {
+  display: flex;
+  flex-direction: column;
   animation: kun-mobile-sheet-enter 150ms ease-out;
 }
 
 .kun-mobile-sheet-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -57,6 +60,20 @@
 .kun-mobile-sheet-content {
   padding: var(--kun-mobile-sheet-gutter);
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+
+.kun-mobile-sheet :is(input, textarea, select) {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 16px;
+}
+.kun-mobile-sheet :is(button, input, textarea, select):focus-visible {
+  outline: 2px solid var(--ds-accent);
+  outline-offset: -2px;
 }
 
 @keyframes kun-mobile-sheet-enter {
