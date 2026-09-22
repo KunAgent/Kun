@@ -24,6 +24,7 @@ import workWhiteboard from './common/work-whiteboard.json'
 import sidebar from './common/sidebar.json'
 import i18nReview from './common/i18n-review.json'
 import commandPalette from './common/command-palette.json'
+import composerPanels from './common/composer-panels.json'
 import workConversations from './common/work-conversations.json'
 import projectBoard from './common/project-board.json'
 import speak from './common/speak.json'
@@ -62,6 +63,7 @@ const common = {
   ...sidebar,
   ...i18nReview,
   ...commandPalette,
+  ...composerPanels,
   ...workConversations,
   ...projectBoard,
   ...speak,

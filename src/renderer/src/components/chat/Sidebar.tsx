@@ -24,6 +24,7 @@ import {
 import type { ClawImDialogMode, ClawInstallTarget } from './SidebarClawDialogHelpers'
 import { ClawAddImDialog } from './SidebarClawDialog'
 import { ConnectPhoneSidebarPanel } from './ConnectPhoneView'
+import { SidebarAttentionPanel } from './SidebarAttentionPanel'
 import { SidebarProjectsSection } from './SidebarProjectsSection'
 import { registerSidebarDragAutoScroll } from './sidebar-drag-auto-scroll'
 import { SidebarConversationsSection } from './SidebarConversationsSection'
@@ -158,6 +159,27 @@ export function Sidebar({
   const activeClawChannel = useMemo(
     () => clawChannels.find((channel) => channel.id === activeClawChannelId) ?? clawChannels[0] ?? null,
     [clawChannels, activeClawChannelId]
+  )
+
+  // Same inputs the project rows classify with — the panel just re-prioritizes
+  // them into a single cross-workspace "needs you" list.
+  const sidebarActivityContext = useMemo(
+    () => ({
+      activeThreadId,
+      busy,
+      watchTurnCompletion,
+      unreadThreadIds,
+      scheduledThreadActivities,
+      awaitingUserInputThreadIds
+    }),
+    [
+      activeThreadId,
+      busy,
+      watchTurnCompletion,
+      unreadThreadIds,
+      scheduledThreadActivities,
+      awaitingUserInputThreadIds
+    ]
   )
 
   return (
@@ -339,6 +361,14 @@ export function Sidebar({
         />
       ) : (
       <>
+      {!threadSearch.trim() && (activeView === 'chat' || activeView === 'write') ? (
+        <SidebarAttentionPanel
+          threads={threads}
+          activityContext={sidebarActivityContext}
+          onSelectThread={onSelectThread}
+          t={t}
+        />
+      ) : null}
       <SidebarProjectsSection
         threads={threads}
         activeView={activeView === 'write' ? 'write' : 'chat'}

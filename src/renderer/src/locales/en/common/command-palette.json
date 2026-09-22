@@ -1,5 +1,10 @@
 {
   "paletteDialogLabel": "Command palette",
+  "findInChatTitle": "Find in chat",
+  "findInChatPlaceholder": "Search messages…",
+  "findInChatNoResults": "No results",
+  "findInChatPrevious": "Previous match",
+  "findInChatNext": "Next match",
   "paletteInputLabel": "Search commands, conversations, and settings",
   "palettePlaceholder": "Type a command or search…",
   "paletteOpenTooltip": "Command palette",

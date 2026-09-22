@@ -15,6 +15,7 @@ import { useTimelineStores } from './use-timeline-stores'
 import { useTimelineScroll } from './use-timeline-scroll'
 import { useTimelineTurnTargetBlocks } from './thread-turn-target'
 import { useTimelineTurnNavigation } from './use-timeline-turn-navigation'
+import { useTimelineFindJump } from './use-timeline-find-jump'
 import { MessageTimelineEmptyHero, ThreadForkBanner, ThreadForkPoint } from './message-timeline-empty'
 import {
   activeTimelineTurnIndex,
@@ -227,12 +228,6 @@ export function MessageTimeline({
     () => activeTimelineTurnIndex(visibleTurns, currentTurnId, currentTurnUserId),
     [currentTurnId, currentTurnUserId, visibleTurns]
   )
-  const graphPlanningPaused = Boolean(
-    graphPlanningCorrectionTurnId &&
-    turns.some((turn) =>
-      turn.turnId === graphPlanningCorrectionTurnId &&
-      turn.user?.id === currentTurnUserId)
-  )
   const visibleTurnAnchors = useMemo(
     () => {
       const anchors: Array<{
@@ -272,16 +267,11 @@ export function MessageTimeline({
 
   useTimelineJumpRail({ containerRef, turnRefMap, visibleTurnAnchors, setActiveTurnKey, setJumpRailLayout })
 
-  // Tick a clock while a turn is running so the live "Worked for Xs" updates.
-  const [tickNow, setTickNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!busy || !currentTurnUserId || graphPlanningPaused) return
-    setTickNow(Date.now())
-    const id = window.setInterval(() => setTickNow(Date.now()), 1000)
-    return () => window.clearInterval(id)
-  }, [busy, currentTurnUserId, graphPlanningPaused])
-
   const jumpToTurn = useTimelineTurnNavigation({ activeThreadId, turns, hiddenTurnCount,
+    turnRefMap, revealTurnAtIndex, onActive: setActiveTurnKey })
+  // The find bar lands on exact turns/blocks; the elapsed label below ticks
+  // itself in the DOM, so no per-second re-render is needed for either.
+  useTimelineFindJump({ activeThreadId, turns, hiddenTurnCount,
     turnRefMap, revealTurnAtIndex, onActive: setActiveTurnKey })
 
   const showJumpRailPreview = (
@@ -430,10 +420,13 @@ export function MessageTimeline({
           const isLive = !!(userId && currentTurnUserId === userId)
           const startedAt = userId ? turnStartedAtByUserId[userId] : undefined
           const recordedDuration = userId ? turnDurationByUserId[userId] : undefined
+          // For the live turn this is only a render-time snapshot: the visible
+          // elapsed label ticks itself via the DOM (LiveElapsedText), so the
+          // timeline no longer re-renders every second just to update it.
           const durationMs =
             recordedDuration ??
             (isLive && typeof startedAt === 'number'
-              ? Math.max(0, tickNow - startedAt)
+              ? Math.max(0, Date.now() - startedAt)
               : undefined)
           const reasoningFirst = userId ? turnReasoningFirstAtByUserId[userId] : undefined
           const reasoningLast = userId ? turnReasoningLastAtByUserId[userId] : undefined
@@ -518,6 +511,7 @@ export function MessageTimeline({
                 liveReasoning={isActiveTurn && !sourceHistory ? liveReasoning : ''}
                 live={isActiveTurn && !sourceHistory ? live : ''}
                 durationMs={durationMs}
+                liveStartedAtMs={isLive ? startedAt : undefined}
                 reasoningDurationMs={reasoningDurationMs}
                 devPreviewCard={isLatestTurn && !sourceHistory ? devPreviewCard : null}
                 planActionsBusy={planActionsBusy}
@@ -614,8 +608,11 @@ export function MessageTimeline({
             allowRecoveryContinue={!busy && !busyUnconfirmed}
             durationMs={
               currentTurnUserId && typeof turnStartedAtByUserId[currentTurnUserId] === 'number'
-                ? Math.max(0, tickNow - turnStartedAtByUserId[currentTurnUserId])
+                ? Math.max(0, Date.now() - turnStartedAtByUserId[currentTurnUserId])
                 : undefined
+            }
+            liveStartedAtMs={
+              currentTurnUserId ? turnStartedAtByUserId[currentTurnUserId] : undefined
             }
             reasoningDurationMs={(() => {
               if (!currentTurnUserId) return undefined

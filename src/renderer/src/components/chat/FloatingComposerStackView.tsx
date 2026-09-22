@@ -8,13 +8,14 @@ export function FloatingComposerStackView({
 }): ReactElement {
   const {
     BackgroundShellOverlay, FloatingComposerAboveInputStack, FloatingComposerActionMenu,
+    FloatingComposerApprovalPanel,
     FloatingComposerFileMentionMenu, FloatingComposerGraphProgress, FloatingComposerQueuedMessages,
     FloatingComposerSlashCommandMenu, FloatingComposerTodoProgress, FloatingComposerUserInputPanel,
     PauseCircle, Pencil, PlayCircle, Target, Trash2, X, activeThreadGoal, activeThreadId, activeThreadTodos, applySlashCommand,
     busy, canOpenGoalPanel, canSetGoalPanelDraft, clearActiveThreadGoal, compact, composerMenuOpen,
     currentTurnOrchestration, draft, fileMentions, filteredSlashCommands, goalBannerLabel,
     goalElapsedLabel, goalPanelOpen, goalPanelRef, graphEnabled, highlightedSlashCommand,
-    onReorderQueuedMessage, onGuideQueuedMessage, onOpenGraph, onOpenGraphChild, onRemoveQueuedMessage, onRestoreQueuedMessageToComposer, pendingUserInputBlock,
+    onReorderQueuedMessage, onGuideQueuedMessage, onOpenGraph, onOpenGraphChild, onRemoveQueuedMessage, onRestoreQueuedMessageToComposer, pendingApprovals, pendingUserInputBlock,
     queuedMessages, runtimeReady,
     setActiveThreadGoalStatus, setGoalFromComposerInput, setGoalPanelOpen,
     showGoalFloater, showGoalMenuOption, showGraphProgress, showTodoProgress, slashCommandMenu,
@@ -115,6 +116,13 @@ export function FloatingComposerStackView({
         )}
         flowPanels={(
           <>
+            {pendingApprovals && pendingApprovals.length > 0 ? (
+              <FloatingComposerApprovalPanel
+                approvals={pendingApprovals}
+                t={t}
+                variant={compact ? 'compact' : 'main'}
+              />
+            ) : null}
             {userInput.active ? (
               <FloatingComposerUserInputPanel
                 controller={userInput}

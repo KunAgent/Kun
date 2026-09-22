@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import type { ChatBlock, RuntimeConnectionStatus } from '../../agent/types'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { FloatingComposer } from '../chat/FloatingComposer'
+import { ChatFindBar } from '../chat/ChatFindBar'
 import { ConversationFileDropZone } from '../chat/ConversationFileDropZone'
 import { LazyMessageTimeline } from '../chat/LazyMessageTimeline'
 import { ThreadHydrationLoading } from '../chat/ThreadHydrationLoading'
@@ -328,6 +329,7 @@ export function WorkbenchChatStage({
               : ''
           }`}
         >
+          <ChatFindBar activeThreadId={activeThreadId} blocks={blocks} />
           <ConversationFileDropZone
             className={`${trajectoryOpen ? 'hidden' : 'flex'} min-h-0 min-w-0 flex-col ${emptyTaskLayout ? 'flex-none' : 'flex-1'}`}
             options={conversationFileDropOptions}

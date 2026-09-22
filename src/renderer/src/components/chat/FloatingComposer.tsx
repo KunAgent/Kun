@@ -129,6 +129,7 @@ import {
   EMPTY_MODEL_GROUPS,
   EMPTY_SKILL_COMMANDS,
   codeExecutionControlsAvailable,
+  listPendingComposerApprovals,
   resolveComposerPrimaryActionKind,
   shouldShowGoalFloater,
   shouldShowUsageHistory,
@@ -140,6 +141,7 @@ import {
 import { useFloatingComposerActions } from './use-floating-composer-actions'
 import { useGoalElapsedLabel } from './use-goal-elapsed'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
+import { FloatingComposerApprovalPanel } from './FloatingComposerApprovalPanel'
 import { FloatingComposerStackView } from './FloatingComposerStackView'
 import { FloatingComposerSurfaceView } from './FloatingComposerSurfaceView'
 import { FloatingComposerTaskProfile } from './FloatingComposerTaskProfile'
@@ -279,6 +281,15 @@ export function FloatingComposer({
   const userInput = useComposerUserInput(
     pendingUserInputBlock,
     onResolveUserInput ?? resolveUserInput
+  )
+  // Pending runtime approvals dock above the composer on surfaces that own the
+  // main thread.
+  const pendingApprovals = useMemo(
+    () => listPendingComposerApprovals({
+      blocks, busy, compact, route, side,
+      hasScopedBlocks: userInputBlocksOverride !== undefined
+    }),
+    [blocks, busy, compact, route, side, userInputBlocksOverride]
   )
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const { speechToText: speechToTextSettings, credentialReady: speechCredentialReady } =
@@ -616,19 +627,22 @@ export function FloatingComposer({
   }, [composerMenuOpen, goalPanelOpen])
 
   const actionContext: FloatingComposerRenderContext = {
-    activeThreadId, archiveThread, buildResearchPrompt, canAcceptComposerFileDrop,
+    activeThreadId, archiveThread, attachments, buildResearchPrompt, busy,
+    canAcceptComposerFileDrop,
     canAddFileReference, canEditComposer, canOpenComposerMenu, canOpenGoalPanel,
     canOptimizePrompt, canPickAttachment, canPickDesignReference, canPickFileReference,
     canPickLocalFileReference, canSetGoalPanelDraft, canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode,
     clearActiveThreadGoal, compact, compactActiveThread, composerRootRef, composerSendKey,
     dictationPrimaryActionRef, draft, effectiveWorkspaceRoot, fileInputRef, fileMentions,
+    fileReferences,
     forkActiveThread, goalInputMode, goalPanelDraftObjective, handleComposerImagePaste,
     hideBtwCommand, highlightedSlashCommand, input, inputHistory, isComposerSendHotkey,
-    mode, onAddFileReference, onBtwCommand, onNewCommand, onOpenDesignReferencePicker,
+    mode, onAddFileReference, onBtwCommand, onGuideQueuedMessage, onNewCommand, onOpenDesignReferencePicker,
     onOpenFileReferencePicker, onOrchestrationChange, onPasteClipboardImage, onPasteLongText,
     onPickAttachments, onPickFileReferences, onPlanCommand, onReviewCommand, onSend,
     orchestration, parseBtwCommand, parseCompactCommand, parseGoalCommand, parseNewCommand,
     parseResearchCommand, parseReviewCommand, parsedGoalCommand, primaryActionDisabled,
+    queuedMessages,
     route, routeComposerFileDrop, runtimeReady, setActiveThreadGoal, setActiveThreadGoalStatus,
     setComposerMenuOpen, setGoalInputMode, setGoalPanelOpen, setInput, setMode,
     setPromptOptimizationBusy, setPromptOptimizationError, slashCommandMenu, slashCommands,
@@ -640,6 +654,7 @@ export function FloatingComposer({
     ...actionContext,
     ...composerActions,
     BackgroundShellOverlay, BarChart3, Bot, FileText, FloatingComposerAboveInputStack, FloatingComposerAgentPicker, FloatingComposerAttachments, FloatingComposerContextCapacity, FloatingComposerExecutionPicker,
+    FloatingComposerApprovalPanel,
     FloatingComposerFileMentionMenu, FloatingComposerGraphProgress, FloatingComposerModelPicker, FloatingComposerQueuedMessages, FloatingComposerSlashCommandMenu, FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker, FloatingComposerTodoProgress, FloatingComposerUsageHistory, FloatingComposerUserInputPanel,
     FloatingComposerActionMenu,
     Folder, GitBranchPicker, ImagePlus, ListTodo, Loader2, Mic, Monitor, Paperclip,
@@ -660,6 +675,7 @@ export function FloatingComposer({
     onGuideQueuedMessage, onInterrupt, onOpenGraph, onOpenGraphChild, onPickAttachments, onRemoveAttachment, onRemoveContextChip, onRemoveFileReference,
     onRemoveQueuedMessage, onToggleWorktreeMode, onWorktreeBranchChange, openSettings, orchestration, pendingUserInputBlock, placeholder, primaryActionDisabled,
     primaryActionLabel, primaryActionLoading, promptOptimizationBusy, promptOptimizationError, onDismissPromptOptimizationError, promptOptimizationSettings, queuedMessages,
+    pendingApprovals,
     route, runningGraphTurn, runtimeReady, setActiveThreadGoalStatus, setGoalInputMode, setGoalPanelOpen, setInput, showComposerMenuButton,
     showAutoPlanBuildMenuOption, showCodeExecutionControls, showExecutionSettingsPicker, showGoalFloater, showGoalMenuOption, showGraphMenuOption, showGraphProgress, showPlanMenuOption, showProviderInModelLabel, showTodoProgress, showToolbarStartControls, showUsageHistoryFooter,
     showVoiceDictation, showWorkspaceControls, side, slashCommandMenu, slashQuery, stretchModelPicker, t, threadUsage: displayThreadUsage, primaryActionKind,
