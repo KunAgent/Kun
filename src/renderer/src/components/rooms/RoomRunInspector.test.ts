@@ -9,8 +9,8 @@ import type {
 import i18n from '../../i18n'
 import { RoomRunInspector } from './RoomRunInspector'
 import { RoomMessageRunButton } from './RoomMessageRunButton'
-import { RoomRunItems } from './RoomRunItems'
 import { RoomRunList } from './RoomRunList'
+import { ConversationTurn } from '../chat/MessageTimeline'
 
 const api = vi.hoisted(() => ({
   request: vi.fn(),
@@ -112,7 +112,34 @@ describe('Rooms run inspector', () => {
     api.stop.mockReset().mockResolvedValue(true)
     api.event = null
     api.error = null
-    vi.stubGlobal('window', { kunGui: { startSse: vi.fn() }, setTimeout: () => 1 })
+    vi.stubGlobal('window', {
+      kunGui: { startSse: vi.fn() },
+      setTimeout: () => 1,
+      clearTimeout: () => undefined,
+      setInterval: () => 1,
+      clearInterval: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => true,
+      requestAnimationFrame: (fn: () => void) => {
+        fn()
+        return 1
+      },
+      cancelAnimationFrame: () => undefined,
+      matchMedia: () => ({
+        matches: false,
+        media: '',
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        addListener: () => undefined,
+        removeListener: () => undefined
+      }),
+      localStorage: {
+        getItem: () => null,
+        setItem: () => undefined,
+        removeItem: () => undefined
+      }
+    })
   })
   afterEach(() => {
     if (renderer) act(() => renderer!.unmount())
@@ -132,6 +159,14 @@ describe('Rooms run inspector', () => {
       .findAllByType('button')
       .find((value) => value.children.includes(text))!
   const texts = () => JSON.stringify(renderer!.toJSON())
+  const turnBlockIds = () =>
+    renderer!.root
+      .findAllByType(ConversationTurn)
+      .flatMap((node) =>
+        (node.props.turn as { blocks: Array<{ id: string }> }).blocks.map(
+          (block) => block.id
+        )
+      )
   const emit = async (kind: string, runId = 'run-a') => {
     const streamId = api.start.mock.calls.at(-1)![2]
     act(() =>
@@ -184,7 +219,7 @@ describe('Rooms run inspector', () => {
     expect(api.request.mock.calls.every((call) => call[1] === 'GET')).toBe(true)
   })
 
-  it('collapses and re-expands the process section without issuing writes', async () => {
+  it('folds the process stream by default and re-expands it via the work meta row', async () => {
     api.request.mockImplementation(async (path: string) =>
       path.endsWith('/items')
         ? page([
@@ -194,11 +229,17 @@ describe('Rooms run inspector', () => {
         : runDetail()
     )
     await render()
-    expect(texts()).toContain('thinking')
-    await act(async () => button('Collapse process').props.onClick())
-    expect(texts()).not.toContain('thinking')
-    await act(async () => button('Expand process').props.onClick())
-    expect(texts()).toContain('thinking')
+    expect(texts()).not.toContain('Thinking')
+    expect(texts()).toContain('final reply')
+    const metaRows = () =>
+      renderer!.root.findAllByProps({ 'data-work-meta-row': 'true' })
+    expect(metaRows()[0]!.props['aria-expanded']).toBe(false)
+    await act(async () => metaRows()[0]!.props.onClick())
+    expect(metaRows()[0]!.props['aria-expanded']).toBe(true)
+    expect(texts()).toContain('Thinking')
+    expect(turnBlockIds()).toEqual(expect.arrayContaining(['20', '30']))
+    await act(async () => metaRows()[0]!.props.onClick())
+    expect(texts()).not.toContain('Thinking')
     expect(api.request.mock.calls.every((call) => call[1] === 'GET')).toBe(true)
   })
 
@@ -278,14 +319,8 @@ describe('Rooms run inspector', () => {
     await emit('run.items_changed', 'different-run')
     expect(api.request).not.toHaveBeenCalled()
     await emit('run.items_changed')
-    expect(texts()).toContain('Earlier output')
-    expect(texts()).toContain('Updated response')
+    expect(turnBlockIds()).toEqual(['10', '20', '30'])
     expect(texts()).toContain('New output')
-    expect(
-      renderer!.root
-        .findByType(RoomRunItems)
-        .props.items.map((value: { id: string }) => value.id)
-    ).toEqual(['10', '20', '30'])
   })
 
   it('retains every missing interval when multiple live pages have no overlap with retained items', async () => {
@@ -301,11 +336,7 @@ describe('Rooms run inspector', () => {
     expect(button('Load missing process')).toBeDefined()
     api.request.mockResolvedValue(page([item('20'), item('30'), item('40')], 'older'))
     await act(async () => button('Load missing process').props.onClick())
-    expect(
-      renderer!.root
-        .findByType(RoomRunItems)
-        .props.items.map((value: { id: string }) => value.id)
-    ).toEqual(['20', '30', '40', '50', '60', '70', '80'])
+    expect(turnBlockIds()).toEqual(['20', '30', '40', '50', '60', '70', '80'])
     expect(button('Load missing process')).toBeUndefined()
   })
 
@@ -390,8 +421,21 @@ describe('Rooms run inspector', () => {
       path.endsWith('/items') ? page(items) : runDetail()
     )
     await render()
-    expect(texts()).toContain('Approval record')
-    expect(texts()).toContain('Choose target')
+    await act(async () =>
+      renderer!.root
+        .findAllByProps({ 'data-work-meta-row': 'true' })[0]!
+        .props.onClick()
+    )
+    expect(texts()).toContain('Run tests')
+    expect(
+      renderer!.root
+        .findAllByType(ConversationTurn)
+        .flatMap((node) =>
+          (node.props.turn as { blocks: Array<{ kind: string }> }).blocks.map(
+            (block) => block.kind
+          )
+        )
+    ).toEqual(expect.arrayContaining(['approval', 'user_input']))
     expect(texts()).not.toContain('Private context must be excluded')
     expect(button('Allow')).toBeUndefined()
     expect(button('Deny')).toBeUndefined()
@@ -399,7 +443,7 @@ describe('Rooms run inspector', () => {
     expect(renderer!.root.findAllByType('form')).toHaveLength(0)
   })
 
-  it('loads long recorded content only on request and follows bounded continuation offsets', async () => {
+  it('loads the full record for truncated preview items and patches it in place', async () => {
     api.request.mockImplementation(async (path: string) => {
       if (path.includes('item_id=20&content_offset=6')) {
         return { ...page([]), content: { itemId: '20', field: 'text', text: 'last', offset: 6, totalChars: 10 } }
@@ -408,11 +452,12 @@ describe('Rooms run inspector', () => {
         return { ...page([]), content: { itemId: '20', field: 'text', text: 'first ', offset: 0, nextOffset: 6, totalChars: 10 } }
       }
       if (path.endsWith('/items')) {
-        return page([item('20', 'long reasoning', { kind: 'assistant_reasoning' })])
+        return page([item('20', 'long answer\n... [timeline truncated]')])
       }
       return runDetail()
     })
     await render()
+    expect(texts()).toContain('timeline truncated')
     await act(async () => button('Read full recorded content').props.onClick())
     expect(api.request).toHaveBeenCalledWith(
       '/v1/rooms/room/runs/run-a/items?item_id=20&content_offset=0',
@@ -420,9 +465,15 @@ describe('Rooms run inspector', () => {
       undefined,
       expect.any(AbortSignal)
     )
-    await act(async () => button('Load more').props.onClick())
+    expect(api.request).toHaveBeenCalledWith(
+      '/v1/rooms/room/runs/run-a/items?item_id=20&content_offset=6',
+      'GET',
+      undefined,
+      expect.any(AbortSignal)
+    )
     expect(texts()).toContain('first last')
-    expect(button('Load more')).toBeUndefined()
+    expect(texts()).not.toContain('timeline truncated')
+    expect(button('Read full recorded content')).toBeUndefined()
   })
 
   it('uses originRunId directly and never guesses a historical run from member identity', async () => {

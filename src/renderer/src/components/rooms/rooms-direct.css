@@ -43,13 +43,13 @@
 .direct-progress { padding: 0 28px; max-height: 38vh; overflow-y: auto; flex-shrink: 0; font-size: 12px; color: var(--ds-text-muted); }
 .direct-progress-line, .direct-project { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
 .direct-progress-line button {
-  display: inline-flex; align-items: center; gap: 5px; margin-left: auto; flex-shrink: 0;
-  padding: 3px 10px; border: 1px solid var(--ds-border); border-radius: 999px;
-  background: var(--ds-surface-card); color: var(--ds-text-muted);
+  display: inline-flex; align-items: center; gap: 4px; margin-left: auto; flex-shrink: 0;
+  padding: 3px 7px; border-radius: 7px;
+  color: var(--ds-text-muted);
   font-size: 11px; line-height: 1.35; white-space: nowrap; text-decoration: none;
 }
 .direct-progress-line button:hover { background: var(--ds-surface-hover); color: var(--ds-text); }
-.direct-progress-line button.is-active { color: var(--ds-accent, #4f46e5); border-color: color-mix(in srgb, var(--ds-accent, #4f46e5) 45%, var(--ds-border)); }
+.direct-progress-line button.is-active { color: var(--ds-accent, #4f46e5); }
 .direct-progress-line button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
 .direct-failed {
   display: flex; flex-wrap: wrap; column-gap: 8px; row-gap: 8px; align-items: flex-start;
