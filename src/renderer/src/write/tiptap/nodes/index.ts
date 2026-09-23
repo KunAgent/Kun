@@ -5,6 +5,7 @@
  */
 import type { AnyExtension } from '@tiptap/core'
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
+import { mathEditorFor, WriteMathInput } from '../math-edit'
 import { WriteBlockId } from './write-block-id'
 import { RawMarkdownBlock } from './raw-markdown-block'
 import { Callout } from './callout'
@@ -41,7 +42,14 @@ export function buildWorkConstructExtensions(): AnyExtension[] {
     WikiLink,
     FootnoteReference,
     InlineHtml,
-    BlockMath,
-    InlineMath
+    BlockMath.configure({
+      katexOptions: { throwOnError: false },
+      onClick: (node, pos) => mathEditorFor(node, pos, 'block')
+    }),
+    InlineMath.configure({
+      katexOptions: { throwOnError: false },
+      onClick: (node, pos) => mathEditorFor(node, pos, 'inline')
+    }),
+    WriteMathInput
   ]
 }

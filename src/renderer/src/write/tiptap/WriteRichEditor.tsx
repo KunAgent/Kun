@@ -9,6 +9,7 @@ import {
 import { Editor, Extension, type AnyExtension } from '@tiptap/core'
 import { TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import 'katex/dist/katex.min.css'
 import type {
   WriteEditorSelectionState
 } from '../../components/write/WriteMarkdownEditor'
@@ -50,6 +51,8 @@ import { WriteRichTemplateShortcuts } from './extensions/template-shortcuts'
 import { SddRequirementBadges } from './extensions/sdd-requirement-badges'
 import { WriteDiffReview } from './review/review-plugin'
 import { WriteReviewSession } from './review/review-session'
+import { WriteWorkLinks } from './extensions/work-links'
+import { useWriteWorkspaceStore } from '../write-workspace-store'
 import { WriteDocumentReviewBar } from '../../components/write/WriteDocumentReviewBar'
 
 /**
@@ -341,6 +344,18 @@ export function WriteRichEditor({
           }
         }),
         WriteRichTermPropagation,
+        WriteWorkLinks.configure({
+          navigation: {
+            getFilePath: () => filePathRef.current,
+            getWorkspaceRoot: () => workspaceRootRef.current,
+            openFile: (path, heading) => {
+              // Heading/line positioning after open is a follow-up; the
+              // store action only accepts the path today.
+              void heading
+              void useWriteWorkspaceStore.getState().openFile(workspaceRootRef.current, path)
+            }
+          }
+        }),
         WriteRichTemplateShortcuts.configure({
           isReadOnly: () => readOnlyRef.current
         }),

@@ -1,0 +1,248 @@
+/* S3 content blocks ---------------------------------------------------- */
+
+.write-callout {
+  border-left: 3px solid var(--ds-border, #d4d4d8);
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--ds-card, #f4f4f5) 55%, transparent);
+}
+
+.write-callout-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.write-callout-icon {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.write-callout-icon:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+}
+
+.write-callout-title {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  outline: none;
+  padding: 0;
+}
+
+.write-callout[data-callout-tone='green'] { border-left-color: #16a34a; }
+.write-callout[data-callout-tone='yellow'] { border-left-color: #ca8a04; }
+.write-callout[data-callout-tone='red'] { border-left-color: #dc2626; }
+.write-callout[data-callout-tone='purple'] { border-left-color: #9333ea; }
+.write-callout[data-callout-tone='orange'] { border-left-color: #ea580c; }
+.write-callout[data-callout-tone='gray'] { border-left-color: #71717a; }
+
+.write-raw-block {
+  position: relative;
+  border: 1px dashed var(--ds-border, #d4d4d8);
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: text;
+}
+
+.write-raw-block.is-selected {
+  border-color: var(--ds-primary, #6fb0e8);
+}
+
+.write-raw-badge {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ds-text-secondary, #71717a);
+  background: var(--ds-card, #f4f4f5);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.write-raw-preview img { max-width: 100%; }
+.write-raw-editor { min-height: 80px; }
+.write-raw-editor .cm-editor { outline: none; }
+
+.work-wiki-link,
+.work-wiki-embed {
+  color: var(--ds-primary, #4f86c6);
+  text-decoration: none;
+  border-bottom: 1px dashed color-mix(in srgb, currentColor 50%, transparent);
+  cursor: pointer;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.work-wiki-embed {
+  border: 1px solid var(--ds-border, #d4d4d8);
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--ds-card, #f4f4f5);
+}
+
+.work-footnote-ref {
+  color: var(--ds-primary, #4f86c6);
+  font-size: 0.75em;
+  cursor: default;
+}
+
+.work-inline-html {
+  font-size: 0.8em;
+  color: var(--ds-text-secondary, #71717a);
+  background: var(--ds-card, #f4f4f5);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+.write-codeblock {
+  border: 1px solid var(--ds-border, #d4d4d8);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.write-codeblock-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--ds-card, #f4f4f5);
+  border-bottom: 1px solid var(--ds-border, #d4d4d8);
+}
+
+.write-codeblock-lang {
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  color: var(--ds-text-secondary, #71717a);
+  outline: none;
+  cursor: pointer;
+}
+
+.write-codeblock-copy {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  color: var(--ds-text-secondary, #71717a);
+  cursor: pointer;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.write-codeblock-copy:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+}
+
+.write-codeblock pre {
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.write-codeblock.is-mermaid:not(.is-editing-code) pre,
+.write-codeblock.is-mermaid:not(.is-editing-code) .write-codeblock-header {
+  display: none;
+}
+
+.write-codeblock-mermaid:empty {
+  display: none;
+}
+
+.write-codeblock-mermaid {
+  padding: 8px;
+  text-align: center;
+  overflow-x: auto;
+}
+
+.write-codeblock-mermaid.is-error {
+  color: #dc2626;
+  font-size: 12px;
+  text-align: left;
+}
+
+.write-math-overlay,
+.write-link-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+}
+
+.write-math-editor,
+.write-link-bubble {
+  position: absolute;
+  min-width: 260px;
+  max-width: 480px;
+  background: var(--ds-card, #fff);
+  border: 1px solid var(--ds-border, #d4d4d8);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.write-math-input {
+  width: 100%;
+  border: 1px solid var(--ds-border, #d4d4d8);
+  border-radius: 6px;
+  background: var(--ds-background, #fff);
+  color: var(--ds-text, inherit);
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  padding: 6px 8px;
+  resize: vertical;
+  outline: none;
+}
+
+.write-math-preview {
+  min-height: 28px;
+  padding: 4px 6px;
+  overflow-x: auto;
+}
+
+.write-math-preview.is-error {
+  color: #dc2626;
+  font-size: 12px;
+}
+
+.write-link-bubble {
+  flex-direction: row;
+  align-items: center;
+}
+
+.write-link-input {
+  flex: 1;
+  min-width: 160px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.write-link-button {
+  border: none;
+  background: transparent;
+  color: var(--ds-text-secondary, #71717a);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+.write-link-button:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+}

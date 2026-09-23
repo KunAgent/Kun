@@ -117,6 +117,9 @@ export const Callout = TiptapNode.create({
   defining: true,
   selectable: true,
   draggable: true,
+  // Above StarterKit so the callout keyboard rules run before
+  // `liftEmptyBlock`/`splitBlock` would pull the caret out of the node.
+  priority: 200,
 
   addAttributes() {
     return {
@@ -151,5 +154,39 @@ export const Callout = TiptapNode.create({
   addNodeView() {
     return ({ node, editor, getPos }) =>
       createCalloutNodeView(node, editor, getPos as () => number | undefined)
+  },
+
+  addKeyboardShortcuts() {
+    const calloutDepth = ($from: { depth: number; node: (d: number) => PmNode }): number => {
+      for (let d = $from.depth; d > 0; d -= 1) {
+        if ($from.node(d).type.name === 'callout') return d
+      }
+      return -1
+    }
+    return {
+      // Enter splits the textblock inside the callout — it never lifts the
+      // caret out of the block (implementation §7.4).
+      Enter: () => {
+        const { $from } = this.editor.state.selection
+        if (calloutDepth($from) < 0) return false
+        return this.editor.commands.splitBlock()
+      },
+      // Backspace at the start of an empty first paragraph lifts the
+      // callout's content out into the parent.
+      Backspace: () => {
+        const { state } = this.editor
+        const { $from, empty } = state.selection
+        if (!empty || $from.parentOffset !== 0) return false
+        const depth = calloutDepth($from)
+        if (depth < 0) return false
+        if ($from.index(depth) !== 0) return false
+        if ($from.parent.type.name !== 'paragraph' || $from.parent.content.size !== 0) return false
+        const callout = $from.node(depth)
+        const pos = $from.before(depth)
+        const tr = state.tr.replaceWith(pos, pos + callout.nodeSize, callout.content)
+        this.editor.view.dispatch(tr.scrollIntoView())
+        return true
+      }
+    }
   }
 })

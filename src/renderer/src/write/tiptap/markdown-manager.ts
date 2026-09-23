@@ -10,9 +10,12 @@ import { TableKit } from '@tiptap/extension-table'
 import { OrderedList, TaskItem, TaskList } from '@tiptap/extension-list'
 import { CodeBlock, tildeInputRegex } from '@tiptap/extension-code-block'
 import { Plugin, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
+import { createHighlightPlugin } from 'prosemirror-highlight'
 import { WriteLocalImage } from './local-image'
 import { findUnsupportedConstructs } from './markdown-construct-gate'
 import { buildWorkConstructExtensions } from './nodes'
+import { createCodeBlockNodeView } from './nodes/code-block-view'
+import { codeHighlightParser } from './code-highlight'
 
 export type WriteRichFidelity =
   | { eligible: true; normalized: string }
@@ -105,17 +108,33 @@ export const WriteCodeBlock = CodeBlock.extend({
     return [fence + language, code, fence].join('\n')
   },
 
+  addNodeView() {
+    return ({ node, editor, getPos }) =>
+      createCodeBlockNodeView(node, editor, getPos as () => number | undefined)
+  },
+
   addProseMirrorPlugins() {
-    return [...(this.parent?.() ?? []), new Plugin({
-      props: {
-        handleTextInput: (view, from, to, text) => {
-          const tr = closeWriteRichCodeFence(view.state, from, to, text)
-          if (!tr) return false
-          view.dispatch(tr)
-          return true
+    return [
+      ...(this.parent?.() ?? []),
+      new Plugin({
+        props: {
+          handleTextInput: (view, from, to, text) => {
+            const tr = closeWriteRichCodeFence(view.state, from, to, text)
+            if (!tr) return false
+            view.dispatch(tr)
+            return true
+          }
         }
-      }
-    })]
+      }),
+      createHighlightPlugin({
+        parser: codeHighlightParser,
+        nodeTypes: ['codeBlock'],
+        languageExtractor: (node) => {
+          const language = typeof node.attrs.language === 'string' ? node.attrs.language : ''
+          return language || undefined
+        }
+      })
+    ]
   }
 })
 
