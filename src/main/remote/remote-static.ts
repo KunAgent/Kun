@@ -204,10 +204,14 @@ export function serveRemoteIndex(
 
 let cachedBridgeSource: { path: string; source: string } | null = null
 
+const REMOTE_BRIDGE_CLIPBOARD_NAME = 'remote-bridge-clipboard.js'
+
 /**
  * The Remote bridge script served to browsers. The source file ships inside
  * the renderer bundle (public/); the bootstrap JSON is prepended per host so
  * platform/homeDir/appEnvironment match the desktop preload constants.
+ * The clipboard helper is served ahead of the bridge so the bridge file
+ * itself stays under the tracked-file line limit.
  */
 export function remoteBridgeScript(
   bridgePath: string,
@@ -222,8 +226,14 @@ export function remoteBridgeScript(
   } catch {
     return null
   }
+  let clipboardSource = ''
+  try {
+    clipboardSource = readFileSync(resolve(bridgePath, '..', REMOTE_BRIDGE_CLIPBOARD_NAME), 'utf8')
+  } catch {
+    // Optional helper; the bridge degrades gracefully without it.
+  }
   const bootstrapJson = JSON.stringify(bootstrap ?? {}).replace(/</g, '\\u003c')
-  return `globalThis.__KUN_REMOTE_BOOTSTRAP__=${bootstrapJson};\n${cachedBridgeSource.source}`
+  return `globalThis.__KUN_REMOTE_BOOTSTRAP__=${bootstrapJson};\n${clipboardSource}${cachedBridgeSource.source}`
 }
 
 export const REMOTE_LOGIN_HTML = `<!doctype html>
