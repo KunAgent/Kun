@@ -68,7 +68,9 @@ describe('Service Manager Runtime active-work discovery', () => {
 
   it('keeps a live but unresponsive Runtime as a non-interruptible external writer', async () => {
     const current = manager()
-    const live = registration(process.pid)
+    // The record must not predate the real process start, otherwise the
+    // PID-reuse guard treats the live process as a different owner.
+    const live = { ...registration(process.pid), startedAt: new Date().toISOString() }
     const fetchMock = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
       const target = String(url)
       if (target === `${current.discovery.baseUrl}/v1/runtimes/production`) {
