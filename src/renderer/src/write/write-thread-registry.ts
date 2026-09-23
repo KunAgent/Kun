@@ -23,7 +23,7 @@ export type WriteThreadRegistry = {
 type WriteThreadCandidate = Pick<NormalizedThread, 'id' | 'workspace'> &
   Partial<Pick<NormalizedThread, 'title' | 'updatedAt' | 'archived' | 'agentSurface'>>
 
-const WRITE_THREAD_REGISTRY_KEY = 'kun.write.threadRegistry.v1'
+export const WRITE_THREAD_REGISTRY_KEY = 'kun.write.threadRegistry.v1'
 
 export function emptyWriteThreadRegistry(): WriteThreadRegistry {
   return { version: 1, workspaces: {} }

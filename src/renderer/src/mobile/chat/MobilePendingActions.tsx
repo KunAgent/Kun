@@ -29,10 +29,10 @@ export function MobilePendingActions({ blocks, resolveApproval, resolveUserInput
   if (input) return <MobileUserInput input={input} resolve={resolveUserInput} />
   if (!approval) return null
   const disabled = approval.status === 'submitting'
-  return <section className="kun-mobile-approval" aria-label={t('approvalRequired')}>
-    <strong>{approval.toolName || t('approvalRequired')}</strong>
+  return <section className="kun-mobile-approval" aria-label={t('approvalTitle')}>
+    <strong>{approval.toolName || t('approvalTitle')}</strong>
     <p>{approval.summary}</p>
-    <div><button type="button" disabled={disabled} onClick={() => void resolveApproval(approval.id, 'deny')}>{t('deny')}</button>
-      <button type="button" disabled={disabled} onClick={() => void resolveApproval(approval.id, 'allow')}>{t('allow')}</button></div>
+    <div><button type="button" disabled={disabled} onClick={() => void resolveApproval(approval.id, 'deny')}>{t('approvalDeny')}</button>
+      <button type="button" disabled={disabled} onClick={() => void resolveApproval(approval.id, 'allow')}>{t('approvalAllow')}</button></div>
   </section>
 }

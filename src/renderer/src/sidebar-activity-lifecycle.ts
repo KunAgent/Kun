@@ -2,6 +2,7 @@ import { KUN_THREAD_ACTIVITY_EVENTS_PATH } from '@shared/kun-endpoints'
 import { rendererRuntimeClient } from './agent/runtime-client'
 import type { ChatState } from './store/chat-store-types'
 import { recordSidebarActivityDuration, recordSidebarActivityMetric } from './sidebar-activity-metrics'
+import { shouldParkWhenHidden, waitForPageVisible } from './lib/page-visibility'
 
 type ActivityChange = {
   threadId: string
@@ -65,6 +66,15 @@ export function installSidebarActivityLifecycle(store: StoreLike): () => void {
   }
   const observe = async (): Promise<void> => {
     while (!disposed && !observerAbort.signal.aborted) {
+      // A hidden Remote page (phone lock screen, background tab) must not
+      // keep the long-poll hot — unless work is still running, matching the
+      // legacy scan's hasActiveWork semantics. Desktop Electron never parks:
+      // minimized windows must keep background-completion notifications
+      // alive. The first un-parked iteration requests immediately.
+      if (shouldParkWhenHidden() && !hasActiveWork()) {
+        await waitForPageVisible(observerAbort.signal)
+        continue
+      }
       try {
         const query = new URLSearchParams({ wait_ms: '25000' })
         if (cursor) query.set('cursor', cursor)

@@ -72,6 +72,8 @@ export type ThreadListOptions = {
   summary?: boolean
   cursor?: string
   workspace?: string
+  /** Extra workspace roots matched alongside `workspace` (e.g. project worktrees). */
+  workspaces?: string[]
   lean?: boolean
 }
 

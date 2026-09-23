@@ -18,10 +18,10 @@ export function MobileRoomPendingActions({ room, onUpdated }: { room: Room; onUp
   return <div className="kun-mobile-room-gates">
     {inputs.slice(0, 1).map((input) => <MobileRoomUserInput key={input.id} input={input} onUpdated={refresh} />)}
     {approvals.length ? <button type="button" className="kun-mobile-input-trigger" onClick={() => setApprovalsOpen(true)}>
-      {t('approvalRequired')} · {approvals.length}
+      {t('approvalTitle')} · {approvals.length}
     </button> : null}
     {direct.error ? <p role="alert">{direct.error}</p> : null}
-    <MobileSheet open={approvalsOpen && approvals.length > 0} title={t('approvalRequired')}
+    <MobileSheet open={approvalsOpen && approvals.length > 0} title={t('approvalTitle')}
       closeLabel={t('mobileInputCollapse')} onClose={() => setApprovalsOpen(false)}>
       {approvals.map((approval) => <RoomApprovalCard key={approval.id} approval={approval} onUpdated={refresh} />)}
     </MobileSheet>

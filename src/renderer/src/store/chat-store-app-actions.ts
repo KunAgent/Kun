@@ -375,7 +375,11 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       if (typeof window.kunGui === 'undefined') return
       const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
       const removedRegistry = readRemovedCodeWorkspaces()
-      const workspaceRoot = effectiveCodeWorkspaceRoot(settings.workspaceRoot, removedRegistry)
+      // A renderer-local selection (Remote mobile, persist: false) survives a
+      // settings reload — the host's workspaceRoot must not snap it back.
+      const workspaceRoot = get().workspaceRootLocal
+        ? normalizeWorkspaceRoot(get().workspaceRoot)
+        : effectiveCodeWorkspaceRoot(settings.workspaceRoot, removedRegistry)
       applyTheme(settings.theme)
       applyUiFontScale(settings.uiFontScale)
       applyChatContentMaxWidth(settings.chatContentMaxWidthPx)

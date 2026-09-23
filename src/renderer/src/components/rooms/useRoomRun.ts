@@ -8,6 +8,7 @@ import type {
 import type { CoreTurnItemJson } from '../../agent/kun-contract'
 import { mergeRoomRunCursors } from '@shared/room-run-cursor'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
+import { registerRemoteStreamResubscriber } from '../../lib/remote-stream-resubscribers'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
 
 export function mergeRunItems(
@@ -156,13 +157,37 @@ export function useRoomRun(roomId: string, runId: string, active = true) {
         timer = setTimeout(() => void refresh(), 250)
       }
     })
+    const restartStream = (): void => {
+      // The remote hub dropped this stream's registration (sender reset) or
+      // backlog (buffer overflow) — rebuild it and refetch the run snapshot.
+      if (controller.signal.aborted) return
+      setStreamError('')
+      refreshDetail = true
+      refreshItems = true
+      void rendererRuntimeClient
+        .startSse(runId, 0, streamId, {
+          scope: 'room-run',
+          roomId,
+          runId,
+          cursor: cursor.current
+        })
+        .then(() => refresh())
+        .catch((cause) => {
+          if (!controller.signal.aborted) setStreamError(String(cause))
+        })
+    }
     const failed = rendererRuntimeClient.onSseError((payload) => {
-      if (payload.streamId === streamId)
-        setStreamError(payload.message ?? 'Run updates disconnected')
+      if (payload.streamId !== streamId) return
+      if (payload.code === 'remote_buffer_overflow' || payload.code === 'remote_client_expired') {
+        restartStream()
+        return
+      }
+      setStreamError(payload.message ?? 'Run updates disconnected')
     })
     const opened = rendererRuntimeClient.onSseOpen((payload) => {
       if (payload.streamId === streamId) setStreamError('')
     })
+    const offResubscribe = registerRemoteStreamResubscriber(restartStream)
     void rendererRuntimeClient
       .startSse(runId, 0, streamId, {
         scope: 'room-run',
@@ -179,6 +204,7 @@ export function useRoomRun(roomId: string, runId: string, active = true) {
       off()
       failed()
       opened()
+      offResubscribe()
       void rendererRuntimeClient.stopSse(streamId).catch(() => undefined)
     }
   }, [active, read, ready, revision, roomId, runId])

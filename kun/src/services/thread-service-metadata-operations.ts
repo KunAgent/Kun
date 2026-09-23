@@ -90,8 +90,12 @@ async list(this: ThreadService, options: ListThreadsOptions = {}): Promise<Threa
     if (!options.includeSide) {
       threads = threads.filter((thread) => (thread.relation ?? 'primary') !== 'side')
     }
-    if (options.workspace) {
-      threads = threads.filter((thread) => thread.workspace === options.workspace)
+    const workspaceSet = new Set(
+      [options.workspace, ...(options.workspaces ?? [])]
+        .filter((value): value is string => Boolean(value))
+    )
+    if (workspaceSet.size > 0) {
+      threads = threads.filter((thread) => workspaceSet.has(thread.workspace))
     }
     if (query) {
       threads = threads.filter((thread) => matchesThreadSearch(thread, query))
@@ -119,6 +123,7 @@ async listPage(this: ThreadService, options: ListThreadsOptions = {}): Promise<T
       cursor: undefined,
       search: undefined,
       workspace: undefined,
+      workspaces: undefined,
       includeArchived: true,
       archivedOnly: false,
       includeSide: true

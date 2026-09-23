@@ -3,6 +3,8 @@ import type { ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import { getProvider } from '../agent/registry'
 import { filterThreadsForSidebar } from '../lib/thread-sidebar-visibility'
 import { normalizeWorkspaceRoot, workspaceRootIdentityKey } from '../lib/workspace-path'
+import { worktreePathsForProject } from '../lib/worktree-project-path'
+import { readThreadWorktreeRegistry } from '../lib/thread-worktree-registry'
 
 /** Project-scoped pagination for the sidebar. Global inventory cursors are never reused here. */
 export const THREAD_LIST_FIRST_PAGE_SIZE = 100
@@ -87,8 +89,16 @@ export function loadMoreThreads(
   const workspaceKey = workspaceRootIdentityKey(normalizedWorkspace)
   if (!workspaceKey) return Promise.resolve()
   const mode = threadPageMode(get().showArchivedThreads)
-  const scope = get().threadListCursorByWorkspace[workspaceKey]
-  if (!scope || scope.mode !== mode || scope.status === 'complete') return Promise.resolve()
+  // A workspace discovered after the last global refresh (e.g. a project
+  // selected on a remote mobile client) has no scope entry yet; treat it as an
+  // unseen first page instead of dropping the request.
+  const scope = get().threadListCursorByWorkspace[workspaceKey] ?? {
+    workspaceKey,
+    mode,
+    status: 'unknown' as const,
+    hasMore: true
+  }
+  if (scope.mode !== mode || scope.status === 'complete') return Promise.resolve()
 
   let requests = paginationRequests.get(get)
   if (!requests) {
@@ -112,10 +122,19 @@ export function loadMoreThreads(
         setPageComplete(set, workspaceKey, scope)
         return
       }
+      // Threads created inside a project worktree keep the worktree path as
+      // their durable workspace; extend the server-side filter with the
+      // project's registered worktree roots so those conversations still
+      // appear under the owning project.
+      const workspaces = worktreePathsForProject(
+        normalizedWorkspace,
+        readThreadWorktreeRegistry().worktrees
+      )
       const page = await provider.listThreadsPage({
         ...(scope.nextCursor ? { cursor: scope.nextCursor } : {}),
         limit: THREAD_LIST_PAGE_SIZE,
         workspace: normalizedWorkspace,
+        ...(workspaces.length ? { workspaces } : {}),
         ...(mode === 'archived' ? { archivedOnly: true } : {}),
         includeSide: false,
         lean: true

@@ -8,6 +8,7 @@ import {
   rememberTurnModel,
   toWriteTurnContext
 } from './chat-store-helpers'
+import { currentCodeWorkspaceRoot } from './chat-store-current-workspace'
 import { rememberPendingClawFeishuMirror } from './chat-store-runtime-notifications'
 import { ensureRuntimeProviderForSend } from './chat-store-thread-action-helpers'
 import { startWorkspaceCheckpointSnapshot } from './chat-store-thread-send-checkpoint'
@@ -197,7 +198,7 @@ export async function drainBackgroundQueuedMessage(
         settings,
         threads: state.threads,
         activeThreadId: threadId,
-        fallbackWorkspaceRoot: settings.workspaceRoot
+        fallbackWorkspaceRoot: currentCodeWorkspaceRoot(state, settings)
       })
       next = {
         ...next,

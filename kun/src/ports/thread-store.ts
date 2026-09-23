@@ -19,6 +19,12 @@ export type ThreadStoreListOptions = {
   cursor?: string
   /** Filter by workspace root path. */
   workspace?: string
+  /**
+   * Extra workspace roots matched alongside `workspace` (e.g. worktrees owned
+   * by the project). A thread matches when its workspace equals any listed
+   * root.
+   */
+  workspaces?: string[]
 }
 
 /**

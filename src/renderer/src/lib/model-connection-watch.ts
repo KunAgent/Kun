@@ -8,6 +8,7 @@ import {
   parseSharedModelConnections,
   type SharedModelConnectionsSnapshot
 } from '../components/settings-section-providers-shared-api'
+import { shouldParkWhenHidden, waitForPageVisible } from './page-visibility'
 
 export const MODEL_CONNECTION_WATCH_WAIT_MS = 25_000
 export const MODEL_CONNECTION_WATCH_INITIAL_RETRY_MS = 2_000
@@ -90,6 +91,13 @@ async function runLoop(generation: number): Promise<void> {
     abort = controller
     let failed = false
     try {
+      // Only Remote Web pages park the long-poll while hidden; a minimized
+      // desktop window keeps watching so provider changes still land.
+      if (shouldParkWhenHidden()) {
+        await waitForPageVisible(controller.signal)
+        if (controller.signal.aborted || generation !== loopGeneration) return
+        continue
+      }
       const snapshot = revision === 0
         ? await fetchSnapshot(controller.signal)
         : await fetchEvent(revision, controller.signal)

@@ -69,7 +69,8 @@ export const ThreadStoreListOptionsSchema: z.ZodType<ThreadStoreListOptions> = z
   archivedOnly: z.boolean().optional(),
   includeSide: z.boolean().optional(),
   cursor: z.string().min(1).optional(),
-  workspace: z.string().optional()
+  workspace: z.string().optional(),
+  workspaces: z.array(z.string()).max(64).optional()
 }).strict()
 
 export function finishedTurnStatus(status: string): FinishedTurnStatus | null {

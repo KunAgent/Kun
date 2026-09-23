@@ -21,6 +21,7 @@ import {
   readBrowserStorageItem,
   writeBrowserStorageItem
 } from '../../lib/browser-storage'
+import { registerRemoteStreamResubscriber } from '../../lib/remote-stream-resubscribers'
 
 type Event = {
   seq: number
@@ -167,12 +168,25 @@ export function useRoomEvents() {
     const opened = rendererRuntimeClient.onSseOpen((payload) => {
       if (payload.streamId === streamId) live = true
     })
+    const restartStream = (): void => {
+      // The remote hub dropped this stream's registration (sender reset) or
+      // backlog (buffer overflow). Rebuild it now rather than waiting out the
+      // fallback poll interval.
+      if (stopped) return
+      live = false
+      void initialize().catch(() => undefined)
+    }
     const failed = rendererRuntimeClient.onSseError((payload) => {
-      if (payload.streamId === streamId) live = false
+      if (payload.streamId !== streamId) return
+      live = false
+      if (payload.code === 'remote_buffer_overflow' || payload.code === 'remote_client_expired') {
+        restartStream()
+      }
     })
     const ended = rendererRuntimeClient.onSseEnd((payload) => {
       if (payload.streamId === streamId) live = false
     })
+    const offResubscribe = registerRemoteStreamResubscriber(restartStream)
     const initialize = async () => {
       const metadata = await roomsRequest<{ cursor: number; scopeId?: string }>('/v1/rooms/events?latest=true')
       if (stopped) return
@@ -229,6 +243,7 @@ export function useRoomEvents() {
       opened()
       failed()
       ended()
+      offResubscribe()
       void rendererRuntimeClient.stopSse(streamId)
     }
   }, [])

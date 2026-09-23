@@ -39,6 +39,30 @@ const STRICT_RESOURCE_FILES = new Set([
   'src/renderer/src/extensions/ControlledContributionSurfaces.tsx'
 ])
 
+// The Remote mobile UI must never render raw keys on a phone, so every file
+// under mobile/ is held to the strict resource contract automatically.
+const STRICT_RESOURCE_PREFIXES = ['src/renderer/src/mobile/']
+const MOBILE_RESOURCE_PREFIX = 'src/renderer/src/mobile/'
+
+// Desktop-feature key families the mobile UI must not borrow — a wording
+// change there would silently retitle a phone control. Mobile labels live in
+// the dedicated mobile* keys instead. Rooms feature keys stay shared: the
+// mobile rooms screens are part of that feature.
+const MOBILE_FORBIDDEN_KEY_PREFIXES = [
+  'projectBoard', 'workflow', 'browser', 'designMode',
+  'generatedDocument', 'composerReview'
+]
+const MOBILE_FORBIDDEN_KEYS = new Set(['roomsContentRetry'])
+
+function isStrictResourceFile(file: string): boolean {
+  return STRICT_RESOURCE_FILES.has(file) ||
+    STRICT_RESOURCE_PREFIXES.some((prefix) => file.startsWith(prefix))
+}
+
+function isMobileFile(file: string): boolean {
+  return file.startsWith(MOBILE_RESOURCE_PREFIX)
+}
+
 const resourceKeys = {
   common: flattenKeys(enCommon as LocaleTree),
   settings: flattenKeys(enSettings as LocaleTree)
@@ -98,8 +122,15 @@ function inspectFile(file: string): string[] {
         (ts.isIdentifier(expression) && expression.text === 't') ||
         (ts.isPropertyAccessExpression(expression) && expression.name.text === 't')
       if (isTranslationCall) {
-        const rawKey = stringLiteral(node.arguments[0])
-        if (rawKey) {
+        const argument = node.arguments[0]
+        // t(cond ? 'a' : 'b') switches between two literal keys — check both.
+        const rawKeys = [
+          stringLiteral(argument),
+          ...(argument && ts.isConditionalExpression(argument)
+            ? [stringLiteral(argument.whenTrue), stringLiteral(argument.whenFalse)]
+            : [])
+        ].filter((value): value is string => value !== null)
+        for (const rawKey of rawKeys) {
           const separator = rawKey.indexOf(':')
           const explicitNamespace = separator > 0 ? rawKey.slice(0, separator) : null
           const key = explicitNamespace ? rawKey.slice(separator + 1) : rawKey
@@ -108,10 +139,17 @@ function inspectFile(file: string): string[] {
           } else {
             const namespace = explicitNamespace ?? 'common'
             if (
-              STRICT_RESOURCE_FILES.has(file) &&
+              isStrictResourceFile(file) &&
               !resourceKeys[namespace as keyof typeof resourceKeys].has(key)
             ) {
               report(node, `uses missing English resource "${namespace}:${key}"`)
+            }
+            if (
+              isMobileFile(file) &&
+              (MOBILE_FORBIDDEN_KEY_PREFIXES.some((prefix) => key.startsWith(prefix)) ||
+                MOBILE_FORBIDDEN_KEYS.has(key))
+            ) {
+              report(node, `borrows desktop feature key "${namespace}:${key}" — use a mobile* key`)
             }
           }
         }

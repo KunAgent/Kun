@@ -675,10 +675,12 @@ function parseListThreadsOptions(
       response: validationError('invalid list threads query', parsed.error.issues)
     }
   }
-  const includeSide = (parsed.data.include ?? '')
-    .split(',')
-    .map((value) => value.trim().toLowerCase())
+  const includeSide = (parsed.data.include ?? '').split(',').map((value) => value.trim().toLowerCase())
     .includes('side')
+  // Repeated workspaces params are trimmed and capped; an absent/empty list
+  // omits the option entirely rather than serializing workspaces: [].
+  const workspaces = url.searchParams.getAll('workspaces').map((value) => value.trim())
+    .filter(Boolean).slice(0, 64)
   return {
     ok: true,
     options: {
@@ -689,6 +691,7 @@ function parseListThreadsOptions(
       includeSide,
       cursor: parsed.data.cursor,
       workspace: parsed.data.workspace,
+      ...(workspaces.length > 0 ? { workspaces } : {}),
       lean: parsed.data.lean === true
     }
   }

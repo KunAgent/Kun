@@ -1,6 +1,11 @@
+import type { ClawImChannelV1 } from '@shared/app-settings'
 import type { NormalizedThread } from '../../agent/types'
 import type { SddDraftHistoryItem } from '../../sdd/sdd-draft-history'
 import { isEmptySddAssistantThreadCandidate } from '../../sdd/sdd-thread-registry'
+import type { WriteThreadRegistry } from '../../write/write-thread-registry'
+import type { DesignThreadRegistry } from '../../design/design-thread-registry'
+import type { SddThreadRegistry } from '../../sdd/sdd-thread-registry'
+import { isCodeThread } from '../../store/chat-store-runtime-projection-support'
 import {
   isClawWorkspacePath,
   isConversationWorkspacePath,
@@ -493,6 +498,90 @@ export function sortSidebarThreads(threads: NormalizedThread[]): NormalizedThrea
     if (b.pinned === true && a.pinned !== true) return 1
     return Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
   })
+}
+
+/**
+ * Threads that belong to one sidebar project, applying the same Code-surface
+ * classification and worktree ownership rules as the desktop sidebar. Shared
+ * by the desktop groups and the Remote mobile project view so both agree on
+ * which conversations live under a project.
+ */
+export function selectCodeProjectThreads(options: {
+  threads: readonly NormalizedThread[]
+  projectRoot: string
+  workspaceRoots?: readonly string[]
+  threadWorktrees?: SidebarThreadWorktrees
+  clawChannels?: ClawImChannelV1[]
+  writeRegistry?: WriteThreadRegistry
+  designRegistry?: DesignThreadRegistry
+  sddRegistry?: SddThreadRegistry
+}): NormalizedThread[] {
+  const worktrees = options.threadWorktrees ?? {}
+  const candidateProjectPaths = sidebarWorkspaceResolutionCandidates({
+    workspaceRoot: options.projectRoot,
+    workspaceRoots: [...(options.workspaceRoots ?? [])],
+    threadWorktrees: worktrees,
+    threads: [...options.threads]
+  })
+  const resolvedProject = sidebarWorkspacePathForRememberedRoot(
+    options.projectRoot,
+    worktrees,
+    candidateProjectPaths
+  ) || normalizeWorkspaceRoot(options.projectRoot)
+  const projectKey = workspaceRootIdentityKey(resolvedProject)
+  if (!projectKey) return []
+  return options.threads.filter((thread) =>
+    isCodeThread(
+      thread,
+      options.clawChannels ?? [],
+      options.writeRegistry,
+      options.designRegistry,
+      options.sddRegistry
+    ) &&
+    workspaceRootIdentityKey(
+      sidebarWorkspacePathForThread(thread, worktrees, candidateProjectPaths)
+    ) === projectKey
+  )
+}
+
+/**
+ * Project rows for the mobile Code home: the same project set the desktop
+ * sidebar would show (worktree owners folded into their project, removed and
+ * internal workspaces hidden), reduced to display paths.
+ */
+export function selectCodeProjectRoots(options: {
+  threads: readonly NormalizedThread[]
+  workspaceRoot: string
+  workspaceRoots: readonly string[]
+  conversationRoot: string
+  threadWorktrees?: SidebarThreadWorktrees
+  removedProjectKeys?: ReadonlySet<string>
+  clawChannels?: ClawImChannelV1[]
+  writeRegistry?: WriteThreadRegistry
+  designRegistry?: DesignThreadRegistry
+  sddRegistry?: SddThreadRegistry
+}): string[] {
+  // Only Code-surface threads contribute a project: a Write/Design-only
+  // workspace must not appear in the mobile Code picker.
+  const codeThreads = options.threads.filter((thread) =>
+    isCodeThread(
+      thread,
+      options.clawChannels ?? [],
+      options.writeRegistry,
+      options.designRegistry,
+      options.sddRegistry
+    )
+  )
+  return buildSidebarWorkspaceGroups({
+    threads: codeThreads,
+    searchQuery: '',
+    showArchived: false,
+    workspaceRoot: options.workspaceRoot,
+    workspaceRoots: [...options.workspaceRoots],
+    conversationRoot: options.conversationRoot,
+    threadWorktrees: options.threadWorktrees,
+    removedProjectKeys: options.removedProjectKeys
+  }).map(([workspacePath]) => workspacePath)
 }
 
 export function sddDraftHistoryForWorkspace(

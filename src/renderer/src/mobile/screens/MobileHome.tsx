@@ -57,7 +57,13 @@ export function MobileHome({
         <input type="search" value={search} onChange={(event) => onSearch(event.target.value)}
           aria-label={labels.search} placeholder={labels.search} />
       </label>
-      <div className="kun-mobile-home-list" aria-busy={loading}>
+      <div className="kun-mobile-home-list" aria-busy={loading}
+        onScroll={(event) => {
+          const el = event.currentTarget
+          if (hasMore && !loading && el.scrollTop + el.clientHeight >= el.scrollHeight - 40) {
+            onLoadMore()
+          }
+        }}>
         {error ? <div role="alert" className="kun-mobile-home-state">
           <p>{error}</p><button type="button" disabled={loading} onClick={onRetry}>{labels.retry}</button>
         </div> : null}

@@ -297,6 +297,9 @@ export type ChatState = {
   initialSetupOpen: boolean
   initialSetupMode: InitialSetupMode
   workspaceRoot: string
+  /** True while `workspaceRoot` is a renderer-local (`persist: false`) pick —
+   *  host `settings.workspaceRoot` must not overwrite it. */
+  workspaceRootLocal: boolean
   workspaceLabel: string
   /** 对话会话的工作目录根(默认 ~/Documents/Kun),供侧边栏对话区块和项目保护使用。 */
   conversationWorkspaceRoot: string
@@ -530,8 +533,20 @@ export type ChatState = {
   closeInitialSetup: () => void
   boot: () => Promise<void>
   probeRuntime: (mode?: 'user' | 'background', options?: { restart?: boolean }) => Promise<void>
-  chooseWorkspace: (options?: { createThreadAfter?: boolean; selectThreadAfter?: boolean }) => Promise<string | null>
-  selectWorkspaceRoot: (workspaceRoot: string) => Promise<string | null>
+  chooseWorkspace: (options?: {
+    createThreadAfter?: boolean
+    selectThreadAfter?: boolean
+    /**
+     * `false` keeps the selection renderer-local (no `settings.workspaceRoot`
+     * write). Remote/mobile clients use this so browsing a project on a phone
+     * never moves the desktop host's current project.
+     */
+    persist?: boolean
+  }) => Promise<string | null>
+  selectWorkspaceRoot: (workspaceRoot: string, options?: {
+    /** See `chooseWorkspace` — `false` skips the host settings write. */
+    persist?: boolean
+  }) => Promise<string | null>
   clearWorkspace: () => Promise<void>
   /**
    * Remove a sidebar project from the Code project list. Keeps threads,

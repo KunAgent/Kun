@@ -13,8 +13,8 @@ import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 export const DESIGN_ASSISTANT_THREAD_TITLE = 'Design Assistant'
 const MAX_DESIGN_THREAD_IDS_PER_WORKSPACE = 20
 const MAX_DESIGN_REGISTRY_WORKSPACES = 80
-const DESIGN_THREAD_REGISTRY_KEY = 'kun.design.threadRegistry.v1'
-const LEGACY_DESIGN_ASSISTANT_THREAD_REGISTRY_KEY = 'kun.design-assistant.threadRegistry.v1'
+export const DESIGN_THREAD_REGISTRY_KEY = 'kun.design.threadRegistry.v1'
+export const LEGACY_DESIGN_ASSISTANT_THREAD_REGISTRY_KEY = 'kun.design-assistant.threadRegistry.v1'
 
 export type DesignThreadWorkspaceRecord = {
   activeThreadId: string

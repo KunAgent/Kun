@@ -522,3 +522,104 @@ describe('HybridThreadStore event high-water buffering', () => {
     }
   })
 })
+
+describe('HybridThreadStore multi-workspace listing', () => {
+  async function seedWorkspaces(store: HybridThreadStore): Promise<void> {
+    const records: ThreadRecord[] = []
+    for (const workspace of ['/repo', '/wt-a', '/other']) {
+      for (let index = 0; index < 30; index += 1) {
+        records.push(createThreadRecord({
+          id: `thr-${workspace.slice(1)}-${index}`,
+          title: `Session ${index} ${workspace}`,
+          workspace,
+          model: 'test-model'
+        }))
+      }
+    }
+    await Promise.all(records.map((record) => store.upsert(record)))
+  }
+
+  it('pages a combined workspace + workspaces query through the SQLite IN branch', async () => {
+    const { store } = await createStore()
+    try {
+      await seedWorkspaces(store)
+      const first = await store.listPage({
+        workspace: '/repo',
+        workspaces: ['/wt-a'],
+        includeArchived: true,
+        limit: 25
+      })
+      expect(first).toMatchObject({ total: 60, hasMore: true })
+      expect(first.threads).toHaveLength(25)
+      expect(first.nextCursor).toEqual(expect.any(String))
+
+      const second = await store.listPage({
+        workspace: '/repo',
+        workspaces: ['/wt-a'],
+        includeArchived: true,
+        limit: 25,
+        cursor: first.nextCursor
+      })
+      expect(second.threads).toHaveLength(25)
+      expect(second.hasMore).toBe(true)
+
+      const third = await store.listPage({
+        workspace: '/repo',
+        workspaces: ['/wt-a'],
+        includeArchived: true,
+        limit: 25,
+        cursor: second.nextCursor
+      })
+      expect(third.threads).toHaveLength(10)
+      expect(third.hasMore).toBe(false)
+
+      const ids = [...first.threads, ...second.threads, ...third.threads]
+        .map((thread) => thread.id)
+      expect(new Set(ids).size).toBe(60)
+      const workspaces = new Set(
+        [...first.threads, ...second.threads, ...third.threads]
+          .map((thread) => thread.workspace)
+      )
+      expect(workspaces).toEqual(new Set(['/repo', '/wt-a']))
+    } finally {
+      store.close()
+    }
+  })
+
+  it('still filters a single workspace through the equality branch', async () => {
+    const { store } = await createStore()
+    try {
+      await seedWorkspaces(store)
+      const page = await store.listPage({
+        workspace: '/wt-a',
+        includeArchived: true,
+        limit: 100
+      })
+      expect(page.total).toBe(30)
+      expect(page.threads.every((thread) => thread.workspace === '/wt-a')).toBe(true)
+    } finally {
+      store.close()
+    }
+  })
+
+  it('combines workspaces IN with the search LIKE filter', async () => {
+    const { store } = await createStore()
+    try {
+      await seedWorkspaces(store)
+      const page = await store.listPage({
+        workspace: '/repo',
+        workspaces: ['/wt-a'],
+        search: 'session 7 ',
+        includeArchived: true,
+        limit: 100
+      })
+      // 'Session 7 /repo' and 'Session 7 /wt-a' only — /other never matches
+      // the workspace predicate regardless of the title match.
+      expect(page.total).toBe(2)
+      expect(page.threads.map((thread) => thread.workspace).sort())
+        .toEqual(['/repo', '/wt-a'])
+    } finally {
+      store.close()
+    }
+  })
+})

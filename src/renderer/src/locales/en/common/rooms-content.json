@@ -1,4 +1,5 @@
 {
+  "roomsContent": "Content",
   "roomsContentUnavailable": "Content is unavailable or no longer belongs to this bot.",
   "roomsContentRetry": "Retry",
   "roomsContentVersion": "Pinned version",

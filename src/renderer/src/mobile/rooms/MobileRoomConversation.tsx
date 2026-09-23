@@ -59,7 +59,7 @@ export function MobileRoomConversation(props: MobileRoomConversationProps) {
       <button type="button" aria-label={t('back')} onClick={props.onBack}><ArrowLeft aria-hidden /></button>
       <div><h1>{room?.name ?? t('roomsLoading')}</h1>
         <p>{room?.conversationKind === 'user_agent' ? t('agentsConversation_user_agent') : room?.members.length ?? ''}</p></div>
-      {props.onDetails ? <button type="button" aria-label={t('more')} onClick={props.onDetails}><MoreHorizontal aria-hidden /></button> : <span aria-hidden />}
+      {props.onDetails ? <button type="button" aria-label={t('mobileMore')} onClick={props.onDetails}><MoreHorizontal aria-hidden /></button> : <span aria-hidden />}
     </header>
     {state.error ? <p className="kun-mobile-room-error" role="alert">{state.error}</p> : null}
     {state.loading || !room ? <p className="kun-mobile-room-loading" role="status">{t('roomsLoading')}</p> : <>

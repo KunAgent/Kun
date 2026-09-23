@@ -21,6 +21,7 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     initialSetupOpen: protectedSurfaceRestore === 'initial-setup',
     initialSetupMode: 'required' as const,
     workspaceRoot: '',
+    workspaceRootLocal: false,
     conversationWorkspaceRoot: defaultConversationWorkspaceRoot(),
     workspaceLabel: workingDirectoryLabel,
     runtimeConnection: 'idle' as const,

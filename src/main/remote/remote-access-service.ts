@@ -452,7 +452,8 @@ export class RemoteAccessService {
   }
 
   private handleEvents(req: IncomingMessage, res: ServerResponse): void {
-    const clientId = new URL(req.url ?? '/', 'http://remote.local').searchParams.get('client') ?? ''
+    const params = new URL(req.url ?? '/', 'http://remote.local').searchParams
+    const clientId = params.get('client') ?? ''
     if (!clientId || clientId.length > 128) {
       sendRemoteJson(res, 400, { error: 'Missing Remote client id' })
       return
@@ -462,7 +463,8 @@ export class RemoteAccessService {
     startSseHeartbeat(res)
     this.hub.attachStream(clientId, res, {
       remoteAddress: remoteAddressOf(req),
-      userAgent: String(req.headers['user-agent'] ?? '')
+      userAgent: String(req.headers['user-agent'] ?? ''),
+      resume: params.get('resume') === '1'
     })
     this.emitStatus()
   }

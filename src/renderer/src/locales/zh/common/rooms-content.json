@@ -1,4 +1,5 @@
 {
+  "roomsContent": "内容",
   "roomsContentUnavailable": "内容不可用，或已不属于此 bot。",
   "roomsContentRetry": "重试",
   "roomsContentVersion": "固定版本",

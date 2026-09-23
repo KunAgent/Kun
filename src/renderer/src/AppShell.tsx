@@ -14,6 +14,7 @@ import { DataMigrationActivityIndicator } from './components/DataMigrationActivi
 import { SpeakDownloadToast } from './components/SpeakDownloadToast'
 import { useRoomEvents } from './components/rooms/useRoomEvents'
 import { useRemoteSurface } from './mobile/use-remote-surface'
+import { useRemoteReconnectRecovery } from './use-remote-reconnect-recovery'
 import {
   clearCurrentlyVisibleUnreadCompletions,
   persistUnreadCompletions,
@@ -94,6 +95,7 @@ function RouteFallback(): React.ReactElement {
 
 export default function AppShell(): React.ReactElement {
   useRoomEvents()
+  useRemoteReconnectRecovery()
   const route = useChatStore((s) => s.route)
   const surface = useRemoteSurface()
   const initialSetupOpen = useChatStore((s) => s.initialSetupOpen)

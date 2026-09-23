@@ -1,4 +1,5 @@
 {
+  "writeFileNotFound": "该文件已不可用。",
   "writeConversationFileTrigger": "文件会话",
   "writeConversationWhiteboardTrigger": "白板会话",
   "writeConversationFileTitle": "当前文件的会话历史",

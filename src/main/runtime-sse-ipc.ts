@@ -7,12 +7,14 @@ import { sseAckPayloadSchema, sseStartPayloadSchema, streamIdSchema } from './ip
 import type { JsonSettingsStore } from './settings-store'
 import { getRuntimeBaseUrlForSettings, runtimeAuthHeaders } from './runtime/kun-adapter'
 import { SseAckWindow } from './runtime/sse-ack-window'
+import { isRemoteClientSender } from './remote/remote-sender'
 
 type SseControllerState = {
   controller: AbortController
   owner: WebContents
   stoppedByClient: boolean
   ackWindow: SseAckWindow
+  threadId: string
 }
 
 const SSE_RECONNECT_BASE_MS = 750
@@ -44,6 +46,36 @@ function observeSseOwner(owner: WebContents): void {
   }
   ;(owner as WebContents & { once?: (event: 'destroyed', listener: () => void) => void })
     .once?.('destroyed', onDestroyed)
+  if (isRemoteClientSender(owner)) {
+    // A remote sender expires when the browser's EventSource has been gone
+    // past the idle grace. 'remote:will-destroy' fires while send() still
+    // works, so push a terminal error per owned stream into the client buffer
+    // — the next attached EventSource delivers it and the renderer can
+    // resubscribe instead of waiting on a dead stream.
+    owner.once('remote:will-destroy', () => {
+      for (const [streamId, state] of sseControllers) {
+        if (state.owner !== owner) continue
+        sendSseMessage(owner, 'runtime:sse-error', {
+          streamId,
+          code: 'remote_client_expired',
+          threadId: state.threadId
+        })
+      }
+    })
+    // The remote event hub dropped this stream's buffered frames when its
+    // backlog overflowed. The renderer will resubscribe via the buffered
+    // remote_buffer_overflow terminal; stop the upstream subscription here so
+    // a dead stream cannot keep reading forever.
+    owner.on('remote:streams-overflowed', (streamIds: unknown) => {
+      if (!Array.isArray(streamIds)) return
+      for (const streamId of streamIds) {
+        const state = sseControllers.get(streamId)
+        if (!state || state.owner !== owner) continue
+        stopSseState(state)
+        sseControllers.delete(streamId)
+      }
+    })
+  }
 }
 
 function sendSseMessage(wc: WebContents, channel: string, payload: unknown): boolean {
@@ -221,7 +253,8 @@ export function registerRuntimeSseIpc(options: {
       controller: ac,
       owner: wc,
       stoppedByClient: false,
-      ackWindow: undefined as unknown as SseAckWindow
+      ackWindow: undefined as unknown as SseAckWindow,
+      threadId: request.threadId
     }
     state.ackWindow = new SseAckWindow(undefined, undefined, Date.now, (batchId) => {
       // A single unacknowledged batch is fatal even when the window is not

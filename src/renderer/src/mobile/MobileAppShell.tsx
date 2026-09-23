@@ -55,7 +55,7 @@ function MobileRoomsRoot({ navigate }: { navigate: ReturnType<typeof useMobileNa
     unreadOnly: filter === 'unread', attentionOnly: filter === 'attention' })
   return <MobileRoomsHome rooms={rooms.entries} search={search} filter={filter}
     loading={rooms.busy} error={rooms.error} hasMore={Boolean(rooms.nextCursor)}
-    labels={{ title: t('roomsLabel'), search: t('roomsUnifiedSearch'), create: t('roomsNewChat'), more: t('more'),
+    labels={{ title: t('roomsLabel'), search: t('roomsUnifiedSearch'), create: t('newChat'), more: t('mobileMore'),
       empty: t('roomsEmpty'), loading: t('roomsLoading'), retry: t('roomsRefresh'), loadMore: t('roomsLoadMore'),
       all: t('roomsFilter_all'), unread: t('roomsFilter_unread'), attention: t('roomsFilter_attention') }}
     onSearch={setSearch} onFilter={setFilter}
@@ -81,7 +81,7 @@ export function MobileAppShell(): ReactElement {
     route: state.route, threads: state.threads, search: state.threadSearch,
     cursors: state.threadListCursorByWorkspace,
     loading: state.threadListStatus === 'loading' || state.threadListStatus === 'refreshing',
-    error: state.threadListStatus === 'error' ? state.threadListError ?? state.error ?? t('unknownError') : null,
+    error: state.threadListStatus === 'error' ? state.threadListError ?? state.error ?? t('appErrorTitle') : null,
     workspaceRoot: state.workspaceRoot, setSearch: state.setThreadSearch,
     refresh: state.refreshThreads, loadMore: state.loadMoreThreads,
     selectThread: state.selectThread, createConversation: state.createConversation,
@@ -187,9 +187,7 @@ export function MobileAppShell(): ReactElement {
       onOpen={(roomId) => navigate({ mode: 'rooms', kind: 'room', roomId })} />
   } else if (page.mode === 'code' && page.kind === 'conversation') {
     content = <MobileCodeConversation threadId={page.threadId}
-      onBack={() => navigate({ mode: 'code', kind: 'home' })}
-      onDetails={() => chat.setRoute('settings')}
-      onSettings={() => chat.setRoute('settings')} />
+      onBack={() => navigate({ mode: 'code', kind: 'home' })} />
   } else if (page.mode === 'rooms' && page.kind === 'room-settings') {
     content = <MobileRoomSettings roomId={page.roomId}
       onBack={() => navigate({ mode: 'rooms', kind: 'room', roomId: page.roomId })} />
@@ -223,8 +221,8 @@ export function MobileAppShell(): ReactElement {
   } else if (page.mode === 'work') {
     content = <MobileWorkHome workspaceLabel={basename(work.workspaceRoot) || t('writeWorkspace')}
       resources={workResources} search={workSearch} loading={work.settingsLoading} error={work.error}
-      labels={{ title: t('workspaceModeWorkLabel'), search: t('search'), create: t('new'), more: t('more'),
-        empty: t('writeEmptyTitle'), loading: t('loading'), retry: t('retry') }}
+      labels={{ title: t('workspaceModeWorkLabel'), search: t('mobileSearch'), create: t('newChat'), more: t('mobileMore'),
+        empty: t('writeEmptyTitle'), loading: t('loading'), retry: t('mobileRetry') }}
       onWorkspace={null} onSearch={setWorkSearch}
       onOpen={(resource) => {
         const path = Object.values(work.entriesByDir).flat().find((entry) =>

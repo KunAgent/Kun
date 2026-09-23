@@ -45,6 +45,7 @@ import {
   type KunThreadMode
 } from '@shared/kun-endpoints'
 import { parseRuntimeErrorBody, runtimeErrorToError, type RuntimeError } from '@shared/runtime-error'
+import type { SseErrorCode } from '@shared/kun-gui-sse-contracts'
 import {
   workspaceDirectoryExists,
   workspaceMissingError
@@ -110,7 +111,7 @@ export class KunSseSubscriptionError extends Error {
   constructor(
     message: string,
     readonly status?: number,
-    readonly code?: 'replay_reset_required' | 'renderer_ack_timeout',
+    readonly code?: SseErrorCode,
     readonly threadId?: string,
     readonly floorSeq?: number
   ) {

@@ -1,6 +1,7 @@
 /*
  * Kun Remote bridge. Served by the Remote gateway to browser clients; the
- * gateway prepends __KUN_REMOTE_BOOTSTRAP__ with host constants. Inside the
+ * gateway prepends __KUN_REMOTE_BOOTSTRAP__ with host constants and the
+ * remote-bridge-transport.js / remote-bridge-browser.js helpers. Inside the
  * Electron app the real preload already installed window.kunGui, so this file
  * is a no-op there.
  */
@@ -9,101 +10,20 @@
   if (window.kunGui) return
 
   var BOOT = window.__KUN_REMOTE_BOOTSTRAP__ || {}
-  var CLIENT_ID_KEY = 'kun-remote-client-id'
-
-  function remoteClientId() {
-    try {
-      var existing = window.sessionStorage.getItem(CLIENT_ID_KEY)
-      if (existing) return existing
-      var generated = window.crypto && window.crypto.randomUUID
-        ? window.crypto.randomUUID()
-        : 'client-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
-      window.sessionStorage.setItem(CLIENT_ID_KEY, generated)
-      return generated
-    } catch {
-      return 'client-' + Date.now().toString(36)
-    }
-  }
-
-  var clientId = remoteClientId()
-  var eventHandlers = new Map()
-  var eventSource = null
-
-  function dispatchEvent(channel, payload) {
-    var handlers = eventHandlers.get(channel)
-    if (!handlers) return
-    handlers.slice().forEach(function (handler) {
-      try {
-        handler(payload)
-      } catch (error) {
-        setTimeout(function () { throw error }, 0)
-      }
-    })
-  }
-
-  function ensureEventStream() {
-    if (eventSource) return
-    eventSource = new EventSource('/remote/events?client=' + encodeURIComponent(clientId))
-    eventSource.addEventListener('kun-ipc', function (event) {
-      try {
-        var frame = JSON.parse(event.data)
-        if (frame && typeof frame.channel === 'string') dispatchEvent(frame.channel, frame.payload)
-      } catch { /* best-effort */ }
-    })
-  }
-
-  function on(channel) {
-    return function (handler) {
-      if (typeof handler !== 'function') return function () {}
-      ensureEventStream()
-      var handlers = eventHandlers.get(channel)
-      if (!handlers) {
-        handlers = []
-        eventHandlers.set(channel, handlers)
-      }
-      handlers.push(handler)
-      return function () {
-        var index = handlers.indexOf(handler)
-        if (index >= 0) handlers.splice(index, 1)
-      }
-    }
-  }
-
-  function invoke(channel, args) {
-    return fetch('/remote/invoke', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: {
-        'content-type': 'application/json',
-        'x-kun-remote-request': '1',
-        'x-kun-remote-client': clientId
-      },
-      body: JSON.stringify({ channel: channel, args: args || [] })
-    }).then(function (response) {
-      if (response.status === 401) {
-        window.location.href = '/remote/login'
-        return new Promise(function () {})
-      }
-      return response.json().then(function (body) {
-        if (!body || body.ok !== true) {
-          throw new Error(body && body.error ? body.error : 'Remote invoke failed: ' + channel)
-        }
-        return body.result
-      })
-    })
-  }
-
-  function invokeRaw(channel) {
-    return function () {
-      return invoke(channel, Array.prototype.slice.call(arguments))
-    }
-  }
-
-  function invokePayload(channel) {
-    return function (payload) {
-      return invoke(channel, [payload])
-    }
-  }
+  // Transport + browser helpers ship as sibling files; the Remote gateway
+  // concatenates them ahead of this file. When this file is served alone
+  // (desktop bundle, plain Vite preview) the bridge stays uninstalled.
+  if (typeof window.__kunRemoteCreateTransport !== 'function') return
+  var transport = window.__kunRemoteCreateTransport()
+  var clientId = transport.clientId
+  var ensureEventStream = transport.ensureEventStream
+  var invoke = transport.invoke
+  var invokeRaw = transport.invokeRaw
+  var invokePayload = transport.invokePayload
+  var on = transport.on
+  var browser = window.__kunRemoteBrowser || {}
+  var bufferToBase64 = browser.bufferToBase64
+  var pickFilesWithBrowser = browser.pickFilesWithBrowser
 
   function normalizeStartupState(payload) {
     if (payload && typeof payload === 'object' && typeof payload.phase === 'string') {
@@ -119,16 +39,6 @@
     return function () {
       return Promise.reject(new Error('kunGui.' + name + ' is not available in Remote web mode'))
     }
-  }
-
-  function bufferToBase64(buffer) {
-    var bytes = new Uint8Array(buffer)
-    var out = ''
-    var chunk = 0x8000
-    for (var offset = 0; offset < bytes.length; offset += chunk) {
-      out += String.fromCharCode.apply(null, bytes.subarray(offset, offset + chunk))
-    }
-    return btoa(out)
   }
 
   var clipboardImageBridge = window.__kunRemoteBridgeClipboard
@@ -156,34 +66,6 @@
           return body.path
         })
       })
-    })
-  }
-
-  function pickFilesWithBrowser(multiple) {
-    return new Promise(function (resolve) {
-      var input = document.createElement('input')
-      input.type = 'file'
-      input.multiple = multiple !== false
-      input.style.display = 'none'
-      var settled = false
-      function finish(files) {
-        if (settled) return
-        settled = true
-        input.remove()
-        resolve(files)
-      }
-      input.addEventListener('change', function () {
-        finish(Array.prototype.slice.call(input.files || []))
-      })
-      // No reliable cancel event across browsers; blur+focus fallback.
-      window.addEventListener('focus', function onFocus() {
-        window.removeEventListener('focus', onFocus)
-        setTimeout(function () {
-          if (!settled && !(input.files && input.files.length)) finish([])
-        }, 300)
-      })
-      document.body.appendChild(input)
-      input.click()
     })
   }
 
@@ -270,6 +152,13 @@
     onSseEvent: on('runtime:sse-event'),
     onSseEnd: on('runtime:sse-end'),
     onSseError: on('runtime:sse-error'),
+    // Synthetic local event: fires when the client event stream re-opens
+    // after a drop so the renderer can reconcile its subscriptions.
+    onRemoteStreamReconnected: on('remote:stream-reconnected'),
+    // Server-sent: the hub recreated (or lost) this client's sender, so every
+    // stream registration made through the old sender is gone and must be
+    // resubscribed.
+    onRemoteSenderReset: on('remote:sender-reset'),
     onRuntimeStatus: on('runtime:status'),
     onAppQuitting: on('app:quitting'),
     onClawChannelActivity: on('claw:channel-activity'),

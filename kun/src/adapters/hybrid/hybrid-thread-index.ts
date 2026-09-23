@@ -47,7 +47,14 @@ export class HybridThreadIndexRepository {
     if (options.archivedOnly) { where.push('status = @archivedStatus'); params.archivedStatus = 'archived' }
     else if (!options.includeArchived) where.push("status NOT IN ('archived', 'deleted')")
     if (!options.includeSide) where.push("relation != 'side'")
-    if (options.workspace) { where.push('workspace = @workspace'); params.workspace = options.workspace }
+    const workspaces = [options.workspace, ...(options.workspaces ?? [])].filter((value): value is string => Boolean(value))
+    if (workspaces.length === 1) { where.push('workspace = @workspace'); params.workspace = workspaces[0] }
+    else if (workspaces.length > 1) {
+      // better-sqlite3 cannot bind an array into IN (...): each workspace
+      // root must be bound as its own named parameter.
+      where.push(`workspace IN (${workspaces.map((_, index) => `@workspace${index}`).join(', ')})`)
+      workspaces.forEach((workspace, index) => { params[`workspace${index}`] = workspace })
+    }
     const search = options.search?.trim().toLowerCase()
     if (search) { where.push("search_text LIKE @search ESCAPE '\\'"); params.search = `%${escapeLike(search)}%` }
     return { where, params }

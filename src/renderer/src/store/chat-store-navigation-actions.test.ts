@@ -262,6 +262,29 @@ describe('chat-store navigation workspace selection', () => {
     // The default thread is preserved in the listing, just not active.
     expect(harness.selectThread).not.toHaveBeenCalled()
     expect(harness.createThread).not.toHaveBeenCalled()
+    // A persisted selection is not renderer-local.
+    expect(harness.state.workspaceRootLocal).toBe(false)
+  })
+
+  it('selectWorkspaceRoot with persist: false marks the root renderer-local without writing settings', async () => {
+    const setSettings = vi.fn(async (patch: { workspaceRoot?: string }) => ({
+      workspaceRoot: patch.workspaceRoot ?? ''
+    }))
+    vi.stubGlobal('window', { kunGui: { setSettings } })
+    const harness = buildHarness()
+
+    await expect(harness.actions.selectWorkspaceRoot('/remote/picked', { persist: false }))
+      .resolves.toBe('/remote/picked')
+
+    expect(setSettings).not.toHaveBeenCalled()
+    expect(harness.state.workspaceRoot).toBe('/remote/picked')
+    expect(harness.state.workspaceRootLocal).toBe(true)
+
+    // A later persisted pick clears the local marker again.
+    await expect(harness.actions.selectWorkspaceRoot('/host/confirmed'))
+      .resolves.toBe('/host/confirmed')
+    expect(setSettings).toHaveBeenCalledWith({ workspaceRoot: '/host/confirmed' })
+    expect(harness.state.workspaceRootLocal).toBe(false)
   })
 
   it('selectWorkspaceRoot ignores an empty path', async () => {

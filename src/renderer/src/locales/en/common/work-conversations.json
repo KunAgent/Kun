@@ -1,4 +1,5 @@
 {
+  "writeFileNotFound": "This file is no longer available.",
   "writeConversationFileTrigger": "File conversations",
   "writeConversationWhiteboardTrigger": "Whiteboard conversations",
   "writeConversationFileTitle": "Conversations for this file",

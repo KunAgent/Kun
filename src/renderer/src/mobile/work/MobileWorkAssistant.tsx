@@ -58,7 +58,7 @@ export function MobileWorkAssistant({ expectedThreadId, onSettings }: {
       canSend={!pendingInput && Boolean(input.trim())} error={assistant.error}
       pendingActions={threadReady ? <MobilePendingActions blocks={state.blocks} resolveApproval={state.resolveApproval}
         resolveUserInput={state.resolveUserInput} /> : null}
-      labels={{ placeholder: t(pendingInput ? 'mobileInputComposerHint' : 'composerPlaceholder'), send: t('send'), stop: t('stop'),
-        attachments: t('attachments'), options: state.composerModel || t('auto') }} />
+      labels={{ placeholder: t(pendingInput ? 'mobileInputComposerHint' : 'mobileComposerPlaceholder'), send: t('send'), stop: t('interrupt'),
+        attachments: t('toolAttachments'), options: state.composerModel || t('autoLabel') }} />
   </section>
 }

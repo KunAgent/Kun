@@ -25,7 +25,7 @@ export type ThreadWorktreeRegistry = {
 
 export const MAX_THREAD_WORKTREE_REGISTRY_ENTRIES = 500
 
-const THREAD_WORKTREE_REGISTRY_KEY = 'kun.threadWorktrees.v1'
+export const THREAD_WORKTREE_REGISTRY_KEY = 'kun.threadWorktrees.v1'
 
 export function emptyThreadWorktreeRegistry(): ThreadWorktreeRegistry {
   return { version: 1, worktrees: {} }

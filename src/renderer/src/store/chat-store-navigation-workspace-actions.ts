@@ -180,7 +180,7 @@ export function createNavigationWorkspaceActions(
   let latestIndexStatus: import('../agent/provider-types').ThreadIndexStatusInfo | undefined
   return {
   loadMoreThreads: (workspacePath) => loadMoreThreadsAction(workspacePath, set, get),
-  chooseWorkspace: async ({ createThreadAfter = false, selectThreadAfter = true } = {}) => {
+  chooseWorkspace: async ({ createThreadAfter = false, selectThreadAfter = true, persist = true } = {}) => {
     try {
       const wasWriteRoute = get().route === 'write'
       if (typeof window.kunGui === 'undefined' || typeof window.kunGui.pickWorkspaceDirectory !== 'function') {
@@ -202,22 +202,25 @@ export function createNavigationWorkspaceActions(
         set({ error: i18n.t('common:workspaceInsideConversationDir') })
         return null
       }
-      const next = await rendererRuntimeClient.setSettings({ workspaceRoot: picked.path })
-      const workspaceRoot = normalizeWorkspaceRoot(next.workspaceRoot)
+      // Remote/mobile callers pass persist: false so browsing a project on a
+      // phone never rewrites the host's current workspaceRoot setting.
+      const next = persist
+        ? await rendererRuntimeClient.setSettings({ workspaceRoot: picked.path })
+        : null
+      const workspaceRoot = normalizeWorkspaceRoot(next?.workspaceRoot ?? picked.path)
       // Re-picking a previously removed directory is an explicit re-add: clear
       // the hidden marker so the retained history reappears with this project.
+      const removedCodeWorkspaces = removedRegistryAfterRestore(workspaceRoot, get().removedCodeWorkspaces)
       const codeWorkspaceRoots = rememberRootForRestore(
-        codeRootsAfterRemoval(get().codeWorkspaceRoots, removedRegistryAfterRestore(
-          workspaceRoot,
-          get().removedCodeWorkspaces
-        )),
+        codeRootsAfterRemoval(get().codeWorkspaceRoots, removedCodeWorkspaces),
         workspaceRoot
       )
 
       set({
         workspaceRoot,
+        workspaceRootLocal: !persist,
         codeWorkspaceRoots,
-        removedCodeWorkspaces: removedRegistryAfterRestore(workspaceRoot, get().removedCodeWorkspaces),
+        removedCodeWorkspaces,
         workspaceLabel: workspaceLabelFromPath(workspaceRoot),
         error: null
       })
@@ -255,7 +258,7 @@ export function createNavigationWorkspaceActions(
   // picker). Persists the choice and lands on a clean new-conversation state for
   // that directory — typing then starts a fresh thread there. This backs the
   // workspace picker shown beneath the composer.
-  selectWorkspaceRoot: async (workspaceRoot) => {
+  selectWorkspaceRoot: async (workspaceRoot, options) => {
     const normalized = normalizeWorkspaceRoot(workspaceRoot)
     if (!normalized) return null
     if (get().runtimeConnection !== 'ready') {
@@ -273,8 +276,12 @@ export function createNavigationWorkspaceActions(
       return normalized
     }
     try {
-      const next = await rendererRuntimeClient.setSettings({ workspaceRoot: normalized })
-      const persisted = normalizeWorkspaceRoot(next.workspaceRoot) || normalized
+      // persist: false keeps the switch renderer-local; Remote mobile browsing
+      // must not move the desktop host's current project.
+      const next = options?.persist === false
+        ? null
+        : await rendererRuntimeClient.setSettings({ workspaceRoot: normalized })
+      const persisted = normalizeWorkspaceRoot(next?.workspaceRoot ?? '') || normalized
       sseAbortRef.current?.abort()
       sseAbortRef.current = null
       clearBusyWatchdog()
@@ -285,6 +292,7 @@ export function createNavigationWorkspaceActions(
         ...clearedThreadSelection(),
         route: 'chat',
         workspaceRoot: persisted,
+        workspaceRootLocal: options?.persist === false,
         workspaceLabel: workspaceLabelFromPath(persisted),
         removedCodeWorkspaces: restoredRegistry,
         codeWorkspaceRoots: rememberRootForRestore(
@@ -309,6 +317,7 @@ export function createNavigationWorkspaceActions(
       const next = await rendererRuntimeClient.setSettings({ workspaceRoot: '' })
       set({
         workspaceRoot: normalizeWorkspaceRoot(next.workspaceRoot),
+        workspaceRootLocal: false,
         codeWorkspaceRoots: get().codeWorkspaceRoots,
         workspaceLabel: workspaceLabelFromPath(''),
         error: null

@@ -37,6 +37,10 @@ export class RemoteClientSender extends EventEmitter {
 
   destroy(): void {
     if (this.destroyed) return
+    // 'remote:will-destroy' fires while send() still works so subscribers can
+    // flush terminal frames (e.g. runtime:sse-error) into the client's buffer
+    // before the destroyed flag blocks further sends.
+    this.emit('remote:will-destroy')
     this.destroyed = true
     this.emit('destroyed')
     this.removeAllListeners()

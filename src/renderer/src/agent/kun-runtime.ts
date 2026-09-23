@@ -283,7 +283,16 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       workspace: options.workspace,
       lean: options.lean === true ? '1' : undefined
     })
-    const response = await rendererRuntimeClient.runtimeRequest(`/v1/threads${query}`, 'GET')
+    // Repeatable `workspaces` params carry the project's worktree roots; each
+    // root must keep its own encoded value (paths can contain commas).
+    const extra = (options.workspaces ?? [])
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .slice(0, 64)
+      .map((value) => `workspaces=${encodeURIComponent(value)}`)
+      .join('&')
+    const suffix = extra ? `${query ? '&' : '?'}${extra}` : ''
+    const response = await rendererRuntimeClient.runtimeRequest(`/v1/threads${query}${suffix}`, 'GET')
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to list threads'))
     }

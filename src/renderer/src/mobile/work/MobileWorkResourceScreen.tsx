@@ -96,8 +96,8 @@ export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView, on
   const effectiveView = supportedViews.includes(view) ? view : board ? 'whiteboard' : 'read'
 
   return <MobileWorkResource title={title} statusLabel={status} view={effectiveView}
-    labels={{ read: t('preview'), edit: t('edit'), assistant: t('writeAssistantTitle'),
-      review: t('review'), whiteboard: t('whiteboard'), back: t('back'), more: t('more') }}
+    labels={{ read: t('mobilePreview'), edit: t('mobileEdit'), assistant: t('writeAssistant'),
+      review: t('mobileReview'), whiteboard: t('mobileWhiteboard'), back: t('back'), more: t('mobileMore') }}
     supportedViews={supportedViews} onBack={onBack} onMenu={null} onView={onView}
     content={effectiveView === 'assistant'
       ? <MobileWorkAssistant expectedThreadId={expectedAssistantThreadId} onSettings={onSettings} />

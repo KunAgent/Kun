@@ -1,5 +1,5 @@
 import { createReadStream, existsSync, statSync, readFileSync } from 'node:fs'
-import { extname, normalize, resolve, sep } from 'node:path'
+import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import { createGzip } from 'node:zlib'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
@@ -204,10 +204,13 @@ export function serveRemoteIndex(
 
 let cachedBridgeSource: { path: string; source: string } | null = null
 
+// Helper files concatenated ahead of the bridge installer; they expose the
+// transport factory and browser helpers the bridge API is built on.
+const REMOTE_BRIDGE_PARTS = ['remote-bridge-transport.js', 'remote-bridge-browser.js']
 const REMOTE_BRIDGE_CLIPBOARD_NAME = 'remote-bridge-clipboard.js'
 
 /**
- * The Remote bridge script served to browsers. The source file ships inside
+ * The Remote bridge script served to browsers. The source files ship inside
  * the renderer bundle (public/); the bootstrap JSON is prepended per host so
  * platform/homeDir/appEnvironment match the desktop preload constants.
  * The clipboard helper is served ahead of the bridge so the bridge file
@@ -220,8 +223,10 @@ export function remoteBridgeScript(
 ): string | null {
   try {
     if (noCache || !cachedBridgeSource || cachedBridgeSource.path !== bridgePath) {
-      const source = readFileSync(bridgePath, 'utf8')
-      cachedBridgeSource = { path: bridgePath, source }
+      const directory = dirname(bridgePath)
+      const parts = REMOTE_BRIDGE_PARTS.map((part) => readFileSync(join(directory, part), 'utf8'))
+      parts.push(readFileSync(bridgePath, 'utf8'))
+      cachedBridgeSource = { path: bridgePath, source: parts.join('\n') }
     }
   } catch {
     return null

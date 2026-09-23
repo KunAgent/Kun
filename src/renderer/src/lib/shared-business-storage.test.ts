@@ -431,4 +431,43 @@ describe('shared business storage synchronization', () => {
     expect(storage.getItem(REMOVED_CODE_WORKSPACES_STORAGE_KEY)).toBe(tombstone)
     expect(changes).toEqual([[REMOVED_CODE_WORKSPACES_STORAGE_KEY]])
   })
+
+  it('keeps the interval sync running while hidden on desktop (no isRemoteWeb)', async () => {
+    vi.useFakeTimers()
+    const storage = new MemoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    const read = vi.fn(async () => ({ revision: 1, value: {} }))
+    ;(window as unknown as { kunGui: unknown }).kunGui = {
+      sharedClientState: { read, write: vi.fn(async (revision: number, value: Record<string, string>) => ({ revision: revision + 1, value })) },
+      appEnvironment: { flavor: 'development' }
+    }
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+
+    await installSharedBusinessStorage()
+    const callsAfterInstall = read.mock.calls.length
+    await vi.advanceTimersByTimeAsync(1_500)
+    expect(read.mock.calls.length).toBeGreaterThan(callsAfterInstall)
+    vi.useRealTimers()
+    delete (window as unknown as { kunGui?: unknown }).kunGui
+  })
+
+  it('skips the interval sync while hidden on Remote Web', async () => {
+    vi.useFakeTimers()
+    const storage = new MemoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    const read = vi.fn(async () => ({ revision: 1, value: {} }))
+    ;(window as unknown as { kunGui: unknown }).kunGui = {
+      isRemoteWeb: true,
+      sharedClientState: { read, write: vi.fn(async (revision: number, value: Record<string, string>) => ({ revision: revision + 1, value })) },
+      appEnvironment: { flavor: 'development' }
+    }
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+
+    await installSharedBusinessStorage()
+    const callsAfterInstall = read.mock.calls.length
+    await vi.advanceTimersByTimeAsync(4_500)
+    expect(read.mock.calls.length).toBe(callsAfterInstall)
+    vi.useRealTimers()
+    delete (window as unknown as { kunGui?: unknown }).kunGui
+  })
 })

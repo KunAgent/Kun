@@ -6,6 +6,7 @@ export type ThreadRecoveryReason =
   | 'runtime_restart'
   | 'send_reconcile'
   | 'replay_reset'
+  | 'remote_sender_reset'
 
 export type ThreadRecoveryOptions = {
   reason?: ThreadRecoveryReason
@@ -41,7 +42,10 @@ const RECOVERY_PREEMPTIVE_REASONS = new Set<ThreadRecoveryReason>([
   'manual_retry',
   'watchdog',
   'replay_reset',
-  'runtime_restart'
+  'runtime_restart',
+  // The remote hub dropped every registration on this sender; a stuck
+  // catching-up stream is provably dead and must be replaced.
+  'remote_sender_reset'
 ])
 
 const flights = new Map<string, RecoveryFlight>()

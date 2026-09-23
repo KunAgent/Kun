@@ -3,6 +3,7 @@ import i18n from '../i18n'
 import { describeRuntimeError, formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
 import { shouldAutoTitleThread } from '../lib/thread-title'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
+import { currentCodeWorkspaceRoot } from './chat-store-current-workspace'
 import { saveQueuedMessagesForThread } from './queued-message-persistence'
 import { runtimePromptForSurface } from './chat-store-send-prompt'
 import { currentTurnStartGeneration } from './turn-start-fence'
@@ -171,7 +172,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     if (!activeThreadId) {
       try {
         const settings = await rendererRuntimeClient.getSettings()
-        const workspaceRoot = normalizeWorkspaceRoot(settings.workspaceRoot)
+        const workspaceRoot = currentCodeWorkspaceRoot(get(), settings)
         if (!workspaceRoot) {
           set({
             blocks: previousBlocks,
@@ -197,12 +198,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           get(),
           p,
           workspaceRoot,
-          (thread) => isCodeThread(
-            thread,
-            get().clawChannels,
-            undefined,
-            readDesignThreadRegistry()
-          )
+          (thread) => isCodeThread(thread, get().clawChannels, undefined, readDesignThreadRegistry())
         )
         const reusableThread = reusableThreadId
           ? get().threads.find((thread) => thread.id === reusableThreadId) ?? null
@@ -298,7 +294,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         settings,
         threads: get().threads,
         activeThreadId,
-        fallbackWorkspaceRoot: settings.workspaceRoot
+        fallbackWorkspaceRoot: currentCodeWorkspaceRoot(get(), settings)
       })
       const runtimeText = runtimePromptForSurface({
         channel,

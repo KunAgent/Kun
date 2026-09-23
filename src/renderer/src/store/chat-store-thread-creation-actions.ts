@@ -15,6 +15,7 @@ import {
   getDefaultThreadTitle,
   shouldAutoTitleThread
 } from '../lib/thread-title'
+import { currentCodeWorkspaceRoot } from './chat-store-current-workspace'
 import { filterThreadsForSidebar } from '../lib/thread-sidebar-visibility'
 import {
   enrichThreadsWithForkInfo,
@@ -258,7 +259,7 @@ export function createThreadCreationActions(
         (activeThread && !isInternalTemporaryWorkspace(activeThread.workspace)
           ? normalizeWorkspaceRoot(activeThread.workspace)
           : '') ||
-        normalizeWorkspaceRoot(settings.workspaceRoot)
+        currentCodeWorkspaceRoot(get(), settings)
       if (!workspaceRoot) {
         await get().chooseWorkspace({ createThreadAfter: true })
         return null
