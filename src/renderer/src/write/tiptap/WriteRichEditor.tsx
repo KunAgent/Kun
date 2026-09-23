@@ -7,9 +7,6 @@ import {
   type ReactNode
 } from 'react'
 import { Editor, Extension, type AnyExtension } from '@tiptap/core'
-import { StarterKit } from '@tiptap/starter-kit'
-import { TableKit } from '@tiptap/extension-table'
-import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -17,6 +14,7 @@ import type {
   WriteSelectionAnchorRect,
   WriteSelectionRange
 } from '../../components/write/WriteMarkdownEditor'
+import { computeWriteDocumentStatsFromText } from '../../components/write/write-workspace-view-utils'
 import { NodeSelection } from '@tiptap/pm/state'
 import type { EditorState } from '@tiptap/pm/state'
 import { buildInlineCompletionPayload } from '../inline-completion'
@@ -25,8 +23,8 @@ import type { WriteBlockType } from '../block-type'
 import type { WriteInlineFormatKind } from '../inline-format'
 import { createWriteRecentEdit, type WriteRecentEdit } from '../recent-edits'
 import {
-  WriteCodeBlock,
   auditWriteMarkdownFidelity,
+  buildWriteRichExtensions,
   getWriteMarkdownManager,
   parseWriteMarkdown,
   type WriteRichFidelity
@@ -73,6 +71,9 @@ export type WriteRichEditorHandle = {
   toggleInlineFormat: (kind: WriteInlineFormatKind) => boolean
   /** Set the block type of the current selection (selection toolbar). */
   setBlockType: (type: WriteBlockType) => boolean
+  /** Word/character counts computed from the live editor document — cheap
+   *  compared to re-parsing the markdown source on every keystroke. */
+  getDocumentStats: () => { characterCount: number; wordCount: number } | null
 }
 
 /** Block type of the current selection, walking outward from the cursor. */
@@ -126,6 +127,7 @@ type Props = {
 type GateState = {
   fileKey: string
   eligible: boolean
+  detail?: string
 }
 
 function fileKeyOf(filePath?: string | null): string {
@@ -331,9 +333,12 @@ export function WriteRichEditor({
     if (value === lastEmittedValueRef.current && gate?.fileKey === fileKey) return
     const fidelity = auditWriteMarkdownFidelity(value)
     onFidelityChangeRef.current?.(fidelity)
+    const detail = fidelity.eligible ? undefined : fidelity.detail
     setGate((current) => {
-      if (current?.fileKey === fileKey && current.eligible === fidelity.eligible) return current
-      return { fileKey, eligible: fidelity.eligible }
+      if (current?.fileKey === fileKey && current.eligible === fidelity.eligible && current.detail === detail) {
+        return current
+      }
+      return { fileKey, eligible: fidelity.eligible, detail }
     })
     if (!fidelity.eligible) {
       lastEmittedValueRef.current = null
@@ -365,63 +370,56 @@ export function WriteRichEditor({
       }
     })
 
-    const extensions: AnyExtension[] = [
-      StarterKit.configure({
-        link: { openOnClick: false },
-        codeBlock: false,
-        undoRedo: { depth: 200 }
-      }),
-      TableKit.configure({ table: { resizable: false } }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      WriteCodeBlock,
-      WriteLocalImage.configure({
+    const extensions: AnyExtension[] = buildWriteRichExtensions({
+      image: WriteLocalImage.configure({
         getFilePath: () => filePathRef.current,
         getWorkspaceRoot: () => workspaceRootRef.current
       }),
-      WritePasteImage.configure({
-        getWorkspaceRoot: () => workspaceRootRef.current,
-        getFilePath: () => filePathRef.current,
-        getDocumentEpoch: () => documentEpochRef.current,
-        getImageDirectory: () => imageDirectoryRef.current,
-        isReadOnly: () => readOnlyRef.current,
-        onSaved: () => onImagePasteSavedRef.current?.(),
-        onError: (message) => onImagePasteErrorRef.current?.(message)
-      }),
-      WriteRichInlineCompletion.configure({
-        getDebounceMs: () => completionDebounceMsRef.current,
-        getMinAcceptScore: () => completionMinAcceptScoreRef.current,
-        getLongDebounceMs: () => completionLongDebounceMsRef.current,
-        getLongMinAcceptScore: () => completionLongMinAcceptScoreRef.current,
-        isLongEnabled: () => completionLongEnabledRef.current,
-        isEnabled: () => completionEnabledRef.current && !readOnlyRef.current,
-        getFilePath: () => filePathRef.current,
-        requestCompletion: async (context, mode) => {
-          if (typeof window.kunGui?.requestWriteInlineCompletion !== 'function') return null
-          const result = await window.kunGui.requestWriteInlineCompletion(
-            buildInlineCompletionPayload(context, {
-              model: completionModelRef.current,
-              workspaceRoot: workspaceRootRef.current,
-              mode,
-              recentEdits: recentEditsRef.current
-            })
-          )
-          if (!result.ok) return null
-          if (result.action?.kind === 'edit') {
-            return { text: result.action.replacement, action: result.action, mode }
+      extra: [
+        WritePasteImage.configure({
+          getWorkspaceRoot: () => workspaceRootRef.current,
+          getFilePath: () => filePathRef.current,
+          getDocumentEpoch: () => documentEpochRef.current,
+          getImageDirectory: () => imageDirectoryRef.current,
+          isReadOnly: () => readOnlyRef.current,
+          onSaved: () => onImagePasteSavedRef.current?.(),
+          onError: (message) => onImagePasteErrorRef.current?.(message)
+        }),
+        WriteRichInlineCompletion.configure({
+          getDebounceMs: () => completionDebounceMsRef.current,
+          getMinAcceptScore: () => completionMinAcceptScoreRef.current,
+          getLongDebounceMs: () => completionLongDebounceMsRef.current,
+          getLongMinAcceptScore: () => completionLongMinAcceptScoreRef.current,
+          isLongEnabled: () => completionLongEnabledRef.current,
+          isEnabled: () => completionEnabledRef.current && !readOnlyRef.current,
+          getFilePath: () => filePathRef.current,
+          requestCompletion: async (context, mode) => {
+            if (typeof window.kunGui?.requestWriteInlineCompletion !== 'function') return null
+            const result = await window.kunGui.requestWriteInlineCompletion(
+              buildInlineCompletionPayload(context, {
+                model: completionModelRef.current,
+                workspaceRoot: workspaceRootRef.current,
+                mode,
+                recentEdits: recentEditsRef.current
+              })
+            )
+            if (!result.ok) return null
+            if (result.action?.kind === 'edit') {
+              return { text: result.action.replacement, action: result.action, mode }
+            }
+            const completionText = result.action ? result.action.text : result.completion
+            if (!completionText) return null
+            return { text: completionText, action: result.action, mode }
           }
-          const completionText = result.action ? result.action.text : result.completion
-          if (!completionText) return null
-          return { text: completionText, action: result.action, mode }
-        }
-      }),
-      WriteRichTermPropagation,
-      WriteRichTemplateShortcuts.configure({
-        isReadOnly: () => readOnlyRef.current
-      }),
-      ...(requirementBadges ? [SddRequirementBadges] : []),
-      saveShortcut
-    ]
+        }),
+        WriteRichTermPropagation,
+        WriteRichTemplateShortcuts.configure({
+          isReadOnly: () => readOnlyRef.current
+        }),
+        ...(requirementBadges ? [SddRequirementBadges] : []),
+        saveShortcut
+      ]
+    })
 
     const editor = new Editor({
       element: hostRef.current,
@@ -556,6 +554,14 @@ export function WriteRichEditor({
             markdown
           )
         },
+        getDocumentStats: () => {
+          const instance = editorRef.current
+          if (!instance || instance.isDestroyed) return null
+          const doc = instance.state.doc
+          return computeWriteDocumentStatsFromText(
+            doc.textBetween(0, doc.content.size, '\n', '\n')
+          )
+        },
         toggleInlineFormat: (kind) => {
           const instance = editorRef.current
           if (!instance || instance.isDestroyed || readOnlyRef.current) return false
@@ -612,7 +618,14 @@ export function WriteRichEditor({
       <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
         <div className="write-rich-fallback-notice flex shrink-0 items-center gap-2 border-b border-amber-200/80 bg-amber-50/90 px-4 py-2 text-[12.5px] text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/35 dark:text-amber-100">
           <TriangleAlert className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
-          <span>{t('writeRichFallbackNotice')}</span>
+          <span>
+            {t('writeRichFallbackNotice')}
+            {gate?.detail
+              ? ` (${gate.detail.split(',').map((code) =>
+                  t(`writeRichFallbackReason.${code.trim()}`, { defaultValue: code.trim() })
+                ).join(', ')})`
+              : ''}
+          </span>
         </div>
         <div className="min-h-0 min-w-0 flex-1">{fallback}</div>
       </div>

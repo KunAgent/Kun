@@ -31,7 +31,9 @@ import {
   isInlineCompletionToggleShortcut,
   inlineAgentPosition,
   isMarkdownFile,
-  computeWriteDocumentStats,
+  isMdxFile,
+  computeWriteDocumentStatsCached,
+  type WriteDocumentStats,
   type WriteNotice
 } from './write-workspace-view-utils'
 import { isPresentationMarkdownPath } from '../../write/write-presentation'
@@ -221,7 +223,7 @@ export function WriteWorkspaceView({
     truncated: fileTruncated
   })
   const richModeActive =
-    previewMode === 'rich' && isMarkdown && renderSafety.livePreviewEnabled && activeFileIsText
+    previewMode === 'rich' && isMarkdown && !isMdxFile(activeFilePath) && renderSafety.livePreviewEnabled && activeFileIsText
   const toggleInlineCompletion = useCallback((): void => {
     const writeState = useWriteWorkspaceStore.getState()
     void writeState.setInlineCompletionEnabled(!writeState.inlineCompletion.enabled)
@@ -261,10 +263,34 @@ export function WriteWorkspaceView({
     ? writeRelativeToWorkspace(workspaceRoot, activeFilePath)
     : t('writeNoFileOpen')
   const activeFileName = activeFilePath ? writeBasenameFromPath(activeFilePath) : t('writeStudio')
-  const documentStats = useMemo(
-    () => (activeFileIsText ? computeWriteDocumentStats(fileContent, isMarkdown) : null),
-    [activeFileIsText, fileContent, isMarkdown],
-  )
+  // Word counts must not re-parse the document on every keystroke: while the
+  // rich editor is active it answers from its own document, and everything
+  // else computes at idle time with a single-entry content cache.
+  const [documentStats, setDocumentStats] = useState<WriteDocumentStats | null>(null)
+  useEffect(() => {
+    if (!activeFileIsText) {
+      setDocumentStats(null)
+      return
+    }
+    let cancelled = false
+    const compute = (): void => {
+      if (cancelled) return
+      const fromEditor = richModeActive ? richHandleRef.current?.getDocumentStats() ?? null : null
+      setDocumentStats(fromEditor ?? computeWriteDocumentStatsCached(fileContent, isMarkdown))
+    }
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(compute, { timeout: 400 })
+      return () => {
+        cancelled = true
+        window.cancelIdleCallback(id)
+      }
+    }
+    const id = window.setTimeout(compute, 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(id)
+    }
+  }, [activeFileIsText, fileContent, isMarkdown, richModeActive])
   const documentStatsLabel = documentStats
     ? t('writeDocumentStats', {
         words: documentStats.wordCount,

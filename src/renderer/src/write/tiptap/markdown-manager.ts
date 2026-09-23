@@ -1,19 +1,21 @@
 import {
   textblockTypeInputRule,
   type AnyExtension,
-  type JSONContent
+  type JSONContent,
+  type MarkdownTokenizer
 } from '@tiptap/core'
 import { MarkdownManager } from '@tiptap/markdown'
 import { StarterKit } from '@tiptap/starter-kit'
 import { TableKit } from '@tiptap/extension-table'
-import { TaskItem, TaskList } from '@tiptap/extension-list'
+import { OrderedList, TaskItem, TaskList } from '@tiptap/extension-list'
 import { CodeBlock, tildeInputRegex } from '@tiptap/extension-code-block'
 import { Plugin, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
 import { WriteLocalImage } from './local-image'
+import { findUnsupportedConstructs } from './markdown-construct-gate'
 
 export type WriteRichFidelity =
   | { eligible: true; normalized: string }
-  | { eligible: false; reason: 'parse-error' | 'unstable' | 'text-loss'; detail?: string }
+  | { eligible: false; reason: 'parse-error' | 'unstable' | 'text-loss' | 'unsupported-construct'; detail?: string }
 
 // Rich mode refuses documents above this size; CodeMirror handles them better
 // and the open-time fidelity audit below would get expensive.
@@ -108,21 +110,80 @@ export const WriteCodeBlock = CodeBlock.extend({
   }
 })
 
-export function buildWriteRichExtensions(): AnyExtension[] {
+/**
+ * marked calls every registered block tokenizer at every block boundary with
+ * the whole remaining document; the stock orderedList/taskList tokenizers
+ * then `src.split("\n")` the remainder, which is O(n^2) over the document.
+ * Both can only produce a token when the first relevant line is a list item,
+ * so a cheap guard skips the split entirely (byte-identical output).
+ * Note: `collectOrderedListItems` breaks on a non-matching first line, while
+ * `parseIndentedBlocks` (taskList) skips leading blank lines first — so the
+ * guards differ: strict first line vs. first non-blank line.
+ */
+function guardFirstLine(
+  tokenizer: MarkdownTokenizer,
+  itemLine: RegExp,
+  skipBlankLines: boolean
+): MarkdownTokenizer {
+  return {
+    ...tokenizer,
+    tokenize(src, tokens, lexer) {
+      let offset = 0
+      let line = ''
+      while (true) {
+        const newline = src.indexOf('\n', offset)
+        line = newline < 0 ? src.slice(offset) : src.slice(offset, newline)
+        if (line.trim() !== '' || !skipBlankLines || newline < 0) break
+        offset = newline + 1
+      }
+      // All-blank input delegates to the original so edge behavior is kept.
+      if (line.trim() !== '' && !itemLine.test(line)) return undefined
+      return tokenizer.tokenize(src, tokens, lexer)
+    }
+  }
+}
+
+export const WriteOrderedList = OrderedList.extend({
+  markdownTokenizer: guardFirstLine(
+    OrderedList.config.markdownTokenizer!,
+    /^(\s*)(\d+)\.\s+/,
+    false
+  )
+})
+
+export const WriteTaskList = TaskList.extend({
+  markdownTokenizer: guardFirstLine(
+    TaskList.config.markdownTokenizer!,
+    /^(\s*)([-+*])\s+\[([ xX])\]\s+/,
+    true
+  )
+})
+
+export type WriteRichRuntimeOptions = {
+  /** Configured WriteLocalImage instance (the base schema uses the plain one). */
+  image?: AnyExtension
+  /** Runtime-only extensions: inline completion, paste image, shortcuts, badges. */
+  extra?: AnyExtension[]
+}
+
+export function buildWriteRichExtensions(runtime?: WriteRichRuntimeOptions): AnyExtension[] {
   return [
     StarterKit.configure({
       link: { openOnClick: false },
       codeBlock: false,
+      orderedList: false,
       // The rich editor manages undo depth like the CodeMirror history()
       undoRedo: { depth: 200 }
     }),
     TableKit.configure({
       table: { resizable: false }
     }),
-    TaskList,
+    WriteOrderedList,
+    WriteTaskList,
     TaskItem.configure({ nested: true }),
     WriteCodeBlock,
-    WriteLocalImage
+    runtime?.image ?? WriteLocalImage,
+    ...(runtime?.extra ?? [])
   ]
 }
 
@@ -169,6 +230,14 @@ function normalizedPlainText(doc: JSONContent): string {
 export function auditWriteMarkdownFidelity(markdown: string): WriteRichFidelity {
   if (markdown.length > WRITE_RICH_MAX_CHARS) {
     return { eligible: false, reason: 'text-loss', detail: 'document too large for rich mode' }
+  }
+  const constructs = findUnsupportedConstructs(markdown)
+  if (constructs.length > 0) {
+    return {
+      eligible: false,
+      reason: 'unsupported-construct',
+      detail: constructs.join(',')
+    }
   }
   const manager = getWriteMarkdownManager()
   let firstDoc: JSONContent

@@ -267,14 +267,23 @@ export function captureFocusedDocument(state: WriteWorkspaceState): Record<strin
   return { ...state.documentsByPath, [key]: document }
 }
 
+/** New-tab default: `.mdx` opens as plain text — its JSX would not survive
+ * a rich-mode round trip. */
+export function defaultWriteViewModeForPath(path: string): WritePreviewMode {
+  return /\.mdx$/i.test(path) ? 'source' : 'rich'
+}
+
 export function addTabToGroup(
   layout: WriteEditorLayoutV1,
   groupId: WriteEditorGroupId,
   path: string,
-  viewMode: WritePreviewMode = 'rich'
+  viewMode?: WritePreviewMode
 ): WriteEditorLayoutV1 {
   const normalized = writeDocumentKey(path)
-  return addEditorItemToGroup(layout, groupId, { path: normalized, viewMode })
+  return addEditorItemToGroup(layout, groupId, {
+    path: normalized,
+    viewMode: viewMode ?? defaultWriteViewModeForPath(normalized)
+  })
 }
 
 export function addEditorItemToGroup(

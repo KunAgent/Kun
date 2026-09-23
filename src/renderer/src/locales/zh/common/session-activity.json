@@ -333,6 +333,16 @@
   "appErrorTitle": "应用出了点问题",
   "appErrorReload": "重新加载",
   "writeRichFallbackNotice": "此文档包含富文本模式无法无损保留的语法，已切换到源码编辑以保护文件内容。",
+  "writeRichFallbackReason": {
+    "frontmatter": "frontmatter",
+    "block-math": "块公式",
+    "escaped-dollar": "\\$ 转义",
+    "wikilink": "双链",
+    "callout": "Callout",
+    "footnote": "脚注",
+    "html": "原生 HTML",
+    "reference-definition": "引用式链接"
+  },
   "writeModeRich": "富文本",
   "sddAssistantStructure": "AI 结构化需求",
   "sddAssistantStructureSub": "拆成 R 块并补验收标准",

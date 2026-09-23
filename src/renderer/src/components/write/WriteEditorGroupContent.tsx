@@ -19,6 +19,7 @@ import { WriteWorkspaceDocumentPane } from './WriteWorkspaceDocumentPane'
 import { WorkWhiteboardSurface } from './WorkWhiteboardSurface'
 import {
   isMarkdownFile,
+  isMdxFile,
   useDebouncedValue,
   writePreviewDebounceMs
 } from './write-workspace-view-utils'
@@ -133,7 +134,8 @@ export function WriteEditorGroupContent({
     truncated: document?.fileTruncated ?? false
   })
   const debounced = useDebouncedValue(content, writePreviewDebounceMs(content.length))
-  const richModeActive = viewMode === 'rich' && markdown && renderSafety.livePreviewEnabled && kind === 'text'
+  const richModeActive =
+    viewMode === 'rich' && markdown && !isMdxFile(path) && renderSafety.livePreviewEnabled && kind === 'text'
   const editorVisible = kind === 'text' && viewMode !== 'preview'
   const previewVisible = kind === 'text' && viewMode === 'preview'
   const editorAppearance = viewMode === 'source' || !renderSafety.livePreviewEnabled ? 'source' : 'live'

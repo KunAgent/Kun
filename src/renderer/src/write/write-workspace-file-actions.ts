@@ -30,6 +30,7 @@ import {
 } from './write-thread-registry'
 import {
   createWriteDocumentSession,
+  defaultWriteViewModeForPath,
   isWriteFileTab,
   isWriteWhiteboardTab,
   persistWriteEditorLayout,
@@ -286,7 +287,7 @@ export function createWriteFileActions({
         return
       }
       if (!fileRequestIsCurrent(groupId, generation, workspaceRoot)) return
-      const viewMode = options.viewMode ?? 'rich'
+      const viewMode = options.viewMode ?? defaultWriteViewModeForPath(path)
       const current = get()
       if (
         current.autoSaveEnabled &&

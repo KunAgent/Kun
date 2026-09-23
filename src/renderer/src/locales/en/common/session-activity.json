@@ -333,6 +333,16 @@
   "appErrorTitle": "Something went wrong",
   "appErrorReload": "Reload",
   "writeRichFallbackNotice": "This document contains syntax the rich editor cannot preserve losslessly. Switched to source editing to protect the file.",
+  "writeRichFallbackReason": {
+    "frontmatter": "frontmatter",
+    "block-math": "block math",
+    "escaped-dollar": "escaped $",
+    "wikilink": "wiki links",
+    "callout": "callouts",
+    "footnote": "footnotes",
+    "html": "raw HTML",
+    "reference-definition": "reference-style links"
+  },
   "writeModeRich": "Rich text",
   "sddAssistantStructure": "Structure requirements",
   "sddAssistantStructureSub": "Split into R blocks with acceptance criteria",
