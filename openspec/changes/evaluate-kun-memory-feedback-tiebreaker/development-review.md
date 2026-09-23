@@ -3,7 +3,8 @@
 ## Outcome and scope
 
 The frozen `p3-feedback-tiebreaker-v1` development grid has no eligible feedback
-candidate. This is a development rejection, not a completed holdout decision.
+candidate. The contributor closes this version at development no-go; there is no
+decision-grade holdout result, and no holdout metric is part of this decision.
 The lock selects `foundation-control` because the pre-registered selection rule
 uses it as the fallback. A valid lock is not a passed decision gate.
 
@@ -73,19 +74,29 @@ This verifies fixture integrity, development reproduction, lock validation,
 safety, privacy, resource bounds and holdout guards. Guard tests do not publish
 a scored holdout decision. Full repository gates must run again after rebasing.
 
-## Review checkpoint before holdout
+## Final decision and holdout limitation (2026-09-23)
 
-Task 4.6 remains open. Independent review of labels, candidate lock and frozen
-inputs has not been recorded. Do not infer that review from #1324 approval,
-which reviews P3-A rather than this P3-B experiment.
+An independent Opus 4.8 review confirmed the candidate lock, frozen input hashes,
+development summary, and pre-registered fallback without reading holdout labels
+or results. That review authorized a run but did not audit the later runner and
+does not certify its execution. The subsequent execution audit found repeated
+temporary-directory scoring and incomplete gate measurement. The historical
+output is therefore retained only as a record of the flawed execution, not as a
+holdout decision.
 
-The existing plan explicitly falls back to foundation control and the current
-task wording still requests one reviewed holdout run. Before consuming holdout,
-reviewers should settle whether to retain that control-only confirmation or
-close this version at development no-go. Do not silently mark holdout complete,
-change the locked gate, promote a rejected candidate, or invent holdout metrics.
-Any agreed workflow clarification must be explicit in the OpenSpec artifacts;
-frozen v1 evidence remains unchanged.
+The contributor closes v1 at the development no-go rather than rerunning the
+retired version. This is an explicit deviation from the original one-holdout
+plan; it does not convert the development result into a holdout result. The
+selected fallback is an unchanged control, and every feedback candidate failed
+the zero-explicit-forbidden-selection gate on development. No gate was relaxed,
+no frozen data was edited, and production ranking remains unchanged. A future
+attempt must use a new decision version and independently reviewed execution
+controls.
+
+During an earlier source review, some holdout label text appeared in search
+output; no holdout metrics were computed and no parameters were tuned. That
+review is not represented as holdout-label-blind. This limitation remains part
+of the audit trail.
 
 ## Label review limitations (2026-09-17)
 

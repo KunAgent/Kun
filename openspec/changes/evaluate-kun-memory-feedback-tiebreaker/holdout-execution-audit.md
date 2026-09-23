@@ -30,12 +30,14 @@ without loading/scoring data. Generic writer tests retain synthetic payloads.
 - The loader checked fixture/manifest checksums, but the runner did not explicitly
   bind those hashes to the plan. Non-null boundaries also silently used zero.
 
-## Disposition
+## Final disposition (2026-09-23)
 
 Preserve `kun/src/memory/fixtures/kun-memory-feedback-tiebreaker-v1.json` unchanged
 as historical output, NOT independent decision-grade holdout evidence. Do not edit
-its flags, delete it, or rerun v1 to make the history appear compliant.
-The pre-execution review remains valid within its scope; it does not certify the
-later implementation. Task 4.6 is reopened. Proposed closure is development no-go
-with the execution deviation disclosed, subject to contributor confirmation.
-No new experiment, production integration, or PR creation is authorized here.
+its flags, delete it, or rerun v1 to make the history appear compliant. The
+pre-execution review remains valid within its scope; it does not certify the later
+implementation. The contributor closes v1 at the development no-go and accepts
+the execution deviation explicitly: no valid holdout result exists, and no holdout
+metrics are used in the decision. Task 4.6 records this closure rather than a
+completed holdout run. Any renewed holdout work requires a new decision version,
+fresh execution controls, and independent review. Production ranking is unchanged.

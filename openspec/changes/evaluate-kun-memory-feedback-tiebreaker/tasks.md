@@ -27,7 +27,7 @@
 - [x] 4.3 Run the complete finite grid on development data and write a calibration report containing every evaluated configuration; verify configuration ordering and selected ids are reproducible.
 - [x] 4.4 Apply the pre-registered selection rule and write one candidate lock containing artifact hashes, evaluator identity, selected candidate, gates, seed, and resource ceilings; verify tampering with any dependency invalidates the lock.
 - [x] 4.5 Prevent holdout scoring without a valid lock and prevent overwriting completed holdout evidence for the same decision version; verify rejected attempts emit no holdout metrics or per-case results.
-- [ ] 4.6 After independent review confirms the lock and frozen inputs, run holdout exactly once and publish immutable go/no-go evidence; verify the result applies every local-benefit, global, uncertainty, safety, privacy, determinism, and resource gate without post-hoc changes. Independent review and a historical run exist, but the runner was later found to permit repeated temporary-directory executions and did not fully measure every holdout gate; see `holdout-execution-audit.md`. Do not treat the historical evidence as decision-grade.
+- [x] 4.6 Close v1 at development no-go after auditing holdout integrity: preserve the historical output as non-decision-grade, retire the v1 runner, and prohibit rerunning this version. This is an explicit deviation from the originally planned holdout run, not a claim that holdout was run or passed; verify the final decision and limitations are documented without relying on holdout metrics.
 
 ## 5. Safety, Privacy, And Resource Coverage
 
@@ -39,10 +39,13 @@
 
 ## 6. Baseline Synchronization And Documentation
 
-Preparation checkpoint (2026-09-17): see `development-review.md` for the
-development rejection and `delivery-checklist.md` for post-merge verification.
-Tasks 4.6 and 6.1-6.3 remain open: independent review, final baseline sync and
-final decision/resource documentation are not replaced by preparation notes.
+Closeout checkpoint (2026-09-23): the branch is rebased on
+`upstream/develop@65f6a55c4`. The frozen development grid has no eligible
+feedback candidate. The holdout audit found repeated temporary-directory scoring
+and unmeasured gates; the historical output is preserved but is not decision-grade,
+and the v1 runner now rejects every attempt. The contributor closes this version
+at development no-go without claiming a holdout result. Production ranking and
+all frozen v1 inputs remain unchanged.
 
 Review hardening: tasks 4.4/4.5 now additionally cover recomputed gate flags,
 complete grid validation, exclusive evidence-file reservation, interruption and
@@ -52,8 +55,8 @@ The frozen fixtures and lock are unchanged; label concerns and holdout-label
 exposure are recorded in `development-review.md`, not silently resolved.
 
 - [x] 6.1 Fetch the latest `upstream/develop`, rebase this branch, and verify the final diff contains the P3-B evaluation capability plus the required P3-A canonical spec synchronization/archive closeout, with no importer or production-ranking changes.
-- [ ] 6.2 Document the calibration method, candidate identities, local/global metrics, privacy model, resource results, and go/no-go interpretation; verify documentation states that go requires a separate production-integration change and no-go retains P3-A infrastructure. Development documentation is complete; historical holdout evidence limitations are recorded, but a decision-grade holdout record is not claimed.
-- [ ] 6.3 Update `D:\learning\Review_md\kun-memory-roadmap.md` and create a stage note under `D:\learning\Review_md\codex` after the decision; verify both record the commit series, checks, immutable evidence hashes, holdout run count, and remaining P4-A work.
+- [x] 6.2 Document the calibration method, candidate identities, local/global metrics, privacy model, resource results, and the development no-go; state that no decision-grade holdout result exists, production integration requires a separate passed decision, and P3-A infrastructure is retained.
+- [x] 6.3 Update `D:\learning\Review_md\kun-memory-roadmap.md` and create a stage note under `D:\learning\Review_md\codex`; record the commit series, checks, immutable development-input hashes, historical holdout execution limitation, no-go disposition, and remaining P4-A work.
 
 ## 7. Validation And Delivery
 

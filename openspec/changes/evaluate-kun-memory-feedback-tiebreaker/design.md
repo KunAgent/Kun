@@ -131,3 +131,15 @@ No network, model file, native dependency, or user data directory is required. T
 3. Review and freeze the selected candidate and every gate before enabling the holdout command.
 4. Run holdout once and publish the immutable go/no-go evidence.
 5. Merge evaluation artifacts without production imports or runtime changes. If the result is go, create a separate production-integration OpenSpec change; if no-go, stop without rollback because production was never changed.
+
+### V1 execution disposition (2026-09-23)
+
+The planned one-time holdout step was not completed as specified. The runner was
+found to permit repeated scoring in temporary output directories and to report
+privacy, determinism, and resource gates without measuring all of them. Its v1
+entry point is retired; the historical output is preserved but is not
+decision-grade evidence. Because the locked selection is the unchanged
+foundation control and every feedback candidate failed the development safety
+gate, this version is closed at development no-go without another holdout run.
+This is a documented execution deviation, not a holdout no-go. Any renewed
+holdout evaluation requires a new decision version and fresh review.

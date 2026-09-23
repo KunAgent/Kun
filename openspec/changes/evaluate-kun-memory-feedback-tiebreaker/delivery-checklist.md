@@ -91,3 +91,32 @@ with final post-rebase verification results before submitting.
 Development currently has no eligible feedback candidate. Include final reviewed
 outcome, artifact hashes, actual holdout run count and sample-size limitations.
 Do not claim production relevance gains or enable ranking from this PR.
+
+## Final closeout checkpoint: 2026-09-23
+
+This checkpoint supersedes the earlier preparation steps above. The P3-B
+development grid and candidate lock are frozen and reproducible on the latest
+`upstream/develop@65f6a55c4`. No feedback candidate passes all development gates;
+the v1 decision is closed at development no-go. The historical holdout output is
+not decision-grade because its runner allowed repeated temporary-directory runs
+and did not measure every gate. The runner is retired, the output and all frozen
+inputs are unchanged, and no holdout metrics are used in the decision.
+
+The final PR includes the offline P3-B evaluation and P3-A canonical-spec/archive
+closeout together. It does not include a UI toggle, feedback-based production
+ranking, or a production integration decision. `feedback.enabled` remains off by
+default, and any future production-ranking proposal requires a separately
+versioned decision that passes its gates.
+
+Post-rebase checks recorded for this closeout: P3-B focused suite passed
+(19 files / 71 tests); all Kun Memory tests passed (57 files / 296 tests);
+`npm run build:kun`, Memory-directory ESLint, strict OpenSpec validation, and
+`git diff --check` passed. Root `npm run typecheck` reports two `AgentModelSettings`
+type errors in an unchanged upstream file and cannot resolve Excalidraw because
+that declared dependency is missing from this local `node_modules`. Root
+`npm run build` stops on the same missing local package. Root `npm run lint`
+stops before ESLint because unchanged upstream files exceed the file-line gate:
+`register-app-file-ipc-handlers.ts` (707 lines) and `remote-bridge.js` (750).
+The evaluator/Memory ESLint run passes. These failures are reported separately;
+they are not described as passing gates. The PR must state plainly that holdout
+is not decision-grade and that this is a development-only no-go.
