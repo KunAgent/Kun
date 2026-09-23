@@ -82,6 +82,20 @@ export class WorkSourceMap {
   }
 
   /**
+   * Merge another map's entries (used by the diff review, where rejected
+   * chunks re-insert blocks parsed under a separate context so they must
+   * still serialize back to their own verbatim source).
+   */
+  absorb(other: WorkSourceMap): void {
+    for (const [id, entry] of other.entries) {
+      this.entries.set(id, entry)
+    }
+    for (const [id, style] of other.styles) {
+      this.styles.set(id, style)
+    }
+  }
+
+  /**
    * After a full serialize pass, forget source entries for ids no longer
    * present in the document so the map does not grow unboundedly.
    */

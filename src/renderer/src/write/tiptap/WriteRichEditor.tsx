@@ -48,6 +48,9 @@ import {
 } from './extensions/term-propagation'
 import { WriteRichTemplateShortcuts } from './extensions/template-shortcuts'
 import { SddRequirementBadges } from './extensions/sdd-requirement-badges'
+import { WriteDiffReview } from './review/review-plugin'
+import { WriteReviewSession } from './review/review-session'
+import { WriteDocumentReviewBar } from '../../components/write/WriteDocumentReviewBar'
 
 /**
  * Imperative surface for flows that operate on the markdown projection
@@ -76,6 +79,16 @@ export type WriteRichEditorHandle = {
   /** Word/character counts computed from the live editor document — cheap
    *  compared to re-parsing the markdown source on every keystroke. */
   getDocumentStats: () => { characterCount: number; wordCount: number } | null
+  /**
+   * Enter the block-level diff review (V2 codec only): swaps the document
+   * to `nextDoc` and shows per-chunk accept/reject decorations against
+   * `original`. Returns false when the editor is read-only, not using the
+   * V2 codec, or the texts are identical.
+   */
+  beginDiffReview: (params: { original: string; nextDoc: string }) => boolean
+  isDiffReviewActive: () => boolean
+  acceptAllDiff: () => void
+  rejectAllDiff: () => void
 }
 
 type Props = {
@@ -103,6 +116,7 @@ type Props = {
   onSaveShortcut: () => void
   onImagePasteSaved?: () => void
   onImagePasteError?: (message: string) => void
+  onReviewStateChange?: (active: boolean) => void
   onFidelityChange?: (fidelity: WriteRichFidelity) => void
   handleRef?: MutableRefObject<WriteRichEditorHandle | null>
   /** Rendered instead of the rich editor when the open document fails the
@@ -145,6 +159,7 @@ export function WriteRichEditor({
   onSaveShortcut,
   onImagePasteSaved,
   onImagePasteError,
+  onReviewStateChange,
   onFidelityChange,
   handleRef,
   fallback
@@ -171,10 +186,17 @@ export function WriteRichEditor({
   const onSaveShortcutRef = useRef(onSaveShortcut)
   const onImagePasteSavedRef = useRef(onImagePasteSaved)
   const onImagePasteErrorRef = useRef(onImagePasteError)
+  const onReviewStateChangeRef = useRef(onReviewStateChange)
   const onFidelityChangeRef = useRef(onFidelityChange)
   const lastEmittedValueRef = useRef<string | null>(null)
   const workCtxRef = useRef<WorkDocContext>(createWorkDocContext())
   const documentEditorV2Ref = useRef(documentEditorV2)
+  const reviewSessionRef = useRef<WriteReviewSession | null>(null)
+  const [reviewUi, setReviewUi] = useState<{ active: boolean; total: number; index: number }>({
+    active: false,
+    total: 0,
+    index: 0
+  })
   const [frontmatter, setFrontmatter] = useState('')
   const [gate, setGate] = useState<GateState | null>(null)
 
@@ -197,6 +219,7 @@ export function WriteRichEditor({
   onSaveShortcutRef.current = onSaveShortcut
   onImagePasteSavedRef.current = onImagePasteSaved
   onImagePasteErrorRef.current = onImagePasteError
+  onReviewStateChangeRef.current = onReviewStateChange
   onFidelityChangeRef.current = onFidelityChange
   documentEditorV2Ref.current = documentEditorV2
 
@@ -212,6 +235,10 @@ export function WriteRichEditor({
       // The unified codec preserves every construct, so nothing is gated.
       onFidelityChangeRef.current?.({ eligible: true, normalized: value })
       setGate({ fileKey, eligible: true })
+      // During an active diff review the agent's next snapshot re-enters
+      // through `beginDiffReview` (§6.3.4); applying it here would clobber
+      // chunk positions.
+      if (reviewSessionRef.current?.isActive()) return
       const editor = editorRef.current
       if (editor && !editor.isDestroyed) {
         if (applyExternalMarkdownToEditor(editor, value, (markdown) => {
@@ -289,7 +316,10 @@ export function WriteRichEditor({
           getLongDebounceMs: () => completionLongDebounceMsRef.current,
           getLongMinAcceptScore: () => completionLongMinAcceptScoreRef.current,
           isLongEnabled: () => completionLongEnabledRef.current,
-          isEnabled: () => completionEnabledRef.current && !readOnlyRef.current,
+          isEnabled: () =>
+            completionEnabledRef.current &&
+            !readOnlyRef.current &&
+            !reviewSessionRef.current?.isActive(),
           getFilePath: () => filePathRef.current,
           requestCompletion: async (context, mode) => {
             if (typeof window.kunGui?.requestWriteInlineCompletion !== 'function') return null
@@ -314,6 +344,7 @@ export function WriteRichEditor({
         WriteRichTemplateShortcuts.configure({
           isReadOnly: () => readOnlyRef.current
         }),
+        WriteDiffReview,
         ...(requirementBadges ? [SddRequirementBadges] : []),
         saveShortcut
       ]
@@ -374,6 +405,35 @@ export function WriteRichEditor({
     editorRef.current = editor
     lastEmittedValueRef.current = value
     onSelectionChangeRef.current(selectionStateFromEditor(editor))
+
+    reviewSessionRef.current = new WriteReviewSession(
+      editor,
+      {
+        onFinish: (markdown) => {
+          lastEmittedValueRef.current = markdown
+          onChangeRef.current(markdown)
+        },
+        onStateChange: (active) => {
+          setReviewUi((current) => ({
+            active,
+            total: active ? current.total : 0,
+            index: 0
+          }))
+          onReviewStateChangeRef.current?.(active)
+        },
+        onChunksChange: (count) => {
+          setReviewUi((current) => ({
+            active: current.active,
+            total: count,
+            index: Math.min(current.index, Math.max(0, count - 1))
+          }))
+        }
+      },
+      () => workCtxRef.current,
+      (ctx) => {
+        workCtxRef.current = ctx
+      }
+    )
 
     if (handleRef) {
       handleRef.current = {
@@ -503,12 +563,21 @@ export function WriteRichEditor({
             default:
               return chain.setParagraph().run()
           }
-        }
+        },
+        beginDiffReview: ({ original, nextDoc }) => {
+          const session = reviewSessionRef.current
+          if (!session || !documentEditorV2Ref.current || readOnlyRef.current) return false
+          return session.begin({ original, nextDoc })
+        },
+        isDiffReviewActive: () => reviewSessionRef.current?.isActive() ?? false,
+        acceptAllDiff: () => reviewSessionRef.current?.resolveAll('accept'),
+        rejectAllDiff: () => reviewSessionRef.current?.resolveAll('reject')
       }
     }
 
     return () => {
       if (handleRef) handleRef.current = null
+      reviewSessionRef.current = null
       editor.destroy()
       editorRef.current = null
     }
@@ -563,6 +632,24 @@ export function WriteRichEditor({
   }
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
+      {reviewUi.active ? (
+        <WriteDocumentReviewBar
+          total={reviewUi.total}
+          index={reviewUi.index}
+          onPrev={() => {
+            const index = Math.max(0, reviewUi.index - 1)
+            setReviewUi((current) => ({ ...current, index }))
+            reviewSessionRef.current?.scrollToChunk(index)
+          }}
+          onNext={() => {
+            const index = Math.min(reviewUi.total - 1, reviewUi.index + 1)
+            setReviewUi((current) => ({ ...current, index }))
+            reviewSessionRef.current?.scrollToChunk(index)
+          }}
+          onAcceptAll={() => reviewSessionRef.current?.resolveAll('accept')}
+          onRejectAll={() => reviewSessionRef.current?.resolveAll('reject')}
+        />
+      ) : null}
       <WritePropertiesPanel
         frontmatter={frontmatter}
         onFrontmatterChange={handleFrontmatterChange}

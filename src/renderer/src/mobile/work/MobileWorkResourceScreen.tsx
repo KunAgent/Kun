@@ -61,7 +61,7 @@ export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView, on
     pendingAgentReview: textDocument?.pendingAgentReview ?? null,
     reviewSurfaceKey: view,
     saveTimerRef,
-    markdownHandleRef,
+    documentHandleRef: markdownHandleRef,
     flushSave: work.flushSave,
     syncActiveFileFromDisk: work.syncActiveFileFromDisk,
     syncActiveImageFromDisk: work.syncActiveImageFromDisk,

@@ -53,9 +53,17 @@ function toEol(text: string, eol: '\n' | '\r\n'): string {
   return eol === '\r\n' ? text.replace(/\r?\n/g, '\r\n') : text
 }
 
+export type ParsedWorkBlock = {
+  blockId: string
+  /** Verbatim source fragment (no trailing blank lines). */
+  raw: string
+}
+
 export type ParsedWorkDocument = {
   doc: JSONContent
   ctx: WorkDocContext
+  /** Top-level blocks in document order (block identity + source). */
+  blocks: ParsedWorkBlock[]
 }
 
 /** Parse a full Markdown document (frontmatter preserved verbatim). */
@@ -67,14 +75,24 @@ export function parseWorkDocument(markdown: string): ParsedWorkDocument {
 
   const root = parseMarkdownToMdast(body)
   const order: { blockId: string; start?: number; end?: number }[] = []
+  const blocks: ParsedWorkBlock[] = []
   const doc = mdastToPm(root, {
     body,
     sourceMap: ctx.sourceMap,
     onTopBlock: (node, mdast) => {
+      const blockId = String(node.attrs?.blockId ?? '')
       order.push({
-        blockId: String(node.attrs?.blockId ?? ''),
+        blockId,
         start: mdast.position?.start?.offset,
         end: mdast.position?.end?.offset
+      })
+      const start = mdast.position?.start?.offset
+      const end = mdast.position?.end?.offset
+      blocks.push({
+        blockId,
+        raw: typeof start === 'number' && typeof end === 'number'
+          ? body.slice(start, end)
+          : ''
       })
     }
   })
@@ -95,7 +113,7 @@ export function parseWorkDocument(markdown: string): ParsedWorkDocument {
   if (!doc.content || doc.content.length === 0) {
     doc.content = [{ type: 'paragraph' }]
   }
-  return { doc, ctx }
+  return { doc, ctx, blocks }
 }
 
 function blockStyleOptions(ctx: WorkDocContext, blockId: string | undefined): WorkMarkdownSerializeOptions {

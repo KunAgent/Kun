@@ -25,6 +25,7 @@ import { WriteWorkspaceToolbar } from './WriteWorkspaceToolbar'
 import { WriteInlineAgent } from './WriteInlineAgent'
 import { resolveWriteAgentPreset } from '../../write/agent-presets'
 import type { WriteMarkdownEditorHandle } from './WriteMarkdownEditor'
+import type { WriteDocumentReviewHandle } from './write-document-editor-handle'
 import {
   WRITE_RICH_CLIPBOARD_ACTION,
   formatSaveLabel,
@@ -189,6 +190,14 @@ export function WriteWorkspaceView({
   const exportNoticeTimerRef = useRef<number | null>(null)
   const richHandleRef = useRef<WriteRichEditorHandle | null>(null)
   const markdownHandleRef = useRef<WriteMarkdownEditorHandle | null>(null)
+  // Unified diff-review surface (§6.1): whichever editor is mounted answers
+  // review calls; only one handle is non-null at a time.
+  const documentHandleRef = useRef<WriteDocumentReviewHandle | null>(null)
+  Object.defineProperty(documentHandleRef, 'current', {
+    configurable: true,
+    get: () => richHandleRef.current ?? markdownHandleRef.current,
+    set: () => undefined
+  })
   const [pointerSelecting, setPointerSelecting] = useState(false)
   const resolvedAgentPresets = agentPresets.map((preset) => resolveWriteAgentPreset(preset))
   const [inlineEditInFlight, setInlineEditInFlight] = useState(false)
@@ -348,7 +357,7 @@ export function WriteWorkspaceView({
     pendingAgentReview,
     reviewSurfaceKey: previewMode,
     saveTimerRef,
-    markdownHandleRef,
+    documentHandleRef,
     flushSave,
     syncActiveFileFromDisk,
     syncActiveImageFromDisk,
@@ -414,6 +423,7 @@ export function WriteWorkspaceView({
     onSubmitPrompt,
     richHandleRef,
     markdownHandleRef,
+    documentHandleRef,
     setAssistantOpen,
     setInlineEditInFlight,
     setFileContent,

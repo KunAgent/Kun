@@ -391,3 +391,73 @@
   border-radius: 3px;
   white-space: pre-wrap;
 }
+
+/* Diff review decorations (S2) */
+.write-diff-added {
+  background-color: color-mix(in srgb, #22c55e 10%, transparent);
+  box-shadow: inset 3px 0 0 #22c55e;
+}
+
+.write-diff-modified {
+  background-color: color-mix(in srgb, #eab308 9%, transparent);
+  box-shadow: inset 3px 0 0 #eab308;
+}
+
+.write-diff-removed {
+  margin: 2px 0;
+  border-radius: 4px;
+  background-color: color-mix(in srgb, #ef4444 9%, transparent);
+  box-shadow: inset 3px 0 0 #ef4444;
+  opacity: 0.85;
+}
+
+.write-diff-removed-body {
+  padding: 4px 8px;
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, #ef4444 45%, transparent);
+  pointer-events: none;
+}
+
+.write-diff-actions {
+  position: absolute;
+  margin-top: -1.4em;
+  margin-left: 4px;
+  display: inline-flex;
+  gap: 2px;
+  z-index: 20;
+}
+
+.write-diff-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid var(--ds-border, #d4d4d8);
+  background: var(--ds-card, #fff);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.write-diff-actions .write-diff-accept {
+  color: #16a34a;
+}
+
+.write-diff-actions .write-diff-reject {
+  color: #dc2626;
+}
+
+.write-diff-word-added {
+  background-color: color-mix(in srgb, #22c55e 18%, transparent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, #22c55e 65%, transparent);
+  border-radius: 2px;
+}
+
+.write-diff-word-removed {
+  color: #dc2626;
+  text-decoration: line-through;
+  opacity: 0.8;
+}

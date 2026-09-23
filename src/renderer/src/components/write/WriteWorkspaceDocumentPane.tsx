@@ -449,6 +449,7 @@ export function WriteWorkspaceDocumentPane({
                 onSaveShortcut={onSaveShortcut}
                 onImagePasteSaved={onImagePasteSaved}
                 onImagePasteError={onImagePasteError}
+                onReviewStateChange={onMarkdownReviewStateChange}
                 handleRef={richHandleRef}
                 fallback={
                   <WriteMarkdownEditor

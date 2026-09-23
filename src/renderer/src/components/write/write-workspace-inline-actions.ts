@@ -20,6 +20,7 @@ import {
 } from '../../write/infographic-pending'
 import type { WriteRichEditorHandle } from '../../write/tiptap/WriteRichEditor'
 import type { WriteMarkdownEditorHandle } from './WriteMarkdownEditor'
+import type { WriteDocumentReviewHandle } from './write-document-editor-handle'
 import { INLINE_EDIT_RECENT_CONTEXT_CHARS, type WriteNotice } from './write-workspace-view-utils'
 import {
   captureWriteDocumentContext,
@@ -47,6 +48,7 @@ type Params = {
   onSubmitPrompt?: (value: string) => void
   richHandleRef: RefObject<WriteRichEditorHandle | null>
   markdownHandleRef: RefObject<WriteMarkdownEditorHandle | null>
+  documentHandleRef: RefObject<WriteDocumentReviewHandle | null>
   setAssistantOpen: WriteWorkspaceState['setAssistantOpen']
   setInlineEditInFlight: (value: boolean) => void
   setFileContent: WriteWorkspaceState['setFileContent']
@@ -74,6 +76,7 @@ export function createWriteWorkspaceInlineActions({
   onSubmitPrompt,
   richHandleRef,
   markdownHandleRef,
+  documentHandleRef,
   setAssistantOpen,
   setInlineEditInFlight,
   setFileContent,
@@ -149,7 +152,7 @@ export function createWriteWorkspaceInlineActions({
       setFileError(t('writeReadOnlySaveDisabled'))
       return
     }
-    if (markdownHandleRef.current?.isDiffReviewActive()) {
+    if (documentHandleRef.current?.isDiffReviewActive()) {
       setFileError(t('writeInlineEditReviewPending'))
       return
     }
@@ -250,7 +253,7 @@ export function createWriteWorkspaceInlineActions({
         scopeKind: draft.scope.kind
       })
 
-      const startedReview = markdownHandleRef.current?.beginDiffReview({
+      const startedReview = documentHandleRef.current?.beginDiffReview({
         original: baseline,
         nextDoc: nextContent
       }) ?? false
