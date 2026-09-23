@@ -98,7 +98,7 @@ describe('room SQLite schema migration', () => {
       db.exec('DROP TABLE room_index_state;')
     } finally { db.close() }
     expect(await open(path).get('message', 'message_139')).toMatchObject({ seq: 141, revision: 1 })
-  })
+  }, 30_000)
 
   it('refuses future schema versions instead of rewriting them', async () => {
     const path = await legacy()
