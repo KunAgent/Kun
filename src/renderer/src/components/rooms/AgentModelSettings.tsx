@@ -7,6 +7,7 @@ import { useChatStore } from '../../store/chat-store'
 
 export type AgentModels = AgentModelOptions & { agent: AgentIdentity }
 export const modelLabel = (value?: AgentModelBinding) => value?.model ?? '—'
+type SavedModelRef = NonNullable<AgentIdentity['modelRef']>
 export function AgentModelSettings({ agentId, room, onClose, onSaved, variant = 'modal' }: { agentId: string; room?: Room; onClose: () => void; onSaved: () => void; variant?: 'modal' | 'panel' }) {
   const { t } = useTranslation('common')
   const resource = useAgentResource<AgentModels>(agentPath(agentId) + '/models' + (room ? '?room_id=' + encodeURIComponent(room.id) : ''))
@@ -20,12 +21,12 @@ export function AgentModelSettings({ agentId, room, onClose, onSaved, variant = 
 }
 function ModelEditor({ value, onSaved }: { value: AgentModels; onSaved: () => void }) {
   const { t } = useTranslation('common')
-  const [main, setMain] = useState<AgentModelBinding | null>(value.agent.modelRef ?? null)
-  const [fast, setFast] = useState<AgentModelBinding | null>(value.agent.fastModelRef ?? null)
+  const [main, setMain] = useState<SavedModelRef | null>(value.agent.modelRef ?? null)
+  const [fast, setFast] = useState<SavedModelRef | null>(value.agent.fastModelRef ?? null)
   const [search, setSearch] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const revision = useRef(value.agent.revision)
   const options = value.options.filter((item) => [item.model, item.providerLabel, item.accountId].join(' ').toLowerCase().includes(search.toLowerCase()))
-  const apply = async (nextMain: AgentModelBinding | null, nextFast: AgentModelBinding | null) => {
+  const apply = async (nextMain: SavedModelRef | null, nextFast: SavedModelRef | null) => {
     if (busy || modelBindingKey(nextMain) === modelBindingKey(main) && modelBindingKey(nextFast) === modelBindingKey(fast)) return
     const previous = { main, fast }
     setMain(nextMain); setFast(nextFast); setBusy(true); setError('')
@@ -50,7 +51,7 @@ function ModelEditor({ value, onSaved }: { value: AgentModels; onSaved: () => vo
       <p>{t(light ? 'directFastHelp' : 'directMainHelp')}</p>
       <select aria-label={t(light ? 'directFastModel' : 'directMainModel')} value={modelBindingKey(selected)} onChange={(event) => {
         const option = value.options.find((item) => modelBindingKey(item) === event.target.value)
-        const next = option ? { providerId: option.providerId, accountId: option.accountId, model: option.model } : null
+        const next = option?.providerId ? { providerId: option.providerId, accountId: option.accountId, model: option.model } : null
         void apply(light ? main : next, light ? next : fast)
       }}>
         <option value="">{t('directInherit', { model: modelLabel(inherited) })}</option>

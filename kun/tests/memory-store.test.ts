@@ -203,6 +203,7 @@ describe('Memory store and recall', () => {
       turnId: 'turn_1',
       workspace: '/tmp/ws',
       approvalPolicy: 'on-request',
+      memoryPolicy: { enabled: true },
       abortSignal: new AbortController().signal,
       awaitApproval: async () => {
         approvals += 1

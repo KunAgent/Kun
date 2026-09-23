@@ -277,7 +277,7 @@ it('sends Codex subscription reasoning max as xhigh with summaries enabled', asy
     expect(sentUrls[0]).toBe('https://chatgpt.com/backend-api/codex/responses')
     expect(sentBodies[0]).toMatchObject({
       model: 'gpt-5.5',
-      stream: false,
+      stream: true,
       instructions: ' ',
       input: [{
         role: 'system',

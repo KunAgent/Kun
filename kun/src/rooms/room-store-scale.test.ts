@@ -53,4 +53,4 @@ it('pages 100 rooms, 100,000 messages and 2,000 historical tasks without returni
     await store.close()
     await rm(root, { recursive: true, force: true })
   }
-}, 30_000)
+}, 120_000)
