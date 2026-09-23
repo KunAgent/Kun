@@ -120,3 +120,7 @@ stops before ESLint because unchanged upstream files exceed the file-line gate:
 The evaluator/Memory ESLint run passes. These failures are reported separately;
 they are not described as passing gates. The PR must state plainly that holdout
 is not decision-grade and that this is a development-only no-go.
+
+PR #1339 is open at <https://github.com/KunAgent/Kun/pull/1339>, with base
+`develop` and head `SunwardL:codex/prepare-memory-feedback-tiebreaker`. The initial
+GitHub Quality gates check is pending; creation does not imply review or merge.
