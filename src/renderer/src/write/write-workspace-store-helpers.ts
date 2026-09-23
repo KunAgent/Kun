@@ -104,6 +104,7 @@ export function normalizeWriteSettings(settings?: Partial<WriteSettingsV1> | nul
   workspaces: string[]
   autoSaveEnabled: boolean
   autoSaveDelayMs: number
+  documentEditorV2: boolean
   inlineCompletion: WriteInlineCompletionSettingsV1
   selectionAssist: WriteSelectionAssistSettingsV1
   agentPresets: WriteAgentPresetV1[]
@@ -130,6 +131,7 @@ export function normalizeWriteSettings(settings?: Partial<WriteSettingsV1> | nul
     activeWorkspaceRoot: workspaces.includes(activeWorkspaceRoot) ? activeWorkspaceRoot : defaultWorkspaceRoot,
     workspaces: workspaces.length > 0 ? workspaces : [defaultWorkspaceRoot],
     autoSaveEnabled: settings?.autoSaveEnabled !== false,
+    documentEditorV2: settings?.documentEditorV2 === true,
     autoSaveDelayMs: Number.isFinite(autoSaveDelayMs)
       ? Math.max(MIN_WRITE_AUTOSAVE_DELAY_MS, Math.min(MAX_WRITE_AUTOSAVE_DELAY_MS, Math.round(autoSaveDelayMs)))
       : DEFAULT_WRITE_AUTOSAVE_DELAY_MS,
@@ -178,6 +180,7 @@ export function withResolvedInlineCompletionSettings(
     workspaces: string[]
     autoSaveEnabled: boolean
     autoSaveDelayMs: number
+    documentEditorV2: boolean
     inlineCompletion: WriteInlineCompletionSettingsV1
     selectionAssist: WriteSelectionAssistSettingsV1
     agentPresets: WriteAgentPresetV1[]
@@ -189,6 +192,7 @@ export function withResolvedInlineCompletionSettings(
   workspaces: string[]
   autoSaveEnabled: boolean
   autoSaveDelayMs: number
+  documentEditorV2: boolean
   inlineCompletion: WriteInlineCompletionSettingsV1
   selectionAssist: WriteSelectionAssistSettingsV1
   agentPresets: WriteAgentPresetV1[]

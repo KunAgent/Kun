@@ -17,6 +17,7 @@ export class MemoryStorage {
 export function makeWriteFileActionBaseState(): WriteWorkspaceState {
   return {
     defaultWorkspaceRoot: '', workspaceRoots: [], autoSaveEnabled: true,
+    documentEditorV2: false,
     autoSaveDelayMs: defaultWriteSettings().autoSaveDelayMs,
     inlineCompletion: defaultWriteSettings().inlineCompletion,
     inlineCompletionApiReady: false,

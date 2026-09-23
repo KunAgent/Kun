@@ -69,6 +69,7 @@ type Props = {
   previewWidth: string
   editorAppearance: 'source' | 'live'
   richModeActive: boolean
+  documentEditorV2?: boolean
   richHandleRef: MutableRefObject<WriteRichEditorHandle | null>
   markdownHandleRef?: MutableRefObject<WriteMarkdownEditorHandle | null>
   debouncedPreviewContent: string
@@ -154,6 +155,7 @@ export function WriteWorkspaceDocumentPane({
   previewWidth,
   editorAppearance,
   richModeActive,
+  documentEditorV2 = false,
   richHandleRef,
   markdownHandleRef,
   debouncedPreviewContent,
@@ -427,6 +429,7 @@ export function WriteWorkspaceDocumentPane({
           <div ref={editorPaneRef} className={`${editorWidth} min-h-0 overflow-hidden`}>
             {richModeActive ? (
               <WriteRichEditor
+                documentEditorV2={documentEditorV2}
                 value={fileContent}
                 workspaceRoot={workspaceRoot}
                 filePath={activeFilePath}

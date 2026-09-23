@@ -347,5 +347,11 @@
   "sddAssistantStructure": "Structure requirements",
   "sddAssistantStructureSub": "Split into R blocks with acceptance criteria",
   "sddAssistantStructurePrompt": "Restructure the current requirement draft into structured requirement blocks and edit requirement.md directly. Format: each requirement uses a level-3 heading \"### R-n: title\" (n increments from 1; do not append any curly-brace status token). Each block contains a short description and an acceptance checklist (lines starting with \"- [ ] \", each criterion concrete and verifiable). Preserve my intent, do not invent requirements; keep unrelated background content outside the blocks.",
-  "sddFwGroupDiscover": "Clarify direction"
+  "sddFwGroupDiscover": "Clarify direction",
+  "writePropertiesAdd": "Add properties",
+  "writePropertiesTitle": "properties · {{count}}",
+  "writePropertiesForm": "Form",
+  "writePropertiesSource": "Source",
+  "writePropertiesAddRow": "Add property",
+  "writePropertiesComplex": "This frontmatter uses YAML the form editor cannot represent. Source mode only."
 }

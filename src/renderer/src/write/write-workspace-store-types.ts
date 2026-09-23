@@ -125,6 +125,8 @@ export type WriteWorkspaceState = {
   workspaceRoots: string[]
   autoSaveEnabled: boolean
   autoSaveDelayMs: number
+  /** S1–S4 gate: unified remark codec + single-view document editor. */
+  documentEditorV2: boolean
   inlineCompletion: WriteInlineCompletionSettingsV1
   inlineCompletionApiReady: boolean
   /** Selection toolbar AI assists: quick action prompts + infographic prompt. */

@@ -10,15 +10,10 @@ import { Editor, Extension, type AnyExtension } from '@tiptap/core'
 import { TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
-  WriteEditorSelectionState,
-  WriteSelectionAnchorRect,
-  WriteSelectionRange
+  WriteEditorSelectionState
 } from '../../components/write/WriteMarkdownEditor'
 import { computeWriteDocumentStatsFromText } from '../../components/write/write-workspace-view-utils'
-import { NodeSelection } from '@tiptap/pm/state'
-import type { EditorState } from '@tiptap/pm/state'
 import { buildInlineCompletionPayload } from '../inline-completion'
-import { isSelectableRasterImageSrc } from '../selected-image'
 import type { WriteBlockType } from '../block-type'
 import type { WriteInlineFormatKind } from '../inline-format'
 import { createWriteRecentEdit, type WriteRecentEdit } from '../recent-edits'
@@ -31,9 +26,16 @@ import {
 } from './markdown-manager'
 import {
   buildWriteRichMarkdownProjection,
-  posForProjectedOffset,
-  projectedOffsetForPos
+  posForProjectedOffset
 } from './markdown-projection'
+import { selectionStateFromEditor } from './rich-selection-state'
+import {
+  createWorkDocContext,
+  parseWorkDocument,
+  serializeWorkDocument,
+  type WorkDocContext
+} from '../markdown/document-codec'
+import { WritePropertiesPanel } from '../../components/write/WritePropertiesPanel'
 import { recentEditsFromRichTransaction } from './recent-edits-pm'
 import { replaceRangeWithMarkdown } from './markdown-insert'
 import { applyExternalMarkdownToEditor } from './markdown-sync'
@@ -76,24 +78,6 @@ export type WriteRichEditorHandle = {
   getDocumentStats: () => { characterCount: number; wordCount: number } | null
 }
 
-/** Block type of the current selection, walking outward from the cursor. */
-function richSelectionBlockType(state: EditorState): WriteBlockType {
-  const { $from } = state.selection
-  for (let depth = $from.depth; depth >= 0; depth -= 1) {
-    const node = $from.node(depth)
-    const name = node.type.name
-    if (name === 'heading') {
-      const level = Number(node.attrs.level) || 1
-      return level === 1 ? 'heading1' : level === 2 ? 'heading2' : 'heading3'
-    }
-    if (name === 'codeBlock') return 'code'
-    if (name === 'blockquote') return 'quote'
-    if (name === 'bulletList') return 'bullet'
-    if (name === 'orderedList') return 'ordered'
-  }
-  return 'paragraph'
-}
-
 type Props = {
   value: string
   workspaceRoot?: string | null
@@ -101,6 +85,8 @@ type Props = {
   documentEpoch?: number
   imageDirectory?: string | null
   readOnly?: boolean
+  /** S1 gate: use the unified remark codec + source-preserving context. */
+  documentEditorV2?: boolean
   /** Render SDD requirement headings with status pills (SDD draft editor). */
   requirementBadges?: boolean
   completionModel?: string
@@ -134,120 +120,6 @@ function fileKeyOf(filePath?: string | null): string {
   return (filePath ?? '').trim()
 }
 
-function unionRects(
-  rects: Array<{ left: number; right: number; top: number; bottom: number }>
-): WriteSelectionAnchorRect | undefined {
-  if (rects.length === 0) return undefined
-  let left = Number.POSITIVE_INFINITY
-  let right = Number.NEGATIVE_INFINITY
-  let top = Number.POSITIVE_INFINITY
-  let bottom = Number.NEGATIVE_INFINITY
-  for (const rect of rects) {
-    left = Math.min(left, rect.left)
-    right = Math.max(right, rect.right)
-    top = Math.min(top, rect.top)
-    bottom = Math.max(bottom, rect.bottom)
-  }
-  if (!Number.isFinite(left) || !Number.isFinite(right) || !Number.isFinite(top) || !Number.isFinite(bottom)) {
-    return undefined
-  }
-  return { left, right, top, bottom, width: right - left, height: bottom - top }
-}
-
-function lineColumnOfText(prefix: string): { line: number; column: number } {
-  const breaks = prefix.match(/\n/g)?.length ?? 0
-  const lastBreak = prefix.lastIndexOf('\n')
-  return { line: breaks + 1, column: prefix.length - lastBreak }
-}
-
-/**
- * Build the selection contract from the ProseMirror selection. Offsets,
- * line/column values, and the selected text are all expressed in markdown
- * projection coordinates so inline edit scopes and quoted selections share
- * one coordinate space with the completion contexts.
- */
-export function selectionStateFromEditor(editor: Editor): WriteEditorSelectionState {
-  const { state, view } = editor
-  const doc = state.doc
-  const projection = buildWriteRichMarkdownProjection(doc)
-  const ranges: WriteSelectionRange[] = []
-  const rects: Array<{ left: number; right: number; top: number; bottom: number }> = []
-
-  // A node-selected raster image surfaces the image-aware toolbar;
-  // text ranges below stay empty for node selections (pmFrom === pmTo - size
-  // collapses to no projected text).
-  const nodeSelection = state.selection instanceof NodeSelection ? state.selection : null
-  if (nodeSelection?.node.type.name === 'image') {
-    const src = typeof nodeSelection.node.attrs.src === 'string' ? nodeSelection.node.attrs.src : ''
-    if (isSelectableRasterImageSrc(src)) {
-      const alt = typeof nodeSelection.node.attrs.alt === 'string' ? nodeSelection.node.attrs.alt : ''
-      let anchorRect: WriteEditorSelectionState['anchorRect']
-      const nodeDom = view.nodeDOM(nodeSelection.from)
-      if (nodeDom instanceof HTMLElement) {
-        const rect = nodeDom.getBoundingClientRect()
-        anchorRect = {
-          left: rect.left,
-          right: rect.right,
-          top: rect.top,
-          bottom: rect.bottom,
-          width: rect.width,
-          height: rect.height
-        }
-      } else {
-        try {
-          const coords = view.coordsAtPos(nodeSelection.from)
-          anchorRect = { ...coords, width: coords.right - coords.left, height: coords.bottom - coords.top }
-        } catch {
-          anchorRect = undefined
-        }
-      }
-      return {
-        text: '',
-        ranges: [],
-        charCount: 0,
-        selectedImage: { src, alt },
-        ...(anchorRect ? { anchorRect } : {})
-      }
-    }
-  }
-
-  for (const range of state.selection.ranges) {
-    const pmFrom = range.$from.pos
-    const pmTo = range.$to.pos
-    if (pmFrom === pmTo) continue
-    const from = projectedOffsetForPos(doc, projection, pmFrom)
-    const to = projectedOffsetForPos(doc, projection, pmTo)
-    try {
-      rects.push(view.coordsAtPos(pmFrom), view.coordsAtPos(pmTo))
-    } catch {
-      // coordsAtPos throws while the view is being torn down; skip the rect.
-    }
-    if (from === null || to === null || to <= from) continue
-    const text = projection.text.slice(from, to)
-    const start = lineColumnOfText(projection.text.slice(0, from))
-    const end = lineColumnOfText(projection.text.slice(0, Math.max(from, to - 1)))
-    ranges.push({
-      from,
-      to,
-      startLine: start.line,
-      startColumn: start.column,
-      endLine: end.line,
-      endColumn: end.column,
-      text,
-      charCount: to - from
-    })
-  }
-
-  const text = ranges.map((range) => range.text).join('\n\n')
-  return {
-    text,
-    ranges,
-    charCount: ranges.reduce((total, range) => total + range.charCount, 0),
-    blockType: richSelectionBlockType(state),
-    ...(rects.length > 0 ? { anchorRect: unionRects(rects) } : {})
-  }
-}
-
 const INLINE_EDIT_RECENT_CONTEXT_CHARS = 180
 
 export function WriteRichEditor({
@@ -257,6 +129,7 @@ export function WriteRichEditor({
   documentEpoch,
   imageDirectory,
   readOnly = false,
+  documentEditorV2 = false,
   requirementBadges = false,
   completionModel = '',
   completionEnabled = false,
@@ -300,6 +173,9 @@ export function WriteRichEditor({
   const onImagePasteErrorRef = useRef(onImagePasteError)
   const onFidelityChangeRef = useRef(onFidelityChange)
   const lastEmittedValueRef = useRef<string | null>(null)
+  const workCtxRef = useRef<WorkDocContext>(createWorkDocContext())
+  const documentEditorV2Ref = useRef(documentEditorV2)
+  const [frontmatter, setFrontmatter] = useState('')
   const [gate, setGate] = useState<GateState | null>(null)
 
   workspaceRootRef.current = workspaceRoot ?? ''
@@ -322,6 +198,7 @@ export function WriteRichEditor({
   onImagePasteSavedRef.current = onImagePasteSaved
   onImagePasteErrorRef.current = onImagePasteError
   onFidelityChangeRef.current = onFidelityChange
+  documentEditorV2Ref.current = documentEditorV2
 
   const fileKey = fileKeyOf(filePath)
   const eligible = gate?.fileKey === fileKey ? gate.eligible : null
@@ -331,6 +208,27 @@ export function WriteRichEditor({
   // and is never re-audited.
   useEffect(() => {
     if (value === lastEmittedValueRef.current && gate?.fileKey === fileKey) return
+    if (documentEditorV2) {
+      // The unified codec preserves every construct, so nothing is gated.
+      onFidelityChangeRef.current?.({ eligible: true, normalized: value })
+      setGate({ fileKey, eligible: true })
+      const editor = editorRef.current
+      if (editor && !editor.isDestroyed) {
+        if (applyExternalMarkdownToEditor(editor, value, (markdown) => {
+          const parsed = parseWorkDocument(markdown)
+          workCtxRef.current = parsed.ctx
+          setFrontmatter(parsed.ctx.frontmatter)
+          return parsed.doc
+        })) {
+          lastEmittedValueRef.current = value
+        }
+      } else {
+        const parsed = parseWorkDocument(value)
+        workCtxRef.current = parsed.ctx
+        setFrontmatter(parsed.ctx.frontmatter)
+      }
+      return
+    }
     const fidelity = auditWriteMarkdownFidelity(value)
     onFidelityChangeRef.current?.(fidelity)
     const detail = fidelity.eligible ? undefined : fidelity.detail
@@ -352,7 +250,7 @@ export function WriteRichEditor({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, fileKey])
+  }, [value, fileKey, documentEditorV2])
 
   useEffect(() => {
     if (eligible !== true || !hostRef.current || editorRef.current) return
@@ -421,10 +319,19 @@ export function WriteRichEditor({
       ]
     })
 
+    const initialContent = documentEditorV2Ref.current
+      ? (() => {
+          const parsed = parseWorkDocument(value)
+          workCtxRef.current = parsed.ctx
+          setFrontmatter(parsed.ctx.frontmatter)
+          return parsed.doc
+        })()
+      : parseWriteMarkdown(value)
+
     const editor = new Editor({
       element: hostRef.current,
       extensions,
-      content: parseWriteMarkdown(value),
+      content: initialContent,
       editable: !readOnlyRef.current,
       editorProps: {
         attributes: {
@@ -442,7 +349,10 @@ export function WriteRichEditor({
           return
         }
         try {
-          const markdown = manager.serialize(instance.state.doc.toJSON())
+          const docJson = instance.state.doc.toJSON()
+          const markdown = documentEditorV2Ref.current
+            ? serializeWorkDocument(docJson, workCtxRef.current)
+            : manager.serialize(docJson)
           lastEmittedValueRef.current = markdown
           onChangeRef.current(markdown)
         } catch (error) {
@@ -632,10 +542,36 @@ export function WriteRichEditor({
     )
   }
 
+  const handleFrontmatterChange = (block: string): void => {
+    workCtxRef.current.frontmatter = block
+    setFrontmatter(block)
+    const instance = editorRef.current
+    if (instance && !instance.isDestroyed) {
+      const markdown = serializeWorkDocument(instance.state.doc.toJSON(), workCtxRef.current)
+      lastEmittedValueRef.current = markdown
+      onChangeRef.current(markdown)
+    }
+  }
+
+  if (!documentEditorV2) {
+    return (
+      <div
+        ref={hostRef}
+        className="write-rich-host flex h-full min-h-0 w-full min-w-0 flex-col overflow-y-auto"
+      />
+    )
+  }
   return (
-    <div
-      ref={hostRef}
-      className="write-rich-host flex h-full min-h-0 w-full min-w-0 flex-col overflow-y-auto"
-    />
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
+      <WritePropertiesPanel
+        frontmatter={frontmatter}
+        onFrontmatterChange={handleFrontmatterChange}
+        readOnly={readOnly}
+      />
+      <div
+        ref={hostRef}
+        className="write-rich-host flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto"
+      />
+    </div>
   )
 }

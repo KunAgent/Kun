@@ -29,6 +29,7 @@ type Props = {
   whiteboard?: WorkWhiteboard
   requestedPath: string | null
   viewMode: WritePreviewMode
+  documentEditorV2?: boolean
   workspaceRoot: string
   workspaceName: string
   workspacePathLabel: string
@@ -81,6 +82,7 @@ export function WriteEditorGroupContent({
   whiteboard,
   requestedPath,
   viewMode,
+  documentEditorV2 = false,
   workspaceRoot,
   workspaceName,
   workspacePathLabel,
@@ -219,6 +221,7 @@ export function WriteEditorGroupContent({
         previewWidth="min-w-0 flex-1"
         editorAppearance={editorAppearance}
         richModeActive={richModeActive}
+        documentEditorV2={documentEditorV2}
         richHandleRef={resolvedRichRef}
         markdownHandleRef={resolvedMarkdownRef}
         onMarkdownReviewStateChange={onReviewStateChange}

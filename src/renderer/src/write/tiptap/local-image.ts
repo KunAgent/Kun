@@ -31,6 +31,17 @@ export const WriteLocalImage = Image.extend<WriteLocalImageOptions>({
     }
   },
 
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      // Reference-style image (`![alt][id]`): serializes back to reference
+      // form instead of `![alt](src)`.
+      identifier: { default: null, rendered: false },
+      label: { default: null, rendered: false },
+      reference: { default: null, rendered: false }
+    }
+  },
+
   addNodeView() {
     return ({ node }) => {
       const pendingId = parsePendingInfographicId(

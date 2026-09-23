@@ -12,6 +12,7 @@ import { CodeBlock, tildeInputRegex } from '@tiptap/extension-code-block'
 import { Plugin, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
 import { WriteLocalImage } from './local-image'
 import { findUnsupportedConstructs } from './markdown-construct-gate'
+import { buildWorkConstructExtensions } from './nodes'
 
 export type WriteRichFidelity =
   | { eligible: true; normalized: string }
@@ -66,6 +67,14 @@ export const WriteCodeBlock = CodeBlock.extend({
       ...this.parent?.(),
       writeFenceLength: {
         default: 3,
+        rendered: false
+      },
+      fenceChar: {
+        default: '`',
+        rendered: false
+      },
+      meta: {
+        default: null,
         rendered: false
       }
     }
@@ -148,7 +157,14 @@ export const WriteOrderedList = OrderedList.extend({
     OrderedList.config.markdownTokenizer!,
     /^(\s*)(\d+)\.\s+/,
     false
-  )
+  ),
+
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      tight: { default: true, rendered: false }
+    }
+  }
 })
 
 export const WriteTaskList = TaskList.extend({
@@ -156,7 +172,14 @@ export const WriteTaskList = TaskList.extend({
     TaskList.config.markdownTokenizer!,
     /^(\s*)([-+*])\s+\[([ xX])\]\s+/,
     true
-  )
+  ),
+
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      tight: { default: true, rendered: false }
+    }
+  }
 })
 
 export type WriteRichRuntimeOptions = {
@@ -169,19 +192,23 @@ export type WriteRichRuntimeOptions = {
 export function buildWriteRichExtensions(runtime?: WriteRichRuntimeOptions): AnyExtension[] {
   return [
     StarterKit.configure({
-      link: { openOnClick: false },
+      link: false,
+      bulletList: false,
       codeBlock: false,
       orderedList: false,
       // The rich editor manages undo depth like the CodeMirror history()
       undoRedo: { depth: 200 }
     }),
     TableKit.configure({
-      table: { resizable: false }
+      table: { resizable: false },
+      tableHeader: false,
+      tableCell: false
     }),
     WriteOrderedList,
     WriteTaskList,
     TaskItem.configure({ nested: true }),
     WriteCodeBlock,
+    ...buildWorkConstructExtensions(),
     runtime?.image ?? WriteLocalImage,
     ...(runtime?.extra ?? [])
   ]

@@ -139,6 +139,7 @@ export function WriteWorkspaceView({
       activeFileKind: s.activeFileKind,
       autoSaveEnabled: s.autoSaveEnabled,
       autoSaveDelayMs: s.autoSaveDelayMs,
+      documentEditorV2: s.documentEditorV2,
       rootDirectory: s.rootDirectory,
       entriesByDir: s.entriesByDir,
       loadingDirs: s.loadingDirs,
