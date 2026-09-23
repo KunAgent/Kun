@@ -7,12 +7,29 @@ import {
 import { defaultConversationWorkspaceRoot } from '../lib/workspace-path'
 import { readCodeWorkspaceFolderSets } from '../lib/code-workspace-folder-sets'
 import { readRemovedCodeWorkspaces } from '../lib/removed-code-workspaces'
-import { readProtectedSurfaceRestore } from '../extensions/protected-surface-session'
+import {
+  clearProtectedSurfaceRestore,
+  readProtectedSurfaceRestore
+} from '../extensions/protected-surface-session'
 
 import { readUnreadCompletions } from './unread-completions'
 
+/**
+ * Remote web never needs the protected-surface reload restore (there are no
+ * extension content scripts in a browser), and restoring into the desktop
+ * settings route there used to trap the page on a permanent loading state.
+ */
+function readInitialProtectedSurfaceRestore(): ReturnType<typeof readProtectedSurfaceRestore> {
+  if (typeof window !== 'undefined' && window.kunGui?.isRemoteWeb === true) {
+    clearProtectedSurfaceRestore('settings')
+    clearProtectedSurfaceRestore('initial-setup')
+    return undefined
+  }
+  return readProtectedSurfaceRestore()
+}
+
 export function createInitialChatStoreState(workingDirectoryLabel: string) {
-  const protectedSurfaceRestore = readProtectedSurfaceRestore()
+  const protectedSurfaceRestore = readInitialProtectedSurfaceRestore()
   return {
     route: (protectedSurfaceRestore === 'settings' ? 'settings' : 'chat') as 'settings' | 'chat',
     settingsReturnRoute: 'chat' as const,

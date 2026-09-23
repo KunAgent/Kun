@@ -287,6 +287,25 @@ describe('chat-store navigation workspace selection', () => {
     expect(harness.state.workspaceRootLocal).toBe(false)
   })
 
+  it('selectWorkspaceRoot persists a same-root pick that was only held renderer-locally', async () => {
+    const setSettings = vi.fn(async (patch: { workspaceRoot?: string }) => ({
+      workspaceRoot: patch.workspaceRoot ?? ''
+    }))
+    vi.stubGlobal('window', { kunGui: { setSettings } })
+    const harness = buildHarness()
+
+    await harness.actions.selectWorkspaceRoot('/remote/picked', { persist: false })
+    expect(harness.state.activeThreadId).toBeNull()
+    expect(harness.state.workspaceRootLocal).toBe(true)
+
+    // Same root, empty composer: the early return must not swallow the
+    // persisted pick or leave the renderer-local marker behind.
+    await expect(harness.actions.selectWorkspaceRoot('/remote/picked'))
+      .resolves.toBe('/remote/picked')
+    expect(setSettings).toHaveBeenCalledWith({ workspaceRoot: '/remote/picked' })
+    expect(harness.state.workspaceRootLocal).toBe(false)
+  })
+
   it('selectWorkspaceRoot ignores an empty path', async () => {
     const setSettings = vi.fn(async () => ({ workspaceRoot: '' }))
     vi.stubGlobal('window', { kunGui: { setSettings } })

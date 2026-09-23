@@ -549,6 +549,21 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
         })
         return
       }
+      // Remote transport terminals (sender reset / expiry / hub overflow / ACK
+      // timeout) do not end the side turn; resubscribe from the cursor.
+      if (
+        reset.code === 'remote_client_expired' ||
+        reset.code === 'remote_buffer_overflow' ||
+        reset.code === 'renderer_ack_timeout'
+      ) {
+        const side = get().sideConversations[sideId]
+        const controller = sideAbortControllers.get(sideId)
+        // Only a still-owned subscription is rebuilt; a torn-down side stays down.
+        if (side && controller && !controller.signal.aborted) {
+          startSideSubscription(sideId, side.lastSeq, ctx)
+        }
+        return
+      }
       const completedTurnId = get().sideConversations[sideId]?.turnId
       set((s) =>
         patchSide(s, sideId, (side) => ({

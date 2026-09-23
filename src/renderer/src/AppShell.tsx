@@ -173,7 +173,7 @@ export default function AppShell(): React.ReactElement {
           <RuntimeStatusBanner />
           <DataMigrationActivityIndicator />
           <Suspense fallback={<RouteFallback />}>
-            {route === 'settings' ? (
+            {route === 'settings' && surface !== 'mobile' ? (
               <ProtectedRendererSurface
                 kind="account-credentials"
                 restoreTarget="settings"

@@ -101,12 +101,21 @@ import {
   threadFromCore
 } from './kun-mapper'
 import { rendererRuntimeClient } from './runtime-client'
+import { registerRemoteStreamResubscriber } from '../lib/remote-stream-resubscribers'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { DesignDocumentTarget } from './design-task-profile'
 
 const MAX_PENDING_SSE_DISPATCH_BATCHES = 32
 
 /** Preserves the native SSE failure status for the store's recovery policy. */
+/** Readable text for terminal frames that carry no runtime message. */
+export function sseErrorFallbackMessage(code: SseErrorCode | undefined, status: number | undefined): string {
+  if (code === 'remote_client_expired' || code === 'remote_buffer_overflow' || code === 'renderer_ack_timeout') {
+    return 'Live updates were interrupted; reconnecting.'
+  }
+  return status ? `Live updates disconnected (HTTP ${status}).` : 'Live updates disconnected.'
+}
+
 export class KunSseSubscriptionError extends Error {
   constructor(
     message: string,
@@ -514,8 +523,24 @@ export class KunRuntimeProviderServices {
         offErr()
         offOpen()
         signal.removeEventListener('abort', onAbort)
+        offSenderReset()
         void dispatchTail.finally(() => resolve())
       }
+      // A Remote sender reset drops this registration on the host without any
+      // terminal frame. Synthesize the transport terminal locally so every
+      // consumer (active thread, side threads, Graph observers) runs its own
+      // reconnect path instead of waiting on a dead stream forever.
+      const offSenderReset = registerRemoteStreamResubscriber(() => {
+        if (settled || signal.aborted) return
+        sink.onError(new KunSseSubscriptionError(
+          sseErrorFallbackMessage('remote_client_expired', undefined),
+          undefined,
+          'remote_client_expired',
+          threadId
+        ))
+        void rendererRuntimeClient.stopSse(streamId)
+        finish()
+      })
       const offData = rendererRuntimeClient.onSseEvent((payload) => {
         if (payload.streamId !== streamId) return
         // Older main processes (pre-batching) deliver a single event under
@@ -636,7 +661,7 @@ export class KunRuntimeProviderServices {
       }) => {
         if (sid !== streamId) return
         sink.onError(new KunSseSubscriptionError(
-          message ?? `sse error ${status ?? ''}`,
+          message ?? sseErrorFallbackMessage(code, status),
           status,
           code,
           resetThreadId,

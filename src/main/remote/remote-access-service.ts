@@ -464,7 +464,9 @@ export class RemoteAccessService {
     this.hub.attachStream(clientId, res, {
       remoteAddress: remoteAddressOf(req),
       userAgent: String(req.headers['user-agent'] ?? ''),
-      resume: params.get('resume') === '1'
+      resume: params.get('resume') === '1',
+      // Native EventSource retries echo the hub epoch written on attach.
+      lastEventId: String(req.headers['last-event-id'] ?? '')
     })
     this.emitStatus()
   }

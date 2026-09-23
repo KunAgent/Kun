@@ -15,6 +15,7 @@ import { KunRuntimeProvider } from './kun-runtime'
 import { getProvider, resetProviderCacheForTests } from './registry'
 import { rendererRuntimeClient } from './runtime-client'
 import type { ThreadEventSink } from './types'
+import { resubscribeAllRemoteStreams } from '../lib/remote-stream-resubscribers'
 
 const DEFAULT_EXECUTION_SETTINGS = {
   approvalPolicy: 'auto',
@@ -152,6 +153,44 @@ describe('KunRuntimeProvider', () => {
       itemId: 'item_text',
       createdAt: 't1'
     }])
+  })
+
+  it('ends an in-flight subscription with a transport terminal on a Remote sender reset', async () => {
+    const ac = new AbortController()
+    const sink: ThreadEventSink = {
+      onSeq: vi.fn(),
+      onDeltas: vi.fn(),
+      onUserMessage: vi.fn(),
+      onTool: vi.fn(),
+      onCompaction: vi.fn(),
+      onApproval: vi.fn(),
+      onUserInput: vi.fn(),
+      onUserInputStatus: vi.fn(),
+      onGoal: vi.fn(),
+      onTodos: vi.fn(),
+      onTurnComplete: vi.fn(),
+      onError: vi.fn()
+    }
+    const stopSse = vi.fn(async () => true)
+    installDsGui({
+      stopSse,
+      startSse: vi.fn(async (_threadId, _sinceSeq, streamId) => ({ streamId: streamId ?? 'stream-1' }))
+    })
+    const provider = new KunRuntimeProvider()
+    const subscription = provider.subscribeThreadEvents('thr_reset', 4, sink, ac.signal)
+    await Promise.resolve()
+    await Promise.resolve()
+    // The host dropped the registration without any terminal frame.
+    resubscribeAllRemoteStreams()
+    await subscription
+    expect(sink.onError).toHaveBeenCalledTimes(1)
+    const error = vi.mocked(sink.onError).mock.calls[0]![0] as Error & { code?: string; threadId?: string }
+    expect(error.code).toBe('remote_client_expired')
+    expect(error.threadId).toBe('thr_reset')
+    expect(stopSse).toHaveBeenCalled()
+    // A settled subscription must not react to later resets.
+    resubscribeAllRemoteStreams()
+    expect(sink.onError).toHaveBeenCalledTimes(1)
   })
 
   it('does not report connected when startSse resolves without an open event', async () => {

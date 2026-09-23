@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { ServerResponse } from 'node:http'
 import type { RemoteAccessClientInfo } from '../../shared/remote-access'
 import { RemoteClientSender } from './remote-sender'
@@ -55,6 +56,10 @@ type RemoteClient = {
   overflowedStreams: Set<string>
   /** Set when a destroyed sender was replaced so the next attach learns it. */
   senderRecreated: boolean
+  /** True once any EventSource attached to this entry. An entry created by an
+   *  invoke (clientFor) that races ahead of the stream reattach is not "known"
+   *  to the browser, so it must not suppress remote:sender-reset. */
+  hasAttachedStream: boolean
 }
 
 function bufferedEventFor(channel: string, payload: unknown): BufferedEvent {
@@ -85,7 +90,19 @@ function enforceBufferLimit(client: RemoteClient): Set<string> {
   const overflowedNow = new Set<string>()
   if (client.buffered.length <= MAX_BUFFERED_EVENTS_PER_CLIENT) return overflowedNow
 
-  let remaining = client.buffered.filter((frame) => frame.kind !== 'lossy')
+  // Evict only as many of the oldest lossy frames as needed — one extra frame
+  // must not wipe the whole buffered terminal/file-change backlog.
+  let remaining = client.buffered
+  let excess = remaining.length - MAX_BUFFERED_EVENTS_PER_CLIENT
+  if (excess > 0) {
+    remaining = remaining.filter((frame) => {
+      if (excess > 0 && frame.kind === 'lossy') {
+        excess -= 1
+        return false
+      }
+      return true
+    })
+  }
   if (remaining.length <= MAX_BUFFERED_EVENTS_PER_CLIENT) {
     client.buffered = remaining
     return overflowedNow
@@ -149,6 +166,14 @@ function writeSseFrame(res: ServerResponse, channel: string, payload: unknown): 
   }
 }
 
+/** An id-only SSE block: sets the browser's lastEventId without dispatching. */
+function writeSseEventId(res: ServerResponse, id: string): void {
+  if (res.destroyed || res.writableEnded) return
+  try {
+    res.write(`id: ${id}\n\n`)
+  } catch { /* best-effort */ }
+}
+
 /**
  * Tracks Remote browser clients and fans Electron-side `sender.send` calls out
  * as SSE frames. Events that arrive while a client has no open stream are
@@ -156,6 +181,13 @@ function writeSseFrame(res: ServerResponse, channel: string, payload: unknown): 
  */
 export class RemoteEventHub {
   private readonly clients = new Map<string, RemoteClient>()
+  /**
+   * Identifies this hub instance. Every attach writes it as the SSE event id,
+   * so the browser echoes it back as `Last-Event-ID` on native EventSource
+   * retries — a mismatch (app restarted) or an unknown client means every
+   * stream registered before is gone.
+   */
+  readonly epoch = randomUUID()
 
   clientFor(
     clientId: string,
@@ -176,10 +208,10 @@ export class RemoteEventHub {
   attachStream(
     clientId: string,
     res: ServerResponse,
-    meta: { remoteAddress?: string; userAgent?: string; resume?: boolean } = {}
+    meta: { remoteAddress?: string; userAgent?: string; resume?: boolean; lastEventId?: string } = {}
   ): RemoteClient {
-    const existed = this.clients.has(clientId)
     const client = this.ensureClient(clientId, meta)
+    const knownToBrowser = client.hasAttachedStream
     if (client.idleTimer) {
       clearTimeout(client.idleTimer)
       client.idleTimer = null
@@ -187,15 +219,21 @@ export class RemoteEventHub {
     if (meta.remoteAddress) client.remoteAddress = meta.remoteAddress
     if (meta.userAgent) client.userAgent = meta.userAgent
     client.streams.add(res)
-    // Tell the browser when its sender-side state was recreated: either the
-    // idle grace expired and ensureClient built a fresh sender, or a resume
-    // attach arrived for a client the hub already forgot (retention elapsed).
-    // Owned streams were torn down in both cases, so the renderer must
-    // resubscribe instead of waiting on dead registrations.
-    if (client.senderRecreated || (meta.resume === true && !existed)) {
+    // Tell the browser when its sender-side state was recreated: the idle
+    // grace expired and ensureClient built a fresh sender; or a returning
+    // browser (resume flag, or a native retry echoing Last-Event-ID) reached
+    // an entry that never had a stream (forgotten after retention, or
+    // recreated by an invoke that raced ahead); or the hub itself is new.
+    // Owned streams are gone in every case, so the renderer must resubscribe.
+    const lastEventId = meta.lastEventId?.trim() ?? ''
+    const returning = meta.resume === true || lastEventId.length > 0
+    const epochChanged = lastEventId.length > 0 && lastEventId !== this.epoch
+    if (client.senderRecreated || epochChanged || (returning && !knownToBrowser)) {
       writeSseFrame(res, 'remote:sender-reset', {})
       client.senderRecreated = false
     }
+    client.hasAttachedStream = true
+    writeSseEventId(res, this.epoch)
     for (const frame of client.buffered) writeSseFrame(res, frame.channel, frame.payload)
     client.buffered = []
     client.overflowedStreams.clear()
@@ -344,7 +382,8 @@ export class RemoteEventHub {
       idleTimer: null,
       expiryTimer: null,
       overflowedStreams: new Set(),
-      senderRecreated: false
+      senderRecreated: false,
+      hasAttachedStream: false
     }
     this.clients.set(clientId, client)
     this.scheduleIdleCleanup(client)

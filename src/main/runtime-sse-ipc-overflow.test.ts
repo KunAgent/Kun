@@ -88,4 +88,40 @@ describe('runtime-sse-ipc remote overflow', () => {
     expect(signals[1].aborted).toBe(true)
     sender.destroy()
   })
+
+  it('does not leave an ACK timer that later emits a stray terminal after an in-send overflow', async () => {
+    registerRuntimeSseIpc({
+      ipcMain: mockIpcMain,
+      store: mockStore,
+      ensureRuntime: mockEnsureRuntime,
+      assertRendererRuntimeReady: () => undefined,
+      logError: mockLogError
+    })
+    const sent: Array<{ channel: string; payload: any }> = []
+    let sender: RemoteClientSender
+    sender = new RemoteClientSender('client-1', (channel, payload) => {
+      sent.push({ channel, payload: payload as any })
+      // The hub overflows this stream while the batch is being sent.
+      if (channel === 'runtime:sse-event') {
+        sender.emit('remote:streams-overflowed', [(payload as { streamId: string }).streamId])
+      }
+    })
+    const encoder = new TextEncoder()
+    mockFetch.mockResolvedValue(new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('id: 1\ndata: {"seq":1,"kind":"heartbeat"}\n\n'))
+      }
+    }), { status: 200, headers: { 'content-type': 'text/event-stream' } }))
+
+    await handlers.get('runtime:sse:start')!({ sender }, {
+      threadId: 'thread-a', sinceSeq: 0, acknowledgedBatches: true
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sent.some((frame) => frame.channel === 'runtime:sse-event')).toBe(true)
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(sent.some((frame) =>
+      frame.channel === 'runtime:sse-error' && frame.payload?.code === 'renderer_ack_timeout'
+    )).toBe(false)
+    sender.destroy()
+  })
 })

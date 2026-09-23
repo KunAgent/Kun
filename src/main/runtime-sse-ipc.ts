@@ -392,6 +392,11 @@ export function registerRuntimeSseIpc(options: {
                 ac.abort()
                 return false
               }
+              // A Remote hub overflow stops this stream synchronously inside
+              // the send above. Registering the batch against an aborted
+              // signal would leave a timer that later emits a stray
+              // renderer_ack_timeout terminal for this stream id.
+              if (state.stoppedByClient || ac.signal.aborted) return false
               if (batchId) {
                 state.ackWindow.registerSentBatch({
                   batchId,

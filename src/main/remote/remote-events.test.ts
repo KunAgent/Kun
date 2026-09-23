@@ -2,15 +2,26 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ServerResponse } from 'node:http'
 import { RemoteEventHub } from './remote-events'
 
-function fakeStream(): ServerResponse & { written: string[]; on: (ev: string, cb: () => void) => void } {
+type FakeStream = ServerResponse & {
+  written: string[]
+  ids: string[]
+  on: (ev: string, cb: () => void) => void
+}
+
+function fakeStream(): FakeStream {
   const written: string[] = []
+  // id-only SSE blocks (the hub epoch) are recorded apart from event frames.
+  const ids: string[] = []
   const listeners = new Map<string, Array<() => void>>()
   const stream = {
     written,
+    ids,
     destroyed: false,
     writableEnded: false,
     write(chunk: string) {
-      written.push(chunk)
+      const id = /^id: (.*)\n\n$/.exec(chunk)
+      if (id) ids.push(id[1] ?? '')
+      else written.push(chunk)
       return true
     },
     end() {
@@ -27,7 +38,7 @@ function fakeStream(): ServerResponse & { written: string[]; on: (ev: string, cb
       for (const cb of listeners.get('close') ?? []) cb()
     }
   }
-  return stream as unknown as ServerResponse & { written: string[]; on: (ev: string, cb: () => void) => void }
+  return stream as unknown as FakeStream
 }
 
 describe('RemoteEventHub', () => {
@@ -200,5 +211,59 @@ describe('RemoteEventHub', () => {
     expect(written).toContain('remote_client_expired')
     expect(written).toContain('"seq":29')
     expect(written).not.toContain('remote_buffer_overflow')
+  })
+
+  it('stamps every attach with the hub epoch as the SSE event id', () => {
+    const hub = new RemoteEventHub()
+    const stream = fakeStream()
+    hub.attachStream('client-1', stream)
+    expect(stream.ids).toEqual([hub.epoch])
+  })
+
+  it('emits remote:sender-reset when a native retry echoes another hub epoch', () => {
+    const hub = new RemoteEventHub()
+    const stream = fakeStream()
+    // No resume flag: the browser's own EventSource retry only carries Last-Event-ID.
+    hub.attachStream('client-1', stream, { lastEventId: 'previous-hub-epoch' })
+    expect(stream.written[0]).toContain('remote:sender-reset')
+  })
+
+  it('emits remote:sender-reset for a native retry of a forgotten client on the same hub', () => {
+    const hub = new RemoteEventHub()
+    const stream = fakeStream()
+    hub.attachStream('client-1', stream, { lastEventId: hub.epoch })
+    expect(stream.written[0]).toContain('remote:sender-reset')
+  })
+
+  it('does not reset a native retry of a client the hub still knows', () => {
+    const hub = new RemoteEventHub()
+    const first = fakeStream()
+    hub.attachStream('client-1', first)
+    ;(first as unknown as { emitClose: () => void }).emitClose()
+    const retry = fakeStream()
+    hub.attachStream('client-1', retry, { lastEventId: hub.epoch })
+    expect(retry.written.some((frame) => frame.includes('remote:sender-reset'))).toBe(false)
+  })
+
+  it('still resets when an invoke recreated the forgotten entry before the stream reattached', () => {
+    const hub = new RemoteEventHub()
+    // The returning page's first invoke races ahead of its EventSource.
+    hub.clientFor('client-1')
+    const stream = fakeStream()
+    hub.attachStream('client-1', stream, { resume: true })
+    expect(stream.written[0]).toContain('remote:sender-reset')
+  })
+
+  it('evicts only as many lossy frames as needed to fit the backlog', () => {
+    const hub = new RemoteEventHub()
+    hub.clientFor('client-1')
+    for (let i = 0; i < 513; i += 1) {
+      hub.emitToClient('client-1', 'terminal:data', { sessionId: 'term-1', chunk: i })
+    }
+    const stream = fakeStream()
+    hub.attachStream('client-1', stream)
+    expect(stream.written).toHaveLength(512)
+    expect(stream.written[0]).toContain('"chunk":1}')
+    expect(stream.written[511]).toContain('"chunk":512}')
   })
 })

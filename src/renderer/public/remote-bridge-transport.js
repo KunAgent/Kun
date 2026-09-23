@@ -68,7 +68,9 @@ window.__kunRemoteCreateTransport = function createKunRemoteTransport() {
     if (authFailed || reconnectTimer) return
     reconnectTimer = setTimeout(function () {
       reconnectTimer = null
-      if (eventSource) return
+      // The auth probe resolves after this timer was armed; an expired
+      // session is on its way to the login page and must not reconnect.
+      if (authFailed || eventSource) return
       ensureEventStream()
     }, reconnectDelayMs)
     reconnectDelayMs = Math.min(reconnectDelayMs * 2, MAX_RECONNECT_DELAY_MS)

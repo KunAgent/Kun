@@ -17,6 +17,7 @@ import { openRoomContentTarget } from '../components/rooms/room-content-navigati
 import { workFileResourceKey, workWhiteboardResourceKey } from './work/work-resource-key'
 import { useWorkBeforeUnloadGuard } from './use-work-before-unload-guard'
 import { useMobileViewport } from './use-mobile-viewport'
+import { MobileCodeSettings } from './chat/MobileCodeSettings'
 import './mobile-app-shell.css'
 
 const MobileRoomNew = lazy(() => import('./rooms/MobileRoomNew').then((module) => ({
@@ -102,8 +103,14 @@ export function MobileAppShell(): ReactElement {
   const { route: currentRoute, setRoute } = chat
   const { initialize: initializeWork, loadSettings: loadWorkSettings, workspaceRoot: workRoot } = work
 
+  // The desktop settings route is never rendered on the phone (AppShell
+  // routes it here). Any path that requests it — the Work settings button, a
+  // runtime that needs configuration, a timeline error card — opens the
+  // mobile settings sheet instead, and the route returns to the current mode.
+  const [settingsOpen, setSettingsOpen] = useState(false)
   useEffect(() => {
     const target = workbenchRouteForMode(page.mode)
+    if (currentRoute === 'settings') setSettingsOpen(true)
     if (currentRoute !== target) setRoute(target)
   }, [currentRoute, page.mode, setRoute])
   useEffect(() => {
@@ -213,7 +220,7 @@ export function MobileAppShell(): ReactElement {
     content = <MobileWorkResourceScreen resourceKey={page.resourceKey} view={page.view}
       onBack={() => void leaveWorkResource()}
       onView={(view) => navigate({ mode: 'work', kind: 'resource', resourceKey: page.resourceKey, view }, true)}
-      onSettings={() => chat.setRoute('settings')} />
+      onSettings={() => setSettingsOpen(true)} />
   } else if (page.kind !== 'home') {
     content = <MobileUnavailable title={page.kind} onBack={() => navigate({ mode: page.mode, kind: 'home' })} />
   } else if (page.mode === 'rooms') {
@@ -247,5 +254,6 @@ export function MobileAppShell(): ReactElement {
     {page.kind === 'home' ? <MobileModeNav active={page.mode} attentionCount={roomAttention}
       labels={{ code: 'Code', rooms: t('roomsLabel'), work: t('workspaceModeWorkLabel') }}
       onSelect={(mode) => void selectMode(mode)} /> : null}
+    <MobileCodeSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
   </div>
 }

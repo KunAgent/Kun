@@ -271,7 +271,14 @@ export function createNavigationWorkspaceActions(
       return null
     }
     // Already on this directory with an empty composer — nothing to switch.
-    if (normalizeWorkspaceRoot(get().workspaceRoot) === normalized && !get().activeThreadId) {
+    // A persisted pick of the root that is only held renderer-locally must
+    // still reach the host settings, so it takes the full path below.
+    const persistRequested = options?.persist !== false
+    if (
+      normalizeWorkspaceRoot(get().workspaceRoot) === normalized &&
+      !get().activeThreadId &&
+      !(persistRequested && get().workspaceRootLocal)
+    ) {
       set({ route: 'chat', error: null })
       return normalized
     }

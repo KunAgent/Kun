@@ -132,7 +132,7 @@ export function removedWorkspaceVisibilityForState(
       removedCodeWorkspaces: registry,
       codeWorkspaceRoots: codeRootsAfterRemoval(state.codeWorkspaceRoots, registry),
       ...(selectedWorkspaceRemoved
-        ? { workspaceRoot: '', workspaceLabel: workspaceLabelFromPath('') }
+        ? { workspaceRoot: '', workspaceRootLocal: false, workspaceLabel: workspaceLabelFromPath('') }
         : {}),
       ...(activeThreadRemoved ? clearedThreadSelection() : {}),
       ...(rememberedThreadRemoved ? { lastCodeThreadId: null } : {})
