@@ -173,6 +173,7 @@ const UNAMBIGUOUS_URL_MATCHES = urlMatchMap({
   'https://dashscope-intl.aliyuncs.com/compatible-mode/v1': 'alibaba',
   'https://api.lkeap.cloud.tencent.com/plan/v3': 'tencent-token-plan',
   'https://ai-gateway.vercel.sh/v1': 'vercel',
+  'https://api.opper.ai/v3/compat': 'opper',
   'https://token-plan-cn.xiaomimimo.com/v1': 'xiaomi-token-plan-cn',
   'https://token-plan-sgp.xiaomimimo.com/v1': 'xiaomi-token-plan-sgp',
   'https://token-plan-ams.xiaomimimo.com/v1': 'xiaomi-token-plan-ams',
