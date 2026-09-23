@@ -41,7 +41,7 @@
   "writeModeSplit": "분할 미리보기",
   "writeModePreview": "미리보기만 가능",
   "writeCharacterCount": "{{count}}자",
-  "writeDocumentStats": "Words {{words}} · Characters {{characters}}",
+  "writeDocumentStats": "Words {{words}} · Characters {{characters}} · ~{{minutes}} min",
   "writePreviewErrorFallback": "마크다운 미리보기에 실패하여 대신 소스 텍스트가 표시됩니다.",
   "writeUnsupportedFileType": "업무에서는 Markdown과 TXT를 편집하고 PDF, Office 문서, 일반 이미지를 읽기 전용으로 미리 볼 수 있습니다.",
   "writeImagePreview": "이미지 미리보기",

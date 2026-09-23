@@ -41,7 +41,7 @@
   "writeModeSplit": "แยกตัวอย่าง",
   "writeModePreview": "ดูตัวอย่างเท่านั้น",
   "writeCharacterCount": "{{count}} ตัวอักษร",
-  "writeDocumentStats": "Words {{words}} · Characters {{characters}}",
+  "writeDocumentStats": "Words {{words}} · Characters {{characters}} · ~{{minutes}} นาที",
   "writePreviewErrorFallback": "การแสดงตัวอย่าง Markdown ล้มเหลว โดยแสดงข้อความต้นฉบับแทน",
   "writeUnsupportedFileType": "งานแก้ไข Markdown และ TXT และเปิด PDF เอกสาร Office และรูปภาพทั่วไปเป็นตัวอย่างแบบอ่านอย่างเดียว",
   "writeImagePreview": "การแสดงตัวอย่างรูปภาพ",

@@ -48,6 +48,7 @@ type Props = {
   surfacePlain: boolean
   onToggleSurface: () => void
   onCopyRichText: () => void
+  onCopyMarkdown?: (() => void) | null
   onCopyXArticle: () => void
   onCopyXArticleImage: () => void
   xArticleImageCount: number
@@ -88,6 +89,7 @@ export function WriteWorkspaceToolbar({
   surfacePlain,
   onToggleSurface,
   onCopyRichText,
+  onCopyMarkdown,
   onCopyXArticle,
   onCopyXArticleImage,
   xArticleImageCount,
@@ -328,6 +330,20 @@ export function WriteWorkspaceToolbar({
                     <span>{t('writeCopyRichText')}</span>
                     <Copy className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.9} />
                   </button>
+                  {activeFileIsText && isMarkdown && onCopyMarkdown ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onCopyMarkdown()
+                        setExportMenuOpen(false)
+                      }}
+                      className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[13px] text-ds-ink transition hover:bg-ds-hover/80"
+                    >
+                      <span>{t('writeCopyMarkdown')}</span>
+                      <Copy className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.9} />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     role="menuitem"

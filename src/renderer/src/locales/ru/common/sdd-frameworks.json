@@ -41,7 +41,7 @@
   "writeModeSplit": "Разделенный предварительный просмотр",
   "writeModePreview": "Только предварительный просмотр",
   "writeCharacterCount": "{{count}} символов",
-  "writeDocumentStats": "Слова {{words}} · Символы {{characters}}",
+  "writeDocumentStats": "Слова {{words}} · Символы {{characters}} · ~{{minutes}} мин",
   "writePreviewErrorFallback": "Предварительный просмотр Markdown не удался, вместо этого отображается исходный текст.",
   "writeUnsupportedFileType": "Работа редактирует Markdown и TXT, а PDF, документы Office и изображения открывает в режиме просмотра только для чтения.",
   "writeImagePreview": "Предварительный просмотр изображения",

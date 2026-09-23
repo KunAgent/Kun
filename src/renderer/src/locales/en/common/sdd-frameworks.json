@@ -41,7 +41,7 @@
   "writeModeSplit": "Split preview",
   "writeModePreview": "Preview only",
   "writeCharacterCount": "{{count}} chars",
-  "writeDocumentStats": "Words {{words}} · Characters {{characters}}",
+  "writeDocumentStats": "Words {{words}} · Characters {{characters}} · ~{{minutes}} min",
   "writePreviewErrorFallback": "Markdown preview failed, showing source text instead.",
   "writeUnsupportedFileType": "Work edits Markdown and TXT files and opens PDF, Office documents, and common images in read-only preview.",
   "writeImagePreview": "Image preview",

@@ -41,7 +41,7 @@
   "writeModeSplit": "分割プレビュー",
   "writeModePreview": "プレビューのみ",
   "writeCharacterCount": "{{count}} 文字",
-  "writeDocumentStats": "単語 {{words}} · 文字 {{characters}}",
+  "writeDocumentStats": "単語 {{words}} · 文字 {{characters}} · 約 {{minutes}} 分",
   "writePreviewErrorFallback": "マークダウンのプレビューが失敗し、代わりにソース テキストが表示されました。",
   "writeUnsupportedFileType": "ワークでは Markdown と TXT を編集し、PDF、Office 文書、一般的な画像を読み取り専用でプレビューできます。",
   "writeImagePreview": "画像プレビュー",

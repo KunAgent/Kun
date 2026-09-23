@@ -41,7 +41,7 @@
   "writeModeSplit": "विभाजित पूर्वावलोकन",
   "writeModePreview": "केवल पूर्वावलोकन करें",
   "writeCharacterCount": "{{count}} chars",
-  "writeDocumentStats": "Words {{words}} · Characters {{characters}}",
+  "writeDocumentStats": "Words {{words}} · Characters {{characters}} · ~{{minutes}} min",
   "writePreviewErrorFallback": "मार्कडाउन पूर्वावलोकन विफल रहा, इसके बजाय स्रोत पाठ दिखाया जा रहा है।",
   "writeUnsupportedFileType": "कार्य Markdown और TXT संपादित करता है तथा PDF, Office दस्तावेज़ और सामान्य छवियाँ केवल-पठन पूर्वावलोकन में खोलता है।",
   "writeImagePreview": "छवि पूर्वावलोकन",

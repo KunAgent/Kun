@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { Editor, Extension, type AnyExtension } from '@tiptap/core'
 import { useTranslation } from 'react-i18next'
+import i18n from '../../i18n'
 import 'katex/dist/katex.min.css'
 import type {
   WriteEditorSelectionState
@@ -47,6 +48,17 @@ import { WriteReviewSession } from './review/review-session'
 import { WriteWorkLinks } from './extensions/work-links'
 import { useWriteWorkspaceStore } from '../write-workspace-store'
 import { WriteDocumentReviewBar } from '../../components/write/WriteDocumentReviewBar'
+import { NodeRange } from '@tiptap/extension-node-range'
+import { Placeholder } from '@tiptap/extensions'
+import { search } from 'prosemirror-search'
+import { WriteBlockHandle } from './blocks/block-handle'
+import { WriteBlockSelection } from './blocks/block-selection'
+import { WriteSlashMenu } from './blocks/slash-menu'
+import { WritePasteMarkdown } from './blocks/write-paste'
+import { WriteTableToolbar } from './blocks/table-toolbar'
+import { WriteBlockShortcuts } from './blocks/write-shortcuts'
+import { WriteFindBar } from '../../components/write/WriteFindBar'
+import { WriteOutlineRail } from '../../components/write/WriteOutlineRail'
 
 /**
  * Imperative surface for flows that operate on the markdown projection
@@ -177,6 +189,11 @@ export function WriteRichEditor({
     index: 0
   })
   const [frontmatter, setFrontmatter] = useState('')
+  const [findBar, setFindBar] = useState<{ open: boolean; withReplace: boolean }>({
+    open: false,
+    withReplace: false
+  })
+  const [mountedEditor, setMountedEditor] = useState<Editor | null>(null)
 
   workspaceRootRef.current = workspaceRoot ?? ''
   filePathRef.current = filePath ?? ''
@@ -236,6 +253,14 @@ export function WriteRichEditor({
         return {
           'Mod-s': () => {
             onSaveShortcutRef.current()
+            return true
+          },
+          'Mod-f': () => {
+            setFindBar({ open: true, withReplace: false })
+            return true
+          },
+          'Mod-Alt-f': () => {
+            setFindBar({ open: true, withReplace: true })
             return true
           }
         }
@@ -305,6 +330,44 @@ export function WriteRichEditor({
         }),
         WriteDiffReview,
         ...(requirementBadges ? [SddRequirementBadges] : []),
+        NodeRange.configure({ depth: undefined, key: 'Shift' }),
+        WriteBlockSelection.configure({
+          getCtx: () => workCtxRef.current,
+          isReadOnly: () => readOnlyRef.current
+        }),
+        WriteBlockHandle.configure({
+          getCtx: () => workCtxRef.current,
+          getFilePath: () => filePathRef.current,
+          getWorkspaceRoot: () => workspaceRootRef.current,
+          isReadOnly: () => readOnlyRef.current,
+          isReviewActive: () => reviewSessionRef.current?.isActive() ?? false
+        }),
+        WriteSlashMenu.configure({
+          isReadOnly: () => readOnlyRef.current,
+          getWorkspaceRoot: () => workspaceRootRef.current,
+          getFilePath: () => filePathRef.current,
+          getImageDirectory: () => imageDirectoryRef.current
+        }),
+        WritePasteMarkdown.configure({ isReadOnly: () => readOnlyRef.current }),
+        WriteTableToolbar.configure({ isReadOnly: () => readOnlyRef.current }),
+        WriteBlockShortcuts.configure({ isReadOnly: () => readOnlyRef.current }),
+        Extension.create({
+          name: 'writeSearch',
+          addProseMirrorPlugins() {
+            return [search()]
+          }
+        }),
+        Placeholder.configure({
+          showOnlyCurrent: false,
+          includeChildren: false,
+          placeholder: ({ editor: instance, node, hasAnchor }) => {
+            if (instance.state.doc.childCount === 1 && instance.state.doc.firstChild === node) {
+              return i18n.t('writePlaceholderEmpty', { ns: 'common' })
+            }
+            if (hasAnchor) return i18n.t('writePlaceholderSlash', { ns: 'common' })
+            return ''
+          }
+        }),
         saveShortcut
       ]
     })
@@ -358,6 +421,7 @@ export function WriteRichEditor({
     })
 
     editorRef.current = editor
+    setMountedEditor(editor)
     lastEmittedValueRef.current = value
     onSelectionChangeRef.current(selectionStateFromEditor(editor))
 
@@ -535,6 +599,7 @@ export function WriteRichEditor({
       reviewSessionRef.current = null
       editor.destroy()
       editorRef.current = null
+      setMountedEditor(null)
     }
     // The editor is created once per file; value/file changes flow
     // through the sync effect above.
@@ -546,6 +611,12 @@ export function WriteRichEditor({
     if (!editor || editor.isDestroyed) return
     editor.setEditable(!readOnly)
   }, [readOnly])
+
+  const fileName = (() => {
+    const path = filePathRef.current.replace(/\\/g, '/')
+    const base = path.split('/').pop() ?? ''
+    return base.replace(/\.[^.]+$/, '')
+  })()
 
   const handleFrontmatterChange = (block: string): void => {
     workCtxRef.current.frontmatter = block
@@ -583,10 +654,20 @@ export function WriteRichEditor({
         onFrontmatterChange={handleFrontmatterChange}
         readOnly={readOnly}
       />
-      <div
-        ref={hostRef}
-        className="write-rich-host flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto"
+      <WriteFindBar
+        editor={mountedEditor}
+        open={findBar.open}
+        withReplace={findBar.withReplace}
+        onClose={() => setFindBar({ open: false, withReplace: false })}
       />
+      {fileName ? <div className="write-doc-title" aria-hidden="true">{fileName}</div> : null}
+      <div className="write-rich-scroll-wrap relative flex min-h-0 w-full min-w-0 flex-1">
+        <div
+          ref={hostRef}
+          className="write-rich-host flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto"
+        />
+        <WriteOutlineRail editor={mountedEditor} scrollHost={hostRef.current} />
+      </div>
     </div>
   )
 }

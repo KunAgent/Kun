@@ -41,7 +41,7 @@
   "writeModeSplit": "分栏预览",
   "writeModePreview": "仅预览",
   "writeCharacterCount": "字数 {{count}}",
-  "writeDocumentStats": "{{words}} 词 · {{characters}} 字",
+  "writeDocumentStats": "{{words}} 词 · {{characters}} 字 · 约 {{minutes}} 分钟",
   "writePreviewErrorFallback": "Markdown 预览渲染失败，已临时显示源码文本。",
   "writeUnsupportedFileType": "办公支持编辑 Markdown 和 TXT，并以只读方式预览 PDF、Office 文档和常见图片。",
   "writeImagePreview": "图片预览",

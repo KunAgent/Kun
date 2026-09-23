@@ -305,7 +305,8 @@ export function WriteWorkspaceView({
   const documentStatsLabel = documentStats
     ? t('writeDocumentStats', {
         words: documentStats.wordCount,
-        characters: documentStats.characterCount
+        characters: documentStats.characterCount,
+        minutes: Math.max(1, Math.ceil(documentStats.wordCount / 200))
       })
     : null
   const workspacePathLabel = rootDirectory || workspaceRoot
@@ -543,6 +544,11 @@ export function WriteWorkspaceView({
         reviewActive={reviewActive}
         setExportMenuOpen={setExportMenuOpen}
         onCopyRichText={() => void copyCurrentFileAsRichText()}
+        onCopyMarkdown={
+          activeFileIsText && isMarkdown
+            ? () => void navigator.clipboard?.writeText(fileContent)
+            : null
+        }
         onCopyXArticle={() => void copyCurrentFileAsXArticle()}
         onCopyXArticleImage={() => void copyCurrentFileAsXArticleImage()}
         xArticleImageCount={xArticleImageCount}
