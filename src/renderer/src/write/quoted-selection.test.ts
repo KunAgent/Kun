@@ -1,16 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
-import { harden } from 'rehype-harden'
-import { isExplicitWriteResourceUrl } from '@shared/write-markdown-resource'
-import type { WriteRetrievalContext } from '@shared/write-retrieval'
 import {
+  isExplicitWriteResourceUrl,
   resolveWriteMarkdownResource,
   resolveWriteMarkdownResourcePath,
-  writePathToFileUrl,
-  WriteMarkdownPreview,
-  writeMarkdownHardenOptions
-} from '../components/write/WriteMarkdownPreview'
+  writePathToFileUrl
+} from '@shared/write-markdown-resource'
+import type { WriteRetrievalContext } from '@shared/write-retrieval'
 import {
   WRITE_QUOTE_ORIGINAL_END,
   WRITE_QUOTE_ORIGINAL_START,
@@ -362,10 +357,6 @@ describe('write quoted selections', () => {
 })
 
 describe('write markdown preview resources', () => {
-  it('uses a rehype-harden config that can initialize without crashing preview', () => {
-    expect(() => harden(writeMarkdownHardenOptions)).not.toThrow()
-  })
-
   it('resolves relative image paths from the current markdown file', () => {
     const resolved = resolveWriteMarkdownResource('../assets/hero image.png', '/tmp/workspace/docs/draft.md')
     expect(resolved).toBe('file:///tmp/workspace/assets/hero%20image.png')
@@ -385,17 +376,6 @@ describe('write markdown preview resources', () => {
     expect(writePathToFileUrl('\\\\server\\share\\hero image.png')).toBe(
       'file://server/share/hero%20image.png'
     )
-  })
-
-  it('renders bare relative markdown images from the current markdown file', () => {
-    const html = renderToStaticMarkup(createElement(WriteMarkdownPreview, {
-      content: '![信息图](img/infographic.png)',
-      isMarkdown: true,
-      filePath: '/tmp/write_workspace/doc.md'
-    }))
-
-    expect(html).toContain('src="file:///tmp/write_workspace/img/infographic.png"')
-    expect(html).not.toContain('https://kun.local/img/infographic.png')
   })
 
   it('keeps explicit external URLs unchanged', () => {

@@ -16,7 +16,6 @@ import {
   applyWriteBlockTypeToLines,
   detectWriteBlockTypeFromLine
 } from '../../write/block-type'
-import { writeMarkdownLivePreviewExtensions } from '../../write/markdown-live-preview'
 import { createWriteRecentEdit, type WriteRecentEdit } from '../../write/recent-edits'
 import { isSelectableRasterImageSrc, parseImageMarkdownLine } from '../../write/selected-image'
 import { buildWriteTemplateShortcutExpansion } from '../../write/template-shortcuts'
@@ -180,8 +179,7 @@ export function termReplacementSeedFromUpdate(update: ViewUpdate): WriteTermRepl
   return change
 }
 
-export function buildEditorTheme(appearance: 'source' | 'live'): Extension {
-  const sourceMode = appearance === 'source'
+export function buildEditorTheme(): Extension {
   return EditorView.theme({
     '&': {
       height: '100%',
@@ -189,11 +187,7 @@ export function buildEditorTheme(appearance: 'source' | 'live'): Extension {
       minHeight: '0',
       color: 'var(--ds-text)',
       backgroundColor: 'transparent',
-      // Prose (live) appearance follows the configured editor font; the raw
-      // source appearance keeps a monospace family but still honors the size.
-      fontFamily: sourceMode
-        ? 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace'
-        : "var(--write-editor-font-family, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif)",
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace',
       fontSize: 'var(--write-editor-font-size, 16px)'
     },
     '.cm-scroller': {
@@ -203,7 +197,7 @@ export function buildEditorTheme(appearance: 'source' | 'live'): Extension {
     },
     '.cm-content': {
       minHeight: '100%',
-      padding: sourceMode ? '26px 24px 56px' : 'clamp(40px, 7vh, 72px) 24px 120px',
+      padding: '26px 24px 56px',
       caretColor: 'var(--ds-text)'
     },
     '.cm-cursor, .cm-dropCursor': {
@@ -228,7 +222,7 @@ export function buildEditorTheme(appearance: 'source' | 'live'): Extension {
   })
 }
 
-export function buildInteractionExtensions(readOnly: boolean, appearance: 'source' | 'live'): Extension[] {
+export function buildInteractionExtensions(readOnly: boolean): Extension[] {
   return [
     EditorState.readOnly.of(readOnly),
     EditorView.editable.of(!readOnly),
@@ -236,7 +230,7 @@ export function buildInteractionExtensions(readOnly: boolean, appearance: 'sourc
       spellcheck: readOnly ? 'false' : 'true',
       autocorrect: readOnly ? 'off' : 'on',
       autocapitalize: readOnly ? 'off' : 'sentences',
-      'data-write-editor-mode': appearance
+      'data-write-editor-mode': 'source'
     })
   ]
 }

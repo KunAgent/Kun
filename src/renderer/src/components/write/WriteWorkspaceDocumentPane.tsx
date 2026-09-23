@@ -3,6 +3,7 @@ import { Maximize2, Minimize2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WriteInlineCompletionSettingsV1 } from '@shared/app-settings'
 import type { WriteRenderSafety } from '../../write/write-render-safety'
+import type { WriteEditorSurface } from '../../write/write-editor-layout'
 import type { WriteRecentEdit } from '../../write/recent-edits'
 import {
   WriteRichEditor,
@@ -10,7 +11,6 @@ import {
 } from '../../write/tiptap/WriteRichEditor'
 import type { WriteEditorSelectionState, WriteMarkdownEditorHandle } from './WriteMarkdownEditor'
 import { WriteMarkdownEditor } from './WriteMarkdownEditor'
-import { WriteMarkdownPreview } from './WriteMarkdownPreview'
 import { WriteWorkspaceStart } from './WriteWorkspaceStart'
 import { WriteImageLightboxHost } from './WriteImageLightboxHost'
 import { WriteImagePreview } from './WriteImagePreview'
@@ -63,22 +63,16 @@ type Props = {
   renderSafety: WriteRenderSafety
   fileGuardMessage: string
   fileGuardDetail: string
-  editorVisible: boolean
-  previewVisible: boolean
-  editorWidth: string
-  previewWidth: string
-  editorAppearance: 'source' | 'live'
-  richModeActive: boolean
-  documentEditorV2?: boolean
+  /** Single-view surface (§8.3): the block document editor or the
+   * plain-text editor — there is no separate preview pane. */
+  editorSurface: WriteEditorSurface
+  readOnly: boolean
   richHandleRef: MutableRefObject<WriteRichEditorHandle | null>
   markdownHandleRef?: MutableRefObject<WriteMarkdownEditorHandle | null>
-  debouncedPreviewContent: string
-  isMarkdown: boolean
   inlineCompletion: WriteInlineCompletionSettingsV1
   inlineCompletionApiReady: boolean
   recentEdits: WriteRecentEdit[]
   editorPaneRef: RefObject<HTMLDivElement | null>
-  previewPaneRef: RefObject<HTMLDivElement | null>
   onAskAssistant: (prompt: string) => void
   onCreateDraft: () => void
   onCreateWhiteboard?: () => void
@@ -149,22 +143,14 @@ export function WriteWorkspaceDocumentPane({
   renderSafety,
   fileGuardMessage,
   fileGuardDetail,
-  editorVisible,
-  previewVisible,
-  editorWidth,
-  previewWidth,
-  editorAppearance,
-  richModeActive,
-  documentEditorV2 = false,
+  editorSurface,
+  readOnly,
   richHandleRef,
   markdownHandleRef,
-  debouncedPreviewContent,
-  isMarkdown,
   inlineCompletion,
   inlineCompletionApiReady,
   recentEdits,
   editorPaneRef,
-  previewPaneRef,
   onAskAssistant,
   onCreateDraft,
   onCreateWhiteboard,
@@ -425,101 +411,57 @@ export function WriteWorkspaceDocumentPane({
         </div>
       ) : null}
       <div className="flex min-h-0 min-w-0 flex-1">
-        {editorVisible ? (
-          <div ref={editorPaneRef} className={`${editorWidth} min-h-0 overflow-hidden`}>
-            {richModeActive ? (
-              <WriteRichEditor
-                documentEditorV2={documentEditorV2}
-                value={fileContent}
-                workspaceRoot={workspaceRoot}
-                filePath={activeFilePath}
-                documentEpoch={documentEpoch}
-                readOnly={renderSafety.readOnly}
-                completionModel={inlineCompletion.model}
-                completionEnabled={inlineCompletion.enabled && inlineCompletionApiReady}
-                completionDebounceMs={inlineCompletion.debounceMs}
-                completionMinAcceptScore={inlineCompletion.minAcceptScore}
-                completionLongEnabled={inlineCompletion.longCompletionEnabled}
-                completionLongDebounceMs={inlineCompletion.longDebounceMs}
-                completionLongMinAcceptScore={inlineCompletion.longMinAcceptScore}
-                recentEdits={recentEdits}
-                onChange={onContentChange}
-                onDocumentEdit={onDocumentEdit}
-                onSelectionChange={onSelectionChange}
-                onSaveShortcut={onSaveShortcut}
-                onImagePasteSaved={onImagePasteSaved}
-                onImagePasteError={onImagePasteError}
-                onReviewStateChange={onMarkdownReviewStateChange}
-                handleRef={richHandleRef}
-                fallback={
-                  <WriteMarkdownEditor
-                    value={fileContent}
-                    workspaceRoot={workspaceRoot}
-                    filePath={activeFilePath}
-                    documentEpoch={documentEpoch}
-                    appearance="live"
-                    livePreviewEnabled={renderSafety.livePreviewEnabled}
-                    readOnly={renderSafety.readOnly}
-                    completionModel={inlineCompletion.model}
-                    completionEnabled={inlineCompletion.enabled && inlineCompletionApiReady}
-                    completionDebounceMs={inlineCompletion.debounceMs}
-                    completionMinAcceptScore={inlineCompletion.minAcceptScore}
-                    completionLongEnabled={inlineCompletion.longCompletionEnabled}
-                    completionLongDebounceMs={inlineCompletion.longDebounceMs}
-                    completionLongMinAcceptScore={inlineCompletion.longMinAcceptScore}
-                    recentEdits={recentEdits}
-                    onChange={onContentChange}
-                    onDocumentEdit={onDocumentEdit}
-                    onSelectionChange={onSelectionChange}
-                    onSaveShortcut={onSaveShortcut}
-                    onImagePasteSaved={onImagePasteSaved}
-                    onImagePasteError={onImagePasteError}
-                    onReviewStateChange={onMarkdownReviewStateChange}
-                    handleRef={markdownHandleRef}
-                  />
-                }
-              />
-            ) : (
-              <WriteMarkdownEditor
-                value={fileContent}
-                workspaceRoot={workspaceRoot}
-                filePath={activeFilePath}
-                documentEpoch={documentEpoch}
-                appearance={editorAppearance}
-                livePreviewEnabled={renderSafety.livePreviewEnabled}
-                readOnly={renderSafety.readOnly}
-                completionModel={inlineCompletion.model}
-                completionEnabled={inlineCompletion.enabled && inlineCompletionApiReady}
-                completionDebounceMs={inlineCompletion.debounceMs}
-                completionMinAcceptScore={inlineCompletion.minAcceptScore}
-                completionLongEnabled={inlineCompletion.longCompletionEnabled}
-                completionLongDebounceMs={inlineCompletion.longDebounceMs}
-                completionLongMinAcceptScore={inlineCompletion.longMinAcceptScore}
-                recentEdits={recentEdits}
-                onChange={onContentChange}
-                onDocumentEdit={onDocumentEdit}
-                onSelectionChange={onSelectionChange}
-                onSaveShortcut={onSaveShortcut}
-                onImagePasteSaved={onImagePasteSaved}
-                onImagePasteError={onImagePasteError}
-                onReviewStateChange={onMarkdownReviewStateChange}
-                handleRef={markdownHandleRef}
-              />
-            )}
-          </div>
-        ) : null}
-
-        {previewVisible ? (
-          <div ref={previewPaneRef} className={`${previewWidth} min-h-0 overflow-y-auto overflow-x-hidden`}>
-            <WriteMarkdownPreview
-              content={debouncedPreviewContent}
-              isMarkdown={isMarkdown && renderSafety.markdownPreviewEnabled}
-              filePath={activeFilePath}
+        <div ref={editorPaneRef} className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          {editorSurface === 'document' ? (
+            <WriteRichEditor
+              value={fileContent}
               workspaceRoot={workspaceRoot}
-              previewErrorMessage={t('writePreviewErrorFallback')}
+              filePath={activeFilePath}
+              documentEpoch={documentEpoch}
+              readOnly={readOnly}
+              completionModel={inlineCompletion.model}
+              completionEnabled={inlineCompletion.enabled && inlineCompletionApiReady}
+              completionDebounceMs={inlineCompletion.debounceMs}
+              completionMinAcceptScore={inlineCompletion.minAcceptScore}
+              completionLongEnabled={inlineCompletion.longCompletionEnabled}
+              completionLongDebounceMs={inlineCompletion.longDebounceMs}
+              completionLongMinAcceptScore={inlineCompletion.longMinAcceptScore}
+              recentEdits={recentEdits}
+              onChange={onContentChange}
+              onDocumentEdit={onDocumentEdit}
+              onSelectionChange={onSelectionChange}
+              onSaveShortcut={onSaveShortcut}
+              onImagePasteSaved={onImagePasteSaved}
+              onImagePasteError={onImagePasteError}
+              onReviewStateChange={onMarkdownReviewStateChange}
+              handleRef={richHandleRef}
             />
-          </div>
-        ) : null}
+          ) : (
+            <WriteMarkdownEditor
+              value={fileContent}
+              workspaceRoot={workspaceRoot}
+              filePath={activeFilePath}
+              documentEpoch={documentEpoch}
+              readOnly={readOnly}
+              completionModel={inlineCompletion.model}
+              completionEnabled={inlineCompletion.enabled && inlineCompletionApiReady}
+              completionDebounceMs={inlineCompletion.debounceMs}
+              completionMinAcceptScore={inlineCompletion.minAcceptScore}
+              completionLongEnabled={inlineCompletion.longCompletionEnabled}
+              completionLongDebounceMs={inlineCompletion.longDebounceMs}
+              completionLongMinAcceptScore={inlineCompletion.longMinAcceptScore}
+              recentEdits={recentEdits}
+              onChange={onContentChange}
+              onDocumentEdit={onDocumentEdit}
+              onSelectionChange={onSelectionChange}
+              onSaveShortcut={onSaveShortcut}
+              onImagePasteSaved={onImagePasteSaved}
+              onImagePasteError={onImagePasteError}
+              onReviewStateChange={onMarkdownReviewStateChange}
+              handleRef={markdownHandleRef}
+            />
+          )}
+        </div>
       </div>
       <WriteImageLightboxHost workspaceRoot={workspaceRoot} />
     </div>

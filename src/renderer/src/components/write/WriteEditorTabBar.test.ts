@@ -29,7 +29,7 @@ describe('WriteEditorTabBar', () => {
       renderer = create(createElement(WriteEditorTabBar, {
         group: {
           id: 'primary',
-          tabs: [{ path: '/work/draft.md', viewMode: 'live' }],
+          tabs: [{ path: '/work/draft.md', viewMode: 'rich' }],
           activePath: '/work/draft.md'
         },
         documentsByPath: { '/work/draft.md': document },

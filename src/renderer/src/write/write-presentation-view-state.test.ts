@@ -62,8 +62,8 @@ function installPresentation(sourceSha256 = SHA_A): void {
       ratio: 0.5,
       focusedGroupId: 'primary',
       groups: [
-        { id: 'primary', tabs: [{ path: PATH, viewMode: 'preview' }], activePath: PATH },
-        { id: 'secondary', tabs: [{ path: PATH, viewMode: 'preview' }], activePath: PATH }
+        { id: 'primary', tabs: [{ path: PATH, viewMode: 'plain' }], activePath: PATH },
+        { id: 'secondary', tabs: [{ path: PATH, viewMode: 'plain' }], activePath: PATH }
       ]
     }
   })

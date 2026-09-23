@@ -10,7 +10,7 @@ import type { WriteRecentEdit } from './recent-edits'
 import type { WorkspaceSpreadsheetMutation } from '@shared/workspace-spreadsheet'
 import type { CanvasEngine } from '../whiteboard/canvas-engine'
 
-export type WritePreviewMode = 'rich' | 'source' | 'live' | 'preview'
+export type WritePreviewMode = 'rich' | 'plain'
 export type WriteSaveStatus = 'saved' | 'dirty' | 'saving' | 'error'
 export type WriteActiveFileKind = 'text' | 'code' | 'image' | 'pdf' | 'office'
 export type WriteEditorGroupId = 'primary' | 'secondary'
@@ -126,7 +126,6 @@ export type WriteWorkspaceState = {
   autoSaveEnabled: boolean
   autoSaveDelayMs: number
   /** S1–S4 gate: unified remark codec + single-view document editor. */
-  documentEditorV2: boolean
   inlineCompletion: WriteInlineCompletionSettingsV1
   inlineCompletionApiReady: boolean
   /** Selection toolbar AI assists: quick action prompts + infographic prompt. */

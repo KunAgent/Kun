@@ -29,10 +29,9 @@ function textToolbarProps(inlineCompletionEnabled: boolean): ToolbarProps {
     exportMenuOpen: false,
     exportMenuRef: createRef<HTMLDivElement>(),
     leftSidebarCollapsed: false,
-    liveModeActive: true,
-    modeMenuItems: [],
-    modeMenuOpen: false,
-    modeMenuRef: createRef<HTMLDivElement>(),
+    isMarkdown: true,
+    surfacePlain: false,
+    onToggleSurface: noop,
     onCopyRichText: noop,
     onCopyXArticle: noop,
     onCopyXArticleImage: noop,
@@ -43,15 +42,12 @@ function textToolbarProps(inlineCompletionEnabled: boolean): ToolbarProps {
     onSave: noop,
     onToggleInlineCompletion: noop,
     onToggleLeftSidebar: noop,
-    previewMode: 'live',
     presentationEnabled: false,
     presentationInFlight: false,
     readOnly: false,
     saveLabel: 'writeSaved',
     saveStatus: 'saved',
-    setExportMenuOpen: noop,
-    setModeMenuOpen: noop,
-    setPreviewMode: noop
+    setExportMenuOpen: noop
   }
 }
 
@@ -74,10 +70,9 @@ describe('WriteWorkspaceToolbar code preview', () => {
       exportMenuOpen: false,
       exportMenuRef: createRef<HTMLDivElement>(),
       leftSidebarCollapsed: false,
-      liveModeActive: false,
-      modeMenuItems: [],
-      modeMenuOpen: false,
-      modeMenuRef: createRef<HTMLDivElement>(),
+      isMarkdown: false,
+      surfacePlain: false,
+      onToggleSurface: noop,
       onCopyRichText: noop,
       onCopyXArticle: noop,
       onCopyXArticleImage: noop,
@@ -88,15 +83,12 @@ describe('WriteWorkspaceToolbar code preview', () => {
       onSave: noop,
       onToggleInlineCompletion: noop,
       onToggleLeftSidebar: noop,
-      previewMode: 'source',
       presentationEnabled: false,
       presentationInFlight: false,
       readOnly: true,
       saveLabel: 'writeSaved',
       saveStatus: 'saved',
-      setExportMenuOpen: noop,
-      setModeMenuOpen: noop,
-      setPreviewMode: noop
+      setExportMenuOpen: noop
     }))
 
     expect(html).toContain('writeModeSource')

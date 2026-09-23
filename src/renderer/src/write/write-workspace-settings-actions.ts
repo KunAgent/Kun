@@ -38,7 +38,6 @@ function applyWriteSettingsState(
     workspaceRoots: write.workspaces,
     autoSaveEnabled: write.autoSaveEnabled,
     autoSaveDelayMs: write.autoSaveDelayMs,
-    documentEditorV2: write.documentEditorV2,
     inlineCompletion: write.inlineCompletion,
     selectionAssist: write.selectionAssist,
     agentPresets: write.agentPresets,

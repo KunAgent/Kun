@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import {
-  Eye,
-  FileCode2,
-  Type
-} from 'lucide-react'
+import { FileCode2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WriteExportFormat } from '@shared/write-export'
 import { useChatStore } from '../../store/chat-store'
@@ -17,6 +13,7 @@ import {
   writeRelativeToWorkspace
 } from '../../write/write-workspace-store'
 import { getWriteRenderSafety } from '../../write/write-render-safety'
+import { resolveWriteEditorSurface } from '../../write/write-editor-layout'
 import { resolveWriteQuickActions } from '../../write/quick-actions'
 import type { WriteRichEditorHandle } from '../../write/tiptap/WriteRichEditor'
 import { useWriteWorkspaceLifecycle } from './use-write-workspace-lifecycle'
@@ -32,7 +29,6 @@ import {
   isInlineCompletionToggleShortcut,
   inlineAgentPosition,
   isMarkdownFile,
-  isMdxFile,
   computeWriteDocumentStatsCached,
   type WriteDocumentStats,
   type WriteNotice
@@ -140,7 +136,6 @@ export function WriteWorkspaceView({
       activeFileKind: s.activeFileKind,
       autoSaveEnabled: s.autoSaveEnabled,
       autoSaveDelayMs: s.autoSaveDelayMs,
-      documentEditorV2: s.documentEditorV2,
       rootDirectory: s.rootDirectory,
       entriesByDir: s.entriesByDir,
       loadingDirs: s.loadingDirs,
@@ -185,7 +180,6 @@ export function WriteWorkspaceView({
   )
   const saveTimerRef = useRef<number | null>(null)
   const exportMenuRef = useRef<HTMLDivElement | null>(null)
-  const modeMenuRef = useRef<HTMLDivElement | null>(null)
   const editorPaneRef = useRef<HTMLDivElement | null>(null)
   const exportNoticeTimerRef = useRef<number | null>(null)
   const richHandleRef = useRef<WriteRichEditorHandle | null>(null)
@@ -196,12 +190,11 @@ export function WriteWorkspaceView({
   Object.defineProperty(documentHandleRef, 'current', {
     configurable: true,
     get: () => richHandleRef.current ?? markdownHandleRef.current,
-    set: () => undefined
+    set: () => {}
   })
   const [pointerSelecting, setPointerSelecting] = useState(false)
   const resolvedAgentPresets = agentPresets.map((preset) => resolveWriteAgentPreset(preset))
   const [inlineEditInFlight, setInlineEditInFlight] = useState(false)
-  const [modeMenuOpen, setModeMenuOpen] = useState(false)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [documentFocusMode, setDocumentFocusMode] = useState(false)
   const [exportingFormat, setExportingFormat] = useState<WriteExportFormat | typeof WRITE_RICH_CLIPBOARD_ACTION | null>(null)
@@ -232,8 +225,16 @@ export function WriteWorkspaceView({
     fileSize,
     truncated: fileTruncated
   })
-  const richModeActive =
-    previewMode === 'rich' && isMarkdown && !isMdxFile(activeFilePath) && renderSafety.livePreviewEnabled && activeFileIsText
+  // Single-view surface decision (§8.2/§8.3): the document editor handles
+  // markdown up to the safety cap; everything else renders plain text.
+  const { surface: editorSurface } = resolveWriteEditorSurface({
+    path: activeFilePath ?? '',
+    viewMode: previewMode,
+    contentLength: fileContent.length,
+    truncated: fileTruncated,
+    isMarkdown
+  })
+  const richModeActive = editorSurface === 'document' && activeFileIsText
   const toggleInlineCompletion = useCallback((): void => {
     const writeState = useWriteWorkspaceStore.getState()
     void writeState.setInlineCompletionEnabled(!writeState.inlineCompletion.enabled)
@@ -486,13 +487,10 @@ export function WriteWorkspaceView({
     previewMode,
     editorPaneRef,
     exportMenuRef,
-    modeMenuRef,
     exportNoticeTimerRef,
     exportMenuOpen,
-    modeMenuOpen,
     exportNotice,
     setExportMenuOpen,
-    setModeMenuOpen,
     setPointerSelecting,
     setExportNotice
   })
@@ -515,36 +513,6 @@ export function WriteWorkspaceView({
     .map((quickAction) => activeFileIsOffice
       ? { ...quickAction, mode: 'chat' as const }
       : quickAction)
-  const liveModeActive = previewMode === 'live' && renderSafety.livePreviewEnabled
-  const sourceModeActive =
-    previewMode === 'source' ||
-    ((previewMode === 'live' || previewMode === 'rich') && !renderSafety.livePreviewEnabled) ||
-    (previewMode === 'rich' && !richModeActive)
-
-  const modeMenuItems: Array<{ mode: WritePreviewMode; label: string; shortLabel: string; icon: ReactElement; active: boolean }> = [
-    {
-      mode: 'rich',
-      label: t('writeModeRich'),
-      shortLabel: t('writeModeRich'),
-      icon: <Type className="h-4 w-4" strokeWidth={1.85} />,
-      active: richModeActive
-    },
-    {
-      mode: 'source',
-      label: t('writeModeSource'),
-      shortLabel: t('writeModeSource'),
-      icon: <FileCode2 className="h-4 w-4" strokeWidth={1.85} />,
-      active: sourceModeActive
-    },
-    {
-      mode: 'preview',
-      label: t('writeModePreview'),
-      shortLabel: t('writeModePreview'),
-      icon: <Eye className="h-4 w-4" strokeWidth={1.85} />,
-      active: previewMode === 'preview'
-    }
-  ]
-
   const focusedToolbar = (
     <WriteWorkspaceToolbar
         embedded
@@ -564,11 +532,9 @@ export function WriteWorkspaceView({
         exportMenuOpen={exportMenuOpen}
         exportMenuRef={exportMenuRef}
         leftSidebarCollapsed={leftSidebarCollapsed}
-        liveModeActive={liveModeActive}
-        modeMenuItems={modeMenuItems}
-        modeMenuOpen={modeMenuOpen}
-        modeMenuRef={modeMenuRef}
-        previewMode={previewMode}
+        isMarkdown={isMarkdown}
+        surfacePlain={editorSurface === 'plain'}
+        onToggleSurface={() => setPreviewMode(editorSurface === 'plain' ? 'rich' : 'plain')}
         presentationEnabled={presentationEnabled}
         presentationInFlight={presentationInFlight}
         readOnly={renderSafety.readOnly}
@@ -576,8 +542,6 @@ export function WriteWorkspaceView({
         saveStatus={saveStatus}
         reviewActive={reviewActive}
         setExportMenuOpen={setExportMenuOpen}
-        setModeMenuOpen={setModeMenuOpen}
-        setPreviewMode={setPreviewMode}
         onCopyRichText={() => void copyCurrentFileAsRichText()}
         onCopyXArticle={() => void copyCurrentFileAsXArticle()}
         onCopyXArticleImage={() => void copyCurrentFileAsXArticleImage()}

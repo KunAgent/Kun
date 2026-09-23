@@ -18,6 +18,7 @@ import type {
 import { WriteMarkdownEditor } from '../write/WriteMarkdownEditor'
 import type { WriteRichEditorHandle } from '../../write/tiptap/WriteRichEditor'
 import { WriteRichEditor } from '../../write/tiptap/WriteRichEditor'
+import { WRITE_SAFE_MARKDOWN_RENDER_MAX_CHARS } from '../../write/write-render-safety'
 import { WriteInlineAgent } from '../write/WriteInlineAgent'
 import type {
   WriteInlineAgentPosition,
@@ -254,6 +255,35 @@ export function SddDraftEditorContent({
           }`}
         >
           {upgrading ? <div className="sdd-editor-progress" /> : null}
+          {content.length > WRITE_SAFE_MARKDOWN_RENDER_MAX_CHARS ? (
+            <WriteMarkdownEditor
+              value={content}
+              workspaceRoot={activeDraft.workspaceRoot}
+              filePath={editorFilePath}
+              imageDirectory={unitImageDir ?? undefined}
+              readOnly={readOnly}
+              handleRef={markdownHandleRef}
+              completionModel={inlineCompletion.model}
+              completionEnabled={inlineCompletion.enabled && inlineCompletionApiReady}
+              completionDebounceMs={inlineCompletion.debounceMs}
+              completionMinAcceptScore={inlineCompletion.minAcceptScore}
+              completionLongEnabled={inlineCompletion.longCompletionEnabled}
+              completionLongDebounceMs={inlineCompletion.longDebounceMs}
+              completionLongMinAcceptScore={inlineCompletion.longMinAcceptScore}
+              recentEdits={recentEdits}
+              onChange={setContent}
+              onDocumentEdit={recordRecentEdits}
+              onSelectionChange={setSelection}
+              onSaveShortcut={() => {
+                if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
+                void saveActiveSddDraftToDisk()
+              }}
+              onImagePasteSaved={() => {
+                setOperationStatus('idle')
+              }}
+              onImagePasteError={(message) => setOperationStatus('error', message)}
+            />
+          ) : (
           <WriteRichEditor
             value={content}
             workspaceRoot={activeDraft.workspaceRoot}
@@ -281,38 +311,8 @@ export function SddDraftEditorContent({
               setOperationStatus('idle')
             }}
             onImagePasteError={(message) => setOperationStatus('error', message)}
-            fallback={
-              <WriteMarkdownEditor
-                value={content}
-                workspaceRoot={activeDraft.workspaceRoot}
-                filePath={editorFilePath}
-                imageDirectory={unitImageDir ?? undefined}
-                appearance="live"
-                livePreviewEnabled
-                readOnly={readOnly}
-                handleRef={markdownHandleRef}
-                completionModel={inlineCompletion.model}
-                completionEnabled={inlineCompletion.enabled && inlineCompletionApiReady}
-                completionDebounceMs={inlineCompletion.debounceMs}
-                completionMinAcceptScore={inlineCompletion.minAcceptScore}
-                completionLongEnabled={inlineCompletion.longCompletionEnabled}
-                completionLongDebounceMs={inlineCompletion.longDebounceMs}
-                completionLongMinAcceptScore={inlineCompletion.longMinAcceptScore}
-                recentEdits={recentEdits}
-                onChange={setContent}
-                onDocumentEdit={recordRecentEdits}
-                onSelectionChange={setSelection}
-                onSaveShortcut={() => {
-                  if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
-                  void saveActiveSddDraftToDisk()
-                }}
-                onImagePasteSaved={() => {
-                  setOperationStatus('idle')
-                }}
-                onImagePasteError={(message) => setOperationStatus('error', message)}
-              />
-            }
           />
+          )}
         </div>
       </div>
 

@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { WriteMarkdownEditor } from '../write/WriteMarkdownEditor'
 import { WriteRichEditor } from '../../write/tiptap/WriteRichEditor'
+import { WRITE_SAFE_MARKDOWN_RENDER_MAX_CHARS } from '../../write/write-render-safety'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { useChatStore } from '../../store/chat-store'
 import {
@@ -447,6 +448,35 @@ export function PlanPanel({
         ) : (
           <div className="flex h-full min-h-0 min-w-0 flex-col">
             <div className="ds-sidebar-surface-body min-h-0 min-w-0 flex-1">
+              {content.length > WRITE_SAFE_MARKDOWN_RENDER_MAX_CHARS ? (
+                <WriteMarkdownEditor
+                  value={content}
+                  workspaceRoot={activePlan!.workspaceRoot}
+                  filePath={activePlan!.absolutePath ?? activePlan!.relativePath}
+                  readOnly={readOnly}
+                  completionModel={inlineCompletion.model}
+                  completionEnabled={inlineCompletion.enabled && inlineCompletionApiReady}
+                  completionDebounceMs={inlineCompletion.debounceMs}
+                  completionMinAcceptScore={inlineCompletion.minAcceptScore}
+                  completionLongEnabled={inlineCompletion.longCompletionEnabled}
+                  completionLongDebounceMs={inlineCompletion.longDebounceMs}
+                  completionLongMinAcceptScore={inlineCompletion.longMinAcceptScore}
+                  recentEdits={recentEdits}
+                  onChange={setContent}
+                  onDocumentEdit={recordRecentEdits}
+                  onSelectionChange={setSelection}
+                  onSaveShortcut={() => {
+                    const snapshot = useGuiPlanStore.getState()
+                    if (snapshot.activePlan?.id === activePlan!.id && snapshot.saveStatus === 'dirty') {
+                      setSaveStatus('dirty')
+                    }
+                  }}
+                  onImagePasteSaved={() => {
+                    setOperationStatus('idle')
+                  }}
+                  onImagePasteError={(message) => setOperationStatus('error', message)}
+                />
+              ) : (
               <WriteRichEditor
                 value={content}
                 workspaceRoot={activePlan!.workspaceRoot}
@@ -473,38 +503,8 @@ export function PlanPanel({
                   setOperationStatus('idle')
                 }}
                 onImagePasteError={(message) => setOperationStatus('error', message)}
-                fallback={
-                  <WriteMarkdownEditor
-                    value={content}
-                    workspaceRoot={activePlan!.workspaceRoot}
-                    filePath={activePlan!.absolutePath ?? activePlan!.relativePath}
-                    appearance="live"
-                    livePreviewEnabled
-                    readOnly={readOnly}
-                    completionModel={inlineCompletion.model}
-                    completionEnabled={inlineCompletion.enabled && inlineCompletionApiReady}
-                    completionDebounceMs={inlineCompletion.debounceMs}
-                    completionMinAcceptScore={inlineCompletion.minAcceptScore}
-                    completionLongEnabled={inlineCompletion.longCompletionEnabled}
-                    completionLongDebounceMs={inlineCompletion.longDebounceMs}
-                    completionLongMinAcceptScore={inlineCompletion.longMinAcceptScore}
-                    recentEdits={recentEdits}
-                    onChange={setContent}
-                    onDocumentEdit={recordRecentEdits}
-                    onSelectionChange={setSelection}
-                    onSaveShortcut={() => {
-                      const snapshot = useGuiPlanStore.getState()
-                      if (snapshot.activePlan?.id === activePlan!.id && snapshot.saveStatus === 'dirty') {
-                        setSaveStatus('dirty')
-                      }
-                    }}
-                    onImagePasteSaved={() => {
-                      setOperationStatus('idle')
-                    }}
-                    onImagePasteError={(message) => setOperationStatus('error', message)}
-                  />
-                }
               />
+              )}
             </div>
           </div>
         )}

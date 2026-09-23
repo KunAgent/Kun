@@ -10,13 +10,10 @@ type Params = {
   previewMode: string
   editorPaneRef: RefObject<HTMLDivElement | null>
   exportMenuRef: RefObject<HTMLDivElement | null>
-  modeMenuRef: RefObject<HTMLDivElement | null>
   exportNoticeTimerRef: RefObject<number | null>
   exportMenuOpen: boolean
-  modeMenuOpen: boolean
   exportNotice: WriteNotice | null
   setExportMenuOpen: (open: boolean) => void
-  setModeMenuOpen: (open: boolean) => void
   setPointerSelecting: (selecting: boolean) => void
   setExportNotice: (notice: WriteNotice | null) => void
 }
@@ -30,13 +27,10 @@ export function useWriteWorkspaceViewEffects({
   previewMode,
   editorPaneRef,
   exportMenuRef,
-  modeMenuRef,
   exportNoticeTimerRef,
   exportMenuOpen,
-  modeMenuOpen,
   exportNotice,
   setExportMenuOpen,
-  setModeMenuOpen,
   setPointerSelecting,
   setExportNotice
 }: Params): void {
@@ -48,8 +42,7 @@ export function useWriteWorkspaceViewEffects({
     if (!onboardingComplete && onboardingDecision === 'complete') completeOnboarding()
   }, [completeOnboarding, onboardingComplete, onboardingDecision])
 
-  useEffect(() => setExportMenuOpen(false), [activeFilePath, setExportMenuOpen])
-  useEffect(() => setModeMenuOpen(false), [activeFilePath, previewMode, setModeMenuOpen])
+  useEffect(() => setExportMenuOpen(false), [activeFilePath, previewMode, setExportMenuOpen])
 
   useEffect(() => {
     const handleDown = (event: PointerEvent): void => {
@@ -70,20 +63,16 @@ export function useWriteWorkspaceViewEffects({
   }, [editorPaneRef, setPointerSelecting])
 
   useEffect(() => {
-    if (!exportMenuOpen && !modeMenuOpen) return
+    if (!exportMenuOpen) return
     const handlePointerDown = (event: PointerEvent): void => {
       const target = event.target
       if (exportMenuRef.current && target instanceof Node && !exportMenuRef.current.contains(target)) {
         setExportMenuOpen(false)
       }
-      if (modeMenuRef.current && target instanceof Node && !modeMenuRef.current.contains(target)) {
-        setModeMenuOpen(false)
-      }
     }
     const handleKeyDown = (event: globalThis.KeyboardEvent): void => {
       if (event.key !== 'Escape') return
       setExportMenuOpen(false)
-      setModeMenuOpen(false)
     }
     window.addEventListener('pointerdown', handlePointerDown)
     window.addEventListener('keydown', handleKeyDown)
@@ -91,7 +80,7 @@ export function useWriteWorkspaceViewEffects({
       window.removeEventListener('pointerdown', handlePointerDown)
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [exportMenuOpen, exportMenuRef, modeMenuOpen, modeMenuRef, setExportMenuOpen, setModeMenuOpen])
+  }, [exportMenuOpen, exportMenuRef, setExportMenuOpen])
 
   useEffect(() => {
     if (exportNoticeTimerRef.current) {

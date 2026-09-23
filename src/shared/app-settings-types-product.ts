@@ -333,7 +333,6 @@ export type WriteSettingsV1 = {
   autoSaveEnabled: boolean
   autoSaveDelayMs: number
   /** S1–S4 gate: unified remark codec + single-view document editor. */
-  documentEditorV2: boolean
   inlineCompletion: WriteInlineCompletionSettingsV1
   selectionAssist: WriteSelectionAssistSettingsV1
   typography: WriteTypographySettingsV1

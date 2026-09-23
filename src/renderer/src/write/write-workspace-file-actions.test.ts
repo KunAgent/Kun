@@ -144,8 +144,8 @@ describe('write workspace file actions', () => {
       ratio: 0.5,
       focusedGroupId: 'secondary',
       groups: [
-        { id: 'primary', activePath: '/tmp/write/a.md', tabs: [{ path: '/tmp/write/a.md', viewMode: 'live' }] },
-        { id: 'secondary', activePath: '/tmp/write/missing.md', tabs: [{ path: '/tmp/write/missing.md', viewMode: 'preview' }] }
+        { id: 'primary', activePath: '/tmp/write/a.md', tabs: [{ path: '/tmp/write/a.md', viewMode: 'rich' }] },
+        { id: 'secondary', activePath: '/tmp/write/missing.md', tabs: [{ path: '/tmp/write/missing.md', viewMode: 'plain' }] }
       ]
     })
     const { actions, get } = createHarness()
@@ -314,7 +314,7 @@ describe('write workspace file actions', () => {
         orientation: 'single',
         ratio: 0.5,
         focusedGroupId: 'primary',
-        groups: [{ id: 'primary', tabs: [{ path: '/tmp/write/draft.md', viewMode: 'live' }], activePath: '/tmp/write/draft.md' }]
+        groups: [{ id: 'primary', tabs: [{ path: '/tmp/write/draft.md', viewMode: 'rich' }], activePath: '/tmp/write/draft.md' }]
       },
       flushSave
     })
@@ -371,7 +371,7 @@ describe('write workspace file actions', () => {
         orientation: 'single',
         ratio: 0.5,
         focusedGroupId: 'primary',
-        groups: [{ id: 'primary', tabs: [{ path: '/tmp/write/draft.md', viewMode: 'live' }], activePath: '/tmp/write/draft.md' }]
+        groups: [{ id: 'primary', tabs: [{ path: '/tmp/write/draft.md', viewMode: 'rich' }], activePath: '/tmp/write/draft.md' }]
       },
       saveDocument
     })

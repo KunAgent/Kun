@@ -87,13 +87,16 @@ export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView, on
     : null)
   const title = board?.title ?? file?.name ?? resourceKey
   const status = board ? board.phase : document?.saveStatus ?? (work.fileLoading ? 'loading' : 'saved')
-  const viewMode = view === 'edit' ? 'source' : 'preview'
+  // Single document view (§8.4): read mode renders the same editor
+  // read-only instead of a separate preview surface.
+  const viewMode = 'rich' as const
   const assistantSupported = Boolean(board || document?.kind === 'text' || document?.kind === 'code')
   const supportedViews: WorkResourceView[] = board
     ? ['whiteboard', ...(assistantSupported ? ['assistant' as const] : [])]
     : ['read', 'edit', ...(assistantSupported ? ['assistant' as const] : []),
         ...(document?.pendingAgentReview || work.reviewActive ? ['review' as const] : [])]
   const effectiveView = supportedViews.includes(view) ? view : board ? 'whiteboard' : 'read'
+  const readOnlyView = effectiveView !== 'edit'
 
   return <MobileWorkResource title={title} statusLabel={status} view={effectiveView}
     labels={{ read: t('mobilePreview'), edit: t('mobileEdit'), assistant: t('writeAssistant'),
@@ -103,7 +106,7 @@ export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView, on
       ? <MobileWorkAssistant expectedThreadId={expectedAssistantThreadId} onSettings={onSettings} />
       : <WriteEditorGroupContent
           document={document} whiteboard={board} requestedPath={file?.path ?? null}
-          viewMode={viewMode} workspaceRoot={work.workspaceRoot}
+          viewMode={viewMode} readOnly={readOnlyView} workspaceRoot={work.workspaceRoot}
           workspaceName={work.workspaceRoot.split(/[\\/]/).filter(Boolean).at(-1) ?? work.workspaceRoot}
           workspacePathLabel={work.workspaceRoot} workspaceError={work.settingsError ?? work.treeError}
           inlineCompletion={work.inlineCompletion} inlineCompletionApiReady={work.inlineCompletionApiReady}

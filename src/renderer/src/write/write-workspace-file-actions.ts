@@ -386,7 +386,7 @@ export function createWriteFileActions({
             fileSize: result.size,
             fileTruncated: result.truncated,
             documentEpoch: nextWriteDocumentEpoch(state.documentEpoch)
-          }), groupId, 'source'))
+          }), groupId, 'plain'))
           return
         }
 

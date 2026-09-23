@@ -3,8 +3,6 @@ import { getSchema } from '@tiptap/core'
 import { EditorState, TextSelection } from '@tiptap/pm/state'
 import {
   WRITE_BACKTICK_FENCE_INPUT_REGEX,
-  WRITE_RICH_MAX_CHARS,
-  auditWriteMarkdownFidelity,
   buildWriteRichExtensions,
   closeWriteRichCodeFence,
   parseWriteMarkdown,
@@ -109,43 +107,5 @@ describe('write markdown round-trip', () => {
     expect(next.doc.child(0).textContent).toBe('const value = 1')
     expect(next.doc.child(1).type.name).toBe('paragraph')
     expect(next.selection.$from.parent.type.name).toBe('paragraph')
-  })
-})
-
-describe('auditWriteMarkdownFidelity', () => {
-  it('accepts simple generated markdown', () => {
-    const fidelity = auditWriteMarkdownFidelity(SIMPLE_DOC)
-    expect(fidelity.eligible).toBe(true)
-  })
-
-  it('accepts an empty document', () => {
-    expect(auditWriteMarkdownFidelity('').eligible).toBe(true)
-  })
-
-  it('rejects ordered-list hard-wrapped continuations that lose characters', () => {
-    const doc = [
-      '1. Add protocol fields in `kun/src/contracts/`.',
-      '2. Add agent behavior in `kun/src/loop/`, or a',
-      '   new port/adapter under `kun/src/ports/`.',
-      ''
-    ].join('\n')
-    const fidelity = auditWriteMarkdownFidelity(doc)
-    expect(fidelity.eligible).toBe(false)
-  })
-
-  it('rejects raw HTML blocks that keep mutating across passes', () => {
-    const doc = [
-      '<a href="https://github.com/x/y">',
-      '  <img src="https://contrib.rocks/image?repo=x/y" />',
-      '</a>',
-      ''
-    ].join('\n')
-    const fidelity = auditWriteMarkdownFidelity(doc)
-    expect(fidelity.eligible).toBe(false)
-  })
-
-  it('rejects documents above the rich-mode size limit', () => {
-    const fidelity = auditWriteMarkdownFidelity('a'.repeat(WRITE_RICH_MAX_CHARS + 1))
-    expect(fidelity).toMatchObject({ eligible: false })
   })
 })

@@ -33,6 +33,7 @@ import {
   writeBrowserStorageItem
 } from '../lib/browser-storage'
 import type { WritePreviewMode, WriteWorkspaceState } from './write-workspace-store-types'
+import { normalizeWriteViewMode } from './write-editor-layout'
 
 export const WRITE_PREVIEW_MODE_KEY = 'kun.write.preview-mode'
 export const WRITE_ASSISTANT_OPEN_KEY = 'kun.write.assistant-open'
@@ -42,8 +43,7 @@ const DEFAULT_WRITE_ASSISTANT_MODEL = DEFAULT_KUN_MODEL
 
 export function readStoredPreviewMode(): WritePreviewMode {
   const raw = readBrowserStorageItem(WRITE_PREVIEW_MODE_KEY)
-  if (raw === 'split') return 'source'
-  return raw === 'rich' || raw === 'source' || raw === 'live' || raw === 'preview' ? raw : 'rich'
+  return normalizeWriteViewMode(raw)
 }
 
 export function readStoredAssistantOpen(): boolean {
@@ -104,7 +104,6 @@ export function normalizeWriteSettings(settings?: Partial<WriteSettingsV1> | nul
   workspaces: string[]
   autoSaveEnabled: boolean
   autoSaveDelayMs: number
-  documentEditorV2: boolean
   inlineCompletion: WriteInlineCompletionSettingsV1
   selectionAssist: WriteSelectionAssistSettingsV1
   agentPresets: WriteAgentPresetV1[]
@@ -131,7 +130,6 @@ export function normalizeWriteSettings(settings?: Partial<WriteSettingsV1> | nul
     activeWorkspaceRoot: workspaces.includes(activeWorkspaceRoot) ? activeWorkspaceRoot : defaultWorkspaceRoot,
     workspaces: workspaces.length > 0 ? workspaces : [defaultWorkspaceRoot],
     autoSaveEnabled: settings?.autoSaveEnabled !== false,
-    documentEditorV2: settings?.documentEditorV2 === true,
     autoSaveDelayMs: Number.isFinite(autoSaveDelayMs)
       ? Math.max(MIN_WRITE_AUTOSAVE_DELAY_MS, Math.min(MAX_WRITE_AUTOSAVE_DELAY_MS, Math.round(autoSaveDelayMs)))
       : DEFAULT_WRITE_AUTOSAVE_DELAY_MS,
@@ -180,7 +178,6 @@ export function withResolvedInlineCompletionSettings(
     workspaces: string[]
     autoSaveEnabled: boolean
     autoSaveDelayMs: number
-    documentEditorV2: boolean
     inlineCompletion: WriteInlineCompletionSettingsV1
     selectionAssist: WriteSelectionAssistSettingsV1
     agentPresets: WriteAgentPresetV1[]
@@ -192,7 +189,6 @@ export function withResolvedInlineCompletionSettings(
   workspaces: string[]
   autoSaveEnabled: boolean
   autoSaveDelayMs: number
-  documentEditorV2: boolean
   inlineCompletion: WriteInlineCompletionSettingsV1
   selectionAssist: WriteSelectionAssistSettingsV1
   agentPresets: WriteAgentPresetV1[]

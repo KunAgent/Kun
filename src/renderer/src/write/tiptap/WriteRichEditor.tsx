@@ -7,7 +7,6 @@ import {
   type ReactNode
 } from 'react'
 import { Editor, Extension, type AnyExtension } from '@tiptap/core'
-import { TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import 'katex/dist/katex.min.css'
 import type {
@@ -18,13 +17,7 @@ import { buildInlineCompletionPayload } from '../inline-completion'
 import type { WriteBlockType } from '../block-type'
 import type { WriteInlineFormatKind } from '../inline-format'
 import { createWriteRecentEdit, type WriteRecentEdit } from '../recent-edits'
-import {
-  auditWriteMarkdownFidelity,
-  buildWriteRichExtensions,
-  getWriteMarkdownManager,
-  parseWriteMarkdown,
-  type WriteRichFidelity
-} from './markdown-manager'
+import { buildWriteRichExtensions } from './markdown-manager'
 import {
   buildWriteRichMarkdownProjection,
   posForProjectedOffset
@@ -101,8 +94,6 @@ type Props = {
   documentEpoch?: number
   imageDirectory?: string | null
   readOnly?: boolean
-  /** S1 gate: use the unified remark codec + source-preserving context. */
-  documentEditorV2?: boolean
   /** Render SDD requirement headings with status pills (SDD draft editor). */
   requirementBadges?: boolean
   completionModel?: string
@@ -120,17 +111,7 @@ type Props = {
   onImagePasteSaved?: () => void
   onImagePasteError?: (message: string) => void
   onReviewStateChange?: (active: boolean) => void
-  onFidelityChange?: (fidelity: WriteRichFidelity) => void
   handleRef?: MutableRefObject<WriteRichEditorHandle | null>
-  /** Rendered instead of the rich editor when the open document fails the
-   * round-trip fidelity gate (typically the CodeMirror editor). */
-  fallback?: ReactNode
-}
-
-type GateState = {
-  fileKey: string
-  eligible: boolean
-  detail?: string
 }
 
 function fileKeyOf(filePath?: string | null): string {
@@ -146,7 +127,6 @@ export function WriteRichEditor({
   documentEpoch,
   imageDirectory,
   readOnly = false,
-  documentEditorV2 = false,
   requirementBadges = false,
   completionModel = '',
   completionEnabled = false,
@@ -163,9 +143,7 @@ export function WriteRichEditor({
   onImagePasteSaved,
   onImagePasteError,
   onReviewStateChange,
-  onFidelityChange,
-  handleRef,
-  fallback
+  handleRef
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -190,10 +168,8 @@ export function WriteRichEditor({
   const onImagePasteSavedRef = useRef(onImagePasteSaved)
   const onImagePasteErrorRef = useRef(onImagePasteError)
   const onReviewStateChangeRef = useRef(onReviewStateChange)
-  const onFidelityChangeRef = useRef(onFidelityChange)
   const lastEmittedValueRef = useRef<string | null>(null)
   const workCtxRef = useRef<WorkDocContext>(createWorkDocContext())
-  const documentEditorV2Ref = useRef(documentEditorV2)
   const reviewSessionRef = useRef<WriteReviewSession | null>(null)
   const [reviewUi, setReviewUi] = useState<{ active: boolean; total: number; index: number }>({
     active: false,
@@ -201,7 +177,6 @@ export function WriteRichEditor({
     index: 0
   })
   const [frontmatter, setFrontmatter] = useState('')
-  const [gate, setGate] = useState<GateState | null>(null)
 
   workspaceRootRef.current = workspaceRoot ?? ''
   filePathRef.current = filePath ?? ''
@@ -223,69 +198,38 @@ export function WriteRichEditor({
   onImagePasteSavedRef.current = onImagePasteSaved
   onImagePasteErrorRef.current = onImagePasteError
   onReviewStateChangeRef.current = onReviewStateChange
-  onFidelityChangeRef.current = onFidelityChange
-  documentEditorV2Ref.current = documentEditorV2
 
   const fileKey = fileKeyOf(filePath)
-  const eligible = gate?.fileKey === fileKey ? gate.eligible : null
 
-  // Audit every payload that arrives from outside the editor (file open,
-  // disk sync). Our own serialized output is round-trip safe by construction
-  // and is never re-audited.
+  // Apply every payload that arrives from outside the editor (file open,
+  // disk sync). The unified codec preserves every construct, so no
+  // fidelity gate runs here. Our own serialized output is never re-parsed.
   useEffect(() => {
-    if (value === lastEmittedValueRef.current && gate?.fileKey === fileKey) return
-    if (documentEditorV2) {
-      // The unified codec preserves every construct, so nothing is gated.
-      onFidelityChangeRef.current?.({ eligible: true, normalized: value })
-      setGate({ fileKey, eligible: true })
-      // During an active diff review the agent's next snapshot re-enters
-      // through `beginDiffReview` (§6.3.4); applying it here would clobber
-      // chunk positions.
-      if (reviewSessionRef.current?.isActive()) return
-      const editor = editorRef.current
-      if (editor && !editor.isDestroyed) {
-        if (applyExternalMarkdownToEditor(editor, value, (markdown) => {
-          const parsed = parseWorkDocument(markdown)
-          workCtxRef.current = parsed.ctx
-          setFrontmatter(parsed.ctx.frontmatter)
-          return parsed.doc
-        })) {
-          lastEmittedValueRef.current = value
-        }
-      } else {
-        const parsed = parseWorkDocument(value)
-        workCtxRef.current = parsed.ctx
-        setFrontmatter(parsed.ctx.frontmatter)
-      }
-      return
-    }
-    const fidelity = auditWriteMarkdownFidelity(value)
-    onFidelityChangeRef.current?.(fidelity)
-    const detail = fidelity.eligible ? undefined : fidelity.detail
-    setGate((current) => {
-      if (current?.fileKey === fileKey && current.eligible === fidelity.eligible && current.detail === detail) {
-        return current
-      }
-      return { fileKey, eligible: fidelity.eligible, detail }
-    })
-    if (!fidelity.eligible) {
-      lastEmittedValueRef.current = null
-      return
-    }
-
+    if (value === lastEmittedValueRef.current) return
+    // During an active diff review the agent's next snapshot re-enters
+    // through `beginDiffReview` (§6.3.4); applying it here would clobber
+    // chunk positions.
+    if (reviewSessionRef.current?.isActive()) return
     const editor = editorRef.current
     if (editor && !editor.isDestroyed) {
-      if (applyExternalMarkdownToEditor(editor, value)) {
+      if (applyExternalMarkdownToEditor(editor, value, (markdown) => {
+        const parsed = parseWorkDocument(markdown)
+        workCtxRef.current = parsed.ctx
+        setFrontmatter(parsed.ctx.frontmatter)
+        return parsed.doc
+      })) {
         lastEmittedValueRef.current = value
       }
+    } else {
+      const parsed = parseWorkDocument(value)
+      workCtxRef.current = parsed.ctx
+      setFrontmatter(parsed.ctx.frontmatter)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, fileKey, documentEditorV2])
+  }, [value, fileKey])
 
   useEffect(() => {
-    if (eligible !== true || !hostRef.current || editorRef.current) return
+    if (!hostRef.current || editorRef.current) return
 
-    const manager = getWriteMarkdownManager()
     const saveShortcut = Extension.create({
       name: 'writeSaveShortcut',
       addKeyboardShortcuts() {
@@ -365,14 +309,12 @@ export function WriteRichEditor({
       ]
     })
 
-    const initialContent = documentEditorV2Ref.current
-      ? (() => {
-          const parsed = parseWorkDocument(value)
-          workCtxRef.current = parsed.ctx
-          setFrontmatter(parsed.ctx.frontmatter)
-          return parsed.doc
-        })()
-      : parseWriteMarkdown(value)
+    const initialContent = (() => {
+      const parsed = parseWorkDocument(value)
+      workCtxRef.current = parsed.ctx
+      setFrontmatter(parsed.ctx.frontmatter)
+      return parsed.doc
+    })()
 
     const editor = new Editor({
       element: hostRef.current,
@@ -396,9 +338,7 @@ export function WriteRichEditor({
         }
         try {
           const docJson = instance.state.doc.toJSON()
-          const markdown = documentEditorV2Ref.current
-            ? serializeWorkDocument(docJson, workCtxRef.current)
-            : manager.serialize(docJson)
+          const markdown = serializeWorkDocument(docJson, workCtxRef.current)
           lastEmittedValueRef.current = markdown
           onChangeRef.current(markdown)
         } catch (error) {
@@ -581,7 +521,7 @@ export function WriteRichEditor({
         },
         beginDiffReview: ({ original, nextDoc }) => {
           const session = reviewSessionRef.current
-          if (!session || !documentEditorV2Ref.current || readOnlyRef.current) return false
+          if (!session || readOnlyRef.current) return false
           return session.begin({ original, nextDoc })
         },
         isDiffReviewActive: () => reviewSessionRef.current?.isActive() ?? false,
@@ -596,35 +536,16 @@ export function WriteRichEditor({
       editor.destroy()
       editorRef.current = null
     }
-    // The editor is created once per eligible file; value/file changes flow
-    // through the audit effect above.
+    // The editor is created once per file; value/file changes flow
+    // through the sync effect above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eligible, fileKey])
+  }, [fileKey])
 
   useEffect(() => {
     const editor = editorRef.current
     if (!editor || editor.isDestroyed) return
     editor.setEditable(!readOnly)
   }, [readOnly])
-
-  if (eligible === false) {
-    return (
-      <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
-        <div className="write-rich-fallback-notice flex shrink-0 items-center gap-2 border-b border-amber-200/80 bg-amber-50/90 px-4 py-2 text-[12.5px] text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/35 dark:text-amber-100">
-          <TriangleAlert className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
-          <span>
-            {t('writeRichFallbackNotice')}
-            {gate?.detail
-              ? ` (${gate.detail.split(',').map((code) =>
-                  t(`writeRichFallbackReason.${code.trim()}`, { defaultValue: code.trim() })
-                ).join(', ')})`
-              : ''}
-          </span>
-        </div>
-        <div className="min-h-0 min-w-0 flex-1">{fallback}</div>
-      </div>
-    )
-  }
 
   const handleFrontmatterChange = (block: string): void => {
     workCtxRef.current.frontmatter = block
@@ -637,14 +558,6 @@ export function WriteRichEditor({
     }
   }
 
-  if (!documentEditorV2) {
-    return (
-      <div
-        ref={hostRef}
-        className="write-rich-host flex h-full min-h-0 w-full min-w-0 flex-col overflow-y-auto"
-      />
-    )
-  }
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
       {reviewUi.active ? (

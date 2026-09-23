@@ -36,8 +36,6 @@
   "writeFontSizeDecrease": "Decrease font size",
   "writeFontSizeIncrease": "Increase font size",
   "writeModeSource": "Source editor",
-  "writeModeLive": "Live editor",
-  "writeModeLiveShort": "Live",
   "writeMoreViewModes": "More view modes",
   "writeModeEdit": "Editor only",
   "writeModeSplit": "Split preview",

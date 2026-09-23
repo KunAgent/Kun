@@ -36,8 +36,6 @@
   "writeFontSizeDecrease": "フォントサイズを小さくする",
   "writeFontSizeIncrease": "フォントサイズを大きくする",
   "writeModeSource": "ソースエディタ",
-  "writeModeLive": "ライブエディター",
-  "writeModeLiveShort": "ライブ",
   "writeMoreViewModes": "その他の表示モード",
   "writeModeEdit": "編集者のみ",
   "writeModeSplit": "分割プレビュー",

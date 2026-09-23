@@ -12,17 +12,12 @@ import { CodeBlock, tildeInputRegex } from '@tiptap/extension-code-block'
 import { Plugin, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
 import { createHighlightPlugin } from 'prosemirror-highlight'
 import { WriteLocalImage } from './local-image'
-import { findUnsupportedConstructs } from './markdown-construct-gate'
 import { buildWorkConstructExtensions } from './nodes'
 import { createCodeBlockNodeView } from './nodes/code-block-view'
 import { codeHighlightParser } from './code-highlight'
 
-export type WriteRichFidelity =
-  | { eligible: true; normalized: string }
-  | { eligible: false; reason: 'parse-error' | 'unstable' | 'text-loss' | 'unsupported-construct'; detail?: string }
-
-// Rich mode refuses documents above this size; CodeMirror handles them better
-// and the open-time fidelity audit below would get expensive.
+// Documents above this size open in the plain-text editor; CodeMirror handles
+// them better and the document parse would get expensive (§8.2).
 export const WRITE_RICH_MAX_CHARS = 300_000
 export const WRITE_BACKTICK_FENCE_INPUT_REGEX = /^(`{3,})([A-Za-z0-9_+#.-]+)?[\s\n]$/
 
@@ -253,60 +248,3 @@ export function serializeWriteMarkdown(doc: JSONContent): string {
   return getWriteMarkdownManager().serialize(doc)
 }
 
-function collectPlainText(node: JSONContent | undefined, acc: string[]): string[] {
-  if (!node) return acc
-  if (node.type === 'text' && node.text) acc.push(node.text)
-  if (Array.isArray(node.content)) {
-    for (const child of node.content) collectPlainText(child, acc)
-  }
-  return acc
-}
-
-function normalizedPlainText(doc: JSONContent): string {
-  return collectPlainText(doc, []).join(' ').replace(/\s+/g, ' ').trim()
-}
-
-/**
- * Open-time gate for the rich editor. A document is eligible only when the
- * markdown round-trip is idempotent after one pass and loses no plain text;
- * everything else (hard-wrapped list continuations, raw HTML blocks, syntax
- * the schema cannot represent) stays in the CodeMirror editor so the file on
- * disk is never silently rewritten.
- */
-export function auditWriteMarkdownFidelity(markdown: string): WriteRichFidelity {
-  if (markdown.length > WRITE_RICH_MAX_CHARS) {
-    return { eligible: false, reason: 'text-loss', detail: 'document too large for rich mode' }
-  }
-  const constructs = findUnsupportedConstructs(markdown)
-  if (constructs.length > 0) {
-    return {
-      eligible: false,
-      reason: 'unsupported-construct',
-      detail: constructs.join(',')
-    }
-  }
-  const manager = getWriteMarkdownManager()
-  let firstDoc: JSONContent
-  let firstPass: string
-  let secondPass: string
-  let secondDoc: JSONContent
-  try {
-    firstDoc = manager.parse(markdown)
-    firstPass = manager.serialize(firstDoc)
-    secondDoc = manager.parse(firstPass)
-    secondPass = manager.serialize(secondDoc)
-  } catch (error) {
-    return {
-      eligible: false,
-      reason: 'parse-error',
-      detail: error instanceof Error ? error.message : String(error)
-    }
-  }
-  if (firstPass !== secondPass) {
-    return { eligible: false, reason: 'unstable' }
-  }
-  if (normalizedPlainText(firstDoc) !== normalizedPlainText(secondDoc)) {
-    return { eligible: false, reason: 'text-loss' }
-  }
-  return { eligible: true, normalized: firstPass }
-}

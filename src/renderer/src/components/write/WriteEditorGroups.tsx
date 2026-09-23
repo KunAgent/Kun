@@ -64,7 +64,6 @@ export function WriteEditorGroups({
   const hostRef = useRef<HTMLDivElement | null>(null)
   const {
     workspaceRoot,
-    documentEditorV2,
     rootDirectory,
     entriesByDir,
     documentsByPath,
@@ -98,7 +97,6 @@ export function WriteEditorGroups({
     setAssistantOpen
   } = useWriteWorkspaceStore(useShallow((state) => ({
     workspaceRoot: state.workspaceRoot,
-    documentEditorV2: state.documentEditorV2,
     rootDirectory: state.rootDirectory,
     entriesByDir: state.entriesByDir,
     documentsByPath: state.documentsByPath,
@@ -258,7 +256,6 @@ export function WriteEditorGroups({
               whiteboard={board}
               requestedPath={path}
               viewMode={tab?.viewMode ?? 'rich'}
-              documentEditorV2={documentEditorV2}
               workspaceRoot={workspaceRoot}
               workspaceName={workspaceName}
               workspacePathLabel={workspacePathLabel}

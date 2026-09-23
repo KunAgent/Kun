@@ -15,16 +15,14 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WriteExportFormat } from '@shared/write-export'
-import type { WritePreviewMode, WriteSaveStatus } from '../../write/write-workspace-store'
+import type { WriteSaveStatus } from '../../write/write-workspace-store'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import { WriteFontSizeControl } from './WriteFontSizeControl'
 import {
   WRITE_EXPORT_FORMATS,
   exportFormatLabel,
-  modeButtonClass,
   toolbarIconButtonClass,
-  toolbarMenuButtonClass,
-  type WriteModeMenuItem
+  toolbarMenuButtonClass
 } from './write-workspace-view-utils'
 
 type Props = {
@@ -45,10 +43,10 @@ type Props = {
   exportMenuOpen: boolean
   exportMenuRef: RefObject<HTMLDivElement | null>
   leftSidebarCollapsed: boolean
-  liveModeActive: boolean
-  modeMenuItems: WriteModeMenuItem[]
-  modeMenuOpen: boolean
-  modeMenuRef: RefObject<HTMLDivElement | null>
+  /** Single-view surface state for the text file (§8.3). */
+  isMarkdown: boolean
+  surfacePlain: boolean
+  onToggleSurface: () => void
   onCopyRichText: () => void
   onCopyXArticle: () => void
   onCopyXArticleImage: () => void
@@ -59,7 +57,6 @@ type Props = {
   onSave: () => void
   onToggleInlineCompletion: () => void
   onToggleLeftSidebar: () => void
-  previewMode: WritePreviewMode
   presentationEnabled: boolean
   presentationInFlight: boolean
   readOnly: boolean
@@ -67,8 +64,6 @@ type Props = {
   saveStatus: WriteSaveStatus
   reviewActive?: boolean
   setExportMenuOpen: (open: boolean | ((open: boolean) => boolean)) => void
-  setModeMenuOpen: (open: boolean | ((open: boolean) => boolean)) => void
-  setPreviewMode: (mode: WritePreviewMode) => void
 }
 
 export function WriteWorkspaceToolbar({
@@ -89,10 +84,9 @@ export function WriteWorkspaceToolbar({
   exportMenuOpen,
   exportMenuRef,
   leftSidebarCollapsed,
-  liveModeActive,
-  modeMenuItems,
-  modeMenuOpen,
-  modeMenuRef,
+  isMarkdown,
+  surfacePlain,
+  onToggleSurface,
   onCopyRichText,
   onCopyXArticle,
   onCopyXArticleImage,
@@ -103,16 +97,13 @@ export function WriteWorkspaceToolbar({
   onSave,
   onToggleInlineCompletion,
   onToggleLeftSidebar,
-  previewMode,
   presentationEnabled,
   presentationInFlight,
   readOnly,
   saveLabel,
   saveStatus,
   reviewActive = false,
-  setExportMenuOpen,
-  setModeMenuOpen,
-  setPreviewMode
+  setExportMenuOpen
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   if (activeFileIsPdf || activeFileIsOffice || activeFileIsCode) {
@@ -216,72 +207,6 @@ export function WriteWorkspaceToolbar({
             </div>
           </div>
 
-          <div
-            ref={modeMenuRef}
-            className="write-workspace-toolbar-modes relative flex min-w-0 items-center justify-start gap-1 rounded-xl border border-ds-border-muted bg-white/68 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:bg-white/[0.06] dark:shadow-none"
-          >
-            <button
-              type="button"
-              onClick={() => setPreviewMode('live')}
-              disabled={!activeFileIsText}
-              className={`${modeButtonClass(liveModeActive)} gap-1.5 ${!activeFileIsText ? 'cursor-not-allowed opacity-45' : ''}`}
-              title={t('writeModeLive')}
-              aria-label={t('writeModeLive')}
-            >
-              <FileCode2 className="h-4 w-4" strokeWidth={1.85} />
-              <span className="hidden text-[12.5px] font-semibold sm:inline">{t('writeModeLiveShort')}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setModeMenuOpen((open) => !open)}
-              disabled={!activeFileIsText}
-              className={`${modeButtonClass(modeMenuOpen || !liveModeActive)} px-2 ${!activeFileIsText ? 'cursor-not-allowed opacity-45' : ''}`}
-              title={t('writeModePreview')}
-              aria-label={t('writeModePreview')}
-              aria-haspopup="menu"
-              aria-expanded={modeMenuOpen}
-            >
-              <ChevronDown
-                className={`h-4 w-4 transition ${modeMenuOpen ? 'rotate-180' : ''}`}
-                strokeWidth={1.9}
-              />
-            </button>
-            {modeMenuOpen ? (
-              <div
-                role="menu"
-                className="absolute left-0 top-full z-30 mt-2 min-w-[188px] overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_40px_rgba(20,47,95,0.12)] dark:border-white/10 dark:bg-[#131722]"
-              >
-                {modeMenuItems.map((item) => (
-                  <button
-                    key={item.mode}
-                    type="button"
-                    role="menuitem"
-                    disabled={!activeFileIsText}
-                    onClick={() => {
-                      setPreviewMode(item.mode)
-                      setModeMenuOpen(false)
-                    }}
-                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-[13px] transition ${
-                      item.active
-                        ? 'bg-accent/12 text-accent'
-                        : 'text-ds-ink hover:bg-slate-100'
-                    } ${!activeFileIsText ? 'cursor-not-allowed opacity-40' : ''}`}
-                  >
-                    <span className="flex items-center gap-2">
-                      {item.icon}
-                      <span>{item.shortLabel}</span>
-                    </span>
-                    {item.active ? (
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em]">
-                        ON
-                      </span>
-                    ) : null}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-
           <div className="write-workspace-toolbar-actions flex min-w-0 items-center justify-end gap-1.5">
             {activeFileIsText ? <WriteFontSizeControl /> : null}
             <button
@@ -380,6 +305,20 @@ export function WriteWorkspaceToolbar({
                   role="menu"
                   className="absolute right-0 top-full z-30 mt-2 w-56 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-ds-border bg-ds-card/95 p-1.5 shadow-[0_22px_48px_rgba(20,47,95,0.16)] backdrop-blur-xl"
                 >
+                  {activeFileIsText && isMarkdown ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onToggleSurface()
+                        setExportMenuOpen(false)
+                      }}
+                      className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[13px] text-ds-ink transition hover:bg-ds-hover/80"
+                    >
+                      <span>{t(surfacePlain ? 'writeOpenAsDocument' : 'writeOpenAsPlainText')}</span>
+                      <FileCode2 className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.9} />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     role="menuitem"

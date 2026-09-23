@@ -448,8 +448,8 @@ export function createWriteEditorGroupActions(
       const key = requestedPath ? requestedItemKey(requestedPath) : source.activePath
       const sourceItem = writeEditorItemForKey(source, key)
       const secondaryItem: WriteEditorItem | null = sourceItem
-        ? isWriteFileTab(sourceItem) ? { ...sourceItem, viewMode: 'preview' } : sourceItem
-        : key && !writeWhiteboardIdFromTabKey(key) ? { path: key, viewMode: 'preview' } : null
+        ? isWriteFileTab(sourceItem) ? { ...sourceItem, viewMode: 'plain' } : sourceItem
+        : key && !writeWhiteboardIdFromTabKey(key) ? { path: key, viewMode: 'plain' } : null
       const secondaryTabs = secondaryItem ? [secondaryItem] : []
       const editorLayout = {
         ...state.editorLayout,

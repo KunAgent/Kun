@@ -290,7 +290,6 @@ export function defaultWriteSettings(): WriteSettingsV1 {
     workspaces: [DEFAULT_WRITE_WORKSPACE_ROOT],
     autoSaveEnabled: true,
     autoSaveDelayMs: DEFAULT_WRITE_AUTOSAVE_DELAY_MS,
-    documentEditorV2: false,
     inlineCompletion: {
       enabled: true,
       retrievalEnabled: true,
@@ -464,7 +463,6 @@ export function normalizeWriteSettings(input: WriteSettingsPatchV1 | undefined):
     activeWorkspaceRoot,
     workspaces: workspaces.length > 0 ? workspaces : [defaultWorkspaceRoot],
     autoSaveEnabled: source.autoSaveEnabled !== false,
-    documentEditorV2: source.documentEditorV2 === true,
     autoSaveDelayMs: Number.isFinite(autoSaveDelayMs)
       ? Math.max(MIN_WRITE_AUTOSAVE_DELAY_MS, Math.min(MAX_WRITE_AUTOSAVE_DELAY_MS, Math.round(autoSaveDelayMs)))
       : defaults.autoSaveDelayMs,

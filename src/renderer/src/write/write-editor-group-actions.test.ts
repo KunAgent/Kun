@@ -36,7 +36,7 @@ function installDocuments(): void {
     groups: [{
       id: 'primary' as const,
       tabs: [
-        { path: '/work/a.md', viewMode: 'live' as const },
+        { path: '/work/a.md', viewMode: 'rich' as const },
         { path: '/work/b.md', viewMode: 'rich' as const }
       ],
       activePath: '/work/a.md'
@@ -120,7 +120,7 @@ describe('write editor group actions', () => {
     })
     expect(state.editorLayout.groups[1]).toMatchObject({
       activePath: '/work/a.md',
-      tabs: [{ path: '/work/a.md', viewMode: 'preview' }]
+      tabs: [{ path: '/work/a.md', viewMode: 'plain' }]
     })
     expect(Object.keys(state.documentsByPath)).toHaveLength(2)
   })
@@ -423,7 +423,7 @@ describe('write editor group actions', () => {
           {
             id: 'secondary',
             activePath: '/work/b.md',
-            tabs: [{ path: '/work/b.md', viewMode: 'preview' }]
+            tabs: [{ path: '/work/b.md', viewMode: 'plain' }]
           }
         ]
       }

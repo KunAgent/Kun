@@ -61,7 +61,7 @@ beforeEach(() => {
         id: 'primary',
         activePath: 'whiteboard:board-1',
         tabs: [
-          { path: '/work/file.md', viewMode: 'live' },
+          { path: '/work/file.md', viewMode: 'rich' },
           { kind: 'whiteboard', boardId: board.id, viewMode: 'rich' }
         ]
       }]

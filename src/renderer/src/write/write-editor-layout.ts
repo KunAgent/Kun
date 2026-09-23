@@ -270,7 +270,40 @@ export function captureFocusedDocument(state: WriteWorkspaceState): Record<strin
 /** New-tab default: `.mdx` opens as plain text — its JSX would not survive
  * a rich-mode round trip. */
 export function defaultWriteViewModeForPath(path: string): WritePreviewMode {
-  return /\.mdx$/i.test(path) ? 'source' : 'rich'
+  return /\.mdx$/i.test(path) ? 'plain' : 'rich'
+}
+
+/**
+ * Migrate persisted view modes (implementation §8.1): the old
+ * `source`/`live`/`preview` surfaces collapse into the single document
+ * view (`'rich'`); `'plain'` maps to the plain-text editor.
+ */
+export function normalizeWriteViewMode(value: unknown): WritePreviewMode {
+  return value === 'plain' ? 'plain' : 'rich'
+}
+
+export type WriteEditorSurface = 'document' | 'plain'
+
+/**
+ * Pick the editing surface for an open file (implementation §8.2):
+ * non-markdown text, `.mdx`, truncated content, oversized markdown, or an
+ * explicit `plain` view mode all go to the plain-text editor; everything
+ * else renders the block document editor.
+ */
+export function resolveWriteEditorSurface(input: {
+  path: string
+  viewMode: WritePreviewMode
+  contentLength: number
+  truncated: boolean
+  isMarkdown?: boolean
+}): { surface: WriteEditorSurface; notice?: 'large-file' | 'mdx' | 'truncated' } {
+  const isMarkdown = input.isMarkdown ?? /\.(md|markdown)$/i.test(input.path)
+  if (input.truncated) return { surface: 'plain', notice: 'truncated' }
+  if (!isMarkdown) return { surface: 'plain' }
+  if (/\.mdx$/i.test(input.path)) return { surface: 'plain', notice: 'mdx' }
+  if (input.viewMode === 'plain') return { surface: 'plain' }
+  if (input.contentLength > 300_000) return { surface: 'plain', notice: 'large-file' }
+  return { surface: 'document' }
 }
 
 export function addTabToGroup(
@@ -312,7 +345,7 @@ export function layoutStorageKey(workspaceRoot: string): string {
 }
 
 function validMode(value: unknown): value is WritePreviewMode {
-  return value === 'rich' || value === 'source' || value === 'live' || value === 'preview'
+  return value === 'rich' || value === 'source' || value === 'live' || value === 'preview' || value === 'plain'
 }
 
 function normalizeStoredTab(value: unknown, workspaceRoot: string): WriteEditorTab | null {
@@ -323,7 +356,7 @@ function normalizeStoredTab(value: unknown, workspaceRoot: string): WriteEditorT
   if (!path || !isWriteWorkspaceFilePath(path) || (path !== root && !path.startsWith(`${root}/`))) return null
   return {
     path,
-    viewMode: validMode(candidate.viewMode) ? candidate.viewMode : 'rich',
+    viewMode: validMode(candidate.viewMode) ? normalizeWriteViewMode(candidate.viewMode) : 'rich',
     ...(Number.isFinite(candidate.cursorOffset) ? { cursorOffset: Math.max(0, Number(candidate.cursorOffset)) } : {}),
     ...(Number.isFinite(candidate.scrollTop) ? { scrollTop: Math.max(0, Number(candidate.scrollTop)) } : {})
   }

@@ -3,8 +3,6 @@ export const WRITE_SAFE_MARKDOWN_RENDER_MAX_CHARS = 300_000
 export type WriteRenderNotice = 'none' | 'large-file' | 'truncated'
 
 export type WriteRenderSafety = {
-  livePreviewEnabled: boolean
-  markdownPreviewEnabled: boolean
   readOnly: boolean
   notice: WriteRenderNotice
 }
@@ -24,8 +22,6 @@ export function getWriteRenderSafety({
 }: WriteRenderSafetyOptions): WriteRenderSafety {
   if (truncated) {
     return {
-      livePreviewEnabled: false,
-      markdownPreviewEnabled: false,
       readOnly: true,
       notice: 'truncated'
     }
@@ -33,8 +29,6 @@ export function getWriteRenderSafety({
 
   if (!isMarkdown) {
     return {
-      livePreviewEnabled: false,
-      markdownPreviewEnabled: false,
       readOnly: false,
       notice: 'none'
     }
@@ -43,16 +37,12 @@ export function getWriteRenderSafety({
   const documentSize = Math.max(0, contentLength, fileSize)
   if (documentSize > WRITE_SAFE_MARKDOWN_RENDER_MAX_CHARS) {
     return {
-      livePreviewEnabled: false,
-      markdownPreviewEnabled: false,
       readOnly: false,
       notice: 'large-file'
     }
   }
 
   return {
-    livePreviewEnabled: true,
-    markdownPreviewEnabled: true,
     readOnly: false,
     notice: 'none'
   }

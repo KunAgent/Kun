@@ -10,7 +10,6 @@ vi.mock('react-i18next', () => {
 })
 vi.mock('../../write/tiptap/WriteRichEditor', () => ({ WriteRichEditor: () => null }))
 vi.mock('./WriteMarkdownEditor', () => ({ WriteMarkdownEditor: () => null }))
-vi.mock('./WriteMarkdownPreview', () => ({ WriteMarkdownPreview: () => null }))
 vi.mock('./WriteWorkspaceStart', () => ({ WriteWorkspaceStart: () => null }))
 vi.mock('./WriteImagePreview', () => ({ WriteImagePreview: () => null }))
 vi.mock('./WritePdfViewer', () => ({ WritePdfViewer: () => null }))
@@ -54,22 +53,15 @@ function paneProps(focusMode: boolean, onFocusModeChange: (active: boolean) => v
     workspaceName: 'repo',
     workspacePathLabel: '/repo',
     renderSafety: {
-      livePreviewEnabled: true,
-      markdownPreviewEnabled: true,
       readOnly: false,
       notice: 'none' as const
     },
     fileGuardMessage: '',
     fileGuardDetail: '',
-    editorVisible: true,
-    previewVisible: false,
-    editorWidth: 'w-full',
-    previewWidth: 'w-0',
-    editorAppearance: 'source' as const,
-    richModeActive: false,
+    editorSurface: 'document' as const,
+    readOnly: false,
     richHandleRef: { current: null },
-    debouncedPreviewContent: 'Draft',
-    isMarkdown: true,
+    markdownHandleRef: { current: null },
     inlineCompletion: {
       enabled: false,
       retrievalEnabled: false,
@@ -90,7 +82,6 @@ function paneProps(focusMode: boolean, onFocusModeChange: (active: boolean) => v
     inlineCompletionApiReady: false,
     recentEdits: [],
     editorPaneRef: createRef<HTMLDivElement>(),
-    previewPaneRef: createRef<HTMLDivElement>(),
     onAskAssistant: noop,
     onCreateDraft: noop,
     onPickWorkspace: noop,
@@ -232,8 +223,7 @@ describe('WriteWorkspaceDocumentPane focus mode', () => {
         activeFileIsCode: true,
         activeFileIsText: false,
         fileContent: 'export const answer = 42\n',
-        isMarkdown: false,
-        editorVisible: false
+        editorSurface: 'plain' as const
       }))
     })
 

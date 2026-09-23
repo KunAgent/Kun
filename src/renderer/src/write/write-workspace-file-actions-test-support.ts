@@ -17,7 +17,6 @@ export class MemoryStorage {
 export function makeWriteFileActionBaseState(): WriteWorkspaceState {
   return {
     defaultWorkspaceRoot: '', workspaceRoots: [], autoSaveEnabled: true,
-    documentEditorV2: false,
     autoSaveDelayMs: defaultWriteSettings().autoSaveDelayMs,
     inlineCompletion: defaultWriteSettings().inlineCompletion,
     inlineCompletionApiReady: false,
@@ -25,7 +24,7 @@ export function makeWriteFileActionBaseState(): WriteWorkspaceState {
     agentPresets: defaultWriteSettings().agentPresets,
     imageGenReady: false, prototypeReady: false, settingsLoading: false, settingsError: null,
     ...initialState(),
-    previewMode: 'live', assistantOpen: true, assistantModel: 'auto', assistantProviderId: '',
+    previewMode: 'rich', assistantOpen: true, assistantModel: 'auto', assistantProviderId: '',
     assistantAgentPresetId: '',
     loadWriteSettings: async () => undefined,
     selectWriteWorkspace: async () => undefined,
