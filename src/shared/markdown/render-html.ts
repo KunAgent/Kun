@@ -24,10 +24,19 @@ import { splitFrontmatter } from './frontmatter'
 import { parseWorkMdast } from './parse-mdast'
 
 export type WorkRenderHtmlOptions = {
-  /** KaTeX output mode. Export uses 'mathml' when targeting DOCX. */
-  math: 'html' | 'mathml'
+  /**
+   * 'html' renders KaTeX spans (editor previews); 'mathml' emits native
+   * MathML (Chromium export surfaces); 'latex' writes the TeX source into
+   * monospace elements for consumers without math support (DOCX).
+   */
+  math: 'html' | 'mathml' | 'latex'
   /** Pre-rendered mermaid SVG keyed by diagram source. */
   renderedDiagrams?: Record<string, string>
+  /**
+   * Pre-highlighted code-block HTML keyed by exact fence source. Callers
+   * compute it asynchronously (e.g. shiki) and pass the map in.
+   */
+  highlightedCode?: Record<string, string>
   /** Rewrite resource URLs (images) before serialization. */
   resolveResource?: (src: string) => string
 }
@@ -49,16 +58,23 @@ type LooseNode = Node & {
 
 const MERMAID_SLOT_TAG = 'work-mermaid-slot'
 
-/** Replace mermaid code blocks with placeholder nodes (raw svg slots). */
-function markMermaidBlocks(tree: LooseNode, slots: string[]): void {
+/**
+ * Replace mermaid code blocks with placeholder nodes (raw svg slots) and
+ * record every remaining fenced block's source in `codeSlots`, in document
+ * order — the post-sanitize pass zips them with `<pre>` elements.
+ */
+function markMermaidBlocks(tree: LooseNode, slots: string[], codeSlots: string[]): void {
   const visit = (node: LooseNode): LooseNode => {
-    if (node.type === 'code' && (node.lang ?? '') === 'mermaid') {
-      const source = node.value ?? ''
-      slots.push(source)
-      return {
-        type: 'workMermaidSlot',
-        value: String(slots.length - 1)
+    if (node.type === 'code') {
+      if ((node.lang ?? '') === 'mermaid') {
+        const source = node.value ?? ''
+        slots.push(source)
+        return {
+          type: 'workMermaidSlot',
+          value: String(slots.length - 1)
+        }
       }
+      codeSlots.push(node.value ?? '')
     }
     if (node.children) {
       node.children = node.children.map((child) => visit(child))
@@ -109,6 +125,23 @@ const workRehypeHandlers = {
   }
 }
 
+/**
+ * 'latex' math mode handlers: mdast `math`/`inlineMath` become monospace
+ * wrappers holding the raw TeX so Word/DOCX keeps the formula readable.
+ */
+const latexMathRehypeHandlers = {
+  math(_state: unknown, node: LooseNode): Element {
+    return el('pre', { className: ['work-math-latex'] }, [
+      el('code', {}, [{ type: 'text', value: node.value ?? '' }])
+    ])
+  },
+  inlineMath(_state: unknown, node: LooseNode): Element {
+    return el('code', { className: ['work-math-latex'] }, [
+      { type: 'text', value: node.value ?? '' }
+    ])
+  }
+}
+
 /** Schema: GitHub defaults + Work profile extras + our data-* slots. */
 const workSanitizeSchema = {
   ...defaultSchema,
@@ -133,12 +166,26 @@ const workSanitizeSchema = {
   }
 }
 
-/** Post-sanitize passes: mermaid svg injection + resource rewriting. */
-function workPostProcess(slots: string[], options: WorkRenderHtmlOptions) {
+/** Post-sanitize passes: mermaid svg injection + shiki slot injection +
+ * resource rewriting. */
+function workPostProcess(slots: string[], codeSlots: string[], options: WorkRenderHtmlOptions) {
   return (tree: HastRoot) => {
-    const visit = (node: Node): void => {
+    let preIndex = 0
+    const visit = (node: Node | HastRoot): void => {
+      if (node.type === 'root') {
+        for (const child of (node as HastRoot).children ?? []) visit(child)
+        return
+      }
       if (node.type !== 'element') return
       const element = node as Element
+      if (element.tagName === 'pre' && options.highlightedCode) {
+        const highlighted = options.highlightedCode[codeSlots[preIndex] ?? '']
+        preIndex += 1
+        if (highlighted) {
+          element.children = [{ type: 'raw', value: highlighted } as ElementContent]
+        }
+        return
+      }
       if (element.tagName === MERMAID_SLOT_TAG) {
         const index = Number(element.properties?.dataMermaidIndex ?? 0)
         const svg = options.renderedDiagrams?.[slots[index]]
@@ -151,10 +198,11 @@ function workPostProcess(slots: string[], options: WorkRenderHtmlOptions) {
             ])]
         return
       }
-      if (element.tagName === 'img' && options.resolveResource) {
-        const src = element.properties?.src
-        if (typeof src === 'string' && src) {
-          element.properties = { ...element.properties, src: options.resolveResource(src) }
+      if ((element.tagName === 'img' || element.tagName === 'a') && options.resolveResource) {
+        const key = element.tagName === 'img' ? 'src' : 'href'
+        const value = element.properties?.[key]
+        if (typeof value === 'string' && value) {
+          element.properties = { ...element.properties, [key]: options.resolveResource(value) }
         }
       }
       for (const child of element.children ?? []) visit(child)
@@ -171,17 +219,24 @@ export function renderWorkMarkdownToHtml(
   const { body } = splitFrontmatter(markdown)
   const mdast = parseWorkMdast(body)
   const slots: string[] = []
-  markMermaidBlocks(mdast as unknown as LooseNode, slots)
+  const codeSlots: string[] = []
+  markMermaidBlocks(mdast as unknown as LooseNode, slots, codeSlots)
 
-  const hast = unified()
+  const pipeline = unified()
     .use(remarkRehype, {
       allowDangerousHtml: true,
-      handlers: workRehypeHandlers as never
+      handlers: {
+        ...workRehypeHandlers,
+        ...(options.math === 'latex' ? latexMathRehypeHandlers : {})
+      } as never
     })
     .use(rehypeRaw)
     .use(rehypeSanitize, workSanitizeSchema)
-    .use(rehypeKatex, { output: options.math === 'mathml' ? 'mathml' : 'html' })
-    .use(workPostProcess, slots, options)
+  if (options.math !== 'latex') {
+    pipeline.use(rehypeKatex, { output: options.math === 'mathml' ? 'mathml' : 'html' })
+  }
+  const hast = pipeline
+    .use(workPostProcess, slots, codeSlots, options)
     .runSync(mdast) as Parent
 
   return toHtml(hast as HastRoot, { allowDangerousHtml: true })

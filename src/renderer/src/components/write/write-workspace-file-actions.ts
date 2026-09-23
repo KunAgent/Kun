@@ -14,9 +14,50 @@ import {
   exportFormatLabel,
   type WriteNotice
 } from './write-workspace-view-utils'
+import { renderMermaid } from '../../lib/mermaid-render'
+import { splitFrontmatter } from '@shared/markdown/frontmatter'
+import { parseWorkMdast } from '@shared/markdown/parse-mdast'
 
 type WriteWorkspaceState = ReturnType<typeof useWriteWorkspaceStore.getState>
 type ExportInFlight = WriteExportFormat | typeof WRITE_RICH_CLIPBOARD_ACTION | null
+
+type MdastNode = {
+  type: string
+  lang?: string | null
+  value?: string
+  children?: MdastNode[]
+}
+
+/** Collect mermaid fence sources in document order. */
+function collectMermaidSources(markdown: string): string[] {
+  const { body } = splitFrontmatter(markdown)
+  const mdast = parseWorkMdast(body) as unknown as MdastNode
+  const sources: string[] = []
+  const visit = (node: MdastNode): void => {
+    if (node.type === 'code' && (node.lang ?? '') === 'mermaid') {
+      sources.push(node.value ?? '')
+    }
+    for (const child of node.children ?? []) visit(child)
+  }
+  visit(mdast)
+  return sources
+}
+
+/**
+ * Pre-render every mermaid diagram in the document so the export IPC can
+ * splice the same SVGs the editor shows (implementation §10.3).
+ */
+async function renderExportDiagrams(markdown: string): Promise<Record<string, string> | undefined> {
+  const sources = collectMermaidSources(markdown)
+  if (sources.length === 0) return undefined
+  const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+  const rendered: Record<string, string> = {}
+  await Promise.all(sources.map(async (source) => {
+    const result = await renderMermaid(source, theme)
+    if (result.ok) rendered[source] = result.svg
+  }))
+  return Object.keys(rendered).length > 0 ? rendered : undefined
+}
 
 type Params = {
   t: TFunction<'common'>
@@ -156,11 +197,13 @@ export function createWriteWorkspaceFileActions({
     setExportMenuOpen(false)
     setExportingFormat(format)
     try {
+      const renderedDiagrams = await renderExportDiagrams(fileContent).catch(() => undefined)
       const result = await window.kunGui.exportWriteDocument({
         path: activeFilePath,
         workspaceRoot,
         format,
-        content: fileContent
+        content: fileContent,
+        ...(renderedDiagrams ? { renderedDiagrams } : {})
       })
       if (!result.ok) {
         if (!result.canceled) {

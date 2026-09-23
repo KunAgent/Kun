@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { createElement, type ComponentPropsWithoutRef, type ReactNode } from 'react'
+import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { renderWorkMarkdownToHtml } from '../../shared/markdown/render-html'
+import { highlightExportCodeBlocks } from './write-export-highlight'
 import type {
   WriteExportFormat,
   WriteExportPayload,
@@ -320,49 +320,32 @@ function renderPlainTextFragment(content: string): string {
   )
 }
 
-function renderMarkdownFragment(content: string, sourcePath: string): string {
-  return renderToStaticMarkup(
-    createElement(
-      ReactMarkdown,
-      {
-        remarkPlugins: [remarkGfm],
-        components: {
-          a: ({
-            href,
-            children,
-            ...props
-          }: ComponentPropsWithoutRef<'a'> & { href?: string; children?: ReactNode }): ReactNode =>
-            createElement(
-              'a',
-              {
-                ...props,
-                href: resolveWriteMarkdownResource(href, sourcePath) ?? href
-              },
-              children
-            ),
-          img: ({
-            src,
-            alt,
-            ...props
-          }: ComponentPropsWithoutRef<'img'> & { src?: string; alt?: string | null }): ReactNode =>
-            createElement('img', {
-              ...props,
-              src: resolveWriteMarkdownResource(src, sourcePath),
-              alt: alt ?? ''
-            })
-        }
-      },
-      content
-    )
-  )
+async function renderMarkdownFragment(
+  content: string,
+  sourcePath: string,
+  options?: {
+    format?: WriteExportFormat
+    renderedDiagrams?: Record<string, string>
+  }
+): Promise<string> {
+  const mathMode = options?.format === 'doc' || options?.format === 'docx' ? 'latex' : 'mathml'
+  const highlightedCode = await highlightExportCodeBlocks(content)
+  return renderWorkMarkdownToHtml(content, {
+    math: mathMode,
+    highlightedCode,
+    ...(options?.renderedDiagrams ? { renderedDiagrams: options.renderedDiagrams } : {}),
+    resolveResource: (src) => resolveWriteMarkdownResource(src, sourcePath) ?? src
+  })
 }
 
 export async function buildWriteClipboardHtmlFragment(options: {
   sourcePath: string
   content: string
+  format?: WriteExportFormat
+  renderedDiagrams?: Record<string, string>
 }): Promise<string> {
   const fragment = isMarkdownFile(options.sourcePath)
-    ? renderMarkdownFragment(options.content, options.sourcePath)
+    ? await renderMarkdownFragment(options.content, options.sourcePath, options)
     : renderPlainTextFragment(options.content)
   const body = await inlineLocalImagesInHtml(fragment)
   return `<article class="markdown-body">${body}</article>`
@@ -377,11 +360,15 @@ export async function buildWriteExportHtmlDocument(options: {
   content: string
   title?: string
   wordCompatible?: boolean
+  format?: WriteExportFormat
+  renderedDiagrams?: Record<string, string>
 }): Promise<string> {
   const title = options.title?.trim() || basenameWithoutExtension(options.sourcePath)
   const body = await buildWriteClipboardHtmlFragment({
     sourcePath: options.sourcePath,
-    content: options.content
+    content: options.content,
+    ...(options.format ? { format: options.format } : {}),
+    ...(options.renderedDiagrams ? { renderedDiagrams: options.renderedDiagrams } : {})
   })
   const baseHref = pathToFileURL(`${dirname(options.sourcePath)}/`).href
   const namespaces = options.wordCompatible
@@ -588,7 +575,9 @@ export async function exportWriteDocument(
       sourcePath,
       content: payload.content,
       title,
-      wordCompatible: payload.format === 'doc'
+      wordCompatible: payload.format === 'doc',
+      format: payload.format,
+      ...(payload.renderedDiagrams ? { renderedDiagrams: payload.renderedDiagrams } : {})
     })
 
     if (payload.format === 'html' || payload.format === 'doc') {

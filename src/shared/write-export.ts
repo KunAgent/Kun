@@ -18,6 +18,12 @@ export type WriteExportPayload = {
   workspaceRoot?: string
   format: WriteExportFormat
   content: string
+  /**
+   * Pre-rendered mermaid SVG keyed by exact fence source. The renderer
+   * generates these before invoking the export IPC so the main process can
+   * inject identical diagrams without running mermaid offscreen.
+   */
+  renderedDiagrams?: Record<string, string>
 }
 
 export type WriteRichClipboardPayload = {

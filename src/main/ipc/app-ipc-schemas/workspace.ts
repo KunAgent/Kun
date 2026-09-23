@@ -487,7 +487,10 @@ export const writeExportPayloadSchema = z
     title: optionalTrimmedString(200),
     workspaceRoot: optionalTrimmedString(MAX_PATH_LENGTH),
     format: z.enum(WRITE_EXPORT_FORMATS),
-    content: z.string().max(MAX_BODY_BYTES)
+    content: z.string().max(MAX_BODY_BYTES),
+    renderedDiagrams: z
+      .record(z.string().max(MAX_BODY_BYTES), z.string().max(MAX_BODY_BYTES))
+      .optional()
   })
   .strict()
   .refine((payload) => Boolean(payload.path || payload.title), {
