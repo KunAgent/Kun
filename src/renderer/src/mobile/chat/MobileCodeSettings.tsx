@@ -2,17 +2,15 @@ import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useChatStore } from '../../store/chat-store'
 import { MobileSheet } from '../sheets/MobileSheet'
-import './mobile-code-options.css'
+import { workspaceLabelFromPath } from '../../lib/workspace-label'
+import { MobileModelSelect } from './MobileModelSelect'
 
 /**
- * Minimal Remote/mobile settings sheet. The desktop settings route is not
- * reachable from the phone shell, so the essentials — runtime health and the
- * default model — live here; everything else points at the desktop app.
+ * Settings content shared by the bottom sheet and the full-screen mobile
+ * settings page: runtime health, project, and the default model. Everything
+ * else points at the desktop app.
  */
-export function MobileCodeSettings({ open, onClose }: {
-  open: boolean
-  onClose: () => void
-}) {
+export function MobileCodeSettingsBody(): React.JSX.Element {
   const { t } = useTranslation('common')
   const state = useChatStore(useShallow((value) => ({
     runtimeConnection: value.runtimeConnection,
@@ -23,28 +21,46 @@ export function MobileCodeSettings({ open, onClose }: {
     setComposerModel: value.setComposerModel,
     workspaceRoot: value.workspaceRoot
   })))
-  const providerForModel = (value: string): string =>
-    state.composerModelGroups.find((group) => group.modelIds.includes(value))?.providerId ?? ''
   const runtimeLabel = state.runtimeConnection === 'ready' ? t('mobileRuntime_ready')
     : state.runtimeConnection === 'checking' ? t('mobileRuntime_checking')
     : state.runtimeConnection === 'offline' ? t('mobileRuntime_offline')
     : t('mobileRuntime_idle')
 
-  return <MobileSheet open={open} title={t('settings')} closeLabel={t('close')} onClose={onClose}>
-    <div className="kun-mobile-code-options">
-      <dl>
+  return (
+    <div className="kun-mobile-form">
+      <dl className="kun-mobile-kv">
         <dt>{t('mobileRuntimeStatus')}</dt><dd>{runtimeLabel}</dd>
-        <dt>{t('mobileDetailsProject')}</dt><dd>{state.workspaceRoot || '—'}</dd>
+        <dt>{t('mobileDetailsProject')}</dt>
+        <dd>{state.workspaceRoot ? workspaceLabelFromPath(state.workspaceRoot) : '—'}</dd>
+        {state.workspaceRoot ? (
+          <>
+            <dt>{t('mobileDetailsPath')}</dt>
+            <dd data-mono>{state.workspaceRoot}</dd>
+          </>
+        ) : null}
       </dl>
-      <label>{t('composerModel')}
-        <select value={state.composerModel}
-          onChange={(event) => state.setComposerModel(event.target.value, providerForModel(event.target.value))}>
-          {!state.composerModel ? <option value="">{t('autoLabel')}</option> : null}
-          {state.composerPickList.map((value) => <option key={value} value={value}>{value}</option>)}
-        </select>
+      <label className="kun-mobile-field">{t('composerModel')}
+        <MobileModelSelect
+          value={state.composerModel}
+          groups={state.composerModelGroups}
+          fallbackIds={state.composerPickList}
+          autoLabel={t('autoLabel')}
+          onChange={(model, providerId) => state.setComposerModel(model, providerId)}
+        />
       </label>
-      {state.composerProviderId ? <p>{state.composerProviderId}</p> : null}
-      <p>{t('mobileSettingsDesktopHint')}</p>
+      <p className="kun-mobile-hint">{t('mobileSettingsDesktopHint')}</p>
     </div>
-  </MobileSheet>
+  )
+}
+
+export function MobileCodeSettings({ open, onClose }: {
+  open: boolean
+  onClose: () => void
+}): React.JSX.Element {
+  const { t } = useTranslation('common')
+  return (
+    <MobileSheet open={open} title={t('settings')} closeLabel={t('close')} onClose={onClose}>
+      <MobileCodeSettingsBody />
+    </MobileSheet>
+  )
 }

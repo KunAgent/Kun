@@ -1,6 +1,6 @@
 import { memo, useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, ChevronDown, ChevronRight, FileEdit, GitFork, Loader2, RotateCcw, Terminal, Wrench } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, FileEdit, GitFork, Loader2, MoreHorizontal, RotateCcw, Terminal, Wrench } from 'lucide-react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { extractUnifiedDiffText } from '../../lib/diff-stats'
 import { useChatStore } from '../../store/chat-store'
@@ -25,9 +25,12 @@ import {
 import { AssistantSpeakButton } from './AssistantSpeakButton'
 import { AssistantSpeakTrackButton } from './AssistantSpeakTrackButton'
 import { useSpeakStore } from '../../stores/speak-store'
+import type { TurnUsageSummary } from '../../hooks/use-turn-usage'
 import { ToolAttachmentPreviews } from './message-timeline-media-views'
 import { LiveAssistantStreamingProvider } from './live-assistant-streaming'
 import { metaString } from './message-timeline-bubble-meta'
+import { useTimelineSurface } from './timeline-surface'
+import { useMobileMessageActionsStore } from '../../stores/mobile-message-actions'
 
 export { GeneratedFilesPanel } from './message-timeline-media-views'
 export { generatedMediaScrollAvailability } from './message-timeline-media-logic'
@@ -83,6 +86,8 @@ function MessageBubbleImpl({
   nested = false,
   forkAction,
   rollbackAction,
+  turnUsage,
+  turnUsageStale = false,
   allowThreadActions = true
 }: {
   block: ChatBlock
@@ -95,6 +100,9 @@ function MessageBubbleImpl({
     busy: boolean
     onRollback: () => void
   }
+  /** Desktop renders TurnUsageRow on the turn; mobile moves it into the sheet. */
+  turnUsage?: TurnUsageSummary
+  turnUsageStale?: boolean
   allowThreadActions?: boolean
 }): ReactElement {
   const { t, i18n } = useTranslation('common')
@@ -105,6 +113,8 @@ function MessageBubbleImpl({
     Boolean(s.activeThreadId && s.threadLoadingId === s.activeThreadId)
   )
   const speakingBlockId = useSpeakStore((s) => s.activeBlockId)
+  const surface = useTimelineSurface()
+  const openMobileMessageActions = useMobileMessageActionsStore((s) => s.open)
   if (block.kind === 'user' && isBackgroundShellNoticeBlock(block)) {
     return <BackgroundShellNoticeBubble block={block} nested={nested} />
   }
@@ -137,7 +147,7 @@ function MessageBubbleImpl({
             <AssistantMarkdown text={block.text} streaming={effectiveStreaming} />
           </div>
         {!streaming ? (
-          <div className={assistantActionRowClass(speakingBlockId === block.id)}>
+          <div className={assistantActionRowClass(speakingBlockId === block.id)} data-assistant-action-row>
             <span className="flex min-w-0 items-center gap-2">
               <span className="truncate">{createdAtLabel ?? ''}</span>
               {turnMetrics ? (
@@ -158,6 +168,7 @@ function MessageBubbleImpl({
                   className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition hover:bg-ds-hover hover:text-ds-muted disabled:cursor-not-allowed disabled:opacity-60"
                   title={t('rollbackWorkspaceFromAssistantResponse')}
                   aria-label={t('rollbackWorkspaceFromAssistantResponse')}
+                  data-assistant-action="rollback"
                 >
                   <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} />
                   <span>{rollbackAction.busy ? t('rollingBackWorkspace') : t('rollbackWorkspace')}</span>
@@ -171,6 +182,7 @@ function MessageBubbleImpl({
                   className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition hover:bg-ds-hover hover:text-ds-muted disabled:cursor-not-allowed disabled:opacity-60"
                   title={t('forkFromAssistantResponse')}
                   aria-label={t('forkFromAssistantResponse')}
+                  data-assistant-action="fork"
                 >
                   <GitFork className="h-3.5 w-3.5" strokeWidth={1.8} />
                   <span>{forkAction.busy ? t('forkingThread') : t('forkResponse')}</span>
@@ -180,6 +192,16 @@ function MessageBubbleImpl({
               <AssistantSpeakTrackButton text={block.text} createdAt={block.createdAt} />
               <AssistantExportButton text={block.text} createdAt={block.createdAt} />
               <CopyFeedbackButton text={block.text} />
+              {surface === 'mobile' ? (
+                <button
+                  type="button"
+                  aria-label={t('mobileMessageActions')}
+                  onClick={() => openMobileMessageActions({ block, forkAction, rollbackAction, turnUsage, turnUsageStale })}
+                  data-assistant-action="more"
+                >
+                  <MoreHorizontal className="h-5 w-5" aria-hidden />
+                </button>
+              ) : null}
             </div>
           </div>
         ) : null}

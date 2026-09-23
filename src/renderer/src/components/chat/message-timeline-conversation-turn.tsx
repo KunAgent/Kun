@@ -424,6 +424,8 @@ export function ConversationTurn({
           key={block.id}
           block={block}
           allowThreadActions={allowMainThreadActions}
+          turnUsage={turnUsage}
+          turnUsageStale={turnUsageStale}
           forkAction={
             block.id === forkActionBlockId
               ? {

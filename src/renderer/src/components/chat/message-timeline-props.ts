@@ -35,6 +35,11 @@ export type MessageTimelineProps = {
   ) => void
   onOpenGeneratedDocuments?: (collection: GeneratedDocumentCollection) => void
   compactCards?: boolean
+  /**
+   * Chrome hosting the timeline. `mobile` swaps hover-only affordances for a
+   * touch action sheet and a floating back-to-latest button.
+   */
+  surface?: 'desktop' | 'mobile'
   onOpenChildThread?: OpenChildThreadHandler
   onComponentPrototypePrompt?: (prompt: string) => void
   extensionMessageActions?: readonly RegisteredContribution<'actions.message'>[]

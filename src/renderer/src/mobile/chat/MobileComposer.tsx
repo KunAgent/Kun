@@ -13,7 +13,7 @@ export type MobileComposerProps = {
   disabled: boolean
   sending: boolean
   canSend: boolean
-  labels: { placeholder: string; send: string; stop: string; attachments: string; options: string }
+  labels: { placeholder: string; send: string; stop: string; attachments: string; options?: string }
   attachments?: ReactNode
   pendingActions?: ReactNode
   error?: string | null
@@ -62,7 +62,7 @@ export function MobileComposer(props: MobileComposerProps) {
       </button>
     </div>
     {onOptions ? <button type="button" className="kun-mobile-composer-options" onClick={onOptions} disabled={disabled}>
-      {labels.options}
+      {labels.options ?? ''}
     </button> : null}
   </section>
 }

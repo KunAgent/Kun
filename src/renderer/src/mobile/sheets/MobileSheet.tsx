@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import './mobile-sheet.css'
+import './mobile-sheet-form.css'
 
 type MobileSheetProps = {
   open: boolean

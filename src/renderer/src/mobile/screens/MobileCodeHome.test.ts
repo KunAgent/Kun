@@ -33,7 +33,7 @@ const state = vi.hoisted(() => ({
 }))
 vi.mock('../../store/chat-store', () => ({useChatStore: Object.assign((selector: (s: typeof state) => unknown) => selector(state), {getState: () => state})}))
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({t: (key: string) => key}),
+  useTranslation: () => ({t: (key: string) => key, i18n: {language: 'en'}}),
   initReactI18next: {type: '3rdParty', init: () => undefined}
 }))
 vi.mock('../../agent/registry', () => ({getProvider: () => ({})}))
@@ -79,7 +79,9 @@ it('starts with projects, selects the real workspace, and never mixes projects o
   expect(host.querySelectorAll('.kun-mobile-project-row')).toHaveLength(2)
   expect(host.textContent).toContain('mobileCodeProjects')
   expect(host.textContent).not.toContain('/projects/alpha')
-  expect(host.textContent).not.toContain('Alpha task')
+  // The recent strip surfaces code threads only — never other surfaces.
+  expect(host.querySelector('.kun-mobile-recent')?.textContent).toContain('Alpha task')
+  expect(host.textContent).not.toContain('Write task')
   expect(host.querySelector('.kun-mobile-project-add')).toBeNull()
   expect(host.querySelector('[aria-label="selectWorkspace"]')).toBeTruthy()
   await openFirstProject()
@@ -87,7 +89,7 @@ it('starts with projects, selects the real workspace, and never mixes projects o
   expect(host.textContent).toContain('Alpha task')
   expect(host.textContent).not.toContain('Beta task')
   expect(host.textContent).not.toContain('Write task')
-  act(() => { (host.querySelector('.kun-mobile-workspace') as HTMLButtonElement).click() })
+  act(() => { (host.querySelector('.kun-mobile-back') as HTMLButtonElement).click() })
   expect(host.querySelectorAll('.kun-mobile-project-row')).toHaveLength(2)
 })
 it('does not enter a project when switching fails', async () => {
@@ -95,7 +97,8 @@ it('does not enter a project when switching fails', async () => {
   act(() => root.render(createElement(MobileCodeHome, {onOpen: vi.fn()})))
   await act(async () => { (host.querySelector('.kun-mobile-project-row') as HTMLButtonElement).click() })
   expect(host.querySelector('[role="alert"]')?.textContent).toContain('Offline')
-  expect(host.querySelector('.kun-mobile-thread')).toBeNull()
+  // Still on the projects screen — no per-project thread list mounted.
+  expect(host.querySelector('.kun-mobile-home')).toBeNull()
 })
 it('auto-loads the selected project page and creates new threads inside it', async () => {
   const onOpen = vi.fn()

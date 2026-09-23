@@ -186,15 +186,31 @@ export default function AppShell(): React.ReactElement {
         </div>
         <SpeakDownloadToast />
         {initialSetupOpen ? (
-          <ProtectedRendererSurface
-            kind="account-credentials"
-            restoreTarget="initial-setup"
-            fallback={null}
-          >
-            <Suspense fallback={null}>
-              <InitialSetupView />
-            </Suspense>
-          </ProtectedRendererSurface>
+          surface === 'mobile' ? (
+            <div className="kun-mobile-setup-hint" role="alertdialog" aria-modal="true">
+              <div className="kun-mobile-setup-hint-card">
+                <h2>{i18n.t('mobileSetupRequiredTitle')}</h2>
+                <p>{i18n.t('mobileSetupRequiredBody')}</p>
+                <button
+                  type="button"
+                  className="kun-mobile-button"
+                  onClick={() => useChatStore.getState().closeInitialSetup()}
+                >
+                  {i18n.t('mobileSetupRequiredDismiss')}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <ProtectedRendererSurface
+              kind="account-credentials"
+              restoreTarget="initial-setup"
+              fallback={null}
+            >
+              <Suspense fallback={null}>
+                <InitialSetupView />
+              </Suspense>
+            </ProtectedRendererSurface>
+          )
         ) : null}
       </div>
     </ExtensionSettingsServiceProvider>

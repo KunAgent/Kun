@@ -1,5 +1,4 @@
 .kun-mobile-sheet {
-  --kun-mobile-touch-size: 44px;
   --kun-mobile-sheet-gutter: 16px;
   box-sizing: border-box;
   position: fixed;
@@ -47,8 +46,8 @@
 
 .kun-mobile-sheet-header button {
   flex-shrink: 0;
-  min-width: var(--kun-mobile-touch-size);
-  min-height: var(--kun-mobile-touch-size);
+  min-width: var(--kun-mobile-touch, 44px);
+  min-height: var(--kun-mobile-touch, 44px);
   padding-inline: 12px;
   border-radius: 9999px;
   color: inherit;

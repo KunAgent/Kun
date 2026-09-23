@@ -35,6 +35,15 @@ export function ProtectedRendererSurface({
     }
     let cancelled = false
     setReady(false)
+    // Remote browser clients have no Electron content-script channel, so the
+    // isolation handshake can never complete — render children instead of an
+    // endless fallback.
+    if (window.kunGui?.isRemoteWeb === true
+      || typeof window.kunGui?.extensionSyncHostContentScripts !== 'function') {
+      clearProtectedSurfaceRestore(restoreTarget)
+      setReady(true)
+      return () => { cancelled = true }
+    }
     markProtectedSurfaceRestore(restoreTarget)
     void window.kunGui.extensionSyncHostContentScripts({
       surface: null,

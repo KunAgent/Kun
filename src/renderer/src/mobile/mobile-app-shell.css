@@ -1,5 +1,14 @@
 html[data-remote-surface='mobile'] {
   --kun-mobile-safe-bottom: max(8px, calc(env(safe-area-inset-bottom, 0px) - var(--kun-mobile-bottom, 0px)));
+  --kun-mobile-gutter: 16px;
+  --kun-mobile-touch: 44px;
+  --kun-mobile-header-h: 52px;
+  --kun-mobile-row-min: 60px;
+  --kun-mobile-radius: 12px;
+  --kun-mobile-radius-lg: 22px;
+  --kun-mobile-font-body: 15px;
+  --kun-mobile-font-meta: 12.5px;
+  --kun-mobile-font-input: 16px;
 }
 .kun-mobile-app {
   position: fixed;
@@ -47,7 +56,87 @@ html[data-remote-surface='mobile'] {
   outline: 2px solid var(--ds-accent);
   outline-offset: -2px;
 }
+.kun-mobile-app .kun-mobile-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
 .kun-mobile-app .kun-mobile-notice { max-height: 25%; overflow-y: auto; }
+
+/* Shared inline back button for mobile headers: icon and label stay on one line. */
+.kun-mobile-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: var(--kun-mobile-touch, 44px);
+  min-height: var(--kun-mobile-touch, 44px);
+  max-width: 55%;
+  padding: 0 8px;
+  margin-inline-start: -8px;
+  border: 0;
+  border-radius: var(--kun-mobile-radius, 12px);
+  color: var(--ds-text);
+  background: transparent;
+  font: inherit;
+  font-size: var(--kun-mobile-font-body, 15px);
+  white-space: nowrap;
+}
+.kun-mobile-back > svg { flex-shrink: 0; }
+.kun-mobile-back > span { overflow: hidden; text-overflow: ellipsis; }
+.kun-mobile-back:active { background: var(--ds-surface-hover); }
+
+/* Compact activity dot shared by the conversation header and list rows. */
+.kun-mobile-app .kun-mobile-status-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: var(--ds-text-faint, var(--ds-text-muted));
+}
+.kun-mobile-app .kun-mobile-status-dot[data-kind='running'] {
+  background: var(--ds-accent);
+  animation: kun-mobile-pulse 1.6s ease-in-out infinite;
+}
+.kun-mobile-app .kun-mobile-status-dot[data-kind='awaiting-input'] { background: var(--ds-warning); }
+.kun-mobile-app .kun-mobile-status-dot[data-kind='failed'] { background: var(--ds-danger); }
+.kun-mobile-app .kun-mobile-status-dot[data-kind='unread'],
+.kun-mobile-app .kun-mobile-status-dot[data-kind='scheduled'] { background: var(--ds-accent); }
+@keyframes kun-mobile-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kun-mobile-app .kun-mobile-status-dot[data-kind='running'] { animation: none; }
+}
+
+/* Explains on a phone that onboarding must be finished in the desktop app. */
+.kun-mobile-setup-hint {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--ds-bg-main) 72%, transparent);
+}
+.kun-mobile-setup-hint-card {
+  display: grid;
+  gap: 12px;
+  max-width: 320px;
+  padding: 20px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--kun-mobile-radius-lg, 22px);
+  background: var(--ds-surface-elevated);
+  box-shadow: 0 16px 48px rgb(0 0 0 / .24);
+}
+.kun-mobile-setup-hint-card h2 { margin: 0; font-size: 16px; }
+.kun-mobile-setup-hint-card p { margin: 0; color: var(--ds-text-muted); font-size: 14px; line-height: 1.5; }
 
 /* Portaled menus, including nested dialogs, share the shell's keyboard-safe viewport. */
 html[data-remote-surface='mobile'] :is(.rooms-popover-surface, .ds-composer-permission-menu) {

@@ -17,7 +17,6 @@ import { openRoomContentTarget } from '../components/rooms/room-content-navigati
 import { workFileResourceKey, workWhiteboardResourceKey } from './work/work-resource-key'
 import { useWorkBeforeUnloadGuard } from './use-work-before-unload-guard'
 import { useMobileViewport } from './use-mobile-viewport'
-import { MobileCodeSettings } from './chat/MobileCodeSettings'
 import './mobile-app-shell.css'
 
 const MobileRoomNew = lazy(() => import('./rooms/MobileRoomNew').then((module) => ({
@@ -37,6 +36,9 @@ const MobileRoomSettings = lazy(() => import('./rooms/MobileRoomSettings').then(
 })))
 const MobileWorkResourceScreen = lazy(() => import('./work/MobileWorkResourceScreen').then((module) => ({
   default: module.MobileWorkResourceScreen
+})))
+const MobileSettingsScreen = lazy(() => import('./settings/MobileSettingsScreen').then((module) => ({
+  default: module.MobileSettingsScreen
 })))
 
 function basename(value: string): string {
@@ -106,13 +108,13 @@ export function MobileAppShell(): ReactElement {
   // The desktop settings route is never rendered on the phone (AppShell
   // routes it here). Any path that requests it — the Work settings button, a
   // runtime that needs configuration, a timeline error card — opens the
-  // mobile settings sheet instead, and the route returns to the current mode.
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  // full-screen mobile settings page instead, and the route returns to the
+  // current mode.
   useEffect(() => {
     const target = workbenchRouteForMode(page.mode)
-    if (currentRoute === 'settings') setSettingsOpen(true)
+    if (currentRoute === 'settings') navigate({ mode: page.mode, kind: 'settings' })
     if (currentRoute !== target) setRoute(target)
-  }, [currentRoute, page.mode, setRoute])
+  }, [currentRoute, navigate, page.mode, setRoute])
   useEffect(() => {
     if (page.mode !== 'work') return
     void loadWorkSettings().then(() => workRoot ? initializeWork(workRoot) : undefined)
@@ -220,7 +222,9 @@ export function MobileAppShell(): ReactElement {
     content = <MobileWorkResourceScreen resourceKey={page.resourceKey} view={page.view}
       onBack={() => void leaveWorkResource()}
       onView={(view) => navigate({ mode: 'work', kind: 'resource', resourceKey: page.resourceKey, view }, true)}
-      onSettings={() => setSettingsOpen(true)} />
+      onSettings={() => navigate({ mode: 'work', kind: 'settings' })} />
+  } else if (page.kind === 'settings') {
+    content = <MobileSettingsScreen onBack={() => navigate({ mode: page.mode, kind: 'home' })} />
   } else if (page.kind !== 'home') {
     content = <MobileUnavailable title={page.kind} onBack={() => navigate({ mode: page.mode, kind: 'home' })} />
   } else if (page.mode === 'rooms') {
@@ -254,6 +258,5 @@ export function MobileAppShell(): ReactElement {
     {page.kind === 'home' ? <MobileModeNav active={page.mode} attentionCount={roomAttention}
       labels={{ code: 'Code', rooms: t('roomsLabel'), work: t('workspaceModeWorkLabel') }}
       onSelect={(mode) => void selectMode(mode)} /> : null}
-    <MobileCodeSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
   </div>
 }

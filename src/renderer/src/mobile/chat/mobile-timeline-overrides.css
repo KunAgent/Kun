@@ -1,0 +1,144 @@
+/* Mobile-only timeline adjustments. Every rule is scoped under .kun-mobile-app
+ * (or data-remote-surface) so the desktop Electron layout is untouched. */
+
+/* Assistant action row: always visible on touch, trimmed to copy + more. */
+.kun-mobile-app [data-assistant-action-row] {
+  opacity: 1;
+  min-height: 32px;
+  margin-top: 2px;
+  font-size: var(--kun-mobile-font-meta, 12.5px);
+}
+.kun-mobile-app [data-assistant-action-row] :is(
+  [data-assistant-action='rollback'],
+  [data-assistant-action='fork'],
+  [data-assistant-action='speak'],
+  [data-assistant-action='speak-track'],
+  [data-assistant-action='export']
+) {
+  display: none;
+}
+/* 32px visual, ::after widens the hit area to ~44px. */
+.kun-mobile-app [data-assistant-action] {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 9999px;
+  color: var(--ds-text-muted);
+}
+.kun-mobile-app [data-assistant-action]::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+.kun-mobile-app [data-assistant-action]:active { background: var(--ds-surface-hover); }
+.kun-mobile-app [data-assistant-action] > span { display: none; }
+
+/* User-message "more" entry — a touch affordance instead of hover reveal. */
+.kun-mobile-app .kun-mobile-message-actions-entry {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 28px;
+  margin-top: 2px;
+}
+.kun-mobile-app .kun-mobile-message-more {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 28px;
+  border: 0;
+  border-radius: 9999px;
+  color: var(--ds-text-faint, var(--ds-text-muted));
+  background: transparent;
+}
+.kun-mobile-app .kun-mobile-message-more::after {
+  content: '';
+  position: absolute;
+  inset: -8px -4px;
+}
+.kun-mobile-app .kun-mobile-message-more:active { background: var(--ds-surface-hover); }
+
+/* Image hover controls stay visible on touch. */
+.kun-mobile-app [data-media-action] {
+  opacity: 1;
+  width: 36px;
+  height: 36px;
+}
+
+/* Floating back-to-latest button (desktop jump rail is hidden on mobile). */
+.kun-mobile-app .kun-mobile-jump-latest {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--ds-border);
+  border-radius: 9999px;
+  color: var(--ds-text);
+  background: var(--ds-surface-elevated, var(--ds-bg-main));
+  box-shadow: 0 8px 24px rgb(0 0 0 / .18);
+}
+.kun-mobile-app .kun-mobile-jump-latest::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+.kun-mobile-app .kun-mobile-jump-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  background: var(--ds-accent);
+  box-shadow: 0 0 0 2px var(--ds-surface-elevated, var(--ds-bg-main));
+}
+
+/* Decluttered mobile turn chrome: archive-to-here and usage rows hide. */
+.kun-mobile-app [data-archive-history-action] { display: none; }
+.kun-mobile-app .turn-usage-row { display: none; }
+
+/* Assistant text column never overflows the phone viewport. */
+.kun-mobile-app .ds-chat-answer {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 15px;
+  line-height: 1.62;
+}
+.kun-mobile-app .ds-markdown {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.kun-mobile-app .ds-markdown pre {
+  max-width: 100%;
+  overflow-x: auto;
+  font-size: 12.5px;
+}
+.kun-mobile-app .ds-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.kun-mobile-app .ds-markdown :is(img, video) { max-width: 100%; height: auto; }
+
+/* Narrow subagent cards: drop the trailing elapsed/steps column so the title
+ * and status stop clipping (the ~7px overflow at 320px). */
+.kun-mobile-app .kun-mobile-code-timeline { container-type: inline-size; container-name: mobile-timeline; }
+@container mobile-timeline (max-width: 400px) {
+  .kun-mobile-app .ds-subagent-mount [data-subagent-header] {
+    gap: 8px;
+    padding-inline: 12px;
+  }
+  .kun-mobile-app .ds-subagent-mount [data-subagent-title] { font-size: 13.5px; }
+  .kun-mobile-app .ds-subagent-mount [data-subagent-trailing] { display: none; }
+}
+.kun-mobile-app .ds-subagent-mount { max-width: 100%; }

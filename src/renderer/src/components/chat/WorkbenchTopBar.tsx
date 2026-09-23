@@ -24,6 +24,7 @@ import {
   RefreshCw,
   Search,
   Shapes,
+  Smartphone,
   Terminal
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -41,6 +42,7 @@ import {
 } from '../../extensions/contribution-ids'
 import { boundedPlainText } from '../../extensions/safe-text'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
+import { switchRemoteSurface } from '../../mobile/use-remote-surface'
 
 export type { RightPanelMode } from '../../extensions/contribution-ids'
 
@@ -454,6 +456,16 @@ export function WorkbenchSideRail({
               {fileTreeOpen ? <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} /> : null}
             </button>
           ) : null}
+          {isRemoteWeb ? (
+            <button
+              type="button"
+              onClick={() => pick(() => switchRemoteSurface('mobile'))}
+              className={rowClass}
+            >
+              <Smartphone className={rowIconClass} strokeWidth={1.75} />
+              <span className="flex-1">{t('mobileUseMobileLayout')}</span>
+            </button>
+          ) : null}
           {extensionEntries.length > 0 ? (
             <div className="mt-1 border-t border-ds-border-muted pt-1">
               {extensionEntries.map((entry) => {
@@ -635,6 +647,17 @@ export function WorkbenchSideRail({
         </div>
       ) : null}
 
+      {isRemoteWeb ? (
+        <button
+          type="button"
+          onClick={() => switchRemoteSurface('mobile')}
+          className={sideRailButtonClass(false)}
+          data-tooltip={t('mobileUseMobileLayout')}
+          aria-label={t('mobileUseMobileLayout')}
+        >
+          <Smartphone className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
+        </button>
+      ) : null}
     </div>
   )
 }

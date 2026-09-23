@@ -1,6 +1,4 @@
 .kun-mobile-home {
-  --kun-mobile-gutter: 16px;
-  --kun-mobile-touch: 44px;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -13,81 +11,164 @@
 .kun-mobile-home-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  padding: 8px var(--kun-mobile-gutter);
+  min-height: var(--kun-mobile-header-h, 52px);
+  padding: 4px var(--kun-mobile-gutter, 16px);
+}
+.kun-mobile-home-header > span { min-width: var(--kun-mobile-touch, 44px); }
+.kun-mobile-home-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 .kun-mobile-icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  min-width: 44px;
-  min-height: 44px;
+  min-width: var(--kun-mobile-touch, 44px);
+  min-height: var(--kun-mobile-touch, 44px);
   border: 0;
   border-radius: 9999px;
   color: inherit;
   background: transparent;
 }
-.kun-mobile-workspace {
-  flex: 1;
-  min-width: 0;
-  min-height: var(--kun-mobile-touch);
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font-size: 16px;
+.kun-mobile-icon-button:active { background: var(--ds-surface-hover); }
+.kun-mobile-home h1 {
+  margin: 4px var(--kun-mobile-gutter, 16px) 12px;
+  font-size: 24px;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.kun-mobile-home h1 {
-  margin: 8px var(--kun-mobile-gutter) 16px;
-  font-size: 24px;
-  font-weight: 500;
 }
 .kun-mobile-search {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 var(--kun-mobile-gutter) 12px;
+  margin: 0 var(--kun-mobile-gutter, 16px) 12px;
   padding: 0 12px;
-  border-radius: 12px;
+  border-radius: var(--kun-mobile-radius, 12px);
   background: var(--ds-surface-subtle);
 }
 .kun-mobile-search input {
   width: 100%;
   min-width: 0;
-  min-height: var(--kun-mobile-touch);
+  min-height: var(--kun-mobile-touch, 44px);
   border: 0;
   color: inherit;
   background: transparent;
-  font-size: 16px;
+  font-size: var(--kun-mobile-font-input, 16px);
 }
+.kun-mobile-search input:focus-visible { outline: none; }
+.kun-mobile-search:focus-within { outline: 2px solid var(--ds-accent); outline-offset: -2px; }
 .kun-mobile-home-list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  padding: 0 var(--kun-mobile-gutter) env(safe-area-inset-bottom, 0px);
+  padding: 0 var(--kun-mobile-gutter, 16px) var(--kun-mobile-safe-bottom, env(safe-area-inset-bottom, 0px));
 }
 .kun-mobile-home-list ul { list-style: none; margin: 0; padding: 0; }
-.kun-mobile-thread { display: flex; align-items: center; border-bottom: 1px solid var(--ds-border); }
+.kun-mobile-thread { display: flex; align-items: center; border-bottom: 1px solid var(--ds-border-muted); }
 .kun-mobile-thread-open {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-  padding: 16px 0;
+  display: grid;
+  gap: 3px;
+  min-height: 56px;
+  max-height: 64px;
+  padding: 9px 0;
   border: 0;
   background: transparent;
   color: inherit;
   text-align: start;
 }
-.kun-mobile-thread-title { font-size: 16px; font-weight: 500; }
-.kun-mobile-thread-title, .kun-mobile-thread-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kun-mobile-thread-preview, .kun-mobile-thread time { color: var(--ds-text-muted); font-size: 13px; }
+.kun-mobile-thread-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.kun-mobile-thread-title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--kun-mobile-font-body, 15px);
+  font-weight: 500;
+}
+.kun-mobile-thread-main > time {
+  flex-shrink: 0;
+  color: var(--ds-text-muted);
+  font-size: var(--kun-mobile-font-meta, 12.5px);
+}
+.kun-mobile-thread-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ds-text-muted);
+  font-size: var(--kun-mobile-font-meta, 12.5px);
+}
+.kun-mobile-thread-title, .kun-mobile-thread-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kun-mobile-thread-preview { min-width: 0; }
+.kun-mobile-activity {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 9999px;
+  color: var(--ds-text-muted);
+  background: var(--ds-surface-subtle);
+}
+.kun-mobile-activity::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: currentColor;
+}
+.kun-mobile-activity[data-kind='running'] { color: var(--ds-accent); background: var(--ds-accent-soft); }
+.kun-mobile-activity[data-kind='running']::before { animation: kun-mobile-pulse 1.6s ease-in-out infinite; }
+.kun-mobile-activity[data-kind='awaiting-input'] { color: var(--ds-warning); background: var(--ds-warning-soft); }
+.kun-mobile-activity[data-kind='failed'] { color: var(--ds-danger); background: var(--ds-danger-soft); }
+.kun-mobile-activity[data-kind='unread'] { color: var(--ds-accent); background: var(--ds-accent-soft); }
+.kun-mobile-activity[data-kind='scheduled'] { color: var(--ds-text-muted); background: var(--ds-surface-subtle); }
+@media (prefers-reduced-motion: reduce) {
+  .kun-mobile-activity[data-kind='running']::before { animation: none; }
+}
+.kun-mobile-skeleton-line {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--ds-surface-subtle);
+  animation: kun-mobile-skeleton 1.4s ease-in-out infinite;
+}
+.kun-mobile-skeleton-line[data-size='lg'] { width: 62%; }
+.kun-mobile-skeleton-line[data-size='sm'] { width: 40%; }
+@keyframes kun-mobile-skeleton {
+  0%, 100% { opacity: .55; }
+  50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kun-mobile-skeleton-line { animation: none; }
+}
 .kun-mobile-home-state { padding: 24px 0; overflow-wrap: anywhere; }
-.kun-mobile-home-state button, .kun-mobile-load-more { min-height: 44px; padding: 8px 16px; color: inherit; background: var(--ds-surface-subtle); border: 1px solid var(--ds-border); border-radius: 12px; }
+.kun-mobile-home-state button, .kun-mobile-load-more {
+  min-height: var(--kun-mobile-touch, 44px);
+  padding: 8px 16px;
+  color: inherit;
+  background: var(--ds-surface-subtle);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--kun-mobile-radius, 12px);
+}
 .kun-mobile-load-more { margin: 16px 0; width: 100%; }

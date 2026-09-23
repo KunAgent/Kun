@@ -3,25 +3,26 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   flex-shrink: 0;
-  padding: 6px 12px calc(6px + env(safe-area-inset-bottom, 0px));
+  padding: 6px 12px calc(6px + var(--kun-mobile-safe-bottom, env(safe-area-inset-bottom, 0px)));
   border-top: 1px solid var(--ds-border);
   background: var(--ds-surface-elevated);
 }
 .kun-mobile-mode-nav button {
   display: flex;
   min-width: 0;
-  min-height: 52px;
+  min-height: 48px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--kun-mobile-radius, 12px);
   color: var(--ds-text-muted);
   background: transparent;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--kun-mobile-font-meta, 12px);
 }
+.kun-mobile-mode-nav button:active { background: var(--ds-surface-hover); }
 .kun-mobile-mode-nav button[aria-current='page'] {
   color: var(--ds-text);
   background: var(--ds-surface-subtle);
@@ -40,3 +41,5 @@
   line-height: 18px;
   text-align: center;
 }
+/* The software keyboard owns the bottom strip; mode switching yields to the composer. */
+html[data-remote-surface='mobile'][data-keyboard-open='true'] .kun-mobile-mode-nav { display: none; }

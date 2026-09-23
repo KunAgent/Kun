@@ -4,7 +4,7 @@ import { SourceHistoryRecordViewer } from '../../history-reference/SourceHistory
 import { SourceHistoryAttachments } from '../../history-reference/SourceHistoryAttachments'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { GitCommitHorizontal, Hash } from 'lucide-react'
+import { ArrowDown, GitCommitHorizontal, Hash } from 'lucide-react'
 import type { ToolBlock } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { threadHasPendingRuntimeWork } from '../../store/chat-store-runtime-helpers'
@@ -54,6 +54,8 @@ import {
   turnResponsePreview
 } from './message-timeline-jump-preview'
 import { MemoMessageTurn } from './message-timeline-conversation-turn'
+import { TimelineSurfaceProvider } from './timeline-surface'
+import { useMobileJumpLatest } from './use-mobile-jump-latest'
 import type { MessageTimelineProps } from './message-timeline-props'
 import { useTurnUsageState } from '../../hooks/use-turn-usage'
 import {
@@ -106,6 +108,7 @@ export function MessageTimeline({
   onPreviewGeneratedDocument,
   onOpenGeneratedDocuments,
   compactCards = false,
+  surface = 'desktop',
   onOpenChildThread,
   onComponentPrototypePrompt,
   extensionMessageActions = [],
@@ -302,7 +305,13 @@ export function MessageTimeline({
   const jumpRailHoveredIndex = jumpRailPreview
     ? visibleTurnAnchors.findIndex((item) => item.key === jumpRailPreview.key)
     : -1
+
+  const { scrolledFarUp, unreadBelow, jumpToLatest } = useMobileJumpLatest({
+    containerRef, scrollContentKey, surface, resetKey: activeThreadId
+  })
+
   return (
+    <TimelineSurfaceProvider value={surface}>
     <TimelineFilePreviewWorkspaceProvider
       workspaceRoot={filePreviewWorkspaceRoot}
       threadId={activeThreadId}
@@ -648,8 +657,20 @@ export function MessageTimeline({
         />
       ) : null}
       </div>
+      {surface === 'mobile' && scrolledFarUp ? (
+        <button
+          type="button"
+          className="kun-mobile-jump-latest"
+          onClick={jumpToLatest}
+          aria-label={t('mobileJumpToLatest')}
+        >
+          <ArrowDown size={20} aria-hidden />
+          {unreadBelow ? <span className="kun-mobile-jump-dot" aria-hidden /> : null}
+        </button>
+      ) : null}
     </div>
     </InjectedMemoryLookupProvider>
     </TimelineFilePreviewWorkspaceProvider>
+    </TimelineSurfaceProvider>
   )
 }

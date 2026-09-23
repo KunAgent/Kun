@@ -6,20 +6,39 @@ import { useChatStore } from '../../store/chat-store'
 import { normalizeWorkspaceRoot, workspaceRootIdentityKey } from '../../lib/workspace-path'
 import { removedWorkspaceIdentityKeys } from '../../lib/removed-code-workspaces'
 import { useThreadClassificationRegistries } from '../../lib/thread-classification-registries'
-import { selectCodeProjectRoots } from '../../components/chat/sidebar-project-selectors'
-import { MobileHome } from './MobileHome'
+import { isCodeThread } from '../../store/chat-store-runtime-projection-support'
+import {
+  selectCodeProjectRoots,
+  selectCodeProjectThreads,
+  sortSidebarThreads,
+  type SidebarThreadActivityContext
+} from '../../components/chat/sidebar-project-selectors'
+import { workspaceLabelFromPath } from '../../lib/workspace-label'
+import { MobileHome, type MobileThreadActivity } from './MobileHome'
 import { useMobileProjectThreads } from './use-mobile-project-threads'
 import { MobileCodeSettings } from '../chat/MobileCodeSettings'
+import { aggregateThreadActivity, mobileThreadActivity } from '../lib/thread-activity'
+import { mobileRelativeTime } from '../lib/relative-time'
+import './mobile-home.css'
 import './mobile-projects.css'
-
-function projectName(root: string): string {
-  return root.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) || root
-}
 
 function projectContext(root: string, label: string): string {
   const parts = root.replace(/\\/g, '/').split('/').filter(Boolean)
   const parent = parts.length >= 2 ? parts[parts.length - 2] ?? '' : ''
   return parent && parent.toLowerCase() !== label.toLowerCase() ? parent : ''
+}
+
+const EMPTY_ACTIVITY_MAP: Record<string, never> = {}
+
+function useActivityContext(): SidebarThreadActivityContext {
+  return useChatStore(useShallow((s) => ({
+    activeThreadId: s.activeThreadId,
+    busy: s.busy,
+    watchTurnCompletion: s.watchTurnCompletion ?? EMPTY_ACTIVITY_MAP,
+    unreadThreadIds: s.unreadThreadIds ?? EMPTY_ACTIVITY_MAP,
+    scheduledThreadActivities: s.scheduledThreadActivities ?? EMPTY_ACTIVITY_MAP,
+    awaitingUserInputThreadIds: s.awaitingUserInputThreadIds ?? EMPTY_ACTIVITY_MAP
+  })))
 }
 
 function MobileProjectHome({ project, onBack, onOpen, onOpenSettings }: {
@@ -28,7 +47,7 @@ function MobileProjectHome({ project, onBack, onOpen, onOpenSettings }: {
   onOpen: (threadId: string) => void
   onOpenSettings: () => void
 }) {
-  const { t } = useTranslation('common')
+  const { t, i18n } = useTranslation('common')
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -36,10 +55,11 @@ function MobileProjectHome({ project, onBack, onOpen, onOpenSettings }: {
     status: s.threadListStatus, error: s.threadListError,
     selectThread: s.selectThread, createThread: s.createThread
   })))
+  const activityContext = useActivityContext()
   const list = useMobileProjectThreads(project, search)
   const loading = busy || chat.status === 'loading' || chat.status === 'refreshing' || list.loading
   return <MobileHome
-    labels={{ title: projectName(project), workspace: t('mobileCodeProjects'),
+    labels={{ title: workspaceLabelFromPath(project), workspace: t('mobileCodeProjects'),
       search: t('mobileSearch'),
       newConversation: t('newChat'), settings: t('settings'), more: t('mobileMore'),
       loadMore: t('sidebarWorkspaceLoadMore'),
@@ -48,6 +68,8 @@ function MobileProjectHome({ project, onBack, onOpen, onOpenSettings }: {
     threads={list.threads} search={search} loading={loading}
     error={error || chat.error || (list.loadFailed ? t('mobileThreadsLoadFailed') : null)}
     hasMore={list.hasMore}
+    activityOf={(thread) => mobileThreadActivity(thread, activityContext, t)}
+    timeLabel={(thread) => mobileRelativeTime(thread.updatedAt, i18n.language)}
     onSearch={setSearch} onThreadMenu={null} onWorkspace={onBack}
     onOpenThread={(id) => { void chat.selectThread(id).then(() => onOpen(id)).catch((cause) => setError(String(cause))) }}
     onSettings={onOpenSettings} onLoadMore={list.loadMore}
@@ -69,8 +91,10 @@ function MobileProjectHome({ project, onBack, onOpen, onOpenSettings }: {
     }} />
 }
 
+const RECENT_LIMIT = 5
+
 export function MobileCodeHome({ onOpen }: { onOpen: (threadId: string) => void }) {
-  const { t } = useTranslation('common')
+  const { t, i18n } = useTranslation('common')
   const [project, setProject] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [switching, setSwitching] = useState(false)
@@ -80,8 +104,9 @@ export function MobileCodeHome({ onOpen }: { onOpen: (threadId: string) => void 
     roots: s.codeWorkspaceRoots, root: s.workspaceRoot, threads: s.threads,
     conversationRoot: s.conversationWorkspaceRoot, removed: s.removedCodeWorkspaces,
     clawChannels: s.clawChannels,
-    select: s.selectWorkspaceRoot, choose: s.chooseWorkspace
+    select: s.selectWorkspaceRoot, choose: s.chooseWorkspace, selectThread: s.selectThread
   })))
+  const activityContext = useActivityContext()
   // Registries live in profile storage; re-check them when the thread
   // inventory changes so a fresh worktree thread joins its project promptly.
   // The shared reader keeps the parsed values identity-stable while the
@@ -108,12 +133,41 @@ export function MobileCodeHome({ onOpen }: { onOpen: (threadId: string) => void 
     // re-classify on every unrelated thread field update.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [chat.clawChannels, chat.conversationRoot, chat.removed, chat.root, chat.roots, classification, projectSignature])
+  const codeThreads = useMemo(() => sortSidebarThreads(chat.threads.filter((thread) =>
+    isCodeThread(thread, chat.clawChannels, classification.writeRegistry,
+      classification.designRegistry, classification.sddRegistry)
+  )), [chat.threads, chat.clawChannels, classification])
+  const recent = useMemo(() => codeThreads.slice(0, RECENT_LIMIT), [codeThreads])
+  const projectMeta = useMemo(() => {
+    const meta = new Map<string, { lastActive: string; activity: MobileThreadActivity | null }>()
+    for (const root of projects) {
+      const threads = selectCodeProjectThreads({
+        threads: chat.threads,
+        projectRoot: root,
+        workspaceRoots: chat.roots,
+        threadWorktrees: classification.threadWorktrees,
+        clawChannels: chat.clawChannels,
+        writeRegistry: classification.writeRegistry,
+        designRegistry: classification.designRegistry,
+        sddRegistry: classification.sddRegistry
+      })
+      meta.set(workspaceRootIdentityKey(root) || root, {
+        lastActive: threads.reduce((latest, thread) =>
+          Date.parse(thread.updatedAt) > Date.parse(latest) ? thread.updatedAt : latest, ''),
+        activity: aggregateThreadActivity(threads, activityContext, t)
+      })
+    }
+    return meta
+  }, [projects, chat.threads, chat.roots, chat.clawChannels, classification, activityContext, t])
   const visible = useMemo(() => {
     const query = search.trim().toLowerCase()
     if (!query) return projects
     return projects.filter((root) =>
-      root.toLowerCase().includes(query) || projectName(root).toLowerCase().includes(query))
+      root.toLowerCase().includes(query) || workspaceLabelFromPath(root).toLowerCase().includes(query))
   }, [projects, search])
+  const openThread = (id: string): void => {
+    void chat.selectThread(id).then(() => onOpen(id)).catch((cause) => setError(String(cause)))
+  }
   const enter = async (root: string) => {
     if (switching) return
     setSwitching(true)
@@ -156,13 +210,40 @@ export function MobileCodeHome({ onOpen }: { onOpen: (threadId: string) => void 
     </label>
     <div className="kun-mobile-project-list" aria-busy={switching}>
       {error ? <p role="alert">{error}</p> : null}
+      {recent.length > 0 && !search.trim() ? (
+        <section className="kun-mobile-recent" aria-label={t('mobileRecentConversations')}>
+          <h2>{t('mobileRecentConversations')}</h2>
+          <ul>
+            {recent.map((thread) => {
+              const activity = mobileThreadActivity(thread, activityContext, t)
+              return <li key={thread.id} className="kun-mobile-thread">
+                <button type="button" className="kun-mobile-thread-open" onClick={() => openThread(thread.id)}>
+                  <span className="kun-mobile-thread-main">
+                    <span className="kun-mobile-thread-title">{thread.title}</span>
+                    <time dateTime={thread.updatedAt}>{mobileRelativeTime(thread.updatedAt, i18n.language)}</time>
+                  </span>
+                  <span className="kun-mobile-thread-meta">
+                    {activity ? <span className="kun-mobile-activity" data-kind={activity.kind}>{activity.label}</span> : null}
+                    <span className="kun-mobile-thread-preview">{workspaceLabelFromPath(thread.workspace ?? '')}</span>
+                  </span>
+                </button>
+              </li>
+            })}
+          </ul>
+        </section>
+      ) : null}
       {visible.map((root) => {
-        const label = projectName(root)
+        const label = workspaceLabelFromPath(root)
         const context = projectContext(root, label)
+        const meta = projectMeta.get(workspaceRootIdentityKey(root) || root)
         return <button type="button" className="kun-mobile-project-row" key={workspaceRootIdentityKey(root) || root} disabled={switching}
           title={root} onClick={() => { void enter(root) }}>
           <Folder size={20} aria-hidden />
           <span><strong>{label}</strong>{context ? <small>{context}</small> : null}</span>
+          <time className="kun-mobile-project-time">
+            {meta?.activity ? <span className="kun-mobile-status-dot" data-kind={meta.activity.kind} aria-hidden /> : null}
+            {meta?.lastActive ? mobileRelativeTime(meta.lastActive, i18n.language) : ''}
+          </time>
           <ChevronRight size={18} aria-hidden />
         </button>
       })}

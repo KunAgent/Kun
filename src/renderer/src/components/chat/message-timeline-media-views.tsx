@@ -192,6 +192,7 @@ export function MediaPreviewTile({
             title={saveLabel}
             aria-label={saveLabel}
             className={iconButtonClass}
+            data-media-action
           >
             {saveIcon}
           </button>
@@ -224,6 +225,7 @@ export function MediaPreviewTile({
           title={saveLabel}
           aria-label={saveLabel}
           className={iconButtonClass}
+          data-media-action
         >
           {saveIcon}
         </button>

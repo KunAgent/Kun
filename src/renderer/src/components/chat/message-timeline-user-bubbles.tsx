@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CheckCircle2, ChevronDown, ChevronRight, CircleAlert, File, Layers3, MessageSquareQuote, PencilLine, Sparkles } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronRight, CircleAlert, File, Layers3, MessageSquareQuote, MoreHorizontal, PencilLine, Sparkles } from 'lucide-react'
 import type { ChatBlock, RuntimeDisclosureMetadata } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { parseWritePromptForDisplay } from '../../write/quoted-selection'
@@ -13,6 +13,8 @@ import { ModelMetaTag, WritePromptMetaDisclosure, WritePromptQuoteCard } from '.
 import { UserAttachmentPreviews } from './message-timeline-media-views'
 import { CopyFeedbackButton, RuntimeMetaChips } from './message-timeline-bubble-support'
 import { metaUserFileReferences } from './message-timeline-bubble-meta'
+import { useTimelineSurface } from './timeline-surface'
+import { useMobileMessageActionsStore } from '../../stores/mobile-message-actions'
 
 export function BackgroundShellNoticeBubble({
   block,
@@ -248,6 +250,8 @@ export function UserMessageBubble({
   const busy = useChatStore((s) => s.busy)
   const route = useChatStore((s) => s.route)
   const rewindAndResend = useChatStore((s) => s.rewindAndResend)
+  const surface = useTimelineSurface()
+  const openMobileMessageActions = useMobileMessageActionsStore((s) => s.open)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(block.text)
   const [writeMetaOpen, setWriteMetaOpen] = useState(false)
@@ -403,6 +407,22 @@ export function UserMessageBubble({
           </>
         )}
       </div>
+      {surface === 'mobile' ? (
+        <div className="kun-mobile-message-actions-entry" data-user-message-actions>
+          <button
+            type="button"
+            className="kun-mobile-message-more"
+            aria-label={t('mobileMessageActions')}
+            onClick={() => openMobileMessageActions({
+              block,
+              copyText: displayText,
+              editAction: canEdit ? { onEdit: startEdit } : undefined
+            })}
+          >
+            <MoreHorizontal className="h-5 w-5" aria-hidden />
+          </button>
+        </div>
+      ) : (
       <div
         data-user-message-actions="inline"
         className="invisible flex min-h-7 min-w-0 max-w-full items-center justify-end pt-1 text-ds-faint opacity-0 transition-[opacity,visibility] duration-150 motion-reduce:transition-none group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
@@ -424,6 +444,7 @@ export function UserMessageBubble({
           ) : null}
         </div>
       </div>
+      )}
     </div>
   )
 }

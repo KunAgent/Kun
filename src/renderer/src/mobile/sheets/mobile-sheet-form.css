@@ -1,0 +1,181 @@
+/* Shared form primitives for mobile sheets and the mobile settings screen.
+ * Scoped to .kun-mobile-* classes so desktop surfaces are never affected. */
+.kun-mobile-form { display: grid; gap: 16px; min-width: 0; }
+
+.kun-mobile-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ds-text-muted);
+  font-size: 13px;
+}
+fieldset.kun-mobile-field { margin: 0; padding: 0; border: 0; min-inline-size: 0; }
+.kun-mobile-field > :is(input, select, textarea) {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--kun-mobile-touch, 44px);
+  padding: 10px 12px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--kun-mobile-radius, 12px);
+  color: var(--ds-text);
+  background: var(--ds-bg-main);
+  font: inherit;
+  font-size: var(--kun-mobile-font-input, 16px);
+  line-height: 22px;
+}
+.kun-mobile-field > select {
+  appearance: none;
+  padding-inline-end: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+.kun-mobile-field > :is(input, select, textarea):focus {
+  outline: 2px solid var(--ds-accent);
+  outline-offset: -2px;
+}
+
+.kun-mobile-kv {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px 16px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--kun-mobile-radius, 12px);
+  background: var(--ds-surface-subtle);
+}
+.kun-mobile-kv dt { color: var(--ds-text-muted); font-size: 13px; line-height: 20px; white-space: nowrap; }
+.kun-mobile-kv dd { margin: 0; min-width: 0; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.kun-mobile-kv dd[data-mono] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+@media (max-width: 339px) {
+  .kun-mobile-kv { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .kun-mobile-kv dd + dt { margin-top: 8px; }
+}
+
+.kun-mobile-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+.kun-mobile-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--kun-mobile-touch, 44px);
+  padding: 10px 14px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-pill, 9999px);
+  color: var(--ds-text);
+  background: var(--ds-surface-elevated);
+  font: inherit;
+  font-size: var(--kun-mobile-font-body, 15px);
+}
+.kun-mobile-button:active:not(:disabled) { background: var(--ds-surface-hover); }
+.kun-mobile-button:disabled { opacity: .45; }
+.kun-mobile-button[data-variant='primary'] {
+  color: var(--ds-bg-main);
+  background: var(--ds-text);
+  border-color: var(--ds-text);
+}
+.kun-mobile-button[data-variant='danger'] {
+  color: var(--ds-danger);
+  background: var(--ds-danger-soft);
+  border-color: transparent;
+}
+
+.kun-mobile-form-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--kun-mobile-radius, 12px);
+  color: var(--ds-danger);
+  background: var(--ds-danger-soft);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.kun-mobile-hint { margin: 0; color: var(--ds-text-muted); font-size: 13px; line-height: 1.5; }
+
+/* Paired confirm/cancel and copy/archive buttons inside sheets. */
+.kun-mobile-row-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+.kun-mobile-row-actions button {
+  min-height: 52px;
+  padding: 10px 14px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--kun-mobile-radius, 12px);
+  color: var(--ds-text);
+  background: var(--ds-surface-elevated);
+  font: inherit;
+  font-size: var(--kun-mobile-font-body, 15px);
+}
+.kun-mobile-row-actions button:active:not(:disabled) { background: var(--ds-surface-hover); }
+.kun-mobile-row-actions button:disabled { opacity: .45; }
+.kun-mobile-row-actions button[data-variant='primary'] {
+  color: var(--ds-bg-main);
+  background: var(--ds-text);
+  border-color: var(--ds-text);
+}
+.kun-mobile-row-actions button[data-variant='danger'] {
+  color: var(--ds-danger);
+  background: var(--ds-danger-soft);
+  border-color: transparent;
+}
+
+
+.kun-mobile-action-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.kun-mobile-action-list li:empty { display: none; }
+.kun-mobile-action-list :is(button, summary) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 1px solid var(--ds-border-muted);
+  color: var(--ds-text);
+  background: transparent;
+  font: inherit;
+  font-size: var(--kun-mobile-font-body, 15px);
+  text-align: start;
+  list-style: none;
+}
+.kun-mobile-action-list summary::-webkit-details-marker { display: none; }
+.kun-mobile-action-list li:last-child > :is(button, summary, details) { border-bottom: 0; }
+.kun-mobile-action-list li:last-child > details > summary { border-bottom: 0; }
+.kun-mobile-action-list :is(button, summary):active { background: var(--ds-surface-hover); }
+.kun-mobile-action-list :is(button, summary) > svg { flex-shrink: 0; color: var(--ds-text-muted); }
+.kun-mobile-action-list button[data-variant='danger'] { color: var(--ds-danger); }
+.kun-mobile-action-list button[data-variant='danger'] > svg { color: currentColor; }
+/* The desktop export dropdown is absolutely positioned; inside a sheet it
+ * expands inline instead. */
+.kun-mobile-action-list details { position: relative; }
+.kun-mobile-action-list details > summary { cursor: pointer; }
+.kun-mobile-action-list details > div {
+  position: static;
+  margin: 0 0 8px;
+  border: 1px solid var(--ds-border-muted);
+  border-radius: var(--kun-mobile-radius, 12px);
+  background: var(--ds-surface-elevated);
+  padding: 4px;
+}
+.kun-mobile-action-list details > div :is(button) {
+  min-height: var(--kun-mobile-touch, 44px);
+  border-bottom: 0;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.kun-mobile-usage-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 4px 2px;
+  border-bottom: 0;
+}
+.kun-mobile-usage-row .turn-usage-row { min-height: var(--kun-mobile-touch, 44px); font-size: 13px; }

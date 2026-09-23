@@ -87,6 +87,7 @@ export function AssistantSpeakTrackButton({
       title={label}
       aria-label={label}
       data-speak-track-state={error ? 'error' : saved ? 'saved' : saving ? 'saving' : 'ready'}
+      data-assistant-action="speak-track"
       className={`flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition hover:bg-ds-hover ${
         error ? 'text-rose-400 hover:text-rose-300' : 'text-ds-faint hover:text-ds-muted'
       }`}

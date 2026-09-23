@@ -1,8 +1,53 @@
 .kun-mobile-code-conversation { display: flex; width: 100%; height: 100%; min-height: 0; flex-direction: column; overflow: hidden; color: var(--ds-text); background: var(--ds-bg-main); }
-.kun-mobile-code-conversation > header { display: grid; min-height: 60px; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; padding: env(safe-area-inset-top, 0px) 8px 0; border-bottom: 1px solid var(--ds-border); }
-.kun-mobile-code-conversation > header button { display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; border: 0; border-radius: 9999px; color: inherit; background: transparent; }
-.kun-mobile-code-conversation > header :is(h1, p) { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kun-mobile-code-conversation > header h1 { font-size: 16px; font-weight: 500; }
-.kun-mobile-code-conversation > header p { color: var(--ds-text-muted); font-size: 12px; }
-.kun-mobile-code-timeline { min-width: 0; min-height: 0; flex: 1; overflow: hidden; }
+.kun-mobile-code-conversation > header {
+  display: grid;
+  min-height: var(--kun-mobile-header-h, 60px);
+  grid-template-columns: var(--kun-mobile-touch, 44px) minmax(0, 1fr) var(--kun-mobile-touch, 44px);
+  align-items: center;
+  gap: 4px;
+  padding: env(safe-area-inset-top, 0px) 8px 0;
+  border-bottom: 1px solid var(--ds-border);
+}
+.kun-mobile-code-conversation > header > button {
+  display: inline-flex;
+  min-width: var(--kun-mobile-touch, 44px);
+  height: var(--kun-mobile-touch, 44px);
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 9999px;
+  color: inherit;
+  background: transparent;
+}
+.kun-mobile-code-conversation > header > button:active { background: var(--ds-surface-hover); }
+.kun-mobile-code-conversation > header .kun-mobile-back { margin-inline-start: 0; justify-content: center; padding: 0; }
+
+/* Title area doubles as the mode/model/options entry (U5/U6). */
+.kun-mobile-conversation-title {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--kun-mobile-radius, 12px);
+  color: inherit;
+  background: transparent;
+  text-align: center;
+}
+.kun-mobile-conversation-title:active { background: var(--ds-surface-hover); }
+.kun-mobile-conversation-title :is(h1, span) { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kun-mobile-conversation-title h1 { font-size: 15.5px; font-weight: 600; }
+.kun-mobile-conversation-sub {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--ds-text-muted);
+  font-size: 12px;
+}
+.kun-mobile-conversation-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.kun-mobile-conversation-sub > svg { flex-shrink: 0; }
+
+.kun-mobile-code-timeline { position: relative; min-width: 0; min-height: 0; flex: 1; overflow: hidden; }
 .kun-mobile-code-timeline > * { height: 100%; }

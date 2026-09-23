@@ -274,7 +274,7 @@ export function SubagentCallCard({
         }}
         className={`flex items-center gap-3 px-4 ${compact ? 'py-2.5' : 'py-3'} text-left ${
           hasBody ? 'cursor-pointer transition hover:bg-ds-hover/30' : ''
-        }`}
+        }`} data-subagent-header
       >
         <span className="ds-subagent-focus-decoration contents">
           <AvatarDisc poseId={poseId} status={status} hue={hue} compact={compact} animate={animate} />
@@ -283,7 +283,7 @@ export function SubagentCallCard({
           <div className="flex min-w-0 items-center gap-2">
             {isFastContext ? <ExploreKindBadge t={t} /> : null}
             {isFastContext ? <FastContextEvidencePill pack={evidencePack} status={status} t={t} /> : null}
-            <span className="truncate text-[14px] font-semibold text-ds-ink" title={taskTitle}>{taskTitle}</span>
+            <span className="truncate text-[14px] font-semibold text-ds-ink" title={taskTitle} data-subagent-title>{taskTitle}</span>
             {generated ? <GeneratedPill t={t} /> : null}
             {detached ? <BackgroundPill t={t} /> : null}
             {proactiveRetry && proactiveRetry.count > 0
@@ -324,7 +324,7 @@ export function SubagentCallCard({
             </span>
           ) : null}
         </div>
-        <span className="shrink-0 text-right tabular-nums">
+        <span className="shrink-0 text-right tabular-nums" data-subagent-trailing>
           <span className="block text-[13px] font-semibold text-ds-ink">{elapsed}</span>
           <span className="mt-px block text-[10.5px] text-ds-faint">
             {typeof steps === 'number'
