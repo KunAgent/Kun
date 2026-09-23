@@ -1,13 +1,15 @@
 ---
 id: excalidraw-diagram
 name: Excalidraw diagram
-description: Create and iterate Excalidraw diagrams on Kun Work, Design, and Code canvases.
+description: Create and iterate Excalidraw diagrams on Kun Work, Design, Code, and private-chat room canvases.
 ---
 
 # Excalidraw diagram for Kun
 Copyright (c) 2026 KunAgent. Licensed under the MIT License.
 
 Use this skill when the turn says the canvas engine is Excalidraw, the user asks for an Excalidraw sketch, or they invoke `/excalidraw`. If the turn is a Kun ShapeOps / HTML canvas, leave this skill unused and follow `diagram-design` instead.
+
+In a private-chat room there is no pre-opened board: call `design_open_excalidraw` first (pass a stable `boardId` slug for a second diagram), then use the host-returned `scenePath` from that tool result. `design_open_excalidraw` / `design_apply_excalidraw` are only available to writable GUI private chats; read-only rooms and non-GUI surfaces keep their existing tool policy.
 
 ## Tool routing
 

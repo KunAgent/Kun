@@ -1,6 +1,6 @@
 import {
-  discardPendingExcalidrawScene,
   excalidrawPngPath,
+  prepareExcalidrawReload,
   isExcalidrawSceneEmpty,
   loadExcalidrawScene,
   rememberLiveExcalidrawScene,
@@ -110,7 +110,15 @@ export async function reloadAndExportExcalidrawScene(input: {
   baseDir: string
   onReload: (scene: ExcalidrawSceneV1) => void
 }): Promise<ExcalidrawApplyResult> {
-  await discardPendingExcalidrawScene(input.workspaceRoot, input.identityId, input.baseDir)
+  try {
+    await prepareExcalidrawReload(input.workspaceRoot, input.identityId, input.baseDir)
+  } catch (error) {
+    return { ok: false, error: {
+      code: 'EXCALIDRAW_LOCAL_CONFLICT',
+      message: error instanceof Error ? error.message : String(error),
+      suggestion: 'Keep or discard the local draft explicitly before retrying.'
+    } }
+  }
   const scene = await loadExcalidrawScene(input.workspaceRoot, input.identityId, input.baseDir)
   if (!scene || isExcalidrawSceneEmpty(scene)) {
     return {

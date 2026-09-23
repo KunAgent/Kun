@@ -6,6 +6,7 @@ import { makeToolResultItem } from '../domain/item.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import type { TurnService } from '../services/turn-service.js'
 import { GoalTurnCoordinator } from './goal-turn-coordinator.js'
+import { bindRoomContinuationDispatcher } from '../rooms/room-continuation-dispatch.js'
 
 const threadId = 'thread_goal_turn_coordinator'
 const turnId = 'turn_goal_turn_coordinator'
@@ -163,6 +164,29 @@ describe('GoalTurnCoordinator', () => {
       status: 'usageLimited'
     })
     expect(h.eventDrafts.map((event) => event.goal?.status)).toEqual(['active', 'usageLimited'])
+  })
+
+  it('auto-resumes active goals in private room conversations', async () => {
+    const h = harness()
+    await h.threadStore.upsert({ ...activeThread(), relation: 'side', roomContext: {
+      roomId: 'room-one', memberId: 'member-one', participantAgentId: 'agent-one',
+      kind: 'conversation', blockedToolNames: [], blockedProviderIds: [], blockedSkillIds: []
+    } })
+    h.coordinator.noteToolExecuted(turnId, 'write', {
+      item: makeToolResultItem({ id: 'room-progress', threadId, turnId, callId: 'room-call', toolName: 'write', output: {} }),
+      approved: true
+    })
+    await h.coordinator.afterTerminal({ threadId, turnId, finalStatus: 'completed', timer: null })
+    expect(h.timers.filter((entry) => !entry.cancelled)).toHaveLength(1)
+    const dispatch = vi.fn(async () => 'queued' as const)
+    const unbind = bindRoomContinuationDispatcher(h.threadStore, dispatch)
+    h.timers.find((entry) => !entry.cancelled)?.fn()
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      threadId, sourceTurnId: turnId, kind: 'goal'
+    })))
+    expect(h.startTurn).not.toHaveBeenCalled()
+    expect(h.runTurn).not.toHaveBeenCalled()
+    unbind()
   })
 
   it('consumes progress and deliberate-stop state before cleanup', async () => {

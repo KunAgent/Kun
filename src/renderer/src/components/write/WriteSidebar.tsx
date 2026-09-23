@@ -30,6 +30,15 @@ import {
   writeRelativeToWorkspace
 } from '../../write/write-workspace-store'
 import { renameWorkWhiteboardSession } from '../../write/work-whiteboard-session-title'
+import { workWhiteboardThreadIds } from '../../write/work-whiteboard'
+import { readWriteThreadRegistry } from '../../write/write-thread-registry'
+import {
+  writeActivityForThreadIds,
+  writeDirectoryActivity,
+  writeFileActivity,
+  writeWorkspaceActivity,
+  type WriteResourceActivityContext
+} from '../../write/write-resource-activity'
 import { WorkWhiteboardTitleDialog } from './WorkWhiteboardTitleDialog'
 import { useWorkWhiteboardCreation } from './use-work-whiteboard-creation'
 import { WriteEntryDialog, type WriteEntryDialogKind } from './WriteEntryDialog'
@@ -43,6 +52,7 @@ import {
   SidebarTreeRow
 } from '../sidebar/SidebarPrimitives'
 import { SidebarFocusModeControl } from '../sidebar/SidebarFocusModeControl'
+import { SidebarActivityIndicator } from '../sidebar/SidebarActivityIndicator'
 import { WriteFileTree } from './WriteFileTree'
 import { WorkWhiteboardSidebarSection } from './WorkWhiteboardSidebarSection'
 
@@ -76,6 +86,14 @@ export function WriteSidebar({
   const ensureWriteThreadForWorkspace = useChatStore((s) => s.ensureWriteThreadForWorkspace)
   const renameThread = useChatStore((s) => s.renameThread)
   const runtimeConnection = useChatStore((s) => s.runtimeConnection)
+  const activityContext = useChatStore(useShallow((s): WriteResourceActivityContext => ({
+    threads: s.threads,
+    activeThreadId: s.activeThreadId,
+    busy: s.busy,
+    watchTurnCompletion: s.watchTurnCompletion,
+    awaitingUserInputThreadIds: s.awaitingUserInputThreadIds,
+    unreadThreadIds: s.unreadThreadIds
+  })))
   const [entryDialog, setEntryDialog] = useState<WriteEntryDialogKind | null>(null)
   const [collapsedWorkspaces, setCollapsedWorkspaces] = useState<Record<string, boolean>>({})
   const [collapsedWhiteboardFolders, setCollapsedWhiteboardFolders] = useState<Record<string, boolean>>({})
@@ -158,6 +176,13 @@ export function WriteSidebar({
   }, [workspaceRoot])
 
   const root = rootDirectory || workspaceRoot
+  const writeRegistry = readWriteThreadRegistry()
+  const activityLabels = {
+    runningLabel: t('sidebarThreadRunning'),
+    failedLabel: t('sidebarThreadFailed'),
+    unreadLabel: t('sidebarThreadUnread'),
+    awaitingInputLabel: t('sidebarThreadAwaitingInput')
+  }
   const rootLoading = Boolean(
     loadingDirs.__root__
     || loadingDirs[root]
@@ -449,6 +474,12 @@ export function WriteSidebar({
                   onClick={() => void toggleWorkspaceGroup(workspacePath)}
                   className="min-h-[36px]"
                   buttonClassName="items-center gap-2 px-2.5 py-2"
+                  trailing={(
+                    <SidebarActivityIndicator
+                      activity={writeWorkspaceActivity(workspacePath, activityContext, writeRegistry).activity}
+                      {...activityLabels}
+                    />
+                  )}
                   actions={(
                     <>
                       <SidebarIconButton
@@ -537,6 +568,11 @@ export function WriteSidebar({
                       moreActionsLabel={t('writeMoreActions')}
                       renameLabel={t('writeRenameEntry')}
                       deleteLabel={t('writeEntryDialogDelete')}
+                      {...activityLabels}
+                      activityForBoard={(board) => writeActivityForThreadIds(
+                        workWhiteboardThreadIds(board),
+                        activityContext
+                      ).activity}
                       onToggle={() => setCollapsedWhiteboardFolders((current) => ({
                         ...current,
                         [workspacePath]: current[workspacePath] !== true
@@ -571,6 +607,11 @@ export function WriteSidebar({
                       onRefresh={() => void refreshWorkspace(workspaceRoot)}
                       showHeader={false}
                       showRootLabel={false}
+                      activityForPath={(path, isDirectory) => (
+                        isDirectory
+                          ? writeDirectoryActivity(workspaceRoot, path, activityContext, writeRegistry).activity
+                          : writeFileActivity(workspaceRoot, path, activityContext, writeRegistry).activity
+                      )}
                     />
                   </div>
                 ) : null}

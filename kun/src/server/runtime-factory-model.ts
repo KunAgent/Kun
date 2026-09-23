@@ -340,6 +340,13 @@ export function cursorSdkProviderIdsForOptions(options: KunServeRuntimeOptions):
   return out
 }
 
+/** Provider engines that cannot enforce Kun room tools, approvals, or scoped writes. */
+export function roomUnsupportedProviderIdsForOptions(options: KunServeRuntimeOptions): Set<string> {
+  // Cursor's custom tools do not replace its native filesystem/shell catalog.
+  // Until the SDK exposes a deny gate for those calls, a bridge is not sufficient.
+  return new Set([...antigravityProviderIdsForOptions(options), ...cursorSdkProviderIdsForOptions(options)])
+}
+
 export function approvalReviewNativeProviderKind(
   value: string | undefined
 ): 'agent-sdk' | 'cursor-sdk' | 'antigravity-cli' | undefined {

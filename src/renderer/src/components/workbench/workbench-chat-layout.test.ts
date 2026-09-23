@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shouldUseEmptyTaskLayout } from './workbench-chat-layout'
+import { isActiveThreadRefreshing, shouldUseEmptyTaskLayout } from './workbench-chat-layout'
 
 const readyEmptyState = {
   activeThreadId: 'thread-a',
@@ -47,5 +47,17 @@ describe('shouldUseEmptyTaskLayout', () => {
       ...readyEmptyState,
       hasWorkspace: false
     })).toBe(false)
+  })
+})
+
+describe('isActiveThreadRefreshing', () => {
+  it('hides the refresh status when no thread is selected', () => {
+    expect(isActiveThreadRefreshing(null, null)).toBe(false)
+  })
+
+  it('shows the refresh status only for the active thread', () => {
+    expect(isActiveThreadRefreshing('thread-a', 'thread-a')).toBe(true)
+    expect(isActiveThreadRefreshing('thread-b', 'thread-a')).toBe(false)
+    expect(isActiveThreadRefreshing(null, 'thread-a')).toBe(false)
   })
 })

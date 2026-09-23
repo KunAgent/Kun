@@ -1,6 +1,13 @@
 import { sameAppSessionOwner, type AppSessionOwner } from '../contracts/app-session-owner.js'
-import type { ServiceManagerHandle } from './service-manager-state.js'
+import type { RuntimeRegistration } from '../contracts/runtime-flavor.js'
 import { runtimeProcessIsAlive } from '../server/runtime-process-identity.js'
+
+export type ManagerOwnerLossHandle = {
+  beginDrain(): void
+  close(): Promise<void>
+  discovery: { appOwner?: AppSessionOwner }
+  state: { snapshot(): Array<{ registration: RuntimeRegistration }> }
+}
 
 export function monitorManagerOwner(owner: AppSessionOwner): {
   startGranted: Promise<boolean>
@@ -35,26 +42,51 @@ export function monitorManagerOwner(owner: AppSessionOwner): {
   }
 }
 
+export function ownedManagerRuntimes(handle: Pick<ManagerOwnerLossHandle, 'discovery' | 'state'>): RuntimeRegistration[] {
+  const owner = handle.discovery.appOwner
+  if (!owner) return []
+  return handle.state.snapshot()
+    .map(({ registration }) => registration)
+    .filter((runtime) => sameAppSessionOwner(runtime.appOwner, owner))
+}
+
 /** Keep the data writer open while orphaned Runtime processes finish their final writes.
  * An independent process guard terminates stuck consumers before its later Manager deadline. */
-export async function drainManagerAfterOwnerLoss(handle: ServiceManagerHandle): Promise<void> {
+export async function drainManagerAfterOwnerLoss(
+  handle: Pick<ManagerOwnerLossHandle, 'beginDrain' | 'discovery' | 'state'>,
+  options: { deadlineMs?: number; fetchImpl?: typeof fetch; wait?: 'owned' | 'all' } = {}
+): Promise<void> {
   handle.beginDrain()
-  const runtimes = handle.state.snapshot().map(({ registration }) => registration)
-  await Promise.allSettled(runtimes.map(async (runtime) => {
+  const owned = ownedManagerRuntimes(handle)
+  const waiting = options.wait === 'all'
+    ? handle.state.snapshot().map(({ registration }) => registration)
+    : owned
+  const fetchImpl = options.fetchImpl ?? fetch
+  await Promise.allSettled(owned.map(async (runtime) => {
     if (!runtimeProcessIsAlive(runtime.pid, runtime)) return
-    if (!handle.discovery.appOwner || !sameAppSessionOwner(runtime.appOwner, handle.discovery.appOwner)) return
-    await fetch(`${runtime.baseUrl}/v1/runtime/shutdown`, {
+    await fetchImpl(`${runtime.baseUrl}/v1/runtime/shutdown`, {
       method: 'POST', headers: { authorization: `Bearer ${runtime.runtimeToken}`, 'content-type': 'application/json' },
       body: JSON.stringify({ instanceId: runtime.instanceId }), signal: AbortSignal.timeout(1_000)
     })
   }))
-  const deadline = Date.now() + 22_000
-  while (runtimes.some((runtime) => runtimeProcessIsAlive(runtime.pid, runtime))) {
+  const deadline = Date.now() + (options.deadlineMs ?? 22_000)
+  while (waiting.some((runtime) => runtimeProcessIsAlive(runtime.pid, runtime))) {
     if (Date.now() >= deadline) {
-      // Do not release the writer ahead of an execution process that the OS
-      // refused to terminate. The independent guard is the final crash fallback.
       throw new Error('Owned Runtime remained alive during Manager owner-loss cleanup')
     }
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
+}
+
+/** Owner-loss must unpublish even when drain times out, so the next desktop is not blocked. */
+export async function stopManagerAfterOwnerLoss(
+  handle: ManagerOwnerLossHandle,
+  options: { deadlineMs?: number; fetchImpl?: typeof fetch } = {}
+): Promise<void> {
+  try {
+    await drainManagerAfterOwnerLoss(handle, options)
+  } catch (error) {
+    process.stderr.write(`kun Manager cleanup failed: ${String(error)}\n`)
+  }
+  await handle.close()
 }

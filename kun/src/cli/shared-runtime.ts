@@ -14,6 +14,7 @@ import {
   removeRuntimeDiscovery,
   withRuntimeStartLock
 } from '../server/runtime-discovery.js'
+import { runtimeProcessIsAlive } from '../server/runtime-process-identity.js'
 import {
   hasUnpublishedGuiRuntime,
   readGuiSharedSettings
@@ -212,7 +213,7 @@ export async function inspectSharedRuntime(
   }
   const discoveryDir = runtimeDiscoveryDirectory(dataDir, flavor, scope.controlDir)
   const discovery = await readRuntimeDiscovery(discoveryDir, flavor).catch(() => null)
-  if (!discovery || !safeDiscoveryUrl(discovery) || !processAlive(discovery.pid)) {
+  if (!discovery || !safeDiscoveryUrl(discovery) || !runtimeProcessIsAlive(discovery.pid, discovery)) {
     return null
   }
   return {
@@ -539,7 +540,7 @@ export async function stopSharedRuntime(
   const inspected = await inspectSharedRuntime(dataDir, fetchImpl, scope)
   if (!inspected) {
     const stale = await readRuntimeDiscovery(discoveryDir, runtimeFlavor).catch(() => null)
-    if (stale && !processAlive(stale.pid)) {
+    if (stale && !runtimeProcessIsAlive(stale.pid, stale)) {
       await removeSharedRuntimeDiscovery(
         dataDir,
         discoveryDir,
@@ -575,7 +576,7 @@ export async function stopInspectedSharedRuntime(
   }
   const deadline = Date.now() + STOP_TIMEOUT_MS
   while (Date.now() < deadline) {
-    if (!processAlive(record.pid)) {
+    if (!runtimeProcessIsAlive(record.pid, record)) {
       await removeSharedRuntimeDiscovery(
         dataDir,
         discoveryDir,
@@ -606,7 +607,7 @@ async function inspectManagerRuntime(
 ): Promise<SharedRuntimeInspection | null> {
   const registration = await readManagerRuntime(manager, flavor, fetchImpl)
   if (!registration) return null
-  if (!processAlive(registration.pid)) {
+  if (!runtimeProcessIsAlive(registration.pid, registration)) {
     await unregisterRuntimeWithManager({
       manager,
       flavor,
@@ -646,7 +647,7 @@ async function probeManagerRuntimeRegistration(
   fetchImpl: typeof fetch
 ): Promise<SharedRuntimeConnection | null> {
   const fallback = discoveryFromManagerRegistration(registration)
-  if (!safeDiscoveryUrl(fallback) || !processAlive(registration.pid)) return null
+  if (!safeDiscoveryUrl(fallback) || !runtimeProcessIsAlive(registration.pid, registration)) return null
   try {
     const response = await fetchImpl(`${registration.baseUrl.replace(/\/$/u, '')}/v1/runtime/info`, {
       headers: registration.runtimeToken
@@ -684,7 +685,6 @@ async function probeManagerRuntimeRegistration(
 import {
   delay,
   discoveryFromManagerRegistration,
-  processAlive,
   rotateLog,
   runtimeDataDir,
   runtimeDiscoveryDirectory,

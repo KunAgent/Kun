@@ -2,7 +2,7 @@ import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
-import { RoomDrawerNavigation, useRoomDrawerNavigation } from './RoomDrawerNavigation'
+import { RoomDrawerNavigation, useRoomDrawerNavigation, type RoomDrawerTarget } from './RoomDrawerNavigation'
 
 function SavedPage({ name }: { name: string }) {
   const [draft, setDraft] = useState('')
@@ -43,6 +43,52 @@ describe('single Rooms drawer navigation stack', () => {
     act(() => navigation.back())
     expect(renderer.root.findByProps({ 'aria-label': 'reply' }).props.value).toBe('Unsent draft')
     expect(focus).toHaveBeenCalled()
+  })
+  it('titles the run page as the Agent session', async () => {
+    await act(async () => { renderer = create(createElement(Harness, { roomId: 'room' })) })
+    act(() => navigation.open({ kind: 'run', runId: 'original-run' }))
+    expect(JSON.stringify(renderer.toJSON())).toContain('Agent session')
+  })
+  it('docks the run page as a right sidebar that can expand to full overlay', async () => {
+    await act(async () => { renderer = create(createElement(Harness, { roomId: 'room' })) })
+    act(() => navigation.open({ kind: 'run', runId: 'original-run' }))
+    const dialog = () => renderer.root.findByProps({ role: 'dialog' })
+    const toggle = () => renderer.root.findByProps({ 'aria-label': 'Right sidebar' })
+    expect(dialog().props.className).toContain('inset-y-0')
+    expect(dialog().props.className).toContain('right-0')
+    expect(dialog().props.className).not.toMatch(/inset-0/)
+    expect(toggle().props['aria-pressed']).toBe(true)
+    act(() => toggle().props.onClick())
+    expect(dialog().props.className).toContain('inset-0')
+    expect(toggle().props['aria-pressed']).toBe(false)
+  })
+  it('docks non-run pages too and resets expansion when the top frame changes', async () => {
+    await act(async () => { renderer = create(createElement(Harness, { roomId: 'room' })) })
+    act(() => navigation.open({ kind: 'reply', messageId: 'root' }))
+    const dialog = () => renderer.root.findByProps({ role: 'dialog' })
+    const toggle = () => renderer.root.findByProps({ 'aria-label': 'Right sidebar' })
+    expect(dialog().props.className).toContain('inset-y-0')
+    expect(dialog().props.className).toContain('right-0')
+    act(() => toggle().props.onClick())
+    expect(dialog().props.className).toContain('inset-0')
+    act(() => navigation.open({ kind: 'run', runId: 'next-run' }))
+    expect(dialog().props.className).toContain('inset-y-0')
+    expect(dialog().props.className).not.toMatch(/inset-0/)
+    expect(toggle().props['aria-pressed']).toBe(true)
+  })
+  it('titles the new sidebar targets with existing locale labels', async () => {
+    await act(async () => { renderer = create(createElement(Harness, { roomId: 'room' })) })
+    const titles: Array<[RoomDrawerTarget, string]> = [
+      [{ kind: 'files' }, 'Conversation files'],
+      [{ kind: 'models' }, 'Model settings'],
+      [{ kind: 'settings' }, 'bot settings'],
+      [{ kind: 'directory' }, 'Agents'],
+      [{ kind: 'profile' }, 'My avatar']
+    ]
+    for (const [target, label] of titles) {
+      act(() => navigation.open(target))
+      expect(JSON.stringify(renderer.toJSON())).toContain(label)
+    }
   })
   it('clears the old room stack and never resurrects it by switching back', async () => {
     await act(async () => { renderer = create(createElement(Harness, { roomId: 'room' })) })

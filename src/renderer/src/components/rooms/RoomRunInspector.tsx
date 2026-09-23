@@ -1,58 +1,131 @@
-import { useLayoutEffect, useRef, useState } from 'react'
-import { ArrowDown, ExternalLink, RefreshCw } from 'lucide-react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { ArrowDown, Lock, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { RoomMessageBody } from './RoomMessageBody'
-import { RoomRunItems } from './RoomRunItems'
+import { buildRoomRunConversation, buildRoomRunTranscript } from './room-run-conversation'
+import { loadRunItemContent, truncatedContentField } from './room-run-content'
+import { presentRoomRunItems } from './room-run-presentation'
 import { useRoomRun } from './useRoomRun'
+import { formatDuration } from '../chat/message-timeline-tools'
+import { TimelineFilePreviewWorkspaceProvider } from '../chat/timeline-file-preview-workspace'
+import { ConversationTurn } from '../chat/MessageTimeline'
+import { groupTurns, stableTurnKey } from '../chat/message-timeline-turns'
+import { chatBlockFromItem } from '../../agent/kun-mapper-events'
+import type { ChatBlock } from '../../agent/types'
 import './rooms-runs.css'
+
+const RUNNING_STATUSES = new Set(['queued', 'running', 'recovery_required'])
 
 export function RoomRunInspector({
   roomId,
   runId,
-  onOpenThread,
   active = true
 }: {
   roomId: string
   runId: string
-  onOpenThread: (threadId: string, turnId?: string) => void | Promise<void>
   active?: boolean
 }) {
   const { t } = useTranslation('common')
   const state = useRoomRun(roomId, runId, active)
-  const [navigationError, setNavigationError] = useState('')
-  const [processFilter, setProcessFilter] = useState('all'), [processSearch, setProcessSearch] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [copyError, setCopyError] = useState('')
   const scroll = useRef<HTMLDivElement>(null)
   const anchor = useRef<{
     height: number
     top: number
     firstId?: string
   } | null>(null)
-  const atBottom = useRef(false)
+  const atBottom = useRef(true)
   const [away, setAway] = useState(false)
+  const [loadedFields, setLoadedFields] = useState<Record<string, { field: string; text: string }>>({})
+  const [loadingItemId, setLoadingItemId] = useState('')
+  const [itemLoadError, setItemLoadError] = useState('')
+  const itemRequest = useRef<AbortController | null>(null)
+
+  useEffect(() => () => itemRequest.current?.abort(), [])
+  useLayoutEffect(() => {
+    setLoadedFields({})
+    setLoadingItemId('')
+    setItemLoadError('')
+  }, [runId])
+
   useLayoutEffect(() => {
     if (!scroll.current) return
     if (anchor.current && anchor.current.firstId !== state.items[0]?.id) {
       scroll.current.scrollTop =
         anchor.current.top + scroll.current.scrollHeight - anchor.current.height
       anchor.current = null
-    } else if (atBottom.current)
+    } else if (atBottom.current) {
       scroll.current.scrollTop = scroll.current.scrollHeight
+    }
   }, [state.items])
+
   const detail = state.detail
   const run = detail?.run
-  const openCode = async () => {
-    if (!run?.threadId || !run.turnId) return
-    setNavigationError('')
+  const processing = run ? RUNNING_STATUSES.has(run.status) : false
+  const displayItems = useMemo(() => {
+    const patched = Object.keys(loadedFields).length
+      ? state.items.map((item) => {
+          const patch = loadedFields[item.id]
+          return patch ? ({ ...item, [patch.field]: patch.text } as typeof item) : item
+        })
+      : state.items
+    return presentRoomRunItems(patched)
+  }, [state.items, loadedFields])
+  const conversation = buildRoomRunConversation(displayItems)
+  const transcript = buildRoomRunTranscript(conversation, run?.input)
+  const blocks = useMemo(() => {
+    const mapped: ChatBlock[] = []
+    for (const item of displayItems) {
+      const block = chatBlockFromItem(item)
+      if (block) mapped.push(block)
+    }
+    return mapped
+  }, [displayItems])
+  const turns = useMemo(() => groupTurns(blocks), [blocks])
+  const hasUserBubble = turns.some((turn) => turn.user)
+  const truncatedItems = useMemo(
+    () =>
+      displayItems.flatMap((item) => {
+        const field = truncatedContentField(item)
+        return field ? [{ id: item.id, kind: item.kind, toolName: item.toolName }] : []
+      }),
+    [displayItems]
+  )
+
+  const loadFullItem = async (itemId: string) => {
+    itemRequest.current?.abort()
+    const controller = new AbortController()
+    itemRequest.current = controller
+    setLoadingItemId(itemId)
+    setItemLoadError('')
     try {
-      await onOpenThread(run.threadId, run.turnId)
+      const loaded = await loadRunItemContent(roomId, runId, itemId, controller.signal)
+      if (controller.signal.aborted) return
+      setLoadedFields((current) => ({ ...current, [itemId]: loaded }))
     } catch (cause) {
-      setNavigationError(String(cause))
+      if (!controller.signal.aborted) setItemLoadError(String(cause))
+    } finally {
+      if (!controller.signal.aborted) setLoadingItemId('')
     }
   }
+
+  const copyTranscript = async () => {
+    setCopyError('')
+    try {
+      await navigator.clipboard.writeText(transcript)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      setCopyError(t('roomsRunCopyFailed'))
+    }
+  }
+
   return (
+    <TimelineFilePreviewWorkspaceProvider workspaceRoot={detail?.workspaceRoot ?? ''} threadId={run?.threadId}>
     <section
       className="rooms-run-inspector"
-      aria-label={t('roomsRunDetails')}
+      aria-label={t('roomsAgentSession')}
       data-run-id={runId}
     >
       <div
@@ -73,33 +146,28 @@ export function RoomRunInspector({
         {run && detail ? (
           <>
             <header className="rooms-run-header">
-              <h3>
-                {run.memberLabel} · {t(`roomsRunPhase_${run.phase}`)}
-              </h3>
-              <p>
-                {t(`roomsRunStatus_${run.status}`)}
-                {run.outcome
-                  ? ` · ${t(`roomsRunOutcome_${run.outcome}`)}`
-                  : ''}{' '}
-                · {t('roomsRunAttempt', { count: run.attempt })}
-              </p>
-              <time dateTime={run.createdAt}>
-                {new Date(run.createdAt).toLocaleString()}
-              </time>
-              {run.threadId &&
-              run.turnId &&
-              detail.availability.status === 'available' ? (
-                <button
-                  type="button"
-                  className="rooms-run-secondary"
-                  data-thread-target-turn-id={run.turnId}
-                  onClick={() => void openCode()}
-                >
-                  <ExternalLink size={14} />
-                  {t('roomsRunOpenCode')}
+              <div className="rooms-run-header-main">
+                <div className="rooms-run-title">
+                  {processing ? <span className="rooms-run-status-dot is-running" /> : null}
+                  <span className="rooms-run-agent">{run.memberLabel}</span>
+                </div>
+                <div className="rooms-run-meta">
+                  <span className={processing ? 'is-running' : ''}>
+                    {t(`roomsRunStatus_${run.status}`, { defaultValue: run.status })}
+                  </span>
+                  {run.model ? <span className="rooms-run-model">{run.model}</span> : null}
+                  {run.elapsedMs !== undefined ? (
+                    <span className="rooms-run-elapsed">{formatDuration(run.elapsedMs)}</span>
+                  ) : null}
+                </div>
+              </div>
+              <div className="rooms-run-actions" aria-label={t('roomsRunTranscriptActions')}>
+                <button type="button" onClick={() => void copyTranscript()}>
+                  {copied ? t('roomsRunCopied') : t('roomsRunCopyTranscript')}
                 </button>
-              ) : null}
+              </div>
             </header>
+
             {run.error || run.reason ? (
               <p
                 className={run.error ? 'rooms-run-error' : 'rooms-run-note'}
@@ -108,52 +176,20 @@ export function RoomRunInspector({
                 {run.error || run.reason}
               </p>
             ) : null}
+
             {detail.availability.status !== 'available' ? (
               <p className="rooms-run-unavailable">
                 {t(`roomsRunAvailability_${detail.availability.status}`)}
-                {detail.availability.reason
-                  ? ` · ${detail.availability.reason}`
-                  : ''}
+                {detail.availability.reason ? ` · ${detail.availability.reason}` : ''}
               </p>
             ) : null}
-            {detail.trigger ? (
-              <details className="rooms-run-trigger">
-                <summary>
-                  {t('roomsRunTrigger')} · {detail.trigger.authorLabelSnapshot}
-                </summary>
-                <RoomMessageBody
-                  body={detail.trigger.body}
-                  attachmentIds={detail.trigger.attachmentIds}
-                />
-              </details>
+
+            {run.input && !hasUserBubble ? (
+              <div className="rooms-run-user-bubble">
+                <RoomMessageBody body={run.input} attachmentIds={run.attachmentIds} />
+              </div>
             ) : null}
-            <section className="rooms-run-input">
-              <h4>{t('roomsRunInput')}</h4>
-              <RoomMessageBody
-                body={run.input || t('roomsRunInputUnavailable')}
-                attachmentIds={run.attachmentIds}
-              />
-            </section>
-            {detail.context?.prompt ? (
-              <details className="rooms-run-trigger">
-                <summary>{t('roomsRunContext')}</summary>
-                <RoomMessageBody
-                  body={detail.context.prompt}
-                  attachmentIds={detail.context.attachmentIds ?? []}
-                />
-              </details>
-            ) : null}
-            <h4 className="rooms-run-process-title">{t('roomsRunProcess')}</h4>
-            {state.itemsAvailability &&
-            state.itemsAvailability.status !== 'available' &&
-            state.itemsAvailability.status !== detail.availability.status ? (
-              <p className="rooms-run-unavailable">
-                {t(`roomsRunAvailability_${state.itemsAvailability.status}`)}
-                {state.itemsAvailability.reason
-                  ? ` · ${state.itemsAvailability.reason}`
-                  : ''}
-              </p>
-            ) : null}
+
             {state.hasEarlier ? (
               <button
                 type="button"
@@ -178,81 +214,102 @@ export function RoomRunInspector({
                 )}
               </button>
             ) : null}
-            <div className="rooms-run-process-filters">
-              <select aria-label={t('roomsRunFilter')} value={processFilter} onChange={(event) => setProcessFilter(event.target.value)}>
-                <option value="all">{t('roomsRunProcessAll')}</option><option value="tools">{t('roomsRunProcessTools')}</option><option value="errors">{t('roomsRunProcessErrors')}</option>
-              </select>
-              <input aria-label={t('roomsRunProcessSearch')} placeholder={t('roomsRunProcessSearch')} value={processSearch} onChange={(event) => setProcessSearch(event.target.value)} />
+
+            {state.itemsAvailability &&
+            state.itemsAvailability.status !== 'available' &&
+            state.itemsAvailability.status !== detail.availability.status ? (
+              <p className="rooms-run-unavailable">
+                {t(`roomsRunAvailability_${state.itemsAvailability.status}`)}
+                {state.itemsAvailability.reason
+                  ? ` · ${state.itemsAvailability.reason}`
+                  : ''}
+              </p>
+            ) : null}
+
+            <div className="rooms-run-turns">
+              {turns.map((turn, index) => (
+                <ConversationTurn
+                  key={stableTurnKey(turn, index)}
+                  turn={turn}
+                  isProcessing={processing && index === turns.length - 1}
+                  liveReasoning=""
+                  live=""
+                  durationMs={index === turns.length - 1 ? run.elapsedMs : undefined}
+                  threadId={run.threadId}
+                  filePreviewWorkspaceRoot={detail.workspaceRoot ?? ''}
+                  viewportRef={scroll}
+                  compactCards
+                  allowMainThreadActions={false}
+                  allowRecoveryContinue={false}
+                />
+              ))}
             </div>
-            {processFilter !== 'all' || processSearch ? <p className="rooms-run-note">{t('roomsRunSearchLoadedOnly')}</p> : null}
-            <RoomRunItems roomId={roomId} runId={runId} items={state.items} filter={processFilter} query={processSearch} runStatus={run.status} />
+
+            {truncatedItems.length ? (
+              <div className="rooms-run-truncated">
+                <p className="rooms-run-note">{t('roomsRunTruncatedNote')}</p>
+                {truncatedItems.map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    className="rooms-run-secondary"
+                    disabled={Boolean(loadingItemId)}
+                    onClick={() => void loadFullItem(entry.id)}
+                  >
+                    {t(loadingItemId === entry.id ? 'roomsLoading' : 'roomsRunFullContent')}
+                    {' · '}
+                    {entry.toolName ?? t(`roomsRunItem_${entry.kind}`, { defaultValue: entry.kind })}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {itemLoadError ? (
+              <p role="alert" className="rooms-run-error">
+                {itemLoadError}
+              </p>
+            ) : null}
+
             {!state.items.length &&
             !state.error &&
             state.itemsAvailability?.status === 'available' ? (
               <p className="rooms-run-note">{t('roomsRunNoItems')}</p>
             ) : null}
-            <dl className="rooms-run-metrics">
-              {run.model ? (
-                <div>
-                  <dt>{t('roomsMemberModel')}</dt>
-                  <dd>{run.model}</dd>
-                </div>
-              ) : null}
-              {run.elapsedMs !== undefined ? (
-                <div>
-                  <dt>{t('roomsRunElapsed')}</dt>
-                  <dd>
-                    {t('roomsRunSeconds', {
-                      count: Math.round(run.elapsedMs / 100) / 10
-                    })}
-                  </dd>
-                </div>
-              ) : null}
-              <div>
-                <dt>{t('roomsRunUsage')}</dt>
-                <dd>
-                  {run.usage
-                    ? t('roomsRunTokens', { count: run.usage.totalTokens })
-                    : t('roomsRunUsageUnavailable')}
-                  {run.usageStatus === 'partial'
-                    ? ` · ${t('roomsRunUsagePartial')}`
-                    : ''}
-                </dd>
-              </div>
-            </dl>
           </>
         ) : null}
-        {state.error || state.streamError || navigationError ? (
+
+        {state.error || state.streamError || copyError ? (
           <p role="alert" className="rooms-run-error">
-            {state.error || state.streamError || navigationError}
+            {state.error || state.streamError || copyError}
           </p>
         ) : null}
         {state.error || state.streamError ? (
-          <button
-            type="button"
-            className="rooms-run-secondary"
-            onClick={state.refresh}
-          >
+          <button type="button" className="rooms-run-secondary" onClick={state.refresh}>
             <RefreshCw size={13} />
             {t('roomsRefresh')}
           </button>
         ) : null}
       </div>
+
       {away && state.items.length ? (
         <button
           type="button"
           className="rooms-run-latest rooms-run-secondary"
           onClick={() => {
-            if (scroll.current)
-              scroll.current.scrollTop = scroll.current.scrollHeight
+            if (scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight
             atBottom.current = true
             setAway(false)
           }}
         >
           <ArrowDown size={13} />
-          {t('roomsRunLatestItems')}
+          {t('roomsRunScrollToBottom')}
         </button>
       ) : null}
+
+      <footer className="rooms-run-readonly-footer">
+        <Lock size={13} strokeWidth={1.9} />
+        <span>{t('roomsRunReadOnlyFooter')}</span>
+      </footer>
     </section>
+    </TimelineFilePreviewWorkspaceProvider>
   )
 }

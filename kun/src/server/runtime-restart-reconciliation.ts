@@ -77,7 +77,7 @@ export async function reconcileRuntimeAfterRestart(
   if (!childReconciliationFailed && runtime.threadStore) {
     for (const [threadId, provenTurnIds] of sourceTurnIdsByThread) {
       const thread = await runtime.threadStore.get(threadId).catch(() => null)
-      if (!thread || thread.relation === 'side') continue
+      if (!thread || (thread.relation === 'side' && thread.roomContext?.kind !== 'conversation')) continue
       const latest = thread.turns.at(-1)
       if (!latest || latest.status !== 'failed' || !provenTurnIds.has(latest.id)) continue
       resumeCandidateSources.push({ threadId, turnId: latest.id })

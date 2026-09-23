@@ -1,4 +1,5 @@
 import { makeToolResultItem } from '../domain/item.js'
+import type { ToolResultTurnItem as ToolResultItem } from '../contracts/items.js'
 import type { RuntimeEventRecorder } from './runtime-event-recorder.js'
 import type { TurnService } from './turn-service.js'
 import type { ToolCallLike } from '../ports/tool-host.js'
@@ -45,10 +46,13 @@ type PendingReceipt = {
   itemId: string
   /** The accepted placeholder output; used as the base for the final result. */
   acceptedOutput: Record<string, unknown>
+  onFinalized?: (item: ToolResultItem) => void
   resolve: (payload: CanvasReceiptPayload | null) => void
   settled: boolean
   waiting: boolean
   fulfilling: boolean
+  finalization?: Promise<void>
+  waitPromise?: Promise<void>
 }
 
 export class CanvasReceiptRegistry {
@@ -66,6 +70,7 @@ export class CanvasReceiptRegistry {
     call: ToolCallLike
     itemId: string
     acceptedOutput: Record<string, unknown>
+    onFinalized?: (item: ToolResultItem) => void
   }): void {
     const key = input.receiptKey.trim()
     if (!key) return
@@ -77,6 +82,7 @@ export class CanvasReceiptRegistry {
       call: input.call,
       itemId: input.itemId,
       acceptedOutput: input.acceptedOutput,
+      onFinalized: input.onFinalized,
       resolve: () => undefined,
       settled: false,
       waiting: false,
@@ -97,11 +103,10 @@ export class CanvasReceiptRegistry {
   ): Promise<void> {
     const entries = [...this.pending.values()].filter(
       (entry) =>
-        entry.threadId === threadId && entry.turnId === turnId &&
-        !entry.settled
+        entry.threadId === threadId && entry.turnId === turnId
     )
-    if (entries.length === 0) return
-    await Promise.all(entries.map((entry) => this.awaitOne(entry, timeoutMs, nowMs)))
+    await Promise.all(entries.map((entry) => this.awaitReceipt(entry.receiptKey, timeoutMs)))
+    void nowMs
   }
 
   /**
@@ -173,18 +178,22 @@ export class CanvasReceiptRegistry {
         ...(payload.affectedIds?.length ? { affectedCount: payload.affectedIds.length } : {})
       })
       entry.settled = true
+      const finalization = this.finalize(entry, payload)
       entry.resolve(payload)
-      // Renderer blocks can apply and acknowledge an operation immediately
-      // after the tool-result SSE item is published. If the loop has not yet
-      // entered awaitTurnReceipts, finalize here so the early receipt is not
-      // stranded behind an unset resolver.
-      if (!entry.waiting && this.pending.get(entry.receiptKey) === entry) {
-        await this.finalize(entry, payload)
-      }
+      await finalization
       return true
     } finally {
       entry.fulfilling = false
     }
+  }
+
+  /** Await only one bridge call; sibling SDK calls may wait concurrently. */
+  async awaitReceipt(receiptKey: string, timeoutMs: number): Promise<void> {
+    const entry = this.pending.get(receiptKey)
+    if (!entry) return
+    if (entry.finalization) return entry.finalization
+    entry.waitPromise ??= this.awaitOne(entry, timeoutMs, Date.now)
+    await entry.waitPromise
   }
 
   /** Count of pending (unfulfilled) receipts for diagnostics. */
@@ -222,7 +231,12 @@ export class CanvasReceiptRegistry {
     }
   }
 
-  private async finalize(entry: PendingReceipt, payload: CanvasReceiptPayload | null): Promise<void> {
+  private finalize(entry: PendingReceipt, payload: CanvasReceiptPayload | null): Promise<void> {
+    entry.finalization ??= this.persistFinalResult(entry, payload)
+    return entry.finalization
+  }
+
+  private async persistFinalResult(entry: PendingReceipt, payload: CanvasReceiptPayload | null): Promise<void> {
     const base = { ...entry.acceptedOutput }
     let output: Record<string, unknown>
     let isError: boolean
@@ -259,6 +273,7 @@ export class CanvasReceiptRegistry {
       isError
     })
     await this.deps.turns.applyItem(entry.threadId, item)
+    if (item.kind === 'tool_result') entry.onFinalized?.(item)
     if (this.pending.get(entry.receiptKey) === entry) this.pending.delete(entry.receiptKey)
   }
 }

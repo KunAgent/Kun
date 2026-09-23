@@ -12,6 +12,7 @@ import type { ComposerReasoningEffort } from './FloatingComposerModelPicker'
 import type { PendingUserInputBlock, ResolveUserInput } from './use-composer-user-input'
 import type { DesignTaskComposerProfile } from './FloatingComposerTaskProfile'
 import type { ComposerTaskSurface } from './FloatingComposerTaskSurfacePicker'
+import { queuedMessageGuidancePayload } from '../../store/queued-message-guidance'
 
 export function shouldShowVoiceDictation(
   speechToText: KunSpeechToTextSettingsV1 | null | undefined,
@@ -53,12 +54,71 @@ export function returnQueuedMessageToComposer(
   setInput(message.displayText ?? message.text)
 }
 
+/**
+ * OpenMausBot-style double-Enter steering: once a send lands in the queue
+ * while a turn runs, a second Enter within this window steers the queue head
+ * into the running turn instead of no-oping on the empty composer.
+ */
+export const DOUBLE_ENTER_STEER_WINDOW_MS = 1500
+
+/**
+ * Mirrors the queue dock's steer gate for the running-turn case only. Paused
+ * and failed rows use retry semantics, not steering, so they are excluded;
+ * `in_flight` rows remain steerable exactly as the dock's guide button allows.
+ */
+export function steerableQueuedMessage(
+  message: QueuedComposerMessage | undefined,
+  running: boolean
+): QueuedComposerMessage | null {
+  if (!message || !running) return null
+  if (message.editIntent || message.steeringRequest) return null
+  if (
+    message.deliveryState === 'starting' ||
+    message.deliveryState === 'paused' ||
+    message.deliveryState === 'failed'
+  ) {
+    return null
+  }
+  if (message.guidanceEligible === false) return null
+  return queuedMessageGuidancePayload(message) !== null ? message : null
+}
+
 export function shouldSurfaceComposerUserInput(route: AppRoute, compact: boolean): boolean {
   // Write owns a single compact composer in its assistant rail, so it must
   // surface the same runtime gate there. Other compact composers mirror a main
   // Chat/Design surface and would duplicate the prompt if they rendered it.
   if (route === 'write') return true
   return !compact && (route === 'chat' || route === 'design')
+}
+
+/**
+ * Pending runtime approvals for the composer takeover panel. Only the main
+ * thread's composer surfaces them — side conversations carry their own block
+ * list but cannot resolve approvals through the main-thread store, and an
+ * idle thread's leftover `pending` block would hit a dead gate.
+ */
+export function listPendingComposerApprovals({
+  blocks,
+  busy,
+  compact,
+  route,
+  side,
+  hasScopedBlocks
+}: {
+  blocks: ChatBlock[]
+  busy: boolean
+  compact: boolean
+  route: AppRoute
+  side: boolean
+  hasScopedBlocks: boolean
+}): Extract<ChatBlock, { kind: 'approval' }>[] {
+  if (hasScopedBlocks || side || !shouldSurfaceComposerUserInput(route, compact) || !busy) {
+    return EMPTY_APPROVAL_BLOCKS
+  }
+  return blocks.filter(
+    (block): block is Extract<ChatBlock, { kind: 'approval' }> =>
+      block.kind === 'approval' && (block.status === 'pending' || block.status === 'submitting')
+  )
 }
 
 export function shouldShowWorkspaceControls({
@@ -231,6 +291,7 @@ export const EMPTY_ATTACHMENTS: AttachmentReference[] = []
 export const EMPTY_CONTEXT_CHIPS: DesignComposerContext[] = []
 export const EMPTY_FILE_REFERENCES: ComposerFileReference[] = []
 export const EMPTY_SKILL_COMMANDS: NonNullable<FloatingComposerProps['skillCommands']> = []
+export const EMPTY_APPROVAL_BLOCKS: Extract<ChatBlock, { kind: 'approval' }>[] = []
 
 export function formatGoalElapsedSeconds(seconds: number): string {
   const value = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0))

@@ -78,6 +78,7 @@ export function buildClientSurfaceInstruction(surface: TurnClientSurface): strin
       return [
         'This turn was initiated through a messaging client.',
         'Do not rely on desktop workbench, terminal controls, or structured dialogs; use messaging-specific tools only when advertised.',
+        'Ordinary assistant text is internal and never shown to the user; publish every visible message with the send_im_message tool when it is advertised.',
         common
       ].join(' ')
     case 'extension':

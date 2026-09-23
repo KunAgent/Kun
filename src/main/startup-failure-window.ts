@@ -45,18 +45,24 @@ export function showStartupFailureWindow(
       }
     })
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+    const launchIdentity = {
+      appVersion: app.getVersion(),
+      execPath: process.execPath
+    }
     let recoveryInFlight = false
+    const htmlOptions = (busy = false) => ({
+      handoff: presentation.handoff,
+      retryable: presentation.handoff ? canRecoverHandoff : presentation.retryable,
+      recheck: presentation.recheck,
+      busy,
+      ...launchIdentity
+    })
     const render = (detail: string, busy = false): void => {
       if (window.isDestroyed()) return
       void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(startupFailureHtml(
         detail,
         logDir,
-        {
-          handoff: presentation.handoff,
-          retryable: presentation.handoff ? canRecoverHandoff : presentation.retryable,
-          recheck: presentation.recheck,
-          busy
-        }
+        htmlOptions(busy)
       ))}`).catch((loadError) => {
         logError('startup', 'Failed to render startup recovery window.', {
           message: sanitizeStartupFailureMessage(loadError)
@@ -113,11 +119,7 @@ export function showStartupFailureWindow(
     void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(startupFailureHtml(
       message,
       logDir,
-      {
-        handoff: presentation.handoff,
-        retryable: presentation.handoff ? canRecoverHandoff : presentation.retryable,
-        recheck: presentation.recheck
-      }
+      htmlOptions()
     ))}`)
       .catch((loadError) => {
         logError('startup', 'Failed to render startup recovery window.', {

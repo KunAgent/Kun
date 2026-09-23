@@ -6,7 +6,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { basename } from 'node:path'
 import { RoomSchema, RoomMessageSchema, RoomMemberSchema, SendRoomMessageSchema,
   type Room, type RoomMessage } from '../contracts/rooms.js'
-import type { RoomAvatarReference } from '../contracts/room-content.js'
+import type { RoomAvatarReference, RoomContentReference } from '../contracts/room-content.js'
 import { CreateRoomRequestSchema, UpdateRoomRequestSchema } from '../contracts/rooms-api.js'
 import type { RoomStore, RoomStoreCommit, RoomDocumentKind, RoomStoredDocument } from './room-store.js'
 import { RoomStoreConflictError } from './room-store.js'
@@ -250,6 +250,45 @@ export class RoomService {
       puts: [{ kind: 'message', id: key, roomId: id, value: message }],
       events: [{ roomId: id, kind: 'message.updated', payload: { id: key } }] }
     await attachRoomRunPublication(this.store, commit, message, originRunId)
+    await this.store.commit(commit)
+  }
+
+  /** Publish one segmented assistant_text item as its own message, idempotently by source item. */
+  async publishSegment(id: string, input: {
+    messageId: string
+    runId: string
+    itemId: string
+    body: string
+    memberId: string
+    taskId?: string
+    createdAt: string
+    status: 'streaming' | 'final' | 'failed'
+    references?: RoomContentReference[]
+    displayThreadRootId?: string
+  }): Promise<void> {
+    const text = input.body.slice(0, 64000)
+    // An explicit send_im_message call may publish an attachment-only bubble.
+    if (!text.trim() && !input.references?.length) return
+    const old = await this.store.get<RoomMessage>('message', input.messageId)
+    if (old && (old.roomId !== id || old.value.authorMemberId !== input.memberId)) throw new Error('message identity mismatch')
+    if (old && (old.value.status === 'final' || old.value.status === 'failed') && input.status === 'streaming') return
+    const message: RoomMessage = old
+      ? { ...old.value, status: input.status, body: text, bodyRevision: old.value.bodyRevision + 1,
+          ...(input.references?.length ? { references: input.references } : {}),
+          ...(input.displayThreadRootId ? { displayThreadRootId: input.displayThreadRootId } : {}) }
+      : RoomMessageSchema.parse({ id: input.messageId, roomId: id, messageSeq: 1,
+          authorKind: 'member', authorMemberId: input.memberId, originItemId: input.itemId,
+          authorLabelSnapshot: '', body: text, bodyRevision: 0, mentionMemberIds: [], attachmentIds: [],
+          taskId: input.taskId, status: input.status, createdAt: input.createdAt,
+          ...(input.references?.length ? { references: input.references } : {}),
+          ...(input.displayThreadRootId ? { displayThreadRootId: input.displayThreadRootId } : {}) })
+    if (old && old.value.body === message.body && old.value.status === input.status && old.value.originRunId === input.runId) return
+    const commit: RoomStoreCommit = { requestId: randomUUID(),
+      checks: [{ kind: 'message', id: input.messageId, expectedRevision: old?.revision ?? null }],
+      puts: [{ kind: 'message', id: input.messageId, roomId: id, value: message }],
+      events: [{ roomId: id, kind: old ? 'message.updated' : 'message.created', payload: { id: input.messageId } }] }
+    await attachRoomRunPublication(this.store, commit, message, input.runId)
+    await attachRoomPublicationReply(this.store, commit, message, input.runId)
     await this.store.commit(commit)
   }
 

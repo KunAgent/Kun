@@ -9,13 +9,13 @@ import { cacheRoomAvatar } from './room-uploaded-avatar'
 import { acceptRoomUserProfile } from './room-user-profile'
 import { useAgentResource } from './agent-client'
 
-export function RoomUserAvatarEditor({ onClose }: { onClose: () => void }) {
+export function RoomUserAvatarEditor({ onClose, variant = 'modal' }: { onClose: () => void; variant?: 'modal' | 'panel' }) {
   const { t } = useTranslation('common')
   const [busy, setBusy] = useState(false)
   const detail = useAgentResource<RoomUserProfileDetail>('/v1/rooms/user-profile')
-  return <RoomModal title={t('roomsMyAvatar')} onClose={onClose} busy={busy}>
-    {detail.data ? <UserAvatarForm initial={detail.data} onClose={onClose} onBusy={setBusy} /> : <p role={detail.error ? 'alert' : undefined}>{detail.error || t('roomsLoading')}</p>}
-  </RoomModal>
+  const body = detail.data ? <UserAvatarForm initial={detail.data} onClose={onClose} onBusy={setBusy} /> : <p role={detail.error ? 'alert' : undefined}>{detail.error || t('roomsLoading')}</p>
+  return variant === 'panel' ? <div className="min-h-0 flex-1 overflow-y-auto p-4">{body}</div>
+    : <RoomModal title={t('roomsMyAvatar')} onClose={onClose} busy={busy}>{body}</RoomModal>
 }
 function UserAvatarForm({ initial, onClose, onBusy }: { initial: RoomUserProfileDetail; onClose: () => void; onBusy: (busy: boolean) => void }) {
   const { t } = useTranslation('common')

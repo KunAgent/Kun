@@ -92,6 +92,7 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     watchTurnCompletion: {},
     awaitingUserInputThreadIds: {},
     unreadThreadIds: readUnreadCompletions(),
+    writeAssistantVisibleThreadId: null,
     scheduledThreadActivities: {},
     sideConversations: {},
     sidePanel: { open: false, activeSideId: null },

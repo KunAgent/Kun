@@ -27,6 +27,27 @@ describe('CanvasReceiptRegistry', () => {
     vi.useFakeTimers()
   })
 
+  it('waits for persistence when the receipt arrives before the bridge waits', async () => {
+    let release!: () => void
+    const barrier = new Promise<void>((resolve) => { release = resolve })
+    const applyItem = vi.fn(async () => { await barrier })
+    const registry = new CanvasReceiptRegistry({ turns: { applyItem },
+      events: { record: vi.fn(async () => {}) }, nowIso: () => '' } as unknown as CanvasReceiptRegistryDeps)
+    registry.register({ receiptKey: 'early', threadId: 't', turnId: 'u', call,
+      itemId: 'i', acceptedOutput: { status: 'accepted' } })
+    const fulfilling = registry.fulfill('early', { status: 'applied' })
+    await Promise.resolve()
+    expect(applyItem).toHaveBeenCalledTimes(1)
+    let settled = false
+    const waiting = registry.awaitReceipt('early', 1000).then(() => { settled = true })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    release()
+    await Promise.all([waiting, fulfilling])
+    expect(settled).toBe(true)
+    expect(applyItem).toHaveBeenCalledTimes(1)
+  })
+
   it('finalizes a turn receipt as applied with the real outcome', async () => {
     const { registry, applied, records } = makeRegistry()
     registry.register({

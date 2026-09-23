@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { ChevronDown, ChevronRight, FileCode2, FileText, FilePlus2, Folder, FolderPlus, FolderSearch, Image, Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceEntry } from '@shared/workspace-file'
+import { SidebarActivityIndicator, type SidebarActivity } from '../sidebar/SidebarActivityIndicator'
 import {
   isWriteCodeFileName,
   isWriteImageFileExtension,
@@ -31,6 +32,7 @@ type Props = {
   onRefresh: () => void
   showHeader?: boolean
   showRootLabel?: boolean
+  activityForPath?: (path: string, isDirectory: boolean) => SidebarActivity
 }
 
 function normalizePath(value: string): string {
@@ -112,7 +114,8 @@ export function WriteFileTree({
   onRevealEntry,
   onRefresh,
   showHeader = true,
-  showRootLabel = true
+  showRootLabel = true,
+  activityForPath = () => 'idle'
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const hasRootSnapshot = Object.prototype.hasOwnProperty.call(entriesByDir, rootDirectory)
@@ -127,6 +130,7 @@ export function WriteFileTree({
       const selected = !isDirectory && selectedFilePath === entry.path
       const imageEntry = isImageEntry(entry)
       const codeEntry = isCodeEntry(entry)
+      const activity = activityForPath(entry.path, isDirectory)
       const row = (
         <div key={entry.path}>
           <SidebarTreeRow
@@ -135,6 +139,15 @@ export function WriteFileTree({
             className="min-h-[34px]"
             buttonStyle={{ paddingLeft: 10 + depth * 14 }}
             title={relativeDisplayPath(rootDirectory, entry.path)}
+            trailing={(
+              <SidebarActivityIndicator
+                activity={activity}
+                runningLabel={t('sidebarThreadRunning')}
+                failedLabel={t('sidebarThreadFailed')}
+                unreadLabel={t('sidebarThreadUnread')}
+                awaitingInputLabel={t('sidebarThreadAwaitingInput')}
+              />
+            )}
             actions={
               <>
                 {isDirectory ? (

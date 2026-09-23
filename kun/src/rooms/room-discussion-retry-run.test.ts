@@ -16,7 +16,7 @@ import type { RoomRequestState, RoomRuntimeDeps } from './room-runtime-types.js'
 import { roomDiscussionMessageId, roomDiscussionMessageThreads } from './room-discussion-message.js'
 import { roomDiscussionContext } from './room-discussion-evidence.js'
 import { roomMessageRunSource } from './room-run-query.js'
-import { resolveHistoricalRoomRun } from './room-run-history.js'
+import { roomRunSegmentMessageId } from './room-run-segments.js'
 
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close() })
@@ -79,24 +79,24 @@ describe('legacy discussion retry provenance', () => {
       turnId: second.turnId!, text: 'A successful concrete finding.' }))
     await f.tick()
     const retryId = roomDiscussionMessageId(f.threadId, second.attempt)
-    const retry = (await f.store.get<RoomMessage>('message', retryId))!.value
     expect(retryId).toBe(originalId + '-attempt-1')
     expect((await f.store.get<RoomMessage>('message', originalId))!.value).toEqual(original)
+    const retry = (await f.store.list<RoomMessage>('message', { roomId: f.room.id }))
+      .map((row) => row.value).find((message) => message.originItemId === 'second-answer')!
+    expect(retry.body).toBe('A successful concrete finding.')
+    expect(retry.id).toBe(roomRunSegmentMessageId(retry.originRunId!, 'second-answer'))
     expect(retry.originRunId).not.toBe(original.originRunId)
     const previousRun = (await f.store.get<RoomRunRecord>('room_run', original.originRunId!))!.value
     const retryRun = (await f.store.get<RoomRunRecord>('room_run', retry.originRunId!))!.value
     expect(previousRun).toMatchObject({ turnId: first.turnId, status: 'failed', publishedMessageId: originalId })
-    expect(retryRun).toMatchObject({ turnId: second.turnId, attempt: 2, previousRunId: previousRun.id, publishedMessageId: retryId })
+    expect(retryRun).toMatchObject({ turnId: second.turnId, attempt: 2, previousRunId: previousRun.id, publishedMessageId: retry.id })
     expect(await roomMessageRunSource(f.deps, f.room.id, originalId)).toEqual({ runId: previousRun.id })
-    expect(await roomMessageRunSource(f.deps, f.room.id, retryId)).toEqual({ runId: retryRun.id })
+    expect(await roomMessageRunSource(f.deps, f.room.id, retry.id)).toEqual({ runId: retryRun.id })
     const frozen = { id: 'frozen', roomId: f.room.id, coveredSeq: 0, summary: '', messages: [], rules: [], truncated: false }
     const before = structuredClone(frozen)
     const evidence = roomDiscussionContext((await f.request()).value, frozen, 8000).discussionEvidence!
     expect(evidence.responses).toEqual([expect.objectContaining({ messageId: retryId, turnId: second.turnId, attempt: 1 })])
     expect(frozen).toEqual(before)
-    // The read-only compatibility resolver also understands a suffix when explicit origin is absent.
-    const resolved = await resolveHistoricalRoomRun(f.deps, { ...retry, originRunId: undefined })
-    expect(resolved?.turnId).toBe(second.turnId)
   })
 
   it('allocates a fresh native identity when a failed legacy request continues at round zero', async () => {

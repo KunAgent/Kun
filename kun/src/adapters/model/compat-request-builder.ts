@@ -4,6 +4,7 @@ import { isDeepSeekHost } from './model-error-probe.js'
 import { repairToolArguments } from './tool-argument-repair.js'
 import {
   COMPAT_ANTHROPIC_THINKING,
+  COMPAT_RESPONSES_REASONING,
   COMPAT_TOOL_RESULT_ERROR,
   CompatRequestCodecs,
   type CompatChatMessage,
@@ -94,6 +95,11 @@ function messagesToResponsesInput(messages: CompatChatMessage[]): Array<Record<s
       })
     }
     for (const call of message.tool_calls ?? []) {
+      // store:false endpoints (Codex) require the reasoning items that
+      // produced a function_call to be replayed immediately ahead of it.
+      for (const reasoningItem of call[COMPAT_RESPONSES_REASONING] ?? []) {
+        input.push({ ...reasoningItem })
+      }
       input.push({
         type: 'function_call',
         call_id: call.id,

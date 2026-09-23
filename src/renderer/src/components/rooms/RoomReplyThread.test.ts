@@ -70,6 +70,20 @@ describe('reply thread drawer', () => {
     expect(send).toHaveBeenCalledWith({ ...input, replyToMessageId: 'nested' })
   })
 
+  it('routes replies to the shared composer callback instead of rendering an embedded composer', async () => {
+    const reply = vi.fn()
+    await act(async () => {
+      renderer = create(createElement(RoomReplyThread, { room, messageId: 'nested', active: true, tasks: [], onSend: send,
+        onReply: reply, onPin: vi.fn(), onTask, onRun, onMember, onOpenContent }),
+        { createNodeMock: (node) => (node.props as { className?: string }).className === 'rooms-reply-scroll' ? scroller : null })
+    })
+    expect(renderer!.root.findAllByType(RoomComposer)).toHaveLength(0)
+    const row = renderer!.root.findAllByType(RoomMessageRow).find((value) => value.props.message.id === 'nested')!
+    act(() => row.props.onReply(nested))
+    expect(reply).toHaveBeenCalledWith(nested)
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('preserves the prepend reading position and keeps reply records out of the main-feed DOM id namespace', async () => {
     api.request.mockResolvedValue(page([nested], { total: 2, nextCursor: 'older' }))
     await render()

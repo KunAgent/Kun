@@ -132,7 +132,7 @@ function MessageBubbleImpl({
         : undefined
     return (
       <LiveAssistantStreamingProvider streaming={effectiveStreaming}>
-        <div className="group/message flex min-w-0 max-w-full flex-col">
+        <div className="group/message flex min-w-0 max-w-full flex-col" data-timeline-block-id={block.id}>
           <div className="ds-markdown ds-chat-answer min-w-0 max-w-full text-ds-ink">
             <AssistantMarkdown text={block.text} streaming={effectiveStreaming} />
           </div>
@@ -189,7 +189,10 @@ function MessageBubbleImpl({
   }
   if (block.kind === 'reasoning') {
     return (
-      <div className="ds-card-soft rounded-[20px] px-4 py-3 text-[13.5px] leading-6 text-ds-muted">
+      <div
+        className="ds-card-soft rounded-[20px] px-4 py-3 text-[13.5px] leading-6 text-ds-muted"
+        data-timeline-block-id={block.id}
+      >
         <div className="ds-markdown">
           <AssistantMarkdown text={block.text} streaming={false} />
         </div>

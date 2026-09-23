@@ -156,6 +156,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // sinks on long turns (design-rail duplicate-text fix). Not part of develop's
   // split initial-state helper, so it's appended here.
   liveDeltaSeqFloor: 0,
+  setWriteAssistantVisibleThreadId: (threadId) => set({
+    writeAssistantVisibleThreadId: threadId?.trim() || null
+  }),
 
   ...createClawActions({
     set,

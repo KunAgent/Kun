@@ -17,6 +17,8 @@ import {
   SVG_ARTIFACT_ALLOWED_TOOL_NAMES,
   SVG_ARTIFACT_MODE_INSTRUCTION
 } from '../../loop/design-mode.js'
+import { applyRoomToolPolicy, mergeRoomDeniedIds } from '../../loop/room-turn-policy.js'
+import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
 import {
   PLAN_MODE_INSTRUCTION,
   isStalePlanContext,
@@ -326,7 +328,7 @@ export function createCursorSdkRuntime(
       input.turn.id,
       input.signal
     )
-    return {
+    const context: ToolHostContext = {
       threadId: input.thread.id,
       turnId: input.turn.id,
       workspace: input.thread.workspace,
@@ -334,6 +336,7 @@ export function createCursorSdkRuntime(
       approvalReviewer: input.approvalReviewer,
       sandboxMode: input.sandboxMode,
       actingModelRoute: input.actingModelRoute,
+      clientSurface: resolveTurnClientSurface(input.turn),
       approvalIntent: input.turn.prompt,
       abortSignal: input.signal,
       ...toolContextBoundary,
@@ -363,6 +366,7 @@ export function createCursorSdkRuntime(
             input.signal
           )
     }
+    return input.thread.roomContext ? applyRoomToolPolicy(context, input.thread) : context
   }
 
   const loadKunTurnContext: NonNullable<
@@ -386,27 +390,29 @@ export function createCursorSdkRuntime(
           defaultSandboxMode ??
           DEFAULT_SANDBOX_MODE
 
-      const skillResolution = skillRuntime
+      const roomSkillsDisabled = thread.roomContext?.skillsEnabled === false
+      const blockedSkillIds = mergeRoomDeniedIds(
+        toolContextBoundary?.blockedSkillIds,
+        thread.roomContext?.blockedSkillIds
+      )
+      const allowedSkillIds = roomSkillsDisabled ? [] : toolContextBoundary?.allowedSkillIds
+      const skillResolution = !roomSkillsDisabled && skillRuntime
         ? await skillRuntime.resolveTurn({
             prompt: userText,
             workspace: thread.workspace,
             threadId,
             turnId,
-            ...(toolContextBoundary?.allowedSkillIds
-              ? { allowedSkillIds: toolContextBoundary.allowedSkillIds }
-              : {}),
-            ...(toolContextBoundary?.blockedSkillIds
-              ? { blockedSkillIds: toolContextBoundary.blockedSkillIds }
-              : {})
+            ...(allowedSkillIds ? { allowedSkillIds } : {}),
+            ...(blockedSkillIds.length ? { blockedSkillIds } : {})
           })
         : undefined
       const activeSkillIds = skillResolution?.activeSkillIds ?? []
       activeSkillIdsByTurn.set(turnKey(threadId, turnId), activeSkillIds)
-      const availableSkillIds = typeof skillRuntime?.availableSkillIdsForWorkspace === 'function'
+      const availableSkillIds = !roomSkillsDisabled && typeof skillRuntime?.availableSkillIdsForWorkspace === 'function'
         ? await skillRuntime.availableSkillIdsForWorkspace(
             thread.workspace,
-            toolContextBoundary?.blockedSkillIds,
-            toolContextBoundary?.allowedSkillIds
+            blockedSkillIds,
+            allowedSkillIds
           )
         : activeSkillIds
       const listingSkillIds = [...new Set([...activeSkillIds, ...availableSkillIds])]
@@ -460,7 +466,7 @@ export function createCursorSdkRuntime(
       }
       let memoryBlocks: string[] = []
       let memoryIds: string[] = []
-      if (memoryStore && userText.trim()) {
+      if (!thread.roomContext && memoryStore && userText.trim()) {
         const memories = await memoryStore.retrieve({
           query: userText,
           workspace: thread.workspace,

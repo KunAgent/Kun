@@ -1,4 +1,4 @@
-import { app, type BrowserWindow } from 'electron'
+import { app, dialog, type BrowserWindow } from 'electron'
 import { shouldStartHidden } from './desktop-behavior'
 import { disposeProxyAgents } from './proxy-fetch'
 import { maybePromptCliInstall } from './cli-install-service'
@@ -8,6 +8,7 @@ import { configureLogger, logError, logInfo, pruneOnStartup, logWarn } from './l
 import {
   gotSingleInstanceLock,
   mainState,
+  runningClawScheduleMcpServer,
   traceStartup
 } from './main-app-context'
 import {
@@ -49,6 +50,13 @@ import { revealMainWindow, syncTray } from './main-tray'
 import { resolveLogDirectory } from './main-paths'
 import { showStartupFailureWindow } from './startup-failure-window'
 import { sanitizeStartupFailureMessage } from './startup-failure-content'
+import {
+  captureDesktopInstanceIdentity,
+  decideDesktopInstanceLock,
+  formatDesktopInstanceConflictMessage,
+  readDesktopInstanceIdentity,
+  writeDesktopInstanceIdentity
+} from './desktop-instance-identity'
 import { resolveManagedRuntimeStartupTarget } from './runtime/managed-runtime-startup-attach'
 import { prefetchCatalogPricing } from './catalog-prefetch'
 import { recoverUpdateBeforeRuntimeStart } from './update-bootstrap-recovery'
@@ -99,16 +107,16 @@ export function startMainApp(): Promise<void> {
         message: cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
       })
     })
+    const message = sanitizeStartupFailureMessage(error)
     if (!mainState.startupState.isReady()) {
       try {
-        mainState.startupState.transition('recovery_required')
+        mainState.startupState.transition('recovery_required', message)
       } catch {
         // Keep the recovery path total even if a test or future caller reaches
         // failure from an unexpected state.
       }
     }
     const earlyWindow = mainState.mainWindow
-    const message = sanitizeStartupFailureMessage(error)
     console.error('[kun-gui] startup failed:', message)
     logError('startup', 'Desktop startup failed.', {
       platform: process.platform,
@@ -151,7 +159,11 @@ export function startMainApp(): Promise<void> {
 
   return app.whenReady().then(async () => {
     traceStartup('app.whenReady:start')
-    if (!gotSingleInstanceLock) return
+    if (!gotSingleInstanceLock) {
+      await explainConflictingDesktopInstance()
+      return
+    }
+    if (!runningClawScheduleMcpServer) publishDesktopInstanceIdentity()
     const disposeHostPowerRecovery = installHostPowerRecovery()
     app.once('before-quit', disposeHostPowerRecovery)
     app.once('before-quit', () => disposeProxyAgents())
@@ -225,4 +237,41 @@ export function startMainApp(): Promise<void> {
       else revealMainWindow()
     })
   }).catch(handleStartupFailure)
+}
+
+function currentDesktopInstanceIdentity() {
+  return captureDesktopInstanceIdentity({
+    pid: process.pid,
+    execPath: process.execPath,
+    appPath: app.getAppPath(),
+    appVersion: app.getVersion()
+  })
+}
+
+function publishDesktopInstanceIdentity(): void {
+  try {
+    writeDesktopInstanceIdentity(app.getPath('userData'), currentDesktopInstanceIdentity())
+  } catch (error) {
+    logWarn('startup', 'Failed to record desktop instance identity.', {
+      message: error instanceof Error ? error.message : String(error)
+    })
+  }
+}
+
+async function explainConflictingDesktopInstance(): Promise<void> {
+  const current = currentDesktopInstanceIdentity()
+  const recorded = readDesktopInstanceIdentity(app.getPath('userData'))
+  const decision = decideDesktopInstanceLock(current, recorded)
+  if (decision.action !== 'conflict') return
+  await dialog.showMessageBox({
+    type: 'warning',
+    title: 'Kun is already running',
+    message: 'Kun is already running from a different app.',
+    detail: formatDesktopInstanceConflictMessage(decision.current, decision.recorded),
+    buttons: ['OK']
+  }).catch((error) => {
+    logWarn('startup', 'Failed to explain a conflicting Kun instance.', {
+      message: error instanceof Error ? error.message : String(error)
+    })
+  })
 }

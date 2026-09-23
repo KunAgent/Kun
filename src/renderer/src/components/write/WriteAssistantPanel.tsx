@@ -14,6 +14,11 @@ import type { AttachmentReference, RuntimeConnectionStatus, ChatBlock } from '..
 import { getProvider } from '../../agent/registry'
 import type { CoreRuntimeSkillJson } from '../../agent/kun-contract'
 import type { QueuedUserMessage } from '../../store/chat-store-types'
+import { useChatStore } from '../../store/chat-store'
+import {
+  clearUnreadCompletion,
+  completionIsCurrentlyVisible
+} from '../../store/unread-completions'
 import { threadSnapshotLooksRunning } from '../../store/chat-store-runtime-helpers'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import {
@@ -150,6 +155,25 @@ export function WriteAssistantPanel({
   const [childError, setChildError] = useState<string | null>(null)
   const viewingChildThread = Boolean(childThreadId)
   const conversationHistory = useWriteResourceConversationHistory(busy)
+
+  useEffect(() => {
+    const threadId = childThreadId?.trim() || activeThreadId?.trim() || null
+    useChatStore.getState().setWriteAssistantVisibleThreadId(threadId)
+    if (threadId) {
+      useChatStore.setState((state) => ({
+        unreadThreadIds: completionIsCurrentlyVisible(state, threadId)
+          ? clearUnreadCompletion(state.unreadThreadIds, threadId)
+          : state.unreadThreadIds
+      }))
+    }
+    return () => {
+      const state = useChatStore.getState()
+      if (state.writeAssistantVisibleThreadId === threadId) {
+        state.setWriteAssistantVisibleThreadId(null)
+      }
+    }
+  }, [activeThreadId, childThreadId])
+
   const canCreateConversation = runtimeConnection === 'ready' &&
     !busy &&
     !viewingChildThread &&

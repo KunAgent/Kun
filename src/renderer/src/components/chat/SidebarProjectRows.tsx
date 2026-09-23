@@ -11,8 +11,6 @@ import {
   CalendarClock,
   ChevronDown,
   ChevronRight,
-  CircleAlert,
-  CircleHelp,
   ClipboardList,
   FolderPlus,
   GitBranch,
@@ -26,6 +24,7 @@ import type { NormalizedThread } from '../../agent/types'
 import { formatRelativeTime } from '../../lib/format-relative-time'
 import type { SddDraftHistoryItem } from '../../sdd/sdd-draft-history'
 import type { SddDraft } from '../../sdd/sdd-draft-store'
+import { SidebarActivityIndicator } from '../sidebar/SidebarActivityIndicator'
 import { SidebarIconButton, SidebarTreeRow } from '../sidebar/SidebarPrimitives'
 import type { SidebarThreadWorktreeRecord } from './sidebar-project-selectors'
 import type { ScheduledThreadActivity } from '../../store/chat-store-types'
@@ -381,11 +380,13 @@ export function ThreadRunningIndicator({
   className?: string
 }): ReactElement {
   return (
-    <Loader2
-      className={`h-3.5 w-3.5 shrink-0 animate-spin text-accent motion-reduce:animate-none ${className}`}
-      strokeWidth={2}
-      role="img"
-      aria-label={label}
+    <SidebarActivityIndicator
+      activity="running"
+      runningLabel={label}
+      failedLabel={label}
+      unreadLabel={label}
+      awaitingInputLabel={label}
+      className={className}
     />
   )
 }
@@ -411,36 +412,23 @@ function ThreadActivityIndicator({
   scheduledLabel: string
   awaitingInputLabel: string
 }): ReactElement | null {
-  if (awaitingInput) {
+  const activity = awaitingInput
+    ? 'awaiting-input'
+    : running
+      ? 'running'
+      : failed
+        ? 'failed'
+        : unread
+          ? 'unread'
+          : 'idle'
+  if (activity !== 'idle') {
     return (
-      <span className="inline-flex" title={awaitingInputLabel}>
-        <CircleHelp
-          className="h-3.5 w-3.5 shrink-0 text-amber-500 motion-safe:animate-pulse"
-          strokeWidth={2.2}
-          role="img"
-          aria-label={awaitingInputLabel}
-        />
-      </span>
-    )
-  }
-  if (running) return <ThreadRunningIndicator label={unreadLabel} />
-  if (failed) {
-    return (
-      <span className="inline-flex" title={failedLabel}>
-        <CircleAlert
-          className="h-3.5 w-3.5 shrink-0 text-red-500"
-          strokeWidth={2}
-          role="img"
-          aria-label={failedLabel}
-        />
-      </span>
-    )
-  }
-  if (unread) {
-    return (
-      <span
-        className="block h-2 w-2 shrink-0 rounded-full bg-accent shadow-[0_0_0_1px_rgba(79,124,255,0.2)]"
-        title={unreadLabel}
+      <SidebarActivityIndicator
+        activity={activity}
+        runningLabel={unreadLabel}
+        failedLabel={failedLabel}
+        unreadLabel={unreadLabel}
+        awaitingInputLabel={awaitingInputLabel}
       />
     )
   }

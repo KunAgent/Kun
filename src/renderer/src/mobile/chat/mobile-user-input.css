@@ -1,0 +1,32 @@
+.kun-mobile-input-trigger { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 12px; border: 1px solid var(--ds-border); border-radius: 12px; color: var(--ds-text); background: var(--ds-surface-subtle); text-align: start; }
+.kun-mobile-input-trigger > svg { flex-shrink: 0; }
+.kun-mobile-input-trigger > span { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.kun-mobile-input-trigger strong { font-size: 14px; font-weight: 500; }
+.kun-mobile-input-trigger small { font-size: 12px; color: var(--ds-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kun-mobile-input-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; color: var(--ds-text-muted); font-size: 12px; }
+.kun-mobile-input-steps { display: flex; gap: 8px; padding-block: 12px; overflow-x: auto; }
+.kun-mobile-input-steps button { display: inline-flex; flex-shrink: 0; width: 44px; height: 44px; align-items: center; justify-content: center; border: 1px solid var(--ds-border); border-radius: 9999px; background: transparent; }
+.kun-mobile-input-steps button[aria-current='step'] { color: var(--ds-bg-main); background: var(--ds-text); border-color: var(--ds-text); }
+.kun-mobile-input-question { min-width: 0; padding: 0; margin: 16px 0 0; border: 0; }
+.kun-mobile-input-question legend { padding: 0; margin-bottom: 12px; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.5; font-weight: 500; }
+.kun-mobile-input-option { display: flex; align-items: flex-start; gap: 12px; min-height: 52px; margin-bottom: 8px; padding: 12px; border: 1px solid var(--ds-border); border-radius: 12px; cursor: pointer; }
+.kun-mobile-input-option[data-selected='true'] { border-color: var(--ds-text); background: var(--ds-surface-subtle); }
+.kun-mobile-input-option:has(input:disabled) { opacity: .55; cursor: default; }
+.kun-mobile-input-option input { appearance: auto; flex-shrink: 0; width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--ds-text); }
+.kun-mobile-input-option > span { min-width: 0; overflow-wrap: anywhere; }
+.kun-mobile-input-option strong { font-size: 15px; line-height: 1.5; font-weight: 500; }
+.kun-mobile-input-option small { display: block; margin-top: 4px; font-size: 13px; line-height: 1.5; color: var(--ds-text-muted); }
+.kun-mobile-input-option em { display: inline-block; margin-inline-start: 8px; padding: 2px 8px; border-radius: 9999px; background: var(--ds-surface-subtle); color: var(--ds-text-muted); font-size: 11px; font-style: normal; }
+.kun-mobile-input-hint { margin: 0 0 12px; font-size: 12px; color: var(--ds-text-muted); }
+.kun-mobile-input-custom { display: grid; gap: 8px; margin-top: 16px; font-size: 13px; color: var(--ds-text-muted); }
+.kun-mobile-input-custom textarea { width: 100%; padding: 12px; border: 1px solid var(--ds-border); border-radius: 12px; background: var(--ds-bg-main); color: var(--ds-text); line-height: 1.5; resize: vertical; }
+.kun-mobile-input-custom textarea:focus { outline: 2px solid var(--ds-accent); outline-offset: -2px; }
+.kun-mobile-input-footer > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.kun-mobile-input-footer button { min-height: 44px; min-width: 44px; padding: 8px 12px; border: 1px solid var(--ds-border); border-radius: 9999px; font: inherit; font-size: 13px; color: var(--ds-text); background: transparent; }
+.kun-mobile-input-footer .kun-mobile-input-primary { flex: 1; color: var(--ds-bg-main); border-color: var(--ds-text); background: var(--ds-text); }
+.kun-mobile-input-footer button:disabled { opacity: .45; }
+.kun-mobile-input-footer [role='alert'] { max-height: 72px; overflow-y: auto; margin: 0 0 8px; overflow-wrap: anywhere; color: var(--ds-danger); font-size: 13px; }
+.kun-mobile-input-resolved { margin: 8px 0; color: var(--ds-text-muted); font-size: 13px; }
+.kun-mobile-room-gates { flex-shrink: 0; padding: 8px 12px 0; }
+html[data-remote-surface='mobile'] .room-approval-card footer { flex-wrap: wrap; }
+html[data-remote-surface='mobile'] .room-approval-card footer button { min-height: 44px; }

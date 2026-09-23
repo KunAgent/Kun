@@ -34,3 +34,27 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-focus-ring) 18%, transparent);
   }
 }
+
+/* Transient ring the in-conversation find bar paints on the hit it lands on. */
+.timeline-find-flash {
+  border-radius: 12px;
+  animation: timeline-find-flash 1.6s ease-out;
+}
+
+@keyframes timeline-find-flash {
+  0% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-accent) 55%, transparent);
+    background-color: color-mix(in srgb, var(--ds-accent) 8%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent;
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline-find-flash {
+    animation: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent) 45%, transparent);
+  }
+}

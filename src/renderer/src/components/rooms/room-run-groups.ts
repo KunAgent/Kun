@@ -22,12 +22,3 @@ export function roomToolArgumentSummary(value: unknown): string {
     .filter((key) => typeof args[key] === 'string').slice(0, 2)
     .map((key) => String(args[key]).replace(/\s+/g, ' ').slice(0, 160)).join(' · ')
 }
-export function roomRunEntryMatches(entry: RoomRunEntry, filter: string, query: string): boolean {
-  if (filter === 'tools' && entry.kind !== 'tool') return false
-  const items = entry.kind === 'item' ? [entry.item] : [entry.call, entry.result].filter((item): item is CoreTurnItemJson => Boolean(item))
-  if (filter === 'errors' && !items.some((item) => item.kind === 'error' || item.isError || item.status === 'failed' ||
-    (['approval', 'user_input'].includes(item.kind) && item.status === 'pending'))) return false
-  if (!query.trim()) return true
-  const needle = query.trim().toLocaleLowerCase()
-  return items.some((item) => JSON.stringify(item).toLocaleLowerCase().includes(needle))
-}

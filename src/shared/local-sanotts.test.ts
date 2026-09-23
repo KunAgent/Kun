@@ -6,6 +6,7 @@ import {
   isLocalSanottsDownloadSourceId,
   localSanottsAssetUrl,
   localSanottsDownloadSourceById,
+  localSanottsDownloadSourcesForRetry,
   localSanottsVoiceFileUrl
 } from './local-sanotts'
 import {
@@ -41,6 +42,7 @@ describe('sanoTTS catalog', () => {
 
   it('builds download URLs from the selected mirror', () => {
     expect(isLocalSanottsDownloadSourceId('github-pages')).toBe(true)
+    expect(LOCAL_SANOTTS_DEFAULT_DOWNLOAD_SOURCE_ID).toBe('github-pages')
     expect(localSanottsDownloadSourceById('missing').id).toBe(LOCAL_SANOTTS_DEFAULT_DOWNLOAD_SOURCE_ID)
     expect(localSanottsAssetUrl('huggingface', 'snt_g2p.wasm')).toContain('huggingface.co/ampixa/sanoTTS')
     expect(localSanottsVoiceFileUrl('chinese', 'meta.json', 'github-pages')).toBe(
@@ -48,5 +50,19 @@ describe('sanoTTS catalog', () => {
     )
     expect(localSanottsVoiceById('chinese').id).toBe('chinese')
     expect(LOCAL_SANOTTS_RUNTIME_ID).toBe('sanotts-runtime')
+  })
+
+  it('tries the preferred source first and then the rest of the catalog', () => {
+    expect(localSanottsDownloadSourcesForRetry('huggingface').map((source) => source.id)).toEqual([
+      'huggingface',
+      'hf-mirror',
+      'github-pages'
+    ])
+    expect(localSanottsDownloadSourcesForRetry('github-pages').map((source) => source.id)).toEqual([
+      'github-pages',
+      'huggingface',
+      'hf-mirror'
+    ])
+    expect(localSanottsDownloadSourcesForRetry('missing')[0]?.id).toBe('github-pages')
   })
 })

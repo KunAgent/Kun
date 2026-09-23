@@ -1,9 +1,10 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { installIssue781DocumentUsability } from './lib/issue-781-document-usability'
+import { subscribeModelConnectionWatch } from './lib/model-connection-watch'
 import { useChatStore } from './store/chat-store'
 import { ensureCodexReferenceWatcher } from './history-reference/codex-reference-watcher'
-import { KUN_MODEL_CONNECTIONS_PATH } from '@shared/kun-endpoints'
+import { currentRemoteSurface } from './mobile/use-remote-surface'
 
 type AppShellModule = typeof import('./AppShell')
 let preparedAppShell: AppShellModule['default'] | null = null
@@ -15,7 +16,8 @@ const LazyAppShell = lazy(loadAppShellModule)
 
 export async function prepareWorkbenchApp(): Promise<void> {
   const appShell = await loadAppShellModule()
-  await appShell.prepareInitialWorkbench()
+  if (currentRemoteSurface() === 'mobile') await appShell.prepareInitialMobileApp()
+  else await appShell.prepareInitialWorkbench()
 }
 
 function DocumentUsabilityLifecycle(): null {
@@ -26,78 +28,49 @@ function DocumentUsabilityLifecycle(): null {
 
 function SharedModelConnectionsLifecycle(): null {
   useEffect(() => {
-    if (typeof window.kunGui?.runtimeRequest !== 'function') return
     let disposed = false
-    let revision = 0
     let modelCatalogLoaded = false
-    let timer: number | undefined
-    const poll = async (): Promise<void> => {
-      try {
-        const previousRevision = revision
-        const result = await window.kunGui.runtimeRequest(
-          revision === 0
-            ? KUN_MODEL_CONNECTIONS_PATH
-            : `${KUN_MODEL_CONNECTIONS_PATH}/events?since_revision=${revision}&wait_ms=25000`,
-          'GET'
+    let lastAppliedRevision = 0
+    const stop = subscribeModelConnectionWatch(async (snapshot) => {
+      if (disposed) return
+      const changed = !modelCatalogLoaded || snapshot.revision > lastAppliedRevision
+      if (!changed) return
+      const state = useChatStore.getState()
+      await state.loadComposerModels()
+      if (disposed) return
+      if (
+        !useChatStore.getState().activeThreadId &&
+        typeof snapshot.defaultProviderId === 'string' &&
+        typeof snapshot.defaultModel === 'string' &&
+        snapshot.defaultProviderId.trim() &&
+        snapshot.defaultModel.trim()
+      ) {
+        const latest = useChatStore.getState()
+        const model = snapshot.defaultModel.trim()
+        const providerId = snapshot.defaultProviderId.trim()
+        if (latest.composerModel !== model || latest.composerProviderId !== providerId) {
+          latest.setComposerModel(model, providerId)
+        }
+      } else if (
+        !useChatStore.getState().activeThreadId &&
+        (
+          typeof snapshot.defaultProviderId !== 'string' ||
+          !snapshot.defaultProviderId.trim() ||
+          typeof snapshot.defaultModel !== 'string' ||
+          !snapshot.defaultModel.trim()
         )
-        if (!result.ok) throw new Error(`model connection sync failed (HTTP ${result.status})`)
-        const parsed = JSON.parse(result.body) as {
-          revision?: unknown
-          snapshot?: { revision?: unknown; defaultProviderId?: unknown; defaultModel?: unknown }
+      ) {
+        const latest = useChatStore.getState()
+        if (latest.composerModel || latest.composerProviderId) {
+          latest.setComposerModel('', '')
         }
-        const snapshot = (parsed.snapshot ?? parsed) as {
-          revision?: unknown
-          defaultProviderId?: unknown
-          defaultModel?: unknown
-        }
-        if (!Number.isInteger(snapshot.revision)) throw new Error('invalid model connection revision')
-        revision = Number(snapshot.revision)
-        const changed = !modelCatalogLoaded || revision > previousRevision
-        if (!disposed && changed) {
-          const state = useChatStore.getState()
-          await state.loadComposerModels()
-          if (disposed) return
-          if (
-            !useChatStore.getState().activeThreadId &&
-            typeof snapshot.defaultProviderId === 'string' &&
-            typeof snapshot.defaultModel === 'string' &&
-            snapshot.defaultProviderId.trim() &&
-            snapshot.defaultModel.trim()
-          ) {
-            const latest = useChatStore.getState()
-            const model = snapshot.defaultModel.trim()
-            const providerId = snapshot.defaultProviderId.trim()
-            if (latest.composerModel !== model || latest.composerProviderId !== providerId) {
-              latest.setComposerModel(model, providerId)
-            }
-          } else if (
-            !useChatStore.getState().activeThreadId &&
-            (
-              typeof snapshot.defaultProviderId !== 'string' ||
-              !snapshot.defaultProviderId.trim() ||
-              typeof snapshot.defaultModel !== 'string' ||
-              !snapshot.defaultModel.trim()
-            )
-          ) {
-            const latest = useChatStore.getState()
-            if (latest.composerModel || latest.composerProviderId) {
-              latest.setComposerModel('', '')
-            }
-          }
-          modelCatalogLoaded = true
-        }
-      } catch {
-        // The runtime lifecycle has its own connection UI. Keep this watcher
-        // quiet and retry so a crash/replacement or a transient catalog read
-        // does not leave the composer permanently without configured models.
-      } finally {
-        if (!disposed) timer = window.setTimeout(poll, modelCatalogLoaded ? 0 : 2_000)
       }
-    }
-    void poll()
+      lastAppliedRevision = snapshot.revision
+      modelCatalogLoaded = true
+    })
     return () => {
       disposed = true
-      if (timer !== undefined) window.clearTimeout(timer)
+      stop()
     }
   }, [])
   return null

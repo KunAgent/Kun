@@ -1,4 +1,3 @@
-import { RoomRunTextStream } from './room-run-text-stream.js'
 import { isPublicRuntimeEvent, type RuntimeEvent } from '../../contracts/events.js'
 import type { RoomRunEvent } from '../../contracts/room-run-query.js'
 import type { RoomRuntimeDeps } from '../../rooms/room-runtime-types.js'
@@ -78,24 +77,17 @@ export function roomRunEventStream(input: {
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined
   let unregister: (() => void) | undefined
   const encoder = new TextEncoder()
-  const text = new RoomRunTextStream(input.deps, input.runtime.eventBus, input.roomId, input.runId, (message) => {
-    if (closed || !controller || (controller.desiredSize ?? 0) <= 0) return false
-    controller.enqueue(encoder.encode('event: run.text\ndata: ' + JSON.stringify({ kind: 'run.text', roomId: input.roomId, runId: input.runId, cursor: encodeRunCursor(cursor), message }) + '\n\n'))
-    return true
-  })
   const close = (): void => {
     if (closed) return
     closed = true
     clearTimeout(timer)
     unregister?.()
-    text.close()
     input.request.signal.removeEventListener('abort', close)
     try { controller?.close() } catch { /* reader already cancelled */ }
   }
   const poll = async (): Promise<void> => {
     if (closed || !controller) return
     try {
-      await text.start()
       if ((controller.desiredSize ?? 0) > 0) {
         const page = await roomRunEventPage(input.deps, input.roomId, input.runId, cursor)
         if (closed) return

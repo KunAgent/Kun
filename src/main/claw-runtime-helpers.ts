@@ -162,6 +162,8 @@ export function finalAssistantReplyText(
   const items = turnId
     ? threadItems(detail).filter((item) => item.turnId === turnId)
     : threadItems(detail)
+  const published = sendImMessageReplyText(items)
+  if (published) return published
   let lastToolIndex = -1
   for (let index = items.length - 1; index >= 0; index -= 1) {
     if (TOOL_ITEM_KINDS.has(items[index].kind)) {
@@ -176,6 +178,22 @@ export function finalAssistantReplyText(
     if (text) return text
   }
   return ''
+}
+
+/**
+ * Texts the agent deliberately published through `send_im_message` — one
+ * call is one intended chat bubble. When any exist they are the turn's
+ * visible reply; ordinary assistant text is internal and stays unsent.
+ */
+export function sendImMessageReplyText(items: readonly TurnItemJson[]): string {
+  const texts: string[] = []
+  for (const item of items) {
+    if (item.kind !== 'tool_result' || item.isError === true || item.toolName !== 'send_im_message') continue
+    const output = outputRecord(item.output)
+    const text = asString(output?.text).trim()
+    if (text) texts.push(text)
+  }
+  return texts.join('\n\n')
 }
 
 /**
@@ -228,7 +246,8 @@ function generatedFilesFromToolResult(
       item.toolName === 'generate_speech' ||
       item.toolName === 'generate_music' ||
       item.toolName === 'generate_video' ||
-      item.toolName === 'send_im_attachment') &&
+      item.toolName === 'send_im_attachment' ||
+      item.toolName === 'send_im_message') &&
     Array.isArray(output.files)
   ) {
     return output.files

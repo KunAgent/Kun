@@ -445,6 +445,8 @@ export type ChatState = {
   awaitingUserInputThreadIds: Record<string, true>
   /** Completion attention keyed by thread. Legacy boolean true reads as completed. */
   unreadThreadIds: CompletionAttentionRegistry
+  /** Write assistant thread whose timeline is actually mounted in the visible right panel. */
+  writeAssistantVisibleThreadId: string | null
   scheduledThreadActivities: Record<string, ScheduledThreadActivity>
   /**
    * Side conversations opened via `/btw`. The main thread selection
@@ -494,6 +496,7 @@ export type ChatState = {
     workspaceRoot?: string,
     activeFilePath?: string
   ) => Promise<void>
+  setWriteAssistantVisibleThreadId: (threadId: string | null) => void
   openSettings: (section?: SettingsRouteSection) => void
   /** 离开设置页:直接把 route 恢复为进入设置前的工作台路由,不经过会重新解析/切换会话的 open* 入口。 */
   closeSettings: () => void

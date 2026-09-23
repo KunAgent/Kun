@@ -3,9 +3,11 @@ import { ArrowUpRight, Check, Copy, Pin, Reply } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomContentReference, RoomMember, RoomMessage, RoomTask } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
+import { RoomEmojiPicker } from './RoomEmojiPicker'
 import { RoomMessageBody } from './RoomMessageBody'
 import { RoomMessageRunButton } from './RoomMessageRunButton'
 import { RoomMessageInteractions } from './RoomMessageInteractions'
+import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
 
 const roles = {
   coordinator: 'roomsCoordinator',
@@ -22,6 +24,7 @@ export function RoomMessageRow({
   task,
   referencedMessage,
   onReply,
+  onThread,
   onPin,
   onTask,
   onViewReply,
@@ -37,6 +40,7 @@ export function RoomMessageRow({
   task?: RoomTask
   referencedMessage?: RoomMessage
   onReply: (message: RoomMessage) => void
+  onThread?: (message: RoomMessage) => void
   onPin: (message: RoomMessage) => void
   onTask: (id: string) => void
   onViewReply: (id: string) => void
@@ -48,6 +52,7 @@ export function RoomMessageRow({
   const { t } = useTranslation('common')
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState('')
+  const [reactBusy, setReactBusy] = useState(false)
   const system = message.authorKind === 'system'
   const progressPrefix = message.taskId ? `progress-${message.taskId}-` : ''
   const legacyTaskProgress = Boolean(message.taskId &&
@@ -62,6 +67,18 @@ export function RoomMessageRow({
       setCopyError('')
     } catch (cause) {
       setCopyError(String(cause))
+    }
+  }
+  const sendReaction = async (emoji: string) => {
+    if (!room) return
+    setReactBusy(true)
+    try {
+      await roomsRequest(`${roomPath(room.id)}/messages/${encodeURIComponent(message.id)}/reactions`, 'PUT',
+        { clientRequestId: roomRequestId(), emoji, active: true })
+    } catch (cause) {
+      setCopyError(String(cause))
+    } finally {
+      setReactBusy(false)
     }
   }
   return (
@@ -137,7 +154,7 @@ export function RoomMessageRow({
         </div>
         <div className="rooms-message-footer">
           {message.handoffId && onHandoff ? <button type="button" className="rooms-run-link" onClick={() => onHandoff(message.handoffId!)}>{t('agentsViewHandoff')}</button> : null}
-          {message.replyCount ? <button type="button" className="rooms-reply-count" onClick={() => onReply(message)}><Reply size={13} />{t('roomsReplyCount', { count: message.replyCount })}</button> : null}
+          {message.replyCount ? <button type="button" className="rooms-reply-count" onClick={() => (onThread ?? onReply)(message)}><Reply size={13} />{t('roomsReplyCount', { count: message.replyCount })}</button> : null}
           {message.taskId ? (
             <button
               type="button"
@@ -149,6 +166,7 @@ export function RoomMessageRow({
             </button>
           ) : null}
           <div className="rooms-message-actions">
+            {room ? <RoomEmojiPicker reactions disabled={reactBusy || Boolean(room.archivedAt)} onChoose={(emoji) => void sendReaction(emoji)} /> : null}
             {onRun && canInspectRun ? <RoomMessageRunButton compact message={message} onRun={onRun} /> : null}
             <button
               type="button"

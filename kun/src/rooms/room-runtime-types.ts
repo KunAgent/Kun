@@ -18,6 +18,12 @@ export type RoomRequestState = {
   privateInput?: string
   privateModel?: { model: string; providerId?: string; accountId?: string }
   privateRunId?: string
+  /** Immutable provenance for a host-queued continuation, never supplied by a model. */
+  privateContinuation?: {
+    sourceTurnId: string
+    kind: import('./room-continuation-dispatch.js').RoomContinuation['kind']
+    goalCreatedAt?: string
+  }
   privateWorkspace?: string
   handoffReturnId?: string
   taskParticipants?: RoomMember[]

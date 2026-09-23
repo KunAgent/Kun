@@ -8,6 +8,7 @@ import type { RoomTaskExecution, RoomRequestState } from './room-runtime-types.j
 import type { RoomRunRecord } from '../contracts/room-runs.js'
 import type { RoomDelivery } from '../contracts/room-deliveries.js'
 import type { RoomContentReference, RoomContentResult } from '../contracts/room-content.js'
+import { EXCALIDRAW_PNG_SIDECAR_PATTERN } from '../contracts/generated-image-path.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 import { roomGit } from './room-git.js'
 import { roomPreviewImage } from './room-preview-image.js'
@@ -86,6 +87,15 @@ function attachmentSummary(metadata: AttachmentMetadata) {
 const textExtensions = new Set(['.txt', '.md', '.mdx', '.json', '.xml', '.csv', '.ts', '.tsx', '.js', '.jsx', '.py', '.rs',
   '.go', '.java', '.css', '.html', '.yaml', '.yml', '.toml', '.sh', '.sql', '.c', '.h', '.cpp', '.vue', '.svelte', '.log'])
 const imageExtensions = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif'])
+const audioMimeByExtension = new Map([['.mp3', 'audio/mpeg'], ['.wav', 'audio/wav'], ['.ogg', 'audio/ogg'],
+  ['.oga', 'audio/ogg'], ['.opus', 'audio/ogg'], ['.m4a', 'audio/mp4'], ['.aac', 'audio/aac'],
+  ['.flac', 'audio/flac'], ['.weba', 'audio/webm']])
+const videoMimeByExtension = new Map([['.mp4', 'video/mp4'], ['.m4v', 'video/mp4'], ['.webm', 'video/webm'],
+  ['.mov', 'video/quicktime'], ['.mkv', 'video/x-matroska'], ['.avi', 'video/x-msvideo']])
+const mediaMimeByExtension = new Map([...audioMimeByExtension, ...videoMimeByExtension])
+const mediaKindByExtension = (extension: string): 'audio' | 'video' | undefined =>
+  audioMimeByExtension.has(extension) ? 'audio' : videoMimeByExtension.has(extension) ? 'video' : undefined
+const MEDIA_PREVIEW_MAX_BYTES = 12 * 1024 * 1024
 
 async function assertReferenceSource(runtime: ServerRuntime, room: Room, reference: RoomContentReference, messageId?: string) {
   if (!messageId || reference.kind === 'attachment') return
@@ -115,13 +125,44 @@ export async function resolveRoomContent(runtime: ServerRuntime, room: Room, ref
       if (workspace.id !== reference.workspaceId) workspace = await privateWorkspace(runtime.rooms!, { ...room, privateWorkspace: undefined })
       if (workspace.id !== reference.workspaceId) throw new Error('workspace_changed')
       const root = await realpath(workspace.path)
-      const file = await readRoomRepositoryFile({ canonicalRoot: root }, reference.relativePath, 128 * 1024)
-      Object.assign(result, { title: reference.relativePath, kind: 'file', byteSize: file.size,
-        openTarget: { kind: 'code_file', workspaceRoot: root, relativePath: reference.relativePath } })
-      if (mode === 'preview' && !file.data.includes(0)) result.preview = { type: 'text', text: file.data.toString('utf8'), truncated: file.size > file.data.length }
+      const sidecar = reference.relativePath.match(EXCALIDRAW_PNG_SIDECAR_PATTERN)
+      if (sidecar) {
+        const boardId = sidecar[1]
+        const file = await readRoomRepositoryFile({ canonicalRoot: root }, reference.relativePath, 12 * 1024 * 1024)
+        Object.assign(result, { title: reference.relativePath, kind: 'image', mimeType: 'image/png', byteSize: file.size,
+          openTarget: { kind: 'excalidraw_board', workspaceRoot: root, boardId } })
+        if (mode === 'thumbnail') result.thumbnail = await roomPreviewImage(file.data)
+        else if (mode === 'preview') result.preview = { type: 'image', image: { dataBase64: file.data.toString('base64'),
+          mimeType: 'image/png', width: 1, height: 1 } }
+      } else {
+        const extension = extname(reference.relativePath).toLowerCase()
+        const imageFile = imageExtensions.has(extension)
+        const mediaMime = mediaMimeByExtension.get(extension)
+        const file = await readRoomRepositoryFile({ canonicalRoot: root }, reference.relativePath,
+          imageFile || mediaMime ? MEDIA_PREVIEW_MAX_BYTES : 128 * 1024)
+        // Media beyond the preview cap degrades to an ordinary file card.
+        const mediaKind = mediaMime && file.size <= MEDIA_PREVIEW_MAX_BYTES ? mediaKindByExtension(extension) : undefined
+        Object.assign(result, { title: reference.relativePath, kind: imageFile ? 'image' : mediaKind ?? 'file', byteSize: file.size,
+          ...(imageFile ? { mimeType: extension === '.jpg' || extension === '.jpeg' ? 'image/jpeg' : `image/${extension.slice(1)}` }
+            : mediaKind ? { mimeType: mediaMime } : {}),
+          openTarget: { kind: ['.pdf', '.docx', '.xlsx', '.pptx'].includes(extension) || mediaKind ? 'work_file' : 'code_file',
+            workspaceRoot: root, relativePath: reference.relativePath } })
+        if (imageFile && mode === 'thumbnail') result.thumbnail = await roomPreviewImage(file.data)
+        else if (imageFile && mode === 'preview') result.preview = { type: 'image', image: {
+          dataBase64: file.data.toString('base64'), mimeType: result.mimeType!, width: 1, height: 1 } }
+        else if (mediaKind && mode === 'preview') result.preview = {
+          type: 'media', dataBase64: file.data.toString('base64'), mimeType: mediaMime! }
+        else if (mode === 'preview' && !file.data.includes(0)) result.preview = {
+          type: 'text', text: file.data.toString('utf8'), truncated: file.size > file.data.length }
+      }
     } else if (reference.kind === 'attachment') {
       const { metadata, scope } = await attachmentScope(runtime, room, reference.attachmentId, messageId, allowDraft && mode === 'summary')
       Object.assign(result, attachmentSummary(metadata))
+      const mediaKind = metadata.byteSize <= MEDIA_PREVIEW_MAX_BYTES
+        ? (metadata.mimeType.startsWith('audio/') ? 'audio' as const
+          : metadata.mimeType.startsWith('video/') ? 'video' as const : undefined)
+        : undefined
+      if (mediaKind) Object.assign(result, { kind: mediaKind })
       if (mode === 'thumbnail' && metadata.kind === 'image') {
         const small = metadata.visualPreview ?? metadata.textFallback
         // History cards consume the upload-time display projection only.
@@ -131,7 +172,10 @@ export async function resolveRoomContent(runtime: ServerRuntime, room: Room, ref
         }
       }
       if (mode === 'preview') {
-        if (metadata.kind === 'image') {
+        if (mediaKind) {
+          const content = await runtime.attachmentStore!.resolveContent(metadata.id, scope)
+          result.preview = { type: 'media', dataBase64: content.data.toString('base64'), mimeType: metadata.mimeType }
+        } else if (metadata.kind === 'image') {
           if (metadata.byteSize > 12 * 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(metadata.mimeType)) {
             throw new Error('unsupported_or_oversized_image')
           }
@@ -149,9 +193,12 @@ export async function resolveRoomContent(runtime: ServerRuntime, room: Room, ref
       const repository = await assertRoomContentRepository(room, reference.repositoryId)
       const file = await readRoomRepositoryFile(repository, reference.relativePath, mode === 'summary' ? 0 : 64000)
       const extension = extname(reference.relativePath).toLowerCase()
+      const mediaMime = mediaMimeByExtension.get(extension)
+      const mediaKind = mediaMime && file.size <= MEDIA_PREVIEW_MAX_BYTES ? mediaKindByExtension(extension) : undefined
       Object.assign(result, { title: reference.relativePath.split('/').at(-1), description: reference.relativePath,
-        kind: imageExtensions.has(extension) ? 'image' : 'file', byteSize: file.size,
-        openTarget: { kind: ['.pdf', '.docx', '.xlsx', '.pptx'].includes(extension) ? 'work_file' : 'code_file',
+        kind: imageExtensions.has(extension) ? 'image' : mediaKind ?? 'file', byteSize: file.size,
+        ...(mediaKind ? { mimeType: mediaMime } : {}),
+        openTarget: { kind: ['.pdf', '.docx', '.xlsx', '.pptx'].includes(extension) || mediaKind ? 'work_file' : 'code_file',
           workspaceRoot: repository.canonicalRoot, relativePath: reference.relativePath } })
       if (mode !== 'summary' && imageExtensions.has(extension)) {
         if (file.size > 12 * 1024 * 1024) throw new Error('image_too_large')
@@ -159,6 +206,9 @@ export async function resolveRoomContent(runtime: ServerRuntime, room: Room, ref
         if (mode === 'thumbnail') result.thumbnail = await roomPreviewImage(image.data)
         else result.preview = { type: 'image', image: { dataBase64: image.data.toString('base64'),
           mimeType: extension === '.jpg' || extension === '.jpeg' ? 'image/jpeg' : `image/${extension.slice(1)}`, width: 1, height: 1 } }
+      } else if (mediaKind && mode === 'preview') {
+        const media = await readRoomRepositoryFile(repository, reference.relativePath, MEDIA_PREVIEW_MAX_BYTES)
+        result.preview = { type: 'media', dataBase64: media.data.toString('base64'), mimeType: mediaMime! }
       } else if (mode === 'preview' && textExtensions.has(extension) && !file.data.includes(0)) {
         result.preview = { type: 'text', text: file.data.toString('utf8'), truncated: file.size > file.data.length }
       }

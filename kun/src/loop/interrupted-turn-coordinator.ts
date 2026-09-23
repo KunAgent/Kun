@@ -12,6 +12,7 @@ import type { ChildRunFailure, ProactiveRetryStatus } from '../contracts/subagen
 import { computeShortHash } from './compaction-marker.js'
 import { launchContinuationTurn } from './continuation-turn-launch.js'
 import type { RestartRecoverySource } from './restart-recovery-source.js'
+import { dispatchRoomContinuation } from '../rooms/room-continuation-dispatch.js'
 
 /**
  * Prompt used for the synthetic continuation turn launched after a restart
@@ -112,7 +113,7 @@ export class InterruptedTurnCoordinator {
     let resumed = 0
     for (const source of sources) {
       const thread = await this.deps.threadStore.get(source.threadId)
-      if (thread?.roomContext) continue
+      if (thread?.roomContext && thread.roomContext.kind !== 'conversation') continue
       const latest = thread?.turns.at(-1)
       if (latest?.id !== source.turnId || latest.status !== 'failed') continue
       this.recoverySourceTurnByThread.set(source.threadId, source.turnId)
@@ -124,8 +125,8 @@ export class InterruptedTurnCoordinator {
   private async canResume(threadId: string): Promise<boolean> {
     if (!this.enabled) return false
     const thread = await this.deps.threadStore.get(threadId)
-    if (!thread || thread.roomContext) return false
-    if (thread.relation === 'side') return false
+    if (!thread || thread.roomContext && thread.roomContext.kind !== 'conversation') return false
+    if (thread.relation === 'side' && thread.roomContext?.kind !== 'conversation') return false
     const sourceTurnId = this.recoverySourceTurnByThread.get(threadId)
     const latest = thread.turns.at(-1)
     if (!sourceTurnId || latest?.id !== sourceTurnId || latest.status !== 'failed') return false
@@ -157,9 +158,22 @@ export class InterruptedTurnCoordinator {
   private async launchResumeTurn(threadId: string): Promise<void> {
     const thread = await this.deps.threadStore.get(threadId)
     const sourceTurnId = this.recoverySourceTurnByThread.get(threadId)
-    if (!thread || thread.roomContext || !sourceTurnId) return
+    if (!thread || !sourceTurnId) return
     const lastTurn = thread.turns[thread.turns.length - 1]
     const recoveryContext = childRecoveryContext(this.childRecoveryByThread.get(threadId) ?? [])
+    if (thread.roomContext) {
+      try {
+        await dispatchRoomContinuation(this.deps.threadStore, {
+          threadId, sourceTurnId, kind: 'restart', key: sourceTurnId,
+          prompt: [INTERRUPTED_RESUME_PROMPT, recoveryContext].filter(Boolean).join('\n\n')
+        })
+      } catch (error) {
+        this.resume.defer(threadId)
+        throw error
+      }
+      this.recoverySourceTurnByThread.delete(threadId)
+      return
+    }
     const recoveryRequestId = recoveryContext
       ? `subagent-recovery:${computeShortHash(`${sourceTurnId}\0${recoveryContext}`, 32)}`
       : undefined

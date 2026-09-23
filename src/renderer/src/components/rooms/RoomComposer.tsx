@@ -70,11 +70,12 @@ function RoomComposerEditor({
   draftId,
   replyTarget,
   topicChoices = [],
-  onSend, onStop, onConnectProject, responding
+  onSend, onStop, onConnectProject, responding, autoFocus = true
 }: {
   onStop?: () => void
   onConnectProject?: () => void
   responding?: boolean
+  autoFocus?: boolean
   room: Room
   tasks: RoomTask[]
   draftId?: string
@@ -96,7 +97,11 @@ function RoomComposerEditor({
   const [error, setError] = useState('')
   const [pollOpen, setPollOpen] = useState(false)
   const editorRef = useRef<RoomRichInputHandle>(null)
-  useEffect(() => { const timer = setTimeout(() => editorRef.current?.focus(), 0); return () => clearTimeout(timer) }, [])
+  useEffect(() => {
+    if (!autoFocus) return
+    const timer = setTimeout(() => editorRef.current?.focus(), 0)
+    return () => clearTimeout(timer)
+  }, [autoFocus])
   const sendMentions = roomSendMentionIds(draft.mentions, room)
   const replyToMessageId = draft.replyToMessageId ?? replyTarget?.messageId
   const rootRequestId = draft.rootRequestId ?? replyTarget?.rootRequestId

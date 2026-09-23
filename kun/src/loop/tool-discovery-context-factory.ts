@@ -114,6 +114,7 @@ export function modelToolDiscoveryContexts(context: ToolHostContext): ToolHostCo
     context.orchestration === 'graph' ||
     context.guiPlan ||
     context.guiDesignArtifact?.kind === 'svg' ||
+    context.roomStepKind !== undefined ||
     (surface !== 'code' && surface !== 'design')
   ) {
     return [context]

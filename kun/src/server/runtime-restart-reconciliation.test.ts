@@ -3,6 +3,27 @@ import type { ServerRuntime } from './routes/server-runtime.js'
 import { reconcileRuntimeAfterRestart } from './runtime-restart-reconciliation.js'
 
 describe('reconcileRuntimeAfterRestart', () => {
+  it('recovers private conversation side threads but not delegated or room-task sides', async () => {
+    const resumeInterruptedGoals = vi.fn(async (sources: readonly unknown[]) => sources.length)
+    const resumeInterruptedTurns = vi.fn(async (sources: readonly unknown[]) => sources.length)
+    const runtime = {
+      turnService: {
+        reconcileOrphanedTurns: async () => ['private', 'goal', 'child', 'task'].map((threadId) => ({ threadId, turnId: threadId })),
+        reconcileManagerSettledInterruptions: async () => []
+      },
+      threadStore: { get: async (id: string) => ({ id, relation: 'side',
+        turns: [{ id, status: 'failed' }],
+        ...(id === 'private' || id === 'goal' ? { roomContext: { kind: 'conversation' } } : {}),
+        ...(id === 'task' ? { roomContext: { kind: 'task' } } : {}),
+        ...(id === 'goal' ? { goal: { status: 'active' } } : {}) }) },
+      resumeInterruptedGoals, resumeInterruptedTurns
+    } as unknown as ServerRuntime
+    const report = await reconcileRuntimeAfterRestart(runtime)
+    expect(report.resumeCandidateIds).toEqual(['private', 'goal'])
+    expect(resumeInterruptedGoals).toHaveBeenCalledWith([{ threadId: 'goal', turnId: 'goal' }])
+    expect(resumeInterruptedTurns).toHaveBeenCalledWith([{ threadId: 'private', turnId: 'private' }], [])
+  })
+
   it('settles children first and resumes ordinary plus child-recovery parent threads', async () => {
     const order: string[] = []
     const resumeInterruptedGoals = vi.fn(async (sources: readonly unknown[]) => sources.length)

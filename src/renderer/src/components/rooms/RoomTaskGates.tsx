@@ -1,5 +1,6 @@
 import { RoomApprovalCard } from './RoomApprovalCard'
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
+import { currentRemoteSurface } from '../../mobile/use-remote-surface'
 import { useTranslation } from 'react-i18next'
 import type { RoomRecoveryInfo, RoomTask } from '@shared/rooms-api'
 import {
@@ -13,6 +14,10 @@ import { roomButtonClass, roomFieldClass } from './RoomSettings'
 import { useRoomMutation, useRoomResource } from './useRoomResource'
 
 export { roomInputAnswers } from './RoomChoiceCard'
+
+const MobileRoomUserInput = lazy(() => import('../../mobile/rooms/MobileRoomUserInput').then((module) => ({
+  default: module.MobileRoomUserInput
+})))
 
 function RoomInputForm({
   input,
@@ -154,9 +159,11 @@ export function RoomExecutionGates({
   return (
     <div className="space-y-3">
       {detail?.approvals?.map((approval) => <RoomApprovalCard key={approval.id} approval={approval} onUpdated={onUpdated} />)}
-      {detail?.userInputs?.map((input) => (
-        <RoomInputForm key={input.id} input={input} onUpdated={onUpdated} />
-      ))}
+      {detail?.userInputs?.map((input) => currentRemoteSurface() === 'mobile' ? (
+        <Suspense key={input.id} fallback={<p role="status">{t('roomsLoading')}</p>}>
+          <MobileRoomUserInput input={input} onUpdated={onUpdated} />
+        </Suspense>
+      ) : <RoomInputForm key={input.id} input={input} onUpdated={onUpdated} />)}
       {mutation.error ? (
         <p role="alert" className="text-xs text-red-500">
           {mutation.error}

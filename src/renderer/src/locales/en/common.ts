@@ -16,6 +16,7 @@ import commandsSdd from './common/commands-sdd.json'
 import providerErrors from './common/provider-errors.json'
 import planBuild from './common/plan-build.json'
 import sddFrameworks from './common/sdd-frameworks.json'
+import sessionActivity from './common/session-activity.json'
 import sddMcp from './common/sdd-mcp.json'
 import agentsGraph from './common/agents-graph.json'
 import codePersonas from './common/code-personas.json'
@@ -23,6 +24,7 @@ import workWhiteboard from './common/work-whiteboard.json'
 import sidebar from './common/sidebar.json'
 import i18nReview from './common/i18n-review.json'
 import commandPalette from './common/command-palette.json'
+import composerPanels from './common/composer-panels.json'
 import workConversations from './common/work-conversations.json'
 import projectBoard from './common/project-board.json'
 import speak from './common/speak.json'
@@ -53,6 +55,7 @@ const common = {
   ...providerErrors,
   ...planBuild,
   ...sddFrameworks,
+  ...sessionActivity,
   ...sddMcp,
   ...agentsGraph,
   ...codePersonas,
@@ -60,6 +63,7 @@ const common = {
   ...sidebar,
   ...i18nReview,
   ...commandPalette,
+  ...composerPanels,
   ...workConversations,
   ...projectBoard,
   ...speak,

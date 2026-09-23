@@ -41,7 +41,7 @@ export function RoomContentPreview({ room, reference, messageId, onOpenTarget, o
       setNavigationError('')
       void Promise.resolve(onOpenTarget ? onOpenTarget(target) : target.kind === 'thread' ? onOpenCode?.(target.threadId, target.turnId) : undefined)
         .catch((cause) => setNavigationError(String(cause)))
-    }}><ExternalLink size={14} />{t(target.kind === 'board' ? 'roomsContentOpenBoard' : target.kind === 'work_file' ? 'roomsContentOpenWork' : 'roomsContentOpenCode')}</button> : null}
+    }}><ExternalLink size={14} />{t(target.kind === 'board' || target.kind === 'excalidraw_board' ? 'roomsContentOpenBoard' : target.kind === 'work_file' ? 'roomsContentOpenWork' : 'roomsContentOpenCode')}</button> : null}
     {navigationError ? <p role="alert">{navigationError}</p> : null}
     {expanded && result.preview?.type === 'image' ? <RoomImageLightbox title={result.title} image={result.preview.image} onClose={() => setExpanded(false)} /> : null}
   </section>

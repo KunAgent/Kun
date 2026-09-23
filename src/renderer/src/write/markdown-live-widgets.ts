@@ -7,6 +7,7 @@ import {
 import { isPendingInfographicActive } from './infographic-pending'
 import { createInfographicPendingElement } from './infographic-pending-dom'
 import { createHtmlEmbedElement } from './html-embed-dom'
+import { openWriteImageLightbox } from './write-image-lightbox'
 
 export type BlockRange = {
   from: number
@@ -158,7 +159,7 @@ export class ImageWidget extends WidgetType {
   toDOM(view: EditorView): HTMLElement {
     const wrapper = document.createElement('span')
     wrapper.className = 'cm-write-md-image-wrap'
-    wrapper.title = 'Click to edit image markdown'
+    wrapper.title = 'Click to edit image markdown. Double-click to preview.'
     wrapper.addEventListener('mousedown', (event) => {
       if (!isPrimaryMouseDown(event)) return
       preventEditorMouseHandling(event)
@@ -169,6 +170,16 @@ export class ImageWidget extends WidgetType {
     if (this.src) image.src = this.src
     image.alt = this.alt
     image.loading = 'lazy'
+    wrapper.addEventListener('dblclick', (event) => {
+      preventEditorMouseHandling(event)
+      const previewSrc = image.src || this.src
+      if (!previewSrc) return
+      openWriteImageLightbox({
+        src: previewSrc,
+        alt: this.alt,
+        ...(this.localPath ? { localPath: this.localPath } : {})
+      })
+    })
     wrapper.appendChild(image)
     if (this.localPath && typeof window.kunGui?.readWorkspaceImage === 'function') {
       void window.kunGui.readWorkspaceImage({ path: this.localPath })

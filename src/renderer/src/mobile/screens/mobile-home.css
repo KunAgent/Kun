@@ -1,0 +1,93 @@
+.kun-mobile-home {
+  --kun-mobile-gutter: 16px;
+  --kun-mobile-touch: 44px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  color: var(--ds-text);
+  background: var(--ds-bg-main);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.kun-mobile-home-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px var(--kun-mobile-gutter);
+}
+.kun-mobile-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 9999px;
+  color: inherit;
+  background: transparent;
+}
+.kun-mobile-workspace {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--kun-mobile-touch);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kun-mobile-home h1 {
+  margin: 8px var(--kun-mobile-gutter) 16px;
+  font-size: 24px;
+  font-weight: 500;
+}
+.kun-mobile-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 var(--kun-mobile-gutter) 12px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: var(--ds-surface-subtle);
+}
+.kun-mobile-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--kun-mobile-touch);
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-size: 16px;
+}
+.kun-mobile-home-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: 0 var(--kun-mobile-gutter) env(safe-area-inset-bottom, 0px);
+}
+.kun-mobile-home-list ul { list-style: none; margin: 0; padding: 0; }
+.kun-mobile-thread { display: flex; align-items: center; border-bottom: 1px solid var(--ds-border); }
+.kun-mobile-thread-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 16px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+}
+.kun-mobile-thread-title { font-size: 16px; font-weight: 500; }
+.kun-mobile-thread-title, .kun-mobile-thread-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kun-mobile-thread-preview, .kun-mobile-thread time { color: var(--ds-text-muted); font-size: 13px; }
+.kun-mobile-home-state { padding: 24px 0; overflow-wrap: anywhere; }
+.kun-mobile-home-state button, .kun-mobile-load-more { min-height: 44px; padding: 8px 16px; color: inherit; background: var(--ds-surface-subtle); border: 1px solid var(--ds-border); border-radius: 12px; }
+.kun-mobile-load-more { margin: 16px 0; width: 100%; }

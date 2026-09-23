@@ -20,6 +20,14 @@ afterEach(async () => {
 })
 
 describe('memory tool provider', () => {
+  it('advertises memory tools only when the scoped memory policy is enabled', async () => {
+    const store = await createStore('mem_tool_policy')
+    const tool = memoryTool(store, 'memory_create')
+    expect(tool.shouldAdvertise?.({ ...context(), memoryPolicy: { enabled: true } })).toBe(true)
+    expect(tool.shouldAdvertise?.({ ...context(), memoryPolicy: { enabled: false } })).toBe(false)
+    expect(tool.shouldAdvertise?.(context())).toBe(false)
+  })
+
   it('creates an approved memory with validated V2 fields', async () => {
     const store = await createStore('mem_tool_create')
     const tool = memoryTool(store, 'memory_create')

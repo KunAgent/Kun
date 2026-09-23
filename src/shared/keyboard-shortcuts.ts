@@ -128,6 +128,21 @@ export const KEYBOARD_SHORTCUT_COMMANDS = [
     descriptionKey: 'shortcutToggleMaximizeDesc',
     defaultBindings: []
   },
+  {
+    id: 'find-in-chat',
+    labelKey: 'shortcutFindInChat',
+    descriptionKey: 'shortcutFindInChatDesc',
+    defaultBindings: ['Ctrl+F'],
+    platformDefaultBindings: { darwin: ['Meta+F'] }
+  },
+  {
+    id: 'open-keyboard-shortcuts',
+    labelKey: 'shortcutKeyboardShortcuts',
+    descriptionKey: 'shortcutKeyboardShortcutsDesc',
+    // `?` is the classic cheatsheet chord; it is a printable character, so the
+    // dispatcher suppresses it while a text field owns focus.
+    defaultBindings: ['Shift+?']
+  },
   // Registered last on purpose: `findKeyboardShortcutCommand` resolves the
   // first command whose bindings match, so any command a user has bound to
   // the palette's chord keeps its own behavior.

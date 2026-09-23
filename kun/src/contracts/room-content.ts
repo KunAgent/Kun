@@ -36,12 +36,13 @@ export type RoomContentOpenTarget =
   | { kind: 'code_file' | 'work_file'; workspaceRoot: string; relativePath: string }
   | { kind: 'thread'; threadId: string; turnId?: string }
   | { kind: 'board'; workspaceRoot: string; cardId: string }
+  | { kind: 'excalidraw_board'; workspaceRoot: string; boardId: string }
 export type RoomContentResult = {
   reference: RoomContentReference
   state: 'available' | 'unavailable'
   reason?: string
   title: string
-  kind?: 'image' | 'file' | 'task' | 'delivery' | 'board_card'
+  kind?: 'image' | 'file' | 'audio' | 'video' | 'task' | 'delivery' | 'board_card'
   description?: string
   mimeType?: string
   byteSize?: number
@@ -50,7 +51,8 @@ export type RoomContentResult = {
   status?: string
   version?: string
   thumbnail?: RoomPreviewImage
-  preview?: { type: 'text'; text: string; truncated: boolean } | { type: 'image'; image: RoomPreviewImage }
+  preview?: { type: 'text'; text: string; truncated: boolean } | { type: 'image'; image: RoomPreviewImage } |
+    { type: 'media'; dataBase64: string; mimeType: string }
   openTarget?: RoomContentOpenTarget
 }
 export type RoomLinkPreview = {

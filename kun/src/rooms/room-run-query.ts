@@ -8,6 +8,7 @@ import type { RoomRunAvailability, RoomRunDetail, RoomRunItemsPage,
 import type { RoomRuntimeDeps } from './room-runtime-types.js'
 import type { RoomStoreListOptions } from './room-store.js'
 import { getRoomRunRow, resolveHistoricalRoomRun } from './room-run-history.js'
+import { roomRunSegmentMessageId } from './room-run-segments.js'
 
 const Cursor = z.object({ v: z.literal(1), id: z.string().min(1).max(256),
   revision: z.number().int().nonnegative(), seq: z.number().int().nonnegative(),
@@ -33,6 +34,7 @@ export async function inspectRoomRun(deps: RoomRuntimeDeps, roomId: string, runI
   const snapshotSeq = run.threadId ? await deps.sessions.highestSeq(run.threadId) : 0
   let availability: RoomRunAvailability = { status: 'available' }
   let turn: Turn | undefined
+  let workspaceRoot: string | undefined
   if (run.phase === 'memory' || run.phase === 'triage' || !run.threadId) {
     availability = run.phase === 'memory' ? { status: 'no_session', reason: '记忆整理是独立的轻量调用，没有 Code 会话。' } : run.phase === 'triage'
       ? { status: 'no_session', reason: '轻量接话判断没有独立的 Code 会话。' }
@@ -59,6 +61,7 @@ export async function inspectRoomRun(deps: RoomRuntimeDeps, roomId: string, runI
         ? { status: 'missing_turn', reason: '原会话中已找不到本次轮次，可能已被清理或裁剪。' }
         : { status: 'pending', reason: '本次运行正在等待队列确认。' }
       else {
+        workspaceRoot = thread.workspace
         run.turnId = turn.id
         run.status = turn.status === 'aborted' ? 'cancelled' : turn.status
         run.startedAt = turn.startedAt
@@ -67,7 +70,7 @@ export async function inspectRoomRun(deps: RoomRuntimeDeps, roomId: string, runI
       }
     }
   }
-  return { row, run, availability, turn, snapshotSeq }
+  return { row, run, availability, turn, snapshotSeq, workspaceRoot }
 }
 
 export function publicRoomRun(run: RoomRunRecord, summary = false): RoomRunRecord {
@@ -93,6 +96,7 @@ export async function roomRunDetail(deps: RoomRuntimeDeps, roomId: string, runId
   const context = admittedContext ?? (current.run.contextId
     ? await deps.store.get<{ prompt?: string; attachmentIds?: string[]; memoryIds?: string[] }>('context', current.run.contextId) : null)
   return { run: publicRoomRun(current.run), availability: current.availability,
+    ...(current.workspaceRoot ? { workspaceRoot: current.workspaceRoot } : {}),
     trigger: trigger?.roomId === roomId ? { ...trigger.value, messageSeq: trigger.seq } : undefined,
     context: current.run.id.startsWith('legacy-') && current.turn
       ? { prompt: current.turn.prompt.slice(0, 64000), attachmentIds: current.turn.attachmentIds?.slice(0, 20) }
@@ -141,9 +145,11 @@ export async function roomMessageRunSource(deps: RoomRuntimeDeps,
   if (!row || row.roomId !== roomId) throw new Error('room message not found')
   if (row.value.originRunId) {
     const run = await deps.store.get<RoomRunRecord>('room_run', row.value.originRunId)
-    return run?.roomId === roomId && run.value.memberId === row.value.authorMemberId &&
-      run.value.publishedMessageId === messageId
-      ? { runId: run.id } : { unavailableReason: '消息记录的运行来源已不可用。' }
+    const segmented = Boolean(row.value.originItemId)
+    const valid = run?.roomId === roomId && run.value.memberId === row.value.authorMemberId &&
+      (segmented ? row.value.id === roomRunSegmentMessageId(run.id, row.value.originItemId!)
+        : run.value.publishedMessageId === messageId)
+    return valid ? { runId: run.id } : { unavailableReason: '消息记录的运行来源已不可用。' }
   }
   const run = await resolveHistoricalRoomRun(deps, row.value)
   return run ? { runId: run.id } : { unavailableReason: '历史消息未记录运行来源' }

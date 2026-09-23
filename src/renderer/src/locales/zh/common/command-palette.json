@@ -1,5 +1,10 @@
 {
   "paletteDialogLabel": "命令面板",
+  "findInChatTitle": "在会话中查找",
+  "findInChatPlaceholder": "搜索消息…",
+  "findInChatNoResults": "无结果",
+  "findInChatPrevious": "上一个匹配",
+  "findInChatNext": "下一个匹配",
   "paletteInputLabel": "搜索命令、会话和设置",
   "palettePlaceholder": "输入命令或搜索…",
   "paletteOpenTooltip": "命令面板",

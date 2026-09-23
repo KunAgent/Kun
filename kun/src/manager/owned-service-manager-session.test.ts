@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createOwnedServiceManagerSession, type OwnedServiceManagerSession } from './owned-service-manager-session.js'
 import { managerDiscoveryPath, readManagerDiscovery } from './manager-discovery.js'
-import { runtimeProcessIsAlive } from '../server/runtime-process-identity.js'
+import { runtimeProcessIdentity, runtimeProcessIsAlive } from '../server/runtime-process-identity.js'
 import { resumeOwnedProcessAdmission, shutdownOwnedProcesses } from '../process/owned-process.js'
 import { bindRuntimeManagerDataPlane, connectInjectedServiceManager } from './owned-manager-binding.js'
 import { launchServiceManagerProcess, type ManagerLaunchOverride } from './manager-launch.js'
@@ -83,7 +83,7 @@ async function spawnLegacyManager(
 }
 
 /** Simulate an older build by dropping one capability from this baseUrl's /health only. */
-function stripHealthCapability(baseUrl: string, capability: string): typeof fetch {
+function stripHealthCapability(baseUrl: string, capability: string, overlay: Record<string, unknown> = {}): typeof fetch {
   return (async (target: string | URL | Request, init?: RequestInit) => {
     const href = typeof target === 'string' ? target : target instanceof URL ? target.href : target.url
     const response = await fetch(target, init)
@@ -91,9 +91,21 @@ function stripHealthCapability(baseUrl: string, capability: string): typeof fetc
     const body = await response.json() as { capabilities?: string[] }
     return Response.json({
       ...body,
+      ...overlay,
       capabilities: (body.capabilities ?? []).filter((value) => value !== capability)
     })
   }) as typeof fetch
+}
+
+function sessionOwner(pid: number, identity: string, startedAt = '2000-01-01T00:00:00.000Z') {
+  return {
+    ownerSessionId: `owner-${pid}`,
+    ownerKind: 'gui' as const,
+    ownerPid: pid,
+    ownerStartedAt: startedAt,
+    ownerProcessIdentity: identity,
+    generation: 1
+  }
 }
 
 describe('owned Service Manager real process lifecycle', () => {
@@ -288,6 +300,54 @@ setInterval(() => {}, 1000);
     const legacy = await spawnLegacyManager(input)
     await writeFile(managerDiscoveryPath(input.controlDir), JSON.stringify({ ...legacy, protocolVersion: 4 }))
     await expect(session.ensure(input)).rejects.toThrow(/kun manager retire/)
+    expect(runtimeProcessIsAlive(legacy.pid, legacy)).toBe(true)
+  }, 20_000)
+
+  it('retires an incompatible Manager whose only Runtime slot pid is already dead', async () => {
+    const { session, input } = await fixture()
+    const legacy = await spawnLegacyManager(input)
+    const child = spawn(process.execPath, ['-e', ''], { stdio: 'ignore' })
+    const deadPid = child.pid
+    expect(deadPid).toBeDefined()
+    await new Promise<void>((resolve, reject) => {
+      child.once('exit', () => resolve())
+      child.once('error', reject)
+    })
+    const registration = { flavor: 'production', instanceId: 'dead-runtime', pid: deadPid,
+      startedAt: '2000-01-01T00:00:00.000Z', host: '127.0.0.1', port: 18999,
+      baseUrl: 'http://127.0.0.1:18999', runtimeToken: 'test-token' }
+    const response = await fetch(`${legacy.baseUrl}/v1/runtimes/production/register`, {
+      method: 'PUT', headers: { authorization: `Bearer ${legacy.managerToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify(registration)
+    })
+    expect(response.ok).toBe(true)
+    const wrapped = stripHealthCapability(legacy.baseUrl, 'item-page-v1')
+    const connection = await session.ensure({ ...input, fetch: wrapped })
+    expect(connection.discovery.appOwner?.ownerSessionId).toBe(session.ownerSessionId)
+    expect(runtimeProcessIsAlive(legacy.pid, legacy)).toBe(false)
+  }, 20_000)
+
+  it('retires an incompatible Manager whose recorded application owner is already dead', async () => {
+    const { session, input } = await fixture()
+    const legacy = await spawnLegacyManager(input)
+    const owner = sessionOwner(988_888_777, 'darwin-v1:never-started')
+    await writeFile(managerDiscoveryPath(input.controlDir), JSON.stringify({ ...legacy, appOwner: owner }))
+    const wrapped = stripHealthCapability(legacy.baseUrl, 'item-page-v1', { appOwner: owner })
+    const connection = await session.ensure({ ...input, fetch: wrapped })
+    expect(connection.discovery.appOwner?.ownerSessionId).toBe(session.ownerSessionId)
+    expect(runtimeProcessIsAlive(legacy.pid, legacy)).toBe(false)
+  }, 20_000)
+
+  it('refuses takeover when an incompatible Manager still has a live application owner', async () => {
+    const { session, input } = await fixture()
+    const legacy = await spawnLegacyManager(input)
+    const identity = runtimeProcessIdentity()
+    expect(identity).toBeDefined()
+    const owner = sessionOwner(process.pid, identity!, new Date().toISOString())
+    await writeFile(managerDiscoveryPath(input.controlDir), JSON.stringify({ ...legacy, appOwner: owner }))
+    const wrapped = stripHealthCapability(legacy.baseUrl, 'item-page-v1', { appOwner: owner })
+    await expect(session.ensure({ ...input, fetch: wrapped }))
+      .rejects.toThrow(/alive but unavailable|kun manager retire|application session/)
     expect(runtimeProcessIsAlive(legacy.pid, legacy)).toBe(true)
   }, 20_000)
 

@@ -19,6 +19,7 @@ import mimoIconUrl from '../assets/provider-icons/mimo.svg?url'
 import minimaxIconUrl from '../assets/provider-icons/minimax.svg?url'
 import ollamaIconUrl from '../assets/provider-icons/ollama.svg?url'
 import opencodeGoIconUrl from '../assets/provider-icons/opencodego.svg?url'
+import stepfunIconUrl from '../assets/provider-icons/stepfun.svg?url'
 import zaiIconUrl from '../assets/provider-icons/zai.svg?url'
 import zenmuxIconUrl from '../assets/provider-icons/zenmux.svg?url'
 import kunIconUrl from '../../../asset/img/kun_tray_mac.svg?url'
@@ -41,6 +42,7 @@ export type ProviderBrandIconKey =
   | 'minimax'
   | 'ollama'
   | 'opencodego'
+  | 'stepfun'
   | 'zai'
   | 'zenmux'
 
@@ -62,6 +64,7 @@ const PROVIDER_ICON_ASSETS: Readonly<Record<ProviderBrandIconKey, string>> = {
   minimax: minimaxIconUrl,
   ollama: ollamaIconUrl,
   opencodego: opencodeGoIconUrl,
+  stepfun: stepfunIconUrl,
   zai: zaiIconUrl,
   zenmux: zenmuxIconUrl
 }
@@ -82,6 +85,7 @@ const ICON_BY_PRESET_ID: Readonly<Record<string, ProviderBrandIconKey>> = {
   'moonshot-global': 'kimi',
   ollama: 'ollama',
   'opencode-go': 'opencodego',
+  stepfun: 'stepfun',
   volcengine: 'doubao',
   'volcengine-agent-plan': 'doubao',
   'volcengine-coding-plan': 'doubao',

@@ -137,7 +137,8 @@ export interface SdkRuntimeDeps {
     turnId: string,
     toolName: string,
     args: Record<string, unknown>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    callId?: string
   ): Promise<KunToolResult>
   /** kun's per-call permission decision (routes to the initiating client's approval UI). */
   decideToolApproval(

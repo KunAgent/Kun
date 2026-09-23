@@ -12,6 +12,7 @@ import type { createRuntimeExtensionComposition } from './runtime-composition-ex
 import type { createRuntimeConfigController } from './runtime-composition-config.js'
 import { bindRoomRuleStore } from '../rooms/room-rule-read-tool.js'
 import { bindRoomPeerStore } from '../rooms/room-peer-tools.js'
+import { bindImMessageService } from '../rooms/room-im-message-tool.js'
 import { bindAgentHandoffService } from '../agents/agent-handoff-tools.js'
 import { bindAgentSetupDirectory } from '../agents/agent-setup-tools.js'
 import {
@@ -154,6 +155,7 @@ export function createServerRuntimeComposition(
   // Tool providers bind to the lifecycle-fenced facade, while room admission
   // retains the backing store. Bind both identities to the same room scope.
   bindRoomPeerStore(core.threadStore, roomComposition.rooms.deps.store)
+  bindImMessageService(core.threadStore, roomComposition.rooms.service)
   bindAgentHandoffService(core.threadStore, roomComposition.rooms.handoffs)
   bindAgentSetupDirectory(core.threadStore, roomComposition.rooms.agents)
   return {

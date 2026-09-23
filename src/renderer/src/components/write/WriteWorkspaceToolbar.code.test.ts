@@ -34,6 +34,10 @@ function textToolbarProps(inlineCompletionEnabled: boolean): ToolbarProps {
     modeMenuOpen: false,
     modeMenuRef: createRef<HTMLDivElement>(),
     onCopyRichText: noop,
+    onCopyXArticle: noop,
+    onCopyXArticleImage: noop,
+    xArticleImageCount: 0,
+    xArticleImageIndex: 0,
     onExportFile: noop,
     onGeneratePresentation: noop,
     onSave: noop,
@@ -75,6 +79,10 @@ describe('WriteWorkspaceToolbar code preview', () => {
       modeMenuOpen: false,
       modeMenuRef: createRef<HTMLDivElement>(),
       onCopyRichText: noop,
+      onCopyXArticle: noop,
+      onCopyXArticleImage: noop,
+      xArticleImageCount: 0,
+      xArticleImageIndex: 0,
       onExportFile: noop,
       onGeneratePresentation: noop,
       onSave: noop,
@@ -124,5 +132,29 @@ describe('WriteWorkspaceToolbar code preview', () => {
     expect(html).toContain('writeUnsaved')
     expect(html).toContain('title="writeUnsaved"')
     expect(html).not.toContain('writeReadOnly')
+  })
+
+  it('lists X article clipboard copy next to online-doc copy', () => {
+    const html = renderToStaticMarkup(createElement(WriteWorkspaceToolbar, {
+      ...textToolbarProps(false),
+      exportMenuOpen: true
+    }))
+    expect(html).toContain('writeCopyRichText')
+    expect(html).toContain('writeCopyXArticle')
+    expect(html).toContain('writeCopyXArticleImageEmpty')
+    expect(html).not.toContain('writeCopyXArticleTitle')
+    expect(html).toMatch(/disabled/)
+  })
+
+  it('shows the next X image slot after a body copy', () => {
+    const html = renderToStaticMarkup(createElement(WriteWorkspaceToolbar, {
+      ...textToolbarProps(false),
+      exportMenuOpen: true,
+      xArticleImageCount: 3,
+      xArticleImageIndex: 0
+    }))
+    expect(html).toContain('writeCopyXArticleImage')
+    expect(html).not.toContain('writeCopyXArticleImageEmpty')
+    expect(html).toMatch(/role="menuitem"(?![^>]*\bdisabled\b)[^>]*>[\s\S]*?writeCopyXArticleImage/)
   })
 })

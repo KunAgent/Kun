@@ -443,3 +443,25 @@ export function intersectAllowedToolNames(
   const forcedSet = new Set(forced)
   return base.filter((name) => forcedSet.has(name))
 }
+
+/**
+ * Agent conversation delivery contract. Ordinary assistant text is internal
+ * working output; only an explicit `send_im_message` call becomes a visible
+ * chat bubble. Injected on every model step that advertises the tool so
+ * threads created before the tool existed still learn the contract. A
+ * positive `recoveryStep` switches to the bounded no-publication nudge.
+ */
+export function conversationDeliveryInstruction(recoveryStep = 0, maxSteps = 0): string {
+  if (recoveryStep > 0) {
+    return [
+      `You stopped without calling \`send_im_message\`, so the user saw nothing (recovery ${recoveryStep}/${maxSteps}).`,
+      'Ordinary assistant text is internal and never reaches the user.',
+      'Call `send_im_message` now with the text and/or workspace file attachments the user should receive.'
+    ].join(' ')
+  }
+  return [
+    'This is an IM-style agent conversation. Your ordinary assistant text is internal working output the user never sees.',
+    'Publish every user-visible reply, status, question, or result with the `send_im_message` tool: text and/or workspace file attachments (images, documents, audio, video, or other files).',
+    'Each call creates one chat bubble. Do not repeat tool-published content in assistant text, and do not end the turn expecting your text to be shown.'
+  ].join(' ')
+}

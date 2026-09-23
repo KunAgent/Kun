@@ -12,7 +12,7 @@ export async function runManagerRetireCommand(argv: readonly string[], io: {
   fetch?: typeof fetch
 }): Promise<number> {
   if (argv[0] !== 'retire') {
-    io.stdout.write('kun manager retire [--data-dir <path>]\nRetire an idle legacy Manager after closing its clients. Application-owned Managers cannot be retired.\n')
+    io.stdout.write('kun manager retire [--data-dir <path>]\nRetire an idle legacy Manager after closing its clients. Live application owners and live Runtime slots cannot be retired.\n')
     return argv[0] && argv[0] !== '--help' && argv[0] !== '-h' ? 64 : 0
   }
   const env = io.env ?? process.env

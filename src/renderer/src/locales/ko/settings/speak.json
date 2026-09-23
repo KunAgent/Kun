@@ -16,7 +16,7 @@
   "speakPreviewPlay": "재생",
   "speakPreviewStop": "정지",
   "speakDownloadSource": "다운로드 소스",
-  "speakDownloadSourceDesc": "런타임 WASM과 음성 파일을 받는 미러입니다.",
+  "speakDownloadSourceDesc": "선택한 소스에서 런타임 WASM과 음성 파일을 받습니다. 실패하면 다른 미러를 자동으로 시도합니다.",
   "speakDownloadSourceChecking": "다운로드 소스를 확인하는 중...",
   "speakDownloadSourceAvailable": "{{source}} 응답 {{ms}} ms",
   "speakDownloadSourceUnavailable": "{{source}} 사용 불가: {{reason}}",

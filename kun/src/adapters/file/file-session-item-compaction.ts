@@ -54,9 +54,9 @@ export async function compactFileSessionItems(input: {
   }
 
   await assertLegacyRepairDiskSpace(input.path, info.size)
-  return input.fileAccess.withReplacement(
+  return input.withThreadWrite(() => input.fileAccess.withReplacement(
     input.path,
-    () => input.withThreadWrite(async () => {
+    async () => {
       const currentInfo = await stat(input.path).catch(() => null)
       if (
         input.readRevision() !== revisionBefore ||
@@ -84,8 +84,8 @@ export async function compactFileSessionItems(input: {
         afterBytes,
         itemCount: parsed.items.length
       }
-    })
-  )
+    }
+  ))
 }
 
 function unchanged(

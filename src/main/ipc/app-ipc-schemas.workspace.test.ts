@@ -20,6 +20,7 @@ import {
   workspaceEntryDeletePayloadSchema,
   workspaceEntryRenamePayloadSchema,
   workspaceImageBytesSavePayloadSchema,
+  clipboardImageWritePayloadSchema,
   workspaceImagePickPayloadSchema,
   writeExportPayloadSchema,
   writeRichClipboardPayloadSchema,
@@ -244,6 +245,30 @@ describe('app-ipc-schemas workspace and system', () => {
 
     expect(payload.path).toBe('/tmp/workspace/draft.md')
     expect(payload.content).toBe('# Draft')
+    expect(payload.profile).toBeUndefined()
+  })
+
+  it('accepts write rich clipboard x-articles profile and rejects unknown profiles', () => {
+    const payload = writeRichClipboardPayloadSchema.parse({
+      path: '/tmp/workspace/draft.md',
+      content: '# Draft',
+      profile: 'x-articles'
+    })
+    expect(payload.profile).toBe('x-articles')
+    expect(writeRichClipboardPayloadSchema.parse({
+      path: '/tmp/workspace/draft.md',
+      content: '# Draft',
+      profile: 'x-articles-image',
+      imageIndex: 2
+    })).toMatchObject({
+      profile: 'x-articles-image',
+      imageIndex: 2
+    })
+    expect(() => writeRichClipboardPayloadSchema.parse({
+      path: '/tmp/workspace/draft.md',
+      content: '# Draft',
+      profile: 'notion'
+    })).toThrow()
   })
 
   it('accepts workspace image pick payloads and rejects extra fields', () => {
@@ -284,6 +309,28 @@ describe('app-ipc-schemas workspace and system', () => {
     })).toMatchObject({
       fileName: 'architecture-a1b2c3.png'
     })
+  })
+
+  it('requires exactly one clipboard image write source', () => {
+    expect(clipboardImageWritePayloadSchema.parse({
+      path: '/tmp/workspace/photo.png',
+      workspaceRoot: '/tmp/workspace'
+    })).toEqual({
+      path: '/tmp/workspace/photo.png',
+      workspaceRoot: '/tmp/workspace'
+    })
+    expect(clipboardImageWritePayloadSchema.parse({
+      dataBase64: 'aW1hZ2U=',
+      mimeType: 'image/png'
+    })).toEqual({
+      dataBase64: 'aW1hZ2U=',
+      mimeType: 'image/png'
+    })
+    expect(() => clipboardImageWritePayloadSchema.parse({})).toThrow(/Either path or dataBase64/)
+    expect(() => clipboardImageWritePayloadSchema.parse({
+      path: '/tmp/workspace/photo.png',
+      dataBase64: 'aW1hZ2U='
+    })).toThrow(/either path or dataBase64, not both/i)
   })
 
   it('validates workspace creation time payloads', () => {

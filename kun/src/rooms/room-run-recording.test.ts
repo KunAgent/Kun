@@ -8,6 +8,7 @@ import { emptyUsageSnapshot } from '../contracts/usage.js'
 import type { RoomRunRecord } from '../contracts/room-runs.js'
 import { ensureRoomThread, enqueueRoomTurn } from './room-execution.js'
 import { roomRunId, updateRoomRun, observeRecordedRoomTurn } from './room-run-recording.js'
+import { roomRunDetail } from './room-run-query.js'
 import { RoomService } from './room-service.js'
 import { SqliteRoomStore } from './room-store-sqlite.js'
 import type { RoomRuntimeDeps } from './room-runtime-types.js'
@@ -48,6 +49,18 @@ describe('room native run admission and publication', () => {
     expect((await f.store.get<{ prompt: string }>('context', runs[0].value.contextId!))?.value.prompt)
       .toBe('Frozen supplemental prompt')
     expect(await f.store.list('room_run', { roomId: f.room.id, clientRequestId: 'attempt-1' })).toHaveLength(1)
+  })
+
+  it('exposes a preview workspace only for the exact validated run', async () => {
+    const f = await fixture()
+    await enqueueRoomTurn(f.deps, f.thread.id, 'preview', 'Read')
+    const id = roomRunId(f.room.id, 'preview')
+    expect((await roomRunDetail(f.deps, f.room.id, id)).workspaceRoot).toBe(f.thread.workspace)
+    const record = (await f.h.threadStore.get(f.thread.id))!
+    await f.h.threadStore.upsert({ ...record, roomContext: { ...record.roomContext!, roomId: 'other-room' } })
+    const mismatched = await roomRunDetail(f.deps, f.room.id, id)
+    expect(mismatched.availability.status).toBe('scope_mismatch')
+    expect(mismatched.workspaceRoot).toBeUndefined()
   })
 
   it('does not readmit an unknown execution after an uncertain queue failure', async () => {

@@ -1,0 +1,10 @@
+.kun-mobile-work-resource { display: flex; width: 100%; height: 100%; min-height: 0; flex-direction: column; color: var(--ds-text); background: var(--ds-bg-main); }
+.kun-mobile-work-resource > header { display: grid; min-height: 60px; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; padding: env(safe-area-inset-top, 0px) 8px 0; border-bottom: 1px solid var(--ds-border); }
+.kun-mobile-work-resource > header button { display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; border: 0; border-radius: 9999px; background: transparent; color: inherit; }
+.kun-mobile-work-resource > header h1, .kun-mobile-work-resource > header p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kun-mobile-work-resource > header h1 { font-size: 16px; font-weight: 500; }
+.kun-mobile-work-resource > header p { color: var(--ds-text-muted); font-size: 12px; }
+.kun-mobile-work-resource > nav { display: flex; min-height: 48px; gap: 4px; overflow-x: auto; padding: 4px 12px; border-bottom: 1px solid var(--ds-border); }
+.kun-mobile-work-resource > nav button { flex-shrink: 0; min-height: 40px; padding: 6px 12px; border: 0; border-radius: 9999px; color: var(--ds-text-muted); background: transparent; font: inherit; }
+.kun-mobile-work-resource > nav button[aria-current='page'] { color: var(--ds-text); background: var(--ds-surface-subtle); }
+.kun-mobile-work-resource-content { min-width: 0; min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; }

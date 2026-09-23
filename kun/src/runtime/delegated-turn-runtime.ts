@@ -4,6 +4,8 @@ export type DelegatedRuntimeCapabilities = {
   nativeResume: boolean
   structuredStreaming: boolean
   kunTools: boolean
+  /** Native tools cannot bypass the room's frozen Kun tool policy. */
+  roomToolPolicy?: boolean
   externalApproval: boolean
   liveSteering: boolean
   nativeContextTelemetry: boolean

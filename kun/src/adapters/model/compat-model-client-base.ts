@@ -132,7 +132,12 @@ export class CompatModelClientBase {
       round: LlmDebugRound | null
       endpointFormat: ModelEndpointFormat
       attempt: number
-      reason: 'initial' | 'transport_retry' | 'credential_refresh' | 'stream_options_fallback'
+      reason:
+        | 'initial'
+        | 'transport_retry'
+        | 'credential_refresh'
+        | 'stream_options_fallback'
+        | 'request_fallback'
       apiKey: string
     }
   ): Promise<CompatPostResult> {
@@ -252,11 +257,16 @@ export class CompatModelClientBase {
   protected buildRequestBody(
     request: ModelRequest,
     stream: boolean,
-    options: { endpointFormat?: ModelEndpointFormat; includeStreamUsage?: boolean } = {}
+    options: {
+      endpointFormat?: ModelEndpointFormat
+      includeStreamUsage?: boolean
+      forceReasoningRoundTrip?: boolean
+      dropUnreplayableResponsesToolRounds?: boolean
+    } = {}
   ): Record<string, unknown> {
     const requestModel = request.model?.trim()
     const model = requestModel || this.config.model
-    const messages = this.collectMessages(request, model)
+    const messages = this.collectMessages(request, model, options.forceReasoningRoundTrip === true)
     const endpointFormat = options.endpointFormat ?? this.endpointFormat()
     const tools = normalizeToolSpecs(request.tools)
     const reasoning = this.modelReasoningFor(model)
@@ -277,14 +287,21 @@ export class CompatModelClientBase {
       isCodex,
       isCodexLite,
       serviceTiers: this.capabilitiesForModel(model).serviceTiers,
-      codexNativeImageGeneration: codexModelSupportsNativeImageGeneration(model)
+      codexNativeImageGeneration: codexModelSupportsNativeImageGeneration(model),
+      ...(options.dropUnreplayableResponsesToolRounds === true
+        ? { dropUnreplayableResponsesToolRounds: true }
+        : {})
     })
   }
 
-  protected collectMessages(request: ModelRequest, model: string): ChatMessage[] {
+  protected collectMessages(
+    request: ModelRequest,
+    model: string,
+    forceReasoningRoundTrip = false
+  ): ChatMessage[] {
     return projectCompatMessages(request, {
       historyLimit: this.config.historyLimit,
-      thinkingMode: requiresReasoningRoundTrip(
+      thinkingMode: forceReasoningRoundTrip || requiresReasoningRoundTrip(
         request.reasoningEffort,
         model,
         this.config.baseUrl,

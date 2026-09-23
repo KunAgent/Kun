@@ -73,13 +73,14 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
   through `/v1/manager/retire-idle`. Incompatible legacy Managers
   (protocol/capability) are retired during startup only after authenticated
   identity on `/health` and `/v1/manager/status`, matching canonical
-  dataDir/settingsPath, no application owner, and an empty Runtime slot check,
+  dataDir/settingsPath, no live application owner, and no live Runtime slot,
   then an instanceId-fenced `/v1/manager/shutdown` and verified process exit.
-  Ambiguous identity or live external work still blocks takeover and fails
-  closed; it never authorizes a broad user-process or port scan. An
-  explicitly requested `kun manager retire --data-dir <directory>` can retire
-  a verified idle legacy Manager under the matching control/settings profile;
-  it rejects application-owned Managers and live Runtime slots.
+  Owners and slots whose processes are verified dead are idle. Ambiguous
+  identity or live external work still blocks takeover and fails closed; it
+  never authorizes a broad user-process or port scan. An explicitly requested
+  `kun manager retire --data-dir <directory>` can retire a verified idle
+  legacy Manager under the matching control/settings profile; it rejects live
+  application owners and live Runtime slots.
 - Service Manager remains the sole physical writer of canonical business data
   and does not execute agent turns. It may have zero Runtime slots while its
   owner is open; it exits after consumers when that owner closes. Phone

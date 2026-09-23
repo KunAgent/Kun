@@ -375,9 +375,13 @@ describe('StartupGate', () => {
     renderGate({})
     await act(async () => undefined)
     await act(async () => {
-      api.listeners.forEach((listener) => listener(phasePayload('recovery_required')))
+      api.listeners.forEach((listener) => listener(phasePayload(
+        'recovery_required',
+        'A leftover Kun data service from another build is still running.'
+      )))
     })
     expect(container.textContent).toContain('Kun startup requires recovery.')
+    expect(container.textContent).toContain('leftover Kun data service')
     expect(container.querySelector('.kun-startup')?.getAttribute('data-recovery')).toBe('true')
     const alert = container.querySelector('[role="alert"]')
     expect(alert).not.toBeNull()
@@ -385,7 +389,9 @@ describe('StartupGate', () => {
     const logo = container.querySelector('[data-testid="kun-startup-logo"]')
     expect(logo?.getAttribute('data-motion')).toBe('paused')
     expect(container.querySelector('[role="progressbar"]')).toBeNull()
-    expect([...container.querySelectorAll('button')]
-      .some((button) => button.textContent === 'Reload Kun')).toBe(true)
+    const labels = [...container.querySelectorAll('button')].map((button) => button.textContent)
+    expect(labels).toContain('Retry')
+    expect(labels).toContain('Open log folder')
+    expect(labels).toContain('Reload Kun')
   })
 })

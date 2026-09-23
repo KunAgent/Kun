@@ -240,3 +240,46 @@ describe('JSONL replacement coordination', () => {
     store.close()
   })
 })
+
+describe('JSONL same-path reentry guards', () => {
+  it('rejects a replacement requested inside its own read lease', async () => {
+    const fileAccess = new JsonlFileAccessCoordinator()
+    const path = join(tmpdir(), 'kun-jsonl-replace-in-read.jsonl')
+    await expect(fileAccess.withRead(path, () =>
+      fileAccess.withReplacement(path, () => Promise.resolve())
+    )).rejects.toThrow('read lease')
+
+    let ran = false
+    await fileAccess.withReplacement(path, async () => { ran = true })
+    expect(ran).toBe(true)
+  })
+
+  it('rejects a read requested inside its own replacement', async () => {
+    const fileAccess = new JsonlFileAccessCoordinator()
+    const path = join(tmpdir(), 'kun-jsonl-read-in-replace.jsonl')
+    await expect(fileAccess.withReplacement(path, () =>
+      fileAccess.withRead(path, () => Promise.resolve())
+    )).rejects.toThrow('replacement')
+  })
+
+  it('lets a nested replacement on the same path share the outer critical section', async () => {
+    const fileAccess = new JsonlFileAccessCoordinator()
+    const path = join(tmpdir(), 'kun-jsonl-nested-replace.jsonl')
+    let innerRan = false
+    await fileAccess.withReplacement(path, async () => {
+      await fileAccess.withReplacement(path, async () => { innerRan = true })
+    })
+    expect(innerRan).toBe(true)
+  })
+
+  it('still lets a replacement on another path run inside a read lease', async () => {
+    const fileAccess = new JsonlFileAccessCoordinator()
+    const held = join(tmpdir(), 'kun-jsonl-held-read.jsonl')
+    const other = join(tmpdir(), 'kun-jsonl-other-replace.jsonl')
+    let ran = false
+    await fileAccess.withRead(held, () =>
+      fileAccess.withReplacement(other, async () => { ran = true })
+    )
+    expect(ran).toBe(true)
+  })
+})

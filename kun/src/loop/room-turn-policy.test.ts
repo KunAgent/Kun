@@ -95,3 +95,42 @@ describe('frozen room turn policy', () => {
     expect(skillResolve).not.toHaveBeenCalled()
   })
 })
+
+describe('writable room general-capability parity', () => {
+  const raw: ToolHostContext = {
+    threadId: 'room_thread', turnId: 'turn_one', workspace: '/workspace',
+    additionalWorkspaces: ['/extra'], sandboxMode: 'workspace-write', approvalPolicy: 'auto',
+    memoryPolicy: { enabled: true }, abortSignal: new AbortController().signal,
+    awaitApproval: async () => 'allow'
+  }
+
+  it('keeps delegate/subagent available for a writable private conversation', () => {
+    const context = applyRoomToolPolicy(raw, {
+      ...roomThread({ kind: 'conversation', participantAgentId: 'agent_one' }),
+      additionalWorkspaces: ['/authorized']
+    })
+    for (const name of ['delegate_task', 'generate_subagent', 'create_goal']) {
+      expect(context.blockedToolNames).not.toContain(name)
+    }
+    expect(context.additionalWorkspaces).toEqual(['/authorized'])
+    expect(context.sandboxMode).toBe('workspace-write')
+  })
+
+  it('keeps send_im_message available for a capability-frozen conversation', () => {
+    const context = applyRoomToolPolicy({ ...raw, allowedToolNames: ['read'] },
+      roomThread({ kind: 'conversation', participantAgentId: 'agent_one', allowedToolNames: ['read'] }))
+    expect(context.allowedToolNames).toEqual(expect.arrayContaining(['read', 'send_im_message']))
+  })
+
+  it('keeps delegate/subagent available for a writable group execution thread', () => {
+    const context = applyRoomToolPolicy(raw, roomThread({ kind: 'execution' }))
+    for (const name of ['delegate_task', 'generate_subagent']) expect(context.blockedToolNames).not.toContain(name)
+    expect(context.additionalWorkspaces).toBeUndefined()
+  })
+
+  it('still blocks delegation and clears extra workspaces for read-only stages', () => {
+    const context = applyRoomToolPolicy(raw, roomThread({ kind: 'review' }))
+    expect(context.blockedToolNames).toEqual(expect.arrayContaining(['delegate_task', 'generate_subagent']))
+    expect(context.additionalWorkspaces).toBeUndefined()
+  })
+})

@@ -1,5 +1,11 @@
+import { app } from 'electron'
+import { join } from 'node:path'
 import { desktopProcessStack } from './runtime/desktop-process-stack'
 import { closeManagerClientAdmission } from '../../kun/src/manager/manager-client-lifetime.js'
+import { defaultKunControlDir } from '../../kun/src/manager/manager-discovery.js'
+import { drainKunOwnersForHandoff } from './runtime/kun-installed-build-handoff'
+import { logKunHandoffEvent } from './runtime/kun-handoff-logging'
+import { SETTINGS_FILE_NAME } from './settings-file-paths'
 import { randomBytes } from 'node:crypto'
 import {
   applyKunRuntimePatch,
@@ -12,10 +18,13 @@ import {
 import {
   configureKunManagerDataPlaneForCurrentProcess,
   isKunChildRunning,
+  resolveKunManagerDataDirFromSettings,
   waitForKunStartupSettled
 } from './kun-process'
 import { clearHistoricalKunServeProcesses } from './runtime/kun-serve-process-cleanup'
 import { waitForRuntimeTurnsIdle } from './runtime/managed-runtime-idle'
+import { retireVerifiablyIdleLegacyManager } from '../../kun/src/manager/legacy-manager-retire.js'
+import { rememberedManagerStartupProfile } from './runtime/kun-startup-manager-recovery'
 import { managedKunHostCanAutoStart } from './managed-runtime-startup-policy'
 import { throwIfApplicationQuitting } from './app-quit-signal'
 import { logWarn } from './logger'
@@ -269,12 +278,36 @@ export async function prepareGuiRuntimeForStartupRetry(error?: unknown): Promise
   // Fence the watchdog before cleanup so it cannot launch a replacement while
   // the recovery window is preparing a new Electron instance.
   runtimeSupervisor.setManagedRuntimeExpected(false)
-  void error
   // Retry relaunches Electron. Stop the old complete stack; the new process
   // acquires a fresh session instead of starting a Manager just before quit.
   await kunRuntimeAdapter.stopAndWait()
   await mainState.stopDesktopServicesForRecovery?.()
   await desktopProcessStack.stopManager(Date.now() + 10_000)
+  const profile = rememberedManagerStartupProfile()
+  if (profile) {
+    await retireVerifiablyIdleLegacyManager({
+      controlDir: profile.controlDir,
+      dataDir: profile.dataDir,
+      settingsPath: profile.settingsPath
+    })
+  }
+  if (!isClientRuntimeOwnerConflict(error)) return
+  // The conflicting owner may be a stale record — e.g. its PID was recycled
+  // by an unrelated process — that the plain liveness probe cannot disprove.
+  // The handoff drain verifies OS-level owner identity and removes only
+  // verifiably-stale records; a verified live client owner still blocks retry.
+  const settingsPath =
+    profile?.settingsPath ?? join(app.getPath('userData'), SETTINGS_FILE_NAME)
+  const dataDir =
+    profile?.dataDir ?? await resolveKunManagerDataDirFromSettings(settingsPath)
+  await drainKunOwnersForHandoff({
+    reason: 'startup-retry',
+    dataDirs: [dataDir],
+    settingsPath,
+    controlDir: profile?.controlDir ?? defaultKunControlDir(),
+    fetch,
+    onEvent: logKunHandoffEvent
+  })
 }
 
 export function isServiceManagerDataMutexFailure(error: unknown): boolean {

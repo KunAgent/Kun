@@ -31,11 +31,13 @@ export const roomButtonClass =
 export function RoomSettings({
   room,
   onClose,
-  onSaved
+  onSaved,
+  variant = 'modal'
 }: {
   room: Room | null
   onClose: () => void
   onSaved: (room: Room) => void
+  variant?: 'modal' | 'panel'
 }): ReactElement {
   const { t } = useTranslation('common')
   const [baselineRoom] = useState(room)
@@ -202,13 +204,14 @@ export function RoomSettings({
     }
   }
 
+  const panelMode = variant === 'panel'
   return (
-    <div className="ds-no-drag absolute inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+    <div className={panelMode ? 'flex min-h-0 flex-1 flex-col' : 'ds-no-drag absolute inset-0 z-50 flex items-center justify-center bg-black/30 p-4'}>
       <section
-        role="dialog"
-        aria-modal="true"
+        role={panelMode ? undefined : 'dialog'}
+        aria-modal={panelMode ? undefined : true}
         aria-label={t(room ? 'roomsSettings' : 'roomsNew')}
-        onKeyDown={(event) => {
+        onKeyDown={panelMode ? undefined : (event) => {
           if (event.key === 'Escape' && !busy) {
             event.preventDefault()
             onClose()
@@ -229,9 +232,9 @@ export function RoomSettings({
             first?.focus()
           }
         }}
-        className="flex max-h-full w-full max-w-3xl flex-col rounded-2xl border border-ds-border bg-ds-main shadow-xl"
+        className={panelMode ? 'flex min-h-0 flex-1 flex-col' : 'flex max-h-full w-full max-w-3xl flex-col rounded-2xl border border-ds-border bg-ds-main shadow-xl'}
       >
-        <header className="flex items-center justify-between border-b border-ds-border p-4">
+        {panelMode ? null : <header className="flex items-center justify-between border-b border-ds-border p-4">
           <h2 className="font-semibold text-ds-ink">
             {t(room ? 'roomsSettings' : 'roomsNew')}
           </h2>
@@ -244,13 +247,13 @@ export function RoomSettings({
           >
             <X size={16} />
           </button>
-        </header>
+        </header>}
         <form
           onSubmit={(event) => {
             event.preventDefault()
             void save()
           }}
-          className="min-h-0 overflow-y-auto p-5"
+          className={panelMode ? 'min-h-0 flex-1 overflow-y-auto p-5' : 'min-h-0 overflow-y-auto p-5'}
         >
           <div className="space-y-4">
             {!room || room.conversationKind !== 'user_agent' ? <div className="block text-sm text-ds-muted">

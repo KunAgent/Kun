@@ -16,7 +16,7 @@
   "speakPreviewPlay": "再生",
   "speakPreviewStop": "停止",
   "speakDownloadSource": "ダウンロード元",
-  "speakDownloadSourceDesc": "ランタイム WASM と声ファイルを取得するミラー。",
+  "speakDownloadSourceDesc": "まず選択したミラーからランタイム WASM と声ファイルを取得します。失敗した場合は他のソースを自動的に試します。",
   "speakDownloadSourceChecking": "ダウンロード元を確認しています...",
   "speakDownloadSourceAvailable": "{{source}} は {{ms}} ms で到達可能",
   "speakDownloadSourceUnavailable": "{{source}} は利用できません: {{reason}}",

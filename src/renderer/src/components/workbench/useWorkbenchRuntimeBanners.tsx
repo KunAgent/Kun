@@ -13,12 +13,17 @@ type UseWorkbenchRuntimeBannersInput = {
   runtimeLogPath: string
   runtimeError: string | null
   runtimeErrorDetail?: string | null
-  activeThreadId: string | null
   stageInsetClass: string
   runtimeActionNeedsConnection: string
   t: (key: string) => string
   onOpenSettings: () => void
   onRetryConnection: () => void
+}
+
+export function shouldShowConversationRuntimeBanner(
+  visibleRuntimeError: string | null | undefined
+): visibleRuntimeError is string {
+  return Boolean(visibleRuntimeError)
 }
 
 export function useWorkbenchRuntimeBanners({
@@ -27,7 +32,6 @@ export function useWorkbenchRuntimeBanners({
   runtimeLogPath,
   runtimeError,
   runtimeErrorDetail,
-  activeThreadId,
   stageInsetClass,
   runtimeActionNeedsConnection,
   t,
@@ -73,7 +77,7 @@ export function useWorkbenchRuntimeBanners({
       ? renderRuntimeBanner(writeRuntimeBannerMessage, visibleRuntimeErrorDetail)
       : null,
     conversationRuntimeBanner:
-      visibleRuntimeError && !(runtimeConnection !== 'ready' && !activeThreadId)
+      shouldShowConversationRuntimeBanner(visibleRuntimeError)
         ? renderRuntimeBanner(visibleRuntimeError, visibleRuntimeErrorDetail)
         : null
   }

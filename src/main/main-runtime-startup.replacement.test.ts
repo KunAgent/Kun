@@ -79,6 +79,8 @@ const harness = vi.hoisted(() => {
     ensure: vi.fn(async (_fingerprint: string, operation: () => Promise<unknown>) => operation())
   }
 
+  const retireVerifiablyIdleLegacyManager = vi.fn(async () => 'retired' as const)
+
   return {
     clearHistoricalKunServeProcesses,
     drainKunOwnersForHandoff,
@@ -101,7 +103,8 @@ const harness = vi.hoisted(() => {
     updateIf,
     waitForHealthy,
     waitForKunStartupSettled,
-    waitForRuntimeTurnsIdle
+    waitForRuntimeTurnsIdle,
+    retireVerifiablyIdleLegacyManager
   }
 })
 
@@ -119,7 +122,12 @@ vi.mock('./runtime/kun-adapter', () => ({
   }
 }))
 vi.mock('./runtime/kun-startup-manager-recovery', () => ({
-  recoverStartupManager: vi.fn(async () => harness.activeServiceManager)
+  recoverStartupManager: vi.fn(async () => harness.activeServiceManager),
+  rememberedManagerStartupProfile: () => ({
+    controlDir: '/tmp/kun-control',
+    dataDir: '/tmp/kun-data',
+    settingsPath: '/tmp/kun-settings.json'
+  })
 }))
 vi.mock('./runtime/desktop-process-stack', () => ({
   desktopProcessStack: {
@@ -141,6 +149,9 @@ vi.mock('./runtime/kun-installed-build-handoff', () => ({
 }))
 vi.mock('./runtime/kun-handoff-logging', () => ({
   logKunHandoffEvent: vi.fn()
+}))
+vi.mock('../../kun/src/manager/legacy-manager-retire.js', () => ({
+  retireVerifiablyIdleLegacyManager: harness.retireVerifiablyIdleLegacyManager
 }))
 vi.mock('../../kun/src/manager/manager-discovery.js', () => ({
   defaultKunControlDir: () => '/tmp/kun-control'
@@ -303,6 +314,31 @@ describe('GUI Runtime startup preparation', () => {
     expect(harness.stopAndWait).toHaveBeenCalledOnce()
     expect(desktopProcessStack.stopManager).toHaveBeenCalledOnce()
     expect(harness.drainKunOwnersForHandoff).not.toHaveBeenCalled()
+    expect(harness.retireVerifiablyIdleLegacyManager).toHaveBeenCalledWith({
+      controlDir: '/tmp/kun-control',
+      dataDir: '/tmp/kun-data',
+      settingsPath: '/tmp/kun-settings.json'
+    })
+  })
+
+  it('drains verifiably-stale owners before relaunch after an owner-busy conflict', async () => {
+    const conflict = Object.assign(
+      new Error('Kun Runtime is already owned by gui process 1380'),
+      { code: 'client_runtime_owner_busy' }
+    )
+
+    await prepareGuiRuntimeForStartupRetry(conflict)
+
+    expect(harness.stopAndWait).toHaveBeenCalledOnce()
+    expect(desktopProcessStack.stopManager).toHaveBeenCalledOnce()
+    expect(harness.drainKunOwnersForHandoff).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'startup-retry',
+        dataDirs: ['/tmp/kun-data'],
+        settingsPath: '/tmp/kun-settings.json',
+        controlDir: '/tmp/kun-control'
+      })
+    )
   })
 
   it('stops the owned Manager after a data-mutex HTTP 500 without launching a replacement before quit', async () => {
@@ -324,6 +360,15 @@ describe('GUI Runtime startup preparation', () => {
     ))).rejects.toThrow(/owned Manager did not exit/)
 
     expect(harness.mainState.activeServiceManager).toBe(harness.activeServiceManager)
+  })
+
+  it('keeps Recheck on the recovery path when a leftover Manager is still busy', async () => {
+    harness.retireVerifiablyIdleLegacyManager.mockRejectedValueOnce(
+      new Error('Manager has an application owner or Runtime slots; close its clients before retiring it')
+    )
+    await expect(prepareGuiRuntimeForStartupRetry(new ServiceManagerUnavailableError('capability_incompatible', 18435)))
+      .rejects.toThrow(/Runtime slots/)
+    expect(desktopProcessStack.stopManager).toHaveBeenCalledOnce()
   })
 
   it('cleans a partial Manager startup before activeServiceManager is initialized', async () => {

@@ -163,6 +163,14 @@ body {
   zoom: var(--ds-ui-scale);
 }
 
+/* Desktop font scaling also scales fixed pixel heights. Keep the remote phone
+   viewport (including body portals) in CSS pixels; browser pinch zoom still works. */
+html[data-remote-surface='mobile'] body {
+  zoom: 1;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body::before {
   content: '';
   position: fixed;

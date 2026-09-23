@@ -60,6 +60,8 @@ import type { KunProtectedApprovalRequest, KunProtectedApprovalResult } from './
 import type { ProviderMutationFlushRequestHandler } from './provider-mutation-barrier'
 import type {
   ClipboardImageReadResult,
+  ClipboardImageWritePayload,
+  ClipboardImageWriteResult,
   LocalPdfTextReadResult,
   LocalPdfTextTarget,
   WorkspaceClipboardImageSavePayload,
@@ -582,6 +584,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
     payload: WorkspaceImageBytesSavePayload
   ) => Promise<WorkspaceImageBytesSaveResult>
   readClipboardImage: () => Promise<ClipboardImageReadResult>
+  writeClipboardImage: (payload: ClipboardImageWritePayload) => Promise<ClipboardImageWriteResult>
   getPathForFile: (file: File) => string
   renameWorkspaceEntry: (
     payload: WorkspaceEntryRenamePayload

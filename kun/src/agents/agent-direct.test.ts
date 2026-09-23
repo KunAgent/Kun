@@ -1,32 +1,45 @@
 import { execFileSync } from 'node:child_process'
 import { setAgentPermissions, agentPermissions } from './agent-permissions.js'
-import { RoomRunTextStream } from '../server/routes/room-run-text-stream.js'
 import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { makeHarness } from '../../tests/loop-test-harness.js'
 import type { ModelClient, ModelRequest } from '../ports/model-client.js'
+import { CapabilityRegistry } from '../adapters/tool/capability-registry.js'
+import { defaultLocalTools } from '../adapters/tool/local-tool-host.js'
+import { roomResultProvider } from '../rooms/room-result-tools.js'
+import { IM_PUBLICATION_MAX_RECOVERY_STEPS } from '../loop/round-outcome-coordinator.js'
 import { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
 import { RoomRuntime } from '../rooms/room-runtime.js'
 import type { RoomRequestState, RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
 import { quickCreateAgent } from './agent-chat-entry.js'
 import { controlDirectRequest, updateDirectWorkspace, directActivity } from './agent-direct-service.js'
 import { AgentDirectRunner } from './agent-direct-runner.js'
+import { enqueuePrivateContinuation } from '../rooms/room-continuation-service.js'
 
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0)) await fn() })
-async function fixture(outputPath = 'hello.txt') {
+async function fixture(outputPath = 'hello.txt', model?: ModelClient) {
   const root = await mkdtemp(join(tmpdir(), 'kun-direct-'))
   const seen: ModelRequest[] = []
-  const client: ModelClient = { provider: 'test', model: 'first', async *stream(request) {
+  const client: ModelClient = model ?? { provider: 'test', model: 'first', async *stream(request) {
     seen.push(request)
-    const wrote = request.history.some((item) => item.turnId === request.turnId && item.kind === 'tool_result')
+    const results = request.history.filter((item): item is Extract<typeof item, { kind: 'tool_result' }> =>
+      item.turnId === request.turnId && item.kind === 'tool_result')
+    const wrote = results.some((item) => item.toolName === 'write')
+    const sent = results.some((item) => item.toolName === 'send_im_message' && item.isError !== true)
     if (!wrote) yield { kind: 'tool_call_complete', callId: 'write-' + request.turnId, toolName: 'write', arguments: { path: outputPath, content: request.model === 'second' ? 'updated' : 'hello' } }
-    else yield { kind: 'assistant_text_delta', text: 'The file is ready.' }
-    yield { kind: 'completed', stopReason: wrote ? 'stop' : 'tool_calls' }
+    else if (!sent) yield { kind: 'tool_call_complete', callId: 'say-' + request.turnId, toolName: 'send_im_message',
+      arguments: { text: 'The file is ready.', ...(outputPath.startsWith('/') ? {} : { attachments: [{ path: outputPath }] }) } }
+    yield { kind: 'completed', stopReason: wrote && !sent ? 'tool_calls' : 'stop' }
   } }
-  const h = makeHarness(client)
+  const h = makeHarness(model ? { provider: model.provider, model: model.model,
+    async *stream(request) { seen.push(request); yield* model.stream(request) } } : client)
+  h.toolHost.replaceRuntimeComponents({ registry: new CapabilityRegistry([
+    { id: 'builtin', kind: 'built-in', enabled: true, available: true, tools: defaultLocalTools },
+    roomResultProvider(h.threadStore)
+  ]) })
   const store = new SqliteRoomStore({ path: join(root, 'rooms.sqlite') })
   const deps: RoomRuntimeDeps = { dataDir: root, store, threads: h.threads, threadStore: h.threadStore,
     turns: h.turns, sessions: h.sessionStore, approvals: h.approvalGate, inputs: h.userInputGate,
@@ -53,6 +66,54 @@ async function fixture(outputPath = 'hello.txt') {
   cleanup.push(async () => { await runtime.close(); await h.turns.interruptActiveTurns(); await store.close(); await rm(root, { recursive: true, force: true }) })
   return { root, seen, h, store, deps, runtime, runner, created, advance }
 }
+it('queues a scoped continuation before admission and publishes its exact run once', async () => {
+  const f = await fixture()
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'source', body: 'Create hello.txt' })
+  const source = await f.advance(sent.requestId)
+  const input = { threadId: source.threadId, sourceTurnId: source.turnId!, kind: 'background_subagent' as const,
+    key: 'completed-child-one', prompt: 'Use the completed child result to finish the task.' }
+  const snapshot = await f.runtime.agents.freeze(await f.runtime.service.get(f.created.roomId))
+  expect(snapshot.members[0]).toEqual(source.roomSnapshot.members[0])
+  expect(await enqueuePrivateContinuation(f.deps, input)).toBe('queued')
+  expect(await enqueuePrivateContinuation(f.deps, input)).toBe('queued')
+  const requests = await f.store.list<RoomRequestState>('request', { roomId: f.created.roomId })
+  const continuations = requests.filter((row) => row.value.privateContinuation)
+  expect(continuations).toHaveLength(1)
+  expect(continuations[0].value.turnId).toBeUndefined()
+  const result = await f.advance(continuations[0].id)
+  expect(result.status).toBe('completed')
+  expect(result.threadId).toBe(source.threadId)
+  expect(result.turnId).not.toBe(source.turnId)
+  const messages = await f.store.list<import('../contracts/rooms.js').RoomMessage>('message', { roomId: f.created.roomId })
+  expect(messages.filter((row) => row.value.authorKind === 'member')).toHaveLength(2)
+  expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'completed-child-two' })).toBe('queued')
+  const second = (await f.store.list<RoomRequestState>('request', { roomId: f.created.roomId }))
+    .find((row) => row.value.privateContinuation && row.id !== continuations[0].id)!
+  expect((await f.advance(second.id)).status).toBe('completed')
+  const newer = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'new-user', body: 'New task' })
+  await f.advance(newer.requestId)
+  expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'completed-child-three' })).toBe('ignored')
+})
+
+it('rejects stale or cross-thread continuation sources and rechecks authority before admission', async () => {
+  const f = await fixture()
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'source', body: 'Create hello.txt' })
+  const source = await f.advance(sent.requestId)
+  const input = { threadId: source.threadId, sourceTurnId: source.turnId!, kind: 'background_subagent' as const,
+    key: 'child-one', prompt: 'Continue the source task.' }
+  expect(await enqueuePrivateContinuation(f.deps, { ...input, sourceTurnId: 'foreign' })).toBe('ignored')
+  expect(await enqueuePrivateContinuation(f.deps, input)).toBe('queued')
+  const continuation = (await f.store.list<RoomRequestState>('request', { roomId: f.created.roomId }))
+    .find((row) => row.value.privateContinuation)!
+  const room = await f.runtime.service.get(f.created.roomId)
+  await updateDirectWorkspace(f.runtime, room.id, { action: 'reset', clientRequestId: 'reset', expectedRevision: room.revision })
+  const enqueue = vi.spyOn(f.h.turns, 'enqueueTurn')
+  await f.runner.tick(continuation)
+  expect((await f.store.get<RoomRequestState>('request', continuation.id))?.value.status).toBe('cancelled')
+  expect(enqueue).not.toHaveBeenCalled()
+  expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'child-two' })).toBe('ignored')
+})
+
 it('creates one default Agent and private chat without calling a model', async () => {
   const f = await fixture()
   expect(await quickCreateAgent(f.runtime.agents, { clientRequestId: 'again' }, true)).toEqual(f.created)
@@ -71,6 +132,9 @@ it('writes and updates a real file with one persistent conversation and ordinary
   const second = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'second', body: 'Update that file.' })
   const b = await f.advance(second.requestId)
   expect(b.status).toBe('completed'); expect(b.threadId).toBe(a.threadId)
+  const recordedItems = await f.deps.sessions.loadItems(b.threadId)
+  const userItem = recordedItems.find((entry) => entry.turnId === b.turnId && entry.kind === 'user_message')
+  expect(userItem?.kind === 'user_message' && userItem.displayText).toBe('Update that file.')
   expect(await readFile(join(b.privateWorkspace!, 'hello.txt'), 'utf8')).toBe('updated')
   expect(f.seen.some((request) => request.model === 'second')).toBe(true)
   const messages = await f.store.list<import('../contracts/rooms.js').RoomMessage>('message', { roomId: f.created.roomId })
@@ -161,50 +225,48 @@ it('keeps explicit reply branches while ordinary assistant messages have no auto
   expect(response.displayThreadRootId).toBe(first.message.id)
 })
 
-it('hydrates a scoped stream and drops late text after persisted cancellation without new execution', async () => {
+it('publishes text and workspace attachments as one visible room message', async () => {
   const f = await fixture()
-  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'stream', body: 'Create hello.txt' })
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'attach', body: 'Create hello.txt' })
   const done = await f.advance(sent.requestId)
-  const values: Array<import('../contracts/rooms.js').RoomMessage | null> = []
-  const feed = new RoomRunTextStream(f.deps, f.h.bus, f.created.roomId, done.privateRunId!, (message) => { values.push(message); return true })
-  await feed.start()
-  await vi.waitFor(() => expect(values.at(-1)?.body).toContain('The file is ready'))
-  const count = f.seen.length
-  const row = (await f.store.get<RoomRequestState>('request', done.id))!
-  await f.store.commit({ requestId: 'stream-stop', checks: [{ kind: 'request', id: done.id, expectedRevision: row.revision }],
-    puts: [{ kind: 'request', id: done.id, roomId: done.roomId, value: { ...row.value, cancellationRequested: true, status: 'cancelled' } }] })
-  f.h.bus.publish({ kind: 'assistant_text_delta', threadId: done.threadId, turnId: done.turnId,
-    seq: 99999, deltaOffset: 0, item: { id: 'late', threadId: done.threadId, turnId: done.turnId, kind: 'assistant_text', text: 'LATE_TEXT' } } as import('../contracts/events.js').RuntimeEvent)
-  await vi.waitFor(() => expect(values.at(-1)).toBeNull())
-  expect(JSON.stringify(values)).not.toContain('LATE_TEXT')
-  expect(f.seen.length).toBe(count)
-  feed.close()
+  expect(done.status).toBe('completed')
+  const published = (await f.store.list<import('../contracts/rooms.js').RoomMessage>('message'))
+    .find((row) => row.value.originRunId === done.privateRunId)
+  expect(published?.value.body).toBe('The file is ready.')
+  expect(published?.value.references).toEqual([
+    { kind: 'agent_file', workspaceId: expect.any(String), relativePath: 'hello.txt', titleSnapshot: 'hello.txt' }
+  ])
+  const run = await f.store.get<import('../contracts/room-runs.js').RoomRunRecord>('room_run', done.privateRunId!)
+  expect(run?.value.outcome).toBe('published')
+  expect(run?.value.publishedMessageId).toBe(published?.id)
 })
 
-it('replays durable deltas beyond a stale checkpoint without depending on bus history', async () => {
-  const f = await fixture()
-  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'checkpoint', body: 'Create hello.txt' })
+it('keeps ordinary assistant text internal and settles the run as skipped after bounded recovery', async () => {
+  const f = await fixture('hello.txt', { provider: 'test', model: 'first', async *stream() {
+    yield { kind: 'assistant_text_delta', text: 'The file is ready.' }
+    yield { kind: 'completed', stopReason: 'stop' }
+  } })
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'quiet', body: 'Say something' })
   const done = await f.advance(sent.requestId)
-  const load = f.h.sessionStore.loadItemPage.bind(f.h.sessionStore)
-  vi.spyOn(f.h.sessionStore, 'loadItemPage').mockImplementationOnce(async (...args) => {
-    const page = await load(...args)
-    return { ...page, replayAfterSeq: 0, items: page.items.map((item) => item.kind === 'assistant_text' ? { ...item, text: 'The' } : item) }
-  })
-  vi.spyOn(f.h.bus, 'snapshotSince').mockImplementation(() => { throw new Error('production has no bus tail') })
-  const values: Array<import('../contracts/rooms.js').RoomMessage | null> = []
-  const feed = new RoomRunTextStream(f.deps, f.h.bus, f.created.roomId, done.privateRunId!, (message) => { values.push(message); return true })
-  await feed.start()
-  await vi.waitFor(() => expect(values.at(-1)?.body).toBe('The file is ready.'))
-  feed.close()
+  expect(done.status).toBe('completed')
+  expect((await f.store.list<import('../contracts/rooms.js').RoomMessage>('message'))
+    .filter((row) => row.value.authorKind === 'member')).toHaveLength(0)
+  const run = await f.store.get<import('../contracts/room-runs.js').RoomRunRecord>('room_run', done.privateRunId!)
+  expect(run?.value.outcome).toBe('skipped')
+  expect(run?.value.publishedMessageId).toBeUndefined()
+  expect(f.seen).toHaveLength(1 + IM_PUBLICATION_MAX_RECOVERY_STEPS)
 })
 
 it('freezes accepted permissions and applies full access only to the next private turn', async () => {
   const f = await fixture()
   const approvals = vi.spyOn(f.h.approvalGate, 'request')
-  const first = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'before-policy', body: 'Keep context: ALPHA. Create hello.txt.' })
   const state = await agentPermissions(f.runtime, f.created.roomId)
-  expect(state.mode).toBe('ask-for-approval')
-  await setAgentPermissions(f.runtime, f.created.roomId, { clientRequestId: 'full-policy', expectedRevision: state.revision, mode: 'full-access' })
+  expect(state.mode).toBe('full-access')
+  await setAgentPermissions(f.runtime, f.created.roomId, { clientRequestId: 'restrict-first', expectedRevision: state.revision, mode: 'ask-for-approval' })
+  const first = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'before-policy', body: 'Keep context: ALPHA. Create hello.txt.' })
+  const restricted = await agentPermissions(f.runtime, f.created.roomId)
+  expect(restricted.mode).toBe('ask-for-approval')
+  await setAgentPermissions(f.runtime, f.created.roomId, { clientRequestId: 'full-policy', expectedRevision: restricted.revision, mode: 'full-access' })
   expect(f.seen).toHaveLength(0)
   const a = await f.advance(first.requestId)
   expect(a.roomSnapshot.privateExecutionPolicy?.sandboxMode).toBe('workspace-write')
@@ -216,7 +278,7 @@ it('freezes accepted permissions and applies full access only to the next privat
   expect(approvals).toHaveBeenCalledTimes(1)
   expect(JSON.stringify(f.seen.filter((request) => request.threadId === b.threadId))).toContain('ALPHA')
   const other = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'other-policy', setupMode: 'form' })
-  expect((await agentPermissions(f.runtime, other.roomId)).mode).toBe('ask-for-approval')
+  expect((await agentPermissions(f.runtime, other.roomId)).mode).toBe('full-access')
 })
 it('full access performs an explicitly selected external file write and respects later Agent directory limits', async () => {
   const outside = await mkdtemp(join(tmpdir(), 'kun-permission-external-'))
@@ -232,6 +294,18 @@ it('full access performs an explicitly selected external file write and respects
   const agent = await f.runtime.agents.get(f.created.agentId)
   await f.runtime.agents.update(agent.id, { clientRequestId: 'limit-after', expectedRevision: agent.revision, allowedRepositoryRoots: [outside] })
   await expect(f.runtime.service.send(f.created.roomId, { clientRequestId: 'after-limit', body: 'Write again' })).rejects.toThrow('Agent limits changed')
+})
+it('defaults a directory-limited Agent to ask-for-approval instead of full access', async () => {
+  const outside = await mkdtemp(join(tmpdir(), 'kun-permission-restricted-'))
+  cleanup.push(() => rm(outside, { recursive: true, force: true }))
+  execFileSync('git', ['init', '--quiet', outside])
+  execFileSync('git', ['-C', outside, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', '-c', 'commit.gpgSign=false', '-c', 'core.hooksPath=/dev/null', 'commit', '--allow-empty', '-m', 'test: initialize scope'])
+  const f = await fixture()
+  const agent = await f.runtime.agents.get(f.created.agentId)
+  await f.runtime.agents.update(agent.id, { clientRequestId: 'restrict-agent', expectedRevision: agent.revision, allowedRepositoryRoots: [outside] })
+  const state = await agentPermissions(f.runtime, f.created.roomId)
+  expect(state.mode).toBe('ask-for-approval')
+  expect(state.fullAccessUnavailable).toBe('agent_directory_limits')
 })
 
 it('uses current confirmed permissions for a new retry while retaining the original workspace', async () => {

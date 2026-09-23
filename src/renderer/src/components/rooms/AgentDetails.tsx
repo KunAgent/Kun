@@ -1,12 +1,16 @@
+import { Archive, ArchiveRestore, Copy, MessageSquare, SlidersHorizontal } from 'lucide-react'
 import { AgentModelSettings } from './AgentModelSettings'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentIdentity, Room, RoomRunRecord } from '@shared/rooms-api'
 import { AgentProfileForm } from './AgentProfileForm'
 import { AgentMemoryPanel } from './AgentMemoryPanel'
+import { RoomAvatar } from './RoomAvatar'
 import { agentPath, useAgentResource } from './agent-client'
 import { roomRequestId, roomsRequest } from './rooms-client'
 import './agents.css'
+
+const TABS = ['profile', 'conversations', 'memory', 'runs'] as const
 
 export function AgentDetails({ agentId, active, onSaved, onOpen, onConversation, onRun, onSource }: {
   agentId?: string; active: boolean; onSaved: (agent: AgentIdentity) => void; onOpen: (id: string) => void;
@@ -29,24 +33,51 @@ export function AgentDetails({ agentId, active, onSaved, onOpen, onConversation,
       onSaved(result.agent)
     } catch (cause) { setError(String(cause)) } finally { setBusy(false) }
   }
-  if (!agentId) return <AgentProfileForm agent={null} active={active} onSaved={onSaved} />
+  if (!agentId) return <div className="agent-details"><div className="agent-details-panel"><AgentProfileForm agent={null} active={active} onSaved={onSaved} /></div></div>
   return <div className="agent-details">
     {agent ? <>
-      <div className="agent-details-heading"><strong>{agent.name}</strong><p>{agent.title}</p>
-        <button type="button" className="rooms-run-primary" onClick={() => onOpen(agent.id)}>{t('agentsOpenPrivate')}</button>
-        <div className="agent-memory-actions"><button type="button" disabled={busy} onClick={() => void action('archive')}>{t(agent.archivedAt ? 'agentsRestore' : 'agentsArchive')}</button>
-          <button type="button" disabled={busy} onClick={() => void action('copy')}>{t('agentsCopy')}</button></div>
-        {agent.archivedAt ? <p className="rooms-run-note">{t('agentsArchiveHint')}</p> : null}
+      <div className="agent-details-body">
+        <aside className="agent-details-summary">
+          <div className="agent-details-identity">
+            <RoomAvatar avatar={agent.avatar} id={agent.id} label={agent.name} size={64} />
+            <div className="agent-details-identity-text">
+              <h2 className="agent-details-name">{agent.name}</h2>
+              {agent.title ? <p className="agent-details-title">{agent.title}</p> : null}
+            </div>
+          </div>
+          <span className={'agent-details-status' + (agent.archivedAt ? ' is-archived' : '')}>
+            {t(agent.archivedAt ? 'agentsArchivedState' : 'agentsIdle')}
+          </span>
+          <button type="button" className="rooms-run-primary agent-details-chat" onClick={() => onOpen(agent.id)}>
+            <MessageSquare size={15} aria-hidden="true" />{t('agentsOpenPrivate')}
+          </button>
+          <div className="agent-details-actions">
+            <button type="button" disabled={busy} onClick={() => void action('archive')}>
+              {agent.archivedAt ? <ArchiveRestore size={15} aria-hidden="true" /> : <Archive size={15} aria-hidden="true" />}
+              {t(agent.archivedAt ? 'agentsRestore' : 'agentsArchive')}
+            </button>
+            <button type="button" disabled={busy} onClick={() => void action('copy')}>
+              <Copy size={15} aria-hidden="true" />{t('agentsCopy')}
+            </button>
+          </div>
+          <button type="button" className="agent-details-models" onClick={() => setModelsOpen(true)}>
+            <SlidersHorizontal size={15} aria-hidden="true" />{t('directModels')}
+          </button>
+          {agent.archivedAt ? <p className="rooms-run-note agent-details-archive-note">{t('agentsArchiveHint')}</p> : null}
+        </aside>
+        <div className="agent-details-content">
+          <nav className="agent-detail-tabs" aria-label={t('agentsProfileAndMemory')}>
+            {TABS.map((value) => <button type="button" key={value} aria-current={tab === value ? 'page' : undefined} onClick={() => setTab(value)}>{t('agentsTab_' + value)}</button>)}
+          </nav>
+          <div className="agent-details-panel">
+            {tab === 'profile' ? <AgentProfileForm agent={agent} active={active} onSaved={onSaved} /> : null}
+            {tab === 'memory' ? <AgentMemoryPanel agentId={agent.id} active={active} onSource={onSource} /> : null}
+            {tab === 'conversations' ? <AgentConversations agentId={agent.id} active={active} onOpen={onConversation} /> : null}
+            {tab === 'runs' ? <AgentRuns agentId={agent.id} active={active} onRun={onRun} /> : null}
+          </div>
+        </div>
       </div>
-      <button type="button" onClick={() => setModelsOpen(true)}>{t('directModels')}</button>
       {modelsOpen ? <AgentModelSettings agentId={agent.id} onClose={() => setModelsOpen(false)} onSaved={resource.refresh} /> : null}
-      <nav className="agent-detail-tabs" aria-label={t('agentsProfileAndMemory')}>
-        {(['profile', 'conversations', 'memory', 'runs'] as const).map((value) => <button type="button" aria-pressed={tab === value} key={value} onClick={() => setTab(value)}>{t('agentsTab_' + value)}</button>)}
-      </nav>
-      {tab === 'profile' ? <AgentProfileForm agent={agent} active={active} onSaved={onSaved} /> : null}
-      {tab === 'memory' ? <AgentMemoryPanel agentId={agent.id} active={active} onSource={onSource} /> : null}
-      {tab === 'conversations' ? <AgentConversations agentId={agent.id} active={active} onOpen={onConversation} /> : null}
-      {tab === 'runs' ? <AgentRuns agentId={agent.id} active={active} onRun={onRun} /> : null}
     </> : !resource.error ? <p className="rooms-run-note">{t('roomsLoading')}</p> : null}
     {error || resource.error ? <p role="alert" className="rooms-run-error">{error || resource.error}</p> : null}
   </div>

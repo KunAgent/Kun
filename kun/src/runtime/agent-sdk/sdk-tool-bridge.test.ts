@@ -117,7 +117,9 @@ describe('buildBridgedToolSpecs', () => {
     const specs = buildBridgedToolSpecs([tool('generate_image')], execute)
     expect(specs).toHaveLength(1)
     const res = await specs[0].handler({ prompt: 'a cat' })
-    expect(execute).toHaveBeenCalledWith('generate_image', { prompt: 'a cat' })
+    expect(execute).toHaveBeenCalledWith('generate_image', { prompt: 'a cat' }, undefined)
+    await specs[0].handler({ prompt: 'a cat' }, { _meta: { 'claudecode/toolUseId': 'toolu_1' } })
+    expect(execute).toHaveBeenLastCalledWith('generate_image', { prompt: 'a cat' }, 'toolu_1')
     expect(res).toEqual({ content: [{ type: 'text', text: 'ok' }] })
   })
 

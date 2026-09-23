@@ -5,6 +5,8 @@ import { getProvider } from '../../agent/registry'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { useChatStore } from '../../store/chat-store'
 import { threadLooksRunning } from '../../store/chat-store-runtime-helpers'
+import { writeThreadActivity, type WriteResourceActivityContext } from '../../write/write-resource-activity'
+import type { SidebarActivity } from '../sidebar/SidebarActivityIndicator'
 import { workWhiteboardThreadIds } from '../../write/work-whiteboard'
 import {
   readWriteThreadRegistry,
@@ -25,6 +27,7 @@ export type WriteResourceConversationEntry = {
   current: boolean
   missing: boolean
   archived: boolean
+  activity?: SidebarActivity
 }
 
 export type WriteResourceConversationHistoryModel = {
@@ -123,7 +126,11 @@ export function useWriteResourceConversationHistory(
     runtimeConnection,
     selectWriteThread,
     renameThread,
-    archiveThread
+    archiveThread,
+    storeBusy,
+    watchTurnCompletion,
+    awaitingUserInputThreadIds,
+    unreadThreadIds
   } = useChatStore(
     useShallow((state) => ({
       activeThreadId: state.activeThreadId,
@@ -131,10 +138,22 @@ export function useWriteResourceConversationHistory(
       runtimeConnection: state.runtimeConnection,
       selectWriteThread: state.selectWriteThread,
       renameThread: state.renameThread,
-      archiveThread: state.archiveThread
+      archiveThread: state.archiveThread,
+      storeBusy: state.busy,
+      watchTurnCompletion: state.watchTurnCompletion,
+      awaitingUserInputThreadIds: state.awaitingUserInputThreadIds,
+      unreadThreadIds: state.unreadThreadIds
     }))
   )
   const [cachedThreads, setCachedThreads] = useState<Record<string, NormalizedThread>>({})
+  const activityContext: WriteResourceActivityContext = {
+    threads,
+    activeThreadId,
+    busy: storeBusy,
+    watchTurnCompletion,
+    awaitingUserInputThreadIds,
+    unreadThreadIds
+  }
 
   const scope = useMemo<ResourceScope | null>(() => {
     const normalizedWorkspace = normalizeWorkspaceRoot(workspaceRoot)
@@ -166,7 +185,7 @@ export function useWriteResourceConversationHistory(
       ),
       workflowLocked: false
     }
-  }, [activeFilePath, activeWhiteboard, activeWhiteboardId, activeThreadId, threads, workspaceRoot])
+  }, [activeFilePath, activeWhiteboard, activeWhiteboardId, workspaceRoot])
 
   useEffect(() => {
     setCachedThreads({})
@@ -294,7 +313,8 @@ export function useWriteResourceConversationHistory(
       updatedAt: thread?.updatedAt ?? null,
       current: id === activeThreadId,
       missing: !thread,
-      archived: thread?.archived === true
+      archived: thread?.archived === true,
+      activity: writeThreadActivity(id, activityContext)
     }
   }).filter((entry) => !entry.archived)
   const running = busy || scope.threadIds.some((id) =>

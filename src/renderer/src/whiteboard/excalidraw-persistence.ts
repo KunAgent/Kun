@@ -30,6 +30,25 @@ const _inFlightSaves = new Map<string, Set<Promise<unknown>>>()
 const _cancelledSaveKeys = new Set<string>()
 const _liveScenes = new Map<string, ExcalidrawSceneV1>()
 const _liveEngines = new Map<string, CanvasEngine>()
+const _sceneMtimes = new Map<string, number>()
+const _saveErrors = new Map<string, Error>()
+const _saveErrorListeners = new Map<string, Set<(message: string) => void>>()
+
+export function subscribeExcalidrawSaveError(workspaceRoot: string, identityId: string, baseDir: string,
+  listener: (message: string) => void): () => void {
+  const key = excalidrawSceneKey(workspaceRoot, identityId, baseDir)
+  const listeners = _saveErrorListeners.get(key) ?? new Set()
+  listeners.add(listener)
+  _saveErrorListeners.set(key, listeners)
+  listener(_saveErrors.get(key)?.message ?? '')
+  return () => { listeners.delete(listener); if (!listeners.size) _saveErrorListeners.delete(key) }
+}
+
+export function pendingExcalidrawDraft(workspaceRoot: string, identityId: string, baseDir: string): ExcalidrawSceneV1 | null {
+  const key = excalidrawSceneKey(workspaceRoot, identityId, baseDir)
+  return _pendingSaves.has(key) || _saveErrors.has(key) || _inFlightSaves.has(key) ? _liveScenes.get(key) ?? null : null
+}
+
 
 export function excalidrawScenePath(identityId: string, baseDir: string): string {
   return `${baseDir}/${identityId}/${EXCALIDRAW_SCENE_FILE}`
@@ -124,7 +143,23 @@ function writePendingScene(
   key: string,
   pending: { workspaceRoot: string; path: string; content: string }
 ): Promise<void> {
-  const write = writeDesignWorkspaceFile(pending).then(() => undefined)
+  const previous = [...(_inFlightSaves.get(key) ?? [])]
+  const write = Promise.all(previous).then(async () => {
+    const failure = _saveErrors.get(key)
+    if (failure) throw failure
+    const expectedMtimeMs = _sceneMtimes.get(key)
+    const result = await writeDesignWorkspaceFile({ ...pending,
+      ...(expectedMtimeMs !== undefined ? { expectedMtimeMs } : {}) })
+    if (!result.ok) throw new Error(result.message)
+    if (result.mtimeMs !== undefined) _sceneMtimes.set(key, result.mtimeMs)
+  }).catch((cause: unknown) => {
+    const error = cause instanceof Error ? cause : new Error(String(cause))
+    _saveErrors.set(key, error)
+    for (const listener of _saveErrorListeners.get(key) ?? []) listener(error.message)
+    // Retain the draft on IPC failures as well as explicit version conflicts.
+    if (!_pendingSaves.has(key)) _pendingSaves.set(key, pending)
+    throw error
+  })
   const writes = _inFlightSaves.get(key) ?? new Set<Promise<unknown>>()
   writes.add(write)
   _inFlightSaves.set(key, writes)
@@ -184,7 +219,7 @@ export function persistExcalidrawScene(
     _saveTimers.delete(key)
     const pending = _pendingSaves.get(key)
     _pendingSaves.delete(key)
-    if (pending && !_cancelledSaveKeys.has(key)) void writePendingScene(key, pending)
+    if (pending && !_cancelledSaveKeys.has(key)) void writePendingScene(key, pending).catch(() => undefined)
   }, 600)
   _saveTimers.set(key, timer)
 }
@@ -209,6 +244,39 @@ export async function flushPendingExcalidrawScenes(workspaceRoot?: string): Prom
   }
 }
 
+export async function prepareExcalidrawReload(workspaceRoot: string, identityId: string, baseDir: string): Promise<void> {
+  const key = excalidrawSceneKey(workspaceRoot, identityId, baseDir)
+  const timer = _saveTimers.get(key)
+  if (timer) clearTimeout(timer)
+  _saveTimers.delete(key)
+  const writes = _inFlightSaves.get(key)
+  if (writes?.size) await Promise.all([...writes])
+  if (_pendingSaves.has(key) || _saveErrors.has(key)) {
+    const message = 'The board has unsaved local changes. Resolve the local/disk conflict before applying the Agent scene.'
+    for (const listener of _saveErrorListeners.get(key) ?? []) listener(message)
+    throw new Error(message)
+  }
+}
+
+export async function flushPendingExcalidrawScene(
+  workspaceRoot: string,
+  identityId: string,
+  baseDir: string
+): Promise<void> {
+  const key = excalidrawSceneKey(workspaceRoot, identityId, baseDir)
+  const timer = _saveTimers.get(key)
+  if (timer) clearTimeout(timer)
+  _saveTimers.delete(key)
+  const pending = _pendingSaves.get(key)
+  _pendingSaves.delete(key)
+  if (pending && !_cancelledSaveKeys.has(key)) await writePendingScene(key, pending)
+  const writes = _inFlightSaves.get(key)
+  if (writes?.size) await Promise.all([...writes])
+  const failure = _saveErrors.get(key)
+  if (failure) throw failure
+}
+
+/** Drop a pending local save only when the caller deliberately replaces it. */
 export async function discardPendingExcalidrawScene(
   workspaceRoot: string,
   identityId: string,
@@ -220,7 +288,11 @@ export async function discardPendingExcalidrawScene(
   _saveTimers.delete(key)
   _pendingSaves.delete(key)
   const writes = _inFlightSaves.get(key)
-  if (writes?.size) await Promise.all([...writes])
+  if (writes?.size) await Promise.allSettled([...writes])
+  _saveErrors.delete(key)
+  for (const listener of _saveErrorListeners.get(key) ?? []) listener('')
+  _pendingSaves.delete(key)
+  _sceneMtimes.delete(key)
 }
 
 export async function cancelPendingExcalidrawScene(
@@ -249,7 +321,12 @@ export async function loadExcalidrawScene(
       path: excalidrawScenePath(identityId, baseDir),
       workspaceRoot
     })
-    if (!result || !result.ok) return null
+    if (!result || !result.ok || result.truncated) return null
+    const key = excalidrawSceneKey(workspaceRoot, identityId, baseDir)
+    // Reading for an Agent apply must not bless a conflicting local draft.
+    if (!_pendingSaves.has(key) && !_saveErrors.has(key) && typeof result.mtimeMs === 'number') {
+      _sceneMtimes.set(key, result.mtimeMs)
+    }
     return parseExcalidrawScene(result.content)
   } catch {
     return null
@@ -326,6 +403,13 @@ export async function persistCanvasEngineRecord(
 export function clearExcalidrawRuntimeCacheForTests(): void {
   _liveScenes.clear()
   _liveEngines.clear()
+  _sceneMtimes.clear()
+  _saveErrors.clear()
+  for (const timer of _saveTimers.values()) clearTimeout(timer)
+  _saveTimers.clear()
+  _pendingSaves.clear()
+  _cancelledSaveKeys.clear()
+  _inFlightSaves.clear()
 }
 
 export function canSwitchCanvasEngine(input: {

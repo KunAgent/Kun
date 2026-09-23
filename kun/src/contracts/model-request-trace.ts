@@ -158,7 +158,8 @@ export const ModelRequestTraceRecordSchema = z
       'initial',
       'transport_retry',
       'credential_refresh',
-      'stream_options_fallback'
+      'stream_options_fallback',
+      'request_fallback'
     ]),
     status: z.enum([
       'pending',

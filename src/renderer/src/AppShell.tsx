@@ -1,21 +1,19 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { appWindowTitleForFlavor } from '@shared/app-environment'
 import { MAX_APP_BADGE_COUNT } from '@shared/kun-gui-api'
-import { resolveDesktopTitleBarMode } from '@shared/desktop-title-bar'
+import { resolveDesktopTitleBarMode, usesCustomDesktopTitleBar } from '@shared/desktop-title-bar'
 import { installSidebarActivityLifecycle } from './sidebar-activity-lifecycle'
 import { useChatStore } from './store/chat-store'
-import { supportsDesktopTitleBar, WindowsTitleBar } from './components/WindowsTitleBar'
-import { MiniWindowOverlay } from './components/MiniWindowOverlay'
-import { useWindowMiniMode } from './lib/use-window-mini-mode'
 import { RuntimeStatusBanner } from './components/RuntimeStatusBanner'
 import i18n from './i18n'
-import { ExtensionWorkbenchLifecycle } from './extensions/ExtensionWorkbenchLifecycle'
 import { ProtectedRendererSurface } from './extensions/ProtectedRendererSurface'
 import { ExtensionSettingsServiceProvider } from './extensions/ExtensionSettingsServiceContext'
 import { RuntimeExtensionSettingsService } from './extensions/runtime-extension-settings-service'
 import { createInitialWorkbenchPreparer } from './initial-workbench-preparation'
 import { DataMigrationActivityIndicator } from './components/DataMigrationActivityIndicator'
 import { SpeakDownloadToast } from './components/SpeakDownloadToast'
+import { useRoomEvents } from './components/rooms/useRoomEvents'
+import { useRemoteSurface } from './mobile/use-remote-surface'
 import {
   clearCurrentlyVisibleUnreadCompletions,
   persistUnreadCompletions,
@@ -24,15 +22,19 @@ import {
 
 const extensionSettingsService = new RuntimeExtensionSettingsService()
 
+const DesktopShellChrome = lazy(() => import('./DesktopShellChrome').then((module) => ({ default: module.DesktopShellChrome })))
+
 type WorkbenchComponent = (typeof import('./components/Workbench'))['Workbench']
 type SettingsViewComponent = (typeof import('./components/SettingsView'))['SettingsView']
 type InitialSetupDialogComponent = (
   typeof import('./components/InitialSetupDialog')
 )['InitialSetupDialog']
+type MobileAppShellComponent = (typeof import('./mobile/MobileAppShell'))['MobileAppShell']
 
 let preparedWorkbench: WorkbenchComponent | null = null
 let preparedSettingsView: SettingsViewComponent | null = null
 let preparedInitialSetupDialog: InitialSetupDialogComponent | null = null
+let preparedMobileAppShell: MobileAppShellComponent | null = null
 
 const loadWorkbench = () =>
   import('./components/Workbench').then((module) => {
@@ -49,9 +51,15 @@ const loadInitialSetupDialog = () => import('./components/InitialSetupDialog').t
   return { default: module.InitialSetupDialog }
 })
 
+const loadMobileAppShell = () => import('./mobile/MobileAppShell').then((module) => {
+  preparedMobileAppShell = module.MobileAppShell
+  return { default: module.MobileAppShell }
+})
+
 const Workbench = lazy(loadWorkbench)
 const SettingsView = lazy(loadSettingsView)
 const InitialSetupDialog = lazy(loadInitialSetupDialog)
+const MobileAppShell = lazy(loadMobileAppShell)
 
 export const prepareInitialWorkbench = createInitialWorkbenchPreparer({
   boot: () => useChatStore.getState().boot(),
@@ -60,6 +68,14 @@ export const prepareInitialWorkbench = createInitialWorkbenchPreparer({
   loadSettingsView,
   loadInitialSetupDialog
 })
+
+export async function prepareInitialMobileApp(): Promise<void> {
+  await useChatStore.getState().boot()
+  await Promise.all([
+    loadMobileAppShell(),
+    useChatStore.getState().route === 'settings' ? loadSettingsView() : Promise.resolve()
+  ])
+}
 
 function RouteFallback(): React.ReactElement {
   return (
@@ -77,18 +93,20 @@ function RouteFallback(): React.ReactElement {
 }
 
 export default function AppShell(): React.ReactElement {
+  useRoomEvents()
   const route = useChatStore((s) => s.route)
+  const surface = useRemoteSurface()
   const initialSetupOpen = useChatStore((s) => s.initialSetupOpen)
   const platform = typeof window !== 'undefined' ? window.kunGui?.platform ?? 'unknown' : 'unknown'
   const appEnvironment = typeof window !== 'undefined' ? window.kunGui?.appEnvironment : undefined
   const desktopTitleBarMode = typeof window !== 'undefined'
     ? window.kunGui?.desktopTitleBarMode ?? resolveDesktopTitleBarMode(platform, false)
     : resolveDesktopTitleBarMode(platform, false)
-  const hasDesktopTitleBar = supportsDesktopTitleBar(platform, desktopTitleBarMode)
-  const miniWindowMode = useWindowMiniMode()
+  const hasDesktopTitleBar = surface === 'desktop' && usesCustomDesktopTitleBar(platform, desktopTitleBarMode)
   const WorkbenchView = preparedWorkbench ?? Workbench
   const SettingsRouteView = preparedSettingsView ?? SettingsView
   const InitialSetupView = preparedInitialSetupDialog ?? InitialSetupDialog
+  const MobileApp = preparedMobileAppShell ?? MobileAppShell
 
   useEffect(() => installSidebarActivityLifecycle(useChatStore), [])
 
@@ -144,8 +162,11 @@ export default function AppShell(): React.ReactElement {
   return (
     <ExtensionSettingsServiceProvider service={extensionSettingsService}>
       <div className={hasDesktopTitleBar ? 'ds-windows-app-frame flex h-full min-h-0 flex-col bg-ds-main' : 'flex h-full min-h-0 flex-col bg-transparent'}>
-        {hasDesktopTitleBar ? <WindowsTitleBar platform={platform} /> : null}
-        {miniWindowMode ? <MiniWindowOverlay /> : null}
+        {surface === 'desktop' ? <Suspense fallback={hasDesktopTitleBar
+          ? <div className="ds-windows-titlebar" aria-hidden />
+          : null}>
+          <DesktopShellChrome platform={platform} titleBar={hasDesktopTitleBar} />
+        </Suspense> : null}
         <div className="flex min-h-0 flex-1 flex-col">
           <RuntimeStatusBanner />
           <DataMigrationActivityIndicator />
@@ -158,11 +179,10 @@ export default function AppShell(): React.ReactElement {
               >
                 <SettingsRouteView />
               </ProtectedRendererSurface>
-            ) : <WorkbenchView />}
+            ) : surface === 'mobile' ? <MobileApp /> : <WorkbenchView />}
           </Suspense>
         </div>
         <SpeakDownloadToast />
-        <ExtensionWorkbenchLifecycle />
         {initialSetupOpen ? (
           <ProtectedRendererSurface
             kind="account-credentials"

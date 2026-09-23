@@ -24,6 +24,7 @@ import {
   initialWriteMarkdownImageSrc,
   loadWriteMarkdownImage
 } from '../../write/markdown-image'
+import { openWriteImageLightbox } from '../../write/write-image-lightbox'
 import { parsePendingInfographicId } from '../../write/infographic-pending'
 import { createInfographicPendingElement } from '../../write/infographic-pending-dom'
 import { createHtmlEmbedElement } from '../../write/html-embed-dom'
@@ -370,16 +371,20 @@ function ResolvedMarkdownImage({
   'data-raw-src': rawSrc,
   ...props
 }: ResolvedMarkdownImageProps): ReactElement {
+  const { t } = useTranslation('common')
   const imageSrc = rawSrc ?? src
   const pendingId = parsePendingInfographicId(imageSrc)
   const htmlEmbed = pendingId === null && isHtmlEmbedSrc(imageSrc)
   const [resolvedSrc, setResolvedSrc] = useState(() => initialWriteMarkdownImageSrc(imageSrc, filePath))
+  const [localPath, setLocalPath] = useState<string | undefined>()
   const [loadError, setLoadError] = useState<string | null>(null)
+  const previewName = alt?.trim() || imageSrc || 'image'
 
   useEffect(() => {
     if (pendingId !== null || htmlEmbed) return undefined
     let cancelled = false
     setLoadError(null)
+    setLocalPath(undefined)
     setResolvedSrc(initialWriteMarkdownImageSrc(imageSrc, filePath))
 
     void loadWriteMarkdownImage(imageSrc, filePath)
@@ -387,8 +392,10 @@ function ResolvedMarkdownImage({
         if (cancelled) return
         if (result.ok) {
           setResolvedSrc(result.src)
+          setLocalPath(result.localPath)
         } else {
           setLoadError(result.message)
+          setLocalPath(result.localPath)
         }
       })
 
@@ -434,12 +441,38 @@ function ResolvedMarkdownImage({
     )
   }
 
+  const openPreview = (): void => {
+    if (!resolvedSrc) return
+    openWriteImageLightbox({
+      src: resolvedSrc,
+      alt: alt ?? '',
+      ...(localPath ? { localPath } : {})
+    })
+  }
+
   return (
-    <img
-      {...props}
-      src={resolvedSrc}
-      alt={alt ?? ''}
-    />
+    <button
+      type="button"
+      className="write-markdown-preview-image-button"
+      onDoubleClick={(event) => {
+        event.preventDefault()
+        openPreview()
+      }}
+      onClick={(event) => {
+        if (event.detail === 0) {
+          event.preventDefault()
+          openPreview()
+        }
+      }}
+      aria-label={t('imagePreviewOpen', { name: previewName })}
+      title={t('imagePreviewOpen', { name: previewName })}
+    >
+      <img
+        {...props}
+        src={resolvedSrc}
+        alt={alt ?? ''}
+      />
+    </button>
   )
 }
 

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import {
   designCanvasReceiptKey,
   designToolError,
@@ -11,13 +12,44 @@ export const DESIGN_OPEN_EXCALIDRAW_TOOL_NAME = 'design_open_excalidraw'
 
 const BOARD_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/
 
+const ROOM_WHITEBOARD_DIR = '.kun-whiteboards'
+
+export const DEFAULT_ROOM_BOARD_ID = 'room'
+
 const BOARD_ID_SCHEMA = {
   type: 'string',
   pattern: '^[a-zA-Z0-9_-]{1,64}$',
-  description: 'Optional Work whiteboard id. The board artifact lives at .kun-whiteboards/<boardId>/; omit it to use the board bound to this conversation.'
+  description: 'Optional Work or private-chat room whiteboard id. The board artifact lives at .kun-whiteboards/<boardId>/; omit it to use the board bound to this conversation.'
 } as const
 
 const BOARD_ID_ERROR = 'boardId must match ^[a-zA-Z0-9_-]{1,64}$'
+
+function isRoomBoard(context: { guiRoomExcalidrawCanvas?: boolean } | undefined): boolean {
+  return context?.guiRoomExcalidrawCanvas === true
+}
+
+function resolveRoomBoardId(
+  boardId: string | undefined,
+  room: boolean,
+  threadId: string | undefined,
+  workspace: string | undefined
+): string | undefined {
+  if (!room) return boardId
+  const namespace = `room-${createHash('sha256')
+    .update(`${threadId ?? ''}\0${workspace ?? ''}`)
+    .digest('hex')
+    .slice(0, 12)}`
+  if (!boardId || boardId === DEFAULT_ROOM_BOARD_ID) return namespace
+  if (boardId === namespace || boardId.startsWith(`${namespace}-`)) return boardId
+  return `${namespace}-${boardId}`.slice(0, 64)
+}
+
+function roomBoardPaths(boardId: string): { scenePath: string; pngPath: string } {
+  return {
+    scenePath: `${ROOM_WHITEBOARD_DIR}/${boardId}/excalidraw.json`,
+    pngPath: `${ROOM_WHITEBOARD_DIR}/${boardId}/excalidraw.png`
+  }
+}
 
 export function createDesignApplyExcalidrawTool(): LocalTool {
   return LocalToolHost.defineTool({
@@ -31,7 +63,9 @@ export function createDesignApplyExcalidrawTool(): LocalTool {
     toolKind: 'tool_call',
     policy: 'auto',
     shouldAdvertise: (context) =>
-      context.guiExcalidrawCanvas === true || context.agentSurface === 'write',
+      context.guiExcalidrawCanvas === true ||
+      context.agentSurface === 'write' ||
+      context.guiRoomExcalidrawCanvas === true,
     inputSchema: {
       type: 'object',
       properties: {
@@ -40,23 +74,36 @@ export function createDesignApplyExcalidrawTool(): LocalTool {
       additionalProperties: false
     },
     execute: async (args, context) => {
-      const boardId = stringArg(args?.boardId)
-      if (boardId && !BOARD_ID_PATTERN.test(boardId)) return designToolError(BOARD_ID_ERROR)
-      if (boardId && context?.agentSurface !== 'write') {
+      const room = isRoomBoard(context)
+      const rawBoardId = stringArg(args?.boardId)
+      if (rawBoardId && !BOARD_ID_PATTERN.test(rawBoardId)) return designToolError(BOARD_ID_ERROR)
+      if (rawBoardId && context?.agentSurface !== 'write' && !room) {
         return designToolError('boardId targets a Work whiteboard and is only supported on the Work surface')
       }
+      const boardId = resolveRoomBoardId(
+        rawBoardId,
+        room,
+        context?.threadId,
+        context?.workspace
+      )
       const ops = [{ op: 'apply-excalidraw', ...(boardId ? { boardId } : {}) }]
-      return designToolOutput(DESIGN_APPLY_EXCALIDRAW_TOOL_NAME, 'apply_excalidraw', ops, {
+      const extras: Record<string, unknown> = {
         status: 'accepted',
         ...(boardId ? { boardId } : {}),
-        ...(context?.agentSurface ? { surface: context.agentSurface } : {}),
+        ...(context?.agentSurface ? { surface: room ? 'room' : context.agentSurface } : {}),
         receiptKey: designCanvasReceiptKey(
           context?.threadId,
           context?.turnId,
           context?.activeToolCallId,
           ops
         )
-      })
+      }
+      if (room && context?.workspace && boardId) {
+        extras.scope = 'room'
+        extras.workspaceRoot = context.workspace
+        Object.assign(extras, roomBoardPaths(boardId))
+      }
+      return designToolOutput(DESIGN_APPLY_EXCALIDRAW_TOOL_NAME, 'apply_excalidraw', ops, extras)
     }
   })
 }
@@ -65,14 +112,15 @@ export function createDesignOpenExcalidrawTool(): LocalTool {
   return LocalToolHost.defineTool({
     name: DESIGN_OPEN_EXCALIDRAW_TOOL_NAME,
     description: [
-      'Open or create the Excalidraw whiteboard bound to this Work conversation.',
+      'Open or create the Excalidraw whiteboard bound to this Work conversation or private-chat room.',
       'Its canonical scene lives at .kun-whiteboards/<boardId>/excalidraw.json; design_apply_excalidraw reloads that file and exports .kun-whiteboards/<boardId>/excalidraw.png.',
       'Call this before writing the scene file when no Excalidraw board is open. Pass a stable boardId slug to choose the artifact directory yourself; omit it to reuse the board bound to this conversation.',
       'Accepted means the renderer received the request; wait for the canvas receipt before treating the board as open.'
     ].join(' '),
     toolKind: 'tool_call',
     policy: 'auto',
-    shouldAdvertise: (context) => context.agentSurface === 'write',
+    shouldAdvertise: (context) =>
+      context.agentSurface === 'write' || context.guiRoomExcalidrawCanvas === true,
     inputSchema: {
       type: 'object',
       properties: {
@@ -87,26 +135,39 @@ export function createDesignOpenExcalidrawTool(): LocalTool {
       additionalProperties: false
     },
     execute: async (args, context) => {
-      const boardId = stringArg(args?.boardId)
+      const room = isRoomBoard(context)
+      const rawBoardId = stringArg(args?.boardId)
       const title = stringArg(args?.title)
-      if (boardId && !BOARD_ID_PATTERN.test(boardId)) return designToolError(BOARD_ID_ERROR)
+      if (rawBoardId && !BOARD_ID_PATTERN.test(rawBoardId)) return designToolError(BOARD_ID_ERROR)
+      const boardId = resolveRoomBoardId(
+        rawBoardId,
+        room,
+        context?.threadId,
+        context?.workspace
+      )
       const ops = [{
         op: 'open-excalidraw',
         ...(boardId ? { boardId } : {}),
         ...(title ? { title } : {})
       }]
-      return designToolOutput(DESIGN_OPEN_EXCALIDRAW_TOOL_NAME, 'open_excalidraw', ops, {
+      const extras: Record<string, unknown> = {
         status: 'accepted',
         ...(boardId ? { boardId } : {}),
         ...(title ? { title } : {}),
-        ...(context?.agentSurface ? { surface: context.agentSurface } : {}),
+        ...(context?.agentSurface ? { surface: room ? 'room' : context.agentSurface } : {}),
         receiptKey: designCanvasReceiptKey(
           context?.threadId,
           context?.turnId,
           context?.activeToolCallId,
           ops
         )
-      })
+      }
+      if (room && context?.workspace && boardId) {
+        extras.scope = 'room'
+        extras.workspaceRoot = context.workspace
+        Object.assign(extras, roomBoardPaths(boardId))
+      }
+      return designToolOutput(DESIGN_OPEN_EXCALIDRAW_TOOL_NAME, 'open_excalidraw', ops, extras)
     }
   })
 }

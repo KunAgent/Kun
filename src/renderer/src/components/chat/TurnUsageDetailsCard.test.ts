@@ -72,7 +72,7 @@ describe('TurnUsageDetailsCard', () => {
     })
     const html = renderToStaticMarkup(createElement(TurnUsageDetailsCard, { usage, stale: true }))
 
-    expect(html).toContain('Recorded cost')
+    expect(html).toContain('Metered cost')
     expect(html).toContain('$0.0312')
     expect(html).toContain('gpt-5.6-luna · Standard · 1 requests')
     expect(html).toContain('2 requests have no trusted reference price.')
@@ -85,7 +85,7 @@ describe('TurnUsageDetailsCard', () => {
       usage: fastUsage({ referencePriceBreakdown: null })
     }))
 
-    expect(html).toContain('reference estimate without an itemized price breakdown')
+    expect(html).toContain('plan-value estimate without an itemized price breakdown')
     expect(html).not.toContain('data-turn-usage-price-details')
   })
 })

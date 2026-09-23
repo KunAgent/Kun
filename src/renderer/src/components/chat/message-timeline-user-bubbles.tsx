@@ -370,7 +370,7 @@ export function UserMessageBubble({
   }
 
   return (
-    <div className="ds-user-message group relative">
+    <div className="ds-user-message group relative" data-timeline-block-id={block.id}>
       <UserAttachmentPreviews meta={block.meta} />
       <div className={showClawInboundCard ? 'contents' : 'ds-user-message-bubble min-w-0'}>
         {showClawInboundCard && parsedClawPrompt ? (

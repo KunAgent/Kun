@@ -30,6 +30,7 @@ const electron = vi.hoisted(() => {
   return {
     app: {
       isPackaged: true,
+      getVersion: vi.fn(() => '0.3.10'),
       relaunch: vi.fn(),
       quit: vi.fn()
     },
@@ -156,6 +157,24 @@ it('presents a typed handoff failure with safe owner details and task continuity
     expect(html).toContain('left the process, active work, and saved data untouched')
     expect(html).toContain('kun-startup-action:open-logs')
     expect(html).toContain('kun-startup-action:quit')
+  })
+
+  it('explains a leftover incompatible Service Manager without treating it as silent loading', async () => {
+    const { ServiceManagerUnavailableError } = await import('../../kun/src/manager/manager-resolution-error.js')
+    const presentation = startupFailurePresentation(new ServiceManagerUnavailableError('capability_incompatible', 18435))
+    const html = startupFailureHtml(presentation.message, '/tmp/logs', {
+      retryable: presentation.retryable,
+      recheck: presentation.recheck,
+      appVersion: '0.3.10',
+      execPath: '/Applications/Kun.app/Contents/MacOS/Kun'
+    })
+
+    expect(presentation.recheck).toBe(true)
+    expect(presentation.message).toContain('leftover Kun data service')
+    expect(presentation.message).toContain('pid 18435')
+    expect(html).toContain('Recheck Kun')
+    expect(html).toContain('This app version: 0.3.10')
+    expect(html).toContain('/Applications/Kun.app/Contents/MacOS/Kun')
   })
 
   it('escapes diagnostic content before rendering static recovery HTML', () => {

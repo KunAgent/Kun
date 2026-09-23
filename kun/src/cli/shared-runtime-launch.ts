@@ -3,7 +3,8 @@ import { RuntimeInfoResponse } from '../contracts/runtime-info.js'
 import type { RuntimeDiscoveryRecord } from '../server/runtime-discovery.js'
 import { sameCanonicalPath } from '../manager/canonical-path.js'
 import type { SharedRuntimeConnection } from './shared-runtime.js'
-import { processAlive, safeDiscoveryUrl } from './shared-runtime-support.js'
+import { safeDiscoveryUrl } from './shared-runtime-support.js'
+import { runtimeProcessIsAlive } from '../server/runtime-process-identity.js'
 import { isOwnedProcess, stopOwnedProcess } from '../process/owned-process.js'
 
 const CANDIDATE_STOP_GRACE_MS = 5_000
@@ -20,7 +21,7 @@ export async function probeRuntimeDiscovery(
   expectedDataDir: string,
   fetchImpl: typeof fetch = fetch
 ): Promise<SharedRuntimeConnection | null> {
-  if (!safeDiscoveryUrl(record) || !processAlive(record.pid)) return null
+  if (!safeDiscoveryUrl(record) || !runtimeProcessIsAlive(record.pid, record)) return null
   try {
     const response = await fetchImpl(`${record.baseUrl.replace(/\/$/u, '')}/v1/runtime/info`, {
       headers: record.runtimeToken

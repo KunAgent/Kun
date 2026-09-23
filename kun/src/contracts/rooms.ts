@@ -135,6 +135,7 @@ export const RoomMessageSchema = z.object({
   rootRequestId: RoomIdSchema.optional(),
   sourceRequestId: RoomIdSchema.optional(),
   originRunId: RoomIdSchema.optional(),
+  originItemId: z.string().min(1).max(256).optional(),
   authorAgentId: ParticipantAgentId.optional(),
   handoffId: RoomIdSchema.optional(),
   displayThreadRootId: RoomIdSchema.optional(),

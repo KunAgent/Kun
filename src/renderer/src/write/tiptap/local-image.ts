@@ -7,6 +7,7 @@ import {
 import { parsePendingInfographicId } from '../infographic-pending'
 import { createInfographicPendingElement } from '../infographic-pending-dom'
 import { createHtmlEmbedElement } from '../html-embed-dom'
+import { openWriteImageLightbox } from '../write-image-lightbox'
 
 export type WriteLocalImageOptions = {
   /** Absolute path of the markdown file being edited; relative image
@@ -76,6 +77,7 @@ export const WriteLocalImage = Image.extend<WriteLocalImageOptions>({
         } else {
           dom.removeAttribute('src')
         }
+        delete dom.dataset.localPath
         dom.classList.remove('write-rich-image-error')
         dom.removeAttribute('title')
         dom.dataset.rawSrc = raw
@@ -84,22 +86,36 @@ export const WriteLocalImage = Image.extend<WriteLocalImageOptions>({
             if (dom.dataset.rawSrc !== raw) return
             if (result.ok) {
               dom.src = result.src
+              if (result.localPath) dom.dataset.localPath = result.localPath
+              else delete dom.dataset.localPath
               dom.classList.remove('write-rich-image-error')
               dom.removeAttribute('title')
               return
             }
             dom.removeAttribute('src')
+            delete dom.dataset.localPath
             dom.classList.add('write-rich-image-error')
             dom.title = result.message
           })
           .catch((error) => {
             if (dom.dataset.rawSrc !== raw) return
             dom.removeAttribute('src')
+            delete dom.dataset.localPath
             dom.classList.add('write-rich-image-error')
             dom.title = error instanceof Error ? error.message : String(error)
           })
       }
       applySrc(node.attrs.src)
+      dom.addEventListener('dblclick', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        if (!dom.src) return
+        openWriteImageLightbox({
+          src: dom.src,
+          alt: dom.alt,
+          ...(dom.dataset.localPath ? { localPath: dom.dataset.localPath } : {})
+        })
+      })
       return {
         dom,
         update: (updated) => {

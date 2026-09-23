@@ -24,6 +24,7 @@ describe('provider icon resolution', () => {
     ['moonshot-global', 'kimi'],
     ['ollama', 'ollama'],
     ['opencode-go', 'opencodego'],
+    ['stepfun', 'stepfun'],
     ['volcengine', 'doubao'],
     ['volcengine-agent-plan', 'doubao'],
     ['volcengine-coding-plan', 'doubao'],

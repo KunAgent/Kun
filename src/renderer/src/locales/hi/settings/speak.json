@@ -16,7 +16,7 @@
   "speakPreviewPlay": "चलाएँ",
   "speakPreviewStop": "रोकें",
   "speakDownloadSource": "डाउनलोड स्रोत",
-  "speakDownloadSourceDesc": "रनटाइम WASM और आवाज़ फ़ाइलों के लिए मिरर।",
+  "speakDownloadSourceDesc": "रनटाइम WASM और आवाज़ फ़ाइलें पहले चुने हुए स्रोत से आती हैं। विफल होने पर अन्य मिरर अपने आप आज़माए जाते हैं।",
   "speakDownloadSourceChecking": "डाउनलोड स्रोत जाँचे जा रहे हैं...",
   "speakDownloadSourceAvailable": "{{source}} {{ms}} ms में उपलब्ध",
   "speakDownloadSourceUnavailable": "{{source}} अनुपलब्ध: {{reason}}",

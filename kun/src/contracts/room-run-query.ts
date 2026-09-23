@@ -13,6 +13,8 @@ export type RoomRunDetail = {
   context?: { prompt?: string; attachmentIds?: string[]; memoryIds?: string[] }
   availability: RoomRunAvailability
   eventsCursor: string
+  /** Authorized source workspace, present only after exact run/thread validation. */
+  workspaceRoot?: string
 }
 export type RoomRunContentPage = {
   itemId: string
@@ -34,7 +36,7 @@ export type RoomRunItemsPage = {
 export type RoomRunListPage = { runs: RoomRunRecord[]; nextCursor?: string }
 export type RoomMessageRunSource = { runId?: string; unavailableReason?: string }
 export type RoomRunEvent = {
-  kind: 'run.updated' | 'run.items_changed' | 'run.cursor' | 'run.reset' | 'run.text'
+  kind: 'run.updated' | 'run.items_changed' | 'run.cursor' | 'run.reset'
   roomId: string
   runId: string
   cursor: string

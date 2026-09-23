@@ -184,6 +184,8 @@ export type ToolHostContext = {
   guiDesignCanvas?: boolean
   /** True when the active GUI turn may apply Excalidraw scene files. */
   guiExcalidrawCanvas?: boolean
+  /** True for a writable GUI private-chat (conversation) room with Excalidraw board capability. */
+  guiRoomExcalidrawCanvas?: boolean
   /** True only for product Design turns (not Code sidebar canvas turns). */
   guiDesignMode?: boolean
   /** Code is the compatibility default when an older turn omits the field. */

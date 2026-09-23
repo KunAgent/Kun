@@ -12,7 +12,7 @@ import { startServiceManager } from './service-manager.js'
 import { RuntimeBuildIdSchema } from '../contracts/runtime-info.js'
 import { installLiveProcessLog } from '../cli/live-process-log.js'
 import { appSessionOwnerFromEnvironment, KUN_APP_SESSION_RESERVATION_ENV } from '../contracts/app-session-owner.js'
-import { drainManagerAfterOwnerLoss, monitorManagerOwner } from './manager-owner-channel.js'
+import { drainManagerAfterOwnerLoss, monitorManagerOwner, stopManagerAfterOwnerLoss } from './manager-owner-channel.js'
 
 export const KUN_MANAGER_READY_PREFIX = 'KUN_MANAGER_READY '
 
@@ -65,15 +65,18 @@ export async function main(): Promise<number> {
     const stop = (ownerLost = false) => {
       if (stopping) return
       stopping = true
-      handle.beginDrain()
       void (async () => {
-        await drainManagerAfterOwnerLoss(handle)
+        if (ownerLost) {
+          await stopManagerAfterOwnerLoss(handle)
+          return
+        }
+        handle.beginDrain()
+        await drainManagerAfterOwnerLoss(handle, { wait: 'all' })
         await handle.close()
       })().then(resolve, (error) => {
         process.stderr.write(`kun Manager cleanup failed: ${String(error)}\n`)
-        // A live consumer must not lose its writer because cleanup timed out.
-        // The independent guard remains responsible for the final crash cutoff.
         if (!ownerLost) resolve()
+        else void handle.close().finally(() => resolve())
       })
     }
     process.once('SIGTERM', () => stop(false))

@@ -128,6 +128,7 @@ export interface AgentSdkRuntimeFactoryDeps {
   sessionStore: SessionStore
   threadStore: ThreadStore
   events: RuntimeEventRecorder
+  receipts?: import('../../services/canvas-receipt-registry.js').CanvasReceiptRegistry
   /** Existing Agent Perspective model-request trace sink. */
   debugSink?: LlmDebugSink
   ids: { next(prefix: string): string }

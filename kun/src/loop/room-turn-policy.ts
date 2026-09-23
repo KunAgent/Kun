@@ -24,16 +24,26 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
   const peerTools = policy.kind === 'discussion' && policy.collaborationProtocol === 'peer'
     ? ['read_room_updates', 'send_room_message'] : []
   const pollTools = policy.kind === 'discussion' && policy.allowedToolNames?.includes('vote_room_poll') ? ['vote_room_poll'] : []
-  const allowed = intersectAllowedToolNames(context.allowedToolNames,
-    intersectAllowedToolNames(policy.allowedToolNames ? [...policy.allowedToolNames, 'read_room_rules', ...peerTools, ...agentTools] : undefined, policy.kind === 'coordination' ? ['submit_room_plan', 'read_room_rules', ...agentTools] :
-      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', ...peerTools, ...pollTools, ...agentTools, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
+  // Replying in a conversation is intrinsic: even read-only or setup-scoped
+  // conversations must be able to publish their visible bubbles.
+  const conversationTools = policy.kind === 'conversation' ? ['send_im_message'] : []
+  const intersected = intersectAllowedToolNames(context.allowedToolNames,
+    intersectAllowedToolNames(policy.allowedToolNames ? [...policy.allowedToolNames, 'read_room_rules', ...peerTools, ...agentTools, ...conversationTools] : undefined, policy.kind === 'coordination' ? ['submit_room_plan', 'read_room_rules', ...agentTools] :
+      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', ...peerTools, ...pollTools, ...agentTools, ...conversationTools, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
+  // Replying is intrinsic to a conversation: a frozen setup or skill allow-list
+  // must not drop the publication tool. Explicit blockedToolNames still wins
+  // because it is enforced separately at resolution time.
+  const allowed = policy.kind === 'conversation' && intersected && !intersected.includes('send_im_message')
+    ? [...intersected, 'send_im_message'] : intersected
   return {
     ...context,
     roomStepKind: policy.kind, roomAgent: Boolean(policy.participantAgentId),
     roomPeer: peerTools.length > 0,
+    guiRoomExcalidrawCanvas: policy.kind === 'conversation' && context.clientSurface === 'gui' &&
+      !readOnly && context.threadMode !== 'plan' && !context.guiPlan,
     workspace: thread.workspace,
-    additionalWorkspaces: undefined,
-    knowledgeBases: undefined,
+    additionalWorkspaces: policy.kind === 'conversation' ? thread.additionalWorkspaces : undefined,
+    knowledgeBases: policy.kind === 'conversation' ? thread.knowledgeBases : undefined,
     sandboxMode: readOnly ? 'read-only' : fullAccess ? 'danger-full-access' : 'workspace-write',
     approvalPolicy: thread.approvalPolicy,
     approvalReviewer: thread.approvalReviewer,
@@ -54,7 +64,8 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
     blockedSkillIds: mergeRoomDeniedIds(context.blockedSkillIds, policy.blockedSkillIds),
     blockedProviderIds: mergeRoomDeniedIds(context.blockedProviderIds, roomBlockedProviders(thread)),
     blockedToolNames: mergeRoomDeniedIds(context.blockedToolNames, policy.blockedToolNames,
-      ['delegate_task', 'generate_subagent', 'create_goal'],
+      readOnly ? ['delegate_task', 'generate_subagent'] : [],
+      policy.kind === 'conversation' ? [] : ['create_goal'],
       policy.skillsEnabled === false ? ['load_skill', 'load_skill_asset'] : [])
   }
 }

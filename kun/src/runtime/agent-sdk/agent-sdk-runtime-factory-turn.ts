@@ -32,6 +32,7 @@ import type { SessionStore } from '../../ports/session-store.js'
 import type { ThreadStore } from '../../ports/thread-store.js'
 import type { CapabilityRegistry } from '../../adapters/tool/capability-registry.js'
 import type { ToolHost, ToolHostContext } from '../../ports/tool-host.js'
+import { applyRoomToolPolicy, mergeRoomDeniedIds } from '../../loop/room-turn-policy.js'
 import {
   DEFAULT_APPROVAL_REVIEWER,
   DEFAULT_SANDBOX_MODE,
@@ -218,18 +219,20 @@ export function createAgentSdkTurnRuntimeDeps(
       const token = normalizeClaudeOAuthToken(rawToken)
       // Resolve skills before listing bridgeable tools so the SDK sees the
       // same per-turn catalog as the native Kun loop.
-      const skillResolution = deps.skillRuntime
+      const roomSkillsDisabled = thread.roomContext?.skillsEnabled === false
+      const blockedSkillIds = mergeRoomDeniedIds(
+        deps.toolContextBoundary?.blockedSkillIds,
+        thread.roomContext?.blockedSkillIds
+      )
+      const allowedSkillIds = roomSkillsDisabled ? [] : deps.toolContextBoundary?.allowedSkillIds
+      const skillResolution = !roomSkillsDisabled && deps.skillRuntime
         ? await deps.skillRuntime.resolveTurn({
             prompt: userText,
             workspace: thread.workspace,
             threadId,
             turnId,
-            ...(deps.toolContextBoundary?.allowedSkillIds
-              ? { allowedSkillIds: deps.toolContextBoundary.allowedSkillIds }
-              : {}),
-            ...(deps.toolContextBoundary?.blockedSkillIds
-              ? { blockedSkillIds: deps.toolContextBoundary.blockedSkillIds }
-              : {})
+            ...(allowedSkillIds ? { allowedSkillIds } : {}),
+            ...(blockedSkillIds.length ? { blockedSkillIds } : {})
           })
         : undefined
       const activeSkillIds = skillResolution?.activeSkillIds ?? []
@@ -273,11 +276,11 @@ export function createAgentSdkTurnRuntimeDeps(
       // by skills visible in this workspace; executeKunTool still re-resolves
       // the real active ids for every call, so schema visibility is not
       // execution authority.
-      const availableSkillIds = typeof deps.skillRuntime?.availableSkillIdsForWorkspace === 'function'
+      const availableSkillIds = !roomSkillsDisabled && typeof deps.skillRuntime?.availableSkillIdsForWorkspace === 'function'
         ? await deps.skillRuntime.availableSkillIdsForWorkspace(
             thread.workspace,
-            deps.toolContextBoundary?.blockedSkillIds,
-            deps.toolContextBoundary?.allowedSkillIds
+            blockedSkillIds,
+            allowedSkillIds
           )
         : activeSkillIds
       const listingOptions = {
@@ -331,7 +334,9 @@ export function createAgentSdkTurnRuntimeDeps(
             }
           : {})
       })
-      const bridgeableTools: BridgeableTool[] = deps.registry.listTools(bridgeListingContext).map((spec) => ({
+      const bridgeableTools: BridgeableTool[] = deps.registry.listTools(
+        thread.roomContext ? applyRoomToolPolicy(bridgeListingContext, thread) : bridgeListingContext
+      ).map((spec) => ({
         name: spec.name,
         description: spec.description,
         inputSchema: spec.inputSchema,
@@ -340,7 +345,7 @@ export function createAgentSdkTurnRuntimeDeps(
       }))
       const bridgedTools = selectBridgeableTools(
         bridgeableTools,
-        graphPolicy || plan.planMode || managedPptScope ? { overlap: new Set() } : undefined
+        graphPolicy || thread.roomContext || plan.planMode || managedPptScope ? { overlap: new Set() } : undefined
       )
 
       // This is the portable rebase handoff. Compatible consecutive turns use
@@ -363,7 +368,7 @@ export function createAgentSdkTurnRuntimeDeps(
 
       let memoryBlocks: string[] = []
       let memoryIds: string[] = []
-      if (deps.memoryStore && userText.trim()) {
+      if (!thread.roomContext && deps.memoryStore && userText.trim()) {
         const memories = await deps.memoryStore.retrieve({
           query: userText,
           workspace: thread.workspace,
@@ -429,7 +434,7 @@ export function createAgentSdkTurnRuntimeDeps(
               approvalReviewer,
               planMode,
               allowSdkBuiltins:
-                graphPolicy || planMode || turn?.guiDesignArtifact?.kind === 'svg'
+                graphPolicy || thread.roomContext || planMode || turn?.guiDesignArtifact?.kind === 'svg'
                   ? false
                   : deps.allowSdkBuiltins ?? true,
               capabilities: agentSdkCapabilities(),
@@ -474,10 +479,10 @@ export function createAgentSdkTurnRuntimeDeps(
         actingModelRoute,
         planMode,
         allowSdkBuiltins:
-          graphPolicy || planMode || turn?.guiDesignArtifact?.kind === 'svg'
+          graphPolicy || thread.roomContext || planMode || turn?.guiDesignArtifact?.kind === 'svg'
             ? false
             : deps.allowSdkBuiltins ?? true,
-        ...(graphPolicy || managedPptScope ? { bridgeKunBuiltinOverlaps: true } : {}),
+        ...(graphPolicy || thread.roomContext || managedPptScope ? { bridgeKunBuiltinOverlaps: true } : {}),
         ...(graphPolicy ? { graphPhase: graphPolicy.phase } : {}),
         ...(turn?.guiDesignArtifact?.kind === 'svg' ? { requireSvgCompletion: true } : {}),
         // Claude Code only accepts Anthropic models; coerce a thread's non-Claude

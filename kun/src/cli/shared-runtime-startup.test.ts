@@ -20,20 +20,23 @@ describe('shared runtime startup ownership', () => {
     const dataDir = join(root, 'data')
     const pidPath = join(root, 'candidate.pid')
     const manager = managerConnection(dataDir)
-    const startedAt = '2026-09-02T00:00:00.000Z'
+    // Captured lazily after the candidate spawns: identity-aware liveness
+    // treats a PID whose OS start time postdates the record as recycled.
+    let startedAt: string | undefined
     let candidatePid = 0
     const fetchImpl = (async (url: string | URL | Request) => {
       const target = String(url)
       if (target === `${manager.discovery.baseUrl}/v1/runtimes/production`) {
         candidatePid = await readPid(pidPath)
+        if (candidatePid > 0) startedAt ??= new Date().toISOString()
         return Response.json({
-          registration: candidatePid > 0
+          registration: candidatePid > 0 && startedAt
             ? registration(candidatePid, startedAt)
             : null
         })
       }
       if (target === 'http://127.0.0.1:18899/v1/runtime/info') {
-        return Response.json(runtimeInfo(candidatePid, startedAt, dataDir))
+        return Response.json(runtimeInfo(candidatePid, startedAt ?? '', dataDir))
       }
       return new Response('', { status: 404 })
     }) as typeof fetch
@@ -71,7 +74,7 @@ setInterval(() => {}, 1000);
     const candidatePidPath = join(root, 'candidate.pid')
     const manager = managerConnection(dataDir)
     const winnerPid = process.pid
-    const startedAt = '2026-09-02T00:01:00.000Z'
+    const startedAt = new Date().toISOString()
     const winner = registration(winnerPid, startedAt)
     let managerReads = 0
     let candidatePid = 0
@@ -131,7 +134,7 @@ function managerConnection(dataDir: string): ServiceManagerConnection {
       protocolVersion: 5,
       instanceId: 'manager-startup-test',
       pid: process.pid,
-      startedAt: '2026-09-02T00:00:00.000Z',
+      startedAt: new Date().toISOString(),
       host: '127.0.0.1',
       port: 18700,
       baseUrl: 'http://127.0.0.1:18700',

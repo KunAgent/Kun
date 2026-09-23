@@ -19,6 +19,7 @@ import type {
 import {
   KUN_ATTACHMENT_DIAGNOSTICS_PATH,
   KUN_ATTACHMENTS_PATH,
+  KUN_HEALTH_PATH,
   KUN_MEMORY_DIAGNOSTICS_PATH,
   KUN_MEMORY_PATH,
   KUN_MCP_OAUTH_PATH,
@@ -185,6 +186,27 @@ export type ThreadContentMatch = {
   updatedAt: string
 }
 
+function logRuntimeProbeFailure(path: string, status: number): void {
+  void (async () => {
+    let baseUrl: string | undefined
+    try {
+      const settings = await rendererRuntimeClient.getSettings()
+      const port = settings.agents.kun.port
+      if (typeof port === 'number' && Number.isFinite(port) && port > 0) {
+        baseUrl = `http://127.0.0.1:${port}`
+      }
+    } catch {
+      // Probe logging is best-effort; the thrown health error is the user path.
+    }
+    if (typeof window.kunGui?.logError !== 'function') return
+    await window.kunGui.logError('runtime-probe', 'Kun runtime health probe failed', {
+      path,
+      status,
+      ...(baseUrl ? { baseUrl } : {})
+    })
+  })()
+}
+
 export class KunRuntimeProvider extends KunRuntimeThreadServices implements AgentProvider {
   readonly id = 'kun' as const
   readonly displayName = 'Kun'
@@ -200,14 +222,10 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   }
 
   async connect(): Promise<void> {
-    const health = await rendererRuntimeClient.runtimeRequest('/health', 'GET')
-    if (!health.ok) {
-      throw runtimeErrorToError(readRuntimeError(health.body, `runtime unhealthy (${health.status || 0})`))
-    }
-    const threads = await rendererRuntimeClient.runtimeRequest('/v1/threads?limit=1', 'GET')
-    if (!threads.ok) {
-      throw runtimeErrorToError(readRuntimeError(threads.body, `failed to list threads (${threads.status || 0})`))
-    }
+    const health = await rendererRuntimeClient.runtimeRequest(KUN_HEALTH_PATH, 'GET')
+    if (health.ok) return
+    logRuntimeProbeFailure(KUN_HEALTH_PATH, health.status)
+    throw runtimeErrorToError(readRuntimeError(health.body, `runtime unhealthy (${health.status || 0})`))
   }
 
   /**

@@ -1,0 +1,36 @@
+.rooms-popover-surface {
+  position: fixed;
+  z-index: 100;
+  padding: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--ds-border);
+  border-radius: 14px;
+  background: var(--ds-surface-elevated);
+  color: var(--ds-text);
+  box-shadow: var(--ds-shadow-overlay);
+  font-size: 13px;
+  -webkit-app-region: no-drag;
+}
+.rooms-menu-list { display: grid; gap: 2px; }
+.rooms-menu-list > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  text-align: left;
+  color: var(--ds-text-muted);
+}
+.rooms-menu-list > button:hover { background: var(--ds-surface-hover); color: var(--ds-text); }
+.rooms-menu-list > button:disabled { opacity: .45; }
+.rooms-menu-list svg { flex-shrink: 0; }
+.rooms-popover-surface :is(button, a, select, input, textarea):focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}
+html[data-remote-surface='mobile'] .rooms-menu-list > button { min-height: 44px; }
+@media (prefers-reduced-motion: reduce) {
+  .rooms-popover-surface * { transition: none !important; }
+}

@@ -4,6 +4,7 @@ import {
   ChevronDown,
   Copy,
   Download,
+  Images,
   FileCode2,
   FilePenLine,
   FileText,
@@ -49,6 +50,10 @@ type Props = {
   modeMenuOpen: boolean
   modeMenuRef: RefObject<HTMLDivElement | null>
   onCopyRichText: () => void
+  onCopyXArticle: () => void
+  onCopyXArticleImage: () => void
+  xArticleImageCount: number
+  xArticleImageIndex: number
   onExportFile: (format: WriteExportFormat) => void
   onGeneratePresentation: () => void
   onSave: () => void
@@ -89,6 +94,10 @@ export function WriteWorkspaceToolbar({
   modeMenuOpen,
   modeMenuRef,
   onCopyRichText,
+  onCopyXArticle,
+  onCopyXArticleImage,
+  xArticleImageCount,
+  xArticleImageIndex,
   onExportFile,
   onGeneratePresentation,
   onSave,
@@ -369,7 +378,7 @@ export function WriteWorkspaceToolbar({
               {exportMenuOpen ? (
                 <div
                   role="menu"
-                  className="absolute right-0 top-full z-30 mt-2 w-52 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-ds-border bg-ds-card/95 p-1.5 shadow-[0_22px_48px_rgba(20,47,95,0.16)] backdrop-blur-xl"
+                  className="absolute right-0 top-full z-30 mt-2 w-56 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-ds-border bg-ds-card/95 p-1.5 shadow-[0_22px_48px_rgba(20,47,95,0.16)] backdrop-blur-xl"
                 >
                   <button
                     type="button"
@@ -379,6 +388,32 @@ export function WriteWorkspaceToolbar({
                   >
                     <span>{t('writeCopyRichText')}</span>
                     <Copy className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.9} />
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={onCopyXArticle}
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[13px] text-ds-ink transition hover:bg-ds-hover/80"
+                  >
+                    <span>{t('writeCopyXArticle')}</span>
+                    <Copy className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.9} />
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={xArticleImageCount <= 0}
+                    onClick={onCopyXArticleImage}
+                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[13px] text-ds-ink transition hover:bg-ds-hover/80 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                  >
+                    <span>
+                      {xArticleImageCount > 0
+                        ? t('writeCopyXArticleImage', {
+                            current: xArticleImageIndex + 1,
+                            total: xArticleImageCount
+                          })
+                        : t('writeCopyXArticleImageEmpty')}
+                    </span>
+                    <Images className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.9} />
                   </button>
                   <div className="my-1 h-px bg-ds-border-muted" />
                   {WRITE_EXPORT_FORMATS.map((format) => (

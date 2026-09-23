@@ -2,7 +2,7 @@ import { logInfo } from '../logger'
 import { ensureServiceManagerWithStartLockHeld, type EnsureServiceManagerInput, type ServiceManagerConnection } from '../../../kun/src/manager/manager-client.js'
 import { inspectServiceManager } from '../../../kun/src/manager/manager-resolution.js'
 import { sameCanonicalPath } from '../../../kun/src/manager/canonical-path.js'
-import { defaultKunControlDir, readManagerHandoffDiscoveryStrict, withManagerStartLock } from '../../../kun/src/manager/manager-discovery.js'
+import { defaultKunControlDir, defaultProductionSettingsPath, readManagerHandoffDiscoveryStrict, withManagerStartLock } from '../../../kun/src/manager/manager-discovery.js'
 import { drainKunOwnersForHandoffWithLock } from './kun-installed-build-handoff'
 import { logKunHandoffEvent } from './kun-handoff-logging'
 import { desktopProcessStack } from './desktop-process-stack'
@@ -14,6 +14,19 @@ export function rememberManagerStartupInput(input: EnsureServiceManagerInput): v
   logInfo('startup', 'Service Manager launch identity selected.', {
     entry: input.launch?.args[0], buildId: input.buildId?.slice(0, 12), flavor: input.flavor
   })
+}
+
+export function rememberedManagerStartupProfile(): {
+  controlDir: string
+  dataDir: string
+  settingsPath: string
+} | undefined {
+  if (!startupInput) return undefined
+  return {
+    controlDir: startupInput.controlDir ?? defaultKunControlDir(),
+    dataDir: startupInput.dataDir,
+    settingsPath: startupInput.settingsPath ?? defaultProductionSettingsPath()
+  }
 }
 
 export async function recoverStartupManager(forceReplacement = false): Promise<ServiceManagerConnection> {
