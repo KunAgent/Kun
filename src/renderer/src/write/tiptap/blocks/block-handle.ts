@@ -15,11 +15,6 @@ export type WriteBlockHandleOptions = {
 
 const HANDLE_HIDE_DELAY_MS = 300
 
-function isEmptyBlock(node: BlockTarget['node']): boolean {
-  if (node.type.name === 'paragraph') return node.content.size === 0
-  return false
-}
-
 /**
  * Notion-style block handle (implementation §9.1): a `+` and a `⋮⋮` button
  * parked in the left gutter next to the hovered top-level block (list items
@@ -125,7 +120,7 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
               contentRect.left + 24,
               event.clientY
             )
-            if (!next || isEmptyBlock(next.node)) {
+            if (!next) {
               scheduleHide()
               return
             }
