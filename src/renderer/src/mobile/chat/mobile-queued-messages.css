@@ -1,0 +1,7 @@
+.kun-mobile-queued ul { display: grid; gap: 6px; margin: 0 0 8px; padding: 0; list-style: none; }
+.kun-mobile-queued li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 4px 4px 12px; border: 1px dashed var(--ds-border-strong); border-radius: 12px; color: var(--ds-text); background: var(--ds-surface-subtle); }
+.kun-mobile-queued-text { flex: 1; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-height: 20px; font-size: 14px; overflow-wrap: anywhere; }
+.kun-mobile-queued-status { flex-shrink: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--ds-text-muted); }
+.kun-mobile-queued li[data-state='failed'] .kun-mobile-queued-status { color: var(--ds-danger, #d14343); }
+.kun-mobile-queued button { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: var(--kun-mobile-touch, 44px); height: var(--kun-mobile-touch, 44px); border: 0; border-radius: 9999px; color: var(--ds-text-muted); background: transparent; }
+.kun-mobile-queued button:disabled { opacity: .4; }

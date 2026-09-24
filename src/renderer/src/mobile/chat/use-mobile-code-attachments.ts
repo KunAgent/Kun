@@ -74,6 +74,11 @@ export function useMobileCodeAttachments(input: {
     enabled,
     pick: controller.handlePickAttachments,
     remove: controller.removeComposerAttachment,
-    clear: () => setAttachments([])
+    clear: () => setAttachments([]),
+    /** Puts back attachments of a rejected send ahead of any picked since. */
+    restore: (items: readonly AttachmentReference[]) => setAttachments((current) => [
+      ...items,
+      ...current.filter((item) => !items.some((restored) => restored.id === item.id))
+    ])
   }
 }

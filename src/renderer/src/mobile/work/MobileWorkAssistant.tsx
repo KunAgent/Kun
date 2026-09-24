@@ -7,6 +7,7 @@ import { LazyMessageTimeline } from '../../components/chat/LazyMessageTimeline'
 import { selectLivePendingUserInput } from '../../components/chat/user-input-panel-logic'
 import { MobileComposer } from '../chat/MobileComposer'
 import { MobilePendingActions } from '../chat/MobilePendingActions'
+import { mergeRestoredDraft } from '../chat/mobile-draft-restore'
 import { useMobileWorkAssistantSend } from './use-mobile-work-assistant-send'
 import './mobile-work-assistant.css'
 
@@ -38,9 +39,15 @@ export function MobileWorkAssistant({ expectedThreadId, onSettings }: {
   const hasSelection = write.selection.ranges.some((range) => range.text.trim().length > 0)
   const assistant = useMobileWorkAssistantSend()
   const pendingInput = threadReady && selectLivePendingUserInput(state.blocks)
-  const send = async (): Promise<void> => {
-    if (pendingInput) return
-    if (await assistant.send(input)) setInput('')
+  // The send resolves when the whole turn ends; clear on submit and put the
+  // text back only if the assistant rejected it.
+  const send = (): void => {
+    const text = input
+    if (pendingInput || assistant.sending || !text.trim()) return
+    setInput('')
+    void assistant.send(text).then((sent) => {
+      if (!sent) setInput((current) => mergeRestoredDraft(text, current))
+    })
   }
   return <section className="kun-mobile-work-assistant">
     <div className="kun-mobile-work-assistant-timeline">{threadReady ? <LazyMessageTimeline blocks={state.blocks}
@@ -52,7 +59,7 @@ export function MobileWorkAssistant({ expectedThreadId, onSettings }: {
         {t('writeSelectionQuote')}</button> : null}
       {write.quotedSelections.length ? <span>{t('writeSelectionLabel')} · {write.quotedSelections.length}</span> : null}
     </div> : null}
-    <MobileComposer value={input} onChange={setInput} onSend={() => void send()}
+    <MobileComposer value={input} onChange={setInput} onSend={send}
       onStop={() => void state.interrupt()} onAttachments={null} onOptions={null}
       running={threadReady && state.busy} disabled={state.runtimeConnection !== 'ready'} sending={assistant.sending}
       canSend={!pendingInput && Boolean(input.trim())} error={assistant.error}

@@ -9,6 +9,8 @@ import { sidebarThreadActivity, type SidebarThreadActivityContext } from '../../
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import { MobileComposer } from './MobileComposer'
 import { MobilePendingActions } from './MobilePendingActions'
+import { MobileQueuedMessages } from './MobileQueuedMessages'
+import { mergeRestoredDraft } from './mobile-draft-restore'
 import { MobileCodeOptions } from './MobileCodeOptions'
 import { MobileCodeThreadDetails } from './MobileCodeThreadDetails'
 import { MobileMessageActionsSheet } from './MobileMessageActionsSheet'
@@ -46,13 +48,20 @@ export function MobileCodeConversation({ threadId, onBack, onOpenSettings }: {
     resolveUserInput: value.resolveUserInput,
     watchTurnCompletion: value.watchTurnCompletion, unreadThreadIds: value.unreadThreadIds,
     scheduledThreadActivities: value.scheduledThreadActivities,
-    awaitingUserInputThreadIds: value.awaitingUserInputThreadIds
+    awaitingUserInputThreadIds: value.awaitingUserInputThreadIds,
+    queuedMessages: value.queuedMessages, removeQueuedMessage: value.removeQueuedMessage
   })))
   const [draft, setDraft] = useState(() => readBrowserStorageItem(draftKey(threadId)) ?? '')
-  const [sending, setSending] = useState(false)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Which thread this screen shows now; a send rejected after navigating away
+  // restores into that thread's stored draft instead of the visible composer.
+  const mountedThreadRef = useRef<string | null>(threadId)
+  useEffect(() => {
+    mountedThreadRef.current = threadId
+    return () => { mountedThreadRef.current = null }
+  }, [threadId])
   const { activeThreadId, selectThread } = state
   useEffect(() => {
     if (activeThreadId !== threadId) void selectThread(threadId)
@@ -93,19 +102,27 @@ export function MobileCodeConversation({ threadId, onBack, onOpenSettings }: {
     modeLabel,
     state.composerModel || t('autoLabel')
   ].join(' · ')
-  const send = async (): Promise<void> => {
+  // sendMessage resolves only when the whole turn ends, so the composer clears
+  // on submit (like desktop) and only a rejected send puts the draft back.
+  const send = (): void => {
     const text = draft.trim()
-    if (!threadReady || !hasSubmission || sending) return
-    setSending(true)
-    try {
-      if (await state.sendMessage(text, state.composerMode, {
-        attachments: attachments.attachments,
-        expectedThreadId: threadId
-      })) {
-        setDraft('')
-        attachments.clear()
+    if (!threadReady || !hasSubmission) return
+    const sentAttachments = attachments.attachments
+    setDraft('')
+    attachments.clear()
+    const restore = (): void => {
+      if (mountedThreadRef.current === threadId) {
+        setDraft((current) => mergeRestoredDraft(text, current))
+        attachments.restore(sentAttachments)
+        return
       }
-    } finally { setSending(false) }
+      const key = draftKey(threadId)
+      writeBrowserStorageItem(key, mergeRestoredDraft(text, readBrowserStorageItem(key) ?? ''))
+    }
+    void state.sendMessage(text, state.composerMode, {
+      attachments: sentAttachments,
+      expectedThreadId: threadId
+    }).then((sent) => { if (!sent) restore() }, restore)
   }
   return <section className="kun-mobile-code-conversation">
     <header>
@@ -139,16 +156,19 @@ export function MobileCodeConversation({ threadId, onBack, onOpenSettings }: {
         event.target.value = ''
         void attachments.pick(files)
       }} />
-    <MobileComposer value={draft} onChange={setDraft} onSend={() => void send()}
+    <MobileComposer value={draft} onChange={setDraft} onSend={send}
       onStop={() => void state.interrupt()}
       onAttachments={threadReady && attachments.enabled ? () => fileInputRef.current?.click() : null}
       onOptions={null}
       running={threadReady && state.busy} disabled={!threadReady || state.runtimeConnection !== 'ready'}
-      sending={sending || attachments.busy}
+      sending={attachments.busy}
       attachments={<FloatingComposerAttachments attachments={attachments.attachments}
         attachmentUploadError={attachments.error} onRemoveAttachment={attachments.remove} />}
-      pendingActions={threadReady ? <MobilePendingActions blocks={state.blocks} resolveApproval={state.resolveApproval}
-        resolveUserInput={state.resolveUserInput} /> : null}
+      pendingActions={threadReady ? <>
+        <MobileQueuedMessages messages={state.queuedMessages} onRemove={state.removeQueuedMessage} />
+        <MobilePendingActions blocks={state.blocks} resolveApproval={state.resolveApproval}
+          resolveUserInput={state.resolveUserInput} />
+      </> : null}
       canSend={hasSubmission}
       labels={{ placeholder: t(pendingInput ? 'mobileInputComposerHint' : 'mobileComposerPlaceholder'), send: t('send'), stop: t('interrupt'),
         attachments: t('toolAttachments') }} />
