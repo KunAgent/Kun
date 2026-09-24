@@ -51,6 +51,7 @@
   "roomsPeerPendingPaused": "{{count}} 条排队事件已暂停",
   "roomsDetails": "任务详情",
   "roomsClose": "关闭",
+  "roomsDismissNotice": "关闭提示",
   "roomsOpenCode": "在 Code 中打开",
   "roomsAccept": "接受交付",
   "roomsApply": "应用改动",

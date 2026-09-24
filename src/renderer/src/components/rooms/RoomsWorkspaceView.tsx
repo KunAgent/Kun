@@ -2,7 +2,7 @@ import { RoomSidebar } from './RoomSidebar'
 import { useAgentChatEntry } from './useAgentChatEntry'
 import { RoomNewChat } from './RoomNewChat'
 import { AgentModelSettings, type AgentModels } from './AgentModelSettings'
-import { useDirectChat, RoomDirectHeader, RoomDirectProgress, RoomDirectFiles } from './RoomDirectChat'
+import { useDirectChat, RoomDirectHeader, RoomDirectProgress, RoomDirectFiles, RoomNoticeDismiss } from './RoomDirectChat'
 import './rooms-direct.css'
 import { RoomUserAvatarEditor } from './RoomUserAvatarEditor'
 import { useRoomUserProfileSync } from './room-user-profile'
@@ -88,6 +88,10 @@ export function RoomsWorkspaceView({
   }, [openDrawer])
   const presentation = useRoomPresentationPreferences()
   const [searchTarget, setSearchTarget] = useState<RoomSearchHit | null>(null)
+  const [dismissedNotices, setDismissedNotices] = useState<Record<string, string>>({})
+  useEffect(() => setDismissedNotices({}), [selectedId])
+  const dismissNotice = (key: string, value: string): void =>
+    setDismissedNotices((current) => ({ ...current, [key]: value }))
   useEffect(() => {
     if (!searchTarget || room?.id !== searchTarget.roomId) return
     if (searchTarget.messageId) { setJumpMessageId(searchTarget.messageId); drawer.close() }
@@ -271,8 +275,14 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             state.saved(result.room)
           }) }}
         />}
-        {onboarding.error ? <p role="alert" className="rooms-run-error">{onboarding.error}<button onClick={onboarding.retry}>{t('roomsRefresh')}</button></p> : null}
-        {state.error ? (
+        {onboarding.error && dismissedNotices.onboarding !== onboarding.error ? (
+          <p role="alert" className="rooms-run-error is-dismissible">
+            <span>{onboarding.error}</span>
+            <button onClick={onboarding.retry}>{t('roomsRefresh')}</button>
+            <RoomNoticeDismiss onDismiss={() => dismissNotice('onboarding', onboarding.error ?? '')} />
+          </p>
+        ) : null}
+        {state.error && dismissedNotices.room !== state.error ? (
           <div
             role="alert"
             className="flex items-center gap-2 border-b border-ds-border p-3 text-sm text-red-500"
@@ -287,6 +297,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             >
               {t('roomsRefresh')}
             </button>
+            <RoomNoticeDismiss onDismiss={() => dismissNotice('room', state.error)} />
           </div>
         ) : null}
         {state.loading ? (

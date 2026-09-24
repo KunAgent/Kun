@@ -152,3 +152,5 @@ html[data-remote-surface='mobile'] :is(.rooms-popover-surface, .ds-composer-perm
 }
 html[data-remote-surface='mobile'] .direct-composer-menu { min-width: 0; width: 100%; }
 html[data-remote-surface='mobile'] .direct-composer-menu select { max-width: 100%; }
+.kun-mobile-room-notice { display: flex; align-items: flex-start; gap: 8px; }
+.kun-mobile-room-notice > span { flex: 1; min-width: 0; }

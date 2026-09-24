@@ -57,6 +57,16 @@
   border: 1px solid color-mix(in srgb, var(--ds-danger) 28%, transparent);
   border-radius: 12px; background: var(--ds-danger-soft);
 }
+.rooms-run-error.is-dismissible { display: flex; align-items: flex-start; gap: 6px; }
+.rooms-run-error.is-dismissible > span { flex: 1; min-width: 0; }
+.rooms-notice-dismiss {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  padding: 2px; border: 0; border-radius: 6px;
+  background: transparent; color: inherit; opacity: .7;
+}
+.rooms-notice-dismiss:hover { opacity: 1; background: var(--ds-surface-hover); }
+.direct-failed > .rooms-notice-dismiss { color: var(--ds-text-muted); }
+html[data-remote-surface='mobile'] .rooms-notice-dismiss { padding: 6px; }
 .direct-failed > svg { flex-shrink: 0; color: var(--ds-danger); margin-top: 1px; }
 .direct-failed > span { flex: 1; min-width: 0; color: var(--ds-text); line-height: 1.45; overflow-wrap: anywhere; }
 .direct-failed-actions { display: flex; flex-basis: 100%; gap: 6px; padding-left: 23px; }

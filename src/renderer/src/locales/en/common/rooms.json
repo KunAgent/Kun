@@ -51,6 +51,7 @@
   "roomsPeerPendingPaused": "{{count}} queued events are paused",
   "roomsDetails": "Task details",
   "roomsClose": "Close",
+  "roomsDismissNotice": "Dismiss notice",
   "roomsOpenCode": "Open in Code",
   "roomsAccept": "Accept delivery",
   "roomsApply": "Apply changes",

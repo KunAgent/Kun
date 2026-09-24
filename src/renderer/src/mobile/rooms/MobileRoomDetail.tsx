@@ -11,6 +11,7 @@ import { RoomMemberDetails } from '../../components/rooms/RoomMemberDetails'
 import { useRoomPendingSends } from '../../components/rooms/useRoomPendingSends'
 import { RoomPendingSendRow } from '../../components/rooms/RoomPendingSendRow'
 import { RoomContentPreview } from '../../components/rooms/RoomContentPreview'
+import { RoomNoticeDismiss } from '../../components/rooms/RoomDirectChat'
 import { MobileSheet } from '../sheets/MobileSheet'
 import type { MobilePage } from '../navigation/mobile-page'
 import './mobile-room-detail.css'
@@ -26,8 +27,10 @@ export function MobileRoomDetail({ page, onBack, onOpenCode, onNavigate, onOpenT
   const state = useRooms('group', false)
   const pending = useRoomPendingSends(state.room?.id, state.messages)
   const [content, setContent] = useState<{ reference: RoomContentReference; messageId?: string } | null>(null)
+  const [dismissedError, setDismissedError] = useState('')
   const { select, selectedId } = state
   useEffect(() => { if (selectedId !== page.roomId) select(page.roomId) }, [page.roomId, select, selectedId])
+  useEffect(() => setDismissedError(''), [page.roomId])
   const room = state.room
   const send = async (message: SendRoomMessage): Promise<void> => {
     if (!room) return
@@ -53,7 +56,7 @@ export function MobileRoomDetail({ page, onBack, onOpenCode, onNavigate, onOpenT
   return <section className="kun-mobile-room-detail">
     <header><button type="button" aria-label={t('back')} onClick={onBack}><ArrowLeft aria-hidden /></button>
       <h1>{page.kind}</h1></header>
-    {state.error ? <p role="alert">{state.error}</p> : null}
+    {state.error && state.error !== dismissedError ? <p className="kun-mobile-room-error kun-mobile-room-notice" role="alert"><span>{state.error}</span><RoomNoticeDismiss onDismiss={() => setDismissedError(state.error)} /></p> : null}
     {!room || state.loading ? <p role="status">{t('roomsLoading')}</p> : page.kind === 'reply' ?
       <RoomReplyThread room={room} messageId={page.messageId} tasks={state.tasks} autoFocus={false}
         onSend={send} onPin={(message) => { void pin(message) }}

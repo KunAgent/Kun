@@ -8,6 +8,7 @@ import { RoomComposer } from '../../components/rooms/RoomComposer'
 import { RoomPendingSendRow } from '../../components/rooms/RoomPendingSendRow'
 import { useRoomPendingSends } from '../../components/rooms/useRoomPendingSends'
 import { roomsClient } from '../../components/rooms/rooms-client'
+import { RoomNoticeDismiss } from '../../components/rooms/RoomDirectChat'
 import { RoomContentPreview } from '../../components/rooms/RoomContentPreview'
 import { MobileSheet } from '../sheets/MobileSheet'
 import { MobileRoomPendingActions } from './MobileRoomPendingActions'
@@ -28,11 +29,13 @@ export function MobileRoomConversation(props: MobileRoomConversationProps) {
   const state = useRooms('group', false)
   const pending = useRoomPendingSends(state.room?.id, state.messages)
   const [content, setContent] = useState<{ reference: RoomContentReference; messageId?: string } | null>(null)
+  const [dismissedError, setDismissedError] = useState('')
   const room = state.room
   const { select: selectRoom, selectedId } = state
   useEffect(() => {
     if (selectedId !== props.roomId) selectRoom(props.roomId)
   }, [props.roomId, selectRoom, selectedId])
+  useEffect(() => setDismissedError(''), [props.roomId])
   const send = async (message: SendRoomMessage): Promise<void> => {
     if (!room) return
     pending.enqueue(message)
@@ -61,7 +64,7 @@ export function MobileRoomConversation(props: MobileRoomConversationProps) {
         <p>{room?.conversationKind === 'user_agent' ? t('agentsConversation_user_agent') : room?.members.length ?? ''}</p></div>
       {props.onDetails ? <button type="button" aria-label={t('mobileMore')} onClick={props.onDetails}><MoreHorizontal aria-hidden /></button> : <span aria-hidden />}
     </header>
-    {state.error ? <p className="kun-mobile-room-error" role="alert">{state.error}</p> : null}
+    {state.error && state.error !== dismissedError ? <p className="kun-mobile-room-error kun-mobile-room-notice" role="alert"><span>{state.error}</span><RoomNoticeDismiss onDismiss={() => setDismissedError(state.error)} /></p> : null}
     {state.loading || !room ? <p className="kun-mobile-room-loading" role="status">{t('roomsLoading')}</p> : <>
       <RoomTimeline room={room} messages={state.messages} tasks={state.tasks}
         cursor={state.messageCursor} moreBusy={state.moreBusy} loadEarlier={state.loadEarlier}
