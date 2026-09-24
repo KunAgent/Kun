@@ -73,6 +73,15 @@ export const WriteBlockId = Extension.create({
             default: null,
             rendered: false,
             keepOnSplit: false
+          },
+          // Continuation line of a multi-line source paragraph: its own
+          // block, rejoined with a single newline on save. Enter inside a
+          // run of such lines keeps adding lines to the same paragraph.
+          softLine: {
+            default: null,
+            keepOnSplit: true,
+            parseHTML: (element) => (element.hasAttribute('data-soft-line') ? true : null),
+            renderHTML: (attributes) => (attributes.softLine ? { 'data-soft-line': 'true' } : {})
           }
         }
       }

@@ -60,7 +60,7 @@ function relativeImageMarkdownPath(filePath: string, workspaceRelativePath: stri
   return [...Array.from({ length: ups }, () => '..'), ...target.slice(shared)].join('/')
 }
 
-async function insertPickedImage(editor: import('@tiptap/core').Editor, options: WriteSlashMenuOptions): Promise<void> {
+export async function insertPickedImage(editor: import('@tiptap/core').Editor, options: WriteSlashMenuOptions): Promise<void> {
   const workspaceRoot = options.getWorkspaceRoot().trim()
   const filePath = options.getFilePath().trim()
   if (!workspaceRoot || !filePath || typeof window.kunGui?.pickWorkspaceImage !== 'function') return

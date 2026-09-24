@@ -237,7 +237,12 @@ function richBlock(node: RootContent, ctx: BlockCtx): JSONContent {
   }
   switch (node.type) {
     case 'paragraph':
-      return { type: 'paragraph', content: phrasing(node.children, [], ctx) }
+      return {
+        type: 'paragraph',
+        // Continuation line of a split source paragraph (soft-line-split.ts).
+        ...(node.data && (node.data as { workSoftLine?: boolean }).workSoftLine ? { attrs: { softLine: true } } : {}),
+        content: phrasing(node.children, [], ctx)
+      }
     case 'heading':
       return { type: 'heading', attrs: { level: node.depth }, content: phrasing(node.children, [], ctx) }
     case 'blockquote':

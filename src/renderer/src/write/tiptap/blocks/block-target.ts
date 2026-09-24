@@ -51,7 +51,28 @@ export function blockTargetAtPos(state: EditorState, pos: number): BlockTarget |
 export function blockTargetFromCoords(view: EditorView, clientX: number, clientY: number): BlockTarget | null {
   const pos = view.posAtCoords({ left: clientX, top: clientY })?.pos
   if (pos === undefined) return null
-  return blockTargetAtPos(view.state, pos)
+  const direct = blockTargetAtPos(view.state, pos)
+  if (direct) return direct
+  // A point in the padding beside the centered reading column resolves to
+  // the gap between two top-level blocks; take the neighbour whose box
+  // spans `clientY` and re-resolve just inside it (so list items still win).
+  const $pos = view.state.doc.resolve(pos)
+  if ($pos.depth !== 0) return null
+  const neighbours = [
+    $pos.nodeAfter ? { at: pos, index: $pos.index(0) } : null,
+    $pos.nodeBefore ? { at: pos - $pos.nodeBefore.nodeSize, index: $pos.index(0) - 1 } : null
+  ]
+  for (const neighbour of neighbours) {
+    const node = neighbour ? view.state.doc.nodeAt(neighbour.at) : null
+    const dom = neighbour ? view.nodeDOM(neighbour.at) : null
+    if (!neighbour || !node || !(dom instanceof HTMLElement)) continue
+    const rect = dom.getBoundingClientRect()
+    if (clientY < rect.top || clientY > rect.bottom) continue
+    const inner = view.posAtCoords({ left: rect.left + 8, top: clientY })?.pos
+    const nested = inner === undefined ? null : blockTargetAtPos(view.state, inner)
+    return nested ?? { pos: neighbour.at, node, depth: 1, parent: view.state.doc, index: neighbour.index }
+  }
+  return null
 }
 
 /** Blocks covered by the current selection — one for NodeSelection, the

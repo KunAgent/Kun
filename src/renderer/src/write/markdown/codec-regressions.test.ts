@@ -171,9 +171,11 @@ describe('file edge whitespace survives edits', () => {
   it('editing a CRLF file keeps CRLF everywhere, including the end', () => {
     const { doc, ctx } = parseWorkDocument('line one\r\nline two\r\n\r\n- a\r\n')
     const edited = JSON.parse(JSON.stringify(doc)) as JSONContent
+    // Each source line is its own block (soft-line-split.ts): only the
+    // first line changes, and the rejoin keeps the CRLF line ending.
     edited.content![0].content = [{ type: 'text', text: 'line 1' }]
     const out = serializeWorkDocument(edited, ctx)
-    expect(out).toBe('line 1\r\n\r\n- a\r\n')
+    expect(out).toBe('line 1\r\nline two\r\n\r\n- a\r\n')
     expect(out).not.toMatch(/(?<!\r)\n/)
   })
 

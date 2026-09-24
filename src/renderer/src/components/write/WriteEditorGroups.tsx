@@ -36,6 +36,8 @@ type Props = {
   markdownHandleRef: MutableRefObject<WriteMarkdownEditorHandle | null>
   editorPaneRef: RefObject<HTMLDivElement | null>
   focusedToolbar: ReactElement
+  /** Save state + word count footer for the focused text document. */
+  focusedStatusBar?: ReactElement | null
   /** Paper-unit strip rendered under the toolbar of the focused group. */
   paperBar?: ReactElement | null
   onboardingDecision: string
@@ -58,6 +60,7 @@ export function WriteEditorGroups({
   markdownHandleRef,
   editorPaneRef,
   focusedToolbar,
+  focusedStatusBar,
   paperBar,
   onboardingDecision,
   onAskAssistant,
@@ -314,6 +317,7 @@ export function WriteEditorGroups({
               onboarding={group.id === 'primary' && onboardingDecision === 'show'}
               workspaceLoading={group.id === 'primary' && onboardingDecision === 'pending' && !settingsError && !treeError}
             />
+            {focused && document && document.kind !== 'image' ? focusedStatusBar : null}
           </section>
         )
         if (index === 0 || !splitActive) return pane

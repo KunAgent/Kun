@@ -32,14 +32,16 @@ function collectHeadings(editor: Editor): OutlineEntry[] {
 }
 
 /**
- * Document outline rail (implementation §9.7): a thin strip on the right
- * edge of the editor that expands to a heading list on hover/focus. Only
- * renders with three or more headings; hidden under 18rem via CSS.
+ * Document outline rail (implementation §9.7, Agentero-style): a compact
+ * column of heading markers pinned to the upper-right of the editor. Hover
+ * or focus widens it into a card where each marker gains its title, so the
+ * collapsed rail never spans the full editor height. Only renders with
+ * three or more headings; hidden under 18rem via CSS.
  */
 export function WriteOutlineRail({ editor, scrollHost }: Props): ReactElement | null {
   const [revision, setRevision] = useState(0)
   const [activeSlug, setActiveSlug] = useState<string | null>(null)
-  const railRef = useRef<HTMLDivElement | null>(null)
+  const listRef = useRef<HTMLDivElement | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
 
   useEffect(() => {
@@ -92,6 +94,17 @@ export function WriteOutlineRail({ editor, scrollHost }: Props): ReactElement | 
     return () => observer.disconnect()
   }, [editor, scrollHost, headings])
 
+  // Long outlines scroll inside the rail; keep the active marker in view
+  // without scrolling the document itself.
+  useEffect(() => {
+    const list = listRef.current
+    const item = list?.querySelector<HTMLElement>('.write-outline-item.is-active')
+    if (!list || !item) return
+    if (item.offsetTop < list.scrollTop || item.offsetTop + item.offsetHeight > list.scrollTop + list.clientHeight) {
+      list.scrollTop = item.offsetTop - (list.clientHeight - item.offsetHeight) / 2
+    }
+  }, [activeSlug])
+
   if (!editor || headings.length < 3) return null
 
   const jump = (entry: OutlineEntry): void => {
@@ -103,28 +116,32 @@ export function WriteOutlineRail({ editor, scrollHost }: Props): ReactElement | 
     setActiveSlug(entry.slug)
   }
 
+  const topLevel = Math.min(...headings.map((heading) => heading.level))
+
   return (
-    <div ref={railRef} className="write-outline-rail" tabIndex={0} role="navigation" aria-label="outline">
-      <div className="write-outline-ticks">
-        {headings.map((heading) => (
-          <span
-            key={`${heading.slug}-${heading.pos}`}
-            className={`write-outline-tick level-${heading.level}${heading.slug === activeSlug ? ' is-active' : ''}`}
-          />
-        ))}
+    <nav className="write-outline-rail" aria-label="outline">
+      <div className="write-outline-card">
+        <div ref={listRef} className="write-outline-list">
+          {headings.map((heading, index) => {
+            const depth = Math.min(Math.max(heading.level - topLevel + 1, 1), 6)
+            const active = heading.slug === activeSlug
+            return (
+              <button
+                key={`${heading.slug}-${heading.pos}`}
+                type="button"
+                aria-label={heading.text}
+                aria-current={active ? 'location' : undefined}
+                className={`write-outline-item depth-${depth}${active ? ' is-active' : ''}${index > 0 && depth === 1 ? ' is-section' : ''}`}
+                style={{ paddingLeft: 4 + (depth - 1) * 10 }}
+                onClick={() => jump(heading)}
+              >
+                <span className="write-outline-label">{heading.text}</span>
+                <span className="write-outline-marker" aria-hidden="true" />
+              </button>
+            )
+          })}
+        </div>
       </div>
-      <div className="write-outline-panel">
-        {headings.map((heading) => (
-          <button
-            key={`${heading.slug}-${heading.pos}`}
-            type="button"
-            className={`write-outline-item level-${heading.level}${heading.slug === activeSlug ? ' is-active' : ''}`}
-            onClick={() => jump(heading)}
-          >
-            {heading.text}
-          </button>
-        ))}
-      </div>
-    </div>
+    </nav>
   )
 }

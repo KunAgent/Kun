@@ -60,7 +60,8 @@ import { Placeholder } from '@tiptap/extensions'
 import { search } from 'prosemirror-search'
 import { WriteBlockHandle } from './blocks/block-handle'
 import { WriteBlockSelection } from './blocks/block-selection'
-import { WriteSlashMenu } from './blocks/slash-menu'
+import { WriteSlashMenu, insertPickedImage } from './blocks/slash-menu'
+import { setRichBlockType, toggleRichInlineFormat } from './rich-format-commands'
 import { WritePasteMarkdown } from './blocks/write-paste'
 import { WriteTableToolbar } from './blocks/table-toolbar'
 import { WriteBlockShortcuts } from './blocks/write-shortcuts'
@@ -91,6 +92,11 @@ export type WriteRichEditorHandle = {
   toggleInlineFormat: (kind: WriteInlineFormatKind) => boolean
   /** Set the block type of the current selection (selection toolbar). */
   setBlockType: (type: WriteBlockType) => boolean
+  /** Live Tiptap instance for the fixed format toolbar's active states. */
+  getEditor: () => Editor | null
+  openFind: () => void
+  /** Pick a workspace image and insert it at the cursor (toolbar button). */
+  insertImage: () => void
   /** Word/character counts computed from the live editor document — cheap
    *  compared to re-parsing the markdown source on every keystroke. */
   getDocumentStats: () => { characterCount: number; wordCount: number } | null
@@ -285,6 +291,12 @@ export function WriteRichEditor({
       onFind: (withReplace) => setFindBar({ open: true, withReplace })
     })
 
+    const pickerOptions = {
+      isReadOnly: () => readOnlyRef.current,
+      getWorkspaceRoot: () => workspaceRootRef.current,
+      getFilePath: () => filePathRef.current,
+      getImageDirectory: () => imageDirectoryRef.current
+    }
     const extensions: AnyExtension[] = buildWriteRichExtensions({
       getFilePath: () => filePathRef.current,
       image: WriteLocalImage.configure({
@@ -363,12 +375,7 @@ export function WriteRichEditor({
           isReadOnly: () => readOnlyRef.current,
           isReviewActive: () => reviewSessionRef.current?.isActive() ?? false
         }),
-        WriteSlashMenu.configure({
-          isReadOnly: () => readOnlyRef.current,
-          getWorkspaceRoot: () => workspaceRootRef.current,
-          getFilePath: () => filePathRef.current,
-          getImageDirectory: () => imageDirectoryRef.current
-        }),
+        WriteSlashMenu.configure(pickerOptions),
         WritePasteMarkdown.configure({ isReadOnly: () => readOnlyRef.current }),
         WriteTableToolbar.configure({ isReadOnly: () => readOnlyRef.current }),
         WriteBlockShortcuts.configure({ isReadOnly: () => readOnlyRef.current }),
@@ -571,37 +578,13 @@ export function WriteRichEditor({
             doc.textBetween(0, doc.content.size, '\n', '\n')
           )
         },
-        toggleInlineFormat: (kind) => {
+        toggleInlineFormat: (kind) => toggleRichInlineFormat(editorRef.current, readOnlyRef.current, kind),
+        setBlockType: (type) => setRichBlockType(editorRef.current, readOnlyRef.current, type),
+        getEditor: () => editorRef.current,
+        openFind: () => setFindBar({ open: true, withReplace: false }),
+        insertImage: () => {
           const instance = editorRef.current
-          if (!instance || instance.isDestroyed || readOnlyRef.current) return false
-          const chain = instance.chain().focus()
-          if (kind === 'bold') return chain.toggleBold().run()
-          if (kind === 'italic') return chain.toggleItalic().run()
-          if (kind === 'strikethrough') return chain.toggleStrike().run()
-          return chain.toggleCode().run()
-        },
-        setBlockType: (type) => {
-          const instance = editorRef.current
-          if (!instance || instance.isDestroyed || readOnlyRef.current) return false
-          const chain = instance.chain().focus()
-          switch (type) {
-            case 'heading1':
-              return chain.toggleHeading({ level: 1 }).run()
-            case 'heading2':
-              return chain.toggleHeading({ level: 2 }).run()
-            case 'heading3':
-              return chain.toggleHeading({ level: 3 }).run()
-            case 'quote':
-              return chain.toggleBlockquote().run()
-            case 'bullet':
-              return chain.toggleBulletList().run()
-            case 'ordered':
-              return chain.toggleOrderedList().run()
-            case 'code':
-              return chain.toggleCodeBlock().run()
-            default:
-              return chain.setParagraph().run()
-          }
+          if (instance && !instance.isDestroyed && !readOnlyRef.current) void insertPickedImage(instance, pickerOptions)
         },
         beginDiffReview: ({ original, nextDoc }) => {
           const session = reviewSessionRef.current

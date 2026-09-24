@@ -19,6 +19,8 @@ import type { WriteRichEditorHandle } from '../../write/tiptap/WriteRichEditor'
 import { useWriteWorkspaceLifecycle } from './use-write-workspace-lifecycle'
 import { WriteWorkspaceEmptyState } from './WriteWorkspaceEmptyState'
 import { WriteWorkspaceToolbar } from './WriteWorkspaceToolbar'
+import { WriteFormatToolbar } from './WriteFormatToolbar'
+import { WriteDocumentStatusBar } from './WriteDocumentStatusBar'
 import { WriteInlineAgent } from './WriteInlineAgent'
 import { resolveWriteAgentPreset } from '../../write/agent-presets'
 import type { WriteMarkdownEditorHandle } from './WriteMarkdownEditor'
@@ -546,6 +548,14 @@ export function WriteWorkspaceView({
     />
   )
 
+  const saveNow = (): void => {
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
+    void flushSave(workspaceRoot, { resolveExternalConflict: 'keep-local' })
+  }
+  const focusedStatusBar = activeFileIsText ? (
+    <WriteDocumentStatusBar documentStatsLabel={documentStatsLabel} saveLabel={saveLabel} saveStatus={saveStatus}
+      readOnly={renderSafety.readOnly} reviewActive={reviewActive} onSave={saveNow} />
+  ) : null
   const focusedToolbar = (
     <WriteWorkspaceToolbar
         embedded
@@ -559,7 +569,10 @@ export function WriteWorkspaceView({
         activeFileLabel={activeFileLabel}
         activeFileName={activeFileName}
         activeFilePath={activeFilePath ?? ''}
-        documentStatsLabel={documentStatsLabel}
+        formatToolbar={richModeActive
+          ? <WriteFormatToolbar richHandleRef={richHandleRef} disabled={renderSafety.readOnly || reviewActive} />
+          : null}
+        onOpenFind={richModeActive ? () => richHandleRef.current?.openFind() : null}
         inlineCompletionEnabled={inlineCompletion.enabled}
         exportInFlight={exportInFlight}
         exportMenuOpen={exportMenuOpen}
@@ -573,7 +586,6 @@ export function WriteWorkspaceView({
         readOnly={renderSafety.readOnly}
         saveLabel={saveLabel}
         saveStatus={saveStatus}
-        reviewActive={reviewActive}
         setExportMenuOpen={setExportMenuOpen}
         onCopyRichText={() => void copyCurrentFileAsRichText()}
         onCopyMarkdown={
@@ -587,10 +599,7 @@ export function WriteWorkspaceView({
         xArticleImageIndex={xArticleImageIndex}
         onExportFile={(format) => void exportCurrentFile(format)}
         onGeneratePresentation={() => void generatePresentation()}
-        onSave={() => {
-          if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
-          void flushSave(workspaceRoot, { resolveExternalConflict: 'keep-local' })
-        }}
+        onSave={saveNow}
         onToggleInlineCompletion={toggleInlineCompletion}
         onToggleLeftSidebar={onToggleLeftSidebar}
       />
@@ -613,6 +622,7 @@ export function WriteWorkspaceView({
           markdownHandleRef={markdownHandleRef}
           editorPaneRef={editorPaneRef}
           focusedToolbar={focusedToolbar}
+          focusedStatusBar={focusedStatusBar}
           paperBar={paperBar}
           onboardingDecision={onboardingDecision}
           onAskAssistant={setAssistantPrompt}

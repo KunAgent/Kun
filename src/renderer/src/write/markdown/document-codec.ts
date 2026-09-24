@@ -15,6 +15,7 @@ import { pmBlockToMdast } from './pm-to-mdast'
 import { mdastBlocksToMarkdown, type WorkMarkdownSerializeOptions } from './to-markdown'
 import { semanticSignature } from './block-fidelity'
 import { WorkSourceMap } from './source-map'
+import { splitSoftLineParagraphs } from './soft-line-split'
 
 export type WorkDocContext = {
   /** Verbatim leading frontmatter block (`---\n…\n---\n`), empty when absent. */
@@ -115,6 +116,7 @@ export function parseWorkDocument(markdown: string): ParsedWorkDocument {
   ctx.eol = detectEol(body)
 
   const root = parseMarkdownToMdast(body)
+  root.children = splitSoftLineParagraphs(root.children, body)
   const order: { blockId: string; start?: number; end?: number }[] = []
   const blocks: ParsedWorkBlock[] = []
   const doc = mdastToPm(root, {
@@ -175,6 +177,9 @@ type EmittedBlock = {
   unchanged: boolean
   /** Contentless paragraph — one blank line's worth of Markdown. */
   blank: boolean
+  paragraph?: boolean
+  /** Continuation line of a split source paragraph (soft-line-split.ts). */
+  softLine?: boolean
 }
 
 function isEmptyParagraphJson(node: JSONContent): boolean {
@@ -182,6 +187,12 @@ function isEmptyParagraphJson(node: JSONContent): boolean {
 }
 
 function emitBlock(node: JSONContent, ctx: WorkDocContext): EmittedBlock {
+  const emitted = emitBlockText(node, ctx)
+  if (node.type !== 'paragraph') return emitted
+  return { ...emitted, paragraph: true, softLine: node.attrs?.softLine === true }
+}
+
+function emitBlockText(node: JSONContent, ctx: WorkDocContext): EmittedBlock {
   const blockId = typeof node.attrs?.blockId === 'string' ? node.attrs.blockId : undefined
   const blank = isEmptyParagraphJson(node)
 
@@ -231,6 +242,22 @@ function defaultSeparator(prev: EmittedBlock, ctx: WorkDocContext): string {
   return toEol('\n'.repeat(Math.max(0, 2 - trailingNewlines)), ctx.eol)
 }
 
+/** A setext underline or table delimiter row would change what the
+ * previous line means once glued to it with a single newline. */
+const SOFT_JOIN_UNSAFE = /^[ \t]*[|:]?[ \t]*[-=][-=|: \t]*$/
+
+/**
+ * Soft lines rejoin the preceding paragraph line with one newline, keeping
+ * an edited line inside its source paragraph; after anything else (list,
+ * quote, table, heading) a single newline would be a lazy continuation, so
+ * the regular blank-line separator applies.
+ */
+function softLineSeparator(prev: EmittedBlock, current: EmittedBlock, ctx: WorkDocContext): string | undefined {
+  if (!current.softLine || !prev.paragraph || prev.blank || current.blank) return undefined
+  if (SOFT_JOIN_UNSAFE.test(current.text.split('\n', 1)[0])) return undefined
+  return toEol('\n', ctx.eol)
+}
+
 /** Serialize a PM doc, reusing original fragments for unchanged blocks. */
 export function serializeWorkDocument(doc: JSONContent, ctx: WorkDocContext): string {
   const content = doc.content ?? []
@@ -254,7 +281,8 @@ export function serializeWorkDocument(doc: JSONContent, ctx: WorkDocContext): st
       const originalSep = prev.unchanged && current.unchanged && prev.blockId && current.blockId
         ? ctx.separators.get(`${prev.blockId}${current.blockId}`)
         : undefined
-      out += originalSep ?? (current.blank ? toEol('\n', ctx.eol) : defaultSeparator(prev, ctx))
+      out += originalSep ??
+        (current.blank ? toEol('\n', ctx.eol) : softLineSeparator(prev, current, ctx) ?? defaultSeparator(prev, ctx))
     }
     out += current.text
     prev = current

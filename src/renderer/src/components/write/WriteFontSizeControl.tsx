@@ -43,11 +43,11 @@ export function WriteFontSizeControl(): ReactElement {
   const [size, setSize] = useState<number>(() => readEditorFontSize())
 
   const buttonClass =
-    'flex h-7 w-7 items-center justify-center rounded-lg text-ds-ink transition hover:bg-ds-hover/80 disabled:cursor-not-allowed disabled:opacity-40'
+    'flex h-8 w-7 items-center justify-center rounded-md text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-40'
 
   return (
     <div
-      className="flex items-center gap-0.5 rounded-xl border border-ds-border-muted bg-white/68 px-1 py-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:bg-white/[0.06] dark:shadow-none"
+      className="flex items-center"
       role="group"
       aria-label={t('writeFontSizeControl')}
     >
@@ -61,7 +61,7 @@ export function WriteFontSizeControl(): ReactElement {
       >
         <Minus className="h-3.5 w-3.5" strokeWidth={2} />
       </button>
-      <span className="min-w-[30px] text-center text-[12px] font-semibold tabular-nums text-ds-ink">
+      <span className="min-w-[24px] text-center text-[12px] font-medium tabular-nums text-ds-muted">
         {size}
       </span>
       <button

@@ -35,6 +35,12 @@
   margin-top: 0.6em;
 }
 
+/* Lines split out of one source paragraph are separate blocks but keep
+   roughly the spacing they had as lines of that paragraph. */
+.write-rich-editor > p + p[data-soft-line] {
+  margin-top: 0.2em;
+}
+
 .write-rich-editor > * + h1 {
   margin-top: 1.8em;
 }
@@ -130,10 +136,16 @@
   color: inherit;
 }
 
+/* No horizontal margin here: this selector outranks `.write-rich-editor > *`,
+   so a `margin-left` would pull top-level quotes out of the centered reading
+   column. Only nested quotes (in lists or other quotes) sit flush left. */
 .write-rich-editor blockquote {
   border-left: 3px solid color-mix(in srgb, var(--ds-text) 78%, transparent);
   color: var(--ds-text);
   padding-left: 1em;
+}
+
+.write-rich-editor * blockquote {
   margin-left: 0;
 }
 
