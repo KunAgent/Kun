@@ -260,6 +260,76 @@ describe('shared business storage synchronization', () => {
     delete (window as unknown as { kunGui?: unknown }).kunGui
   })
 
+  it('pulls remote keys on first install instead of pushing deletions for missing local entries', async () => {
+    // First-seen origins (remote web page on an auto-picked port, a cleared
+    // profile) have no journal: missing local keys were never downloaded, so
+    // they must not be uploaded as tombstones wiping the shared document.
+    const storage = new MemoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    const remoteRoots = '["/repo/a","/repo/b"]'
+    const remoteRegistry = '{"version":1,"workspaces":{}}'
+    const write = vi.fn(async (revision: number, value: Record<string, string>) => ({
+      revision: revision + 1,
+      value
+    }))
+    ;(window as unknown as { kunGui: unknown }).kunGui = {
+      sharedClientState: {
+        read: vi.fn(async () => ({
+          revision: 40,
+          value: {
+            'kun.codeWorkspaceRoots.v1': remoteRoots,
+            'kun.write.threadRegistry.v1': remoteRegistry
+          }
+        })),
+        write
+      },
+      appEnvironment: { flavor: 'development' }
+    }
+
+    await installSharedBusinessStorage()
+
+    expect(write).not.toHaveBeenCalled()
+    expect(storage.getItem('kun.codeWorkspaceRoots.v1')).toBe(remoteRoots)
+    expect(storage.getItem('kun.write.threadRegistry.v1')).toBe(remoteRegistry)
+    delete (window as unknown as { kunGui?: unknown }).kunGui
+  })
+
+  it('first install uploads only keys present locally and still pulls the rest', async () => {
+    const storage = new MemoryStorage()
+    const localRegistry = '{"version":1,"workspaces":{"drawing-local":{}}}'
+    const remoteRegistry = '{"version":1,"workspaces":{}}'
+    const remoteRoots = '["/repo/a","/repo/b"]'
+    storage.setItem(DESIGN_REGISTRY_KEY, localRegistry)
+    vi.stubGlobal('localStorage', storage)
+    const write = vi.fn(async (revision: number, value: Record<string, string>) => ({
+      revision: revision + 1,
+      value
+    }))
+    ;(window as unknown as { kunGui: unknown }).kunGui = {
+      sharedClientState: {
+        read: vi.fn(async () => ({
+          revision: 40,
+          value: {
+            'kun.codeWorkspaceRoots.v1': remoteRoots,
+            [DESIGN_REGISTRY_KEY]: remoteRegistry
+          }
+        })),
+        write
+      },
+      appEnvironment: { flavor: 'development' }
+    }
+
+    await installSharedBusinessStorage()
+
+    expect(write).toHaveBeenCalledWith(40, {
+      'kun.codeWorkspaceRoots.v1': remoteRoots,
+      [DESIGN_REGISTRY_KEY]: localRegistry
+    })
+    expect(storage.getItem('kun.codeWorkspaceRoots.v1')).toBe(remoteRoots)
+    expect(storage.getItem(DESIGN_REGISTRY_KEY)).toBe(localRegistry)
+    delete (window as unknown as { kunGui?: unknown }).kunGui
+  })
+
   it('runs the immediate follow-up after clearing the completed in-flight sync', async () => {
     const storage = new MemoryStorage()
     const remoteRegistry = '{"version":1,"workspaces":{}}'

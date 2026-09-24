@@ -97,6 +97,7 @@ async function doInstallSharedBusinessStorage(): Promise<void> {
   const localAtStartup = readSharedLocalEntries()
   let snapshot = await readInitialSnapshot(api)
   let journal = readSharedBusinessStorageJournal()
+  const hasSyncedBefore = journal !== null
   if (!journal) {
     const dirtyKeys = SHARED_BUSINESS_KEYS.filter((key) =>
       localAtStartup[key] !== undefined && localAtStartup[key] !== snapshot.value[key]
@@ -110,10 +111,17 @@ async function doInstallSharedBusinessStorage(): Promise<void> {
     writeSharedBusinessStorageJournal(journal)
   }
 
-  const startupDirty = new Set([
-    ...journal.dirtyKeys,
-    ...changedSharedKeys(journal.acknowledgedEntries, localAtStartup)
-  ])
+  // A first-seen client (new origin/profile — remote web pages are always one:
+  // their URL port is auto-picked per launch) has never synced, so keys missing
+  // locally were simply never downloaded — pushing them as deletions would wipe
+  // the shared document for every other client. Only a returning client may
+  // tombstone keys that were acknowledged before and are gone locally now.
+  const startupDirty = new Set(journal.dirtyKeys)
+  if (hasSyncedBefore) {
+    for (const key of changedSharedKeys(journal.acknowledgedEntries, localAtStartup)) {
+      startupDirty.add(key)
+    }
+  }
   applyEntries(snapshot.value, startupDirty)
   let baseline = journal.acknowledgedEntries
   let revision = journal.acknowledgedRevision
