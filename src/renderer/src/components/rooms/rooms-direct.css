@@ -31,12 +31,6 @@
 .rooms-workspace[data-private-chat] .rooms-message-meta strong,
 .rooms-workspace[data-private-chat] .rooms-message-role { display: none; }
 .rooms-workspace[data-private-chat] .rooms-message-meta { font-size: 10px; padding: 0 3px; opacity: .65; }
-.rooms-workspace[data-private-chat] .rooms-message-user .rooms-message-bubble { background: color-mix(in srgb, var(--ds-text) 8%, var(--ds-bg-main)); border-color: transparent; }
-.rooms-workspace[data-private-chat] .rooms-message-member .rooms-message-bubble { background: var(--ds-surface-card); border-color: var(--ds-border); }
-.rooms-workspace .rooms-message-bubble { border-radius: 18px; }
-.rooms-workspace .rooms-message-footer { min-height: 0; }
-.rooms-workspace .rooms-message-actions { position: absolute; bottom: -27px; z-index: 2; padding: 2px 5px; border: 1px solid var(--ds-border); border-radius: 9px; background: var(--ds-bg-main); }
-.rooms-workspace .rooms-message-content { position: relative; }
 .rooms-workspace .rooms-message-row { padding-bottom: 20px; }
 .rooms-reactions:not(:has(> button)) { min-height: 0; padding: 0; margin: 0; }
 .rooms-workspace .rooms-message-bubble:has(.rooms-reactions:not(:has(> button))) .rooms-message-interactions { margin: 0; }
@@ -109,9 +103,6 @@ html[data-remote-surface='mobile'] .rooms-notice-dismiss { padding: 6px; }
   .direct-header { gap: 6px; padding-inline: 12px; }
   .direct-new-chat, .direct-model-settings { padding-inline: 16px; }
   .direct-progress { padding-inline: 12px; }
-}
-@media (hover: none) {
-  .rooms-workspace .rooms-message-actions { position: static; margin-top: 3px; opacity: 1; }
 }
 
 .rooms-composer-surface > .rooms-composer-chip { grid-column: 1 / -1; width: fit-content; margin: 3px 6px; }

@@ -29,6 +29,7 @@ import { RoomMemberDetails } from './RoomMemberDetails'
 import { roomsClient } from './rooms-client'
 import { useRooms } from './useRooms'
 import './rooms.css'
+import './rooms-chat-surface.css'
 import { RoomTimeline } from './RoomTimeline'
 import { RoomTaskStrip } from './RoomTaskStrip'
 import { RoomOverview } from './RoomOverview'
@@ -39,6 +40,7 @@ import {
   RoomPeerSummary
 } from './RoomPeerActivity'
 import { RoomTypingRow } from './RoomTypingRow'
+import { useRoomReplyAwaiting } from './use-room-reply-awaiting'
 import { RoomPendingSendRow } from './RoomPendingSendRow'
 import { useRoomPendingSends } from './useRoomPendingSends'
 import { roomRespondingMemberIds, roomWaitingMemberIds } from './room-receipt-helpers'
@@ -161,6 +163,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
   const openMember = (memberId: string, rootRequestId?: string): void => drawer.open({ kind: 'section', section: 'members', memberId, rootRequestId })
   const openContent = (reference: RoomContentReference, messageId?: string): void => drawer.open({ kind: 'content', reference, messageId })
   const pendingSends = useRoomPendingSends(room?.id, messages)
+  const replyAwaiting = useRoomReplyAwaiting(Boolean(direct.data?.active) || roomRespondingMemberIds(topicState.topics).length > 0, messages)
+  const waitingForReply = pendingSends.hasUnsettled || replyAwaiting.awaiting
   const send = async (message: SendRoomMessage): Promise<void> => {
     if (!room) return
     const pending = choiceInputs[0]
@@ -173,6 +177,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
     try {
       await roomsClient.send(room.id, message)
       pendingSends.markSent(message.clientRequestId)
+      replyAwaiting.markSent()
     } catch (cause) {
       pendingSends.markFailed(
         message.clientRequestId,
@@ -197,10 +202,10 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
   )
   const waitingNames = useMemo(
     () =>
-      privateChat || !pendingSends.hasUnsettled
+      privateChat || !waitingForReply
         ? []
         : roomWaitingMemberIds(topicState.topics).map(memberName),
-    [memberName, pendingSends.hasUnsettled, privateChat, topicState.topics]
+    [memberName, waitingForReply, privateChat, topicState.topics]
   )
   const skipSetup = async (): Promise<void> => {
     if (!agentId || !setupPending) return
@@ -352,7 +357,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
               <RoomTypingRow
                 names={typingNames}
                 waitingNames={waitingNames}
-                fallback={!typingNames.length && pendingSends.hasUnsettled && !(privateChat && direct.data?.active) ? t('roomsReceipt_fallback') : ''}
+                fallback={!typingNames.length && waitingForReply && !(privateChat && direct.data?.active) ? t('roomsReceipt_fallback') : ''}
               />
               <RoomComposer
               key={room.id + '-composer'}
@@ -364,6 +369,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
               }))}
               onSend={send} responding={Boolean(direct.data?.active)} onStop={() => void direct.act('stop')}
               onConnectProject={privateChat ? () => void direct.context('workspace') : undefined}
+              quickTools
             />
           </>}
           </>

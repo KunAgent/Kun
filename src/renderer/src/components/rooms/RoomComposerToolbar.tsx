@@ -7,7 +7,7 @@ import { RoomPopover } from './RoomPopover'
 
 export function RoomComposerToolbar({ room, tasks, taskId, repositoryId, rootRequestId, topicChoices,
   disabled, uploading, attachmentLimit, canSend, responding, onStop, onConnectProject, references,
-  onAttach, onMention, onEmoji, onPoll, onTask, onRepository, onTopic }: {
+  onAttach, onMention, onEmoji, onPoll, onTask, onRepository, onTopic, quickTools = false }: {
   room: Room; tasks: RoomTask[]; taskId: string; repositoryId: string; rootRequestId?: string; topicTitle?: string
   topicChoices: Array<{ rootRequestId: string; title: string }>; showTopic: boolean; intent: SendRoomMessage['executionIntent']
   busy: boolean; uploading: boolean; disabled: boolean; attachmentLimit: boolean; canSend: boolean
@@ -15,19 +15,27 @@ export function RoomComposerToolbar({ room, tasks, taskId, repositoryId, rootReq
   onTask: (id: string) => void; onRepository: (id: string) => void; onTopic: (id: string) => void
   onIntent: (intent: SendRoomMessage['executionIntent']) => void
   references?: ReactNode; responding?: boolean; onStop?: () => void; onConnectProject?: () => void
+  /** Desktop IM layout: frequent tools sit in the toolbar and leave the "+" menu. */
+  quickTools?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
   const privateChat = room.conversationKind === 'user_agent'
   return <div className="rooms-composer-toolbar">
-    <RoomPopover label={t('roomsAddContext')} trigger={<Plus size={20} />} side="top"
+    {quickTools ? <div className="rooms-composer-quick-tools">
+      <RoomEmojiPicker onChoose={onEmoji} disabled={disabled} />
+      {!privateChat ? <button type="button" aria-label={t('roomsMention')} title={t('roomsMention')} disabled={disabled} onClick={onMention}><AtSign size={17} /></button> : null}
+      <button type="button" aria-label={t('roomsAttach')} title={t('roomsAttach')} disabled={disabled || attachmentLimit} onClick={onAttach}><Paperclip size={17} /></button>
+      {!privateChat ? <button type="button" aria-label={t('roomsCreatePoll')} title={t('roomsCreatePoll')} disabled={disabled} onClick={onPoll}><BarChart3 size={17} /></button> : null}
+    </div> : null}
+    <RoomPopover label={t('roomsAddContext')} trigger={<Plus size={quickTools ? 18 : 20} />} side="top"
       className="rooms-composer-context-popover" disabled={disabled}>
       {(close) => <div className="rooms-menu-list direct-composer-menu">
-        <button type="button" aria-label={t('roomsAttach')} disabled={attachmentLimit} onClick={() => { close(); onAttach() }}><Paperclip size={17} />{t('roomsAttach')}</button>
+        {!quickTools ? <button type="button" aria-label={t('roomsAttach')} disabled={attachmentLimit} onClick={() => { close(); onAttach() }}><Paperclip size={17} />{t('roomsAttach')}</button> : null}
         {onConnectProject ? <button type="button" onClick={() => { close(); onConnectProject() }}><FolderOpen size={17} />{t('directConnectProject')}</button> : null}
         {references}
-        {!privateChat ? <button type="button" onClick={() => { close(); onMention() }}><AtSign size={17} />{t('roomsMention')}</button> : null}
-        <div className="direct-menu-emoji"><RoomEmojiPicker onChoose={(emoji) => { onEmoji(emoji); close() }} /><span>{t('directEmoji')}</span></div>
-        {!privateChat ? <button type="button" onClick={() => { close(); onPoll() }}><BarChart3 size={17} />{t('roomsCreatePoll')}</button> : null}
+        {!quickTools && !privateChat ? <button type="button" onClick={() => { close(); onMention() }}><AtSign size={17} />{t('roomsMention')}</button> : null}
+        {!quickTools ? <div className="direct-menu-emoji"><RoomEmojiPicker onChoose={(emoji) => { onEmoji(emoji); close() }} /><span>{t('directEmoji')}</span></div> : null}
+        {!quickTools && !privateChat ? <button type="button" onClick={() => { close(); onPoll() }}><BarChart3 size={17} />{t('roomsCreatePoll')}</button> : null}
         {tasks.length ? <label>{t('roomsTaskReference')}<select aria-label={t('roomsTaskReference')} value={taskId} onChange={(event) => { onTask(event.target.value); close() }}>
           <option value="">{t('roomsNoTask')}</option>{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}
         </select></label> : null}

@@ -70,9 +70,11 @@ function RoomComposerEditor({
   draftId,
   replyTarget,
   topicChoices = [],
-  onSend, onStop, onConnectProject, responding, autoFocus = true
+  onSend, onStop, onConnectProject, responding, autoFocus = true, quickTools = false
 }: {
   onStop?: () => void
+  /** Show emoji / mention / attach / poll directly in the toolbar (desktop IM layout). */
+  quickTools?: boolean
   onConnectProject?: () => void
   responding?: boolean
   autoFocus?: boolean
@@ -350,7 +352,7 @@ function RoomComposerEditor({
           onTopic={(id) => patch({ rootRequestId: id || undefined, replyToMessageId: undefined, replyBody: undefined })}
           onIntent={(intent) => patch({ intent })} onStop={onStop} responding={responding} onConnectProject={onConnectProject}
           references={<RoomContentReferencePicker showLabel room={room} tasks={tasks} references={draft.references}
-            onChange={(references) => patch({ references })} disabled={disabled} />} />
+            onChange={(references) => patch({ references })} disabled={disabled} />} quickTools={quickTools} />
       </fieldset>
       {room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId ? <RoomPermissionPicker roomId={room.id} /> : null}
       {room.conversationKind !== 'user_agent' && !room.repositories.length ? (

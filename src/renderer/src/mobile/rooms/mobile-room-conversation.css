@@ -71,7 +71,7 @@
   overscroll-behavior-y: contain;
 }
 .kun-mobile-room-conversation .rooms-message-row:not(.rooms-message-system) { max-width: 100%; gap: 8px; }
-/* Keep the opposite side free like WeChat, so a bubble never runs edge to edge. */
+/* Keep the opposite side free so a bubble never runs edge to edge. */
 .kun-mobile-room-conversation .rooms-message-row:not(.rooms-message-system) > .rooms-message-content { max-width: calc(100% - 88px); }
 .kun-mobile-room-conversation .rooms-message-user { margin-left: auto; flex-direction: row-reverse; }
 .kun-mobile-room-conversation .rooms-message-user :is(.rooms-message-meta, .rooms-message-footer) { justify-content: flex-end; }
@@ -118,6 +118,21 @@
 @media (prefers-reduced-motion: reduce) { .kun-mobile-room-conversation [data-kun-actions-open] .rooms-message-actions { animation: none; } }
 .kun-mobile-room-conversation .rooms-timeline-latest { min-height: 44px; right: 12px; }
 
-.kun-mobile-room-error, .kun-mobile-room-loading, .kun-mobile-room-readonly { margin: 0; padding: 12px 16px; overflow-wrap: anywhere; }
+.kun-mobile-room-error, .kun-mobile-room-readonly { margin: 0; padding: 12px 16px; overflow-wrap: anywhere; }
 .kun-mobile-room-readonly { border-top: 1px solid var(--ds-border); color: var(--ds-text-muted); }
 .kun-mobile-room-conversation .rooms-reply-count { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 10px; border: 0; border-radius: 9999px; color: var(--ds-accent); background: var(--ds-surface-subtle); font-size: 12px; }
+/* Agent "typing" bubble shown while a private-chat run is queued or working. */
+.kun-mobile-room-conversation .kun-mobile-room-activity { animation: kun-mobile-room-activity-in .22s ease-out; }
+.kun-mobile-room-activity-bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 9px 14px;
+  border-radius: 4px 14px 14px;
+  color: var(--ds-text-muted);
+  background: var(--ds-surface-card);
+  font-size: 13px;
+}
+@keyframes kun-mobile-room-activity-in { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .kun-mobile-room-conversation .kun-mobile-room-activity { animation: none; } }

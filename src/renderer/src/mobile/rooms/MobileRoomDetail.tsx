@@ -15,6 +15,7 @@ import { RoomNoticeDismiss } from '../../components/rooms/RoomDirectChat'
 import { MobileSheet } from '../sheets/MobileSheet'
 import type { MobilePage } from '../navigation/mobile-page'
 import './mobile-room-detail.css'
+import { MobileLoadingState } from '../lib/MobileLoading'
 
 export function MobileRoomDetail({ page, onBack, onOpenCode, onNavigate, onOpenTarget }: {
   page: Extract<MobilePage, { mode: 'rooms'; kind: 'reply' | 'run' | 'task' | 'member' }>
@@ -57,7 +58,7 @@ export function MobileRoomDetail({ page, onBack, onOpenCode, onNavigate, onOpenT
     <header><button type="button" aria-label={t('back')} onClick={onBack}><ArrowLeft aria-hidden /></button>
       <h1>{page.kind}</h1></header>
     {state.error && state.error !== dismissedError ? <p className="kun-mobile-room-error kun-mobile-room-notice" role="alert"><span>{state.error}</span><RoomNoticeDismiss onDismiss={() => setDismissedError(state.error)} /></p> : null}
-    {!room || state.loading ? <p role="status">{t('roomsLoading')}</p> : page.kind === 'reply' ?
+    {!room || state.loading ? <MobileLoadingState label={t('roomsLoading')} /> : page.kind === 'reply' ?
       <RoomReplyThread room={room} messageId={page.messageId} tasks={state.tasks} autoFocus={false}
         onSend={send} onPin={(message) => { void pin(message) }}
         onTask={(taskId) => onNavigate({ mode: 'rooms', kind: 'task', roomId: room.id, taskId })}

@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RoomSidebarEntry } from '@shared/rooms-api'
 import { MobileRoomsHome, type MobileRoomsHomeProps } from './MobileRoomsHome'
-import { mobileImTime } from '../lib/im-time'
+import { imListTime } from '../../lib/im-time'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -109,15 +109,15 @@ describe('mobile Bot list', () => {
   })
 })
 
-describe('mobileImTime', () => {
+describe('imListTime', () => {
   const now = new Date(2026, 8, 24, 18, 0)
   it('uses time today, yesterday, weekday this week, then dates', () => {
-    expect(mobileImTime(new Date(2026, 8, 24, 9, 5).toISOString(), 'en-US', now)).toMatch(/09:05/)
-    expect(mobileImTime(new Date(2026, 8, 23, 23, 0).toISOString(), 'en-US', now)).toBe('yesterday')
-    expect(mobileImTime(new Date(2026, 8, 23, 23, 0).toISOString(), 'zh-CN', now)).toBe('昨天')
-    expect(mobileImTime(new Date(2026, 8, 21, 8, 0).toISOString(), 'en-US', now)).toBe('Mon')
-    expect(mobileImTime(new Date(2026, 5, 2).toISOString(), 'en-US', now)).toBe('6/2')
-    expect(mobileImTime(new Date(2025, 5, 2).toISOString(), 'en-US', now)).toBe('6/2/2025')
-    expect(mobileImTime('not a date', 'en-US', now)).toBe('')
+    expect(imListTime(new Date(2026, 8, 24, 9, 5).toISOString(), 'en-US', now)).toMatch(/09:05/)
+    expect(imListTime(new Date(2026, 8, 23, 23, 0).toISOString(), 'en-US', now)).toBe('yesterday')
+    expect(imListTime(new Date(2026, 8, 23, 23, 0).toISOString(), 'zh-CN', now)).toBe('昨天')
+    expect(imListTime(new Date(2026, 8, 21, 8, 0).toISOString(), 'en-US', now)).toBe('Mon')
+    expect(imListTime(new Date(2026, 5, 2).toISOString(), 'en-US', now)).toBe('6/2')
+    expect(imListTime(new Date(2025, 5, 2).toISOString(), 'en-US', now)).toBe('6/2/2025')
+    expect(imListTime('not a date', 'en-US', now)).toBe('')
   })
 })

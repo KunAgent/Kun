@@ -16,6 +16,7 @@ import { openRoomContentTarget } from '../components/rooms/room-content-navigati
 import { workFileResourceKey, workWhiteboardResourceKey } from './work/work-resource-key'
 import { useWorkBeforeUnloadGuard } from './use-work-before-unload-guard'
 import { useMobileViewport } from './use-mobile-viewport'
+import { MobileLoadingState } from './lib/MobileLoading'
 import './mobile-app-shell.css'
 
 const MobileRoomNew = lazy(() => import('./rooms/MobileRoomNew').then((module) => ({
@@ -250,7 +251,7 @@ export function MobileAppShell(): ReactElement {
 
   return <div className="kun-mobile-app" data-mobile-mode={page.mode}>
     {notice ? <div className="kun-mobile-notice" role="alert">{notice}</div> : null}
-    <div className="kun-mobile-app-content"><Suspense fallback={<MobileUnavailable title="loading" onBack={() => navigate({ mode: page.mode, kind: 'home' })} />}>{content}</Suspense></div>
+    <div className="kun-mobile-app-content"><Suspense fallback={<MobileLoadingState className="kun-mobile-page-loading" label={t('loading')} />}>{content}</Suspense></div>
     {page.kind === 'home' ? <MobileModeNav active={page.mode} attentionCount={roomAttention}
       labels={{ code: 'Code', rooms: t('roomsLabel'), work: t('workspaceModeWorkLabel') }}
       onSelect={(mode) => void selectMode(mode)} /> : null}

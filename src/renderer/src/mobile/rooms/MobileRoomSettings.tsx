@@ -5,6 +5,7 @@ import { RoomSettings } from '../../components/rooms/RoomSettings'
 import { roomsClient } from '../../components/rooms/rooms-client'
 import { useRooms } from '../../components/rooms/useRooms'
 import './mobile-room-settings.css'
+import { MobileLoadingState } from '../lib/MobileLoading'
 
 export function MobileRoomSettings({ roomId, onBack }: { roomId: string; onBack: () => void }) {
   const { t } = useTranslation('common')
@@ -28,7 +29,7 @@ export function MobileRoomSettings({ roomId, onBack }: { roomId: string; onBack:
   return <section className="kun-mobile-room-settings">
     <header><button type="button" aria-label={t('back')} onClick={onBack}><ArrowLeft aria-hidden /></button>
       <h1>{room?.name ?? t('roomsLoading')}</h1></header>
-    {state.loading || !room ? <p role="status">{t('roomsLoading')}</p> : <div className="kun-mobile-room-settings-actions">
+    {state.loading || !room ? <MobileLoadingState label={t('roomsLoading')} /> : <div className="kun-mobile-room-settings-actions">
       <button type="button" disabled={busy} onClick={() => setEditing(true)}>{t('roomsSettings')}</button>
       <button type="button" disabled={busy} onClick={() => void update({ pinned: !room.pinned })}>
         {room.pinned ? t('roomsUnpin') : t('roomsPin')}</button>

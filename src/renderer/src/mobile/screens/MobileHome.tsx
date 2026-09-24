@@ -1,6 +1,7 @@
 import { ArrowLeft, MoreHorizontal, Plus, Search, Settings } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
 import './mobile-home.css'
+import { MobileLoadingDots } from '../lib/MobileLoading'
 
 export type MobileThreadActivity = {
   kind: 'running' | 'awaiting-input' | 'failed' | 'unread' | 'scheduled'
@@ -131,7 +132,7 @@ export function MobileHome({
             })}
         </ul>
         {hasMore ? <button type="button" className="kun-mobile-load-more" disabled={loading} onClick={onLoadMore}>
-          {loading ? labels.loading : labels.loadMore}
+          {loading ? <MobileLoadingDots /> : labels.loadMore}
         </button> : null}
       </div>
     </section>

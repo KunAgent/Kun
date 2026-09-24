@@ -10,7 +10,7 @@ function messageAt(target: EventTarget | null): HTMLElement | null {
 }
 
 /**
- * WeChat-style message actions: each message's action bar stays hidden until
+ * Press-and-hold message actions: each message's action bar stays hidden until
  * its bubble is pressed and held (or right-clicked); a tap anywhere else hides
  * it again. Delegated from the conversation root because the timeline markup
  * belongs to the shared desktop RoomTimeline.

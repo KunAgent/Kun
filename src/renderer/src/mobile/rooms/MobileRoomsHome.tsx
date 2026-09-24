@@ -7,6 +7,7 @@ import { MobileSheet } from '../sheets/MobileSheet'
 import { useLongPress } from '../lib/use-long-press'
 import { MobileRoomRow } from './MobileRoomRow'
 import './mobile-rooms-home.css'
+import { MobileLoadingDots, MobileLoadingState } from '../lib/MobileLoading'
 
 export type MobileRoomsFilter = 'all' | 'unread' | 'attention'
 export type MobileRoomsHomeProps = {
@@ -81,12 +82,12 @@ export function MobileRoomsHome(props: MobileRoomsHomeProps) {
     <div className="kun-mobile-room-list" aria-busy={loading}>
       {error ? <div role="alert"><p>{error}</p>
         <button type="button" disabled={loading} onClick={onRetry}>{t('roomsRefresh')}</button></div> : null}
-      {!error && rooms.length === 0 ? <p role="status" className="kun-mobile-rooms-empty">
-        {loading ? t('roomsLoading') : search ? t('roomsSearchNoResults') : t('roomsEmpty')}</p> : null}
+      {!error && rooms.length === 0 ? loading ? <MobileLoadingState label={t('roomsLoading')} />
+        : <p role="status" className="kun-mobile-rooms-empty">{search ? t('roomsSearchNoResults') : t('roomsEmpty')}</p> : null}
       <ul>{rooms.map((entry) => <MobileRoomRow key={entry.id} entry={entry}
         pressHandlers={longPress(entry)} onOpen={() => onOpen(entry)} />)}</ul>
       {hasMore ? <button type="button" className="kun-mobile-rooms-more" disabled={loading} onClick={onLoadMore}>
-        {loading ? t('roomsLoading') : t('roomsLoadMore')}</button> : null}
+        {loading ? <MobileLoadingDots /> : t('roomsLoadMore')}</button> : null}
     </div>
     <MobileSheet open={Boolean(actionEntry)} title={actionName} closeLabel={t('close')} onClose={() => setActionEntry(null)}>
       {actionEntry ? <ul className="kun-mobile-action-list">

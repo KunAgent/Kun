@@ -4,8 +4,8 @@ function startOfDay(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
 }
 
-/** Chat-list timestamp in the WeChat/Feishu style: 14:05, 昨天, 周三, 9/20, 2025/9/20. */
-export function mobileImTime(iso: string, locale: string, now = new Date()): string {
+/** Chat-list timestamp: 14:05, 昨天, 周三, 9/20, 2025/9/20. */
+export function imListTime(iso: string, locale: string, now = new Date()): string {
   const ms = Date.parse(iso)
   if (Number.isNaN(ms)) return ''
   const date = new Date(ms)

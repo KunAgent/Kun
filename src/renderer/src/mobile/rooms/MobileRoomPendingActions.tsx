@@ -1,15 +1,13 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Room } from '@shared/rooms-api'
-import { useDirectChat, RoomNoticeDismiss } from '../../components/rooms/RoomDirectChat'
+import { type useDirectChat, RoomNoticeDismiss } from '../../components/rooms/RoomDirectChat'
 import { RoomApprovalCard } from '../../components/rooms/RoomApprovalCard'
 import { MobileRoomUserInput } from './MobileRoomUserInput'
 import { MobileSheet } from '../sheets/MobileSheet'
 
 /** Private-chat gates must be reachable without opening the desktop run inspector. */
-export function MobileRoomPendingActions({ room, onUpdated }: { room: Room; onUpdated: () => Promise<void> }) {
+export function MobileRoomPendingActions({ direct, onUpdated }: { direct: ReturnType<typeof useDirectChat>; onUpdated: () => Promise<void> }) {
   const { t } = useTranslation('common')
-  const direct = useDirectChat(room, onUpdated)
   const [approvalsOpen, setApprovalsOpen] = useState(false)
   const [dismissedError, setDismissedError] = useState('')
   const inputs = direct.data?.userInputs ?? []

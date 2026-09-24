@@ -2,13 +2,13 @@ import { Pin } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { RoomSidebarEntry } from '@shared/rooms-api'
 import { RoomAvatar, RoomAvatarGroup } from '../../components/rooms/RoomAvatar'
-import { mobileImTime } from '../lib/im-time'
+import { imListTime } from '../../lib/im-time'
 
 export function mobileRoomUnread(entry: RoomSidebarEntry): number {
   return Math.max(0, (entry.latestMessageSeq ?? 0) - (entry.readSeq ?? 0))
 }
 
-/** WeChat/Feishu list row: avatar with unread badge, name + time, one-line preview. */
+/** Chat list row: avatar with unread badge, name + time, one-line preview. */
 export function MobileRoomRow({ entry, pressHandlers, onOpen }: {
   entry: RoomSidebarEntry
   pressHandlers: Record<string, unknown>
@@ -24,7 +24,7 @@ export function MobileRoomRow({ entry, pressHandlers, onOpen }: {
     ? latest.preview || (latest.attachmentCount ? t('roomsAttachmentSummary', { count: latest.attachmentCount }) : '')
     : entry.title !== name ? entry.title : ''
   const unread = mobileRoomUnread(entry)
-  const time = latest?.createdAt ? mobileImTime(latest.createdAt, i18n.language) : ''
+  const time = latest?.createdAt ? imListTime(latest.createdAt, i18n.language) : ''
   return <li data-pinned={entry.pinned || undefined}>
     <button type="button" className="kun-mobile-room-open" onClick={onOpen} {...pressHandlers}>
       <span className="kun-mobile-room-avatar">

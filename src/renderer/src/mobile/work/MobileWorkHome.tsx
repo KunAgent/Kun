@@ -1,5 +1,6 @@
 import { FileText, MoreHorizontal, Plus, Search, Shapes } from 'lucide-react'
 import './mobile-work-home.css'
+import { MobileLoadingState } from '../lib/MobileLoading'
 
 export type MobileWorkResource = {
   key: string
@@ -33,7 +34,8 @@ export function MobileWorkHome(props: MobileWorkHomeProps) {
       <input type="search" value={search} onChange={(event) => onSearch(event.target.value)} aria-label={labels.search} placeholder={labels.search} /></label>
     <div className="kun-mobile-work-list" aria-busy={loading}>
       {error ? <div role="alert"><p>{error}</p><button type="button" disabled={loading} onClick={onRetry}>{labels.retry}</button></div> : null}
-      {!error && resources.length === 0 ? <p role="status">{loading ? labels.loading : labels.empty}</p> : null}
+      {!error && resources.length === 0 ? loading ? <MobileLoadingState label={labels.loading} />
+        : <p role="status">{labels.empty}</p> : null}
       <ul>{resources.map((resource) => <li key={resource.key}>
         <button type="button" className="kun-mobile-work-open" onClick={() => onOpen(resource)}>
           {resource.kind === 'whiteboard' ? <Shapes aria-hidden /> : <FileText aria-hidden />}

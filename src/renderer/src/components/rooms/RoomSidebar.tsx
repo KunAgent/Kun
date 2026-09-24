@@ -2,10 +2,11 @@ import { useRoomSidebarMotion } from './useRoomSidebarMotion'
 import { useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useTranslation } from 'react-i18next'
-import { Search, Plus, MoreHorizontal, SlidersHorizontal, Pin, Settings, X } from 'lucide-react'
+import { Search, Plus, MoreHorizontal, SlidersHorizontal, Settings, X } from 'lucide-react'
 import type { RoomSearchHit, RoomSidebarEntry } from '@shared/rooms-api'
 import { useRoomSidebar } from './useRoomSidebar'
-import { RoomAvatar, RoomAvatarGroup } from './RoomAvatar'
+import { RoomAvatar } from './RoomAvatar'
+import { RoomSidebarRow } from './RoomSidebarRow'
 import { RoomPopover } from './RoomPopover'
 import { RoomListFilters } from './RoomManagementControls'
 import { RoomUnifiedSearch } from './RoomUnifiedSearch'
@@ -46,8 +47,10 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
     } catch (cause) { setActionError(String(cause)) }
   }
   return <div className="rooms-im-sidebar">
-    <div className="rooms-im-sidebar-toolbar"><strong>{t('roomsConversations')}</strong>
-      <button type="button" aria-label={t('roomsSidebarNew')} className="rooms-icon-button" onClick={onCreateAgent}><Plus size={18} /></button>
+    <div className="rooms-im-sidebar-toolbar">
+      <div className="rooms-list-search"><Search size={15} /><input value={search} onChange={(e) => { setSearch(e.target.value); setFullSearch(false) }}
+        aria-label={t('roomsSidebarSearch')} placeholder={t('roomsSidebarSearch')} />{search ? <button aria-label={t('roomsClose')} onClick={() => setSearch('')}><X size={14} /></button> : null}</div>
+      <button type="button" aria-label={t('roomsSidebarNew')} title={t('roomsSidebarNew')} className="rooms-icon-button rooms-im-sidebar-new" onClick={onCreateAgent}><Plus size={18} /></button>
       <RoomPopover label={t('roomsSidebarFilter')} trigger={<SlidersHorizontal size={16} />} className="rooms-icon-button" align="end" width={280}>
         {() => <div className="rooms-sidebar-filter-menu"><label>{t('roomsSidebarKind')}<select value={kind} onChange={(e) => {
           const value = e.target.value as Kind; setKind(value); writeBrowserStorageItem('kun.rooms.sidebar.kind', value)
@@ -57,40 +60,31 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
         </div>}
       </RoomPopover>
     </div>
-    <div className="rooms-list-search"><Search size={15} /><input value={search} onChange={(e) => { setSearch(e.target.value); setFullSearch(false) }}
-      aria-label={t('roomsSidebarSearch')} placeholder={t('roomsSidebarSearch')} />{search ? <button aria-label={t('roomsClose')} onClick={() => setSearch('')}><X size={14} /></button> : null}</div>
-    {kind !== 'all' || archived || filter !== 'all' || repository ? <button className="rooms-sidebar-active-filter" onClick={() => {
+    <div className="rooms-im-sidebar-tabs" role="group" aria-label={t('roomsSidebarFilter')}>
+      {(['all', 'unread', 'attention'] as const).map((value) => <button key={value} type="button" aria-pressed={!archived && filter === value}
+        onClick={() => { setArchived(false); setFilter(value) }}>{t('roomsFilter_' + value)}</button>)}
+    </div>
+    {kind !== 'all' || archived || repository ? <button className="rooms-sidebar-active-filter" onClick={() => {
       setKind('all'); setArchived(false); setFilter('all'); setRepository(''); writeBrowserStorageItem('kun.rooms.sidebar.kind', 'all')
-    }}>{t('roomsSidebar_' + kind)}{archived ? ' · ' + t('roomsArchived') : ''}{filter !== 'all' ? ' · ' + t('roomsFilter_' + filter) : ''}{repository ? ' · ' + repository.split('/').at(-1) : ''}<X size={12} /></button> : null}
+    }}>{t('roomsSidebar_' + kind)}{archived ? ' · ' + t('roomsArchived') : ''}{repository ? ' · ' + repository.split('/').at(-1) : ''}<X size={12} /></button> : null}
     {search.trim().length >= 2 ? <button className="rooms-sidebar-search-all" onClick={() => setFullSearch(!fullSearch)}>{t(fullSearch ? 'roomsSidebarChatsOnly' : 'roomsSidebarSearchAll')}</button> : null}
     {fullSearch && search.trim().length >= 2 ? <RoomUnifiedSearch query={search} repositoryRoot={repository} includeArchived={archived} onSelect={(hit) => { onSearch(hit); setSearch(''); setFullSearch(false) }} /> :
       <div className="rooms-im-sidebar-list" ref={scroll} onScroll={rememberScroll} tabIndex={-1} aria-label={t('roomsConversations')}>
         <div style={{ ...(virtual ? { height: virtualizer.getTotalSize() } : {}), position: 'relative' }}>{rows.map((row) => {
-          const entry = page.entries[row.index], latest = entry.latestMessage
+          const entry = page.entries[row.index]
           const selected = Boolean(entry.roomId && entry.roomId === selectedRoomId)
-          const date = latest ? new Date(latest.createdAt) : null
-          const preview = latest ? (latest.authorKind === 'user' ? t('roomsSidebarYou') + ': ' : entry.kind !== 'user_agent' ? latest.authorLabelSnapshot + ': ' : '') +
-            (latest.preview || (latest.attachmentCount ? t('roomsAttachmentSummary', { count: latest.attachmentCount }) : '')) : entry.title
           return <div key={row.key} data-sidebar-entry={entry.id} data-pinned={entry.pinned} data-index={row.index} ref={virtual ? virtualizer.measureElement : undefined}
             className={'rooms-im-sidebar-row' + (selected ? ' is-selected' : '')}
             style={virtual ? { position: 'absolute', top: row.start, width: '100%' } : undefined}>
-            <button className="rooms-im-sidebar-open" aria-label={entry.name} aria-current={selected ? 'page' : undefined}
-              onClick={() => entry.agentId ? onOpenAgent(entry.agentId) : entry.roomId && onSelect(entry.roomId)}>
-              {entry.agentId ? <RoomAvatar avatar={entry.avatar} id={entry.agentId} label={entry.name} size={36} /> :
-                <RoomAvatarGroup members={entry.members} avatar={entry.avatar} id={entry.roomId} label={entry.name} size={36} />}
-              <span className="rooms-im-sidebar-copy"><span className="rooms-im-sidebar-name"><strong>{entry.name}</strong>
-                {date && Number.isFinite(date.getTime()) ? <time dateTime={latest!.createdAt}>{date.toDateString() === new Date().toDateString() ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : date.toLocaleDateString([], { month: 'short', day: 'numeric' })}</time> : null}</span>
-                <span className="rooms-im-sidebar-preview">{entry.attentionCount ? <b aria-label={t('roomsAttention')}>!</b> : entry.runningCount ? <i aria-label={t('agentsWorking')}>●</i> : null}<small>{preview}</small>
-                  {entry.pinned ? <Pin size={10} aria-label={t('roomsPin')} /> : null}{entry.latestMessageSeq > entry.readSeq ? <i className="rooms-unread-dot" aria-label={t('roomsUnread')} /> : null}</span>
-              </span>
-            </button>
-            <RoomPopover label={t('agentsActions', { name: entry.name })} trigger={<MoreHorizontal size={15} />} className="rooms-sidebar-row-menu rooms-icon-button" align="end">
-              {(close) => <div className="rooms-menu-list">{entry.agentId ? <button onClick={() => { close(); onDetails(entry.agentId!) }}>{t('agentsProfileAndMemory')}</button> : null}
-                <button onClick={() => { close(); page.togglePin(entry); requestAnimationFrame(() => {
-                  if (document.activeElement === document.body) scroll.current?.focus({ preventScroll: true })
-                }) }}>{t(entry.pinned ? 'roomsSidebarUnpin' : 'roomsPin')}</button>
-                <button onClick={() => { close(); void act(entry, 'archive') }}>{t(entry.archived ? 'agentsRestore' : 'agentsArchive')}</button></div>}
-            </RoomPopover>
+            <RoomSidebarRow entry={entry} selected={selected}
+              onOpen={() => entry.agentId ? onOpenAgent(entry.agentId) : entry.roomId && onSelect(entry.roomId)}
+              menu={<RoomPopover label={t('agentsActions', { name: entry.name })} trigger={<MoreHorizontal size={15} />} className="rooms-sidebar-row-menu rooms-icon-button" align="end">
+                {(close) => <div className="rooms-menu-list">{entry.agentId ? <button onClick={() => { close(); onDetails(entry.agentId!) }}>{t('agentsProfileAndMemory')}</button> : null}
+                  <button onClick={() => { close(); page.togglePin(entry); requestAnimationFrame(() => {
+                    if (document.activeElement === document.body) scroll.current?.focus({ preventScroll: true })
+                  }) }}>{t(entry.pinned ? 'roomsSidebarUnpin' : 'roomsPin')}</button>
+                  <button onClick={() => { close(); void act(entry, 'archive') }}>{t(entry.archived ? 'agentsRestore' : 'agentsArchive')}</button></div>}
+              </RoomPopover>} />
           </div>
         })}</div>
         {page.nextCursor ? <button className="rooms-sidebar-search-all" disabled={page.busy} onClick={page.more}>{t('roomsLoadMore')}</button> : null}

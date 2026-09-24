@@ -1,7 +1,7 @@
 .kun-mobile-rooms-home { display: flex; min-height: 0; flex: 1; flex-direction: column; color: var(--ds-text); background: var(--ds-bg-main); }
 .kun-mobile-rooms-home button { color: inherit; font: inherit; -webkit-tap-highlight-color: transparent; }
 
-/* Header: my avatar | centered title | "+" menu, as in WeChat / Feishu. */
+/* Header: my avatar | centered title | "+" menu. */
 .kun-mobile-rooms-home > header { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; min-height: 52px; padding: env(safe-area-inset-top, 0px) 8px 0; }
 .kun-mobile-rooms-home h1 { margin: 0; overflow: hidden; font-size: 17px; font-weight: 600; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 .kun-mobile-rooms-home > header > button:not(.kun-mobile-rooms-scrim) { display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 9999px; background: transparent; }
@@ -18,7 +18,7 @@
 .kun-mobile-rooms-search { display: flex; align-items: center; gap: 6px; margin: 4px 12px 8px; padding-inline: 12px; border-radius: 10px; color: var(--ds-text-muted); background: var(--ds-surface-subtle); }
 .kun-mobile-rooms-search input { width: 100%; min-width: 0; min-height: 40px; border: 0; outline: none; color: var(--ds-text); background: transparent; font-size: 16px; }
 
-/* Feishu-style text tabs with an underline on the active one. */
+/* Text tabs with an underline on the active one. */
 .kun-mobile-room-filters { display: flex; gap: 22px; padding: 0 16px; overflow-x: auto; border-bottom: 1px solid var(--ds-border-muted); scrollbar-width: none; }
 .kun-mobile-room-filters button { position: relative; flex-shrink: 0; min-height: 40px; padding: 0 2px; border: 0; color: var(--ds-text-muted); background: transparent; font-size: 14px; }
 .kun-mobile-room-filters button[aria-pressed='true'] { color: var(--ds-text); font-weight: 600; }
@@ -32,7 +32,7 @@
 .kun-mobile-room-avatar { position: relative; display: inline-flex; flex-shrink: 0; }
 .kun-mobile-room-badge { position: absolute; top: -6px; right: -7px; min-width: 18px; height: 18px; box-sizing: border-box; padding: 0 5px; border-radius: 9999px; color: #fff; background: var(--ds-danger); box-shadow: 0 0 0 2px var(--ds-bg-main); font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
 .kun-mobile-room-running { position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; background: var(--ds-success); box-shadow: 0 0 0 2px var(--ds-bg-main); }
-/* Inset divider that starts under the text column, like WeChat. */
+/* Inset divider that starts under the text column. */
 .kun-mobile-room-body { position: relative; display: grid; flex: 1; align-self: stretch; align-content: center; gap: 4px; min-width: 0; }
 .kun-mobile-room-body::after { content: ''; position: absolute; left: 0; right: -16px; bottom: -10px; height: 1px; background: var(--ds-border-muted); }
 .kun-mobile-room-list li:last-child .kun-mobile-room-body::after { display: none; }
