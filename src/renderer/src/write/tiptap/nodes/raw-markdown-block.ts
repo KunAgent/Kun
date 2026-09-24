@@ -17,10 +17,34 @@ import { EditorState } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { markdown } from '@codemirror/lang-markdown'
 import { parseWorkDocument } from '../../markdown/document-codec'
+import { loadWriteMarkdownImage } from '../../markdown-image'
 
 export type RawMarkdownReason = string
 
-function renderPreview(dom: HTMLElement, raw: string): void {
+export type RawMarkdownBlockOptions = {
+  /** Current file path — relative images inside previews resolve via IPC. */
+  getFilePath: () => string
+}
+
+/** A rendered preview whose visible payload is empty (HTML comments,
+ * link/footnote definitions, bare closing tags) must not collapse to a
+ * zero-height ghost — fall back to the faded monospace source. */
+function hasVisiblePayload(root: HTMLElement): boolean {
+  if (root.textContent?.trim()) return true
+  return Boolean(root.querySelector('img,video,svg,table,math,iframe,hr,input,object'))
+}
+
+function resolvePreviewImages(root: HTMLElement, filePath: string): void {
+  for (const img of Array.from(root.querySelectorAll('img'))) {
+    const src = img.getAttribute('src') ?? ''
+    if (!src || src.startsWith('data:')) continue
+    void loadWriteMarkdownImage(src, filePath).then((result) => {
+      if (img.isConnected && result.ok) img.src = result.src
+    })
+  }
+}
+
+function renderPreview(dom: HTMLElement, raw: string, getFilePath: () => string): void {
   dom.textContent = ''
   const preview = document.createElement('div')
   preview.className = 'write-raw-preview'
@@ -33,8 +57,15 @@ function renderPreview(dom: HTMLElement, raw: string): void {
       if (!preview.isConnected) return
       const html = renderer.renderWorkMarkdownToHtml(raw, { math: 'html' })
       preview.innerHTML = (purify.default ?? purify).sanitize(html)
+      if (!hasVisiblePayload(preview)) {
+        preview.classList.add('write-raw-preview-plain')
+        preview.textContent = raw
+        return
+      }
+      resolvePreviewImages(preview, getFilePath())
     })
     .catch(() => {
+      preview.classList.add('write-raw-preview-plain')
       preview.textContent = raw
     })
   dom.appendChild(preview)
@@ -85,9 +116,14 @@ function reparseAndReplace(
   editor.view.dispatch(tr.scrollIntoView())
 }
 
-function createRawNodeView(node: PmNode, editor: Editor, getPos: () => number | undefined): NodeView {
+function createRawNodeView(
+  node: PmNode,
+  editor: Editor,
+  getPos: () => number | undefined,
+  getFilePath: () => string
+): NodeView {
   const { dom, badge, previewHost } = buildDom(String(node.attrs.reason ?? ''))
-  renderPreview(previewHost, String(node.attrs.raw ?? ''))
+  renderPreview(previewHost, String(node.attrs.raw ?? ''), getFilePath)
 
   let editing = false
   let cm: EditorView | undefined
@@ -97,7 +133,7 @@ function createRawNodeView(node: PmNode, editor: Editor, getPos: () => number | 
     cm?.destroy()
     cm = undefined
     previewHost.textContent = ''
-    renderPreview(previewHost, String(node.attrs.raw ?? ''))
+    renderPreview(previewHost, String(node.attrs.raw ?? ''), getFilePath)
     dom.classList.remove('is-editing')
   }
 
@@ -155,7 +191,7 @@ function createRawNodeView(node: PmNode, editor: Editor, getPos: () => number | 
     update: (updated) => {
       if (updated.type.name !== node.type.name) return false
       if (updated.attrs.raw !== node.attrs.raw && !editing) {
-        renderPreview(previewHost, String(updated.attrs.raw ?? ''))
+        renderPreview(previewHost, String(updated.attrs.raw ?? ''), getFilePath)
       }
       badge.title = `raw markdown · ${String(updated.attrs.reason ?? '')}`
       return true
@@ -166,12 +202,18 @@ function createRawNodeView(node: PmNode, editor: Editor, getPos: () => number | 
   }
 }
 
-export const RawMarkdownBlock = TiptapNode.create({
+export const RawMarkdownBlock = TiptapNode.create<RawMarkdownBlockOptions>({
   name: 'rawMarkdownBlock',
   group: 'block',
   atom: true,
   selectable: true,
   draggable: true,
+
+  addOptions() {
+    return {
+      getFilePath: () => ''
+    }
+  },
 
   addAttributes() {
     return {
@@ -202,7 +244,8 @@ export const RawMarkdownBlock = TiptapNode.create({
   },
 
   addNodeView() {
+    const getFilePath = () => this.options.getFilePath()
     return ({ node, editor, getPos }) =>
-      createRawNodeView(node, editor, getPos as () => number | undefined)
+      createRawNodeView(node, editor, getPos as () => number | undefined, getFilePath)
   }
 })

@@ -153,6 +153,38 @@ describe('CRLF handling', () => {
   })
 })
 
+describe('file edge whitespace survives edits', () => {
+  it('editing a block keeps the trailing newline', () => {
+    const { doc, ctx } = parseWorkDocument('# Title\n\nBody text.\n')
+    const edited = JSON.parse(JSON.stringify(doc)) as JSONContent
+    edited.content![1].content = [{ type: 'text', text: 'Body text!' }]
+    expect(serializeWorkDocument(edited, ctx)).toBe('# Title\n\nBody text!\n')
+  })
+
+  it('a file without a trailing newline stays without one', () => {
+    const { doc, ctx } = parseWorkDocument('a\n\nb')
+    const edited = JSON.parse(JSON.stringify(doc)) as JSONContent
+    edited.content![1].content = [{ type: 'text', text: 'b2' }]
+    expect(serializeWorkDocument(edited, ctx)).toBe('a\n\nb2')
+  })
+
+  it('editing a CRLF file keeps CRLF everywhere, including the end', () => {
+    const { doc, ctx } = parseWorkDocument('line one\r\nline two\r\n\r\n- a\r\n')
+    const edited = JSON.parse(JSON.stringify(doc)) as JSONContent
+    edited.content![0].content = [{ type: 'text', text: 'line 1' }]
+    const out = serializeWorkDocument(edited, ctx)
+    expect(out).toBe('line 1\r\n\r\n- a\r\n')
+    expect(out).not.toMatch(/(?<!\r)\n/)
+  })
+
+  it('deleting the last block still preserves the file ending', () => {
+    const { doc, ctx } = parseWorkDocument('keep\n\ngone\n')
+    const edited = JSON.parse(JSON.stringify(doc)) as JSONContent
+    edited.content!.pop()
+    expect(serializeWorkDocument(edited, ctx)).toBe('keep\n')
+  })
+})
+
 describe('frontmatter BOM', () => {
   it('BOM + frontmatter is recognized and reattached verbatim', () => {
     const md = '\uFEFF---\ntitle: x\n---\nbody\n'

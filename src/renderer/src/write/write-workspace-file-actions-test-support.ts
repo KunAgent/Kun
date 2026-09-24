@@ -18,6 +18,7 @@ export function makeWriteFileActionBaseState(): WriteWorkspaceState {
   return {
     defaultWorkspaceRoot: '', workspaceRoots: [], autoSaveEnabled: true,
     autoSaveDelayMs: defaultWriteSettings().autoSaveDelayMs,
+    documentEditorV2: defaultWriteSettings().documentEditorV2,
     inlineCompletion: defaultWriteSettings().inlineCompletion,
     inlineCompletionApiReady: false,
     selectionAssist: defaultWriteSettings().selectionAssist,

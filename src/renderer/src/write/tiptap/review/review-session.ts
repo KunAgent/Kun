@@ -254,8 +254,9 @@ export class WriteReviewSession {
         }
       } else if (chunk.kind === 'removed') {
         const original = chunk.prev.map((index) => prev.nodes[index]).filter(Boolean)
+        const originalRaw = chunk.prev.map((index) => prev.keys[index]).filter(Boolean)
         const pos = nextBlockPos(nextDoc, chunk.anchorNext)
-        chunks.push({ id: `r${++chunkCounter}`, kind: 'removed', from: pos, to: pos, original })
+        chunks.push({ id: `r${++chunkCounter}`, kind: 'removed', from: pos, to: pos, original, originalRaw })
       } else {
         const from = nextBlockPos(nextDoc, chunk.next)
         const to = from + nextDoc.child(chunk.next).nodeSize

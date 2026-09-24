@@ -104,6 +104,7 @@ export function normalizeWriteSettings(settings?: Partial<WriteSettingsV1> | nul
   workspaces: string[]
   autoSaveEnabled: boolean
   autoSaveDelayMs: number
+  documentEditorV2: boolean
   inlineCompletion: WriteInlineCompletionSettingsV1
   selectionAssist: WriteSelectionAssistSettingsV1
   agentPresets: WriteAgentPresetV1[]
@@ -133,6 +134,9 @@ export function normalizeWriteSettings(settings?: Partial<WriteSettingsV1> | nul
     autoSaveDelayMs: Number.isFinite(autoSaveDelayMs)
       ? Math.max(MIN_WRITE_AUTOSAVE_DELAY_MS, Math.min(MAX_WRITE_AUTOSAVE_DELAY_MS, Math.round(autoSaveDelayMs)))
       : DEFAULT_WRITE_AUTOSAVE_DELAY_MS,
+    // `write.documentEditorV2` (registered in shared normalizeWriteSettings):
+    // off = markdown opens in the plain-text editor during the rollout.
+    documentEditorV2: settings?.documentEditorV2 !== false,
     inlineCompletion: {
       enabled: rawInlineCompletion.enabled !== false,
       retrievalEnabled: rawInlineCompletion.retrievalEnabled !== false,
@@ -178,6 +182,7 @@ export function withResolvedInlineCompletionSettings(
     workspaces: string[]
     autoSaveEnabled: boolean
     autoSaveDelayMs: number
+    documentEditorV2: boolean
     inlineCompletion: WriteInlineCompletionSettingsV1
     selectionAssist: WriteSelectionAssistSettingsV1
     agentPresets: WriteAgentPresetV1[]
@@ -189,6 +194,7 @@ export function withResolvedInlineCompletionSettings(
   workspaces: string[]
   autoSaveEnabled: boolean
   autoSaveDelayMs: number
+  documentEditorV2: boolean
   inlineCompletion: WriteInlineCompletionSettingsV1
   selectionAssist: WriteSelectionAssistSettingsV1
   agentPresets: WriteAgentPresetV1[]

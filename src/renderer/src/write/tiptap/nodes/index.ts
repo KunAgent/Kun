@@ -30,7 +30,22 @@ export {
   WriteTableHeader
 }
 
-export function buildWorkConstructExtensions(): AnyExtension[] {
+/**
+ * The stock `InlineMath` input rule converts a typed `$$x$$` into an
+ * inline math node — which then serializes back as `$x$`, silently
+ * rewriting the user's text. `WriteMathInput` owns math input instead
+ * (Pandoc-rule `$…$` inline, `$$` + Enter for block math), so the
+ * bundled rule is stripped here.
+ */
+const WorkInlineMath = InlineMath.extend({
+  addInputRules() {
+    return []
+  }
+})
+
+export function buildWorkConstructExtensions(runtime?: {
+  getFilePath?: () => string
+}): AnyExtension[] {
   return [
     WriteBlockId,
     WriteBulletList,
@@ -38,7 +53,9 @@ export function buildWorkConstructExtensions(): AnyExtension[] {
     WriteTableHeader,
     WriteTableCell,
     Callout,
-    RawMarkdownBlock,
+    RawMarkdownBlock.configure({
+      getFilePath: runtime?.getFilePath ?? (() => '')
+    }),
     WikiLink,
     FootnoteReference,
     InlineHtml,
@@ -46,7 +63,7 @@ export function buildWorkConstructExtensions(): AnyExtension[] {
       katexOptions: { throwOnError: false },
       onClick: (node, pos) => mathEditorFor(node, pos, 'block')
     }),
-    InlineMath.configure({
+    WorkInlineMath.configure({
       katexOptions: { throwOnError: false },
       onClick: (node, pos) => mathEditorFor(node, pos, 'inline')
     }),

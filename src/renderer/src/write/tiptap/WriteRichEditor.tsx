@@ -286,6 +286,7 @@ export function WriteRichEditor({
     })
 
     const extensions: AnyExtension[] = buildWriteRichExtensions({
+      getFilePath: () => filePathRef.current,
       image: WriteLocalImage.configure({
         getFilePath: () => filePathRef.current,
         getWorkspaceRoot: () => workspaceRootRef.current
@@ -346,7 +347,9 @@ export function WriteRichEditor({
         WriteRichTemplateShortcuts.configure({
           isReadOnly: () => readOnlyRef.current
         }),
-        WriteDiffReview,
+        WriteDiffReview.configure({
+          getFilePath: () => filePathRef.current
+        }),
         ...(requirementBadges ? [SddRequirementBadges] : []),
         NodeRange.configure({ depth: undefined, key: 'Shift' }),
         WriteBlockSelection.configure({

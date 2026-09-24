@@ -93,6 +93,7 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
   workspaceRoots: [],
   autoSaveEnabled: true,
   autoSaveDelayMs: DEFAULT_WRITE_AUTOSAVE_DELAY_MS,
+  documentEditorV2: true,
   inlineCompletion: {
     enabled: true,
     retrievalEnabled: true,

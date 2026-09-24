@@ -1,5 +1,6 @@
 import { Extension } from '@tiptap/core'
-import { PluginKey } from '@tiptap/pm/state'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { ReplaceStep } from '@tiptap/pm/transform'
 import { Suggestion, type SuggestionProps } from '@tiptap/suggestion'
 import { autoUpdate, computePosition, flip, offset, shift } from '@floating-ui/dom'
 import i18n from '../../../i18n'
@@ -162,6 +163,38 @@ export const WriteSlashMenu = Extension.create<WriteSlashMenuOptions>({
   addProseMirrorPlugins() {
     const options = this.options
     return [
+      // CJK IMEs type `、` (or full-width `／`) for the slash key — swap
+      // it to `/` at a valid trigger position so the menu still opens;
+      // `deleteRange` in the command path removes it like any `/` query.
+      new Plugin({
+        key: new PluginKey('writeSlashCjkTrigger'),
+        appendTransaction: (transactions, _oldState, newState) => {
+          if (options.isReadOnly()) return null
+          for (const tr of transactions) {
+            if (!tr.docChanged) continue
+            for (const step of tr.steps) {
+              if (!(step instanceof ReplaceStep) || step.from !== step.to) continue
+              const text = step.slice.content.textBetween(0, step.slice.content.size, '', '')
+              if (text !== '、' && text !== '／') continue
+              const pos = tr.mapping.map(step.from)
+              const $from = newState.doc.resolve(pos)
+              const parentName = $from.parent.type.name
+              if (parentName === 'codeBlock' || parentName === 'inlineMath' || parentName === 'blockMath') {
+                continue
+              }
+              const before = $from.parent.textBetween(
+                Math.max(0, $from.parentOffset - 1),
+                $from.parentOffset,
+                undefined,
+                '￼'
+              )
+              if ($from.parentOffset > 1 && !/\s/.test(before)) continue
+              return newState.tr.insertText('/', pos, pos + 1)
+            }
+          }
+          return null
+        }
+      }),
       Suggestion<SlashItem, SlashItem>({
         pluginKey: new PluginKey('writeSlashMenu'),
         editor: this.editor,

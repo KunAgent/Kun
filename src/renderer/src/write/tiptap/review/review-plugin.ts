@@ -24,6 +24,8 @@ export type ReviewChunkState = {
   to: number
   /** Original top-level nodes — `removed` runs may hold several. */
   original: PMNode[]
+  /** Verbatim Markdown of the original blocks — rendered for `removed`. */
+  originalRaw?: string[]
 }
 
 export type WriteReviewPluginState = {
@@ -77,8 +79,40 @@ function removedWidgetDom(view: EditorView, chunk: ReviewChunkState): HTMLElemen
   dom.contentEditable = 'false'
   const body = document.createElement('div')
   body.className = 'write-diff-removed-body'
-  const serializer = DOMSerializer.fromSchema(view.state.schema)
-  body.appendChild(serializer.serializeFragment(Fragment.from(chunk.original)))
+  const raws = chunk.originalRaw ?? []
+  if (raws.length > 0) {
+    // Render the removed blocks' Markdown through the shared pipeline —
+    // PM serialization would emit an empty div for math/raw/html nodes.
+    void Promise.all([
+      import('@shared/markdown/render-html'),
+      import('dompurify')
+    ]).then(([renderer, purify]) => {
+      if (!body.isConnected) return
+      const html = renderer.renderWorkMarkdownToHtml(raws.join('\n\n'), { math: 'html' })
+      body.innerHTML = (purify.default ?? purify).sanitize(html)
+      if (!body.textContent?.trim() && !body.querySelector('img,svg,table,math,hr')) {
+        body.classList.add('write-diff-removed-plain')
+        body.textContent = raws.join('\n\n')
+        return
+      }
+      const filePath = reviewFilePathFor(view)
+      for (const img of Array.from(body.querySelectorAll('img'))) {
+        const src = img.getAttribute('src') ?? ''
+        if (!src || src.startsWith('data:')) continue
+        void import('../../markdown-image').then(({ loadWriteMarkdownImage }) =>
+          loadWriteMarkdownImage(src, filePath).then((result) => {
+            if (img.isConnected && result.ok) img.src = result.src
+          })
+        )
+      }
+    }).catch(() => {
+      body.classList.add('write-diff-removed-plain')
+      body.textContent = raws.join('\n\n')
+    })
+  } else {
+    const serializer = DOMSerializer.fromSchema(view.state.schema)
+    body.appendChild(serializer.serializeFragment(Fragment.from(chunk.original)))
+  }
   dom.append(body, actionButtonsDom(view, chunk))
   return dom
 }
@@ -198,9 +232,26 @@ export const writeReviewPlugin = new Plugin<WriteReviewPluginState>({
 })
 
 /** Review extension — added to the rich editor's extension list. */
-export const WriteDiffReview = Extension.create({
+export type WriteDiffReviewOptions = {
+  /** Current file path — removed-block previews resolve relative images. */
+  getFilePath: () => string
+}
+
+const reviewFilePaths = new WeakMap<EditorView, () => string>()
+
+function reviewFilePathFor(view: EditorView): string {
+  return reviewFilePaths.get(view)?.() ?? ''
+}
+
+export const WriteDiffReview = Extension.create<WriteDiffReviewOptions>({
   name: 'writeDiffReview',
+  addOptions() {
+    return { getFilePath: () => '' }
+  },
   addProseMirrorPlugins() {
     return [writeReviewPlugin]
+  },
+  onCreate() {
+    reviewFilePaths.set(this.editor.view, this.options.getFilePath)
   }
 })

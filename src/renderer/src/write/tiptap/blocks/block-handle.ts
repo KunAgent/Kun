@@ -155,6 +155,11 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
           const onGripClick = (event: MouseEvent): void => {
             event.preventDefault()
             if (!target || menuOpen) return
+            openMenu()
+          }
+
+          const openMenu = (): void => {
+            if (!target || menuOpen) return
             menuOpen = true
             closeMenu = openBlockMenu(menuDeps, target, gripButton)
             const originalClose = closeMenu
@@ -162,6 +167,45 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
               menuOpen = false
               originalClose()
             }
+          }
+
+          // Touch screens have no hover: a long-press on a block opens the
+          // same block menu (the `+` affordance stays reachable via `/`).
+          let pressTimer: number | null = null
+          let pressStart: { x: number; y: number } | null = null
+
+          const cancelPress = (): void => {
+            if (pressTimer !== null) {
+              window.clearTimeout(pressTimer)
+              pressTimer = null
+            }
+            pressStart = null
+          }
+
+          const onPointerDown = (event: PointerEvent): void => {
+            if (event.pointerType !== 'touch') return
+            if (options.isReadOnly() || options.isReviewActive()) return
+            pressStart = { x: event.clientX, y: event.clientY }
+            const next = blockTargetFromCoords(editorView, event.clientX, event.clientY)
+            if (!next) return
+            pressTimer = window.setTimeout(() => {
+              pressTimer = null
+              target = next
+              positionFor(next)
+              openMenu()
+            }, 500)
+          }
+
+          const onPointerMove = (event: PointerEvent): void => {
+            if (pressTimer === null || !pressStart) return
+            const dx = event.clientX - pressStart.x
+            const dy = event.clientY - pressStart.y
+            if (dx * dx + dy * dy > 100) cancelPress()
+          }
+
+          const onContextMenu = (event: Event): void => {
+            // Long-press already opened our menu — swallow the native one.
+            if (menuOpen) event.preventDefault()
           }
 
           const onDragStart = (event: DragEvent): void => {
@@ -186,6 +230,10 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
 
           const onDragEnd = (): void => {
             delete host.dataset.dragging
+            // Dropping outside the editor never runs PM's drop cleanup —
+            // a stale `dragging` would turn the next external drop into a
+            // block move and delete the selected block.
+            editorView.dragging = null
           }
 
           addButton.addEventListener('click', onAdd)
@@ -196,6 +244,11 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
           layer.addEventListener('mouseleave', scheduleHide)
           host.addEventListener('mousemove', onMouseMove)
           host.addEventListener('mouseleave', onMouseLeave)
+          host.addEventListener('pointerdown', onPointerDown)
+          host.addEventListener('pointermove', onPointerMove)
+          host.addEventListener('pointerup', cancelPress)
+          host.addEventListener('pointercancel', cancelPress)
+          host.addEventListener('contextmenu', onContextMenu)
 
           return {
             update(view) {
@@ -211,9 +264,15 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
             destroy() {
               if (frame) window.cancelAnimationFrame(frame)
               if (hideTimer !== null) window.clearTimeout(hideTimer)
+              cancelPress()
               closeMenu?.()
               host.removeEventListener('mousemove', onMouseMove)
               host.removeEventListener('mouseleave', onMouseLeave)
+              host.removeEventListener('pointerdown', onPointerDown)
+              host.removeEventListener('pointermove', onPointerMove)
+              host.removeEventListener('pointerup', cancelPress)
+              host.removeEventListener('pointercancel', cancelPress)
+              host.removeEventListener('contextmenu', onContextMenu)
               layer.remove()
             }
           }

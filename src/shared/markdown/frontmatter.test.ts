@@ -5,6 +5,7 @@ import {
   frontmatterInterior,
   joinFrontmatter,
   parseFrontmatterProperties,
+  patchFrontmatterInterior,
   serializeFrontmatterProperties,
   splitFrontmatter,
   wrapFrontmatter
@@ -101,6 +102,73 @@ describe('parseFrontmatterProperties', () => {
     const serialized = serializeFrontmatterProperties(parsed.properties)
     const reparsed = parseFrontmatterProperties(serialized)
     expect(reparsed).toEqual(parsed)
+  })
+})
+
+describe('patchFrontmatterInterior', () => {
+  const props = (interior: string) => {
+    const parsed = parseFrontmatterProperties(interior)
+    if (!parsed.ok) throw new Error('unparseable interior in test')
+    return parsed.properties
+  }
+
+  it('edits one property without rewriting comments or quote styles', () => {
+    const interior = '# top comment\ntitle: "Keep Me"\ntags: [a, b] # inline\ndone: false\n'
+    const previous = props(interior)
+    const next = previous.map((p) =>
+      p.key === 'done' ? { ...p, value: 'true' } : p
+    )
+    const out = patchFrontmatterInterior(interior, previous, next)
+    expect(out).toContain('# top comment')
+    expect(out).toContain('title: "Keep Me"')
+    expect(out).toContain('tags: [a, b] # inline')
+    expect(out).toMatch(/done: true/)
+  })
+
+  it('renames a key in place and removes a row', () => {
+    const interior = 'a: 1\nb: 2\nc: 3\n'
+    const previous = props(interior)
+    const next = [
+      { ...previous[0], key: 'renamed' },
+      previous[2]
+    ]
+    const out = patchFrontmatterInterior(interior, previous, next)
+    const reparsed = parseFrontmatterProperties(out)
+    expect(reparsed.ok).toBe(true)
+    if (!reparsed.ok) return
+    expect(reparsed.properties.map((p) => p.key)).toEqual(['renamed', 'c'])
+    expect(reparsed.properties[0].value).toBe('1')
+  })
+
+  it('appends a new property at the end', () => {
+    const interior = 'a: 1\n'
+    const previous = props(interior)
+    const next = [...previous, { key: 'added', kind: 'scalar' as const, value: 'v', items: [] }]
+    const out = patchFrontmatterInterior(interior, previous, next)
+    expect(out).toContain('a: 1')
+    expect(out).toContain('added: v')
+  })
+
+  it('inserts a property before an existing key', () => {
+    const interior = 'a: 1\nc: 3\n'
+    const previous = props(interior)
+    const next = [previous[0], { key: 'b', kind: 'scalar' as const, value: '2', items: [] }, previous[1]]
+    expect(patchFrontmatterInterior(interior, previous, next)).toBe('a: 1\nb: 2\nc: 3\n')
+  })
+
+  it('dropping a property keeps neighboring comments verbatim', () => {
+    const interior = '# about b\na: 1\nb: 2\n# about c\nc: 3\n'
+    const previous = props(interior)
+    const next = [previous[0], previous[2]]
+    expect(patchFrontmatterInterior(interior, previous, next)).toBe('# about b\na: 1\n# about c\nc: 3\n')
+  })
+
+  it('falls back to full serialization when pairs disagree', () => {
+    const interior = 'a: 1\nb: 2\n'
+    const stale = [{ key: 'zzz', kind: 'scalar' as const, value: 'x', items: [] }]
+    const out = patchFrontmatterInterior(interior, stale, stale)
+    expect(out).toContain('zzz')
+    expect(out).not.toContain('a: 1')
   })
 })
 

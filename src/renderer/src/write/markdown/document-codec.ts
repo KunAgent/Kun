@@ -265,16 +265,15 @@ export function serializeWorkDocument(doc: JSONContent, ctx: WorkDocContext): st
     return joinFrontmatter(ctx.frontmatter, out)
   }
 
-  const first = emitted[0]
-  const last = emitted[emitted.length - 1]
-  if (first?.unchanged && first.blockId && first.blockId === ctx.firstBlockId) {
-    out = ctx.leading + out
-  }
-  if (last?.unchanged && last.blockId && last.blockId === ctx.lastBlockId) {
-    out += ctx.trailing
-  } else {
-    out += toEol('\n', ctx.eol)
-  }
+  // File-start whitespace (comments/blank lines before the first block) is
+  // not part of any block — always keep it, even when the first block was
+  // edited or replaced. Fresh contexts have empty leading anyway.
+  out = ctx.leading + out
+  // Same for the file's ending: `ctx.trailing` records it verbatim (which
+  // may be '' — a file without a trailing newline must stay that way).
+  // Only a never-parsed context (brand-new document) gets the conventional
+  // single trailing newline.
+  out += ctx.lastBlockId !== undefined ? ctx.trailing : toEol('\n', ctx.eol)
   return joinFrontmatter(ctx.frontmatter, out)
 }
 

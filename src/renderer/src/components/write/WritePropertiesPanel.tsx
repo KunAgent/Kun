@@ -15,7 +15,7 @@ import {
   createEmptyProperty,
   frontmatterInterior,
   parseFrontmatterProperties,
-  serializeFrontmatterProperties,
+  patchFrontmatterInterior,
   wrapFrontmatter,
   type FrontmatterProperty,
   type FrontmatterPropertyKind
@@ -51,7 +51,13 @@ export function WritePropertiesPanel({ frontmatter, onFrontmatterChange, readOnl
   const formAvailable = parsed.ok
 
   const commitProperties = (properties: FrontmatterProperty[]): void => {
-    const nextInterior = serializeFrontmatterProperties(properties)
+    // Patch the YAML document in place — a full re-serialize would drop
+    // comments, quote styles, and key spelling of every untouched entry.
+    const nextInterior = patchFrontmatterInterior(
+      interior,
+      parsed.ok ? parsed.properties : [],
+      properties
+    )
     onFrontmatterChange(wrapFrontmatter(nextInterior))
   }
 

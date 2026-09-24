@@ -296,11 +296,14 @@ export function resolveWriteEditorSurface(input: {
   contentLength: number
   truncated: boolean
   isMarkdown?: boolean
+  /** `write.documentEditorV2` rollout gate; absent/undefined means on. */
+  documentEditorV2?: boolean
 }): { surface: WriteEditorSurface; notice?: 'large-file' | 'mdx' | 'truncated' } {
   const isMarkdown = input.isMarkdown ?? /\.(md|markdown)$/i.test(input.path)
   if (input.truncated) return { surface: 'plain', notice: 'truncated' }
   if (!isMarkdown) return { surface: 'plain' }
   if (/\.mdx$/i.test(input.path)) return { surface: 'plain', notice: 'mdx' }
+  if (input.documentEditorV2 === false) return { surface: 'plain' }
   if (input.viewMode === 'plain') return { surface: 'plain' }
   if (input.contentLength > 300_000) return { surface: 'plain', notice: 'large-file' }
   return { surface: 'document' }

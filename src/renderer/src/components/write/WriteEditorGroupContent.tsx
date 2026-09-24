@@ -11,6 +11,7 @@ import type {
   WorkWhiteboard,
   WritePreviewMode
 } from '../../write/write-workspace-store'
+import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { getWriteRenderSafety } from '../../write/write-render-safety'
 import { resolveWriteEditorSurface } from '../../write/write-editor-layout'
 import type { WriteRecentEdit } from '../../write/recent-edits'
@@ -130,12 +131,14 @@ export function WriteEditorGroupContent({
     fileSize: document?.fileSize ?? 0,
     truncated: document?.fileTruncated ?? false
   })
+  const documentEditorV2 = useWriteWorkspaceStore((s) => s.documentEditorV2)
   const { surface } = resolveWriteEditorSurface({
     path: path ?? '',
     viewMode,
     contentLength: content.length,
     truncated: document?.fileTruncated ?? false,
-    isMarkdown: markdown
+    isMarkdown: markdown,
+    documentEditorV2
   })
   const effectiveReadOnly = readOnly || renderSafety.readOnly
   const fileGuardMessage = renderSafety.notice === 'truncated'

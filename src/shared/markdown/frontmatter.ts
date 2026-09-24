@@ -293,6 +293,131 @@ export function parseFrontmatterProperties(interior: string): FrontmatterParseRe
   return { ok: true, properties }
 }
 
+const FRONTMATTER_KEY_LINE_RE = /^([^:#\s][^:]*?)\s*:\s*(.*)$/
+
+/**
+ * Line ranges `[start, end)` of each top-level property in `interior`,
+ * matched in order against `keys` (the parser's output). A property's range
+ * covers its `key:` line plus indented continuation lines (block list
+ * items, indented comments); blank lines inside a block list count too.
+ * Returns null when the line walk disagrees with `keys` — callers then
+ * fall back to a full re-serialize.
+ */
+function frontmatterPropertyRanges(
+  lines: string[],
+  keys: string[]
+): { start: number; end: number }[] | null {
+  const ranges: { start: number; end: number }[] = []
+  let cursor = 0
+  for (const key of keys) {
+    // Skip blank lines and top-level comments — they belong to the gap
+    // between properties, not to any property's range.
+    while (cursor < lines.length) {
+      const line = lines[cursor]
+      if (!line.trim() || line.trimStart().startsWith('#') || /^\s/.test(line)) {
+        cursor += 1
+        continue
+      }
+      const match = line.match(FRONTMATTER_KEY_LINE_RE)
+      if (!match || match[1].trim() !== key) return null
+      break
+    }
+    if (cursor >= lines.length) return null
+    const start = cursor
+    cursor += 1
+    while (cursor < lines.length) {
+      const line = lines[cursor]
+      if (/^\s/.test(line) && line.trim()) {
+        cursor += 1
+        continue
+      }
+      if (!line.trim()) {
+        // A blank line belongs to this property only when another indented
+        // line follows (blank-separated list items).
+        let look = cursor
+        while (look < lines.length && !lines[look].trim()) look += 1
+        if (look < lines.length && /^\s/.test(lines[look]) && lines[look].trim()) {
+          cursor = look + 1
+          continue
+        }
+      }
+      break
+    }
+    ranges.push({ start, end: cursor })
+  }
+  return ranges
+}
+
+function sameFrontmatterProperty(a: FrontmatterProperty, b: FrontmatterProperty): boolean {
+  return a.key === b.key &&
+    a.kind === b.kind &&
+    a.value === b.value &&
+    a.items.length === b.items.length &&
+    a.items.every((item, index) => item === b.items[index])
+}
+
+/**
+ * Apply a property-list edit to `interior` by patching only the affected
+ * lines — untouched keys keep their original text byte-for-byte (comments,
+ * quote styles, key spelling). The panel only ever performs single
+ * operations (edit / remove / append); anything else falls back to
+ * {@link serializeFrontmatterProperties}.
+ */
+export function patchFrontmatterInterior(
+  interior: string,
+  previous: FrontmatterProperty[],
+  next: FrontmatterProperty[]
+): string {
+  const fallback = (): string => serializeFrontmatterProperties(next)
+  const lines = interior.split('\n')
+  const ranges = frontmatterPropertyRanges(lines, previous.map((p) => p.key))
+  if (!ranges) return fallback()
+
+  // Align next↔previous assuming a single edit / removal / insertion.
+  let removedAt = -1
+  let insertedAt = -1
+  if (next.length === previous.length - 1) {
+    let i = 0
+    while (i < next.length && previous[i].key === next[i].key) i += 1
+    removedAt = i
+  } else if (next.length === previous.length + 1) {
+    let i = 0
+    while (i < previous.length && previous[i].key === next[i].key) i += 1
+    insertedAt = i
+  } else if (next.length !== previous.length) {
+    return fallback()
+  }
+
+  const out: string[] = []
+  let cursor = 0
+  for (let pi = 0; pi < previous.length; pi += 1) {
+    const range = ranges[pi]
+    out.push(...lines.slice(cursor, range.start))
+    if (pi === insertedAt) {
+      // Mid-document insertion: emit the new property before this range.
+      const fragment = serializeFrontmatterProperties([next[insertedAt]])
+      if (fragment) out.push(...fragment.split('\n'))
+    }
+    const ni = removedAt >= 0 && pi > removedAt ? pi - 1 : insertedAt >= 0 && pi >= insertedAt ? pi + 1 : pi
+    const incoming = pi === removedAt ? null : next[ni] ?? null
+    if (incoming === null) {
+      // Removed property: drop its lines entirely.
+    } else if (sameFrontmatterProperty(previous[pi], incoming)) {
+      out.push(...lines.slice(range.start, range.end))
+    } else {
+      const fragment = serializeFrontmatterProperties([incoming])
+      if (fragment) out.push(...fragment.split('\n'))
+    }
+    cursor = range.end
+  }
+  out.push(...lines.slice(cursor))
+  if (insertedAt === previous.length) {
+    const fragment = serializeFrontmatterProperties([next[insertedAt]])
+    if (fragment) out.push(...fragment.split('\n'))
+  }
+  return out.join('\n')
+}
+
 /** Serialize structured properties to a YAML interior (no fences). */
 export function serializeFrontmatterProperties(properties: FrontmatterProperty[]): string {
   const lines: string[] = []

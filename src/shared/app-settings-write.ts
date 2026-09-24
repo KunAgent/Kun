@@ -290,6 +290,9 @@ export function defaultWriteSettings(): WriteSettingsV1 {
     workspaces: [DEFAULT_WRITE_WORKSPACE_ROOT],
     autoSaveEnabled: true,
     autoSaveDelayMs: DEFAULT_WRITE_AUTOSAVE_DELAY_MS,
+    // S4 landed: the single-view editor is the default; the flag only stays
+    // as an escape hatch during the rollout period.
+    documentEditorV2: true,
     inlineCompletion: {
       enabled: true,
       retrievalEnabled: true,
@@ -466,6 +469,7 @@ export function normalizeWriteSettings(input: WriteSettingsPatchV1 | undefined):
     autoSaveDelayMs: Number.isFinite(autoSaveDelayMs)
       ? Math.max(MIN_WRITE_AUTOSAVE_DELAY_MS, Math.min(MAX_WRITE_AUTOSAVE_DELAY_MS, Math.round(autoSaveDelayMs)))
       : defaults.autoSaveDelayMs,
+    documentEditorV2: source.documentEditorV2 !== false,
     inlineCompletion: normalizeWriteInlineCompletionSettings(source.inlineCompletion),
     selectionAssist: normalizeWriteSelectionAssistSettings(source.selectionAssist),
     typography: normalizeWriteTypography(source.typography),

@@ -203,6 +203,8 @@ export type WriteRichRuntimeOptions = {
   image?: AnyExtension
   /** Runtime-only extensions: inline completion, paste image, shortcuts, badges. */
   extra?: AnyExtension[]
+  /** Current file path — raw-block previews resolve relative images with it. */
+  getFilePath?: () => string
 }
 
 export function buildWriteRichExtensions(runtime?: WriteRichRuntimeOptions): AnyExtension[] {
@@ -224,7 +226,7 @@ export function buildWriteRichExtensions(runtime?: WriteRichRuntimeOptions): Any
     WriteTaskList,
     TaskItem.configure({ nested: true }),
     WriteCodeBlock,
-    ...buildWorkConstructExtensions(),
+    ...buildWorkConstructExtensions({ getFilePath: runtime?.getFilePath }),
     runtime?.image ?? WriteLocalImage,
     ...(runtime?.extra ?? [])
   ]

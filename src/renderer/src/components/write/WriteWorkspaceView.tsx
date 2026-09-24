@@ -84,6 +84,7 @@ export function WriteWorkspaceView({
     activeFileKind,
     autoSaveEnabled,
     autoSaveDelayMs,
+    documentEditorV2,
     rootDirectory,
     entriesByDir,
     loadingDirs,
@@ -136,6 +137,7 @@ export function WriteWorkspaceView({
       activeFileKind: s.activeFileKind,
       autoSaveEnabled: s.autoSaveEnabled,
       autoSaveDelayMs: s.autoSaveDelayMs,
+      documentEditorV2: s.documentEditorV2,
       rootDirectory: s.rootDirectory,
       entriesByDir: s.entriesByDir,
       loadingDirs: s.loadingDirs,
@@ -232,7 +234,8 @@ export function WriteWorkspaceView({
     viewMode: previewMode,
     contentLength: fileContent.length,
     truncated: fileTruncated,
-    isMarkdown
+    isMarkdown,
+    documentEditorV2
   })
   const richModeActive = editorSurface === 'document' && activeFileIsText
   const toggleInlineCompletion = useCallback((): void => {
