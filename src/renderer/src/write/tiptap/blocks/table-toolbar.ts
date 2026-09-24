@@ -2,6 +2,7 @@ import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
 import i18n from '../../../i18n'
+import { bodyZoom, toLayoutPx } from '../../../lib/body-zoom'
 
 export type WriteTableToolbarOptions = {
   isReadOnly: () => boolean
@@ -80,9 +81,10 @@ export const WriteTableToolbar = Extension.create<WriteTableToolbarOptions>({
             }
             const hostRect = host.getBoundingClientRect()
             const rect = dom.getBoundingClientRect()
+            const zoom = bodyZoom()
             bar.style.display = 'flex'
-            bar.style.top = `${rect.top - hostRect.top + host.scrollTop - 34}px`
-            bar.style.left = `${rect.left - hostRect.left + host.scrollLeft}px`
+            bar.style.top = `${toLayoutPx(rect.top - hostRect.top, zoom) + host.scrollTop - 34}px`
+            bar.style.left = `${toLayoutPx(rect.left - hostRect.left, zoom) + host.scrollLeft}px`
           }
 
           update()

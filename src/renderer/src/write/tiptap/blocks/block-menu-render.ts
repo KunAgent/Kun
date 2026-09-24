@@ -9,6 +9,7 @@ import {
   Trash2,
   createElement
 } from 'lucide'
+import { bodyZoom, toLayoutPx } from '../../../lib/body-zoom'
 import type { MenuEntry, MenuIconName } from './block-menu'
 
 const SUBMENU_OPEN_MS = 150
@@ -60,8 +61,12 @@ export function renderMenuPanel(opts: {
   openDoms: HTMLElement[]
   /** Present on submenus: ArrowLeft closes this panel and refocuses the row. */
   onArrowLeft?: () => void
+  /** Fired when this panel opens a submenu; the handle pins hover mode. */
+  onSubmenuOpen?: () => void
+  /** Fired for every mounted panel (root and submenus) once it is in the DOM. */
+  onPanelMount?: (dom: HTMLElement) => void
 }): { dom: HTMLElement; dispose: () => void } {
-  const { entries, anchor, placement, requestCloseAll, openDoms, onArrowLeft } = opts
+  const { entries, anchor, placement, requestCloseAll, openDoms, onArrowLeft, onSubmenuOpen, onPanelMount } = opts
   const dom = document.createElement('div')
   dom.className = 'write-block-menu'
   dom.setAttribute('role', 'menu')
@@ -94,15 +99,17 @@ export function renderMenuPanel(opts: {
       placement: 'right-start',
       requestCloseAll,
       openDoms,
+      onSubmenuOpen,
+      onPanelMount,
       onArrowLeft: () => {
         closeSub()
         row.focus()
       }
     })
     panel.dom.classList.add('is-submenu')
-    document.body.append(panel.dom)
     openDoms.push(panel.dom)
     sub = { ...panel, row }
+    onSubmenuOpen?.()
   }
   const scheduleSub = (row: HTMLElement, entry: Extract<MenuEntry, { kind: 'submenu' }>): void => {
     clearSubTimer()
@@ -114,6 +121,9 @@ export function renderMenuPanel(opts: {
   }
 
   const rows: Array<{ button: HTMLButtonElement; entry: MenuEntry }> = []
+  const setActive = (active: HTMLButtonElement): void => {
+    for (const row of rows) row.button.classList.toggle('is-active', row.button === active)
+  }
   for (const entry of entries) {
     if (entry.kind === 'separator') {
       const sep = document.createElement('div')
@@ -132,27 +142,24 @@ export function renderMenuPanel(opts: {
     button.type = 'button'
     button.className = `write-block-menu-item${entry.kind === 'item' && entry.danger ? ' is-danger' : ''}`
     button.setAttribute('role', 'menuitem')
-    button.append(
-      iconEl(entry.icon),
-      labelEl(entry.label),
-      hintEl(entry.kind === 'item' ? entry.hint : undefined)
-    )
+    button.append(iconEl(entry.icon), labelEl(entry.label))
     if (entry.kind === 'submenu') {
       const chevron = document.createElement('span')
-      chevron.className = 'write-block-menu-chevron'
+      chevron.className = 'write-block-menu-hint write-block-menu-chevron'
       chevron.setAttribute('aria-hidden', 'true')
       chevron.append(createElement(ChevronRight, { width: 14, height: 14 }))
       button.append(chevron)
       button.setAttribute('aria-haspopup', 'menu')
       button.addEventListener('mouseenter', () => {
-        button.focus({ preventScroll: true })
+        setActive(button)
         scheduleSub(button, entry)
       })
       button.addEventListener('click', () => openSub(button, entry))
     } else {
+      button.append(hintEl(entry.hint))
       if (entry.disabled) button.disabled = true
       button.addEventListener('mouseenter', () => {
-        button.focus({ preventScroll: true })
+        if (!button.disabled) setActive(button)
         if (sub && sub.row !== button) closeSub()
       })
       button.addEventListener('click', () => {
@@ -171,7 +178,9 @@ export function renderMenuPanel(opts: {
       event.preventDefault()
       event.stopPropagation()
       const delta = event.key === 'ArrowDown' ? 1 : -1
-      enabled[(current + delta + enabled.length) % enabled.length]?.button.focus()
+      const next = enabled[(current + delta + enabled.length) % enabled.length]?.button
+      next?.focus()
+      if (next) setActive(next)
       return
     }
     if (event.key === 'ArrowRight') {
@@ -192,18 +201,20 @@ export function renderMenuPanel(opts: {
   })
 
   document.body.append(dom)
+  onPanelMount?.(dom)
   const stopAutoUpdate = autoUpdate(anchor, dom, () => {
     void computePosition(anchor, dom, {
       placement,
       strategy: 'fixed',
       middleware: [
-        offset(4),
+        offset({ mainAxis: 6, crossAxis: -6 }),
         flip({ fallbackPlacements: placement === 'left-start' ? ['bottom-start', 'right-start'] : undefined }),
         shift({ padding: 8 })
       ]
     }).then(({ x, y }) => {
-      dom.style.left = `${x}px`
-      dom.style.top = `${y}px`
+      const zoom = bodyZoom()
+      dom.style.left = `${toLayoutPx(x, zoom)}px`
+      dom.style.top = `${toLayoutPx(y, zoom)}px`
     })
   })
 

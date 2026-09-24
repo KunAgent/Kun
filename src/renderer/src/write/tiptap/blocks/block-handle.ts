@@ -6,6 +6,7 @@ import type { WorkDocContext } from '../../markdown/document-codec'
 import { blockTargetFromCoords, type BlockTarget } from './block-target'
 import { openBlockMenu, type BlockMenuDeps, type BlockMenuHandle } from './block-menu'
 import { createHoverIntent } from './hover-intent'
+import { bodyZoom, toLayoutPx } from '../../../lib/body-zoom'
 
 export type WriteBlockHandleOptions = {
   getCtx: () => WorkDocContext
@@ -16,7 +17,7 @@ export type WriteBlockHandleOptions = {
 }
 
 const HANDLE_HIDE_DELAY_MS = 300
-const MENU_HOVER_OPEN_MS = 250
+const MENU_HOVER_OPEN_MS = 350
 const MENU_HOVER_CLOSE_MS = 200
 const TOUCH_PRESS_MS = 500
 
@@ -25,7 +26,7 @@ const TOUCH_PRESS_MS = 500
  * parked in the left gutter next to the hovered top-level block (list items
  * count as blocks). `+` inserts an empty paragraph after the block and
  * opens the slash menu; the grip opens the block menu and starts drag-moves.
- * The menu opens on a 250ms hover and pins on click; while open the target
+ * The menu opens on a 350ms hover and pins on click; while open the target
  * block gets an `is-block-menu-target` decoration instead of a selection so
  * the user's caret stays put.
  */
@@ -129,28 +130,32 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
             }
             const hostRect = host.getBoundingClientRect()
             const rect = dom.getBoundingClientRect()
+            const zoom = bodyZoom()
             target = next
             layer.style.display = 'flex'
-            layer.style.top = `${rect.top - hostRect.top + host.scrollTop}px`
-            layer.style.height = `${Math.min(rect.height, 28)}px`
-            layer.style.left = `${rect.left - hostRect.left - 46}px`
+            layer.style.top = `${toLayoutPx(rect.top - hostRect.top, zoom) + host.scrollTop}px`
+            layer.style.height = `${Math.min(toLayoutPx(rect.height, zoom), 28)}px`
+            layer.style.left = `${toLayoutPx(rect.left - hostRect.left, zoom) - 46}px`
           }
 
-          const openMenu = (): void => {
+          const openMenu = (pinned: boolean): void => {
             if (!target || menuOpen) return
             menuOpen = true
             setMenuTarget(target.pos)
-            const handle = openBlockMenu(menuDeps, target, gripButton, () => {
-              // Every close path (item run, Esc, outside pointer, scroll)
-              // funnels here so hover state and the highlight stay in sync.
-              menuOpen = false
-              menuHandle = null
-              setMenuTarget(null)
-              hover.closeNow()
+            menuHandle = openBlockMenu(menuDeps, target, gripButton, {
+              focusOnOpen: pinned,
+              onMenuEnter: () => hover.enterMenu(),
+              onMenuLeave: () => hover.leaveMenu(),
+              onSubmenuOpen: () => hover.pin(),
+              onClosed: () => {
+                // Every close path (item run, Esc, outside pointer, scroll)
+                // funnels here so hover state and the highlight stay in sync.
+                menuOpen = false
+                menuHandle = null
+                setMenuTarget(null)
+                hover.closeNow()
+              }
             })
-            menuHandle = handle
-            handle.dom.addEventListener('mouseenter', () => hover.enterMenu())
-            handle.dom.addEventListener('mouseleave', () => hover.leaveMenu())
           }
 
           const hover = createHoverIntent({

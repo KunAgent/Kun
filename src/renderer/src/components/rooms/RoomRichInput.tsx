@@ -17,7 +17,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import type { Room } from '@shared/rooms-api'
 import { useTranslation } from 'react-i18next'
-import { currentComposerBodyZoom } from '../chat/floating-composer-popover-placement'
+import { bodyZoom } from '../../lib/body-zoom'
 import { RoomAvatar, RoomAvatarGroup } from './RoomAvatar'
 import { roomPopoverPlacement } from './RoomPopover'
 import { ROOM_ALL_MENTION, roomMentionToken, roomRichContent, roomRichDraft } from './room-mentions'
@@ -76,7 +76,7 @@ function RoomMentionMenu({
         height: menu.scrollHeight,
         side: 'top',
         align: 'start',
-        zoom: currentComposerBodyZoom()
+        zoom: bodyZoom()
       }),
       visibility: 'visible'
     })

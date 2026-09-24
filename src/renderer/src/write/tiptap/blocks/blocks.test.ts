@@ -6,7 +6,7 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { getSchema, type Editor } from '@tiptap/core'
-import { EditorState, type Transaction } from '@tiptap/pm/state'
+import { EditorState, TextSelection, type Transaction } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
 import { buildWriteRichExtensions } from '../markdown-manager'
 import { parseWorkDocument, type WorkDocContext } from '../../markdown/document-codec'
@@ -30,6 +30,23 @@ function stateFor(markdown: string) {
     ctx: parsed.ctx,
     state: EditorState.create({ schema, doc: schema.nodeFromJSON(parsed.doc) })
   }
+}
+
+function posOfText(state: EditorState, text: string): number {
+  let found = -1
+  state.doc.descendants((node, pos) => {
+    if (found >= 0) return false
+    if (node.isText && node.text === text) {
+      found = pos + 1
+      return false
+    }
+    return true
+  })
+  return found
+}
+
+function stateWithCaretAt(state: EditorState, text: string): EditorState {
+  return state.apply(state.tr.setSelection(TextSelection.create(state.doc, posOfText(state, text))))
 }
 
 describe('blockTargetAtPos', () => {
@@ -81,7 +98,22 @@ describe('block markdown copy', () => {
   it('serializes a single block through the work codec', () => {
     const { state, ctx } = stateFor('# Hello\n\nbody text\n')
     const heading = blockTargetAtPos(state, 1)!
-    expect(blockToMarkdown(heading.node, ctx)).toBe('# Hello')
+    expect(blockToMarkdown(heading, ctx)).toBe('# Hello')
+  })
+
+  it('keeps the bullet marker when copying a list item', () => {
+    const { state, ctx } = stateFor('- one\n- two\n- three\n')
+    expect(blocksToMarkdown(stateWithCaretAt(state, 'two'), ctx)).toBe('- two')
+  })
+
+  it('keeps the item number when copying an ordered list item', () => {
+    const { state, ctx } = stateFor('1. one\n2. two\n3. three\n')
+    expect(blocksToMarkdown(stateWithCaretAt(state, 'two'), ctx)).toBe('2. two')
+  })
+
+  it('keeps the checkbox when copying a task item', () => {
+    const { state, ctx } = stateFor('- [x] done\n- [ ] todo\n')
+    expect(blocksToMarkdown(stateWithCaretAt(state, 'done'), ctx)).toBe('- [x] done')
   })
 
   it('serializes a text-selection block via blocksToMarkdown', () => {

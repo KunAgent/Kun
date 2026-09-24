@@ -18,6 +18,7 @@ import {
   resolveWikiLinkFilePath,
   workHeadingSlug
 } from '../../work-link'
+import { bodyZoom, toLayoutPx } from '../../../lib/body-zoom'
 
 export type WorkLinkNavigation = {
   getFilePath: () => string
@@ -111,8 +112,9 @@ function openLinkBubble(editor: Editor, nav: WorkLinkNavigation, anchor: { href:
   try {
     const coords = editor.view.coordsAtPos(Math.min(anchorPos, editor.state.doc.content.size))
     const hostRect = host.getBoundingClientRect()
-    box.style.left = `${Math.max(0, coords.left - hostRect.left)}px`
-    box.style.top = `${coords.bottom - hostRect.top + 4}px`
+    const zoom = bodyZoom()
+    box.style.left = `${Math.max(0, toLayoutPx(coords.left - hostRect.left, zoom))}px`
+    box.style.top = `${toLayoutPx(coords.bottom - hostRect.top, zoom) + 4}px`
   } catch {
     // Keep default position.
   }

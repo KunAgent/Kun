@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { currentComposerBodyZoom } from '../chat/floating-composer-popover-placement'
+import { bodyZoom } from '../../lib/body-zoom'
 import './rooms-popover.css'
 
 type Placement = { left: number; top: number; width: number; maxHeight: number }
@@ -38,7 +38,7 @@ export function RoomPopover({ label, trigger, children, side = 'bottom', align =
     if (!anchor.current || !panel.current) return
     setPlacement(roomPopoverPlacement({ anchor: anchor.current.getBoundingClientRect(),
       viewportWidth: window.innerWidth, viewportHeight: window.innerHeight,
-      width, height: panel.current.scrollHeight, side, align, zoom: currentComposerBodyZoom() }))
+      width, height: panel.current.scrollHeight, side, align, zoom: bodyZoom() }))
   }, [width, side, align])
   useLayoutEffect(() => { if (open) measure() }, [open, measure])
   useEffect(() => {

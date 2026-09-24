@@ -13,10 +13,10 @@ import { useGraphStore } from '../../graph/graph-store'
 import { graphRunOwnsThreadProgress } from './composer-graph-preview'
 import {
   calculateComposerPopoverPlacement,
-  currentComposerBodyZoom,
   type ComposerPopoverAnchorRect,
   type ComposerPopoverPlacement
 } from './floating-composer-popover-placement'
+import { bodyZoom } from '../../lib/body-zoom'
 
 const TODO_POPOVER_WIDTH = 640
 const TODO_POPOVER_MAX_HEIGHT = 360
@@ -124,7 +124,7 @@ export function FloatingComposerTodoProgress({
         popoverHeight: popoverRef.current?.offsetHeight ?? estimatedPopoverHeight,
         viewportHeight: window.innerHeight,
         viewportWidth: window.innerWidth,
-        coordinateScale: currentComposerBodyZoom()
+        coordinateScale: bodyZoom()
       }))
     }
     updatePlacement()

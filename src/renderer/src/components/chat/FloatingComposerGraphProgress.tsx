@@ -9,9 +9,9 @@ import { getComposerGraphProgress, selectComposerGraphRun } from './composer-gra
 import { AgentStack, FloatingComposerGraphPreview } from './FloatingComposerGraphPreview'
 import {
   calculateComposerPopoverPlacement,
-  currentComposerBodyZoom,
   type ComposerPopoverPlacement
 } from './floating-composer-popover-placement'
+import { bodyZoom } from '../../lib/body-zoom'
 
 const GRAPH_POPOVER_WIDTH = 680
 const GRAPH_POPOVER_MAX_HEIGHT = 420
@@ -93,7 +93,7 @@ export function FloatingComposerGraphProgress({
         popoverHeight: popoverRef.current?.offsetHeight ?? GRAPH_POPOVER_ESTIMATED_HEIGHT,
         viewportHeight: window.innerHeight,
         viewportWidth: window.innerWidth,
-        coordinateScale: currentComposerBodyZoom(),
+        coordinateScale: bodyZoom(),
         preferredWidth: GRAPH_POPOVER_WIDTH,
         maximumHeight: GRAPH_POPOVER_MAX_HEIGHT
       }))

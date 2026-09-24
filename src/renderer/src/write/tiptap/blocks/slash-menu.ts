@@ -4,6 +4,7 @@ import { ReplaceStep } from '@tiptap/pm/transform'
 import { Suggestion, type SuggestionProps } from '@tiptap/suggestion'
 import { autoUpdate, computePosition, flip, offset, shift } from '@floating-ui/dom'
 import i18n from '../../../i18n'
+import { bodyZoom, toLayoutPx } from '../../../lib/body-zoom'
 
 export type WriteSlashMenuOptions = {
   isReadOnly: () => boolean
@@ -263,8 +264,9 @@ export const WriteSlashMenu = Extension.create<WriteSlashMenuOptions>({
               }
             ).then(({ x, y }) => {
               if (!dom) return
-              dom.style.left = `${x}px`
-              dom.style.top = `${y}px`
+              const zoom = bodyZoom()
+              dom.style.left = `${toLayoutPx(x, zoom)}px`
+              dom.style.top = `${toLayoutPx(y, zoom)}px`
             })
           }
 

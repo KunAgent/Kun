@@ -4,6 +4,7 @@ import { NodeRangeSelection, isNodeRangeSelection } from '@tiptap/extension-node
 import type { EditorView } from '@tiptap/pm/view'
 import type { WorkDocContext } from '../../markdown/document-codec'
 import { blockTargetAtPos, blocksToMarkdown, selectedBlocks } from './block-target'
+import { bodyZoom, toLayoutPx } from '../../../lib/body-zoom'
 
 export type WriteBlockSelectionOptions = {
   getCtx: () => WorkDocContext
@@ -113,10 +114,11 @@ export const WriteBlockSelection = Extension.create<WriteBlockSelectionOptions>(
 
             const onMove = (move: MouseEvent): void => {
               const hostRect = host.getBoundingClientRect()
-              const left = Math.min(startX, move.clientX) - hostRect.left + host.scrollLeft
-              const top = Math.min(startY, move.clientY) - hostRect.top + host.scrollTop
-              const width = Math.abs(move.clientX - startX)
-              const height = Math.abs(move.clientY - startY)
+              const zoom = bodyZoom()
+              const left = toLayoutPx(Math.min(startX, move.clientX) - hostRect.left, zoom) + host.scrollLeft
+              const top = toLayoutPx(Math.min(startY, move.clientY) - hostRect.top, zoom) + host.scrollTop
+              const width = toLayoutPx(Math.abs(move.clientX - startX), zoom)
+              const height = toLayoutPx(Math.abs(move.clientY - startY), zoom)
               rect.style.left = `${left}px`
               rect.style.top = `${top}px`
               rect.style.width = `${width}px`

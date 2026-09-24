@@ -2,6 +2,7 @@ import type { Node as PmNode } from '@tiptap/pm/model'
 import { NodeSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
 import { isNodeRangeSelection } from '@tiptap/extension-node-range'
+import type { JSONContent } from '@tiptap/core'
 import { serializeWorkDocument, type WorkDocContext } from '../../markdown/document-codec'
 import { workHeadingSlug } from '../../work-link'
 
@@ -10,6 +11,8 @@ export type BlockTarget = {
   pos: number
   node: PmNode
   depth: number
+  parent: PmNode
+  index: number
 }
 
 const DRAGGABLE_LIST_ITEMS = new Set(['listItem', 'taskItem'])
@@ -34,13 +37,13 @@ export function blockTargetAtPos(state: EditorState, pos: number): BlockTarget |
   for (let depth = $pos.depth; depth >= 1; depth -= 1) {
     const node = $pos.node(depth)
     if (DRAGGABLE_LIST_ITEMS.has(node.type.name)) {
-      return { pos: $pos.before(depth), node, depth }
+      return { pos: $pos.before(depth), node, depth, parent: $pos.node(depth - 1), index: $pos.index(depth - 1) }
     }
   }
   if ($pos.depth < 1) return null
   const node = $pos.node(1)
   if (NON_BLOCK_NAMES.has(node.type.name)) return null
-  return { pos: $pos.before(1), node, depth: 1 }
+  return { pos: $pos.before(1), node, depth: 1, parent: $pos.node(0), index: $pos.index(0) }
 }
 
 /** The top-level (or list-item) block near a client coordinate, used by the
@@ -57,14 +60,20 @@ export function blockTargetFromCoords(view: EditorView, clientX: number, clientY
 export function selectedBlocks(state: EditorState): BlockTarget[] {
   const selection = state.selection
   if (selection instanceof NodeSelection) {
-    return [{ pos: selection.from, node: selection.node, depth: selection.$from.depth }]
+    return [{
+      pos: selection.from, node: selection.node, depth: selection.$from.depth,
+      parent: selection.$from.parent, index: selection.$from.index()
+    }]
   }
   if (isNodeRangeSelection(selection)) {
     const blocks: BlockTarget[] = []
     for (const range of selection.ranges) {
       const node = range.$from.nodeAfter
       if (!node || NON_BLOCK_NAMES.has(node.type.name)) continue
-      blocks.push({ pos: range.$from.pos, node, depth: range.$from.depth })
+      blocks.push({
+        pos: range.$from.pos, node, depth: range.$from.depth,
+        parent: range.$from.parent, index: range.$from.index()
+      })
     }
     if (blocks.length > 0) return blocks
   }
@@ -72,15 +81,46 @@ export function selectedBlocks(state: EditorState): BlockTarget[] {
   return target ? [target] : []
 }
 
-/** Serialize one node through the work codec; original-registered blocks
- * come back verbatim. */
-export function blockToMarkdown(node: PmNode, ctx: WorkDocContext): string {
-  return serializeWorkDocument({ type: 'doc', content: [node.toJSON()] }, ctx).trim()
+const LIST_TYPES = new Set(['bulletList', 'orderedList', 'taskList'])
+
+/**
+ * A bare `listItem`/`taskItem` is not a valid top-level doc node, so copying
+ * one alone would serialize as plain text and lose its marker. Wrap it in a
+ * single-item list of the parent type; an ordered list keeps the item's
+ * number via `start`, a task item keeps `checked` on its own attrs.
+ */
+function blockToJSON(block: BlockTarget): JSONContent {
+  const { node, parent } = block
+  if (!DRAGGABLE_LIST_ITEMS.has(node.type.name) || !LIST_TYPES.has(parent.type.name)) {
+    return node.toJSON()
+  }
+  const attrs = { ...parent.attrs }
+  if (parent.type.name === 'orderedList') {
+    attrs.start = Number(attrs.start ?? 1) + block.index
+  }
+  return { type: parent.type.name, attrs, content: [node.toJSON()] }
 }
 
-/** Serialize every selected block joined like a document fragment. */
+/** Serialize one block through the work codec; original-registered blocks
+ * come back verbatim. */
+export function blockToMarkdown(target: BlockTarget, ctx: WorkDocContext): string {
+  return serializeWorkDocument({ type: 'doc', content: [blockToJSON(target)] }, ctx).trim()
+}
+
+/** Serialize every selected block joined like a document fragment;
+ * consecutive items of the same list type merge into one list. */
 export function blocksToMarkdown(state: EditorState, ctx: WorkDocContext): string {
-  const content = selectedBlocks(state).map((block) => block.node.toJSON())
+  const content: JSONContent[] = []
+  for (const block of selectedBlocks(state)) {
+    const json = blockToJSON(block)
+    const prev = content[content.length - 1]
+    if (prev?.type === json.type && LIST_TYPES.has(json.type ?? '') &&
+      Array.isArray(prev.content) && Array.isArray(json.content)) {
+      prev.content.push(...json.content)
+    } else {
+      content.push(json)
+    }
+  }
   return serializeWorkDocument({ type: 'doc', content }, ctx).trim()
 }
 

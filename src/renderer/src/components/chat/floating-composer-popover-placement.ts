@@ -23,12 +23,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 
-export function currentComposerBodyZoom(): number {
-  if (typeof window === 'undefined') return 1
-  const parsed = Number.parseFloat(window.getComputedStyle(document.body).zoom)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
-}
-
 export function calculateComposerPopoverPlacement({
   anchorRect,
   popoverHeight,

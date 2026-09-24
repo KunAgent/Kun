@@ -28,7 +28,7 @@ import {
   UserRound
 } from 'lucide-react'
 import { LucideIconByName } from '../lucide-icon-by-name'
-import { currentComposerBodyZoom } from './floating-composer-popover-placement'
+import { bodyZoom } from '../../lib/body-zoom'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 
 const ACTION_MENU_WIDTH = 224
@@ -175,7 +175,7 @@ export function FloatingComposerActionMenu({
       shellRect: composerRect,
       menuHeight: mainMenuRef.current?.offsetHeight ?? ACTION_MENU_ESTIMATED_HEIGHT,
       viewportWidth: window.innerWidth,
-      coordinateScale: currentComposerBodyZoom()
+      coordinateScale: bodyZoom()
     })
     setStyle({
       ...placement,
@@ -191,7 +191,7 @@ export function FloatingComposerActionMenu({
       shellRect: composerRect,
       menuHeight: personaMenuRef.current?.offsetHeight ?? PERSONA_MENU_ESTIMATED_HEIGHT,
       viewportWidth: window.innerWidth,
-      coordinateScale: currentComposerBodyZoom()
+      coordinateScale: bodyZoom()
     })
     setPersonaStyle({
       ...personaPlacement,
@@ -511,7 +511,7 @@ function PersonaHelpTip({ text }: { text: string }): ReactElement {
   const show = (): void => {
     const rect = anchorRef.current?.getBoundingClientRect()
     if (!rect) return
-    const scale = currentComposerBodyZoom()
+    const scale = bodyZoom()
     const viewportWidth = window.innerWidth / scale
     const viewportHeight = window.innerHeight / scale
     const anchor = {

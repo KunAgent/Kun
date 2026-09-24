@@ -8,9 +8,9 @@ import {
 } from 'react'
 import {
   calculateComposerPopoverPlacement,
-  currentComposerBodyZoom,
   type ComposerPopoverPlacement
 } from './floating-composer-popover-placement'
+import { bodyZoom } from '../../lib/body-zoom'
 
 const POPOVER_WIDTH = 560
 const POPOVER_MAX_HEIGHT = 640
@@ -45,7 +45,7 @@ export function useGitBranchPickerPopover({
       viewportWidth: window.innerWidth,
       preferredWidth: POPOVER_WIDTH,
       maximumHeight: POPOVER_MAX_HEIGHT,
-      coordinateScale: currentComposerBodyZoom()
+      coordinateScale: bodyZoom()
     }))
   }, [anchorRef])
 

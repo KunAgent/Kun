@@ -14,6 +14,7 @@ import { Extension, InputRule } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 import type { Editor } from '@tiptap/core'
 import type { Node as PmNode } from '@tiptap/pm/model'
+import { bodyZoom, toLayoutPx } from '../../lib/body-zoom'
 
 type MathKind = 'block' | 'inline'
 
@@ -62,8 +63,10 @@ export function openMathEditor(editor: Editor, node: PmNode, pos: number, kind: 
 
   try {
     const coords = editor.view.coordsAtPos(Math.min(pos, editor.state.doc.content.size))
-    box.style.left = `${Math.max(0, coords.left - host.getBoundingClientRect().left)}px`
-    box.style.top = `${coords.bottom - host.getBoundingClientRect().top + 4}px`
+    const hostRect = host.getBoundingClientRect()
+    const zoom = bodyZoom()
+    box.style.left = `${Math.max(0, toLayoutPx(coords.left - hostRect.left, zoom))}px`
+    box.style.top = `${toLayoutPx(coords.bottom - hostRect.top, zoom) + 4}px`
   } catch {
     // Keep default position.
   }

@@ -137,6 +137,22 @@ export function runClipboard(deps: BlockMenuDeps, target: BlockTarget, kind: 'co
   if (kind === 'cut') deleteSelectedBlocks(view)
 }
 
+function duplicateBlocks(editor: Editor, target: BlockTarget): void {
+  const blocks = selectedBlocks(editor.state)
+  const tr = editor.state.tr
+  let insertPos = target.pos + target.node.nodeSize
+  for (const block of blocks) {
+    tr.insert(insertPos, block.node.copy(block.node.content))
+    insertPos += block.node.nodeSize
+  }
+  editor.view.dispatch(tr.scrollIntoView())
+}
+
+function deleteBlocks(deps: BlockMenuDeps, target: BlockTarget): void {
+  ensureBlockSelection(deps.editor.view, target)
+  deleteSelectedBlocks(deps.editor.view)
+}
+
 function convertEntries(deps: BlockMenuDeps, target: BlockTarget, multiple: boolean): MenuEntry[] {
   const { editor } = deps
   const t = (key: string): string => i18n.t(key, { ns: 'common' })
@@ -162,7 +178,7 @@ function moreEntries(deps: BlockMenuDeps, target: BlockTarget, multiple: boolean
     run: () => {
       const markdown = multiple
         ? blocksToMarkdown(editor.state, deps.getCtx())
-        : blockToMarkdown(target.node, deps.getCtx())
+        : blockToMarkdown(target, deps.getCtx())
       void navigator.clipboard?.writeText(markdown)
     }
   })
@@ -215,15 +231,7 @@ function menuEntries(deps: BlockMenuDeps, target: BlockTarget): MenuEntry[] {
     }),
     duplicate: () => ({
       kind: 'item', id: 'duplicate', label: t('writeBlockMenuDuplicate'), icon: 'duplicate',
-      run: () => {
-        const tr = editor.state.tr
-        let insertPos = target.pos + target.node.nodeSize
-        for (const block of blocks) {
-          tr.insert(insertPos, block.node.copy(block.node.content))
-          insertPos += block.node.nodeSize
-        }
-        editor.view.dispatch(tr.scrollIntoView())
-      }
+      run: () => duplicateBlocks(editor, target)
     }),
     convert: () => ({
       kind: 'submenu', id: 'convert', label: t('writeBlockMenuConvertTo'), icon: 'convert',
@@ -235,10 +243,7 @@ function menuEntries(deps: BlockMenuDeps, target: BlockTarget): MenuEntry[] {
     }),
     delete: () => ({
       kind: 'item', id: 'delete', label: t('writeBlockMenuDelete'), icon: 'delete', danger: true,
-      run: () => {
-        ensureBlockSelection(editor.view, target)
-        deleteSelectedBlocks(editor.view)
-      }
+      run: () => deleteBlocks(deps, target)
     })
   }
 
@@ -254,11 +259,23 @@ export type BlockMenuHandle = {
   dom: HTMLElement
 }
 
+export type BlockMenuOpenOptions = {
+  /** Fires on every close path — item run, Esc, outside pointer, scroll. */
+  onClosed?: () => void
+  /** Clicked/long-pressed open: move focus to the first enabled item. */
+  focusOnOpen?: boolean
+  /** Pointer enter/leave for every mounted panel (root and submenus). */
+  onMenuEnter?: () => void
+  onMenuLeave?: () => void
+  /** A submenu opening means the user is operating the menu: pin it. */
+  onSubmenuOpen?: () => void
+}
+
 /** Open the grip context menu for `target` anchored at `anchor`. `onClosed`
  * fires on every close path — item run, Esc, outside pointer, scroll — so the
  * caller can reset its own bookkeeping. */
 export function openBlockMenu(deps: BlockMenuDeps, target: BlockTarget, anchor: HTMLElement,
-  onClosed?: () => void): BlockMenuHandle {
+  opts?: BlockMenuOpenOptions): BlockMenuHandle {
   const openDoms: HTMLElement[] = []
   let closed = false
   let panel: { dom: HTMLElement; dispose: () => void }
@@ -272,15 +289,45 @@ export function openBlockMenu(deps: BlockMenuDeps, target: BlockTarget, anchor: 
       event.stopPropagation()
       close()
       deps.editor.commands.focus()
+      return
+    }
+    const hit = event.target
+    if (hit instanceof HTMLInputElement || hit instanceof HTMLTextAreaElement) return
+    const mod = event.metaKey || event.ctrlKey
+    const key = event.key.toLowerCase()
+    const run = (action: () => void): void => {
+      event.preventDefault()
+      event.stopPropagation()
+      close()
+      action()
+    }
+    if (mod && key === 'c') run(() => runClipboard(deps, target, 'copy'))
+    else if (mod && key === 'x' && !deps.isReadOnly()) run(() => runClipboard(deps, target, 'cut'))
+    else if (mod && key === 'd') run(() => duplicateBlocks(deps.editor, target))
+    else if ((event.key === 'Delete' || event.key === 'Backspace') && !mod && !deps.isReadOnly()) {
+      run(() => deleteBlocks(deps, target))
     }
   }
   const onScroll = (): void => close()
+  const onMenuLeave = (event: MouseEvent): void => {
+    const next = event.relatedTarget
+    if (next instanceof globalThis.Node &&
+      (openDoms.some((menu) => menu.contains(next)) || anchor.contains(next))) return
+    opts?.onMenuLeave?.()
+  }
   const close = (): void => {
     if (closed) return
     closed = true
+    const active = document.activeElement
     panel.dispose()
     panel.dom.remove()
-    onClosed?.()
+    // A hover-opened menu never moved focus; a pinned one may die with a
+    // focused item, which would leave the caret on <body> swallowing typing.
+    if (active instanceof HTMLElement &&
+      (openDoms.some((menu) => menu.contains(active)) || active === document.body)) {
+      deps.editor.view.focus()
+    }
+    opts?.onClosed?.()
     window.removeEventListener('pointerdown', onPointerDown, true)
     window.removeEventListener('keydown', onKeyDown, true)
     window.removeEventListener('resize', onScroll, true)
@@ -292,9 +339,17 @@ export function openBlockMenu(deps: BlockMenuDeps, target: BlockTarget, anchor: 
     anchor,
     placement: 'left-start',
     requestCloseAll: close,
-    openDoms
+    openDoms,
+    onSubmenuOpen: () => opts?.onSubmenuOpen?.(),
+    onPanelMount: (menuDom) => {
+      menuDom.addEventListener('mouseenter', () => opts?.onMenuEnter?.())
+      menuDom.addEventListener('mouseleave', onMenuLeave)
+    }
   })
   openDoms.push(panel.dom)
+  if (opts?.focusOnOpen) {
+    panel.dom.querySelector<HTMLButtonElement>('.write-block-menu-item:not(:disabled)')?.focus({ preventScroll: true })
+  }
 
   window.addEventListener('pointerdown', onPointerDown, true)
   window.addEventListener('keydown', onKeyDown, true)

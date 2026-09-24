@@ -10,10 +10,10 @@ import {
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import {
   calculateComposerPopoverPlacement,
-  currentComposerBodyZoom,
   type ComposerPopoverAnchorRect,
   type ComposerPopoverPlacement
 } from './floating-composer-popover-placement'
+import { bodyZoom } from '../../lib/body-zoom'
 
 const SHELL_POPOVER_WIDTH = 736
 const SHELL_POPOVER_MAX_HEIGHT = 620
@@ -167,7 +167,7 @@ export function BackgroundShellOverlay({
         popoverHeight: popoverRef.current?.offsetHeight ?? SHELL_POPOVER_ESTIMATED_HEIGHT,
         viewportHeight: window.innerHeight,
         viewportWidth: window.innerWidth,
-        coordinateScale: currentComposerBodyZoom()
+        coordinateScale: bodyZoom()
       }))
     }
     updatePlacement()

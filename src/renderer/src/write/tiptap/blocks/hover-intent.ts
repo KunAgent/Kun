@@ -32,7 +32,8 @@ export type HoverIntent = {
 export function createHoverIntent(opts: {
   openDelay: number
   closeDelay: number
-  onOpen: () => void
+  /** `pinned` is true for click/long-press opens and false for hover opens. */
+  onOpen: (pinned: boolean) => void
   onClose: () => void
 }): HoverIntent {
   type State = 'closed' | 'opening' | 'open-hover' | 'open-pinned'
@@ -57,7 +58,7 @@ export function createHoverIntent(opts: {
     clearClose()
     if (state === 'closed' || state === 'opening') {
       state = pinned ? 'open-pinned' : 'open-hover'
-      opts.onOpen()
+      opts.onOpen(pinned)
     } else if (pinned) {
       state = 'open-pinned'
     }

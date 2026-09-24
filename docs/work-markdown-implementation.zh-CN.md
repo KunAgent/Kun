@@ -591,15 +591,10 @@ export function resolveWriteEditorSurface(input: {
 - 复制/剪切走 `runClipboard`：先把目标块置为块选区（多块框选不动），`view.focus()` 后 `document.execCommand`
   触发 §9.4 的 `copySelection` 同时写 `text/plain`（Markdown）与 `text/html`；execCommand 不可用时
   兜底 `navigator.clipboard.writeText(blocksToMarkdown)`，剪切随后调 `deleteSelectedBlocks`。
-- 渲染：三列网格（图标 / 文案 / 快捷键提示，子菜单行尾 `›`）。子菜单 150ms 悬停或 → 键在右侧弹出
-  （`right-start` + `flip` + `shift`），同时只开一个；↑/↓ 在可用项间移动焦点，Enter 执行，← 收子菜单，
-  Esc 关整树；外部点击判断遍历所有已打开的面板。
-- 打开方式：抓手悬停 250ms 以"悬停"态打开（指针移到菜单内不消失，两边都离开 200ms 关闭——状态机在
-  `blocks/hover-intent.ts`）；点击转为"固定"态或直接固定打开。`openBlockMenu` 返回 `{ close, dom }`，
-  `dom` 用于绑定悬停进出事件。菜单锚点 `left-start`（`flip` 回退 `bottom-start`/`right-start`），
-  `z-index: 80` 挂在 `document.body`。
-- 菜单打开期间目标块通过插件 meta `menuTargetPos` + `Decoration.node` 拿 `is-block-menu-target`
-  灰底高亮，不动用户选区；真正执行复制/剪切/删除时才设选区。多块选中时菜单作用于整组（§9.4）。
+- 渲染：三列网格（图标 / 文案 / 快捷键提示，子菜单行尾 `›` 占第三列）。子菜单 150ms 悬停或 → 键在右侧弹出（`right-start` + `flip` + `shift`），同时只开一个；↑/↓ 在可用项间移动焦点，Enter 执行，← 收子菜单，Esc 关整树；外部点击判断遍历所有已打开的面板。悬停高亮用 `.is-active` 而非 `focus()`（仅点击/长按打开或方向键导航才移动焦点）；关闭时焦点在菜单内或 `body` 上则还给编辑器；⌘C/⌘X/⌘D/Delete 直接作用于目标块。
+- 打开方式：抓手悬停 350ms 以"悬停"态打开（两边都离开 200ms 关闭——`blocks/hover-intent.ts`）；点击或子菜单打开转"固定"态。每个面板的 `mouseleave` 先看 `relatedTarget` 是否仍在任一已打开面板或手柄内，在则不收起。菜单锚点 `left-start`（`flip` 回退 `bottom-start`/`right-start`），`z-index: 80` 挂在 `document.body`。
+- 菜单打开期间目标块经插件 meta `menuTargetPos` + `Decoration.node` 拿 `is-block-menu-target` 描边高亮（`box-shadow`，灰底块上仍可见），不动用户选区；执行复制/剪切/删除时才设选区，多块作用于整组（§9.4）。复制列表项会包一层父列表保住 `- `/编号/`- [x]` 标记，连续同类项合并为一个列表。
+- 界面缩放：`body` 带 `zoom: var(--ds-ui-scale)`，`getBoundingClientRect`/`coordsAtPos`/floating-ui 返回已缩放的视觉像素；挂 `body` 下的浮层与宿主内叠加层把坐标写进 `style` 前一律过 `lib/body-zoom.ts` 的 `toLayoutPx()` 换算回 CSS 像素（`scrollTop`/`scrollLeft` 已是 CSS 像素不除）。
 
 ### 9.3 拖拽换位
 
