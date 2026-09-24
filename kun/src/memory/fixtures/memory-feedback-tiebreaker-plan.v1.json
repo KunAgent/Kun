@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "evaluationVersion": "p3-feedback-tiebreaker-v1",
+  "decisionId": "kun-memory-feedback-tiebreaker-v1",
+  "status": "pre-registered",
+  "artifactHashes": {
+    "fixtureSha256": "a6a37e35a5da6afdfbdae42b9abe8a9f182dcad19167fc82361f662873d7e259",
+    "manifestSha256": "17ab0ea2186d11bbdfb38e0f76b75f3547144c74412183e8118cb2e525d6124a",
+    "calibrationSha256": "b34b6d995a2230aac543885d4173c07f8e3024b4fd8603637d5f49e4258a7964"
+  },
+  "partitions": {
+    "development": [
+      "case_dev_confirmed_01", "case_dev_confirmed_02", "case_dev_corrected_01",
+      "case_dev_corrected_02", "case_dev_empty_01", "case_dev_empty_02",
+      "case_dev_frequent_01", "case_dev_frequent_02", "case_dev_lifecycle_01",
+      "case_dev_lifecycle_02", "case_dev_misleading_01", "case_dev_misleading_02",
+      "case_dev_neutral_01", "case_dev_neutral_02", "case_dev_scope_01",
+      "case_dev_scope_02", "case_dev_wide_01", "case_dev_wide_02"
+    ],
+    "holdout": [
+      "case_hold_confirmed_01", "case_hold_confirmed_02", "case_hold_corrected_01",
+      "case_hold_corrected_02", "case_hold_empty_01", "case_hold_empty_02",
+      "case_hold_frequent_01", "case_hold_frequent_02", "case_hold_lifecycle_01",
+      "case_hold_lifecycle_02", "case_hold_misleading_01", "case_hold_misleading_02",
+      "case_hold_neutral_01", "case_hold_neutral_02", "case_hold_scope_01",
+      "case_hold_scope_02", "case_hold_wide_01", "case_hold_wide_02"
+    ]
+  },
+  "candidates": [
+    {"id":"foundation-control","kind":"foundation-control","boundaryId":null,"signalRule":"foundation-only","orderingSignals":[],"shadowSignals":["retrieval-frequency","last-retrieved-at"]},
+    {"id":"confirmation-gap_0","kind":"near-tie-rerank","boundaryId":"gap_0","signalRule":"confirmation","orderingSignals":["confirmation"],"shadowSignals":["retrieval-frequency","last-retrieved-at"]},
+    {"id":"confirmation-correction-gap_0","kind":"near-tie-rerank","boundaryId":"gap_0","signalRule":"confirmation-correction","orderingSignals":["confirmation","correction"],"shadowSignals":["retrieval-frequency","last-retrieved-at"]},
+    {"id":"confirmation-gap_1","kind":"near-tie-rerank","boundaryId":"gap_1","signalRule":"confirmation","orderingSignals":["confirmation"],"shadowSignals":["retrieval-frequency","last-retrieved-at"]},
+    {"id":"confirmation-correction-gap_1","kind":"near-tie-rerank","boundaryId":"gap_1","signalRule":"confirmation-correction","orderingSignals":["confirmation","correction"],"shadowSignals":["retrieval-frequency","last-retrieved-at"]},
+    {"id":"confirmation-gap_2","kind":"near-tie-rerank","boundaryId":"gap_2","signalRule":"confirmation","orderingSignals":["confirmation"],"shadowSignals":["retrieval-frequency","last-retrieved-at"]},
+    {"id":"confirmation-correction-gap_2","kind":"near-tie-rerank","boundaryId":"gap_2","signalRule":"confirmation-correction","orderingSignals":["confirmation","correction"],"shadowSignals":["retrieval-frequency","last-retrieved-at"]}
+  ],
+  "selectionRule": {
+    "orderBy": [
+      "all-required-gates", "pair-accuracy-lower-bound", "pair-accuracy-point-estimate",
+      "smallest-boundary", "candidate-id"
+    ],
+    "fallback": "foundation-control"
+  },
+  "gates": {
+    "localBenefit": {
+      "minimumPairAccuracyGain": 0.25,
+      "minimumPairAccuracyGainLowerBound": 0.001
+    },
+    "globalNonRegression": {
+      "minimumRecallGainLowerBound": 0,
+      "minimumMrrGainLowerBound": 0,
+      "maximumPrecisionDecline": 0,
+      "maximumAbstentionDecline": 0
+    },
+    "safety": {
+      "maximumExplicitForbiddenSelections": 0,
+      "maximumAuthorizationOrLifecycleViolations": 0,
+      "maximumProductionRankingChanges": 0
+    },
+    "privacy": {
+      "queryTextInTrace": false,
+      "memoryContentInTrace": false,
+      "sourceExcerptInTrace": false,
+      "machinePathInTrace": false,
+      "credentialInTrace": false
+    },
+    "determinism": {"repeatedRuns":3,"numericTolerance":0.000001},
+    "resource": {
+      "maximumEvaluationMilliseconds": 5000,
+      "maximumTraceRankings": 64,
+      "maximumEvidenceBytes": 1000000
+    }
+  },
+  "bootstrap": {
+    "method": "paired-percentile-lower-bound",
+    "seed": 20260916,
+    "resamples": 10000,
+    "confidenceLevel": 0.95,
+    "unit": "case",
+    "holdoutRuns": 1
+  },
+  "production": {
+    "rankingChanged": false,
+    "dormantFeatureFlagAdded": false,
+    "evaluatorOnly": true
+  }
+}

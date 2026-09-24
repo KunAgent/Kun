@@ -45,6 +45,7 @@ const api = vi.hoisted(() => ({
     fastSource: 'agent'
   } as AgentModels
 }))
+const initialSnapshot = api.snapshot
 
 vi.mock('./agent-client', async (original) => ({
   ...(await original<typeof import('./agent-client')>()),
@@ -66,6 +67,7 @@ describe('AgentModelSettings immediate apply', () => {
   let renderer: ReactTestRenderer
   beforeEach(async () => {
     await i18n.changeLanguage('en')
+    api.snapshot = initialSnapshot
     api.refresh.mockReset()
     api.saveAgentModels.mockReset().mockResolvedValue({
       ...api.snapshot,
@@ -91,6 +93,20 @@ describe('AgentModelSettings immediate apply', () => {
   }
 
   const select = (label: string) => renderer.root.findByProps({ 'aria-label': label })
+
+  it('treats a model without a provider id as inheritance', async () => {
+    const unavailable = { ...api.snapshot.options[0], model: 'legacy-model', providerId: undefined }
+    api.snapshot = { ...api.snapshot, options: [...api.snapshot.options, unavailable] }
+    await render()
+    await act(async () => {
+      select('Main model').props.onChange({ target: { value: modelBindingKey(unavailable) } })
+    })
+    expect(api.saveAgentModels).toHaveBeenCalledWith('agent-1', {
+      expectedRevision: 2,
+      modelRef: null,
+      fastModelRef: api.snapshot.agent.fastModelRef
+    })
+  })
 
   it('saves the main model as soon as it changes and does not keep a Save button', async () => {
     const onSaved = await render()

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "evaluationVersion": "p3-feedback-tiebreaker-v1",
+  "algorithm": "sha256",
+  "files": {
+    "fixture": "a6a37e35a5da6afdfbdae42b9abe8a9f182dcad19167fc82361f662873d7e259",
+    "manifest": "17ab0ea2186d11bbdfb38e0f76b75f3547144c74412183e8118cb2e525d6124a"
+  }
+}

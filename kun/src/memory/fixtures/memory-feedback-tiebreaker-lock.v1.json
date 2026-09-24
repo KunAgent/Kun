@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "evaluationVersion": "p3-feedback-tiebreaker-v1",
+  "decisionId": "kun-memory-feedback-tiebreaker-v1",
+  "status": "locked",
+  "artifactHashes": {
+    "fixtureSha256": "a6a37e35a5da6afdfbdae42b9abe8a9f182dcad19167fc82361f662873d7e259",
+    "manifestSha256": "17ab0ea2186d11bbdfb38e0f76b75f3547144c74412183e8118cb2e525d6124a",
+    "calibrationSha256": "b34b6d995a2230aac543885d4173c07f8e3024b4fd8603637d5f49e4258a7964",
+    "decisionPlanSha256": "27dfc5852afa9d86e0ff52bf549fb154e5b788ac00690758c0c8accd15460ab7",
+    "developmentReportSha256": "c66eecdd069a6507bf158a980e25a556f87fb39f69b6674bede77470d70b1542"
+  },
+  "selectedCandidateId": "foundation-control",
+  "gates": {
+    "localBenefit": {"minimumPairAccuracyGain":0.25,"minimumPairAccuracyGainLowerBound":0.001},
+    "globalNonRegression": {"minimumRecallGainLowerBound":0,"minimumMrrGainLowerBound":0,"maximumPrecisionDecline":0,"maximumAbstentionDecline":0},
+    "safety": {"maximumExplicitForbiddenSelections":0,"maximumAuthorizationOrLifecycleViolations":0,"maximumProductionRankingChanges":0},
+    "privacy": {"queryTextInTrace":false,"memoryContentInTrace":false,"sourceExcerptInTrace":false,"machinePathInTrace":false,"credentialInTrace":false},
+    "determinism": {"repeatedRuns":3,"numericTolerance":0.000001},
+    "resource": {"maximumEvaluationMilliseconds":5000,"maximumTraceRankings":64,"maximumEvidenceBytes":1000000}
+  },
+  "evaluatorIdentity": "memory-feedback-tiebreaker-v1|foundation=post-1308-foundation-v1|grouping=leader-relative",
+  "bootstrapSeed": 20260916,
+  "holdoutRunLimit": 1,
+  "lockedAt": "2026-09-16T00:00:00.000Z"
+}
