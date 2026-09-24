@@ -1,9 +1,11 @@
 import type {
   WriteAgentPresetV1,
   WriteInlineCompletionSettingsV1,
+  WritePaperModeSettingsV1,
   WritePaperReadingSettingsV1,
   WriteSelectionAssistSettingsV1
 } from '@shared/app-settings'
+import type { WriteWorkSurface } from './write-surface'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import type {
   WorkspaceOfficePreviewSuccess,
@@ -140,6 +142,10 @@ export type WriteWorkspaceState = {
   agentPresets: WriteAgentPresetV1[]
   /** Paper-reading units: papers dir, interpretation template, preprocessing. */
   paperReading: WritePaperReadingSettingsV1
+  /** Paper-mode settings: enabled flag + library list/active library. */
+  paperMode: WritePaperModeSettingsV1
+  /** Active Work surface: ordinary docs workspace vs the paper workbench. */
+  workSurface: WriteWorkSurface
   /** True when the image generation provider is fully configured (enables 生成信息图). */
   imageGenReady: boolean
   /** True when the primary chat provider is configured (enables 生成交互原型). */
@@ -196,6 +202,7 @@ export type WriteWorkspaceState = {
   quotedSelections: WriteQuotedSelection[]
   recentEdits: WriteRecentEdit[]
   loadWriteSettings: () => Promise<void>
+  setWorkSurface: (surface: WriteWorkSurface) => void
   selectWriteWorkspace: (workspaceRoot: string) => Promise<void>
   addWriteWorkspace: (workspaceRoot: string) => Promise<void>
   removeWriteWorkspace: (workspaceRoot: string) => Promise<void>

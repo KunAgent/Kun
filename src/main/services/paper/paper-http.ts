@@ -11,7 +11,10 @@ const PAPER_ALLOWED_HOSTS = new Set([
   'papers.cool',
   'www.papers.cool',
   'arxiv.org',
-  'export.arxiv.org'
+  'export.arxiv.org',
+  'rss.arxiv.org',
+  'api.semanticscholar.org',
+  'api.crossref.org'
 ])
 
 export const PAPER_HTML_MAX_BYTES = 5 * 1024 * 1024

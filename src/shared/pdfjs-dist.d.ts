@@ -24,9 +24,17 @@ declare module 'pdfjs-dist/build/pdf.mjs' {
     getTextContent: () => Promise<TextContent>
     cleanup: () => void
   }
+  export type PDFOutlineItem = {
+    title: string
+    dest: string | unknown[] | null
+    items?: PDFOutlineItem[]
+  }
   export type PDFDocumentProxy = {
     numPages: number
     getPage: (pageNumber: number) => Promise<PDFPageProxy>
+    getOutline: () => Promise<PDFOutlineItem[] | null>
+    getDestination: (id: string) => Promise<unknown[] | null>
+    getPageIndex: (ref: unknown) => Promise<number>
     destroy: () => Promise<void>
   }
   export type PDFDocumentLoadingTask = {

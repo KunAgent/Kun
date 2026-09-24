@@ -11,7 +11,7 @@ import {
   type PaperFigureIndexV1,
   type PaperFigureItemV1,
   type PaperFigureSource,
-  type PaperUnitMetaV1
+  type PaperUnitMeta
 } from '../../../shared/paper/paper-types'
 import { atomicWriteFile } from '../../atomic-json-file'
 import {
@@ -189,10 +189,11 @@ async function figuresFromTex(
 /** Tier 3: caption-region crops from the PDF itself. */
 async function figuresFromPdfCaptions(
   unitDirAbs: string,
-  meta: PaperUnitMetaV1,
+  meta: PaperUnitMeta,
   ctx: PaperFetchContext,
   progress: Progress
 ): Promise<PaperFigureItemV1[]> {
+  if (!meta.pdfFile) return []
   const doc = await openPdfDocument(join(unitDirAbs, meta.pdfFile))
   const figuresDir = join(unitDirAbs, PAPER_FIGURES_DIR_NAME)
   const items: PaperFigureItemV1[] = []
@@ -244,10 +245,11 @@ async function figuresFromPdfCaptions(
 /** Tier 4: whole-page renders so the agent can still pick pages by caption. */
 async function figuresFromPdfPages(
   unitDirAbs: string,
-  meta: PaperUnitMetaV1,
+  meta: PaperUnitMeta,
   ctx: PaperFetchContext,
   progress: Progress
 ): Promise<PaperFigureItemV1[]> {
+  if (!meta.pdfFile) return []
   const doc = await openPdfDocument(join(unitDirAbs, meta.pdfFile))
   const pagesDir = join(unitDirAbs, PAPER_FIGURES_DIR_NAME, 'pages')
   const items: PaperFigureItemV1[] = []
@@ -288,7 +290,7 @@ async function figuresFromPdfPages(
  */
 export async function generatePaperFigures(
   unitDirAbs: string,
-  meta: PaperUnitMetaV1,
+  meta: PaperUnitMeta,
   ctx: PaperFetchContext,
   progress: Progress = () => undefined
 ): Promise<PaperFiguresOutcome> {

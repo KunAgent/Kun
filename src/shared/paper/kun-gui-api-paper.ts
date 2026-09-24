@@ -151,11 +151,12 @@ export type PaperReaderApi = {
     workspaceRoot: string
     unitDir: string
   }) => Promise<PaperMarksResult>
-  /** Replace `marks/annotations.json` items for the unit (id-keyed merge). */
+  /** Merge `marks/annotations.json` items by id; `removedIds` are deleted. */
   paperMarksWrite: (payload: {
     workspaceRoot: string
     unitDir: string
     items: unknown[]
+    removedIds?: string[]
   }) => Promise<PaperMarksResult>
   paperTranslateSelection: (payload: {
     text: string
@@ -177,6 +178,8 @@ export type PaperReaderApi = {
     workspaceRoot: string
     unitDir: string
     force?: boolean
+    /** `citations` lists S2 cited-by papers into `citations.json` instead. */
+    kind?: 'references' | 'citations'
   }) => Promise<PaperReferencesResult>
 }
 

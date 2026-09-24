@@ -136,6 +136,22 @@ export const KEYBOARD_SHORTCUT_COMMANDS = [
     platformDefaultBindings: { darwin: ['Meta+F'] }
   },
   {
+    id: 'toggle-paper-mode',
+    labelKey: 'shortcutTogglePaperMode',
+    descriptionKey: 'shortcutTogglePaperModeDesc',
+    // Unbound by default (plan §6.1): users opt into a chord in settings.
+    defaultBindings: []
+  },
+  {
+    id: 'paper-import',
+    labelKey: 'shortcutPaperImport',
+    descriptionKey: 'shortcutPaperImportDesc',
+    // Ctrl+Shift+I is taken by toggle-devtools; use Meta+Shift+I on macOS and
+    // Ctrl+Alt+I on Windows/Linux.
+    defaultBindings: ['Ctrl+Alt+I'],
+    platformDefaultBindings: { darwin: ['Meta+Shift+I'] }
+  },
+  {
     id: 'open-keyboard-shortcuts',
     labelKey: 'shortcutKeyboardShortcuts',
     descriptionKey: 'shortcutKeyboardShortcutsDesc',

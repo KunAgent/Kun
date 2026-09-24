@@ -4,6 +4,8 @@
   "writeConversationWhiteboardTrigger": "白板会话",
   "writeConversationFileTitle": "当前文件的会话历史",
   "writeConversationWhiteboardTitle": "当前白板的会话历史",
+  "writeConversationPaperTrigger": "论文会话",
+  "writeConversationPaperTitle": "当前论文的会话历史",
   "writeConversationNew": "新建会话",
   "writeConversationSearch": "搜索会话标题",
   "writeConversationCurrent": "当前",

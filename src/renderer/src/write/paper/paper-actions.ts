@@ -1,4 +1,4 @@
-import type { PaperUnitMetaV1 } from '@shared/paper/paper-types'
+import type { PaperUnitMeta } from '@shared/paper/paper-meta-v2'
 import type { WritePaperReadingSettingsV1 } from '@shared/app-settings-types-product'
 import { useWriteWorkspaceStore } from '../write-workspace-store'
 import { normalizePath } from '../write-workspace-store-helpers'
@@ -53,7 +53,7 @@ export async function importPaper(
   deps: PaperActionDeps & {
     input?: string
     localPdfPath?: string
-    onImported?: (unitDir: string, meta: PaperUnitMetaV1) => void
+    onImported?: (unitDir: string, meta: PaperUnitMeta) => void
   }
 ): Promise<boolean> {
   const { t, workspaceRoot } = deps
@@ -190,7 +190,7 @@ export async function preprocessPaper(
 
 export type InterpretDeps = PaperActionDeps & {
   unitDir: string
-  meta: PaperUnitMetaV1
+  meta: PaperUnitMeta
   onSubmitPrompt?: (value: string) => void
   setInput: (value: string) => void
   input: string

@@ -44,6 +44,11 @@ import {
   PAPER_INTERPRET_TEMPLATE_MAX_CHARS,
   PAPER_PAPERS_DIR_MAX_CHARS
 } from './paper/paper-interpret-template'
+import {
+  defaultWritePaperModeSettings,
+  mergeWritePaperModeSettings,
+  normalizeWritePaperModeSettings
+} from './app-settings-paper-mode'
 
 export const DEFAULT_WRITE_PAPERS_DIR = 'papers'
 
@@ -372,7 +377,8 @@ export function defaultWriteSettings(): WriteSettingsV1 {
     selectionAssist: defaultWriteSelectionAssistSettings(),
     typography: defaultWriteTypography(),
     agentPresets: defaultWriteAgentPresets(),
-    paperReading: defaultWritePaperReadingSettings()
+    paperReading: defaultWritePaperReadingSettings(),
+    paperMode: defaultWritePaperModeSettings()
   }
 }
 
@@ -534,7 +540,8 @@ export function normalizeWriteSettings(input: WriteSettingsPatchV1 | undefined):
     selectionAssist: normalizeWriteSelectionAssistSettings(source.selectionAssist),
     typography: normalizeWriteTypography(source.typography),
     agentPresets: normalizeWriteAgentPresets(source.agentPresets),
-    paperReading: normalizeWritePaperReadingSettings(source.paperReading)
+    paperReading: normalizeWritePaperReadingSettings(source.paperReading),
+    paperMode: normalizeWritePaperModeSettings(source.paperMode)
   }
 }
 
@@ -579,6 +586,7 @@ export function mergeWriteSettings(
     inlineCompletion: nextInlineCompletion,
     selectionAssist: nextSelectionAssist,
     typography: nextTypography,
-    paperReading: nextPaperReading
+    paperReading: nextPaperReading,
+    paperMode: mergeWritePaperModeSettings(current.paperMode, patch?.paperMode)
   })
 }

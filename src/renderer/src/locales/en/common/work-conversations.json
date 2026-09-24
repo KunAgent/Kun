@@ -4,6 +4,8 @@
   "writeConversationWhiteboardTrigger": "Whiteboard conversations",
   "writeConversationFileTitle": "Conversations for this file",
   "writeConversationWhiteboardTitle": "Conversations for this whiteboard",
+  "writeConversationPaperTrigger": "Paper conversations",
+  "writeConversationPaperTitle": "Conversations for this paper",
   "writeConversationNew": "New",
   "writeConversationSearch": "Search conversation titles",
   "writeConversationCurrent": "Current",

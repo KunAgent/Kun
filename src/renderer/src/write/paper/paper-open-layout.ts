@@ -1,4 +1,4 @@
-import type { PaperUnitMetaV1 } from '@shared/paper/paper-types'
+import type { PaperUnitMeta } from '@shared/paper/paper-meta-v2'
 import { useWriteWorkspaceStore, writeJoinPath } from '../write-workspace-store'
 import { normalizePath } from '../write-workspace-store-helpers'
 import { PAPER_INTERPRET_SUFFIX, PAPER_NOTES_FILE } from './paper-unit'
@@ -12,15 +12,22 @@ export async function openPaperUnit(input: {
   workspaceRoot: string
   /** Workspace-relative unit dir (`papers/<slug>`) or absolute path. */
   unitDir: string
-  meta: PaperUnitMetaV1
+  /** Only `pdfFile` is read; v2 meta (with a present pdfFile) also works. */
+  meta: Pick<PaperUnitMeta, 'pdfFile'>
 }): Promise<void> {
   const store = useWriteWorkspaceStore.getState()
   const root = normalizePath(input.workspaceRoot)
   const unitAbs = input.unitDir.startsWith(root)
     ? normalizePath(input.unitDir)
     : writeJoinPath(root, input.unitDir)
-  const pdfPath = writeJoinPath(unitAbs, input.meta.pdfFile)
   const notesPath = writeJoinPath(unitAbs, PAPER_NOTES_FILE)
+
+  // Metadata-only units (v2, no pdfFile) open NOTES.md alone.
+  if (!input.meta.pdfFile) {
+    await store.openFile(root, notesPath, { groupId: 'primary', viewMode: 'rich' })
+    return
+  }
+  const pdfPath = writeJoinPath(unitAbs, input.meta.pdfFile)
 
   await store.openFile(root, pdfPath, { groupId: 'primary' })
   const layout = useWriteWorkspaceStore.getState().editorLayout

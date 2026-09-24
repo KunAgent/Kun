@@ -15,6 +15,7 @@ import {
   Table2
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 
 export function WriteWorkspaceStart({
   onAskAssistant,
@@ -41,6 +42,7 @@ export function WriteWorkspaceStart({
   onboarding?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
+  const workSurface = useWriteWorkspaceStore((s) => s.workSurface)
   const officeStarters = [
     { label: t('writeStarterSummarize'), prompt: t('writeStarterSummarizePrompt'), icon: FileText },
     { label: t('writeStarterPdf'), prompt: t('writeStarterPdfPrompt'), icon: MessageSquareQuote },
@@ -113,7 +115,7 @@ export function WriteWorkspaceStart({
                   className="flex min-h-11 items-center gap-2 rounded-xl border border-accent/20 bg-accent/[0.055] px-3 py-2 text-left text-[12.5px] font-medium text-accent transition hover:bg-accent/10"
                 >
                   <GraduationCap className="h-4 w-4 shrink-0" strokeWidth={1.9} />
-                  <span>{t('writePaperStarter')}</span>
+                  <span>{t(workSurface === 'papers' ? 'writePaperStarter' : 'writePaperModeEnter')}</span>
                 </button>
               ) : null}
               {officeStarters.map(({ label, prompt, icon: StarterIcon }) => (

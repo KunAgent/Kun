@@ -16,6 +16,7 @@ import type {
   WriteWorkspaceState
 } from './write-workspace-store-types'
 import { emptySelection, normalizePath } from './write-workspace-store-helpers'
+import { writeSurfaceKeySuffix } from './write-surface'
 
 const LAYOUT_KEY_PREFIX = 'kun.write.editor-layout:v1:'
 
@@ -344,7 +345,9 @@ export function addEditorItemToGroup(
 }
 
 export function layoutStorageKey(workspaceRoot: string): string {
-  return `${LAYOUT_KEY_PREFIX}${normalizePath(workspaceRoot)}`
+  // The papers surface namespaces the key so docs/papers tabs stay separate
+  // even when both point at the same directory (plan D2).
+  return `${LAYOUT_KEY_PREFIX}${normalizePath(workspaceRoot)}${writeSurfaceKeySuffix()}`
 }
 
 function validMode(value: unknown): value is WritePreviewMode {

@@ -31,6 +31,7 @@ import {
   saveThreadWorktreeRegistry
 } from '../lib/thread-worktree-registry'
 import { workspaceLabelFromPath } from '../lib/workspace-label'
+import { writeConversationResourcePath } from '../paper/paper-mode-actions'
 import {
   isInternalTemporaryWorkspace,
   normalizeWorkspaceRoot,
@@ -362,7 +363,10 @@ export async function sendThreadMessage(
           : null
         : await get().ensureWriteThreadForWorkspace(
             writeContext?.workspaceRoot,
-            writeContext ? writeContext.activeFilePath ?? '' : undefined
+            writeContext
+              ? writeConversationResourcePath(
+                  writeContext.workspaceRoot, writeContext.activeFilePath)
+              : undefined
           )
       if (!writeThreadId) return false
       if (writeContext?.threadId && writeThreadId !== writeContext.threadId) return false

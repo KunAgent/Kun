@@ -24,6 +24,8 @@ export function makeWriteFileActionBaseState(): WriteWorkspaceState {
     selectionAssist: defaultWriteSettings().selectionAssist,
     agentPresets: defaultWriteSettings().agentPresets,
     paperReading: defaultWriteSettings().paperReading,
+    paperMode: defaultWriteSettings().paperMode,
+    workSurface: 'docs',
     imageGenReady: false, prototypeReady: false, settingsLoading: false, settingsError: null,
     ...initialState(),
     previewMode: 'rich', assistantOpen: true, assistantModel: 'auto', assistantProviderId: '',
@@ -87,6 +89,7 @@ export function makeWriteFileActionBaseState(): WriteWorkspaceState {
     quoteCurrentSelection: () => undefined,
     removeQuotedSelection: () => undefined,
     clearQuotedSelections: () => undefined,
+    setWorkSurface: () => undefined,
     resetWorkspace: () => undefined
   }
 }

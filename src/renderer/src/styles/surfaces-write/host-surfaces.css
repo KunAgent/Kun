@@ -635,3 +635,37 @@ html[data-ui-plugin-presentation='on'] .ds-ui-plugin-decor-layer {
   z-index: 1;
   display: block;
 }
+
+/* Paper-mode reader: highlight marks, selection swatches, paper tones. */
+
+.paper-mark-rect {
+  border: 0;
+  border-radius: 2px;
+  padding: 0;
+  mix-blend-mode: multiply;
+  opacity: 0.45;
+}
+
+.paper-mark-yellow { background: #f7d154; }
+.paper-mark-green { background: #7fd18b; }
+.paper-mark-blue { background: #7db3f0; }
+.paper-mark-pink { background: #f09ec0; }
+
+[data-theme='dark'] .paper-mark-rect {
+  mix-blend-mode: screen;
+  opacity: 0.35;
+}
+
+.paper-swatch-yellow { background: #f7d154; }
+.paper-swatch-green { background: #7fd18b; }
+.paper-swatch-blue { background: #7db3f0; }
+.paper-swatch-pink { background: #f09ec0; }
+
+.paper-tone-white { background: #ffffff; }
+.paper-tone-sepia { background: #f4ecd8; }
+.paper-tone-green { background: #d8ecd8; }
+.paper-tone-dark { background: #2b2b2e; }
+
+.write-pdf-scroller[data-paper-tone='sepia'] .write-pdf-page { background: #f4ecd8; }
+.write-pdf-scroller[data-paper-tone='green'] .write-pdf-page { background: #e4f0e0; }
+.write-pdf-scroller[data-paper-tone='dark'] .write-pdf-page { background: #333338; }

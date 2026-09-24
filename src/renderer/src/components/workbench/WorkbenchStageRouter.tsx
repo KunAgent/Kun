@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactElement, type ReactNode } from 'react'
 import { WorkbenchConversationStage, type WorkbenchConversationStageProps } from './WorkbenchConversationStage'
 import { normalizeWorkbenchRoute } from './workbench-route'
+import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 
 const PluginMarketplaceView = lazy(() =>
   import('../PluginMarketplaceView').then((module) => ({ default: module.PluginMarketplaceView }))
@@ -19,6 +20,9 @@ const WorkflowRunPanel = lazy(() =>
 )
 const WriteWorkspaceView = lazy(() =>
   import('../write/WriteWorkspaceView').then((module) => ({ default: module.WriteWorkspaceView }))
+)
+const PaperWorkspaceView = lazy(() =>
+  import('../paper/PaperWorkspaceView').then((module) => ({ default: module.PaperWorkspaceView }))
 )
 const RoomsWorkspaceView = lazy(() =>
   import('../rooms/RoomsWorkspaceView').then((module) => ({ default: module.RoomsWorkspaceView }))
@@ -59,6 +63,41 @@ export type WorkbenchStageRouterProps = {
 
 function WorkbenchPaneFallback(): ReactElement {
   return <div className="h-full min-h-0 w-full bg-ds-main" aria-hidden />
+}
+
+/**
+ * Write stage: docs surface renders the ordinary workspace; the papers
+ * surface swaps in the paper workbench (library/discover + reader) without
+ * changing the route (§3.1 D2).
+ */
+function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
+  const workSurface = useWriteWorkspaceStore((s) => s.workSurface)
+  if (workSurface === 'papers') {
+    return (
+      <PaperWorkspaceView
+        leftSidebarCollapsed={write.leftSidebarCollapsed}
+        onToggleLeftSidebar={write.onToggleLeftSidebar}
+        input={write.input}
+        setInput={write.setInput}
+        onSubmitPrompt={write.onSubmitPrompt}
+        onOpenAgentSettings={write.onOpenAgentSettings}
+        rightPanel={write.rightPanel}
+      />
+    )
+  }
+  return (
+    <div className="flex min-h-0 flex-1">
+      <WriteWorkspaceView
+        leftSidebarCollapsed={write.leftSidebarCollapsed}
+        onToggleLeftSidebar={write.onToggleLeftSidebar}
+        input={write.input}
+        setInput={write.setInput}
+        onSubmitPrompt={write.onSubmitPrompt}
+        onOpenAgentSettings={write.onOpenAgentSettings}
+      />
+      {write.rightPanel}
+    </div>
+  )
 }
 
 export function WorkbenchStageRouter({
@@ -130,17 +169,7 @@ export function WorkbenchStageRouter({
         ) : normalizedRoute === 'write' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
             {write.runtimeBanner}
-            <div className="flex min-h-0 flex-1">
-              <WriteWorkspaceView
-                leftSidebarCollapsed={write.leftSidebarCollapsed}
-                onToggleLeftSidebar={write.onToggleLeftSidebar}
-                input={write.input}
-                setInput={write.setInput}
-                onSubmitPrompt={write.onSubmitPrompt}
-                onOpenAgentSettings={write.onOpenAgentSettings}
-              />
-              {write.rightPanel}
-            </div>
+            <WriteStage write={write} />
           </Suspense>
         ) : (
           <WorkbenchConversationStage {...conversation} route={normalizedRoute} />

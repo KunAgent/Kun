@@ -2,6 +2,11 @@ import type { ReactElement } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { defaultWritePaperReadingSettings, type WritePaperReadingSettingsV1 } from '@shared/app-settings'
+import { defaultWritePaperModeSettings } from '@shared/app-settings-paper-mode'
+import type {
+  WritePaperModeSettingsPatchV1,
+  WritePaperModeSettingsV1
+} from '@shared/app-settings-types-paper-mode'
 import { DEFAULT_PAPER_INTERPRET_TEMPLATE } from '@shared/paper/paper-interpret-template'
 import { SettingRow, SettingsCard, Toggle } from './settings-controls'
 
@@ -20,14 +25,159 @@ export function WritePaperReadingSettingsPanel({
   form,
   update
 }: {
-  form: { write: { paperReading?: Partial<WritePaperReadingSettingsV1> } }
-  update: (patch: { write: { paperReading: Partial<WritePaperReadingSettingsV1> } }) => void
+  form: {
+    write: {
+      paperReading?: Partial<WritePaperReadingSettingsV1>
+      paperMode?: Partial<WritePaperModeSettingsV1>
+    }
+  }
+  update: (patch: {
+    write: {
+      paperReading?: Partial<WritePaperReadingSettingsV1>
+      paperMode?: WritePaperModeSettingsPatchV1
+    }
+  }) => void
 }): ReactElement {
   const { t } = useTranslation('common')
   const defaults = defaultWritePaperReadingSettings()
   const paper = { ...defaults, ...(form.write.paperReading ?? {}) }
+  const modeDefaults = defaultWritePaperModeSettings()
+  const mode = {
+    ...modeDefaults,
+    ...(form.write.paperMode ?? {}),
+    translate: { ...modeDefaults.translate, ...(form.write.paperMode?.translate ?? {}) },
+    discover: { ...modeDefaults.discover, ...(form.write.paperMode?.discover ?? {}) },
+    scholar: { ...modeDefaults.scholar, ...(form.write.paperMode?.scholar ?? {}) }
+  }
+  const updateMode = (paperMode: WritePaperModeSettingsPatchV1): void =>
+    update({ write: { paperMode } })
 
   return (
+    <>
+    <SettingsCard title={t('writePaperModeSettingsTitle')}>
+      <SettingRow
+        title={t('writePaperAutoMarkReading')}
+        description={t('writePaperAutoMarkReadingDesc')}
+        control={
+          <Toggle
+            checked={mode.autoMarkReading !== false}
+            onChange={(autoMarkReading) => updateMode({ autoMarkReading })}
+          />
+        }
+      />
+      <SettingRow
+        title={t('writePaperTranslateTarget')}
+        description={t('writePaperTranslateTargetDesc')}
+        control={
+          <select
+            className={selectControlClass}
+            value={mode.translate.targetLanguage}
+            onChange={(e) =>
+              updateMode({
+                translate: {
+                  targetLanguage: e.target.value as WritePaperModeSettingsV1['translate']['targetLanguage']
+                }
+              })
+            }
+          >
+            <option value="zh">{t('writePaperLanguageZh')}</option>
+            <option value="en">{t('writePaperLanguageEn')}</option>
+          </select>
+        }
+      />
+      <SettingRow
+        title={t('writePaperTranslateInherit')}
+        description={t('writePaperTranslateInheritDesc')}
+        control={
+          <Toggle
+            checked={mode.translate.inheritModel !== false}
+            onChange={(inheritModel) => updateMode({ translate: { inheritModel } })}
+          />
+        }
+      />
+      {!mode.translate.inheritModel ? (
+        <SettingRow
+          title={t('writePaperTranslateModel')}
+          description={t('writePaperTranslateModelDesc')}
+          control={
+            <div className="flex gap-2">
+              <input
+                className={`${textInputClass} w-36`}
+                value={mode.translate.providerId}
+                placeholder="provider"
+                spellCheck={false}
+                onChange={(e) => updateMode({ translate: { providerId: e.target.value } })}
+              />
+              <input
+                className={`${textInputClass} w-44`}
+                value={mode.translate.model}
+                placeholder="model"
+                spellCheck={false}
+                onChange={(e) => updateMode({ translate: { model: e.target.value } })}
+              />
+            </div>
+          }
+        />
+      ) : null}
+      <SettingRow
+        title={t('writePaperArxivCategories')}
+        description={t('writePaperArxivCategoriesDesc')}
+        control={
+          <input
+            className={`${textInputClass} w-56`}
+            value={mode.discover.arxivCategories.join(', ')}
+            placeholder="cs.AI, cs.CL"
+            spellCheck={false}
+            onChange={(e) =>
+              updateMode({
+                discover: {
+                  arxivCategories: e.target.value
+                    .split(/[,\s]+/)
+                    .map((item) => item.trim())
+                    .filter(Boolean)
+                }
+              })
+            }
+          />
+        }
+      />
+      <SettingRow
+        title={t('writePaperOnlineRefs')}
+        description={t('writePaperOnlineRefsDesc')}
+        control={
+          <Toggle
+            checked={mode.scholar.onlineReferences !== false}
+            onChange={(onlineReferences) => updateMode({ scholar: { onlineReferences } })}
+          />
+        }
+      />
+      <SettingRow
+        title={t('writePaperScholarKey')}
+        description={t('writePaperScholarKeyDesc')}
+        control={
+          <input
+            className={`${textInputClass} w-56`}
+            value={mode.scholar.semanticScholarApiKey}
+            placeholder={t('writePaperOptional')}
+            spellCheck={false}
+            onChange={(e) => updateMode({ scholar: { semanticScholarApiKey: e.target.value } })}
+          />
+        }
+      />
+      <SettingRow
+        title={t('writePaperCrossrefMailto')}
+        description={t('writePaperCrossrefMailtoDesc')}
+        control={
+          <input
+            className={`${textInputClass} w-56`}
+            value={mode.scholar.crossrefMailto}
+            placeholder={t('writePaperOptional')}
+            spellCheck={false}
+            onChange={(e) => updateMode({ scholar: { crossrefMailto: e.target.value } })}
+          />
+        }
+      />
+    </SettingsCard>
     <SettingsCard title={t('writePaperSettingsTitle')}>
       <SettingRow
         title={t('writePaperDirLabel')}
@@ -111,5 +261,6 @@ export function WritePaperReadingSettingsPanel({
         />
       </div>
     </SettingsCard>
+    </>
   )
 }

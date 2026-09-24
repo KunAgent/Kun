@@ -1,4 +1,4 @@
-import type { PaperUnitMetaV1 } from '@shared/paper/paper-types'
+import type { PaperUnitMeta } from '@shared/paper/paper-meta-v2'
 import { DEFAULT_PAPER_INTERPRET_TEMPLATE } from '@shared/paper/paper-interpret-template'
 import { paperUnitSlugFromDir } from './paper-unit'
 
@@ -24,7 +24,7 @@ function languageLine(language: PaperInterpretLanguage): string {
 export function buildPaperInterpretPrompt(input: {
   /** Workspace-relative unit dir, e.g. `papers/1706.03762`. */
   unitDir: string
-  meta: PaperUnitMetaV1
+  meta: PaperUnitMeta
   /** Workspace-relative output file, e.g. `papers/1706.03762/1706.03762-解读.md`. */
   outputPath: string
   template?: string

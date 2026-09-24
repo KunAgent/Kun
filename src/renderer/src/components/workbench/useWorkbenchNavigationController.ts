@@ -7,6 +7,9 @@ import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
 import { requestCodeCanvasPanelOpen } from '../../lib/code-canvas-panel-event'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { usePaperStore } from '../../write/paper/paper-store'
+import { usePaperModeStore } from '../../paper/paper-mode-store'
+import { paperConversationResourcePath } from '../../paper/paper-conversation-scope'
 import type { SddDraft } from '../../sdd/sdd-draft-store'
 import { useSddDraftStore } from '../../sdd/sdd-draft-store'
 import { markSddAssistantThread } from '../../sdd/sdd-thread-registry'
@@ -549,9 +552,19 @@ export function useWorkbenchNavigationController({
     // identity (or create an unrelated Write task with no board to own it).
     if (activeBoard?.workflowId) return
     const writeWorkspaceScope = workspaceRootScopeKey(writeWorkspaceRoot)
+    const conversationResource = writeState.workSurface === 'papers'
+      ? paperConversationResourcePath({
+          surface: writeState.workSurface,
+          workspaceRoot: writeWorkspaceRoot,
+          activeFilePath: writeState.activeFilePath,
+          unitDirs: Object.keys(usePaperStore.getState().unitsByDir),
+          entriesByDir: writeState.entriesByDir,
+          view: usePaperModeStore.getState().view
+        }) ?? ''
+      : writeState.activeFilePath ?? undefined
     void createWriteThread(
       writeWorkspaceRoot,
-      writeState.activeFilePath ?? undefined,
+      conversationResource,
       activeBoard
         ? { title: activeBoard.title, titleAuto: false }
         : undefined

@@ -13,6 +13,7 @@ import {
   MIN_WRITE_AUTOSAVE_DELAY_MS,
   normalizeWriteAgentPresets,
   normalizeWriteInlineCompletionModel,
+  normalizeWritePaperModeSettings,
   normalizeWritePaperReadingSettings,
   normalizeWriteSelectionAssistSettings,
   resolveWriteInlineCompletionApiKey,
@@ -21,6 +22,7 @@ import {
   type AppSettingsV1,
   type WriteAgentPresetV1,
   type WriteInlineCompletionSettingsV1,
+  type WritePaperModeSettingsV1,
   type WritePaperReadingSettingsV1,
   type WriteSelectionAssistSettingsV1,
   type WriteSettingsV1
@@ -36,6 +38,7 @@ import {
 } from '../lib/browser-storage'
 import type { WritePreviewMode, WriteWorkspaceState } from './write-workspace-store-types'
 import { normalizeWriteViewMode } from './write-editor-layout'
+import { writeSurfaceKeySuffix } from './write-surface'
 
 export const WRITE_PREVIEW_MODE_KEY = 'kun.write.preview-mode'
 export const WRITE_ASSISTANT_OPEN_KEY = 'kun.write.assistant-open'
@@ -166,7 +169,8 @@ export function normalizeWriteSettings(
     },
     selectionAssist: normalizeWriteSelectionAssistSettings(settings?.selectionAssist),
     agentPresets: normalizeWriteAgentPresets(settings?.agentPresets),
-    paperReading: normalizeWritePaperReadingSettings(settings?.paperReading)
+    paperReading: normalizeWritePaperReadingSettings(settings?.paperReading),
+    paperMode: normalizeWritePaperModeSettings(settings?.paperMode)
   }
 }
 
@@ -181,6 +185,7 @@ type NormalizedWriteWorkspaceSettings = {
   selectionAssist: WriteSelectionAssistSettingsV1
   agentPresets: WriteAgentPresetV1[]
   paperReading: WritePaperReadingSettingsV1
+  paperMode: WritePaperModeSettingsV1
 }
 
 export function withResolvedInlineCompletionSettings(
@@ -225,7 +230,7 @@ export function writeRelativeToWorkspace(workspaceRoot: string, filePath: string
 }
 
 export function activeFileStorageKey(workspaceRoot: string): string {
-  return `kun.write.active-file:${normalizePath(workspaceRoot)}`
+  return `kun.write.active-file:${normalizePath(workspaceRoot)}${writeSurfaceKeySuffix()}`
 }
 
 export function rememberActiveFile(workspaceRoot: string, nextPath: string | null): void {

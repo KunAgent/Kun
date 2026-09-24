@@ -25,13 +25,16 @@ type Props = {
   rootLoading?: boolean
   onToggleDir: (path: string) => void
   onSelectFile: (path: string) => void
-  onCreateFile: (directoryPath?: string) => void
-  onCreateDirectory: (directoryPath?: string) => void
-  onRenameEntry: (entry: WorkspaceEntry) => void
-  onDeleteEntry: (entry: WorkspaceEntry) => void
+  /** Optional so read-only trees (paper library) can hide file mutations. */
+  onCreateFile?: (directoryPath?: string) => void
+  onCreateDirectory?: (directoryPath?: string) => void
+  onRenameEntry?: (entry: WorkspaceEntry) => void
+  onDeleteEntry?: (entry: WorkspaceEntry) => void
   onRevealEntry: (entry: WorkspaceEntry) => void
-  /** Show "作为论文打开" on PDF rows (paper-unit import, §6.3). */
+  /** Show the paper action on PDF rows (docs: 「加入论文库」, papers: 「作为论文打开」). */
   onOpenPdfAsPaper?: (entry: WorkspaceEntry) => void
+  /** Tooltip/title override for the PDF paper action (surface-aware label). */
+  openPdfAsPaperTitle?: string
   onRefresh: () => void
   showHeader?: boolean
   showRootLabel?: boolean
@@ -120,6 +123,7 @@ export function WriteFileTree({
   onDeleteEntry,
   onRevealEntry,
   onOpenPdfAsPaper,
+  openPdfAsPaperTitle,
   onRefresh,
   showHeader = true,
   showRootLabel = true,
@@ -158,26 +162,30 @@ export function WriteFileTree({
             )}
             actions={
               <>
-                {isDirectory ? (
+                {isDirectory && (onCreateFile || onCreateDirectory) ? (
                   <>
-                    <TreeActionButton
-                      title={t('writeCreateFileInFolder')}
-                      onClick={() => onCreateFile(entry.path)}
-                      tone="accent"
-                    >
-                      <FilePlus2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-                    </TreeActionButton>
-                    <TreeActionButton
-                      title={t('writeCreateFolderInFolder')}
-                      onClick={() => onCreateDirectory(entry.path)}
-                    >
-                      <FolderPlus className="h-3.5 w-3.5" strokeWidth={1.8} />
-                    </TreeActionButton>
+                    {onCreateFile ? (
+                      <TreeActionButton
+                        title={t('writeCreateFileInFolder')}
+                        onClick={() => onCreateFile(entry.path)}
+                        tone="accent"
+                      >
+                        <FilePlus2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      </TreeActionButton>
+                    ) : null}
+                    {onCreateDirectory ? (
+                      <TreeActionButton
+                        title={t('writeCreateFolderInFolder')}
+                        onClick={() => onCreateDirectory(entry.path)}
+                      >
+                        <FolderPlus className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      </TreeActionButton>
+                    ) : null}
                   </>
                 ) : null}
                 {!isDirectory && onOpenPdfAsPaper && isPdfEntry(entry) ? (
                   <TreeActionButton
-                    title={t('writePaperOpenAsPaper')}
+                    title={openPdfAsPaperTitle ?? t('writePaperOpenAsPaper')}
                     onClick={() => onOpenPdfAsPaper(entry)}
                     tone="accent"
                   >
@@ -192,19 +200,23 @@ export function WriteFileTree({
                 >
                   <FolderSearch className="h-3.5 w-3.5" strokeWidth={1.85} />
                 </TreeActionButton>
-                <TreeActionButton
-                  title={t('writeRenameEntry')}
-                  onClick={() => onRenameEntry(entry)}
-                >
-                  <Pencil className="h-3.5 w-3.5" strokeWidth={1.85} />
-                </TreeActionButton>
-                <TreeActionButton
-                  title={isDirectory ? t('writeDeleteFolder') : t('writeDeleteFile')}
-                  onClick={() => onDeleteEntry(entry)}
-                  tone="danger"
-                >
-                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.85} />
-                </TreeActionButton>
+                {onRenameEntry ? (
+                  <TreeActionButton
+                    title={t('writeRenameEntry')}
+                    onClick={() => onRenameEntry(entry)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={1.85} />
+                  </TreeActionButton>
+                ) : null}
+                {onDeleteEntry ? (
+                  <TreeActionButton
+                    title={isDirectory ? t('writeDeleteFolder') : t('writeDeleteFile')}
+                    onClick={() => onDeleteEntry(entry)}
+                    tone="danger"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.85} />
+                  </TreeActionButton>
+                ) : null}
               </>
             }
           >
@@ -245,19 +257,23 @@ export function WriteFileTree({
           label={t('writeWorkspaceFiles')}
           actions={
             <>
-              <TreeActionButton
-                title={t('writeCreateFile')}
-                onClick={() => onCreateFile()}
-                tone="accent"
-              >
-                <FilePlus2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-              </TreeActionButton>
-              <TreeActionButton
-                title={t('writeCreateFolder')}
-                onClick={() => onCreateDirectory()}
-              >
-                <FolderPlus className="h-3.5 w-3.5" strokeWidth={1.75} />
-              </TreeActionButton>
+              {onCreateFile ? (
+                <TreeActionButton
+                  title={t('writeCreateFile')}
+                  onClick={() => onCreateFile()}
+                  tone="accent"
+                >
+                  <FilePlus2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                </TreeActionButton>
+              ) : null}
+              {onCreateDirectory ? (
+                <TreeActionButton
+                  title={t('writeCreateFolder')}
+                  onClick={() => onCreateDirectory()}
+                >
+                  <FolderPlus className="h-3.5 w-3.5" strokeWidth={1.75} />
+                </TreeActionButton>
+              ) : null}
               <TreeActionButton
                 title={t('writeRefreshWorkspace')}
                 onClick={onRefresh}
@@ -301,22 +317,26 @@ export function WriteFileTree({
               {t('writeWorkspaceEmptySub')}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => onCreateFile()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border bg-ds-card px-2.5 py-1.5 text-[12.5px] font-medium text-ds-ink transition hover:bg-ds-hover"
-              >
-                <FilePlus2 className="h-3.5 w-3.5 text-accent" strokeWidth={1.9} />
-                {t('writeCreateFirstFile')}
-              </button>
-              <button
-                type="button"
-                onClick={() => onCreateDirectory()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border bg-ds-card px-2.5 py-1.5 text-[12.5px] font-medium text-ds-ink transition hover:bg-ds-hover"
-              >
-                <FolderPlus className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.9} />
-                {t('writeCreateFirstFolder')}
-              </button>
+              {onCreateFile ? (
+                <button
+                  type="button"
+                  onClick={() => onCreateFile()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border bg-ds-card px-2.5 py-1.5 text-[12.5px] font-medium text-ds-ink transition hover:bg-ds-hover"
+                >
+                  <FilePlus2 className="h-3.5 w-3.5 text-accent" strokeWidth={1.9} />
+                  {t('writeCreateFirstFile')}
+                </button>
+              ) : null}
+              {onCreateDirectory ? (
+                <button
+                  type="button"
+                  onClick={() => onCreateDirectory()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border bg-ds-card px-2.5 py-1.5 text-[12.5px] font-medium text-ds-ink transition hover:bg-ds-hover"
+                >
+                  <FolderPlus className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.9} />
+                  {t('writeCreateFirstFolder')}
+                </button>
+              ) : null}
             </div>
           </div>
         ) : (

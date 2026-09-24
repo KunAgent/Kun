@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import type { PaperUnitMetaV1 } from '@shared/paper/paper-types'
+import type { PaperUnitMeta } from '@shared/paper/paper-meta-v2'
 import { useChatStore } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../write-workspace-store'
 import { normalizePath } from '../write-workspace-store-helpers'
@@ -21,7 +21,7 @@ export type PaperModeState = {
   unitDirAbs: string | null
   /** Workspace-relative unit dir for IPC calls. */
   unitDir: string | null
-  meta: PaperUnitMetaV1 | null
+  meta: PaperUnitMeta | null
   /** Active file is a PDF outside any paper unit → offer "作为论文打开". */
   loosePdf: boolean
 }

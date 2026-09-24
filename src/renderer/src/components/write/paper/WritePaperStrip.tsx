@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react'
 import { GraduationCap } from 'lucide-react'
-import type { PaperUnitMetaV1 } from '@shared/paper/paper-types'
+import type { PaperUnitMeta } from '@shared/paper/paper-meta-v2'
 import type { WritePaperReadingSettingsV1 } from '@shared/app-settings'
 import {
   cancelPaperJob,
@@ -33,7 +33,7 @@ export function WritePaperStrip({
   paperReading: WritePaperReadingSettingsV1
   /** Workspace-relative unit dir when the active file belongs to one. */
   unitDir: string | null
-  meta: PaperUnitMetaV1 | null
+  meta: PaperUnitMeta | null
   /** Absolute path of the active loose PDF (outside any unit), else null. */
   loosePdfPath: string | null
   input: string

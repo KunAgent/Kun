@@ -12,6 +12,7 @@ import {
   Check,
   ChevronDown,
   FileText,
+  GraduationCap,
   History,
   LayoutPanelTop,
   Loader2,
@@ -73,6 +74,20 @@ export function WriteResourceConversationHistoryPopover({
   const canRename = !interactionLocked
   const canArchive = !interactionLocked && !model.workflowLocked
   const locale = i18n.resolvedLanguage || i18n.language || 'en'
+  const kindStrings = model.resourceKind === 'whiteboard'
+    ? {
+        trigger: 'writeConversationWhiteboardTrigger',
+        title: 'writeConversationWhiteboardTitle'
+      }
+    : model.resourceKind === 'paper'
+      ? {
+          trigger: 'writeConversationPaperTrigger',
+          title: 'writeConversationPaperTitle'
+        }
+      : {
+          trigger: 'writeConversationFileTrigger',
+          title: 'writeConversationFileTitle'
+        }
 
   useEffect(() => {
     setOpen(false)
@@ -179,15 +194,11 @@ export function WriteResourceConversationHistoryPopover({
         }`}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={t(model.resourceKind === 'file'
-          ? 'writeConversationFileTrigger'
-          : 'writeConversationWhiteboardTrigger')}
+        aria-label={t(kindStrings.trigger)}
       >
         <History className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
         <span className="truncate">
-          {t(model.resourceKind === 'file'
-            ? 'writeConversationFileTrigger'
-            : 'writeConversationWhiteboardTrigger')}
+          {t(kindStrings.trigger)}
         </span>
         <ChevronDown
           className={`h-3 w-3 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -198,9 +209,7 @@ export function WriteResourceConversationHistoryPopover({
       {open ? (
         <div
           role="dialog"
-          aria-label={t(model.resourceKind === 'file'
-            ? 'writeConversationFileTitle'
-            : 'writeConversationWhiteboardTitle')}
+          aria-label={t(kindStrings.title)}
           className="absolute right-0 top-[calc(100%+9px)] z-[70] w-[360px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border border-ds-border bg-ds-card shadow-[0_22px_64px_rgba(20,47,95,0.22)] dark:shadow-[0_22px_64px_rgba(0,0,0,0.42)]"
           data-testid="write-resource-conversation-history"
         >
@@ -208,13 +217,13 @@ export function WriteResourceConversationHistoryPopover({
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-[13.5px] font-semibold text-ds-ink">
-                  {t(model.resourceKind === 'file'
-                    ? 'writeConversationFileTitle'
-                    : 'writeConversationWhiteboardTitle')}
+                  {t(kindStrings.title)}
                 </div>
                 <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-ds-faint">
                   {model.resourceKind === 'file' ? (
                     <FileText className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+                  ) : model.resourceKind === 'paper' ? (
+                    <GraduationCap className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
                   ) : (
                     <LayoutPanelTop className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
                   )}

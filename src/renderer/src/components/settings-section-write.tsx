@@ -138,7 +138,7 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                   { id: 'suggestions', label: t('writeInlineCompletion'), icon: Sparkles },
                   { id: 'selection', label: t('writeSelectionAssistTitle'), icon: TextCursorInput },
                   { id: 'agents', label: t('writeAgentPresets'), icon: Bot },
-                  { id: 'paper', label: t('writePaperSettingsTitle'), icon: GraduationCap }
+                  { id: 'paper', label: t('writePaperModeSettingsTitle'), icon: GraduationCap }
                 ]}
               />
               <SettingsTabPanel baseId="write-settings" tabId="workspace" active={activeTab === 'workspace'}>

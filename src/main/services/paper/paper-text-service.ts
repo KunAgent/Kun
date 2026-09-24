@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import { readLocalPdfText } from '../write-pdf-text-service'
 import { PAPER_TEXT_FILE_NAME } from '../../../shared/paper/paper-types'
-import type { PaperUnitMetaV1 } from '../../../shared/paper/paper-types'
+import type { PaperUnitMeta } from '../../../shared/paper/paper-types'
 
 const REFERENCES_HEADING = /\b(References|Bibliography|参考文献)\b/
 const AFTER_REFERENCES = /\b(Appendix|Appendices|Supplementary|Acknowledg)/i
@@ -17,7 +17,9 @@ const AFTER_REFERENCES = /\b(Appendix|Appendices|Supplementary|Acknowledg)/i
  * Writes `<unitDir>/paper.md`. Returns 'ok' when any page text was extracted
  * (including OCR), 'failed' otherwise.
  */
-export async function generatePaperText(unitDirAbs: string, meta: PaperUnitMetaV1): Promise<'ok' | 'failed'> {
+export async function generatePaperText(unitDirAbs: string, meta: PaperUnitMeta): Promise<'ok' | 'failed'> {
+  // Metadata-only units (v2, no pdfFile) have nothing to extract.
+  if (!meta.pdfFile) return 'failed'
   const pdfPath = join(unitDirAbs, meta.pdfFile)
   const result = await readLocalPdfText({ path: pdfPath })
   if (!result.ok || !result.hasText) return 'failed'

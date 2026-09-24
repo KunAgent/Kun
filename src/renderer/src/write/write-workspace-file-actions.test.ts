@@ -234,7 +234,6 @@ describe('write workspace file actions', () => {
     })
 
     await actions.initializeWorkspace('/tmp/write', { force: true })
-
     // A same-root refresh would keep the previous surface's active file; the
     // forced reinit must drop it and restore this surface's persisted layout.
     expect(readWorkspaceFile).toHaveBeenCalled()

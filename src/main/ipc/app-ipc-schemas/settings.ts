@@ -11,6 +11,7 @@ import { GUI_UPDATE_CHANNELS } from '../../../shared/gui-update'
 import { KEYBOARD_SHORTCUT_COMMANDS } from '../../../shared/keyboard-shortcuts'
 import { kunGraphPatchSchema } from './settings-graph'
 import { kunLabPatchSchema } from './settings-lab'
+import { writePaperModePatchSchema } from './settings-paper-mode'
 import {
   MAX_BODY_BYTES,
   MAX_CHANNEL_TEXT_LENGTH,
@@ -193,7 +194,8 @@ const writeSettingsPatchSchema = z.object({
   typography: writeTypographyPatchSchema.optional(),
   agentPresets: z.array(writeAgentPresetSchema).max(24).optional(),
   documentEditorV2: z.boolean().optional(),
-  paperReading: writePaperReadingPatchSchema.optional()
+  paperReading: writePaperReadingPatchSchema.optional(),
+  paperMode: writePaperModePatchSchema.optional()
 }).strict()
 
 const terminalColorPatchSchema = z.object({

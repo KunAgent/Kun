@@ -1,11 +1,12 @@
 import { z } from 'zod'
+import type { PaperUnitMeta } from './paper-meta-v2'
 
 /**
  * Paper unit contracts shared by main services, IPC, preload, and renderer.
  *
  * A paper unit is a plain directory `<workspace>/<papersDir>/<slug>/` that
- * contains a `paper.json` matching `paperUnitMetaV1Schema`. No database: the
- * file tree is the paper library.
+ * contains a `paper.json` (v1 or v2 — see `paper-meta-v2.ts`). No database:
+ * the file tree is the paper library.
  */
 
 export const PAPER_META_FILE_NAME = 'paper.json'
@@ -79,6 +80,7 @@ export const paperUnitMetaV1Schema = z
   .strict()
 
 export type PaperUnitMetaV1 = z.infer<typeof paperUnitMetaV1Schema>
+export type { PaperUnitMeta, PaperUnitMetaV2 } from './paper-meta-v2'
 
 export const paperFigureIndexV1Schema = z
   .object({
@@ -109,7 +111,7 @@ export type PaperFigureItemV1 = PaperFigureIndexV1['items'][number]
 
 // ---- IPC payloads and results ----
 
-export type PaperJobKind = 'import' | 'cool-notes' | 'preprocess'
+export type PaperJobKind = 'import' | 'cool-notes' | 'preprocess' | 'translate-document' | 'bibtex-import'
 
 export type PaperProgressEvent = {
   requestId: string
@@ -131,13 +133,13 @@ export type PaperErrorCode =
   | 'io'
 
 export type PaperImportResult =
-  | { ok: true; unitDir: string; meta: PaperUnitMetaV1; reused: boolean }
+  | { ok: true; unitDir: string; meta: PaperUnitMeta; reused: boolean }
   | { ok: false; code: PaperErrorCode; message: string }
 
 export type PaperUnitListEntry = {
   /** Paper directory path relative to the workspace root (forward slashes). */
   unitDir: string
-  meta: PaperUnitMetaV1
+  meta: PaperUnitMeta
 }
 
 export type PaperListUnitsResult =
@@ -148,7 +150,7 @@ export type PaperUnitReadResult =
   | {
       ok: true
       unitDir: string
-      meta: PaperUnitMetaV1
+      meta: PaperUnitMeta
       figures: PaperFigureIndexV1 | null
     }
   | { ok: false; code: 'not-paper-unit' | 'invalid-unit' | 'io'; message: string }
@@ -182,5 +184,5 @@ export type PaperPreprocessResult =
   | { ok: false; code: 'canceled' | 'invalid-unit' | 'io'; message: string }
 
 export type PaperRecordInterpretationResult =
-  | { ok: true; meta: PaperUnitMetaV1 }
+  | { ok: true; meta: PaperUnitMeta }
   | { ok: false; code: 'invalid-unit' | 'io'; message: string }

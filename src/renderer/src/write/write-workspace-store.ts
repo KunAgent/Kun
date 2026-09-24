@@ -8,6 +8,7 @@ import {
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_DEBOUNCE_MS,
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_MAX_TOKENS,
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_MIN_ACCEPT_SCORE,
+  defaultWritePaperModeSettings,
   defaultWritePaperReadingSettings,
   defaultWriteSelectionAssistSettings
 } from '@shared/app-settings'
@@ -22,6 +23,7 @@ import { createWritePresentationViewActions } from './write-presentation-view-st
 import { createWorkWhiteboardActions } from './work-whiteboard'
 import { writeDocumentKey } from './write-editor-layout'
 import { createWriteSpreadsheetActions } from './write-workspace-spreadsheet-actions'
+import { createWriteSurfaceActions } from './write-workspace-surface-actions'
 import { writeBrowserStorageItem } from '../lib/browser-storage'
 import {
   captureWriteDocumentContext,
@@ -116,6 +118,8 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
   selectionAssist: defaultWriteSelectionAssistSettings(),
   agentPresets: [],
   paperReading: defaultWritePaperReadingSettings(),
+  paperMode: defaultWritePaperModeSettings(),
+  workSurface: 'docs',
   imageGenReady: false,
   prototypeReady: false,
   settingsLoading: false,
@@ -128,6 +132,7 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
   assistantAgentPresetId: '',
 
   ...createWriteSettingsActions({ set, get }),
+  ...createWriteSurfaceActions({ set, get }),
   ...createWriteFileActions({
     set,
     get,

@@ -43,6 +43,7 @@ function applyWriteSettingsState(
     selectionAssist: write.selectionAssist,
     agentPresets: write.agentPresets,
     paperReading: write.paperReading,
+    paperMode: write.paperMode,
     inlineCompletionApiReady: Boolean(resolveWriteInlineCompletionApiKey(settings).trim()),
     imageGenReady: Boolean(
       imageGeneration?.enabled &&
@@ -101,7 +102,16 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
           inlineRevisionAtRequest,
           inlineWritePendingAtRequest
         )
-        await get().initializeWorkspace(write.activeWorkspaceRoot)
+        // Paper mode re-roots the workspace at the active library; a same-root
+        // surface switch must force a full reinit so the papers-namespaced
+        // layout replaces the docs one (and vice versa).
+        const targetSurface = write.paperMode.enabled ? 'papers' : 'docs'
+        const surfaceChanged = get().workSurface !== targetSurface
+        if (surfaceChanged) get().setWorkSurface(targetSurface)
+        const root = targetSurface === 'papers'
+          ? write.paperMode.activeLibrary
+          : write.activeWorkspaceRoot
+        await get().initializeWorkspace(root, { force: surfaceChanged })
         if (!requestIsCurrent(generation)) return
         set({ settingsLoading: false })
       } catch (error) {
@@ -175,7 +185,11 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
           inlineRevisionAtRequest,
           inlineWritePendingAtRequest
         )
-        await get().initializeWorkspace(write.activeWorkspaceRoot)
+        // Workspace switching is a docs-surface operation; on the papers
+        // surface the library root stays mounted until the toggle flips back.
+        if (get().workSurface === 'docs') {
+          await get().initializeWorkspace(write.activeWorkspaceRoot)
+        }
       } catch (error) {
         if (!requestIsCurrent(generation)) return
         set({ settingsError: error instanceof Error ? error.message : String(error) })
@@ -203,7 +217,9 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
           inlineRevisionAtRequest,
           inlineWritePendingAtRequest
         )
-        await get().initializeWorkspace(write.activeWorkspaceRoot)
+        if (get().workSurface === 'docs') {
+          await get().initializeWorkspace(write.activeWorkspaceRoot)
+        }
       } catch (error) {
         if (!requestIsCurrent(generation)) return
         set({ settingsError: error instanceof Error ? error.message : String(error) })
@@ -241,7 +257,10 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
           inlineRevisionAtRequest,
           inlineWritePendingAtRequest
         )
-        if (normalizePath(get().workspaceRoot) === normalized) {
+        if (
+          get().workSurface === 'docs' &&
+          normalizePath(get().workspaceRoot) === normalized
+        ) {
           await get().initializeWorkspace(write.activeWorkspaceRoot)
         }
       } catch (error) {

@@ -25,6 +25,7 @@ let lastArxivExportRequestAt = 0
 export type PaperFetchContext = {
   signal?: AbortSignal
   proxyUrl?: string
+  timeoutMs?: number
 }
 
 async function spacedExportFetch(url: string, options: PaperFetchContext): Promise<string> {
@@ -77,6 +78,38 @@ export function parseArxivAtomEntry(xml: string): Omit<ArxivPaperMeta, 'arxivId'
     year: published?.slice(0, 4),
     doi: xmlTagText(entry, 'arxiv:doi')
   }
+}
+
+/** Parse every `<entry>` of an export-API Atom response (search feeds). */
+export function parseArxivAtomEntries(xml: string): ArxivPaperMeta[] {
+  const out: ArxivPaperMeta[] = []
+  for (const match of xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)) {
+    const entry = match[1]
+    const idUrl = xmlTagText(entry, 'id')
+    const idMatch = /abs\/([^v<]+?)(v\d+)?$/i.exec(idUrl ?? '')
+    if (!idMatch) continue
+    const parsed = parseArxivAtomEntry(match[0])
+    if (!parsed) continue
+    const arxivId = idMatch[1]
+    out.push({
+      arxivId,
+      ...parsed,
+      pdfUrl: `https://arxiv.org/pdf/${arxivId}`,
+      sourceUrl: `https://arxiv.org/abs/${arxivId}`
+    })
+  }
+  return out
+}
+
+/** arXiv export-API title search (share the spaced request budget). */
+export async function searchArxivByTitle(
+  query: string,
+  options: PaperFetchContext & { limit?: number } = {}
+): Promise<ArxivPaperMeta[]> {
+  const limit = Math.min(Math.max(1, options.limit ?? 5), 20)
+  const url = `https://export.arxiv.org/api/query?search_query=ti:${encodeURIComponent(`"${query}"`)}&start=0&max_results=${limit}`
+  const xml = await spacedExportFetch(url, options)
+  return parseArxivAtomEntries(xml)
 }
 
 /** Returns null when the export API has no entry for the id. */

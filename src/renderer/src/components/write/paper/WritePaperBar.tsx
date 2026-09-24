@@ -9,7 +9,7 @@ import {
   X
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { PaperUnitMetaV1 } from '@shared/paper/paper-types'
+import type { PaperUnitMeta } from '@shared/paper/paper-meta-v2'
 import { usePaperStore } from '../../../write/paper/paper-store'
 import { CoolPapersIcon } from './CoolPapersIcon'
 
@@ -53,7 +53,7 @@ export function WritePaperBar({
 }: {
   /** Workspace-relative unit dir, e.g. `papers/1706.03762`. */
   unitDir: string
-  meta: PaperUnitMetaV1
+  meta: PaperUnitMeta
   onCoolNotes: (force: boolean) => void
   onInterpret: () => void
   onPreprocess: (force: boolean) => void

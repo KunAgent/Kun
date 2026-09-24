@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type {
   PaperListUnitsResult,
   PaperProgressEvent,
-  PaperUnitMetaV1,
+  PaperUnitMeta,
   PaperUnitReadResult
 } from '@shared/paper/paper-types'
 import { normalizePath } from '../write-workspace-store-helpers'
@@ -37,19 +37,19 @@ export type PendingPaperInterpretation = {
 
 type PaperWorkspaceState = {
   /** unitDir (workspace-relative, forward slashes) → last read meta. */
-  unitsByDir: Record<string, PaperUnitMetaV1>
+  unitsByDir: Record<string, PaperUnitMeta>
   /** Sidebar listing for the configured papersDir. */
-  units: Array<{ unitDir: string; meta: PaperUnitMetaV1 }>
+  units: Array<{ unitDir: string; meta: PaperUnitMeta }>
   unitsLoaded: boolean
   unitsError: string | null
   importOpen: boolean
-  busy: Partial<Record<'import' | 'cool-notes' | 'preprocess', PaperJobUiState>>
+  busy: Partial<Record<PaperProgressEvent['kind'], PaperJobUiState>>
   notice: PaperNotice
   /** Interpretation turn in flight; resolved when the thread goes idle. */
   pendingInterpretation: PendingPaperInterpretation | null
   setUnitsFromResult: (result: PaperListUnitsResult & { ok: true }) => void
   setUnitsError: (message: string | null) => void
-  rememberUnit: (unitDir: string, meta: PaperUnitMetaV1) => void
+  rememberUnit: (unitDir: string, meta: PaperUnitMeta) => void
   setImportOpen: (open: boolean) => void
   beginJob: (kind: PaperJobUiState['kind'], requestId: string) => void
   applyProgress: (event: PaperProgressEvent) => void

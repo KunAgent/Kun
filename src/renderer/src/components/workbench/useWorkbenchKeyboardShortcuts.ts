@@ -10,6 +10,8 @@ import {
 } from '@shared/keyboard-shortcuts'
 import { useKeyboardShortcutSettings } from '../../lib/keyboard-shortcut-settings'
 import { isNativeDialogOpen } from '../../lib/native-dialog-activity'
+import { enterPaperMode, togglePaperMode } from '../../paper/paper-mode-actions'
+import { usePaperModeStore } from '../../paper/paper-mode-store'
 
 const DESKTOP_SHORTCUT_COMMANDS: Partial<Record<KeyboardShortcutCommandId, DesktopCommand>> = {
   quit: 'quit',
@@ -104,6 +106,18 @@ export function runWorkbenchShortcutCommand(
   }
   if (commandId === 'open-keyboard-shortcuts') {
     context.openKeyboardShortcuts?.()
+    return
+  }
+  // Paper-mode commands act on the Write surface regardless of composer
+  // context; they are safe no-ops when the write store is uninitialized.
+  if (commandId === 'toggle-paper-mode') {
+    void togglePaperMode()
+    return
+  }
+  if (commandId === 'paper-import') {
+    void enterPaperMode().then((result) => {
+      if (result.ok) usePaperModeStore.getState().setImportDialogOpen(true)
+    })
     return
   }
 

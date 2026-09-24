@@ -1,4 +1,8 @@
 import type { AppLocale } from './app-locales'
+import type {
+  WritePaperModeSettingsPatchV1,
+  WritePaperModeSettingsV1
+} from './app-settings-types-paper-mode'
 import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
 import type { LocalWhisperDownloadSourceId } from './local-whisper'
@@ -351,6 +355,7 @@ export type WriteSettingsV1 = {
   typography: WriteTypographySettingsV1
   agentPresets: WriteAgentPresetV1[]
   paperReading: WritePaperReadingSettingsV1
+  paperMode: WritePaperModeSettingsV1
 }
 
 export type ClawSettingsPatchV1 = Partial<Omit<ClawSettingsV1, 'skills' | 'im' | 'channels' | 'tasks'>> & {
@@ -368,7 +373,7 @@ export type ScheduleSettingsPatchV1 = Partial<
   tasks?: Array<Partial<ScheduledTaskV1>>
 }
 
-export type WriteSettingsPatchV1 = Partial<Omit<WriteSettingsV1, 'inlineCompletion' | 'selectionAssist' | 'typography' | 'agentPresets' | 'paperReading'>> & {
+export type WriteSettingsPatchV1 = Partial<Omit<WriteSettingsV1, 'inlineCompletion' | 'selectionAssist' | 'typography' | 'agentPresets' | 'paperReading' | 'paperMode'>> & {
   inlineCompletion?: Partial<WriteInlineCompletionSettingsV1>
   selectionAssist?: Partial<Omit<WriteSelectionAssistSettingsV1, 'quickActions'>> & {
     /** Replaced wholesale when present. */
@@ -378,6 +383,7 @@ export type WriteSettingsPatchV1 = Partial<Omit<WriteSettingsV1, 'inlineCompleti
   /** Replaced wholesale when present. */
   agentPresets?: Array<Partial<WriteAgentPresetV1>>
   paperReading?: Partial<WritePaperReadingSettingsV1>
+  paperMode?: WritePaperModeSettingsPatchV1
 }
 
 export type DesignSystemPreset =
