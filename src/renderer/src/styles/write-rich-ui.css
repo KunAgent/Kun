@@ -1,0 +1,481 @@
+/* Write rich editor — document chrome (head/properties/find/outline)
+   and editor mount. Block-level widgets live in write-rich-blocks.css. */
+
+/* ---- S5 block experience ------------------------------------------ */
+
+/* Document head: properties panel + filename title, aligned with the
+   editor's centered 720px text column (720 + 2*28px padding = 776px). */
+.write-doc-head {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 776px;
+  margin: 0 auto;
+  padding: clamp(36px, 6vh, 60px) 28px 4px;
+}
+
+.write-doc-head:empty {
+  display: none;
+}
+
+.write-doc-title {
+  padding: 4px 0 6px;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ds-text, #1f2328);
+  user-select: none;
+}
+
+/* Editor mount: tiptap appends .tiptap.write-rich-editor here. Flex so the
+   editor fills the remaining viewport height (clicks below the last block
+   still place the caret). Overlay plugins position against this element. */
+.write-rich-editor-mount {
+  position: relative;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.write-rich-editor-mount > .tiptap.write-rich-editor {
+  flex: 1 0 auto;
+  padding-top: 8px;
+}
+
+/* frontmatter properties panel (§4) */
+.write-properties-panel {
+  margin-bottom: 2px;
+}
+
+.write-properties-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ds-text-faint, #9aa0a8);
+  font-size: 12.5px;
+  padding: 3px 8px 3px 4px;
+  margin-left: -4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.write-doc-head:hover .write-properties-add,
+.write-properties-add:focus-visible {
+  opacity: 1;
+}
+
+.write-properties-add:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+  color: var(--ds-text-secondary, #5c616b);
+}
+
+.write-properties-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ds-text-muted, #71717a);
+  font-size: 12.5px;
+  padding: 3px 8px 3px 4px;
+  margin-left: -4px;
+  cursor: pointer;
+}
+
+.write-properties-head:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+}
+
+.write-properties-body {
+  margin: 4px 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ds-border, rgba(0, 0, 0, 0.09));
+  border-radius: 8px;
+  background: var(--ds-surface-subtle, var(--ds-card, #fafbfc));
+}
+
+.write-properties-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.write-properties-tabs button {
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ds-text-muted, #71717a);
+  font-size: 12px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.write-properties-tabs button.is-active {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+  color: var(--ds-text, #1f2328);
+}
+
+.write-properties-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.write-properties-kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ds-text-muted, #71717a);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.write-properties-kind:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+}
+
+.write-properties-key {
+  width: 140px;
+  border: none;
+  background: transparent;
+  color: var(--ds-text-secondary, #5c616b);
+  font-size: 13px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  outline: none;
+}
+
+.write-properties-value {
+  flex: 1;
+  min-width: 60px;
+  border: none;
+  background: transparent;
+  color: var(--ds-text, #1f2328);
+  font-size: 13px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  outline: none;
+}
+
+.write-properties-key:focus,
+.write-properties-value:focus {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.04));
+}
+
+.write-properties-check {
+  accent-color: var(--ds-accent, #3b82f6);
+}
+
+.write-properties-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ds-text-faint, #9aa0a8);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.write-properties-row:hover .write-properties-remove {
+  opacity: 1;
+}
+
+.write-properties-remove:hover {
+  color: var(--ds-danger, #d93025);
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+}
+
+.write-properties-addrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ds-text-muted, #71717a);
+  font-size: 12.5px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.write-properties-addrow:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+}
+
+.write-properties-note {
+  font-size: 12px;
+  color: var(--ds-text-muted, #71717a);
+  margin-bottom: 6px;
+}
+
+.write-properties-yaml {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--ds-border, rgba(0, 0, 0, 0.09));
+  border-radius: 6px;
+  background: var(--ds-background, #fff);
+  color: var(--ds-text, #1f2328);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  padding: 6px 8px;
+  resize: vertical;
+  outline: none;
+}
+
+.write-properties-error {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ds-danger, #d93025);
+}
+
+/* find bar */
+.write-find-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ds-border, rgba(0, 0, 0, 0.09));
+  background: var(--ds-surface-elevated, var(--ds-card, #fafbfc));
+}
+
+.write-find-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.write-find-input {
+  flex: 1;
+  min-width: 120px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--ds-border, rgba(0, 0, 0, 0.12));
+  border-radius: 6px;
+  background: var(--ds-background, #fff);
+  color: var(--ds-text, #1f2328);
+  font-size: 13px;
+  outline: none;
+}
+
+.write-find-input:focus {
+  border-color: var(--ds-accent, #3b82f6);
+}
+
+.write-find-count {
+  min-width: 52px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ds-text-faint, #8b8f98);
+  font-variant-numeric: tabular-nums;
+}
+
+.write-find-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ds-text-secondary, #5c616b);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.write-find-button:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+  color: var(--ds-text, #1f2328);
+}
+
+.write-find-button.is-active {
+  background: color-mix(in srgb, var(--ds-accent, #3b82f6) 14%, transparent);
+  color: var(--ds-accent, #3b82f6);
+}
+
+.write-find-text-button {
+  padding: 0 8px;
+}
+
+.write-find-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.write-rich-host .ProseMirror .search-match {
+  background: rgba(250, 204, 21, 0.4);
+  border-radius: 2px;
+}
+
+.write-rich-host .ProseMirror .search-match-current {
+  background: rgba(249, 115, 22, 0.55);
+}
+
+/* outline rail */
+.write-rich-scroll-wrap {
+  position: relative;
+  container-type: inline-size;
+  container-name: write-rich;
+}
+
+.write-outline-rail {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  z-index: 40;
+}
+
+.write-outline-ticks {
+  position: absolute;
+  top: 24px;
+  right: 4px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 8px;
+  opacity: 0.35;
+  transition: opacity 0.15s ease;
+}
+
+.write-outline-rail:hover .write-outline-ticks,
+.write-outline-rail:focus-within .write-outline-ticks {
+  opacity: 0.15;
+}
+
+.write-outline-tick {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--ds-text-faint, #8b8f98);
+}
+
+.write-outline-tick.level-1 {
+  width: 8px;
+}
+
+.write-outline-tick.level-2 {
+  width: 6px;
+}
+
+.write-outline-tick.level-3,
+.write-outline-tick.level-4,
+.write-outline-tick.level-5,
+.write-outline-tick.level-6 {
+  width: 4px;
+}
+
+.write-outline-tick.is-active {
+  background: var(--ds-accent, #3b82f6);
+}
+
+.write-outline-panel {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  bottom: 8px;
+  width: 220px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--ds-border, rgba(0, 0, 0, 0.09));
+  background: var(--ds-surface-elevated, var(--ds-card, #fff));
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.14);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(6px);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.write-outline-rail:hover .write-outline-panel,
+.write-outline-rail:focus-within .write-outline-panel {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.write-outline-item {
+  display: block;
+  width: 100%;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ds-text-secondary, #5c616b);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.write-outline-item:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+  color: var(--ds-text, #1f2328);
+}
+
+.write-outline-item.is-active {
+  color: var(--ds-accent, #3b82f6);
+}
+
+.write-outline-item.level-2 {
+  padding-left: 20px;
+}
+
+.write-outline-item.level-3,
+.write-outline-item.level-4,
+.write-outline-item.level-5,
+.write-outline-item.level-6 {
+  padding-left: 32px;
+}
+
+.write-outline-flash {
+  animation: writeOutlineFlash 1.2s ease;
+}
+
+@keyframes writeOutlineFlash {
+  0% {
+    background: color-mix(in srgb, var(--ds-accent, #3b82f6) 22%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+/* hide outline under 18rem wide editors */
+@container write-rich (max-width: 18rem) {
+  .write-outline-rail {
+    display: none;
+  }
+}
+
+/* placeholder */
+.write-rich-host .ProseMirror p.is-empty::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  color: var(--ds-text-faint, #9aa0a8);
+  pointer-events: none;
+  height: 0;
+}

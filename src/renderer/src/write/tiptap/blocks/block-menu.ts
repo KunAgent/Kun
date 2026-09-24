@@ -228,6 +228,7 @@ export function openBlockMenu(deps: BlockMenuDeps, target: BlockTarget, anchor: 
   const stopAutoUpdate = autoUpdate(virtualAnchor, dom, () => {
     void computePosition(virtualAnchor, dom, {
       placement: 'bottom-start',
+      strategy: 'fixed',
       middleware: [offset(4), flip(), shift({ padding: 8 })]
     }).then(({ x, y }) => {
       dom.style.left = `${x}px`

@@ -247,57 +247,47 @@
   background: var(--ds-hover, rgba(0, 0, 0, 0.06));
 }
 
-/* ---- S5 block experience ------------------------------------------ */
-
-.write-block-handle-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-  z-index: 30;
-}
-
-.write-block-grip {
+/* hover gutter: '+' inserts a block and opens the slash menu, '⋮⋮'
+   opens the block menu and starts drag-moves. */
+.write-block-handle {
   position: absolute;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  pointer-events: auto;
-  opacity: 0;
-  transition: opacity 0.12s ease;
-  transform: translateX(-46px);
+  gap: 1px;
+  z-index: 30;
+  user-select: none;
 }
 
-.write-block-grip.is-visible {
-  opacity: 1;
-}
-
-.write-block-grip-button {
+.write-block-handle-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border: none;
   border-radius: 5px;
   background: transparent;
-  color: var(--text-tertiary, #8b8f98);
+  color: var(--ds-text-faint, #8b8f98);
+  font-size: 17px;
+  line-height: 1;
   cursor: pointer;
   padding: 0;
 }
 
-.write-block-grip-button:hover {
-  background: var(--bg-hover, rgba(0, 0, 0, 0.06));
-  color: var(--text-secondary, #5c616b);
+.write-block-handle-grip {
+  font-size: 11px;
+  letter-spacing: -1.5px;
+  cursor: grab;
 }
 
-.write-block-grip-button svg {
-  width: 15px;
-  height: 15px;
+.write-block-handle-button:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+  color: var(--ds-text-secondary, #5c616b);
 }
 
+/* block context menu (anchored via floating-ui, fixed strategy) */
 .write-block-menu {
-  position: absolute;
+  position: fixed;
   display: flex;
   flex-direction: column;
   min-width: 190px;
@@ -305,10 +295,10 @@
   overflow-y: auto;
   padding: 4px;
   border-radius: 9px;
-  border: 1px solid var(--border, rgba(0, 0, 0, 0.09));
-  background: var(--bg-elevated, #fff);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.12);
-  z-index: 60;
+  border: 1px solid var(--ds-border, rgba(0, 0, 0, 0.09));
+  background: var(--ds-surface-elevated, var(--ds-card, #fff));
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.14);
+  z-index: 80;
   font-size: 13px;
 }
 
@@ -320,49 +310,115 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--text-primary, #1f2328);
+  color: var(--ds-text, #1f2328);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
   white-space: nowrap;
 }
 
-.write-block-menu-item:hover {
-  background: var(--bg-hover, rgba(0, 0, 0, 0.06));
+.write-block-menu-item:hover:not(:disabled) {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
 }
 
-.write-block-menu-sep {
+.write-block-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.write-block-menu-separator {
   height: 1px;
   margin: 4px 6px;
-  background: var(--border, rgba(0, 0, 0, 0.09));
+  background: var(--ds-border, rgba(0, 0, 0, 0.09));
 }
 
-.write-block-menu-label {
+.write-block-menu-header {
   padding: 4px 10px 2px;
   font-size: 11px;
-  color: var(--text-tertiary, #8b8f98);
+  color: var(--ds-text-faint, #8b8f98);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
-/* slash menu reuses block menu styles; narrow */
+/* slash command menu */
 .write-slash-menu {
-  min-width: 210px;
+  position: fixed;
+  min-width: 230px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+  border-radius: 9px;
+  border: 1px solid var(--ds-border, rgba(0, 0, 0, 0.09));
+  background: var(--ds-surface-elevated, var(--ds-card, #fff));
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.14);
+  z-index: 80;
+  font-size: 13px;
 }
 
-/* selected blocks */
+.write-slash-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.write-slash-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ds-text, #1f2328);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.write-slash-item.is-active,
+.write-slash-item:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+}
+
+.write-slash-item-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border: 1px solid var(--ds-border, rgba(0, 0, 0, 0.09));
+  border-radius: 5px;
+  background: var(--ds-card, #fff);
+  color: var(--ds-text-secondary, #5c616b);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.write-slash-item-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* left-gutter drag box selection */
+.write-block-box-select {
+  position: absolute;
+  border: 1px solid var(--ds-accent, #3b82f6);
+  background: color-mix(in srgb, var(--ds-accent, #3b82f6) 12%, transparent);
+  z-index: 25;
+  pointer-events: none;
+}
+
+/* selected blocks (node-range decorations apply the class to the block) */
 .write-rich-host .ProseMirror-selectedblock,
-.write-rich-host .ProseMirror-selectednoderange > * {
-  background: var(--accent-soft, rgba(59, 130, 246, 0.10));
-  border-radius: 6px;
-}
-
+.write-rich-host .ProseMirror-selectednoderange,
 .write-rich-host .write-block-selected {
-  background: var(--accent-soft, rgba(59, 130, 246, 0.10));
+  background: color-mix(in srgb, var(--ds-accent, #3b82f6) 10%, transparent);
   border-radius: 6px;
 }
 
-/* table toolbar */
+/* table toolbar (absolute inside the editor mount) */
 .write-table-toolbar {
   position: absolute;
   display: flex;
@@ -370,9 +426,9 @@
   gap: 2px;
   padding: 3px 4px;
   border-radius: 8px;
-  border: 1px solid var(--border, rgba(0, 0, 0, 0.09));
-  background: var(--bg-elevated, #fff);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--ds-border, rgba(0, 0, 0, 0.09));
+  background: var(--ds-surface-elevated, var(--ds-card, #fff));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   z-index: 55;
 }
 
@@ -386,269 +442,26 @@
   border: none;
   border-radius: 5px;
   background: transparent;
-  color: var(--text-secondary, #5c616b);
-  font-size: 12px;
+  color: var(--ds-text-secondary, #5c616b);
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .write-table-toolbar-button:hover {
-  background: var(--bg-hover, rgba(0, 0, 0, 0.06));
-  color: var(--text-primary, #1f2328);
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+  color: var(--ds-text, #1f2328);
 }
 
 .write-table-toolbar-button.is-danger:hover {
-  color: var(--danger, #d93025);
+  color: var(--ds-danger, #d93025);
 }
 
 .write-table-toolbar-sep {
   width: 1px;
   height: 16px;
   margin: 0 3px;
-  background: var(--border, rgba(0, 0, 0, 0.09));
+  background: var(--ds-border, rgba(0, 0, 0, 0.09));
 }
 
-/* find bar */
-.write-find-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border, rgba(0, 0, 0, 0.09));
-  background: var(--bg-elevated, #fafbfc);
-}
-
-.write-find-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.write-find-input {
-  flex: 1;
-  min-width: 120px;
-  height: 26px;
-  padding: 0 8px;
-  border: 1px solid var(--border, rgba(0, 0, 0, 0.12));
-  border-radius: 6px;
-  background: var(--bg-input, #fff);
-  color: var(--text-primary, #1f2328);
-  font-size: 13px;
-  outline: none;
-}
-
-.write-find-input:focus {
-  border-color: var(--accent, #3b82f6);
-}
-
-.write-find-count {
-  min-width: 52px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--text-tertiary, #8b8f98);
-  font-variant-numeric: tabular-nums;
-}
-
-.write-find-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 26px;
-  min-width: 26px;
-  padding: 0 6px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-secondary, #5c616b);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.write-find-button:hover {
-  background: var(--bg-hover, rgba(0, 0, 0, 0.06));
-  color: var(--text-primary, #1f2328);
-}
-
-.write-find-button.is-active {
-  background: var(--accent-soft, rgba(59, 130, 246, 0.14));
-  color: var(--accent, #3b82f6);
-}
-
-.write-find-button svg {
-  width: 14px;
-  height: 14px;
-}
-
-.write-rich-host .ProseMirror .search-match {
-  background: rgba(250, 204, 21, 0.4);
-  border-radius: 2px;
-}
-
-.write-rich-host .ProseMirror .search-match-current {
-  background: rgba(249, 115, 22, 0.55);
-}
-
-/* outline rail */
-.write-rich-scroll-wrap {
-  position: relative;
-  container-type: inline-size;
-  container-name: write-rich;
-}
-
-.write-outline-rail {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 14px;
-  z-index: 40;
-}
-
-.write-outline-ticks {
-  position: absolute;
-  top: 24px;
-  right: 4px;
-  bottom: 24px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  width: 8px;
-  opacity: 0.35;
-  transition: opacity 0.15s ease;
-}
-
-.write-outline-rail:hover .write-outline-ticks,
-.write-outline-rail:focus-within .write-outline-ticks {
-  opacity: 0.15;
-}
-
-.write-outline-tick {
-  display: block;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--text-tertiary, #8b8f98);
-}
-
-.write-outline-tick.level-1 {
-  width: 8px;
-}
-
-.write-outline-tick.level-2 {
-  width: 6px;
-}
-
-.write-outline-tick.level-3,
-.write-outline-tick.level-4,
-.write-outline-tick.level-5,
-.write-outline-tick.level-6 {
-  width: 4px;
-}
-
-.write-outline-tick.is-active {
-  background: var(--accent, #3b82f6);
-}
-
-.write-outline-panel {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  bottom: 8px;
-  width: 220px;
-  overflow-y: auto;
-  padding: 6px;
-  border-radius: 10px;
-  border: 1px solid var(--border, rgba(0, 0, 0, 0.09));
-  background: var(--bg-elevated, #fff);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.12);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(6px);
-  transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
-}
-
-.write-outline-rail:hover .write-outline-panel,
-.write-outline-rail:focus-within .write-outline-panel {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateX(0);
-}
-
-.write-outline-item {
-  display: block;
-  width: 100%;
-  padding: 3px 8px;
-  border: none;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-secondary, #5c616b);
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.write-outline-item:hover {
-  background: var(--bg-hover, rgba(0, 0, 0, 0.06));
-  color: var(--text-primary, #1f2328);
-}
-
-.write-outline-item.is-active {
-  color: var(--accent, #3b82f6);
-}
-
-.write-outline-item.level-2 {
-  padding-left: 20px;
-}
-
-.write-outline-item.level-3,
-.write-outline-item.level-4,
-.write-outline-item.level-5,
-.write-outline-item.level-6 {
-  padding-left: 32px;
-}
-
-.write-outline-flash {
-  animation: writeOutlineFlash 1.2s ease;
-}
-
-@keyframes writeOutlineFlash {
-  0% {
-    background: var(--accent-soft, rgba(59, 130, 246, 0.22));
-  }
-  100% {
-    background: transparent;
-  }
-}
-
-/* hide outline under 18rem wide editors */
-@container write-rich (max-width: 18rem) {
-  .write-outline-rail {
-    display: none;
-  }
-}
-
-/* placeholder */
-.write-rich-host .ProseMirror p.is-empty::before {
-  content: attr(data-placeholder);
-  position: absolute;
-  color: var(--text-tertiary, #9aa0a8);
-  pointer-events: none;
-  height: 0;
-}
-
-/* document title (§9.6) */
-.write-doc-title {
-  padding: 18px 24px 4px;
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1.3;
-  color: var(--text-primary, #1f2328);
-  max-width: 760px;
-  width: 100%;
-  margin: 0 auto;
-  user-select: none;
-}

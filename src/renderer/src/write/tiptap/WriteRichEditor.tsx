@@ -159,6 +159,7 @@ export function WriteRichEditor({
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const scrollHostRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor | null>(null)
   const workspaceRootRef = useRef(workspaceRoot ?? '')
   const filePathRef = useRef(filePath ?? '')
@@ -649,24 +650,28 @@ export function WriteRichEditor({
           onRejectAll={() => reviewSessionRef.current?.resolveAll('reject')}
         />
       ) : null}
-      <WritePropertiesPanel
-        frontmatter={frontmatter}
-        onFrontmatterChange={handleFrontmatterChange}
-        readOnly={readOnly}
-      />
       <WriteFindBar
         editor={mountedEditor}
         open={findBar.open}
         withReplace={findBar.withReplace}
         onClose={() => setFindBar({ open: false, withReplace: false })}
       />
-      {fileName ? <div className="write-doc-title" aria-hidden="true">{fileName}</div> : null}
       <div className="write-rich-scroll-wrap relative flex min-h-0 w-full min-w-0 flex-1">
         <div
-          ref={hostRef}
+          ref={scrollHostRef}
           className="write-rich-host flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto"
-        />
-        <WriteOutlineRail editor={mountedEditor} scrollHost={hostRef.current} />
+        >
+          <div className="write-doc-head">
+            <WritePropertiesPanel
+              frontmatter={frontmatter}
+              onFrontmatterChange={handleFrontmatterChange}
+              readOnly={readOnly}
+            />
+            {fileName ? <div className="write-doc-title" aria-hidden="true">{fileName}</div> : null}
+          </div>
+          <div ref={hostRef} className="write-rich-editor-mount" />
+        </div>
+        <WriteOutlineRail editor={mountedEditor} scrollHost={scrollHostRef.current} />
       </div>
     </div>
   )

@@ -223,7 +223,11 @@ export const WriteSlashMenu = Extension.create<WriteSlashMenuOptions>({
             void computePosition(
               { getBoundingClientRect: () => rect },
               dom,
-              { placement: 'bottom-start', middleware: [offset(6), flip(), shift({ padding: 8 })] }
+              {
+                placement: 'bottom-start',
+                strategy: 'fixed',
+                middleware: [offset(6), flip(), shift({ padding: 8 })]
+              }
             ).then(({ x, y }) => {
               if (!dom) return
               dom.style.left = `${x}px`
