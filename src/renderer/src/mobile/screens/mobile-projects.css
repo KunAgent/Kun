@@ -65,7 +65,7 @@
   overscroll-behavior: contain;
 }
 .kun-mobile-recent { margin-bottom: 12px; }
-.kun-mobile-recent > h2 {
+:is(.kun-mobile-recent, .kun-mobile-projects-section) > h2 {
   margin: 0 0 2px;
   font-size: 13px;
   font-weight: 600;

@@ -2,6 +2,7 @@ import { ArrowLeft, MonitorSmartphone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { APP_LOCALE_OPTIONS } from '@shared/app-locales'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
+import { isRemoteWeb, writeRemoteLocaleOverride } from '../../lib/remote-mobile'
 import { useChatStore } from '../../store/chat-store'
 import { MobileCodeSettingsBody } from '../chat/MobileCodeSettings'
 import { switchRemoteSurface } from '../use-remote-surface'
@@ -22,7 +23,10 @@ export function MobileSettingsScreen({ onBack }: { onBack: () => void }): React.
   const pickLocale = (value: (typeof APP_LOCALE_OPTIONS)[number]['value']): void => {
     if (value === activeLocale) return
     void applyI18n(value)
-    void rendererRuntimeClient.setSettings({ locale: value }).catch(() => undefined)
+    // Remote language is per-device browser storage — writing the host's
+    // settings would switch the desktop UI language too.
+    if (isRemoteWeb()) writeRemoteLocaleOverride(value)
+    else void rendererRuntimeClient.setSettings({ locale: value }).catch(() => undefined)
   }
 
   return (

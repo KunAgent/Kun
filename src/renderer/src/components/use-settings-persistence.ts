@@ -4,6 +4,7 @@ import {
 } from '@shared/app-settings'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { emitRendererSettingsChanged } from '../lib/keyboard-shortcut-settings'
+import { isRemoteWeb, readRemoteLocaleOverride } from '../lib/remote-mobile'
 import {
   expandSettingsHomePathsForUse
 } from '../lib/settings-home-paths'
@@ -32,6 +33,10 @@ export function useSettingsPersistence(scope: Record<string, any>): Record<strin
         settingsPlatform
       )
       const patch = diffSettingsPatch(expandedBase, expandedSnapshot)
+      // A Remote client's language is per-device browser storage; persisting
+      // it would relabel the host UI, and re-applying the host locale would
+      // clobber the device pick.
+      if (isRemoteWeb()) delete patch.locale
       const next = coerceRendererSettings(
         Object.keys(patch).length > 0
           ? await rendererRuntimeClient.setSettings(patch)
@@ -42,7 +47,7 @@ export function useSettingsPersistence(scope: Record<string, any>): Record<strin
       persistedSettingsRef.current = next
       setForm(next)
       emitRendererSettingsChanged(next)
-      await applyI18n(next.locale)
+      await applyI18n(readRemoteLocaleOverride() ?? next.locale)
       void reloadUiSettings()
       void probeRuntime('background')
       if (version !== draftVersion.current) return
@@ -121,6 +126,7 @@ export function useSettingsPersistence(scope: Record<string, any>): Record<strin
       settingsPlatform
     )
     const patch = diffSettingsPatch(expandedBase, expandedSnapshot)
+    if (isRemoteWeb()) delete patch.locale
     void rendererRuntimeClient
       .setSettings(patch)
       .then((saved) => {
@@ -129,7 +135,7 @@ export function useSettingsPersistence(scope: Record<string, any>): Record<strin
         emitRendererSettingsChanged(next)
         // App-wide effects the normal save path runs, so a last-moment locale or
         // UI-token edit still takes effect immediately rather than on next start.
-        void applyI18n(next.locale)
+        void applyI18n(readRemoteLocaleOverride() ?? next.locale)
         void reloadUiSettings()
       })
       .catch((e) => {

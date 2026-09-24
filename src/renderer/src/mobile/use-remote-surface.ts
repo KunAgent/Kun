@@ -10,6 +10,16 @@ export function readRemoteSurfaceOverride(): RemoteSurface | null {
     const param = new URL(window.location.href).searchParams.get('surface')
     if (param === 'mobile' || param === 'desktop') {
       window.sessionStorage.setItem(REMOTE_SURFACE_OVERRIDE_KEY, param)
+      // Consume the param once — it lands in sessionStorage and must not keep
+      // beating a later "use the other layout" pick on every reload.
+      try {
+        const url = new URL(window.location.href)
+        url.searchParams.delete('surface')
+        window.history.replaceState(window.history.state, '', url)
+      } catch {
+        // file:// or a restrictive embed may forbid replaceState; the stored
+        // value still wins for the rest of this session.
+      }
       return param
     }
     const stored = window.sessionStorage.getItem(REMOTE_SURFACE_OVERRIDE_KEY)

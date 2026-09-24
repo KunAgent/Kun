@@ -116,7 +116,11 @@ export function MobileHome({
                     {activity ? (
                       <span className="kun-mobile-activity" data-kind={activity.kind}>{activity.label}</span>
                     ) : null}
-                    <span className="kun-mobile-thread-preview">{thread.summary || thread.preview || thread.model}</span>
+                    {/* No summary/preview means no second line — falling back to
+                        the model name filled every row with "deepseek-chat". */}
+                    {thread.summary || thread.preview ? (
+                      <span className="kun-mobile-thread-preview">{thread.summary || thread.preview}</span>
+                    ) : null}
                   </span>
                 </button>
                 {onThreadMenu ? <button type="button" className="kun-mobile-icon-button" onClick={() => onThreadMenu(thread.id)}

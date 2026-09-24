@@ -14,6 +14,7 @@ import {
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
 import { formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
 import { isAppQuitting, markAppQuitting } from '../lib/app-quitting'
+import { readRemoteLocaleOverride } from '../lib/remote-mobile'
 import {
   deriveThreadTitleFromPrompt,
   getDefaultThreadTitle,
@@ -300,7 +301,7 @@ export function createNavigationRuntimeActions(
         applyCursorSpotlightColor(settings.cursorSpotlightColor)
         applyDarkUiColors(settings.darkUiColors)
         if (settings.write?.typography) applyWriteTypography(settings.write.typography)
-        await get().applyI18nFromSettings(settings.locale)
+        await get().applyI18nFromSettings(readRemoteLocaleOverride() ?? settings.locale)
         if (!appQuittingUnsubscribe && typeof window.kunGui.onAppQuitting === 'function') {
           appQuittingUnsubscribe = window.kunGui.onAppQuitting(() => {
             markAppQuitting()

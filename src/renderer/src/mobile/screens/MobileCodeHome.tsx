@@ -8,8 +8,7 @@ import { removedWorkspaceIdentityKeys } from '../../lib/removed-code-workspaces'
 import { useThreadClassificationRegistries } from '../../lib/thread-classification-registries'
 import { isCodeThread } from '../../store/chat-store-runtime-projection-support'
 import {
-  selectCodeProjectRoots,
-  selectCodeProjectThreads,
+  selectCodeProjectGroups,
   sortSidebarThreads,
   type SidebarThreadActivityContext
 } from '../../components/chat/sidebar-project-selectors'
@@ -113,14 +112,10 @@ export function MobileCodeHome({ onOpen, onOpenSettings }: {
   // The shared reader keeps the parsed values identity-stable while the
   // stored strings are unchanged, so list churn skips the recompute below.
   const classification = useThreadClassificationRegistries(chat.threads)
-  // Project roots only depend on a thread's id/workspace/surface/archive
-  // flag — status or title churn must not re-run project classification.
-  const projectSignature = useMemo(() => chat.threads.map((thread) =>
-    [thread.id, thread.workspace, thread.agentSurface ?? '', thread.archived ? '1' : '0']
-      .join(' ')
-  ).join(' '), [chat.threads])
-  const projects = useMemo(() => selectCodeProjectRoots({
-    threads: useChatStore.getState().threads,
+  // Groups carry their threads, so project meta is one pass over the list
+  // instead of a full-inventory scan per project row on every thread update.
+  const projectGroups = useMemo(() => selectCodeProjectGroups({
+    threads: chat.threads,
     workspaceRoot: chat.root,
     workspaceRoots: chat.roots,
     conversationRoot: chat.conversationRoot,
@@ -130,10 +125,8 @@ export function MobileCodeHome({ onOpen, onOpenSettings }: {
     writeRegistry: classification.writeRegistry,
     designRegistry: classification.designRegistry,
     sddRegistry: classification.sddRegistry
-    // chat.threads is read through the signature above — a plain dep would
-    // re-classify on every unrelated thread field update.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [chat.clawChannels, chat.conversationRoot, chat.removed, chat.root, chat.roots, classification, projectSignature])
+  }), [chat.clawChannels, chat.conversationRoot, chat.removed, chat.root, chat.roots, chat.threads, classification])
+  const projects = useMemo(() => projectGroups.map(([workspacePath]) => workspacePath), [projectGroups])
   const codeThreads = useMemo(() => sortSidebarThreads(chat.threads.filter((thread) =>
     isCodeThread(thread, chat.clawChannels, classification.writeRegistry,
       classification.designRegistry, classification.sddRegistry)
@@ -141,17 +134,7 @@ export function MobileCodeHome({ onOpen, onOpenSettings }: {
   const recent = useMemo(() => codeThreads.slice(0, RECENT_LIMIT), [codeThreads])
   const projectMeta = useMemo(() => {
     const meta = new Map<string, { lastActive: string; activity: MobileThreadActivity | null }>()
-    for (const root of projects) {
-      const threads = selectCodeProjectThreads({
-        threads: chat.threads,
-        projectRoot: root,
-        workspaceRoots: chat.roots,
-        threadWorktrees: classification.threadWorktrees,
-        clawChannels: chat.clawChannels,
-        writeRegistry: classification.writeRegistry,
-        designRegistry: classification.designRegistry,
-        sddRegistry: classification.sddRegistry
-      })
+    for (const [root, threads] of projectGroups) {
       meta.set(workspaceRootIdentityKey(root) || root, {
         lastActive: threads.reduce((latest, thread) =>
           !latest || Date.parse(thread.updatedAt) > Date.parse(latest) ? thread.updatedAt : latest, ''),
@@ -159,7 +142,7 @@ export function MobileCodeHome({ onOpen, onOpenSettings }: {
       })
     }
     return meta
-  }, [projects, chat.threads, chat.roots, chat.clawChannels, classification, activityContext, t])
+  }, [projectGroups, activityContext, t])
   const visible = useMemo(() => {
     const query = search.trim().toLowerCase()
     if (!query) return projects
@@ -230,21 +213,26 @@ export function MobileCodeHome({ onOpen, onOpenSettings }: {
           </ul>
         </section>
       ) : null}
-      {visible.map((root) => {
-        const label = workspaceLabelFromPath(root)
-        const context = projectContext(root, label)
-        const meta = projectMeta.get(workspaceRootIdentityKey(root) || root)
-        return <button type="button" className="kun-mobile-project-row" key={workspaceRootIdentityKey(root) || root} disabled={switching}
-          title={root} onClick={() => { void enter(root) }}>
-          <Folder size={20} aria-hidden />
-          <span><strong>{label}</strong>{context ? <small>{context}</small> : null}</span>
-          <time className="kun-mobile-project-time">
-            {meta?.activity ? <span className="kun-mobile-status-dot" data-kind={meta.activity.kind} aria-hidden /> : null}
-            {meta?.lastActive ? mobileRelativeTime(meta.lastActive, i18n.language) : ''}
-          </time>
-          <ChevronRight size={18} aria-hidden />
-        </button>
-      })}
+      {visible.length ? (
+        <section className="kun-mobile-projects-section" aria-label={t('mobileCodeProjects')}>
+          <h2>{t('mobileCodeProjects')}</h2>
+          {visible.map((root) => {
+            const label = workspaceLabelFromPath(root)
+            const context = projectContext(root, label)
+            const meta = projectMeta.get(workspaceRootIdentityKey(root) || root)
+            return <button type="button" className="kun-mobile-project-row" key={workspaceRootIdentityKey(root) || root} disabled={switching}
+              title={root} onClick={() => { void enter(root) }}>
+              <Folder size={20} aria-hidden />
+              <span><strong>{label}</strong>{context ? <small>{context}</small> : null}</span>
+              <time className="kun-mobile-project-time">
+                {meta?.activity ? <span className="kun-mobile-status-dot" data-kind={meta.activity.kind} aria-hidden /> : null}
+                {meta?.lastActive ? mobileRelativeTime(meta.lastActive, i18n.language) : ''}
+              </time>
+              <ChevronRight size={18} aria-hidden />
+            </button>
+          })}
+        </section>
+      ) : null}
       {!visible.length ? <div className="kun-mobile-project-empty">
         <p>{projects.length ? t('composerWorkspaceNoMatch') : t('mobileCodeChooseProject')}</p>
         {!projects.length ? <button type="button" className="kun-mobile-project-add" disabled={switching}

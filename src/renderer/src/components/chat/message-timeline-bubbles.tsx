@@ -333,7 +333,10 @@ function MessageBubbleImpl({
         {block.errorMessage ? (
           <p className="mt-2 text-[12px] text-red-700 dark:text-red-300">{block.errorMessage}</p>
         ) : null}
-        {!done ? (
+        {/* Mobile owns pending approvals through the composer-adjacent
+            MobilePendingActions card — rendering Allow/Deny here too would
+            duplicate the same approval with the opposite button order. */}
+        {!done && surface !== 'mobile' ? (
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"

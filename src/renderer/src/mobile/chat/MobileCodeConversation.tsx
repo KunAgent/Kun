@@ -12,6 +12,7 @@ import { MobilePendingActions } from './MobilePendingActions'
 import { MobileCodeOptions } from './MobileCodeOptions'
 import { MobileCodeThreadDetails } from './MobileCodeThreadDetails'
 import { MobileMessageActionsSheet } from './MobileMessageActionsSheet'
+import { useMobileMessageActionsStore } from '../../stores/mobile-message-actions'
 import { FloatingComposerAttachments } from '../../components/chat/FloatingComposerAttachments'
 import { useMobileCodeAttachments } from './use-mobile-code-attachments'
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/browser-storage'
@@ -57,6 +58,10 @@ export function MobileCodeConversation({ threadId, onBack, onOpenSettings }: {
     if (activeThreadId !== threadId) void selectThread(threadId)
   }, [activeThreadId, selectThread, threadId])
   useEffect(() => { setDraft(readBrowserStorageItem(draftKey(threadId)) ?? '') }, [threadId])
+  // The actions sheet lives in a global store: leaving the conversation (or
+  // switching threads without a remount) must close it, otherwise the next
+  // conversation reopens a stale panel whose rollback/fork target the old one.
+  useEffect(() => () => useMobileMessageActionsStore.getState().close(), [threadId])
   useEffect(() => { writeBrowserStorageItem(draftKey(threadId), draft) }, [draft, threadId])
   const threadReady = mobileCodeThreadReady(state.activeThreadId, threadId)
   const attachments = useMobileCodeAttachments({

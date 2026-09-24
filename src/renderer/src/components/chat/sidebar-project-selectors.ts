@@ -549,7 +549,7 @@ export function selectCodeProjectThreads(options: {
  * sidebar would show (worktree owners folded into their project, removed and
  * internal workspaces hidden), reduced to display paths.
  */
-export function selectCodeProjectRoots(options: {
+export function selectCodeProjectGroups(options: {
   threads: readonly NormalizedThread[]
   workspaceRoot: string
   workspaceRoots: readonly string[]
@@ -560,7 +560,7 @@ export function selectCodeProjectRoots(options: {
   writeRegistry?: WriteThreadRegistry
   designRegistry?: DesignThreadRegistry
   sddRegistry?: SddThreadRegistry
-}): string[] {
+}): SidebarWorkspaceGroup[] {
   // Only Code-surface threads contribute a project: a Write/Design-only
   // workspace must not appear in the mobile Code picker.
   const codeThreads = options.threads.filter((thread) =>
@@ -581,7 +581,22 @@ export function selectCodeProjectRoots(options: {
     conversationRoot: options.conversationRoot,
     threadWorktrees: options.threadWorktrees,
     removedProjectKeys: options.removedProjectKeys
-  }).map(([workspacePath]) => workspacePath)
+  })
+}
+
+export function selectCodeProjectRoots(options: {
+  threads: readonly NormalizedThread[]
+  workspaceRoot: string
+  workspaceRoots: readonly string[]
+  conversationRoot: string
+  threadWorktrees?: SidebarThreadWorktrees
+  removedProjectKeys?: ReadonlySet<string>
+  clawChannels?: ClawImChannelV1[]
+  writeRegistry?: WriteThreadRegistry
+  designRegistry?: DesignThreadRegistry
+  sddRegistry?: SddThreadRegistry
+}): string[] {
+  return selectCodeProjectGroups(options).map(([workspacePath]) => workspacePath)
 }
 
 export function sddDraftHistoryForWorkspace(

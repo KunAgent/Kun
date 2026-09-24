@@ -6,7 +6,9 @@ export type RemoteSurfaceEnvironment = {
   coarsePointer: boolean
   screenWidth: number
   screenHeight: number
-  /** Explicit user choice (?surface= or sessionStorage); wins over every heuristic. */
+  /** Explicit user choice (?surface= or sessionStorage); Remote clients only —
+   * the desktop shell must never be trapped in the phone layout by a stray
+   * stored value. */
   override?: RemoteSurface | null
 }
 
@@ -26,10 +28,10 @@ export function resolveRemoteSurface(
   environment: RemoteSurfaceEnvironment,
   previous?: RemoteSurface
 ): RemoteSurface {
+  if (!environment.remote) return 'desktop'
   if (environment.override === 'mobile' || environment.override === 'desktop') {
     return environment.override
   }
-  if (!environment.remote) return 'desktop'
   if (isPositiveFinite(environment.viewportWidth)) {
     if (environment.viewportWidth <= MOBILE_MAX_WIDTH) return 'mobile'
     if (environment.viewportWidth > MOBILE_EXIT_WIDTH) return 'desktop'
