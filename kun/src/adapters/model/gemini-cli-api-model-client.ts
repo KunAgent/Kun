@@ -260,7 +260,8 @@ export class GeminiCliApiModelClient implements ModelClient {
         status,
         providerCode: providerError.status,
         body: providerError.message,
-        headers: result.response.headers
+        headers: result.response.headers,
+        retryAfterMs: providerError.retryAfterMs
       })
       const budget = httpRetryBudget({
         reason: classification.reason,
@@ -318,11 +319,9 @@ export class GeminiCliApiModelClient implements ModelClient {
             status: response.status,
             providerCode: error.status,
             body: error.message,
-            headers: response.headers
-          }),
-          ...(error.retryAfterMs !== undefined
-            ? { retryAfterMs: error.retryAfterMs }
-            : {})
+            headers: response.headers,
+            retryAfterMs: error.retryAfterMs
+          })
         }
       }
       return

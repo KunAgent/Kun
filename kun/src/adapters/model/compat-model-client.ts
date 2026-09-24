@@ -4,8 +4,8 @@ import { startLlmDebugRoundIfEnabled, type LlmDebugRound } from '../../services/
 import { exponentialRetryDelayMs, normalizeModelRequestRetryConfig, retryDelayMs, sleepWithAbort } from './compat-retry-policy.js'
 import { CompatModelStreamingClient } from './compat-model-client-stream.js'
 import { summarizeModelRetryFailure } from './model-retry-failure-summary.js'
-import { providerErrorCode, summarizeHttpErrorBody } from './compat-http-diagnostics.js'
-import { classifyModelFailure, httpRetryBudget } from './failure-reason.js'
+import { summarizeHttpErrorBody } from './compat-http-diagnostics.js'
+import { httpFailureRetryDecision } from './failure-reason.js'
 import type { ChatCompletionResponse, CompatModelClientConfig, CompatPostResult } from './compat-model-types.js'
 import {
   buildChatCompletionsUrl,
@@ -132,7 +132,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       }
       return
     }
-    const url = buildModelEndpointUrl(this.config.baseUrl, configuredEndpointFormat)
+    const url = buildModelEndpointUrl(this.baseUrlForFormat(configuredEndpointFormat), configuredEndpointFormat)
     // Codex Responses only accepts streamed requests; explicit stream:false
     // callers (subagents, background distillations) get forced streaming.
     const stream = isCodex ? true : (request.stream ?? !this.config.nonStreaming)
@@ -240,17 +240,12 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       // report share it, so a consumed response never gets read twice.
       const status = result.response.status
       const errorBody = await readLimitedResponseText(result.response, maxErrorBodyBytes)
-      const classification = classifyModelFailure({
+      const { budget } = httpFailureRetryDecision({
         status,
-        providerCode: providerErrorCode(errorBody.exceeded ? '' : errorBody.text),
         body: errorBody.exceeded ? '' : errorBody.text,
-        headers: result.response.headers
-      })
-      const budget = httpRetryBudget({
-        reason: classification.reason,
-        retryAfterMs: classification.retryAfterMs,
+        headers: result.response.headers,
         alternatives: request.failover?.alternatives,
-        policy: retry
+        policyMaxAttempts: retry.maxAttempts
       })
       if (transportRetryAttempt >= budget.maxAttempts) {
         terminalErrorBody = errorBody

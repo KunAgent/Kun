@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import type { KunGuiApi } from '../shared/kun-gui-api'
+import { providerBridge } from './provider-bridge'
 import type { ProviderMutationFlushRequestHandler } from '../shared/provider-mutation-barrier'
 import { normalizeDesktopTitleBarMode } from '../shared/desktop-title-bar'
 import { registerExtensionContentScriptPreload } from './extension-content-script'
@@ -116,9 +117,7 @@ const api = {
   restartRuntime: () => ipcRenderer.invoke('runtime:restart'),
   restartKunServe: () => ipcRenderer.invoke('runtime:restart-serve'),
   fetchUpstreamModels: () => ipcRenderer.invoke('upstream:models'),
-  probeModelProvider: (payload) => ipcRenderer.invoke('provider:probe', payload),
-  listProviderQuotas: () => ipcRenderer.invoke('provider:quota:list'),
-  fetchModelsDevCatalog: (payload) => ipcRenderer.invoke('provider:models-dev-catalog', payload),
+  ...providerBridge,
   optimizePrompt: (payload) => ipcRenderer.invoke('prompt:optimize', payload),
   getClawStatus: () => ipcRenderer.invoke('claw:status'),
   runClawTask: (taskId) => ipcRenderer.invoke('claw:task:run', taskId),

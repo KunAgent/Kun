@@ -2,6 +2,7 @@ import {
   defaultKunTokenEconomySettings,
   getModelProviderSettings,
   projectExecutableModelRoutePools,
+  projectFailoverGroupsForRuntime,
   resolveKunRuntimeSettings,
   resolveModelProviderPresetSource,
   resolveProviderProxyUrl,
@@ -88,6 +89,7 @@ export function providersConfigForRuntime(
         ? { authType: 'subscription' }
         : {}),
       ...(provider.endpointFormat ? { endpointFormat: provider.endpointFormat } : {}),
+      ...(provider.endpoints ? { endpoints: provider.endpoints } : {}),
       models: [...provider.models],
       modelCapabilities: modelCapabilitiesForProviderConfig(provider),
       ...(selectedModel ? { selectedModel } : {}),
@@ -137,6 +139,10 @@ function modelCapabilitiesForProviderConfig(
 export function routePoolsConfigForRuntime(settings: AppSettingsV1) {
   const providerSettings = getModelProviderSettings(settings)
   return projectExecutableModelRoutePools(providerSettings)
+}
+
+export function providerFailoverConfigForRuntime(settings: AppSettingsV1) {
+  return projectFailoverGroupsForRuntime(getModelProviderSettings(settings))
 }
 
 export function localModelGatewayConfigForRuntime(settings: AppSettingsV1) {

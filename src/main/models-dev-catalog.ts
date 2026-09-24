@@ -1,20 +1,35 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import {
-  MAX_MODEL_CONTEXT_WINDOW_TOKENS,
-  MAX_MODEL_OUTPUT_TOKENS,
+  getModelProviderSettings,
   resolveModelProviderProxyUrl,
   type AppSettingsV1
 } from '../shared/app-settings'
 import type {
   ModelsDevCatalogMatchMode,
-  ModelsDevCatalogMetadataIssue,
-  ModelsDevCatalogModel,
-  ModelsDevCatalogModality,
-  ModelsDevCatalogPricing,
   ModelsDevCatalogRequest,
   ModelsDevCatalogResult,
   ModelsDevCatalogSource
 } from '../shared/kun-gui-api'
 import { fetchWithOptionalProxy } from './proxy-fetch'
+import {
+  catalogSourceLabel,
+  isRecord,
+  normalizeCatalogKeys,
+  parseCatalog,
+  sanitizeProvider,
+  type CatalogRoot
+} from './models-dev-catalog-sanitize'
+import {
+  resolveCursorModelsDevCatalog,
+  resolveFamilyModelsDevCatalog
+} from './models-dev-catalog-families'
+
+export { normalizeCatalogKeys } from './models-dev-catalog-sanitize'
+export {
+  resolveCursorModelsDevCatalog,
+  resolveFamilyModelsDevCatalog
+} from './models-dev-catalog-families'
 
 export const MODELS_DEV_CATALOG_URL = 'https://models.dev/api.json'
 // Fallback used when the public catalog is unreachable (network error, timeout,
@@ -33,20 +48,6 @@ export const MODELS_DEV_TIMEOUT_MS = 30_000
 export const KUN_AGENT_TIMEOUT_MS = 15_000
 export const MODELS_DEV_MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 
-const MAX_PROVIDER_COUNT = 1_000
-const MAX_MODEL_COUNT = 5_000
-const MAX_MODEL_ID_LENGTH = 512
-const MAX_MODEL_NAME_LENGTH = 256
-const MAX_MODEL_DESCRIPTION_LENGTH = 2_000
-const ALLOWED_MODALITIES = new Set<ModelsDevCatalogModality>([
-  'text',
-  'audio',
-  'image',
-  'video',
-  'pdf'
-])
-
-type CatalogRoot = Record<string, unknown>
 type ModelsDevFetch = typeof fetchWithOptionalProxy
 type ModelsDevProviderMatch = {
   providerKey: string
@@ -63,11 +64,6 @@ type LoadedCatalog = {
   source: ModelsDevCatalogSource
   stale: boolean
 }
-type CursorCatalogFamily = {
-  providerKey: string
-  pattern: RegExp
-}
-
 // Provider keys in the kun-agent.com catalog may differ from models.dev's.
 // Map kun-agent-specific keys onto models.dev keys so the shared matching
 // tables (PROFILE_MATCHES / URL matches) work unchanged. Fill entries in from
@@ -98,15 +94,6 @@ const PROFILE_MATCHES: Record<string, ModelsDevProviderMatch> = {
   opper: catalogMatch('opper'),
   'vercel-ai-gateway': catalogMatch('vercel')
 }
-
-const CURSOR_CATALOG_FAMILIES: readonly CursorCatalogFamily[] = [
-  { providerKey: 'openai', pattern: /^(?:gpt(?:-|$)|chatgpt(?:-|$)|codex(?:-|$)|o[1-9](?:-|$))/i },
-  { providerKey: 'anthropic', pattern: /^claude(?:-|$)/i },
-  { providerKey: 'google', pattern: /^gemini(?:-|$)/i },
-  { providerKey: 'xai', pattern: /^grok(?:-|$)/i },
-  { providerKey: 'moonshotai', pattern: /^(?:kimi|moonshot)(?:-|$)/i }
-]
-
 const XIAOMI_TOKEN_PLAN_URLS = urlMatchMap({
   'https://token-plan-cn.xiaomimimo.com/v1': 'xiaomi-token-plan-cn',
   'https://token-plan-sgp.xiaomimimo.com/v1': 'xiaomi-token-plan-sgp',
@@ -241,11 +228,69 @@ export function resolveModelsDevProvider(
 export class ModelsDevCatalogService {
   private cache: CatalogCache | null = null
   private inFlight: Promise<LoadedCatalog> | null = null
+  private diskCachePath: string | null = null
+  private diskLoaded = false
 
   constructor(
     private readonly fetcher: ModelsDevFetch = fetchWithOptionalProxy,
-    private readonly now: () => number = Date.now
-  ) {}
+    private readonly now: () => number = Date.now,
+    diskCachePath?: string
+  ) {
+    this.diskCachePath = diskCachePath ?? null
+  }
+
+  /**
+   * Disk persistence (`userData/cache/models-dev.json`): the last successful
+   * catalog (with etag and fetchedAt) survives restarts, so startup shows
+   * catalog metadata immediately and offline launches reuse the last fetch.
+   * The in-memory TTL still governs background refreshes; a failed refresh
+   * falls back to the disk-seeded cache marked stale.
+   */
+  attachDiskCache(path: string): void {
+    this.diskCachePath = path
+  }
+
+  private async loadDiskCache(): Promise<void> {
+    if (this.diskLoaded) return
+    this.diskLoaded = true
+    if (!this.diskCachePath || this.cache) return
+    try {
+      const parsed = JSON.parse(await readFile(this.diskCachePath, 'utf8')) as Partial<CatalogCache>
+      if (
+        !parsed || typeof parsed !== 'object' ||
+        !isRecord(parsed.catalog) ||
+        (parsed.source !== 'models.dev' && parsed.source !== 'kun-agent') ||
+        typeof parsed.fetchedAt !== 'number'
+      ) return
+      this.cache = {
+        catalog: parsed.catalog,
+        source: parsed.source,
+        fetchedAt: parsed.fetchedAt,
+        ...(typeof parsed.etag === 'string' ? { etag: parsed.etag } : {})
+      }
+    } catch {
+      // Missing or corrupt cache file is fine — the next refresh rewrites it.
+    }
+  }
+
+  private persistDiskCache(): void {
+    const path = this.diskCachePath
+    const cache = this.cache
+    if (!path || !cache) return
+    void (async () => {
+      try {
+        await mkdir(dirname(path), { recursive: true })
+        await writeFile(path, JSON.stringify({
+          catalog: cache.catalog,
+          source: cache.source,
+          fetchedAt: cache.fetchedAt,
+          ...(cache.etag ? { etag: cache.etag } : {})
+        }), 'utf8')
+      } catch {
+        // Cache persistence is best-effort; never fail a catalog fetch on it.
+      }
+    })()
+  }
 
   async fetch(
     request: ModelsDevCatalogRequest,
@@ -254,7 +299,7 @@ export class ModelsDevCatalogService {
     let match = resolveModelsDevProvider(request)
     const normalizedBaseUrl = normalizeCatalogBaseUrl(request.baseUrl)
     const cursorMixedCatalog = request.providerId.trim().toLowerCase() === 'cursor-subscription'
-    if (!match && !normalizedBaseUrl && !cursorMixedCatalog) {
+    if (!match && !normalizedBaseUrl && !cursorMixedCatalog && !(request.modelHints?.length)) {
       return { status: 'unmapped', models: [] }
     }
 
@@ -272,8 +317,30 @@ export class ModelsDevCatalogService {
           models: resolveCursorModelsDevCatalog(loaded.catalog, request.modelHints ?? [])
         }
       }
+      // Profile-declared catalog sources take precedence over host matching:
+      // relays commonly re-expose an upstream catalog under a custom host.
+      const declaredSources = catalogSourcesForRequest(request, settings)
+      for (const source of declaredSources) {
+        if (match) break
+        if (sanitizeProvider(loaded.catalog[source])) match = catalogMatch(source)
+      }
       match ??= resolveUniqueCatalogApiMatch(loaded.catalog, normalizedBaseUrl)
-      if (!match) return { status: 'unmapped', models: [] }
+      if (!match) {
+        // Completion-only family enrichment for unmapped custom/relay
+        // providers: known model families borrow catalog metadata without
+        // adding models the provider did not report.
+        const familyModels = resolveFamilyModelsDevCatalog(loaded.catalog, request.modelHints ?? [])
+        if (familyModels.length === 0) return { status: 'unmapped', models: [] }
+        return {
+          status: 'ok',
+          providerKey: 'family-mixed',
+          providerName: '',
+          matchMode: 'enrichment-only',
+          stale: loaded.stale,
+          source: loaded.source,
+          models: familyModels
+        }
+      }
       const provider = sanitizeProvider(loaded.catalog[match.providerKey])
       if (!provider) {
         return {
@@ -306,6 +373,7 @@ export class ModelsDevCatalogService {
   }
 
   private async loadCatalog(proxyUrl: string, forceRefresh: boolean): Promise<LoadedCatalog> {
+    await this.loadDiskCache()
     const cached = this.cache
     if (!forceRefresh && cached && this.now() - cached.fetchedAt < MODELS_DEV_CACHE_TTL_MS) {
       return { catalog: cached.catalog, source: cached.source, stale: false }
@@ -368,6 +436,7 @@ export class ModelsDevCatalogService {
 
     if (response.status === 304 && cached?.source === source) {
       this.cache = { ...cached, fetchedAt: this.now() }
+      this.persistDiskCache()
       await response.body?.cancel().catch(() => undefined)
       return { catalog: cached.catalog, source, stale: false }
     }
@@ -395,51 +464,24 @@ export class ModelsDevCatalogService {
         ? { etag: response.headers.get('etag') ?? undefined }
         : {})
     }
+    this.persistDiskCache()
     return { catalog, source, stale: false }
   }
 }
 
-export function resolveCursorModelsDevCatalog(
-  catalog: CatalogRoot,
-  hints: readonly { id: string; aliases?: readonly string[] }[]
-): ModelsDevCatalogModel[] {
-  const providers = new Map<string, Map<string, ModelsDevCatalogModel>>()
-  const resolved: ModelsDevCatalogModel[] = []
-  const seen = new Set<string>()
-
-  for (const hint of hints.slice(0, MAX_MODEL_COUNT)) {
-    const id = boundedString(hint.id, MAX_MODEL_ID_LENGTH)?.trim()
-    const key = id?.toLowerCase() ?? ''
-    if (!id || !key || seen.has(key)) continue
-    seen.add(key)
-
-    const family = CURSOR_CATALOG_FAMILIES.find((candidate) => candidate.pattern.test(id))
-    if (!family) continue
-    let providerModels = providers.get(family.providerKey)
-    if (!providerModels) {
-      const provider = sanitizeProvider(catalog[family.providerKey])
-      if (!provider) continue
-      providerModels = new Map(
-        provider.models.map((model) => [model.id.trim().toLowerCase(), model] as const)
-      )
-      providers.set(family.providerKey, providerModels)
-    }
-
-    const candidateIds = [id, ...(hint.aliases ?? [])]
-      .map((candidate) => boundedString(candidate, MAX_MODEL_ID_LENGTH)?.trim())
-      .filter((candidate): candidate is string => Boolean(candidate))
-    const catalogModel = candidateIds
-      .map((candidate) => providerModels?.get(candidate.toLowerCase()))
-      .find((candidate): candidate is ModelsDevCatalogModel => Boolean(candidate))
-    if (!catalogModel) continue
-    resolved.push({
-      ...catalogModel,
-      id,
-      providerKey: family.providerKey
-    })
-  }
-
-  return resolved
+function catalogSourcesForRequest(
+  request: ModelsDevCatalogRequest,
+  settings?: AppSettingsV1
+): string[] {
+  const providerId = request.providerId.trim()
+  if (!providerId || !settings) return []
+  const profile = getModelProviderSettings(settings).providers.find(
+    (candidate) => candidate.id === providerId
+  )
+  return (profile?.catalogSources ?? [])
+    .map((source) => source.trim())
+    .filter((source) => source.length > 0 && source.length <= 128)
+    .slice(0, 8)
 }
 
 function resolveUniqueCatalogApiMatch(
@@ -466,159 +508,10 @@ export function fetchModelsDevCatalog(
   return modelsDevCatalogService.fetch(request, settings)
 }
 
-export function normalizeCatalogKeys(
-  catalog: CatalogRoot,
-  aliases: Readonly<Record<string, string>>
-): CatalogRoot {
-  if (Object.keys(aliases).length === 0) return catalog
-  const normalized: CatalogRoot = {}
-  for (const [key, provider] of Object.entries(catalog)) {
-    const target = aliases[key]?.trim()
-    normalized[target && target !== key ? target : key] = provider
-  }
-  return normalized
+export function attachModelsDevDiskCache(path: string): void {
+  modelsDevCatalogService.attachDiskCache(path)
 }
 
-function parseCatalog(body: string, source: ModelsDevCatalogSource): CatalogRoot {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(body) as unknown
-  } catch {
-    throw new Error(`${catalogSourceLabel(source)} returned invalid JSON.`)
-  }
-  if (!isRecord(parsed)) throw new Error(`${catalogSourceLabel(source)} returned an invalid catalog.`)
-  const entries = Object.entries(parsed)
-  if (entries.length > MAX_PROVIDER_COUNT) {
-    throw new Error(
-      `${catalogSourceLabel(source)} catalog exceeded the ${MAX_PROVIDER_COUNT} provider limit.`
-    )
-  }
-  return Object.fromEntries(entries)
-}
-
-function sanitizeProvider(value: unknown): { name: string; models: ModelsDevCatalogModel[] } | null {
-  if (!isRecord(value) || !isRecord(value.models)) return null
-  const rawModels = Object.entries(value.models)
-  if (rawModels.length > MAX_MODEL_COUNT) return null
-  const models: ModelsDevCatalogModel[] = []
-  const seen = new Set<string>()
-  for (const [fallbackId, rawModel] of rawModels) {
-    const model = sanitizeModel(fallbackId, rawModel)
-    if (!model) continue
-    const key = model.id.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    models.push(model)
-  }
-  return {
-    name: boundedString(value.name, MAX_MODEL_NAME_LENGTH) ?? boundedString(value.id, MAX_MODEL_NAME_LENGTH) ?? '',
-    models
-  }
-}
-
-function sanitizeModel(fallbackId: string, value: unknown): ModelsDevCatalogModel | null {
-  if (!isRecord(value)) return null
-  const id = (boundedString(value.id, MAX_MODEL_ID_LENGTH)
-    ?? boundedString(fallbackId, MAX_MODEL_ID_LENGTH))?.trim()
-  if (!id) return null
-  const name = boundedString(value.name, MAX_MODEL_NAME_LENGTH)
-  const description = boundedString(value.description, MAX_MODEL_DESCRIPTION_LENGTH)
-  const modalities = isRecord(value.modalities) ? value.modalities : {}
-  const limit = isRecord(value.limit) ? value.limit : {}
-  const cost = isRecord(value.cost) ? value.cost : {}
-  const free = cost.input === 0 && cost.output === 0
-  const pricing = sanitizeCatalogPricing(cost)
-  const reasoning = typeof value.reasoning === 'boolean' ? value.reasoning : undefined
-  const toolCalling = typeof value.tool_call === 'boolean' ? value.tool_call : undefined
-  const metadataIssues: ModelsDevCatalogMetadataIssue[] = []
-  const contextWindowTokens = boundedCatalogLimit(
-    limit.context,
-    'contextWindowTokens',
-    MAX_MODEL_CONTEXT_WINDOW_TOKENS,
-    metadataIssues
-  )
-  const maxOutputTokens = boundedCatalogLimit(
-    limit.output,
-    'maxOutputTokens',
-    MAX_MODEL_OUTPUT_TOKENS,
-    metadataIssues
-  )
-  return {
-    id,
-    ...(name ? { name } : {}),
-    ...(description ? { description } : {}),
-    inputModalities: sanitizeModalities(modalities.input),
-    outputModalities: sanitizeModalities(modalities.output),
-    ...(reasoning !== undefined ? { reasoning } : {}),
-    ...(toolCalling !== undefined ? { toolCalling } : {}),
-    ...(free ? { free } : {}),
-    ...(pricing ? { pricing } : {}),
-    ...(contextWindowTokens ? { contextWindowTokens } : {}),
-    ...(maxOutputTokens ? { maxOutputTokens } : {}),
-    ...(metadataIssues.length ? { metadataIssues } : {})
-  }
-}
-
-/**
- * Parses models.dev cost fields (USD per million tokens). Pricing requires a
- * finite non-negative input and output price; cache prices stay optional.
- */
-function sanitizeCatalogPricing(
-  cost: Record<string, unknown>
-): ModelsDevCatalogPricing | undefined {
-  const input = nonNegativeFiniteCost(cost.input)
-  const output = nonNegativeFiniteCost(cost.output)
-  if (input == null || output == null) return undefined
-  const cacheRead = nonNegativeFiniteCost(cost.cache_read)
-  const cacheWrite = nonNegativeFiniteCost(cost.cache_write)
-  return {
-    inputUsdPerMillion: input,
-    outputUsdPerMillion: output,
-    ...(cacheRead != null ? { cacheReadUsdPerMillion: cacheRead } : {}),
-    ...(cacheWrite != null ? { cacheWriteUsdPerMillion: cacheWrite } : {})
-  }
-}
-
-function nonNegativeFiniteCost(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
-}
-
-function sanitizeModalities(value: unknown): ModelsDevCatalogModality[] {
-  if (!Array.isArray(value)) return []
-  const out: ModelsDevCatalogModality[] = []
-  for (const item of value) {
-    if (typeof item !== 'string') continue
-    const modality = item.trim().toLowerCase() as ModelsDevCatalogModality
-    if (ALLOWED_MODALITIES.has(modality) && !out.includes(modality)) out.push(modality)
-  }
-  return out
-}
-
-function boundedCatalogLimit(
-  value: unknown,
-  field: ModelsDevCatalogMetadataIssue['field'],
-  maxAllowed: number,
-  issues: ModelsDevCatalogMetadataIssue[]
-): number | undefined {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value)) return undefined
-  if (value > 0 && value <= maxAllowed) return value
-  issues.push({ field, code: 'out_of_range', rawValue: value, maxAllowed })
-  return undefined
-}
-
-function boundedString(value: unknown, maxLength: number): string | undefined {
-  if (typeof value !== 'string') return undefined
-  const normalized = value.trim()
-  return normalized && normalized.length <= maxLength ? normalized : undefined
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-function catalogSourceLabel(source: ModelsDevCatalogSource): string {
-  return source === 'models.dev' ? 'models.dev' : 'kun-agent.com'
-}
 
 function modelsDevFailureMessage(error: unknown): string {
   if (error instanceof Error && error.name === 'TimeoutError') {

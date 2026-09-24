@@ -80,6 +80,7 @@ import {
   contextCompactionConfigForRuntime,
   modelConfigForRuntime,
   localModelGatewayConfigForRuntime,
+  providerFailoverConfigForRuntime,
   providersConfigForRuntime,
   routePoolsConfigForRuntime,
   rolesConfigForRuntime,
@@ -159,6 +160,7 @@ export async function syncGuiManagedKunConfig(
     ? providersConfigForRuntime(appSettings)
     : undefined
   const routePools = appSettings ? routePoolsConfigForRuntime(appSettings) : undefined
+  const providerFailover = appSettings ? providerFailoverConfigForRuntime(appSettings) : undefined
   const localModelGateway = appSettings ? localModelGatewayConfigForRuntime(appSettings) : undefined
   // The top-level value remains the shared Registry master/fallback. Every
   // managed Provider below carries its own explicit effective route, so the
@@ -191,6 +193,7 @@ export async function syncGuiManagedKunConfig(
       toolOutputLimits: toolOutputLimitsConfigForRuntime(runtime.toolOutputLimits),
       ...(providers && Object.keys(providers).length ? { providers } : {}),
       ...(routePools ? { routePools } : {}),
+      ...(providerFailover && providerFailover.length > 0 ? { providerFailover } : {}),
       ...(localModelGateway ? { localModelGateway } : {})
     },
     models: modelConfigForRuntime(objectValue(existing?.models), modelProfiles),
@@ -425,7 +428,8 @@ export function buildManagedRuntimeHotApplyBody(
       tokenEconomy: runtime.tokenEconomy,
       toolOutputLimits: runtime.toolOutputLimits,
       providers: serve.providers ?? {},
-      routePools: routePoolsConfigForRuntime(settings)
+      routePools: routePoolsConfigForRuntime(settings),
+      providerFailover: providerFailoverConfigForRuntime(settings)
     }
   })
 }

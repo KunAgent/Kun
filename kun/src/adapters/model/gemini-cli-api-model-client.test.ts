@@ -322,6 +322,8 @@ describe('GeminiCliApiModelClient', () => {
       message: expect.stringContaining('NOT_FOUND'),
       failure: {
         category: 'model_not_found',
+        reason: 'model',
+        responseReceived: true,
         httpStatus: 404,
         providerCode: 'NOT_FOUND',
         retryAfterMs: 30_000,

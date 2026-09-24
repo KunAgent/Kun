@@ -124,6 +124,7 @@ async materializeDocument(this: ModelConnectionRegistry,
               authType: profile.authType,
               baseUrl: profile.baseUrl!,
               endpointFormat: profile.endpointFormat,
+              ...(profile.endpoints ? { endpoints: profile.endpoints } : {}),
               useProxy: profile.useProxy,
               modelProxyUrl,
               models: [...profile.models],
@@ -145,6 +146,7 @@ async materializeDocument(this: ModelConnectionRegistry,
       providers,
       proxy: document.proxy,
       routePools: document.routePools,
+      failover: document.failover,
       localModelGateway: document.localModelGateway,
       ...(selected ? { selected } : {})
     }
@@ -156,6 +158,7 @@ async probeInput(this: ModelConnectionRegistry, input: ModelConnectionConnectReq
       baseUrl: input.baseUrl,
       endpointFormat: input.endpointFormat,
       apiKey: input.credential?.trim() ?? '',
+      headers: input.customHeaders,
       fallbackModels: input.models,
       proxyUrl: resolveRegistryProfileProxyUrl(
         { proxy: (await this['file'].read(emptyDocument)).proxy },

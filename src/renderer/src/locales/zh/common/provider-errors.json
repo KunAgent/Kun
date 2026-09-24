@@ -13,5 +13,6 @@
   "outputTruncatedNotice": "回复被模型的单次输出上限（max output tokens）截断——这是单次生成上限，不是账户余额问题。Kun 已尝试自动续写。点击「继续任务」可再次续写，或在 设置 > Providers > 模型 > Max output (tokens) 调高上限。",
   "continueTruncatedTaskPrompt": "从上次回复被截断的位置继续。每次回复保持更短，把剩余工作拆成更小的步骤完成。",
   "runtimeFetchFailedAutoStart": "无法连接到 Kun。自动启动已开启，本地运行时可能已崩溃或仍在重启——请重试，或重启 Kun 并查看运行时日志。",
-  "openProviderSettings": "Provider 设置"
+  "openProviderSettings": "Provider 设置",
+  "modelRouteSwitchStatus": "正在切换模型路由：{{from}} 失败{{reasonSuffix}}，尝试 {{to}}…"
 }

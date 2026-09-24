@@ -431,6 +431,48 @@ export type ModelProviderPresetSourceV1 = {
   mode: ModelProviderPresetMode
 }
 
+/**
+ * Optional per-protocol base URL overrides for providers that expose several
+ * endpoint families on different paths (common for relay gateways). A model
+ * request resolves its base URL from `endpoints[format] ?? baseUrl` after the
+ * effective endpoint format is chosen.
+ */
+export type ModelProviderEndpointsV1 = {
+  chat_completions?: string
+  responses?: string
+  messages?: string
+}
+
+export const PROVIDER_ACCOUNT_STRATEGIES = ['smart', 'order', 'rotate', 'least-used'] as const
+
+export type ProviderAccountStrategy = (typeof PROVIDER_ACCOUNT_STRATEGIES)[number]
+
+export type ModelProviderFailoverAccountV1 = {
+  providerId: string
+  enabled: boolean
+}
+
+export type ModelProviderFailoverTargetV1 = {
+  providerId: string
+  modelId: string
+}
+
+/**
+ * Provider-level failover: an account group (same vendor, multiple keys)
+ * plus an ordered fallback chain of other provider/model pairs. Only
+ * explicitly configured groups take part in automatic switching; a profile
+ * that is not referenced by any failover entry keeps single-target behavior.
+ */
+export type ModelProviderFailoverV1 = {
+  /** Representative provider id for the group (usually its first account). */
+  providerId: string
+  /** Other accounts of the same vendor; order is the `order` strategy's priority. */
+  accounts: ModelProviderFailoverAccountV1[]
+  strategy: ProviderAccountStrategy
+  /** Ordered targets tried after every group account is unavailable. */
+  fallbackTargets: ModelProviderFailoverTargetV1[]
+}
+
 export type ModelProviderProfileV1 = {
   id: string
   name: string
@@ -439,6 +481,12 @@ export type ModelProviderProfileV1 = {
   apiKey: string
   baseUrl: string
   endpointFormat: ModelEndpointFormat
+  /** Optional per-protocol base URL overrides (relay gateways). */
+  endpoints?: ModelProviderEndpointsV1
+  /** models.dev catalog keys consulted for metadata completion, first match wins. */
+  catalogSources?: string[]
+  /** Content-addressed custom icon id under userData/provider-icons. */
+  iconId?: string
   /** Whether Kun-owned HTTP requests for this Provider use the configured app proxy. */
   useProxy: boolean
   /** 模型请求遇到临时失败或限流响应时使用的 HTTP 重试策略。 */
@@ -470,6 +518,7 @@ export const MODEL_ROUTE_STRATEGIES = [
   'round-robin',
   'weighted-round-robin',
   'least-latency',
+  'least-used',
   'adaptive'
 ] as const
 
@@ -502,6 +551,12 @@ export type ModelRouteHealthPolicyV1 = {
   failureThreshold: number
   cooldownMs: number
   halfOpenMaxAttempts: number
+  /** Reason-specific circuit-breaker durations (ms). */
+  creditCooldownMs?: number
+  quotaCooldownMs?: number
+  authCooldownMs?: number
+  /** Upper bound for exponential cooldown backoff on generic failures. */
+  maxCooldownMs?: number
 }
 
 export type ModelRoutePoolV1 = {
@@ -529,6 +584,8 @@ export type ModelProviderSettingsV1 = {
   /** Built-in profiles explicitly removed by the user; do not seed them again. */
   excludedBuiltinProviderIds?: string[]
   routePools: ModelRoutePoolV1[]
+  /** Provider-level account groups and fallback chains (explicit opt-in). */
+  failover?: ModelProviderFailoverV1[]
   localGateway: LocalModelGatewaySettingsV1
 }
 
@@ -544,8 +601,11 @@ export type ModelProviderVideoCapabilityPatchV1 = Partial<ModelProviderVideoCapa
 
 export type ModelProviderModelProfilePatchV1 = Partial<ModelProviderModelProfileV1>
 
-export type ModelProviderProfilePatchV1 = Partial<Omit<ModelProviderProfileV1, 'image' | 'speech' | 'textToSpeech' | 'music' | 'video' | 'modelProfiles'>> & {
+export type ModelProviderEndpointsPatchV1 = Partial<ModelProviderEndpointsV1>
+
+export type ModelProviderProfilePatchV1 = Partial<Omit<ModelProviderProfileV1, 'image' | 'speech' | 'textToSpeech' | 'music' | 'video' | 'modelProfiles' | 'endpoints'>> & {
   retry?: Partial<ModelRequestRetrySettingsV1>
+  endpoints?: ModelProviderEndpointsPatchV1 | null
   modelProfiles?: Record<string, ModelProviderModelProfilePatchV1 | null>
   image?: ModelProviderImageCapabilityPatchV1 | null
   speech?: ModelProviderSpeechCapabilityPatchV1 | null
@@ -555,10 +615,11 @@ export type ModelProviderProfilePatchV1 = Partial<Omit<ModelProviderProfileV1, '
 }
 
 export type ModelProviderSettingsPatchV1 = Partial<
-  Omit<ModelProviderSettingsV1, 'providers' | 'proxy' | 'routePools' | 'localGateway'>
+  Omit<ModelProviderSettingsV1, 'providers' | 'proxy' | 'routePools' | 'localGateway' | 'failover'>
 > & {
   proxy?: Partial<NetworkProxySettingsV1>
   providers?: ModelProviderProfilePatchV1[]
   routePools?: Partial<ModelRoutePoolV1>[]
+  failover?: Partial<ModelProviderFailoverV1>[]
   localGateway?: Partial<LocalModelGatewaySettingsV1>
 }

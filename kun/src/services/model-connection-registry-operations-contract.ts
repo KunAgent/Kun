@@ -31,6 +31,7 @@ export interface ModelConnectionRegistryOperations {
     globals?: {
       proxy?: RegistryDocument['proxy']
       routePools?: RegistryDocument['routePools']
+      failover?: RegistryDocument['failover']
       localModelGateway?: RegistryDocument['localModelGateway']
     }
   ): Promise<ModelConnectionSnapshot>;
@@ -65,6 +66,11 @@ export interface ModelConnectionRegistryOperations {
   }): Promise<ModelConnectionSnapshot>;
   updateGlobals(raw: unknown): Promise<ModelConnectionSnapshot>;
   probe(providerId: string): Promise<{ ok: true; models: string[] }>;
+  /**
+   * Last persisted model-list fetch for the provider
+   * (`model-catalog/providers/<id>.json`), or null when never fetched.
+   */
+  catalog(providerId: string): Promise<import('./model-catalog-store.js').ModelCatalogEntry | null>;
   credentialForCompatibility(providerId: string): Promise<string | null>;
   credentialStateForInternalConsumer(providerId: string): Promise<{
     authoritative: boolean

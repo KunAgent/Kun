@@ -367,6 +367,7 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
 {
     id: 'vercel-ai-gateway',
     name: 'Vercel AI Gateway',
+    origin: 'relay',
     baseUrl: 'https://ai-gateway.vercel.sh/v1',
     endpointFormat: 'chat_completions',
     models: [],

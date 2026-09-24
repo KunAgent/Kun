@@ -174,7 +174,6 @@
   "modelContextOverflowRetryStatus": "Model context limit reached; compacted history and retrying once…",
   "modelNetworkRetryStatus": "Model provider connection failed; retrying {{attempt}}/{{max}} in about {{seconds}}s…",
   "modelStreamRetryStatus": "Model response transport was interrupted; retrying {{attempt}}/{{max}} in about {{seconds}}s…",
-  "modelRouteSwitchStatus": "Switching model route: {{from}} failed{{reasonSuffix}}; trying {{to}}…",
   "toolCatalogChangedStatus": "Tool catalog changed; Kun refreshed the active tool list.",
   "toolStormSuppressedStatus": "{{tool}} repeated the same call too many times; Kun suppressed the duplicate and asked the model to change approach.",
   "compactionSummaryFallbackStatus": "Model compaction summary was unavailable; Kun used the heuristic summary.",

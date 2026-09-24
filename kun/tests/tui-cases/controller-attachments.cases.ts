@@ -83,6 +83,7 @@ function credentialSnapshot(
     defaultModel: 'model-a',
     proxy: { enabled: false, url: '' },
     routePools: [],
+    failover: [],
     localModelGateway: { enabled: false }
   }
 }
@@ -494,6 +495,7 @@ describe("TuiController attachments", () => {
       defaultModel: 'text-only',
       proxy: { enabled: false, url: '' },
       routePools: [],
+      failover: [],
       localModelGateway: { enabled: false }
     }
     const controller = new TuiController(client, {

@@ -12,6 +12,7 @@ const snapshot = {
   providers: [],
   proxy: { enabled: false, url: '' },
   routePools: [],
+  failover: [],
   localModelGateway: { enabled: false }
 }
 

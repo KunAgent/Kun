@@ -465,6 +465,7 @@ export function createRuntimeConfigController(
 	        providers: Object.fromEntries(materializedConnections.providers.entries()),
 	        modelProxyUrl: selected?.config.modelProxyUrl,
 	        routePools: materializedConnections.routePools,
+	        providerFailover: materializedConnections.failover,
 	        localModelGateway: materializedConnections.localModelGateway
 	      }
             }
@@ -541,6 +542,7 @@ export function createRuntimeConfigController(
 	    directModelClient.replace(nextModelClients)
 	    approvalReviewModelClient.replace(nextApprovalReviewClients)
 	    modelClient.replacePools(activeOptions.routePools ?? [])
+	    modelClient.replaceFailoverGroups(activeOptions.providerFailover ?? [])
 	    if (delegationRuntime && nextSubagentConfig) {
 	      delegationRuntime.replaceConfig(nextSubagentConfig)
 	    }

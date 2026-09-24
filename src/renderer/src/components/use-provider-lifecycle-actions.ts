@@ -1,7 +1,9 @@
 import type {
+  AppSettingsV1,
   ModelProviderModelProfileV1,
   ModelProviderPresetMode,
-  ModelProviderProfileV1
+  ModelProviderProfileV1,
+  ModelProviderReferenceKind
 } from '@shared/app-settings'
 import {
   DEFAULT_MODEL_PROVIDER_ID,
@@ -10,6 +12,7 @@ import {
   defaultModelRequestRetrySettings,
   defaultModelProviderSettings,
   isMultiAccountProviderPreset,
+  listModelProviderReferences,
   modelProviderPresetAccountProfile,
   modelProviderPresetProfile,
   modelProviderTokenPlanProfile,
@@ -110,9 +113,7 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
     setActiveTab('connection')
   }
 
-  const commitProviderDraft = async (): Promise<void> => {
-    if (!draftProvider) return
-    const providerDraft = draftProvider
+  const commitProviderProfile = async (providerDraft: ModelProviderProfileV1): Promise<void> => {
     const credential = providerDraft.apiKey.trim()
     clearPendingSharedProviderDeletionForExplicitAdd(
       pendingSharedProviderDeletions.current,
@@ -143,8 +144,11 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
       }
     }
     const secretFreeProvider = { ...providerDraft, apiKey: '' }
+    const alreadyListed = modelProviders.some((item) => item.id === providerDraft.id)
     updateModelProviders(
-      [...modelProviders, secretFreeProvider],
+      alreadyListed
+        ? modelProviders.map((item) => item.id === providerDraft.id ? secretFreeProvider : item)
+        : [...modelProviders, secretFreeProvider],
       credential
         ? kunProviderSelectionPatch({
             providerId: providerDraft.id,
@@ -155,6 +159,11 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
     previousProviderSelectionRef.current = null
     setDraftProvider(null)
     setSelectedProviderId(providerDraft.id)
+  }
+
+  const commitProviderDraft = async (): Promise<void> => {
+    if (!draftProvider) return
+    await commitProviderProfile(draftProvider)
   }
 
   const cancelProviderDraft = (): void => {
@@ -262,23 +271,26 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
     const target = modelProviders.find((item) => item.id === id)
     if (!target) return
     const usedByChat = activeKunProviderId === id
-    const usedByImage = (kun.imageGeneration?.providerId ?? '').trim() === id
-    const usedBySpeech = (kun.speechToText?.providerId ?? '').trim() === id
-    const usedByTextToSpeech = (kun.textToSpeech?.providerId ?? '').trim() === id
-    const usedByMusic = (kun.musicGeneration?.providerId ?? '').trim() === id
-    const usedByVideo = (kun.videoGeneration?.providerId ?? '').trim() === id
-    const writeInline = form?.write?.inlineCompletion
-    const usedByWrite = Boolean(
-      writeInline && !writeInline.inheritProvider && writeInline.providerId === id
-    )
+    const LEGACY_DELETE_KEYS: Partial<Record<ModelProviderReferenceKind, string>> = {
+      image: 'modelProviderDeleteInUseImage',
+      speech: 'modelProviderDeleteInUseSpeech',
+      textToSpeech: 'modelProviderDeleteInUseTextToSpeech',
+      music: 'modelProviderDeleteInUseMusic',
+      video: 'modelProviderDeleteInUseVideo',
+      write: 'modelProviderDeleteInUseWrite'
+    }
+    const referenceKinds = [...new Set(
+      listModelProviderReferences(form as AppSettingsV1, id).map((ref) => ref.kind)
+    )]
     const references = [
       ...(usedByChat ? [t('modelProviderDeleteInUseChat')] : []),
-      ...(usedByImage ? [t('modelProviderDeleteInUseImage')] : []),
-      ...(usedBySpeech ? [t('modelProviderDeleteInUseSpeech')] : []),
-      ...(usedByTextToSpeech ? [t('modelProviderDeleteInUseTextToSpeech')] : []),
-      ...(usedByMusic ? [t('modelProviderDeleteInUseMusic')] : []),
-      ...(usedByVideo ? [t('modelProviderDeleteInUseVideo')] : []),
-      ...(usedByWrite ? [t('modelProviderDeleteInUseWrite')] : [])
+      ...referenceKinds
+        .filter((kind) => kind !== 'chat')
+        .map((kind) => LEGACY_DELETE_KEYS[kind]
+          ? t(LEGACY_DELETE_KEYS[kind]!)
+          : t('modelProviderDeleteInUseOther', {
+              surface: t(`modelProviderRefKind_${kind}`)
+            }))
     ]
     const confirmed = await confirmAction({
       message: t('modelProviderDeleteConfirmTitle', { name: target.name.trim() || target.id }),
@@ -509,5 +521,5 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
       ...(input.authoritative ? { authoritative: true } : {})
     })
   }
-  return { updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addDefaultModelProvider, addPresetModelProvider, removeModelProvider, deletingProviderId, fetchModelsDevCatalogFor, openModelImport }
+  return { updateModelProviderId, commitProviderDraft, commitProviderProfile, cancelProviderDraft, addModelProvider, addDefaultModelProvider, addPresetModelProvider, removeModelProvider, deletingProviderId, fetchModelsDevCatalogFor, openModelImport }
 }

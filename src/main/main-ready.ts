@@ -58,10 +58,16 @@ import {
   writeDesktopInstanceIdentity
 } from './desktop-instance-identity'
 import { resolveManagedRuntimeStartupTarget } from './runtime/managed-runtime-startup-attach'
+import { join } from 'node:path'
 import { prefetchCatalogPricing } from './catalog-prefetch'
+import { attachModelsDevDiskCache } from './models-dev-catalog'
 import { recoverUpdateBeforeRuntimeStart } from './update-bootstrap-recovery'
 import { installHostPowerRecovery } from './host-power-recovery'
 import { desktopProcessStack } from './runtime/desktop-process-stack'
+import {
+  stageProviderImportLink,
+  type StagedProviderImportLink
+} from './provider-import-link'
 
 export function startMainApp(): Promise<void> {
   mainState.createWindow = createWindow
@@ -96,7 +102,44 @@ export function startMainApp(): Promise<void> {
     () => mainState.mainWindow,
     revealMainWindow
   )
-  app.on('second-instance', () => activation.requestReveal())
+
+  // kun://import deep links (plan §6.12). The staged draft is delivered to the
+  // workbench; the key itself stays staged in this process until the user
+  // confirms through the commit IPC.
+  let stagedImportLink: StagedProviderImportLink | null = null
+  const deliverImportLink = (window: BrowserWindow | null): void => {
+    if (!window || !stagedImportLink) return
+    const staged = stagedImportLink
+    const send = (): void => {
+      stagedImportLink = null
+      if (!window.isDestroyed()) window.webContents.send('provider:import-link', staged)
+    }
+    if (window.webContents.isLoadingMainFrame()) {
+      window.webContents.once('did-finish-load', send)
+    } else {
+      send()
+    }
+  }
+  const onImportLink = (raw: string): void => {
+    const staged = stageProviderImportLink(raw)
+    if (!staged.ok) {
+      logWarn('provider-import-link', 'Rejected kun:// import link.', { message: staged.message })
+      return
+    }
+    stagedImportLink = staged.staged
+    activation.requestReveal()
+    deliverImportLink(mainState.mainWindow)
+  }
+  app.setAsDefaultProtocolClient('kun')
+  app.on('open-url', (event, url) => {
+    event.preventDefault()
+    onImportLink(url)
+  })
+  app.on('second-instance', (_event, argv) => {
+    activation.requestReveal()
+    const link = argv.find((arg) => /^kun:\/\/import/i.test(arg))
+    if (link) onImportLink(link)
+  })
 
   const handleStartupFailure = async (error: unknown): Promise<void> => {
     if (runtimeShutdown.isQuitInProgress) return
@@ -149,7 +192,10 @@ export function startMainApp(): Promise<void> {
     createWindow(options)
     const window = mainState.mainWindow as BrowserWindow | null
     if (!window) return
-    const publishState = (): void => mainState.startupState.publish()
+    const publishState = (): void => {
+      mainState.startupState.publish()
+      deliverImportLink(window)
+    }
     if (window.webContents.isLoadingMainFrame()) {
       window.webContents.once('did-finish-load', publishState)
     } else {
@@ -205,6 +251,9 @@ export function startMainApp(): Promise<void> {
       console.warn('[kun-gui] prune logs:', err)
     })
 
+    // Persist the models.dev catalog across restarts so provider metadata is
+    // available immediately and offline launches reuse the last fetch.
+    attachModelsDevDiskCache(join(app.getPath('userData'), 'cache', 'models-dev.json'))
     void prefetchCatalogPricing(mainState.store).catch((err) => {
       console.warn('[kun-gui] catalog pricing prefetch failed:', err)
     })

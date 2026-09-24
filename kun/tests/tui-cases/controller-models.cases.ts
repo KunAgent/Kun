@@ -83,6 +83,7 @@ function credentialSnapshot(
     defaultModel: 'model-a',
     proxy: { enabled: false, url: '' },
     routePools: [],
+    failover: [],
     localModelGateway: { enabled: false }
   }
 }
@@ -112,6 +113,7 @@ describe("TuiController model selection and turn startup", () => {
       defaultModel: 'gpt-next',
       proxy: { enabled: false, url: '' },
       routePools: [],
+      failover: [],
       localModelGateway: { enabled: false }
     }
     const client = {
@@ -286,6 +288,7 @@ describe("TuiController model selection and turn startup", () => {
       defaultModel: 'MiniMax-M3',
       proxy: { enabled: false, url: '' },
       routePools: [],
+      failover: [],
       localModelGateway: { enabled: false }
     }, false)
 
@@ -410,6 +413,7 @@ describe("TuiController model selection and turn startup", () => {
       providers: [],
       proxy: { enabled: false, url: '' },
       routePools: [],
+      failover: [],
       localModelGateway: { enabled: false }
     }, false)
 

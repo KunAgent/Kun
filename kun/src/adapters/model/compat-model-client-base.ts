@@ -86,6 +86,19 @@ export class CompatModelClientBase {
   }
 
   /**
+   * Base URL for a resolved wire format. Multi-protocol providers may
+   * override each family (`endpoints.chat_completions` / `responses` /
+   * `messages`); `custom_endpoint` always uses the raw `baseUrl`.
+   */
+  protected baseUrlForFormat(format: ModelEndpointFormat): string {
+    if (format === 'chat_completions' || format === 'responses' || format === 'messages') {
+      const override = this.config.endpoints?.[format]?.trim()
+      if (override) return override
+    }
+    return this.config.baseUrl
+  }
+
+  /**
    * The wire format for a specific model: a per-model override (carried on
    * the model's capability metadata) takes precedence over the
    * provider/runtime format. Lets one provider mix chat completions and

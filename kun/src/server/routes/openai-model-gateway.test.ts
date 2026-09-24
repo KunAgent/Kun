@@ -99,8 +99,8 @@ describe('local OpenAI model gateway', () => {
     expect(ServeOptionsSchema.safeParse({ ...DEFAULT_SERVE_OPTIONS, dataDir: '/tmp/kun', host: '0.0.0.0', localModelGateway: { enabled: true } }).success).toBe(false)
     expect(ServeOptionsSchema.safeParse({ ...DEFAULT_SERVE_OPTIONS, dataDir: '/tmp/kun', host: '127.0.0.1', localModelGateway: { enabled: true } }).success).toBe(true)
   })
-  it('lists every routed model exposed by the local provider', () => {
-    const response = gatewayModels(runtime(), authorizedRequest('/v1/models'))
+  it('lists every routed model exposed by the local provider', async () => {
+    const response = await gatewayModels(runtime(), authorizedRequest('/v1/models'))
     expect(JSON.parse(response.body).data).toEqual([
       expect.objectContaining({ id: 'local-model', owned_by: 'kun-route-pool' }),
       expect.objectContaining({ id: 'local-coding', owned_by: 'kun-route-pool' })
@@ -166,7 +166,7 @@ describe('local OpenAI model gateway', () => {
   })
 
   it('requires independent Bearer auth on all three public routes', async () => {
-    expect(gatewayModels(runtime(), new Request('http://localhost/v1/models')).status).toBe(401)
+    expect((await gatewayModels(runtime(), new Request('http://localhost/v1/models'))).status).toBe(401)
     expect((await gatewayChatCompletions(runtime(), new Request('http://localhost/v1/chat/completions', {
       method: 'POST', body: '{}'
     }))).status).toBe(401)

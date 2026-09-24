@@ -8,6 +8,7 @@ import {
   modelProviderRequiresApiKey,
   modelSupportsImageInput
 } from '@shared/app-settings-provider-core'
+import { projectFailoverGroupsForRuntime } from '@shared/app-settings-provider-failover'
 import {
   Check,
   ChevronDown,
@@ -56,6 +57,7 @@ export type SharedModelConnectionsSnapshot = {
   defaultModel?: string
   proxy?: { enabled: boolean; url: string }
   routePools?: ModelProviderSettingsV1['routePools']
+  failover?: ReturnType<typeof projectFailoverGroupsForRuntime>
   localModelGateway?: { enabled: boolean }
 }
 

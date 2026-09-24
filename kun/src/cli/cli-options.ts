@@ -38,7 +38,7 @@ import {
   normalizeModelEndpointFormat
 } from '../contracts/model-endpoint-format.js'
 import { HooksConfigSchema } from '../hooks/hook-config.js'
-import { LocalModelGatewayConfigSchema, ModelRoutePoolConfigSchema, isLoopbackHost as isGatewayLoopbackHost } from '../contracts/model-route-pool.js'
+import { LocalModelGatewayConfigSchema, ModelFailoverGroupSchema, ModelRoutePoolConfigSchema, isLoopbackHost as isGatewayLoopbackHost } from '../contracts/model-route-pool.js'
 import { isLoopbackHost } from '../server/loopback-host.js'
 
 export const DEFAULT_SERVE_PORT = 18899
@@ -87,6 +87,7 @@ export const ServeOptionsSchema = z.object({
   headers: z.record(z.string(), z.string()).optional(),
   providers: z.record(z.string().min(1), ServeProviderConfigSchema).optional(),
   routePools: z.array(ModelRoutePoolConfigSchema).max(100).optional(),
+  providerFailover: z.array(ModelFailoverGroupSchema).max(100).optional(),
   localModelGateway: LocalModelGatewayConfigSchema.optional(),
   models: ModelConfigSchema.optional(),
   contextCompaction: ContextCompactionConfigSchema.optional(),

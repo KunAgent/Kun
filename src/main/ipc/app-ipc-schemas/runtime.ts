@@ -132,7 +132,8 @@ export const providerProbePayloadSchema = z
     baseUrl: trimmedString(MAX_URL_LENGTH),
     apiKey: z.string().max(8_192),
     endpointFormat: z.enum(MODEL_ENDPOINT_FORMATS),
-    useProxy: z.boolean()
+    useProxy: z.boolean(),
+    customHeaders: z.record(trimmedString(128), z.string().max(8_192)).optional()
   })
   .strict()
 

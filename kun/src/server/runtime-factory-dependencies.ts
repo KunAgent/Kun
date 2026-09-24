@@ -215,6 +215,7 @@ export { TurnService, ownerLeaseExpiredTurnAbortReason } from '../services/turn-
 export { ReviewService } from '../services/review-service.js'
 export { UsageService } from '../services/usage-service.js'
 export { ProviderQuotaService } from '../services/provider-quota-service.js'
+export type { ProviderQuotaEntry } from '../contracts/provider-quota.js'
 export {
   resolveDefaultCodexQuotaCredential,
   resolveDefaultGrokQuotaCredential,
@@ -326,5 +327,5 @@ export {
   OfficialProviderCliService,
   resolveAntigravityCliCommand
 } from '../services/official-provider-cli.js'
-export type { LocalModelGatewayConfig, ModelRoutePoolConfig } from '../contracts/model-route-pool.js'
+export type { LocalModelGatewayConfig, ModelFailoverGroup, ModelRoutePoolConfig } from '../contracts/model-route-pool.js'
 export type { GeminiCodeAssistCredential } from '../contracts/gemini-code-assist.js'

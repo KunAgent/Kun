@@ -130,6 +130,12 @@ module.exports = {
   //  - macOS TCC 权限、通知授权也都挂在这个 id 上。
   appId,
   productName,
+  protocols: [
+    {
+      name: 'Kun provider import link',
+      schemes: ['kun']
+    }
+  ],
   asar: true,
   asarUnpack: [
     '**/kun/dist/**/*',

@@ -101,6 +101,7 @@ export const RegistryDocumentSchema = z.object({
   defaultModel: z.string().min(1).optional(),
   proxy: ModelConnectionSnapshotSchema.shape.proxy,
   routePools: ModelConnectionSnapshotSchema.shape.routePools,
+  failover: ModelConnectionSnapshotSchema.shape.failover,
   localModelGateway: ModelConnectionSnapshotSchema.shape.localModelGateway
 }).strict()
 export type RegistryDocument = z.infer<typeof RegistryDocumentSchema>
@@ -160,6 +161,7 @@ export type MaterializedModelConnections = {
   providers: Map<string, ServeProviderConfig>
   proxy: RegistryDocument['proxy']
   routePools: RegistryDocument['routePools']
+  failover: RegistryDocument['failover']
   localModelGateway: RegistryDocument['localModelGateway']
 }
 
@@ -363,6 +365,7 @@ export function emptyDocument(): RegistryDocument {
     credentialRefCleanup: {},
     proxy: { enabled: false, url: '' },
     routePools: [],
+    failover: [],
     localModelGateway: { enabled: false }
   }
 }
@@ -421,6 +424,7 @@ export function reconcileSeedProfile(
         ? {
             baseUrl: request.baseUrl,
             endpointFormat: request.endpointFormat,
+            ...(request.endpoints ? { endpoints: request.endpoints } : {}),
             configured: true
           }
         : {}),
@@ -440,6 +444,7 @@ export function sameStoredProfile(left: StoredProfile, right: StoredProfile): bo
     left.authType === right.authType &&
     left.baseUrl === right.baseUrl &&
     left.endpointFormat === right.endpointFormat &&
+    sameEndpoints(left.endpoints, right.endpoints) &&
     left.useProxy === right.useProxy &&
     left.configured === right.configured &&
     left.incarnationId === right.incarnationId &&
@@ -509,6 +514,7 @@ export function project(
       : {}),
     proxy: document.proxy,
     routePools: document.routePools,
+    failover: document.failover,
     localModelGateway: document.localModelGateway
   })
 }
@@ -629,4 +635,13 @@ export function sameHeaders(
   right: Record<string, string> | undefined
 ): boolean {
   return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {})
+}
+
+export function sameEndpoints(
+  left: StoredProfile['endpoints'],
+  right: StoredProfile['endpoints']
+): boolean {
+  return (left?.chat_completions ?? '') === (right?.chat_completions ?? '') &&
+    (left?.responses ?? '') === (right?.responses ?? '') &&
+    (left?.messages ?? '') === (right?.messages ?? '')
 }

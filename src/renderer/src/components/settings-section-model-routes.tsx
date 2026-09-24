@@ -84,6 +84,7 @@ const strategyTranslationKeys: Record<ModelRouteStrategy, string> = {
   'round-robin': 'modelRoutes.strategyRoundRobin',
   'weighted-round-robin': 'modelRoutes.strategyWeightedRoundRobin',
   'least-latency': 'modelRoutes.strategyLeastLatency',
+  'least-used': 'modelRoutes.strategyLeastUsed',
   adaptive: 'modelRoutes.strategyAdaptive'
 }
 

@@ -8,6 +8,7 @@ import {
   DEFAULT_MODEL_PROVIDER_ID
 } from '@shared/app-settings'
 import { modelProviderRequiresApiKey } from '@shared/app-settings-provider-core'
+import { projectFailoverGroupsForRuntime } from '@shared/app-settings-provider-failover'
 import {
   useEffect
 } from 'react'
@@ -86,6 +87,7 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
         model: effectiveProjectedModel,
         proxy: projected.provider.proxy,
         routePools: projected.provider.routePools,
+        failover: projected.provider.failover,
         localGateway: projected.provider.localGateway
       })
       sharedSyncFingerprint.current = fingerprint
@@ -95,6 +97,7 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
         model: current.kun.model,
         proxy: current.provider.proxy,
         routePools: current.provider.routePools,
+        failover: current.provider.failover,
         localGateway: current.provider.localGateway
       })
       if (fingerprint !== currentFingerprint) {
@@ -148,6 +151,7 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
       model: kun.model,
       proxy: provider.proxy,
       routePools: provider.routePools,
+      failover: provider.failover,
       localGateway: provider.localGateway
     })
     if (sharedProjectionPending.current) {
@@ -274,15 +278,18 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
         pendingSharedProviderCatalogs.current.delete(existing.id)
         pendingSharedProviderCredentials.current.delete(existing.id)
       }
+      const projectedFailover = projectFailoverGroupsForRuntime(latest.provider)
       const globalsChanged =
         JSON.stringify(snapshot.proxy) !== JSON.stringify(latest.provider.proxy ?? { enabled: false, url: '' }) ||
         JSON.stringify(snapshot.routePools) !== JSON.stringify(latest.provider.routePools ?? []) ||
+        JSON.stringify(snapshot.failover ?? []) !== JSON.stringify(projectedFailover) ||
         snapshot.localModelGateway?.enabled !== (latest.provider.localGateway?.enabled === true)
       if (globalsChanged) {
         snapshot = await requestSharedModelConnections('/v1/model-connections', 'PATCH', {
           expectedRevision: snapshot.revision,
           proxy: latest.provider.proxy ?? { enabled: false, url: '' },
           routePools: latest.provider.routePools ?? [],
+          failover: projectedFailover,
           localModelGateway: { enabled: latest.provider.localGateway?.enabled === true }
         })
       }
@@ -306,6 +313,7 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
           model: latestKun.model,
           proxy: latest.provider.proxy,
           routePools: latest.provider.routePools,
+          failover: latest.provider.failover,
           localGateway: latest.provider.localGateway
         })
         setSharedConnections(snapshot)
@@ -331,6 +339,7 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
     kun.model,
     kun.providerId,
     modelProviders,
+    provider.failover,
     provider.localGateway,
     provider.proxy,
     provider.routePools,

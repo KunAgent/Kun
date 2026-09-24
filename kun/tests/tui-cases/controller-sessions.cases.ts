@@ -83,6 +83,7 @@ function credentialSnapshot(
     defaultModel: 'model-a',
     proxy: { enabled: false, url: '' },
     routePools: [],
+    failover: [],
     localModelGateway: { enabled: false }
   }
 }
@@ -112,6 +113,7 @@ describe("TuiController reasoning and session lifecycle", () => {
         defaultModel: 'reasoning-model',
         proxy: { enabled: false, url: '' },
         routePools: [],
+        failover: [],
         localModelGateway: { enabled: false },
         providers: [{
           id: 'provider-a', accountId: 'account-a', name: 'Provider A', kind: 'http',
@@ -178,6 +180,7 @@ describe("TuiController reasoning and session lifecycle", () => {
         defaultModel: 'glm-5.2',
         proxy: { enabled: false, url: '' },
         routePools: [],
+        failover: [],
         localModelGateway: { enabled: false },
         providers: [{
           id: 'opencode-go',
@@ -258,6 +261,7 @@ describe("TuiController reasoning and session lifecycle", () => {
         defaultModel: 'gpt-5.6-luna',
         proxy: { enabled: false, url: '' },
         routePools: [],
+        failover: [],
         localModelGateway: { enabled: false },
         providers: [{
           id: 'codex',

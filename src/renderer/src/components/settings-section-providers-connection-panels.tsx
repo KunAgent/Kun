@@ -51,6 +51,8 @@ import {
   type SharedModelConnection, type SharedModelConnectionsSnapshot
 } from './settings-section-providers-shared-api'
 import { ProviderCustomHeadersEditor } from './provider-custom-headers-editor'
+import { ProviderEndpointsPanel } from './provider-endpoints-panel'
+import { ProviderIconPicker } from './provider-icon-picker'
 import {
   sharedProviderMutationCoordinator
 } from './shared-provider-mutation-coordinator'
@@ -399,6 +401,14 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                       {t('modelEndpointCustomEndpointDesc')}
                     </p>
                   ) : null}
+                  {!isOAuthSubscriptionProvider(activeProvider) &&
+                  !isDelegatedEndpointProvider(activeProvider) ? (
+                    <ProviderEndpointsPanel
+                      provider={activeProvider}
+                      t={t}
+                      onChange={(patch) => updateModelProvider(activeProvider.id, patch)}
+                    />
+                  ) : null}
                 </DetailSection>
                 <SharedDefaultModelPicker
                   snapshot={sharedConnections}
@@ -441,6 +451,11 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                           {t('modelProviderIdentityHint')}
                         </span>
                       </label>
+                      <ProviderIconPicker
+                        provider={activeProvider}
+                        t={t}
+                        onChange={(patch) => updateModelProvider(activeProvider.id, patch)}
+                      />
                     </DetailSection>
                 <DetailSection
                   title={t('modelProviderRetrySection')}

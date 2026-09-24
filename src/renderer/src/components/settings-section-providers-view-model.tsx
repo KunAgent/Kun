@@ -49,6 +49,7 @@ import {
 import {
   sharedProviderSetupNeedsApiKey
 } from './settings-section-providers-shared-api'
+import { modelProviderReferenceKinds } from '@shared/app-settings'
 
 export { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
 
@@ -64,7 +65,7 @@ export function isOpenCodeFreeProvider(provider: Pick<ModelProviderProfileV1, 'i
 }
 
 export function buildProvidersViewModel(scope: Record<string, any>): Record<string, any> {
-  const { t, showApiKey, sharedConnections, revealedCredential, credentialRevealPendingProviderId, setSelectedProviderId, addProviderQuery, subscriptionRegion, providerListQuery, probeStates, cursorAccounts, pendingImport, draftProvider, activeProvider, sharedConnectionFor, hasConfiguredCredential, activeKunProviderId, closeAddProviderDialog, addPresetModelProvider, updateProviderProxy, updateModelProvider, setGlobalNetworkOpen, providerProxy, runProbe } = scope
+  const { t, showApiKey, sharedConnections, revealedCredential, credentialRevealPendingProviderId, setSelectedProviderId, addProviderQuery, subscriptionRegion, providerListQuery, probeStates, cursorAccounts, pendingImport, draftProvider, activeProvider, sharedConnectionFor, hasConfiguredCredential, activeKunProviderId, closeAddProviderDialog, addPresetModelProvider, updateProviderProxy, updateModelProvider, setGlobalNetworkOpen, providerProxy, runProbe, openQuickAdd, form } = scope
   const modelProviders = scope.modelProviders as ModelProviderProfileV1[]
   const displayProviders = scope.displayProviders as ModelProviderProfileV1[]
   const activeProbe = activeProvider ? probeStates[activeProvider.id] : undefined
@@ -241,6 +242,7 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
             <ProviderIcon
               presetId={item.presetSource?.presetId}
               providerId={item.id}
+              iconId={item.iconId}
               className="h-4 w-4"
             />
           </span>
@@ -257,6 +259,14 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
               {inUse ? <span>{t('modelProviderInUse')}</span> : null}
               {inUse ? <span aria-hidden="true">·</span> : null}
               <span>{t('modelProviderModelCount', { total: providerModelCount(item) })}</span>
+              {!isDraft ? modelProviderReferenceKinds(form, item.id).slice(0, 3).map((kind) => (
+                <span
+                  key={kind}
+                  className="shrink-0 rounded-md bg-ds-main/80 px-1.5 py-0.5 text-[10px] font-medium text-ds-faint"
+                >
+                  {t(`modelProviderRefKind_${kind}`)}
+                </span>
+              )) : null}
               {item.models.some((model) =>
                 modelSupportsImageInput(profileForModel(item, model))
               ) ? <ImageIcon className="h-3 w-3 shrink-0" strokeWidth={1.9} /> : null}
@@ -350,6 +360,10 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
         key={entry.profileId}
         type="button"
         onClick={() => {
+          if (typeof openQuickAdd === 'function') {
+            openQuickAdd({ preset: entry.preset, mode: entry.mode })
+            return
+          }
           closeAddProviderDialog()
           void addPresetModelProvider(entry.preset, entry.mode)
         }}

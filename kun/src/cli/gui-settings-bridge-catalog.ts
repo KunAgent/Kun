@@ -333,6 +333,7 @@ export function modelConnectionSnapshotFromGuiSettings(
       : {}),
     proxy: { enabled: false, url: '' },
     routePools: [],
+    failover: [],
     localModelGateway: { enabled: false }
   })
 }

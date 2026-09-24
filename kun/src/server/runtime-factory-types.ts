@@ -13,6 +13,7 @@ import type {
   LocalModelGatewayConfig,
   ModelConfig,
   ModelEndpointFormat,
+  ModelFailoverGroup,
   ModelRequestRetryConfig,
   ModelRoutePoolConfig,
   NodeHttpServerHandle,
@@ -51,6 +52,7 @@ export type KunServeRuntimeOptions = {
   headers?: Record<string, string>
   providers?: Record<string, ServeProviderConfig>
   routePools?: ModelRoutePoolConfig[]
+  providerFailover?: ModelFailoverGroup[]
   localModelGateway?: LocalModelGatewayConfig
   model: string
   approvalPolicy: ApprovalPolicy

@@ -386,11 +386,15 @@ export type ModelProviderProbeRequest = {
   apiKey: string
   endpointFormat: ModelEndpointFormat
   useProxy: boolean
+  /** User-configured custom headers merged over protocol defaults. */
+  customHeaders?: Record<string, string>
 }
 
 export type ModelProviderProbeResult =
   | { ok: true; latencyMs: number; modelIds: string[]; modelProfiles?: Record<string, ModelProviderModelProfileV1> }
   | { ok: false; message: string; suggestedProxyUrl?: string }
+
+export * from './kun-gui-api-contracts-provider'
 
 export type ProviderModelCatalogSource = 'provider-api' | 'models-dev'
 

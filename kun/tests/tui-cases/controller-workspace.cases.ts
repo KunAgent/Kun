@@ -83,6 +83,7 @@ function credentialSnapshot(
     defaultModel: 'model-a',
     proxy: { enabled: false, url: '' },
     routePools: [],
+    failover: [],
     localModelGateway: { enabled: false }
   }
 }

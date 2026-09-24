@@ -255,7 +255,8 @@ import {
   WorkspaceCreationTimeEntry,
   WorkspacePickResult
 } from './kun-gui-api-contracts'
-export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & {
+import type { KunGuiProviderApi } from './kun-gui-api-surface-provider'
+export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & {
   platform: string
   /** True only in the browser Remote build served by the Remote gateway. */
   isRemoteWeb?: boolean

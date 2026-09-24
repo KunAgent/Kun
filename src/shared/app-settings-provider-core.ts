@@ -91,6 +91,11 @@ import {
   normalizeProxyUrl
 } from './app-settings-provider-capabilities'
 import {
+  isLocalModelProviderBaseUrl,
+  normalizeModelProviderFailover,
+  normalizeRouteHealthPolicyExtras
+} from './app-settings-provider-failover'
+import {
   boundedNonNegativeInteger,
   defaultModelProviderProfile,
   normalizeModelProviderProfile,
@@ -195,6 +200,7 @@ export function normalizeModelProviderSettings(
   }
   const providers = [...providersById.values()]
   const routePools = normalizeModelRoutePools(input?.routePools, providers)
+  const failover = normalizeModelProviderFailover(input?.failover)
   return {
     apiKey: excludedBuiltinProviderIds.includes(DEFAULT_MODEL_PROVIDER_ID) ? '' : apiKey,
     baseUrl,
@@ -203,6 +209,7 @@ export function normalizeModelProviderSettings(
     providers,
     ...(excludedBuiltinProviderIds.length > 0 ? { excludedBuiltinProviderIds } : {}),
     routePools,
+    ...(failover.length > 0 ? { failover } : {}),
     localGateway: {
       enabled: input?.localGateway?.enabled === true,
       name: typeof input?.localGateway?.name === 'string' && input.localGateway.name.trim()
@@ -226,6 +233,7 @@ export function mergeModelProviderSettings(
         }
       : current.proxy,
     routePools: patch?.routePools ?? current.routePools,
+    failover: patch?.failover ?? current.failover,
     localGateway: patch?.localGateway
       ? { ...current.localGateway, ...patch.localGateway }
       : current.localGateway
@@ -299,7 +307,8 @@ export function normalizeModelRoutePools(
       healthPolicy: {
         failureThreshold: Math.min(20, Math.max(1, boundedNonNegativeInteger(raw.healthPolicy?.failureThreshold, 3, 20))),
         cooldownMs: Math.min(3_600_000, Math.max(1_000, boundedNonNegativeInteger(raw.healthPolicy?.cooldownMs, 60_000, 3_600_000))),
-        halfOpenMaxAttempts: Math.min(10, Math.max(1, boundedNonNegativeInteger(raw.healthPolicy?.halfOpenMaxAttempts, 1, 10)))
+        halfOpenMaxAttempts: Math.min(10, Math.max(1, boundedNonNegativeInteger(raw.healthPolicy?.halfOpenMaxAttempts, 1, 10))),
+        ...normalizeRouteHealthPolicyExtras(raw)
       }
     }
     usedIds.add(id)
@@ -441,7 +450,7 @@ export function getModelProviderProfile(
 }
 
 export function modelProviderRequiresApiKey(
-  provider: Pick<ModelProviderProfileV1, 'id' | 'kind' | 'presetSource'>
+  provider: Pick<ModelProviderProfileV1, 'id' | 'kind' | 'presetSource' | 'baseUrl'>
 ): boolean {
   if (
     provider.kind === 'agent-sdk' ||
@@ -456,8 +465,12 @@ export function modelProviderRequiresApiKey(
   if (
     provider.id === OPENCODE_FREE_PROVIDER_ID ||
     source?.preset.id === 'litellm' ||
-    source?.preset.id === OPENCODE_FREE_PROVIDER_ID
+    source?.preset.id === OPENCODE_FREE_PROVIDER_ID ||
+    source?.preset.keyOptional === true
   ) return false
+  // Loopback/LAN servers (LM Studio, vLLM, a local Ollama) normally serve
+  // without credentials; the key field stays editable for the ones that do.
+  if (isLocalModelProviderBaseUrl(provider.baseUrl)) return false
   // Every remaining profile uses API-key authentication. In particular,
   // manually created HTTP providers have no presetSource, which must not make
   // the credential field disappear from Settings (#1245).

@@ -3,6 +3,7 @@ import { MODEL_ENDPOINT_FORMATS } from './model-endpoint-format.js'
 import { CustomHeadersSchema } from './custom-headers.js'
 import {
   LocalModelGatewayConfigSchema,
+  ModelFailoverGroupSchema,
   ModelRoutePoolConfigSchema
 } from './model-route-pool.js'
 import { ModelCapabilityMetadata } from './capabilities.js'
@@ -23,6 +24,17 @@ export const ModelConnectionCredentialErrorCodeSchema = z.enum([
   'credential_unreadable'
 ])
 
+/**
+ * Per-protocol base URL overrides for multi-protocol providers. Each family
+ * may point at a different path/host; requests resolve
+ * `endpoints[format] ?? baseUrl` once the wire format is chosen.
+ */
+export const ModelConnectionEndpointsSchema = z.object({
+  chat_completions: z.string().url().max(2_048).optional(),
+  responses: z.string().url().max(2_048).optional(),
+  messages: z.string().url().max(2_048).optional()
+}).strict()
+
 export const ModelConnectionProfileSchema = z.object({
   id: z.string().min(1).max(128),
   accountId: z.string().min(1).max(128),
@@ -40,6 +52,7 @@ export const ModelConnectionProfileSchema = z.object({
   authType: z.enum(['api-key', 'oauth', 'subscription']),
   baseUrl: z.string().url().optional(),
   endpointFormat: z.enum(MODEL_ENDPOINT_FORMATS),
+  endpoints: ModelConnectionEndpointsSchema.optional(),
   useProxy: z.boolean(),
   configured: z.boolean(),
   credentialStatus: ModelConnectionCredentialStatusSchema.optional(),
@@ -61,6 +74,7 @@ export const ModelConnectionSnapshotSchema = z.object({
   defaultModel: z.string().min(1).optional(),
   proxy: ModelConnectionProxySchema.default({ enabled: false, url: '' }),
   routePools: z.array(ModelRoutePoolConfigSchema).default([]),
+  failover: z.array(ModelFailoverGroupSchema).default([]),
   localModelGateway: LocalModelGatewayConfigSchema.default({ enabled: false })
 }).strict()
 
@@ -68,6 +82,7 @@ export const ModelConnectionGlobalsRequestSchema = z.object({
   expectedRevision: z.number().int().nonnegative(),
   proxy: ModelConnectionProxySchema,
   routePools: z.array(ModelRoutePoolConfigSchema),
+  failover: z.array(ModelFailoverGroupSchema).default([]),
   localModelGateway: LocalModelGatewayConfigSchema
 }).strict()
 
@@ -88,6 +103,7 @@ export const ModelConnectionConnectRequestSchema = z.object({
   authType: z.enum(['api-key', 'oauth', 'subscription']).default('api-key'),
   baseUrl: z.string().url().optional(),
   endpointFormat: z.enum(MODEL_ENDPOINT_FORMATS).default('chat_completions'),
+  endpoints: ModelConnectionEndpointsSchema.optional(),
   useProxy: z.boolean().default(false),
   credential: z.string().max(64 * 1024).optional(),
   models: z.array(z.string().min(1).max(512)).max(500).default([]),
@@ -149,6 +165,7 @@ export const ModelConnectionPatchRequestSchema = z.object({
   authType: z.enum(['api-key', 'oauth', 'subscription']).optional(),
   baseUrl: z.string().url().optional(),
   endpointFormat: z.enum(MODEL_ENDPOINT_FORMATS).optional(),
+  endpoints: ModelConnectionEndpointsSchema.optional(),
   useProxy: z.boolean().optional(),
   models: z.array(z.string().min(1).max(512)).max(500).optional(),
   modelCapabilities: z.record(z.string(), ModelCapabilityMetadata).optional(),

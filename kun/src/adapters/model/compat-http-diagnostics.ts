@@ -1,7 +1,7 @@
 import type { ModelEndpointFormat } from '../../contracts/model-endpoint-format.js'
 import { isDeepSeekHost, probeDeepSeekReachable } from './model-error-probe.js'
 import type { ModelFailureMetadata } from '../../contracts/model-route-pool.js'
-import { modelFailureMetadata, type FailureHeaderSource } from './failure-reason.js'
+import { modelFailureMetadata, providerErrorCode, type FailureHeaderSource } from './failure-reason.js'
 
 export function buildCompatRequestHeaders(input: {
   apiKey: string
@@ -108,15 +108,7 @@ function retryAfterHeaderRecord(retryAfter: string | null | undefined): FailureH
   return retryAfter ? { 'retry-after': retryAfter } : undefined
 }
 
-export function providerErrorCode(text: string): string | undefined {
-  try {
-    const parsed = JSON.parse(text) as { error?: { code?: unknown }; code?: unknown }
-    const code = parsed?.error?.code ?? parsed?.code
-    return typeof code === 'string' || typeof code === 'number' ? String(code).slice(0, 128) : undefined
-  } catch {
-    return undefined
-  }
-}
+export { providerErrorCode } from './failure-reason.js'
 
 export function compatHttpFailureLog(input: {
   provider: string

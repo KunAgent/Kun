@@ -1,10 +1,13 @@
 import type { ModelCapabilityMetadata } from '../../contracts/capabilities.js'
 import type {
+  ModelFailoverGroup,
+  ModelFailoverStrategy,
   ModelFailureMetadata,
   ModelRoutePoolConfig,
   ModelRouteTargetConfig
 } from '../../contracts/model-route-pool.js'
 import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../../contracts/model-route-pool.js'
+import type { ProviderQuotaEntry } from '../../contracts/provider-quota.js'
 import type {
   ModelClient,
   ModelRequest,
@@ -221,6 +224,9 @@ export class RoutePoolModelClient implements ModelClient {
   private pools = new Map<string, ModelRoutePoolConfig>()
   private configured: ModelRoutePoolConfig[] = []
   private readonly roundRobin = new Map<string, number>()
+  private readonly requestCounts = new Map<string, number>()
+  private failoverByProvider = new Map<string, ModelFailoverGroup>()
+  private quotaLookup?: (providerId: string) => ProviderQuotaEntry | undefined
 
   constructor(
     private readonly direct: ModelClient,
@@ -236,7 +242,35 @@ export class RoutePoolModelClient implements ModelClient {
     this.configured = pools.map((pool) => structuredClone(pool))
     this.pools = new Map(pools.filter((pool) => pool.enabled).map((pool) => [pool.modelId.toLowerCase(), structuredClone(pool)]))
     this.roundRobin.clear()
-    this.health.prune([...this.pools.values()])
+    this.health.prune([...this.pools.values(), ...this.failoverPools()])
+  }
+
+  /**
+   * Provider-level failover groups (same-vendor account groups plus
+   * cross-provider fallback chains). A request whose provider id is governed
+   * by a group is routed through a synthesized pool so account exhaustion,
+   * rotation, and fallback reuse the same health/cooldown machinery as
+   * explicit model route pools.
+   */
+  replaceFailoverGroups(groups: readonly ModelFailoverGroup[]): void {
+    this.failoverByProvider = new Map()
+    for (const group of groups) {
+      for (const member of group.members) {
+        const key = member.providerId.trim().toLowerCase()
+        if (key && !this.failoverByProvider.has(key)) {
+          this.failoverByProvider.set(key, group)
+        }
+      }
+    }
+    this.health.prune([...this.pools.values(), ...this.failoverPools()])
+  }
+
+  /**
+   * Read-only quota accessor wired by runtime composition. Only the cached
+   * snapshot is consulted — routing never blocks on a live quota probe.
+   */
+  setQuotaLookup(lookup: ((providerId: string) => ProviderQuotaEntry | undefined) | undefined): void {
+    this.quotaLookup = lookup
   }
 
   routePools(): ModelRoutePoolConfig[] {
@@ -250,19 +284,81 @@ export class RoutePoolModelClient implements ModelClient {
   selectsRouteTargetDuringStream(
     request: Pick<ModelRequest, 'model' | 'providerId'>
   ): boolean {
-    const pool = this.pools.get(request.model.trim().toLowerCase())
-    return Boolean(pool && shouldRouteRequest(pool, request))
+    return this.poolForRequest(request) !== undefined
   }
 
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
-    const pool = this.pools.get(request.model.trim().toLowerCase())
-    return pool && shouldRouteRequest(pool, request)
-      ? this.streamPool(pool, request)
-      : this.direct.stream(request)
+    const pool = this.poolForRequest(request)
+    return pool ? this.streamPool(pool, request) : this.direct.stream(request)
+  }
+
+  private poolForRequest(
+    request: Pick<ModelRequest, 'model' | 'providerId'>
+  ): ModelRoutePoolConfig | undefined {
+    const explicit = this.pools.get(request.model.trim().toLowerCase())
+    if (explicit && shouldRouteRequest(explicit, request)) return explicit
+    const providerId = request.providerId?.trim().toLowerCase()
+    const group = providerId ? this.failoverByProvider.get(providerId) : undefined
+    return group
+      ? this.synthesizeGroupPool(group, request.model.trim(), providerId ?? '')
+      : undefined
+  }
+
+  /**
+   * Synthesized pools exist only to drive health bookkeeping during pruning;
+   * the per-request pool carries the concrete model id.
+   */
+  private failoverPools(): ModelRoutePoolConfig[] {
+    const seen = new Set<string>()
+    const pools: ModelRoutePoolConfig[] = []
+    for (const group of this.failoverByProvider.values()) {
+      if (seen.has(group.providerId)) continue
+      seen.add(group.providerId)
+      const targets = failoverGroupTargets(group, '')
+      if (targets.length > 0) {
+        pools.push(synthesizedGroupPool(group, '', targets))
+      }
+    }
+    return pools
+  }
+
+  private synthesizeGroupPool(
+    group: ModelFailoverGroup,
+    model: string,
+    preferredProviderId: string
+  ): ModelRoutePoolConfig | undefined {
+    let targets = failoverGroupTargets(group, model)
+    // A request addressed to a specific member still honors it first under
+    // member-order strategies; rotation strategies reorder dynamically anyway.
+    if (preferredProviderId && targets[0]?.providerId !== preferredProviderId) {
+      const preferred = targets.find((target) =>
+        target.providerId.toLowerCase() === preferredProviderId &&
+        target.id.startsWith('member:'))
+      if (preferred) {
+        targets = [preferred, ...targets.filter((target) => target !== preferred)]
+      }
+    }
+    return targets.length > 0 ? synthesizedGroupPool(group, model, targets) : undefined
+  }
+
+  /** A quota entry counts as exhausted only on a definitive reading. */
+  private quotaExhausted(providerId: string): boolean {
+    const entry = this.quotaLookup?.(providerId)
+    if (!entry || entry.status !== 'available') return false
+    return entry.metrics.some((metric) =>
+      metric.usedPercent === 100 ||
+      (metric.remaining !== undefined && metric.remaining <= 0)
+    )
   }
 
   private async *streamPool(pool: ModelRoutePoolConfig, request: ModelRequest): AsyncIterable<ModelStreamChunk> {
-    const eligible = pool.targets.filter((target) => target.enabled && this.health.available(pool, target) && targetSupportsRequest(target, request, this.capabilities))
+    let eligible = pool.targets.filter((target) => target.enabled && this.health.available(pool, target) && targetSupportsRequest(target, request, this.capabilities))
+    if (this.quotaLookup && eligible.length > 1) {
+      // Quota-aware routing: a target whose cached quota entry is definitively
+      // exhausted is skipped while at least one funded alternative remains.
+      const funded = eligible.filter((target) => !this.quotaExhausted(target.providerId))
+      if (funded.length > 0) eligible = funded
+    }
     if (eligible.length === 0) {
       yield {
         kind: 'error',
@@ -290,6 +386,8 @@ export class RoutePoolModelClient implements ModelClient {
       }
       const started = this.now()
       this.health.begin(pool, target, request.routeTestId)
+      const countKey = `${pool.id}:${target.id}`
+      this.requestCounts.set(countKey, (this.requestCounts.get(countKey) ?? 0) + 1)
       const route: ModelRouteTargetMetadata = {
         routePoolId: pool.id,
         targetId: target.id,
@@ -402,6 +500,13 @@ export class RoutePoolModelClient implements ModelClient {
     if (pool.strategy === 'least-latency') {
       return [...targets].sort((a, b) => latency(this.health.state(pool.id, a.id)) - latency(this.health.state(pool.id, b.id)))
     }
+    if (pool.strategy === 'least-used') {
+      // Stable sort: equal usage keeps the configured member order, so a
+      // brand-new account never jumps ahead of the representative.
+      return [...targets].sort((a, b) =>
+        (this.requestCounts.get(`${pool.id}:${a.id}`) ?? 0) -
+        (this.requestCounts.get(`${pool.id}:${b.id}`) ?? 0))
+    }
     if (pool.strategy === 'adaptive') {
       return [...targets].sort((a, b) => adaptiveScore(this.health.state(pool.id, b.id)) - adaptiveScore(this.health.state(pool.id, a.id)))
     }
@@ -491,6 +596,65 @@ function withRouteFailure(failure: ModelFailureMetadata | undefined, route: Mode
 }
 
 function healthKey(poolId: string, targetId: string): string { return `${poolId}:${targetId}` }
+
+function failoverGroupTargets(group: ModelFailoverGroup, model: string): ModelRouteTargetConfig[] {
+  const targets: ModelRouteTargetConfig[] = []
+  for (const member of group.members) {
+    if (!member.enabled) continue
+    // A member without a declared model list cannot serve a concrete model
+    // request; the empty `model` call only enumerates ids for health pruning.
+    if (model && !member.models.includes(model)) continue
+    targets.push({
+      id: `member:${member.providerId}`,
+      providerId: member.providerId,
+      modelId: model,
+      enabled: true,
+      weight: 1
+    })
+  }
+  for (const target of group.fallbackTargets) {
+    targets.push({
+      id: `fallback:${target.providerId}:${target.modelId}`,
+      providerId: target.providerId,
+      modelId: target.modelId,
+      enabled: true,
+      weight: 1
+    })
+  }
+  return targets
+}
+
+const FAILOVER_GROUP_STRATEGY: Record<ModelFailoverStrategy, ModelRoutePoolConfig['strategy']> = {
+  // smart = quota- and latency-aware adaptive selection; subscription
+  // accounts therefore only rotate after the active one degrades.
+  smart: 'adaptive',
+  order: 'priority',
+  rotate: 'round-robin',
+  'least-used': 'least-used'
+}
+
+function synthesizedGroupPool(
+  group: ModelFailoverGroup,
+  model: string,
+  targets: ModelRouteTargetConfig[]
+): ModelRoutePoolConfig {
+  return {
+    id: `provider-failover:${group.providerId}`,
+    name: group.providerId,
+    modelId: model,
+    enabled: true,
+    strategy: FAILOVER_GROUP_STRATEGY[group.strategy],
+    targets,
+    failurePolicy: {
+      failoverHttpStatusCodes: [401, 402, 403, 404, 408, 425, 429, 500, 502, 503, 504],
+      failoverOnNetworkError: true,
+      failoverOnTimeout: true,
+      failoverOnAuthError: true
+    },
+    healthPolicy: { failureThreshold: 3, cooldownMs: 60_000, halfOpenMaxAttempts: 1 }
+  }
+}
+
 function latency(state: RuntimeHealth): number { return state.ewmaLatencyMs ?? -1 }
 function adaptiveScore(state: RuntimeHealth): number {
   const total = state.successes + state.failures

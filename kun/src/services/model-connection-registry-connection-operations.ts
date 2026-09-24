@@ -32,6 +32,7 @@ async initialize(this: ModelConnectionRegistry,
     globals?: {
       proxy?: RegistryDocument['proxy']
       routePools?: RegistryDocument['routePools']
+      failover?: RegistryDocument['failover']
       localModelGateway?: RegistryDocument['localModelGateway']
     }
   ): Promise<ModelConnectionSnapshot> {
@@ -141,27 +142,32 @@ async initialize(this: ModelConnectionRegistry,
     if (globals) {
       const nextProxy = globals.proxy ?? current.proxy
       const nextRoutePools = globals.routePools ?? current.routePools
+      const nextFailover = globals.failover ?? current.failover
       const nextLocalModelGateway = globals.localModelGateway ?? current.localModelGateway
       if (JSON.stringify({
         proxy: current.proxy,
         routePools: current.routePools,
+        failover: current.failover,
         localModelGateway: current.localModelGateway
       }) !== JSON.stringify({
         proxy: nextProxy,
         routePools: nextRoutePools,
+        failover: nextFailover,
         localModelGateway: nextLocalModelGateway
       })) {
         current = await this['file'].update(emptyDocument, (document) => {
           const proxy = globals.proxy ?? document.proxy
           const routePools = globals.routePools ?? document.routePools
+          const failover = globals.failover ?? document.failover
           const localModelGateway = globals.localModelGateway ?? document.localModelGateway
-          if (JSON.stringify({ proxy: document.proxy, routePools: document.routePools, localModelGateway: document.localModelGateway }) ===
-            JSON.stringify({ proxy, routePools, localModelGateway })) return document
+          if (JSON.stringify({ proxy: document.proxy, routePools: document.routePools, failover: document.failover, localModelGateway: document.localModelGateway }) ===
+            JSON.stringify({ proxy, routePools, failover, localModelGateway })) return document
           return {
             ...document,
             revision: document.revision + 1,
             proxy,
             routePools,
+            failover,
             localModelGateway
           }
         })
@@ -286,6 +292,7 @@ async connectAuthenticated(this: ModelConnectionRegistry,
         authType: input.authType,
         baseUrl: input.baseUrl,
         endpointFormat: input.endpointFormat,
+        ...(input.endpoints ? { endpoints: input.endpoints } : {}),
         useProxy: requestedUseProxy ?? existing?.useProxy ?? false,
         configured: true,
         incarnationId,
@@ -511,6 +518,7 @@ async connectInternal(this: ModelConnectionRegistry,
             authType: input.authType,
             baseUrl: input.baseUrl,
             endpointFormat: input.endpointFormat,
+            ...(input.endpoints ? { endpoints: input.endpoints } : {}),
             useProxy: input.useProxy,
             configured: true,
             incarnationId,
@@ -580,6 +588,7 @@ async connectInternal(this: ModelConnectionRegistry,
         authType: input.authType,
         baseUrl: input.baseUrl,
         endpointFormat: input.endpointFormat,
+        ...(input.endpoints ? { endpoints: input.endpoints } : {}),
         useProxy: input.useProxy,
         configured,
         incarnationId: randomUUID(),

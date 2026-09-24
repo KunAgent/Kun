@@ -25,6 +25,7 @@ import type { ExtensionCredentialStore } from './extension-credential-store.js'
 import { createProxyFetch } from '../adapters/model/proxy-fetch.js'
 import { type ModelConnectionRegistry, StoredProfileSchema, DeletedProfileTombstoneSchema, CredentialTransactionPreviousSchema, CredentialTransactionSchema, CredentialRefCleanupEntrySchema, RegistryDocumentSchema, type RegistryDocument, type StoredProfile, type CredentialTransaction, type PreparedCredentialSecret, type ModelConnectionSeed, type AuthenticatedModelConnectionInput, MODEL_CONNECTION_CREDENTIAL_SOURCE_PREFIX, isModelConnectionCredentialSourceId, modelConnectionCredentialSourceId, providerIdFromCredentialSource, ModelConnectionConflictError, type MaterializedModelConnections, type ProjectedCredentialHealth, credentialHealth, readLatestIfChanged, parseCredentialOperationToken, previousCredentialState, boundedCredentialHighWater, appendCredentialRefs, requireCredentialTransaction, credentialReferenceIsLive, processIsAlive, emptyDocument, configuredFallback, reconcileSeedProfile, sameStoredProfile, project, isProfileUsable, mergeProjectedCapability, assertRevision, requireProfile, capabilitiesForModels, sameCapabilities, allocateId, normalizeProviderId, preparedCredentialSecretTimerKey, uniqueModels, sameModels, probeModels, modelsUrl } from './model-connection-registry-core.js'
 import { resolveRegistryProfileProxyUrl } from './model-connection-registry-proxy.js'
+import { readModelCatalog, writeModelCatalog } from './model-catalog-store.js'
 
 export const modelConnectionRegistrySelectionOperations = {
 async select(this: ModelConnectionRegistry, raw: unknown): Promise<ModelConnectionSnapshot> {
@@ -124,6 +125,7 @@ async updateGlobals(this: ModelConnectionRegistry, raw: unknown): Promise<ModelC
         revision: current.revision + 1,
         proxy: input.proxy,
         routePools: input.routePools,
+        failover: input.failover,
         localModelGateway: input.localModelGateway
       }
     })
@@ -151,11 +153,28 @@ async probe(this: ModelConnectionRegistry, providerId: string): Promise<{ ok: tr
       baseUrl: profile.baseUrl,
       endpointFormat: profile.endpointFormat,
       apiKey: resolved.apiKey,
-      headers: { ...(profile.headers ?? {}), ...(resolved.headers ?? {}) },
+      headers: {
+        ...(profile.customHeaders ?? {}),
+        ...(profile.headers ?? {}),
+        ...(resolved.headers ?? {})
+      },
       fallbackModels: profile.models,
       proxyUrl: resolveRegistryProfileProxyUrl(document, profile)
     })
+    // Persist the discovered catalog so GUI/TUI can render availability
+    // without re-probing. Best-effort: a cache write failure must not fail
+    // the probe.
+    void writeModelCatalog(this['options'].dataDir, profile.id, {
+      fetchedAt: new Date().toISOString(),
+      ...(profile.baseUrl ? { baseUrl: profile.baseUrl } : {}),
+      endpointFormat: profile.endpointFormat,
+      models
+    }).catch(() => {})
     return { ok: true, models }
+  },
+
+async catalog(this: ModelConnectionRegistry, providerId: string) {
+    return readModelCatalog(this['options'].dataDir, providerId)
   },
 
 /**

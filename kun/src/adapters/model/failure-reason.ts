@@ -6,6 +6,17 @@ import type {
 
 export type { ModelFailureReason } from '../../contracts/model-route-pool.js'
 
+/** Extract a machine-readable provider error code from a JSON error body. */
+export function providerErrorCode(text: string): string | undefined {
+  try {
+    const parsed = JSON.parse(text) as { error?: { code?: unknown }; code?: unknown }
+    const code = parsed?.error?.code ?? parsed?.code
+    return typeof code === 'string' || typeof code === 'number' ? String(code).slice(0, 128) : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * Unified failure classification shared by every model client.
  *
@@ -56,12 +67,16 @@ export function classifyModelFailure(input: {
   providerCode?: string
   body?: string
   headers?: FailureHeaderSource
+  /** Retry hint the caller already parsed from a provider-specific body. */
+  retryAfterMs?: number
   now?: number
 }): ModelFailureClassification {
   const now = input.now ?? Date.now()
   const signal = `${input.providerCode ?? ''}\n${(input.body ?? '').slice(0, 4_000)}`
     .toLowerCase()
-  const { retryAfterMs, resetAt } = resetInfoFromHeaders(input.headers, now)
+  const parsed = resetInfoFromHeaders(input.headers, now)
+  const retryAfterMs = input.retryAfterMs ?? parsed.retryAfterMs
+  const resetAt = parsed.resetAt
   const status = input.status
   let reason: ModelFailureReason
   if (status === 402 || CREDIT_SIGNAL.test(signal)) reason = 'credit'
@@ -72,6 +87,12 @@ export function classifyModelFailure(input: {
   else if (status === 404) reason = 'model'
   else if (status === 400 || status === 413 || status === 422) reason = 'request'
   else reason = 'other'
+  // A provider that declares a retry delay is throttling, not out of funds:
+  // treat hinted credit/quota failures as rate limits (e.g. Code Assist
+  // per-minute capacity resets).
+  if ((reason === 'credit' || reason === 'quota') && retryAfterMs !== undefined) {
+    reason = 'rate'
+  }
   return {
     reason,
     ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
@@ -92,6 +113,7 @@ export function modelFailureMetadata(input: {
   providerCode?: string
   body?: string
   headers?: FailureHeaderSource
+  retryAfterMs?: number
   responseReceived?: boolean
   now?: number
 }): ModelFailureMetadata {
@@ -343,4 +365,30 @@ function forEachHeader(
     if (value === undefined) continue
     visit(key, Array.isArray(value) ? value.join(', ') : value)
   }
+}
+
+/**
+ * Classify an HTTP error response and compute its same-target retry budget in
+ * one call — used by both the buffered and streaming retry loops.
+ */
+export function httpFailureRetryDecision(input: {
+  status: number
+  body: string
+  headers?: FailureHeaderSource
+  alternatives?: number
+  policyMaxAttempts: number
+}): { classification: ModelFailureClassification; budget: ReturnType<typeof httpRetryBudget> } {
+  const classification = classifyModelFailure({
+    status: input.status,
+    providerCode: providerErrorCode(input.body),
+    body: input.body,
+    headers: input.headers
+  })
+  const budget = httpRetryBudget({
+    reason: classification.reason,
+    retryAfterMs: classification.retryAfterMs,
+    alternatives: input.alternatives,
+    policy: { maxAttempts: input.policyMaxAttempts }
+  })
+  return { classification, budget }
 }

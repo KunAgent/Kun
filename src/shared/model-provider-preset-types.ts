@@ -49,6 +49,23 @@ export type ModelProviderPresetId =
   | 'opper'
   | 'vercel-ai-gateway'
   | 'stepfun'
+  | 'openai-api'
+  | 'anthropic-api'
+  | 'gemini-api'
+  | 'xai-api'
+  | 'mistral-api'
+  | 'groq-api'
+  | 'zhipu-api'
+  | 'zai-api'
+  | 'openrouter'
+  | 'siliconflow'
+  | 'aihubmix'
+  | 'three02ai'
+  | 'together'
+  | 'fireworks'
+  | 'ollama-local'
+  | 'lmstudio'
+  | 'local-openai'
 
 export const TOKEN_PLAN_PROVIDER_ID_SUFFIX = '-token-plan'
 
@@ -227,6 +244,30 @@ export type ModelProviderPreset = {
    * 'api'(默认) = 按量付费。仅用于设置页分组，不写入存储的 profile。
    */
   category?: 'api' | 'free' | 'subscription'
+  /**
+   * 展示分组:'vendor' = 厂商官方 API,'relay' = 中转/聚合网关,
+   * 'local' = 本机或局域网服务。缺省视为 'vendor'。仅用于添加页分组。
+   */
+  origin?: 'vendor' | 'relay' | 'local'
+  /** 一句话说明(如"按量付费"、"多家模型一个 Key"),仅用于添加页副标题。 */
+  note?: string
+  /** 免 Key 预设(本机服务)。Key 输入框仍显示但标注为可选。 */
+  keyOptional?: boolean
+  /**
+   * models.dev 目录来源 key(先中先用)。未设置时按 baseUrl host 自动匹配。
+   * 仅用于目录补全展示与默认导入,不写入存储的 profile。
+   */
+  catalogSources?: string[]
+  /**
+   * API 模式的区域端点。存在时添加页只显示一个图块,由用户在面板里
+   * 选择区域;baseUrl 必须等于第一个区域的 baseUrl。
+   */
+  regions?: ModelProviderTokenPlanRegion[]
+  /**
+   * 添加页图块合并 id:相同 tileGroup 的预设显示为一个图块,面板里
+   * 用 regions/单独预设条目切换。已存储的 profile id 不变。
+   */
+  tileGroup?: string
   /**
    * 套餐订阅筛选所使用的供应商归属地区。仅用于预设选择器展示，不写入 provider profile。
    * 同一个预设的 Token Plan 入口沿用这里的地区。

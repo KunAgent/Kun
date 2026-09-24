@@ -30,6 +30,7 @@ export function mergeRuntimeConfigApplyOptions(
     headers: serve.headers ?? current.headers,
     providers: mergeRuntimeProviderCredentials(current.providers, serve.providers),
     routePools: serve.routePools ?? current.routePools,
+    providerFailover: serve.providerFailover ?? current.providerFailover,
     localModelGateway: serve.localModelGateway ?? current.localModelGateway,
     model: serve.model ?? current.model,
     approvalPolicy: serve.approvalPolicy ?? current.approvalPolicy,

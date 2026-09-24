@@ -566,7 +566,7 @@ export function projectSharedModelConnections(
   pendingNames: Pick<ReadonlyMap<string, PendingSharedProviderName>, 'get'> = new Map(),
   pendingCatalogs: Pick<ReadonlyMap<string, PendingSharedProviderCatalog>, 'get'> = new Map()
 ): {
-  provider: Pick<ModelProviderSettingsV1, 'providers' | 'proxy' | 'routePools' | 'localGateway'>
+  provider: Pick<ModelProviderSettingsV1, 'providers' | 'proxy' | 'routePools' | 'failover' | 'localGateway'>
   kun: ProjectedKunSelectionPatch
 } {
   const existingById = new Map(current.providers.map((item) => [item.id, item]))
@@ -650,6 +650,7 @@ export function projectSharedModelConnections(
       // A registry snapshot may lag that draft while its globals are being
       // persisted, so it must never replace the renderer's intended config.
       routePools: current.routePools,
+      failover: current.failover,
       localGateway: current.localGateway
     },
     kun: hasUsableDefault
@@ -664,6 +665,7 @@ export function sharedSettingsFingerprint(input: {
   model: string
   proxy: ModelProviderSettingsV1['proxy']
   routePools: ModelProviderSettingsV1['routePools']
+  failover: ModelProviderSettingsV1['failover']
   localGateway: ModelProviderSettingsV1['localGateway']
 }): string {
   return JSON.stringify({
@@ -672,6 +674,9 @@ export function sharedSettingsFingerprint(input: {
       name: item.name,
       baseUrl: item.baseUrl,
       endpointFormat: item.endpointFormat,
+      endpoints: item.endpoints,
+      catalogSources: item.catalogSources,
+      iconId: item.iconId,
       useProxy: item.useProxy,
       kind: item.kind,
       models: item.models,
@@ -681,6 +686,7 @@ export function sharedSettingsFingerprint(input: {
     model: input.model,
     proxy: input.proxy,
     routePools: input.routePools,
+    failover: input.failover,
     localGateway: input.localGateway
   })
 }

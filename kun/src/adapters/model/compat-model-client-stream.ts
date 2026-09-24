@@ -43,11 +43,10 @@ import {
   buildCompatRequestHeaders,
   classifyCompatHttpError,
   compatHttpFailureLog,
-  providerErrorCode,
   redactUrlForLog,
   summarizeHttpErrorBody
 } from './compat-http-diagnostics.js'
-import { classifyModelFailure, httpRetryBudget } from './failure-reason.js'
+import { httpFailureRetryDecision } from './failure-reason.js'
 import type { CompatChatMessage } from './compat-request-codecs.js'
 import { projectCompatMessages } from './compat-message-projector.js'
 import {
@@ -257,17 +256,12 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         let errorBody: { text: string; exceeded: boolean } | undefined
         if (input.retry.httpStatusCodes.includes(response.status)) {
           errorBody = await readLimitedResponseText(response, input.maxErrorBodyBytes)
-          const classification = classifyModelFailure({
+          const { budget } = httpFailureRetryDecision({
             status: response.status,
-            providerCode: providerErrorCode(errorBody.exceeded ? '' : errorBody.text),
             body: errorBody.exceeded ? '' : errorBody.text,
-            headers: response.headers
-          })
-          const budget = httpRetryBudget({
-            reason: classification.reason,
-            retryAfterMs: classification.retryAfterMs,
+            headers: response.headers,
             alternatives: input.request.failover?.alternatives,
-            policy: { maxAttempts: maxRetryAttempts }
+            policyMaxAttempts: maxRetryAttempts
           })
           if (usedRetryAttempts < budget.maxAttempts) {
             const httpRetryAttempt = usedRetryAttempts + 1

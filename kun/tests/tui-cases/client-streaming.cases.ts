@@ -88,6 +88,7 @@ function modelSnapshot(revision = 1) {
     defaultModel: 'model-a',
     proxy: { enabled: false, url: '' },
     routePools: [],
+    failover: [],
     localModelGateway: { enabled: false }
   }
 }

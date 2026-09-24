@@ -327,11 +327,21 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
         }
         const models = await requestSharedModelConnectionProbe(target.id)
         if (mode === 'fetch') {
+          let catalogResult = await fetchModelsDevCatalogFor(target)
+          // Unmapped custom/relay providers still get completion-only
+          // metadata via model-family rules keyed off the discovered ids.
+          if (catalogResult.status === 'unmapped' && models.length > 0) {
+            catalogResult = await fetchModelsDevCatalogFor(
+              target,
+              models.map((id) => ({ id, displayName: id })),
+              false
+            )
+          }
           openModelImport({
             target,
             fingerprint,
             providerModelIds: models,
-            catalogResult: await fetchModelsDevCatalogFor(target),
+            catalogResult,
             latencyMs: Math.max(0, Math.round(performance.now() - startedAt)),
             authoritative: true
           })
@@ -393,10 +403,20 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
     }
 
     if (mode === 'fetch') {
-      const [result, catalogResult] = await Promise.all([
+      const [result, firstCatalogResult] = await Promise.all([
         probe(),
         fetchModelsDevCatalogFor(target)
       ])
+      let catalogResult = firstCatalogResult
+      // Unmapped custom/relay providers get a second pass with the
+      // discovered model ids so family rules can attach catalog metadata.
+      if (result.ok && catalogResult.status === 'unmapped' && result.modelIds.length > 0) {
+        catalogResult = await fetchModelsDevCatalogFor(
+          target,
+          result.modelIds.map((id) => ({ id, displayName: id })),
+          false
+        )
+      }
       if (!result.ok && result.suggestedProxyUrl) {
         setProbeStates((previous) => ({
           ...previous,

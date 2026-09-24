@@ -45,7 +45,7 @@ import {
   DEFAULT_TOOL_OUTPUT_MAX_LINES
 } from '../contracts/tool-output-limits.js'
 import { HooksConfigSchema } from '../hooks/hook-config.js'
-import { LocalModelGatewayConfigSchema, ModelRoutePoolConfigSchema } from '../contracts/model-route-pool.js'
+import { LocalModelGatewayConfigSchema, ModelFailoverGroupSchema, ModelRoutePoolConfigSchema } from '../contracts/model-route-pool.js'
 
 import {
   ContextCompactionConfigSchema,
@@ -176,6 +176,17 @@ export const ServeProviderConfigSchema = z
     /** Secret-free authentication family used for capability gating. */
     authType: z.enum(['api-key', 'oauth', 'subscription']).optional(),
     baseUrl: z.string().min(1).optional(),
+    /**
+     * Optional per-protocol base URL overrides for providers that expose
+     * several endpoint families on different paths. A request resolves its
+     * base URL from `endpoints[effectiveFormat] ?? baseUrl` after the
+     * effective endpoint format is chosen.
+     */
+    endpoints: z.object({
+      chat_completions: z.string().min(1).max(2_048).optional(),
+      responses: z.string().min(1).max(2_048).optional(),
+      messages: z.string().min(1).max(2_048).optional()
+    }).strict().optional(),
     endpointFormat: z
       .preprocess(normalizeModelEndpointFormat, z.enum(MODEL_ENDPOINT_FORMATS))
       .default(DEFAULT_MODEL_ENDPOINT_FORMAT)
@@ -251,6 +262,7 @@ export const KunServeConfigSchema = z
      */
     providers: z.record(z.string().min(1), ServeProviderConfigSchema).optional(),
     routePools: z.array(ModelRoutePoolConfigSchema).max(100).optional(),
+    providerFailover: z.array(ModelFailoverGroupSchema).max(100).optional(),
     localModelGateway: LocalModelGatewayConfigSchema.optional()
   })
   .strict()

@@ -17,6 +17,7 @@ import {
   makeToolCallItem
 } from '../domain/item.js'
 import { redactBrowserUseActionForPersistence } from '../contracts/browser-use.js'
+import { buildModelRetryEvent, buildRouteSwitchEvent } from './model-round-events.js'
 import {
   ModelStreamCollector,
   type ModelStreamSnapshot,
@@ -305,30 +306,10 @@ export class ModelRoundEngine {
               queuedReasoningChars += intent.text.length
               break
             case 'retrying':
-              await this.deps.events.record({
-                kind: 'model_request_retry',
-                threadId: input.threadId,
-                turnId: input.turnId,
-                ...(intent.status !== undefined ? { status: intent.status } : {}),
-                attempt: intent.attempt,
-                maxAttempts: intent.maxAttempts,
-                delayMs: intent.delayMs,
-                ...(intent.reason ? { reason: intent.reason } : {}),
-                ...(intent.failureSummary ? { failureSummary: intent.failureSummary } : {})
-              })
+              await this.deps.events.record(buildModelRetryEvent(input, intent))
               break
             case 'route_switching':
-              await this.deps.events.record({
-                kind: 'model_route_switch',
-                threadId: input.threadId,
-                turnId: input.turnId,
-                fromProviderId: intent.from.providerId,
-                fromModelId: intent.from.modelId,
-                toProviderId: intent.to.providerId,
-                toModelId: intent.to.modelId,
-                ...(intent.reason ? { reason: intent.reason } : {}),
-                ...(intent.message ? { failureSummary: intent.message.slice(0, 500) } : {})
-              })
+              await this.deps.events.record(buildRouteSwitchEvent(input, intent))
               break
             case 'tool_call_ready': {
               // A model response can emit reasoning/text before its tool call.

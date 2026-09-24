@@ -193,7 +193,11 @@ export function isMultiAccountProviderPreset(
   preset: ModelProviderPreset,
   mode: ModelProviderPresetMode
 ): boolean {
-  return mode === 'token-plan' || preset.category === 'subscription'
+  void preset
+  void mode
+  // Every preset family can hold additional accounts/keys; the UI decides
+  // whether to offer the multi-account affordance for a given entry.
+  return true
 }
 
 export function modelProviderPresetAccountCount(

@@ -7,6 +7,7 @@ export const ModelRouteStrategySchema = z.enum([
   'round-robin',
   'weighted-round-robin',
   'least-latency',
+  'least-used',
   'adaptive'
 ])
 export type ModelRouteStrategy = z.infer<typeof ModelRouteStrategySchema>
@@ -53,6 +54,50 @@ export const LocalModelGatewayConfigSchema = z.object({
   enabled: z.boolean().default(false)
 }).strict()
 export type LocalModelGatewayConfig = z.infer<typeof LocalModelGatewayConfigSchema>
+
+/**
+ * Account-group rotation strategy inside a provider failover group:
+ * - `smart`: adaptive score (latency, recent failures, cached quota).
+ * - `order`: strict member priority; later accounts only run on failover.
+ * - `rotate`: round-robin across enabled members.
+ * - `least-used`: member with the fewest served requests this session.
+ */
+export const ModelFailoverStrategySchema = z.enum([
+  'smart',
+  'order',
+  'rotate',
+  'least-used'
+])
+export type ModelFailoverStrategy = z.infer<typeof ModelFailoverStrategySchema>
+
+export const ModelFailoverMemberSchema = z.object({
+  providerId: z.string().min(1).max(128),
+  enabled: z.boolean().default(true),
+  /** Declared model ids; a member only receives models it declares. */
+  models: z.array(z.string().min(1).max(512)).max(500).default([])
+}).strict()
+export type ModelFailoverMember = z.infer<typeof ModelFailoverMemberSchema>
+
+export const ModelFailoverFallbackTargetSchema = z.object({
+  providerId: z.string().min(1).max(128),
+  modelId: z.string().min(1).max(512)
+}).strict()
+export type ModelFailoverFallbackTarget = z.infer<typeof ModelFailoverFallbackTargetSchema>
+
+/**
+ * Provider-level failover: one logical provider backed by several accounts
+ * (same vendor, distinct keys) plus an ordered cross-provider fallback
+ * chain. `members[0]` is the representative account the GUI shows.
+ * Groups are explicit opt-in — a provider absent from every group keeps
+ * single-target behavior.
+ */
+export const ModelFailoverGroupSchema = z.object({
+  providerId: z.string().min(1).max(128),
+  members: z.array(ModelFailoverMemberSchema).min(1).max(21),
+  strategy: ModelFailoverStrategySchema.default('smart'),
+  fallbackTargets: z.array(ModelFailoverFallbackTargetSchema).max(20).default([])
+}).strict()
+export type ModelFailoverGroup = z.infer<typeof ModelFailoverGroupSchema>
 
 export type ModelFailureCategory =
   | 'network'
