@@ -1,6 +1,7 @@
 import type { ModelEndpointFormat } from '../../contracts/model-endpoint-format.js'
 import { isDeepSeekHost, probeDeepSeekReachable } from './model-error-probe.js'
 import type { ModelFailureMetadata } from '../../contracts/model-route-pool.js'
+import { modelFailureMetadata, type FailureHeaderSource } from './failure-reason.js'
 
 export function buildCompatRequestHeaders(input: {
   apiKey: string
@@ -65,11 +66,18 @@ export async function classifyCompatHttpError(input: {
   baseUrl: string
   fetchImpl: typeof fetch
   retryAfter?: string | null
+  /** Full response headers enable *-ratelimit-reset-* parsing. */
+  headers?: FailureHeaderSource
 }): Promise<{ message: string; code: string; failure: ModelFailureMetadata }> {
   const body = summarizeHttpErrorBody(input.text)
   const providerCode = providerErrorCode(input.text)
-  const retryAfterMs = parseRetryAfterMs(input.retryAfter)
-  const failure = failureForHttpStatus(input.status, providerCode, retryAfterMs)
+  const headerSource = input.headers ?? retryAfterHeaderRecord(input.retryAfter)
+  const failure = modelFailureMetadata({
+    status: input.status,
+    ...(providerCode ? { providerCode } : {}),
+    body: input.text,
+    headers: headerSource
+  })
   if (input.status === 404) {
     const prefix = body ? `${body} ` : ''
     return {
@@ -96,33 +104,11 @@ export async function classifyCompatHttpError(input: {
   }
 }
 
-function failureForHttpStatus(status: number, providerCode?: string, retryAfterMs?: number): ModelFailureMetadata {
-  const category = status === 401 || status === 403
-    ? 'authentication'
-    : status === 402
-      ? 'quota'
-      : status === 404
-        ? 'model_not_found'
-        : status === 408
-          ? 'timeout'
-          : status === 429
-            ? 'rate_limit'
-            : status >= 500
-              ? 'unavailable'
-              : status === 400 || status === 413 || status === 422
-                ? 'request'
-                : 'unknown'
-  return {
-    category,
-    responseReceived: true,
-    httpStatus: status,
-    ...(providerCode ? { providerCode } : {}),
-    ...(retryAfterMs !== undefined ? { retryAfterMs } : {}),
-    failoverAllowed: status === 401 || status === 402 || status === 403 || status === 404 || status === 408 || status === 425 || status === 429 || status >= 500
-  }
+function retryAfterHeaderRecord(retryAfter: string | null | undefined): FailureHeaderSource {
+  return retryAfter ? { 'retry-after': retryAfter } : undefined
 }
 
-function providerErrorCode(text: string): string | undefined {
+export function providerErrorCode(text: string): string | undefined {
   try {
     const parsed = JSON.parse(text) as { error?: { code?: unknown }; code?: unknown }
     const code = parsed?.error?.code ?? parsed?.code
@@ -130,14 +116,6 @@ function providerErrorCode(text: string): string | undefined {
   } catch {
     return undefined
   }
-}
-
-function parseRetryAfterMs(value: string | null | undefined): number | undefined {
-  if (!value) return undefined
-  const seconds = Number(value)
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(3_600_000, Math.round(seconds * 1_000))
-  const date = Date.parse(value)
-  return Number.isFinite(date) ? Math.max(0, Math.min(3_600_000, date - Date.now())) : undefined
 }
 
 export function compatHttpFailureLog(input: {

@@ -12,6 +12,7 @@ import type {
   ModelStreamChunk
 } from '../../ports/model-client.js'
 import { AtomicJsonFile } from '../../extensions/atomic-json.js'
+import { circuitCooldownMs } from './failure-reason.js'
 
 export type RouteTargetMetrics = {
   successes: number
@@ -32,6 +33,7 @@ export type ModelRouteEvent = {
   result: 'started' | 'success' | 'failure' | 'skipped'
   testId?: string
   category?: string
+  reason?: string
   message?: string
 }
 
@@ -108,11 +110,19 @@ export class RoutePoolHealthStore {
     state.consecutiveFailures += 1
     state.lastError = message.slice(0, 500)
     state.ewmaLatencyMs = state.ewmaLatencyMs === undefined ? latencyMs : state.ewmaLatencyMs * 0.7 + latencyMs * 0.3
-    if (state.consecutiveFailures >= pool.healthPolicy.failureThreshold) {
-      state.circuitOpenUntil = this.now() + Math.max(pool.healthPolicy.cooldownMs, failure?.retryAfterMs ?? 0)
+    const cooldown = circuitCooldownMs({
+      reason: failure?.reason,
+      resetAt: failure?.resetAt,
+      retryAfterMs: failure?.retryAfterMs,
+      consecutiveFailures: state.consecutiveFailures,
+      policy: pool.healthPolicy,
+      now: this.now()
+    })
+    if (cooldown.open) {
+      state.circuitOpenUntil = this.now() + cooldown.durationMs
       state.halfOpenAttempts = 0
     }
-    this.event(pool, target, latencyMs, 'failure', failure?.category, message, testId)
+    this.event(pool, target, latencyMs, 'failure', failure?.category, message, testId, failure?.reason)
   }
 
   snapshot(poolId?: string): { metrics: Record<string, RouteTargetMetrics>; events: ModelRouteEvent[] } {
@@ -135,7 +145,7 @@ export class RoutePoolHealthStore {
     return this.writeChain
   }
 
-  private event(pool: ModelRoutePoolConfig, target: ModelRouteTargetConfig, latencyMs: number, result: ModelRouteEvent['result'], category?: string, message?: string, testId?: string): void {
+  private event(pool: ModelRoutePoolConfig, target: ModelRouteTargetConfig, latencyMs: number, result: ModelRouteEvent['result'], category?: string, message?: string, testId?: string, reason?: string): void {
     this.events_.push({
       at: new Date(this.now()).toISOString(),
       poolId: pool.id,
@@ -146,6 +156,7 @@ export class RoutePoolHealthStore {
       result,
       ...(testId ? { testId } : {}),
       ...(category ? { category } : {}),
+      ...(reason ? { reason } : {}),
       ...(message ? { message: message.slice(0, 500) } : {})
     })
     if (this.events_.length > MAX_ROUTE_EVENTS) this.events_.splice(0, this.events_.length - MAX_ROUTE_EVENTS)
@@ -263,7 +274,20 @@ export class RoutePoolModelClient implements ModelClient {
     }
     const ordered = this.orderTargets(pool, eligible)
     const failures: string[] = []
-    for (const target of ordered) {
+    let lastRejection: { providerId: string; modelId: string; reason?: string; message?: string } | undefined
+    for (const [index, target] of ordered.entries()) {
+      if (index > 0 && lastRejection) {
+        // Surface the in-flight switch so a slow failover is visible instead
+        // of looking like a stalled request. Not route-attributed: the first
+        // observable route must remain the final committed route.
+        yield {
+          kind: 'route_switching',
+          from: { providerId: lastRejection.providerId, modelId: lastRejection.modelId },
+          to: { providerId: target.providerId, modelId: target.modelId },
+          ...(lastRejection.reason ? { reason: lastRejection.reason } : {}),
+          ...(lastRejection.message ? { message: lastRejection.message } : {})
+        }
+      }
       const started = this.now()
       this.health.begin(pool, target, request.routeTestId)
       const route: ModelRouteTargetMetadata = {
@@ -280,7 +304,13 @@ export class RoutePoolModelClient implements ModelClient {
         for await (const chunk of this.direct.stream({
           ...request,
           model: target.modelId,
-          providerId: target.providerId
+          providerId: target.providerId,
+          routeSelection: {
+            kind: 'route-pool',
+            id: pool.id,
+            targetProviderId: target.providerId
+          },
+          failover: { alternatives: ordered.length - index - 1 }
         })) {
           if (chunk.kind === 'error') {
             failed = true
@@ -292,6 +322,12 @@ export class RoutePoolModelClient implements ModelClient {
               // therefore the immutable target that owns the response after
               // any pre-content failover.
               pending.length = 0
+              lastRejection = {
+                providerId: target.providerId,
+                modelId: target.modelId,
+                ...(failure.reason ? { reason: failure.reason } : {}),
+                message: chunk.message
+              }
               failures.push(`${target.providerId}/${target.modelId}: ${chunk.message}`)
               break
             }
@@ -320,6 +356,7 @@ export class RoutePoolModelClient implements ModelClient {
           yield { kind: 'error', message, code: 'route_target_error', failure, route }
           return
         }
+        lastRejection = { providerId: target.providerId, modelId: target.modelId, message }
         failures.push(`${target.providerId}/${target.modelId}: ${message}`)
       }
       if (!failed) {
@@ -343,6 +380,7 @@ export class RoutePoolModelClient implements ModelClient {
             message,
             request.routeTestId
           )
+          lastRejection = { providerId: target.providerId, modelId: target.modelId, message }
           failures.push(`${target.providerId}/${target.modelId}: ${message}`)
           continue
         }
@@ -433,6 +471,12 @@ function routeFailureAllowed(pool: ModelRoutePoolConfig, failure: ModelFailureMe
   if (failure.category === 'network') return pool.failurePolicy.failoverOnNetworkError
   if (failure.category === 'timeout') return pool.failurePolicy.failoverOnTimeout
   if (failure.category === 'authentication') return pool.failurePolicy.failoverOnAuthError
+  // Deterministic account/capacity failures always qualify: retrying the same
+  // credential cannot help regardless of which HTTP status carried them.
+  if (
+    failure.reason === 'credit' || failure.reason === 'quota' ||
+    failure.reason === 'rate' || failure.reason === 'overloaded'
+  ) return true
   return failure.httpStatus === undefined || pool.failurePolicy.failoverHttpStatusCodes.includes(failure.httpStatus)
 }
 

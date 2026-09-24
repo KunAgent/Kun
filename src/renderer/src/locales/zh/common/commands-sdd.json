@@ -174,6 +174,7 @@
   "modelContextOverflowRetryStatus": "模型上下文已超限，已压缩历史并重试一次…",
   "modelNetworkRetryStatus": "模型供应商连接失败，正在第 {{attempt}}/{{max}} 次重试，约 {{seconds}} 秒后继续…",
   "modelStreamRetryStatus": "模型响应传输中断，正在第 {{attempt}}/{{max}} 次重试，约 {{seconds}} 秒后继续…",
+  "modelRouteSwitchStatus": "正在切换模型路由：{{from}} 失败{{reasonSuffix}}，尝试 {{to}}…",
   "toolCatalogChangedStatus": "工具目录已变化；Kun 已刷新当前工具列表。",
   "toolStormSuppressedStatus": "{{tool}} 连续重复相同调用，Kun 已压制重复请求并提示模型换个思路。",
   "compactionSummaryFallbackStatus": "模型压缩摘要暂不可用；Kun 已改用启发式摘要。",

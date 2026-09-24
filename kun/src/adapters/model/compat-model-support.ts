@@ -3,6 +3,7 @@ import type { UsageSnapshot } from '../../contracts/usage.js'
 import { isCustomModelEndpointFormat, modelEndpointPath, type ModelEndpointFormat } from '../../contracts/model-endpoint-format.js'
 import { DEFAULT_MODEL_STREAM_LIMITS, ModelStreamResourceBudget, ModelStreamResourceLimitError, type ModelStreamLimits } from './model-stream-resource-budget.js'
 import type { ChatCompletionResponse, ChatMessage, StreamReadResult } from './compat-model-types.js'
+import { modelFailureMetadata } from './failure-reason.js'
 
 export function mergeStreamFinishReason(current: string | null, next: string): string {
   if (current && current !== 'stop' && next === 'stop') return current
@@ -115,26 +116,23 @@ export function modelPayloadError(payload: Record<string, unknown>): { message: 
 export function modelPayloadFailure(
   error: { message: string; code?: string }
 ): import('../../contracts/model-route-pool.js').ModelFailureMetadata {
-  const signal = `${error.code ?? ''} ${error.message}`.toLowerCase()
-  const category = /rate.?limit|too many requests/.test(signal)
-    ? 'rate_limit' as const
-    : /overload|at capacity|unavailable|server busy/.test(signal)
-      ? 'unavailable' as const
-      : /auth|unauthor|forbidden|credential|api.?key/.test(signal)
-        ? 'authentication' as const
-        : /quota|credit|balance|payment/.test(signal)
-          ? 'quota' as const
-          : /model.*(?:missing|not found|unavailable)/.test(signal)
-            ? 'model_not_found' as const
-            : 'unknown' as const
-  return {
-    category,
-    responseReceived: true,
-    ...(error.code ? { providerCode: error.code } : {}),
-    // Preserve existing route behavior: streamed provider rejections were not
-    // failover-eligible before provenance was attached.
-    failoverAllowed: false
+  const metadata = modelFailureMetadata({
+    providerCode: error.code,
+    body: error.message,
+    responseReceived: true
+  })
+  if (metadata.category === 'unknown') {
+    // Streamed provider rejections carry no HTTP status; keep the legacy
+    // keyword categories for auth/model errors the new classifier leaves
+    // unmapped.
+    const signal = `${error.code ?? ''} ${error.message}`.toLowerCase()
+    metadata.category = /auth|unauthor|forbidden|credential|api.?key/.test(signal)
+      ? 'authentication'
+      : /model.*(?:missing|not found|unavailable)/.test(signal)
+        ? 'model_not_found'
+        : 'unknown'
   }
+  return metadata
 }
 
 function modelErrorObject(error: Record<string, unknown> | null): { message: string; code?: string } | null {

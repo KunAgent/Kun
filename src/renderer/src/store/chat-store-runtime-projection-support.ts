@@ -315,6 +315,13 @@ export function runtimeStatusText(event: RuntimeStatusEventPayload): string {
       seconds: Math.ceil((event.delayMs ?? 0) / 1000)
     })
   }
+  if (event.kind === 'model_route_switch') {
+    return i18n.t('common:modelRouteSwitchStatus', {
+      from: `${event.fromProviderId ?? ''}/${event.fromModelId ?? ''}`,
+      to: `${event.toProviderId ?? ''}/${event.toModelId ?? ''}`,
+      reasonSuffix: event.routeReason ? ` (${event.routeReason})` : ''
+    })
+  }
   if (event.kind === 'tool_catalog_changed') {
     return event.message?.trim() || i18n.t('common:toolCatalogChangedStatus')
   }

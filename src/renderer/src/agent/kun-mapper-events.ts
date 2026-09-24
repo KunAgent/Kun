@@ -314,6 +314,23 @@ export function runtimeStatusFromEvent(event: CoreRuntimeEventJson): RuntimeStat
         : undefined
     }
   }
+  if (event.kind === 'model_route_switch') {
+    const turnKey = event.turnId ?? event.threadId ?? event.seq ?? Date.now()
+    return {
+      kind: 'model_route_switch',
+      itemId: `runtime_status_${turnKey}_route_switch`,
+      turnId: event.turnId,
+      createdAt: event.timestamp,
+      fromProviderId: event.fromProviderId,
+      fromModelId: event.fromModelId,
+      toProviderId: event.toProviderId,
+      toModelId: event.toModelId,
+      routeReason: typeof event.reason === 'string' ? event.reason : undefined,
+      failureSummary: typeof event.failureSummary === 'string' && event.failureSummary.trim()
+        ? redactSecretText(event.failureSummary.trim())
+        : undefined
+    }
+  }
   if (event.kind === 'tool_catalog_changed') {
     const key = event.fingerprint ?? event.seq ?? Date.now()
     return {

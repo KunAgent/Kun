@@ -310,6 +310,21 @@ export function normalizeProviderReportedError(code: string, retryable: boolean)
       message: 'Extension provider authorization failed for the selected account.'
     }
   }
+  // Billing/quota exhaustion is checked before generic rate limiting: a
+  // credit failure is deterministic for this account and must not be retried
+  // or mislabeled as a transient rate limit.
+  if (
+    has('insufficient', 'balance', 'credit', 'billing', 'payment', 'arrear', 'recharge', 'quota') ||
+    is('insufficientquota', 'quotaexceeded', 'insufficientbalance', 'billingrequired', 'paymentrequired') ||
+    httpStatus === '402'
+  ) {
+    return {
+      category: 'rate_limit',
+      retryable,
+      code: 'extension_provider_quota_error',
+      message: 'Extension provider reported exhausted quota or credit.'
+    }
+  }
   if (
     has('ratelimit', 'rate', 'quota', 'throttled', 'throttle') ||
     is('resourceexhausted', 'toomanyrequests', 'ratelimitexceeded', 'quotaexceeded') ||

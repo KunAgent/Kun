@@ -43,6 +43,7 @@ export function modelRequestFailureContext(input: {
       ? { providerCode: failure?.providerCode ?? input.code }
       : {}),
     ...(failure?.category ? { category: failure.category } : preflightFailure ? { category: 'authentication' } : {}),
+    ...(failure?.reason ? { reason: failure.reason } : {}),
     ...(failure?.retryAfterMs !== undefined ? { retryAfterMs: failure.retryAfterMs } : {})
   }
 }

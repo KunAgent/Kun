@@ -402,6 +402,20 @@ export function applyRuntimeEvent(
         }
       }
       break
+    case 'model_route_switch':
+      if (event.turnId) {
+        next = {
+          ...next,
+          activity: activityFor(
+            event.turnId,
+            'retrying',
+            `Switching model route to ${event.toProviderId}/${event.toModelId}`,
+            event.timestamp,
+            current.activity
+          )
+        }
+      }
+      break
     case 'tool_result_upload_wait':
       if (event.turnId) {
         next = {

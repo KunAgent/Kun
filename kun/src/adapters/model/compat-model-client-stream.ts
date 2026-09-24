@@ -43,9 +43,11 @@ import {
   buildCompatRequestHeaders,
   classifyCompatHttpError,
   compatHttpFailureLog,
+  providerErrorCode,
   redactUrlForLog,
   summarizeHttpErrorBody
 } from './compat-http-diagnostics.js'
+import { classifyModelFailure, httpRetryBudget } from './failure-reason.js'
 import type { CompatChatMessage } from './compat-request-codecs.js'
 import { projectCompatMessages } from './compat-message-projector.js'
 import {
@@ -206,10 +208,13 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
       while (true) {
         const retried = await input.post()
         if (retried.kind === 'error') {
+          const failoverCap = (input.request.failover?.alternatives ?? 0) > 0
+            ? Math.min(1, maxRetryAttempts)
+            : maxRetryAttempts
           if (
             input.request.abortSignal.aborted ||
             retried.failure.failoverAllowed === false ||
-            usedRetryAttempts >= maxRetryAttempts
+            usedRetryAttempts >= failoverCap
           ) {
             yield {
               kind: 'error',
@@ -220,9 +225,12 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
             return
           }
           const networkRetryAttempt = usedRetryAttempts + 1
-          const networkDelayMs = exponentialRetryDelayMs(
-            input.retry.initialDelayMs,
-            usedRetryAttempts
+          const networkDelayMs = Math.min(
+            (input.request.failover?.alternatives ?? 0) > 0 ? 3_000 : Number.MAX_SAFE_INTEGER,
+            exponentialRetryDelayMs(
+              input.retry.initialDelayMs,
+              usedRetryAttempts
+            )
           )
           const failureSummary = summarizeModelRetryFailure(retried.message, input.knownSecrets)
           yield {
@@ -246,34 +254,48 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         response = retried.response
         if (response.ok) break
 
-        if (
-          usedRetryAttempts < maxRetryAttempts &&
-          input.retry.httpStatusCodes.includes(response.status)
-        ) {
-          const httpRetryAttempt = usedRetryAttempts + 1
-          const httpDelayMs = retryDelayMs(response, input.retry.initialDelayMs, usedRetryAttempts)
-          const status = response.status
-          const errorBody = await readLimitedResponseText(response, input.maxErrorBodyBytes)
-          const failureSummary = errorBody.exceeded
-            ? `model error response exceeded ${input.maxErrorBodyBytes} bytes`
-            : summarizeModelRetryFailure(summarizeHttpErrorBody(errorBody.text), input.knownSecrets)
-          yield {
-            kind: 'retrying',
-            status,
-            attempt: httpRetryAttempt,
-            maxAttempts: maxRetryAttempts,
-            delayMs: httpDelayMs,
-            ...(failureSummary ? { failureSummary } : {})
+        let errorBody: { text: string; exceeded: boolean } | undefined
+        if (input.retry.httpStatusCodes.includes(response.status)) {
+          errorBody = await readLimitedResponseText(response, input.maxErrorBodyBytes)
+          const classification = classifyModelFailure({
+            status: response.status,
+            providerCode: providerErrorCode(errorBody.exceeded ? '' : errorBody.text),
+            body: errorBody.exceeded ? '' : errorBody.text,
+            headers: response.headers
+          })
+          const budget = httpRetryBudget({
+            reason: classification.reason,
+            retryAfterMs: classification.retryAfterMs,
+            alternatives: input.request.failover?.alternatives,
+            policy: { maxAttempts: maxRetryAttempts }
+          })
+          if (usedRetryAttempts < budget.maxAttempts) {
+            const httpRetryAttempt = usedRetryAttempts + 1
+            let httpDelayMs = retryDelayMs(response, input.retry.initialDelayMs, usedRetryAttempts)
+            if (budget.fixedDelayMs !== undefined) httpDelayMs = budget.fixedDelayMs
+            if (budget.delayCapMs !== undefined) httpDelayMs = Math.min(httpDelayMs, budget.delayCapMs)
+            const status = response.status
+            const failureSummary = errorBody.exceeded
+              ? `model error response exceeded ${input.maxErrorBodyBytes} bytes`
+              : summarizeModelRetryFailure(summarizeHttpErrorBody(errorBody.text), input.knownSecrets)
+            yield {
+              kind: 'retrying',
+              status,
+              attempt: httpRetryAttempt,
+              maxAttempts: maxRetryAttempts,
+              delayMs: httpDelayMs,
+              ...(failureSummary ? { failureSummary } : {})
+            }
+            const httpRetryAborted = await sleepWithAbort(httpDelayMs, input.request.abortSignal)
+            if (httpRetryAborted || input.request.abortSignal.aborted) {
+              return
+            }
+            usedRetryAttempts = httpRetryAttempt
+            continue
           }
-          const httpRetryAborted = await sleepWithAbort(httpDelayMs, input.request.abortSignal)
-          if (httpRetryAborted || input.request.abortSignal.aborted) {
-            return
-          }
-          usedRetryAttempts = httpRetryAttempt
-          continue
         }
 
-        const errorBody = await readLimitedResponseText(response, input.maxErrorBodyBytes)
+        errorBody ??= await readLimitedResponseText(response, input.maxErrorBodyBytes)
         if (errorBody.exceeded) {
           yield {
             kind: 'error',
@@ -293,7 +315,8 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         const classified = await this.classifyHttpError(
           response.status,
           errorBody.text,
-          response.headers.get('retry-after')
+          response.headers.get('retry-after'),
+          response.headers
         )
         yield {
           kind: 'error',

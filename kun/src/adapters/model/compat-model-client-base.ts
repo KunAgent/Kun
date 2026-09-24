@@ -41,6 +41,7 @@ import {
   compatHttpFailureLog,
   redactUrlForLog
 } from './compat-http-diagnostics.js'
+import type { FailureHeaderSource } from './failure-reason.js'
 import type { CompatChatMessage } from './compat-request-codecs.js'
 import { projectCompatMessages } from './compat-message-projector.js'
 import {
@@ -223,13 +224,19 @@ export class CompatModelClientBase {
     })
   }
 
-  protected async classifyHttpError(status: number, text: string, retryAfter?: string | null) {
+  protected async classifyHttpError(
+    status: number,
+    text: string,
+    retryAfter?: string | null,
+    headers?: FailureHeaderSource
+  ) {
     return classifyCompatHttpError({
       status,
       text,
       baseUrl: this.config.baseUrl,
       fetchImpl: this.fetchImpl,
-      retryAfter
+      retryAfter,
+      headers
     })
   }
 

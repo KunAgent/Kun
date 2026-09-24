@@ -4,7 +4,8 @@ import { startLlmDebugRoundIfEnabled, type LlmDebugRound } from '../../services/
 import { exponentialRetryDelayMs, normalizeModelRequestRetryConfig, retryDelayMs, sleepWithAbort } from './compat-retry-policy.js'
 import { CompatModelStreamingClient } from './compat-model-client-stream.js'
 import { summarizeModelRetryFailure } from './model-retry-failure-summary.js'
-import { summarizeHttpErrorBody } from './compat-http-diagnostics.js'
+import { providerErrorCode, summarizeHttpErrorBody } from './compat-http-diagnostics.js'
+import { classifyModelFailure, httpRetryBudget } from './failure-reason.js'
 import type { ChatCompletionResponse, CompatModelClientConfig, CompatPostResult } from './compat-model-types.js'
 import {
   buildChatCompletionsUrl,
@@ -175,15 +176,25 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
     let result = await post(body, 'initial')
     let transportRetryAttempt = 0
     let credentialRefreshAttempted = false
+    let terminalErrorBody: { text: string; exceeded: boolean } | undefined
     while (true) {
       if (result.kind === 'error') {
+        // With declared failover alternatives a same-target network retry is
+        // capped at one fast attempt — waiting out backoff just delays the
+        // switch the user configured.
+        const failoverCap = (request.failover?.alternatives ?? 0) > 0
+          ? Math.min(1, retry.maxAttempts)
+          : retry.maxAttempts
         if (
           request.abortSignal.aborted ||
           result.failure.failoverAllowed === false ||
-          transportRetryAttempt >= retry.maxAttempts
+          transportRetryAttempt >= failoverCap
         ) break
         const nextAttempt = transportRetryAttempt + 1
-        const delayMs = exponentialRetryDelayMs(retry.initialDelayMs, transportRetryAttempt)
+        const delayMs = Math.min(
+          (request.failover?.alternatives ?? 0) > 0 ? 3_000 : Number.MAX_SAFE_INTEGER,
+          exponentialRetryDelayMs(retry.initialDelayMs, transportRetryAttempt)
+        )
         const failureSummary = summarizeModelRetryFailure(result.message, [credentials.apiKey])
         yield {
           kind: 'retrying',
@@ -224,13 +235,30 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
         result = await post(body, 'credential_refresh')
         continue
       }
-      if (
-        transportRetryAttempt >= retry.maxAttempts ||
-        !retryStatuses.has(result.response.status)
-      ) break
-      const delayMs = retryDelayMs(result.response, retry.initialDelayMs, transportRetryAttempt)
+      if (!retryStatuses.has(result.response.status)) break
+      // Read the body once: the failure classifier and any terminal error
+      // report share it, so a consumed response never gets read twice.
       const status = result.response.status
       const errorBody = await readLimitedResponseText(result.response, maxErrorBodyBytes)
+      const classification = classifyModelFailure({
+        status,
+        providerCode: providerErrorCode(errorBody.exceeded ? '' : errorBody.text),
+        body: errorBody.exceeded ? '' : errorBody.text,
+        headers: result.response.headers
+      })
+      const budget = httpRetryBudget({
+        reason: classification.reason,
+        retryAfterMs: classification.retryAfterMs,
+        alternatives: request.failover?.alternatives,
+        policy: retry
+      })
+      if (transportRetryAttempt >= budget.maxAttempts) {
+        terminalErrorBody = errorBody
+        break
+      }
+      let delayMs = retryDelayMs(result.response, retry.initialDelayMs, transportRetryAttempt)
+      if (budget.fixedDelayMs !== undefined) delayMs = budget.fixedDelayMs
+      if (budget.delayCapMs !== undefined) delayMs = Math.min(delayMs, budget.delayCapMs)
       const failureSummary = errorBody.exceeded
         ? `model error response exceeded ${maxErrorBodyBytes} bytes`
         : summarizeModelRetryFailure(summarizeHttpErrorBody(errorBody.text), [credentials.apiKey])
@@ -263,7 +291,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
     }
     let response = result.response
     if (!response.ok) {
-      const errorBody = await readLimitedResponseText(response, maxErrorBodyBytes)
+      const errorBody = terminalErrorBody ?? await readLimitedResponseText(response, maxErrorBodyBytes)
       if (errorBody.exceeded) {
         yield {
           kind: 'error',
@@ -379,7 +407,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
           configuredEndpointFormat,
           model: requestModel
         })
-        const retryClassified = await this.classifyHttpError(response.status, retryText, response.headers.get('retry-after'))
+        const retryClassified = await this.classifyHttpError(response.status, retryText, response.headers.get('retry-after'), response.headers)
         yield {
           kind: 'error',
           message: retryClassified.message,
@@ -396,7 +424,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
         configuredEndpointFormat,
         model: requestModel
       })
-      const classified = await this.classifyHttpError(response.status, text, response.headers.get('retry-after'))
+      const classified = await this.classifyHttpError(response.status, text, response.headers.get('retry-after'), response.headers)
       yield {
         kind: 'error',
         message: classified.message,

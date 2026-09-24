@@ -317,6 +317,19 @@ export class ModelRoundEngine {
                 ...(intent.failureSummary ? { failureSummary: intent.failureSummary } : {})
               })
               break
+            case 'route_switching':
+              await this.deps.events.record({
+                kind: 'model_route_switch',
+                threadId: input.threadId,
+                turnId: input.turnId,
+                fromProviderId: intent.from.providerId,
+                fromModelId: intent.from.modelId,
+                toProviderId: intent.to.providerId,
+                toModelId: intent.to.modelId,
+                ...(intent.reason ? { reason: intent.reason } : {}),
+                ...(intent.message ? { failureSummary: intent.message.slice(0, 500) } : {})
+              })
+              break
             case 'tool_call_ready': {
               // A model response can emit reasoning/text before its tool call.
               // Persist those assistant items now so the canonical item stream

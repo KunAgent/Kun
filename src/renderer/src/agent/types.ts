@@ -527,6 +527,7 @@ export type RuntimeStatusEventPayload = {
   kind:
     | 'tool_result_upload_wait'
     | 'model_request_retry'
+    | 'model_route_switch'
     | 'tool_catalog_changed'
     | 'tool_storm_suppressed'
     | 'compaction_summary_fallback'
@@ -541,6 +542,12 @@ export type RuntimeStatusEventPayload = {
   maxAttempts?: number
   delayMs?: number
   retryReason?: 'network' | 'stream_transport' | 'context_overflow'
+  /** model_route_switch: the abandoned and next route targets. */
+  fromProviderId?: string
+  fromModelId?: string
+  toProviderId?: string
+  toModelId?: string
+  routeReason?: string
   changeKind?: 'additive' | 'breaking'
   toolName?: string
   callId?: string

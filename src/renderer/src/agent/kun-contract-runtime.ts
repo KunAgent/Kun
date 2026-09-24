@@ -542,6 +542,11 @@ export type CoreRuntimeEventJson = {
   attempt?: number
   maxAttempts?: number
   delayMs?: number
+  /** model_route_switch: failover progress between two route targets. */
+  fromProviderId?: string
+  fromModelId?: string
+  toProviderId?: string
+  toModelId?: string
   fingerprint?: string
   toolCount?: number
   changeKind?: 'additive' | 'breaking'

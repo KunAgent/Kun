@@ -63,6 +63,7 @@ export const RuntimeEventKind = z.enum([
   'tool_call_ready',
   'required_tool_gate',
   'model_request_retry',
+  'model_route_switch',
   'tool_result_upload_wait',
   'tool_storm_suppressed',
   'source_tool_page',
@@ -373,6 +374,19 @@ export const ModelRequestRetryEvent = RuntimeEventBase.extend({
 })
 export type ModelRequestRetryEvent = z.infer<typeof ModelRequestRetryEvent>
 
+/** Progress event when a routing layer abandons one target for the next. */
+export const ModelRouteSwitchEvent = RuntimeEventBase.extend({
+  kind: z.literal('model_route_switch'),
+  fromProviderId: z.string().min(1).max(128),
+  fromModelId: z.string().min(1).max(512),
+  toProviderId: z.string().min(1).max(128),
+  toModelId: z.string().min(1).max(512),
+  /** Unified failure reason (credit/quota/rate/overloaded/...) when known. */
+  reason: z.string().min(1).max(64).optional(),
+  failureSummary: z.string().min(1).max(1_024).optional()
+})
+export type ModelRouteSwitchEvent = z.infer<typeof ModelRouteSwitchEvent>
+
 export const ToolUploadStatusEvent = RuntimeEventBase.extend({
   kind: z.literal('tool_result_upload_wait'),
   status: z.literal('waiting'),
@@ -598,6 +612,7 @@ export const RuntimeEvent = z.discriminatedUnion('kind', [
   ToolCallReadyEvent,
   RequiredToolGateEvent,
   ModelRequestRetryEvent,
+  ModelRouteSwitchEvent,
   ToolUploadStatusEvent,
   ToolStormSuppressedEvent,
   SourceToolPageEvent,

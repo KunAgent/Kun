@@ -32,6 +32,7 @@ import {
   normalizeModelRequestRetryConfig,
   sleepWithAbort
 } from './compat-retry-policy.js'
+import { classifyModelFailure, httpRetryBudget, modelFailureMetadata } from './failure-reason.js'
 import type { ModelRequestRetryConfig } from '../../config/kun-config.js'
 export const GEMINI_CLI_CODE_ASSIST_ENDPOINT = 'https://cloudcode-pa.googleapis.com'
 export const GEMINI_CLI_CODE_ASSIST_API_VERSION = 'v1internal'
@@ -192,6 +193,7 @@ export class GeminiCliApiModelClient implements ModelClient {
     let result = await post('initial')
     let credentialRefreshAttempted = false
     let transportRetryAttempt = 0
+    let terminalProviderError: Awaited<ReturnType<typeof readGeminiError>> | undefined
     const retryStatuses = new Set(this.retry.httpStatusCodes)
     while (true) {
       if (result.error) {
@@ -251,17 +253,30 @@ export class GeminiCliApiModelClient implements ModelClient {
         result = await post('credential_refresh')
         continue
       }
-      if (
-        transportRetryAttempt >= this.retry.maxAttempts ||
-        !retryStatuses.has(result.response.status)
-      ) break
+      if (!retryStatuses.has(result.response.status)) break
       const status = result.response.status
+      const providerError = await readGeminiError(result.response)
+      const classification = classifyModelFailure({
+        status,
+        providerCode: providerError.status,
+        body: providerError.message,
+        headers: result.response.headers
+      })
+      const budget = httpRetryBudget({
+        reason: classification.reason,
+        retryAfterMs: classification.retryAfterMs ?? providerError.retryAfterMs,
+        alternatives: request.failover?.alternatives,
+        policy: this.retry
+      })
+      if (transportRetryAttempt >= budget.maxAttempts) {
+        terminalProviderError = providerError
+        break
+      }
       const delayMs = await geminiRetryDelayMs(
         result.response,
         this.retry.initialDelayMs,
         transportRetryAttempt
       )
-      const providerError = await readGeminiError(result.response)
       const failureSummary = summarizeModelRetryFailure(providerError.message, [accessToken])
       yield {
         kind: 'retrying',
@@ -293,32 +308,21 @@ export class GeminiCliApiModelClient implements ModelClient {
     }
     const response = result.response!
     if (!response.ok) {
-      const error = await readGeminiError(response)
+      const error = terminalProviderError ?? await readGeminiError(response)
       yield {
         kind: 'error',
         code: geminiErrorCode(response.status, error.status),
         message: error.message,
         failure: {
-          category: response.status === 401 || response.status === 403
-            ? 'authentication'
-            : response.status === 404
-              ? 'model_not_found'
-              : response.status === 429
-                ? 'rate_limit'
-                : response.status >= 500
-                  ? 'unavailable'
-                  : 'request',
-          httpStatus: response.status,
-          ...(error.status ? { providerCode: error.status } : {}),
+          ...modelFailureMetadata({
+            status: response.status,
+            providerCode: error.status,
+            body: error.message,
+            headers: response.headers
+          }),
           ...(error.retryAfterMs !== undefined
             ? { retryAfterMs: error.retryAfterMs }
-            : {}),
-          failoverAllowed:
-            response.status === 401 ||
-            response.status === 403 ||
-            response.status === 404 ||
-            response.status === 429 ||
-            response.status >= 500
+            : {})
         }
       }
       return
