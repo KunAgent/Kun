@@ -14,6 +14,7 @@ export type ExcalidrawApplyRequest = {
   turnId: string
   boardId?: string
   surface?: string
+  exportPath?: string
 }
 
 export function excalidrawApplyRequestFromBlock(
@@ -41,11 +42,13 @@ export function excalidrawApplyRequestFromBlock(
     ) return null
     const boardId = typeof value.boardId === 'string' ? value.boardId.trim() : ''
     const surface = typeof value.surface === 'string' ? value.surface.trim() : ''
+    const exportPath = typeof value.exportPath === 'string' ? value.exportPath.trim() : ''
     return {
       receiptKey,
       turnId,
       ...(boardId ? { boardId } : {}),
-      ...(surface ? { surface } : {})
+      ...(surface ? { surface } : {}),
+      ...(exportPath ? { exportPath } : {})
     }
   } catch {
     return null
@@ -85,7 +88,8 @@ export function useApplyExcalidrawLive(input: {
             result = await applyOpenExcalidrawScene(
               input.workspaceRoot,
               input.identityId,
-              input.baseDir
+              input.baseDir,
+              request.exportPath
             )
           } catch (error) {
             result = {
@@ -104,12 +108,22 @@ export function useApplyExcalidrawLive(input: {
             errors: result.ok ? [] : [result.error],
             ...(result.ok
               ? {
-                  generatedFiles: [{
-                    name: 'excalidraw.png',
-                    relativePath: result.pngRelativePath,
-                    mimeType: 'image/png' as const,
-                    byteSize: result.pngByteSize
-                  }]
+                  generatedFiles: [
+                    {
+                      name: 'excalidraw.png',
+                      relativePath: result.pngRelativePath,
+                      mimeType: 'image/png' as const,
+                      byteSize: result.pngByteSize
+                    },
+                    ...(result.exportedPath
+                      ? [{
+                          name: result.exportedPath.slice(result.exportedPath.lastIndexOf('/') + 1),
+                          relativePath: result.exportedPath,
+                          mimeType: 'image/png' as const,
+                          byteSize: result.pngByteSize
+                        }]
+                      : [])
+                  ]
                 }
               : {})
           })

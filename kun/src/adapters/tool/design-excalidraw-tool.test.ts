@@ -95,6 +95,54 @@ describe('design_apply_excalidraw tool', () => {
       error: 'boardId targets a Work whiteboard and is only supported on the Work surface'
     })
   })
+
+  it('passes a valid exportPath through to ops and extras', async () => {
+    const tool = createDesignApplyExcalidrawTool()
+    const result = await tool.execute(
+      { boardId: 'paper-1706037-1', exportPath: 'papers/1706.03762/assets/解读-架构.png' },
+      workContext()
+    )
+    expect(result.isError).toBeUndefined()
+    expect(result.output).toMatchObject({
+      status: 'accepted',
+      exportPath: 'papers/1706.03762/assets/解读-架构.png',
+      ops: [{ op: 'apply-excalidraw', boardId: 'paper-1706037-1', exportPath: 'papers/1706.03762/assets/解读-架构.png' }]
+    })
+  })
+
+  it('normalizes ./ prefixes and backslashes in exportPath', async () => {
+    const tool = createDesignApplyExcalidrawTool()
+    const result = await tool.execute(
+      { exportPath: '.\\papers\\x\\assets\\a.png' },
+      workContext()
+    )
+    expect(result.output).toMatchObject({
+      status: 'accepted',
+      exportPath: 'papers/x/assets/a.png'
+    })
+  })
+
+  it('rejects unsafe exportPath values', async () => {
+    const tool = createDesignApplyExcalidrawTool()
+    const bad = [
+      '../escape.png',
+      'papers/../../outside.png',
+      '/abs/path.png',
+      'C:/abs/path.png',
+      '.kun-whiteboards/board/excalidraw.png',
+      'papers/x/.hidden/a.png',
+      'papers/x/assets/a.svg',
+      'papers/x/assets/no-extension'
+    ]
+    for (const exportPath of bad) {
+      const result = await tool.execute({ exportPath }, workContext())
+      expect(result.isError).toBe(true)
+      expect(result.output).toMatchObject({
+        ok: false,
+        error: 'exportPath must be a workspace-relative .png path without .. and must not live under .kun-whiteboards/'
+      })
+    }
+  })
 })
 
 describe('design_open_excalidraw tool', () => {

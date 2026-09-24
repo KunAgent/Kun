@@ -148,7 +148,12 @@ async function handleApplyRequest(
   }
   let result: ExcalidrawApplyResult
   try {
-    result = await applyOpenExcalidrawScene(board.workspaceRoot, board.id, WORK_WHITEBOARD_DIR)
+    result = await applyOpenExcalidrawScene(
+      board.workspaceRoot,
+      board.id,
+      WORK_WHITEBOARD_DIR,
+      request.exportPath
+    )
   } catch (error) {
     result = {
       ok: false,
@@ -173,12 +178,22 @@ async function handleApplyRequest(
       : receiptErrors(result.error.code, result.error.message, failureSuggestion),
     ...(result.ok
       ? {
-          generatedFiles: [{
-            name: 'excalidraw.png',
-            relativePath: result.pngRelativePath,
-            mimeType: 'image/png' as const,
-            byteSize: result.pngByteSize
-          }]
+          generatedFiles: [
+            {
+              name: 'excalidraw.png',
+              relativePath: result.pngRelativePath,
+              mimeType: 'image/png' as const,
+              byteSize: result.pngByteSize
+            },
+            ...(result.exportedPath
+              ? [{
+                  name: result.exportedPath.slice(result.exportedPath.lastIndexOf('/') + 1),
+                  relativePath: result.exportedPath,
+                  mimeType: 'image/png' as const,
+                  byteSize: result.pngByteSize
+                }]
+              : [])
+          ]
         }
       : {})
   })

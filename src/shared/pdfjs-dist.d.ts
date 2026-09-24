@@ -59,10 +59,16 @@ declare module 'pdfjs-dist/legacy/build/pdf.mjs' {
     promise: Promise<unknown>
     cancel: () => void
   }
+  export type PDFOperatorList = {
+    fnArray: number[]
+    argsArray: unknown[][]
+  }
+  export const OPS: Record<string, number>
   export type PDFPageProxy = {
     getViewport: (options: { scale: number; rotation?: number }) => PageViewport
     render: (options: { canvasContext: CanvasRenderingContext2D; viewport: PageViewport }) => RenderTask
     getTextContent: () => Promise<TextContent>
+    getOperatorList: () => Promise<PDFOperatorList>
     cleanup: () => void
   }
   export type PDFDocumentProxy = {

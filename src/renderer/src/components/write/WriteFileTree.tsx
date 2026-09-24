@@ -1,11 +1,12 @@
 import type { ReactElement, ReactNode } from 'react'
-import { ChevronDown, ChevronRight, FileCode2, FileText, FilePlus2, Folder, FolderPlus, FolderSearch, Image, Pencil, RefreshCw, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileCode2, FileText, FilePlus2, Folder, FolderPlus, FolderSearch, GraduationCap, Image, Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import { SidebarActivityIndicator, type SidebarActivity } from '../sidebar/SidebarActivityIndicator'
 import {
   isWriteCodeFileName,
   isWriteImageFileExtension,
+  isWritePdfFileExtension,
   isWriteWorkspaceEntry
 } from '@shared/write-text-file'
 import {
@@ -29,6 +30,8 @@ type Props = {
   onRenameEntry: (entry: WorkspaceEntry) => void
   onDeleteEntry: (entry: WorkspaceEntry) => void
   onRevealEntry: (entry: WorkspaceEntry) => void
+  /** Show "作为论文打开" on PDF rows (paper-unit import, §6.3). */
+  onOpenPdfAsPaper?: (entry: WorkspaceEntry) => void
   onRefresh: () => void
   showHeader?: boolean
   showRootLabel?: boolean
@@ -72,6 +75,10 @@ function isCodeEntry(entry: WorkspaceEntry): boolean {
   return entry.type === 'file' && isWriteCodeFileName(entry.name)
 }
 
+function isPdfEntry(entry: WorkspaceEntry): boolean {
+  return entry.type === 'file' && isWritePdfFileExtension(entry.ext)
+}
+
 type TreeActionButtonProps = {
   title: string
   children: ReactNode
@@ -112,6 +119,7 @@ export function WriteFileTree({
   onRenameEntry,
   onDeleteEntry,
   onRevealEntry,
+  onOpenPdfAsPaper,
   onRefresh,
   showHeader = true,
   showRootLabel = true,
@@ -166,6 +174,15 @@ export function WriteFileTree({
                       <FolderPlus className="h-3.5 w-3.5" strokeWidth={1.8} />
                     </TreeActionButton>
                   </>
+                ) : null}
+                {!isDirectory && onOpenPdfAsPaper && isPdfEntry(entry) ? (
+                  <TreeActionButton
+                    title={t('writePaperOpenAsPaper')}
+                    onClick={() => onOpenPdfAsPaper(entry)}
+                    tone="accent"
+                  >
+                    <GraduationCap className="h-3.5 w-3.5" strokeWidth={1.85} />
+                  </TreeActionButton>
                 ) : null}
                 <TreeActionButton
                   title={window.kunGui?.platform === 'darwin'

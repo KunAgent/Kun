@@ -5,6 +5,7 @@ import {
   FileText,
   FolderOpen,
   FolderPlus,
+  GraduationCap,
   ListTodo,
   MessageSquareQuote,
   Presentation,
@@ -19,6 +20,7 @@ export function WriteWorkspaceStart({
   onAskAssistant,
   onCreateDraft,
   onCreateWhiteboard,
+  onImportPaper,
   onPickWorkspace,
   onRefreshWorkspace,
   workspaceName,
@@ -29,6 +31,8 @@ export function WriteWorkspaceStart({
   onAskAssistant: (prompt: string) => void
   onCreateDraft: () => void
   onCreateWhiteboard?: () => void
+  /** Opens the paper import dialog (§6.1 读论文 starter). */
+  onImportPaper?: () => void
   onPickWorkspace: () => void
   onRefreshWorkspace: () => void
   workspaceName: string
@@ -100,6 +104,16 @@ export function WriteWorkspaceStart({
                 >
                   <Shapes className="h-4 w-4 shrink-0" strokeWidth={1.9} />
                   <span>{t('writeCreateWhiteboard', { defaultValue: 'New whiteboard' })}</span>
+                </button>
+              ) : null}
+              {onImportPaper ? (
+                <button
+                  type="button"
+                  onClick={onImportPaper}
+                  className="flex min-h-11 items-center gap-2 rounded-xl border border-accent/20 bg-accent/[0.055] px-3 py-2 text-left text-[12.5px] font-medium text-accent transition hover:bg-accent/10"
+                >
+                  <GraduationCap className="h-4 w-4 shrink-0" strokeWidth={1.9} />
+                  <span>{t('writePaperStarter')}</span>
                 </button>
               ) : null}
               {officeStarters.map(({ label, prompt, icon: StarterIcon }) => (

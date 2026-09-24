@@ -326,6 +326,18 @@ export type CodeAgentPresetV1 = {
   persona: string
 }
 
+export type WritePaperReadingSettingsV1 = {
+  /** Workspace-relative directory holding paper units. Default "papers". */
+  papersDir: string
+  /** User template for the interpretation turn; empty = built-in default. */
+  interpretTemplate: string
+  outputLanguage: 'zh' | 'en' | 'auto'
+  /** Extract paper.md + figures/ automatically after import. */
+  autoPreprocess: boolean
+  /** Cool Papers notes fetching can be disabled on locked-down networks. */
+  coolNotesEnabled: boolean
+}
+
 export type WriteSettingsV1 = {
   defaultWorkspaceRoot: string
   activeWorkspaceRoot: string
@@ -338,6 +350,7 @@ export type WriteSettingsV1 = {
   selectionAssist: WriteSelectionAssistSettingsV1
   typography: WriteTypographySettingsV1
   agentPresets: WriteAgentPresetV1[]
+  paperReading: WritePaperReadingSettingsV1
 }
 
 export type ClawSettingsPatchV1 = Partial<Omit<ClawSettingsV1, 'skills' | 'im' | 'channels' | 'tasks'>> & {
@@ -355,7 +368,7 @@ export type ScheduleSettingsPatchV1 = Partial<
   tasks?: Array<Partial<ScheduledTaskV1>>
 }
 
-export type WriteSettingsPatchV1 = Partial<Omit<WriteSettingsV1, 'inlineCompletion' | 'selectionAssist' | 'typography' | 'agentPresets'>> & {
+export type WriteSettingsPatchV1 = Partial<Omit<WriteSettingsV1, 'inlineCompletion' | 'selectionAssist' | 'typography' | 'agentPresets' | 'paperReading'>> & {
   inlineCompletion?: Partial<WriteInlineCompletionSettingsV1>
   selectionAssist?: Partial<Omit<WriteSelectionAssistSettingsV1, 'quickActions'>> & {
     /** Replaced wholesale when present. */
@@ -364,6 +377,7 @@ export type WriteSettingsPatchV1 = Partial<Omit<WriteSettingsV1, 'inlineCompleti
   typography?: Partial<WriteTypographySettingsV1>
   /** Replaced wholesale when present. */
   agentPresets?: Array<Partial<WriteAgentPresetV1>>
+  paperReading?: Partial<WritePaperReadingSettingsV1>
 }
 
 export type DesignSystemPreset =

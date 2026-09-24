@@ -140,7 +140,7 @@ describe('useWorkbenchExcalidrawRouter', () => {
     await act(async () => { renderer = create(createElement(RouterHarness, { blocks })) })
     await vi.waitFor(() => expect(mocks.sendReceipt).toHaveBeenCalledOnce())
 
-    expect(mocks.apply).toHaveBeenCalledWith('/work', 'auth-flow', '.kun-whiteboards')
+    expect(mocks.apply).toHaveBeenCalledWith('/work', 'auth-flow', '.kun-whiteboards', undefined)
     expect(mocks.sendReceipt).toHaveBeenCalledWith(expect.objectContaining({
       threadId: 'thread-a', turnId: 'turn-1', receiptKey: 'design-receipt-apply',
       affectedIds: ['excalidraw:auth-flow'], errors: [],

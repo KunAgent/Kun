@@ -13,6 +13,7 @@ import {
   MIN_WRITE_AUTOSAVE_DELAY_MS,
   normalizeWriteAgentPresets,
   normalizeWriteInlineCompletionModel,
+  normalizeWritePaperReadingSettings,
   normalizeWriteSelectionAssistSettings,
   resolveWriteInlineCompletionApiKey,
   resolveWriteInlineCompletionBaseUrl,
@@ -20,6 +21,7 @@ import {
   type AppSettingsV1,
   type WriteAgentPresetV1,
   type WriteInlineCompletionSettingsV1,
+  type WritePaperReadingSettingsV1,
   type WriteSelectionAssistSettingsV1,
   type WriteSettingsV1
 } from '@shared/app-settings'
@@ -98,17 +100,9 @@ export function compactWorkspaceRoots(values: string[]): string[] {
   return roots
 }
 
-export function normalizeWriteSettings(settings?: Partial<WriteSettingsV1> | null): {
-  defaultWorkspaceRoot: string
-  activeWorkspaceRoot: string
-  workspaces: string[]
-  autoSaveEnabled: boolean
-  autoSaveDelayMs: number
-  documentEditorV2: boolean
-  inlineCompletion: WriteInlineCompletionSettingsV1
-  selectionAssist: WriteSelectionAssistSettingsV1
-  agentPresets: WriteAgentPresetV1[]
-} {
+export function normalizeWriteSettings(
+  settings?: Partial<WriteSettingsV1> | null
+): NormalizedWriteWorkspaceSettings {
   const defaultWorkspaceRoot = normalizePath(settings?.defaultWorkspaceRoot || DEFAULT_WRITE_WORKSPACE_ROOT)
   const activeWorkspaceRoot = normalizePath(settings?.activeWorkspaceRoot || defaultWorkspaceRoot)
   const workspaces = compactWorkspaceRoots([
@@ -171,24 +165,12 @@ export function normalizeWriteSettings(settings?: Partial<WriteSettingsV1> | nul
         : DEFAULT_WRITE_INLINE_LONG_COMPLETION_MAX_TOKENS
     },
     selectionAssist: normalizeWriteSelectionAssistSettings(settings?.selectionAssist),
-    agentPresets: normalizeWriteAgentPresets(settings?.agentPresets)
+    agentPresets: normalizeWriteAgentPresets(settings?.agentPresets),
+    paperReading: normalizeWritePaperReadingSettings(settings?.paperReading)
   }
 }
 
-export function withResolvedInlineCompletionSettings(
-  write: {
-    defaultWorkspaceRoot: string
-    activeWorkspaceRoot: string
-    workspaces: string[]
-    autoSaveEnabled: boolean
-    autoSaveDelayMs: number
-    documentEditorV2: boolean
-    inlineCompletion: WriteInlineCompletionSettingsV1
-    selectionAssist: WriteSelectionAssistSettingsV1
-    agentPresets: WriteAgentPresetV1[]
-  },
-  settings: Pick<AppSettingsV1, 'provider' | 'agents' | 'write'>
-): {
+type NormalizedWriteWorkspaceSettings = {
   defaultWorkspaceRoot: string
   activeWorkspaceRoot: string
   workspaces: string[]
@@ -198,7 +180,13 @@ export function withResolvedInlineCompletionSettings(
   inlineCompletion: WriteInlineCompletionSettingsV1
   selectionAssist: WriteSelectionAssistSettingsV1
   agentPresets: WriteAgentPresetV1[]
-} {
+  paperReading: WritePaperReadingSettingsV1
+}
+
+export function withResolvedInlineCompletionSettings(
+  write: NormalizedWriteWorkspaceSettings,
+  settings: Pick<AppSettingsV1, 'provider' | 'agents' | 'write'>
+): NormalizedWriteWorkspaceSettings {
   return {
     ...write,
     inlineCompletion: {

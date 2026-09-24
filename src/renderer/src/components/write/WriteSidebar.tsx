@@ -55,6 +55,15 @@ import { SidebarFocusModeControl } from '../sidebar/SidebarFocusModeControl'
 import { SidebarActivityIndicator } from '../sidebar/SidebarActivityIndicator'
 import { WriteFileTree } from './WriteFileTree'
 import { WorkWhiteboardSidebarSection } from './WorkWhiteboardSidebarSection'
+import { WritePaperSidebarSection } from './paper/WritePaperSidebarSection'
+import { usePaperStore } from '../../write/paper/paper-store'
+import {
+  findPaperUnitDir,
+  paperUnitDirForFile,
+  paperUnitDirFromKnownUnits
+} from '../../write/paper/paper-unit'
+import { listPaperUnits, openPdfAsPaper } from '../../write/paper/paper-actions'
+import { openPaperUnit } from '../../write/paper/paper-open-layout'
 
 type Props = {
   activeView: 'chat' | 'write' | 'claw' | 'schedule' | 'workflow'
@@ -115,6 +124,7 @@ export function WriteSidebar({
     activeFilePath,
     activeWhiteboardId,
     whiteboards,
+    paperReading,
     loadWriteSettings,
     selectWriteWorkspace,
     addWriteWorkspace,
@@ -144,6 +154,7 @@ export function WriteSidebar({
       activeFilePath: s.activeFilePath,
       activeWhiteboardId: s.activeWhiteboardId,
       whiteboards: s.whiteboards,
+      paperReading: s.paperReading,
       loadWriteSettings: s.loadWriteSettings,
       selectWriteWorkspace: s.selectWriteWorkspace,
       addWriteWorkspace: s.addWriteWorkspace,
@@ -177,6 +188,20 @@ export function WriteSidebar({
 
   const root = rootDirectory || workspaceRoot
   const writeRegistry = readWriteThreadRegistry()
+  const paperUnits = usePaperStore((s) => s.units)
+  const paperUnitsLoaded = usePaperStore((s) => s.unitsLoaded)
+  const paperUnitDirs = usePaperStore((s) => Object.keys(s.unitsByDir).join('\n'))
+  const setPaperImportOpen = usePaperStore((s) => s.setImportOpen)
+  const activePaperUnitDir = (() => {
+    const abs =
+      findPaperUnitDir(workspaceRoot, activeFilePath, entriesByDir) ??
+      paperUnitDirFromKnownUnits(
+        workspaceRoot,
+        activeFilePath,
+        paperUnitDirs ? paperUnitDirs.split('\n') : []
+      )
+    return abs ? paperUnitDirForFile(abs, workspaceRoot) : null
+  })()
   const activityLabels = {
     runningLabel: t('sidebarThreadRunning'),
     failedLabel: t('sidebarThreadFailed'),
@@ -589,6 +614,16 @@ export function WriteSidebar({
                         setEntryDialog({ kind: 'delete-whiteboard', board })
                       }}
                     />
+                    <WritePaperSidebarSection
+                      units={paperUnits}
+                      activeUnitDir={activePaperUnitDir}
+                      loading={!paperUnitsLoaded}
+                      onOpenUnit={(unit) =>
+                        void openPaperUnit({ workspaceRoot, unitDir: unit.unitDir, meta: unit.meta })
+                      }
+                      onImport={() => setPaperImportOpen(true)}
+                      onRefresh={() => void listPaperUnits(workspaceRoot, paperReading.papersDir)}
+                    />
                     <WriteFileTree
                       rootDirectory={root}
                       entriesByDir={entriesByDir}
@@ -604,6 +639,14 @@ export function WriteSidebar({
                       onRenameEntry={openRenameEntryDialog}
                       onDeleteEntry={openDeleteEntryDialog}
                       onRevealEntry={(entry) => void revealWritePath(entry.path, workspaceRoot)}
+                      onOpenPdfAsPaper={(entry) =>
+                        void openPdfAsPaper({
+                          workspaceRoot,
+                          settings: paperReading,
+                          t,
+                          pdfPath: entry.path
+                        })
+                      }
                       onRefresh={() => void refreshWorkspace(workspaceRoot)}
                       showHeader={false}
                       showRootLabel={false}

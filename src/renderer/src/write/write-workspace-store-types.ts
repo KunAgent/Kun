@@ -1,4 +1,9 @@
-import type { WriteAgentPresetV1, WriteInlineCompletionSettingsV1, WriteSelectionAssistSettingsV1 } from '@shared/app-settings'
+import type {
+  WriteAgentPresetV1,
+  WriteInlineCompletionSettingsV1,
+  WritePaperReadingSettingsV1,
+  WriteSelectionAssistSettingsV1
+} from '@shared/app-settings'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import type {
   WorkspaceOfficePreviewSuccess,
@@ -133,6 +138,8 @@ export type WriteWorkspaceState = {
   selectionAssist: WriteSelectionAssistSettingsV1
   /** Named writing-assistant personas for quick switching. */
   agentPresets: WriteAgentPresetV1[]
+  /** Paper-reading units: papers dir, interpretation template, preprocessing. */
+  paperReading: WritePaperReadingSettingsV1
   /** True when the image generation provider is fully configured (enables 生成信息图). */
   imageGenReady: boolean
   /** True when the primary chat provider is configured (enables 生成交互原型). */

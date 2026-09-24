@@ -50,6 +50,11 @@ import { useWriteWorkspaceViewEffects } from './use-write-workspace-view-effects
 import { WriteEditorGroups } from './WriteEditorGroups'
 import { useWriteEditorGroupFileWatches } from './use-write-editor-group-file-watches'
 import { shouldShowWriteInlineAgent } from './write-inline-agent-visibility'
+import { useWritePaperMode } from '../../write/paper/use-write-paper-mode'
+import { usePaperStore } from '../../write/paper/paper-store'
+import { cancelPaperJob, importPaper } from '../../write/paper/paper-actions'
+import { WritePaperStrip } from './paper/WritePaperStrip'
+import { WritePaperImportDialog } from './paper/WritePaperImportDialog'
 
 type Props = {
   leftSidebarCollapsed: boolean; onToggleLeftSidebar: () => void
@@ -92,6 +97,7 @@ export function WriteWorkspaceView({
     inlineCompletion,
     inlineCompletionApiReady,
     selectionAssist,
+    paperReading,
     imageGenReady,
     fileContent,
     fileSize,
@@ -145,6 +151,7 @@ export function WriteWorkspaceView({
       inlineCompletion: s.inlineCompletion,
       inlineCompletionApiReady: s.inlineCompletionApiReady,
       selectionAssist: s.selectionAssist,
+      paperReading: s.paperReading,
       agentPresets: s.agentPresets,
       assistantAgentPresetId: s.assistantAgentPresetId,
       setAssistantAgentPresetId: s.setAssistantAgentPresetId,
@@ -373,6 +380,14 @@ export function WriteWorkspaceView({
   })
   useWriteEditorGroupFileWatches({ workspaceRoot, editorLayout })
 
+  const paper = useWritePaperMode(workspaceRoot)
+  const paperImportOpen = usePaperStore((s) => s.importOpen)
+  const setPaperImportOpen = usePaperStore((s) => s.setImportOpen)
+  const paperDeps = useMemo(
+    () => ({ workspaceRoot, settings: paperReading, t }),
+    [workspaceRoot, paperReading, t]
+  )
+
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent): void => {
       const state = useWriteWorkspaceStore.getState()
@@ -517,6 +532,20 @@ export function WriteWorkspaceView({
     .map((quickAction) => activeFileIsOffice
       ? { ...quickAction, mode: 'chat' as const }
       : quickAction)
+  const paperBar = (
+    <WritePaperStrip
+      workspaceRoot={workspaceRoot}
+      paperReading={paperReading}
+      unitDir={paper.unitDir}
+      meta={paper.meta}
+      loosePdfPath={paper.loosePdf ? activeFilePath : null}
+      input={input}
+      setInput={setInput}
+      onSubmitPrompt={onSubmitPrompt}
+      t={t}
+    />
+  )
+
   const focusedToolbar = (
     <WriteWorkspaceToolbar
         embedded
@@ -584,9 +613,11 @@ export function WriteWorkspaceView({
           markdownHandleRef={markdownHandleRef}
           editorPaneRef={editorPaneRef}
           focusedToolbar={focusedToolbar}
+          paperBar={paperBar}
           onboardingDecision={onboardingDecision}
           onAskAssistant={setAssistantPrompt}
           onCreateDraft={() => void createDraftFile()}
+          onImportPaper={() => setPaperImportOpen(true)}
           onPickWorkspace={() => void pickWriteWorkspace()}
         />
       </div>
@@ -615,6 +646,18 @@ export function WriteWorkspaceView({
         <div className={`pointer-events-none fixed bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-red-200/70 bg-red-50/92 px-4 py-2 text-[13px] text-red-700 shadow-[0_14px_32px_rgba(20,47,95,0.12)] dark:border-red-900/60 dark:bg-red-950/84 dark:text-red-200 ${writeFocusModeFloatingLayerClassName(documentFocusMode, 'z-40')}`}>
           {fileError}
         </div>
+      ) : null}
+      {paperImportOpen ? (
+        <WritePaperImportDialog
+          onImport={(value) =>
+            importPaper({ ...paperDeps, input: value })
+          }
+          onImportPdf={(localPdfPath) =>
+            importPaper({ ...paperDeps, localPdfPath })
+          }
+          onCancel={() => cancelPaperJob('import')}
+          onClose={() => setPaperImportOpen(false)}
+        />
       ) : null}
       {exportNotice ? (
         <div

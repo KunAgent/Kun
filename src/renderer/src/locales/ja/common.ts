@@ -13,6 +13,8 @@ import projectBoard from '../en/common/project-board.json'
 import speak from './common/speak.json'
 import remoteAccess from './common/remote-access.json'
 
+import paper from './common/paper.json'
+
 const common = {
   ...shellWorkflow,
   ...workflowConnect,
@@ -28,6 +30,7 @@ const common = {
   ...projectBoard,
   ...speak,
   ...remoteAccess,
+  ...paper,
 }
 
 export default common

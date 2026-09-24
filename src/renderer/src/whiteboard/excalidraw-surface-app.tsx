@@ -104,10 +104,11 @@ export function ExcalidrawSurfaceApp(props: ExcalidrawSurfaceProps): ReactElemen
 
   useEffect(() => {
     const key = excalidrawApplyKey(props.workspaceRoot, props.identityId, props.baseDir)
-    return registerExcalidrawApplyHandler(key, () => reloadAndExportExcalidrawScene({
+    return registerExcalidrawApplyHandler(key, (exportPath) => reloadAndExportExcalidrawScene({
       workspaceRoot: props.workspaceRoot,
       identityId: props.identityId,
       baseDir: props.baseDir,
+      exportPath,
       onReload: (scene) => {
         skipPersistRef.current = true
         setInitialScene(scene)

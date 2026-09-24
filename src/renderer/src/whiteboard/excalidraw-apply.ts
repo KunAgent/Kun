@@ -20,6 +20,8 @@ export type ExcalidrawApplySuccess = {
   pngRelativePath: string
   pngByteSize: number
   elementCount: number
+  /** Workspace-relative second PNG copy requested via design_apply_excalidraw exportPath. */
+  exportedPath?: string
 }
 
 export type ExcalidrawApplyFailure = {
@@ -29,7 +31,7 @@ export type ExcalidrawApplyFailure = {
 
 export type ExcalidrawApplyResult = ExcalidrawApplySuccess | ExcalidrawApplyFailure
 
-export type ExcalidrawApplyHandler = () => Promise<ExcalidrawApplyResult>
+export type ExcalidrawApplyHandler = (exportPath?: string) => Promise<ExcalidrawApplyResult>
 
 const handlers = new Map<string, ExcalidrawApplyHandler>()
 const claimedApplyBlockIds = new Set<string>()
@@ -88,7 +90,8 @@ export function registerExcalidrawApplyHandler(
 export async function applyOpenExcalidrawScene(
   workspaceRoot: string,
   identityId: string,
-  baseDir: string
+  baseDir: string,
+  exportPath?: string
 ): Promise<ExcalidrawApplyResult> {
   const handler = handlers.get(excalidrawApplyKey(workspaceRoot, identityId, baseDir))
   if (!handler) {
@@ -101,13 +104,14 @@ export async function applyOpenExcalidrawScene(
       }
     }
   }
-  return handler()
+  return handler(exportPath)
 }
 
 export async function reloadAndExportExcalidrawScene(input: {
   workspaceRoot: string
   identityId: string
   baseDir: string
+  exportPath?: string
   onReload: (scene: ExcalidrawSceneV1) => void
 }): Promise<ExcalidrawApplyResult> {
   try {
@@ -136,6 +140,7 @@ export async function reloadAndExportExcalidrawScene(input: {
     workspaceRoot: input.workspaceRoot,
     identityId: input.identityId,
     baseDir: input.baseDir,
+    exportPath: input.exportPath,
     scene
   })
 }
@@ -144,6 +149,8 @@ export async function exportExcalidrawPngSidecar(input: {
   workspaceRoot: string
   identityId: string
   baseDir: string
+  /** Workspace-relative extra PNG target (e.g. papers/<id>/assets/<name>.png). */
+  exportPath?: string
   scene: ExcalidrawSceneV1
 }): Promise<ExcalidrawApplyResult> {
   const pngRelativePath = excalidrawPngPath(input.identityId, input.baseDir)
@@ -216,11 +223,39 @@ export async function exportExcalidrawPngSidecar(input: {
       }
     }
   }
+  let exportedPath: string | undefined
+  const exportPath = input.exportPath?.trim().replace(/\\/g, '/').replace(/^\.\//, '')
+  if (exportPath) {
+    const slash = exportPath.lastIndexOf('/')
+    const exportDir = slash >= 0 ? exportPath.slice(0, slash) : '.'
+    const exportName = slash >= 0 ? exportPath.slice(slash + 1) : exportPath
+    const second = await window.kunGui.saveWorkspaceImageBytes({
+      workspaceRoot: input.workspaceRoot,
+      dataBase64,
+      mimeType: 'image/png',
+      imageDirectory: exportDir,
+      fileName: exportName
+    })
+    if (!second.ok || second.workspaceRelativePath !== exportPath) {
+      return {
+        ok: false,
+        error: {
+          code: 'EXCALIDRAW_PNG_EXPORT_PATH_FAILED',
+          message: second.ok
+            ? 'The exportPath PNG copy landed on an unexpected path.'
+            : (second.message ?? 'The exportPath PNG copy failed.'),
+          suggestion: 'Check that exportPath stays inside the workspace and retry design_apply_excalidraw.'
+        }
+      }
+    }
+    exportedPath = second.workspaceRelativePath
+  }
   return {
     ok: true,
     pngRelativePath,
     pngByteSize: blob.size,
-    elementCount: liveElements.length
+    elementCount: liveElements.length,
+    ...(exportedPath ? { exportedPath } : {})
   }
 }
 

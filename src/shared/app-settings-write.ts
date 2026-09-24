@@ -29,6 +29,7 @@ import {
   type WriteAgentPresetV1,
   type WriteFontPreset,
   type WriteInlineCompletionSettingsV1,
+  type WritePaperReadingSettingsV1,
   type WriteQuickActionMode,
   type WriteQuickActionV1,
   type WriteSelectionAssistSettingsV1,
@@ -39,6 +40,12 @@ import {
 import { getActiveAgentApiKey, getKunRuntimeSettings } from './app-settings-kun'
 import { getModelProviderProfile, resolveModelProviderBaseUrl } from './app-settings-provider'
 import { compactStrings } from './app-settings-normalizers'
+import {
+  PAPER_INTERPRET_TEMPLATE_MAX_CHARS,
+  PAPER_PAPERS_DIR_MAX_CHARS
+} from './paper/paper-interpret-template'
+
+export const DEFAULT_WRITE_PAPERS_DIR = 'papers'
 
 export const WRITE_QUICK_ACTION_BUILTIN_IDS = [
   'polish',
@@ -283,6 +290,58 @@ export function normalizeWriteAgentPresets(
   return presets
 }
 
+export function defaultWritePaperReadingSettings(): WritePaperReadingSettingsV1 {
+  return {
+    papersDir: DEFAULT_WRITE_PAPERS_DIR,
+    interpretTemplate: '',
+    outputLanguage: 'zh',
+    autoPreprocess: true,
+    coolNotesEnabled: true
+  }
+}
+
+/**
+ * `papersDir` is a workspace-relative directory: normalize separators, drop
+ * empty segments, and reject absolute paths and `..` traversal so imports can
+ * never escape the workspace root.
+ */
+export function normalizeWritePapersDir(value: unknown): string {
+  if (typeof value !== 'string') return DEFAULT_WRITE_PAPERS_DIR
+  const trimmed = value.trim().replace(/\\+/g, '/')
+  if (!trimmed || trimmed.startsWith('/') || trimmed.startsWith('~') || /^[A-Za-z]:/.test(trimmed)) {
+    return DEFAULT_WRITE_PAPERS_DIR
+  }
+  const segments = trimmed.split('/').filter((seg) => seg.length > 0 && seg !== '.')
+  if (segments.length === 0 || segments.some((seg) => seg === '..')) {
+    return DEFAULT_WRITE_PAPERS_DIR
+  }
+  const joined = segments.join('/').slice(0, PAPER_PAPERS_DIR_MAX_CHARS).replace(/\/+$/, '')
+  return joined || DEFAULT_WRITE_PAPERS_DIR
+}
+
+export function normalizeWritePaperReadingSettings(
+  input: Partial<WritePaperReadingSettingsV1> | undefined
+): WritePaperReadingSettingsV1 {
+  const defaults = defaultWritePaperReadingSettings()
+  const outputLanguage =
+    input?.outputLanguage === 'en' || input?.outputLanguage === 'auto'
+      ? input.outputLanguage
+      : 'zh'
+  return {
+    papersDir:
+      typeof input?.papersDir === 'string'
+        ? normalizeWritePapersDir(input.papersDir)
+        : defaults.papersDir,
+    interpretTemplate:
+      typeof input?.interpretTemplate === 'string'
+        ? input.interpretTemplate.slice(0, PAPER_INTERPRET_TEMPLATE_MAX_CHARS)
+        : defaults.interpretTemplate,
+    outputLanguage,
+    autoPreprocess: input?.autoPreprocess !== false,
+    coolNotesEnabled: input?.coolNotesEnabled !== false
+  }
+}
+
 export function defaultWriteSettings(): WriteSettingsV1 {
   return {
     defaultWorkspaceRoot: DEFAULT_WRITE_WORKSPACE_ROOT,
@@ -312,7 +371,8 @@ export function defaultWriteSettings(): WriteSettingsV1 {
     },
     selectionAssist: defaultWriteSelectionAssistSettings(),
     typography: defaultWriteTypography(),
-    agentPresets: defaultWriteAgentPresets()
+    agentPresets: defaultWriteAgentPresets(),
+    paperReading: defaultWritePaperReadingSettings()
   }
 }
 
@@ -473,7 +533,8 @@ export function normalizeWriteSettings(input: WriteSettingsPatchV1 | undefined):
     inlineCompletion: normalizeWriteInlineCompletionSettings(source.inlineCompletion),
     selectionAssist: normalizeWriteSelectionAssistSettings(source.selectionAssist),
     typography: normalizeWriteTypography(source.typography),
-    agentPresets: normalizeWriteAgentPresets(source.agentPresets)
+    agentPresets: normalizeWriteAgentPresets(source.agentPresets),
+    paperReading: normalizeWritePaperReadingSettings(source.paperReading)
   }
 }
 
@@ -506,11 +567,18 @@ export function mergeWriteSettings(
     ...typographyPatch
   }
 
+  const paperReadingPatch = patch?.paperReading ?? {}
+  const nextPaperReading: Partial<WritePaperReadingSettingsV1> = {
+    ...current.paperReading,
+    ...paperReadingPatch
+  }
+
   return normalizeWriteSettings({
     ...current,
     ...(patch ?? {}),
     inlineCompletion: nextInlineCompletion,
     selectionAssist: nextSelectionAssist,
-    typography: nextTypography
+    typography: nextTypography,
+    paperReading: nextPaperReading
   })
 }

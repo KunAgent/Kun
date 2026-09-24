@@ -36,9 +36,12 @@ type Props = {
   markdownHandleRef: MutableRefObject<WriteMarkdownEditorHandle | null>
   editorPaneRef: RefObject<HTMLDivElement | null>
   focusedToolbar: ReactElement
+  /** Paper-unit strip rendered under the toolbar of the focused group. */
+  paperBar?: ReactElement | null
   onboardingDecision: string
   onAskAssistant: (prompt: string) => void
   onCreateDraft: () => void
+  onImportPaper?: () => void
   onPickWorkspace: () => void
 }
 export function WriteEditorGroups({
@@ -55,9 +58,11 @@ export function WriteEditorGroups({
   markdownHandleRef,
   editorPaneRef,
   focusedToolbar,
+  paperBar,
   onboardingDecision,
   onAskAssistant,
   onCreateDraft,
+  onImportPaper,
   onPickWorkspace
 }: Props): ReactElement {
   const { t } = useTranslation('common')
@@ -251,6 +256,7 @@ export function WriteEditorGroups({
               onToggleAssistant={() => setAssistantOpen(!assistantOpen)}
             />
             {focused && document && document.kind !== 'image' ? focusedToolbar : null}
+            {focused && document ? paperBar : null}
             <WriteEditorGroupContent
               document={document}
               whiteboard={board}
@@ -279,6 +285,7 @@ export function WriteEditorGroups({
               }}
               onCreateDraft={onCreateDraft}
               onCreateWhiteboard={() => { focusEditorGroup(group.id); setPendingWhiteboardGroupId(group.id) }}
+              onImportPaper={onImportPaper}
               onPickWorkspace={onPickWorkspace}
               onRefreshWorkspace={() => void refreshWorkspace(workspaceRoot)}
               onContentChange={(content) => { if (path) setDocumentContent(path, content) }}

@@ -8,6 +8,7 @@ import {
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_DEBOUNCE_MS,
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_MAX_TOKENS,
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_MIN_ACCEPT_SCORE,
+  defaultWritePaperReadingSettings,
   defaultWriteSelectionAssistSettings
 } from '@shared/app-settings'
 import { normalizeWriteQuotedSelections, quotedSelectionFromEditor } from './quoted-selection'
@@ -114,6 +115,7 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
   inlineCompletionApiReady: false,
   selectionAssist: defaultWriteSelectionAssistSettings(),
   agentPresets: [],
+  paperReading: defaultWritePaperReadingSettings(),
   imageGenReady: false,
   prototypeReady: false,
   settingsLoading: false,

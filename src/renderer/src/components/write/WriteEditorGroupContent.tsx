@@ -45,6 +45,7 @@ type Props = {
   onOpenWorkspaceFile?: (path: string) => void
   onCreateDraft: () => void
   onCreateWhiteboard?: () => void
+  onImportPaper?: () => void
   onPickWorkspace: () => void
   onRefreshWorkspace: () => void
   onContentChange: (content: string) => void
@@ -98,6 +99,7 @@ export function WriteEditorGroupContent({
   onOpenWorkspaceFile,
   onCreateDraft,
   onCreateWhiteboard,
+  onImportPaper,
   onPickWorkspace,
   onRefreshWorkspace,
   onContentChange,
@@ -232,6 +234,7 @@ export function WriteEditorGroupContent({
         onAskAssistant={onAskAssistant}
         onCreateDraft={onCreateDraft}
         onCreateWhiteboard={onCreateWhiteboard}
+        onImportPaper={onImportPaper}
         onPickWorkspace={onPickWorkspace}
         onRefreshWorkspace={onRefreshWorkspace}
         onContentChange={onContentChange}

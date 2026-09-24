@@ -12,6 +12,7 @@ import { getWorkspaceCreationTimes } from './workspace-creation-times'
 import { runtimeRequestPreloadApi } from './runtime-request'
 import { sanottsSpeechBridge } from './sanotts-speech-bridge'
 import { onIpcEvent } from './ipc-event'
+import { paperApi } from './paper-api'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
 // The preload runs sandboxed (webPreferences.sandbox = true), so it cannot
 // require node built-ins like node:os. The home dir is passed in from the main
@@ -693,6 +694,7 @@ const api = {
     ) => handler(payload)
     ipcRenderer.on('remote:status-changed', wrapped)
     return () => ipcRenderer.removeListener('remote:status-changed', wrapped)
-  }
+  },
+  ...paperApi
 } satisfies KunGuiApi
 contextBridge.exposeInMainWorld('kunGui', api)

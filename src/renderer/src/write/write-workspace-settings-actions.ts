@@ -42,6 +42,7 @@ function applyWriteSettingsState(
     inlineCompletion: write.inlineCompletion,
     selectionAssist: write.selectionAssist,
     agentPresets: write.agentPresets,
+    paperReading: write.paperReading,
     inlineCompletionApiReady: Boolean(resolveWriteInlineCompletionApiKey(settings).trim()),
     imageGenReady: Boolean(
       imageGeneration?.enabled &&

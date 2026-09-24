@@ -23,6 +23,7 @@ export function makeWriteFileActionBaseState(): WriteWorkspaceState {
     inlineCompletionApiReady: false,
     selectionAssist: defaultWriteSettings().selectionAssist,
     agentPresets: defaultWriteSettings().agentPresets,
+    paperReading: defaultWriteSettings().paperReading,
     imageGenReady: false, prototypeReady: false, settingsLoading: false, settingsError: null,
     ...initialState(),
     previewMode: 'rich', assistantOpen: true, assistantModel: 'auto', assistantProviderId: '',

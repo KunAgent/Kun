@@ -115,7 +115,7 @@ describe('useApplyExcalidrawLive', () => {
       })
       await vi.waitFor(() => expect(mocks.sendReceipt).toHaveBeenCalledOnce())
     })
-    expect(mocks.apply).toHaveBeenCalledWith('/work', 'board-1', '.kun-whiteboards')
+    expect(mocks.apply).toHaveBeenCalledWith('/work', 'board-1', '.kun-whiteboards', undefined)
     expect(mocks.sendReceipt).toHaveBeenCalledWith({
       threadId: 'thread-1',
       turnId: 'turn-1',
@@ -152,7 +152,7 @@ describe('useApplyExcalidrawLive', () => {
       useChatStore.setState({ blocks: [block] })
       await vi.waitFor(() => expect(mocks.sendReceipt).toHaveBeenCalledOnce())
     })
-    expect(mocks.apply).toHaveBeenCalledWith('/work', 'board-1', '.kun-whiteboards')
+    expect(mocks.apply).toHaveBeenCalledWith('/work', 'board-1', '.kun-whiteboards', undefined)
     expect(mocks.sendReceipt).toHaveBeenCalledWith(expect.objectContaining({
       receiptKey: 'design-receipt-targeted',
       affectedIds: ['excalidraw:board-1']

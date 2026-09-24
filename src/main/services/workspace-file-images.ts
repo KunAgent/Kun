@@ -311,7 +311,9 @@ export async function saveWorkspaceImageBytes(
       requestedFileName &&
       (
         basename(requestedFileName) !== requestedFileName ||
-        !/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.(?:png|svg)$/i.test(requestedFileName)
+        // Unicode letters/numbers allowed (paper assets use localized titles);
+        // path separators and leading dots stay rejected by basename + class.
+        !/^[\p{L}\p{N}][\p{L}\p{N}._\- ]{0,199}\.(?:png|svg)$/u.test(requestedFileName)
       )
     ) {
       return { ok: false, message: 'Image fileName must be a safe PNG or SVG basename.' }

@@ -18,6 +18,7 @@ export type ExcalidrawWorkbenchRequest =
       receiptKey: string
       turnId: string
       boardId?: string
+      exportPath?: string
     }
 
 function nonEmptyString(value: unknown): string | undefined {
@@ -70,7 +71,8 @@ export function excalidrawWorkbenchRequestFromBlock(
       blockId: block.id,
       receiptKey,
       turnId,
-      ...(boardId ? { boardId } : {})
+      ...(boardId ? { boardId } : {}),
+      ...(nonEmptyString(value.exportPath) ? { exportPath: nonEmptyString(value.exportPath) } : {})
     }
   }
   return null

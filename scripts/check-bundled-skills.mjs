@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const skillsRoot = join(root, 'resources', 'bundled-skills')
 const runtimeModule = join(root, 'kun', 'dist', 'skills', 'skill-runtime.js')
-const expectedCount = 36
+const expectedCount = 37
 const maxManifestBytes = 64 * 1024
 const maxEntryBytes = 256 * 1024
 

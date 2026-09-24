@@ -128,6 +128,7 @@ import type {
   SpeechTranscriptionResult
 } from './speech-to-text'
 import type { KunGuiLocalSpeechApi } from './kun-gui-api-speech'
+import type { KunGuiPaperApi } from './paper/kun-gui-api-paper'
 import type {
   UiPluginListItem,
   UiPluginManifestV1,
@@ -253,7 +254,7 @@ import {
   WorkspaceCreationTimeEntry,
   WorkspacePickResult
 } from './kun-gui-api-contracts'
-export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & {
+export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & {
   platform: string
   /** True only in the browser Remote build served by the Remote gateway. */
   isRemoteWeb?: boolean

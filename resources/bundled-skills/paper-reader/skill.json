@@ -1,0 +1,25 @@
+{
+  "id": "paper-reader",
+  "name": "Paper reader",
+  "version": "1.0.0",
+  "description": "Read and explain a research paper unit (papers/<id>/) in clear Chinese: core contributions, method walkthrough, experiments, limitations, with embedded original figures and Excalidraw whiteboard diagrams for hard concepts.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/paper-read"
+    ],
+    "promptPatterns": [
+      "论文解读",
+      "paper-reader",
+      "精读论文",
+      "解读论文"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [
+    "references/figure-rules.md",
+    "references/whiteboard-rules.md"
+  ],
+  "priority": 25
+}

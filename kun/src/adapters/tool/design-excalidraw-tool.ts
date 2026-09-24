@@ -24,6 +24,36 @@ const BOARD_ID_SCHEMA = {
 
 const BOARD_ID_ERROR = 'boardId must match ^[a-zA-Z0-9_-]{1,64}$'
 
+const EXPORT_PATH_SCHEMA = {
+  type: 'string',
+  pattern: '^[^\\0]+\\.png$',
+  maxLength: 300,
+  description:
+    'Optional workspace-relative .png path (for example papers/<id>/assets/<name>.png). After the excalidraw.png sidecar is exported, the renderer writes a second PNG copy there so Markdown can embed it. Must not be absolute, contain .., or live under .kun-whiteboards/.'
+} as const
+
+const EXPORT_PATH_ERROR =
+  'exportPath must be a workspace-relative .png path without .. and must not live under .kun-whiteboards/'
+
+export function normalizeExcalidrawExportPath(raw: string | undefined): string | undefined {
+  if (!raw) return undefined
+  const trimmed = raw.trim().replace(/\\/g, '/')
+  const normalized = trimmed.replace(/\/+/g, '/').replace(/^\.\//, '')
+  if (
+    !normalized ||
+    normalized.length > 300 ||
+    /^([a-zA-Z]:)?\//.test(normalized) ||
+    normalized.split('/').includes('..') ||
+    normalized === ROOM_WHITEBOARD_DIR ||
+    normalized.startsWith(`${ROOM_WHITEBOARD_DIR}/`) ||
+    normalized.split('/').some((segment) => segment.startsWith('.')) ||
+    !/\.png$/i.test(normalized)
+  ) {
+    return undefined
+  }
+  return normalized
+}
+
 function isRoomBoard(context: { guiRoomExcalidrawCanvas?: boolean } | undefined): boolean {
   return context?.guiRoomExcalidrawCanvas === true
 }
@@ -69,7 +99,8 @@ export function createDesignApplyExcalidrawTool(): LocalTool {
     inputSchema: {
       type: 'object',
       properties: {
-        boardId: BOARD_ID_SCHEMA
+        boardId: BOARD_ID_SCHEMA,
+        exportPath: EXPORT_PATH_SCHEMA
       },
       additionalProperties: false
     },
@@ -86,10 +117,18 @@ export function createDesignApplyExcalidrawTool(): LocalTool {
         context?.threadId,
         context?.workspace
       )
-      const ops = [{ op: 'apply-excalidraw', ...(boardId ? { boardId } : {}) }]
+      const rawExportPath = stringArg(args?.exportPath)
+      const exportPath = normalizeExcalidrawExportPath(rawExportPath)
+      if (rawExportPath && !exportPath) return designToolError(EXPORT_PATH_ERROR)
+      const ops = [{
+        op: 'apply-excalidraw',
+        ...(boardId ? { boardId } : {}),
+        ...(exportPath ? { exportPath } : {})
+      }]
       const extras: Record<string, unknown> = {
         status: 'accepted',
         ...(boardId ? { boardId } : {}),
+        ...(exportPath ? { exportPath } : {}),
         ...(context?.agentSurface ? { surface: room ? 'room' : context.agentSurface } : {}),
         receiptKey: designCanvasReceiptKey(
           context?.threadId,

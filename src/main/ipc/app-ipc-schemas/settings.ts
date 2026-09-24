@@ -174,6 +174,14 @@ const codeAgentPresetSchema = z.object({
   persona: z.string().max(2_000).optional()
 }).strict()
 
+const writePaperReadingPatchSchema = z.object({
+  papersDir: trimmedString(MAX_PATH_LENGTH).optional(),
+  interpretTemplate: z.string().max(8_000).optional(),
+  outputLanguage: z.enum(['zh', 'en', 'auto']).optional(),
+  autoPreprocess: z.boolean().optional(),
+  coolNotesEnabled: z.boolean().optional()
+}).strict()
+
 const writeSettingsPatchSchema = z.object({
   defaultWorkspaceRoot: defaultPathSchema,
   activeWorkspaceRoot: defaultPathSchema,
@@ -183,7 +191,9 @@ const writeSettingsPatchSchema = z.object({
   inlineCompletion: writeInlineCompletionPatchSchema.optional(),
   selectionAssist: writeSelectionAssistPatchSchema.optional(),
   typography: writeTypographyPatchSchema.optional(),
-  agentPresets: z.array(writeAgentPresetSchema).max(24).optional()
+  agentPresets: z.array(writeAgentPresetSchema).max(24).optional(),
+  documentEditorV2: z.boolean().optional(),
+  paperReading: writePaperReadingPatchSchema.optional()
 }).strict()
 
 const terminalColorPatchSchema = z.object({

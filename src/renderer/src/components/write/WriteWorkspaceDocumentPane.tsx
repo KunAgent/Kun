@@ -76,6 +76,7 @@ type Props = {
   onAskAssistant: (prompt: string) => void
   onCreateDraft: () => void
   onCreateWhiteboard?: () => void
+  onImportPaper?: () => void
   onPickWorkspace: () => void
   onRefreshWorkspace: () => void
   onContentChange: (content: string) => void
@@ -154,6 +155,7 @@ export function WriteWorkspaceDocumentPane({
   onAskAssistant,
   onCreateDraft,
   onCreateWhiteboard,
+  onImportPaper,
   onPickWorkspace,
   onRefreshWorkspace,
   onContentChange,
@@ -220,6 +222,7 @@ export function WriteWorkspaceDocumentPane({
         onAskAssistant={onAskAssistant}
         onCreateDraft={onCreateDraft}
         onCreateWhiteboard={onCreateWhiteboard}
+        onImportPaper={onImportPaper}
         onPickWorkspace={onPickWorkspace}
         onRefreshWorkspace={onRefreshWorkspace}
         onboarding={onboarding}
