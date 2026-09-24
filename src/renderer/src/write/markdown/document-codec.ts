@@ -44,6 +44,47 @@ export function createWorkDocContext(): WorkDocContext {
   }
 }
 
+/**
+ * Structured-clone-safe snapshot of a context, for handing parsed results
+ * back from a Web Worker. `blocks`/`doc` are already plain JSON.
+ */
+export type SerializedWorkContext = {
+  frontmatter: string
+  eol: '\n' | '\r\n'
+  leading: string
+  trailing: string
+  firstBlockId?: string
+  lastBlockId?: string
+  separators: [string, string][]
+  sourceMap: ReturnType<WorkSourceMap['toJSON']>
+}
+
+export function serializeWorkContext(ctx: WorkDocContext): SerializedWorkContext {
+  return {
+    frontmatter: ctx.frontmatter,
+    eol: ctx.eol,
+    leading: ctx.leading,
+    trailing: ctx.trailing,
+    ...(ctx.firstBlockId ? { firstBlockId: ctx.firstBlockId } : {}),
+    ...(ctx.lastBlockId ? { lastBlockId: ctx.lastBlockId } : {}),
+    separators: [...ctx.separators],
+    sourceMap: ctx.sourceMap.toJSON()
+  }
+}
+
+export function deserializeWorkContext(data: SerializedWorkContext): WorkDocContext {
+  return {
+    frontmatter: data.frontmatter,
+    eol: data.eol,
+    leading: data.leading,
+    trailing: data.trailing,
+    ...(data.firstBlockId ? { firstBlockId: data.firstBlockId } : {}),
+    ...(data.lastBlockId ? { lastBlockId: data.lastBlockId } : {}),
+    separators: new Map(data.separators),
+    sourceMap: WorkSourceMap.fromJSON(data.sourceMap)
+  }
+}
+
 function detectEol(source: string): '\n' | '\r\n' {
   const firstLf = source.indexOf('\n')
   return firstLf > 0 && source[firstLf - 1] === '\r' ? '\r\n' : '\n'
@@ -108,6 +149,10 @@ export function parseWorkDocument(markdown: string): ParsedWorkDocument {
       const sep = body.slice(order[i].end!, order[i + 1].start!)
       ctx.separators.set(`${order[i].blockId}${order[i + 1].blockId}`, sep)
     }
+  } else if (order.length === 0) {
+    // No top-level blocks at all: the whole (whitespace-only) body is
+    // leading context so an empty document serializes back byte-exactly.
+    ctx.leading = body
   }
 
   if (!doc.content || doc.content.length === 0) {
@@ -124,43 +169,83 @@ function blockStyleOptions(ctx: WorkDocContext, blockId: string | undefined): Wo
   }
 }
 
-type EmittedBlock = { text: string; blockId?: string; unchanged: boolean }
+type EmittedBlock = {
+  text: string
+  blockId?: string
+  unchanged: boolean
+  /** Contentless paragraph — one blank line's worth of Markdown. */
+  blank: boolean
+}
+
+function isEmptyParagraphJson(node: JSONContent): boolean {
+  return node.type === 'paragraph' && (node.content ?? []).length === 0
+}
 
 function emitBlock(node: JSONContent, ctx: WorkDocContext): EmittedBlock {
   const blockId = typeof node.attrs?.blockId === 'string' ? node.attrs.blockId : undefined
+  const blank = isEmptyParagraphJson(node)
 
   if (node.type === 'rawMarkdownBlock') {
     const raw = String(node.attrs?.raw ?? '')
     const original = ctx.sourceMap.sourceFor(blockId, `raw:${raw}`)
-    return { text: original ?? raw, blockId, unchanged: original !== undefined }
+    return { text: original ?? raw, blockId, unchanged: original !== undefined, blank: false }
   }
 
   const mdast = pmBlockToMdast(node)
   const signature = semanticSignature(mdast)
   const original = ctx.sourceMap.sourceFor(blockId, signature)
   if (original !== undefined) {
-    return { text: original, blockId, unchanged: true }
+    return { text: original, blockId, unchanged: true, blank }
+  }
+
+  if (blank) {
+    // An empty paragraph contributes exactly one newline: with the
+    // separator rules below it materializes as one blank line.
+    return { text: toEol('\n', ctx.eol), blockId, unchanged: false, blank }
   }
 
   const cached = ctx.sourceMap.cachedSerialize(blockId, signature)
   if (cached !== undefined) {
-    return { text: cached, blockId, unchanged: false }
+    return { text: cached, blockId, unchanged: false, blank }
   }
 
   const serialized = mdastBlocksToMarkdown([mdast], blockStyleOptions(ctx, blockId))
     .replace(/\n+$/, '')
   const text = toEol(serialized, ctx.eol)
   ctx.sourceMap.cacheSerialize(blockId, signature, text)
-  return { text, blockId, unchanged: false }
+  return { text, blockId, unchanged: false, blank }
+}
+
+/**
+ * Separator before a non-blank emitted block that was never adjacent to
+ * its predecessor in the source. A blank predecessor carries its own
+ * newline, so nothing more is needed; between two real blocks we
+ * guarantee at least one blank line even when the previous verbatim
+ * fragment already ends with a newline, so a freshly inserted block can
+ * never glue itself onto the previous Markdown block (`b` + `c` must not
+ * become `b\nc`).
+ */
+function defaultSeparator(prev: EmittedBlock, ctx: WorkDocContext): string {
+  if (prev.blank) return ''
+  const trailingNewlines = prev.text.match(/\n*$/)?.[0].length ?? 0
+  return toEol('\n'.repeat(Math.max(0, 2 - trailingNewlines)), ctx.eol)
 }
 
 /** Serialize a PM doc, reusing original fragments for unchanged blocks. */
 export function serializeWorkDocument(doc: JSONContent, ctx: WorkDocContext): string {
-  const emitted = (doc.content ?? [])
+  const content = doc.content ?? []
+  // Leading/trailing empty paragraphs are editor artifacts (the user or PM
+  // may leave them behind); Markdown cannot express them anyway — real
+  // leading/trailing whitespace lives in ctx.leading / ctx.trailing.
+  let start = 0
+  let end = content.length
+  while (start < end && isEmptyParagraphJson(content[start])) start += 1
+  while (end > start && isEmptyParagraphJson(content[end - 1])) end -= 1
+
+  const emitted = content
+    .slice(start, end)
     .map((node) => emitBlock(node, ctx))
-    // Empty paragraphs carry no Markdown meaning; skip their emission so a
-    // PM-internal blank block never adds stray blank lines to the file.
-    .filter((block, index, all) => block.text !== '' || all.length === 1)
+    .filter((block) => block.text !== '')
 
   let out = ''
   let prev: EmittedBlock | undefined
@@ -169,10 +254,15 @@ export function serializeWorkDocument(doc: JSONContent, ctx: WorkDocContext): st
       const originalSep = prev.unchanged && current.unchanged && prev.blockId && current.blockId
         ? ctx.separators.get(`${prev.blockId}${current.blockId}`)
         : undefined
-      out += originalSep ?? toEol('\n\n', ctx.eol)
+      out += originalSep ?? (current.blank ? toEol('\n', ctx.eol) : defaultSeparator(prev, ctx))
     }
     out += current.text
     prev = current
+  }
+
+  if (emitted.length === 0) {
+    out = ctx.leading + ctx.trailing
+    return joinFrontmatter(ctx.frontmatter, out)
   }
 
   const first = emitted[0]
@@ -182,7 +272,7 @@ export function serializeWorkDocument(doc: JSONContent, ctx: WorkDocContext): st
   }
   if (last?.unchanged && last.blockId && last.blockId === ctx.lastBlockId) {
     out += ctx.trailing
-  } else if (emitted.length) {
+  } else {
     out += toEol('\n', ctx.eol)
   }
   return joinFrontmatter(ctx.frontmatter, out)

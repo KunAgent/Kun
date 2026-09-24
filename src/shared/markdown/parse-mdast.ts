@@ -19,7 +19,7 @@ import { gfmFootnoteFromMarkdown } from 'mdast-util-gfm-footnote'
 import { gfmStrikethroughFromMarkdown } from 'mdast-util-gfm-strikethrough'
 import { gfmTableFromMarkdown } from 'mdast-util-gfm-table'
 import { gfmTaskListItemFromMarkdown } from 'mdast-util-gfm-task-list-item'
-import { remarkCallout, remarkWorkInline } from './remark-work-plugins'
+import { remarkCallout, remarkDemoteFalseMath, remarkWorkInline } from './remark-work-plugins'
 
 /**
  * GFM syntax registered as individual extensions instead of the
@@ -50,7 +50,8 @@ const processor = unified()
   .use(remarkParse)
   .use(remarkGfmWork)
   .use(remarkFrontmatter, ['yaml'])
-  .use(remarkMath, { singleDollarTextMath: false })
+  .use(remarkMath, { singleDollarTextMath: true })
+  .use(remarkDemoteFalseMath)
   .use(remarkCallout)
   .use(remarkWorkInline)
   .freeze()

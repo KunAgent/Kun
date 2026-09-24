@@ -26,6 +26,10 @@ export const WriteLocalImage = Image.extend<WriteLocalImageOptions>({
   addOptions() {
     return {
       ...this.parent?.(),
+      // Markdown images are inline phrasing content; a block-level image
+      // node could not represent `text ![img](src) text` and would fail
+      // schema validation on such paragraphs.
+      inline: true,
       getFilePath: () => '',
       getWorkspaceRoot: () => ''
     }

@@ -1,4 +1,5 @@
 import {
+  getSchema,
   textblockTypeInputRule,
   type AnyExtension,
   type JSONContent,
@@ -10,6 +11,7 @@ import { TableKit } from '@tiptap/extension-table'
 import { OrderedList, TaskItem, TaskList } from '@tiptap/extension-list'
 import { CodeBlock, tildeInputRegex } from '@tiptap/extension-code-block'
 import { Plugin, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
+import type { Schema } from '@tiptap/pm/model'
 import { createHighlightPlugin } from 'prosemirror-highlight'
 import { WriteLocalImage } from './local-image'
 import { buildWorkConstructExtensions } from './nodes'
@@ -229,6 +231,16 @@ export function buildWriteRichExtensions(runtime?: WriteRichRuntimeOptions): Any
 }
 
 let sharedManager: MarkdownManager | null = null
+let sharedSchema: Schema | null = null
+
+/**
+ * Schema built from the base extension set — used to validate converted
+ * blocks before an Editor exists (parse path sanitizes to raw blocks).
+ */
+export function workCodecSchema(): Schema {
+  if (!sharedSchema) sharedSchema = getSchema(buildWriteRichExtensions())
+  return sharedSchema
+}
 
 export function getWriteMarkdownManager(): MarkdownManager {
   if (!sharedManager) {

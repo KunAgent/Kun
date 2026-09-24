@@ -4,16 +4,20 @@
  *
  * - `remarkCallout`: `> [!type] title` blockquotes → `callout` nodes
  *   (ported from Agentero `src/lib/markdown/callout.ts`).
- * - `remarkWorkInline`: one `findAndReplace` pass that splits
- *   `[[target#heading|alias]]` / `![[embed]]` into `wikiLink` nodes carrying
- *   the verbatim `raw`, and `$…$` with Pandoc's spacing rules into
- *   `inlineMath` (remark-math runs with `singleDollarTextMath:false`; this
- *   adds the strict variant back so `$5 and $6` stays text).
+ * - `remarkDemoteFalseMath`: remark-math runs with
+ *   `singleDollarTextMath:true` so micromark tokenizes `$…$` on the raw
+ *   source — LaTeX escapes survive and emphasis cannot split a formula.
+ *   micromark does not apply Pandoc's spacing rules, so this pass demotes
+ *   false positives back to text: formulas whose value starts/ends with
+ *   whitespace, or whose closing `$` is immediately followed by a digit
+ *   (`$5 and $6`).
+ * - `remarkWorkInline`: `findAndReplace` splits `[[target#heading|alias]]`
+ *   / `![[embed]]` into `wikiLink` nodes; a position pass then re-attaches
+ *   the verbatim source slice so escapes inside the brackets survive.
  */
 import { findAndReplace } from 'mdast-util-find-and-replace'
 import type { Node, Parent } from 'unist'
 import type { PhrasingContent, RootContent, Text } from 'mdast'
-import { WORK_INLINE_MATH_RE } from './work-profile'
 
 export type WorkCalloutNode = Parent & {
   type: 'callout'
@@ -151,19 +155,58 @@ function parseWikiLinkInner(inner: string): WikiLinkParts | null {
 }
 
 const WIKI_LINK_RE = /(!?)\[\[([^\]\n]+)\]\]/g
-const PANDOC_MATH_RE = new RegExp(WORK_INLINE_MATH_RE.source, 'g')
+
+type Positioned = {
+  type: string
+  position?: {
+    start?: { offset?: number }
+    end?: { offset?: number }
+  }
+  children?: Positioned[]
+}
 
 /**
- * Single `findAndReplace` pass over `text` nodes that splits out both wiki
- * links (`[[target#heading|alias]]`, `![[embed]]`) and Pandoc-rule inline
- * math (`$…$`: opening `$` followed by non-space, closing `$` preceded by
- * non-space and not followed by a digit, `\$` never counts). One tree walk
- * for both constructs keeps large-document parsing cheaper.
- * `link`, `inlineCode`, `code`, `math`, and `html` subtrees are skipped so
- * their literal content is untouched.
+ * `findAndReplace` creates wikiLink nodes without positions and matches on
+ * the *decoded* text value, so escapes inside `[[…]]` (e.g. `[[a\{b]]`)
+ * would lose their backslashes. Re-anchor each wikiLink node to the raw
+ * source by scanning the parent node's source slice: when the number of
+ * raw `[[…]]` matches equals the number of wikiLink children they pair up
+ * in order and get their verbatim `raw` + `position` back.
+ */
+function anchorWikiLinks(node: Positioned, source: string): void {
+  const children = node.children
+  if (!children) return
+  const parentStart = node.position?.start?.offset
+  const parentEnd = node.position?.end?.offset
+  const wikiChildren = children.filter((child) => child.type === 'wikiLink')
+  if (wikiChildren.length > 0 && typeof parentStart === 'number' && typeof parentEnd === 'number') {
+    const slice = source.slice(parentStart, parentEnd)
+    WIKI_LINK_RE.lastIndex = 0
+    const matches = [...slice.matchAll(WIKI_LINK_RE)]
+    if (matches.length === wikiChildren.length) {
+      wikiChildren.forEach((child, index) => {
+        const match = matches[index]
+        const start = parentStart + match.index
+        ;(child as { raw?: string }).raw = match[0]
+        child.position = {
+          start: { offset: start },
+          end: { offset: start + match[0].length }
+        }
+      })
+    }
+  }
+  for (const child of children) anchorWikiLinks(child, source)
+}
+
+/**
+ * One `findAndReplace` pass over `text` nodes that splits out wiki links
+ * (`[[target#heading|alias]]`, `![[embed]]`). `link`, `inlineCode`,
+ * `code`, `math`, and `html` subtrees are skipped so their literal content
+ * is untouched. Inline math is handled by remark-math +
+ * {@link remarkDemoteFalseMath}, not here.
  */
 export function remarkWorkInline() {
-  return (tree: Node) => {
+  return (tree: Node, file: { value?: unknown }) => {
     findAndReplace(tree as never, [
       [
         WIKI_LINK_RE,
@@ -179,14 +222,6 @@ export function remarkWorkInline() {
             embed: bang === '!'
           } as unknown as PhrasingContent
         }
-      ],
-      [
-        PANDOC_MATH_RE,
-        (raw: string): PhrasingContent | false => {
-          const value = raw.slice(1, -1)
-          if (!value.trim()) return false
-          return { type: 'inlineMath', value } as unknown as PhrasingContent
-        }
       ]
     ], {
       ignore: [
@@ -194,6 +229,52 @@ export function remarkWorkInline() {
         'definition', 'footnoteDefinition'
       ]
     })
+    const source = typeof file?.value === 'string' ? file.value : ''
+    if (source) anchorWikiLinks(tree as Positioned, source)
+  }
+}
+
+type LooseMathNode = Positioned & { value?: string }
+
+function demoteInlineMath(node: LooseMathNode, source: string): void {
+  const children = node.children
+  if (!children) return
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index]
+    if (child.type !== 'inlineMath') {
+      demoteInlineMath(child, source)
+      continue
+    }
+    const rawValue = (child as LooseMathNode).value
+    const value = typeof rawValue === 'string' ? rawValue : ''
+    const end = child.position?.end?.offset
+    const start = child.position?.start?.offset
+    const demote =
+      !value.trim() ||
+      /^\s|\s$/.test(value) ||
+      (typeof end === 'number' && /[0-9]/.test(source.charAt(end)))
+    if (!demote) continue
+    const raw = typeof start === 'number' && typeof end === 'number'
+      ? source.slice(start, end)
+      : `$${value}$`
+    children[index] = {
+      type: 'text',
+      value: raw,
+      position: child.position
+    } as Positioned
+  }
+}
+
+/**
+ * Pandoc's `$…$` spacing rules as a post-pass over remark-math output:
+ * inline math whose value has leading/trailing whitespace, or whose
+ * closing `$` is followed by an ASCII digit, was never a formula — restore
+ * it to the literal source text.
+ */
+export function remarkDemoteFalseMath() {
+  return (tree: Node, file: { value?: unknown }) => {
+    const source = typeof file?.value === 'string' ? file.value : ''
+    demoteInlineMath(tree as LooseMathNode, source)
   }
 }
 

@@ -11,7 +11,7 @@
  * docs/work-markdown-implementation.zh-CN.md §4).
  */
 
-const FRONTMATTER_RE = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/
+const FRONTMATTER_RE = /^(?:\uFEFF)?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/
 
 export type MarkdownDoc = {
   /** Leading YAML frontmatter block, verbatim (incl. delimiters and trailing newline). Empty when absent. */
@@ -26,7 +26,7 @@ export type MarkdownDoc = {
  * on save without going through the document round-trip.
  */
 export function splitFrontmatter(md: string): MarkdownDoc {
-  if (!md.startsWith('---')) return { frontmatter: '', body: md }
+  if (!md.startsWith('---') && !md.startsWith('\uFEFF---')) return { frontmatter: '', body: md }
   const match = FRONTMATTER_RE.exec(md)
   if (!match) return { frontmatter: '', body: md }
   return { frontmatter: match[0], body: md.slice(match[0].length) }

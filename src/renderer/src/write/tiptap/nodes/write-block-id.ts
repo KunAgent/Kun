@@ -62,6 +62,19 @@ export const WriteBlockId = Extension.create({
             keepOnSplit: false
           }
         }
+      },
+      {
+        types: ['paragraph'],
+        attributes: {
+          // Marks a paragraph synthesized to satisfy PM content constraints
+          // (e.g. listItem's required leading paragraph) — serialization
+          // drops it so the source fragment round-trips.
+          workAuto: {
+            default: null,
+            rendered: false,
+            keepOnSplit: false
+          }
+        }
       }
     ]
   },

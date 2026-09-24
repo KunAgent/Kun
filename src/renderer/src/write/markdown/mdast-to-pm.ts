@@ -130,15 +130,28 @@ function phrasing(nodes: PhrasingContent[] | undefined, marks: PmMark[], ctx: In
   return out
 }
 
+/**
+ * PM requires a listItem's first child to be a paragraph. When mdast gives
+ * the item a different leading block (e.g. `- ```code````), synthesize an
+ * empty leading paragraph flagged `workAuto` so serialization can drop it
+ * again and the block keeps its original signature.
+ */
+function ensureLeadingParagraph(content: JSONContent[]): JSONContent[] {
+  if (content.length === 0) return content
+  const first = content[0]
+  if (first.type === 'paragraph') return content
+  return [{ type: 'paragraph', attrs: { workAuto: true }, content: [] }, ...content]
+}
+
 function listItemToPm(item: ListItem, asTask: boolean, ctx: BlockCtx): JSONContent {
   if (asTask) {
     return {
       type: 'taskItem',
       attrs: { checked: item.checked === true },
-      content: blocks(item.children, ctx)
+      content: ensureLeadingParagraph(blocks(item.children, ctx))
     }
   }
-  const content = blocks(item.children, ctx)
+  const content = ensureLeadingParagraph(blocks(item.children, ctx))
   // A checked item inside a plain bullet list keeps `[x]`/`[ ]` as literal
   // text so editing the list never loses the marker characters.
   if (item.checked !== null && item.checked !== undefined) {
@@ -254,9 +267,59 @@ function richBlock(node: RootContent, ctx: BlockCtx): JSONContent {
   }
 }
 
+const HTML_OPEN_TAG_RE = /^<([A-Za-z][A-Za-z0-9-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>$/
+const HTML_VOID_TAGS = new Set([
+  'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+  'link', 'meta', 'source', 'track', 'wbr'
+])
+
+/**
+ * Merge `<div align="center"> … </div>`-style wrappers into one mdast html
+ * node spanning open tag → matching close tag. micromark splits such
+ * wrappers at blank lines ("open tag / inner blocks / close tag"), which
+ * would otherwise produce three stray blocks and lose the wrapping effect.
+ */
+function mergeHtmlWrappers(children: RootContent[] | undefined, ctx: InlineCtx): RootContent[] {
+  const list = children ?? []
+  const out: RootContent[] = []
+  for (let index = 0; index < list.length; index += 1) {
+    const child = list[index]
+    let merged = false
+    if (child.type === 'html') {
+      const open = child.value.trim().match(HTML_OPEN_TAG_RE)
+      const tag = open?.[1]?.toLowerCase()
+      if (open && tag && !HTML_VOID_TAGS.has(tag) && !open[2].trimEnd().endsWith('/')) {
+        const closeTag = `</${tag}>`
+        for (let scan = index + 1; scan < list.length; scan += 1) {
+          const sibling = list[scan]
+          if (sibling.type === 'html' && sibling.value.trim() === closeTag) {
+            const start = child.position?.start?.offset
+            const end = sibling.position?.end?.offset
+            const value = typeof start === 'number' && typeof end === 'number'
+              ? ctx.body.slice(start, end)
+              : `${child.value}${closeTag}`
+            out.push({
+              type: 'html',
+              value,
+              ...(child.position && sibling.position
+                ? { position: { start: child.position.start, end: sibling.position.end } }
+                : {})
+            } as RootContent)
+            index = scan
+            merged = true
+            break
+          }
+        }
+      }
+    }
+    if (!merged) out.push(child)
+  }
+  return out
+}
+
 function blocks(children: RootContent[] | undefined, ctx: BlockCtx): JSONContent[] {
   const out: JSONContent[] = []
-  for (const child of children ?? []) {
+  for (const child of mergeHtmlWrappers(children, ctx)) {
     if (classifyBlock(child) === 'raw') {
       const raw = nodeSource(ctx.body, child) ?? ''
       out.push({ type: 'rawMarkdownBlock', attrs: { raw, reason: rawBlockReason(child) } })
@@ -286,10 +349,54 @@ export type MdastToPmOptions = {
  * `blockId` attr and are registered (source + signature + style) in
  * `sourceMap`.
  */
+/** Fake mdast paragraph covering a single `\n`, used for blank-line blocks. */
+function blankLineMdast(offset: number): RootContent {
+  return {
+    type: 'paragraph',
+    children: [],
+    position: {
+      start: { offset, line: 0, column: 0 },
+      end: { offset: offset + 1, line: 0, column: 0 }
+    }
+  } as RootContent
+}
+
 export function mdastToPm(root: Root, options: MdastToPmOptions): JSONContent {
   const ctx: BlockCtx = { body: options.body, sourceMap: options.sourceMap }
   const content: JSONContent[] = []
-  for (const child of root.children) {
+  const children = mergeHtmlWrappers(root.children, ctx)
+  let prevEnd: number | undefined
+  for (const child of children) {
+    // Blank-line fidelity: every blank line beyond the two newlines that
+    // separate adjacent blocks becomes its own empty paragraph (registered
+    // as a `\n` source fragment), so `a\n\n\n\nb` surfaces the two extra
+    // blank lines as editable empty blocks instead of hiding them inside
+    // `a`'s verbatim source.
+    const start = child.position?.start?.offset
+    if (typeof prevEnd === 'number' && typeof start === 'number' && start > prevEnd) {
+      const gap = options.body.slice(prevEnd, start)
+      const newlineOffsets: number[] = []
+      for (let i = 0; i < gap.length; i += 1) {
+        if (gap.charCodeAt(i) === 10) newlineOffsets.push(prevEnd + i)
+      }
+      for (let k = 0; k + 2 < newlineOffsets.length; k += 1) {
+        const offset = newlineOffsets[k + 1]
+        const mdast = blankLineMdast(offset)
+        const blockId = options.sourceMap.nextBlockId()
+        options.sourceMap.register(
+          blockId,
+          '\n',
+          semanticSignature({ type: 'paragraph', children: [] } as unknown as RootContent)
+        )
+        const emptyNode: JSONContent = { type: 'paragraph', attrs: { blockId } }
+        content.push(emptyNode)
+        options.onTopBlock?.(emptyNode, mdast)
+      }
+    }
+    if (typeof start === 'number' && child.position?.end?.offset !== undefined) {
+      prevEnd = child.position.end.offset
+    }
+
     const blockId = options.sourceMap.nextBlockId()
     const raw = nodeSource(options.body, child) ?? ''
     const isRaw = classifyBlock(child) === 'raw'

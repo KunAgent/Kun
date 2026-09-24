@@ -17,6 +17,7 @@ import {
   type WorkDocContext
 } from '../../markdown/document-codec'
 import { writeRichExternalSyncMeta } from '../extensions/term-propagation'
+import { computeBlockSyncReplacement } from '../markdown-sync'
 import { alignBlocks, type ReviewChunk } from './align-blocks'
 import {
   registerWriteReviewResolver,
@@ -210,8 +211,18 @@ export class WriteReviewSession {
       let node: PMNode
       try {
         node = this.editor.schema.nodeFromJSON(child)
+        node.check()
       } catch {
-        continue
+        // Schema-invalid conversions degrade to their verbatim source block
+        // instead of being dropped (they would silently vanish otherwise).
+        try {
+          node = this.editor.schema.nodeFromJSON({
+            type: 'rawMarkdownBlock',
+            attrs: { blockId, raw, reason: 'schema' }
+          })
+        } catch {
+          continue
+        }
       }
       // The codec inserts a placeholder paragraph into empty documents; it
       // has no block identity and must not count as a review block.
@@ -255,9 +266,21 @@ export class WriteReviewSession {
     return chunks
   }
 
+  /**
+   * Swap the document to `nodes` via the minimal top-level replacement, so
+   * unchanged blocks keep their live nodes — cursor, scroll position, and
+   * undo history survive entering/leaving the review (§6.3).
+   */
   private swapToTopNodes(nodes: PMNode[]): void {
+    const target = this.editor.schema.topNodeType.create(null, Fragment.from(nodes))
+    const replacement = computeBlockSyncReplacement(this.editor.state.doc, target)
+    if (!replacement) return
     const tr = this.editor.state.tr
-    tr.replaceWith(0, this.editor.state.doc.content.size, nodes)
+    if (replacement.nodes.length > 0) {
+      tr.replaceWith(replacement.from, replacement.to, replacement.nodes)
+    } else {
+      tr.delete(replacement.from, replacement.to)
+    }
     tr.setMeta(writeRichExternalSyncMeta, true)
     tr.setMeta('addToHistory', false)
     this.editor.view.dispatch(tr)
@@ -277,16 +300,34 @@ export class WriteReviewSession {
     if (preReview) {
       // Step 1 (history-less): restore the pre-review document so the next
       // step can be a single undoable original → final transaction.
-      const restore = editor.state.tr
-      restore.replaceWith(0, finalDoc.content.size, topNodes(preReview))
-      restore.setMeta(writeRichExternalSyncMeta, true)
-      restore.setMeta('addToHistory', false)
-      editor.view.dispatch(restore)
+      const restoreTarget = editor.schema.topNodeType.create(null, Fragment.from(topNodes(preReview)))
+      const restoreReplacement = computeBlockSyncReplacement(editor.state.doc, restoreTarget)
+      if (restoreReplacement) {
+        const restore = editor.state.tr
+        if (restoreReplacement.nodes.length > 0) {
+          restore.replaceWith(restoreReplacement.from, restoreReplacement.to, restoreReplacement.nodes)
+        } else {
+          restore.delete(restoreReplacement.from, restoreReplacement.to)
+        }
+        restore.setMeta(writeRichExternalSyncMeta, true)
+        restore.setMeta('addToHistory', false)
+        editor.view.dispatch(restore)
+      }
 
-      // Step 2 (undoable): swap to the final resolved content.
-      const apply = editor.state.tr
-      apply.replaceWith(0, editor.state.doc.content.size, finalNodes)
-      editor.view.dispatch(apply)
+      // Step 2 (undoable): swap to the final resolved content — again a
+      // minimal block replacement, so unchanged nodes are reused and the
+      // transaction stays small enough to undo cleanly.
+      const applyTarget = editor.schema.topNodeType.create(null, Fragment.from(finalNodes))
+      const applyReplacement = computeBlockSyncReplacement(editor.state.doc, applyTarget)
+      if (applyReplacement) {
+        const apply = editor.state.tr
+        if (applyReplacement.nodes.length > 0) {
+          apply.replaceWith(applyReplacement.from, applyReplacement.to, applyReplacement.nodes)
+        } else {
+          apply.delete(applyReplacement.from, applyReplacement.to)
+        }
+        editor.view.dispatch(apply)
+      }
     }
 
     const clear = editor.state.tr

@@ -45,6 +45,20 @@ export const WriteBlockShortcuts = Extension.create<WriteBlockShortcutsOptions>(
     }
 
     return {
+      // GFM table cells are single-line: Enter inserts a line break
+      // (serialized as <br>) instead of splitting the cell paragraph.
+      'Enter': () => {
+        if (!editable()) return false
+        const { $from } = this.editor.state.selection
+        for (let depth = $from.depth; depth > 0; depth -= 1) {
+          const name = $from.node(depth).type.name
+          if (name === 'tableCell' || name === 'tableHeader') {
+            return this.editor.chain().setHardBreak().scrollIntoView().run()
+          }
+          if (name === 'table' || name === 'callout') break
+        }
+        return false
+      },
       'Mod-Alt-1': () => editable() && this.editor.chain().focus().toggleHeading({ level: 1 }).run(),
       'Mod-Alt-2': () => editable() && this.editor.chain().focus().toggleHeading({ level: 2 }).run(),
       'Mod-Alt-3': () => editable() && this.editor.chain().focus().toggleHeading({ level: 3 }).run(),

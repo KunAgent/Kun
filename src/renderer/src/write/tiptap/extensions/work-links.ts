@@ -126,11 +126,16 @@ function openLinkBubble(editor: Editor, nav: WorkLinkNavigation, anchor: { href:
   const applyHref = (): void => {
     const href = input.value.trim()
     if (!href) return
+    // Editing a reference-style link (`[text][id]`) through the bubble must
+    // produce a plain inline link — otherwise the kept identifier would
+    // serialize back to `[text][id]` while the definition no longer matches
+    // the new address.
+    const attrs = { href, identifier: null, label: null, reference: null }
     const chain = editor.chain().focus()
     if (anchor) {
-      chain.setTextSelection({ from: anchor.from, to: anchor.to }).extendMarkRange('link').setLink({ href }).run()
+      chain.setTextSelection({ from: anchor.from, to: anchor.to }).extendMarkRange('link').setLink(attrs).run()
     } else if (!editor.state.selection.empty) {
-      chain.extendMarkRange('link').setLink({ href }).run()
+      chain.extendMarkRange('link').setLink(attrs).run()
     }
     close()
   }

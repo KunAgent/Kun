@@ -80,6 +80,33 @@ describe('write-export-service helpers', () => {
     expect(html).toContain(`href="${pathToFileURL(join(workspaceRoot, 'notes.md')).href}"`)
   })
 
+  it('renders clipboard math as pure MathML (no KaTeX spans without CSS)', async () => {
+    const sourcePath = join(workspaceRoot, 'draft.md')
+    const html = await buildWriteClipboardHtmlFragment({
+      sourcePath,
+      content: 'inline $x^2$ math\n'
+    })
+
+    expect(html).toContain('<math')
+    expect(html).not.toContain('katex-html')
+  })
+
+  it('renders export-document math with KaTeX fallback and bundled CSS', async () => {
+    const sourcePath = join(workspaceRoot, 'draft.md')
+    const html = await buildWriteExportHtmlDocument({
+      sourcePath,
+      title: 'Draft',
+      content: 'inline $x^2$ math\n'
+    })
+
+    // htmlAndMathml keeps MathML for capable viewers plus the KaTeX HTML
+    // span fallback for Linux exports without system math fonts.
+    expect(html).toContain('<math')
+    expect(html).toContain('katex-html')
+    expect(html).toContain('.katex')
+    expect(html).toContain('fonts/KaTeX')
+  })
+
   it('renders clipboard html fragments for plain text content', async () => {
     const sourcePath = join(workspaceRoot, 'draft.txt')
     const html = await buildWriteClipboardHtmlFragment({

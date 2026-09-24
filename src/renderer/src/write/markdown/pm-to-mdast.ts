@@ -65,7 +65,7 @@ function applyMark(inner: PhrasingContent[], mark: NonNullable<JSONContent['mark
   }
 }
 
-function inlineNodes(content: JSONContent[] | undefined): PhrasingContent[] {
+function inlineNodes(content: JSONContent[] | undefined, inTableCell = false): PhrasingContent[] {
   const out: PhrasingContent[] = []
   for (const node of content ?? []) {
     switch (node.type) {
@@ -83,7 +83,10 @@ function inlineNodes(content: JSONContent[] | undefined): PhrasingContent[] {
         break
       }
       case 'hardBreak':
-        out.push({ type: 'break' })
+        // GFM table cells are single-line: a break serializes as <br>.
+        out.push(inTableCell
+          ? { type: 'html', value: '<br>' }
+          : { type: 'break' })
         break
       case 'image': {
         const attrs = node.attrs ?? {}
@@ -147,11 +150,22 @@ function pmList(node: JSONContent): List {
   const isTask = node.type === 'taskList'
   const children: ListItem[] = (node.content ?? []).map((item) => {
     const checked = isTask ? item.attrs?.checked === true : null
+    let itemContent = item.content ?? []
+    // Drop the synthesized leading paragraph (`workAuto`) that PM needs to
+    // satisfy listItem's content expression — the mdast never had it.
+    const first = itemContent[0]
+    if (
+      first?.type === 'paragraph' &&
+      first.attrs?.workAuto === true &&
+      (first.content ?? []).length === 0
+    ) {
+      itemContent = itemContent.slice(1)
+    }
     return {
       type: 'listItem',
       checked,
       spread: false,
-      children: pmBlocks(item.content) as ListItem['children']
+      children: pmBlocks(itemContent) as ListItem['children']
     }
   })
   return {
@@ -163,14 +177,28 @@ function pmList(node: JSONContent): List {
   }
 }
 
+/**
+ * A GFM table cell is one line of phrasing content. PM lets a cell hold
+ * several paragraphs (Enter inside a cell); join them with `<br>` nodes so
+ * the row stays a single source line.
+ */
+function cellInlineNodes(cell: JSONContent): PhrasingContent[] {
+  const blocks = (cell.content ?? []).filter((child) => child.type === 'paragraph')
+  if (blocks.length === 0) return [{ type: 'text', value: textContent(cell) }]
+  const out: PhrasingContent[] = []
+  blocks.forEach((paragraph, index) => {
+    if (index > 0) out.push({ type: 'html', value: '<br>' })
+    out.push(...inlineNodes(paragraph.content, true))
+  })
+  return out
+}
+
 function pmTable(node: JSONContent): Table {
   const rows: TableRow[] = (node.content ?? []).map((row) => ({
     type: 'tableRow',
     children: (row.content ?? []).map((cell): TableCell => ({
       type: 'tableCell',
-      children: cell.content?.length === 1 && cell.content[0].type === 'paragraph'
-        ? inlineNodes(cell.content[0].content)
-        : [{ type: 'text', value: textContent(cell) }]
+      children: cellInlineNodes(cell)
     }))
   }))
   const header = node.content?.[0]?.content ?? []

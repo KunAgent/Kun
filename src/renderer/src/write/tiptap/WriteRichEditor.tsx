@@ -18,7 +18,7 @@ import { buildInlineCompletionPayload } from '../inline-completion'
 import type { WriteBlockType } from '../block-type'
 import type { WriteInlineFormatKind } from '../inline-format'
 import { createWriteRecentEdit, type WriteRecentEdit } from '../recent-edits'
-import { buildWriteRichExtensions } from './markdown-manager'
+import { buildWriteRichExtensions, workCodecSchema } from './markdown-manager'
 import {
   buildWriteRichMarkdownProjection,
   posForProjectedOffset
@@ -28,15 +28,22 @@ import {
   createWorkDocContext,
   parseWorkDocument,
   serializeWorkDocument,
+  type ParsedWorkDocument,
   type WorkDocContext
 } from '../markdown/document-codec'
+import {
+  scheduleWorkParse,
+  WORK_PARSE_WORKER_THRESHOLD
+} from '../markdown/parse-work-async'
+import { sanitizeWorkDocContent } from '../markdown/schema-check'
 import { WritePropertiesPanel } from '../../components/write/WritePropertiesPanel'
 import { recentEditsFromRichTransaction } from './recent-edits-pm'
 import { replaceRangeWithMarkdown } from './markdown-insert'
-import { applyExternalMarkdownToEditor } from './markdown-sync'
+import { applyExternalMarkdownToEditor, applyParsedDocToEditor } from './markdown-sync'
 import { WriteLocalImage } from './local-image'
 import { WritePasteImage } from './paste-image'
 import { WriteRichInlineCompletion } from './extensions/inline-completion'
+import { WriteSaveShortcut } from './extensions/write-save-shortcut'
 import {
   WriteRichTermPropagation,
   writeRichExternalSyncMeta
@@ -195,6 +202,9 @@ export function WriteRichEditor({
     withReplace: false
   })
   const [mountedEditor, setMountedEditor] = useState<Editor | null>(null)
+  // Initial parse result; large documents parse in a Web Worker and arrive
+  // asynchronously (§3.9/§11).
+  const [boot, setBoot] = useState<{ parsed: ParsedWorkDocument; source: string } | null>(null)
 
   workspaceRootRef.current = workspaceRoot ?? ''
   filePathRef.current = filePath ?? ''
@@ -219,6 +229,16 @@ export function WriteRichEditor({
 
   const fileKey = fileKeyOf(filePath)
 
+  // Parse the initial document — synchronously for small files, in the
+  // worker past the threshold so opening a large file never blocks the UI.
+  useEffect(() => {
+    setBoot(null)
+    return scheduleWorkParse(value, (parsed) => setBoot({ parsed, source: value }))
+    // `value` is captured at file open; later updates flow through the
+    // sync effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileKey])
+
   // Apply every payload that arrives from outside the editor (file open,
   // disk sync). The unified codec preserves every construct, so no
   // fidelity gate runs here. Our own serialized output is never re-parsed.
@@ -229,43 +249,40 @@ export function WriteRichEditor({
     // chunk positions.
     if (reviewSessionRef.current?.isActive()) return
     const editor = editorRef.current
-    if (editor && !editor.isDestroyed) {
-      if (applyExternalMarkdownToEditor(editor, value, (markdown) => {
-        const parsed = parseWorkDocument(markdown)
-        workCtxRef.current = parsed.ctx
-        setFrontmatter(parsed.ctx.frontmatter)
-        return parsed.doc
-      })) {
-        lastEmittedValueRef.current = value
-      }
-    } else {
-      const parsed = parseWorkDocument(value)
+    if (!editor || editor.isDestroyed) return
+
+    if (value.length >= WORK_PARSE_WORKER_THRESHOLD && typeof Worker !== 'undefined') {
+      // Off-thread parse; a newer snapshot arriving mid-parse supersedes
+      // this one (streaming agent edits coalesce naturally).
+      return scheduleWorkParse(value, (parsed) => {
+        const instance = editorRef.current
+        if (!instance || instance.isDestroyed) return
+        const doc = sanitizeWorkDocContent(parsed.doc, parsed.ctx, instance.schema)
+        if (applyParsedDocToEditor(instance, doc)) {
+          workCtxRef.current = parsed.ctx
+          setFrontmatter(parsed.ctx.frontmatter)
+          lastEmittedValueRef.current = value
+        }
+      })
+    }
+
+    if (applyExternalMarkdownToEditor(editor, value, (markdown) => {
+      const parsed = parseWorkDocument(markdown)
+      const doc = sanitizeWorkDocContent(parsed.doc, parsed.ctx, editor.schema)
       workCtxRef.current = parsed.ctx
       setFrontmatter(parsed.ctx.frontmatter)
+      return doc
+    })) {
+      lastEmittedValueRef.current = value
     }
-  }, [value, fileKey])
+  }, [value, fileKey, mountedEditor])
 
   useEffect(() => {
-    if (!hostRef.current || editorRef.current) return
+    if (!hostRef.current || editorRef.current || !boot) return
 
-    const saveShortcut = Extension.create({
-      name: 'writeSaveShortcut',
-      addKeyboardShortcuts() {
-        return {
-          'Mod-s': () => {
-            onSaveShortcutRef.current()
-            return true
-          },
-          'Mod-f': () => {
-            setFindBar({ open: true, withReplace: false })
-            return true
-          },
-          'Mod-Alt-f': () => {
-            setFindBar({ open: true, withReplace: true })
-            return true
-          }
-        }
-      }
+    const saveShortcut = WriteSaveShortcut.configure({
+      onSave: () => onSaveShortcutRef.current(),
+      onFind: (withReplace) => setFindBar({ open: true, withReplace })
     })
 
     const extensions: AnyExtension[] = buildWriteRichExtensions({
@@ -374,10 +391,9 @@ export function WriteRichEditor({
     })
 
     const initialContent = (() => {
-      const parsed = parseWorkDocument(value)
-      workCtxRef.current = parsed.ctx
-      setFrontmatter(parsed.ctx.frontmatter)
-      return parsed.doc
+      workCtxRef.current = boot.parsed.ctx
+      setFrontmatter(boot.parsed.ctx.frontmatter)
+      return sanitizeWorkDocContent(boot.parsed.doc, boot.parsed.ctx, workCodecSchema())
     })()
 
     const editor = new Editor({
@@ -397,7 +413,7 @@ export function WriteRichEditor({
         // re-emitting them as user changes would mark the file dirty and
         // autosave a normalized rewrite of content the agent just wrote.
         if (transaction.getMeta(writeRichExternalSyncMeta)) {
-          onSelectionChangeRef.current(selectionStateFromEditor(instance))
+          onSelectionChangeRef.current(selectionStateFromEditor(instance, workCtxRef.current))
           return
         }
         try {
@@ -414,17 +430,17 @@ export function WriteRichEditor({
           const edits = recentEditsFromRichTransaction(transaction, filePathRef.current)
           if (edits.length > 0) onDocumentEditRef.current(edits)
         }
-        onSelectionChangeRef.current(selectionStateFromEditor(instance))
+        onSelectionChangeRef.current(selectionStateFromEditor(instance, workCtxRef.current))
       },
       onSelectionUpdate({ editor: instance }) {
-        onSelectionChangeRef.current(selectionStateFromEditor(instance))
+        onSelectionChangeRef.current(selectionStateFromEditor(instance, workCtxRef.current))
       }
     })
 
     editorRef.current = editor
     setMountedEditor(editor)
-    lastEmittedValueRef.current = value
-    onSelectionChangeRef.current(selectionStateFromEditor(editor))
+    lastEmittedValueRef.current = boot.source
+    onSelectionChangeRef.current(selectionStateFromEditor(editor, workCtxRef.current))
 
     reviewSessionRef.current = new WriteReviewSession(
       editor,
@@ -602,10 +618,10 @@ export function WriteRichEditor({
       editorRef.current = null
       setMountedEditor(null)
     }
-    // The editor is created once per file; value/file changes flow
-    // through the sync effect above.
+    // The editor is created once per file once the initial parse (`boot`)
+    // resolves; value/file changes flow through the sync effect above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileKey])
+  }, [fileKey, boot])
 
   useEffect(() => {
     const editor = editorRef.current

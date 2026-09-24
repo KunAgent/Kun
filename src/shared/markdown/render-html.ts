@@ -29,7 +29,7 @@ export type WorkRenderHtmlOptions = {
    * MathML (Chromium export surfaces); 'latex' writes the TeX source into
    * monospace elements for consumers without math support (DOCX).
    */
-  math: 'html' | 'mathml' | 'latex'
+  math: 'html' | 'mathml' | 'mathmlDual' | 'latex'
   /** Pre-rendered mermaid SVG keyed by diagram source. */
   renderedDiagrams?: Record<string, string>
   /**
@@ -233,7 +233,17 @@ export function renderWorkMarkdownToHtml(
     .use(rehypeRaw)
     .use(rehypeSanitize, workSanitizeSchema)
   if (options.math !== 'latex') {
-    pipeline.use(rehypeKatex, { output: options.math === 'mathml' ? 'mathml' : 'html' })
+    // 'mathmlDual' emits MathML *plus* KaTeX HTML spans — Linux exports
+    // often lack system math fonts, in which case native MathML renders
+    // boxes while the KaTeX spans still display correctly (export CSS
+    // supplies the hiding rule; clipboard fragments stay pure MathML).
+    pipeline.use(rehypeKatex, {
+      output: options.math === 'mathml'
+        ? 'mathml'
+        : options.math === 'mathmlDual'
+          ? 'htmlAndMathml'
+          : 'html'
+    })
   }
   const hast = pipeline
     .use(workPostProcess, slots, codeSlots, options)

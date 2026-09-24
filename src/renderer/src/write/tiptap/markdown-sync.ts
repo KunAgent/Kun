@@ -70,9 +70,23 @@ export function applyExternalMarkdownToEditor(
   markdown: string,
   parse: (markdown: string) => JSONContent = parseWriteMarkdown
 ): boolean {
+  let parsed: JSONContent
+  try {
+    parsed = parse(markdown)
+  } catch {
+    return false
+  }
+  return applyParsedDocToEditor(editor, parsed)
+}
+
+/**
+ * Same minimal-replacement apply as {@link applyExternalMarkdownToEditor}
+ * for a doc that was already parsed — e.g. off-thread in the parse worker.
+ */
+export function applyParsedDocToEditor(editor: Editor, docJson: JSONContent): boolean {
   let nextDoc: PMNode
   try {
-    nextDoc = editor.schema.nodeFromJSON(parse(markdown))
+    nextDoc = editor.schema.nodeFromJSON(docJson)
   } catch {
     return false
   }
