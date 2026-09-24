@@ -336,25 +336,32 @@ const clawImChannelPatchSchema = z.object({
   feishuStream: z.boolean().optional()
 }).strict()
 
-const clawTaskSchedulePatchSchema = z.object({
+const scheduledTaskSchedulePatchSchema = z.object({
   kind: clawScheduleKindSchema.optional(),
   everyMinutes: z.number().int().min(1).max(10_080).optional(),
   timeOfDay: z.string().max(16).optional(),
-  atTime: z.string().max(128).optional()
+  atTime: z.string().max(128).optional(),
+  timeZone: z.string().trim().max(128).optional()
 }).strict()
 
-const clawTaskPatchSchema = z.object({
+const scheduledTaskPatchSchema = z.object({
   id: z.string().max(MAX_ID_LENGTH).optional(),
   title: z.string().max(512).optional(),
   enabled: z.boolean().optional(),
   prompt: z.string().max(MAX_CHANNEL_TEXT_LENGTH).optional(),
   workspaceRoot: defaultPathSchema,
+  sourcePlanId: z.string().trim().max(MAX_ID_LENGTH).optional(),
+  sourceThreadId: z.string().trim().max(MAX_ID_LENGTH).optional(),
   clawChannelId: z.string().trim().max(MAX_ID_LENGTH).optional(),
   providerId: z.string().trim().max(64).optional(),
   model: modelIdSchema.optional(),
   reasoningEffort: scheduleReasoningEffortSchema.optional(),
   mode: clawRunModeSchema.optional(),
-  schedule: clawTaskSchedulePatchSchema.optional(),
+  orchestration: z.enum(['direct', 'graph']).optional(),
+  priority: z.number().int().min(0).max(100).optional(),
+  dependsOn: z.array(z.string().trim().min(1).max(MAX_ID_LENGTH)).max(32).optional(),
+  useWorktree: z.boolean().optional(),
+  schedule: scheduledTaskSchedulePatchSchema.optional(),
   createdAt: z.string().max(128).optional(),
   updatedAt: z.string().max(128).optional(),
   lastRunAt: z.string().max(128).optional(),
@@ -369,7 +376,7 @@ const clawSettingsPatchSchema = z.object({
   skills: clawSkillPatchSchema.optional(),
   im: clawImPatchSchema.optional(),
   channels: z.array(clawImChannelPatchSchema).max(512).optional(),
-  tasks: z.array(clawTaskPatchSchema).max(512).optional()
+  tasks: z.array(scheduledTaskPatchSchema).max(512).optional()
 }).strict()
 
 const scheduleSkillPatchSchema = z.object({
@@ -381,37 +388,6 @@ const scheduleSkillPatchSchema = z.object({
 const scheduleInternalPatchSchema = z.object({
   port: z.number().int().min(MIN_KUN_LOCAL_PORT).max(65_535).optional(),
   secret: z.string().max(MAX_BODY_BYTES).optional()
-}).strict()
-
-const scheduledTaskSchedulePatchSchema = z.object({
-  kind: clawScheduleKindSchema.optional(),
-  everyMinutes: z.number().int().min(1).max(10_080).optional(),
-  timeOfDay: z.string().max(16).optional(),
-  atTime: z.string().max(128).optional()
-}).strict()
-
-const scheduledTaskPatchSchema = z.object({
-  id: z.string().max(MAX_ID_LENGTH).optional(),
-  title: z.string().max(512).optional(),
-  enabled: z.boolean().optional(),
-  prompt: z.string().max(MAX_CHANNEL_TEXT_LENGTH).optional(),
-  workspaceRoot: defaultPathSchema,
-  clawChannelId: z.string().trim().max(MAX_ID_LENGTH).optional(),
-  providerId: z.string().trim().max(64).optional(),
-  model: modelIdSchema.optional(),
-  reasoningEffort: scheduleReasoningEffortSchema.optional(),
-  mode: clawRunModeSchema.optional(),
-  priority: z.number().int().min(0).max(100).optional(),
-  dependsOn: z.array(z.string().trim().min(1).max(MAX_ID_LENGTH)).max(32).optional(),
-  useWorktree: z.boolean().optional(),
-  schedule: scheduledTaskSchedulePatchSchema.optional(),
-  createdAt: z.string().max(128).optional(),
-  updatedAt: z.string().max(128).optional(),
-  lastRunAt: z.string().max(128).optional(),
-  nextRunAt: z.string().max(128).optional(),
-  lastStatus: clawTaskStatusSchema.optional(),
-  lastMessage: z.string().max(MAX_CHANNEL_TEXT_LENGTH).optional(),
-  lastThreadId: z.string().max(MAX_ID_LENGTH).optional()
 }).strict()
 
 const sessionDaemonPushPatchSchema = z.object({
