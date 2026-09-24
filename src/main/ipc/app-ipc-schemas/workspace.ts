@@ -6,6 +6,10 @@ import {
 import { WRITE_EXPORT_FORMATS, WRITE_RICH_CLIPBOARD_PROFILES } from '../../../shared/write-export'
 import { WRITE_INFOGRAPHIC_MAX_TEXT_CHARS } from '../../../shared/write-infographic'
 import {
+  WRITE_AI_PROPERTIES_MAX_DOCUMENT_CHARS,
+  WRITE_AI_PROPERTIES_MAX_YAML_CHARS
+} from '../../../shared/write-ai-properties'
+import {
   MAX_WORKSPACE_SPREADSHEET_CELL_TEXT_CHARS,
   MAX_WORKSPACE_SPREADSHEET_FORMULA_CHARS,
   MAX_WORKSPACE_SPREADSHEET_MUTATION_BYTES,
@@ -621,6 +625,14 @@ export const writeInlineCompletionPayloadSchema = z
       .strict(),
     editCandidate: writeInlineCompletionEditCandidateSchema.optional(),
     recentEdits: z.array(writeInlineEditRecentEditSchema).max(12).optional(),
+    model: optionalModelIdSchema
+  })
+  .strict()
+
+export const writeAiPropertiesPayloadSchema = z
+  .object({
+    documentText: z.string().max(WRITE_AI_PROPERTIES_MAX_DOCUMENT_CHARS),
+    existingYaml: z.string().max(WRITE_AI_PROPERTIES_MAX_YAML_CHARS).optional(),
     model: optionalModelIdSchema
   })
   .strict()

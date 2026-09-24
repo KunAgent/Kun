@@ -36,6 +36,7 @@ import {
   WORK_PARSE_WORKER_THRESHOLD
 } from '../markdown/parse-work-async'
 import { sanitizeWorkDocContent } from '../markdown/schema-check'
+import { splitFrontmatter } from '@shared/markdown/frontmatter'
 import { WritePropertiesPanel } from '../../components/write/WritePropertiesPanel'
 import { recentEditsFromRichTransaction } from './recent-edits-pm'
 import { replaceRangeWithMarkdown } from './markdown-insert'
@@ -668,6 +669,7 @@ export function WriteRichEditor({
               frontmatter={frontmatter}
               onFrontmatterChange={handleFrontmatterChange}
               readOnly={readOnly}
+              getDocumentText={() => splitFrontmatter(lastEmittedValueRef.current ?? '').body}
             />
             {fileName ? <div className="write-doc-title" aria-hidden="true">{fileName}</div> : null}
           </div>

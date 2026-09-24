@@ -131,11 +131,19 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
             const hostRect = host.getBoundingClientRect()
             const rect = dom.getBoundingClientRect()
             const zoom = bodyZoom()
+            // List markers hang left of the <li> box inside the list's
+            // padding — anchor to the parent list edge so the grip doesn't
+            // cover the bullet/number.
+            const parent = dom.parentElement
+            const leftEdge =
+              parent && (parent.tagName === 'UL' || parent.tagName === 'OL')
+                ? parent.getBoundingClientRect().left
+                : rect.left
             target = next
             layer.style.display = 'flex'
             layer.style.top = `${toLayoutPx(rect.top - hostRect.top, zoom) + host.scrollTop}px`
             layer.style.height = `${Math.min(toLayoutPx(rect.height, zoom), 28)}px`
-            layer.style.left = `${toLayoutPx(rect.left - hostRect.left, zoom) - 46}px`
+            layer.style.left = `${toLayoutPx(leftEdge - hostRect.left, zoom) - 46}px`
           }
 
           const openMenu = (pinned: boolean): void => {

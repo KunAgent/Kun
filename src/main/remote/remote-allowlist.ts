@@ -153,6 +153,7 @@ export const REMOTE_ALLOWED_INVOKE_CHANNELS: ReadonlySet<string> = new Set([
   'write:export',
   'write:copy-rich-text',
   'write:inline-completion',
+  'write:ai-properties',
   'write:retrieve-context',
   'write:read-document-sha256',
   'write:generate-infographic',

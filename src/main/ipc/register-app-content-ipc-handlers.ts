@@ -53,6 +53,7 @@ import {
   writeRichClipboardPayloadSchema,
   writeDocumentSha256PayloadSchema,
   writeInfographicPayloadSchema,
+  writeAiPropertiesPayloadSchema,
   writeInlineCompletionPayloadSchema,
   writePrototypeFilePayloadSchema,
   writeRetrievalPayloadSchema
@@ -68,6 +69,9 @@ import {
   listWriteInlineCompletionDebugEntries,
   requestWriteInlineCompletion
 } from '../services/write-inline-completion-service'
+import {
+  requestWriteAiProperties
+} from '../services/write-ai-properties-service'
 import {
   retrieveWriteContext
 } from '../services/write-retrieval-service'
@@ -202,6 +206,12 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
     requestWriteInlineCompletion(
       await withRegistryCredentials(await store.load()),
       parseIpcPayload('write:inline-completion', writeInlineCompletionPayloadSchema, payload)
+    )
+  )
+  ipcMain.handle('write:ai-properties', async (_, payload: unknown) =>
+    requestWriteAiProperties(
+      await withRegistryCredentials(await store.load()),
+      parseIpcPayload('write:ai-properties', writeAiPropertiesPayloadSchema, payload)
     )
   )
   ipcMain.handle('write:retrieve-context', async (_, payload: unknown) => {

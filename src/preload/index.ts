@@ -11,6 +11,7 @@ import { createDataMigrationPreloadApi } from './data-migration'
 import { getWorkspaceCreationTimes } from './workspace-creation-times'
 import { runtimeRequestPreloadApi } from './runtime-request'
 import { sanottsSpeechBridge } from './sanotts-speech-bridge'
+import { writeBridge } from './write-bridge'
 import { onIpcEvent } from './ipc-event'
 import { paperApi } from './paper-api'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
@@ -329,27 +330,13 @@ const api = {
     ipcRenderer.on('file:workspace-changed', wrapped)
     return () => ipcRenderer.removeListener('file:workspace-changed', wrapped)
   },
-  exportWriteDocument: (payload) =>
-    ipcRenderer.invoke('write:export', payload),
+  ...writeBridge,
   exportConversation: (payload) =>
     ipcRenderer.invoke('conversation:export', payload),
   exportMemoryMarkdown: (payload) =>
     ipcRenderer.invoke('memory:export-markdown', payload),
   exportDesignPrototype: (payload) =>
     ipcRenderer.invoke('design:export-prototype', payload),
-  copyWriteDocumentAsRichText: (payload) =>
-    ipcRenderer.invoke('write:copy-rich-text', payload),
-  requestWriteInlineCompletion: (payload) =>
-    ipcRenderer.invoke('write:inline-completion', payload),
-  retrieveWriteContext: (payload) =>
-    ipcRenderer.invoke('write:retrieve-context', payload),
-  readWriteDocumentSha256: (payload) => ipcRenderer.invoke('write:read-document-sha256', payload),
-  generateWriteInfographic: (payload) =>
-    ipcRenderer.invoke('write:generate-infographic', payload),
-  authorizeWritePrototype: (payload) =>
-    ipcRenderer.invoke('write:authorize-prototype', payload),
-  openWritePrototype: (payload) =>
-    ipcRenderer.invoke('write:open-prototype', payload),
   transcribeSpeech: (payload) =>
     ipcRenderer.invoke('speech:transcribe', payload),
   getLocalWhisperModelStatus: (modelId) =>
@@ -371,10 +358,6 @@ const api = {
     return () => ipcRenderer.removeListener('speech:local-whisper:progress', wrapped)
   },
   ...sanottsSpeechBridge,
-  listWriteInlineCompletionDebugEntries: () =>
-    ipcRenderer.invoke('write:inline-completion-debug:list'),
-  clearWriteInlineCompletionDebugEntries: () =>
-    ipcRenderer.invoke('write:inline-completion-debug:clear'),
   startSse: (threadId, sinceSeq, streamId, options) =>
     ipcRenderer.invoke('runtime:sse:start', { threadId, sinceSeq, streamId, ...options }),
   stopSse: (streamId) => ipcRenderer.invoke('runtime:sse:stop', streamId),

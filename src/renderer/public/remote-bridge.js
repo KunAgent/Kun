@@ -493,6 +493,7 @@
     exportDesignPrototype: invokePayload('design:export-prototype'),
     copyWriteDocumentAsRichText: invokePayload('write:copy-rich-text'),
     requestWriteInlineCompletion: invokePayload('write:inline-completion'),
+    requestWriteAiProperties: invokePayload('write:ai-properties'),
     retrieveWriteContext: invokePayload('write:retrieve-context'),
     readWriteDocumentSha256: invokePayload('write:read-document-sha256'),
     generateWriteInfographic: invokePayload('write:generate-infographic'),

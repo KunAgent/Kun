@@ -7,7 +7,7 @@
  */
 import { useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, ChevronRight, List, Plus, Text, Calendar, ToggleLeft, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, List, Plus, Sparkles, Text, Calendar, ToggleLeft, Trash2 } from 'lucide-react'
 import { parse as parseYaml } from 'yaml'
 import {
   convertPropertyKind,
@@ -20,6 +20,7 @@ import {
   type FrontmatterProperty,
   type FrontmatterPropertyKind
 } from '@shared/markdown/frontmatter'
+import { mergeFrontmatterYamlAddition } from '@shared/write-ai-properties'
 
 type Props = {
   /** Verbatim frontmatter block (with fences), '' when absent. */
@@ -27,6 +28,8 @@ type Props = {
   /** Called with the new verbatim block ('' removes frontmatter). */
   onFrontmatterChange: (block: string) => void
   readOnly?: boolean
+  /** Document body markdown for the AI-properties request. */
+  getDocumentText?: () => string
 }
 
 const KIND_ORDER: FrontmatterPropertyKind[] = ['scalar', 'list', 'checkbox', 'date']
@@ -38,12 +41,14 @@ function KindIcon({ kind }: { kind: FrontmatterPropertyKind }): ReactElement {
   return <Text size={13} />
 }
 
-export function WritePropertiesPanel({ frontmatter, onFrontmatterChange, readOnly = false }: Props): ReactElement | null {
+export function WritePropertiesPanel({ frontmatter, onFrontmatterChange, readOnly = false, getDocumentText }: Props): ReactElement | null {
   const { t } = useTranslation('common')
   const [expanded, setExpanded] = useState(false)
   const [mode, setMode] = useState<'form' | 'source'>('form')
   const [draft, setDraft] = useState<string | null>(null)
   const [sourceError, setSourceError] = useState<string | null>(null)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   const interior = useMemo(() => frontmatterInterior(frontmatter), [frontmatter])
   const parsed = useMemo(() => parseFrontmatterProperties(interior), [interior])
@@ -88,19 +93,73 @@ export function WritePropertiesPanel({ frontmatter, onFrontmatterChange, readOnl
     }
   }
 
+  const aiAvailable =
+    !readOnly &&
+    Boolean(getDocumentText) &&
+    typeof window.kunGui?.requestWriteAiProperties === 'function'
+
+  const runAiGenerate = async (): Promise<void> => {
+    if (aiBusy || readOnly) return
+    setAiBusy(true)
+    setAiError(null)
+    try {
+      const result = await window.kunGui.requestWriteAiProperties({
+        documentText: getDocumentText?.() ?? '',
+        existingYaml: interior || undefined
+      })
+      if (!result.ok) {
+        setAiError(result.message)
+        return
+      }
+      const merged = mergeFrontmatterYamlAddition(interior, result.yaml)
+      if (merged === null) {
+        // Existing frontmatter is not a plain mapping — surface the generated
+        // YAML in source mode instead of risking a destructive rewrite.
+        setDraft(result.yaml)
+        setMode('source')
+        setExpanded(true)
+        setAiError(t('writePropertiesAiReviewSource'))
+        return
+      }
+      setExpanded(true)
+      if (merged !== interior) onFrontmatterChange(wrapFrontmatter(merged))
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
+  const renderAiButton = (className: string): ReactElement | null =>
+    aiAvailable ? (
+      <button
+        type="button"
+        className={`${className} write-properties-ai`}
+        disabled={aiBusy}
+        onClick={() => void runAiGenerate()}
+      >
+        <Sparkles size={12} />
+        {aiBusy ? t('writePropertiesAiGenerating') : t('writePropertiesAiGenerate')}
+      </button>
+    ) : null
+
   if (!frontmatter && !expanded) {
     if (readOnly) return null
     return (
-      <button
-        type="button"
-        className="write-properties-add"
-        onClick={() => {
-          setExpanded(true)
-          onFrontmatterChange(wrapFrontmatter(''))
-        }}
-      >
-        <Plus size={12} /> {t('writePropertiesAdd')}
-      </button>
+      <div className="write-properties-collapsed">
+        <button
+          type="button"
+          className="write-properties-add"
+          onClick={() => {
+            setExpanded(true)
+            onFrontmatterChange(wrapFrontmatter(''))
+          }}
+        >
+          <Plus size={12} /> {t('writePropertiesAdd')}
+        </button>
+        {renderAiButton('write-properties-add')}
+        {aiError && <span className="write-properties-inline-error">{aiError}</span>}
+      </div>
     )
   }
 
@@ -209,17 +268,21 @@ export function WritePropertiesPanel({ frontmatter, onFrontmatterChange, readOnl
                 </div>
               ))}
               {!readOnly && (
-                <button
-                  type="button"
-                  className="write-properties-addrow"
-                  onClick={() => {
-                    if (!parsed.ok) return
-                    commitProperties([...parsed.properties, createEmptyProperty()])
-                  }}
-                >
-                  <Plus size={12} /> {t('writePropertiesAddRow')}
-                </button>
+                <div className="write-properties-actions">
+                  <button
+                    type="button"
+                    className="write-properties-addrow"
+                    onClick={() => {
+                      if (!parsed.ok) return
+                      commitProperties([...parsed.properties, createEmptyProperty()])
+                    }}
+                  >
+                    <Plus size={12} /> {t('writePropertiesAddRow')}
+                  </button>
+                  {renderAiButton('write-properties-addrow')}
+                </div>
               )}
+              {aiError && <div className="write-properties-error">{aiError}</div>}
             </div>
           )}
 

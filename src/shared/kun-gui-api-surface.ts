@@ -119,6 +119,7 @@ import type {
   WriteInlineCompletionRequest,
   WriteInlineCompletionResult
 } from './write-inline-completion'
+import type { KunGuiWriteAiApi } from './write-ai-properties'
 import type {
   WriteInfographicRequest,
   WriteInfographicResult
@@ -254,7 +255,7 @@ import {
   WorkspaceCreationTimeEntry,
   WorkspacePickResult
 } from './kun-gui-api-contracts'
-export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & {
+export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & {
   platform: string
   /** True only in the browser Remote build served by the Remote gateway. */
   isRemoteWeb?: boolean
