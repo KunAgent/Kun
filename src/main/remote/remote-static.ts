@@ -226,7 +226,9 @@ export function remoteBridgeScript(
       const directory = dirname(bridgePath)
       const parts = REMOTE_BRIDGE_PARTS.map((part) => readFileSync(join(directory, part), 'utf8'))
       parts.push(readFileSync(bridgePath, 'utf8'))
-      cachedBridgeSource = { path: bridgePath, source: parts.join('\n') }
+      // A part ending in `})()` followed by one starting with `(function` would
+      // otherwise parse as a call chain; an explicit `;` keeps parts separate.
+      cachedBridgeSource = { path: bridgePath, source: parts.join('\n;\n') }
     }
   } catch {
     return null

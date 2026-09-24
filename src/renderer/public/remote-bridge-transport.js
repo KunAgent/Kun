@@ -199,4 +199,4 @@ window.__kunRemoteCreateTransport = function createKunRemoteTransport() {
     invokePayload: invokePayload,
     on: on
   }
-}
+};

@@ -1,7 +1,8 @@
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
+import { runInNewContext } from 'node:vm'
 import { gunzipSync } from 'node:zlib'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -9,6 +10,7 @@ import {
   chooseRemoteStaticSource,
   isRemoteModulePathname,
   isWebKitRemoteClient,
+  remoteBridgeScript,
   remoteResponseLooksLikeHtml,
   resolveRemoteStaticPath,
   serveRemoteStaticFile,
@@ -146,6 +148,51 @@ describe('serveRemoteStaticFile', () => {
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()))
       await rm(root, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('remoteBridgeScript', () => {
+  // Minimal browser globals the bridge touches while installing.
+  function browserWindow(): Record<string, unknown> {
+    const storage = new Map<string, string>()
+    const window: Record<string, unknown> = {
+      sessionStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => void storage.set(key, value)
+      },
+      crypto: { randomUUID: () => 'client-test' },
+      document: { visibilityState: 'visible', addEventListener: () => undefined },
+      location: { href: '/' },
+      addEventListener: () => undefined,
+      EventSource: class { addEventListener(): void {} close(): void {} },
+      fetch: () => new Promise(() => undefined)
+    }
+    window.window = window
+    return window
+  }
+
+  it('installs window.kunGui from the shipped bridge parts', () => {
+    const bridgePath = resolve(__dirname, '../../renderer/public/remote-bridge.js')
+    const script = remoteBridgeScript(bridgePath, { platform: 'darwin' }, true)
+    expect(script).not.toBeNull()
+    const window = browserWindow()
+    runInNewContext(script!, window)
+    expect(typeof (window.kunGui as { getSettings?: unknown }).getSettings).toBe('function')
+  })
+
+  it('keeps an unterminated IIFE part from calling into the next part', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kun-remote-bridge-'))
+    try {
+      await writeFile(join(dir, 'remote-bridge-transport.js'), 'window.a = function () { return 1 }')
+      await writeFile(join(dir, 'remote-bridge-browser.js'), 'window.b = (function () { return {} })()')
+      await writeFile(join(dir, 'remote-bridge.js'), '(function () { window.kunGui = { ok: true } })()')
+      const script = remoteBridgeScript(join(dir, 'remote-bridge.js'), {}, true)
+      const window = browserWindow()
+      expect(() => runInNewContext(script!, window)).not.toThrow()
+      expect(window.kunGui).toEqual({ ok: true })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
     }
   })
 })

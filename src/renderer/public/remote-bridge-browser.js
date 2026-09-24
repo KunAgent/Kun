@@ -110,4 +110,4 @@ window.__kunRemoteBrowser = (function installKunRemoteBrowserHelpers() {
     pickFilesWithBrowser: pickFilesWithBrowser,
     writeLocalClipboardPng: writeLocalClipboardPng
   }
-})()
+})();
