@@ -12,6 +12,7 @@ import { RoomNoticeDismiss } from '../../components/rooms/RoomDirectChat'
 import { RoomContentPreview } from '../../components/rooms/RoomContentPreview'
 import { MobileSheet } from '../sheets/MobileSheet'
 import { MobileRoomPendingActions } from './MobileRoomPendingActions'
+import { useMessageActionReveal } from './use-message-action-reveal'
 import './mobile-room-conversation.css'
 
 type MobileRoomConversationProps = {
@@ -30,6 +31,7 @@ export function MobileRoomConversation(props: MobileRoomConversationProps) {
   const pending = useRoomPendingSends(state.room?.id, state.messages)
   const [content, setContent] = useState<{ reference: RoomContentReference; messageId?: string } | null>(null)
   const [dismissedError, setDismissedError] = useState('')
+  const messageActions = useMessageActionReveal()
   const room = state.room
   const { select: selectRoom, selectedId } = state
   useEffect(() => {
@@ -57,11 +59,16 @@ export function MobileRoomConversation(props: MobileRoomConversationProps) {
     const message = pending.retry(id)
     if (message) void send(message).catch(() => undefined)
   }
-  return <section className="kun-mobile-room-conversation" data-kind={room?.conversationKind}>
+  const activeMembers = room?.members.filter((member) => !member.removedAt).length ?? 0
+  const conversationKind = room?.conversationKind ?? 'group'
+  const subtitle = !room ? '' : conversationKind === 'group'
+    ? `${t('agentsConversation_group')} · ${activeMembers}`
+    : t(`agentsConversation_${conversationKind}`)
+  return <section className="kun-mobile-room-conversation" data-kind={room?.conversationKind} {...messageActions}>
     <header>
       <button type="button" aria-label={t('back')} onClick={props.onBack}><ArrowLeft aria-hidden /></button>
       <div><h1>{room?.name ?? t('roomsLoading')}</h1>
-        <p>{room?.conversationKind === 'user_agent' ? t('agentsConversation_user_agent') : room?.members.length ?? ''}</p></div>
+        {subtitle ? <p>{subtitle}</p> : null}</div>
       {props.onDetails ? <button type="button" aria-label={t('mobileMore')} onClick={props.onDetails}><MoreHorizontal aria-hidden /></button> : <span aria-hidden />}
     </header>
     {state.error && state.error !== dismissedError ? <p className="kun-mobile-room-error kun-mobile-room-notice" role="alert"><span>{state.error}</span><RoomNoticeDismiss onDismiss={() => setDismissedError(state.error)} /></p> : null}

@@ -34,6 +34,7 @@ describe('mobile page URLs', () => {
   it('round trips Code and Rooms new pages', () => {
     roundTrip({ mode: 'code', kind: 'new' })
     roundTrip({ mode: 'rooms', kind: 'new' })
+    roundTrip({ mode: 'rooms', kind: 'new', group: true })
     const url = roundTrip({ mode: 'code', kind: 'conversation', threadId: 'a/b?x=1&other=2' })
     expect(url.searchParams.has('other')).toBe(false)
   })

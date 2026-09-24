@@ -3,13 +3,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useTranslation } from 'react-i18next'
 import { Search, Plus, MoreHorizontal, SlidersHorizontal, Pin, Settings, X } from 'lucide-react'
-import type { Room, RoomSearchHit, RoomSidebarEntry } from '@shared/rooms-api'
+import type { RoomSearchHit, RoomSidebarEntry } from '@shared/rooms-api'
 import { useRoomSidebar } from './useRoomSidebar'
 import { RoomAvatar, RoomAvatarGroup } from './RoomAvatar'
 import { RoomPopover } from './RoomPopover'
 import { RoomListFilters } from './RoomManagementControls'
 import { RoomUnifiedSearch } from './RoomUnifiedSearch'
-import { roomsClient, roomsRequest, roomRequestId } from './rooms-client'
+import { toggleRoomSidebarEntryArchived } from './room-sidebar-actions'
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/browser-storage'
 
 type Kind = 'all' | 'agents' | 'group' | 'agent_agent'
@@ -41,13 +41,7 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
   const act = async (entry: RoomSidebarEntry, action: 'archive') => {
     setActionError('')
     try {
-      if (entry.agentId) {
-        const { agent } = await roomsRequest<{ agent: { revision: number } }>('/v1/agents/' + entry.agentId)
-        await roomsRequest('/v1/agents/' + entry.agentId, 'PATCH', { clientRequestId: roomRequestId(), expectedRevision: agent.revision, archived: !entry.archived })
-      } else {
-        const { room } = entry.roomId ? await roomsClient.get(entry.roomId) : await roomsRequest<{ room: Room }>('/v1/agents/' + entry.agentId + '/conversation', 'POST', {})
-        await roomsClient.update(room, { archived: !entry.archived })
-      }
+      if (action === 'archive') await toggleRoomSidebarEntryArchived(entry)
       page.refresh()
     } catch (cause) { setActionError(String(cause)) }
   }

@@ -1,19 +1,50 @@
 .kun-mobile-rooms-home { display: flex; min-height: 0; flex: 1; flex-direction: column; color: var(--ds-text); background: var(--ds-bg-main); }
-.kun-mobile-rooms-home > header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 8px; }
-.kun-mobile-rooms-home h1 { margin: 0; font-size: 24px; font-weight: 500; }
-.kun-mobile-rooms-home button { color: inherit; font: inherit; }
-.kun-mobile-rooms-home > header button, .kun-mobile-room-menu { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; border: 0; border-radius: 9999px; background: transparent; }
-.kun-mobile-rooms-search { display: flex; align-items: center; gap: 8px; margin: 0 16px 10px; padding-inline: 12px; border-radius: 12px; background: var(--ds-surface-subtle); }
-.kun-mobile-rooms-search input { width: 100%; min-width: 0; min-height: 44px; border: 0; background: transparent; color: inherit; font-size: 16px; }
-.kun-mobile-room-filters { display: flex; gap: 6px; overflow-x: auto; padding: 0 16px 10px; }
-.kun-mobile-room-filters button { flex-shrink: 0; min-height: 44px; padding: 8px 14px; border: 0; border-radius: 9999px; background: transparent; }
-.kun-mobile-room-filters button[aria-pressed='true'] { background: var(--ds-surface-subtle); }
-.kun-mobile-room-list { min-height: 0; flex: 1; overflow-y: auto; padding: 0 16px; overscroll-behavior-y: contain; }
+.kun-mobile-rooms-home button { color: inherit; font: inherit; -webkit-tap-highlight-color: transparent; }
+
+/* Header: my avatar | centered title | "+" menu, as in WeChat / Feishu. */
+.kun-mobile-rooms-home > header { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; min-height: 52px; padding: env(safe-area-inset-top, 0px) 8px 0; }
+.kun-mobile-rooms-home h1 { margin: 0; overflow: hidden; font-size: 17px; font-weight: 600; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.kun-mobile-rooms-home > header > button:not(.kun-mobile-rooms-scrim) { display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 9999px; background: transparent; }
+.kun-mobile-rooms-me .rooms-avatar { pointer-events: none; }
+.kun-mobile-rooms-scrim { position: fixed; inset: 0; z-index: 20; border: 0; background: transparent; }
+.kun-mobile-rooms-plus-menu { position: absolute; top: calc(100% - 4px); right: 8px; z-index: 21; display: grid; min-width: 172px; padding: 4px 0; border-radius: 10px; color: #fff; background: #2f3033; box-shadow: 0 12px 32px rgb(0 0 0 / 24%); animation: kun-mobile-rooms-pop 120ms ease-out; transform-origin: top right; }
+.kun-mobile-rooms-plus-menu::before { content: ''; position: absolute; top: -6px; right: 16px; border: 6px solid transparent; border-top: 0; border-bottom-color: #2f3033; }
+.kun-mobile-rooms-plus-menu button { display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 0 18px; border: 0; color: #fff; background: transparent; font-size: 15px; text-align: start; white-space: nowrap; }
+.kun-mobile-rooms-plus-menu button + button { border-top: 1px solid rgb(255 255 255 / 8%); }
+.kun-mobile-rooms-plus-menu button:active { background: rgb(255 255 255 / 8%); }
+@keyframes kun-mobile-rooms-pop { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .kun-mobile-rooms-plus-menu { animation: none; } }
+
+.kun-mobile-rooms-search { display: flex; align-items: center; gap: 6px; margin: 4px 12px 8px; padding-inline: 12px; border-radius: 10px; color: var(--ds-text-muted); background: var(--ds-surface-subtle); }
+.kun-mobile-rooms-search input { width: 100%; min-width: 0; min-height: 40px; border: 0; outline: none; color: var(--ds-text); background: transparent; font-size: 16px; }
+
+/* Feishu-style text tabs with an underline on the active one. */
+.kun-mobile-room-filters { display: flex; gap: 22px; padding: 0 16px; overflow-x: auto; border-bottom: 1px solid var(--ds-border-muted); scrollbar-width: none; }
+.kun-mobile-room-filters button { position: relative; flex-shrink: 0; min-height: 40px; padding: 0 2px; border: 0; color: var(--ds-text-muted); background: transparent; font-size: 14px; }
+.kun-mobile-room-filters button[aria-pressed='true'] { color: var(--ds-text); font-weight: 600; }
+.kun-mobile-room-filters button[aria-pressed='true']::after { content: ''; position: absolute; left: 50%; bottom: 0; width: 20px; height: 3px; border-radius: 3px; background: var(--ds-accent); transform: translateX(-50%); }
+
+.kun-mobile-room-list { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior-y: contain; }
 .kun-mobile-room-list ul { margin: 0; padding: 0; list-style: none; }
-.kun-mobile-room-list li { display: flex; align-items: center; border-bottom: 1px solid var(--ds-border); }
-.kun-mobile-room-open { position: relative; display: grid; min-width: 0; flex: 1; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 8px; padding: 14px 0; border: 0; background: transparent; text-align: start; }
-.kun-mobile-room-open :is(strong, span, small) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kun-mobile-room-open > span:not(.kun-mobile-room-count, .kun-mobile-room-attention), .kun-mobile-room-open small { color: var(--ds-text-muted); font-size: 13px; }
-.kun-mobile-room-count, .kun-mobile-room-attention { align-self: center; border-radius: 9999px; padding: 2px 6px; background: var(--ds-surface-subtle); font-size: 11px; }
-.kun-mobile-room-attention { background: var(--ds-warning-soft); }
-.kun-mobile-rooms-more, .kun-mobile-room-list [role='alert'] button { width: 100%; min-height: 44px; margin: 12px 0; border: 1px solid var(--ds-border); border-radius: 12px; background: var(--ds-surface-subtle); }
+.kun-mobile-room-list li[data-pinned] { background: var(--ds-surface-subtle); }
+.kun-mobile-room-open { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; padding: 10px 16px; border: 0; background: transparent; text-align: start; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.kun-mobile-room-open:active { background: var(--ds-surface-hover); }
+.kun-mobile-room-avatar { position: relative; display: inline-flex; flex-shrink: 0; }
+.kun-mobile-room-badge { position: absolute; top: -6px; right: -7px; min-width: 18px; height: 18px; box-sizing: border-box; padding: 0 5px; border-radius: 9999px; color: #fff; background: var(--ds-danger); box-shadow: 0 0 0 2px var(--ds-bg-main); font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+.kun-mobile-room-running { position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; background: var(--ds-success); box-shadow: 0 0 0 2px var(--ds-bg-main); }
+/* Inset divider that starts under the text column, like WeChat. */
+.kun-mobile-room-body { position: relative; display: grid; flex: 1; align-self: stretch; align-content: center; gap: 4px; min-width: 0; }
+.kun-mobile-room-body::after { content: ''; position: absolute; left: 0; right: -16px; bottom: -10px; height: 1px; background: var(--ds-border-muted); }
+.kun-mobile-room-list li:last-child .kun-mobile-room-body::after { display: none; }
+.kun-mobile-room-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.kun-mobile-room-line strong { flex: 1; min-width: 0; overflow: hidden; font-size: 16px; font-weight: 500; line-height: 22px; text-overflow: ellipsis; white-space: nowrap; }
+.kun-mobile-room-line time { flex-shrink: 0; color: var(--ds-text-faint, var(--ds-text-muted)); font-size: 12px; font-variant-numeric: tabular-nums; }
+.kun-mobile-room-preview { flex: 1; min-width: 0; min-height: 20px; overflow: hidden; color: var(--ds-text-muted); font-size: 14px; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
+.kun-mobile-room-preview em { margin-right: 2px; color: var(--ds-danger); font-style: normal; }
+.kun-mobile-room-line > svg { flex-shrink: 0; color: var(--ds-text-faint, var(--ds-text-muted)); }
+
+.kun-mobile-rooms-empty { margin: 56px 32px; color: var(--ds-text-muted); font-size: 14px; line-height: 1.6; text-align: center; }
+.kun-mobile-room-list [role='alert'] { padding: 12px 16px 0; color: var(--ds-danger); overflow-wrap: anywhere; }
+.kun-mobile-room-list [role='alert'] p { margin: 0; }
+.kun-mobile-rooms-more, .kun-mobile-room-list [role='alert'] button { display: block; width: calc(100% - 32px); min-height: 44px; margin: 12px 16px; border: 1px solid var(--ds-border); border-radius: 12px; background: var(--ds-surface-subtle); }
+.kun-mobile-room-list [role='alert'] button { width: 100%; margin: 8px 0 0; color: var(--ds-text); }

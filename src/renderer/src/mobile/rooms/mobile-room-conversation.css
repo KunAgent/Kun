@@ -1,8 +1,9 @@
 .kun-mobile-room-conversation { display: flex; width: 100%; height: 100%; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; color: var(--ds-text); background: var(--ds-bg-main); }
 .kun-mobile-room-conversation > header { display: grid; min-height: 60px; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 8px; padding: env(safe-area-inset-top, 0px) 8px 0; border-bottom: 1px solid var(--ds-border); }
 .kun-mobile-room-conversation > header button { display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; border: 0; border-radius: 9999px; color: inherit; background: transparent; }
+.kun-mobile-room-conversation > header > div { min-width: 0; text-align: center; }
 .kun-mobile-room-conversation > header :is(h1, p) { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kun-mobile-room-conversation > header h1 { font-size: 16px; font-weight: 500; }
+.kun-mobile-room-conversation > header h1 { font-size: 17px; font-weight: 600; }
 .kun-mobile-room-conversation > header p { color: var(--ds-text-muted); font-size: 12px; }
 .kun-mobile-room-conversation .rooms-timeline { min-width: 0; min-height: 0; flex: 1; }
 .kun-mobile-room-conversation .rooms-composer {
@@ -69,33 +70,54 @@
   scrollbar-gutter: auto;
   overscroll-behavior-y: contain;
 }
-.kun-mobile-room-conversation .rooms-avatar { display: none; }
-.kun-mobile-room-conversation .rooms-message-row:not(.rooms-message-system) { max-width: 88%; gap: 0; }
+.kun-mobile-room-conversation .rooms-message-row:not(.rooms-message-system) { max-width: 100%; gap: 8px; }
+/* Keep the opposite side free like WeChat, so a bubble never runs edge to edge. */
+.kun-mobile-room-conversation .rooms-message-row:not(.rooms-message-system) > .rooms-message-content { max-width: calc(100% - 88px); }
 .kun-mobile-room-conversation .rooms-message-user { margin-left: auto; flex-direction: row-reverse; }
 .kun-mobile-room-conversation .rooms-message-user :is(.rooms-message-meta, .rooms-message-footer) { justify-content: flex-end; }
 .kun-mobile-room-conversation .rooms-message-system { padding-left: 0; justify-content: center; }
+.kun-mobile-room-conversation .rooms-message-meta { gap: 6px; font-size: 11px; }
 .kun-mobile-room-conversation .rooms-message-bubble {
-  padding: 8px 12px;
-  border-radius: 18px;
-  border-top-left-radius: 6px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  border-top-left-radius: 4px;
+  background: var(--ds-surface-card);
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: filter 120ms ease;
 }
 .kun-mobile-room-conversation .rooms-message-user .rooms-message-bubble {
   margin-left: auto;
-  border-top-left-radius: 18px;
-  border-top-right-radius: 6px;
+  border-top-left-radius: 14px;
+  border-top-right-radius: 4px;
   background: color-mix(in srgb, var(--ds-accent) 12%, var(--ds-surface-card));
 }
 .kun-mobile-room-conversation[data-kind='user_agent'] .rooms-message-meta strong { display: none; }
-.kun-mobile-room-conversation .rooms-message-footer { flex-wrap: wrap; }
-.kun-mobile-room-conversation .rooms-message-actions {
+.kun-mobile-room-conversation .rooms-message-footer { flex-wrap: wrap; min-height: 0; }
+/* Actions stay hidden until the bubble is long-pressed (use-message-action-reveal). */
+.kun-mobile-room-conversation .rooms-message-actions { display: none; }
+.kun-mobile-room-conversation [data-kun-actions-open] .rooms-message-bubble { filter: brightness(.94); }
+.kun-mobile-room-conversation [data-kun-actions-open] .rooms-message-actions {
+  display: flex;
   opacity: 1;
   flex-wrap: nowrap;
   max-width: 100%;
+  margin-top: 4px;
+  padding: 2px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
+  border: 1px solid var(--ds-border);
+  border-radius: 12px;
+  background: var(--ds-surface-elevated);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 12%);
+  animation: kun-mobile-room-actions-in 120ms ease-out;
 }
 .kun-mobile-room-conversation .rooms-message-actions button { flex-shrink: 0; width: 44px; height: 44px; }
+@keyframes kun-mobile-room-actions-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .kun-mobile-room-conversation [data-kun-actions-open] .rooms-message-actions { animation: none; } }
 .kun-mobile-room-conversation .rooms-timeline-latest { min-height: 44px; right: 12px; }
 
 .kun-mobile-room-error, .kun-mobile-room-loading, .kun-mobile-room-readonly { margin: 0; padding: 12px 16px; overflow-wrap: anywhere; }
 .kun-mobile-room-readonly { border-top: 1px solid var(--ds-border); color: var(--ds-text-muted); }
+.kun-mobile-room-conversation .rooms-reply-count { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 10px; border: 0; border-radius: 9999px; color: var(--ds-accent); background: var(--ds-surface-subtle); font-size: 12px; }

@@ -7,11 +7,12 @@ import { RoomAvatar } from './RoomAvatar'
 import { agentMember, useAgentCatalog, useAgentResource } from './agent-client'
 import { roomRequestId, roomsClient, roomsRequest } from './rooms-client'
 
-export function RoomNewChat({ onClose, onOpen, onAgent, onFill = null, autoFocus = true, closeAfterAgent = true }: {
+export function RoomNewChat({ onClose, onOpen, onAgent, onFill = null, autoFocus = true, closeAfterAgent = true, initialGroup = false }: {
   onClose: () => void; onOpen: (roomId: string) => void; onAgent: (agentId: string) => void | Promise<void>; onFill?: (() => void) | null; autoFocus?: boolean; closeAfterAgent?: boolean
+  initialGroup?: boolean
 }) {
   const { t } = useTranslation('common')
-  const [query, setQuery] = useState(''), [group, setGroup] = useState(false), [templatesOpen, setTemplatesOpen] = useState(false)
+  const [query, setQuery] = useState(''), [group, setGroup] = useState(initialGroup), [templatesOpen, setTemplatesOpen] = useState(false)
   const [selected, setSelected] = useState<AgentIdentity[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const catalog = useAgentCatalog(query)
   const templates = useAgentResource<{ templates: AgentIdentity[] }>('/v1/agents/templates', templatesOpen)

@@ -3,11 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useChatStore } from '../store/chat-store'
 import { useRoomAttentionCount } from '../components/rooms/useRoomEvents'
-import { useRoomSidebar } from '../components/rooms/useRoomSidebar'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { MobileModeNav } from './MobileModeNav'
 import { MobileCodeHome } from './screens/MobileCodeHome'
-import { MobileRoomsHome } from './rooms/MobileRoomsHome'
+import { MobileRoomsRoot } from './rooms/MobileRoomsRoot'
 import { MobileWorkHome, type MobileWorkResource } from './work/MobileWorkHome'
 import { useMobileNavigation, type MobileNavigationGuard } from './navigation/use-mobile-navigation'
 import { modeForWorkbenchRoute, workLeaveDecision, workbenchRouteForMode } from './mobile-mode-policy'
@@ -48,24 +47,6 @@ function basename(value: string): string {
 function MobileUnavailable({ title, onBack }: { title: string; onBack: () => void }): ReactElement {
   return <section className="kun-mobile-unavailable"><h1>{title}</h1><p>This mobile workspace is still loading.</p>
     <button type="button" onClick={onBack}>Back</button></section>
-}
-
-function MobileRoomsRoot({ navigate }: { navigate: ReturnType<typeof useMobileNavigation>['navigate'] }) {
-  const { t } = useTranslation('common')
-  const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<'all' | 'unread' | 'attention'>('all')
-  const rooms = useRoomSidebar({ kind: 'all', search,
-    unreadOnly: filter === 'unread', attentionOnly: filter === 'attention' })
-  return <MobileRoomsHome rooms={rooms.entries} search={search} filter={filter}
-    loading={rooms.busy} error={rooms.error} hasMore={Boolean(rooms.nextCursor)}
-    labels={{ title: t('roomsLabel'), search: t('roomsUnifiedSearch'), create: t('newChat'), more: t('mobileMore'),
-      empty: t('roomsEmpty'), loading: t('roomsLoading'), retry: t('roomsRefresh'), loadMore: t('roomsLoadMore'),
-      all: t('roomsFilter_all'), unread: t('roomsFilter_unread'), attention: t('roomsFilter_attention') }}
-    onSearch={setSearch} onFilter={setFilter}
-    onOpen={(roomId) => navigate({ mode: 'rooms', kind: 'room', roomId })}
-    onMenu={(roomId) => navigate({ mode: 'rooms', kind: 'room-settings', roomId })}
-    onCreate={() => navigate({ mode: 'rooms', kind: 'new' })}
-    onRetry={rooms.refresh} onLoadMore={rooms.more} />
 }
 
 export function MobileAppShell(): ReactElement {
@@ -201,7 +182,7 @@ export function MobileAppShell(): ReactElement {
 
   let content: ReactElement
   if (page.mode === 'rooms' && page.kind === 'new') {
-    content = <MobileRoomNew onClose={() => navigate({ mode: 'rooms', kind: 'home' })}
+    content = <MobileRoomNew group={page.group === true} onClose={() => navigate({ mode: 'rooms', kind: 'home' })}
       onOpen={(roomId) => navigate({ mode: 'rooms', kind: 'room', roomId })} />
   } else if (page.mode === 'code' && page.kind === 'conversation') {
     content = <MobileCodeConversation threadId={page.threadId}

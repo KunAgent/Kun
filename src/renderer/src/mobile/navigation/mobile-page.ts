@@ -2,7 +2,7 @@ export type MobileMode = 'code' | 'rooms' | 'work'
 export type WorkResourceView = 'read' | 'edit' | 'assistant' | 'review' | 'whiteboard'
 export type MobilePage =
   | { mode: MobileMode; kind: 'home' }
-  | { mode: 'code' | 'rooms'; kind: 'new' }
+  | { mode: 'code' | 'rooms'; kind: 'new'; group?: true }
   | { mode: 'code'; kind: 'conversation'; threadId: string }
   | { mode: 'rooms'; kind: 'room'; roomId: string }
   | { mode: 'rooms'; kind: 'room-settings'; roomId: string }
@@ -16,7 +16,7 @@ export type MobilePage =
 const MAX_IDENTIFIER_LENGTH = 512
 const MODES = new Set<MobileMode>(['code', 'rooms', 'work'])
 const WORK_VIEWS = new Set<WorkResourceView>(['read', 'edit', 'assistant', 'review', 'whiteboard'])
-const MANAGED_KEYS = ['mode', 'mobile', 'thread', 'room', 'message', 'run', 'task', 'member', 'resource', 'view']
+const MANAGED_KEYS = ['mode', 'mobile', 'thread', 'room', 'message', 'run', 'task', 'member', 'resource', 'view', 'group']
 
 function identifier(url: URL, key: string): string | null {
   const value = url.searchParams.get(key)
@@ -29,7 +29,9 @@ export function readMobilePage(url: URL): MobilePage {
   const kind = url.searchParams.get('mobile')
   if (kind === 'settings') return { mode, kind }
   if (kind === 'home' || !kind) return { mode, kind: 'home' }
-  if ((mode === 'code' || mode === 'rooms') && kind === 'new') return { mode, kind }
+  if ((mode === 'code' || mode === 'rooms') && kind === 'new') {
+    return mode === 'rooms' && url.searchParams.get('group') === '1' ? { mode, kind, group: true } : { mode, kind }
+  }
   if (mode === 'code') {
     const threadId = identifier(url, 'thread')
     if (kind === 'conversation' && threadId) return { mode, kind, threadId }
@@ -63,6 +65,7 @@ export function mobilePageUrl(url: URL, page: MobilePage): string {
   next.searchParams.set('mode', page.mode)
   next.searchParams.set('mobile', page.kind)
   if (page.kind === 'conversation') next.searchParams.set('thread', page.threadId)
+  if (page.kind === 'new' && page.group) next.searchParams.set('group', '1')
   if ('roomId' in page) next.searchParams.set('room', page.roomId)
   if (page.kind === 'reply') next.searchParams.set('message', page.messageId)
   if (page.kind === 'run') next.searchParams.set('run', page.runId)
