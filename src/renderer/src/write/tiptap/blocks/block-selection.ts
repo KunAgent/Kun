@@ -10,7 +10,7 @@ export type WriteBlockSelectionOptions = {
   isReadOnly: () => boolean
 }
 
-function deleteSelectedBlocks(view: EditorView): boolean {
+export function deleteSelectedBlocks(view: EditorView): boolean {
   const blocks = selectedBlocks(view.state)
   if (blocks.length === 0) return false
   const tr = view.state.tr

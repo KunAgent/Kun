@@ -1,9 +1,11 @@
 import { Extension } from '@tiptap/core'
 import { NodeSelection, Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
-import type { EditorView } from '@tiptap/pm/view'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
+import { GripVertical, Plus, createElement } from 'lucide'
 import type { WorkDocContext } from '../../markdown/document-codec'
 import { blockTargetFromCoords, type BlockTarget } from './block-target'
-import { openBlockMenu, type BlockMenuDeps } from './block-menu'
+import { openBlockMenu, type BlockMenuDeps, type BlockMenuHandle } from './block-menu'
+import { createHoverIntent } from './hover-intent'
 
 export type WriteBlockHandleOptions = {
   getCtx: () => WorkDocContext
@@ -14,12 +16,18 @@ export type WriteBlockHandleOptions = {
 }
 
 const HANDLE_HIDE_DELAY_MS = 300
+const MENU_HOVER_OPEN_MS = 250
+const MENU_HOVER_CLOSE_MS = 200
+const TOUCH_PRESS_MS = 500
 
 /**
- * Notion-style block handle (implementation §9.1): a `+` and a `⋮⋮` button
+ * Notion-style block handle (implementation §9.1): a `+` and a grip button
  * parked in the left gutter next to the hovered top-level block (list items
  * count as blocks). `+` inserts an empty paragraph after the block and
- * opens the slash menu; `⋮⋮` opens the block menu and starts drag-moves.
+ * opens the slash menu; the grip opens the block menu and starts drag-moves.
+ * The menu opens on a 250ms hover and pins on click; while open the target
+ * block gets an `is-block-menu-target` decoration instead of a selection so
+ * the user's caret stays put.
  */
 export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
   name: 'writeBlockHandle',
@@ -27,10 +35,30 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
   addProseMirrorPlugins() {
     const options = this.options
     const editor = this.editor
+    const menuKey = new PluginKey<number | null>('writeBlockHandleMenu')
 
     return [
-      new Plugin({
-        key: new PluginKey('writeBlockHandle'),
+      new Plugin<number | null>({
+        key: menuKey,
+        state: {
+          init: () => null,
+          apply(tr, value) {
+            const meta = tr.getMeta(menuKey) as { menuTargetPos?: number | null } | undefined
+            if (meta && 'menuTargetPos' in meta) return meta.menuTargetPos ?? null
+            return value === null ? null : tr.mapping.map(value)
+          }
+        },
+        props: {
+          decorations(state) {
+            const pos = menuKey.getState(state)
+            if (pos === null || pos === undefined || pos >= state.doc.content.size) return null
+            const node = state.doc.nodeAt(pos)
+            if (!node) return null
+            return DecorationSet.create(state.doc, [
+              Decoration.node(pos, pos + node.nodeSize, { class: 'is-block-menu-target' })
+            ])
+          }
+        },
         view(editorView) {
           const host = editorView.dom.parentElement ?? editorView.dom
           if (getComputedStyle(host).position === 'static') {
@@ -43,13 +71,13 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
           const addButton = document.createElement('button')
           addButton.type = 'button'
           addButton.className = 'write-block-handle-button write-block-handle-add'
-          addButton.textContent = '+'
+          addButton.append(createElement(Plus, { width: 16, height: 16, 'stroke-width': 1.75 }))
           addButton.setAttribute('aria-label', 'insert block')
 
           const gripButton = document.createElement('button')
           gripButton.type = 'button'
           gripButton.className = 'write-block-handle-button write-block-handle-grip'
-          gripButton.textContent = '⋮⋮'
+          gripButton.append(createElement(GripVertical, { width: 14, height: 16, 'stroke-width': 1.75 }))
           gripButton.setAttribute('aria-label', 'block menu')
           gripButton.draggable = true
 
@@ -60,13 +88,18 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
           let hideTimer: number | null = null
           let frame = 0
           let menuOpen = false
-          let closeMenu: (() => void) | null = null
+          let menuHandle: BlockMenuHandle | null = null
 
           const menuDeps: BlockMenuDeps = {
             editor,
             getCtx: options.getCtx,
             getFilePath: options.getFilePath,
-            getWorkspaceRoot: options.getWorkspaceRoot
+            getWorkspaceRoot: options.getWorkspaceRoot,
+            isReadOnly: options.isReadOnly
+          }
+
+          const setMenuTarget = (pos: number | null): void => {
+            editorView.dispatch(editorView.state.tr.setMeta(menuKey, { menuTargetPos: pos }))
           }
 
           const hide = (): void => {
@@ -102,6 +135,30 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
             layer.style.height = `${Math.min(rect.height, 28)}px`
             layer.style.left = `${rect.left - hostRect.left - 46}px`
           }
+
+          const openMenu = (): void => {
+            if (!target || menuOpen) return
+            menuOpen = true
+            setMenuTarget(target.pos)
+            const handle = openBlockMenu(menuDeps, target, gripButton, () => {
+              // Every close path (item run, Esc, outside pointer, scroll)
+              // funnels here so hover state and the highlight stay in sync.
+              menuOpen = false
+              menuHandle = null
+              setMenuTarget(null)
+              hover.closeNow()
+            })
+            menuHandle = handle
+            handle.dom.addEventListener('mouseenter', () => hover.enterMenu())
+            handle.dom.addEventListener('mouseleave', () => hover.leaveMenu())
+          }
+
+          const hover = createHoverIntent({
+            openDelay: MENU_HOVER_OPEN_MS,
+            closeDelay: MENU_HOVER_CLOSE_MS,
+            onOpen: openMenu,
+            onClose: () => menuHandle?.close()
+          })
 
           const update = (event: MouseEvent): void => {
             if (
@@ -154,20 +211,21 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
 
           const onGripClick = (event: MouseEvent): void => {
             event.preventDefault()
-            if (!target || menuOpen) return
-            openMenu()
+            if (!target) return
+            if (hover.isOpen()) {
+              hover.pin()
+              return
+            }
+            hover.openNow()
           }
 
-          const openMenu = (): void => {
-            if (!target || menuOpen) return
-            menuOpen = true
-            closeMenu = openBlockMenu(menuDeps, target, gripButton)
-            const originalClose = closeMenu
-            closeMenu = () => {
-              menuOpen = false
-              originalClose()
-            }
+          const onGripEnter = (event: MouseEvent): void => {
+            // No armed button, no in-flight drag, no box selection in progress.
+            if (event.buttons !== 0 || editorView.dragging != null) return
+            if (host.querySelector('.write-block-box-select')) return
+            hover.enterTrigger()
           }
+          const onGripLeave = (): void => hover.leaveTrigger()
 
           // Touch screens have no hover: a long-press on a block opens the
           // same block menu (the `+` affordance stays reachable via `/`).
@@ -192,8 +250,8 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
               pressTimer = null
               target = next
               positionFor(next)
-              openMenu()
-            }, 500)
+              hover.openNow()
+            }, TOUCH_PRESS_MS)
           }
 
           const onPointerMove = (event: PointerEvent): void => {
@@ -209,6 +267,8 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
           }
 
           const onDragStart = (event: DragEvent): void => {
+            hover.closeNow()
+            menuHandle?.close()
             if (!target || !event.dataTransfer) {
               event.preventDefault()
               return
@@ -238,6 +298,8 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
 
           addButton.addEventListener('click', onAdd)
           gripButton.addEventListener('click', onGripClick)
+          gripButton.addEventListener('mouseenter', onGripEnter)
+          gripButton.addEventListener('mouseleave', onGripLeave)
           gripButton.addEventListener('dragstart', onDragStart)
           gripButton.addEventListener('dragend', onDragEnd)
           layer.addEventListener('mouseenter', cancelHide)
@@ -265,7 +327,8 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
               if (frame) window.cancelAnimationFrame(frame)
               if (hideTimer !== null) window.clearTimeout(hideTimer)
               cancelPress()
-              closeMenu?.()
+              hover.dispose()
+              menuHandle?.close()
               host.removeEventListener('mousemove', onMouseMove)
               host.removeEventListener('mouseleave', onMouseLeave)
               host.removeEventListener('pointerdown', onPointerDown)

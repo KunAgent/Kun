@@ -128,6 +128,7 @@
     "ipaddr.js": "^2.4.0",
     "jszip": "3.10.1",
     "katex": "^0.16.46",
+    "lucide": "^0.544.0",
     "mdast-util-find-and-replace": "^3.0.2",
     "mdast-util-frontmatter": "2.0.1",
     "mdast-util-gfm": "3.1.0",

@@ -57,11 +57,56 @@ const processor = unified()
   .freeze()
 
 /**
+ * An odd count of `$$` fences would swallow everything after the last one
+ * into a math block (the fence never closes). Escape that dangling fence
+ * with `\$\$` before parsing — micromark then leaves it as literal text.
+ * Returns the modified text plus the offsets of the inserted `\` chars.
+ */
+const BLOCK_MATH_FENCE_RE = /^[^\S\n]*\$\$/gm
+
+function escapeUnclosedBlockMath(body: string): { text: string; inserts: number[] } {
+  const fences = [...body.matchAll(BLOCK_MATH_FENCE_RE)]
+  if (fences.length % 2 === 0) return { text: body, inserts: [] }
+  const last = fences[fences.length - 1]
+  const at = last.index + last[0].length - 2
+  return {
+    text: `${body.slice(0, at)}\\$\\$${body.slice(at + 2)}`,
+    inserts: [at, at + 2]
+  }
+}
+
+/**
+ * Rewrites every position offset in the tree from the *modified* source's
+ * coordinate space back to the original body's: each inserted character
+ * shifts subsequent offsets by one, so subtract the count of insertions
+ * before each offset. Downstream slicing (`nodeSource`, separators,
+ * leading/trailing) then works on the untouched source — verbatim.
+ */
+function remapPositions(node: unknown, inserts: number[]): void {
+  const n = node as {
+    position?: { start?: { offset?: number }; end?: { offset?: number } }
+    children?: unknown[]
+  }
+  const shift = (offset: number): number =>
+    offset - inserts.filter((i) => i < offset).length
+  if (n.position) {
+    const start = n.position.start?.offset
+    const end = n.position.end?.offset
+    if (typeof start === 'number') n.position.start!.offset = shift(start)
+    if (typeof end === 'number') n.position.end!.offset = shift(end)
+  }
+  for (const child of n.children ?? []) remapPositions(child, inserts)
+}
+
+/**
  * Parse a Markdown body (frontmatter already split away) into an mdast tree.
- * `position.start/end.offset` is preserved for source slicing.
+ * `position.start/end.offset` refers to the *original* `body` even when an
+ * unclosed `$$` had to be escaped internally.
  */
 export function parseWorkMdast(body: string): Root {
-  const file = new VFile(body)
-  const tree = processor.parse(file)
-  return processor.runSync(tree, file) as Root
+  const { text, inserts } = escapeUnclosedBlockMath(body)
+  const file = new VFile(text)
+  const tree = processor.runSync(processor.parse(file), file) as Root
+  if (inserts.length > 0) remapPositions(tree, inserts)
+  return tree
 }

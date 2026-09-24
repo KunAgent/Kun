@@ -8,20 +8,22 @@
 
 | 路径 | 职责 | 阶段 |
 |---|---|---|
-| `write/markdown/remark-pipeline.ts` | unified 解析器（remark-parse + gfm + math + frontmatter + 自研插件） | S1 |
+| `src/shared/markdown/parse-mdast.ts` | unified 解析器（remark-parse + gfm + math + frontmatter + 自研插件） | S1 |
+| `write/markdown/remark-pipeline.ts` | 渲染进程侧 remark 组装，复用 shared 插件 | S1 |
 | `write/markdown/mdast-to-pm.ts` | mdast → ProseMirror 节点，登记原文片段 | S1 |
 | `write/markdown/pm-to-mdast.ts` | ProseMirror 节点 → mdast | S1 |
-| `write/markdown/to-markdown.ts` | mdast-util-to-markdown 配置、风格探测、自研节点的输出处理 | S1 |
-| `write/markdown/source-map.ts` | 原文片段登记、原样写回、节点级序列化缓存 | S1 |
-| `write/markdown/block-fidelity.ts` | 每块保真判定、mdast 语义签名 | S1 |
-| `write/markdown/document-codec.ts` | 门面：`parseWorkDocument` / `serializeWorkDocument`；兼容旧的 `parseWriteMarkdown` / `serializeWriteMarkdown` | S1 |
-| `src/shared/markdown/frontmatter.ts` | frontmatter 拆分/拼接/简单属性解析（渲染进程与主进程共用） | S1 |
-| `src/shared/markdown/work-profile.ts` | Callout 类型表、HTML 允许标签/属性、行内公式规则 | S1/S3 |
-| `src/shared/markdown/remark-work-plugins.ts` | `remarkCallout`、`remarkWikiLink`、`remarkInlineMathPandoc`（渲染进程与主进程共用） | S1 |
-| `src/shared/markdown/render-html.ts` | 同一管线输出 HTML（源码块预览、导出） | S1/S6 |
-| `write/tiptap/nodes/*.ts` | `rawMarkdownBlock`、`callout`、`htmlBlock`、`htmlInline`、`wikiLink`、`footnoteRef` 节点与 NodeView | S1/S3 |
+| `write/markdown/to-markdown.ts` | mdast-util-to-markdown 配置、自研节点的输出处理 | S1 |
+| `write/markdown/source-map.ts` | 原文片段登记、签名回退、节点级序列化缓存 | S1 |
+| `write/markdown/schema-check.ts` | `node.check()` 校验，失败降级源码块 | S1 |
+| `write/markdown/parse-worker.ts` + `parse-work-async.ts` | 大文档 Web Worker 解析、ctx 跨线程还原 | S1 |
+| `write/markdown/document-codec.ts` | 门面：`parseWorkDocument` / `serializeWorkDocument` | S1 |
+| `src/shared/markdown/frontmatter.ts` | frontmatter 拆分/拼接/属性解析/行级补丁（渲染与主进程共用） | S1 |
+| `src/shared/markdown/work-profile.ts` | Callout 类型表、HTML 允许标签/属性 | S1/S3 |
+| `src/shared/markdown/remark-work-plugins.ts` | `remarkCallout`、`remarkWikiLink`、`remarkDemoteFalseMath` 等 | S1 |
+| `src/shared/markdown/render-html.ts` | 同一管线输出 HTML（源码块预览、审阅删除块、导出） | S1/S6 |
+| `write/tiptap/nodes/*.ts` | `rawMarkdownBlock`、`callout`、`inlineHtml`、`wikiLink` 等节点与 NodeView | S1/S3 |
 | `write/tiptap/review/*.ts` | 块对齐、审阅插件、审阅句柄 | S2 |
-| `write/tiptap/blocks/*.ts` | 块手柄、块菜单、多块选择、拖拽、`/` 命令 | S5 |
+| `write/tiptap/blocks/*.ts` | 块手柄、块菜单（`block-menu` + `block-menu-render` + `hover-intent`）、多块选择、`/` 命令 | S5 |
 | `components/write/WritePropertiesPanel.tsx` | 属性面板 | S1 |
 | `components/write/WriteDocumentReviewBar.tsx` | 审阅顶部条 | S2 |
 | `components/write/WriteOutlineRail.tsx`、`WriteFindBar.tsx` | 目录、查找替换浮条 | S5 |
@@ -34,66 +36,23 @@ NodeView 一律用原生 DOM（与现有 `write/tiptap/local-image.ts` 一致）
 
 ### 2.1 构造清单检查
 
-新文件 `write/tiptap/markdown-construct-gate.ts`，在 `auditWriteMarkdownFidelity`（`markdown-manager.ts:169`）开头调用：
+最初设计是 `write/tiptap/markdown-construct-gate.ts` 的整篇正则门禁（frontmatter、块公式、`$` 转义、
+双链、callout、脚注、HTML、引用定义命中其一即整篇退纯文本），在 `auditWriteMarkdownFidelity` 开头调用，
+`WriteRichFidelity.reason` 报 `'unsupported-construct'`。
 
-```ts
-const CONSTRUCTS: Array<[code: string, re: RegExp]> = [
-  ['block-math', /^ {0,3}\$\$/m],
-  ['escaped-dollar', /\\\$/],
-  ['wikilink', /!?\[\[[^\]\n]+\]\]/],
-  ['callout', /^ {0,3}>[ \t]*\[![A-Za-z0-9_-]+\]/m],
-  ['footnote', /\[\^[^\]\s]+\]/],
-  ['html', /<(?:[A-Za-z][\w-]*[\s/>]|\/[A-Za-z]|!--)/],   // p<0.05 不命中
-  ['reference-definition', /^ {0,3}\[[^\]]+\]:[ \t]*\S/m]
-]
-export function findUnsupportedConstructs(markdown: string): string[] {
-  const codes: string[] = []
-  if (/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(\r?\n|$)/.test(markdown)) codes.push('frontmatter')
-  const prose = stripCode(markdown)          // 去掉围栏代码块与行内代码，保留行结构
-  for (const [code, re] of CONSTRUCTS) if (re.test(prose)) codes.push(code)
-  return codes
-}
-```
-
-- `stripCode` 复用 `write/markdown-live-widgets.ts` 的 `openingFence` / `closingFencePattern`（S4 删除该文件前先把这两个函数移到
-  `write/markdown/fences.ts`）；行内代码用 `` /(`+)[^`]*?\1/g `` 替换为等长空格。
-- `WriteRichFidelity.reason` 增加 `'unsupported-construct'`，`detail` 为逗号分隔的代码；横幅 `writeRichFallbackNotice`
-  后追加 `t('writeRichFallbackReason.<code>')`。
-- 测试 `markdown-construct-gate.test.ts`：方案 1.2 表的每个样例；代码块里的 `$$`、`<div>` 不命中；`p<0.05` 不命中。
 - **当前合并状态**：S1 编解码器落地后整篇门禁已退役——`resolveWriteEditorSurface` 只按 `.mdx`/非 Markdown/
-  截断/超上限/手动 viewMode 路由纯文本；不支持的构造在文档内落成 `rawMarkdownBlock` 而非把整篇挡在富文本外。
-  文档不会再因为含 `<br>` 而整体降级。
-- **影响面提示**：LLM 生成的 Markdown 常见 `<br>`、`<sup>` 等行内 HTML——按构造清单它们命中 `html`，
-  S0 会把文档挡在富文本外；S1 起这类行内 HTML 由 `inlineHtml` 原子节点承载（逐字保存、可显示），
-  只有无法安全映射的块级构造才落成 `rawMarkdownBlock`。实际拦截率以埋点为准。
+  截断/超上限/手动 viewMode/`documentEditorV2` 关闭路由纯文本；不支持的构造在文档内落成 `rawMarkdownBlock`
+  而非把整篇挡在富文本外。文档不会再因为含 `<br>` 而整体降级。
+- **影响面提示**：LLM 生成的 Markdown 常见 `<br>`、`<sup>` 等行内 HTML——若保留门禁它们会命中 `html`
+  把整篇挡在富文本外；现实现里这类行内 HTML 由 `inlineHtml` 原子节点承载（逐字保存、可显示），
+  只有无法安全映射的块级构造才落成 `rawMarkdownBlock`。
 
 ### 2.2 列表解析热修与扩展列表统一
 
-```ts
-// write/tiptap/markdown-manager.ts
-function guardFirstLine(tokenizer: MarkdownTokenizer, firstLine: RegExp): MarkdownTokenizer {
-  return {
-    ...tokenizer,
-    tokenize(src, tokens, lexer) {
-      const nl = src.indexOf('\n')
-      if (!firstLine.test(nl < 0 ? src : src.slice(0, nl))) return undefined
-      return tokenizer.tokenize(src, tokens, lexer)
-    }
-  }
-}
-export const WriteOrderedList = OrderedList.extend({
-  markdownTokenizer: guardFirstLine(OrderedList.config.markdownTokenizer!, /^(\s*)(\d+)\.\s+/)
-})
-export const WriteTaskList = TaskList.extend({
-  markdownTokenizer: guardFirstLine(TaskList.config.markdownTokenizer!, /^\s*[-+*]\s+\[([ xX])\]\s+/)
-})
-```
-
-- 守卫正则与各解析器自身的首行要求一致，语义等价（实测输出逐字相同）。
-- `buildWriteRichExtensions(runtime?: WriteRichRuntimeOptions)`：`StarterKit.configure({ orderedList: false, codeBlock: false, … })`
-  + `WriteOrderedList` + `WriteTaskList` + 其余；`runtime` 存在时追加补全、粘贴图片、术语传播、模板快捷键、保存快捷键、
-  SDD 标签。`WriteRichEditor.tsx:368` 改为调用它。
-- 测试：守卫前后对语料解析结果 `toEqual`。S1 切到 remark 后这段代码随 `@tiptap/markdown` 一起退役。
+最初给 `@tiptap/markdown` 的有序/待办 tokenizer 加了 `guardFirstLine` 首行守卫（`WriteOrderedList` /
+`WriteTaskList` 只认 `^\d+\.\s+` / `^\s*[-+*]\s+\[[ xX]\]\s+` 开头的首行），并用
+`buildWriteRichExtensions(runtime?)` 统一扩展列表。S1 切到 remark 后这段代码随 `@tiptap/markdown`
+一起退役，列表解析由 micromark/mdast 承担。
 
 ### 2.3 字数统计
 
@@ -264,20 +223,12 @@ export type WorkDocContext = {
 
 ### 3.7 每块保真判定
 
-实现里不是"序列化→再解析→比字符串"（大文档上太贵），而是两道静态检查，见
-`write/markdown/schema-check.ts` 与 `write/markdown/block-fidelity.ts`：
+实现里不是"序列化→再解析→比字符串"（大文档上太贵），而是两道静态检查：
 
-```ts
-// schema-check.ts —— 结构合法性
-export function applySafeBlocks(schema, json, ctx): JSONContent
-//   每个顶层块 schema.nodeFromJSON(node).check()；失败的替换为
-//   rawMarkdownBlock{ raw: 原文, reason } 并以原文登记。
-
-// block-fidelity.ts —— 语义签名
-export function semanticSignature(node: UnistNode): string
-//   去掉 position/data，保留 type、value、depth、ordered、start、checked、
-//   align、url、lang、identifier 等后 JSON.stringify。
-```
+- `write/markdown/schema-check.ts` 的 `applySafeBlocks`：每个顶层块 `schema.nodeFromJSON(node).check()`，
+  失败的替换为 `rawMarkdownBlock{ raw: 原文, reason }` 并以原文登记。
+- `write/markdown/block-fidelity.ts` 的 `semanticSignature`：去掉 position/data，保留 type、value、
+  depth、ordered、start、checked、align、url、lang、identifier 等后 `JSON.stringify`。
 
 - 序列化侧：`sourceFor(blockId, signature)` 先按 blockId 查原文，查不到再按签名查（撤销/粘贴回原处
   命中签名回退）；签名一致即"语义未变"，直接用登记的原文输出，不再生成字符串比对。
@@ -622,8 +573,8 @@ export function resolveWriteEditorSurface(input: {
 - 在编辑器宿主上监听 `mousemove`（`requestAnimationFrame` 节流）：
   `view.posAtCoords({ left: contentRect.left + 24, top: event.clientY })` → `doc.resolve(pos)` →
   取最近的"可拖块"：列表项（`listItem` / `taskItem`）优先，否则深度 1 的顶层块 → `view.nodeDOM(blockPos)` 取矩形。
-- 手柄 DOM 挂在宿主内的绝对定位层，放在内容左侧 48px 留白里（`write-rich-editor.css` 为内容区加 `padding-left: 56px`）：
-  `+` 按钮与 `⋮⋮` 按钮，垂直对齐块首行（标题按行高居中）。
+- 手柄 DOM 挂在宿主内的绝对定位层，放在内容左侧留白里（`write-rich-editor.css` 为内容区加 `padding-left: 56px`）：
+  `Plus` 图标的 `+` 按钮与 `GripVertical` 图标的抓手按钮（lucide，原生 DOM 用 `createElement`），垂直对齐块首行。
 - 空段落也显示手柄（`+` 的主要入口）；只读、审阅中、选区拖动中隐藏；指针离开编辑区 300ms 后隐藏。
 - **触屏**：无悬停环境改用长按——在块上按住 500ms（移动 >10px 取消）直接弹出块菜单；
   `+` 仍可用 `/` 命令触达。
@@ -631,39 +582,39 @@ export function resolveWriteEditorSurface(input: {
 
 ### 9.2 块菜单
 
-点击 `⋮⋮` 弹出（`@floating-ui/dom`，已是直接依赖），菜单项：
+菜单分两层文件：`blocks/block-menu.ts` 只管"排什么 + 怎么执行"，`blocks/block-menu-render.ts` 管 DOM 渲染。
 
-| 项 | 实现 |
-|---|---|
-| 转换为 段落 / H1–H3 / 无序 / 有序 / 待办 / 引用 / 代码 / Callout | 先 `NodeSelection` 选中块，再调用对应 `setNode` / `toggleList` / `wrapIn` |
-| 复制为 Markdown | `blockToMarkdown(node)`（有原文登记时直接用原文）写入剪贴板 |
-| 创建副本 | `tr.insert(pos + node.nodeSize, node.copy(node.content))`（副本是新对象，会重新序列化） |
-| 删除 | `tr.delete(pos, pos + node.nodeSize)` |
-| AI 改写此块 | 以块的投影区间作为选区，调用现有行内编辑入口 |
-| 上移 / 下移 | 与相邻兄弟交换；快捷键 Alt+Shift+↑/↓ |
-| 复制块链接（仅标题） | `相对路径#slug` |
-
-多块选中时菜单作用于整组（§9.4）。
+- 布局由纯函数 `blockMenuLayout({ readOnly, multiple, hasLink })` 给出：
+  `复制 ⌘C` / `剪切 ⌘X`（只读禁用）/ `创建副本` | `转换为 ▸` / `更多 ▸` | `删除`（danger 红）。
+  `转换为` 子菜单是 10 项块类型（`NodeSelection` 选中后 `setNode`/`toggleList`/`wrapIn`）；
+  `更多` 子菜单是 复制为 Markdown / AI 改写此块 / 上移 / 下移 / 复制块链接（仅标题，多块禁用移动项）。
+- 复制/剪切走 `runClipboard`：先把目标块置为块选区（多块框选不动），`view.focus()` 后 `document.execCommand`
+  触发 §9.4 的 `copySelection` 同时写 `text/plain`（Markdown）与 `text/html`；execCommand 不可用时
+  兜底 `navigator.clipboard.writeText(blocksToMarkdown)`，剪切随后调 `deleteSelectedBlocks`。
+- 渲染：三列网格（图标 / 文案 / 快捷键提示，子菜单行尾 `›`）。子菜单 150ms 悬停或 → 键在右侧弹出
+  （`right-start` + `flip` + `shift`），同时只开一个；↑/↓ 在可用项间移动焦点，Enter 执行，← 收子菜单，
+  Esc 关整树；外部点击判断遍历所有已打开的面板。
+- 打开方式：抓手悬停 250ms 以"悬停"态打开（指针移到菜单内不消失，两边都离开 200ms 关闭——状态机在
+  `blocks/hover-intent.ts`）；点击转为"固定"态或直接固定打开。`openBlockMenu` 返回 `{ close, dom }`，
+  `dom` 用于绑定悬停进出事件。菜单锚点 `left-start`（`flip` 回退 `bottom-start`/`right-start`），
+  `z-index: 80` 挂在 `document.body`。
+- 菜单打开期间目标块通过插件 meta `menuTargetPos` + `Decoration.node` 拿 `is-block-menu-target`
+  灰底高亮，不动用户选区；真正执行复制/剪切/删除时才设选区。多块选中时菜单作用于整组（§9.4）。
 
 ### 9.3 拖拽换位
 
-- `⋮⋮` 设 `draggable=true`；`dragstart` 时：
-  1. 选中目标（单块 `NodeSelection.create(doc, pos)`；已有多块选区则沿用）并 dispatch；
-  2. `const slice = view.state.selection.content()`；
-  3. 用 `view.serializeForClipboard(slice)`（ProseMirror 1.3x 公开方法）写入 `text/html` 与 `text/plain`；
-  4. `event.dataTransfer.setDragImage(blockDom, 0, 0)`；
-  5. `view.dragging = { slice, move: true }`。
-- 之后由 ProseMirror 内置的 drop 处理完成"删除原位置 + 插入新位置"，StarterKit 自带的 dropcursor 显示落点。
-- 被移动的节点对象不变，原文登记随之生效，只有位置变化的块在保存时仍是原文。
-- 拖拽中给宿主加 `data-dragging` 属性，CSS 禁止文本选择。
+- 抓手按钮设 `draggable=true`；`dragstart` 先 `hover.closeNow()` 关掉可能悬停打开的菜单，然后：
+  选中目标（单块 `NodeSelection`；已有多块选区则沿用）→ `selection.content()` 取 slice →
+  `serializeForClipboard` 写 `text/html`/`text/plain` → `setDragImage(blockDom)` →
+  `view.dragging = { slice, move: true }`。之后由 PM 内置 drop 完成"删原位 + 插新位"，dropcursor 显示落点。
+- 被移动的节点对象不变，原文登记随之生效，只有位置变化的块在保存时仍是原文；拖拽中宿主加 `data-dragging` 禁文本选择。
 - `dragend` 无条件清 `view.dragging`：在编辑器外松手不会触发 PM 的 drop 清理，
   残留的 `dragging` 会把下一次外部拖入误判为"移动块"并删掉选中块。
 
 ### 9.4 多块选择
 
-- 引入 `@tiptap/extension-node-range@3.26`（MIT，peer 只有 core/pm），提供跨多个兄弟块的节点区间选区；
-  具体 API（选区类名、键盘行为）以包内类型定义为准，不满足时自写 `BlockRangeSelection`（继承 `Selection`，
-  `content()` 返回区间内顶层块，配合块级高亮装饰）。
+- `@tiptap/extension-node-range` 提供跨多个兄弟块的节点区间选区（`NodeRangeSelection` /
+  `isNodeRangeSelection`）。
 - 键盘：光标在块内按 Esc → 选中当前块；Shift+↑/↓ 扩展；⌘A 第一次选当前块、第二次选全文（Agentero 同款）；
   Backspace/Delete 删除选中块；⌘C/⌘X 以 Markdown 文本 + HTML 写入剪贴板。
 - 框选：在内容左侧留白或块间空白处按下并拖动 → 绘制半透明矩形 → 与矩形相交的顶层块组成区间选区；文字上拖动仍是普通划词。

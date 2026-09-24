@@ -4,11 +4,13 @@
  * slash-menu filtering, and markdown-aware paste detection. Runs on the
  * view-less editor harness like review-session.test.ts.
  */
-import { describe, expect, it } from 'vitest'
-import { getSchema } from '@tiptap/core'
-import { EditorState } from '@tiptap/pm/state'
+import { describe, expect, it, vi } from 'vitest'
+import { getSchema, type Editor } from '@tiptap/core'
+import { EditorState, type Transaction } from '@tiptap/pm/state'
+import type { EditorView } from '@tiptap/pm/view'
 import { buildWriteRichExtensions } from '../markdown-manager'
-import { parseWorkDocument } from '../../markdown/document-codec'
+import { parseWorkDocument, type WorkDocContext } from '../../markdown/document-codec'
+import { blockMenuLayout, runClipboard, type BlockMenuDeps } from './block-menu'
 import {
   blockLinkForNode,
   blockTargetAtPos,
@@ -120,6 +122,92 @@ describe('filterSlashItems', () => {
     expect(filterSlashItems('todo').map((item) => item.id)).toContain('taskList')
     expect(filterSlashItems('表格').map((item) => item.id)).toContain('table')
     expect(filterSlashItems('xyz-nothing')).toHaveLength(0)
+  })
+})
+
+describe('blockMenuLayout', () => {
+  it('orders the top level as copy, cut, duplicate | convert, more | delete', () => {
+    const layout = blockMenuLayout({ readOnly: false, multiple: false, hasLink: true })
+    const ids = layout.map((item) => (item === 'separator' ? '|' : item.id))
+    expect(ids).toEqual(['copy', 'cut', 'duplicate', '|', 'convert', 'more', '|', 'delete'])
+  })
+
+  it('marks delete as dangerous', () => {
+    const layout = blockMenuLayout({ readOnly: false, multiple: false, hasLink: false })
+    const del = layout.find((item) => item !== 'separator' && item.id === 'delete')
+    expect(del && del !== 'separator' && del.danger).toBe(true)
+  })
+
+  it('disables cut when read-only', () => {
+    const layout = blockMenuLayout({ readOnly: true, multiple: false, hasLink: false })
+    const cut = layout.find((item) => item !== 'separator' && item.id === 'cut')
+    expect(cut && cut !== 'separator' && cut.disabled).toBe(true)
+  })
+
+  it('omits copyLink from the more submenu for non-heading blocks', () => {
+    const layout = blockMenuLayout({ readOnly: false, multiple: false, hasLink: false })
+    const more = layout.find((item) => item !== 'separator' && item.id === 'more')
+    expect(more && more !== 'separator' ? more.submenu : []).not.toContain('copyLink')
+    const withLink = blockMenuLayout({ readOnly: false, multiple: false, hasLink: true })
+    const moreLink = withLink.find((item) => item !== 'separator' && item.id === 'more')
+    expect(moreLink && moreLink !== 'separator' ? moreLink.submenu : []).toContain('copyLink')
+  })
+})
+
+describe('runClipboard', () => {
+  function fakeDeps(markdown: string) {
+    const { ctx, state } = stateFor(markdown)
+    let current = state
+    const view = {
+      get state() {
+        return current
+      },
+      dispatch(tr: Transaction) {
+        current = current.apply(tr)
+      },
+      focus: vi.fn()
+    } as unknown as EditorView
+    const deps: BlockMenuDeps = {
+      editor: { view } as unknown as Editor,
+      getCtx: () => ctx as WorkDocContext,
+      getFilePath: () => 'a.md',
+      getWorkspaceRoot: () => '',
+      isReadOnly: () => false
+    }
+    return { deps, view, state: () => current }
+  }
+
+  it('falls back to clipboard.writeText when execCommand is unavailable', () => {
+    const writeText = vi.fn()
+    const execCommand = vi.fn(() => false)
+    vi.stubGlobal('document', { execCommand })
+    vi.stubGlobal('navigator', { clipboard: { writeText }, platform: 'MacIntel' })
+    try {
+      const { deps, view } = fakeDeps('alpha\n\nbeta\n')
+      const target = blockTargetAtPos(view.state, 1)!
+      runClipboard(deps, target, 'copy')
+      expect(execCommand).toHaveBeenCalledWith('copy')
+      expect(writeText).toHaveBeenCalledWith('alpha')
+      expect(view.state.doc.textContent).toContain('alpha')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('deletes the block on cut fallback', () => {
+    const writeText = vi.fn()
+    vi.stubGlobal('document', { execCommand: () => false })
+    vi.stubGlobal('navigator', { clipboard: { writeText }, platform: 'MacIntel' })
+    try {
+      const { deps, view } = fakeDeps('alpha\n\nbeta\n')
+      const target = blockTargetAtPos(view.state, 1)!
+      runClipboard(deps, target, 'cut')
+      expect(writeText).toHaveBeenCalledWith('alpha')
+      expect(view.state.doc.textContent).not.toContain('alpha')
+      expect(view.state.doc.textContent).toContain('beta')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })
 
