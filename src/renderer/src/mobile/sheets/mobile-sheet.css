@@ -57,7 +57,10 @@
 }
 
 .kun-mobile-sheet-content {
-  flex: 1;
+  /* The sheet has only a max-height, so its height is indefinite. WebKit
+   * resolves a 0% flex-basis there as 0 and collapses the body to its padding;
+   * an auto basis sizes to content and still shrinks + scrolls at max-height. */
+  flex: 1 1 auto;
   padding: var(--kun-mobile-sheet-gutter);
   min-width: 0;
   min-height: 0;

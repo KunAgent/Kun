@@ -26,7 +26,9 @@ const BOARD_ID_ERROR = 'boardId must match ^[a-zA-Z0-9_-]{1,64}$'
 
 const EXPORT_PATH_SCHEMA = {
   type: 'string',
-  pattern: '^[^\\0]+\\.png$',
+  // Keep the pattern escape-free: some providers validate JSON Schema
+  // `pattern` with strict regex engines that reject `\0`-style escapes.
+  pattern: '^.+\\.png$',
   maxLength: 300,
   description:
     'Optional workspace-relative .png path (for example papers/<id>/assets/<name>.png). After the excalidraw.png sidecar is exported, the renderer writes a second PNG copy there so Markdown can embed it. Must not be absolute, contain .., or live under .kun-whiteboards/.'
