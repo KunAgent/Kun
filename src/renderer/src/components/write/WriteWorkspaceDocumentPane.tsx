@@ -14,7 +14,7 @@ import { WriteMarkdownEditor } from './WriteMarkdownEditor'
 import { WriteWorkspaceStart } from './WriteWorkspaceStart'
 import { WriteImageLightboxHost } from './WriteImageLightboxHost'
 import { WriteImagePreview } from './WriteImagePreview'
-import { WritePdfViewer } from './WritePdfViewer'
+import { useWritePdfRenderer } from './write-pdf-renderer-context'
 import { WorkspaceOfficePreview } from '../WorkspaceOfficePreview'
 import { WorkspaceCodePreview } from '../WorkspaceCodePreview'
 import type {
@@ -177,6 +177,7 @@ export function WriteWorkspaceDocumentPane({
   workspaceLoading = false
 }: Props): ReactElement {
   const { t } = useTranslation('common')
+  const PdfRenderer = useWritePdfRenderer()
   const selectionCallbackRef = useRef(onSelectionChange)
   selectionCallbackRef.current = onSelectionChange
   const handleOfficeSelection = useCallback((next: import('@shared/office-document').WorkspaceOfficeSelection) => {
@@ -252,7 +253,7 @@ export function WriteWorkspaceDocumentPane({
 
   if (activeFileIsPdf) {
     return (
-      <WritePdfViewer
+      <PdfRenderer
         filePath={activeFilePath}
         dataBase64={pdfDataBase64}
         size={fileSize}

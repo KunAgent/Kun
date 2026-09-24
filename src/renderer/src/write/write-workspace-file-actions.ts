@@ -108,9 +108,10 @@ export function createWriteFileActions({
   ): boolean => fileRequestGenerations.get(groupId) === generation && workspaceIsCurrent(workspaceRoot)
 
   return {
-    initializeWorkspace: async (workspaceRoot) => {
+    initializeWorkspace: async (workspaceRoot, options) => {
       const generation = nextNavigationGeneration()
       const normalized = normalizePath(workspaceRoot.trim())
+      const force = options?.force === true
       if (!normalized) {
         cancelExternalSyncAnimation()
         set((state) => ({
@@ -120,11 +121,11 @@ export function createWriteFileActions({
         return
       }
       const current = get()
-      if (current.workspaceRoot === normalized && current.rootDirectory) {
+      if (!force && current.workspaceRoot === normalized && current.rootDirectory) {
         await get().refreshWorkspace(normalized)
         return
       }
-      if (current.workspaceRoot && current.workspaceRoot !== normalized) {
+      if (current.workspaceRoot && (force || current.workspaceRoot !== normalized)) {
         const canLeaveCurrentFile = await prepareActiveWriteFileForNavigation(get, current.workspaceRoot)
         if (!canLeaveCurrentFile || generation !== navigationGeneration) return
       }

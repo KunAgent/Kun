@@ -200,7 +200,10 @@ export type WriteWorkspaceState = {
   addWriteWorkspace: (workspaceRoot: string) => Promise<void>
   removeWriteWorkspace: (workspaceRoot: string) => Promise<void>
   setInlineCompletionEnabled: (enabled: boolean) => Promise<void>
-  initializeWorkspace: (workspaceRoot: string) => Promise<void>
+  initializeWorkspace: (
+    workspaceRoot: string,
+    options?: { force?: boolean }
+  ) => Promise<void>
   loadDirectory: (workspaceRoot: string, path?: string) => Promise<string | null>
   toggleDirectory: (workspaceRoot: string, path: string) => Promise<void>
   refreshWorkspace: (workspaceRoot: string) => Promise<void>
