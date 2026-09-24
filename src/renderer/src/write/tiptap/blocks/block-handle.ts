@@ -290,7 +290,10 @@ export const WriteBlockHandle = Extension.create<WriteBlockHandleOptions>({
             event.dataTransfer.effectAllowed = 'move'
             editorView.dragging = { slice, move: true }
             host.dataset.dragging = 'true'
-            hide()
+            // Hiding the drag source (or its box) inside `dragstart` aborts the
+            // native drag in Chromium — `dragend` fires immediately. Defer the
+            // hide to the next task so the drag session is established first.
+            window.setTimeout(hide, 0)
           }
 
           const onDragEnd = (): void => {
