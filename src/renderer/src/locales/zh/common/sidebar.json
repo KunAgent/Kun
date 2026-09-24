@@ -66,5 +66,10 @@
   "workspaceFolderMissing": "请选择要添加到项目的目录。",
   "workspaceFolderMissingPrimary": "请先打开一个项目，再向其中添加目录。",
   "composerWorkspaceExtraHint": "Git、plan worktree 和默认 shell 仍使用主目录。",
-  "fileTreeGitUsesPrimary": "Git 和 plan 命令仍使用主目录。"
+  "fileTreeGitUsesPrimary": "Git 和 plan 命令仍使用主目录。",
+  "mobileModelProvider": "供应商",
+  "mobileModelSearch": "搜索 {{count}} 个模型",
+  "mobileModelNoMatch": "没有匹配的模型",
+  "mobileModelNone": "还没有可用的模型，请先在桌面端配置供应商。",
+  "mobileModelImageInput": "识图"
 }

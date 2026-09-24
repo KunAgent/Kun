@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import type { ChatState } from '../../store/chat-store-types'
 import { MobileSheet } from '../sheets/MobileSheet'
-import { MobileModelSelect } from './MobileModelSelect'
+import { MobileModelPicker } from './MobileModelPicker'
 import './mobile-code-options.css'
 
 const MODES = ['auto', 'agent', 'plan'] as const
@@ -44,15 +44,16 @@ export function MobileCodeOptions({ open, onClose, model, providerId, models, gr
           ))}
         </div>
       </fieldset>
-      <label className="kun-mobile-field">{t('composerModel')}
-        <MobileModelSelect
-          value={model}
+      <fieldset className="kun-mobile-field">
+        <legend>{t('composerModel')}</legend>
+        <MobileModelPicker
+          model={model}
+          providerId={providerId}
           groups={groups}
           fallbackIds={models}
-          autoLabel={t('autoLabel')}
           onChange={(value, provider) => onModel(value, provider)}
         />
-      </label>
+      </fieldset>
       {model ? (
         <p className="kun-mobile-hint">
           {t('mobileOptionsCurrent', { provider: providerLabel || t('autoLabel'), model })}

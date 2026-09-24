@@ -66,5 +66,10 @@
   "workspaceFolderMissing": "Choose a folder to add to this project.",
   "workspaceFolderMissingPrimary": "Open a project first, then add another folder to it.",
   "composerWorkspaceExtraHint": "Git, plan worktrees, and the default shell stay on the primary folder.",
-  "fileTreeGitUsesPrimary": "Git and plan commands use the primary folder."
+  "fileTreeGitUsesPrimary": "Git and plan commands use the primary folder.",
+  "mobileModelProvider": "Provider",
+  "mobileModelSearch": "Search {{count}} models",
+  "mobileModelNoMatch": "No matching models",
+  "mobileModelNone": "No models available yet. Configure a provider in the desktop app.",
+  "mobileModelImageInput": "Vision"
 }

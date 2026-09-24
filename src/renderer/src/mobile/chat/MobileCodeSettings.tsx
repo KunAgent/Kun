@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useChatStore } from '../../store/chat-store'
 import { MobileSheet } from '../sheets/MobileSheet'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
-import { MobileModelSelect } from './MobileModelSelect'
+import { MobileModelPicker } from './MobileModelPicker'
 
 /**
  * Settings content shared by the bottom sheet and the full-screen mobile
@@ -39,15 +39,16 @@ export function MobileCodeSettingsBody(): React.JSX.Element {
           </>
         ) : null}
       </dl>
-      <label className="kun-mobile-field">{t('composerModel')}
-        <MobileModelSelect
-          value={state.composerModel}
+      <fieldset className="kun-mobile-field">
+        <legend>{t('composerModel')}</legend>
+        <MobileModelPicker
+          model={state.composerModel}
+          providerId={state.composerProviderId}
           groups={state.composerModelGroups}
           fallbackIds={state.composerPickList}
-          autoLabel={t('autoLabel')}
           onChange={(model, providerId) => state.setComposerModel(model, providerId)}
         />
-      </label>
+      </fieldset>
       <p className="kun-mobile-hint">{t('mobileSettingsDesktopHint')}</p>
     </div>
   )
