@@ -44,6 +44,7 @@
   "mobileOptionsCurrent": "Current: {{provider}} · {{model}}",
   "mobileSettingsLanguage": "Language",
   "mobileSettingsDisplay": "Display",
+  "mobileSettingsRuntimeHint": "The runtime is offline. Finish the model and key configuration in the desktop app.",
   "mobileSettingsUseDesktop": "Use desktop layout",
   "mobileSettingsUseDesktopHint": "Reloads this page with the full desktop interface.",
   "mobileSetupRequiredTitle": "Finish setup in the desktop app",

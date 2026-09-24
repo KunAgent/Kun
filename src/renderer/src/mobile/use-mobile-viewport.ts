@@ -19,8 +19,14 @@ export function useMobileViewport(): void {
       root.style.setProperty(properties[2], `${bottom}px`)
       // Chrome shrinks the layout viewport instead of reporting a bottom
       // offset, so treat either signal past ~80px as "keyboard open". CSS can
-      // then drop chrome (mode nav) that would crowd the composer.
-      root.dataset.keyboardOpen = bottom > 80 || height < window.innerHeight * 0.62 ? 'true' : 'false'
+      // then drop chrome (mode nav) that would crowd the composer. Landscape
+      // phones lose a larger share of a short viewport, so the bottom-offset
+      // signal relaxes there (browser chrome rarely eats >50px in landscape).
+      const landscape = window.innerWidth > window.innerHeight
+      const keyboardOpen = bottom > 80
+        || height < window.innerHeight * 0.62
+        || (landscape && bottom > 60)
+      root.dataset.keyboardOpen = keyboardOpen ? 'true' : 'false'
     }
     update()
     window.addEventListener('resize', update)

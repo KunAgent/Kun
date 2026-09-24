@@ -4,13 +4,9 @@ import type { TurnUsageSummary } from '../hooks/use-turn-usage'
 
 export type MobileMessageActionsPayload = {
   block: ChatBlock
-  /** User bubbles copy the display text (parsed prompt), not the raw payload. */
-  copyText?: string
   forkAction?: { busy: boolean; onFork: () => void }
   rollbackAction?: { busy: boolean; onRollback: () => void }
-  /** User-message rewind/edit; flips the bubble into its inline editor. */
-  editAction?: { onEdit: () => void }
-  /** Desktop TurnUsageRow is hidden on mobile; its data moves into the sheet. */
+  /** Desktop TurnUsageRow is not rendered on mobile; its data moves into the sheet. */
   turnUsage?: TurnUsageSummary
   turnUsageStale?: boolean
 }

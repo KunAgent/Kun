@@ -8,7 +8,7 @@
   padding: env(safe-area-inset-top, 0px) 8px 0;
   border-bottom: 1px solid var(--ds-border);
 }
-.kun-mobile-code-conversation > header > button {
+.kun-mobile-code-conversation > header > button:not(.kun-mobile-conversation-title) {
   display: inline-flex;
   min-width: var(--kun-mobile-touch, 44px);
   height: var(--kun-mobile-touch, 44px);
@@ -27,6 +27,7 @@
   display: grid;
   gap: 1px;
   min-width: 0;
+  min-height: var(--kun-mobile-touch, 44px);
   padding: 4px 6px;
   border: 0;
   border-radius: var(--kun-mobile-radius, 12px);

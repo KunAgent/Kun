@@ -16,6 +16,7 @@ import './mobile-settings-screen.css'
 export function MobileSettingsScreen({ onBack }: { onBack: () => void }): React.JSX.Element {
   const { t, i18n } = useTranslation('common')
   const applyI18n = useChatStore((s) => s.applyI18nFromSettings)
+  const runtimeConnection = useChatStore((s) => s.runtimeConnection)
   const activeLocale = i18n.resolvedLanguage ?? i18n.language
 
   const pickLocale = (value: (typeof APP_LOCALE_OPTIONS)[number]['value']): void => {
@@ -35,6 +36,11 @@ export function MobileSettingsScreen({ onBack }: { onBack: () => void }): React.
         <span />
       </header>
       <div className="kun-mobile-settings-screen-body">
+        {/* A needs-config jump lands here with an offline runtime; explain why
+            instead of showing a bare form (U1). */}
+        {runtimeConnection === 'offline' ? (
+          <p className="kun-mobile-settings-hint" role="status">{t('mobileSettingsRuntimeHint')}</p>
+        ) : null}
         <MobileCodeSettingsBody />
         <section className="kun-mobile-form">
           <h2 className="kun-mobile-settings-section-title">{t('mobileSettingsLanguage')}</h2>

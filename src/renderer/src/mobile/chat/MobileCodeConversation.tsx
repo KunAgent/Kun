@@ -11,7 +11,6 @@ import { MobileComposer } from './MobileComposer'
 import { MobilePendingActions } from './MobilePendingActions'
 import { MobileCodeOptions } from './MobileCodeOptions'
 import { MobileCodeThreadDetails } from './MobileCodeThreadDetails'
-import { MobileCodeSettings } from './MobileCodeSettings'
 import { MobileMessageActionsSheet } from './MobileMessageActionsSheet'
 import { FloatingComposerAttachments } from '../../components/chat/FloatingComposerAttachments'
 import { useMobileCodeAttachments } from './use-mobile-code-attachments'
@@ -25,9 +24,10 @@ export function mobileCodeThreadReady(activeThreadId: string | null, requestedTh
   return activeThreadId === requestedThreadId
 }
 
-export function MobileCodeConversation({ threadId, onBack }: {
+export function MobileCodeConversation({ threadId, onBack, onOpenSettings }: {
   threadId: string
   onBack: () => void
+  onOpenSettings: () => void
 }) {
   const { t } = useTranslation('common')
   const state = useChatStore(useShallow((value) => ({
@@ -51,7 +51,6 @@ export function MobileCodeConversation({ threadId, onBack }: {
   const [sending, setSending] = useState(false)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { activeThreadId, selectThread } = state
   useEffect(() => {
@@ -127,7 +126,7 @@ export function MobileCodeConversation({ threadId, onBack }: {
       {threadReady ? <LazyMessageTimeline blocks={state.blocks} liveReasoning={state.liveReasoning} live={state.liveAssistant}
         activeThreadId={state.activeThreadId} runtimeConnection={state.runtimeConnection}
         runtimeError={state.runtimeError} onRetryConnection={state.probeRuntime}
-        onOpenSettings={() => setSettingsOpen(true)} compactCards surface="mobile" /> : null}
+        onOpenSettings={onOpenSettings} compactCards surface="mobile" /> : null}
     </div>
     <input ref={fileInputRef} type="file" multiple hidden accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
       onChange={(event) => {
@@ -152,10 +151,9 @@ export function MobileCodeConversation({ threadId, onBack }: {
       model={state.composerModel} providerId={state.composerProviderId} models={state.composerPickList}
       groups={state.composerModelGroups} mode={state.composerMode} reasoning={state.composerReasoningEffort}
       onModel={state.setComposerModel} onMode={state.setComposerMode}
-      onReasoning={state.setComposerReasoningEffort} />
+      onReasoning={state.setComposerReasoningEffort} onOpenSettings={onOpenSettings} />
     <MobileCodeThreadDetails threadId={threadId} open={detailsOpen}
       onClose={() => setDetailsOpen(false)} onArchived={onBack} />
-    <MobileCodeSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     <MobileMessageActionsSheet />
   </section>
 }

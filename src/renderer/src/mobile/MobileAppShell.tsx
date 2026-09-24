@@ -11,7 +11,7 @@ import { MobileRoomsHome } from './rooms/MobileRoomsHome'
 import { MobileWorkHome, type MobileWorkResource } from './work/MobileWorkHome'
 import { useMobileNavigation, type MobileNavigationGuard } from './navigation/use-mobile-navigation'
 import { modeForWorkbenchRoute, workLeaveDecision, workbenchRouteForMode } from './mobile-mode-policy'
-import type { MobileMode } from './navigation/mobile-page'
+import type { MobileMode, MobilePage } from './navigation/mobile-page'
 import type { RoomContentOpenTarget } from '@shared/rooms-api'
 import { openRoomContentTarget } from '../components/rooms/room-content-navigation'
 import { workFileResourceKey, workWhiteboardResourceKey } from './work/work-resource-key'
@@ -89,7 +89,7 @@ export function MobileAppShell(): ReactElement {
     refresh: state.refreshThreads, loadMore: state.loadMoreThreads,
     selectThread: state.selectThread, createConversation: state.createConversation,
     chooseWorkspace: state.chooseWorkspace,
-    openSettings: state.openSettings, setRoute: state.setRoute
+    setRoute: state.setRoute
   })))
   const work = useWriteWorkspaceStore(useShallow((state) => ({
     workspaceRoot: state.workspaceRoot, entriesByDir: state.entriesByDir,
@@ -109,12 +109,21 @@ export function MobileAppShell(): ReactElement {
   // routes it here). Any path that requests it — the Work settings button, a
   // runtime that needs configuration, a timeline error card — opens the
   // full-screen mobile settings page instead, and the route returns to the
-  // current mode.
+  // current mode. The page that opened settings is remembered so its back
+  // button restores the exact origin instead of the mode home.
+  const settingsReturnRef = useRef<MobilePage | null>(null)
+  const openSettingsPage = (from: MobilePage): void => {
+    settingsReturnRef.current = from
+    navigate({ mode: from.mode, kind: 'settings' })
+  }
   useEffect(() => {
     const target = workbenchRouteForMode(page.mode)
-    if (currentRoute === 'settings') navigate({ mode: page.mode, kind: 'settings' })
+    if (currentRoute === 'settings') {
+      if (page.kind !== 'settings') settingsReturnRef.current = page
+      navigate({ mode: page.mode, kind: 'settings' })
+    }
     if (currentRoute !== target) setRoute(target)
-  }, [currentRoute, navigate, page.mode, setRoute])
+  }, [currentRoute, navigate, page, setRoute])
   useEffect(() => {
     if (page.mode !== 'work') return
     void loadWorkSettings().then(() => workRoot ? initializeWork(workRoot) : undefined)
@@ -196,7 +205,8 @@ export function MobileAppShell(): ReactElement {
       onOpen={(roomId) => navigate({ mode: 'rooms', kind: 'room', roomId })} />
   } else if (page.mode === 'code' && page.kind === 'conversation') {
     content = <MobileCodeConversation threadId={page.threadId}
-      onBack={() => navigate({ mode: 'code', kind: 'home' })} />
+      onBack={() => navigate({ mode: 'code', kind: 'home' })}
+      onOpenSettings={() => openSettingsPage(page)} />
   } else if (page.mode === 'rooms' && page.kind === 'room-settings') {
     content = <MobileRoomSettings roomId={page.roomId}
       onBack={() => navigate({ mode: 'rooms', kind: 'room', roomId: page.roomId })} />
@@ -222,9 +232,13 @@ export function MobileAppShell(): ReactElement {
     content = <MobileWorkResourceScreen resourceKey={page.resourceKey} view={page.view}
       onBack={() => void leaveWorkResource()}
       onView={(view) => navigate({ mode: 'work', kind: 'resource', resourceKey: page.resourceKey, view }, true)}
-      onSettings={() => navigate({ mode: 'work', kind: 'settings' })} />
+      onSettings={() => openSettingsPage(page)} />
   } else if (page.kind === 'settings') {
-    content = <MobileSettingsScreen onBack={() => navigate({ mode: page.mode, kind: 'home' })} />
+    content = <MobileSettingsScreen onBack={() => {
+      const origin = settingsReturnRef.current ?? { mode: page.mode, kind: 'home' } as MobilePage
+      settingsReturnRef.current = null
+      navigate(origin, true)
+    }} />
   } else if (page.kind !== 'home') {
     content = <MobileUnavailable title={page.kind} onBack={() => navigate({ mode: page.mode, kind: 'home' })} />
   } else if (page.mode === 'rooms') {
@@ -249,7 +263,8 @@ export function MobileAppShell(): ReactElement {
       onMenu={null} onCreate={null}
       onRetry={() => work.workspaceRoot ? void work.initialize(work.workspaceRoot) : undefined} />
   } else {
-    content = <MobileCodeHome onOpen={(threadId) => navigate({ mode: 'code', kind: 'conversation', threadId })} />
+    content = <MobileCodeHome onOpen={(threadId) => navigate({ mode: 'code', kind: 'conversation', threadId })}
+      onOpenSettings={() => openSettingsPage(page)} />
   }
 
   return <div className="kun-mobile-app" data-mobile-mode={page.mode}>

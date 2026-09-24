@@ -152,6 +152,7 @@
   "compactionCompletedWithCounts": "Compacted context ({{before}} → {{after}} messages)",
   "compactionNothingToCompact": "Nothing to compact yet — the conversation is still short",
   "archiveHistoryToHere": "Archive through here",
+  "archiveHistoryEarlier": "Archive earlier history",
   "archiveHistoryWorking": "Archiving…",
   "archiveHistoryConfirm": "Archive all history through this completed turn? Recent turns will stay in the active context.",
   "archiveHistorySuccess": "Archived {{count}} items, released about {{tokens}} tokens. Archive: {{path}}",

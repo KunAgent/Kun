@@ -75,7 +75,7 @@ async function openFirstProject(): Promise<void> {
 }
 
 it('starts with projects, selects the real workspace, and never mixes projects or surfaces', async () => {
-  act(() => root.render(createElement(MobileCodeHome, {onOpen: vi.fn()})))
+  act(() => root.render(createElement(MobileCodeHome, {onOpen: vi.fn(), onOpenSettings: vi.fn()})))
   expect(host.querySelectorAll('.kun-mobile-project-row')).toHaveLength(2)
   expect(host.textContent).toContain('mobileCodeProjects')
   expect(host.textContent).not.toContain('/projects/alpha')
@@ -94,7 +94,7 @@ it('starts with projects, selects the real workspace, and never mixes projects o
 })
 it('does not enter a project when switching fails', async () => {
   state.selectWorkspaceRoot.mockRejectedValueOnce(new Error('Offline'))
-  act(() => root.render(createElement(MobileCodeHome, {onOpen: vi.fn()})))
+  act(() => root.render(createElement(MobileCodeHome, {onOpen: vi.fn(), onOpenSettings: vi.fn()})))
   await act(async () => { (host.querySelector('.kun-mobile-project-row') as HTMLButtonElement).click() })
   expect(host.querySelector('[role="alert"]')?.textContent).toContain('Offline')
   // Still on the projects screen — no per-project thread list mounted.
@@ -102,7 +102,7 @@ it('does not enter a project when switching fails', async () => {
 })
 it('auto-loads the selected project page and creates new threads inside it', async () => {
   const onOpen = vi.fn()
-  act(() => root.render(createElement(MobileCodeHome, {onOpen})))
+  act(() => root.render(createElement(MobileCodeHome, {onOpen, onOpenSettings: vi.fn()})))
   await openFirstProject()
   // A cold project (no cursor entry) must fetch its own first page instead of
   // relying on the global 100-thread inventory.
@@ -113,7 +113,7 @@ it('auto-loads the selected project page and creates new threads inside it', asy
     state.threadListCursorByWorkspace = {
       '/projects/alpha': { workspaceKey: '/projects/alpha', mode: 'active', status: 'complete', hasMore: false }
     }
-    root.render(createElement(MobileCodeHome, {onOpen}))
+    root.render(createElement(MobileCodeHome, {onOpen, onOpenSettings: vi.fn()}))
   })
   await act(async () => {
     (host.querySelector('[aria-label="newChat"]') as HTMLButtonElement).click()
@@ -134,7 +134,7 @@ it('groups registered worktree conversations under their owning project', async 
       wt: { projectPath: '/projects/alpha', worktreePath: '/home/u/.kun/worktrees/ab12/alpha', branch: 'kun-ab12' }
     }
   })
-  act(() => root.render(createElement(MobileCodeHome, {onOpen: vi.fn()})))
+  act(() => root.render(createElement(MobileCodeHome, {onOpen: vi.fn(), onOpenSettings: vi.fn()})))
   await openFirstProject()
   expect(host.textContent).toContain('Worktree task')
   // The worktree itself is not a separate project row.
@@ -145,13 +145,13 @@ it('shows an empty choose-project state and opens a working directory from there
   state.codeWorkspaceRoots = []
   state.workspaceRoot = ''
   state.threads = []
-  act(() => root.render(createElement(MobileCodeHome, {onOpen: vi.fn()})))
+  act(() => root.render(createElement(MobileCodeHome, {onOpen: vi.fn(), onOpenSettings: vi.fn()})))
   expect(host.querySelector('.kun-mobile-project-empty')?.textContent).toContain('mobileCodeChooseProject')
   await act(async () => { (host.querySelector('.kun-mobile-project-add') as HTMLButtonElement).click() })
   expect(state.chooseWorkspace).toHaveBeenCalledWith({ createThreadAfter: false, selectThreadAfter: false, persist: false })
 })
 it('hides unmatched projects and keeps the header add action', async () => {
-  act(() => root.render(createElement(MobileCodeHome, {onOpen: vi.fn()})))
+  act(() => root.render(createElement(MobileCodeHome, {onOpen: vi.fn(), onOpenSettings: vi.fn()})))
   act(() => {
     const input = host.querySelector('input[type="search"]') as HTMLInputElement
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'zzz')

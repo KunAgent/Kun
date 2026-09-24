@@ -44,6 +44,7 @@
   "mobileOptionsCurrent": "当前：{{provider}} · {{model}}",
   "mobileSettingsLanguage": "语言",
   "mobileSettingsDisplay": "显示",
+  "mobileSettingsRuntimeHint": "运行时离线。请在桌面端完成模型 / 密钥配置。",
   "mobileSettingsUseDesktop": "使用桌面版布局",
   "mobileSettingsUseDesktopHint": "将重新加载页面并切换到完整的桌面界面。",
   "mobileSetupRequiredTitle": "请在桌面端完成初始化",

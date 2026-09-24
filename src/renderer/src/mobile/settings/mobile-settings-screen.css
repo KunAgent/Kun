@@ -44,6 +44,16 @@
   gap: 20px;
   align-content: start;
 }
+.kun-mobile-settings-hint {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--kun-mobile-radius, 12px);
+  color: var(--ds-text-muted);
+  background: var(--ds-surface-subtle);
+  font-size: 13px;
+  line-height: 1.5;
+}
 .kun-mobile-settings-section-title {
   margin: 0;
   font-size: 13px;

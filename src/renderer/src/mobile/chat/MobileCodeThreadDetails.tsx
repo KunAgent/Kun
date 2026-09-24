@@ -20,10 +20,14 @@ export function MobileCodeThreadDetails({ threadId, open, onClose, onArchived }:
   const { t } = useTranslation('common')
   const state = useChatStore(useShallow((value) => ({
     thread: value.threads.find((item) => item.id === threadId),
+    activeThreadId: value.activeThreadId,
+    blocks: value.blocks,
+    busy: value.busy,
     composerMode: value.composerMode,
     composerModel: value.composerModel,
     rename: value.renameThread,
-    archive: value.archiveThread
+    archive: value.archiveThread,
+    archiveToTurn: value.archiveActiveThreadToTurn
   })))
   const thread = state.thread
   const [title, setTitle] = useState<string | null>(null)
@@ -70,6 +74,27 @@ export function MobileCodeThreadDetails({ threadId, open, onClose, onArchived }:
       setError(formatRuntimeError(cause))
     } finally { setBusy(false) }
   }
+  // The per-turn "archive through here" controls are desktop-only (U9); the
+  // sheet offers the same operation anchored at the latest turn instead.
+  const archiveAnchorTurnId = (() => {
+    if (threadId !== state.activeThreadId) return ''
+    for (let index = state.blocks.length - 1; index >= 0; index -= 1) {
+      const turnId = state.blocks[index]?.turnId?.trim()
+      if (turnId) return turnId
+    }
+    return ''
+  })()
+  const archiveEarlierHistory = async (): Promise<void> => {
+    if (!archiveAnchorTurnId || busy || state.busy) return
+    if (!window.confirm(t('archiveHistoryConfirm'))) return
+    setBusy(true)
+    try {
+      await state.archiveToTurn(archiveAnchorTurnId)
+      setError('')
+    } catch (cause) {
+      setError(formatRuntimeError(cause))
+    } finally { setBusy(false) }
+  }
 
   return <MobileSheet open={open} title={t('mobileThreadDetails')} closeLabel={t('close')} onClose={onClose}>
     <div className="kun-mobile-form">
@@ -91,6 +116,12 @@ export function MobileCodeThreadDetails({ threadId, open, onClose, onArchived }:
         <dt>{t('mode')}</dt><dd>{modeLabel}</dd>
         <dt>{t('mobileDetailsSession')}</dt><dd data-mono>{threadId}</dd>
       </dl>
+      {archiveAnchorTurnId ? (
+        <div className="kun-mobile-row-actions">
+          <button type="button" disabled={busy || state.busy} onClick={() => void archiveEarlierHistory()}>
+            {t('archiveHistoryEarlier')}</button>
+        </div>
+      ) : null}
       <div className="kun-mobile-row-actions">
         <button type="button" onClick={() => void copySessionId()}>
           {copied ? t('copySuccess') : t('sidebarThreadCopyId')}</button>

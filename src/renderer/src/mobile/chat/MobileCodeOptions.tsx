@@ -9,9 +9,10 @@ const MODES = ['auto', 'agent', 'plan'] as const
 const REASONING = ['auto', 'off', 'low', 'medium', 'high', 'max'] as const
 
 export function MobileCodeOptions({ open, onClose, model, providerId, models, groups, mode,
-  reasoning, onModel, onMode, onReasoning }: {
+  reasoning, onModel, onMode, onReasoning, onOpenSettings }: {
   open: boolean
   onClose: () => void
+  onOpenSettings: () => void
   model: string
   providerId: string
   models: string[]
@@ -69,6 +70,9 @@ export function MobileCodeOptions({ open, onClose, model, providerId, models, gr
           ))}
         </div>
       </fieldset>
+      <div className="kun-mobile-row-actions">
+        <button type="button" onClick={() => { onClose(); onOpenSettings() }}>{t('settings')}</button>
+      </div>
     </div>
   </MobileSheet>
 }

@@ -1,14 +1,13 @@
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useChatStore } from '../../store/chat-store'
-import { MobileSheet } from '../sheets/MobileSheet'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import { MobileModelPicker } from './MobileModelPicker'
 
 /**
- * Settings content shared by the bottom sheet and the full-screen mobile
- * settings page: runtime health, project, and the default model. Everything
- * else points at the desktop app.
+ * Settings content for the full-screen mobile settings page: runtime health,
+ * project, and the default model. Everything else points at the desktop app.
+ * (The pre-U1 bottom sheet was removed; all settings entries open the page.)
  */
 export function MobileCodeSettingsBody(): React.JSX.Element {
   const { t } = useTranslation('common')
@@ -51,17 +50,5 @@ export function MobileCodeSettingsBody(): React.JSX.Element {
       </fieldset>
       <p className="kun-mobile-hint">{t('mobileSettingsDesktopHint')}</p>
     </div>
-  )
-}
-
-export function MobileCodeSettings({ open, onClose }: {
-  open: boolean
-  onClose: () => void
-}): React.JSX.Element {
-  const { t } = useTranslation('common')
-  return (
-    <MobileSheet open={open} title={t('settings')} closeLabel={t('close')} onClose={onClose}>
-      <MobileCodeSettingsBody />
-    </MobileSheet>
   )
 }

@@ -16,7 +16,6 @@ import {
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import { MobileHome, type MobileThreadActivity } from './MobileHome'
 import { useMobileProjectThreads } from './use-mobile-project-threads'
-import { MobileCodeSettings } from '../chat/MobileCodeSettings'
 import { aggregateThreadActivity, mobileThreadActivity } from '../lib/thread-activity'
 import { mobileRelativeTime } from '../lib/relative-time'
 import './mobile-home.css'
@@ -93,13 +92,15 @@ function MobileProjectHome({ project, onBack, onOpen, onOpenSettings }: {
 
 const RECENT_LIMIT = 5
 
-export function MobileCodeHome({ onOpen }: { onOpen: (threadId: string) => void }) {
+export function MobileCodeHome({ onOpen, onOpenSettings }: {
+  onOpen: (threadId: string) => void
+  onOpenSettings: () => void
+}) {
   const { t, i18n } = useTranslation('common')
   const [project, setProject] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [switching, setSwitching] = useState(false)
   const [error, setError] = useState('')
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const chat = useChatStore(useShallow((s) => ({
     roots: s.codeWorkspaceRoots, root: s.workspaceRoot, threads: s.threads,
     conversationRoot: s.conversationWorkspaceRoot, removed: s.removedCodeWorkspaces,
@@ -153,7 +154,7 @@ export function MobileCodeHome({ onOpen }: { onOpen: (threadId: string) => void 
       })
       meta.set(workspaceRootIdentityKey(root) || root, {
         lastActive: threads.reduce((latest, thread) =>
-          Date.parse(thread.updatedAt) > Date.parse(latest) ? thread.updatedAt : latest, ''),
+          !latest || Date.parse(thread.updatedAt) > Date.parse(latest) ? thread.updatedAt : latest, ''),
         activity: aggregateThreadActivity(threads, activityContext, t)
       })
     }
@@ -188,11 +189,8 @@ export function MobileCodeHome({ onOpen }: { onOpen: (threadId: string) => void 
     }).catch((cause) => setError(String(cause)))
   }
   if (project) {
-    return <>
-      <MobileProjectHome project={project} onBack={() => { setProject(null); setSearch(''); setError('') }}
-        onOpen={onOpen} onOpenSettings={() => setSettingsOpen(true)} />
-      <MobileCodeSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-    </>
+    return <MobileProjectHome project={project} onBack={() => { setProject(null); setSearch(''); setError('') }}
+      onOpen={onOpen} onOpenSettings={onOpenSettings} />
   }
   return <section className="kun-mobile-projects" aria-label={t('mobileCodeProjects')}>
     <header>
@@ -201,7 +199,7 @@ export function MobileCodeHome({ onOpen }: { onOpen: (threadId: string) => void 
         <button type="button" className="kun-mobile-project-icon" aria-label={t('selectWorkspace')}
           disabled={switching} onClick={addProject}><Plus size={22} aria-hidden /></button>
         <button type="button" className="kun-mobile-project-icon" aria-label={t('settings')}
-          onClick={() => setSettingsOpen(true)}><Settings size={20} aria-hidden /></button>
+          onClick={onOpenSettings}><Settings size={20} aria-hidden /></button>
       </div>
     </header>
     <label className="kun-mobile-project-search"><Search size={18} aria-hidden />
@@ -253,6 +251,5 @@ export function MobileCodeHome({ onOpen }: { onOpen: (threadId: string) => void 
           onClick={addProject}><Plus size={18} aria-hidden />{t('selectWorkspace')}</button> : null}
       </div> : null}
     </div>
-    <MobileCodeSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
   </section>
 }

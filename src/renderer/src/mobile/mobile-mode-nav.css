@@ -3,43 +3,62 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   flex-shrink: 0;
-  padding: 6px 12px calc(6px + var(--kun-mobile-safe-bottom, env(safe-area-inset-bottom, 0px)));
-  border-top: 1px solid var(--ds-border);
+  padding: 4px 8px calc(4px + var(--kun-mobile-safe-bottom, env(safe-area-inset-bottom, 0px)));
+  border-top: 1px solid var(--ds-border-muted);
   background: var(--ds-surface-elevated);
-}
-.kun-mobile-mode-nav button {
-  display: flex;
-  min-width: 0;
-  min-height: 48px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  border: 0;
-  border-radius: var(--kun-mobile-radius, 12px);
-  color: var(--ds-text-muted);
-  background: transparent;
-  font: inherit;
-  font-size: var(--kun-mobile-font-meta, 12px);
-}
-.kun-mobile-mode-nav button:active { background: var(--ds-surface-hover); }
-.kun-mobile-mode-nav button[aria-current='page'] {
-  color: var(--ds-text);
-  background: var(--ds-surface-subtle);
-}
-.kun-mobile-mode-icon { position: relative; display: inline-flex; }
-.kun-mobile-mode-badge {
-  position: absolute;
-  inset: -7px auto auto 13px;
-  min-width: 18px;
-  height: 18px;
-  padding-inline: 4px;
-  border-radius: 9999px;
-  color: var(--ds-bg-main);
-  background: var(--ds-text);
-  font-size: 10px;
-  line-height: 18px;
-  text-align: center;
 }
 /* The software keyboard owns the bottom strip; mode switching yields to the composer. */
 html[data-remote-surface='mobile'][data-keyboard-open='true'] .kun-mobile-mode-nav { display: none; }
+
+.kun-mobile-mode-nav button {
+  display: flex;
+  min-width: 0;
+  min-height: 50px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--ds-text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.kun-mobile-mode-nav button > span:last-child { text-transform: capitalize; }
+.kun-mobile-mode-nav button:active .kun-mobile-mode-icon { background: var(--ds-surface-hover); }
+/* Selected state: a pill behind the icon only, not a greyed block. */
+.kun-mobile-mode-nav button[aria-current='page'] { color: var(--ds-text); }
+.kun-mobile-mode-nav button[aria-current='page'] .kun-mobile-mode-icon {
+  background: var(--ds-surface-subtle);
+}
+.kun-mobile-mode-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 28px;
+  border-radius: 9999px;
+  transition: background-color .15s ease;
+}
+/* Anchored to the icon center so it stays put across label/icon widths. */
+.kun-mobile-mode-badge {
+  position: absolute;
+  top: -4px;
+  left: calc(50% + 6px);
+  min-width: 18px;
+  height: 18px;
+  padding-inline: 4px;
+  border: 2px solid var(--ds-surface-elevated);
+  border-radius: 9999px;
+  box-sizing: border-box;
+  color: var(--ds-bg-main);
+  background: var(--ds-danger);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce) { .kun-mobile-mode-icon { transition: none; } }

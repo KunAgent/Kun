@@ -31,6 +31,7 @@ import { useTurnRuntimeErrorActions } from './use-turn-runtime-error-actions'
 import type { TurnUsageSummary } from '../../hooks/use-turn-usage'
 import { TurnUsageRow } from './TurnUsageRow'
 import { hasLivePendingUserInput } from '../../store/chat-store-runtime-helpers'
+import { useTimelineSurface } from './timeline-surface'
 import { LiveTurnProgressRow } from './message-timeline-live-progress'
 import {
   parseDelegateDetail,
@@ -106,6 +107,7 @@ export function ConversationTurn({
   turnUsageStale = false
 }: ConversationTurnProps): ReactElement {
   const { t } = useTranslation('common')
+  const surface = useTimelineSurface()
   const forkThreadFromTurn = useChatStore((s) => s.forkThreadFromTurn)
   const rollbackWorkspaceToCheckpoint = useChatStore((s) => s.rollbackWorkspaceToCheckpoint)
   const { continueInterruptedTask } = useTurnRuntimeErrorActions()
@@ -461,7 +463,8 @@ export function ConversationTurn({
         <ChartRenderer key={block.id} spec={block.spec} />
       ))}
 
-      {!isProcessing && (assistantContentBlocks.length > 0 || orderedAnswerBlocks.length > 0) && turnUsage ? (
+      {/* Mobile moves per-turn usage into the message actions sheet (U9). */}
+      {!isProcessing && surface !== 'mobile' && (assistantContentBlocks.length > 0 || orderedAnswerBlocks.length > 0) && turnUsage ? (
         <TurnUsageRow usage={turnUsage} stale={turnUsageStale} />
       ) : null}
 
@@ -531,7 +534,8 @@ export function ConversationTurn({
         />
       ) : null}
 
-      {allowMainThreadActions && hasSettledResultEvidence && forkTurnId ? (
+      {/* Mobile shows archive-earlier-history inside the thread details sheet (U9). */}
+      {surface !== 'mobile' && allowMainThreadActions && hasSettledResultEvidence && forkTurnId ? (
         <div className="flex justify-end pt-6" data-archive-history-action>
           <button
             type="button"

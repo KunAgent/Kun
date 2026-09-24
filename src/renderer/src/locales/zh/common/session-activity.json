@@ -152,6 +152,7 @@
   "compactionCompletedWithCounts": "已压缩上下文（{{before}} → {{after}} 条消息）",
   "compactionNothingToCompact": "当前会话内容较少，暂无需压缩",
   "archiveHistoryToHere": "归档到此处",
+  "archiveHistoryEarlier": "归档此前的历史",
   "archiveHistoryWorking": "正在归档…",
   "archiveHistoryConfirm": "确认归档到这个已完成回合吗？后续近期回合会原样保留在活动上下文中。",
   "archiveHistorySuccess": "已归档 {{count}} 条，释放约 {{tokens}} tokens。归档位置：{{path}}",

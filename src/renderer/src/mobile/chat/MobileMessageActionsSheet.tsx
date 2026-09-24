@@ -1,4 +1,4 @@
-import { GitFork, PencilLine, RotateCcw } from 'lucide-react'
+import { GitFork, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useMobileMessageActionsStore } from '../../stores/mobile-message-actions'
 import {
@@ -33,21 +33,7 @@ export function MobileMessageActionsSheet(): React.JSX.Element {
     >
       {block ? (
         <ul className="kun-mobile-action-list">
-          <li><CopyFeedbackButton text={payload?.copyText ?? blockText} /></li>
-          {payload?.editAction ? (
-            <li>
-              <button
-                type="button"
-                onClick={() => {
-                  close()
-                  payload.editAction?.onEdit()
-                }}
-              >
-                <PencilLine size={18} aria-hidden />
-                {t('rewindEditMessage')}
-              </button>
-            </li>
-          ) : null}
+          <li><CopyFeedbackButton text={blockText} /></li>
           {payload?.forkAction ? (
             <li>
               <button

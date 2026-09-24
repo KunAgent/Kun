@@ -151,7 +151,12 @@ fieldset.kun-mobile-field { margin: 0; padding: 0; border: 0; min-inline-size: 0
 .kun-mobile-action-list li:last-child > :is(button, summary, details) { border-bottom: 0; }
 .kun-mobile-action-list li:last-child > details > summary { border-bottom: 0; }
 .kun-mobile-action-list :is(button, summary):active { background: var(--ds-surface-hover); }
-.kun-mobile-action-list :is(button, summary) > svg { flex-shrink: 0; color: var(--ds-text-muted); }
+.kun-mobile-action-list :is(button, summary) > svg {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--ds-text-muted);
+}
 .kun-mobile-action-list button[data-variant='danger'] { color: var(--ds-danger); }
 .kun-mobile-action-list button[data-variant='danger'] > svg { color: currentColor; }
 /* The desktop export dropdown is absolutely positioned; inside a sheet it
