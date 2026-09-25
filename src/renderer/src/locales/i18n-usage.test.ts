@@ -54,6 +54,14 @@ const MOBILE_FORBIDDEN_KEY_PREFIXES = [
 ]
 const MOBILE_FORBIDDEN_KEYS = new Set(['roomsContentRetry'])
 
+// i18next resolves `t('key', { count })` through plural variants such as
+// `key_one` / `key_other`, so a base key is present when any variant is.
+const PLURAL_SUFFIXES = ['zero', 'one', 'two', 'few', 'many', 'other']
+
+function hasResourceKey(keys: Set<string>, key: string): boolean {
+  return keys.has(key) || PLURAL_SUFFIXES.some((suffix) => keys.has(`${key}_${suffix}`))
+}
+
 function isStrictResourceFile(file: string): boolean {
   return STRICT_RESOURCE_FILES.has(file) ||
     STRICT_RESOURCE_PREFIXES.some((prefix) => file.startsWith(prefix))
@@ -140,7 +148,7 @@ function inspectFile(file: string): string[] {
             const namespace = explicitNamespace ?? 'common'
             if (
               isStrictResourceFile(file) &&
-              !resourceKeys[namespace as keyof typeof resourceKeys].has(key)
+              !hasResourceKey(resourceKeys[namespace as keyof typeof resourceKeys], key)
             ) {
               report(node, `uses missing English resource "${namespace}:${key}"`)
             }
