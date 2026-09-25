@@ -159,7 +159,11 @@ export function resolveModelEndpointUrl(
     }
   }
   const suffix = target === 'models' ? 'models' : modelEndpointPath(format)
-  const { path, tail } = splitModelEndpointUrlTail(baseUrl.trim())
+  const { path, tail: rawTail } = splitModelEndpointUrlTail(baseUrl.trim())
+  // A models URL is derived, never dialed verbatim — query/fragment parts of a
+  // configured generate URL (deployment tags, preview flags) must not leak
+  // into it. The generate target keeps them at the end of the final URL.
+  const tail = target === 'models' ? '' : rawTail
   const normalized = path.replace(/\/+$/, '')
   if (!normalized) return `/v1/${suffix}${tail}`
   if (normalized.toLowerCase().endsWith(`/${suffix}`)) return `${normalized}${tail}`
