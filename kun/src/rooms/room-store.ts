@@ -13,6 +13,7 @@ export const RoomDocumentKindSchema = z.enum([
   'rule_version', 'context', 'summary', 'outcome', 'recovery', 'integration', 'read_state', 'cleanup', 'validation',
   'request_input', 'rule_bundle', 'rule_compression',
   'room_run', 'room_poll', 'room_reactions', 'room_preference', 'room_avatar', 'room_user_profile',
+  'room_proposal',
   'peer_topic', 'peer_inbox', 'peer_member', 'peer_publication', 'peer_metric', 'peer_cursor'
 ])
 export type RoomDocumentKind = z.infer<typeof RoomDocumentKindSchema>
@@ -65,7 +66,8 @@ export const RoomStoreListOptionsSchema = z.object({
   summaryOnly: z.boolean().optional(),
   deliveryId: Id.optional(),
   threadId: Id.optional(),
-  memberId: Id.optional(), repositoryId: Id.optional(), requestId: Id.optional(), documentId: Id.optional()
+  memberId: Id.optional(), repositoryId: Id.optional(), requestId: Id.optional(), documentId: Id.optional(),
+  originRunId: Id.optional()
 }).strict()
 export type RoomStoreListOptions = z.input<typeof RoomStoreListOptionsSchema>
 export const RoomOutcomeQuerySchema = z.object({

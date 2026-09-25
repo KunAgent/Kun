@@ -106,6 +106,7 @@ export class SqliteRoomStore implements RoomStore {
       "json_extract(document, '$.task.requestId') = ?"); args.push(parsed.requestId) }
     if (parsed.documentId) { clauses.push(kind === 'message' ? 'id = ?' : "json_extract(document, '$.id') = ?"); args.push(parsed.documentId) }
     if (parsed.deliveryId) { clauses.push("json_extract(document, '$.deliveryId') = ?"); args.push(parsed.deliveryId) }
+    if (parsed.originRunId) { clauses.push("json_extract(document, '$.originRunId') = ?"); args.push(parsed.originRunId) }
     if (parsed.threadId) {
       clauses.push("(json_extract(document,'$.threadId') = ? OR EXISTS (SELECT 1 FROM json_each(json_extract(document,'$.discussions')) d WHERE json_extract(d.value,'$.threadId') = ?))")
       args.push(parsed.threadId, parsed.threadId)

@@ -61,6 +61,9 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
   if (input.kind === 'discussion' && input.collaborationProtocol === 'peer' && allowed) {
     allowed.push(...['read_room_updates', 'send_room_message'].filter((name) => !blocked.includes(name)))
   }
+  if (input.kind === 'discussion' && input.member.participantAgentId && allowed && !blocked.includes('propose_room_action')) {
+    allowed.push('propose_room_action')
+  }
   if (input.member.participantAgentId && allowed) allowed.push(...AGENT_COLLABORATION_TOOLS.filter((name) => !blocked.includes(name)))
   return deps.threads.create({
     workspace, title: input.member.displayName, model: binding.model, providerId: binding.providerId,

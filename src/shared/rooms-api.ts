@@ -4,6 +4,8 @@ export type { RoomContentReference, RoomAvatarReference, RoomContentResult,
   RoomContentOpenTarget, RoomLinkPreview, RoomPreviewImage } from '../../kun/src/contracts/room-content'
 export type { RoomPoll, RoomPollInvitation, RoomMessageReactions,
   RoomMessageInteractions } from '../../kun/src/contracts/room-interactions'
+export type { RoomProposal, RoomProposalEntry, RoomProposalPayload,
+  RoomProposalResultRef, ResolveRoomProposal } from '../../kun/src/contracts/room-proposals'
 export type { RoomReplyPage, RoomReplyPageInput } from '../../kun/src/contracts/room-replies'
 export type { RoomNotificationPreference, RoomPreferenceDetail, RoomSearchQuery, RoomSearchHit,
   RoomSearchPage, RoomRepositoryChoice, RoomRunSummary, RoomRunSummaryQuery } from '../../kun/src/contracts/room-experience'

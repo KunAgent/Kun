@@ -107,6 +107,7 @@
   "agentsFeature_identities": "Independent private conversations",
   "agentsFeature_memory": "Agent long-term memory",
   "agentsFeature_collaboration": "Agent collaboration",
+  "agentsFeature_proposals": "Room proposal cards",
   "agentsFeaturesHint": "Disabling a feature preserves its records. Already dispatched code tasks keep their own lifecycle.",
   "agentsMemoryCandidates": "Memory changes to review",
   "agentsMemoryPending": "{{count}} memory batches pending or in progress",

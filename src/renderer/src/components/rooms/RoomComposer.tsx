@@ -193,16 +193,40 @@ function RoomComposerEditor({
       setDraft((current) => current.body.trim() ? current : { ...current, body: detail.body })
       editorRef.current?.focus()
     }
+    const proposalDraft = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          roomId: string
+          body: string
+          mentions?: string[]
+          repositoryId?: string
+          rootRequestId?: string
+          intent?: Draft['intent']
+        }>
+      ).detail
+      if (detail.roomId !== room.id) return
+      setDraft((current) => ({
+        ...current,
+        body: current.body.trim() ? current.body + '\n' + detail.body : detail.body,
+        mentions: [...new Set([...current.mentions, ...(detail.mentions ?? [])])],
+        repositoryId: detail.repositoryId ?? current.repositoryId,
+        intent: detail.intent ?? current.intent,
+        rootRequestId: detail.rootRequestId ?? current.rootRequestId
+      }))
+      editorRef.current?.focus()
+    }
     if (draftId) return
     window.addEventListener('kun-room-example', example)
     window.addEventListener?.('kun-room-continue-topic', continueTopic)
     window.addEventListener?.('kun-room-reply', reply)
     window.addEventListener?.('kun-room-task-reply', taskReply)
+    window.addEventListener?.('kun-room-proposal-draft', proposalDraft)
     return () => {
       window.removeEventListener('kun-room-example', example)
       window.removeEventListener?.('kun-room-continue-topic', continueTopic)
       window.removeEventListener?.('kun-room-reply', reply)
       window.removeEventListener?.('kun-room-task-reply', taskReply)
+      window.removeEventListener?.('kun-room-proposal-draft', proposalDraft)
     }
   }, [room.id, draftId])
   const replyTargetId = replyTarget?.messageId, replyTargetBody = replyTarget?.body, replyTargetRoot = replyTarget?.rootRequestId

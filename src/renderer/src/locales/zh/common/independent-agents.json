@@ -107,6 +107,7 @@
   "agentsFeature_identities": "独立 Agent 私聊",
   "agentsFeature_memory": "Agent 长期记忆",
   "agentsFeature_collaboration": "Agent 间协作",
+  "agentsFeature_proposals": "房间提议卡",
   "agentsFeaturesHint": "关闭功能会保留已有记录，已派发代码任务仍使用独立的生命周期。",
   "agentsMemoryCandidates": "待确认的记忆更新",
   "agentsMemoryPending": "有 {{count}} 批记忆正在或等待整理",

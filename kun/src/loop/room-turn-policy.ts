@@ -24,12 +24,14 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
   const peerTools = policy.kind === 'discussion' && policy.collaborationProtocol === 'peer'
     ? ['read_room_updates', 'send_room_message'] : []
   const pollTools = policy.kind === 'discussion' && policy.allowedToolNames?.includes('vote_room_poll') ? ['vote_room_poll'] : []
+  // Drafting a proposal is a data-only room protocol; adoption stays a user route.
+  const proposalTools = policy.participantAgentId && ['discussion', 'conversation'].includes(policy.kind) ? ['propose_room_action'] : []
   // Replying in a conversation is intrinsic: even read-only or setup-scoped
   // conversations must be able to publish their visible bubbles.
   const conversationTools = policy.kind === 'conversation' ? ['send_im_message'] : []
   const intersected = intersectAllowedToolNames(context.allowedToolNames,
-    intersectAllowedToolNames(policy.allowedToolNames ? [...policy.allowedToolNames, 'read_room_rules', 'read_room_playbook', ...peerTools, ...agentTools, ...conversationTools] : undefined, policy.kind === 'coordination' ? ['submit_room_plan', 'read_room_rules', 'read_room_playbook', ...agentTools] :
-      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', 'read_room_playbook', ...peerTools, ...pollTools, ...agentTools, ...conversationTools, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
+    intersectAllowedToolNames(policy.allowedToolNames ? [...policy.allowedToolNames, 'read_room_rules', 'read_room_playbook', ...peerTools, ...agentTools, ...conversationTools, ...proposalTools] : undefined, policy.kind === 'coordination' ? ['submit_room_plan', 'read_room_rules', 'read_room_playbook', ...agentTools] :
+      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', 'read_room_playbook', ...peerTools, ...pollTools, ...agentTools, ...conversationTools, ...proposalTools, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
   // Replying is intrinsic to a conversation: a frozen setup or skill allow-list
   // must not drop the publication tool. Explicit blockedToolNames still wins
   // because it is enforced separately at resolution time.

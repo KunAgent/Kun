@@ -95,6 +95,8 @@ export class AgentMemoryCoordinator {
       if (event.kind === 'message.created' || event.kind === 'message.updated' || event.kind === 'message.presentation.created') {
         const message = await this.deps.store.get<RoomMessage>('message', id)
         if (!message || message.value.status !== 'final') continue
+        // Proposal cards are drafts pending user confirmation, not memory sources.
+        if (message.value.presentationKind === 'proposal') continue
         if (message.value.handoffId) {
           if (!message.value.originRunId || message.value.authorKind !== 'member') continue
           handoff = (await this.deps.store.get<AgentHandoff>('agent_handoff', message.value.handoffId))?.value

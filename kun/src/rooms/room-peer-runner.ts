@@ -16,6 +16,7 @@ import { roomDiscussionWorkspace } from './room-context.js'
 import { roomPeerTriage, RoomPeerTriageError, type RoomPeerTriageResult } from './room-peer-triage.js'
 import { RoomPeerMessageInput } from './room-peer-tools.js'
 import { stopRoomTaskTurn } from './room-task-activity.js'
+import { withdrawRunProposals } from './room-proposals.js'
 import { RoomContextPending } from './room-rule-compression.js'
 import { releasePeerActivation, updatePeerTopicStatus, recordPeerMetric, setPeerMemberWait, failPeerPreparation } from './room-peer-runner-state.js'
 import { capturePeerUsageBaseline, recordPeerResponseMetric } from './room-peer-runner-metrics.js'
@@ -450,6 +451,7 @@ export class RoomPeerRunner {
     if (this.deps.backgroundExecutionActive?.(active.threadId)) return
     await updateRoomRun(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId),
       { status: 'cancelled', outcome: 'cancelled', endedAt: new Date().toISOString() })
+    await withdrawRunProposals(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId), 'topic_stopped')
     await releasePeerActivation(this.deps, member)
   }
 }

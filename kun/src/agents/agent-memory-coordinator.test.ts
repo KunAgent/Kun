@@ -44,11 +44,11 @@ async function fixture() {
     profiles: () => ({}), peerModels: { client, roles: () => undefined } } as unknown as RoomRuntimeDeps
   const capture = new AgentMemoryCoordinator(deps)
   resources.push({ root, store, capture })
-  const publish = async (id: string) => store.commit({ requestId: 'publish:' + id,
+  const publish = async (id: string, overrides: Record<string, unknown> = {}) => store.commit({ requestId: 'publish:' + id,
     checks: [{ kind: 'message', id, expectedRevision: null }],
     puts: [{ kind: 'message', id, roomId: room.id, value: { ...sent.message, id, authorKind: 'member',
       authorMemberId: actor.id, authorAgentId: actor.id, body: 'I will include source links in Chinese reports.',
-      sourceRequestId: sent.requestId, clientRequestId: undefined, status: 'final' } }],
+      sourceRequestId: sent.requestId, clientRequestId: undefined, status: 'final', ...overrides } }],
     events: [{ roomId: room.id, kind: 'message.created', payload: { id } }] })
   return { store, memory, agents, actor, capture, room, publish, calls: () => calls }
 }
@@ -76,6 +76,15 @@ it('captures attributed completed work without waking discussion or reprocessing
   expect(events.filter((event) => event.kind === 'message.created')).toHaveLength(3)
   await f.capture.tick()
   expect(f.calls()).toBe(1)
+})
+
+it('skips proposal presentation cards since they are only drafts', async () => {
+  const f = await fixture()
+  await f.capture.tick()
+  await f.publish('proposal-card', { presentationKind: 'proposal' })
+  await f.capture.tick(); await setImmediate(); await f.capture.tick()
+  expect(f.calls()).toBe(0)
+  expect((await f.memory.list(f.actor.id, {})).memories).toHaveLength(0)
 })
 
 it('never captures work after an agent disables automatic memory', async () => {

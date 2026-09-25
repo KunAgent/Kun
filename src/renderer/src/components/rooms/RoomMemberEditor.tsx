@@ -57,8 +57,8 @@ export function RoomMemberEditor({
   defaultMemberId: string
   hasActiveTasks: boolean
   onChange: (patch: Partial<RoomMember>) => void
-  onRemove: () => void
-  onCopy: () => void
+  onRemove?: () => void
+  onCopy?: () => void
 }) {
   const { t } = useTranslation('common')
   const models = useAgentResource<AgentModelSnapshot>(
@@ -320,24 +320,30 @@ export function RoomMemberEditor({
           {t('roomsDisableSkills')}
         </label>
       </details>
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={roomButtonClass} onClick={onCopy}>
-          {t('roomsCopyMember')}
-        </button>
-        <button
-          type="button"
-          className={roomButtonClass}
-          disabled={hasActiveTasks || member.id === defaultMemberId}
-          onClick={onRemove}
-        >
-          {t('roomsRemove')}
-        </button>
-        {hasActiveTasks ? (
-          <span className="text-xs text-ds-muted">
-            {t('roomsDisableFirst')}
-          </span>
-        ) : null}
-      </div>
+      {onCopy || onRemove ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {onCopy ? (
+            <button type="button" className={roomButtonClass} onClick={onCopy}>
+              {t('roomsCopyMember')}
+            </button>
+          ) : null}
+          {onRemove ? (
+            <button
+              type="button"
+              className={roomButtonClass}
+              disabled={hasActiveTasks || member.id === defaultMemberId}
+              onClick={onRemove}
+            >
+              {t('roomsRemove')}
+            </button>
+          ) : null}
+          {hasActiveTasks && onRemove ? (
+            <span className="text-xs text-ds-muted">
+              {t('roomsDisableFirst')}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </fieldset>
   )
 }

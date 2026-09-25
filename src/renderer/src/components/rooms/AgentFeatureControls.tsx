@@ -32,7 +32,7 @@ function FeatureOptions() {
     } catch (cause) { setError(String(cause)) } finally { setBusy(false); setOptimistic(null) }
   }
   return <div className="agent-profile-form">
-    {(['identities', 'memory', 'collaboration'] as const).map((key) => <label className="agent-checkbox" key={key}>
+    {(['identities', 'memory', 'collaboration', 'proposals'] as const).map((key) => <label className="agent-checkbox" key={key}>
       <input type="checkbox" disabled={!data || busy} checked={optimistic?.[key] ?? data?.features[key] ?? false} onChange={(event) => void update(key, event.target.checked)} />
       {t('agentsFeature_' + key)}
     </label>)}

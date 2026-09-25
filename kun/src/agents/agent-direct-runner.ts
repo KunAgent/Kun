@@ -17,6 +17,7 @@ import { persistDirectChoiceMessages } from './agent-choice-messages.js'
 import { AGENT_SETUP_PROMPT } from './agent-setup-prompt.js'
 import { agentSetupConversationPolicy, agentSetupPending, isHiddenAgentSetupMessage } from './agent-setup.js'
 import { settleConversationRunOutcome } from './agent-direct-publication.js'
+import { withdrawRunProposals } from '../rooms/room-proposals.js'
 import { roomContinuationIsCurrent } from '../rooms/room-continuation-service.js'
 import { ROOM_DIRECT_GUIDANCE } from '../rooms/room-collaboration-guidance.js'
 
@@ -44,6 +45,7 @@ export class AgentDirectRunner {
         await observeRecordedRoomTurn(this.deps, thread!, turn)
         await settleConversationRunOutcome(this.deps, request.privateRunId, turn)
       }
+      if (request.privateRunId) await withdrawRunProposals(this.deps.store, request.privateRunId, 'run_cancelled')
       return this.save(row, { ...request, status: 'cancelled' })
     }
     if (!request.privateInput) {
@@ -89,7 +91,7 @@ export class AgentDirectRunner {
           ...ROOM_DIRECT_GUIDANCE].filter(Boolean).join('\n')
       }, { id: request.threadId, relation: 'side', roomContext: { roomId: request.roomId, memberId: member.id,
         participantAgentId: member.participantAgentId, agentRevision: member.agentRevision, kind: 'conversation',
-        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', ...AGENT_COLLABORATION_TOOLS])] : undefined,
+        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...AGENT_COLLABORATION_TOOLS])] : undefined,
         blockedToolNames: policy.blocked,
         blockedProviderIds: limits?.blockedMcpServers ?? [], blockedSkillIds: limits?.blockedSkills ?? [], skillsEnabled: policy.skillsEnabled } })
     }
@@ -137,6 +139,7 @@ export class AgentDirectRunner {
     const finished = !['queued', 'running'].includes(turn.status)
     if (finished) {
       await settleConversationRunOutcome(this.deps, run.id, turn)
+      if (turn.status === 'aborted') await withdrawRunProposals(this.deps.store, run.id, 'run_cancelled')
       await this.save(row, { ...request, status: turn.status === 'completed' ? 'completed' : turn.status === 'aborted' ? 'cancelled' : 'failed',
         error: turn.status === 'failed' ? 'The response failed. Its partial output is retained; inspect the run or retry.' : undefined })
     }

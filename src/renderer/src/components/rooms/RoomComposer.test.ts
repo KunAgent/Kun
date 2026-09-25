@@ -291,6 +291,39 @@ describe('RoomComposer', () => {
     expect(stored.has('kun.rooms.draft.room')).toBe(false)
   })
 
+  it('adopts proposal drafts into the composer with mentions, repository and intent', async () => {
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    act(() =>
+      listeners.get('kun-room-proposal-draft')!({
+        detail: {
+          roomId: 'room',
+          body: '[@Developer](#kun-room-developer)\nPort the importer',
+          mentions: ['developer'],
+          repositoryId: 'repo',
+          rootRequestId: 'topic-1',
+          intent: 'execute'
+        }
+      } as unknown as Event)
+    )
+    expect(renderer.root.findByType('textarea').props.value).toContain('Port the importer')
+    await submit()
+    expect(send.mock.calls[0][0]).toMatchObject({
+      mentionMemberIds: ['developer'],
+      repositoryId: 'repo',
+      rootRequestId: 'topic-1',
+      executionIntent: 'execute'
+    })
+    // A proposal draft for another room never enters this composer.
+    await render(send, { room: { ...room, id: 'other' } })
+    act(() =>
+      listeners.get('kun-room-proposal-draft')!({
+        detail: { roomId: 'room', body: 'Ignore me' }
+      } as unknown as Event)
+    )
+    expect(renderer.root.findByType('textarea').props.value).toBe('')
+  })
+
   it('hints that group rooms without repositories can discuss but cannot create tasks', async () => {
     const send = vi.fn().mockResolvedValue(undefined)
     await render(send, { room: { ...room, repositories: [] } })

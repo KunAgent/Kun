@@ -7,6 +7,7 @@ import { RoomEmojiPicker } from './RoomEmojiPicker'
 import { RoomMessageBody } from './RoomMessageBody'
 import { RoomMessageRunButton } from './RoomMessageRunButton'
 import { RoomMessageInteractions } from './RoomMessageInteractions'
+import { RoomProposalCard } from './RoomProposalCard'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
 
 const roles = {
@@ -140,7 +141,7 @@ export function RoomMessageRow({
               </span>
             </button>
           ) : null}
-          {message.presentationKind !== 'poll' ? <RoomMessageBody
+          {message.presentationKind !== 'poll' && (message.presentationKind !== 'proposal' || !room) ? <RoomMessageBody
             room={room}
             publicMessage={message.status !== 'streaming'}
             messageId={message.id}
@@ -150,6 +151,7 @@ export function RoomMessageRow({
             body={message.body}
             attachmentIds={message.attachmentIds}
           /> : null}
+          {room && message.presentationKind === 'proposal' ? <RoomProposalCard room={room} message={message} /> : null}
           {room ? <RoomMessageInteractions room={room} message={message} onMember={onMember ? (id) => onMember(id, message.rootRequestId) : undefined} /> : null}
         </div>
         <div className="rooms-message-footer">

@@ -76,6 +76,6 @@ export type AgentActivity = { conversationId?: string; unread: boolean;
 export type AgentPage = { agents: AgentIdentity[]; nextCursor?: string; activities?: Record<string, AgentActivity> }
 export const AgentFeaturesSchema = z.object({
   identities: z.boolean().default(true), memory: z.boolean().default(true),
-  collaboration: z.boolean().default(true)
+  collaboration: z.boolean().default(true), proposals: z.boolean().default(true)
 }).strict()
 export type AgentFeatures = z.infer<typeof AgentFeaturesSchema>

@@ -1,7 +1,9 @@
 import { executeAgentHandoffRoomTool } from '../agents/agent-handoff-tools.js'
 import { z } from 'zod'
 import type { ThreadStore } from '../ports/thread-store.js'
-import type { RoomStore } from './room-store.js'
+import type { ToolHostContext } from '../ports/tool-host.js'
+import type { ThreadRecord } from '../contracts/threads.js'
+import type { RoomStore, RoomStoredDocument } from './room-store.js'
 import { RoomPeerStore } from './room-peer-state.js'
 import { peerInboxRows } from './room-peer-inbox.js'
 import { ROOM_PEER_HOLD_LIMITS, type RoomPeerActivation, type RoomPeerMemberState, type RoomPeerTopic,
@@ -11,6 +13,42 @@ import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 const bindings = new WeakMap<ThreadStore, RoomStore>()
 export function roomPeerStoreBinding(threads: ThreadStore) { return bindings.get(threads) }
 export function bindRoomPeerStore(threads: ThreadStore, store: RoomStore) { bindings.set(threads, store) }
+
+export type CurrentPeerActivation = {
+  thread: ThreadRecord
+  room: NonNullable<ThreadRecord['roomContext']> & { rootRequestId: string }
+  store: RoomStore
+  topic: RoomStoredDocument<RoomPeerTopic>
+  state: RoomPeerMemberState & { activation: RoomPeerActivation }
+}
+
+/**
+ * Shared freshness check: the calling turn must still own the member's current
+ * peer activation on a live topic generation. Throws when the binding is stale.
+ */
+export async function assertCurrentPeerActivation(threads: ThreadStore, context: ToolHostContext): Promise<CurrentPeerActivation> {
+  const thread = await (threads.getMetadata?.(context.threadId) ?? threads.get(context.threadId))
+  const room = thread?.roomContext, store = bindings.get(threads)
+  if (!thread || !store || !room?.rootRequestId || room.collaborationProtocol !== 'peer' || room.kind !== 'discussion' ||
+    !thread.turns.some((turn) => turn.id === context.turnId)) throw new Error('peer room scope required')
+  const topic = await store.get<RoomPeerTopic>('peer_topic', room.rootRequestId)
+  const currentTurn = thread.turns.find((turn) => turn.id === context.turnId)
+  const members = await store.list<RoomPeerMemberState>('peer_member', {
+    roomId: room.roomId, rootRequestId: room.rootRequestId, memberId: room.memberId, limit: 1
+  })
+  const state = members[0]?.value
+  if (!topic || topic.roomId !== room.roomId || !state?.activation ||
+    state.activation.threadId !== context.threadId ||
+    (state.activation.turnId ? state.activation.turnId !== context.turnId :
+      currentTurn?.clientRequestId !== state.activation.clientRequestId) ||
+    topic.value.generation !== state.activation.generation ||
+    !(['active', 'idle'].includes(topic.value.status) || topic.value.status === 'paused' && topic.value.pauseReason === 'budget_exhausted')) {
+    throw new Error('peer activation is no longer current')
+  }
+  return { thread,
+    room: room as CurrentPeerActivation['room'], store, topic,
+    state: state as RoomPeerMemberState & { activation: RoomPeerActivation } }
+}
 export const RoomPeerMessageInput = z.object({
   body: z.string().max(16000).default(''),
   skip: z.boolean().default(false),
@@ -36,24 +74,8 @@ export function roomPeerTools(threads: ThreadStore) {
     execute: async (args, context) => {
       try {
         const thread = await (threads.getMetadata?.(context.threadId) ?? threads.get(context.threadId))
-        const room = thread?.roomContext, store = bindings.get(threads)
-        if (room?.handoffId) return await executeAgentHandoffRoomTool(threads, name, args, context)
-        if (!thread || !store || !room?.rootRequestId || room.collaborationProtocol !== 'peer' || room.kind !== 'discussion' ||
-          !thread.turns.some((turn) => turn.id === context.turnId)) throw new Error('peer room scope required')
-        const topic = await store.get<RoomPeerTopic>('peer_topic', room.rootRequestId)
-        const currentTurn = thread.turns.find((turn) => turn.id === context.turnId)
-        const members = await store.list<RoomPeerMemberState>('peer_member', {
-          roomId: room.roomId, rootRequestId: room.rootRequestId, memberId: room.memberId, limit: 1
-        })
-        const state = members[0]?.value
-        if (!topic || topic.roomId !== room.roomId || !state?.activation ||
-          state.activation.threadId !== context.threadId ||
-          (state.activation.turnId ? state.activation.turnId !== context.turnId :
-            currentTurn?.clientRequestId !== state.activation.clientRequestId) ||
-          topic.value.generation !== state.activation.generation ||
-          !(['active', 'idle'].includes(topic.value.status) || topic.value.status === 'paused' && topic.value.pauseReason === 'budget_exhausted')) {
-          throw new Error('peer activation is no longer current')
-        }
+        if (thread?.roomContext?.handoffId) return await executeAgentHandoffRoomTool(threads, name, args, context)
+        const { room, store, topic, state } = await assertCurrentPeerActivation(threads, context)
         if (name === 'send_room_message') {
           const input = RoomPeerMessageInput.parse(args)
           const allowed = new Set(topic.value.roomSnapshot.members.filter((member) => member.enabled && !member.removedAt).map((member) => member.id))
