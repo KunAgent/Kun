@@ -10,7 +10,7 @@ import type { PaperRect } from '@shared/paper/paper-marks-types'
 
 export type PaperTranslateSelectionResult =
   | { ok: true; markId: string; translation: string }
-  | { ok: false; message: string }
+  | { ok: false; code?: string; message: string }
 
 export async function translatePaperSelection(input: {
   unitDir: string
@@ -29,7 +29,7 @@ export async function translatePaperSelection(input: {
     providerId: translate.inheritModel ? undefined : translate.providerId || undefined,
     model: translate.inheritModel ? undefined : translate.model || undefined
   })
-  if (!result.ok) return { ok: false, message: result.message }
+  if (!result.ok) return { ok: false, code: result.code, message: result.message }
   const markId = nextPaperMarkId()
   // Register a translate card locally; the marks-write IPC persists cards
   // alongside annotations (per-id files under marks/).
@@ -56,7 +56,7 @@ export async function translatePaperSelection(input: {
 export async function translatePaperDocument(input: {
   unitDir: string
   requestId: string
-}): Promise<{ ok: true; outputPath: string } | { ok: false; message: string }> {
+}): Promise<{ ok: true; outputPath: string } | { ok: false; code?: string; message: string }> {
   const state = useWriteWorkspaceStore.getState()
   const translate = state.paperMode.translate
   if (typeof window.kunGui?.paperTranslateDocument !== 'function') {
@@ -70,6 +70,6 @@ export async function translatePaperDocument(input: {
     model: translate.inheritModel ? undefined : translate.model || undefined,
     requestId: input.requestId
   })
-  if (!result.ok) return { ok: false, message: result.message }
+  if (!result.ok) return { ok: false, code: result.code, message: result.message }
   return { ok: true, outputPath: result.outputPath }
 }

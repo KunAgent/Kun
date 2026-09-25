@@ -12,8 +12,7 @@ import type {
 } from '../../write/write-markdown-editor-types'
 import type { PaperHighlight, PaperRect } from '@shared/paper/paper-marks-types'
 import type { WritePaperModeReaderSettingsV1 } from '@shared/app-settings-types-paper-mode'
-import { PAPER_TEXT_FILE_NAME } from '@shared/paper/paper-types'
-import { useWriteWorkspaceStore, writeJoinPath } from '../../../write/write-workspace-store'
+import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { openPaperViewTab } from '../../../paper/paper-view'
 import {
@@ -23,8 +22,6 @@ import {
   removePaperHighlight
 } from '../../../paper/paper-marks-store'
 import { usePaperMarks } from '../../../paper/use-paper-marks'
-import { translatePaperDocument } from '../../../paper/paper-translate-actions'
-import { confirmDialog } from '../../../lib/confirm-dialog'
 import {
   findPaperUnitDir,
   paperUnitDirFromKnownUnits,
@@ -43,6 +40,8 @@ import { PaperSelectionMenu } from './PaperSelectionMenu'
 import { PaperReaderDrawer } from './PaperReaderDrawer'
 import { PaperFloatingControls } from './PaperFloatingControls'
 import { PaperTranslateCard } from './PaperTranslateCard'
+import { PaperTranslateSettingsDialog } from './PaperTranslateSettingsDialog'
+import { usePaperReaderTranslate } from './usePaperReaderTranslate'
 import { PaperAskPopover } from './PaperAskPopover'
 import { PaperCommentGutter } from './PaperCommentGutter'
 
@@ -58,15 +57,6 @@ type PendingSelection = {
   localRects: WriteSelectionPageRect[]
   /** Anchor position for the floating menu (viewport coords). */
   anchor: { x: number; y: number }
-}
-
-type TranslateCardState = {
-  anchor: { x: number; y: number }
-  quote: string
-  translation: string
-  model?: string
-  loading: boolean
-  error: string | null
 }
 
 /**
@@ -127,7 +117,6 @@ function PaperUnitPdfReader({
   const entries = usePaperModeStore((s) => s.entries)
   const libraryEntry = entries.find((e) => e.unitDir === unitRelDir)
   const tone = useWriteWorkspaceStore((s) => s.paperMode.reader.paperTone)
-  const translateJob = usePaperStore((s) => s.busy['translate-document'])
 
   usePaperMarks(workspaceRoot, unitRelDir)
 
@@ -139,9 +128,6 @@ function PaperUnitPdfReader({
   const [pending, setPending] = useState<PendingSelection | null>(null)
   const [askOpen, setAskOpen] = useState(false)
   const [selectionRects, setSelectionRects] = useState<WriteSelectionPageRect[]>([])
-  const [translateCard, setTranslateCard] = useState<TranslateCardState | null>(null)
-  const [translateNotice, setTranslateNotice] = useState('')
-  const translateRequestRef = useRef('')
   const selectionTimerRef = useRef<number | null>(null)
   const draggingRef = useRef(false)
   const [restoredPage, setRestoredPage] = useState<number | null>(null)
@@ -182,6 +168,22 @@ function PaperUnitPdfReader({
     schedulePageSync,
     jumpSearch
   } = useWritePdfNavigation({ filePath, pdfDocument, pageCount, pageTexts, scrollerRef })
+
+  const {
+    card: translateCard,
+    closeCard,
+    notice: translateNotice,
+    setNotice: setTranslateNotice,
+    settingsOpen: translateSettingsOpen,
+    openSettings: openTranslateSettings,
+    closeSettings: closeTranslateSettings,
+    onSettingsSaved: onTranslateSettingsSaved,
+    runCardRequest,
+    runPageTranslate,
+    runDocumentTranslate,
+    cancelDocumentTranslate,
+    translateJob
+  } = usePaperReaderTranslate({ t, unitRelDir, workspaceRoot, pageTexts, rootRef })
 
   // Position memory: restore lastPage once the document is ready.
   useEffect(() => {
@@ -349,138 +351,20 @@ function PaperUnitPdfReader({
     else bridge?.setInput(question)
   }, [pending, workspaceRoot])
 
-  // Selection translation → floating card beside the anchor. The mark card is
-  // persisted by translatePaperSelection itself.
-  const runSelectionTranslate = useCallback(async (): Promise<void> => {
+  // Selection translation → floating card beside the anchor. The mark card
+  // is persisted by translatePaperSelection itself.
+  const runSelectionTranslate = useCallback((): void => {
     const sel = pending
     if (!sel) return
     setPending(null)
     setAskOpen(false)
     window.getSelection()?.removeAllRanges()
-    setTranslateCard({
-      anchor: sel.anchor,
-      quote: sel.text,
-      translation: '',
-      loading: true,
-      error: null
-    })
-    const { translatePaperSelection } = await import('../../../paper/paper-translate-actions')
-    const result = await translatePaperSelection({
-      unitDir: unitRelDir,
+    void runCardRequest(sel.anchor, sel.text, {
       page: sel.page,
       rects: sel.rects,
       text: sel.text
     })
-    setTranslateCard((card) => card && card.loading ? {
-      ...card,
-      loading: false,
-      translation: result.ok ? result.translation : '',
-      error: result.ok ? null : result.message
-    } : card)
-  }, [pending, unitRelDir])
-
-  // Page-edge 「译」 rail: translate the loaded text of a single page.
-  const runPageTranslate = useCallback(async (page: number): Promise<void> => {
-    const text = pageTexts.find((item) => item.page === page)?.text ?? ''
-    if (!text.trim()) return
-    const el = rootRef.current?.querySelector<HTMLElement>(`[data-write-pdf-page="${page}"]`)
-    const bounds = el?.getBoundingClientRect()
-    const anchor = bounds
-      ? { x: bounds.right - 24, y: bounds.top + bounds.height / 2 }
-      : { x: 0, y: 0 }
-    setTranslateCard({
-      anchor,
-      quote: text.slice(0, 240),
-      translation: '',
-      loading: true,
-      error: null
-    })
-    const { translatePaperSelection } = await import('../../../paper/paper-translate-actions')
-    const result = await translatePaperSelection({
-      unitDir: unitRelDir,
-      page,
-      rects: [],
-      text: text.slice(0, 8000)
-    })
-    setTranslateCard((card) => card && card.loading ? {
-      ...card,
-      loading: false,
-      translation: result.ok ? result.translation : '',
-      error: result.ok ? null : result.message
-    } : card)
-  }, [pageTexts, unitRelDir, rootRef])
-
-  const readPaperTextChars = async (): Promise<number> => {
-    try {
-      const read = await window.kunGui.readWorkspaceFile({
-        workspaceRoot,
-        path: writeJoinPath(unitRelDir, PAPER_TEXT_FILE_NAME)
-      })
-      return read.ok ? read.content.length : 0
-    } catch {
-      return 0
-    }
-  }
-
-  const runDocumentTranslate = async (): Promise<void> => {
-    setTranslateNotice('')
-    let chars = await readPaperTextChars()
-    if (!chars) {
-      // Whole-document translation reads paper.md — produce it on demand
-      // (same auto-preprocess path as interpretPaper) instead of dead-ending.
-      const settings = useWriteWorkspaceStore.getState().paperReading
-      const allowed = settings.autoPreprocess
-        ? true
-        : await confirmDialog(t('writePaperReaderTranslateNeedsPreprocess'))
-      if (!allowed) {
-        setTranslateNotice(t('writePaperReaderTranslateNoText'))
-        return
-      }
-      const { preprocessPaper } = await import('../../../write/paper/paper-actions')
-      if (!(await preprocessPaper({ workspaceRoot, settings, t, unitDir: unitRelDir }))) return
-      chars = await readPaperTextChars()
-      if (!chars) {
-        setTranslateNotice(t('writePaperReaderTranslateNoText'))
-        return
-      }
-    }
-    const confirmed = await confirmDialog(
-      t('writePaperReaderTranslateConfirm', {
-        chars,
-        tokens: Math.ceil(chars / 4)
-      })
-    )
-    if (!confirmed) return
-
-    const requestId = `translate-doc-${Date.now().toString(36)}`
-    translateRequestRef.current = requestId
-    usePaperStore.getState().beginJob('translate-document', requestId)
-    try {
-      const result = await translatePaperDocument({ unitDir: unitRelDir, requestId })
-      if (!result.ok) {
-        setTranslateNotice(result.message)
-        return
-      }
-      setTranslateNotice(result.outputPath)
-      // Open the translated markdown in the right editor group (plan §6.5).
-      const root = useWriteWorkspaceStore.getState().workspaceRoot
-      if (root) {
-        await useWriteWorkspaceStore.getState().openFile(
-          root,
-          writeJoinPath(writeJoinPath(root, unitRelDir), result.outputPath),
-          { groupId: 'secondary', viewMode: 'rich' }
-        )
-      }
-    } finally {
-      usePaperStore.getState().endJob(requestId)
-    }
-  }
-
-  const cancelDocumentTranslate = (): void => {
-    if (translateRequestRef.current) {
-      void window.kunGui?.paperCancel?.({ requestId: translateRequestRef.current })
-    }
-  }
+  }, [pending, runCardRequest])
 
   const exportAnnotations = async (): Promise<void> => {
     const { items, cards } = usePaperMarksStore.getState()
@@ -488,7 +372,7 @@ function PaperUnitPdfReader({
     const { appendPaperNotes } = await import('../../../paper/paper-notes-append')
     const notesPath = `${unitRelDir}/${paperUnitSlugFromDir(unitRelDir)}-NOTES.md`
     await appendPaperNotes({ workspaceRoot, notesPath, items, cards })
-    setTranslateNotice(t('writePaperReaderNotesExported'))
+    setTranslateNotice({ message: t('writePaperReaderNotesExported'), config: false })
   }
 
   const marksByPage = useMemo(() => {
@@ -616,7 +500,7 @@ function PaperUnitPdfReader({
         tone={tone}
         setTone={setTone}
         translating={translating}
-        translateLabel={translateJob?.message ?? (translateNotice || null)}
+        translateLabel={translateJob?.message ?? (translateNotice?.message || null)}
         onTranslateDocument={() => void runDocumentTranslate()}
         onCancelTranslate={cancelDocumentTranslate}
         marksCount={marksCount}
@@ -632,8 +516,17 @@ function PaperUnitPdfReader({
       />
 
       {translateNotice ? (
-        <div className="pointer-events-none absolute bottom-14 left-1/2 z-20 -translate-x-1/2 rounded-full border border-ds-border bg-ds-card/95 px-3 py-1 text-[11px] text-ds-muted shadow">
-          {translateNotice}
+        <div className="pointer-events-none absolute bottom-14 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-ds-border bg-ds-card/95 px-3 py-1 text-[11px] text-ds-muted shadow">
+          <span>{translateNotice.message}</span>
+          {translateNotice.config ? (
+            <button
+              type="button"
+              className="pointer-events-auto font-medium text-accent hover:underline"
+              onClick={openTranslateSettings}
+            >
+              {t('writePaperTranslateConfigure')}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -669,8 +562,17 @@ function PaperUnitPdfReader({
           model={translateCard.model}
           loading={translateCard.loading}
           error={translateCard.error}
-          onClose={() => setTranslateCard(null)}
+          onConfigure={
+            translateCard.errorCode === 'config' ? openTranslateSettings : undefined
+          }
+          onClose={closeCard}
           t={t}
+        />
+      ) : null}
+      {translateSettingsOpen ? (
+        <PaperTranslateSettingsDialog
+          onClose={closeTranslateSettings}
+          onSaved={onTranslateSettingsSaved}
         />
       ) : null}
     </div>

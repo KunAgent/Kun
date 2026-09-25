@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactElement, type RefObject } from 'react'
-import { Check, Copy, Languages, Loader2, X } from 'lucide-react'
+import { Check, Copy, Languages, Loader2, Settings2, X } from 'lucide-react'
 import type { TFunction } from 'i18next'
 
 /**
@@ -15,6 +15,7 @@ export function PaperTranslateCard({
   model,
   loading,
   error,
+  onConfigure,
   onClose,
   t
 }: {
@@ -25,6 +26,8 @@ export function PaperTranslateCard({
   model?: string
   loading: boolean
   error: string | null
+  /** Shown in the error state when the failure is fixable via settings. */
+  onConfigure?: () => void
   onClose: () => void
   t: TFunction
 }): ReactElement {
@@ -104,7 +107,19 @@ export function PaperTranslateCard({
             {t('writePaperReaderTranslating')}
           </span>
         ) : error ? (
-          <p className="py-1 text-[12px] text-red-500">{error}</p>
+          <div className="py-1">
+            <p className="text-[12px] text-red-500">{error}</p>
+            {onConfigure ? (
+              <button
+                type="button"
+                className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-ds-border bg-ds-card px-2.5 py-1 text-[11.5px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
+                onClick={onConfigure}
+              >
+                <Settings2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+                {t('writePaperTranslateConfigure')}
+              </button>
+            ) : null}
+          </div>
         ) : (
           <p className="whitespace-pre-wrap text-[12.5px] leading-5 text-ds-ink">{translation}</p>
         )}
