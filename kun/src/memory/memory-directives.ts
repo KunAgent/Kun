@@ -48,7 +48,7 @@ export function selectMemoryDirectives(input: {
     .filter((record) => record.authority === 'directive')
     .filter((record) => !record.agentContext)
     .filter((record) => agentMemoryVisible(record, access))
-    .filter((record) => memoryInScope(record, access))
+    .filter((record) => memoryInScope(record, access, policy?.scopes))
   const active = filterActiveMemories(scoped, nowMs)
   const truncatedIds = active
     .filter((record) => record.content.length > MEMORY_DIRECTIVE_MAX_CONTENT_CHARS)

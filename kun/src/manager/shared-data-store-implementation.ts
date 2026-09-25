@@ -273,7 +273,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             agent: AgentMemoryAccessSchema.optional()
           }).strict().parse(body.value ?? {})
           if (!store.listDirectives) throw new Error('memory directive listing is unavailable')
-          return store.listDirectives(access)
+          return store.listDirectives(access, body.config)
         }
         case 'retrieve': {
           const request = z.object({
