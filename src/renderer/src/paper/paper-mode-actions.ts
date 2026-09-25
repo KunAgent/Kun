@@ -4,6 +4,7 @@ import { normalizePath } from '../write/write-workspace-store-helpers'
 import { usePaperStore } from '../write/paper/paper-store'
 import { usePaperModeStore } from './paper-mode-store'
 import { paperConversationResourcePath } from './paper-conversation-scope'
+import { paperModeView } from './paper-view'
 
 export type PaperModeToggleResult = { ok: true } | { ok: false; message: string }
 
@@ -90,7 +91,7 @@ export function writeConversationResourcePath(
     activeFilePath,
     unitDirs: Object.keys(usePaperStore.getState().unitsByDir),
     entriesByDir: state.entriesByDir,
-    view: usePaperModeStore.getState().view
+    view: paperModeView(state)
   }) ?? ''
 }
 

@@ -12,7 +12,7 @@ import {
 } from '../../write/write-thread-registry'
 import { workWhiteboardThreadIds } from '../../write/work-whiteboard'
 import { usePaperStore } from '../../write/paper/paper-store'
-import { usePaperModeStore } from '../../paper/paper-mode-store'
+import { paperModeView } from '../../paper/paper-view'
 import { paperConversationResourcePath } from '../../paper/paper-conversation-scope'
 
 type WorkbenchWriteAssistantRuntimeOptions = {
@@ -30,7 +30,7 @@ export function useWorkbenchWriteAssistantRuntime({
   const writeAssistantProviderId = useWriteWorkspaceStore((s) => s.assistantProviderId)
   const writeWorkspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
   const workSurface = useWriteWorkspaceStore((s) => s.workSurface)
-  const paperView = usePaperModeStore((s) => s.view)
+  const paperView = useWriteWorkspaceStore((s) => paperModeView(s))
   const activeWriteFilePath = useWriteWorkspaceStore((s) => s.activeFilePath)
   const activeWhiteboardId = useWriteWorkspaceStore((s) => s.activeWhiteboardId)
   const activeWhiteboard = useWriteWorkspaceStore((s) =>

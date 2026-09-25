@@ -35,12 +35,15 @@ export function usePaperSurfaceSlots(props: {
   const paperImportOpen = usePaperStore((s) => s.importOpen)
   const setPaperImportOpen = usePaperStore((s) => s.setImportOpen)
 
+  // Papers surface (U1): no fixed paper strip — unit actions live in the
+  // sidebar info panel / task ring. Loose PDFs still get the "open as paper"
+  // hint so they can be promoted into the library.
   const paperBar = surface === 'papers' ? (
     <WritePaperStrip
       workspaceRoot={workspaceRoot}
       paperReading={paperReading}
-      unitDir={paper.unitDir}
-      meta={paper.meta}
+      unitDir={null}
+      meta={null}
       loosePdfPath={paper.loosePdf ? activeFilePath : null}
       input={input}
       setInput={setInput}

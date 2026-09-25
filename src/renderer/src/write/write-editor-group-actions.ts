@@ -17,10 +17,13 @@ import {
   persistWriteEditorLayout,
   projectFocusedDocument,
   isWriteFileTab,
+  isWriteVirtualTabKey,
   tabViewMode,
   writeDocumentKey,
   writeEditorItemForKey,
   writeEditorItemKey,
+  writePaperViewIdFromTabKey,
+  writePaperViewTabKey,
   writeWhiteboardIdFromTabKey
 } from './write-editor-layout'
 import { enqueueWriteWorkspaceSave, flushWriteWorkspaceSaveQueue } from './write-save-coordinator'
@@ -34,6 +37,7 @@ import { normalizePath, pathsEqual } from './write-workspace-store-helpers'
 
 type WriteEditorActions = Pick<
   WriteWorkspaceState,
+  | 'openPaperViewTab'
   | 'activateTab'
   | 'closeTab'
   | 'moveTab'
@@ -72,7 +76,7 @@ function updateDocument(
 }
 
 function documentReferenceCount(state: WriteWorkspaceState, path: string): number {
-  if (writeWhiteboardIdFromTabKey(path)) return 0
+  if (isWriteVirtualTabKey(path)) return 0
   const key = writeDocumentKey(path)
   return state.editorLayout.groups.reduce(
     (count, group) => count + group.tabs.filter((tab) => (
@@ -83,7 +87,7 @@ function documentReferenceCount(state: WriteWorkspaceState, path: string): numbe
 }
 
 function requestedItemKey(value: string): string {
-  return writeWhiteboardIdFromTabKey(value) ? value : writeDocumentKey(value)
+  return isWriteVirtualTabKey(value) ? value : writeDocumentKey(value)
 }
 
 function removeTabFromGroup(
@@ -331,6 +335,41 @@ export function createWriteEditorGroupActions(
   }
 
   return {
+    /**
+     * Open (or activate) a papers-surface virtual tab. Paper views are
+     * singletons: the tab is removed from the other group first so a view
+     * never shows twice. The library tab is pinned at index 0.
+     */
+    openPaperViewTab: (view, groupId) => {
+      const state = get()
+      const key = writePaperViewTabKey(view)
+      const target = groupId ?? 'primary'
+      const cleared = {
+        ...state.editorLayout,
+        groups: state.editorLayout.groups.map((group) => {
+          if (group.id === target || !group.tabs.some((tab) => writeEditorItemKey(tab) === key)) {
+            return group
+          }
+          const tabs = group.tabs.filter((tab) => writeEditorItemKey(tab) !== key)
+          return {
+            ...group,
+            tabs,
+            activePath: group.activePath === key
+              ? (tabs[0] ? writeEditorItemKey(tabs[0]) : null)
+              : group.activePath
+          }
+        })
+      }
+      const editorLayout = addEditorItemToGroup(
+        cleared,
+        target,
+        { kind: 'paper-view', view, viewMode: 'rich' },
+        view === 'library' ? 0 : undefined
+      )
+      persist(state.workspaceRoot, editorLayout)
+      set(withProjection(state.documentsByPath, editorLayout))
+    },
+
     activateTab: (groupId, path) => {
       const rawState = get()
       const state = { ...rawState, documentsByPath: captureFocusedDocument(rawState) }
@@ -349,9 +388,11 @@ export function createWriteEditorGroupActions(
     },
 
     closeTab: async (groupId, path, force = false) => {
+      // The paper library tab is pinned and cannot be closed (U4).
+      if (writePaperViewIdFromTabKey(path) === 'library') return false
       const rawSnapshot = get()
       const snapshot = { ...rawSnapshot, documentsByPath: captureFocusedDocument(rawSnapshot) }
-      const filePath = writeWhiteboardIdFromTabKey(path) ? null : path
+      const filePath = isWriteVirtualTabKey(path) ? null : path
       const document = filePath ? snapshot.documentsByPath[writeDocumentKey(filePath)] : undefined
       const lastReference = documentReferenceCount(snapshot, path) <= 1
       const needsDecision = lastReference && document && (
@@ -449,7 +490,7 @@ export function createWriteEditorGroupActions(
       const sourceItem = writeEditorItemForKey(source, key)
       const secondaryItem: WriteEditorItem | null = sourceItem
         ? isWriteFileTab(sourceItem) ? { ...sourceItem, viewMode: 'plain' } : sourceItem
-        : key && !writeWhiteboardIdFromTabKey(key) ? { path: key, viewMode: 'plain' } : null
+        : key && !isWriteVirtualTabKey(key) ? { path: key, viewMode: 'plain' } : null
       const secondaryTabs = secondaryItem ? [secondaryItem] : []
       const editorLayout = {
         ...state.editorLayout,

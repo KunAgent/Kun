@@ -37,7 +37,20 @@ export type WriteWhiteboardTab = {
   viewMode: 'rich'
 }
 
-export type WriteEditorItem = WriteEditorTab | WriteWhiteboardTab
+/**
+ * Non-document tabs on the papers surface (plan U4): the paper library plus
+ * one discover tab per source. They live in the editor layout like ordinary
+ * tabs, persist across restarts, and never own a file.
+ */
+export type WritePaperViewId = 'library' | 'discover:arxiv' | 'discover:feeds' | 'discover:venue'
+
+export type WritePaperViewTab = {
+  kind: 'paper-view'
+  view: WritePaperViewId
+  viewMode: 'rich'
+}
+
+export type WriteEditorItem = WriteEditorTab | WriteWhiteboardTab | WritePaperViewTab
 
 export type WriteEditorGroup = {
   id: WriteEditorGroupId
@@ -256,6 +269,7 @@ export type WriteWorkspaceState = {
     childId?: string
     revision?: number
   }) => Promise<boolean>
+  openPaperViewTab: (view: WritePaperViewId, groupId?: WriteEditorGroupId) => void
   activateTab: (groupId: WriteEditorGroupId, path: string) => void
   closeTab: (groupId: WriteEditorGroupId, path: string, force?: boolean) => Promise<boolean>
   moveTab: (path: string, fromGroupId: WriteEditorGroupId, toGroupId: WriteEditorGroupId, index?: number) => void

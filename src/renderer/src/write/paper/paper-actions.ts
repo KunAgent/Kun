@@ -1,4 +1,5 @@
 import type { PaperUnitMeta } from '@shared/paper/paper-meta-v2'
+import type { PaperJobKind } from '@shared/paper/paper-types'
 import type { WritePaperReadingSettingsV1 } from '@shared/app-settings-types-product'
 import { useWriteWorkspaceStore } from '../write-workspace-store'
 import { normalizePath } from '../write-workspace-store-helpers'
@@ -148,8 +149,8 @@ export async function fetchCoolNotes(
   }
 }
 
-/** Cancel a running job by request id (Cool notes / import / preprocess). */
-export function cancelPaperJob(kind: 'import' | 'cool-notes' | 'preprocess'): void {
+/** Cancel a running job by request id (import / cool-notes / preprocess / translate). */
+export function cancelPaperJob(kind: PaperJobKind): void {
   const job = usePaperStore.getState().busy[kind]
   if (job) void window.kunGui.paperCancel({ requestId: job.requestId })
 }

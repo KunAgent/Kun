@@ -13,6 +13,7 @@ import {
 import {
   isWriteEditorLayoutSplit,
   isWriteFileTab,
+  isWritePaperViewTab,
   isWriteWhiteboardTab,
   writeEditorItemForKey,
   writeDocumentKey,
@@ -20,6 +21,7 @@ import {
 } from '../../write/write-editor-layout'
 import { WriteEditorGroupContent } from './WriteEditorGroupContent'
 import { WriteEditorTabBar } from './WriteEditorTabBar'
+import { PaperViewSurface } from '../paper/PaperViewSurface'
 import { WorkWhiteboardTitleDialog } from './WorkWhiteboardTitleDialog'
 
 type Props = {
@@ -35,7 +37,7 @@ type Props = {
   richHandleRef: MutableRefObject<WriteRichEditorHandle | null>
   markdownHandleRef: MutableRefObject<WriteMarkdownEditorHandle | null>
   editorPaneRef: RefObject<HTMLDivElement | null>
-  focusedToolbar: ReactElement
+  focusedToolbar: ReactElement | null
   /** Save state + word count footer for the focused text document. */
   focusedStatusBar?: ReactElement | null
   /** Paper-unit strip rendered under the toolbar of the focused group. */
@@ -215,6 +217,7 @@ export function WriteEditorGroups({
         const tab = writeEditorItemForKey(group, activeKey)
         const path = tab && isWriteFileTab(tab) ? tab.path : null
         const board = tab && isWriteWhiteboardTab(tab) ? whiteboards[tab.boardId] : undefined
+        const paperView = tab && isWritePaperViewTab(tab) ? tab.view : null
         const document = path ? documentsByPath[writeDocumentKey(path)] : undefined
         const focused = editorLayout.focusedGroupId === group.id
         const pane = (
@@ -234,7 +237,7 @@ export function WriteEditorGroups({
               onToggleLeftSidebar={onToggleLeftSidebar}
               onActivate={(nextPath) => {
                 const nextItem = writeEditorItemForKey(group, nextPath)
-                if (nextItem && isWriteWhiteboardTab(nextItem)) activateTab(group.id, nextPath)
+                if (nextItem && !isWriteFileTab(nextItem)) activateTab(group.id, nextPath)
                 else if (documentsByPath[writeDocumentKey(nextPath)]) activateTab(group.id, nextPath)
                 else void openFile(workspaceRoot, nextPath, {
                   groupId: group.id,
@@ -258,66 +261,74 @@ export function WriteEditorGroups({
               }
               onToggleAssistant={() => setAssistantOpen(!assistantOpen)}
             />
-            {focused && document && document.kind !== 'image' ? focusedToolbar : null}
-            {focused && document ? paperBar : null}
-            <WriteEditorGroupContent
-              document={document}
-              whiteboard={board}
-              requestedPath={path}
-              viewMode={tab?.viewMode ?? 'rich'}
-              workspaceRoot={workspaceRoot}
-              workspaceName={workspaceName}
-              workspacePathLabel={workspacePathLabel}
-              workspaceError={workspaceError ?? settingsError ?? treeError}
-              inlineCompletion={inlineCompletion}
-              inlineCompletionApiReady={inlineCompletionApiReady}
-              recentEdits={document?.recentEdits ?? []}
-              focused={focused}
-              focusMode={focusMode}
-              richHandleRef={focused ? richHandleRef : undefined}
-              markdownHandleRef={focused ? markdownHandleRef : undefined}
-              editorPaneRef={focused ? editorPaneRef : undefined}
-              onFocusModeChange={onFocusModeChange}
-              onFocus={() => { if (!focused) focusEditorGroup(group.id) }}
-              onAskAssistant={onAskAssistant}
-              onOpenWorkspaceFile={(nextPath) => {
-                const resolvedPath = nextPath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(nextPath)
-                  ? nextPath
-                  : writeJoinPath(workspaceRoot, nextPath)
-                void openFile(workspaceRoot, resolvedPath)
-              }}
-              onCreateDraft={onCreateDraft}
-              onCreateWhiteboard={() => { focusEditorGroup(group.id); setPendingWhiteboardGroupId(group.id) }}
-              onImportPaper={onImportPaper}
-              onPickWorkspace={onPickWorkspace}
-              onRefreshWorkspace={() => void refreshWorkspace(workspaceRoot)}
-              onContentChange={(content) => { if (path) setDocumentContent(path, content) }}
-              onDocumentEdit={(edits) => {
-                if (!focused) focusEditorGroup(group.id)
-                recordRecentEdits(edits)
-              }}
-              onSelectionChange={(selection) => {
-                if (!focused) focusEditorGroup(group.id)
-                setSelection(selection)
-              }}
-              onPresentationViewChange={(view, source) => {
-                if (view) setPresentationViewForGroup(group.id, view)
-                else clearPresentationViewForGroup(group.id, source)
-              }}
-              onSaveShortcut={() => {
-                if (path) void saveDocument(workspaceRoot, path, { resolveExternalConflict: 'keep-local' })
-              }}
-              onImagePasteSaved={() => { setFileError(null); void refreshWorkspace(workspaceRoot) }}
-              onImagePasteError={setFileError}
-              onReviewStateChange={setReviewActive}
-              onSpreadsheetMutations={setSpreadsheetMutations}
-              onConvertSpreadsheet={(nextPath) => { void convertSpreadsheet(workspaceRoot, nextPath) }}
-              onReloadSpreadsheetConflict={reloadSpreadsheetConflict}
-              onResolveSpreadsheetConflict={resolveSpreadsheetConflict}
-              onboarding={group.id === 'primary' && onboardingDecision === 'show'}
-              workspaceLoading={group.id === 'primary' && onboardingDecision === 'pending' && !settingsError && !treeError}
-            />
-            {focused && document && document.kind !== 'image' ? focusedStatusBar : null}
+            {paperView ? (
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                <PaperViewSurface view={paperView} />
+              </div>
+            ) : (
+              <>
+                {focused && document && document.kind !== 'image' ? focusedToolbar : null}
+                {focused && document ? paperBar : null}
+                <WriteEditorGroupContent
+                  document={document}
+                  whiteboard={board}
+                  requestedPath={path}
+                  viewMode={tab?.viewMode ?? 'rich'}
+                  workspaceRoot={workspaceRoot}
+                  workspaceName={workspaceName}
+                  workspacePathLabel={workspacePathLabel}
+                  workspaceError={workspaceError ?? settingsError ?? treeError}
+                  inlineCompletion={inlineCompletion}
+                  inlineCompletionApiReady={inlineCompletionApiReady}
+                  recentEdits={document?.recentEdits ?? []}
+                  focused={focused}
+                  focusMode={focusMode}
+                  richHandleRef={focused ? richHandleRef : undefined}
+                  markdownHandleRef={focused ? markdownHandleRef : undefined}
+                  editorPaneRef={focused ? editorPaneRef : undefined}
+                  onFocusModeChange={onFocusModeChange}
+                  onFocus={() => { if (!focused) focusEditorGroup(group.id) }}
+                  onAskAssistant={onAskAssistant}
+                  onOpenWorkspaceFile={(nextPath) => {
+                    const resolvedPath = nextPath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(nextPath)
+                      ? nextPath
+                      : writeJoinPath(workspaceRoot, nextPath)
+                    void openFile(workspaceRoot, resolvedPath)
+                  }}
+                  onCreateDraft={onCreateDraft}
+                  onCreateWhiteboard={() => { focusEditorGroup(group.id); setPendingWhiteboardGroupId(group.id) }}
+                  onImportPaper={onImportPaper}
+                  onPickWorkspace={onPickWorkspace}
+                  onRefreshWorkspace={() => void refreshWorkspace(workspaceRoot)}
+                  onContentChange={(content) => { if (path) setDocumentContent(path, content) }}
+                  onDocumentEdit={(edits) => {
+                    if (!focused) focusEditorGroup(group.id)
+                    recordRecentEdits(edits)
+                  }}
+                  onSelectionChange={(selection) => {
+                    if (!focused) focusEditorGroup(group.id)
+                    setSelection(selection)
+                  }}
+                  onPresentationViewChange={(view, source) => {
+                    if (view) setPresentationViewForGroup(group.id, view)
+                    else clearPresentationViewForGroup(group.id, source)
+                  }}
+                  onSaveShortcut={() => {
+                    if (path) void saveDocument(workspaceRoot, path, { resolveExternalConflict: 'keep-local' })
+                  }}
+                  onImagePasteSaved={() => { setFileError(null); void refreshWorkspace(workspaceRoot) }}
+                  onImagePasteError={setFileError}
+                  onReviewStateChange={setReviewActive}
+                  onSpreadsheetMutations={setSpreadsheetMutations}
+                  onConvertSpreadsheet={(nextPath) => { void convertSpreadsheet(workspaceRoot, nextPath) }}
+                  onReloadSpreadsheetConflict={reloadSpreadsheetConflict}
+                  onResolveSpreadsheetConflict={resolveSpreadsheetConflict}
+                  onboarding={group.id === 'primary' && onboardingDecision === 'show'}
+                  workspaceLoading={group.id === 'primary' && onboardingDecision === 'pending' && !settingsError && !treeError}
+                />
+                {focused && document && document.kind !== 'image' ? focusedStatusBar : null}
+              </>
+            )}
           </section>
         )
         if (index === 0 || !splitActive) return pane

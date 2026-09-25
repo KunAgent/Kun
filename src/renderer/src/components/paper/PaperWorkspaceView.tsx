@@ -1,15 +1,14 @@
 import { useEffect, type ReactElement, type ReactNode } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { isWritePaperViewTab } from '../../write/write-editor-layout'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
 import { WriteWorkspaceView } from '../write/WriteWorkspaceView'
 import { WritePdfRendererProvider } from '../write/write-pdf-renderer-context'
 import { PaperPdfReader } from './reader/PaperPdfReader'
 import { PaperImportDialogHost } from './PaperImportDialogHost'
 import { PaperLibraryOnboarding } from './PaperLibraryOnboarding'
-import { PaperLibraryView } from './PaperLibraryView'
-import { PaperDiscoverView } from './PaperDiscoverView'
+import { PaperTaskRing } from './PaperTaskRing'
 
 export type PaperWorkspaceViewProps = {
   leftSidebarCollapsed: boolean
@@ -22,11 +21,11 @@ export type PaperWorkspaceViewProps = {
 }
 
 /**
- * Papers-surface stage (§3.4): hosts the library table, the discover view, and
- * the reader (the ordinary Write editor groups). The reader stays mounted —
- * hidden via `hidden` — so PDF scroll position and NOTES state survive view
- * switches. Without a configured library the onboarding card replaces all
- * views.
+ * Papers-surface stage (U4): the center column is always the ordinary editor
+ * groups — library/discover live inside it as fixed virtual tabs alongside
+ * file tabs (the reader). The pinned 「论文库」 tab is re-created at index 0
+ * if a persisted layout lost it. The composer bridge lets deep paper UI
+ * (tree rows, reader cards, the info panel) submit to the assistant.
  */
 export function PaperWorkspaceView({
   leftSidebarCollapsed,
@@ -37,7 +36,6 @@ export function PaperWorkspaceView({
   onOpenAgentSettings,
   rightPanel
 }: PaperWorkspaceViewProps): ReactElement {
-  const { t } = useTranslation('common')
   const { workspaceRoot, paperReading, paperMode } = useWriteWorkspaceStore(
     useShallow((s) => ({
       workspaceRoot: s.workspaceRoot,
@@ -45,13 +43,41 @@ export function PaperWorkspaceView({
       paperMode: s.paperMode
     }))
   )
-  const view = usePaperModeStore((s) => s.view)
+  const openPaperViewTab = useWriteWorkspaceStore((s) => s.openPaperViewTab)
   const entriesRefreshToken = usePaperModeStore((s) => s.entriesRefreshToken)
   const setEntriesLoading = usePaperModeStore((s) => s.setEntriesLoading)
   const setEntriesResult = usePaperModeStore((s) => s.setEntriesResult)
   const setEntriesError = usePaperModeStore((s) => s.setEntriesError)
 
   const hasLibrary = paperMode.libraries.length > 0
+
+  // The library tab is pinned: restore it when the persisted layout lost it
+  // (e.g. a layout saved before virtual tabs existed).
+  useEffect(() => {
+    if (!hasLibrary) return
+    const layout = useWriteWorkspaceStore.getState().editorLayout
+    const pinned = layout.groups.some((group) =>
+      group.tabs.some((tab) => isWritePaperViewTab(tab) && tab.view === 'library')
+    )
+    if (!pinned) openPaperViewTab('library')
+  }, [hasLibrary, openPaperViewTab])
+
+  // Register the composer bridge for sidebar/reader actions (interpret,
+  // quick-ask cards, suggested prompts). Re-registered per render so `input`
+  // stays fresh.
+  useEffect(() => {
+    usePaperModeStore.getState().setComposerBridge({
+      input,
+      setInput,
+      ...(onSubmitPrompt ? { submit: onSubmitPrompt } : {})
+    })
+    return () => {
+      const bridge = usePaperModeStore.getState().composerBridge
+      if (bridge?.setInput === setInput) {
+        usePaperModeStore.getState().setComposerBridge(null)
+      }
+    }
+  }, [input, setInput, onSubmitPrompt])
 
   // Index the active library whenever the mounted root changes; the store's
   // workspaceRoot is the library root on this surface. Entries arrive
@@ -93,21 +119,13 @@ export function PaperWorkspaceView({
     setEntriesError
   ])
 
-  const readerVisible = hasLibrary && view === 'reader'
-
   return (
     <>
       <div className="flex min-h-0 min-w-0 flex-1">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {!hasLibrary ? (
             <PaperLibraryOnboarding />
           ) : (
-            <>
-              {view === 'library' ? <PaperLibraryView onSubmitPrompt={onSubmitPrompt} /> : null}
-              {view === 'discover' ? <PaperDiscoverView /> : null}
-            </>
-          )}
-          <div className={readerVisible ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'hidden'}>
             <WritePdfRendererProvider value={PaperPdfReader}>
               <WriteWorkspaceView
                 leftSidebarCollapsed={leftSidebarCollapsed}
@@ -118,7 +136,8 @@ export function PaperWorkspaceView({
                 onOpenAgentSettings={onOpenAgentSettings}
               />
             </WritePdfRendererProvider>
-          </div>
+          )}
+          {hasLibrary ? <PaperTaskRing /> : null}
         </div>
         {rightPanel}
       </div>

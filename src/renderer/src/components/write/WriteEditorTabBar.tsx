@@ -6,14 +6,18 @@ import {
   FileSpreadsheet,
   FilePlus2,
   FileText,
+  LibraryBig,
   Loader2,
   MoreHorizontal,
+  Newspaper,
   PanelLeftClose,
   PanelRight,
   PanelTop,
   Plus,
+  Rss,
   Search,
   Shapes,
+  Trophy,
   Presentation,
   X
 } from 'lucide-react'
@@ -22,13 +26,18 @@ import type {
   WriteDocumentSession,
   WriteEditorGroup,
   WriteEditorGroupId,
+  WriteEditorItem,
   WorkWhiteboard
 } from '../../write/write-workspace-store'
 import { writeBasenameFromPath } from '../../write/write-workspace-store'
 import {
+  isWriteFileTab,
+  isWritePaperViewTab,
   isWriteWhiteboardTab,
   writeEditorItemKey
 } from '../../write/write-editor-layout'
+import type { WritePaperViewId } from '../../write/write-workspace-store-types'
+import { usePaperTabLabel } from '../../paper/use-paper-tab-label'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import { WriteAssistantPanelToggleIcon } from './WriteAssistantIcons'
 
@@ -59,6 +68,65 @@ function fileIcon(document: WriteDocumentSession | undefined): ReactElement {
   if (document?.officePreview?.viewer === 'spreadsheet') return <FileSpreadsheet className="h-3.5 w-3.5" strokeWidth={1.9} />
   if (document?.officePreview?.viewer === 'presentation') return <Presentation className="h-3.5 w-3.5" strokeWidth={1.9} />
   return <FileText className="h-3.5 w-3.5" strokeWidth={1.9} />
+}
+
+const PAPER_VIEW_ICONS: Record<WritePaperViewId, ReactElement> = {
+  library: <LibraryBig className="h-3.5 w-3.5" strokeWidth={1.9} />,
+  'discover:arxiv': <Newspaper className="h-3.5 w-3.5" strokeWidth={1.9} />,
+  'discover:feeds': <Rss className="h-3.5 w-3.5" strokeWidth={1.9} />,
+  'discover:venue': <Trophy className="h-3.5 w-3.5" strokeWidth={1.9} />
+}
+
+function paperViewLabelKey(view: WritePaperViewId): string {
+  return view === 'library'
+    ? 'writePaperModeLibraryView'
+    : `writePaperDiscoverTab_${view.slice('discover:'.length)}`
+}
+
+/**
+ * Tab label resolver (U1): paper-view tabs get a fixed icon + i18n label; file
+ * tabs inside a paper unit show the paper title (PDF) or title + kind suffix
+ * (NOTES.md, -解读*.md) instead of the raw filename.
+ */
+function WriteEditorTabTitle({
+  tab,
+  document,
+  board
+}: {
+  tab: WriteEditorItem
+  document: WriteDocumentSession | undefined
+  board: WorkWhiteboard | undefined
+}): ReactElement {
+  const { t } = useTranslation('common')
+  const paperLabel = usePaperTabLabel(isWriteFileTab(tab) ? tab.path : null)
+  if (isWritePaperViewTab(tab)) {
+    return (
+      <span className="flex min-w-0 items-center gap-2">
+        {PAPER_VIEW_ICONS[tab.view]}
+        <span className="min-w-0 truncate">{t(paperViewLabelKey(tab.view))}</span>
+      </span>
+    )
+  }
+  const icon = board ? <Shapes className="h-3.5 w-3.5" strokeWidth={1.9} /> : fileIcon(document)
+  const label = isWriteWhiteboardTab(tab)
+    ? board?.title ?? t('rightPanelWhiteboard')
+    : paperLabel
+      ? paperLabel.kind === 'pdf'
+        ? paperLabel.title
+        : `${paperLabel.title} · ${t(
+            paperLabel.kind === 'notes'
+              ? 'writePaperTabNotes'
+              : paperLabel.kind === 'interpretation'
+                ? 'writePaperTabInterpret'
+                : 'writePaperTabFile'
+          )}`
+      : writeBasenameFromPath(tab.path)
+  return (
+    <span className="flex min-w-0 items-center gap-2" title={isWriteFileTab(tab) ? tab.path : undefined}>
+      {icon}
+      <span className="min-w-0 truncate">{label}</span>
+    </span>
+  )
 }
 
 function statusMark(document: WriteDocumentSession | undefined): ReactElement | null {
@@ -119,8 +187,9 @@ export function WriteEditorTabBar({
       >
         {group.tabs.map((tab, index) => {
           const key = writeEditorItemKey(tab)
+          const pinned = isWritePaperViewTab(tab) && tab.view === 'library'
           const board = isWriteWhiteboardTab(tab) ? whiteboards[tab.boardId] : undefined
-          const document = isWriteWhiteboardTab(tab) ? undefined : documentsByPath[tab.path]
+          const document = isWriteFileTab(tab) ? documentsByPath[tab.path] : undefined
           const active = group.activePath === key
           return (
             <div
@@ -166,30 +235,33 @@ export function WriteEditorTabBar({
                 if (nextTab) onActivate(writeEditorItemKey(nextTab))
               }}
               onAuxClick={(event) => {
-                if (event.button === 1) onClose(key)
+                if (event.button === 1 && !pinned) onClose(key)
               }}
               className={`group relative flex max-w-[220px] shrink-0 cursor-default items-center gap-2 border-r border-ds-border-muted px-3 text-[12.5px] transition ${
                 active ? 'bg-ds-card font-semibold text-ds-ink' : 'bg-ds-hover/35 text-ds-muted hover:bg-ds-hover/70'
               }`}
             >
-              <span className={active ? 'text-accent' : 'text-ds-faint'}>
-                {board ? <Shapes className="h-3.5 w-3.5" strokeWidth={1.9} /> : fileIcon(document)}
+              <span className={`flex min-w-0 flex-1 items-center ${active ? 'text-ds-ink [&_svg]:text-accent' : 'text-ds-muted [&_svg]:text-ds-faint'}`}>
+                <WriteEditorTabTitle tab={tab} document={document} board={board} />
               </span>
-              <span className="min-w-0 truncate">{board?.title ?? (isWriteWhiteboardTab(tab) ? t('rightPanelWhiteboard') : writeBasenameFromPath(tab.path))}</span>
               <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                <span className="group-hover:hidden">{statusMark(document)}</span>
-                <button
-                  type="button"
-                  className="hidden h-5 w-5 items-center justify-center rounded-md text-ds-faint hover:bg-ds-hover hover:text-ds-ink group-hover:flex"
-                  title={t('writeCloseTab')}
-                  aria-label={t('writeCloseTab')}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onClose(key)
-                  }}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                {pinned ? null : (
+                  <>
+                    <span className="group-hover:hidden">{statusMark(document)}</span>
+                    <button
+                      type="button"
+                      className="hidden h-5 w-5 items-center justify-center rounded-md text-ds-faint hover:bg-ds-hover hover:text-ds-ink group-hover:flex"
+                      title={t('writeCloseTab')}
+                      aria-label={t('writeCloseTab')}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onClose(key)
+                      }}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                )}
               </span>
               {active ? <span className="absolute inset-x-0 bottom-0 h-0.5 bg-accent" /> : null}
             </div>
@@ -253,8 +325,13 @@ export function WriteEditorTabBar({
             {group.tabs.length > 0 ? <div className="my-1 h-px bg-ds-border-muted" /> : null}
             {group.tabs.map((tab) => (
               <button key={writeEditorItemKey(tab)} type="button" className="write-tabbar-menu-item" onClick={() => { setOverflowOpen(false); onActivate(writeEditorItemKey(tab)) }}>
-                {isWriteWhiteboardTab(tab) ? <Shapes className="h-3.5 w-3.5" /> : fileIcon(documentsByPath[tab.path])}
-                <span className="min-w-0 flex-1 truncate">{isWriteWhiteboardTab(tab) ? whiteboards[tab.boardId]?.title ?? t('rightPanelWhiteboard') : writeBasenameFromPath(tab.path)}</span>
+                <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                  <WriteEditorTabTitle
+                    tab={tab}
+                    document={isWriteFileTab(tab) ? documentsByPath[tab.path] : undefined}
+                    board={isWriteWhiteboardTab(tab) ? whiteboards[tab.boardId] : undefined}
+                  />
+                </span>
                 {group.activePath === writeEditorItemKey(tab) ? <ChevronDown className="h-3.5 w-3.5 text-accent" /> : null}
               </button>
             ))}

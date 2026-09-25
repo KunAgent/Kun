@@ -588,13 +588,14 @@ function LibraryRow({
         {meta.venue ?? ''}
       </span>
       <span className="w-20 shrink-0">
-        <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${
-          (meta.status ?? 'unread') === 'read'
-            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-            : (meta.status ?? 'unread') === 'reading'
-              ? 'bg-accent/10 text-accent'
-              : 'bg-slate-500/10 text-ds-muted'
-        }`}>
+        <span className="inline-flex items-center gap-1.5 text-[11px] text-ds-muted">
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+            (meta.status ?? 'unread') === 'read'
+              ? 'bg-emerald-500'
+              : (meta.status ?? 'unread') === 'reading'
+                ? 'bg-amber-500'
+                : 'bg-ds-faint'
+          }`} />
           {t(statusLabelKey(meta.status))}
         </span>
       </span>

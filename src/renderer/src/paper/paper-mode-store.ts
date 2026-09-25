@@ -34,8 +34,17 @@ export type PaperDiscoverState = {
   venueError: string | null
 }
 
+/**
+ * Bridge registered by the paper workspace so deep UI (sidebar rows, reader
+ * cards, info panel) can reach the assistant composer without prop drilling.
+ */
+export type PaperComposerBridge = {
+  input: string
+  setInput: (value: string) => void
+  submit?: (value: string) => void
+}
+
 export type PaperModeState = {
-  view: PaperModeView
   filter: PaperLibraryFilter
   sort: PaperLibrarySort
   /** Selected unit dirs (relative) for bulk operations. */
@@ -50,7 +59,17 @@ export type PaperModeState = {
   /** Bumped to re-run the library scan (imports, external edits). */
   entriesRefreshToken: number
   discover: PaperDiscoverState
-  setView: (view: PaperModeView) => void
+  /**
+   * Unit dir (relative) whose meta is pinned in the sidebar info panel —
+   * tracks the active reader unit and the last library row the user opened.
+   */
+  infoUnitDir: string | null
+  /** Live reader position for the focused paper, used by assistant context. */
+  readerPage: { unitDir: string; page: number; pageCount: number } | null
+  composerBridge: PaperComposerBridge | null
+  setInfoUnitDir: (unitDir: string | null) => void
+  setReaderPage: (page: PaperModeState['readerPage']) => void
+  setComposerBridge: (bridge: PaperComposerBridge | null) => void
   setFilter: (patch: Partial<PaperLibraryFilter>) => void
   setSort: (sort: PaperLibrarySort) => void
   setSelection: (selection: ReadonlySet<string>) => void
@@ -86,7 +105,6 @@ const emptyDiscover = (): PaperDiscoverState => ({
 })
 
 export const usePaperModeStore = create<PaperModeState>((set) => ({
-  view: 'library',
   filter: emptyPaperLibraryFilter(),
   sort: PAPER_DEFAULT_SORT,
   selection: new Set<string>(),
@@ -99,7 +117,12 @@ export const usePaperModeStore = create<PaperModeState>((set) => ({
   importDialogOpen: false,
   entriesRefreshToken: 0,
   discover: emptyDiscover(),
-  setView: (view) => set({ view }),
+  infoUnitDir: null,
+  readerPage: null,
+  composerBridge: null,
+  setInfoUnitDir: (infoUnitDir) => set({ infoUnitDir }),
+  setReaderPage: (readerPage) => set({ readerPage }),
+  setComposerBridge: (composerBridge) => set({ composerBridge }),
   setFilter: (patch) => set((state) => ({ filter: { ...state.filter, ...patch } })),
   setSort: (sort) => set({ sort }),
   setSelection: (selection) => set({ selection: new Set(selection) }),

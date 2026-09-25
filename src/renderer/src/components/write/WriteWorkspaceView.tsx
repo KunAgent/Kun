@@ -546,7 +546,11 @@ export function WriteWorkspaceView({
     <WriteDocumentStatusBar documentStatsLabel={documentStatsLabel} saveLabel={saveLabel} saveStatus={saveStatus}
       readOnly={renderSafety.readOnly} reviewActive={reviewActive} onSave={saveNow} />
   ) : null
-  const focusedToolbar = (
+  // U1: on the papers surface the reader owns its chrome — the 52px file
+  // toolbar is replaced by the PDF reader's floating capsules; unit-file
+  // actions live in the sidebar info panel instead of the paper strip.
+  const hidePaperReaderChrome = workSurface === 'papers' && activeFileIsPdf
+  const focusedToolbar = hidePaperReaderChrome ? null : (
     <WriteWorkspaceToolbar
         embedded
         showSidebarToggle={false}

@@ -82,7 +82,7 @@ export async function openLibraryEntry(entry: PaperLibraryEntry): Promise<void> 
   const store = useWriteWorkspaceStore.getState()
   const root = normalizePath(store.workspaceRoot)
   if (!root) return
-  usePaperModeStore.getState().setView('reader')
+  usePaperModeStore.getState().setInfoUnitDir(entry.unitDir)
   if (entry.hasPdf && entry.meta.pdfFile) {
     // openPaperUnit only reads `pdfFile`; pass it explicitly so the v2 meta's
     // optional field narrows to a present value.

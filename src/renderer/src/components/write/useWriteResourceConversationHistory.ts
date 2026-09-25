@@ -20,8 +20,8 @@ import {
   writeRelativeToWorkspace
 } from '../../write/write-workspace-store'
 import { usePaperStore } from '../../write/paper/paper-store'
-import { usePaperModeStore } from '../../paper/paper-mode-store'
 import { paperConversationResourcePath } from '../../paper/paper-conversation-scope'
+import { paperModeView } from '../../paper/paper-view'
 import { normalizePath } from '../../write/write-workspace-store-helpers'
 
 export type WriteResourceConversationEntry = {
@@ -75,7 +75,7 @@ function scopeMatchesCurrentResource(scope: ResourceScope): boolean {
       activeFilePath: state.activeFilePath,
       unitDirs: Object.keys(usePaperStore.getState().unitsByDir),
       entriesByDir: state.entriesByDir,
-      view: usePaperModeStore.getState().view
+      view: paperModeView(state)
     })
     return writeFileKey(resource) === scope.resourceId
   }
@@ -138,7 +138,7 @@ export function useWriteResourceConversationHistory(
       bindWhiteboardThread: state.bindWhiteboardThread
     }))
   )
-  const paperView = usePaperModeStore((s) => s.view)
+  const paperView = useWriteWorkspaceStore(paperModeView)
   const {
     activeThreadId,
     threads,

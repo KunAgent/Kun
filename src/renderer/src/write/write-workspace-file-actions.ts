@@ -32,6 +32,7 @@ import {
   createWriteDocumentSession,
   defaultWriteViewModeForPath,
   isWriteFileTab,
+  isWritePaperViewTab,
   isWriteWhiteboardTab,
   persistWriteEditorLayout,
   projectFocusedDocument,
@@ -162,6 +163,11 @@ export function createWriteFileActions({
               }
               validatedLayout = removeFailedRestoredWriteTab(validatedLayout, group.id, itemKey)
               continue
+            }
+            if (isWritePaperViewTab(tab)) {
+              // Virtual paper tabs never need a file read to stay valid.
+              openedKey = itemKey
+              break
             }
             await get().openFile(normalized, tab.path, { groupId: group.id, viewMode: tab.viewMode })
             if (!navigationIsCurrent(generation, normalized)) return

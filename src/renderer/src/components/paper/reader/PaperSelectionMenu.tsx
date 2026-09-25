@@ -1,14 +1,14 @@
 import { useLayoutEffect, useRef, useState, type ReactElement, type RefObject } from 'react'
-import { Languages, MessageSquarePlus, MessagesSquare } from 'lucide-react'
+import { Languages, MessageSquarePlus, MessagesSquare, TextQuote } from 'lucide-react'
 import type { TFunction } from 'i18next'
 import type { PaperHighlightColor } from '@shared/paper/paper-marks-types'
 
 const COLORS: PaperHighlightColor[] = ['yellow', 'green', 'blue', 'pink']
 
 /**
- * Floating menu over a text selection: highlight (4 colors), annotate,
- * translate, and send-to-assistant. Positions itself near the selection
- * anchor and clamps inside the reader root.
+ * Floating menu over a text selection (U2): highlight swatches, annotate,
+ * inline translate card, quick-ask popover, and add-to-conversation.
+ * Positions itself near the selection anchor and clamps inside the reader.
  */
 export function PaperSelectionMenu({
   anchor,
@@ -18,6 +18,7 @@ export function PaperSelectionMenu({
   onAnnotate,
   onTranslate,
   onAsk,
+  onAddToChat,
   onClose,
   t
 }: {
@@ -29,6 +30,7 @@ export function PaperSelectionMenu({
   onAnnotate?: (comment: string) => void
   onTranslate: () => void
   onAsk?: () => void
+  onAddToChat?: () => void
   onClose: () => void
   t: TFunction
 }): ReactElement {
@@ -137,6 +139,17 @@ export function PaperSelectionMenu({
               onClick={onAsk}
             >
               <MessagesSquare className="h-4 w-4" strokeWidth={1.9} />
+            </button>
+          ) : null}
+          {onAddToChat ? (
+            <button
+              type="button"
+              className="write-pdf-icon-button"
+              title={t('writePaperReaderAddToChat')}
+              aria-label={t('writePaperReaderAddToChat')}
+              onClick={onAddToChat}
+            >
+              <TextQuote className="h-4 w-4" strokeWidth={1.9} />
             </button>
           ) : null}
         </div>

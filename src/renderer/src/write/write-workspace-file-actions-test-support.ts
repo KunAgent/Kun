@@ -52,6 +52,7 @@ export function makeWriteFileActionBaseState(): WriteWorkspaceState {
     updateWhiteboardPptState: async () => false,
     setWhiteboardEngine: async () => false,
     activateTab: () => undefined,
+    openPaperViewTab: () => undefined,
     closeTab: async () => true,
     moveTab: () => undefined,
     focusEditorGroup: () => undefined,

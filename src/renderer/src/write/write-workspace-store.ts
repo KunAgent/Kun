@@ -66,6 +66,8 @@ export type {
   WriteEditorLayoutOrientation,
   WriteEditorLayoutV1,
   WriteEditorTab,
+  WritePaperViewId,
+  WritePaperViewTab,
   WriteWhiteboardTab,
   WritePreviewMode,
   WriteSaveStatus,

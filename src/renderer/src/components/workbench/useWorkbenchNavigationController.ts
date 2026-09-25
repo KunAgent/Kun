@@ -8,7 +8,7 @@ import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surf
 import { requestCodeCanvasPanelOpen } from '../../lib/code-canvas-panel-event'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { usePaperStore } from '../../write/paper/paper-store'
-import { usePaperModeStore } from '../../paper/paper-mode-store'
+import { paperModeView } from '../../paper/paper-view'
 import { paperConversationResourcePath } from '../../paper/paper-conversation-scope'
 import type { SddDraft } from '../../sdd/sdd-draft-store'
 import { useSddDraftStore } from '../../sdd/sdd-draft-store'
@@ -559,7 +559,7 @@ export function useWorkbenchNavigationController({
           activeFilePath: writeState.activeFilePath,
           unitDirs: Object.keys(usePaperStore.getState().unitsByDir),
           entriesByDir: writeState.entriesByDir,
-          view: usePaperModeStore.getState().view
+          view: paperModeView(writeState)
         }) ?? ''
       : writeState.activeFilePath ?? undefined
     void createWriteThread(
