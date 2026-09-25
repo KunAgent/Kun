@@ -167,7 +167,11 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
     const modelStreamLimits = normalizeModelStreamLimits(this.config.streamLimits)
     const maxErrorBodyBytes = Math.min(modelStreamLimits.maxTotalBytes, 1 * 1024 * 1024)
     const retryStatuses = new Set(retry.httpStatusCodes)
-    const maxRetryAttempts = retry.maxAttempts
+    // A per-request retry ceiling (probes pass 0 to fail fast without
+    // burning failover state) caps the configured budget.
+    const maxRetryAttempts = request.maxRetryAttempts !== undefined
+      ? Math.min(retry.maxAttempts, request.maxRetryAttempts)
+      : retry.maxAttempts
     let attemptOrdinal = 0
     const post = (
       requestBody: Record<string, unknown>,

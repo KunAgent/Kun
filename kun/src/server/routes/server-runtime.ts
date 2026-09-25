@@ -238,6 +238,13 @@ export type ServerRuntime = {
    * scaffolds can omit it.
    */
   modelClient?: ModelClient
+  /**
+   * Unrouted provider client (MultiProviderModelClient) used by probes and
+   * diagnostics that must hit the exact requested provider — a failover pool
+   * would silently pass a probe through a healthy alternative and pollute
+   * shared route health with probe results.
+   */
+  directModelClient?: ModelClient
   modelConnections?: ModelConnectionRegistry
   modelConnectionOAuth?: ModelConnectionOAuthService
   officialProviderAuth?: OfficialProviderAuthService

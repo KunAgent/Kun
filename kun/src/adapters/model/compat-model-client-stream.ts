@@ -105,8 +105,11 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
     // maxAttempts counts retries after the initial request everywhere, and
     // `0` is an explicit "no automatic transport retries" setting. Unlike the
     // older code, this stream-recovery budget must not sneak in a minimum of
-    // one retry when the operator disabled retries.
-    const maxRetryAttempts = input.retry.maxAttempts
+    // one retry when the operator disabled retries. A per-request ceiling
+    // (probes pass 0) caps it further.
+    const maxRetryAttempts = input.request.maxRetryAttempts !== undefined
+      ? Math.min(input.retry.maxAttempts, input.request.maxRetryAttempts)
+      : input.retry.maxAttempts
 
     while (true) {
       if (!response.body) {

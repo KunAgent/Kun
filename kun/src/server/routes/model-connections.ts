@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import {
   ModelConnectionConflictError,
@@ -115,6 +116,7 @@ export async function probeModelConnection(
   runtime: {
     modelConnections?: ModelConnectionRegistry
     modelClient?: ModelClient
+    directModelClient?: ModelClient
   } | ModelConnectionRegistry | undefined,
   providerId: string,
   request?: Request
@@ -138,9 +140,15 @@ export async function probeModelConnection(
     }
   }
   if (mode === 'inference') {
-    const client = runtime && 'snapshot' in runtime
+    // Probes must hit the exact provider under test: the routed pool client
+    // would silently pass a dead key through a healthy alternative and still
+    // report success, while writing probe failures into real traffic health.
+    // Fall back to the routed client only for embedders that do not expose
+    // the direct one (test scaffolds).
+    const scoped = runtime && 'snapshot' in runtime
       ? undefined
-      : (runtime as { modelClient?: ModelClient }).modelClient
+      : (runtime as { directModelClient?: ModelClient; modelClient?: ModelClient })
+    const client = scoped?.directModelClient ?? scoped?.modelClient
     return inferenceProbe(registry, client, providerId, probeModel, request)
   }
   return mutate(registry, () => registry.probe(providerId))
@@ -197,21 +205,26 @@ async function inferenceProbe(
     })
   }
   const started = Date.now()
-  const timeout = new Promise<'timeout'>((resolve) => {
-    const timer = setTimeout(() => resolve('timeout'), INFERENCE_PROBE_TIMEOUT_MS)
-    timer.unref?.()
-  })
+  // A Promise.race timeout leaves the upstream request running; instead abort
+  // the merged signal so the provider fetch actually tears down.
+  const abort = new AbortController()
+  const timeoutTimer = setTimeout(() => abort.abort(), INFERENCE_PROBE_TIMEOUT_MS)
+  timeoutTimer.unref?.()
+  const probeSignal = request?.signal
+    ? AbortSignal.any([request.signal, abort.signal])
+    : abort.signal
   const run = async (): Promise<JsonResponse> => {
+    const turnId = `probe_${randomUUID()}`
     const stream = client.stream({
       threadId: `probe_${providerId}`,
-      turnId: `probe_${Date.now().toString(36)}`,
+      turnId,
       model: probeModelName,
       providerId,
       systemPrompt: '',
       prefix: [],
       history: [{
         id: 'probe_msg_1',
-        turnId: `probe_${Date.now().toString(36)}`,
+        turnId,
         threadId: `probe_${providerId}`,
         role: 'user',
         kind: 'user_message',
@@ -221,8 +234,14 @@ async function inferenceProbe(
       }],
       tools: [],
       stream: true,
+      // OpenAI Responses rejects maxTokens below 16.
       maxTokens: 16,
-      abortSignal: request?.signal ?? new AbortController().signal
+      // Keep reasoning off so the probe cost stays at a single token.
+      reasoningEffort: 'off',
+      // Probes must fail fast on the exact target — retrying would hide a
+      // dead key behind a slow success and leak into route health.
+      maxRetryAttempts: 0,
+      abortSignal: probeSignal
     })
     let sawContent = false
     let ttftMs: number | undefined
@@ -248,6 +267,25 @@ async function inferenceProbe(
     }
     const latencyMs = Date.now() - started
     const base = { providerId, model: probeModelName, format: profile.endpointFormat }
+    if (abort.signal.aborted && !sawContent && !lastError) {
+      return jsonResponse({
+        ...base,
+        ok: false,
+        latencyMs,
+        reason: 'other',
+        message: 'Inference probe timed out.',
+        hint: 'Provider did not answer in time — check connectivity and proxy settings.'
+      })
+    }
+    if (request?.signal.aborted && !sawContent && !lastError) {
+      return jsonResponse({
+        ...base,
+        ok: false,
+        latencyMs,
+        reason: 'other',
+        message: 'Inference probe aborted.'
+      })
+    }
     if (lastError) {
       return jsonResponse({
         ...base,
@@ -265,20 +303,12 @@ async function inferenceProbe(
       ...(ttftMs !== undefined ? { ttftMs } : {})
     })
   }
-  const result = await Promise.race([run(), timeout])
-  if (result === 'timeout') {
-    return jsonResponse({
-      ok: false,
-      providerId,
-      model: probeModelName,
-      format: profile.endpointFormat,
-      latencyMs: Date.now() - started,
-      reason: 'other',
-      message: 'Inference probe timed out.',
-      hint: 'Provider did not answer in time — check connectivity and proxy settings.'
-    })
+  try {
+    return await run()
+  } finally {
+    clearTimeout(timeoutTimer)
+    abort.abort()
   }
-  return result
 }
 
 /**
