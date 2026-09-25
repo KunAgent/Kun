@@ -182,6 +182,7 @@ export function isCodeSidebarThread(
   const workspace = normalizeWorkspaceRoot(thread.workspace)
   const designTask = isDesignWorkbenchThread(thread.id, thread, designRegistry)
   return Boolean(workspace) &&
+    thread.workspaceMode !== 'ade' &&
     thread.agentSurface !== 'write' &&
     (thread.agentSurface !== 'design' || designTask) &&
     !isInternalTemporaryWorkspace(thread.workspace) &&

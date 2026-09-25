@@ -627,7 +627,12 @@ export const UpdateThreadRequest = z
     pinned: z.boolean().optional(),
     costBudgetUsd: z.number().positive().nullable().optional(),
     costBudgetWarningSent: z.boolean().optional(),
-    relation: ThreadRelation.optional()
+    relation: ThreadRelation.optional(),
+    /**
+     * workspaceMode is fixed at create time; PATCH rejects any attempt to
+     * carry it rather than silently dropping the value.
+     */
+    workspaceMode: z.never().optional()
   })
   .refine(
     (value) =>

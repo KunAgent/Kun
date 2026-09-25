@@ -46,6 +46,9 @@ export function filterThreadSummaries(
       .filter((value): value is string => Boolean(value))
   )
   if (workspaceSet.size > 0) out = out.filter((thread) => workspaceSet.has(thread.workspace))
+  if (options.workspaceMode) {
+    out = out.filter((thread) => (thread.workspaceMode ?? 'code') === options.workspaceMode)
+  }
   if (query) out = out.filter((thread) => threadSearchText(thread).includes(query))
   return out.sort(compareThreadSummaries)
 }

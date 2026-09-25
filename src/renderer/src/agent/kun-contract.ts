@@ -26,6 +26,8 @@ export type CoreThreadSummaryJson = {
   title: string
   /** Durable product surface that owns the thread. Absent for legacy Code threads. */
   agentSurface?: 'code' | 'write' | 'design'
+  /** Owning workspace mode ('code' | 'ade'); absent counts as 'code'. */
+  workspaceMode?: 'code' | 'ade'
   /** Immutable Code/Design mode derived from the first accepted turn. */
   lockedTaskSurface?: 'code' | 'write' | 'design'
   designProfile?: DesignTaskProfile

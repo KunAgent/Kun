@@ -200,6 +200,8 @@ export class TurnContextResolver {
       ...(input.turn.harnessId ?? input.thread.harnessId
         ? { harnessId: input.turn.harnessId ?? input.thread.harnessId }
         : {}),
+      // Thread-owned workspace mode; manager tools only advertise on 'ade'.
+      ...(input.thread.workspaceMode ? { workspaceMode: input.thread.workspaceMode } : {}),
       activeSkillIds: skillResolution.activeSkillIds,
       ...(allowedToolNames ? { allowedToolNames } : {}),
       ...(input.thread.toolCatalogEpoch

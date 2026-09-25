@@ -97,6 +97,11 @@ async list(this: ThreadService, options: ListThreadsOptions = {}): Promise<Threa
     if (workspaceSet.size > 0) {
       threads = threads.filter((thread) => workspaceSet.has(thread.workspace))
     }
+    if (options.workspaceMode) {
+      threads = threads.filter(
+        (thread) => (thread.workspaceMode ?? 'code') === options.workspaceMode
+      )
+    }
     if (query) {
       threads = threads.filter((thread) => matchesThreadSearch(thread, query))
     }

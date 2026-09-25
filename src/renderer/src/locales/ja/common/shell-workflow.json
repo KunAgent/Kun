@@ -38,6 +38,8 @@
   "code": "コード",
   "write": "ワーク",
   "workspaceModeWorkLabel": "ワーク",
+  "workspaceModeAdeLabel": "ADE",
+  "workspaceModeAdeDescription": "エージェント群を指揮",
   "workspaceModeCodeDescription": "構築、デバッグ、リリース",
   "workspaceModeWorkDescription": "執筆、整理、日常業務",
   "design": "デザイン",

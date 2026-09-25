@@ -615,6 +615,7 @@ describe('createChildAgentExecutor', () => {
       memoryEnabled: false
     })
   })
+
 })
 
 describe('DelegationRuntime detached children', () => {

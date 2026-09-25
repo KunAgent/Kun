@@ -281,6 +281,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       include: options.includeSide ? 'side' : undefined,
       cursor: options.cursor,
       workspace: options.workspace,
+      workspace_mode: options.workspaceMode,
       lean: options.lean === true ? '1' : undefined
     })
     // Repeatable `workspaces` params carry the project's worktree roots; each
@@ -322,6 +323,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     titleAuto?: boolean
     mode?: KunThreadMode
     agentSurface?: 'code' | 'write' | 'design'
+    workspaceMode?: 'code' | 'ade'
     agentId?: string
     providerId?: string
     accountId?: string
@@ -365,6 +367,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         title: input.title,
         ...(input.titleAuto !== undefined ? { titleAuto: input.titleAuto } : {}),
         ...(input.agentSurface ? { agentSurface: input.agentSurface } : {}),
+        ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
         model: requestedModel || runtime.model,
         mode: normalizeThreadMode(input.mode),
         approvalPolicy: runtime.approvalPolicy,

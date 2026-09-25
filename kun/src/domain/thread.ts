@@ -178,6 +178,8 @@ export function toThreadSummary(
     ...(thread.designProfile ? { designProfile: thread.designProfile } : {}),
     ...(thread.designCloneOperation ? { designCloneOperation: thread.designCloneOperation } : {}),
     ...(thread.providerId ? { providerId: thread.providerId } : {}),
+    ...(thread.harnessId ? { harnessId: thread.harnessId } : {}),
+    ...(thread.workspaceMode ? { workspaceMode: thread.workspaceMode } : {}),
     ...(thread.ownerExtensionId ? { ownerExtensionId: thread.ownerExtensionId } : {}),
     ...(thread.ownerExtensionVersion ? { ownerExtensionVersion: thread.ownerExtensionVersion } : {}),
     ...(thread.accountId ? { accountId: thread.accountId } : {}),

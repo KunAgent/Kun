@@ -33,6 +33,7 @@ export function useArchivedThreads(runtimeReady: boolean, initialThreads: Normal
           const page = await provider.listThreadsPage({
             archivedOnly: true,
             includeSide: false,
+            workspaceMode: 'code',
             lean: true,
             limit: 500,
             ...(cursor ? { cursor } : {})
@@ -48,7 +49,7 @@ export function useArchivedThreads(runtimeReady: boolean, initialThreads: Normal
           seenCursors.add(cursor)
         } while (cursor)
       } else {
-        const listed = await provider.listThreads({ archivedOnly: true, includeSide: false, lean: true })
+        const listed = await provider.listThreads({ archivedOnly: true, includeSide: false, workspaceMode: 'code', lean: true })
         for (const thread of listed) inventory.set(thread.id, thread)
       }
       if (currentRequestId !== requestId.current) return

@@ -150,6 +150,10 @@ type StoreActionContext = {
   sseAbortRef: SseAbortRef
 }
 
+function isAdeListedThread(state: Pick<ChatState, 'adeThreads'>, threadId: string): boolean {
+  return (state.adeThreads ?? []).some((thread) => thread.id === threadId)
+}
+
 function applyGoalSnapshot(
   set: ChatStoreSet,
   threadId: string,
@@ -159,6 +163,11 @@ function applyGoalSnapshot(
   set((s) => ({
     activeThreadGoal: s.activeThreadId === threadId ? goal : s.activeThreadGoal,
     threads: s.threads.map((thread) =>
+      thread.id === threadId
+        ? { ...thread, goal, updatedAt: goal?.updatedAt ?? updatedAt }
+        : thread
+    ),
+    adeThreads: (s.adeThreads ?? []).map((thread) =>
       thread.id === threadId
         ? { ...thread, goal, updatedAt: goal?.updatedAt ?? updatedAt }
         : thread
@@ -175,6 +184,11 @@ function applyTodosSnapshot(
   set((s) => ({
     activeThreadTodos: s.activeThreadId === threadId ? todos : s.activeThreadTodos,
     threads: s.threads.map((thread) =>
+      thread.id === threadId
+        ? { ...thread, todos, updatedAt: todos?.updatedAt ?? updatedAt }
+        : thread
+    ),
+    adeThreads: (s.adeThreads ?? []).map((thread) =>
       thread.id === threadId
         ? { ...thread, todos, updatedAt: todos?.updatedAt ?? updatedAt }
         : thread
@@ -216,7 +230,12 @@ function settleInterruptedTurn(set: ChatStoreSet, get: ChatStoreGet): void {
         ? s.threads.map((thread) => thread.id === threadId
             ? { ...thread, status: 'idle' as const, latestTurnStatus: 'aborted' as const }
             : thread)
-        : s.threads
+        : s.threads,
+      adeThreads: threadId
+        ? (s.adeThreads ?? []).map((thread) => thread.id === threadId
+            ? { ...thread, status: 'idle' as const, latestTurnStatus: 'aborted' as const }
+            : thread)
+        : s.adeThreads
     }
   })
   if (threadId) {
@@ -297,9 +316,13 @@ export function createMaintenanceMetadataActions(
         threads: s.threads.map((thread) =>
           thread.id === targetId ? { ...thread, title: nextTitle, titleAuto: false } : thread
         ),
+        adeThreads: (s.adeThreads ?? []).map((thread) =>
+          thread.id === targetId ? { ...thread, title: nextTitle, titleAuto: false } : thread
+        ),
         error: null
       }))
       await get().refreshThreads()
+      if (isAdeListedThread(get(), targetId)) void get().refreshAdeThreads()
     } catch (e) {
       set({
         error: formatRuntimeError(e),
@@ -328,9 +351,13 @@ export function createMaintenanceMetadataActions(
         threads: s.threads.map((thread) =>
           thread.id === targetId ? { ...thread, pinned } : thread
         ),
+        adeThreads: (s.adeThreads ?? []).map((thread) =>
+          thread.id === targetId ? { ...thread, pinned } : thread
+        ),
         error: null
       }))
       await get().refreshThreads()
+      if (isAdeListedThread(get(), targetId)) void get().refreshAdeThreads()
     } catch (e) {
       set({
         error: formatRuntimeError(e),
@@ -379,6 +406,9 @@ export function createMaintenanceMetadataActions(
           threads: s.threads.map((thread) =>
             thread.id === targetId ? { ...thread, archived } : thread
           ),
+          adeThreads: (s.adeThreads ?? []).map((thread) =>
+            thread.id === targetId ? { ...thread, archived } : thread
+          ),
           watchTurnCompletion: w,
           unreadThreadIds: u,
           ...(archivingActive ? clearedThreadSelection() : {}),
@@ -386,6 +416,7 @@ export function createMaintenanceMetadataActions(
         }
       })
       await get().refreshThreads()
+      if (isAdeListedThread(get(), targetId)) void get().refreshAdeThreads()
     } catch (e) {
       set({
         error: formatRuntimeError(e),

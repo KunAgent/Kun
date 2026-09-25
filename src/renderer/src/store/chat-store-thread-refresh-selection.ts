@@ -3,7 +3,12 @@ import type { ChatState } from './chat-store-types'
 
 type ThreadRefreshState = Pick<
   ChatState,
-  'activeThreadId' | 'activeThreadRelation' | 'threadLoadingId' | 'sideConversations'
+  | 'activeThreadId'
+  | 'activeThreadRelation'
+  | 'threadLoadingId'
+  | 'sideConversations'
+  | 'route'
+  | 'adeThreads'
 >
 
 export type ThreadRefreshSelection = {
@@ -22,10 +27,12 @@ export function threadRefreshSelection(
 ): ThreadRefreshSelection {
   const activeThreadId = state.activeThreadId
   const preserveActiveThread = activeThreadId != null && (
-    state.threadLoadingId === activeThreadId || state.activeThreadRelation === 'side'
+    state.threadLoadingId === activeThreadId || state.activeThreadRelation === 'side' ||
+    state.route === 'ade'
   )
   const validIds = new Set([
     ...displayThreads.map((thread) => thread.id),
+    ...(state.adeThreads ?? []).map((thread) => thread.id),
     ...Object.keys(state.sideConversations ?? {})
   ])
   if (preserveActiveThread) validIds.add(activeThreadId)

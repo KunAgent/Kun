@@ -55,6 +55,7 @@ export function createToolDiscoveryContext(
     ...(input.imContext ? { imContext: true } : {}),
     model: input.modelCapabilities,
     ...(input.harnessId ? { harnessId: input.harnessId } : {}),
+    ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
     ...(input.executionUnitKind ? { executionUnitKind: input.executionUnitKind } : {}),
     actingModelRoute: input.actingModelRoute,
     activeSkillIds: input.activeSkillIds,
