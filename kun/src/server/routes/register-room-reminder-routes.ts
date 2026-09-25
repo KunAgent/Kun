@@ -37,10 +37,12 @@ export function registerRoomReminderRoutes(add: Add): void {
     const input = z.object({ clientRequestId: RoomIdSchema,
       expectedRevision: z.number().int().nonnegative().optional() }).strict().parse(await body(request))
     await privateRoom(rooms, params.roomId)
-    return rooms.exclusive(() => cancelRoomReminder(rooms.deps.store, params.roomId,
-      RoomIdSchema.parse(params.reminderId), {
-        clientRequestId: input.clientRequestId,
-        reason: 'user_cancelled',
-        ...(input.expectedRevision !== undefined ? { expectedRevision: input.expectedRevision } : {}) }))
+    try {
+      return await rooms.exclusive(() => cancelRoomReminder(rooms.deps.store, params.roomId,
+        RoomIdSchema.parse(params.reminderId), {
+          clientRequestId: input.clientRequestId,
+          reason: 'user_cancelled',
+          ...(input.expectedRevision !== undefined ? { expectedRevision: input.expectedRevision } : {}) }))
+    } finally { rooms.wake() }
   })
 }

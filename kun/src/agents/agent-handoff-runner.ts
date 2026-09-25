@@ -54,8 +54,10 @@ export class AgentHandoffRunner {
     const rows = await this.deps.store.list<AgentHandoff>('agent_handoff', { status: 'queued', phase: 'handoff', limit: 100, summaryOnly: true })
     for (const row of rows) this.deps.discussionFairness?.waiting(row.value.recipientAgentId, 'peer')
   }
-  async tick(externalBusy: ReadonlySet<string>, start = true): Promise<void> {
-    for (const row of await this.rows()) {
+  /** Returns whether any handoff row is still in the active 'handoff' phase. */
+  async tick(externalBusy: ReadonlySet<string>, start = true): Promise<boolean> {
+    const rows = await this.rows()
+    for (const row of rows) {
       try {
         const current = await this.deps.store.get<AgentHandoff>('agent_handoff', row.id)
         if (current) await this.observe(current)
@@ -67,7 +69,7 @@ export class AgentHandoffRunner {
           error: error instanceof Error ? error.message : String(error) })
       }
     }
-    if (!start) return
+    if (!start) return rows.length > 0
     const busy = new Set([...externalBusy, ...await this.busy()])
     const jobs = await this.deps.store.list<AgentHandoff>('agent_handoff', { status: 'queued', phase: 'handoff', limit: 100, order: 'asc' })
     // Rotate sources within the bounded queue rather than drain one source first.
@@ -97,6 +99,7 @@ export class AgentHandoffRunner {
         }
       }
     }
+    return rows.length > 0 || jobs.length > 0
   }
   private async children(job: AgentHandoff) {
     const rows = await this.deps.store.list<AgentHandoff>('agent_handoff', { rootRequestId: job.sourceRootRequestId, parentHandoffId: job.id, limit: 33 })

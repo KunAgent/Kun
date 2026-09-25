@@ -56,6 +56,8 @@ export async function updateDirectWorkspace(rooms: RoomRuntime, roomId: string, 
     puts: [{ kind: 'room', id: roomId, roomId, value: { ...room, privateWorkspace: workspace,
       privateEpoch: (room.privateEpoch ?? 0) + 1, revision: room.revision + 1, updatedAt: new Date().toISOString() } }],
     events: [{ roomId, kind: 'room.updated', payload: { id: roomId } }] })
+  // The epoch bump invalidates pending continuations; reconcile them now.
+  rooms.wake()
   return rooms.service.get(roomId)
 }
 export async function controlDirectRequest(rooms: RoomRuntime, roomId: string, requestId: string,

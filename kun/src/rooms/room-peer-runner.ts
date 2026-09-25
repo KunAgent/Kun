@@ -67,13 +67,16 @@ export class RoomPeerRunner {
     const addressed = request.message.mentionMemberIds.length ? request.message.mentionMemberIds : [request.roomSnapshot.defaultMemberId]
     return addressed.includes(updates.member.value.memberId) && updates.items.some((item) => item.value.sourceId === request.sourceMessageId)
   }
-  async tick(externalBusy: ReadonlySet<string> = new Set()): Promise<void> {
-    if (this.closed) return
+  /** Returns whether any topic still holds live or deferred work for the next pass. */
+  async tick(externalBusy: ReadonlySet<string> = new Set()): Promise<boolean> {
+    if (this.closed) return false
+    let workRemains = this.triages.size > 0
     const topics = await this.state.topics()
     // Complete/reconcile first, even for paused topics. Unknown execution keeps its member occupied.
     for (const topic of topics) {
       for (const member of await this.state.members(topic.id)) {
         if (!member.value.activation) continue
+        workRemains = true
         try { await this.observe(topic, member) } catch (error) {
           await this.handleError(topic, member, error)
         }
@@ -166,8 +169,9 @@ export class RoomPeerRunner {
         if (budgetPending) await updatePeerTopicStatus(this.state, topic.id, 'paused', 'budget_exhausted')
         else if (failedPending) await updatePeerTopicStatus(this.state, topic.id, 'paused', 'member_failed')
         else await updatePeerTopicStatus(this.state, topic.id, 'idle', disabledPending ? 'member_unavailable' : undefined)
-      }
+      } else workRemains = true
     }
+    return workRemains
   }
 
   private async direct(updates: RoomPeerUpdates, request: RoomRequestState): Promise<boolean> {

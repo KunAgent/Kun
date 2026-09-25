@@ -32,6 +32,13 @@ import { isRoomRouteReason, roomRouteMessage } from './room-router.js'
 import { bindRoomContinuationDispatcher } from './room-continuation-dispatch.js'
 import { enqueuePrivateContinuation } from './room-continuation-service.js'
 import { fireDueRoomReminders } from './room-reminders.js'
+import { bindRoomReminderWake } from './room-reminder-tools.js'
+
+/** A tick reports whether live work remains and, when idle, the next scheduled wake time. */
+type RoomTickOutcome = { active: boolean; nextWakeAt?: number }
+
+const ACTIVE_TICK_MS = 1_000
+const IDLE_TICK_MS = 15_000
 
 export class RoomRuntime {
   private readonly memoryCapture: AgentMemoryCoordinator
@@ -49,6 +56,7 @@ export class RoomRuntime {
   private timer?: ReturnType<typeof setTimeout>
   private stopped = true
   private inFlight?: Promise<void>
+  private wakeQueued = false
   private actionQueue: Promise<unknown> = Promise.resolve()
   private requestCursor?: number
   private readonly executionService: RoomService
@@ -82,6 +90,7 @@ export class RoomRuntime {
     this.tasks = new RoomTaskRunner(deps, this.executionService)
     this.peers = new RoomPeerRunner(deps, () => this.wake())
     bindRoomPeerStore(deps.threadStore, deps.store)
+    bindRoomReminderWake(deps.threadStore, () => this.wake())
     bindImMessageService(deps.threadStore, this.executionService)
     this.unbindContinuations = bindRoomContinuationDispatcher(deps.threadStore, (input) =>
       this.exclusive(async () => {
@@ -92,18 +101,42 @@ export class RoomRuntime {
       }))
   }
   start() { this.stopped = false; this.wake() }
+  /**
+   * Immediate wake: a pending idle timer is cancelled so new room work never
+   * waits out the backoff window. A wake arriving mid-tick is queued and
+   * drains as soon as the current pass ends.
+   */
   wake() {
-    if (this.stopped || this.timer || this.inFlight) return
-    this.timer = setTimeout(() => {
-      this.timer = undefined
-      this.inFlight = this.exclusive(() => this.tick()).catch((error) => {
-        console.warn('[kun] room coordinator:', error instanceof Error ? error.message : String(error))
-      }).finally(() => {
-        this.inFlight = undefined
-        if (!this.stopped) this.timer = setTimeout(() => { this.timer = undefined; this.wake() }, 1000)
-      })
-    }, 0)
+    if (this.stopped) return
+    if (this.inFlight) { this.wakeQueued = true; return }
+    if (this.timer) { clearTimeout(this.timer); this.timer = undefined }
+    this.timer = setTimeout(() => { this.timer = undefined; this.runTick() }, 0)
     this.timer.unref?.()
+  }
+  private runTick(): void {
+    this.inFlight = this.exclusive(() => this.tick()).catch((error) => {
+      console.warn('[kun] room coordinator:', error instanceof Error ? error.message : String(error))
+      const outcome: RoomTickOutcome = { active: true }
+      return outcome
+    }).then((outcome) => {
+      if (this.stopped) return
+      this.timer = setTimeout(() => { this.timer = undefined; if (!this.stopped) this.runTick() }, this.nextDelay(outcome))
+      this.timer.unref?.()
+    }).finally(() => {
+      this.inFlight = undefined
+      if (this.wakeQueued) { this.wakeQueued = false; this.wake() }
+    })
+  }
+  /**
+   * Active work keeps the one-second cadence. Idle passes wait up to fifteen
+   * seconds, bounded by the nearest scheduled reminder so it still fires on
+   * time. A past-due reminder keeps a prompt one-second retry floor instead of
+   * a hot loop.
+   */
+  private nextDelay(outcome: RoomTickOutcome): number {
+    if (outcome.active) return ACTIVE_TICK_MS
+    if (outcome.nextWakeAt === undefined) return IDLE_TICK_MS
+    return Math.min(IDLE_TICK_MS, Math.max(ACTIVE_TICK_MS, outcome.nextWakeAt - Date.now()))
   }
   async close() {
     this.stopped = true
@@ -170,18 +203,23 @@ export class RoomRuntime {
       nextCursor: rows.length === limit ? String(rows.at(-1)!.seq) : undefined }
   }
 
-  private async tick() {
-    if (!this.held()) return
+  private async tick(): Promise<RoomTickOutcome> {
+    if (!this.held()) return { active: false }
     await this.deps.assertOwnership()
     await this.agents.initialize()
-    await this.memoryCapture.tick()
+    const outcome: RoomTickOutcome = { active: await this.memoryCapture.tick() }
     try {
-      await fireDueRoomReminders(this.deps, this.service, new Date().toISOString())
+      const reminders = await fireDueRoomReminders(this.deps, this.service, new Date().toISOString())
+      if (reminders.fired) outcome.active = true
+      if (reminders.nextFireAt) outcome.nextWakeAt = Date.parse(reminders.nextFireAt)
     } catch (error) {
+      // A transient store failure retries at the active cadence like before.
       console.warn('[kun] room reminders:', error instanceof Error ? error.message : String(error))
+      outcome.active = true
     }
     const requests = await this.deps.store.list<RoomRequestState>('request', {
       status: ['pending', 'running', 'stopping', 'recovery_required'], limit: 100, order: 'asc', afterSeq: this.requestCursor })
+    if (requests.length) outcome.active = true
     this.requestCursor = requests.length === 100 ? requests.at(-1)!.seq : undefined
     this.deps.discussionFairness!.resetWaiting()
     await this.handoffRunner.registerWaiting()
@@ -194,10 +232,10 @@ export class RoomRuntime {
         this.deps.discussionFairness!.waiting(actor.participantAgentId, row.value.handoffReturnId ? 'peer' : 'user')
       }
     }
-    await this.handoffRunner.tick(new Set(), false)
+    if (await this.handoffRunner.tick(new Set(), false)) outcome.active = true
     const discussionBusy = new Set([...await roomDiscussionBusy(this.deps, true), ...await this.handoffRunner.busy()])
     for (const row of requests) {
-      if (this.stopped) return
+      if (this.stopped) return { active: true }
       try {
         if (row.value.handoffReturnId && !await this.handoffs.current(row.value.handoffReturnId)) {
           await cancelSupersededRoomRequest(this.deps, row.id); continue
@@ -259,6 +297,10 @@ export class RoomRuntime {
       taskRows.push(...page)
       if (page.length < 1000) break
     }
+    // Every scanned task status is unfinished lifecycle work: queued or waiting
+    // tasks need the next pass to start, and input/approval/recovery states are
+    // reconciled against their live turn only here.
+    if (taskRows.length) outcome.active = true
     const activeTurn = (execution: RoomTaskExecution) => execution.task.stage === 'review' ?
       execution.completedReviewRunId === execution.reviewThreadId ? undefined : execution.reviewTurnId : execution.turnId
     const actingMember = (execution: RoomTaskExecution) => execution.task.stage === 'review' ?
@@ -276,6 +318,8 @@ export class RoomRuntime {
     }
     const busyMembers = new Set<string>()
     const integrations = await this.integrations.active()
+    // The active() scan only returns in-flight integration stages.
+    if (integrations.length) outcome.active = true
     const activeIntegrations = new Set<string>()
     const integrationMembers = new Map<string, string>()
     for (const row of integrations) {
@@ -302,7 +346,7 @@ export class RoomRuntime {
       busyMembers.add(row.roomId + ':' + actingMember(execution))
     }
     for (const row of taskRows) {
-      if (this.stopped) return
+      if (this.stopped) return { active: true }
       if (row.value.task.status === 'needs_input' && row.value.task.stage === 'review' &&
         row.value.completedReviewRunId && row.value.completedReviewRunId === row.value.reviewThreadId) continue
       const member = row.roomId + ':' + actingMember(row.value)
@@ -325,6 +369,7 @@ export class RoomRuntime {
     }
     await this.product.summarizeRequests(taskRows.map((row) => row.value))
     for (const row of integrations) {
+      if (this.stopped) return { active: true }
       const member = integrationMembers.get(row.id)!
       const allowStart = occupied < 2 && !busyMembers.has(member) && await roomHasCapacity(row.roomId!)
       await this.integrations.tick(row, allowStart)
@@ -334,7 +379,8 @@ export class RoomRuntime {
       }
     }
     await deliverRoomPeerTaskProgress(this.deps, this.peers.state)
-    await this.peers.tick(new Set([...await roomDiscussionBusy(this.deps), ...await this.handoffRunner.busy()]))
-    await this.handoffRunner.tick(await roomDiscussionBusy(this.deps, true))
+    if (await this.peers.tick(new Set([...await roomDiscussionBusy(this.deps), ...await this.handoffRunner.busy()]))) outcome.active = true
+    if (await this.handoffRunner.tick(await roomDiscussionBusy(this.deps, true))) outcome.active = true
+    return outcome
   }
 }

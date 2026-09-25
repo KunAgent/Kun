@@ -235,16 +235,31 @@ async function expireRoomReminder(store: RoomStore, row: RoomStoredDocument<Room
  * keyed by `reminder-fire:<reminderId>`, so replay and restart never duplicate
  * a wake-up. Reminders never fire while the application is closed; overdue
  * ones are reconciled here by the lateness rules instead.
+ *
+ * Returns how many due rows were attempted plus the earliest pending fire
+ * time, so the runtime can bound its idle backoff to the next scheduled wake.
+ * A row that failed mid-fire stays scheduled with a past fireAt and keeps the
+ * next wake prompt.
  */
-export async function fireDueRoomReminders(deps: RoomRuntimeDeps, service: RoomService, now: string): Promise<void> {
+export async function fireDueRoomReminders(deps: RoomRuntimeDeps, service: RoomService,
+  now: string): Promise<{ fired: number; nextFireAt?: string }> {
   const scheduled = await deps.store.list<RoomReminder>('room_reminder', { status: 'scheduled', limit: 1000, order: 'asc' })
   const due = scheduled.filter((row) => row.value.fireAt <= now)
     .sort((a, b) => a.value.fireAt.localeCompare(b.value.fireAt))
     .slice(0, ROOM_REMINDER_LIMITS.maxFireBatch)
+  const attempted = new Set(due.map((row) => row.id))
+  const pending: string[] = []
+  let fired = 0
   for (const row of due) {
-    try { await fireRoomReminder(deps, service, row, now) }
-    catch (error) { console.warn('[kun] room reminder', row.id, error instanceof Error ? error.message : String(error)) }
+    try { await fireRoomReminder(deps, service, row, now); fired++ }
+    catch (error) {
+      console.warn('[kun] room reminder', row.id, error instanceof Error ? error.message : String(error))
+      pending.push(row.value.fireAt)
+    }
   }
+  for (const row of scheduled) if (!attempted.has(row.id)) pending.push(row.value.fireAt)
+  pending.sort()
+  return { fired, nextFireAt: pending[0] }
 }
 
 async function fireRoomReminder(deps: RoomRuntimeDeps, service: RoomService,

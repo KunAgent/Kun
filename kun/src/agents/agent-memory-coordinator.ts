@@ -25,18 +25,19 @@ export class AgentMemoryCoordinator {
     this.active?.controller.abort(new Error('runtime closing'))
     await this.active?.promise
   }
-  async tick() {
-    if (this.closed || !this.deps.agentMemory || !this.deps.memoryStore) return
+  /** Returns whether an extraction is in flight or pending jobs remain queued. */
+  async tick(): Promise<boolean> {
+    if (this.closed || !this.deps.agentMemory || !this.deps.memoryStore) return false
     await this.deps.agentMemory.recoverEdits()
     await this.discover()
     if (this.active) {
       const row = await this.deps.store.get<AgentMemoryCapture>('agent_memory_job', this.active.jobId)
       if (row && !await this.allowed(row.value)) this.active.controller.abort(new Error('memory source cancelled or disabled'))
-      if (!this.active.done) return
+      if (!this.active.done) return true
       const active = this.active; this.active = undefined
       if (row) await this.apply(row, active.result!)
     }
-    if (!await this.deps.agentMemory.available()) return
+    if (!await this.deps.agentMemory.available()) return false
     const jobs = await this.deps.store.list<AgentMemoryCapture>('agent_memory_job', {
       phase: 'capture', status: ['pending', 'running'], limit: 50, order: 'asc' })
     for (const row of jobs) {
@@ -60,6 +61,7 @@ export class AgentMemoryCoordinator {
       await this.start(row)
       break
     }
+    return jobs.length > 0 || Boolean(this.active)
   }
   private async save(row: RoomStoredDocument<AgentMemoryCapture>, patch: Partial<AgentMemoryCapture>) {
     await this.deps.store.commit({ requestId: agentStableId('memory-state', row.id, String(row.revision), JSON.stringify(patch)),

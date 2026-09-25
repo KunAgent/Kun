@@ -21,6 +21,8 @@ export function registerRoomProposalRoutes(add: Add): void {
     readRoomProposal(rooms.deps.store, params.roomId, RoomIdSchema.parse(params.proposalId)))
   add('POST', '/v1/rooms/:roomId/proposals/:proposalId/resolve', async (rooms, request, { params }) => {
     const input = await body(request)
-    return rooms.exclusive(() => resolveRoomProposal(rooms.deps.store, params.roomId, RoomIdSchema.parse(params.proposalId), input))
+    try {
+      return await rooms.exclusive(() => resolveRoomProposal(rooms.deps.store, params.roomId, RoomIdSchema.parse(params.proposalId), input))
+    } finally { rooms.wake() }
   })
 }

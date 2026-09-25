@@ -53,6 +53,19 @@ type ReminderBinding = {
 }
 
 /**
+ * A scheduled reminder bounds the runtime's idle backoff, so every durable
+ * schedule change must wake the owner immediately. The wake is advisory: a
+ * tool that runs outside the owning runtime still succeeds.
+ */
+const wakes = new WeakMap<ThreadStore, () => void>()
+export function bindRoomReminderWake(threads: ThreadStore, wake: () => void): void {
+  wakes.set(threads, wake)
+}
+function wakeReminderOwner(threads: ThreadStore): void {
+  try { wakes.get(threads)?.() } catch { /* scheduling hint only */ }
+}
+
+/**
  * Reminder tools bind exactly like send_im_message: the active running turn,
  * its recorded room run, the bound member and the host-derived agent identity.
  * Model arguments can never supply any of these fields.
@@ -131,6 +144,7 @@ export function roomReminderTools(threads: ThreadStore): LocalTool[] {
             note: parsed.data.note, fireAt,
             anchorMessageId: parsed.data.anchorMessageId ?? binding.triggerMessageId,
             chainDepth: binding.chainDepth, createdByRunId: binding.runId })
+          wakeReminderOwner(threads)
           return { output: { accepted: true, reminderId: entry.reminderId, fireAt: entry.fireAt,
             note: 'One-shot reminder scheduled. It wakes only you when it fires.' } }
         } catch (error) { return fail(error) }
@@ -177,6 +191,7 @@ export function roomReminderTools(threads: ThreadStore): LocalTool[] {
             ...(parsed.data.note !== undefined ? { note: parsed.data.note } : {}),
             ...(parsed.data.delaySeconds !== undefined ? { delaySeconds: parsed.data.delaySeconds } : {}),
             ...(parsed.data.fireAt !== undefined ? { fireAt: parsed.data.fireAt } : {}) })
+          wakeReminderOwner(threads)
           return { output: { accepted: true, reminderId: entry.reminderId, fireAt: entry.fireAt, status: entry.status } }
         } catch (error) { return fail(error) }
       }
@@ -199,6 +214,7 @@ export function roomReminderTools(threads: ThreadStore): LocalTool[] {
           const entry = await cancelRoomReminder(binding.store, binding.roomId, parsed.data.reminderId, {
             clientRequestId: agentStableId('reminder-cancel', binding.runId, context.activeToolCallId),
             reason: 'agent_cancelled' })
+          wakeReminderOwner(threads)
           return { output: { accepted: true, reminderId: entry.reminderId, status: entry.status } }
         } catch (error) { return fail(error) }
       }
