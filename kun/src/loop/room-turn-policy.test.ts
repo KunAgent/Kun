@@ -133,4 +133,16 @@ describe('writable room general-capability parity', () => {
     expect(context.blockedToolNames).toEqual(expect.arrayContaining(['delegate_task', 'generate_subagent']))
     expect(context.additionalWorkspaces).toBeUndefined()
   })
+
+  it('keeps read_room_playbook inside the allowed surface of every room step kind', () => {
+    const kinds = ['coordination', 'discussion', 'execution', 'review', 'conversation'] as const
+    for (const kind of kinds) {
+      const context = applyRoomToolPolicy(raw, roomThread({ kind, allowedToolNames: ['read', 'read_room_playbook'] }))
+      expect(context.allowedToolNames).toEqual(expect.arrayContaining(['read_room_playbook']))
+    }
+    for (const kind of kinds) {
+      const unrestricted = applyRoomToolPolicy(raw, roomThread({ kind }))
+      if (unrestricted.allowedToolNames) expect(unrestricted.allowedToolNames).toContain('read_room_playbook')
+    }
+  })
 })

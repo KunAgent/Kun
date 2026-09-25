@@ -57,6 +57,7 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
   // Result submission is a scoped data-only protocol. Host-level denies still win.
   if (resultTool && allowed && !blocked.includes(resultTool)) allowed.push(resultTool)
   if (allowed && !blocked.includes('read_room_rules')) allowed.push('read_room_rules')
+  if (allowed && !blocked.includes('read_room_playbook')) allowed.push('read_room_playbook')
   if (input.kind === 'discussion' && input.collaborationProtocol === 'peer' && allowed) {
     allowed.push(...['read_room_updates', 'send_room_message'].filter((name) => !blocked.includes(name)))
   }

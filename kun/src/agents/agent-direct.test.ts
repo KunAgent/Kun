@@ -17,6 +17,7 @@ import { quickCreateAgent } from './agent-chat-entry.js'
 import { controlDirectRequest, updateDirectWorkspace, directActivity } from './agent-direct-service.js'
 import { AgentDirectRunner } from './agent-direct-runner.js'
 import { enqueuePrivateContinuation } from '../rooms/room-continuation-service.js'
+import { ROOM_DIRECT_GUIDANCE } from '../rooms/room-collaboration-guidance.js'
 
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0)) await fn() })
@@ -120,6 +121,14 @@ it('creates one default Agent and private chat without calling a model', async (
   expect(await f.store.list('agent_identity')).toHaveLength(1)
   expect(await f.store.list('room')).toHaveLength(1)
   expect(f.seen).toEqual([])
+})
+it('writes the shared collaboration guidance into new private thread system prompts', async () => {
+  const f = await fixture()
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'guidance', body: 'Create hello.txt' })
+  const done = await f.advance(sent.requestId)
+  const thread = await f.h.threads.getMetadata(done.threadId!)
+  expect(thread).toBeDefined()
+  for (const line of ROOM_DIRECT_GUIDANCE) expect(thread!.systemPrompt).toContain(line)
 })
 it('writes and updates a real file with one persistent conversation and ordinary tool calls', async () => {
   const f = await fixture()

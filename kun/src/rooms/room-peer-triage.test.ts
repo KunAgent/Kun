@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../ports/model-client.js'
 import type { UsageSnapshot } from '../contracts/usage.js'
 import { roomPeerTriage, RoomPeerTriageError } from './room-peer-triage.js'
+import { ROOM_TRIAGE_GUIDANCE } from './room-collaboration-guidance.js'
 
 afterEach(() => vi.useRealTimers())
 function fixture(chunks: ModelStreamChunk[] = [{ kind: 'assistant_text_delta', text: '{"action":"skip","reason":"Already covered"}' }]) {
@@ -127,6 +128,15 @@ describe('peer participation classifier', () => {
     await vi.advanceTimersByTimeAsync(250)
     await assertion
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('appends the shared skip guidance while keeping the JSON verdict contract last', async () => {
+    const f = fixture()
+    await roomPeerTriage(f.input)
+    const instructions = f.requests[0].contextInstructions
+    expect(instructions).toBeDefined()
+    for (const line of ROOM_TRIAGE_GUIDANCE) expect(instructions).toContain(line)
+    expect(instructions!.at(-1)).toContain('Return JSON only')
   })
 
   it('fails before a model request when no route exists', async () => {

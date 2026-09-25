@@ -28,8 +28,8 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
   // conversations must be able to publish their visible bubbles.
   const conversationTools = policy.kind === 'conversation' ? ['send_im_message'] : []
   const intersected = intersectAllowedToolNames(context.allowedToolNames,
-    intersectAllowedToolNames(policy.allowedToolNames ? [...policy.allowedToolNames, 'read_room_rules', ...peerTools, ...agentTools, ...conversationTools] : undefined, policy.kind === 'coordination' ? ['submit_room_plan', 'read_room_rules', ...agentTools] :
-      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', ...peerTools, ...pollTools, ...agentTools, ...conversationTools, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
+    intersectAllowedToolNames(policy.allowedToolNames ? [...policy.allowedToolNames, 'read_room_rules', 'read_room_playbook', ...peerTools, ...agentTools, ...conversationTools] : undefined, policy.kind === 'coordination' ? ['submit_room_plan', 'read_room_rules', 'read_room_playbook', ...agentTools] :
+      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', 'read_room_playbook', ...peerTools, ...pollTools, ...agentTools, ...conversationTools, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
   // Replying is intrinsic to a conversation: a frozen setup or skill allow-list
   // must not drop the publication tool. Explicit blockedToolNames still wins
   // because it is enforced separately at resolution time.
