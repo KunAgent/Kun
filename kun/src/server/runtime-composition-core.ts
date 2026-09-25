@@ -32,6 +32,7 @@ import {
   KUN_SYSTEM_PROMPT,
   RuntimeEventRecorder,
   ThreadActivityRegistry,
+  ActivityStore,
   GraphRuntimeComposition,
   LifecycleFencedSessionStore,
   LifecycleFencedThreadStore,
@@ -131,6 +132,10 @@ export async function createRuntimeCore(
     dataDir: activeOptions.dataDir
   })
   const threadActivity = new ThreadActivityRegistry()
+  const activityStore = new ActivityStore({
+    nowIso,
+    threadMetadata: (id) => threadStore.getMetadata?.(id) ?? Promise.resolve(null)
+  })
   const contextWindowModes = new ContextWindowTurnModes(
     liveContextWindowMode(() => activeOptions)
   )
@@ -158,8 +163,12 @@ export async function createRuntimeCore(
     ids,
     nowIso
   })
+  // Rebuild activity rows for recently-active threads from durable turn
+  // state before live events start flowing (docs/ade/06 §8).
+  await activityStore.hydrate(threadStore)
   const observers = [
     threadActivity,
+    activityStore,
     ...(agentObservability ? [agentObservability] : [])
   ]
   const events = new RuntimeEventRecorder({
@@ -392,6 +401,7 @@ export async function createRuntimeCore(
     contextWindowStateRestore,
     events,
     threadActivity,
+    activityStore,
     prefix,
     delegatedSessions,
     threadService,

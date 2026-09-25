@@ -176,6 +176,7 @@ export { ScopedMigrationMaintenanceLock } from '../ports/migration-maintenance-l
 export { KUN_SYSTEM_PROMPT } from '../prompt/kun-system-prompt.js'
 export { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 export { ThreadActivityRegistry } from '../services/thread-activity-registry.js'
+export { ActivityStore } from '../services/activity-store.js'
 export { ToolCancellationService } from '../services/tool-cancellation-service.js'
 export { GraphRuntimeComposition } from './graph-runtime-factory.js'
 export { createGraphRuntimeStartOptions } from './graph-runtime-bootstrap.js'
