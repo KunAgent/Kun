@@ -10,6 +10,7 @@ import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 import { roomRunId } from './room-run-recording.js'
 import { commitRoomPollVote, readRoomPoll, assertRoomPollOpen } from './room-polls.js'
 import { interactionId } from './room-interaction-store.js'
+import { ROOM_AX_TOOL_DESCRIPTIONS } from './room-ax-surfaces.js'
 
 const Input = z.object({ pollId: z.string().min(1).max(128), optionIds: z.array(z.string().min(1).max(128)).min(1).max(10) }).strict()
 async function authorizeVote(threads: ThreadStore, store: RoomStore, context: ToolHostContext, pollId: string) {
@@ -64,7 +65,7 @@ async function authorizeVote(threads: ThreadStore, store: RoomStore, context: To
 
 export function roomPollVoteTool(threads: ThreadStore, getStore: () => RoomStore | undefined) {
   return LocalToolHost.defineTool({ name: 'vote_room_poll',
-    description: 'Cast the single ballot explicitly requested by the user for this exact poll invitation. Supply option IDs from the frozen invitation. Never creates tasks or grants execution permission.',
+    description: ROOM_AX_TOOL_DESCRIPTIONS.vote_room_poll,
     toolKind: 'tool_call', policy: 'auto', sideEffect: 'read-only',
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
     shouldAdvertise: (context) => context.roomStepKind === 'discussion' && context.allowedToolNames?.includes('vote_room_poll') === true,

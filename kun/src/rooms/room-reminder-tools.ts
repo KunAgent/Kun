@@ -13,6 +13,7 @@ import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 import type { LocalTool } from '../adapters/tool/local-tool-host.js'
 import { cancelRoomReminder, createRoomReminder, listRoomReminders,
   reminderFireAt, remindersEnabled, updateRoomReminder } from './room-reminders.js'
+import { ROOM_AX_TOOL_DESCRIPTIONS } from './room-ax-surfaces.js'
 
 export const SCHEDULE_REMINDER_TOOL_NAME = 'schedule_reminder'
 export const LIST_REMINDERS_TOOL_NAME = 'list_reminders'
@@ -122,10 +123,7 @@ export function roomReminderTools(threads: ThreadStore): LocalTool[] {
   return [
     LocalToolHost.defineTool({
       name: SCHEDULE_REMINDER_TOOL_NAME,
-      description:
-        'Schedule a one-shot reminder for yourself in this private conversation. When it fires, you are woken here ' +
-        'and decide whether the user should see a follow-up. Provide delaySeconds or fireAt (exactly one), ' +
-        `${ROOM_REMINDER_LIMITS.minDelaySec} seconds to ${Math.floor(ROOM_REMINDER_LIMITS.maxDelaySec / 86400)} days out.`,
+      description: ROOM_AX_TOOL_DESCRIPTIONS.schedule_reminder,
       ...meta, shouldAdvertise: advertise,
       inputSchema: schema(ScheduleReminderInput),
       execute: async (args, context) => {
@@ -152,9 +150,7 @@ export function roomReminderTools(threads: ThreadStore): LocalTool[] {
     }),
     LocalToolHost.defineTool({
       name: LIST_REMINDERS_TOOL_NAME,
-      description:
-        'List your own reminders in this private conversation. Defaults to scheduled only; ' +
-        'pass status "all" to include recently ended reminders.',
+      description: ROOM_AX_TOOL_DESCRIPTIONS.list_reminders,
       ...meta, shouldAdvertise: advertise,
       inputSchema: schema(ListRemindersInput),
       execute: async (args, context) => {
@@ -171,9 +167,7 @@ export function roomReminderTools(threads: ThreadStore): LocalTool[] {
     }),
     LocalToolHost.defineTool({
       name: UPDATE_REMINDER_TOOL_NAME,
-      description:
-        'Update the note or fire time of one of your own scheduled reminders. ' +
-        'Only still-scheduled reminders can change; ended ones are immutable.',
+      description: ROOM_AX_TOOL_DESCRIPTIONS.update_reminder,
       ...meta, shouldAdvertise: advertise,
       inputSchema: schema(UpdateReminderInput),
       execute: async (args, context) => {
@@ -198,7 +192,7 @@ export function roomReminderTools(threads: ThreadStore): LocalTool[] {
     }),
     LocalToolHost.defineTool({
       name: CANCEL_REMINDER_TOOL_NAME,
-      description: 'Cancel one of your own scheduled reminders so it never fires.',
+      description: ROOM_AX_TOOL_DESCRIPTIONS.cancel_reminder,
       ...meta, shouldAdvertise: advertise,
       inputSchema: schema(CancelReminderInput),
       execute: async (args, context) => {

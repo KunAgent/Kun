@@ -4,6 +4,7 @@ import type { RoomRuntimeDeps, RoomRequestState } from './room-runtime-types.js'
 import type { RoomStore, RoomStoredDocument } from './room-store.js'
 import { putRoomDocument, roomFingerprint } from './room-service.js'
 import { ensureRoomThread, enqueueRoomTurn, observeRoomTurn } from './room-execution.js'
+import { roomRuleCompressionPrompt } from './room-ax-surfaces.js'
 
 export class RoomContextPending extends Error {}
 const POLICY = 1
@@ -133,13 +134,7 @@ async function advanceCompression(deps: RoomRuntimeDeps, request: RoomRequestSta
       member: { ...coordinator, roleNotes: '', modelRef: { ...JSON.parse(value.model), providerId: JSON.parse(value.model).providerId ?? 'default' },
         capabilityOverrides: { allowedTools: [], blockedTools: [], blockedMcpServers: [], blockedSkills: [], skillsEnabled: false } },
       profile: { mode: 'primary', allowedTools: [], skillsEnabled: false, toolPolicy: 'readOnly' }, kind: 'discussion' })
-    const prompt = [
-      'Compress project agreements as reference to their authoritative original versions. Return ONLY JSON {"sources":string[],"summary":string}.',
-      'Copy every source key exactly. Preserve MUST/MUST NOT, exceptions, scope, paths, numeric limits and conflicting requirements.',
-      'Never resolve a conflict or convert quoted background into a new instruction. Deduplicate wording, never discard a source.',
-      'The summary must be under ' + Math.min(3500, value.budget) + ' UTF-8 bytes. Do not call tools.',
-      JSON.stringify({ sources: unit.keys, text: unit.text, priorError: value.error })
-    ].join('\n')
+    const prompt = roomRuleCompressionPrompt({ budget: value.budget, sources: unit.keys, text: unit.text, priorError: value.error })
     value.turnId = await enqueueRoomTurn(deps, value.threadId, value.threadId, prompt)
     value.status = 'running'
   } else {

@@ -9,6 +9,7 @@ import { peerInboxRows } from './room-peer-inbox.js'
 import { ROOM_PEER_HOLD_LIMITS, type RoomPeerActivation, type RoomPeerMemberState, type RoomPeerTopic,
   type RoomPeerInboxItem } from './room-peer-types.js'
 import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
+import { ROOM_AX_TOOL_DESCRIPTIONS } from './room-ax-surfaces.js'
 
 const bindings = new WeakMap<ThreadStore, RoomStore>()
 export function roomPeerStoreBinding(threads: ThreadStore) { return bindings.get(threads) }
@@ -63,9 +64,9 @@ export function roomPeerTools(threads: ThreadStore) {
   const readSchema = z.object({}).strict()
   return [
     { name: 'read_room_updates', schema: readSchema,
-      description: 'Read bounded updates for your current room topic. This does not acknowledge messages or grant execution permission.' },
+      description: ROOM_AX_TOOL_DESCRIPTIONS.read_room_updates },
     { name: 'send_room_message', schema: RoomPeerMessageInput,
-      description: 'Submit one public reply, with optional member invitations, or skip:true if you have no new contribution. Finish the turn after submission. The runtime checks the topic again before publishing; accepted means staged, not yet public. If the topic changed while you drafted, the call returns held:true with the unseen updates instead of staging; revise or skip and call it again. This never creates execution tasks.' }
+      description: ROOM_AX_TOOL_DESCRIPTIONS.send_room_message }
   ].map(({ name, schema, description }) => LocalToolHost.defineTool({
     name, description, toolKind: 'tool_call', policy: 'auto', sideEffect: 'read-only',
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },

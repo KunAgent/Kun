@@ -13,6 +13,7 @@ import { roomPeerTools, roomPeerStoreBinding } from './room-peer-tools.js'
 import { roomImMessageTool } from './room-im-message-tool.js'
 import { roomProposalTool } from './room-proposal-tool.js'
 import { roomReminderTools } from './room-reminder-tools.js'
+import { ROOM_AX_TOOL_DESCRIPTIONS } from './room-ax-surfaces.js'
 
 export const RoomReviewResultSchema = z.object({
   verdict: RoomReviewSchema.shape.verdict,
@@ -32,11 +33,11 @@ export function roomResultProvider(threads: ThreadStore): CapabilityToolProvider
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
     tools: [...agentHandoffTools(threads), ...agentSetupTools(threads), roomRuleReadTool(threads), roomPlaybookTool(threads), roomPollVoteTool(threads, () => roomPeerStoreBinding(threads)), ...roomPeerTools(threads), roomImMessageTool(threads), roomProposalTool(threads), ...roomReminderTools(threads), ...[
       { name: 'submit_room_plan', kind: 'coordination', schema: RoomCoordinationPlanSchema,
-        description: 'Submit the structured room decision for the current user request.' },
+        description: ROOM_AX_TOOL_DESCRIPTIONS.submit_room_plan },
       { name: 'submit_room_review', kind: 'review', schema: RoomReviewResultSchema,
-        description: 'After inspecting the pinned delivery, submit the review findings and limitations.' },
+        description: ROOM_AX_TOOL_DESCRIPTIONS.submit_room_review },
       { name: 'declare_room_checks', kind: 'execution', schema: RoomChecksSchema,
-        description: 'Before executing verification, declare exact validation commands and their workspace. Results will be matched to actual tool executions.' }
+        description: ROOM_AX_TOOL_DESCRIPTIONS.declare_room_checks }
     ].map(({ name, kind, schema, description }) => LocalToolHost.defineTool({
       name, description, toolKind: 'tool_call', policy: 'auto', sideEffect: 'read-only',
       effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },

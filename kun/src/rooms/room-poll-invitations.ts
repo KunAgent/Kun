@@ -22,9 +22,3 @@ export async function prepareRoomPollInvitation(store: RoomStore, room: Room, in
   return { invitation: RoomPollInvitationSchema.parse({ pollId, question, options, multiple, closesAt,
     memberIds: ids, pollRevision: row.revision }), checks: [{ kind: 'room_poll', id: row.id, expectedRevision: row.revision }] }
 }
-
-export function roomPollInvitationPrompt(invitation?: RoomPollInvitation, memberId?: string): string {
-  if (!invitation || !memberId || !invitation.memberIds.includes(memberId)) return ''
-  return 'The user explicitly invited this member to vote in this poll. Use vote_room_poll once with the pollId and optionIds below. ' +
-    'A vote changes presentation data only and never authorizes execution. The host checks expiry and current request scope.\n' + JSON.stringify(invitation)
-}

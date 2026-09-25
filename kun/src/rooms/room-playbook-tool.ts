@@ -2,16 +2,15 @@ import { z } from 'zod'
 import type { ThreadStore } from '../ports/thread-store.js'
 import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 import { ROOM_PLAYBOOKS, type RoomPlaybookId } from './room-playbooks.js'
+import { roomPlaybookIndex, ROOM_AX_TOOL_DESCRIPTIONS } from './room-ax-surfaces.js'
 
 const Input = z.object({ id: z.string().trim().min(1).max(128).optional() }).strict()
-const index = () => (Object.keys(ROOM_PLAYBOOKS) as RoomPlaybookId[]).map((id) => ({
-  id, title: ROOM_PLAYBOOKS[id].title, triggers: ROOM_PLAYBOOKS[id].triggers
-}))
+const index = roomPlaybookIndex
 
 export function roomPlaybookTool(threads: ThreadStore) {
   return LocalToolHost.defineTool({
     name: 'read_room_playbook',
-    description: 'Read an on-demand room collaboration playbook. Call without id for the index (id, title, triggers), or with an id for one full playbook: converging a discussion, evidence handoffs, coordinator synthesis, external actions, asking the user, or deferred follow-up.',
+    description: ROOM_AX_TOOL_DESCRIPTIONS.read_room_playbook,
     toolKind: 'tool_call', policy: 'auto', sideEffect: 'read-only',
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
     shouldAdvertise: (context) => Boolean(context.roomStepKind),

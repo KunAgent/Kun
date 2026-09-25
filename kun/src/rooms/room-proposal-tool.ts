@@ -12,6 +12,7 @@ import { createRoomProposal, type CreateRoomProposal } from './room-proposals.js
 import { agentStableId } from '../agents/agent-identity-service.js'
 import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 import type { LocalTool } from '../adapters/tool/local-tool-host.js'
+import { ROOM_AX_TOOL_DESCRIPTIONS } from './room-ax-surfaces.js'
 
 export const PROPOSE_ROOM_ACTION_TOOL_NAME = 'propose_room_action'
 
@@ -117,10 +118,7 @@ function memberLabel(room: Room, memberId: string): string {
 export function roomProposalTool(threads: ThreadStore): LocalTool {
   return LocalToolHost.defineTool({
     name: PROPOSE_ROOM_ACTION_TOOL_NAME,
-    description:
-      'Draft one structural room proposal as a card the user can adopt: pin an agreement, request an execution, ' +
-      'add a member, or create a new agent. The proposal is only a draft; nothing is executed. The user reviews ' +
-      'it in the timeline and confirms with their own authorization. Provide a short rationale the user can judge.',
+    description: ROOM_AX_TOOL_DESCRIPTIONS.propose_room_action,
     toolKind: 'tool_call',
     policy: 'auto',
     sideEffect: 'read-only',
