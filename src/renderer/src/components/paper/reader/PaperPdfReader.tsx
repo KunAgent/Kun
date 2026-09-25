@@ -53,13 +53,19 @@ type PendingSelection = {
 export function PaperPdfReader(props: WritePdfRendererProps): ReactElement {
   const { filePath, workspaceRoot } = props
   const entriesByDir = useWriteWorkspaceStore((s) => s.entriesByDir)
-  const unitDirs = usePaperModeStore((s) => s.entries.map((e) => e.unitDir))
+  const entries = usePaperModeStore((s) => s.entries)
   const knownUnits = usePaperStore((s) => s.unitsByDir)
   const unitDirAbs = useMemo(() => {
     return (
-      findUnitDir(filePath, workspaceRoot, entriesByDir, unitDirs, Object.keys(knownUnits))
+      findUnitDir(
+        filePath,
+        workspaceRoot,
+        entriesByDir,
+        entries.map((e) => e.unitDir),
+        Object.keys(knownUnits)
+      )
     )
-  }, [filePath, workspaceRoot, entriesByDir, unitDirs, knownUnits])
+  }, [filePath, workspaceRoot, entriesByDir, entries, knownUnits])
   if (!unitDirAbs) {
     return <WritePdfViewer {...props} />
   }
