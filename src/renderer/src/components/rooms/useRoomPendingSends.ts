@@ -6,7 +6,7 @@ export type RoomPendingSend = {
   body: string
   message: SendRoomMessage
   createdAt: string
-  state: 'sending' | 'sent' | 'failed'
+  state: 'sending' | 'sent' | 'steered' | 'failed'
   error?: string
 }
 
@@ -14,27 +14,33 @@ export type RoomPendingSend = {
  * Keep optimistic bubbles only until the server echoes the message back
  * (matched by clientRequestId) or until a timeout covers an older runtime
  * that never echoes the field. Failed sends stay for explicit retry/dismiss.
+ * `steered` marks clientRequestIds whose private request merged into the
+ * running reply, so the row can announce that instead of looking queued.
  */
 export function reconcilePendingSends(
   pending: RoomPendingSend[],
   messages: RoomMessage[],
   now: number,
-  timeoutMs = 30000
+  timeoutMs = 30000,
+  steered?: ReadonlySet<string>
 ): RoomPendingSend[] {
   const echoed = new Set(
     messages.map((message) => message.clientRequestId).filter(Boolean)
   )
-  return pending.filter((item) => {
-    if (echoed.has(item.clientRequestId)) return false
-    if (item.state === 'failed') return true
-    if (now - Date.parse(item.createdAt) > timeoutMs) return false
-    return true
+  return pending.flatMap((item) => {
+    if (echoed.has(item.clientRequestId)) return []
+    if (item.state === 'failed') return [item]
+    if (now - Date.parse(item.createdAt) > timeoutMs) return []
+    const state = steered?.has(item.clientRequestId) ? 'steered' as const
+      : item.state === 'steered' ? 'sent' as const : item.state
+    return [state === item.state ? item : { ...item, state }]
   })
 }
 
 export function useRoomPendingSends(
   roomId: string | undefined,
-  messages: RoomMessage[]
+  messages: RoomMessage[],
+  steered?: ReadonlySet<string>
 ) {
   const [pending, setPending] = useState<RoomPendingSend[]>([])
   const mounted = useRef(true)
@@ -51,13 +57,13 @@ export function useRoomPendingSends(
   // Server echo (or timeout) reconciles the optimistic rows away.
   useEffect(() => {
     setPending((current) => {
-      const next = reconcilePendingSends(current, messages, Date.now())
+      const next = reconcilePendingSends(current, messages, Date.now(), 30000, steered)
       return next.length === current.length &&
         next.every((item, index) => item === current[index])
         ? current
         : next
     })
-  }, [messages])
+  }, [messages, steered])
   const patch = useCallback(
     (clientRequestId: string, update: Partial<RoomPendingSend>) => {
       setPending((current) =>

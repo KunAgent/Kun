@@ -129,6 +129,19 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
     assert.equal(switchedRun.run.model, other.model)
     await send('HOLD_RESPONSE 请等待。')
     await poll(() => fixture.holding() && page.getByRole('button', { name: 'Stop response', exact: true }).isVisible(), 15000, 'active response')
+    // A message sent while the reply is running steers into the live turn
+    // instead of queueing a separate one.
+    await send('请把这句并入当前回复。')
+    await poll(async () => {
+      const data = await request(page, `/v1/rooms/${conversation.id}/direct`)
+      const merged = data.requests.find((entry) => entry.steer)
+      if (!merged || merged.status !== 'running' || merged.turnId) return false
+      const run = await request(page, `/v1/rooms/${conversation.id}/runs/${merged.runId}`)
+      return run.run.mergedIntoRunId === merged.steer.targetRunId && run.run.turnId === merged.steer.targetTurnId
+    }, 20000, 'busy message merged into the running reply')
+    const merged = (await request(page, `/v1/rooms/${conversation.id}/direct`)).requests.find((entry) => entry.steer)
+    assert.equal(merged.steer.targetRunId, (await request(page, `/v1/rooms/${conversation.id}/runs/${merged.runId}`)).run.mergedIntoRunId)
+    await capture('09b-steered-merge')
     await editor().fill('Preserved draft')
     await page.getByRole('button', { name: 'Stop response', exact: true }).click()
     await poll(async () => ['stopping', 'cancelled'].includes((await request(page, `/v1/rooms/${conversation.id}/direct`)).requests[0]?.status), 20000, 'durable cancellation acknowledged')

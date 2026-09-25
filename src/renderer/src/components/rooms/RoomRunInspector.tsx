@@ -19,11 +19,13 @@ const RUNNING_STATUSES = new Set(['queued', 'running', 'recovery_required'])
 export function RoomRunInspector({
   roomId,
   runId,
-  active = true
+  active = true,
+  onOpenRun
 }: {
   roomId: string
   runId: string
   active?: boolean
+  onOpenRun?: (runId: string) => void
 }) {
   const { t } = useTranslation('common')
   const state = useRoomRun(roomId, runId, active)
@@ -174,6 +176,24 @@ export function RoomRunInspector({
                 role={run.error ? 'alert' : undefined}
               >
                 {run.error || run.reason}
+              </p>
+            ) : null}
+
+            {run.mergedIntoRunId ? (
+              <p className="rooms-run-note">
+                {t('directSteered')}
+                {onOpenRun ? (
+                  <>
+                    {' · '}
+                    <button
+                      type="button"
+                      className="rooms-run-secondary"
+                      onClick={() => onOpenRun(run.mergedIntoRunId!)}
+                    >
+                      {t('roomsViewAgentSession')}
+                    </button>
+                  </>
+                ) : null}
               </p>
             ) : null}
 

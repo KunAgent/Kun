@@ -15,6 +15,8 @@ export const RoomRunRecordSchema = z.object({
   triggerSource: z.object({ kind: z.enum(['message', 'invitation', 'task']), id: Id, version: z.number().int().nonnegative() }).strict().optional(),
   generation: z.number().int().nonnegative().optional(),
   threadId: Id.optional(), turnId: Id.optional(), contextId: Id.optional(), admissionAttempted: z.boolean().optional(),
+  /** Set when this run's message was steered into another run's live turn instead of executing alone. */
+  mergedIntoRunId: Id.optional(),
   input: z.string().max(64000), attachmentIds: z.array(Id).default([]),
   status: RoomRunStatusSchema, outcome: RoomRunOutcomeSchema.optional(),
   reason: z.string().max(4000).optional(), error: z.string().max(4000).optional(),

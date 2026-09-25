@@ -163,7 +163,13 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
   const openTask = (taskId: string): void => drawer.open({ kind: 'task', taskId })
   const openMember = (memberId: string, rootRequestId?: string): void => drawer.open({ kind: 'section', section: 'members', memberId, rootRequestId })
   const openContent = (reference: RoomContentReference, messageId?: string): void => drawer.open({ kind: 'content', reference, messageId })
-  const pendingSends = useRoomPendingSends(room?.id, messages)
+  const steeredSendIds = useMemo(() => new Set(
+    (direct.data?.requests ?? [])
+      .filter((entry) => entry.steer && ['pending', 'running', 'stopping'].includes(entry.status))
+      .map((entry) => entry.clientRequestId)
+      .filter((id): id is string => Boolean(id))
+  ), [direct.data?.requests])
+  const pendingSends = useRoomPendingSends(room?.id, messages, steeredSendIds)
   const replyAwaiting = useRoomReplyAwaiting(Boolean(direct.data?.active) || roomRespondingMemberIds(topicState.topics).length > 0, messages)
   const waitingForReply = pendingSends.hasUnsettled || replyAwaiting.awaiting
   const send = async (message: SendRoomMessage): Promise<void> => {
@@ -412,7 +418,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           if (target.kind === 'handoffs') return <AgentHandoffPanel key={key} room={room} messages={messages} topics={topicState.topics}
             active={active} selectedId={target.selectedId} onOpenPair={(id) => { chooseRoom(id) }}
             onSource={chooseRoom} onRun={(roomId, runId) => { chooseRoom(roomId); setAgentRunTarget({ roomId, runId }) }} />
-          if (target.kind === 'run') return <RoomRunInspector key={key} roomId={room.id} runId={target.runId} active={active} />
+          if (target.kind === 'run') return <RoomRunInspector key={key} roomId={room.id} runId={target.runId} active={active} onOpenRun={openRun} />
           if (target.kind === 'task') return <RoomDrawerTask key={key} roomId={room.id} taskId={target.taskId} tasks={state.tasks}
             onClose={drawer.back} onRun={openRun} onOpenThread={onOpenThread} onUpdated={() => void state.refresh()} />
           if (target.kind === 'reply') return <RoomReplyThread key={key} room={room} messageId={target.messageId} tasks={state.tasks} active={active}

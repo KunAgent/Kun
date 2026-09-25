@@ -33,12 +33,18 @@ type MobileRoomConversationProps = {
 export function MobileRoomConversation(props: MobileRoomConversationProps) {
   const { t } = useTranslation('common')
   const state = useRooms('group', false)
-  const pending = useRoomPendingSends(state.room?.id, state.messages)
   const [content, setContent] = useState<{ reference: RoomContentReference; messageId?: string } | null>(null)
   const [dismissedError, setDismissedError] = useState('')
   const messageActions = useMessageActionReveal()
   const room = state.room
   const direct = useDirectChat(room, state.refresh)
+  const steeredIds = useMemo(() => new Set(
+    (direct.data?.requests ?? [])
+      .filter((entry) => entry.steer && ['pending', 'running', 'stopping'].includes(entry.status))
+      .map((entry) => entry.clientRequestId)
+      .filter((id): id is string => Boolean(id))
+  ), [direct.data?.requests])
+  const pending = useRoomPendingSends(state.room?.id, state.messages, steeredIds)
   const topicState = useRoomTopics(room?.conversationKind === 'group' ? room.id : '')
   const typingIds = useMemo(() => roomRespondingMemberIds(topicState.topics), [topicState.topics])
   const waitingIds = useMemo(() => roomWaitingMemberIds(topicState.topics), [topicState.topics])

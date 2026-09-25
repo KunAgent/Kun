@@ -30,6 +30,7 @@ export function RoomPendingSendRow({
           <span className="rooms-pending-status">
             {item.state === 'sending' ? t('roomsSend_pending') : null}
             {item.state === 'sent' ? t('roomsReceipt_fallback') : null}
+            {item.state === 'steered' ? t('directSteered') : null}
           </span>
         </div>
         <div className="rooms-message-bubble">

@@ -46,6 +46,7 @@
   "directQueued": "Queued",
   "directReconciling": "Reconciling original run",
   "directStopping": "Stopping…",
+  "directSteered": "Merged into the current reply",
   "directResponding": "Working…",
   "directQueuedCount": "{{count}} more queued",
   "directToolProgress": "Tool progress",

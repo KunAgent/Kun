@@ -66,6 +66,19 @@ describe('reconcilePendingSends', () => {
     })
     expect(reconcilePendingSends([old], [], Date.now())).toHaveLength(0)
   })
+  it('labels requests the runtime merged into the running reply as steered', () => {
+    const result = reconcilePendingSends([pendingItem({ state: 'sent' })], [message('other')],
+      Date.now(), 30000, new Set(['req-1']))
+    expect(result).toHaveLength(1)
+    expect(result[0].state).toBe('steered')
+  })
+  it('drops steered rows on echo and returns un-steered rows to sent', () => {
+    expect(reconcilePendingSends([pendingItem({ state: 'steered' })], [message('req-1')],
+      Date.now(), 30000, new Set(['req-1']))).toHaveLength(0)
+    const fallback = reconcilePendingSends([pendingItem({ state: 'steered' })], [message('other')],
+      Date.now(), 30000, new Set())
+    expect(fallback[0].state).toBe('sent')
+  })
 })
 
 const member = (
