@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import type { Room, RoomMessage } from '../contracts/rooms.js'
 import type { RoomStore, RoomStoreCommit, RoomStoredDocument } from './room-store.js'
 import { RoomStoreConflictError } from './room-store.js'
-import { appendPeerInbox, emptyPeerMember, peerId, peerInboxRows, peerMemberId } from './room-peer-inbox.js'
+import { appendPeerInbox, emptyPeerMember, peerId, peerInboxRows, peerMemberId, peerMessageRecipients } from './room-peer-inbox.js'
 import { publishPeerMessage } from './room-peer-publication.js'
 import { ROOM_PEER_HOLD_LIMITS, ROOM_PEER_LIMITS, type RoomPeerActivation, type RoomPeerBeginInput,
   type RoomPeerMemberState, type RoomPeerPublishInput, type RoomPeerRequestInput, type RoomPeerTopic,
@@ -75,7 +75,12 @@ export class RoomPeerStore {
             lastError: undefined, retryAt: undefined, retryCount: 0, waitingReason: undefined, updatedAt: now } })
       }
       const mentioned = new Set(request.message.mentionMemberIds)
-      await appendPeerInbox(this.store, commit, topic, memberIds.filter((id) => !mentioned.has(id)), {
+      // A mention-less request designates the default member as the responder,
+      // so it stays a recipient even in 'mentions' attention mode.
+      const messageRecipients = peerMessageRecipients(request.roomSnapshot,
+        memberIds.filter((id) => !mentioned.has(id)),
+        { designated: mentioned.size ? [] : [request.roomSnapshot.defaultMemberId] })
+      await appendPeerInbox(this.store, commit, topic, messageRecipients, {
         sourceKind: 'message', sourceId: source.id, sourceRevision: source.value.bodyRevision,
         messageId: source.id, causeId: request.id, body: source.value.body
       })
@@ -266,7 +271,10 @@ export class RoomPeerStore {
         checks: [{ kind: 'peer_topic', id: rootId, expectedRevision: topic.revision }],
         puts: [{ kind: 'peer_topic', id: rootId, roomId: topic.roomId, value: {
           ...topic.value, status: 'active', publicationRevision: topic.value.publicationRevision + 1, updatedAt: new Date().toISOString() } }] }
-      await appendPeerInbox(this.store, commit, topic.value, topic.value.memberIds, {
+      // Task notices reach all-attention members plus the task owner directly.
+      const recipients = peerMessageRecipients(topic.value.roomSnapshot, topic.value.memberIds,
+        { designated: input.memberId ? [input.memberId] : [] })
+      await appendPeerInbox(this.store, commit, topic.value, recipients, {
         sourceKind: 'task', sourceId: input.id, sourceRevision: input.revision, taskId: input.id,
         causeId: input.eventId ?? peerId(input.id, input.revision), body: input.body.slice(0, 16000), authorMemberId: input.memberId
       })

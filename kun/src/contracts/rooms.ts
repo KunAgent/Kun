@@ -27,6 +27,7 @@ export const RoomMemberSchema = z.object({
   agentTitle: z.string().max(160).optional(),
   fastModelRef: AgentModelRef.optional(),
   enabled: z.boolean().default(true),
+  attention: z.enum(['all', 'mentions']).optional(),
   removedAt: Timestamp.optional(),
   defaultRepositoryId: RoomIdSchema.optional(),
   allowedRepositoryIds: UniqueIds.default([]),

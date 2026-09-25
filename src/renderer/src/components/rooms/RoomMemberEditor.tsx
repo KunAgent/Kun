@@ -165,6 +165,19 @@ export function RoomMemberEditor({
         />
         {t('roomsEnabled')}
       </label>
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-sm text-ds-muted">
+          <input
+            type="checkbox"
+            checked={member.attention === 'mentions'}
+            onChange={(event) =>
+              onChange({ attention: event.target.checked ? 'mentions' : 'all' })
+            }
+          />
+          {t('roomsAttentionMentions')}
+        </label>
+        <p className="text-xs text-ds-faint">{t('roomsAttentionPeerHint')}</p>
+      </div>
       <div className="text-xs text-ds-muted">
         {t('roomsAllowedRepositories')}
       </div>

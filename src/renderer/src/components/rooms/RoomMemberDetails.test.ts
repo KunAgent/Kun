@@ -202,4 +202,15 @@ describe('RoomMemberDetails model override', () => {
     await render({ ...groupRoom, conversationKind: 'user_agent' } as Room)
     expect(modelSelects()).toHaveLength(0)
   })
+
+  it('marks mentions-only members and leaves the others unmarked', async () => {
+    const room = {
+      ...groupRoom,
+      members: [{ ...reviewer, attention: 'mentions' }, developer]
+    } as unknown as Room
+    await render(room)
+    const texts = renderer.root.findAllByType('p').map((node) => node.children.join(''))
+    expect(texts.filter((text) => text.includes('Mentions only'))).toHaveLength(1)
+    expect(texts.some((text) => text.includes('Developer') && text.includes('Mentions only'))).toBe(false)
+  })
 })

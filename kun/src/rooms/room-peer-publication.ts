@@ -1,7 +1,7 @@
 import { attachRoomRunPublication, roomRunId } from './room-run-recording.js'
 import { RoomMessageSchema, type Room, type RoomMessage } from '../contracts/rooms.js'
 import type { RoomStoreCommit } from './room-store.js'
-import { appendPeerInbox, peerId, peerInboxRows } from './room-peer-inbox.js'
+import { appendPeerInbox, peerId, peerInboxRows, peerMessageRecipients } from './room-peer-inbox.js'
 import { peerFingerprint, retryPeerConflict, type RoomPeerStore } from './room-peer-state.js'
 import type { RoomPeerPublishInput, RoomPeerPublishResult, RoomPeerRequestInput, RoomPeerInboxItem } from './room-peer-types.js'
 import { appendRoomReplyChecks, prepareRoomReplyContext } from './room-replies.js'
@@ -110,7 +110,8 @@ export async function publishPeerMessage(peer: RoomPeerStore, input: RoomPeerPub
     appendRoomReplyChecks(commit, sourceChecks)
     appendRoomReplyChecks(commit, replyContext.checks)
     const recipients = nextTopic.memberIds.filter((id) => id !== input.memberId)
-    await appendPeerInbox(peer.store, commit, nextTopic, recipients.filter((id) => !invites.includes(id)), {
+    await appendPeerInbox(peer.store, commit, nextTopic,
+      peerMessageRecipients(nextTopic.roomSnapshot, recipients.filter((id) => !invites.includes(id))), {
       sourceKind: 'message', sourceId: message.id, sourceRevision: message.bodyRevision,
       messageId: message.id, causeId: activation.clientRequestId, body: message.body, authorMemberId: input.memberId
     })
