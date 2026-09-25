@@ -114,7 +114,8 @@ export function buildMemoryReadTools(store: MemoryStore): LocalTool[] {
         const page = await listActiveMemoryPage(store, access, filter.value, {
           limit,
           before,
-          nowMs
+          nowMs,
+          allowedScopes: allowedMemoryScopes(context.memoryPolicy?.scopes)
         })
         return {
           output: {
@@ -158,7 +159,12 @@ async function listActiveMemoryPage(
   store: MemoryStore,
   access: { workspace?: string },
   filter: MemoryToolFilter,
-  options: { limit: number; before?: { updatedAt: string; id: string }; nowMs: number }
+  options: {
+    limit: number
+    before?: { updatedAt: string; id: string }
+    nowMs: number
+    allowedScopes: readonly MemoryRecord['scope'][]
+  }
 ): Promise<{
   records: MemoryRecord[]
   nextCursor?: string
@@ -186,6 +192,7 @@ async function listActiveMemoryPage(
     before = { updatedAt: batch[batch.length - 1].updatedAt, id: batch[batch.length - 1].id }
     for (const record of filterActiveMemories(batch, options.nowMs)) {
       if (filter.scope && record.scope !== filter.scope) continue
+      if (!options.allowedScopes.includes(record.scope)) continue
       scannedTotal += 1
       if (records.length < options.limit) records.push(record)
     }
@@ -255,6 +262,12 @@ function enumArgument<T extends string>(
     : { ok: false }
 }
 
+/** Scopes the memory policy enables for this turn; unknown names are ignored. */
+function allowedMemoryScopes(scopes: readonly string[] | undefined): MemoryRecord['scope'][] {
+  if (!scopes) return [...MemoryScope.options]
+  return MemoryScope.options.filter((scope) => scopes.includes(scope))
+}
+
 /** Tool lookups apply their own record cap instead of the injection cap. */
 function toolMemoryPolicy(
   memoryPolicy: { enabled: boolean; scopes?: readonly string[] } | undefined,
@@ -262,7 +275,7 @@ function toolMemoryPolicy(
 ): MemoryCapabilityConfig {
   return {
     enabled: memoryPolicy?.enabled === true,
-    scopes: (memoryPolicy?.scopes ?? ['user', 'workspace', 'project']) as MemoryCapabilityConfig['scopes'],
+    scopes: allowedMemoryScopes(memoryPolicy?.scopes),
     maxInjectedRecords: limit,
     distillation: { enabled: false },
     directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 }
