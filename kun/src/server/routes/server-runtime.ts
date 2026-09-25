@@ -192,6 +192,8 @@ export type ServerRuntime = {
   threadActivity?: ThreadActivityRegistry
   /** Execution-unit activity rows shared by all clients (docs/ade/06). */
   activityStore?: import('../../services/activity-store.js').ActivityStore
+  /** Persisted user facts (ack/dismiss/pin) for activity rows. */
+  activityFacts?: import('../../services/activity-facts-store.js').ActivityFactsStore
   /** Active SSE streams, so a successful thread delete can close them. */
   eventStreamRegistry?: ThreadEventStreamRegistry
   /** Optional troubleshooting buffer of the most recent LLM rounds (in-memory). */

@@ -63,6 +63,10 @@ import type {
   UserMessageEventPayload
 } from './types'
 import type { WriteTurnContext } from './write-turn-context'
+import type {
+  ActivityPollResponse,
+  ActivitySnapshotResponse
+} from '@shared/activity-row'
 
 export type ThreadListOptions = {
   limit?: number
@@ -225,6 +229,19 @@ export interface AgentProvider {
   listThreads(options?: ThreadListOptions): Promise<NormalizedThread[]>
   /** Optional paginated listing used by the sidebar "show more" flow. */
   listThreadsPage?(options?: ThreadListOptions): Promise<ThreadListPage>
+  /** Execution-unit activity feed (docs/ade/06 §9); absent when unsupported. */
+  getActivitySnapshot?(options?: {
+    scope?: 'all' | 'workspace'
+    workspace?: string
+  }): Promise<ActivitySnapshotResponse>
+  pollActivity?(
+    cursor: string,
+    waitMs: number,
+    signal?: AbortSignal
+  ): Promise<ActivityPollResponse>
+  ackActivity?(unitId: string): Promise<void>
+  dismissActivity?(unitId: string): Promise<void>
+  pinActivity?(unitId: string, pinned?: boolean): Promise<void>
   createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; workspaceMode?: 'code' | 'ade'; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string; additionalWorkspaces?: string[] }): Promise<NormalizedThread>
   getThreadDetail(threadId: string, options?: {
     before?: string

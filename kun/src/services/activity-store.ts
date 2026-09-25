@@ -40,6 +40,8 @@ export type ActivityStoreOptions = {
   nowMs?: () => number
   /** Optional thread metadata lookup used to fill auto-registered rows. */
   threadMetadata?: (threadId: string) => Promise<ThreadRecord | null>
+  /** User-fact persistence; cleared when a row's thread is deleted. */
+  facts?: { removeFact(unitId: string): void }
   maxRows?: number
   changesCapacity?: number
   previewThrottleMs?: number
@@ -139,6 +141,7 @@ export class ActivityStore implements RuntimeEventObserver {
       this.previewTimers.delete(unitId)
     }
     this.bump(unitId, true)
+    this.options.facts?.removeFact(unitId)
     if (row.parentThreadId) this.recomputeParent(row.parentThreadId)
   }
 
