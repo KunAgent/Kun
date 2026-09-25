@@ -6,14 +6,12 @@ import type { GatewayLease } from './gateway-request-guard.js'
 import type { ServerRuntime } from './server-runtime.js'
 import {
   asRecord,
-  authorizePublicGateway,
   errorMessage,
   errorStatus,
   guardFor,
   MAX_GATEWAY_BODY_BYTES,
   nextGatewayChunk,
   numberValue,
-  openAiError,
   parseArguments,
   stringValue
 } from './openai-model-gateway-support.js'
@@ -21,43 +19,83 @@ import {
   makeModelRequest,
   resolveGatewayModel
 } from './openai-model-gateway.js'
+
+/**
+ * Anthropic wire errors keep the `{ type: 'error', error: { type, message } }`
+ * envelope; the nested `type` is derived from the HTTP status per the public
+ * Messages API.
+ */
+function anthropicErrorType(status: number): string {
+  switch (status) {
+    case 400: return 'invalid_request_error'
+    case 401: return 'authentication_error'
+    case 403: return 'permission_error'
+    case 404: return 'not_found_error'
+    case 413: return 'request_too_large'
+    case 429: return 'rate_limit_error'
+    case 529: return 'overloaded_error'
+    default: return 'api_error'
+  }
+}
+
+function anthropicError(message: string, status: number): JsonResponse {
+  return jsonResponse({ type: 'error', error: { type: anthropicErrorType(status), message } }, status)
+}
+
+/** Same Bearer/x-api-key credential + token bucket, with Anthropic error bodies. */
+function authorizeAnthropicGateway(runtime: ServerRuntime, request: Request): JsonResponse | null {
+  const guard = guardFor(runtime)
+  if (!guard || !guard.authorize(request)) return anthropicError('Invalid gateway API key.', 401)
+  if (!guard.consumeToken()) return anthropicError('Gateway rate limit exceeded.', 429)
+  return null
+}
+
+function anthropicStopReason(
+  stopReason: 'stop' | 'tool_calls' | 'length' | 'error' | undefined,
+  sawToolUse: boolean
+): 'end_turn' | 'max_tokens' | 'tool_use' {
+  if (stopReason === 'tool_calls' || sawToolUse) return 'tool_use'
+  if (stopReason === 'length') return 'max_tokens'
+  return 'end_turn'
+}
+
 export async function gatewayMessages(runtime: ServerRuntime, request: Request): Promise<Response | JsonResponse> {
-  const rejected = authorizePublicGateway(runtime, request)
+  const rejected = authorizeAnthropicGateway(runtime, request)
   if (rejected) return rejected
-  if (!runtime.modelGateway?.enabled() || !runtime.modelClient) return openAiError('Local model gateway is disabled.', 'gateway_disabled', 404)
+  if (!runtime.modelGateway?.enabled() || !runtime.modelClient) return anthropicError('Local model gateway is disabled.', 404)
   const guard = guardFor(runtime)!
   const lease = guard.acquire(request.signal)
-  if (!lease) return openAiError('Too many concurrent gateway requests.', 'concurrency_limit', 429)
+  if (!lease) return anthropicError('Too many concurrent gateway requests.', 429)
   let body: Awaited<ReturnType<typeof readJsonBody>>
   try {
     body = await readJsonBody(request, MAX_GATEWAY_BODY_BYTES, lease.signal)
   } catch (error) {
     lease.release()
-    return openAiError(lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error), lease.timedOut() ? 'timeout' : 'invalid_request_error', lease.timedOut() ? 504 : 400)
+    return anthropicError(lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error), lease.timedOut() ? 504 : 400)
   }
   if (!body.ok) {
     lease.release()
-    return openAiError(JSON.parse(body.response.body).message, 'invalid_request_error', body.response.status)
+    return anthropicError(JSON.parse(body.response.body).message, body.response.status)
   }
   let input: Record<string, unknown>
   try {
     input = anthropicToChatInput(asRecord(body.value))
   } catch (error) {
     lease.release()
-    return openAiError(error instanceof Error ? error.message : String(error), 'invalid_request_error', 400)
+    return anthropicError(error instanceof Error ? error.message : String(error), 400)
   }
   const model = stringValue(input.model)
   const resolved = model ? await resolveGatewayModel(runtime, model) : null
   if (!resolved) {
     lease.release()
-    return openAiError(`The model '${model || '(missing)'}' does not exist.`, 'model_not_found', 404)
+    return anthropicError(`The model '${model || '(missing)'}' does not exist.`, 404)
   }
   let modelRequest: ModelRequest
   try {
     modelRequest = makeModelRequest({ ...input, model: resolved.model }, lease.signal, resolved.providerId)
   } catch (error) {
     lease.release()
-    return openAiError(error instanceof Error ? error.message : String(error), 'invalid_request_error', 400)
+    return anthropicError(error instanceof Error ? error.message : String(error), 400)
   }
   const stream = input.stream === true
   try {
@@ -67,7 +105,7 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
       : anthropicNonStreamingResponse(chunks, model, lease)
   } catch (error) {
     lease.release()
-    return openAiError(errorMessage(error), 'upstream_error', 502)
+    return anthropicError(errorMessage(error), 502)
   }
 }
 
@@ -157,6 +195,7 @@ function anthropicUsage(usage: unknown): Record<string, number> {
 async function anthropicNonStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, model: string, lease: GatewayLease): Promise<JsonResponse> {
   let text = ''
   let usage: unknown
+  let stopReason: 'stop' | 'tool_calls' | 'length' | 'error' | undefined
   const content: AnthropicBlock[] = []
   const toolCalls: { id: string; name: string; input: unknown }[] = []
   const iterator = chunks[Symbol.asyncIterator]()
@@ -169,10 +208,11 @@ async function anthropicNonStreamingResponse(chunks: AsyncIterable<ModelStreamCh
       if (chunk.kind === 'assistant_text_delta') text += chunk.text
       else if (chunk.kind === 'tool_call_complete') toolCalls.push({ id: chunk.callId, name: chunk.toolName, input: chunk.arguments })
       else if (chunk.kind === 'usage') usage = chunk.usage
-      else if (chunk.kind === 'error') return openAiError(chunk.message, chunk.code ?? 'upstream_error', errorStatus(chunk))
+      else if (chunk.kind === 'completed') stopReason = chunk.stopReason
+      else if (chunk.kind === 'error') return anthropicError(chunk.message, errorStatus(chunk))
     }
   } catch (error) {
-    return openAiError(lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error), lease.timedOut() ? 'timeout' : 'upstream_error', lease.timedOut() ? 504 : 502)
+    return anthropicError(lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error), lease.timedOut() ? 504 : 502)
   } finally {
     if (!completed) await iterator.return?.().catch(() => undefined)
     lease.release()
@@ -187,7 +227,7 @@ async function anthropicNonStreamingResponse(chunks: AsyncIterable<ModelStreamCh
     role: 'assistant',
     model,
     content,
-    stop_reason: toolCalls.length > 0 ? 'tool_use' : 'end_turn',
+    stop_reason: anthropicStopReason(stopReason, toolCalls.length > 0),
     stop_sequence: null,
     usage: anthropicUsage(usage)
   })
@@ -203,6 +243,8 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
   let blockIndex = 0
   let textOpen = false
   let usage: unknown
+  let sawToolUse = false
+  let stopReason: 'stop' | 'tool_calls' | 'length' | 'error' | undefined
   const closeIterator = async (): Promise<void> => {
     if (iteratorClosed) return
     iteratorClosed = true
@@ -239,14 +281,16 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
       if (finished || cancelled) return
       try {
         const result = await nextGatewayChunk(iterator, lease.signal)
-        const chunk = result.done ? { kind: 'completed' as const } : result.value
+        const chunk = result.done ? { kind: 'completed' as const, stopReason: 'stop' as const } : result.value
         if (result.done) iteratorClosed = true
         if (chunk.kind === 'completed' || result.done) {
+          if (chunk.kind === 'completed') stopReason = chunk.stopReason
           closeTextBlock(controller)
+          const parsedUsage = anthropicUsage(usage)
           sendEvent(controller, 'message_delta', {
             type: 'message_delta',
-            delta: { stop_reason: 'end_turn', stop_sequence: null },
-            usage: { output_tokens: anthropicUsage(usage).output_tokens }
+            delta: { stop_reason: anthropicStopReason(stopReason, sawToolUse), stop_sequence: null },
+            usage: parsedUsage
           })
           sendEvent(controller, 'message_stop', { type: 'message_stop' })
           await finish(controller, true)
@@ -276,6 +320,7 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
           return
         }
         if (chunk.kind === 'tool_call_complete') {
+          sawToolUse = true
           closeTextBlock(controller)
           sendEvent(controller, 'content_block_start', {
             type: 'content_block_start', index: blockIndex,
