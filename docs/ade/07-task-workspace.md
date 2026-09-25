@@ -188,9 +188,12 @@ worktree: z.object({
 
 ### 7.1 信任
 
-setup 命令来自仓库，执行它等于运行仓库里的代码。沿用项目 MCP 的批准机制（`approvedProjectMcpServers`）：
+setup 命令来自仓库，执行它等于运行仓库里的代码。直接复用项目配置的批准记录：
 
-- 批准绑定 `ResolvedKunProjectConfig.digest` 里 `worktree.setup` 部分的内容哈希；内容变化后需要重新批准。
+- 现有机制（2026-09-25 核对）：`src/main/services/project-config-service.ts:69` 的 `approvedProjectMcpServers` 读取 `agents.kun.projectConfig.grants: { workspaceRoot, configDigest }[]`，只有 `loadKunProjectConfig(root).digest === grant.configDigest` 时项目 MCP 才生效。digest 覆盖整份 `.kun/project.json`。
+- setup 与 checks 命令使用**同一份 grant**：`approvedWorktreeSetup(settings, repoRoot)` 按相同规则判定；项目配置任何一处变化（包括 MCP 段）都需要重新批准。这样用户只面对一个"信任此项目配置"的决定，不会出现 MCP 已批准、setup 未批准的混合状态。
+- 批准入口沿用现有的项目配置批准 UI；它的说明文字补上"包括 worktree 安装命令"。
+- kun 侧拿不到 GUI 设置：主进程生成 config.json 时，把已批准仓库的 `worktree` 段（命令原文 + digest）写进 `ade.approvedWorktreeConfigs`（数组，按仓库根排序），kun 只执行其中 digest 与当前 `.kun/project.json` 一致的命令。
 - 未批准：`setup.status = 'not-approved'`，工作区仍然 `ready`，侧栏显示"此项目的 worktree 安装命令待批准"提示（12 §7），用户批准后可一键补跑。
 - 无人值守路径（总管在用户不在时派活）遇到未批准的 setup：跳过，并在派活结果里告诉总管"依赖未安装"，由总管决定是否先问用户。
 

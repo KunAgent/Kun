@@ -23,8 +23,20 @@
 
 ## 2. Worker 工具
 
-新增工具提供者 `kun/src/adapters/tool/worker-callback-tool-provider.ts`，`providerKind: 'delegation'`。
-**只在 `thread.executionUnit?.kind === 'worker'` 时广告**（09 §3 新增字段），普通会话看不到。
+新增工具提供者 `kun/src/adapters/tool/worker-callback-tool-provider.ts`，写法与现有提供者一致（`LocalToolHost.defineTool({ name, description, inputSchema, policy, sideEffect, shouldAdvertise, execute })`，参考 `context-window-tool-provider.ts`），提供者 `kind: 'delegation'`。
+**只在 worker 线程上广告**，普通会话看不到。
+
+`shouldAdvertise(context)` 是同步函数，只能读 `ToolHostContext`（`kun/src/ports/tool-host.ts`），而它目前没有线程的执行单元信息。因此 `ToolHostContext` 新增两个字段，由 agent loop 与外部运行时的工具桥在构造上下文时从线程记录填入：
+
+```ts
+/** 本轮运行的 harness（01）；工具桥为外部 harness 构造上下文时必填 */
+harnessId?: string
+/** 线程的执行单元类型（09 §3.1）；普通线程缺省 */
+executionUnitKind?: 'worker'
+```
+
+- worker 回调工具：`shouldAdvertise = (ctx) => ctx.executionUnitKind === 'worker'`。
+- 总管工具（09 §4）：`shouldAdvertise = (ctx) => (ctx.harnessId ?? 'kun') === 'kun' && ctx.executionUnitKind !== 'worker' && !ctx.roomAgent && adeEnabled()`。IM / 定时任务触发的总管 turn 也能派活，但按无人值守规则执行（不升级权限、回落最严档，02 §4）。
 
 ### 2.1 `report_progress`
 

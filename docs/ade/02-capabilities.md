@@ -256,18 +256,21 @@ export function resolvePermissionMode(
 usage 推导：
 
 ```ts
-export function usageForTurn(thread: ThreadRecord, turn: TurnRecord): HarnessUsage {
+export function usageForTurn(thread: ThreadRecord, turn: Turn): HarnessUsage {
   if (thread.roomContext) return 'room-execution'
   if (turn.orchestration === 'graph') return turn.graphLeadLifecycle || turn.graphPlanningLifecycle ? 'graph-lead' : 'graph-worker'
   if (thread.executionUnit?.kind === 'worker') return 'manager-worker'            // 09 新增字段
-  if (turn.clientSurface === 'im') return 'im'
-  if (turn.scheduledTaskId) return 'scheduled'
+  if (turn.imContext === true || turn.clientSurface === 'im') return 'im'
+  if (turn.disableUserInput === true) return 'scheduled'                            // 无人值守：定时任务、headless API
   if (turn.agentSurface === 'design') return 'design'
   return 'one-to-one'
 }
+
+/** 无人值守的唯一判据：turn 上的 disableUserInput（contracts/turns.ts，IM 与 headless 运行都会设置） */
+export const isUnattendedTurn = (turn: Turn): boolean => turn.disableUserInput === true || turn.imContext === true
 ```
 
-`turn.scheduledTaskId` 若现有 turn 上没有对应字段，用现有定时任务来源字段替代，实现时核对 `contracts/turns.ts`。
+turn 上没有定时任务 id 字段（2026-09-25 核对 `contracts/turns.ts`）；无人值守统一按 `disableUserInput` / `imContext` 判定。
 
 ## 6. 事件与前端
 

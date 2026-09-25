@@ -13,12 +13,16 @@
 
 ## 2. 现状
 
-- `kun/src/runtime/agent-sdk/sdk-context-assembler.ts:33` 的 `buildHistoryTranscript(items, currentTurnId, maxBytes = 48 KiB)`：取最新压缩摘要 + 从新到旧尽量塞满 48 KiB 的渲染文本。Claude SDK 和 Antigravity 都用它，每轮都发（Claude SDK 路径的决策是"永远发 transcript，不依赖 resume"）。
+- `kun/src/runtime/agent-sdk/sdk-context-assembler.ts:33` 的 `buildHistoryTranscript(items, currentTurnId, maxBytes = 48 KiB)`：取最新压缩摘要 + 从新到旧尽量塞满 48 KiB 的渲染文本。调用点（2026-09-25 核对）：
+  - Claude SDK：`agent-sdk-runtime-factory-turn.ts:355` 生成，`agent-sdk-runtime-core.ts:298` 只在**没有 resume id**（新 generation）时放进 prompt。
+  - Cursor SDK：`cursor-sdk-runtime-lifecycle.ts:196` 生成，`preparation.resumed` 且无动态指令时不带。
+  - Antigravity：`antigravity-cli-runtime.ts:244`，没有原生续接，**每轮都带**。
+  - 三处都通过 `composeSdkPromptText` 拼成 `<prior_conversation>` 块。
 - `DelegatedSessionCoordinator.prepare`（`delegated-session-binding.ts:172`）：路由变化时对新旧两种 providerKind 都 `clearProviderState`，**旧会话直接丢弃**，没有停泊。
 - 窗口模式有 `history_*` 检索工具，但只在窗口模式开启时可用（`context-window-tool-provider.ts:41`）。
 - 外部历史引用有 `read_source_history`（读 Codex / Claude Code / OpenCode 的原始日志）。
 
-问题：48 KiB 的渲染尾巴在长会话里既贵又丢重点（改了哪些文件、跑过哪些命令这类"工作现场"信息可能在截断范围外）；而且每轮都重复发送，浪费 harness 的上下文。
+问题：48 KiB 的渲染尾巴在长会话里既贵又丢重点（改了哪些文件、跑过哪些命令这类"工作现场"信息可能在截断范围外）；切换 harness 时旧会话被丢弃，切回来只能重新灌历史；harness 拿不到截断范围之外的细节。Antigravity 这类没有原生续接的 harness 每轮都带 48 KiB，代价更高。
 
 ## 3. 交接简报：`kun/src/handoff/handoff-brief.ts`（新增，纯函数）
 
@@ -123,7 +127,7 @@ function needsHandoff(prep: DelegatedSessionPreparation, priorItems: readonly Tu
 }
 ```
 
-与现状的差别：Claude SDK 路径从"每轮都发 48 KiB transcript"改为"只在新原生会话的第一轮发简报"。前提是 native resume 可用；如果某个 harness 的 native resume 不可靠（`nativeResume` 不支持），它的每一轮都等于新会话，每轮都会带简报（与现状等价，但更短）。
+与现状的差别：注入时机不变（Claude SDK、Cursor 已经只在新 generation 时带历史），变的是**内容**（确定性简报替代 48 KiB 渲染尾巴）和**能力**（停泊恢复、按需检索）。没有原生续接的 harness（Antigravity）每轮都等于新会话，每轮带简报——与现状等价，但更短、更有重点。
 
 迁移：`buildHistoryTranscript` 保留一个版本周期，由开关 `agents.kun.ade.deterministicHandoff`（默认开）控制，关闭时回到旧行为。
 

@@ -83,7 +83,7 @@ Kun 既有约束同时适用：
 
 ## 5. Mission Control
 
-路由：新增 `AppRoute` `'mission-control'`（与现有 `'subagents'` 等路由同一机制），全宽页面；P2 支持弹出到独立窗口（主进程新建 `BrowserWindow`，加载同一路由）。
+路由：复用现有的 `AppRoute` `'board'`（`src/renderer/src/store/chat-store-types.ts:219`，项目看板的全页路由），页面顶部分两个标签："Agents"（本节的 Mission Control，默认）与"任务卡片"（现有项目看板）。不新增路由和导航入口，左侧栏的导航行改名为 Mission Control 并带计数。P2 支持弹出到独立窗口（主进程新建 `BrowserWindow`，加载同一路由）。
 
 ### 5.1 看板
 
@@ -162,8 +162,10 @@ Kun 既有约束同时适用：
 ## 8. 通知与收件箱
 
 - 统一收件箱 = Mission Control 的"待你处理"列 + 顶部铃铛（计数 = 待你处理的行数）。
-- 主进程订阅 ActivityStore 的变化（和 renderer 同一个长轮询源），在以下转移时发桌面通知：`→ waiting`、`→ failed`、`→ done`（worker 或任务工作区会话）、`stalled` 被标记。窗口在前台且该会话正显示时不发。
-- macOS Dock 角标 = 待你处理计数；Windows / Linux 用任务栏闪烁（可在设置关闭）。
+- 现状：通知由渲染层驱动——`src/renderer/src/store/chat-store-runtime-notifications.ts` 判定何时通知，经 IPC `notification:turn-complete`（`src/main/ipc/register-app-content-ipc-handlers.ts:425`）由主进程显示；角标经 `app:badge-count`。ADE **扩展这条链路**，不另建主进程通知器：
+  - 触发源从"本窗口观察到的 turn 完成"改为 renderer `activity-store` 的状态转移：`→ waiting`、`→ failed`、`→ done`（worker 或任务工作区会话）、`stalled` 被标记。窗口在前台且该会话正显示时不发。
+  - IPC 载荷 schema（`notificationPayloadSchema`）加可选字段 `category: 'waiting' | 'failed' | 'done' | 'stalled'`，主进程按类别应用用户设置；旧载荷没有该字段时按 `done` 处理。
+- 角标：`app:badge-count` = 待你处理计数（现有接口在 macOS / Linux 生效）；Windows 用任务栏闪烁（可在设置关闭）。
 - 设置 → 通知：按类别开关（等待、失败、完成、可能卡住），可选提示音。
 - 已读 / 忽略写回 ActivityStore（跨端一致，06 §9）；通知点击后跳到对应会话并标记已读。
 - 可选：有 agent 在工作时阻止系统休眠（Electron `powerSaveBlocker`，设置里开关，默认关）。
@@ -184,7 +186,7 @@ Kun 既有约束同时适用：
 - 复用 ActivityStore 投影：按状态分组的列表 + 卡片详情。
 - 可操作：审批、回答问题、发送审查批注（11 §4.4）、确认已读 / 忽略、停止 worker。
 - 不在手机上做：创建 worktree、合入、丢弃（这些需要看 diff，留在桌面）。
-- 远程桥白名单（`src/main/remote/remote-allowlist.ts`）只加这些路由；新增的字段都是可选字段，旧版手机端忽略即可。
+- 这些操作都通过已放行的 `runtime:request` 通道访问 kun 路由，不需要改远程白名单；新增的字段都是可选字段，旧版手机端忽略即可。
 
 ## 11. 验证
 
@@ -200,8 +202,7 @@ Kun 既有约束同时适用：
 - `src/renderer/src/components/mission-control/MissionControlView.tsx`、`MissionColumn.tsx`、`MissionCard.tsx`、`MissionToolbar.tsx`
 - `src/renderer/src/components/workers/WorkersPanel.tsx`、`WorkerRow.tsx`、`WorkersTrackPill.tsx`、`WorkerControlBanner.tsx`、`AssignmentCard.tsx`
 - `src/renderer/src/components/chat/FloatingComposerHarnessPicker.tsx`、`FloatingComposerIsolationPicker.tsx`（与现有 `FloatingComposer*` 组件同目录、同命名）
-- `src/renderer/src/store/activity-store.ts`、`team-store.ts`
-- `src/main/notifications/activity-notifier.ts`
+- `src/renderer/src/store/activity-store.ts`、`team-store.ts`、`activity-notifications.ts`（接入现有 `chat-store-runtime-notifications.ts`）
 
 修改：
 
@@ -210,4 +211,4 @@ Kun 既有约束同时适用：
 - composer 控件行、斜杠菜单
 - `src/renderer/src/locales/{en,zh}/`（新增文案）
 - 设置页各分组组件
-- `src/main/remote/remote-allowlist.ts`
+- `src/main/ipc/register-app-content-ipc-handlers.ts`（通知载荷的 `category` 字段）

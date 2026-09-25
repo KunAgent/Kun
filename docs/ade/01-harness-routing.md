@@ -369,7 +369,12 @@ const harnessRouter = new HarnessRouter({ catalog, runtimes, providers: () => co
 
 `ReplaceableDelegatedTurnRuntime` 的热替换语义保留：`HarnessRouter` 本身也做成可替换（`model.refreshModelConnectionDelegatedDeps` 里一起替换）。
 
-子代理执行器（`child-agent-executor.ts:265`）的 `createDelegatedRuntime` 同样改为注入 `harnessRouter`，这样 worker 能按 `harnessId` 选引擎（09 依赖这一点）。
+外部运行时有**两个**组合点，都要改：
+
+1. 主运行时：`runtime-composition-agent.ts:250` 的 `buildMainDelegatedRuntime`（上面的代码）。
+2. 子运行时：`runtime-composition-registry.ts:73` 的 `createChildDelegatedRuntime`，它用子任务专用的 registry、`childToolHost`、child turns / stores 组合同样三个运行时，经 `child-agent-executor.ts:128` 的 `createDelegatedRuntime` 注入每个子任务的 AgentLoop。这里同样改为构造一个子作用域的 `HarnessRouter`（运行时实例用 child 依赖），worker 才能按 `harnessId` 选引擎（09 依赖这一点）。
+
+两处共用一个 `buildHarnessRuntimes(deps)` 工厂，避免两份装配逻辑漂移。
 
 ## 7. 设置与配置桥
 

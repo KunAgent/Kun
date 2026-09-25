@@ -47,7 +47,7 @@
 | --- | --- |
 | `acp-schema.ts` | 从官方 schema 生成/引入的类型 + zod 解析器（只解析 Kun 用到的字段，其余透传忽略） |
 | `acp-jsonrpc.ts` | stdio 上的 JSON-RPC 帧：逐行 JSON、请求 id 表、超时、通知分发、双向请求 |
-| `acp-process.ts` | 受管进程：启动、环境隔离、退出观测、强制结束；复用 `owned-sdk-process.ts` 的所有权模式 |
+| `acp-process.ts` | 受管进程：启动、环境隔离、退出观测、强制结束；用通用的 `spawnOwnedProcess` / `stopOwnedProcess`（`kun/src/process/owned-process.ts:161`，POSIX 进程组 + 启动闸门，Windows Job Object），不用 SDK 专用的 `spawnOwnedSdkProcess` |
 | `acp-connection-pool.ts` | 按 (harnessId, 凭据身份) 复用进程，一个进程承载多个会话 |
 | `acp-session-manager.ts` | 线程 ↔ ACP 会话：new / load、config options、原生会话绑定 |
 | `acp-client-host.ts` | 实现 agent → 客户端方法：fs、terminal、权限、elicitation |
@@ -334,7 +334,7 @@ async writeTextFile({ sessionId, path, content }) {
 
 ### 8.2 终端
 
-- `terminal/create`：命令、参数、环境、`cwd`（必须在工作区内）、`outputByteLimit`。用 Kun 现有受管后台 shell（`backgroundShellRuntime`）启动，登记在该 turn 下，turn 结束或取消时回收整棵进程树。
+- `terminal/create`：命令、参数、环境、`cwd`（必须在工作区内）、`outputByteLimit`。用 `spawnOwnedProcess` 启动（`BackgroundShellRuntime` 只是 bash 工具后台会话的登记表，不提供启动能力），句柄登记在新的 `AcpTerminalRegistry`（按 sessionId + turnId），turn 结束或取消时 `stopOwnedProcess` 回收整棵进程树。
 - 审批：命令执行按 Kun 策略判定；如果本轮已经为对应工具调用允许过，不再二次询问。
 - `output` / `wait_for_exit` / `kill` / `release`：直接映射到受管 shell 的对应操作；`release` 后句柄失效。
 - 输出受 `outputByteLimit` 和 Kun 工具输出上限双重限制，截断时返回 `truncated: true`。

@@ -1,7 +1,6 @@
 # Work 单视图 Markdown 编辑器：实现细节
 
-> 配套方案：[work-markdown-optimization-plan.zh-CN.md](work-markdown-optimization-plan.zh-CN.md)（目标、阶段、验收）。
-> 本文按实现模块组织，章节号与方案中的引用一致。代码是示意，以落地时的类型检查为准。
+> 本文按实现模块组织。代码是示意，以落地时的类型检查为准。
 > 路径默认相对 `src/renderer/src/`，`src/shared`、`src/main` 写全路径。
 
 ## 1. 模块布局

@@ -69,6 +69,8 @@ export type WorkerRecord = {
   permissionMode: string            // harness 档位 id（已按 §7 裁剪）
   lifecycle: 'persistent' | 'ephemeral'
   taskWorkspaceId?: string
+  /** 创建时按 §7 固化的权限交集（ChildSecuritySnapshot）；之后每次派活都用它，不随总管后续 turn 变宽 */
+  securitySnapshot: ChildSecuritySnapshot
   control: 'manager' | 'user'
   state: 'active' | 'released' | 'detached'
   createdAt: string; releasedAt?: string
@@ -85,6 +87,7 @@ export type DispatchRecord = {
   dispatchId: string                // `dsp_` + 随机；同时作为 startTurn 的 clientRequestId
   teamId: string
   workerId: string
+  parentTurnId: string              // 发起派活的总管 turn（GUI 发起时为总管线程最近一个 turn）
   title: string
   task: string                      // 总管写的任务说明
   context?: DispatchContext         // 总管显式给的文件、链接、约束
@@ -241,6 +244,7 @@ async tryDeliver(dispatchId: string): Promise<{ accepted: boolean; pendingReason
   return this.exclusive(dispatchId, async () => {
     const d = await this.dispatches.get(dispatchId)
     if (d.state !== 'pending' && d.state !== 'uncertain') return { accepted: d.state === 'accepted' }
+    const team = await this.teams.get(d.teamId)
     const worker = await this.teams.worker(d.teamId, d.workerId)
     if (worker.control === 'user' || worker.state !== 'active') {
       await this.cancel(d, worker.control === 'user' ? 'worker is under user control' : 'worker released')
@@ -255,27 +259,42 @@ async tryDeliver(dispatchId: string): Promise<{ accepted: boolean; pendingReason
     if (busy && d.mode === 'queue') return { accepted: false, pendingReason: 'worker-busy' }
     if (busy && d.mode === 'interrupt') await this.abortWorkerTurn(d.workerId)
     await this.dispatches.update(d.dispatchId, { state: 'delivering' })     // 先落盘，再投递
-    try {
-      const started = await this.delegation.runChild({
-        ...workerRunChildInput(d),                  // 父线程、launcher 'manager-worker'、harness 路由、安全快照、工作区路径
-        resumeChild: true,
-        detach: true,
-        clientRequestId: d.dispatchId,              // 新增字段：透传给 turns.startTurn，保证幂等
-        prompt: renderAssignment(d)                 // §4.3
-      })
-      await this.dispatches.update(d.dispatchId, { state: 'accepted', turnId: started.turnId })
-      return { accepted: true }
-    } catch (error) {
-      await this.dispatches.update(d.dispatchId, { state: isAmbiguous(error) ? 'uncertain' : 'failed',
-        failureReason: boundedError(error) })
-      return { accepted: false }
+    const record = await this.childRuns.get(d.workerId)                     // ChildRunRecord；首次派活时不存在
+    const controller = this.abortControllers.forWorker(d.workerId)          // worker 独立的中止器，与总管 turn 生命周期无关
+    const common = {
+      parentThreadId: team.managerThreadId,
+      parentTurnId: d.parentTurnId,                 // 派活来源的总管 turn；GUI 发起的派活用总管线程最近一个 turn（见下）
+      prompt: renderAssignment(d, worker),          // §4.3
+      clientRequestId: d.dispatchId,                // 新增：一路透传到 turns.startTurn，保证幂等
+      security: worker.securitySnapshot,            // 创建时按 §7 固化的交集快照
+      signal: controller.signal
     }
+    // 两个现有入口（2026-09-25 核对）：
+    // - 首次：DelegationRuntime.runChild（delegation-runtime-run.ts:81），detach: true 时立即返回 queued 记录、后台执行
+    // - 之后：DelegationRuntime.resumeChild（delegation-runtime-lifecycle.ts:117），同步执行到 child 结束，
+    //   用 expectedResumeCount 作为乐观栅栏；这里不 await，由 deliverer 在后台跟踪
+    const run = record
+      ? this.delegation.resumeChild({ ...common, childId: d.workerId,
+          expectedResumeCount: record.resumeCount ?? 0, expectedLaunchers: ['manager-worker'] })
+      : this.delegation.runChild({ ...common, ...workerFirstRunInput(worker), launcher: 'manager-worker', detach: true })
+    this.track(d.dispatchId, run)                                           // 失败时置 failed / uncertain（见下）
+    await this.dispatches.update(d.dispatchId, { state: 'accepted' })       // turnId 由 turn_started 事件回填（按 clientRequestId 匹配）
+    return { accepted: true }
   })
 }
 ```
 
-- `runChild` 需要新增 `clientRequestId` 输入并透传给 `turns.startTurn`（`kun/src/contracts/turns.ts:184` 已有该字段，服务端绑定规范化请求哈希，同一 id 不同内容会被拒绝）。
-- 启动时对账：`delivering` / `uncertain` 的派活，按 worker 线程里是否存在该 `clientRequestId` 的 turn 判断——存在则 `accepted`，不存在则重新投递（同一个 id）。
+需要的底层改动（2026-09-25 核对后确定）：
+
+- `ChildRunExecutor` 的输入（`delegation-runtime-contracts.ts:353`）加 `clientRequestId?: string`；`child-agent-executor.ts` 调用 `turns.startTurn` 时放进 `request.clientRequestId`。`runChild` 与 `resumeChild` 的输入都加这个字段并透传。服务端 `findIdempotentStart`（`turn-service-admission-operations.ts:474`）已按 `clientRequestId` + 请求指纹去重：同一 id 同一内容返回原 turn，不同内容报错。
+- `ChildRunLauncher` 枚举（`delegation-runtime-contracts.ts:86`）加 `manager-worker`；`isGenericChildLauncher` 对它返回 false（worker 不走 `delegate_task` 的通用恢复路径）。
+- `resumeChild` 在 child 正在运行时会抛"still running"：deliverer 先用 `workerHasActiveTurn` 判断，排队的派活等上一轮结束再投递，不依赖这个异常。
+- `parentTurnId` 是必填：来自总管工具调用时就是当前 turn；来自 GUI（例如审查批注发回 worker，11 §4.4）时用总管线程最近一个 turn id，只影响 UI 分组，不影响执行。
+
+对账与触发：
+
+- `track()`：`runChild` / `resumeChild` 的 promise 拒绝时，错误能确定"未启动"（参数校验、栅栏冲突）→ `failed`；否则 → `uncertain`。
+- 启动时对账：`delivering` / `uncertain` 的派活，在 worker 线程里按 `turn.clientRequestId === dispatchId` 查找：找到 → `accepted` 并回填 turnId；没找到 → 用同一个 id 重新投递（幂等保证不会产生第二个 turn）。
 - 触发 `tryDeliver` 的事件：创建时、任务工作区变为 ready、worker 的 turn 结束（队列里的下一份活）、启动对账。
 - 同一 worker 的派活按创建顺序串行投递。
 
@@ -309,12 +328,22 @@ async handleWorkerTurnTerminal(threadId: string, turnId: string, outcome: TurnRu
 
 ### 6.2 唤醒
 
-复用 `DetachedChildHandoffCoordinator`（`kun/src/delegation/delegation-detached-handoff.ts`）的模式：
+照搬 `DetachedChildHandoffCoordinator`（`kun/src/delegation/delegation-detached-handoff.ts`，2026-09-25 核对）的机制，新建 `WorkerNoticeCoordinator`：
 
-- 通知先持久化（`WorkerNoticeStore`），再尝试投递。
-- 总管线程空闲：等 3 秒合并窗口（多个 worker 几乎同时完成时只唤醒一次），然后在总管线程启动一个 host-control turn（`runtimeContext: { kind: 'host-control', content }`，沿用 child executor 的 `controlPrompt` 机制），内容是结构化的通知列表。
-- 总管线程忙：通知留在队列里，在总管下一轮开始时作为 `model_context` 追加（不改变稳定前缀）。
-- 用户正在总管线程里打字时不唤醒（renderer 上报 composer 焦点状态，沿用现有草稿状态），等用户发出消息后作为上下文附在那一轮。
+| 现有后台子任务的做法 | worker 通知照搬 |
+| --- | --- |
+| `prepare()` 先持久化 handoff 记录（带 `clientRequestId = handoff id`） | 通知先写 `WorkerNoticeStore` |
+| `deliver()`：父线程 `status === 'running'` → 抛错 → 指数退避重试（1s、2s、4s… 上限 30s） | 总管线程忙时同样退避重试；不往进行中的 turn 里塞上下文 |
+| 父线程空闲 → `turns.startTurn({ prompt: notice, displayText, messageSource: 'background_subagent', clientRequestId })` → `runTurn` → `ack` | 用 `messageSource: 'worker_update'`（`UserMessageSource` 枚举新增，`contracts/items.ts:86`）启动一轮，`clientRequestId = notice batch id` |
+| `replayPending()` 启动时重放 | 同样在启动时重放 |
+| `roomContext` 线程走房间续跑 | 总管线程不在 Rooms 里（§2），不需要 |
+
+在此基础上增加两点：
+
+1. **合并**：投递时取该总管线程所有未确认的通知，合成一条消息，一次唤醒；合并窗口 3 秒（第一条通知到达后等 3 秒再投递），多个 worker 几乎同时完成时只唤醒一次。
+2. **不打断用户**：renderer 在用户正在总管线程输入时（composer 有未发送草稿且有焦点）通过 `POST /v1/teams/:managerThreadId/notice-hold` 设置一个 60 秒可续期的暂缓标记；暂缓期间 `deliver()` 按"线程忙"处理。用户发出消息后，未投递的通知以 `composerContexts` 附在这条消息上，通知记录随之确认。
+
+时间线上，`messageSource: 'worker_update'` 的用户消息渲染为"worker 更新"卡片，不显示为用户说的话（12 §6.2）。
 
 通知内容（宿主生成，结构化）：
 

@@ -125,6 +125,7 @@ kun serve
 | [11-review-ship.md](./11-review-ship.md) | 审查闭环、批注回传、AI 行归属、提交与 PR | P1–P2 |
 | [12-workbench-ui.md](./12-workbench-ui.md) | 工作台 UI：Mission Control、轨道、一对一、通知 | P1 |
 | [13-governance-rollout.md](./13-governance-rollout.md) | 安全、测试、红线文档修改、开关、分阶段验收 | 全程 |
+| [impl/](./impl/README.md) | **实施拆解**：按 PR 列出依赖、文件、函数级步骤、测试、验收；流程时序；契约汇总；2026-09-25 核对过的代码事实 | 全程 |
 
 ## 7. 阶段与里程碑
 

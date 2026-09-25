@@ -254,8 +254,8 @@ for (const row of rows) {
 | POST | `/v1/activity/:unitId/pin` | 置顶 |
 | POST | `/v1/activity/hooks` | 终端 agent 的 hook 写入（`hook-ingest` 令牌，05 §4） |
 
-- 主进程转发长轮询时，超时必须大于 `wait_ms`（`docs/AGENTS.md` 已有规则，thread-activity 曾因此出错）。
-- 手机远程：远程桥的白名单（`src/main/remote/remote-allowlist.ts`）加上 `/v1/activity*` 的只读路由和 ack / dismiss。
+- 主进程转发长轮询时，超时必须大于 `wait_ms`（`docs/AGENTS.md` 已有规则，thread-activity 曾因此出错）：在 `src/main/runtime/kun-adapter.ts:293` 的 `runtimeEventsWaitMs()` 里加上 `/v1/activity/events?` 前缀，与 `/v1/thread-activity/events?` 并列。
+- 手机远程：远程白名单按 IPC 通道控制，`runtime:request` 已放行，`/v1/activity*` 无需改白名单；只有新增 IPC 通道时才要改 `src/main/remote/remote-allowlist.ts`。
 - TUI：新增 `/activity` 只读视图（不增加任何运行时控制入口，符合现有 TUI 规则）。
 
 ## 10. 展示策略：`src/shared/activity-display.ts`
@@ -304,6 +304,6 @@ export const DONE_DECAY_MS = 30 * 60_000
 
 修改：
 
-- `kun/src/server/runtime-composition*.ts`（挂载观察者、服务、路由）
-- `src/main/remote/remote-allowlist.ts`、主进程长轮询桥
+- `kun/src/server/runtime-composition-core.ts:158`（`observers` 数组里与 `threadActivity` 并列加入 `activityStore`）、`runtime-composition-runtime.ts`（服务与路由）
+- `src/main/runtime/kun-adapter.ts`（`runtimeEventsWaitMs` 加前缀）
 - `src/preload/index.ts`、`src/shared/kun-gui-api-surface.ts`（activity API）
