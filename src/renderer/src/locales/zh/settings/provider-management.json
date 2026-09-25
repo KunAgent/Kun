@@ -13,10 +13,10 @@
   "modelProviderFailoverStrategy_order": "按顺序",
   "modelProviderFailoverStrategy_rotate": "轮询",
   "modelProviderFailoverStrategy_least-used": "最少使用",
-  "modelProviderFailoverStrategyDesc_smart": "按顺序尝试，遇到可重试故障自动切换。",
-  "modelProviderFailoverStrategyDesc_order": "始终按列表顺序尝试账户与备用。",
-  "modelProviderFailoverStrategyDesc_rotate": "在启用的账户间轮询，然后尝试备用。",
-  "modelProviderFailoverStrategyDesc_least-used": "优先使用最近用量最少的启用账户。",
+  "modelProviderFailoverStrategyDesc_smart": "同一对话尽量一直用同一个账户以保持缓存；额度快用完或出错时换到剩余最多的账户；所有账户都不可用时才用备用。",
+  "modelProviderFailoverStrategyDesc_order": "总是先用第一个账户，前一个不可用才用下一个；最后才用备用。",
+  "modelProviderFailoverStrategyDesc_rotate": "每个请求换下一个账户，会降低缓存命中率；所有账户都不可用时才用备用。",
+  "modelProviderFailoverStrategyDesc_least-used": "优先使用最近用量最少的账户；所有账户都不可用时才用备用。",
   "modelProviderFailoverAccounts": "账户",
   "modelProviderFailoverAccountEnabled": "启用",
   "modelProviderFailoverPrimary": "主账户",
@@ -107,5 +107,6 @@
   "modelProviderRefKind_routePool": "路由池",
   "modelProviderRefKind_failover": "故障转移",
   "modelProviderDeleteInUseOther": "正在被 {{surface}} 使用。",
-  "modelProviderDetectCostHint": "检测会对每个格式发一次最小请求，可能消耗极少量 token。"
+  "modelProviderDetectCostHint": "检测会对每个格式发一次最小请求，可能消耗极少量 token。",
+  "modelProviderFailoverOauthStrategyHint": "订阅（OAuth）账户不支持轮询与最少使用，会自动按智能策略执行。"
 }

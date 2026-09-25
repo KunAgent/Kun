@@ -14,5 +14,13 @@
   "continueTruncatedTaskPrompt": "Continue from where the previous reply was cut off. Keep each response shorter and split the remaining work into smaller steps.",
   "runtimeFetchFailedAutoStart": "Could not reach Kun. Auto-start is already enabled, so the local runtime may have crashed or is still restarting — retry, or restart Kun and check its logs.",
   "openProviderSettings": "Provider settings",
-  "modelRouteSwitchStatus": "Switching model route: {{from}} failed{{reasonSuffix}}; trying {{to}}…"
+  "modelRouteSwitchStatus": "Switching model route: {{from}} failed{{reasonSuffix}}; trying {{to}}…",
+  "modelRouteSwitchReason_credit": "insufficient balance",
+  "modelRouteSwitchReason_quota": "quota exhausted",
+  "modelRouteSwitchReason_rate": "rate limited",
+  "modelRouteSwitchReason_overloaded": "provider overloaded",
+  "modelRouteSwitchReason_auth": "authentication failed",
+  "modelRouteSwitchReason_model": "model unavailable",
+  "modelRouteSwitchReason_request": "request rejected",
+  "modelRouteSwitchReason_other": "request failed"
 }

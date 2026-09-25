@@ -6,7 +6,8 @@ import type {
 } from '@shared/app-settings'
 import {
   PROVIDER_ACCOUNT_STRATEGIES,
-  modelProviderFailoverGroup
+  modelProviderFailoverGroup,
+  modelProviderIsOauthOrDelegated
 } from '@shared/app-settings'
 import { Plus, Trash2 } from 'lucide-react'
 import type { ReactElement } from 'react'
@@ -70,6 +71,8 @@ export function ProviderReliabilityPanel({
 
   const host = hostOf(provider.baseUrl)
   const memberIds = new Set(group ? [group.providerId, ...group.accounts.map((a) => a.providerId)] : [])
+  const providersById = new Map(providerSettings.providers.map((candidate) => [candidate.id, candidate]))
+  const hasOauthMembers = [...memberIds].some((id) => modelProviderIsOauthOrDelegated(providersById.get(id)))
   const accountCandidates = providerSettings.providers.filter((candidate) =>
     !memberIds.has(candidate.id) &&
     (host ? hostOf(candidate.baseUrl) === host : candidate.id !== provider.id)
@@ -113,16 +116,25 @@ export function ProviderReliabilityPanel({
               <div className="inline-flex w-fit items-center rounded-lg border border-ds-border-muted bg-ds-main/70 p-0.5">
                 {PROVIDER_ACCOUNT_STRATEGIES.map((strategy) => {
                   const selected = group.strategy === strategy
+                  // OAuth/subscription members cannot spread requests across
+                  // interactive sessions — the runtime degrades rotate and
+                  // least-used to smart, so the picker disables them.
+                  const oauthDisabled = hasOauthMembers
+                    && (strategy === 'rotate' || strategy === 'least-used')
                   return (
                     <button
                       key={strategy}
                       type="button"
                       aria-pressed={selected}
+                      disabled={oauthDisabled}
+                      title={oauthDisabled ? t('modelProviderFailoverOauthStrategyHint') : undefined}
                       onClick={() => saveGroup({ ...group, strategy })}
                       className={`rounded-md px-3 py-1.5 text-[12px] font-medium leading-none transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
                         selected
                           ? 'bg-ds-card text-ds-ink shadow-sm'
-                          : 'text-ds-faint hover:text-ds-muted'
+                          : oauthDisabled
+                            ? 'cursor-not-allowed text-ds-faint opacity-50'
+                            : 'text-ds-faint hover:text-ds-muted'
                       }`}
                     >
                       {t(`modelProviderFailoverStrategy_${strategy}`)}
@@ -133,6 +145,11 @@ export function ProviderReliabilityPanel({
               <p className="text-[12px] leading-5 text-ds-faint">
                 {t(`modelProviderFailoverStrategyDesc_${group.strategy}`)}
               </p>
+              {hasOauthMembers ? (
+                <p className="text-[11.5px] leading-4 text-amber-600 dark:text-amber-300">
+                  {t('modelProviderFailoverOauthStrategyHint')}
+                </p>
+              ) : null}
             </div>
 
             <div className="grid gap-2">

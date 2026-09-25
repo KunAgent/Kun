@@ -316,10 +316,19 @@ export function runtimeStatusText(event: RuntimeStatusEventPayload): string {
     })
   }
   if (event.kind === 'model_route_switch') {
+    const reason = event.routeReason?.trim()
+    // Failure reason codes (credit, quota, rate, overloaded, auth, model,
+    // request, other) are rendered through localized labels; unknown codes
+    // fall back to the generic `other` text rather than leaking raw ids.
+    const reasonLabel = reason
+      ? i18n.t(`common:modelRouteSwitchReason_${reason}`, {
+          defaultValue: i18n.t('common:modelRouteSwitchReason_other')
+        })
+      : ''
     return i18n.t('common:modelRouteSwitchStatus', {
       from: `${event.fromProviderId ?? ''}/${event.fromModelId ?? ''}`,
       to: `${event.toProviderId ?? ''}/${event.toModelId ?? ''}`,
-      reasonSuffix: event.routeReason ? ` (${event.routeReason})` : ''
+      reasonSuffix: reasonLabel ? ` (${reasonLabel})` : ''
     })
   }
   if (event.kind === 'tool_catalog_changed') {

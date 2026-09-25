@@ -84,6 +84,7 @@ export {
   modelProviderDisplayId,
   modelProviderFailoverAfterRemoval,
   modelProviderFailoverGroup,
+  modelProviderIsOauthOrDelegated,
   modelProviderFailoverMemberIds,
   modelProviderInFailoverGroup,
   normalizeModelProviderCatalogSources,
