@@ -8,6 +8,16 @@ import { workspaceGit, workspaceWriteMutexContext } from './workspace-git.js'
 import { resolveStartFrom } from './start-from-resolver.js'
 import type { WorktreeLifecycle } from './worktree-lifecycle.js'
 import type { TaskWorkspaceStore } from './task-workspace-store.js'
+import {
+  captureTaskWorkspace,
+  cleanupIntegratedTaskWorkspace,
+  discardTaskWorkspace,
+  integrateTaskWorkspace,
+  preservedBranchesForRepo,
+  type TaskWorkspaceArtifacts,
+  type TaskWorkspaceIntegrateResult,
+  type WorkspaceIntegrationContext
+} from './task-workspace-integration.js'
 import type { KunProjectWorktreeConfig } from '../config/project-config.js'
 import type {
   ApprovedSetupStep,
@@ -52,6 +62,8 @@ export type TaskWorkspaceServiceOptions = {
     worktreePath: string
     config: KunProjectWorktreeConfig | undefined
   }) => Promise<EnvFillResult>
+  /** Patch/log artifact storage (07 §8.1); absent → capture keeps no patch. */
+  artifacts?: TaskWorkspaceArtifacts
 }
 
 /** Shape this service needs from `.kun/project.json`. */
@@ -190,6 +202,45 @@ export class TaskWorkspaceService {
     return this.options.store.get(workspaceId) ?? record
   }
 
+  /** Capture committed + uncommitted worktree changes into a patch artifact. */
+  async capture(workspaceId: string): Promise<TaskWorkspaceRecord> {
+    return captureTaskWorkspace(this.integrationContext(), workspaceId)
+  }
+
+  /** Integrate into the source repository; serialized per repo (07 §8). */
+  async integrate(
+    workspaceId: string,
+    mode: 'apply-patch' | 'merge-branch' = 'apply-patch'
+  ): Promise<TaskWorkspaceIntegrateResult> {
+    return integrateTaskWorkspace(this.integrationContext(), workspaceId, mode)
+  }
+
+  /** Preview without confirm; force-removes worktree + branch with it. */
+  async discard(workspaceId: string, confirm: boolean): Promise<TaskWorkspaceRecord> {
+    return discardTaskWorkspace(this.integrationContext(), workspaceId, confirm)
+  }
+
+  /** Non-force cleanup after integrate; unmerged branches are preserved. */
+  async cleanupIntegrated(workspaceId: string): Promise<TaskWorkspaceRecord> {
+    return cleanupIntegratedTaskWorkspace(this.integrationContext(), workspaceId)
+  }
+
+  async preservedBranches(repoRoot: string) {
+    return preservedBranchesForRepo(this.integrationContext(), repoRoot)
+  }
+
+  private integrationContext(): WorkspaceIntegrationContext {
+    return {
+      store: this.options.store,
+      lifecycle: this.options.lifecycle,
+      artifacts: this.options.artifacts,
+      nowIso: this.nowIso,
+      withRepoLock: (repoRoot, operation) => this.withRepoLock(repoRoot, operation),
+      withWriteContext: (operation) => this.withWriteContext(operation),
+      emit: (workspaceId) => this.emit(workspaceId)
+    }
+  }
+
   // ------------------------------------------------------------------
 
   private async runCreate(
@@ -262,11 +313,13 @@ export class TaskWorkspaceService {
             startRevision: start.sha,
             branch
           })))
+      const targetBranch = await this.resolveTargetBranch(repo.root, input.startFrom, start, signal)
       this.options.store.update(workspaceId, {
         repositoryRoot: repo.root,
         path,
         baseRevision: start.sha,
         branch,
+        ...(targetBranch ? { targetBranch } : {}),
         updatedAt: this.nowIso()
       })
       if (this.options.environmentFill) {
@@ -352,6 +405,33 @@ export class TaskWorkspaceService {
       state: setup.status === 'failed' ? 'failed' : 'ready',
       setup
     })
+  }
+
+  /**
+   * Local branch that `merge-branch` integration targets. Remote-tracking
+   * starts map to their local counterpart when it exists; detached/commit
+   * starts have no target.
+   */
+  private async resolveTargetBranch(
+    repoRoot: string,
+    startFrom: CreateTaskWorkspaceRequest['startFrom'],
+    start: { sha: string; ref?: string },
+    signal: AbortSignal
+  ): Promise<string | undefined> {
+    if (startFrom.kind === 'branch') return startFrom.name
+    if (startFrom.kind !== 'current-head' && startFrom.kind !== 'default-branch') return undefined
+    const ref = start.ref
+      ?? await workspaceGit(repoRoot, ['symbolic-ref', '--quiet', '--short', 'HEAD'], signal)
+        .then((out) => out.trim(), () => '')
+    if (!ref) return undefined
+    if (ref.startsWith('origin/')) {
+      const local = ref.slice('origin/'.length)
+      const exists = await workspaceGit(repoRoot, [
+        'rev-parse', '--verify', `refs/heads/${local}^{commit}`
+      ], signal).then(() => true, () => false)
+      return exists ? local : undefined
+    }
+    return ref
   }
 
   private async detectRepository(sourceRoot: string): Promise<{ root: string } | null> {

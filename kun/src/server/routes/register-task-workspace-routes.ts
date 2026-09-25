@@ -4,15 +4,20 @@ import { authorize } from './route-auth.js'
 import { ERRORS } from './runtime-error.js'
 import {
   cancelTaskWorkspaceResponse,
+  captureTaskWorkspaceResponse,
+  cleanupTaskWorkspaceResponse,
   createTaskWorkspaceResponse,
+  discardTaskWorkspaceResponse,
   getTaskWorkspaceResponse,
+  integrateTaskWorkspaceResponse,
   listTaskWorkspacesResponse,
   markReadyTaskWorkspaceResponse,
+  preservedBranchesResponse,
   retryTaskWorkspaceResponse,
   taskWorkspaceSetupLogResponse
 } from './task-workspaces.js'
 
-/** Task workspace routes (docs/ade/07 §11). capture/integrate/discard land in P0-12. */
+/** Task workspace routes (docs/ade/07 §11). */
 export function registerTaskWorkspaceRoutes(router: Router, runtime: ServerRuntime): void {
   const service = () => runtime.taskWorkspaces
   router.add('POST', '/v1/task-workspaces', async (request) => {
@@ -26,6 +31,13 @@ export function registerTaskWorkspaceRoutes(router: Router, runtime: ServerRunti
     const svc = service()
     if (!svc) return ERRORS.unavailable('task workspaces are unavailable')
     return listTaskWorkspacesResponse(svc, request)
+  })
+  // Literal segment must register before :workspaceId — first match wins.
+  router.add('GET', '/v1/task-workspaces/preserved-branches', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const svc = service()
+    if (!svc) return ERRORS.unavailable('task workspaces are unavailable')
+    return preservedBranchesResponse(svc, request)
   })
   router.add('GET', '/v1/task-workspaces/:workspaceId', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
@@ -57,5 +69,29 @@ export function registerTaskWorkspaceRoutes(router: Router, runtime: ServerRunti
     const artifacts = runtime.graph?.artifacts
     if (!svc || !artifacts) return ERRORS.unavailable('task workspaces are unavailable')
     return taskWorkspaceSetupLogResponse(svc, artifacts, ctx.params.workspaceId)
+  })
+  router.add('POST', '/v1/task-workspaces/:workspaceId/capture', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const svc = service()
+    if (!svc) return ERRORS.unavailable('task workspaces are unavailable')
+    return captureTaskWorkspaceResponse(svc, ctx.params.workspaceId)
+  })
+  router.add('POST', '/v1/task-workspaces/:workspaceId/integrate', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const svc = service()
+    if (!svc) return ERRORS.unavailable('task workspaces are unavailable')
+    return integrateTaskWorkspaceResponse(svc, request, ctx.params.workspaceId)
+  })
+  router.add('POST', '/v1/task-workspaces/:workspaceId/discard', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const svc = service()
+    if (!svc) return ERRORS.unavailable('task workspaces are unavailable')
+    return discardTaskWorkspaceResponse(svc, request, ctx.params.workspaceId)
+  })
+  router.add('POST', '/v1/task-workspaces/:workspaceId/cleanup', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const svc = service()
+    if (!svc) return ERRORS.unavailable('task workspaces are unavailable')
+    return cleanupTaskWorkspaceResponse(svc, ctx.params.workspaceId)
   })
 }

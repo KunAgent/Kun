@@ -337,7 +337,8 @@ export async function createRuntimeCore(
           activeOptions.ade?.worktreeSharedPaths, input.repoRoot
         )
       }),
-    setupRunner: new TaskWorkspaceSetupRunner({ artifacts: artifactStore })
+    setupRunner: new TaskWorkspaceSetupRunner({ artifacts: artifactStore }),
+    artifacts: artifactStore
   })
   taskWorkspaces.recoverInterrupted()
   const graphConfig = (): GraphRuntimeConfig =>
