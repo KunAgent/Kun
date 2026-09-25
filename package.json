@@ -17,7 +17,7 @@
     "dev:production": "node ./scripts/run-with-kun-flavor.cjs production npm run dev:app",
     "dev:tui": "npm run build:kun && node ./kun/dist/cli/serve-entry.js tui",
     "dev:tui:dv": "node ./scripts/run-with-kun-flavor.cjs development npm run dev:tui",
-    "build": "npm run build:extensions && npm run build:kun && npm run check:bundled-skills && npm run build:bundled-extensions && electron-vite build && npm run check:packaged-runtime-deps",
+    "build": "npm run build:extensions && npm run build:kun && npm run check:bundled-skills && npm run build:bundled-extensions && node ./scripts/run-electron-vite-build.cjs && npm run check:packaged-runtime-deps",
     "build:dv": "node ./scripts/run-with-kun-flavor.cjs development npm run build",
     "build:kun": "npm run build --workspace @kun/provider-catalog && npm run build --workspace @kun/extension-api && node ./scripts/ensure-kun-install.cjs && npm --prefix kun run build",
     "smoke:dual-runtime": "npm run build:kun && node ./scripts/smoke-dual-runtime.mjs",
