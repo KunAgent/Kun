@@ -54,6 +54,10 @@ import type { GatewayCredentialService } from '../../services/gateway-credential
 import type { RoutePoolHealthStore } from '../../adapters/model/route-pool-model-client.js'
 import type { RoutePoolTestService } from '../../services/route-pool-test-service.js'
 import type { GraphRuntimeConfig, RolesConfig } from '../../config/kun-config.js'
+import type { ServeProviderConfig } from '../../config/kun-config-application.js'
+import type { HarnessCatalog } from '../../harness/harness-catalog.js'
+import type { HarnessDetector } from '../../harness/harness-detector.js'
+import type { HarnessDefinition, HarnessStatus } from '../../contracts/harness.js'
 import type {
   FileGraphWriteCoordinator,
   FileGraphThreadReferenceStore,
@@ -232,6 +236,26 @@ export type ServerRuntime = {
   supplyChainTrust?: PublisherTrustStore
   /** Single extension platform instance shared by HTTP, CLI-style services, tools, and model routing. */
   extensionPlatform?: ExtensionPlatformRuntime
+  /**
+   * Harness catalog + detection status cache for `/v1/harnesses`. Optional so
+   * test scaffolds can omit it.
+   */
+  harnesses?: {
+    catalog: HarnessCatalog
+    detector: HarnessDetector
+  }
+  /**
+   * Admission evaluation for a harness in a usage surface (one-to-one,
+   * worker, graph, ...). Added in the admission step; routes only call it
+   * when present.
+   */
+  harnessAdmission?(input: {
+    definition: HarnessDefinition
+    status: HarnessStatus
+    usage: string
+  }): Promise<unknown>
+  /** Read-only view of the configured provider map (serve.providers). */
+  providerConfigs?(): Record<string, ServeProviderConfig>
   /**
    * Default ModelClient + model id for one-shot completions outside the
    * agent loop (e.g. AI-generated subagent profiles). Optional so test

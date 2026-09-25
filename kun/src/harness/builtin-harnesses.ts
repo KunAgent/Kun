@@ -83,6 +83,24 @@ export const ANTIGRAVITY_CAPABILITIES: HarnessCapabilities = {
   facts: { sandbox: 'none', usageReporting: 'none', compactionOwner: 'harness' }
 }
 
+/**
+ * Static superset for ACP harnesses; the ACP runtime narrows it from the
+ * agentCapabilities reported by `initialize` (03 §10).
+ */
+export const ACP_DEFAULT_CAPABILITIES: HarnessCapabilities = {
+  statuses: {
+    ...allSupportedStatuses(),
+    fork: up('acp session/fork is not widely implemented'),
+    rewind: up('acp session/rewind is not widely implemented'),
+    sameTurnSteer: up('acp session/prompt does not steer an in-flight turn'),
+    switchModelMidSession: todo(),
+    nativeContextTelemetry: todo(),
+    nativeCommands: { supported: true },
+    modes: { supported: true }
+  },
+  facts: { sandbox: 'native', usageReporting: 'estimated', compactionOwner: 'harness' }
+}
+
 export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
   {
     id: 'kun',
