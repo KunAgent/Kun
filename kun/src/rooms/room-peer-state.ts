@@ -6,8 +6,9 @@ import type { RoomStore, RoomStoreCommit, RoomStoredDocument } from './room-stor
 import { RoomStoreConflictError } from './room-store.js'
 import { appendPeerInbox, emptyPeerMember, peerId, peerInboxRows, peerMemberId } from './room-peer-inbox.js'
 import { publishPeerMessage } from './room-peer-publication.js'
-import { ROOM_PEER_LIMITS, type RoomPeerActivation, type RoomPeerBeginInput, type RoomPeerMemberState,
-  type RoomPeerPublishInput, type RoomPeerRequestInput, type RoomPeerTopic, type RoomPeerUpdates } from './room-peer-types.js'
+import { ROOM_PEER_HOLD_LIMITS, ROOM_PEER_LIMITS, type RoomPeerActivation, type RoomPeerBeginInput,
+  type RoomPeerMemberState, type RoomPeerPublishInput, type RoomPeerRequestInput, type RoomPeerTopic,
+  type RoomPeerUpdates } from './room-peer-types.js'
 
 type TopicRow = RoomStoredDocument<RoomPeerTopic>
 type MemberRow = RoomStoredDocument<RoomPeerMemberState>
@@ -160,6 +161,44 @@ export class RoomPeerStore {
         events: [{ roomId: topic.value.roomId, kind: 'peer.member.updated', payload: { rootRequestId: rootId, memberId } }] }
       if (promotion) await appendPeerActivationRun(this.store, commit, topic.value, member.value, next.activation!)
       await this.store.commit(commit)
+      return this.member(rootId, memberId)
+    })
+  }
+
+  /** Fold the unseen inbox batch into the live draft without spending another response activation. */
+  async rebaseActivation(rootId: string, memberId: string, activationClientRequestId: string,
+    input: { expectedPublicationRevision: number; itemIds: string[] }): Promise<MemberRow | null> {
+    return retryPeerConflict(async () => {
+      const receiptId = peerId('rebase', activationClientRequestId, input.expectedPublicationRevision, input.itemIds)
+      const fingerprint = peerFingerprint([rootId, memberId, activationClientRequestId, input])
+      const receipt = await this.store.getRequest(receiptId)
+      if (receipt) {
+        if (receipt.fingerprint !== fingerprint) throw new Error('peer rebase identity reused with different input')
+        return this.member(rootId, memberId)
+      }
+      const topic = await this.topic(rootId), member = await this.member(rootId, memberId)
+      const activation = member?.value.activation
+      if (!topic || !member || !activation || activation.clientRequestId !== activationClientRequestId ||
+        activation.phase !== 'respond' || activation.generation !== topic.value.generation ||
+        (activation.holds ?? 0) >= ROOM_PEER_HOLD_LIMITS.maxHolds ||
+        !(['active', 'idle'].includes(topic.value.status) ||
+          topic.value.status === 'paused' && topic.value.pauseReason === 'budget_exhausted') ||
+        topic.value.publicationRevision !== input.expectedPublicationRevision ||
+        !await this.current(topic, memberId)) return null
+      const unseen = await peerInboxRows(this.store, rootId, memberId, activation.seenThroughSeq, topic.value.generation)
+      if (unseen.length !== input.itemIds.length || unseen.some((item, index) => item.id !== input.itemIds[index])) return null
+      const seenThroughSeq = unseen.at(-1)?.seq ?? activation.seenThroughSeq
+      const next: RoomPeerMemberState = { ...member.value,
+        activation: { ...activation, basePublicationRevision: input.expectedPublicationRevision,
+          holds: (activation.holds ?? 0) + 1, seenThroughSeq,
+          seenItems: [...activation.seenItems, ...unseen.map((item) => ({ id: item.id, sourceId: item.value.sourceId,
+            sourceRevision: item.value.sourceRevision, seq: item.seq }))] },
+        seenInboxSeq: Math.max(member.value.seenInboxSeq, seenThroughSeq), updatedAt: new Date().toISOString() }
+      await this.store.commit({ requestId: receiptId, fingerprint,
+        checks: [{ kind: 'peer_topic', id: rootId, expectedRevision: topic.revision },
+          { kind: 'peer_member', id: member.id, expectedRevision: member.revision }],
+        puts: [{ kind: 'peer_member', id: member.id, roomId: topic.roomId, value: next }],
+        events: [{ roomId: topic.value.roomId, kind: 'peer.member.updated', payload: { rootRequestId: rootId, memberId } }] })
       return this.member(rootId, memberId)
     })
   }

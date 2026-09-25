@@ -3,11 +3,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RoomSchema } from '../contracts/rooms.js'
+import { RoomSchema, type Room } from '../contracts/rooms.js'
 import { SqliteRoomStore } from './room-store-sqlite.js'
 import { RoomService } from './room-service.js'
 import { RoomPeerStore } from './room-peer-state.js'
-import { peerId } from './room-peer-inbox.js'
+import { peerId, peerInboxRows } from './room-peer-inbox.js'
 import type { RoomPeerRequestInput } from './room-peer-types.js'
 
 const cleanups: Array<() => Promise<void>> = []
@@ -219,5 +219,133 @@ describe('durable peer topics and member inboxes', () => {
     expect(await f.peer.publish({ rootRequestId: f.rootId, memberId: 'developer', clientRequestId: 'late-reply',
       activationClientRequestId: active!.value.activation!.clientRequestId, body: 'Late output' })).toEqual({ status: 'stopped' })
     expect((await f.peer.member(f.rootId, 'developer'))!.value.handledInboxSeq).toBe(0)
+  })
+
+  it('rebases a staged draft onto delivered updates without touching budgets and replays idempotently', async () => {
+    const f = await fixture(), active = await f.begin('developer')
+    const activation = active!.value.activation!
+    await f.peer.deliverTask(f.rootId, { id: 'task-a', revision: 1, body: 'Task progressed once' })
+    await f.peer.deliverTask(f.rootId, { id: 'task-b', revision: 1, body: 'Second task progressed' })
+    const topic = (await f.peer.topic(f.rootId))!
+    expect(topic.value.publicationRevision).toBe(2)
+    const unseen = await peerInboxRows(f.store, f.rootId, 'developer', activation.seenThroughSeq, topic.value.generation)
+    expect(unseen).toHaveLength(2)
+    const input = { expectedPublicationRevision: 2, itemIds: unseen.map((item) => item.id) }
+    const rebased = await f.peer.rebaseActivation(f.rootId, 'developer', activation.clientRequestId, input)
+    expect(rebased).not.toBeNull()
+    const next = rebased!.value.activation!
+    expect(next).toMatchObject({ basePublicationRevision: 2, holds: 1,
+      seenThroughSeq: unseen.at(-1)!.seq, generation: 1 })
+    expect(next.seenItems.map((item) => item.id)).toEqual([...activation.seenItems.map((item) => item.id), ...input.itemIds])
+    expect(rebased!.value).toMatchObject({ seenInboxSeq: unseen.at(-1)!.seq, handledInboxSeq: 0, state: 'responding' })
+    expect(await f.peer.topic(f.rootId)).toMatchObject({ revision: topic.revision,
+      value: { responseCount: 1, triageCount: 0, publicationRevision: 2 } })
+    const replay = await f.peer.rebaseActivation(f.rootId, 'developer', activation.clientRequestId, input)
+    expect(replay!.value.activation).toMatchObject({ holds: 1, basePublicationRevision: 2 })
+    expect(replay!.value.activation!.seenItems).toHaveLength(next.seenItems.length)
+  })
+
+  it('publishes a rebased draft instead of discarding it as stale', async () => {
+    const f = await fixture(), active = await f.begin('developer')
+    const activation = active!.value.activation!
+    await f.peer.deliverTask(f.rootId, { id: 'task-a', revision: 1, body: 'Task progressed' })
+    const unseen = await peerInboxRows(f.store, f.rootId, 'developer', activation.seenThroughSeq, 1)
+    expect(await f.peer.rebaseActivation(f.rootId, 'developer', activation.clientRequestId,
+      { expectedPublicationRevision: 1, itemIds: unseen.map((item) => item.id) })).not.toBeNull()
+    expect(await f.peer.publish({ rootRequestId: f.rootId, memberId: 'developer', clientRequestId: 'revised-publish',
+      activationClientRequestId: activation.clientRequestId, body: 'Revised answer covering the update' }))
+      .toMatchObject({ status: 'published' })
+    expect((await f.peer.member(f.rootId, 'developer'))!.value.handledInboxSeq).toBe(unseen.at(-1)!.seq)
+  })
+
+  it('rejects a rebase when the activation, revision or unseen list does not match', async () => {
+    const f = await fixture(), active = await f.begin('developer')
+    const activation = active!.value.activation!
+    await f.peer.deliverTask(f.rootId, { id: 'task-a', revision: 1, body: 'One' })
+    await f.peer.deliverTask(f.rootId, { id: 'task-b', revision: 1, body: 'Two' })
+    const unseen = await peerInboxRows(f.store, f.rootId, 'developer', activation.seenThroughSeq, 1)
+    const input = { expectedPublicationRevision: 2, itemIds: unseen.map((item) => item.id) }
+    const attempt = (clientRequestId: string, patch: Partial<typeof input> = {}) =>
+      f.peer.rebaseActivation(f.rootId, 'developer', clientRequestId, { ...input, ...patch })
+    expect(await attempt('wrong-activation')).toBeNull()
+    expect(await attempt(activation.clientRequestId, { expectedPublicationRevision: 1 })).toBeNull()
+    expect(await attempt(activation.clientRequestId, { expectedPublicationRevision: 99 })).toBeNull()
+    expect(await attempt(activation.clientRequestId, { itemIds: [] })).toBeNull()
+    expect(await attempt(activation.clientRequestId, { itemIds: [input.itemIds[0]] })).toBeNull()
+    expect(await attempt(activation.clientRequestId, { itemIds: [...input.itemIds, 'peer-inbox-extra'] })).toBeNull()
+    expect(await attempt(activation.clientRequestId, { itemIds: [...input.itemIds].reverse() })).toBeNull()
+    expect(await f.peer.rebaseActivation(f.rootId, 'reviewer', activation.clientRequestId, input)).toBeNull()
+    const room = (await f.store.get<Room>('room', f.room.id))!
+    await f.service.update(f.room.id, { clientRequestId: 'disable-dev', expectedRevision: room.revision,
+      members: room.value.members.map((member) => member.id === 'developer' ? { ...member, enabled: false } : member) })
+    expect(await attempt(activation.clientRequestId)).toBeNull()
+    const restored = (await f.store.get<Room>('room', f.room.id))!
+    await f.service.update(f.room.id, { clientRequestId: 'enable-dev', expectedRevision: restored.revision,
+      members: restored.value.members.map((member) => member.id === 'developer' ? { ...member, enabled: true } : member) })
+    expect(await attempt(activation.clientRequestId)).not.toBeNull()
+  })
+
+  it('rejects a rebase outside the respond phase or after the hold limit', async () => {
+    const f = await fixture(), triage = await f.begin('developer', 'triage')
+    const activation = triage!.value.activation!
+    await f.peer.deliverTask(f.rootId, { id: 'task-a', revision: 1, body: 'New work' })
+    const unseen = await peerInboxRows(f.store, f.rootId, 'developer', activation.seenThroughSeq, 1)
+    const input = { expectedPublicationRevision: 1, itemIds: unseen.map((item) => item.id) }
+    expect(await f.peer.rebaseActivation(f.rootId, 'developer', activation.clientRequestId, input)).toBeNull()
+    const member = (await f.peer.member(f.rootId, 'developer'))!
+    await f.store.commit({ requestId: 'seed-holds',
+      checks: [{ kind: 'peer_member', id: member.id, expectedRevision: member.revision }],
+      puts: [{ kind: 'peer_member', id: member.id, roomId: member.roomId, value: { ...member.value,
+        activation: { ...member.value.activation!, phase: 'respond' as const, holds: 2 } } }] })
+    expect(await f.peer.rebaseActivation(f.rootId, 'developer', activation.clientRequestId, input)).toBeNull()
+  })
+
+  it('rejects a rebase once the topic generation moved on', async () => {
+    const f = await fixture(), active = await f.begin('developer')
+    const activation = active!.value.activation!
+    await f.peer.stop(f.rootId)
+    expect(await f.peer.rebaseActivation(f.rootId, 'developer', activation.clientRequestId,
+      { expectedPublicationRevision: 0, itemIds: [] })).toBeNull()
+  })
+
+  it('keeps rejecting under a non-budget pause but rebases under an exhausted budget', async () => {
+    const f = await fixture(), active = await f.begin('developer')
+    const activation = active!.value.activation!
+    await f.peer.deliverTask(f.rootId, { id: 'task-a', revision: 1, body: 'New work' })
+    const unseen = await peerInboxRows(f.store, f.rootId, 'developer', activation.seenThroughSeq, 1)
+    const input = { expectedPublicationRevision: 1, itemIds: unseen.map((item) => item.id) }
+    let row = (await f.peer.topic(f.rootId))!
+    await f.store.commit({ requestId: 'pause-member-failure',
+      checks: [{ kind: 'peer_topic', id: row.id, expectedRevision: row.revision }],
+      puts: [{ kind: 'peer_topic', id: row.id, roomId: row.roomId, value: { ...row.value,
+        status: 'paused', pauseReason: 'member_failed' } }] })
+    expect(await f.peer.rebaseActivation(f.rootId, 'developer', activation.clientRequestId, input)).toBeNull()
+    row = (await f.peer.topic(f.rootId))!
+    await f.store.commit({ requestId: 'pause-budget',
+      checks: [{ kind: 'peer_topic', id: row.id, expectedRevision: row.revision }],
+      puts: [{ kind: 'peer_topic', id: row.id, roomId: row.roomId, value: { ...row.value, pauseReason: 'budget_exhausted' } }] })
+    expect(await f.peer.rebaseActivation(f.rootId, 'developer', activation.clientRequestId, input)).not.toBeNull()
+  })
+
+  it('loses a racing rebase when a publication lands inside the commit', async () => {
+    const f = await fixture(), active = await f.begin('developer')
+    const activation = active!.value.activation!
+    await f.peer.deliverTask(f.rootId, { id: 'task-a', revision: 1, body: 'New work' })
+    const unseen = await peerInboxRows(f.store, f.rootId, 'developer', activation.seenThroughSeq, 1)
+    const input = { expectedPublicationRevision: 1, itemIds: unseen.map((item) => item.id) }
+    const receiptId = peerId('rebase', activation.clientRequestId, input.expectedPublicationRevision, input.itemIds)
+    const commit = f.store.commit.bind(f.store)
+    let injected = false
+    vi.spyOn(f.store, 'commit').mockImplementation(async (request) => {
+      if (!injected && request.requestId === receiptId) {
+        injected = true
+        await f.peer.deliverTask(f.rootId, { id: 'task-b', revision: 1, body: 'Racing update' })
+      }
+      return commit(request)
+    })
+    expect(await f.peer.rebaseActivation(f.rootId, 'developer', activation.clientRequestId, input)).toBeNull()
+    const member = (await f.peer.member(f.rootId, 'developer'))!.value
+    expect(member.activation).toMatchObject({ basePublicationRevision: 0, seenThroughSeq: activation.seenThroughSeq })
+    expect(member.activation!.holds).toBeUndefined()
   })
 })

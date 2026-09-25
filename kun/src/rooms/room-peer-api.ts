@@ -53,7 +53,8 @@ export async function roomPeerMetricPage(peer: RoomPeerStore, roomId: string, ro
   return { metrics: rows.map(({ id, value }) => ({ id, rootRequestId,
     memberId: value.memberId, phase: value.phase, outcome: value.outcome, model: value.model,
     generation: value.generation, elapsedMs: value.elapsedMs, usage: value.usage,
-    firstResponseMs: value.firstResponseMs, usageStatus: value.usageStatus, createdAt: value.createdAt
+    firstResponseMs: value.firstResponseMs, usageStatus: value.usageStatus, holds: value.holds,
+    createdAt: value.createdAt
   })), firstResponseAggregation: 'minimum_published_response_per_generation',
     nextCursor: rows.length === limit ? String(rows.at(-1)!.seq) : undefined }
 }

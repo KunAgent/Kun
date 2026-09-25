@@ -180,9 +180,14 @@ async function collectPeerMetrics(api, state) {
     knownUsage++
     for (const key of TOKEN_KEYS) if (Number.isFinite(usage[key])) totals[key] += usage[key]
   }
+  const responses = [...metrics.values()].filter((metric) => metric.phase === 'response')
   return { recordedMetrics: metrics.size, triageMetrics, triageUsage: knownUsage ? totals : null,
     triageUsageKnownCalls: knownUsage, triageUsageMissingCalls: triageMetrics - knownUsage,
-    responseOutcomes: [...metrics.values()].filter((metric) => metric.phase === 'response').reduce((counts, metric) => {
+    // Each hold is a stale draft intercepted mid-turn; holds on runs that did not end stale avoided a rerun.
+    holds: responses.reduce((total, metric) => total + (Number.isFinite(metric.holds) ? metric.holds : 0), 0),
+    avoidedReruns: responses.reduce((total, metric) => total +
+      (metric.outcome !== 'stale' && Number.isFinite(metric.holds) ? metric.holds : 0), 0),
+    responseOutcomes: responses.reduce((counts, metric) => {
       const outcome = ['published', 'duplicate', 'stale', 'stopped', 'budget_exhausted'].includes(metric.outcome) ? metric.outcome : 'other'
       counts[outcome] = (counts[outcome] ?? 0) + 1
       return counts

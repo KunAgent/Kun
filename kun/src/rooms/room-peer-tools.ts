@@ -2,7 +2,10 @@ import { executeAgentHandoffRoomTool } from '../agents/agent-handoff-tools.js'
 import { z } from 'zod'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { RoomStore } from './room-store.js'
-import type { RoomPeerMemberState, RoomPeerTopic, RoomPeerInboxItem } from './room-peer-types.js'
+import { RoomPeerStore } from './room-peer-state.js'
+import { peerInboxRows } from './room-peer-inbox.js'
+import { ROOM_PEER_HOLD_LIMITS, type RoomPeerActivation, type RoomPeerMemberState, type RoomPeerTopic,
+  type RoomPeerInboxItem } from './room-peer-types.js'
 import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 
 const bindings = new WeakMap<ThreadStore, RoomStore>()
@@ -24,7 +27,7 @@ export function roomPeerTools(threads: ThreadStore) {
     { name: 'read_room_updates', schema: readSchema,
       description: 'Read bounded updates for your current room topic. This does not acknowledge messages or grant execution permission.' },
     { name: 'send_room_message', schema: RoomPeerMessageInput,
-      description: 'Submit one public reply, with optional member invitations, or skip:true if you have no new contribution. Finish the turn after submission. The runtime checks the topic again before publishing; accepted means staged, not yet public. This never creates execution tasks.' }
+      description: 'Submit one public reply, with optional member invitations, or skip:true if you have no new contribution. Finish the turn after submission. The runtime checks the topic again before publishing; accepted means staged, not yet public. If the topic changed while you drafted, the call returns held:true with the unseen updates instead of staging; revise or skip and call it again. This never creates execution tasks.' }
   ].map(({ name, schema, description }) => LocalToolHost.defineTool({
     name, description, toolKind: 'tool_call', policy: 'auto', sideEffect: 'read-only',
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
@@ -57,6 +60,11 @@ export function roomPeerTools(threads: ThreadStore) {
           if ([...input.mentionMemberIds, ...input.inviteMemberIds].some((id) => id === room.memberId || !allowed.has(id))) {
             throw new Error('invitation must address another enabled room member')
           }
+          if (topic.value.publicationRevision !== state.activation.basePublicationRevision) {
+            const held = await holdStalePeerDraft(store, room.rootRequestId, room.memberId,
+              state.activation, topic.value.publicationRevision, topic.value.generation)
+            if (held) return { output: held }
+          }
           return { output: { accepted: true, staged: true, value: input } }
         }
         readSchema.parse(args)
@@ -79,4 +87,21 @@ export function roomPeerTools(threads: ThreadStore) {
       }
     }
   }))
+}
+
+/** A bounded stale-draft hold: the unseen batch is committed into the activation so the same turn can revise. */
+async function holdStalePeerDraft(store: RoomStore, rootRequestId: string, memberId: string,
+  activation: RoomPeerActivation, publicationRevision: number, generation: number) {
+  const unseen = await peerInboxRows(store, rootRequestId, memberId, activation.seenThroughSeq, generation)
+  if (!unseen.length || unseen.length > ROOM_PEER_HOLD_LIMITS.maxUpdates ||
+    (activation.holds ?? 0) >= ROOM_PEER_HOLD_LIMITS.maxHolds) return undefined
+  const rebased = await new RoomPeerStore(store).rebaseActivation(rootRequestId, memberId, activation.clientRequestId,
+    { expectedPublicationRevision: publicationRevision, itemIds: unseen.map((item) => item.id) })
+  if (!rebased) return undefined
+  return { accepted: false as const, held: true as const, reason: 'topic_changed' as const,
+    updates: unseen.map((item) => ({ id: item.value.sourceId, kind: item.value.sourceKind,
+      authorMemberId: item.value.authorMemberId, body: item.value.body.slice(0, 1500),
+      truncated: item.value.body.length > 1500 })),
+    note: 'Your draft was not published. These updates arrived after your context was prepared. ' +
+      'Revise using them, or call send_room_message with skip:true if they already cover your point.' }
 }

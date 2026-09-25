@@ -57,6 +57,11 @@ delivery and integration still target the original execution records.
 other members cannot see a staged draft. At turn completion the runtime checks
 the topic generation and publication revision. Changed context causes a fresh
 judgment before publication. Unrelated topics do not invalidate an answer.
+When the revision already advanced while the member was drafting,
+`send_room_message` returns `held` with the unseen updates instead of staging
+(up to 6 items, at most 2 holds per activation); the member revises or skips in
+the same turn without spending another response activation. A draft that stays
+stale until turn completion still falls back to the same judgment path.
 Publication, recipient delivery and processed-inbox acknowledgment are committed
 together; replayed receipts do not create another response. Exact duplicate
 suppression is not a guarantee against semantically similar answers.

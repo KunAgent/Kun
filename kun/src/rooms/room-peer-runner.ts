@@ -361,6 +361,16 @@ export class RoomPeerRunner {
       return
     }
     if (observed.resultError && observed.structured === undefined) throw new Error(observed.resultError)
+    if (observed.structured === undefined && observed.held) {
+      // A held draft was rebased but never resubmitted. The run ends stale like the
+      // publication guard, never falling back to raw assistant text, and the
+      // pending inbox stays unhandled for the next activation.
+      await updateRoomRun(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId),
+        { status: 'completed', outcome: 'stale' })
+      await releasePeerActivation(this.deps, member)
+      await recordPeerResponseMetric(this.deps, topic.value, member, 'stale', observed.turn)
+      return
+    }
     const submitted = RoomPeerMessageInput.parse(observed.structured ?? {
       body: observed.text.trim(), skip: !observed.text.trim()
     })

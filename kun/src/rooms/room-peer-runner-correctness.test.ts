@@ -142,6 +142,42 @@ describe('peer response failure recovery', () => {
     } finally { await runner.close() }
   })
 
+  it('treats a held draft without resubmission as stale without publishing assistant text', async () => {
+    const f = await fixture()
+    await f.runner.tick()
+    const activation = (await f.active()).value.activation!
+    const turn = await f.finish()
+    vi.spyOn(execution, 'observeRoomTurn').mockResolvedValue({ status: 'completed', held: true,
+      text: 'Assistant draft text that must not be published', structured: undefined, turn,
+      error: undefined, resultError: undefined })
+    await f.runner.tick()
+    const member = (await f.active()).value
+    // The released activation is gone; the still-pending inbox may already have re-activated.
+    expect(member.activation?.clientRequestId).not.toBe(activation.clientRequestId)
+    expect(member.handledInboxSeq).toBe(0)
+    const published = await f.store.list<RoomMessage>('message', { roomId: f.room.id })
+    expect(published.every((row) => !JSON.stringify(row.value).includes('Assistant draft text'))).toBe(true)
+    expect(published.filter((row) => row.value.authorKind === 'member')).toHaveLength(0)
+    expect((await f.store.get<RoomRunRecord>('room_run', roomRunId(f.room.id, activation.clientRequestId)))!.value)
+      .toMatchObject({ status: 'completed', outcome: 'stale' })
+    const metrics = await f.store.list<{ phase: string; outcome: string }>('peer_metric', { rootRequestId: f.sent.requestId })
+    expect(metrics.some((row) => row.value.phase === 'response' && row.value.outcome === 'stale')).toBe(true)
+  })
+
+  it('exposes response holds through the topic metrics page', async () => {
+    const f = await fixture()
+    await f.runner.tick()
+    const member = await f.active()
+    await putRoomDocument(f.store, 'peer_member', member.id, f.room.id,
+      { ...member.value, activation: { ...member.value.activation!, holds: 1 } }, member)
+    const turn = await f.finish()
+    vi.spyOn(execution, 'observeRoomTurn').mockResolvedValue({ status: 'completed', held: true,
+      text: '', structured: undefined, turn })
+    await f.runner.tick()
+    const page = await roomPeerMetricPage(f.runner.state, f.room.id, f.sent.requestId)
+    expect(page.metrics[0]).toMatchObject({ phase: 'response', outcome: 'stale', holds: 1 })
+  })
+
   it('reports disabled pending members without keeping an otherwise drained topic busy', async () => {
     const f = await fixture(true)
     const updates = (await f.runner.state.readUpdates(f.sent.requestId, 'coordinator'))!
