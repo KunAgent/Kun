@@ -1,6 +1,6 @@
 import type { ModelStreamChunk } from '../../ports/model-client.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
-import { isCustomModelEndpointFormat, modelEndpointPath, type ModelEndpointFormat } from '../../contracts/model-endpoint-format.js'
+import { resolveModelEndpointUrl, type ModelEndpointFormat } from '../../contracts/model-endpoint-format.js'
 import { DEFAULT_MODEL_STREAM_LIMITS, ModelStreamResourceBudget, ModelStreamResourceLimitError, type ModelStreamLimits } from './model-stream-resource-budget.js'
 import type { ChatCompletionResponse, ChatMessage, StreamReadResult } from './compat-model-types.js'
 import { modelFailureMetadata } from './failure-reason.js'
@@ -50,26 +50,11 @@ export function normalizeCodexResponsesUrl(baseUrl: string): string {
 }
 
 export function buildModelEndpointUrl(baseUrl: string, endpointFormat: ModelEndpointFormat): string {
-  if (isCodexEndpoint(baseUrl)) return normalizeCodexResponsesUrl(baseUrl)
-  if (isCustomModelEndpointFormat(endpointFormat)) return exactModelEndpointUrl(baseUrl)
-  const path = modelEndpointPath(endpointFormat)
-  const normalized = baseUrl.trim().replace(/\/+$/, '')
-  if (!normalized) return `/v1/${path}`
-  const lastSegment = normalized.split('/').pop()?.toLowerCase() ?? ''
-  if (lastSegment === 'beta') {
-    return `${normalized.slice(0, -'/beta'.length)}/v1/${path}`
-  }
-  if (/^v\d+$/.test(lastSegment)) {
-    return `${normalized}/${path}`
-  }
-  return `${normalized}/v1/${path}`
+  return resolveModelEndpointUrl(baseUrl, endpointFormat, 'generate')
 }
 
 export function exactModelEndpointUrl(baseUrl: string): string {
-  const trimmed = baseUrl.trim()
-  const query = trimmed.search(/[?#]/)
-  if (query < 0) return trimmed.replace(/\/+$/, '')
-  return `${trimmed.slice(0, query).replace(/\/+$/, '')}${trimmed.slice(query)}`
+  return resolveModelEndpointUrl(baseUrl, 'custom_endpoint', 'generate')
 }
 
 

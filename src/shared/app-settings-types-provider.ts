@@ -20,6 +20,7 @@ export {
   modelEndpointPath,
   normalizeModelEndpointFormat,
   resolveModelEndpointFormat,
+  resolveModelEndpointUrl,
   usesChatCompletionsShape
 } from '../../kun/src/contracts/model-endpoint-format.js'
 
