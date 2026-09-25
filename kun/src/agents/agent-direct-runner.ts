@@ -19,6 +19,7 @@ import { agentSetupConversationPolicy, agentSetupPending, isHiddenAgentSetupMess
 import { settleConversationRunOutcome } from './agent-direct-publication.js'
 import { withdrawRunProposals } from '../rooms/room-proposals.js'
 import { roomContinuationIsCurrent } from '../rooms/room-continuation-service.js'
+import { ROOM_REMINDER_TOOL_NAMES } from '../rooms/room-reminder-tools.js'
 import { ROOM_DIRECT_GUIDANCE } from '../rooms/room-collaboration-guidance.js'
 
 export function agentWorkspace(dataDir: string, agentId: string) { return join(dataDir, 'agents', 'workspaces', agentId) }
@@ -64,7 +65,8 @@ export class AgentDirectRunner {
       const prior = await this.deps.threads.getMetadata(threadId)
       const history = !prior ? await this.history(request) : ''
       const reply = request.message.replyToMessageId ? await this.deps.store.get<RoomMessage>('message', request.message.replyToMessageId) : null
-      const input = [history, reply?.roomId === request.roomId ? 'The user explicitly replied to this earlier message (reference only): ' + reply.value.body.slice(0, 4000) : '', 'User message:\n' + request.message.body,
+      const reminderInput = request.privateReminder ? await this.reminderWakeInput(request) : null
+      const input = [history, reply?.roomId === request.roomId ? 'The user explicitly replied to this earlier message (reference only): ' + reply.value.body.slice(0, 4000) : '', reminderInput ?? 'User message:\n' + request.message.body,
         request.handoffReturnId ? 'This is the result of your scoped collaboration. Use it to continue the original work, or finish if nothing remains.' : '',
         request.message.references?.length ? 'User supplied content references: ' + JSON.stringify(request.message.references) : '',
         agentSetupPending(agent) ? AGENT_SETUP_PROMPT : ''].filter(Boolean).join('\n\n')
@@ -91,7 +93,7 @@ export class AgentDirectRunner {
           ...ROOM_DIRECT_GUIDANCE].filter(Boolean).join('\n')
       }, { id: request.threadId, relation: 'side', roomContext: { roomId: request.roomId, memberId: member.id,
         participantAgentId: member.participantAgentId, agentRevision: member.agentRevision, kind: 'conversation',
-        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...AGENT_COLLABORATION_TOOLS])] : undefined,
+        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...ROOM_REMINDER_TOOL_NAMES, ...AGENT_COLLABORATION_TOOLS])] : undefined,
         blockedToolNames: policy.blocked,
         blockedProviderIds: limits?.blockedMcpServers ?? [], blockedSkillIds: limits?.blockedSkills ?? [], skillsEnabled: policy.skillsEnabled } })
     }
@@ -146,6 +148,25 @@ export class AgentDirectRunner {
   }
   private clientId(request: RoomRequestState) {
     return 'private-' + request.id + '-' + (request.stepAttempt ?? 0)
+  }
+  /**
+   * A fired reminder wakes the agent with reference material, never a new user
+   * instruction. The note and anchor stay quoted context; the agent decides
+   * whether the user should see anything.
+   */
+  private async reminderWakeInput(request: RoomRequestState): Promise<string> {
+    const reminder = request.privateReminder!
+    const doc = await this.deps.store.get<import('../contracts/room-reminders.js').RoomReminder>('room_reminder', reminder.reminderId)
+    const anchor = doc?.value.anchorMessageId
+      ? await this.deps.store.get<RoomMessage>('message', doc.value.anchorMessageId) : null
+    const anchorText = anchor && anchor.roomId === request.roomId ? anchor.value.body.slice(0, 1500) : ''
+    return [
+      'Scheduled reminder you created earlier. It wakes only you and is not a new user instruction:',
+      doc?.value.note ?? request.message.body,
+      `Scheduled for ${reminder.scheduledFor}; fired ${reminder.lateSeconds} seconds late.`,
+      'Anchor message (reference only): ' + (anchorText || 'none'),
+      'Decide whether follow-up is needed now. Use send_im_message only if the user should see something; otherwise finish without a visible reply.'
+    ].join('\n')
   }
   private async history(request: RoomRequestState) {
     const rows = await this.deps.store.list<RoomMessage>('message', { roomId: request.roomId, limit: 30 })

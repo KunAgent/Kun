@@ -31,6 +31,7 @@ import { pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
 import { isRoomRouteReason, roomRouteMessage } from './room-router.js'
 import { bindRoomContinuationDispatcher } from './room-continuation-dispatch.js'
 import { enqueuePrivateContinuation } from './room-continuation-service.js'
+import { fireDueRoomReminders } from './room-reminders.js'
 
 export class RoomRuntime {
   private readonly memoryCapture: AgentMemoryCoordinator
@@ -174,6 +175,11 @@ export class RoomRuntime {
     await this.deps.assertOwnership()
     await this.agents.initialize()
     await this.memoryCapture.tick()
+    try {
+      await fireDueRoomReminders(this.deps, this.service, new Date().toISOString())
+    } catch (error) {
+      console.warn('[kun] room reminders:', error instanceof Error ? error.message : String(error))
+    }
     const requests = await this.deps.store.list<RoomRequestState>('request', {
       status: ['pending', 'running', 'stopping', 'recovery_required'], limit: 100, order: 'asc', afterSeq: this.requestCursor })
     this.requestCursor = requests.length === 100 ? requests.at(-1)!.seq : undefined

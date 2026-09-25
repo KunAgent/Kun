@@ -255,6 +255,8 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   ...['close', 'invite', 'discuss'].map((action) => compileEndpoint('/v1/rooms/{roomId}/polls/{pollId}/' + action, ['POST'])),
   compileEndpoint('/v1/rooms/{roomId}/proposals/{proposalId}', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/proposals/{proposalId}/resolve', ['POST']),
+  compileEndpoint('/v1/rooms/{roomId}/reminders', ['GET']),
+  compileEndpoint('/v1/rooms/{roomId}/reminders/{reminderId}/cancel', ['POST']),
   compileEndpoint('/v1/rooms/{roomId}/messages/{messageId}/run', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/runs', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/runs/{runId}', ['GET']),

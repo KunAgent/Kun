@@ -13,7 +13,7 @@ export const RoomDocumentKindSchema = z.enum([
   'rule_version', 'context', 'summary', 'outcome', 'recovery', 'integration', 'read_state', 'cleanup', 'validation',
   'request_input', 'rule_bundle', 'rule_compression',
   'room_run', 'room_poll', 'room_reactions', 'room_preference', 'room_avatar', 'room_user_profile',
-  'room_proposal',
+  'room_proposal', 'room_reminder',
   'peer_topic', 'peer_inbox', 'peer_member', 'peer_publication', 'peer_metric', 'peer_cursor'
 ])
 export type RoomDocumentKind = z.infer<typeof RoomDocumentKindSchema>

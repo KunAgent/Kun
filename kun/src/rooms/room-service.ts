@@ -184,18 +184,26 @@ export class RoomService {
       attachmentIds: body.attachmentIds, clientRequestId: body.clientRequestId,
       requestFingerprint: roomFingerprint(body), createdAt: new Date().toISOString()
     })
-    if (room.conversationKind === 'user_agent' && !body.taskId && !body.executionAgentId && this.agents) {
-      await freezeAgentPermissions(this.agents, room)
-    }
+    const privateTarget = room.conversationKind === 'user_agent' && !body.taskId && !body.executionAgentId
     const taskParticipants = this.agents ? await prepareAgentTaskParticipants(this.agents, room, body) : undefined
-    const request: RoomRequestState = {
-      ...(room.conversationKind === 'user_agent' && !body.taskId && !body.executionAgentId ? { privateProtocol: 'direct-v1' as const, privateModel: await this.directModel?.(room) } : {}), taskParticipants, id: requestId, roomId: id, status: 'pending',
-      rootRequestId, collaborationProtocol: room.conversationKind === 'user_agent' && !body.taskId && !body.executionAgentId ? 'legacy' : protocol,
-      ...(protocol === 'peer' && !root ? { peerLatestRequestId: requestId } : {}),
-      message: body, sourceMessageId: message.id,
-      ...(pollContext.invitation ? { pollInvitation: pollContext.invitation } : {}),
-      roomSnapshot: root ? { ...room, collaborationMode: root.value.roomSnapshot.collaborationMode } : room,
-      threadId: 'room-discussion-' + roomId(), ...(internal ? { ruleAdoption: internal.ruleAdoption } : {}) }
+    const request: RoomRequestState = privateTarget
+      ? {
+          ...await this.privateDirectRequest(room, {
+            requestId, rootRequestId, message: body, sourceMessageId: message.id,
+            roomSnapshot: root ? { ...room, collaborationMode: root.value.roomSnapshot.collaborationMode } : room,
+            ...(protocol === 'peer' && !root ? { peerLatestRequestId: requestId } : {}) }),
+          taskParticipants,
+          ...(pollContext.invitation ? { pollInvitation: pollContext.invitation } : {}),
+          ...(internal ? { ruleAdoption: internal.ruleAdoption } : {})
+        }
+      : {
+          taskParticipants, id: requestId, roomId: id, status: 'pending',
+          rootRequestId, collaborationProtocol: protocol,
+          ...(protocol === 'peer' && !root ? { peerLatestRequestId: requestId } : {}),
+          message: body, sourceMessageId: message.id,
+          ...(pollContext.invitation ? { pollInvitation: pollContext.invitation } : {}),
+          roomSnapshot: root ? { ...room, collaborationMode: root.value.roomSnapshot.collaborationMode } : room,
+          threadId: 'room-discussion-' + roomId(), ...(internal ? { ruleAdoption: internal.ruleAdoption } : {}) }
     const result = { message, requestId: request.id }
     const commit: RoomStoreCommit = { requestId: key, fingerprint: roomFingerprint(identity),
       checks: [{ kind: 'room', id, expectedRevision: room.revision },
@@ -212,6 +220,33 @@ export class RoomService {
     const saved = await this.store.commit(commit)
     this.wake()
     return saved.result as typeof result
+  }
+
+  /**
+   * Shared private-request construction for user sends and reminder wake-ups:
+   * permission freezing, direct model binding, and the frozen room snapshot
+   * all follow one path so both bindings stay identical.
+   */
+  async privateDirectRequest(room: Room, input: {
+    requestId: string
+    rootRequestId: string
+    message: import('../contracts/rooms.js').SendRoomMessage
+    sourceMessageId: string
+    roomSnapshot?: Room
+    peerLatestRequestId?: string
+    privateReminder?: RoomRequestState['privateReminder']
+  }): Promise<RoomRequestState> {
+    if (this.agents) await freezeAgentPermissions(this.agents, room)
+    return {
+      privateProtocol: 'direct-v1', privateModel: await this.directModel?.(room),
+      id: input.requestId, roomId: room.id, status: 'pending', rootRequestId: input.rootRequestId,
+      collaborationProtocol: 'legacy',
+      ...(input.peerLatestRequestId ? { peerLatestRequestId: input.peerLatestRequestId } : {}),
+      message: input.message, sourceMessageId: input.sourceMessageId,
+      roomSnapshot: input.roomSnapshot ?? room,
+      threadId: 'room-discussion-' + roomId(),
+      ...(input.privateReminder ? { privateReminder: input.privateReminder } : {})
+    }
   }
 
   async append(id: string, key: string, body: string, memberId?: string, taskId?: string, originRunId?: string, status: 'streaming' | 'final' | 'failed' = 'final') {

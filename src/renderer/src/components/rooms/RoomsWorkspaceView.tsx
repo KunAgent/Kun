@@ -48,6 +48,7 @@ import { RoomRunInspector } from './RoomRunInspector'
 import { RoomDrawerNavigation, useRoomDrawerNavigation } from './RoomDrawerNavigation'
 import { RoomDrawerTask } from './RoomDrawerTask'
 import { RoomReplyThread } from './RoomReplyThread'
+import { RoomReminderList } from './RoomReminderList'
 import { RoomContentPreview } from './RoomContentPreview'
 import { RoomPanelResizeHandle } from './RoomPanelResizeHandle'
 import { RoomRunSummary } from './RoomRunSummary'
@@ -268,7 +269,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {privateChat && room ? <RoomDirectHeader room={room} models={agentModels.data} onSidebar={() => setSidebarOpen(true)} onSearch={() => setSearchOpen(!searchOpen)}
           onProfile={() => drawer.open({ kind: 'agent', agentId: room.members[0].participantAgentId })} onModels={() => drawer.open({ kind: 'models' })}
-          onFiles={() => drawer.open({ kind: 'files' })} onReset={() => void direct.context('reset')} onConnect={() => void direct.context('workspace')}
+          onFiles={() => drawer.open({ kind: 'files' })} onReminders={() => drawer.open({ kind: 'reminders' })}
+          onReset={() => void direct.context('reset')} onConnect={() => void direct.context('workspace')}
           onTasks={() => drawer.section('tasks')} onSession={toggleSession} sessionOpen={Boolean(openRunId)} sessionDisabled={!latestRunId} /> : <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
           onSidebar={() => setSidebarOpen(true)}
           onSearch={() => setSearchOpen((value) => !value)}
@@ -420,6 +422,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           if (target.kind === 'content') return <RoomContentPreview key={key} room={room} reference={target.reference} messageId={target.messageId}
             onOpenCode={onOpenThread} onOpenTarget={onOpenContentTarget ?? ((value) => openRoomContentTarget(value, onOpenThread, room?.id))} />
           if (target.kind === 'files') return <RoomDirectFiles key={key} room={room} onOpen={(reference) => openContent(reference)} />
+          if (target.kind === 'reminders') return room ? <RoomReminderList key={key} room={room} active={active} /> : null
           if (target.kind === 'models') return agentId ? <AgentModelSettings key={key} agentId={agentId} room={room} variant="panel"
             onClose={drawer.back} onSaved={() => { agentModels.refresh(); void state.refresh() }} /> : null
           if (target.kind === 'settings') return <RoomSettings key={room.id} room={room} variant="panel"

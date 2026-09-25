@@ -12,6 +12,7 @@ import { roomPollVoteTool } from './room-poll-vote-tool.js'
 import { roomPeerTools, roomPeerStoreBinding } from './room-peer-tools.js'
 import { roomImMessageTool } from './room-im-message-tool.js'
 import { roomProposalTool } from './room-proposal-tool.js'
+import { roomReminderTools } from './room-reminder-tools.js'
 
 export const RoomReviewResultSchema = z.object({
   verdict: RoomReviewSchema.shape.verdict,
@@ -29,7 +30,7 @@ export function roomResultProvider(threads: ThreadStore): CapabilityToolProvider
   return {
     id: 'room-results', kind: 'built-in', enabled: true, available: true,
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
-    tools: [...agentHandoffTools(threads), ...agentSetupTools(threads), roomRuleReadTool(threads), roomPlaybookTool(threads), roomPollVoteTool(threads, () => roomPeerStoreBinding(threads)), ...roomPeerTools(threads), roomImMessageTool(threads), roomProposalTool(threads), ...[
+    tools: [...agentHandoffTools(threads), ...agentSetupTools(threads), roomRuleReadTool(threads), roomPlaybookTool(threads), roomPollVoteTool(threads, () => roomPeerStoreBinding(threads)), ...roomPeerTools(threads), roomImMessageTool(threads), roomProposalTool(threads), ...roomReminderTools(threads), ...[
       { name: 'submit_room_plan', kind: 'coordination', schema: RoomCoordinationPlanSchema,
         description: 'Submit the structured room decision for the current user request.' },
       { name: 'submit_room_review', kind: 'review', schema: RoomReviewResultSchema,

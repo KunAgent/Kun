@@ -96,7 +96,7 @@ export function addManagerRoomRoutes(router: Router, input: {
             const value = z.object({ input: RoomStoreCommitSchema, fence: ManagerResourceFenceSchema.optional() })
               .strict().parse(body.value)
             if (!value.fence && value.input.puts.some((put) => (put.kind.startsWith('peer_') ||
-              ['agent_identity', 'agent_mapping', 'agent_bootstrap', 'agent_features', 'agent_handoff', 'agent_memory_job', 'agent_budget', 'agent_budget_claim', 'room_run', 'room_poll', 'room_reactions', 'room_avatar', 'room_proposal'].includes(put.kind)))) {
+              ['agent_identity', 'agent_mapping', 'agent_bootstrap', 'agent_features', 'agent_handoff', 'agent_memory_job', 'agent_budget', 'agent_budget_claim', 'room_run', 'room_poll', 'room_reactions', 'room_avatar', 'room_proposal', 'room_reminder'].includes(put.kind)))) {
               throw new ResourceFenceStaleError()
             }
             if (value.fence) assertCurrent(value.fence)

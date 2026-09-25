@@ -51,5 +51,22 @@
   "roomsProposalCommitted_pin_agreement": "Adopted — pinned as a room agreement.",
   "roomsProposalCommitted_execution_request": "Adopted — sent as your request.",
   "roomsProposalCommitted_add_member": "Adopted — member added to the room.",
-  "roomsProposalCommitted_create_agent": "Adopted — agent created."
+  "roomsProposalCommitted_create_agent": "Adopted — agent created.",
+  "roomsReminders": "Reminders",
+  "roomsReminderFired": "Reminder triggered",
+  "roomsReminderScheduled": "Scheduled",
+  "roomsReminderRecent": "Recently ended",
+  "roomsReminderStatus_scheduled": "Scheduled",
+  "roomsReminderStatus_fired": "Triggered",
+  "roomsReminderStatus_cancelled": "Cancelled",
+  "roomsReminderStatus_expired": "Expired",
+  "roomsReminderReason_agent_cancelled": "Cancelled by the agent",
+  "roomsReminderReason_user_cancelled": "Cancelled by you",
+  "roomsReminderReason_room_archived": "Room archived",
+  "roomsReminderReason_agent_unavailable": "Agent unavailable",
+  "roomsReminderReason_too_late": "Missed by more than 7 days",
+  "roomsReminderFireAt": "Fires {{time}}",
+  "roomsReminderCancel": "Cancel",
+  "roomsReminderEmpty": "No reminders yet. The agent can schedule one-shot follow-ups here.",
+  "roomsReminderLoading": "Loading…"
 }

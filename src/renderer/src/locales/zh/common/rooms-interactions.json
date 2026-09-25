@@ -51,5 +51,22 @@
   "roomsProposalCommitted_pin_agreement": "已采纳——已置顶为房间约定。",
   "roomsProposalCommitted_execution_request": "已采纳——已作为你的请求发送。",
   "roomsProposalCommitted_add_member": "已采纳——成员已加入房间。",
-  "roomsProposalCommitted_create_agent": "已采纳——Agent 已创建。"
+  "roomsProposalCommitted_create_agent": "已采纳——Agent 已创建。",
+  "roomsReminders": "提醒",
+  "roomsReminderFired": "提醒已触发",
+  "roomsReminderScheduled": "待触发",
+  "roomsReminderRecent": "最近结束",
+  "roomsReminderStatus_scheduled": "待触发",
+  "roomsReminderStatus_fired": "已触发",
+  "roomsReminderStatus_cancelled": "已取消",
+  "roomsReminderStatus_expired": "已过期",
+  "roomsReminderReason_agent_cancelled": "Agent 已取消",
+  "roomsReminderReason_user_cancelled": "你已取消",
+  "roomsReminderReason_room_archived": "房间已归档",
+  "roomsReminderReason_agent_unavailable": "Agent 不可用",
+  "roomsReminderReason_too_late": "错过超过 7 天",
+  "roomsReminderFireAt": "{{time}} 触发",
+  "roomsReminderCancel": "取消",
+  "roomsReminderEmpty": "暂无提醒。Agent 可以在这里安排一次性跟进。",
+  "roomsReminderLoading": "加载中…"
 }

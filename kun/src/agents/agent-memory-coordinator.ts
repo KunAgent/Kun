@@ -96,7 +96,9 @@ export class AgentMemoryCoordinator {
         const message = await this.deps.store.get<RoomMessage>('message', id)
         if (!message || message.value.status !== 'final') continue
         // Proposal cards are drafts pending user confirmation, not memory sources.
-        if (message.value.presentationKind === 'proposal') continue
+        // Reminder presentations are wake notifications, not facts; the
+        // reminder record itself stays queryable through list_reminders.
+        if (message.value.presentationKind === 'proposal' || message.value.presentationKind === 'reminder') continue
         if (message.value.handoffId) {
           if (!message.value.originRunId || message.value.authorKind !== 'member') continue
           handoff = (await this.deps.store.get<AgentHandoff>('agent_handoff', message.value.handoffId))?.value

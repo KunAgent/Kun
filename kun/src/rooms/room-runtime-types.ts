@@ -24,6 +24,8 @@ export type RoomRequestState = {
     kind: import('./room-continuation-dispatch.js').RoomContinuation['kind']
     goalCreatedAt?: string
   }
+  /** Provenance of the durable reminder that woke this private request. */
+  privateReminder?: import('../contracts/room-reminders.js').RoomPrivateReminder
   privateWorkspace?: string
   handoffReturnId?: string
   taskParticipants?: RoomMember[]

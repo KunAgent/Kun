@@ -28,6 +28,7 @@ const baseProps = () => ({
   onProfile: vi.fn(),
   onModels: vi.fn(),
   onFiles: vi.fn(),
+  onReminders: vi.fn(),
   onReset: vi.fn(),
   onConnect: vi.fn(),
   onTasks: vi.fn(),

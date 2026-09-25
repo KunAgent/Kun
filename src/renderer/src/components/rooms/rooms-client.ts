@@ -12,7 +12,8 @@ import type {
   RoomTaskAction,
   SendRoomMessage,
   RoomProposalEntry,
-  RoomProposalResultRef
+  RoomProposalResultRef,
+  RoomReminderEntry
 } from '@shared/rooms-api'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 export type { RoomListEntry } from '@shared/rooms-api'
@@ -261,6 +262,19 @@ export const roomsClient = {
         decision: input.decision,
         ...(input.resultRef ? { resultRef: input.resultRef } : {})
       }
+    ),
+  listRoomReminders: (roomId: string, status: 'scheduled' | 'all' = 'all', signal?: AbortSignal) =>
+    roomsRequest<{ reminders: RoomReminderEntry[] }>(
+      `${roomPath(roomId)}/reminders?status=${status}`,
+      'GET',
+      undefined,
+      signal
+    ),
+  cancelRoomReminder: (roomId: string, reminder: RoomReminderEntry, clientRequestId = roomRequestId()) =>
+    roomsRequest<RoomReminderEntry>(
+      `${roomPath(roomId)}/reminders/${encodeURIComponent(reminder.reminderId)}/cancel`,
+      'POST',
+      { clientRequestId, expectedRevision: reminder.revision }
     )
 }
 
