@@ -14,209 +14,27 @@ import type {
   ModelRouteTargetMetadata,
   ModelStreamChunk
 } from '../../ports/model-client.js'
-import { AtomicJsonFile } from '../../extensions/atomic-json.js'
-import { circuitCooldownMs } from './failure-reason.js'
+import {
+  createFailoverGroupRouteState,
+  failoverGroupFallbackTargets,
+  failoverGroupHealthTargets,
+  failoverGroupMemberTargets,
+  memberFailureTargetId,
+  memberModelTargetId,
+  orderFailoverGroupTargets,
+  recordFailoverGroupSuccess
+} from './route-pool-failover-groups.js'
+import type { FailoverGroupRouteState } from './route-pool-failover-groups.js'
+import { RoutePoolHealthStore } from './route-pool-health-store.js'
+import type { RuntimeHealth } from './route-pool-health-store.js'
 
-export type RouteTargetMetrics = {
-  successes: number
-  failures: number
-  consecutiveFailures: number
-  ewmaLatencyMs?: number
-  lastError?: string
-  lastAttemptAt?: string
-}
+export { RoutePoolHealthStore } from './route-pool-health-store.js'
+export type {
+  ModelRouteEvent,
+  PersistedRouteHealth,
+  RouteTargetMetrics
+} from './route-pool-health-store.js'
 
-export type ModelRouteEvent = {
-  at: string
-  poolId: string
-  targetId: string
-  providerId: string
-  modelId: string
-  latencyMs: number
-  result: 'started' | 'success' | 'failure' | 'skipped'
-  testId?: string
-  category?: string
-  reason?: string
-  message?: string
-}
-
-type RuntimeHealth = RouteTargetMetrics & {
-  circuitOpenUntil?: number
-  halfOpenAttempts: number
-}
-
-type PersistedHealth = {
-  version: 1
-  metrics: Record<string, RouteTargetMetrics>
-  events: ModelRouteEvent[]
-}
-
-const MAX_ROUTE_EVENTS = 200
-
-export class RoutePoolHealthStore {
-  private readonly states = new Map<string, RuntimeHealth>()
-  private readonly events_: ModelRouteEvent[] = []
-  private writeChain: Promise<void> = Promise.resolve()
-
-  constructor(private readonly filePath?: string, private readonly now: () => number = Date.now) {}
-
-  async load(): Promise<void> {
-    if (!this.filePath) return
-    try {
-      const parsed = await this.file().read(emptyPersistedHealth)
-      for (const [key, metrics] of Object.entries(parsed.metrics ?? {})) {
-        this.states.set(key, { ...metrics, consecutiveFailures: 0, halfOpenAttempts: 0 })
-      }
-      this.events_.push(...(Array.isArray(parsed.events) ? parsed.events.slice(-MAX_ROUTE_EVENTS) : []))
-    } catch {
-      // Missing or corrupt health history must never stop the model runtime.
-    }
-  }
-
-  state(poolId: string, targetId: string): RuntimeHealth {
-    const key = healthKey(poolId, targetId)
-    const existing = this.states.get(key)
-    if (existing) return existing
-    const created: RuntimeHealth = { successes: 0, failures: 0, consecutiveFailures: 0, halfOpenAttempts: 0 }
-    this.states.set(key, created)
-    return created
-  }
-
-  available(pool: ModelRoutePoolConfig, target: ModelRouteTargetConfig): boolean {
-    const state = this.state(pool.id, target.id)
-    if (!state.circuitOpenUntil) return true
-    if (state.circuitOpenUntil > this.now()) return false
-    return state.halfOpenAttempts < pool.healthPolicy.halfOpenMaxAttempts
-  }
-
-  begin(pool: ModelRoutePoolConfig, target: ModelRouteTargetConfig, testId?: string): void {
-    const state = this.state(pool.id, target.id)
-    if (state.circuitOpenUntil && state.circuitOpenUntil <= this.now()) state.halfOpenAttempts += 1
-    state.lastAttemptAt = new Date(this.now()).toISOString()
-    if (testId) this.event(pool, target, 0, 'started', undefined, undefined, testId)
-  }
-
-  success(pool: ModelRoutePoolConfig, target: ModelRouteTargetConfig, latencyMs: number, testId?: string): void {
-    const state = this.state(pool.id, target.id)
-    state.successes += 1
-    state.consecutiveFailures = 0
-    state.halfOpenAttempts = 0
-    state.circuitOpenUntil = undefined
-    state.ewmaLatencyMs = state.ewmaLatencyMs === undefined ? latencyMs : state.ewmaLatencyMs * 0.7 + latencyMs * 0.3
-    state.lastError = undefined
-    this.event(pool, target, latencyMs, 'success', undefined, undefined, testId)
-  }
-
-  failure(pool: ModelRoutePoolConfig, target: ModelRouteTargetConfig, latencyMs: number, failure: ModelFailureMetadata | undefined, message: string, testId?: string): void {
-    const state = this.state(pool.id, target.id)
-    state.failures += 1
-    state.consecutiveFailures += 1
-    state.lastError = message.slice(0, 500)
-    state.ewmaLatencyMs = state.ewmaLatencyMs === undefined ? latencyMs : state.ewmaLatencyMs * 0.7 + latencyMs * 0.3
-    const cooldown = circuitCooldownMs({
-      reason: failure?.reason,
-      resetAt: failure?.resetAt,
-      retryAfterMs: failure?.retryAfterMs,
-      consecutiveFailures: state.consecutiveFailures,
-      policy: pool.healthPolicy,
-      now: this.now()
-    })
-    if (cooldown.open) {
-      state.circuitOpenUntil = this.now() + cooldown.durationMs
-      state.halfOpenAttempts = 0
-    }
-    this.event(pool, target, latencyMs, 'failure', failure?.category, message, testId, failure?.reason)
-  }
-
-  snapshot(poolId?: string): { metrics: Record<string, RouteTargetMetrics>; events: ModelRouteEvent[] } {
-    const metrics: Record<string, RouteTargetMetrics> = {}
-    for (const [key, state] of this.states) {
-      if (poolId && !key.startsWith(`${poolId}:`)) continue
-      const { circuitOpenUntil: _open, halfOpenAttempts: _half, ...persisted } = state
-      metrics[key] = persisted
-    }
-    return { metrics, events: this.events_.filter((event) => !poolId || event.poolId === poolId) }
-  }
-
-  prune(pools: readonly ModelRoutePoolConfig[]): void {
-    const valid = new Set(pools.flatMap((pool) => pool.targets.map((target) => healthKey(pool.id, target.id))))
-    for (const key of this.states.keys()) if (!valid.has(key)) this.states.delete(key)
-    this.persist()
-  }
-
-  flush(): Promise<void> {
-    return this.writeChain
-  }
-
-  private event(pool: ModelRoutePoolConfig, target: ModelRouteTargetConfig, latencyMs: number, result: ModelRouteEvent['result'], category?: string, message?: string, testId?: string, reason?: string): void {
-    this.events_.push({
-      at: new Date(this.now()).toISOString(),
-      poolId: pool.id,
-      targetId: target.id,
-      providerId: target.providerId,
-      modelId: target.modelId,
-      latencyMs,
-      result,
-      ...(testId ? { testId } : {}),
-      ...(category ? { category } : {}),
-      ...(reason ? { reason } : {}),
-      ...(message ? { message: message.slice(0, 500) } : {})
-    })
-    if (this.events_.length > MAX_ROUTE_EVENTS) this.events_.splice(0, this.events_.length - MAX_ROUTE_EVENTS)
-    this.persist()
-  }
-
-  private persist(): void {
-    if (!this.filePath) return
-    const payload: PersistedHealth = { version: 1, ...this.snapshot() }
-    this.writeChain = this.writeChain.then(async () => {
-      await this.file().update(emptyPersistedHealth, (current) => mergePersistedHealth(current, payload))
-    }).catch(() => undefined)
-  }
-
-  private file(): AtomicJsonFile<PersistedHealth> {
-    return new AtomicJsonFile(this.filePath!, validatePersistedHealth)
-  }
-}
-
-function emptyPersistedHealth(): PersistedHealth {
-  return { version: 1, metrics: {}, events: [] }
-}
-
-function validatePersistedHealth(value: unknown): PersistedHealth {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('invalid route health state')
-  }
-  const record = value as Partial<PersistedHealth>
-  if (record.version !== 1 || !record.metrics || typeof record.metrics !== 'object' ||
-    !Array.isArray(record.events)) throw new Error('invalid route health state')
-  return value as PersistedHealth
-}
-
-function mergePersistedHealth(current: PersistedHealth, next: PersistedHealth): PersistedHealth {
-  const metrics: Record<string, RouteTargetMetrics> = { ...current.metrics }
-  for (const [key, value] of Object.entries(next.metrics)) {
-    const prior = metrics[key]
-    metrics[key] = prior
-      ? {
-          ...prior,
-          ...value,
-          successes: Math.max(prior.successes, value.successes),
-          failures: Math.max(prior.failures, value.failures),
-          consecutiveFailures: value.lastAttemptAt &&
-            (!prior.lastAttemptAt || value.lastAttemptAt >= prior.lastAttemptAt)
-            ? value.consecutiveFailures
-            : prior.consecutiveFailures
-        }
-      : value
-  }
-  const events = [...current.events, ...next.events]
-    .filter((event, index, all) => all.findIndex((candidate) =>
-      JSON.stringify(candidate) === JSON.stringify(event)) === index)
-    .sort((left, right) => left.at.localeCompare(right.at))
-    .slice(-MAX_ROUTE_EVENTS)
-  return { version: 1, metrics, events }
-}
 
 export class RoutePoolModelClient implements ModelClient {
   readonly provider = 'route-pool'
@@ -226,6 +44,7 @@ export class RoutePoolModelClient implements ModelClient {
   private readonly roundRobin = new Map<string, number>()
   private readonly requestCounts = new Map<string, number>()
   private failoverByProvider = new Map<string, ModelFailoverGroup>()
+  private readonly groupState: FailoverGroupRouteState = createFailoverGroupRouteState()
   private quotaLookup?: (providerId: string) => ProviderQuotaEntry | undefined
 
   constructor(
@@ -288,20 +107,20 @@ export class RoutePoolModelClient implements ModelClient {
   }
 
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
-    const pool = this.poolForRequest(request)
-    return pool ? this.streamPool(pool, request) : this.direct.stream(request)
+    const routed = this.poolForRequest(request)
+    return routed ? this.streamPool(routed.pool, request, routed.group) : this.direct.stream(request)
   }
 
   private poolForRequest(
     request: Pick<ModelRequest, 'model' | 'providerId'>
-  ): ModelRoutePoolConfig | undefined {
+  ): { pool: ModelRoutePoolConfig; group?: ModelFailoverGroup } | undefined {
     const explicit = this.pools.get(request.model.trim().toLowerCase())
-    if (explicit && shouldRouteRequest(explicit, request)) return explicit
+    if (explicit && shouldRouteRequest(explicit, request)) return { pool: explicit }
     const providerId = request.providerId?.trim().toLowerCase()
     const group = providerId ? this.failoverByProvider.get(providerId) : undefined
-    return group
-      ? this.synthesizeGroupPool(group, request.model.trim(), providerId ?? '')
-      : undefined
+    if (!group) return undefined
+    const pool = this.synthesizeGroupPool(group, request.model.trim(), providerId ?? '')
+    return pool ? { pool, group } : undefined
   }
 
   /**
@@ -314,7 +133,7 @@ export class RoutePoolModelClient implements ModelClient {
     for (const group of this.failoverByProvider.values()) {
       if (seen.has(group.providerId)) continue
       seen.add(group.providerId)
-      const targets = failoverGroupTargets(group, '')
+      const targets = failoverGroupHealthTargets(group)
       if (targets.length > 0) {
         pools.push(synthesizedGroupPool(group, '', targets))
       }
@@ -322,41 +141,99 @@ export class RoutePoolModelClient implements ModelClient {
     return pools
   }
 
+  /**
+   * Builds the per-request pool for a failover group. Member ordering is not
+   * applied here — `orderFailoverGroupTargets` orders members by strategy and
+   * keeps fallbacks behind them.
+   */
   private synthesizeGroupPool(
     group: ModelFailoverGroup,
     model: string,
-    preferredProviderId: string
+    requestedProviderId: string
   ): ModelRoutePoolConfig | undefined {
-    let targets = failoverGroupTargets(group, model)
-    // A request addressed to a specific member still honors it first under
-    // member-order strategies; rotation strategies reorder dynamically anyway.
-    if (preferredProviderId && targets[0]?.providerId !== preferredProviderId) {
-      const preferred = targets.find((target) =>
-        target.providerId.toLowerCase() === preferredProviderId &&
-        target.id.startsWith('member:'))
-      if (preferred) {
-        targets = [preferred, ...targets.filter((target) => target !== preferred)]
-      }
-    }
+    const targets = [
+      ...failoverGroupMemberTargets(group, model, requestedProviderId),
+      ...failoverGroupFallbackTargets(group)
+    ]
     return targets.length > 0 ? synthesizedGroupPool(group, model, targets) : undefined
   }
 
   /** A quota entry counts as exhausted only on a definitive reading. */
   private quotaExhausted(providerId: string): boolean {
-    const entry = this.quotaLookup?.(providerId)
-    if (!entry || entry.status !== 'available') return false
-    return entry.metrics.some((metric) =>
-      metric.usedPercent === 100 ||
-      (metric.remaining !== undefined && metric.remaining <= 0)
-    )
+    return this.quotaUsedPercent(providerId) === 100
   }
 
-  private async *streamPool(pool: ModelRoutePoolConfig, request: ModelRequest): AsyncIterable<ModelStreamChunk> {
-    let eligible = pool.targets.filter((target) => target.enabled && this.health.available(pool, target) && targetSupportsRequest(target, request, this.capabilities))
+  /** Highest reported quota usage in percent; undefined without a reading. */
+  private quotaUsedPercent(providerId: string): number | undefined {
+    const entry = this.quotaLookup?.(providerId)
+    if (!entry || entry.status !== 'available') return undefined
+    if (entry.metrics.some((metric) => metric.remaining !== undefined && metric.remaining <= 0)) {
+      return 100
+    }
+    let used: number | undefined
+    for (const metric of entry.metrics) {
+      if (metric.usedPercent !== undefined) used = Math.max(used ?? 0, metric.usedPercent)
+    }
+    return used
+  }
+
+  /**
+   * Two-level member health: a member target is unavailable when either the
+   * account circuit (`member:<pid>`) or the model circuit
+   * (`member:<pid>:<model>`) is open.
+   */
+  private targetAvailable(pool: ModelRoutePoolConfig, target: ModelRouteTargetConfig): boolean {
+    if (!this.health.available(pool, target)) return false
+    if (!target.id.startsWith('member:')) return true
+    if (!target.modelId) return true
+    return this.health.available(pool, {
+      ...target,
+      id: memberModelTargetId(target.providerId, target.modelId)
+    })
+  }
+
+  /** Health-write target: credit/auth close the whole account, other reasons stay model-scoped. */
+  private failureTarget(
+    target: ModelRouteTargetConfig,
+    failure: ModelFailureMetadata | undefined
+  ): ModelRouteTargetConfig {
+    if (!target.id.startsWith('member:')) return target
+    const id = memberFailureTargetId(target.providerId, target.modelId, failure?.reason)
+    return id === target.id ? target : { ...target, id }
+  }
+
+  /** Success clears both member health tiers so a healed model frees the account. */
+  private recordHealthSuccess(
+    pool: ModelRoutePoolConfig,
+    target: ModelRouteTargetConfig,
+    latencyMs: number,
+    testId?: string
+  ): void {
+    this.health.success(pool, target, latencyMs, testId)
+    if (target.id.startsWith('member:') && target.modelId) {
+      this.health.success(pool, {
+        ...target,
+        id: memberModelTargetId(target.providerId, target.modelId)
+      }, latencyMs, testId)
+    }
+  }
+
+  private async *streamPool(
+    pool: ModelRoutePoolConfig,
+    request: ModelRequest,
+    group?: ModelFailoverGroup
+  ): AsyncIterable<ModelStreamChunk> {
+    let eligible = pool.targets.filter((target) =>
+      target.enabled &&
+      this.targetAvailable(pool, target) &&
+      targetSupportsRequest(target, request, this.capabilities))
     if (this.quotaLookup && eligible.length > 1) {
-      // Quota-aware routing: a target whose cached quota entry is definitively
-      // exhausted is skipped while at least one funded alternative remains.
-      const funded = eligible.filter((target) => !this.quotaExhausted(target.providerId))
+      // Quota-aware routing only applies to same-vendor member accounts:
+      // a member whose cached quota entry is definitively exhausted is
+      // skipped while at least one funded alternative remains. Fallback
+      // providers are governed by their own ordering.
+      const funded = eligible.filter((target) =>
+        !target.id.startsWith('member:') || !this.quotaExhausted(target.providerId))
       if (funded.length > 0) eligible = funded
     }
     if (eligible.length === 0) {
@@ -368,7 +245,17 @@ export class RoutePoolModelClient implements ModelClient {
       }
       return
     }
-    const ordered = this.orderTargets(pool, eligible)
+    const ordered = group
+      ? orderFailoverGroupTargets({
+          group,
+          request,
+          members: eligible.filter((target) => target.id.startsWith('member:')),
+          fallbacks: eligible.filter((target) => !target.id.startsWith('member:')),
+          usedPercent: (providerId) => this.quotaUsedPercent(providerId),
+          state: this.groupState,
+          now: this.now()
+        })
+      : this.orderTargets(pool, eligible)
     const failures: string[] = []
     let lastRejection: { providerId: string; modelId: string; reason?: string; message?: string } | undefined
     for (const [index, target] of ordered.entries()) {
@@ -397,6 +284,7 @@ export class RoutePoolModelClient implements ModelClient {
       }
       let committed = false
       let failed = false
+      let usageTokens = 0
       const pending: ModelStreamChunk[] = []
       try {
         for await (const chunk of this.direct.stream({
@@ -410,11 +298,16 @@ export class RoutePoolModelClient implements ModelClient {
           },
           failover: { alternatives: ordered.length - index - 1 }
         })) {
+          if (chunk.kind === 'usage') usageTokens = chunk.usage.totalTokens
           if (chunk.kind === 'error') {
             failed = true
             const latency = Math.max(0, this.now() - started)
             const failure = withRouteFailure(chunk.failure, route)
-            this.health.failure(pool, target, latency, failure, chunk.message, request.routeTestId)
+            if (healthCountable(failure)) {
+              this.health.failure(
+                pool, this.failureTarget(target, failure), latency, failure,
+                chunk.message, request.routeTestId)
+            }
             if (!committed && routeFailureAllowed(pool, failure)) {
               // Do not expose a rejected target. The first observable route is
               // therefore the immutable target that owns the response after
@@ -449,7 +342,11 @@ export class RoutePoolModelClient implements ModelClient {
         failed = true
         const message = error instanceof Error ? error.message : String(error)
         const failure = withRouteFailure({ category: 'unavailable', failoverAllowed: true }, route)
-        this.health.failure(pool, target, Math.max(0, this.now() - started), failure, message, request.routeTestId)
+        if (healthCountable(failure)) {
+          this.health.failure(
+            pool, this.failureTarget(target, failure), Math.max(0, this.now() - started),
+            failure, message, request.routeTestId)
+        }
         if (committed) {
           yield { kind: 'error', message, code: 'route_target_error', failure, route }
           return
@@ -470,20 +367,32 @@ export class RoutePoolModelClient implements ModelClient {
             { category: 'unavailable', failoverAllowed: true },
             route
           )
-          this.health.failure(
-            pool,
-            target,
-            Math.max(0, this.now() - started),
-            failure,
-            message,
-            request.routeTestId
-          )
+          if (healthCountable(failure)) {
+            this.health.failure(
+              pool,
+              this.failureTarget(target, failure),
+              Math.max(0, this.now() - started),
+              failure,
+              message,
+              request.routeTestId
+            )
+          }
           lastRejection = { providerId: target.providerId, modelId: target.modelId, message }
           failures.push(`${target.providerId}/${target.modelId}: ${message}`)
           continue
         }
         for (const buffered of pending) yield attributeRouteChunk(buffered, route)
-        this.health.success(pool, target, Math.max(0, this.now() - started), request.routeTestId)
+        this.recordHealthSuccess(pool, target, Math.max(0, this.now() - started), request.routeTestId)
+        if (group && target.id.startsWith('member:')) {
+          recordFailoverGroupSuccess({
+            state: this.groupState,
+            groupId: group.providerId,
+            threadId: request.threadId,
+            providerId: target.providerId,
+            tokens: usageTokens,
+            now: this.now()
+          })
+        }
         return
       }
     }
@@ -571,6 +480,15 @@ function attributeRouteChunk(
   }
 }
 
+/**
+ * Request-shape and model-mismatch failures are not the route target's
+ * fault: they never decrement its health, open a circuit, or consume the
+ * account's consecutive-failure budget.
+ */
+function healthCountable(failure: ModelFailureMetadata | undefined): boolean {
+  return failure?.reason !== 'request' && failure?.reason !== 'model'
+}
+
 function routeFailureAllowed(pool: ModelRoutePoolConfig, failure: ModelFailureMetadata): boolean {
   if (!failure.failoverAllowed) return false
   if (failure.category === 'network') return pool.failurePolicy.failoverOnNetworkError
@@ -595,34 +513,6 @@ function withRouteFailure(failure: ModelFailureMetadata | undefined, route: Mode
   }
 }
 
-function healthKey(poolId: string, targetId: string): string { return `${poolId}:${targetId}` }
-
-function failoverGroupTargets(group: ModelFailoverGroup, model: string): ModelRouteTargetConfig[] {
-  const targets: ModelRouteTargetConfig[] = []
-  for (const member of group.members) {
-    if (!member.enabled) continue
-    // A member without a declared model list cannot serve a concrete model
-    // request; the empty `model` call only enumerates ids for health pruning.
-    if (model && !member.models.includes(model)) continue
-    targets.push({
-      id: `member:${member.providerId}`,
-      providerId: member.providerId,
-      modelId: model,
-      enabled: true,
-      weight: 1
-    })
-  }
-  for (const target of group.fallbackTargets) {
-    targets.push({
-      id: `fallback:${target.providerId}:${target.modelId}`,
-      providerId: target.providerId,
-      modelId: target.modelId,
-      enabled: true,
-      weight: 1
-    })
-  }
-  return targets
-}
 
 const FAILOVER_GROUP_STRATEGY: Record<ModelFailoverStrategy, ModelRoutePoolConfig['strategy']> = {
   // smart = quota- and latency-aware adaptive selection; subscription

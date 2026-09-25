@@ -90,7 +90,7 @@ function modelSnapshot(revision = 1) {
     proxy: { enabled: false, url: '' },
     routePools: [],
     failover: [],
-    localModelGateway: { enabled: false }
+    localModelGateway: { enabled: false, exposeProviderModels: false }
   }
 }
 

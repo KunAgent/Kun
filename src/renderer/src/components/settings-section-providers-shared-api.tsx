@@ -1,5 +1,6 @@
 import type {
   ModelEndpointFormat,
+  ModelProviderEndpointsV1,
   ModelProviderModelProfileV1,
   ModelProviderProfileV1,
   ModelProviderSettingsV1
@@ -38,6 +39,7 @@ export type SharedModelConnection = {
   authType: 'api-key' | 'oauth' | 'subscription'
   baseUrl?: string
   endpointFormat: ModelEndpointFormat
+  endpoints?: ModelProviderEndpointsV1
   useProxy: boolean
   configured: boolean
   credentialStatus?: 'ready' | 'missing' | 'unreadable'
@@ -58,7 +60,7 @@ export type SharedModelConnectionsSnapshot = {
   proxy?: { enabled: boolean; url: string }
   routePools?: ModelProviderSettingsV1['routePools']
   failover?: ReturnType<typeof projectFailoverGroupsForRuntime>
-  localModelGateway?: { enabled: boolean }
+  localModelGateway?: { enabled: boolean; exposeProviderModels?: boolean }
 }
 
 export const MAX_SHARED_MODEL_CONNECTION_MODELS = 500

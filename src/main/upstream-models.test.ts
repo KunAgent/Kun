@@ -451,7 +451,7 @@ describe('upstream model picker list', () => {
     await mkdir(dataDir, { recursive: true })
     const routed = settings(dataDir)
     const deepseek = routed.provider.providers.find((provider) => provider.id === 'deepseek')!
-    routed.provider.localGateway = { enabled: true, name: 'Team Relay' }
+    routed.provider.localGateway = { enabled: true, name: 'Team Relay', exposeProviderModels: false }
     routed.provider.routePools = [
       {
         id: 'general',

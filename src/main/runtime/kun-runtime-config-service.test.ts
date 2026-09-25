@@ -133,7 +133,7 @@ describe('Kun runtime config service', () => {
       ...base,
       provider: {
         ...defaultModelProviderSettings(),
-        localGateway: { enabled: true, name: 'Kun API' }
+        localGateway: { enabled: true, name: 'Kun API', exposeProviderModels: false }
       },
       agents: { kun: runtime }
     })

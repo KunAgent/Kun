@@ -1,7 +1,7 @@
 import { isLocalModelProviderBaseUrl } from './app-settings-provider-failover'
 
 /**
- * `kun://import` deep-link parsing and validation (plan §6.12). Two forms:
+ * `kun://import` deep-link parsing and validation. Two forms:
  *
  *   kun://import?preset=<presetId>&key=<apiKey>
  *   kun://import?name=<name>&chat=<baseUrl>&anthropic=<baseUrl>&responses=<baseUrl>&models=a,b&key=<apiKey>

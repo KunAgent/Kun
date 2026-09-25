@@ -2,7 +2,7 @@ import {
   DEFAULT_WRITE_INLINE_COMPLETION_MAX_TOKENS,
   resolveProviderProxyUrl,
   resolveWriteInlineCompletionApiKey,
-  resolveWriteInlineCompletionBaseUrl,
+  resolveWriteInlineCompletionEndpointBaseUrl,
   resolveWriteInlineCompletionEndpointFormat,
   resolveWriteInlineCompletionModel,
   resolveWriteInlineCompletionProviderProfile,
@@ -45,7 +45,7 @@ export async function requestWriteAiProperties(
     return { ok: false, message: 'Missing API key for AI property generation.' }
   }
   const model = resolveWriteInlineCompletionModel(settings, request.model)
-  const baseUrl = resolveWriteInlineCompletionBaseUrl(settings)
+  const baseUrl = resolveWriteInlineCompletionEndpointBaseUrl(settings)
   const provider = resolveWriteInlineCompletionProviderProfile(settings)
   const responsesLite = usesCodexResponsesLite(
     baseUrl,

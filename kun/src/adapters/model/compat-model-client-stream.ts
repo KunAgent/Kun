@@ -46,7 +46,11 @@ import {
   redactUrlForLog,
   summarizeHttpErrorBody
 } from './compat-http-diagnostics.js'
-import { httpFailureRetryDecision } from './failure-reason.js'
+import {
+  httpFailureRetryDecision,
+  rateLimitRecoverySuffix,
+  retryDelayForBudget
+} from './failure-reason.js'
 import type { CompatChatMessage } from './compat-request-codecs.js'
 import { projectCompatMessages } from './compat-message-projector.js'
 import {
@@ -55,29 +59,22 @@ import {
   normalizeToolSpecs,
   requiresReasoningRoundTrip
 } from './compat-request-builder.js'
-import { decodeChatCompletionsStreamPayload } from './chat-completions-stream-decoder.js'
+import { createResponsesContentTracker } from './responses-stream-decoder.js'
+import { createAnthropicThinkingState } from './anthropic-messages-stream-decoder.js'
 import {
-  createResponsesContentTracker,
-  decodeResponsesStreamPayload
-} from './responses-stream-decoder.js'
-import {
-  createAnthropicThinkingState,
-  decodeAnthropicMessagesStreamPayload
-} from './anthropic-messages-stream-decoder.js'
-import { decodeCompatNonStreamingResponse } from './compat-non-streaming-decoder.js'
+  consumeCompatStreamPayload,
+  materializeCompatNonStreaming
+} from './compat-model-client-stream-payloads.js'
 import { CompatModelClientBase } from './compat-model-client-base.js'
 import { IncrementalSseFrameBuffer } from './incremental-sse-frame-buffer.js'
 import { summarizeModelRetryFailure } from './model-retry-failure-summary.js'
 import { StreamOutputReplayBuffer } from './stream-output-replay-buffer.js'
 import { StreamTextReplayReconciler } from './stream-text-replay-reconciler.js'
-import type { ChatCompletionResponse, CompatPostResult, ModelStopReason, StreamPayloadResult } from './compat-model-types.js'
+import type { ChatCompletionResponse, CompatPostResult, ModelStopReason } from './compat-model-types.js'
 import {
-  enforceNonStreamingLimits,
   isRecoverableStreamTransportError,
   mergeStreamFinishReason,
   mergeUsageSnapshots,
-  modelPayloadError,
-  modelPayloadFailure,
   normalizeModelStreamLimits,
   normalizeStreamIdleTimeoutMs,
   readLimitedResponseText,
@@ -102,13 +99,17 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
   }): AsyncIterable<ModelStreamChunk> {
     let response = input.response
     let usedRetryAttempts = input.usedRetryAttempts
+    let rateLimitRecoveryMs: number | undefined
     let emittedReasoning = false
     const textReplay = new StreamTextReplayReconciler()
     // maxAttempts counts retries after the initial request everywhere, and
     // `0` is an explicit "no automatic transport retries" setting. Unlike the
     // older code, this stream-recovery budget must not sneak in a minimum of
-    // one retry when the operator disabled retries.
-    const maxRetryAttempts = input.retry.maxAttempts
+    // one retry when the operator disabled retries. A per-request ceiling
+    // (probes pass 0) caps it further.
+    const maxRetryAttempts = input.request.maxRetryAttempts !== undefined
+      ? Math.min(input.retry.maxAttempts, input.request.maxRetryAttempts)
+      : input.retry.maxAttempts
 
     while (true) {
       if (!response.body) {
@@ -256,18 +257,24 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         let errorBody: { text: string; exceeded: boolean } | undefined
         if (input.retry.httpStatusCodes.includes(response.status)) {
           errorBody = await readLimitedResponseText(response, input.maxErrorBodyBytes)
-          const { budget } = httpFailureRetryDecision({
+          const { classification, budget } = httpFailureRetryDecision({
             status: response.status,
             body: errorBody.exceeded ? '' : errorBody.text,
             headers: response.headers,
             alternatives: input.request.failover?.alternatives,
             policyMaxAttempts: maxRetryAttempts
           })
+          if (classification.reason === 'rate' && usedRetryAttempts >= budget.maxAttempts) {
+            rateLimitRecoveryMs = classification.retryAfterMs
+          }
           if (usedRetryAttempts < budget.maxAttempts) {
             const httpRetryAttempt = usedRetryAttempts + 1
-            let httpDelayMs = retryDelayMs(response, input.retry.initialDelayMs, usedRetryAttempts)
-            if (budget.fixedDelayMs !== undefined) httpDelayMs = budget.fixedDelayMs
-            if (budget.delayCapMs !== undefined) httpDelayMs = Math.min(httpDelayMs, budget.delayCapMs)
+            const httpDelayMs = retryDelayForBudget({
+              response,
+              budget,
+              initialDelayMs: input.retry.initialDelayMs,
+              attempt: usedRetryAttempts
+            })
             const status = response.status
             const failureSummary = errorBody.exceeded
               ? `model error response exceeded ${input.maxErrorBodyBytes} bytes`
@@ -314,7 +321,7 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         )
         yield {
           kind: 'error',
-          message: classified.message,
+          message: `${classified.message}${rateLimitRecoverySuffix(rateLimitRecoveryMs)}`,
           code: classified.code,
           failure: classified.failure
         }
@@ -338,11 +345,15 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
           yield { kind: 'error', message: `model response contained invalid JSON: ${json.message}` }
           return
         }
-        yield* this.materializeNonStreaming(
+        yield* materializeCompatNonStreaming(
           json.value as ChatCompletionResponse,
           input.endpointFormat,
           input.model,
-          input.streamLimits
+          input.streamLimits,
+          {
+            normalizeUsage: (usage) => this.mapUsage(usage, input.model),
+            parseToolArguments: (raw) => this.parseToolArguments(raw)
+          }
         )
         return
       }
@@ -445,7 +456,7 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
             yield { kind: 'error', message: 'model stream contained invalid SSE JSON', code: 'stream_invalid_frame' }
             return
           }
-          const result = this.consumeStreamPayload(
+          const result = consumeCompatStreamPayload(
             payload as Record<string, unknown>,
             pendingArguments,
             pendingByIndex,
@@ -455,7 +466,11 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
             anthropicThinkingState,
             endpointFormat,
             model,
-            budget
+            budget,
+            {
+              normalizeUsage: (usage) => this.mapUsage(usage, model),
+              parseToolArguments: (raw) => this.parseToolArguments(raw)
+            }
           )
           budget.addOutput(result.chunks)
           sawTextDelta = result.sawTextDelta
@@ -559,132 +574,6 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
       }
     })()
     yield { kind: 'completed', stopReason }
-  }
-
-  protected consumeStreamPayload(
-    payload: Record<string, unknown>,
-    pendingArguments: Map<string, PendingToolCall>,
-    pendingByIndex: Map<number, string>,
-    completedToolCalls: Set<string>,
-    sawTextDelta: boolean,
-    responsesContentTracker: import('./responses-stream-decoder.js').ResponsesContentTracker,
-    anthropicThinkingState: import('./anthropic-messages-stream-decoder.js').AnthropicThinkingState,
-    endpointFormat: ModelEndpointFormat,
-    model: string,
-    budget: ModelStreamResourceBudget
-  ): StreamPayloadResult {
-    const payloadError = modelPayloadError(payload)
-    if (payloadError) {
-      return {
-        chunks: [{
-          kind: 'error',
-          message: payloadError.message,
-          ...(payloadError.code ? { code: payloadError.code } : {}),
-          failure: modelPayloadFailure(payloadError)
-        }],
-        sawTextDelta,
-        finishReason: 'error',
-        usage: null
-      }
-    }
-    if (endpointFormat === 'responses') {
-      return this.consumeResponsesStreamPayload(
-        payload,
-        pendingArguments,
-        pendingByIndex,
-        completedToolCalls,
-        sawTextDelta,
-        responsesContentTracker,
-        model,
-        budget
-      )
-    }
-    if (endpointFormat === 'messages') {
-      return this.consumeAnthropicMessagesStreamPayload(
-        payload,
-        pendingArguments,
-        pendingByIndex,
-        completedToolCalls,
-        anthropicThinkingState,
-        sawTextDelta,
-        model,
-        budget
-      )
-    }
-    return decodeChatCompletionsStreamPayload({
-      payload,
-      pendingArguments,
-      pendingByIndex,
-      sawTextDelta,
-      budget,
-      normalizeUsage: (usage) => this.mapUsage(usage, model),
-      parseToolArguments: (raw) => this.parseToolArguments(raw)
-    })
-  }
-
-  protected consumeResponsesStreamPayload(
-    payload: Record<string, unknown>,
-    pendingArguments: Map<string, PendingToolCall>,
-    pendingByIndex: Map<number, string>,
-    completedToolCalls: Set<string>,
-    sawTextDelta: boolean,
-    responsesContentTracker: import('./responses-stream-decoder.js').ResponsesContentTracker,
-    model: string,
-    budget: ModelStreamResourceBudget
-  ): StreamPayloadResult {
-    return decodeResponsesStreamPayload({
-      payload,
-      pendingArguments,
-      pendingByIndex,
-      completedToolCalls,
-      sawTextDelta,
-      contentTracker: responsesContentTracker,
-      budget,
-      parseToolArguments: (raw) => this.parseToolArguments(raw),
-      normalizeUsage: (usage) => this.mapUsage(usage, model)
-    })
-  }
-  protected consumeAnthropicMessagesStreamPayload(
-    payload: Record<string, unknown>,
-    pendingArguments: Map<string, PendingToolCall>,
-    pendingByIndex: Map<number, string>,
-    completedToolCalls: Set<string>,
-    thinkingState: import('./anthropic-messages-stream-decoder.js').AnthropicThinkingState,
-    sawTextDelta: boolean,
-    model: string,
-    budget: ModelStreamResourceBudget
-  ): StreamPayloadResult {
-    return decodeAnthropicMessagesStreamPayload({
-      payload,
-      pendingArguments,
-      pendingByIndex,
-      completedToolCalls,
-      thinkingState,
-      sawTextDelta,
-      budget,
-      normalizeUsage: (usage) => this.mapUsage(usage, model),
-      parseToolArguments: (raw) => this.parseToolArguments(raw)
-    })
-  }
-
-  protected *materializeNonStreaming(
-    payload: ChatCompletionResponse,
-    endpointFormat: ModelEndpointFormat,
-    model: string,
-    limits: ModelStreamLimits
-  ): Generator<ModelStreamChunk> {
-    yield* enforceNonStreamingLimits(
-      decodeCompatNonStreamingResponse(
-        payload as unknown as Record<string, unknown>,
-        endpointFormat,
-        {
-          normalizeUsage: (usage) => this.mapUsage(usage, model),
-          parseToolArguments: (raw) => this.parseToolArguments(raw),
-          payloadError: modelPayloadError
-        }
-      ),
-      limits
-    )
   }
 
 }

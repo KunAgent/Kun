@@ -163,12 +163,12 @@ describe('ModelConnectionRegistry', () => {
     const applied = await value.initialize([], {
       proxy: { enabled: false, url: '' },
       routePools,
-      localModelGateway: { enabled: true }
+      localModelGateway: { enabled: true, exposeProviderModels: false }
     })
 
     expect(applied.revision).toBeGreaterThan(connected.revision)
     expect(applied.routePools).toEqual(routePools)
-    expect(applied.localModelGateway).toEqual({ enabled: true })
+    expect(applied.localModelGateway).toEqual({ enabled: true, exposeProviderModels: false })
   })
 
   it.each([

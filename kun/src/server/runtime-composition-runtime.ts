@@ -70,6 +70,7 @@ export function createServerRuntimeComposition(
     extensionModelProviders,
     modelConnections,
     routeHealth,
+    directModelClient,
     modelClient,
     routePoolTests,
     providerQuotaService,
@@ -248,8 +249,10 @@ export function createServerRuntimeComposition(
 	      bundledSeedResults
 	    },
 	    modelClient,
+	    directModelClient,
 	    modelGateway: {
 	      enabled: () => config.activeOptions.localModelGateway?.enabled === true && gatewayCredentials.hasKey(),
+      exposeProviderModels: () => config.activeOptions.localModelGateway?.exposeProviderModels === true,
 	      pools: () => modelClient.routePools(),
 	      configuredPools: () => modelClient.configuredPools(),
 	      health: routeHealth,

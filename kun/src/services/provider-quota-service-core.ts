@@ -23,6 +23,18 @@ export const MAX_RESPONSE_BYTES = 256 * 1024
 
 export const QUOTA_CONCURRENCY = 4
 
+/** Per-provider cache retention; the route refresh and the GUI share it. */
+export const QUOTA_CACHE_TTL_MS = 5 * 60_000
+
+export type ProviderQuotaListOptions = {
+  /** Restrict probing to these provider ids (matched case-insensitively). */
+  providerIds?: readonly string[]
+  /** Aggregate local cost summaries; pass false for routing refreshes. */
+  includeLocalCosts?: boolean
+  /** Bypass the per-provider cache (manual refresh). */
+  forceRefresh?: boolean
+}
+
 export type ProviderQuotaProbeKind =
   | 'deepseek'
   | 'openrouter'
@@ -70,34 +82,45 @@ export class ProviderQuotaRequestError extends Error {
 export class ProviderQuotaService {
   private readonly fetcher: ProviderQuotaFetch
   private readonly nowIso: () => string
+  private readonly now: () => number
   private readonly subscriptionRuntime: Partial<SubscriptionQuotaRuntime>
+  private readonly cache = new Map<string, { entry: ProviderQuotaEntry; fetchedAt: number }>()
+  private readonly inflight = new Map<string, Promise<ProviderQuotaEntry>>()
 
   constructor(private readonly options: {
     loadSource: () => Promise<ProviderQuotaSourceSnapshot>
     fetcher?: ProviderQuotaFetch
     nowIso?: () => string
+    now?: () => number
     subscriptionRuntime?: Partial<SubscriptionQuotaRuntime>
     loadLocalCosts?: ProviderLocalCostLoader
   }) {
     this.fetcher = options.fetcher ?? proxyAwareFetch
     this.nowIso = options.nowIso ?? (() => new Date().toISOString())
+    this.now = options.now ?? Date.now
     this.subscriptionRuntime = options.subscriptionRuntime ?? {}
   }
 
-  async list(): Promise<ProviderQuotaListResponse> {
+  async list(listOptions: ProviderQuotaListOptions = {}): Promise<ProviderQuotaListResponse> {
     const refreshedAt = this.nowIso()
     const source = await this.options.loadSource()
+    const wanted = listOptions.providerIds
+      ? new Set(listOptions.providerIds.map((id) => id.trim().toLowerCase()))
+      : undefined
+    const profiles = wanted
+      ? source.profiles.filter((profile) => wanted.has(profile.id.trim().toLowerCase()))
+      : source.profiles
     const localCostsPromise: Promise<Readonly<Record<
       string,
       ProviderLocalCostSummary | undefined
-    >>> = this.options.loadLocalCosts
-      ? this.options.loadLocalCosts(source.profiles).catch(() => ({}))
+    >>> = listOptions.includeLocalCosts !== false && this.options.loadLocalCosts
+      ? this.options.loadLocalCosts(profiles).catch(() => ({}))
       : Promise.resolve({})
     const [probedEntries, localCosts] = await Promise.all([
       mapWithConcurrency(
-        source.profiles,
+        profiles,
         QUOTA_CONCURRENCY,
-        async (profile) => this.refreshProfile(profile, profile.proxyUrl ?? '')
+        async (profile) => this.cachedRefreshProfile(profile, listOptions.forceRefresh === true)
       ),
       localCostsPromise
     ])
@@ -108,6 +131,36 @@ export class ProviderQuotaService {
       return localCost ? { ...entry, localCost } : entry
     })
     return ProviderQuotaListResponseSchema.parse({ entries, refreshedAt })
+  }
+
+  /**
+   * Probes a profile through the shared TTL cache. Concurrent callers share
+   * one in-flight request; a failed refresh keeps the previous snapshot so
+   * routing never stalls on a transient probe error.
+   */
+  private cachedRefreshProfile(
+    profile: ProviderQuotaProbeProfile,
+    forceRefresh: boolean
+  ): Promise<ProviderQuotaEntry> {
+    const key = profile.id.trim().toLowerCase()
+    const cached = this.cache.get(key)
+    if (!forceRefresh && cached && this.now() - cached.fetchedAt < QUOTA_CACHE_TTL_MS) {
+      return Promise.resolve(cached.entry)
+    }
+    const pending = this.inflight.get(key)
+    if (pending && !forceRefresh) return pending
+    const request = this.refreshProfile(profile, profile.proxyUrl ?? '')
+      .then((entry) => {
+        const previous = this.cache.get(key)
+        const stored = entry.status === 'error' && previous ? previous.entry : entry
+        this.cache.set(key, { entry: stored, fetchedAt: this.now() })
+        return stored
+      })
+      .finally(() => {
+        this.inflight.delete(key)
+      })
+    this.inflight.set(key, request)
+    return request
   }
 
   private async refreshProfile(

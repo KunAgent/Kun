@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { assertManagerAtomicJsonPath, AtomicJsonFile } from '../extensions/atomic-json.js'
@@ -125,7 +125,7 @@ async updateGlobals(this: ModelConnectionRegistry, raw: unknown): Promise<ModelC
         revision: current.revision + 1,
         proxy: input.proxy,
         routePools: input.routePools,
-        failover: input.failover,
+        failover: input.failover ?? current.failover,
         localModelGateway: input.localModelGateway
       }
     })
@@ -152,6 +152,7 @@ async probe(this: ModelConnectionRegistry, providerId: string): Promise<{ ok: tr
       kind: profile.kind,
       baseUrl: profile.baseUrl,
       endpointFormat: profile.endpointFormat,
+      ...(profile.endpoints ? { endpoints: profile.endpoints } : {}),
       apiKey: resolved.apiKey,
       headers: {
         ...(profile.customHeaders ?? {}),
@@ -189,6 +190,29 @@ async credentialForCompatibility(this: ModelConnectionRegistry, providerId: stri
     if (!profile.credentialRef) return null
     const credential = await this['options'].credentials.get(profile.credentialRef)
     return credential?.apiKey?.trim() || null
+  },
+
+/**
+ * sha256 fingerprints of the stored apiKey credentials, keyed by provider id.
+ * External-import dedup compares these without ever moving raw keys across
+ * the HTTP boundary.
+ */
+async credentialFingerprints(this: ModelConnectionRegistry): Promise<Record<string, string>> {
+    const document = await this['file'].read(emptyDocument)
+    const fingerprints: Record<string, string> = {}
+    for (const profile of Object.values(document.profiles)) {
+      if (!profile.credentialRef || document.credentialTransactions[profile.id]) continue
+      try {
+        const credential = await this['options'].credentials.get(profile.credentialRef)
+        const apiKey = credential?.apiKey?.trim() ?? ''
+        if (apiKey) {
+          fingerprints[profile.id] = createHash('sha256').update(apiKey, 'utf8').digest('hex')
+        }
+      } catch {
+        // An unreadable credential simply produces no fingerprint.
+      }
+    }
+    return fingerprints
   },
 
 /**

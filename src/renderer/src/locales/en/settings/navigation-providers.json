@@ -431,6 +431,8 @@
     "providerNameAria": "Relay provider name",
     "providerDesc": "One provider serves multiple public models, each with independent route targets and load strategy.",
     "enableLocalApi": "Enable local API",
+    "exposeProviderModels": "Share provider models",
+    "exposeProviderModelsDesc": "When on, local apps holding the gateway key can call your API-key providers as provider/model and consume their quota. Subscription and OAuth accounts are never exposed.",
     "localOnlyNoAuth": "Local access only · No authentication",
     "retrySave": "Retry save",
     "runtimeUnavailableHint": "Local settings are unaffected and will sync automatically when Kun starts.",

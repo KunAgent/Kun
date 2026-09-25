@@ -11,15 +11,15 @@ import {
   DEFAULT_SCHEDULE_REASONING_EFFORT,
   getModelProviderProfile,
   getModelProviderSettings,
-  isCustomModelEndpointFormat,
-  modelEndpointPath,
   modelProviderModelProfile,
   normalizeModelProviderId,
   resolveKunRuntimeSettings,
   resolveModelEndpointFormat,
   resolveProviderProxyUrl
 } from '../shared/app-settings'
+import { resolveModelEndpointUrl } from '../../kun/src/contracts/model-endpoint-format.js'
 import { openCodeSessionRuntimeHeaders } from '../shared/opencode-session'
+import { resolveProviderEndpointBaseUrl } from '../shared/model-provider-endpoints'
 import { fetchWithOptionalProxy } from './proxy-fetch'
 import {
   codexResponsesLiteInput,
@@ -164,22 +164,7 @@ function normalizeDetectedRequest(
 }
 
 function buildModelEndpointUrl(baseUrl: string, endpointFormat: ModelEndpointFormat): string {
-  if (isCustomModelEndpointFormat(endpointFormat)) return exactModelEndpointUrl(baseUrl)
-  const path = modelEndpointPath(endpointFormat)
-  const normalized = baseUrl.replace(/\/+$/, '')
-  if (!normalized) return `/v1/${path}`
-  if (normalized.endsWith('/v1')) return `${normalized}/${path}`
-  if (normalized.endsWith('/beta')) {
-    return `${normalized.slice(0, -5)}/v1/${path}`
-  }
-  return `${normalized}/v1/${path}`
-}
-
-function exactModelEndpointUrl(baseUrl: string): string {
-  const trimmed = baseUrl.trim()
-  const query = trimmed.search(/[?#]/)
-  if (query < 0) return trimmed.replace(/\/+$/, '')
-  return `${trimmed.slice(0, query).replace(/\/+$/, '')}${trimmed.slice(query)}`
+  return resolveModelEndpointUrl(baseUrl, endpointFormat, 'generate')
 }
 
 function buildDetectionPrompt(now: Date): string {
@@ -351,10 +336,13 @@ export async function detectClawScheduledTaskRequest(
   if (!apiKey) return null
   const model = detectionModel(modelHint)
   const responsesMode = modelProviderModelProfile(provider, model)?.responsesMode
+  const endpointFormat = usesRuntimeRoute ? runtime.endpointFormat : provider.endpointFormat
   const baseUrl = usesRuntimeRoute
     ? runtime.baseUrl
-    : provider.baseUrl.trim() || DEFAULT_DEEPSEEK_BASE_URL
-  const endpointFormat = usesRuntimeRoute ? runtime.endpointFormat : provider.endpointFormat
+    : resolveProviderEndpointBaseUrl(
+        { baseUrl: provider.baseUrl.trim() || DEFAULT_DEEPSEEK_BASE_URL, endpoints: provider.endpoints },
+        endpointFormat
+      )
   if (!resolveCodexResponsesRequestAuth(baseUrl, apiKey).apiKey) return null
   const detectionRequest = buildDetectionRequest({
     baseUrl,

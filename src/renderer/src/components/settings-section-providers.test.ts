@@ -1,5 +1,6 @@
 import {
   defaultModelProviderSettings,
+  modelProviderFailoverAfterRemoval,
   type ModelProviderModelProfileV1
 } from '@shared/app-settings'
 import { describe, expect, it, vi } from 'vitest'
@@ -89,6 +90,68 @@ describe('provider settings patch model sanitization', () => {
       providerId: 'opencode-go',
       model: 'grok-4.5'
     })
+  })
+
+  it('writes pruned failover groups when a provider is deleted', () => {
+    const provider = {
+      ...defaultModelProviderSettings(),
+      providers: [
+        { id: 'acct-a', name: 'A' },
+        { id: 'acct-b', name: 'B' },
+        { id: 'kimi', name: 'Kimi' }
+      ]
+    } as never
+    const failover = [
+      {
+        providerId: 'acct-a',
+        accounts: [{ providerId: 'acct-b', enabled: true }],
+        strategy: 'smart' as const,
+        fallbackTargets: [{ providerId: 'kimi', modelId: 'k2' }]
+      }
+    ]
+    const patch = modelProvidersSettingsPatch({
+      provider,
+      providers: [],
+      failover: modelProviderFailoverAfterRemoval(failover, 'acct-a')
+    })
+    // The representative's group is gone entirely; a recreated acct-a cannot
+    // resurrect the stale group or its fallback chain.
+    expect(patch.provider?.failover).toEqual([])
+  })
+
+  it('keeps failover untouched when no failover patch is supplied', () => {
+    const provider = defaultModelProviderSettings()
+    const patch = modelProvidersSettingsPatch({
+      provider,
+      providers: provider.providers
+    })
+    expect(patch.provider).not.toHaveProperty('failover')
+  })
+
+  it('removes only the deleted member from a surviving group', () => {
+    const provider = defaultModelProviderSettings()
+    const failover = [
+      {
+        providerId: 'acct-a',
+        accounts: [
+          { providerId: 'acct-b', enabled: true },
+          { providerId: 'acct-c', enabled: false }
+        ],
+        strategy: 'order' as const,
+        fallbackTargets: [{ providerId: 'kimi', modelId: 'k2' }]
+      }
+    ]
+    const patch = modelProvidersSettingsPatch({
+      provider,
+      providers: [],
+      failover: modelProviderFailoverAfterRemoval(failover, 'acct-b')
+    })
+    expect(patch.provider?.failover).toEqual([{
+      providerId: 'acct-a',
+      accounts: [{ providerId: 'acct-c', enabled: false }],
+      strategy: 'order',
+      fallbackTargets: [{ providerId: 'kimi', modelId: 'k2' }]
+    }])
   })
 
   it('builds selection patches that skip blank model ids', () => {

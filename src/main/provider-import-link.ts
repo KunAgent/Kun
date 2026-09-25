@@ -8,13 +8,27 @@ import {
 } from '../shared/provider-import-link'
 
 /**
- * `kun://import` link staging (plan §6.12): the link's API key never reaches
+ * `kun://import` link staging: the link's API key never reaches
  * the renderer. The renderer receives a sanitized draft (key replaced by a
  * hint) plus an opaque token; on confirm the commit IPC resolves the token
  * back to the staged draft inside this process and writes the profile.
  */
 const PENDING_TTL_MS = 10 * 60 * 1_000
 const pendingImports = new Map<string, { draft: ProviderImportLinkDraft; expiresAt: number }>()
+
+/**
+ * Scans a process argv for a `kun://import` link. Windows and Linux cold
+ * starts deliver the URL as a launch argument, sometimes wrapped in quotes
+ * and interleaved with other switches; matching is case-insensitive.
+ */
+export function findProviderImportLinkArg(argv: readonly string[]): string | null {
+  for (const raw of argv) {
+    if (typeof raw !== 'string') continue
+    const arg = raw.trim().replace(/^["']+/, '').replace(/["']+$/, '')
+    if (/^kun:\/\/import/i.test(arg)) return arg
+  }
+  return null
+}
 
 export type StagedProviderImportLink = {
   token: string

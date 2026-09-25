@@ -11,6 +11,7 @@ import type {
 import { PROVIDER_ACCOUNT_STRATEGIES } from './app-settings-types'
 import { normalizeModelProviderId } from './app-settings-provider-capabilities'
 import { boundedNonNegativeInteger } from './app-settings-provider-profiles'
+import { resolveModelProviderPresetSource } from './model-provider-preset-operations-core'
 
 const MAX_PROVIDER_URL_LENGTH = 2_048
 
@@ -163,6 +164,21 @@ export function projectExecutableProviderFailover(
 }
 
 /**
+ * OAuth-backed subscription and delegated-runtime accounts (ChatGPT, Claude,
+ * Grok, Gemini CLI, Antigravity, Cursor) serve through interactive session
+ * credentials. Blindly rotating or load-spreading across them produces noisy
+ * re-auth prompts and rate-limit storms, so `rotate`/`least-used` degrade to
+ * `smart` — the runtime keeps affinity until the active account degrades.
+ */
+export function modelProviderIsOauthOrDelegated(
+  provider: Pick<ModelProviderProfileV1, 'id' | 'kind' | 'presetSource'> | undefined
+): boolean {
+  if (!provider) return false
+  if (provider.kind && provider.kind !== 'http') return true
+  return resolveModelProviderPresetSource(provider)?.preset.category === 'subscription'
+}
+
+/**
  * Wire shape consumed by Kun globals/config: every member (representative
  * first) carries its declared model list so the runtime can decide per
  * request whether the account serves the model. Members whose provider is
@@ -177,26 +193,34 @@ export function projectFailoverGroupsForRuntime(
   fallbackTargets: ModelProviderFailoverTargetV1[]
 }[] {
   const providersById = new Map(settings.providers.map((provider) => [provider.id, provider]))
-  return projectExecutableProviderFailover(settings).map((group) => ({
-    providerId: group.providerId,
-    members: [
-      {
-        providerId: group.providerId,
-        enabled: true,
-        models: [...(providersById.get(group.providerId)?.models ?? [])]
-      },
-      ...group.accounts.map((account) => ({
-        providerId: account.providerId,
-        enabled: account.enabled,
-        models: [...(providersById.get(account.providerId)?.models ?? [])]
+  return projectExecutableProviderFailover(settings).map((group) => {
+    const memberIds = [group.providerId, ...group.accounts.map((account) => account.providerId)]
+    const oauthMembers = memberIds.some((id) => modelProviderIsOauthOrDelegated(providersById.get(id)))
+    const strategy: ProviderAccountStrategy =
+      oauthMembers && (group.strategy === 'rotate' || group.strategy === 'least-used')
+        ? 'smart'
+        : group.strategy
+    return {
+      providerId: group.providerId,
+      members: [
+        {
+          providerId: group.providerId,
+          enabled: true,
+          models: [...(providersById.get(group.providerId)?.models ?? [])]
+        },
+        ...group.accounts.map((account) => ({
+          providerId: account.providerId,
+          enabled: account.enabled,
+          models: [...(providersById.get(account.providerId)?.models ?? [])]
+        }))
+      ],
+      strategy,
+      fallbackTargets: group.fallbackTargets.map((target) => ({
+        providerId: target.providerId,
+        modelId: target.modelId
       }))
-    ],
-    strategy: group.strategy,
-    fallbackTargets: group.fallbackTargets.map((target) => ({
-      providerId: target.providerId,
-      modelId: target.modelId
-    }))
-  }))
+    }
+  })
 }
 
 /** Finds the failover group that governs a provider id (representative or member). */

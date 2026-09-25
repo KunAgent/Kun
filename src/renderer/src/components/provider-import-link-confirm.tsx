@@ -14,7 +14,7 @@ function hostLabel(staged: StagedProviderImportLink): string {
 }
 
 /**
- * Confirmation sheet for `kun://import` links and pasted links (plan §6.12).
+ * Confirmation sheet for `kun://import` links and links pasted into the add-provider sheet.
  * The warning names the destination host explicitly; the staged key stays in
  * the main process and only resolves through the token on confirm.
  */

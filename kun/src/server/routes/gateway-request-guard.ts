@@ -35,7 +35,9 @@ export class GatewayRequestGuard {
   authorize(request: Request): boolean {
     const header = request.headers.get('authorization')
     const match = /^Bearer ([^\s]+)$/.exec(header ?? '')
-    return this.credentials.verify(match?.[1] ?? null)
+    // Anthropic-style clients authenticate with `x-api-key` instead of Bearer.
+    const candidate = match?.[1] ?? request.headers.get('x-api-key')
+    return this.credentials.verify(candidate && candidate.trim() ? candidate : null)
   }
 
   consumeToken(): boolean {

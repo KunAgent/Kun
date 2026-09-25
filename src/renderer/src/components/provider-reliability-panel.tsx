@@ -6,7 +6,8 @@ import type {
 } from '@shared/app-settings'
 import {
   PROVIDER_ACCOUNT_STRATEGIES,
-  modelProviderFailoverGroup
+  modelProviderFailoverGroup,
+  modelProviderIsOauthOrDelegated
 } from '@shared/app-settings'
 import { Plus, Trash2 } from 'lucide-react'
 import type { ReactElement } from 'react'
@@ -28,7 +29,7 @@ function hostOf(baseUrl: string): string {
 }
 
 /**
- * Reliability tab (plan §6.4/§6.11): account-group strategy plus an ordered
+ * Reliability tab: account-group strategy plus an ordered
  * cross-provider fallback chain. Accounts are sibling provider profiles on the
  * same host (multiple keys for one vendor); fallback targets are concrete
  * `provider/model` pairs tried after every account is exhausted.
@@ -70,6 +71,8 @@ export function ProviderReliabilityPanel({
 
   const host = hostOf(provider.baseUrl)
   const memberIds = new Set(group ? [group.providerId, ...group.accounts.map((a) => a.providerId)] : [])
+  const providersById = new Map(providerSettings.providers.map((candidate) => [candidate.id, candidate]))
+  const hasOauthMembers = [...memberIds].some((id) => modelProviderIsOauthOrDelegated(providersById.get(id)))
   const accountCandidates = providerSettings.providers.filter((candidate) =>
     !memberIds.has(candidate.id) &&
     (host ? hostOf(candidate.baseUrl) === host : candidate.id !== provider.id)
@@ -113,16 +116,25 @@ export function ProviderReliabilityPanel({
               <div className="inline-flex w-fit items-center rounded-lg border border-ds-border-muted bg-ds-main/70 p-0.5">
                 {PROVIDER_ACCOUNT_STRATEGIES.map((strategy) => {
                   const selected = group.strategy === strategy
+                  // OAuth/subscription members cannot spread requests across
+                  // interactive sessions — the runtime degrades rotate and
+                  // least-used to smart, so the picker disables them.
+                  const oauthDisabled = hasOauthMembers
+                    && (strategy === 'rotate' || strategy === 'least-used')
                   return (
                     <button
                       key={strategy}
                       type="button"
                       aria-pressed={selected}
+                      disabled={oauthDisabled}
+                      title={oauthDisabled ? t('modelProviderFailoverOauthStrategyHint') : undefined}
                       onClick={() => saveGroup({ ...group, strategy })}
                       className={`rounded-md px-3 py-1.5 text-[12px] font-medium leading-none transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
                         selected
                           ? 'bg-ds-card text-ds-ink shadow-sm'
-                          : 'text-ds-faint hover:text-ds-muted'
+                          : oauthDisabled
+                            ? 'cursor-not-allowed text-ds-faint opacity-50'
+                            : 'text-ds-faint hover:text-ds-muted'
                       }`}
                     >
                       {t(`modelProviderFailoverStrategy_${strategy}`)}
@@ -133,6 +145,11 @@ export function ProviderReliabilityPanel({
               <p className="text-[12px] leading-5 text-ds-faint">
                 {t(`modelProviderFailoverStrategyDesc_${group.strategy}`)}
               </p>
+              {hasOauthMembers ? (
+                <p className="text-[11.5px] leading-4 text-amber-600 dark:text-amber-300">
+                  {t('modelProviderFailoverOauthStrategyHint')}
+                </p>
+              ) : null}
             </div>
 
             <div className="grid gap-2">
@@ -143,6 +160,9 @@ export function ProviderReliabilityPanel({
                 {[group.providerId, ...group.accounts.map((account) => account.providerId)].map((id) => {
                   const representative = id === group.providerId
                   const account = group.accounts.find((entry) => entry.providerId === id)
+                  const memberExists = providerSettings.providers.some(
+                    (candidate) => candidate.id === id
+                  )
                   return (
                     <div
                       key={id}
@@ -166,6 +186,11 @@ export function ProviderReliabilityPanel({
                         {nameFor(id)}
                         <span className="ml-1.5 text-[11px] text-ds-faint">{id}</span>
                       </span>
+                      {!memberExists ? (
+                        <span className="text-[11px] font-medium text-red-600 dark:text-red-300">
+                          {t('modelProviderFailoverInvalidMember')}
+                        </span>
+                      ) : null}
                       {representative ? (
                         <span className="text-[11px] font-medium text-ds-faint">
                           {t('modelProviderFailoverPrimary')}
@@ -222,10 +247,16 @@ export function ProviderReliabilityPanel({
                   const targetProvider = providerSettings.providers.find(
                     (candidate) => candidate.id === target.providerId
                   )
+                  const targetInvalid = !targetProvider
+                    || !targetProvider.models.includes(target.modelId)
                   return (
                     <div
                       key={`${target.providerId}/${target.modelId}/${index}`}
-                      className="flex items-center gap-2 rounded-lg border border-ds-border-muted bg-ds-card px-3 py-2"
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${
+                        targetInvalid
+                          ? 'border-red-300/70 bg-red-50/40 dark:border-red-500/30 dark:bg-red-500/10'
+                          : 'border-ds-border-muted bg-ds-card'
+                      }`}
                     >
                       <span className="text-[11px] font-medium tabular-nums text-ds-faint">
                         {index + 1}
@@ -270,6 +301,11 @@ export function ProviderReliabilityPanel({
                           <option key={modelId} value={modelId}>{modelId}</option>
                         ))}
                       </select>
+                      {targetInvalid ? (
+                        <span className="shrink-0 text-[11px] font-medium text-red-600 dark:text-red-300">
+                          {t('modelProviderFailoverInvalidFallback')}
+                        </span>
+                      ) : null}
                       <button
                         type="button"
                         aria-label={t('modelProviderFailoverFallbackRemove')}

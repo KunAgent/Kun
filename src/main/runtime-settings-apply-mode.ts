@@ -188,6 +188,7 @@ function modelProviderRuntimeConfigChanged(prev: AppSettingsV1, next: AppSetting
   if (!stableSettingsValueEqual(a.proxy, b.proxy)) return true
   if (!stableSettingsValueEqual(a.routePools, b.routePools)) return true
   if (a.localGateway.enabled !== b.localGateway.enabled) return true
+  if (a.localGateway.exposeProviderModels !== b.localGateway.exposeProviderModels) return true
 
   const aProviders = new Map(a.providers.map((provider) => [provider.id.trim(), provider]))
   const bProviders = new Map(b.providers.map((provider) => [provider.id.trim(), provider]))

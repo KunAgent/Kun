@@ -84,6 +84,7 @@ export {
   modelProviderDisplayId,
   modelProviderFailoverAfterRemoval,
   modelProviderFailoverGroup,
+  modelProviderIsOauthOrDelegated,
   modelProviderFailoverMemberIds,
   modelProviderInFailoverGroup,
   normalizeModelProviderCatalogSources,
@@ -100,3 +101,4 @@ export {
   type ModelProviderReference,
   type ModelProviderReferenceKind
 } from './app-settings-provider-references'
+export { resolveProviderEndpointBaseUrl } from './model-provider-endpoints'

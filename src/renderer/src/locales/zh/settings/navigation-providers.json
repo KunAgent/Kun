@@ -431,6 +431,8 @@
     "providerNameAria": "中转供应商名称",
     "providerDesc": "一个供应商统一承载多个公开模型，每个模型可配置独立的路由目标和负载策略。",
     "enableLocalApi": "开放本地 API",
+    "exposeProviderModels": "共享供应商模型",
+    "exposeProviderModelsDesc": "开启后，持有网关 Key 的本机程序可以以 provider/model 形式调用你的 API Key 供应商并消耗其额度；订阅与 OAuth 账户永不暴露。",
     "localOnlyNoAuth": "仅本机访问 · 无鉴权",
     "retrySave": "重试保存",
     "runtimeUnavailableHint": "本地配置不受影响；Kun 启动后会自动同步。",

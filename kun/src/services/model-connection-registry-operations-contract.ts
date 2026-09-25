@@ -72,6 +72,7 @@ export interface ModelConnectionRegistryOperations {
    */
   catalog(providerId: string): Promise<import('./model-catalog-store.js').ModelCatalogEntry | null>;
   credentialForCompatibility(providerId: string): Promise<string | null>;
+  credentialFingerprints(): Promise<Record<string, string>>;
   credentialStateForInternalConsumer(providerId: string): Promise<{
     authoritative: boolean
     apiKey: string

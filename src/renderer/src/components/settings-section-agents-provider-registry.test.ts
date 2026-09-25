@@ -219,6 +219,34 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
           }]
           return { ok: true, status: 201, body: JSON.stringify(snapshot()) }
         }
+        if (path.startsWith('/v1/model-connections/') && method === 'PATCH') {
+          const id = decodeURIComponent(path.slice('/v1/model-connections/'.length))
+          const request = JSON.parse(body ?? '{}') as Record<string, unknown>
+          revision += 1
+          providers = providers.map((provider) => provider.id === id
+            ? {
+                ...provider,
+                ...(Array.isArray(request.models) ? { models: request.models } : {}),
+                ...(typeof request.selectedModel === 'string'
+                  ? { selectedModel: request.selectedModel }
+                  : {})
+              }
+            : provider)
+          return { ok: true, status: 200, body: JSON.stringify(snapshot()) }
+        }
+        if (path.endsWith('/credential/fence') && method === 'POST') {
+          revision += 1
+          return { ok: true, status: 200, body: JSON.stringify(snapshot()) }
+        }
+        if (path.endsWith('/credential/commit') && method === 'POST') {
+          revision += 1
+          providers = providers.map((provider) => ({ ...provider, credentialStatus: 'ready' }))
+          return { ok: true, status: 200, body: JSON.stringify(snapshot()) }
+        }
+        if (path.endsWith('/credential') && (method === 'PUT' || method === 'DELETE')) {
+          revision += 1
+          return { ok: true, status: 200, body: JSON.stringify(snapshot()) }
+        }
         throw new Error(`Unexpected runtime request: ${method} ${path}`)
       })
       Object.assign(window.kunGui, { runtimeRequest })
@@ -595,30 +623,44 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       expect(instanceText(minimaxPlanEntry!)).toContain('Add an independent account')
 
       await act(async () => minimaxPlanEntry!.props.onClick())
-      expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(0)
-      expect(rendererText(renderer)).toContain('Unsaved')
-      expect(rendererText(renderer)).toContain('MiniMax Token Plan 2')
+      const quickAdd = renderer.root.findAllByProps({ role: 'dialog' })
+        .find((node) => node.props['aria-labelledby'] === 'provider-quick-add-title')
+      expect(quickAdd).toBeDefined()
+      expect(instanceText(quickAdd!)).toContain('MiniMax')
 
-      await act(async () => findButton(renderer, 'Cancel').props.onClick())
-      expect(rendererText(renderer)).not.toContain('Unsaved')
+      const cancelButton = quickAdd!.findAllByType('button')
+        .find((button) => instanceText(button).trim() === 'Close add provider dialog')
+      await act(async () => cancelButton!.props.onClick())
+      expect(renderer.root.findAllByProps({ 'aria-labelledby': 'provider-quick-add-title' })).toHaveLength(0)
       expect(update).not.toHaveBeenCalled()
 
       await act(async () => findButton(renderer, 'Add provider').props.onClick())
-      const reopenedDialog = renderer.root.findByProps({ role: 'dialog' })
-      const reopenedEntry = reopenedDialog.findAllByType('button')
+      const reopenedDialog = renderer.root.findAllByProps({ role: 'dialog' })
+        .find((node) => node.props['aria-labelledby'] !== 'provider-quick-add-title')
+      const reopenedEntry = reopenedDialog!.findAllByType('button')
         .find((button) => {
           const text = instanceText(button)
           return text.includes('MiniMax') && text.includes('Token Plan') && text.includes('1 accounts')
         })
       await act(async () => reopenedEntry!.props.onClick())
 
-      const apiKeyInput = renderer.root.findAllByType('input')
-        .find((input) => input.props.placeholder === 'Enter provider API key')
+      const reopenedQuickAdd = renderer.root.findByProps({ 'aria-labelledby': 'provider-quick-add-title' })
+      const apiKeyInput = reopenedQuickAdd.findAllByType('input')
+        .find((input) => input.props.type === 'password')
       await act(async () => apiKeyInput!.props.onChange({ target: { value: 'sk-second' } }))
-      await act(async () => findButton(renderer, 'Add').props.onClick())
+      const submitButton = reopenedQuickAdd.findAllByType('button')
+        .find((button) => instanceText(button).trim() === 'Add provider')
+      await act(async () => {
+        submitButton!.props.onClick()
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
 
-      const savedProviders = update.mock.calls[0]?.[0]?.provider?.providers as ModelProviderProfileV1[]
-      expect(savedProviders.filter((provider) => provider.presetSource?.presetId === 'minimax')).toEqual([
+      const savedProviders = update.mock.calls
+        .map((call) => (call[0] as { provider?: { providers?: ModelProviderProfileV1[] } }).provider?.providers)
+        .find((providers) => providers?.some((provider) => provider.id === 'minimax-token-plan-2'))
+      expect(savedProviders?.filter((provider) => provider.presetSource?.presetId === 'minimax')).toEqual([
         expect.objectContaining({
           id: 'minimax-token-plan',
           name: 'MiniMax Token Plan',
@@ -632,7 +674,9 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
           presetSource: { presetId: 'minimax', mode: 'token-plan' }
         })
       ])
-      expect(update.mock.calls[0]?.[0]?.agents?.kun?.providerId).toBe('minimax-token-plan-2')
+      expect(update.mock.calls.some((call) =>
+        (call[0] as { agents?: { kun?: { providerId?: string } } }).agents?.kun?.providerId === 'minimax-token-plan-2'
+      )).toBe(true)
       expect(runtimeRequest.mock.calls.some(([path, method, body]) =>
         path === '/v1/model-connections/connect' &&
         method === 'POST' &&

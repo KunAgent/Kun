@@ -5,7 +5,8 @@ import {
   httpRetryBudget,
   modelFailureMetadata,
   reasonAllowsFailover,
-  retryAfterHeaderMs
+  retryAfterHeaderMs,
+  retryDelayForBudget
 } from './failure-reason.js'
 
 const NOW = Date.parse('2026-09-24T12:00:00.000Z')
@@ -21,14 +22,25 @@ describe('classifyModelFailure', () => {
     [{ status: 403, body: '账户欠费已停用' }, 'credit'],
     // Quota-style failures (plan/usage limits) distinct from credit
     [{ status: 429, body: '{"error":{"code":"exceeded_current_quota_error"}}' }, 'quota'],
-    [{ status: 400, body: 'quota exceeded for this plan' }, 'quota'],
     [{ status: 403, body: '额度不足' }, 'quota'],
     [{ status: 429, body: '已达到套餐用量上限' }, 'quota'],
-    [{ status: 400, body: 'usage limit reached for the month' }, 'quota'],
+    [{ status: 429, body: 'usage limit reached for the month' }, 'quota'],
+    // A bare 400 needs an explicit quota machine code; prose stays `request`.
+    [{ status: 400, body: 'quota exceeded for this plan' }, 'request'],
+    [{ status: 400, body: 'usage limit reached for the month' }, 'request'],
+    [{ status: 400, body: '{"error":{"code":"exceeded_current_quota_error"}}' }, 'quota'],
+    // Request-shape errors are never quota problems (A2 samples).
+    [{ status: 400, body: 'exceeded model token limit: 262144' }, 'request'],
+    [{ status: 400, body: '输入长度超过模型上限' }, 'request'],
+    [{ status: 400, body: 'max_tokens exceeds the limit of 8192' }, 'request'],
+    [{ status: 400, body: 'request exceeds the maximum context length' }, 'request'],
     // Rate limiting
     [{ status: 429 }, 'rate'],
     [{ status: 429, body: '{"error":{"type":"rate_limit_error"}}' }, 'rate'],
+    [{ status: 429, body: 'Rate limit reached for requests (RPM)' }, 'rate'],
     [{ status: 400, body: '请求频率过高，已限流' }, 'rate'],
+    // A 5xx mentioning billing is an upstream outage, not unpaid credit.
+    [{ status: 500, body: 'upstream billing service timeout' }, 'other'],
     // Overloaded
     [{ status: 529, body: '{"error":{"type":"overloaded_error"}}' }, 'overloaded'],
     [{ status: 503, body: 'server busy, at capacity' }, 'overloaded'],
@@ -69,12 +81,65 @@ describe('classifyModelFailure', () => {
       .toBe(new Date(NOW + 10_000).toISOString())
   })
 
-  it('picks the earliest reset across multiple reset headers', () => {
+  it('picks the latest reset when no remaining dimension is exhausted', () => {
     const headers = new Headers({
       'x-ratelimit-reset-requests': String((NOW + 60_000) / 1_000),
       'x-ratelimit-reset-tokens': String((NOW + 5_000) / 1_000)
     })
-    expect(classifyModelFailure({ status: 429, headers, now: NOW }).retryAfterMs).toBe(5_000)
+    expect(classifyModelFailure({ status: 429, headers, now: NOW }).retryAfterMs).toBe(60_000)
+  })
+
+  it('prefers the reset of the dimension whose remaining count hit zero', () => {
+    const headers = new Headers({
+      'x-ratelimit-remaining-tokens': '0',
+      'x-ratelimit-remaining-requests': '120',
+      'x-ratelimit-reset-requests': '120ms',
+      'x-ratelimit-reset-tokens': '6m0s'
+    })
+    const classified = classifyModelFailure({ status: 429, headers, now: NOW })
+    expect(classified.retryAfterMs).toBe(360_000)
+    expect(classified.resetAt).toBe(new Date(NOW + 360_000).toISOString())
+  })
+
+  it('pairs anthropic input/output dimensions with their resets', () => {
+    const headers = new Headers({
+      'anthropic-ratelimit-input-tokens-remaining': '0',
+      'anthropic-ratelimit-input-tokens-reset': new Date(NOW + 30_000).toISOString(),
+      'anthropic-ratelimit-output-tokens-remaining': '50',
+      'anthropic-ratelimit-output-tokens-reset': new Date(NOW + 5_000).toISOString()
+    })
+    expect(classifyModelFailure({ status: 429, headers, now: NOW }).retryAfterMs).toBe(30_000)
+  })
+
+  it('keeps credit when only window resets hint a wait (insufficient_quota + reset header)', () => {
+    const headers = new Headers({ 'x-ratelimit-reset-requests': '1s' })
+    const classified = classifyModelFailure({
+      status: 429,
+      body: '{"error":{"code":"insufficient_quota","message":"You exceeded your current quota"}}',
+      headers,
+      now: NOW
+    })
+    expect(classified.reason).toBe('credit')
+    expect(classified.retryAfterMs).toBe(1_000)
+  })
+
+  it('demotes credit to rate only on an explicit retry directive', () => {
+    const headers = new Headers({ 'retry-after': '20' })
+    const classified = classifyModelFailure({
+      status: 429,
+      body: '{"error":{"code":"insufficient_quota"}}',
+      headers,
+      now: NOW
+    })
+    expect(classified.reason).toBe('rate')
+    expect(classified.retryAfterMs).toBe(20_000)
+    const bodyHint = classifyModelFailure({
+      status: 429,
+      body: 'insufficient balance',
+      retryAfterMs: 30_000,
+      now: NOW
+    })
+    expect(bodyHint.reason).toBe('rate')
   })
 
   it('caps reset-derived delays at one hour', () => {
@@ -86,7 +151,7 @@ describe('classifyModelFailure', () => {
 describe('modelFailureMetadata', () => {
   it('allows failover for deterministic reasons even on unusual statuses', () => {
     for (const [status, body] of [
-      [400, 'quota exceeded'],
+      [400, '{"error":{"code":"exceeded_current_quota_error"}}'],
       [401, '余额不足'],
       [403, 'insufficient credit']
     ] as const) {
@@ -126,15 +191,28 @@ describe('httpRetryBudget', () => {
     expect(httpRetryBudget({ reason: 'quota', policy }).maxAttempts).toBe(0)
   })
 
-  it('waits once for a short provider Retry-After on rate limits', () => {
+  it('lets a single provider keep its configured retries, floored at the hint', () => {
     expect(httpRetryBudget({ reason: 'rate', retryAfterMs: 5_000, policy }))
+      .toEqual({ maxAttempts: 5, minDelayMs: 5_000 })
+    expect(httpRetryBudget({ reason: 'rate', policy }).maxAttempts).toBe(5)
+  })
+
+  it('refuses same-target waits past sixty seconds on a single provider', () => {
+    expect(httpRetryBudget({ reason: 'rate', retryAfterMs: 360_000, policy }).maxAttempts).toBe(0)
+    expect(httpRetryBudget({ reason: 'rate', retryAfterMs: 60_001, policy }).maxAttempts).toBe(0)
+    expect(httpRetryBudget({ reason: 'rate', retryAfterMs: 60_000, policy }))
+      .toEqual({ maxAttempts: 5, minDelayMs: 60_000 })
+  })
+
+  it('waits once for a short provider Retry-After when alternatives exist', () => {
+    expect(httpRetryBudget({ reason: 'rate', retryAfterMs: 5_000, policy, alternatives: 2 }))
       .toEqual({ maxAttempts: 1, fixedDelayMs: 5_000 })
   })
 
   it('skips same-target rate retries when failover alternatives exist', () => {
     expect(httpRetryBudget({ reason: 'rate', retryAfterMs: 60_000, policy, alternatives: 2 }).maxAttempts).toBe(0)
+    expect(httpRetryBudget({ reason: 'rate', retryAfterMs: 21_000, policy, alternatives: 1 }).maxAttempts).toBe(0)
     expect(httpRetryBudget({ reason: 'rate', policy, alternatives: 1 }).maxAttempts).toBe(0)
-    expect(httpRetryBudget({ reason: 'rate', policy }).maxAttempts).toBe(5)
   })
 
   it('caps overload retries to one fast attempt when alternatives exist', () => {
@@ -148,6 +226,39 @@ describe('httpRetryBudget', () => {
     expect(httpRetryBudget({ reason: 'auth', policy }).maxAttempts).toBe(5)
     expect(httpRetryBudget({ reason: 'request', policy }).maxAttempts).toBe(5)
     expect(httpRetryBudget({ reason: 'overloaded', policy }).maxAttempts).toBe(5)
+  })
+})
+
+describe('retryDelayForBudget', () => {
+  const response = (headers: Record<string, string>) => ({
+    headers: { get: (name: string) => headers[name.toLowerCase()] ?? null }
+  })
+
+  it('applies fixed delay, then floors and caps the computed backoff', () => {
+    expect(retryDelayForBudget({
+      response: response({}),
+      budget: { fixedDelayMs: 5_000 },
+      initialDelayMs: 1_000,
+      attempt: 0
+    })).toBe(5_000)
+
+    // minDelayMs raises the backoff to the provider-declared wait.
+    const floored = retryDelayForBudget({
+      response: response({}),
+      budget: { minDelayMs: 5_000 },
+      initialDelayMs: 100,
+      attempt: 0
+    })
+    expect(floored).toBe(5_000)
+
+    // delayCapMs still trims a larger backoff.
+    const capped = retryDelayForBudget({
+      response: response({ 'retry-after': '60' }),
+      budget: { delayCapMs: 3_000 },
+      initialDelayMs: 100,
+      attempt: 0
+    })
+    expect(capped).toBe(3_000)
   })
 })
 

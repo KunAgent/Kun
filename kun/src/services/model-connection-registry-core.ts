@@ -366,7 +366,7 @@ export function emptyDocument(): RegistryDocument {
     proxy: { enabled: false, url: '' },
     routePools: [],
     failover: [],
-    localModelGateway: { enabled: false }
+    localModelGateway: { enabled: false, exposeProviderModels: false }
   }
 }
 

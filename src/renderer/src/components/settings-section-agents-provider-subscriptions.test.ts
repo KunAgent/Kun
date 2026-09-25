@@ -559,11 +559,11 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
               apiKey: ''
             })
           ])
-        },
-        agents: {
-          kun: expect.objectContaining({ providerId: 'custom-provider-4' })
         }
       })
+      // A provider without discovered models must not replace the current
+      // Kun provider/model selection.
+      expect((update.mock.calls[0][0] as { agents?: unknown }).agents).toBeUndefined()
       expect(runtimeRequest.mock.calls.some(([path, method, body]) =>
         path === '/v1/model-connections/connect' &&
         method === 'POST' &&

@@ -428,6 +428,31 @@ describe('probeModelProvider', () => {
     ])
   })
 
+  it('probes /models against the per-format endpoint override', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ data: [{ id: 'claude-x' }] }), { status: 200 })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await probeModelProvider({
+      providerId: 'test-provider',
+      useProxy: false,
+      baseUrl: 'https://relay.example.com/v1',
+      apiKey: 'sk-x',
+      endpointFormat: 'messages',
+      endpoints: { messages: 'https://relay.example.com/anthropic' }
+    })
+
+    expect(result).toMatchObject({ ok: true, modelIds: ['claude-x'] })
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://relay.example.com/anthropic/v1/models',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({ 'x-api-key': 'sk-x' })
+      })
+    )
+  })
+
   it('does not probe /models for custom full endpoint providers', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)

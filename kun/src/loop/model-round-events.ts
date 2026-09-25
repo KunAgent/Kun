@@ -1,4 +1,5 @@
 import type { ModelRequestRetryEvent, ModelRouteSwitchEvent } from '../contracts/events.js'
+import { summarizeModelRetryFailure } from '../adapters/model/model-retry-failure-summary.js'
 import type { ModelStreamIntent } from './model-stream-collector.js'
 
 /**
@@ -31,6 +32,9 @@ export function buildRouteSwitchEvent(
   input: { threadId: string; turnId: string },
   intent: Extract<ModelStreamIntent, { kind: 'route_switching' }>
 ): Omit<ModelRouteSwitchEvent, 'seq' | 'timestamp'> {
+  // The rejection message is raw provider error text; redact before it is
+  // persisted or replayed to the GUI.
+  const failureSummary = summarizeModelRetryFailure(intent.message)
   return {
     kind: 'model_route_switch',
     threadId: input.threadId,
@@ -40,6 +44,6 @@ export function buildRouteSwitchEvent(
     toProviderId: intent.to.providerId,
     toModelId: intent.to.modelId,
     ...(intent.reason ? { reason: intent.reason } : {}),
-    ...(intent.message ? { failureSummary: intent.message.slice(0, 500) } : {})
+    ...(failureSummary ? { failureSummary } : {})
   }
 }

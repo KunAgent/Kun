@@ -162,6 +162,12 @@ export type ModelRequest = {
   stream?: boolean
   /** Optional output cap forwarded to OpenAI-compatible providers. */
   maxTokens?: number
+  /**
+   * Per-request same-target retry ceiling. The adapter takes
+   * `min(configured attempts, this value)`; `0` disables retries entirely
+   * (used by probes that must fail fast without touching shared health).
+   */
+  maxRetryAttempts?: number
   /** Optional sampling controls for classifier-style calls. */
   temperature?: number
   topP?: number

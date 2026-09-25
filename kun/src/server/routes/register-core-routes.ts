@@ -233,6 +233,13 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return modelConnectionEvents(runtime.modelConnections, request)
   })
+  router.add('GET', '/v1/model-connections/credentials/fingerprints', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if (!runtime.modelConnections) return ERRORS.unavailable('model connections unavailable')
+    return jsonResponse({
+      fingerprints: await runtime.modelConnections.credentialFingerprints()
+    })
+  })
   router.add('PATCH', '/v1/model-connections/:providerId', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return patchModelConnection(runtime.modelConnections, ctx.params.providerId, request)

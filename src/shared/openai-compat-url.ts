@@ -1,7 +1,10 @@
 /**
- * Build `.../models` URL for OpenAI-compatible providers, matching
- * DeepSeek-TUI `client::api_url(base, "models")` so `/beta` bases still hit `/v1/models`.
+ * OpenAI-compatible URL construction delegates to the shared
+ * `resolveModelEndpointUrl` contract so the GUI and the Kun runtime always
+ * build identical request/model-list URLs.
  */
+import { resolveModelEndpointUrl } from '../../kun/src/contracts/model-endpoint-format.js'
+
 function splitUrlSuffix(url: string): { path: string; suffix: string } {
   const query = url.search(/[?#]/)
   if (query < 0) return { path: url, suffix: '' }
@@ -11,11 +14,6 @@ function splitUrlSuffix(url: string): { path: string; suffix: string } {
 function appendUrlPath(baseUrl: string, path: string): string {
   const split = splitUrlSuffix(baseUrl)
   return `${split.path.replace(/\/+$/, '')}/${path}${split.suffix}`
-}
-
-function trimUrlPathEnd(baseUrl: string): string {
-  const split = splitUrlSuffix(baseUrl.trim())
-  return `${split.path.replace(/\/+$/, '')}${split.suffix}`
 }
 
 function lastPathSegment(baseUrl: string): string {
@@ -39,40 +37,25 @@ function unversionedBaseUrl(baseUrl: string): string {
   return `${trimmed}${split.suffix}`
 }
 
-function versionedBaseUrl(baseUrl: string): string {
-  const trimmed = trimUrlPathEnd(baseUrl)
-  const seg = lastPathSegment(trimmed)
-  if (isVersionSegment(seg)) return trimmed
-  return appendUrlPath(trimmed, 'v1')
-}
-
 export function upstreamOpenAiModelsUrl(baseUrl: string): string {
-  const path = 'models'
-  const endpointBase = baseUrl.trim()
-  let versioned = versionedBaseUrl(endpointBase)
-  if (lastPathSegment(versioned).toLowerCase() === 'beta') {
-    versioned = appendUrlPath(unversionedBaseUrl(endpointBase), 'v1')
-  }
-  return appendUrlPath(versioned, path)
+  return resolveModelEndpointUrl(baseUrl, 'chat_completions', 'models')
 }
 
 export function upstreamOpenAiChatCompletionsUrl(baseUrl: string): string {
-  const path = 'chat/completions'
-  const trimmed = baseUrl.trim()
-  let versioned = versionedBaseUrl(trimmed)
-  if (lastPathSegment(versioned).toLowerCase() === 'beta') {
-    versioned = appendUrlPath(unversionedBaseUrl(trimmed), 'v1')
-  }
-  return appendUrlPath(versioned, path)
+  return resolveModelEndpointUrl(baseUrl, 'chat_completions', 'generate')
 }
 
 export function upstreamOpenAiCustomEndpointUrl(baseUrl: string): string {
-  return trimUrlPathEnd(baseUrl)
+  return resolveModelEndpointUrl(baseUrl, 'custom_endpoint', 'generate')
 }
 
+/**
+ * DeepSeek's FIM completion lives under `/beta/completions`, not the
+ * versioned chat path — it keeps its own builder.
+ */
 export function upstreamDeepSeekFimCompletionsUrl(baseUrl: string): string {
   const path = 'completions'
-  const trimmed = trimUrlPathEnd(baseUrl)
+  const trimmed = resolveModelEndpointUrl(baseUrl, 'custom_endpoint', 'generate')
   const base = trimmed || 'https://api.deepseek.com/beta'
   const segment = lastPathSegment(base).toLowerCase()
   const betaBase = segment === 'beta'

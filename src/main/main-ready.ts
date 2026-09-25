@@ -58,13 +58,14 @@ import {
   writeDesktopInstanceIdentity
 } from './desktop-instance-identity'
 import { resolveManagedRuntimeStartupTarget } from './runtime/managed-runtime-startup-attach'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { prefetchCatalogPricing } from './catalog-prefetch'
 import { attachModelsDevDiskCache } from './models-dev-catalog'
 import { recoverUpdateBeforeRuntimeStart } from './update-bootstrap-recovery'
 import { installHostPowerRecovery } from './host-power-recovery'
 import { desktopProcessStack } from './runtime/desktop-process-stack'
 import {
+  findProviderImportLinkArg,
   stageProviderImportLink,
   type StagedProviderImportLink
 } from './provider-import-link'
@@ -103,7 +104,7 @@ export function startMainApp(): Promise<void> {
     revealMainWindow
   )
 
-  // kun://import deep links (plan §6.12). The staged draft is delivered to the
+  // kun://import deep links. The staged draft is delivered to the
   // workbench; the key itself stays staged in this process until the user
   // confirms through the commit IPC.
   let stagedImportLink: StagedProviderImportLink | null = null
@@ -130,16 +131,28 @@ export function startMainApp(): Promise<void> {
     activation.requestReveal()
     deliverImportLink(mainState.mainWindow)
   }
-  app.setAsDefaultProtocolClient('kun')
+  // Only packaged builds claim the scheme: a dev instance must not steal
+  // kun:// links from the installed app. `KUN_DEV_REGISTER_PROTOCOL=1`
+  // opts a dev build back in, pointing the OS at the dev entry script.
+  if (app.isPackaged || process.env.KUN_DEV_REGISTER_PROTOCOL === '1') {
+    if (!app.isPackaged && process.defaultApp && process.argv[1]) {
+      app.setAsDefaultProtocolClient('kun', process.execPath, [resolve(process.argv[1])])
+    } else {
+      app.setAsDefaultProtocolClient('kun')
+    }
+  }
   app.on('open-url', (event, url) => {
     event.preventDefault()
     onImportLink(url)
   })
   app.on('second-instance', (_event, argv) => {
     activation.requestReveal()
-    const link = argv.find((arg) => /^kun:\/\/import/i.test(arg))
+    const link = findProviderImportLinkArg(argv)
     if (link) onImportLink(link)
   })
+  // Windows/Linux cold starts pass the link in this process's own argv.
+  const coldStartLink = findProviderImportLinkArg(process.argv)
+  if (coldStartLink) onImportLink(coldStartLink)
 
   const handleStartupFailure = async (error: unknown): Promise<void> => {
     if (runtimeShutdown.isQuitInProgress) return

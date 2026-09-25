@@ -44,3 +44,21 @@ it('keeps the configured-model behavior for other custom inference endpoints', a
   expect(await probeModels({ ...input, baseUrl: 'https://example.com/inference' })).toEqual(['gpt-5.5'])
   expect(fetcher).not.toHaveBeenCalled()
 })
+
+it('probes /models on the per-format endpoint override', async () => {
+  const fetcher = vi.fn(async () => Response.json({ data: [{ id: 'claude-x' }] }))
+  vi.stubGlobal('fetch', fetcher)
+  await expect(probeModels({
+    kind: 'http',
+    baseUrl: 'https://relay.example.com/v1',
+    endpointFormat: 'messages',
+    endpoints: { messages: 'https://relay.example.com/anthropic' },
+    apiKey: 'sk-x',
+    fallbackModels: [],
+    proxyUrl: ''
+  })).resolves.toEqual(['claude-x'])
+  expect(fetcher).toHaveBeenCalledWith(
+    'https://relay.example.com/anthropic/v1/models',
+    expect.objectContaining({ headers: expect.objectContaining({ 'x-api-key': 'sk-x' }) })
+  )
+})

@@ -149,7 +149,7 @@ export function defaultModelProviderSettings(): ModelProviderSettingsV1 {
     proxyRoutingVersion: PROVIDER_PROXY_ROUTING_VERSION,
     providers: [defaultProvider, openCodeFreeProvider],
     routePools: [],
-    localGateway: { enabled: false, name: 'Kun API' }
+    localGateway: { enabled: false, name: 'Kun API', exposeProviderModels: false }
   }
 }
 
@@ -214,7 +214,8 @@ export function normalizeModelProviderSettings(
       enabled: input?.localGateway?.enabled === true,
       name: typeof input?.localGateway?.name === 'string' && input.localGateway.name.trim()
         ? input.localGateway.name.trim().slice(0, 80)
-        : defaults.localGateway.name
+        : defaults.localGateway.name,
+      exposeProviderModels: input?.localGateway?.exposeProviderModels === true
     }
   }
 }

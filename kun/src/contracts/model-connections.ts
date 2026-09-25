@@ -75,14 +75,14 @@ export const ModelConnectionSnapshotSchema = z.object({
   proxy: ModelConnectionProxySchema.default({ enabled: false, url: '' }),
   routePools: z.array(ModelRoutePoolConfigSchema).default([]),
   failover: z.array(ModelFailoverGroupSchema).default([]),
-  localModelGateway: LocalModelGatewayConfigSchema.default({ enabled: false })
+  localModelGateway: LocalModelGatewayConfigSchema.default({ enabled: false, exposeProviderModels: false })
 }).strict()
 
 export const ModelConnectionGlobalsRequestSchema = z.object({
   expectedRevision: z.number().int().nonnegative(),
   proxy: ModelConnectionProxySchema,
   routePools: z.array(ModelRoutePoolConfigSchema),
-  failover: z.array(ModelFailoverGroupSchema).default([]),
+  failover: z.array(ModelFailoverGroupSchema).optional(),
   localModelGateway: LocalModelGatewayConfigSchema
 }).strict()
 

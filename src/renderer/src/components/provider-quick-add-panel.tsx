@@ -18,7 +18,7 @@ function hostOf(url: string): string {
 }
 
 /**
- * Compact quick-add sheet for preset providers (plan §6.5): icon, name, note,
+ * Compact quick-add sheet for preset providers: icon, name, note,
  * website/Get-Key links, autofocused key input (Enter submits), an optional
  * region selector, and collapsed "more settings" for base-URL/proxy
  * overrides. Submitting hands a fully-built profile to the caller which
@@ -50,13 +50,6 @@ export function ProviderQuickAddPanel({
   useEffect(() => {
     keyRef.current?.focus()
   }, [])
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
 
   const region = preset.regions?.find((entry) => entry.id === regionId)
   const keyOptional = preset.keyOptional === true
@@ -89,6 +82,9 @@ export function ProviderQuickAddPanel({
       role="dialog"
       aria-modal="true"
       aria-labelledby="provider-quick-add-title"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') onClose()
+      }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}

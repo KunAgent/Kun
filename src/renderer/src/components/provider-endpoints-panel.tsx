@@ -20,7 +20,7 @@ const ENDPOINT_FORMAT_FIELDS: {
 ]
 
 /**
- * Per-protocol base URL overrides (plan §6.13). A relay may serve Anthropic
+ * Per-protocol base URL overrides. A relay may serve Anthropic
  * messages on a different path than OpenAI chat completions; each row stores
  * an optional absolute URL and falls back to the profile `baseUrl` when empty.
  * The "detect" action asks Kun which wire protocols the base URL speaks and
@@ -97,36 +97,40 @@ export function ProviderEndpointsPanel({
       ) : null}
       {detectResult ? (
         <div className="grid gap-1.5 rounded-xl border border-ds-border-muted bg-ds-main/30 px-3 py-2.5">
-          {detectResult.formats.map((entry) => (
-            <div key={entry.format} className="flex items-center gap-2 text-[12px]">
-              <span
-                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                  entry.ok
-                    ? 'bg-emerald-500'
-                    : 'bg-red-400'
-                }`}
-              />
-              <span className="font-medium text-ds-ink">
-                {t(MODEL_ENDPOINT_FORMAT_LABEL_KEYS[entry.format] ?? entry.format)}
-              </span>
-              <span className="text-ds-faint">
-                {entry.ok
-                  ? `${entry.latencyMs}ms${entry.models?.length ? ` · ${entry.models.length}` : ''}${entry.verified ? ` · ${t('modelProviderDetectVerified')}` : ''}`
-                  : (entry.message ?? t('modelProviderDetectFailed'))}
-              </span>
-            </div>
-          ))}
-          {detectResult.recommended && detectResult.recommended !== provider.endpointFormat ? (
-            <button
-              type="button"
-              onClick={() => onChange({ endpointFormat: detectResult.recommended })}
-              className="mt-0.5 w-fit text-[12px] font-medium text-accent underline-offset-2 hover:underline"
-            >
-              {t('modelProviderDetectApply', {
-                format: t(MODEL_ENDPOINT_FORMAT_LABEL_KEYS[detectResult.recommended] ?? detectResult.recommended)
-              })}
-            </button>
-          ) : null}
+          {detectResult.formats.map((entry) => {
+            const isRecommended = entry.format === detectResult.recommended
+            return (
+              <div key={entry.format} className="flex items-center gap-2 text-[12px]">
+                <span
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                    entry.ok
+                      ? 'bg-emerald-500'
+                      : 'bg-red-400'
+                  }`}
+                />
+                <span className="font-medium text-ds-ink">
+                  {t(MODEL_ENDPOINT_FORMAT_LABEL_KEYS[entry.format] ?? entry.format)}
+                </span>
+                <span className="text-ds-faint">
+                  {entry.listed ? t('modelProviderDetectListed') : t('modelProviderDetectUnlisted')}
+                  {entry.verified ? ` · ${t('modelProviderDetectVerified')}` : entry.ok ? '' : ` · ${entry.message ?? t('modelProviderDetectFailed')}`}
+                  {entry.ok ? ` · ${entry.latencyMs}ms` : ''}
+                </span>
+                {isRecommended && detectResult.recommended !== provider.endpointFormat ? (
+                  <button
+                    type="button"
+                    onClick={() => onChange({ endpointFormat: detectResult.recommended })}
+                    className="ml-auto text-[12px] font-medium text-accent underline-offset-2 hover:underline"
+                  >
+                    {t('modelProviderDetectApply')}
+                  </button>
+                ) : null}
+              </div>
+            )
+          })}
+          <p className="text-[11.5px] leading-4 text-ds-faint">
+            {t('modelProviderDetectCostHint')}
+          </p>
         </div>
       ) : null}
       <label className="grid gap-1.5 text-[12.5px] font-medium text-ds-muted">

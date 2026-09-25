@@ -50,7 +50,8 @@ import {
 } from '../provider-connection'
 import {
   importExternalProvider,
-  scanExternalProviders
+  scanExternalProviders,
+  withRegistryCredentials as withRegistryCredentialFingerprints
 } from '../provider-external-import'
 import {
   commitProviderImportLink,
@@ -172,10 +173,14 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
     return body
   })
 
-  ipcMain.handle('provider:quota:list', async (event) => {
+  const quotaListPayloadSchema = z.object({
+    forceRefresh: z.boolean().optional()
+  }).strict().optional()
+  ipcMain.handle('provider:quota:list', async (event, payload: unknown) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     options.assertRendererRuntimeReady()
-    return requestRuntimeProviderQuotas(runtimeRequest)
+    const request = parseIpcPayload('provider:quota:list', quotaListPayloadSchema, payload)
+    return requestRuntimeProviderQuotas(runtimeRequest, request?.forceRefresh === true)
   })
 
   ipcMain.handle('provider:models-dev-catalog', async (_, payload: unknown) => {
@@ -198,7 +203,9 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
   // the source file itself.
   ipcMain.handle('provider:external-scan', async (event) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
-    return scanExternalProviders(await store.load())
+    const settings = await store.load()
+    return withRegistryCredentialFingerprints(runtimeRequest, (credentialFingerprints) =>
+      scanExternalProviders(settings, { credentialFingerprints }))
   })
 
   const appendProviderProfile = async (profile: ModelProviderProfileV1): Promise<void> => {
