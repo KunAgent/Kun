@@ -12,6 +12,9 @@
 import type { TurnItem } from '../../contracts/items.js'
 import { effectiveHistoryAfterLatestCompaction } from '../../loop/compaction-history.js'
 import { buildSessionTranscript } from '../../loop/session-summary.js'
+import { fitUtf8, utf8Bytes } from '../../handoff/utf8-budget.js'
+
+export { fitUtf8, utf8Bytes } from '../../handoff/utf8-budget.js'
 
 /** Default cap for the replayed history transcript (bytes). */
 export const DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES = 48 * 1024
@@ -163,23 +166,6 @@ function renderChunk(items: readonly TurnItem[]): string {
     .filter((line) => line.length > 0)
     .join('\n')
     .trim()
-}
-
-function utf8Bytes(text: string): number {
-  return Buffer.byteLength(text, 'utf8')
-}
-
-function fitUtf8(text: string, maxBytes: number): string {
-  if (utf8Bytes(text) <= maxBytes) return text
-  let out = ''
-  let used = 0
-  for (const char of text) {
-    const bytes = utf8Bytes(char)
-    if (used + bytes > maxBytes) break
-    out += char
-    used += bytes
-  }
-  return out
 }
 
 function truncateRecentChunk(text: string, maxBytes: number): string {

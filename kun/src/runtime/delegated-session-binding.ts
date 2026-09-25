@@ -37,6 +37,8 @@ export type DelegatedSessionPreparation = {
   priorHistoryDigest: string
   nativeSessionId?: string
   resumed: boolean
+  /** Set when this resume restored a parked session (docs/ade/08 §5). */
+  parkedDelta?: { lastCommittedTurnId: string }
   rebaseReason?:
     | 'new'
     | 'route_changed'
