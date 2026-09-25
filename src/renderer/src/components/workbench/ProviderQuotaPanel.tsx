@@ -96,7 +96,7 @@ export function ProviderQuotaPanel({
       if (typeof window.kunGui?.listProviderQuotas !== 'function') {
         throw new Error(t('providerQuotaUnavailable'))
       }
-      setResult(await window.kunGui.listProviderQuotas())
+      setResult(await window.kunGui.listProviderQuotas(manual ? { forceRefresh: true } : undefined))
     } catch (cause) {
       setError(cause instanceof Error && cause.message
         ? cause.message

@@ -173,10 +173,14 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
     return body
   })
 
-  ipcMain.handle('provider:quota:list', async (event) => {
+  const quotaListPayloadSchema = z.object({
+    forceRefresh: z.boolean().optional()
+  }).strict().optional()
+  ipcMain.handle('provider:quota:list', async (event, payload: unknown) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     options.assertRendererRuntimeReady()
-    return requestRuntimeProviderQuotas(runtimeRequest)
+    const request = parseIpcPayload('provider:quota:list', quotaListPayloadSchema, payload)
+    return requestRuntimeProviderQuotas(runtimeRequest, request?.forceRefresh === true)
   })
 
   ipcMain.handle('provider:models-dev-catalog', async (_, payload: unknown) => {

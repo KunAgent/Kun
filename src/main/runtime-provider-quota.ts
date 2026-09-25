@@ -8,9 +8,13 @@ type ProviderQuotaRuntimeRequest = (
 ) => Promise<RuntimeRequestResult>
 
 export async function requestRuntimeProviderQuotas(
-  runtimeRequest: ProviderQuotaRuntimeRequest
+  runtimeRequest: ProviderQuotaRuntimeRequest,
+  forceRefresh = false
 ): Promise<ProviderQuotaListResult> {
-  const response = await runtimeRequest('/v1/provider-quotas', 'GET')
+  const response = await runtimeRequest(
+    forceRefresh ? '/v1/provider-quotas?refresh=1' : '/v1/provider-quotas',
+    'GET'
+  )
   let payload: unknown
   try {
     payload = JSON.parse(response.body)

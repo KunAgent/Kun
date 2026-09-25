@@ -498,7 +498,7 @@ export function registerThreadRoutes(
     if (!runtime.providerQuotaService) {
       return ERRORS.unavailable('provider quota service is not available')
     }
-    return listProviderQuotas(runtime.providerQuotaService)
+    return listProviderQuotas(runtime.providerQuotaService, request)
   })
   router.add('GET', '/v1/debug/llm-rounds', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

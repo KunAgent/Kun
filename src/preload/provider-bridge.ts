@@ -22,7 +22,7 @@ export const providerBridge = {
     ipcRenderer.on('provider:import-link', wrapped)
     return () => ipcRenderer.removeListener('provider:import-link', wrapped)
   },
-  listProviderQuotas: () => ipcRenderer.invoke('provider:quota:list'),
+  listProviderQuotas: (payload) => ipcRenderer.invoke('provider:quota:list', payload),
   fetchModelsDevCatalog: (payload) => ipcRenderer.invoke('provider:models-dev-catalog', payload)
 } satisfies Pick<
   KunGuiApi,
