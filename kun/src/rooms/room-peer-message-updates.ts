@@ -1,7 +1,7 @@
 import type { RoomMessage } from '../contracts/rooms.js'
 import type { RoomStoreCommit } from './room-store.js'
 import { RoomPeerStore, peerFingerprint, retryPeerConflict } from './room-peer-state.js'
-import { appendPeerInbox, peerId } from './room-peer-inbox.js'
+import { appendPeerInbox, peerId, peerMessageRecipients } from './room-peer-inbox.js'
 
 /** Only finalized revisions of this generation's published member messages can wake peers. */
 export async function deliverPeerMessageUpdate(peer: RoomPeerStore, roomId: string, messageId: string): Promise<void> {
@@ -25,7 +25,9 @@ export async function deliverPeerMessageUpdate(peer: RoomPeerStore, roomId: stri
     const recipients = topic.value.memberIds.filter((memberId) => memberId !== value.authorMemberId)
     const mentions = new Set(value.mentionMemberIds)
     for (const sourceKind of ['message', 'invitation'] as const) {
-      await appendPeerInbox(peer.store, commit, next, recipients.filter((memberId) => mentions.has(memberId) === (sourceKind === 'invitation')), {
+      const candidates = recipients.filter((memberId) => mentions.has(memberId) === (sourceKind === 'invitation'))
+      await appendPeerInbox(peer.store, commit, next,
+        sourceKind === 'message' ? peerMessageRecipients(topic.value.roomSnapshot, candidates) : candidates, {
         sourceKind, sourceId: message.id, sourceRevision: value.bodyRevision, messageId: message.id,
         causeId: id, body: value.body, authorMemberId: value.authorMemberId
       })

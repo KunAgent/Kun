@@ -6,6 +6,7 @@ import type { RoomContextSnapshot, RoomRule } from '../contracts/rooms-product.j
 import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 import { loadRoomRuleBundle } from './room-rule-compression.js'
 import { roomFingerprint } from './room-service.js'
+import { ROOM_AX_TOOL_DESCRIPTIONS } from './room-ax-surfaces.js'
 
 const bindings = new WeakMap<ThreadStore, RoomStore>()
 export function bindRoomRuleStore(threads: ThreadStore, store: RoomStore) { bindings.set(threads, store) }
@@ -31,7 +32,7 @@ export async function roomRuleOriginalPage(store: RoomStore, roomId: string, inp
 }
 export function roomRuleReadTool(threads: ThreadStore) {
   return LocalToolHost.defineTool({
-    name: 'read_room_rules', description: 'List the frozen project agreement sources or read an exact original rule version in pages. Original rules remain authoritative over compressed summaries. Use the bundleId from current agreementSources.',
+    name: 'read_room_rules', description: ROOM_AX_TOOL_DESCRIPTIONS.read_room_rules,
     toolKind: 'tool_call', policy: 'auto', sideEffect: 'read-only',
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
     shouldAdvertise: (context) => Boolean(context.roomStepKind),

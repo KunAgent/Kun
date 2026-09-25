@@ -14,6 +14,7 @@ export function directActivityLabelKey(data: DirectData, awaiting: boolean): str
   if (active.status === 'pending') return 'directQueued'
   if (active.status === 'recovery_required') return 'directReconciling'
   if (active.status === 'stopping') return 'directStopping'
+  if (active.steer) return 'directSteered'
   return 'directResponding'
 }
 

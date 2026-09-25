@@ -10,7 +10,10 @@ import type {
   RoomTask,
   RoomPeerTopicSummary,
   RoomTaskAction,
-  SendRoomMessage
+  SendRoomMessage,
+  RoomProposalEntry,
+  RoomProposalResultRef,
+  RoomReminderEntry
 } from '@shared/rooms-api'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 export type { RoomListEntry } from '@shared/rooms-api'
@@ -224,7 +227,55 @@ export const roomsClient = {
     roomsRequest<{ rule: RoomRule }>(`${roomPath(id)}/rules`, 'POST', {
       messageId,
       clientRequestId
-    })
+    }),
+  updateRule: (id: string, rule: RoomRule, input: { body?: string; active?: boolean }, clientRequestId: string) =>
+    roomsRequest<{ rule: RoomRule }>(
+      `${roomPath(id)}/rules/${encodeURIComponent(rule.id)}`,
+      'PATCH',
+      { clientRequestId, expectedRevision: rule.revision ?? 0, ...input }
+    ),
+  message: (roomId: string, messageId: string, signal?: AbortSignal) =>
+    roomsRequest<{ message: RoomMessage }>(
+      `${roomPath(roomId)}/messages/${encodeURIComponent(messageId)}`,
+      'GET',
+      undefined,
+      signal
+    ),
+  getRoomProposal: (roomId: string, proposalId: string, signal?: AbortSignal) =>
+    roomsRequest<RoomProposalEntry>(
+      `${roomPath(roomId)}/proposals/${encodeURIComponent(proposalId)}`,
+      'GET',
+      undefined,
+      signal
+    ),
+  resolveRoomProposal: (roomId: string, proposal: RoomProposalEntry, input: {
+    decision: 'committed' | 'dismissed'
+    resultRef?: RoomProposalResultRef
+    clientRequestId?: string
+  }) =>
+    roomsRequest<RoomProposalEntry>(
+      `${roomPath(roomId)}/proposals/${encodeURIComponent(proposal.proposalId)}/resolve`,
+      'POST',
+      {
+        clientRequestId: input.clientRequestId ?? roomRequestId(),
+        expectedRevision: proposal.revision,
+        decision: input.decision,
+        ...(input.resultRef ? { resultRef: input.resultRef } : {})
+      }
+    ),
+  listRoomReminders: (roomId: string, status: 'scheduled' | 'all' = 'all', signal?: AbortSignal) =>
+    roomsRequest<{ reminders: RoomReminderEntry[] }>(
+      `${roomPath(roomId)}/reminders?status=${status}`,
+      'GET',
+      undefined,
+      signal
+    ),
+  cancelRoomReminder: (roomId: string, reminder: RoomReminderEntry, clientRequestId = roomRequestId()) =>
+    roomsRequest<RoomReminderEntry>(
+      `${roomPath(roomId)}/reminders/${encodeURIComponent(reminder.reminderId)}/cancel`,
+      'POST',
+      { clientRequestId, expectedRevision: reminder.revision }
+    )
 }
 
 export function mergeRoomMessages(

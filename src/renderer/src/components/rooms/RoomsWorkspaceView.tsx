@@ -48,6 +48,7 @@ import { RoomRunInspector } from './RoomRunInspector'
 import { RoomDrawerNavigation, useRoomDrawerNavigation } from './RoomDrawerNavigation'
 import { RoomDrawerTask } from './RoomDrawerTask'
 import { RoomReplyThread } from './RoomReplyThread'
+import { RoomReminderList } from './RoomReminderList'
 import { RoomContentPreview } from './RoomContentPreview'
 import { RoomPanelResizeHandle } from './RoomPanelResizeHandle'
 import { RoomRunSummary } from './RoomRunSummary'
@@ -162,7 +163,13 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
   const openTask = (taskId: string): void => drawer.open({ kind: 'task', taskId })
   const openMember = (memberId: string, rootRequestId?: string): void => drawer.open({ kind: 'section', section: 'members', memberId, rootRequestId })
   const openContent = (reference: RoomContentReference, messageId?: string): void => drawer.open({ kind: 'content', reference, messageId })
-  const pendingSends = useRoomPendingSends(room?.id, messages)
+  const steeredSendIds = useMemo(() => new Set(
+    (direct.data?.requests ?? [])
+      .filter((entry) => entry.steer && ['pending', 'running', 'stopping'].includes(entry.status))
+      .map((entry) => entry.clientRequestId)
+      .filter((id): id is string => Boolean(id))
+  ), [direct.data?.requests])
+  const pendingSends = useRoomPendingSends(room?.id, messages, steeredSendIds)
   const replyAwaiting = useRoomReplyAwaiting(Boolean(direct.data?.active) || roomRespondingMemberIds(topicState.topics).length > 0, messages)
   const waitingForReply = pendingSends.hasUnsettled || replyAwaiting.awaiting
   const send = async (message: SendRoomMessage): Promise<void> => {
@@ -268,7 +275,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {privateChat && room ? <RoomDirectHeader room={room} models={agentModels.data} onSidebar={() => setSidebarOpen(true)} onSearch={() => setSearchOpen(!searchOpen)}
           onProfile={() => drawer.open({ kind: 'agent', agentId: room.members[0].participantAgentId })} onModels={() => drawer.open({ kind: 'models' })}
-          onFiles={() => drawer.open({ kind: 'files' })} onReset={() => void direct.context('reset')} onConnect={() => void direct.context('workspace')}
+          onFiles={() => drawer.open({ kind: 'files' })} onReminders={() => drawer.open({ kind: 'reminders' })}
+          onReset={() => void direct.context('reset')} onConnect={() => void direct.context('workspace')}
           onTasks={() => drawer.section('tasks')} onSession={toggleSession} sessionOpen={Boolean(openRunId)} sessionDisabled={!latestRunId} /> : <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
           onSidebar={() => setSidebarOpen(true)}
           onSearch={() => setSearchOpen((value) => !value)}
@@ -410,7 +418,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           if (target.kind === 'handoffs') return <AgentHandoffPanel key={key} room={room} messages={messages} topics={topicState.topics}
             active={active} selectedId={target.selectedId} onOpenPair={(id) => { chooseRoom(id) }}
             onSource={chooseRoom} onRun={(roomId, runId) => { chooseRoom(roomId); setAgentRunTarget({ roomId, runId }) }} />
-          if (target.kind === 'run') return <RoomRunInspector key={key} roomId={room.id} runId={target.runId} active={active} />
+          if (target.kind === 'run') return <RoomRunInspector key={key} roomId={room.id} runId={target.runId} active={active} onOpenRun={openRun} />
           if (target.kind === 'task') return <RoomDrawerTask key={key} roomId={room.id} taskId={target.taskId} tasks={state.tasks}
             onClose={drawer.back} onRun={openRun} onOpenThread={onOpenThread} onUpdated={() => void state.refresh()} />
           if (target.kind === 'reply') return <RoomReplyThread key={key} room={room} messageId={target.messageId} tasks={state.tasks} active={active}
@@ -420,6 +428,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           if (target.kind === 'content') return <RoomContentPreview key={key} room={room} reference={target.reference} messageId={target.messageId}
             onOpenCode={onOpenThread} onOpenTarget={onOpenContentTarget ?? ((value) => openRoomContentTarget(value, onOpenThread, room?.id))} />
           if (target.kind === 'files') return <RoomDirectFiles key={key} room={room} onOpen={(reference) => openContent(reference)} />
+          if (target.kind === 'reminders') return room ? <RoomReminderList key={key} room={room} active={active} /> : null
           if (target.kind === 'models') return agentId ? <AgentModelSettings key={key} agentId={agentId} room={room} variant="panel"
             onClose={drawer.back} onSaved={() => { agentModels.refresh(); void state.refresh() }} /> : null
           if (target.kind === 'settings') return <RoomSettings key={room.id} room={room} variant="panel"

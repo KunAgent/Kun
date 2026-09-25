@@ -16,6 +16,7 @@ import { roomDiscussionWorkspace } from './room-context.js'
 import { roomPeerTriage, RoomPeerTriageError, type RoomPeerTriageResult } from './room-peer-triage.js'
 import { RoomPeerMessageInput } from './room-peer-tools.js'
 import { stopRoomTaskTurn } from './room-task-activity.js'
+import { withdrawRunProposals } from './room-proposals.js'
 import { RoomContextPending } from './room-rule-compression.js'
 import { releasePeerActivation, updatePeerTopicStatus, recordPeerMetric, setPeerMemberWait, failPeerPreparation } from './room-peer-runner-state.js'
 import { capturePeerUsageBaseline, recordPeerResponseMetric } from './room-peer-runner-metrics.js'
@@ -66,13 +67,16 @@ export class RoomPeerRunner {
     const addressed = request.message.mentionMemberIds.length ? request.message.mentionMemberIds : [request.roomSnapshot.defaultMemberId]
     return addressed.includes(updates.member.value.memberId) && updates.items.some((item) => item.value.sourceId === request.sourceMessageId)
   }
-  async tick(externalBusy: ReadonlySet<string> = new Set()): Promise<void> {
-    if (this.closed) return
+  /** Returns whether any topic still holds live or deferred work for the next pass. */
+  async tick(externalBusy: ReadonlySet<string> = new Set()): Promise<boolean> {
+    if (this.closed) return false
+    let workRemains = this.triages.size > 0
     const topics = await this.state.topics()
     // Complete/reconcile first, even for paused topics. Unknown execution keeps its member occupied.
     for (const topic of topics) {
       for (const member of await this.state.members(topic.id)) {
         if (!member.value.activation) continue
+        workRemains = true
         try { await this.observe(topic, member) } catch (error) {
           await this.handleError(topic, member, error)
         }
@@ -165,8 +169,9 @@ export class RoomPeerRunner {
         if (budgetPending) await updatePeerTopicStatus(this.state, topic.id, 'paused', 'budget_exhausted')
         else if (failedPending) await updatePeerTopicStatus(this.state, topic.id, 'paused', 'member_failed')
         else await updatePeerTopicStatus(this.state, topic.id, 'idle', disabledPending ? 'member_unavailable' : undefined)
-      }
+      } else workRemains = true
     }
+    return workRemains
   }
 
   private async direct(updates: RoomPeerUpdates, request: RoomRequestState): Promise<boolean> {
@@ -361,6 +366,16 @@ export class RoomPeerRunner {
       return
     }
     if (observed.resultError && observed.structured === undefined) throw new Error(observed.resultError)
+    if (observed.structured === undefined && observed.held) {
+      // A held draft was rebased but never resubmitted. The run ends stale like the
+      // publication guard, never falling back to raw assistant text, and the
+      // pending inbox stays unhandled for the next activation.
+      await updateRoomRun(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId),
+        { status: 'completed', outcome: 'stale' })
+      await releasePeerActivation(this.deps, member)
+      await recordPeerResponseMetric(this.deps, topic.value, member, 'stale', observed.turn)
+      return
+    }
     const submitted = RoomPeerMessageInput.parse(observed.structured ?? {
       body: observed.text.trim(), skip: !observed.text.trim()
     })
@@ -440,6 +455,7 @@ export class RoomPeerRunner {
     if (this.deps.backgroundExecutionActive?.(active.threadId)) return
     await updateRoomRun(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId),
       { status: 'cancelled', outcome: 'cancelled', endedAt: new Date().toISOString() })
+    await withdrawRunProposals(this.deps.store, roomRunId(topic.value.roomId, active.clientRequestId), 'topic_stopped')
     await releasePeerActivation(this.deps, member)
   }
 }

@@ -33,6 +33,8 @@ describe('Rooms desktop HTTP boundary', () => {
     ['/v1/rooms/room-1/rules/rule-1', ['PATCH']],
     ['/v1/rooms/room-1/rules/rule-1/versions', ['GET']],
     ['/v1/rooms/room-1/rules/rule-1/adopt', ['POST']],
+    ['/v1/rooms/room-1/proposals/proposal-1', ['GET']],
+    ['/v1/rooms/room-1/proposals/proposal-1/resolve', ['POST']],
     ...['cleanup', 'integrations'].map((part) => [`/v1/rooms/room-1/tasks/task-1/${part}`, ['GET', 'POST']]),
     ...['recovery', 'deliveries', 'compare'].map((part) => [`/v1/rooms/room-1/tasks/task-1/${part}`, ['GET']]),
     ['/v1/rooms/room-1/tasks/task-1/deliveries/delivery-1', ['GET']],
@@ -48,6 +50,7 @@ describe('Rooms desktop HTTP boundary', () => {
     '/v1/rooms/room-1/delete', '/v1/rooms//messages',
     '/v1/rooms/room-1/topics/topic-1/retry', '/v1/rooms/room-1/topics//stop',
     '/v1/rooms/room-1/topics/topic-1/stop/extra',
+    '/v1/rooms/room-1/proposals', '/v1/rooms/room-1/proposals//resolve',
     '/v1/rooms/room-1/tasks/task-1/reset', '/v1/rooms/room-1/tasks/task-1/apply/extra'
   ])('rejects unmodeled actions and empty identities: %s', (path) => {
     expect(runtimeRequestPayloadSchema.safeParse({ path, method: 'POST' }).success).toBe(false)

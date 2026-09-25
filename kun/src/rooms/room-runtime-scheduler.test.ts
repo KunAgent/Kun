@@ -6,6 +6,7 @@ import { makeFakeModel, makeHarness } from '../../tests/loop-test-harness.js'
 import { createTurnRecord } from '../domain/turn.js'
 import { RoomMemberSchema } from '../contracts/rooms.js'
 import { RoomTaskSchema } from '../contracts/room-tasks.js'
+import { RoomReminderSchema } from '../contracts/room-reminders.js'
 import { RoomRuntime } from './room-runtime.js'
 import { SqliteRoomStore } from './room-store-sqlite.js'
 import { ensureRoomThread } from './room-execution.js'
@@ -14,6 +15,9 @@ import type { RoomRuntimeDeps, RoomTaskExecution, RoomWorkspace } from './room-r
 
 const cleanups: Array<() => Promise<void>> = []
 afterEach(async () => {
+  // Restore real timers before runtime teardown so pending fake backoff timers
+  // can never hold the suite open.
+  vi.useRealTimers()
   vi.restoreAllMocks()
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
@@ -163,5 +167,95 @@ describe('room scheduler execution ownership', () => {
     await f.tick()
     expect((await f.get('next')).turnId).toBeUndefined()
     expect((await f.get('next')).task.status).toBe('queued')
+  })
+})
+
+describe('room scheduler idle backoff', () => {
+  const spy = (f: Awaited<ReturnType<typeof fixture>>) =>
+    vi.spyOn(f.runtime as unknown as { tick(): Promise<unknown> }, 'tick')
+  // The store opens lazily with real fs calls; resolve that before faking time
+  // so a whole tick drains inside one timer advance.
+  const ready = async (f: Awaited<ReturnType<typeof fixture>>) => { await f.store.get('room', 'warmup') }
+
+  it('reschedules every second while room work is active', async () => {
+    const f = await fixture()
+    // A running turn never settles on its own: every pass stays active.
+    await f.task('active', 'running', 'developer', 'running')
+    vi.useFakeTimers()
+    const tick = spy(f)
+    f.runtime.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(tick).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(999)
+    expect(tick).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(tick).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(tick).toHaveBeenCalledTimes(3)
+  })
+
+  it('backs off to fifteen seconds when no work remains', async () => {
+    const f = await fixture()
+    await ready(f)
+    vi.useFakeTimers()
+    const tick = spy(f)
+    f.runtime.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(tick).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(14_999)
+    expect(tick).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(tick).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(tick).toHaveBeenCalledTimes(3)
+  })
+
+  it('bounds the idle delay by the nearest scheduled reminder', async () => {
+    const f = await fixture()
+    await ready(f)
+    vi.useFakeTimers()
+    const fireAt = new Date(Date.now() + 5_000).toISOString()
+    const reminder = RoomReminderSchema.parse({ schemaVersion: 1, reminderId: 'rem-bound',
+      roomId: 'gone-room', participantAgentId: 'agent-x', memberId: 'member-x', note: 'wake',
+      fireAt, status: 'scheduled', chainDepth: 0, createdByRunId: 'run-x',
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
+    await f.store.commit({ requestId: 'seed-reminder',
+      checks: [{ kind: 'room_reminder', id: reminder.reminderId, expectedRevision: null }],
+      puts: [{ kind: 'room_reminder', id: reminder.reminderId, roomId: reminder.roomId, value: reminder }] })
+    const tick = spy(f)
+    f.runtime.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(tick).toHaveBeenCalledTimes(1)
+    // The reminder is due in five seconds: the idle pass wakes for it, not in fifteen.
+    await vi.advanceTimersByTimeAsync(4_999)
+    expect(tick).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(tick).toHaveBeenCalledTimes(2)
+    // The fire pass reconciled work (the orphan expires as room_archived), so the
+    // following pass keeps the one-second active cadence before idling again.
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(tick).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(999)
+    expect(tick).toHaveBeenCalledTimes(3)
+    expect((await f.store.get<{ status: string }>('room_reminder', 'rem-bound'))!.value.status).toBe('expired')
+  })
+
+  it('wakes immediately when room work arrives during idle backoff', async () => {
+    const f = await fixture()
+    await ready(f)
+    vi.useFakeTimers()
+    const tick = spy(f)
+    f.runtime.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(tick).toHaveBeenCalledTimes(1)
+    // Idle pass scheduled fifteen seconds out; an explicit wake preempts it.
+    f.runtime.wake()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(tick).toHaveBeenCalledTimes(2)
+    // The preempted pass reschedules its own idle backoff from now.
+    await vi.advanceTimersByTimeAsync(14_999)
+    expect(tick).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(tick).toHaveBeenCalledTimes(3)
   })
 })

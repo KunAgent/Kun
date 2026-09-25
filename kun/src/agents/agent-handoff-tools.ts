@@ -8,6 +8,7 @@ import type { RoomPeerTopic, RoomPeerMemberState } from '../rooms/room-peer-type
 import { agentStableId } from './agent-identity-service.js'
 import type { AgentHandoffService, HandoffOrigin } from './agent-handoff-service.js'
 import { RoomPeerMessageInput } from '../rooms/room-peer-tools.js'
+import { ROOM_AX_TOOL_DESCRIPTIONS } from '../rooms/room-ax-surfaces.js'
 
 const bindings = new WeakMap<ThreadStore, AgentHandoffService>()
 export const bindAgentHandoffService = (threads: ThreadStore, service: AgentHandoffService) => bindings.set(threads, service)
@@ -71,9 +72,9 @@ export function agentHandoffTools(threads: ThreadStore) {
     sourceMessageIds: z.array(Id).max(8).default([]) }).strict()
   const get = z.object({ handoffId: Id }).strict()
   return [
-    { name: 'list_collaboration_agents', schema: list, description: 'List up to 30 relevant Agents you may contact in this work: common group members or Agents explicitly designated by the user. This does not wake them.' },
-    { name: 'send_agent_message', schema: send, description: 'Request focused read-only assistance from another permitted Agent. Returns an accepted handoff handle, not a completed reply. Supply only necessary source message IDs. Continue useful work or finish your turn; the result returns asynchronously. Never resend an accepted handoff after a timeout. This cannot create or reassign code tasks.' },
-    { name: 'get_agent_handoff', schema: get, description: 'Read the state or bounded result of an existing handoff in your current work scope. No dispatch occurs. Do not repeatedly poll a pending handoff; finish the current turn so the result can wake a fresh response.' }
+    { name: 'list_collaboration_agents', schema: list, description: ROOM_AX_TOOL_DESCRIPTIONS.list_collaboration_agents },
+    { name: 'send_agent_message', schema: send, description: ROOM_AX_TOOL_DESCRIPTIONS.send_agent_message },
+    { name: 'get_agent_handoff', schema: get, description: ROOM_AX_TOOL_DESCRIPTIONS.get_agent_handoff }
   ].map(({ name, schema, description }) => LocalToolHost.defineTool({
     name, description, toolKind: 'tool_call', policy: 'auto', sideEffect: 'read-only',
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },

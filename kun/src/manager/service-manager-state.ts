@@ -83,6 +83,7 @@ export const KUN_MANAGER_CAPABILITIES = [
   'room-store-v3',
   'room-store-v4',
   'room-store-v5',
+  'room-store-v6',
   'agent-direct-chat-v1', 'rooms-init-im-v1', 'agent-identities-v1'
 ] as const
 

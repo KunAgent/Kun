@@ -28,6 +28,8 @@ import { registerRoomExperienceRoutes } from './register-room-experience-routes.
 import { registerRoomReplyRoutes } from './register-room-reply-routes.js'
 import { registerRoomContentRoutes } from './register-room-content-routes.js'
 import { registerRoomInteractionRoutes } from './register-room-interaction-routes.js'
+import { registerRoomProposalRoutes } from './register-room-proposal-routes.js'
+import { registerRoomReminderRoutes } from './register-room-reminder-routes.js'
 import type { RoomWorkspace } from '../../rooms/room-runtime-types.js'
 
 const PageSchema = z.object({
@@ -82,6 +84,8 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   registerRoomReplyRoutes(add)
   registerRoomContentRoutes(add, runtime)
   registerRoomInteractionRoutes(add)
+  registerRoomProposalRoutes(add)
+  registerRoomReminderRoutes(add)
   add('GET', '/v1/rooms/:roomId/topics', (rooms, request, context) => {
     const page = pagination(request)
     return rooms.peerTopics(context.params.roomId, page.limit, page.cursor)
@@ -139,7 +143,9 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   add('GET', '/v1/rooms/:roomId', async (rooms, _request, context) => ({ room: await rooms.service.get(context.params.roomId) }))
   add('PATCH', '/v1/rooms/:roomId', async (rooms, request, context) => {
     const input = await body(request)
-    return rooms.exclusive(() => rooms.service.update(context.params.roomId, input))
+    // Member/archive changes re-gate pending topics and reminders.
+    try { return await rooms.exclusive(() => rooms.service.update(context.params.roomId, input)) }
+    finally { rooms.wake() }
   })
   add('GET', '/v1/rooms/:roomId/messages', async (rooms, request, context) => {
     const params = new URL(request.url).searchParams
@@ -230,7 +236,8 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     rooms.product.recovery(context.params.roomId, context.params.taskId))
   add('POST', '/v1/rooms/:roomId/tasks/:taskId/recover', async (rooms, request, context) => {
     const input = await body(request)
-    return rooms.exclusive(() => rooms.product.recover(context.params.roomId, context.params.taskId, input))
+    try { return await rooms.exclusive(() => rooms.product.recover(context.params.roomId, context.params.taskId, input)) }
+    finally { rooms.wake() }
   })
   add('GET', '/v1/rooms/:roomId/tasks/:taskId/deliveries', (rooms, request, context) =>
     rooms.product.deliveryPage(context.params.roomId, context.params.taskId, pagination(request), new URL(request.url).searchParams.get('summary_only') === 'true'))
@@ -268,11 +275,15 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   })
   add('POST', '/v1/rooms/:roomId/tasks/:taskId/integrations', async (rooms, request, { params }) => {
     const input = await body(request)
-    return { integration: await rooms.exclusive(() => rooms.integrations.prepare(params.roomId, params.taskId, input)) }
+    try {
+      return { integration: await rooms.exclusive(() => rooms.integrations.prepare(params.roomId, params.taskId, input)) }
+    } finally { rooms.wake() }
   })
   for (const action of ['resolve', 'apply', 'cancel', 'open', 'validate']) add('POST', '/v1/rooms/:roomId/tasks/:taskId/integrations/:integrationId/' + action, async (rooms, request, { params }) => {
     const input = await body(request)
-    return { integration: await rooms.exclusive(() => rooms.integrations.action(params.roomId, params.taskId, params.integrationId, action, input)) }
+    try {
+      return { integration: await rooms.exclusive(() => rooms.integrations.action(params.roomId, params.taskId, params.integrationId, action, input)) }
+    } finally { rooms.wake() }
   })
   add('GET', '/v1/rooms/:roomId/tasks/:taskId/cleanup', (rooms, _request, { params }) =>
     roomCleanupPreview(rooms.deps, params.roomId, params.taskId))

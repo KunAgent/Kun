@@ -35,7 +35,7 @@ describe('scoped Room result tools', () => {
     await threads.upsert(thread)
     expect(await host.listTools(rawContext('normal'))).toEqual([])
     const context = applyRoomToolPolicy(rawContext(thread.id), thread)
-    expect((await host.listTools(context)).map((tool) => tool.name)).toEqual(['read_room_rules', 'submit_room_plan'])
+    expect((await host.listTools(context)).map((tool) => tool.name)).toEqual(['read_room_rules', 'read_room_playbook', 'submit_room_plan'])
     host.replaceRuntimeComponents({ registry: new CapabilityRegistry([roomResultProvider(threads)]) })
     const result = await host.execute({ callId: 'valid', toolName: 'submit_room_plan', arguments: { kind: 'answer', response: 'Done' } }, context)
     expect(result.item).toMatchObject({ isError: false, output: { accepted: true, value: { kind: 'answer' } } })
@@ -83,7 +83,7 @@ describe('scoped Room result tools', () => {
     const deps = { threads: h.threads, dataDir: root, assertOwnership: async () => {}, model: () => ({ model: 'test', providerId: 'native' }),
       profiles: () => ({ custom: { allowedTools: ['read', 'bash'], skillsEnabled: false } }), unsupportedProviderIds: () => ['sdk'] } as unknown as RoomRuntimeDeps
     const thread = await ensureRoomThread(deps, { id: 'execution', roomId: 'room', member, kind: 'execution' })
-    expect(thread.roomContext).toMatchObject({ allowedToolNames: ['declare_room_checks', 'read_room_rules'], blockedToolNames: expect.arrayContaining(['read']),
+    expect(thread.roomContext).toMatchObject({ allowedToolNames: ['declare_room_checks', 'read_room_rules', 'read_room_playbook'], blockedToolNames: expect.arrayContaining(['read']),
       blockedProviderIds: ['mcp:private'], blockedSkillIds: ['private'], skillsEnabled: false })
     await expect(ensureRoomThread(deps, { id: 'sdk', roomId: 'room', member: { ...member, modelRef: { model: 'sdk-model', providerId: 'sdk' } }, kind: 'execution' })).rejects.toThrow('native API model')
     expect(await h.threadStore.get('sdk')).toBeNull()

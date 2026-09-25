@@ -57,8 +57,12 @@ export async function ensureRoomThread(deps: RoomRuntimeDeps, input: {
   // Result submission is a scoped data-only protocol. Host-level denies still win.
   if (resultTool && allowed && !blocked.includes(resultTool)) allowed.push(resultTool)
   if (allowed && !blocked.includes('read_room_rules')) allowed.push('read_room_rules')
+  if (allowed && !blocked.includes('read_room_playbook')) allowed.push('read_room_playbook')
   if (input.kind === 'discussion' && input.collaborationProtocol === 'peer' && allowed) {
     allowed.push(...['read_room_updates', 'send_room_message'].filter((name) => !blocked.includes(name)))
+  }
+  if (input.kind === 'discussion' && input.member.participantAgentId && allowed && !blocked.includes('propose_room_action')) {
+    allowed.push('propose_room_action')
   }
   if (input.member.participantAgentId && allowed) allowed.push(...AGENT_COLLABORATION_TOOLS.filter((name) => !blocked.includes(name)))
   return deps.threads.create({
@@ -138,6 +142,7 @@ export type ObservedRoomTurn = {
   text: string
   turn?: Turn
   structured?: unknown
+  held?: boolean
   error?: string
   resultError?: string
   segments?: Array<{ itemId: string; text: string; createdAt: string; status: AssistantTextTurnItem['status'] }>
@@ -153,7 +158,7 @@ export async function observeRoomTurn(deps: RoomRuntimeDeps, threadId: string, t
   }
   const textParts: string[] = []
   const segmentParts: Array<{ itemId: string; text: string; createdAt: string; status: AssistantTextTurnItem['status'] }> = []
-  let textLength = 0, error: string | undefined, structured: unknown, resultError: string | undefined
+  let textLength = 0, error: string | undefined, structured: unknown, resultError: string | undefined, held = false
   const resultName = thread?.roomContext?.kind === 'coordination' ? 'submit_room_plan' :
     thread?.roomContext?.kind === 'review' ? 'submit_room_review' :
       thread?.roomContext?.kind === 'discussion' && thread.roomContext.collaborationProtocol === 'peer' ? 'send_room_message' : undefined
@@ -174,6 +179,10 @@ export async function observeRoomTurn(deps: RoomRuntimeDeps, threadId: string, t
       typeof item.output === 'object' && item.output !== null && 'accepted' in item.output && item.output.accepted === true) {
       structured = (item.output as { value?: unknown }).value
     }
+    if (item.kind === 'tool_result' && !item.isError && item.toolName === resultName &&
+      typeof item.output === 'object' && item.output !== null && (item.output as { held?: unknown }).held === true) {
+      held = true
+    }
   }
   if (turn.status === 'completed' && resultName) {
     const exact = (await roomEvidenceHistory(deps.sessions, threadId, turn.id)).items.find(({ item }) =>
@@ -183,6 +192,6 @@ export async function observeRoomTurn(deps: RoomRuntimeDeps, threadId: string, t
   }
   if (error && thread?.roomContext && turn.clientRequestId) await updateRoomRun(deps.store,
     roomRunId(thread.roomContext.roomId, turn.clientRequestId), { error: error.slice(0, 4000) })
-  return { status: turn.status, text: textParts.join('\n'), turn, structured, error, resultError,
+  return { status: turn.status, text: textParts.join('\n'), turn, structured, held, error, resultError,
     segments: segmentParts.reverse().filter((segment) => segment.text.trim()) }
 }

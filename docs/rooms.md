@@ -49,6 +49,12 @@ is outside the loaded history. Attachments retain Runtime IDs and local file
 paths; posted files show their names and support preview/download. Message
 bodies reuse the existing Markdown, code block and link renderer.
 
+Agents can draft structured proposals — pin an agreement, request an execution,
+add a member or create an agent — that render as timeline cards. Drafts never
+execute anything; only the user can adopt or dismiss a card, and committing
+requires a durable result produced through the ordinary user-scoped paths.
+See [Room proposals](./rooms-proposals.md).
+
 Room names and message text can be searched locally. Tasks can be filtered by
 status, member or repository. Room, message and task lists use pagination and
 virtualization; drafts, reply references and scroll positions survive navigation.

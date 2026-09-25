@@ -8,6 +8,8 @@ import { RoomRuntime } from '../../rooms/room-runtime.js'
 import { Router } from '../router.js'
 import { dispatchRequest } from '../http-server.js'
 import { registerRoomRoutes } from './register-room-routes.js'
+import { createRoomProposal } from '../../rooms/room-proposals.js'
+import { RoomMemberSchema } from '../../contracts/rooms.js'
 import type { ServerRuntime } from './server-runtime.js'
 
 const cleanups: Array<() => Promise<void>> = []
@@ -70,5 +72,31 @@ describe('room interaction HTTP presentation boundary', () => {
     expect((await f.call(path + '/vote', 'PUT', { clientRequestId: 'fake', optionIds: ['option-1'], memberId: 'developer' })).status).toBe(400)
     expect((await f.call(path + '/invite', 'POST', { clientRequestId: 'bad-member', memberIds: ['unknown'] })).status).toBe(409)
     expect((await f.call(`${f.base}/messages/${created.body.messageId}/reactions`, 'PUT', { clientRequestId: 'fake-react', emoji: 'not-an-emoji', active: true })).status).toBe(400)
+  })
+})
+
+describe('room proposal HTTP user-resolution boundary', () => {
+  it('reads drafts and resolves them with replay, conflict and auth checks', async () => {
+    const f = await fixture()
+    const room = (await f.rooms.service.create({ clientRequestId: 'proposal-room', name: 'Proposals',
+      members: [RoomMemberSchema.parse({ id: 'developer', displayName: 'Dev', role: 'developer', presetId: 'developer', revision: 0 })] })).room
+    const base = '/v1/rooms/' + room.id
+    const draft = await createRoomProposal(f.store, room.id, { clientRequestId: 'draft', originRunId: 'run-1',
+      authorMemberId: 'developer', authorLabelSnapshot: 'Dev', rationale: 'Worth dismissing.',
+      payload: { kind: 'pin_agreement', body: 'Agreement' } })
+    const path = `${base}/proposals/${draft.proposal.proposalId}`
+    expect((await f.call(path, 'GET', undefined, 'wrong')).status).toBe(401)
+    const read = await f.call(path)
+    expect(read.status).toBe(200)
+    expect(read.body).toMatchObject({ proposalId: draft.proposal.proposalId, status: 'open', authorMemberId: 'developer' })
+    expect((await f.call(`/v1/rooms/other/proposals/${draft.proposal.proposalId}`)).status).toBe(404)
+    expect((await f.call(path + '/resolve', 'POST', { clientRequestId: 'resolve', expectedRevision: read.body.revision, decision: 'committed' })).status).toBe(409)
+    const resolved = await f.call(path + '/resolve', 'POST', { clientRequestId: 'resolve', expectedRevision: read.body.revision, decision: 'dismissed' })
+    expect(resolved.status).toBe(200)
+    expect(resolved.body).toMatchObject({ status: 'dismissed' })
+    expect((await f.call(path + '/resolve', 'POST', { clientRequestId: 'resolve', expectedRevision: read.body.revision, decision: 'dismissed' })).body).toEqual(resolved.body)
+    expect((await f.call(path + '/resolve', 'POST', { clientRequestId: 'again', expectedRevision: resolved.body.revision, decision: 'dismissed' })).status).toBe(409)
+    expect((await f.call(path + '/resolve', 'POST', { clientRequestId: 'bad' })).status).toBe(400)
+    expect(await f.store.list('peer_inbox', { roomId: room.id })).toHaveLength(0)
   })
 })

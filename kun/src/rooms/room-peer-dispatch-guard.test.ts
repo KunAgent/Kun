@@ -152,7 +152,7 @@ describe('peer execution authorization linearization', () => {
     // Keep the unrelated execution and peer lanes out of this request-recovery test.
     const taskRunner = (runtime as unknown as { tasks: { tick(): Promise<void> } }).tasks
     vi.spyOn(taskRunner, 'tick').mockResolvedValue(undefined)
-    vi.spyOn(runtime.peers, 'tick').mockResolvedValue(undefined)
+    vi.spyOn(runtime.peers, 'tick').mockResolvedValue(false)
     vi.spyOn(runtime.product, 'summarizeRequests').mockResolvedValue(undefined)
     const driver = runtime as unknown as { stopped: boolean; tick(): Promise<void> }
     const tick = async () => { driver.stopped = false; try { await driver.tick() } finally { driver.stopped = true } }
@@ -186,7 +186,7 @@ describe('peer execution authorization linearization', () => {
     const runtime = new RoomRuntime(f.deps)
     cleanups.push(() => runtime.close())
     vi.spyOn((runtime as unknown as { tasks: { tick(): Promise<void> } }).tasks, 'tick').mockResolvedValue(undefined)
-    vi.spyOn(runtime.peers, 'tick').mockResolvedValue(undefined)
+    vi.spyOn(runtime.peers, 'tick').mockResolvedValue(false)
     vi.spyOn(runtime.product, 'summarizeRequests').mockResolvedValue(undefined)
     const driver = runtime as unknown as { stopped: boolean; tick(): Promise<void> }
     const tick = async () => { driver.stopped = false; try { await driver.tick() } finally { driver.stopped = true } }

@@ -24,7 +24,15 @@ export type RoomRequestState = {
     kind: import('./room-continuation-dispatch.js').RoomContinuation['kind']
     goalCreatedAt?: string
   }
+  /** Provenance of the durable reminder that woke this private request. */
+  privateReminder?: import('../contracts/room-reminders.js').RoomPrivateReminder
   privateWorkspace?: string
+  /**
+   * Durable steer intent for a plain user message admitted into a running
+   * private turn. `operationId` is idempotent; `targetRunId` is recorded so the
+   * source run can link to the response it merged into.
+   */
+  steer?: { operationId: string; targetTurnId: string; targetRunId: string }
   handoffReturnId?: string
   taskParticipants?: RoomMember[]
   pollInvitation?: import('../contracts/room-interactions.js').RoomPollInvitation

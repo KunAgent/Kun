@@ -12,6 +12,7 @@ import type { RoomService } from './room-service.js'
 import { roomRunId } from './room-run-recording.js'
 import { roomRunSegmentMessageId } from './room-run-segments.js'
 import { agentStableId } from '../agents/agent-identity-service.js'
+import { ROOM_AX_TOOL_DESCRIPTIONS } from './room-ax-surfaces.js'
 
 export const SEND_IM_MESSAGE_TOOL_NAME = 'send_im_message'
 const MAX_IM_MESSAGE_TEXT_CHARS = 16_000
@@ -76,10 +77,7 @@ function fileOutput(file: ResolvedImFile) {
 export function roomImMessageTool(threads: ThreadStore): LocalTool {
   return LocalToolHost.defineTool({
     name: SEND_IM_MESSAGE_TOOL_NAME,
-    description:
-      'Publish one message to the user in this IM conversation. Ordinary assistant text is internal working output the user never sees. ' +
-      'Call this tool for every reply, status, question, or result the user should see: text and/or workspace files such as images, documents, audio, or video. ' +
-      'One call creates one chat bubble; combine text with attachments or call it again for another bubble.',
+    description: ROOM_AX_TOOL_DESCRIPTIONS.send_im_message,
     toolKind: 'tool_call',
     policy: 'auto',
     // Publishing a bubble is the conversation's own data-only protocol, like

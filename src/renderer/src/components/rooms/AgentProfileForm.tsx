@@ -8,7 +8,7 @@ import { roomRequestId, roomsRequest, type RoomPresetCatalog } from './rooms-cli
 import './agents.css'
 
 const lines = (text: string) => [...new Set(text.split(/[,\n]/).map((item) => item.trim()).filter(Boolean))]
-export function AgentProfileForm({ agent: initialAgent, active = true, onSaved }: { agent: AgentIdentity | null; active?: boolean; onSaved: (agent: AgentIdentity) => void }) {
+export function AgentProfileForm({ agent: initialAgent, draft, active = true, onSaved }: { agent: AgentIdentity | null; draft?: { name?: string; title?: string; instructions?: string }; active?: boolean; onSaved: (agent: AgentIdentity) => void }) {
   const { t } = useTranslation('common')
   const uid = useId()
   const instructionsInputId = `${uid}-instructions`
@@ -18,8 +18,8 @@ export function AgentProfileForm({ agent: initialAgent, active = true, onSaved }
   const catalog = useAgentResource<RoomPresetCatalog>('/v1/rooms/presets', active)
   const templates = useAgentResource<{ templates: Array<Pick<AgentIdentity, 'name' | 'title' | 'instructions' | 'defaultRole' | 'presetId' | 'avatar' | 'templateId' | 'templateVersion'>> }>('/v1/agents/templates', active)
   const [templateRef, setTemplateRef] = useState({ templateId: agent?.templateId, templateVersion: agent?.templateVersion })
-  const [name, setName] = useState(agent?.name ?? ''), [title, setTitle] = useState(agent?.title ?? '')
-  const [instructions, setInstructions] = useState(agent?.instructions ?? '')
+  const [name, setName] = useState(agent?.name ?? draft?.name ?? ''), [title, setTitle] = useState(agent?.title ?? draft?.title ?? '')
+  const [instructions, setInstructions] = useState(agent?.instructions ?? draft?.instructions ?? '')
   const [role, setRole] = useState(agent?.defaultRole ?? 'developer'), [presetId, setPreset] = useState(agent?.presetId ?? 'general')
   const [avatar, setAvatar] = useState(agent?.avatar)
   const [roots, setRoots] = useState(agent?.allowedRepositoryRoots?.join('\n') ?? '')

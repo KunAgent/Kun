@@ -46,6 +46,7 @@
   "directQueued": "等待响应",
   "directReconciling": "正在核对原运行",
   "directStopping": "正在停止…",
+  "directSteered": "已并入当前回复",
   "directResponding": "正在处理…",
   "directQueuedCount": "另有 {{count}} 条等待处理",
   "directToolProgress": "工具进度",

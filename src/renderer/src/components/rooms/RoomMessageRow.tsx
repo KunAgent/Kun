@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowUpRight, Check, Copy, Pin, Reply } from 'lucide-react'
+import { ArrowUpRight, BellRing, Check, Copy, Pin, Reply } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomContentReference, RoomMember, RoomMessage, RoomTask } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
@@ -7,7 +7,9 @@ import { RoomEmojiPicker } from './RoomEmojiPicker'
 import { RoomMessageBody } from './RoomMessageBody'
 import { RoomMessageRunButton } from './RoomMessageRunButton'
 import { RoomMessageInteractions } from './RoomMessageInteractions'
+import { RoomProposalCard } from './RoomProposalCard'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
+import './rooms-reminders.css'
 
 const roles = {
   coordinator: 'roomsCoordinator',
@@ -140,7 +142,7 @@ export function RoomMessageRow({
               </span>
             </button>
           ) : null}
-          {message.presentationKind !== 'poll' ? <RoomMessageBody
+          {message.presentationKind !== 'poll' && message.presentationKind !== 'reminder' && (message.presentationKind !== 'proposal' || !room) ? <RoomMessageBody
             room={room}
             publicMessage={message.status !== 'streaming'}
             messageId={message.id}
@@ -150,6 +152,15 @@ export function RoomMessageRow({
             body={message.body}
             attachmentIds={message.attachmentIds}
           /> : null}
+          {message.presentationKind === 'reminder' ? <div className="rooms-reminder-fired" role="note"
+            aria-label={t('roomsReminderFired')}>
+            <BellRing size={15} aria-hidden="true" />
+            <div>
+              <strong>{t('roomsReminderFired')}</strong>
+              <p>{message.body}</p>
+            </div>
+          </div> : null}
+          {room && message.presentationKind === 'proposal' ? <RoomProposalCard room={room} message={message} /> : null}
           {room ? <RoomMessageInteractions room={room} message={message} onMember={onMember ? (id) => onMember(id, message.rootRequestId) : undefined} /> : null}
         </div>
         <div className="rooms-message-footer">

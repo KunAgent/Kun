@@ -28,6 +28,7 @@ const baseProps = () => ({
   onProfile: vi.fn(),
   onModels: vi.fn(),
   onFiles: vi.fn(),
+  onReminders: vi.fn(),
   onReset: vi.fn(),
   onConnect: vi.fn(),
   onTasks: vi.fn(),
@@ -120,6 +121,17 @@ describe('RoomDirectProgress dismissible notices', () => {
     expect(errorAlert()).toHaveLength(0)
     await act(async () => { renderer.update(createElement(RoomDirectProgress, progressProps(directState({ error: 'Error: a different failure' })))) })
     expect(errorAlert()).toHaveLength(1)
+  })
+
+  it('labels a steered request as merged into the current reply', async () => {
+    const steered = { id: 'req-b', revision: 1, status: 'running', runId: 'run-b', clientRequestId: 'b',
+      steer: { operationId: 'op-b', targetTurnId: 'turn-a', targetRunId: 'run-a' } }
+    const state = directState({
+      data: { active: steered, requests: [steered], pendingCount: 1, approvals: [], userInputs: [] } as unknown as AgentDirectActivity
+    })
+    await act(async () => { renderer = create(createElement(RoomDirectProgress, progressProps(state))) })
+    const status = renderer.root.findByProps({ role: 'status' })
+    expect(textOf(status)).toContain('Merged into the current reply')
   })
 
   it('dismisses the failed-response box and reopens it for a new failed request', async () => {

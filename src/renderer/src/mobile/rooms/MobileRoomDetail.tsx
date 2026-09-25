@@ -69,7 +69,8 @@ export function MobileRoomDetail({ page, onBack, onOpenCode, onNavigate, onOpenT
           onClose={onBack}
           onRun={(runId) => onNavigate({ mode: 'rooms', kind: 'run', roomId: room.id, runId })}
           onOpenThread={onOpenCode} onUpdated={() => void state.refresh()} />
-      : page.kind === 'run' ? <RoomRunInspector roomId={room.id} runId={page.runId} />
+      : page.kind === 'run' ? <RoomRunInspector roomId={room.id} runId={page.runId}
+          onOpenRun={(runId) => onNavigate({ mode: 'rooms', kind: 'run', roomId: room.id, runId })} />
       : <RoomMemberDetails room={room} selectedMemberId={page.memberId}
           onSelectMember={(memberId) => onNavigate({ mode: 'rooms', kind: 'member', roomId: room.id, memberId })}
           onRun={(runId) => onNavigate({ mode: 'rooms', kind: 'run', roomId: room.id, runId })}

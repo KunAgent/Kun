@@ -3,6 +3,7 @@ import type { ThreadStore } from '../ports/thread-store.js'
 import type { ToolHostContext } from '../ports/tool-host.js'
 import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 import type { AgentIdentityService } from './agent-identity-service.js'
+import { ROOM_AX_TOOL_DESCRIPTIONS } from '../rooms/room-ax-surfaces.js'
 
 const bindings = new WeakMap<ThreadStore, AgentIdentityService>()
 export const COMMIT_AGENT_SETUP_TOOL = 'commit_agent_setup'
@@ -17,7 +18,7 @@ const CommitAgentSetup = z.object({
 export function agentSetupTools(threads: ThreadStore) {
   return [LocalToolHost.defineTool({
     name: COMMIT_AGENT_SETUP_TOOL,
-    description: 'Save the interviewed Agent identity. Call once when you have enough to write durable name, title, and standing instructions. This does not start other work.',
+    description: ROOM_AX_TOOL_DESCRIPTIONS.commit_agent_setup,
     toolKind: 'tool_call', policy: 'auto', sideEffect: 'read-only',
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
     shouldAdvertise: (context) => context.roomAgent === true && Boolean(context.allowedToolNames?.includes(COMMIT_AGENT_SETUP_TOOL)),

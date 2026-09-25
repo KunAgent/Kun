@@ -18,7 +18,7 @@ export async function recordPeerResponseMetric(deps: RoomRuntimeDeps, topic: Roo
   const firstResponseMs = source && message ? Date.parse(message.createdAt) - Date.parse(source.value.createdAt) : undefined
   await recordPeerMetric(deps, { id: active.clientRequestId, roomId: topic.roomId,
     rootRequestId: topic.rootRequestId, memberId: member.value.memberId, generation: active.generation,
-    threadId: active.threadId, turnId: active.turnId, phase: 'response', outcome,
+    threadId: active.threadId, turnId: active.turnId, phase: 'response', outcome, holds: active.holds,
     ...await readPeerTurnUsage(deps, active), elapsedMs: duration !== undefined && duration >= 0 ? duration : undefined,
     // Consumers take the minimum successful publication latency per generation.
     firstResponseMs: firstResponseMs !== undefined && firstResponseMs >= 0 ? firstResponseMs : undefined })

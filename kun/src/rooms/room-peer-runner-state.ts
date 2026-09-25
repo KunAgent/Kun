@@ -80,7 +80,7 @@ export async function recordPeerMetric(deps: RoomRuntimeDeps, input: {
   id: string; roomId: string; rootRequestId: string; memberId: string;
   phase: string; outcome: string; model?: string; elapsedMs?: number; usage?: unknown; firstResponseMs?: number
   generation?: number
-  threadId?: string; turnId?: string; usageStatus?: string
+  threadId?: string; turnId?: string; usageStatus?: string; holds?: number
 }): Promise<void> {
   const id = peerId('metric', input.id, input.phase, input.outcome)
   if (await deps.store.get('peer_metric', id)) return

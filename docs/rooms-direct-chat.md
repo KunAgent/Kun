@@ -33,7 +33,8 @@ and independent-selection workflow.
   references, emoji, group mentions/polls and project selection use the plus menu.
 - Ordinary responses have no implicit quote or reply count. Explicit reply
   branches retain their host-proven root. Run inspection is a hover/focus action.
-- A busy private chat accepts queued messages and shows a brief status. Tool
+- A busy private chat merges new plain-text messages into the running reply and
+  marks them as merged instead of queueing separate turns. Tool
   details are expandable. Approvals stay in the progress strip. Pending
   `user_input` requests render as Grok-style choice cards in the private
   timeline; with a card open, composer send is the current question's Other
@@ -60,6 +61,17 @@ it never allocates a replacement because a timeout elapsed. Publication and
 `originRunId` commit together. Stream projections and failed drafts cannot feed
 collaborators or memory. Cancelling invalidates publication and retains the
 original execution identity. Viewing a run uses existing turn-filtered pagination.
+
+When a plain user message arrives while the private turn is still running, the
+host records a durable steer intent (`request.steer` with an idempotent
+operation id and target turn/run) and admits it through the shared steering
+queue. The merged request keeps its own run record, which links to the response
+it joined through `mergedIntoRunId`, and settles exactly with that target.
+Continuations, reminders, handoff returns, setup interviews, attachments and
+task-designated messages keep their own queued turns, as does any message whose
+model binding differs. A target that finishes without the steering receipt falls
+back to the normal admission path under a fresh attempt identity; cancelling a
+merged message stops the response it merged into.
 
 Generated top-level files get scoped content cards. The file browser is bounded
 to 100 top-level regular files. Owned Agent files remain available after connecting

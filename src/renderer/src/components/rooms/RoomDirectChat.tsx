@@ -40,9 +40,9 @@ export function RoomNoticeDismiss({ onDismiss }: { onDismiss: () => void }) {
   return <button type="button" className="rooms-notice-dismiss" aria-label={t('roomsDismissNotice')} title={t('roomsDismissNotice')}
     onClick={onDismiss}><X size={13} aria-hidden="true" /></button>
 }
-export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile, onModels, onFiles, onReset, onConnect, onTasks, onSession, sessionOpen, sessionDisabled }: {
+export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile, onModels, onFiles, onReminders, onReset, onConnect, onTasks, onSession, sessionOpen, sessionDisabled }: {
   room: Room; models?: AgentModels | null; onSidebar: () => void; onSearch: () => void; onProfile: () => void; onModels: () => void
-  onFiles: () => void; onReset: () => void; onConnect: () => void; onTasks: () => void
+  onFiles: () => void; onReminders: () => void; onReset: () => void; onConnect: () => void; onTasks: () => void
   onSession: () => void; sessionOpen: boolean; sessionDisabled: boolean
 }) {
   const { t } = useTranslation('common')
@@ -64,6 +64,7 @@ export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile,
         <button onClick={() => { close(); onProfile() }}>{t('agentsProfileAndMemory')}</button>
         <button onClick={() => { close(); onModels() }}>{t('directModels')}</button>
         <button onClick={() => { close(); onFiles() }}>{t('directFiles')}</button>
+        <button onClick={() => { close(); onReminders() }}>{t('roomsReminders')}</button>
         <button onClick={() => { close(); onConnect() }}>{t('directConnectProject')}</button>
         <button onClick={() => { close(); onReset() }}>{t('directNewContext')}</button>
         <button onClick={() => { close(); onTasks() }}>{t('roomsTasks')}</button>
@@ -85,7 +86,7 @@ export function RoomDirectProgress({ room, state, onRun, openRunId, onModels }: 
   if (!active && !(failed && failedKey !== dismissed) && !(state.error && errorKey !== dismissed) && !room.privateWorkspace) return null
   return <div className="direct-progress">
     {room.privateWorkspace ? <p className="direct-project"><FolderOpen size={13} /><span title={room.privateWorkspace}>{room.privateWorkspace.split('/').at(-1)}</span></p> : null}
-    {active ? <div className="direct-progress-line"><span className="rooms-typing-dots" aria-hidden="true"><span className="rooms-typing-dot" /><span className="rooms-typing-dot" /><span className="rooms-typing-dot" /></span><span role="status">{t(state.data?.approvals.length ? 'roomsState_needs_approval' : state.data?.userInputs.length ? 'roomsState_needs_input' : active.status === 'pending' ? 'directQueued' : active.status === 'recovery_required' ? 'directReconciling' : active.status === 'stopping' ? 'directStopping' : 'directResponding')}{queued ? ' · ' + t('directQueuedCount', { count: queued }) : ''}</span>
+    {active ? <div className="direct-progress-line"><span className="rooms-typing-dots" aria-hidden="true"><span className="rooms-typing-dot" /><span className="rooms-typing-dot" /><span className="rooms-typing-dot" /></span><span role="status">{t(state.data?.approvals.length ? 'roomsState_needs_approval' : state.data?.userInputs.length ? 'roomsState_needs_input' : active.status === 'pending' ? 'directQueued' : active.status === 'recovery_required' ? 'directReconciling' : active.status === 'stopping' ? 'directStopping' : active.steer ? 'directSteered' : 'directResponding')}{queued ? ' · ' + t('directQueuedCount', { count: queued }) : ''}</span>
       {runId ? <button type="button" aria-pressed={openRunId === runId} className={openRunId === runId ? 'is-active' : ''} onClick={() => onRun(runId)}><PanelRightOpen size={14} />{t('roomsViewAgentSession')}</button> : null}</div> : null}
     {state.data ? <RoomExecutionGates detail={{ ...state.data, userInputs: [] }} onUpdated={async () => state.refresh()} /> : null}
     {failed && failedKey !== dismissed ? <div className="direct-failed" role="status"><CircleAlert size={15} /><span>{failed.error || t(failed.status === 'cancelled' ? 'directStopped' : 'directFailed')}</span>

@@ -18,6 +18,9 @@ it('labels the run like the desktop progress line', () => {
   expect(directActivityLabelKey(active('stopping'), false)).toBe('directStopping')
   expect(directActivityLabelKey({ active: { status: 'running' }, approvals: [{}], userInputs: [] } as never, false))
     .toBe('roomsState_needs_approval')
+  expect(directActivityLabelKey({ active: { status: 'running',
+    steer: { operationId: 'op', targetTurnId: 't1', targetRunId: 'r1' } }, approvals: [], userInputs: [] } as never, false))
+    .toBe('directSteered')
 })
 
 it('describes group activity: responding, then waiting inbox, then receipt', () => {

@@ -21,14 +21,15 @@ export async function directActivity(rooms: RoomRuntime, roomId: string) {
   const room = await rooms.service.get(roomId)
   const rows = await rooms.deps.store.list<RoomRequestState>('request', { roomId, limit: 20 })
   const activeRows = await rooms.deps.store.list<RoomRequestState>('request', { roomId, status: ['running', 'pending', 'stopping', 'recovery_required'], order: 'asc', limit: 1000 })
-  const requestSummary = (row: typeof rows[number]) => ({ id: row.id, revision: row.revision, status: row.value.status, runId: row.value.privateRunId, threadId: row.value.turnId ? row.value.threadId : undefined, turnId: row.value.turnId, error: row.value.error })
-  const requests = rows.filter((row) => row.value.privateProtocol).map((row) => ({ id: row.id, revision: row.revision,
-    status: row.value.status, runId: row.value.privateRunId, threadId: row.value.turnId ? row.value.threadId : undefined,
-    turnId: row.value.turnId, error: row.value.error }))
+  const requestSummary = (row: typeof rows[number]) => ({ id: row.id, revision: row.revision, status: row.value.status,
+    runId: row.value.privateRunId, threadId: row.value.turnId ? row.value.threadId : undefined, turnId: row.value.turnId,
+    clientRequestId: row.value.message.clientRequestId, steer: row.value.steer, error: row.value.error })
+  const requests = rows.filter((row) => row.value.privateProtocol).map(requestSummary)
   const activeRow = activeRows.find((row) => row.value.privateProtocol)
   const active = activeRow ? requestSummary(activeRow) : undefined
   const workspace = await privateWorkspace(rooms, room)
-  return { requests, active, pendingCount: activeRows.filter((row) => row.value.privateProtocol).length, workspace,
+  // A merged request already folded into the running reply is not queued work.
+  return { requests, active, pendingCount: activeRows.filter((row) => row.value.privateProtocol && !row.value.steer).length, workspace,
     approvals: active?.threadId ? rooms.deps.approvals.pending(active.threadId) : [],
     userInputs: active?.threadId ? rooms.deps.inputs.pending(active.threadId) : [] }
 }
@@ -55,6 +56,8 @@ export async function updateDirectWorkspace(rooms: RoomRuntime, roomId: string, 
     puts: [{ kind: 'room', id: roomId, roomId, value: { ...room, privateWorkspace: workspace,
       privateEpoch: (room.privateEpoch ?? 0) + 1, revision: room.revision + 1, updatedAt: new Date().toISOString() } }],
     events: [{ roomId, kind: 'room.updated', payload: { id: roomId } }] })
+  // The epoch bump invalidates pending continuations; reconcile them now.
+  rooms.wake()
   return rooms.service.get(roomId)
 }
 export async function controlDirectRequest(rooms: RoomRuntime, roomId: string, requestId: string,

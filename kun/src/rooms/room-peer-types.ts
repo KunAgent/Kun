@@ -3,6 +3,7 @@ import type { RoomStoredDocument } from './room-store.js'
 import type { UsageSnapshot } from '../contracts/usage.js'
 
 export const ROOM_PEER_LIMITS = { responses: 32, memberResponses: 8, triages: 128 } as const
+export const ROOM_PEER_HOLD_LIMITS = { maxUpdates: 6, maxHolds: 2 } as const
 
 export type RoomPeerRequestInput = {
   id: string
@@ -63,6 +64,7 @@ export type RoomPeerActivation = {
   seenItems: Array<{ id: string; sourceId: string; sourceRevision: number; seq: number }>
   seenThroughSeq: number
   basePublicationRevision: number
+  holds?: number
   generation: number
   attempt: number
   phase: 'triage' | 'respond'

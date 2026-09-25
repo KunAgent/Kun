@@ -5,6 +5,7 @@ import type { Room, RoomMessage } from '@shared/rooms-api'
 import i18n from '../../i18n'
 import { RoomEmojiPicker } from './RoomEmojiPicker'
 import { RoomMessageRow } from './RoomMessageRow'
+import { RoomProposalCard } from './RoomProposalCard'
 
 const api = vi.hoisted(() => ({ request: vi.fn() }))
 vi.mock('./rooms-client', async (original) => ({ ...(await original<typeof import('./rooms-client')>()),
@@ -46,5 +47,18 @@ describe('room message row actions', () => {
     expect(onReply).not.toHaveBeenCalled()
     act(() => renderer!.root.findByProps({ 'aria-label': 'Reply' }).props.onClick())
     expect(onReply).toHaveBeenCalledWith(threaded)
+  })
+
+  it('renders proposal presentation messages through RoomProposalCard instead of the body', async () => {
+    const drafted = { ...message, presentationKind: 'proposal', proposalId: 'proposal-1' } as RoomMessage
+    await act(async () => { renderer = create(createElement(RoomMessageRow, { room, message: drafted, ...props })) })
+    expect(renderer!.root.findAllByType(RoomProposalCard)).toHaveLength(1)
+    expect(renderer!.root.findAllByType('p').map((node) => node.props.children)).not.toContain('hello')
+  })
+
+  it('falls back to the plain body for proposal messages without a room context', async () => {
+    const drafted = { ...message, presentationKind: 'proposal', proposalId: 'proposal-1' } as RoomMessage
+    await act(async () => { renderer = create(createElement(RoomMessageRow, { message: drafted, ...props })) })
+    expect(renderer!.root.findAllByType(RoomProposalCard)).toHaveLength(0)
   })
 })

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import type { Room } from '../contracts/rooms.js'
 import type { RoomStore, RoomStoreCommit, RoomStoredDocument } from './room-store.js'
 import type { RoomPeerInboxItem, RoomPeerMemberState, RoomPeerTopic } from './room-peer-types.js'
 
@@ -22,6 +23,21 @@ export async function peerInboxRows(store: RoomStore, rootRequestId: string, mem
     if (page.length < 200) break
   }
   return rows
+}
+
+/**
+ * Ordinary 'message' fan-out skips members whose attention mode is 'mentions'.
+ * Explicit @-mentions and structured invitations already arrive through the
+ * unfiltered 'invitation' deliveries, while directly designated recipients —
+ * the default member on a mention-less request or a task owner — always stay.
+ * Members without the setting (legacy data) behave as 'all'.
+ */
+export function peerMessageRecipients(room: Pick<Room, 'members'>, candidateIds: Iterable<string>,
+  opts?: { designated?: Iterable<string> }): string[] {
+  const designated = new Set(opts?.designated ?? [])
+  const quiet = new Set(room.members.filter((member) => member.attention === 'mentions')
+    .map((member) => member.id))
+  return [...new Set(candidateIds)].filter((id) => designated.has(id) || !quiet.has(id))
 }
 
 /** Inbox identity binds the immutable source revision, never the SSE transport cursor. */
