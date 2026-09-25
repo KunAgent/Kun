@@ -37,6 +37,8 @@ import {
 } from './runtime-factory-model.js'
 import { resumeInterruptedGraphPlanning } from './runtime-graph-lifecycle.js'
 import { CanvasReceiptRegistry } from '../services/canvas-receipt-registry.js'
+import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
+import { HarnessRouter, HarnessRuntimeMap } from '../harness/harness-router.js'
 
 export async function createRuntimeAgentComposition(
   registryComposition: ReturnType<typeof createRuntimeRegistry>
@@ -247,11 +249,11 @@ export async function createRuntimeAgentComposition(
       sessionCoordinator: delegatedSessions,
       contextProfile: delegatedContextProfile
     }
-    return composeDelegatedTurnRuntimes([
-      createAgentSdkRuntime(sdkRuntimeDeps),
-      new AntigravityCliRuntime(antigravityRuntimeDeps),
-      createCursorSdkRuntime(cursorRuntimeDeps)
-    ])
+    return {
+      agentSdk: sdkRuntimeDeps,
+      antigravity: antigravityRuntimeDeps,
+      cursor: cursorRuntimeDeps
+    }
   }
 
   // The main turn abort signal already reaches foreground children. Detached
@@ -269,25 +271,45 @@ export async function createRuntimeAgentComposition(
       (childId) => threadService.delete(childId)
     )
   }
-  const sdkRuntime = new ReplaceableDelegatedTurnRuntime(buildMainDelegatedRuntime({
-    options: core.activeOptions,
-    registry: registryComposition.registry,
-    skillRuntime: services.skillRuntime,
-    instructionRuntime: services.instructionRuntime,
-    attachmentStore: services.attachmentStore,
-    memoryStore: services.memoryStore,
-    memoryFeedback: services.memoryFeedback
-  }))
+  const harnessRuntimeMap = new HarnessRuntimeMap(
+    buildHarnessRuntimes(
+      buildMainDelegatedRuntime({
+        options: core.activeOptions,
+        registry: registryComposition.registry,
+        skillRuntime: services.skillRuntime,
+        instructionRuntime: services.instructionRuntime,
+        attachmentStore: services.attachmentStore,
+        memoryStore: services.memoryStore,
+        memoryFeedback: services.memoryFeedback
+      })
+    )
+  )
+  // Legacy provider-inference view kept in sync with the router's map so the
+  // disabled-router path behaves exactly as before.
+  const sdkRuntime = new ReplaceableDelegatedTurnRuntime(
+    composeDelegatedTurnRuntimes(Object.values(harnessRuntimeMap.get()))
+  )
+  const harnessRouter = new HarnessRouter({
+    enabled: () => core.activeOptions.ade?.harnessRouter !== false,
+    catalog: services.harnesses.catalog,
+    runtimes: () => harnessRuntimeMap.get(),
+    providerKinds: services.providerKinds,
+    defaultModel: () => core.activeOptions.model
+  })
   model.refreshModelConnectionDelegatedDeps = () => {
-    sdkRuntime.replace(buildMainDelegatedRuntime({
-      options: core.activeOptions,
-      registry: registryComposition.registry,
-      skillRuntime: services.skillRuntime,
-      instructionRuntime: services.instructionRuntime,
-      attachmentStore: services.attachmentStore,
-      memoryStore: services.memoryStore,
-      memoryFeedback: services.memoryFeedback
-    }))
+    const next = buildHarnessRuntimes(
+      buildMainDelegatedRuntime({
+        options: core.activeOptions,
+        registry: registryComposition.registry,
+        skillRuntime: services.skillRuntime,
+        instructionRuntime: services.instructionRuntime,
+        attachmentStore: services.attachmentStore,
+        memoryStore: services.memoryStore,
+        memoryFeedback: services.memoryFeedback
+      })
+    )
+    harnessRuntimeMap.replace(next)
+    sdkRuntime.replace(composeDelegatedTurnRuntimes(Object.values(next)))
   }
 	  const activeRuntimeRuns = new Set<Promise<TurnRunOutcome>>()
 	  let shuttingDown = false
@@ -327,6 +349,7 @@ export async function createRuntimeAgentComposition(
     model: timedModelClient,
     toolHost,
     sdkRuntime,
+    harnessRouter,
     usage: usageService,
     events,
     turns: turnService,
@@ -457,6 +480,9 @@ export async function createRuntimeAgentComposition(
     canvasReceipts,
     buildMainDelegatedRuntime,
     sdkRuntime,
+    harnessRouter,
+    harnessRuntimeMap,
+    harnesses: services.harnesses,
     activeRuntimeRuns,
     trackRuntimeRun,
     runAgentTurn,

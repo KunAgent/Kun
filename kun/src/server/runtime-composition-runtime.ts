@@ -28,7 +28,6 @@ import type { ServerRuntime } from './runtime-factory-dependencies.js'
 import { createRuntimeRoomComposition } from './runtime-composition-rooms.js'
 import { beginOwnedProcessShutdown, shutdownOwnedProcesses } from '../process/owned-process.js'
 import { ownedServiceManagerProcesses } from '../manager/owned-service-manager-session.js'
-import { createHarnessComposition } from '../harness/harness-runtime.js'
 
 export function createServerRuntimeComposition(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>,
@@ -128,7 +127,6 @@ export function createServerRuntimeComposition(
     extensionIndexClient
   } = extensions
   const { startedAt, rebuildCapabilities, applyConfig } = config
-  const harnessComposition = createHarnessComposition(() => config.activeOptions)
   const roomComposition = createRuntimeRoomComposition({
     options: () => config.activeOptions,
     services: { threads: threadService, threadStore: stores.threadStore,
@@ -250,7 +248,7 @@ export function createServerRuntimeComposition(
 	      jobs: extensionJobs,
 	      bundledSeedResults
 	    },
-	    harnesses: harnessComposition,
+	    harnesses: services.harnesses,
 	    providerConfigs: () => config.activeOptions.providers ?? {},
 	    modelClient,
 	    directModelClient,

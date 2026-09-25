@@ -73,6 +73,8 @@ import {
   MemoryDistillationPendingStore
 } from '../memory/index.js'
 import { createWriteDocumentGuard } from './runtime-write-document-guard.js'
+import { createHarnessComposition } from '../harness/harness-runtime.js'
+import { providerKindsForOptions } from './runtime-factory-model.js'
 
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
@@ -141,6 +143,13 @@ export async function createRuntimeServices(
     dataDir: core.activeOptions.dataDir,
     nowIso
   })
+  const harnesses = createHarnessComposition(() => core.activeOptions)
+  const providerKinds = () =>
+    providerKindsForOptions(core.activeOptions, {
+      defaultIsAgentSdk,
+      defaultIsCursorSdk,
+      defaultIsAntigravity
+    })
   const turnService = new TurnService({
     threadStore,
     sessionStore,
@@ -173,7 +182,9 @@ export async function createRuntimeServices(
 	      graphRuntime.cancelSourceTurnRunsExplicitly(threadId, sourceTurnId),
 	    migrationMaintenance,
 	    ids,
-	    nowIso
+	    nowIso,
+	    providerKinds,
+	    harnessCatalog: harnesses.catalog
   })
   executionLeases?.setLeaseLostHandler((lease) => {
     turnService.abortTurnExecution(lease.turnId, ownerLeaseExpiredTurnAbortReason(lease))
@@ -522,6 +533,8 @@ export async function createRuntimeServices(
     defaultIsAgentSdk,
     defaultIsAntigravity,
     defaultIsCursorSdk,
+    harnesses,
+    providerKinds,
     get mcpProviders() { return mcpProviders },
     set mcpProviders(value: typeof mcpProviders) { mcpProviders = value },
     get skillRuntime() { return skillRuntime },

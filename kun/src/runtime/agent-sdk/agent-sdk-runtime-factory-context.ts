@@ -432,6 +432,7 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
         awaitApproval?: ToolHostContext['awaitApproval']
         clientSurface?: ToolHostContext['clientSurface']
         orchestration?: ToolHostContext['orchestration']
+        harnessId?: string
       }
     ): ToolHostContext => {
       const allowedToolNames = intersectAllowedToolNames(
@@ -461,6 +462,7 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
         ...(opts?.activeSkillIds ? { activeSkillIds: opts.activeSkillIds } : {}),
         ...(opts?.clientSurface ? { clientSurface: opts.clientSurface } : {}),
         ...(opts?.orchestration ? { orchestration: opts.orchestration } : {}),
+        ...(opts?.harnessId ? { harnessId: opts.harnessId } : {}),
         ...(allowedToolNames ? { allowedToolNames } : {}),
         // Presence advertises `user_input`; the active client renders the gate.
         ...(opts?.awaitUserInput ? { awaitUserInput: opts.awaitUserInput } : {}),

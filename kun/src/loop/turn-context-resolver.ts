@@ -196,6 +196,10 @@ export class TurnContextResolver {
       ...(input.turn.guiDesignArtifact ? { guiDesignArtifact: input.turn.guiDesignArtifact } : {}),
       ...(input.turn.imContext ? { imContext: true } : {}),
       modelCapabilities: input.modelCapabilities,
+      // Frozen at turn admission; the thread pin is the legacy fallback.
+      ...(input.turn.harnessId ?? input.thread.harnessId
+        ? { harnessId: input.turn.harnessId ?? input.thread.harnessId }
+        : {}),
       activeSkillIds: skillResolution.activeSkillIds,
       ...(allowedToolNames ? { allowedToolNames } : {}),
       ...(input.thread.toolCatalogEpoch

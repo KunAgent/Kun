@@ -105,6 +105,14 @@ export type TurnServiceDeps = {
    * Window-mode admission fails closed when the route cannot execute tools.
    */
   modelCapabilities?: (model: string, providerId?: string) => ModelCapabilityMetadata
+  /**
+   * Provider-kind lookup used to freeze `harnessId` at turn admission.
+   * Optional so test scaffolds keep working; absent => every provider id maps
+   * to the native loop.
+   */
+  providerKinds?: () => import('../harness/resolve-turn-harness.js').ProviderKindsView
+  /** Optional harness catalog used to pick the default credential mode. */
+  harnessCatalog?: { get(id: string): import('../contracts/harness.js').HarnessDefinition | undefined }
   /** Resolve durable Graph ownership without coupling TurnService to the Graph store. */
   resolveGraphLeadRun?: (input: {
     threadId: string

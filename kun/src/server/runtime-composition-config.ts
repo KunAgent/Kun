@@ -46,6 +46,8 @@ import {
   resolveConfiguredHooks
 } from './runtime-factory-dependencies.js'
 import type { createRuntimeExtensionComposition } from './runtime-composition-extensions.js'
+import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
+import { composeDelegatedTurnRuntimes } from '../runtime/delegated-turn-runtime.js'
 import {
   buildPptAgentRuntimeProvider,
   builtinToolOptionsForOptions,
@@ -113,6 +115,7 @@ export function createRuntimeConfigController(
     extensionTools,
     buildMainDelegatedRuntime,
     sdkRuntime,
+    harnessRuntimeMap,
     extensionAgent
   } = agent
   const { extensionPreparations } = extensions
@@ -569,7 +572,11 @@ export function createRuntimeConfigController(
 	    extensionTools.publishStagedRegistry(stagedExtensionRegistry)
 	    childToolHost.replaceRuntimeComponents({ registry: childRegistry, hooks: resolvedHooks })
 	    toolHost.replaceRuntimeComponents({ registry, hooks: resolvedHooks })
-	    sdkRuntime.replace(nextDelegatedRuntime)
+	    // Hot config swaps rebuild the transport map wholesale: the router reads
+	    // it live while the legacy provider-inference runtime stays in sync.
+	    const nextHarnessRuntimes = buildHarnessRuntimes(nextDelegatedRuntime)
+	    harnessRuntimeMap.replace(nextHarnessRuntimes)
+	    sdkRuntime.replace(composeDelegatedTurnRuntimes(Object.values(nextHarnessRuntimes)))
 	    turnService.updateRuntimeConfig({
 	      defaultModel: activeOptions.model,
 	      contextCompaction: activeOptions.contextCompaction,

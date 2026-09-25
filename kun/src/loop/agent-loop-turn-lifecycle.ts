@@ -128,9 +128,25 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
     const sdkRuntime = this.opts.sdkRuntime
     let delegatedSdkRuntime: DelegatedTurnRuntime | undefined
     let delegatedProviderId: string | undefined
-    if (sdkRuntime) {
-      const turn = owningThread?.turns.find((candidate) => candidate.id === turnId)
-      const providerId = turn?.providerId?.trim() || owningThread?.providerId?.trim()
+    const turnRecord = owningThread?.turns.find((candidate) => candidate.id === turnId)
+    if (this.opts.harnessRouter?.enabled() && owningThread && turnRecord) {
+      // Explicit harness routing: resolve synchronously before any further
+      // await so a hot config swap cannot retarget this turn.
+      const resolved = this.opts.harnessRouter.resolve(owningThread, turnRecord)
+      if (!resolved.ok) {
+        const settlement = await settle({
+          status: 'failed',
+          error: resolved.error.userMessage,
+          code: resolved.error.code
+        })
+        finalStatus = statusFromSettlement(settlement, 'failed')
+        finalError = errorFromSettlement(settlement)
+        return finalStatus
+      }
+      delegatedSdkRuntime = resolved.runtime
+      delegatedProviderId = resolved.resolved.route.providerId
+    } else if (sdkRuntime) {
+      const providerId = turnRecord?.providerId?.trim() || owningThread?.providerId?.trim()
       const resolvedRuntime = sdkRuntime.resolveProvider?.(providerId) ??
         (sdkRuntime.handlesProvider(providerId) ? sdkRuntime : undefined)
       if (resolvedRuntime) {

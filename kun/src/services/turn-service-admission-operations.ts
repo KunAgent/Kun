@@ -43,6 +43,10 @@ import type { ContextCompactionConfig } from '../loop/model-context-profile.js'
 import { reserveExtensionModelRequest } from '../loop/turn-budget-gate.js'
 import { makeGoalContextItem, makeUserItem, makeErrorItem } from '../domain/item.js'
 import { appendTurnItem, createTurnRecord, finishTurn, replaceTurnItem, startTurn as startTurnRecord } from '../domain/turn.js'
+import {
+  defaultCredentialMode,
+  resolveAdmissionHarness
+} from '../harness/resolve-turn-harness.js'
 import { finalizeTurnItems } from '../domain/turn-item-finalization.js'
 import { resolveThreadAgentSurface, touchThread } from '../domain/thread.js'
 import type { RuntimeEventRecorder } from './runtime-event-recorder.js'
@@ -242,6 +246,21 @@ async startTurn(this: TurnService, input: {
           // consumers. Persist the default alias explicitly so a selection
           // change after admission cannot move this already-running turn.
           const turnProviderId = requestedProviderId ?? threadProviderId ?? 'default'
+          // Freeze the harness alongside the provider: explicit request value,
+          // then the thread pin, then legacy provider-kind inference.
+          const providerKindsView = this['deps'].providerKinds?.() ?? {
+            byId: {},
+            defaultKind: 'http' as const
+          }
+          const turnHarnessId = resolveAdmissionHarness({
+            request: input.request,
+            thread,
+            turnProviderId,
+            providerKinds: providerKindsView
+          })
+          const turnCredentialMode =
+            input.request.credentialMode ??
+            defaultCredentialMode(turnHarnessId, this['deps'].harnessCatalog?.get(turnHarnessId))
           const turnAccountId = firstNonBlank(input.request.accountId) ?? (
             !requestedProviderId || requestedProviderId === threadProviderId
               ? firstNonBlank(thread.accountId)
@@ -258,6 +277,8 @@ async startTurn(this: TurnService, input: {
             subagentResume: input.request.subagentResume,
             model: turnModel,
             providerId: turnProviderId,
+            harnessId: turnHarnessId,
+            credentialMode: turnCredentialMode,
             accountId: turnAccountId,
             reasoningEffort: input.request.reasoningEffort,
             serviceTier: input.request.serviceTier,

@@ -342,6 +342,7 @@ export function createCursorSdkRuntime(
       abortSignal: input.signal,
       ...toolContextBoundary,
       ...(input.turn.orchestration ? { orchestration: input.turn.orchestration } : {}),
+      ...(input.turn.harnessId ? { harnessId: input.turn.harnessId } : {}),
       ...(plan.planMode ? { threadMode: 'plan' as const } : {}),
       ...(plan.guiPlan ? { guiPlan: plan.guiPlan } : {}),
       ...(input.turn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),

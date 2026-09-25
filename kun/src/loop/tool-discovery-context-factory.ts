@@ -54,6 +54,8 @@ export function createToolDiscoveryContext(
     ...(input.guiDesignArtifact ? { guiDesignArtifact: input.guiDesignArtifact } : {}),
     ...(input.imContext ? { imContext: true } : {}),
     model: input.modelCapabilities,
+    ...(input.harnessId ? { harnessId: input.harnessId } : {}),
+    ...(input.executionUnitKind ? { executionUnitKind: input.executionUnitKind } : {}),
     actingModelRoute: input.actingModelRoute,
     activeSkillIds: input.activeSkillIds,
     memoryPolicy: { enabled: deps.memoryEnabled },

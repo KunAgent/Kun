@@ -24,6 +24,8 @@ import {
   type ChildDelegatedRuntimeFactory,
   resolveAntigravityCliCommand
 } from './runtime-factory-dependencies.js'
+import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
+import { HarnessRouter } from '../harness/harness-router.js'
 import type { createRuntimeServices } from './runtime-composition-services.js'
 import { diffUsage, hasUsage } from '../domain/usage.js'
 import { roomResultProvider } from '../rooms/room-result-tools.js'
@@ -69,10 +71,11 @@ export function createRuntimeRegistry(
     defaultIsAntigravity,
     defaultIsCursorSdk
   } = services
-  const createChildDelegatedRuntime: ChildDelegatedRuntimeFactory = (child) =>
-    composeDelegatedTurnRuntimes([
-    ...(agentSdkProviderIds.size > 0 || defaultIsAgentSdk
-      ? [createAgentSdkRuntime({
+  const createChildDelegatedRuntime: ChildDelegatedRuntimeFactory = (child) => {
+    const childRuntimes = buildHarnessRuntimes({
+    agentSdk:
+    (agentSdkProviderIds.size > 0 || defaultIsAgentSdk
+      ? ({
           registry: services.childRegistry,
           toolHost: childToolHost,
           turns: child.turns,
@@ -130,12 +133,11 @@ export function createRuntimeRegistry(
           nowIso,
           sessionCoordinator: delegatedSessions,
           contextProfile: delegatedContextProfile
-        })]
-      : []),
-    ...((antigravityProviderIds.size > 0 || defaultIsAntigravity) &&
+        }) : undefined),
+    antigravity: ((antigravityProviderIds.size > 0 || defaultIsAntigravity) &&
       !child.allowedReadPaths &&
       !child.allowedWritePaths
-      ? [new AntigravityCliRuntime({
+      ? ({
           providerConfigs: core.activeOptions.providers ?? {},
           providerIds: antigravityProviderIds,
           defaultIsAntigravity,
@@ -154,10 +156,9 @@ export function createRuntimeRegistry(
           enforceReadOnly: child.toolPolicy === 'readOnly',
           sessionCoordinator: delegatedSessions,
           contextProfile: delegatedContextProfile
-        })]
-      : []),
-    ...(cursorSdkProviderIds.size > 0 || defaultIsCursorSdk
-      ? [createCursorSdkRuntime({
+        }) : undefined),
+    cursor: (cursorSdkProviderIds.size > 0 || defaultIsCursorSdk
+      ? ({
           registry: services.childRegistry,
           toolHost: childToolHost,
           providerConfigs: core.activeOptions.providers ?? {},
@@ -211,9 +212,21 @@ export function createRuntimeRegistry(
           nowIso,
           sessionCoordinator: delegatedSessions,
           contextProfile: delegatedContextProfile
-        })]
-      : [])
-    ])
+        })
+      : undefined)
+    })
+    const childRouter = new HarnessRouter({
+      enabled: () => core.activeOptions.ade?.harnessRouter !== false,
+      catalog: services.harnesses.catalog,
+      runtimes: () => childRuntimes,
+      providerKinds: services.providerKinds,
+      defaultModel: () => core.activeOptions.model
+    })
+    return {
+      delegated: composeDelegatedTurnRuntimes(Object.values(childRuntimes)),
+      router: childRouter
+    }
+  }
 	  let delegationRuntime = core.activeOptions.capabilities?.subagents.enabled
 	    ? new DelegationRuntime({
 	        config: mergeBuiltinSubagentProfiles(core.activeOptions.capabilities.subagents),
