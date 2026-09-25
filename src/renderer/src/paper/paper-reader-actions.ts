@@ -1,4 +1,3 @@
-import { usePaperMarksStore } from './paper-marks-store'
 import { usePaperModeStore } from './paper-mode-store'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import type { PaperLibraryEntry } from '@shared/paper/paper-library-types'
@@ -50,13 +49,5 @@ export async function paperReaderAutoMarkReading(entry: PaperLibraryEntry): Prom
         e.unitDir === entry.unitDir ? { ...e, meta: result.meta } : e
       )
     }))
-  }
-}
-
-/** Reset marks state when the reader unit changes (used by PaperPdfReader). */
-export function resetPaperMarksFor(unitDir: string): void {
-  const store = usePaperMarksStore.getState()
-  if (store.unitDir !== unitDir) {
-    usePaperMarksStore.setState({ unitDir, items: [], cards: {}, dirty: false })
   }
 }

@@ -398,6 +398,7 @@ export function WriteSidebar({
           onCodeOpen={onCodeOpen}
           onWriteOpen={onWriteOpen}
         />
+        <PaperModeToggle />
         <SidebarCommandRow
           icon={<FilePlus2 className="h-4 w-4" strokeWidth={1.9} />}
           label={t('writeCreateFile')}
@@ -409,7 +410,6 @@ export function WriteSidebar({
           label={t('writeAddWorkspace')}
           onClick={() => void pickWriteWorkspace()}
         />
-        <PaperModeToggle />
       </div>
 
       <div className="ds-no-drag mx-1.5 my-3" />

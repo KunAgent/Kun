@@ -110,6 +110,7 @@
   "writePaperNeedsReview": "要確認",
   "writePaperOnlineRefs": "オンライン参考文献検索",
   "writePaperOnlineRefsDesc": "ローカルの .bbl/.bib がない場合、Semantic Scholar と Crossref から参考文献/被引用を取得します。",
+  "writePaperOpFailed": "{{count}} 件が失敗しました：{{message}}",
   "writePaperOpenArxiv": "arXiv で開く",
   "writePaperOpenAsPaper": "論文として開く",
   "writePaperOpenCool": "papers.cool で開く",

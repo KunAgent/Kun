@@ -8,6 +8,7 @@ import type {
   PaperVenueItem
 } from '@shared/paper/paper-library-types'
 import type { PaperModeView } from './paper-conversation-scope'
+import { usePaperStore } from '../write/paper/paper-store'
 
 export type { PaperModeView }
 
@@ -110,8 +111,13 @@ export const usePaperModeStore = create<PaperModeState>((set) => ({
       return { selection: next }
     }),
   clearSelection: () => set({ selection: new Set<string>() }),
-  setEntriesResult: ({ entries, counts, tags, groups }) =>
-    set({ entries, counts, tags, groups, entriesLoading: false, entriesError: null }),
+  setEntriesResult: ({ entries, counts, tags, groups }) => {
+    // The recursive library index is the only listing that sees grouped
+    // units (papers/<group>/<id>); feed it to the unit map the paper bar and
+    // conversation scope resolve against.
+    usePaperStore.getState().rememberUnits(entries)
+    set({ entries, counts, tags, groups, entriesLoading: false, entriesError: null })
+  },
   setEntriesLoading: (entriesLoading) => set({ entriesLoading }),
   setEntriesError: (entriesError) => set({ entriesError, entriesLoading: false }),
   setImportDialogOpen: (importDialogOpen) => set({ importDialogOpen }),

@@ -110,6 +110,7 @@
   "writePaperNeedsReview": "待确认",
   "writePaperOnlineRefs": "在线参考文献查询",
   "writePaperOnlineRefsDesc": "本地没有 .bbl/.bib 时，从 Semantic Scholar 和 Crossref 拉取参考文献/被引。",
+  "writePaperOpFailed": "{{count}} 项操作失败：{{message}}",
   "writePaperOpenArxiv": "在 arXiv 打开",
   "writePaperOpenAsPaper": "作为论文打开",
   "writePaperOpenCool": "在 papers.cool 打开",

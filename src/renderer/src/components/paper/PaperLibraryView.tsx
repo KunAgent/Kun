@@ -20,6 +20,7 @@ import {
   sortPaperEntries
 } from '../../paper/paper-library-filter'
 import { openLibraryEntry } from '../../paper/paper-library-actions'
+import { trashPaperUnits } from '../../paper/paper-unit-ops'
 import { newPaperRequestId, usePaperStore } from '../../write/paper/paper-store'
 import type {
   PaperLibraryEntry,
@@ -164,22 +165,36 @@ export function PaperLibraryView(): ReactElement {
 
   const bulkSetStatus = async (status: 'unread' | 'reading' | 'read'): Promise<void> => {
     if (typeof window.kunGui?.paperUpdateMeta !== 'function') return
+    const failed: string[] = []
     for (const unitDir of selection) {
-      await window.kunGui.paperUpdateMeta({ workspaceRoot, unitDir, patch: { status } })
+      const result = await window.kunGui.paperUpdateMeta({ workspaceRoot, unitDir, patch: { status } })
+        .catch((error: unknown) => ({ ok: false as const, message: String(error) }))
+      if (!result.ok) failed.push(result.message)
     }
     clearSelection()
     void reload()
+    if (failed.length) {
+      usePaperStore.getState().setNotice({
+        tone: 'error',
+        message: t('writePaperOpFailed', { count: failed.length, message: failed[0] })
+      })
+    }
   }
 
   const bulkTrash = async (): Promise<void> => {
     if (selection.size === 0) return
     if (!(await confirmDialog(t('writePaperTrashConfirm', { count: selection.size })))) return
-    if (typeof window.kunGui?.paperTrashUnit !== 'function') return
-    for (const unitDir of selection) {
-      await window.kunGui.paperTrashUnit({ workspaceRoot, unitDir })
-    }
+    const outcome = await trashPaperUnits([...selection])
     clearSelection()
-    void reload()
+    if (outcome.failed.length) {
+      usePaperStore.getState().setNotice({
+        tone: 'error',
+        message: t('writePaperOpFailed', {
+          count: outcome.failed.length,
+          message: outcome.failed[0].message
+        })
+      })
+    }
   }
 
   const allVisibleSelected = visible.length > 0 && visible.every((e) => selection.has(e.unitDir))

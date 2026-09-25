@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactElement, type ReactNode } from 'react'
 import { WorkbenchConversationStage, type WorkbenchConversationStageProps } from './WorkbenchConversationStage'
 import { normalizeWorkbenchRoute } from './workbench-route'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { PaperNoticeToast } from '../paper/PaperNoticeToast'
 
 const PluginMarketplaceView = lazy(() =>
   import('../PluginMarketplaceView').then((module) => ({ default: module.PluginMarketplaceView }))
@@ -170,6 +171,7 @@ export function WorkbenchStageRouter({
           <Suspense fallback={<WorkbenchPaneFallback />}>
             {write.runtimeBanner}
             <WriteStage write={write} />
+            <PaperNoticeToast />
           </Suspense>
         ) : (
           <WorkbenchConversationStage {...conversation} route={normalizedRoute} />

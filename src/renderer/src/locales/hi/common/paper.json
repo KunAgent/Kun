@@ -110,6 +110,7 @@
   "writePaperNeedsReview": "समीक्षा हेतु",
   "writePaperOnlineRefs": "ऑनलाइन संदर्भ खोज",
   "writePaperOnlineRefsDesc": "स्थानीय .bbl/.bib न होने पर Semantic Scholar और Crossref से संदर्भ/उद्धरण लाएँ।",
+  "writePaperOpFailed": "{{count}} आइटम विफल: {{message}}",
   "writePaperOpenArxiv": "arXiv पर खोलें",
   "writePaperOpenAsPaper": "पेपर के रूप में खोलें",
   "writePaperOpenCool": "papers.cool पर खोलें",

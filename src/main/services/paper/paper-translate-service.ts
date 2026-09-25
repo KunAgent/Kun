@@ -62,19 +62,25 @@ export function resolvePaperTranslateModel(
     || (translate.inheritModel ? '' : translate.providerId.trim())
     || runtime.providerId.trim())
   const provider = getModelProviderProfile(settings, providerId)
+  // Runtime fallbacks (model, key, base URL) only apply when the translate
+  // provider IS the runtime provider. Borrowing them for another provider
+  // would post the runtime provider's credential to a foreign endpoint.
+  const sameAsRuntime = provider.id === runtime.providerId.trim()
   const model = override?.model?.trim()
     || (translate.inheritModel ? '' : translate.model.trim())
-    || runtime.model.trim()
+    || (sameAsRuntime ? runtime.model.trim() : '')
     || provider.models.map((item) => item.trim()).find(Boolean)
     || ''
   if (!model) return null
-  const apiKey = provider.apiKey.trim() || runtime.apiKey.trim()
+  const apiKey = provider.apiKey.trim() || (sameAsRuntime ? runtime.apiKey.trim() : '')
   if (!apiKey) return null
   return {
     providerId: provider.id,
     model,
     apiKey,
-    baseUrl: provider.baseUrl.trim() || runtime.baseUrl.trim() || DEFAULT_DEEPSEEK_BASE_URL,
+    baseUrl: provider.baseUrl.trim()
+      || (sameAsRuntime ? runtime.baseUrl.trim() : '')
+      || DEFAULT_DEEPSEEK_BASE_URL,
     endpointFormat: resolveModelFormat(settings, provider.id, model),
     responsesMode: modelProviderModelProfile(provider, model)?.responsesMode,
     proxyUrl: resolveProviderProxyUrl(settings, provider.id)

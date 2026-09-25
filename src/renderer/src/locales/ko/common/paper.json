@@ -110,6 +110,7 @@
   "writePaperNeedsReview": "확인 필요",
   "writePaperOnlineRefs": "온라인 참고문헌 조회",
   "writePaperOnlineRefsDesc": "로컬 .bbl/.bib이 없으면 Semantic Scholar와 Crossref에서 참고문헌/피인용을 가져옵니다.",
+  "writePaperOpFailed": "{{count}}개 항목 실패: {{message}}",
   "writePaperOpenArxiv": "arXiv에서 열기",
   "writePaperOpenAsPaper": "논문으로 열기",
   "writePaperOpenCool": "papers.cool에서 열기",

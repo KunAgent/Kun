@@ -110,6 +110,7 @@
   "writePaperNeedsReview": "ต้องตรวจสอบ",
   "writePaperOnlineRefs": "ค้นหาอ้างอิงออนไลน์",
   "writePaperOnlineRefsDesc": "เมื่อไม่มี .bbl/.bib ในเครื่อง ให้ดึงอ้างอิง/ถูกอ้างอิงจาก Semantic Scholar และ Crossref",
+  "writePaperOpFailed": "ล้มเหลว {{count}} รายการ: {{message}}",
   "writePaperOpenArxiv": "เปิดบน arXiv",
   "writePaperOpenAsPaper": "เปิดเป็นพาเพอร์",
   "writePaperOpenCool": "เปิดบน papers.cool",

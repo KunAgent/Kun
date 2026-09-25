@@ -50,6 +50,8 @@ type PaperWorkspaceState = {
   setUnitsFromResult: (result: PaperListUnitsResult & { ok: true }) => void
   setUnitsError: (message: string | null) => void
   rememberUnit: (unitDir: string, meta: PaperUnitMeta) => void
+  /** Batch form for the paper-mode library index (includes grouped units). */
+  rememberUnits: (units: ReadonlyArray<{ unitDir: string; meta: PaperUnitMeta }>) => void
   setImportOpen: (open: boolean) => void
   beginJob: (kind: PaperJobUiState['kind'], requestId: string) => void
   applyProgress: (event: PaperProgressEvent) => void
@@ -88,6 +90,12 @@ export const usePaperStore = create<PaperWorkspaceState>((set, get) => ({
     set({ units: result.units, unitsByDir, unitsLoaded: true, unitsError: null })
   },
   setUnitsError: (message) => set({ unitsError: message, unitsLoaded: true }),
+  rememberUnits: (units) =>
+    set((state) => {
+      const unitsByDir = { ...state.unitsByDir }
+      for (const unit of units) unitsByDir[normalizePath(unit.unitDir)] = unit.meta
+      return { unitsByDir }
+    }),
   rememberUnit: (unitDir, meta) =>
     set((state) => ({
       unitsByDir: { ...state.unitsByDir, [normalizePath(unitDir)]: meta }

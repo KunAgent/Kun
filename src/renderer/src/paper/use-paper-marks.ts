@@ -59,6 +59,10 @@ export function usePaperMarks(workspaceRoot: string, unitDir: string): void {
         window.clearTimeout(saveTimerRef.current)
         saveTimerRef.current = null
       }
+      // Leaving this unit (another paper, reader unmount, surface switch):
+      // write pending edits now instead of dropping the debounced save. The
+      // store still holds this unit's items until the next effect resets it.
+      void flushPaperMarks(workspaceRoot, unitDir)
     }
   }, [workspaceRoot, unitDir])
 
@@ -67,30 +71,9 @@ export function usePaperMarks(workspaceRoot: string, unitDir: string): void {
     const unsubscribe = usePaperMarksStore.subscribe((state) => {
       if (!state.dirty || state.unitDir !== unitDir || !workspaceRoot) return
       if (saveTimerRef.current != null) window.clearTimeout(saveTimerRef.current)
-      saveTimerRef.current = window.setTimeout(async () => {
+      saveTimerRef.current = window.setTimeout(() => {
         saveTimerRef.current = null
-        const current = usePaperMarksStore.getState()
-        if (current.unitDir !== unitDir) return
-        const sentItems = current.items
-        const sentRemoved = current.removedIds
-        const result = await window.kunGui.paperMarksWrite({
-          workspaceRoot,
-          unitDir,
-          items: [...sentItems, ...Object.values(current.cards)],
-          removedIds: sentRemoved
-        })
-        if (!result.ok) return
-        usePaperMarksStore.setState((state) => {
-          const stillDirty = state.items !== sentItems || state.removedIds !== sentRemoved
-          return {
-            items: mergeIntoState(state.items, result.items as PaperHighlight[]),
-            removedIds: stillDirty
-              ? state.removedIds.filter((id) => !sentRemoved.includes(id))
-              : [],
-            dirty: stillDirty,
-            revision: state.revision + 1
-          }
-        })
+        void flushPaperMarks(workspaceRoot, unitDir)
       }, 600)
     })
     return unsubscribe
@@ -98,6 +81,39 @@ export function usePaperMarks(workspaceRoot: string, unitDir: string): void {
 
   // Keep revisionRef warm for future conflict UIs.
   revisionRef.current = usePaperMarksStore.getState().revision
+}
+
+/**
+ * Write the store's pending marks for `unitDir` if it still owns them and has
+ * unsaved edits. Safe to call from effect cleanup: it snapshots state
+ * synchronously before the caller resets the store for the next unit.
+ */
+export async function flushPaperMarks(workspaceRoot: string, unitDir: string): Promise<void> {
+  const current = usePaperMarksStore.getState()
+  if (!workspaceRoot || !unitDir || current.unitDir !== unitDir || !current.dirty) return
+  if (typeof window.kunGui?.paperMarksWrite !== 'function') return
+  const sentItems = current.items
+  const sentRemoved = current.removedIds
+  const result = await window.kunGui.paperMarksWrite({
+    workspaceRoot,
+    unitDir,
+    items: [...sentItems, ...Object.values(current.cards)],
+    removedIds: sentRemoved
+  }).catch(() => null)
+  if (!result?.ok) return
+  usePaperMarksStore.setState((state) => {
+    // The store may already belong to the next unit; never merge across units.
+    if (state.unitDir !== unitDir) return state
+    const stillDirty = state.items !== sentItems || state.removedIds !== sentRemoved
+    return {
+      items: mergeIntoState(state.items, result.items as PaperHighlight[]),
+      removedIds: stillDirty
+        ? state.removedIds.filter((id) => !sentRemoved.includes(id))
+        : [],
+      dirty: stillDirty,
+      revision: state.revision + 1
+    }
+  })
 }
 
 /** After a successful write, merge server-side extras (Agent-added) back in. */

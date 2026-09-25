@@ -3,24 +3,26 @@ import { GraduationCap } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { usePaperStore } from '../../write/paper/paper-store'
-import { togglePaperMode } from '../../paper/paper-mode-actions'
+import { useRemoteMobileLayout } from '../../lib/remote-mobile'
+import { PAPER_MODE_SWITCH_CANCELED, togglePaperMode } from '../../paper/paper-mode-actions'
 
 /**
  * Full-width sidebar row that toggles the paper-mode workbench surface (§3.1).
  * Shared by the docs and papers sidebars so the control never moves. Hidden on
  * the remote mobile layout (first version ships desktop-only).
  */
-export function PaperModeToggle(): ReactElement {
+export function PaperModeToggle(): ReactElement | null {
   const { t } = useTranslation('common')
   const enabled = useWriteWorkspaceStore((s) => s.paperMode.enabled)
   const [pending, setPending] = useState(false)
+  const remoteMobile = useRemoteMobileLayout()
 
   const onChange = (next: boolean): void => {
     if (pending || next === enabled) return
     setPending(true)
     void togglePaperMode()
       .then((result) => {
-        if (!result.ok) {
+        if (!result.ok && result.message !== PAPER_MODE_SWITCH_CANCELED) {
           usePaperStore.getState().setNotice({
             tone: 'error',
             message: result.message === 'save-failed'
@@ -31,6 +33,8 @@ export function PaperModeToggle(): ReactElement {
       })
       .finally(() => setPending(false))
   }
+
+  if (remoteMobile) return null
 
   return (
     <button

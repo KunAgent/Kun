@@ -63,7 +63,6 @@ export function WritePaperBar({
 }): ReactElement {
   const { t } = useTranslation('common')
   const busy = usePaperStore((s) => s.busy)
-  const notice = usePaperStore((s) => s.notice)
   const coolJob = busy['cool-notes']
   const preprocessJob = busy.preprocess
   const coolRunning = coolJob?.status === 'running'
@@ -213,20 +212,6 @@ export function WritePaperBar({
           </button>
         ) : null}
 
-        {notice ? (
-          <span
-            className={`ml-auto min-w-0 truncate text-[12px] ${
-              notice.tone === 'error'
-                ? 'text-red-600 dark:text-red-300'
-                : notice.tone === 'success'
-                  ? 'text-emerald-600 dark:text-emerald-300'
-                  : 'text-ds-faint'
-            }`}
-            role={notice.tone === 'error' ? 'alert' : 'status'}
-          >
-            {notice.message}
-          </span>
-        ) : null}
       </div>
     </div>
   )

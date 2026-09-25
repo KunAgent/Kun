@@ -35,6 +35,7 @@ import {
 import {
   detectPaperLibraries,
   movePaperUnitToGroup,
+  readPaperUnitMetaV2,
   scanPaperLibrary,
   scannedUnitToEntry,
   updatePaperUnitMetaV2
@@ -77,6 +78,11 @@ export function registerAppPaperLibraryIpcHandlers(
   }
 
   const userDataDir = (): string => app.getPath('userData')
+
+  // Local state files are keyed by sha1(root). paper-library:list keys with
+  // the canonical (realpath) root, so read/write must canonicalize the same
+  // way or symlinked library roots split into two state files.
+  const libraryStateKey = (raw: string): Promise<string> => canonicalPath(resolvePath(raw))
 
   ipcMain.handle(
     'paper-library:list',
@@ -191,6 +197,9 @@ export function registerAppPaperLibraryIpcHandlers(
         if (group.split('/').some((segment) => !segment || segment === '.' || segment === '..')) {
           return { ok: false, code: 'invalid-group', message: 'Invalid group path.' }
         }
+        if (!(await readPaperUnitMetaV2(unitDirAbs))) {
+          return { ok: false, code: 'invalid-unit', message: 'Not a paper unit.' }
+        }
         const previousUnitDir = workspaceRelativeDir(workspacePath, unitDirAbs)
         const moved = await movePaperUnitToGroup(workspacePath, papersDirAbs, unitDirAbs, group)
         return { ok: true, unitDir: moved.unitDir, previousUnitDir }
@@ -220,6 +229,11 @@ export function registerAppPaperLibraryIpcHandlers(
       try {
         const workspacePath = await canonicalPath(resolvePath(request.workspaceRoot))
         const unitDirAbs = await resolveTargetPathWithinWorkspace(request.unitDir, workspacePath)
+        // Only a real paper unit may be trashed: the containment check alone
+        // accepts the library root itself ('.') or the papers dir.
+        if (unitDirAbs === workspacePath || !(await readPaperUnitMetaV2(unitDirAbs))) {
+          return { ok: false, code: 'invalid-unit', message: 'Not a paper unit.' }
+        }
         await shell.trashItem(unitDirAbs)
         return { ok: true }
       } catch (error) {
@@ -239,7 +253,7 @@ export function registerAppPaperLibraryIpcHandlers(
         payload
       )
       try {
-        return await readPaperLocalLibraryState(userDataDir(), resolvePath(request.libraryRoot))
+        return await readPaperLocalLibraryState(userDataDir(), await libraryStateKey(request.libraryRoot))
       } catch (error) {
         logError?.('paper-library', 'paper-library:local-state-read failed', error)
         return { version: 1, units: {} }
@@ -259,7 +273,7 @@ export function registerAppPaperLibraryIpcHandlers(
       try {
         await writePaperLocalUnitState(
           userDataDir(),
-          resolvePath(request.libraryRoot),
+          await libraryStateKey(request.libraryRoot),
           request.unitRelDir,
           request.patch
         )

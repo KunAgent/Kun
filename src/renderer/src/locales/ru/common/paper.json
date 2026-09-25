@@ -110,6 +110,7 @@
   "writePaperNeedsReview": "проверить",
   "writePaperOnlineRefs": "Онлайн-поиск ссылок",
   "writePaperOnlineRefsDesc": "При отсутствии .bbl/.bib получать ссылки/цитирования из Semantic Scholar и Crossref.",
+  "writePaperOpFailed": "Не удалось выполнить для {{count}}: {{message}}",
   "writePaperOpenArxiv": "Открыть на arXiv",
   "writePaperOpenAsPaper": "Открыть как статью",
   "writePaperOpenCool": "Открыть на papers.cool",

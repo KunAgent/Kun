@@ -110,6 +110,7 @@
   "writePaperNeedsReview": "needs review",
   "writePaperOnlineRefs": "Online reference lookup",
   "writePaperOnlineRefsDesc": "Fetch references/citations from Semantic Scholar and Crossref when no local .bbl/.bib exists.",
+  "writePaperOpFailed": "{{count}} item(s) failed: {{message}}",
   "writePaperOpenArxiv": "Open on arXiv",
   "writePaperOpenAsPaper": "Open as paper",
   "writePaperOpenCool": "Open on papers.cool",

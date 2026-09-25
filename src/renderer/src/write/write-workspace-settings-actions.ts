@@ -4,6 +4,7 @@ import {
   resolveWriteInlineCompletionApiKey
 } from '@shared/app-settings'
 import { rendererRuntimeClient } from '../agent/runtime-client'
+import { prepareActiveWriteFileForNavigation } from './write-workspace-file-action-helpers'
 import type { WriteWorkspaceGet, WriteWorkspaceSet, WriteWorkspaceState } from './write-workspace-store-types'
 import {
   compactWorkspaceRoots,
@@ -87,40 +88,76 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
     return write
   }
 
-  return {
-    loadWriteSettings: async () => {
-      if (get().settingsLoading) return
-      const generation = nextSettingsRequest()
-      const inlineRevisionAtRequest = inlineCompletionSettingsRevision
-      const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
-      set({ settingsLoading: true, settingsError: null })
-      try {
-        const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
+  // A load requested while one is in flight must not be dropped: the paper
+  // mode toggle writes settings and then reloads, and a sidebar-mount load
+  // started a moment earlier would otherwise swallow the surface switch.
+  // Every waiter shares one follow-up load that re-reads fresh settings.
+  let inflightLoad: Promise<void> | null = null
+  let queuedLoad: Promise<void> | null = null
+
+  const runLoadWriteSettings = async (): Promise<void> => {
+    const generation = nextSettingsRequest()
+    const inlineRevisionAtRequest = inlineCompletionSettingsRevision
+    const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
+    set({ settingsLoading: true, settingsError: null })
+    try {
+      const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
+      if (!requestIsCurrent(generation)) return
+      const write = applySettingsResponse(
+        settings,
+        inlineRevisionAtRequest,
+        inlineWritePendingAtRequest
+      )
+      // Paper mode re-roots the workspace at the active library; a same-root
+      // surface switch must force a full reinit so the papers-namespaced
+      // layout replaces the docs one (and vice versa).
+      const targetSurface = write.paperMode.enabled ? 'papers' : 'docs'
+      const surfaceChanged = get().workSurface !== targetSurface
+      if (surfaceChanged && get().workspaceRoot) {
+        // Settle the outgoing surface BEFORE flipping the layout namespace:
+        // if the user keeps unsaved edits, stay put and roll the persisted
+        // flag back instead of mounting the new surface over the old root.
+        const canLeave = await prepareActiveWriteFileForNavigation(get, get().workspaceRoot)
         if (!requestIsCurrent(generation)) return
-        const write = applySettingsResponse(
-          settings,
-          inlineRevisionAtRequest,
-          inlineWritePendingAtRequest
-        )
-        // Paper mode re-roots the workspace at the active library; a same-root
-        // surface switch must force a full reinit so the papers-namespaced
-        // layout replaces the docs one (and vice versa).
-        const targetSurface = write.paperMode.enabled ? 'papers' : 'docs'
-        const surfaceChanged = get().workSurface !== targetSurface
-        if (surfaceChanged) get().setWorkSurface(targetSurface)
-        const root = targetSurface === 'papers'
-          ? write.paperMode.activeLibrary
-          : write.activeWorkspaceRoot
-        await get().initializeWorkspace(root, { force: surfaceChanged })
-        if (!requestIsCurrent(generation)) return
-        set({ settingsLoading: false })
-      } catch (error) {
-        if (!requestIsCurrent(generation)) return
-        set({
-          settingsLoading: false,
-          settingsError: error instanceof Error ? error.message : String(error)
-        })
+        if (!canLeave) {
+          const rolledBack = await rendererRuntimeClient.setSettings({
+            write: { paperMode: { enabled: get().workSurface === 'papers' } }
+          })
+          if (!requestIsCurrent(generation)) return
+          applySettingsResponse(rolledBack, inlineRevisionAtRequest, inlineWritePendingAtRequest)
+          set({ settingsLoading: false })
+          return
+        }
       }
+      if (surfaceChanged) get().setWorkSurface(targetSurface)
+      const root = targetSurface === 'papers'
+        ? write.paperMode.activeLibrary
+        : write.activeWorkspaceRoot
+      await get().initializeWorkspace(root, { force: surfaceChanged })
+      if (!requestIsCurrent(generation)) return
+      set({ settingsLoading: false })
+    } catch (error) {
+      if (!requestIsCurrent(generation)) return
+      set({
+        settingsLoading: false,
+        settingsError: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  return {
+    loadWriteSettings: () => {
+      if (inflightLoad) {
+        queuedLoad ??= inflightLoad.then(() => {
+          queuedLoad = null
+          return get().loadWriteSettings()
+        })
+        return queuedLoad
+      }
+      inflightLoad = runLoadWriteSettings().finally(() => {
+        inflightLoad = null
+      })
+      return inflightLoad
     },
 
     setInlineCompletionEnabled: async (enabled) => {

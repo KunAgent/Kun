@@ -26,8 +26,37 @@ async function setPaperModeEnabled(enabled: boolean): Promise<PaperModeToggleRes
     return { ok: false, message: error instanceof Error ? error.message : String(error) }
   }
   await useWriteWorkspaceStore.getState().loadWriteSettings()
+  // loadWriteSettings rolls the flag back when the user keeps unsaved edits
+  // on the outgoing surface; report that as a silent cancel.
+  if (useWriteWorkspaceStore.getState().workSurface !== (enabled ? 'papers' : 'docs')) {
+    return { ok: false, message: PAPER_MODE_SWITCH_CANCELED }
+  }
   if (!enabled) usePaperModeStore.getState().clearSelection()
   return { ok: true }
+}
+
+/** Result message for a switch the user declined (no notice needed). */
+export const PAPER_MODE_SWITCH_CANCELED = 'switch-canceled'
+
+/**
+ * Keyboard/command-palette entry: paper mode lives on the Work route, so a
+ * shortcut pressed in Code or Rooms first navigates to Work. Toggling from
+ * another route always lands in paper mode rather than silently turning it
+ * off behind the user's back.
+ */
+export async function runPaperModeShortcut(command: 'toggle' | 'import'): Promise<void> {
+  // Dynamic import: chat-store's send path imports this module.
+  const { useChatStore } = await import('../store/chat-store')
+  const onWorkRoute = useChatStore.getState().route === 'write'
+  if (!onWorkRoute) await useChatStore.getState().openWrite()
+  if (command === 'toggle' && onWorkRoute) {
+    await togglePaperMode()
+    return
+  }
+  const result = await enterPaperMode()
+  if (command === 'import' && result.ok && useWriteWorkspaceStore.getState().paperMode.activeLibrary) {
+    usePaperModeStore.getState().setImportDialogOpen(true)
+  }
 }
 
 export function enterPaperMode(): Promise<PaperModeToggleResult> {

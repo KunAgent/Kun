@@ -46,7 +46,8 @@ describe('write workspace settings actions', () => {
     useWriteWorkspaceStore.setState({ initializeWorkspace })
 
     const loading = useWriteWorkspaceStore.getState().loadWriteSettings()
-    await vi.waitFor(() => expect(initializeWorkspace).toHaveBeenCalledWith('/workspace/default'))
+    await vi.waitFor(() => expect(initializeWorkspace)
+      .toHaveBeenCalledWith('/workspace/default', { force: false }))
 
     expect(useWriteWorkspaceStore.getState().settingsLoading).toBe(true)
     initialized.resolve()
@@ -78,6 +79,63 @@ describe('write workspace settings actions', () => {
     expect(initializeWorkspace).toHaveBeenCalledWith('/workspace/b')
     expect(useWriteWorkspaceStore.getState().workspaceRoots).toContain('/workspace/b')
     expect(useWriteWorkspaceStore.getState().workspaceRoots).not.toContain('/workspace/a')
+  })
+})
+
+describe('loadWriteSettings concurrency and surface switch', () => {
+  afterEach(() => {
+    useWriteWorkspaceStore.getState().setWorkSurface('docs')
+  })
+
+  it('runs one follow-up load for calls made while a load is in flight', async () => {
+    const first = deferred<AppSettingsV1>()
+    const getSettings = vi.spyOn(rendererRuntimeClient, 'getSettings')
+      .mockImplementationOnce(() => first.promise)
+      .mockResolvedValue(settingsFor('/workspace/second'))
+    const initializeWorkspace = vi.fn(async () => undefined)
+    useWriteWorkspaceStore.setState({ initializeWorkspace })
+
+    const loading = useWriteWorkspaceStore.getState().loadWriteSettings()
+    const queuedA = useWriteWorkspaceStore.getState().loadWriteSettings()
+    const queuedB = useWriteWorkspaceStore.getState().loadWriteSettings()
+    first.resolve(settingsFor('/workspace/first'))
+    await Promise.all([loading, queuedA, queuedB])
+
+    expect(getSettings).toHaveBeenCalledTimes(2)
+    expect(initializeWorkspace).toHaveBeenLastCalledWith('/workspace/second', { force: false })
+  })
+
+  it('stays on the docs surface and rolls the flag back when leaving is declined', async () => {
+    const enabled = normalizeAppSettings({
+      write: {
+        activeWorkspaceRoot: '/workspace/docs',
+        workspaces: ['/workspace/docs'],
+        // Autosave off so leaving asks the user (declined below).
+        autoSaveEnabled: false,
+        paperMode: { enabled: true, libraries: ['/library'], activeLibrary: '/library' }
+      }
+    } as AppSettingsV1)
+    vi.spyOn(rendererRuntimeClient, 'getSettings').mockResolvedValue(enabled)
+    const setSettings = vi.spyOn(rendererRuntimeClient, 'setSettings')
+      .mockResolvedValue(settingsFor('/workspace/docs'))
+    vi.stubGlobal('window', { confirm: vi.fn(() => false) })
+    const initializeWorkspace = vi.fn(async () => undefined)
+    useWriteWorkspaceStore.setState({
+      workspaceRoot: '/workspace/docs',
+      autoSaveEnabled: false,
+      documentsByPath: {
+        '/workspace/docs/a.md': { kind: 'text', path: '/workspace/docs/a.md', saveStatus: 'dirty' }
+      } as never,
+      initializeWorkspace
+    })
+
+    await useWriteWorkspaceStore.getState().loadWriteSettings()
+
+    expect(useWriteWorkspaceStore.getState().workSurface).toBe('docs')
+    expect(initializeWorkspace).not.toHaveBeenCalled()
+    expect(setSettings).toHaveBeenCalledWith({ write: { paperMode: { enabled: false } } })
+    useWriteWorkspaceStore.setState({ documentsByPath: {} })
+    vi.unstubAllGlobals()
   })
 })
 
