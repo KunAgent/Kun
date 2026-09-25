@@ -304,13 +304,14 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       const tabs = renderer.root
         .findAllByProps({ role: 'tab' })
         .filter((tab) => String(tab.props.id ?? '').startsWith('provider-settings-tab-'))
-      expect(tabs.map(instanceText)).toEqual(['Connection', 'Models', 'Capabilities', 'Advanced'])
-      expect(tabs.map((tab) => tab.props['aria-selected'])).toEqual([true, false, false, false])
-      expect(tabs.map((tab) => tab.props.tabIndex)).toEqual([0, -1, -1, -1])
+      expect(tabs.map(instanceText)).toEqual(['Connection', 'Models', 'Capabilities', 'Reliability', 'Advanced'])
+      expect(tabs.map((tab) => tab.props['aria-selected'])).toEqual([true, false, false, false, false])
+      expect(tabs.map((tab) => tab.props.tabIndex)).toEqual([0, -1, -1, -1, -1])
       expect(tabs.map((tab) => tab.props['aria-controls'])).toEqual([
         'provider-settings-panel-connection',
         'provider-settings-panel-models',
         'provider-settings-panel-capabilities',
+        'provider-settings-panel-reliability',
         'provider-settings-panel-advanced'
       ])
       const initialPanel = renderer.root.findByProps({ id: 'provider-settings-panel-connection' })
@@ -322,9 +323,10 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         'provider-settings-panel-connection',
         'provider-settings-panel-advanced',
         'provider-settings-panel-models',
-        'provider-settings-panel-capabilities'
+        'provider-settings-panel-capabilities',
+        'provider-settings-panel-reliability'
       ])
-      expect(taskPanels.map((panel) => panel.props.hidden)).toEqual([false, true, true, true])
+      expect(taskPanels.map((panel) => panel.props.hidden)).toEqual([false, true, true, true, true])
       expect(activePanelText(renderer)).toContain('Provider connection')
       expect(activePanelText(renderer)).not.toContain('Provider models')
       expect(renderer.root.findAllByType('select').some((select) => select.props.value === 'messages')).toBe(true)
@@ -341,7 +343,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         .findAllByProps({ role: 'tab' })
         .filter((tab) => String(tab.props.id ?? '').startsWith('provider-settings-tab-'))
         .map((tab) => tab.props.tabIndex))
-        .toEqual([-1, 0, -1, -1])
+        .toEqual([-1, 0, -1, -1, -1])
       expect(activePanelText(renderer)).toContain('Provider models')
       expect(activePanelText(renderer)).toContain('Fetch models')
       expect(activePanelText(renderer)).not.toContain('Provider connection')

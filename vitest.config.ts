@@ -5,7 +5,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@renderer': resolve('src/renderer/src'),
-      '@shared': resolve('src/shared')
+      '@shared': resolve('src/shared'),
+      '@kun/provider-catalog': resolve('packages/provider-catalog/src/index.ts')
     }
   },
   test: {

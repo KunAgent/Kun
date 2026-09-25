@@ -9,10 +9,10 @@ import {
 describe('provider catalog', () => {
   it('publishes every GUI base preset and Token Plan as stable entries', () => {
     const entries = providerCatalogEntries()
-    expect(PROVIDER_CATALOG).toHaveLength(27)
-    expect(entries).toHaveLength(33)
+    expect(PROVIDER_CATALOG).toHaveLength(44)
+    expect(entries).toHaveLength(50)
     expect(entries.filter((entry) => entry.category === 'subscription')).toHaveLength(19)
-    expect(entries.filter((entry) => entry.category === 'api')).toHaveLength(13)
+    expect(entries.filter((entry) => entry.category === 'api')).toHaveLength(30)
     expect(entries.filter((entry) => entry.category === 'free')).toEqual([
       expect.objectContaining({
         profileId: 'opencode-free',
