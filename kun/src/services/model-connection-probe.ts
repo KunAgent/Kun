@@ -10,6 +10,8 @@ export async function probeModels(input: {
   kind: ModelConnectionProfile['kind']
   baseUrl?: string
   endpointFormat?: ModelConnectionProfile['endpointFormat']
+  /** Per-protocol base URL overrides; the probe resolves `endpoints[format] ?? baseUrl`. */
+  endpoints?: ModelConnectionProfile['endpoints']
   apiKey: string
   headers?: Record<string, string>
   fallbackModels: readonly string[]
@@ -52,7 +54,10 @@ export async function probeModels(input: {
     }
     return configured
   }
-  const url = modelsUrl(input.baseUrl, input.endpointFormat)
+  const override = input.endpointFormat
+    ? input.endpoints?.[input.endpointFormat]?.trim()
+    : undefined
+  const url = modelsUrl(override || input.baseUrl, input.endpointFormat)
   const usesAnthropicHeaders = input.endpointFormat === 'messages'
   const authHeaders: Record<string, string> = input.apiKey
     ? usesAnthropicHeaders

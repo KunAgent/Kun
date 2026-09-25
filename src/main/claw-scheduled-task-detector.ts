@@ -20,6 +20,7 @@ import {
   resolveProviderProxyUrl
 } from '../shared/app-settings'
 import { openCodeSessionRuntimeHeaders } from '../shared/opencode-session'
+import { resolveProviderEndpointBaseUrl } from '../shared/model-provider-endpoints'
 import { fetchWithOptionalProxy } from './proxy-fetch'
 import {
   codexResponsesLiteInput,
@@ -351,10 +352,13 @@ export async function detectClawScheduledTaskRequest(
   if (!apiKey) return null
   const model = detectionModel(modelHint)
   const responsesMode = modelProviderModelProfile(provider, model)?.responsesMode
+  const endpointFormat = usesRuntimeRoute ? runtime.endpointFormat : provider.endpointFormat
   const baseUrl = usesRuntimeRoute
     ? runtime.baseUrl
-    : provider.baseUrl.trim() || DEFAULT_DEEPSEEK_BASE_URL
-  const endpointFormat = usesRuntimeRoute ? runtime.endpointFormat : provider.endpointFormat
+    : resolveProviderEndpointBaseUrl(
+        { baseUrl: provider.baseUrl.trim() || DEFAULT_DEEPSEEK_BASE_URL, endpoints: provider.endpoints },
+        endpointFormat
+      )
   if (!resolveCodexResponsesRequestAuth(baseUrl, apiKey).apiKey) return null
   const detectionRequest = buildDetectionRequest({
     baseUrl,

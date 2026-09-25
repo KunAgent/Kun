@@ -6,7 +6,7 @@ import {
   resolveProviderProxyUrl,
   resolveWriteInlineCompletionEndpointFormat,
   resolveWriteInlineCompletionApiKey,
-  resolveWriteInlineCompletionBaseUrl,
+  resolveWriteInlineCompletionEndpointBaseUrl,
   resolveWriteInlineCompletionModel,
   resolveWriteInlineCompletionProviderProfile,
   modelProviderModelProfile,
@@ -82,7 +82,7 @@ export async function requestWriteInlineCompletion(
   const mode = resolveMode(request)
   const actionMayEdit = Boolean(request.editCandidate && request.recentEdits?.length)
   const useChatCompletions = mode === 'edit' || actionMayEdit
-  const baseUrl = resolveWriteInlineCompletionBaseUrl(settings)
+  const baseUrl = resolveWriteInlineCompletionEndpointBaseUrl(settings)
   const provider = resolveWriteInlineCompletionProviderProfile(settings)
   const responsesLite = usesCodexResponsesLite(
     baseUrl,

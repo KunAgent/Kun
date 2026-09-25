@@ -10,6 +10,7 @@ import {
 import type { ModelProviderProbeRequest, ModelProviderProbeResult } from '../shared/kun-gui-api'
 import { openCodeSessionRuntimeHeaders } from '../shared/opencode-session'
 import { upstreamOpenAiModelsUrl } from '../shared/openai-compat-url'
+import { resolveProviderEndpointBaseUrl } from '../shared/model-provider-endpoints'
 import { GROK_SUBSCRIPTION_MODEL_IDS } from '../shared/model-provider-presets'
 import { fetchWithOptionalProxy } from './proxy-fetch'
 import { CODEX_CLI_VERSION, codexRequestHeaders, isCodexOAuthCredentials, parseCodexCredentials } from './codex-auth'
@@ -169,9 +170,13 @@ export async function probeModelProvider(
       message: 'Custom full endpoint mode does not support /models probing. Add model IDs manually.'
     }
   }
+  const modelsBaseUrl = resolveProviderEndpointBaseUrl(
+    { baseUrl, endpoints: request.endpoints },
+    endpointFormat
+  )
   const url = codexHeaders
     ? `https://chatgpt.com/backend-api/codex/models?client_version=${CODEX_CLI_VERSION}`
-    : upstreamOpenAiModelsUrl(baseUrl)
+    : upstreamOpenAiModelsUrl(modelsBaseUrl)
   const headers = {
     ...(codexHeaders ?? providerProbeHeaders(endpointFormat, request.apiKey, request.customHeaders)),
     ...openCodeSessionRuntimeHeaders({

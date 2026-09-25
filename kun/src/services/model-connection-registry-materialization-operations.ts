@@ -157,6 +157,7 @@ async probeInput(this: ModelConnectionRegistry, input: ModelConnectionConnectReq
       kind: input.kind,
       baseUrl: input.baseUrl,
       endpointFormat: input.endpointFormat,
+      ...(input.endpoints ? { endpoints: input.endpoints } : {}),
       apiKey: input.credential?.trim() ?? '',
       headers: input.customHeaders,
       fallbackModels: input.models,

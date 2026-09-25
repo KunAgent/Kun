@@ -8,6 +8,7 @@ import type {
   DaemonLogPage,
   DaemonRuntimeStatus,
   ModelEndpointFormat,
+  ModelProviderEndpointsV1,
   ModelProviderModelProfileV1,
   ModelReasoningEffort,
   ScheduleRunResult,
@@ -385,6 +386,8 @@ export type ModelProviderProbeRequest = {
   baseUrl: string
   apiKey: string
   endpointFormat: ModelEndpointFormat
+  /** Per-protocol base URL overrides; the probe resolves `endpoints[format] ?? baseUrl`. */
+  endpoints?: ModelProviderEndpointsV1
   useProxy: boolean
   /** User-configured custom headers merged over protocol defaults. */
   customHeaders?: Record<string, string>

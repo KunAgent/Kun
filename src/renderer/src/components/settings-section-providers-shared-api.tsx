@@ -1,5 +1,6 @@
 import type {
   ModelEndpointFormat,
+  ModelProviderEndpointsV1,
   ModelProviderModelProfileV1,
   ModelProviderProfileV1,
   ModelProviderSettingsV1
@@ -38,6 +39,7 @@ export type SharedModelConnection = {
   authType: 'api-key' | 'oauth' | 'subscription'
   baseUrl?: string
   endpointFormat: ModelEndpointFormat
+  endpoints?: ModelProviderEndpointsV1
   useProxy: boolean
   configured: boolean
   credentialStatus?: 'ready' | 'missing' | 'unreadable'

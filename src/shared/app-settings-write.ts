@@ -39,6 +39,7 @@ import {
 } from './app-settings-types'
 import { getActiveAgentApiKey, getKunRuntimeSettings } from './app-settings-kun'
 import { getModelProviderProfile, resolveModelProviderBaseUrl } from './app-settings-provider'
+import { resolveProviderEndpointBaseUrl } from './model-provider-endpoints'
 import { compactStrings } from './app-settings-normalizers'
 import {
   PAPER_INTERPRET_TEMPLATE_MAX_CHARS,
@@ -464,6 +465,27 @@ export function resolveWriteInlineCompletionBaseUrl(settings: AppSettingsV1): st
     return configured
   }
   return resolveWriteInlineCompletionProviderProfile(settings).baseUrl.trim() || resolveModelProviderBaseUrl(settings)
+}
+
+/**
+ * The effective base URL for the inline-completion request: an explicit
+ * inline override wins untouched; the inherited provider route resolves its
+ * per-protocol `endpoints[format] ?? baseUrl` so relay providers hit the
+ * right family endpoint.
+ */
+export function resolveWriteInlineCompletionEndpointBaseUrl(settings: AppSettingsV1): string {
+  const configured = getNormalizedWriteInlineCompletionSettings(settings).baseUrl.trim()
+  if (configured && configured !== DEFAULT_WRITE_INLINE_COMPLETION_BASE_URL) {
+    return configured
+  }
+  const provider = resolveWriteInlineCompletionProviderProfile(settings)
+  return resolveProviderEndpointBaseUrl(
+    {
+      baseUrl: provider.baseUrl.trim() || resolveModelProviderBaseUrl(settings),
+      endpoints: provider.endpoints
+    },
+    provider.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT
+  )
 }
 
 export function resolveWriteInlineCompletionApiKey(settings: AppSettingsV1): string {

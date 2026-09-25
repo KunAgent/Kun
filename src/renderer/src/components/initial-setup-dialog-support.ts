@@ -254,6 +254,7 @@ export async function commitInitialSetupRegistryCredentials(
                   authType: 'api-key',
                   baseUrl: profile.baseUrl,
                   endpointFormat: profile.endpointFormat,
+                  ...(profile.endpoints ? { endpoints: profile.endpoints } : {}),
                   credential,
                   models: profile.models,
                   ...(profile.models[0]

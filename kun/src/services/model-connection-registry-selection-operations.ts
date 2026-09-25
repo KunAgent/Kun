@@ -152,6 +152,7 @@ async probe(this: ModelConnectionRegistry, providerId: string): Promise<{ ok: tr
       kind: profile.kind,
       baseUrl: profile.baseUrl,
       endpointFormat: profile.endpointFormat,
+      ...(profile.endpoints ? { endpoints: profile.endpoints } : {}),
       apiKey: resolved.apiKey,
       headers: {
         ...(profile.customHeaders ?? {}),

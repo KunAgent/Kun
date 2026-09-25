@@ -395,6 +395,7 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
           baseUrl: target.baseUrl,
           apiKey: target.apiKey,
           endpointFormat: target.endpointFormat,
+          ...(target.endpoints ? { endpoints: target.endpoints } : {}),
           useProxy: target.useProxy
         })
       } catch (error) {
