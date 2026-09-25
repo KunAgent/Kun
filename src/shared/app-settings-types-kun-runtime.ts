@@ -348,6 +348,71 @@ export type KunPlanExecutionSettingsV1 = {
   useWorktreeByDefault: boolean
 }
 
+/** User-defined custom (ACP) harness entry under agents.kun.harnesses.custom. */
+export type KunHarnessCustomEntryV1 = {
+  id: string
+  displayName: string
+  command: string
+  args: string[]
+  env: Record<string, string>
+}
+
+export type KunHarnessSettingsV1 = {
+  /** Builtin harnesses the user turned off; they stay out of pickers. */
+  disabledIds: string[]
+  /** Per-harness local command path overrides. */
+  binaryPaths: Record<string, string>
+  /** User-defined ACP harnesses (id must not collide with builtins). */
+  custom: KunHarnessCustomEntryV1[]
+  /** Per-harness default permission level (a permissionModes[].id). */
+  defaultPermissionMode: Record<string, string>
+  /** Default harness for new one-to-one ADE conversations. */
+  defaultHarnessId: string
+}
+
+export type KunAdeSettingsV1 = {
+  /** Master switch; shows the ADE mode entry. Default off (Lab). */
+  enabled: boolean
+  /** New harness-aware turn routing; false restores provider inference. */
+  harnessRouter: boolean
+  /** Deterministic handoff briefs; false restores the raw transcript tail. */
+  deterministicHandoff: boolean
+  managerModel?: {
+    providerId: string
+    model: string
+  }
+  managerMayApprove: boolean
+  /** Unattended turns may keep full-access when true; otherwise clamped. */
+  allowUnattendedFullAccess: boolean
+  limits: {
+    softWorkers: number
+    hardWorkers: number
+  }
+  budget?: {
+    softTokens?: number
+    hardTokens?: number
+  }
+  hibernation: {
+    enabled: boolean
+    idleMinutes: number
+  }
+  stall: {
+    structuredMinutes: number
+    terminalMinutes: number
+  }
+  /** GUI-only notification switches; never written into Kun config. */
+  notifications: {
+    waiting: boolean
+    failed: boolean
+    done: boolean
+    stalled: boolean
+    sound: boolean
+    keepAwake: boolean
+  }
+  /** Repository roots approved for host-managed task workspaces. */
+  approvedWorktreeConfigs: string[]
+}
+
 export type KunRuntimeSettingsV1 = {
   binaryPath: string
   port: number
@@ -428,6 +493,10 @@ export type KunRuntimeSettingsV1 = {
   graph: KunGraphSettingsV1
   /** Host-owned defaults for executing reviewed GUI plans. */
   planExecution: KunPlanExecutionSettingsV1
+  /** Harness enablement, overrides, and custom ACP harnesses. */
+  harnesses: KunHarnessSettingsV1
+  /** ADE mode switches; runtime-relevant subset syncs into Kun config. */
+  ade: KunAdeSettingsV1
   /** Formal Fast Context settings. Enabled by default. */
   fastContext: KunFastContextSettingsV1
   /** Experimental Lab features that remain in Laboratory. */

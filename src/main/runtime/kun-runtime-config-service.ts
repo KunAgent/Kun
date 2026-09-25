@@ -2,8 +2,10 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import {
+  AdeConfigSchema,
   ContextCompactionConfigSchema,
   GraphRuntimeConfigSchema,
+  HarnessesConfigSchema,
   KunConfigSchema,
   KunServeConfigSchema,
   LabConfigSchema,
@@ -84,6 +86,8 @@ import {
   providersConfigForRuntime,
   routePoolsConfigForRuntime,
   rolesConfigForRuntime,
+  adeConfigForRuntime,
+  harnessesConfigForRuntime,
   storageConfigForRuntime,
   tokenEconomyConfigForRuntime,
   toolOutputLimitsConfigForRuntime
@@ -207,6 +211,8 @@ export async function syncGuiManagedKunConfig(
       runtime.llmDebug
     ),
     graph: graphConfigForRuntime(runtime.graph),
+    harnesses: harnessesConfigForRuntime(runtime.harnesses),
+    ade: adeConfigForRuntime(runtime.ade),
     quality: qualityConfigForRuntime(runtime.quality, objectValue(existing?.quality)),
     ...(Object.keys(roles).length ? { roles } : {}),
     fastContext: fastContextConfigForRuntime(runtime.fastContext),
@@ -375,6 +381,7 @@ type KunRuntimeConfigSettings = Pick<KunRuntimeSettingsV1,
   'videoGeneration' | 'computerUse' | 'browserUse' | 'modelProfiles' | 'memoryEnabled' |
   'memoryDistillationEnabled' | 'memoryDirectivesEnabled' |
   'instructions' | 'quality' | 'subagents' | 'graph' | 'fastContext' | 'lab' | 'githubMcp' | 'smallModel' |
+  'harnesses' | 'ade' |
   'smallModelProviderId' | 'smallModelAccountId' |
   'titleModel' | 'titleProviderId' | 'titleAccountId' |
   'summaryModel' | 'summaryProviderId' | 'summaryAccountId' |
@@ -492,6 +499,8 @@ function sanitizeKunConfigSections(
     contextCompaction: parseKunConfigSection(ContextCompactionConfigSchema, existing.contextCompaction),
     runtime: parseKunConfigSection(RuntimeTuningConfigSchema, existing.runtime),
     graph: parseKunConfigSection(GraphRuntimeConfigSchema, existing.graph),
+    harnesses: parseKunConfigSection(HarnessesConfigSchema, existing.harnesses),
+    ade: parseKunConfigSection(AdeConfigSchema, existing.ade),
     quality: parseKunConfigSection(QualityConfigSchema, existing.quality),
     ...('fastContext' in existing ? { fastContext: parseKunConfigSection(FastContextConfigSchema, existing.fastContext) } : {}),
     ...('lab' in existing ? { lab: parseKunConfigSection(LabConfigSchema, existing.lab) } : {}),

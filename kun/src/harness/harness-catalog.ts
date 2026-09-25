@@ -22,7 +22,11 @@ const CUSTOM_TRANSPORT = 'acp'
  */
 export class HarnessCatalog {
   constructor(
-    private readonly deps: { custom: () => readonly CustomHarnessConfig[] } = {
+    private readonly deps: {
+      custom: () => readonly CustomHarnessConfig[]
+      /** User-disabled builtin harness ids; they stay visible but unadmittable. */
+      disabled?: () => readonly HarnessId[]
+    } = {
       custom: () => []
     }
   ) {}
@@ -40,6 +44,14 @@ export class HarnessCatalog {
 
   get(id: string): HarnessDefinition | undefined {
     return this.list().find((d) => d.id === id)
+  }
+
+  /**
+   * Whether the user disabled this builtin harness. The native Kun loop is the
+   * host runtime itself and can never be disabled through settings.
+   */
+  isDisabled(id: HarnessId): boolean {
+    return id !== 'kun' && (this.deps.disabled?.() ?? []).includes(id)
   }
 }
 

@@ -44,6 +44,8 @@ export function mergeRuntimeConfigApplyOptions(
     contextCompaction: request.contextCompaction ?? current.contextCompaction,
     runtime: request.runtime ?? current.runtime,
     graph: request.graph ?? current.graph,
+    harnesses: request.harnesses ?? current.harnesses,
+    ade: request.ade ?? current.ade,
     roles: request.roles ?? current.roles,
     fastContext: request.fastContext ?? current.fastContext,
     capabilities: request.capabilities ?? current.capabilities,

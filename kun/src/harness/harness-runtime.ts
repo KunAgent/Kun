@@ -37,7 +37,8 @@ export function createHarnessComposition(
   options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses'>
 ): HarnessRuntimeComposition {
   const catalog = new HarnessCatalog({
-    custom: () => options().harnesses?.custom ?? []
+    custom: () => options().harnesses?.custom ?? [],
+    disabled: () => options().harnesses?.disabledIds ?? []
   })
   const detector = new HarnessDetector({
     definitions: () => catalog.list(),
