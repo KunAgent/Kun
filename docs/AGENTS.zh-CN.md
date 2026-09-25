@@ -11,6 +11,9 @@ Kun 桌面应用当前只有一个可运行的本地 Agent 运行时：仓库自
 3. 在 `kun/src/server/routes/` 下新增 HTTP 接口。
 4. 在 `src/renderer/src/agent/kun-runtime.ts` 与 `src/renderer/src/agent/kun-mapper.ts` 中完成端点与事件映射。
 5. 仅在 `agents.kun` 下新增设置项。
+6. 新的 agent 引擎以 harness 定义（`kun/src/harness/`）的形式加入，必要时再加一个
+   `DelegatedTurnRuntime` 实现。优先使用通用 ACP 运行时；只有 ACP 提供不了的能力
+   才需要专用适配器。
 
 ## 提示词管理的计划 Worktree 边界
 
@@ -31,10 +34,17 @@ Kun 桌面应用当前只有一个可运行的本地 Agent 运行时：仓库自
 
 ## 禁止路径
 
-- 不要新增 `AgentSwitcher`。
+- 不要新增切换宿主运行时的 `AgentSwitcher`。为线程或回合选择 **harness**
+  （Kun 原生、Claude Code、Codex、某个 ACP agent 等）不是切换运行时：每个
+  harness 都以 `DelegatedTurnRuntime` 的身份运行在 `kun serve` 内部，GUI 仍然只
+  与 `kun serve` 通信。
 - 不要新增 `ConnectionStatusBar`。
 - 不要新增 `RuntimeDiagnosticsDialog` 或运行时自检 UI。
 - 不要恢复 CodeWhale/Reasonix 的适配器、进程管理、RPC 桥、更新器或导入器。
+  外部 agent 进程只能由 `kun serve` 通过 harness 运行时（`kun/src/runtime/`）以
+  受管进程启动器启动，且只能通过 Kun 的 HTTP/SSE 边界到达。GUI 主进程只有在先向
+  `kun serve` 登记之后才能在 PTY 里启动终端 agent，并且只能通过 Kun 的 activity
+  store 上报该 agent 的状态。
 - 不要恢复独立于当前 Design 模式之外的旧绘图/绘画启动卡片。
 - 不要新增打开运行时控制面板的 `/usage` 或 `/runtime` 斜杠命令。
 

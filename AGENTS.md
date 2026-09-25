@@ -26,7 +26,7 @@ This guide is for AI agents working in this repository. It collects the project 
   - `src/renderer/src/agent/kun-mapper.ts`
   - `kun/src/server/runtime-factory.ts`
   - `kun/src/server/routes/`
-- Do not recreate old runtime paths, provider switchers, runtime diagnostics panels, CodeWhale/Reasonix adapters, process managers, or RPC bridges. Legacy provider fields should only be read during settings migration and folded into `agents.kun`.
+- Do not recreate old runtime paths, provider switchers, runtime diagnostics panels, CodeWhale/Reasonix adapters, process managers, or RPC bridges. Legacy provider fields should only be read during settings migration and folded into `agents.kun`. External agent harnesses are the documented exception and must follow `docs/ade/`.
 - Connect phone code may still use the internal `claw` name for compatibility. That name does not mean there should be a separate Claw runtime.
 
 ## Providers And Model Requests
