@@ -32,6 +32,7 @@ import speak from './common/speak.json'
 import remoteAccess from './common/remote-access.json'
 
 import paper from './common/paper.json'
+import agentHarness from './common/agent-harness.json'
 
 const common = {
   ...roomsInitIm,
@@ -73,6 +74,7 @@ const common = {
   ...speak,
   ...remoteAccess,
   ...paper,
+  ...agentHarness,
 }
 
 export default common

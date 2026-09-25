@@ -644,6 +644,13 @@ export function buildThreadEventSink(
         payload: runtimeState
       }))
     },
+    onHarnessRuntimeState: (runtimeState) => {
+      if (!isCurrentStream()) return
+      set((state) => reduce(state, {
+        type: 'harness_runtime_received',
+        payload: runtimeState
+      }))
+    },
     onChildRuntimeEvent: (event) => {
       if (!isCurrentStream()) return
       receiveGraphChildRuntimeEvent(event)

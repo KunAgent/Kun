@@ -1,6 +1,7 @@
 import type { DelegatedRuntimeCapabilities } from '../runtime/delegated-turn-runtime.js'
 import {
   HARNESS_CAPABILITY_KEYS,
+  SUPPORTED,
   type CapabilityStatus,
   type HarnessCapabilities
 } from '../contracts/harness-capabilities.js'
@@ -44,6 +45,50 @@ export function intersectCapabilities(...layers: HarnessCapabilities[]): Harness
       usageReporting: weakestUsage(layers.map((l) => l.facts.usageReporting)),
       compactionOwner: layers[layers.length - 1]!.facts.compactionOwner
     }
+  }
+}
+
+/**
+ * Effective capabilities for one route: the definition's static declaration
+ * intersected with whatever the owning runtime reports for this provider.
+ * Runtimes without a v2 view are derived through `capabilitiesV2FromLegacy`;
+ * the native loop has no runtime so the declaration stands alone.
+ */
+export function effectiveCapabilitiesForRoute(
+  definition: { capabilities: HarnessCapabilities },
+  runtime:
+    | {
+        capabilitiesV2?(providerId: string | undefined): HarnessCapabilities | undefined
+        capabilities(providerId: string | undefined): DelegatedRuntimeCapabilities | undefined
+      }
+    | undefined,
+  providerId: string | undefined
+): HarnessCapabilities {
+  const direct = runtime?.capabilitiesV2?.(providerId)
+  if (direct) return intersectCapabilities(definition.capabilities, direct)
+  const legacy = runtime?.capabilities(providerId)
+  if (legacy) return capabilitiesV2FromLegacy(legacy, definition.capabilities)
+  return definition.capabilities
+}
+
+/**
+ * Room turns strip a harness's native tools and route every call through
+ * Kun's tool host (`roomToolPolicy` on the legacy capability bag), so the
+ * room-scoped effective view may claim host mediation even when the harness
+ * normally writes files and runs commands natively.
+ */
+export function roomAdjustedCapabilities(
+  effective: HarnessCapabilities,
+  roomToolPolicy: boolean
+): HarnessCapabilities {
+  if (!roomToolPolicy) return effective
+  return {
+    statuses: {
+      ...effective.statuses,
+      fsMediated: SUPPORTED,
+      terminalMediated: SUPPORTED
+    },
+    facts: { ...effective.facts, sandbox: 'host' }
   }
 }
 

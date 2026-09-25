@@ -127,3 +127,45 @@ export function capabilitiesV2FromLegacy(
     facts: base.facts
   })
 }
+
+/**
+ * Conservative base for deriving v2 capabilities from a legacy boolean bag when
+ * the wire event predates `capabilitiesV2`: the seven keys covered by the
+ * legacy bag come out supported-or-upstream, everything else stays
+ * not-implemented, and the facts report the weakest levels.
+ */
+export const LEGACY_DERIVATION_BASE: HarnessCapabilities = {
+  statuses: Object.fromEntries(
+    HARNESS_CAPABILITY_KEYS.map((key) => [
+      key,
+      { supported: false, reason: 'not-implemented' }
+    ])
+  ) as Record<HarnessCapabilityKey, CapabilityStatus>,
+  facts: { sandbox: 'none', usageReporting: 'none', compactionOwner: 'none' }
+}
+
+const CAPABILITY_REASONS = new Set(['upstream', 'not-implemented', 'platform'])
+const SANDBOX_FACTS = new Set(['host', 'native', 'none'])
+const USAGE_FACTS = new Set(['exact', 'estimated', 'none'])
+const OWNER_FACTS = new Set(['kun', 'harness', 'none'])
+
+function isCapabilityStatus(value: unknown): value is CapabilityStatus {
+  if (typeof value !== 'object' || value === null) return false
+  const status = value as CapabilityStatus
+  if (status.supported === true) return true
+  if (status.supported !== false) return false
+  return typeof status.reason === 'string' && CAPABILITY_REASONS.has(status.reason)
+}
+
+/** Structural validator for `capabilitiesV2` arriving over the wire. */
+export function isHarnessCapabilities(value: unknown): value is HarnessCapabilities {
+  if (typeof value !== 'object' || value === null) return false
+  const caps = value as HarnessCapabilities
+  if (typeof caps.statuses !== 'object' || caps.statuses === null) return false
+  if (typeof caps.facts !== 'object' || caps.facts === null) return false
+  const { sandbox, usageReporting, compactionOwner } = caps.facts
+  if (!SANDBOX_FACTS.has(sandbox) || !USAGE_FACTS.has(usageReporting) || !OWNER_FACTS.has(compactionOwner)) {
+    return false
+  }
+  return HARNESS_CAPABILITY_KEYS.every((key) => isCapabilityStatus(caps.statuses[key]))
+}

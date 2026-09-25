@@ -16,6 +16,7 @@ import type {
   ThreadEventSink,
   ThreadUsageSnapshot,
   DelegatedRuntimeState,
+  HarnessRuntimeState,
   ToolEventPayload,
   TurnTerminalEvent,
   UserInputRequestPayload,
@@ -53,6 +54,7 @@ type RuntimeProjectionActionPayload =
   | { type: 'thread_metadata_changed'; payload: ThreadMetadataProjection }
   | { type: 'context_snapshot_received'; payload: RequestContextSnapshot }
   | { type: 'delegated_runtime_received'; payload: DelegatedRuntimeState }
+  | { type: 'harness_runtime_received'; payload: HarnessRuntimeState }
   | { type: 'usage_received'; payload: ThreadUsageSnapshot }
   | {
       type: 'thread_snapshot_reconciled'

@@ -2,11 +2,19 @@ import type {
   HarnessDefinition,
   HarnessId,
   HarnessRoute,
+  HarnessStatus,
   HarnessTransport
 } from '../contracts/harness.js'
+import type { HarnessCapabilities } from '../contracts/harness-capabilities.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
 import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
+import { checkHarnessAdmission } from './harness-admission.js'
+import {
+  effectiveCapabilitiesForRoute,
+  roomAdjustedCapabilities
+} from './effective-capabilities.js'
+import { isUnattendedTurn, usageForTurn } from './usage-for-turn.js'
 import {
   defaultCredentialMode,
   legacyHarnessForProvider,
@@ -42,6 +50,10 @@ export class HarnessAdmissionError extends Error {
 export type ResolvedHarnessRoute = {
   route: HarnessRoute
   definition: HarnessDefinition
+  /** Effective capabilities for this route (declaration ∩ runtime report). */
+  effective: HarnessCapabilities
+  /** Resolved harness permission level after unattended clamping. */
+  permissionMode: string
 }
 
 export type HarnessResolveResult =
@@ -60,7 +72,15 @@ export type HarnessRouterDeps = {
   runtimes(): Partial<Record<HarnessTransport, DelegatedTurnRuntime>>
   providerKinds(): ProviderKindsView
   defaultModel(): string | undefined
-  /** Optional admission hook (P0-05). Absent means capability-only routing. */
+  /**
+   * Last probed detector status; undefined means "never probed" and the
+   * not-ready gate is skipped (an unprobed harness is not a known-missing
+   * one). Compositions should warm detection in the background.
+   */
+  status?(id: HarnessId): HarnessStatus | undefined
+  /** `agents.kun.ade.allowUnattendedFullAccess`; default false. */
+  allowUnattendedFullAccess?(): boolean
+  /** Optional extra admission hook. Absent means capability-only routing. */
   admission?(input: {
     definition: HarnessDefinition
     thread: ThreadRecord
@@ -103,35 +123,72 @@ export class HarnessRouter {
     }
     const admissionError = this.deps.admission?.({ definition, thread, turn })
     if (admissionError) return { ok: false, error: admissionError }
-    if (definition.transport === 'native-loop') {
-      return { ok: true, resolved: { route, definition } }
+    let runtime: DelegatedTurnRuntime | undefined
+    if (definition.transport !== 'native-loop') {
+      const transport = this.deps.runtimes()[definition.transport]
+      if (!transport) {
+        return {
+          ok: false,
+          error: new HarnessAdmissionError(
+            'harness_unavailable',
+            `No runtime registered for harness transport: ${definition.transport}`
+          )
+        }
+      }
+      // Runtimes that understand routes get the explicit check; legacy runtimes
+      // keep the provider-based admission so existing threads are unaffected.
+      const owns = transport.handlesRoute
+        ? transport.handlesRoute(route)
+        : transport.handlesProvider(route.providerId)
+      if (!owns) {
+        return {
+          ok: false,
+          error: new HarnessAdmissionError(
+            'route_unsupported',
+            `Harness ${harnessId} does not handle provider route ${route.providerId ?? 'default'}`
+          )
+        }
+      }
+      runtime = transport.resolveProvider?.(route.providerId) ?? transport
     }
-    const runtime = this.deps.runtimes()[definition.transport]
-    if (!runtime) {
+    const usage = usageForTurn(thread, turn)
+    let effective = effectiveCapabilitiesForRoute(definition, runtime, route.providerId)
+    if (usage === 'room-execution') {
+      // A room turn strips native tools entirely: when the runtime declares
+      // `roomToolPolicy`, Kun's tool host mediates every call, so the
+      // room-scoped sandbox is host-enforced regardless of the harness's own
+      // sandbox declaration.
+      effective = roomAdjustedCapabilities(
+        effective,
+        runtime?.capabilities?.(route.providerId)?.roomToolPolicy === true
+      )
+    }
+    const verdict = checkHarnessAdmission({
+      usage,
+      harness: definition,
+      effective,
+      status: this.deps.status?.(harnessId) ?? {
+        harnessId,
+        installed: 'yes',
+        login: 'unknown',
+        checkedAt: '1970-01-01T00:00:00.000Z'
+      },
+      // P0 has no host-managed task workspaces yet; P0-10 fills this in.
+      workspace: { isolated: false },
+      unattended: isUnattendedTurn(turn),
+      allowUnattendedFullAccess: this.deps.allowUnattendedFullAccess?.() ?? false
+    })
+    if (!verdict.ok) {
       return {
         ok: false,
-        error: new HarnessAdmissionError(
-          'harness_unavailable',
-          `No runtime registered for harness transport: ${definition.transport}`
-        )
+        error: new HarnessAdmissionError(verdict.code, verdict.message, verdict.missing)
       }
     }
-    // Runtimes that understand routes get the explicit check; legacy runtimes
-    // keep the provider-based admission so existing threads are unaffected.
-    const owns = runtime.handlesRoute
-      ? runtime.handlesRoute(route)
-      : runtime.handlesProvider(route.providerId)
-    if (!owns) {
-      return {
-        ok: false,
-        error: new HarnessAdmissionError(
-          'route_unsupported',
-          `Harness ${harnessId} does not handle provider route ${route.providerId ?? 'default'}`
-        )
-      }
+    return {
+      ok: true,
+      runtime,
+      resolved: { route, definition, effective, permissionMode: verdict.permissionMode }
     }
-    const resolved = runtime.resolveProvider?.(route.providerId) ?? runtime
-    return { ok: true, runtime: resolved, resolved: { route, definition } }
   }
 }
 

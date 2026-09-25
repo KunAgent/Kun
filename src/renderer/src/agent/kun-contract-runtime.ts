@@ -517,19 +517,6 @@ export type CoreUsageSnapshotJson = {
   avgTokensPerSecond?: number | null
 }
 
-/** Bounded, redacted action data authored by the runtime for approval review. */
-export type CoreApprovalActionJson = {
-  version?: 1
-  kind?: 'command' | 'file' | 'network' | 'mcp' | 'external-effect' | 'unknown'
-  toolName?: string
-  arguments?: Record<string, unknown>
-  workspace?: string
-  cwd?: string
-  targets?: Array<{ kind: string; value: string }>
-  reason?: string
-  requiresUserDecision?: boolean
-}
-
 export type CoreRuntimeEventJson = {
   kind?: string
   seq?: number
@@ -587,7 +574,7 @@ export type CoreRuntimeEventJson = {
   activeSkillIds?: string[]
   contextManagement?: 'kun-managed' | 'sdk-managed'
   nativeHistory?: 'known' | 'unknown' | 'none'
-  providerKind?: 'agent-sdk' | 'cursor-sdk' | 'antigravity-cli'
+  providerKind?: 'agent-sdk' | 'cursor-sdk' | 'antigravity-cli' | 'acp'
   phase?: 'portable' | 'resumed' | 'rebased' | 'preparing' | 'retrying' | 'succeeded' | 'failed'
   failureSummary?: string
   capabilities?: {
@@ -599,6 +586,10 @@ export type CoreRuntimeEventJson = {
     nativeContextTelemetry?: boolean
     fork?: boolean
   }
+  /** Explicit harness identity on delegated_runtime / harness_runtime events. */
+  harnessId?: string
+  /** Capability v2 snapshot; validated by isHarnessCapabilities before use. */
+  capabilitiesV2?: unknown
   status?: string | number
   /** turn_started: the effective routing and reasoning configuration. */
   accountId?: string

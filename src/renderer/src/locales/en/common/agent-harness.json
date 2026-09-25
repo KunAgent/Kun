@@ -1,0 +1,16 @@
+{
+  "agent": {
+    "harness": {
+      "reason": {
+        "upstream": "Not supported by the upstream harness",
+        "notImplemented": "Not implemented for this harness yet",
+        "platform": "Not supported on this platform"
+      },
+      "steerUnavailable": "This agent cannot receive steering while a turn is running",
+      "planModeUnavailable": "This agent does not support plan mode",
+      "rewindUnavailable": "This agent does not support rewinding",
+      "effortUnavailable": "This agent does not support effort selection",
+      "approveForMeUnavailable": "This agent cannot relay approvals; approve manually"
+    }
+  }
+}

@@ -222,6 +222,10 @@ export function reduceLateChatProjection(
       return state.activeThreadId === action.payload.threadId
         ? { lastDelegatedRuntimeState: action.payload }
         : {}
+    case 'harness_runtime_received':
+      return state.activeThreadId === action.payload.threadId
+        ? { lastHarnessRuntimeState: action.payload }
+        : {}
     case 'usage_received': {
       const threadId = state.activeThreadId ?? ''
       const turnId = action.payload.turnId
