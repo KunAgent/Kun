@@ -1,6 +1,9 @@
 import { ServiceManagerTransportError } from '../manager/usage-errors.js'
 import { redactSecretText } from '../config/secret-redaction.js'
 import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
+import type { HarnessId } from '../contracts/harness.js'
+import type { HarnessCapabilities } from '../contracts/harness-capabilities.js'
+import { KUN_NATIVE_CAPABILITIES } from '../harness/builtin-harnesses.js'
 import {
   isHostShutdownTurnSuspension,
   ownerLeaseExpiredTurnAbortFrom,
@@ -128,6 +131,8 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
     const sdkRuntime = this.opts.sdkRuntime
     let delegatedSdkRuntime: DelegatedTurnRuntime | undefined
     let delegatedProviderId: string | undefined
+    let turnHarnessId: HarnessId | undefined
+    let turnCapabilitiesV2: HarnessCapabilities | undefined
     const turnRecord = owningThread?.turns.find((candidate) => candidate.id === turnId)
     if (this.opts.harnessRouter?.enabled() && owningThread && turnRecord) {
       // Explicit harness routing: resolve synchronously before any further
@@ -145,6 +150,8 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
       }
       delegatedSdkRuntime = resolved.runtime
       delegatedProviderId = resolved.resolved.route.providerId
+      turnHarnessId = resolved.resolved.route.harnessId
+      turnCapabilitiesV2 = resolved.resolved.effective
     } else if (sdkRuntime) {
       const providerId = turnRecord?.providerId?.trim() || owningThread?.providerId?.trim()
       const resolvedRuntime = sdkRuntime.resolveProvider?.(providerId) ??
@@ -153,6 +160,18 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
         delegatedSdkRuntime = resolvedRuntime
         delegatedProviderId = providerId
       }
+    }
+    // Native-loop turns emit the same harness identity event so clients can
+    // render capability state uniformly (delegated turns emit
+    // `delegated_runtime` from inside their own runtime).
+    if (!delegatedSdkRuntime && owningThread && turnRecord) {
+      await this.opts.events.record({
+        kind: 'harness_runtime',
+        threadId,
+        turnId,
+        harnessId: turnHarnessId ?? 'kun',
+        capabilitiesV2: turnCapabilitiesV2 ?? KUN_NATIVE_CAPABILITIES
+      })
     }
     // The Agent SDK owns its own wall-clock timeout so it can distinguish a
     // runtime deadline from a user cancellation. Starting this native timer

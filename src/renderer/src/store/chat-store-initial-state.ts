@@ -73,6 +73,7 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     usageRefreshKey: 0,
     lastContextSnapshot: null,
     lastDelegatedRuntimeState: null,
+    lastHarnessRuntimeState: null,
     lastTurnUsage: null,
     turnTimingMetrics: new Map(),
     busy: false,

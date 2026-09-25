@@ -36,6 +36,8 @@ import {
   type CursorTrace
 } from './cursor-sdk-runtime-trace.js'
 import { consumeCursorMessage, emitCursorDraft } from './cursor-sdk-runtime-events.js'
+import { capabilitiesV2FromLegacy } from '../../harness/effective-capabilities.js'
+import { CURSOR_CAPABILITIES } from '../../harness/builtin-harnesses.js'
 
 export async function runCursorSdkTurnOwned(
   deps: CursorSdkRuntimeDeps,
@@ -297,9 +299,11 @@ export async function runCursorSdkTurnOwned(
       turnId,
       providerKind: 'cursor-sdk',
       providerId: resolvedProviderId,
+      harnessId: 'cursor',
       phase: resumeNativeSession ? 'resumed' : 'rebased',
       ...(preparation?.rebaseReason ? { reason: preparation.rebaseReason } : {}),
-      capabilities
+      capabilities,
+      capabilitiesV2: capabilitiesV2FromLegacy(capabilities, CURSOR_CAPABILITIES)
     })
     const contextProfile = deps.contextProfile?.(model)
     const recordContextSnapshot = async (resumed: boolean): Promise<void> => {
@@ -391,9 +395,11 @@ export async function runCursorSdkTurnOwned(
           turnId,
           providerKind: 'cursor-sdk',
           providerId: resolvedProviderId,
+          harnessId: 'cursor',
           phase: 'portable',
           reason: 'capabilities_changed',
-          capabilities
+          capabilities,
+          capabilitiesV2: capabilitiesV2FromLegacy(capabilities, CURSOR_CAPABILITIES)
         })
         throw new Error(
           'Cursor SDK configuration does not expose the isolated local agent store required for durable sessions'
@@ -428,9 +434,11 @@ export async function runCursorSdkTurnOwned(
             turnId,
             providerKind: 'cursor-sdk',
             providerId: resolvedProviderId,
+            harnessId: 'cursor',
             phase: 'rebased',
             reason: 'native_state_unavailable',
-            capabilities
+            capabilities,
+            capabilitiesV2: capabilitiesV2FromLegacy(capabilities, CURSOR_CAPABILITIES)
           })
           await recordContextSnapshot(false)
           agent = await Promise.race([sdk.Agent.create(options), interrupted])

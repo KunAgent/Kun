@@ -12,6 +12,8 @@ import {
 import { composeSdkPromptText } from './sdk-context-assembler.js'
 import type { SdkQueryResult } from './sdk-protocol.js'
 import type { DelegatedRuntimeCapabilities } from '../delegated-turn-runtime.js'
+import { capabilitiesV2FromLegacy } from '../../harness/effective-capabilities.js'
+import { CLAUDE_CODE_CAPABILITIES } from '../../harness/builtin-harnesses.js'
 import {
   delegatedGraphPlanCanRetry,
   delegatedGraphPlanRepairFeedback,
@@ -305,17 +307,20 @@ export class AgentSdkRuntime {
             ...(ctx.contextInstructions?.length ? { instructionBlocks: ctx.contextInstructions } : {})
           })
       const capabilities = agentSdkCapabilities()
+      const capabilitiesV2 = capabilitiesV2FromLegacy(capabilities, CLAUDE_CODE_CAPABILITIES)
       await this.deps.recordEvent({
         kind: 'delegated_runtime',
         threadId,
         turnId,
         providerKind: 'agent-sdk',
         providerId: ctx.sessionPreparation?.route.providerId ?? 'default',
+        harnessId: 'claude-code',
         phase: resumeSessionId ? 'resumed' : 'rebased',
         ...(ctx.sessionPreparation?.rebaseReason
           ? { reason: ctx.sessionPreparation.rebaseReason }
           : {}),
-        capabilities
+        capabilities,
+        capabilitiesV2
       })
       const recordContextSnapshot = async (): Promise<void> => {
         if (!ctx.contextProfile) return
@@ -517,9 +522,11 @@ export class AgentSdkRuntime {
               turnId,
               providerKind: 'agent-sdk',
               providerId: ctx.sessionPreparation?.route.providerId ?? 'default',
+              harnessId: 'claude-code',
               phase: 'rebased',
               reason: 'native_state_unavailable',
-              capabilities
+              capabilities,
+              capabilitiesV2
             })
             await recordContextSnapshot()
             attempt -= 1

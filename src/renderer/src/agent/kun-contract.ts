@@ -466,3 +466,4 @@ export type CoreRuntimeCapabilityManifestJson = {
 }
 
 export * from './kun-contract-runtime'
+export * from './kun-contract-approval'

@@ -14,12 +14,17 @@ type FixtureCase = {
   expected: HarnessCapabilities
 }
 
-const fixtureUrl = new URL(
-  '../../kun/src/harness/__fixtures__/capability-fixtures.json',
-  import.meta.url
-)
-const FIXTURES = JSON.parse(readFileSync(fileURLToPath(fixtureUrl), 'utf8')) as {
-  cases: FixtureCase[]
+const loadFixture = (file: string): FixtureCase[] => {
+  const url = new URL(`../../kun/src/harness/__fixtures__/${file}`, import.meta.url)
+  return (JSON.parse(readFileSync(fileURLToPath(url), 'utf8')) as {
+    cases: FixtureCase[]
+  }).cases
+}
+const FIXTURES = {
+  cases: [
+    ...loadFixture('capability-fixtures.json'),
+    ...loadFixture('capability-fixtures-delegated.json')
+  ]
 }
 
 describe('shared harness capabilities', () => {

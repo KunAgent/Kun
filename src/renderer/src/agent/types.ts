@@ -8,7 +8,7 @@ import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '@shared/app-
 import type { NormalizedThread } from './types-thread'
 export type { NormalizedThread } from './types-thread'
 import type { CoreModelRequestFailureJson } from './kun-contract'
-import type { CoreApprovalActionJson } from './kun-contract-runtime'
+import type { CoreApprovalActionJson } from './kun-contract-approval'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { RendererChartSpec } from './chart-spec-adapter'
 
@@ -665,6 +665,7 @@ export type ThreadErrorOptions = {
 export type { AgentProvider, ThreadDetail, ThreadEventSink } from './provider-types'
 export type {
   DelegatedRuntimeState,
+  HarnessRuntimeState,
   RequestContextSnapshot,
   ThreadUsageSnapshot
 } from './thread-runtime-types'

@@ -109,6 +109,16 @@ export class HarnessDetector {
     }
   }
 
+  /**
+   * Cached verdict only; undefined until a probe lands. Does not schedule
+   * detection — the synchronous router path uses this so an unprobed harness
+   * is not confused with a known-missing one.
+   */
+  cachedStatus(id: HarnessId): HarnessStatus | undefined {
+    const cached = this.cache.get(id)
+    return cached && cached.expiresAt > this.deps.nowMs() ? cached.status : undefined
+  }
+
   /** Non-blocking snapshot: cached status or an optimistic unknown entry. */
   peek(id: HarnessId): HarnessStatus | undefined {
     const cached = this.cache.get(id)

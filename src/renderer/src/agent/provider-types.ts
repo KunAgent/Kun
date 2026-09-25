@@ -36,6 +36,7 @@ import type {
   ChatBlock,
   CompactionEventPayload,
   DelegatedRuntimeState,
+  HarnessRuntimeState,
   NormalizedThread,
   KnowledgeBaseMount,
   KnowledgeBaseIndexStatus,
@@ -199,6 +200,7 @@ export type ThreadEventSink = {
   /** Optional: request-local context accounting for the main agent. */
   onContextSnapshot?(snapshot: RequestContextSnapshot): void
   onDelegatedRuntimeState?(state: DelegatedRuntimeState): void
+  onHarnessRuntimeState?(state: HarnessRuntimeState): void
   /** Safe child lifecycle/activity projected onto the parent thread. */
   onChildRuntimeEvent?(event: RuntimeChildEventPayload): void
   /** Raw versioned Graph envelope; the Graph projection owns validation/reconciliation. */

@@ -8,6 +8,7 @@ import {
   threadFromCore
 } from './kun-mapper'
 import type { CoreRuntimeEventJson, CoreTurnItemJson } from './kun-contract'
+import { capabilitiesV2FromLegacy, LEGACY_DERIVATION_BASE } from '@shared/harness-capabilities'
 import type { ThreadErrorOptions, ThreadEventSink } from './types'
 import {
   PRESENTATION_STUDIO_EXTENSION_ID,
@@ -366,7 +367,16 @@ describe('delegated runtime capability mapping', () => {
           liveSteering: false,
           nativeContextTelemetry: false,
           fork: false
-        }
+        },
+        capabilitiesV2: capabilitiesV2FromLegacy({
+          nativeResume: true,
+          structuredStreaming: true,
+          kunTools: false,
+          externalApproval: false,
+          liveSteering: false,
+          nativeContextTelemetry: false,
+          fork: false
+        }, LEGACY_DERIVATION_BASE)
       }
     }])
   })

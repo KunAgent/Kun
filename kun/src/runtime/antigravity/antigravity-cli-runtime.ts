@@ -39,6 +39,8 @@ import type {
   DelegatedRuntimeCapabilities,
   DelegatedTurnRuntime
 } from '../delegated-turn-runtime.js'
+import { capabilitiesV2FromLegacy } from '../../harness/effective-capabilities.js'
+import { ANTIGRAVITY_CAPABILITIES } from '../../harness/builtin-harnesses.js'
 import {
   delegatedCapabilityFingerprint,
   delegatedCredentialIdentity,
@@ -342,9 +344,11 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
       turnId,
       providerKind: 'antigravity-cli',
       providerId: resolvedProviderId,
+      harnessId: 'antigravity',
       phase: 'portable',
       ...(preparation?.rebaseReason ? { reason: preparation.rebaseReason } : {}),
-      capabilities
+      capabilities,
+      capabilitiesV2: capabilitiesV2FromLegacy(capabilities, ANTIGRAVITY_CAPABILITIES)
     })
     const contextProfile = this.deps.contextProfile?.(model)
     if (contextProfile) {

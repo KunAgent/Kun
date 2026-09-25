@@ -38,6 +38,8 @@ import {
 } from './design-task-profile.js'
 import { WriteTurnContextSchema } from './write-turn-context.js'
 import { ModelRequestFailureContextSchema } from './model-request-failure.js'
+import { HarnessIdSchema } from './harness.js'
+import { HarnessCapabilitiesSchema } from './harness-capabilities.js'
 
 /**
  * Persisted runtime events. Every event has a per-thread `seq` so the
@@ -88,6 +90,7 @@ export const RuntimeEventKind = z.enum([
   'bash_session_completed',
   'pipeline_stage',
   'delegated_runtime',
+  'harness_runtime',
   'graph_planning',
   'graph_event',
   'context_snapshot',
@@ -520,8 +523,10 @@ export const DelegatedRuntimeCapabilitiesSchema = z.object({
 
 export const DelegatedRuntimeEvent = RuntimeEventBase.extend({
   kind: z.literal('delegated_runtime'),
-  providerKind: z.enum(['agent-sdk', 'cursor-sdk', 'antigravity-cli']),
+  providerKind: z.enum(['agent-sdk', 'cursor-sdk', 'antigravity-cli', 'acp']),
   providerId: z.string().min(1),
+  /** Explicit harness identity for the delegated turn (P0-04+). */
+  harnessId: HarnessIdSchema.optional(),
   phase: z.enum(['portable', 'resumed', 'rebased']),
   reason: z.enum([
     'new',
@@ -530,9 +535,22 @@ export const DelegatedRuntimeEvent = RuntimeEventBase.extend({
     'history_changed',
     'native_state_unavailable'
   ]).optional(),
-  capabilities: DelegatedRuntimeCapabilitiesSchema
+  capabilities: DelegatedRuntimeCapabilitiesSchema,
+  /** Capability-v2 view; preferred over `capabilities` when present. */
+  capabilitiesV2: HarnessCapabilitiesSchema.optional()
 })
 export type DelegatedRuntimeEvent = z.infer<typeof DelegatedRuntimeEvent>
+
+/**
+ * Native-loop analogue of `delegated_runtime`: emitted once per turn so
+ * clients can render harness state uniformly instead of special-casing Kun.
+ */
+export const HarnessRuntimeEvent = RuntimeEventBase.extend({
+  kind: z.literal('harness_runtime'),
+  harnessId: HarnessIdSchema,
+  capabilitiesV2: HarnessCapabilitiesSchema
+})
+export type HarnessRuntimeEvent = z.infer<typeof HarnessRuntimeEvent>
 
 export const GraphRuntimeEvent = RuntimeEventBase.extend({
   kind: z.literal('graph_event'),
@@ -624,6 +642,7 @@ export const RuntimeEvent = z.discriminatedUnion('kind', [
   BashSessionEvent,
   PipelineStageEvent,
   DelegatedRuntimeEvent,
+  HarnessRuntimeEvent,
   GraphPlanningRuntimeEvent,
   GraphRuntimeEvent,
   ContextSnapshotEvent,

@@ -4,6 +4,7 @@ import type {
   ApprovalReviewEventPayload,
   CompactionEventPayload,
   DelegatedRuntimeState,
+  HarnessRuntimeState,
   ReviewEventPayload,
   RequestContextSnapshot,
   RuntimeErrorEventPayload,
@@ -39,6 +40,7 @@ export type KunEventNormalizerDeps = {
   todosAction: (event: CoreRuntimeEventJson, cleared: boolean) => RuntimeProjectionAction
   contextSnapshot: (event: CoreRuntimeEventJson) => RequestContextSnapshot | null
   delegatedRuntime: (event: CoreRuntimeEventJson) => DelegatedRuntimeState | null
+  harnessRuntime: (event: CoreRuntimeEventJson) => HarnessRuntimeState | null
   usage: (event: CoreRuntimeEventJson) => ThreadUsageSnapshot | null
   runtimeError: (event: CoreRuntimeEventJson, fallback: string) => RuntimeErrorEventPayload
   errorFromRuntime: (payload: RuntimeErrorEventPayload) => Error
@@ -212,6 +214,10 @@ function normalizeKunRuntimeEventPayload(
     case 'delegated_runtime': {
       const state = deps.delegatedRuntime(event)
       return state ? [{ type: 'delegated_runtime_received', payload: state }] : []
+    }
+    case 'harness_runtime': {
+      const state = deps.harnessRuntime(event)
+      return state ? [{ type: 'harness_runtime_received', payload: state }] : []
     }
     case 'usage': {
       const usage = deps.usage(event)

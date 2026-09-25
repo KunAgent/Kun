@@ -6,6 +6,7 @@ import type {
   ComponentPrototypeMetadata,
   DelegatedRuntimeState,
   GeneratedFileReference,
+  HarnessRuntimeState,
   NormalizedThread,
   ReviewBlock,
   ReviewEventPayload,
@@ -28,6 +29,11 @@ import type {
   UserInputQuestion
 } from './types'
 import { normalizeKunRuntimeEvent, type KunEventNormalizerDeps } from './kun-event-normalizer'
+import {
+  capabilitiesV2FromLegacy,
+  isHarnessCapabilities,
+  LEGACY_DERIVATION_BASE
+} from '@shared/harness-capabilities'
 import type { RuntimeProjectionAction } from './runtime-projection-actions'
 import { redactSecrets, redactSecretText } from '@shared/secret-redaction'
 import { applyClientUserMessageSourceMeta } from '@shared/background-shell-notice'
@@ -283,7 +289,8 @@ export function delegatedRuntimeFromCore(event: CoreRuntimeEventJson): Delegated
     (
       providerKind !== 'agent-sdk' &&
       providerKind !== 'cursor-sdk' &&
-      providerKind !== 'antigravity-cli'
+      providerKind !== 'antigravity-cli' &&
+      providerKind !== 'acp'
     ) ||
     (phase !== 'portable' && phase !== 'resumed' && phase !== 'rebased') ||
     !capabilities ||
@@ -298,11 +305,26 @@ export function delegatedRuntimeFromCore(event: CoreRuntimeEventJson): Delegated
     ].every((value) => typeof value === 'boolean')
   ) return null
   const reason = event.reason
+  const legacyCapabilities = {
+    nativeResume: capabilities.nativeResume!,
+    structuredStreaming: capabilities.structuredStreaming!,
+    kunTools: capabilities.kunTools!,
+    externalApproval: capabilities.externalApproval!,
+    liveSteering: capabilities.liveSteering!,
+    nativeContextTelemetry: capabilities.nativeContextTelemetry!,
+    fork: capabilities.fork!
+  }
+  const capabilitiesV2 = isHarnessCapabilities(event.capabilitiesV2)
+    ? event.capabilitiesV2
+    : capabilitiesV2FromLegacy(legacyCapabilities, LEGACY_DERIVATION_BASE)
+  const harnessId = event.harnessId?.trim()
   return {
     threadId,
     ...(event.turnId?.trim() ? { turnId: event.turnId.trim() } : {}),
     providerKind,
     providerId,
+    ...(harnessId ? { harnessId } : {}),
+    capabilitiesV2,
     phase,
     ...(reason === 'new' ||
       reason === 'route_changed' ||
@@ -311,15 +333,20 @@ export function delegatedRuntimeFromCore(event: CoreRuntimeEventJson): Delegated
       reason === 'native_state_unavailable'
       ? { reason }
       : {}),
-    capabilities: {
-      nativeResume: capabilities.nativeResume!,
-      structuredStreaming: capabilities.structuredStreaming!,
-      kunTools: capabilities.kunTools!,
-      externalApproval: capabilities.externalApproval!,
-      liveSteering: capabilities.liveSteering!,
-      nativeContextTelemetry: capabilities.nativeContextTelemetry!,
-      fork: capabilities.fork!
-    }
+    capabilities: legacyCapabilities
+  }
+}
+
+/** `harness_runtime` events carry native-loop harness state (kun today). */
+export function harnessRuntimeFromCore(event: CoreRuntimeEventJson): HarnessRuntimeState | null {
+  const threadId = event.threadId?.trim()
+  const harnessId = event.harnessId?.trim()
+  if (!threadId || !harnessId || !isHarnessCapabilities(event.capabilitiesV2)) return null
+  return {
+    threadId,
+    ...(event.turnId?.trim() ? { turnId: event.turnId.trim() } : {}),
+    harnessId,
+    capabilitiesV2: event.capabilitiesV2
   }
 }
 

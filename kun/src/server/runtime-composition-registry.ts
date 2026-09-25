@@ -220,7 +220,14 @@ export function createRuntimeRegistry(
       catalog: services.harnesses.catalog,
       runtimes: () => childRuntimes,
       providerKinds: services.providerKinds,
-      defaultModel: () => core.activeOptions.model
+      defaultModel: () => core.activeOptions.model,
+      status: (id) => {
+        const cached = services.harnesses.detector.cachedStatus(id)
+        if (!cached) void services.harnesses.detector.status(id).catch(() => undefined)
+        return cached
+      },
+      allowUnattendedFullAccess: () =>
+        core.activeOptions.ade?.allowUnattendedFullAccess === true
     })
     return {
       delegated: composeDelegatedTurnRuntimes(Object.values(childRuntimes)),
