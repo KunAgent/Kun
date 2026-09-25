@@ -164,6 +164,8 @@ function mergeTurnMetadata(previous: Turn, next: Turn): Turn {
     activeSkillIds: mergeStringArrays(previous.activeSkillIds, next.activeSkillIds),
     injectedMemoryIds: mergeStringArrays(previous.injectedMemoryIds, next.injectedMemoryIds),
     injectedMemorySummaries: next.injectedMemorySummaries.length > 0 ? next.injectedMemorySummaries : previous.injectedMemorySummaries,
+    injectedDirectiveIds: mergeStringArrays(previous.injectedDirectiveIds, next.injectedDirectiveIds),
+    injectedDirectiveSummaries: next.injectedDirectiveSummaries.length > 0 ? next.injectedDirectiveSummaries : previous.injectedDirectiveSummaries,
     injectedInstructionSources: next.injectedInstructionSources.length > 0 ? next.injectedInstructionSources : previous.injectedInstructionSources,
     items: mergeTurnItems(previous.items, next.items)
   }
@@ -209,7 +211,7 @@ function turnFromItems(threadId: string, turnId: string, items: TurnItem[], fall
     id: turnId, threadId,
     status: hasOpenItem ? 'running' : hasFailedItem ? 'failed' : 'completed',
     prompt, orchestration: 'direct', steering: [], attachmentIds: attachmentIdsFromItems(items), activeSkillIds: [],
-    injectedMemoryIds: [], injectedMemorySummaries: [], injectedInstructionSources: [],
+    injectedMemoryIds: [], injectedMemorySummaries: [], injectedDirectiveIds: [], injectedDirectiveSummaries: [], injectedInstructionSources: [],
     createdAt,
     finishedAt: hasOpenItem ? undefined : items[items.length - 1]?.finishedAt ?? fallbackTime,
     items

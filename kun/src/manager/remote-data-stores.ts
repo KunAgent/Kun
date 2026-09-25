@@ -72,6 +72,13 @@ import { ManagerRemoteThreadStore } from './remote-thread-store.js'
 export { ManagerRemoteThreadStore } from './remote-thread-store.js'
 export { resolveManagerDataRequestTimeoutMs } from './remote-data-store-request.js'
 
+const MemoryDirectiveResultSchema = z.object({
+  records: z.array(MemoryRecord),
+  excludedByBudget: z.array(z.string()),
+  truncatedIds: z.array(z.string()),
+  characters: z.number().int().nonnegative()
+}).strict()
+
 const ItemSnapshotSchema = z.object({
   revision: z.number().int().nonnegative(),
   items: z.array(TurnItem),
@@ -475,6 +482,10 @@ export class ManagerRemoteMemoryStore implements MemoryStore {
 
   async list(filter: MemoryListFilter = {}) {
     return MemoryRecord.array().parse(await this.call('list', filter))
+  }
+
+  async listDirectives(access: MemoryAccess = {}) {
+    return MemoryDirectiveResultSchema.parse(await this.call('listDirectives', access))
   }
 
   async retrieve(input: MemoryRetrieveRequest) {

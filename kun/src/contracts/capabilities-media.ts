@@ -54,6 +54,11 @@ export const MemoryCapabilityConfig = CapabilityToggleConfig.extend({
   distillation: z.object({
     enabled: z.boolean().default(false)
   }).strict().default(() => ({ enabled: false })),
+  directives: z.object({
+    enabled: z.boolean().default(true),
+    maxRecords: z.number().int().positive().max(50).default(20),
+    maxCharacters: z.number().int().positive().max(16_000).default(4_000)
+  }).strict().default(() => ({ enabled: true, maxRecords: 20, maxCharacters: 4_000 })),
   feedback: MemoryFeedbackConfig.optional()
 }).strict()
 export type MemoryCapabilityConfig = z.infer<typeof MemoryCapabilityConfig>
@@ -263,7 +268,10 @@ export const RuntimeCapabilityManifest = z
     }).strict(),
     memory: RuntimeCapabilityState.extend({
       scopes: z.array(z.enum(['user', 'workspace', 'project'])),
-      maxInjectedRecords: z.number().int().positive()
+      maxInjectedRecords: z.number().int().positive(),
+      directives: z.object({
+        enabled: z.boolean()
+      }).strict()
     }).strict(),
     imageGen: RuntimeCapabilityState.extend({
       model: z.string().optional(),
@@ -467,7 +475,8 @@ export function buildRuntimeCapabilityManifest(input: {
         input.memory?.reason ?? 'memory store is unavailable'
       ),
       scopes: config.memory.scopes,
-      maxInjectedRecords: config.memory.maxInjectedRecords
+      maxInjectedRecords: config.memory.maxInjectedRecords,
+      directives: { enabled: config.memory.directives.enabled }
     },
     imageGen: {
       ...providerCapabilityState(

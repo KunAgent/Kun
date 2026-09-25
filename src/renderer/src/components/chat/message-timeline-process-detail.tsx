@@ -177,6 +177,7 @@ export function RuntimeMetaBadges({
   const attachmentIds = showTurnDisclosure ? readMetaStringArray(meta, 'attachmentIds') : []
   const activeSkillIds = showTurnDisclosure ? readMetaStringArray(meta, 'activeSkillIds') : []
   const injectedMemoryIds = showTurnDisclosure ? readMetaStringArray(meta, 'injectedMemoryIds') : []
+  const injectedDirectiveIds = showTurnDisclosure ? readMetaStringArray(meta, 'injectedDirectiveIds') : []
   const injectedInstructionSources = showTurnDisclosure ? readMetaInstructionSources(meta) : []
   const child = meta.child && typeof meta.child === 'object' ? meta.child as Record<string, unknown> : null
   const childLabel =
@@ -192,6 +193,7 @@ export function RuntimeMetaBadges({
     attachmentIds.length === 0 &&
     activeSkillIds.length === 0 &&
     injectedMemoryIds.length === 0 &&
+    injectedDirectiveIds.length === 0 &&
     injectedInstructionSources.length === 0 &&
     !childLabel
   ) {
@@ -211,7 +213,7 @@ export function RuntimeMetaBadges({
           {t('toolActiveSkills')} {activeSkillIds.length}
         </span>
       ) : null}
-      {injectedMemoryIds.length > 0 ? (
+      {injectedMemoryIds.length > 0 || injectedDirectiveIds.length > 0 ? (
         <InjectedMemoryMetaChip meta={meta} memoryIds={injectedMemoryIds} chipClass={chipClass} />
       ) : null}
       {injectedInstructionSources.length > 0 ? (

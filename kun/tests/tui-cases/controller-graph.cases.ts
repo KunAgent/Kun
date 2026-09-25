@@ -388,6 +388,8 @@ describe("TuiController Graph, attachment hydration, and legacy runtime behavior
         activeSkillIds: [],
         injectedMemoryIds: [],
         injectedMemorySummaries: [],
+        injectedDirectiveIds: [],
+        injectedDirectiveSummaries: [],
         injectedInstructionSources: []
       }]
     })

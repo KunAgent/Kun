@@ -73,6 +73,7 @@ export function prepared(overrides: Partial<PreparedTurnContext> = {}): Prepared
     },
     instructionResolution: { instruction: undefined, sources: [], injectedBytes: 0 },
     memories: [],
+    memoryDirectives: [],
     activeGoalInstruction: null,
     goalRecoveryInstruction: null,
     activeTodoInstruction: null,

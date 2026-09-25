@@ -246,6 +246,7 @@ async function handleKunApprovalRequest(event: CoreRuntimeEventJson, sink: Threa
     createdAt: event.timestamp,
     summary: event.summary ?? 'Approval required',
     toolName: event.toolName,
+    ...(event.action ? { action: event.action } : {}),
     ...(event.child ? { meta: { child: event.child } } : {})
   })
 }

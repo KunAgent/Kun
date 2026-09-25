@@ -171,6 +171,8 @@ function renderAssistantMessage(text: string, width: number, running = false): s
     activeSkillIds: [],
     injectedMemoryIds: [],
     injectedMemorySummaries: [],
+    injectedDirectiveIds: [],
+    injectedDirectiveSummaries: [],
     injectedInstructionSources: []
   }]
   const transcript = new TranscriptComponent()
@@ -256,6 +258,8 @@ describe("PiTuiApplication Thinking and markdown rendering", () => {
       activeSkillIds: [],
       injectedMemoryIds: [],
       injectedMemorySummaries: [],
+      injectedDirectiveIds: [],
+      injectedDirectiveSummaries: [],
       injectedInstructionSources: []
     }]
     const transcript = new TranscriptComponent()
@@ -378,6 +382,8 @@ describe("PiTuiApplication Thinking and markdown rendering", () => {
       activeSkillIds: [],
       injectedMemoryIds: [],
       injectedMemorySummaries: [],
+      injectedDirectiveIds: [],
+      injectedDirectiveSummaries: [],
       injectedInstructionSources: []
     }]
     const transcript = new TranscriptComponent()
@@ -423,6 +429,8 @@ describe("PiTuiApplication Thinking and markdown rendering", () => {
       activeSkillIds: [],
       injectedMemoryIds: [],
       injectedMemorySummaries: [],
+      injectedDirectiveIds: [],
+      injectedDirectiveSummaries: [],
       injectedInstructionSources: []
     }]
     const transcript = new TranscriptComponent()
@@ -483,6 +491,8 @@ describe("PiTuiApplication Thinking and markdown rendering", () => {
         activeSkillIds: [],
         injectedMemoryIds: [],
         injectedMemorySummaries: [],
+        injectedDirectiveIds: [],
+        injectedDirectiveSummaries: [],
         injectedInstructionSources: []
       }]
       const transcript = new TranscriptComponent()

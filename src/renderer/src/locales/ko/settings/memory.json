@@ -1,0 +1,21 @@
+{
+  "memoryAuthority_all": "전체",
+  "memoryAuthority_directive": "규칙",
+  "memoryAuthority_reference": "참조 메모리",
+  "memoryDirectivesEnable": "장기 규칙 주입",
+  "memoryDirectivesEnableDesc": "승인된 규칙은 매 턴 당신의 지시로 모델에 전달됩니다. 끄면 저장만 되고 적용되지 않습니다.",
+  "memoryDirectives": "사용자 규칙",
+  "memoryDirectivesDesc": "규칙은 매 턴 당신의 지시로 주입되며 참조 메모리와 달리 관련성 필터를 거치지 않습니다.",
+  "memoryDirectiveActiveCount": "활성 규칙",
+  "memoryDirectiveInjectedCount": "이번 턴 주입",
+  "memoryDirectiveOmittedCount": "예산으로 생략",
+  "memorySetDirective": "규칙으로 설정",
+  "memoryUnsetDirective": "규칙 해제",
+  "memorySetDirectiveDisabled": "규칙은 짧아야 하며 사용자/워크스페이스 범위여야 합니다. 긴 내용은 AGENTS.md에 작성하세요",
+  "memoryDirectiveUpdateFailed": "규칙 업데이트 실패",
+  "memoryAsDirective": "규칙으로 저장(매 턴 적용)",
+  "memoryAsDirectiveDesc": "규칙은 당신의 지시로 모델에 전달됩니다(예: \"한국어로 답변\", \"커밋 전 테스트 실행\"). 일반 메모리는 참조 정보일 뿐 지시로 실행되지 않습니다.",
+  "memoryDirectiveTooLong": "규칙은 짧게 유지하세요. 긴 내용은 AGENTS.md로",
+  "memoryImportDowngradedPrefix": " ",
+  "memoryImportDowngradedSuffix": " 개 항목이 규칙이었지만 참조 메모리로 가져왔습니다. 목록에서 다시 활성화할 수 있습니다."
+}

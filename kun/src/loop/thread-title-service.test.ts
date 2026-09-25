@@ -80,6 +80,8 @@ describe('ThreadTitleService', () => {
         activeSkillIds: [],
         injectedMemoryIds: [],
         injectedMemorySummaries: [],
+        injectedDirectiveIds: [],
+        injectedDirectiveSummaries: [],
         injectedInstructionSources: []
       }]
     })
@@ -150,6 +152,8 @@ describe('ThreadTitleService', () => {
           activeSkillIds: [],
           injectedMemoryIds: [],
           injectedMemorySummaries: [],
+          injectedDirectiveIds: [],
+          injectedDirectiveSummaries: [],
           injectedInstructionSources: []
         },
         {
@@ -166,6 +170,8 @@ describe('ThreadTitleService', () => {
           activeSkillIds: [],
           injectedMemoryIds: [],
           injectedMemorySummaries: [],
+          injectedDirectiveIds: [],
+          injectedDirectiveSummaries: [],
           injectedInstructionSources: []
         }
       ]

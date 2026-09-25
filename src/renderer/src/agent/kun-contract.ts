@@ -182,7 +182,7 @@ export type CoreMemoryRecordJson = {
   tags?: string[]
   confidence?: number
   type?: 'fact' | 'preference' | 'decision' | 'episode' | 'relationship' | 'insight'
-  authority?: 'reference'
+  authority?: 'reference' | 'directive'
   importance?: number
   observedAt?: string
   validFrom?: string
@@ -322,6 +322,13 @@ export type CoreMemoryDiagnosticsJson = {
     malformedCount: number
     lastCheckpointAt?: string
     degradedReason?: string
+  }
+  directiveCount?: number
+  lastDirectiveInjection?: {
+    ids: string[]
+    excludedByBudget: string[]
+    truncatedIds: string[]
+    characters: number
   }
   lastRetrieval?: {
     timestamp: string

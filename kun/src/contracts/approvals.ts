@@ -50,7 +50,13 @@ export const ApprovalActionEnvelopeSchema = z.object({
   workspace: z.string().min(1).max(4_096),
   cwd: z.string().min(1).max(4_096).optional(),
   targets: z.array(ApprovalActionTargetSchema).max(16),
-  reason: z.string().min(1).max(2_048)
+  reason: z.string().min(1).max(2_048),
+  /**
+   * The action may only be authorized by a human. Full-access auto-allow,
+   * configured hooks, and the automatic agent reviewer must not decide it
+   * (for example promoting content into a standing user directive).
+   */
+  requiresUserDecision: z.boolean().optional()
 }).strict()
 export type ApprovalActionEnvelope = z.infer<typeof ApprovalActionEnvelopeSchema>
 

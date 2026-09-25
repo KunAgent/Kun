@@ -271,7 +271,7 @@ describe("TuiController workspace commands and goals", () => {
     source.turns = [{
       id: 'turn_queued', threadId: source.id, status: 'running', orchestration: 'direct', prompt: 'work', steering: ['check packaging'],
       createdAt: source.createdAt, items: [], attachmentIds: [], activeSkillIds: [],
-      injectedMemoryIds: [], injectedMemorySummaries: [], injectedInstructionSources: []
+      injectedMemoryIds: [], injectedMemorySummaries: [], injectedDirectiveIds: [], injectedDirectiveSummaries: [], injectedInstructionSources: []
     }]
     const todo = {
       id: 'todo_1', content: 'Ship tests', status: 'in_progress' as const,

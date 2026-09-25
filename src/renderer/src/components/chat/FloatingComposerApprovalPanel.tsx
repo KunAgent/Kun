@@ -9,6 +9,7 @@ import {
 import type { ChatBlock } from '../../agent/types'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import { useChatStore } from '../../store/chat-store'
+import { MemoryApprovalHint } from './memory-approval-hint'
 
 type ApprovalBlock = Extract<ChatBlock, { kind: 'approval' }>
 
@@ -107,6 +108,7 @@ export function FloatingComposerApprovalPanel({
         >
           {current.summary}
         </div>
+        <MemoryApprovalHint toolName={current.toolName} action={current.action} t={t} />
         {current.errorMessage ? (
           <p className="mt-2 text-[12px] text-red-700 dark:text-red-300">{current.errorMessage}</p>
         ) : null}

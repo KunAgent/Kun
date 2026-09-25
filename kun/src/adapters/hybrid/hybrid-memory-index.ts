@@ -49,16 +49,16 @@ export class HybridMemoryIndex {
     this.db.transaction(() => {
       this.db.prepare(`
         INSERT INTO memory_records (
-          id, scope, workspace, project, lifecycle, type, confidence, importance,
+          id, scope, workspace, project, lifecycle, type, authority, confidence, importance,
           observed_at, valid_from, valid_to, expires_at, updated_at, canonical_hash,
           search_tokens, source_summaries_json, record_json
         ) VALUES (
-          @id, @scope, @workspace, @project, @lifecycle, @type, @confidence, @importance,
+          @id, @scope, @workspace, @project, @lifecycle, @type, @authority, @confidence, @importance,
           @observedAt, @validFrom, @validTo, @expiresAt, @updatedAt, @canonicalHash,
           @searchTokens, @sourceSummariesJson, @recordJson
         ) ON CONFLICT(id) DO UPDATE SET
           scope=excluded.scope, workspace=excluded.workspace, project=excluded.project,
-          lifecycle=excluded.lifecycle, type=excluded.type, confidence=excluded.confidence,
+          lifecycle=excluded.lifecycle, type=excluded.type, authority=excluded.authority, confidence=excluded.confidence,
           importance=excluded.importance, observed_at=excluded.observed_at,
           valid_from=excluded.valid_from, valid_to=excluded.valid_to, expires_at=excluded.expires_at,
           updated_at=excluded.updated_at, canonical_hash=excluded.canonical_hash,
@@ -71,6 +71,7 @@ export class HybridMemoryIndex {
         project: record.project ?? null,
         lifecycle,
         type: record.type,
+        authority: record.authority,
         confidence: record.confidence,
         importance: record.importance,
         observedAt: record.observedAt,
@@ -112,6 +113,8 @@ export class HybridMemoryIndex {
     if (!filter.includeDeleted) where.push("lifecycle != 'deleted'")
     if (!filter.all) addScopeWhere(where, params, filter, ['user', 'workspace', 'project'])
     else agentMemoryScopeSql(where, params, filter)
+    if (filter.authority) { where.push('authority=@filterAuthority'); params.filterAuthority = filter.authority }
+    if (filter.type) { where.push('type=@filterType'); params.filterType = filter.type }
     if (filter.before) {
       where.push('(updated_at<@beforeUpdated OR (updated_at=@beforeUpdated AND id>@beforeId))')
       params.beforeUpdated = filter.before.updatedAt; params.beforeId = filter.before.id
@@ -140,6 +143,11 @@ export class HybridMemoryIndex {
     ]
     const params: Record<string, unknown> = { nowIso }
     addScopeWhere(where, params, request, policy.scopes, 'r')
+    // Push explicit tool-purpose filters into the candidate query so a narrow
+    // authority/scope/type lookup is not crowded out by unrelated rows.
+    if (request.filter?.authority) { where.push('r.authority=@filterAuthority'); params.filterAuthority = request.filter.authority }
+    if (request.filter?.scope) { where.push('r.scope=@filterScope'); params.filterScope = request.filter.scope }
+    if (request.filter?.type) { where.push('r.type=@filterType'); params.filterType = request.filter.type }
     const candidateLimit = Math.max(16, Math.min(256, Math.max(request.limit, policy.maxInjectedRecords) * 16))
     params.candidateLimit = candidateLimit
     const rows = new Map<string, MemoryRow>()

@@ -412,6 +412,8 @@ export type KunRuntimeSettingsV1 = {
   memoryEnabled: boolean
   /** Opt-in post-turn Memory candidate extraction; approval remains mandatory. */
   memoryDistillationEnabled: boolean
+  /** Whether user-approved long-term directives are injected into every turn. */
+  memoryDirectivesEnabled: boolean
   /** Native Kun AGENTS.md instructions injected into every turn. */
   instructions: KunInstructionSettingsV1
   /** Host computer-use (screenshot + mouse/keyboard control) settings. */

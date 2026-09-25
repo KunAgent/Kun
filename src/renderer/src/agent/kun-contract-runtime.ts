@@ -243,6 +243,8 @@ export type CoreTurnJson = {
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   injectedMemorySummaries?: Array<{ id: string; content: string }>
+  injectedDirectiveIds?: string[]
+  injectedDirectiveSummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
   injectedInstructionSources?: Array<{ scope: 'global' | 'workspace'; path: string; bytes: number; truncated?: boolean }>
   instructionInjectionBytes?: number
@@ -289,6 +291,7 @@ export type CoreTurnItemJson = {
   approvalId?: string
   approvalReviewer?: 'user' | 'agent'
   decisionSource?: 'user' | 'agent'
+  action?: CoreApprovalActionJson
   inputId?: string
   prompt?: string
   timeoutSeconds?: number
@@ -334,6 +337,8 @@ export type CoreTurnItemJson = {
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   injectedMemorySummaries?: Array<{ id: string; content: string }>
+  injectedDirectiveIds?: string[]
+  injectedDirectiveSummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
   injectedInstructionSources?: Array<{ scope: 'global' | 'workspace'; path: string; bytes: number; truncated?: boolean }>
   instructionInjectionBytes?: number
@@ -512,6 +517,19 @@ export type CoreUsageSnapshotJson = {
   avgTokensPerSecond?: number | null
 }
 
+/** Bounded, redacted action data authored by the runtime for approval review. */
+export type CoreApprovalActionJson = {
+  version?: 1
+  kind?: 'command' | 'file' | 'network' | 'mcp' | 'external-effect' | 'unknown'
+  toolName?: string
+  arguments?: Record<string, unknown>
+  workspace?: string
+  cwd?: string
+  targets?: Array<{ kind: string; value: string }>
+  reason?: string
+  requiresUserDecision?: boolean
+}
+
 export type CoreRuntimeEventJson = {
   kind?: string
   seq?: number
@@ -526,6 +544,7 @@ export type CoreRuntimeEventJson = {
   item?: CoreTurnItemJson
   approvalId?: string
   reviewId?: string
+  action?: CoreApprovalActionJson
   approvalPolicy?: string
   sandboxMode?: string
   approvalReviewer?: string

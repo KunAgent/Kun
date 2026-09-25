@@ -22,11 +22,11 @@ import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
 import {
   PLAN_MODE_INSTRUCTION,
   isStalePlanContext,
-  memoryInstructions,
   todoContinuationInstruction
 } from '../../loop/agent-loop.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
-import { DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT } from '../../memory/memory-retrieval.js'
+import { resolveMemoryTurnContext } from '../../memory/memory-turn-context.js'
+import { memoryInjectionMetadata } from '../../loop/model-step-preparation-memory.js'
 import {
   recordRetrieved,
   type MemoryRetrievalFeedbackTarget
@@ -254,8 +254,9 @@ export function createCursorSdkRuntime(
     intent: string,
     signal: AbortSignal
   ): ToolHostContext['awaitApproval'] => async (approval: ApprovalRequest) => {
-    if (approvalPolicy === 'auto' && sandboxMode === 'danger-full-access') return 'allow'
-    if (approvalReviewer === 'agent') {
+    const requiresUserDecision = approval.action?.requiresUserDecision === true
+    if (!requiresUserDecision && approvalPolicy === 'auto' && sandboxMode === 'danger-full-access') return 'allow'
+    if (approvalReviewer === 'agent' && !requiresUserDecision) {
       if (!approvalReview) {
         return {
           decision: 'deny',
@@ -464,17 +465,21 @@ export function createCursorSdkRuntime(
           instructionInjectionBytes: instructionResolution.injectedBytes
         })
       }
-      let memoryBlocks: string[] = []
-      let memoryIds: string[] = []
-      if (!thread.roomContext && memoryStore && userText.trim()) {
-        const memories = await memoryStore.retrieve({
-          query: userText,
-          workspace: thread.workspace,
-          limit: DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT
-        })
-        memoryIds = memories.map((memory) => memory.id)
-        memoryStore.setLastInjected(memoryIds)
-        memoryBlocks = memoryInstructions(memories)
+      // Directives are injected on every turn — including empty-prompt
+      // continuations — while reference memories stay relevance-gated. Rooms
+      // keep the memory-free boundary.
+      const memoryContext = await resolveMemoryTurnContext(
+        thread.roomContext ? undefined : memoryStore,
+        { query: userText, workspace: thread.workspace }
+      )
+      const directiveBlocks = memoryContext.directiveBlocks
+      const memoryBlocks = memoryContext.referenceBlocks
+      const memoryIds = memoryContext.memories.map((memory) => memory.id)
+      if (memoryContext.memories.length > 0 || memoryContext.directives.length > 0) {
+        await deps.turns.updateTurnMetadata(threadId, turnId, memoryInjectionMetadata({
+          memories: memoryContext.memories,
+          directives: memoryContext.directives
+        }))
       }
       const plan = resolveCursorPlanContext(thread, turnId)
       if (!plan.planMode && thread.goal?.status === 'active') {
@@ -495,6 +500,7 @@ export function createCursorSdkRuntime(
             : []),
         ...(instructionResolution?.instruction ? [instructionResolution.instruction] : []),
         ...(todoInstruction ? [todoInstruction] : []),
+        ...directiveBlocks,
         ...memoryBlocks,
         ...(skillResolution?.catalogInstruction ? [skillResolution.catalogInstruction] : []),
         ...(skillResolution?.instructions ?? []),

@@ -565,6 +565,7 @@
   "toolChildAgent": "子エージェント",
   "toolActiveSkills": "スキル",
   "toolInjectedMemories": "思い出",
+  "toolInjectedDirectives": "ルール",
   "toolInjectedInstructions": "指示",
   "toolAttachments": "添付ファイル",
   "toolExtensionContexts": "拡張コンテキスト",

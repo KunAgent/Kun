@@ -93,6 +93,8 @@ export type PreparedTurnContext = Readonly<{
   skillResolution: SkillTurnResolution
   instructionResolution: InstructionTurnResolution
   memories: readonly MemoryRecord[]
+  /** User-approved standing rules injected this turn (empty when none/on rooms). */
+  memoryDirectives: readonly MemoryRecord[]
   activeGoalInstruction: string | null
   goalRecoveryInstruction: string | null
   activeTodoInstruction: string | null

@@ -171,6 +171,8 @@ function renderAssistantMessage(text: string, width: number, running = false): s
     activeSkillIds: [],
     injectedMemoryIds: [],
     injectedMemorySummaries: [],
+    injectedDirectiveIds: [],
+    injectedDirectiveSummaries: [],
     injectedInstructionSources: []
   }]
   const transcript = new TranscriptComponent()

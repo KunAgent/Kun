@@ -404,6 +404,8 @@ export function mergeKunRuntimeSettings(
     memoryEnabled: patch?.memoryEnabled ?? current.memoryEnabled ?? false,
     memoryDistillationEnabled:
       patch?.memoryDistillationEnabled ?? current.memoryDistillationEnabled ?? false,
+    memoryDirectivesEnabled:
+      patch?.memoryDirectivesEnabled ?? current.memoryDirectivesEnabled ?? true,
     instructions: nextInstructions,
     computerUse: nextComputerUse,
     browserUse: nextBrowserUse,

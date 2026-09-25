@@ -1,0 +1,21 @@
+{
+  "memoryAuthority_all": "ทั้งหมด",
+  "memoryAuthority_directive": "กฎ",
+  "memoryAuthority_reference": "อ้างอิง",
+  "memoryDirectivesEnable": "ฉีดกฎระยะยาว",
+  "memoryDirectivesEnableDesc": "กฎที่อนุมัติจะถูกส่งให้โมเดลเป็นคำสั่งของคุณทุกเทิร์น ปิดเพื่อเก็บไว้โดยไม่ใช้งาน",
+  "memoryDirectives": "กฎของผู้ใช้",
+  "memoryDirectivesDesc": "กฎถูกฉีดเป็นคำสั่งของคุณทุกเทิร์น ต่างจากหน่วยความจำอ้างอิงที่ถูกกรองตามความเกี่ยวข้อง",
+  "memoryDirectiveActiveCount": "กฎที่ใช้งาน",
+  "memoryDirectiveInjectedCount": "ฉีดเทิร์นนี้",
+  "memoryDirectiveOmittedCount": "ถูกตัดโดยงบประมาณ",
+  "memorySetDirective": "ตั้งเป็นกฎ",
+  "memoryUnsetDirective": "ยกเลิกกฎ",
+  "memorySetDirectiveDisabled": "กฎต้องสั้นและอยู่ในขอบเขต user/workspace เนื้อหายาวให้เขียนใน AGENTS.md",
+  "memoryDirectiveUpdateFailed": "อัปเดตกฎไม่สำเร็จ",
+  "memoryAsDirective": "บันทึกเป็นกฎ (มีผลทุกเทิร์น)",
+  "memoryAsDirectiveDesc": "กฎจะถูกส่งให้โมเดลเป็นคำสั่งของคุณ เช่น \"ตอบเป็นภาษาไทย\" หรือ \"รันเทสต์ก่อนคอมมิต\" หน่วยความจำทั่วไปเป็นเพียงข้อมูลอ้างอิง ไม่ถูกทำเป็นคำสั่ง",
+  "memoryDirectiveTooLong": "กฎต้องสั้น เนื้อหายาวให้ย้ายไป AGENTS.md",
+  "memoryImportDowngradedPrefix": " ",
+  "memoryImportDowngradedSuffix": " รายการเคยเป็นกฎและถูกนำเข้าเป็นอ้างอิง เปิดใช้งานอีกครั้งทีละรายการได้"
+}

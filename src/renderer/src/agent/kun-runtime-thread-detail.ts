@@ -68,6 +68,8 @@ export async function getKunThreadDetail(threadId: string, options: {
       activeSkillIds: turn.activeSkillIds,
       injectedMemoryIds: turn.injectedMemoryIds,
       injectedMemorySummaries: turn.injectedMemorySummaries,
+      injectedDirectiveIds: turn.injectedDirectiveIds,
+      injectedDirectiveSummaries: turn.injectedDirectiveSummaries,
       skillInjectionBytes: turn.skillInjectionBytes,
       injectedInstructionSources: turn.injectedInstructionSources,
       instructionInjectionBytes: turn.instructionInjectionBytes,

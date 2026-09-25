@@ -376,6 +376,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
     tags?: string[]
     confidence?: number
     type?: CoreMemoryRecordJson['type']
+    authority?: CoreMemoryRecordJson['authority']
     importance?: number
     observedAt?: string
     validFrom?: string
@@ -396,6 +397,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
         tags: input.tags,
         confidence: input.confidence,
         type: input.type,
+        authority: input.authority,
         importance: input.importance,
         observedAt: input.observedAt,
         validFrom: input.validFrom,
@@ -419,7 +421,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
 
   const updateMemoryRecord = async (
     memoryId: string,
-    patch: { content?: string; tags?: string[]; confidence?: number; importance?: number; type?: CoreMemoryRecordJson['type']; disabled?: boolean }
+    patch: { content?: string; tags?: string[]; confidence?: number; importance?: number; type?: CoreMemoryRecordJson['type']; authority?: CoreMemoryRecordJson['authority']; disabled?: boolean }
   ): Promise<boolean> => {
     const provider = getProvider()
     if (typeof provider.updateMemory !== 'function') return false

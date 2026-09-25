@@ -296,7 +296,9 @@ export function MemoryRecordDialog({
                   >
                     <option value="user">{t('memoryScope_user')}</option>
                     <option value="workspace">{t('memoryScope_workspace')}</option>
-                    <option value="project">{t('memoryScope_project')}</option>
+                    {draft.directive ? null : (
+                      <option value="project">{t('memoryScope_project')}</option>
+                    )}
                   </select>
                 ) : null}
                 {dialog.mode === 'create' && draft.scope !== 'user' ? (
@@ -359,6 +361,30 @@ export function MemoryRecordDialog({
                   />
                 </div>
               </div>
+              {dialog.mode === 'create' || (dialog.mode === 'edit' && dialog.memory.scope !== 'project') ? (
+                <div className="flex flex-col gap-1.5 rounded-lg border border-ds-border-muted bg-ds-surface-subtle px-3 py-2.5">
+                  <label className="flex items-center gap-2 text-[12px] font-medium text-ds-ink">
+                    <input
+                      type="checkbox"
+                      checked={draft.directive}
+                      onChange={(e) => onDraftChange((prev) => ({
+                        ...prev,
+                        directive: e.target.checked,
+                        scope: e.target.checked && prev.scope === 'project' ? 'user' : prev.scope
+                      }))}
+                      className="h-3.5 w-3.5 accent-ds-ink"
+                    />
+                    {t('memoryAsDirective')}
+                  </label>
+                  <div className="text-[11px] leading-5 text-ds-faint">{t('memoryAsDirectiveDesc')}</div>
+                  {draft.directive ? (
+                    <div className={`text-[11px] font-mono ${draft.content.trim().length > 1000 ? 'text-amber-600' : 'text-ds-faint'}`}>
+                      {draft.content.trim().length} / 1000
+                      {draft.content.trim().length > 1000 ? ` · ${t('memoryDirectiveTooLong')}` : ''}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {notice ? (
                 <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-[12px] text-amber-700 dark:border-amber-800/40 dark:bg-amber-500/10 dark:text-amber-300">
                   {notice}
@@ -407,6 +433,7 @@ export function MemoryRecordDialog({
               onClick={onSave}
               disabled={
                 !draft.content.trim() ||
+                (draft.directive && draft.content.trim().length > 1000) ||
                 (dialog.mode === 'create' && draft.scope !== 'user' && !draft.targetPath.trim())
               }
               className="rounded-lg bg-ds-ink px-3 py-1.5 text-[12px] font-semibold text-ds-main transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45"

@@ -94,6 +94,8 @@ export function createTurnRecord(input: {
     activeSkillIds: [],
     injectedMemoryIds: [],
     injectedMemorySummaries: [],
+    injectedDirectiveIds: [],
+    injectedDirectiveSummaries: [],
     injectedInstructionSources: [],
     ...(model ? { model } : {}),
     ...(providerId ? { providerId } : {}),

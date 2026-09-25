@@ -140,6 +140,8 @@ export type ApprovalActionEnvelopeInput = {
   cwd?: string
   exactFileTargets?: readonly string[]
   reason: string
+  /** Marks actions that only a human may authorize (never auto-allowed). */
+  requiresUserDecision?: boolean
 }
 
 /**
@@ -199,7 +201,8 @@ export function createApprovalActionEnvelope(
     reason: boundedText(
       redactApprovalSensitiveText(input.reason.trim() || 'approval required'),
       2_048
-    )
+    ),
+    ...(input.requiresUserDecision === true ? { requiresUserDecision: true } : {})
   })
 }
 

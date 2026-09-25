@@ -34,6 +34,8 @@ import {
 import { TurnItem } from '../contracts/items.js'
 import {
   MemoryCreateRequest,
+  MemoryScope,
+  MemoryType,
   MemoryUpdateRequest
 } from '../contracts/memory.js'
 import { ThreadSchema } from '../contracts/threads.js'
@@ -257,10 +259,21 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             project: z.string().optional(),
             includeDeleted: z.boolean().optional(),
             all: z.boolean().optional(), agent: AgentMemoryAccessSchema.optional(),
+            authority: z.enum(['reference', 'directive']).optional(),
+            type: MemoryType.optional(),
             limit: z.number().int().min(1).max(1000).optional(),
             before: z.object({ updatedAt: z.string(), id: z.string() }).strict().optional()
           }).strict().parse(body.value ?? {})
           return store.list(filter)
+        }
+        case 'listDirectives': {
+          const access = z.object({
+            workspace: z.string().optional(),
+            project: z.string().optional(),
+            agent: AgentMemoryAccessSchema.optional()
+          }).strict().parse(body.value ?? {})
+          if (!store.listDirectives) throw new Error('memory directive listing is unavailable')
+          return store.listDirectives(access)
         }
         case 'retrieve': {
           const request = z.object({
@@ -268,7 +281,13 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             workspace: z.string().optional(),
             project: z.string().optional(),
             limit: z.number().int().positive(),
-            promptCharacterBudget: z.number().int().nonnegative().optional(), agent: AgentMemoryAccessSchema.optional()
+            promptCharacterBudget: z.number().int().nonnegative().optional(), agent: AgentMemoryAccessSchema.optional(),
+            purpose: z.enum(['injection', 'tool']).optional(),
+            filter: z.object({
+              scope: MemoryScope.optional(),
+              type: MemoryType.optional(),
+              authority: z.enum(['reference', 'directive']).optional()
+            }).strict().optional()
           }).strict().parse(body.value)
           return store.retrieve({ ...request, policy: body.config })
         }

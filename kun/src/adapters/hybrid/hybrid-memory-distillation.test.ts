@@ -19,7 +19,7 @@ async function setup(action: 'update' | 'supersede') {
   let time = '2026-09-03T01:00:00.000Z'
   const store = new HybridMemoryStore({ dataDir, nowIso: () => time,
     config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8,
-      distillation: { enabled: true } } })
+      distillation: { enabled: true }, directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 } } })
   cleanup.push(() => store.shutdown())
   await store.ready()
   const target = await store.createWithId('target', {

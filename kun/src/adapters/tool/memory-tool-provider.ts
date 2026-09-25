@@ -1,5 +1,6 @@
 import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost } from './local-tool-host.js'
+import { buildMemoryReadTools } from './memory-read-tools.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
 import { MemoryCreateRequest, MemoryUpdateRequest } from '../../contracts/memory.js'
 
@@ -35,6 +36,13 @@ const nullableDateTimeSchema = {
   anyOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }]
 }
 
+const memoryAuthoritySchema = {
+  type: 'string',
+  enum: ['reference', 'directive'],
+  description:
+    "'directive' turns the memory into a standing rule injected every turn; it always needs explicit user approval."
+}
+
 export function buildMemoryToolProviders(store: MemoryStore | undefined): CapabilityToolProvider[] {
   if (!store) return []
   return [{
@@ -60,6 +68,7 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
             scope: { type: 'string', enum: ['user', 'workspace', 'project'] },
             tags: { type: 'array', items: { type: 'string' } },
             type: memoryTypeSchema,
+            authority: memoryAuthoritySchema,
             confidence: { type: 'number', minimum: 0, maximum: 1 },
             importance: { type: 'number', minimum: 0, maximum: 1 },
             observedAt: { type: 'string', format: 'date-time' },
@@ -73,6 +82,10 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
           additionalProperties: false
         },
         policy: 'on-request',
+        // A directive becomes a user-authority instruction, so creating one is
+        // always a human decision — even under auto + danger-full-access.
+        requiresExplicitApproval: (call) => call.arguments?.authority === 'directive',
+        requiresApprovalInFullAccess: true,
         execute: async (args, context) => {
           const content = typeof args.content === 'string' ? args.content.trim() : ''
           if (!content) return { output: { error: 'content is required' }, isError: true }
@@ -93,6 +106,7 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
             provenance: { kind: 'user', turnId: context.turnId, origin: 'memory_create' },
             tags: args.tags ?? [],
             ...(ttlMs !== undefined ? { ttlMs } : {}),
+            ...optionalArgument(args, 'authority'),
             ...optionalArgument(args, 'supersedes', (value) => typeof value === 'string' ? value.trim() : value),
             ...optionalArgument(args, 'type'),
             ...optionalArgument(args, 'confidence'),
@@ -121,6 +135,7 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
             content: { type: 'string' },
             tags: { type: 'array', items: { type: 'string' } },
             type: memoryTypeSchema,
+            authority: memoryAuthoritySchema,
             confidence: { type: 'number', minimum: 0, maximum: 1 },
             importance: { type: 'number', minimum: 0, maximum: 1 },
             observedAt: { type: 'string', format: 'date-time' },
@@ -134,6 +149,8 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
           additionalProperties: false
         },
         policy: 'on-request',
+        requiresExplicitApproval: (call) => call.arguments?.authority === 'directive',
+        requiresApprovalInFullAccess: true,
         execute: async (args, context) => {
           const id = typeof args.id === 'string' ? args.id.trim() : ''
           if (!id) return { output: { error: 'id is required' }, isError: true }
@@ -141,6 +158,7 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
             ...optionalArgument(args, 'content'),
             ...optionalArgument(args, 'tags'),
             ...optionalArgument(args, 'type'),
+            ...optionalArgument(args, 'authority'),
             ...optionalArgument(args, 'confidence'),
             ...optionalArgument(args, 'importance'),
             ...optionalArgument(args, 'observedAt'),
@@ -155,6 +173,17 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
           }
           const parsed = MemoryUpdateRequest.safeParse(patch)
           if (!parsed.success) return invalidArguments('update', parsed.error.issues)
+          // Rewriting an existing directive's text must repeat the explicit
+          // user approval: require the call to carry authority='directive'.
+          if (patch.content !== undefined && patch.authority !== 'directive' && store.getById) {
+            const existing = await store.getById(id, { workspace: context.workspace }).catch(() => undefined)
+            if (existing?.authority === 'directive') {
+              return {
+                output: { error: 'updating a directive requires authority=directive' },
+                isError: true
+              }
+            }
+          }
           return {
             output: {
               memory: await store.update(id, parsed.data, { workspace: context.workspace })
@@ -177,7 +206,8 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
           if (typeof args.id !== 'string') return { output: { error: 'id is required' }, isError: true }
           return { output: { memory: await store.delete(args.id, { workspace: context.workspace }) } }
         }
-      })
+      }),
+      ...buildMemoryReadTools(store)
     ]
   }]
 }

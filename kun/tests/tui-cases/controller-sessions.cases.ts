@@ -395,7 +395,7 @@ describe("TuiController reasoning and session lifecycle", () => {
     source.turns = [{
       id: 'turn_first', threadId: source.id, status: 'completed', orchestration: 'direct', prompt: 'first', steering: [],
       createdAt: source.createdAt, attachmentIds: [], activeSkillIds: [],
-      injectedMemoryIds: [], injectedMemorySummaries: [], injectedInstructionSources: [],
+      injectedMemoryIds: [], injectedMemorySummaries: [], injectedDirectiveIds: [], injectedDirectiveSummaries: [], injectedInstructionSources: [],
       items: [{
         id: 'item_user', turnId: 'turn_first', threadId: source.id, role: 'user',
         createdAt: source.createdAt, kind: 'user_message', status: 'completed', text: 'first'

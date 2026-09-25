@@ -20,7 +20,7 @@ describe('FileMemoryStore', () => {
   it('creates portable imports with exact expiry and disabled lifecycle state', async () => {
     const store = new FileMemoryStore({
       rootDir: await makeTempDir(),
-      config: { enabled: true, scopes: ['user'], maxInjectedRecords: 8, distillation: { enabled: false } },
+      config: { enabled: true, scopes: ['user'], maxInjectedRecords: 8, distillation: { enabled: false }, directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 } },
       idGenerator: () => 'mem_portable',
       nowIso: () => '2026-06-21T00:00:00.000Z'
     })
@@ -44,7 +44,7 @@ describe('FileMemoryStore', () => {
     let tick = 0
     const store = new FileMemoryStore({
       rootDir: await makeTempDir(),
-      config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8, distillation: { enabled: false } },
+      config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8, distillation: { enabled: false }, directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 } },
       idGenerator: () => 'mem_toggle',
       nowIso: () => `2026-06-21T00:00:0${tick++}.000Z`
     })
@@ -79,7 +79,8 @@ describe('FileMemoryStore', () => {
         enabled: true,
         scopes: ['workspace'],
         maxInjectedRecords: 8,
-        distillation: { enabled: false }
+        distillation: { enabled: false },
+        directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 },
       },
       nowIso: () => '2026-06-21T00:00:00.000Z'
     })
@@ -104,7 +105,8 @@ describe('FileMemoryStore', () => {
         enabled: true,
         scopes: ['workspace'],
         maxInjectedRecords: 8,
-        distillation: { enabled: false }
+        distillation: { enabled: false },
+        directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 },
       }
     })
     await writeFile(join(rootDir, 'mem_bad.json'), '{broken')
@@ -118,7 +120,8 @@ describe('FileMemoryStore', () => {
         enabled: true,
         scopes: ['workspace'],
         maxInjectedRecords: 8,
-        distillation: { enabled: false }
+        distillation: { enabled: false },
+        directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 },
       },
       nowIso: () => '2026-06-21T00:00:00.000Z'
     })
@@ -139,7 +142,8 @@ describe('FileMemoryStore', () => {
         enabled: true,
         scopes: ['workspace'],
         maxInjectedRecords: 8,
-        distillation: { enabled: false }
+        distillation: { enabled: false },
+        directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 },
       },
       idGenerator: () => 'mem_new',
       nowIso: () => '2026-06-21T00:00:00.000Z'
@@ -155,5 +159,99 @@ describe('FileMemoryStore', () => {
     })
     expect(listSpy).not.toHaveBeenCalled()
     listSpy.mockRestore()
+  })
+
+  it('rejects directive creation for project scope, agent context, and long content', async () => {
+    const store = new FileMemoryStore({
+      rootDir: await makeTempDir(),
+      config: {
+        enabled: true,
+        scopes: ['user', 'workspace', 'project'],
+        maxInjectedRecords: 8,
+        distillation: { enabled: false },
+        directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 },
+      },
+      nowIso: () => '2026-06-21T00:00:00.000Z'
+    })
+
+    await expect(store.create({
+      content: 'Project rule',
+      scope: 'project',
+      project: '/tmp/workspace',
+      workspace: '/tmp/workspace',
+      authority: 'directive'
+    })).rejects.toThrow(/directive/i)
+    await expect(store.create({
+      content: 'x'.repeat(1_001),
+      scope: 'user',
+      authority: 'directive'
+    })).rejects.toThrow(/directive/i)
+    await expect(store.create({
+      content: 'Agent rule',
+      scope: 'workspace',
+      workspace: '/tmp/workspace',
+      authority: 'directive',
+      agentContext: { schemaVersion: 1, agentId: 'agent-1', sourceConversationId: 'conv-1' }
+    })).rejects.toThrow(/directive/i)
+    await expect(store.list({ all: true })).resolves.toEqual([])
+  })
+
+  it('rejects patches that would smuggle an invalid directive state', async () => {
+    const store = new FileMemoryStore({
+      rootDir: await makeTempDir(),
+      config: {
+        enabled: true,
+        scopes: ['user', 'workspace', 'project'],
+        maxInjectedRecords: 8,
+        distillation: { enabled: false },
+        directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 },
+      },
+      nowIso: () => '2026-06-21T00:00:00.000Z'
+    })
+
+    const created = await store.create({
+      content: 'Keep responses short',
+      scope: 'user'
+    })
+    await expect(store.update(created.id, {
+      content: 'x'.repeat(1_001),
+      authority: 'directive'
+    })).rejects.toThrow(/directive/i)
+    const promoted = await store.update(created.id, { authority: 'directive' })
+    expect(promoted.authority).toBe('directive')
+    const demoted = await store.update(created.id, { authority: 'reference' })
+    expect(demoted.authority).toBe('reference')
+  })
+
+  it('lists directives without relevance gating and filters list by authority', async () => {
+    const store = new FileMemoryStore({
+      rootDir: await makeTempDir(),
+      config: {
+        enabled: true,
+        scopes: ['user', 'workspace'],
+        maxInjectedRecords: 8,
+        distillation: { enabled: false },
+        directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 },
+      },
+      nowIso: () => '2026-06-21T00:00:00.000Z'
+    })
+
+    await store.createWithId('mem_rule', {
+      content: 'Reply in English', scope: 'user', authority: 'directive'
+    })
+    await store.createWithId('mem_ref', {
+      content: 'Uses pnpm', scope: 'user'
+    })
+    await store.createWithId('mem_other_ws', {
+      content: 'Workspace rule', scope: 'workspace', workspace: '/tmp/other', authority: 'directive'
+    })
+
+    const result = await store.listDirectives({ workspace: '/tmp/workspace' })
+    expect(result.records.map((record) => record.id)).toEqual(['mem_rule'])
+
+    const directives = await store.list({ all: true, authority: 'directive' })
+    expect(directives.map((record) => record.id).sort()).toEqual(['mem_other_ws', 'mem_rule'])
+    const references = await store.list({ all: true, authority: 'reference' })
+    expect(references.map((record) => record.id)).toEqual(['mem_ref'])
   })
 })

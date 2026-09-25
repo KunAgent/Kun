@@ -3,7 +3,6 @@ import type { ModelToolSpec } from '../ports/model-client.js'
 import type { TurnItem } from '../contracts/items.js'
 import { makeErrorItem } from '../domain/item.js'
 import { repairModelHistoryItemsForModel } from '../domain/model-history-repair.js'
-import { memoryPreview } from '../shared/memory-preview.js'
 import { CREATE_PLAN_TOOL_NAME } from '../adapters/tool/create-plan-tool.js'
 import {
   DESIGN_SVG_ANIMATE_TOOL_NAME,
@@ -38,7 +37,10 @@ import {
 } from './continuation-instructions.js'
 import { SEND_IM_MESSAGE_TOOL_NAME } from '../rooms/room-im-message-tool.js'
 import { healLoadedHistoryItems } from './history-healing.js'
-import { memoryInstructions } from './memory-instructions.js'
+import {
+  memoryContextBlocks,
+  memoryInjectionMetadata
+} from './model-step-preparation-memory.js'
 import { modelCapabilitiesForModel } from './model-context-profile.js'
 import {
   resolvePlanModeToolSpecs,
@@ -292,6 +294,7 @@ export abstract class ModelStepPreparationService {
       skillResolution,
       instructionResolution,
       memories,
+      memoryDirectives,
       activeGoalInstruction,
       goalRecoveryInstruction,
       activeTodoInstruction,
@@ -381,11 +384,7 @@ export abstract class ModelStepPreparationService {
       await this.deps.turns.updateTurnMetadata(threadId, turnId, {
         activeSkillIds: skillResolution.activeSkillIds,
         skillInjectionBytes: skillResolution.injectedBytes,
-        injectedMemoryIds: memories.map((memory) => memory.id),
-        injectedMemorySummaries: memories.map((memory) => ({
-          id: memory.id,
-          content: memoryPreview(memory.content)
-        })),
+        ...memoryInjectionMetadata({ memories, directives: memoryDirectives }),
         injectedInstructionSources: instructionResolution.sources,
         instructionInjectionBytes: instructionResolution.injectedBytes,
         toolCatalogFingerprint: toolCatalog.fingerprint,
@@ -590,8 +589,7 @@ export abstract class ModelStepPreparationService {
         workspace: thread?.workspace ?? '',
         tools: requestToolSpecs
       }).map((content) => kunContextBlock('attachment-reference', 'reference', content)),
-      ...memoryInstructions(memories)
-        .map((content) => kunContextBlock('memory', 'user', content)),
+      ...memoryContextBlocks({ memories, directives: memoryDirectives }),
       ...turnDynamicContext.blocks.filter((block) => block.authority === 'user'),
       ...(turn.designProfile
         ? [kunContextBlock(
@@ -634,6 +632,7 @@ export abstract class ModelStepPreparationService {
     const contextInstructions = buildKunTurnContextInstructions(contextBlocks)
     await this.deps.recordPipelineStage(threadId, turnId, 'input_remembered', {
       memoryCount: memories.length,
+      directiveCount: memoryDirectives.length,
       contextInstructionCount: contextInstructions.length
     })
     const modeInstruction = buildTurnModeInstruction(turn, planTurnActive, thread.roomContext, historyItems, turnId)

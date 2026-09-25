@@ -34,6 +34,8 @@ export type MemoryImportCandidate = {
 export type PreparedMemoryImport = {
   kind: 'portable' | 'profile' | 'invalid-portable'
   candidates: MemoryImportCandidate[]
+  /** Records whose archived authority was `directive`; they import as reference. */
+  downgradedDirectives: number
   error?: string
 }
 
@@ -44,10 +46,11 @@ export function prepareMemoryImport(
 ): PreparedMemoryImport {
   const parsed = parseMemoryImport(raw)
   if (parsed.kind === 'invalid-portable') {
-    return { kind: parsed.kind, candidates: [], error: parsed.message }
+    return { kind: parsed.kind, candidates: [], downgradedDirectives: 0, error: parsed.message }
   }
   if (parsed.kind === 'portable') {
     return {
+      downgradedDirectives: parsed.records.filter((record) => record.authority === 'directive').length,
       kind: parsed.kind,
       candidates: parsed.records.map((record) => ({
         preview: `[${record.type}] ${record.scope}: ${record.content}`,
@@ -72,6 +75,7 @@ export function prepareMemoryImport(
   }
   return {
     kind: parsed.kind,
+    downgradedDirectives: 0,
     candidates: parsed.entries.map((entry) => {
       const observedAt = memoryImportObservedAt(entry.date)
       const content = buildMemoryImportContent(entry)

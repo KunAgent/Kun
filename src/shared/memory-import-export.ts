@@ -65,7 +65,8 @@ const MemoryPortableRecordSchema = z.object({
   tags: z.array(z.string()),
   confidence: z.number().min(0).max(1),
   type: z.enum(['fact', 'preference', 'decision', 'episode', 'relationship', 'insight']),
-  authority: z.literal('reference'),
+  // Archives may carry directives; import always downgrades them to reference.
+  authority: z.enum(['reference', 'directive']),
   importance: z.number().min(0).max(1),
   observedAt: z.string().datetime(),
   validFrom: z.string().datetime().optional(),
@@ -110,7 +111,7 @@ export type MemoryExportRecord = {
   tags?: string[]
   confidence?: number
   type?: 'fact' | 'preference' | 'decision' | 'episode' | 'relationship' | 'insight'
-  authority?: 'reference'
+  authority?: 'reference' | 'directive'
   importance?: number
   observedAt?: string
   validFrom?: string
@@ -269,7 +270,7 @@ function toPortableRecord(record: MemoryExportRecord): MemoryPortableRecord {
     tags: record.tags ?? [],
     confidence: record.confidence ?? 1,
     type: record.type ?? inferPortableType(record),
-    authority: 'reference',
+    authority: record.authority === 'directive' ? 'directive' : 'reference',
     importance: record.importance ?? 0.5,
     observedAt: record.observedAt ?? record.updatedAt ?? record.createdAt,
     ...(record.validFrom ? { validFrom: record.validFrom } : {}),
