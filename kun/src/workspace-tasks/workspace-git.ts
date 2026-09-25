@@ -42,13 +42,14 @@ export async function workspaceCommitGit(cwd: string, args: string[]): Promise<s
 export async function workspaceGit(
   cwd: string,
   args: string[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  timeoutMs?: number
 ): Promise<string> {
   const operationSignal = signal ?? workspaceWriteMutexContext.getStore()?.signal
   operationSignal?.throwIfAborted()
   const result = await execFileAsync('git', ['-C', cwd, ...args], {
     encoding: 'utf8',
-    timeout: 120_000,
+    timeout: timeoutMs ?? 120_000,
     maxBuffer: 64 * 1024 * 1024,
     signal: operationSignal
   })

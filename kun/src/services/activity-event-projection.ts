@@ -29,7 +29,14 @@ export function projectRuntimeEvent(event: RuntimeEvent): ActivityProjection[] {
     ]
   }
   const patch = selfPatch(event)
-  return patch ? [{ unitId: event.threadId, patch }] : []
+  if (!patch) return []
+  // Task-workspace updates target the bound execution unit, which may be
+  // a worker row rather than the owner thread's row.
+  const unitId =
+    event.kind === 'task_workspace'
+      ? event.taskWorkspace.unitId ?? event.threadId
+      : event.threadId
+  return [{ unitId, patch }]
 }
 
 function selfPatch(event: RuntimeEvent): ActivityPatch | null {
@@ -94,6 +101,23 @@ function selfPatch(event: RuntimeEvent): ActivityPatch | null {
       return typeof event.title === 'string' && event.title.length > 0
         ? { title: event.title.slice(0, 200) }
         : null
+    case 'task_workspace': {
+      const workspace = event.taskWorkspace.workspace
+      const progressNote = event.taskWorkspace.progress?.message
+      if (!workspace && !progressNote) return null
+      return {
+        ...(workspace
+          ? {
+              workspace: {
+                path: workspace.path,
+                kind: workspace.kind,
+                ...(workspace.branch ? { branch: workspace.branch } : {})
+              }
+            }
+          : {}),
+        ...(progressNote ? { progressNote: progressNote.slice(0, 280) } : {})
+      }
+    }
     case 'harness_runtime':
       return { harnessId: event.harnessId }
     case 'delegated_runtime':

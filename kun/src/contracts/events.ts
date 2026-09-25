@@ -40,6 +40,7 @@ import { WriteTurnContextSchema } from './write-turn-context.js'
 import { ModelRequestFailureContextSchema } from './model-request-failure.js'
 import { HarnessIdSchema } from './harness.js'
 import { HarnessCapabilitiesSchema } from './harness-capabilities.js'
+import { TaskWorkspaceEventPayloadSchema } from './task-workspace.js'
 
 /**
  * Persisted runtime events. Every event has a per-thread `seq` so the
@@ -93,6 +94,7 @@ export const RuntimeEventKind = z.enum([
   'harness_runtime',
   'graph_planning',
   'graph_event',
+  'task_workspace',
   'context_snapshot',
   'usage',
   'error',
@@ -558,6 +560,17 @@ export const GraphRuntimeEvent = RuntimeEventBase.extend({
 })
 export type GraphRuntimeEvent = z.infer<typeof GraphRuntimeEvent>
 
+/**
+ * Task-workspace progress/state transitions (docs/ade/07 §5). Emitted on
+ * `threadId = ownerThreadId`; ActivityStore refreshes the bound unit's
+ * workspace fields from the payload.
+ */
+export const TaskWorkspaceEvent = RuntimeEventBase.extend({
+  kind: z.literal('task_workspace'),
+  taskWorkspace: TaskWorkspaceEventPayloadSchema
+}).strict()
+export type TaskWorkspaceEvent = z.infer<typeof TaskWorkspaceEvent>
+
 export const GraphPlanningRuntimeEvent = RuntimeEventBase.extend({
   kind: z.literal('graph_planning'),
   planning: GraphPlanningLifecycleEventV1Schema
@@ -645,6 +658,7 @@ export const RuntimeEvent = z.discriminatedUnion('kind', [
   HarnessRuntimeEvent,
   GraphPlanningRuntimeEvent,
   GraphRuntimeEvent,
+  TaskWorkspaceEvent,
   ContextSnapshotEvent,
   UsageEvent,
   ErrorEvent,

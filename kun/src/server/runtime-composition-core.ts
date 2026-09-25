@@ -34,6 +34,13 @@ import {
   ThreadActivityRegistry,
   ActivityStore,
   ActivityFactsStore,
+  TaskWorkspaceStore,
+  TaskWorkspaceService,
+  createWorktreeLifecycle,
+  workspaceGit,
+  workspaceCommitGit,
+  assertWorkspaceWriteFence,
+  withWorkspaceWriteCommit,
   GraphRuntimeComposition,
   LifecycleFencedSessionStore,
   LifecycleFencedThreadStore,
@@ -188,6 +195,19 @@ export async function createRuntimeCore(
     lifecycleFence,
     observers
   })
+  const taskWorkspaceStore = new TaskWorkspaceStore({ dataDir: activeOptions.dataDir })
+  await taskWorkspaceStore.load().catch(() => undefined)
+  const taskWorkspaces = new TaskWorkspaceService({
+    store: taskWorkspaceStore,
+    lifecycle: createWorktreeLifecycle({
+      git: workspaceGit,
+      commitGit: workspaceCommitGit,
+      fence: assertWorkspaceWriteFence,
+      withCommit: withWorkspaceWriteCommit
+    }),
+    events
+  })
+  taskWorkspaces.recoverInterrupted()
   const contextWindowState = new FileContextWindowStateStore({ dataDir: activeOptions.dataDir })
   const contextWindowStateRestore = new ContextWindowStateRestore({
     store: contextWindowState,
@@ -412,6 +432,7 @@ export async function createRuntimeCore(
     threadActivity,
     activityStore,
     activityFacts,
+    taskWorkspaces,
     prefix,
     delegatedSessions,
     threadService,

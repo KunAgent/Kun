@@ -178,6 +178,15 @@ export { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 export { ThreadActivityRegistry } from '../services/thread-activity-registry.js'
 export { ActivityStore } from '../services/activity-store.js'
 export { ActivityFactsStore } from '../services/activity-facts-store.js'
+export { TaskWorkspaceStore } from '../workspace-tasks/task-workspace-store.js'
+export { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
+export { createWorktreeLifecycle } from '../workspace-tasks/worktree-lifecycle.js'
+export {
+  workspaceGit,
+  workspaceCommitGit,
+  assertWorkspaceWriteFence,
+  withWorkspaceWriteCommit
+} from '../workspace-tasks/workspace-git.js'
 export { ToolCancellationService } from '../services/tool-cancellation-service.js'
 export { GraphRuntimeComposition } from './graph-runtime-factory.js'
 export { createGraphRuntimeStartOptions } from './graph-runtime-bootstrap.js'
