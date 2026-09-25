@@ -283,14 +283,19 @@ export function useProviderSharedSynchronization(scope: Record<string, any>): vo
         JSON.stringify(snapshot.proxy) !== JSON.stringify(latest.provider.proxy ?? { enabled: false, url: '' }) ||
         JSON.stringify(snapshot.routePools) !== JSON.stringify(latest.provider.routePools ?? []) ||
         JSON.stringify(snapshot.failover ?? []) !== JSON.stringify(projectedFailover) ||
-        snapshot.localModelGateway?.enabled !== (latest.provider.localGateway?.enabled === true)
+        snapshot.localModelGateway?.enabled !== (latest.provider.localGateway?.enabled === true) ||
+        (snapshot.localModelGateway?.exposeProviderModels === true) !==
+          (latest.provider.localGateway?.exposeProviderModels === true)
       if (globalsChanged) {
         snapshot = await requestSharedModelConnections('/v1/model-connections', 'PATCH', {
           expectedRevision: snapshot.revision,
           proxy: latest.provider.proxy ?? { enabled: false, url: '' },
           routePools: latest.provider.routePools ?? [],
           failover: projectedFailover,
-          localModelGateway: { enabled: latest.provider.localGateway?.enabled === true }
+          localModelGateway: {
+            enabled: latest.provider.localGateway?.enabled === true,
+            exposeProviderModels: latest.provider.localGateway?.exposeProviderModels === true
+          }
         })
       }
       const active = snapshot.providers.find((entry) => entry.id === latestKun.providerId)

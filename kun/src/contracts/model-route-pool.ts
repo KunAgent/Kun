@@ -51,7 +51,13 @@ export const ModelRoutePoolConfigSchema = z.object({
 export type ModelRoutePoolConfig = z.infer<typeof ModelRoutePoolConfigSchema>
 
 export const LocalModelGatewayConfigSchema = z.object({
-  enabled: z.boolean().default(false)
+  enabled: z.boolean().default(false),
+  /**
+   * Opt-in: expose configured API-key providers as `providerId/modelId` on the
+   * local gateway. Off by default; subscription, OAuth, and non-HTTP providers
+   * are never exposed regardless of this flag.
+   */
+  exposeProviderModels: z.boolean().default(false)
 }).strict()
 export type LocalModelGatewayConfig = z.infer<typeof LocalModelGatewayConfigSchema>
 

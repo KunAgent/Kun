@@ -84,7 +84,7 @@ function credentialSnapshot(
     proxy: { enabled: false, url: '' },
     routePools: [],
     failover: [],
-    localModelGateway: { enabled: false }
+    localModelGateway: { enabled: false, exposeProviderModels: false }
   }
 }
 
@@ -114,7 +114,7 @@ describe("TuiController model selection and turn startup", () => {
       proxy: { enabled: false, url: '' },
       routePools: [],
       failover: [],
-      localModelGateway: { enabled: false }
+      localModelGateway: { enabled: false, exposeProviderModels: false }
     }
     const client = {
       modelConnections: vi.fn(async () => snapshot),
@@ -289,7 +289,7 @@ describe("TuiController model selection and turn startup", () => {
       proxy: { enabled: false, url: '' },
       routePools: [],
       failover: [],
-      localModelGateway: { enabled: false }
+      localModelGateway: { enabled: false, exposeProviderModels: false }
     }, false)
 
     expect(tuiOptions).toMatchObject({
@@ -414,7 +414,7 @@ describe("TuiController model selection and turn startup", () => {
       proxy: { enabled: false, url: '' },
       routePools: [],
       failover: [],
-      localModelGateway: { enabled: false }
+      localModelGateway: { enabled: false, exposeProviderModels: false }
     }, false)
 
     await controller.createThread()

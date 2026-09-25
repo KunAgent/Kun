@@ -297,7 +297,8 @@ export const modelProviderPatchSchema = z.object({
   }).strict()).max(100).optional(),
   localGateway: z.object({
     enabled: z.boolean().optional(),
-    name: z.string().trim().min(1).max(80).optional()
+    name: z.string().trim().min(1).max(80).optional(),
+    exposeProviderModels: z.boolean().optional()
   }).strict().optional()
 }).strict()
 

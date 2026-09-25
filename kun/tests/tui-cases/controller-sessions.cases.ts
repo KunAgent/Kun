@@ -84,7 +84,7 @@ function credentialSnapshot(
     proxy: { enabled: false, url: '' },
     routePools: [],
     failover: [],
-    localModelGateway: { enabled: false }
+    localModelGateway: { enabled: false, exposeProviderModels: false }
   }
 }
 
@@ -114,7 +114,7 @@ describe("TuiController reasoning and session lifecycle", () => {
         proxy: { enabled: false, url: '' },
         routePools: [],
         failover: [],
-        localModelGateway: { enabled: false },
+        localModelGateway: { enabled: false, exposeProviderModels: false },
         providers: [{
           id: 'provider-a', accountId: 'account-a', name: 'Provider A', kind: 'http',
           authType: 'api-key', endpointFormat: 'chat_completions', useProxy: false, configured: true,
@@ -181,7 +181,7 @@ describe("TuiController reasoning and session lifecycle", () => {
         proxy: { enabled: false, url: '' },
         routePools: [],
         failover: [],
-        localModelGateway: { enabled: false },
+        localModelGateway: { enabled: false, exposeProviderModels: false },
         providers: [{
           id: 'opencode-go',
           accountId: 'account:opencode-go',
@@ -262,7 +262,7 @@ describe("TuiController reasoning and session lifecycle", () => {
         proxy: { enabled: false, url: '' },
         routePools: [],
         failover: [],
-        localModelGateway: { enabled: false },
+        localModelGateway: { enabled: false, exposeProviderModels: false },
         providers: [{
           id: 'codex',
           accountId: 'account:codex',

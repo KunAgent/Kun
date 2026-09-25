@@ -252,6 +252,7 @@ export type ServerRuntime = {
   providerQuotaService?: Pick<ProviderQuotaService, 'list'>
   modelGateway?: {
     enabled(): boolean
+    exposeProviderModels(): boolean
     pools(): ModelRoutePoolConfig[]
     configuredPools(): ModelRoutePoolConfig[]
     health: RoutePoolHealthStore

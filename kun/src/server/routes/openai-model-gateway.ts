@@ -30,14 +30,15 @@ export async function gatewayModels(runtime: ServerRuntime, request: Request): P
       created: 0,
       owned_by: 'kun-route-pool'
     }))
-  // Plan §6.13: also expose every usable provider model as
-  // `providerId/modelId` so other tools can reach a concrete provider through
-  // this gateway without first configuring a route pool.
-  if (runtime.modelConnections) {
+  // Plan §6.13 + review fix C2: `providerId/modelId` provider exposure is an
+  // explicit opt-in (`localModelGateway.exposeProviderModels`). Only plain
+  // HTTP API-key providers may be exposed; subscription, OAuth, and
+  // delegated/non-HTTP providers are never listed.
+  if (runtime.modelConnections && runtime.modelGateway.exposeProviderModels()) {
     const snapshot = await runtime.modelConnections.snapshot()
     const seen = new Set(data.map((entry) => entry.id))
     for (const provider of snapshot.providers) {
-      if (!provider.configured || (provider.credentialStatus && provider.credentialStatus !== 'ready')) continue
+      if (!exposableProvider(provider)) continue
       for (const modelId of provider.models) {
         const id = `${provider.id}/${modelId}`
         if (seen.has(id)) continue
@@ -64,12 +65,30 @@ export async function resolveGatewayModel(
   }
   const slash = model.indexOf('/')
   if (slash <= 0 || slash === model.length - 1 || !runtime.modelConnections) return null
+  if (!runtime.modelGateway?.exposeProviderModels()) return null
   const providerId = model.slice(0, slash)
   const modelId = model.slice(slash + 1)
   const snapshot = await runtime.modelConnections.snapshot()
   const provider = snapshot.providers.find((candidate) => candidate.id === providerId)
-  if (!provider || !provider.configured || (provider.credentialStatus && provider.credentialStatus !== 'ready')) return null
+  if (!provider || !exposableProvider(provider)) return null
   return { model: modelId, providerId }
+}
+
+/**
+ * A provider may only be exposed through the local gateway when it is a plain
+ * HTTP API-key connection with a ready credential. Subscription, OAuth, and
+ * delegated/non-HTTP providers are never reachable this way.
+ */
+function exposableProvider(provider: {
+  kind: string
+  authType: string
+  configured: boolean
+  credentialStatus?: string
+}): boolean {
+  return provider.kind === 'http' &&
+    provider.authType === 'api-key' &&
+    provider.configured &&
+    (!provider.credentialStatus || provider.credentialStatus === 'ready')
 }
 
 export async function gatewayChatCompletions(runtime: ServerRuntime, request: Request): Promise<Response | JsonResponse> {
@@ -90,7 +109,10 @@ export function routePoolStatus(runtime: ServerRuntime): JsonResponse {
     return jsonResponse({ localGateway: { enabled: false }, pools: [], configuredPools: [], metrics: {}, events: [], tests: [] })
   }
   return jsonResponse({
-    localGateway: { enabled: runtime.modelGateway.enabled() },
+    localGateway: {
+      enabled: runtime.modelGateway.enabled(),
+      exposeProviderModels: runtime.modelGateway.exposeProviderModels()
+    },
     pools: runtime.modelGateway.pools(),
     configuredPools: runtime.modelGateway.configuredPools(),
     ...runtime.modelGateway.health.snapshot(),

@@ -376,7 +376,7 @@ export async function createRuntimeModelComposition(
     proxy: { enabled: Boolean(core.activeOptions.modelProxyUrl), url: core.activeOptions.modelProxyUrl ?? '' },
     routePools: core.activeOptions.routePools ?? [],
     failover: core.activeOptions.providerFailover ?? [],
-    localModelGateway: core.activeOptions.localModelGateway ?? { enabled: false }
+    localModelGateway: core.activeOptions.localModelGateway ?? { enabled: false, exposeProviderModels: false }
   })
   const resolveCapabilityProviderCredential = async (providerId: string): Promise<{
     apiKey: string

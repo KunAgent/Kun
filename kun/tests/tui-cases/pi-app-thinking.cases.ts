@@ -137,7 +137,7 @@ function modelSnapshot(): ModelConnectionSnapshot {
       }
     ],
     defaultProviderId: 'deepseek', defaultAccountId: 'account:deepseek', defaultModel: 'deepseek-v4-pro',
-    proxy: { enabled: false, url: '' }, routePools: [], localModelGateway: { enabled: false },
+    proxy: { enabled: false, url: '' }, routePools: [], localModelGateway: { enabled: false, exposeProviderModels: false },
     failover: [],
   }
 }

@@ -574,6 +574,11 @@ export type ModelRoutePoolV1 = {
 export type LocalModelGatewaySettingsV1 = {
   enabled: boolean
   name: string
+  /**
+   * Opt-in: expose configured API-key providers as `providerId/modelId` on the
+   * local gateway. Subscription/OAuth and non-HTTP providers are never exposed.
+   */
+  exposeProviderModels: boolean
 }
 
 export type ModelProviderSettingsV1 = {

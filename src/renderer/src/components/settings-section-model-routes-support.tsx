@@ -1,7 +1,7 @@
 import type { ModelRoutePoolV1 } from '@shared/app-settings'
 import type { KunRuntimeSettingsSyncStatusPayload } from '@shared/kun-gui-api'
 import type { TFunction } from 'i18next'
-import { Check, Clipboard, Code2, X } from 'lucide-react'
+import { Check, Clipboard, Code2, Plus, Route, X } from 'lucide-react'
 import {
   useCallback,
   useEffect,
@@ -20,6 +20,26 @@ import type {
 } from './settings-section-model-routes'
 
 type GatewayApiTab = 'models' | 'chat' | 'responses'
+
+export function EmptyRoutePoolState({ onAdd, t }: { onAdd: () => void; t: TFunction }): ReactElement {
+  return (
+    <div className="grid min-h-[360px] place-items-center text-center">
+      <div>
+        <Route className="mx-auto h-10 w-10 text-ds-faint" />
+        <h3 className="mt-3 text-[14px] font-semibold text-ds-ink">{t('modelRoutes.emptyTitle')}</h3>
+        <p className="mt-1 text-[12px] text-ds-faint">{t('modelRoutes.gatewayMultipleModelsDesc')}</p>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="mt-4 inline-flex h-9 items-center gap-2 rounded-full bg-accent px-4 text-[12px] font-semibold text-white"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {t('modelRoutes.addModel')}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export function ApiCompatibilityPill({ children }: { children: string }): ReactElement {
   return <span className="rounded-full bg-ds-main px-2 py-1 font-mono text-[10px] text-ds-muted">{children}</span>
@@ -302,9 +322,11 @@ export function runtimePoolMatches(selected: ModelRoutePoolV1 | undefined, runti
 export function runtimeConfigurationMatches(
   expectedPools: readonly ModelRoutePoolV1[],
   expectedGatewayEnabled: boolean,
+  expectedExposeProviderModels: boolean,
   status: RouteStatus | null
 ): boolean {
   if (!status || status.localGateway?.enabled !== expectedGatewayEnabled) return false
+  if ((status.localGateway?.exposeProviderModels === true) !== expectedExposeProviderModels) return false
   const runtimePools = status.configuredPools ?? status.pools ?? []
   return expectedPools.length === runtimePools.length &&
     expectedPools.every((pool, index) => runtimePoolMatches(pool, runtimePools[index]))

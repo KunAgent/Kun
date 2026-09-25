@@ -84,7 +84,7 @@ function credentialSnapshot(
     proxy: { enabled: false, url: '' },
     routePools: [],
     failover: [],
-    localModelGateway: { enabled: false }
+    localModelGateway: { enabled: false, exposeProviderModels: false }
   }
 }
 
@@ -445,7 +445,7 @@ describe("TuiController Graph, attachment hydration, and legacy runtime behavior
           models: ['gpt-5.6-luna', 'gpt-5.6-sol'], selectedModel: 'gpt-5.6-luna'
         }],
         defaultProviderId: 'codex', defaultAccountId: 'account:codex', defaultModel: 'gpt-5.6-luna',
-        proxy: { enabled: false, url: '' }, routePools: [], localModelGateway: { enabled: false },
+        proxy: { enabled: false, url: '' }, routePools: [], localModelGateway: { enabled: false, exposeProviderModels: false },
         failover: [],
       }, false)
 
@@ -494,7 +494,7 @@ describe("TuiController Graph, attachment hydration, and legacy runtime behavior
         useProxy: false, configured: true, models: ['deepseek-chat'], selectedModel: 'deepseek-chat'
       }],
       defaultProviderId: 'deepseek', defaultAccountId: 'account:deepseek', defaultModel: 'deepseek-chat',
-      proxy: { enabled: false, url: '' }, routePools: [], localModelGateway: { enabled: false },
+      proxy: { enabled: false, url: '' }, routePools: [], localModelGateway: { enabled: false, exposeProviderModels: false },
       failover: [],
     }
     const refreshed = {

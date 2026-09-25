@@ -496,7 +496,7 @@ describe('shared model connection settings projection', () => {
 
   it('keeps the in-progress route and local gateway configuration over a stale registry snapshot', () => {
     const current = defaultModelProviderSettings()
-    current.localGateway = { name: 'My local relay', enabled: true }
+    current.localGateway = { name: 'My local relay', enabled: true, exposeProviderModels: false }
     current.routePools = [{
       id: 'local-route-1',
       name: 'Local route',
