@@ -5,10 +5,11 @@ import { RemoteEventHub } from './remote-events'
 type FakeStream = ServerResponse & {
   written: string[]
   ids: string[]
+  setBacklog: (bytes: number) => void
   on: (ev: string, cb: () => void) => void
 }
 
-function fakeStream(): FakeStream {
+function fakeStream(options: { writeReturnsFalse?: boolean } = {}): FakeStream {
   const written: string[] = []
   // id-only SSE blocks (the hub epoch) are recorded apart from event frames.
   const ids: string[] = []
@@ -18,15 +19,24 @@ function fakeStream(): FakeStream {
     ids,
     destroyed: false,
     writableEnded: false,
+    writableLength: 0,
     write(chunk: string) {
       const id = /^id: (.*)\n\n$/.exec(chunk)
       if (id) ids.push(id[1] ?? '')
       else written.push(chunk)
-      return true
+      return !options.writeReturnsFalse
     },
     end() {
       stream.writableEnded = true
       return stream
+    },
+    destroy() {
+      stream.destroyed = true
+      stream.emitClose()
+      return stream
+    },
+    setBacklog(bytes: number) {
+      stream.writableLength = bytes
     },
     on(event: string, cb: () => void) {
       const list = listeners.get(event) ?? []
@@ -252,6 +262,56 @@ describe('RemoteEventHub', () => {
     const stream = fakeStream()
     hub.attachStream('client-1', stream, { resume: true })
     expect(stream.written[0]).toContain('remote:sender-reset')
+  })
+
+  it('closes every client bound to a session token on disconnectClientsForSession', () => {
+    const hub = new RemoteEventHub()
+    const streamA = fakeStream()
+    const clientA = hub.attachStream('client-a', streamA, { sessionToken: 'tok-1' })
+    const clientB = hub.attachStream('client-b', fakeStream(), { sessionToken: 'tok-2' })
+    // An invoke-only client bound to the same session is torn down too.
+    const senderC = hub.clientFor('client-c', { sessionToken: 'tok-1' })
+    hub.disconnectClientsForSession('tok-1')
+    expect(streamA.writableEnded).toBe(true)
+    expect(clientA.sender.isDestroyed()).toBe(true)
+    expect(senderC.isDestroyed()).toBe(true)
+    expect(clientB.sender.isDestroyed()).toBe(false)
+    expect(hub.clientInfos().map((info) => info.id)).toEqual(['client-b'])
+  })
+
+  it('drops a stalled stream once its socket backlog exceeds the byte cap', () => {
+    const hub = new RemoteEventHub()
+    const stream = fakeStream()
+    hub.attachStream('client-1', stream)
+    // Simulate a client that stopped reading: accepted frames sit in the
+    // socket buffer far above the per-connection cap.
+    stream.setBacklog(8 * 1024 * 1024)
+    hub.emitToClient('client-1', 'runtime:sse-event', { streamId: 's-1', seq: 7 })
+    expect(stream.destroyed).toBe(true)
+    // Later events land in the bounded buffer instead of a dead socket.
+    hub.emitToClient('client-1', 'runtime:sse-event', { streamId: 's-1', seq: 8 })
+    const retry = fakeStream()
+    hub.attachStream('client-1', retry, { resume: true })
+    const written = retry.written.join('')
+    // A sender-reset precedes the replay so every subscription resyncs; the
+    // frame accepted by write() before the drop is never resent.
+    expect(written).toContain('remote:sender-reset')
+    expect(written).toContain('"seq":8')
+    expect(written).not.toContain('"seq":7')
+  })
+
+  it('does not drop or duplicate a frame merely because write() returned false', () => {
+    const hub = new RemoteEventHub()
+    const stream = fakeStream({ writeReturnsFalse: true })
+    hub.attachStream('client-1', stream)
+    hub.emitToClient('client-1', 'runtime:sse-event', { streamId: 's-1', seq: 1 })
+    hub.emitToClient('client-1', 'runtime:sse-event', { streamId: 's-1', seq: 2 })
+    // write(false) already queued the frame — the stream stays open and each
+    // event is written exactly once while the byte cap is not exceeded.
+    expect(stream.destroyed).toBe(false)
+    expect(stream.written).toHaveLength(2)
+    expect(stream.written[0]).toContain('"seq":1')
+    expect(stream.written[1]).toContain('"seq":2')
   })
 
   it('evicts only as many lossy frames as needed to fit the backlog', () => {

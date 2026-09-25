@@ -51,6 +51,9 @@ import { mkdtemp, stat, writeFile } from 'node:fs/promises'
 const REMOTE_PORT_SCAN_START = 18_900
 const REMOTE_PORT_RANDOM_ATTEMPTS = 25
 const REMOTE_PORT_SCAN_LIMIT = 50
+// Grace window for in-flight requests before stopServer force-closes sockets;
+// an unbounded wait lets a hung download or stream stall shutdown forever.
+const REMOTE_SERVER_CLOSE_GRACE_MS = 3_000
 
 export type RemoteAccessServiceOptions = {
   getSettings: () => Promise<AppSettingsV1>
@@ -58,6 +61,10 @@ export type RemoteAccessServiceOptions = {
   persistRemotePatch: (patch: RemoteAccessSettingsPatchV1) => Promise<unknown>
   getMainWindow: () => BrowserWindow | null
   logError: (category: string, message: string, detail?: Record<string, unknown>) => void
+  /** Test hook: registry with an injectable clock. */
+  sessions?: RemoteSessionRegistry
+  /** Test hook: override the shutdown grace window. */
+  serverCloseGraceMs?: number
 }
 
 function findFreePort(port: number, host: string): Promise<number> {
@@ -98,7 +105,8 @@ export class RemoteAccessService {
   private readonly getMainWindow: RemoteAccessServiceOptions['getMainWindow']
   private readonly logError: RemoteAccessServiceOptions['logError']
   private readonly hub = new RemoteEventHub()
-  private readonly sessions = new RemoteSessionRegistry()
+  private readonly sessions: RemoteSessionRegistry
+  private readonly serverCloseGraceMs: number
   private readonly loginLimiter = new RemoteLoginRateLimiter()
   private readonly mirroredContents = new WeakSet<WebContents>()
 
@@ -114,6 +122,15 @@ export class RemoteAccessService {
     this.persistRemotePatch = options.persistRemotePatch
     this.getMainWindow = options.getMainWindow
     this.logError = options.logError
+    this.sessions = options.sessions ?? new RemoteSessionRegistry()
+    this.serverCloseGraceMs = options.serverCloseGraceMs ?? REMOTE_SERVER_CLOSE_GRACE_MS
+    // Session removal — logout, timer expiry, lazy verify expiry, or
+    // eviction — must immediately close the session's open streams, not just
+    // fail the next request.
+    this.sessions.setOnRemoved((token) => {
+      if (token === null) this.hub.disconnectAll()
+      else this.hub.disconnectClientsForSession(token)
+    })
   }
 
   get running(): boolean {
@@ -211,10 +228,25 @@ export class RemoteAccessService {
     const server = this.server
     this.server = null
     this.hub.disconnectAll()
-    if (server) {
-      await new Promise<void>((resolveClose) => server.close(() => resolveClose()))
+    if (!server) return
+    // server.close() stops accepting connections; its callback only fires once
+    // every socket ends, so force-close anything still open past the grace.
+    const closed = new Promise<void>((resolveClose) => server.close(() => resolveClose()))
+    const timedOut = await Promise.race([closed.then(() => false), this.graceTimer()])
+    if (timedOut) {
       server.closeAllConnections?.()
+      server.closeIdleConnections?.()
+      // Force-closing sockets unblocks the close callback; bound the tail too
+      // so a wedged connection can never stall shutdown/reconfiguration.
+      await Promise.race([closed, this.graceTimer()])
     }
+  }
+
+  private graceTimer(): Promise<true> {
+    return new Promise<true>((resolveTimeout) => {
+      const timer = setTimeout(() => resolveTimeout(true), this.serverCloseGraceMs)
+      timer.unref?.()
+    })
   }
 
   async destroy(): Promise<void> {
@@ -416,7 +448,13 @@ export class RemoteAccessService {
       res.writeHead(200, {
         'content-type': remoteMimeType(resolved),
         'content-length': info.size,
-        'cache-control': 'no-store'
+        'cache-control': 'no-store',
+        // Workspace files are untrusted: previewing .html/.svg under the Remote
+        // origin would let their scripts invoke /remote/invoke with the
+        // visitor's session. CSP sandbox forces an opaque origin with scripts
+        // disabled, and nosniff stops active-content sniffing of other types.
+        'content-security-policy': 'sandbox',
+        'x-content-type-options': 'nosniff'
       })
       createReadStream(resolved).pipe(res)
     } catch {
@@ -458,12 +496,19 @@ export class RemoteAccessService {
       sendRemoteJson(res, 400, { error: 'Missing Remote client id' })
       return
     }
+    const session = this.sessionFor(req)
+    if (!session) {
+      sendRemoteJson(res, 401, { error: 'Remote session required' })
+      return
+    }
     res.writeHead(200, remoteSseHeaders())
     res.write(': ok\n\n')
     startSseHeartbeat(res)
     this.hub.attachStream(clientId, res, {
       remoteAddress: remoteAddressOf(req),
       userAgent: String(req.headers['user-agent'] ?? ''),
+      // Bind the stream to its session so revoke/expiry closes it immediately.
+      sessionToken: session.token,
       resume: params.get('resume') === '1',
       // Native EventSource retries echo the hub epoch written on attach.
       lastEventId: String(req.headers['last-event-id'] ?? '')
@@ -492,9 +537,15 @@ export class RemoteAccessService {
       sendRemoteJson(res, 400, { error: 'Invalid invoke body' })
       return
     }
+    const session = this.sessionFor(req)
+    if (!session) {
+      sendRemoteJson(res, 401, { error: 'Remote session required' })
+      return
+    }
     const sender = this.hub.clientFor(clientId, {
       remoteAddress: remoteAddressOf(req),
-      userAgent: String(req.headers['user-agent'] ?? '')
+      userAgent: String(req.headers['user-agent'] ?? ''),
+      sessionToken: session.token
     })
     try {
       const result = await dispatchRemoteInvoke(body, sender)

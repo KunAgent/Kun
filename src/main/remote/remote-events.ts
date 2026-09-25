@@ -16,6 +16,10 @@ const SENDER_IDLE_GRACE_MS = 5 * 60_000
 // terminal frames can still be delivered on the next attach; then forget it.
 const EXPIRED_CLIENT_RETENTION_MS = 10 * 60_000
 const MAX_EVENT_PAYLOAD_BYTES = 4 * 1024 * 1024
+// Per-connection socket backlog bound. The event-count cap only applies while
+// no stream is attached; a connected client that stops reading must not grow
+// the response buffer without limit.
+const MAX_SSE_PENDING_BYTES = 4 * 1024 * 1024
 
 // Buffered-event tiers. `control` frames (stream terminals) are never evicted;
 // `stream` frames belong to one owned SSE subscription and can be dropped per
@@ -51,6 +55,8 @@ type RemoteClient = {
   connectedAt: string
   remoteAddress: string
   userAgent: string
+  /** Session that owns this client; revoke/expiry closes its streams. */
+  sessionToken: string
   idleTimer: NodeJS.Timeout | null
   expiryTimer: NodeJS.Timeout | null
   overflowedStreams: Set<string>
@@ -160,10 +166,13 @@ function writeSseFrame(res: ServerResponse, channel: string, payload: unknown): 
   if (data.length > MAX_EVENT_PAYLOAD_BYTES) return false
   try {
     res.write(`event: kun-ipc\ndata: ${data}\n\n`)
-    return true
   } catch {
     return false
   }
+  // write() returning false only means this frame was accepted and the next
+  // batch must wait for drain — never resend it. The connection is dropped
+  // once the accepted-but-undrained backlog passes the byte cap.
+  return res.writableLength <= MAX_SSE_PENDING_BYTES
 }
 
 /** An id-only SSE block: sets the browser's lastEventId without dispatching. */
@@ -191,7 +200,7 @@ export class RemoteEventHub {
 
   clientFor(
     clientId: string,
-    meta: { remoteAddress?: string; userAgent?: string } = {}
+    meta: { remoteAddress?: string; userAgent?: string; sessionToken?: string } = {}
   ): RemoteClientSender {
     const client = this.ensureClient(clientId, meta)
     if (client.idleTimer) {
@@ -208,7 +217,7 @@ export class RemoteEventHub {
   attachStream(
     clientId: string,
     res: ServerResponse,
-    meta: { remoteAddress?: string; userAgent?: string; resume?: boolean; lastEventId?: string } = {}
+    meta: { remoteAddress?: string; userAgent?: string; sessionToken?: string; resume?: boolean; lastEventId?: string } = {}
   ): RemoteClient {
     const client = this.ensureClient(clientId, meta)
     const knownToBrowser = client.hasAttachedStream
@@ -234,8 +243,17 @@ export class RemoteEventHub {
     }
     client.hasAttachedStream = true
     writeSseEventId(res, this.epoch)
-    for (const frame of client.buffered) writeSseFrame(res, frame.channel, frame.payload)
+    const pending = client.buffered
     client.buffered = []
+    for (let index = 0; index < pending.length; index += 1) {
+      const frame = pending[index]
+      if (writeSseFrame(res, frame.channel, frame.payload)) continue
+      // Unwritten frames survive for the next attach; the sender-reset flag
+      // already forces a resync so ambiguous sent frames cannot leave a gap.
+      client.buffered = pending.slice(index).concat(client.buffered)
+      this.dropSlowStream(client, res)
+      return client
+    }
     client.overflowedStreams.clear()
     res.on('close', () => {
       client.streams.delete(res)
@@ -292,7 +310,11 @@ export class RemoteEventHub {
       }
       return
     }
-    for (const stream of client.streams) writeSseFrame(stream, channel, payload)
+    const stalled: ServerResponse[] = []
+    for (const stream of client.streams) {
+      if (!writeSseFrame(stream, channel, payload)) stalled.push(stream)
+    }
+    for (const stream of stalled) this.dropSlowStream(client, stream)
   }
 
   /** Broadcast push (mirrors of main-window webContents.send). */
@@ -300,7 +322,11 @@ export class RemoteEventHub {
     if (!REMOTE_BROADCAST_EVENT_CHANNELS.has(channel)) return
     for (const client of this.clients.values()) {
       if (client.streams.size === 0) continue
-      for (const stream of client.streams) writeSseFrame(stream, channel, payload)
+      const stalled: ServerResponse[] = []
+      for (const stream of client.streams) {
+        if (!writeSseFrame(stream, channel, payload)) stalled.push(stream)
+      }
+      for (const stream of stalled) this.dropSlowStream(client, stream)
     }
   }
 
@@ -347,12 +373,37 @@ export class RemoteEventHub {
     this.clients.delete(clientId)
   }
 
+  /** Closes every client bound to a session (logout, expiry, eviction). */
+  disconnectClientsForSession(token: string): void {
+    for (const client of [...this.clients.values()]) {
+      if (client.sessionToken === token) this.destroyClient(client.id)
+    }
+  }
+
+  /**
+   * A stream that stopped draining grows an unbounded socket backlog; cut it
+   * so the browser retries into the bounded buffered/replay path instead of
+   * accumulating memory in the main process.
+   */
+  private dropSlowStream(client: RemoteClient, stream: ServerResponse): void {
+    if (!client.streams.delete(stream)) return
+    // Force a sender-reset on the next attach: frames accepted into the socket
+    // before it was destroyed may or may not have reached the browser, so
+    // every subscription resyncs rather than trusting a torn sequence.
+    client.senderRecreated = true
+    try {
+      stream.destroy()
+    } catch { /* best-effort */ }
+    this.scheduleIdleCleanup(client)
+  }
+
   private ensureClient(
     clientId: string,
-    meta: { remoteAddress?: string; userAgent?: string }
+    meta: { remoteAddress?: string; userAgent?: string; sessionToken?: string }
   ): RemoteClient {
     const existing = this.clients.get(clientId)
     if (existing) {
+      if (meta.sessionToken) existing.sessionToken = meta.sessionToken
       if (existing.sender.isDestroyed()) {
         // The idle grace elapsed; hand the client a fresh sender so owned
         // stream registrations bind to a live channel again. Flag it so the
@@ -379,6 +430,7 @@ export class RemoteEventHub {
       connectedAt: new Date().toISOString(),
       remoteAddress: meta.remoteAddress ?? '',
       userAgent: meta.userAgent ?? '',
+      sessionToken: meta.sessionToken ?? '',
       idleTimer: null,
       expiryTimer: null,
       overflowedStreams: new Set(),
@@ -430,6 +482,9 @@ export function startSseHeartbeat(res: ServerResponse): NodeJS.Timeout {
       clearInterval(timer)
       return
     }
+    // Do not add heartbeat bytes to an already-overflowing socket; the event
+    // path drops the stalled stream itself.
+    if (res.writableLength > MAX_SSE_PENDING_BYTES) return
     try {
       res.write(': ping\n\n')
     } catch {

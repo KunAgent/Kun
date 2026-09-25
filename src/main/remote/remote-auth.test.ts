@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   hashRemoteAccessPassword,
   parseCookies,
@@ -60,6 +60,39 @@ describe('RemoteSessionRegistry', () => {
     registry.revokeAll()
     expect(registry.verify(a.token)).toBeNull()
     expect(registry.verify(b.token)).toBeNull()
+  })
+
+  it('notifies the removal callback for revoke, lazy expiry, and revokeAll', () => {
+    let now = 1_000
+    const removed: Array<string | null> = []
+    const registry = new RemoteSessionRegistry(() => now)
+    registry.setOnRemoved((token) => removed.push(token))
+    const a = registry.create('10.0.0.1', 1)
+    registry.revoke(a.token)
+    expect(removed).toEqual([a.token])
+    const b = registry.create('10.0.0.2', 1)
+    now += 3_600_001
+    expect(registry.verify(b.token)).toBeNull()
+    expect(removed).toEqual([a.token, b.token])
+    const c = registry.create('10.0.0.3', 1)
+    registry.revokeAll()
+    expect(removed).toEqual([a.token, b.token, null])
+    expect(registry.verify(c.token)).toBeNull()
+  })
+
+  it('fires the removal callback when the expiry timer elapses', () => {
+    vi.useFakeTimers()
+    try {
+      const registry = new RemoteSessionRegistry()
+      const removed: Array<string | null> = []
+      registry.setOnRemoved((token) => removed.push(token))
+      const session = registry.create('10.0.0.5', 1)
+      vi.advanceTimersByTime(3_600_001)
+      expect(removed).toEqual([session.token])
+      expect(registry.verify(session.token)).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

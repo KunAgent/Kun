@@ -68,10 +68,24 @@ type RemoteSession = {
 }
 
 const MAX_REMOTE_SESSIONS = 128
+// setTimeout cannot hold delays past ~24.8 days; long TTLs re-arm as needed.
+const MAX_EXPIRY_TIMER_MS = 2_147_000_000
 
 export class RemoteSessionRegistry {
   private readonly sessions = new Map<string, RemoteSession>()
+  private readonly expiryTimers = new Map<string, NodeJS.Timeout>()
+  private onRemoved: ((token: string | null) => void) | null = null
+
   constructor(private readonly now: () => number = () => Date.now()) {}
+
+  /**
+   * Called once per removed session, for every removal path: explicit
+   * revoke, timer-driven expiry, lazy expiry inside verify/eviction, and
+   * oldest-session eviction. `null` means every session was cleared.
+   */
+  setOnRemoved(cb: (token: string | null) => void): void {
+    this.onRemoved = cb
+  }
 
   create(remoteAddress: string, ttlHours: number): RemoteSession {
     if (this.sessions.size >= MAX_REMOTE_SESSIONS) this.evictExpiredAndOldest()
@@ -83,6 +97,7 @@ export class RemoteSessionRegistry {
       remoteAddress
     }
     this.sessions.set(session.token, session)
+    this.armExpiry(session)
     return session
   }
 
@@ -91,7 +106,7 @@ export class RemoteSessionRegistry {
     const session = this.sessions.get(token)
     if (!session) return null
     if (session.expiresAt <= this.now()) {
-      this.sessions.delete(token)
+      this.remove(token)
       return null
     }
     return session
@@ -99,11 +114,15 @@ export class RemoteSessionRegistry {
 
   revoke(token: string | undefined | null): void {
     if (!token) return
-    this.sessions.delete(token)
+    this.remove(token)
   }
 
   revokeAll(): void {
+    if (this.sessions.size === 0) return
     this.sessions.clear()
+    for (const timer of this.expiryTimers.values()) clearTimeout(timer)
+    this.expiryTimers.clear()
+    this.onRemoved?.(null)
   }
 
   get size(): number {
@@ -111,10 +130,31 @@ export class RemoteSessionRegistry {
     return this.sessions.size
   }
 
+  /** Timer-driven expiry so open connections die at expiry even without a
+   *  later request noticing the dead session. */
+  private armExpiry(session: RemoteSession): void {
+    const delay = Math.min(session.expiresAt - this.now(), MAX_EXPIRY_TIMER_MS)
+    const timer = setTimeout(() => {
+      this.expiryTimers.delete(session.token)
+      if (session.expiresAt <= this.now()) this.remove(session.token)
+      else this.armExpiry(session)
+    }, delay)
+    timer.unref?.()
+    this.expiryTimers.set(session.token, timer)
+  }
+
+  private remove(token: string): void {
+    if (!this.sessions.delete(token)) return
+    const timer = this.expiryTimers.get(token)
+    if (timer) clearTimeout(timer)
+    this.expiryTimers.delete(token)
+    this.onRemoved?.(token)
+  }
+
   private evictExpired(): void {
     const now = this.now()
     for (const [token, session] of this.sessions) {
-      if (session.expiresAt <= now) this.sessions.delete(token)
+      if (session.expiresAt <= now) this.remove(token)
     }
   }
 
@@ -129,7 +169,7 @@ export class RemoteSessionRegistry {
         oldestToken = token
       }
     }
-    if (oldestToken) this.sessions.delete(oldestToken)
+    if (oldestToken) this.remove(oldestToken)
   }
 }
 
