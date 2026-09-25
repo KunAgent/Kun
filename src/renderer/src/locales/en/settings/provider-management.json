@@ -62,8 +62,10 @@
   "modelProviderInvalidUrl": "Enter an absolute http(s) URL.",
   "modelProviderDetectProtocol": "Detect protocol",
   "modelProviderDetectVerified": "verified",
+  "modelProviderDetectListed": "listed",
+  "modelProviderDetectUnlisted": "no listing",
   "modelProviderDetectFailed": "unreachable",
-  "modelProviderDetectApply": "Use detected format: {{format}}",
+  "modelProviderDetectApply": "Apply",
   "modelProviderIconLabel": "Provider icon",
   "modelProviderIconUpload": "Upload icon",
   "modelProviderIconReplace": "Replace icon",
@@ -102,5 +104,6 @@
   "modelProviderRefKind_titleModel": "Title",
   "modelProviderRefKind_routePool": "Pool",
   "modelProviderRefKind_failover": "Failover",
-  "modelProviderDeleteInUseOther": "In use by {{surface}}."
+  "modelProviderDeleteInUseOther": "In use by {{surface}}.",
+  "modelProviderDetectCostHint": "Detection sends one minimal request per format and may consume a few tokens."
 }

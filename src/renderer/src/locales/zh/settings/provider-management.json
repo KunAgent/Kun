@@ -62,8 +62,10 @@
   "modelProviderInvalidUrl": "请输入 http(s) 完整 URL。",
   "modelProviderDetectProtocol": "检测协议",
   "modelProviderDetectVerified": "已验证",
+  "modelProviderDetectListed": "已列出",
+  "modelProviderDetectUnlisted": "未列出",
   "modelProviderDetectFailed": "不可达",
-  "modelProviderDetectApply": "使用检测到的格式：{{format}}",
+  "modelProviderDetectApply": "应用",
   "modelProviderIconLabel": "供应商图标",
   "modelProviderIconUpload": "上传图标",
   "modelProviderIconReplace": "更换图标",
@@ -102,5 +104,6 @@
   "modelProviderRefKind_titleModel": "标题",
   "modelProviderRefKind_routePool": "路由池",
   "modelProviderRefKind_failover": "故障转移",
-  "modelProviderDeleteInUseOther": "正在被 {{surface}} 使用。"
+  "modelProviderDeleteInUseOther": "正在被 {{surface}} 使用。",
+  "modelProviderDetectCostHint": "检测会对每个格式发一次最小请求，可能消耗极少量 token。"
 }

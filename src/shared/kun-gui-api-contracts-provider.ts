@@ -67,9 +67,12 @@ export type ProviderImportLinkCommitResult =
 export type ProviderDetectedProtocol = {
   format: ModelEndpointFormat
   ok: boolean
+  /** Model catalog answered with this format's auth family. */
+  listed: boolean
+  /** A real minimal inference request completed on this format. */
+  verified: boolean
   latencyMs: number
   models?: string[]
-  verified?: boolean
   message?: string
 }
 
