@@ -60,7 +60,7 @@ export function isManagerStoreRead(store: ManagerStore, operation: string): bool
       'loadUsageRecords', 'aggregateUsage', 'loadLatestUsageSnapshots'],
     artifact: ['list', 'get', 'readRange', 'stat'],
     memory: [
-      'list', 'retrieve', 'diagnostics', 'distillationPending',
+      'list', 'listDirectives', 'retrieve', 'diagnostics', 'distillationPending',
       'feedbackEvent', 'feedbackAggregate', 'feedbackAggregates', 'feedbackDiagnostics'
     ],
     graph: ['get', 'list', 'events', 'eventReplay', 'snapshot', 'diagnostics'],

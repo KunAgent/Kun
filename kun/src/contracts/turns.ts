@@ -223,6 +223,9 @@ export const TurnSchema = z.object({
   activeSkillIds: z.array(z.string().min(1)).default([]),
   injectedMemoryIds: z.array(z.string().min(1)).default([]),
   injectedMemorySummaries: z.array(InjectedMemorySummarySchema).default([]),
+  /** User-approved standing rules injected this turn; see injectedMemoryIds. */
+  injectedDirectiveIds: z.array(z.string().min(1)).default([]),
+  injectedDirectiveSummaries: z.array(InjectedMemorySummarySchema).default([]),
   skillInjectionBytes: z.number().int().nonnegative().optional(),
   injectedInstructionSources: z.array(InjectedInstructionSourceSchema).default([]),
   instructionInjectionBytes: z.number().int().nonnegative().optional(),

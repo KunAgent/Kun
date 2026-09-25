@@ -45,12 +45,12 @@ import type { AttachmentStore } from '../../attachments/attachment-store.js'
 import type { SkillRuntime } from '../../skills/skill-runtime.js'
 import type { InstructionRuntime } from '../../instructions/instruction-runtime.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
-import { DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT } from '../../memory/memory-retrieval.js'
+import { resolveMemoryTurnContext } from '../../memory/memory-turn-context.js'
+import { memoryInjectionMetadata } from '../../loop/model-step-preparation-memory.js'
 import { recordRetrieved } from '../../memory/memory-retrieval-feedback.js'
 import {
   PLAN_MODE_INSTRUCTION,
   todoContinuationInstruction,
-  memoryInstructions,
   isStalePlanContext
 } from '../../loop/agent-loop.js'
 import {
@@ -366,24 +366,28 @@ export function createAgentSdkTurnRuntimeDeps(
         ? await deps.instructionRuntime.resolveTurn({ workspace: thread.workspace })
         : undefined
 
-      let memoryBlocks: string[] = []
-      let memoryIds: string[] = []
-      if (!thread.roomContext && deps.memoryStore && userText.trim()) {
-        const memories = await deps.memoryStore.retrieve({
-          query: userText,
-          workspace: thread.workspace,
-          limit: DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT
-        })
-        memoryIds = memories.map((memory) => memory.id)
-        deps.memoryStore.setLastInjected(memoryIds)
-        memoryBlocks = memoryInstructions(memories)
-      }
+      // Directives are injected on every turn — including empty-prompt
+      // continuations — while reference memories stay relevance-gated. Rooms
+      // keep the memory-free boundary.
+      const memoryContext = await resolveMemoryTurnContext(
+        thread.roomContext ? undefined : deps.memoryStore,
+        { query: userText, workspace: thread.workspace }
+      )
+      const directiveBlocks = memoryContext.directiveBlocks
+      const memoryBlocks = memoryContext.referenceBlocks
+      const memoryIds = memoryContext.memories.map((memory) => memory.id)
 
       const todoInstruction = planMode ? null : todoContinuationInstruction(thread.todos)
-      if (instructionResolution) {
+      if (instructionResolution || memoryContext.memories.length > 0 || memoryContext.directives.length > 0) {
         await deps.turns.updateTurnMetadata(threadId, turnId, {
-          injectedInstructionSources: instructionResolution.sources,
-          instructionInjectionBytes: instructionResolution.injectedBytes
+          ...memoryInjectionMetadata({
+            memories: memoryContext.memories,
+            directives: memoryContext.directives
+          }),
+          ...(instructionResolution ? {
+            injectedInstructionSources: instructionResolution.sources,
+            instructionInjectionBytes: instructionResolution.injectedBytes
+          } : {})
         })
       }
 
@@ -403,6 +407,7 @@ export function createAgentSdkTurnRuntimeDeps(
             : []),
         ...(instructionResolution?.instruction ? [instructionResolution.instruction] : []),
         ...(todoInstruction ? [todoInstruction] : []),
+        ...directiveBlocks,
         ...memoryBlocks,
         ...turnDynamicContext.instructions,
         ...(skillResolution?.catalogInstruction ? [skillResolution.catalogInstruction] : []),

@@ -12,7 +12,8 @@ const policy: MemoryCapabilityConfig = {
   enabled: true,
   scopes: ['user', 'workspace', 'project'],
   maxInjectedRecords: 8,
-  distillation: { enabled: false }
+  distillation: { enabled: false },
+  directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 },
 }
 
 afterEach(async () => {
@@ -33,7 +34,9 @@ describe('memory tool provider', () => {
     const tool = memoryTool(store, 'memory_create')
 
     expect(tool.policy).toBe('on-request')
-    expect((tool.inputSchema.properties as Record<string, unknown>)).not.toHaveProperty('authority')
+    expect(tool.inputSchema.properties).toMatchObject({
+      authority: { enum: ['reference', 'directive'] }
+    })
     const result = await tool.execute({
       content: '  Use pnpm for this workspace  ',
       scope: 'workspace',
@@ -154,6 +157,88 @@ describe('memory tool provider', () => {
       observedAt: 'not-an-iso-date'
     }, context())).resolves.toMatchObject({ isError: true })
     await expect(store.list({ all: true })).resolves.toEqual([])
+  })
+
+  it('advertises read-only memory_search and memory_list without approval', async () => {
+    const store = await createStore('mem_tool_read')
+    for (const name of ['memory_search', 'memory_list']) {
+      const tool = memoryTool(store, name)
+      expect(tool).toBeDefined()
+      expect(tool.policy).toBe('auto')
+      expect(tool.requiresApprovalInFullAccess).not.toBe(true)
+      expect(tool.shouldAdvertise?.({ ...context(), memoryPolicy: { enabled: true } })).toBe(true)
+      expect(tool.shouldAdvertise?.({ ...context(), memoryPolicy: { enabled: false } })).toBe(false)
+    }
+  })
+
+  it('enumerates all active memories through memory_list', async () => {
+    const store = await createStore('mem_tool_list')
+    await store.createWithId('mem_list_a', {
+      content: 'Prefers concise replies', scope: 'workspace', workspace: '/workspace-a'
+    })
+    await store.createWithId('mem_list_b', {
+      content: 'Uses pnpm workspaces', scope: 'workspace', workspace: '/workspace-a'
+    })
+    const tool = memoryTool(store, 'memory_list')
+    const result = await tool.execute({ workspace: '/workspace-a' }, context())
+    expect(result.isError).not.toBe(true)
+    const output = result.output as { memories: Array<{ id: string }> }
+    expect(output.memories.map((memory) => memory.id)).toEqual(
+      expect.arrayContaining(['mem_list_a', 'mem_list_b'])
+    )
+  })
+
+  it('searches memories by query through memory_search', async () => {
+    const store = await createStore('mem_tool_search')
+    await store.createWithId('mem_search_a', {
+      content: 'Always answer in English', scope: 'workspace', workspace: '/workspace-a'
+    })
+    await store.createWithId('mem_search_b', {
+      content: 'zzqxv unrelated topic', scope: 'workspace', workspace: '/workspace-a'
+    })
+    const tool = memoryTool(store, 'memory_search')
+    const result = await tool.execute(
+      { query: 'answer in English', workspace: '/workspace-a' },
+      { ...context(), memoryPolicy: { enabled: true } }
+    )
+    expect(result.isError).not.toBe(true)
+    const output = result.output as { memories: Array<{ id: string }> }
+    expect(output.memories.map((memory) => memory.id)).toContain('mem_search_a')
+  })
+
+  it('marks directive creation as requiring explicit approval', async () => {
+    const store = await createStore('mem_tool_directive')
+    const tool = memoryTool(store, 'memory_create')
+    const requires = tool.requiresExplicitApproval
+    expect(typeof requires).toBe('function')
+    const call = (authority?: string) => ({
+      callId: 'call-1',
+      toolName: 'memory_create',
+      arguments: { content: 'Reply in English', scope: 'user', ...(authority ? { authority } : {}) }
+    })
+    if (typeof requires !== 'function') throw new Error('expected predicate')
+    expect(requires(call('directive'), context())).toBe(true)
+    expect(requires(call(), context())).toBe(false)
+    expect(requires(call('reference'), context())).toBe(false)
+    expect(tool.requiresApprovalInFullAccess).toBe(true)
+  })
+
+  it('rejects updating a directive without repeating authority=directive', async () => {
+    const store = await createStore('mem_tool_dir_update')
+    await store.createWithId('mem_rule', {
+      content: 'Reply in English', scope: 'user', authority: 'directive'
+    })
+    const tool = memoryTool(store, 'memory_update')
+    await expect(tool.execute({
+      id: 'mem_rule',
+      content: 'Reply in French'
+    }, context())).resolves.toMatchObject({ isError: true })
+    const approved = await tool.execute({
+      id: 'mem_rule',
+      content: 'Reply in French',
+      authority: 'directive'
+    }, context())
+    expect(approved.isError).not.toBe(true)
   })
 })
 

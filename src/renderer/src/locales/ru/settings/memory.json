@@ -1,0 +1,21 @@
+{
+  "memoryAuthority_all": "Все",
+  "memoryAuthority_directive": "Правила",
+  "memoryAuthority_reference": "Справочные",
+  "memoryDirectivesEnable": "Внедрять долговременные правила",
+  "memoryDirectivesEnableDesc": "Одобренные правила отправляются модели как ваши инструкции каждый ход. Отключите, чтобы хранить правила без применения.",
+  "memoryDirectives": "Правила пользователя",
+  "memoryDirectivesDesc": "Правила внедряются как ваши инструкции каждый ход; в отличие от справочных воспоминаний они не фильтруются по релевантности.",
+  "memoryDirectiveActiveCount": "Активных правил",
+  "memoryDirectiveInjectedCount": "Внедрено в ходе",
+  "memoryDirectiveOmittedCount": "Пропущено по бюджету",
+  "memorySetDirective": "Сделать правилом",
+  "memoryUnsetDirective": "Убрать правило",
+  "memorySetDirectiveDisabled": "Правила должны быть короткими и иметь область user/workspace; длинный текст поместите в AGENTS.md",
+  "memoryDirectiveUpdateFailed": "Не удалось обновить правило",
+  "memoryAsDirective": "Сохранить как правило (действует каждый ход)",
+  "memoryAsDirectiveDesc": "Правила отправляются модели как ваши инструкции, например «отвечай по-русски» или «запускай тесты перед коммитом». Обычные воспоминания — только справка и не исполняются.",
+  "memoryDirectiveTooLong": "Правила должны быть короткими; длинный текст — в AGENTS.md",
+  "memoryImportDowngradedPrefix": " ",
+  "memoryImportDowngradedSuffix": " записей были правилами и импортированы как справочные; включите их по одной."
+}

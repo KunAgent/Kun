@@ -2,13 +2,36 @@
 
 The canonical store is `{dataDir}/memory/*.json`; `{dataDir}/memory-index.sqlite3` is a disposable,
 rebuildable FTS5 projection. Records are normalized to schema V2 on read without eagerly rewriting
-legacy JSON. Every record has `authority: reference`, so user, imported, tool, web, and inferred text
-remains untrusted evidence rather than model instructions.
+legacy JSON. Every record has `authority: reference` (default) or `directive`. `reference` records —
+including user, imported, tool, web, and inferred text — remain untrusted evidence rather than model
+instructions. `directive` records are user-approved standing rules and can only be created through
+explicit user approval (the settings page, or a `memory_create`/`memory_update` approval carrying
+`authority: 'directive'`); imports and distillation always produce `reference`.
 
 Retrieval filters scope and lifecycle before FTS ranking. It combines lexical relevance (0.55), scope
 affinity (0.10), type affinity (0.10), freshness (0.10), importance (0.075), and confidence (0.075),
 then applies live record and character budgets. Injected memory stays outside the immutable system
 prefix and is wrapped as `MEMORY_REFERENCE_DATA` with `untrusted="true"`.
+
+## User rules (directive)
+
+`authority: 'directive'` records are standing user-approved rules. Unlike reference memories they are
+not relevance-gated: every turn injects them as a user-authority `<kun_memory_directives>` block.
+Rules are limited to `user`/`workspace` scope, 1,000 characters each, and per-turn budgets
+(`capabilities.memory.directives.maxRecords`/`maxCharacters`, defaults 20/4,000). Creating or
+promoting a rule always requires a human decision — even under full-access auto-allow — and editing a
+rule requires `authority: 'directive'` on the update. Imports (kunpack, `kun-memory-v2` archives,
+profile import) are downgraded to `reference` and reported; distillation never writes rules. Rules
+guide behavior but cannot override Kun policy, sandboxing, tool permissions, approval requirements,
+or the latest explicit user instruction. They complement `AGENTS.md`: rules are cross-workspace,
+short, and manageable in Settings -> Memory; `AGENTS.md` suits project-level conventions.
+
+## Read-only model tools
+
+Besides the approval-gated `memory_create`/`memory_update`/`memory_delete`, the model can call the
+read-only, approval-free `memory_search` (query + scope/authority/type filters) and `memory_list`
+(paginated enumeration with `includeDisabled`). Neither exposes hidden agent-context memories nor
+mutates retrieval diagnostics.
 
 Canonical writes commit before index projection. Startup reconciliation repairs missing or stale index
 rows by stable hash. Missing native SQLite/FTS5 support, corruption, migration/query/projection errors,

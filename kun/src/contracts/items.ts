@@ -11,6 +11,7 @@ import {
   DesignTaskProfileSchema
 } from './design-task-profile.js'
 import { ModelRequestFailureContextSchema } from './model-request-failure.js'
+import { ApprovalActionEnvelopeSchema } from './approvals.js'
 
 /**
  * Conversation items returned as part of a thread or turn.
@@ -292,6 +293,8 @@ export const ApprovalTurnItem = TurnItemBase.extend({
   approvalId: z.string().min(1),
   toolName: z.string().min(1),
   summary: z.string(),
+  /** Bounded, redacted action data so clients can render the full request. */
+  action: ApprovalActionEnvelopeSchema.optional(),
   status: z.enum(['pending', 'allowed', 'denied', 'expired']),
   approvalReviewer: z.enum(['user', 'agent']).optional(),
   decisionSource: z.enum(['user', 'agent']).optional(),

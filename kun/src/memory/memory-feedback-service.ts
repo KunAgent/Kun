@@ -323,6 +323,7 @@ function replacementInput(previous: MemoryRecord, request: ReturnType<typeof Mem
   const replacement = request.replacement
   return {
     content: replacement.content,
+    authority: previous.authority,
     scope: previous.scope,
     workspace: previous.workspace,
     project: previous.project,

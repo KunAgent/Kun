@@ -565,6 +565,7 @@
   "toolChildAgent": "하위 대리인",
   "toolActiveSkills": "기술",
   "toolInjectedMemories": "추억",
+  "toolInjectedDirectives": "규칙",
   "toolInjectedInstructions": "지침",
   "toolAttachments": "첨부파일",
   "toolExtensionContexts": "확장 컨텍스트",

@@ -50,6 +50,10 @@ export async function validateMemoryDistillationApplyIntent(
     if (!target) {
       throw new MemoryDistillationConflictError('the proposed Memory target is no longer active')
     }
+    // Distillation may never silently create or edit a user-authority rule.
+    if (target.authority !== 'reference') {
+      throw new MemoryDistillationConflictError('distillation cannot modify a directive memory')
+    }
     if (target.updatedAt !== action.targetUpdatedAt || canonicalMemoryHash(target) !== action.targetFingerprint) {
       throw new MemoryDistillationConflictError('the proposed Memory target changed after extraction')
     }

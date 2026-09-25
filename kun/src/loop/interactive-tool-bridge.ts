@@ -57,13 +57,15 @@ export class InteractiveToolBridge {
   async awaitApproval(
     input: AwaitToolApprovalInput
   ): Promise<'allow' | 'deny' | ApprovalResolution> {
+    const requiresUserDecision = input.approval.action?.requiresUserDecision === true
     if (
+      !requiresUserDecision &&
       input.approvalPolicy === 'auto' &&
       input.sandboxMode === 'danger-full-access'
     ) {
       return { decision: 'allow', reviewer: 'user' }
     }
-    if (input.approvalReviewer === 'agent') {
+    if (input.approvalReviewer === 'agent' && !requiresUserDecision) {
       if (!this.deps.approvalReview) {
         return {
           decision: 'deny',

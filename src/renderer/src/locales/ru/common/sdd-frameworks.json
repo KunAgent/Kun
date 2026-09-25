@@ -565,6 +565,7 @@
   "toolChildAgent": "Детский агент",
   "toolActiveSkills": "Навыки",
   "toolInjectedMemories": "Воспоминания",
+  "toolInjectedDirectives": "Правила",
   "toolInjectedInstructions": "Инструкции",
   "toolAttachments": "Вложения",
   "toolExtensionContexts": "Контекст расширения",

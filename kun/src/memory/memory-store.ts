@@ -5,10 +5,13 @@ import { withMemoryMutation } from './memory-mutation-queue.js'
 import { readFile } from 'node:fs/promises'
 import type { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import {
+  MEMORY_DIRECTIVE_MAX_CONTENT_CHARS,
   MemoryDiagnostics,
   MemoryRecord,
+  type MemoryAuthority,
   type MemoryCreateRequest,
   type MemoryRetrievalTrace,
+  type MemoryType,
   type MemoryUpdateRequest
 } from '../contracts/memory.js'
 import {
@@ -33,6 +36,10 @@ import {
   normalizeMemoryScopePath
 } from './memory-ranking.js'
 import {
+  selectMemoryDirectives,
+  type MemoryDirectiveResult
+} from './memory-directives.js'
+import {
   retrieveMemoryRecords,
   type MemoryRetrieveRequest
 } from './memory-retrieval.js'
@@ -46,6 +53,7 @@ export interface MemoryStore {
   delete(id: string, access?: MemoryAccess): Promise<MemoryRecord>
   purge?(id: string, access?: MemoryAccess): Promise<void>
   list(filter?: MemoryListFilter): Promise<MemoryRecord[]>
+  listDirectives?(access?: MemoryAccess): Promise<MemoryDirectiveResult>
   retrieve(input: MemoryRetrieveRequest): Promise<MemoryRecord[]>
   diagnostics(policy?: MemoryCapabilityConfig): Promise<MemoryDiagnostics>
   setLastInjected(ids: string[]): void
@@ -54,11 +62,20 @@ export interface MemoryStore {
 }
 
 export type MemoryAccess = { workspace?: string; project?: string; agent?: AgentMemoryAccess }
-export type MemoryListFilter = MemoryAccess & { includeDeleted?: boolean; all?: boolean; limit?: number; before?: { updatedAt: string; id: string } }
+export type MemoryListFilter = MemoryAccess & {
+  includeDeleted?: boolean
+  all?: boolean
+  limit?: number
+  before?: { updatedAt: string; id: string }
+  authority?: MemoryAuthority
+  type?: MemoryType
+}
+export type { MemoryDirectiveResult }
 
 export class FileMemoryStore implements MemoryStore {
   private lastInjectedIds: string[] = []
   private lastRetrieval: MemoryRetrievalTrace | undefined
+  private lastDirectiveInjection: MemoryDirectiveResult | undefined
 
   constructor(
     private readonly options: {
@@ -137,6 +154,7 @@ export class FileMemoryStore implements MemoryStore {
       createdAt: now,
       updatedAt: now,
       type: input.type,
+      authority: input.authority,
       importance: input.importance,
       observedAt: input.observedAt ?? now,
       validFrom: input.validFrom,
@@ -151,6 +169,7 @@ export class FileMemoryStore implements MemoryStore {
       ...(input.supersedes ? { supersedes: input.supersedes } : {})
     })
     assertValidInterval(parsed)
+    assertDirectiveConstraints(parsed)
     const older = input.supersedes
       ? await this.mustGet(input.supersedes, { workspace, project, ...(input.agentContext ? { agent: { agentId: input.agentContext.agentId, manage: true } } : {}) })
       : undefined
@@ -185,6 +204,7 @@ export class FileMemoryStore implements MemoryStore {
       ...(patch.confidence !== undefined ? { confidence: patch.confidence } : corrected ? { confidence: 1 } : {}),
       ...(patch.importance !== undefined ? { importance: patch.importance } : {}),
       ...(patch.type !== undefined ? { type: patch.type } : {}),
+      ...(patch.authority !== undefined ? { authority: patch.authority } : {}),
       ...(patch.observedAt !== undefined ? { observedAt: patch.observedAt } : {}),
       ...(patch.sources !== undefined ? { sources: normalizeUpdateSources(patch.sources) } : {}),
       ...(corrected ? {
@@ -199,6 +219,7 @@ export class FileMemoryStore implements MemoryStore {
       updatedAt: now
     })
     assertValidInterval(next)
+    assertDirectiveConstraints(next)
     await this.write(next)
     return next
   }
@@ -242,10 +263,26 @@ export class FileMemoryStore implements MemoryStore {
     const records = (await readCanonicalMemoryDirectory(this.options.rootDir)).records
     return records
       .filter((record) => filter.includeDeleted || !record.deletedAt)
+      .filter((record) => !filter.authority || record.authority === filter.authority)
+      .filter((record) => !filter.type || record.type === filter.type)
       .filter((record) => agentMemoryVisible(record, filter) && (filter.all || memoryInScope(record, filter)))
       .filter((record) => !filter.before || record.updatedAt < filter.before.updatedAt || record.updatedAt === filter.before.updatedAt && record.id > filter.before.id)
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.id.localeCompare(right.id))
       .slice(0, filter.limit ?? Infinity)
+  }
+
+  async listDirectives(access: MemoryAccess = {}): Promise<MemoryDirectiveResult> {
+    const canonical = await readCanonicalMemoryDirectory(this.options.rootDir, {
+      maxFiles: MEMORY_MAX_FALLBACK_FILES
+    })
+    const result = selectMemoryDirectives({
+      records: canonical.records,
+      access,
+      policy: this.config(),
+      nowMs: Date.parse(this.now())
+    })
+    this.lastDirectiveInjection = result
+    return result
   }
 
   async retrieve(input: MemoryRetrieveRequest): Promise<MemoryRecord[]> {
@@ -260,8 +297,10 @@ export class FileMemoryStore implements MemoryStore {
       nowIso: this.now(),
       minConfidence: this.options.minConfidence
     })
-    this.lastRetrieval = result.trace
-    this.lastInjectedIds = [...result.trace.selectedIds]
+    if (input.purpose !== 'tool') {
+      this.lastRetrieval = result.trace
+      this.lastInjectedIds = [...result.trace.selectedIds]
+    }
     return result.records
   }
 
@@ -283,7 +322,18 @@ export class FileMemoryStore implements MemoryStore {
       indexedCount: 0,
       staleCount: 0,
       backfill: { running: false, scanned: canonical.records.length, remaining: 0 },
-      lastRetrieval: this.lastRetrieval
+      lastRetrieval: this.lastRetrieval,
+      directiveCount: canonical.records.filter((record) =>
+        record.authority === 'directive' && memoryLifecycleState(record, nowMs) === 'active'
+      ).length,
+      ...(this.lastDirectiveInjection ? {
+        lastDirectiveInjection: {
+          ids: this.lastDirectiveInjection.records.map((record) => record.id),
+          excludedByBudget: this.lastDirectiveInjection.excludedByBudget,
+          truncatedIds: this.lastDirectiveInjection.truncatedIds,
+          characters: this.lastDirectiveInjection.characters
+        }
+      } : {})
     })
   }
 
@@ -334,5 +384,15 @@ export function effectiveMemoryConfidence(record: MemoryRecord, _nowMs?: number,
 function assertValidInterval(record: MemoryRecord): void {
   if (record.validFrom && record.validTo && Date.parse(record.validFrom) > Date.parse(record.validTo)) {
     throw new Error('memory validFrom must not be after validTo')
+  }
+}
+
+/** Re-validates the merged record so a patch cannot smuggle in a bad directive. */
+function assertDirectiveConstraints(record: MemoryRecord): void {
+  if (record.authority !== 'directive') return
+  if (record.agentContext) throw new Error('agent-scoped memories cannot become directives')
+  if (record.scope === 'project') throw new Error('project-scoped memories cannot become directives')
+  if (record.content.length > MEMORY_DIRECTIVE_MAX_CONTENT_CHARS) {
+    throw new Error(`directive content must be at most ${MEMORY_DIRECTIVE_MAX_CONTENT_CHARS} characters`)
   }
 }

@@ -208,6 +208,7 @@
   "toolChildAgent": "Child agent",
   "toolActiveSkills": "Skills",
   "toolInjectedMemories": "Memories",
+  "toolInjectedDirectives": "Rules",
   "toolInjectedInstructions": "Instructions",
   "toolAttachments": "Attachments",
   "toolExtensionContexts": "Extension context",

@@ -17,7 +17,8 @@ const policy: MemoryCapabilityConfig = {
   enabled: true,
   scopes: ['user', 'workspace', 'project'],
   maxInjectedRecords: 2,
-  distillation: { enabled: false }
+  distillation: { enabled: false },
+  directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 },
 }
 
 afterEach(async () => {
@@ -83,12 +84,14 @@ describe('Manager memory repository policy reload', () => {
       })
 
       const narrow = new ManagerRemoteMemoryStore(manager.connection, {
-        enabled: true, scopes: ['user'], maxInjectedRecords: 1, distillation: { enabled: false }
+        enabled: true, scopes: ['user'], maxInjectedRecords: 1, distillation: { enabled: false },
+        directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 },
       })
       await expect(narrow.retrieve({ query: 'alpha memory', workspace: '/workspace-a', limit: 8 }))
         .resolves.toMatchObject([{ id: 'mem_manager_user' }])
       const disabled = new ManagerRemoteMemoryStore(manager.connection, {
-        enabled: false, scopes: ['user', 'workspace'], maxInjectedRecords: 8, distillation: { enabled: false }
+        enabled: false, scopes: ['user', 'workspace'], maxInjectedRecords: 8, distillation: { enabled: false },
+        directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 },
       })
       await expect(disabled.retrieve({ query: 'alpha memory', workspace: '/workspace-a', limit: 8 }))
         .resolves.toEqual([])
