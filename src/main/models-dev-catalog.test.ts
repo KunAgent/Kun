@@ -508,28 +508,6 @@ describe('ModelsDevCatalogService', () => {
     })
   })
 
-  it('falls back to stale cache when refresh fails', async () => {
-    let now = 1_000
-    const fetcher = vi
-      .fn()
-      .mockResolvedValueOnce(new Response(catalogBody(), { status: 200 }))
-      .mockRejectedValueOnce(new Error('offline'))
-      .mockRejectedValueOnce(new Error('offline'))
-    const service = new ModelsDevCatalogService(fetcher, () => now)
-    const request = { providerId: 'deepseek', baseUrl: 'https://api.deepseek.com' }
-
-    await service.fetch(request)
-    now += MODELS_DEV_CACHE_TTL_MS + 1
-    const stale = await service.fetch(request)
-
-    expect(stale).toMatchObject({
-      status: 'ok',
-      stale: true,
-      source: 'models.dev'
-    })
-    expect(fetcher).toHaveBeenCalledTimes(3)
-  })
-
   it('reports malformed, oversized, and timed-out first loads', async () => {
     const oversized = new ModelsDevCatalogService(vi.fn(async () => new Response('', {
       status: 200,

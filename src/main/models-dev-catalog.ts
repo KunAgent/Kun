@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import {
   getModelProviderSettings,
@@ -280,12 +280,16 @@ export class ModelsDevCatalogService {
     void (async () => {
       try {
         await mkdir(dirname(path), { recursive: true })
-        await writeFile(path, JSON.stringify({
+        // Write-then-rename keeps readers from observing a torn cache file
+        // when a background refresh overlaps an earlier persist.
+        const tmp = `${path}.tmp`
+        await writeFile(tmp, JSON.stringify({
           catalog: cache.catalog,
           source: cache.source,
           fetchedAt: cache.fetchedAt,
           ...(cache.etag ? { etag: cache.etag } : {})
         }), 'utf8')
+        await rename(tmp, path)
       } catch {
         // Cache persistence is best-effort; never fail a catalog fetch on it.
       }
@@ -377,6 +381,16 @@ export class ModelsDevCatalogService {
     const cached = this.cache
     if (!forceRefresh && cached && this.now() - cached.fetchedAt < MODELS_DEV_CACHE_TTL_MS) {
       return { catalog: cached.catalog, source: cached.source, stale: false }
+    }
+    // A stale but present cache answers immediately; the refresh continues in
+    // the background so callers never block on a slow network. Only an empty
+    // cache (or an explicit forceRefresh) waits on the wire.
+    if (!forceRefresh && cached) {
+      this.inFlight ??= this.refreshCatalog(proxyUrl).finally(() => {
+        this.inFlight = null
+      })
+      void this.inFlight.catch(() => undefined)
+      return { catalog: cached.catalog, source: cached.source, stale: true }
     }
     if (this.inFlight) return this.inFlight
 
