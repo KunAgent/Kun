@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   commitProviderImportLink,
   findProviderImportLinkArg,
@@ -65,5 +65,18 @@ describe('stageProviderImportLink + commitProviderImportLink', () => {
   it('rejects malformed links before staging', () => {
     expect(stageProviderImportLink('kun://import').ok).toBe(false)
     expect(stageProviderImportLink('https://example.com/x').ok).toBe(false)
+  })
+
+  it('rejects a token after the staging TTL expires', () => {
+    vi.useFakeTimers()
+    try {
+      const staged = stageProviderImportLink('kun://import?preset=litellm&key=sk-expire')
+      expect(staged.ok).toBe(true)
+      if (!staged.ok) return
+      vi.setSystemTime(Date.now() + 11 * 60 * 1_000)
+      expect(commitProviderImportLink(staged.staged.token, settings()).ok).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
