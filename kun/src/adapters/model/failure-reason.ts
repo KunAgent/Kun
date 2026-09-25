@@ -46,11 +46,25 @@ export type FailureHeaderSource =
 const CREDIT_SIGNAL =
   /insufficient[_\s-]?quota|insufficient[_\s-]?(?:balance|credit|funds?)|balance[_\s-]?(?:is[_\s-]?)?(?:not[_\s-]?enough|insufficient)|billing|hard[_\s-]?limit|arrears?|payment[_\s-]?required|recharge|余额不足|欠费|充值|账户.{0,8}(?:不足|停用|冻结)/iu
 const QUOTA_SIGNAL =
-  /\bquota\b|usage[_\s-]?limit|limit[_\s-]?reached|exceed(?:ed|s)?[_\s-]?.{0,24}(?:plan|limit|quota|allowance)|额度|用量|套餐|上限/iu
+  /\bquota\b|usage[_\s-]?limit|allowance[_\s-]?exceeded|plan[_\s-]?limit|订阅额度|账户额度/iu
+/** Chinese quota phrases require the quota word to co-occur with exhaustion. */
+const QUOTA_SIGNAL_ZH =
+  /(额度|套餐|用量).{0,6}(不足|用尽|耗尽|已用完|超限|上限)|(超出|超过|达到).{0,6}(额度|套餐|用量)/u
+/** Machine error codes that name account quota even on a bare HTTP 400. */
+const QUOTA_ERROR_CODE =
+  /exceeded_current_quota|insufficient_quota|quota_exceeded|quotaExceeded|billing_hard_limit|hard_limit_exceeded|usage_limit_reached|account_quota_exceeded/iu
 const RATE_SIGNAL =
   /rate[_\s-]?limit|too[_\s-]?many[_\s-]?requests|throttl|requests?[_\s-]?per[_\s-]?(?:min|sec|hour|day)|限流|频率/iu
 const OVERLOADED_SIGNAL =
   /overload|server[_\s-]?busy|at[_\s-]?capacity|capacity[_\s-]?reached|engine[_\s-]?(?:unavailable|overloaded)|服务(?:器)?(?:繁忙|过载)/iu
+/**
+ * Request-shape problems (oversized prompt, impossible max_tokens) share
+ * vocabulary with quota errors ("exceed", "limit", "上限"). Detect the
+ * size/context pair first so a 400 about length never opens a credit
+ * circuit.
+ */
+const REQUEST_SIZE_SIGNAL =
+  /(context|token|prompt|input|max_?(?:output_)?tokens|length|上下文|长度|字数).{0,40}(exceed|limit|maximum|too (?:long|large)|超过|超出|上限)|(exceed(?:ed|s)?|超过|超出).{0,40}(context|token|length|max_?tokens|上下文|长度)/iu
 
 /** Reasons that never benefit from retrying the same credential/target. */
 const FAILOVER_REASONS: ReadonlySet<ModelFailureReason> = new Set([
@@ -79,8 +93,26 @@ export function classifyModelFailure(input: {
   const resetAt = parsed.resetAt
   const status = input.status
   let reason: ModelFailureReason
-  if (status === 402 || CREDIT_SIGNAL.test(signal)) reason = 'credit'
-  else if (QUOTA_SIGNAL.test(signal)) reason = 'quota'
+  // 1. Request-shape failures first: a size/length 400 is never a quota or
+  //    credit problem. (402 stays credit by definition.)
+  if (status !== 402 && REQUEST_SIZE_SIGNAL.test(signal)) reason = 'request'
+  // 2. Credit only on non-5xx statuses: a 5xx mentioning "billing" is an
+  //    upstream outage, not an unpaid invoice.
+  else if (
+    status === 402 ||
+    ((status === undefined || status === 400 || status === 401 ||
+      status === 403 || status === 429) && CREDIT_SIGNAL.test(signal))
+  ) reason = 'credit'
+  // 3. Every 429 carrying rate-limit vocabulary is throttling.
+  else if (status === 429 && RATE_SIGNAL.test(signal)) reason = 'rate'
+  // 4. Quota vocabulary counts on 403/429/missing status; a bare 400 needs an
+  //    explicit quota error code.
+  else if (
+    (status === undefined || status === 403 || status === 429) &&
+    (QUOTA_SIGNAL.test(signal) || QUOTA_SIGNAL_ZH.test(signal) || QUOTA_ERROR_CODE.test(signal))
+  ) reason = 'quota'
+  else if (status === 400 && QUOTA_ERROR_CODE.test(signal)) reason = 'quota'
+  // 5. Generic mappings.
   else if (status === 429 || RATE_SIGNAL.test(signal)) reason = 'rate'
   else if (status === 529 || OVERLOADED_SIGNAL.test(signal)) reason = 'overloaded'
   else if (status === 401 || status === 403) reason = 'auth'

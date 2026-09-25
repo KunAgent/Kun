@@ -303,9 +303,11 @@ export class RoutePoolModelClient implements ModelClient {
             failed = true
             const latency = Math.max(0, this.now() - started)
             const failure = withRouteFailure(chunk.failure, route)
-            this.health.failure(
-              pool, this.failureTarget(target, failure), latency, failure,
-              chunk.message, request.routeTestId)
+            if (healthCountable(failure)) {
+              this.health.failure(
+                pool, this.failureTarget(target, failure), latency, failure,
+                chunk.message, request.routeTestId)
+            }
             if (!committed && routeFailureAllowed(pool, failure)) {
               // Do not expose a rejected target. The first observable route is
               // therefore the immutable target that owns the response after
@@ -340,9 +342,11 @@ export class RoutePoolModelClient implements ModelClient {
         failed = true
         const message = error instanceof Error ? error.message : String(error)
         const failure = withRouteFailure({ category: 'unavailable', failoverAllowed: true }, route)
-        this.health.failure(
-          pool, this.failureTarget(target, failure), Math.max(0, this.now() - started),
-          failure, message, request.routeTestId)
+        if (healthCountable(failure)) {
+          this.health.failure(
+            pool, this.failureTarget(target, failure), Math.max(0, this.now() - started),
+            failure, message, request.routeTestId)
+        }
         if (committed) {
           yield { kind: 'error', message, code: 'route_target_error', failure, route }
           return
@@ -363,14 +367,16 @@ export class RoutePoolModelClient implements ModelClient {
             { category: 'unavailable', failoverAllowed: true },
             route
           )
-          this.health.failure(
-            pool,
-            this.failureTarget(target, failure),
-            Math.max(0, this.now() - started),
-            failure,
-            message,
-            request.routeTestId
-          )
+          if (healthCountable(failure)) {
+            this.health.failure(
+              pool,
+              this.failureTarget(target, failure),
+              Math.max(0, this.now() - started),
+              failure,
+              message,
+              request.routeTestId
+            )
+          }
           lastRejection = { providerId: target.providerId, modelId: target.modelId, message }
           failures.push(`${target.providerId}/${target.modelId}: ${message}`)
           continue
@@ -472,6 +478,15 @@ function attributeRouteChunk(
     },
     route
   }
+}
+
+/**
+ * Request-shape and model-mismatch failures are not the route target's
+ * fault: they never decrement its health, open a circuit, or consume the
+ * account's consecutive-failure budget.
+ */
+function healthCountable(failure: ModelFailureMetadata | undefined): boolean {
+  return failure?.reason !== 'request' && failure?.reason !== 'model'
 }
 
 function routeFailureAllowed(pool: ModelRoutePoolConfig, failure: ModelFailureMetadata): boolean {
