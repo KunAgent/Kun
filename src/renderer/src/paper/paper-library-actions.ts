@@ -11,6 +11,7 @@ import {
 import { normalizePath } from '../write/write-workspace-store-helpers'
 import { usePaperModeStore } from './paper-mode-store'
 import { enterPaperMode } from './paper-mode-actions'
+import { applyPaperReaderLayout, readPaperReaderLayout } from './paper-reader-layout'
 
 function paperNotice(notice: { tone: 'info' | 'success' | 'error'; message: string }): void {
   usePaperStore.getState().setNotice(notice)
@@ -97,6 +98,15 @@ export async function openLibraryEntry(entry: PaperLibraryEntry): Promise<void> 
       writeJoinPath(writeJoinPath(root, entry.unitDir), PAPER_NOTES_FILE_NAME),
       { groupId: 'primary', viewMode: 'rich' }
     )
+  }
+  // R1.1: the reader layout preset persists across papers — apply the stored
+  // choice (阅读/笔记/助手) right after the unit opens.
+  if (entry.hasPdf && entry.meta.pdfFile) {
+    await applyPaperReaderLayout(readPaperReaderLayout(), {
+      workspaceRoot: root,
+      unitDir: entry.unitDir,
+      pdfFile: entry.meta.pdfFile
+    })
   }
   const now = new Date().toISOString()
   void window.kunGui?.paperLocalStateWrite?.({

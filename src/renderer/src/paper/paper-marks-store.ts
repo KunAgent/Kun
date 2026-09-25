@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import type {
   PaperHighlight,
-  PaperHighlightColor
+  PaperHighlightColor,
+  PaperVisualMark
 } from '@shared/paper/paper-marks-types'
 
 /**
@@ -20,6 +21,16 @@ export type PaperMarksState = {
   dirty: boolean
   /** Bump when a write finishes so late external merges stay consistent. */
   revision: number
+  /**
+   * Mark hovered on the page or in the comment gutter (R1.4) — shared so the
+   * page overlay and gutter cards light up / draw connectors together.
+   * Transient UI state; never persisted.
+   */
+  hoveredMarkId: string | null
+  /** Card id opened in edit mode inside the gutter (fresh visual marks). */
+  editingMarkId: string | null
+  /** dataURL cache for visual-mark thumbnails captured this session. */
+  visualMarkImages: Record<string, string>
 }
 
 const initialMarksState = (): PaperMarksState => ({
@@ -28,7 +39,10 @@ const initialMarksState = (): PaperMarksState => ({
   cards: {},
   removedIds: [],
   dirty: false,
-  revision: 0
+  revision: 0,
+  hoveredMarkId: null,
+  editingMarkId: null,
+  visualMarkImages: {}
 })
 
 export const usePaperMarksStore = create<PaperMarksState>(() => initialMarksState())
@@ -62,6 +76,57 @@ export function setPaperHighlightComment(id: string, comment: string): void {
     ),
     dirty: true
   }))
+}
+
+/**
+ * R2.4 visual marks live in `cards` (per-id files), not annotations.json.
+ * Upserts mark the store dirty so the debounced flush persists them; the
+ * freshly captured thumbnail is cached so the gutter shows it without a
+ * round trip.
+ */
+export function upsertPaperMarkCard(card: unknown, dataUrl?: string): void {
+  const id = (card as { id?: string }).id
+  if (!id) return
+  usePaperMarksStore.setState((state) => ({
+    cards: { ...state.cards, [id]: card },
+    editingMarkId: (card as { kind?: string }).kind === 'visual' ? id : state.editingMarkId,
+    visualMarkImages: dataUrl ? { ...state.visualMarkImages, [id]: dataUrl } : state.visualMarkImages,
+    dirty: true
+  }))
+}
+
+/** Update a card's comment (visual marks) and mark the store dirty. */
+export function setPaperMarkCardComment(id: string, comment: string): void {
+  usePaperMarksStore.setState((state) => {
+    const card = state.cards[id] as PaperVisualMark | undefined
+    if (!card || card.kind !== 'visual') return state
+    return {
+      cards: {
+        ...state.cards,
+        [id]: { ...card, comment: comment || undefined, updatedAt: new Date().toISOString() }
+      },
+      dirty: true
+    }
+  })
+}
+
+/** Remove a per-id card (translate/ask/visual) — main also deletes the file. */
+export function removePaperMarkCard(id: string): void {
+  usePaperMarksStore.setState((state) => {
+    if (!(id in state.cards)) return state
+    const cards = { ...state.cards }
+    delete cards[id]
+    return {
+      cards,
+      editingMarkId: state.editingMarkId === id ? null : state.editingMarkId,
+      removedIds: state.removedIds.includes(id) ? state.removedIds : [...state.removedIds, id],
+      dirty: true
+    }
+  })
+}
+
+export function setPaperEditingMark(id: string | null): void {
+  usePaperMarksStore.setState({ editingMarkId: id })
 }
 
 export function newPaperHighlight(input: {

@@ -8,6 +8,7 @@ import type {
   PaperUnitReadResult
 } from './paper-types'
 import type { PaperUnitMetaV2 } from './paper-meta-v2'
+import type { PaperVisualMark } from './paper-marks-types'
 import type {
   PaperLibraryEntriesResult,
   PaperLibraryDetectResult,
@@ -24,7 +25,9 @@ import type {
   PaperFeedFetchResult,
   PaperArxivTodayResult,
   PaperVenueListResult,
+  PaperReadingActivityResult,
   PaperReferencesResult,
+  PaperTranslateBlocksResult,
   PaperTranslateTextResult,
   PaperTranslateDocumentResult,
   PaperMarksResult
@@ -118,6 +121,14 @@ export type PaperLibraryApi = {
     workspaceRoot: string
     unitDir: string
   }) => Promise<PaperLibraryTrashResult>
+  /**
+   * R3.1 heat bar data: per-unit mark counts per page, merged with local
+   * last-page/page-count state. Read-only; results are mtime-cached in main.
+   */
+  paperReadingActivity: (payload: {
+    workspaceRoot: string
+    papersDir?: string
+  }) => Promise<PaperReadingActivityResult>
   /** Read the per-library local reading state (last page, recent opens). */
   paperLocalStateRead: (payload: {
     libraryRoot: string
@@ -179,6 +190,36 @@ export type PaperReaderApi = {
     model?: string
     requestId: string
   }) => Promise<PaperTranslateDocumentResult>
+  /**
+   * R2.2 overlay translation: masked text blocks → `[[n]]`-batched model
+   * calls, per-block cache under `.cache/translate-blocks-<lang>-<hash>.json`.
+   */
+  paperTranslateBlocks: (payload: {
+    workspaceRoot: string
+    unitDir: string
+    blocks: { id: string; text: string }[]
+    targetLanguage: 'zh' | 'en'
+    providerId?: string
+    model?: string
+  }) => Promise<PaperTranslateBlocksResult>
+  /**
+   * R2.4 region capture: persist a cropped page PNG to `marks/assets/` and
+   * its visual-mark card to `marks/<id>.json`.
+   */
+  paperSaveVisualMark: (payload: {
+    workspaceRoot: string
+    unitDir: string
+    mark: {
+      id: string
+      page: number
+      rect: [number, number, number, number]
+      comment?: string
+    }
+    pngBase64: string
+  }) => Promise<
+    | { ok: true; mark: PaperVisualMark }
+    | { ok: false; code: string; message: string }
+  >
   /** Read or refresh `<unit>/references.json` (local bbl/bib → S2 → Crossref). */
   paperFetchReferences: (payload: {
     workspaceRoot: string

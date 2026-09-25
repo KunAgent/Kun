@@ -42,6 +42,12 @@ export type PaperComposerBridge = {
   input: string
   setInput: (value: string) => void
   submit?: (value: string) => void
+  /**
+   * R2.4: attach an image to the current composer via the existing runtime
+   * attachment channel; resolves false when uploads/vision are unavailable
+   * so callers can fall back to text-only prompts.
+   */
+  attachImage?: (input: { dataBase64: string; name: string }) => Promise<boolean>
 }
 
 export type PaperModeState = {

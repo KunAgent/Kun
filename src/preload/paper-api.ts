@@ -32,6 +32,8 @@ export const paperApi: KunGuiPaperApi = {
   paperMoveToGroup: (payload) => ipcRenderer.invoke('paper-library:move-to-group', payload),
   paperTrashUnit: (payload) => ipcRenderer.invoke('paper-library:trash', payload),
   paperDownloadPdf: (payload) => ipcRenderer.invoke('paper-library:download-pdf', payload),
+  paperReadingActivity: (payload) =>
+    ipcRenderer.invoke('paper-library:reading-activity', payload),
   paperLocalStateRead: (payload) => ipcRenderer.invoke('paper-library:local-state-read', payload),
   paperLocalStateWrite: (payload) => ipcRenderer.invoke('paper-library:local-state-write', payload),
   paperExportBibtex: (payload) => ipcRenderer.invoke('paper-library:export-bibtex', payload),
@@ -44,6 +46,10 @@ export const paperApi: KunGuiPaperApi = {
     ipcRenderer.invoke('paper-reader:translate-selection', payload),
   paperTranslateDocument: (payload) =>
     ipcRenderer.invoke('paper-reader:translate-document', payload),
+  paperTranslateBlocks: (payload) =>
+    ipcRenderer.invoke('paper-reader:translate-blocks', payload),
+  paperSaveVisualMark: (payload) =>
+    ipcRenderer.invoke('paper-reader:save-visual-mark', payload),
   paperFetchReferences: (payload) => ipcRenderer.invoke('paper-reader:references', payload),
 
   // ---- discover / import enrichment ------------------------------------------

@@ -1,6 +1,23 @@
 declare module 'pdfjs-dist/build/pdf.mjs' {
-  export type TextContentItem = { str?: string }
+  export type TextContentItem = {
+    str?: string
+    /** [a, b, c, d, x, y] in user space (origin bottom-left). */
+    transform?: number[]
+    width?: number
+    height?: number
+    fontName?: string
+  }
   export type TextContent = { items: TextContentItem[]; styles?: Record<string, unknown>; lang?: string }
+  export type PDFAnnotation = {
+    annotationType?: number
+    subtype?: string
+    /** [x1, y1, x2, y2] in user space. */
+    rect?: number[]
+    url?: string
+    unsafeUrl?: string
+    dest?: unknown
+    destName?: string
+  }
   export type PageViewport = {
     width: number
     height: number
@@ -13,6 +30,7 @@ declare module 'pdfjs-dist/build/pdf.mjs' {
       pageX: number
       pageY: number
     }
+    convertToViewportRectangle: (rect: number[]) => number[]
   }
   export type RenderTask = {
     promise: Promise<unknown>
@@ -22,6 +40,7 @@ declare module 'pdfjs-dist/build/pdf.mjs' {
     getViewport: (options: { scale: number; rotation?: number }) => PageViewport
     render: (options: { canvasContext: CanvasRenderingContext2D; viewport: PageViewport }) => RenderTask
     getTextContent: () => Promise<TextContent>
+    getAnnotations: (options?: { intent?: string }) => Promise<PDFAnnotation[]>
     cleanup: () => void
   }
   export type PDFOutlineItem = {

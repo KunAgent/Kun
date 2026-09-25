@@ -26,6 +26,8 @@ type Props = {
   whiteboard?: WorkWhiteboard
   requestedPath: string | null
   viewMode: WritePreviewMode
+  /** R2.3: 'translated' makes the PDF renderer show the overlay-only mirror. */
+  pdfView?: 'translated'
   readOnly?: boolean
   workspaceRoot: string
   workspaceName: string
@@ -80,6 +82,7 @@ export function WriteEditorGroupContent({
   whiteboard,
   requestedPath,
   viewMode,
+  pdfView,
   readOnly = false,
   workspaceRoot,
   workspaceName,
@@ -187,6 +190,7 @@ export function WriteEditorGroupContent({
         activeFileIsOffice={kind === 'office'}
         activeFileIsCode={kind === 'code'}
         activeFileIsText={kind === 'text'}
+        pdfView={pdfView}
         fileLoading={Boolean(requestedPath && !document) || document?.fileLoading === true}
         fileContent={content}
         imageDataUrl={document?.imageDataUrl ?? ''}

@@ -412,7 +412,7 @@ export function Workbench(): ReactElement {
     runtimeInfo
   })
   const {
-    addComposerImageBase64,
+    addComposerImageBase64, addComposerImagePngBase64,
     attachmentUploadBusy,
     attachmentUploadEnabled,
     attachmentUploadError,
@@ -671,7 +671,7 @@ export function Workbench(): ReactElement {
     messageContributionsForSurface,
     openCodeRightTool, currentSideRunningCount, extensionRightRailItems, selectRightRailExtension,
     imageAnnotationHost, planOverlay, openManagedExtensionView, activeExtensionAuxiliaryPanel,
-    workspaceContextMenu, activeGuiPlan,
+    workspaceContextMenu, activeGuiPlan, attachPaperComposerImage: addComposerImagePngBase64,
     focusedCanvasWorkspace, openGeneratedDocuments, openGeneratedDocumentPreview,
     onOpenCommandPalette: openWorkbenchCommandPalette
   }} />

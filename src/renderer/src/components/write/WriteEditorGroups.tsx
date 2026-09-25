@@ -274,6 +274,7 @@ export function WriteEditorGroups({
                   whiteboard={board}
                   requestedPath={path}
                   viewMode={tab?.viewMode ?? 'rich'}
+                  pdfView={tab && isWriteFileTab(tab) ? tab.pdfView : undefined}
                   workspaceRoot={workspaceRoot}
                   workspaceName={workspaceName}
                   workspacePathLabel={workspacePathLabel}

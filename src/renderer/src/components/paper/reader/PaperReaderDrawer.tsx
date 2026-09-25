@@ -1,13 +1,15 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { BookMarked, Loader2, Plus, Trash2 } from 'lucide-react'
+import { BookMarked, Link2, Loader2, Plus, Trash2 } from 'lucide-react'
 import type { TFunction } from 'i18next'
 import type { PDFDocumentProxy, PDFOutlineItem } from 'pdfjs-dist/build/pdf.mjs'
 import type { PaperReferenceItem } from '@shared/paper/paper-library-types'
 import { usePaperMarksStore } from '../../../paper/paper-marks-store'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { openLibraryEntry } from '../../../paper/paper-library-actions'
+import { paperCitationMarkdown } from '../../../paper/paper-citation-copy'
 import { newPaperRequestId, usePaperStore } from '../../../write/paper/paper-store'
 import { PaperFiguresPane } from './PaperFiguresPane'
+import { PaperCitationGraph } from './PaperCitationGraph'
 
 type DrawerTab = 'outline' | 'figures' | 'annotations' | 'references' | 'citations'
 
@@ -18,6 +20,8 @@ type DrawerTab = 'outline' | 'figures' | 'annotations' | 'references' | 'citatio
 export function PaperReaderDrawer({
   workspaceRoot,
   unitDir,
+  paperTitle = '',
+  pdfFile,
   pdfDocument,
   onJumpToPage,
   onDeleteMark,
@@ -25,6 +29,8 @@ export function PaperReaderDrawer({
 }: {
   workspaceRoot: string
   unitDir: string
+  paperTitle?: string
+  pdfFile?: string
   pdfDocument: PDFDocumentProxy | null
   onJumpToPage: (page: number) => void
   onDeleteMark: (id: string) => void
@@ -58,11 +64,19 @@ export function PaperReaderDrawer({
             t={t}
           />
         ) : tab === 'annotations' ? (
-          <AnnotationsPane onJumpToPage={onJumpToPage} onDelete={onDeleteMark} t={t} />
+          <AnnotationsPane
+            unitDir={unitDir}
+            paperTitle={paperTitle}
+            pdfFile={pdfFile}
+            onJumpToPage={onJumpToPage}
+            onDelete={onDeleteMark}
+            t={t}
+          />
         ) : (
           <ReferencesPane
             workspaceRoot={workspaceRoot}
             unitDir={unitDir}
+            paperTitle={paperTitle}
             kind={tab === 'citations' ? 'citations' : 'references'}
             t={t}
           />
@@ -157,17 +171,37 @@ function OutlineRow({
 }
 
 function AnnotationsPane({
+  unitDir,
+  paperTitle,
+  pdfFile,
   onJumpToPage,
   onDelete,
   t
 }: {
+  unitDir: string
+  paperTitle: string
+  pdfFile?: string
   onJumpToPage: (page: number) => void
   onDelete: (id: string) => void
   t: TFunction
 }): ReactElement {
   const items = usePaperMarksStore((s) => s.items)
   const cards = usePaperMarksStore((s) => s.cards)
-  const cardList = Object.values(cards) as { id: string; page: number; quote: string; translation?: string }[]
+  const cardList = Object.values(cards) as {
+    id: string
+    page: number
+    kind?: string
+    quote?: string
+    comment?: string
+    translation?: string
+  }[]
+  const copyCitation = (quote: string, page: number, comment?: string): void => {
+    void navigator.clipboard
+      .writeText(
+        paperCitationMarkdown({ quote, title: paperTitle, page, unitDir, pdfFile, comment })
+      )
+      .catch(() => undefined)
+  }
   if (items.length === 0 && cardList.length === 0) {
     return <p className="p-2 text-[12px] text-ds-faint">{t('writePaperReaderNoAnnotations')}</p>
   }
@@ -186,31 +220,76 @@ function AnnotationsPane({
               <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-4 text-ds-muted">{mark.comment}</p>
             ) : null}
           </button>
-          <button
-            type="button"
-            className="mt-1 hidden text-[11px] text-red-500 group-hover:block"
-            onClick={() => onDelete(mark.id)}
-          >
-            <Trash2 className="mr-1 inline h-3 w-3" />
-            {t('writePaperReaderDelete')}
-          </button>
+          <span className="mt-1 hidden items-center gap-2 group-hover:flex">
+            <button
+              type="button"
+              className="inline-flex items-center text-[11px] text-ds-muted hover:text-accent"
+              onClick={() => copyCitation(mark.quote, mark.page, mark.comment)}
+            >
+              <Link2 className="mr-1 inline h-3 w-3" />
+              {t('writePaperReaderCopyCitation')}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center text-[11px] text-red-500"
+              onClick={() => onDelete(mark.id)}
+            >
+              <Trash2 className="mr-1 inline h-3 w-3" />
+              {t('writePaperReaderDelete')}
+            </button>
+          </span>
         </li>
       ))}
-      {cardList.map((card) => (
-        <li key={card.id} className="rounded-lg border border-accent/30 bg-accent/5 p-2">
-          <button
-            type="button"
-            className="block w-full text-left"
-            onClick={() => onJumpToPage(card.page)}
+      {cardList.map((card) => {
+        const visual = card.kind === 'visual'
+        const quote = visual ? '' : (card.quote ?? '')
+        const label = visual ? (card.comment ?? '') : quote
+        return (
+          <li
+            key={card.id}
+            className={`group rounded-lg border p-2 ${
+              visual ? 'border-dashed border-[#3b82f6]/50' : 'border-accent/30 bg-accent/5'
+            }`}
           >
-            <span className="text-[10.5px] text-ds-faint">{t('writePdfPageLabel', { page: card.page })}</span>
-            <p className="line-clamp-2 text-[12px] leading-4 text-ds-ink">{card.quote}</p>
-            {card.translation ? (
-              <p className="mt-0.5 line-clamp-3 text-[11.5px] leading-4 text-ds-muted">{card.translation}</p>
+            <button
+              type="button"
+              className="block w-full text-left"
+              onClick={() => onJumpToPage(card.page)}
+            >
+              <span className="text-[10.5px] text-ds-faint">
+                {t('writePdfPageLabel', { page: card.page })}
+                {visual ? ` · ${t('writePaperReaderRegionMark')}` : ''}
+              </span>
+              {label ? (
+                <p className="line-clamp-2 text-[12px] leading-4 text-ds-ink">{label}</p>
+              ) : null}
+              {card.translation ? (
+                <p className="mt-0.5 line-clamp-3 text-[11.5px] leading-4 text-ds-muted">{card.translation}</p>
+              ) : null}
+            </button>
+            {visual ? (
+              <span className="mt-1 hidden items-center gap-2 group-hover:flex">
+                <button
+                  type="button"
+                  className="inline-flex items-center text-[11px] text-ds-muted hover:text-accent"
+                  onClick={() => copyCitation(label, card.page, card.comment)}
+                >
+                  <Link2 className="mr-1 inline h-3 w-3" />
+                  {t('writePaperReaderCopyCitation')}
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center text-[11px] text-red-500"
+                  onClick={() => onDelete(card.id)}
+                >
+                  <Trash2 className="mr-1 inline h-3 w-3" />
+                  {t('writePaperReaderDelete')}
+                </button>
+              </span>
             ) : null}
-          </button>
-        </li>
-      ))}
+          </li>
+        )
+      })}
     </ul>
   )
 }
@@ -218,11 +297,13 @@ function AnnotationsPane({
 function ReferencesPane({
   workspaceRoot,
   unitDir,
+  paperTitle,
   kind,
   t
 }: {
   workspaceRoot: string
   unitDir: string
+  paperTitle?: string
   kind: 'references' | 'citations'
   t: TFunction
 }): ReactElement {
@@ -294,7 +375,8 @@ function ReferencesPane({
     return <p className="p-2 text-[12px] text-ds-faint">{t('writePaperReaderNoReferences')}</p>
   }
   return (
-    <ul className="space-y-1.5">
+    <div>
+      <ul className="space-y-1.5">
       {state.items.map((ref) => {
         const inLibrary = findInLibrary(ref)
         return (
@@ -339,6 +421,15 @@ function ReferencesPane({
           </li>
         )
       })}
-    </ul>
+      </ul>
+      {kind === 'references' ? (
+        <PaperCitationGraph
+          centerTitle={paperTitle ?? ''}
+          items={state.items}
+          entries={entries}
+          t={t}
+        />
+      ) : null}
+    </div>
   )
 }

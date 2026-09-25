@@ -1,0 +1,16 @@
+{
+  "comment": "Synthetic two-column 612x792pt page shaped like pdf.js getTextContent() items: transform [a,b,c,d,x,y] in user space (origin bottom-left), width/height in user units. Header + footer + References section exercise the R2.1 filters.",
+  "pageWidth": 612,
+  "pageHeight": 792,
+  "items": [
+    { "str": "Journal of Tests 2024", "transform": [9, 0, 0, 9, 220, 772], "width": 94.5, "height": 9, "fontName": "test" },
+    { "str": "First column line one ends with hyphen-", "transform": [9, 0, 0, 9, 40, 692], "width": 175.5, "height": 9, "fontName": "test" },
+    { "str": "ated and continues here.", "transform": [9, 0, 0, 9, 40, 679], "width": 108, "height": 9, "fontName": "test" },
+    { "str": "Second paragraph stays separate.", "transform": [9, 0, 0, 9, 40, 642], "width": 144, "height": 9, "fontName": "test" },
+    { "str": "Right column line one.", "transform": [9, 0, 0, 9, 340, 692], "width": 99, "height": 9, "fontName": "test" },
+    { "str": "Right column line two continues.", "transform": [9, 0, 0, 9, 340, 679], "width": 144, "height": 9, "fontName": "test" },
+    { "str": "References", "transform": [9, 0, 0, 9, 340, 392], "width": 45, "height": 9, "fontName": "test" },
+    { "str": "[1] Some citation text", "transform": [9, 0, 0, 9, 340, 377], "width": 99, "height": 9, "fontName": "test" },
+    { "str": "42", "transform": [9, 0, 0, 9, 300, 20], "width": 9, "height": 9, "fontName": "test" }
+  ]
+}

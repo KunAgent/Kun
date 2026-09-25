@@ -1,12 +1,20 @@
-import { useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import {
   ArrowLeft,
+  BookOpen,
+  Bot,
+  BoxSelect,
   ChevronLeft,
   ChevronRight,
+  Columns2,
   FileDown,
   Languages,
+  LayoutPanelLeft,
   Loader2,
+  Maximize2,
+  Minimize2,
   Minus,
+  NotebookPen,
   PanelLeft,
   Plus,
   Search,
@@ -14,6 +22,7 @@ import {
 } from 'lucide-react'
 import type { TFunction } from 'i18next'
 import type { WritePaperModeReaderSettingsV1 } from '@shared/app-settings-types-paper-mode'
+import type { PaperReaderLayoutPreset } from '../../../paper/paper-reader-layout'
 
 type Tone = WritePaperModeReaderSettingsV1['paperTone']
 const TONES: Tone[] = ['white', 'sepia', 'green', 'dark']
@@ -21,6 +30,16 @@ const TONES: Tone[] = ['white', 'sepia', 'green', 'dark']
 const PILL =
   'pointer-events-auto flex items-center gap-0.5 rounded-full border border-ds-border bg-ds-card/92 px-1.5 py-1 shadow-lg backdrop-blur'
 const ICON = 'write-pdf-icon-button'
+
+const LAYOUT_OPTIONS: ReadonlyArray<{
+  preset: PaperReaderLayoutPreset
+  icon: typeof BookOpen
+  shortcut: string
+}> = [
+  { preset: 'read', icon: BookOpen, shortcut: '⌥1' },
+  { preset: 'notes', icon: NotebookPen, shortcut: '⌥2' },
+  { preset: 'assistant', icon: Bot, shortcut: '⌥3' }
+]
 
 /**
  * Floating reader chrome (U1): a compact pill pinned to the top-right corner
@@ -45,14 +64,24 @@ export function PaperFloatingControls({
   drawerOpen,
   onToggleDrawer,
   onBackToLibrary,
+  layoutPreset,
+  onApplyLayout,
+  immersive,
+  onToggleImmersive,
   tone,
   setTone,
   translating,
   translateLabel,
   onTranslateDocument,
   onCancelTranslate,
+  onToggleMirror,
+  pageTranslating,
+  pageTranslateProgress,
+  onTranslatePagesToggle,
   marksCount,
-  onExportNotes
+  onExportNotes,
+  regionSelectActive,
+  onToggleRegionSelect
 }: {
   t: TFunction
   scale: number
@@ -70,16 +99,56 @@ export function PaperFloatingControls({
   drawerOpen: boolean
   onToggleDrawer: () => void
   onBackToLibrary: () => void
+  layoutPreset: PaperReaderLayoutPreset
+  onApplyLayout: (preset: PaperReaderLayoutPreset) => void
+  immersive: boolean
+  onToggleImmersive: () => void
   tone: Tone
   setTone: (tone: Tone) => void
   translating: boolean
   translateLabel: string | null
   onTranslateDocument: () => void
   onCancelTranslate: () => void
+  /** R2.3: toggle the side-by-side translated mirror in the secondary group. */
+  onToggleMirror: () => void
+  /** R2.2: sequential per-page overlay translation running (click = stop). */
+  pageTranslating: boolean
+  /** "done/total" for the running page sweep. */
+  pageTranslateProgress: string | null
+  onTranslatePagesToggle: () => void
   marksCount: number
   onExportNotes: () => void
+  /** R2.4: crosshair region-capture mode for figures/tables. */
+  regionSelectActive: boolean
+  onToggleRegionSelect: () => void
 }): ReactElement {
   const [searchOpen, setSearchOpen] = useState(false)
+  const [layoutOpen, setLayoutOpen] = useState(false)
+  const [translateMenuOpen, setTranslateMenuOpen] = useState(false)
+  const layoutRef = useRef<HTMLDivElement | null>(null)
+  const translateMenuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!translateMenuOpen) return
+    const onPointerDown = (event: PointerEvent): void => {
+      if (translateMenuRef.current && !translateMenuRef.current.contains(event.target as Node)) {
+        setTranslateMenuOpen(false)
+      }
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    return () => window.removeEventListener('pointerdown', onPointerDown)
+  }, [translateMenuOpen])
+
+  useEffect(() => {
+    if (!layoutOpen) return
+    const onPointerDown = (event: PointerEvent): void => {
+      if (layoutRef.current && !layoutRef.current.contains(event.target as Node)) {
+        setLayoutOpen(false)
+      }
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    return () => window.removeEventListener('pointerdown', onPointerDown)
+  }, [layoutOpen])
 
   return (
     <>
@@ -103,6 +172,42 @@ export function PaperFloatingControls({
           >
             <PanelLeft className="h-4 w-4" strokeWidth={1.9} />
           </button>
+          <span className="mx-0.5 h-4 w-px bg-ds-border-muted" />
+          <div ref={layoutRef} className="relative flex">
+            <button
+              type="button"
+              className={`${ICON} ${layoutOpen ? 'bg-accent/15 text-accent' : ''}`}
+              title={t('writePaperReaderLayout')}
+              aria-label={t('writePaperReaderLayout')}
+              aria-expanded={layoutOpen}
+              onClick={() => setLayoutOpen((open) => !open)}
+            >
+              <LayoutPanelLeft className="h-4 w-4" strokeWidth={1.9} />
+            </button>
+            {layoutOpen ? (
+              <div className="ds-no-drag absolute right-0 top-[calc(100%+8px)] w-[200px] rounded-xl border border-ds-border bg-ds-card p-1 shadow-xl">
+                {LAYOUT_OPTIONS.map(({ preset, icon: Icon, shortcut }) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] transition hover:bg-ds-hover ${
+                      layoutPreset === preset ? 'text-accent' : 'text-ds-ink'
+                    }`}
+                    onClick={() => {
+                      setLayoutOpen(false)
+                      onApplyLayout(preset)
+                    }}
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+                    <span className="min-w-0 flex-1">
+                      {t(`writePaperReaderLayout_${preset}`)}
+                    </span>
+                    <kbd className="text-[10px] text-ds-faint">{shortcut}</kbd>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <span className="mx-0.5 h-4 w-px bg-ds-border-muted" />
           <button
             type="button"
@@ -135,26 +240,74 @@ export function PaperFloatingControls({
             <Plus className="h-4 w-4" strokeWidth={1.9} />
           </button>
           <span className="mx-0.5 h-4 w-px bg-ds-border-muted" />
-          {translating ? (
+          {translating || pageTranslating ? (
             <button
               type="button"
               className={`${ICON} text-accent`}
-              title={t('writePaperReaderTranslating')}
-              aria-label={translateLabel ?? t('writePaperReaderTranslating')}
-              onClick={onCancelTranslate}
+              title={
+                pageTranslating
+                  ? t('writePaperReaderTranslateStop')
+                  : t('writePaperReaderTranslating')
+              }
+              aria-label={
+                pageTranslating
+                  ? `${t('writePaperReaderTranslateStop')} ${pageTranslateProgress ?? ''}`
+                  : translateLabel ?? t('writePaperReaderTranslating')
+              }
+              onClick={pageTranslating ? onTranslatePagesToggle : onCancelTranslate}
             >
               <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.9} />
             </button>
           ) : (
-            <button
-              type="button"
-              className={ICON}
-              title={t('writePaperReaderTranslateDoc')}
-              aria-label={t('writePaperReaderTranslateDoc')}
-              onClick={onTranslateDocument}
-            >
-              <Languages className="h-4 w-4" strokeWidth={1.9} />
-            </button>
+            <div ref={translateMenuRef} className="relative flex">
+              <button
+                type="button"
+                className={`${ICON} ${translateMenuOpen ? 'bg-accent/15 text-accent' : ''}`}
+                title={t('writePaperReaderTranslateDoc')}
+                aria-label={t('writePaperReaderTranslateDoc')}
+                aria-expanded={translateMenuOpen}
+                onClick={() => setTranslateMenuOpen((open) => !open)}
+              >
+                <Languages className="h-4 w-4" strokeWidth={1.9} />
+              </button>
+              {translateMenuOpen ? (
+                <div className="ds-no-drag absolute right-0 top-[calc(100%+8px)] w-[210px] rounded-xl border border-ds-border bg-ds-card p-1 shadow-xl">
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] text-ds-ink transition hover:bg-ds-hover"
+                    onClick={() => {
+                      setTranslateMenuOpen(false)
+                      onTranslatePagesToggle()
+                    }}
+                  >
+                    <Languages className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+                    {t('writePaperReaderTranslatePages')}
+                  </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] text-ds-ink transition hover:bg-ds-hover"
+                    onClick={() => {
+                      setTranslateMenuOpen(false)
+                      onTranslateDocument()
+                    }}
+                  >
+                    <FileDown className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+                    {t('writePaperReaderTranslateMarkdown')}
+                  </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] text-ds-ink transition hover:bg-ds-hover"
+                    onClick={() => {
+                      setTranslateMenuOpen(false)
+                      onToggleMirror()
+                    }}
+                  >
+                    <Columns2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+                    {t('writePaperReaderMirror')}
+                  </button>
+                </div>
+              ) : null}
+            </div>
           )}
           <button
             type="button"
@@ -270,6 +423,31 @@ export function PaperFloatingControls({
               />
             ))}
           </div>
+          <span className="mx-0.5 h-4 w-px bg-ds-border-muted" />
+          <button
+            type="button"
+            className={`${ICON} ${regionSelectActive ? 'bg-accent/15 text-accent' : ''}`}
+            title={`${t('writePaperReaderRegionSelect')} · ⌘.`}
+            aria-label={t('writePaperReaderRegionSelect')}
+            aria-pressed={regionSelectActive}
+            onClick={onToggleRegionSelect}
+          >
+            <BoxSelect className="h-4 w-4" strokeWidth={1.9} />
+          </button>
+          <button
+            type="button"
+            className={`${ICON} ${immersive ? 'bg-accent/15 text-accent' : ''}`}
+            title={`${t(immersive ? 'writePaperReaderExitImmersive' : 'writePaperReaderImmersive')} · F`}
+            aria-label={t(immersive ? 'writePaperReaderExitImmersive' : 'writePaperReaderImmersive')}
+            aria-pressed={immersive}
+            onClick={onToggleImmersive}
+          >
+            {immersive ? (
+              <Minimize2 className="h-4 w-4" strokeWidth={1.9} />
+            ) : (
+              <Maximize2 className="h-4 w-4" strokeWidth={1.9} />
+            )}
+          </button>
         </div>
       </div>
     </>

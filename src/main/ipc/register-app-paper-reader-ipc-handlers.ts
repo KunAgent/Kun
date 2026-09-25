@@ -9,8 +9,10 @@ import {
   paperMarksReadPayloadSchema,
   paperMarksWritePayloadSchema,
   paperReferencesPayloadSchema,
+  paperSaveVisualMarkPayloadSchema,
   paperResolveDoiPayloadSchema,
   paperSearchTitlePayloadSchema,
+  paperTranslateBlocksPayloadSchema,
   paperTranslateDocumentPayloadSchema,
   paperTranslateSelectionPayloadSchema,
   paperUrlMetaPayloadSchema
@@ -22,6 +24,7 @@ import type {
   PaperBibtexImportResult,
   PaperMarksResult,
   PaperReferencesResult,
+  PaperTranslateBlocksResult,
   PaperTranslateDocumentResult,
   PaperTranslateTextResult
 } from '../../shared/paper/paper-library-types'
@@ -44,15 +47,18 @@ import {
   importPaperBibtex
 } from '../services/paper/paper-library-service'
 import {
+  deletePaperMarkCard,
   listPaperMarkCards,
   mergeWritePaperAnnotations,
   readPaperAnnotations,
-  writePaperMarkCard
+  writePaperMarkCard,
+  writePaperVisualMarkPng
 } from '../services/paper/paper-marks-service'
 import {
   translatePaperDocument,
   translatePaperSelection
 } from '../services/paper/paper-translate-service'
+import { translatePaperBlocks } from '../services/paper/paper-block-translate'
 import { resolvePaperReferences } from '../services/paper/paper-references-service'
 import {
   fetchArxivToday,
@@ -139,10 +145,13 @@ export function registerAppPaperReaderIpcHandlers(
           (request.items as { kind?: string }[]).filter((item) => item?.kind === 'highlight')
         )
         const cards = (request.items as { kind?: string }[]).filter(
-          (item) => item && (item.kind === 'translate' || item.kind === 'ask')
+          (item) => item && (item.kind === 'translate' || item.kind === 'ask' || item.kind === 'visual')
         )
         for (const card of cards) {
           await writePaperMarkCard(unitDirAbs, card)
+        }
+        for (const removedId of request.removedIds ?? []) {
+          await deletePaperMarkCard(unitDirAbs, removedId)
         }
         const merged = await mergeWritePaperAnnotations(
           unitDirAbs,
@@ -153,6 +162,47 @@ export function registerAppPaperReaderIpcHandlers(
       } catch (error) {
         logError?.('paper-reader', 'marks-write failed', error)
         return paperError<PaperMarksResult>(error, 'io', 'Failed to write marks.')
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'paper-reader:save-visual-mark',
+    async (event, payload: unknown) => {
+      assertTrustedWorkbenchSender(event, getMainWindow)
+      const request = parseIpcPayload(
+        'paper-reader:save-visual-mark',
+        paperSaveVisualMarkPayloadSchema,
+        payload
+      )
+      try {
+        const png = Buffer.from(request.pngBase64, 'base64')
+        const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+        if (png.length < 8 || !png.subarray(0, 8).equals(PNG_MAGIC) || png.length > 4 * 1024 * 1024) {
+          return { ok: false as const, code: 'invalid-image' as const, message: 'Invalid PNG payload.' }
+        }
+        const { unitDirAbs } = await unitDirAbsFor(request.workspaceRoot, request.unitDir)
+        const meta = await readPaperUnitMetaV2(unitDirAbs)
+        if (!meta) {
+          return { ok: false as const, code: 'invalid-unit' as const, message: 'paper.json is missing or invalid.' }
+        }
+        const imagePath = await writePaperVisualMarkPng(unitDirAbs, request.mark.id, png)
+        const now = new Date().toISOString()
+        const card = {
+          id: request.mark.id,
+          kind: 'visual' as const,
+          page: request.mark.page,
+          rect: request.mark.rect,
+          ...(request.mark.comment ? { comment: request.mark.comment } : {}),
+          image: { path: imagePath },
+          createdAt: now,
+          updatedAt: now
+        }
+        await writePaperMarkCard(unitDirAbs, card)
+        return { ok: true as const, mark: card }
+      } catch (error) {
+        logError?.('paper-reader', 'save-visual-mark failed', error)
+        return paperError<unknown>(error, 'io', 'Failed to save the region mark.')
       }
     }
   )
@@ -217,6 +267,37 @@ export function registerAppPaperReaderIpcHandlers(
         logError?.('paper-reader', 'translate-document failed', error)
         finishPaperJob(request.requestId, isPaperJobCanceled(job.signal, error) ? 'canceled' : 'error')
         return paperError<PaperTranslateDocumentResult>(error, 'io', 'Translation failed.')
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'paper-reader:translate-blocks',
+    async (event, payload: unknown): Promise<PaperTranslateBlocksResult> => {
+      assertTrustedWorkbenchSender(event, getMainWindow)
+      const request = parseIpcPayload(
+        'paper-reader:translate-blocks',
+        paperTranslateBlocksPayloadSchema,
+        payload
+      )
+      try {
+        const { unitDirAbs } = await unitDirAbsFor(request.workspaceRoot, request.unitDir)
+        const meta = await readPaperUnitMetaV2(unitDirAbs)
+        if (!meta) {
+          return { ok: false, code: 'invalid-unit', message: 'paper.json is missing or invalid.' }
+        }
+        const settings = await store.load()
+        return await translatePaperBlocks({
+          settings,
+          unitDirAbs,
+          blocks: request.blocks,
+          targetLanguage: request.targetLanguage,
+          providerId: request.providerId,
+          model: request.model
+        })
+      } catch (error) {
+        logError?.('paper-reader', 'translate-blocks failed', error)
+        return paperError<PaperTranslateBlocksResult>(error, 'io', 'Translation failed.')
       }
     }
   )

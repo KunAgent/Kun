@@ -407,6 +407,7 @@ function normalizeStoredTab(value: unknown, workspaceRoot: string): WriteEditorT
   return {
     path,
     viewMode: validMode(candidate.viewMode) ? normalizeWriteViewMode(candidate.viewMode) : 'rich',
+    ...(candidate.pdfView === 'translated' ? { pdfView: 'translated' as const } : {}),
     ...(Number.isFinite(candidate.cursorOffset) ? { cursorOffset: Math.max(0, Number(candidate.cursorOffset)) } : {}),
     ...(Number.isFinite(candidate.scrollTop) ? { scrollTop: Math.max(0, Number(candidate.scrollTop)) } : {})
   }

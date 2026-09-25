@@ -23,7 +23,7 @@ import { bodyZoom, toLayoutPx } from '../../../lib/body-zoom'
 export type WorkLinkNavigation = {
   getFilePath: () => string
   getWorkspaceRoot: () => string
-  openFile: (path: string, heading?: string) => void
+  openFile: (path: string, heading?: string, page?: number) => void
   openExternal?: (url: string) => void
 }
 
@@ -54,7 +54,7 @@ function openTarget(editor: Editor, nav: WorkLinkNavigation, href: string): void
       return
     }
     case 'workspace-file':
-      nav.openFile(target.path, target.slug)
+      nav.openFile(target.path, target.slug, target.page)
       return
     default:
       return

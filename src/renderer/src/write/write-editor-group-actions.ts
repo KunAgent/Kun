@@ -45,6 +45,7 @@ type WriteEditorActions = Pick<
   | 'splitEditorGroup'
   | 'closeEditorGroup'
   | 'setTabViewMode'
+  | 'setTabPdfView'
   | 'setSplitOrientation'
   | 'setSplitRatio'
   | 'setDocumentContent'
@@ -543,6 +544,24 @@ export function createWriteEditorGroupActions(
               ...group,
               tabs: group.tabs.map((tab) => isWriteFileTab(tab) && pathsEqual(tab.path, path)
                 ? { ...tab, viewMode: mode }
+                : tab)
+            }
+          : group)
+      }
+      persist(state.workspaceRoot, editorLayout)
+      set(withProjection(state.documentsByPath, editorLayout))
+    },
+
+    setTabPdfView: (groupId, path, pdfView) => {
+      const rawState = get()
+      const state = { ...rawState, documentsByPath: captureFocusedDocument(rawState) }
+      const editorLayout = {
+        ...state.editorLayout,
+        groups: state.editorLayout.groups.map((group) => group.id === groupId
+          ? {
+              ...group,
+              tabs: group.tabs.map((tab) => isWriteFileTab(tab) && pathsEqual(tab.path, path)
+                ? { ...tab, pdfView }
                 : tab)
             }
           : group)

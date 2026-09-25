@@ -54,6 +54,7 @@ import { SddRequirementBadges } from './extensions/sdd-requirement-badges'
 import { WriteDiffReview } from './review/review-plugin'
 import { WriteReviewSession } from './review/review-session'
 import { WriteWorkLinks } from './extensions/work-links'
+import { requestKnowledgeSourceNavigation } from '../../lib/knowledge-source-navigation'
 import { useWriteWorkspaceStore } from '../write-workspace-store'
 import { WriteDocumentReviewBar } from '../../components/write/WriteDocumentReviewBar'
 import { NodeRange } from '@tiptap/extension-node-range'
@@ -349,11 +350,19 @@ export function WriteRichEditor({
           navigation: {
             getFilePath: () => filePathRef.current,
             getWorkspaceRoot: () => workspaceRootRef.current,
-            openFile: (path, heading) => {
-              // Heading/line positioning after open is a follow-up; the
-              // store action only accepts the path today.
+            openFile: (path, heading, page) => {
+              // Heading positioning after open is a follow-up; the store
+              // action only accepts the path today. PDF `#page=N` links
+              // (paper citations) are delivered through the knowledge-source
+              // navigation channel once the reader mounts.
               void heading
               void useWriteWorkspaceStore.getState().openFile(workspaceRootRef.current, path)
+              if (typeof page === 'number' && Number.isFinite(page)) {
+                requestKnowledgeSourceNavigation({
+                  filePath: path,
+                  location: { kind: 'pdf', pageStart: page, pageEnd: page }
+                })
+              }
             }
           }
         }),

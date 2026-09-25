@@ -41,6 +41,8 @@ type WriteStageProps = {
   input: string
   setInput: (value: string) => void
   onSubmitPrompt?: (value: string) => void
+  /** Attach a base64 image to the composer (papers surface only). */
+  onAttachImage?: (input: { dataBase64: string; name: string }) => Promise<boolean>
   onOpenAgentSettings?: () => void
   rightPanel: ReactNode
 }
@@ -81,6 +83,7 @@ function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
         input={write.input}
         setInput={write.setInput}
         onSubmitPrompt={write.onSubmitPrompt}
+        onAttachImage={write.onAttachImage}
         onOpenAgentSettings={write.onOpenAgentSettings}
         rightPanel={write.rightPanel}
       />

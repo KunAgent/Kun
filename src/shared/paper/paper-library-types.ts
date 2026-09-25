@@ -120,6 +120,22 @@ export type PaperLocalLibraryState = {
   >
 }
 
+// ---- reading activity (heat bar) ---------------------------------------------
+
+/**
+ * R3.1 per-unit mark density for the library heat bar. `pages[i]` is the mark
+ * count on page `i + 1` (count only — mark content never crosses IPC).
+ */
+export type PaperUnitReadingActivity = {
+  pages: number[]
+  pageCount?: number
+  lastPage?: number
+}
+
+export type PaperReadingActivityResult =
+  | { ok: true; activity: Record<string, PaperUnitReadingActivity> }
+  | { ok: false; code: 'io' | 'invalid-root'; message: string }
+
 // ---- title search / DOI / URL meta / local-PDF identify ---------------------
 
 export type PaperTitleSearchCandidate = {
@@ -284,6 +300,20 @@ export type PaperTranslateDocumentResult =
       translatedChunks: number
     }
   | { ok: false; code: 'network' | 'timeout' | 'config' | 'io' | 'canceled' | 'invalid-unit' | 'invalid-input'; message: string }
+
+/**
+ * R2.2 overlay translation: renderer-extracted page text blocks translate in
+ * ≤4500-char batches under `[[n]]` markers; results cache per block under
+ * `.cache/translate-blocks-<lang>-<modelHash>.json`.
+ */
+export type PaperTranslateBlocksResult =
+  | {
+      ok: true
+      translations: Record<string, string>
+      cachedBlocks: number
+      translatedBlocks: number
+    }
+  | { ok: false; code: 'network' | 'timeout' | 'config' | 'io' | 'invalid-unit' | 'invalid-input'; message: string }
 
 // ---- marks --------------------------------------------------------------------
 

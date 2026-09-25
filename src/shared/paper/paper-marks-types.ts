@@ -74,6 +74,27 @@ export const paperAskMarkSchema = z
   .strict()
 export type PaperAskMark = z.infer<typeof paperAskMarkSchema>
 
+export const PAPER_MARKS_ASSETS_DIR = 'assets'
+
+/**
+ * R2.4 visual mark: a page region captured to `marks/assets/<id>.png`. Unlike
+ * translate/ask cards it also lives in the gutter stream, so it keeps a
+ * `comment` field and a normalized page `rect` (single rect, not spans).
+ */
+export const paperVisualMarkSchema = z
+  .object({
+    id: z.string().min(1).max(80),
+    kind: z.literal('visual'),
+    page: z.number().int().min(1),
+    rect: paperRectSchema,
+    comment: z.string().max(8000).optional(),
+    image: z.object({ path: z.string().min(1).max(200) }).strict(),
+    createdAt: z.string(),
+    updatedAt: z.string()
+  })
+  .strict()
+export type PaperVisualMark = z.infer<typeof paperVisualMarkSchema>
+
 /** Merge by id: incoming items win; local items not in `incoming` are kept. */
 export function mergePaperHighlights(
   local: readonly PaperHighlight[],

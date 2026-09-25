@@ -8,6 +8,7 @@ import type {
   WritePaperModeSettingsV1
 } from '@shared/app-settings-types-paper-mode'
 import { DEFAULT_PAPER_INTERPRET_TEMPLATE } from '@shared/paper/paper-interpret-template'
+import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { SettingRow, SettingsCard, Toggle } from './settings-controls'
 
 const textInputClass =
@@ -92,6 +93,26 @@ export function WritePaperReadingSettingsPanel({
           <Toggle
             checked={mode.translate.inheritModel !== false}
             onChange={(inheritModel) => updateMode({ translate: { inheritModel } })}
+          />
+        }
+      />
+      <SettingRow
+        title={t('writePaperAutoTranslateSelection')}
+        description={t('writePaperAutoTranslateSelectionDesc')}
+        control={
+          <Toggle
+            checked={mode.translate.autoTranslateSelection === true}
+            onChange={(autoTranslateSelection) => {
+              updateMode({ translate: { autoTranslateSelection } })
+              // Mirror into the live workspace store like paperTone does so
+              // the reader picks it up without a settings reload.
+              useWriteWorkspaceStore.setState((s) => ({
+                paperMode: {
+                  ...s.paperMode,
+                  translate: { ...s.paperMode.translate, autoTranslateSelection }
+                }
+              }))
+            }}
           />
         }
       />

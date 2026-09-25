@@ -37,6 +37,8 @@ type Props = {
   activeFileIsOffice?: boolean
   activeFileIsCode?: boolean
   activeFileIsText: boolean
+  /** R2.3: 'translated' forwards to the PDF renderer's mirror mode. */
+  pdfView?: 'translated'
   fileLoading: boolean
   fileContent: string
   imageDataUrl: string
@@ -118,6 +120,7 @@ export function WriteWorkspaceDocumentPane({
   activeFileIsOffice = false,
   activeFileIsCode = false,
   activeFileIsText,
+  pdfView,
   fileLoading,
   fileContent,
   imageDataUrl,
@@ -259,6 +262,7 @@ export function WriteWorkspaceDocumentPane({
         size={fileSize}
         mtimeMs={pdfMtimeMs}
         workspaceRoot={workspaceRoot}
+        pdfView={pdfView}
         viewerRef={editorPaneRef}
         onSelectionChange={onSelectionChange}
       />

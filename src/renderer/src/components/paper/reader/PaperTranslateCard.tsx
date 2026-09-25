@@ -17,6 +17,7 @@ export function PaperTranslateCard({
   error,
   onConfigure,
   onClose,
+  onHoverChange,
   t
 }: {
   anchor: { x: number; y: number }
@@ -29,6 +30,8 @@ export function PaperTranslateCard({
   /** Shown in the error state when the failure is fixable via settings. */
   onConfigure?: () => void
   onClose: () => void
+  /** R1.3: pauses the 700ms auto-collapse while the pointer is over the card. */
+  onHoverChange?: (hovered: boolean) => void
   t: TFunction
 }): ReactElement {
   const cardRef = useRef<HTMLDivElement | null>(null)
@@ -69,6 +72,8 @@ export function PaperTranslateCard({
       style={{ left: pos.left, top: pos.top }}
       onPointerDown={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
+      onMouseEnter={() => onHoverChange?.(true)}
+      onMouseLeave={() => onHoverChange?.(false)}
     >
       <div className="flex items-center gap-1.5 border-b border-ds-border-muted px-3 py-1.5">
         <Languages className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.9} />

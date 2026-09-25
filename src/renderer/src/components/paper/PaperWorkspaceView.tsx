@@ -1,8 +1,9 @@
-import { useEffect, type ReactElement, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, type ReactElement, type ReactNode } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { isWritePaperViewTab } from '../../write/write-editor-layout'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
+import { PaperWorkbenchChromeContext, type PaperWorkbenchChrome } from '../../paper/paper-chrome-context'
 import { WriteWorkspaceView } from '../write/WriteWorkspaceView'
 import { WritePdfRendererProvider } from '../write/write-pdf-renderer-context'
 import { PaperPdfReader } from './reader/PaperPdfReader'
@@ -16,6 +17,8 @@ export type PaperWorkspaceViewProps = {
   input: string
   setInput: (value: string) => void
   onSubmitPrompt?: (value: string) => void
+  /** R2.4: attach a base64 PNG to the assistant composer (vision channel). */
+  onAttachImage?: (input: { dataBase64: string; name: string }) => Promise<boolean>
   onOpenAgentSettings?: () => void
   rightPanel: ReactNode
 }
@@ -33,6 +36,7 @@ export function PaperWorkspaceView({
   input,
   setInput,
   onSubmitPrompt,
+  onAttachImage,
   onOpenAgentSettings,
   rightPanel
 }: PaperWorkspaceViewProps): ReactElement {
@@ -50,6 +54,16 @@ export function PaperWorkspaceView({
   const setEntriesError = usePaperModeStore((s) => s.setEntriesError)
 
   const hasLibrary = paperMode.libraries.length > 0
+
+  // Deep paper UI (reader layout presets, immersive mode) collapses the left
+  // sidebar through the workbench callback rather than a parallel flag.
+  const setLeftSidebarCollapsed = useCallback((collapsed: boolean): void => {
+    if (collapsed !== leftSidebarCollapsed) onToggleLeftSidebar()
+  }, [leftSidebarCollapsed, onToggleLeftSidebar])
+  const chrome = useMemo<PaperWorkbenchChrome>(
+    () => ({ leftSidebarCollapsed, setLeftSidebarCollapsed }),
+    [leftSidebarCollapsed, setLeftSidebarCollapsed]
+  )
 
   // The library tab is pinned: restore it when the persisted layout lost it
   // (e.g. a layout saved before virtual tabs existed).
@@ -69,7 +83,8 @@ export function PaperWorkspaceView({
     usePaperModeStore.getState().setComposerBridge({
       input,
       setInput,
-      ...(onSubmitPrompt ? { submit: onSubmitPrompt } : {})
+      ...(onSubmitPrompt ? { submit: onSubmitPrompt } : {}),
+      ...(onAttachImage ? { attachImage: onAttachImage } : {})
     })
     return () => {
       const bridge = usePaperModeStore.getState().composerBridge
@@ -77,7 +92,7 @@ export function PaperWorkspaceView({
         usePaperModeStore.getState().setComposerBridge(null)
       }
     }
-  }, [input, setInput, onSubmitPrompt])
+  }, [input, setInput, onSubmitPrompt, onAttachImage])
 
   // Index the active library whenever the mounted root changes; the store's
   // workspaceRoot is the library root on this surface. Entries arrive
@@ -126,16 +141,18 @@ export function PaperWorkspaceView({
           {!hasLibrary ? (
             <PaperLibraryOnboarding />
           ) : (
-            <WritePdfRendererProvider value={PaperPdfReader}>
-              <WriteWorkspaceView
-                leftSidebarCollapsed={leftSidebarCollapsed}
-                onToggleLeftSidebar={onToggleLeftSidebar}
-                input={input}
-                setInput={setInput}
-                onSubmitPrompt={onSubmitPrompt}
-                onOpenAgentSettings={onOpenAgentSettings}
-              />
-            </WritePdfRendererProvider>
+            <PaperWorkbenchChromeContext.Provider value={chrome}>
+              <WritePdfRendererProvider value={PaperPdfReader}>
+                <WriteWorkspaceView
+                  leftSidebarCollapsed={leftSidebarCollapsed}
+                  onToggleLeftSidebar={onToggleLeftSidebar}
+                  input={input}
+                  setInput={setInput}
+                  onSubmitPrompt={onSubmitPrompt}
+                  onOpenAgentSettings={onOpenAgentSettings}
+                />
+              </WritePdfRendererProvider>
+            </PaperWorkbenchChromeContext.Provider>
           )}
           {hasLibrary ? <PaperTaskRing /> : null}
         </div>

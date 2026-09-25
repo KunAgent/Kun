@@ -59,6 +59,7 @@ export function makeWriteFileActionBaseState(): WriteWorkspaceState {
     splitEditorGroup: () => undefined,
     closeEditorGroup: () => undefined,
     setTabViewMode: () => undefined,
+    setTabPdfView: () => undefined,
     setSplitOrientation: () => undefined,
     setSplitRatio: () => undefined,
     setPresentationViewForGroup: () => undefined,

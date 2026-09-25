@@ -7,6 +7,7 @@ import {
   paperLocalStateReadPayloadSchema,
   paperLocalStateWritePayloadSchema,
   paperMoveToGroupPayloadSchema,
+  paperReadingActivityPayloadSchema,
   paperTrashUnitPayloadSchema,
   paperUpdateMetaPayloadSchema
 } from './app-ipc-schemas/paper-library'
@@ -22,7 +23,8 @@ import type {
   PaperLibraryEntriesResult,
   PaperLibraryTrashResult,
   PaperLocalLibraryState,
-  PaperMoveToGroupResult
+  PaperMoveToGroupResult,
+  PaperReadingActivityResult
 } from '../../shared/paper/paper-library-types'
 import type { PaperUnitMetaV2 } from '../../shared/paper/paper-meta-v2'
 import {
@@ -48,6 +50,7 @@ import {
   readPaperLocalLibraryState,
   writePaperLocalUnitState
 } from '../services/paper/paper-local-state-store'
+import { readPaperReadingActivity } from '../services/paper/paper-reading-activity-service'
 
 function resolvePath(raw: string): string {
   return resolve(expandHomePath(raw.trim()))
@@ -266,6 +269,32 @@ export function registerAppPaperLibraryIpcHandlers(
       } catch (error) {
         logError?.('paper-library', 'paper-library:download-pdf failed', error)
         return paperErrorResult<PaperDownloadPdfResult>(error, 'network')
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'paper-library:reading-activity',
+    async (event, payload: unknown): Promise<PaperReadingActivityResult> => {
+      assertTrustedWorkbenchSender(event, getMainWindow)
+      const request = parseIpcPayload(
+        'paper-library:reading-activity',
+        paperReadingActivityPayloadSchema,
+        payload
+      )
+      try {
+        const workspacePath = await canonicalPath(resolvePath(request.workspaceRoot))
+        const papersDir = await papersDirFor(request.papersDir)
+        const papersDirAbs = await resolveTargetPathWithinWorkspace(papersDir, workspacePath)
+        const [units, local] = await Promise.all([
+          scanPaperLibrary(workspacePath, papersDirAbs),
+          readPaperLocalLibraryState(userDataDir(), workspacePath)
+        ])
+        const activity = await readPaperReadingActivity(units, local)
+        return { ok: true, activity }
+      } catch (error) {
+        logError?.('paper-library', 'paper-library:reading-activity failed', error)
+        return paperErrorResult<PaperReadingActivityResult>(error, 'invalid-root')
       }
     }
   )

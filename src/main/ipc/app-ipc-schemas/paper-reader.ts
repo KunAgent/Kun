@@ -41,6 +41,51 @@ export const paperTranslateDocumentPayloadSchema = z
   })
   .strict()
 
+/** R2.2: overlay block translation — blocks arrive already ⟦n⟧-masked. */
+export const paperTranslateBlocksPayloadSchema = z
+  .object({
+    ...workspaceUnitScoped,
+    blocks: z
+      .array(
+        z
+          .object({
+            id: z.string().trim().min(1).max(80),
+            text: z.string().min(1).max(8_000)
+          })
+          .strict()
+      )
+      .min(1)
+      .max(400),
+    targetLanguage: z.enum(['zh', 'en']),
+    ...translateModel
+  })
+  .strict()
+
+/**
+ * R2.4 region capture: renderer crops the PNG itself and sends base64 +
+ * the card fields. The main side validates the PNG magic and size before
+ * writing `marks/assets/<id>.png` + `marks/<id>.json`.
+ */
+export const paperSaveVisualMarkPayloadSchema = z
+  .object({
+    ...workspaceUnitScoped,
+    mark: z
+      .object({
+        id: z.string().trim().min(1).max(80),
+        page: z.number().int().min(1).max(10_000),
+        rect: z.tuple([
+          z.number().min(0).max(1),
+          z.number().min(0).max(1),
+          z.number().min(0).max(1),
+          z.number().min(0).max(1)
+        ]),
+        comment: z.string().max(8_000).optional()
+      })
+      .strict(),
+    pngBase64: z.string().min(8).max(6_000_000)
+  })
+  .strict()
+
 export const paperReferencesPayloadSchema = z
   .object({
     ...workspaceUnitScoped,

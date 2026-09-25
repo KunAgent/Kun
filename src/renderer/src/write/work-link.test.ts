@@ -56,7 +56,18 @@ describe('resolveWorkLinkTarget', () => {
       kind: 'workspace-file',
       path: '/work/notes/x.md',
       slug: undefined,
-      line: 12
+      line: 12,
+      page: undefined
+    })
+  })
+
+  it('parses #page=N deep-links into page targets', () => {
+    expect(resolveWorkLinkTarget('papers/u1/u1.pdf#page=4', FILE, ROOT)).toEqual({
+      kind: 'workspace-file',
+      path: '/work/notes/papers/u1/u1.pdf',
+      slug: undefined,
+      line: undefined,
+      page: 4
     })
   })
 

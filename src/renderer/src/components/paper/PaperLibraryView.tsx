@@ -1,4 +1,4 @@
-import { useMemo, useState, type DragEvent, type ReactElement } from 'react'
+import { useEffect, useMemo, useState, type DragEvent, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   ArrowDown,
@@ -33,6 +33,7 @@ import {
 import { PaperRowMenu, type PaperRowMenuAction } from './library/PaperRowMenu'
 import { PaperMetaEditDialog } from './library/PaperMetaEditDialog'
 import { PaperMoveGroupDialog } from './library/PaperMoveGroupDialog'
+import { PaperReadingHeat } from './library/PaperReadingHeat'
 import { PaperTitleText } from './PaperTitleText'
 import {
   buildPaperMultiPrompt,
@@ -42,7 +43,8 @@ import {
 import { newPaperRequestId, usePaperStore } from '../../write/paper/paper-store'
 import type {
   PaperLibraryEntry,
-  PaperLibrarySortKey
+  PaperLibrarySortKey,
+  PaperUnitReadingActivity
 } from '@shared/paper/paper-library-types'
 
 const COLUMNS: { key: PaperLibrarySortKey | null; labelKey: string; className: string }[] = [
@@ -125,6 +127,23 @@ export function PaperLibraryView({
   const [menu, setMenu] = useState<{ entry: PaperLibraryEntry; x: number; y: number } | null>(null)
   const [editEntry, setEditEntry] = useState<PaperLibraryEntry | null>(null)
   const [moveUnits, setMoveUnits] = useState<string[] | null>(null)
+  // R3.1: mark-density data for the per-row heat bar; fetched once per tab
+  // visit (main process mtime-caches the per-unit aggregates).
+  const [activity, setActivity] = useState<Record<string, PaperUnitReadingActivity>>({})
+
+  const loadActivity = async (): Promise<void> => {
+    if (!workspaceRoot || typeof window.kunGui?.paperReadingActivity !== 'function') return
+    const result = await window.kunGui.paperReadingActivity({
+      workspaceRoot,
+      papersDir: paperReading.papersDir
+    }).catch(() => null)
+    if (result?.ok) setActivity(result.activity)
+  }
+
+  useEffect(() => {
+    void loadActivity()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceRoot])
 
   const visible = useMemo(
     () => sortPaperEntries(filterPaperEntries(entries, filter), sort),
@@ -146,6 +165,7 @@ export function PaperLibraryView({
           tags: result.tags,
           groups: result.groups
         })
+        void loadActivity()
       } else {
         setEntriesError(result.message)
       }
@@ -487,6 +507,7 @@ export function PaperLibraryView({
             <LibraryRow
               key={entry.unitDir}
               entry={entry}
+              activity={activity[entry.unitDir]}
               selected={selection.has(entry.unitDir)}
               onToggle={() => toggleSelected(entry.unitDir)}
               onOpen={() => void openLibraryEntry(entry)}
@@ -513,6 +534,7 @@ export function PaperLibraryView({
 
 function LibraryRow({
   entry,
+  activity,
   selected,
   onToggle,
   onOpen,
@@ -520,6 +542,7 @@ function LibraryRow({
   t
 }: {
   entry: PaperLibraryEntry
+  activity: PaperUnitReadingActivity | undefined
   selected: boolean
   onToggle: () => void
   onOpen: () => void
@@ -527,6 +550,12 @@ function LibraryRow({
   t: (key: string, opts?: Record<string, unknown>) => string
 }): ReactElement {
   const meta = entry.meta
+  const markCount = (activity?.pages ?? []).reduce((sum, count) => sum + count, 0)
+  const heatTooltip = t('writePaperReadingHeatTooltip', {
+    marks: markCount,
+    page: activity?.lastPage ?? entry.lastPage ?? 0,
+    total: activity?.pageCount ?? entry.pageCount ?? 0
+  })
   return (
     <div
       role="button"
@@ -600,7 +629,12 @@ function LibraryRow({
         </span>
       </span>
       <span className="w-16 shrink-0">
-        <ReadingProgress lastPage={entry.lastPage} pageCount={entry.pageCount} />
+        <PaperReadingHeat
+          activity={activity}
+          lastPage={activity?.lastPage ?? entry.lastPage}
+          pageCount={activity?.pageCount ?? entry.pageCount}
+          tooltip={heatTooltip}
+        />
       </span>
       <span className="w-24 shrink-0 text-[11.5px] text-ds-faint">
         {formatOpenedAt(meta.importedAt)}
@@ -622,18 +656,5 @@ function LibraryRow({
         <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={1.9} />
       </button>
     </div>
-  )
-}
-
-/** Local reading position as a thin bar (last page / page count). */
-function ReadingProgress({ lastPage, pageCount }: { lastPage?: number; pageCount?: number }): ReactElement | null {
-  if (!lastPage || !pageCount) return null
-  const ratio = Math.max(0, Math.min(1, lastPage / pageCount))
-  return (
-    <span className="flex items-center gap-1" title={`${lastPage}/${pageCount}`}>
-      <span className="h-1 w-9 overflow-hidden rounded-full bg-ds-border-muted">
-        <span className="block h-full rounded-full bg-accent/70" style={{ width: `${Math.round(ratio * 100)}%` }} />
-      </span>
-    </span>
   )
 }

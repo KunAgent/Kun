@@ -52,7 +52,15 @@ export function PaperInfoPanel(): ReactElement | null {
   const { meta } = entry
 
   const links: { label: string; url: string }[] = []
-  if (meta.arxivId) links.push({ label: 'arXiv', url: `https://arxiv.org/abs/${meta.arxivId}` })
+  if (meta.arxivId) {
+    links.push({ label: 'arXiv', url: `https://arxiv.org/abs/${meta.arxivId}` })
+    // R1.5: alphaXiv 速览页 + ModelScope 解读页 for arXiv papers.
+    links.push({ label: 'alphaXiv', url: `https://www.alphaxiv.org/abs/${meta.arxivId}` })
+    links.push({
+      label: t('writePaperLinkModelScope'),
+      url: `https://modelscope.cn/papers/${meta.arxivId}`
+    })
+  }
   if (meta.doi) links.push({ label: 'DOI', url: `https://doi.org/${meta.doi}` })
   if (meta.coolPapers) {
     links.push({
@@ -180,11 +188,12 @@ export function PaperInfoPanel(): ReactElement | null {
                 <button
                   key={link.url}
                   type="button"
+                  title={link.url}
                   onClick={() => void window.kunGui?.openExternal?.(link.url)}
-                  className="inline-flex items-center gap-0.5 text-[11px] text-accent hover:underline"
+                  className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline"
                 >
+                  <ExternalLink className="h-4 w-4" strokeWidth={1.8} />
                   {link.label}
-                  <ExternalLink className="h-2.5 w-2.5" strokeWidth={2} />
                 </button>
               ))}
             </div>
@@ -240,7 +249,7 @@ export function PaperInfoPanel(): ReactElement | null {
               }
               className="inline-flex h-6 items-center rounded-md bg-ds-hover px-2 text-[11px] text-ds-muted transition hover:text-ds-ink"
             >
-              {t('writePaperCoolNotes')}
+              {t('writePaperAiDigest')}
             </button>
           </div>
         </div>

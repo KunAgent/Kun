@@ -9,6 +9,8 @@ export type WritePdfRendererProps = {
   size: number
   mtimeMs: number
   workspaceRoot: string
+  /** R2.3: 'translated' renders the read-only side-by-side mirror. */
+  pdfView?: 'translated'
   viewerRef?: RefObject<HTMLDivElement | null>
   onSelectionChange: (selection: WriteEditorSelectionState) => void
 }

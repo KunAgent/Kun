@@ -291,13 +291,16 @@ export function WritePdfPage({
   pageNumber,
   scale,
   selectionRects,
-  onPageText
+  onPageText,
+  onViewport
 }: {
   document: PDFDocumentProxy
   pageNumber: number
   scale: number
   selectionRects: WriteSelectionPageRect[]
   onPageText: (page: PageText) => void
+  /** Reports the rendered CSS-pixel page size once known / after zoom. */
+  onViewport?: (page: number, size: { width: number; height: number }) => void
 }): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const textLayerHostRef = useRef<HTMLDivElement | null>(null)
@@ -320,7 +323,9 @@ export function WritePdfPage({
       canvas.height = Math.floor(viewport.height * outputScale)
       canvas.style.width = `${viewport.width}px`
       canvas.style.height = `${viewport.height}px`
-      setPageSize({ width: viewport.width, height: viewport.height })
+      const size = { width: viewport.width, height: viewport.height }
+      setPageSize(size)
+      onViewport?.(pageNumber, size)
 
       const context = canvas.getContext('2d')
       if (!context) return
@@ -367,7 +372,7 @@ export function WritePdfPage({
       renderTask?.cancel()
       textLayerBuilder?.cancel()
     }
-  }, [document, onPageText, pageNumber, scale])
+  }, [document, onPageText, onViewport, pageNumber, scale])
 
   return (
     <div

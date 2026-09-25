@@ -196,6 +196,12 @@ export function useWorkbenchAttachmentRuntime({
     setComposerAttachmentsForScope
   ])
 
+  const addComposerImagePngBase64 = useCallback(
+    async (input: { dataBase64: string; name: string }): Promise<boolean> =>
+      (await addComposerImageBase64({ ...input, mimeType: 'image/png' })) !== null,
+    [addComposerImageBase64]
+  )
+
   const {
     handlePickAttachments,
     handlePasteClipboardImage,
@@ -267,7 +273,7 @@ export function useWorkbenchAttachmentRuntime({
     attachmentUploadBusy,
     attachmentUploadEnabled,
     attachmentUploadError,
-    addComposerImageBase64,
+    addComposerImageBase64, addComposerImagePngBase64,
     clearComposerAttachments,
     composerAttachments,
     getAttachmentScope: () => composerAttachmentScopeRef.current,

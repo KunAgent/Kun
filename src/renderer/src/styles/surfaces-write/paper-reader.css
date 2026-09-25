@@ -1,0 +1,56 @@
+/* Paper reader styles: immersive chrome, selection marks, link flash, and
+   per-page translation overlays (R1/R2). Keep opaque backgrounds on floating
+   layers; reduced-motion paths use fade only. */
+
+/* R1.4: hovered mark brightens while the gutter draws its connector line. */
+.paper-mark-rect-active {
+  opacity: 0.85;
+}
+
+/* R1.2 immersive reading: the reader overlays the tab bar/sidebars as a
+   fixed layer (chrome collapses via store state, not display:none); the PDF
+   column stays centered and capped. */
+.write-pdf-viewer[data-immersive='true'] {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--ds-main, #ffffff);
+}
+
+.write-pdf-viewer[data-immersive='true'] .write-pdf-scroller > div {
+  margin-inline: auto;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .write-pdf-viewer[data-immersive='true'] {
+    animation: paper-immersive-fade 140ms ease-out;
+  }
+}
+
+@keyframes paper-immersive-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* R2.5: yellow pulse on the page an internal link just jumped to. */
+[data-paper-page].paper-page-flash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  background: rgba(250, 204, 21, 0.28);
+  animation: paper-flash-fade 1.2s ease-out forwards;
+}
+
+@keyframes paper-flash-fade {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* R2.2 overlay translation: block divs match the paper tone so the overlay
+   reads as the page itself (opaque — it masks the original glyphs). */
+.paper-translate-block { background: #ffffff; color: #1f2937; }
+.write-pdf-scroller[data-paper-tone='sepia'] .paper-translate-block { background: #f4ecd8; }
+.write-pdf-scroller[data-paper-tone='green'] .paper-translate-block { background: #e4f0e0; }
+.write-pdf-scroller[data-paper-tone='dark'] .paper-translate-block { background: #333338; color: #e5e7eb; }

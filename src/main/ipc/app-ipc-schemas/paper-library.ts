@@ -32,6 +32,8 @@ const metaPatchSchema = z
 
 export const paperLibraryListPayloadSchema = z.object({ ...workspaceScoped }).strict()
 
+export const paperReadingActivityPayloadSchema = z.object({ ...workspaceScoped }).strict()
+
 export const paperLibraryDetectPayloadSchema = z
   .object({
     workspaceRoots: z.array(trimmedString(MAX_PATH_LENGTH)).max(64),

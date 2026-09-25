@@ -12,7 +12,7 @@ import {
 export type WorkLinkTarget =
   | { kind: 'external'; url: string }
   | { kind: 'anchor'; slug: string }
-  | { kind: 'workspace-file'; path: string; slug?: string; line?: number }
+  | { kind: 'workspace-file'; path: string; slug?: string; line?: number; page?: number }
   | { kind: 'invalid'; reason: string }
 
 /** GitHub-compatible heading slug: lowercase, punctuation removed,
@@ -71,10 +71,16 @@ export function resolveWorkLinkTarget(
   const pathname = pathnamePart.trim()
   let slug: string | undefined
   let line: number | undefined
+  let page: number | undefined
   if (hashPart) {
     const lineMatch = hashPart.match(/^L(\d+)$/)
+    const pageMatch = hashPart.match(/^page=(\d+)$/)
     if (lineMatch) {
       line = Number.parseInt(lineMatch[1], 10)
+    } else if (pageMatch) {
+      // R3.2 citation links: `papers/<unit>/<pdf>#page=N` deep-links into
+      // the reader's PDF at page N.
+      page = Number.parseInt(pageMatch[1], 10)
     } else {
       slug = workHeadingSlug(hashPart)
     }
@@ -92,7 +98,7 @@ export function resolveWorkLinkTarget(
   if (!isInsideRoot(resolved, workspaceRoot)) {
     return { kind: 'invalid', reason: 'outside-workspace' }
   }
-  return { kind: 'workspace-file', path: resolved, slug, line }
+  return { kind: 'workspace-file', path: resolved, slug, line, page }
 }
 
 function decodeURIComponentSafe(value: string): string {

@@ -1,12 +1,14 @@
-import { mkdir, readFile, readdir } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   PAPER_MARKS_ANNOTATIONS_FILE,
+  PAPER_MARKS_ASSETS_DIR,
   PAPER_MARKS_DIR_NAME,
   mergePaperHighlights,
   paperAnnotationsFileSchema,
   paperAskMarkSchema,
   paperTranslateMarkSchema,
+  paperVisualMarkSchema,
   type PaperAnnotationsFile,
   type PaperHighlight
 } from '../../../shared/paper/paper-marks-types'
@@ -83,6 +85,8 @@ export async function readPaperMarkCard(
     if (translate.success) return translate.data
     const ask = paperAskMarkSchema.safeParse(json)
     if (ask.success) return ask.data
+    const visual = paperVisualMarkSchema.safeParse(json)
+    if (visual.success) return visual.data
     return null
   } catch {
     return null
@@ -95,7 +99,14 @@ export async function writePaperMarkCard(
 ): Promise<void> {
   const translate = paperTranslateMarkSchema.safeParse(card)
   const ask = translate.success ? null : paperAskMarkSchema.safeParse(card)
-  const parsed = translate.success ? translate.data : ask?.success ? ask.data : null
+  const visual = !translate.success && !ask?.success ? paperVisualMarkSchema.safeParse(card) : null
+  const parsed = translate.success
+    ? translate.data
+    : ask?.success
+      ? ask.data
+      : visual?.success
+        ? visual.data
+        : null
   if (!parsed || !MARK_ID_RE.test(parsed.id)) {
     throw new Error('Invalid mark card payload.')
   }
@@ -104,6 +115,30 @@ export async function writePaperMarkCard(
     join(marksDir(unitDirAbs), `${parsed.id}.json`),
     JSON.stringify(parsed, null, 2)
   )
+}
+
+/** R2.4: store a captured region PNG under `marks/assets/<id>.png`. */
+export async function writePaperVisualMarkPng(
+  unitDirAbs: string,
+  markId: string,
+  png: Buffer
+): Promise<string> {
+  if (!MARK_ID_RE.test(markId)) throw new Error('Invalid mark id.')
+  const dir = join(marksDir(unitDirAbs), PAPER_MARKS_ASSETS_DIR)
+  await mkdir(dir, { recursive: true })
+  const filePath = join(dir, `${markId}.png`)
+  await writeFile(filePath, png)
+  return `${PAPER_MARKS_ASSETS_DIR}/${markId}.png`
+}
+
+/**
+ * Remove a per-id card file plus any visual-mark asset it owns. Called from
+ * the marks-write merge when `removedIds` contains a card id.
+ */
+export async function deletePaperMarkCard(unitDirAbs: string, markId: string): Promise<void> {
+  if (!MARK_ID_RE.test(markId)) return
+  await rm(join(marksDir(unitDirAbs), `${markId}.json`), { force: true })
+  await rm(join(marksDir(unitDirAbs), PAPER_MARKS_ASSETS_DIR, `${markId}.png`), { force: true })
 }
 
 export async function listPaperMarkCards(unitDirAbs: string): Promise<unknown[]> {

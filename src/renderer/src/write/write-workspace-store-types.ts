@@ -27,6 +27,11 @@ export type WriteEditorTab = {
   kind?: 'file'
   path: string
   viewMode: WritePreviewMode
+  /**
+   * R2.3 side-by-side translation: a same-path tab in the secondary group
+   * marked `translated` renders the reader's overlay-only mirror.
+   */
+  pdfView?: 'translated'
   cursorOffset?: number
   scrollTop?: number
 }
@@ -277,6 +282,8 @@ export type WriteWorkspaceState = {
   splitEditorGroup: (orientation: Exclude<WriteEditorLayoutOrientation, 'single'>, path?: string) => void
   closeEditorGroup: (groupId: WriteEditorGroupId) => void
   setTabViewMode: (groupId: WriteEditorGroupId, path: string, mode: WritePreviewMode) => void
+  /** R2.3: mark/unmark a file tab as the read-only translated mirror. */
+  setTabPdfView: (groupId: WriteEditorGroupId, path: string, pdfView?: 'translated') => void
   setSplitOrientation: (orientation: Exclude<WriteEditorLayoutOrientation, 'single'>) => void
   setSplitRatio: (ratio: number) => void
   setPresentationViewForGroup: (

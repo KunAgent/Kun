@@ -1,30 +1,58 @@
 import { useState, type ReactElement } from 'react'
 import { X } from 'lucide-react'
-import type { PaperHighlight } from '@shared/paper/paper-marks-types'
+import type { PaperHighlight, PaperVisualMark } from '@shared/paper/paper-marks-types'
+import { setPaperEditingMark, usePaperMarksStore } from '../../../paper/paper-marks-store'
 
 /**
  * Absolute overlay that renders a page's highlights as %-positioned rects.
  * Marks store normalized [x, y, w, h] so zoom never shifts their position.
- * Click a mark to see its quote/comment and delete it.
+ * Click a mark to see its quote/comment and delete it. Hover is forwarded so
+ * the comment gutter can draw its connector line (R1.4).
  */
 export function PaperPageMarksLayer({
   marks,
+  visualMarks = [],
   onDelete
 }: {
   marks: readonly PaperHighlight[]
+  visualMarks?: readonly PaperVisualMark[]
   onDelete: (id: string) => void
 }): ReactElement {
   const [openId, setOpenId] = useState<string | null>(null)
+  const hoveredMarkId = usePaperMarksStore((s) => s.hoveredMarkId)
   const open = marks.find((mark) => mark.id === openId)
   return (
     <div className="pointer-events-none absolute inset-0 z-[2]">
+      {/* R2.4 region marks: dashed outline; clicking opens the gutter card. */}
+      {visualMarks.map((mark) => (
+        <button
+          key={mark.id}
+          type="button"
+          aria-label={mark.comment ?? 'region mark'}
+          title={mark.comment}
+          className={`pointer-events-auto absolute rounded-[2px] border border-dashed border-[#3b82f6]/80 bg-[#3b82f6]/8 transition hover:bg-[#3b82f6]/15 ${
+            hoveredMarkId === mark.id ? 'paper-mark-rect-active' : ''
+          }`}
+          style={{
+            left: `${mark.rect[0] * 100}%`,
+            top: `${mark.rect[1] * 100}%`,
+            width: `${mark.rect[2] * 100}%`,
+            height: `${mark.rect[3] * 100}%`
+          }}
+          onClick={() => setPaperEditingMark(mark.id)}
+          onMouseEnter={() => usePaperMarksStore.setState({ hoveredMarkId: mark.id })}
+          onMouseLeave={() => usePaperMarksStore.setState({ hoveredMarkId: null })}
+        />
+      ))}
       {marks.map((mark) =>
         mark.rects.map((rect, index) => (
           <button
             key={`${mark.id}-${index}`}
             type="button"
             aria-label="highlight"
-            className={`paper-mark-rect paper-mark-${mark.color} pointer-events-auto absolute cursor-pointer`}
+            className={`paper-mark-rect paper-mark-${mark.color} pointer-events-auto absolute cursor-pointer ${
+              hoveredMarkId === mark.id ? 'paper-mark-rect-active' : ''
+            }`}
             style={{
               left: `${rect[0] * 100}%`,
               top: `${rect[1] * 100}%`,
@@ -32,6 +60,8 @@ export function PaperPageMarksLayer({
               height: `${rect[3] * 100}%`
             }}
             onClick={() => setOpenId(openId === mark.id ? null : mark.id)}
+            onMouseEnter={() => usePaperMarksStore.setState({ hoveredMarkId: mark.id })}
+            onMouseLeave={() => usePaperMarksStore.setState({ hoveredMarkId: null })}
           />
         ))
       )}
