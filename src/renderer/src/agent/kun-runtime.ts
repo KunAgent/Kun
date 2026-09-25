@@ -579,5 +579,5 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
 
 }
 
-export { KunSseSubscriptionError } from './kun-runtime-services'
+export { KunSseSubscriptionError } from './kun-runtime-sse-subscription'
 export { kunThreadEventsPath }
