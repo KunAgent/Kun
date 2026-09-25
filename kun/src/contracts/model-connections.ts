@@ -82,7 +82,7 @@ export const ModelConnectionGlobalsRequestSchema = z.object({
   expectedRevision: z.number().int().nonnegative(),
   proxy: ModelConnectionProxySchema,
   routePools: z.array(ModelRoutePoolConfigSchema),
-  failover: z.array(ModelFailoverGroupSchema).default([]),
+  failover: z.array(ModelFailoverGroupSchema).optional(),
   localModelGateway: LocalModelGatewayConfigSchema
 }).strict()
 

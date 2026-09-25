@@ -171,6 +171,34 @@ describe('ModelConnectionRegistry', () => {
     expect(applied.localModelGateway).toEqual({ enabled: true, exposeProviderModels: false })
   })
 
+  it('keeps failover groups when a globals patch omits the field', async () => {
+    const { value } = await registry()
+    const connected = await value.connect(deepseekConnection())
+    const failover = [{
+      providerId: 'deepseek',
+      members: [{ providerId: 'deepseek', enabled: true, models: [] }],
+      strategy: 'order' as const,
+      fallbackTargets: []
+    }]
+    const withFailover = await value.updateGlobals({
+      expectedRevision: connected.revision,
+      proxy: { enabled: false, url: '' },
+      routePools: [],
+      failover,
+      localModelGateway: { enabled: false, exposeProviderModels: false }
+    })
+    expect(withFailover.failover).toEqual(failover)
+
+    const partial = await value.updateGlobals({
+      expectedRevision: withFailover.revision,
+      proxy: { enabled: true, url: 'http://127.0.0.1:7890' },
+      routePools: [],
+      localModelGateway: { enabled: false, exposeProviderModels: false }
+    })
+    expect(partial.failover).toEqual(failover)
+    expect(partial.proxy).toEqual({ enabled: true, url: 'http://127.0.0.1:7890' })
+  })
+
   it.each([
       {
         label: 'an origin root',

@@ -125,7 +125,7 @@ async updateGlobals(this: ModelConnectionRegistry, raw: unknown): Promise<ModelC
         revision: current.revision + 1,
         proxy: input.proxy,
         routePools: input.routePools,
-        failover: input.failover,
+        failover: input.failover ?? current.failover,
         localModelGateway: input.localModelGateway
       }
     })
