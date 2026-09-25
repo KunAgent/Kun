@@ -29,7 +29,7 @@ function hostOf(baseUrl: string): string {
 }
 
 /**
- * Reliability tab (plan §6.4/§6.11): account-group strategy plus an ordered
+ * Reliability tab: account-group strategy plus an ordered
  * cross-provider fallback chain. Accounts are sibling provider profiles on the
  * same host (multiple keys for one vendor); fallback targets are concrete
  * `provider/model` pairs tried after every account is exhausted.

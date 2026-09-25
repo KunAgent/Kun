@@ -20,7 +20,7 @@ const ENDPOINT_FORMAT_FIELDS: {
 ]
 
 /**
- * Per-protocol base URL overrides (plan §6.13). A relay may serve Anthropic
+ * Per-protocol base URL overrides. A relay may serve Anthropic
  * messages on a different path than OpenAI chat completions; each row stores
  * an optional absolute URL and falls back to the profile `baseUrl` when empty.
  * The "detect" action asks Kun which wire protocols the base URL speaks and

@@ -16,7 +16,7 @@ import {
 } from './provider-external-import-types'
 
 /**
- * External provider import (plan §6.12): read-only scans of other tools'
+ * External provider import: read-only scans of other tools'
  * config. Credentials are extracted only inside this main-process module —
  * scan results carry a `hasKey` flag and a masked hint, never the key —
  * and the commit step re-reads the source file itself.

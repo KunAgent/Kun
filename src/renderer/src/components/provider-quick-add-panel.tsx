@@ -18,7 +18,7 @@ function hostOf(url: string): string {
 }
 
 /**
- * Compact quick-add sheet for preset providers (plan §6.5): icon, name, note,
+ * Compact quick-add sheet for preset providers: icon, name, note,
  * website/Get-Key links, autofocused key input (Enter submits), an optional
  * region selector, and collapsed "more settings" for base-URL/proxy
  * overrides. Submitting hands a fully-built profile to the caller which

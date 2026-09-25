@@ -104,7 +104,7 @@ export function startMainApp(): Promise<void> {
     revealMainWindow
   )
 
-  // kun://import deep links (plan §6.12). The staged draft is delivered to the
+  // kun://import deep links. The staged draft is delivered to the
   // workbench; the key itself stays staged in this process until the user
   // confirms through the commit IPC.
   let stagedImportLink: StagedProviderImportLink | null = null

@@ -18,7 +18,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 /**
- * Custom provider icon picker (plan §6.13): uploads a small image through
+ * Custom provider icon picker: uploads a small image through
  * `provider:icon:import` (main process validates + content-addresses it) and
  * stores the returned `iconId` on the profile.
  */

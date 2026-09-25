@@ -5,7 +5,7 @@ import { app } from 'electron'
 import type { AppSettingsV1 } from '../shared/app-settings'
 
 /**
- * Custom provider icons (plan §6.13). Icons are content-addressed under
+ * Custom provider icons. Icons are content-addressed under
  * `userData/provider-icons/<sha256>.<ext>`; a profile references one through
  * `iconId`. SVG is allowed but must only ever be rendered via `<img>` (no
  * inline injection). Unreferenced icons older than one hour are pruned.

@@ -38,7 +38,7 @@ type SheetProps = {
 }
 
 /**
- * The "add provider" sheet (plan §6.5): searchable preset cards grouped by
+ * The "add provider" sheet: searchable preset cards grouped by
  * subscription/plans/api, a custom-provider tile, an external import entry
  * point, and a `kun://import` paste field.
  */

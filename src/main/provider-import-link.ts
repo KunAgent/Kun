@@ -8,7 +8,7 @@ import {
 } from '../shared/provider-import-link'
 
 /**
- * `kun://import` link staging (plan §6.12): the link's API key never reaches
+ * `kun://import` link staging: the link's API key never reaches
  * the renderer. The renderer receives a sanitized draft (key replaced by a
  * hint) plus an opaque token; on confirm the commit IPC resolves the token
  * back to the staged draft inside this process and writes the profile.

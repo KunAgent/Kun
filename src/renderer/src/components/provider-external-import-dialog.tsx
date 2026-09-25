@@ -30,7 +30,7 @@ function statusLabel(
 }
 
 /**
- * External tool import dialog (plan §6.12). Scanning is read-only and never
+ * External tool import dialog. Scanning is read-only and never
  * returns credentials — each row shows a masked key hint only. Committing one
  * entry asks the main process to re-read the source file itself.
  */
