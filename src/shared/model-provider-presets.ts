@@ -33,8 +33,8 @@ export {
 export { MODEL_PROVIDER_PRESETS } from './model-provider-preset-catalog'
 export {
   getModelProviderPreset,
-  isMultiAccountProviderPreset,
   modelProviderPresetAccountCount,
+  modelProviderPresetFamilyProviders,
   modelProviderPresetAccountProfile,
   modelProviderPresetProfile,
   modelProviderTokenPlanProfile,

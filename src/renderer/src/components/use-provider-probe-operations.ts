@@ -478,83 +478,25 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
     modelAliases: Readonly<Record<string, readonly string[]>> = {},
     discoveredModelProfiles: Readonly<Record<string, ModelProviderModelProfileV1>> = {}
   ): Promise<number> => {
-    const nextChatModels = authoritative
-      ? [...picked.chat]
-      : mergeProviderModelIds(target.models, picked.chat)
+    const merged = applyProviderModelImport(target, picked, authoritative, modelAliases, discoveredModelProfiles)
     if (
       sharedConnectionFor(target.id) &&
-      nextChatModels.length > MAX_SHARED_MODEL_CONNECTION_MODELS
+      merged.models.length > MAX_SHARED_MODEL_CONNECTION_MODELS
     ) {
       throw new Error(t('providerModelImportSharedLimit', {
-        count: nextChatModels.length,
+        count: merged.models.length,
         max: MAX_SHARED_MODEL_CONNECTION_MODELS
       }))
     }
-    const nextImageModels = target.image
-      ? mergeProviderModelIds(target.image.models, picked.image)
-      : picked.image
-    const nextSpeechModels = target.speech
-      ? mergeProviderModelIds(target.speech.models, picked.speech)
-      : picked.speech
-    const nextTextToSpeechModels = target.textToSpeech
-      ? mergeProviderModelIds(target.textToSpeech.models, picked.tts)
-      : picked.tts
-    const nextMusicModels = target.music
-      ? mergeProviderModelIds(target.music.models, picked.music)
-      : picked.music
-    const nextVideoModels = target.video
-      ? mergeProviderModelIds(target.video.models, picked.video)
-      : picked.video
-    const enrichedModelProfiles = isCursorSubscriptionProvider(target)
-      ? enrichCursorProviderModelProfiles(
-          target,
-          nextChatModels,
-          picked.catalogModels,
-          modelAliases
-        )
-      : enrichProviderModelProfiles(
-          target,
-          nextChatModels,
-          picked.catalogModels,
-          modelAliases
-        )
-    const nextModelProfiles = Object.keys(discoveredModelProfiles).length > 0
-      ? Object.fromEntries(nextChatModels.flatMap((modelId) => {
-          const profile = mergeDiscoveredModelProfile(
-            enrichedModelProfiles[modelId],
-            discoveredModelProfiles[modelId]
-          )
-          return profile ? [[modelId, profile]] : []
-        }))
-      : enrichedModelProfiles
     const added =
-      addedModelCount(target.models, nextChatModels)
-      + addedModelCount(target.image?.models ?? [], nextImageModels)
-      + addedModelCount(target.speech?.models ?? [], nextSpeechModels)
-      + addedModelCount(target.textToSpeech?.models ?? [], nextTextToSpeechModels)
-      + addedModelCount(target.music?.models ?? [], nextMusicModels)
-      + addedModelCount(target.video?.models ?? [], nextVideoModels)
-    if (authoritative || added > 0 || nextModelProfiles !== target.modelProfiles) {
-      patchProviderProfile(target, (item) => ({
-        ...item,
-        models: nextChatModels,
-        modelProfiles: nextModelProfiles,
-        ...(nextImageModels.length > 0
-          ? { image: { ...(item.image ?? presetImageCapability(item) ?? defaultImageCapability(item.baseUrl)), models: nextImageModels } }
-          : {}),
-        ...(nextSpeechModels.length > 0
-          ? { speech: { ...(item.speech ?? presetSpeechCapability(item) ?? defaultSpeechCapability(item.baseUrl)), models: nextSpeechModels } }
-          : {}),
-        ...(nextTextToSpeechModels.length > 0
-          ? { textToSpeech: { ...(item.textToSpeech ?? presetTextToSpeechCapability(item) ?? defaultTextToSpeechCapability(item.baseUrl)), models: nextTextToSpeechModels } }
-          : {}),
-        ...(nextMusicModels.length > 0
-          ? { music: { ...(item.music ?? presetMusicCapability(item) ?? defaultMusicCapability(item.baseUrl)), models: nextMusicModels } }
-          : {}),
-        ...(nextVideoModels.length > 0
-          ? { video: { ...(item.video ?? presetVideoCapability(item) ?? defaultVideoCapability(item.baseUrl)), models: nextVideoModels } }
-          : {})
-      }))
+      addedModelCount(target.models, merged.models)
+      + addedModelCount(target.image?.models ?? [], merged.image?.models ?? [])
+      + addedModelCount(target.speech?.models ?? [], merged.speech?.models ?? [])
+      + addedModelCount(target.textToSpeech?.models ?? [], merged.textToSpeech?.models ?? [])
+      + addedModelCount(target.music?.models ?? [], merged.music?.models ?? [])
+      + addedModelCount(target.video?.models ?? [], merged.video?.models ?? [])
+    if (authoritative || added > 0 || merged.modelProfiles !== target.modelProfiles) {
+      patchProviderProfile(target, () => merged)
     }
     if (sharedConnectionFor(target.id)) await flushSharedProviderCatalog(target.id)
     setProbeStates((prev) => {
@@ -567,7 +509,78 @@ export function useProviderProbeOperations(scope: Record<string, any>): Record<s
     })
     return added
   }
+
   return { runProbe, importPickedModels }
+}
+
+/** Merge an import selection into a provider profile without touching state. */
+export function applyProviderModelImport(
+  target: ModelProviderProfileV1,
+  picked: ProviderModelImportResult,
+  authoritative = false,
+  modelAliases: Readonly<Record<string, readonly string[]>> = {},
+  discoveredModelProfiles: Readonly<Record<string, ModelProviderModelProfileV1>> = {}
+): ModelProviderProfileV1 {
+  const nextChatModels = authoritative
+    ? [...picked.chat]
+    : mergeProviderModelIds(target.models, picked.chat)
+  const nextImageModels = target.image
+    ? mergeProviderModelIds(target.image.models, picked.image)
+    : picked.image
+  const nextSpeechModels = target.speech
+    ? mergeProviderModelIds(target.speech.models, picked.speech)
+    : picked.speech
+  const nextTextToSpeechModels = target.textToSpeech
+    ? mergeProviderModelIds(target.textToSpeech.models, picked.tts)
+    : picked.tts
+  const nextMusicModels = target.music
+    ? mergeProviderModelIds(target.music.models, picked.music)
+    : picked.music
+  const nextVideoModels = target.video
+    ? mergeProviderModelIds(target.video.models, picked.video)
+    : picked.video
+  const enrichedModelProfiles = isCursorSubscriptionProvider(target)
+    ? enrichCursorProviderModelProfiles(
+        target,
+        nextChatModels,
+        picked.catalogModels,
+        modelAliases
+      )
+    : enrichProviderModelProfiles(
+        target,
+        nextChatModels,
+        picked.catalogModels,
+        modelAliases
+      )
+  const nextModelProfiles = Object.keys(discoveredModelProfiles).length > 0
+    ? Object.fromEntries(nextChatModels.flatMap((modelId) => {
+        const profile = mergeDiscoveredModelProfile(
+          enrichedModelProfiles[modelId],
+          discoveredModelProfiles[modelId]
+        )
+        return profile ? [[modelId, profile]] : []
+      }))
+    : enrichedModelProfiles
+  return {
+    ...target,
+    models: nextChatModels,
+    modelProfiles: nextModelProfiles,
+    ...(nextImageModels.length > 0
+      ? { image: { ...(target.image ?? presetImageCapability(target) ?? defaultImageCapability(target.baseUrl)), models: nextImageModels } }
+      : {}),
+    ...(nextSpeechModels.length > 0
+      ? { speech: { ...(target.speech ?? presetSpeechCapability(target) ?? defaultSpeechCapability(target.baseUrl)), models: nextSpeechModels } }
+      : {}),
+    ...(nextTextToSpeechModels.length > 0
+      ? { textToSpeech: { ...(target.textToSpeech ?? presetTextToSpeechCapability(target) ?? defaultTextToSpeechCapability(target.baseUrl)), models: nextTextToSpeechModels } }
+      : {}),
+    ...(nextMusicModels.length > 0
+      ? { music: { ...(target.music ?? presetMusicCapability(target) ?? defaultMusicCapability(target.baseUrl)), models: nextMusicModels } }
+      : {}),
+    ...(nextVideoModels.length > 0
+      ? { video: { ...(target.video ?? presetVideoCapability(target) ?? defaultVideoCapability(target.baseUrl)), models: nextVideoModels } }
+      : {})
+  }
 }
 
 /**

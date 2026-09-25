@@ -25,6 +25,7 @@ import {
   providerRetrySettings
 } from './settings-section-providers-controls'
 import {
+  kunProviderSelectionPatch,
   type ProbeState,
   type ProviderCapability, type ProviderTaskTab, type ProviderWorkspaceMode,
   type SubscriptionRegionFilter
@@ -45,6 +46,7 @@ import { useProviderSharedActions } from './use-provider-shared-actions'
 import { useProviderSharedSynchronization } from './use-provider-shared-synchronization'
 import { settingsSaveIssueMessage } from './settings-save-error'
 import { useProviderMutationFlushOperations } from './provider-mutation-flush'
+import { discoverProviderModels } from './provider-model-discovery'
 
 export { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
 export {
@@ -348,7 +350,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     stageSharedProviderCredential })
 
   const { updateModelProviderId, commitProviderDraft, commitProviderProfile, cancelProviderDraft, addModelProvider, addDefaultModelProvider,
-    addPresetModelProvider, removeModelProvider, deletingProviderId, fetchModelsDevCatalogFor, openModelImport
+    addPresetModelProvider, refreshPresetProvider, removeModelProvider, deletingProviderId, fetchModelsDevCatalogFor, openModelImport
   } = useProviderLifecycleActions({ t, form, kun, provider, modelProviders, setSharedConnections,
     setSharedConnectionsError, pendingSharedProviderDeletions, pendingSharedProviderNames,
     pendingSharedProviderCatalogs, pendingSharedProviderCredentials, catalogMutationTimers,
@@ -363,13 +365,34 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     setCursorAccounts, sharedConnectionFor, patchProviderProfile, fetchModelsDevCatalogFor,
     openModelImport, flushSharedProviderCatalog, providerProxy })
 
-  // Quick-add commits the profile directly (credential goes through the shared
-  // connection path), then kicks off catalog enrichment and an inference probe
-  // in the background — the detail view is already open when they finish.
+  // Quick-add commits the profile first, then discovers models and only then
+  // writes the Kun selection — a provider with no discovered models must not
+  // hijack the current provider/model pair (plan B3). The providers list is
+  // rebuilt from this closure because the commit's settings re-render may not
+  // have flushed yet; discovery.mergedProvider carries the imported models.
   const submitQuickAdd = async (profile: ModelProviderProfileV1): Promise<void> => {
     await commitProviderProfile(profile)
-    void fetchModelsDevCatalogFor(profile).catch(() => undefined)
-    void runProbe(profile, 'test').catch(() => undefined)
+    const discovery = await discoverProviderModels(profile, {
+      t,
+      providerProxy,
+      sharedConnectionFor,
+      fetchModelsDevCatalogFor,
+      importPickedModels,
+      setProbeStates
+    })
+    if (discovery.firstChatModel && discovery.mergedProvider) {
+      const mergedProvider = { ...discovery.mergedProvider, apiKey: '' }
+      const nextProviders = modelProviders.some((item) => item.id === profile.id)
+        ? modelProviders.map((item) => item.id === profile.id ? mergedProvider : item)
+        : [...modelProviders, mergedProvider]
+      updateModelProviders(
+        nextProviders,
+        kunProviderSelectionPatch({
+          providerId: profile.id,
+          model: discovery.firstChatModel
+        })
+      )
+    }
   }
 
   const { activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, freeProviders, planProviders, apiProviders, grouped, renderProviderButton, freeAddEntries, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider } = buildProvidersViewModel({ t, form, showApiKey, modelProviders,
@@ -377,6 +400,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     addProviderQuery, subscriptionRegion, providerListQuery, probeStates, cursorAccounts,
     pendingImport, draftProvider, displayProviders, activeProvider, sharedConnectionFor,
     hasConfiguredCredential, activeKunProviderId, closeAddProviderDialog, addPresetModelProvider,
+    refreshPresetProvider,
     updateProviderProxy, updateModelProvider, setGlobalNetworkOpen, providerProxy, runProbe,
     openQuickAdd: (entry: { preset: ModelProviderPreset; mode: ModelProviderPresetMode }) => {
       closeAddProviderDialog()

@@ -50,13 +50,6 @@ export function ProviderQuickAddPanel({
   useEffect(() => {
     keyRef.current?.focus()
   }, [])
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
 
   const region = preset.regions?.find((entry) => entry.id === regionId)
   const keyOptional = preset.keyOptional === true
@@ -89,6 +82,9 @@ export function ProviderQuickAddPanel({
       role="dialog"
       aria-modal="true"
       aria-labelledby="provider-quick-add-title"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') onClose()
+      }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}

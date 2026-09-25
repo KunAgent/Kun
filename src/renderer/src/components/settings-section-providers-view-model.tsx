@@ -5,7 +5,6 @@ import type {
 import {
   MODEL_PROVIDER_PRESETS,
   OPENCODE_FREE_PROVIDER_ID,
-  isMultiAccountProviderPreset,
   modelProviderPresetAccountCount,
   resolveModelProviderPresetSource,
   tokenPlanProviderId
@@ -65,7 +64,7 @@ export function isOpenCodeFreeProvider(provider: Pick<ModelProviderProfileV1, 'i
 }
 
 export function buildProvidersViewModel(scope: Record<string, any>): Record<string, any> {
-  const { t, showApiKey, sharedConnections, revealedCredential, credentialRevealPendingProviderId, setSelectedProviderId, addProviderQuery, subscriptionRegion, providerListQuery, probeStates, cursorAccounts, pendingImport, draftProvider, activeProvider, sharedConnectionFor, hasConfiguredCredential, activeKunProviderId, closeAddProviderDialog, addPresetModelProvider, updateProviderProxy, updateModelProvider, setGlobalNetworkOpen, providerProxy, runProbe, openQuickAdd, form } = scope
+  const { t, showApiKey, sharedConnections, revealedCredential, credentialRevealPendingProviderId, setSelectedProviderId, addProviderQuery, subscriptionRegion, providerListQuery, probeStates, cursorAccounts, pendingImport, draftProvider, activeProvider, sharedConnectionFor, hasConfiguredCredential, activeKunProviderId, closeAddProviderDialog, addPresetModelProvider, refreshPresetProvider, updateProviderProxy, updateModelProvider, setGlobalNetworkOpen, providerProxy, runProbe, openQuickAdd, form } = scope
   const modelProviders = scope.modelProviders as ModelProviderProfileV1[]
   const displayProviders = scope.displayProviders as ModelProviderProfileV1[]
   const activeProbe = activeProvider ? probeStates[activeProvider.id] : undefined
@@ -350,52 +349,69 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
   const apiAddEntries = visibleAddEntries.filter((entry) => entry.group === 'api')
   const showPlanAddGroup = queriedPlanAddEntries.length > 0 || !normalizedAddProviderQuery
   const renderAddEntry = (entry: (typeof addMenuEntries)[number]): ReactElement => {
-    const multiAccount = isMultiAccountProviderPreset(entry.preset, entry.mode)
-    const accountCount = multiAccount
-      ? modelProviderPresetAccountCount(entry.preset, entry.mode, modelProviders)
-      : 0
-    const exists = !multiAccount && modelProviders.some((item) => item.id === entry.profileId)
+    const accountCount = modelProviderPresetAccountCount(entry.preset, entry.mode, modelProviders)
+    // Q5: an existing preset family offers two distinct actions — "add another
+    // key" (the card body) and "update preset" (the footer shortcut), instead
+    // of forcing a numbered account as the only outcome.
+    const familyExists = accountCount > 0
+    const openAdd = (): void => {
+      if (typeof openQuickAdd === 'function') {
+        openQuickAdd({ preset: entry.preset, mode: entry.mode })
+        return
+      }
+      closeAddProviderDialog()
+      void addPresetModelProvider(entry.preset, entry.mode)
+    }
     return (
-      <button
+      <div
         key={entry.profileId}
-        type="button"
-        onClick={() => {
-          if (typeof openQuickAdd === 'function') {
-            openQuickAdd({ preset: entry.preset, mode: entry.mode })
-            return
-          }
-          closeAddProviderDialog()
-          void addPresetModelProvider(entry.preset, entry.mode)
-        }}
-        className="group grid min-h-20 w-full gap-2 rounded-xl border border-ds-border bg-ds-card px-3.5 py-3 text-left transition hover:border-accent/45 hover:bg-ds-hover"
+        className="group overflow-hidden rounded-xl border border-ds-border bg-ds-card transition hover:border-accent/45"
       >
-        <span className="flex min-w-0 items-start justify-between gap-2">
-          <span className="flex min-w-0 items-center gap-2.5">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-ds-border-muted bg-ds-main/45 text-ds-muted">
-              <ProviderIcon
-                presetId={entry.preset.id}
-                providerId={entry.profileId}
-                className="h-4 w-4"
-              />
+        <button
+          type="button"
+          onClick={openAdd}
+          className="grid min-h-20 w-full gap-2 px-3.5 py-3 text-left transition hover:bg-ds-hover"
+        >
+          <span className="flex min-w-0 items-start justify-between gap-2">
+            <span className="flex min-w-0 items-center gap-2.5">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-ds-border-muted bg-ds-main/45 text-ds-muted">
+                <ProviderIcon
+                  presetId={entry.preset.id}
+                  providerId={entry.profileId}
+                  className="h-4 w-4"
+                />
+              </span>
+              <span className="truncate text-[13.5px] font-semibold text-ds-ink">{entry.label}</span>
             </span>
-            <span className="truncate text-[13.5px] font-semibold text-ds-ink">{entry.label}</span>
+            <StatusPill tone={familyExists ? 'success' : 'muted'}>
+              {familyExists
+                ? t('modelProviderAccountCount', { count: accountCount })
+                : entry.group === 'free'
+                  ? t('modelProviderFreeBadge')
+                  : entry.group === 'subscription'
+                    ? t('modelProviderPlanBadge')
+                    : t('modelProviderPresetBadge')}
+            </StatusPill>
           </span>
-          <StatusPill tone={exists ? 'warning' : accountCount > 0 ? 'success' : 'muted'}>
-            {accountCount > 0
-              ? t('modelProviderAccountCount', { count: accountCount })
-              : exists
-              ? t('modelProviderPresetUpdateTag')
-              : entry.group === 'free'
-                ? t('modelProviderFreeBadge')
-                : entry.group === 'subscription'
-                ? t('modelProviderPlanBadge')
-                : t('modelProviderPresetBadge')}
-          </StatusPill>
-        </span>
-        <span className="truncate font-mono text-[11.5px] text-ds-faint">
-          {entry.profileId}{multiAccount ? ` · ${t('modelProviderAddAccountHint')}` : ''}
-        </span>
-      </button>
+          <span className="truncate font-mono text-[11.5px] text-ds-faint">
+            {entry.profileId} · {t('modelProviderAddAccountHint')}
+          </span>
+        </button>
+        {familyExists && typeof refreshPresetProvider === 'function' ? (
+          <div className="flex justify-end border-t border-ds-border-muted px-3 py-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                closeAddProviderDialog()
+                void refreshPresetProvider(entry.preset, entry.mode)
+              }}
+              className="rounded-full px-2 py-0.5 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-accent"
+            >
+              {t('modelProviderPresetUpdateTag')}
+            </button>
+          </div>
+        ) : null}
+      </div>
     )
   }
 

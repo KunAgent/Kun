@@ -11,7 +11,6 @@ import {
   OPENCODE_FREE_PROVIDER_ID,
   defaultModelRequestRetrySettings,
   defaultModelProviderSettings,
-  isMultiAccountProviderPreset,
   listModelProviderReferences,
   modelProviderPresetAccountProfile,
   modelProviderPresetProfile,
@@ -149,10 +148,10 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
       alreadyListed
         ? modelProviders.map((item) => item.id === providerDraft.id ? secretFreeProvider : item)
         : [...modelProviders, secretFreeProvider],
-      credential
+      credential && nonEmptyModelId(providerDraft.models[0])
         ? kunProviderSelectionPatch({
             providerId: providerDraft.id,
-            model: nonEmptyModelId(providerDraft.models[0]) ?? kun.model
+            model: providerDraft.models[0]
           })
         : undefined
     )
@@ -212,30 +211,34 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
     preset: ModelProviderPreset,
     mode: ModelProviderPresetMode = 'api'
   ): Promise<void> => {
-    if (isMultiAccountProviderPreset(preset, mode)) {
-      const accountProvider = modelProviderPresetAccountProfile(preset, mode, displayProviders)
-      if (accountProvider) startProviderDraft(accountProvider)
-      return
-    }
+    const accountProvider = modelProviderPresetAccountProfile(preset, mode, displayProviders)
+    if (accountProvider) startProviderDraft(accountProvider)
+  }
+
+  // Refresh the canonical preset profile in place: the preset's connection
+  // fields and model catalog win, while the user's name, key, proxy, extra
+  // models, model profiles, and capability overrides are preserved.
+  const refreshPresetProvider = async (
+    preset: ModelProviderPreset,
+    mode: ModelProviderPresetMode = 'api'
+  ): Promise<void> => {
     const presetProvider = mode === 'token-plan'
       ? modelProviderTokenPlanProfile(preset)
       : modelProviderPresetProfile(preset)
     if (!presetProvider) return
     const existingProvider = modelProviders.find((item) => item.id === presetProvider.id)
-    if (existingProvider) {
-      const confirmed = await confirmAction({
-        message: t('modelProviderUpdatePresetTitle', { name: presetProvider.name }),
-        detail: t('modelProviderUpdatePresetDetail'),
-        confirmLabel: t('modelProviderUpdatePresetAction'),
-        cancelLabel: t('modelProviderCancel')
-      })
-      if (!confirmed) {
-        setSelectedProviderId(presetProvider.id)
-        return
-      }
-    }
     if (!existingProvider) {
       startProviderDraft(presetProvider)
+      return
+    }
+    const confirmed = await confirmAction({
+      message: t('modelProviderUpdatePresetTitle', { name: presetProvider.name }),
+      detail: t('modelProviderUpdatePresetDetail'),
+      confirmLabel: t('modelProviderUpdatePresetAction'),
+      cancelLabel: t('modelProviderCancel')
+    })
+    if (!confirmed) {
+      setSelectedProviderId(presetProvider.id)
       return
     }
     const nextProvider: ModelProviderProfileV1 = {
@@ -243,6 +246,9 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
       name: existingProvider.name.trim() || presetProvider.name,
       apiKey: existingProvider.apiKey,
       useProxy: existingProvider.useProxy,
+      ...(existingProvider.endpoints && !presetProvider.endpoints
+        ? { endpoints: existingProvider.endpoints }
+        : {}),
       models: mergeProviderModelIds(presetProvider.models, existingProvider.models),
       modelProfiles: {
         ...existingProvider.modelProfiles,
@@ -258,10 +264,10 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
     setSelectedProviderId(nextProvider.id)
     updateModelProviders(
       nextProviders,
-      nextProvider.apiKey.trim()
+      nextProvider.apiKey.trim() && nonEmptyModelId(nextProvider.models[0])
         ? kunProviderSelectionPatch({
             providerId: nextProvider.id,
-            model: nonEmptyModelId(nextProvider.models[0]) ?? kun.model
+            model: nextProvider.models[0]
           })
         : undefined
     )
@@ -521,5 +527,5 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
       ...(input.authoritative ? { authoritative: true } : {})
     })
   }
-  return { updateModelProviderId, commitProviderDraft, commitProviderProfile, cancelProviderDraft, addModelProvider, addDefaultModelProvider, addPresetModelProvider, removeModelProvider, deletingProviderId, fetchModelsDevCatalogFor, openModelImport }
+  return { updateModelProviderId, commitProviderDraft, commitProviderProfile, cancelProviderDraft, addModelProvider, addDefaultModelProvider, addPresetModelProvider, refreshPresetProvider, removeModelProvider, deletingProviderId, fetchModelsDevCatalogFor, openModelImport }
 }
