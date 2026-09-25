@@ -1,11 +1,14 @@
 import type {
   KunAdeSettingsV1,
   KunHarnessCustomEntryV1,
-  KunHarnessSettingsV1
+  KunHarnessSettingsV1,
+  KunWorktreeSettingsV1,
+  KunWorktreeSharedPathV1
 } from './app-settings-types-kun-runtime'
 import type {
   KunAdeSettingsPatchV1,
-  KunHarnessSettingsPatchV1
+  KunHarnessSettingsPatchV1,
+  KunWorktreeSettingsPatchV1
 } from './app-settings-types-kun-services'
 
 /**
@@ -134,8 +137,7 @@ export function defaultKunAdeSettings(): KunAdeSettingsV1 {
       stalled: true,
       sound: true,
       keepAwake: false
-    },
-    approvedWorktreeConfigs: []
+    }
   }
 }
 
@@ -209,8 +211,7 @@ export function normalizeKunAdeSettings(value: unknown): KunAdeSettingsV1 {
       stalled: bool(notifications.stalled, defaults.notifications.stalled),
       sound: bool(notifications.sound, defaults.notifications.sound),
       keepAwake: bool(notifications.keepAwake, defaults.notifications.keepAwake)
-    },
-    approvedWorktreeConfigs: stringList(input.approvedWorktreeConfigs)
+    }
   }
 }
 
@@ -238,8 +239,45 @@ export function mergeKunAdeSettings(
     budget: patch.budget === null ? undefined : { ...base.budget, ...(patch.budget ?? {}) },
     hibernation: { ...base.hibernation, ...(patch.hibernation ?? {}) },
     stall: { ...base.stall, ...(patch.stall ?? {}) },
-    notifications: { ...base.notifications, ...(patch.notifications ?? {}) },
-    approvedWorktreeConfigs:
-      patch.approvedWorktreeConfigs ?? base.approvedWorktreeConfigs
+    notifications: { ...base.notifications, ...(patch.notifications ?? {}) }
+  })
+}
+
+export function defaultKunWorktreeSettings(): KunWorktreeSettingsV1 {
+  return { sharedPaths: {} }
+}
+
+const WORKTREE_SHARED_MODES = new Set(['symlink', 'clone', 'copy'])
+
+export function normalizeKunWorktreeSettings(value: unknown): KunWorktreeSettingsV1 {
+  const input = isRecord(value) ? value : {}
+  const sharedPaths: KunWorktreeSettingsV1['sharedPaths'] = {}
+  if (isRecord(input.sharedPaths)) {
+    for (const [root, list] of Object.entries(input.sharedPaths)) {
+      const repoRoot = nonEmpty(root, 4_096)
+      if (!repoRoot || !Array.isArray(list)) continue
+      const entries: KunWorktreeSharedPathV1[] = []
+      for (const entry of list) {
+        if (!isRecord(entry)) continue
+        const path = nonEmpty(entry.path, 1_024)
+        const mode = nonEmpty(entry.mode, 16) ?? 'symlink'
+        if (!path || !WORKTREE_SHARED_MODES.has(mode) || entries.length >= 64) continue
+        entries.push({ path, mode: mode as KunWorktreeSharedPathV1['mode'] })
+      }
+      if (entries.length) sharedPaths[repoRoot] = entries
+      if (Object.keys(sharedPaths).length >= 64) break
+    }
+  }
+  return { sharedPaths }
+}
+
+export function mergeKunWorktreeSettings(
+  current: KunWorktreeSettingsV1 | undefined,
+  patch: KunWorktreeSettingsPatchV1 | undefined
+): KunWorktreeSettingsV1 {
+  const base = normalizeKunWorktreeSettings(current)
+  if (!patch) return base
+  return normalizeKunWorktreeSettings({
+    sharedPaths: patch.sharedPaths ?? base.sharedPaths
   })
 }

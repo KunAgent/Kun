@@ -12,6 +12,7 @@ import { syncGuiManagedKunConfig } from '../runtime/kun-runtime-config-service'
 import {
   GENERATED_PROJECT_MCP_SERVER_PREFIX,
   approvedProjectMcpServers,
+  approvedWorktreeConfigs,
   readProjectConfigState,
   stripGeneratedProjectMcpServers
 } from './project-config-service'
@@ -165,6 +166,44 @@ describe('project config MCP grants', () => {
     expect(Object.keys(second.capabilities.mcp.servers).some((id) =>
       id.startsWith(GENERATED_PROJECT_MCP_SERVER_PREFIX)
     )).toBe(false)
+  })
+
+  it('carries approved worktree sections and drops them on any config change', async () => {
+    const workspace = await createWorkspace('worktree')
+    const written = await writeKunProjectConfig(workspace, JSON.stringify({
+      version: 1,
+      mcp: { servers: {} },
+      worktree: {
+        copyFiles: ['.env'],
+        setup: [{ name: 'install', command: 'bun', args: ['install'] }]
+      }
+    }, null, 2))
+    const granted = settings([
+      { workspaceRoot: written.workspaceRoot, configDigest: written.digest }
+    ])
+
+    const entries = await approvedWorktreeConfigs(granted)
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({
+      repoRoot: written.workspaceRoot,
+      digest: written.digest,
+      worktree: {
+        copyFiles: ['.env'],
+        setup: [{ name: 'install', command: 'bun', args: ['install'], timeoutMs: 600_000 }]
+      }
+    })
+
+    // The digest covers the whole file: editing the MCP section revokes
+    // setup approval too (docs/ade/07 §7.1).
+    await writeKunProjectConfig(workspace, JSON.stringify({
+      version: 1,
+      mcp: { servers: { api: { transport: 'stdio', command: 'node', args: ['a.js'] } } },
+      worktree: {
+        copyFiles: ['.env'],
+        setup: [{ name: 'install', command: 'bun', args: ['install'] }]
+      }
+    }, null, 2))
+    await expect(approvedWorktreeConfigs(granted)).resolves.toEqual([])
   })
 
   it('strips only the reserved generated namespace', () => {

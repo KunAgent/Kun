@@ -43,8 +43,10 @@ describe('harness/ade settings bridge', () => {
         enabled: true,
         harnessRouter: false,
         allowUnattendedFullAccess: true,
-        limits: { softWorkers: 2, hardWorkers: 6 },
-        approvedWorktreeConfigs: ['/repo/b', '/repo/a']
+        limits: { softWorkers: 2, hardWorkers: 6 }
+      },
+      worktrees: {
+        sharedPaths: { '/repo/a': [{ path: '.env', mode: 'copy' }] }
       }
     })
     const b = runtimeWith({
@@ -59,20 +61,32 @@ describe('harness/ade settings bridge', () => {
         defaultHarnessId: 'claude-code'
       },
       ade: {
-        approvedWorktreeConfigs: ['/repo/a', '/repo/b'],
         limits: { hardWorkers: 6, softWorkers: 2 },
         allowUnattendedFullAccess: true,
         harnessRouter: false,
         enabled: true
+      },
+      worktrees: {
+        sharedPaths: { '/repo/a': [{ path: '.env', mode: 'copy' }] }
       }
     })
+    const approved = [
+      { repoRoot: '/repo/b', digest: 'd2', worktree: { branchPrefix: 'kun/' } },
+      { repoRoot: '/repo/a', digest: 'd1', worktree: { branchPrefix: 'kun/' } }
+    ]
     const configA = {
       harnesses: harnessesConfigForRuntime(a.harnesses),
-      ade: adeConfigForRuntime(a.ade)
+      ade: adeConfigForRuntime(a.ade, {
+        approvedWorktreeConfigs: approved,
+        worktreeSharedPaths: a.worktrees?.sharedPaths
+      })
     }
     const configB = {
       harnesses: harnessesConfigForRuntime(b.harnesses),
-      ade: adeConfigForRuntime(b.ade)
+      ade: adeConfigForRuntime(b.ade, {
+        approvedWorktreeConfigs: approved,
+        worktreeSharedPaths: b.worktrees?.sharedPaths
+      })
     }
     expect(JSON.stringify(configA)).toBe(JSON.stringify(configB))
     expect(configA.ade).toMatchObject({
@@ -80,7 +94,12 @@ describe('harness/ade settings bridge', () => {
       harnessRouter: false,
       allowUnattendedFullAccess: true,
       limits: { softWorkers: 2, hardWorkers: 6 },
-      approvedWorktreeConfigs: ['/repo/a', '/repo/b']
+      // Entries sort by repoRoot regardless of input order.
+      approvedWorktreeConfigs: [
+        { repoRoot: '/repo/a', digest: 'd1' },
+        { repoRoot: '/repo/b', digest: 'd2' }
+      ],
+      worktreeSharedPaths: { '/repo/a': [{ path: '.env', mode: 'copy' }] }
     })
     // GUI-only notifications never reach the runtime config.
     expect(configA.ade).not.toHaveProperty('notifications')
@@ -99,7 +118,8 @@ describe('harness/ade settings bridge', () => {
       limits: { softWorkers: 4, hardWorkers: 8 },
       hibernation: { enabled: true, idleMinutes: 30 },
       stall: { structuredMinutes: 10, terminalMinutes: 20 },
-      approvedWorktreeConfigs: []
+      approvedWorktreeConfigs: [],
+      worktreeSharedPaths: {}
     })
     expect(harnessesConfigForRuntime(runtime.harnesses)).toEqual({
       disabledIds: [],

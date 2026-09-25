@@ -95,10 +95,39 @@ export const KunProjectMcpServerConfig = z
   })
 export type KunProjectMcpServerConfig = z.infer<typeof KunProjectMcpServerConfig>
 
+export const KunProjectWorktreeConfigSchema = z
+  .object({
+    /** Ignored directories shared into new task worktrees (dependencies, caches). */
+    sharedDirectories: z
+      .array(z.object({
+        path: RelativeProjectPath,
+        mode: z.enum(['symlink', 'clone']).default('symlink')
+      }).strict())
+      .max(32)
+      .default([]),
+    /** Ignored files copied into new task worktrees (.env and friends). */
+    copyFiles: z.array(RelativeProjectPath).max(64).default([]),
+    /** Install commands run after creation; require user approval (07 §7). */
+    setup: z
+      .array(z.object({
+        name: z.string().min(1).max(64),
+        command: z.string().min(1).max(256),
+        args: z.array(z.string().max(1_024)).max(32).default([]),
+        timeoutMs: z.number().int().positive().max(30 * 60_000).default(10 * 60_000)
+      }).strict())
+      .max(8)
+      .default([]),
+    branchPrefix: z.string().regex(/^[a-z0-9][a-z0-9/_-]{0,31}$/).default('kun/')
+  })
+  .strict()
+  .default({ sharedDirectories: [], copyFiles: [], setup: [], branchPrefix: 'kun/' })
+export type KunProjectWorktreeConfig = z.infer<typeof KunProjectWorktreeConfigSchema>
+
 export const KunProjectConfigSchema = z
   .object({
     $schema: z.string().trim().min(1).max(4_096).optional(),
     version: z.literal(KUN_PROJECT_CONFIG_VERSION),
+    worktree: KunProjectWorktreeConfigSchema,
     mcp: z
       .object({
         servers: z
@@ -133,6 +162,7 @@ export type ResolvedKunProjectConfig = {
   path: string
   digest: string
   config: KunProjectConfig
+  worktree: KunProjectWorktreeConfig
   mcp: {
     servers: Record<string, KunProjectMcpServerConfig & { cwd?: string }>
   }
@@ -208,6 +238,7 @@ export async function parseAndResolveKunProjectConfig(
     path,
     digest: kunProjectConfigDigest(config),
     config,
+    worktree: config.worktree,
     mcp: { servers },
     skills: {
       enabled: config.skills.enabled,

@@ -36,6 +36,11 @@ import {
   ActivityFactsStore,
   TaskWorkspaceStore,
   TaskWorkspaceService,
+  TaskWorkspaceSetupRunner,
+  fillTaskWorktreeEnvironment,
+  createApprovedSetupResolver,
+  userSharedPathsForRepo,
+  loadKunProjectConfig,
   createWorktreeLifecycle,
   workspaceGit,
   workspaceCommitGit,
@@ -197,17 +202,6 @@ export async function createRuntimeCore(
   })
   const taskWorkspaceStore = new TaskWorkspaceStore({ dataDir: activeOptions.dataDir })
   await taskWorkspaceStore.load().catch(() => undefined)
-  const taskWorkspaces = new TaskWorkspaceService({
-    store: taskWorkspaceStore,
-    lifecycle: createWorktreeLifecycle({
-      git: workspaceGit,
-      commitGit: workspaceCommitGit,
-      fence: assertWorkspaceWriteFence,
-      withCommit: withWorkspaceWriteCommit
-    }),
-    events
-  })
-  taskWorkspaces.recoverInterrupted()
   const contextWindowState = new FileContextWindowStateStore({ dataDir: activeOptions.dataDir })
   const contextWindowStateRestore = new ContextWindowStateRestore({
     store: contextWindowState,
@@ -319,6 +313,33 @@ export async function createRuntimeCore(
   const artifactStore: ArtifactStore = activeOptions.serviceManager
     ? new ManagerRemoteArtifactStore(activeOptions.serviceManager)
     : new FileArtifactStore(join(activeOptions.dataDir, 'artifacts'), nowIso)
+  const approvedSetup = createApprovedSetupResolver({
+    approvedEntries: () => activeOptions.ade?.approvedWorktreeConfigs ?? []
+  })
+  const taskWorkspaces = new TaskWorkspaceService({
+    store: taskWorkspaceStore,
+    lifecycle: createWorktreeLifecycle({
+      git: workspaceGit,
+      commitGit: workspaceCommitGit,
+      fence: assertWorkspaceWriteFence,
+      withCommit: withWorkspaceWriteCommit
+    }),
+    events,
+    projectConfig: async (repoRoot) => {
+      const loaded = await loadKunProjectConfig(repoRoot).catch(() => null)
+      return loaded?.status === 'valid' ? loaded : null
+    },
+    approvedSetup,
+    environmentFill: (input) =>
+      fillTaskWorktreeEnvironment({
+        ...input,
+        userSharedPaths: userSharedPathsForRepo(
+          activeOptions.ade?.worktreeSharedPaths, input.repoRoot
+        )
+      }),
+    setupRunner: new TaskWorkspaceSetupRunner({ artifacts: artifactStore })
+  })
+  taskWorkspaces.recoverInterrupted()
   const graphConfig = (): GraphRuntimeConfig =>
     activeOptions.graph ?? DEFAULT_GRAPH_RUNTIME_CONFIG
   const graphRuntime = new GraphRuntimeComposition({

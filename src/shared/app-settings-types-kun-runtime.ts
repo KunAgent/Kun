@@ -409,8 +409,17 @@ export type KunAdeSettingsV1 = {
     sound: boolean
     keepAwake: boolean
   }
-  /** Repository roots approved for host-managed task workspaces. */
-  approvedWorktreeConfigs: string[]
+}
+
+/** User-level task-worktree fill additions (`agents.kun.worktrees`). */
+export type KunWorktreeSharedPathV1 = {
+  path: string
+  mode: 'symlink' | 'clone' | 'copy'
+}
+
+export type KunWorktreeSettingsV1 = {
+  /** Per-repository ignored paths shared into task worktrees. */
+  sharedPaths: Record<string, KunWorktreeSharedPathV1[]>
 }
 
 export type KunRuntimeSettingsV1 = {
@@ -497,6 +506,8 @@ export type KunRuntimeSettingsV1 = {
   harnesses: KunHarnessSettingsV1
   /** ADE mode switches; runtime-relevant subset syncs into Kun config. */
   ade: KunAdeSettingsV1
+  /** User-level task-worktree fill additions, merged with project config. */
+  worktrees: KunWorktreeSettingsV1
   /** Formal Fast Context settings. Enabled by default. */
   fastContext: KunFastContextSettingsV1
   /** Experimental Lab features that remain in Laboratory. */

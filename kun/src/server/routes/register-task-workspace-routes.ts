@@ -8,7 +8,8 @@ import {
   getTaskWorkspaceResponse,
   listTaskWorkspacesResponse,
   markReadyTaskWorkspaceResponse,
-  retryTaskWorkspaceResponse
+  retryTaskWorkspaceResponse,
+  taskWorkspaceSetupLogResponse
 } from './task-workspaces.js'
 
 /** Task workspace routes (docs/ade/07 §11). capture/integrate/discard land in P0-12. */
@@ -49,5 +50,12 @@ export function registerTaskWorkspaceRoutes(router: Router, runtime: ServerRunti
     const svc = service()
     if (!svc) return ERRORS.unavailable('task workspaces are unavailable')
     return cancelTaskWorkspaceResponse(svc, ctx.params.workspaceId)
+  })
+  router.add('GET', '/v1/task-workspaces/:workspaceId/setup-log', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const svc = service()
+    const artifacts = runtime.graph?.artifacts
+    if (!svc || !artifacts) return ERRORS.unavailable('task workspaces are unavailable')
+    return taskWorkspaceSetupLogResponse(svc, artifacts, ctx.params.workspaceId)
   })
 }

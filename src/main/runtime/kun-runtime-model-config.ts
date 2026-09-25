@@ -219,10 +219,16 @@ export function harnessesConfigForRuntime(
 /**
  * `ade` config section. The GUI-only `notifications` group is deliberately
  * dropped; everything else maps 1:1 onto Kun's AdeConfigSchema with a fixed
- * key order.
+ * key order. `approvedWorktreeConfigs` entries are resolved from
+ * project-config grants by the caller (they need async file reads), and
+ * `worktreeSharedPaths` carries `agents.kun.worktrees.sharedPaths`.
  */
 export function adeConfigForRuntime(
-  ade: Pick<KunRuntimeSettingsV1, 'ade'>['ade'] | undefined
+  ade: Pick<KunRuntimeSettingsV1, 'ade'>['ade'] | undefined,
+  extras: {
+    approvedWorktreeConfigs?: Array<{ repoRoot: string; digest: string; worktree: unknown }>
+    worktreeSharedPaths?: Record<string, Array<{ path: string; mode: string }>>
+  } = {}
 ): Record<string, unknown> {
   const budget = ade?.budget &&
     (ade.budget.softTokens !== undefined || ade.budget.hardTokens !== undefined)
@@ -258,7 +264,9 @@ export function adeConfigForRuntime(
       structuredMinutes: ade?.stall.structuredMinutes ?? 10,
       terminalMinutes: ade?.stall.terminalMinutes ?? 20
     },
-    approvedWorktreeConfigs: [...(ade?.approvedWorktreeConfigs ?? [])].sort()
+    approvedWorktreeConfigs: [...(extras.approvedWorktreeConfigs ?? [])]
+      .sort((a, b) => a.repoRoot.localeCompare(b.repoRoot)),
+    worktreeSharedPaths: extras.worktreeSharedPaths ?? {}
   }
 }
 

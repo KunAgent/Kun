@@ -346,13 +346,17 @@ export type KunAdeSettingsPatchV1 = {
     sound?: boolean
     keepAwake?: boolean
   }
-  approvedWorktreeConfigs?: string[]
+}
+
+/** Patch shape for agents.kun.worktrees. */
+export type KunWorktreeSettingsPatchV1 = {
+  sharedPaths?: Record<string, Array<{ path: string; mode?: string }>>
 }
 
 export type KunRuntimeSettingsPatchV1 = Partial<
   Omit<
     KunRuntimeSettingsV1,
-    'mcpSearch' | 'githubMcp' | 'projectConfig' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'llmDebug' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'speak' | 'textToSpeech' | 'promptOptimization' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'browserUse' | 'quality' | 'modelProfiles' | 'subagents' | 'graph' | 'planExecution' | 'fastContext' | 'lab' | 'harnesses' | 'ade'
+    'mcpSearch' | 'githubMcp' | 'projectConfig' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'llmDebug' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'speak' | 'textToSpeech' | 'promptOptimization' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'browserUse' | 'quality' | 'modelProfiles' | 'subagents' | 'graph' | 'planExecution' | 'fastContext' | 'lab' | 'harnesses' | 'ade' | 'worktrees'
   >
 > & {
   mcpSearch?: Partial<KunMcpSearchSettingsV1>
@@ -383,6 +387,7 @@ export type KunRuntimeSettingsPatchV1 = Partial<
   lab?: KunLabSettingsPatchV1
   harnesses?: KunHarnessSettingsPatchV1
   ade?: KunAdeSettingsPatchV1
+  worktrees?: KunWorktreeSettingsPatchV1
 }
 
 export type KunSettingsEnvelopePatchV1 = {

@@ -83,3 +83,20 @@ export function cancelTaskWorkspaceResponse(
     return serviceError(error)
   }
 }
+
+/** GET /v1/task-workspaces/:id/setup-log — read the stored setup artifact. */
+export async function taskWorkspaceSetupLogResponse(
+  service: TaskWorkspaceService,
+  artifacts: { get(id: string): Promise<string | null> },
+  workspaceId: string
+): Promise<JsonResponse> {
+  const record = service.get(workspaceId)
+  if (!record) return ERRORS.notFound('task workspace not found')
+  const logArtifactId = record.setup.logArtifactId
+  if (!logArtifactId) {
+    return jsonResponse({ log: '', status: record.setup.status })
+  }
+  const content = await artifacts.get(logArtifactId).catch(() => null)
+  if (content === null) return ERRORS.notFound('setup log artifact not found')
+  return jsonResponse({ log: content, status: record.setup.status })
+}
