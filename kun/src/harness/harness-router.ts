@@ -63,7 +63,11 @@ export type HarnessResolveResult =
 export type HarnessRouterDeps = {
   /** Feature switch: `agents.kun.ade.harnessRouter` (default true). */
   enabled(): boolean
-  catalog: { get(id: string): HarnessDefinition | undefined }
+  catalog: {
+    get(id: string): HarnessDefinition | undefined
+    /** User-disabled harness ids fail admission; absent means nothing disabled. */
+    isDisabled?(id: HarnessId): boolean
+  }
   /**
    * Live transport -> runtime view. A held reference must reflect hot
    * replacement; implementations should read through a getter rather than
@@ -111,6 +115,15 @@ export class HarnessRouter {
         error: new HarnessAdmissionError(
           'harness_unknown',
           `Unknown harness: ${harnessId}`
+        )
+      }
+    }
+    if (this.deps.catalog.isDisabled?.(harnessId)) {
+      return {
+        ok: false,
+        error: new HarnessAdmissionError(
+          'harness_unavailable',
+          `Harness disabled in settings: ${harnessId}`
         )
       }
     }

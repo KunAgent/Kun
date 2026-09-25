@@ -97,6 +97,10 @@ import {
 } from './github-mcp-authorization'
 
 import {
+  defaultKunAdeSettings,
+  defaultKunHarnessSettings
+} from './app-settings-kun-harness'
+import {
   defaultKunFastContextSettings,
   defaultKunLabSettings,
   mergeKunRuntimeSettings
@@ -233,6 +237,8 @@ export function defaultKunRuntimeSettings(
     quality: defaultKunQualitySettings(),
     graph: defaultKunGraphSettings(),
     planExecution: { useWorktreeByDefault: true },
+    harnesses: defaultKunHarnessSettings(),
+    ade: defaultKunAdeSettings(),
     fastContext: defaultKunFastContextSettings(),
     lab: defaultKunLabSettings()
   }

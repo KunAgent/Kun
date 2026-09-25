@@ -1,0 +1,245 @@
+import type {
+  KunAdeSettingsV1,
+  KunHarnessCustomEntryV1,
+  KunHarnessSettingsV1
+} from './app-settings-types-kun-runtime'
+import type {
+  KunAdeSettingsPatchV1,
+  KunHarnessSettingsPatchV1
+} from './app-settings-types-kun-services'
+
+/**
+ * Settings normalization for `agents.kun.harnesses` / `agents.kun.ade`
+ * (plan 01 §7.1, 13 §3.1). Unknown keys are dropped; numeric fields are
+ * clamped to the kun config schema bounds so the generated config stays valid.
+ */
+
+/** Builtin harness ids; custom entries colliding with these are dropped. */
+export const BUILTIN_HARNESS_IDS = ['kun', 'claude-code', 'cursor', 'antigravity'] as const
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const nonEmpty = (value: unknown, max = 1_024): string | undefined =>
+  typeof value === 'string' && value.trim() && value.length <= max
+    ? value.trim()
+    : undefined
+
+const clampInt = (value: unknown, min: number, max: number, fallback: number): number => {
+  const n = typeof value === 'number' && Number.isFinite(value)
+    ? Math.trunc(value)
+    : fallback
+  return Math.min(max, Math.max(min, n))
+}
+
+const bool = (value: unknown, fallback: boolean): boolean =>
+  typeof value === 'boolean' ? value : fallback
+
+const stringList = (value: unknown, max = 64): string[] => {
+  if (!Array.isArray(value)) return []
+  const out: string[] = []
+  for (const entry of value) {
+    const s = nonEmpty(entry)
+    if (s && !out.includes(s)) out.push(s)
+    if (out.length >= max) break
+  }
+  return out
+}
+
+const stringRecord = (value: unknown): Record<string, string> => {
+  if (!isRecord(value)) return {}
+  const out: Record<string, string> = {}
+  for (const [key, entry] of Object.entries(value)) {
+    const s = nonEmpty(entry, 4_096)
+    if (nonEmpty(key, 128) && s) out[key.trim()] = s
+  }
+  return out
+}
+
+export function defaultKunHarnessSettings(): KunHarnessSettingsV1 {
+  return {
+    disabledIds: [],
+    binaryPaths: {},
+    custom: [],
+    defaultPermissionMode: {},
+    defaultHarnessId: 'kun'
+  }
+}
+
+export function normalizeKunHarnessSettings(value: unknown): KunHarnessSettingsV1 {
+  const input = isRecord(value) ? value : {}
+  const defaults = defaultKunHarnessSettings()
+  const builtinIds = new Set<string>(BUILTIN_HARNESS_IDS)
+  const custom: KunHarnessCustomEntryV1[] = []
+  if (Array.isArray(input.custom)) {
+    const seen = new Set<string>()
+    for (const entry of input.custom) {
+      if (!isRecord(entry)) continue
+      const id = nonEmpty(entry.id, 128)
+      const command = nonEmpty(entry.command, 4_096)
+      if (!id || !command || builtinIds.has(id) || seen.has(id)) continue
+      seen.add(id)
+      custom.push({
+        id,
+        displayName: nonEmpty(entry.displayName, 128) ?? id,
+        command,
+        args: stringList(entry.args, 32),
+        env: stringRecord(entry.env)
+      })
+      if (custom.length >= 32) break
+    }
+  }
+  const defaultHarnessId = nonEmpty(input.defaultHarnessId, 128)
+  return {
+    // The native Kun loop is the host runtime itself; it cannot be disabled.
+    disabledIds: stringList(input.disabledIds).filter(
+      (id) => builtinIds.has(id) && id !== 'kun'
+    ),
+    binaryPaths: stringRecord(input.binaryPaths),
+    custom,
+    defaultPermissionMode: stringRecord(input.defaultPermissionMode),
+    defaultHarnessId: defaultHarnessId ?? defaults.defaultHarnessId
+  }
+}
+
+export function mergeKunHarnessSettings(
+  current: KunHarnessSettingsV1 | undefined,
+  patch: KunHarnessSettingsPatchV1 | undefined
+): KunHarnessSettingsV1 {
+  const base = normalizeKunHarnessSettings(current)
+  if (!patch) return base
+  return normalizeKunHarnessSettings({
+    disabledIds: patch.disabledIds ?? base.disabledIds,
+    binaryPaths: patch.binaryPaths ?? base.binaryPaths,
+    custom: patch.custom ?? base.custom,
+    defaultPermissionMode: patch.defaultPermissionMode ?? base.defaultPermissionMode,
+    defaultHarnessId: patch.defaultHarnessId ?? base.defaultHarnessId
+  })
+}
+
+export function defaultKunAdeSettings(): KunAdeSettingsV1 {
+  return {
+    enabled: false,
+    harnessRouter: true,
+    deterministicHandoff: true,
+    managerMayApprove: false,
+    allowUnattendedFullAccess: false,
+    limits: { softWorkers: 4, hardWorkers: 8 },
+    hibernation: { enabled: true, idleMinutes: 30 },
+    stall: { structuredMinutes: 10, terminalMinutes: 20 },
+    notifications: {
+      waiting: true,
+      failed: true,
+      done: true,
+      stalled: true,
+      sound: true,
+      keepAwake: false
+    },
+    approvedWorktreeConfigs: []
+  }
+}
+
+export function normalizeKunAdeSettings(value: unknown): KunAdeSettingsV1 {
+  const input = isRecord(value) ? value : {}
+  const defaults = defaultKunAdeSettings()
+  const managerModel = isRecord(input.managerModel)
+    ? {
+        providerId: nonEmpty(input.managerModel.providerId, 128),
+        model: nonEmpty(input.managerModel.model, 512)
+      }
+    : undefined
+  const softWorkers = clampInt(
+    isRecord(input.limits) ? input.limits.softWorkers : undefined,
+    1, 16, defaults.limits.softWorkers
+  )
+  const hardWorkers = clampInt(
+    isRecord(input.limits) ? input.limits.hardWorkers : undefined,
+    softWorkers, 32, Math.max(softWorkers, defaults.limits.hardWorkers)
+  )
+  const budgetInput = isRecord(input.budget) ? input.budget : undefined
+  const budget = budgetInput
+    ? {
+        ...(typeof budgetInput.softTokens === 'number' &&
+          Number.isInteger(budgetInput.softTokens) && budgetInput.softTokens > 0
+          ? { softTokens: budgetInput.softTokens }
+          : {}),
+        ...(typeof budgetInput.hardTokens === 'number' &&
+          Number.isInteger(budgetInput.hardTokens) && budgetInput.hardTokens > 0
+          ? { hardTokens: budgetInput.hardTokens }
+          : {})
+      }
+    : undefined
+  const hibernation = isRecord(input.hibernation) ? input.hibernation : {}
+  const stall = isRecord(input.stall) ? input.stall : {}
+  const notifications = isRecord(input.notifications) ? input.notifications : {}
+  return {
+    enabled: bool(input.enabled, defaults.enabled),
+    harnessRouter: bool(input.harnessRouter, defaults.harnessRouter),
+    deterministicHandoff: bool(input.deterministicHandoff, defaults.deterministicHandoff),
+    ...(managerModel?.providerId && managerModel.model
+      ? { managerModel: { providerId: managerModel.providerId, model: managerModel.model } }
+      : {}),
+    managerMayApprove: bool(input.managerMayApprove, defaults.managerMayApprove),
+    allowUnattendedFullAccess: bool(
+      input.allowUnattendedFullAccess,
+      defaults.allowUnattendedFullAccess
+    ),
+    limits: { softWorkers, hardWorkers },
+    ...(budget && (budget.softTokens !== undefined || budget.hardTokens !== undefined)
+      ? { budget }
+      : {}),
+    hibernation: {
+      enabled: bool(hibernation.enabled, defaults.hibernation.enabled),
+      idleMinutes: clampInt(
+        hibernation.idleMinutes, 1, 1_440, defaults.hibernation.idleMinutes
+      )
+    },
+    stall: {
+      structuredMinutes: clampInt(
+        stall.structuredMinutes, 1, 240, defaults.stall.structuredMinutes
+      ),
+      terminalMinutes: clampInt(
+        stall.terminalMinutes, 1, 480, defaults.stall.terminalMinutes
+      )
+    },
+    notifications: {
+      waiting: bool(notifications.waiting, defaults.notifications.waiting),
+      failed: bool(notifications.failed, defaults.notifications.failed),
+      done: bool(notifications.done, defaults.notifications.done),
+      stalled: bool(notifications.stalled, defaults.notifications.stalled),
+      sound: bool(notifications.sound, defaults.notifications.sound),
+      keepAwake: bool(notifications.keepAwake, defaults.notifications.keepAwake)
+    },
+    approvedWorktreeConfigs: stringList(input.approvedWorktreeConfigs)
+  }
+}
+
+export function mergeKunAdeSettings(
+  current: KunAdeSettingsV1 | undefined,
+  patch: KunAdeSettingsPatchV1 | undefined
+): KunAdeSettingsV1 {
+  const base = normalizeKunAdeSettings(current)
+  if (!patch) return base
+  const managerModelPatch = patch.managerModel
+    ? {
+        providerId: patch.managerModel.providerId ?? base.managerModel?.providerId,
+        model: patch.managerModel.model ?? base.managerModel?.model
+      }
+    : base.managerModel
+  return normalizeKunAdeSettings({
+    enabled: patch.enabled ?? base.enabled,
+    harnessRouter: patch.harnessRouter ?? base.harnessRouter,
+    deterministicHandoff: patch.deterministicHandoff ?? base.deterministicHandoff,
+    ...(managerModelPatch ? { managerModel: managerModelPatch } : {}),
+    managerMayApprove: patch.managerMayApprove ?? base.managerMayApprove,
+    allowUnattendedFullAccess:
+      patch.allowUnattendedFullAccess ?? base.allowUnattendedFullAccess,
+    limits: { ...base.limits, ...(patch.limits ?? {}) },
+    budget: patch.budget === null ? undefined : { ...base.budget, ...(patch.budget ?? {}) },
+    hibernation: { ...base.hibernation, ...(patch.hibernation ?? {}) },
+    stall: { ...base.stall, ...(patch.stall ?? {}) },
+    notifications: { ...base.notifications, ...(patch.notifications ?? {}) },
+    approvedWorktreeConfigs:
+      patch.approvedWorktreeConfigs ?? base.approvedWorktreeConfigs
+  })
+}

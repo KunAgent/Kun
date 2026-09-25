@@ -1,4 +1,5 @@
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
+import type { CoreApprovalActionJson } from './kun-contract-approval'
 import type {
   CoreAttachmentDiagnosticsJson,
   CoreAttachmentMetadataJson,
@@ -516,6 +517,8 @@ export type CoreUsageSnapshotJson = {
   /** Thread-cumulative average tokens-per-second across all model calls. */
   avgTokensPerSecond?: number | null
 }
+
+export type { CoreApprovalActionJson } from './kun-contract-approval'
 
 export type CoreRuntimeEventJson = {
   kind?: string
