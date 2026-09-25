@@ -240,6 +240,46 @@ describe('memory tool provider', () => {
     }, context())
     expect(approved.isError).not.toBe(true)
   })
+
+  it('rejects re-enabling or re-timing a directive without authority=directive', async () => {
+    const store = await createStore('mem_tool_dir_revive')
+    await store.createWithId('mem_rule', {
+      content: 'Reply in English', scope: 'user', authority: 'directive', disabled: true
+    })
+    const tool = memoryTool(store, 'memory_update')
+    for (const patch of [
+      { disabled: false },
+      { expiresAt: null },
+      { validTo: null },
+      { validFrom: '2026-08-01T00:00:00.000Z' }
+    ]) {
+      await expect(tool.execute({ id: 'mem_rule', ...patch }, context()))
+        .resolves.toMatchObject({ isError: true })
+    }
+    expect((await store.getById('mem_rule')).disabledAt).toBeDefined()
+    // Removing a rule stays on the ordinary path.
+    const demoted = await tool.execute({ id: 'mem_rule', authority: 'reference' }, context())
+    expect(demoted.isError).not.toBe(true)
+    // Reference memories keep the ordinary update path.
+    await store.createWithId('mem_fact', { content: 'Uses pnpm', scope: 'user', disabled: true })
+    const revived = await tool.execute({ id: 'mem_fact', disabled: false }, context())
+    expect(revived.isError).not.toBe(true)
+  })
+
+  it('hides memories from scopes the memory policy disables in memory_list', async () => {
+    const store = await createStore('mem_tool_scopes')
+    await store.createWithId('mem_user_scope', { content: 'Prefers tabs', scope: 'user' })
+    await store.createWithId('mem_ws_scope', {
+      content: 'Uses pnpm', scope: 'workspace', workspace: '/workspace-a'
+    })
+    const tool = memoryTool(store, 'memory_list')
+    const result = await tool.execute({}, {
+      ...context(),
+      memoryPolicy: { enabled: true, scopes: ['workspace'] }
+    })
+    const output = result.output as { memories: Array<{ id: string }> }
+    expect(output.memories.map((memory) => memory.id)).toEqual(['mem_ws_scope'])
+  })
 })
 
 async function createStore(id: string): Promise<FileMemoryStore> {

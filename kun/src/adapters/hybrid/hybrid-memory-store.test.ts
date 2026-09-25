@@ -36,7 +36,7 @@ describe('HybridMemoryStore', () => {
       .resolves.toMatchObject([{ id: 'mem_cjk' }])
     const diagnostics = await store.diagnostics()
     expect(diagnostics).toMatchObject({
-      canonicalCount: 2, indexedCount: 2, staleCount: 0, indexState: 'ready', indexSchemaVersion: 1
+      canonicalCount: 2, indexedCount: 2, staleCount: 0, indexState: 'ready', indexSchemaVersion: 2
     })
     expect(diagnostics.lastRetrieval?.mode).toBe('sqlite-fts5')
     await store.shutdown()

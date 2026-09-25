@@ -173,11 +173,14 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
           }
           const parsed = MemoryUpdateRequest.safeParse(patch)
           if (!parsed.success) return invalidArguments('update', parsed.error.issues)
-          // Rewriting an existing directive's text must repeat the explicit
-          // user approval: require the call to carry authority='directive'.
-          if (patch.content !== undefined && patch.authority !== 'directive' && store.getById) {
-            const existing = await store.getById(id, { workspace: context.workspace }).catch(() => undefined)
-            if (existing?.authority === 'directive') {
+          // Rewriting, re-enabling, or re-timing an existing directive changes
+          // what is injected as a user instruction, so it must repeat the
+          // explicit user approval by carrying authority='directive'.
+          if (patch.authority === undefined && touchesDirectiveEffect(patch)) {
+            const existing = store.getById
+              ? await store.getById(id, { workspace: context.workspace }).catch(() => undefined)
+              : undefined
+            if (!store.getById || existing?.authority === 'directive') {
               return {
                 output: { error: 'updating a directive requires authority=directive' },
                 isError: true
@@ -210,6 +213,17 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
       ...buildMemoryReadTools(store)
     ]
   }]
+}
+
+/**
+ * Fields that change a directive's text or bring it back into effect. Disabling
+ * (`disabled: true`) and demoting (`authority: 'reference'`) only remove a rule
+ * and stay available under the ordinary memory approval policy.
+ */
+const DIRECTIVE_EFFECT_FIELDS = ['content', 'expiresAt', 'validFrom', 'validTo'] as const
+
+function touchesDirectiveEffect(patch: Record<string, unknown>): boolean {
+  return DIRECTIVE_EFFECT_FIELDS.some((key) => hasOwn(patch, key)) || patch.disabled === false
 }
 
 function hasOwn(value: Record<string, unknown>, key: string): boolean {

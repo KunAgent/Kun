@@ -53,7 +53,8 @@ export interface MemoryStore {
   delete(id: string, access?: MemoryAccess): Promise<MemoryRecord>
   purge?(id: string, access?: MemoryAccess): Promise<void>
   list(filter?: MemoryListFilter): Promise<MemoryRecord[]>
-  listDirectives?(access?: MemoryAccess): Promise<MemoryDirectiveResult>
+  /** `policy` overrides the store's own config so shared repositories honor live settings. */
+  listDirectives?(access?: MemoryAccess, policy?: MemoryCapabilityConfig): Promise<MemoryDirectiveResult>
   retrieve(input: MemoryRetrieveRequest): Promise<MemoryRecord[]>
   diagnostics(policy?: MemoryCapabilityConfig): Promise<MemoryDiagnostics>
   setLastInjected(ids: string[]): void
@@ -271,14 +272,17 @@ export class FileMemoryStore implements MemoryStore {
       .slice(0, filter.limit ?? Infinity)
   }
 
-  async listDirectives(access: MemoryAccess = {}): Promise<MemoryDirectiveResult> {
+  async listDirectives(
+    access: MemoryAccess = {},
+    policy: MemoryCapabilityConfig = this.config()
+  ): Promise<MemoryDirectiveResult> {
     const canonical = await readCanonicalMemoryDirectory(this.options.rootDir, {
       maxFiles: MEMORY_MAX_FALLBACK_FILES
     })
     const result = selectMemoryDirectives({
       records: canonical.records,
       access,
-      policy: this.config(),
+      policy,
       nowMs: Date.parse(this.now())
     })
     this.lastDirectiveInjection = result
