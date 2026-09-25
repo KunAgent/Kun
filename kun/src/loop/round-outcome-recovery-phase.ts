@@ -467,6 +467,7 @@ export abstract class RoundOutcomeRecoveryPhase extends RoundOutcomeRequiredTool
       agentSurface: input.turn.agentSurface ?? 'code',
       guiDesignArtifact: input.turn.guiDesignArtifact,
       modelProviderId: input.modelProviderId,
+      ...(input.turn.harnessId ? { harnessId: input.turn.harnessId } : {}),
       actingModelRoute: prepared.actingModelRoute,
       approvalIntent: input.turn.prompt,
       reasoningEffort: input.modelReasoningEffort,

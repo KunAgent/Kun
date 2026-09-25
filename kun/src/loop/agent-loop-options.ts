@@ -193,6 +193,12 @@ export type AgentLoopOptions = {
    * Kun's HTTP model loop.
    */
   sdkRuntime?: DelegatedTurnRuntime
+  /**
+   * Harness-aware routing. When present and `enabled()`, it replaces the
+   * `sdkRuntime` provider-kind inference at dispatch; turns still resolve to
+   * the same DelegatedTurnRuntime instances.
+   */
+  harnessRouter?: import('../harness/harness-router.js').HarnessRouter
   /** Accepted per-turn context-window mode snapshots (frozen at admission). */
   contextWindowModes?: ContextWindowTurnModes
   /** Window transition coordinator backing the new_context tool. */

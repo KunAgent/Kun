@@ -55,6 +55,8 @@ export function createThreadRecord(input: {
   designProfile?: DesignTaskProfile
   designCloneOperation?: DesignCloneOperation
   providerId?: string
+  harnessId?: string
+  workspaceMode?: 'code' | 'ade'
   ownerExtensionId?: string
   ownerExtensionVersion?: string
   accountId?: string
@@ -106,6 +108,8 @@ export function createThreadRecord(input: {
     ...(input.designProfile ? { designProfile: input.designProfile } : {}),
     ...(input.designCloneOperation ? { designCloneOperation: input.designCloneOperation } : {}),
     ...(input.providerId ? { providerId: input.providerId } : {}),
+    ...(input.harnessId ? { harnessId: input.harnessId } : {}),
+    ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
     ...(input.ownerExtensionId ? { ownerExtensionId: input.ownerExtensionId } : {}),
     ...(input.ownerExtensionVersion ? { ownerExtensionVersion: input.ownerExtensionVersion } : {}),
     ...(input.accountId ? { accountId: input.accountId } : {}),

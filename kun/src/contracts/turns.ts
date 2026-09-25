@@ -23,6 +23,7 @@ import {
   DesignTaskProfileSchema
 } from './design-task-profile.js'
 import { WriteTurnContextSchema } from './write-turn-context.js'
+import { HarnessCredentialModeSchema, HarnessIdSchema } from './harness.js'
 
 export { TurnReasoningEffortSchema } from './turn-reasoning.js'
 export type { TurnReasoningEffort } from './turn-reasoning.js'
@@ -199,6 +200,10 @@ export const TurnSchema = z.object({
   subagentResume: SubagentResumeRequestSchema.optional(),
   model: z.string().optional(),
   providerId: z.string().optional(),
+  /** Frozen harness identity; inferred at admission when absent on legacy records. */
+  harnessId: HarnessIdSchema.optional(),
+  /** Frozen credential mode for the frozen harness; defaults to the harness's first mode. */
+  credentialMode: HarnessCredentialModeSchema.optional(),
   accountId: z.string().min(1).optional(),
   /** First successfully resolved route; immutable for the remainder of this turn. */
   actingModelRoute: ActingTurnModelRouteSchema.optional(),
@@ -318,6 +323,13 @@ export const StartTurnRequest = z.object({
   subagentResume: SubagentResumeRequestSchema.optional(),
   model: z.string().optional(),
   providerId: z.string().optional(),
+  /**
+   * Explicit harness override for this turn. Absent means "inherit the
+   * thread's harness (or infer from the provider for legacy records)".
+   */
+  harnessId: HarnessIdSchema.optional(),
+  /** Explicit credential mode; absent means "the harness's default". */
+  credentialMode: HarnessCredentialModeSchema.optional(),
   accountId: z.string().min(1).optional(),
   reasoningEffort: TurnReasoningEffortSchema.optional(),
   serviceTier: TurnServiceTierSchema.optional(),

@@ -214,6 +214,14 @@ export type ToolHostContext = {
   fastContextTaskCount?: number
   /** Active model provider id selected for this turn. Child agents inherit this routing unless a profile overrides it. */
   modelProviderId?: string
+  /** Frozen harness identity for this turn; tool providers use it for harness-aware behavior. */
+  harnessId?: string
+  /**
+   * Execution-unit classification for the owning thread. P0 has no worker
+   * execution unit yet, so ADE workers leave this unset until task
+   * workspaces land.
+   */
+  executionUnitKind?: 'worker'
   /** Frozen model/provider/account route used by automatic approval review. */
   actingModelRoute?: ActingTurnModelRoute
   /** Bounded initiating intent supplied only to the isolated approval reviewer. */

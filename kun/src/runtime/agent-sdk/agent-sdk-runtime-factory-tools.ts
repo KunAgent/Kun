@@ -170,6 +170,7 @@ export function createAgentSdkToolRuntimeDeps(
         approvalReviewer,
         actingModelRoute,
         ...(turn.orchestration ? { orchestration: turn.orchestration } : {}),
+        ...(turn?.harnessId ? { harnessId: turn.harnessId } : {}),
         signal: toolSignal,
         awaitApproval: makeAwaitApproval(
           approvalPolicy,

@@ -1,0 +1,31 @@
+import type { HarnessTransport } from '../contracts/harness.js'
+import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
+import {
+  createAgentSdkRuntime,
+  type AgentSdkRuntimeFactoryDeps
+} from '../runtime/agent-sdk/agent-sdk-runtime-factory.js'
+import {
+  AntigravityCliRuntime,
+  type AntigravityCliRuntimeDeps
+} from '../runtime/antigravity/antigravity-cli-runtime.js'
+import {
+  createCursorSdkRuntime,
+  type CursorSdkRuntimeFactoryDeps
+} from '../runtime/cursor/cursor-sdk-runtime-factory.js'
+
+/**
+ * Shared transport map assembly used by the main runtime and by child/delegated
+ * scopes. Callers build the per-scope deps objects (child scopes narrow them);
+ * this factory only decides which transports exist.
+ */
+export function buildHarnessRuntimes(input: {
+  agentSdk?: AgentSdkRuntimeFactoryDeps | null
+  antigravity?: AntigravityCliRuntimeDeps | null
+  cursor?: CursorSdkRuntimeFactoryDeps | null
+}): Partial<Record<HarnessTransport, DelegatedTurnRuntime>> {
+  const map: Partial<Record<HarnessTransport, DelegatedTurnRuntime>> = {}
+  if (input.agentSdk) map['agent-sdk'] = createAgentSdkRuntime(input.agentSdk)
+  if (input.antigravity) map['antigravity-cli'] = new AntigravityCliRuntime(input.antigravity)
+  if (input.cursor) map['cursor-sdk'] = createCursorSdkRuntime(input.cursor)
+  return map
+}

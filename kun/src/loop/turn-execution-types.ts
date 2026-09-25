@@ -130,6 +130,10 @@ export type ToolTurnContextInput = {
   agentSurface?: 'code' | 'write' | 'design'
   guiDesignArtifact?: GuiDesignArtifactContext
   modelProviderId?: string
+  /** Frozen harness identity; copied to the tool context verbatim. */
+  harnessId?: string
+  /** Worker execution-unit marker for future ADE task threads. */
+  executionUnitKind?: 'worker'
   actingModelRoute?: ActingTurnModelRoute
   approvalIntent?: string
   reasoningEffort?: string

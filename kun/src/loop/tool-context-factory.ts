@@ -61,6 +61,8 @@ export function createToolExecutionContext(
       ? { sourceResultBudgetTokens: input.sourceResultBudgetTokens }
       : {}),
     ...(input.modelProviderId ? { modelProviderId: input.modelProviderId } : {}),
+    ...(input.harnessId ? { harnessId: input.harnessId } : {}),
+    ...(input.executionUnitKind ? { executionUnitKind: input.executionUnitKind } : {}),
     actingModelRoute: input.actingModelRoute,
     ...(input.approvalIntent ? { approvalIntent: input.approvalIntent } : {}),
     ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),

@@ -92,7 +92,12 @@ export type ChildDelegatedRuntimeFactory = (input: {
   instructionsEnabled: boolean
   memoryEnabled: boolean
   pptWorkflowScope?: PptWorkflowScope
-}) => DelegatedTurnRuntime | undefined
+}) => {
+  /** Legacy provider-inference view (used when the harness router is off). */
+  delegated?: DelegatedTurnRuntime
+  /** Child-scoped harness router; shares the global catalog. */
+  router?: import('../harness/harness-router.js').HarnessRouter
+} | undefined
 
 export type ChildAgentExecutorOptions = {
   model: ModelClient
@@ -262,7 +267,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     // Provider-native SDKs own separate shell/search tool catalogs. Fast
     // Context deliberately stays in Kun's managed loop so its exact source
     // tool allow-list, semaphore, and result bounds cannot be bypassed.
-    const delegatedRuntime = input.fastContext ? undefined : options.createDelegatedRuntime?.({
+    const delegated = input.fastContext ? undefined : options.createDelegatedRuntime?.({
       threads,
       turns,
       sessionStore,
@@ -310,7 +315,8 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       userInputGate: new InMemoryUserInputGate(),
       model: options.model,
       toolHost,
-      ...(delegatedRuntime ? { sdkRuntime: delegatedRuntime } : {}),
+      ...(delegated?.delegated ? { sdkRuntime: delegated.delegated } : {}),
+      ...(delegated?.router ? { harnessRouter: delegated.router } : {}),
       usage,
       events,
       turns,

@@ -297,6 +297,7 @@ export function createAgentSdkTurnRuntimeDeps(
         approvalReviewer,
         actingModelRoute,
         ...(turn.orchestration ? { orchestration: turn.orchestration } : {}),
+        ...(turn?.harnessId ? { harnessId: turn.harnessId } : {}),
         ...(awaitUserInput ? { awaitUserInput } : {})
       }
       const discoveryContext = toolContext(threadId, turnId, thread.workspace, {

@@ -33,36 +33,20 @@ export type HarnessRuntimeComposition = {
  * Settings overrides are read lazily on every detection pass so config
  * re-apply does not need to rebuild the detector.
  */
-export type HarnessSettingsEntry = {
-  enabled?: boolean
-  binaryPath?: string
-  env?: Record<string, string>
-  /** Present on custom ACP harness definitions. */
-  command?: string
-  args?: string[]
-  displayName?: string
-}
-
 export function createHarnessComposition(
-  options: () => Pick<KunServeRuntimeOptions, 'providers'> & {
-    harnesses?: Record<string, HarnessSettingsEntry>
-  }
+  options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses'>
 ): HarnessRuntimeComposition {
   const catalog = new HarnessCatalog({
-    custom: () =>
-      Object.entries(options().harnesses ?? {})
-        .filter(([, entry]) => typeof entry.command === 'string' && entry.command.length > 0)
-        .map(([id, entry]) => ({
-          id,
-          displayName: entry.displayName ?? id,
-          command: entry.command!,
-          args: entry.args ?? [],
-          env: entry.env ?? {}
-        }))
+    custom: () => options().harnesses?.custom ?? []
   })
   const detector = new HarnessDetector({
     definitions: () => catalog.list(),
-    overrides: () => options().harnesses ?? {},
+    overrides: () => {
+      const binaryPaths = options().harnesses?.binaryPaths ?? {}
+      return Object.fromEntries(
+        Object.entries(binaryPaths).map(([id, binaryPath]) => [id, { binaryPath }])
+      )
+    },
     bundled: bundledRuntime,
     spawnCaptured,
     probeLogin: (def) =>
