@@ -143,6 +143,9 @@ export function ProviderReliabilityPanel({
                 {[group.providerId, ...group.accounts.map((account) => account.providerId)].map((id) => {
                   const representative = id === group.providerId
                   const account = group.accounts.find((entry) => entry.providerId === id)
+                  const memberExists = providerSettings.providers.some(
+                    (candidate) => candidate.id === id
+                  )
                   return (
                     <div
                       key={id}
@@ -166,6 +169,11 @@ export function ProviderReliabilityPanel({
                         {nameFor(id)}
                         <span className="ml-1.5 text-[11px] text-ds-faint">{id}</span>
                       </span>
+                      {!memberExists ? (
+                        <span className="text-[11px] font-medium text-red-600 dark:text-red-300">
+                          {t('modelProviderFailoverInvalidMember')}
+                        </span>
+                      ) : null}
                       {representative ? (
                         <span className="text-[11px] font-medium text-ds-faint">
                           {t('modelProviderFailoverPrimary')}
@@ -222,10 +230,16 @@ export function ProviderReliabilityPanel({
                   const targetProvider = providerSettings.providers.find(
                     (candidate) => candidate.id === target.providerId
                   )
+                  const targetInvalid = !targetProvider
+                    || !targetProvider.models.includes(target.modelId)
                   return (
                     <div
                       key={`${target.providerId}/${target.modelId}/${index}`}
-                      className="flex items-center gap-2 rounded-lg border border-ds-border-muted bg-ds-card px-3 py-2"
+                      className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${
+                        targetInvalid
+                          ? 'border-red-300/70 bg-red-50/40 dark:border-red-500/30 dark:bg-red-500/10'
+                          : 'border-ds-border-muted bg-ds-card'
+                      }`}
                     >
                       <span className="text-[11px] font-medium tabular-nums text-ds-faint">
                         {index + 1}
@@ -270,6 +284,11 @@ export function ProviderReliabilityPanel({
                           <option key={modelId} value={modelId}>{modelId}</option>
                         ))}
                       </select>
+                      {targetInvalid ? (
+                        <span className="shrink-0 text-[11px] font-medium text-red-600 dark:text-red-300">
+                          {t('modelProviderFailoverInvalidFallback')}
+                        </span>
+                      ) : null}
                       <button
                         type="button"
                         aria-label={t('modelProviderFailoverFallbackRemove')}

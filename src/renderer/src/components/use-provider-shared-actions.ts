@@ -1,6 +1,7 @@
 import type {
   AppSettingsPatch,
   KunRuntimeSettingsPatchV1,
+  ModelProviderFailoverV1,
   ModelProviderProfileV1
 } from '@shared/app-settings'
 import {
@@ -168,7 +169,8 @@ export function useProviderSharedActions(scope: Record<string, any>): Record<str
   const updateModelProviders = (
     providers: ModelProviderProfileV1[],
     kunPatch?: KunRuntimeSettingsPatchV1,
-    additionalPatch?: Pick<AppSettingsPatch, 'write'>
+    additionalPatch?: Pick<AppSettingsPatch, 'write'>,
+    failover?: ModelProviderFailoverV1[]
   ): void => {
     const current = sharedProjectionInput.current
     current.update({
@@ -176,7 +178,8 @@ export function useProviderSharedActions(scope: Record<string, any>): Record<str
         provider: current.provider,
         providers,
         kun: kunPatch,
-        currentKun: current.kun
+        currentKun: current.kun,
+        failover
       }),
       ...(additionalPatch ?? {})
     })

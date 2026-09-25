@@ -28,6 +28,8 @@
   "modelProviderFailoverFallbackAdd": "添加备用",
   "modelProviderFailoverDisable": "退出故障转移组",
   "modelProviderFailoverMemberHint": "该供应商是故障转移组成员。",
+  "modelProviderFailoverInvalidMember": "供应商已删除，运行时忽略",
+  "modelProviderFailoverInvalidFallback": "供应商或模型已删除，运行时忽略",
   "modelProviderImportButton": "导入…",
   "modelProviderImportTitle": "导入供应商",
   "modelProviderImportDesc": "扫描本机工具配置（CC Switch、Claude Code、Codex、OpenCode）并导入匹配的供应商。凭据在主进程读取，不会显示在这里。",

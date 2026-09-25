@@ -12,6 +12,7 @@ import {
   defaultModelRequestRetrySettings,
   defaultModelProviderSettings,
   listModelProviderReferences,
+  modelProviderFailoverAfterRemoval,
   modelProviderPresetAccountProfile,
   modelProviderPresetProfile,
   modelProviderTokenPlanProfile,
@@ -355,7 +356,11 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
       updateModelProviders(
         remainingProviders,
         Object.keys(kunPatch).length > 0 ? kunPatch : undefined,
-        writePatch
+        writePatch,
+        // Prune the deleted provider from every failover group in the same
+        // write; otherwise recreating a same-id provider revives stale
+        // account groups and fallback chains.
+        modelProviderFailoverAfterRemoval(latest.provider.failover, id)
       )
       setSelectedProviderId((currentId: string) => currentId === id
         ? fallbackProvider?.id ?? DEFAULT_MODEL_PROVIDER_ID

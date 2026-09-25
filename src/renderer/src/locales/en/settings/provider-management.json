@@ -28,6 +28,8 @@
   "modelProviderFailoverFallbackAdd": "Add fallback",
   "modelProviderFailoverDisable": "Leave failover group",
   "modelProviderFailoverMemberHint": "This provider is a member of the failover group.",
+  "modelProviderFailoverInvalidMember": "provider removed — ignored at runtime",
+  "modelProviderFailoverInvalidFallback": "provider or model removed — ignored at runtime",
   "modelProviderImportButton": "Import…",
   "modelProviderImportTitle": "Import providers",
   "modelProviderImportDesc": "Scan local tool configurations (CC Switch, Claude Code, Codex, OpenCode) and import matching providers. Credentials are read in the main process and never shown here.",
