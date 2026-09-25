@@ -1,0 +1,21 @@
+{
+  "memoryAuthority_all": "सभी",
+  "memoryAuthority_directive": "नियम",
+  "memoryAuthority_reference": "संदर्भ",
+  "memoryDirectivesEnable": "दीर्घकालिक नियम इंजेक्ट करें",
+  "memoryDirectivesEnableDesc": "स्वीकृत नियम हर टर्न में आपके निर्देश के रूप में मॉडल को भेजे जाते हैं। बंद करने पर नियम सहेजे रहते हैं पर लागू नहीं होते।",
+  "memoryDirectives": "उपयोगकर्ता नियम",
+  "memoryDirectivesDesc": "नियम हर टर्न में आपके निर्देश के रूप में इंजेक्ट होते हैं; संदर्भ स्मृतियों के विपरीत इन्हें प्रासंगिकता से फ़िल्टर नहीं किया जाता।",
+  "memoryDirectiveActiveCount": "सक्रिय नियम",
+  "memoryDirectiveInjectedCount": "इस टर्न में इंजेक्ट",
+  "memoryDirectiveOmittedCount": "बजट से छोड़े गए",
+  "memorySetDirective": "नियम बनाएं",
+  "memoryUnsetDirective": "नियम हटाएं",
+  "memorySetDirectiveDisabled": "नियम छोटे और user/workspace स्कोप होने चाहिए; लंबा कंटेंट AGENTS.md में लिखें",
+  "memoryDirectiveUpdateFailed": "नियम अपडेट करने में विफल",
+  "memoryAsDirective": "नियम के रूप में सहेजें (हर टर्न लागू)",
+  "memoryAsDirectiveDesc": "नियम आपके निर्देश के रूप में मॉडल को भेजे जाते हैं, जैसे \"हिंदी में उत्तर दें\" या \"कमिट से पहले टेस्ट चलाएं\"। सामान्य स्मृतियां केवल संदर्भ हैं, निर्देश नहीं।",
+  "memoryDirectiveTooLong": "नियम छोटा रखें; लंबा कंटेंट AGENTS.md में लिखें",
+  "memoryImportDowngradedPrefix": " ",
+  "memoryImportDowngradedSuffix": " रिकॉर्ड नियम थे और संदर्भ के रूप में इम्पोर्ट हुए; सूची में एक-एक कर फिर सक्षम करें।"
+}

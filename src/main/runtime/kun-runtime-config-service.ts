@@ -231,6 +231,10 @@ export async function syncGuiManagedKunConfig(
         distillation: {
           ...objectValue(objectValue(capabilities.memory).distillation),
           enabled: runtime.memoryDistillationEnabled
+        },
+        directives: {
+          ...objectValue(objectValue(capabilities.memory).directives),
+          enabled: runtime.memoryDirectivesEnabled
         }
       },
       instructions: {
@@ -369,7 +373,7 @@ type KunRuntimeConfigSettings = Pick<KunRuntimeSettingsV1,
   'tokenEconomy' | 'toolOutputLimits' | 'storage' | 'contextCompaction' |
   'runtimeTuning' | 'llmDebug' | 'imageGeneration' | 'textToSpeech' | 'musicGeneration' |
   'videoGeneration' | 'computerUse' | 'browserUse' | 'modelProfiles' | 'memoryEnabled' |
-  'memoryDistillationEnabled' |
+  'memoryDistillationEnabled' | 'memoryDirectivesEnabled' |
   'instructions' | 'quality' | 'subagents' | 'graph' | 'fastContext' | 'lab' | 'githubMcp' | 'smallModel' |
   'smallModelProviderId' | 'smallModelAccountId' |
   'titleModel' | 'titleProviderId' | 'titleAccountId' |
@@ -410,6 +414,10 @@ export function buildManagedRuntimeHotApplyBody(
         distillation: {
           ...config.capabilities?.memory?.distillation,
           enabled: runtime.memoryDistillationEnabled
+        },
+        directives: {
+          ...config.capabilities?.memory?.directives,
+          enabled: runtime.memoryDirectivesEnabled
         }
       }
     },

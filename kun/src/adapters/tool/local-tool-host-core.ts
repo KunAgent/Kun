@@ -242,7 +242,9 @@ export class LocalToolHost implements ToolHost {
         : workspaceCommandApproval
           ? 'host command execution from the workspace sandbox requires approval'
           : explicitApprovalRequired
-            ? 'external side effect requires explicit approval'
+            ? tool.requiresApprovalInFullAccess === true
+              ? 'this action requires an explicit user decision'
+              : 'external side effect requires explicit approval'
             : 'runtime tool policy requires approval'
       const action = createApprovalActionEnvelope({
         toolName: activeCall.toolName,
@@ -256,7 +258,9 @@ export class LocalToolHost implements ToolHost {
           ? activeCall.arguments.cwd
           : context.workspace,
         exactFileTargets: externalWriteTargets.map((target) => target.path),
-        reason: approvalReason
+        reason: approvalReason,
+        requiresUserDecision:
+          tool.requiresApprovalInFullAccess === true && explicitApprovalRequired
       })
       const approval: ApprovalRequest = createApprovalRequest({
         id: approvalId,

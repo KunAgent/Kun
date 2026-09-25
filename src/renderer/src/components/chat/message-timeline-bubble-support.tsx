@@ -80,6 +80,7 @@ export function RuntimeMetaChips({
   const attachmentIds = hideTurnDisclosure || hideAttachments ? [] : metaStringArray(meta, 'attachmentIds')
   const activeSkillIds = hideTurnDisclosure ? [] : metaStringArray(meta, 'activeSkillIds')
   const injectedMemoryIds = hideTurnDisclosure ? [] : metaStringArray(meta, 'injectedMemoryIds')
+  const injectedDirectiveIds = hideTurnDisclosure ? [] : metaStringArray(meta, 'injectedDirectiveIds')
   const injectedInstructionSources = hideTurnDisclosure ? [] : metaInstructionSources(meta)
   const composerContextLabels = hideTurnDisclosure ? [] : metaComposerContextLabels(meta)
   const officeViewPositions = hideTurnDisclosure ? [] : metaOfficeViewPositions(meta)
@@ -97,6 +98,7 @@ export function RuntimeMetaChips({
     (hideAttachments || attachmentIds.length === 0) &&
     activeSkillIds.length === 0 &&
     injectedMemoryIds.length === 0 &&
+    injectedDirectiveIds.length === 0 &&
     injectedInstructionSources.length === 0 &&
     composerContextLabels.length === 0 &&
     officeViewPositions.length === 0 &&
@@ -118,7 +120,7 @@ export function RuntimeMetaChips({
           {t('toolActiveSkills')} {activeSkillIds.length}
         </span>
       ) : null}
-      {injectedMemoryIds.length > 0 ? (
+      {injectedMemoryIds.length > 0 || injectedDirectiveIds.length > 0 ? (
         <InjectedMemoryMetaChip meta={meta} memoryIds={injectedMemoryIds} chipClass={chipClass} />
       ) : null}
       {injectedInstructionSources.length > 0 ? (

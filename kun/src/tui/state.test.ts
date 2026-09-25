@@ -494,6 +494,8 @@ describe('thread projection', () => {
       activeSkillIds: [],
       injectedMemoryIds: [],
       injectedMemorySummaries: [],
+      injectedDirectiveIds: [],
+      injectedDirectiveSummaries: [],
       injectedInstructionSources: []
     }]
     expect(projectThreadSnapshot(source).pendingUserInput).toBeUndefined()
@@ -506,7 +508,7 @@ describe('thread projection', () => {
     source.turns = [{
       id: 'turn_1', threadId: 'thr_1', status: 'running', orchestration: 'direct', prompt: 'work', steering: [],
       createdAt: source.createdAt, items: [], attachmentIds: [], activeSkillIds: [],
-      injectedMemoryIds: [], injectedMemorySummaries: [], injectedInstructionSources: []
+      injectedMemoryIds: [], injectedMemorySummaries: [], injectedDirectiveIds: [], injectedDirectiveSummaries: [], injectedInstructionSources: []
     }]
     let state = projectThreadSnapshot(source)
     state = applyRuntimeEvent(state, event({ kind: 'turn_steered', seq: 1, turnId: 'turn_1', text: 'focus tests' }))

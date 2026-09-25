@@ -40,6 +40,8 @@ function detail(): ThreadDetail {
         activeSkillIds: [],
         injectedMemoryIds: [],
         injectedMemorySummaries: [],
+        injectedDirectiveIds: [],
+        injectedDirectiveSummaries: [],
         injectedInstructionSources: [],
         items: [{
           id: 'item_user', turnId: 'turn_1', threadId: 'thr_export', role: 'user',

@@ -158,6 +158,7 @@ function memoryDraft(overrides: Partial<MemoryDraft> = {}): MemoryDraft {
     confidence: 1,
     type: 'fact',
     importance: 0.8,
+    directive: false,
     ...overrides
   }
 }
@@ -466,8 +467,16 @@ describe('memoryDraftMutation', () => {
       tags: ['alpha', 'beta'],
       confidence: 0.7,
       type: 'decision',
-      importance: 0.9
+      importance: 0.9,
+      authority: 'reference'
     })
+  })
+
+  it('maps the rule checkbox to directive authority', () => {
+    expect(memoryDraftMutation(memoryDraft({
+      content: 'Reply in English',
+      directive: true
+    }))).toMatchObject({ authority: 'directive' })
   })
 })
 

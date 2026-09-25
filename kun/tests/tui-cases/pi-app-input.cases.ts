@@ -171,6 +171,8 @@ function renderAssistantMessage(text: string, width: number, running = false): s
     activeSkillIds: [],
     injectedMemoryIds: [],
     injectedMemorySummaries: [],
+    injectedDirectiveIds: [],
+    injectedDirectiveSummaries: [],
     injectedInstructionSources: []
   }]
   const transcript = new TranscriptComponent()
@@ -501,6 +503,8 @@ describe("PiTuiApplication input, exit, steering, and timeline", () => {
       activeSkillIds: [],
       injectedMemoryIds: [],
       injectedMemorySummaries: [],
+      injectedDirectiveIds: [],
+      injectedDirectiveSummaries: [],
       injectedInstructionSources: [],
       items: []
     }]
@@ -557,6 +561,8 @@ describe("PiTuiApplication input, exit, steering, and timeline", () => {
       activeSkillIds: [],
       injectedMemoryIds: [],
       injectedMemorySummaries: [],
+      injectedDirectiveIds: [],
+      injectedDirectiveSummaries: [],
       injectedInstructionSources: [],
       items: []
     }]
@@ -604,7 +610,7 @@ describe("PiTuiApplication input, exit, steering, and timeline", () => {
     current.turns = [{
       id: 'turn_live', threadId: current.id, status: 'completed', orchestration: 'direct', prompt: 'inspect live state', steering: [],
       createdAt: current.createdAt, finishedAt: current.updatedAt, attachmentIds: [], activeSkillIds: [],
-      injectedMemoryIds: [], injectedMemorySummaries: [], injectedInstructionSources: [],
+      injectedMemoryIds: [], injectedMemorySummaries: [], injectedDirectiveIds: [], injectedDirectiveSummaries: [], injectedInstructionSources: [],
       items: [{
         id: 'item_user', turnId: 'turn_live', threadId: current.id, role: 'user', status: 'completed',
         createdAt: current.createdAt, kind: 'user_message', text: 'inspect live state'
