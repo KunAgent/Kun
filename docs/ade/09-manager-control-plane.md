@@ -20,6 +20,7 @@ Kun 原生 agent 作为总管：拆任务、选 agent、派活、盯进度、回
 
 ## 2. 定位
 
+- **总管只存在于 ADE 模式**（00）：只有 `workspaceMode === 'ade'` 的线程才有 `worker_*` 工具，Code 线程没有。
 - **总管不是新的编排模式**。它就是 Kun 原生 loop，多了一组 `worker_*` 工具；某个线程第一次创建 worker 时，宿主为它建一个 team，这个线程就成了总管线程。
 - **Graph 是总管的结构化形态**：Graph 用 DAG 显式编排，总管用对话自由编排。两者共用同一套 worker 执行底座（dispatch、任务工作区、ActivityStore、harness 路由）。
 - 总管必须是 `harness: 'kun'`：`worker_*` 工具只在原生 loop 的 turn 上广告。外部 harness 的一对一会话里没有这些工具（不做"外部 agent 当总管"）。
@@ -120,7 +121,7 @@ export type QuestionRecord = {
 
 ## 4. 工具：`kun/src/adapters/tool/manager-tool-provider.ts`（新增）
 
-`providerKind: 'delegation'`。广告条件：原生 loop 的 turn、`agentSurface` 为 code、`agents.kun.ade.enabled` 为真、线程不是 worker、不在 Rooms。
+`providerKind: 'delegation'`。广告条件：线程 `workspaceMode === 'ade'`、原生 loop 的 turn、线程不是 worker、不在 Rooms（00 §3）。
 
 ### 4.1 工具列表
 

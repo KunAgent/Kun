@@ -114,6 +114,10 @@ kun 侧所有开关通过 `core.activeOptions` 读取，支持热更新；已接
   report that agent's state only through Kun's activity store.
 ```
 
+### 4.1b 工作区模式说明
+
+`docs/AGENTS.md` 开头"Code (including Design tasks), Work, and Connect phone all enter the same Kun HTTP/SSE boundary"补上 ADE：ADE 是第四个工作区模式（线程字段 `workspaceMode: 'ade'`），同样只经 Kun HTTP/SSE 边界；它的 turn 以 `agentSurface: 'code'` 运行。
+
 ### 4.2 `docs/AGENTS.md` → Allowed Extension Path
 
 追加一条：

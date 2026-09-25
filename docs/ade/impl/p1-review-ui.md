@@ -114,6 +114,8 @@ switch (target.kind) {
 
 ## P1-20 Mission Control（M→L，R S）
 
+> 2026-09-26 修订：Mission Control 是 ADE 模式首页（`AdeStage` 的默认视图，00 §4），不改 `board` 路由；下表中关于 `board` / `BoardStage` 的两行作废，其余组件与数据设计不变。左侧栏计数挂在 ADE 侧栏的 Mission Control 行上。
+
 - 分支：`codex/ade-mission-control`；依赖：P0-08
 
 ### 结构
@@ -168,6 +170,8 @@ switch (target.kind) {
 ---
 
 ## P1-22 composer 的 agent 选择器、模型分组、原生斜杠命令（M，R K）
+
+> 2026-09-26 修订：只在 ADE 模式（`mode="ade"`）的 composer 渲染这些控件；Code composer 不变。
 
 - 分支：`codex/ade-harness-picker`；依赖：P0-05、P1-05
 

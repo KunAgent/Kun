@@ -36,7 +36,7 @@ executionUnitKind?: 'worker'
 ```
 
 - worker 回调工具：`shouldAdvertise = (ctx) => ctx.executionUnitKind === 'worker'`。
-- 总管工具（09 §4）：`shouldAdvertise = (ctx) => (ctx.harnessId ?? 'kun') === 'kun' && ctx.executionUnitKind !== 'worker' && !ctx.roomAgent && adeEnabled()`。IM / 定时任务触发的总管 turn 也能派活，但按无人值守规则执行（不升级权限、回落最严档，02 §4）。
+- 总管工具（09 §4）：`shouldAdvertise = (ctx) => ctx.workspaceMode === 'ade' && (ctx.harnessId ?? 'kun') === 'kun' && ctx.executionUnitKind !== 'worker' && !ctx.roomAgent`（ADE 独立模式，见 00 §3；`ToolHostContext` 同时新增 `workspaceMode?`）。IM / 定时任务触发的总管 turn 也能派活，但按无人值守规则执行（不升级权限、回落最严档，02 §4）。
 
 ### 2.1 `report_progress`
 

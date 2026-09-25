@@ -13,7 +13,7 @@
 
 ## 1. 目标
 
-把 Kun 的 Code 模式升级成 ADE（Agentic Development Environment），有两种使用方式，共用一个底座：
+新增一个独立的 **ADE 模式**（Agentic Development Environment），与 Work、Code、Bot 并列（2026-09-26 决策，见 [00-ade-mode.md](./00-ade-mode.md)）。Code 模式保持不变。ADE 模式里有两种使用方式，共用一个底座：
 
 1. **一对一**：用户直接和某一个 agent 对话。这个 agent 可以是 Kun 原生 agent，也可以是 Claude Code、Codex、Gemini CLI、Cursor 等外部 agent。
 2. **总管模式**：用户对 Kun 原生 agent（总管）说话，总管负责拆任务、选 agent、派活、盯进度、验收、汇报；每个 worker 可以是任意 agent，各自在一个由宿主创建的 worktree 里工作。
@@ -64,7 +64,8 @@ Kun 的结构性优势：
 
 ```text
 Renderer（React + Zustand）
-  Mission Control / 一对一会话 / 总管会话 / Workers 轨道 / 审查面板
+  模式：Work / Code（不变）/ ADE（新）/ Bot
+  ADE：Mission Control / 一对一会话 / 总管会话 / Workers 轨道 / 审查面板
       |  window.kunGui.runtimeRequest / startSse / activity 长轮询
       v
 Preload -> Main（DesktopProcessStack、PTY、通知、Dock 角标）
@@ -112,6 +113,7 @@ kun serve
 
 | 文件 | 内容 | 阶段 |
 | --- | --- | --- |
+| [00-ade-mode.md](./00-ade-mode.md) | ADE 作为独立模式：边界、线程归属 `workspaceMode`、界面结构、P0-17 模式外壳（**优先于其它文档**） | P0 |
 | [01-harness-routing.md](./01-harness-routing.md) | Harness 概念、目录、检测、路由、设置 | P0 |
 | [02-capabilities.md](./02-capabilities.md) | 能力声明 v2、准入矩阵、UI 降级契约 | P0 |
 | [03-acp-runtime.md](./03-acp-runtime.md) | ACP 通用接入运行时 | P1 |
