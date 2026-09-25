@@ -47,11 +47,10 @@ import {
 } from '../../../paper/paper-reader-sync'
 import { togglePaperTranslatedMirror } from '../../../paper/paper-mirror'
 import { PaperPageStack } from './PaperPageStack'
-import { PaperSelectionMenu } from './PaperSelectionMenu'
+import { PaperReaderOverlays } from './PaperReaderOverlays'
+import { PaperTranslatedMirror } from './PaperTranslatedMirror'
 import { PaperReaderDrawer } from './PaperReaderDrawer'
 import { PaperFloatingControls } from './PaperFloatingControls'
-import { PaperTranslateCard } from './PaperTranslateCard'
-import { PaperAskPopover } from './PaperAskPopover'
 import { PaperCommentGutter } from './PaperCommentGutter'
 
 type PaperTone = WritePaperModeReaderSettingsV1['paperTone']
@@ -163,6 +162,10 @@ export function PaperUnitPdfReader({
     setTranslateNotice,
     setTranslateCardHovered,
     reopenTranslateCard,
+    settingsOpen: translateSettingsOpen,
+    openSettings: openTranslateSettings,
+    closeSettings: closeTranslateSettings,
+    onSettingsSaved: onTranslateSettingsSaved,
     runSelectionTranslate,
     runDocumentTranslate,
     cancelDocumentTranslate,
@@ -523,50 +526,22 @@ export function PaperUnitPdfReader({
   // selection, drawer, gutter, or floating chrome. Scroll/zoom follow the
   // primary reader through the sync bus.
   if (translated) {
-    const emptyMarks = new Map<number, PaperHighlight[]>()
-    const emptyVisual = new Map<number, PaperVisualMark[]>()
     return (
-      <PaperReaderContext.Provider value={readerServices}>
-        <div
-          ref={localRootRef}
-          data-immersive={undefined}
-          className="write-pdf-viewer write-pdf-viewer--translated relative flex h-full min-h-0 min-w-0 flex-col"
-        >
-          <div
-            ref={scrollerRef}
-            className="write-pdf-scroller min-h-0 flex-1 overflow-auto bg-ds-main/55 px-4 py-5 dark:bg-black/20"
-            onScroll={onScrollerScroll}
-          >
-            {loading ? (
-              <div className="flex h-full min-h-[320px] items-center justify-center gap-2 text-[13px] text-ds-muted">
-                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.9} />
-                {t('writePdfLoading')}
-              </div>
-            ) : error ? (
-              <div className="flex h-full min-h-[320px] items-center justify-center text-[13px] text-red-600 dark:text-red-300">
-                {t('writePdfLoadFailed', { message: error })}
-              </div>
-            ) : pdfDocument ? (
-              <div className="mx-auto flex w-max max-w-full flex-col items-center gap-5">
-                <PaperPageStack
-                  pdfDocument={pdfDocument}
-                  scale={scale}
-                  selectionRects={[]}
-                  marksByPage={emptyMarks}
-                  visualMarksByPage={emptyVisual}
-                  pageRefs={pageRefs}
-                  onPageText={updatePageText}
-                  onDeleteMark={() => undefined}
-                  pdfHasText={pdfHasText}
-                  layers={[PaperTranslateOverlay]}
-                  pageTranslateStatus={(p) => pageTranslate.statusByPage.get(p) ?? 'idle'}
-                  t={t}
-                />
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </PaperReaderContext.Provider>
+      <PaperTranslatedMirror
+        readerServices={readerServices}
+        localRootRef={localRootRef}
+        scrollerRef={scrollerRef}
+        onScrollerScroll={onScrollerScroll}
+        loading={loading}
+        error={error}
+        pdfDocument={pdfDocument}
+        scale={scale}
+        pageRefs={pageRefs}
+        onPageText={updatePageText}
+        pdfHasText={pdfHasText}
+        statusByPage={pageTranslate.statusByPage}
+        t={t}
+      />
     )
   }
 
@@ -663,7 +638,7 @@ export function PaperUnitPdfReader({
         tone={tone}
         setTone={setTone}
         translating={translating}
-        translateLabel={translateJob?.message ?? (translateNotice || null)}
+        translateLabel={translateJob?.message ?? translateNotice?.message ?? null}
         onTranslateDocument={() => void runDocumentTranslate()}
         onCancelTranslate={cancelDocumentTranslate}
         onToggleMirror={() => togglePaperTranslatedMirror(filePath)}
@@ -700,64 +675,22 @@ export function PaperUnitPdfReader({
         t={t}
       />
 
-      {translateNotice || regionNotice ? (
-        <div className="pointer-events-none absolute bottom-14 left-1/2 z-20 -translate-x-1/2 rounded-full border border-ds-border bg-ds-card/95 px-3 py-1 text-[11px] text-ds-muted shadow">
-          {regionNotice || translateNotice}
-        </div>
-      ) : null}
-
-      {selection.pending && !selection.askOpen ? (
-        <PaperSelectionMenu
-          anchor={selection.pending.anchor}
-          containerRef={rootRef}
-          selectionLength={selection.pending.text.length}
-          onHighlight={selection.addHighlight}
-          onAnnotate={(comment) => selection.addHighlight('yellow', comment)}
-          onAsk={() => selection.setAskOpen(true)}
-          onAddToChat={selection.addToConversation}
-          onTranslate={translateSelection}
-          onClose={selection.dismissPending}
-          t={t}
-        />
-      ) : null}
-      {selection.pending && selection.askOpen ? (
-        <PaperAskPopover
-          anchor={selection.pending.anchor}
-          containerRef={rootRef}
-          onSubmit={selection.submitQuickAsk}
-          onClose={() => selection.setAskOpen(false)}
-          t={t}
-        />
-      ) : null}
-      {translateCard && !translateCard.collapsed ? (
-        <PaperTranslateCard
-          anchor={translateCard.anchor}
-          containerRef={rootRef}
-          quote={translateCard.quote}
-          translation={translateCard.translation}
-          model={translateCard.model}
-          loading={translateCard.loading}
-          error={translateCard.error}
-          onClose={() => setTranslateCard(null)}
-          onHoverChange={setTranslateCardHovered}
-          t={t}
-        />
-      ) : null}
-      {translateCard?.collapsed ? (
-        <button
-          type="button"
-          className="ds-no-drag absolute z-30 flex h-6 w-6 items-center justify-center rounded-full border border-ds-border bg-ds-card text-[10px] font-medium text-accent shadow-lg"
-          style={{
-            left: Math.max(8, translateCard.anchor.x - (rootRef.current?.getBoundingClientRect().left ?? 0) + 12),
-            top: Math.max(8, translateCard.anchor.y - (rootRef.current?.getBoundingClientRect().top ?? 0) - 12)
-          }}
-          title={t('writePaperReaderTranslate')}
-          aria-label={t('writePaperReaderTranslate')}
-          onClick={reopenTranslateCard}
-        >
-          译
-        </button>
-      ) : null}
+      <PaperReaderOverlays
+        selection={selection}
+        translateSelection={translateSelection}
+        translateCard={translateCard}
+        setTranslateCard={setTranslateCard}
+        setTranslateCardHovered={setTranslateCardHovered}
+        reopenTranslateCard={reopenTranslateCard}
+        translateNotice={translateNotice}
+        regionNotice={regionNotice}
+        translateSettingsOpen={translateSettingsOpen}
+        openTranslateSettings={openTranslateSettings}
+        closeTranslateSettings={closeTranslateSettings}
+        onTranslateSettingsSaved={onTranslateSettingsSaved}
+        rootRef={rootRef}
+        t={t}
+      />
     </div>
     </PaperReaderContext.Provider>
   )
