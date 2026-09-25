@@ -439,7 +439,7 @@ harness 的凭据不进 config.json：
 
 - `src/renderer/src/agent/kun-runtime.ts`：新增 `listHarnesses()`、`probeHarness(id)`、`listHarnessModels(id)`。
 - 设置页：在现有 Settings → Agents 下新增"Agents"分组（harness 列表，每行：图标、名称、版本、登录态、开关、kebab 菜单里"重新检测 / 设置命令路径 / 默认权限"）。遵循 12 §2 的行规范。
-- composer：模型选择器前加 agent 选择器（12 §6）。
+- composer：只在 ADE 模式的 composer 里，模型选择器前加 agent 选择器（12 §7.2、00 §2）；Code 模式不变。
 - 线程列表：`ThreadSummary.harnessId` 决定行首图标。
 
 ## 11. 兼容与迁移
