@@ -47,6 +47,8 @@ Kun 既有约束同时适用：
 
 分组逻辑只来自 `src/shared/activity-display.ts` 的 `displayBucket()`（06 §10），UI 不自己判断。
 
+> 2026-09-26 修订：以下界面全部位于独立的 ADE 模式内（路由 `ade`，见 00 §4）。Code 模式不加 agent 选择器、Workers 面板与 Mission Control；Mission Control 是 ADE 首页，不再放进 `board` 路由（下文 §5 中关于 `board` 的描述以 00 为准）。
+
 ## 4. 信息架构
 
 ```text

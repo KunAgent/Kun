@@ -254,4 +254,40 @@ describe('FileMemoryStore', () => {
     const references = await store.list({ all: true, authority: 'reference' })
     expect(references.map((record) => record.id)).toEqual(['mem_ref'])
   })
+
+  it('applies a caller policy and allowed scopes when listing directives', async () => {
+    const config = {
+      enabled: true,
+      scopes: ['user', 'workspace'] as Array<'user' | 'workspace' | 'project'>,
+      maxInjectedRecords: 8,
+      distillation: { enabled: false },
+      directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 }
+    }
+    const store = new FileMemoryStore({
+      rootDir: await makeTempDir(),
+      config,
+      nowIso: () => '2026-06-21T00:00:00.000Z'
+    })
+    await store.createWithId('mem_user_rule', {
+      content: 'Reply in English', scope: 'user', authority: 'directive'
+    })
+    await store.createWithId('mem_ws_rule', {
+      content: 'Run tests first', scope: 'workspace', workspace: '/tmp/workspace', authority: 'directive'
+    })
+    const access = { workspace: '/tmp/workspace' }
+
+    expect((await store.listDirectives(access)).records.map((record) => record.id))
+      .toEqual(['mem_user_rule', 'mem_ws_rule'])
+    // A shared repository must honor the live policy passed per call.
+    expect((await store.listDirectives(access, {
+      ...config,
+      directives: { ...config.directives, enabled: false }
+    })).records).toEqual([])
+    expect((await store.listDirectives(access, {
+      ...config,
+      directives: { ...config.directives, maxRecords: 1 }
+    })).excludedByBudget).toEqual(['mem_ws_rule'])
+    expect((await store.listDirectives(access, { ...config, scopes: ['workspace'] }))
+      .records.map((record) => record.id)).toEqual(['mem_ws_rule'])
+  })
 })

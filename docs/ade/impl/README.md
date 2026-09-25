@@ -44,7 +44,7 @@
 | --- | --- | --- | --- |
 | `agents.kun.ade.harnessRouter` | true | 走新的 harness 路由；false 回到按 provider kind 推断 | P0-04 |
 | `agents.kun.ade.deterministicHandoff` | true | 交接简报；false 回到 48 KiB transcript | P0-14 |
-| `agents.kun.ade.enabled` | false | 总管工具、Mission Control 的 Agents 标签、Workers 面板 | P0-06（字段）/ P1-12（生效） |
+| `agents.kun.ade.enabled` | false | 显示 ADE 模式入口（总管工具另按线程 `workspaceMode` 门控） | P0-06（字段）/ P0-17（生效） |
 | `agents.kun.ade.managerMayApprove` | false | 总管代批 worker 审批 | P1-14 |
 | `agents.kun.ade.allowUnattendedFullAccess` | false | 无人值守保留完全访问 | P0-05 |
 | `agents.kun.ade.hibernation.enabled` | true | 休眠 | P1-26 |
@@ -73,6 +73,7 @@
 | P0-14 | 简报注入 SDK / Antigravity、`handoff_injected`、`read_thread_history` | M | K R | P0-13、P0-06 |
 | P0-15 | 会话停泊与增量 | M | K | P0-14 |
 | P0-16 | 权限上限与升级确认基础件 | S | K | P0-02 |
+| P0-17 | **ADE 模式外壳**：`workspaceMode` 线程归属、`ade` 路由、模式切换器、`AdeStage`（见 [00 §7](../00-ade-mode.md)） | M | K R S | P0-06 |
 
 ### P1 总管能派、能看、能判断
 
@@ -97,9 +98,9 @@
 | P1-17 | 审查：diff 接口与审查面板 | L | K R | P0-12 |
 | P1-18 | 审查：批注、重新定位、批量发送 | L | K R S | P1-17、P1-14 |
 | P1-19 | 合入按钮与 `workspace_integrate` | M | K R | P1-17、P0-16 |
-| P1-20 | Mission Control（`board` 路由的 Agents 标签） | L | R S | P0-08 |
-| P1-21 | Workers 面板、轨道胶囊、接管横幅、任务卡片 | M | R | P1-14、P1-20 |
-| P1-22 | composer 的 agent 选择器、模型分组、原生斜杠命令 | M | R K | P0-05、P1-05 |
+| P1-20 | Mission Control（ADE 模式首页） | L | R S | P0-08、P0-17 |
+| P1-21 | Workers 面板、轨道胶囊、接管横幅、任务卡片（ADE 内） | M | R | P1-14、P1-20 |
+| P1-22 | ADE composer 的 agent 选择器、模型分组、原生斜杠命令 | M | R K | P0-05、P1-05、P0-17 |
 | P1-23 | 通知接入 ActivityStore | S | R M | P0-08 |
 | P1-24 | 设置页：Agents、工作区、总管 | M | R S | P0-06、P0-11 |
 | P1-25 | Graph 节点 harness、规划摘要、计划阶段准入 | M | K | P0-05、P1-12 |
@@ -119,7 +120,7 @@ P0-07 ─ P0-08 ─ P1-20 ─ P1-21
 P1-01 ─ P1-02 ─ P1-03/P1-04 ─ P1-05（第三种 harness 进场）
 ```
 
-最短可演示路径（"总管派两个 worker：一个 Kun 原生、一个 Claude Code"）：P0-01 → P0-02 → P0-04 → P0-05 → P0-07 → P0-09 → P0-10 → P0-16 → P1-10 → P1-12 → P1-13。这条路径不依赖 ACP 和网关，可以先跑通总管闭环，再并行推进 ACP（P1-01 ~ P1-05）。
+最短可演示路径（"在 ADE 模式里，总管派两个 worker：一个 Kun 原生、一个 Claude Code"）：P0-01 → P0-02 → P0-04 → P0-05 → P0-06 → P0-17 → P0-07 → P0-09 → P0-10 → P0-16 → P1-10 → P1-12 → P1-13。这条路径不依赖 ACP 和网关，可以先跑通总管闭环，再并行推进 ACP（P1-01 ~ P1-05）。
 
 ## 5. 2026-09-25 核对过的代码事实
 

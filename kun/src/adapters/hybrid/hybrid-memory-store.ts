@@ -192,9 +192,11 @@ export class HybridMemoryStore implements MemoryStore {
     return records
   }
 
-  async listDirectives(access: MemoryAccess = {}): Promise<MemoryDirectiveResult> {
+  async listDirectives(
+    access: MemoryAccess = {},
+    policy: MemoryCapabilityConfig = this.config()
+  ): Promise<MemoryDirectiveResult> {
     await this.ready()
-    const policy = this.config()
     if (this.indexReady()) {
       try {
         this.options.beforeIndexQuery?.('list')
@@ -212,7 +214,7 @@ export class HybridMemoryStore implements MemoryStore {
         this.degraded.fail('directive query', error)
       }
     }
-    const result = await this.canonical.listDirectives(access)
+    const result = await this.canonical.listDirectives(access, policy)
     this.lastDirectiveInjection = result
     this.reconcileStaleIndex()
     return result
