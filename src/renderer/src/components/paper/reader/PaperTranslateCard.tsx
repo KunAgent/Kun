@@ -68,7 +68,7 @@ export function PaperTranslateCard({
       onMouseDown={(event) => event.stopPropagation()}
     >
       <div className="flex items-center gap-1.5 border-b border-ds-border-muted px-3 py-1.5">
-        <Languages className="h-3.5 w-3.5 shrink-0 text-ds-accent" strokeWidth={1.9} />
+        <Languages className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.9} />
         <span className="flex-1 text-[11px] font-medium text-ds-muted">
           {t('writePaperReaderTranslate')}
         </span>

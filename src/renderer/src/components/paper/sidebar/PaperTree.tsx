@@ -49,7 +49,15 @@ export function PaperTree(): ReactElement {
     })
   }
 
-  if (!entries.length) return <></>
+  if (!entries.length) {
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
+        <p className="px-2 py-6 text-center text-[12px] text-ds-faint">
+          {t('writePaperLibraryEmpty')}
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
@@ -90,11 +98,6 @@ export function PaperTree(): ReactElement {
           onMenu={openMenu}
         />
       ))}
-      {entries.length === 0 ? (
-        <p className="px-2 py-6 text-center text-[12px] text-ds-faint">
-          {t('writePaperLibraryEmpty')}
-        </p>
-      ) : null}
       {host}
     </div>
   )

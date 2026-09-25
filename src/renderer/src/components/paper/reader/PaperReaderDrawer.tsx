@@ -39,7 +39,7 @@ export function PaperReaderDrawer({
             key={key}
             type="button"
             className={`flex-1 rounded-md px-2 py-1 text-[11.5px] ${
-              tab === key ? 'bg-ds-accent/15 font-medium text-ds-accent' : 'text-ds-muted hover:bg-ds-hover'
+              tab === key ? 'bg-accent/15 font-medium text-accent' : 'text-ds-muted hover:bg-ds-hover'
             }`}
             onClick={() => setTab(key)}
           >
@@ -197,7 +197,7 @@ function AnnotationsPane({
         </li>
       ))}
       {cardList.map((card) => (
-        <li key={card.id} className="rounded-lg border border-ds-accent/30 bg-ds-accent/5 p-2">
+        <li key={card.id} className="rounded-lg border border-accent/30 bg-accent/5 p-2">
           <button
             type="button"
             className="block w-full text-left"
@@ -284,7 +284,7 @@ function ReferencesPane({
     return (
       <div className="p-2">
         <p className="text-[12px] text-red-500">{state.message}</p>
-        <button type="button" className="mt-1 text-[12px] text-ds-accent" onClick={() => load(true)}>
+        <button type="button" className="mt-1 text-[12px] text-accent" onClick={() => load(true)}>
           {t('writePaperReaderRetry')}
         </button>
       </div>
@@ -305,7 +305,7 @@ function ReferencesPane({
             </p>
             <div className="mt-1 flex items-center gap-1.5">
               {ref.doi || ref.arxivId ? (
-                <span className="min-w-0 flex-1 truncate text-[10.5px] text-ds-accent">
+                <span className="min-w-0 flex-1 truncate text-[10.5px] text-accent">
                   {ref.doi ?? `arXiv:${ref.arxivId}`}
                 </span>
               ) : (

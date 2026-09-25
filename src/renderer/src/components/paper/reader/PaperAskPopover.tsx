@@ -57,7 +57,7 @@ export function PaperAskPopover({
       onMouseDown={(event) => event.stopPropagation()}
     >
       <div className="flex items-center gap-1.5 border-b border-ds-border-muted px-3 py-1.5">
-        <MessagesSquare className="h-3.5 w-3.5 shrink-0 text-ds-accent" strokeWidth={1.9} />
+        <MessagesSquare className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.9} />
         <span className="flex-1 text-[11px] font-medium text-ds-muted">
           {t('writePaperReaderAsk')}
         </span>
@@ -79,7 +79,7 @@ export function PaperAskPopover({
       >
         <input
           autoFocus
-          className="min-w-0 flex-1 rounded-md border border-ds-border-muted bg-ds-surface-subtle px-2 py-1 text-[12px] text-ds-ink outline-none focus:border-ds-accent/50"
+          className="min-w-0 flex-1 rounded-md border border-ds-border-muted bg-ds-subtle px-2 py-1 text-[12px] text-ds-ink outline-none focus:border-accent/50"
           value={question}
           placeholder={t('writePaperReaderAskPlaceholder')}
           onChange={(event) => setQuestion(event.target.value)}
@@ -87,7 +87,7 @@ export function PaperAskPopover({
         <button
           type="submit"
           disabled={!question.trim()}
-          className="inline-flex items-center gap-1 rounded-md bg-ds-accent px-2 py-1 text-[12px] font-medium text-white disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[12px] font-medium text-white disabled:opacity-50"
         >
           <CornerDownRight className="h-3.5 w-3.5" strokeWidth={2} />
           {t('send')}

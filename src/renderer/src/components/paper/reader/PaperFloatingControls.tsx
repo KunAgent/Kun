@@ -96,7 +96,7 @@ export function PaperFloatingControls({
           </button>
           <button
             type="button"
-            className={`${ICON} ${drawerOpen ? 'bg-ds-accent/15 text-ds-accent' : ''}`}
+            className={`${ICON} ${drawerOpen ? 'bg-accent/15 text-accent' : ''}`}
             title={t('writePaperReaderDrawer')}
             aria-label={t('writePaperReaderDrawer')}
             onClick={onToggleDrawer}
@@ -106,7 +106,7 @@ export function PaperFloatingControls({
           <span className="mx-0.5 h-4 w-px bg-ds-border-muted" />
           <button
             type="button"
-            className={`${ICON} ${searchOpen ? 'bg-ds-accent/15 text-ds-accent' : ''}`}
+            className={`${ICON} ${searchOpen ? 'bg-accent/15 text-accent' : ''}`}
             title={t('writePdfSearchPlaceholder')}
             aria-label={t('writePdfSearchPlaceholder')}
             onClick={() => setSearchOpen((open) => !open)}
@@ -138,7 +138,7 @@ export function PaperFloatingControls({
           {translating ? (
             <button
               type="button"
-              className={`${ICON} text-ds-accent`}
+              className={`${ICON} text-accent`}
               title={t('writePaperReaderTranslating')}
               aria-label={translateLabel ?? t('writePaperReaderTranslating')}
               onClick={onCancelTranslate}
@@ -264,7 +264,7 @@ export function PaperFloatingControls({
                 aria-label={t(`writePaperReaderTone_${item}`)}
                 aria-pressed={tone === item}
                 className={`paper-tone-${item} h-[14px] w-[14px] rounded-full border ${
-                  tone === item ? 'ring-2 ring-ds-accent ring-offset-1' : 'border-black/15'
+                  tone === item ? 'ring-2 ring-accent ring-offset-1' : 'border-black/15'
                 }`}
                 onClick={() => setTone(item)}
               />

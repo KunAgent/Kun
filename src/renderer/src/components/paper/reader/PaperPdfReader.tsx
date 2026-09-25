@@ -560,7 +560,7 @@ function PaperUnitPdfReader({
                         title={t('writePaperReaderTranslatePage')}
                         aria-label={t('writePaperReaderTranslatePage')}
                         onClick={() => void runPageTranslate(pageNumber)}
-                        className="absolute right-1 top-1/2 z-[3] flex h-16 w-4 -translate-y-1/2 items-center justify-center rounded-l-md border-y border-l border-ds-border bg-ds-card/85 text-ds-faint opacity-0 shadow-sm transition group-hover/page:opacity-100 hover:text-ds-accent"
+                        className="absolute right-1 top-1/2 z-[3] flex h-16 w-4 -translate-y-1/2 items-center justify-center rounded-l-md border-y border-l border-ds-border bg-ds-card/85 text-ds-faint opacity-0 shadow-sm transition group-hover/page:opacity-100 hover:text-accent"
                       >
                         <span className="text-[10px] font-medium leading-none" style={{ writingMode: 'vertical-rl' }}>
                           {t('writePaperReaderTranslatePageMark')}

@@ -101,7 +101,7 @@ export function PaperInfoPanel(): ReactElement | null {
 
   return (
     <div
-      className="flex shrink-0 flex-col border-t border-ds-border bg-ds-panel"
+      className="flex shrink-0 flex-col border-t border-ds-border bg-ds-card"
       style={collapsed ? undefined : { height }}
     >
       {!collapsed ? (

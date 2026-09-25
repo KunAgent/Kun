@@ -77,7 +77,7 @@ export function PaperDiscoverView({ source }: { source?: PaperDiscoverSource }):
         >
           <RotateCw className="h-3.5 w-3.5" strokeWidth={1.9} />
         </button>
-        <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-full border border-ds-border-muted bg-ds-surface-subtle px-3 dark:bg-white/[0.05]">
+        <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-full border border-ds-border-muted bg-ds-subtle px-3 dark:bg-white/[0.05]">
           <span className="shrink-0 text-accent">{SOURCE_ICONS[effectiveSource]}</span>
           <span className="min-w-0 flex-1 truncate text-[12px] text-ds-muted">
             {addressLabel}

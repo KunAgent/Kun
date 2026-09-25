@@ -76,14 +76,14 @@ export function PaperSelectionMenu({
         >
           <input
             autoFocus
-            className="w-[220px] rounded-md border border-ds-border-muted bg-ds-surface-subtle px-2 py-1 text-[12px] text-ds-ink outline-none"
+            className="w-[220px] rounded-md border border-ds-border-muted bg-ds-subtle px-2 py-1 text-[12px] text-ds-ink outline-none"
             value={comment}
             placeholder={t('writePaperReaderCommentPlaceholder')}
             onChange={(event) => setComment(event.target.value)}
           />
           <button
             type="submit"
-            className="rounded-md bg-ds-accent px-2 py-1 text-[12px] font-medium text-white"
+            className="rounded-md bg-accent px-2 py-1 text-[12px] font-medium text-white"
             disabled={!comment.trim()}
           >
             {t('writePaperReaderSave')}

@@ -78,7 +78,7 @@ export function PaperTreeRow({
         onMenu(entry, event.clientX, event.clientY)
       }}
       className={`group relative flex h-7 w-full cursor-default items-center gap-1.5 rounded-md pl-4 pr-1.5 text-[12px] transition ${
-        isActive ? 'bg-ds-active text-ds-ink' : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
+        isActive ? 'bg-[var(--ds-sidebar-row-active)] text-ds-ink' : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
       }`}
     >
       <span
@@ -94,7 +94,7 @@ export function PaperTreeRow({
             type="button"
             title={t('writePaperInterpret')}
             onClick={(event) => void interpret(event)}
-            className="rounded p-0.5 text-ds-faint hover:bg-ds-active hover:text-ds-ink"
+            className="rounded p-0.5 text-ds-faint hover:bg-ds-hover hover:text-ds-ink"
           >
             <Zap className="h-3 w-3" strokeWidth={1.9} />
           </button>
@@ -103,7 +103,7 @@ export function PaperTreeRow({
             type="button"
             title={t('writePaperDownloadPdf')}
             onClick={(event) => void fetchPdf(event)}
-            className="rounded p-0.5 text-ds-faint hover:bg-ds-active hover:text-ds-ink"
+            className="rounded p-0.5 text-ds-faint hover:bg-ds-hover hover:text-ds-ink"
           >
             <Download className="h-3 w-3" strokeWidth={1.9} />
           </button>
@@ -112,7 +112,7 @@ export function PaperTreeRow({
       {!entry.hasPdf ? <FileText className="h-3 w-3 shrink-0 text-ds-faint" strokeWidth={1.6} /> : null}
       {progress > 0 ? (
         <span
-          className="pointer-events-none absolute inset-x-3 bottom-0 h-px bg-ds-accent/50"
+          className="pointer-events-none absolute inset-x-3 bottom-0 h-px bg-accent/50"
           style={{ width: `${Math.round(progress * 90)}%` }}
         />
       ) : null}

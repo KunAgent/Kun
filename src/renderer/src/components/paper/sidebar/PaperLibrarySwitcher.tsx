@@ -83,7 +83,7 @@ export function PaperLibrarySwitcher(): ReactElement {
         <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.9} />
       </button>
       {open ? (
-        <div className="absolute inset-x-1.5 top-full z-30 mt-1 overflow-hidden rounded-xl border border-ds-border bg-ds-panel py-1 shadow-lg">
+        <div className="absolute inset-x-1.5 top-full z-30 mt-1 overflow-hidden rounded-xl border border-ds-border bg-ds-card py-1 shadow-lg">
           {paperMode.libraries.map((libraryPath) => {
             const normalized = normalizePath(libraryPath)
             const active = normalized === activeLibrary
@@ -119,7 +119,7 @@ export function PaperLibrarySwitcher(): ReactElement {
                       event.stopPropagation()
                       void revealWorkspacePathInFileManager(libraryPath, libraryPath)
                     }}
-                    className="rounded p-1 text-ds-faint hover:bg-ds-active hover:text-ds-ink"
+                    className="rounded p-1 text-ds-faint hover:bg-ds-hover hover:text-ds-ink"
                   >
                     <FolderSearch className="h-3 w-3" strokeWidth={1.8} />
                   </button>
@@ -131,7 +131,7 @@ export function PaperLibrarySwitcher(): ReactElement {
                         event.stopPropagation()
                         void removeLibrary(libraryPath)
                       }}
-                      className="rounded p-1 text-ds-faint hover:bg-ds-active hover:text-red-500"
+                      className="rounded p-1 text-ds-faint hover:bg-ds-hover hover:text-red-500"
                     >
                       <Trash2 className="h-3 w-3" strokeWidth={1.8} />
                     </button>
