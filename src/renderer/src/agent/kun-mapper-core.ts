@@ -457,6 +457,8 @@ export function applyRuntimeDisclosureMeta(
   const activeSkillIds = stringArray(item.activeSkillIds)
   const injectedMemoryIds = stringArray(item.injectedMemoryIds)
   const injectedMemorySummaries = normalizeInjectedMemorySummaries(item.injectedMemorySummaries)
+  const injectedDirectiveIds = stringArray(item.injectedDirectiveIds)
+  const injectedDirectiveSummaries = normalizeInjectedMemorySummaries(item.injectedDirectiveSummaries)
   const injectedInstructionSources = normalizeInjectedInstructionSources(item.injectedInstructionSources)
   const fileReferences = normalizeUserFileReferences(item.fileReferences)
   const composerContexts = normalizeComposerContexts(item.composerContexts)
@@ -496,6 +498,8 @@ export function applyRuntimeDisclosureMeta(
   if (activeSkillIds) meta.activeSkillIds = activeSkillIds
   if (injectedMemoryIds) meta.injectedMemoryIds = injectedMemoryIds
   if (injectedMemorySummaries) meta.injectedMemorySummaries = injectedMemorySummaries
+  if (injectedDirectiveIds) meta.injectedDirectiveIds = injectedDirectiveIds
+  if (injectedDirectiveSummaries) meta.injectedDirectiveSummaries = injectedDirectiveSummaries
   if (injectedInstructionSources) meta.injectedInstructionSources = injectedInstructionSources
   if (typeof item.skillInjectionBytes === 'number') {
     meta.skillInjectionBytes = item.skillInjectionBytes

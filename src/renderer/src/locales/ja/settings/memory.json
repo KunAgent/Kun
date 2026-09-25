@@ -1,0 +1,21 @@
+{
+  "memoryAuthority_all": "すべて",
+  "memoryAuthority_directive": "ルール",
+  "memoryAuthority_reference": "参照メモリ",
+  "memoryDirectivesEnable": "長期ルールを注入",
+  "memoryDirectivesEnableDesc": "承認済みルールは毎ターンあなたの指示としてモデルに送信されます。オフにすると保存されたまま無効になります。",
+  "memoryDirectives": "ユーザールール",
+  "memoryDirectivesDesc": "ルールは毎ターンあなたの指示として注入されます。参照メモリと異なり関連性フィルタを通りません。",
+  "memoryDirectiveActiveCount": "有効なルール",
+  "memoryDirectiveInjectedCount": "今回注入",
+  "memoryDirectiveOmittedCount": "予算で省略",
+  "memorySetDirective": "ルールにする",
+  "memoryUnsetDirective": "ルール解除",
+  "memorySetDirectiveDisabled": "ルールは短く、ユーザー/ワークスペーススコープである必要があります。長文は AGENTS.md に記述してください",
+  "memoryDirectiveUpdateFailed": "ルールの更新に失敗しました",
+  "memoryAsDirective": "ルールとして保存(毎ターン適用)",
+  "memoryAsDirectiveDesc": "ルールはあなたの指示としてモデルに送信されます(例:「日本語で返答」「コミット前にテスト」)。通常のメモリは参照情報のみで、指示として実行されません。",
+  "memoryDirectiveTooLong": "ルールは短くしてください。長文は AGENTS.md へ",
+  "memoryImportDowngradedPrefix": " ",
+  "memoryImportDowngradedSuffix": " 件はルールでしたが参照メモリとしてインポートされました。一覧から個別に再有効化できます。"
+}

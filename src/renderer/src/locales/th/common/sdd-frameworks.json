@@ -565,6 +565,7 @@
   "toolChildAgent": "ตัวแทนเด็ก",
   "toolActiveSkills": "ทักษะ",
   "toolInjectedMemories": "ความทรงจำ",
+  "toolInjectedDirectives": "กฎ",
   "toolInjectedInstructions": "คำแนะนำ",
   "toolAttachments": "ไฟล์แนบ",
   "toolExtensionContexts": "บริบทส่วนขยาย",

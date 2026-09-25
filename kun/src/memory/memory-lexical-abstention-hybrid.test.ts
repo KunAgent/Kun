@@ -11,7 +11,8 @@ const policy: MemoryCapabilityConfig = {
   enabled: true,
   scopes: ['user', 'workspace', 'project'],
   maxInjectedRecords: 8,
-  distillation: { enabled: false }
+  distillation: { enabled: false },
+  directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 },
 }
 const roots: string[] = []
 

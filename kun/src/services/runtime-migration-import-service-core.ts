@@ -447,6 +447,9 @@ export class RuntimeMigrationImportService {
           tags: rewritten.tags,
           confidence: rewritten.confidence,
           type: rewritten.type,
+          // Imported snapshots never arrive with user confirmation, so they
+          // always come back as reference memories, never directives.
+          authority: 'reference' as const,
           importance: rewritten.importance,
           observedAt: rewritten.observedAt,
           validFrom: rewritten.validFrom,

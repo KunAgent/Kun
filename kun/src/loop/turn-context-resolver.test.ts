@@ -51,6 +51,8 @@ function turn(overrides: Partial<Turn> = {}): Turn {
     activeSkillIds: [],
     injectedMemoryIds: [],
     injectedMemorySummaries: [],
+    injectedDirectiveIds: [],
+    injectedDirectiveSummaries: [],
     injectedInstructionSources: [],
     items: [],
     steering: [],

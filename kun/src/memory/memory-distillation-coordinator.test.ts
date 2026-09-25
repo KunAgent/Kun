@@ -426,7 +426,8 @@ async function createHarness(options: {
       enabled: true,
       scopes: ['user', 'workspace', 'project'],
       maxInjectedRecords: 8,
-      distillation: { enabled: false }
+      distillation: { enabled: false },
+      directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 },
     },
     nowIso
   })
@@ -517,6 +518,8 @@ function makeThread(options: {
       activeSkillIds: [],
       injectedMemoryIds: [],
       injectedMemorySummaries: [],
+      injectedDirectiveIds: [],
+      injectedDirectiveSummaries: [],
       injectedInstructionSources: [],
       orchestration: 'direct',
       attachmentIds: [],

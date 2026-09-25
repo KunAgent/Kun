@@ -29,6 +29,7 @@ import type { TurnUsageSummary } from '../../hooks/use-turn-usage'
 import { ToolAttachmentPreviews } from './message-timeline-media-views'
 import { LiveAssistantStreamingProvider } from './live-assistant-streaming'
 import { metaString } from './message-timeline-bubble-meta'
+import { MemoryApprovalHint } from './memory-approval-hint'
 import { useTimelineSurface } from './timeline-surface'
 import { useMobileMessageActionsStore } from '../../stores/mobile-message-actions'
 
@@ -330,6 +331,7 @@ function MessageBubbleImpl({
           </div>
         ) : null}
         <p className="mt-2 whitespace-pre-wrap text-[14px] text-ds-ink">{block.summary}</p>
+        <MemoryApprovalHint toolName={block.toolName} action={block.action} t={t} />
         {block.errorMessage ? (
           <p className="mt-2 text-[12px] text-red-700 dark:text-red-300">{block.errorMessage}</p>
         ) : null}

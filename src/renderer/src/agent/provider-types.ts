@@ -338,6 +338,7 @@ export interface AgentProvider {
     tags?: string[]
     confidence?: number
     type?: CoreMemoryRecordJson['type']
+    authority?: CoreMemoryRecordJson['authority']
     importance?: number
     observedAt?: string
     validFrom?: string
@@ -348,7 +349,7 @@ export interface AgentProvider {
   }): Promise<CoreMemoryRecordJson>
   updateMemory?(
     memoryId: string,
-    patch: { content?: string; tags?: string[]; confidence?: number; importance?: number; type?: CoreMemoryRecordJson['type']; disabled?: boolean },
+    patch: { content?: string; tags?: string[]; confidence?: number; importance?: number; type?: CoreMemoryRecordJson['type']; authority?: CoreMemoryRecordJson['authority']; disabled?: boolean },
     options?: { workspace?: string; project?: string }
   ): Promise<CoreMemoryRecordJson>
   deleteMemory?(memoryId: string, options?: { workspace?: string; project?: string }): Promise<CoreMemoryRecordJson>

@@ -47,7 +47,7 @@ describe('Memory distillation approval concurrency', () => {
     let clock = initialTime
     const memory = new FileMemoryStore({ rootDir: join(dataDir, 'memory'),
       config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8,
-        distillation: { enabled: true } }, nowIso: () => clock })
+        distillation: { enabled: true }, directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 } }, nowIso: () => clock })
     const original = await memory.createWithId('target', {
       content: 'The user prefers long release notes.', scope: 'workspace', workspace: dataDir
     })

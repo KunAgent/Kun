@@ -208,6 +208,7 @@
   "toolChildAgent": "子任务",
   "toolActiveSkills": "Skills",
   "toolInjectedMemories": "记忆",
+  "toolInjectedDirectives": "规则",
   "toolInjectedInstructions": "指令",
   "toolAttachments": "附件",
   "toolExtensionContexts": "扩展上下文",

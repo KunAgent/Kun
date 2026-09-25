@@ -2,7 +2,7 @@ import type { ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useInjectedMemoryTooltipText } from './injected-memory-lookup'
+import { metaInjectedDirectiveIds, useInjectedMemoryTooltipText } from './injected-memory-lookup'
 
 type TooltipState = {
   text: string
@@ -29,7 +29,11 @@ export function InjectedMemoryMetaChip({
   const { t } = useTranslation('common')
   const anchorRef = useRef<HTMLSpanElement>(null)
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
-  const tooltipText = useInjectedMemoryTooltipText(meta, memoryIds)
+  const directiveIds = metaInjectedDirectiveIds(meta)
+  const tooltipText = useInjectedMemoryTooltipText(meta, memoryIds, directiveIds, {
+    directive: t('toolInjectedDirectives'),
+    memory: t('toolInjectedMemories')
+  })
 
   const showTooltip = useCallback(
     (clientX: number): void => {
@@ -54,7 +58,7 @@ export function InjectedMemoryMetaChip({
     setTooltip(null)
   }, [])
 
-  if (memoryIds.length === 0) return null
+  if (memoryIds.length === 0 && directiveIds.length === 0) return null
 
   return (
     <>
@@ -66,7 +70,9 @@ export function InjectedMemoryMetaChip({
         onPointerLeave={hideTooltip}
         onPointerCancel={hideTooltip}
       >
-        {t('toolInjectedMemories')} {memoryIds.length}
+        {directiveIds.length > 0
+          ? `${t('toolInjectedDirectives')} ${directiveIds.length} · ${t('toolInjectedMemories')} ${memoryIds.length}`
+          : `${t('toolInjectedMemories')} ${memoryIds.length}`}
       </span>
       {tooltip
         ? createPortal(

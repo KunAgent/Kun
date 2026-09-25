@@ -226,6 +226,7 @@ export function defaultKunRuntimeSettings(
     modelProfiles: {},
     memoryEnabled: false,
     memoryDistillationEnabled: false,
+    memoryDirectivesEnabled: true,
     instructions: defaultKunInstructionSettings(),
     computerUse: defaultKunComputerUseSettings(),
     browserUse: defaultKunBrowserUseSettings(),

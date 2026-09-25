@@ -1,0 +1,3 @@
+{
+  "approvalMemoryDirectiveHint": "此操作会写入一条长期规则,每轮对话都会作为你的指令发送给模型。"
+}
