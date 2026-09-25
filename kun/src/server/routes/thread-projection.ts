@@ -43,6 +43,8 @@ export function projectTimelineTurn(turn: Turn, items: TurnItem[]): Turn {
     activeSkillIds: turn.activeSkillIds.slice(0, 32),
     injectedMemoryIds: turn.injectedMemoryIds.slice(0, 32),
     injectedMemorySummaries: [],
+    injectedDirectiveIds: turn.injectedDirectiveIds.slice(0, 32),
+    injectedDirectiveSummaries: [],
     injectedInstructionSources: [],
     graphLeadLifecycle: undefined,
     graphPlanningLifecycle: undefined,
@@ -137,6 +139,7 @@ function approvalItemFromRequest(
     approvalId: approval.id,
     toolName: approval.toolName,
     summary: approval.summary,
+    ...(approval.action ? { action: approval.action } : {}),
     status: 'pending',
     approvalReviewer: 'user'
   }

@@ -17,6 +17,7 @@ import providerErrors from './common/provider-errors.json'
 import planBuild from './common/plan-build.json'
 import sddFrameworks from './common/sdd-frameworks.json'
 import sessionActivity from './common/session-activity.json'
+import chatMemory from './common/chat-memory.json'
 import sddMcp from './common/sdd-mcp.json'
 import agentsGraph from './common/agents-graph.json'
 import codePersonas from './common/code-personas.json'
@@ -58,6 +59,7 @@ const common = {
   ...planBuild,
   ...sddFrameworks,
   ...sessionActivity,
+  ...chatMemory,
   ...sddMcp,
   ...agentsGraph,
   ...codePersonas,

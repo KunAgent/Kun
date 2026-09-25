@@ -195,6 +195,7 @@ export type ManagerMemoryStoreOperation =
   | 'delete'
   | 'purge'
   | 'list'
+  | 'listDirectives'
   | 'retrieve'
   | 'diagnostics'
   | 'feedbackReady'

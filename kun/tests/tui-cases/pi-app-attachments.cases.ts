@@ -171,6 +171,8 @@ function renderAssistantMessage(text: string, width: number, running = false): s
     activeSkillIds: [],
     injectedMemoryIds: [],
     injectedMemorySummaries: [],
+    injectedDirectiveIds: [],
+    injectedDirectiveSummaries: [],
     injectedInstructionSources: []
   }]
   const transcript = new TranscriptComponent()
@@ -405,7 +407,7 @@ describe("PiTuiApplication clipboard, attachments, and streaming", () => {
     current.turns = [{
       id: 'turn_stream', threadId: current.id, status: 'running', orchestration: 'direct', prompt: 'Say hello', steering: [],
       createdAt: current.createdAt, startedAt: current.createdAt, items: [], attachmentIds: [], activeSkillIds: [],
-      injectedMemoryIds: [], injectedMemorySummaries: [], injectedInstructionSources: []
+      injectedMemoryIds: [], injectedMemorySummaries: [], injectedDirectiveIds: [], injectedDirectiveSummaries: [], injectedInstructionSources: []
     }]
     let onEvent: ((event: RuntimeEvent) => void) | undefined
     const client = {
@@ -555,6 +557,8 @@ describe("PiTuiApplication clipboard, attachments, and streaming", () => {
         id: 'user_auth', threadId: current.id, turnId: 'turn_auth', role: 'user', status: 'completed',
         createdAt: current.createdAt, kind: 'user_message', text: 'Hello'
       }], attachmentIds: [], activeSkillIds: [], injectedMemoryIds: [], injectedMemorySummaries: [],
+      injectedDirectiveIds: [],
+      injectedDirectiveSummaries: [],
       injectedInstructionSources: []
     }]
     let onEvent: ((event: RuntimeEvent) => void) | undefined

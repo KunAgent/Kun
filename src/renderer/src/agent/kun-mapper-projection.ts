@@ -375,6 +375,7 @@ export function approvalBlockFromItem(item: CoreTurnItemJson, child?: CoreChildR
     approvalId: item.approvalId ?? item.id,
     summary: item.summary?.trim() || 'Approval required',
     toolName: item.toolName,
+    ...(item.action ? { action: item.action } : {}),
     status:
       item.status === 'allowed' || item.status === 'denied' || item.status === 'expired'
         ? item.status

@@ -454,6 +454,7 @@ export function reduceChatProjection(
         approvalId: request.approvalId,
         summary: request.summary,
         toolName: request.toolName,
+        ...(request.action ? { action: request.action } : {}),
         status: 'pending',
         ...(request.meta ? { meta: request.meta } : {})
       }

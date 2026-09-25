@@ -1,4 +1,4 @@
-import { MemoryCreateRequest, MemoryUpdateRequest } from '../../contracts/memory.js'
+import { MemoryAuthority, MemoryCreateRequest, MemoryType, MemoryUpdateRequest } from '../../contracts/memory.js'
 import { MemoryFeedbackDiagnostics } from '../../contracts/memory-feedback.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
 import {
@@ -14,12 +14,22 @@ import { ERRORS } from './runtime-error.js'
 export async function listMemories(store: MemoryStore | undefined, request: Request): Promise<JsonResponse> {
   if (!store) return ERRORS.unavailable('memory store is unavailable')
   const url = new URL(request.url)
+  const authority = url.searchParams.get('authority') ?? undefined
+  const type = url.searchParams.get('type') ?? undefined
+  if (authority !== undefined && !MemoryAuthority.options.includes(authority as never)) {
+    return ERRORS.validation('invalid memory authority filter')
+  }
+  if (type !== undefined && !MemoryType.options.includes(type as never)) {
+    return ERRORS.validation('invalid memory type filter')
+  }
   return jsonResponse({
     memories: await store.list({
       workspace: url.searchParams.get('workspace') ?? undefined,
       project: url.searchParams.get('project') ?? undefined,
       includeDeleted: url.searchParams.get('include_deleted') === 'true',
-      all: url.searchParams.get('all') === 'true'
+      all: url.searchParams.get('all') === 'true',
+      authority: authority as MemoryAuthority | undefined,
+      type: type as MemoryType | undefined
     })
   })
 }

@@ -66,6 +66,7 @@ const TODO_TOOL_NAMES = ['todo_list', 'todo_write'] as const
 const GOAL_TOOL_NAMES = ['get_goal', 'create_goal', 'update_goal'] as const
 const USER_INPUT_TOOL_NAMES = ['user_input', 'request_user_input'] as const
 const MEMORY_TOOL_NAMES = ['memory_create', 'memory_update', 'memory_delete'] as const
+const MEMORY_READ_TOOL_NAMES = ['memory_search', 'memory_list'] as const
 
 /**
  * Keep availability-dependent guidance after the immutable system prefix.
@@ -83,6 +84,7 @@ export function buildToolPreferenceInstruction(
   const goalTools = presentNames(names, GOAL_TOOL_NAMES)
   const inputTools = presentNames(names, USER_INPUT_TOOL_NAMES)
   const memoryTools = presentNames(names, MEMORY_TOOL_NAMES)
+  const memoryReadTools = presentNames(names, MEMORY_READ_TOOL_NAMES)
   const fastContextAvailable = names.has('fast_context')
   const pptAgentAvailable = names.has('ppt_agent')
   const bullets: string[] = []
@@ -263,9 +265,15 @@ export function buildToolPreferenceInstruction(
     )
   }
 
+  if (memoryReadTools.length > 0) {
+    bullets.push(
+      `Use ${formatToolNames(memoryReadTools)} to recall or enumerate long-term memories — including what you remember for this user or workspace; they are read-only and never require approval.`
+    )
+  }
+
   if (memoryTools.length > 0) {
     bullets.push(
-      `Use ${formatToolNames(memoryTools)} only for durable user-approved facts or preferences, never for transient task state or content already available in the workspace.`
+      `Use ${formatToolNames(memoryTools)} only for durable user-approved facts or preferences, never for transient task state or content already available in the workspace. Set authority='directive' only when the user asks for a standing rule; directives always need explicit user approval and apply to every later turn.`
     )
   }
 

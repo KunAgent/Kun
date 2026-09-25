@@ -8,6 +8,7 @@ import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '@shared/app-
 import type { NormalizedThread } from './types-thread'
 export type { NormalizedThread } from './types-thread'
 import type { CoreModelRequestFailureJson } from './kun-contract'
+import type { CoreApprovalActionJson } from './kun-contract-runtime'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { RendererChartSpec } from './chart-spec-adapter'
 
@@ -203,6 +204,8 @@ export type RuntimeDisclosureMetadata = {
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   injectedMemorySummaries?: Array<{ id: string; content: string }>
+  injectedDirectiveIds?: string[]
+  injectedDirectiveSummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
   injectedInstructionSources?: Array<{ scope: 'global' | 'workspace'; path: string; bytes: number; truncated?: boolean }>
   instructionInjectionBytes?: number
@@ -430,6 +433,7 @@ export type ChatBlock = ({
       approvalId: string
       summary: string
       toolName?: string
+      action?: CoreApprovalActionJson
       status: 'pending' | 'submitting' | 'allowed' | 'denied' | 'expired' | 'error'
       errorMessage?: string
       meta?: RuntimeDisclosureMetadata
@@ -480,6 +484,7 @@ export type ApprovalRequestPayload = {
   createdAt?: string
   summary: string
   toolName?: string
+  action?: CoreApprovalActionJson
   meta?: RuntimeDisclosureMetadata
 }
 

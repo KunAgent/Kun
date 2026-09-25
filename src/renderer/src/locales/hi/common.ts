@@ -5,6 +5,7 @@ import composerFastMode from './common/composer-fast-mode.json'
 import commandsSdd from './common/commands-sdd.json'
 import providerErrors from './common/provider-errors.json'
 import sddFrameworks from './common/sdd-frameworks.json'
+import chatMemory from './common/chat-memory.json'
 import sddMcp from './common/sdd-mcp.json'
 import agentsGraph from './common/agents-graph.json'
 import sidebar from './common/sidebar.json'
@@ -23,6 +24,7 @@ const common = {
   ...commandsSdd,
   ...providerErrors,
   ...sddFrameworks,
+  ...chatMemory,
   ...sddMcp,
   ...agentsGraph,
   ...sidebar,

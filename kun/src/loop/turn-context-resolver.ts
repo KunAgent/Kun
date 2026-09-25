@@ -1,5 +1,4 @@
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
-import type { MemoryRecord } from '../contracts/memory.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
 import type { ActingTurnModelRoute } from '../contracts/turns.js'
@@ -11,8 +10,10 @@ import {
   DEFAULT_SANDBOX_MODE
 } from '../contracts/policy.js'
 import type { InstructionRuntime, InstructionTurnResolution } from '../instructions/instruction-runtime.js'
-import type { MemoryStore } from '../memory/memory-store.js'
-import { DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT } from '../memory/memory-retrieval.js'
+import {
+  resolveMemoryTurnContext,
+  type MemoryTurnStore
+} from '../memory/memory-turn-context.js'
 import type { GuiPlanContext, PptWorkflowScope, ToolHost, ToolHostContext } from '../ports/tool-host.js'
 import type { SkillRuntime, SkillTurnResolution } from '../skills/skill-runtime.js'
 import { SVG_ARTIFACT_ALLOWED_TOOL_NAMES } from './design-mode.js'
@@ -82,8 +83,8 @@ export type TurnContextResolverDeps = {
   }) => Promise<ResolvedTurnAttachments>
   skillRuntime?: Pick<SkillRuntime, 'resolveTurn'>
   instructionRuntime?: Pick<InstructionRuntime, 'resolveTurn'>
-  memoryStore?: Pick<MemoryStore, 'retrieve' | 'setLastInjected'>
-  getMemoryStore?: () => Pick<MemoryStore, 'retrieve' | 'setLastInjected'> | undefined
+  memoryStore?: MemoryTurnStore
+  getMemoryStore?: () => MemoryTurnStore | undefined
   interactiveToolBridge: Pick<InteractiveToolBridge, 'awaitUserInput'>
   forcedAllowedToolNames?: readonly string[]
   allowedProviderIds?: readonly string[]
@@ -126,7 +127,7 @@ export class TurnContextResolver {
     const blockedSkillIds = mergeRoomDeniedIds(this.deps.blockedSkillIds, input.thread.roomContext?.blockedSkillIds)
     // These inputs are independent snapshots. Resolve their filesystem/store
     // I/O together so model dispatch pays the slowest branch, not their sum.
-    const [attachments, skillResolution, instructionResolution, memories] = await Promise.all([
+    const [attachments, skillResolution, instructionResolution, memoryContext] = await Promise.all([
       this.deps.resolveAttachments({
         attachmentIds: collectTurnAttachmentIds(input.turn),
         threadId: input.threadId,
@@ -143,11 +144,13 @@ export class TurnContextResolver {
       }) ?? Promise.resolve(EMPTY_SKILL_RESOLUTION),
       this.deps.instructionRuntime?.resolveTurn({ workspace }) ??
         Promise.resolve(EMPTY_INSTRUCTION_RESOLUTION),
-      retrieveMemories(memoryStore, {
-        prompt: input.turn.prompt,
+      resolveMemoryTurnContext(memoryStore, {
+        query: input.turn.prompt,
         workspace
       })
     ])
+    const memories = memoryContext.memories
+    const memoryDirectives = memoryContext.directives
     const planTurnActive = !input.mode.dedicatedSvgTurn && !input.mode.planContextStale && (
       input.mode.effectiveMode === 'plan' || Boolean(input.mode.activePlanContext)
     )
@@ -252,6 +255,7 @@ export class TurnContextResolver {
       skillResolution,
       instructionResolution,
       memories,
+      memoryDirectives,
       activeGoalInstruction,
       goalRecoveryInstruction,
       activeTodoInstruction,
@@ -327,20 +331,6 @@ export function resolveTurnModeContext(input: {
     ...(activePlanContext ? { activePlanContext } : {}),
     effectiveMode: dedicatedSvgTurn ? 'agent' : input.turn.mode ?? input.threadMode
   }
-}
-
-async function retrieveMemories(
-  memoryStore: TurnContextResolverDeps['memoryStore'],
-  input: { prompt: string; workspace: string }
-): Promise<MemoryRecord[]> {
-  if (!memoryStore) return []
-  const memories = await memoryStore.retrieve({
-    query: input.prompt,
-    workspace: input.workspace,
-    limit: DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT
-  })
-  memoryStore.setLastInjected(memories.map((memory) => memory.id))
-  return memories
 }
 
 function normalizeApprovalPolicy(value: string | undefined): ToolHostContext['approvalPolicy'] {
