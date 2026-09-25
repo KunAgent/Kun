@@ -212,6 +212,7 @@
   "writePaperReaderTranslate": "Translate selection",
   "writePaperReaderTranslateConfirm": "पूरा पेपर अनुवाद करें? {{chars}} वर्ण (~{{tokens}} टोकन)। कैश किए गए हिस्से छोड़े जाते हैं।",
   "writePaperReaderTranslateDoc": "Translate paper",
+  "writePaperReaderTranslateNeedsPreprocess": "पूरे पेपर का अनुवाद करने के लिए paper.md चाहिए। पहले प्रीप्रोसेसिंग चलाएँ?",
   "writePaperReaderTranslateNoText": "paper.md नहीं है — पहले प्रीप्रोसेसिंग चलाएँ।",
   "writePaperReaderTranslatePage": "यह पृष्ठ अनुवाद करें",
   "writePaperReaderTranslatePageMark": "अनु",

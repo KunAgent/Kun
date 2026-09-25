@@ -410,21 +410,39 @@ function PaperUnitPdfReader({
     } : card)
   }, [pageTexts, unitRelDir, rootRef])
 
-  const runDocumentTranslate = async (): Promise<void> => {
-    setTranslateNotice('')
-    let chars = 0
+  const readPaperTextChars = async (): Promise<number> => {
     try {
       const read = await window.kunGui.readWorkspaceFile({
         workspaceRoot,
         path: writeJoinPath(unitRelDir, PAPER_TEXT_FILE_NAME)
       })
-      if (read.ok) chars = read.content.length
+      return read.ok ? read.content.length : 0
     } catch {
-      chars = 0
+      return 0
     }
+  }
+
+  const runDocumentTranslate = async (): Promise<void> => {
+    setTranslateNotice('')
+    let chars = await readPaperTextChars()
     if (!chars) {
-      setTranslateNotice(t('writePaperReaderTranslateNoText'))
-      return
+      // Whole-document translation reads paper.md — produce it on demand
+      // (same auto-preprocess path as interpretPaper) instead of dead-ending.
+      const settings = useWriteWorkspaceStore.getState().paperReading
+      const allowed = settings.autoPreprocess
+        ? true
+        : await confirmDialog(t('writePaperReaderTranslateNeedsPreprocess'))
+      if (!allowed) {
+        setTranslateNotice(t('writePaperReaderTranslateNoText'))
+        return
+      }
+      const { preprocessPaper } = await import('../../../write/paper/paper-actions')
+      if (!(await preprocessPaper({ workspaceRoot, settings, t, unitDir: unitRelDir }))) return
+      chars = await readPaperTextChars()
+      if (!chars) {
+        setTranslateNotice(t('writePaperReaderTranslateNoText'))
+        return
+      }
     }
     const confirmed = await confirmDialog(
       t('writePaperReaderTranslateConfirm', {

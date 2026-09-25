@@ -212,6 +212,7 @@
   "writePaperReaderTranslate": "Translate selection",
   "writePaperReaderTranslateConfirm": "แปลทั้งบทความ? {{chars}} ตัวอักษร (~{{tokens}} โทเคน) ข้ามส่วนที่แคชไว้",
   "writePaperReaderTranslateDoc": "Translate paper",
+  "writePaperReaderTranslateNeedsPreprocess": "การแปลทั้งบทความต้องมี paper.md ก่อน ต้องการรันการเตรียมข้อมูลตอนนี้ไหม",
   "writePaperReaderTranslateNoText": "ไม่มี paper.md — เรียกการประมวลผลก่อน",
   "writePaperReaderTranslatePage": "แปลหน้านี้",
   "writePaperReaderTranslatePageMark": "แปล",

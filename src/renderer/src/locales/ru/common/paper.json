@@ -212,6 +212,7 @@
   "writePaperReaderTranslate": "Translate selection",
   "writePaperReaderTranslateConfirm": "Перевести всю статью? {{chars}} символов (~{{tokens}} токенов). Кешированные части пропускаются.",
   "writePaperReaderTranslateDoc": "Translate paper",
+  "writePaperReaderTranslateNeedsPreprocess": "Для перевода всей статьи нужен paper.md. Сначала запустить препроцессинг?",
   "writePaperReaderTranslateNoText": "paper.md отсутствует — сначала выполните предобработку.",
   "writePaperReaderTranslatePage": "Перевести страницу",
   "writePaperReaderTranslatePageMark": "Пер",

@@ -212,6 +212,7 @@
   "writePaperReaderTranslate": "翻译选中",
   "writePaperReaderTranslateConfirm": "翻译整篇论文？约 {{chars}} 字符（约 {{tokens}} token），已缓存的块会跳过。",
   "writePaperReaderTranslateDoc": "翻译全文",
+  "writePaperReaderTranslateNeedsPreprocess": "翻译整篇论文需要先生成 paper.md。现在运行预处理？",
   "writePaperReaderTranslateNoText": "缺少 paper.md——请先运行预处理。",
   "writePaperReaderTranslatePage": "翻译本页",
   "writePaperReaderTranslatePageMark": "译",

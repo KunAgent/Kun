@@ -212,6 +212,7 @@
   "writePaperReaderTranslate": "Translate selection",
   "writePaperReaderTranslateConfirm": "Translate the whole paper? {{chars}} characters (~{{tokens}} tokens). Cached chunks are skipped.",
   "writePaperReaderTranslateDoc": "Translate paper",
+  "writePaperReaderTranslateNeedsPreprocess": "Translating the whole paper requires paper.md. Run preprocessing first?",
   "writePaperReaderTranslateNoText": "paper.md is missing — run preprocessing first.",
   "writePaperReaderTranslatePage": "Translate this page",
   "writePaperReaderTranslatePageMark": "Tr",

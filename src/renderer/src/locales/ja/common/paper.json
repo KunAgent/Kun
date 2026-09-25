@@ -212,6 +212,7 @@
   "writePaperReaderTranslate": "Translate selection",
   "writePaperReaderTranslateConfirm": "論文全体を翻訳しますか？約 {{chars}} 文字（約 {{tokens}} トークン）。キャッシュ済みのチャンクはスキップされます。",
   "writePaperReaderTranslateDoc": "Translate paper",
+  "writePaperReaderTranslateNeedsPreprocess": "論文全体を翻訳するには paper.md が必要です。先に前処理を実行しますか？",
   "writePaperReaderTranslateNoText": "paper.md がありません。先に前処理を実行してください。",
   "writePaperReaderTranslatePage": "このページを翻訳",
   "writePaperReaderTranslatePageMark": "訳",

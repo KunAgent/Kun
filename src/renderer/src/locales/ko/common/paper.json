@@ -212,6 +212,7 @@
   "writePaperReaderTranslate": "Translate selection",
   "writePaperReaderTranslateConfirm": "논문 전체를 번역할까요? 약 {{chars}}자(약 {{tokens}} 토큰). 캐시된 청크는 건너뜁니다.",
   "writePaperReaderTranslateDoc": "Translate paper",
+  "writePaperReaderTranslateNeedsPreprocess": "논문 전체를 번역하려면 paper.md가 필요합니다. 전처리를 먼저 실행할까요?",
   "writePaperReaderTranslateNoText": "paper.md가 없습니다. 먼저 전처리를 실행하세요.",
   "writePaperReaderTranslatePage": "이 페이지 번역",
   "writePaperReaderTranslatePageMark": "번",
