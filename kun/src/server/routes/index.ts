@@ -9,6 +9,7 @@ import { registerProjectBoardRoutes } from './register-project-board-routes.js'
 import { registerRoomRoutes } from './register-room-routes.js'
 import { registerHistoryReferenceRoutes } from './register-history-reference-routes.js'
 import { registerHarnessRoutes } from './register-harness-routes.js'
+import { registerActivityRoutes } from './register-activity-routes.js'
 
 /** Build the full HTTP router while preserving first-match registration order. */
 export function buildRouter(runtime: ServerRuntime): Router {
@@ -16,6 +17,7 @@ export function buildRouter(runtime: ServerRuntime): Router {
   const approvalConsent = new ApprovalConsentVerifier(runtime.runtimeToken)
   registerCoreRoutes(router, runtime)
   registerHarnessRoutes(router, runtime)
+  registerActivityRoutes(router, runtime)
   registerGraphRoutes(router, runtime)
   registerResourceRoutes(router, runtime)
   registerProjectBoardRoutes(router, runtime)

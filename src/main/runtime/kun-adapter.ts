@@ -293,7 +293,8 @@ function isProviderQuotaPath(pathNorm: string): boolean {
 function runtimeEventsWaitMs(pathNorm: string): number | null {
   if (
     !pathNorm.startsWith('/v1/model-connections/events?') &&
-    !pathNorm.startsWith('/v1/thread-activity/events?')
+    !pathNorm.startsWith('/v1/thread-activity/events?') &&
+    !pathNorm.startsWith('/v1/activity/events?')
   ) return null
   const query = pathNorm.slice(pathNorm.indexOf('?') + 1)
   const waitMs = Number(new URLSearchParams(query).get('wait_ms'))

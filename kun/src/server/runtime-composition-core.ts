@@ -33,6 +33,7 @@ import {
   RuntimeEventRecorder,
   ThreadActivityRegistry,
   ActivityStore,
+  ActivityFactsStore,
   GraphRuntimeComposition,
   LifecycleFencedSessionStore,
   LifecycleFencedThreadStore,
@@ -132,9 +133,12 @@ export async function createRuntimeCore(
     dataDir: activeOptions.dataDir
   })
   const threadActivity = new ThreadActivityRegistry()
+  const activityFacts = new ActivityFactsStore({ dataDir: activeOptions.dataDir })
+  await activityFacts.load().catch(() => undefined)
   const activityStore = new ActivityStore({
     nowIso,
-    threadMetadata: (id) => threadStore.getMetadata?.(id) ?? Promise.resolve(null)
+    threadMetadata: (id) => threadStore.getMetadata?.(id) ?? Promise.resolve(null),
+    facts: activityFacts
   })
   const contextWindowModes = new ContextWindowTurnModes(
     liveContextWindowMode(() => activeOptions)
@@ -164,8 +168,13 @@ export async function createRuntimeCore(
     nowIso
   })
   // Rebuild activity rows for recently-active threads from durable turn
-  // state before live events start flowing (docs/ade/06 §8).
+  // state before live events start flowing (docs/ade/06 §8), then reapply
+  // the persisted per-unit user facts.
   await activityStore.hydrate(threadStore)
+  for (const [unitId, fact] of Object.entries(activityFacts.all())) {
+    const row = activityStore.get(unitId)
+    if (row) activityStore.apply(unitId, fact, row.provenance)
+  }
   const observers = [
     threadActivity,
     activityStore,
@@ -402,6 +411,7 @@ export async function createRuntimeCore(
     events,
     threadActivity,
     activityStore,
+    activityFacts,
     prefix,
     delegatedSessions,
     threadService,

@@ -232,6 +232,14 @@ export function kunGraphProjectConsolidatePath(projectId: string): string {
 export const KUN_THREAD_ACTIVITY_EVENTS_PATH = '/v1/thread-activity/events'
 export const KUN_THREAD_ACTIVITY_EVENTS_TEMPLATE = '/v1/thread-activity/events'
 
+export const KUN_ACTIVITY_PATH = '/v1/activity'
+export const KUN_ACTIVITY_TEMPLATE = '/v1/activity'
+export const KUN_ACTIVITY_EVENTS_PATH = '/v1/activity/events'
+export const KUN_ACTIVITY_EVENTS_TEMPLATE = '/v1/activity/events'
+export function kunActivityUnitPath(unitId: string, action: 'ack' | 'dismiss' | 'pin'): string {
+  return `${KUN_ACTIVITY_PATH}/${encodeURIComponent(unitId)}/${action}`
+}
+
 export const KUN_THREADS_PATH = '/v1/threads'
 export const KUN_THREADS_TEMPLATE = '/v1/threads'
 

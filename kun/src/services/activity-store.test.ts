@@ -10,7 +10,7 @@ function ev(kind: RuntimeEvent['kind'], threadId: string, extra: Record<string, 
   return { kind, threadId, seq: 1, timestamp: NOW, ...extra } as RuntimeEvent
 }
 
-function makeStore(options: ConstructorParameters<typeof ActivityStore>[0] = {}) {
+function makeStore(options: Omit<ConstructorParameters<typeof ActivityStore>[0], 'nowIso'> = {}) {
   return new ActivityStore({ nowIso: () => NOW, ...options })
 }
 
