@@ -126,7 +126,7 @@ export function parseCoolPapersUrl(raw: string): CoolPapersRef | null {
 
 // ---- Paper directory slugs ----
 
-const INVALID_FILE_NAME_CHARS = /[\\/:*?"<>|\x00-\x1f]/g
+const INVALID_FILE_NAME_CHARS = /[\\/:*?"<>|\p{Cc}]/gu
 
 /** arXiv units keep the canonical id verbatim (`1706.03762`). */
 export function paperSlugForArxiv(arxivId: string): string {
