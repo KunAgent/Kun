@@ -132,6 +132,7 @@ export function useMobileProjectThreads(
                 search: query,
                 limit: SEARCH_PAGE_SIZE,
                 includeSide: false,
+                workspaceMode: 'code',
                 lean: true
               })
             : { threads: [] as NormalizedThread[], hasMore: false }

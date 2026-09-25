@@ -15,6 +15,7 @@ import speak from './common/speak.json'
 import remoteAccess from './common/remote-access.json'
 
 import paper from './common/paper.json'
+import ade from './common/ade.json'
 
 const common = {
   ...shellWorkflow,
@@ -33,6 +34,7 @@ const common = {
   ...speak,
   ...remoteAccess,
   ...paper,
+  ...ade,
 }
 
 export default common

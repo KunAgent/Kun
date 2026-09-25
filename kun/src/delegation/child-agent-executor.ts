@@ -382,6 +382,13 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     })
 
     const title = childThreadTitle(input.childId, input.label, input.profile)
+    // Worker/side threads belong to the parent's workspace mode: a child of an
+    // ADE thread stays in ADE and never leaks into the Code listing.
+    const parentThread = input.resumeChild
+      ? null
+      : (threadStore.getMetadata
+          ? await threadStore.getMetadata(input.parentThreadId)
+          : await threadStore.get(input.parentThreadId))
     const thread = input.resumeChild
       ? await threadStore.get(input.childId)
       : await threads.create({
@@ -392,6 +399,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         approvalPolicy,
         ...(sandboxMode ? { sandboxMode } : {}),
         approvalReviewer,
+        ...(parentThread?.workspaceMode ? { workspaceMode: parentThread.workspaceMode } : {}),
         // Route the child to the profile's provider. ThreadService threads
         // providerId into every ModelRequest, and the executor's model is the
         // MultiProviderModelClient, so this single field is all routing needs.
@@ -414,9 +422,9 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       throw new Error(`child thread ${input.childId} is not a side thread of the expected parent`)
     }
     const parentDesignProfile = agentSurface === 'design' && !thread.designProfile
-      ? (threadStore.getMetadata
+      ? (parentThread ?? (threadStore.getMetadata
           ? await threadStore.getMetadata(input.parentThreadId)
-          : await threadStore.get(input.parentThreadId))?.designProfile
+          : await threadStore.get(input.parentThreadId)))?.designProfile
       : undefined
     const designAdmission = parentDesignProfile
       ? {

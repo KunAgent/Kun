@@ -62,6 +62,7 @@ export function createToolExecutionContext(
       : {}),
     ...(input.modelProviderId ? { modelProviderId: input.modelProviderId } : {}),
     ...(input.harnessId ? { harnessId: input.harnessId } : {}),
+    ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
     ...(input.executionUnitKind ? { executionUnitKind: input.executionUnitKind } : {}),
     actingModelRoute: input.actingModelRoute,
     ...(input.approvalIntent ? { approvalIntent: input.approvalIntent } : {}),

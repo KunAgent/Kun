@@ -75,6 +75,8 @@ export type ThreadListOptions = {
   workspace?: string
   /** Extra workspace roots matched alongside `workspace` (e.g. project worktrees). */
   workspaces?: string[]
+  /** Filter by owning workspace mode; absent returns every mode. */
+  workspaceMode?: 'code' | 'ade'
   lean?: boolean
 }
 
@@ -223,7 +225,7 @@ export interface AgentProvider {
   listThreads(options?: ThreadListOptions): Promise<NormalizedThread[]>
   /** Optional paginated listing used by the sidebar "show more" flow. */
   listThreadsPage?(options?: ThreadListOptions): Promise<ThreadListPage>
-  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string; additionalWorkspaces?: string[] }): Promise<NormalizedThread>
+  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; workspaceMode?: 'code' | 'ade'; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string; additionalWorkspaces?: string[] }): Promise<NormalizedThread>
   getThreadDetail(threadId: string, options?: {
     before?: string
     turnId?: string

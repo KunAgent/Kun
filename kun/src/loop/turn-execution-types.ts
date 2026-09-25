@@ -132,6 +132,8 @@ export type ToolTurnContextInput = {
   modelProviderId?: string
   /** Frozen harness identity; copied to the tool context verbatim. */
   harnessId?: string
+  /** Owning workspace mode of the turn's thread; copied verbatim. */
+  workspaceMode?: 'code' | 'ade'
   /** Worker execution-unit marker for future ADE task threads. */
   executionUnitKind?: 'worker'
   actingModelRoute?: ActingTurnModelRoute

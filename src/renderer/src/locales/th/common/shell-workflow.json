@@ -38,6 +38,8 @@
   "code": "รหัส",
   "write": "งาน",
   "workspaceModeWorkLabel": "งาน",
+  "workspaceModeAdeLabel": "ADE",
+  "workspaceModeAdeDescription": "ควบคุมทีมเอเจนต์",
   "workspaceModeCodeDescription": "สร้าง ดีบัก และเผยแพร่",
   "workspaceModeWorkDescription": "เขียน จัดระเบียบ และงานประจำวัน",
   "design": "การออกแบบ",

@@ -18,13 +18,13 @@ type Context = Record<string, any>
 export function WorkbenchContent({ context }: { context: Context }): ReactElement {
   const {
     shellRef, extensionHostContextMenus, activeExtensionCenterView, route, setWorkspaceContextMenu,
-    leftSidebarCollapsed, leftSidebarWidth, codeThreads, activeThreadId, sidebarView,
+    leftSidebarCollapsed, leftSidebarWidth, codeThreads, adeThreads, activeThreadId, sidebarView,
     connectPhoneSidebarOpen, connectPhoneInitialTarget, activeExtensionLeftSidebar, extensionWorkspaceRoot,
     selectExtensionSurface, runtimeConnection, threadSearch, showArchivedThreads, focusModeEnabled,
     updateFocusMode, setThreadSearch, openThread, renameThread, pinThread, archiveThread,
-    deleteThread, startNewChat, startNewChatInWorkspace,
+    deleteThread, startNewChat, startNewAdeChat, startNewChatInWorkspace,
     openSettings, openPluginsView, openExtensionsView, toggleTheme, toggleConnectPhone, openConnectWeixin,
-    openCodeMode, openWriteMode, openBoardView, openScheduleView, openWorkflowView,
+    openCodeMode, openAdeMode, openWriteMode, openBoardView, openScheduleView, openWorkflowView,
     startNewConversation, beginLeftResize, toggleLeftSidebar, busy,
     input, rightPanel, writeRuntimeBanner, setInput, sendWritePrompt,
     conversationRuntimeBanner, activeSddDraft, rightPanelMode, toggleSddAssistantPanel,
@@ -81,6 +81,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         width={leftSidebarWidth}
         route={normalizedRoute}
         codeThreads={codeThreads}
+        adeThreads={adeThreads}
         activeThreadId={activeThreadId}
         sidebarView={sidebarView}
         connectPhoneSidebarOpen={connectPhoneSidebarOpen}
@@ -109,6 +110,8 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         onToggleTheme={toggleTheme}
         onToggleConnectPhone={toggleConnectPhone}
         onCodeOpen={openCodeMode}
+        onAdeOpen={openAdeMode}
+        onNewAdeChat={startNewAdeChat}
         onWriteOpen={openWriteMode}
         onScheduleOpen={openScheduleView}
         onBoardOpen={openBoardView}

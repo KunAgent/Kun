@@ -68,7 +68,8 @@ function buildHarness(): {
     turnReasoningFirstAtByUserId: {},
     turnReasoningLastAtByUserId: {},
     turnStartedAtByUserId: {},
-    threads: [thread()]
+    threads: [thread()],
+    adeThreads: []
   } as unknown as ChatState
   const set: ChatStoreSet = (partial) => {
     const update = typeof partial === 'function' ? partial(state) : partial
@@ -94,8 +95,9 @@ describe('design profile follow-up store behavior', () => {
   it('keeps turn_started designProfile on the thread entry', () => {
     const projected = reduceChatProjection({
       activeThreadId: 'thr_design',
+      adeThreads: [],
       threads: [thread()]
-    } as ChatState, {
+    } as unknown as ChatState, {
       type: 'thread_metadata_changed',
       payload: {
         threadId: 'thr_design',

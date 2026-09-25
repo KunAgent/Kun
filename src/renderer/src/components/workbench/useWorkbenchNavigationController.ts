@@ -30,7 +30,7 @@ import {
   DEFAULT_WORKBENCH_DESIGN_PROFILE
 } from './workbench-task-intent'
 
-export type WorkbenchSidebarView = 'chat' | 'write' | 'claw' | 'board' | 'schedule' | 'workflow' | 'subagents'
+export type WorkbenchSidebarView = 'chat' | 'ade' | 'write' | 'claw' | 'board' | 'schedule' | 'workflow' | 'subagents'
 
 export type UseWorkbenchNavigationControllerParams = {
   activeSddDraft: boolean
@@ -41,6 +41,8 @@ export type UseWorkbenchNavigationControllerParams = {
   runtimeConnection: RuntimeConnectionStatus
   sddDraftContent: string
   threads: NormalizedThread[]
+  /** ADE inventory is separate; openThread consults it for workspaceMode. */
+  adeThreads?: NormalizedThread[]
   useWorktreePool: boolean
   workspaceRoot: string
   worktreeBranch: string
@@ -58,6 +60,7 @@ export type UseWorkbenchNavigationControllerParams = {
   openClaw: ChatState['openClaw']
   openBoard: ChatState['openBoard']
   openCode: ChatState['openCode']
+  openAde: ChatState['openAde']
   openPlugins: ChatState['openPlugins']
   openSchedule: ChatState['openSchedule']
   openWorkflow: ChatState['openWorkflow']
@@ -77,6 +80,7 @@ export type WorkbenchNavigationController = {
   closeRightPanel: () => void
   exploreSddRequirementInDesign: () => void
   openCodeMode: () => void
+  openAdeMode: () => void
   openPluginsView: () => void
   openBoardView: () => void
   openExtensionsView: () => void
@@ -87,6 +91,7 @@ export type WorkbenchNavigationController = {
   pickWriteAssistantWorkspace: () => Promise<void>
   sidebarView: WorkbenchSidebarView
   startNewChat: () => void
+  startNewAdeChat: () => void
   startNewChatInWorkspace: (
     workspaceRoot: string,
     options?: { forceNew?: boolean }
@@ -139,6 +144,7 @@ export function useWorkbenchNavigationController({
   runtimeConnection,
   sddDraftContent,
   threads,
+  adeThreads = [],
   useWorktreePool,
   workspaceRoot,
   worktreeBranch,
@@ -152,6 +158,7 @@ export function useWorkbenchNavigationController({
   openClaw,
   openBoard,
   openCode,
+  openAde,
   openPlugins,
   openSchedule,
   openWorkflow,
@@ -186,6 +193,7 @@ export function useWorkbenchNavigationController({
     if (route === 'board') return 'board'
     if (route === 'workflow') return 'workflow'
     if (route === 'write') return 'write'
+    if (route === 'ade') return 'ade'
     return 'chat'
   }, [pluginHostRoute, route])
 
@@ -207,7 +215,15 @@ export function useWorkbenchNavigationController({
         return
       }
       useThreadTurnTarget.setState({ target: null })
-      const thread = threads.find((item) => item.id === id) ?? null
+      const thread = threads.find((item) => item.id === id) ??
+        adeThreads.find((item) => item.id === id) ?? null
+      // ADE 线程在自己的路由打开;它们不出现在 Code 列表,也不走 Design/SDD 分支。
+      if (thread?.workspaceMode === 'ade') {
+        if (useSddDraftStore.getState().activeDraft) dismissActiveSddDraft({ closeAssistant: true })
+        setRoute('ade')
+        await selectThread(id, { selectionGuard: isCurrentRequest })
+        return
+      }
       const designRegistry = readDesignThreadRegistry()
       if (isWorkbenchDesignThread(id, thread, designRegistry)) {
         const cachedDesignRef = (): WorkbenchDesignDocumentRef | null => {
@@ -325,6 +341,7 @@ export function useWorkbenchNavigationController({
       await selectThread(id, { selectionGuard: isCurrentRequest })
     })()
   }, [
+    adeThreads,
     beginNavigation,
     dismissActiveSddDraft,
     findSddDraftForSidebarThread,
@@ -344,6 +361,32 @@ export function useWorkbenchNavigationController({
       useWorktreePool,
       worktreeBranch,
       agentSurface: 'code',
+      activationGuard: () => navigationIsCurrent(requestId)
+    })
+    if (useWorktreePool) setUseWorktreePool(false)
+  }, [
+    activeSddDraft,
+    beginNavigation,
+    createThread,
+    dismissActiveSddDraft,
+    navigationIsCurrent,
+    setConnectPhoneSidebarOpen,
+    setRoute,
+    setUseWorktreePool,
+    useWorktreePool,
+    worktreeBranch
+  ])
+
+  const startNewAdeChat = useCallback((): void => {
+    const requestId = beginNavigation()
+    if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
+    setConnectPhoneSidebarOpen(false)
+    setRoute('ade')
+    void createThread({
+      useWorktreePool,
+      worktreeBranch,
+      agentSurface: 'code',
+      workspaceMode: 'ade',
       activationGuard: () => navigationIsCurrent(requestId)
     })
     if (useWorktreePool) setUseWorktreePool(false)
@@ -412,6 +455,12 @@ export function useWorkbenchNavigationController({
     setConnectPhoneSidebarOpen(false)
     void openCode({ activationGuard: () => navigationIsCurrent(requestId) })
   }, [beginNavigation, navigationIsCurrent, openCode, setConnectPhoneSidebarOpen])
+
+  const openAdeMode = useCallback((): void => {
+    const requestId = beginNavigation()
+    setConnectPhoneSidebarOpen(false)
+    void openAde({ activationGuard: () => navigationIsCurrent(requestId) })
+  }, [beginNavigation, navigationIsCurrent, openAde, setConnectPhoneSidebarOpen])
 
   const openWriteMode = useCallback((): void => {
     const requestId = beginNavigation()
@@ -495,6 +544,11 @@ export function useWorkbenchNavigationController({
         void openWrite({ activationGuard: () => navigationIsCurrent(requestId) })
         return
       }
+      if (returnRoute === 'ade') {
+        // ADE 与 Code 各自记忆线程:返回 ADE 时恢复上次的 ADE 会话。
+        void openAde({ activationGuard: () => navigationIsCurrent(requestId) })
+        return
+      }
       setRoute(returnRoute)
       return
     }
@@ -504,6 +558,7 @@ export function useWorkbenchNavigationController({
   }, [
     beginNavigation,
     navigationIsCurrent,
+    openAde,
     openClaw,
     openCode,
     openWrite,
@@ -606,6 +661,7 @@ export function useWorkbenchNavigationController({
     closeRightPanel,
     exploreSddRequirementInDesign,
     openCodeMode,
+    openAdeMode,
     openPluginsView,
     openBoardView,
     openExtensionsView,
@@ -616,6 +672,7 @@ export function useWorkbenchNavigationController({
     pickWriteAssistantWorkspace,
     sidebarView,
     startNewChat,
+    startNewAdeChat,
     startNewChatInWorkspace,
     startNewConversation,
     startNewWriteAssistantConversation,

@@ -55,6 +55,10 @@ export class HybridThreadIndexRepository {
       where.push(`workspace IN (${workspaces.map((_, index) => `@workspace${index}`).join(', ')})`)
       workspaces.forEach((workspace, index) => { params[`workspace${index}`] = workspace })
     }
+    if (options.workspaceMode) {
+      where.push("COALESCE(workspace_mode, 'code') = @workspaceMode")
+      params.workspaceMode = options.workspaceMode
+    }
     const search = options.search?.trim().toLowerCase()
     if (search) { where.push("search_text LIKE @search ESCAPE '\\'"); params.search = `%${escapeLike(search)}%` }
     return { where, params }
@@ -100,7 +104,7 @@ export class HybridThreadIndexRepository {
     if (!this.upsertStatement) {
       this.upsertStatement = this.db.prepare(`
         INSERT INTO threads (
-          id, title, workspace, model, agent_surface, mode, status, approval_policy, sandbox_mode, approval_reviewer,
+          id, title, workspace, model, agent_surface, workspace_mode, mode, status, approval_policy, sandbox_mode, approval_reviewer,
           model_request_capture_enabled,
           cost_budget_usd, cost_budget_warning_sent, relation, parent_thread_id,
           forked_from_thread_id, forked_from_title, forked_at, forked_from_message_count,
@@ -108,7 +112,7 @@ export class HybridThreadIndexRepository {
           updated_at_ms, preview, message_count, event_seq_high_water, metadata_path,
           messages_path, events_path, search_text
         ) VALUES (
-          @id, @title, @workspace, @model, @agent_surface, @mode, @status, @approval_policy, @sandbox_mode, @approval_reviewer,
+          @id, @title, @workspace, @model, @agent_surface, @workspace_mode, @mode, @status, @approval_policy, @sandbox_mode, @approval_reviewer,
           @model_request_capture_enabled,
           @cost_budget_usd, @cost_budget_warning_sent, @relation, @parent_thread_id,
           @forked_from_thread_id, @forked_from_title, @forked_at, @forked_from_message_count,
@@ -117,7 +121,7 @@ export class HybridThreadIndexRepository {
           @messages_path, @events_path, @search_text
         ) ON CONFLICT(id) DO UPDATE SET
           title=excluded.title, workspace=excluded.workspace, model=excluded.model,
-          agent_surface=excluded.agent_surface, mode=excluded.mode,
+          agent_surface=excluded.agent_surface, workspace_mode=excluded.workspace_mode, mode=excluded.mode,
           status=excluded.status, approval_policy=excluded.approval_policy, sandbox_mode=excluded.sandbox_mode,
           approval_reviewer=excluded.approval_reviewer,
           model_request_capture_enabled=excluded.model_request_capture_enabled,

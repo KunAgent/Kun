@@ -38,6 +38,8 @@
   "code": "코드",
   "write": "업무",
   "workspaceModeWorkLabel": "업무",
+  "workspaceModeAdeLabel": "ADE",
+  "workspaceModeAdeDescription": "에이전트 팀 지휘",
   "workspaceModeCodeDescription": "구축, 디버깅 및 배포",
   "workspaceModeWorkDescription": "작성, 정리 및 일상 업무",
   "design": "디자인",
