@@ -30,6 +30,9 @@ export default defineConfig({
       // electron-vite disables minification by default; enable esbuild so the
       // shipped main-process bundle is smaller without touching externals.
       minify: 'esbuild',
+      // Per-chunk gzip reporting costs heap on large builds and the desktop
+      // package never consumes the numbers.
+      reportCompressedSize: false,
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),
@@ -44,6 +47,7 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     build: {
       minify: 'esbuild',
+      reportCompressedSize: false,
       rollupOptions: {
         input: {
           index: resolve('src/preload/index.ts'),
@@ -78,6 +82,7 @@ export default defineConfig({
       // "Importing a module script failed."
       target: ['chrome128', 'safari16'],
       modulePreload: false,
+      reportCompressedSize: false,
       rollupOptions: {
         input: {
           index: resolve('src/renderer/index.html'),
