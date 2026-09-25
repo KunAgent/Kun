@@ -13,6 +13,7 @@ import type {
   PaperLibraryDetectResult,
   PaperLibraryMetaPatch,
   PaperLibraryTrashResult,
+  PaperDownloadPdfResult,
   PaperLocalLibraryState,
   PaperBibtexImportResult,
   PaperMoveToGroupResult,
@@ -49,7 +50,7 @@ export type PaperUnitApi = {
     workspaceRoot: string
     unitDir: string
   }) => Promise<PaperUnitReadResult>
-  /** Scan `<workspaceRoot>/<parentDir>/​*​/paper.json` for the sidebar. */
+  /** Scan `<workspaceRoot>/<parentDir>` children for `paper.json` for the sidebar. */
   paperListUnits: (payload: {
     workspaceRoot: string
     parentDir?: string
@@ -107,6 +108,11 @@ export type PaperLibraryApi = {
     unitDir: string
     group: string
   }) => Promise<PaperMoveToGroupResult>
+  /** Fetch a missing main PDF from the unit's arXiv id or recorded pdfUrl. */
+  paperDownloadPdf: (payload: {
+    workspaceRoot: string
+    unitDir: string
+  }) => Promise<PaperDownloadPdfResult>
   /** Move a unit directory to the OS trash. */
   paperTrashUnit: (payload: {
     workspaceRoot: string

@@ -63,6 +63,13 @@ export const paperTrashUnitPayloadSchema = z
   })
   .strict()
 
+export const paperDownloadPdfPayloadSchema = z
+  .object({
+    workspaceRoot: trimmedString(MAX_PATH_LENGTH),
+    unitDir: unitDirSchema
+  })
+  .strict()
+
 export const paperLocalStateReadPayloadSchema = z
   .object({ libraryRoot: trimmedString(MAX_PATH_LENGTH) })
   .strict()

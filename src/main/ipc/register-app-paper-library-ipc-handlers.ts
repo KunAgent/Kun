@@ -1,6 +1,7 @@
 import { app, ipcMain, shell } from 'electron'
 import { resolve } from 'node:path'
 import {
+  paperDownloadPdfPayloadSchema,
   paperLibraryDetectPayloadSchema,
   paperLibraryListPayloadSchema,
   paperLocalStateReadPayloadSchema,
@@ -16,6 +17,7 @@ import {
   normalizeWritePapersDir
 } from '../../shared/app-settings-write'
 import type {
+  PaperDownloadPdfResult,
   PaperLibraryDetectResult,
   PaperLibraryEntriesResult,
   PaperLibraryTrashResult,
@@ -40,6 +42,8 @@ import {
   scannedUnitToEntry,
   updatePaperUnitMetaV2
 } from '../services/paper/paper-library-service'
+import { backfillPaperPdf } from '../services/paper/paper-pdf-backfill'
+import { resolveKunRuntimeSettings, resolveProviderProxyUrl } from '../../shared/app-settings'
 import {
   readPaperLocalLibraryState,
   writePaperLocalUnitState
@@ -239,6 +243,29 @@ export function registerAppPaperLibraryIpcHandlers(
       } catch (error) {
         logError?.('paper-library', 'paper-library:trash failed', error)
         return paperErrorResult<PaperLibraryTrashResult>(error, 'io')
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'paper-library:download-pdf',
+    async (event, payload: unknown): Promise<PaperDownloadPdfResult> => {
+      assertTrustedWorkbenchSender(event, getMainWindow)
+      const request = parseIpcPayload(
+        'paper-library:download-pdf',
+        paperDownloadPdfPayloadSchema,
+        payload
+      )
+      try {
+        const workspacePath = await canonicalPath(resolvePath(request.workspaceRoot))
+        const unitDirAbs = await resolveTargetPathWithinWorkspace(request.unitDir, workspacePath)
+        const settings = await store.load()
+        const proxyUrl = resolveProviderProxyUrl(settings, resolveKunRuntimeSettings(settings).providerId)
+        const meta = await backfillPaperPdf(unitDirAbs, { proxyUrl })
+        return { ok: true, meta }
+      } catch (error) {
+        logError?.('paper-library', 'paper-library:download-pdf failed', error)
+        return paperErrorResult<PaperDownloadPdfResult>(error, 'network')
       }
     }
   )

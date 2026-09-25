@@ -6,8 +6,11 @@ import {
   BookOpen,
   FileDown,
   FileWarning,
+  FolderInput,
   Loader2,
+  MoreHorizontal,
   RefreshCw,
+  Sparkles,
   Trash2
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -21,18 +24,35 @@ import {
 } from '../../paper/paper-library-filter'
 import { openLibraryEntry } from '../../paper/paper-library-actions'
 import { trashPaperUnits } from '../../paper/paper-unit-ops'
+import {
+  copyPaperEntryBibtex,
+  downloadMissingPaperPdfs,
+  revealPaperEntry,
+  updatePaperEntryMeta
+} from '../../paper/paper-library-row-actions'
+import { PaperRowMenu, type PaperRowMenuAction } from './library/PaperRowMenu'
+import { PaperMetaEditDialog } from './library/PaperMetaEditDialog'
+import { PaperMoveGroupDialog } from './library/PaperMoveGroupDialog'
+import { PaperTitleText } from './PaperTitleText'
+import {
+  buildPaperMultiPrompt,
+  paperMultiOutputPath,
+  type PaperMultiTask
+} from '../../paper/paper-multi-prompt'
 import { newPaperRequestId, usePaperStore } from '../../write/paper/paper-store'
 import type {
   PaperLibraryEntry,
   PaperLibrarySortKey
 } from '@shared/paper/paper-library-types'
 
-const COLUMNS: { key: PaperLibrarySortKey; labelKey: string; className: string }[] = [
+const COLUMNS: { key: PaperLibrarySortKey | null; labelKey: string; className: string }[] = [
   { key: 'title', labelKey: 'writePaperColTitle', className: 'min-w-0 flex-1' },
   { key: 'year', labelKey: 'writePaperColYear', className: 'w-14 shrink-0' },
-  { key: 'venue', labelKey: 'writePaperColVenue', className: 'w-40 shrink-0' },
-  { key: 'status', labelKey: 'writePaperColStatus', className: 'w-24 shrink-0' },
-  { key: 'lastOpenedAt', labelKey: 'writePaperColOpened', className: 'w-28 shrink-0' }
+  { key: 'venue', labelKey: 'writePaperColVenue', className: 'w-36 shrink-0' },
+  { key: 'status', labelKey: 'writePaperColStatus', className: 'w-20 shrink-0' },
+  { key: null, labelKey: 'writePaperColProgress', className: 'w-16 shrink-0' },
+  { key: 'importedAt', labelKey: 'writePaperColAdded', className: 'w-24 shrink-0' },
+  { key: 'lastOpenedAt', labelKey: 'writePaperColOpened', className: 'w-24 shrink-0' }
 ]
 
 function statusLabelKey(status: string | undefined): string {
@@ -52,7 +72,12 @@ function formatOpenedAt(value: string | undefined): string {
 
 /** Library table view (§3.4): filter chips live in the sidebar; this is the
  * sortable/selectable grid plus the bulk-action bar. */
-export function PaperLibraryView(): ReactElement {
+export function PaperLibraryView({
+  onSubmitPrompt
+}: {
+  /** Sends a prompt to the Work assistant (library-level conversation). */
+  onSubmitPrompt?: (value: string) => void
+} = {}): ReactElement {
   const { t } = useTranslation('common')
   const { workspaceRoot, paperReading } = useWriteWorkspaceStore(
     useShallow((s) => ({
@@ -97,6 +122,9 @@ export function PaperLibraryView(): ReactElement {
   )
 
   const [dropActive, setDropActive] = useState(false)
+  const [menu, setMenu] = useState<{ entry: PaperLibraryEntry; x: number; y: number } | null>(null)
+  const [editEntry, setEditEntry] = useState<PaperLibraryEntry | null>(null)
+  const [moveUnits, setMoveUnits] = useState<string[] | null>(null)
 
   const visible = useMemo(
     () => sortPaperEntries(filterPaperEntries(entries, filter), sort),
@@ -197,6 +225,52 @@ export function PaperLibraryView(): ReactElement {
     }
   }
 
+  const runRowAction = async (entry: PaperLibraryEntry, action: PaperRowMenuAction): Promise<void> => {
+    if (typeof action === 'object') {
+      await updatePaperEntryMeta(entry, { status: action.status }, t)
+      return
+    }
+    switch (action) {
+      case 'open':
+        await openLibraryEntry(entry)
+        return
+      case 'edit':
+        setEditEntry(entry)
+        return
+      case 'download-pdf':
+        await downloadMissingPaperPdfs([entry], t)
+        return
+      case 'copy-bibtex':
+        await copyPaperEntryBibtex(entry, t)
+        return
+      case 'reveal':
+        await revealPaperEntry(entry)
+        return
+      case 'move':
+        setMoveUnits([entry.unitDir])
+        return
+      case 'trash': {
+        if (!(await confirmDialog(t('writePaperTrashConfirm', { count: 1 })))) return
+        const outcome = await trashPaperUnits([entry.unitDir])
+        if (outcome.failed.length) {
+          usePaperStore.getState().setNotice({
+            tone: 'error',
+            message: t('writePaperOpFailed', { count: 1, message: outcome.failed[0].message })
+          })
+        }
+      }
+    }
+  }
+
+  const runMultiTask = (task: PaperMultiTask): void => {
+    const chosen = entries.filter((entry) => selection.has(entry.unitDir))
+    if (chosen.length === 0 || !onSubmitPrompt) return
+    const prompt = buildPaperMultiPrompt({ task, entries: chosen, outputPath: paperMultiOutputPath(task) })
+    useWriteWorkspaceStore.getState().setAssistantOpen(true)
+    onSubmitPrompt(prompt)
+    clearSelection()
+  }
+
   const allVisibleSelected = visible.length > 0 && visible.every((e) => selection.has(e.unitDir))
 
   // PM4: drop PDFs anywhere on the table to import them into this library.
@@ -256,6 +330,17 @@ export function PaperLibraryView(): ReactElement {
         >
           <RefreshCw className={`h-3.5 w-3.5 ${entriesLoading ? 'animate-spin' : ''}`} strokeWidth={1.8} />
         </button>
+        {counts.missingPdf > 0 ? (
+          <button
+            type="button"
+            onClick={() => void downloadMissingPaperPdfs(entries, t)}
+            title={t('writePaperDownloadMissingHint')}
+            className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-amber-300/60 px-2.5 text-[12px] font-medium text-amber-700 transition hover:bg-amber-50 dark:border-amber-800/60 dark:text-amber-300 dark:hover:bg-amber-950/30"
+          >
+            <FileWarning className="h-3.5 w-3.5" strokeWidth={1.8} />
+            {t('writePaperDownloadMissing', { count: counts.missingPdf })}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => void exportBibtex()}
@@ -288,6 +373,36 @@ export function PaperLibraryView(): ReactElement {
               {t(statusLabelKey(status))}
             </button>
           ))}
+          {onSubmitPrompt ? (
+            <>
+              <button
+                type="button"
+                disabled={selection.size < 2}
+                title={selection.size < 2 ? t('writePaperCompareNeedsTwo') : undefined}
+                onClick={() => runMultiTask('compare')}
+                className="inline-flex h-6 items-center gap-1 rounded-full border border-accent/30 px-2 text-[11.5px] text-accent transition hover:bg-accent/10 disabled:opacity-50"
+              >
+                <Sparkles className="h-3 w-3" strokeWidth={1.9} />
+                {t('writePaperCompare')}
+              </button>
+              <button
+                type="button"
+                onClick={() => runMultiTask('related-work')}
+                className="inline-flex h-6 items-center gap-1 rounded-full border border-accent/30 px-2 text-[11.5px] text-accent transition hover:bg-accent/10"
+              >
+                <Sparkles className="h-3 w-3" strokeWidth={1.9} />
+                {t('writePaperRelatedWork')}
+              </button>
+            </>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setMoveUnits([...selection])}
+            className="inline-flex h-6 items-center gap-1 rounded-full border border-ds-border-muted px-2 text-[11.5px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+          >
+            <FolderInput className="h-3 w-3" strokeWidth={1.9} />
+            {t('writePaperMoveToGroup')}
+          </button>
           <button
             type="button"
             onClick={() => void bulkTrash()}
@@ -328,11 +443,13 @@ export function PaperLibraryView(): ReactElement {
             }
             className="h-3.5 w-3.5 accent-accent"
           />
-          {COLUMNS.map((column) => (
+          {COLUMNS.map((column) => column.key === null ? (
+            <span key={column.labelKey} className={column.className}>{t(column.labelKey)}</span>
+          ) : (
             <button
               key={column.key}
               type="button"
-              onClick={() => toggleSort(column.key)}
+              onClick={() => toggleSort(column.key as PaperLibrarySortKey)}
               className={`flex items-center gap-0.5 text-left transition hover:text-ds-ink ${column.className}`}
             >
               {t(column.labelKey)}
@@ -345,6 +462,7 @@ export function PaperLibraryView(): ReactElement {
               ) : null}
             </button>
           ))}
+          <span className="w-6 shrink-0" aria-hidden />
         </div>
 
         {entriesLoading && visible.length === 0 ? (
@@ -372,11 +490,23 @@ export function PaperLibraryView(): ReactElement {
               selected={selection.has(entry.unitDir)}
               onToggle={() => toggleSelected(entry.unitDir)}
               onOpen={() => void openLibraryEntry(entry)}
+              onMenu={(x, y) => setMenu({ entry, x, y })}
               t={t}
             />
           ))
         )}
       </div>
+      {menu ? (
+        <PaperRowMenu
+          entry={menu.entry}
+          x={menu.x}
+          y={menu.y}
+          onAction={(action) => void runRowAction(menu.entry, action)}
+          onClose={() => setMenu(null)}
+        />
+      ) : null}
+      {editEntry ? <PaperMetaEditDialog entry={editEntry} onClose={() => setEditEntry(null)} /> : null}
+      {moveUnits ? <PaperMoveGroupDialog unitDirs={moveUnits} onClose={() => setMoveUnits(null)} /> : null}
     </div>
   )
 }
@@ -386,12 +516,14 @@ function LibraryRow({
   selected,
   onToggle,
   onOpen,
+  onMenu,
   t
 }: {
   entry: PaperLibraryEntry
   selected: boolean
   onToggle: () => void
   onOpen: () => void
+  onMenu: (x: number, y: number) => void
   t: (key: string, opts?: Record<string, unknown>) => string
 }): ReactElement {
   const meta = entry.meta
@@ -400,6 +532,10 @@ function LibraryRow({
       role="button"
       tabIndex={0}
       onClick={onOpen}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        onMenu(event.clientX, event.clientY)
+      }}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
@@ -420,7 +556,7 @@ function LibraryRow({
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-[13px] font-medium text-ds-ink">{meta.title}</span>
+          <PaperTitleText title={meta.title} className="truncate text-[13px] font-medium text-ds-ink" />
           {!entry.hasPdf ? (
             <span
               title={t('writePaperMissingPdf')}
@@ -448,10 +584,10 @@ function LibraryRow({
         </div>
       </div>
       <span className="w-14 shrink-0 text-[12px] text-ds-muted">{meta.year ?? ''}</span>
-      <span className="w-40 shrink-0 truncate text-[12px] text-ds-muted" title={meta.venue ?? ''}>
+      <span className="w-36 shrink-0 truncate text-[12px] text-ds-muted" title={meta.venue ?? ''}>
         {meta.venue ?? ''}
       </span>
-      <span className="w-24 shrink-0">
+      <span className="w-20 shrink-0">
         <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${
           (meta.status ?? 'unread') === 'read'
             ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
@@ -462,9 +598,41 @@ function LibraryRow({
           {t(statusLabelKey(meta.status))}
         </span>
       </span>
-      <span className="w-28 shrink-0 text-[11.5px] text-ds-faint">
+      <span className="w-16 shrink-0">
+        <ReadingProgress lastPage={entry.lastPage} pageCount={entry.pageCount} />
+      </span>
+      <span className="w-24 shrink-0 text-[11.5px] text-ds-faint">
+        {formatOpenedAt(meta.importedAt)}
+      </span>
+      <span className="w-24 shrink-0 text-[11.5px] text-ds-faint">
         {formatOpenedAt(entry.lastOpenedAt)}
       </span>
+      <button
+        type="button"
+        aria-label={t('writePaperMoreActions')}
+        title={t('writePaperMoreActions')}
+        onClick={(event) => {
+          event.stopPropagation()
+          const rect = event.currentTarget.getBoundingClientRect()
+          onMenu(rect.left, rect.bottom + 4)
+        }}
+        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+      >
+        <MoreHorizontal className="h-3.5 w-3.5" strokeWidth={1.9} />
+      </button>
     </div>
+  )
+}
+
+/** Local reading position as a thin bar (last page / page count). */
+function ReadingProgress({ lastPage, pageCount }: { lastPage?: number; pageCount?: number }): ReactElement | null {
+  if (!lastPage || !pageCount) return null
+  const ratio = Math.max(0, Math.min(1, lastPage / pageCount))
+  return (
+    <span className="flex items-center gap-1" title={`${lastPage}/${pageCount}`}>
+      <span className="h-1 w-9 overflow-hidden rounded-full bg-ds-border-muted">
+        <span className="block h-full rounded-full bg-accent/70" style={{ width: `${Math.round(ratio * 100)}%` }} />
+      </span>
+    </span>
   )
 }

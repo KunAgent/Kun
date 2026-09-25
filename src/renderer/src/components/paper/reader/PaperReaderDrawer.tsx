@@ -7,8 +7,9 @@ import { usePaperMarksStore } from '../../../paper/paper-marks-store'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { openLibraryEntry } from '../../../paper/paper-library-actions'
 import { newPaperRequestId, usePaperStore } from '../../../write/paper/paper-store'
+import { PaperFiguresPane } from './PaperFiguresPane'
 
-type DrawerTab = 'outline' | 'annotations' | 'references' | 'citations'
+type DrawerTab = 'outline' | 'figures' | 'annotations' | 'references' | 'citations'
 
 /**
  * Reader side drawer (plan §6.4): table of contents, annotation list, and
@@ -33,7 +34,7 @@ export function PaperReaderDrawer({
   return (
     <aside className="flex w-[260px] shrink-0 flex-col border-r border-ds-border-muted bg-ds-card/60">
       <div className="flex shrink-0 gap-1 border-b border-ds-border-muted p-1.5">
-        {(['outline', 'annotations', 'references', 'citations'] as const).map((key) => (
+        {(['outline', 'figures', 'annotations', 'references', 'citations'] as const).map((key) => (
           <button
             key={key}
             type="button"
@@ -49,6 +50,13 @@ export function PaperReaderDrawer({
       <div className="min-h-0 flex-1 overflow-auto p-2">
         {tab === 'outline' ? (
           <OutlinePane pdfDocument={pdfDocument} onJumpToPage={onJumpToPage} t={t} />
+        ) : tab === 'figures' ? (
+          <PaperFiguresPane
+            workspaceRoot={workspaceRoot}
+            unitDir={unitDir}
+            onJumpToPage={onJumpToPage}
+            t={t}
+          />
         ) : tab === 'annotations' ? (
           <AnnotationsPane onJumpToPage={onJumpToPage} onDelete={onDeleteMark} t={t} />
         ) : (

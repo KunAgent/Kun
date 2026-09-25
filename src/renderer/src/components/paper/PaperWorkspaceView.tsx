@@ -103,7 +103,7 @@ export function PaperWorkspaceView({
             <PaperLibraryOnboarding />
           ) : (
             <>
-              {view === 'library' ? <PaperLibraryView /> : null}
+              {view === 'library' ? <PaperLibraryView onSubmitPrompt={onSubmitPrompt} /> : null}
               {view === 'discover' ? <PaperDiscoverView /> : null}
             </>
           )}
