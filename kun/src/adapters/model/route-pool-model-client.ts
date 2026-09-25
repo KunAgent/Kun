@@ -515,8 +515,9 @@ function withRouteFailure(failure: ModelFailureMetadata | undefined, route: Mode
 
 
 const FAILOVER_GROUP_STRATEGY: Record<ModelFailoverStrategy, ModelRoutePoolConfig['strategy']> = {
-  // smart = quota- and latency-aware adaptive selection; subscription
-  // accounts therefore only rotate after the active one degrades.
+  // Nominal strategy for the synthesized pool only — member order is already
+  // decided by orderGroupMembers before this pool is built, so this value
+  // never drives adaptive selection at runtime.
   smart: 'adaptive',
   order: 'priority',
   rotate: 'round-robin',
