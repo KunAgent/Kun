@@ -50,7 +50,8 @@ import {
 } from '../provider-connection'
 import {
   importExternalProvider,
-  scanExternalProviders
+  scanExternalProviders,
+  withRegistryCredentials as withRegistryCredentialFingerprints
 } from '../provider-external-import'
 import {
   commitProviderImportLink,
@@ -198,7 +199,9 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
   // the source file itself.
   ipcMain.handle('provider:external-scan', async (event) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
-    return scanExternalProviders(await store.load())
+    const settings = await store.load()
+    return withRegistryCredentialFingerprints(runtimeRequest, (credentialFingerprints) =>
+      scanExternalProviders(settings, { credentialFingerprints }))
   })
 
   const appendProviderProfile = async (profile: ModelProviderProfileV1): Promise<void> => {
