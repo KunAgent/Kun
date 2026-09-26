@@ -6,52 +6,20 @@
 import { historyReferenceInstructions } from '../../prompt/history-reference-context.js'
 import {
   AgentSdkCredentialUnavailableError,
-  AgentSdkRuntime,
   agentSdkCapabilities,
   type SdkRuntimeDeps,
   type SdkTurnContext
 } from './agent-sdk-runtime.js'
-import type { SdkStreamResourceLimits } from './sdk-event-mapper.js'
-import {
-  normalizeClaudeOAuthToken,
-  resolveSdkModel,
-  type ToolApprovalDecision
-} from './sdk-options-builder.js'
-import {
-  selectBridgeableTools,
-  type BridgeableTool,
-  type KunToolResult
-} from './sdk-tool-bridge.js'
-import type { SdkApi } from './sdk-protocol.js'
+import { normalizeClaudeOAuthToken, resolveSdkModel } from './sdk-options-builder.js'
 import { subscriptionBillingKind } from '../../shared/subscription-billing.js'
-import type { RuntimeEventRecorder } from '../../services/runtime-event-recorder.js'
-import type { LlmDebugSink } from '../../services/llm-debug-recorder.js'
 import type { TurnService } from '../../services/turn-service.js'
-import type { TurnRunOutcome } from '../../loop/turn-execution-types.js'
-import type { SessionStore } from '../../ports/session-store.js'
-import type { ThreadStore } from '../../ports/thread-store.js'
-import type { CapabilityRegistry } from '../../adapters/tool/capability-registry.js'
-import type { ToolHost, ToolHostContext } from '../../ports/tool-host.js'
-import { applyRoomToolPolicy, mergeRoomDeniedIds } from '../../loop/room-turn-policy.js'
-import {
-  DEFAULT_APPROVAL_REVIEWER,
-  DEFAULT_SANDBOX_MODE,
-  type ApprovalPolicy,
-  type ApprovalReviewer,
-  type SandboxMode
-} from '../../contracts/policy.js'
-import type { ServeProviderConfig } from '../../config/kun-config.js'
-import type { AttachmentStore } from '../../attachments/attachment-store.js'
-import type { SkillRuntime } from '../../skills/skill-runtime.js'
-import type { InstructionRuntime } from '../../instructions/instruction-runtime.js'
-import type { MemoryStore } from '../../memory/memory-store.js'
+import { DEFAULT_APPROVAL_REVIEWER } from '../../contracts/policy.js'
 import { resolveMemoryTurnContext } from '../../memory/memory-turn-context.js'
 import { memoryInjectionMetadata } from '../../loop/model-step-preparation-memory.js'
 import { recordRetrieved } from '../../memory/memory-retrieval-feedback.js'
 import {
   PLAN_MODE_INSTRUCTION,
-  todoContinuationInstruction,
-  isStalePlanContext
+  todoContinuationInstruction
 } from '../../loop/agent-loop.js'
 import {
   filterGoalContextsForGoalKey,
@@ -59,39 +27,17 @@ import {
 } from '../../loop/continuation-instructions.js'
 import {
   DESIGN_MODE_INSTRUCTION,
-  SVG_ARTIFACT_ALLOWED_TOOL_NAMES,
   SVG_ARTIFACT_MODE_INSTRUCTION
 } from '../../loop/design-mode.js'
-import type { GuiDesignArtifactContext, GuiPlanContext } from '../../ports/tool-host.js'
-import type { ThreadRecord } from '../../contracts/threads.js'
-import type {
-  UserInputGate,
-  UserInputRequest,
-  UserInputResolution
-} from '../../ports/user-input-gate.js'
-import { goalContextTexts, type TurnItem } from '../../contracts/items.js'
-import type { ApprovalGate } from '../../ports/approval-gate.js'
-import {
-  createApprovalActionEnvelope,
-  createApprovalRequest,
-  safeApprovalActionSummary,
-  type ApprovalRequest,
-  type ApprovalResolution
-} from '../../domain/approval.js'
-import type { ApprovalReviewPort } from '../../ports/approval-review.js'
 import type { ActingTurnModelRoute } from '../../contracts/turns.js'
-import { makeUserInputItem } from '../../domain/item.js'
-import { awaitAbortableGate } from '../../services/interactive-gate.js'
+import { goalContextTexts } from '../../contracts/items.js'
 import {
   buildHistoryTranscript,
   DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
 } from './sdk-context-assembler.js'
 import { resolveTurnHandoff, type TurnHandoff } from '../../handoff/turn-handoff.js'
-import { shellSpawnEnv } from '../../adapters/tool/builtin-tool-utils.js'
-import type { TurnLimitsConfig } from '../../loop/turn-limits.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
 import { mkdir } from 'node:fs/promises'
-import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
 import { buildAdditionalWorkspacesInstruction, buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.js'
 import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
 import {
@@ -99,16 +45,8 @@ import {
   delegatedCredentialIdentity,
   delegatedRouteKey,
   priorItemsForDelegatedTurn,
-  type DelegatedSessionCoordinator,
   type DelegatedSessionPreparation
 } from '../delegated-session-binding.js'
-import {
-  delegatedGraphCompletionCheck,
-  delegatedGraphAllowedToolNames,
-  delegatedGraphTurnPolicy,
-  intersectDelegatedToolNames,
-  parkDelegatedGraphTurnAfterRecovery
-} from '../delegated-graph-turn-policy.js'
 
 const CLAUDE_KUN_TOOL_INSTRUCTION = [
   'Kun-managed capabilities are available through the mcp__kun__ tools.',
@@ -116,21 +54,14 @@ const CLAUDE_KUN_TOOL_INSTRUCTION = [
   'Their execution remains governed by Kun ToolHost approval and sandbox policy.'
 ].join(' ')
 
-const SDK_ON_REQUEST_AUTO_ALLOWED_TOOLS = new Set([
-  'Read',
-  'Glob',
-  'Grep',
-  'TodoWrite'
-])
 import type { AgentSdkRuntimeFactoryDeps } from './agent-sdk-runtime-factory-contracts.js'
-import { resolveTurnPlanContext } from './agent-sdk-runtime-factory-plan.js'
 import type { AgentSdkFactoryContext } from './agent-sdk-runtime-factory-context.js'
 
 export function createAgentSdkTurnRuntimeDeps(
   deps: AgentSdkRuntimeFactoryDeps,
   context: AgentSdkFactoryContext
 ): Pick<SdkRuntimeDeps, 'handlesProvider' | 'loadTurnContext'> {
-  const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, activeSkillIdsByTurn, skillPromptByTurn, handoffBriefDigestsByTurn, skillTurnKey, resolveActiveSkillIds, nowIso, makeAwaitUserInput, makeAwaitApproval, toolContext, resolveImages } = context
+  const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, handoffBriefDigestsByTurn, skillTurnKey, nowIso, toolBridge, resolveImages } = context
   return {
     handlesProvider: (providerId) => {
       if (providerId && deps.agentSdkProviderIds.has(providerId)) return true
@@ -219,40 +150,15 @@ export function createAgentSdkTurnRuntimeDeps(
         if (!rawToken.trim()) throw new AgentSdkCredentialUnavailableError()
       }
       const token = normalizeClaudeOAuthToken(rawToken)
-      // Resolve skills before listing bridgeable tools so the SDK sees the
-      // same per-turn catalog as the native Kun loop.
-      const roomSkillsDisabled = thread.roomContext?.skillsEnabled === false
-      const blockedSkillIds = mergeRoomDeniedIds(
-        deps.toolContextBoundary?.blockedSkillIds,
-        thread.roomContext?.blockedSkillIds
-      )
-      const allowedSkillIds = roomSkillsDisabled ? [] : deps.toolContextBoundary?.allowedSkillIds
-      const skillResolution = !roomSkillsDisabled && deps.skillRuntime
-        ? await deps.skillRuntime.resolveTurn({
-            prompt: userText,
-            workspace: thread.workspace,
-            threadId,
-            turnId,
-            ...(allowedSkillIds ? { allowedSkillIds } : {}),
-            ...(blockedSkillIds.length ? { blockedSkillIds } : {})
-          })
-        : undefined
-      const activeSkillIds = skillResolution?.activeSkillIds ?? []
-      const turnKey = skillTurnKey(threadId, turnId)
-      activeSkillIdsByTurn.set(turnKey, activeSkillIds)
-      skillPromptByTurn.set(turnKey, userText)
-      // Plan turns expose create_plan (and narrow kun tools to the plan-allowed
-      // set); resolve before listing tools so the bridge sees create_plan.
-      // awaitUserInput presence is what advertises `user_input` (the signal here
-      // is only for advertisement; the real per-call signal is set on execution).
-      const dedicatedSvgTurn = turn.guiDesignArtifact?.kind === 'svg'
-      const clientSurface = resolveTurnClientSurface(turn)
-      const awaitUserInput = turn.disableUserInput === true
-        ? undefined
-        : makeAwaitUserInput(threadId, turnId, new AbortController().signal)
-      const plan = dedicatedSvgTurn
-        ? { planMode: false as const }
-        : resolveTurnPlanContext(thread, turnId)
+      // Resolve the shared turn scope (skills, plan, graph, surface) before
+      // listing bridgeable tools so the SDK sees the same per-turn catalog as
+      // the native Kun loop.
+      const scope = await toolBridge.resolveTurnScope(threadId, turnId, {
+        skillPrompt: userText,
+        actingModelRoute
+      })
+      if (!scope) return null
+      const { plan, graphPolicy, skillResolution, clientSurface, activeSkillIds } = scope
       if (!plan.planMode && thread.goal?.status === 'active') {
         await deps.turns.ensureGoalContext(threadId, turnId, signal)
         // Goal context is persisted by TurnService outside the public thread
@@ -272,85 +178,10 @@ export function createAgentSdkTurnRuntimeDeps(
         items
       })
       items = [...turnDynamicContext.historyItems]
-      const graphPolicy = delegatedGraphTurnPolicy(turn)
-      // An Agent SDK query pins its in-process MCP schemas at startup and
-      // cannot add tools after `load_skill` returns. Pre-bridge schemas gated
-      // by skills visible in this workspace; executeKunTool still re-resolves
-      // the real active ids for every call, so schema visibility is not
-      // execution authority.
-      const availableSkillIds = !roomSkillsDisabled && typeof deps.skillRuntime?.availableSkillIdsForWorkspace === 'function'
-        ? await deps.skillRuntime.availableSkillIdsForWorkspace(
-            thread.workspace,
-            blockedSkillIds,
-            allowedSkillIds
-          )
-        : activeSkillIds
-      const listingOptions = {
-        additionalWorkspaces: thread.additionalWorkspaces,
-        ...plan,
-        ...(turn?.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
-        ...(turn?.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
-        ...(turn?.guiDesignMode ? { guiDesignMode: true } : {}),
-        ...(turn?.guiDesignArtifact ? { guiDesignArtifact: turn.guiDesignArtifact } : {}),
-        activeSkillIds: [...new Set([...activeSkillIds, ...availableSkillIds])],
-        clientSurface,
-        sandboxMode,
-        approvalPolicy,
-        approvalReviewer,
-        actingModelRoute,
-        ...(turn.orchestration ? { orchestration: turn.orchestration } : {}),
-        ...(turn?.harnessId ? { harnessId: turn.harnessId } : {}),
-        ...(thread.workspaceMode ? { workspaceMode: thread.workspaceMode } : {}),
-        ...(awaitUserInput ? { awaitUserInput } : {})
-      }
-      const discoveryContext = toolContext(threadId, turnId, thread.workspace, {
-        ...listingOptions,
-        ...(!graphPolicy && turn.guiDesignArtifact?.kind === 'svg'
-          ? { allowedToolNames: SVG_ARTIFACT_ALLOWED_TOOL_NAMES }
-          : {})
-      })
-      if (deps.toolHost) {
-        // Activate turn-scoped extension contributions before taking the
-        // canonical registry snapshot used by the SDK MCP bridge.
-        await deps.toolHost.listTools(discoveryContext)
-      }
-      const graphAllowedToolNames = graphPolicy
-        ? delegatedGraphAllowedToolNames(
-            deps.registry.listTools(discoveryContext),
-            graphPolicy.phase
-          )
-        : undefined
-      const bridgeListingContext = toolContext(threadId, turnId, thread.workspace, {
-        ...listingOptions,
-        ...(intersectDelegatedToolNames(
-          !graphPolicy && turn.guiDesignArtifact?.kind === 'svg'
-            ? SVG_ARTIFACT_ALLOWED_TOOL_NAMES
-            : undefined,
-          graphAllowedToolNames
-        )
-          ? {
-              allowedToolNames: intersectDelegatedToolNames(
-                !graphPolicy && turn.guiDesignArtifact?.kind === 'svg'
-                  ? SVG_ARTIFACT_ALLOWED_TOOL_NAMES
-                  : undefined,
-                graphAllowedToolNames
-              )
-            }
-          : {})
-      })
-      const bridgeableTools: BridgeableTool[] = deps.registry.listTools(
-        thread.roomContext ? applyRoomToolPolicy(bridgeListingContext, thread) : bridgeListingContext
-      ).map((spec) => ({
-        name: spec.name,
-        description: spec.description,
-        inputSchema: spec.inputSchema,
-        providerId: spec.providerId,
-        providerKind: spec.providerKind
-      }))
-      const bridgedTools = selectBridgeableTools(
-        bridgeableTools,
-        graphPolicy || thread.roomContext || plan.planMode || managedPptScope ? { overlap: new Set() } : undefined
-      )
+      // The bridged catalog comes from the shared tool bridge host: same
+      // capability snapshot, plan context, client surface, and overlap policy
+      // as the native loop (docs/ade/05 §3.2).
+      const bridgedTools = await toolBridge.listTools(threadId, turnId, { scope })
 
       // A plan turn suppresses goal/todo continuation and injects the plan-mode
       // instruction telling the model to call create_plan (now advertised above).
@@ -547,7 +378,7 @@ export function createAgentSdkTurnRuntimeDeps(
           : {}),
         oauthToken: token || undefined,
         ...(images.length ? { images } : {}),
-        bridgeableTools,
+        bridgeableTools: bridgedTools,
         ...([...goalContextTexts(items), ...turnDynamicContext.privateValues].length
           ? {
               redactedRequestValues: [

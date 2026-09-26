@@ -102,18 +102,6 @@ import {
   parkDelegatedGraphTurnAfterRecovery
 } from '../delegated-graph-turn-policy.js'
 
-const CLAUDE_KUN_TOOL_INSTRUCTION = [
-  'Kun-managed capabilities are available through the mcp__kun__ tools.',
-  'Use these tools for Kun capabilities such as MCP, extensions, skills, memory, media, GUI input, and delegation.',
-  'Their execution remains governed by Kun ToolHost approval and sandbox policy.'
-].join(' ')
-
-const SDK_ON_REQUEST_AUTO_ALLOWED_TOOLS = new Set([
-  'Read',
-  'Glob',
-  'Grep',
-  'TodoWrite'
-])
 import type { AgentSdkRuntimeFactoryDeps } from './agent-sdk-runtime-factory-contracts.js'
 import type { AgentSdkFactoryContext } from './agent-sdk-runtime-factory-context.js'
 
@@ -125,7 +113,7 @@ export function createAgentSdkLifecycleRuntimeDeps(
   SdkRuntimeDeps,
   'handlesProvider' | 'loadTurnContext' | 'executeKunTool' | 'decideToolApproval'
 > {
-  const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, activeSkillIdsByTurn, skillPromptByTurn, handoffBriefDigestsByTurn, skillTurnKey, resolveActiveSkillIds, nowIso, makeAwaitUserInput, makeAwaitApproval, toolContext, resolveImages } = context
+  const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, handoffBriefDigestsByTurn, skillTurnKey, nowIso, toolBridge, resolveImages } = context
   return {
     async recordEvent(draft): Promise<void> {
       await deps.events.record(draft)
@@ -203,8 +191,7 @@ export function createAgentSdkLifecycleRuntimeDeps(
         }
         return outcome
       } finally {
-        activeSkillIdsByTurn.delete(key)
-        skillPromptByTurn.delete(key)
+        toolBridge.releaseTurn(threadId, turnId)
         sessionIdsByTurn.delete(key)
         sessionPreparationsByTurn.delete(key)
         sessionGoalContextKeysByTurn.delete(key)
