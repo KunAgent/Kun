@@ -103,19 +103,6 @@ import {
   parkDelegatedGraphTurnAfterRecovery
 } from '../delegated-graph-turn-policy.js'
 
-const CLAUDE_KUN_TOOL_INSTRUCTION = [
-  'Kun-managed capabilities are available through the mcp__kun__ tools.',
-  'Use these tools for Kun capabilities such as MCP, extensions, skills, memory, media, GUI input, and delegation.',
-  'Their execution remains governed by Kun ToolHost approval and sandbox policy.'
-].join(' ')
-
-const SDK_ON_REQUEST_AUTO_ALLOWED_TOOLS = new Set([
-  'Read',
-  'Glob',
-  'Grep',
-  'TodoWrite'
-])
-
 export interface AgentSdkRuntimeFactoryDeps {
   registry: CapabilityRegistry
   /**

@@ -1,27 +1,17 @@
 import type { CapabilityRegistry } from '../../adapters/tool/capability-registry.js'
-import type { AttachmentStore } from '../../attachments/attachment-store.js'
 import type {
   ApprovalPolicy,
   ApprovalReviewer,
   SandboxMode
 } from '../../contracts/policy.js'
-import type { ActingTurnModelRoute } from '../../contracts/turns.js'
-import type { ThreadRecord } from '../../contracts/threads.js'
-import type { TurnItem } from '../../contracts/items.js'
-import { makeUserInputItem } from '../../domain/item.js'
-import type { ApprovalRequest } from '../../domain/approval.js'
 import type { InstructionRuntime } from '../../instructions/instruction-runtime.js'
 import { historyReferenceInstructions } from '../../prompt/history-reference-context.js'
 import {
   DESIGN_MODE_INSTRUCTION,
-  SVG_ARTIFACT_ALLOWED_TOOL_NAMES,
   SVG_ARTIFACT_MODE_INSTRUCTION
 } from '../../loop/design-mode.js'
-import { applyRoomToolPolicy, mergeRoomDeniedIds } from '../../loop/room-turn-policy.js'
-import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
 import {
   PLAN_MODE_INSTRUCTION,
-  isStalePlanContext,
   todoContinuationInstruction
 } from '../../loop/agent-loop.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
@@ -33,41 +23,22 @@ import {
 } from '../../memory/memory-retrieval-feedback.js'
 import type { ApprovalGate } from '../../ports/approval-gate.js'
 import type { ApprovalReviewPort } from '../../ports/approval-review.js'
-import type {
-  GuiPlanContext,
-  ToolHost,
-  ToolHostContext
-} from '../../ports/tool-host.js'
-import type {
-  UserInputGate,
-  UserInputRequest,
-  UserInputResolution
-} from '../../ports/user-input-gate.js'
-import {
-  armUserInputTimeout,
-  awaitAbortableGate,
-  userInputRequestWithDeadline
-} from '../../services/interactive-gate.js'
-import { sessionEventExists } from '../../adapters/session-event-query.js'
+import type { ToolHost, ToolHostContext } from '../../ports/tool-host.js'
+import type { UserInputGate } from '../../ports/user-input-gate.js'
 import type { SkillRuntime } from '../../skills/skill-runtime.js'
-import {
-  DEFAULT_APPROVAL_REVIEWER,
-  DEFAULT_SANDBOX_MODE
-} from '../../contracts/policy.js'
+import type { CanvasReceiptRegistry } from '../../services/canvas-receipt-registry.js'
 import {
   CursorSdkRuntime,
   type CursorSdkRuntimeDeps
 } from './cursor-sdk-runtime.js'
 import {
   buildCursorCustomTools,
-  selectCursorBridgeTools
+  CURSOR_OVERLAP_TOOL_NAMES
 } from './cursor-sdk-tool-bridge.js'
+import { createKunToolBridgeHost } from '../../harness/kun-tool-bridge-host.js'
 import {
-  delegatedGraphAllowedToolNames,
   delegatedGraphPlanCanRetry,
-  delegatedGraphPlanWasCommitted,
-  delegatedGraphTurnPolicy,
-  intersectDelegatedToolNames
+  delegatedGraphPlanWasCommitted
 } from '../delegated-graph-turn-policy.js'
 
 const CURSOR_KUN_TOOL_INSTRUCTION = [
@@ -92,6 +63,8 @@ export interface CursorSdkRuntimeFactoryDeps extends Omit<
   userInputGate?: UserInputGate
   approvalGate?: ApprovalGate
   approvalReview?: ApprovalReviewPort
+  /** Design-canvas receipt registry shared with the native loop. */
+  receipts?: CanvasReceiptRegistry
   nowIso?: () => string
   toolContextBoundary?: Pick<
     ToolHostContext,
@@ -129,336 +102,52 @@ export function createCursorSdkRuntime(
     approvalReview,
     nowIso: configuredNowIso,
     toolContextBoundary,
+    receipts,
     ...runtimeDeps
   } = deps
-  const activeSkillIdsByTurn = new Map<string, readonly string[]>()
-  const turnKey = (threadId: string, turnId: string): string => `${threadId}\u0000${turnId}`
   const nowIso = (): string => configuredNowIso?.() ?? new Date().toISOString()
 
-  const resolveActiveSkillIds = async (
-    thread: ThreadRecord,
-    turn: ThreadRecord['turns'][number],
-    prompt: string
-  ): Promise<readonly string[]> => {
-    if (!skillRuntime) return activeSkillIdsByTurn.get(turnKey(thread.id, turn.id)) ?? []
-    const resolution = await skillRuntime.resolveTurn({
-      prompt,
-      workspace: thread.workspace,
-      threadId: thread.id,
-      turnId: turn.id,
-      ...(toolContextBoundary?.allowedSkillIds
-        ? { allowedSkillIds: toolContextBoundary.allowedSkillIds }
-        : {}),
-      ...(toolContextBoundary?.blockedSkillIds
-        ? { blockedSkillIds: toolContextBoundary.blockedSkillIds }
-        : {})
-    })
-    activeSkillIdsByTurn.set(turnKey(thread.id, turn.id), resolution.activeSkillIds)
-    return resolution.activeSkillIds
-  }
-
-  const makeAwaitUserInput = (
-    threadId: string,
-    turnId: string,
-    signal: AbortSignal
-  ): ToolHostContext['awaitUserInput'] => {
-    if (!userInputGate) return undefined
-    return async (input): Promise<UserInputResolution> => {
-      const request: UserInputRequest = {
-        id: input.id,
-        threadId,
-        turnId,
-        itemId: input.itemId,
-        prompt: input.prompt,
-        questions: input.questions,
-        ...(input.timeoutSeconds !== undefined ? { timeoutSeconds: input.timeoutSeconds } : {})
-      }
-      const pending = userInputGate.request(userInputRequestWithDeadline(request))
-      const item = makeUserInputItem({
-        id: input.itemId,
-        threadId,
-        turnId,
-        inputId: input.id,
-        prompt: input.prompt,
-        questions: input.questions,
-        ...(input.timeoutSeconds !== undefined ? { timeoutSeconds: input.timeoutSeconds } : {})
-      })
-      try {
-        await deps.turns.applyItem(threadId, item)
-        await deps.events.record({
-          kind: 'user_input_requested',
-          threadId,
-          turnId,
-          itemId: item.id,
-          inputId: input.id,
-          status: 'pending',
-          prompt: input.prompt,
-          questions: input.questions,
-          ...(input.timeoutSeconds !== undefined ? { timeoutSeconds: input.timeoutSeconds } : {})
-        })
-      } catch (error) {
-        userInputGate.resolve(input.id, { status: 'cancelled' })
-        void pending.catch(() => undefined)
-        throw error
-      }
-      const disarmTimeout = armUserInputTimeout(
-        (resolution) => userInputGate.resolve(input.id, resolution),
-        input.id,
-        input.timeoutSeconds
-      )
-      let resolution: UserInputResolution
-      try {
-        resolution = await awaitAbortableGate(
-          pending,
-          signal,
-          () => { userInputGate.resolve(input.id, { status: 'cancelled' }) },
-          'cancelled while awaiting Cursor SDK tool input'
-        )
-      } catch {
-        resolution = { status: 'cancelled' }
-      } finally {
-        disarmTimeout()
-      }
-      await deps.turns.updateItem(threadId, item.id, {
-        status: resolution.status,
-        finishedAt: nowIso(),
-        ...(resolution.status === 'submitted' ? { answers: resolution.answers } : {})
-      } as Partial<TurnItem>)
-      const alreadyRecorded = await sessionEventExists(
-        deps.sessionStore,
-        threadId,
-        (event) => event.kind === 'user_input_resolved' && event.inputId === input.id
-      )
-      if (!alreadyRecorded) {
-        await deps.events.record({
-          kind: 'user_input_resolved',
-          threadId,
-          turnId,
-          itemId: item.id,
-          inputId: input.id,
-          status: resolution.status,
-          prompt: input.prompt,
-          questions: input.questions,
-          ...(resolution.status === 'submitted' ? { answers: resolution.answers } : {})
-        })
-      }
-      return resolution
-    }
-  }
-
-  const makeAwaitApproval = (
-    approvalPolicy: ApprovalPolicy,
-    sandboxMode: SandboxMode | undefined,
-    approvalReviewer: ApprovalReviewer,
-    actingModelRoute: ActingTurnModelRoute,
-    intent: string,
-    signal: AbortSignal
-  ): ToolHostContext['awaitApproval'] => async (approval: ApprovalRequest) => {
-    const requiresUserDecision =
-      approval.action?.requiresUserDecision === true ||
-      approval.action?.reviewerRequirement === 'user'
-    if (!requiresUserDecision && approvalPolicy === 'auto' && sandboxMode === 'danger-full-access') return 'allow'
-    if (approvalReviewer === 'agent' && !requiresUserDecision) {
-      if (!approvalReview) {
-        return {
-          decision: 'deny',
-          reviewer: 'agent',
-          reason: 'Automatic approval review is unavailable.',
-          reviewStatus: 'failed-closed'
-        }
-      }
-      return approvalReview.review({
-        approval,
-        route: actingModelRoute,
-        intent,
-        signal
-      })
-    }
-    if (approvalPolicy === 'never' || !approvalGate) return 'deny'
-    const pending = approvalGate.request(approval)
-    try {
-      await deps.events.record({
-        kind: 'approval_requested',
-        threadId: approval.threadId,
-        turnId: approval.turnId,
-        approvalId: approval.id,
-        toolName: approval.toolName,
-        status: 'pending',
-        approvalPolicy,
-        approvalReviewer: 'user',
-        sandboxMode: sandboxMode ?? DEFAULT_SANDBOX_MODE,
-        summary: approval.summary,
-        ...(approval.action ? { action: approval.action } : {})
-      })
-      return await awaitAbortableGate(
-        pending,
-        signal,
-        () => { approvalGate.expire(approval.id, 'Cursor SDK turn aborted while awaiting approval') },
-        'cancelled while awaiting Cursor SDK tool approval'
-      )
-    } catch {
-      approvalGate.expire(approval.id, 'Cursor SDK tool approval failed')
-      void pending.catch(() => undefined)
-      return 'deny'
-    }
-  }
-
-  const toolContext = (input: {
-    thread: ThreadRecord
-    turn: ThreadRecord['turns'][number]
-    signal: AbortSignal
-    activeSkillIds: readonly string[]
-    actingModelRoute: ActingTurnModelRoute
-    approvalReviewer: ApprovalReviewer
-    approvalPolicy: ApprovalPolicy
-    sandboxMode: SandboxMode
-    listing?: boolean
-    allowedToolNames?: readonly string[]
-  }): ToolHostContext => {
-    const plan = resolveCursorPlanContext(input.thread, input.turn.id)
-    const dedicatedSvgTurn =
-      input.turn.orchestration !== 'graph' &&
-      input.turn.guiDesignArtifact?.kind === 'svg'
-    const allowedToolNames = intersectDelegatedToolNames(
-      toolContextBoundary?.allowedToolNames,
-      intersectDelegatedToolNames(
-        dedicatedSvgTurn ? SVG_ARTIFACT_ALLOWED_TOOL_NAMES : undefined,
-        input.allowedToolNames
-      )
-    )
-    const awaitUserInput = makeAwaitUserInput(
-      input.thread.id,
-      input.turn.id,
-      input.signal
-    )
-    const context: ToolHostContext = {
-      threadId: input.thread.id,
-      turnId: input.turn.id,
-      workspace: input.thread.workspace,
-      approvalPolicy: input.approvalPolicy,
-      approvalReviewer: input.approvalReviewer,
-      sandboxMode: input.sandboxMode,
-      actingModelRoute: input.actingModelRoute,
-      clientSurface: resolveTurnClientSurface(input.turn),
-      approvalIntent: input.turn.prompt,
-      abortSignal: input.signal,
-      ...toolContextBoundary,
-      ...(input.turn.orchestration ? { orchestration: input.turn.orchestration } : {}),
-      ...(input.turn.harnessId ? { harnessId: input.turn.harnessId } : {}),
-      ...(input.thread.workspaceMode ? { workspaceMode: input.thread.workspaceMode } : {}),
-      ...(plan.planMode ? { threadMode: 'plan' as const } : {}),
-      ...(plan.guiPlan ? { guiPlan: plan.guiPlan } : {}),
-      ...(input.turn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
-      ...(input.turn.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
-      ...(input.turn.guiDesignMode ? { guiDesignMode: true } : {}),
-      ...(input.turn.guiDesignArtifact
-        ? { guiDesignArtifact: input.turn.guiDesignArtifact }
-        : {}),
-      ...(input.thread.toolCatalogEpoch
-        ? { extensionToolCatalogEpoch: input.thread.toolCatalogEpoch }
-        : {}),
-      activeSkillIds: input.activeSkillIds,
-      ...(allowedToolNames ? { allowedToolNames } : {}),
-      ...(awaitUserInput ? { awaitUserInput } : {}),
-      awaitApproval: input.listing
-        ? async () => 'deny'
-        : makeAwaitApproval(
-            input.approvalPolicy,
-            input.sandboxMode,
-            input.approvalReviewer,
-            input.actingModelRoute,
-            input.turn.prompt,
-            input.signal
-          )
-    }
-    return input.thread.roomContext ? applyRoomToolPolicy(context, input.thread) : context
-  }
+  // Bridged Kun tool listing + execution runs through the shared
+  // transport-independent host (docs/ade/05 §3.2). Cursor keeps only the
+  // SDKCustomTool format conversion in cursor-sdk-tool-bridge.ts.
+  const toolBridge = createKunToolBridgeHost({
+    threadStore: deps.threadStore,
+    sessionStore: deps.sessionStore,
+    registry,
+    toolHost,
+    turns: deps.turns,
+    events: deps.events,
+    ids: deps.ids,
+    receipts,
+    userInputGate,
+    approvalGate,
+    approvalReview,
+    skillRuntime,
+    toolContextBoundary,
+    defaultApprovalPolicy,
+    defaultSandboxMode,
+    defaultApprovalReviewer,
+    enforceReadOnly: runtimeDeps.enforceReadOnly,
+    callIdPrefix: 'call_cursor_sdk',
+    nowIso
+  })
 
   const loadKunTurnContext: NonNullable<
     CursorSdkRuntimeDeps['loadKunTurnContext']
   > = async ({ threadId, turnId, userText, actingModelRoute, signal }) => {
-      const thread = await deps.threadStore.get(threadId)
-      const turn = thread?.turns.find((candidate) => candidate.id === turnId)
-      if (!thread || !turn) throw new Error('Cursor SDK Kun tool context is unavailable')
-      const approvalReviewer =
-        turn.approvalReviewer ??
-        thread.approvalReviewer ??
-        defaultApprovalReviewer ??
-        DEFAULT_APPROVAL_REVIEWER
-      const approvalPolicy = runtimeDeps.enforceReadOnly === true
-        ? 'never'
-        : turn.approvalPolicy ?? thread.approvalPolicy ?? defaultApprovalPolicy
-      const sandboxMode = runtimeDeps.enforceReadOnly === true
-        ? 'read-only'
-        : turn.sandboxMode ??
-          thread.sandboxMode ??
-          defaultSandboxMode ??
-          DEFAULT_SANDBOX_MODE
-
-      const roomSkillsDisabled = thread.roomContext?.skillsEnabled === false
-      const blockedSkillIds = mergeRoomDeniedIds(
-        toolContextBoundary?.blockedSkillIds,
-        thread.roomContext?.blockedSkillIds
-      )
-      const allowedSkillIds = roomSkillsDisabled ? [] : toolContextBoundary?.allowedSkillIds
-      const skillResolution = !roomSkillsDisabled && skillRuntime
-        ? await skillRuntime.resolveTurn({
-            prompt: userText,
-            workspace: thread.workspace,
-            threadId,
-            turnId,
-            ...(allowedSkillIds ? { allowedSkillIds } : {}),
-            ...(blockedSkillIds.length ? { blockedSkillIds } : {})
-          })
-        : undefined
-      const activeSkillIds = skillResolution?.activeSkillIds ?? []
-      activeSkillIdsByTurn.set(turnKey(threadId, turnId), activeSkillIds)
-      const availableSkillIds = !roomSkillsDisabled && typeof skillRuntime?.availableSkillIdsForWorkspace === 'function'
-        ? await skillRuntime.availableSkillIdsForWorkspace(
-            thread.workspace,
-            blockedSkillIds,
-            allowedSkillIds
-          )
-        : activeSkillIds
-      const listingSkillIds = [...new Set([...activeSkillIds, ...availableSkillIds])]
-      const graphPolicy = delegatedGraphTurnPolicy(turn)
-      const discoveryContext = toolContext({
-        thread,
-        turn,
-        signal,
-        activeSkillIds: listingSkillIds,
-        actingModelRoute,
-        approvalReviewer,
-        approvalPolicy,
-        sandboxMode,
-        listing: true
+      const scope = await toolBridge.resolveTurnScope(threadId, turnId, {
+        skillPrompt: userText,
+        actingModelRoute
       })
-      if (toolHost) {
-        // Run the host preparation hook first so turn-scoped extension
-        // contributions are registered before the canonical catalog snapshot.
-        await toolHost.listTools(discoveryContext)
-      }
-      const graphAllowedToolNames = graphPolicy
-        ? delegatedGraphAllowedToolNames(
-            registry.listTools(discoveryContext),
-            graphPolicy.phase
-          )
-        : undefined
-      const listingContext = toolContext({
-        thread,
-        turn,
-        signal,
-        activeSkillIds: listingSkillIds,
-        actingModelRoute,
-        approvalReviewer,
-        approvalPolicy,
-        sandboxMode,
-        listing: true,
-        ...(graphAllowedToolNames ? { allowedToolNames: graphAllowedToolNames } : {})
+      if (!scope) throw new Error('Cursor SDK Kun tool context is unavailable')
+      const { thread, turn, plan, graphPolicy, skillResolution, activeSkillIds } = scope
+      // The bridged catalog comes from the shared tool bridge host. Cursor
+      // keeps its native read/write/bash priority, so overlap exclusion stays
+      // pinned for Cursor even where the host would suppress it.
+      const tools = await toolBridge.listTools(threadId, turnId, {
+        scope,
+        overlap: CURSOR_OVERLAP_TOOL_NAMES
       })
-      const tools = toolHost
-        ? selectCursorBridgeTools(registry.listTools(listingContext))
-        : []
 
       const instructionResolution = instructionRuntime
         ? await instructionRuntime.resolveTurn({ workspace: thread.workspace })
@@ -485,7 +174,6 @@ export function createCursorSdkRuntime(
           directives: memoryContext.directives
         }))
       }
-      const plan = resolveCursorPlanContext(thread, turnId)
       if (!plan.planMode && thread.goal?.status === 'active') {
         await deps.turns.ensureGoalContext(threadId, turnId, signal)
       }
@@ -514,11 +202,6 @@ export function createCursorSdkRuntime(
       let graphPlanRetryAllowed = true
       const customTools = toolHost
         ? buildCursorCustomTools(tools, async ({ toolName, args, toolCallId }) => {
-            const latestThread = await deps.threadStore.get(threadId)
-            const latestTurn = latestThread?.turns.find((candidate) => candidate.id === turnId)
-            if (!latestThread || !latestTurn) {
-              return { output: 'Cursor SDK Kun tool context expired', isError: true }
-            }
             // Resolve the tool against the bridged catalog so provider and
             // tool-kind stay authoritative. An unknown name is a structured
             // error instead of a bypassed registry resolution.
@@ -531,76 +214,21 @@ export function createCursorSdkRuntime(
                 isError: true
               }
             }
-            const latestActiveSkillIds = await resolveActiveSkillIds(
-              latestThread,
-              latestTurn,
-              userText
-            )
-            const latestGraphPolicy = delegatedGraphTurnPolicy(latestTurn)
-            const discoveryExecutionContext = toolContext({
-              thread: latestThread,
-              turn: latestTurn,
-              signal,
-              activeSkillIds: latestActiveSkillIds,
-              actingModelRoute,
-              approvalReviewer,
-              approvalPolicy,
-              sandboxMode
+            const toolResult = await toolBridge.execute(threadId, turnId, {
+              toolName,
+              args,
+              ...(toolCallId?.trim() ? { callId: toolCallId.trim() } : {}),
+              ...(spec.providerId ? { providerId: spec.providerId } : {}),
+              ...(spec.toolKind ? { toolKind: spec.toolKind } : {}),
+              signal
             })
-            const latestGraphAllowedToolNames = latestGraphPolicy
-              ? delegatedGraphAllowedToolNames(
-                  registry.listTools(discoveryExecutionContext),
-                  latestGraphPolicy.phase
-                )
-              : undefined
-            const context = toolContext({
-              thread: latestThread,
-              turn: latestTurn,
-              signal,
-              activeSkillIds: latestActiveSkillIds,
-              actingModelRoute,
-              approvalReviewer,
-              approvalPolicy,
-              sandboxMode,
-              ...(latestGraphAllowedToolNames
-                ? { allowedToolNames: latestGraphAllowedToolNames }
-                : {})
-            })
-            try {
-              const result = await toolHost.execute({
-                callId: toolCallId?.trim() || deps.ids.next('call_cursor_sdk'),
-                toolName,
-                ...(spec.providerId ? { providerId: spec.providerId } : {}),
-                ...(spec.toolKind ? { toolKind: spec.toolKind } : {}),
-                arguments: args
-              }, context)
-              if (result.item.kind !== 'tool_result') {
-                return {
-                  output: `Kun tool ${toolName} returned an invalid result item`,
-                  isError: true
-                }
-              }
-              const toolResult = {
-                output: result.item.output,
-                isError: result.item.isError
-              }
-              if (
-                toolName === 'graph_define_plan' &&
-                delegatedGraphPlanWasCommitted(toolResult)
-              ) {
-                graphPlanCommitted = true
-                graphPlanRetryAllowed = false
-              } else if (toolName === 'graph_define_plan') {
-                graphPlanRetryAllowed =
-                  delegatedGraphPlanCanRetry(toolResult)
-              }
-              return toolResult
-            } catch (error) {
-              return {
-                output: error instanceof Error ? error.message : String(error),
-                isError: true
-              }
+            if (toolName === 'graph_define_plan' && delegatedGraphPlanWasCommitted(toolResult)) {
+              graphPlanCommitted = true
+              graphPlanRetryAllowed = false
+            } else if (toolName === 'graph_define_plan') {
+              graphPlanRetryAllowed = delegatedGraphPlanCanRetry(toolResult)
             }
+            return toolResult
           })
         : {}
 
@@ -630,17 +258,4 @@ export function createCursorSdkRuntime(
     ...runtimeDeps,
     ...(toolHost ? { loadKunTurnContext } : {})
   })
-}
-
-function resolveCursorPlanContext(
-  thread: ThreadRecord,
-  turnId: string
-): { planMode: boolean; guiPlan?: GuiPlanContext } {
-  const turn = thread.turns.find((entry) => entry.id === turnId)
-  const candidate = turn?.guiPlan ? ({ ...turn.guiPlan, turnId } as GuiPlanContext) : undefined
-  const guiPlan = candidate && !isStalePlanContext(candidate, thread.workspace)
-    ? candidate
-    : undefined
-  const planMode = (turn?.mode ?? thread.mode) === 'plan' || Boolean(guiPlan)
-  return { planMode, ...(guiPlan ? { guiPlan } : {}) }
 }

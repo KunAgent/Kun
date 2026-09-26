@@ -221,6 +221,7 @@ export async function createRuntimeAgentComposition(
     const cursorRuntimeDeps: CursorSdkRuntimeFactoryDeps = {
       registry: input.registry,
       toolHost,
+      receipts: canvasReceipts,
       providerConfigs,
       providerIds: new Set(cursorSdkProviderIdsForOptions(input.options)),
       defaultIsCursor: defaultIsCursorSdk,
