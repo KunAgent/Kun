@@ -1,5 +1,4 @@
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
-import type { MemoryRecord } from '../contracts/memory.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
 import type { ActingTurnModelRoute } from '../contracts/turns.js'
@@ -11,8 +10,10 @@ import {
   DEFAULT_SANDBOX_MODE
 } from '../contracts/policy.js'
 import type { InstructionRuntime, InstructionTurnResolution } from '../instructions/instruction-runtime.js'
-import type { MemoryStore } from '../memory/memory-store.js'
-import { DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT } from '../memory/memory-retrieval.js'
+import {
+  resolveMemoryTurnContext,
+  type MemoryTurnStore
+} from '../memory/memory-turn-context.js'
 import type { GuiPlanContext, PptWorkflowScope, ToolHost, ToolHostContext } from '../ports/tool-host.js'
 import type { SkillRuntime, SkillTurnResolution } from '../skills/skill-runtime.js'
 import { SVG_ARTIFACT_ALLOWED_TOOL_NAMES } from './design-mode.js'
@@ -35,6 +36,7 @@ import type {
   ResolvedTurnAttachments
 } from './turn-execution-types.js'
 import { collectTurnAttachmentIds } from './turn-steering-attachments.js'
+import { applyRoomToolPolicy, mergeRoomDeniedIds } from './room-turn-policy.js'
 
 const EMPTY_SKILL_RESOLUTION: SkillTurnResolution = {
   activeSkillIds: [],
@@ -81,13 +83,14 @@ export type TurnContextResolverDeps = {
   }) => Promise<ResolvedTurnAttachments>
   skillRuntime?: Pick<SkillRuntime, 'resolveTurn'>
   instructionRuntime?: Pick<InstructionRuntime, 'resolveTurn'>
-  memoryStore?: Pick<MemoryStore, 'retrieve' | 'setLastInjected'>
-  getMemoryStore?: () => Pick<MemoryStore, 'retrieve' | 'setLastInjected'> | undefined
+  memoryStore?: MemoryTurnStore
+  getMemoryStore?: () => MemoryTurnStore | undefined
   interactiveToolBridge: Pick<InteractiveToolBridge, 'awaitUserInput'>
   forcedAllowedToolNames?: readonly string[]
   allowedProviderIds?: readonly string[]
   allowedSkillIds?: readonly string[]
   allowedReadPaths?: readonly string[]
+  allowHostReads?: boolean
   allowedWritePaths?: readonly string[]
   allowedArtifactIds?: readonly string[]
   pptWorkflowScope?: PptWorkflowScope
@@ -112,39 +115,42 @@ export class TurnContextResolver {
     const workspace = input.thread.workspace
     const clientSurface = resolveTurnClientSurface(input.turn)
     const approvalPolicy = normalizeApprovalPolicy(
-      input.turn.approvalPolicy ?? input.thread.approvalPolicy
+      input.thread.roomContext ? input.thread.approvalPolicy : input.turn.approvalPolicy ?? input.thread.approvalPolicy
     )
     const sandboxMode = normalizeSandboxMode(
-      input.turn.sandboxMode ?? input.thread.sandboxMode
+      input.thread.roomContext ? input.thread.sandboxMode : input.turn.sandboxMode ?? input.thread.sandboxMode
     )
     const approvalReviewer = normalizeApprovalReviewer(
-      input.turn.approvalReviewer ?? input.thread.approvalReviewer
+      input.thread.roomContext ? input.thread.approvalReviewer : input.turn.approvalReviewer ?? input.thread.approvalReviewer
     )
-    const memoryStore = this.deps.getMemoryStore?.() ?? this.deps.memoryStore
+    const memoryStore = input.thread.roomContext ? undefined : this.deps.getMemoryStore?.() ?? this.deps.memoryStore
+    const blockedSkillIds = mergeRoomDeniedIds(this.deps.blockedSkillIds, input.thread.roomContext?.blockedSkillIds)
     // These inputs are independent snapshots. Resolve their filesystem/store
     // I/O together so model dispatch pays the slowest branch, not their sum.
-    const [attachments, skillResolution, instructionResolution, memories] = await Promise.all([
+    const [attachments, skillResolution, instructionResolution, memoryContext] = await Promise.all([
       this.deps.resolveAttachments({
         attachmentIds: collectTurnAttachmentIds(input.turn),
         threadId: input.threadId,
         workspace,
         modelCapabilities: input.modelCapabilities
       }),
-      this.deps.skillRuntime?.resolveTurn({
+      (input.thread.roomContext?.skillsEnabled === false ? undefined : this.deps.skillRuntime)?.resolveTurn({
         prompt: input.turn.prompt,
         workspace,
         threadId: input.threadId,
         turnId: input.turnId,
         ...(this.deps.allowedSkillIds ? { allowedSkillIds: this.deps.allowedSkillIds } : {}),
-        ...(this.deps.blockedSkillIds ? { blockedSkillIds: this.deps.blockedSkillIds } : {})
+        ...(blockedSkillIds.length ? { blockedSkillIds } : {})
       }) ?? Promise.resolve(EMPTY_SKILL_RESOLUTION),
       this.deps.instructionRuntime?.resolveTurn({ workspace }) ??
         Promise.resolve(EMPTY_INSTRUCTION_RESOLUTION),
-      retrieveMemories(memoryStore, {
-        prompt: input.turn.prompt,
+      resolveMemoryTurnContext(memoryStore, {
+        query: input.turn.prompt,
         workspace
       })
     ])
+    const memories = memoryContext.memories
+    const memoryDirectives = memoryContext.directives
     const planTurnActive = !input.mode.dedicatedSvgTurn && !input.mode.planContextStale && (
       input.mode.effectiveMode === 'plan' || Boolean(input.mode.activePlanContext)
     )
@@ -168,10 +174,10 @@ export class TurnContextResolver {
         input.mode.dedicatedSvgTurn ? undefined : skillResolution.allowedToolNames,
         activeGoalInstruction !== null
       ),
-      forcedAllowedToolNames
+      intersectAllowedToolNames(forcedAllowedToolNames, input.thread.roomContext?.allowedToolNames)
     )
     const userInputDisabled = input.turn.disableUserInput === true
-    const toolDiscoveryContext = createToolDiscoveryContext({
+    const toolDiscoveryContext = applyRoomToolPolicy(createToolDiscoveryContext({
       threadId: input.threadId,
       turnId: input.turnId,
       workspace,
@@ -184,6 +190,7 @@ export class TurnContextResolver {
       threadMode: input.mode.effectiveMode,
       ...(input.mode.activePlanContext ? { activePlanContext: input.mode.activePlanContext } : {}),
       ...(input.turn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+      ...(input.turn.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
       ...(input.turn.guiDesignMode ? { guiDesignMode: true } : {}),
       agentSurface: input.turn.agentSurface ?? 'code',
       ...(input.turn.guiDesignArtifact ? { guiDesignArtifact: input.turn.guiDesignArtifact } : {}),
@@ -205,6 +212,7 @@ export class TurnContextResolver {
       ...(this.deps.allowedProviderIds ? { allowedProviderIds: this.deps.allowedProviderIds } : {}),
       ...(this.deps.allowedSkillIds ? { allowedSkillIds: this.deps.allowedSkillIds } : {}),
       ...(this.deps.allowedReadPaths ? { allowedReadPaths: this.deps.allowedReadPaths } : {}),
+      ...(this.deps.allowHostReads ? { allowHostReads: true } : {}),
       ...(this.deps.allowedWritePaths ? { allowedWritePaths: this.deps.allowedWritePaths } : {}),
       ...(this.deps.allowedArtifactIds ? { allowedArtifactIds: this.deps.allowedArtifactIds } : {}),
       ...(this.deps.pptWorkflowScope ? { pptWorkflowScope: this.deps.pptWorkflowScope } : {}),
@@ -216,7 +224,7 @@ export class TurnContextResolver {
       ...(this.deps.fastContextScopeId ? { fastContextScopeId: this.deps.fastContextScopeId } : {}),
       ...(this.deps.fastContextTaskCount ? { fastContextTaskCount: this.deps.fastContextTaskCount } : {}),
       interactiveToolBridge: this.deps.interactiveToolBridge
-    })
+    }), input.thread)
     const tools = await listModelTools(
       this.deps.toolHost,
       modelToolDiscoveryContexts(toolDiscoveryContext)
@@ -247,6 +255,7 @@ export class TurnContextResolver {
       skillResolution,
       instructionResolution,
       memories,
+      memoryDirectives,
       activeGoalInstruction,
       goalRecoveryInstruction,
       activeTodoInstruction,
@@ -282,6 +291,7 @@ export function resolveTurnClientSurface(turn: Pick<
   | 'imContext'
   | 'guiPlan'
   | 'guiDesignCanvas'
+  | 'guiExcalidrawCanvas'
   | 'guiDesignMode'
   | 'guiDesignArtifact'
   | 'agentSurface'
@@ -291,6 +301,7 @@ export function resolveTurnClientSurface(turn: Pick<
   if (
     turn.guiPlan ||
     turn.guiDesignCanvas ||
+    turn.guiExcalidrawCanvas ||
     turn.guiDesignMode ||
     turn.guiDesignArtifact ||
     turn.agentSurface
@@ -320,20 +331,6 @@ export function resolveTurnModeContext(input: {
     ...(activePlanContext ? { activePlanContext } : {}),
     effectiveMode: dedicatedSvgTurn ? 'agent' : input.turn.mode ?? input.threadMode
   }
-}
-
-async function retrieveMemories(
-  memoryStore: TurnContextResolverDeps['memoryStore'],
-  input: { prompt: string; workspace: string }
-): Promise<MemoryRecord[]> {
-  if (!memoryStore) return []
-  const memories = await memoryStore.retrieve({
-    query: input.prompt,
-    workspace: input.workspace,
-    limit: DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT
-  })
-  memoryStore.setLastInjected(memories.map((memory) => memory.id))
-  return memories
 }
 
 function normalizeApprovalPolicy(value: string | undefined): ToolHostContext['approvalPolicy'] {

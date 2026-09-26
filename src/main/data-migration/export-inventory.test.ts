@@ -9,7 +9,7 @@ import {
   defaultKunRuntimeSettings,
   defaultModelProviderSettings,
   defaultScheduleSettings,
-  defaultTerminalSettings,
+  defaultTerminalSettings, defaultRemoteAccessSettings,
   defaultWorkflowSettings,
   defaultWriteSettings,
   type AppSettingsV1
@@ -56,6 +56,7 @@ function settings(workspaceRoot: string, nestedRoot = workspaceRoot): AppSetting
     workflow: { ...workflow, defaultWorkspaceRoot: workspaceRoot },
     design: { ...design, defaultWorkspaceRoot: workspaceRoot },
     terminal: defaultTerminalSettings(),
+    remote: defaultRemoteAccessSettings(),
     guiUpdate: { channel: 'stable' },
     codePromptPrefix: 'portable prompt',
     chatWelcomeMessage: '',

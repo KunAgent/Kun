@@ -60,6 +60,20 @@ export function canonicalChartToolName(value: string | undefined): string {
   return marker >= 0 ? name.slice(marker + 2) : name
 }
 
+export function isRenderChartToolName(value: string | undefined): boolean {
+  return canonicalChartToolName(value) === 'render_chart'
+}
+
+export function isPendingRenderChartTool(block: {
+  kind?: string
+  status?: string
+  meta?: Record<string, unknown>
+}): boolean {
+  if (block.kind !== 'tool' || block.status !== 'running') return false
+  const toolName = typeof block.meta?.toolName === 'string' ? block.meta.toolName : undefined
+  return isRenderChartToolName(toolName)
+}
+
 export function chartSpecFromToolItem(item: {
   kind?: string
   status?: string

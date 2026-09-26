@@ -10,6 +10,11 @@ import {
 } from './runtime-factory-dependencies.js'
 import type { createRuntimeExtensionComposition } from './runtime-composition-extensions.js'
 import type { createRuntimeConfigController } from './runtime-composition-config.js'
+import { bindRoomRuleStore } from '../rooms/room-rule-read-tool.js'
+import { bindRoomPeerStore } from '../rooms/room-peer-tools.js'
+import { bindImMessageService } from '../rooms/room-im-message-tool.js'
+import { bindAgentHandoffService } from '../agents/agent-handoff-tools.js'
+import { bindAgentSetupDirectory } from '../agents/agent-setup-tools.js'
 import {
   persistRuntimeCapabilitySection,
   persistRuntimeMcpConfig,
@@ -20,6 +25,9 @@ import { settleCleanupSteps } from './runtime-factory-cleanup.js'
 import { shutdownRuntimeExecutionForHost } from './runtime-graph-lifecycle.js'
 import { disposeProxyAgents } from '../adapters/model/proxy-fetch.js'
 import type { ServerRuntime } from './runtime-factory-dependencies.js'
+import { createRuntimeRoomComposition } from './runtime-composition-rooms.js'
+import { beginOwnedProcessShutdown, shutdownOwnedProcesses } from '../process/owned-process.js'
+import { ownedServiceManagerProcesses } from '../manager/owned-service-manager-session.js'
 
 export function createServerRuntimeComposition(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>,
@@ -62,6 +70,7 @@ export function createServerRuntimeComposition(
     extensionModelProviders,
     modelConnections,
     routeHealth,
+    directModelClient,
     modelClient,
     routePoolTests,
     providerQuotaService,
@@ -118,8 +127,42 @@ export function createServerRuntimeComposition(
     extensionIndexClient
   } = extensions
   const { startedAt, rebuildCapabilities, applyConfig } = config
+  const roomComposition = createRuntimeRoomComposition({
+    options: () => config.activeOptions,
+    services: { threads: threadService, threadStore: stores.threadStore,
+      artifacts: artifactStore,
+      memoryStore: services.memoryStore, memoryEnabled: () => config.activeOptions.capabilities?.memory?.enabled !== false,
+      turns: turnService, sessions: sessionStore, approvals: approvalGate, inputs: userInputGate,
+      runTurn: runAgentTurn,
+      peerModels: { client: modelClient, roles: () => config.activeOptions.roles },
+      backgroundExecutionActive: (threadId) => backgroundShellRuntime.listSessions(threadId).some((item) => item.status === 'running'),
+      stopBackgroundExecution: async (threadId) => { await backgroundShellRuntime.stopThread(threadId) },
+      proveStopped: async (threadId, turnId) => {
+        if (turnId && turnService.isTurnExecutionActive(turnId)) return false
+        if (backgroundShellRuntime.listSessions(threadId).some((item) => item.status === 'running')) return false
+        if (executionLeases && await executionLeases.owner(threadId)) return false
+        const thread = await threadService.getMetadata(threadId)
+        if (thread?.turns.some((turn) => turn.status === 'queued' || turn.status === 'running')) return false
+        if (!turnId) return true
+        if (thread?.turns.some((turn) => turn.id === turnId && ['completed', 'failed', 'aborted'].includes(turn.status))) return true
+        // Lease absence alone does not prove a missing executor finished.
+        const highest = await sessionStore.highestSeq(threadId)
+        const tail = await sessionStore.loadEventsSince(threadId, Math.max(0, highest - 1000))
+        return tail.some((event) => event.turnId === turnId &&
+          ['turn_completed', 'turn_failed', 'turn_aborted'].includes(event.kind))
+      } }
+  })
+  bindRoomRuleStore(core.threadStore, roomComposition.rooms.service.store)
+  // Tool providers bind to the lifecycle-fenced facade, while room admission
+  // retains the backing store. Bind both identities to the same room scope.
+  bindRoomPeerStore(core.threadStore, roomComposition.rooms.deps.store)
+  bindImMessageService(core.threadStore, roomComposition.rooms.service)
+  bindAgentHandoffService(core.threadStore, roomComposition.rooms.handoffs)
+  bindAgentSetupDirectory(core.threadStore, roomComposition.rooms.agents)
   return {
     threadService,
+    historyReferences: core.historyReferences,
+    rooms: roomComposition.rooms,
     projectBoardService,
     turnService,
     threadStore: stores.threadStore,
@@ -137,7 +180,10 @@ export function createServerRuntimeComposition(
       inflight: inflight.size(),
       activeCaptures: llmDebug?.activeCaptureCount ?? 0
     }),
-    startBackgroundMaintenance: () => backgroundMaintenance.start(),
+    startBackgroundMaintenance: () => {
+      backgroundMaintenance.start()
+      roomComposition.start()
+    },
     prepareForRequests: prepareUsageCarryover,
     inspectThreadStore: () => services.threadStoreGuardian.run(),
     sessionGuardian: services.sessionGuardian,
@@ -151,6 +197,9 @@ export function createServerRuntimeComposition(
 	    },
 	    get memoryStore() {
 	      return services.memoryStore
+	    },
+	    get memoryFeedback() {
+	      return services.memoryFeedback
 	    },
 	    memoryDistillation: services.memoryDistillation,
 	    migrationService,
@@ -200,8 +249,10 @@ export function createServerRuntimeComposition(
 	      bundledSeedResults
 	    },
 	    modelClient,
+	    directModelClient,
 	    modelGateway: {
 	      enabled: () => config.activeOptions.localModelGateway?.enabled === true && gatewayCredentials.hasKey(),
+      exposeProviderModels: () => config.activeOptions.localModelGateway?.exposeProviderModels === true,
 	      pools: () => modelClient.routePools(),
 	      configuredPools: () => modelClient.configuredPools(),
 	      health: routeHealth,
@@ -385,10 +436,13 @@ export function createServerRuntimeComposition(
       return result
     },
     shutdown: async () => {
+      beginOwnedProcessShutdown()
       await settleCleanupSteps([
         async () => {
           await shutdownRuntimeExecutionForHost({
             prepare: async () => {
+              eventStreamRegistry.closeAll()
+              await roomComposition.close()
               agent.shuttingDown = true
               await agent.queuedTurnDispatcher.dispose()
               backgroundMaintenance.stop()
@@ -405,35 +459,28 @@ export function createServerRuntimeComposition(
           })
         },
         async () => { await services.memoryDistillation.shutdown() },
-        async () => {
-          try {
-            await backgroundShellRuntime.shutdown()
-            await extensionJobs.handleRuntimeShutdown()
-            extensionMediaJobs.dispose()
-            extensionAudioAnalysisJobs.dispose()
-            extensionMediaArchiveJobs.dispose()
-            stopExtensionModelListener()
-            extensionViewSessions.disposeAll()
-            await extensionManager.shutdown()
-            await extensionBroker.dispose()
-            extensionSecretReveals.dispose()
-            await extensionAccountAudit.flush()
-            extensionTools.disposeAll()
-            await extensionModelProviders.disposeAll()
-            shutdownAllLspSessions()
-            await services.mcpProviders.close()
-            await migrationService.shutdown()
-            await migrationImportService.shutdown()
-            await routeHealth.flush()
-          } finally {
-            try {
-              await llmDebug?.shutdown()
-              await agentObservability?.shutdown()
-            } finally {
-              await stores.shutdown?.()
-            }
-          }
-        },
+        () => backgroundShellRuntime.shutdown(),
+        () => extensionJobs.handleRuntimeShutdown(),
+        () => { extensionMediaJobs.dispose() },
+        () => { extensionAudioAnalysisJobs.dispose() },
+        () => { extensionMediaArchiveJobs.dispose() },
+        () => { stopExtensionModelListener() },
+        () => { extensionViewSessions.disposeAll() },
+        () => extensionManager.shutdown(),
+        () => extensionBroker.dispose(),
+        () => { extensionSecretReveals.dispose() },
+        () => extensionAccountAudit.flush(),
+        () => { extensionTools.disposeAll() },
+        () => extensionModelProviders.disposeAll(),
+        () => shutdownAllLspSessions(),
+        () => services.mcpProviders.close(),
+        () => migrationService.shutdown(),
+        () => migrationImportService.shutdown(),
+        () => routeHealth.flush(),
+        () => shutdownOwnedProcesses({ graceMs: 500, timeoutMs: 3000, exclude: ownedServiceManagerProcesses() }),
+        async () => { await llmDebug?.shutdown() },
+        async () => { await agentObservability?.shutdown() },
+        async () => { await stores.shutdown?.() },
         async () => { await dataDirLease?.release() },
         () => { disposeProxyAgents() }
       ])

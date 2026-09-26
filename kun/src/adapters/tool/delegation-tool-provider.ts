@@ -360,6 +360,7 @@ async function runChild(
     approvalReviewer: context.approvalReviewer ?? 'user',
     ...(context.clientSurface ? { clientSurface: context.clientSurface } : {}),
     ...(context.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+    ...(context.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
     ...(common.detach ? { detach: true } : {}),
     ...(common.returnFormat ? { returnFormat: common.returnFormat } : {}),
     onQueued: async (childId, profile, metadata) => {

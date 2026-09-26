@@ -1,0 +1,17 @@
+.rooms-reminder-list { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+.rooms-reminder-section { display: flex; flex-direction: column; gap: 8px; }
+.rooms-reminder-section h3 { display: flex; gap: 6px; align-items: center; margin: 0; font-size: 12px; font-weight: 600; color: var(--ds-muted); text-transform: none; }
+.rooms-reminder { border: 1px solid var(--ds-border); border-radius: 10px; padding: 10px 12px; background: var(--ds-surface-card); display: flex; flex-direction: column; gap: 6px; }
+.rooms-reminder.is-cancelled, .rooms-reminder.is-expired { opacity: .75; }
+.rooms-reminder-note { margin: 0; font-size: 13px; color: var(--ds-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.rooms-reminder-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 11px; color: var(--ds-muted); }
+.rooms-reminder-status { border: 1px solid var(--ds-border); border-radius: 999px; padding: 1px 8px; font-size: 10px; white-space: nowrap; }
+.rooms-reminder-status.is-scheduled { color: var(--ds-accent); border-color: var(--ds-accent); }
+.rooms-reminder-status.is-fired { color: var(--ds-success, #15803d); border-color: currentColor; }
+.rooms-reminder-cancel { display: inline-flex; gap: 4px; align-items: center; margin-left: auto; border: 1px solid var(--ds-border); border-radius: 6px; padding: 3px 8px; color: var(--ds-text); font-size: 11px; }
+.rooms-reminder-cancel:disabled { opacity: .5; cursor: default; }
+.rooms-reminder-empty { margin: 8px 0; color: var(--ds-muted); font-size: 12px; }
+.rooms-reminder-fired { display: flex; gap: 8px; align-items: flex-start; border: 1px solid var(--ds-border); border-radius: 10px; padding: 10px 12px; margin: 4px 0; background: var(--ds-surface-card); color: var(--ds-muted); }
+.rooms-reminder-fired > svg { flex-shrink: 0; margin-top: 2px; color: var(--ds-accent); }
+.rooms-reminder-fired strong { display: block; font-size: 12px; color: var(--ds-text); }
+.rooms-reminder-fired p { margin: 2px 0 0; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }

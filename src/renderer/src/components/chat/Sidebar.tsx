@@ -24,10 +24,13 @@ import {
 import type { ClawImDialogMode, ClawInstallTarget } from './SidebarClawDialogHelpers'
 import { ClawAddImDialog } from './SidebarClawDialog'
 import { ConnectPhoneSidebarPanel } from './ConnectPhoneView'
+import { SidebarAttentionPanel } from './SidebarAttentionPanel'
 import { SidebarProjectsSection } from './SidebarProjectsSection'
 import { registerSidebarDragAutoScroll } from './sidebar-drag-auto-scroll'
 import { SidebarConversationsSection } from './SidebarConversationsSection'
 import { SidebarProjectBoardsSection } from './SidebarProjectBoardsSection'
+import { CodexReferenceDialog } from '../../history-reference/CodexReferenceDialog'
+import { useCodexReferenceEnabled } from '../../history-reference/use-codex-reference-enabled'
 import { useProjectBoardEnabled } from '../../project-board/use-project-board-enabled'
 import { WorkspaceModeTabs } from './WorkspaceModeTabs'
 import {
@@ -150,10 +153,33 @@ export function Sidebar({
   const resetClawChannelSession = useChatStore((s) => s.resetClawChannelSession)
   const [imDialogMode, setImDialogMode] = useState<ClawImDialogMode | null>(null)
   const { enabled: projectBoardEnabled } = useProjectBoardEnabled()
+  const codexReferenceEnabled = useCodexReferenceEnabled()
+  const [codexDialogOpen, setCodexDialogOpen] = useState(false)
 
   const activeClawChannel = useMemo(
     () => clawChannels.find((channel) => channel.id === activeClawChannelId) ?? clawChannels[0] ?? null,
     [clawChannels, activeClawChannelId]
+  )
+
+  // Same inputs the project rows classify with — the panel just re-prioritizes
+  // them into a single cross-workspace "needs you" list.
+  const sidebarActivityContext = useMemo(
+    () => ({
+      activeThreadId,
+      busy,
+      watchTurnCompletion,
+      unreadThreadIds,
+      scheduledThreadActivities,
+      awaitingUserInputThreadIds
+    }),
+    [
+      activeThreadId,
+      busy,
+      watchTurnCompletion,
+      unreadThreadIds,
+      scheduledThreadActivities,
+      awaitingUserInputThreadIds
+    ]
   )
 
   return (
@@ -198,6 +224,8 @@ export function Sidebar({
         </div>
       }
     >
+      {codexDialogOpen && codexReferenceEnabled ? <CodexReferenceDialog workspaceRoot={workspaceRoot}
+        onClose={() => setCodexDialogOpen(false)} onCreated={(id) => { setCodexDialogOpen(false); onSelectThread(id) }} /> : null}
       <div className="workspace-mode-controls ds-no-drag flex flex-col px-1">
         <WorkspaceModeTabs
           activeView={activeView}
@@ -215,6 +243,10 @@ export function Sidebar({
             variant="accent"
           />
         ) : null}
+        {codexReferenceEnabled && activeView === 'chat' ? <SidebarCommandRow
+          icon={<Clock3 className="h-4 w-4" />} label={t('codexHistoryCreate')}
+          onClick={() => setCodexDialogOpen(true)} disabled={!runtimeReady}
+        /> : null}
         <SidebarCommandRow
           icon={<LayoutGrid className="h-4 w-4" strokeWidth={1.75} />}
           label={t('plugins')}
@@ -329,6 +361,14 @@ export function Sidebar({
         />
       ) : (
       <>
+      {!threadSearch.trim() && (activeView === 'chat' || activeView === 'write') ? (
+        <SidebarAttentionPanel
+          threads={threads}
+          activityContext={sidebarActivityContext}
+          onSelectThread={onSelectThread}
+          t={t}
+        />
+      ) : null}
       <SidebarProjectsSection
         threads={threads}
         activeView={activeView === 'write' ? 'write' : 'chat'}

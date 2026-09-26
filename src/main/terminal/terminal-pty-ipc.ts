@@ -15,6 +15,8 @@
  *  - `useConpty` is a no-op on non-Windows, so we always pass it.
  */
 import { homedir } from 'node:os'
+import { spawnPtyBehindGate } from './pty-launch-gate'
+import { registerOwnedProcessGroup } from '../../../kun/src/process/owned-process.js'
 import type { BrowserWindow, IpcMain, WebContents } from 'electron'
 import type { IPty } from 'node-pty'
 import {
@@ -41,6 +43,10 @@ type TerminalSession = {
   /** Last ~64KB of output, replayed when a panel re-attaches. */
   ringBuffer: string
   exited: boolean
+  ready: boolean
+  cleanupPromise: Promise<void> | null
+  exitPromise: Promise<void>
+  ownership?: { stop(): Promise<void> }
 }
 
 let nodePty: typeof import('node-pty') | null | undefined
@@ -162,38 +168,58 @@ export type RegisterTerminalPtyIpcOptions = {
    * when not provided.
    */
   getTerminalColorMode?: () => TerminalColorMode | Promise<TerminalColorMode>
+  /** Test seam for native PTY and setup cancellation. */
+  loadPty?: () => Promise<Pick<typeof import('node-pty'), 'spawn'> | null>
 }
 
 export type TerminalPtyController = {
   listSessionIds: () => string[]
   disposeAll: () => void
+  disposeAllAndWait: () => Promise<void>
 }
 
 export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): TerminalPtyController {
   const { ipcMain, getMainWindow, logError, getTerminalColorMode } = options
   const sessions = new Map<string, TerminalSession>()
 
-  const disposeSession = (sessionId: string, killedByClient: boolean): boolean => {
+  let stopping = false
+  let stopPromise: Promise<void> | null = null
+  const pendingCreates = new Map<string, Promise<unknown>>()
+
+  const disposeSession = (sessionId: string, killedByClient: boolean): Promise<boolean> => {
     const session = sessions.get(sessionId)
-    if (!session) return false
-    try {
-      session.pty.kill()
-    } catch (error) {
-      logError('terminal', 'Failed to kill PTY process', {
-        sessionId,
-        message: error instanceof Error ? error.message : String(error)
-      })
+    if (!session) return Promise.resolve(false)
+    if (!session.cleanupPromise) {
+      session.cleanupPromise = (async () => {
+        const failures: unknown[] = []
+        try { await session.ownership?.stop() } catch (error) { failures.push(error) }
+        // The owned handle waits for the whole tree; node-pty.kill then releases
+        // the native terminal. Before registration only the inert gate can run.
+        try { session.pty.kill() } catch { /* Already exited after owned tree stop. */ }
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('Terminal native session did not exit.')), 2_000)
+            void session.exitPromise.then(() => { clearTimeout(timer); resolve() })
+          })
+        } catch (error) { failures.push(error) }
+        if (failures.length) throw new AggregateError(failures, 'Failed to close terminal session.')
+        if (sessions.get(sessionId) === session) sessions.delete(sessionId)
+        if (!killedByClient && !session.sender.isDestroyed()) {
+          sendToSender(session.sender, 'terminal:exit', { sessionId, exitCode: null })
+        }
+      })()
     }
-    sessions.delete(sessionId)
-    if (!killedByClient && !session.sender.isDestroyed()) {
-      sendToSender(session.sender, 'terminal:exit', { sessionId, exitCode: null })
-    }
-    return true
+    return session.cleanupPromise.then(() => true)
   }
 
+  const logCleanupFailure = (sessionId: string, error: unknown): void => {
+    logError('terminal', 'Failed to stop PTY process tree', {
+      sessionId, message: error instanceof Error ? error.message : String(error)
+    })
+  }
   const disposeForSender = (sender: WebContents): void => {
     for (const [sessionId, session] of sessions) {
-      if (session.sender === sender) disposeSession(sessionId, true)
+      if (session.sender === sender) void disposeSession(sessionId, true).catch((error) => logCleanupFailure(sessionId, error))
     }
   }
 
@@ -207,13 +233,18 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
     sender.once('destroyed', () => disposeForSender(sender))
   }
 
-  ipcMain.handle('terminal:create', async (event, args: unknown) => {
+  const createSession = async (event: { sender: WebContents }, args: unknown) => {
     const request = terminalCreatePayloadSchema.parse(args)
+    const cancelled = () => stopping || event.sender.isDestroyed()
+    if (cancelled()) return { ok: false as const, message: 'Terminal service is stopping.' }
 
     // Re-attach to an existing session: replay the ring buffer so reopening
     // the panel shows recent output instead of a blank screen.
     const existing = sessions.get(request.sessionId)
-    if (existing && !existing.exited) {
+    if (existing && !existing.ready && !existing.cleanupPromise) {
+      return { ok: false as const, message: 'Terminal session is already starting.' }
+    }
+    if (existing && !existing.exited && !existing.cleanupPromise) {
       if (existing.ringBuffer) {
         sendToSender(event.sender, 'terminal:data', {
           sessionId: request.sessionId,
@@ -225,9 +256,7 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
       attachSenderCleanup(event.sender)
       return { ok: true as const, sessionId: request.sessionId, replayed: true }
     }
-    if (existing && existing.exited) {
-      disposeSession(request.sessionId, true)
-    }
+    if (existing) await disposeSession(request.sessionId, true)
 
     if (sessions.size >= TERMINAL_MAX_SESSIONS) {
       return {
@@ -236,7 +265,7 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
       }
     }
 
-    const ptyModule = await loadNodePty()
+    const ptyModule = await (options.loadPty ?? loadNodePty)()
     if (!ptyModule) {
       return {
         ok: false as const,
@@ -257,13 +286,16 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
       })
     }
 
+    if (cancelled()) return { ok: false as const, message: 'Terminal service is stopping.' }
+    if (sessions.has(request.sessionId)) return { ok: false as const, message: 'Terminal session is already starting.' }
     let pty: IPty | undefined
+    let launch: Awaited<ReturnType<typeof spawnPtyBehindGate>> | undefined
     const spawnAttempts: Array<{ file: string; message: string }> = []
     for (const candidate of resolveTerminalShellCandidates()) {
       try {
         const env = buildShellEnv(colorMode)
         if (candidate.gitBash) env.CHERE_INVOKING = '1'
-        pty = ptyModule.spawn(candidate.file, candidate.args, {
+        launch = await spawnPtyBehindGate(ptyModule, candidate.file, candidate.args, {
           name: 'xterm-256color',
           cols,
           rows,
@@ -271,7 +303,8 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
           env,
           // ConPTY on Windows, ignored elsewhere.
           useConpty: true
-        })
+        }, cancelled)
+        pty = launch.pty
         break
       } catch (error) {
         spawnAttempts.push({
@@ -294,9 +327,17 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
         pty,
         sender: event.sender,
         ringBuffer: '',
-        exited: false
+        exited: false,
+        ready: false,
+        cleanupPromise: null,
+        exitPromise: launch!.exited,
+        ownership: launch?.ownership
       }
       sessions.set(request.sessionId, session)
+      await launch?.ready
+      if (process.platform !== 'win32') {
+        session.ownership = await registerOwnedProcessGroup(pty.pid, { trackDescendants: true, ownerLossGraceMs: 5_000 })
+      }
       attachSenderCleanup(event.sender)
 
       pty.onData((data) => {
@@ -305,6 +346,12 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
         sendToSender(session.sender, 'terminal:data', { sessionId: request.sessionId, data })
       })
 
+      const initialOutput = launch?.takeInitialOutput()
+      if (initialOutput) {
+        pushToRingBuffer(session, initialOutput)
+        sendToSender(session.sender, 'terminal:data', { sessionId: request.sessionId, data: initialOutput })
+      }
+
       pty.onExit(({ exitCode }) => {
         session.exited = true
         sendToSender(session.sender, 'terminal:exit', { sessionId: request.sessionId, exitCode })
@@ -312,23 +359,39 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
         // next create disposes it. Full cleanup also happens on app quit.
       })
 
+      if (cancelled()) {
+        await disposeSession(request.sessionId, true)
+        return { ok: false as const, message: 'Terminal service is stopping.' }
+      }
+      launch?.release()
+      session.ready = true
       return { ok: true as const, sessionId: request.sessionId }
     } catch (error) {
       try {
-        pty.kill()
-      } catch {
-        // Best effort: setup failed before the session became renderer-owned.
+        await disposeSession(request.sessionId, true)
+      } catch (cleanupError) {
+        logCleanupFailure(request.sessionId, cleanupError)
       }
       const message = error instanceof Error ? error.message : String(error)
       logError('terminal', 'Failed to spawn PTY', { sessionId: request.sessionId, message })
       return { ok: false as const, message }
     }
+  }
+
+  ipcMain.handle('terminal:create', (event, args: unknown) => {
+    const request = terminalCreatePayloadSchema.parse(args)
+    const current = pendingCreates.get(request.sessionId)
+    if (current) return current
+    const pending = createSession(event, request)
+    pendingCreates.set(request.sessionId, pending)
+    void pending.finally(() => pendingCreates.delete(request.sessionId)).catch(() => undefined)
+    return pending
   })
 
   ipcMain.handle('terminal:write', async (event, args: unknown) => {
     const request = terminalWritePayloadSchema.parse(args)
     const session = sessions.get(request.sessionId)
-    if (!session || session.exited) return false
+    if (stopping || !session || !session.ready || session.exited || session.cleanupPromise) return false
     try {
       session.pty.write(request.data)
       return true
@@ -344,7 +407,7 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
   ipcMain.handle('terminal:resize', async (event, args: unknown) => {
     const request = terminalResizePayloadSchema.parse(args)
     const session = sessions.get(request.sessionId)
-    if (!session || session.exited) return false
+    if (stopping || !session || !session.ready || session.exited || session.cleanupPromise) return false
     try {
       session.pty.resize(request.cols, request.rows)
       return true
@@ -362,26 +425,26 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
     return disposeSession(normalized, true)
   })
 
-  // App-wide teardown so no orphaned shell survives a normal quit. Lazily
-  // importing `electron` here keeps the module side-effect-free for tests.
-  void import('electron').then(({ app }) => {
-    app.on('before-quit', () => {
-      for (const sessionId of Array.from(sessions.keys())) {
-        disposeSession(sessionId, true)
-      }
-    })
-  })
-
   // If the main window is recreated (e.g. on macOS reactivation), make sure
   // stale sessions bound to a destroyed window are torn down.
   const mainWindow = getMainWindow()
   if (mainWindow && !mainWindow.isDestroyed()) {
     attachSenderCleanup(mainWindow.webContents)
   }
+  const disposeAllAndWait = (): Promise<void> => {
+    if (stopPromise) return stopPromise
+    stopping = true
+    stopPromise = (async () => {
+      await Promise.allSettled([...pendingCreates.values()])
+      const results = await Promise.allSettled([...sessions.keys()].map((id) => disposeSession(id, true)))
+      const failures = results.flatMap((result) => result.status === 'rejected' ? [result.reason] : [])
+      if (failures.length) throw new AggregateError(failures, 'Failed to stop terminal process trees.')
+    })()
+    return stopPromise
+  }
   return {
     listSessionIds: () => [...sessions.keys()],
-    disposeAll: () => {
-      for (const sessionId of [...sessions.keys()]) disposeSession(sessionId, true)
-    }
+    disposeAllAndWait,
+    disposeAll: () => { void disposeAllAndWait().catch((error) => logCleanupFailure('all', error)) }
   }
 }

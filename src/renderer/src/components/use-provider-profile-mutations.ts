@@ -37,9 +37,18 @@ export function useProviderProfileMutations(scope: Record<string, any>): Record<
       return
     }
     const canonical = modelProviders.find((existing) => existing.id === item.id)
-    if (!canonical) return
     const transformed = transform(item)
     stageSharedProviderCatalog(item, transformed)
+    if (!canonical) {
+      // The provider was committed moments ago and the settings re-render has
+      // not flushed into this closure yet — append the transformed profile
+      // instead of silently dropping the mutation (quick-add discovery).
+      updateModelProviders([
+        ...modelProviders,
+        { ...transformed, apiKey: apiKeyOverride ?? '' }
+      ])
+      return
+    }
     updateModelProviders(modelProviders.map((existing) => existing.id === item.id
       ? { ...transformed, apiKey: apiKeyOverride ?? canonical.apiKey }
       : existing))

@@ -83,7 +83,8 @@ function credentialSnapshot(
     defaultModel: 'model-a',
     proxy: { enabled: false, url: '' },
     routePools: [],
-    localModelGateway: { enabled: false }
+    failover: [],
+    localModelGateway: { enabled: false, exposeProviderModels: false }
   }
 }
 
@@ -112,7 +113,8 @@ describe("TuiController reasoning and session lifecycle", () => {
         defaultModel: 'reasoning-model',
         proxy: { enabled: false, url: '' },
         routePools: [],
-        localModelGateway: { enabled: false },
+        failover: [],
+        localModelGateway: { enabled: false, exposeProviderModels: false },
         providers: [{
           id: 'provider-a', accountId: 'account-a', name: 'Provider A', kind: 'http',
           authType: 'api-key', endpointFormat: 'chat_completions', useProxy: false, configured: true,
@@ -178,7 +180,8 @@ describe("TuiController reasoning and session lifecycle", () => {
         defaultModel: 'glm-5.2',
         proxy: { enabled: false, url: '' },
         routePools: [],
-        localModelGateway: { enabled: false },
+        failover: [],
+        localModelGateway: { enabled: false, exposeProviderModels: false },
         providers: [{
           id: 'opencode-go',
           accountId: 'account:opencode-go',
@@ -258,7 +261,8 @@ describe("TuiController reasoning and session lifecycle", () => {
         defaultModel: 'gpt-5.6-luna',
         proxy: { enabled: false, url: '' },
         routePools: [],
-        localModelGateway: { enabled: false },
+        failover: [],
+        localModelGateway: { enabled: false, exposeProviderModels: false },
         providers: [{
           id: 'codex',
           accountId: 'account:codex',
@@ -391,7 +395,7 @@ describe("TuiController reasoning and session lifecycle", () => {
     source.turns = [{
       id: 'turn_first', threadId: source.id, status: 'completed', orchestration: 'direct', prompt: 'first', steering: [],
       createdAt: source.createdAt, attachmentIds: [], activeSkillIds: [],
-      injectedMemoryIds: [], injectedMemorySummaries: [], injectedInstructionSources: [],
+      injectedMemoryIds: [], injectedMemorySummaries: [], injectedDirectiveIds: [], injectedDirectiveSummaries: [], injectedInstructionSources: [],
       items: [{
         id: 'item_user', turnId: 'turn_first', threadId: source.id, role: 'user',
         createdAt: source.createdAt, kind: 'user_message', status: 'completed', text: 'first'

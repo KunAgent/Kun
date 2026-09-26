@@ -3,6 +3,8 @@ import type {
   CoreAttachmentMetadataJson,
   CoreAttachmentTextFallbackJson,
   CoreMemoryDiagnosticsJson,
+  CoreMemoryConfirmResultJson,
+  CoreMemoryCorrectResultJson,
   CorePendingMemoryCandidateJson,
   CoreMemoryRecordJson,
   CoreMcpOAuthDiagnosticJson,
@@ -70,6 +72,8 @@ export type ThreadListOptions = {
   summary?: boolean
   cursor?: string
   workspace?: string
+  /** Extra workspace roots matched alongside `workspace` (e.g. project worktrees). */
+  workspaces?: string[]
   lean?: boolean
 }
 
@@ -145,12 +149,19 @@ export type ThreadDetail = {
   todos?: ThreadTodoList | null
   /** Original detail response size, used only to bound renderer snapshots. */
   payloadBytes?: number
+  historyTarget?: { turnId: string; itemId?: string; previousCursor?: string; nextCursor?: string }
   historyCursor?: string
   hasMoreHistory?: boolean
   designProfile?: DesignTaskProfile
+  additionalWorkspaces?: string[]
 }
 
 export type ThreadEventSink = {
+  /**
+   * Wrap one inbound event batch so intermediate store writes commit once.
+   * Optional: sinks without it dispatch event-by-event as before.
+   */
+  runEventBatch?<T>(work: () => Promise<T>): Promise<T>
   /** The HTTP/SSE stream is established, even when no replay or live event is pending. */
   onConnected?(): void
   /** Persisted replay reached the server's fixed synchronization boundary. */
@@ -210,9 +221,11 @@ export interface AgentProvider {
   listThreads(options?: ThreadListOptions): Promise<NormalizedThread[]>
   /** Optional paginated listing used by the sidebar "show more" flow. */
   listThreadsPage?(options?: ThreadListOptions): Promise<ThreadListPage>
-  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string }): Promise<NormalizedThread>
+  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string; additionalWorkspaces?: string[] }): Promise<NormalizedThread>
   getThreadDetail(threadId: string, options?: {
     before?: string
+    turnId?: string
+    itemId?: string
     signal?: AbortSignal
     priority?: 'foreground' | 'background'
   }): Promise<ThreadDetail>
@@ -247,6 +260,7 @@ export interface AgentProvider {
         title?: string
       }
       guiDesignCanvas?: boolean
+      guiExcalidrawCanvas?: boolean
       guiDesignMode?: boolean
       persona?: string
       agentSurface?: 'code' | 'write' | 'design'
@@ -324,6 +338,7 @@ export interface AgentProvider {
     tags?: string[]
     confidence?: number
     type?: CoreMemoryRecordJson['type']
+    authority?: CoreMemoryRecordJson['authority']
     importance?: number
     observedAt?: string
     validFrom?: string
@@ -334,11 +349,32 @@ export interface AgentProvider {
   }): Promise<CoreMemoryRecordJson>
   updateMemory?(
     memoryId: string,
-    patch: { content?: string; tags?: string[]; confidence?: number; importance?: number; type?: CoreMemoryRecordJson['type']; disabled?: boolean },
+    patch: { content?: string; tags?: string[]; confidence?: number; importance?: number; type?: CoreMemoryRecordJson['type']; authority?: CoreMemoryRecordJson['authority']; disabled?: boolean },
     options?: { workspace?: string; project?: string }
   ): Promise<CoreMemoryRecordJson>
   deleteMemory?(memoryId: string, options?: { workspace?: string; project?: string }): Promise<CoreMemoryRecordJson>
   getMemoryDiagnostics?(): Promise<CoreMemoryDiagnosticsJson>
+  confirmMemory?(
+    memoryId: string,
+    operationId: string,
+    access?: { workspace?: string; project?: string }
+  ): Promise<CoreMemoryConfirmResultJson>
+  correctMemory?(
+    memoryId: string,
+    operationId: string,
+    replacement: {
+      content: string
+      tags?: string[]
+      confidence?: number
+      importance?: number
+      type?: CoreMemoryRecordJson['type']
+      observedAt?: string
+      validFrom?: string | null
+      validTo?: string | null
+      expiresAt?: string | null
+    },
+    access?: { workspace?: string; project?: string }
+  ): Promise<CoreMemoryCorrectResultJson>
   listMemoryDistillationCandidates?(workspace: string): Promise<CorePendingMemoryCandidateJson[]>
   decideMemoryDistillationCandidate?(
     candidateId: string,
@@ -371,6 +407,7 @@ export interface AgentProvider {
    */
   renameThread(threadId: string, title: string, auto?: boolean): Promise<void>
   updateThreadWorkspace?(threadId: string, workspace: string): Promise<void>
+  updateThreadAdditionalWorkspaces?(threadId: string, additionalWorkspaces: string[]): Promise<NormalizedThread>
   updateThreadKnowledgeBases?(threadId: string, mounts: KnowledgeBaseMount[]): Promise<NormalizedThread>
   getThreadKnowledgeBases?(threadId: string): Promise<{
     mounts: KnowledgeBaseMount[]

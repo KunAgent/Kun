@@ -75,6 +75,7 @@ const labels: Record<string, string> = {
   memoryCreate: 'New',
   memoryCreateTitle: 'Create memory',
   memoryEditTitle: 'Edit memory',
+  memoryCorrectTitle: 'Correct memory',
   memoryContentPlaceholder: 'Memory content',
   memoryTagsPlaceholder: 'Tags',
   memoryConfidence: 'Confidence',
@@ -85,12 +86,17 @@ const labels: Record<string, string> = {
   memorySaveFailed: 'Memory save failed',
   memoryEmpty: 'No memory records',
   memoryEdit: 'Edit',
+  memoryConfirm: 'Confirm',
+  memoryCorrect: 'Correct',
+  memoryConfirmed: 'Memory confirmed.',
+  memoryConfirmFailed: 'Memory confirmation failed.',
   memoryDetails: 'Details',
   memoryClose: 'Close',
   memoryDisable: 'Disable',
   memoryRestore: 'Restore',
   memoryDelete: 'Delete',
   memoryDisabled: 'Disabled',
+  memorySuperseded: 'Superseded',
   memoryProject: 'Project',
   memoryLastInjected: 'Last injected',
   memoryLastInjectedDesc: 'Last injected description',
@@ -152,6 +158,7 @@ function memoryDraft(overrides: Partial<MemoryDraft> = {}): MemoryDraft {
     confidence: 1,
     type: 'fact',
     importance: 0.8,
+    directive: false,
     ...overrides
   }
 }
@@ -296,6 +303,7 @@ describe('MemorySettingsSection', () => {
     expect(html).not.toContain('aria-label="Disable"')
     expect(html).toContain('Disabled')
   })
+
 })
 
 describe('serializeMemoryTags', () => {
@@ -459,8 +467,16 @@ describe('memoryDraftMutation', () => {
       tags: ['alpha', 'beta'],
       confidence: 0.7,
       type: 'decision',
-      importance: 0.9
+      importance: 0.9,
+      authority: 'reference'
     })
+  })
+
+  it('maps the rule checkbox to directive authority', () => {
+    expect(memoryDraftMutation(memoryDraft({
+      content: 'Reply in English',
+      directive: true
+    }))).toMatchObject({ authority: 'directive' })
   })
 })
 
@@ -473,6 +489,8 @@ describe('MemoryRecordDialog', () => {
       notice: null,
       onClose: () => undefined,
       onBeginEdit: () => undefined,
+      onBeginCorrection: () => undefined,
+      onConfirm: () => undefined,
       onDraftChange: () => undefined,
       onSave: () => undefined
     }))
@@ -481,6 +499,81 @@ describe('MemoryRecordDialog', () => {
     expect(html).toContain('value="decision" selected=""')
     expect(html).toContain('Importance')
     expect(html).toContain('value="0.9"')
+  })
+
+  it('shows correction as a separate action while retaining ordinary edit', () => {
+    const html = renderToStaticMarkup(createElement(MemoryRecordDialog, {
+      dialog: { mode: 'view', memory: sampleRecord() },
+      draft: memoryDraft(),
+      t: (key: string) => labels[key] ?? key,
+      notice: null,
+      feedbackEnabled: true,
+      onClose: () => undefined,
+      onBeginEdit: () => undefined,
+      onBeginCorrection: () => undefined,
+      onConfirm: () => undefined,
+      onDraftChange: () => undefined,
+      onSave: () => undefined
+    }))
+
+    expect(html).toContain('Confirm')
+    expect(html).toContain('Correct')
+    expect(html).toContain('Edit')
+  })
+
+  it('hides confirmation when feedback collection is disabled but keeps correction', () => {
+    const html = renderToStaticMarkup(createElement(MemoryRecordDialog, {
+      dialog: { mode: 'view', memory: sampleRecord() },
+      draft: memoryDraft(),
+      t: (key: string) => labels[key] ?? key,
+      notice: null,
+      feedbackEnabled: false,
+      onClose: () => undefined,
+      onBeginEdit: () => undefined,
+      onBeginCorrection: () => undefined,
+      onConfirm: () => undefined,
+      onDraftChange: () => undefined,
+      onSave: () => undefined
+    }))
+
+    expect(html).not.toContain('Confirm')
+    expect(html).toContain('Correct')
+  })
+
+  it('hides confirmation until feedback capability is known to be enabled', () => {
+    const html = renderToStaticMarkup(createElement(MemoryRecordDialog, {
+      dialog: { mode: 'view', memory: sampleRecord() },
+      draft: memoryDraft(),
+      t: (key: string) => labels[key] ?? key,
+      notice: null,
+      onClose: () => undefined,
+      onBeginEdit: () => undefined,
+      onBeginCorrection: () => undefined,
+      onConfirm: () => undefined,
+      onDraftChange: () => undefined,
+      onSave: () => undefined
+    }))
+
+    expect(html).not.toContain('Confirm')
+    expect(html).toContain('Correct')
+  })
+
+  it('does not offer feedback actions for an inactive record', () => {
+    const html = renderToStaticMarkup(createElement(MemoryRecordDialog, {
+      dialog: { mode: 'view', memory: sampleRecord({ disabledAt: '2026-09-01T00:00:00.000Z' }) },
+      draft: memoryDraft(),
+      t: (key: string) => labels[key] ?? key,
+      notice: null,
+      onClose: () => undefined,
+      onBeginEdit: () => undefined,
+      onBeginCorrection: () => undefined,
+      onConfirm: () => undefined,
+      onDraftChange: () => undefined,
+      onSave: () => undefined
+    }))
+
+    expect(html).not.toContain('Confirm')
+    expect(html).not.toContain('Correct')
   })
 
   it('clamps confidence and importance inputs to their contract bounds', () => {

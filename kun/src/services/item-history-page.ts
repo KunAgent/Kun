@@ -1,5 +1,7 @@
 import { isPublicTurnItem, type TurnItem } from '../contracts/items.js'
 import type { ItemHistoryPage, ItemHistoryPageOptions } from '../ports/session-store.js'
+import { buildItemContentPage, isItemContentRequest } from './item-history-content.js'
+import { itemMatchesHistoryScope } from './item-history-scope.js'
 
 const TIMELINE_ITEM_PREVIEW_CHARS = 64 * 1024
 const TIMELINE_ARRAY_PREVIEW_ITEMS = 32
@@ -9,7 +11,14 @@ export function buildPublicItemHistoryPage(
   items: readonly TurnItem[],
   options: ItemHistoryPageOptions
 ): ItemHistoryPage {
-  const publicItems = items.filter(isPublicTurnItem)
+  if (isItemContentRequest(options)) {
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const item = items[index]!
+      if (item.id === options.itemId) return buildItemContentPage(item, options)
+    }
+    return buildItemContentPage(undefined, options)
+  }
+  const publicItems = items.filter((item) => isPublicTurnItem(item) && itemMatchesHistoryScope(item, options))
   const maxItems = Math.max(1, Math.floor(options.maxItems))
   const maxBytes = Math.max(1, Math.floor(options.maxBytes))
   const cursorIndex = options.before
@@ -168,6 +177,7 @@ function timelinePreviewItem(item: TurnItem, maxBytes: number): TurnItem {
       }
     case 'goal_context':
     case 'interruption_note':
+    case 'context_window':
       return item
   }
 }
@@ -263,6 +273,22 @@ function minimalTimelineItem(item: TurnItem): TurnItem {
         status: 'completed',
         sourceTurnId: truncateText(item.sourceTurnId, 1_024),
         text: marker
+      }
+    case 'context_window':
+      return {
+        ...minimalTimelineItemBase(item),
+        kind: item.kind,
+        schemaVersion: item.schemaVersion,
+        windowId: truncateText(item.windowId, 1_024),
+        previousWindowId: item.previousWindowId
+          ? truncateText(item.previousWindowId, 1_024)
+          : item.previousWindowId,
+        reason: item.reason,
+        sourceHistoryRevision: item.sourceHistoryRevision,
+        splitBefore: item.splitBefore,
+        initializationRef: truncateText(item.initializationRef, 1_024),
+        operationId: truncateText(item.operationId, 1_024),
+        replacedTokens: item.replacedTokens
       }
   }
 }

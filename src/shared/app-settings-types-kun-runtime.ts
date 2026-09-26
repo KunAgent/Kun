@@ -139,7 +139,7 @@ export type KunLabPptAgentSettingsV1 = {
   imageFirst: boolean
 }
 
-/** Experimental Lab feature settings for inline conversation visualizations. */
+/** Experimental Lab session-display optimization (charts, diagrams, structured visuals). */
 export type KunLabConversationVisualizationSettingsV1 = {
   /** Master switch. Default false while the feature is experimental. */
   enabled: boolean
@@ -177,6 +177,9 @@ export type KunLabSettingsV1 = {
   pptAgent: KunLabPptAgentSettingsV1
   conversationVisualization: KunLabConversationVisualizationSettingsV1
   autoPlanBuild: KunLabAutoPlanBuildSettingsV1
+  opencodeReferenceBranches: { enabled: boolean }
+  claudeCodeReferenceBranches: { enabled: boolean }
+  codexReferenceBranches: { enabled: boolean }
   projectBoard: KunLabProjectBoardSettingsV1
 }
 
@@ -187,6 +190,9 @@ export type KunLabSettingsPatchV1 = {
   autoPlanBuild?: Partial<Omit<KunLabAutoPlanBuildSettingsV1, 'scheduledDefaults'>> & {
     scheduledDefaults?: Partial<KunLabAutoPlanBuildScheduledDefaultsV1>
   }
+  opencodeReferenceBranches?: { enabled?: boolean }
+  claudeCodeReferenceBranches?: { enabled?: boolean }
+  codexReferenceBranches?: { enabled?: boolean }
   projectBoard?: Partial<KunLabProjectBoardSettingsV1>
 }
 
@@ -390,7 +396,7 @@ export type KunRuntimeSettingsV1 = {
   imageGeneration: KunImageGenerationSettingsV1
   /** Speech-to-text provider used for voice input in the composer. */
   speechToText: KunSpeechToTextSettingsV1
-  /** Local Kokoro speech playback for assistant answers. */
+  /** Local sanoTTS speech playback for assistant answers. */
   speak: KunSpeakSettingsV1
   /** Text-to-speech provider exposed to agents as generate_speech. */
   textToSpeech: KunTextToSpeechSettingsV1
@@ -406,6 +412,8 @@ export type KunRuntimeSettingsV1 = {
   memoryEnabled: boolean
   /** Opt-in post-turn Memory candidate extraction; approval remains mandatory. */
   memoryDistillationEnabled: boolean
+  /** Whether user-approved long-term directives are injected into every turn. */
+  memoryDirectivesEnabled: boolean
   /** Native Kun AGENTS.md instructions injected into every turn. */
   instructions: KunInstructionSettingsV1
   /** Host computer-use (screenshot + mouse/keyboard control) settings. */

@@ -380,6 +380,10 @@ export function childActivityFromEvent(
       phase = 'retrying'
       label = `Retrying model request ${event.attempt}/${event.maxAttempts}`
       break
+    case 'model_route_switch':
+      phase = 'retrying'
+      label = `Switching model route to ${event.toProviderId}/${event.toModelId}`
+      break
     case 'tool_result_upload_wait':
       phase = 'waiting'
       label = 'Waiting for tool results'
@@ -571,6 +575,10 @@ export function intersectChildSecurity(
     ...intersectOptionalList('allowedToolNames', stored, current),
     ...intersectOptionalList('allowedSkillIds', stored, current),
     ...intersectOptionalPaths('allowedReadPaths', stored, current),
+    ...(stored.allowHostReads === true && current.allowHostReads === true &&
+      stored.allowedReadPaths === undefined && current.allowedReadPaths === undefined
+      ? { allowHostReads: true }
+      : {}),
     ...intersectOptionalPaths('allowedWritePaths', stored, current),
     ...intersectOptionalList('allowedArtifactIds', stored, current),
     ...unionOptionalList('blockedProviderIds', stored, current),

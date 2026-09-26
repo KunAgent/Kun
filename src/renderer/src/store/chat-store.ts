@@ -120,6 +120,10 @@ import { createComposerContextActions } from './chat-store-composer-context-acti
 import { createKnowledgeBaseActions } from './chat-store-knowledge-base-actions'
 import { createSidebarActivityActions } from './chat-store-sidebar-activity'
 import {
+  CODE_WORKSPACE_FOLDER_SETS_STORAGE_KEY,
+  readCodeWorkspaceFolderSets
+} from '../lib/code-workspace-folder-sets'
+import {
   REMOVED_CODE_WORKSPACES_STORAGE_KEY,
   readRemovedCodeWorkspaces
 } from '../lib/removed-code-workspaces'
@@ -152,6 +156,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // sinks on long turns (design-rail duplicate-text fix). Not part of develop's
   // split initial-state helper, so it's appended here.
   liveDeltaSeqFloor: 0,
+  setWriteAssistantVisibleThreadId: (threadId) => set({
+    writeAssistantVisibleThreadId: threadId?.trim() || null
+  }),
 
   ...createClawActions({
     set,
@@ -226,6 +233,9 @@ export function installRemovedWorkspaceSharedStateListener(): void {
   sharedRemovalListenerInstalled = true
   window.addEventListener(SHARED_BUSINESS_STORAGE_CHANGED_EVENT, (event) => {
     const detail = (event as CustomEvent<SharedBusinessStorageChangedDetail>).detail
+    if (detail?.keys.includes(CODE_WORKSPACE_FOLDER_SETS_STORAGE_KEY)) {
+      useChatStore.setState({ codeWorkspaceFolderSets: readCodeWorkspaceFolderSets() })
+    }
     if (!detail?.keys.includes(REMOVED_CODE_WORKSPACES_STORAGE_KEY)) return
     const registry = readRemovedCodeWorkspaces()
     const state = useChatStore.getState()

@@ -1,0 +1,507 @@
+import type {
+  ModelFailureCategory,
+  ModelFailureMetadata,
+  ModelFailureReason
+} from '../../contracts/model-route-pool.js'
+import { retryDelayMs } from './compat-retry-policy.js'
+
+export type { ModelFailureReason } from '../../contracts/model-route-pool.js'
+
+/** Extract a machine-readable provider error code from a JSON error body. */
+export function providerErrorCode(text: string): string | undefined {
+  try {
+    const parsed = JSON.parse(text) as { error?: { code?: unknown }; code?: unknown }
+    const code = parsed?.error?.code ?? parsed?.code
+    return typeof code === 'string' || typeof code === 'number' ? String(code).slice(0, 128) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Unified failure classification shared by every model client.
+ *
+ * HTTP status codes alone cannot distinguish "rate limited, retry soon" from
+ * "account out of credit, retrying is pointless", so classification also reads
+ * the provider error body (English and Chinese signal phrases) and rate-limit
+ * reset headers. The result drives three decisions: whether the same target
+ * may be retried, whether a configured failover target may take over, and how
+ * long a route-pool circuit stays open.
+ */
+
+export type ModelFailureClassification = {
+  reason: ModelFailureReason
+  /** Suggested wait before the same target may work again. */
+  retryAfterMs?: number
+  /** Provider-declared quota reset instant (ISO 8601), when known. */
+  resetAt?: string
+}
+
+export type FailureHeaderSource =
+  | Headers
+  | Record<string, string | string[] | undefined>
+  | Iterable<readonly [string, string]>
+  | undefined
+
+/** Body keywords are trusted only for actual error responses, never content. */
+const CREDIT_SIGNAL =
+  /insufficient[_\s-]?quota|insufficient[_\s-]?(?:balance|credit|funds?)|balance[_\s-]?(?:is[_\s-]?)?(?:not[_\s-]?enough|insufficient)|billing|hard[_\s-]?limit|arrears?|payment[_\s-]?required|recharge|余额不足|欠费|充值|账户.{0,8}(?:不足|停用|冻结)/iu
+const QUOTA_SIGNAL =
+  /\bquota\b|usage[_\s-]?limit|allowance[_\s-]?exceeded|plan[_\s-]?limit|订阅额度|账户额度/iu
+/** Chinese quota phrases require the quota word to co-occur with exhaustion. */
+const QUOTA_SIGNAL_ZH =
+  /(额度|套餐|用量).{0,6}(不足|用尽|耗尽|已用完|超限|上限)|(超出|超过|达到).{0,6}(额度|套餐|用量)/u
+/** Machine error codes that name account quota even on a bare HTTP 400. */
+const QUOTA_ERROR_CODE =
+  /exceeded_current_quota|insufficient_quota|quota_exceeded|quotaExceeded|billing_hard_limit|hard_limit_exceeded|usage_limit_reached|account_quota_exceeded/iu
+const RATE_SIGNAL =
+  /rate[_\s-]?limit|too[_\s-]?many[_\s-]?requests|throttl|requests?[_\s-]?per[_\s-]?(?:min|sec|hour|day)|限流|频率/iu
+const OVERLOADED_SIGNAL =
+  /overload|server[_\s-]?busy|at[_\s-]?capacity|capacity[_\s-]?reached|engine[_\s-]?(?:unavailable|overloaded)|服务(?:器)?(?:繁忙|过载)/iu
+/**
+ * Request-shape problems (oversized prompt, impossible max_tokens) share
+ * vocabulary with quota errors ("exceed", "limit", "上限"). Detect the
+ * size/context pair first so a 400 about length never opens a credit
+ * circuit.
+ */
+const REQUEST_SIZE_SIGNAL =
+  /(context|token|prompt|input|max_?(?:output_)?tokens|length|上下文|长度|字数).{0,40}(exceed|limit|maximum|too (?:long|large)|超过|超出|上限)|(exceed(?:ed|s)?|超过|超出).{0,40}(context|token|length|max_?tokens|上下文|长度)/iu
+
+/** Reasons that never benefit from retrying the same credential/target. */
+const FAILOVER_REASONS: ReadonlySet<ModelFailureReason> = new Set([
+  'credit',
+  'quota',
+  'rate',
+  'overloaded'
+])
+
+const MAX_RESET_DELAY_MS = 3_600_000
+
+export function classifyModelFailure(input: {
+  status?: number
+  providerCode?: string
+  body?: string
+  headers?: FailureHeaderSource
+  /** Retry hint the caller already parsed from a provider-specific body. */
+  retryAfterMs?: number
+  now?: number
+}): ModelFailureClassification {
+  const now = input.now ?? Date.now()
+  const signal = `${input.providerCode ?? ''}\n${(input.body ?? '').slice(0, 4_000)}`
+    .toLowerCase()
+  const parsed = resetInfoFromHeaders(input.headers, now)
+  // Two distinct waits: an explicit retry directive (Retry-After header or a
+  // provider-parsed body hint) versus a passive rate-limit window reset.
+  const explicitRetryAfterMs = input.retryAfterMs ?? parsed.explicitRetryAfterMs
+  const retryWaitMs = explicitRetryAfterMs ?? parsed.resetDelayMs
+  const resetAt = parsed.resetAt
+  const status = input.status
+  let reason: ModelFailureReason
+  // 1. Request-shape failures first: a size/length 400 is never a quota or
+  //    credit problem. (402 stays credit by definition.)
+  if (status !== 402 && REQUEST_SIZE_SIGNAL.test(signal)) reason = 'request'
+  // 2. Credit only on non-5xx statuses: a 5xx mentioning "billing" is an
+  //    upstream outage, not an unpaid invoice.
+  else if (
+    status === 402 ||
+    ((status === undefined || status === 400 || status === 401 ||
+      status === 403 || status === 429) && CREDIT_SIGNAL.test(signal))
+  ) reason = 'credit'
+  // 3. Every 429 carrying rate-limit vocabulary is throttling.
+  else if (status === 429 && RATE_SIGNAL.test(signal)) reason = 'rate'
+  // 4. Quota vocabulary counts on 403/429/missing status; a bare 400 needs an
+  //    explicit quota error code.
+  else if (
+    (status === undefined || status === 403 || status === 429) &&
+    (QUOTA_SIGNAL.test(signal) || QUOTA_SIGNAL_ZH.test(signal) || QUOTA_ERROR_CODE.test(signal))
+  ) reason = 'quota'
+  else if (status === 400 && QUOTA_ERROR_CODE.test(signal)) reason = 'quota'
+  // 5. Generic mappings.
+  else if (status === 429 || RATE_SIGNAL.test(signal)) reason = 'rate'
+  else if (status === 529 || OVERLOADED_SIGNAL.test(signal)) reason = 'overloaded'
+  else if (status === 401 || status === 403) reason = 'auth'
+  else if (status === 404) reason = 'model'
+  else if (status === 400 || status === 413 || status === 422) reason = 'request'
+  else reason = 'other'
+  // A provider that declares an explicit retry directive is throttling, not
+  // out of funds: demote hinted credit/quota to rate (e.g. Code Assist
+  // per-minute capacity resets). Passive window resets alone do not demote.
+  if ((reason === 'credit' || reason === 'quota') && explicitRetryAfterMs !== undefined) {
+    reason = 'rate'
+  }
+  return {
+    reason,
+    ...(retryWaitMs !== undefined ? { retryAfterMs: retryWaitMs } : {}),
+    ...(resetAt ? { resetAt } : {})
+  }
+}
+
+export function reasonAllowsFailover(reason: ModelFailureReason): boolean {
+  return FAILOVER_REASONS.has(reason)
+}
+
+/**
+ * Full route-pool metadata for one failure. `reason` is additive: `category`
+ * keeps the pre-existing mapping so older consumers keep working.
+ */
+export function modelFailureMetadata(input: {
+  status?: number
+  providerCode?: string
+  body?: string
+  headers?: FailureHeaderSource
+  retryAfterMs?: number
+  responseReceived?: boolean
+  now?: number
+}): ModelFailureMetadata {
+  const classification = classifyModelFailure(input)
+  return {
+    category: categoryForReason(classification.reason, input.status),
+    reason: classification.reason,
+    responseReceived: input.responseReceived ?? input.status !== undefined,
+    ...(input.status !== undefined ? { httpStatus: input.status } : {}),
+    ...(input.providerCode ? { providerCode: input.providerCode.slice(0, 128) } : {}),
+    ...(classification.retryAfterMs !== undefined
+      ? { retryAfterMs: classification.retryAfterMs }
+      : {}),
+    ...(classification.resetAt ? { resetAt: classification.resetAt } : {}),
+    failoverAllowed: failoverAllowedFor(classification.reason, input.status)
+  }
+}
+
+function categoryForReason(reason: ModelFailureReason, status?: number): ModelFailureCategory {
+  switch (reason) {
+    case 'credit':
+    case 'quota':
+      return 'quota'
+    case 'rate':
+      return 'rate_limit'
+    case 'overloaded':
+      return 'unavailable'
+    case 'auth':
+      return 'authentication'
+    case 'model':
+      return 'model_not_found'
+    case 'request':
+      return 'request'
+    case 'other':
+      if (status === 408) return 'timeout'
+      if (status !== undefined && status >= 500) return 'unavailable'
+      return 'unknown'
+  }
+}
+
+function failoverAllowedFor(reason: ModelFailureReason, status?: number): boolean {
+  if (FAILOVER_REASONS.has(reason)) return true
+  if (status === undefined) return false
+  return (
+    status === 401 || status === 402 || status === 403 || status === 404 ||
+    status === 408 || status === 425 || status === 429 || status >= 500
+  )
+}
+
+/**
+ * Same-target retry budget for a classified failure. Credit/quota failures
+ * cannot succeed on retry; rate/overload failures retry at most once when the
+ * caller has declared failover alternatives (waiting on the same target only
+ * delays the switch the user asked for).
+ */
+export type HttpRetryBudget = {
+  maxAttempts: number
+  /** Sleep exactly this long instead of computing a backoff. */
+  fixedDelayMs?: number
+  /** Cap the computed backoff (fast failover when alternatives exist). */
+  delayCapMs?: number
+  /** Floor for the computed backoff (provider-declared wait). */
+  minDelayMs?: number
+}
+
+/** Terminal-error suffix when a rate limit's declared wait is too long to sleep through. */
+export function rateLimitRecoverySuffix(recoveryMs: number | undefined): string {
+  if (recoveryMs === undefined || recoveryMs <= 60_000) return ''
+  const minutes = Math.max(1, Math.ceil(recoveryMs / 60_000))
+  return ` (rate limit resets in about ${minutes} minute${minutes === 1 ? '' : 's'})`
+}
+
+export function httpRetryBudget(input: {
+  reason: ModelFailureReason
+  retryAfterMs?: number
+  policy: { maxAttempts: number }
+  alternatives?: number
+}): HttpRetryBudget {
+  const policyMax = Math.max(0, input.policy.maxAttempts)
+  const hasAlternatives = (input.alternatives ?? 0) > 0
+  switch (input.reason) {
+    case 'credit':
+    case 'quota':
+      return { maxAttempts: 0 }
+    case 'rate': {
+      const hint = input.retryAfterMs
+      if (hasAlternatives) {
+        return hint !== undefined && hint <= 20_000
+          ? { maxAttempts: Math.min(1, policyMax), fixedDelayMs: hint }
+          : { maxAttempts: 0 }
+      }
+      // A single-provider wait past ~a minute is surfaced instead of being
+      // retried: the caller renders the recovery instant for a manual retry.
+      if (hint !== undefined && hint > 60_000) return { maxAttempts: 0 }
+      return { maxAttempts: policyMax, minDelayMs: hint }
+    }
+    case 'overloaded':
+    case 'other':
+      return hasAlternatives
+        ? { maxAttempts: Math.min(1, policyMax), delayCapMs: 3_000 }
+        : { maxAttempts: policyMax }
+    default:
+      return { maxAttempts: policyMax }
+  }
+}
+
+/**
+ * Delay before retry attempt `attempt`: the budget's fixed delay wins, then
+ * the standard Retry-After/exponential backoff floored at the provider's
+ * declared wait and capped by the failover-friendly delay cap.
+ */
+export function retryDelayForBudget(input: {
+  response: { headers: { get(name: string): string | null } }
+  budget: Pick<HttpRetryBudget, 'fixedDelayMs' | 'delayCapMs' | 'minDelayMs'>
+  initialDelayMs: number
+  attempt: number
+}): number {
+  if (input.budget.fixedDelayMs !== undefined) return input.budget.fixedDelayMs
+  let delayMs = retryDelayMs(input.response as Response, input.initialDelayMs, input.attempt)
+  if (input.budget.minDelayMs !== undefined) delayMs = Math.max(delayMs, input.budget.minDelayMs)
+  if (input.budget.delayCapMs !== undefined) delayMs = Math.min(delayMs, input.budget.delayCapMs)
+  return delayMs
+}
+
+/**
+ * Route-pool circuit cooldown for a classified failure. Deterministic account
+ * failures (credit/quota/auth) open the circuit on the first failure; transient
+ * ones keep the existing consecutive-failure threshold.
+ */
+export function circuitCooldownMs(input: {
+  reason?: ModelFailureReason
+  resetAt?: string
+  retryAfterMs?: number
+  consecutiveFailures: number
+  policy: {
+    failureThreshold: number
+    cooldownMs: number
+    creditCooldownMs?: number
+    quotaCooldownMs?: number
+    authCooldownMs?: number
+    maxCooldownMs?: number
+  }
+  now?: number
+}): { open: boolean; durationMs: number } {
+  const now = input.now ?? Date.now()
+  const reason = input.reason ?? 'other'
+  const deterministic =
+    reason === 'credit' || reason === 'quota' || reason === 'rate' || reason === 'auth'
+  const open = deterministic || input.consecutiveFailures >= input.policy.failureThreshold
+  if (!open) return { open: false, durationMs: 0 }
+  const resetDelayMs = input.resetAt !== undefined
+    ? Math.max(0, Math.min(MAX_RESET_DELAY_MS, Date.parse(input.resetAt) - now))
+    : undefined
+  let durationMs: number
+  switch (reason) {
+    case 'credit':
+      durationMs = input.policy.creditCooldownMs ?? 1_800_000
+      break
+    case 'quota':
+      durationMs = resetDelayMs ?? input.policy.quotaCooldownMs ?? 900_000
+      break
+    case 'rate':
+      durationMs = input.retryAfterMs ?? resetDelayMs ?? input.policy.cooldownMs
+      break
+    case 'auth':
+      durationMs = input.policy.authCooldownMs ?? 1_800_000
+      break
+    default: {
+      const maxCooldownMs = input.policy.maxCooldownMs ?? 600_000
+      const exponent = Math.max(0, input.consecutiveFailures - input.policy.failureThreshold)
+      durationMs = Math.min(maxCooldownMs, input.policy.cooldownMs * 2 ** exponent)
+    }
+  }
+  durationMs = Math.max(durationMs, input.retryAfterMs ?? 0)
+  return { open: true, durationMs: Math.min(MAX_RESET_DELAY_MS, durationMs) }
+}
+
+function resetInfoFromHeaders(
+  headers: FailureHeaderSource,
+  now: number
+): { explicitRetryAfterMs?: number; resetDelayMs?: number; resetAt?: string } {
+  const get = headerGetter(headers)
+  if (!get) return {}
+  const explicitRetryAfterMs = retryAfterHeaderMs(get('retry-after'), now)
+  const remaining = new Map<string, number>()
+  const resets = new Map<string, number>()
+  forEachHeader(headers, (name, value) => {
+    const dimension = rateLimitHeaderDimension(name)
+    if (!dimension) return
+    if (dimension.kind === 'remaining') {
+      const numeric = Number(value.trim())
+      if (Number.isFinite(numeric)) {
+        remaining.set(dimension.key, Math.min(numeric, remaining.get(dimension.key) ?? numeric))
+      }
+    } else {
+      const resetMs = resetHeaderValueMs(value, now)
+      if (resetMs !== undefined) {
+        resets.set(dimension.key, Math.max(resetMs, resets.get(dimension.key) ?? 0))
+      }
+    }
+  })
+  let resetDelayMs: number | undefined
+  if (resets.size > 0) {
+    // Dimensions whose remaining counter already hit zero are the binding
+    // constraint; without one, every window must have recovered, so the
+    // latest reset wins.
+    const exhausted = [...resets.entries()].filter(([key]) => remaining.get(key) === 0)
+    const candidates = exhausted.length > 0 ? exhausted : [...resets.entries()]
+    resetDelayMs = Math.max(...candidates.map(([, ms]) => ms))
+  }
+  return {
+    ...(explicitRetryAfterMs !== undefined ? { explicitRetryAfterMs } : {}),
+    ...(resetDelayMs !== undefined
+      ? { resetDelayMs, resetAt: new Date(now + resetDelayMs).toISOString() }
+      : {})
+  }
+}
+
+/**
+ * Pairs `*remaining*` and `*reset*` rate-limit headers by dimension:
+ * `x-ratelimit-remaining-tokens` shares a bucket with
+ * `x-ratelimit-reset-tokens`, and `anthropic-ratelimit-input-tokens-reset`
+ * pairs with `anthropic-ratelimit-input-tokens-remaining`.
+ */
+function rateLimitHeaderDimension(
+  name: string
+): { kind: 'remaining' | 'reset'; key: string } | undefined {
+  const lower = name.toLowerCase()
+  if (!/rate.?limit/i.test(lower)) return undefined
+  const keyFor = (marker: string): string =>
+    lower.replace(marker, '').replace(/-{2,}/g, '-').replace(/[-_]+$/, '')
+  if (/remaining/.test(lower)) return { kind: 'remaining', key: keyFor('remaining') }
+  if (/reset/.test(lower)) return { kind: 'reset', key: keyFor('reset') }
+  return undefined
+}
+
+/** Retry-After / x-ratelimit-reset-*/ /anthropic-ratelimit-*-reset values. */
+export function retryAfterHeaderMs(value: string | null | undefined, now = Date.now()): number | undefined {
+  const trimmed = value?.trim()
+  if (!trimmed) return undefined
+  const numeric = Number(trimmed)
+  if (Number.isFinite(numeric) && numeric >= 0) {
+    return Math.min(MAX_RESET_DELAY_MS, Math.round(numeric * 1_000))
+  }
+  const dateMs = Date.parse(trimmed)
+  if (Number.isFinite(dateMs)) {
+    return Math.min(MAX_RESET_DELAY_MS, Math.max(0, dateMs - now))
+  }
+  return undefined
+}
+
+/**
+ * Reset header values arrive as unix seconds, RFC 3339 timestamps, or relative
+ * durations (`20ms`, `1s`, `6m30s`, `1h`). Numbers near epoch magnitude are
+ * treated as absolute instants; small numbers stay relative seconds.
+ */
+function resetHeaderValueMs(value: string, now: number): number | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const duration = parseDurationMs(trimmed)
+  if (duration !== undefined) return Math.min(MAX_RESET_DELAY_MS, duration)
+  const numeric = Number(trimmed)
+  if (Number.isFinite(numeric) && numeric > 0) {
+    if (numeric >= 1e12) return clampReset(numeric - now)
+    if (numeric >= 1e9) return clampReset(numeric * 1_000 - now)
+    return clampReset(numeric * 1_000)
+  }
+  const dateMs = Date.parse(trimmed)
+  if (Number.isFinite(dateMs)) return clampReset(dateMs - now)
+  return undefined
+}
+
+function parseDurationMs(value: string): number | undefined {
+  if (!/^\d+(?:\.\d+)?(?:ms|s|m|h)(?:\d+(?:\.\d+)?(?:ms|s|m|h))*$/i.test(value)) {
+    return undefined
+  }
+  let total = 0
+  for (const match of value.matchAll(/(\d+(?:\.\d+)?)(ms|s|m|h)/gi)) {
+    const amount = Number(match[1])
+    const unit = match[2].toLowerCase()
+    total += amount * (unit === 'ms' ? 1 : unit === 's' ? 1_000 : unit === 'm' ? 60_000 : 3_600_000)
+  }
+  return total
+}
+
+function clampReset(ms: number): number | undefined {
+  if (!Number.isFinite(ms) || ms < 0) return undefined
+  return Math.min(MAX_RESET_DELAY_MS, Math.round(ms))
+}
+
+function headerGetter(headers: FailureHeaderSource): ((name: string) => string | null) | undefined {
+  if (!headers) return undefined
+  if (typeof (headers as Headers).get === 'function') {
+    const h = headers as Headers
+    return (name) => h.get(name)
+  }
+  if (Symbol.iterator in (headers as object)) {
+    const map = new Map<string, string>()
+    for (const [key, value] of headers as Iterable<readonly [string, string]>) {
+      map.set(key.toLowerCase(), value)
+    }
+    return (name) => map.get(name.toLowerCase()) ?? null
+  }
+  const record = headers as Record<string, string | string[] | undefined>
+  return (name) => {
+    const found = Object.entries(record).find(([key]) => key.toLowerCase() === name)
+    const value = found?.[1]
+    return Array.isArray(value) ? value[0] ?? null : value ?? null
+  }
+}
+
+function forEachHeader(
+  headers: FailureHeaderSource,
+  visit: (name: string, value: string) => void
+): void {
+  if (!headers) return
+  if (typeof (headers as Headers).forEach === 'function') {
+    ;(headers as Headers).forEach((value, name) => visit(name, value))
+    return
+  }
+  if (Symbol.iterator in (headers as object)) {
+    for (const [key, value] of headers as Iterable<readonly [string, string]>) visit(key, value)
+    return
+  }
+  for (const [key, value] of Object.entries(headers as Record<string, string | string[] | undefined>)) {
+    if (value === undefined) continue
+    visit(key, Array.isArray(value) ? value.join(', ') : value)
+  }
+}
+
+/**
+ * Classify an HTTP error response and compute its same-target retry budget in
+ * one call — used by both the buffered and streaming retry loops.
+ */
+export function httpFailureRetryDecision(input: {
+  status: number
+  body: string
+  headers?: FailureHeaderSource
+  alternatives?: number
+  policyMaxAttempts: number
+}): { classification: ModelFailureClassification; budget: ReturnType<typeof httpRetryBudget> } {
+  const classification = classifyModelFailure({
+    status: input.status,
+    providerCode: providerErrorCode(input.body),
+    body: input.body,
+    headers: input.headers
+  })
+  const budget = httpRetryBudget({
+    reason: classification.reason,
+    retryAfterMs: classification.retryAfterMs,
+    alternatives: input.alternatives,
+    policy: { maxAttempts: input.policyMaxAttempts }
+  })
+  return { classification, budget }
+}

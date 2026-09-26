@@ -12,8 +12,8 @@ import { icons, ChevronDown, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   calculateComposerPopoverPlacement,
-  currentComposerBodyZoom
 } from './chat/floating-composer-popover-placement'
+import { bodyZoom } from '../lib/body-zoom'
 import { LucideIconByName } from './lucide-icon-by-name'
 
 const ICON_NAMES = Object.keys(icons)
@@ -64,7 +64,7 @@ export function LucideIconPicker({ value, onChange, disabled = false, ariaLabel 
       viewportWidth: window.innerWidth,
       preferredWidth: PICKER_WIDTH,
       maximumHeight: PICKER_MAX_HEIGHT,
-      coordinateScale: currentComposerBodyZoom()
+      coordinateScale: bodyZoom()
     })
     setMenuStyle({ left, top, width, maxHeight })
   }, [])

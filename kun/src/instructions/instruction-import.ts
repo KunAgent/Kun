@@ -1,0 +1,651 @@
+import { lstat, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { createHash } from 'node:crypto'
+import { parse as parseYaml } from 'yaml'
+import {
+  DEFAULT_INSTRUCTION_MAX_FILE_BYTES,
+  DEFAULT_INSTRUCTION_MAX_TOTAL_BYTES,
+  KUN_AGENTS_FILENAME
+} from './instruction-runtime.js'
+
+export const MAX_IMPORT_DEPTH = 4
+
+/** Independent hard ceiling: a single source file larger than this is skipped entirely rather than imported. */
+export const MAX_IMPORT_SOURCE_BYTES = 512 * 1024
+
+export type ImportScope = 'workspace' | 'global'
+
+export type SourceToolId =
+  | 'claude-code'
+  | 'codex'
+  | 'cursor'
+  | 'gemini'
+  | 'copilot'
+  | 'windsurf'
+  | 'cline'
+  | 'zed'
+  | 'opencode'
+  | 'kiro'
+  | 'roo-code'
+  | 'kilo-code'
+  | 'continue'
+  | 'amp'
+  | 'goose'
+
+/**
+ * One source location declared by an adapter. `relFile` is read directly;
+ * `relDir` reads every file in that directory whose extension is in `exts`.
+ * Paths are relative to the workspace root (workspace scope) or the home
+ * directory (global scope).
+ */
+export type SourceFileSpec = {
+  kind: string
+  relFile?: string
+  relDir?: string
+  exts?: string[]
+  resolveImports?: boolean
+  stripFrontmatter?: boolean
+}
+
+export type SourceAdapter = {
+  tool: SourceToolId
+  label: string
+  workspace: SourceFileSpec[]
+  global: SourceFileSpec[]
+}
+
+export type DetectedSourceFile = {
+  tool: SourceToolId
+  scope: ImportScope
+  kind: string
+  path: string
+  bytes: number
+  spec: SourceFileSpec
+}
+
+export type ImportWarning =
+  | { code: 'unresolved-import'; path: string; detail: string }
+  | { code: 'import-cycle'; path: string }
+  | { code: 'oversized-import'; path: string; bytes: number }
+  | { code: 'oversized-source-imported'; path: string; bytes: number; limit: number }
+  | { code: 'out-of-bounds-import'; path: string; detail: string }
+  | { code: 'identity-skip'; tool: SourceToolId; path: string }
+  | { code: 'block-modified'; tool: SourceToolId; target: string }
+  | { code: 'budget-exceeded'; target: string; bytes: number; limit: number }
+
+export type ImportTargetPlan = {
+  scope: ImportScope
+  target: string
+  tools: SourceToolId[]
+  mergedText: string
+  existingText: string
+  changed: boolean
+  finalBytes: number
+}
+
+export type ImportPlan = {
+  targets: ImportTargetPlan[]
+  warnings: ImportWarning[]
+}
+
+export type BuildImportPlanInput = {
+  workspace: string
+  homeDir: string
+  adapters: SourceAdapter[]
+  scopes: ImportScope[]
+  /** Restrict to these tools; empty/undefined means every adapter. */
+  tools?: SourceToolId[]
+  maxFileBytes?: number
+  maxTotalBytes?: number
+  maxSourceBytes?: number
+  /** Overwrite managed blocks even when they were hand-edited since the last import. */
+  force?: boolean
+}
+
+const BEGIN = 'kun:import:begin'
+const END = 'kun:import:end'
+
+export function globalAgentsPath(homeDir: string): string {
+  return join(homeDir, '.kun', KUN_AGENTS_FILENAME)
+}
+
+export function workspaceAgentsPath(workspace: string): string {
+  return join(workspace, KUN_AGENTS_FILENAME)
+}
+
+function beginMarkerWithHash(tool: SourceToolId, blockBody: string): string {
+  return `<!-- ${BEGIN} tool=${tool} sha=${contentHash(blockBody)} -->`
+}
+
+function endMarker(tool: SourceToolId): string {
+  return `<!-- ${END} tool=${tool} -->`
+}
+
+function contentHash(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 12)
+}
+
+/** Locate an existing managed block for `tool`, returning its recorded hash and current body (line endings normalized). */
+function findManagedBlock(existing: string, tool: SourceToolId): { recordedHash: string | null; body: string } | null {
+  // Tolerate CRLF files (e.g. git autocrlf on Windows): without \r? here the
+  // markers are never found and a hand-edited block would be silently replaced.
+  const pattern = new RegExp(
+    `<!-- ${escapeRegExp(BEGIN)} tool=${escapeRegExp(tool)}(?: sha=([0-9a-f]+))? -->\\r?\\n([\\s\\S]*?)\\r?\\n<!-- ${escapeRegExp(END)} tool=${escapeRegExp(tool)} -->`,
+    'u'
+  )
+  const match = pattern.exec(existing)
+  if (!match) return null
+  // Normalize line endings so a pristine CRLF file still hashes equal to the LF body we wrote.
+  return { recordedHash: match[1] ?? null, body: (match[2] ?? '').replace(/\r\n/gu, '\n') }
+}
+
+/**
+ * True when a managed block exists AND cannot be trusted as import-written:
+ * either its body no longer matches the recorded hash (hand-edited inside the
+ * fence), or it carries no hash at all (written before hashing existed — its
+ * provenance is unknown, so it is treated as modified rather than risk
+ * clobbering a hand-edit).
+ */
+export function isManagedBlockModified(existing: string, tool: SourceToolId): boolean {
+  const found = findManagedBlock(existing, tool)
+  if (!found) return false
+  if (found.recordedHash === null) return true
+  return contentHash(found.body) !== found.recordedHash
+}
+
+async function statSafe(path: string): Promise<{ isFile: boolean; bytes: number } | null> {
+  try {
+    const info = await stat(path)
+    return { isFile: info.isFile(), bytes: info.size }
+  } catch {
+    return null
+  }
+}
+
+function baseForScope(scope: ImportScope, workspace: string, homeDir: string): string {
+  return scope === 'workspace' ? workspace : homeDir
+}
+
+/** Detect which declared source files exist, per tool and scope. Reads nothing beyond declared locations and mutates nothing. */
+export async function detectImportSources(input: {
+  workspace: string
+  homeDir: string
+  adapters: SourceAdapter[]
+  scopes: ImportScope[]
+  tools?: SourceToolId[]
+}): Promise<DetectedSourceFile[]> {
+  const { workspace, homeDir, adapters, scopes } = input
+  const toolFilter = input.tools && input.tools.length > 0 ? new Set(input.tools) : null
+  const found: DetectedSourceFile[] = []
+
+  for (const adapter of adapters) {
+    if (toolFilter && !toolFilter.has(adapter.tool)) continue
+    for (const scope of scopes) {
+      const base = baseForScope(scope, workspace, homeDir)
+      const specs = scope === 'workspace' ? adapter.workspace : adapter.global
+      for (const spec of specs) {
+        for (const path of await expandSpec(base, spec)) {
+          const info = await statSafe(path)
+          if (!info || !info.isFile) continue
+          found.push({ tool: adapter.tool, scope, kind: spec.kind, path, bytes: info.bytes, spec })
+        }
+      }
+    }
+  }
+  return found
+}
+
+async function expandSpec(base: string, spec: SourceFileSpec): Promise<string[]> {
+  if (spec.relFile) return [resolve(base, spec.relFile)]
+  if (spec.relDir) {
+    const dir = resolve(base, spec.relDir)
+    let entries: string[]
+    try {
+      entries = await readdir(dir)
+    } catch {
+      return []
+    }
+    const exts = spec.exts ?? ['.md']
+    return entries
+      .filter((name) => exts.some((ext) => name.toLowerCase().endsWith(ext)))
+      .sort()
+      .map((name) => join(dir, name))
+  }
+  return []
+}
+
+type FrontmatterSplit = { frontmatter: string; body: string }
+
+function splitFrontmatter(text: string): FrontmatterSplit {
+  if (!text.startsWith('---')) return { frontmatter: '', body: text }
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/u.exec(text)
+  if (!match) return { frontmatter: '', body: text }
+  return { frontmatter: match[1] ?? '', body: text.slice(match[0].length) }
+}
+
+/**
+ * Inspect a source file's frontmatter and decide whether it encodes a real
+ * file-scoping condition (e.g. Cursor `globs`, Copilot `applyTo` pattern, Kiro
+ * `inclusion: fileMatch` + `fileMatchPattern`). Unconditional/always-apply
+ * rules return no note. Kun cannot enforce these conditions, so a scoped rule
+ * gets a visible note recording the original condition.
+ */
+function scopedConditionNote(frontmatter: string): string | null {
+  if (!frontmatter.trim()) return null
+  let parsed: unknown
+  try {
+    parsed = parseYaml(frontmatter)
+  } catch {
+    return /^(?:alwaysApply|globs|applyTo|inclusion|fileMatchPattern)\s*:/imu.test(frontmatter)
+      ? 'conditional frontmatter could not be parsed'
+      : null
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
+  const fields = new Map(
+    Object.entries(parsed).map(([key, value]) => [key.toLowerCase(), value])
+  )
+  const values = (value: unknown): string[] => {
+    const entries = Array.isArray(value) ? value : [value]
+    return entries
+      .filter((entry): entry is string | number | boolean => ['string', 'number', 'boolean'].includes(typeof entry))
+      .map((entry) => String(entry).trim())
+      .filter(Boolean)
+  }
+  const display = (value: unknown): string => values(value).join(', ')
+  const isTruthy = (value: unknown): boolean => values(value).some((entry) => /^(true|yes|always)$/iu.test(entry))
+
+  // Cursor: alwaysApply true means global; globs present means scoped.
+  const alwaysApply = fields.get('alwaysapply')
+  if (isTruthy(alwaysApply)) return null
+  const conditions: string[] = []
+  if (alwaysApply === false || values(alwaysApply).some((entry) => /^(false|no|never)$/iu.test(entry))) {
+    conditions.push('alwaysApply=false')
+  }
+  const globs = fields.get('globs')
+  if (display(globs)) conditions.push(`globs=${display(globs)}`)
+  const applyTo = fields.get('applyto')
+  const applyToValues = values(applyTo).filter((entry) => entry !== '**')
+  if (applyToValues.length > 0) conditions.push(`applyTo=${applyToValues.join(', ')}`)
+  const inclusion = fields.get('inclusion')
+  if (/filematch/iu.test(display(inclusion))) {
+    const pattern = fields.get('filematchpattern')
+    conditions.push(display(pattern) ? `inclusion=fileMatch(${display(pattern)})` : 'inclusion=fileMatch')
+  }
+  return conditions.length > 0 ? conditions.join(', ') : null
+}
+
+function normalizeBody(text: string): string {
+  const lines = text.replace(/\r\n/gu, '\n').split('\n')
+  const out: string[] = []
+  // A fence closes only on the same char (` or ~) at the same-or-longer run,
+  // so a `~~~` line inside a ``` fence stays content instead of ending it early.
+  let fenceChar = ''
+  let fenceLen = 0
+  let blankRun = 0
+  for (const line of lines) {
+    const marker = /^\s*(`{3,}|~{3,})/u.exec(line)?.[1]
+    if (fenceChar) {
+      // Inside a code fence: preserve verbatim (blank lines and trailing spaces included).
+      out.push(line)
+      if (marker && marker[0] === fenceChar && marker.length >= fenceLen) {
+        fenceChar = ''
+        fenceLen = 0
+      }
+      blankRun = 0
+      continue
+    }
+    if (marker) {
+      fenceChar = marker[0] ?? ''
+      fenceLen = marker.length
+      out.push(line)
+      blankRun = 0
+      continue
+    }
+    const trimmed = line.replace(/[ \t]+$/u, '')
+    if (trimmed === '') {
+      blankRun += 1
+      if (blankRun >= 2) continue // collapse consecutive blanks to one outside code fences
+    } else {
+      blankRun = 0
+    }
+    out.push(trimmed)
+  }
+  return out.join('\n').trim()
+}
+
+type ResolveCtx = {
+  homeDir: string
+  roots: string[]
+  visited: Set<string>
+  warnings: ImportWarning[]
+  maxFileBytes: number
+}
+
+const IMPORT_TOKEN = /(^|[^\w`@])@([^\s'"()]+)/gu
+
+/**
+ * True when `candidate`, after symlink resolution, resides within one of
+ * `roots` (also symlink-resolved). Guards @import against `..`, absolute,
+ * UNC/drive, and symlink-escape reads outside the workspace root or home.
+ */
+async function isPathWithinRoots(candidate: string, roots: string[]): Promise<boolean> {
+  const real = await realpath(candidate).catch(() => resolve(candidate))
+  for (const root of roots) {
+    const realRoot = await realpath(root).catch(() => resolve(root))
+    const rel = relative(realRoot, real)
+    if (rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel))) return true
+  }
+  return false
+}
+
+async function resolveClaudeImports(
+  text: string,
+  baseDir: string,
+  depth: number,
+  ctx: ResolveCtx
+): Promise<string> {
+  if (depth >= MAX_IMPORT_DEPTH) return text
+  const matches = [...text.matchAll(IMPORT_TOKEN)]
+  if (matches.length === 0) return text
+
+  let out = ''
+  let cursor = 0
+  for (const match of matches) {
+    const full = match[0]
+    const lead = match[1] ?? ''
+    const rawPath = match[2] ?? ''
+    const start = match.index ?? 0
+    out += text.slice(cursor, start) + lead
+    cursor = start + full.length
+
+    const looksLikePath = rawPath.includes('/') || rawPath.includes('\\')
+    const resolved = resolveImportPath(rawPath, baseDir, ctx.homeDir)
+    const info = await statSafe(resolved)
+    if (!info || !info.isFile) {
+      if (looksLikePath) ctx.warnings.push({ code: 'unresolved-import', path: resolved, detail: rawPath })
+      out += `@${rawPath}`
+      continue
+    }
+    if (!(await isPathWithinRoots(resolved, ctx.roots))) {
+      ctx.warnings.push({ code: 'out-of-bounds-import', path: resolved, detail: rawPath })
+      out += `@${rawPath}`
+      continue
+    }
+    if (info.bytes > ctx.maxFileBytes) {
+      ctx.warnings.push({ code: 'oversized-import', path: resolved, bytes: info.bytes })
+      out += `@${rawPath}`
+      continue
+    }
+    let real = resolved
+    try {
+      real = await realpath(resolved)
+    } catch {
+      // fall back to resolved path for the cycle key
+    }
+    if (ctx.visited.has(real)) {
+      ctx.warnings.push({ code: 'import-cycle', path: real })
+      out += `<!-- kun-import: cycle skipped ${rawPath} -->`
+      continue
+    }
+    ctx.visited.add(real)
+    const nested = await resolveClaudeImports(await readFile(resolved, 'utf8'), dirname(resolved), depth + 1, ctx)
+    ctx.visited.delete(real)
+    out += `\n${normalizeBody(nested)}\n`
+  }
+  out += text.slice(cursor)
+  return out
+}
+
+function resolveImportPath(rawPath: string, baseDir: string, homeDir: string): string {
+  if (rawPath.startsWith('~/') || rawPath.startsWith('~\\')) return resolve(homeDir, rawPath.slice(2))
+  if (isAbsolute(rawPath)) return rawPath
+  return resolve(baseDir, rawPath)
+}
+
+async function renderSourceFile(source: DetectedSourceFile, ctx: ResolveCtx): Promise<string> {
+  let text = await readFile(source.path, 'utf8')
+  let conditionNote: string | null = null
+  if (source.spec.stripFrontmatter) {
+    const split = splitFrontmatter(text)
+    conditionNote = scopedConditionNote(split.frontmatter)
+    text = split.body
+  }
+  if (source.spec.resolveImports) {
+    ctx.visited.add(await realpath(source.path).catch(() => source.path))
+    text = await resolveClaudeImports(text, dirname(source.path), 0, ctx)
+  }
+  const body = normalizeBody(text)
+  if (conditionNote && body.length > 0) {
+    return `<!-- Imported condition (NOT enforced by Kun): ${conditionNote} -->\n${body}`
+  }
+  return body
+}
+
+/** Replace the managed block for `tool`, appending a fresh block if none exists. Content outside markers is preserved verbatim. */
+export function mergeManagedBlock(existing: string, tool: SourceToolId, blockBody: string): string {
+  const begin = beginMarkerWithHash(tool, blockBody)
+  const end = endMarker(tool)
+  const block = `${begin}\n${blockBody}\n${end}`
+  // Match the begin marker with or without a recorded sha= attribute so legacy blocks are replaced too.
+  const pattern = new RegExp(
+    `<!-- ${escapeRegExp(BEGIN)} tool=${escapeRegExp(tool)}(?: sha=[0-9a-f]+)? -->[\\s\\S]*?${escapeRegExp(end)}`,
+    'u'
+  )
+  if (pattern.test(existing)) {
+    // Callback replacement: blockBody may contain $-sequences ($&, $', $1, ...)
+    // which String.replace would otherwise interpret as match references.
+    return existing.replace(pattern, () => block)
+  }
+  const trimmed = existing.replace(/\s+$/u, '')
+  return trimmed.length > 0 ? `${trimmed}\n\n${block}\n` : `${block}\n`
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+}
+
+async function readTargetText(path: string): Promise<string> {
+  try {
+    return await readFile(path, 'utf8')
+  } catch (error) {
+    if (isMissingFileError(error)) return ''
+    throw error
+  }
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'ENOENT'
+}
+
+/** Pure-ish planning step: reads source files and produces the merged target text without writing anything. */
+export async function buildImportPlan(input: BuildImportPlanInput): Promise<ImportPlan> {
+  const maxFileBytes = input.maxFileBytes ?? DEFAULT_INSTRUCTION_MAX_FILE_BYTES
+  const maxTotalBytes = input.maxTotalBytes ?? DEFAULT_INSTRUCTION_MAX_TOTAL_BYTES
+  const maxSourceBytes = Math.min(input.maxSourceBytes ?? MAX_IMPORT_SOURCE_BYTES, MAX_IMPORT_SOURCE_BYTES)
+  const warnings: ImportWarning[] = []
+  const detected = await detectImportSources({
+    workspace: input.workspace,
+    homeDir: input.homeDir,
+    adapters: input.adapters,
+    scopes: input.scopes,
+    ...(input.tools ? { tools: input.tools } : {})
+  })
+
+  const targets: ImportTargetPlan[] = []
+  for (const scope of input.scopes) {
+    const target = scope === 'workspace'
+      ? workspaceAgentsPath(input.workspace)
+      : globalAgentsPath(input.homeDir)
+    const existingText = await readTargetText(target)
+    let mergedText = existingText
+    const tools: SourceToolId[] = []
+
+    for (const adapter of input.adapters) {
+      const sources = detected.filter((source) => source.scope === scope && source.tool === adapter.tool)
+      if (sources.length === 0) continue
+      // Refuse to clobber a managed block whose contents we cannot verify (hand-edited since the
+      // last import, or written before hashing existed), unless forced.
+      if (!input.force && isManagedBlockModified(mergedText, adapter.tool)) {
+        warnings.push({ code: 'block-modified', tool: adapter.tool, target })
+        continue
+      }
+      const parts: string[] = []
+      for (const source of sources) {
+        // A source that resolves to the target file itself is an identity import (e.g. Codex workspace AGENTS.md).
+        if (resolve(source.path) === resolve(target)) {
+          warnings.push({ code: 'identity-skip', tool: source.tool, path: source.path })
+          continue
+        }
+        // Independent hard ceiling: skip an oversized top-level source entirely rather than importing a huge file.
+        if (source.bytes > maxSourceBytes) {
+          warnings.push({ code: 'oversized-import', path: source.path, bytes: source.bytes })
+          continue
+        }
+        // Within the hard cap but over the per-file budget: still import, but warn (never truncate instruction meaning).
+        if (source.bytes > maxFileBytes) {
+          warnings.push({ code: 'oversized-source-imported', path: source.path, bytes: source.bytes, limit: maxFileBytes })
+        }
+        const ctx: ResolveCtx = {
+          homeDir: input.homeDir,
+          roots: [input.workspace, input.homeDir],
+          visited: new Set(),
+          warnings,
+          maxFileBytes
+        }
+        const body = await renderSourceFile(source, ctx)
+        if (body.length > 0) parts.push(`<!-- from: ${source.kind} -->\n${body}`)
+      }
+      if (parts.length === 0) continue
+      mergedText = mergeManagedBlock(mergedText, adapter.tool, parts.join('\n\n'))
+      tools.push(adapter.tool)
+    }
+
+    const finalBytes = Buffer.byteLength(mergedText, 'utf8')
+    if (finalBytes > maxFileBytes) {
+      warnings.push({ code: 'budget-exceeded', target, bytes: finalBytes, limit: maxFileBytes })
+    }
+    targets.push({
+      scope,
+      target,
+      tools,
+      mergedText,
+      existingText,
+      changed: tools.length > 0 && mergedText !== existingText,
+      finalBytes
+    })
+  }
+
+  const totalBytes = targets.reduce((sum, plan) => sum + plan.finalBytes, 0)
+  if (totalBytes > maxTotalBytes) {
+    warnings.push({ code: 'budget-exceeded', target: '(all scopes)', bytes: totalBytes, limit: maxTotalBytes })
+  }
+
+  return { targets, warnings }
+}
+
+async function writeTextAtomically(path: string, content: string): Promise<void> {
+  const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.tmp`)
+  await writeFile(temporary, content, { encoding: 'utf8', mode: 0o600 })
+  await rename(temporary, path)
+}
+
+async function assertSafeWorkspaceTarget(target: string, workspace: string): Promise<void> {
+  const info = await lstat(target).catch(() => null)
+  if (info?.isSymbolicLink()) throw new Error('workspace AGENTS.md must not be a symbolic link')
+  const root = await realpath(workspace).catch(() => resolve(workspace))
+  const parent = await realpath(dirname(target)).catch(() => resolve(dirname(target)))
+  const rel = relative(root, parent)
+  if (rel !== '' && (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel))) {
+    throw new Error('workspace AGENTS.md resolves outside the workspace')
+  }
+}
+
+export type AppliedTarget = { scope: ImportScope; target: string; bytes: number }
+
+/** Write the changed targets from a plan. Global writes create `~/.kun`; workspace writes refuse symlinks and out-of-root paths. */
+export async function applyImportPlan(plan: ImportPlan, input: { workspace: string }): Promise<AppliedTarget[]> {
+  const applied: AppliedTarget[] = []
+  for (const targetPlan of plan.targets) {
+    if (!targetPlan.changed) continue
+    if (targetPlan.scope === 'workspace') {
+      await assertSafeWorkspaceTarget(targetPlan.target, input.workspace)
+    } else {
+      await mkdir(dirname(targetPlan.target), { recursive: true })
+    }
+    await writeTextAtomically(targetPlan.target, targetPlan.mergedText)
+    applied.push({ scope: targetPlan.scope, target: targetPlan.target, bytes: targetPlan.finalBytes })
+  }
+  return applied
+}
+
+export function describeWarning(warning: ImportWarning): string {
+  switch (warning.code) {
+    case 'unresolved-import':
+      return `Unresolved @import "${warning.detail}" (${warning.path})`
+    case 'import-cycle':
+      return `Skipped @import cycle at ${warning.path}`
+    case 'oversized-import':
+      return `Skipped oversized @import (${warning.bytes} bytes) at ${warning.path}`
+    case 'oversized-source-imported':
+      return `Imported oversized source (${warning.bytes} > ${warning.limit} bytes) without truncation at ${warning.path}`
+    case 'out-of-bounds-import':
+      return `Skipped out-of-bounds @import "${warning.detail}" outside the workspace or home: ${warning.path}`
+    case 'identity-skip':
+      return `Skipped ${warning.tool} source identical to the target: ${warning.path}`
+    case 'block-modified':
+      return `Skipped ${warning.tool}: its managed block in ${warning.target} was hand-edited or predates hashing; re-run with --force to overwrite`
+    case 'budget-exceeded':
+      return `Instruction budget exceeded for ${warning.target}: ${warning.bytes} > ${warning.limit} bytes`
+  }
+}
+
+export function describeImportPlan(plan: ImportPlan): string[] {
+  const lines: string[] = []
+  for (const target of plan.targets) {
+    const state = target.changed ? `${target.finalBytes} bytes` : 'no change'
+    const tools = target.tools.length > 0 ? target.tools.join(', ') : 'none'
+    lines.push(`[${target.scope}] ${target.target}`)
+    lines.push(`  tools: ${tools} · ${state}`)
+  }
+  if (plan.warnings.length > 0) {
+    lines.push('', 'Warnings:')
+    for (const warning of plan.warnings) lines.push(`  - ${describeWarning(warning)}`)
+  }
+  return lines
+}
+
+export type ParsedImportArgs = {
+  tools: SourceToolId[]
+  unknownTools: string[]
+  unknownFlags: string[]
+  scopes: ImportScope[]
+  dryRun: boolean
+  force: boolean
+}
+
+const KNOWN_IMPORT_FLAGS = new Set(['--global', '--workspace', '--dry-run', '--force'])
+
+/**
+ * Parse `/import` arguments into a typed request. Tool tokens are split into
+ * known (`tools`) and `unknownTools` against `knownTools`; flags outside the
+ * known set are collected in `unknownFlags` so the caller can reject typos like
+ * `--gloabl` instead of silently ignoring them. Scope defaults to workspace;
+ * `--global` alone means global only, and passing both flags means both. Pure
+ * and free of any filesystem or adapter dependency.
+ */
+export function parseImportArgs(args: string | undefined, knownTools: SourceToolId[]): ParsedImportArgs {
+  const tokens = (args ?? '').trim().split(/\s+/u).filter((token) => token.length > 0)
+  const flags = tokens.filter((token) => token.startsWith('--'))
+  const flagSet = new Set(flags)
+  const unknownFlags = flags.filter((flag) => !KNOWN_IMPORT_FLAGS.has(flag))
+  const requested = tokens.filter((token) => !token.startsWith('--'))
+  const known = new Set<string>(knownTools)
+  const tools = requested.filter((token): token is SourceToolId => known.has(token))
+  const unknownTools = requested.filter((token) => !known.has(token))
+  const wantGlobal = flagSet.has('--global')
+  const wantWorkspace = flagSet.has('--workspace') || !wantGlobal
+  const scopes: ImportScope[] = []
+  if (wantWorkspace) scopes.push('workspace')
+  if (wantGlobal) scopes.push('global')
+  return { tools, unknownTools, unknownFlags, scopes, dryRun: flagSet.has('--dry-run'), force: flagSet.has('--force') }
+}

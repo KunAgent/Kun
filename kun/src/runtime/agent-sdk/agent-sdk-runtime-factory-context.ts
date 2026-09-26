@@ -31,6 +31,7 @@ import type { ThreadStore } from '../../ports/thread-store.js'
 import { sessionEventExists } from '../../adapters/session-event-query.js'
 import type { CapabilityRegistry } from '../../adapters/tool/capability-registry.js'
 import type { ToolHost, ToolHostContext } from '../../ports/tool-host.js'
+import { mergeRoomDeniedIds } from '../../loop/room-turn-policy.js'
 import {
   DEFAULT_APPROVAL_REVIEWER,
   DEFAULT_SANDBOX_MODE,
@@ -153,7 +154,13 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
       turn: ThreadRecord['turns'][number]
     ): Promise<readonly string[]> => {
       const key = skillTurnKey(thread.id, turn.id)
-      if (!deps.skillRuntime) return activeSkillIdsByTurn.get(key) ?? []
+      if (!deps.skillRuntime || thread.roomContext?.skillsEnabled === false) {
+        return activeSkillIdsByTurn.get(key) ?? []
+      }
+      const blockedSkillIds = mergeRoomDeniedIds(
+        deps.toolContextBoundary?.blockedSkillIds,
+        thread.roomContext?.blockedSkillIds
+      )
       const resolution = await deps.skillRuntime.resolveTurn({
         prompt: skillPromptByTurn.get(key) ?? turn.prompt ?? '',
         workspace: thread.workspace,
@@ -162,9 +169,7 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
         ...(deps.toolContextBoundary?.allowedSkillIds
           ? { allowedSkillIds: deps.toolContextBoundary.allowedSkillIds }
           : {}),
-        ...(deps.toolContextBoundary?.blockedSkillIds
-          ? { blockedSkillIds: deps.toolContextBoundary.blockedSkillIds }
-          : {})
+        ...(blockedSkillIds.length ? { blockedSkillIds } : {})
       })
       activeSkillIdsByTurn.set(key, resolution.activeSkillIds)
       return resolution.activeSkillIds
@@ -272,8 +277,9 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
       intent: string,
       signal: AbortSignal
     ): ((approval: ApprovalRequest) => Promise<'allow' | 'deny' | ApprovalResolution>) => async (approval) => {
-      if (approvalPolicy === 'auto' && sandboxMode === 'danger-full-access') return 'allow'
-      if (approvalReviewer === 'agent') {
+      const requiresUserDecision = approval.action?.requiresUserDecision === true
+      if (!requiresUserDecision && approvalPolicy === 'auto' && sandboxMode === 'danger-full-access') return 'allow'
+      if (approvalReviewer === 'agent' && !requiresUserDecision) {
         if (!deps.approvalReview) {
           return {
             decision: 'deny',
@@ -411,6 +417,7 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
         planMode?: boolean
         guiPlan?: GuiPlanContext
         guiDesignCanvas?: boolean
+        guiExcalidrawCanvas?: boolean
         guiDesignMode?: boolean
         guiDesignArtifact?: GuiDesignArtifactContext
         activeSkillIds?: readonly string[]
@@ -448,6 +455,7 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
         ...(opts?.planMode ? { threadMode: 'plan' as const } : {}),
         ...(opts?.guiPlan ? { guiPlan: opts.guiPlan } : {}),
         ...(opts?.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+        ...(opts?.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
         ...(opts?.guiDesignMode ? { guiDesignMode: true } : {}),
         ...(opts?.guiDesignArtifact ? { guiDesignArtifact: opts.guiDesignArtifact } : {}),
         ...(opts?.activeSkillIds ? { activeSkillIds: opts.activeSkillIds } : {}),

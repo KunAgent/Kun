@@ -11,14 +11,15 @@ import {
   DEFAULT_SCHEDULE_REASONING_EFFORT,
   getModelProviderProfile,
   getModelProviderSettings,
-  isCustomModelEndpointFormat,
-  modelEndpointPath,
   modelProviderModelProfile,
   normalizeModelProviderId,
   resolveKunRuntimeSettings,
   resolveModelEndpointFormat,
   resolveProviderProxyUrl
 } from '../shared/app-settings'
+import { resolveModelEndpointUrl } from '../../kun/src/contracts/model-endpoint-format.js'
+import { openCodeSessionRuntimeHeaders } from '../shared/opencode-session'
+import { resolveProviderEndpointBaseUrl } from '../shared/model-provider-endpoints'
 import { fetchWithOptionalProxy } from './proxy-fetch'
 import {
   codexResponsesLiteInput,
@@ -163,22 +164,7 @@ function normalizeDetectedRequest(
 }
 
 function buildModelEndpointUrl(baseUrl: string, endpointFormat: ModelEndpointFormat): string {
-  if (isCustomModelEndpointFormat(endpointFormat)) return exactModelEndpointUrl(baseUrl)
-  const path = modelEndpointPath(endpointFormat)
-  const normalized = baseUrl.replace(/\/+$/, '')
-  if (!normalized) return `/v1/${path}`
-  if (normalized.endsWith('/v1')) return `${normalized}/${path}`
-  if (normalized.endsWith('/beta')) {
-    return `${normalized.slice(0, -5)}/v1/${path}`
-  }
-  return `${normalized}/v1/${path}`
-}
-
-function exactModelEndpointUrl(baseUrl: string): string {
-  const trimmed = baseUrl.trim()
-  const query = trimmed.search(/[?#]/)
-  if (query < 0) return trimmed.replace(/\/+$/, '')
-  return `${trimmed.slice(0, query).replace(/\/+$/, '')}${trimmed.slice(query)}`
+  return resolveModelEndpointUrl(baseUrl, endpointFormat, 'generate')
 }
 
 function buildDetectionPrompt(now: Date): string {
@@ -210,16 +196,25 @@ function buildDetectionRequest(input: {
   systemPrompt: string
   sourceText: string
   responsesMode?: 'lite'
+  providerId?: string
+  presetSource?: string
 }): DetectionRequestPayload | null {
   const endpointFormat = resolveModelEndpointFormat(input.endpointFormat, input.baseUrl)
   if (!endpointFormat) return null
   const auth = resolveCodexResponsesRequestAuth(input.baseUrl, input.apiKey)
   const responsesLite = usesCodexResponsesLite(input.baseUrl, input.responsesMode)
-  const headers: Record<string, string> = withCodexResponsesLiteHeader({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${auth.apiKey}`,
-    ...auth.headers
-  }, responsesLite)
+  const headers: Record<string, string> = {
+    ...withCodexResponsesLiteHeader({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${auth.apiKey}`,
+      ...auth.headers
+    }, responsesLite),
+    ...openCodeSessionRuntimeHeaders({
+      presetSource: input.presetSource,
+      providerId: input.providerId,
+      baseUrl: input.baseUrl
+    })
+  }
   if (endpointFormat === 'messages') {
     headers['x-api-key'] = auth.apiKey
     headers['anthropic-version'] = '2023-06-01'
@@ -341,10 +336,13 @@ export async function detectClawScheduledTaskRequest(
   if (!apiKey) return null
   const model = detectionModel(modelHint)
   const responsesMode = modelProviderModelProfile(provider, model)?.responsesMode
+  const endpointFormat = usesRuntimeRoute ? runtime.endpointFormat : provider.endpointFormat
   const baseUrl = usesRuntimeRoute
     ? runtime.baseUrl
-    : provider.baseUrl.trim() || DEFAULT_DEEPSEEK_BASE_URL
-  const endpointFormat = usesRuntimeRoute ? runtime.endpointFormat : provider.endpointFormat
+    : resolveProviderEndpointBaseUrl(
+        { baseUrl: provider.baseUrl.trim() || DEFAULT_DEEPSEEK_BASE_URL, endpoints: provider.endpoints },
+        endpointFormat
+      )
   if (!resolveCodexResponsesRequestAuth(baseUrl, apiKey).apiKey) return null
   const detectionRequest = buildDetectionRequest({
     baseUrl,
@@ -353,7 +351,9 @@ export async function detectClawScheduledTaskRequest(
     model,
     systemPrompt: buildDetectionPrompt(now),
     sourceText,
-    responsesMode
+    responsesMode,
+    providerId: provider.id,
+    presetSource: provider.presetSource?.presetId
   })
   if (!detectionRequest) return null
   const response = await fetchWithOptionalProxy(detectionRequest.url, {

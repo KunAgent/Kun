@@ -485,6 +485,7 @@ async clearCredential(this: ModelConnectionRegistry,
         ),
         proxy: current.proxy,
         routePools: current.routePools,
+        failover: current.failover,
         localModelGateway: current.localModelGateway,
         ...(!configured && current.defaultProviderId === providerId
           ? fallback ? {
@@ -552,6 +553,7 @@ async delete(this: ModelConnectionRegistry, providerId: string, expectedRevision
         ),
         proxy: current.proxy,
         routePools: current.routePools,
+        failover: current.failover,
         localModelGateway: current.localModelGateway,
         ...(current.defaultProviderId === providerId
           ? fallback ? {

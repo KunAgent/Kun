@@ -1,0 +1,21 @@
+{
+  "memoryAuthority_all": "全部",
+  "memoryAuthority_directive": "规则",
+  "memoryAuthority_reference": "参考记忆",
+  "memoryDirectivesEnable": "注入长期规则",
+  "memoryDirectivesEnableDesc": "已批准的规则会在每轮对话中作为你的指令发送给模型。关闭后规则仍保留但不再生效。",
+  "memoryDirectives": "用户规则",
+  "memoryDirectivesDesc": "规则每轮都作为你的指令注入;与参考记忆不同,它们不做相关性过滤。",
+  "memoryDirectiveActiveCount": "已启用规则",
+  "memoryDirectiveInjectedCount": "本轮注入",
+  "memoryDirectiveOmittedCount": "因预算省略",
+  "memorySetDirective": "设为规则",
+  "memoryUnsetDirective": "取消规则",
+  "memorySetDirectiveDisabled": "规则需简短且为\"用户/工作区\"范围;长内容请写入 AGENTS.md",
+  "memoryDirectiveUpdateFailed": "更新规则失败",
+  "memoryAsDirective": "作为规则(每轮对模型生效)",
+  "memoryAsDirectiveDesc": "规则会作为你的指令发送给模型,适合\"回复使用中文\"\"提交前先跑测试\"这类长期偏好。普通记忆只作为参考信息,不会被当作指令执行。",
+  "memoryDirectiveTooLong": "规则需简短,长内容请写入 AGENTS.md",
+  "memoryImportDowngradedPrefix": " ",
+  "memoryImportDowngradedSuffix": " 条原为规则,已按参考记忆导入;可在列表中逐条重新启用。"
+}

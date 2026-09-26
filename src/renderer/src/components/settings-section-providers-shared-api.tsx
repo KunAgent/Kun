@@ -1,5 +1,6 @@
 import type {
   ModelEndpointFormat,
+  ModelProviderEndpointsV1,
   ModelProviderModelProfileV1,
   ModelProviderProfileV1,
   ModelProviderSettingsV1
@@ -8,6 +9,7 @@ import {
   modelProviderRequiresApiKey,
   modelSupportsImageInput
 } from '@shared/app-settings-provider-core'
+import { projectFailoverGroupsForRuntime } from '@shared/app-settings-provider-failover'
 import {
   Check,
   ChevronDown,
@@ -37,6 +39,7 @@ export type SharedModelConnection = {
   authType: 'api-key' | 'oauth' | 'subscription'
   baseUrl?: string
   endpointFormat: ModelEndpointFormat
+  endpoints?: ModelProviderEndpointsV1
   useProxy: boolean
   configured: boolean
   credentialStatus?: 'ready' | 'missing' | 'unreadable'
@@ -56,7 +59,8 @@ export type SharedModelConnectionsSnapshot = {
   defaultModel?: string
   proxy?: { enabled: boolean; url: string }
   routePools?: ModelProviderSettingsV1['routePools']
-  localModelGateway?: { enabled: boolean }
+  failover?: ReturnType<typeof projectFailoverGroupsForRuntime>
+  localModelGateway?: { enabled: boolean; exposeProviderModels?: boolean }
 }
 
 export const MAX_SHARED_MODEL_CONNECTION_MODELS = 500

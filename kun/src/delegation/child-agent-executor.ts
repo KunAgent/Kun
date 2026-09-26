@@ -25,6 +25,7 @@ import { InflightTracker } from '../loop/inflight-tracker.js'
 import { SteeringQueue } from '../loop/steering-queue.js'
 import type { TokenEconomyConfig } from '../loop/token-economy.js'
 import type { MemoryStore } from '../memory/memory-store.js'
+import type { MemoryRetrievalFeedbackTarget } from '../memory/memory-retrieval-feedback.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import type { AttachmentStore } from '../attachments/attachment-store.js'
 import type { ModelClient } from '../ports/model-client.js'
@@ -81,6 +82,7 @@ export type ChildDelegatedRuntimeFactory = (input: {
   allowedProviderIds?: readonly string[]
   allowedSkillIds?: readonly string[]
   allowedReadPaths?: readonly string[]
+  allowHostReads?: boolean
   allowedWritePaths?: readonly string[]
   allowedArtifactIds?: readonly string[]
   blockedToolNames?: readonly string[]
@@ -112,6 +114,7 @@ export type ChildAgentExecutorOptions = {
   skillRuntime?: SkillRuntime
   instructionRuntime?: InstructionRuntime
   memoryStore?: MemoryStore
+  memoryFeedback?: MemoryRetrievalFeedbackTarget
   attachmentStore?: () => AttachmentStore | undefined
   artifactStore?: ArtifactStore
   /** Runtime-owned approval channel shared with the HTTP decision endpoint. */
@@ -166,11 +169,13 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     const toolHost = input.fastContext
       ? createFastContextToolHost(options.toolHost, fastContextTaskCount)
       : options.toolHost
-    // Fast Context source calls are always confined to a parent-minted read
-    // scope. This remains true when the parent itself chose full access: an
-    // omitted scope means the captured workspace only, never the host.
+    // Fast Context source calls are confined to a parent-minted read scope.
+    // An omitted scope still means the captured workspace only, never the host,
+    // unless the parent explicitly granted host-wide reads.
+    const allowHostReads = input.security?.allowHostReads === true &&
+      input.security.allowedReadPaths === undefined
     const allowedReadPaths = input.fastContext
-      ? input.security?.allowedReadPaths ?? ['.']
+      ? input.security?.allowedReadPaths ?? (allowHostReads ? undefined : ['.'])
       : input.security?.allowedReadPaths
     const blockedSkillIds = unique([
       ...(input.security?.blockedSkillIds ?? []),
@@ -282,6 +287,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(allowedReadPaths
         ? { allowedReadPaths }
         : {}),
+      ...(allowHostReads ? { allowHostReads: true } : {}),
       ...(input.security?.allowedWritePaths
         ? { allowedWritePaths: input.security.allowedWritePaths }
         : {}),
@@ -326,6 +332,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(allowedReadPaths
         ? { allowedReadPaths }
         : {}),
+      ...(allowHostReads ? { allowHostReads: true } : {}),
       ...(input.security?.allowedWritePaths
         ? { allowedWritePaths: input.security.allowedWritePaths }
         : {}),
@@ -345,6 +352,9 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         : {}),
       ...(input.fastContext !== true && options.memoryStore && input.security?.memoryEnabled !== false
         ? { memoryStore: options.memoryStore }
+        : {}),
+      ...(input.fastContext !== true && options.memoryFeedback && input.security?.memoryEnabled !== false
+        ? { memoryFeedback: options.memoryFeedback }
         : {}),
       ...(attachmentStore ? { attachmentStore } : {}),
       ...(options.artifactStore ? { artifactStore: options.artifactStore } : {}),
@@ -438,7 +448,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         ...(source?.composerContexts.length ? { composerContexts: source.composerContexts } : {}),
         ...(source?.fileReferences.length ? { fileReferences: source.fileReferences } : {}),
         model,
-        clientSurface: input.guiDesignCanvas ? 'gui' : input.clientSurface ?? 'api',
+        clientSurface: input.guiDesignCanvas || input.guiExcalidrawCanvas ? 'gui' : input.clientSurface ?? 'api',
         ...(input.providerId ? { providerId: input.providerId } : {}),
         ...(input.accountId ? { accountId: input.accountId } : {}),
         approvalPolicy,
@@ -448,6 +458,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         reasoningEffort: normalizeRoleReasoningEffort(input.reasoningEffort),
         ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
         ...(input.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+        ...(input.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
         ...(agentSurface ? { agentSurface } : {}),
         ...(designAdmission ?? {}),
         // Child runs have no independent interactive surface for structured prompts.

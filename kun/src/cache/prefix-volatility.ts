@@ -55,6 +55,8 @@ function fewShotText(item: TurnItem): string {
       return item.prompt
     case 'compaction':
       return item.summary
+    case 'context_window':
+      return ''
     case 'review':
       return `${item.title} ${item.reviewText ?? ''} ${stableStringify(item.output ?? {})}`
     case 'error':

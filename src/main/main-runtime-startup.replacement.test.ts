@@ -1,4 +1,5 @@
 import { recoverStartupManager } from './runtime/kun-startup-manager-recovery'
+import { desktopProcessStack } from './runtime/desktop-process-stack'
 import { ServiceManagerUnavailableError } from '../../kun/src/manager/manager-resolution-error.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -78,6 +79,8 @@ const harness = vi.hoisted(() => {
     ensure: vi.fn(async (_fingerprint: string, operation: () => Promise<unknown>) => operation())
   }
 
+  const retireVerifiablyIdleLegacyManager = vi.fn(async () => 'retired' as const)
+
   return {
     clearHistoricalKunServeProcesses,
     drainKunOwnersForHandoff,
@@ -100,7 +103,8 @@ const harness = vi.hoisted(() => {
     updateIf,
     waitForHealthy,
     waitForKunStartupSettled,
-    waitForRuntimeTurnsIdle
+    waitForRuntimeTurnsIdle,
+    retireVerifiablyIdleLegacyManager
   }
 })
 
@@ -118,7 +122,19 @@ vi.mock('./runtime/kun-adapter', () => ({
   }
 }))
 vi.mock('./runtime/kun-startup-manager-recovery', () => ({
-  recoverStartupManager: vi.fn(async () => harness.activeServiceManager)
+  recoverStartupManager: vi.fn(async () => harness.activeServiceManager),
+  rememberedManagerStartupProfile: () => ({
+    controlDir: '/tmp/kun-control',
+    dataDir: '/tmp/kun-data',
+    settingsPath: '/tmp/kun-settings.json'
+  })
+}))
+vi.mock('./runtime/desktop-process-stack', () => ({
+  desktopProcessStack: {
+    assertCanStart: vi.fn(),
+    recoverManager: vi.fn(async () => undefined),
+    stopManager: vi.fn(async () => undefined)
+  }
 }))
 vi.mock('./kun-process', () => ({
   configureKunManagerDataPlaneForCurrentProcess: (manager: unknown) => manager,
@@ -133,6 +149,9 @@ vi.mock('./runtime/kun-installed-build-handoff', () => ({
 }))
 vi.mock('./runtime/kun-handoff-logging', () => ({
   logKunHandoffEvent: vi.fn()
+}))
+vi.mock('../../kun/src/manager/legacy-manager-retire.js', () => ({
+  retireVerifiablyIdleLegacyManager: harness.retireVerifiablyIdleLegacyManager
 }))
 vi.mock('../../kun/src/manager/manager-discovery.js', () => ({
   defaultKunControlDir: () => '/tmp/kun-control'
@@ -186,6 +205,8 @@ function settings(): AppSettingsV1 {
 }
 
 beforeEach(() => {
+  vi.mocked(desktopProcessStack.stopManager).mockReset()
+  vi.mocked(desktopProcessStack.stopManager).mockResolvedValue(undefined)
   harness.setLatest(undefined)
   harness.setChildRunning(false)
   harness.stopAndWait.mockClear()
@@ -286,40 +307,76 @@ describe('GUI Runtime startup preparation', () => {
     expect(harness.stopAndWait).not.toHaveBeenCalled()
   })
 
-  it('fences the watchdog and waits for runtime operations before Retry cleanup', async () => {
+  it('fences the watchdog and stops the owned stack before Retry relaunch', async () => {
     await prepareGuiRuntimeForStartupRetry()
 
     expect(harness.runtimeSupervisor.setManagedRuntimeExpected).toHaveBeenCalledWith(false)
-    expect(harness.runtimeSupervisor.waitForIdle).toHaveBeenCalledOnce()
     expect(harness.stopAndWait).toHaveBeenCalledOnce()
+    expect(desktopProcessStack.stopManager).toHaveBeenCalledOnce()
     expect(harness.drainKunOwnersForHandoff).not.toHaveBeenCalled()
+    expect(harness.retireVerifiablyIdleLegacyManager).toHaveBeenCalledWith({
+      controlDir: '/tmp/kun-control',
+      dataDir: '/tmp/kun-data',
+      settingsPath: '/tmp/kun-settings.json'
+    })
   })
 
-  it('replaces the exact Service Manager after a data-mutex HTTP 500', async () => {
+  it('drains verifiably-stale owners before relaunch after an owner-busy conflict', async () => {
+    const conflict = Object.assign(
+      new Error('Kun Runtime is already owned by gui process 1380'),
+      { code: 'client_runtime_owner_busy' }
+    )
+
+    await prepareGuiRuntimeForStartupRetry(conflict)
+
+    expect(harness.stopAndWait).toHaveBeenCalledOnce()
+    expect(desktopProcessStack.stopManager).toHaveBeenCalledOnce()
+    expect(harness.drainKunOwnersForHandoff).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'startup-retry',
+        dataDirs: ['/tmp/kun-data'],
+        settingsPath: '/tmp/kun-settings.json',
+        controlDir: '/tmp/kun-control'
+      })
+    )
+  })
+
+  it('stops the owned Manager after a data-mutex HTTP 500 without launching a replacement before quit', async () => {
     await prepareGuiRuntimeForStartupRetry(new Error(
       'Kun Service Manager data mutex failed with HTTP 500: internal_error'
     ))
 
     expect(harness.stopAndWait).toHaveBeenCalledOnce()
-    expect(recoverStartupManager).toHaveBeenCalledWith(true)
+    expect(desktopProcessStack.stopManager).toHaveBeenCalledOnce()
+    expect(recoverStartupManager).not.toHaveBeenCalled()
     expect(harness.mainState.activeServiceManager).toBe(harness.activeServiceManager)
   })
 
-  it('keeps the Manager binding when verified replacement fails', async () => {
-    vi.mocked(recoverStartupManager).mockRejectedValueOnce(new Error('another TUI owns the Runtime'))
+  it('keeps the Manager binding when exact owned cleanup fails', async () => {
+    vi.mocked(desktopProcessStack.stopManager).mockRejectedValueOnce(new Error('owned Manager did not exit'))
 
     await expect(prepareGuiRuntimeForStartupRetry(new Error(
       'Kun Service Manager data mutex failed with HTTP 500: internal_error'
-    ))).rejects.toThrow(/another TUI owns the Runtime/)
+    ))).rejects.toThrow(/owned Manager did not exit/)
 
     expect(harness.mainState.activeServiceManager).toBe(harness.activeServiceManager)
   })
 
-  it('recovers a Manager failure before activeServiceManager is initialized', async () => {
+  it('keeps Recheck on the recovery path when a leftover Manager is still busy', async () => {
+    harness.retireVerifiablyIdleLegacyManager.mockRejectedValueOnce(
+      new Error('Manager has an application owner or Runtime slots; close its clients before retiring it')
+    )
+    await expect(prepareGuiRuntimeForStartupRetry(new ServiceManagerUnavailableError('capability_incompatible', 18435)))
+      .rejects.toThrow(/Runtime slots/)
+    expect(desktopProcessStack.stopManager).toHaveBeenCalledOnce()
+  })
+
+  it('cleans a partial Manager startup before activeServiceManager is initialized', async () => {
     harness.mainState.activeServiceManager = null
     await prepareGuiRuntimeForStartupRetry(new ServiceManagerUnavailableError('transport_refused', 11288))
-    expect(recoverStartupManager).toHaveBeenCalledWith(false)
-    expect(harness.mainState.activeServiceManager).toBe(harness.activeServiceManager)
+    expect(desktopProcessStack.stopManager).toHaveBeenCalledOnce()
+    expect(recoverStartupManager).not.toHaveBeenCalled()
+    expect(harness.mainState.activeServiceManager).toBeNull()
   })
 
   it('recognizes only the persistent Manager data-mutex failure', () => {

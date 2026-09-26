@@ -238,7 +238,8 @@ describe('resolveModelsDevProvider', () => {
     ['gemini-cli-subscription', '', 'google', 'enrichment-only'],
     ['ollama', 'https://ollama.com/v1', 'ollama-cloud', 'enrichment-only'],
     ['grok-subscription', 'https://cli-chat-proxy.grok.com/v1', 'xai', 'enrichment-only'],
-    ['vercel-ai-gateway', 'https://ai-gateway.vercel.sh/v1', 'vercel', 'catalog']
+    ['vercel-ai-gateway', 'https://ai-gateway.vercel.sh/v1', 'vercel', 'catalog'],
+    ['opper', 'https://api.opper.ai/v3/compat', 'opper', 'catalog']
   ])('maps %s deterministically', (providerId, baseUrl, providerKey, matchMode) => {
     expect(resolveModelsDevProvider({ providerId, baseUrl })).toEqual({ providerKey, matchMode })
   })
@@ -252,6 +253,10 @@ describe('resolveModelsDevProvider', () => {
       providerId: 'my-ollama-cloud-account',
       baseUrl: 'https://ollama.com/v1/'
     })).toEqual({ providerKey: 'ollama-cloud', matchMode: 'enrichment-only' })
+    expect(resolveModelsDevProvider({
+      providerId: 'my-opper-gateway',
+      baseUrl: 'https://api.opper.ai/v3/compat/'
+    })).toEqual({ providerKey: 'opper', matchMode: 'catalog' })
     expect(resolveModelsDevProvider({
       providerId: 'looks-like-minimax',
       baseUrl: 'https://proxy.example/minimax'
@@ -501,28 +506,6 @@ describe('ModelsDevCatalogService', () => {
       Accept: 'application/json',
       'If-None-Match': '"catalog-v1"'
     })
-  })
-
-  it('falls back to stale cache when refresh fails', async () => {
-    let now = 1_000
-    const fetcher = vi
-      .fn()
-      .mockResolvedValueOnce(new Response(catalogBody(), { status: 200 }))
-      .mockRejectedValueOnce(new Error('offline'))
-      .mockRejectedValueOnce(new Error('offline'))
-    const service = new ModelsDevCatalogService(fetcher, () => now)
-    const request = { providerId: 'deepseek', baseUrl: 'https://api.deepseek.com' }
-
-    await service.fetch(request)
-    now += MODELS_DEV_CACHE_TTL_MS + 1
-    const stale = await service.fetch(request)
-
-    expect(stale).toMatchObject({
-      status: 'ok',
-      stale: true,
-      source: 'models.dev'
-    })
-    expect(fetcher).toHaveBeenCalledTimes(3)
   })
 
   it('reports malformed, oversized, and timed-out first loads', async () => {

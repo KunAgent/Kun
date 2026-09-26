@@ -7,12 +7,20 @@ import { CodeCanvasPanel } from './CodeCanvasPanel'
 
 const mocks = vi.hoisted(() => ({ applyLive: vi.fn() }))
 
+vi.mock('../../../whiteboard/use-apply-excalidraw-live', () => ({
+  useApplyExcalidrawLive: () => undefined
+}))
+
 vi.mock('../../../design/canvas/use-apply-shape-ops-live', () => ({
   useApplyShapeOpsLive: (...args: unknown[]) => mocks.applyLive(...args)
 }))
 
 vi.mock('./CanvasViewport', () => ({ CanvasViewport: () => createElement('div') }))
 vi.mock('./PropertiesPanel', () => ({ PropertiesPanel: () => createElement('div') }))
+vi.mock('../../../whiteboard/excalidraw-surface', () => ({
+  ExcalidrawSurface: () => createElement('div'),
+  CanvasEngineSwitcher: () => createElement('div')
+}))
 
 describe('CodeCanvasPanel live replay binding', () => {
   it('waits for the matching per-thread canvas document', () => {

@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   type ChangeEvent,
   type ClipboardEvent as ReactClipboardEvent,
   type DragEvent as ReactDragEvent,
@@ -7,6 +8,13 @@ import {
   type MouseEvent as ReactMouseEvent
 } from 'react'
 import type { SlashCommand, SlashCommandId } from './floating-composer-commands'
+import {
+  DOUBLE_ENTER_STEER_WINDOW_MS,
+  steerableQueuedMessage
+} from './floating-composer-policy'
+import type { QueuedComposerMessage } from './FloatingComposerQueuedMessages'
+import { extraRootsForWorkspace } from '../../lib/code-workspace-folder-lookup'
+import { useChatStore } from '../../store/chat-store'
 import type { ComposerFileDropOptions } from './composer-file-drop'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 
@@ -37,17 +45,20 @@ export function useFloatingComposerActions(
   context: FloatingComposerRenderContext
 ): FloatingComposerRenderContext {
   const {
-    activeThreadId, archiveThread, buildResearchPrompt, canAcceptComposerFileDrop,
+    activeThreadId, archiveThread, attachments, buildResearchPrompt, busy,
+    canAcceptComposerFileDrop,
     canAddFileReference, canEditComposer, canOpenComposerMenu, canOpenGoalPanel,
     canOptimizePrompt, canPickAttachment, canPickDesignReference, canPickFileReference,
     canPickLocalFileReference, canSetGoalPanelDraft, canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode,
     clearActiveThreadGoal, compact, compactActiveThread, composerRootRef, composerSendKey,
     dictationPrimaryActionRef, draft, effectiveWorkspaceRoot, fileInputRef, fileMentions,
     forkActiveThread, goalInputMode, goalPanelDraftObjective, handleComposerImagePaste,
-    hideBtwCommand, highlightedSlashCommand, input, inputHistory, isComposerSendHotkey,
-    mode, onAddFileReference, onBtwCommand, onNewCommand, onOpenDesignReferencePicker,
+    fileReferences, hideBtwCommand, highlightedSlashCommand, input, inputHistory,
+    isComposerSendHotkey,
+    mode, onAddFileReference, onBtwCommand, onGuideQueuedMessage, onNewCommand, onOpenDesignReferencePicker,
     onOpenFileReferencePicker, onOrchestrationChange, onPasteClipboardImage, onPasteLongText,
     onPickAttachments, onPickFileReferences, onPlanCommand, onReviewCommand, onSend,
+    queuedMessages,
     orchestration, parseBtwCommand, parseCompactCommand, parseGoalCommand, parseNewCommand,
     parseResearchCommand, parseReviewCommand, parsedGoalCommand, primaryActionDisabled,
     route, routeComposerFileDrop, runtimeReady, setActiveThreadGoal, setActiveThreadGoalStatus,
@@ -55,6 +66,22 @@ export function useFloatingComposerActions(
     setPromptOptimizationBusy, setPromptOptimizationError, slashCommandMenu, slashCommands,
     t, userInput
   } = context
+  const folderSets = useChatStore((state) => state.codeWorkspaceFolderSets)
+  const extraWorkspaceRoots = extraRootsForWorkspace(effectiveWorkspaceRoot, folderSets)
+
+  // Double-Enter steering window. Arming it on queue growth (rather than on
+  // the Enter that queued) also covers messages queued by the toolbar button
+  // or another surface, matching how the gesture feels: "I just queued this —
+  // Enter again to steer it now."
+  const steerWindowExpiresAtRef = useRef(0)
+  const previousQueueLengthRef = useRef(queuedMessages.length)
+  useEffect(() => {
+    const previousLength = previousQueueLengthRef.current
+    previousQueueLengthRef.current = queuedMessages.length
+    if (queuedMessages.length <= previousLength) return
+    if (!busy || !onGuideQueuedMessage) return
+    steerWindowExpiresAtRef.current = Date.now() + DOUBLE_ENTER_STEER_WINDOW_MS
+  }, [busy, onGuideQueuedMessage, queuedMessages.length])
   const applySlashCommand = (commandId: SlashCommandId): void => {
     if (commandId.startsWith('skill:')) {
       const command = slashCommands.find((item: SlashCommand) => item.id === commandId)
@@ -417,6 +444,26 @@ export function useFloatingComposerActions(
     if (!sendByHotkey || composing) return
 
     event.preventDefault()
+    // Empty-composer Enter is a dead keypress while a turn runs (send rejects
+    // empty input and the interrupt path is pointer-only). Repurpose it for
+    // the double-Enter steer gesture while the window from a fresh queue
+    // entry is still open.
+    if (
+      !input.trim() &&
+      attachments.length === 0 &&
+      fileReferences.length === 0 &&
+      onGuideQueuedMessage &&
+      Date.now() < steerWindowExpiresAtRef.current
+    ) {
+      const head = (queuedMessages as QueuedComposerMessage[]).find(
+        (message) => steerableQueuedMessage(message, busy)
+      )
+      if (head) {
+        steerWindowExpiresAtRef.current = 0
+        void onGuideQueuedMessage(head.id)
+        return
+      }
+    }
     handlePrimaryAction()
   }
 
@@ -479,6 +526,7 @@ export function useFloatingComposerActions(
     canPickLocalFileReference,
     canAddFileReference,
     workspaceRoot: effectiveWorkspaceRoot,
+    extraWorkspaceRoots,
     onPickAttachments,
     onAddFileReference,
     getPathForFile: (file) => window.kunGui.getPathForFile(file)

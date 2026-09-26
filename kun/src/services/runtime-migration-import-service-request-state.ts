@@ -1,3 +1,4 @@
+import { parseHistoryMigrationState } from './runtime-migration-history-references.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
@@ -141,6 +142,8 @@ export function rewriteImportedSession(value: unknown, targetThreadId: string, s
   }
   return {
     threadId: targetThreadId,
+    ...(typeof record.historyRefId === 'string' ? { historyRefId: record.historyRefId } : {}),
+    ...(typeof record.workspace === 'string' ? { workspace: record.workspace } : {}),
     turnId: record.turnId,
     startedAt: record.startedAt,
     updatedAt: record.updatedAt,
@@ -188,6 +191,7 @@ export function parseImportState(value: unknown, rootDir: string, importId: stri
   }
   return {
     importId,
+    historyReferences: parseHistoryMigrationState(record.historyReferences),
     filePath: join(rootDir, `${importId}.jsonl`),
     statePath: join(rootDir, `${importId}.state.json`),
     control,

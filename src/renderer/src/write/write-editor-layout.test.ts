@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { WriteEditorLayoutV1 } from './write-workspace-store-types'
 import {
   addEditorItemToGroup,
   addTabToGroup,
@@ -46,14 +47,14 @@ describe('write editor layout', () => {
   })
 
   it('deduplicates tabs inside one group while allowing per-group occurrences', () => {
-    let layout = addTabToGroup(emptyWriteEditorLayout(), 'primary', '/work/a.md', 'live')
-    layout = addTabToGroup(layout, 'primary', '/work/a.md', 'preview')
-    expect(layout.groups[0].tabs).toEqual([{ path: '/work/a.md', viewMode: 'live' }])
+    let layout = addTabToGroup(emptyWriteEditorLayout(), 'primary', '/work/a.md', 'rich')
+    layout = addTabToGroup(layout, 'primary', '/work/a.md', 'plain')
+    expect(layout.groups[0].tabs).toEqual([{ path: '/work/a.md', viewMode: 'rich' }])
     expect(layout.groups[0].activePath).toBe('/work/a.md')
   })
 
   it('projects the focused group document and its occurrence view mode', () => {
-    const layout = addTabToGroup(emptyWriteEditorLayout(), 'primary', '/work/a.md', 'preview')
+    const layout = addTabToGroup(emptyWriteEditorLayout(), 'primary', '/work/a.md', 'plain')
     const document = createWriteDocumentSession({
       path: '/work/a.md',
       kind: 'text',
@@ -65,7 +66,7 @@ describe('write editor layout', () => {
       activeFilePath: '/work/a.md',
       fileContent: 'draft',
       saveStatus: 'dirty',
-      previewMode: 'preview'
+      previewMode: 'plain'
     })
   })
 
@@ -98,16 +99,16 @@ describe('write editor layout', () => {
         id: 'primary' as const,
         activePath: '/work/a.md',
         tabs: [
-          { path: '/work/a.md', viewMode: 'live' as const },
-          { path: '/other/secret.md', viewMode: 'source' as const }
+          { path: '/work/a.md', viewMode: 'live' },
+          { path: '/other/secret.md', viewMode: 'source' }
         ]
       }]
-    }
+    } as unknown as WriteEditorLayoutV1
     persistWriteEditorLayout('/work', layout)
     expect(readWriteEditorLayout('/work')?.groups[0]).toEqual({
       id: 'primary',
       activePath: '/work/a.md',
-      tabs: [{ path: '/work/a.md', viewMode: 'live' }]
+      tabs: [{ path: '/work/a.md', viewMode: 'rich' }]
     })
   })
 
@@ -124,13 +125,13 @@ describe('write editor layout', () => {
           { kind: 'whiteboard', boardId: 'board-1', viewMode: 'rich' }
         ]
       }]
-    })
+    } as unknown as WriteEditorLayoutV1)
 
     expect(readWriteEditorLayout('/work')?.groups[0]).toEqual({
       id: 'primary',
       activePath: 'whiteboard:board-1',
       tabs: [
-        { path: '/work/a.md', viewMode: 'live' },
+        { path: '/work/a.md', viewMode: 'rich' },
         { kind: 'whiteboard', boardId: 'board-1', viewMode: 'rich' }
       ]
     })
@@ -157,7 +158,7 @@ describe('write editor layout', () => {
     expect(readWriteEditorLayout('/work')?.groups[0]).toEqual({
       id: 'primary',
       activePath: '/work/a.md',
-      tabs: [{ path: '/work/a.md', viewMode: 'live' }]
+      tabs: [{ path: '/work/a.md', viewMode: 'rich' }]
     })
   })
 
@@ -212,7 +213,7 @@ describe('write editor layout', () => {
         { id: 'primary', activePath: '/work/a.md', tabs: [{ path: '/work/a.md', viewMode: 'live' }] },
         { id: 'secondary', activePath: '/work/b.md', tabs: [{ path: '/work/b.md', viewMode: 'preview' }] }
       ]
-    })
+    } as unknown as WriteEditorLayoutV1)
 
     expect(readWriteEditorLayout('/work')).toMatchObject({
       orientation: 'vertical',

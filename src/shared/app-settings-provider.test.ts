@@ -359,13 +359,13 @@ describe('model route pool settings', () => {
   it('normalizes legacy settings to an empty route catalog', () => {
     const settings = normalizeModelProviderSettings(undefined)
     expect(settings.routePools).toEqual([])
-    expect(settings.localGateway).toEqual({ enabled: false, name: 'Kun API' })
+    expect(settings.localGateway).toEqual({ enabled: false, name: 'Kun API', exposeProviderModels: false })
   })
 
   it('persists a custom local gateway provider name', () => {
     expect(normalizeModelProviderSettings({
       localGateway: { enabled: true, name: '  Team Relay  ' }
-    }).localGateway).toEqual({ enabled: true, name: 'Team Relay' })
+    }).localGateway).toEqual({ enabled: true, name: 'Team Relay', exposeProviderModels: false })
   })
 
   it('keeps valid concrete targets and allows a routed alias to match a concrete model', () => {

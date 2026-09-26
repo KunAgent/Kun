@@ -198,7 +198,8 @@ export class GeminiCodeAssistModelClient implements ModelClient {
         text,
         baseUrl: this.config.baseUrl,
         fetchImpl: this.fetchImpl,
-        retryAfter: result.response.headers.get('retry-after')
+        retryAfter: result.response.headers.get('retry-after'),
+        headers: result.response.headers
       })
       const message = result.response.status === 404
         ? `Gemini Code Assist model "${model}" is not available for this Google subscription. Pull the provider model list again and select one returned by the account.`

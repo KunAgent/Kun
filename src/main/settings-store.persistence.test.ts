@@ -176,7 +176,7 @@ it('ignores null entries in persisted Claw channels and schedule tasks', async (
         openAtLogin: true,
         startMinimized: true,
         useSystemTitleBar: true,
-        closeAction: 'tray'
+        closeAction: 'quit'
       }
     })
     const disabled = await store.patch({
@@ -190,8 +190,8 @@ it('ignores null entries in persisted Claw channels and schedule tasks', async (
       openAtLogin: true,
       startMinimized: true,
       useSystemTitleBar: true,
-      closeAction: 'tray',
-      closeToTray: true,
+      closeAction: 'quit',
+      closeToTray: false,
       keepAwake: false
     })
     expect(disabled.appBehavior).toEqual({

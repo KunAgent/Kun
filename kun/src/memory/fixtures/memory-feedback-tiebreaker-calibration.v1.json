@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "evaluationVersion": "p3-feedback-tiebreaker-v1",
+  "fixtureSha256": "a6a37e35a5da6afdfbdae42b9abe8a9f182dcad19167fc82361f662873d7e259",
+  "foundationVersion": "post-1308-foundation-v1",
+  "procedure": {
+    "source": "development-foundation-only",
+    "gapFormula": "higher-score-minus-lower-score",
+    "quantiles": [0.25, 0.5, 0.75],
+    "quantileMethod": "floor-index",
+    "maximumGridSize": 4,
+    "boundaryInclusive": true,
+    "grouping": "leader-relative",
+    "maximumReorderWindow": 3,
+    "exactTieControl": true,
+    "noRerankControl": true,
+    "stableFallback": ["foundation-score", "memory-id"]
+  },
+  "observedGaps": [
+    {"caseId":"case_dev_confirmed_01","higherId":"mem_tie_list","lowerId":"mem_tie_table","gap":0.00375},
+    {"caseId":"case_dev_corrected_01","higherId":"mem_corr_distractor","lowerId":"mem_corr_new","gap":0.0075},
+    {"caseId":"case_dev_corrected_02","higherId":"mem_corr_distractor","lowerId":"mem_corr_new","gap":0.0075},
+    {"caseId":"case_dev_frequent_01","higherId":"mem_freq_wrong","lowerId":"mem_freq_right","gap":0.0075},
+    {"caseId":"case_dev_misleading_01","higherId":"mem_misleading_confirmed","lowerId":"mem_misleading_expected","gap":0.01125},
+    {"caseId":"case_dev_misleading_02","higherId":"mem_misleading_confirmed","lowerId":"mem_misleading_expected","gap":0.01125},
+    {"caseId":"case_dev_neutral_01","higherId":"mem_neutral_blue","lowerId":"mem_neutral_green","gap":0.0075},
+    {"caseId":"case_dev_wide_01","higherId":"mem_wide_primary","lowerId":"mem_wide_confirmed","gap":0.2}
+  ],
+  "boundaryGrid": [
+    {"id":"gap_0","maximumGap":0,"inclusive":true},
+    {"id":"gap_1","maximumGap":0.0075,"inclusive":true},
+    {"id":"gap_2","maximumGap":0.01125,"inclusive":true}
+  ]
+}

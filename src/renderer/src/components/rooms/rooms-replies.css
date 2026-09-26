@@ -1,0 +1,18 @@
+.rooms-drawer-pages { position: relative; flex: 1; min-height: 0; min-width: 0; }
+.rooms-drawer-page { position: absolute; inset: 0; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.rooms-drawer-page.is-section { display: block; overflow-y: auto; }
+.rooms-reply-thread { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
+.rooms-reply-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overflow-anchor: none; padding: 1rem 0.75rem; }
+.rooms-reply-root { margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--ds-border); }
+.rooms-reply-thread .rooms-message-row { gap: 0.5rem; }
+.rooms-reply-thread .rooms-message-role { display: none; }
+.rooms-reply-thread .rooms-message-meta time { font-size: 0.625rem; }
+.rooms-reply-thread .rooms-message-bubble { padding: 0.625rem 0.75rem; }
+.rooms-reply-thread .rooms-message-avatar { flex-shrink: 0; }
+.rooms-reply-thread .rooms-composer { padding-inline: 0.75rem; }
+.rooms-reply-heading { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.875rem; font-size: 0.75rem; color: var(--ds-text-muted); }
+.rooms-reply-heading button { margin-left: auto; }
+.rooms-reply-warning { margin: 0.5rem 0; padding: 0.625rem; border: 1px solid var(--ds-border); border-radius: 0.625rem; color: var(--ds-text-muted); font-size: 0.75rem; }
+.rooms-reply-count { display: inline-flex; align-items: center; gap: 0.3rem; border-radius: 0.375rem; color: var(--ds-accent); padding: 0.2rem 0.35rem; font-size: 0.6875rem; }
+.rooms-reply-count:hover { background: var(--ds-accent-soft); }
+.rooms-reply-count:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }

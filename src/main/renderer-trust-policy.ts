@@ -1,4 +1,5 @@
 import type { BrowserWindow, IpcMainInvokeEvent, WebFrameMain } from 'electron'
+import { isRemoteClientSender } from './remote/remote-sender'
 
 export type RendererSurface = 'workbench' | 'storage-relocation' | 'runtime-data-recovery'
 
@@ -52,6 +53,9 @@ export function trustedRendererSenderIsCurrent(
     surface: RendererSurface
   }
 ): boolean {
+  // Remote clients are authenticated by the Remote gateway and bridged in as
+  // workbench-equivalent senders; the invoke allowlist still gates channels.
+  if (isRemoteClientSender(event.sender)) return options.surface === 'workbench'
   const senderFrame = event.senderFrame
   const mainFrame = window?.webContents.mainFrame
   return Boolean(

@@ -5,14 +5,13 @@ import type {
   CoreRuntimeSkillJson, CoreRuntimeToolDiagnosticsJson
 } from './kun-contract'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '@shared/app-settings'
-import type {
-  DelegatedRuntimeState,
-  RequestContextSnapshot,
-  ThreadUsageSnapshot
-} from './thread-runtime-types'
+import type { NormalizedThread } from './types-thread'
+export type { NormalizedThread } from './types-thread'
 import type { CoreModelRequestFailureJson } from './kun-contract'
+import type { CoreApprovalActionJson } from './kun-contract-runtime'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { RendererChartSpec } from './chart-spec-adapter'
+import type { RendererPaperList } from './paper-list-adapter'
 
 export type ToolItemKind = 'tool_call' | 'command_execution' | 'file_change'
 export type RuntimeErrorSeverity = 'info' | 'warning' | 'error'
@@ -190,6 +189,7 @@ export type RuntimeDisclosureMetadata = {
   agentSurface?: 'code' | 'write' | 'design'
   /** Persisted turn routing hint so edit/resend can rebuild live canvas context. */
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   guiDesignMode?: boolean
   designProfile?: import('./design-task-profile').DesignTaskProfileInput | import('./design-task-profile').DesignTaskProfile
   designDocumentTarget?: import('./design-task-profile').DesignDocumentTarget
@@ -205,6 +205,8 @@ export type RuntimeDisclosureMetadata = {
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   injectedMemorySummaries?: Array<{ id: string; content: string }>
+  injectedDirectiveIds?: string[]
+  injectedDirectiveSummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
   injectedInstructionSources?: Array<{ scope: 'global' | 'workspace'; path: string; bytes: number; truncated?: boolean }>
   instructionInjectionBytes?: number
@@ -238,58 +240,6 @@ export type UserInputAnswer = {
   value: string
   labels?: string[]
   values?: string[]
-}
-export type NormalizedThread = {
-  id: string
-  title: string
-  /** Durable product surface that owns this thread. Absent for legacy Code threads. */
-  agentSurface?: 'code' | 'write' | 'design'
-  /** Immutable task mode derived from the first accepted turn. */
-  lockedTaskSurface?: 'code' | 'write' | 'design'
-  /** Immutable runtime-owned profile for a Design task. */
-  designProfile?: import('./design-task-profile').DesignTaskProfile
-  designCloneOperation?: {
-    operationId: string
-    kind: 'fork' | 'resume'
-    sourceId: string
-  }
-  /** Whether the title is auto/provisional (true) vs user-set/locked (false); absent = legacy. */
-  titleAuto?: boolean
-  updatedAt: string
-  model: string
-  mode: string
-  workspace?: string
-  knowledgeBases?: KnowledgeBaseMount[]
-  status?: string
-  latestSeq?: number
-  approvalPolicy?: ApprovalPolicy
-  sandboxMode?: SandboxMode
-  approvalReviewer?: ApprovalReviewer
-  /** Whether future model requests are retained for Agent Perspective. */
-  modelRequestCaptureEnabled?: boolean
-  /** Optional provider id when this thread is pinned to a non-default provider. */
-  providerId?: string
-  /** Optional subagent profile id this thread is bound to (primary-agent persona). */
-  agentId?: string
-  /** Optional persona systemPrompt snapshot applied to every ModelRequest on this thread. */
-  systemPrompt?: string
-  archived?: boolean
-  pinned?: boolean
-  preview?: string
-  summary?: string // Whole-conversation summary shown as the list subtitle.
-  latestTurnId?: string
-  latestTurnStatus?: string
-  relation?: 'primary' | 'fork' | 'side'
-  parentThreadId?: string
-  /** Legacy plan-build linkage retained for read-only history compatibility. */
-  planBuildRunId?: string
-  forkedFromThreadId?: string
-  forkedFromTitle?: string
-  forkedAt?: string
-  forkedFromMessageCount?: number
-  forkedFromTurnCount?: number
-  goal?: ThreadGoal | null
-  todos?: ThreadTodoList | null
 }
 export type KnowledgeBaseMount = {
   id: string
@@ -390,6 +340,9 @@ export type CompactionBlock = {
   auto?: boolean
   messagesBefore?: number
   messagesAfter?: number
+  // 'window' marks a committed context-window checkpoint; it renders the fixed
+  // marker label and no generated summary, unlike summary compaction.
+  variant?: 'summary' | 'window'
 }
 
 export type ReviewTarget =
@@ -436,7 +389,22 @@ export type ChartBlock = {
   spec: RendererChartSpec
 }
 
-export type ChatBlock =
+export type PaperListBlock = {
+  kind: 'paper-list'
+  id: string
+  turnId?: string
+  createdAt?: string
+  list: RendererPaperList
+}
+
+export type SourceHistoryOrder = { referenceId: string; turnIndex: number; itemIndex: number }
+export type SourceHistoryAttachment = { index: number; name: string; mimeType?: string }
+export type ChatBlock = ({
+  sourceHistoryOrder?: SourceHistoryOrder
+  sourceAttachments?: SourceHistoryAttachment[]
+  sourceRecords?: Array<{ itemId: string; kind: string }>
+  sourceItemId?: string
+} & (
   | {
       kind: 'user'
       id: string
@@ -453,6 +421,7 @@ export type ChatBlock =
   | CompactionBlock
   | ReviewBlock
   | ChartBlock
+  | PaperListBlock
   | {
       kind: 'system'
       id: string
@@ -474,6 +443,7 @@ export type ChatBlock =
       approvalId: string
       summary: string
       toolName?: string
+      action?: CoreApprovalActionJson
       status: 'pending' | 'submitting' | 'allowed' | 'denied' | 'expired' | 'error'
       errorMessage?: string
       meta?: RuntimeDisclosureMetadata
@@ -516,12 +486,15 @@ export type ChatBlock =
       live?: boolean
     }
 
+))
+
 export type ApprovalRequestPayload = {
   approvalId: string
   turnId?: string
   createdAt?: string
   summary: string
   toolName?: string
+  action?: CoreApprovalActionJson
   meta?: RuntimeDisclosureMetadata
 }
 
@@ -569,6 +542,7 @@ export type RuntimeStatusEventPayload = {
   kind:
     | 'tool_result_upload_wait'
     | 'model_request_retry'
+    | 'model_route_switch'
     | 'tool_catalog_changed'
     | 'tool_storm_suppressed'
     | 'compaction_summary_fallback'
@@ -583,6 +557,12 @@ export type RuntimeStatusEventPayload = {
   maxAttempts?: number
   delayMs?: number
   retryReason?: 'network' | 'stream_transport' | 'context_overflow'
+  /** model_route_switch: the abandoned and next route targets. */
+  fromProviderId?: string
+  fromModelId?: string
+  toProviderId?: string
+  toModelId?: string
+  routeReason?: string
   changeKind?: 'additive' | 'breaking'
   toolName?: string
   callId?: string
@@ -612,6 +592,7 @@ export type CompactionEventPayload = {
   messagesBefore?: number
   messagesAfter?: number
   createdAt?: string
+  variant?: 'summary' | 'window' // see CompactionBlock.variant
 }
 
 export type ReviewEventPayload = {

@@ -14,11 +14,14 @@ import { RoundOutcomeRecoveryPhase } from './round-outcome-recovery-phase.js'
 import {
   GRAPH_CREATE_RUN_TOOL_NAME,
   CANVAS_RECEIPT_TIMEOUT_MS,
+  IM_PUBLICATION_MAX_RECOVERY_STEPS,
   type RoundOutcomeInput
 } from './round-outcome-state.js'
+import { SEND_IM_MESSAGE_TOOL_NAME } from '../rooms/room-im-message-tool.js'
 
 export {
   GRAPH_CREATE_RUN_TOOL_NAME,
+  IM_PUBLICATION_MAX_RECOVERY_STEPS,
   MAX_GRAPH_CREATE_RUN_ATTEMPTS,
   MAX_GRAPH_CREATE_RUN_RECOVERY_STEPS,
   type GraphCreateRunRecoveryReason,
@@ -33,6 +36,61 @@ export {
  * streaming, tool execution, or terminal turn settlement.
  */
 export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
+  /**
+   * A room step's deliverable is its accepted scoped submission
+   * (submit_room_plan, submit_room_review, declare_room_checks,
+   * send_room_message, or an accepted agent handoff). Providers may then end
+   * the turn with a bare reasoning item and no visible output; the durable
+   * submission makes that a normal completion, not an empty response.
+   */
+  private hasAcceptedRoomSubmission(input: RoundOutcomeInput): boolean {
+    if (!input.prepared.toolDiscoveryContext.roomStepKind) return false
+    return input.prepared.history.some((item) =>
+      item.turnId === input.turnId &&
+      item.kind === 'tool_result' &&
+      item.isError !== true &&
+      typeof item.output === 'object' && item.output !== null &&
+      (item.output as { accepted?: unknown }).accepted === true
+    )
+  }
+
+  /**
+   * A bot conversation turn owes the user a visible bubble. It is still
+   * pending while the turn has no successful send_im_message result and the
+   * model can still call the tool (not during tool-disabled recovery).
+   */
+  private conversationPublicationPending(input: RoundOutcomeInput): boolean {
+    const context = input.prepared.toolDiscoveryContext
+    if (context.roomStepKind !== 'conversation' || context.roomAgent !== true) return false
+    if (input.toolCallsDisabled || !input.toolKinds.has(SEND_IM_MESSAGE_TOOL_NAME)) return false
+    return !input.prepared.history.some((item) =>
+      item.turnId === input.turnId &&
+      item.kind === 'tool_result' &&
+      item.toolName === SEND_IM_MESSAGE_TOOL_NAME &&
+      item.isError !== true
+    )
+  }
+
+  /**
+   * A successful send_im_message call is the visible deliverable of a bot
+   * conversation or remote IM turn. Once it lands, a silent stop is a normal
+   * completion — the bubble already answered the user — rather than a
+   * missing final answer.
+   */
+  private conversationPublicationDelivered(input: RoundOutcomeInput): boolean {
+    const context = input.prepared.toolDiscoveryContext
+    const scoped =
+      (context.roomStepKind === 'conversation' && context.roomAgent === true) ||
+      context.imContext === true
+    if (!scoped) return false
+    return input.prepared.history.some((item) =>
+      item.turnId === input.turnId &&
+      item.kind === 'tool_result' &&
+      item.toolName === SEND_IM_MESSAGE_TOOL_NAME &&
+      item.isError !== true
+    )
+  }
+
   async resolve(input: RoundOutcomeInput): Promise<ModelRoundOutcome> {
     if (input.streamed.kind === 'aborted') return 'aborted'
     if (input.streamed.kind === 'context_overflow') return 'failed'
@@ -69,6 +127,29 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
       if (streamSnapshot.text.trim()) {
         this.toolSuppressionRecoveryStepsByTurn.delete(input.turnId)
       }
+      // In a bot IM conversation, ordinary assistant text is internal and
+      // never shown: stopping without a send_im_message bubble leaves the
+      // user with nothing. Nudge toward the explicit publication tool, then
+      // let normal settlement mark the unpublished run as skipped.
+      if (
+        streamSnapshot.stopReason !== 'length' &&
+        this.conversationPublicationPending(input)
+      ) {
+        const steps = (this.imPublicationRecoveryByTurn.get(input.turnId) ?? 0) + 1
+        if (steps <= IM_PUBLICATION_MAX_RECOVERY_STEPS) {
+          this.imPublicationRecoveryByTurn.set(input.turnId, steps)
+          await this.deps.events.record({
+            kind: 'error',
+            threadId: input.threadId,
+            turnId: input.turnId,
+            message:
+              'Conversation turn ended without publishing a send_im_message bubble; requesting publication.',
+            code: 'im_message_missing',
+            severity: 'warning'
+          })
+          return 'continue'
+        }
+      }
       const hasCurrentTurnFileChange = input.prepared.history.some(
         (item) =>
           item.turnId === input.turnId &&
@@ -79,7 +160,8 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
       if (
         streamSnapshot.stopReason === 'stop' &&
         !streamSnapshot.text.trim() &&
-        hasCurrentTurnFileChange
+        hasCurrentTurnFileChange &&
+        !this.conversationPublicationDelivered(input)
       ) {
         return this.resolveEmptyPostToolResponse(input)
       }
@@ -97,14 +179,15 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
         return this.advancePostToolFailureRecovery(input)
       }
       if (streamSnapshot.stopReason === 'length') {
-        await this.recordOutputTruncated(input)
-        return 'stop'
+        return this.advanceOutputTruncationRecovery(input)
       }
       if (
         streamSnapshot.stopReason === 'stop' &&
         !streamSnapshot.text.trim() &&
         !streamSnapshot.reasoning.trim()
       ) {
+        if (this.hasAcceptedRoomSubmission(input)) return 'stop'
+        if (this.conversationPublicationDelivered(input)) return 'stop'
         return this.failEmptyTerminalResponse(input)
       }
       return 'stop'
@@ -115,6 +198,7 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
     this.lastNoToolTextByTurn.delete(input.turnId)
     this.goalNoToolRecoveryStepsByTurn.delete(input.turnId)
     this.emptyPostToolRecoveryStepsByTurn.delete(input.turnId)
+    this.outputTruncationRecoveryStepsByTurn.delete(input.turnId)
     if (input.toolCallsDisabled) {
       const message =
         'Tool calls are disabled during final-answer recovery; the provider-emitted calls were not executed.'

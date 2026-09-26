@@ -1,0 +1,18 @@
+/* Phone layout for the shared RoomUserAvatarEditor; the desktop rules ship
+ * with the rooms workspace stylesheets, which the mobile shell never loads. */
+.kun-mobile-avatar-editor > div { padding: 0; overflow: visible; }
+.kun-mobile-avatar-editor .rooms-user-avatar-form { display: grid; gap: 16px; }
+.kun-mobile-avatar-editor .rooms-avatar-preview { display: grid; place-items: center; }
+.kun-mobile-avatar-editor .rooms-avatar-preview > canvas { width: 128px; height: 128px; border-radius: 16px; }
+.kun-mobile-avatar-editor .rooms-user-kun { object-fit: contain; padding: 2px; }
+.kun-mobile-avatar-editor .rooms-avatar-crop-controls { display: grid; gap: 10px; }
+.kun-mobile-avatar-editor .rooms-avatar-crop-controls > label { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 12px; font-size: 14px; }
+.kun-mobile-avatar-editor .rooms-avatar-picker-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.kun-mobile-avatar-editor .rooms-avatar-picker-option { position: relative; aspect-ratio: 1; min-width: 0; padding: 0; overflow: hidden; border: 2px solid transparent; border-radius: 12px; background: var(--ds-surface-subtle); }
+.kun-mobile-avatar-editor .rooms-avatar-picker-option[aria-pressed='true'] { border-color: var(--ds-accent); }
+.kun-mobile-avatar-editor .rooms-avatar-editor-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.kun-mobile-avatar-editor .rooms-avatar-editor-actions button { min-height: 44px; border: 1px solid var(--ds-border); border-radius: 12px; color: var(--ds-text); background: var(--ds-surface-subtle); font: inherit; font-size: 15px; }
+.kun-mobile-avatar-editor .rooms-avatar-editor-actions button:disabled { opacity: .5; }
+.kun-mobile-avatar-editor .rooms-avatar-editor-actions .rooms-run-primary { border-color: var(--ds-accent); color: var(--ds-control-foreground, #fff); background: var(--ds-accent); }
+.kun-mobile-avatar-editor .rooms-user-avatar-form > small { color: var(--ds-text-muted); font-size: 12px; line-height: 1.5; }
+.kun-mobile-avatar-editor .rooms-run-error { margin: 0; color: var(--ds-danger); overflow-wrap: anywhere; }

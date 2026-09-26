@@ -282,7 +282,7 @@ describe('JsonSettingsStore', () => {
       openAtLogin: false,
       startMinimized: false,
       useSystemTitleBar: false,
-      closeAction: 'ask',
+      closeAction: 'quit',
       closeToTray: false,
       keepAwake: false
     })
@@ -569,20 +569,20 @@ describe('JsonSettingsStore', () => {
         ...initial.provider,
         providers: [...initial.provider.providers, provider],
         routePools: [routePool],
-        localGateway: { enabled: true, name: 'Team Relay' }
+        localGateway: { enabled: true, name: 'Team Relay', exposeProviderModels: false }
       }
     })
 
     const restarted = new JsonSettingsStore(userDataDir)
     const loaded = await restarted.load()
     expect(loaded.provider.routePools).toEqual([routePool])
-    expect(loaded.provider.localGateway).toEqual({ enabled: true, name: 'Team Relay' })
+    expect(loaded.provider.localGateway).toEqual({ enabled: true, name: 'Team Relay', exposeProviderModels: false })
     expect(loaded.provider.providers.find((item) => item.id === provider.id)?.presetSource)
       .toEqual(provider.presetSource)
 
     await restarted.patch({ theme: 'dark' })
     const afterUnrelatedPatch = await new JsonSettingsStore(userDataDir).load()
     expect(afterUnrelatedPatch.provider.routePools).toEqual([routePool])
-    expect(afterUnrelatedPatch.provider.localGateway).toEqual({ enabled: true, name: 'Team Relay' })
+    expect(afterUnrelatedPatch.provider.localGateway).toEqual({ enabled: true, name: 'Team Relay', exposeProviderModels: false })
   })
 })

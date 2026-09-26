@@ -45,7 +45,8 @@ describe('composer file drop routing', () => {
       path: '/workspace/project/netassist.go',
       relativePath: 'netassist.go',
       name: 'netassist.go',
-      type: 'file'
+      type: 'file',
+      workspaceRoot: '/workspace/project'
     })
   })
 

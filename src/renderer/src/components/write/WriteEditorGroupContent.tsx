@@ -11,23 +11,24 @@ import type {
   WorkWhiteboard,
   WritePreviewMode
 } from '../../write/write-workspace-store'
+import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { getWriteRenderSafety } from '../../write/write-render-safety'
+import { resolveWriteEditorSurface } from '../../write/write-editor-layout'
 import type { WriteRecentEdit } from '../../write/recent-edits'
 import type { WriteRichEditorHandle } from '../../write/tiptap/WriteRichEditor'
 import type { WriteEditorSelectionState, WriteMarkdownEditorHandle } from './WriteMarkdownEditor'
 import { WriteWorkspaceDocumentPane } from './WriteWorkspaceDocumentPane'
 import { WorkWhiteboardSurface } from './WorkWhiteboardSurface'
-import {
-  isMarkdownFile,
-  useDebouncedValue,
-  writePreviewDebounceMs
-} from './write-workspace-view-utils'
+import { isMarkdownFile } from './write-workspace-view-utils'
 
 type Props = {
   document: WriteDocumentSession | undefined
   whiteboard?: WorkWhiteboard
   requestedPath: string | null
   viewMode: WritePreviewMode
+  /** R2.3: 'translated' makes the PDF renderer show the overlay-only mirror. */
+  pdfView?: 'translated'
+  readOnly?: boolean
   workspaceRoot: string
   workspaceName: string
   workspacePathLabel: string
@@ -46,6 +47,7 @@ type Props = {
   onOpenWorkspaceFile?: (path: string) => void
   onCreateDraft: () => void
   onCreateWhiteboard?: () => void
+  onImportPaper?: () => void
   onPickWorkspace: () => void
   onRefreshWorkspace: () => void
   onContentChange: (content: string) => void
@@ -80,6 +82,8 @@ export function WriteEditorGroupContent({
   whiteboard,
   requestedPath,
   viewMode,
+  pdfView,
+  readOnly = false,
   workspaceRoot,
   workspaceName,
   workspacePathLabel,
@@ -98,6 +102,7 @@ export function WriteEditorGroupContent({
   onOpenWorkspaceFile,
   onCreateDraft,
   onCreateWhiteboard,
+  onImportPaper,
   onPickWorkspace,
   onRefreshWorkspace,
   onContentChange,
@@ -119,7 +124,6 @@ export function WriteEditorGroupContent({
   const localRichRef = useRef<WriteRichEditorHandle | null>(null)
   const localMarkdownRef = useRef<WriteMarkdownEditorHandle | null>(null)
   const localEditorPaneRef = useRef<HTMLDivElement | null>(null)
-  const previewPaneRef = useRef<HTMLDivElement | null>(null)
   const path = document?.path ?? requestedPath
   const kind = document?.kind ?? null
   const content = document?.fileContent ?? ''
@@ -132,11 +136,16 @@ export function WriteEditorGroupContent({
     fileSize: document?.fileSize ?? 0,
     truncated: document?.fileTruncated ?? false
   })
-  const debounced = useDebouncedValue(content, writePreviewDebounceMs(content.length))
-  const richModeActive = viewMode === 'rich' && markdown && renderSafety.livePreviewEnabled && kind === 'text'
-  const editorVisible = kind === 'text' && viewMode !== 'preview'
-  const previewVisible = kind === 'text' && viewMode === 'preview'
-  const editorAppearance = viewMode === 'source' || !renderSafety.livePreviewEnabled ? 'source' : 'live'
+  const documentEditorV2 = useWriteWorkspaceStore((s) => s.documentEditorV2)
+  const { surface } = resolveWriteEditorSurface({
+    path: path ?? '',
+    viewMode,
+    contentLength: content.length,
+    truncated: document?.fileTruncated ?? false,
+    isMarkdown: markdown,
+    documentEditorV2
+  })
+  const effectiveReadOnly = readOnly || renderSafety.readOnly
   const fileGuardMessage = renderSafety.notice === 'truncated'
     ? t('writeLargeFileTruncated')
     : renderSafety.notice === 'large-file' ? t('writeLargeFileSafeMode') : ''
@@ -181,6 +190,7 @@ export function WriteEditorGroupContent({
         activeFileIsOffice={kind === 'office'}
         activeFileIsCode={kind === 'code'}
         activeFileIsText={kind === 'text'}
+        pdfView={pdfView}
         fileLoading={Boolean(requestedPath && !document) || document?.fileLoading === true}
         fileContent={content}
         imageDataUrl={document?.imageDataUrl ?? ''}
@@ -211,12 +221,8 @@ export function WriteEditorGroupContent({
         renderSafety={renderSafety}
         fileGuardMessage={fileGuardMessage}
         fileGuardDetail={fileGuardDetail}
-        editorVisible={editorVisible}
-        previewVisible={previewVisible}
-        editorWidth="min-w-0 flex-1"
-        previewWidth="min-w-0 flex-1"
-        editorAppearance={editorAppearance}
-        richModeActive={richModeActive}
+        editorSurface={surface}
+        readOnly={effectiveReadOnly}
         richHandleRef={resolvedRichRef}
         markdownHandleRef={resolvedMarkdownRef}
         onMarkdownReviewStateChange={onReviewStateChange}
@@ -224,17 +230,15 @@ export function WriteEditorGroupContent({
         onFocusModeChange={onFocusModeChange}
         onboarding={onboarding}
         workspaceLoading={workspaceLoading}
-        debouncedPreviewContent={debounced}
-        isMarkdown={markdown}
         inlineCompletion={inlineCompletion}
         inlineCompletionApiReady={inlineCompletionApiReady}
         recentEdits={stableRecentEdits}
         focused={focused}
         editorPaneRef={resolvedEditorPaneRef}
-        previewPaneRef={previewPaneRef}
         onAskAssistant={onAskAssistant}
         onCreateDraft={onCreateDraft}
         onCreateWhiteboard={onCreateWhiteboard}
+        onImportPaper={onImportPaper}
         onPickWorkspace={onPickWorkspace}
         onRefreshWorkspace={onRefreshWorkspace}
         onContentChange={onContentChange}

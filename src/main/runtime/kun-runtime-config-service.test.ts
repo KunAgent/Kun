@@ -133,7 +133,7 @@ describe('Kun runtime config service', () => {
       ...base,
       provider: {
         ...defaultModelProviderSettings(),
-        localGateway: { enabled: true, name: 'Kun API' }
+        localGateway: { enabled: true, name: 'Kun API', exposeProviderModels: false }
       },
       agents: { kun: runtime }
     })
@@ -277,6 +277,43 @@ describe('Kun runtime config service', () => {
     expect(body.modelSelection).toBeUndefined()
   })
 
+  it('projects the window mode toggle into persisted and hot-applied config', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-config-window-mode-'))
+    const base = normalizeAppSettings({} as AppSettingsV1)
+    const project = async (enabled: boolean): Promise<RuntimeConfigApplyPayload> => {
+      const defaults = defaultKunRuntimeSettings()
+      const runtime = {
+        ...defaults,
+        contextCompaction: {
+          ...defaults.contextCompaction,
+          windowModeEnabled: enabled
+        }
+      }
+      const settings = normalizeAppSettings({
+        ...base,
+        provider: defaultModelProviderSettings(),
+        agents: { kun: runtime }
+      })
+      const config = await syncGuiManagedKunConfig(dataDir, runtime)
+      expect(config.contextCompaction?.windowModeEnabled).toBe(enabled)
+      expect(config.contextCompaction?.summaryMaxTokens).toBe(
+        defaults.contextCompaction.summaryMaxTokens
+      )
+      return buildManagedRuntimeHotApplyBody(settings, config)
+    }
+
+    try {
+      const enabledBody = await project(true)
+      expect(enabledBody.contextCompaction?.windowModeEnabled).toBe(true)
+      expect(enabledBody.contextCompaction?.summaryMaxTokens).toBe(2_048)
+
+      const disabledBody = await project(false)
+      expect(disabledBody.contextCompaction?.windowModeEnabled).toBe(false)
+    } finally {
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
   it('maps conversation visualization settings into persisted and hot-applied config', async () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-config-visualization-'))
     const base = normalizeAppSettings({} as AppSettingsV1)
@@ -303,6 +340,22 @@ describe('Kun runtime config service', () => {
     try {
       expect((await project(true)).lab?.conversationVisualization).toEqual({ enabled: true })
       expect((await project()).lab?.conversationVisualization).toEqual({ enabled: false })
+    } finally {
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
+  it('projects Codex reference opt-in and explicit disable to disk and hot apply', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-config-codex-reference-'))
+    try {
+      for (const enabled of [false, true, false]) {
+        const runtime = defaultKunRuntimeSettings()
+        runtime.lab.codexReferenceBranches.enabled = enabled
+        const settings = normalizeAppSettings({ ...normalizeAppSettings({} as AppSettingsV1), agents: { kun: runtime } })
+        const config = await syncGuiManagedKunConfig(dataDir, runtime)
+        expect(config.lab?.codexReferenceBranches).toEqual({ enabled })
+        expect(buildManagedRuntimeHotApplyBody(settings, config).lab?.codexReferenceBranches).toEqual({ enabled })
+      }
     } finally {
       await rm(dataDir, { recursive: true, force: true })
     }

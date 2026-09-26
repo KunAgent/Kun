@@ -94,6 +94,9 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
 {
     id: 'litellm',
     name: 'LiteLLM',
+    origin: 'local',
+    note: 'Self-hosted multi-vendor proxy',
+    keyOptional: true,
     baseUrl: 'http://localhost:4000',
     endpointFormat: 'chat_completions',
     models: [],
@@ -383,6 +386,7 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
     id: 'opencode-go',
     name: 'OpenCode Go',
     category: 'subscription',
+    origin: 'relay',
     subscriptionRegion: 'united-states',
     // 网关默认走 chat_completions;MiniMax / Qwen 系列在 OpenCode Go 上以
     // Anthropic Messages 格式提供,故按模型用 endpointFormat:'messages' 覆盖
@@ -442,6 +446,7 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
 {
     id: 'zenmux',
     name: 'ZenMux API',
+    origin: 'relay',
     subscriptionRegion: 'united-states',
     baseUrl: 'https://zenmux.ai/api/v1',
     endpointFormat: 'chat_completions',
@@ -461,6 +466,7 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
 {
     id: 'moonshot-cn',
     name: 'Moonshot CN',
+    tileGroup: 'moonshot',
     baseUrl: 'https://api.moonshot.cn/v1',
     endpointFormat: 'chat_completions',
     models: [...MOONSHOT_CHAT_MODELS],
@@ -478,6 +484,7 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
 {
     id: 'moonshot-global',
     name: 'Moonshot Global',
+    tileGroup: 'moonshot',
     baseUrl: 'https://api.moonshot.ai/v1',
     endpointFormat: 'chat_completions',
     models: [...MOONSHOT_CHAT_MODELS],

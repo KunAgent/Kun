@@ -15,6 +15,9 @@ export function CompactionTimelineEntry({
 
   const isRunning = block.status === 'running'
   const isError = block.status === 'error'
+  // A context-window checkpoint is a committed boundary, not a compaction:
+  // it renders the fixed marker label and never a generated summary.
+  const isWindow = block.variant === 'window'
   // `auto === false` means the user explicitly ran `/compact`; absent/true is
   // loop-triggered (automatic) compaction per the runtime contract.
   const isAuto = block.auto !== false
@@ -30,13 +33,15 @@ export function CompactionTimelineEntry({
   const canToggle = hasDetails && !forceOpen
 
   const Icon = isRunning ? LoaderCircle : isError ? CircleAlert : CheckCircle2
-  const title = isRunning
-    ? t('compactionRunning')
-    : isError
-      ? t('compactionFailed')
-      : isAuto
-        ? t('compactionAutoCompleted')
-        : t('compactionManualCompleted')
+  const title = isWindow
+    ? t('contextWindowSwitched')
+    : isRunning
+      ? t('compactionRunning')
+      : isError
+        ? t('compactionFailed')
+        : isAuto
+          ? t('compactionAutoCompleted')
+          : t('compactionManualCompleted')
   const meta = compactionMetaText(block, t)
   const iconTone = isRunning
     ? 'text-accent'
@@ -91,9 +96,11 @@ export function CompactionTimelineEntry({
             >
               {title}
             </span>
-            <span className="inline-flex items-center rounded-md border border-ds-border-muted bg-ds-card/75 px-1.5 py-0.5 text-[11px] font-medium text-ds-faint">
-              {isAuto ? t('compactionTriggerAuto') : t('compactionTriggerManual')}
-            </span>
+            {isWindow ? null : (
+              <span className="inline-flex items-center rounded-md border border-ds-border-muted bg-ds-card/75 px-1.5 py-0.5 text-[11px] font-medium text-ds-faint">
+                {isAuto ? t('compactionTriggerAuto') : t('compactionTriggerManual')}
+              </span>
+            )}
           </span>
           {meta ? (
             <span className="mt-0.5 block truncate text-[12px] leading-5 text-ds-faint">

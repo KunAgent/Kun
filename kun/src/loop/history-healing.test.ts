@@ -64,6 +64,27 @@ function toolResult(id: string, callId: string): TurnItem {
   }
 }
 
+function contextWindow(id: string): TurnItem {
+  return {
+    id,
+    kind: 'context_window',
+    turnId: 't1',
+    threadId: 'thr1',
+    role: 'system',
+    status: 'completed',
+    createdAt: CREATED_AT,
+    schemaVersion: 1,
+    windowId: 'win-1',
+    previousWindowId: 'win-0',
+    reason: 'model',
+    sourceHistoryRevision: 1,
+    splitBefore: { kind: 'seq', seq: 1 },
+    initializationRef: 'window://win-1',
+    operationId: 'op-win-1',
+    replacedTokens: 0
+  }
+}
+
 describe('healLoadedHistoryItems', () => {
   it('reports changed=false and preserves item references for already-valid history', () => {
     const items = [assistantText('a1'), toolCall('c1', 'call1'), toolResult('r1', 'call1')]
@@ -112,6 +133,15 @@ describe('healLoadedHistoryItems', () => {
 
   it('keeps a valid internal goal context without rewriting or exposing it as a malformed record', () => {
     const item = goalContext('goal_1')
+    const result = healLoadedHistoryItems([item])
+
+    expect(result.changed).toBe(false)
+    expect(result.items).toEqual([item])
+    expect(result.items[0]).toBe(item)
+  })
+
+  it('preserves context-window checkpoints across restart healing', () => {
+    const item = contextWindow('boundary-1')
     const result = healLoadedHistoryItems([item])
 
     expect(result.changed).toBe(false)

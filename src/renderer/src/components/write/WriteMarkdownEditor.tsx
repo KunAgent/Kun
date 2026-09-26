@@ -14,7 +14,6 @@ import {
   type WriteBlockType
 } from '../../write/block-type'
 import { buildInlineCompletionExtension, buildInlineCompletionPayload } from '../../write/inline-completion'
-import { writeMarkdownLivePreviewExtensions } from '../../write/markdown-live-preview'
 import { createWriteRecentEdit, type WriteRecentEdit } from '../../write/recent-edits'
 import { isSelectableRasterImageSrc, parseImageMarkdownLine } from '../../write/selected-image'
 import { buildWriteTemplateShortcutExpansion } from '../../write/template-shortcuts'
@@ -49,8 +48,6 @@ type Props = {
   filePath?: string | null
   documentEpoch?: number
   imageDirectory?: string | null
-  appearance?: 'source' | 'live'
-  livePreviewEnabled?: boolean
   readOnly?: boolean
   completionModel: string
   completionEnabled: boolean
@@ -91,8 +88,6 @@ export function WriteMarkdownEditor({
   filePath,
   documentEpoch,
   imageDirectory,
-  appearance = 'live',
-  livePreviewEnabled = appearance === 'live',
   readOnly = false,
   completionModel,
   completionEnabled,
@@ -115,14 +110,12 @@ export function WriteMarkdownEditor({
   const hostRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
   const themeCompartmentRef = useRef<Compartment | null>(null)
-  const livePreviewCompartmentRef = useRef<Compartment | null>(null)
   const editableCompartmentRef = useRef<Compartment | null>(null)
   const displayCompartmentRef = useRef<Compartment | null>(null)
   const workspaceRootRef = useRef(workspaceRoot ?? '')
   const filePathRef = useRef(filePath ?? '')
   const documentEpochRef = useRef(documentEpoch ?? 0)
   const imageDirectoryRef = useRef(imageDirectory ?? '')
-  const livePreviewEnabledRef = useRef(livePreviewEnabled)
   const readOnlyRef = useRef(readOnly)
   const completionModelRef = useRef(completionModel)
   const completionEnabledRef = useRef(completionEnabled)
@@ -132,7 +125,6 @@ export function WriteMarkdownEditor({
   const completionLongDebounceMsRef = useRef(completionLongDebounceMs)
   const completionLongMinAcceptScoreRef = useRef(completionLongMinAcceptScore)
   const recentEditsRef = useRef(recentEdits)
-  const appearanceRef = useRef(appearance)
   const onChangeRef = useRef(onChange)
   const onDocumentEditRef = useRef(onDocumentEdit)
   const onSelectionChangeRef = useRef(onSelectionChange)
@@ -150,7 +142,6 @@ export function WriteMarkdownEditor({
   filePathRef.current = filePath ?? ''
   documentEpochRef.current = documentEpoch ?? 0
   imageDirectoryRef.current = imageDirectory ?? ''
-  livePreviewEnabledRef.current = livePreviewEnabled
   readOnlyRef.current = readOnly
   completionModelRef.current = completionModel
   completionEnabledRef.current = completionEnabled
@@ -160,7 +151,6 @@ export function WriteMarkdownEditor({
   completionLongDebounceMsRef.current = completionLongDebounceMs
   completionLongMinAcceptScoreRef.current = completionLongMinAcceptScore
   recentEditsRef.current = recentEdits
-  appearanceRef.current = appearance
   onChangeRef.current = onChange
   onDocumentEditRef.current = onDocumentEdit
   onSelectionChangeRef.current = onSelectionChange
@@ -175,12 +165,10 @@ export function WriteMarkdownEditor({
 
     const inlineCompletionCompartment = new Compartment()
     const themeCompartment = new Compartment()
-    const livePreviewCompartment = new Compartment()
     const editableCompartment = new Compartment()
     const displayCompartment = new Compartment()
     const mergeCompartment = new Compartment()
     themeCompartmentRef.current = themeCompartment
-    livePreviewCompartmentRef.current = livePreviewCompartment
     editableCompartmentRef.current = editableCompartment
     displayCompartmentRef.current = displayCompartment
     mergeCompartmentRef.current = mergeCompartment
@@ -195,15 +183,7 @@ export function WriteMarkdownEditor({
       const finalDoc = instance.state.doc.toString()
       reviewActiveRef.current = false
       instance.dispatch({
-        effects: [
-          mergeCompartment.reconfigure([]),
-          // Restore the live-preview decorations that were suspended for review.
-          livePreviewCompartment.reconfigure(
-            appearanceRef.current === 'live' && livePreviewEnabledRef.current
-              ? writeMarkdownLivePreviewExtensions(filePathRef.current, workspaceRootRef.current)
-              : []
-          )
-        ]
+        effects: [mergeCompartment.reconfigure([])]
       })
       lastEmittedValueRef.current = finalDoc
       onChangeRef.current(finalDoc)
@@ -254,9 +234,6 @@ export function WriteMarkdownEditor({
         changes: { from: 0, to: instance.state.doc.length, insert: nextDoc },
         annotations: externalValueSyncAnnotation.of(true),
         effects: [
-          // Suspend live-preview decorations so the raw red/green diff (and the
-          // merge view's deleted-line widgets) render cleanly during review.
-          livePreviewCompartment.reconfigure([]),
           mergeCompartment.reconfigure([
             unifiedMergeView({ original, gutter: false, collapseUnchanged: { margin: 3, minSize: 4 } }),
             showPanel.of(buildDiffReviewPanel)
@@ -308,13 +285,8 @@ export function WriteMarkdownEditor({
     const state = EditorState.create({
       doc: valueRef.current,
       extensions: [
-        themeCompartment.of(buildEditorTheme(appearanceRef.current)),
-        livePreviewCompartment.of(
-          appearanceRef.current === 'live' && livePreviewEnabledRef.current
-            ? writeMarkdownLivePreviewExtensions(filePathRef.current, workspaceRootRef.current)
-            : []
-        ),
-        editableCompartment.of(buildInteractionExtensions(readOnlyRef.current, appearanceRef.current)),
+        themeCompartment.of(buildEditorTheme()),
+        editableCompartment.of(buildInteractionExtensions(readOnlyRef.current)),
         displayCompartment.of(writeEditorDisplayExtensions(displayPreferences)),
         mergeCompartment.of([]),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
@@ -553,7 +525,6 @@ export function WriteMarkdownEditor({
       view.destroy()
       viewRef.current = null
       themeCompartmentRef.current = null
-      livePreviewCompartmentRef.current = null
       editableCompartmentRef.current = null
       displayCompartmentRef.current = null
       mergeCompartmentRef.current = null
@@ -564,22 +535,12 @@ export function WriteMarkdownEditor({
 
   useEffect(() => {
     const view = viewRef.current
-    const themeCompartment = themeCompartmentRef.current
-    const livePreviewCompartment = livePreviewCompartmentRef.current
     const editableCompartment = editableCompartmentRef.current
-    if (!view || !themeCompartment || !livePreviewCompartment || !editableCompartment) return
+    if (!view || !editableCompartment) return
     view.dispatch({
-      effects: [
-        themeCompartment.reconfigure(buildEditorTheme(appearance)),
-        livePreviewCompartment.reconfigure(
-          appearance === 'live' && livePreviewEnabled
-            ? writeMarkdownLivePreviewExtensions(filePath, workspaceRoot)
-            : []
-        ),
-        editableCompartment.reconfigure(buildInteractionExtensions(readOnly, appearance))
-      ]
+      effects: [editableCompartment.reconfigure(buildInteractionExtensions(readOnly))]
     })
-  }, [appearance, filePath, livePreviewEnabled, readOnly, workspaceRoot])
+  }, [readOnly])
 
   useEffect(() => {
     const view = viewRef.current

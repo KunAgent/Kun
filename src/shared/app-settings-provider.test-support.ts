@@ -5,7 +5,7 @@ import {
   defaultKunRuntimeSettings,
   defaultModelProviderSettings,
   defaultScheduleSettings,
-  defaultTerminalSettings,
+  defaultTerminalSettings, defaultRemoteAccessSettings,
   defaultWorkflowSettings,
   defaultWriteSettings,
   type AppSettingsV1
@@ -55,6 +55,7 @@ export function settings(): AppSettingsV1 {
     workflow: defaultWorkflowSettings(),
     design: defaultDesignSettings(),
     terminal: defaultTerminalSettings(),
+    remote: defaultRemoteAccessSettings(),
     guiUpdate: { channel: 'stable' },
     codePromptPrefix: '',
     chatWelcomeMessage: '',

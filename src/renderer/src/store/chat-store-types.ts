@@ -44,6 +44,7 @@ import type {
   DesignTaskProfileInput
 } from '../agent/design-task-profile'
 import type { ThreadRecoveryOptions } from './thread-recovery-coordinator'
+import type { CodeWorkspaceFolderSetsRegistry } from '../lib/code-workspace-folder-sets'
 import type { RemovedCodeWorkspacesRegistry } from '../lib/removed-code-workspaces'
 
 export type QueuedUserMessage = {
@@ -93,6 +94,7 @@ export type QueuedUserMessage = {
     title?: string
   }
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   /** True only for the product Design surface; Code whiteboards leave this unset. */
   guiDesignMode?: boolean
   /** Turn-scoped persona text resolved from the composer preset. */
@@ -173,6 +175,7 @@ export type SendMessageOverrides = {
   orchestration?: 'direct' | 'graph'
   guiPlan?: GuiPlanMessageContext
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   guiDesignMode?: boolean
   /** Turn-scoped persona text resolved from the composer preset. */
   persona?: string
@@ -213,7 +216,7 @@ export type ClearDesignHistoryResult = {
 export type InitialSetupMode = 'required' | 'preview'
 import type { SettingsRouteSection } from './settings-route-sections'
 export type { SettingsRouteSection }
-export type AppRoute = 'chat' | 'write' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow'
+export type AppRoute = 'chat' | 'write' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow'
 export type ThreadCompletionOutcome = 'completed' | 'failed'
 export type CompletionAttentionRegistry = Record<string, ThreadCompletionOutcome | boolean>
 export type ScheduledThreadActivity = {
@@ -294,12 +297,17 @@ export type ChatState = {
   initialSetupOpen: boolean
   initialSetupMode: InitialSetupMode
   workspaceRoot: string
+  /** True while `workspaceRoot` is a renderer-local (`persist: false`) pick —
+   *  host `settings.workspaceRoot` must not overwrite it. */
+  workspaceRootLocal: boolean
   workspaceLabel: string
   /** 对话会话的工作目录根(默认 ~/Documents/Kun),供侧边栏对话区块和项目保护使用。 */
   conversationWorkspaceRoot: string
   runtimeConnection: RuntimeConnectionStatus
   runtimeStatus: KunRuntimeStatusPayload | null
   codeWorkspaceRoots: string[]
+  /** Extra folders attached to a Code project; persisted in localStorage. */
+  codeWorkspaceFolderSets: CodeWorkspaceFolderSetsRegistry
   /** Projects hidden from the Code sidebar/picker; persisted in localStorage. */
   removedCodeWorkspaces: RemovedCodeWorkspacesRegistry
   threads: NormalizedThread[]
@@ -440,6 +448,8 @@ export type ChatState = {
   awaitingUserInputThreadIds: Record<string, true>
   /** Completion attention keyed by thread. Legacy boolean true reads as completed. */
   unreadThreadIds: CompletionAttentionRegistry
+  /** Write assistant thread whose timeline is actually mounted in the visible right panel. */
+  writeAssistantVisibleThreadId: string | null
   scheduledThreadActivities: Record<string, ScheduledThreadActivity>
   /**
    * Side conversations opened via `/btw`. The main thread selection
@@ -489,6 +499,7 @@ export type ChatState = {
     workspaceRoot?: string,
     activeFilePath?: string
   ) => Promise<void>
+  setWriteAssistantVisibleThreadId: (threadId: string | null) => void
   openSettings: (section?: SettingsRouteSection) => void
   /** 离开设置页:直接把 route 恢复为进入设置前的工作台路由,不经过会重新解析/切换会话的 open* 入口。 */
   closeSettings: () => void
@@ -522,8 +533,20 @@ export type ChatState = {
   closeInitialSetup: () => void
   boot: () => Promise<void>
   probeRuntime: (mode?: 'user' | 'background', options?: { restart?: boolean }) => Promise<void>
-  chooseWorkspace: (options?: { createThreadAfter?: boolean; selectThreadAfter?: boolean }) => Promise<string | null>
-  selectWorkspaceRoot: (workspaceRoot: string) => Promise<string | null>
+  chooseWorkspace: (options?: {
+    createThreadAfter?: boolean
+    selectThreadAfter?: boolean
+    /**
+     * `false` keeps the selection renderer-local (no `settings.workspaceRoot`
+     * write). Remote/mobile clients use this so browsing a project on a phone
+     * never moves the desktop host's current project.
+     */
+    persist?: boolean
+  }) => Promise<string | null>
+  selectWorkspaceRoot: (workspaceRoot: string, options?: {
+    /** See `chooseWorkspace` — `false` skips the host settings write. */
+    persist?: boolean
+  }) => Promise<string | null>
   clearWorkspace: () => Promise<void>
   /**
    * Remove a sidebar project from the Code project list. Keeps threads,
@@ -532,6 +555,10 @@ export type ChatState = {
    * whole project identity is hidden at once.
    */
   removeWorkspace: (workspacePath: string, relatedPaths?: string[]) => Promise<void>
+  /** Add a sibling directory to the current Code project without creating a new project. */
+  addWorkspaceFolder: (workspacePath?: string) => Promise<boolean>
+  /** Remove a previously attached extra directory from a Code project. */
+  removeWorkspaceFolder: (workspacePath: string, extraRoot: string) => Promise<boolean>
   refreshThreads: () => Promise<void>
   /** Reconcile targeted push invalidations or run a legacy discovery scan. */
   syncSidebarActivity: (options?: {

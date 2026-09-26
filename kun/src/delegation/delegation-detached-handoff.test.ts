@@ -6,6 +6,7 @@ import type { ThreadStore } from '../ports/thread-store.js'
 import type { TurnService } from '../services/turn-service.js'
 import { DetachedChildHandoffCoordinator } from './delegation-detached-handoff.js'
 import { ChildRunRecord } from './delegation-runtime-contracts.js'
+import { bindRoomContinuationDispatcher } from '../rooms/room-continuation-dispatch.js'
 import { DetachedChildHandoffStore } from './detached-child-handoff-store.js'
 
 const roots: string[] = []
@@ -40,6 +41,28 @@ describe('detached child handoff', () => {
     await fixture.second.replayPending()
     expect(fixture.startTurn).toHaveBeenCalledOnce()
     expect(await fixture.store.list()).toEqual([])
+  })
+
+  it('retains a room handoff while its owner is starting and acknowledges only after durable queuing', async () => {
+    const f = await createFixture()
+    vi.mocked(f.threadStore.get).mockResolvedValue({ id: 'parent-thread', status: 'idle',
+      roomContext: { kind: 'conversation' }, turns: [] } as never)
+    let ready = false
+    const dispatch = vi.fn(async () => {
+      if (!ready) throw new Error('owner starting')
+      return 'queued' as const
+    })
+    const unbind = bindRoomContinuationDispatcher(f.threadStore, dispatch)
+    try {
+      await f.first.prepare(childRecord())
+      await f.second.replayPending()
+      expect(await f.store.list()).toHaveLength(1)
+      ready = true
+      await f.second.replayPending()
+      expect(await f.store.list()).toEqual([])
+      expect(f.startTurn).not.toHaveBeenCalled()
+      expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ sourceTurnId: 'parent-turn' }))
+    } finally { unbind() }
   })
 
   it('uses one clientRequestId when ack fails after durable admission', async () => {
@@ -101,6 +124,7 @@ async function createFixture(status: () => 'running' | 'idle' = () => 'idle') {
     nowIso: () => '2026-08-30T00:00:00.000Z'
   }
   return {
+    threadStore,
     store,
     runTurn,
     startTurn,

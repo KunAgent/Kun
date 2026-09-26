@@ -1,0 +1,62 @@
+/* Full-screen mobile settings page. Sits inside .kun-mobile-app-content, so it
+ * only needs to fill its parent and leave the mode nav (when shown) untouched. */
+.kun-mobile-settings-screen {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding-top: env(safe-area-inset-top, 0px);
+  background: var(--ds-bg-main);
+}
+.kun-mobile-settings-screen > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--kun-mobile-header-h, 52px);
+  padding-inline: var(--kun-mobile-gutter, 16px);
+  border-bottom: 1px solid var(--ds-border-muted);
+  flex-shrink: 0;
+}
+.kun-mobile-settings-screen > header > h1 {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ds-text);
+}
+.kun-mobile-settings-screen > header > span:last-child {
+  min-width: var(--kun-mobile-touch, 44px);
+}
+.kun-mobile-settings-screen-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px var(--kun-mobile-gutter, 16px) calc(24px + var(--kun-mobile-safe-bottom, 0px));
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+.kun-mobile-settings-hint {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--kun-mobile-radius, 12px);
+  color: var(--ds-text-muted);
+  background: var(--ds-surface-subtle);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.kun-mobile-settings-section-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ds-text-muted);
+}

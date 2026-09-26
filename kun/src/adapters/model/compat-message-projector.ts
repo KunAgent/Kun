@@ -8,6 +8,7 @@ import { extractToolResultImages, toolResultTextWithoutImages } from '../../loop
 import { wrapUntrustedContent } from '../../security/untrusted-content.js'
 import {
   COMPAT_ANTHROPIC_THINKING,
+  COMPAT_RESPONSES_REASONING,
   COMPAT_TOOL_RESULT_ERROR,
   COMPAT_HISTORY_CONTEXT,
   type CompatChatMessage,
@@ -239,10 +240,16 @@ class CompatMessageProjector {
   }
 
   private toolCallToWire(item: Extract<TurnItem, { kind: 'tool_call' }>): NonNullable<CompatChatMessage['tool_calls']>[number] {
+    const reasoningItems = item.providerMetadata?.responses?.reasoningItems
     return {
       id: item.callId,
       type: 'function',
-      function: { name: item.toolName, arguments: JSON.stringify(item.arguments) }
+      function: { name: item.toolName, arguments: JSON.stringify(item.arguments) },
+      // Responses reasoning items stay replayable across turns (store:false),
+      // unlike Anthropic thinking blocks which are only valid in-turn.
+      ...(reasoningItems?.length
+        ? { [COMPAT_RESPONSES_REASONING]: reasoningItems.map((entry) => ({ ...entry })) }
+        : {})
     }
   }
 
@@ -339,6 +346,10 @@ class CompatMessageProjector {
               [COMPAT_HISTORY_CONTEXT]: true
             }
           : null
+      // A window boundary carries no summary text; the new window's history
+      // is rebuilt from the initialization reference, so nothing is forwarded.
+      case 'context_window':
+        return null
       case 'review':
         return item.status === 'completed' && item.reviewText?.trim()
           ? {

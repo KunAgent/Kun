@@ -1,0 +1,184 @@
+/* Work document chrome (Agentero-style): a slim format bar above the page
+   and a muted status line below it. */
+
+.write-format-bar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--ds-border-muted, rgba(0, 0, 0, 0.07));
+  background: color-mix(in srgb, var(--ds-surface-card, #fff) 95%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.write-format-bar-trailing {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.write-format-toolbar {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+}
+
+.write-format-toolbar-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in srgb, var(--ds-text, #1f2328) 86%, transparent);
+  cursor: pointer;
+  outline: none;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.write-format-toolbar-button:hover {
+  background: var(--ds-surface-hover, rgba(0, 0, 0, 0.05));
+  color: var(--ds-text, #1f2328);
+}
+
+.write-format-toolbar-button[data-pressed] {
+  background: color-mix(in srgb, var(--ds-accent, #3b82d8) 12%, transparent);
+  color: var(--ds-accent, #3b82d8);
+}
+
+.write-format-toolbar-button:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent, #3b82d8) 45%, transparent);
+}
+
+.write-format-toolbar-button:disabled {
+  cursor: default;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.write-format-toolbar-separator {
+  flex-shrink: 0;
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: var(--ds-border-muted, rgba(0, 0, 0, 0.09));
+}
+
+.write-format-toolbar-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 30;
+  min-width: 180px;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid var(--ds-border, rgba(0, 0, 0, 0.09));
+  border-radius: 12px;
+  background: var(--ds-surface-card, #fff);
+  box-shadow: 0 14px 32px rgba(20, 47, 95, 0.14);
+}
+
+.write-format-toolbar-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ds-text, #1f2328);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.write-format-toolbar-menu-item:hover {
+  background: var(--ds-surface-hover, rgba(0, 0, 0, 0.05));
+}
+
+.write-format-toolbar-menu-item[data-pressed] {
+  color: var(--ds-accent, #3b82d8);
+}
+
+.write-status-bar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  height: 28px;
+  padding: 0 14px;
+  border-top: 1px solid var(--ds-border-muted, rgba(0, 0, 0, 0.07));
+  color: var(--ds-text-faint, #9aa0a8);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.write-status-bar-save {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.write-status-bar-save:not(:disabled) {
+  color: var(--ds-text-muted, #6b7280);
+  cursor: pointer;
+}
+
+.write-status-bar-save:not(:disabled):hover {
+  background: var(--ds-surface-hover, rgba(0, 0, 0, 0.05));
+  color: var(--ds-text, #1f2328);
+}
+
+.write-status-bar-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #10b981;
+}
+
+.write-status-bar-save.is-dirty .write-status-bar-dot {
+  background: #f59e0b;
+}
+
+.write-status-bar-save.is-saving .write-status-bar-dot {
+  background: #0ea5e9;
+}
+
+.write-status-bar-save.is-error .write-status-bar-dot {
+  background: #ef4444;
+}
+
+.write-status-bar-save.is-readonly .write-status-bar-dot {
+  background: #94a3b8;
+}
+
+.write-status-bar-save.is-review .write-status-bar-dot {
+  background: var(--ds-accent, #3b82d8);
+}
+
+.write-status-bar-divider {
+  flex-shrink: 0;
+  width: 1px;
+  height: 12px;
+  background: var(--ds-border-muted, rgba(0, 0, 0, 0.09));
+}

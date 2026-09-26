@@ -91,5 +91,33 @@ export function preserveRedactedProviderCredentials(
     }
   }
 
+  // `write.paperMode.search` keys are write-only in the renderer projection;
+  // an empty value round-tripping through `settings:set` means "unchanged".
+  const prevPaperSearch = prev.write?.paperMode?.search
+  const incomingPaperMode = partial.write?.paperMode
+  if (incomingPaperMode?.search && prevPaperSearch) {
+    const incomingSearch = incomingPaperMode.search
+    const preservedKeys: Record<string, string> = {}
+    for (const key of ['semanticScholarApiKey', 'coreApiKey'] as const) {
+      const previous = typeof prevPaperSearch[key] === 'string' ? prevPaperSearch[key] : ''
+      const incoming = typeof incomingSearch[key] === 'string' ? incomingSearch[key] : undefined
+      if (incoming !== undefined && !incoming.trim() && previous.trim()) {
+        preservedKeys[key] = previous
+      }
+    }
+    if (Object.keys(preservedKeys).length) {
+      next = {
+        ...next,
+        write: {
+          ...next.write,
+          paperMode: {
+            ...incomingPaperMode,
+            search: { ...incomingSearch, ...preservedKeys }
+          }
+        }
+      }
+    }
+  }
+
   return next
 }

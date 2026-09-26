@@ -128,6 +128,37 @@ export const KEYBOARD_SHORTCUT_COMMANDS = [
     descriptionKey: 'shortcutToggleMaximizeDesc',
     defaultBindings: []
   },
+  {
+    id: 'find-in-chat',
+    labelKey: 'shortcutFindInChat',
+    descriptionKey: 'shortcutFindInChatDesc',
+    defaultBindings: ['Ctrl+F'],
+    platformDefaultBindings: { darwin: ['Meta+F'] }
+  },
+  {
+    id: 'toggle-paper-mode',
+    labelKey: 'shortcutTogglePaperMode',
+    descriptionKey: 'shortcutTogglePaperModeDesc',
+    // Unbound by default (plan §6.1): users opt into a chord in settings.
+    defaultBindings: []
+  },
+  {
+    id: 'paper-import',
+    labelKey: 'shortcutPaperImport',
+    descriptionKey: 'shortcutPaperImportDesc',
+    // Ctrl+Shift+I is taken by toggle-devtools; use Meta+Shift+I on macOS and
+    // Ctrl+Alt+I on Windows/Linux.
+    defaultBindings: ['Ctrl+Alt+I'],
+    platformDefaultBindings: { darwin: ['Meta+Shift+I'] }
+  },
+  {
+    id: 'open-keyboard-shortcuts',
+    labelKey: 'shortcutKeyboardShortcuts',
+    descriptionKey: 'shortcutKeyboardShortcutsDesc',
+    // `?` is the classic cheatsheet chord; it is a printable character, so the
+    // dispatcher suppresses it while a text field owns focus.
+    defaultBindings: ['Shift+?']
+  },
   // Registered last on purpose: `findKeyboardShortcutCommand` resolves the
   // first command whose bindings match, so any command a user has bound to
   // the palette's chord keeps its own behavior.

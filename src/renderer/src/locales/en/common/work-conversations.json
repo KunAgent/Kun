@@ -1,8 +1,11 @@
 {
+  "writeFileNotFound": "This file is no longer available.",
   "writeConversationFileTrigger": "File conversations",
   "writeConversationWhiteboardTrigger": "Whiteboard conversations",
   "writeConversationFileTitle": "Conversations for this file",
   "writeConversationWhiteboardTitle": "Conversations for this whiteboard",
+  "writeConversationPaperTrigger": "Paper conversations",
+  "writeConversationPaperTitle": "Conversations for this paper",
   "writeConversationNew": "New",
   "writeConversationSearch": "Search conversation titles",
   "writeConversationCurrent": "Current",
@@ -16,5 +19,6 @@
   "writeConversationLockedRunning": "Conversation actions are locked while this resource has a running task.",
   "writeConversationWorkflowLocked": "This review whiteboard stays bound to its workflow conversation.",
   "writeConversationArchiveTitle": "Archive conversation?",
-  "writeConversationArchiveDescription": "The conversation will leave this resource's active history. You can restore it from archived conversations."
+  "writeConversationArchiveDescription": "The conversation will leave this resource's active history. You can restore it from archived conversations.",
+  "contextWindowSwitched": "Switched context window"
 }

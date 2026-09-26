@@ -24,6 +24,7 @@ export type ComposerFileDropOptions = {
   canPickLocalFileReference: boolean
   canAddFileReference: boolean
   workspaceRoot: string
+  extraWorkspaceRoots?: readonly string[]
   onPickAttachments?: (files: File[]) => void
   onAddFileReference?: (reference: ComposerFileReference) => void
   getPathForFile?: (file: File) => string
@@ -90,7 +91,7 @@ export function routeComposerFileDrop(
   const draggedReference = options.canAddFileReference
     ? parseComposerFileReferenceDragData(
         source.getData?.(COMPOSER_FILE_REFERENCE_DRAG_MIME) ?? '',
-        options.workspaceRoot
+        [options.workspaceRoot, ...(options.extraWorkspaceRoots ?? [])]
       )
     : null
 
@@ -118,7 +119,10 @@ export function routeComposerFileDrop(
       try {
         const path = options.getPathForFile(file)
         if (!path) continue
-        options.onAddFileReference(composerFileReferenceFromPath(path, options.workspaceRoot))
+        options.onAddFileReference(composerFileReferenceFromPath(
+          path,
+          [options.workspaceRoot, ...(options.extraWorkspaceRoots ?? [])]
+        ))
         handled = true
       } catch {
         // Ignore files whose native filesystem path cannot be resolved.

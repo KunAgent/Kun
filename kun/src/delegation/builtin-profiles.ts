@@ -194,6 +194,31 @@ export const COMPONENT_DESIGNER_PROFILE: SubagentProfileConfig = {
   ].join('')
 }
 
+/**
+ * Read-only literature sweeper for survey-scale searches on the Work/paper
+ * surface. It runs `paper_search` over several query phrasings for one
+ * delegated sub-topic, optionally walks citations with `paper_citations`, and
+ * reports a compact verified-candidate list the parent can feed to
+ * `paper_report`. It never edits files and never invents identifiers
+ * (toolPolicy `readOnly`).
+ */
+export const LITERATURE_RESEARCHER_PROFILE: SubagentProfileConfig = {
+  mode: 'subagent',
+  toolPolicy: 'readOnly',
+  skillsEnabled: false,
+  blockedTools: ['delegate_task', 'generate_subagent', 'load_skill', 'paper_report'],
+  systemPrompt: [
+    'You are a read-only literature researcher. Your job is a thorough scholarly sweep for ONE delegated sub-topic.',
+    'Use paper_search with several short English keyword variants (synonyms, method names, venue-specific terms),',
+    'narrow with year_from/year_to when the task states a range, and use paper_citations to expand around the',
+    'strongest seeds when the sweep needs depth. Judge relevance from titles and abstracts before recommending.',
+    'Never invent paper identifiers — only ids returned by the tools are valid.',
+    'Return a compact markdown list, one line per recommended paper: `- <title> | <arxiv id or DOI> | <one-line reason> | <priority must|should|optional>`; ',
+    'group related lines under `## <group>` headings when the sweep covers distinct themes, and end with a short',
+    'coverage note (queries tried, sources that failed). Keep it under 30 papers and under 2000 words total.'
+  ].join(' ')
+}
+
 const BUILTIN_SUBAGENT_PROFILE_BASES: Readonly<Record<string, SubagentProfileConfig>> = {
   general: GENERAL_PROFILE,
   explore: EXPLORE_PROFILE,
@@ -201,6 +226,7 @@ const BUILTIN_SUBAGENT_PROFILE_BASES: Readonly<Record<string, SubagentProfileCon
   'diagram-designer': DIAGRAM_DESIGNER_PROFILE,
   'design-reviewer': DESIGN_REVIEWER_PROFILE,
   'over-engineering-reviewer': OVER_ENGINEERING_REVIEWER_PROFILE,
+  'literature-researcher': LITERATURE_RESEARCHER_PROFILE,
   ...AGENT_SKILLS_SUBAGENT_PROFILES,
   ...WORKFLOW_SUBAGENT_PROFILES,
   ...SURFACE_SPECIALIST_SUBAGENT_PROFILES

@@ -49,6 +49,20 @@ export type ModelStreamChunk = (
       /** Safe, concise provider diagnostic displayed from the retry status. */
       failureSummary?: string
     }
+  | {
+      /**
+       * Pre-content progress: a routing layer is abandoning one target and
+       * trying the next. Emitted outside the per-target buffer so the user
+       * sees the switch while it happens; it carries no `route` attribution
+       * because the rejected route must never become the visible route.
+       */
+      kind: 'route_switching'
+      from: { providerId: string; modelId: string }
+      to: { providerId: string; modelId: string }
+      /** Unified failure reason that triggered the switch, when known. */
+      reason?: string
+      message?: string
+    }
   | { kind: 'image_generation_complete'; imageBase64: string; mimeType: string }
   | { kind: 'usage'; usage: UsageSnapshot }
   | { kind: 'completed'; stopReason: 'stop' | 'tool_calls' | 'length' | 'error' }
@@ -78,6 +92,25 @@ export type ModelRequest = {
    * reusing the single Kun process (kun#workflow-multi-provider).
    */
   providerId?: string
+  /**
+   * Declared routing identity when a routing layer (route pool, account
+   * group) deliberately switches targets within one turn. `providerId` still
+   * carries the concrete target of this attempt; `routeSelection` lets the
+   * provider router pin the turn to the *selection* instead of the first
+   * resolved provider, so an explicit failover is not rejected as a silent
+   * credential change.
+   */
+  routeSelection?: {
+    kind: 'route-pool' | 'account-group'
+    id: string
+    targetProviderId: string
+  }
+  /**
+   * Routing-layer hint: how many configured alternatives remain after this
+   * attempt. Model clients use it to shorten same-target retries — waiting
+   * out a provider backoff is pointless when the user asked to switch.
+   */
+  failover?: { alternatives: number }
   /** Runtime-owned diagnostic run id used to correlate route-test progress. */
   routeTestId?: string
   /** Opaque account selection for custom/extension providers. Never a credential. */
@@ -129,6 +162,12 @@ export type ModelRequest = {
   stream?: boolean
   /** Optional output cap forwarded to OpenAI-compatible providers. */
   maxTokens?: number
+  /**
+   * Per-request same-target retry ceiling. The adapter takes
+   * `min(configured attempts, this value)`; `0` disables retries entirely
+   * (used by probes that must fail fast without touching shared health).
+   */
+  maxRetryAttempts?: number
   /** Optional sampling controls for classifier-style calls. */
   temperature?: number
   topP?: number

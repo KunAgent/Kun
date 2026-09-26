@@ -14,7 +14,7 @@ function thread(ages: number[]): ThreadRecord {
       id: `turn_${index + 1}`, threadId: 'thr_retention', status: 'completed', prompt: `p${index}`,
       orchestration: 'direct', steering: [], createdAt: new Date(Date.parse(NOW) - days * DAY).toISOString(),
       finishedAt: new Date(Date.parse(NOW) - days * DAY).toISOString(), items: [], attachmentIds: [],
-      activeSkillIds: [], injectedMemoryIds: [], injectedMemorySummaries: [], injectedInstructionSources: []
+      activeSkillIds: [], injectedMemoryIds: [], injectedMemorySummaries: [], injectedDirectiveIds: [], injectedDirectiveSummaries: [], injectedInstructionSources: []
     }))
   }
 }

@@ -1,0 +1,6 @@
+.kun-mobile-room-detail { display: flex; width: 100%; height: 100%; min-height: 0; flex-direction: column; overflow: hidden; color: var(--ds-text); background: var(--ds-bg-main); }
+.kun-mobile-room-detail > header { display: grid; min-height: 60px; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: 8px; padding: env(safe-area-inset-top, 0px) 8px 0; border-bottom: 1px solid var(--ds-border); }
+.kun-mobile-room-detail > header button { display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; border: 0; border-radius: 9999px; color: inherit; background: transparent; }
+.kun-mobile-room-detail > header h1 { margin: 0; font-size: 16px; font-weight: 500; text-transform: capitalize; }
+.kun-mobile-room-detail > :not(header) { min-width: 0; }
+.kun-mobile-room-detail > :is(.rooms-reply-thread, .rooms-run-inspector, .rooms-task-panel, .rooms-member-details) { min-height: 0; flex: 1; overflow: auto; }

@@ -5,9 +5,14 @@ import {
   DEFAULT_TOOL_OUTPUT_LIMITS_CONFIG,
   type ToolOutputLimitsConfig,
   type RuntimeConfigApplyRequest,
-  AtomicJsonFile
+  AtomicJsonFile,
+  buildPptAgentLocalTools,
+  PPT_AGENT_LOCAL_PROVIDER_ID,
+  type TurnService
 } from './runtime-factory-dependencies.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
+import type { ContextWindowModeSource } from '../adapters/tool/context-window-tool-provider.js'
+import type { ContextWindowMode } from '../contracts/context-windows.js'
 
 export function mergeRuntimeConfigApplyOptions(
   current: KunServeRuntimeOptions,
@@ -25,6 +30,7 @@ export function mergeRuntimeConfigApplyOptions(
     headers: serve.headers ?? current.headers,
     providers: mergeRuntimeProviderCredentials(current.providers, serve.providers),
     routePools: serve.routePools ?? current.routePools,
+    providerFailover: serve.providerFailover ?? current.providerFailover,
     localModelGateway: serve.localModelGateway ?? current.localModelGateway,
     model: serve.model ?? current.model,
     approvalPolicy: serve.approvalPolicy ?? current.approvalPolicy,
@@ -73,6 +79,24 @@ export function modelRequestCaptureDefaultEnabled(
   options: Pick<KunServeRuntimeOptions, 'runtime'>
 ): boolean {
   return options.runtime?.llmDebug?.defaultThreadCaptureEnabled === true
+}
+
+/**
+ * Live-config fallback for the turn-modes registry. Turn admission freezes
+ * the accepted mode per turn; only threads without any snapshot (or brand
+ * new turns) read the current effective option here.
+ */
+export function liveContextWindowMode(
+  read: () => KunServeRuntimeOptions
+): () => ContextWindowMode {
+  return () => read().contextCompaction?.windowModeEnabled === true ? 'windows' : 'summary'
+}
+
+/** Frozen per-call mode resolution for the window tool provider. */
+export function contextWindowModeFor(modes: {
+  modeFor(threadId: string, turnId: string | undefined): ContextWindowMode
+}): ContextWindowModeSource {
+  return (context) => modes.modeFor(context.threadId, context.turnId)
 }
 
 export async function persistRuntimeMcpConfig(
@@ -186,5 +210,26 @@ export function skillsConfigForRuntime(
   return {
     ...skills,
     disabledIds: [...new Set([...skills.disabledIds, 'ppt-master'])]
+  }
+}
+
+export function buildPptAgentRuntimeProvider(
+  options: Pick<KunServeRuntimeOptions, 'dataDir' | 'lab'>,
+  turnService: Pick<TurnService, 'getTurn'>
+) {
+  return {
+    id: PPT_AGENT_LOCAL_PROVIDER_ID,
+    kind: 'built-in' as const,
+    enabled: true,
+    available: true,
+    tools: [
+      ...buildPptAgentLocalTools({
+        enabled: () => options.lab?.pptAgent?.enabled !== false,
+        toolchainDirectory: () => process.env.KUN_PPT_TOOLCHAIN_DIR,
+        governanceDirectory: () => join(options.dataDir, 'ppt-governance'),
+        resolveSourceRequest: async (context) =>
+          (await turnService.getTurn(context.threadId, context.turnId))?.prompt
+      })
+    ]
   }
 }

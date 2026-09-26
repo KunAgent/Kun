@@ -41,6 +41,7 @@ import {
   compatHttpFailureLog,
   redactUrlForLog
 } from './compat-http-diagnostics.js'
+import type { FailureHeaderSource } from './failure-reason.js'
 import type { CompatChatMessage } from './compat-request-codecs.js'
 import { projectCompatMessages } from './compat-message-projector.js'
 import {
@@ -60,7 +61,7 @@ import {
 } from './anthropic-messages-stream-decoder.js'
 import { decodeCompatNonStreamingResponse } from './compat-non-streaming-decoder.js'
 import type { CompatModelClientConfig, ChatMessage, CompatPostResult } from './compat-model-types.js'
-import { isCodexEndpoint, isOpenCodeGo, ignoreModelTraceFailure } from './compat-model-support.js'
+import { isCodexEndpoint, ignoreModelTraceFailure } from './compat-model-support.js'
 import { isDeepSeekHost } from './model-error-probe.js'
 
 export class CompatModelClientBase {
@@ -82,6 +83,19 @@ export class CompatModelClientBase {
 
   protected endpointFormat(): ModelEndpointFormat {
     return normalizeModelEndpointFormat(this.config.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT)
+  }
+
+  /**
+   * Base URL for a resolved wire format. Multi-protocol providers may
+   * override each family (`endpoints.chat_completions` / `responses` /
+   * `messages`); `custom_endpoint` always uses the raw `baseUrl`.
+   */
+  protected baseUrlForFormat(format: ModelEndpointFormat): string {
+    if (format === 'chat_completions' || format === 'responses' || format === 'messages') {
+      const override = this.config.endpoints?.[format]?.trim()
+      if (override) return override
+    }
+    return this.config.baseUrl
   }
 
   /**
@@ -132,7 +146,12 @@ export class CompatModelClientBase {
       round: LlmDebugRound | null
       endpointFormat: ModelEndpointFormat
       attempt: number
-      reason: 'initial' | 'transport_retry' | 'credential_refresh' | 'stream_options_fallback'
+      reason:
+        | 'initial'
+        | 'transport_retry'
+        | 'credential_refresh'
+        | 'stream_options_fallback'
+        | 'request_fallback'
       apiKey: string
     }
   ): Promise<CompatPostResult> {
@@ -218,30 +237,19 @@ export class CompatModelClientBase {
     })
   }
 
-  /**
-   * Resolve the per-session routing id for OpenCode Go requests. A real Kun
-   * thread id is propagated as-is; a non-session probe/inline completion that
-   * carries no thread id gets a stable, request-local routing id (never a
-   * client-instance UUID or the GUI's unrelated selected session).
-   */
-  protected openCodeGoSessionId(threadId?: string): string | undefined {
-    if (!isOpenCodeGo({
-      presetSource: this.config.presetSource,
-      providerId: this.config.providerId,
-      baseUrl: this.config.baseUrl
-    })) {
-      return undefined
-    }
-    return threadId?.trim() || randomUUID()
-  }
-
-  protected async classifyHttpError(status: number, text: string, retryAfter?: string | null) {
+  protected async classifyHttpError(
+    status: number,
+    text: string,
+    retryAfter?: string | null,
+    headers?: FailureHeaderSource
+  ) {
     return classifyCompatHttpError({
       status,
       text,
       baseUrl: this.config.baseUrl,
       fetchImpl: this.fetchImpl,
-      retryAfter
+      retryAfter,
+      headers
     })
   }
 
@@ -269,11 +277,16 @@ export class CompatModelClientBase {
   protected buildRequestBody(
     request: ModelRequest,
     stream: boolean,
-    options: { endpointFormat?: ModelEndpointFormat; includeStreamUsage?: boolean } = {}
+    options: {
+      endpointFormat?: ModelEndpointFormat
+      includeStreamUsage?: boolean
+      forceReasoningRoundTrip?: boolean
+      dropUnreplayableResponsesToolRounds?: boolean
+    } = {}
   ): Record<string, unknown> {
     const requestModel = request.model?.trim()
     const model = requestModel || this.config.model
-    const messages = this.collectMessages(request, model)
+    const messages = this.collectMessages(request, model, options.forceReasoningRoundTrip === true)
     const endpointFormat = options.endpointFormat ?? this.endpointFormat()
     const tools = normalizeToolSpecs(request.tools)
     const reasoning = this.modelReasoningFor(model)
@@ -294,14 +307,21 @@ export class CompatModelClientBase {
       isCodex,
       isCodexLite,
       serviceTiers: this.capabilitiesForModel(model).serviceTiers,
-      codexNativeImageGeneration: codexModelSupportsNativeImageGeneration(model)
+      codexNativeImageGeneration: codexModelSupportsNativeImageGeneration(model),
+      ...(options.dropUnreplayableResponsesToolRounds === true
+        ? { dropUnreplayableResponsesToolRounds: true }
+        : {})
     })
   }
 
-  protected collectMessages(request: ModelRequest, model: string): ChatMessage[] {
+  protected collectMessages(
+    request: ModelRequest,
+    model: string,
+    forceReasoningRoundTrip = false
+  ): ChatMessage[] {
     return projectCompatMessages(request, {
       historyLimit: this.config.historyLimit,
-      thinkingMode: requiresReasoningRoundTrip(
+      thinkingMode: forceReasoningRoundTrip || requiresReasoningRoundTrip(
         request.reasoningEffort,
         model,
         this.config.baseUrl,

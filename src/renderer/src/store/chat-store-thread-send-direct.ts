@@ -3,6 +3,7 @@ import i18n from '../i18n'
 import { describeRuntimeError, formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
 import { shouldAutoTitleThread } from '../lib/thread-title'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
+import { currentCodeWorkspaceRoot } from './chat-store-current-workspace'
 import { saveQueuedMessagesForThread } from './queued-message-persistence'
 import { runtimePromptForSurface } from './chat-store-send-prompt'
 import { currentTurnStartGeneration } from './turn-start-fence'
@@ -100,7 +101,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     composerAccountId,
     reasoningEffort,
     serviceTier,
-    guiDesignCanvas,
+    guiDesignCanvas, guiExcalidrawCanvas,
     guiDesignMode,
     persona,
     orchestration,
@@ -134,7 +135,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           createdAt: new Date(now).toISOString(),
           text: displayText,
           ...(userModelChip ? { modelLabel: userModelChip } : {}),
-          ...((requestedAgentSurface || writeContext || guiDesignMode) || mode || userDisplayText || messageSource || guiDesignCanvas || designProfile || designDocumentTarget || designImagePlacementTarget || attachmentIds.length || attachments.length || fileReferences.length || composerContexts.length
+          ...((requestedAgentSurface || writeContext || guiDesignMode) || mode || userDisplayText || messageSource || guiDesignCanvas || guiExcalidrawCanvas || designProfile || designDocumentTarget || designImagePlacementTarget || attachmentIds.length || attachments.length || fileReferences.length || composerContexts.length
             ? {
                 meta: {
                   agentSurface: requestedAgentSurface ??
@@ -142,7 +143,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
                   ...(mode === 'agent' || mode === 'plan' ? { mode } : {}),
                   ...(userDisplayText ? { displayText: userDisplayText } : {}),
                   ...(messageSource ? { messageSource } : {}),
-                  ...(guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+                  ...(guiDesignCanvas ? { guiDesignCanvas: true } : guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
                   ...(guiDesignMode ? { guiDesignMode: true } : {}),
                   ...(designProfile ? { designProfile } : {}),
                   ...(designDocumentTarget ? { designDocumentTarget } : {}),
@@ -171,7 +172,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     if (!activeThreadId) {
       try {
         const settings = await rendererRuntimeClient.getSettings()
-        const workspaceRoot = normalizeWorkspaceRoot(settings.workspaceRoot)
+        const workspaceRoot = currentCodeWorkspaceRoot(get(), settings)
         if (!workspaceRoot) {
           set({
             blocks: previousBlocks,
@@ -197,12 +198,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           get(),
           p,
           workspaceRoot,
-          (thread) => isCodeThread(
-            thread,
-            get().clawChannels,
-            undefined,
-            readDesignThreadRegistry()
-          )
+          (thread) => isCodeThread(thread, get().clawChannels, undefined, readDesignThreadRegistry())
         )
         const reusableThread = reusableThreadId
           ? get().threads.find((thread) => thread.id === reusableThreadId) ?? null
@@ -298,7 +294,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         settings,
         threads: get().threads,
         activeThreadId,
-        fallbackWorkspaceRoot: settings.workspaceRoot
+        fallbackWorkspaceRoot: currentCodeWorkspaceRoot(get(), settings)
       })
       const runtimeText = runtimePromptForSurface({
         channel,
@@ -361,7 +357,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         ...(messageSource ? { messageSource } : {}),
         ...(runtimeDisplayText ? { displayText: runtimeDisplayText } : {}),
         ...((queued?.guiPlan ?? overrides?.guiPlan) ? { guiPlan: queued?.guiPlan ?? overrides?.guiPlan } : {}),
-        ...(guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+        ...(guiDesignCanvas ? { guiDesignCanvas: true } : guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
         ...(guiDesignMode ? { guiDesignMode: true } : {}),
         ...(designProfile ? { designProfile } : {}),
         ...(designDocumentTarget ? { designDocumentTarget } : {}),

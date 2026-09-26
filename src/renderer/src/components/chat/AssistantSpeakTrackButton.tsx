@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, Download, Loader2 } from 'lucide-react'
-import { localKokoroTrackFileName } from '@shared/local-kokoro-tracks'
+import { localSanottsTrackFileName } from '@shared/local-sanotts-tracks'
 import {
   ensureSpeakTrackKeys,
   speakTrackStored,
@@ -57,13 +57,13 @@ export function AssistantSpeakTrackButton({
   if (!speakTrackStored(keys, trackKey) || !trackKey) return null
 
   const onClick = async (): Promise<void> => {
-    if (saving || typeof window.kunGui?.exportLocalKokoroTrack !== 'function') return
+    if (saving || typeof window.kunGui?.exportLocalSanottsTrack !== 'function') return
     setSaving(true)
     setError('')
     try {
-      const result = await window.kunGui.exportLocalKokoroTrack({
+      const result = await window.kunGui.exportLocalSanottsTrack({
         key: trackKey,
-        fileName: localKokoroTrackFileName(createdAt)
+        fileName: localSanottsTrackFileName(createdAt)
       })
       if (result.ok) setSaved(true)
       else if (!result.canceled) setError(result.message ?? '')
@@ -87,6 +87,7 @@ export function AssistantSpeakTrackButton({
       title={label}
       aria-label={label}
       data-speak-track-state={error ? 'error' : saved ? 'saved' : saving ? 'saving' : 'ready'}
+      data-assistant-action="speak-track"
       className={`flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition hover:bg-ds-hover ${
         error ? 'text-rose-400 hover:text-rose-300' : 'text-ds-faint hover:text-ds-muted'
       }`}

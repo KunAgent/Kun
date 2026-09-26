@@ -222,6 +222,8 @@ export interface TurnServiceOperations {
       | 'activeSkillIds'
       | 'injectedMemoryIds'
       | 'injectedMemorySummaries'
+      | 'injectedDirectiveIds'
+      | 'injectedDirectiveSummaries'
       | 'skillInjectionBytes'
       | 'injectedInstructionSources'
       | 'instructionInjectionBytes'

@@ -7,7 +7,7 @@ import {
   type OAuthClientProvider,
   type Transport
 } from '@modelcontextprotocol/client'
-import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
+import { OwnedStdioClientTransport } from './mcp-owned-stdio.js'
 import type { McpServerConfig } from '../../contracts/capabilities.js'
 import { isKunManagedGitHubMcpServer } from '../../contracts/builtin-mcp.js'
 import { KUN_VERSION } from '../../version.js'
@@ -273,7 +273,7 @@ export function createTransport(server: McpServerConfig, authProvider?: OAuthCli
   switch (server.transport) {
     case 'stdio': {
       const cwd = resolveMcpServerCwd(server)
-      return new StdioClientTransport({
+      return new OwnedStdioClientTransport({
         command: server.command ?? '',
         args: server.args,
         env: buildMcpStdioEnvironment(server.env),

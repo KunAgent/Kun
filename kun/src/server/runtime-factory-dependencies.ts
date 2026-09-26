@@ -31,6 +31,7 @@ export {
   ManagerRemoteArtifactStore,
   ManagerRemoteMemoryStore
 } from '../manager/remote-data-stores.js'
+export { ManagerRemoteMemoryFeedback } from '../manager/remote-memory-feedback.js'
 export {
   ManagerThreadExecutionLeaseClient,
   registerRuntimeWithManager,
@@ -184,6 +185,29 @@ export {
   ThreadLifecycleFence
 } from '../services/thread-lifecycle-fence.js'
 export { LlmDebugRecorder } from '../services/llm-debug-recorder.js'
+export { ContextWindowService } from '../services/context-window-service.js'
+export { ContextWindowNotes } from '../services/context-window-notes.js'
+export { FileContextWindowStore } from '../adapters/file/file-context-window-store.js'
+export { buildContextWindowToolProviders } from '../adapters/tool/context-window-tool-provider.js'
+export { ContextWindowBudget } from '../loop/context-window-budget.js'
+export { ContextWindowTurnModes } from '../services/context-window-turn-modes.js'
+export {
+  ContextWindowTransitionCoordinator,
+  countOrdinaryWorkItems,
+  exclusiveNewContextBatchError
+} from '../services/context-window-transition-coordinator.js'
+export {
+  ContextWindowStateRestore,
+  type ContextWindowStateStore
+} from '../services/context-window-state.js'
+export { FileContextWindowStateStore } from '../adapters/file/file-context-window-state.js'
+export { ContextWindowStrategyCoordinator } from '../loop/context-window-strategy.js'
+export { buildWindowInitializationText } from '../services/context-window-initialization.js'
+export {
+  CONTEXT_WINDOWS_NOTE_FILE_MAX_BYTES,
+  CONTEXT_WINDOWS_NOTE_MAX_FILES_PER_THREAD,
+  CONTEXT_WINDOWS_NOTE_TOTAL_MAX_BYTES
+} from '../contracts/context-windows.js'
 export { waitForWorkspaceCheckpoint } from '../services/workspace-checkpoint-gate.js'
 export { ThreadService } from '../services/thread-service.js'
 export { ProjectBoardService } from '../services/project-board-service.js'
@@ -191,6 +215,7 @@ export { TurnService, ownerLeaseExpiredTurnAbortReason } from '../services/turn-
 export { ReviewService } from '../services/review-service.js'
 export { UsageService } from '../services/usage-service.js'
 export { ProviderQuotaService } from '../services/provider-quota-service.js'
+export type { ProviderQuotaEntry } from '../contracts/provider-quota.js'
 export {
   resolveDefaultCodexQuotaCredential,
   resolveDefaultGrokQuotaCredential,
@@ -212,6 +237,13 @@ export { SkillRuntime } from '../skills/skill-runtime.js'
 export { InstructionRuntime } from '../instructions/instruction-runtime.js'
 export { resolveConfiguredHooks, type HooksConfig } from '../hooks/hook-config.js'
 export { FileMemoryStore, type MemoryStore } from '../memory/memory-store.js'
+export { FileMemoryFeedbackStore } from '../memory/memory-feedback-store.js'
+export { MemoryFeedbackService } from '../memory/memory-feedback-service.js'
+export { MemoryFeedbackConfig } from '../contracts/memory-feedback.js'
+export {
+  LocalMemoryFeedbackRuntime,
+  type MemoryFeedbackRuntime
+} from '../memory/memory-feedback-runtime.js'
 export { AtomicJsonFile } from '../extensions/atomic-json.js'
 export { DelegationRuntime, FileDelegationStore } from '../delegation/delegation-runtime.js'
 export {
@@ -295,5 +327,5 @@ export {
   OfficialProviderCliService,
   resolveAntigravityCliCommand
 } from '../services/official-provider-cli.js'
-export type { LocalModelGatewayConfig, ModelRoutePoolConfig } from '../contracts/model-route-pool.js'
+export type { LocalModelGatewayConfig, ModelFailoverGroup, ModelRoutePoolConfig } from '../contracts/model-route-pool.js'
 export type { GeminiCodeAssistCredential } from '../contracts/gemini-code-assist.js'

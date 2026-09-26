@@ -3,6 +3,15 @@ import { ProviderBindingSchema } from './accounts.js'
 import { JsonObjectSchema, JsonValueSchema, PageInfoSchema, PageRequestSchema } from './common.js'
 import { ModelContentPartSchema, ModelUsageSchema } from './providers.js'
 
+/** Global turn load across every Kun surface, including room collaboration. */
+export const AgentCapacitySnapshotSchema = z.strictObject({
+  activeTurns: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  queuedTurns: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  maxConcurrentTurns: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  busy: z.boolean()
+})
+export type AgentCapacitySnapshot = z.infer<typeof AgentCapacitySnapshotSchema>
+
 export const AgentRunStateSchema = z.enum([
   'queued',
   'running',

@@ -7,12 +7,14 @@ import { sseAckPayloadSchema, sseStartPayloadSchema, streamIdSchema } from './ip
 import type { JsonSettingsStore } from './settings-store'
 import { getRuntimeBaseUrlForSettings, runtimeAuthHeaders } from './runtime/kun-adapter'
 import { SseAckWindow } from './runtime/sse-ack-window'
+import { isRemoteClientSender } from './remote/remote-sender'
 
 type SseControllerState = {
   controller: AbortController
   owner: WebContents
   stoppedByClient: boolean
   ackWindow: SseAckWindow
+  threadId: string
 }
 
 const SSE_RECONNECT_BASE_MS = 750
@@ -44,6 +46,36 @@ function observeSseOwner(owner: WebContents): void {
   }
   ;(owner as WebContents & { once?: (event: 'destroyed', listener: () => void) => void })
     .once?.('destroyed', onDestroyed)
+  if (isRemoteClientSender(owner)) {
+    // A remote sender expires when the browser's EventSource has been gone
+    // past the idle grace. 'remote:will-destroy' fires while send() still
+    // works, so push a terminal error per owned stream into the client buffer
+    // — the next attached EventSource delivers it and the renderer can
+    // resubscribe instead of waiting on a dead stream.
+    owner.once('remote:will-destroy', () => {
+      for (const [streamId, state] of sseControllers) {
+        if (state.owner !== owner) continue
+        sendSseMessage(owner, 'runtime:sse-error', {
+          streamId,
+          code: 'remote_client_expired',
+          threadId: state.threadId
+        })
+      }
+    })
+    // The remote event hub dropped this stream's buffered frames when its
+    // backlog overflowed. The renderer will resubscribe via the buffered
+    // remote_buffer_overflow terminal; stop the upstream subscription here so
+    // a dead stream cannot keep reading forever.
+    owner.on('remote:streams-overflowed', (streamIds: unknown) => {
+      if (!Array.isArray(streamIds)) return
+      for (const streamId of streamIds) {
+        const state = sseControllers.get(streamId)
+        if (!state || state.owner !== owner) continue
+        stopSseState(state)
+        sseControllers.delete(streamId)
+      }
+    })
+  }
 }
 
 function sendSseMessage(wc: WebContents, channel: string, payload: unknown): boolean {
@@ -221,7 +253,8 @@ export function registerRuntimeSseIpc(options: {
       controller: ac,
       owner: wc,
       stoppedByClient: false,
-      ackWindow: undefined as unknown as SseAckWindow
+      ackWindow: undefined as unknown as SseAckWindow,
+      threadId: request.threadId
     }
     state.ackWindow = new SseAckWindow(undefined, undefined, Date.now, (batchId) => {
       // A single unacknowledged batch is fatal even when the window is not
@@ -242,6 +275,7 @@ export function registerRuntimeSseIpc(options: {
 
     ;(async () => {
       let nextSinceSeq = request.sinceSeq
+      let nextRunCursor = request.cursor
       let reconnectDelayMs = SSE_RECONNECT_BASE_MS
       let notFoundRetries = 0
 
@@ -260,8 +294,13 @@ export function registerRuntimeSseIpc(options: {
             runtimeAuthHeaders(connectionSettings).forEach((value, key) => {
               headers[key] = value
             })
-            const url = new URL(`${base}${kunThreadEventsPath(request.threadId)}`)
-            url.searchParams.set('since_seq', String(nextSinceSeq))
+            const path = request.scope === 'room-run'
+              ? `/v1/rooms/${encodeURIComponent(request.roomId!)}/runs/${encodeURIComponent(request.runId!)}/events`
+              : request.scope === 'rooms' ? '/v1/rooms/events' : kunThreadEventsPath(request.threadId)
+            const url = new URL(`${base}${path}`)
+            if (request.scope === 'room-run') {
+              if (nextRunCursor) url.searchParams.set('cursor', nextRunCursor)
+            } else url.searchParams.set('since_seq', String(nextSinceSeq))
             const requestHeaders = { ...headers }
             if (nextSinceSeq > 0) {
               requestHeaders['Last-Event-ID'] = String(nextSinceSeq)
@@ -353,6 +392,11 @@ export function registerRuntimeSseIpc(options: {
                 ac.abort()
                 return false
               }
+              // A Remote hub overflow stops this stream synchronously inside
+              // the send above. Registering the batch against an aborted
+              // signal would leave a timer that later emits a stray
+              // renderer_ack_timeout terminal for this stream id.
+              if (state.stoppedByClient || ac.signal.aborted) return false
               if (batchId) {
                 state.ackWindow.registerSentBatch({
                   batchId,
@@ -364,6 +408,10 @@ export function registerRuntimeSseIpc(options: {
               // a dead renderer re-subscribes from its snapshot cursor, so no
               // event can be lost or duplicated across those paths.
               nextSinceSeq = batchMaxSeq
+              if (request.scope === 'room-run') {
+                const last = batch.at(-1)
+                if (last && last.runId === request.runId && typeof last.cursor === 'string') nextRunCursor = last.cursor
+              }
               return true
             }
 

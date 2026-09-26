@@ -11,6 +11,8 @@ export type ToolOperationIdentity = {
 export type ToolOperationResult = {
   output: unknown
   isError?: boolean
+  /** Client-facing sideband replayed with the result; never reaches the model. */
+  meta?: Record<string, unknown>
 }
 
 export type ToolOperationRecord =

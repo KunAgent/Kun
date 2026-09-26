@@ -5,9 +5,9 @@ import { defaultKunLabSettings } from '@shared/app-settings-kun-merge'
 import { ConversationVisualizationSettingsPanel } from './settings-section-lab-conversation-visualization'
 
 const labels: Record<string, string> = {
-  labConversationVisualizationTitle: 'Conversation visualization',
+  labConversationVisualizationTitle: 'Session display optimization',
   labConversationVisualizationDescription: 'Experimental visualization.',
-  labConversationVisualizationEnabled: 'Allow agent visualizations',
+  labConversationVisualizationEnabled: 'Enable session display optimization',
   labConversationVisualizationEnabledDesc: 'Preserves visualizations in history.'
 }
 const t = (key: string): string => labels[key] ?? key
@@ -19,7 +19,7 @@ describe('ConversationVisualizationSettingsPanel', () => {
       value: defaultKunLabSettings(),
       onChange: () => undefined
     }))
-    expect(markup).toContain('Conversation visualization')
+    expect(markup).toContain('Session display optimization')
     expect(markup).toContain('Preserves visualizations in history.')
     expect(markup).toContain('aria-checked="false"')
   })

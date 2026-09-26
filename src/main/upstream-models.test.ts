@@ -12,7 +12,7 @@ import {
   defaultScheduleSettings,
   defaultWorkflowSettings,
   defaultWriteSettings,
-  defaultTerminalSettings,
+  defaultTerminalSettings, defaultRemoteAccessSettings,
   getModelProviderPreset,
   modelProviderPresetAccountProfile,
   type AppSettingsV1
@@ -69,6 +69,7 @@ function settings(dataDir: string, model = 'settings-model'): AppSettingsV1 {
     workflow: defaultWorkflowSettings(),
     design: defaultDesignSettings(),
     terminal: defaultTerminalSettings(),
+    remote: defaultRemoteAccessSettings(),
     guiUpdate: { channel: 'stable' },
     codePromptPrefix: '',
     chatWelcomeMessage: '',
@@ -450,7 +451,7 @@ describe('upstream model picker list', () => {
     await mkdir(dataDir, { recursive: true })
     const routed = settings(dataDir)
     const deepseek = routed.provider.providers.find((provider) => provider.id === 'deepseek')!
-    routed.provider.localGateway = { enabled: true, name: 'Team Relay' }
+    routed.provider.localGateway = { enabled: true, name: 'Team Relay', exposeProviderModels: false }
     routed.provider.routePools = [
       {
         id: 'general',

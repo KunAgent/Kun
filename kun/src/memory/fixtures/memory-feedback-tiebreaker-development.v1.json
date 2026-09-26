@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "evaluationVersion": "p3-feedback-tiebreaker-v1",
+  "partition": "development",
+  "artifactHashes": {
+    "fixtureSha256": "a6a37e35a5da6afdfbdae42b9abe8a9f182dcad19167fc82361f662873d7e259",
+    "manifestSha256": "17ab0ea2186d11bbdfb38e0f76b75f3547144c74412183e8118cb2e525d6124a",
+    "calibrationSha256": "b34b6d995a2230aac543885d4173c07f8e3024b4fd8603637d5f49e4258a7964",
+    "decisionPlanSha256": "27dfc5852afa9d86e0ff52bf549fb154e5b788ac00690758c0c8accd15460ab7"
+  },
+  "foundation": {
+    "pairAccuracy":0,"pairCount":4,"recallAtK":0.4375,"precisionAtK":0.4375,
+    "meanReciprocalRank":0.4375,"abstentionAccuracy":1,"explicitForbiddenSelections":6,
+    "authorizationOrLifecycleViolations":0,"rankedCaseCount":16,"noResultCaseCount":2,"caseCount":18
+  },
+  "configurations": [
+    {
+      "candidateId":"foundation-control","boundaryId":null,"maximumGap":0,"signalRule":"foundation-only",
+      "metrics":{"pairAccuracy":0,"pairCount":4,"recallAtK":0.4375,"precisionAtK":0.4375,"meanReciprocalRank":0.4375,"abstentionAccuracy":1,"explicitForbiddenSelections":6,"authorizationOrLifecycleViolations":0,"rankedCaseCount":16,"noResultCaseCount":2,"caseCount":18},
+      "bootstrapLowerBounds":{"pairAccuracyGain":0,"recallGain":0,"mrrGain":0},
+      "gates":{"localBenefit":false,"globalNonRegression":true,"safety":false,"passed":false},
+      "selectedIdsSha256":"867715da1bd988bdf02bc50eef39d6440e7d633ee12f5018056a386402455540"
+    },
+    {
+      "candidateId":"confirmation-gap_0","boundaryId":"gap_0","maximumGap":0,"signalRule":"confirmation",
+      "metrics":{"pairAccuracy":0,"pairCount":4,"recallAtK":0.4375,"precisionAtK":0.4375,"meanReciprocalRank":0.4375,"abstentionAccuracy":1,"explicitForbiddenSelections":6,"authorizationOrLifecycleViolations":0,"rankedCaseCount":16,"noResultCaseCount":2,"caseCount":18},
+      "bootstrapLowerBounds":{"pairAccuracyGain":0,"recallGain":0,"mrrGain":0},
+      "gates":{"localBenefit":false,"globalNonRegression":true,"safety":false,"passed":false},
+      "selectedIdsSha256":"867715da1bd988bdf02bc50eef39d6440e7d633ee12f5018056a386402455540"
+    },
+    {
+      "candidateId":"confirmation-correction-gap_0","boundaryId":"gap_0","maximumGap":0,"signalRule":"confirmation-correction",
+      "metrics":{"pairAccuracy":0,"pairCount":4,"recallAtK":0.4375,"precisionAtK":0.4375,"meanReciprocalRank":0.4375,"abstentionAccuracy":1,"explicitForbiddenSelections":6,"authorizationOrLifecycleViolations":0,"rankedCaseCount":16,"noResultCaseCount":2,"caseCount":18},
+      "bootstrapLowerBounds":{"pairAccuracyGain":0,"recallGain":0,"mrrGain":0},
+      "gates":{"localBenefit":false,"globalNonRegression":true,"safety":false,"passed":false},
+      "selectedIdsSha256":"867715da1bd988bdf02bc50eef39d6440e7d633ee12f5018056a386402455540"
+    },
+    {
+      "candidateId":"confirmation-gap_1","boundaryId":"gap_1","maximumGap":0.0075,"signalRule":"confirmation",
+      "metrics":{"pairAccuracy":0.25,"pairCount":4,"recallAtK":0.5,"precisionAtK":0.5,"meanReciprocalRank":0.5,"abstentionAccuracy":1,"explicitForbiddenSelections":5,"authorizationOrLifecycleViolations":0,"rankedCaseCount":16,"noResultCaseCount":2,"caseCount":18},
+      "bootstrapLowerBounds":{"pairAccuracyGain":0,"recallGain":0,"mrrGain":0},
+      "gates":{"localBenefit":false,"globalNonRegression":true,"safety":false,"passed":false},
+      "selectedIdsSha256":"839628f204c80ed5e5b39ee20066e70b92126dfe08c5e934890eb1aefa19c1fc"
+    },
+    {
+      "candidateId":"confirmation-correction-gap_1","boundaryId":"gap_1","maximumGap":0.0075,"signalRule":"confirmation-correction",
+      "metrics":{"pairAccuracy":0.75,"pairCount":4,"recallAtK":0.625,"precisionAtK":0.625,"meanReciprocalRank":0.625,"abstentionAccuracy":1,"explicitForbiddenSelections":3,"authorizationOrLifecycleViolations":0,"rankedCaseCount":16,"noResultCaseCount":2,"caseCount":18},
+      "bootstrapLowerBounds":{"pairAccuracyGain":0.25,"recallGain":0.0625,"mrrGain":0.0625},
+      "gates":{"localBenefit":true,"globalNonRegression":true,"safety":false,"passed":false},
+      "selectedIdsSha256":"3e386fe6b11bdc8c7dd68c43e210533bdc70557f25901c168c3d2ca78f5fbc57"
+    },
+    {
+      "candidateId":"confirmation-gap_2","boundaryId":"gap_2","maximumGap":0.01125,"signalRule":"confirmation",
+      "metrics":{"pairAccuracy":0.25,"pairCount":4,"recallAtK":0.5,"precisionAtK":0.5,"meanReciprocalRank":0.5,"abstentionAccuracy":1,"explicitForbiddenSelections":5,"authorizationOrLifecycleViolations":0,"rankedCaseCount":16,"noResultCaseCount":2,"caseCount":18},
+      "bootstrapLowerBounds":{"pairAccuracyGain":0,"recallGain":0,"mrrGain":0},
+      "gates":{"localBenefit":false,"globalNonRegression":true,"safety":false,"passed":false},
+      "selectedIdsSha256":"839628f204c80ed5e5b39ee20066e70b92126dfe08c5e934890eb1aefa19c1fc"
+    },
+    {
+      "candidateId":"confirmation-correction-gap_2","boundaryId":"gap_2","maximumGap":0.01125,"signalRule":"confirmation-correction",
+      "metrics":{"pairAccuracy":0.75,"pairCount":4,"recallAtK":0.625,"precisionAtK":0.625,"meanReciprocalRank":0.625,"abstentionAccuracy":1,"explicitForbiddenSelections":3,"authorizationOrLifecycleViolations":0,"rankedCaseCount":16,"noResultCaseCount":2,"caseCount":18},
+      "bootstrapLowerBounds":{"pairAccuracyGain":0.25,"recallGain":0.0625,"mrrGain":0.0625},
+      "gates":{"localBenefit":true,"globalNonRegression":true,"safety":false,"passed":false},
+      "selectedIdsSha256":"3e386fe6b11bdc8c7dd68c43e210533bdc70557f25901c168c3d2ca78f5fbc57"
+    }
+  ]
+}

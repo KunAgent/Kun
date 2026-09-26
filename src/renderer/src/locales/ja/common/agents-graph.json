@@ -223,6 +223,10 @@
         "name": "Citation Researcher",
         "desc": "Authoritative sources and traceable citations · read-only"
       },
+      "literature-researcher": {
+        "name": "文献リサーチャー",
+        "desc": "サブトピックごとの学術スイープ · 読み取り専用"
+      },
       "design-product-planner": {
         "name": "Product Design Planner",
         "desc": "Direction, goals, flows, and tradeoffs · read-only"

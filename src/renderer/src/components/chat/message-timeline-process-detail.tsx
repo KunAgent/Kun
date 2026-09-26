@@ -1,3 +1,4 @@
+import { SourceHistoryReadDetail } from '../../history-reference/SourceHistoryReadDetail'
 import type { ReactElement } from 'react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { extractUnifiedDiffText } from '../../lib/diff-stats'
@@ -72,6 +73,8 @@ export function builtInToolLabel(
   t: (key: string, opts?: Record<string, unknown>) => string
 ): string | undefined {
   switch (toolName) {
+    case 'read_source_history':
+      return t('codexHistoryReadTool')
     case 'read':
     case 'read_file':
       return t('toolBuiltinRead')
@@ -174,6 +177,7 @@ export function RuntimeMetaBadges({
   const attachmentIds = showTurnDisclosure ? readMetaStringArray(meta, 'attachmentIds') : []
   const activeSkillIds = showTurnDisclosure ? readMetaStringArray(meta, 'activeSkillIds') : []
   const injectedMemoryIds = showTurnDisclosure ? readMetaStringArray(meta, 'injectedMemoryIds') : []
+  const injectedDirectiveIds = showTurnDisclosure ? readMetaStringArray(meta, 'injectedDirectiveIds') : []
   const injectedInstructionSources = showTurnDisclosure ? readMetaInstructionSources(meta) : []
   const child = meta.child && typeof meta.child === 'object' ? meta.child as Record<string, unknown> : null
   const childLabel =
@@ -189,6 +193,7 @@ export function RuntimeMetaBadges({
     attachmentIds.length === 0 &&
     activeSkillIds.length === 0 &&
     injectedMemoryIds.length === 0 &&
+    injectedDirectiveIds.length === 0 &&
     injectedInstructionSources.length === 0 &&
     !childLabel
   ) {
@@ -208,7 +213,7 @@ export function RuntimeMetaBadges({
           {t('toolActiveSkills')} {activeSkillIds.length}
         </span>
       ) : null}
-      {injectedMemoryIds.length > 0 ? (
+      {injectedMemoryIds.length > 0 || injectedDirectiveIds.length > 0 ? (
         <InjectedMemoryMetaChip meta={meta} memoryIds={injectedMemoryIds} chipClass={chipClass} />
       ) : null}
       {injectedInstructionSources.length > 0 ? (
@@ -396,6 +401,9 @@ export function ProcessEntryDetail({
     )
   }
   if (detail.kind === 'tool') {
+    if (block.kind === 'tool' && toolNameForBlock(block) === 'read_source_history' && !/^(codex|claude-code|opencode):/u.test(block.turnId ?? '')) {
+      return <SourceHistoryReadDetail block={block} />
+    }
     if (detail.isPatch) {
       return <DiffView patch={detail.text} filePath={detail.filePath} />
     }
@@ -464,6 +472,7 @@ export function describeProcessBlock(
     return block.meta?.displayText?.trim() || t('backgroundSubagentNotice.title', { defaultValue: 'Background subagent completed' })
   }
   if (block.kind === 'compaction') {
+    if (block.variant === 'window') return t('contextWindowSwitched')
     if (block.status === 'running') return t('compactionRunning')
     if (block.status === 'error') return block.summary || t('compactionFailed')
     if (typeof block.messagesBefore === 'number' && typeof block.messagesAfter === 'number') {

@@ -54,6 +54,43 @@ function bootErrorMessage(error: unknown): string {
   return String(error)
 }
 
+const MODULE_IMPORT_ERROR =
+  /importing a module script failed|failed to fetch dynamically imported module|error loading dynamically imported module/i
+
+export function isModuleScriptImportError(error: unknown): boolean {
+  return MODULE_IMPORT_ERROR.test(bootErrorMessage(error))
+}
+
+function workbenchBootErrorMessage(error: unknown): string {
+  const message = bootErrorMessage(error)
+  if (
+    isModuleScriptImportError(error) &&
+    typeof window !== 'undefined' &&
+    window.kunGui?.isRemoteWeb === true
+  ) {
+    return `${message} The phone browser could not finish loading a workbench script. Retry on a faster network, or rebuild the desktop app.`
+  }
+  return message
+}
+
+export async function withModuleImportRetry<T>(
+  run: () => Promise<T>,
+  attempts = 3,
+  delayMs = 250
+): Promise<T> {
+  let last: unknown
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await run()
+    } catch (error) {
+      last = error
+      if (attempt === attempts - 1 || !isModuleScriptImportError(error)) throw error
+      if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs * (attempt + 1)))
+    }
+  }
+  throw last
+}
+
 function StartupErrorView({
   title,
   message,
@@ -194,13 +231,15 @@ export function StartupGate({
     setBoot({ status: 'loading' })
     void (async () => {
       try {
-        await installSharedBusinessStorageForWorkbench()
-        const app = await loadAppModule()
-        await app.prepareWorkbenchApp()
+        await withModuleImportRetry(async () => {
+          await installSharedBusinessStorageForWorkbench()
+          const app = await loadAppModule()
+          await app.prepareWorkbenchApp()
+        })
         if (bootRunRef.current === run) setBoot({ status: 'ready' })
       } catch (error) {
         if (bootRunRef.current === run) {
-          setBoot({ status: 'error', message: bootErrorMessage(error) })
+          setBoot({ status: 'error', message: workbenchBootErrorMessage(error) })
         }
       }
     })()
@@ -290,9 +329,18 @@ export function StartupGate({
           <p className="kun-startup__hint">
             Startup stopped before Kun could finish preparing the workspace.
           </p>
-          <button type="button" className="secondary-button" onClick={() => requestApplicationReload()}>
-            Reload Kun
-          </button>
+          {recoveryActionError ? <p className="text-xs text-red-600">{recoveryActionError}</p> : null}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <button type="button" className="primary-button" onClick={() => requestApplicationReload()}>
+              Retry
+            </button>
+            <button type="button" className="secondary-button" onClick={openLogs}>
+              Open log folder
+            </button>
+            <button type="button" className="secondary-button" onClick={() => requestApplicationReload()}>
+              Reload Kun
+            </button>
+          </div>
         </section>
       </main>
     )

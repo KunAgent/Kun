@@ -8,6 +8,7 @@ import type {
 } from '../agent/types'
 import type { RuntimeProjectionAction } from '../agent/runtime-projection-actions'
 import { parseRendererChartSpec } from '../agent/chart-spec-adapter'
+import { parseRendererPaperListMeta } from '../agent/paper-list-adapter'
 import { isBackgroundShellNoticeUserMessage } from '@shared/background-shell-notice'
 import type { ChatState } from './chat-store-types'
 import {
@@ -391,6 +392,19 @@ export function reduceChatProjection(
         }
         return { ...base, blocks: upsertProjectedTimelineBlock(state, chartBlock), error: context.clearRecoveringError(state.error) }
       }
+      const paperList = parseRendererPaperListMeta(event.meta?.paperList)
+      if (paperList) {
+        const paperBlock: ChatBlock = {
+          kind: 'paper-list', id: event.itemId, turnId: event.turnId,
+          createdAt: event.createdAt ?? new Date(context.now).toISOString(), list: paperList
+        }
+        if (chartIndex >= 0) {
+          const blocks = [...state.blocks]
+          blocks[chartIndex] = paperBlock
+          return { ...base, blocks, error: context.clearRecoveringError(state.error) }
+        }
+        return { ...base, blocks: upsertProjectedTimelineBlock(state, paperBlock), error: context.clearRecoveringError(state.error) }
+      }
       const index = findMatchingToolBlockIndex(state.blocks, event)
       if (index >= 0) {
         const current = state.blocks[index]
@@ -454,6 +468,7 @@ export function reduceChatProjection(
         approvalId: request.approvalId,
         summary: request.summary,
         toolName: request.toolName,
+        ...(request.action ? { action: request.action } : {}),
         status: 'pending',
         ...(request.meta ? { meta: request.meta } : {})
       }

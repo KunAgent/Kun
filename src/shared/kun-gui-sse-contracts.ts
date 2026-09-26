@@ -5,9 +5,15 @@ export type SseOpenPayload = { streamId: string }
 
 export type SseEndPayload = { streamId: string }
 
-export type SseErrorCode = 'replay_reset_required' | 'renderer_ack_timeout'
+export type SseErrorCode =
+  | 'replay_reset_required'
+  | 'renderer_ack_timeout'
+  | 'remote_client_expired'
+  | 'remote_buffer_overflow'
 
 export type SseErrorPayload = {
+  /** Every terminal frame names the stream it tears down, including
+   * remote-side overflow/expiry errors which are always per-stream. */
   streamId: string
   status?: number
   message?: string
@@ -15,6 +21,14 @@ export type SseErrorPayload = {
   threadId?: string
   floorSeq?: number
   batchId?: string
+}
+
+export type SseStartOptions = {
+  acknowledgedBatches?: boolean
+  scope?: 'rooms' | 'room-run'
+  roomId?: string
+  runId?: string
+  cursor?: string
 }
 
 /**
@@ -27,7 +41,7 @@ export interface KunGuiSseSurface {
     threadId: string,
     sinceSeq: number,
     streamId?: string,
-    options?: { acknowledgedBatches?: boolean }
+    options?: SseStartOptions
   ) => Promise<{ streamId: string }>
   stopSse: (streamId: string) => Promise<boolean>
   ackSse: (streamId: string, batchId: string) => Promise<boolean>
@@ -35,4 +49,16 @@ export interface KunGuiSseSurface {
   onSseEvent: (handler: (payload: SseEventPayload) => void) => () => void
   onSseEnd: (handler: (payload: SseEndPayload) => void) => () => void
   onSseError: (handler: (payload: SseErrorPayload) => void) => () => void
+  /**
+   * Remote-web only: fires when the browser's EventSource re-opens after a
+   * drop, so the renderer can reconcile thread inventory and resubscribe any
+   * stream whose terminal frame was lost. Absent in the Electron preload.
+   */
+  onRemoteStreamReconnected?: (handler: () => void) => () => void
+  /**
+   * Remote-web only: the remote event hub recreated (or forgot) this client's
+   * sender, so every stream registered through it is gone. The renderer must
+   * resubscribe all active streams. Absent in the Electron preload.
+   */
+  onRemoteSenderReset?: (handler: () => void) => () => void
 }

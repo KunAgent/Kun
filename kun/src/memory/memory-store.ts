@@ -1,13 +1,17 @@
+import { agentMemoryVisible, type AgentMemoryAccess } from './agent-memory-scope.js'
 import type { PendingMemoryCandidate } from '../contracts/memory-distillation-runtime.js'
 import { commitMemoryDistillationCandidate } from './memory-distillation-apply.js'
 import { withMemoryMutation } from './memory-mutation-queue.js'
 import { readFile } from 'node:fs/promises'
 import type { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import {
+  MEMORY_DIRECTIVE_MAX_CONTENT_CHARS,
   MemoryDiagnostics,
   MemoryRecord,
+  type MemoryAuthority,
   type MemoryCreateRequest,
   type MemoryRetrievalTrace,
+  type MemoryType,
   type MemoryUpdateRequest
 } from '../contracts/memory.js'
 import {
@@ -18,6 +22,7 @@ import {
   writeCanonicalMemoryRecord
 } from './memory-canonical-files.js'
 import {
+  canonicalMemoryHash,
   defaultLegacyProvenance,
   defaultMemoryConfidence,
   defaultProvenance,
@@ -31,18 +36,25 @@ import {
   normalizeMemoryScopePath
 } from './memory-ranking.js'
 import {
+  selectMemoryDirectives,
+  type MemoryDirectiveResult
+} from './memory-directives.js'
+import {
   retrieveMemoryRecords,
   type MemoryRetrieveRequest
 } from './memory-retrieval.js'
 
 export interface MemoryStore {
+  getById?(id: string, access?: MemoryAccess): Promise<MemoryRecord>
   create(input: MemoryCreateRequest): Promise<MemoryRecord>
   commitDistillation?(candidate: PendingMemoryCandidate): Promise<MemoryRecord>
   createWithId?(id: string, input: MemoryCreateRequest): Promise<MemoryRecord>
   update(id: string, patch: MemoryUpdateRequest, access?: MemoryAccess): Promise<MemoryRecord>
   delete(id: string, access?: MemoryAccess): Promise<MemoryRecord>
-  purge?(id: string): Promise<void>
+  purge?(id: string, access?: MemoryAccess): Promise<void>
   list(filter?: MemoryListFilter): Promise<MemoryRecord[]>
+  /** `policy` overrides the store's own config so shared repositories honor live settings. */
+  listDirectives?(access?: MemoryAccess, policy?: MemoryCapabilityConfig): Promise<MemoryDirectiveResult>
   retrieve(input: MemoryRetrieveRequest): Promise<MemoryRecord[]>
   diagnostics(policy?: MemoryCapabilityConfig): Promise<MemoryDiagnostics>
   setLastInjected(ids: string[]): void
@@ -50,12 +62,21 @@ export interface MemoryStore {
   shutdown?(): Promise<void>
 }
 
-export type MemoryAccess = { workspace?: string; project?: string }
-export type MemoryListFilter = MemoryAccess & { includeDeleted?: boolean; all?: boolean }
+export type MemoryAccess = { workspace?: string; project?: string; agent?: AgentMemoryAccess }
+export type MemoryListFilter = MemoryAccess & {
+  includeDeleted?: boolean
+  all?: boolean
+  limit?: number
+  before?: { updatedAt: string; id: string }
+  authority?: MemoryAuthority
+  type?: MemoryType
+}
+export type { MemoryDirectiveResult }
 
 export class FileMemoryStore implements MemoryStore {
   private lastInjectedIds: string[] = []
   private lastRetrieval: MemoryRetrievalTrace | undefined
+  private lastDirectiveInjection: MemoryDirectiveResult | undefined
 
   constructor(
     private readonly options: {
@@ -66,6 +87,8 @@ export class FileMemoryStore implements MemoryStore {
       minConfidence?: number
     }
   ) {}
+
+  async getById(id: string, access?: MemoryAccess): Promise<MemoryRecord> { return this.mustGet(id, access) }
 
   async create(input: MemoryCreateRequest): Promise<MemoryRecord> {
     return withMemoryMutation(this.options.rootDir, () => this.createRecord(
@@ -81,10 +104,11 @@ export class FileMemoryStore implements MemoryStore {
   private async createWithIdNow(id: string, input: MemoryCreateRequest): Promise<MemoryRecord> {
     const existing = await this.get(id)
     if (existing) {
+      if (existing.agentContext?.agentId !== input.agentContext?.agentId || existing.agentContext?.sourceConversationId !== input.agentContext?.sourceConversationId || existing.agentContext?.originFingerprint !== input.agentContext?.originFingerprint || existing.agentContext?.sourceTaskId !== input.agentContext?.sourceTaskId || existing.agentContext?.sourceHandoffId !== input.agentContext?.sourceHandoffId) throw new Error('memory identity belongs to another scope')
       if (input.supersedes && existing.supersedes === input.supersedes) {
         const older = await this.mustGet(input.supersedes, {
           workspace: existing.workspace,
-          project: existing.project
+          project: existing.project, ...(existing.agentContext ? { agent: { agentId: existing.agentContext.agentId, manage: true } } : {})
         })
         if (!older.supersededAt) {
           const now = this.now()
@@ -122,6 +146,7 @@ export class FileMemoryStore implements MemoryStore {
       scope,
       ...(scope !== 'user' && workspace ? { workspace } : {}),
       ...(scope === 'project' && project ? { project } : {}),
+      agentContext: input.agentContext,
       sourceThreadId: input.sourceThreadId,
       sourceTurnId: input.sourceTurnId,
       provenance,
@@ -130,6 +155,7 @@ export class FileMemoryStore implements MemoryStore {
       createdAt: now,
       updatedAt: now,
       type: input.type,
+      authority: input.authority,
       importance: input.importance,
       observedAt: input.observedAt ?? now,
       validFrom: input.validFrom,
@@ -144,10 +170,13 @@ export class FileMemoryStore implements MemoryStore {
       ...(input.supersedes ? { supersedes: input.supersedes } : {})
     })
     assertValidInterval(parsed)
+    assertDirectiveConstraints(parsed)
     const older = input.supersedes
-      ? await this.mustGet(input.supersedes, { workspace, project })
+      ? await this.mustGet(input.supersedes, { workspace, project, ...(input.agentContext ? { agent: { agentId: input.agentContext.agentId, manage: true } } : {}) })
       : undefined
     if (older) {
+      if (older.agentContext?.sourceConversationId !== parsed.agentContext?.sourceConversationId ||
+        older.agentContext?.sourceTaskId !== parsed.agentContext?.sourceTaskId || older.agentContext?.sourceHandoffId !== parsed.agentContext?.sourceHandoffId) throw new Error('memory supersession cannot change visibility scope')
       if (older.scope !== parsed.scope) {
         throw new Error('a memory can only supersede another memory in the same scope')
       }
@@ -165,15 +194,18 @@ export class FileMemoryStore implements MemoryStore {
 
   private async updateNow(id: string, patch: MemoryUpdateRequest, access?: MemoryAccess): Promise<MemoryRecord> {
     const current = await this.mustGet(id, access)
+    if (patch.agentContext && (!current.agentContext || patch.agentContext.agentId !== current.agentContext.agentId || patch.agentContext.sourceConversationId !== current.agentContext.sourceConversationId || !access?.agent?.manage)) throw new Error('memory ownership cannot change')
     const now = this.now()
     const corrected = patch.content !== undefined && patch.content !== current.content
     const next = MemoryRecord.parse({
       ...current,
+      ...(patch.agentContext ? { agentContext: patch.agentContext } : {}),
       ...(patch.content !== undefined ? { content: patch.content } : {}),
       ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
       ...(patch.confidence !== undefined ? { confidence: patch.confidence } : corrected ? { confidence: 1 } : {}),
       ...(patch.importance !== undefined ? { importance: patch.importance } : {}),
       ...(patch.type !== undefined ? { type: patch.type } : {}),
+      ...(patch.authority !== undefined ? { authority: patch.authority } : {}),
       ...(patch.observedAt !== undefined ? { observedAt: patch.observedAt } : {}),
       ...(patch.sources !== undefined ? { sources: normalizeUpdateSources(patch.sources) } : {}),
       ...(corrected ? {
@@ -188,6 +220,7 @@ export class FileMemoryStore implements MemoryStore {
       updatedAt: now
     })
     assertValidInterval(next)
+    assertDirectiveConstraints(next)
     await this.write(next)
     return next
   }
@@ -201,6 +234,9 @@ export class FileMemoryStore implements MemoryStore {
     const now = this.now()
     const next = MemoryRecord.parse({
       ...current,
+      ...(current.agentContext && access?.agent?.manage && access.agent.operationId ? {
+        agentContext: { ...current.agentContext, lastOperationId: access.agent.operationId }
+      } : {}),
       deletedAt: current.deletedAt ?? now,
       updatedAt: now
     })
@@ -208,8 +244,12 @@ export class FileMemoryStore implements MemoryStore {
     return next
   }
 
-  async purge(id: string): Promise<void> {
-    await withMemoryMutation(this.options.rootDir, () => purgeCanonicalMemoryRecord(this.options.rootDir, id))
+  async purge(id: string, access?: MemoryAccess): Promise<void> {
+    await withMemoryMutation(this.options.rootDir, async () => {
+      const record = await this.get(id)
+      if (record && !agentMemoryVisible(record, access ?? {})) throw new Error('memory not found')
+      await purgeCanonicalMemoryRecord(this.options.rootDir, id)
+    })
   }
 
   async commitDistillation(candidate: PendingMemoryCandidate): Promise<MemoryRecord> {
@@ -224,8 +264,29 @@ export class FileMemoryStore implements MemoryStore {
     const records = (await readCanonicalMemoryDirectory(this.options.rootDir)).records
     return records
       .filter((record) => filter.includeDeleted || !record.deletedAt)
-      .filter((record) => filter.all || memoryInScope(record, filter))
+      .filter((record) => !filter.authority || record.authority === filter.authority)
+      .filter((record) => !filter.type || record.type === filter.type)
+      .filter((record) => agentMemoryVisible(record, filter) && (filter.all || memoryInScope(record, filter)))
+      .filter((record) => !filter.before || record.updatedAt < filter.before.updatedAt || record.updatedAt === filter.before.updatedAt && record.id > filter.before.id)
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.id.localeCompare(right.id))
+      .slice(0, filter.limit ?? Infinity)
+  }
+
+  async listDirectives(
+    access: MemoryAccess = {},
+    policy: MemoryCapabilityConfig = this.config()
+  ): Promise<MemoryDirectiveResult> {
+    const canonical = await readCanonicalMemoryDirectory(this.options.rootDir, {
+      maxFiles: MEMORY_MAX_FALLBACK_FILES
+    })
+    const result = selectMemoryDirectives({
+      records: canonical.records,
+      access,
+      policy,
+      nowMs: Date.parse(this.now())
+    })
+    this.lastDirectiveInjection = result
+    return result
   }
 
   async retrieve(input: MemoryRetrieveRequest): Promise<MemoryRecord[]> {
@@ -240,8 +301,10 @@ export class FileMemoryStore implements MemoryStore {
       nowIso: this.now(),
       minConfidence: this.options.minConfidence
     })
-    this.lastRetrieval = result.trace
-    this.lastInjectedIds = [...result.trace.selectedIds]
+    if (input.purpose !== 'tool') {
+      this.lastRetrieval = result.trace
+      this.lastInjectedIds = [...result.trace.selectedIds]
+    }
     return result.records
   }
 
@@ -263,7 +326,18 @@ export class FileMemoryStore implements MemoryStore {
       indexedCount: 0,
       staleCount: 0,
       backfill: { running: false, scanned: canonical.records.length, remaining: 0 },
-      lastRetrieval: this.lastRetrieval
+      lastRetrieval: this.lastRetrieval,
+      directiveCount: canonical.records.filter((record) =>
+        record.authority === 'directive' && memoryLifecycleState(record, nowMs) === 'active'
+      ).length,
+      ...(this.lastDirectiveInjection ? {
+        lastDirectiveInjection: {
+          ids: this.lastDirectiveInjection.records.map((record) => record.id),
+          excludedByBudget: this.lastDirectiveInjection.excludedByBudget,
+          truncatedIds: this.lastDirectiveInjection.truncatedIds,
+          characters: this.lastDirectiveInjection.characters
+        }
+      } : {})
     })
   }
 
@@ -284,7 +358,8 @@ export class FileMemoryStore implements MemoryStore {
 
   private async mustGet(id: string, access?: MemoryAccess): Promise<MemoryRecord> {
     const record = await this.get(id)
-    if (!record || (access && !memoryInScope(record, access))) throw new Error(`memory not found: ${id}`)
+    if (!record || !agentMemoryVisible(record, access ?? {}) || (access && !memoryInScope(record, access))) throw new Error(`memory not found: ${id}`)
+    if (access?.agent?.expectedFingerprint && canonicalMemoryHash(record) !== access.agent.expectedFingerprint) throw new Error('memory changed; reload before editing')
     return record
   }
 
@@ -313,5 +388,15 @@ export function effectiveMemoryConfidence(record: MemoryRecord, _nowMs?: number,
 function assertValidInterval(record: MemoryRecord): void {
   if (record.validFrom && record.validTo && Date.parse(record.validFrom) > Date.parse(record.validTo)) {
     throw new Error('memory validFrom must not be after validTo')
+  }
+}
+
+/** Re-validates the merged record so a patch cannot smuggle in a bad directive. */
+function assertDirectiveConstraints(record: MemoryRecord): void {
+  if (record.authority !== 'directive') return
+  if (record.agentContext) throw new Error('agent-scoped memories cannot become directives')
+  if (record.scope === 'project') throw new Error('project-scoped memories cannot become directives')
+  if (record.content.length > MEMORY_DIRECTIVE_MAX_CONTENT_CHARS) {
+    throw new Error(`directive content must be at most ${MEMORY_DIRECTIVE_MAX_CONTENT_CHARS} characters`)
   }
 }

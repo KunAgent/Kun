@@ -90,8 +90,12 @@ async list(this: ThreadService, options: ListThreadsOptions = {}): Promise<Threa
     if (!options.includeSide) {
       threads = threads.filter((thread) => (thread.relation ?? 'primary') !== 'side')
     }
-    if (options.workspace) {
-      threads = threads.filter((thread) => thread.workspace === options.workspace)
+    const workspaceSet = new Set(
+      [options.workspace, ...(options.workspaces ?? [])]
+        .filter((value): value is string => Boolean(value))
+    )
+    if (workspaceSet.size > 0) {
+      threads = threads.filter((thread) => workspaceSet.has(thread.workspace))
     }
     if (query) {
       threads = threads.filter((thread) => matchesThreadSearch(thread, query))
@@ -119,6 +123,7 @@ async listPage(this: ThreadService, options: ListThreadsOptions = {}): Promise<T
       cursor: undefined,
       search: undefined,
       workspace: undefined,
+      workspaces: undefined,
       includeArchived: true,
       archivedOnly: false,
       includeSide: true
@@ -158,6 +163,8 @@ async create(this: ThreadService,
       parentThreadId?: string
       /** Broker-derived metadata. Never populated from the public thread request body. */
       extensionMetadata?: ExtensionThreadMetadata
+      roomContext?: ThreadRecord['roomContext']
+      historyRefId?: string
     } = {}
   ): Promise<ThreadRecord> {
     // Always advance the id generator so externally-supplied ids
@@ -176,6 +183,8 @@ async create(this: ThreadService,
       ...(request.providerId?.trim() ? { providerId: request.providerId.trim() } : {}),
       ...(request.accountId?.trim() ? { accountId: request.accountId.trim() } : {}),
       ...(options.extensionMetadata ?? {}),
+      ...(options.roomContext ? { roomContext: options.roomContext } : {}),
+      ...(options.historyRefId ? { historyRefId: options.historyRefId } : {}),
       ...(request.agentId?.trim() ? { agentId: request.agentId.trim() } : {}),
       ...(request.systemPrompt?.trim() ? { systemPrompt: request.systemPrompt.trim() } : {}),
       mode: request.mode,
@@ -197,6 +206,9 @@ async create(this: ThreadService,
       // id after deletion. It deliberately starts a fresh generation so
       // delayed writes captured by the previous lifetime remain stale.
       this['lifecycleFence']?.reopen(id)
+      if (thread.historyRefId) await this['sessionStore'].upsertSession(
+        toSessionSnapshot(thread, this['nowIso']())
+      )
       await this['threadStore'].upsert(thread)
     })
     await this['events'].record({
@@ -235,6 +247,14 @@ async update(this: ThreadService, threadId: string, patch: {
     const updated = await this['withThreadMutation'](threadId, async () => {
       const current = await this['threadStore'].get(threadId)
       if (!current) throw new Error(`thread not found: ${threadId}`)
+      if (current.roomContext) {
+        const protectedFields = ['workspace', 'additionalWorkspaces', 'knowledgeBases', 'mode',
+          'approvalPolicy', 'sandboxMode', 'approvalReviewer', 'status', 'relation'] as const
+        if (Object.hasOwn(patch, 'roomContext') || protectedFields.some((key) =>
+          patch[key] !== undefined && JSON.stringify(patch[key]) !== JSON.stringify(current[key]))) {
+          throw new Error('room thread execution policy is frozen; change the room configuration or task instead')
+        }
+      }
       // Keep this runtime check in addition to the request schema/type. The
       // service is also used directly by internal callers, and accepting an
       // arbitrary status here could desynchronise durable turn state from the
@@ -286,6 +306,12 @@ async update(this: ThreadService, threadId: string, patch: {
       }
       const next = touchThread(merged, this['nowIso']())
       await this['threadStore'].upsert(next)
+      if (next.historyRefId && patch.workspace !== undefined) {
+        const snapshot = await this['sessionStore'].loadSession(threadId) ??
+          toSessionSnapshot(next, next.updatedAt, await this['sessionStore'].loadItems(threadId))
+        await this['sessionStore'].upsertSession({ ...snapshot, historyRefId: next.historyRefId,
+          workspace: next.workspace, updatedAt: next.updatedAt })
+      }
       return next
     })
     await this['events'].record({

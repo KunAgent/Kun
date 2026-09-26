@@ -79,6 +79,7 @@ describe('ModelConnectionRegistry provider proxy routing', () => {
       credentialRefCleanup: {},
       proxy: { enabled, url: 'http://127.0.0.1:7890' },
       routePools: [],
+      failover: [],
       localModelGateway: { enabled: false }
     }))
 

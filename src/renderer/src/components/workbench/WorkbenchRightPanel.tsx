@@ -31,6 +31,8 @@ import {
   type WorkbenchFileTreeSidePanelProps
 } from './WorkbenchFileTreeSidePanel'
 import { workbenchDividerClassName } from './workbench-divider'
+import { useRemoteMobileLayout } from '../../lib/remote-mobile'
+import { X } from 'lucide-react'
 
 const ChangeInspector = lazy(() =>
   import('../ChangeInspector').then((module) => ({ default: module.ChangeInspector }))
@@ -63,6 +65,9 @@ const McpSkillsPanel = lazy(() =>
 )
 const UsageQuotaPanel = lazy(() =>
   import('./UsageQuotaPanel').then((module) => ({ default: module.UsageQuotaPanel }))
+)
+const RemoteAccessPanel = lazy(() =>
+  import('../remote/RemoteAccessPanel').then((module) => ({ default: module.RemoteAccessPanel }))
 )
 const GraphModePanel = lazy(() =>
   import('../graph/GraphModePanel').then((module) => ({ default: module.GraphModePanel }))
@@ -142,6 +147,8 @@ export function WorkbenchRightPanel({
   workspaceRoot,
   onCollapse
 }: WorkbenchRightPanelProps): ReactElement | null {
+  const { t } = useTranslation('common')
+  const remoteMobile = useRemoteMobileLayout()
   if (route === 'chat' && rightPanelMode !== BUILTIN_RIGHT_PANEL_IDS.sddAi && code) {
     const visibleCodeState = codeRightTabsForGraphVisibility(code.state, graphEnabled)
     if (
@@ -176,6 +183,16 @@ export function WorkbenchRightPanel({
         onPointerDown={onBeginResize}
       />
       <div data-workbench-right-panel className="ds-sidebar-surface h-full min-h-0 shrink-0" style={{ width }}>
+        {remoteMobile ? (
+          <button
+            type="button"
+            onClick={onCollapse}
+            className="ds-no-drag absolute right-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-ds-border-muted bg-ds-card text-ds-muted shadow-md"
+            aria-label={t('close')}
+          >
+            <X className="h-5 w-5" strokeWidth={1.8} />
+          </button>
+        ) : null}
         <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
           {design.panelMode !== 'hidden' ? (
             <DesignRightPanelContent {...design} />
@@ -355,6 +372,9 @@ function CodeRightPanelWorkspace({
           active={visible && code.state.activeId === id}
         />
       )
+    }
+    if (id === BUILTIN_RIGHT_PANEL_IDS.remote) {
+      return <RemoteAccessPanel className="h-full max-h-full w-full" />
     }
     if (isExtensionContributionId(id)) {
       const contribution = code.extensionViews.find((view) => view.id === id)

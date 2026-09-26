@@ -1,8 +1,4 @@
-import type {
-  WorkspaceDirectoryListResult,
-  WorkspaceDirectoryTarget,
-  WorkspaceEntry
-} from '@shared/workspace-file'
+import type { WorkspaceEntry } from '@shared/workspace-file'
 import {
   ChevronDown,
   ChevronRight,
@@ -28,14 +24,12 @@ import {
   type ReactElement
 } from 'react'
 import type { TFunction } from 'i18next'
-import type { ComposerFileReference } from '../../lib/composer-file-references'
 import {
   COMPOSER_FILE_REFERENCE_DRAG_MIME,
   formatComposerFileMentionToken,
   relativeWorkspacePath
 } from '../../lib/composer-file-references'
 import {
-  isWorkspacePreviewPath,
   workspaceFileKindLabel,
   workspaceFilePreviewKind
 } from '../../lib/workspace-text-preview'
@@ -44,15 +38,39 @@ import {
   SidebarSectionHeader,
   SidebarTreeRow
 } from '../sidebar/SidebarPrimitives'
+import {
+  chatFileTreeDisplayName,
+  chatFileTreeEntryMatchesQuery,
+  chatFileTreeEntryReference,
+  chatFileTreePathKey,
+  chatFileTreeUniqueRoots,
+  formatChatFileTreeUnsupportedMessage,
+  isChatFileTreeIgnoredDirectory,
+  isChatFileTreePreviewableEntry,
+  owningChatFileTreeRoot,
+  scanChatFileTreeRecentFilesInRoots,
+  sortChatFileTreeEntries,
+  type ChatFileTreeReference,
+  type FileTreeSortMode
+} from './chat-file-tree-helpers'
 
-export type ChatFileTreeReference = ComposerFileReference & {
-  type: 'file' | 'directory'
-}
+export type { ChatFileTreeReference } from './chat-file-tree-helpers'
+export {
+  chatFileTreeEntryMatchesQuery,
+  compareChatFileTreeEntriesByModified,
+  compareChatFileTreeEntriesByName,
+  formatChatFileTreeUnsupportedMessage,
+  isChatFileTreeIgnoredDirectory,
+  isChatFileTreePreviewableEntry,
+  scanChatFileTreeRecentFiles,
+  sortChatFileTreeEntries
+} from './chat-file-tree-helpers'
 
 type Props = {
   workspaceRoot: string
+  extraRoots?: readonly string[]
   selectedPath?: string | null
-  onPreviewFile: (path: string) => void
+  onPreviewFile: (path: string, workspaceRoot?: string) => void
   onAddReference: (reference: ChatFileTreeReference) => void
   t: TFunction
   fill?: boolean
@@ -70,145 +88,17 @@ type ContextMenuState = {
   entry: WorkspaceEntry
 } | null
 
-type FileTreeSortMode = 'name' | 'modified'
-
-type ListWorkspaceDirectory = (target: WorkspaceDirectoryTarget) => Promise<WorkspaceDirectoryListResult>
-
 type RecentScanState = {
   entries: WorkspaceEntry[]
   loading: boolean
   error: string | null
 }
 
-type RecentScanOptions = {
-  isCancelled?: () => boolean
-  limit?: number
-  maxDepth?: number
-  maxEntries?: number
-}
-
 const ROOT_PATH = ''
-const IGNORED_DIRS = new Set(['.git', '.hg', '.svn', 'node_modules'])
-const RECENT_FILE_LIMIT = 8
-const RECENT_SCAN_MAX_ENTRIES = 2_000
-const RECENT_SCAN_MAX_DEPTH = 8
-
-function normalizePath(path: string): string {
-  return path.replaceAll('\\', '/').replace(/\/+$/g, '')
-}
-
-function pathKey(path: string): string {
-  return normalizePath(path).toLowerCase()
-}
-
-function workspaceDisplayName(path: string): string {
-  const normalized = normalizePath(path)
-  const parts = normalized.split('/').filter(Boolean)
-  return parts.at(-1) ?? path
-}
-
-function entryReference(entry: WorkspaceEntry, workspaceRoot: string): ChatFileTreeReference {
-  const relativePath = relativeWorkspacePath(entry.path, workspaceRoot)
-  return {
-    path: entry.path,
-    relativePath,
-    name: entry.name,
-    type: entry.type,
-    workspaceRoot
-  }
-}
-
-export function compareChatFileTreeEntriesByName(left: WorkspaceEntry, right: WorkspaceEntry): number {
-  if (left.type !== right.type) return left.type === 'directory' ? -1 : 1
-  return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' })
-}
-
-export function compareChatFileTreeEntriesByModified(left: WorkspaceEntry, right: WorkspaceEntry): number {
-  if (left.type !== right.type) return left.type === 'directory' ? -1 : 1
-  const leftTime = left.mtimeMs ?? 0
-  const rightTime = right.mtimeMs ?? 0
-  if (leftTime !== rightTime) return rightTime - leftTime
-  return compareChatFileTreeEntriesByName(left, right)
-}
-
-export function sortChatFileTreeEntries(entries: WorkspaceEntry[], mode: FileTreeSortMode): WorkspaceEntry[] {
-  return [...entries].sort(mode === 'modified' ? compareChatFileTreeEntriesByModified : compareChatFileTreeEntriesByName)
-}
-
-function sortRecentFiles(entries: WorkspaceEntry[]): WorkspaceEntry[] {
-  return [...entries]
-    .filter(isChatFileTreePreviewableEntry)
-    .sort((left, right) => {
-      const leftTime = left.mtimeMs ?? 0
-      const rightTime = right.mtimeMs ?? 0
-      if (leftTime !== rightTime) return rightTime - leftTime
-      return compareChatFileTreeEntriesByName(left, right)
-    })
-}
-
-export async function scanChatFileTreeRecentFiles(
-  root: string,
-  listWorkspaceDirectory: ListWorkspaceDirectory,
-  options: RecentScanOptions = {}
-): Promise<WorkspaceEntry[]> {
-  const limit = options.limit ?? RECENT_FILE_LIMIT
-  const maxDepth = options.maxDepth ?? RECENT_SCAN_MAX_DEPTH
-  const maxEntries = options.maxEntries ?? RECENT_SCAN_MAX_ENTRIES
-  const isCancelled = options.isCancelled ?? (() => false)
-  const collected: WorkspaceEntry[] = []
-
-  const scanDirectory = async (
-    path: string,
-    depth: number,
-    seenDirectories: Set<string>
-  ): Promise<void> => {
-    if (isCancelled() || depth > maxDepth || collected.length >= maxEntries) return
-    const directoryKey = pathKey(path || root)
-    if (seenDirectories.has(directoryKey)) return
-    seenDirectories.add(directoryKey)
-    const result = await listWorkspaceDirectory({ workspaceRoot: root, path: path || root })
-    if (!result.ok) throw new Error(result.message)
-    for (const entry of result.entries) {
-      if (isCancelled() || collected.length >= maxEntries) return
-      if (entry.type === 'directory') {
-        if (!isChatFileTreeIgnoredDirectory(entry.name)) {
-          await scanDirectory(entry.path, depth + 1, seenDirectories)
-        }
-        continue
-      }
-      if (isChatFileTreePreviewableEntry(entry)) collected.push(entry)
-    }
-  }
-
-  await scanDirectory(root, 0, new Set())
-  return sortRecentFiles(collected).slice(0, limit)
-}
-
-export function isChatFileTreeIgnoredDirectory(name: string): boolean {
-  return IGNORED_DIRS.has(name.toLowerCase())
-}
-
-export function isChatFileTreePreviewableEntry(entry: WorkspaceEntry): boolean {
-  return entry.type === 'file' && isWorkspacePreviewPath(entry.path || entry.name)
-}
-
-export function formatChatFileTreeUnsupportedMessage(name: string): string {
-  return `${name} does not have an in-app preview.`
-}
-
-export function chatFileTreeEntryMatchesQuery(
-  entry: WorkspaceEntry,
-  workspaceRoot: string,
-  query: string
-): boolean {
-  const normalizedQuery = query.trim().toLocaleLowerCase()
-  if (!normalizedQuery) return true
-  const relativePath = relativeWorkspacePath(entry.path, workspaceRoot).toLocaleLowerCase()
-  return entry.name.toLocaleLowerCase().includes(normalizedQuery) || relativePath.includes(normalizedQuery)
-}
 
 export function ChatFileTreePanel({
   workspaceRoot,
+  extraRoots = [],
   selectedPath,
   onPreviewFile,
   onAddReference,
@@ -223,19 +113,25 @@ export function ChatFileTreePanel({
   const [recentScan, setRecentScan] = useState<RecentScanState>({ entries: [], loading: false, error: null })
   const [recentScanNonce, setRecentScanNonce] = useState(0)
   const menuRef = useRef<HTMLDivElement | null>(null)
-  const root = workspaceRoot.trim()
-  const rootName = useMemo(() => workspaceDisplayName(root), [root])
+  const roots = useMemo(() => chatFileTreeUniqueRoots(workspaceRoot, extraRoots), [workspaceRoot, extraRoots])
+  const root = roots[0] ?? ''
+  const multiRoot = roots.length > 1
+  const rootsKey = roots.join('\n')
+  const rootName = useMemo(() => chatFileTreeDisplayName(root), [root])
+  const owningRoot = useCallback((path: string): string => owningChatFileTreeRoot(path, roots), [roots])
 
   useEffect(() => {
-    setExpanded(new Set([ROOT_PATH]))
+    setExpanded(new Set(multiRoot ? roots : [ROOT_PATH]))
     setDirectories({})
     setContextMenu(null)
     setQuery('')
     setRecentScan({ entries: [], loading: false, error: null })
-  }, [root])
+  }, [rootsKey, multiRoot, roots])
 
   const loadDirectory = useCallback((path: string): void => {
     if (!root || typeof window.kunGui?.listWorkspaceDirectory !== 'function') return
+    const directoryPath = path || root
+    const workspace = owningChatFileTreeRoot(directoryPath, roots)
     setDirectories((current) => ({
       ...current,
       [path || ROOT_PATH]: {
@@ -246,8 +142,8 @@ export function ChatFileTreePanel({
     }))
     void window.kunGui
       .listWorkspaceDirectory({
-        workspaceRoot: root,
-        path: path || root
+        workspaceRoot: workspace || root,
+        path: directoryPath
       })
       .then((result) => {
         setDirectories((current) => ({
@@ -267,7 +163,7 @@ export function ChatFileTreePanel({
           }
         }))
       })
-  }, [root])
+  }, [owningRoot, root, roots])
 
   useEffect(() => {
     for (const path of expanded) {
@@ -284,7 +180,7 @@ export function ChatFileTreePanel({
 
     void (async () => {
       try {
-        const entries = await scanChatFileTreeRecentFiles(root, listWorkspaceDirectory, {
+        const entries = await scanChatFileTreeRecentFilesInRoots(roots, listWorkspaceDirectory, {
           isCancelled: () => cancelled
         })
         if (!cancelled) {
@@ -308,7 +204,7 @@ export function ChatFileTreePanel({
     return () => {
       cancelled = true
     }
-  }, [root, recentScanNonce])
+  }, [rootsKey, recentScanNonce, roots])
 
   useEffect(() => {
     if (!contextMenu) return
@@ -328,9 +224,9 @@ export function ChatFileTreePanel({
     }
   }, [contextMenu])
 
-  const selectedKey = useMemo(() => pathKey(selectedPath ?? ''), [selectedPath])
+  const selectedKey = useMemo(() => chatFileTreePathKey(selectedPath ?? ''), [selectedPath])
   const recentEntries = recentScan.entries.filter((entry) =>
-    chatFileTreeEntryMatchesQuery(entry, root, query)
+    chatFileTreeEntryMatchesQuery(entry, owningRoot(entry.path) || root, query)
   )
 
   if (!root) return null
@@ -346,7 +242,7 @@ export function ChatFileTreePanel({
 
   const refresh = (): void => {
     setDirectories({})
-    setExpanded(new Set([ROOT_PATH]))
+    setExpanded(new Set(multiRoot ? roots : [ROOT_PATH]))
     setRecentScan((current) => ({
       entries: current.entries,
       loading: true,
@@ -356,12 +252,12 @@ export function ChatFileTreePanel({
   }
 
   const addReference = (entry: WorkspaceEntry): void => {
-    onAddReference(entryReference(entry, root))
+    onAddReference(chatFileTreeEntryReference(entry, owningRoot(entry.path) || root))
     setContextMenu(null)
   }
 
   const setEntryDragData = (event: ReactDragEvent<HTMLElement>, entry: WorkspaceEntry): void => {
-    const reference = entryReference(entry, root)
+    const reference = chatFileTreeEntryReference(entry, owningRoot(entry.path) || root)
     const token = formatComposerFileMentionToken(reference.relativePath, reference.type === 'directory')
     event.dataTransfer.effectAllowed = 'copy'
     event.dataTransfer.setData('text/plain', `${token} `)
@@ -370,7 +266,8 @@ export function ChatFileTreePanel({
 
   const copyEntryPath = async (entry: WorkspaceEntry, mode: 'absolute' | 'relative'): Promise<void> => {
     if (!navigator?.clipboard?.writeText) return
-    const value = mode === 'absolute' ? entry.path : relativeWorkspacePath(entry.path, root)
+    const workspace = owningRoot(entry.path) || root
+    const value = mode === 'absolute' ? entry.path : relativeWorkspacePath(entry.path, workspace)
     await navigator.clipboard.writeText(value)
     setContextMenu(null)
   }
@@ -379,7 +276,7 @@ export function ChatFileTreePanel({
     if (typeof window.kunGui?.openEditorPath !== 'function') return
     await window.kunGui.openEditorPath({
       path: entry.path,
-      workspaceRoot: root,
+      workspaceRoot: owningRoot(entry.path) || root,
       editorId: 'file-manager'
     })
     setContextMenu(null)
@@ -431,7 +328,7 @@ export function ChatFileTreePanel({
     }
 
     const hasMatchingLoadedDescendant = (entry: WorkspaceEntry): boolean => {
-      if (chatFileTreeEntryMatchesQuery(entry, root, query)) return true
+      if (chatFileTreeEntryMatchesQuery(entry, owningRoot(entry.path) || root, query)) return true
       if (entry.type !== 'directory') return false
       const childState = directories[entry.path]
       return Boolean(childState?.entries.some((child) => hasMatchingLoadedDescendant(child)))
@@ -444,7 +341,7 @@ export function ChatFileTreePanel({
         const isDirectory = entry.type === 'directory'
         const entryExpanded = expanded.has(entry.path) || Boolean(query.trim() && directories[entry.path])
         const previewable = isChatFileTreePreviewableEntry(entry)
-        const active = !isDirectory && selectedKey === pathKey(entry.path)
+        const active = !isDirectory && selectedKey === chatFileTreePathKey(entry.path)
         const previewKind = workspaceFilePreviewKind(entry.path || entry.name)
         const icon = isDirectory
           ? entryExpanded
@@ -465,7 +362,7 @@ export function ChatFileTreePanel({
                   toggleDirectory(entry.path)
                   return
                 }
-                onPreviewFile(entry.path)
+                onPreviewFile(entry.path, owningRoot(entry.path) || root)
               }}
               onContextMenu={(event) => openContextMenu(event, entry)}
               buttonClassName="h-7 items-center gap-1.5 py-0 pr-1.5 text-[12px]"
@@ -513,8 +410,8 @@ export function ChatFileTreePanel({
   return (
     <div className={`ds-no-drag min-h-0 ${fill ? 'flex h-full flex-col' : ''}`}>
       <SidebarSectionHeader
-        label={rootName || t('fileTreeTitle')}
-        title={root}
+        label={multiRoot ? t('fileTreeTitle') : (rootName || t('fileTreeTitle'))}
+        title={multiRoot ? `${root}\n${t('fileTreeGitUsesPrimary')}` : root}
         actions={
           <>
             <SidebarIconButton
@@ -578,12 +475,12 @@ export function ChatFileTreePanel({
                 type="button"
                 draggable
                 onDragStart={(event) => setEntryDragData(event, entry)}
-                onClick={() => onPreviewFile(entry.path)}
+                onClick={() => onPreviewFile(entry.path, owningRoot(entry.path) || root)}
                 className="flex h-7 min-w-0 items-center gap-1.5 rounded-md px-2.5 text-left text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
                 title={entry.path}
               >
                 <FileText className="h-3.5 w-3.5 shrink-0" strokeWidth={1.7} />
-                <span className="min-w-0 truncate">{relativeWorkspacePath(entry.path, root)}</span>
+                <span className="min-w-0 truncate">{relativeWorkspacePath(entry.path, owningRoot(entry.path) || root)}</span>
                 <span className="ml-auto shrink-0 text-[9px] font-semibold text-ds-faint">
                   {workspaceFileKindLabel(entry.path)}
                 </span>
@@ -593,7 +490,31 @@ export function ChatFileTreePanel({
         </div>
       ) : null}
       <div className={`${fill ? 'min-h-0 flex-1' : 'max-h-[34vh] min-h-[96px]'} overflow-y-auto overflow-x-hidden px-1`}>
-        {renderDirectory(ROOT_PATH, 0)}
+        {multiRoot
+          ? roots.flatMap((treeRoot) => {
+              const expandedRoot = expanded.has(treeRoot) || Boolean(query.trim() && directories[treeRoot])
+              return [
+                <SidebarTreeRow
+                  key={treeRoot}
+                  title={treeRoot}
+                  active={false}
+                  onClick={() => toggleDirectory(treeRoot)}
+                  buttonClassName="h-7 items-center gap-1.5 py-0 pr-1.5 text-[12px]"
+                  trailing={
+                    expandedRoot
+                      ? <ChevronDown className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.8} />
+                      : <ChevronRight className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.8} />
+                  }
+                >
+                  {expandedRoot
+                    ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.75} />
+                    : <Folder className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.75} />}
+                  <span className="min-w-0 truncate">{chatFileTreeDisplayName(treeRoot)}</span>
+                </SidebarTreeRow>,
+                ...(expandedRoot ? renderDirectory(treeRoot, 1) : [])
+              ]
+            })
+          : renderDirectory(ROOT_PATH, 0)}
       </div>
       {contextEntry ? (
         <div

@@ -2,6 +2,7 @@ import {
   defaultKunTokenEconomySettings,
   getModelProviderSettings,
   projectExecutableModelRoutePools,
+  projectFailoverGroupsForRuntime,
   resolveKunRuntimeSettings,
   resolveModelProviderPresetSource,
   resolveProviderProxyUrl,
@@ -88,6 +89,7 @@ export function providersConfigForRuntime(
         ? { authType: 'subscription' }
         : {}),
       ...(provider.endpointFormat ? { endpointFormat: provider.endpointFormat } : {}),
+      ...(provider.endpoints ? { endpoints: provider.endpoints } : {}),
       models: [...provider.models],
       modelCapabilities: modelCapabilitiesForProviderConfig(provider),
       ...(selectedModel ? { selectedModel } : {}),
@@ -139,8 +141,13 @@ export function routePoolsConfigForRuntime(settings: AppSettingsV1) {
   return projectExecutableModelRoutePools(providerSettings)
 }
 
+export function providerFailoverConfigForRuntime(settings: AppSettingsV1) {
+  return projectFailoverGroupsForRuntime(getModelProviderSettings(settings))
+}
+
 export function localModelGatewayConfigForRuntime(settings: AppSettingsV1) {
-  return { enabled: getModelProviderSettings(settings).localGateway.enabled }
+  const localGateway = getModelProviderSettings(settings).localGateway
+  return { enabled: localGateway.enabled, exposeProviderModels: localGateway.exposeProviderModels }
 }
 
 export function tokenEconomyConfigForRuntime(
@@ -194,6 +201,7 @@ export function contextCompactionConfigForRuntime(
     defaultSoftThreshold: value.defaultSoftThreshold,
     defaultHardThreshold: value.defaultHardThreshold,
     summaryMode: value.summaryMode,
+    windowModeEnabled: value.windowModeEnabled,
     summaryTimeoutMs: value.summaryTimeoutMs,
     summaryMaxTokens: value.summaryMaxTokens,
     summaryInputMaxBytes: value.summaryInputMaxBytes,

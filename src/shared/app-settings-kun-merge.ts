@@ -1,3 +1,5 @@
+import { defaultKunLabSettings } from './app-settings-kun-lab-defaults'
+export { defaultKunLabSettings } from './app-settings-kun-lab-defaults'
 import {
   DEFAULT_APPROVAL_REVIEWER,
   DEFAULT_APPROVAL_POLICY,
@@ -402,6 +404,8 @@ export function mergeKunRuntimeSettings(
     memoryEnabled: patch?.memoryEnabled ?? current.memoryEnabled ?? false,
     memoryDistillationEnabled:
       patch?.memoryDistillationEnabled ?? current.memoryDistillationEnabled ?? false,
+    memoryDirectivesEnabled:
+      patch?.memoryDirectivesEnabled ?? current.memoryDirectivesEnabled ?? true,
     instructions: nextInstructions,
     computerUse: nextComputerUse,
     browserUse: nextBrowserUse,
@@ -466,36 +470,6 @@ export function defaultKunFastContextSettings(): KunFastContextSettingsV1 {
   }
 }
 
-export function defaultKunLabSettings(): KunLabSettingsV1 {
-  return {
-    pptAgent: {
-      enabled: true,
-      model: '',
-      providerId: '',
-      fast: false,
-      imageFirst: true
-    },
-    conversationVisualization: {
-      enabled: false
-    },
-    autoPlanBuild: {
-      enabled: false,
-      confirmation: 'always',
-      defaultBuildMode: 'direct',
-      useWorktreeByDefault: true,
-      scheduledDefaults: {
-        providerId: '',
-        model: '',
-        reasoningEffort: 'auto',
-        timeZone: ''
-      }
-    },
-    projectBoard: {
-      enabled: false
-    }
-  }
-}
-
 /**
  * Merge the experimental Lab section. Nested fields merge field-by-field;
  * a half-configured model override (only one of model/providerId set) is
@@ -529,6 +503,9 @@ export function mergeKunLabSettings(
         timeZone: stringOrFallback(legacyScheduled?.timeZone, '').trim()
       }
     },
+    opencodeReferenceBranches: { enabled: legacyCurrent?.opencodeReferenceBranches?.enabled === true },
+    claudeCodeReferenceBranches: { enabled: legacyCurrent?.claudeCodeReferenceBranches?.enabled === true },
+    codexReferenceBranches: { enabled: legacyCurrent?.codexReferenceBranches?.enabled === true },
     projectBoard: {
       enabled: legacyCurrent?.projectBoard?.enabled ?? defaults.projectBoard.enabled
     }
@@ -574,6 +551,15 @@ export function mergeKunLabSettings(
           base.autoPlanBuild.scheduledDefaults.timeZone
         ).trim()
       }
+    },
+    opencodeReferenceBranches: {
+      enabled: patch.opencodeReferenceBranches?.enabled ?? base.opencodeReferenceBranches.enabled
+    },
+    claudeCodeReferenceBranches: {
+      enabled: patch.claudeCodeReferenceBranches?.enabled ?? base.claudeCodeReferenceBranches.enabled
+    },
+    codexReferenceBranches: {
+      enabled: patch.codexReferenceBranches?.enabled ?? base.codexReferenceBranches.enabled
     },
     projectBoard: {
       enabled: patch.projectBoard?.enabled ?? base.projectBoard.enabled

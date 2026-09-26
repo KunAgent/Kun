@@ -70,7 +70,11 @@ export function subscribeThreadEventsWithRecovery(
       terminalError = error
       releaseThreadRecoveryCatchup(threadId, generation)
       if (isReplayReset(error, threadId)) requireThreadTimelineHydration(threadId)
-      if (!isReplayReset(error, threadId)) sink.onError(error, options)
+      // Transport-level terminals (Remote sender expiry / hub overflow / ACK
+      // timeout) say nothing about the turn itself — it keeps running on the
+      // runtime. Surfacing them as turn_failed would flash a raw "sse error"
+      // banner and freeze the turn timer; the recovery below resubscribes.
+      if (!isReplayReset(error, threadId) && !isTransportTerminal(error)) sink.onError(error, options)
     }
   }
   void provider.subscribeThreadEvents(threadId, sinceSeq, recoverySink, signal)
@@ -107,7 +111,7 @@ function scheduleSseRecovery(
   if (state?.subscription === subscription && state.timer) return
   const next: SseRecoveryState = { subscription }
   const status = sseStatus(error)
-  const delay = isReplayReset(error, threadId)
+  const delay = isReplayReset(error, threadId) || isTransportTerminal(error)
     ? 0
     : Math.max(
         status === 401 || status === 403 ? SSE_RECOVERY_AUTH_DELAY_MS : 0,
@@ -132,6 +136,17 @@ function scheduleSseRecovery(
 function sseStatus(error: Error | undefined): number | undefined {
   const value = error as (Error & { status?: unknown }) | undefined
   return typeof value?.status === 'number' ? value.status : undefined
+}
+
+const TRANSPORT_TERMINAL_CODES = new Set([
+  'remote_client_expired',
+  'remote_buffer_overflow',
+  'renderer_ack_timeout'
+])
+
+function isTransportTerminal(error: Error | undefined): boolean {
+  const code = (error as (Error & { code?: unknown }) | undefined)?.code
+  return typeof code === 'string' && TRANSPORT_TERMINAL_CODES.has(code)
 }
 
 function isReplayReset(error: Error | undefined, threadId: string): boolean {

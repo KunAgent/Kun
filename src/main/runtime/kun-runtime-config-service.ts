@@ -29,6 +29,7 @@ import {
   McpCapabilityConfig,
   MemoryCapabilityConfig,
   MusicGenCapabilityConfig,
+  PaperSearchCapabilityConfig,
   SkillsCapabilityConfig,
   SpeechGenCapabilityConfig,
   SubagentsCapabilityConfig,
@@ -48,6 +49,7 @@ import {
   type ModelReasoningEffort,
   type KunRuntimeSettingsV1
 } from '../../shared/app-settings'
+import { normalizeWritePaperModeSettings } from '../../shared/app-settings-paper-mode'
 import {
   BUILTIN_GITHUB_MCP_SERVER_ID,
   buildBuiltinGitHubMcpServer,
@@ -64,6 +66,8 @@ import {
   graphConfigForRuntime,
   imageGenConfigForRuntime,
   musicGenConfigForRuntime,
+  paperSearchConfigForRuntime,
+  paperSearchSecretsForRuntime,
   qualityConfigForRuntime,
   runtimeTuningConfigForRuntime,
   speechGenConfigForRuntime,
@@ -80,6 +84,7 @@ import {
   contextCompactionConfigForRuntime,
   modelConfigForRuntime,
   localModelGatewayConfigForRuntime,
+  providerFailoverConfigForRuntime,
   providersConfigForRuntime,
   routePoolsConfigForRuntime,
   rolesConfigForRuntime,
@@ -159,6 +164,7 @@ export async function syncGuiManagedKunConfig(
     ? providersConfigForRuntime(appSettings)
     : undefined
   const routePools = appSettings ? routePoolsConfigForRuntime(appSettings) : undefined
+  const providerFailover = appSettings ? providerFailoverConfigForRuntime(appSettings) : undefined
   const localModelGateway = appSettings ? localModelGatewayConfigForRuntime(appSettings) : undefined
   // The top-level value remains the shared Registry master/fallback. Every
   // managed Provider below carries its own explicit effective route, so the
@@ -191,6 +197,7 @@ export async function syncGuiManagedKunConfig(
       toolOutputLimits: toolOutputLimitsConfigForRuntime(runtime.toolOutputLimits),
       ...(providers && Object.keys(providers).length ? { providers } : {}),
       ...(routePools ? { routePools } : {}),
+      ...(providerFailover && providerFailover.length > 0 ? { providerFailover } : {}),
       ...(localModelGateway ? { localModelGateway } : {})
     },
     models: modelConfigForRuntime(objectValue(existing?.models), modelProfiles),
@@ -222,12 +229,21 @@ export async function syncGuiManagedKunConfig(
       videoGen: videoGenConfigForRuntime(runtime.videoGeneration, objectValue(capabilities.videoGen)),
       computerUse: computerUseConfigForRuntime(runtime.computerUse, objectValue(capabilities.computerUse)),
       browserUse: browserUseConfigForRuntime(runtime.browserUse, objectValue(capabilities.browserUse)),
+      paperSearch: paperSearchConfigForRuntime(
+        appSettings ? normalizeWritePaperModeSettings(appSettings.write?.paperMode).search : undefined,
+        appSettings ? normalizeWritePaperModeSettings(appSettings.write?.paperMode).scholar.crossrefMailto : '',
+        objectValue(capabilities.paperSearch)
+      ),
       memory: {
         ...objectValue(capabilities.memory),
         enabled: runtime.memoryEnabled,
         distillation: {
           ...objectValue(objectValue(capabilities.memory).distillation),
           enabled: runtime.memoryDistillationEnabled
+        },
+        directives: {
+          ...objectValue(objectValue(capabilities.memory).directives),
+          enabled: runtime.memoryDirectivesEnabled
         }
       },
       instructions: {
@@ -318,6 +334,9 @@ function labConfigForRuntime(lab: KunLabSettingsV1 | undefined): KunConfig['lab'
     conversationVisualization: {
       enabled: lab?.conversationVisualization?.enabled === true
     },
+    opencodeReferenceBranches: { enabled: lab?.opencodeReferenceBranches?.enabled === true },
+    claudeCodeReferenceBranches: { enabled: lab?.claudeCodeReferenceBranches?.enabled === true },
+    codexReferenceBranches: { enabled: lab?.codexReferenceBranches?.enabled === true },
     projectBoard: {
       enabled: lab?.projectBoard?.enabled === true
     }
@@ -363,7 +382,7 @@ type KunRuntimeConfigSettings = Pick<KunRuntimeSettingsV1,
   'tokenEconomy' | 'toolOutputLimits' | 'storage' | 'contextCompaction' |
   'runtimeTuning' | 'llmDebug' | 'imageGeneration' | 'textToSpeech' | 'musicGeneration' |
   'videoGeneration' | 'computerUse' | 'browserUse' | 'modelProfiles' | 'memoryEnabled' |
-  'memoryDistillationEnabled' |
+  'memoryDistillationEnabled' | 'memoryDirectivesEnabled' |
   'instructions' | 'quality' | 'subagents' | 'graph' | 'fastContext' | 'lab' | 'githubMcp' | 'smallModel' |
   'smallModelProviderId' | 'smallModelAccountId' |
   'titleModel' | 'titleProviderId' | 'titleAccountId' |
@@ -404,7 +423,19 @@ export function buildManagedRuntimeHotApplyBody(
         distillation: {
           ...config.capabilities?.memory?.distillation,
           enabled: runtime.memoryDistillationEnabled
+        },
+        directives: {
+          ...config.capabilities?.memory?.directives,
+          enabled: runtime.memoryDirectivesEnabled
         }
+      },
+      paperSearch: {
+        ...config.capabilities?.paperSearch,
+        // API keys ride the in-memory body only; the persisted file strips them.
+        ...paperSearchSecretsForRuntime(
+          normalizeWritePaperModeSettings(settings.write?.paperMode).search,
+          normalizeWritePaperModeSettings(settings.write?.paperMode).scholar.semanticScholarApiKey
+        )
       }
     },
     serve: {
@@ -422,7 +453,8 @@ export function buildManagedRuntimeHotApplyBody(
       tokenEconomy: runtime.tokenEconomy,
       toolOutputLimits: runtime.toolOutputLimits,
       providers: serve.providers ?? {},
-      routePools: routePoolsConfigForRuntime(settings)
+      routePools: routePoolsConfigForRuntime(settings),
+      providerFailover: providerFailoverConfigForRuntime(settings)
     }
   })
 }
@@ -501,7 +533,8 @@ function sanitizeCapabilities(value: unknown): Record<string, unknown> {
     musicGen: MusicGenCapabilityConfig,
     videoGen: VideoGenCapabilityConfig,
     computerUse: ComputerUseCapabilityConfig,
-    browserUse: BrowserUseCapabilityConfig
+    browserUse: BrowserUseCapabilityConfig,
+    paperSearch: PaperSearchCapabilityConfig
   }
   const next: Record<string, unknown> = {}
   for (const [key, schema] of Object.entries(schemas)) {

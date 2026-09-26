@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import {
   FolderOpen,
   FileText,
+  GraduationCap,
   ListTodo,
   Loader2,
   MessageSquareQuote,
@@ -14,6 +15,14 @@ import type { AttachmentReference, RuntimeConnectionStatus, ChatBlock } from '..
 import { getProvider } from '../../agent/registry'
 import type { CoreRuntimeSkillJson } from '../../agent/kun-contract'
 import type { QueuedUserMessage } from '../../store/chat-store-types'
+import { useChatStore } from '../../store/chat-store'
+import { usePaperModeStore } from '../../paper/paper-mode-store'
+import { usePaperStore } from '../../write/paper/paper-store'
+import { paperUnitDirForFile, paperUnitDirFromKnownUnits } from '../../write/paper/paper-unit'
+import {
+  clearUnreadCompletion,
+  completionIsCurrentlyVisible
+} from '../../store/unread-completions'
 import { threadSnapshotLooksRunning } from '../../store/chat-store-runtime-helpers'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import {
@@ -27,6 +36,7 @@ import { FloatingComposer } from '../chat/FloatingComposer'
 import type { ComposerReasoningEffort } from '../chat/FloatingComposerModelPicker'
 import { SubagentReturnBar } from '../chat/message-timeline-empty'
 import { WriteAssistantSparkleIcon } from './WriteAssistantIcons'
+import { WritePaperAssistantActions } from './WritePaperAssistantActions'
 import { WritePresentationViewChip } from './WritePresentationViewChip'
 import { WriteResourceConversationHistoryPopover } from './WriteResourceConversationHistoryPopover'
 import { useWriteResourceConversationHistory } from './useWriteResourceConversationHistory'
@@ -127,7 +137,8 @@ export function WriteAssistantPanel({
     selection,
     quotedSelections,
     quoteCurrentSelection,
-    removeQuotedSelection
+    removeQuotedSelection,
+    workSurface
   } = useWriteWorkspaceStore(
     useShallow((s) => ({
       workspaceRoot: s.workspaceRoot,
@@ -135,9 +146,34 @@ export function WriteAssistantPanel({
       selection: s.selection,
       quotedSelections: s.quotedSelections,
       quoteCurrentSelection: s.quoteCurrentSelection,
-      removeQuotedSelection: s.removeQuotedSelection
+      removeQuotedSelection: s.removeQuotedSelection,
+      workSurface: s.workSurface
     }))
   )
+  const papersSurface = workSurface === 'papers'
+  const paperEntries = usePaperModeStore((s) => s.entries)
+  const readerPage = usePaperModeStore((s) => s.readerPage)
+  const knownUnits = usePaperStore((s) => s.unitsByDir)
+  // Active paper unit (relative dir) resolved against the library index and
+  // the store's known units — drives the context header, the composer chip,
+  // and the papers-only empty-state prompts.
+  const activeUnitRel = (() => {
+    if (!papersSurface || !activeFilePath || !workspaceRoot) return null
+    const abs = paperUnitDirFromKnownUnits(
+      workspaceRoot,
+      activeFilePath,
+      paperEntries.map((e) => e.unitDir)
+    ) ?? paperUnitDirFromKnownUnits(
+      workspaceRoot,
+      activeFilePath,
+      Object.keys(knownUnits)
+    )
+    return abs ? paperUnitDirForFile(abs, workspaceRoot) : null
+  })()
+  const activePaperEntry = activeUnitRel
+    ? paperEntries.find((e) => e.unitDir === activeUnitRel) ?? null
+    : null
+  const paperContextLabel = activePaperEntry?.meta.title ?? null
   const activeFileLabel = activeFilePath
     ? writeRelativeToWorkspace(workspaceRoot, activeFilePath)
     : t('writeNoFileOpen')
@@ -150,6 +186,25 @@ export function WriteAssistantPanel({
   const [childError, setChildError] = useState<string | null>(null)
   const viewingChildThread = Boolean(childThreadId)
   const conversationHistory = useWriteResourceConversationHistory(busy)
+
+  useEffect(() => {
+    const threadId = childThreadId?.trim() || activeThreadId?.trim() || null
+    useChatStore.getState().setWriteAssistantVisibleThreadId(threadId)
+    if (threadId) {
+      useChatStore.setState((state) => ({
+        unreadThreadIds: completionIsCurrentlyVisible(state, threadId)
+          ? clearUnreadCompletion(state.unreadThreadIds, threadId)
+          : state.unreadThreadIds
+      }))
+    }
+    return () => {
+      const state = useChatStore.getState()
+      if (state.writeAssistantVisibleThreadId === threadId) {
+        state.setWriteAssistantVisibleThreadId(null)
+      }
+    }
+  }, [activeThreadId, childThreadId])
+
   const canCreateConversation = runtimeConnection === 'ready' &&
     !busy &&
     !viewingChildThread &&
@@ -314,11 +369,27 @@ export function WriteAssistantPanel({
           </button>
         </div>
         <div className="min-w-0 border-t border-ds-border-muted/70 px-4 py-2.5">
-          <div className="flex min-w-0 items-center gap-2 text-[11.5px] font-medium text-ds-muted" title={activeFileLabel}>
-            <FileText className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />
-            <span className="shrink-0">{t('writePromptActiveFile')}</span>
+          <div
+            className="flex min-w-0 items-center gap-2 text-[11.5px] font-medium text-ds-muted"
+            title={paperContextLabel ?? activeFileLabel}
+          >
+            {papersSurface && activePaperEntry ? (
+              <GraduationCap className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />
+            ) : (
+              <FileText className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />
+            )}
+            <span className="shrink-0">
+              {papersSurface ? t('writePaperContextPaper') : t('writePromptActiveFile')}
+            </span>
             <span className="text-ds-faint" aria-hidden="true">·</span>
-            <span className="min-w-0 truncate">{activeFileName}</span>
+            <span className="min-w-0 truncate">
+              {papersSurface && paperContextLabel ? paperContextLabel : activeFileName}
+            </span>
+            {papersSurface && readerPage ? (
+              <span className="shrink-0 text-ds-faint">
+                p.{readerPage.page}/{readerPage.pageCount || '–'}
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
@@ -401,63 +472,93 @@ export function WriteAssistantPanel({
             </div>
 
             <div className="write-assistant-actions mt-auto overflow-hidden border-y border-ds-border-muted">
-              <button
-                type="button"
-                onClick={() => setAssistantPrompt(t('writeAssistantSummarizePrompt', { file: activeFileLabel }))}
-                className="write-assistant-action-row"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-300">
-                  <FileText className="h-4 w-4" strokeWidth={1.9} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[13.5px] font-semibold text-ds-ink">{t('writeAssistantSummarize')}</span>
-                  <span className="mt-0.5 block truncate text-[12px] text-ds-faint">{t('writeAssistantSummarizeSub')}</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAssistantPrompt(t('writeAssistantOutlinePrompt', { file: activeFileLabel }))}
-                className="write-assistant-action-row border-t border-ds-border-muted"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
-                  <ListTodo className="h-4 w-4" strokeWidth={1.9} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[13.5px] font-semibold text-ds-ink">{t('writeAssistantOutline')}</span>
-                  <span className="mt-0.5 block truncate text-[12px] text-ds-faint">{t('writeAssistantOutlineSub')}</span>
-                </span>
-              </button>
-              {!selectionIsSpreadsheet ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (selection.charCount > 0) {
-                      quoteSelectionForAssistant()
-                    } else {
-                      setAssistantPrompt(t('writeAssistantPolishSelectionPrompt'))
-                    }
-                  }}
-                  className="write-assistant-action-row border-t border-ds-border-muted"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-300">
-                    <MessageSquareQuote className="h-4 w-4" strokeWidth={1.9} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[13.5px] font-semibold text-ds-ink">
-                      {selectionActionLabel}
+              {papersSurface ? (
+                <WritePaperAssistantActions
+                  paperTitle={paperContextLabel ?? ''}
+                  selectionIsSpreadsheet={selectionIsSpreadsheet}
+                  selectionActionLabel={selectionActionLabel}
+                  selectionActionDescription={selectionActionDescription}
+                  selectionCharCount={selection.charCount}
+                  onSetPrompt={setAssistantPrompt}
+                  onQuoteSelection={quoteSelectionForAssistant}
+                  t={t}
+                />
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setAssistantPrompt(t('writeAssistantSummarizePrompt', { file: activeFileLabel }))}
+                    className="write-assistant-action-row"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-300">
+                      <FileText className="h-4 w-4" strokeWidth={1.9} />
                     </span>
-                    <span className="mt-0.5 block truncate text-[12px] text-ds-faint">
-                      {selectionActionDescription}
+                    <span className="min-w-0">
+                      <span className="block text-[13.5px] font-semibold text-ds-ink">{t('writeAssistantSummarize')}</span>
+                      <span className="mt-0.5 block truncate text-[12px] text-ds-faint">{t('writeAssistantSummarizeSub')}</span>
                     </span>
-                  </span>
-                </button>
-              ) : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAssistantPrompt(t('writeAssistantOutlinePrompt', { file: activeFileLabel }))}
+                    className="write-assistant-action-row border-t border-ds-border-muted"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+                      <ListTodo className="h-4 w-4" strokeWidth={1.9} />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[13.5px] font-semibold text-ds-ink">{t('writeAssistantOutline')}</span>
+                      <span className="mt-0.5 block truncate text-[12px] text-ds-faint">{t('writeAssistantOutlineSub')}</span>
+                    </span>
+                  </button>
+                  {!selectionIsSpreadsheet ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selection.charCount > 0) {
+                          quoteSelectionForAssistant()
+                        } else {
+                          setAssistantPrompt(t('writeAssistantPolishSelectionPrompt'))
+                        }
+                      }}
+                      className="write-assistant-action-row border-t border-ds-border-muted"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-300">
+                        <MessageSquareQuote className="h-4 w-4" strokeWidth={1.9} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[13.5px] font-semibold text-ds-ink">
+                          {selectionActionLabel}
+                        </span>
+                        <span className="mt-0.5 block truncate text-[12px] text-ds-faint">
+                          {selectionActionDescription}
+                        </span>
+                      </span>
+                    </button>
+                  ) : null}
+                </>
+              )}
             </div>
           </div>
         )}
       </div>
 
       <div className="write-assistant-footer ds-sidebar-surface-chrome shrink-0 border-t border-ds-border-muted px-3 pb-3 pt-3">
+        {!viewingChildThread && papersSurface && activePaperEntry && readerPage
+          && readerPage.unitDir === activeUnitRel ? (
+          <div
+            className="mb-3 flex min-w-0 items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] px-3 py-2 text-[12px] text-ds-muted"
+            data-testid="write-paper-context-chip"
+          >
+            <GraduationCap className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-300" strokeWidth={1.9} />
+            <span className="min-w-0 flex-1 truncate font-medium text-ds-ink">
+              {activePaperEntry.meta.title}
+            </span>
+            <span className="shrink-0 text-[11px] text-ds-faint">
+              p.{readerPage.page}/{readerPage.pageCount || '–'}
+            </span>
+          </div>
+        ) : null}
         {!viewingChildThread && presentationView ? (
           <WritePresentationViewChip view={presentationView} />
         ) : null}

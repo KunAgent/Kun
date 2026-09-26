@@ -15,35 +15,25 @@ import {
 import { ReviewPlanCard, ReviewSummaryCard, TurnChangeSummary, WorkMetaRow } from './message-timeline-cards'
 import {
   ProcessSectionRow,
-  groupProcessSections,
-  summarizeToolBlock
+  groupProcessSections
 } from './message-timeline-process'
 import { ComponentPrototypeCard } from './ComponentPrototypeCard'
 import { DiagramPrototypeCard } from './DiagramPrototypeCard'
 import { ConversationVisualizationCard } from './ConversationVisualizationCard'
-import { ChartRenderer } from './ChartRenderer'
+import { ChartRenderer, ChartSkeleton } from './ChartRenderer'
+import { PaperListCard, PaperListSkeleton } from './PaperListCard'
 import type { OpenChildThreadHandler } from './SubagentCallCard'
-import {
-  AnimatedWorkLogo,
-  IKUN_WORK_LOGO_VARIANT_LABEL_KEYS,
-  WORK_LOGO_SWIM_MODE_LABEL_KEYS,
-  useIkunWorkLogoVariant,
-  useWorkLogoSwimMode,
-  type IkunWorkLogoVariant,
-  type WorkLogoSwimMode
-} from './AnimatedWorkLogo'
-import type { UiPluginLabelKey } from '@shared/ui-plugin'
-import { useUiPluginWorkLabel } from '../../store/ui-plugin-store'
 import { sameTurnContent, splitThink, type Turn } from './message-timeline-turns'
 import { extractPlanMetadataFromBlock, type GuiPlanToolMeta } from '../../plan/plan-tool'
 import { planDisplayNameFromRelativePath } from '../../plan/plan-path'
 import type { PlanBuildOrchestration } from '../../plan/plan-build'
-import { TimelineRuntimeError, liveTurnProgressClass } from './message-timeline-jump-preview'
+import { TimelineRuntimeError } from './message-timeline-jump-preview'
+import { useTurnRuntimeErrorActions } from './use-turn-runtime-error-actions'
 import type { TurnUsageSummary } from '../../hooks/use-turn-usage'
 import { TurnUsageRow } from './TurnUsageRow'
 import { hasLivePendingUserInput } from '../../store/chat-store-runtime-helpers'
-import { CircleHelp } from 'lucide-react'
-import { formatDuration } from './message-timeline-tools'
+import { useTimelineSurface } from './timeline-surface'
+import { LiveTurnProgressRow } from './message-timeline-live-progress'
 import {
   parseDelegateDetail,
   readChildMeta,
@@ -56,6 +46,8 @@ export type ConversationTurnProps = {
   liveReasoning: string
   live: string
   durationMs?: number
+  /** Start timestamp of the live turn; the elapsed label ticks off this. */
+  liveStartedAtMs?: number
   reasoningDurationMs?: number
   devPreviewCard?: ReactElement | null
   planActionsBusy?: boolean
@@ -91,6 +83,7 @@ export function ConversationTurn({
   liveReasoning,
   live,
   durationMs,
+  liveStartedAtMs,
   reasoningDurationMs,
   devPreviewCard,
   planActionsBusy,
@@ -115,9 +108,10 @@ export function ConversationTurn({
   turnUsageStale = false
 }: ConversationTurnProps): ReactElement {
   const { t } = useTranslation('common')
+  const surface = useTimelineSurface()
   const forkThreadFromTurn = useChatStore((s) => s.forkThreadFromTurn)
   const rollbackWorkspaceToCheckpoint = useChatStore((s) => s.rollbackWorkspaceToCheckpoint)
-  const sendMessage = useChatStore((s) => s.sendMessage)
+  const { continueInterruptedTask } = useTurnRuntimeErrorActions()
   const archiveActiveThreadToTurn = useChatStore((s) => s.archiveActiveThreadToTurn)
   const [forking, setForking] = useState(false)
   const [archiving, setArchiving] = useState(false)
@@ -152,6 +146,9 @@ export function ConversationTurn({
     generatedFileBlocks,
     turnFileChanges,
     chartBlocks,
+    pendingChartBlocks,
+    paperListBlocks,
+    pendingPaperListBlocks,
     timelineEntries
   } = useMemo(
     () =>
@@ -290,7 +287,10 @@ export function ConversationTurn({
     componentPrototypeBlocks.length > 0 ||
     diagramPrototypeBlocks.length > 0 ||
     conversationVisualizationBlocks.length > 0 ||
+    pendingChartBlocks.length > 0 ||
     chartBlocks.length > 0 ||
+    pendingPaperListBlocks.length > 0 ||
+    paperListBlocks.length > 0 ||
     Boolean(devPreviewCard)
   )
   const forkFromTurn = async (): Promise<void> => {
@@ -341,9 +341,7 @@ export function ConversationTurn({
           viewportRef={viewportRef}
           allowThreadActions={allowMainThreadActions}
           allowRecoveryContinue={allowRecoveryContinue}
-          onContinueInterrupted={() => {
-            void sendMessage(t('continueInterruptedTaskPrompt'))
-          }}
+          onContinueInterrupted={continueInterruptedTask}
           onOpenChildThread={onOpenChildThread}
           onCancelToolCall={onCancelToolCall}
           forkAction={
@@ -428,19 +426,13 @@ export function ConversationTurn({
         />
       ))}
 
-      {conversationVisualizationBlocks.map((block) => (
-        <ConversationVisualizationCard key={block.id} block={block} />
-      ))}
-
-      {chartBlocks.map((block) => (
-        <ChartRenderer key={block.id} spec={block.spec} />
-      ))}
-
       {assistantContentBlocks.map((block) => (
         <MessageBubble
           key={block.id}
           block={block}
           allowThreadActions={allowMainThreadActions}
+          turnUsage={turnUsage}
+          turnUsageStale={turnUsageStale}
           forkAction={
             block.id === forkActionBlockId
               ? {
@@ -464,7 +456,28 @@ export function ConversationTurn({
         />
       ))}
 
-      {!isProcessing && (assistantContentBlocks.length > 0 || orderedAnswerBlocks.length > 0) && turnUsage ? (
+      {conversationVisualizationBlocks.map((block) => (
+        <ConversationVisualizationCard key={block.id} block={block} />
+      ))}
+
+      {pendingChartBlocks.map((block) => (
+        <ChartSkeleton key={block.id} title={block.summary} />
+      ))}
+
+      {chartBlocks.map((block) => (
+        <ChartRenderer key={block.id} spec={block.spec} />
+      ))}
+
+      {pendingPaperListBlocks.map((block) => (
+        <PaperListSkeleton key={block.id} title={block.summary} />
+      ))}
+
+      {paperListBlocks.map((block) => (
+        <PaperListCard key={block.id} list={block.list} workspaceRoot={filePreviewWorkspaceRoot} />
+      ))}
+
+      {/* Mobile moves per-turn usage into the message actions sheet (U9). */}
+      {!isProcessing && surface !== 'mobile' && (assistantContentBlocks.length > 0 || orderedAnswerBlocks.length > 0) && turnUsage ? (
         <TurnUsageRow usage={turnUsage} stale={turnUsageStale} />
       ) : null}
 
@@ -501,9 +514,7 @@ export function ConversationTurn({
               block={block}
               onContinue={
                 !isProcessing && allowMainThreadActions && allowRecoveryContinue
-                  ? () => {
-                      void sendMessage(t('continueInterruptedTaskPrompt'))
-                    }
+                  ? () => continueInterruptedTask(block.code)
                   : undefined
               }
             />
@@ -536,7 +547,8 @@ export function ConversationTurn({
         />
       ) : null}
 
-      {allowMainThreadActions && hasSettledResultEvidence && forkTurnId ? (
+      {/* Mobile shows archive-earlier-history inside the thread details sheet (U9). */}
+      {surface !== 'mobile' && allowMainThreadActions && hasSettledResultEvidence && forkTurnId ? (
         <div className="flex justify-end pt-6" data-archive-history-action>
           <button
             type="button"
@@ -556,93 +568,9 @@ export function ConversationTurn({
           activityLabel={liveChildActivityLabel}
           awaitingUserInput={awaitingUserInput}
           durationMs={durationMs}
+          liveStartedAtMs={liveStartedAtMs}
         />
       ) : null}
-    </div>
-  )
-}
-
-function LiveTurnProgressRow({
-  tool,
-  thinking,
-  activityLabel,
-  awaitingUserInput = false,
-  durationMs
-}: {
-  tool?: Extract<ChatBlock, { kind: 'tool' }>
-  thinking: boolean
-  activityLabel?: string
-  awaitingUserInput?: boolean
-  durationMs?: number
-}): ReactElement {
-  const { t, i18n } = useTranslation('common')
-  const swimMode = useWorkLogoSwimMode(true)
-  const ikunVariant = useIkunWorkLogoVariant(true)
-  // iKun 模式是全局 html 属性;进行行每个回合重新挂载,挂载时读取即可
-  const [ikunModeOn] = useState(
-    () =>
-      typeof document !== 'undefined' &&
-      document.documentElement.getAttribute('data-ikun-mode') === 'on'
-  )
-  const swimLabelKey = WORK_LOGO_SWIM_MODE_LABEL_KEYS[swimMode]
-  // UI 插件可声明自己的进行中文案(按泳姿键、按语言),未声明则用默认文案
-  const pluginLabel = useUiPluginWorkLabel(
-    swimLabelKey as UiPluginLabelKey,
-    i18n.language ?? 'zh'
-  )
-  const activityText = awaitingUserInput
-    ? t('awaitingYourInput')
-    : activityLabel
-    ? t('workingToolAction', { action: activityLabel })
-    : thinking
-      ? t('thinkingNow')
-      : tool
-        ? t('workingToolAction', { action: summarizeToolBlock(tool, t) })
-        : ikunModeOn
-          ? t(IKUN_WORK_LOGO_VARIANT_LABEL_KEYS[ikunVariant])
-          : pluginLabel ?? t(swimLabelKey)
-  const label = typeof durationMs === 'number'
-    ? `${activityText} · ${formatDuration(durationMs)}`
-    : activityText
-
-  return (
-    <LiveTurnActivityRow
-      label={label}
-      ikunVariant={ikunVariant}
-      swimMode={swimMode}
-      awaitingUserInput={awaitingUserInput}
-    />
-  )
-}
-
-function LiveTurnActivityRow({
-  label,
-  ikunVariant,
-  swimMode,
-  awaitingUserInput = false
-}: {
-  label: string
-  ikunVariant?: IkunWorkLogoVariant
-  swimMode?: WorkLogoSwimMode
-  awaitingUserInput?: boolean
-}): ReactElement {
-  return (
-    <div className={liveTurnProgressClass()} data-turn-live-status-owner="generic">
-      {awaitingUserInput ? (
-        <CircleHelp
-          className="mr-0.5 h-4 w-4 shrink-0 text-amber-500 motion-safe:animate-pulse"
-          strokeWidth={2}
-          role="img"
-          aria-label={label}
-        />
-      ) : (
-        <span className="ds-work-logo-slot ds-work-logo-slot-sm mr-0.5">
-          <AnimatedWorkLogo active ikunVariant={ikunVariant} mode={swimMode} phase="trail" size="sm" />
-        </span>
-      )}
-      <span className={awaitingUserInput ? 'font-medium text-amber-600 dark:text-amber-300' : 'ds-shiny-text'}>
-        {label}
-      </span>
     </div>
   )
 }
@@ -653,6 +581,7 @@ export const MemoMessageTurn = memo(ConversationTurn, (prev, next) => (
   prev.liveReasoning === next.liveReasoning &&
   prev.live === next.live &&
   prev.durationMs === next.durationMs &&
+  prev.liveStartedAtMs === next.liveStartedAtMs &&
   prev.reasoningDurationMs === next.reasoningDurationMs &&
   prev.devPreviewCard === next.devPreviewCard &&
   prev.planActionsBusy === next.planActionsBusy &&

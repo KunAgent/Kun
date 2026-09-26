@@ -45,7 +45,7 @@ import { normalizeWorkspaceRoot, workspaceRootScopeKey } from '../lib/workspace-
 import { relativeWorkspacePath } from '../lib/composer-file-references'
 import { useDesignWorkspaceStore } from '../design/design-workspace-store'
 import { useCodeCanvasDesignSurface } from '../design/code-canvas-design-surface'
-import { useWorkbenchPptWhiteboardRouter } from './workbench/useWorkbenchPptWhiteboardRouter'
+import { useWorkbenchWhiteboardRouters } from './workbench/useWorkbenchWhiteboardRouters'
 import { designDocumentComposerFileReferences } from '../design/design-document-file-reference'
 import {
   BUILTIN_RIGHT_PANEL_IDS,
@@ -124,7 +124,7 @@ export function Workbench(): ReactElement {
     graphChildReturnTarget, graphRuns, graphChildRuns, graphChildNow
   } = useWorkbenchGraphRuntimeState(activeThreadId)
   const guiPlanSaveStatus = useGuiPlanStore((state) => state.saveStatus)
-  useWorkbenchPptWhiteboardRouter({ activeThreadId, blocks, route, threads, workspaceRoot })
+  useWorkbenchWhiteboardRouters({ activeThreadId, blocks, route, threads, workspaceRoot })
   const {
     activeComposerContextEvents,
     extensionComposerContextChips,
@@ -412,7 +412,7 @@ export function Workbench(): ReactElement {
     runtimeInfo
   })
   const {
-    addComposerImageBase64,
+    addComposerImageBase64, addComposerImagePngBase64,
     attachmentUploadBusy,
     attachmentUploadEnabled,
     attachmentUploadError,
@@ -671,7 +671,7 @@ export function Workbench(): ReactElement {
     messageContributionsForSurface,
     openCodeRightTool, currentSideRunningCount, extensionRightRailItems, selectRightRailExtension,
     imageAnnotationHost, planOverlay, openManagedExtensionView, activeExtensionAuxiliaryPanel,
-    workspaceContextMenu, activeGuiPlan,
+    workspaceContextMenu, activeGuiPlan, attachPaperComposerImage: addComposerImagePngBase64,
     focusedCanvasWorkspace, openGeneratedDocuments, openGeneratedDocumentPreview,
     onOpenCommandPalette: openWorkbenchCommandPalette
   }} />
@@ -689,7 +689,7 @@ export function Workbench(): ReactElement {
       shortcutContext={{ composerMode, setComposerMode, handleGuiPlanCommand, createThread,
         chooseWorkspace, toggleTerminal, openSettings, useWorktreePool, setUseWorktreePool,
         worktreeBranch, navigationLocked: designDrawingCreationSubmitting }}
-      actions={{ routes: { chat: openCodeMode, write: openWriteMode, design: openDesignMode,
+      actions={{ routes: { chat: openCodeMode, write: openWriteMode, design: openDesignMode, rooms: () => setRoute('rooms'),
         settings: openSettings, plugins: openPluginsView, extensions: openExtensionsView,
         claw: openClaw, board: openBoardView, schedule: openScheduleView, workflow: openWorkflowView },
         openSettings, openThread, selectWorkspaceRoot, selectExtension: selectRightRailExtension,

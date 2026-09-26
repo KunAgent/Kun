@@ -66,7 +66,7 @@ describe('JsonSettingsStore', () => {
     const loaded = await new JsonSettingsStore(userDataDir).load()
     expect(loaded.agents.kun.autoStart).toBe(false)
     expect(loaded.provider.routePools).toEqual([routePool])
-    expect(loaded.provider.localGateway).toEqual({ enabled: true, name: 'Legacy Relay' })
+    expect(loaded.provider.localGateway).toEqual({ enabled: true, name: 'Legacy Relay', exposeProviderModels: false })
     expect(loaded.provider.providers.find((item) => item.id === provider.id)?.presetSource)
       .toEqual(provider.presetSource)
   })

@@ -144,4 +144,46 @@ describe('subscribeThreadEventsWithRecovery', () => {
     expect(sink.onError).not.toHaveBeenCalled()
     expect(recoverActiveTurn).toHaveBeenCalledOnce()
   })
+
+  it.each(['remote_client_expired', 'remote_buffer_overflow', 'renderer_ack_timeout'])(
+    'resubscribes quietly after a %s transport terminal instead of failing the running turn',
+    async (code) => {
+      vi.useFakeTimers()
+      const recoverActiveTurn = vi.fn(async () => true)
+      const state = {
+        activeThreadId: `thread_${code}`,
+        busy: true,
+        recoverActiveTurn
+      } as unknown as ChatState
+      const terminal = Object.assign(new Error('Live updates were interrupted; reconnecting.'), {
+        code,
+        threadId: state.activeThreadId
+      })
+      const provider = {
+        subscribeThreadEvents: vi.fn(async (
+          _threadId: string,
+          _sinceSeq: number,
+          recoverySink: ThreadEventSink
+        ) => {
+          recoverySink.onError(terminal)
+        })
+      } as unknown as AgentProvider
+      const sink = { onError: vi.fn() } as unknown as ThreadEventSink
+
+      subscribeThreadEventsWithRecovery(
+        provider,
+        state.activeThreadId!,
+        7,
+        sink,
+        new AbortController().signal,
+        () => state
+      )
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+
+      // No turn_failed projection (raw error banner, frozen timer) — only a resubscribe.
+      expect(sink.onError).not.toHaveBeenCalled()
+      expect(recoverActiveTurn).toHaveBeenCalledWith({ reason: 'sse_disconnect', forceTimeline: false })
+    }
+  )
 })

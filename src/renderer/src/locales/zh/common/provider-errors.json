@@ -9,5 +9,18 @@
   "modelErrorNoResponseSummary": "模型请求已发送，但没有收到供应商响应",
   "modelErrorNotSentSummary": "模型请求在发送前失败",
   "modelErrorProviderOriginalMessage": "供应商返回消息",
-  "modelErrorFailureMessage": "失败原因"
+  "modelErrorFailureMessage": "失败原因",
+  "outputTruncatedNotice": "回复被模型的单次输出上限（max output tokens）截断——这是单次生成上限，不是账户余额问题。Kun 已尝试自动续写。点击「继续任务」可再次续写，或在 设置 > Providers > 模型 > Max output (tokens) 调高上限。",
+  "continueTruncatedTaskPrompt": "从上次回复被截断的位置继续。每次回复保持更短，把剩余工作拆成更小的步骤完成。",
+  "runtimeFetchFailedAutoStart": "无法连接到 Kun。自动启动已开启，本地运行时可能已崩溃或仍在重启——请重试，或重启 Kun 并查看运行时日志。",
+  "openProviderSettings": "Provider 设置",
+  "modelRouteSwitchStatus": "正在切换模型路由：{{from}} 失败{{reasonSuffix}}，尝试 {{to}}…",
+  "modelRouteSwitchReason_credit": "余额不足",
+  "modelRouteSwitchReason_quota": "额度耗尽",
+  "modelRouteSwitchReason_rate": "触发限流",
+  "modelRouteSwitchReason_overloaded": "供应商过载",
+  "modelRouteSwitchReason_auth": "鉴权失败",
+  "modelRouteSwitchReason_model": "模型不可用",
+  "modelRouteSwitchReason_request": "请求被拒绝",
+  "modelRouteSwitchReason_other": "请求失败"
 }

@@ -13,6 +13,8 @@ import {
   MIN_WRITE_AUTOSAVE_DELAY_MS,
   normalizeWriteAgentPresets,
   normalizeWriteInlineCompletionModel,
+  normalizeWritePaperModeSettings,
+  normalizeWritePaperReadingSettings,
   normalizeWriteSelectionAssistSettings,
   resolveWriteInlineCompletionApiKey,
   resolveWriteInlineCompletionBaseUrl,
@@ -20,6 +22,8 @@ import {
   type AppSettingsV1,
   type WriteAgentPresetV1,
   type WriteInlineCompletionSettingsV1,
+  type WritePaperModeSettingsV1,
+  type WritePaperReadingSettingsV1,
   type WriteSelectionAssistSettingsV1,
   type WriteSettingsV1
 } from '@shared/app-settings'
@@ -33,6 +37,8 @@ import {
   writeBrowserStorageItem
 } from '../lib/browser-storage'
 import type { WritePreviewMode, WriteWorkspaceState } from './write-workspace-store-types'
+import { normalizeWriteViewMode } from './write-editor-layout'
+import { writeSurfaceKeySuffix } from './write-surface'
 
 export const WRITE_PREVIEW_MODE_KEY = 'kun.write.preview-mode'
 export const WRITE_ASSISTANT_OPEN_KEY = 'kun.write.assistant-open'
@@ -42,8 +48,7 @@ const DEFAULT_WRITE_ASSISTANT_MODEL = DEFAULT_KUN_MODEL
 
 export function readStoredPreviewMode(): WritePreviewMode {
   const raw = readBrowserStorageItem(WRITE_PREVIEW_MODE_KEY)
-  if (raw === 'split') return 'source'
-  return raw === 'rich' || raw === 'source' || raw === 'live' || raw === 'preview' ? raw : 'rich'
+  return normalizeWriteViewMode(raw)
 }
 
 export function readStoredAssistantOpen(): boolean {
@@ -98,16 +103,9 @@ export function compactWorkspaceRoots(values: string[]): string[] {
   return roots
 }
 
-export function normalizeWriteSettings(settings?: Partial<WriteSettingsV1> | null): {
-  defaultWorkspaceRoot: string
-  activeWorkspaceRoot: string
-  workspaces: string[]
-  autoSaveEnabled: boolean
-  autoSaveDelayMs: number
-  inlineCompletion: WriteInlineCompletionSettingsV1
-  selectionAssist: WriteSelectionAssistSettingsV1
-  agentPresets: WriteAgentPresetV1[]
-} {
+export function normalizeWriteSettings(
+  settings?: Partial<WriteSettingsV1> | null
+): NormalizedWriteWorkspaceSettings {
   const defaultWorkspaceRoot = normalizePath(settings?.defaultWorkspaceRoot || DEFAULT_WRITE_WORKSPACE_ROOT)
   const activeWorkspaceRoot = normalizePath(settings?.activeWorkspaceRoot || defaultWorkspaceRoot)
   const workspaces = compactWorkspaceRoots([
@@ -133,6 +131,9 @@ export function normalizeWriteSettings(settings?: Partial<WriteSettingsV1> | nul
     autoSaveDelayMs: Number.isFinite(autoSaveDelayMs)
       ? Math.max(MIN_WRITE_AUTOSAVE_DELAY_MS, Math.min(MAX_WRITE_AUTOSAVE_DELAY_MS, Math.round(autoSaveDelayMs)))
       : DEFAULT_WRITE_AUTOSAVE_DELAY_MS,
+    // `write.documentEditorV2` (registered in shared normalizeWriteSettings):
+    // off = markdown opens in the plain-text editor during the rollout.
+    documentEditorV2: settings?.documentEditorV2 !== false,
     inlineCompletion: {
       enabled: rawInlineCompletion.enabled !== false,
       retrievalEnabled: rawInlineCompletion.retrievalEnabled !== false,
@@ -167,32 +168,30 @@ export function normalizeWriteSettings(settings?: Partial<WriteSettingsV1> | nul
         : DEFAULT_WRITE_INLINE_LONG_COMPLETION_MAX_TOKENS
     },
     selectionAssist: normalizeWriteSelectionAssistSettings(settings?.selectionAssist),
-    agentPresets: normalizeWriteAgentPresets(settings?.agentPresets)
+    agentPresets: normalizeWriteAgentPresets(settings?.agentPresets),
+    paperReading: normalizeWritePaperReadingSettings(settings?.paperReading),
+    paperMode: normalizeWritePaperModeSettings(settings?.paperMode)
   }
 }
 
-export function withResolvedInlineCompletionSettings(
-  write: {
-    defaultWorkspaceRoot: string
-    activeWorkspaceRoot: string
-    workspaces: string[]
-    autoSaveEnabled: boolean
-    autoSaveDelayMs: number
-    inlineCompletion: WriteInlineCompletionSettingsV1
-    selectionAssist: WriteSelectionAssistSettingsV1
-    agentPresets: WriteAgentPresetV1[]
-  },
-  settings: Pick<AppSettingsV1, 'provider' | 'agents' | 'write'>
-): {
+type NormalizedWriteWorkspaceSettings = {
   defaultWorkspaceRoot: string
   activeWorkspaceRoot: string
   workspaces: string[]
   autoSaveEnabled: boolean
   autoSaveDelayMs: number
+  documentEditorV2: boolean
   inlineCompletion: WriteInlineCompletionSettingsV1
   selectionAssist: WriteSelectionAssistSettingsV1
   agentPresets: WriteAgentPresetV1[]
-} {
+  paperReading: WritePaperReadingSettingsV1
+  paperMode: WritePaperModeSettingsV1
+}
+
+export function withResolvedInlineCompletionSettings(
+  write: NormalizedWriteWorkspaceSettings,
+  settings: Pick<AppSettingsV1, 'provider' | 'agents' | 'write'>
+): NormalizedWriteWorkspaceSettings {
   return {
     ...write,
     inlineCompletion: {
@@ -231,7 +230,7 @@ export function writeRelativeToWorkspace(workspaceRoot: string, filePath: string
 }
 
 export function activeFileStorageKey(workspaceRoot: string): string {
-  return `kun.write.active-file:${normalizePath(workspaceRoot)}`
+  return `kun.write.active-file:${normalizePath(workspaceRoot)}${writeSurfaceKeySuffix()}`
 }
 
 export function rememberActiveFile(workspaceRoot: string, nextPath: string | null): void {

@@ -89,6 +89,14 @@ export const KUN_MEMORY_RECORD_TEMPLATE = '/v1/memory/{id}'
 export function kunMemoryRecordPath(memoryId: string): string {
   return `/v1/memory/${encodeURIComponent(memoryId)}`
 }
+export const KUN_MEMORY_CONFIRM_TEMPLATE = '/v1/memory/{id}/confirm'
+export const KUN_MEMORY_CORRECT_TEMPLATE = '/v1/memory/{id}/correct'
+export function kunMemoryFeedbackActionPath(
+  memoryId: string,
+  action: 'confirm' | 'correct'
+): string {
+  return `${kunMemoryRecordPath(memoryId)}/${action}`
+}
 export const KUN_MEMORY_DISTILLATION_PATH = '/v1/memory/distillation'
 export const KUN_MEMORY_DISTILLATION_TEMPLATE = '/v1/memory/distillation'
 export const KUN_MEMORY_DISTILLATION_DECISION_TEMPLATE =
@@ -272,9 +280,11 @@ export function kunThreadStatePath(threadId: string): string {
 export const KUN_THREAD_TIMELINE_TEMPLATE = '/v1/threads/{id}/timeline'
 export function kunThreadTimelinePath(
   threadId: string,
-  options: { before?: string; limit?: number } = {}
+  options: { before?: string; limit?: number; turnId?: string; itemId?: string } = {}
 ): string {
   const params = new URLSearchParams()
+  if (options.turnId) params.set('turnId', options.turnId)
+  if (options.itemId) params.set('itemId', options.itemId)
   if (options.before) params.set('before', options.before)
   if (options.limit !== undefined) params.set('limit', String(options.limit))
   const query = params.toString()

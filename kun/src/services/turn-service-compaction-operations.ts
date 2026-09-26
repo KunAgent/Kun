@@ -379,6 +379,33 @@ async compact(this: TurnService, input: {
           : {})
       })
       await this['deps'].onCompacted?.(input.threadId)
+      // Window mode: an explicit /compact stays a summary compaction, and the
+      // summary is registered as a 'manual-summary' window boundary so the
+      // next request re-initializes the window budget. The boundary commit is
+      // idempotent per summary item, so replays never double-register.
+      if (
+        result.replacedTokens > 0 &&
+        this['deps'].contextWindowModes?.modeForThread(input.threadId) === 'windows' &&
+        this['deps'].contextWindows
+      ) {
+        const modes = this['deps'].contextWindowModes
+        const previous = modes.windowFor(input.threadId)
+        const windowSeq = (previous?.windowSeq ?? 0) + 1
+        const windowId = this['deps'].ids.next('win')
+        const boundary = await this['deps'].contextWindows.commitWindowCheckpoint({
+          threadId: input.threadId,
+          turnId,
+          windowId,
+          previousWindowId: previous?.windowId ?? null,
+          reason: 'manual-summary',
+          initializationRef: result.summaryItem.id,
+          operationId: `manual_compact_${result.summaryItem.id}`,
+          replacedTokens: result.replacedTokens
+        })
+        if (boundary.status === 'committed' || boundary.status === 'replayed') {
+          modes.setWindow(input.threadId, { windowId, windowSeq })
+        }
+      }
     }
     return {
       threadId: input.threadId,

@@ -11,19 +11,26 @@ import type { TurnItem } from '../../contracts/items.js'
 import { makeUserInputItem } from '../../domain/item.js'
 import type { ApprovalRequest } from '../../domain/approval.js'
 import type { InstructionRuntime } from '../../instructions/instruction-runtime.js'
+import { historyReferenceInstructions } from '../../prompt/history-reference-context.js'
 import {
   DESIGN_MODE_INSTRUCTION,
   SVG_ARTIFACT_ALLOWED_TOOL_NAMES,
   SVG_ARTIFACT_MODE_INSTRUCTION
 } from '../../loop/design-mode.js'
+import { applyRoomToolPolicy, mergeRoomDeniedIds } from '../../loop/room-turn-policy.js'
+import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
 import {
   PLAN_MODE_INSTRUCTION,
   isStalePlanContext,
-  memoryInstructions,
   todoContinuationInstruction
 } from '../../loop/agent-loop.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
-import { DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT } from '../../memory/memory-retrieval.js'
+import { resolveMemoryTurnContext } from '../../memory/memory-turn-context.js'
+import { memoryInjectionMetadata } from '../../loop/model-step-preparation-memory.js'
+import {
+  recordRetrieved,
+  type MemoryRetrievalFeedbackTarget
+} from '../../memory/memory-retrieval-feedback.js'
 import type { ApprovalGate } from '../../ports/approval-gate.js'
 import type { ApprovalReviewPort } from '../../ports/approval-review.js'
 import type {
@@ -81,6 +88,7 @@ export interface CursorSdkRuntimeFactoryDeps extends Omit<
   skillRuntime?: SkillRuntime
   instructionRuntime?: InstructionRuntime
   memoryStore?: MemoryStore
+  memoryFeedback?: MemoryRetrievalFeedbackTarget
   userInputGate?: UserInputGate
   approvalGate?: ApprovalGate
   approvalReview?: ApprovalReviewPort
@@ -93,6 +101,7 @@ export interface CursorSdkRuntimeFactoryDeps extends Omit<
     | 'allowedToolNames'
     | 'allowedSkillIds'
     | 'allowedReadPaths'
+    | 'allowHostReads'
     | 'allowedWritePaths'
     | 'allowedArtifactIds'
     | 'pptWorkflowScope'
@@ -114,6 +123,7 @@ export function createCursorSdkRuntime(
     skillRuntime,
     instructionRuntime,
     memoryStore,
+    memoryFeedback,
     userInputGate,
     approvalGate,
     approvalReview,
@@ -244,8 +254,9 @@ export function createCursorSdkRuntime(
     intent: string,
     signal: AbortSignal
   ): ToolHostContext['awaitApproval'] => async (approval: ApprovalRequest) => {
-    if (approvalPolicy === 'auto' && sandboxMode === 'danger-full-access') return 'allow'
-    if (approvalReviewer === 'agent') {
+    const requiresUserDecision = approval.action?.requiresUserDecision === true
+    if (!requiresUserDecision && approvalPolicy === 'auto' && sandboxMode === 'danger-full-access') return 'allow'
+    if (approvalReviewer === 'agent' && !requiresUserDecision) {
       if (!approvalReview) {
         return {
           decision: 'deny',
@@ -318,7 +329,7 @@ export function createCursorSdkRuntime(
       input.turn.id,
       input.signal
     )
-    return {
+    const context: ToolHostContext = {
       threadId: input.thread.id,
       turnId: input.turn.id,
       workspace: input.thread.workspace,
@@ -326,6 +337,7 @@ export function createCursorSdkRuntime(
       approvalReviewer: input.approvalReviewer,
       sandboxMode: input.sandboxMode,
       actingModelRoute: input.actingModelRoute,
+      clientSurface: resolveTurnClientSurface(input.turn),
       approvalIntent: input.turn.prompt,
       abortSignal: input.signal,
       ...toolContextBoundary,
@@ -333,6 +345,7 @@ export function createCursorSdkRuntime(
       ...(plan.planMode ? { threadMode: 'plan' as const } : {}),
       ...(plan.guiPlan ? { guiPlan: plan.guiPlan } : {}),
       ...(input.turn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+      ...(input.turn.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
       ...(input.turn.guiDesignMode ? { guiDesignMode: true } : {}),
       ...(input.turn.guiDesignArtifact
         ? { guiDesignArtifact: input.turn.guiDesignArtifact }
@@ -354,6 +367,7 @@ export function createCursorSdkRuntime(
             input.signal
           )
     }
+    return input.thread.roomContext ? applyRoomToolPolicy(context, input.thread) : context
   }
 
   const loadKunTurnContext: NonNullable<
@@ -377,27 +391,29 @@ export function createCursorSdkRuntime(
           defaultSandboxMode ??
           DEFAULT_SANDBOX_MODE
 
-      const skillResolution = skillRuntime
+      const roomSkillsDisabled = thread.roomContext?.skillsEnabled === false
+      const blockedSkillIds = mergeRoomDeniedIds(
+        toolContextBoundary?.blockedSkillIds,
+        thread.roomContext?.blockedSkillIds
+      )
+      const allowedSkillIds = roomSkillsDisabled ? [] : toolContextBoundary?.allowedSkillIds
+      const skillResolution = !roomSkillsDisabled && skillRuntime
         ? await skillRuntime.resolveTurn({
             prompt: userText,
             workspace: thread.workspace,
             threadId,
             turnId,
-            ...(toolContextBoundary?.allowedSkillIds
-              ? { allowedSkillIds: toolContextBoundary.allowedSkillIds }
-              : {}),
-            ...(toolContextBoundary?.blockedSkillIds
-              ? { blockedSkillIds: toolContextBoundary.blockedSkillIds }
-              : {})
+            ...(allowedSkillIds ? { allowedSkillIds } : {}),
+            ...(blockedSkillIds.length ? { blockedSkillIds } : {})
           })
         : undefined
       const activeSkillIds = skillResolution?.activeSkillIds ?? []
       activeSkillIdsByTurn.set(turnKey(threadId, turnId), activeSkillIds)
-      const availableSkillIds = typeof skillRuntime?.availableSkillIdsForWorkspace === 'function'
+      const availableSkillIds = !roomSkillsDisabled && typeof skillRuntime?.availableSkillIdsForWorkspace === 'function'
         ? await skillRuntime.availableSkillIdsForWorkspace(
             thread.workspace,
-            toolContextBoundary?.blockedSkillIds,
-            toolContextBoundary?.allowedSkillIds
+            blockedSkillIds,
+            allowedSkillIds
           )
         : activeSkillIds
       const listingSkillIds = [...new Set([...activeSkillIds, ...availableSkillIds])]
@@ -449,15 +465,21 @@ export function createCursorSdkRuntime(
           instructionInjectionBytes: instructionResolution.injectedBytes
         })
       }
-      let memoryBlocks: string[] = []
-      if (memoryStore && userText.trim()) {
-        const memories = await memoryStore.retrieve({
-          query: userText,
-          workspace: thread.workspace,
-          limit: DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT
-        })
-        memoryStore.setLastInjected(memories.map((memory) => memory.id))
-        memoryBlocks = memoryInstructions(memories)
+      // Directives are injected on every turn — including empty-prompt
+      // continuations — while reference memories stay relevance-gated. Rooms
+      // keep the memory-free boundary.
+      const memoryContext = await resolveMemoryTurnContext(
+        thread.roomContext ? undefined : memoryStore,
+        { query: userText, workspace: thread.workspace }
+      )
+      const directiveBlocks = memoryContext.directiveBlocks
+      const memoryBlocks = memoryContext.referenceBlocks
+      const memoryIds = memoryContext.memories.map((memory) => memory.id)
+      if (memoryContext.memories.length > 0 || memoryContext.directives.length > 0) {
+        await deps.turns.updateTurnMetadata(threadId, turnId, memoryInjectionMetadata({
+          memories: memoryContext.memories,
+          directives: memoryContext.directives
+        }))
       }
       const plan = resolveCursorPlanContext(thread, turnId)
       if (!plan.planMode && thread.goal?.status === 'active') {
@@ -468,6 +490,7 @@ export function createCursorSdkRuntime(
       }
       const todoInstruction = plan.planMode ? null : todoContinuationInstruction(thread.todos)
       const instructionBlocks = [
+        ...historyReferenceInstructions(thread),
         ...(graphPolicy ? [graphPolicy.instruction] : []),
         ...(plan.planMode ? [PLAN_MODE_INSTRUCTION] : []),
         ...(turn.guiDesignArtifact?.kind === 'svg'
@@ -477,6 +500,7 @@ export function createCursorSdkRuntime(
             : []),
         ...(instructionResolution?.instruction ? [instructionResolution.instruction] : []),
         ...(todoInstruction ? [todoInstruction] : []),
+        ...directiveBlocks,
         ...memoryBlocks,
         ...(skillResolution?.catalogInstruction ? [skillResolution.catalogInstruction] : []),
         ...(skillResolution?.instructions ?? []),
@@ -576,6 +600,13 @@ export function createCursorSdkRuntime(
           })
         : {}
 
+      void recordRetrieved({
+        feedback: memoryFeedback,
+        selectedIds: memoryIds,
+        threadId,
+        turnId,
+        occurredAt: turn.createdAt
+      })
       return {
         instructionBlocks,
         activeSkillIds: [...(skillResolution?.activeSkillIds ?? activeSkillIds)],

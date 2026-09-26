@@ -27,7 +27,7 @@ export async function compactUsageEventsIfLarge(options: {
     retentionDays: options.retentionDays,
     maxRecordBytes: options.maxRecordBytes,
     withSourceRead: options.withRead,
-    commitReplacement: (replace) => options.withReplacement(() => options.withWrite(async () => {
+    commitReplacement: (replace) => options.withWrite(() => options.withReplacement(async () => {
       const currentInfo = await stat(options.path).catch(() => null)
       if (
         options.readRevision() !== revisionBefore ||

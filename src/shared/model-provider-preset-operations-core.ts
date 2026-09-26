@@ -189,11 +189,16 @@ export function resolveModelProviderPresetSource(
     : null
 }
 
-export function isMultiAccountProviderPreset(
+/** All stored profiles that belong to the same preset/mode account family. */
+export function modelProviderPresetFamilyProviders<T extends Pick<ModelProviderProfileV1, 'id' | 'name' | 'presetSource'>>(
   preset: ModelProviderPreset,
-  mode: ModelProviderPresetMode
-): boolean {
-  return mode === 'token-plan' || preset.category === 'subscription'
+  mode: ModelProviderPresetMode,
+  providers: readonly T[]
+): T[] {
+  return providers.filter((provider) => {
+    const source = resolveModelProviderPresetSource(provider)
+    return source?.preset.id === preset.id && source.mode === mode
+  })
 }
 
 export function modelProviderPresetAccountCount(
@@ -201,10 +206,7 @@ export function modelProviderPresetAccountCount(
   mode: ModelProviderPresetMode,
   providers: readonly Pick<ModelProviderProfileV1, 'id' | 'name' | 'presetSource'>[]
 ): number {
-  return providers.filter((provider) => {
-    const source = resolveModelProviderPresetSource(provider)
-    return source?.preset.id === preset.id && source.mode === mode
-  }).length
+  return modelProviderPresetFamilyProviders(preset, mode, providers).length
 }
 
 /** Builds the next independent account profile for a preset/mode family. */
@@ -217,10 +219,7 @@ export function modelProviderPresetAccountProfile(
     ? modelProviderTokenPlanProfile(preset)
     : modelProviderPresetProfile(preset)
   if (!base) return null
-  const family = providers.filter((provider) => {
-    const source = resolveModelProviderPresetSource(provider)
-    return source?.preset.id === preset.id && source.mode === mode
-  })
+  const family = modelProviderPresetFamilyProviders(preset, mode, providers)
   const idPattern = new RegExp(`^${escapeRegExp(base.id)}-(\\d+)$`)
   const namePattern = new RegExp(`^${escapeRegExp(base.name)} (\\d+)$`, 'i')
   let highestOrdinal = 0

@@ -158,6 +158,27 @@ describe('resolveWorkspacePath sandbox mode', () => {
     expect(resolved.absolutePath).toBe(target)
   })
 
+  it('allows an absolute path outside the workspace when allowHostReads is set', async () => {
+    const target = join(outside, 'sys.txt')
+    await writeFile(target, 'x')
+    const resolved = await resolveWorkspacePath(target, {
+      ...context(workspace),
+      sandboxMode: 'read-only',
+      allowHostReads: true
+    })
+    expect(resolved.absolutePath).toBe(target)
+  })
+
+  it('still enforces delegated read scopes when allowHostReads is set with a scope', async () => {
+    await mkdir(join(workspace, 'src'), { recursive: true })
+    await expect(resolveWorkspacePath(join(outside, 'sys.txt'), {
+      ...context(workspace),
+      sandboxMode: 'read-only',
+      allowHostReads: true,
+      allowedReadPaths: ['src']
+    })).rejects.toThrow(/outside the delegated child read scopes/)
+  })
+
   it('enforces delegated read scopes even under danger-full-access', async () => {
     const scoped = {
       ...fullAccessContext(workspace),

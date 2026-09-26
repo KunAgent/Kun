@@ -153,6 +153,12 @@ export async function shutdownServiceManagerAndWait(manager: ServiceManagerConne
 export async function shutdownActiveServiceManagerForUpdate(): Promise<void> {
   const manager = mainState.activeServiceManager
   if (!manager) return
+  if (manager.discovery.appOwner) {
+    const { desktopProcessStack } = await import('./runtime/desktop-process-stack')
+    await desktopProcessStack.stopManager(Date.now() + 10_000)
+    if (mainState.activeServiceManager === manager) mainState.activeServiceManager = null
+    return
+  }
   await drainKunOwnersForHandoff({
     reason: 'in-app-update',
     dataDirs: [manager.discovery.dataDir],

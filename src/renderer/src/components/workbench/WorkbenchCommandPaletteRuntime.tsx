@@ -1,11 +1,13 @@
 import type { ReactElement } from 'react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { resolveKeyboardShortcutBindings } from '@shared/keyboard-shortcuts'
 import type { AppRoute, SettingsRouteSection } from '../../store/chat-store-types'
 import type { ExtensionRightRailViewEntry } from '../../extensions/contribution-registry'
 import { useKeyboardShortcutSettings } from '../../lib/keyboard-shortcut-settings'
+import { openChatFind } from '../chat/chat-find'
 import { CommandPaletteOverlay } from '../../palette/CommandPaletteOverlay'
+import { KeyboardShortcutsModal } from './KeyboardShortcutsModal'
 import type { PaletteSourcesInput } from '../../palette/palette-sources'
 import { useCommandPaletteStore } from '../../palette/palette-store'
 import { useWorkbenchCommandPalette } from '../../palette/useWorkbenchCommandPalette'
@@ -65,9 +67,24 @@ export function WorkbenchCommandPaletteRuntime({
     [keyboardShortcuts, shortcutPlatform]
   )
   const openPalette = useCommandPaletteStore((state) => state.openPalette)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+
+  // Surface-specific commands attach here so both the keydown path and the
+  // palette's 'shortcut-command' rows behave identically.
+  const effectiveShortcutContext: WorkbenchShortcutCommandContext = useMemo(
+    () => ({
+      ...shortcutContext,
+      openFindInChat:
+        sources.route === 'chat' && sources.activeThreadId
+          ? () => openChatFind(sources.activeThreadId!)
+          : undefined,
+      openKeyboardShortcuts: () => setShortcutsOpen(true)
+    }),
+    [shortcutContext, sources.route, sources.activeThreadId]
+  )
 
   useWorkbenchKeyboardShortcuts({
-    ...shortcutContext,
+    ...effectiveShortcutContext,
     slashMenuOpen: getSlashQuery(input) !== null,
     openCommandPalette: openPalette,
     keyboardShortcutBindings: shortcutBindings
@@ -85,7 +102,7 @@ export function WorkbenchCommandPaletteRuntime({
       thread: (threadId) => { void actions.openThread(threadId) },
       workspace: (root) => { void actions.selectWorkspaceRoot(root) },
       'shortcut-command': (commandId) => {
-        runWorkbenchShortcutCommand(commandId, shortcutContext)
+        runWorkbenchShortcutCommand(commandId, effectiveShortcutContext)
       },
       'slash-command': (_commandId, insertText) => {
         const draft = input.trim()
@@ -122,19 +139,24 @@ export function WorkbenchCommandPaletteRuntime({
     }
   })
 
-  return commandPalette.open ? (
-    <CommandPaletteOverlay
-      query={commandPalette.query}
-      matchTerm={commandPalette.matchTerm}
-      scope={commandPalette.scope}
-      scopeLabel={commandPalette.scopeLabel}
-      groups={commandPalette.groups}
-      results={commandPalette.results}
-      contentSearchPending={commandPalette.contentSearchPending}
-      sourceLabel={commandPalette.sourceLabelFor}
-      onQueryChange={commandPalette.setQuery}
-      onActivate={commandPalette.activate}
-      onClose={commandPalette.close}
-    />
-  ) : <></>
+  return (
+    <>
+      {commandPalette.open ? (
+        <CommandPaletteOverlay
+          query={commandPalette.query}
+          matchTerm={commandPalette.matchTerm}
+          scope={commandPalette.scope}
+          scopeLabel={commandPalette.scopeLabel}
+          groups={commandPalette.groups}
+          results={commandPalette.results}
+          contentSearchPending={commandPalette.contentSearchPending}
+          sourceLabel={commandPalette.sourceLabelFor}
+          onQueryChange={commandPalette.setQuery}
+          onActivate={commandPalette.activate}
+          onClose={commandPalette.close}
+        />
+      ) : null}
+      <KeyboardShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+    </>
+  )
 }

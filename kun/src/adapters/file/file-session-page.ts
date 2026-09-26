@@ -2,6 +2,7 @@ import { open, type FileHandle } from 'node:fs/promises'
 import type { TurnItem } from '../../contracts/items.js'
 import type { ItemHistoryPage, ItemHistoryPageOptions } from '../../ports/session-store.js'
 import { buildPublicItemHistoryPage } from '../../services/item-history-page.js'
+import { buildItemContentPage } from '../../services/item-history-content.js'
 import { readItemPageFromJsonl } from './file-session-jsonl.js'
 import type { JsonlFileAccessCoordinator } from './jsonl-file-access.js'
 import type { FileSessionItemIndex } from './file-session-item-index.js'
@@ -27,9 +28,9 @@ export async function loadIndexedLiveItemPageFromStore(input: Parameters<
     statePath: input.indexStatePath,
     options: input.options
   }))
-  if (indexed) {
+  if (indexed && !input.options.turnId) {
     if ((await statSize(input.path)) >= input.compactionMinBytes) input.scheduleCompaction()
-  } else {
+  } else if (!indexed && !input.options.turnId) {
     input.itemIndex.scheduleRebuild({
       sourcePath: input.path,
       indexPath: input.indexPath,
@@ -42,6 +43,10 @@ export async function loadIndexedLiveItemPageFromStore(input: Parameters<
   const page = indexed ?? await loadItemPageFromStore(input)
   if (input.options.before) return page
   const live = await readLiveItems(input.liveItemsPath)
+  if (input.options.itemId) {
+    const match = live.find((entry) => entry.item.id === input.options.itemId && entry.item.turnId === input.options.turnId)
+    return match ? buildItemContentPage(match.item, input.options) : page
+  }
   if (live.length === 0) return page
   const overlaid = buildPublicItemHistoryPage(overlayLiveItems(page.items, live), input.options)
   return {
@@ -65,9 +70,10 @@ export async function loadItemPageFromStore(input: {
   scheduleCompaction: () => void
   compactionMinBytes: number
 }): Promise<ItemHistoryPage> {
-  const release = await input.fileAccess.acquireRead(input.path)
+  let release: (() => void) | undefined
   try {
     const source = await input.withThreadWrite<PageSource | null>(async () => {
+      release = await input.fileAccess.acquireRead(input.path)
       const cached = input.cachedItems()
       if (cached) {
         input.touchCache(cached)
@@ -90,10 +96,10 @@ export async function loadItemPageFromStore(input: {
       return { items: [], hasMore: false, itemBytes: 0 }
     }
     const page = await readItemPageFromJsonl(source.handle, source.size, input.options)
-    if (source.size >= input.compactionMinBytes) input.scheduleCompaction()
+    if (!input.options.turnId && source.size >= input.compactionMinBytes) input.scheduleCompaction()
     return page
   } finally {
-    release()
+    release?.()
   }
 }
 

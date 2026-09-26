@@ -49,6 +49,7 @@ function normalizeLoadedItem(item: TurnItem, index: number): TurnItem | null {
     case 'approval':
     case 'user_input':
     case 'compaction':
+    case 'context_window':
     case 'review':
     case 'error':
       break

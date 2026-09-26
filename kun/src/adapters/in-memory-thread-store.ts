@@ -24,8 +24,17 @@ export class InMemoryThreadStore implements ThreadStore {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 
+  async hasHistoryReference(referenceId: string): Promise<boolean> {
+    return [...this.threads.values()].some((thread) => thread.historyRefId === referenceId)
+  }
+
   async get(threadId: string): Promise<ThreadRecord | null> {
     return this.threads.get(threadId) ?? null
+  }
+
+  async getMetadata(threadId: string): Promise<ThreadRecord | null> {
+    const thread = this.threads.get(threadId)
+    return thread ? { ...thread, turns: thread.turns.map((turn) => ({ ...turn, items: [] })) } : null
   }
 
   async upsert(thread: ThreadRecord): Promise<ThreadRecord> {

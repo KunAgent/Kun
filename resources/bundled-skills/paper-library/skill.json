@@ -1,0 +1,24 @@
+{
+  "id": "paper-library",
+  "name": "Paper library",
+  "version": "1.0.0",
+  "description": "Work across a Kun paper library (papers/<group>/<id>/ units): find papers, compare several papers, draft related-work sections with [@citeKey] citations, and write notes under notes/.",
+  "entry": "SKILL.md",
+  "triggers": {
+    "commands": [
+      "/paper-library"
+    ],
+    "promptPatterns": [
+      "论文库",
+      "对比阅读",
+      "相关工作",
+      "related work",
+      "文献综述",
+      "paper-library"
+    ],
+    "fileTypes": []
+  },
+  "allowedTools": [],
+  "assets": [],
+  "priority": 20
+}

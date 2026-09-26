@@ -6,7 +6,7 @@ import {
   defaultKunRuntimeSettings,
   defaultModelProviderSettings,
   defaultScheduleSettings,
-  defaultTerminalSettings,
+  defaultTerminalSettings, defaultRemoteAccessSettings,
   defaultWorkflowSettings,
   defaultWriteSettings,
   type AppSettingsV1,
@@ -46,6 +46,7 @@ function settings(): AppSettingsV1 {
     workflow: defaultWorkflowSettings(),
     design: defaultDesignSettings(),
     terminal: defaultTerminalSettings(),
+    remote: defaultRemoteAccessSettings(),
     guiUpdate: { channel: 'stable' },
     codePromptPrefix: '',
     chatWelcomeMessage: '',
@@ -437,7 +438,7 @@ describe('runtimeSettingsApplyMode', () => {
       agents: { kun: { ...previous.agents.kun, port: previous.agents.kun.port + 1 } },
       provider: {
         ...previous.provider,
-        localGateway: { enabled: true, name: 'Team Relay' },
+        localGateway: { enabled: true, name: 'Team Relay', exposeProviderModels: false },
         routePools: [{
           id: 'durable-route', name: 'Durable route', modelId: 'durable-auto', enabled: true, strategy: 'priority' as const,
           targets: [{ id: 'target', providerId: targetProvider.id, modelId: targetProvider.models[0], enabled: true, weight: 1 }],

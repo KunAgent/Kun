@@ -61,7 +61,7 @@ import { modelCapabilitiesForModel } from './model-context-profile.js'
 import type { ModelRoundEngine } from './model-round-engine.js'
 import { modelClientDiagnostics } from './model-client-diagnostics.js'
 import { recoverModelContextOverflow } from './model-context-overflow-recovery.js'
-import { composeModelRequest, effectiveOutputBudgetTokens, ordinaryOutputReserveTokens } from './model-request-composer.js'
+import { effectiveOutputBudgetTokens, ordinaryOutputReserveTokens } from './model-request-composer.js'
 import { estimateModelRequestInputTokenBreakdown } from './model-request-estimator.js'
 import type { ModelRoutingService } from './model-routing-service.js'
 import {
@@ -74,6 +74,10 @@ import {
   buildRuntimeContextInstruction,
   shouldInjectInitialRuntimeContext
 } from './runtime-context.js'
+import {
+  collectWindowContextInstructions,
+  composeWindowPreflightEstimates
+} from './context-window-instructions.js'
 import {
   GRAPH_CREATE_RUN_TOOL_NAME,
   type RoundOutcomeCoordinator
@@ -111,7 +115,6 @@ import { isPoolAliasActingRoute, sameActingModelRoute } from './model-step-prepa
 import { composeForwardedModelRequest } from './forwarded-model-request.js'
 export type { ModelStepServiceDeps } from './model-step-service-types.js'
 export { buildExtensionProfileInstruction } from './model-step-preparation-helpers.js'
-
 
 export class ModelStepService extends ModelStepPreparationService {
   private readonly workspaceCheckpointGates = new Map<string, Promise<void>>()
@@ -169,7 +172,7 @@ export class ModelStepService extends ModelStepPreparationService {
       contextInstructions,
       redactedRequestValues,
       skillContextInstructions,
-      modeInstruction
+      modeInstruction, recordMemoryRetrieved
     } = preparation
     const clientDiagnostics = modelClientDiagnostics(this.deps.model, providerId)
     const threadProfileInstruction = buildThreadProfileInstruction(thread.systemPrompt)
@@ -183,33 +186,20 @@ export class ModelStepService extends ModelStepPreparationService {
       ...(threadProfileInstruction ? { threadProfileInstruction } : {}),
       tools: requestToolSpecs
     })
-    // Automatic compaction must see every non-history part of the request that
-    // will actually be sent. Building the same request with empty history gives
-    // us an authoritative overhead estimate for system/thread prompts, dynamic
-    // context, skills, tools, and attachments without mixing in cumulative
-    // provider usage.
-    const requestOverheadTokens = composeModelRequest({
-      threadId,
-      turnId,
-      model,
-      ...(providerId ? { providerId } : {}),
-      ...(accountId ? { accountId } : {}),
-      ...(modelRoute.reasoningEffort ? { reasoningEffort: modelRoute.reasoningEffort } : {}),
-      ...(serviceTier ? { serviceTier } : {}),
+    // Compaction preflight needs the non-history floor AND the full upcoming
+    // request estimate so window-mode budget thresholds see real usage.
+    const { requestOverheadTokens, requestInputTokens } = composeWindowPreflightEstimates({
+      threadId, turnId, model, providerId, accountId,
+      reasoningEffort: modelRoute.reasoningEffort, serviceTier,
       promptCachePartition: promptCachePartition.hash,
       immutablePrefix: this.deps.prefix,
-      ...(thread.systemPrompt !== undefined ? { threadSystemPrompt: thread.systemPrompt } : {}),
-      ...(modeInstruction ? { modeInstruction } : {}),
-      contextInstructions,
-      redactedRequestValues,
-      history: [],
-      historyRoutesByTurnId,
-      attachments,
-      tools: requestToolSpecs,
-      ...(hardRequiredToolName ? { requiredToolName: hardRequiredToolName } : {}),
-      ...(this.deps.tokenEconomy ? { tokenEconomy: this.deps.tokenEconomy } : {}),
-      signal
-    }).sentInputTokens
+      threadSystemPrompt: thread.systemPrompt,
+      modeInstruction,
+      contextInstructions, redactedRequestValues, historyRoutesByTurnId,
+      attachments, tools: requestToolSpecs, requiredToolName: hardRequiredToolName,
+      tokenEconomy: this.deps.tokenEconomy, signal,
+      history: items
+    })
     // The compaction reservation and the forwarded `max_tokens` differ: the
     // reservation stays bounded (huge capabilities must not force compaction
     // every request), while the forwarded value honors the configured limit.
@@ -263,11 +253,16 @@ export class ModelStepService extends ModelStepPreparationService {
       clientSurface: prepared.clientSurface,
       toolSpecs: requestToolSpecs,
       requestOverheadTokens,
+      requestInputTokens,
       outputBudgetTokens,
       requestHardCapTokens,
       reserveModelRequest: () => this.deps.budgetGate.reserveAdditionalModelRequest(threadId, turnId)
     })
     if (signal.aborted) return 'aborted'
+    // Window-mode context that must ride the NEXT model request: the durable
+    // per-window initialization (persisted after transitions) plus one
+    // transient budget notice. Both stay out of the immutable system prefix.
+    let windowContextInstructions = collectWindowContextInstructions(firstCompaction.history, firstCompaction.notice)
     const postCompactionBudgetGate = await this.deps.budgetGate.recheckReservedMainModelRequest(
       threadId,
       turnId
@@ -308,7 +303,7 @@ export class ModelStepService extends ModelStepPreparationService {
       reasoningEffort: modelRoute.reasoningEffort,
       serviceTier,
       modeInstruction,
-      contextInstructions,
+      contextInstructions: [...contextInstructions, ...windowContextInstructions],
       redactedRequestValues,
       historyRoutesByTurnId,
       requestToolSpecs,
@@ -359,6 +354,9 @@ export class ModelStepService extends ModelStepPreparationService {
       })
       if (signal.aborted) return 'aborted'
       history = await projectCompactedGoalHistory(fallbackCompaction.history)
+      // The fallback may have transitioned to a NEW window: re-collect from
+      // the REBUILT history so the retried request never carries stale init.
+      windowContextInstructions = collectWindowContextInstructions(history, fallbackCompaction.notice ?? firstCompaction.notice)
       fallbackCompactionApplied = fallbackCompaction.compacted
       replacedTokens += fallbackCompaction.replacedTokens
       composedRequest = await composeForwardedModelRequest({
@@ -373,7 +371,7 @@ export class ModelStepService extends ModelStepPreparationService {
         reasoningEffort: modelRoute.reasoningEffort,
         serviceTier,
         modeInstruction,
-        contextInstructions,
+        contextInstructions: [...contextInstructions, ...windowContextInstructions],
         redactedRequestValues,
         historyRoutesByTurnId,
         requestToolSpecs,
@@ -525,6 +523,7 @@ export class ModelStepService extends ModelStepPreparationService {
       turnId,
       signal,
       request,
+      onModelDispatched: recordMemoryRetrieved,
       maxToolCallsPerStep,
       // A retrieval model can occasionally emit one extra parallel call.
       // Preserve the bounded accepted batch instead of failing the whole child.

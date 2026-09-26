@@ -1,5 +1,6 @@
 import type {
   ModelProviderModelProfileV1,
+  ModelProviderPresetMode,
   ModelProviderProfileV1
 } from '@shared/app-settings'
 import {
@@ -8,8 +9,10 @@ import {
 } from '@shared/app-settings'
 import { defaultModelProviderSettings } from '@shared/app-settings-provider-core'
 import type {
-  ModelsDevCatalogResult
+  ModelsDevCatalogResult,
+  StagedProviderImportLink
 } from '@shared/kun-gui-api'
+import type { ModelProviderPreset } from '@shared/model-provider-presets'
 import {
   useEffect,
   useMemo,
@@ -22,6 +25,7 @@ import {
   providerRetrySettings
 } from './settings-section-providers-controls'
 import {
+  kunProviderSelectionPatch,
   type ProbeState,
   type ProviderCapability, type ProviderTaskTab, type ProviderWorkspaceMode,
   type SubscriptionRegionFilter
@@ -42,6 +46,7 @@ import { useProviderSharedActions } from './use-provider-shared-actions'
 import { useProviderSharedSynchronization } from './use-provider-shared-synchronization'
 import { settingsSaveIssueMessage } from './settings-save-error'
 import { useProviderMutationFlushOperations } from './provider-mutation-flush'
+import { discoverProviderModels } from './provider-model-discovery'
 
 export { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
 export {
@@ -207,6 +212,33 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
       }
     | null
   >(null)
+  const [externalImportOpen, setExternalImportOpen] = useState(false)
+  const [quickAddEntry, setQuickAddEntry] = useState<{
+    preset: ModelProviderPreset
+    mode: ModelProviderPresetMode
+  } | null>(null)
+  const [stagedImportLink, setStagedImportLink] = useState<StagedProviderImportLink | null>(null)
+  const [importLinkInput, setImportLinkInput] = useState('')
+  const [importLinkError, setImportLinkError] = useState('')
+  useEffect(() => {
+    if (typeof window.kunGui.onProviderImportLink !== 'function') return
+    return window.kunGui.onProviderImportLink((staged) => {
+      setStagedImportLink(staged)
+      setImportLinkError('')
+    })
+  }, [])
+  const stageImportLinkInput = async (): Promise<void> => {
+    const link = importLinkInput.trim()
+    if (!link) return
+    setImportLinkError('')
+    const result = await window.kunGui.stageProviderImportLink({ link })
+    if (!result.ok) {
+      setImportLinkError(result.message || t('modelProviderPasteLinkInvalid'))
+      return
+    }
+    setStagedImportLink(result.staged)
+    setImportLinkInput('')
+  }
   const cursorMetadataRepairAttempts = useRef(new Set<string>())
   // 新增供应商先停留在本地草稿,点「添加」才写入设置,避免半配置状态被持久化。
   const [draftProvider, setDraftProvider] = useState<ModelProviderProfileV1 | null>(null)
@@ -317,8 +349,8 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     activeProviderIdRef, sharedConnectionFor, updateModelProviders, stageSharedProviderCatalog,
     stageSharedProviderCredential })
 
-  const { updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addDefaultModelProvider,
-    addPresetModelProvider, removeModelProvider, deletingProviderId, fetchModelsDevCatalogFor, openModelImport
+  const { updateModelProviderId, commitProviderDraft, commitProviderProfile, cancelProviderDraft, addModelProvider, addDefaultModelProvider,
+    addPresetModelProvider, refreshPresetProvider, removeModelProvider, deletingProviderId, fetchModelsDevCatalogFor, openModelImport
   } = useProviderLifecycleActions({ t, form, kun, provider, modelProviders, setSharedConnections,
     setSharedConnectionsError, pendingSharedProviderDeletions, pendingSharedProviderNames,
     pendingSharedProviderCatalogs, pendingSharedProviderCredentials, catalogMutationTimers,
@@ -333,12 +365,47 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     setCursorAccounts, sharedConnectionFor, patchProviderProfile, fetchModelsDevCatalogFor,
     openModelImport, flushSharedProviderCatalog, providerProxy })
 
-  const { activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, freeProviders, planProviders, apiProviders, grouped, renderProviderButton, freeAddEntries, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider } = buildProvidersViewModel({ t, showApiKey, modelProviders,
+  // Quick-add commits the profile first, then discovers models and only then
+  // writes the Kun selection — a provider with no discovered models must not
+  // hijack the current provider/model pair (plan B3). The providers list is
+  // rebuilt from this closure because the commit's settings re-render may not
+  // have flushed yet; discovery.mergedProvider carries the imported models.
+  const submitQuickAdd = async (profile: ModelProviderProfileV1): Promise<void> => {
+    await commitProviderProfile(profile)
+    const discovery = await discoverProviderModels(profile, {
+      t,
+      providerProxy,
+      sharedConnectionFor,
+      fetchModelsDevCatalogFor,
+      importPickedModels,
+      setProbeStates
+    })
+    if (discovery.firstChatModel && discovery.mergedProvider) {
+      const mergedProvider = { ...discovery.mergedProvider, apiKey: '' }
+      const nextProviders = modelProviders.some((item) => item.id === profile.id)
+        ? modelProviders.map((item) => item.id === profile.id ? mergedProvider : item)
+        : [...modelProviders, mergedProvider]
+      updateModelProviders(
+        nextProviders,
+        kunProviderSelectionPatch({
+          providerId: profile.id,
+          model: discovery.firstChatModel
+        })
+      )
+    }
+  }
+
+  const { activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, freeProviders, planProviders, apiProviders, grouped, renderProviderButton, freeAddEntries, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider } = buildProvidersViewModel({ t, form, showApiKey, modelProviders,
     sharedConnections, revealedCredential, credentialRevealPendingProviderId, setSelectedProviderId,
     addProviderQuery, subscriptionRegion, providerListQuery, probeStates, cursorAccounts,
     pendingImport, draftProvider, displayProviders, activeProvider, sharedConnectionFor,
     hasConfiguredCredential, activeKunProviderId, closeAddProviderDialog, addPresetModelProvider,
-    updateProviderProxy, updateModelProvider, setGlobalNetworkOpen, providerProxy, runProbe })
+    refreshPresetProvider,
+    updateProviderProxy, updateModelProvider, setGlobalNetworkOpen, providerProxy, runProbe,
+    openQuickAdd: (entry: { preset: ModelProviderPreset; mode: ModelProviderPresetMode }) => {
+      closeAddProviderDialog()
+      setQuickAddEntry(entry)
+    } })
 
   const openSettingsConfigFile = async (): Promise<void> => {
     setSettingsConfigOpenError('')
@@ -346,6 +413,8 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     if (!result.ok) setSettingsConfigOpenError(result.message ?? t('modelProviderConfigOpenFailed'))
   }
 
-  const view = { t, kun, update, showApiKey, selectControlClass, saveStatus, saveError: providerSaveError, saveIssue, retrySave, zh, provider, sharedConnections, sharedConnectionsError, settingsConfigOpenError, openSettingsConfigFile, credentialRevealError, setSelectedProviderId, addMenuOpen, addProviderQuery, setAddProviderQuery, subscriptionRegion, setSubscriptionRegion, providerListQuery, setProviderListQuery, activeTab, setActiveTab, workspaceMode, setWorkspaceMode, globalNetworkOpen, setGlobalNetworkOpen, expandedCapabilities, addProviderButtonRef, addProviderDialogRef, pendingImport, setPendingImport, displayProviders, activeProvider, activeRetry, isDraftActive, canEditActiveProviderId, activeKunProviderId, providerProxy, selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderSpeech, removeModelProviderSpeech, updateModelProviderTextToSpeech, removeModelProviderTextToSpeech, updateModelProviderMusic, removeModelProviderMusic, updateModelProviderVideo, removeModelProviderVideo, updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addDefaultModelProvider, removeModelProvider, deletingProviderId, runProbe, importPickedModels, activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, freeProviders, planProviders, apiProviders, grouped, renderProviderButton, freeAddEntries, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider }
+  const view = { t, kun, update, showApiKey, selectControlClass, saveStatus, saveError: providerSaveError, saveIssue, retrySave, zh, provider, sharedConnections, sharedConnectionsError, settingsConfigOpenError, openSettingsConfigFile, credentialRevealError, setSelectedProviderId, addMenuOpen, addProviderQuery, setAddProviderQuery, subscriptionRegion, setSubscriptionRegion, providerListQuery, setProviderListQuery, activeTab, setActiveTab, workspaceMode, setWorkspaceMode, globalNetworkOpen, setGlobalNetworkOpen, expandedCapabilities, addProviderButtonRef, addProviderDialogRef, pendingImport, setPendingImport, displayProviders, activeProvider, activeRetry, isDraftActive, canEditActiveProviderId, activeKunProviderId, providerProxy, selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderSpeech, removeModelProviderSpeech, updateModelProviderTextToSpeech, removeModelProviderTextToSpeech, updateModelProviderMusic, removeModelProviderMusic, updateModelProviderVideo, removeModelProviderVideo, updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addDefaultModelProvider, removeModelProvider, deletingProviderId, runProbe, importPickedModels, activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, freeProviders, planProviders, apiProviders, grouped, renderProviderButton, freeAddEntries, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider,
+    externalImportOpen, setExternalImportOpen, quickAddEntry, setQuickAddEntry, submitQuickAdd, stagedImportLink, setStagedImportLink,
+    importLinkInput, setImportLinkInput, importLinkError, setImportLinkError, stageImportLinkInput }
   return <ProvidersSettingsView view={view} />
 }

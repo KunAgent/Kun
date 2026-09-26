@@ -93,10 +93,30 @@ function visitBlock(node: PMNode, pos: number, prefix: string, state: Projection
   }
 
   switch (name) {
-    case 'blockquote': {
+    case 'blockquote':
+    case 'callout': {
       node.forEach((child, offset) => {
         visitBlock(child, pos + 1 + offset, `${prefix}> `, state)
       })
+      return
+    }
+    case 'rawMarkdownBlock': {
+      // Raw source stays visible in the projection but has no block mapping:
+      // offsets inside it cannot map back to a PM position, so inline edit
+      // and completion abandon (implementation §5).
+      const raw = typeof node.attrs.raw === 'string' ? node.attrs.raw : ''
+      for (const line of raw.split('\n')) {
+        lines.push({ text: prefix + line })
+      }
+      return
+    }
+    case 'blockMath': {
+      const latex = typeof node.attrs.latex === 'string' ? node.attrs.latex : ''
+      lines.push({ text: `${prefix}$$` })
+      for (const line of latex.split('\n')) {
+        lines.push({ text: prefix + line })
+      }
+      lines.push({ text: `${prefix}$$` })
       return
     }
     case 'bulletList':

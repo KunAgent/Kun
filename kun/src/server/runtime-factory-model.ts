@@ -134,6 +134,7 @@ export function buildModelClientRouterInput(
           apiKey: options.apiKey,
           modelProxyUrl: defaultModelProxyUrl,
           endpointFormat: options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
+          ...(activeProvider?.endpoints ? { endpoints: activeProvider.endpoints } : {}),
           retry: options.retry,
           model: options.model,
           modelCapabilities: defaultModelCapabilities,
@@ -200,6 +201,7 @@ export function buildModelClientRouterInput(
             ? provider.modelProxyUrl
             : options.modelProxyUrl,
           endpointFormat: provider.endpointFormat ?? options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
+          ...(provider.endpoints ? { endpoints: provider.endpoints } : {}),
           retry: provider.retry ?? options.retry,
           model: options.model,
           modelCapabilities: scopedModelCapabilities,
@@ -340,6 +342,13 @@ export function cursorSdkProviderIdsForOptions(options: KunServeRuntimeOptions):
   return out
 }
 
+/** Provider engines that cannot enforce Kun room tools, approvals, or scoped writes. */
+export function roomUnsupportedProviderIdsForOptions(options: KunServeRuntimeOptions): Set<string> {
+  // Cursor's custom tools do not replace its native filesystem/shell catalog.
+  // Until the SDK exposes a deny gate for those calls, a bridge is not sufficient.
+  return new Set([...antigravityProviderIdsForOptions(options), ...cursorSdkProviderIdsForOptions(options)])
+}
+
 export function approvalReviewNativeProviderKind(
   value: string | undefined
 ): 'agent-sdk' | 'cursor-sdk' | 'antigravity-cli' | undefined {
@@ -426,6 +435,7 @@ export function modelConnectionSeedsForOptions(
           ? { baseUrl: options.baseUrl }
           : {}),
       endpointFormat: options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
+      ...(activeProvider?.endpoints ? { endpoints: activeProvider.endpoints } : {}),
       ...(activeProvider?.useProxy === undefined ? {} : { useProxy: activeProvider.useProxy }),
       ...(options.credentialSourceId
         ? { credentialSourceId: options.credentialSourceId }
@@ -464,6 +474,7 @@ export function modelConnectionSeedsForOptions(
             ? { baseUrl: provider.baseUrl }
             : {}),
         endpointFormat: provider.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
+        ...(provider.endpoints ? { endpoints: provider.endpoints } : {}),
         ...(provider.credentialSourceId
           ? { credentialSourceId: provider.credentialSourceId }
           : {}),

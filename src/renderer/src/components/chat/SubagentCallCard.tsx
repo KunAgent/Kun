@@ -274,16 +274,16 @@ export function SubagentCallCard({
         }}
         className={`flex items-center gap-3 px-4 ${compact ? 'py-2.5' : 'py-3'} text-left ${
           hasBody ? 'cursor-pointer transition hover:bg-ds-hover/30' : ''
-        }`}
+        }`} data-subagent-header
       >
         <span className="ds-subagent-focus-decoration contents">
           <AvatarDisc poseId={poseId} status={status} hue={hue} compact={compact} animate={animate} />
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1" data-subagent-title>
           <div className="flex min-w-0 items-center gap-2">
             {isFastContext ? <ExploreKindBadge t={t} /> : null}
             {isFastContext ? <FastContextEvidencePill pack={evidencePack} status={status} t={t} /> : null}
-            <span className="truncate text-[14px] font-semibold text-ds-ink" title={taskTitle}>{taskTitle}</span>
+            <span className="truncate text-[14px] font-semibold text-ds-ink" title={taskTitle} data-subagent-name>{taskTitle}</span>
             {generated ? <GeneratedPill t={t} /> : null}
             {detached ? <BackgroundPill t={t} /> : null}
             {proactiveRetry && proactiveRetry.count > 0
@@ -324,93 +324,88 @@ export function SubagentCallCard({
             </span>
           ) : null}
         </div>
-        <span className="shrink-0 text-right tabular-nums">
+        <span className="shrink-0 text-right tabular-nums" data-subagent-trailing>
           <span className="block text-[13px] font-semibold text-ds-ink">{elapsed}</span>
           <span className="mt-px block text-[10.5px] text-ds-faint">
-            {typeof steps === 'number'
-              ? t('subagentSteps', { count: steps })
-                : status === 'queued' && typeof (child.queuedMs ?? detail.queuedMs) === 'number'
-                  ? t('subagentQueuedHint')
-                  : ''}
+            {typeof steps === 'number' ? t('subagentSteps', { count: steps })
+              : status === 'queued' && typeof (child.queuedMs ?? detail.queuedMs) === 'number'
+                ? t('subagentQueuedHint') : ''}
           </span>
         </span>
-        {canResume ? (
-          <button
-            type="button"
-            disabled={resuming || parentBusy}
-            onClick={(e) => {
-              e.stopPropagation()
-              void resumeChild()
-            }}
-            className="flex h-7 shrink-0 items-center gap-1 rounded-md bg-emerald-500/10 px-2 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-300"
-            aria-label={t('subagentResumeAction', { defaultValue: 'Continue subagent' })}
-            title={t('subagentResumeAction', { defaultValue: 'Continue subagent' })}
-            data-testid="subagent-resume-button"
-          >
-            {resuming ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
-            ) : (
-              <RotateCcw className="h-3.5 w-3.5" strokeWidth={2} />
-            )}
-            <span>{t('subagentResumeShort', { defaultValue: 'Continue' })}</span>
-          </button>
-        ) : null}
-        <SubagentStopControl
-          childId={childId}
-          active={status === 'queued' || status === 'running' || status === 'awaiting-permission'}
-          t={t}
-        />
-        {childId ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              setPeekOpen((value) => !value)
-            }}
-            className="flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-semibold text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
-            aria-label={t('explorePeekPreview', { defaultValue: 'Preview' })}
-            title={t('explorePeekPreview', { defaultValue: 'Preview' })}
-            data-testid="explore-peek-button"
-          >
-            <Eye className="h-3.5 w-3.5" strokeWidth={2} />
-            <span className="hidden sm:inline">{t('explorePeekPreview', { defaultValue: 'Preview' })}</span>
-          </button>
-        ) : null}
-        {childId ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              openChild()
-            }}
-            className="flex h-7 shrink-0 items-center gap-1 rounded-md bg-accent/10 px-2 text-[11px] font-semibold text-accent transition hover:bg-accent/15"
-            aria-label={
-              isFastContext
-                ? t('exploreViewProcess', { defaultValue: 'View explore process' })
-                : t('subagentOpenSession')
-            }
-            title={
-              isFastContext
-                ? t('exploreViewProcess', { defaultValue: 'View explore process' })
-                : t('subagentOpenSession')
-            }
-            data-testid="explore-open-process-button"
-          >
-            {isFastContext
-              ? t('exploreViewProcessShort', { defaultValue: 'Open' })
-              : t('subagentOpenSessionShort', { defaultValue: 'Open' })}
-            <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
-          </button>
-        ) : null}
-        {hasBody ? (
-          expanded ? (
+        {/* Mobile wraps the actions onto a second row via the container query. */}
+        <span className="flex shrink-0 items-center gap-1.5" data-subagent-actions>
+          {canResume ? (
+            <button
+              type="button"
+              disabled={resuming || parentBusy}
+              onClick={(e) => {
+                e.stopPropagation()
+                void resumeChild()
+              }}
+              className="flex h-7 shrink-0 items-center gap-1 rounded-md bg-emerald-500/10 px-2 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-300"
+              aria-label={t('subagentResumeAction', { defaultValue: 'Continue subagent' })}
+              title={t('subagentResumeAction', { defaultValue: 'Continue subagent' })}
+              data-testid="subagent-resume-button"
+            >
+              {resuming
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
+                : <RotateCcw className="h-3.5 w-3.5" strokeWidth={2} />}
+              <span>{t('subagentResumeShort', { defaultValue: 'Continue' })}</span>
+            </button>
+          ) : null}
+          <SubagentStopControl
+            childId={childId}
+            active={status === 'queued' || status === 'running' || status === 'awaiting-permission'}
+            t={t}
+          />
+          {childId ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setPeekOpen((value) => !value)
+              }}
+              className="flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-semibold text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+              aria-label={t('explorePeekPreview', { defaultValue: 'Preview' })}
+              title={t('explorePeekPreview', { defaultValue: 'Preview' })}
+              data-testid="explore-peek-button"
+            >
+              <Eye className="h-3.5 w-3.5" strokeWidth={2} />
+              <span className="hidden sm:inline">{t('explorePeekPreview', { defaultValue: 'Preview' })}</span>
+            </button>
+          ) : null}
+          {childId ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                openChild()
+              }}
+              className="flex h-7 shrink-0 items-center gap-1 rounded-md bg-accent/10 px-2 text-[11px] font-semibold text-accent transition hover:bg-accent/15"
+              aria-label={
+                isFastContext
+                  ? t('exploreViewProcess', { defaultValue: 'View explore process' })
+                  : t('subagentOpenSession')
+              }
+              title={
+                isFastContext
+                  ? t('exploreViewProcess', { defaultValue: 'View explore process' })
+                  : t('subagentOpenSession')
+              }
+              data-testid="explore-open-process-button"
+            >
+              {isFastContext
+                ? t('exploreViewProcessShort', { defaultValue: 'Open' })
+                : t('subagentOpenSessionShort', { defaultValue: 'Open' })}
+              <ChevronRight className="h-3.5 w-3.5" strokeWidth={2} />
+            </button>
+          ) : null}
+          {hasBody && expanded ? (
             <ChevronDown className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.8} />
           ) : (
-            <ChevronRight className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.8} />
-          )
-        ) : (
-          <ChevronRight className="h-4 w-4 shrink-0 text-ds-faint/40" strokeWidth={1.8} />
-        )}
+            <ChevronRight className={`h-4 w-4 shrink-0 ${hasBody ? 'text-ds-faint' : 'text-ds-faint/40'}`} strokeWidth={1.8} />
+          )}
+        </span>
       </div>
 
       <LaneHairline status={status} animate={animate} />

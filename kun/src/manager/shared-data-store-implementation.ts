@@ -1,3 +1,4 @@
+import { AgentMemoryAccessSchema } from '../memory/agent-memory-scope.js'
 import { PendingMemoryCandidate } from '../contracts/memory-distillation-runtime.js'
 import { MemoryDistillationConflictError } from '../memory/memory-distillation-apply.js'
 import { readFile, rm } from 'node:fs/promises'
@@ -33,6 +34,8 @@ import {
 import { TurnItem } from '../contracts/items.js'
 import {
   MemoryCreateRequest,
+  MemoryScope,
+  MemoryType,
   MemoryUpdateRequest
 } from '../contracts/memory.js'
 import { ThreadSchema } from '../contracts/threads.js'
@@ -64,6 +67,7 @@ import { RevisionConflictError } from './revisioned-document-store.js'
 import { buildPublicItemHistoryPage } from '../services/item-history-page.js'
 
 import { ManagerSharedDataStoreCore } from './shared-data-store-core.js'
+import { executeArtifactStoreOperation } from './shared-data-store-artifact.js'
 import {
   AgentSessionSchema,
   SessionUsageQuerySchema,
@@ -133,6 +137,10 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
         const { threadId } = parseThreadId(value)
         return this.threadStore.get(threadId)
       }
+      case 'hasHistoryReference': {
+        const { referenceId } = z.object({ referenceId: z.string().min(1).max(256) }).strict().parse(value)
+        return this.hybridThreadStore.hasHistoryReference(referenceId)
+      }
       case 'getMetadata': {
         const { threadId } = parseThreadId(value)
         return this.threadStore.getMetadata?.(threadId) ?? this.threadStore.get(threadId)
@@ -179,53 +187,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
   }
 
   async executeArtifact(operation: ManagerArtifactStoreOperation, value: unknown): Promise<unknown> {
-    switch (operation) {
-      case 'put': {
-        const body = z.object({
-          input: z.object({
-            content: z.string(),
-            mimeType: z.string().min(1).optional(),
-            source: z.enum(['mcp', 'web', 'bash', 'attachment', 'remote-log', 'tool', 'other']).optional(),
-            origin: z.string().min(1).optional(),
-            linkedOwners: z.array(z.string().min(1).max(512)).max(64).optional(),
-            maxInlineChars: z.number().int().nonnegative().optional()
-          }).strict()
-        }).strict().parse(value)
-        return this.artifactStore.put(body.input)
-      }
-      case 'releaseOwner': {
-        const body = z.object({
-          ownerId: z.string().min(1).max(512)
-        }).strict().parse(value)
-        return this.artifactStore.releaseOwner?.(body.ownerId) ?? {
-          released: 0,
-          deleted: 0
-        }
-      }
-      case 'delete': {
-        const { id } = parseArtifactId(value)
-        await this.artifactStore.delete?.(id)
-        return null
-      }
-      case 'list':
-        return this.artifactStore.list?.() ?? []
-      case 'get':
-        return this.artifactStore.get(parseArtifactId(value).id)
-      case 'readRange': {
-        const body = z.object({
-          id: z.string().min(1).max(256),
-          options: z.object({
-            offset: z.number().int().nonnegative().optional(),
-            length: z.number().int().nonnegative().optional(),
-            startLine: z.number().int().positive().optional(),
-            endLine: z.number().int().positive().optional()
-          }).strict()
-        }).strict().parse(value)
-        return this.artifactStore.readRange(body.id, body.options)
-      }
-      case 'stat':
-        return this.artifactStore.stat(parseArtifactId(value).id)
-    }
+    return executeArtifactStoreOperation(this.artifactStore, operation, value)
   }
 
   async executeMemory(operation: ManagerMemoryStoreOperation, value: unknown): Promise<unknown> {
@@ -233,6 +195,12 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
       const body = z.object({ value: z.unknown() }).strict().parse(value)
       const run = this.memoryQueue.catch(() => undefined)
         .then(() => this.memoryDistillationPending.execute(body.value))
+      this.memoryQueue = run.then(() => undefined, () => undefined)
+      return run
+    }
+    if (operation.startsWith('feedback')) {
+      const run = this.memoryQueue.catch(() => undefined)
+        .then(() => this.memoryFeedback.execute(operation, value))
       this.memoryQueue = run.then(() => undefined, () => undefined)
       return run
     }
@@ -254,6 +222,11 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             throw error
           }
         }
+        case 'getById': {
+          const request = z.object({ id: z.string().min(1), access: z.object({ workspace: z.string().optional(), project: z.string().optional(), agent: AgentMemoryAccessSchema.optional() }).strict().optional() }).strict().parse(body.value)
+          if (!store.getById) throw new Error('scoped memory lookup unavailable')
+          return store.getById(request.id, request.access)
+        }
         case 'create':
           return store.create(MemoryCreateRequest.parse(body.value))
         case 'createWithId': {
@@ -264,20 +237,20 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
           const request = z.object({
             id: z.string().min(1),
             patch: MemoryUpdateRequest,
-            access: z.object({ workspace: z.string().optional(), project: z.string().optional() }).strict().optional()
+            access: z.object({ workspace: z.string().optional(), project: z.string().optional(), agent: AgentMemoryAccessSchema.optional() }).strict().optional()
           }).strict().parse(body.value)
           return store.update(request.id, request.patch, request.access)
         }
         case 'delete': {
           const request = z.object({
             id: z.string().min(1),
-            access: z.object({ workspace: z.string().optional(), project: z.string().optional() }).strict().optional()
+            access: z.object({ workspace: z.string().optional(), project: z.string().optional(), agent: AgentMemoryAccessSchema.optional() }).strict().optional()
           }).strict().parse(body.value)
           return store.delete(request.id, request.access)
         }
         case 'purge': {
-          const request = z.object({ id: z.string().min(1) }).strict().parse(body.value)
-          await store.purge?.(request.id)
+          const request = z.object({ id: z.string().min(1), access: z.object({ agent: AgentMemoryAccessSchema.optional() }).strict().optional() }).strict().parse(body.value)
+          await store.purge?.(request.id, request.access)
           return null
         }
         case 'list': {
@@ -285,9 +258,22 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             workspace: z.string().optional(),
             project: z.string().optional(),
             includeDeleted: z.boolean().optional(),
-            all: z.boolean().optional()
+            all: z.boolean().optional(), agent: AgentMemoryAccessSchema.optional(),
+            authority: z.enum(['reference', 'directive']).optional(),
+            type: MemoryType.optional(),
+            limit: z.number().int().min(1).max(1000).optional(),
+            before: z.object({ updatedAt: z.string(), id: z.string() }).strict().optional()
           }).strict().parse(body.value ?? {})
           return store.list(filter)
+        }
+        case 'listDirectives': {
+          const access = z.object({
+            workspace: z.string().optional(),
+            project: z.string().optional(),
+            agent: AgentMemoryAccessSchema.optional()
+          }).strict().parse(body.value ?? {})
+          if (!store.listDirectives) throw new Error('memory directive listing is unavailable')
+          return store.listDirectives(access, body.config)
         }
         case 'retrieve': {
           const request = z.object({
@@ -295,7 +281,13 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             workspace: z.string().optional(),
             project: z.string().optional(),
             limit: z.number().int().positive(),
-            promptCharacterBudget: z.number().int().nonnegative().optional()
+            promptCharacterBudget: z.number().int().nonnegative().optional(), agent: AgentMemoryAccessSchema.optional(),
+            purpose: z.enum(['injection', 'tool']).optional(),
+            filter: z.object({
+              scope: MemoryScope.optional(),
+              type: MemoryType.optional(),
+              authority: z.enum(['reference', 'directive']).optional()
+            }).strict().optional()
           }).strict().parse(body.value)
           return store.retrieve({ ...request, policy: body.config })
         }
@@ -616,13 +608,22 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
           options: z.object({
             before: z.string().min(1).max(256).optional(),
             anchorTurnId: z.string().min(1).max(256).optional(),
+            turnId: z.string().min(1).max(256).optional(),
+            callId: z.string().min(1).max(256).optional(),
+            itemId: z.string().min(1).max(256).optional(),
+            contentOffset: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
             maxItems: z.number().int().positive().max(1_000),
             maxBytes: z.number().int().positive().max(16 * 1024 * 1024)
-          }).strict()
+          }).strict().refine((options) => !(options.itemId || options.contentOffset !== undefined) || Boolean(options.turnId && options.itemId), {
+            message: 'item content requires turnId and itemId'
+          }).refine((options) => !options.callId || Boolean(options.turnId), {
+            message: 'tool call history requires turnId'
+          })
         }).strict().parse(value) as { threadId: string; options: ItemHistoryPageOptions }
         if (this.sessionStore.loadItemPage) {
           return this.sessionStore.loadItemPage(body.threadId, body.options)
         }
+        if (body.options.turnId) throw new Error('exact-turn item paging unavailable')
         const page: ItemHistoryPage = buildPublicItemHistoryPage(
           await this.sessionStore.loadItems(body.threadId),
           body.options

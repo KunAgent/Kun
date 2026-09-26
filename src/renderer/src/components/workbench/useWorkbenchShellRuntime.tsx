@@ -1,6 +1,8 @@
 import type { ReactElement } from 'react'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
+import { extraRootsForWorkspace } from '../../lib/code-workspace-folder-lookup'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
+import { useChatStore } from '../../store/chat-store'
 import { useWorkbenchChatComposerProps } from './useWorkbenchChatComposerProps'
 import { buildWorkbenchRightPanelSharedProps } from './useWorkbenchRightPanelSharedProps'
 import { useWorkbenchRuntimeBanners } from './useWorkbenchRuntimeBanners'
@@ -81,6 +83,8 @@ export function useWorkbenchShellRuntime(context: Context): {
     handleDesignHtmlElementAsContext, handleDesignRuntimeQualityFindings,
     handleDesignQualityRepairRequest
   } = context
+  const folderSets = useChatStore((state) => state.codeWorkspaceFolderSets)
+  const extraWorkspaceRoots = extraRootsForWorkspace(fileTreeWorkspaceRoot, folderSets)
   const mainComposerContextChips = taskSurface === 'design'
     ? [...designContextChips, ...extensionComposerContextChips]
     : extensionComposerContextChips
@@ -147,7 +151,6 @@ export function useWorkbenchShellRuntime(context: Context): {
     runtimeLogPath,
     runtimeError: error,
     runtimeErrorDetail,
-    activeThreadId,
     stageInsetClass,
     runtimeActionNeedsConnection: t('runtimeActionNeedsConnection'),
     t,
@@ -327,6 +330,7 @@ export function useWorkbenchShellRuntime(context: Context): {
         view: fileTreeSidePanelView,
         width: FILE_TREE_SIDEBAR_WIDTH,
         workspaceRoot: fileTreeWorkspaceRoot,
+        extraWorkspaceRoots,
         designWorkspaceRoot: normalizeWorkspaceRoot(designWorkspaceRoot || workspaceRoot),
         designDocuments,
         activeDesignDocumentId: designActiveDocumentId,

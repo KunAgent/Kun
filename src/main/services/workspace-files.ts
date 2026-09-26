@@ -12,7 +12,8 @@ export {
   pickAndSaveWorkspaceImage,
   readClipboardImage,
   saveWorkspaceClipboardImage,
-  saveWorkspaceImageBytes
+  saveWorkspaceImageBytes,
+  writeClipboardImage
 } from './workspace-file-images'
 export {
   deleteWorkspaceEntry,

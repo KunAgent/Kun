@@ -10,6 +10,7 @@ export type ToolExecutionContextFactoryDeps = {
   allowedProviderIds?: readonly string[]
   allowedSkillIds?: readonly string[]
   allowedReadPaths?: readonly string[]
+  allowHostReads?: boolean
   allowedWritePaths?: readonly string[]
   allowedArtifactIds?: readonly string[]
   pptWorkflowScope?: PptWorkflowScope
@@ -50,6 +51,7 @@ export function createToolExecutionContext(
     threadMode: input.threadMode,
     ...(input.activePlanContext ? { guiPlan: input.activePlanContext } : {}),
     ...(input.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+    ...(input.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
     ...(input.guiDesignMode ? { guiDesignMode: true } : {}),
     agentSurface: input.agentSurface ?? 'code',
     ...(input.guiDesignArtifact ? { guiDesignArtifact: input.guiDesignArtifact } : {}),
@@ -77,6 +79,7 @@ export function createToolExecutionContext(
     ...(deps.allowedProviderIds ? { allowedProviderIds: deps.allowedProviderIds } : {}),
     ...(deps.allowedSkillIds ? { allowedSkillIds: deps.allowedSkillIds } : {}),
     ...(deps.allowedReadPaths ? { allowedReadPaths: deps.allowedReadPaths } : {}),
+    ...(deps.allowHostReads ? { allowHostReads: true } : {}),
     ...(deps.allowedWritePaths ? { allowedWritePaths: deps.allowedWritePaths } : {}),
     ...(deps.allowedArtifactIds ? { allowedArtifactIds: deps.allowedArtifactIds } : {}),
     ...(deps.pptWorkflowScope ? { pptWorkflowScope: deps.pptWorkflowScope } : {}),

@@ -39,6 +39,13 @@ export type ModelStreamIntent =
       failureSummary?: string
     }
   | {
+      kind: 'route_switching'
+      from: { providerId: string; modelId: string }
+      to: { providerId: string; modelId: string }
+      reason?: string
+      message?: string
+    }
+  | {
       kind: 'tool_call_ready'
       call: ToolCallLike
       repairNotes: readonly string[]
@@ -96,6 +103,16 @@ export class ModelStreamCollector {
             delayMs: chunk.delayMs,
             ...(chunk.reason ? { reason: chunk.reason } : {}),
             ...(chunk.failureSummary ? { failureSummary: chunk.failureSummary } : {})
+          }]
+        }
+      case 'route_switching':
+        return {
+          intents: [{
+            kind: 'route_switching',
+            from: chunk.from,
+            to: chunk.to,
+            ...(chunk.reason ? { reason: chunk.reason } : {}),
+            ...(chunk.message ? { message: chunk.message } : {})
           }]
         }
       case 'tool_call_complete':

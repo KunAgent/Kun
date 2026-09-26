@@ -489,7 +489,7 @@ export function createThreadQueueActions(
           const surface: 'write' | 'design' | 'code' =
             message.agentSurface === 'write' || message.agentSurface === 'design'
               ? message.agentSurface
-              : message.guiDesignCanvas || message.guiDesignMode
+              : message.guiDesignCanvas || message.guiExcalidrawCanvas || message.guiDesignMode
                 ? 'design'
                 : 'code'
           return {

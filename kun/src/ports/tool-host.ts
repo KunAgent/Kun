@@ -153,6 +153,10 @@ export type PptWorkflowScope = Readonly<{
 }>
 
 export type ToolHostContext = {
+  /** Host-authored room step scope, never accepted from model arguments. */
+  roomAgent?: boolean
+  roomStepKind?: 'coordination' | 'discussion' | 'execution' | 'review' | 'conversation'
+  roomPeer?: boolean
   threadId: string
   turnId: string
   workspace: string
@@ -178,6 +182,10 @@ export type ToolHostContext = {
   guiPlan?: GuiPlanContext
   /** True when the active GUI turn is allowed to mutate the design canvas. */
   guiDesignCanvas?: boolean
+  /** True when the active GUI turn may apply Excalidraw scene files. */
+  guiExcalidrawCanvas?: boolean
+  /** True for a writable GUI private-chat (conversation) room with Excalidraw board capability. */
+  guiRoomExcalidrawCanvas?: boolean
   /** True only for product Design turns (not Code sidebar canvas turns). */
   guiDesignMode?: boolean
   /** Code is the compatibility default when an older turn omits the field. */
@@ -238,6 +246,11 @@ export type ToolHostContext = {
   allowedSkillIds?: readonly string[]
   /** Workspace-relative read scopes captured at a delegated child boundary. */
   allowedReadPaths?: readonly string[]
+  /**
+   * When true and no delegated read scopes are set, file-read tools may resolve
+   * paths outside the thread workspace. Writes and commands stay on sandboxMode.
+   */
+  allowHostReads?: boolean
   /** Workspace-relative write scopes captured at a delegated child boundary. */
   allowedWritePaths?: readonly string[]
   /** Immutable artifact capability set captured at a delegated child boundary. */
@@ -289,6 +302,12 @@ export type ToolCallLike = {
 export type ToolExecutionUpdate = {
   output: unknown
   isError?: boolean
+  /**
+   * Structured sideband stored on the tool_result item for clients. It is
+   * never projected into model context; keep `output` as the model-facing
+   * summary when both are present.
+   */
+  meta?: Record<string, unknown>
 }
 
 export type ToolHostResult = {

@@ -30,7 +30,9 @@ import {
 } from './write-thread-registry'
 import {
   createWriteDocumentSession,
+  defaultWriteViewModeForPath,
   isWriteFileTab,
+  isWritePaperViewTab,
   isWriteWhiteboardTab,
   persistWriteEditorLayout,
   projectFocusedDocument,
@@ -107,9 +109,10 @@ export function createWriteFileActions({
   ): boolean => fileRequestGenerations.get(groupId) === generation && workspaceIsCurrent(workspaceRoot)
 
   return {
-    initializeWorkspace: async (workspaceRoot) => {
+    initializeWorkspace: async (workspaceRoot, options) => {
       const generation = nextNavigationGeneration()
       const normalized = normalizePath(workspaceRoot.trim())
+      const force = options?.force === true
       if (!normalized) {
         cancelExternalSyncAnimation()
         set((state) => ({
@@ -119,11 +122,11 @@ export function createWriteFileActions({
         return
       }
       const current = get()
-      if (current.workspaceRoot === normalized && current.rootDirectory) {
+      if (!force && current.workspaceRoot === normalized && current.rootDirectory) {
         await get().refreshWorkspace(normalized)
         return
       }
-      if (current.workspaceRoot && current.workspaceRoot !== normalized) {
+      if (current.workspaceRoot && (force || current.workspaceRoot !== normalized)) {
         const canLeaveCurrentFile = await prepareActiveWriteFileForNavigation(get, current.workspaceRoot)
         if (!canLeaveCurrentFile || generation !== navigationGeneration) return
       }
@@ -160,6 +163,11 @@ export function createWriteFileActions({
               }
               validatedLayout = removeFailedRestoredWriteTab(validatedLayout, group.id, itemKey)
               continue
+            }
+            if (isWritePaperViewTab(tab)) {
+              // Virtual paper tabs never need a file read to stay valid.
+              openedKey = itemKey
+              break
             }
             await get().openFile(normalized, tab.path, { groupId: group.id, viewMode: tab.viewMode })
             if (!navigationIsCurrent(generation, normalized)) return
@@ -286,7 +294,7 @@ export function createWriteFileActions({
         return
       }
       if (!fileRequestIsCurrent(groupId, generation, workspaceRoot)) return
-      const viewMode = options.viewMode ?? 'rich'
+      const viewMode = options.viewMode ?? defaultWriteViewModeForPath(path)
       const current = get()
       if (
         current.autoSaveEnabled &&
@@ -385,7 +393,7 @@ export function createWriteFileActions({
             fileSize: result.size,
             fileTruncated: result.truncated,
             documentEpoch: nextWriteDocumentEpoch(state.documentEpoch)
-          }), groupId, 'source'))
+          }), groupId, 'plain'))
           return
         }
 

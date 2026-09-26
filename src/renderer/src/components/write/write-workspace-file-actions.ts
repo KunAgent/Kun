@@ -1,6 +1,10 @@
 import type { RefObject } from 'react'
 import type { TFunction } from 'i18next'
-import type { WriteExportFormat } from '@shared/write-export'
+import {
+  X_ARTICLE_IMAGE_MISSING,
+  type WriteExportFormat,
+  type WriteRichClipboardProfile
+} from '@shared/write-export'
 import { useWriteWorkspaceStore, writeJoinPath } from '../../write/write-workspace-store'
 import { pathsEqual } from '../../write/write-workspace-store-helpers'
 import { formatWorkspacePickerError } from '../../lib/format-workspace-picker-error'
@@ -10,9 +14,50 @@ import {
   exportFormatLabel,
   type WriteNotice
 } from './write-workspace-view-utils'
+import { renderMermaid } from '../../lib/mermaid-render'
+import { splitFrontmatter } from '@shared/markdown/frontmatter'
+import { parseWorkMdast } from '@shared/markdown/parse-mdast'
 
 type WriteWorkspaceState = ReturnType<typeof useWriteWorkspaceStore.getState>
 type ExportInFlight = WriteExportFormat | typeof WRITE_RICH_CLIPBOARD_ACTION | null
+
+type MdastNode = {
+  type: string
+  lang?: string | null
+  value?: string
+  children?: MdastNode[]
+}
+
+/** Collect mermaid fence sources in document order. */
+function collectMermaidSources(markdown: string): string[] {
+  const { body } = splitFrontmatter(markdown)
+  const mdast = parseWorkMdast(body) as unknown as MdastNode
+  const sources: string[] = []
+  const visit = (node: MdastNode): void => {
+    if (node.type === 'code' && (node.lang ?? '') === 'mermaid') {
+      sources.push(node.value ?? '')
+    }
+    for (const child of node.children ?? []) visit(child)
+  }
+  visit(mdast)
+  return sources
+}
+
+/**
+ * Pre-render every mermaid diagram in the document so the export IPC can
+ * splice the same SVGs the editor shows (implementation §10.3).
+ */
+async function renderExportDiagrams(markdown: string): Promise<Record<string, string> | undefined> {
+  const sources = collectMermaidSources(markdown)
+  if (sources.length === 0) return undefined
+  const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+  const rendered: Record<string, string> = {}
+  await Promise.all(sources.map(async (source) => {
+    const result = await renderMermaid(source, theme)
+    if (result.ok) rendered[source] = result.svg
+  }))
+  return Object.keys(rendered).length > 0 ? rendered : undefined
+}
 
 type Params = {
   t: TFunction<'common'>
@@ -40,6 +85,8 @@ type Params = {
   setExportMenuOpen: (value: boolean) => void
   setExportingFormat: (value: ExportInFlight) => void
   setPresentationInFlight: (value: boolean) => void
+  xArticleImageIndex: number
+  setXArticleImageState: (state: { count: number; index: number }) => void
 }
 
 export function createWriteWorkspaceFileActions({
@@ -67,7 +114,9 @@ export function createWriteWorkspaceFileActions({
   showExportNotice,
   setExportMenuOpen,
   setExportingFormat,
-  setPresentationInFlight
+  setPresentationInFlight,
+  xArticleImageIndex,
+  setXArticleImageState
 }: Params) {
   const pickWriteWorkspace = async (): Promise<void> => {
     try {
@@ -148,11 +197,13 @@ export function createWriteWorkspaceFileActions({
     setExportMenuOpen(false)
     setExportingFormat(format)
     try {
+      const renderedDiagrams = await renderExportDiagrams(fileContent).catch(() => undefined)
       const result = await window.kunGui.exportWriteDocument({
         path: activeFilePath,
         workspaceRoot,
         format,
-        content: fileContent
+        content: fileContent,
+        ...(renderedDiagrams ? { renderedDiagrams } : {})
       })
       if (!result.ok) {
         if (!result.canceled) {
@@ -183,7 +234,9 @@ export function createWriteWorkspaceFileActions({
     }
   }
 
-  const copyCurrentFileAsRichText = async (): Promise<void> => {
+  const copyCurrentFileAsRichText = async (
+    profile: WriteRichClipboardProfile = 'online-docs'
+  ): Promise<void> => {
     if (!activeFilePath || !activeFileIsText) return
     if (typeof window.kunGui?.copyWriteDocumentAsRichText !== 'function') {
       showExportNotice({ tone: 'error', message: t('writeCopyRichTextUnavailable') })
@@ -196,16 +249,32 @@ export function createWriteWorkspaceFileActions({
       const result = await window.kunGui.copyWriteDocumentAsRichText({
         path: activeFilePath,
         workspaceRoot,
-        content: fileContent
+        content: fileContent,
+        profile,
+        ...(profile === 'x-articles-image' ? { imageIndex: xArticleImageIndex } : {})
       })
       if (!result.ok) {
         showExportNotice({
           tone: 'error',
-          message: t('writeCopyRichTextFailed', { message: result.message })
+          message: copyRichTextErrorMessage(profile, result.message, t)
         })
         return
       }
-      showExportNotice({ tone: 'success', message: t('writeCopyRichTextSuccess') })
+      if (profile === 'x-articles') {
+        setXArticleImageState({ count: result.imageCount ?? 0, index: 0 })
+      }
+      if (profile === 'x-articles-image') {
+        const count = result.imageCount ?? 0
+        const current = result.imageIndex ?? 0
+        setXArticleImageState({
+          count,
+          index: count > 0 ? (current + 1) % count : 0
+        })
+      }
+      showExportNotice({
+        tone: 'success',
+        message: copyRichTextSuccessMessage(profile, result, t)
+      })
     } catch (error) {
       showExportNotice({
         tone: 'error',
@@ -220,9 +289,43 @@ export function createWriteWorkspaceFileActions({
 
   return {
     copyCurrentFileAsRichText,
+    copyCurrentFileAsXArticle: () => copyCurrentFileAsRichText('x-articles'),
+    copyCurrentFileAsXArticleImage: () => copyCurrentFileAsRichText('x-articles-image'),
     createDraftFile,
     exportCurrentFile,
     generatePresentation,
     pickWriteWorkspace
   }
+}
+
+function copyRichTextErrorMessage(
+  profile: WriteRichClipboardProfile,
+  message: string,
+  t: TFunction<'common'>
+): string {
+  if (profile === 'x-articles-image' && message === X_ARTICLE_IMAGE_MISSING) {
+    return t('writeCopyXArticleImageMissing')
+  }
+  return t('writeCopyRichTextFailed', { message })
+}
+
+function copyRichTextSuccessMessage(
+  profile: WriteRichClipboardProfile,
+  result: { title?: string; simplified?: boolean; overLimit?: boolean; imageCount?: number; imageIndex?: number },
+  t: TFunction<'common'>
+): string {
+  if (profile === 'x-articles-image') {
+    const current = (result.imageIndex ?? 0) + 1
+    const total = result.imageCount ?? 0
+    return t('writeCopyXArticleImageSuccess', {
+      current,
+      total,
+      label: `图片 ${current}`
+    })
+  }
+  if (profile !== 'x-articles') return t('writeCopyRichTextSuccess')
+  if (result.overLimit) return t('writeCopyXArticleOverLimit')
+  if ((result.imageCount ?? 0) > 0) return t('writeCopyXArticleSuccessWithImages')
+  if (!result.title) return t('writeCopyXArticleSuccessNoTitle')
+  return t('writeCopyXArticleSuccess')
 }

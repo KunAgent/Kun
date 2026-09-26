@@ -63,6 +63,7 @@ import {
 } from './kun-mapper-core'
 import { toolBlockFromItem } from './kun-mapper-tools'
 import { chartSpecFromToolItem } from './chart-spec-adapter'
+import { paperListFromToolItem, paperSearchMetaFromToolItem } from './paper-list-adapter'
 import {
   approvalBlockFromItem,
   approvalReviewFromEvent,
@@ -92,6 +93,15 @@ import {
  * live event dispatcher maps onto sink callbacks.
  */
 export function chatBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeMetadataJson): ChatBlock | null {
+  const block = baseChatBlockFromItem(item, child)
+  if (!block || !/^(codex|claude-code|opencode):/u.test(item.turnId ?? '')) return block
+  return { ...block, ...(item.sourceHistoryOrder ? { sourceHistoryOrder: item.sourceHistoryOrder } : {}), sourceRecords: [{ itemId: item.id, kind: item.kind }],
+    ...(item.sourceAttachments?.length ? {
+      sourceItemId: item.id, sourceAttachments: item.sourceAttachments.map((entry) => ({ ...entry }))
+    } : {}) }
+}
+
+function baseChatBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeMetadataJson): ChatBlock | null {
   switch (item.kind) {
     case 'user_message':
       return userMessageBlockFromItem(item)
@@ -111,6 +121,16 @@ export function chatBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
           spec
         }
       }
+      const paperList = paperListFromToolItem(item)
+      if (paperList) {
+        return {
+          kind: 'paper-list',
+          id: toolBlockId(item),
+          turnId: item.turnId,
+          createdAt: itemCreatedAt(item),
+          list: paperList
+        }
+      }
       return toolBlockFromItem(item, child)
     }
     case 'approval':
@@ -122,6 +142,7 @@ export function chatBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
       return block.questions.length > 0 ? block : null
     }
     case 'compaction':
+    case 'context_window':
       return compactionBlockFromItem(item)
     case 'review':
       return reviewBlockFromItem(item)
@@ -135,6 +156,12 @@ export function chatBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
 export function toolEventFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeMetadataJson): ToolEventPayload {
   const block = toolBlockFromItem(item, child)
   const chartSpec = chartSpecFromToolItem(item)
+  const paperList = paperListFromToolItem(item)
+  const paperSearch = paperSearchMetaFromToolItem(item)
+  let meta = block.meta
+  if (chartSpec) meta = { ...meta, chartSpec }
+  if (paperList) meta = { ...meta, paperList }
+  if (paperSearch) meta = { ...meta, paperSearch }
   return {
     itemId: block.id,
     turnId: item.turnId,
@@ -144,7 +171,7 @@ export function toolEventFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     toolKind: block.toolKind,
     detail: block.detail,
     filePath: block.filePath,
-    meta: chartSpec ? { ...block.meta, chartSpec } : block.meta
+    meta
   }
 }
 
@@ -188,15 +215,17 @@ export function childLifecycleToolEventFromRuntimeEvent(event: CoreRuntimeEventJ
 }
 
 export function compactionFromItem(item: CoreTurnItemJson): CompactionEventPayload {
+  const isWindow = item.kind === 'context_window'
   return {
     itemId: item.id,
     turnId: item.turnId,
-    summary: item.summary?.trim() || 'Context compacted',
+    summary: item.summary?.trim() || (isWindow ? '' : 'Context compacted'),
     status: item.status === 'failed' ? 'error' : item.status === 'running' ? 'running' : 'success',
     createdAt: itemCreatedAt(item),
     messagesBefore: item.replacedTokens,
     detail: item.pinnedConstraints?.length ? item.pinnedConstraints.join('\n') : undefined,
-    auto: item.auto ?? true
+    auto: item.auto ?? true,
+    variant: isWindow ? 'window' : 'summary'
   }
 }
 
@@ -225,15 +254,17 @@ export function compactionFromEvent(
   event: CoreRuntimeEventJson,
   status: CompactionEventPayload['status']
 ): CompactionEventPayload {
+  const isWindow = event.item?.kind === 'context_window'
   return {
-    itemId: event.itemId ?? `compaction_${event.seq ?? Date.now()}`,
+    itemId: event.item?.id ?? event.itemId ?? `compaction_${event.seq ?? Date.now()}`,
     turnId: event.turnId,
-    summary: event.summary ?? 'Context compacted',
+    summary: event.summary ?? (isWindow ? '' : 'Context compacted'),
     status,
     createdAt: event.timestamp,
-    messagesBefore: event.replacedTokens,
+    messagesBefore: event.replacedTokens ?? event.item?.replacedTokens,
     detail: event.pinnedConstraints?.join('\n'),
-    auto: event.auto ?? true
+    auto: event.auto ?? true,
+    variant: isWindow ? 'window' : 'summary'
   }
 }
 
@@ -297,6 +328,23 @@ export function runtimeStatusFromEvent(event: CoreRuntimeEventJson): RuntimeStat
         event.reason === 'stream_transport' ||
         event.reason === 'context_overflow'
         ? event.reason
+        : undefined
+    }
+  }
+  if (event.kind === 'model_route_switch') {
+    const turnKey = event.turnId ?? event.threadId ?? event.seq ?? Date.now()
+    return {
+      kind: 'model_route_switch',
+      itemId: `runtime_status_${turnKey}_route_switch`,
+      turnId: event.turnId,
+      createdAt: event.timestamp,
+      fromProviderId: event.fromProviderId,
+      fromModelId: event.fromModelId,
+      toProviderId: event.toProviderId,
+      toModelId: event.toModelId,
+      routeReason: typeof event.reason === 'string' ? event.reason : undefined,
+      failureSummary: typeof event.failureSummary === 'string' && event.failureSummary.trim()
+        ? redactSecretText(event.failureSummary.trim())
         : undefined
     }
   }
@@ -472,47 +520,51 @@ export async function dispatchKunRuntimeEvents(
   sink: ThreadEventSink,
   handleApprovalRequest: (event: CoreRuntimeEventJson, sink: ThreadEventSink) => Promise<void>
 ): Promise<void> {
-  let pendingDeltas: ThreadDeltaEvent[] = []
-  const flushDeltas = async (): Promise<void> => {
-    if (pendingDeltas.length === 0) return
-    const deltas = pendingDeltas
-    pendingDeltas = []
-    const seqs = deltas
-      .map((delta) => delta.seq)
-      .filter((seq): seq is number => typeof seq === 'number')
-    await applyRuntimeProjectionAction(
-      {
-        type: 'deltas_received',
-        deltas,
-        ...(seqs.length > 0 ? { seq: Math.max(...seqs) } : {})
-      },
-      sink,
-      handleApprovalRequest
-    )
-  }
-  for (const event of events) {
-    if (event.kind === 'assistant_text_delta' || event.kind === 'assistant_reasoning_delta') {
-      const text = event.item?.text ?? ''
-      if (text) {
-        pendingDeltas.push({
-          text,
-          kind: event.kind === 'assistant_text_delta' ? 'agent_message' : 'agent_reasoning',
-          seq: event.seq,
-          ...(typeof event.deltaOffset === 'number'
-            ? { deltaOffset: event.deltaOffset }
-            : {}),
-          threadId: event.threadId ?? event.item?.threadId,
-          turnId: event.turnId ?? event.item?.turnId,
-          itemId: event.itemId ?? event.item?.id,
-          createdAt: event.timestamp ?? event.item?.createdAt
-        })
+  const body = async (): Promise<void> => {
+    let pendingDeltas: ThreadDeltaEvent[] = []
+    const flushDeltas = async (): Promise<void> => {
+      if (pendingDeltas.length === 0) return
+      const deltas = pendingDeltas
+      pendingDeltas = []
+      const seqs = deltas
+        .map((delta) => delta.seq)
+        .filter((seq): seq is number => typeof seq === 'number')
+      await applyRuntimeProjectionAction(
+        {
+          type: 'deltas_received',
+          deltas,
+          ...(seqs.length > 0 ? { seq: Math.max(...seqs) } : {})
+        },
+        sink,
+        handleApprovalRequest
+      )
+    }
+    for (const event of events) {
+      if (event.kind === 'assistant_text_delta' || event.kind === 'assistant_reasoning_delta') {
+        const text = event.item?.text ?? ''
+        if (text) {
+          pendingDeltas.push({
+            text,
+            kind: event.kind === 'assistant_text_delta' ? 'agent_message' : 'agent_reasoning',
+            seq: event.seq,
+            ...(typeof event.deltaOffset === 'number'
+              ? { deltaOffset: event.deltaOffset }
+              : {}),
+            threadId: event.threadId ?? event.item?.threadId,
+            turnId: event.turnId ?? event.item?.turnId,
+            itemId: event.itemId ?? event.item?.id,
+            createdAt: event.timestamp ?? event.item?.createdAt
+          })
+        }
+        continue
       }
-      continue
+      await flushDeltas()
+      await dispatchKunRuntimeEvent(event, sink, handleApprovalRequest)
     }
     await flushDeltas()
-    await dispatchKunRuntimeEvent(event, sink, handleApprovalRequest)
   }
-  await flushDeltas()
+  if (sink.runEventBatch) return sink.runEventBatch(body)
+  return body()
 }
 
 export async function dispatchKunRuntimeEvent(

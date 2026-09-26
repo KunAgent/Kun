@@ -17,6 +17,7 @@ import type { TurnService } from './turn-service.js'
 
 export const EXTENSION_AGENT_PERMISSIONS = {
   run: 'agent.run',
+  readCapacity: 'agent.capacity.read',
   readOwnThreads: 'agent.threads.readOwn'
 } as const
 
@@ -51,8 +52,15 @@ export type ExtensionAgentRunOptions = Readonly<{
   models: readonly ExtensionAgentModelOption[]
 }>
 
+export type ExtensionAgentCapacitySnapshot = Readonly<{
+  activeTurns: number
+  queuedTurns: number
+  maxConcurrentTurns: number
+  busy: boolean
+}>
+
 export type ExtensionAuthorizationRequest = Readonly<{
-  operation: 'getRunOptions' | 'createRun' | 'getRun' | 'listOwn' | 'listRunEvents' | 'subscribe' | 'steer' | 'cancel'
+  operation: 'capacity' | 'getRunOptions' | 'createRun' | 'getRun' | 'listOwn' | 'listRunEvents' | 'subscribe' | 'steer' | 'cancel'
   permission: string
   workspace?: string
   providerId?: string

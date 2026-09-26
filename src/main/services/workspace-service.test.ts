@@ -8,7 +8,13 @@ vi.mock('electron', () => ({
     getFileIcon: vi.fn()
   },
   clipboard: {
-    readImage: vi.fn()
+    readImage: vi.fn(),
+    writeImage: vi.fn()
+  },
+  nativeImage: {
+    createFromPath: vi.fn(),
+    createFromBuffer: vi.fn(),
+    createFromDataURL: vi.fn()
   },
   dialog: {
     showOpenDialog: vi.fn()
@@ -19,7 +25,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { clipboard, dialog } from 'electron'
+import { clipboard, dialog, nativeImage } from 'electron'
 
 import {
   createWorkspaceDirectory,
@@ -35,6 +41,7 @@ import {
   pickAndSaveWorkspaceImage,
   saveWorkspaceClipboardImage,
   saveWorkspaceImageBytes,
+  writeClipboardImage,
   writeWorkspaceFile
 } from './workspace-service'
 
@@ -45,6 +52,10 @@ describe('workspace-service boundary checks', () => {
 
   beforeEach(async () => {
     vi.mocked(clipboard.readImage).mockReset()
+    vi.mocked(clipboard.writeImage).mockReset()
+    vi.mocked(nativeImage.createFromPath).mockReset()
+    vi.mocked(nativeImage.createFromBuffer).mockReset()
+    vi.mocked(nativeImage.createFromDataURL).mockReset()
     vi.mocked(dialog.showOpenDialog).mockReset()
     rootDir = await mkdtemp(join(tmpdir(), 'ds-gui-workspace-'))
     workspaceRoot = join(rootDir, 'workspace')
@@ -240,6 +251,67 @@ describe('workspace-service boundary checks', () => {
     expect(result.width).toBe(12)
     expect(result.height).toBe(8)
     await expect(readFile(result.localFilePath)).resolves.toEqual(Buffer.from('clipboard-png-bytes'))
+  })
+
+  it('writes a workspace image path onto the system clipboard', async () => {
+    const imagePath = join(workspaceRoot, 'photo.png')
+    await writeFile(imagePath, Buffer.from('workspace-png-bytes'))
+    const image = { isEmpty: () => false } as Electron.NativeImage
+    vi.mocked(nativeImage.createFromPath).mockReturnValue(image)
+
+    const result = await writeClipboardImage({
+      path: imagePath,
+      workspaceRoot
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(nativeImage.createFromPath).toHaveBeenCalledWith(await realpath(imagePath))
+    expect(clipboard.writeImage).toHaveBeenCalledWith(image)
+  })
+
+  it('writes clipboard images from base64 bytes', async () => {
+    const image = { isEmpty: () => false } as Electron.NativeImage
+    vi.mocked(nativeImage.createFromBuffer).mockReturnValue(image)
+
+    const result = await writeClipboardImage({
+      dataBase64: Buffer.from('png-bytes').toString('base64'),
+      mimeType: 'image/png'
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(nativeImage.createFromBuffer).toHaveBeenCalledWith(Buffer.from('png-bytes'))
+    expect(clipboard.writeImage).toHaveBeenCalledWith(image)
+  })
+
+  it('rejects empty bitmap encodings', async () => {
+    vi.mocked(nativeImage.createFromBuffer).mockReturnValue({ isEmpty: () => true } as Electron.NativeImage)
+    vi.mocked(nativeImage.createFromDataURL).mockReturnValue({ isEmpty: () => true } as Electron.NativeImage)
+
+    const result = await writeClipboardImage({
+      dataBase64: Buffer.from('not-an-image').toString('base64')
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      message: 'This image could not be copied as a bitmap.'
+    })
+    expect(clipboard.writeImage).not.toHaveBeenCalled()
+  })
+
+  it('does not copy images outside the selected workspace', async () => {
+    const outsideImage = join(rootDir, 'secret.png')
+    await writeFile(outsideImage, Buffer.from('outside-png'))
+
+    const result = await writeClipboardImage({
+      path: outsideImage,
+      workspaceRoot
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      message: 'Path must stay within the selected workspace.'
+    })
+    expect(clipboard.writeImage).not.toHaveBeenCalled()
   })
 
   it('saves SDD pasted clipboard images into .kunsdd/img with draft-relative markdown', async () => {

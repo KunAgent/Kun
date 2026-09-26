@@ -144,8 +144,8 @@ describe('write workspace file actions', () => {
       ratio: 0.5,
       focusedGroupId: 'secondary',
       groups: [
-        { id: 'primary', activePath: '/tmp/write/a.md', tabs: [{ path: '/tmp/write/a.md', viewMode: 'live' }] },
-        { id: 'secondary', activePath: '/tmp/write/missing.md', tabs: [{ path: '/tmp/write/missing.md', viewMode: 'preview' }] }
+        { id: 'primary', activePath: '/tmp/write/a.md', tabs: [{ path: '/tmp/write/a.md', viewMode: 'rich' }] },
+        { id: 'secondary', activePath: '/tmp/write/missing.md', tabs: [{ path: '/tmp/write/missing.md', viewMode: 'plain' }] }
       ]
     })
     const { actions, get } = createHarness()
@@ -195,6 +195,81 @@ describe('write workspace file actions', () => {
       fileContent: 'unsaved draft',
       saveStatus: 'dirty'
     })
+  })
+
+  it('force-reinitializes the same workspace root when switching surfaces', async () => {
+    const storage = new MemoryStorage()
+    const readWorkspaceFile = vi.fn(async ({ path }: { path: string }) => ({
+      ok: true as const,
+      path,
+      content: 'a',
+      size: 1,
+      truncated: false as const
+    }))
+    vi.stubGlobal('window', {
+      localStorage: storage,
+      confirm: vi.fn(() => true),
+      kunGui: {
+        listWorkspaceDirectory: vi.fn(async () => ({ ok: true as const, root: '/tmp/write', entries: [] })),
+        readWorkspaceFile
+      }
+    })
+    persistWriteEditorLayout('/tmp/write', {
+      version: 1,
+      orientation: 'single',
+      ratio: 0.5,
+      focusedGroupId: 'primary',
+      groups: [
+        { id: 'primary', activePath: '/tmp/write/a.md', tabs: [{ path: '/tmp/write/a.md', viewMode: 'rich' }] }
+      ]
+    })
+    const { actions, get, set } = createHarness()
+    set({
+      workspaceRoot: '/tmp/write',
+      rootDirectory: '/tmp/write',
+      expandedDirs: new Set(['/tmp/write']),
+      activeFilePath: '/tmp/write/paper-mode-tab.pdf',
+      fileContent: '',
+      saveStatus: 'saved'
+    })
+
+    await actions.initializeWorkspace('/tmp/write', { force: true })
+    // A same-root refresh would keep the previous surface's active file; the
+    // forced reinit must drop it and restore this surface's persisted layout.
+    expect(readWorkspaceFile).toHaveBeenCalled()
+    expect(get()).toMatchObject({
+      workspaceRoot: '/tmp/write',
+      activeFilePath: '/tmp/write/a.md'
+    })
+    expect(get().editorLayout).toMatchObject({
+      orientation: 'single',
+      groups: [{ id: 'primary', activePath: '/tmp/write/a.md' }]
+    })
+  })
+
+  it('aborts a forced reinit when the user declines to leave a dirty file', async () => {
+    const listWorkspaceDirectory = vi.fn()
+    vi.stubGlobal('window', {
+      confirm: vi.fn(() => false),
+      kunGui: { listWorkspaceDirectory }
+    })
+    const { actions, get, set } = createHarness()
+    set({
+      workspaceRoot: '/tmp/write',
+      rootDirectory: '/tmp/write',
+      activeFilePath: '/tmp/write/draft.md',
+      fileContent: 'unsaved draft',
+      saveStatus: 'dirty',
+      autoSaveEnabled: false,
+      documentsByPath: {
+        '/tmp/write/draft.md': { kind: 'text', saveStatus: 'dirty' } as never
+      }
+    })
+
+    await actions.initializeWorkspace('/tmp/write', { force: true })
+
+    expect(listWorkspaceDirectory).not.toHaveBeenCalled()
+    expect(get().activeFilePath).toBe('/tmp/write/draft.md')
   })
 
   it('clears loading state and records list errors when directory IPC throws', async () => {
@@ -314,7 +389,7 @@ describe('write workspace file actions', () => {
         orientation: 'single',
         ratio: 0.5,
         focusedGroupId: 'primary',
-        groups: [{ id: 'primary', tabs: [{ path: '/tmp/write/draft.md', viewMode: 'live' }], activePath: '/tmp/write/draft.md' }]
+        groups: [{ id: 'primary', tabs: [{ path: '/tmp/write/draft.md', viewMode: 'rich' }], activePath: '/tmp/write/draft.md' }]
       },
       flushSave
     })
@@ -371,7 +446,7 @@ describe('write workspace file actions', () => {
         orientation: 'single',
         ratio: 0.5,
         focusedGroupId: 'primary',
-        groups: [{ id: 'primary', tabs: [{ path: '/tmp/write/draft.md', viewMode: 'live' }], activePath: '/tmp/write/draft.md' }]
+        groups: [{ id: 'primary', tabs: [{ path: '/tmp/write/draft.md', viewMode: 'rich' }], activePath: '/tmp/write/draft.md' }]
       },
       saveDocument
     })

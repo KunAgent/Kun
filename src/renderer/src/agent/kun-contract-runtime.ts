@@ -243,12 +243,15 @@ export type CoreTurnJson = {
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   injectedMemorySummaries?: Array<{ id: string; content: string }>
+  injectedDirectiveIds?: string[]
+  injectedDirectiveSummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
   injectedInstructionSources?: Array<{ scope: 'global' | 'workspace'; path: string; bytes: number; truncated?: boolean }>
   instructionInjectionBytes?: number
   workspaceCheckpointId?: string
   workspaceCheckpointRequestId?: string
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   guiDesignMode?: boolean
   agentSurface?: 'code' | 'write' | 'design'
   designProfile?: DesignTaskProfile
@@ -257,6 +260,8 @@ export type CoreTurnJson = {
 }
 
 export type CoreTurnItemJson = {
+  sourceHistoryOrder?: { referenceId: string; turnIndex: number; itemIndex: number }
+  sourceAttachments?: Array<{ index: number; name: string; mimeType?: string }>
   id: string
   turnId: string
   threadId: string
@@ -269,6 +274,7 @@ export type CoreTurnItemJson = {
   displayText?: string
   mode?: 'agent' | 'plan'
   guiDesignCanvas?: boolean
+  guiExcalidrawCanvas?: boolean
   guiDesignMode?: boolean
   agentSurface?: 'code' | 'write' | 'design'
   designProfile?: DesignTaskProfile
@@ -281,10 +287,13 @@ export type CoreTurnItemJson = {
   toolKind?: 'tool_call' | 'command_execution' | 'file_change'
   arguments?: Record<string, unknown>
   output?: unknown
+  /** Tool-result sideband (e.g. `paperList`/`paperSearch`); never model-facing. */
+  meta?: Record<string, unknown>
   isError?: boolean
   approvalId?: string
   approvalReviewer?: 'user' | 'agent'
   decisionSource?: 'user' | 'agent'
+  action?: CoreApprovalActionJson
   inputId?: string
   prompt?: string
   timeoutSeconds?: number
@@ -313,6 +322,11 @@ export type CoreTurnItemJson = {
   sourceDigest?: string
   digestMarker?: string
   sourceItemIds?: string[]
+  /** Context-window checkpoint identity (kind === 'context_window'). */
+  windowId?: string
+  previousWindowId?: string | null
+  /** Why the window transitioned: model, pressure, overflow, manual-summary. */
+  reason?: string
   message?: string
   code?: string
   details?: unknown
@@ -325,6 +339,8 @@ export type CoreTurnItemJson = {
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   injectedMemorySummaries?: Array<{ id: string; content: string }>
+  injectedDirectiveIds?: string[]
+  injectedDirectiveSummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
   injectedInstructionSources?: Array<{ scope: 'global' | 'workspace'; path: string; bytes: number; truncated?: boolean }>
   instructionInjectionBytes?: number
@@ -503,6 +519,19 @@ export type CoreUsageSnapshotJson = {
   avgTokensPerSecond?: number | null
 }
 
+/** Bounded, redacted action data authored by the runtime for approval review. */
+export type CoreApprovalActionJson = {
+  version?: 1
+  kind?: 'command' | 'file' | 'network' | 'mcp' | 'external-effect' | 'unknown'
+  toolName?: string
+  arguments?: Record<string, unknown>
+  workspace?: string
+  cwd?: string
+  targets?: Array<{ kind: string; value: string }>
+  reason?: string
+  requiresUserDecision?: boolean
+}
+
 export type CoreRuntimeEventJson = {
   kind?: string
   seq?: number
@@ -517,6 +546,7 @@ export type CoreRuntimeEventJson = {
   item?: CoreTurnItemJson
   approvalId?: string
   reviewId?: string
+  action?: CoreApprovalActionJson
   approvalPolicy?: string
   sandboxMode?: string
   approvalReviewer?: string
@@ -533,6 +563,11 @@ export type CoreRuntimeEventJson = {
   attempt?: number
   maxAttempts?: number
   delayMs?: number
+  /** model_route_switch: failover progress between two route targets. */
+  fromProviderId?: string
+  fromModelId?: string
+  toProviderId?: string
+  toModelId?: string
   fingerprint?: string
   toolCount?: number
   changeKind?: 'additive' | 'breaking'

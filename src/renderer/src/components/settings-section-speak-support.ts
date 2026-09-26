@@ -3,71 +3,84 @@
  * the default sample line used by the voice preview.
  */
 import {
-  LOCAL_KOKORO_VOICES,
-  type LocalKokoroVoice,
-  type LocalKokoroVoiceAccent,
-  type LocalKokoroVoiceId
-} from '@shared/local-kokoro-voices'
+  LOCAL_SANOTTS_VOICES,
+  type LocalSanottsVoice,
+  type LocalSanottsVoiceId,
+  type LocalSanottsVoiceLanguage
+} from '@shared/local-sanotts-voices'
 import type {
-  LocalKokoroAssetState,
-  LocalKokoroDownloadSourceStatus
-} from '@shared/local-kokoro'
+  LocalSanottsAssetState,
+  LocalSanottsDownloadSourceStatus
+} from '@shared/local-sanotts'
 
-export const SPEAK_PREVIEW_SAMPLE_TEXT = 'Hello, this is a test of the selected voice.'
+export const SPEAK_PREVIEW_SAMPLES: Record<LocalSanottsVoiceLanguage, string> = {
+  en: 'Hello, this is a test of the selected voice.',
+  zh: '你好，这是当前声线的试听。',
+  ru: 'Здравствуйте, это проверка выбранного голоса.',
+  hi: 'नमस्ते, यह चयनित आवाज़ का परीक्षण है।'
+}
 
-export const SPEAK_ACCENT_FILTERS = ['all', 'en-us', 'en-gb'] as const
-export type SpeakAccentFilter = (typeof SPEAK_ACCENT_FILTERS)[number]
+export const SPEAK_PREVIEW_SAMPLE_TEXT = SPEAK_PREVIEW_SAMPLES.en
+
+export const SPEAK_LANGUAGE_FILTERS = ['all', ...(['en', 'zh', 'ru', 'hi'] as const)] as const
+export type SpeakLanguageFilter = (typeof SPEAK_LANGUAGE_FILTERS)[number]
 
 export const SPEAK_SPEED_MIN = 0.5
 export const SPEAK_SPEED_MAX = 2
 export const SPEAK_SPEED_STEP = 0.05
 
 export type SpeakVoiceGroup = {
-  accent: LocalKokoroVoiceAccent
-  voices: LocalKokoroVoice[]
+  language: LocalSanottsVoiceLanguage
+  voices: LocalSanottsVoice[]
 }
 
-/** Voices grouped by accent so the dropdown can render one optgroup each. */
-export function speakVoiceGroups(filter: SpeakAccentFilter): SpeakVoiceGroup[] {
-  const accents: LocalKokoroVoiceAccent[] = filter === 'all' ? ['en-us', 'en-gb'] : [filter]
-  return accents
-    .map((accent) => ({
-      accent,
-      voices: LOCAL_KOKORO_VOICES.filter((voice) => voice.accent === accent).map((voice) => ({ ...voice }))
+/** Voices grouped by language so the dropdown can render one optgroup each. */
+export function speakVoiceGroups(filter: SpeakLanguageFilter): SpeakVoiceGroup[] {
+  const languages: LocalSanottsVoiceLanguage[] = filter === 'all' ? ['en', 'zh', 'ru', 'hi'] : [filter]
+  return languages
+    .map((language) => ({
+      language,
+      voices: LOCAL_SANOTTS_VOICES.filter((voice) => voice.language === language).map((voice) => ({ ...voice }))
     }))
     .filter((group) => group.voices.length > 0)
 }
 
-/** Voice ids visible under the current accent filter, in dropdown order. */
-export function speakVisibleVoiceIds(filter: SpeakAccentFilter): LocalKokoroVoiceId[] {
+/** Voice ids visible under the current language filter, in dropdown order. */
+export function speakVisibleVoiceIds(filter: SpeakLanguageFilter): LocalSanottsVoiceId[] {
   return speakVoiceGroups(filter).flatMap((group) => group.voices.map((voice) => voice.id))
 }
 
-export function speakAccentLabel(
+export function speakLanguageLabel(
   t: (key: string) => string,
-  accent: LocalKokoroVoiceAccent | 'all'
+  language: LocalSanottsVoiceLanguage | 'all'
 ): string {
-  if (accent === 'all') return t('speakAccentAll')
-  return accent === 'en-gb' ? t('speakAccentBritish') : t('speakAccentAmerican')
+  if (language === 'all') return t('speakLanguageAll')
+  if (language === 'zh') return t('speakLanguageZh')
+  if (language === 'ru') return t('speakLanguageRu')
+  if (language === 'hi') return t('speakLanguageHi')
+  return t('speakLanguageEn')
+}
+
+export function speakPreviewSample(language: LocalSanottsVoiceLanguage): string {
+  return SPEAK_PREVIEW_SAMPLES[language] || SPEAK_PREVIEW_SAMPLES.en
 }
 
 export function speakVoiceOptionLabel(
   t: (key: string, options?: Record<string, unknown>) => string,
-  voice: LocalKokoroVoice,
-  state: LocalKokoroAssetState
+  voice: LocalSanottsVoice,
+  state: LocalSanottsAssetState
 ): string {
-  const gender = voice.gender === 'male' ? t('speakVoiceMale') : t('speakVoiceFemale')
   const suffix = state === 'ready'
     ? ''
     : state === 'downloading'
       ? ` - ${t('speakVoiceStateDownloading')}`
       : ` - ${t('speakVoiceStateNotDownloaded')}`
-  return `${voice.label} (${gender})${suffix}`
+  return `${voice.label}${suffix}`
 }
 
 export function speakModelStateLabel(
   t: (key: string) => string,
-  state: LocalKokoroAssetState
+  state: LocalSanottsAssetState
 ): string {
   if (state === 'ready') return t('speakModelStateReady')
   if (state === 'downloading') return t('speakModelStateDownloading')
@@ -75,15 +88,9 @@ export function speakModelStateLabel(
   return t('speakModelStateNotDownloaded')
 }
 
-export function speakQualityLabel(t: (key: string) => string, tier: string): string {
-  if (tier === 'reference') return t('speakQualityReference')
-  if (tier === 'strong') return t('speakQualityStrong')
-  return t('speakQualityBalanced')
-}
-
 export function speakSourceStatusText(
   t: (key: string, options?: Record<string, unknown>) => string,
-  status: LocalKokoroDownloadSourceStatus
+  status: LocalSanottsDownloadSourceStatus
 ): string {
   if (status.state === 'available') {
     return t('speakDownloadSourceAvailable', {

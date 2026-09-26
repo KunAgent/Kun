@@ -26,7 +26,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
     openSettings, openPluginsView, openExtensionsView, toggleTheme, toggleConnectPhone, openConnectWeixin,
     openCodeMode, openWriteMode, openBoardView, openScheduleView, openWorkflowView,
     startNewConversation, beginLeftResize, toggleLeftSidebar, busy,
-    input, rightPanel, writeRuntimeBanner, setInput, sendWritePrompt,
+    input, rightPanel, writeRuntimeBanner, setInput, sendWritePrompt, attachPaperComposerImage,
     conversationRuntimeBanner, activeSddDraft, rightPanelMode, toggleSddAssistantPanel,
     quoteToSddAssistant, sendSddPrototypeTurn, exploreSddRequirementInDesign, handleSddNextStep,
     dismissActiveSddDraft, sddDraftOperationStatus, stageInsetClass,
@@ -115,6 +115,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         onWorkflowOpen={openWorkflowView}
         onNewConversation={startNewConversation}
         onBeginResize={beginLeftResize}
+        onBackdropClose={toggleLeftSidebar}
       />
 
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -142,6 +143,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
           input,
           setInput,
           onSubmitPrompt: sendWritePrompt,
+          onAttachImage: attachPaperComposerImage,
           onOpenAgentSettings: () => openSettings('write'),
           rightPanel
         }}

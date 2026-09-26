@@ -15,6 +15,8 @@ import type { DesignHtmlElementContext } from './design-composer-context'
 import { useProjectDesignSystemStore } from './canvas/project-design-system-store'
 import type { DesignPromptSource } from './design-quality-repair-dispatch'
 import type { DesignArtifact } from './design-types'
+import { designDocumentResolvedEngine } from './design-types'
+import { resolveExcalidrawSceneForPrompt, excalidrawScenePath } from '../whiteboard/excalidraw-persistence'
 import {
   buildDesignTurnSendOverrides,
   type DesignTurnPromptState
@@ -172,6 +174,8 @@ export async function submitDesignTurn(
     return fail(error instanceof Error ? error.message : String(error))
   }
   if (!boardArtifact) return { status: 'missing-board' }
+  const activeDocument = latestDesignState.documents.find((item) => item.id === turnContext.documentId)
+  const canvasEngine = activeDocument ? designDocumentResolvedEngine(activeDocument) : 'kun'
   const designDocumentTarget = {
     documentId: turnContext.documentId,
     boardArtifactId: boardArtifact.id
@@ -190,7 +194,7 @@ export async function submitDesignTurn(
 
   const canvasDoc = getCanvasShapeState().document
   const selectedShapeIds = getCanvasSelectionState().selectedIds
-  const designImagePlacementTarget = designProfile?.outputMedium === 'image'
+  const designImagePlacementTarget = canvasEngine !== 'excalidraw' && designProfile?.outputMedium === 'image'
     ? resolveGeneratedImagePlacementTarget({
         document: canvasDoc,
         selectedIds: selectedShapeIds,
@@ -213,6 +217,14 @@ export async function submitDesignTurn(
     })
   } catch (error) {
     return fail(error instanceof Error ? error.message : String(error))
+  }
+  if (canvasEngine === 'excalidraw') {
+    resolvedTarget = {
+      target: 'canvas',
+      artifactRelativePath: boardArtifact.relativePath,
+      visibleTargets: [],
+      targetAutoRepairKey: ''
+    }
   }
   const failAfterResolve = async (message: string): Promise<SubmitDesignTurnResult> => {
     try {
@@ -261,6 +273,13 @@ export async function submitDesignTurn(
     : livePromptState
   const projectDesignMd = useProjectDesignSystemStore.getState()
   const canvasErrorKey = canvasOpErrorKey(options.workspaceRoot, promptState.activeDocumentId, boardArtifact.id)
+  const excalidrawScene = canvasEngine === 'excalidraw' && turnContext.documentId
+    ? await resolveExcalidrawSceneForPrompt(
+        options.workspaceRoot,
+        turnContext.documentId,
+        '.kun-design'
+      )
+    : null
   let promptPayload: DesignTurnPromptPayload
   try {
     promptPayload = await buildPayload({
@@ -282,10 +301,20 @@ export async function submitDesignTurn(
       ...(resolvedTarget.basePath ? { basePath: resolvedTarget.basePath } : {}),
       ...(resolvedTarget.htmlArtifactId ? { htmlArtifactId: resolvedTarget.htmlArtifactId } : {}),
       ...(resolvedTarget.htmlElementContext ? { htmlElementContext: resolvedTarget.htmlElementContext } : {}),
-      ...(resolvedTarget.canvasSnapshot ? { canvasSnapshot: resolvedTarget.canvasSnapshot } : {}),
+      ...(canvasEngine === 'excalidraw'
+        ? {
+            canvasEngine: 'excalidraw' as const,
+            ...(turnContext.documentId
+              ? { excalidrawScenePath: excalidrawScenePath(turnContext.documentId, '.kun-design') }
+              : {}),
+            ...(excalidrawScene ? { excalidrawScene } : {})
+          }
+        : {
+            ...(resolvedTarget.canvasSnapshot ? { canvasSnapshot: resolvedTarget.canvasSnapshot } : {}),
+            ...(resolvedTarget.target === 'canvas' ? { previousOpErrors: takeCanvasErrors(canvasErrorKey) } : {})
+          }),
       ...(resolvedTarget.htmlFrameContext ? { frameContext: resolvedTarget.htmlFrameContext } : {}),
       ...(resolvedTarget.selectedFrame ? { selectedFrame: resolvedTarget.selectedFrame } : {}),
-      ...(resolvedTarget.target === 'canvas' ? { previousOpErrors: takeCanvasErrors(canvasErrorKey) } : {}),
       ...(options.imageEditReferencePath
         ? { imageEditReferencePath: options.imageEditReferencePath }
         : {})
@@ -312,6 +341,7 @@ export async function submitDesignTurn(
         ...(options.serviceTier ? { serviceTier: options.serviceTier } : {}),
         ...(options.expectedThreadId ? { expectedThreadId: options.expectedThreadId } : {}),
         target: resolvedTarget.target,
+        ...(canvasEngine === 'excalidraw' ? { canvasEngine: 'excalidraw' as const } : {}),
         ...(!omitLockedProfile && designProfile ? { designProfile, designDocumentTarget } : {}),
         ...(designImagePlacementTarget ? { designImagePlacementTarget } : {}),
         ...(options.waitForRuntimeAdmission ? { waitForRuntimeAdmission: true } : {}),

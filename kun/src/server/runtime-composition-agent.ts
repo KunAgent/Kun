@@ -22,6 +22,7 @@ import {
   SkillRuntime,
   InstructionRuntime,
   type MemoryStore,
+  type MemoryFeedbackRuntime,
   ExtensionAgentProfileRegistry,
   ExtensionAgentService,
   resolveAntigravityCliCommand
@@ -137,6 +138,7 @@ export async function createRuntimeAgentComposition(
   // narrow delegated runtime boundary. Keep the runtime objects alive even
   // with an initially empty provider set so /connect can add an account
   // without requiring the standalone TUI runtime to restart.
+  const canvasReceipts = new CanvasReceiptRegistry({ turns: turnService, events, nowIso })
   const buildMainDelegatedRuntime = (input: {
     options: KunServeRuntimeOptions
     registry: CapabilityRegistry
@@ -144,12 +146,14 @@ export async function createRuntimeAgentComposition(
     instructionRuntime: InstructionRuntime
     attachmentStore?: AttachmentStore
     memoryStore?: MemoryStore
+    memoryFeedback?: MemoryFeedbackRuntime
   }) => {
     const providerConfigs = Object.fromEntries(
       Object.entries(input.options.providers ?? {}).map(([id, provider]) => [id, { ...provider }])
     )
     const sdkRuntimeDeps: AgentSdkRuntimeFactoryDeps = {
       registry: input.registry,
+      receipts: canvasReceipts,
       toolHost,
       turns: turnService,
       sessionStore,
@@ -179,6 +183,7 @@ export async function createRuntimeAgentComposition(
       nowIso,
       ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
       ...(input.memoryStore ? { memoryStore: input.memoryStore } : {}),
+      ...(input.memoryFeedback ? { memoryFeedback: input.memoryFeedback } : {}),
       ...(process.env.KUN_CLAUDE_BINARY
         ? { pathToClaudeCodeExecutable: process.env.KUN_CLAUDE_BINARY }
         : {}),
@@ -236,6 +241,7 @@ export async function createRuntimeAgentComposition(
       instructionRuntime: input.instructionRuntime,
       nowIso,
       ...(input.memoryStore ? { memoryStore: input.memoryStore } : {}),
+      ...(input.memoryFeedback ? { memoryFeedback: input.memoryFeedback } : {}),
       ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
       turnLimits: input.options.runtime?.turnLimits,
       sessionCoordinator: delegatedSessions,
@@ -269,7 +275,8 @@ export async function createRuntimeAgentComposition(
     skillRuntime: services.skillRuntime,
     instructionRuntime: services.instructionRuntime,
     attachmentStore: services.attachmentStore,
-    memoryStore: services.memoryStore
+    memoryStore: services.memoryStore,
+    memoryFeedback: services.memoryFeedback
   }))
   model.refreshModelConnectionDelegatedDeps = () => {
     sdkRuntime.replace(buildMainDelegatedRuntime({
@@ -278,14 +285,10 @@ export async function createRuntimeAgentComposition(
       skillRuntime: services.skillRuntime,
       instructionRuntime: services.instructionRuntime,
       attachmentStore: services.attachmentStore,
-      memoryStore: services.memoryStore
+      memoryStore: services.memoryStore,
+      memoryFeedback: services.memoryFeedback
     }))
   }
-	  const canvasReceipts = new CanvasReceiptRegistry({
-	    turns: turnService,
-	    events,
-	    nowIso
-	  })
 	  const activeRuntimeRuns = new Set<Promise<TurnRunOutcome>>()
 	  let shuttingDown = false
 	  let loop!: AgentLoop
@@ -341,6 +344,10 @@ export async function createRuntimeAgentComposition(
 		    instructionRuntime: services.instructionRuntime,
 		    tokenEconomy: core.tokenEconomy,
 	    contextCompaction: core.activeOptions.contextCompaction,
+	    contextWindowModes: core.contextWindowModes,
+	    contextWindowTransition: core.contextWindowTransition,
+	    contextWindowBudget: core.contextWindowBudget,
+	    contextWindowStateRestore: core.contextWindowStateRestore,
 	    ...(core.activeOptions.roles ? { roles: core.activeOptions.roles } : {}),
 	    ...(core.activeOptions.runtime?.toolStorm ? { toolStorm: core.activeOptions.runtime.toolStorm } : {}),
 	    ...(core.activeOptions.runtime?.turnLimits ? { turnLimits: core.activeOptions.runtime.turnLimits } : {}),
@@ -352,6 +359,7 @@ export async function createRuntimeAgentComposition(
 		    ...(services.attachmentStore ? { attachmentStore: services.attachmentStore } : {}),
 	    artifactStore,
 	    ...(services.memoryStore ? { memoryStore: services.memoryStore } : {}),
+	    ...(services.memoryFeedback ? { memoryFeedback: services.memoryFeedback } : {}),
 	    memoryDistillation: services.memoryDistillation,
 	    runtimeDataDir: core.activeOptions.dataDir,
 	    awaitWorkspaceCheckpoint: (checkpointRequestId, signal) =>

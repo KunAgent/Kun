@@ -8,6 +8,7 @@ import { RelativePathSchema, ResultPreviewSourceSchema } from '@kun/extension-ap
 import type { ExtensionResultPreviewSource } from '../../extensions/ControlledContributionSurfaces'
 import { isBackgroundShellNoticeBlock, splitThink, type Turn } from './message-timeline-turns'
 import type { TurnRuntimeErrorBlock } from './derive-turn-sections'
+import { useTurnRuntimeErrorActions } from './use-turn-runtime-error-actions'
 
 const TIMELINE_JUMP_RAIL_FALLBACK_LEFT_PX = 16
 const TIMELINE_JUMP_RAIL_STAGE_INSET_PX = 16
@@ -243,6 +244,7 @@ export function TimelineRuntimeError({
   /** Optional "continue the interrupted task" action shown for restart interrupts. */
   onContinue?: () => void
 }): ReactElement {
+  const { openProviderSettings } = useTurnRuntimeErrorActions()
   const { t } = useTranslation('common')
   const code = block.code?.trim() ?? ''
   const detail = block.detail?.trim() ?? ''
@@ -267,6 +269,8 @@ export function TimelineRuntimeError({
             ? t('runtimeMemoryPressureWarning', {
                 defaultValue: 'Agent Runtime memory usage is high. New subagents are temporarily limited while memory is reclaimed.'
               })
+          : code === 'output_truncated'
+            ? t('outputTruncatedNotice')
             : ''
   const providerSummary = requestFailure?.category === 'rate_limit'
     ? t('modelErrorProviderSummaryRateLimited')
@@ -377,18 +381,32 @@ export function TimelineRuntimeError({
             </pre>
           </details>
         ) : null}
-        {onContinue && (
-          code === 'orphaned_after_restart' || code === 'owner_lease_expired'
-        ) ? (
-          <button
-            type="button"
-            data-testid="timeline-runtime-error-continue"
-            onClick={onContinue}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-orange-300/60 bg-orange-100/60 px-2.5 py-1 text-[12.5px] font-medium text-orange-900 transition-colors hover:bg-orange-200/70 dark:border-orange-700/60 dark:bg-orange-900/40 dark:text-orange-100 dark:hover:bg-orange-800/50"
-          >
-            {t('continueInterruptedTask')}
-          </button>
-        ) : null}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {onContinue && (
+            code === 'orphaned_after_restart' ||
+            code === 'owner_lease_expired' ||
+            code === 'output_truncated'
+          ) ? (
+            <button
+              type="button"
+              data-testid="timeline-runtime-error-continue"
+              onClick={onContinue}
+              className="inline-flex items-center gap-1.5 rounded-md border border-orange-300/60 bg-orange-100/60 px-2.5 py-1 text-[12.5px] font-medium text-orange-900 transition-colors hover:bg-orange-200/70 dark:border-orange-700/60 dark:bg-orange-900/40 dark:text-orange-100 dark:hover:bg-orange-800/50"
+            >
+              {t('continueInterruptedTask')}
+            </button>
+          ) : null}
+          {code === 'output_truncated' ? (
+            <button
+              type="button"
+              data-testid="timeline-runtime-error-provider-settings"
+              onClick={openProviderSettings}
+              className="inline-flex items-center gap-1.5 rounded-md border border-orange-300/60 px-2.5 py-1 text-[12.5px] font-medium text-orange-800 transition-colors hover:bg-orange-100/60 dark:border-orange-700/60 dark:text-orange-200 dark:hover:bg-orange-900/30"
+            >
+              {t('openProviderSettings')}
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   )

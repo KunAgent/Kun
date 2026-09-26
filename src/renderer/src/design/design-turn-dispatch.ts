@@ -37,11 +37,13 @@ export type DesignTurnSendOptions = DesignAssistantModelOptions & {
   designDocumentTarget?: DesignDocumentTarget
   designImagePlacementTarget?: DesignImagePlacementTarget
   waitForRuntimeAdmission?: boolean
+  canvasEngine?: 'kun' | 'excalidraw'
 }
 
 export type CodeCanvasSendOptions = {
   displayText?: string
   reasoningEffort?: string
+  canvasEngine?: 'kun' | 'excalidraw'
 }
 
 function buildAssistantModelOverrides({
@@ -81,7 +83,12 @@ export function buildDesignTurnSendOverrides(options: DesignTurnSendOptions): Se
       ? { designImagePlacementTarget: options.designImagePlacementTarget }
       : {}),
     ...(options.waitForRuntimeAdmission ? { waitForRuntimeAdmission: true } : {}),
-    ...(options.target === 'canvas' ? { guiDesignCanvas: true, guiDesignMode: true } : {}),
+    ...(options.target === 'canvas' && options.canvasEngine !== 'excalidraw'
+      ? { guiDesignCanvas: true, guiDesignMode: true }
+      : {}),
+    ...(options.target === 'canvas' && options.canvasEngine === 'excalidraw'
+      ? { guiExcalidrawCanvas: true }
+      : {}),
     ...(options.target === 'svg' ? {
       guiDesignMode: true,
       ...(options.guiDesignArtifact ? { guiDesignArtifact: options.guiDesignArtifact } : {})
@@ -93,7 +100,9 @@ export function buildDesignTurnSendOverrides(options: DesignTurnSendOptions): Se
 export function buildCodeCanvasSendOverrides(options: CodeCanvasSendOptions): SendMessageOverrides {
   return {
     ...(options.displayText ? { displayText: options.displayText } : {}),
-    guiDesignCanvas: true,
+    ...(options.canvasEngine === 'excalidraw'
+      ? { guiExcalidrawCanvas: true }
+      : { guiDesignCanvas: true }),
     agentSurface: 'code',
     ...(options.reasoningEffort ? { reasoningEffort: options.reasoningEffort } : {})
   }

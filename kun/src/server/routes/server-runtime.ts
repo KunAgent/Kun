@@ -43,6 +43,7 @@ import type { AttachmentDiagnostics } from '../../contracts/attachments.js'
 import type { AttachmentStore } from '../../attachments/attachment-store.js'
 import type { MemoryDiagnostics } from '../../contracts/memory.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
+import type { MemoryFeedbackRuntime } from '../../memory/memory-feedback-runtime.js'
 import type { MemoryDistillationCoordinator } from '../../memory/memory-distillation-coordinator.js'
 import type { ReviewTarget } from '../../contracts/review.js'
 import type { DelegationRuntime } from '../../delegation/delegation-runtime.js'
@@ -105,6 +106,7 @@ import type { ProviderQuotaService } from '../../services/provider-quota-service
 import type { ToolCancellationService } from '../../services/tool-cancellation-service.js'
 import type { KnowledgeBaseService } from '../../knowledge/knowledge-base-service.js'
 import type { ProjectBoardService } from '../../services/project-board-service.js'
+import type { RoomRuntime } from '../../rooms/room-runtime.js'
 
 export type RuntimeToolDiagnostics = {
   providers: ToolProviderPolicy[]
@@ -171,7 +173,9 @@ export type ExtensionPlatformRuntime = {
  * file-backed adapters without leaking concrete types into routes.
  */
 export type ServerRuntime = {
+  historyReferences?: import('../../history/history-reference-service.js').HistoryReferenceService
   threadService: ThreadService
+  rooms?: RoomRuntime
   projectBoardService?: ProjectBoardService
   turnService: TurnService
   toolCancellationService?: ToolCancellationService
@@ -199,6 +203,7 @@ export type ServerRuntime = {
   toolHost?: ToolHost
   attachmentStore?: AttachmentStore
   memoryStore?: MemoryStore
+  memoryFeedback?: MemoryFeedbackRuntime
   memoryDistillation?: MemoryDistillationCoordinator
   knowledgeBaseService?: KnowledgeBaseService
   migrationService?: RuntimeMigrationService
@@ -233,6 +238,13 @@ export type ServerRuntime = {
    * scaffolds can omit it.
    */
   modelClient?: ModelClient
+  /**
+   * Unrouted provider client (MultiProviderModelClient) used by probes and
+   * diagnostics that must hit the exact requested provider — a failover pool
+   * would silently pass a probe through a healthy alternative and pollute
+   * shared route health with probe results.
+   */
+  directModelClient?: ModelClient
   modelConnections?: ModelConnectionRegistry
   modelConnectionOAuth?: ModelConnectionOAuthService
   officialProviderAuth?: OfficialProviderAuthService
@@ -240,6 +252,7 @@ export type ServerRuntime = {
   providerQuotaService?: Pick<ProviderQuotaService, 'list'>
   modelGateway?: {
     enabled(): boolean
+    exposeProviderModels(): boolean
     pools(): ModelRoutePoolConfig[]
     configuredPools(): ModelRoutePoolConfig[]
     health: RoutePoolHealthStore

@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "decisionId": "kun-memory-feedback-decision-v1",
+  "evaluationVersion": "p3-feedback-v1",
+  "fixtureSha256": "a1268bfbfaa364c5b5d920a100b54edeedd5dbda67c0f525ae340ca5d436f21a",
+  "protocol": {
+    "development": ["case_workspace_a_concise_port", "case_workspace_a_command"],
+    "holdout": ["case_workspace_a_port", "case_workspace_b_scope"],
+    "holdoutRunCount": 1,
+    "candidateLockedAfterDevelopment": true,
+    "bootstrap": { "method": "paired-percentile-lower-bound", "seed": 20260915, "resamples": 2000, "confidenceLevel": 0.95 }
+  },
+  "development": {
+    "foundation": { "recallAtK": 0.75, "precisionAtK": 0.5, "meanReciprocalRank": 1, "forbiddenSelections": 0, "queryCount": 2 },
+    "candidate": { "recallAtK": 0.75, "precisionAtK": 0.5, "meanReciprocalRank": 1, "forbiddenSelections": 0, "queryCount": 2 },
+    "delta": { "recallAtK": 0, "precisionAtK": 0, "meanReciprocalRank": 0 },
+    "gates": { "relevance": true, "safety": true, "privacy": true, "resource": true, "passed": true }
+  },
+  "holdout": {
+    "foundation": { "recallAtK": 1, "precisionAtK": 0.667, "meanReciprocalRank": 1, "forbiddenSelections": 0, "queryCount": 2 },
+    "candidate": { "recallAtK": 1, "precisionAtK": 0.667, "meanReciprocalRank": 1, "forbiddenSelections": 0, "queryCount": 2 },
+    "delta": { "recallAtK": 0, "precisionAtK": 0, "meanReciprocalRank": 0 },
+    "bootstrap": { "recallGainLowerBound": 0, "mrrGainLowerBound": 0 },
+    "gates": { "relevance": false, "safety": true, "privacy": true, "resource": true, "passed": false }
+  },
+  "decision": "no-go",
+  "reasons": ["holdout bootstrap relevance gate failed"],
+  "weights": { "retrievalFrequency": 0.05, "confirmation": 0.1, "correction": 0.1 },
+  "traces": [
+    { "caseId": "case_workspace_a_concise_port", "candidate": "foundation", "selectedIds": ["mem_feedback_confirmed", "mem_feedback_frequent"], "forbiddenSelectedIds": [], "rankings": [
+      { "memoryId": "mem_feedback_confirmed", "selected": true, "foundationScore": 0.637314, "candidateScore": 0.737314, "freshness": 0.373137, "importance": 0.5, "confidence": 0.8, "retrievalFrequency": 0, "confirmation": 1, "correction": 0 },
+      { "memoryId": "mem_feedback_frequent", "selected": true, "foundationScore": 0.44467, "candidateScore": 0.469135, "freshness": 0.371703, "importance": 0.5, "confidence": 0.8, "retrievalFrequency": 0.489301, "confirmation": 0, "correction": 0 },
+      { "memoryId": "mem_feedback_replacement", "selected": false, "foundationScore": 0.396883, "candidateScore": 0.396883, "freshness": 0.418832, "importance": 0.7, "confidence": 1, "retrievalFrequency": 0, "confirmation": 0, "correction": 0 }
+    ] },
+    { "caseId": "case_workspace_a_concise_port", "candidate": "feedback", "selectedIds": ["mem_feedback_confirmed", "mem_feedback_frequent"], "forbiddenSelectedIds": [], "rankings": [
+      { "memoryId": "mem_feedback_confirmed", "selected": true, "foundationScore": 0.637314, "candidateScore": 0.737314, "freshness": 0.373137, "importance": 0.5, "confidence": 0.8, "retrievalFrequency": 0, "confirmation": 1, "correction": 0 },
+      { "memoryId": "mem_feedback_frequent", "selected": true, "foundationScore": 0.44467, "candidateScore": 0.469135, "freshness": 0.371703, "importance": 0.5, "confidence": 0.8, "retrievalFrequency": 0.489301, "confirmation": 0, "correction": 0 },
+      { "memoryId": "mem_feedback_replacement", "selected": false, "foundationScore": 0.396883, "candidateScore": 0.396883, "freshness": 0.418832, "importance": 0.7, "confidence": 1, "retrievalFrequency": 0, "confirmation": 0, "correction": 0 }
+    ] },
+    { "caseId": "case_workspace_a_command", "candidate": "foundation", "selectedIds": ["mem_feedback_frequent"], "forbiddenSelectedIds": [], "rankings": [
+      { "memoryId": "mem_feedback_frequent", "selected": true, "foundationScore": 0.77467, "candidateScore": 0.799135, "freshness": 0.371703, "importance": 0.5, "confidence": 0.8, "retrievalFrequency": 0.489301, "confirmation": 0, "correction": 0 },
+      { "memoryId": "mem_feedback_confirmed", "selected": false, "foundationScore": 0.467461, "candidateScore": 0.567461, "freshness": 0.373137, "importance": 0.5, "confidence": 0.8, "retrievalFrequency": 0, "confirmation": 1, "correction": 0 },
+      { "memoryId": "mem_feedback_replacement", "selected": false, "foundationScore": 0.372619, "candidateScore": 0.372619, "freshness": 0.418832, "importance": 0.7, "confidence": 1, "retrievalFrequency": 0, "confirmation": 0, "correction": 0 }
+    ] },
+    { "caseId": "case_workspace_a_command", "candidate": "feedback", "selectedIds": ["mem_feedback_frequent"], "forbiddenSelectedIds": [], "rankings": [
+      { "memoryId": "mem_feedback_frequent", "selected": true, "foundationScore": 0.77467, "candidateScore": 0.799135, "freshness": 0.371703, "importance": 0.5, "confidence": 0.8, "retrievalFrequency": 0.489301, "confirmation": 0, "correction": 0 },
+      { "memoryId": "mem_feedback_confirmed", "selected": false, "foundationScore": 0.467461, "candidateScore": 0.567461, "freshness": 0.373137, "importance": 0.5, "confidence": 0.8, "retrievalFrequency": 0, "confirmation": 1, "correction": 0 },
+      { "memoryId": "mem_feedback_replacement", "selected": false, "foundationScore": 0.372619, "candidateScore": 0.372619, "freshness": 0.418832, "importance": 0.7, "confidence": 1, "retrievalFrequency": 0, "confirmation": 0, "correction": 0 }
+    ] },
+    { "caseId": "case_workspace_a_port", "candidate": "foundation", "selectedIds": ["mem_feedback_replacement"], "forbiddenSelectedIds": [], "rankings": [
+      { "memoryId": "mem_feedback_replacement", "selected": true, "foundationScore": 0.582913, "candidateScore": 0.582913, "freshness": 0.418832, "importance": 0.7, "confidence": 1, "retrievalFrequency": 0, "confirmation": 0, "correction": 0 },
+      { "memoryId": "mem_feedback_frequent", "selected": false, "foundationScore": 0.483494, "candidateScore": 0.507959, "freshness": 0.371703, "importance": 0.5, "confidence": 0.8, "retrievalFrequency": 0.489301, "confirmation": 0, "correction": 0 },
+      { "memoryId": "mem_feedback_confirmed", "selected": false, "foundationScore": 0.451284, "candidateScore": 0.551284, "freshness": 0.373137, "importance": 0.5, "confidence": 0.8, "retrievalFrequency": 0, "confirmation": 1, "correction": 0 }
+    ] },
+    { "caseId": "case_workspace_a_port", "candidate": "feedback", "selectedIds": ["mem_feedback_replacement"], "forbiddenSelectedIds": [], "rankings": [
+      { "memoryId": "mem_feedback_replacement", "selected": true, "foundationScore": 0.582913, "candidateScore": 0.582913, "freshness": 0.418832, "importance": 0.7, "confidence": 1, "retrievalFrequency": 0, "confirmation": 0, "correction": 0 },
+      { "memoryId": "mem_feedback_confirmed", "selected": false, "foundationScore": 0.451284, "candidateScore": 0.551284, "freshness": 0.373137, "importance": 0.5, "confidence": 0.8, "retrievalFrequency": 0, "confirmation": 1, "correction": 0 },
+      { "memoryId": "mem_feedback_frequent", "selected": false, "foundationScore": 0.483494, "candidateScore": 0.507959, "freshness": 0.371703, "importance": 0.5, "confidence": 0.8, "retrievalFrequency": 0.489301, "confirmation": 0, "correction": 0 }
+    ] },
+    { "caseId": "case_workspace_b_scope", "candidate": "foundation", "selectedIds": ["mem_feedback_cross_scope"], "forbiddenSelectedIds": [], "rankings": [
+      { "memoryId": "mem_feedback_cross_scope", "selected": true, "foundationScore": 0.749176, "candidateScore": 0.761408, "freshness": 0.377473, "importance": 1, "confidence": 1, "retrievalFrequency": 0.244651, "confirmation": 0, "correction": 0 }
+    ] },
+    { "caseId": "case_workspace_b_scope", "candidate": "feedback", "selectedIds": ["mem_feedback_cross_scope"], "forbiddenSelectedIds": [], "rankings": [
+      { "memoryId": "mem_feedback_cross_scope", "selected": true, "foundationScore": 0.749176, "candidateScore": 0.761408, "freshness": 0.377473, "importance": 1, "confidence": 1, "retrievalFrequency": 0.244651, "confirmation": 0, "correction": 0 }
+    ] }
+  ]
+}

@@ -267,8 +267,9 @@ export function SettingsView(): ReactElement {
   const {
     loadMcpConfig, openSkillRoot, toggleSkillRoot, saveMcpConfig, openMcpConfigDir,
     loadProjectConfig, saveProjectConfig, setProjectConfigTrust, openProjectConfigDir,
-    refreshKunDiagnostics, createMemoryRecord, updateMemoryRecord, disableMemoryRecord,
-    restoreMemoryRecord, deleteMemoryRecord, decideMemoryCandidate, scrollToAgentSection
+    refreshKunDiagnostics, createMemoryRecord, updateMemoryRecord, confirmMemoryRecord,
+    correctMemoryRecord, disableMemoryRecord, restoreMemoryRecord, deleteMemoryRecord,
+    decideMemoryCandidate, scrollToAgentSection
   } = useSettingsDomainOperations({
     t, reloadUiSettings, category, form, setForm, setSkillRoots, setSkillRootsLoading,
     setSkillNotice, setMcpConfigPath, mcpConfigText, setMcpConfigText, setMcpConfigExists,
@@ -552,6 +553,8 @@ export function SettingsView(): ReactElement {
     refreshKunDiagnostics,
     createMemoryRecord,
     updateMemoryRecord,
+    confirmMemoryRecord,
+    correctMemoryRecord,
     disableMemoryRecord,
     restoreMemoryRecord,
     deleteMemoryRecord,

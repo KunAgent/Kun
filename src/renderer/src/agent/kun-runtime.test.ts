@@ -24,6 +24,44 @@ describe('KunRuntimeProvider', () => {
     expect(caps.approvals).toBe(true)
   })
 
+  it('treats a healthy runtime as connected without listing threads', async () => {
+    const runtimeRequest = vi.fn(async (path: string) => {
+      expect(path).toBe('/health')
+      return { ok: true, status: 200, body: JSON.stringify({ status: 'ok' }) }
+    })
+    installDsGui({ runtimeRequest })
+
+    await new KunRuntimeProvider().connect()
+
+    expect(runtimeRequest).toHaveBeenCalledTimes(1)
+    expect(runtimeRequest).toHaveBeenCalledWith('/health', 'GET')
+  })
+
+  it('logs a sanitized health probe failure without listing threads', async () => {
+    const logError = vi.fn(async () => undefined)
+    const runtimeRequest = vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      body: JSON.stringify({ message: 'runtime unhealthy' })
+    }))
+    installDsGui({ logError, runtimeRequest })
+
+    await expect(new KunRuntimeProvider().connect()).rejects.toThrow(/runtime unhealthy/i)
+    expect(runtimeRequest).toHaveBeenCalledTimes(1)
+    expect(runtimeRequest).toHaveBeenCalledWith('/health', 'GET')
+    await vi.waitFor(() => {
+      expect(logError).toHaveBeenCalledWith(
+        'runtime-probe',
+        'Kun runtime health probe failed',
+        expect.objectContaining({
+          path: '/health',
+          status: 503,
+          baseUrl: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+$/)
+        })
+      )
+    })
+  })
+
   it('reports invalid runtime JSON responses with a stable error message', async () => {
     installDsGui({
       runtimeRequest: vi.fn(async () => ({

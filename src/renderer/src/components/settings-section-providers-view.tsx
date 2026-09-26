@@ -38,7 +38,7 @@ import {
   textInputClass
 } from './settings-section-providers-controls'
 import {
-  MODEL_ENDPOINT_FORMAT_LABEL_KEYS, PROVIDER_TASK_TABS, SUBSCRIPTION_REGION_TABS,
+  MODEL_ENDPOINT_FORMAT_LABEL_KEYS, PROVIDER_TASK_TABS,
   providerModelCount,
   type ProviderTaskTab, type ProviderWorkspaceMode
 } from './settings-section-providers-profile'
@@ -51,13 +51,20 @@ export { sharedModelConnectionHasUsableCredential } from '../lib/provider-creden
 
 
 import { ProviderModelImportDialog } from './provider-model-import-dialog'
+import { ProviderExternalImportDialog } from './provider-external-import-dialog'
+import { ProviderImportLinkConfirmDialog } from './provider-import-link-confirm'
+import { ProviderReliabilityPanel } from './provider-reliability-panel'
+import { ProviderQuickAddPanel } from './provider-quick-add-panel'
+import { ProviderAddSheet } from './provider-add-sheet'
 import { ProviderIcon } from './provider-icon'
 import { ModelRoutesSettings } from './settings-section-model-routes'
 import { ProviderConnectionAdvancedPanels } from './settings-section-providers-connection-panels'
 import { ProviderModelsCapabilitiesPanels } from './settings-section-providers-model-panels'
 
 export function ProvidersSettingsView({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, kun, update, showApiKey, selectControlClass, saveStatus, saveError, retrySave, zh, provider, sharedConnections, sharedConnectionsError, settingsConfigOpenError, openSettingsConfigFile, credentialRevealError, setSelectedProviderId, addMenuOpen, addProviderQuery, setAddProviderQuery, subscriptionRegion, setSubscriptionRegion, providerListQuery, setProviderListQuery, activeTab, setActiveTab, workspaceMode, setWorkspaceMode, globalNetworkOpen, setGlobalNetworkOpen, expandedCapabilities, addProviderButtonRef, addProviderDialogRef, pendingImport, setPendingImport, displayProviders, activeRetry, isDraftActive, canEditActiveProviderId, activeKunProviderId, providerProxy, selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderSpeech, removeModelProviderSpeech, updateModelProviderTextToSpeech, removeModelProviderTextToSpeech, updateModelProviderMusic, removeModelProviderMusic, updateModelProviderVideo, removeModelProviderVideo, updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addDefaultModelProvider, removeModelProvider, deletingProviderId, runProbe, importPickedModels, activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, grouped, renderProviderButton, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider } = view
+  const { t, kun, update, showApiKey, selectControlClass, saveStatus, saveError, retrySave, zh, provider, sharedConnections, sharedConnectionsError, settingsConfigOpenError, openSettingsConfigFile, credentialRevealError, setSelectedProviderId, addMenuOpen, addProviderQuery, setAddProviderQuery, subscriptionRegion, setSubscriptionRegion, providerListQuery, setProviderListQuery, activeTab, setActiveTab, workspaceMode, setWorkspaceMode, globalNetworkOpen, setGlobalNetworkOpen, expandedCapabilities, addProviderButtonRef, addProviderDialogRef, pendingImport, setPendingImport, displayProviders, activeRetry, isDraftActive, canEditActiveProviderId, activeKunProviderId, providerProxy, selectSharedModel, updateProviderProxy, setCapabilityExpanded, openAddProviderDialog, closeAddProviderDialog, handleAddProviderDialogKeyDown, handleSubscriptionRegionTabKeyDown, patchProviderProfile, updateModelProvider, updateActiveProviderCredential, toggleActiveProviderCredentialVisibility, flushSharedProviderCredential, updateModelProviderImage, removeModelProviderImage, updateModelProviderSpeech, removeModelProviderSpeech, updateModelProviderTextToSpeech, removeModelProviderTextToSpeech, updateModelProviderMusic, removeModelProviderMusic, updateModelProviderVideo, removeModelProviderVideo, updateModelProviderId, commitProviderDraft, cancelProviderDraft, addModelProvider, addDefaultModelProvider, removeModelProvider, deletingProviderId, runProbe, importPickedModels, activeProbe, probeBusy, probeNotice, activeBaseUrlInvalid, activeImageBaseUrlInvalid, activeSpeechBaseUrlInvalid, activeSpeechToggleDisabled, activeTextToSpeechBaseUrlInvalid, activeMusicBaseUrlInvalid, activeVideoBaseUrlInvalid, activeMissingCredential, providerSetupNeedsApiKey, activeProbeBlocked, activeCursorAccount, activeCursorAccountFresh, activeCursorApiKeyUrl, activeSharedConnection, activeCredentialNeedsReplacement, activeApiKeyPlaceholder, activeApiKeyValue, activeCredentialRevealBusy, activeTokenPlanRegions, filteredProviders, grouped, renderProviderButton, planAddEntries, apiAddEntries, showPlanAddGroup, renderAddEntry, pendingImportProvider,
+    externalImportOpen, setExternalImportOpen, quickAddEntry, setQuickAddEntry, submitQuickAdd, stagedImportLink, setStagedImportLink,
+    importLinkInput, setImportLinkInput, importLinkError, setImportLinkError, stageImportLinkInput } = view
   const activeProvider = view.activeProvider as ModelProviderProfileV1 | undefined
   const freeProviders = (view.freeProviders as ModelProviderProfileV1[] | undefined) ?? []
   const freeAddEntries = (view.freeAddEntries as any[] | undefined) ?? []
@@ -144,6 +151,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
               <ProviderIcon
                 presetId={activeProvider?.presetSource?.presetId}
                 providerId={activeProvider?.id}
+                iconId={activeProvider?.iconId}
                 className="h-4 w-4"
               />
               {t('modelProviderCompactSelect')}
@@ -208,6 +216,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                       <ProviderIcon
                         presetId={activeProvider.presetSource?.presetId}
                         providerId={activeProvider.id}
+                        iconId={activeProvider.iconId}
                         className="h-6 w-6"
                       />
                     </span>
@@ -332,6 +341,15 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                 {probeNotice ? <InlineNoticeView notice={probeNotice} /> : null}
                 <ProviderConnectionAdvancedPanels view={view} />
                 <ProviderModelsCapabilitiesPanels view={view} />
+                {activeProvider ? (
+                  <ProviderReliabilityPanel
+                    provider={activeProvider}
+                    providerSettings={provider}
+                    t={t}
+                    activeTab={activeTab}
+                    onFailoverChange={(failover) => update({ provider: { failover } })}
+                  />
+                ) : null}
                 {isDraftActive ? (
                   <div className="sticky bottom-0 z-10 -mx-1 mt-2 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/30 bg-ds-card/95 px-4 py-3 shadow-lg backdrop-blur">
                     <div className="min-w-0">
@@ -444,150 +462,31 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
         </div>
       </details>
       {addMenuOpen ? (
-        <div
-          className="ds-no-drag fixed inset-0 z-50 grid place-items-center overscroll-none bg-slate-950/40 p-4 backdrop-blur-md dark:bg-black/65"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="add-provider-dialog-title"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeAddProviderDialog()
-          }}
-        >
-          <section
-            ref={addProviderDialogRef}
-            onKeyDown={handleAddProviderDialogKeyDown}
-            className="flex max-h-[min(720px,calc(100dvh-2rem))] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-ds-border bg-ds-card shadow-panel"
-          >
-            <header className="flex shrink-0 items-start justify-between gap-3 border-b border-ds-border px-5 py-4">
-              <div>
-                <h2 id="add-provider-dialog-title" className="text-[15px] font-semibold text-ds-ink">
-                  {t('modelProviderAddDialogTitle')}
-                </h2>
-                <p className="mt-1 text-[12.5px] text-ds-faint">{t('modelProviderAddDialogDesc')}</p>
-              </div>
-              <button
-                type="button"
-                aria-label={t('modelProviderAddDialogCancel')}
-                onClick={closeAddProviderDialog}
-                className="rounded-full p-1.5 text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
-              >
-                <X className="h-4 w-4" strokeWidth={1.9} />
-              </button>
-            </header>
-            <div className="shrink-0 border-b border-ds-border px-5 py-3">
-              <label className="relative block">
-                <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ds-faint"
-                  strokeWidth={1.9}
-                />
-                <input
-                  autoFocus
-                  value={addProviderQuery}
-                  onChange={(event) => setAddProviderQuery(event.target.value)}
-                  placeholder={t('modelProviderAddDialogSearch')}
-                  aria-label={t('modelProviderAddDialogSearch')}
-                  className="w-full rounded-xl border border-ds-border bg-ds-card py-2 pl-9 pr-3 text-[13px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
-                />
-              </label>
-            </div>
-            <div className="min-h-0 flex-1 overscroll-contain overflow-y-auto px-5 py-4">
-              <button
-                type="button"
-                onClick={() => {
-                  closeAddProviderDialog()
-                  addModelProvider()
-                }}
-                className="mb-4 flex w-full items-center justify-between gap-3 rounded-xl border border-dashed border-accent/45 bg-accent/5 px-4 py-3 text-left transition hover:bg-accent/10"
-              >
-                <span className="flex min-w-0 items-center gap-3">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-ds-border-muted bg-ds-main/45 text-ds-muted">
-                    <ProviderIcon providerId="custom" className="h-4 w-4" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[13.5px] font-semibold text-ds-ink">{t('modelProviderAddMenuCustom')}</span>
-                    <span className="mt-0.5 block text-[12px] text-ds-faint">{t('modelProviderAddCustomDesc')}</span>
-                  </span>
-                </span>
-                <Plus className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
-              </button>
-              {showDefaultProviderEntry ? (
-                <button
-                  type="button"
-                  data-testid="provider-add-deepseek"
-                  onClick={() => { closeAddProviderDialog(); addDefaultModelProvider() }}
-                  className="mb-4 flex w-full items-center gap-3 rounded-xl border border-ds-border bg-ds-card px-4 py-3 text-left transition hover:bg-ds-hover"
-                >
-                  <ProviderIcon providerId="deepseek" className="h-5 w-5" />
-                  <span className="flex-1 text-[13.5px] font-semibold text-ds-ink">DeepSeek</span>
-                  <Plus className="h-4 w-4 text-accent" strokeWidth={2} />
-                </button>
-              ) : null}
-              {freeAddEntries.length > 0 ? (
-                <div className="mb-5 grid gap-2">
-                  <div className="flex items-center gap-2 px-1">
-                    <h3 className="text-[12px] font-semibold text-ds-muted">{t('modelProviderGroupFree')}</h3>
-                    <span className="text-[11px] text-ds-faint">{freeAddEntries.length}</span>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">{freeAddEntries.map(renderAddEntry)}</div>
-                </div>
-              ) : null}
-              {showPlanAddGroup ? (
-                <div className="mb-5 grid gap-2">
-                  <div className="flex flex-wrap items-center gap-2 px-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-[12px] font-semibold text-ds-muted">{t('modelProviderGroupPlans')}</h3>
-                      <span className="text-[11px] text-ds-faint">{planAddEntries.length}</span>
-                    </div>
-                    <div
-                      role="tablist"
-                      aria-label={t('modelProviderSubscriptionRegions')}
-                      className="inline-flex items-center rounded-lg border border-ds-border-muted bg-ds-main/70 p-0.5"
-                    >
-                      {SUBSCRIPTION_REGION_TABS.map((tab) => {
-                        const selected = subscriptionRegion === tab.id
-                        return (
-                          <button
-                            key={tab.id}
-                            type="button"
-                            role="tab"
-                            aria-selected={selected}
-                            tabIndex={selected ? 0 : -1}
-                            onClick={() => setSubscriptionRegion(tab.id)}
-                            onKeyDown={(event) => handleSubscriptionRegionTabKeyDown(event, tab.id)}
-                            className={`min-w-12 rounded-md border px-2.5 py-1 text-[11.5px] font-medium leading-none transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
-                              selected
-                                ? 'border-accent/25 bg-accent/10 text-accent shadow-sm'
-                                : 'border-transparent text-ds-faint hover:bg-ds-card hover:text-ds-muted'
-                            }`}
-                          >
-                            {t(tab.labelKey)}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                  {planAddEntries.length > 0 ? (
-                    <div className="grid gap-2 sm:grid-cols-2">{planAddEntries.map(renderAddEntry)}</div>
-                  ) : null}
-                </div>
-              ) : null}
-              {apiAddEntries.length > 0 ? (
-                <div className="grid gap-2">
-                  <div className="flex items-center gap-2 px-1">
-                    <h3 className="text-[12px] font-semibold text-ds-muted">{t('modelProviderGroupApi')}</h3>
-                    <span className="text-[11px] text-ds-faint">{apiAddEntries.length}</span>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">{apiAddEntries.map(renderAddEntry)}</div>
-                </div>
-              ) : null}
-              {!showDefaultProviderEntry && freeAddEntries.length === 0 && planAddEntries.length === 0 && apiAddEntries.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-ds-border-muted px-4 py-8 text-center text-[12.5px] text-ds-faint">
-                  {t('modelProviderAddDialogEmpty', { query: addProviderQuery.trim() })}
-                </p>
-              ) : null}
-            </div>
-          </section>
-        </div>
+        <ProviderAddSheet
+          t={t}
+          dialogRef={addProviderDialogRef}
+          onKeyDown={handleAddProviderDialogKeyDown}
+          onClose={closeAddProviderDialog}
+          query={addProviderQuery}
+          setQuery={setAddProviderQuery}
+          onOpenExternalImport={() => setExternalImportOpen(true)}
+          importLinkInput={importLinkInput}
+          setImportLinkInput={setImportLinkInput}
+          importLinkError={importLinkError}
+          clearImportLinkError={() => setImportLinkError('')}
+          onStageImportLink={stageImportLinkInput}
+          onAddCustom={addModelProvider}
+          onAddDefault={addDefaultModelProvider}
+          showDefaultProviderEntry={showDefaultProviderEntry}
+          freeAddEntries={freeAddEntries}
+          planAddEntries={planAddEntries}
+          apiAddEntries={apiAddEntries}
+          showPlanAddGroup={showPlanAddGroup}
+          renderAddEntry={renderAddEntry}
+          subscriptionRegion={subscriptionRegion}
+          setSubscriptionRegion={setSubscriptionRegion}
+          onRegionTabKeyDown={handleSubscriptionRegionTabKeyDown}
+        />
       ) : null}
       {pendingImport && pendingImportProvider ? (
       <ProviderModelImportDialog
@@ -607,6 +506,37 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
             pendingImport.discoveredModelProfiles
           )
           setPendingImport(null)
+        }}
+      />
+    ) : null}
+    {quickAddEntry ? (
+      <ProviderQuickAddPanel
+        preset={quickAddEntry.preset}
+        mode={quickAddEntry.mode}
+        providers={displayProviders}
+        t={t}
+        onClose={() => setQuickAddEntry(null)}
+        onSubmit={submitQuickAdd}
+      />
+    ) : null}
+    {externalImportOpen ? (
+      <ProviderExternalImportDialog
+        t={t}
+        onClose={() => setExternalImportOpen(false)}
+        onImported={(providerIds) => {
+          const last = providerIds[providerIds.length - 1]
+          if (last) setSelectedProviderId(last)
+        }}
+      />
+    ) : null}
+    {stagedImportLink ? (
+      <ProviderImportLinkConfirmDialog
+        staged={stagedImportLink}
+        t={t}
+        onCancel={() => setStagedImportLink(null)}
+        onConfirm={(providerId) => {
+          setStagedImportLink(null)
+          setSelectedProviderId(providerId)
         }}
       />
     ) : null}

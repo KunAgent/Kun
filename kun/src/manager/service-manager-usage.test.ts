@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { dispatchRequest } from '../server/http-server.js'
+import { UsageIndexUnavailableError } from './usage-errors.js'
 import {
   requestManagerJson,
   type ServiceManagerConnection
@@ -62,6 +63,62 @@ describe('manager usage query contract', () => {
     await expect(response.json()).resolves.toEqual({
       code: 'usage_index_unavailable',
       message: 'Usage index is temporarily unavailable.'
+    })
+  })
+
+  it('maps typed UsageIndexUnavailableError codes to a typed 503', async () => {
+    const executeSession = vi.fn(async () => {
+      // The hybrid store throws typed errors whose human-readable message does
+      // not embed the code; the router must read error.code instead.
+      throw new UsageIndexUnavailableError(
+        'usage_index_unavailable',
+        'Hybrid SQLite usage index is unavailable'
+      )
+    })
+    const router = buildServiceManagerRouter({
+      managerToken: 'manager-secret',
+      instanceId: 'manager-a',
+      startedAt: '2026-08-01T00:00:00.000Z',
+      state: new ServiceManagerState(),
+      sharedData: { executeSession } as unknown as ManagerSharedDataStore
+    })
+
+    const response = await dispatchRequest(router, request('/v1/data/session/aggregateUsage', {
+      method: 'POST',
+      body: JSON.stringify({ value: {} })
+    }))
+
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({
+      code: 'usage_index_unavailable',
+      message: 'Usage index is temporarily unavailable.'
+    })
+  })
+
+  it('maps typed UsageIndexUnavailableError timeout codes to a typed 503', async () => {
+    const executeSession = vi.fn(async () => {
+      throw new UsageIndexUnavailableError(
+        'usage_query_timeout',
+        'Usage index query timed out'
+      )
+    })
+    const router = buildServiceManagerRouter({
+      managerToken: 'manager-secret',
+      instanceId: 'manager-a',
+      startedAt: '2026-08-01T00:00:00.000Z',
+      state: new ServiceManagerState(),
+      sharedData: { executeSession } as unknown as ManagerSharedDataStore
+    })
+
+    const response = await dispatchRequest(router, request('/v1/data/session/aggregateUsage', {
+      method: 'POST',
+      body: JSON.stringify({ value: {} })
+    }))
+
+    expect(response.status).toBe(503)
+    await expect(response.json()).resolves.toEqual({
+      code: 'usage_query_timeout',
+      message: 'Usage index query timed out.'
     })
   })
 

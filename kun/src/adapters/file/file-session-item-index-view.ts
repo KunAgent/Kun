@@ -4,6 +4,8 @@ export type ItemIndexRow = {
   itemId: string
   turnId: string
   kind: TurnItem['kind']
+  /** Optional in older v3 indexes; exact-call readers verify the source record when absent. */
+  callId?: string
   isPublic: boolean
   baseline: boolean
   offset: number
@@ -239,5 +241,5 @@ function identityKey(identity: ItemIndexSourceIdentity): string {
 }
 
 function estimateRowBytes(row: ItemIndexRow): number {
-  return ROW_OVERHEAD_BYTES + Buffer.byteLength(row.itemId, 'utf8') + Buffer.byteLength(row.turnId, 'utf8')
+  return ROW_OVERHEAD_BYTES + Buffer.byteLength(row.itemId, 'utf8') + Buffer.byteLength(row.turnId, 'utf8') + Buffer.byteLength(row.callId ?? '', 'utf8')
 }

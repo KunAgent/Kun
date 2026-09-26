@@ -66,4 +66,11 @@ describe('DesignDrawingStart', () => {
     expect(html).toContain('aria-label="Fast mode on"')
     expect(html).toContain('aria-pressed="true"')
   })
+
+  it('opens a blank Excalidraw drawing without the HTML composer', () => {
+    const html = renderToStaticMarkup(createElement(DesignDrawingStart, props()))
+    expect(html).toContain('data-canvas-engine-switcher="true"')
+    expect(html).toContain('data-design-start-composer="true"')
+    expect(html).not.toContain('data-design-excalidraw-open="true"')
+  })
 })

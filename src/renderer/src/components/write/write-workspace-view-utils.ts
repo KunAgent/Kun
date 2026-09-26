@@ -68,6 +68,11 @@ export function isMarkdownFile(filePath: string): boolean {
   return /\.(md|markdown|mdx)$/i.test(filePath)
 }
 
+/** `.mdx` keeps out of rich mode entirely: embedded JSX would be rewritten. */
+export function isMdxFile(filePath: string | null | undefined): boolean {
+  return typeof filePath === 'string' && /\.mdx$/i.test(filePath)
+}
+
 export function formatSaveLabel(status: WriteSaveStatus, t: (key: string) => string): string {
   if (status === 'saving') return t('writeSaving')
   if (status === 'dirty') return t('writeUnsaved')
@@ -159,10 +164,26 @@ function countWords(text: string): number {
   return text.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)?.length ?? 0
 }
 
-export function computeWriteDocumentStats(content: string, isMarkdown: boolean): WriteDocumentStats {
-  const visibleText = isMarkdown ? visibleTextFromMarkdown(content) : content
+export function computeWriteDocumentStatsFromText(visibleText: string): WriteDocumentStats {
   const characterCount = Array.from(visibleText.replace(/\s+/g, '')).length
   return { characterCount, wordCount: countWords(visibleText) }
+}
+
+export function computeWriteDocumentStats(content: string, isMarkdown: boolean): WriteDocumentStats {
+  const visibleText = isMarkdown ? visibleTextFromMarkdown(content) : content
+  return computeWriteDocumentStatsFromText(visibleText)
+}
+
+// Single-entry cache: identical content skips the markdown re-parse.
+let lastStats: { content: string; isMarkdown: boolean; stats: WriteDocumentStats } | null = null
+
+export function computeWriteDocumentStatsCached(content: string, isMarkdown: boolean): WriteDocumentStats {
+  if (lastStats && lastStats.content === content && lastStats.isMarkdown === isMarkdown) {
+    return lastStats.stats
+  }
+  const stats = computeWriteDocumentStats(content, isMarkdown)
+  lastStats = { content, isMarkdown, stats }
+  return stats
 }
 
 export function clamp(value: number, min: number, max: number): number {

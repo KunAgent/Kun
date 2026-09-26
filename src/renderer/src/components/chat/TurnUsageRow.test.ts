@@ -40,8 +40,8 @@ describe('TurnUsageRow', () => {
     }))
 
     expect(html).toContain('1,200 tokens')
-    expect(html).toContain('Cost $0.0123')
-    expect(html).toContain('Estimate ≈$0.0456')
+    expect(html).toContain('API $0.0123')
+    expect(html).toContain('Plan value ≈$0.0456')
     expect(html).toContain('Partial estimate')
     expect(html).toContain('data-turn-usage-partial')
     expect(html).toContain('flex-wrap')
@@ -52,7 +52,7 @@ describe('TurnUsageRow', () => {
       usage: usage({ referenceEstimateUsd: 0, estimateCoverage: 'complete' })
     }))
 
-    expect(html).toContain('Estimate ≈$0.0000')
+    expect(html).toContain('Plan value ≈$0.0000')
     expect(html).not.toContain('data-turn-usage-unavailable')
   })
 

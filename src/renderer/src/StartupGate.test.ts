@@ -6,7 +6,7 @@ import type {
   DesktopStartupPhase,
   DesktopStartupStatePayload
 } from '@shared/desktop-startup-state'
-import { StartupGate, STARTUP_STATE_TIMEOUT_MS } from './StartupGate'
+import { StartupGate, STARTUP_STATE_TIMEOUT_MS, withModuleImportRetry } from './StartupGate'
 
 const appMock = vi.hoisted(() => ({
   prepareWorkbenchApp: vi.fn<() => Promise<void>>(async () => undefined)
@@ -265,6 +265,20 @@ describe('StartupGate', () => {
     expect(container.querySelector('button')?.textContent).toBe('Retry')
   })
 
+  it('retries module script import failures without waiting', async () => {
+    const run = vi.fn()
+      .mockRejectedValueOnce(new Error('Importing a module script failed.'))
+      .mockResolvedValueOnce('ok')
+    await expect(withModuleImportRetry(run, 3, 0)).resolves.toBe('ok')
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry unrelated workbench boot errors', async () => {
+    const run = vi.fn().mockRejectedValueOnce(new Error('shared storage unavailable'))
+    await expect(withModuleImportRetry(run, 3, 0)).rejects.toThrow('shared storage unavailable')
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+
   it('shows an error view when initial workbench preparation fails', async () => {
     const installSharedBusinessStorage = await mockedInstallSharedBusinessStorage()
     appMock.prepareWorkbenchApp.mockRejectedValueOnce(new Error('App chunk load failed'))
@@ -361,9 +375,13 @@ describe('StartupGate', () => {
     renderGate({})
     await act(async () => undefined)
     await act(async () => {
-      api.listeners.forEach((listener) => listener(phasePayload('recovery_required')))
+      api.listeners.forEach((listener) => listener(phasePayload(
+        'recovery_required',
+        'A leftover Kun data service from another build is still running.'
+      )))
     })
     expect(container.textContent).toContain('Kun startup requires recovery.')
+    expect(container.textContent).toContain('leftover Kun data service')
     expect(container.querySelector('.kun-startup')?.getAttribute('data-recovery')).toBe('true')
     const alert = container.querySelector('[role="alert"]')
     expect(alert).not.toBeNull()
@@ -371,7 +389,9 @@ describe('StartupGate', () => {
     const logo = container.querySelector('[data-testid="kun-startup-logo"]')
     expect(logo?.getAttribute('data-motion')).toBe('paused')
     expect(container.querySelector('[role="progressbar"]')).toBeNull()
-    expect([...container.querySelectorAll('button')]
-      .some((button) => button.textContent === 'Reload Kun')).toBe(true)
+    const labels = [...container.querySelectorAll('button')].map((button) => button.textContent)
+    expect(labels).toContain('Retry')
+    expect(labels).toContain('Open log folder')
+    expect(labels).toContain('Reload Kun')
   })
 })

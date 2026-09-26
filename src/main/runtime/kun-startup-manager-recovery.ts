@@ -2,9 +2,10 @@ import { logInfo } from '../logger'
 import { ensureServiceManagerWithStartLockHeld, type EnsureServiceManagerInput, type ServiceManagerConnection } from '../../../kun/src/manager/manager-client.js'
 import { inspectServiceManager } from '../../../kun/src/manager/manager-resolution.js'
 import { sameCanonicalPath } from '../../../kun/src/manager/canonical-path.js'
-import { defaultKunControlDir, readManagerHandoffDiscoveryStrict, withManagerStartLock } from '../../../kun/src/manager/manager-discovery.js'
+import { defaultKunControlDir, defaultProductionSettingsPath, readManagerHandoffDiscoveryStrict, withManagerStartLock } from '../../../kun/src/manager/manager-discovery.js'
 import { drainKunOwnersForHandoffWithLock } from './kun-installed-build-handoff'
 import { logKunHandoffEvent } from './kun-handoff-logging'
+import { desktopProcessStack } from './desktop-process-stack'
 
 /** Trusted launch inputs are captured before initialization can fail, never parsed from an error. */
 let startupInput: EnsureServiceManagerInput | undefined
@@ -15,9 +16,25 @@ export function rememberManagerStartupInput(input: EnsureServiceManagerInput): v
   })
 }
 
+export function rememberedManagerStartupProfile(): {
+  controlDir: string
+  dataDir: string
+  settingsPath: string
+} | undefined {
+  if (!startupInput) return undefined
+  return {
+    controlDir: startupInput.controlDir ?? defaultKunControlDir(),
+    dataDir: startupInput.dataDir,
+    settingsPath: startupInput.settingsPath ?? defaultProductionSettingsPath()
+  }
+}
+
 export async function recoverStartupManager(forceReplacement = false): Promise<ServiceManagerConnection> {
   if (!startupInput) throw new Error('Manager startup context is unavailable. Quit and launch the installed application again.')
-  return recoverManager(startupInput, forceReplacement)
+  // The caller has stopped the GUI-owned Runtime. Never run the legacy
+  // cross-flavor handoff path to recover an application-owned Manager.
+  const recovered = await desktopProcessStack.recoverManager(async () => undefined, forceReplacement)
+  return recovered ?? desktopProcessStack.ensureManager(startupInput)
 }
 
 export async function recoverManager(

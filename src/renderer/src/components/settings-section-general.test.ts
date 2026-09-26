@@ -46,7 +46,7 @@ function baseCtx(): Record<string, unknown> {
         keepAwake: true,
         useSystemTitleBar: false,
         closeToTray: false,
-        closeAction: 'ask'
+        closeAction: 'quit'
       },
       notifications: {
         turnComplete: false,
@@ -166,6 +166,13 @@ describe('GeneralSettingsSection workspace layout', () => {
     expect(html).toContain('legacyImportTitle')
     expect(html).toContain('gitCheckpointTitle')
     expect(html).toContain('logTitle')
+  })
+
+  it('explains main-window quit without exposing legacy background options', () => {
+    const html = renderToStaticMarkup(createElement(GeneralSettingsSection, { ctx: baseCtx() }))
+    expect(html).toContain('desktopCloseAction_quit')
+    expect(html).not.toContain('desktopCloseAction_ask')
+    expect(html).not.toContain('desktopCloseAction_tray')
   })
 
   it('shows the keep-awake preference in desktop behavior', () => {

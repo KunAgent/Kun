@@ -1,7 +1,8 @@
 import type { RuntimeEvent } from '../contracts/events.js'
+import { serializeRuntimeEvent } from '../adapters/event-serialization.js'
 
 export function encodeSseEvent(event: RuntimeEvent): string {
-  return `id: ${event.seq}\nevent: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`
+  return `id: ${event.seq}\nevent: ${event.kind}\ndata: ${serializeRuntimeEvent(event)}\n\n`
 }
 
 export function encodeReplaySynchronized(input: {

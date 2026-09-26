@@ -8,6 +8,7 @@ import type {
   DaemonLogPage,
   DaemonRuntimeStatus,
   ModelEndpointFormat,
+  ModelProviderEndpointsV1,
   ModelProviderModelProfileV1,
   ModelReasoningEffort,
   ScheduleRunResult,
@@ -333,18 +334,11 @@ export type AppBadgeCountResult = {
   applied: boolean
 }
 
-export type TurnCompleteNotificationSource = 'main-agent' | 'subagent'
-
-export type TurnCompleteNotificationPayload = {
-  threadId?: string
-  source: TurnCompleteNotificationSource
-  title: string
-  body: string
-}
-
-export type SystemNotificationResult =
-  | { ok: true; shown: boolean; reason?: string }
-  | { ok: false; message: string }
+export type {
+  TurnCompleteNotificationSource,
+  TurnCompleteNotificationPayload,
+  SystemNotificationResult
+} from './kun-gui-notification-contracts'
 
 export type ClawChannelActivityPayload = {
   channelId: string
@@ -392,12 +386,18 @@ export type ModelProviderProbeRequest = {
   baseUrl: string
   apiKey: string
   endpointFormat: ModelEndpointFormat
+  /** Per-protocol base URL overrides; the probe resolves `endpoints[format] ?? baseUrl`. */
+  endpoints?: ModelProviderEndpointsV1
   useProxy: boolean
+  /** User-configured custom headers merged over protocol defaults. */
+  customHeaders?: Record<string, string>
 }
 
 export type ModelProviderProbeResult =
   | { ok: true; latencyMs: number; modelIds: string[]; modelProfiles?: Record<string, ModelProviderModelProfileV1> }
   | { ok: false; message: string; suggestedProxyUrl?: string }
+
+export * from './kun-gui-api-contracts-provider'
 
 export type ProviderModelCatalogSource = 'provider-api' | 'models-dev'
 

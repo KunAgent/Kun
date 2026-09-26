@@ -1,0 +1,70 @@
+/* Desktop IM chat surface. Loaded last by RoomsWorkspaceView and
+ * scoped to .rooms-workspace so the mobile Remote shell keeps its own layout. */
+
+/* Header: compact title bar with a round avatar. */
+.rooms-workspace .rooms-main-titlebar { min-height: 56px; padding-block: 8px; }
+.rooms-workspace .rooms-main-titlebar .rooms-avatar { border: 0; border-radius: 50%; }
+.rooms-workspace .rooms-main-titlebar .rooms-avatar-letter { display: none; }
+.rooms-workspace .direct-chat-title strong { font-size: 16px; font-weight: 600; }
+
+/* Messages: round avatars, flat tinted bubbles, no reserved action row. */
+.rooms-workspace .rooms-message-row > .rooms-avatar { border: 0; border-radius: 50%; }
+.rooms-workspace .rooms-message-row > .rooms-avatar .rooms-avatar-letter { display: none; }
+.rooms-workspace .rooms-message-meta { font-size: 12px; }
+.rooms-workspace .rooms-message-bubble { border-color: transparent; border-radius: 8px; background: var(--ds-surface-subtle); }
+.rooms-workspace .rooms-message-user .rooms-message-bubble {
+  border-radius: 8px;
+  color: var(--ds-text);
+  background: color-mix(in srgb, var(--ds-accent) 14%, var(--ds-surface-card));
+}
+/* Plain messages shrink to their bubble so the hover toolbar sits beside it;
+ * code, tables and wide cards keep the full column. */
+.rooms-workspace .rooms-message-row:not(.rooms-message-system):not(:has(.rooms-message-wide, pre, table, .ds-code-block)) > .rooms-message-content { flex: 0 1 auto; }
+.rooms-workspace .rooms-message-row:not(.rooms-message-system) > .rooms-message-content { position: relative; }
+.rooms-workspace .rooms-message-footer { min-height: 0; }
+.rooms-workspace .rooms-message-actions {
+  position: absolute;
+  top: -14px;
+  right: 0;
+  z-index: 4;
+  padding: 2px;
+  border: 1px solid var(--ds-border);
+  border-radius: 8px;
+  background: var(--ds-surface-elevated);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 10%);
+  pointer-events: none;
+}
+.rooms-workspace .rooms-message-user .rooms-message-actions { right: auto; left: 0; }
+.rooms-workspace .rooms-message-row:is(:hover, :focus-within) .rooms-message-actions,
+.rooms-workspace .rooms-message-actions:has([aria-expanded='true']) { opacity: 1; pointer-events: auto; }
+@media (hover: none) { .rooms-workspace .rooms-message-actions { position: static; margin-top: 3px; opacity: 1; pointer-events: auto; box-shadow: none; } }
+
+/* Composer: a bordered input box with the tool row underneath. */
+.rooms-workspace .rooms-composer { padding: 8px 24px 16px; }
+.rooms-workspace .rooms-composer-surface {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 10px 12px 6px;
+  border-radius: 10px;
+  background: var(--ds-surface-card);
+}
+.rooms-workspace .rooms-composer-surface:focus-within { border-color: color-mix(in srgb, var(--ds-accent) 60%, var(--ds-border)); }
+.rooms-workspace .rooms-rich-input { min-height: 48px; padding: 2px; }
+.rooms-workspace .rooms-composer-surface > .rooms-composer-toolbar { display: flex; align-items: center; gap: 2px; }
+.rooms-workspace .rooms-composer-quick-tools { display: flex; align-items: center; gap: 2px; }
+.rooms-workspace :is(.rooms-composer-quick-tools > button, .rooms-composer-context-popover) {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--ds-text-muted);
+}
+.rooms-workspace :is(.rooms-composer-quick-tools > button, .rooms-composer-context-popover):hover:not(:disabled),
+.rooms-workspace .rooms-composer-context-popover[aria-expanded='true'] { color: var(--ds-text); background: var(--ds-surface-hover); }
+.rooms-workspace .rooms-composer-quick-tools > button:disabled { opacity: .45; }
+.rooms-workspace .rooms-composer-surface .direct-send-controls { margin-left: auto; }
+.rooms-workspace .rooms-composer-send { width: 32px; height: 32px; border-radius: 8px; }

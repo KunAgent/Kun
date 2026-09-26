@@ -3,6 +3,7 @@ import {
   KOKORO_FIRST_CHUNK_CHARS,
   KOKORO_MAX_CHUNK_CHARS,
   KOKORO_MIN_CHUNK_CHARS,
+  hasUnsupportedSpeechScript,
   normalizeSpeechText,
   speechChunksFromAnswer,
   speechTextFromAnswer,
@@ -251,4 +252,21 @@ describe('takeSpeechChunk', () => {
 it('preserves inline identifiers and mathematical conditions', () => {
   expect(speechTextFromAnswer('Use `user_id` to query.')).toContain('user underscore id')
   expect(speechTextFromAnswer('Ensure x ≤ 10 and y ≠ 0.')).toBe('Ensure x less than or equal to 10 and y not equal to 0.')
+})
+
+describe('hasUnsupportedSpeechScript', () => {
+  it('rejects Han unless the selected voice allows it', () => {
+    expect(hasUnsupportedSpeechScript('你好')).toBe(true)
+    expect(hasUnsupportedSpeechScript('你好', ['han'])).toBe(false)
+  })
+
+  it('still rejects scripts no shipped voice can read', () => {
+    expect(hasUnsupportedSpeechScript('こんにちは', ['han'])).toBe(true)
+  })
+
+  it('allows Cyrillic and Devanagari only for voices that declare them', () => {
+    expect(hasUnsupportedSpeechScript('Привет')).toBe(true)
+    expect(hasUnsupportedSpeechScript('Привет', ['cyrillic'])).toBe(false)
+    expect(hasUnsupportedSpeechScript('नमस्ते', ['devanagari'])).toBe(false)
+  })
 })

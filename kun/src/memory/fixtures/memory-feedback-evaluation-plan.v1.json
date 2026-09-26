@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "evaluationVersion": "p3-feedback-v1",
+  "decisionId": "kun-memory-feedback-decision-v1",
+  "status": "pre-registered",
+  "fixtureDatasetId": "kun-memory-feedback-anonymous-v1",
+  "fixtureSha256": "a1268bfbfaa364c5b5d920a100b54edeedd5dbda67c0f525ae340ca5d436f21a",
+  "partitions": {
+    "development": ["case_workspace_a_concise_port", "case_workspace_a_command"],
+    "holdout": ["case_workspace_a_port", "case_workspace_b_scope"]
+  },
+  "candidates": [
+    { "id": "foundation", "kind": "unchanged-lexical-foundation", "formula": "foundationScore" },
+    {
+      "id": "feedback-additive-v1",
+      "kind": "offline-feedback-rerank",
+      "formula": "clamp01(foundationScore + retrievalFrequency*0.05 + confirmation*0.1 + correction*0.1)"
+    }
+  ],
+  "features": {
+    "retrievalFrequency": "clamp01(log1p(retrievalCount)/log1p(16))",
+    "confirmation": "clamp01(confirmationCount)",
+    "correction": "clamp01(correctionCount)",
+    "canonical": ["freshness", "importance", "confidence"]
+  },
+  "gates": {
+    "development": {
+      "minimumRecallGain": 0,
+      "minimumMrrGain": 0,
+      "maximumPrecisionDecline": 0.05,
+      "maximumForbiddenSelections": 0
+    },
+    "holdout": {
+      "minimumRecallGainLowerBound": 0.05,
+      "minimumMrrGainLowerBound": 0.05,
+      "maximumPrecisionDecline": 0.05,
+      "maximumForbiddenSelections": 0
+    },
+    "safety": {
+      "maximumScopeOrLifecycleLeaks": 0,
+      "maximumUnboundedFeatureValues": 0,
+      "productionRankingChanges": 0
+    },
+    "privacy": {
+      "queryTextInTrace": false,
+      "memoryContentInTrace": false,
+      "localPathInTrace": false,
+      "credentialInTrace": false
+    },
+    "resource": {
+      "maximumTraceRankings": 64,
+      "maximumEvaluationMilliseconds": 1000
+    }
+  },
+  "bootstrap": {
+    "method": "paired-percentile-lower-bound",
+    "seed": 20260915,
+    "resamples": 2000,
+    "confidenceLevel": 0.95,
+    "unit": "case",
+    "holdoutRuns": 1
+  },
+  "production": {
+    "rankingWeightsChanged": false,
+    "dormantFeatureFlagAdded": false,
+    "evaluatorImportAllowedFrom": ["offline-tests", "offline-scripts"]
+  }
+}

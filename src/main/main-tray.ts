@@ -1,7 +1,6 @@
 import {
   app,
   BrowserWindow,
-  dialog,
   Menu,
   nativeImage,
   Notification,
@@ -30,12 +29,8 @@ import {
   resolveTrayQuotaWorkspaceOptions
 } from './tray-quota-window-options'
 import { TRAY_PROVIDER_QUOTA_CHANNELS } from '../shared/tray-provider-quota'
-import { syncLoginItemSettings } from './desktop-behavior'
 import { resolveNamedPreloadPath } from './main-paths'
-import {
-  type AppSettingsV1,
-  type WindowCloseAction
-} from '../shared/app-settings'
+import type { AppSettingsV1 } from '../shared/app-settings'
 import type {
   TrayActionPayload,
   TurnCompleteNotificationPayload
@@ -54,44 +49,10 @@ import {
   appIcon,
   developmentRendererUrl,
   mainState,
-  nativeDialogCoordinator,
   trayIcon
 } from './main-app-context'
 import { runtimeShutdown } from './main-lifecycle'
-
-function windowCloseLabels(locale: AppSettingsV1['locale']): {
-  title: string
-  message: string
-  detail: string
-  minimizeToTray: string
-  quit: string
-  cancel: string
-  remember: string
-  trayUnavailable: string
-} {
-  if (locale === 'zh') {
-    return {
-      title: '关闭窗口',
-      message: '关闭窗口时要怎么处理？',
-      detail: '最小化到托盘会让 Kun 和当前 Runtime 继续在后台运行，不会影响当前任务。退出应用会停止桌面端拥有的 Runtime，运行中的 Agent 任务和待审批操作会中断；已保存的对话、设置和工作区文件不会被删除。',
-      minimizeToTray: '最小化到托盘',
-      quit: '退出应用',
-      cancel: '取消',
-      remember: '记住我的选择，不再询问',
-      trayUnavailable: '系统托盘当前不可用。为避免窗口消失后无法恢复，本次只能退出或取消。'
-    }
-  }
-  return {
-    title: 'Close window',
-    message: 'What should Kun do when this window closes?',
-    detail: 'Minimize to tray keeps Kun and its current Runtime running in the background without interrupting the current task. Quitting stops the Runtime owned by this desktop app, interrupting running Agent work and pending approvals. Saved conversations, settings, and workspace files are not deleted.',
-    minimizeToTray: 'Minimize to tray',
-    quit: 'Quit app',
-    cancel: 'Cancel',
-    remember: 'Remember my choice and do not ask again',
-    trayUnavailable: 'The system tray is unavailable. To keep the window recoverable, this close can only quit or be cancelled.'
-  }
-}
+import { notifyApplicationQuitting } from './app-quit-signal'
 
 export function revealMainWindow(): void {
   if (!mainState.mainWindow || mainState.mainWindow.isDestroyed()) {
@@ -150,7 +111,7 @@ export function showRendererContextMenu(window: BrowserWindow, params: ContextMe
 }
 
 function quitFromTray(): void {
-  runtimeShutdown.requestQuit()
+  notifyApplicationQuitting()
   app.quit()
 }
 
@@ -373,88 +334,15 @@ export function syncTray(settings: AppSettingsV1): void {
   }
 }
 
-async function saveWindowCloseActionPreference(closeAction: WindowCloseAction): Promise<void> {
-  const saved = await mainState.store.patch({ appBehavior: { closeAction } })
-  syncLoginItemSettings(saved)
-  syncTray(saved)
-}
-
-async function promptWindowCloseAction(window: BrowserWindow): Promise<void> {
-  if (mainState.closeWindowPromptOpen || window.isDestroyed()) return
-  mainState.closeWindowPromptOpen = true
-  try {
-    const settings = await mainState.store.load()
-    const labels = windowCloseLabels(settings.locale)
-    const trayAvailable = mainState.trayAvailable
-    const result = await nativeDialogCoordinator.run(window.webContents, async () => {
-      if (window.isDestroyed()) {
-        throw new Error('Close-window prompt parent was destroyed.')
-      }
-      return dialog.showMessageBox(window, {
-        type: 'question',
-        title: labels.title,
-        message: labels.message,
-        detail: trayAvailable ? labels.detail : labels.trayUnavailable,
-        buttons: trayAvailable
-          ? [labels.minimizeToTray, labels.quit, labels.cancel]
-          : [labels.quit, labels.cancel],
-        defaultId: trayAvailable ? 0 : 1,
-        cancelId: trayAvailable ? 2 : 1,
-        noLink: true,
-        checkboxLabel: trayAvailable ? labels.remember : undefined,
-        checkboxChecked: false
-      })
-    })
-    if (!trayAvailable) {
-      if (result.response === 0) {
-        runtimeShutdown.requestQuit()
-        app.quit()
-      }
-      return
-    }
-    if (result.response === 0) {
-      if (result.checkboxChecked) {
-        await saveWindowCloseActionPreference('tray')
-      }
-      window.hide()
-      return
-    }
-    if (result.response === 1) {
-      if (result.checkboxChecked) {
-        await saveWindowCloseActionPreference('quit')
-      }
-      runtimeShutdown.requestQuit()
-      app.quit()
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.warn('[kun-gui] failed to handle close-window prompt:', error)
-    logWarn('desktop-behavior', 'Failed to handle close-window prompt.', { message })
-  } finally {
-    mainState.closeWindowPromptOpen = false
-  }
-}
-
 export function handleMainWindowClose(window: BrowserWindow, event: Electron.Event): void {
   const decision = resolveMainWindowCloseDecision({
-    closeAction: mainState.appBehavior.closeAction,
     isQuitting: runtimeShutdown.isQuitRequested,
-    isUpdateInstallQuitting: runtimeShutdown.isUpdateInstallQuit,
-    trayAvailable: mainState.trayAvailable
+    isUpdateInstallQuitting: runtimeShutdown.isUpdateInstallQuit
   })
   if (decision === 'allow') return
-
   event.preventDefault()
-  if (decision === 'hide-to-tray') {
-    window.hide()
-    return
-  }
-  if (decision === 'quit-app') {
-    runtimeShutdown.requestQuit()
-    app.quit()
-    return
-  }
-  void promptWindowCloseAction(window)
+  notifyApplicationQuitting(window)
+  app.quit()
 }
 
 function normalizeNotificationText(raw: string | undefined, fallback: string, maxLength: number): string {
@@ -491,6 +379,9 @@ export async function showTurnCompleteNotification(
     })
     notification.on('click', () => {
       revealMainWindow()
+      if (payload.roomId) mainState.mainWindow?.webContents.send('runtime:sse-event', {
+        streamId: 'rooms-navigation', events: [{ kind: 'navigate', roomId: payload.roomId }]
+      })
     })
     notification.show()
     return { ok: true, shown: true }

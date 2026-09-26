@@ -1,0 +1,21 @@
+.kun-excalidraw-host,
+.kun-excalidraw-host .excalidraw,
+.kun-excalidraw-host .excalidraw .App-menu,
+.kun-excalidraw-host .excalidraw .App {
+  height: 100%;
+  width: 100%;
+}
+
+/* The shell scales the UI via `body { zoom: var(--ds-ui-scale) }`. Excalidraw
+   measures its container with getBoundingClientRect() (post-zoom viewport px)
+   but applies the result as pre-zoom canvas style sizes, so the canvas ends up
+   scaled by the UI zoom. Cancel the body zoom inside the host (and for the
+   body-mounted tooltip) so both coordinate spaces agree. */
+.kun-excalidraw-host,
+.excalidraw-tooltip {
+  zoom: calc(1 / var(--ds-ui-scale, 1));
+}
+
+.kun-excalidraw-host .excalidraw {
+  --color-primary: var(--ds-accent, #4f46e5);
+}

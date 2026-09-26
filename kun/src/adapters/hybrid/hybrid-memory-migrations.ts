@@ -1,6 +1,6 @@
 import type { Database as BetterSqliteDatabase } from 'better-sqlite3'
 
-export const MEMORY_INDEX_SCHEMA_VERSION = 1
+export const MEMORY_INDEX_SCHEMA_VERSION = 2
 
 export function migrateMemoryIndex(db: BetterSqliteDatabase): void {
   db.exec(`
@@ -23,6 +23,7 @@ export function migrateMemoryIndex(db: BetterSqliteDatabase): void {
       project TEXT,
       lifecycle TEXT NOT NULL,
       type TEXT NOT NULL,
+      authority TEXT NOT NULL DEFAULT 'reference',
       confidence REAL NOT NULL,
       importance REAL NOT NULL,
       observed_at TEXT NOT NULL,
@@ -60,10 +61,24 @@ export function migrateMemoryIndex(db: BetterSqliteDatabase): void {
       tokenize='unicode61'
     );
   `)
+  if (!memoryRecordsHasColumn(db, 'authority')) {
+    // Existing V1 rows only ever stored 'reference'; the default backfills them.
+    db.exec("ALTER TABLE memory_records ADD COLUMN authority TEXT NOT NULL DEFAULT 'reference'")
+  }
+  // Must run after the column exists: a V1 table only gains it via ALTER above.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS memory_records_authority_idx
+      ON memory_records(authority, scope);
+  `)
   db.prepare(`
     INSERT INTO memory_index_meta(key, value) VALUES('schema_version', ?)
     ON CONFLICT(key) DO UPDATE SET value=excluded.value
   `).run(String(MEMORY_INDEX_SCHEMA_VERSION))
+}
+
+function memoryRecordsHasColumn(db: BetterSqliteDatabase, column: string): boolean {
+  const rows = db.prepare('PRAGMA table_info(memory_records)').all() as Array<{ name: string }>
+  return rows.some((row) => row.name === column)
 }
 
 export function memoryIndexSchemaVersion(db: BetterSqliteDatabase): number {

@@ -331,6 +331,24 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     }
   }
 
+  async updateThreadAdditionalWorkspaces(
+    threadId: string,
+    additionalWorkspaces: string[]
+  ): Promise<NormalizedThread> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      kunThreadPath(threadId),
+      'PATCH',
+      JSON.stringify({ additionalWorkspaces })
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'update thread additional workspaces failed'))
+    }
+    return threadFromCore(readRuntimeJson<CoreThreadJson>(
+      response.body,
+      'runtime returned an invalid thread response'
+    ))
+  }
+
   async updateThreadKnowledgeBases(
     threadId: string,
     mounts: KnowledgeBaseMount[]

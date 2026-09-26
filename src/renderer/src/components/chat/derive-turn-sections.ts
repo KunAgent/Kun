@@ -5,6 +5,8 @@ import {
   extractUnifiedDiffText,
   formatFilePathForDisplay,
 } from '../../lib/diff-stats'
+import { isPendingRenderChartTool } from '../../agent/chart-spec-adapter'
+import { isPendingPaperReportTool } from '../../agent/paper-list-adapter'
 import {
   isAppendedUserBlock,
   isProcessBlock,
@@ -50,6 +52,9 @@ export type TurnSections = {
   runtimeErrorsBeforeFinalContent: TurnRuntimeErrorBlock[]
   runtimeErrorsAfterFinalContent: TurnRuntimeErrorBlock[]
   chartBlocks: Extract<ChatBlock, { kind: 'chart' }>[]
+  pendingChartBlocks: ToolBlock[]
+  paperListBlocks: Extract<ChatBlock, { kind: 'paper-list' }>[]
+  pendingPaperListBlocks: ToolBlock[]
   componentPrototypeBlocks: ToolBlock[]
   diagramPrototypeBlocks: ToolBlock[]
   conversationVisualizationBlocks: ToolBlock[]
@@ -270,6 +275,8 @@ export function deriveTurnSections({
       }
       continue
     }
+    if (isPendingRenderChartTool(block)) continue
+    if (isPendingPaperReportTool(block)) continue
     if (isProcessBlock(block)) {
       processBlocks.push(block)
       processTimelineBlocks.push(block)
@@ -344,6 +351,9 @@ export function deriveTurnSections({
   ))
 
   const chartBlocks = turn.blocks.filter((block): block is Extract<ChatBlock, { kind: 'chart' }> => block.kind === 'chart')
+  const pendingChartBlocks = turn.blocks.filter((block): block is ToolBlock => isPendingRenderChartTool(block))
+  const paperListBlocks = turn.blocks.filter((block): block is Extract<ChatBlock, { kind: 'paper-list' }> => block.kind === 'paper-list')
+  const pendingPaperListBlocks = turn.blocks.filter((block): block is ToolBlock => isPendingPaperReportTool(block))
 
   return {
     processBlocks,
@@ -358,6 +368,9 @@ export function deriveTurnSections({
     generatedFileBlocks,
     turnFileChanges,
     chartBlocks,
+    pendingChartBlocks,
+    paperListBlocks,
+    pendingPaperListBlocks,
     appendedUserBlocks,
     timelineEntries
   }

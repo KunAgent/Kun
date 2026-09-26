@@ -60,6 +60,8 @@ import type { KunProtectedApprovalRequest, KunProtectedApprovalResult } from './
 import type { ProviderMutationFlushRequestHandler } from './provider-mutation-barrier'
 import type {
   ClipboardImageReadResult,
+  ClipboardImageWritePayload,
+  ClipboardImageWriteResult,
   LocalPdfTextReadResult,
   LocalPdfTextTarget,
   WorkspaceClipboardImageSavePayload,
@@ -117,6 +119,7 @@ import type {
   WriteInlineCompletionRequest,
   WriteInlineCompletionResult
 } from './write-inline-completion'
+import type { KunGuiWriteAiApi } from './write-ai-properties'
 import type {
   WriteInfographicRequest,
   WriteInfographicResult
@@ -126,6 +129,7 @@ import type {
   SpeechTranscriptionResult
 } from './speech-to-text'
 import type { KunGuiLocalSpeechApi } from './kun-gui-api-speech'
+import type { KunGuiPaperApi } from './paper/kun-gui-api-paper'
 import type {
   UiPluginListItem,
   UiPluginManifestV1,
@@ -154,6 +158,11 @@ import type {
   MemoryMarkdownExportSaveResult
 } from './memory-import-export'
 import type { RemoteSshApi } from './remote-ssh'
+import type {
+  RemoteAccessConfigPatch,
+  RemoteAccessStatus,
+  RemoteTailscaleInfo
+} from './remote-access'
 import type {
   TerminalCreatePayload,
   TerminalCreateResult,
@@ -246,8 +255,11 @@ import {
   WorkspaceCreationTimeEntry,
   WorkspacePickResult
 } from './kun-gui-api-contracts'
-export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & {
+import type { KunGuiProviderApi } from './kun-gui-api-surface-provider'
+export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & {
   platform: string
+  /** True only in the browser Remote build served by the Remote gateway. */
+  isRemoteWeb?: boolean
   /** Immutable mode selected before the BrowserWindow and renderer are created. */
   desktopTitleBarMode: DesktopTitleBarMode
   homeDir: string
@@ -361,6 +373,12 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   saveSettingsSilent: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   gatewayCredential: (action: 'status' | 'ensure' | 'copy' | 'rotate' | 'revoke') => Promise<GatewayCredentialResult>
   getRuntimeSettingsSyncStatus: () => Promise<KunRuntimeSettingsSyncStatusPayload>
+  remoteAccessGetStatus: () => Promise<RemoteAccessStatus>
+  remoteAccessSetConfig: (patch: RemoteAccessConfigPatch) => Promise<RemoteAccessStatus>
+  remoteAccessSetPassword: (password: string) => Promise<RemoteAccessStatus>
+  remoteAccessRevokeSessions: () => Promise<RemoteAccessStatus>
+  remoteAccessDetectTailscale: () => Promise<RemoteTailscaleInfo>
+  onRemoteAccessStatusChanged: (handler: (status: RemoteAccessStatus) => void) => () => void
   uploadRuntimeImageAttachment: (
     request: RuntimeImageAttachmentUploadRequest
   ) => Promise<RuntimeImageAttachmentUploadResult>
@@ -383,12 +401,13 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   convertWorkspaceSpreadsheet: (
     payload: WorkspaceSpreadsheetConvertPayload
   ) => Promise<WorkspaceSpreadsheetConvertResult>
+  setRoomPermissions: (request: import('./kun-gui-api-protected-approval').RoomPermissionChange) => Promise<import('./kun-gui-api-protected-approval').RoomPermissionChangeResult>
   resolveKunApproval: (request: KunProtectedApprovalRequest) => Promise<KunProtectedApprovalResult>
   restartRuntime: () => Promise<void>
   restartKunServe: () => Promise<{ accepted: boolean; error?: string }>
   fetchUpstreamModels: () => Promise<UpstreamModelsResult>
   probeModelProvider: (payload: ModelProviderProbeRequest) => Promise<ModelProviderProbeResult>
-  listProviderQuotas: () => Promise<ProviderQuotaListResult>
+  listProviderQuotas: (payload?: { forceRefresh?: boolean }) => Promise<ProviderQuotaListResult>
   fetchModelsDevCatalog: (payload: ModelsDevCatalogRequest) => Promise<ModelsDevCatalogResult>
   optimizePrompt: (payload: PromptOptimizationRequest) => Promise<PromptOptimizationResult>
   getClawStatus: () => Promise<ClawRuntimeStatus>
@@ -428,6 +447,12 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   pickWorkspaceDirectory: (defaultPath?: string) => Promise<WorkspacePickResult>
   workspaceDirectoryExists: (workspaceRoot: string) => Promise<boolean>
   pickLocalFiles: (defaultPath?: string) => Promise<LocalFilesPickResult>
+  /**
+   * Remote-web only: uploads a browser File to a host temp directory and
+   * resolves with the resulting host path (the remote equivalent of
+   * webUtils.getPathForFile). Undefined on the desktop bridge.
+   */
+  uploadRemoteFile?: (file: File) => Promise<string>
   /** 在对话工作目录根下创建一个时间戳子目录作为新对话的工作目录。 */
   createConversationWorkspace: (root?: string) => Promise<ConversationWorkspaceCreateResult>
   alertDialog: (options: AlertDialogOptions) => Promise<void>
@@ -562,6 +587,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
     payload: WorkspaceImageBytesSavePayload
   ) => Promise<WorkspaceImageBytesSaveResult>
   readClipboardImage: () => Promise<ClipboardImageReadResult>
+  writeClipboardImage: (payload: ClipboardImageWritePayload) => Promise<ClipboardImageWriteResult>
   getPathForFile: (file: File) => string
   renameWorkspaceEntry: (
     payload: WorkspaceEntryRenamePayload
@@ -609,6 +635,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   onClawChannelActivity: (handler: (payload: ClawChannelActivityPayload) => void) => () => void
   onTrayAction: (handler: (payload: TrayActionPayload) => void) => () => void
   onRuntimeStatus: (handler: (payload: KunRuntimeStatusPayload) => void) => () => void
+  onAppQuitting: (handler: () => void) => () => void
   onRuntimeSettingsSyncStatus: (
     handler: (payload: KunRuntimeSettingsSyncStatusPayload) => void
   ) => () => void

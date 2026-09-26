@@ -8,6 +8,7 @@ import {
   Check,
   Code2,
   ClipboardList,
+  Ellipsis,
   FileEdit,
   Folders,
   FolderOpen,
@@ -19,9 +20,11 @@ import {
   MessageCircleMore,
   PanelRight,
   Puzzle,
+  Radio,
   RefreshCw,
   Search,
   Shapes,
+  Smartphone,
   Terminal
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -38,12 +41,18 @@ import {
   type RightPanelMode
 } from '../../extensions/contribution-ids'
 import { boundedPlainText } from '../../extensions/safe-text'
+import { useRemoteMobileLayout } from '../../lib/remote-mobile'
+import { switchRemoteSurface } from '../../mobile/use-remote-surface'
 
 export type { RightPanelMode } from '../../extensions/contribution-ids'
 
 type Props = {
   rightPanelMode: RightPanelMode
   onToggleRightPanelMode: (mode: Exclude<RightPanelMode, null>) => void
+  /** 'rail' renders the desktop icon column; 'sheet' renders a mobile bottom sheet. */
+  presentation?: 'rail' | 'sheet'
+  sheetOpen?: boolean
+  onCloseSheet?: () => void
   planPanelEnabled?: boolean
   canvasEnabled?: boolean
   graphEnabled?: boolean
@@ -67,6 +76,8 @@ type WorkbenchTopActionsProps = {
   rightWorkspaceExpanded?: boolean
   onToggleRightWorkspace?: () => void
   onOpenCommandPalette?: () => void
+  /** Remote-mobile only: opens the right rail as a bottom sheet. */
+  onOpenMobileRail?: () => void
 }
 
 const TOPBAR_ICON_CLASS = 'h-4 w-4'
@@ -91,9 +102,11 @@ export function WorkbenchTopActions({
   onToggleTerminal,
   rightWorkspaceExpanded = false,
   onToggleRightWorkspace,
-  onOpenCommandPalette
+  onOpenCommandPalette,
+  onOpenMobileRail
 }: WorkbenchTopActionsProps): ReactElement {
   const { t } = useTranslation(['common', 'settings'])
+  const remoteMobile = useRemoteMobileLayout()
   const [editors, setEditors] = useState<EditorInfo[]>([])
   const [selectedEditorId, setSelectedEditorId] = useState(() => readPreferredEditorId() ?? '')
   const [editorMenuOpen, setEditorMenuOpen] = useState(false)
@@ -214,6 +227,9 @@ export function WorkbenchTopActions({
 
       <WorkbenchGuiUpdateButton />
 
+      {/* Host-side affordances (editor picker, runtime restart) are dropped on
+          Remote mobile — they operate on the desktop host and crowd the bar. */}
+      {!remoteMobile ? (
       <div ref={editorMenuRef} className="relative">
         <button
           type="button"
@@ -258,6 +274,7 @@ export function WorkbenchTopActions({
           </div>
         ) : null}
       </div>
+      ) : null}
 
       {onToggleTerminal ? (
         <button
@@ -272,7 +289,9 @@ export function WorkbenchTopActions({
         </button>
       ) : null}
 
-      {onToggleRightWorkspace ? (
+      {/* On Remote mobile the right rail opens as the "…" bottom sheet, so
+          the expand-workspace toggle only duplicates it. */}
+      {onToggleRightWorkspace && !(remoteMobile && onOpenMobileRail) ? (
         <button
           type="button"
           onClick={onToggleRightWorkspace}
@@ -285,6 +304,7 @@ export function WorkbenchTopActions({
         </button>
       ) : null}
 
+      {!remoteMobile ? (
       <button
         type="button"
         onClick={() => void restartKunServe()}
@@ -304,6 +324,20 @@ export function WorkbenchTopActions({
           <RefreshCw className="h-4 w-4" strokeWidth={1.85} />
         )}
       </button>
+      ) : null}
+
+      {onOpenMobileRail ? (
+        <button
+          type="button"
+          onClick={onOpenMobileRail}
+          className={topbarActionButtonClass(false)}
+          data-tooltip={t('rightPanelMore')}
+          aria-label={t('rightPanelMore')}
+          aria-haspopup="dialog"
+        >
+          <Ellipsis className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -311,6 +345,9 @@ export function WorkbenchTopActions({
 export function WorkbenchSideRail({
   rightPanelMode,
   onToggleRightPanelMode,
+  presentation = 'rail',
+  sheetOpen = false,
+  onCloseSheet,
   planPanelEnabled = false,
   canvasEnabled = false,
   graphEnabled = false,
@@ -324,8 +361,10 @@ export function WorkbenchSideRail({
   extensionItems = [],
   extensionContainers = [],
   onSelectExtension
-}: Props): ReactElement {
+}: Props): ReactElement | null {
   const { t } = useTranslation(['common', 'settings'])
+  // The Remote panel configures this host; hide the entry inside Remote clients.
+  const isRemoteWeb = typeof window !== 'undefined' && window.kunGui?.isRemoteWeb === true
   const items = [
     ...(planPanelEnabled ? [{ mode: BUILTIN_RIGHT_PANEL_IDS.plan, label: t('rightPanelPlan'), icon: ClipboardList }] : []),
     { mode: BUILTIN_RIGHT_PANEL_IDS.changes, label: t('rightPanelChanges'), icon: FileEdit },
@@ -342,8 +381,132 @@ export function WorkbenchSideRail({
       mode: BUILTIN_RIGHT_PANEL_IDS.providerQuotas,
       label: t('rightPanelProviderQuotas'),
       icon: Gauge
-    }
+    },
+    ...(isRemoteWeb ? [] : [{ mode: BUILTIN_RIGHT_PANEL_IDS.remote, label: t('rightPanelRemote'), icon: Radio }])
   ]
+
+  if (presentation === 'sheet') {
+    if (!sheetOpen) return null
+    const pick = (action: () => void): void => {
+      action()
+      onCloseSheet?.()
+    }
+    const rowClass =
+      'flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-medium text-ds-ink transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-45'
+    const rowIconClass = 'h-5 w-5 shrink-0 text-ds-muted'
+    const extensionEntries = [
+      ...extensionContainers.map(({ container, target }) => ({ kind: 'container' as const, container, target })),
+      ...extensionItems
+        .filter((item) => !extensionContainers.some(({ target }) => target.id === item.id))
+        .map((item) => ({ kind: 'item' as const, item }))
+    ]
+    return (
+      <div className="ds-no-drag fixed inset-0 z-[70]" role="dialog" aria-modal="true">
+        <button
+          type="button"
+          className="absolute inset-0 bg-black/45"
+          onClick={() => onCloseSheet?.()}
+          aria-label={t('close')}
+        />
+        <div className="ds-sidebar-surface absolute inset-x-0 bottom-0 max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-ds-border-muted px-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] pt-2 shadow-2xl">
+          <div className="mx-auto mb-1 h-1 w-9 rounded-full bg-ds-border-strong" aria-hidden />
+          {onOpenSideChat ? (
+            <button
+              type="button"
+              onClick={() => pick(onOpenSideChat)}
+              disabled={!sideChatEnabled}
+              className={rowClass}
+              aria-pressed={sideChatOpen}
+            >
+              <MessageCircleMore className={rowIconClass} strokeWidth={1.75} />
+              <span className="flex-1">{t('sidePanelOpen')}</span>
+              {sideChatRunningCount > 0 ? (
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" aria-hidden />
+              ) : null}
+            </button>
+          ) : null}
+          {items.map((item) => {
+            const Icon = item.icon
+            const active = rightPanelMode === item.mode
+            return (
+              <button
+                key={item.mode}
+                type="button"
+                onClick={() => pick(() => onToggleRightPanelMode(item.mode))}
+                disabled={'disabled' in item && item.disabled === true}
+                className={rowClass}
+                aria-pressed={active}
+              >
+                <Icon className={rowIconClass} strokeWidth={1.75} />
+                <span className="flex-1">{item.label}</span>
+                {active ? <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} /> : null}
+              </button>
+            )
+          })}
+          {onToggleFileTree ? (
+            <button
+              type="button"
+              onClick={() => pick(onToggleFileTree)}
+              disabled={!fileTreeEnabled}
+              className={rowClass}
+              aria-pressed={fileTreeOpen}
+            >
+              <Folders className={rowIconClass} strokeWidth={1.75} />
+              <span className="flex-1">{t('rightPanelFiles')}</span>
+              {fileTreeOpen ? <Check className="h-4 w-4 shrink-0 text-accent" strokeWidth={2} /> : null}
+            </button>
+          ) : null}
+          {isRemoteWeb ? (
+            <button
+              type="button"
+              onClick={() => pick(() => switchRemoteSurface('mobile'))}
+              className={rowClass}
+            >
+              <Smartphone className={rowIconClass} strokeWidth={1.75} />
+              <span className="flex-1">{t('mobileUseMobileLayout')}</span>
+            </button>
+          ) : null}
+          {extensionEntries.length > 0 ? (
+            <div className="mt-1 border-t border-ds-border-muted pt-1">
+              {extensionEntries.map((entry) => {
+                const target = entry.kind === 'container' ? entry.target : entry.item
+                const owner = entry.kind === 'container' ? entry.container.owner : entry.item.owner
+                const ownerId = owner.kind === 'extension' ? owner.extensionId : null
+                const icon = entry.kind === 'container' ? entry.container.payload.icon : entry.item.payload.icon
+                const title = boundedPlainText(
+                  entry.kind === 'container' ? entry.container.payload.title : entry.item.payload.title,
+                  128
+                )
+                const label = target.workspaceTrusted ? title : t('extensionRailAuthorize', { title })
+                const active = rightPanelMode === target.id
+                return (
+                  <button
+                    key={target.id}
+                    type="button"
+                    onClick={() => pick(() => onSelectExtension
+                      ? onSelectExtension(target)
+                      : onToggleRightPanelMode(target.id as Exclude<RightPanelMode, null>))}
+                    className={rowClass}
+                    aria-pressed={active}
+                  >
+                    {icon && ownerId ? (
+                      <img src={extensionHostIconUrl(ownerId, icon)} alt="" aria-hidden className={rowIconClass} />
+                    ) : (
+                      <Puzzle className={rowIconClass} strokeWidth={1.75} />
+                    )}
+                    <span className="flex-1">{label}</span>
+                    {!target.workspaceTrusted ? (
+                      <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-amber-500" strokeWidth={2} />
+                    ) : null}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="ds-workbench-side-rail ds-sidebar-surface ds-no-drag flex h-full w-12 shrink-0 flex-col items-center gap-1.5 border-l border-ds-border-muted py-3">
@@ -484,6 +647,17 @@ export function WorkbenchSideRail({
         </div>
       ) : null}
 
+      {isRemoteWeb ? (
+        <button
+          type="button"
+          onClick={() => switchRemoteSurface('mobile')}
+          className={sideRailButtonClass(false)}
+          data-tooltip={t('mobileUseMobileLayout')}
+          aria-label={t('mobileUseMobileLayout')}
+        >
+          <Smartphone className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
+        </button>
+      ) : null}
     </div>
   )
 }

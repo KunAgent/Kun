@@ -1,0 +1,21 @@
+{
+  "memoryAuthority_all": "All",
+  "memoryAuthority_directive": "Rules",
+  "memoryAuthority_reference": "Reference",
+  "memoryDirectivesEnable": "Inject long-term rules",
+  "memoryDirectivesEnableDesc": "Approved rules are sent to the model as your instructions on every turn. Turn off to keep rules stored but inactive.",
+  "memoryDirectives": "User rules",
+  "memoryDirectivesDesc": "Rules are injected as your instructions every turn; unlike reference memories they are not relevance-gated.",
+  "memoryDirectiveActiveCount": "Active rules",
+  "memoryDirectiveInjectedCount": "Injected this turn",
+  "memoryDirectiveOmittedCount": "Omitted by budget",
+  "memorySetDirective": "Make rule",
+  "memoryUnsetDirective": "Unset rule",
+  "memorySetDirectiveDisabled": "Rules must be short and user/workspace scoped; long content belongs in AGENTS.md",
+  "memoryDirectiveUpdateFailed": "Failed to update the rule",
+  "memoryAsDirective": "Save as rule (applies to the model every turn)",
+  "memoryAsDirectiveDesc": "Rules are sent to the model as your instructions, e.g. \"reply in Chinese\" or \"run tests before committing\". Ordinary memories are reference only and never executed as instructions.",
+  "memoryDirectiveTooLong": "Rules must stay short; move long content to AGENTS.md",
+  "memoryImportDowngradedPrefix": " ",
+  "memoryImportDowngradedSuffix": " record(s) were rules and were imported as reference; re-enable them one by one."
+}

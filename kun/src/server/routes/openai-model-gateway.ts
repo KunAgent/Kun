@@ -4,36 +4,91 @@ import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../../contracts/model-route-poo
 import type { ModelRequest, ModelStreamChunk, ModelToolSpec } from '../../ports/model-client.js'
 import { readJsonBody } from '../read-json-body.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
-import { GatewayRequestGuard, type GatewayLease } from './gateway-request-guard.js'
+import type { GatewayLease } from './gateway-request-guard.js'
 import type { ServerRuntime } from './server-runtime.js'
-
-const MAX_GATEWAY_BODY_BYTES = 2 * 1024 * 1024
-const GATEWAY_GUARDS = new WeakMap<object, GatewayRequestGuard>()
-
-function guardFor(runtime: ServerRuntime): GatewayRequestGuard | null {
-  const credentials = runtime.modelGateway?.credentials
-  if (!credentials) return null
-  let guard = GATEWAY_GUARDS.get(credentials)
-  if (!guard) {
-    guard = new GatewayRequestGuard(credentials)
-    GATEWAY_GUARDS.set(credentials, guard)
-  }
-  return guard
-}
-
-export function gatewayModels(runtime: ServerRuntime, request: Request): JsonResponse {
+import {
+  asRecord,
+  authorizePublicGateway,
+  errorMessage,
+  errorStatus,
+  guardFor,
+  MAX_GATEWAY_BODY_BYTES,
+  nextGatewayChunk,
+  numberValue,
+  openAiError,
+  parseArguments,
+  stringValue
+} from './openai-model-gateway-support.js'
+export async function gatewayModels(runtime: ServerRuntime, request: Request): Promise<JsonResponse> {
   const rejected = authorizePublicGateway(runtime, request)
   if (rejected) return rejected
   if (!runtime.modelGateway?.enabled()) return openAiError('Local model gateway is disabled.', 'gateway_disabled', 404)
-  return jsonResponse({
-    object: 'list',
-    data: runtime.modelGateway.pools().filter((pool) => pool.enabled).map((pool) => ({
+  const data: { id: string; object: 'model'; created: number; owned_by: string }[] =
+    runtime.modelGateway.pools().filter((pool) => pool.enabled).map((pool) => ({
       id: pool.modelId,
       object: 'model',
       created: 0,
       owned_by: 'kun-route-pool'
     }))
-  })
+  // Plan §6.13 + review fix C2: `providerId/modelId` provider exposure is an
+  // explicit opt-in (`localModelGateway.exposeProviderModels`). Only plain
+  // HTTP API-key providers may be exposed; subscription, OAuth, and
+  // delegated/non-HTTP providers are never listed.
+  if (runtime.modelConnections && runtime.modelGateway.exposeProviderModels()) {
+    const snapshot = await runtime.modelConnections.snapshot()
+    const seen = new Set(data.map((entry) => entry.id))
+    for (const provider of snapshot.providers) {
+      if (!exposableProvider(provider)) continue
+      for (const modelId of provider.models) {
+        const id = `${provider.id}/${modelId}`
+        if (seen.has(id)) continue
+        seen.add(id)
+        data.push({ id, object: 'model', created: 0, owned_by: provider.id })
+      }
+    }
+  }
+  return jsonResponse({ object: 'list', data })
+}
+
+/**
+ * Resolves a gateway model name: an enabled route-pool id, or
+ * `providerId/modelId` addressing a usable provider directly (§6.13). For the
+ * direct form the returned providerId overrides the gateway sentinel so the
+ * request lands on that provider's client.
+ */
+export async function resolveGatewayModel(
+  runtime: ServerRuntime,
+  model: string
+): Promise<{ model: string; providerId?: string } | null> {
+  if (runtime.modelGateway?.pools().some((pool) => pool.enabled && pool.modelId === model)) {
+    return { model }
+  }
+  const slash = model.indexOf('/')
+  if (slash <= 0 || slash === model.length - 1 || !runtime.modelConnections) return null
+  if (!runtime.modelGateway?.exposeProviderModels()) return null
+  const providerId = model.slice(0, slash)
+  const modelId = model.slice(slash + 1)
+  const snapshot = await runtime.modelConnections.snapshot()
+  const provider = snapshot.providers.find((candidate) => candidate.id === providerId)
+  if (!provider || !exposableProvider(provider)) return null
+  return { model: modelId, providerId }
+}
+
+/**
+ * A provider may only be exposed through the local gateway when it is a plain
+ * HTTP API-key connection with a ready credential. Subscription, OAuth, and
+ * delegated/non-HTTP providers are never reachable this way.
+ */
+function exposableProvider(provider: {
+  kind: string
+  authType: string
+  configured: boolean
+  credentialStatus?: string
+}): boolean {
+  return provider.kind === 'http' &&
+    provider.authType === 'api-key' &&
+    provider.configured &&
+    (!provider.credentialStatus || provider.credentialStatus === 'ready')
 }
 
 export async function gatewayChatCompletions(runtime: ServerRuntime, request: Request): Promise<Response | JsonResponse> {
@@ -44,12 +99,20 @@ export async function gatewayResponses(runtime: ServerRuntime, request: Request)
   return gatewayGenerate(runtime, request, 'responses')
 }
 
+/**
+ * Anthropic Messages shape (`POST /v1/messages`). Requests are translated to
+ * the shared chat pipeline so failover/pool semantics stay identical; only
+ * the wire envelope differs.
+ */
 export function routePoolStatus(runtime: ServerRuntime): JsonResponse {
   if (!runtime.modelGateway) {
     return jsonResponse({ localGateway: { enabled: false }, pools: [], configuredPools: [], metrics: {}, events: [], tests: [] })
   }
   return jsonResponse({
-    localGateway: { enabled: runtime.modelGateway.enabled() },
+    localGateway: {
+      enabled: runtime.modelGateway.enabled(),
+      exposeProviderModels: runtime.modelGateway.exposeProviderModels()
+    },
     pools: runtime.modelGateway.pools(),
     configuredPools: runtime.modelGateway.configuredPools(),
     ...runtime.modelGateway.health.snapshot(),
@@ -115,13 +178,15 @@ async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 
   }
   const input = asRecord(body.value)
   const model = stringValue(input.model)
-  if (!model || !runtime.modelGateway.pools().some((pool) => pool.enabled && pool.modelId === model)) {
+  const resolved = model ? await resolveGatewayModel(runtime, model) : null
+  if (!resolved) {
     lease.release()
     return openAiError(`The model '${model || '(missing)'}' does not exist.`, 'model_not_found', 404)
   }
   let modelRequest: ModelRequest
   try {
-    modelRequest = makeModelRequest(shape === 'chat' ? input : responsesToChatInput(input), lease.signal)
+    const normalized = shape === 'chat' ? input : responsesToChatInput(input)
+    modelRequest = makeModelRequest({ ...normalized, model: resolved.model }, lease.signal, resolved.providerId)
   } catch (error) {
     lease.release()
     return openAiError(error instanceof Error ? error.message : String(error), 'invalid_request_error', 400)
@@ -138,7 +203,7 @@ async function gatewayGenerate(runtime: ServerRuntime, request: Request, shape: 
   }
 }
 
-function makeModelRequest(input: Record<string, unknown>, signal: AbortSignal): ModelRequest {
+export function makeModelRequest(input: Record<string, unknown>, signal: AbortSignal, providerId?: string): ModelRequest {
   const model = stringValue(input.model)
   if (!model) throw new Error('model is required')
   const rawMessages = Array.isArray(input.messages) ? input.messages : []
@@ -186,7 +251,7 @@ function makeModelRequest(input: Record<string, unknown>, signal: AbortSignal): 
     threadId,
     turnId,
     model,
-    providerId: LOCAL_MODEL_GATEWAY_PROVIDER_ID,
+    providerId: providerId ?? LOCAL_MODEL_GATEWAY_PROVIDER_ID,
     systemPrompt,
     prefix: [],
     history,
@@ -363,38 +428,3 @@ function messageContent(value: unknown, attachments: NonNullable<ModelRequest['a
   return text.join('\n')
 }
 
-async function nextGatewayChunk(
-  iterator: AsyncIterator<ModelStreamChunk>,
-  signal: AbortSignal
-): Promise<IteratorResult<ModelStreamChunk>> {
-  if (signal.aborted) throw signal.reason ?? new Error('gateway request aborted')
-  return new Promise((resolve, reject) => {
-    const onAbort = () => {
-      cleanup()
-      reject(signal.reason ?? new Error('gateway request aborted'))
-    }
-    const cleanup = () => signal.removeEventListener('abort', onAbort)
-    signal.addEventListener('abort', onAbort, { once: true })
-    iterator.next().then(
-      (result) => { cleanup(); resolve(result) },
-      (error) => { cleanup(); reject(error) }
-    )
-  })
-}
-
-function authorizePublicGateway(runtime: ServerRuntime, request: Request): JsonResponse | null {
-  const guard = guardFor(runtime)
-  if (!guard || !guard.authorize(request)) return openAiError('Invalid gateway API key.', 'invalid_api_key', 401)
-  if (!guard.consumeToken()) return openAiError('Gateway rate limit exceeded.', 'rate_limit_exceeded', 429)
-  return null
-}
-
-function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error) }
-function openAiError(message: string, code: string, status: number): JsonResponse {
-  return jsonResponse({ error: { message, type: status >= 500 ? 'server_error' : 'invalid_request_error', param: null, code } }, status)
-}
-function errorStatus(chunk: Extract<ModelStreamChunk, { kind: 'error' }>): number { return chunk.failure?.httpStatus && chunk.failure.httpStatus >= 400 ? chunk.failure.httpStatus : 502 }
-function asRecord(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
-function stringValue(value: unknown): string { return typeof value === 'string' ? value : '' }
-function numberValue(value: unknown): number | undefined { return typeof value === 'number' && Number.isFinite(value) ? value : undefined }
-function parseArguments(value: unknown): Record<string, unknown> { try { return typeof value === 'string' ? asRecord(JSON.parse(value)) : asRecord(value) } catch { return {} } }

@@ -14,6 +14,7 @@ export function agentSdkCapabilities(): DelegatedRuntimeCapabilities {
     nativeResume: true,
     structuredStreaming: true,
     kunTools: true,
+    roomToolPolicy: true,
     externalApproval: true,
     liveSteering: false,
     nativeContextTelemetry: false,

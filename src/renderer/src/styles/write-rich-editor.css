@@ -35,6 +35,12 @@
   margin-top: 0.6em;
 }
 
+/* Lines split out of one source paragraph are separate blocks but keep
+   roughly the spacing they had as lines of that paragraph. */
+.write-rich-editor > p + p[data-soft-line] {
+  margin-top: 0.2em;
+}
+
 .write-rich-editor > * + h1 {
   margin-top: 1.8em;
 }
@@ -130,10 +136,16 @@
   color: inherit;
 }
 
+/* No horizontal margin here: this selector outranks `.write-rich-editor > *`,
+   so a `margin-left` would pull top-level quotes out of the centered reading
+   column. Only nested quotes (in lists or other quotes) sit flush left. */
 .write-rich-editor blockquote {
   border-left: 3px solid color-mix(in srgb, var(--ds-text) 78%, transparent);
   color: var(--ds-text);
   padding-left: 1em;
+}
+
+.write-rich-editor * blockquote {
   margin-left: 0;
 }
 
@@ -240,6 +252,7 @@
   border-radius: 10px;
   display: block;
   margin: 0.4em 0;
+  cursor: zoom-in;
 }
 
 .write-rich-editor img.write-rich-image-error {
@@ -389,4 +402,74 @@
   background-color: color-mix(in srgb, #22c55e 16%, transparent);
   border-radius: 3px;
   white-space: pre-wrap;
+}
+
+/* Diff review decorations (S2) */
+.write-diff-added {
+  background-color: color-mix(in srgb, #22c55e 10%, transparent);
+  box-shadow: inset 3px 0 0 #22c55e;
+}
+
+.write-diff-modified {
+  background-color: color-mix(in srgb, #eab308 9%, transparent);
+  box-shadow: inset 3px 0 0 #eab308;
+}
+
+.write-diff-removed {
+  margin: 2px 0;
+  border-radius: 4px;
+  background-color: color-mix(in srgb, #ef4444 9%, transparent);
+  box-shadow: inset 3px 0 0 #ef4444;
+  opacity: 0.85;
+}
+
+.write-diff-removed-body {
+  padding: 4px 8px;
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, #ef4444 45%, transparent);
+  pointer-events: none;
+}
+
+.write-diff-actions {
+  position: absolute;
+  margin-top: -1.4em;
+  margin-left: 4px;
+  display: inline-flex;
+  gap: 2px;
+  z-index: 20;
+}
+
+.write-diff-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid var(--ds-border, #d4d4d8);
+  background: var(--ds-card, #fff);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.write-diff-actions .write-diff-accept {
+  color: #16a34a;
+}
+
+.write-diff-actions .write-diff-reject {
+  color: #dc2626;
+}
+
+.write-diff-word-added {
+  background-color: color-mix(in srgb, #22c55e 18%, transparent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, #22c55e 65%, transparent);
+  border-radius: 2px;
+}
+
+.write-diff-word-removed {
+  color: #dc2626;
+  text-decoration: line-through;
+  opacity: 0.8;
 }

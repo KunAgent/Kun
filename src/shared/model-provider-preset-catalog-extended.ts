@@ -42,7 +42,8 @@ import {
   GROK_SUBSCRIPTION_PROVIDER_ID,
   HUNYUAN_REASONING,
   ModelProviderPreset,
-  QWEN_REASONING
+  QWEN_REASONING,
+  STEPFUN_REASONING
 } from './model-provider-preset-types'
 
 export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
@@ -355,12 +356,49 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
     apiKeyUrl: 'https://accounts.x.ai'
   },
 {
+    id: 'opper',
+    name: 'Opper',
+    baseUrl: 'https://api.opper.ai/v3/compat',
+    endpointFormat: 'chat_completions',
+    models: [],
+    docsUrl: 'https://docs.opper.ai',
+    apiKeyUrl: 'https://platform.opper.ai'
+  },
+{
     id: 'vercel-ai-gateway',
     name: 'Vercel AI Gateway',
+    origin: 'relay',
     baseUrl: 'https://ai-gateway.vercel.sh/v1',
     endpointFormat: 'chat_completions',
     models: [],
     docsUrl: 'https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions',
     apiKeyUrl: 'https://vercel.com/ai-gateway'
+  },
+{
+    id: 'stepfun',
+    name: 'StepFun',
+    subscriptionRegion: 'china',
+    baseUrl: 'https://api.stepfun.com/v1',
+    endpointFormat: 'chat_completions',
+    models: ['step-3.7-flash', 'step-3.5-flash'],
+    modelProfiles: {
+      'step-3.7-flash': visionChatProfile(262_144, STEPFUN_REASONING),
+      'step-3.5-flash': textChatProfile(262_144)
+    },
+    tokenPlan: {
+      displayName: 'Step Plan',
+      baseUrl: 'https://api.stepfun.com/step_plan/v1',
+      endpointFormat: 'chat_completions',
+      models: ['step-5-preview', 'step-3.7-flash', 'step-3.5-flash', 'step-3.5-flash-2603'],
+      modelProfiles: {
+        'step-5-preview': visionChatProfile(1_000_000),
+        'step-3.7-flash': visionChatProfile(262_144, STEPFUN_REASONING),
+        'step-3.5-flash': textChatProfile(262_144),
+        'step-3.5-flash-2603': textChatProfile(262_144)
+      },
+      apiKeyUrl: 'https://platform.stepfun.com/interface-key'
+    },
+    docsUrl: 'https://platform.stepfun.com/docs',
+    apiKeyUrl: 'https://platform.stepfun.com/interface-key'
   }
 ]

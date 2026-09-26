@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { assertRoomTurnAdmission } from './room-thread-admission-policy.js'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
 import type {
@@ -17,6 +18,7 @@ import type { RuntimeErrorSeverity } from '../contracts/errors.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { MigrationMaintenanceLock } from '../ports/migration-maintenance-lock.js'
+import { assertHistoryReferenceWorkspace } from './history-reference-workspace.js'
 import {
   ThreadExecutionBusyError,
   type ThreadExecutionLeasePort
@@ -121,6 +123,8 @@ async startTurn(this: TurnService, input: {
         }
         const thread = await this['deps'].threadStore.get(input.threadId)
         if (!thread) throw new Error(`thread not found: ${input.threadId}`)
+        await assertHistoryReferenceWorkspace(thread)
+        assertRoomTurnAdmission(thread, input.request)
         if (thread.turns.some((turn) => turn.status === 'running' || turn.status === 'queued')) {
           if (
             !options.expectedLatestFailedTurnId &&
@@ -165,6 +169,32 @@ async startTurn(this: TurnService, input: {
           throw new TurnCapacityError(this['maxConcurrentTurns'])
         }
         attemptedTurnId = turnId
+        // Freeze the accepted context-window mode now: hot config updates
+        // only affect turns admitted after this point, and child/forked
+        // threads inherit the parent's last accepted mode.
+        this['deps'].contextWindowModes?.freeze({
+          threadId: input.threadId,
+          turnId,
+          parentThreadId: thread.parentThreadId ?? null
+        })
+        // Window-mode admission is fail-closed on route capability: a route
+        // that cannot execute tools can never run new_context or the history
+        // tools, so admitting it could strand the task mid-window. Reject
+        // BEFORE the turn starts: no context clear, no strategy change, and
+        // summary mode stays usable for later turns on other routes.
+        const acceptedMode = this['deps'].contextWindowModes
+          ?.snapshot(input.threadId, turnId).mode
+        if (acceptedMode === 'windows' && this['deps'].modelCapabilities) {
+          const routeModel = input.request.model ?? thread.model
+          const routeProviderId = input.request.providerId ?? thread.providerId ?? undefined
+          const capabilities = this['deps'].modelCapabilities(routeModel, routeProviderId)
+          if (!capabilities.supportsToolCalling) {
+            throw new TurnConflictError(
+              `window-mode context requires a route with tool support, but ${JSON.stringify(routeModel)} ` +
+              'cannot execute tools; switch model/provider or disable window mode for this thread'
+            )
+          }
+        }
         try {
           if (this['deps'].executionLeases) {
             const lease = await this['deps'].executionLeases.acquire(input.threadId, turnId)
@@ -239,6 +269,7 @@ async startTurn(this: TurnService, input: {
             composerContexts,
             guiPlan: input.request.guiPlan,
             guiDesignCanvas: input.request.guiDesignCanvas,
+            guiExcalidrawCanvas: input.request.guiExcalidrawCanvas,
             guiDesignMode: input.request.guiDesignMode,
             agentSurface: designAdmission.effectiveSurface,
             designProfile: designAdmission.effectiveProfile,
@@ -268,6 +299,7 @@ async startTurn(this: TurnService, input: {
             fileReferences: input.request.fileReferences ?? [],
             workspaceCheckpointId: input.request.workspaceCheckpointId,
             workspace: thread.workspace,
+            historyRefId: thread.historyRefId,
             threadAgentSurface: designAdmission.locksSurface && designAdmission.effectiveSurface
               ? designAdmission.effectiveSurface
               : resolveThreadAgentSurface(thread),

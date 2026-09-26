@@ -7,6 +7,7 @@ export class ManagedRuntimeShutdownCoordinator {
   private stoppedForQuit = false
   private stopPromise: Promise<void> | null = null
   private stopIncludesUpdateIntent = false
+  private quitStartedAt: number | undefined
 
   constructor(private readonly stopManagedRuntimes: () => Promise<void>) {}
 
@@ -26,13 +27,18 @@ export class ManagedRuntimeShutdownCoordinator {
     return this.quitRequested || this.updateInstallQuit || this.storageRelocationQuit
   }
 
+  get shutdownStartedAt(): number { return this.quitStartedAt ?? Date.now() }
+
   requestQuit(): void {
     this.quitRequested = true
+    this.quitStartedAt ??= Date.now()
   }
 
   setUpdateInstallQuit(active: boolean): void {
     if (this.updateInstallQuit === active) return
     this.updateInstallQuit = active
+    if (active) this.quitStartedAt ??= Date.now()
+    else if (!this.quitRequested) this.quitStartedAt = undefined
     if (!active) this.updateInstallPrepared = false
   }
 
@@ -84,14 +90,9 @@ export class ManagedRuntimeShutdownCoordinator {
   async stopForQuit(): Promise<void> {
     this.requestQuit()
     if (this.stoppedForQuit) return
-    try {
-      // A successful update preflight already stopped the same resources. Do
-      // not run it twice when Electron subsequently emits `before-quit`.
-      if (!this.updateInstallPrepared) await this.stop()
-    } finally {
-      // Quit remains terminal even when one adapter reports a stop error: the
-      // supervisor must never spawn a replacement child after this point.
-      this.stoppedForQuit = true
-    }
+    // Intent stays terminal on failure, but completion must mean resources
+    // actually stopped. Failed cleanup remains observable and retryable.
+    if (!this.updateInstallPrepared) await this.stop()
+    this.stoppedForQuit = true
   }
 }

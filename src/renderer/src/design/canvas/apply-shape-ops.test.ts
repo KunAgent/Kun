@@ -295,6 +295,7 @@ describe('extractCanvasOpBlocksFromValue (tool result payloads)', () => {
     expect(isDesignCanvasToolName('design_motion_set_timeline')).toBe(true)
     expect(isDesignCanvasToolName('design_motion_upsert_keyframes')).toBe(true)
     expect(isDesignCanvasToolName('bash')).toBe(false)
+    expect(isDesignCanvasToolName('design_apply_excalidraw')).toBe(false)
     expect(
       extractCanvasOpBlocksFromValue({
         ok: true,

@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   armBusyWatchdog,
+  cancelOfflineRuntimeProbe,
   clearBusyWatchdog,
+  OFFLINE_RUNTIME_PROBE_INTERVAL_MS,
   resetBusyRecoveryAttempts,
+  scheduleOfflineRuntimeProbe,
   scheduleStartupRuntimeProbe,
   stopTurnCompletionPoll,
   syncTurnCompletionPoll
@@ -223,6 +226,103 @@ describe('scheduleStartupRuntimeProbe', () => {
     expect(probeRuntime).toHaveBeenCalledTimes(3)
     // Drain the remaining retry budget so no probe/timer leaks into later tests.
     await vi.advanceTimersByTimeAsync(10_000)
+  })
+})
+
+describe('scheduleOfflineRuntimeProbe', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    cancelOfflineRuntimeProbe()
+  })
+  afterEach(() => {
+    cancelOfflineRuntimeProbe()
+    vi.useRealTimers()
+  })
+
+  function makeOfflineProbeHarness(options: { probeDurationMs?: number } = {}) {
+    const h = makeHarness({ runtimeConnection: 'offline' })
+    const probeRuntime = vi.fn(() => {
+      if (!options.probeDurationMs) return Promise.resolve()
+      return new Promise<void>((resolve) => setTimeout(resolve, options.probeDurationMs))
+    })
+    h.set({ probeRuntime } as Partial<ChatState>)
+    return { h, probeRuntime }
+  }
+
+  it('runs a background probe after the interval while offline', async () => {
+    const { h, probeRuntime } = makeOfflineProbeHarness()
+    scheduleOfflineRuntimeProbe(h.get)
+    await vi.advanceTimersByTimeAsync(OFFLINE_RUNTIME_PROBE_INTERVAL_MS - 1)
+    expect(probeRuntime).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(probeRuntime).toHaveBeenCalledTimes(1)
+    expect(probeRuntime).toHaveBeenCalledWith('background')
+    // Still offline: the probe settled and re-armed the chain. Mark ready so
+    // the pending timer dies instead of leaking into the next test.
+    h.set({ runtimeConnection: 'ready' })
+    await vi.advanceTimersByTimeAsync(OFFLINE_RUNTIME_PROBE_INTERVAL_MS)
+    expect(probeRuntime).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps re-arming while the connection stays offline', async () => {
+    const { h, probeRuntime } = makeOfflineProbeHarness()
+    scheduleOfflineRuntimeProbe(h.get)
+    await vi.advanceTimersByTimeAsync(OFFLINE_RUNTIME_PROBE_INTERVAL_MS)
+    expect(probeRuntime).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(OFFLINE_RUNTIME_PROBE_INTERVAL_MS)
+    expect(probeRuntime).toHaveBeenCalledTimes(2)
+    h.set({ runtimeConnection: 'ready' })
+    await vi.advanceTimersByTimeAsync(OFFLINE_RUNTIME_PROBE_INTERVAL_MS)
+    expect(probeRuntime).toHaveBeenCalledTimes(2)
+  })
+
+  it('never fires once the connection is ready', async () => {
+    const { h, probeRuntime } = makeOfflineProbeHarness()
+    scheduleOfflineRuntimeProbe(h.get)
+    h.set({ runtimeConnection: 'ready' })
+    await vi.advanceTimersByTimeAsync(OFFLINE_RUNTIME_PROBE_INTERVAL_MS * 2)
+    expect(probeRuntime).not.toHaveBeenCalled()
+  })
+
+  it('defers while a user probe is checking and retries after it settles', async () => {
+    const { h, probeRuntime } = makeOfflineProbeHarness()
+    scheduleOfflineRuntimeProbe(h.get)
+    h.set({ runtimeConnection: 'checking' })
+    await vi.advanceTimersByTimeAsync(OFFLINE_RUNTIME_PROBE_INTERVAL_MS)
+    expect(probeRuntime).not.toHaveBeenCalled()
+    // The timer re-armed for another interval instead of dying.
+    await vi.advanceTimersByTimeAsync(OFFLINE_RUNTIME_PROBE_INTERVAL_MS - 1)
+    expect(probeRuntime).not.toHaveBeenCalled()
+    h.set({ runtimeConnection: 'offline' })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(probeRuntime).toHaveBeenCalledTimes(1)
+    h.set({ runtimeConnection: 'ready' })
+    await vi.advanceTimersByTimeAsync(OFFLINE_RUNTIME_PROBE_INTERVAL_MS)
+  })
+
+  it('does not start a second probe while one is still in flight', async () => {
+    const { h, probeRuntime } = makeOfflineProbeHarness({ probeDurationMs: 5_000 })
+    scheduleOfflineRuntimeProbe(h.get)
+    await vi.advanceTimersByTimeAsync(OFFLINE_RUNTIME_PROBE_INTERVAL_MS)
+    expect(probeRuntime).toHaveBeenCalledTimes(1)
+    // The first probe is still running; extra schedule calls in that window
+    // must not start a parallel probe.
+    scheduleOfflineRuntimeProbe(h.get)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(probeRuntime).toHaveBeenCalledTimes(1)
+    // It settled at +5s and re-armed; the next probe fires one interval later.
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(probeRuntime).toHaveBeenCalledTimes(2)
+    h.set({ runtimeConnection: 'ready' })
+    await vi.advanceTimersByTimeAsync(OFFLINE_RUNTIME_PROBE_INTERVAL_MS)
+  })
+
+  it('cancelOfflineRuntimeProbe stops a pending retry', async () => {
+    const { h, probeRuntime } = makeOfflineProbeHarness()
+    scheduleOfflineRuntimeProbe(h.get)
+    cancelOfflineRuntimeProbe()
+    await vi.advanceTimersByTimeAsync(OFFLINE_RUNTIME_PROBE_INTERVAL_MS * 2)
+    expect(probeRuntime).not.toHaveBeenCalled()
   })
 })
 

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { MODEL_ENDPOINT_FORMATS } from './model-endpoint-format.js'
+import { MemoryFeedbackConfig } from './memory-feedback.js'
 
 import {
   CapabilityToggleConfig,
@@ -7,6 +8,7 @@ import {
   McpCapabilityConfig,
   McpToolDiscoveryMode,
   ModelCapabilityMetadata,
+  PaperSearchCapabilityConfig,
   ProactiveSubagentRetryConfig,
   RUNTIME_CAPABILITY_CONTRACT_VERSION,
   RuntimeCapabilityState,
@@ -52,7 +54,13 @@ export const MemoryCapabilityConfig = CapabilityToggleConfig.extend({
   maxInjectedRecords: z.number().int().positive().default(8),
   distillation: z.object({
     enabled: z.boolean().default(false)
-  }).strict().default(() => ({ enabled: false }))
+  }).strict().default(() => ({ enabled: false })),
+  directives: z.object({
+    enabled: z.boolean().default(true),
+    maxRecords: z.number().int().positive().max(50).default(20),
+    maxCharacters: z.number().int().positive().max(16_000).default(4_000)
+  }).strict().default(() => ({ enabled: true, maxRecords: 20, maxCharacters: 4_000 })),
+  feedback: MemoryFeedbackConfig.optional()
 }).strict()
 export type MemoryCapabilityConfig = z.infer<typeof MemoryCapabilityConfig>
 
@@ -184,7 +192,8 @@ export const KunCapabilitiesConfig = z
     musicGen: MusicGenCapabilityConfig.default(() => MusicGenCapabilityConfig.parse({})),
     videoGen: VideoGenCapabilityConfig.default(() => VideoGenCapabilityConfig.parse({})),
     computerUse: ComputerUseCapabilityConfig.default(() => ComputerUseCapabilityConfig.parse({})),
-    browserUse: BrowserUseCapabilityConfig.default(() => BrowserUseCapabilityConfig.parse({}))
+    browserUse: BrowserUseCapabilityConfig.default(() => BrowserUseCapabilityConfig.parse({})),
+    paperSearch: PaperSearchCapabilityConfig.default(() => PaperSearchCapabilityConfig.parse({}))
   })
   .strict()
 export type KunCapabilitiesConfig = z.infer<typeof KunCapabilitiesConfig>
@@ -261,7 +270,10 @@ export const RuntimeCapabilityManifest = z
     }).strict(),
     memory: RuntimeCapabilityState.extend({
       scopes: z.array(z.enum(['user', 'workspace', 'project'])),
-      maxInjectedRecords: z.number().int().positive()
+      maxInjectedRecords: z.number().int().positive(),
+      directives: z.object({
+        enabled: z.boolean()
+      }).strict()
     }).strict(),
     imageGen: RuntimeCapabilityState.extend({
       model: z.string().optional(),
@@ -465,7 +477,8 @@ export function buildRuntimeCapabilityManifest(input: {
         input.memory?.reason ?? 'memory store is unavailable'
       ),
       scopes: config.memory.scopes,
-      maxInjectedRecords: config.memory.maxInjectedRecords
+      maxInjectedRecords: config.memory.maxInjectedRecords,
+      directives: { enabled: config.memory.directives.enabled }
     },
     imageGen: {
       ...providerCapabilityState(

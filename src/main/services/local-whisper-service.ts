@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import { spawn } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import { stopOwnedProcess } from '../../../kun/src/process/owned-process'
+import { runOwnedCommand } from '../owned-command'
 import { createHash } from 'node:crypto'
 import {
   LOCAL_WHISPER_DEFAULT_MODEL_ID,
@@ -43,7 +45,7 @@ let activeDownload: {
   tempPath: string
   canceled: boolean
 } | null = null
-const activeWhisperChildren = new Set<ReturnType<typeof spawn>>()
+const activeWhisperChildren = new Set<ChildProcess>()
 const activeWhisperRuns = new Set<Promise<void>>()
 let whisperShuttingDown = false
 
@@ -515,44 +517,18 @@ async function runWhisper(
   timeoutMs: number,
   runner: Pick<RunnerCommand, 'cwd' | 'env'> = {}
 ): Promise<void> {
-  const run = new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args, { cwd: runner.cwd, env: runner.env, windowsHide: true })
-    activeWhisperChildren.add(child)
-    let stderr = ''
-    let stdout = ''
-    let settled = false
-    const finish = (error?: Error): void => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      activeWhisperChildren.delete(child)
-      if (error) reject(error)
-      else resolve()
+  const run = runOwnedCommand(command, args, {
+    cwd: runner.cwd, env: runner.env, timeoutMs,
+    messages: { timeout: `local Whisper timed out after ${timeoutMs}ms` },
+    onSpawn: (child) => { activeWhisperChildren.add(child) },
+    onSettled: (child) => { activeWhisperChildren.delete(child) }
+  }).then((result) => {
+    if (result.exitCode !== 0) {
+      throw new Error((result.stderr || result.stdout || `local Whisper exited with code ${result.exitCode}`).trim().slice(0, 1000))
     }
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL')
-      finish(new Error(`local Whisper timed out after ${timeoutMs}ms`))
-    }, timeoutMs)
-    child.stdout?.on('data', (chunk) => {
-      stdout += String(chunk)
-    })
-    child.stderr?.on('data', (chunk) => {
-      stderr += String(chunk)
-    })
-    child.on('error', (error) => {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        finish(new Error(`local Whisper runner is missing (${basename(command)})`))
-        return
-      }
-      finish(error)
-    })
-    child.on('exit', (code) => {
-      if (code === 0) {
-        finish()
-        return
-      }
-      finish(new Error((stderr || stdout || `local Whisper exited with code ${code}`).trim().slice(0, 1000)))
-    })
+  }).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') throw new Error(`local Whisper runner is missing (${basename(command)})`)
+    throw error
   })
   activeWhisperRuns.add(run)
   try {
@@ -568,9 +544,9 @@ export async function shutdownLocalWhisperService(): Promise<void> {
     activeDownload.canceled = true
     activeDownload.controller.abort()
   }
-  for (const child of activeWhisperChildren) {
-    try { child.kill('SIGKILL') } catch { /* already exited */ }
-  }
+  const stopped = await Promise.allSettled([...activeWhisperChildren].map((child) =>
+    stopOwnedProcess(child, { graceMs: 0, timeoutMs: 2000 })))
+  const stopFailures = stopped.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
   const pending = [
     ...activeWhisperRuns,
     ...(downloadPromise ? [downloadPromise] : [])
@@ -587,6 +563,7 @@ export async function shutdownLocalWhisperService(): Promise<void> {
     }
   }
   progressEmitter = null
+  if (stopFailures.length) throw new AggregateError(stopFailures.map((result) => result.reason), 'Whisper process cleanup failed')
 }
 
 export function localWhisperAvailableModels(): typeof LOCAL_WHISPER_MODELS {

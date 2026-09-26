@@ -1,0 +1,178 @@
+/* Mobile-only timeline adjustments. Every rule is scoped under .kun-mobile-app
+ * (or data-remote-surface) so the desktop Electron layout is untouched. */
+
+/* Assistant action row: always visible on touch, trimmed to copy + more. */
+.kun-mobile-app [data-assistant-action-row] {
+  opacity: 1;
+  min-height: 32px;
+  margin-top: 2px;
+  font-size: var(--kun-mobile-font-meta, 12.5px);
+}
+.kun-mobile-app [data-assistant-action-row] :is(
+  [data-assistant-action='rollback'],
+  [data-assistant-action='fork'],
+  [data-assistant-action='speak'],
+  [data-assistant-action='speak-track'],
+  [data-assistant-action='export']
+) {
+  display: none;
+}
+/* 32px visual, ::after widens the hit area to ~44px. Scoped to the two actions
+ * that stay visible in the timeline row — copy + more — so the display value
+ * here can never override the display:none hiding of secondary actions above. */
+.kun-mobile-app [data-assistant-action-row] :is(
+  [data-assistant-action='copy'],
+  [data-assistant-action='more']
+) {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 9999px;
+  color: var(--ds-text-muted);
+}
+.kun-mobile-app [data-assistant-action-row] :is(
+  [data-assistant-action='copy'],
+  [data-assistant-action='more']
+)::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+.kun-mobile-app [data-assistant-action-row] :is(
+  [data-assistant-action='copy'],
+  [data-assistant-action='more']
+):active { background: var(--ds-surface-hover); }
+.kun-mobile-app [data-assistant-action-row] :is(
+  [data-assistant-action='copy'],
+  [data-assistant-action='more']
+) > span { display: none; }
+
+/* User bubbles reveal their inline row through focus-within: the bubble gets
+ * tabIndex on mobile so a tap focuses it and shows copy/edit (U2). */
+.kun-mobile-app .ds-user-message:focus { outline: none; }
+.kun-mobile-app [data-user-message-actions] { min-height: 32px; }
+.kun-mobile-app [data-user-message-actions] button {
+  position: relative;
+  min-width: 32px;
+  min-height: 32px;
+}
+.kun-mobile-app [data-user-message-actions] button::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+.kun-mobile-app [data-user-message-actions] button:active { background: var(--ds-surface-hover); }
+
+/* Image hover controls stay visible on touch. */
+.kun-mobile-app [data-media-action] {
+  opacity: 1;
+  width: 36px;
+  height: 36px;
+}
+
+/* Floating back-to-latest button (desktop jump rail is hidden on mobile). */
+.kun-mobile-app .kun-mobile-jump-latest {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--ds-border);
+  border-radius: 9999px;
+  color: var(--ds-text);
+  background: var(--ds-surface-elevated, var(--ds-bg-main));
+  box-shadow: 0 8px 24px rgb(0 0 0 / .18);
+}
+.kun-mobile-app .kun-mobile-jump-latest::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+.kun-mobile-app .kun-mobile-jump-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  background: var(--ds-accent);
+  box-shadow: 0 0 0 2px var(--ds-surface-elevated, var(--ds-bg-main));
+}
+
+/* Assistant text column never overflows the phone viewport. */
+.kun-mobile-app .ds-chat-answer {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 15px;
+  line-height: 1.62;
+}
+.kun-mobile-app .ds-markdown {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.kun-mobile-app .ds-markdown pre {
+  max-width: 100%;
+  overflow-x: auto;
+  font-size: 12.5px;
+}
+.kun-mobile-app .ds-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.kun-mobile-app .ds-markdown :is(img, video) { max-width: 100%; height: auto; }
+
+/* Markdown and tool chrome: 22–24px icon buttons get a 32px visual size and
+ * an ::after ring that widens the hit area to ~44px (plan §1.5). */
+.kun-mobile-app :is(
+  .ds-code-block-action,
+  [data-streamdown='code-block-actions'] button,
+  [data-streamdown='table-wrapper'] button
+) {
+  position: relative;
+  min-width: 32px;
+  min-height: 32px;
+}
+.kun-mobile-app :is(
+  .ds-code-block-action,
+  [data-streamdown='code-block-actions'] button,
+  [data-streamdown='table-wrapper'] button
+)::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+/* Collapsible "Processed …" tool rows are full-width tap targets. */
+.kun-mobile-app [data-work-meta-row] { min-height: 44px; }
+
+/* Subagent cards: the mascot avatar leaves on mobile (matches the desktop
+ * focus-mode precedent), and below 440px the header wraps into two rows —
+ * title first, then elapsed/steps on the left and actions on the right. */
+.kun-mobile-app .ds-subagent-mount .ds-subagent-focus-decoration { display: none; }
+.kun-mobile-app .kun-mobile-code-timeline { container-type: inline-size; container-name: mobile-timeline; }
+@container mobile-timeline (max-width: 440px) {
+  .kun-mobile-app .ds-subagent-mount [data-subagent-header] {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding-inline: 12px;
+  }
+  /* Row 1: the title column alone; row 2: elapsed left, actions right. */
+  .kun-mobile-app .ds-subagent-mount [data-subagent-header] > [data-subagent-title] { flex-basis: 100%; }
+  .kun-mobile-app .ds-subagent-mount [data-subagent-name] { font-size: 13.5px; }
+  .kun-mobile-app .ds-subagent-mount [data-subagent-actions] { margin-inline-start: auto; }
+  .kun-mobile-app .ds-subagent-mount [data-subagent-actions] button { position: relative; }
+  .kun-mobile-app .ds-subagent-mount [data-subagent-actions] button::after {
+    content: '';
+    position: absolute;
+    inset: -8px -4px;
+  }
+}
+.kun-mobile-app .ds-subagent-mount { max-width: 100%; }

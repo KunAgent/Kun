@@ -17,6 +17,13 @@ export type CompatModelClientConfig = {
   model: string
   /** Compatible request/response protocol to use for custom providers. */
   endpointFormat?: ModelEndpointFormat
+  /**
+   * Per-protocol base URL overrides for multi-protocol providers that host
+   * each endpoint family on a different path. The resolved request format
+   * selects `endpoints[format]` when present, else falls back to `baseUrl`.
+   * `custom_endpoint` always uses `baseUrl` verbatim.
+   */
+  endpoints?: Partial<Record<'chat_completions' | 'responses' | 'messages', string>>
   /** Optional protected extra headers (e.g. Codex account/User-Agent material). */
   headers?: Record<string, string>
   /** Optional user-configured custom headers merged before protected headers. */

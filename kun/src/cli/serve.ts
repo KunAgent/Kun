@@ -229,6 +229,7 @@ export function parseServeOptions(
     headers: configServe.headers,
     providers: configServe.providers,
     routePools: configServe.routePools,
+    providerFailover: configServe.providerFailover,
     localModelGateway: configServe.localModelGateway,
     models: loadedConfig?.config.models,
     contextCompaction: loadedConfig?.config.contextCompaction,

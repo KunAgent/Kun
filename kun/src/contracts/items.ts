@@ -11,6 +11,7 @@ import {
   DesignTaskProfileSchema
 } from './design-task-profile.js'
 import { ModelRequestFailureContextSchema } from './model-request-failure.js'
+import { ApprovalActionEnvelopeSchema } from './approvals.js'
 
 /**
  * Conversation items returned as part of a thread or turn.
@@ -32,13 +33,23 @@ export const TurnItemStatus = z.enum([
 export type TurnItemStatus = z.infer<typeof TurnItemStatus>
 
 export const TurnItemBase = z.object({
+  /** Read-only source projection position; never a native event sequence. */
+  sourceHistoryOrder: z.object({
+    referenceId: z.string().min(1),
+    turnIndex: z.number().int().nonnegative(),
+    itemIndex: z.number().int().nonnegative()
+  }).optional(),
   id: z.string().min(1),
   turnId: z.string().min(1),
   threadId: z.string().min(1),
   role: TurnItemRole,
   status: TurnItemStatus,
   createdAt: z.string(),
-  finishedAt: z.string().optional()
+  finishedAt: z.string().optional(),
+  /** Ephemeral external-history projection; these are not Kun attachment IDs. */
+  sourceAttachments: z.array(z.object({
+    index: z.number().int().nonnegative(), name: z.string(), mimeType: z.string().optional()
+  })).max(32).optional()
 })
 
 export const UserInputOptionSchema = z.object({
@@ -83,6 +94,8 @@ export const UserMessageSource = z.enum([
 export type UserMessageSource = z.infer<typeof UserMessageSource>
 
 export const UserTurnItem = TurnItemBase.extend({
+  /** Host-owned identity for JSONL-only branch recovery; never user-provided. */
+  historyRefId: z.string().min(1).optional(),
   kind: z.literal('user_message'),
   text: z.string(),
   displayText: z.string().optional(),
@@ -249,6 +262,15 @@ export const ToolCallTurnItem = TurnItemBase.extend({
           data: z.string().min(1).max(262_144)
         }).strict()
       ])).min(1).max(16)
+    }).strict().optional(),
+    responses: z.object({
+      /**
+       * Opaque Responses-API reasoning items captured ahead of this tool
+       * call. Responses requests run with `store: false`, so the endpoint
+       * keeps no server-side state: replaying a function_call requires the
+       * reasoning items that preceded it (id/summary/encrypted_content).
+       */
+      reasoningItems: z.array(z.record(z.string(), z.unknown())).min(1).max(16)
     }).strict().optional()
   }).strict().optional(),
   summary: z.string().optional()
@@ -262,7 +284,13 @@ export const ToolResultTurnItem = TurnItemBase.extend({
   callId: z.string().min(1),
   toolKind: z.enum(['tool_call', 'command_execution', 'file_change']),
   output: z.unknown(),
-  isError: z.boolean().default(false)
+  isError: z.boolean().default(false),
+  /**
+   * Structured sideband for clients; never projected into model context.
+   * Tool authors use it for reviewable payloads (e.g. paper lists) while
+   * `output` stays a compact model-facing summary.
+   */
+  meta: z.record(z.string(), z.unknown()).optional()
 })
 export type ToolResultTurnItem = z.infer<typeof ToolResultTurnItem>
 
@@ -271,6 +299,8 @@ export const ApprovalTurnItem = TurnItemBase.extend({
   approvalId: z.string().min(1),
   toolName: z.string().min(1),
   summary: z.string(),
+  /** Bounded, redacted action data so clients can render the full request. */
+  action: ApprovalActionEnvelopeSchema.optional(),
   status: z.enum(['pending', 'allowed', 'denied', 'expired']),
   approvalReviewer: z.enum(['user', 'agent']).optional(),
   decisionSource: z.enum(['user', 'agent']).optional(),
@@ -304,6 +334,51 @@ export const CompactionTurnItem = TurnItemBase.extend({
 })
 export type CompactionTurnItem = z.infer<typeof CompactionTurnItem>
 
+export const ContextWindowTransitionReasonSchema = z.enum([
+  'model',
+  'pressure',
+  'overflow',
+  'manual-summary'
+])
+export type ContextWindowTransitionReason = z.infer<typeof ContextWindowTransitionReasonSchema>
+
+/** Position in retained history before which a window cut happened. */
+export const ContextWindowSplitPositionSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('item'),
+    itemId: z.string().min(1)
+  }).strict(),
+  z.object({
+    kind: z.literal('seq'),
+    seq: z.number().int().nonnegative()
+  }).strict()
+])
+export type ContextWindowSplitPosition = z.infer<typeof ContextWindowSplitPositionSchema>
+
+/**
+ * Durable, versioned boundary committed when the active context window
+ * changes. Unlike compaction it never carries a generated summary: the
+ * boundary is fully described by its own fields and old items stay
+ * retrievable through the history tools.
+ */
+export const ContextWindowTurnItem = TurnItemBase.extend({
+  kind: z.literal('context_window'),
+  schemaVersion: z.literal(1),
+  windowId: z.string().min(1),
+  /** null/absent only for window 0 (first enablement over retained history). */
+  previousWindowId: z.string().min(1).nullable().optional(),
+  reason: ContextWindowTransitionReasonSchema,
+  /** Session-store CAS revision captured at the cut. */
+  sourceHistoryRevision: z.number().int().nonnegative(),
+  splitBefore: ContextWindowSplitPositionSchema,
+  /** Reference to the rebuilt initial context recorded for the new window. */
+  initializationRef: z.string().min(1),
+  /** Idempotent operation identity; replays return the committed result. */
+  operationId: z.string().min(1),
+  replacedTokens: z.number().int().nonnegative()
+})
+export type ContextWindowTurnItem = z.infer<typeof ContextWindowTurnItem>
+
 export const ReviewTurnItem = TurnItemBase.extend({
   kind: z.literal('review'),
   target: ReviewTargetSchema,
@@ -336,6 +411,7 @@ export const TurnItem = z.discriminatedUnion('kind', [
   ApprovalTurnItem,
   UserInputTurnItem,
   CompactionTurnItem,
+  ContextWindowTurnItem,
   ReviewTurnItem,
   ErrorTurnItem
 ])

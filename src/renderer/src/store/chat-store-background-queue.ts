@@ -8,6 +8,7 @@ import {
   rememberTurnModel,
   toWriteTurnContext
 } from './chat-store-helpers'
+import { currentCodeWorkspaceRoot } from './chat-store-current-workspace'
 import { rememberPendingClawFeishuMirror } from './chat-store-runtime-notifications'
 import { ensureRuntimeProviderForSend } from './chat-store-thread-action-helpers'
 import { startWorkspaceCheckpointSnapshot } from './chat-store-thread-send-checkpoint'
@@ -113,6 +114,7 @@ function queuedSendOptions(message: QueuedUserMessage, input: {
     displayText: input.displayText,
     ...(message.guiPlan ? { guiPlan: message.guiPlan } : {}),
     ...(message.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+    ...(message.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
     ...(message.guiDesignMode ? { guiDesignMode: true } : {}),
     ...(message.persona ? { persona: message.persona } : {}),
     ...(message.approvalPolicy ? { approvalPolicy: message.approvalPolicy } : {}),
@@ -196,7 +198,7 @@ export async function drainBackgroundQueuedMessage(
         settings,
         threads: state.threads,
         activeThreadId: threadId,
-        fallbackWorkspaceRoot: settings.workspaceRoot
+        fallbackWorkspaceRoot: currentCodeWorkspaceRoot(state, settings)
       })
       next = {
         ...next,

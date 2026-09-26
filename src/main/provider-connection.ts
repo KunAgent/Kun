@@ -8,7 +8,9 @@ import {
   type ModelEndpointFormat
 } from '../shared/app-settings'
 import type { ModelProviderProbeRequest, ModelProviderProbeResult } from '../shared/kun-gui-api'
+import { openCodeSessionRuntimeHeaders } from '../shared/opencode-session'
 import { upstreamOpenAiModelsUrl } from '../shared/openai-compat-url'
+import { resolveProviderEndpointBaseUrl } from '../shared/model-provider-endpoints'
 import { GROK_SUBSCRIPTION_MODEL_IDS } from '../shared/model-provider-presets'
 import { fetchWithOptionalProxy } from './proxy-fetch'
 import { CODEX_CLI_VERSION, codexRequestHeaders, isCodexOAuthCredentials, parseCodexCredentials } from './codex-auth'
@@ -63,17 +65,30 @@ export async function fetchProviderProbe(
 
 export function providerProbeHeaders(
   endpointFormat: ModelEndpointFormat,
-  apiKey: string
+  apiKey: string,
+  customHeaders?: Record<string, string>
 ): Record<string, string> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   const key = apiKey.trim()
   if (endpointFormat === 'messages') {
     headers['anthropic-version'] = ANTHROPIC_VERSION
     if (key) headers['x-api-key'] = key
-    return headers
+  } else if (key) {
+    headers.Authorization = `Bearer ${key}`
   }
-  if (key) headers.Authorization = `Bearer ${key}`
-  return headers
+  // Same layering as Kun's buildCompatRequestHeaders: user-configured custom
+  // headers sit above protocol defaults (a relay may require its own auth
+  // header spelling), case-insensitively.
+  if (!customHeaders) return headers
+  const out = { ...headers }
+  const canonicalByLower = new Map(Object.keys(out).map((name) => [name.toLowerCase(), name]))
+  for (const [rawKey, value] of Object.entries(customHeaders)) {
+    const existing = canonicalByLower.get(rawKey.toLowerCase())
+    if (existing !== undefined && existing !== rawKey) delete out[existing]
+    out[rawKey] = value
+    canonicalByLower.set(rawKey.toLowerCase(), rawKey)
+  }
+  return out
 }
 
 /**
@@ -155,10 +170,22 @@ export async function probeModelProvider(
       message: 'Custom full endpoint mode does not support /models probing. Add model IDs manually.'
     }
   }
+  const modelsBaseUrl = resolveProviderEndpointBaseUrl(
+    { baseUrl, endpoints: request.endpoints },
+    endpointFormat
+  )
   const url = codexHeaders
     ? `https://chatgpt.com/backend-api/codex/models?client_version=${CODEX_CLI_VERSION}`
-    : upstreamOpenAiModelsUrl(baseUrl)
-  const headers = codexHeaders ?? providerProbeHeaders(endpointFormat, request.apiKey)
+    : upstreamOpenAiModelsUrl(modelsBaseUrl)
+  const headers = {
+    ...(codexHeaders ?? providerProbeHeaders(endpointFormat, request.apiKey, request.customHeaders)),
+    ...openCodeSessionRuntimeHeaders({
+      presetSource: settings?.provider.providers.find((provider) => provider.id === request.providerId)
+        ?.presetSource?.presetId,
+      providerId: request.providerId,
+      baseUrl
+    })
+  }
   const startedAt = Date.now()
   let res: Response
   let text: string

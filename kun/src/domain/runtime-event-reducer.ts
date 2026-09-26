@@ -382,6 +382,7 @@ function upsertApprovalFromEvent(
         approvalId: event.approvalId,
         toolName: event.toolName,
         summary: event.summary ?? '',
+        ...(event.action ? { action: event.action } : {}),
         status,
         ...(event.approvalReviewer
           ? { approvalReviewer: event.approvalReviewer }

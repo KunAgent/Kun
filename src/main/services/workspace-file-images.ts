@@ -1,4 +1,4 @@
-import { BrowserWindow, clipboard, dialog } from 'electron'
+import { BrowserWindow, clipboard, dialog, nativeImage } from 'electron'
 import {
   mkdir,
   open as openFile,
@@ -17,6 +17,8 @@ import type {
   WorkspaceClipboardImageSavePayload,
   WorkspaceClipboardImageSaveResult,
   ClipboardImageReadResult,
+  ClipboardImageWritePayload,
+  ClipboardImageWriteResult,
   WorkspaceDirectoryCreatePayload,
   WorkspaceDirectoryCreateResult,
   WorkspaceDirectoryListResult,
@@ -56,7 +58,9 @@ import {
 
 import {
   CLIPBOARD_TEMP_DIR,
+  MAX_IMAGE_PREVIEW_BYTES,
   WORKSPACE_IMAGE_DIR,
+  WORKSPACE_IMAGE_MIME_BY_EXT,
   buildAnnotatedImageName,
   buildPickedImageName,
   buildWorkspaceImageName
@@ -184,6 +188,68 @@ export async function readClipboardImage(): Promise<ClipboardImageReadResult> {
   }
 }
 
+function nativeImageFromBuffer(buffer: Buffer): Electron.NativeImage {
+  const fromBuffer = nativeImage.createFromBuffer(buffer)
+  if (!fromBuffer.isEmpty()) return fromBuffer
+  return nativeImage.createFromDataURL(`data:application/octet-stream;base64,${buffer.toString('base64')}`)
+}
+
+async function nativeImageFromPath(targetPath: string): Promise<Electron.NativeImage> {
+  const fromPath = nativeImage.createFromPath(targetPath)
+  if (!fromPath.isEmpty()) return fromPath
+  return nativeImageFromBuffer(await readFile(targetPath))
+}
+
+export async function writeClipboardImage(
+  payload: ClipboardImageWritePayload
+): Promise<ClipboardImageWriteResult> {
+  try {
+    let image: Electron.NativeImage
+    if (payload.path) {
+      const targetPath = await resolveOpenTargetPath(payload.path, payload.workspaceRoot, {
+        allowBasenameFallback: false
+      })
+      const fileInfo = await stat(targetPath)
+      if (fileInfo.isDirectory()) {
+        return { ok: false, message: 'Cannot copy a directory as an image.' }
+      }
+      if (fileInfo.size > MAX_IMAGE_PREVIEW_BYTES) {
+        return { ok: false, message: 'This image is too large to copy.' }
+      }
+      const ext = extensionFromName(targetPath).toLowerCase()
+      if (!WORKSPACE_IMAGE_MIME_BY_EXT.has(ext)) {
+        return { ok: false, message: 'This image type is not supported.' }
+      }
+      image = await nativeImageFromPath(targetPath)
+    } else {
+      const dataBase64 = payload.dataBase64?.trim() ?? ''
+      if (!dataBase64) {
+        return { ok: false, message: 'Either path or dataBase64 is required.' }
+      }
+      const buffer = Buffer.from(dataBase64, 'base64')
+      if (!buffer.length) {
+        return { ok: false, message: 'Image data is empty.' }
+      }
+      if (buffer.length > MAX_IMAGE_PREVIEW_BYTES) {
+        return { ok: false, message: 'This image is too large to copy.' }
+      }
+      image = nativeImageFromBuffer(buffer)
+    }
+
+    if (image.isEmpty()) {
+      return { ok: false, message: 'This image could not be copied as a bitmap.' }
+    }
+
+    clipboard.writeImage(image)
+    return { ok: true }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
 export async function saveWorkspaceClipboardImage(
   payload: WorkspaceClipboardImageSavePayload
 ): Promise<WorkspaceClipboardImageSaveResult> {
@@ -245,7 +311,9 @@ export async function saveWorkspaceImageBytes(
       requestedFileName &&
       (
         basename(requestedFileName) !== requestedFileName ||
-        !/^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.(?:png|svg)$/i.test(requestedFileName)
+        // Unicode letters/numbers allowed (paper assets use localized titles);
+        // path separators and leading dots stay rejected by basename + class.
+        !/^[\p{L}\p{N}][\p{L}\p{N}._\- ]{0,199}\.(?:png|svg)$/u.test(requestedFileName)
       )
     ) {
       return { ok: false, message: 'Image fileName must be a safe PNG or SVG basename.' }

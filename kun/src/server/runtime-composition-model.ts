@@ -33,7 +33,8 @@ import {
   ClaudeConnectionService,
   OfficialProviderAuthService,
 OfficialProviderCliService,
-  type GeminiCodeAssistCredential
+  type GeminiCodeAssistCredential,
+  type ProviderQuotaEntry
 } from './runtime-factory-dependencies.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import type { createRuntimeCore } from './runtime-composition-core.js'
@@ -263,6 +264,7 @@ export async function createRuntimeModelComposition(
     modelCapabilities,
     routeHealth
   )
+  modelClient.replaceFailoverGroups(core.activeOptions.providerFailover ?? [])
   /**
    * Timing-instrumented entry point shared by the chat loop, child agents,
    * review, and compaction so every model response reports TTFT and
@@ -303,6 +305,7 @@ export async function createRuntimeModelComposition(
     directModelClient.replace(next)
     approvalReviewModelClient.replace(buildApprovalReviewClients(core.activeOptions, next))
     modelClient.replacePools(core.activeOptions.routePools ?? [])
+    modelClient.replaceFailoverGroups(core.activeOptions.providerFailover ?? [])
   }
   modelConnections = new ModelConnectionRegistry({
     dataDir: core.activeOptions.dataDir,
@@ -348,6 +351,7 @@ export async function createRuntimeModelComposition(
         providers,
         modelProxyUrl: selected?.config.modelProxyUrl,
         routePools: connections.routePools,
+        providerFailover: connections.failover,
         localModelGateway: connections.localModelGateway
       }
       const nextClients = buildModelClientRouterInput(
@@ -364,13 +368,15 @@ export async function createRuntimeModelComposition(
       directModelClient.replace(nextClients)
       approvalReviewModelClient.replace(buildApprovalReviewClients(core.activeOptions, nextClients))
       modelClient.replacePools(core.activeOptions.routePools ?? [])
+      modelClient.replaceFailoverGroups(core.activeOptions.providerFailover ?? [])
       refreshModelConnectionDelegatedDeps()
     }
   })
   await modelConnections.initialize(modelConnectionSeedsForOptions(core.activeOptions), {
     proxy: { enabled: Boolean(core.activeOptions.modelProxyUrl), url: core.activeOptions.modelProxyUrl ?? '' },
     routePools: core.activeOptions.routePools ?? [],
-    localModelGateway: core.activeOptions.localModelGateway ?? { enabled: false }
+    failover: core.activeOptions.providerFailover ?? [],
+    localModelGateway: core.activeOptions.localModelGateway ?? { enabled: false, exposeProviderModels: false }
   })
   const resolveCapabilityProviderCredential = async (providerId: string): Promise<{
     apiKey: string
@@ -520,6 +526,80 @@ export async function createRuntimeModelComposition(
       }
     }
   })
+  /**
+   * Quota-aware routing reads only this cache — a request never blocks on a
+   * live quota probe. The service refreshes the map in the background and
+   * only while failover groups exist (their members are the providers that
+   * benefit from exhaustion-aware selection).
+   */
+  const quotaSnapshot = new Map<string, ProviderQuotaEntry>()
+  const quotaSnapshotAt = new Map<string, number>()
+  const QUOTA_REFRESH_MS = 5 * 60_000
+  const QUOTA_REFRESH_MAX_DELAY_MS = 30 * 60_000
+  const failoverQuotaProviderIds = (): string[] => {
+    const ids = new Set<string>()
+    for (const group of core.activeOptions.providerFailover ?? []) {
+      for (const member of group.members) ids.add(member.providerId.trim().toLowerCase())
+      for (const target of group.fallbackTargets) ids.add(target.providerId.trim().toLowerCase())
+    }
+    return [...ids]
+  }
+  let quotaRefreshFailures = 0
+  let quotaRefreshInflight: Promise<void> | null = null
+  const scheduleQuotaRefresh = (): void => {
+    const delay = Math.min(QUOTA_REFRESH_MS * 2 ** quotaRefreshFailures, QUOTA_REFRESH_MAX_DELAY_MS)
+    const timer = setTimeout(() => void refreshQuotaSnapshot(), delay)
+    timer.unref?.()
+  }
+  /**
+   * Only failover group members (and their fallback providers) are probed —
+   * every other provider's quota call would be wasted work. The service-side
+   * TTL cache also dedupes this with the GUI's own refresh path.
+   */
+  const refreshQuotaSnapshot = (): Promise<void> => {
+    quotaRefreshInflight ??= (async () => {
+      const providerIds = failoverQuotaProviderIds()
+      if (providerIds.length === 0) return
+      try {
+        const response = await providerQuotaService.list({
+          providerIds,
+          includeLocalCosts: false
+        })
+        quotaSnapshot.clear()
+        quotaSnapshotAt.clear()
+        const fetched = Date.now()
+        for (const entry of response.entries) {
+          const key = entry.providerId.trim().toLowerCase()
+          quotaSnapshot.set(key, entry)
+          quotaSnapshotAt.set(key, fetched)
+        }
+        quotaRefreshFailures = 0
+      } catch {
+        // A failed refresh keeps the previous snapshot; stale quota data is
+        // safer than a routing stall. The timer backs off exponentially.
+        quotaRefreshFailures += 1
+      }
+    })().finally(() => {
+      quotaRefreshInflight = null
+    })
+    return quotaRefreshInflight
+  }
+  modelClient.setQuotaLookup((providerId) => {
+    const key = providerId.trim().toLowerCase()
+    const entry = quotaSnapshot.get(key)
+    const fetched = quotaSnapshotAt.get(key) ?? 0
+    if (
+      (core.activeOptions.providerFailover ?? []).length > 0
+      && Date.now() - fetched > QUOTA_REFRESH_MS
+    ) {
+      // Stale or missing entry for an active group member: refresh in the
+      // background without blocking this routing decision.
+      void refreshQuotaSnapshot()
+    }
+    return entry
+  })
+  scheduleQuotaRefresh()
+  void refreshQuotaSnapshot()
   const claudeConnections = new ClaudeConnectionService({ dataDir: core.activeOptions.dataDir })
   const modelConnectionOAuth = new ModelConnectionOAuthService({
     registry: modelConnections,

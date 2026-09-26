@@ -1,6 +1,7 @@
 import { rememberManagerStartupInput } from './runtime/kun-startup-manager-recovery'
+import { desktopProcessStack } from './runtime/desktop-process-stack'
 import { app } from 'electron'
-import { spawn } from 'node:child_process'
+import { spawnOwnedProcess, stopOwnedProcess } from '../../kun/src/process/owned-process.js'
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -15,6 +16,7 @@ import {
   type ModelProviderProfileV1,
   type KunRuntimeSettingsV1, type AppSettingsV1
 } from '../shared/app-settings'
+import { normalizeWritePaperModeSettings } from '../shared/app-settings-paper-mode'
 import {
   buildKunServeArgs,
   resolveKunExecutable,
@@ -115,33 +117,21 @@ import {
 import { KUN_RUNTIME_CLIENT_OWNER_KIND_ENV } from '../../kun/src/contracts/runtime-owner.js'
 import {
   ensureServiceManager,
-  ensureServiceManagerWithStartLockHeld,
   type LegacyRuntimeHandoverStatus,
   type ServiceManagerConnection
 } from '../../kun/src/manager/manager-client.js'
 import {
-  defaultKunControlDir,
-  withManagerStartLock
+  defaultKunControlDir
 } from '../../kun/src/manager/manager-discovery.js'
 import { configureManagerAtomicJsonClient } from '../../kun/src/extensions/atomic-json.js'
 import { kunManagerLaunchEnvironment } from './runtime/kun-manager-launch-environment'
 import { handoffExistingKunServiceManagerForDataDir } from './runtime/service-manager-build-handoff'
-import {
-  drainKunOwnersForHandoffWithLock,
-  installedBuildProbeError,
-  probeInstalledBuildHandoff
-} from './runtime/kun-installed-build-handoff'
-import {
-  createHandoffEventReporter,
-  type HandoffEventListener
-} from './runtime/kun-handoff-events'
+import type { HandoffEventListener } from './runtime/kun-handoff-events'
 import { assertSupportedSettingsVersion } from './settings-store-foundation'
 
 import {
   appendTail,
   createKunChildLogCapture,
-  KUN_STOP_FORCE_MS,
-  KUN_STOP_GRACE_MS,
   normalizeCapturedChunk,
   processController,
   waitForKunChildExit
@@ -188,6 +178,7 @@ export async function ensureKunServiceManager(input: {
   onLegacyHandoverStatus?: (status: LegacyRuntimeHandoverStatus) => void
   onHandoffEvent?: HandoffEventListener
 }): Promise<ServiceManagerConnection> {
+  desktopProcessStack.assertCanStart()
   serviceManagerSettingsPath = input.settingsPath
   const dataDir = input.dataDir ?? defaultKunDataDir()
   const resolution = resolveKunExecutable(appRoot(), '')
@@ -200,15 +191,11 @@ export async function ensureKunServiceManager(input: {
   const buildId = await resolveKunRuntimeBuildId(resolution)
   const managerEntry = join(dirname(serveEntry), '..', 'manager', 'manager-entry.js')
   const flavor = resolveCliRuntimeFlavor({ env: process.env })
-  const controlDir = defaultKunControlDir()
+  const controlDir = process.env.KUN_MANAGER_CONTROL_DIR?.trim() || defaultKunControlDir()
   const managerInput = {
     flavor,
     controlDir,
-    allowDevelopmentBootstrap: allowsDevelopmentManagerBootstrap({
-      flavor,
-      env: process.env,
-      isPackaged: app.isPackaged
-    }),
+    allowDevelopmentBootstrap: true,
     ...(buildId ? { buildId } : {}),
     dataDir,
     settingsPath: input.settingsPath,
@@ -220,37 +207,7 @@ export async function ensureKunServiceManager(input: {
     ...(input.onLegacyHandoverStatus ? { onLegacyHandoverStatus: input.onLegacyHandoverStatus } : {})
   }
   rememberManagerStartupInput(managerInput)
-  let manager: ServiceManagerConnection
-  const handoffInput = {
-    reason: 'installed-build-change' as const,
-    dataDirs: [dataDir],
-    settingsPath: input.settingsPath,
-    controlDir,
-    onEvent: createHandoffEventReporter(input.onHandoffEvent),
-    ...(buildId ? { targetBuildId: buildId } : {})
-  }
-  if (app.isPackaged && flavor === 'production') {
-    const probe = await probeInstalledBuildHandoff(handoffInput)
-    const probeError = installedBuildProbeError(handoffInput, probe)
-    if (probeError) throw probeError
-    if (probe === 'mismatched') {
-      manager = await withManagerStartLock(controlDir, async () => {
-        // Recheck after acquiring the election lock so a replacement that won
-        // the race before us is not interrupted unnecessarily.
-        const lockedProbe = await probeInstalledBuildHandoff(handoffInput)
-        const lockedProbeError = installedBuildProbeError(handoffInput, lockedProbe)
-        if (lockedProbeError) throw lockedProbeError
-        if (lockedProbe === 'mismatched') {
-          await drainKunOwnersForHandoffWithLock(handoffInput)
-        }
-        return ensureServiceManagerWithStartLockHeld(managerInput)
-      })
-    } else {
-      manager = await ensureServiceManager(managerInput)
-    }
-  } else {
-    manager = await ensureServiceManager(managerInput)
-  }
+  const manager = await desktopProcessStack.ensureManager(managerInput)
   return configureKunManagerDataPlaneForCurrentProcess(manager)
 }
 
@@ -343,7 +300,11 @@ export function waitForKunStartupSettled(): Promise<void> {
 }
 
 export function startKunChild(settings: AppSettingsV1): Promise<void> {
+  desktopProcessStack.assertCanStart()
   return processController.start(async () => {
+    desktopProcessStack.assertCanStart()
+    const manager = await desktopProcessStack.recoverManager(() => stopKunChildAndWait())
+    if (manager) configureKunManagerDataPlaneForCurrentProcess(manager)
     const runtime = resolveKunRuntimeSettings(settings)
     if (isKunChildRunning() || !runtime.autoStart) return
     const dataDir = resolveKunDataDir(runtime)
@@ -354,6 +315,7 @@ export function startKunChild(settings: AppSettingsV1): Promise<void> {
       ownerKind: 'gui',
       ...(mainManagerBinding ? { manager: mainManagerBinding } : {})
     }, async (scope) => {
+      desktopProcessStack.assertCanStart()
       if (scope.manager) configureKunManagerDataPlaneForCurrentProcess(scope.manager)
       await startKunChildOnce(settings, runtime)
     })
@@ -519,14 +481,21 @@ async function prepareKunLaunch(
   const computerUseBridge = runtime.computerUse.enabled
     ? await prepareComputerUseHostForKunLaunch()
     : undefined
+  const paperSearch = normalizeWritePaperModeSettings(settings.write?.paperMode)
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     ...kunManagerLaunchEnvironment({
       manager: mainManagerBinding,
-      controlDir: defaultKunControlDir(),
+      controlDir: process.env.KUN_MANAGER_CONTROL_DIR?.trim() || defaultKunControlDir(),
       settingsPath: serviceManagerSettingsPath
     }),
     DEEPSEEK_API_KEY: defaultClientApiKey || process.env.DEEPSEEK_API_KEY || '',
+    // Paper-search credentials: env passes them to `kun serve` without touching kun.config.json.
+    KUN_SEMANTIC_SCHOLAR_API_KEY:
+      paperSearch.search.semanticScholarApiKey || paperSearch.scholar.semanticScholarApiKey || process.env.KUN_SEMANTIC_SCHOLAR_API_KEY || '',
+    KUN_CORE_API_KEY: paperSearch.search.coreApiKey || process.env.KUN_CORE_API_KEY || '',
+    KUN_OPENALEX_MAILTO: paperSearch.search.openAlexMailto || paperSearch.scholar.crossrefMailto || '',
+    KUN_UNPAYWALL_EMAIL: paperSearch.search.unpaywallEmail || '',
     KUN_PPT_TOOLCHAIN_DIR: pptToolchainDirectory,
     ...(activeProviderKind ? { KUN_RUNTIME_PROVIDER_KIND: activeProviderKind } : {}),
     ...(claudeBinary ? { KUN_CLAUDE_BINARY: claudeBinary } : {}),
@@ -581,7 +550,8 @@ async function startKunChildOnce(
     processController.logCapture = null
   }
   const launch = await prepareKunLaunch(settings, runtime)
-  processController.child = spawn(launch.command, launch.args, {
+  desktopProcessStack.assertCanStart()
+  const startedChild = await spawnOwnedProcess(launch.command, launch.args, {
     env: {
       ...launch.env,
       KUN_RUNTIME_TOKEN: runtime.runtimeToken,
@@ -589,9 +559,14 @@ async function startKunChildOnce(
       [KUN_RUNTIME_CLIENT_OWNER_KIND_ENV]: 'gui'
     },
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-    detached: false
+    ownerLossGraceMs: 20_000
   })
-  const startedChild = processController.child
+  processController.child = startedChild
+  try { desktopProcessStack.assertCanStart() } catch (error) {
+    await stopOwnedProcess(startedChild, { graceMs: 0, timeoutMs: 3_000 })
+    processController.clearChild(startedChild)
+    throw error
+  }
   startedChild.channel?.unref()
   processController.childPort = runtime.port
   const startedLogCapture = createKunChildLogCapture(startedChild.pid)
@@ -641,7 +616,7 @@ async function startKunChildOnce(
   startedLogCapture.logLifecycle(`ready marker received on port ${runtime.port}`)
 }
 
-export async function stopKunChildAndWait(): Promise<void> {
+export async function stopKunChildAndWait(options: { deadline?: number } = {}): Promise<void> {
   if (!processController.child) {
     if (processController.logCapture) {
       const capture = processController.logCapture
@@ -652,30 +627,21 @@ export async function stopKunChildAndWait(): Promise<void> {
   }
   const stoppingChild = processController.child
   processController.markIntentionalStop(stoppingChild)
-  const pid = stoppingChild.pid
   const capture = processController.logCapture
+  const deadline = options.deadline ?? Date.now() + 15_000
   if (stoppingChild.exitCode === null && stoppingChild.signalCode === null) {
     try {
-      stoppingChild.kill('SIGTERM')
+      if (stoppingChild.connected) {
+        stoppingChild.send({ type: 'kun-runtime-stop' }, () => undefined)
+      }
+      if (process.platform !== 'win32') stoppingChild.kill('SIGTERM')
     } catch {
       /* already gone */
     }
   }
-  const exited = await waitForKunChildExit(stoppingChild, KUN_STOP_GRACE_MS)
-  if (!exited) {
-    try {
-      if (pid) process.kill(pid, 'SIGKILL')
-    } catch {
-      /* already gone */
-    }
-    const forcedExit = await waitForKunChildExit(stoppingChild, KUN_STOP_FORCE_MS)
-    if (!forcedExit) {
-      throw new Error(
-        `Kun runtime process ${pid ?? 'unknown'} remained alive after SIGKILL; ` +
-        'the exact child remains supervised and no replacement was started'
-      )
-    }
-  }
+  await waitForKunChildExit(stoppingChild, Math.max(0, Math.min(10_000, deadline - Date.now() - 1_000)))
+  // A direct child's exit is not proof that its shell/helper descendants died.
+  await stopOwnedProcess(stoppingChild, { graceMs: 0, timeoutMs: Math.max(1, deadline - Date.now()) })
   processController.clearChild(stoppingChild)
   if (capture) {
     processController.logCapture = null

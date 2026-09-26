@@ -13,6 +13,7 @@ import { ModelMetaTag, WritePromptMetaDisclosure, WritePromptQuoteCard } from '.
 import { UserAttachmentPreviews } from './message-timeline-media-views'
 import { CopyFeedbackButton, RuntimeMetaChips } from './message-timeline-bubble-support'
 import { metaUserFileReferences } from './message-timeline-bubble-meta'
+import { useTimelineSurface } from './timeline-surface'
 
 export function BackgroundShellNoticeBubble({
   block,
@@ -248,6 +249,7 @@ export function UserMessageBubble({
   const busy = useChatStore((s) => s.busy)
   const route = useChatStore((s) => s.route)
   const rewindAndResend = useChatStore((s) => s.rewindAndResend)
+  const surface = useTimelineSurface()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(block.text)
   const [writeMetaOpen, setWriteMetaOpen] = useState(false)
@@ -370,7 +372,10 @@ export function UserMessageBubble({
   }
 
   return (
-    <div className="ds-user-message group relative">
+    <div className="ds-user-message group relative" data-timeline-block-id={block.id}
+      // Mobile: tapping the bubble focuses the group so the focus-within
+      // action row below becomes reachable without hover.
+      tabIndex={surface === 'mobile' ? 0 : undefined}>
       <UserAttachmentPreviews meta={block.meta} />
       <div className={showClawInboundCard ? 'contents' : 'ds-user-message-bubble min-w-0'}>
         {showClawInboundCard && parsedClawPrompt ? (

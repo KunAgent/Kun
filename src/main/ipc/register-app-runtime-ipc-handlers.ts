@@ -49,6 +49,22 @@ import {
   probeModelProvider
 } from '../provider-connection'
 import {
+  importExternalProvider,
+  scanExternalProviders,
+  withRegistryCredentials as withRegistryCredentialFingerprints
+} from '../provider-external-import'
+import {
+  commitProviderImportLink,
+  stageProviderImportLink
+} from '../provider-import-link'
+import {
+  importProviderIcon,
+  providerIconDataUrl,
+  pruneProviderIcons
+} from '../provider-icons'
+import { getModelProviderSettings } from '../../shared/app-settings'
+import type { ModelProviderProfileV1 } from '../../shared/app-settings'
+import {
   requestRuntimeProviderQuotas
 } from '../runtime-provider-quota'
 import {
@@ -120,10 +136,51 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
     return probeModelProvider(request, await store.load())
   })
 
-  ipcMain.handle('provider:quota:list', async (event) => {
+  // Protocol detection for the custom-provider flow is a Kun route; forward
+  // the draft verbatim (the optional credential is user input, not a stored
+  // key) and return the sanitized JSON result.
+  const detectProtocolPayloadSchema = z.object({
+    baseUrl: z.string().url().max(2_048),
+    credential: z.string().max(64 * 1024).optional(),
+    customHeaders: z.record(z.string().min(1).max(128), z.string().max(8 * 1024)).optional(),
+    verifyModel: z.string().min(1).max(512).optional(),
+    useProxy: z.boolean().optional()
+  }).strict()
+  ipcMain.handle('provider:detect-protocol', async (event, payload: unknown) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    const request = parseIpcPayload('provider:detect-protocol', detectProtocolPayloadSchema, payload)
+    const response = await runtimeRequest(
+      '/v1/model-connections/detect-protocol',
+      'POST',
+      JSON.stringify(request)
+    )
+    let body: unknown
+    try {
+      body = JSON.parse(response.body)
+    } catch {
+      throw new Error('Kun returned malformed protocol detection data.')
+    }
+    if (!response.ok) {
+      const message = body && typeof body === 'object' && !Array.isArray(body)
+        ? ((body as Record<string, unknown>).message ?? (body as Record<string, unknown>).error)
+        : undefined
+      throw new Error(
+        typeof message === 'string' && message.trim()
+          ? message
+          : `Kun protocol detection failed (HTTP ${response.status}).`
+      )
+    }
+    return body
+  })
+
+  const quotaListPayloadSchema = z.object({
+    forceRefresh: z.boolean().optional()
+  }).strict().optional()
+  ipcMain.handle('provider:quota:list', async (event, payload: unknown) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     options.assertRendererRuntimeReady()
-    return requestRuntimeProviderQuotas(runtimeRequest)
+    const request = parseIpcPayload('provider:quota:list', quotaListPayloadSchema, payload)
+    return requestRuntimeProviderQuotas(runtimeRequest, request?.forceRefresh === true)
   })
 
   ipcMain.handle('provider:models-dev-catalog', async (_, payload: unknown) => {
@@ -133,6 +190,98 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
       payload
     )
     return fetchModelsDevCatalog(request, await store.load())
+  })
+
+  const externalImportPayloadSchema = z.object({
+    source: z.enum(['cc-switch', 'claude-code', 'codex', 'opencode']),
+    ref: z.string().min(1).max(512),
+    name: z.string().trim().max(80).optional()
+  }).strict()
+
+  // Read-only scan of other tools' config. Credentials never leave the main
+  // process: results carry hasKey/masked hints, and the commit step re-reads
+  // the source file itself.
+  ipcMain.handle('provider:external-scan', async (event) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    const settings = await store.load()
+    return withRegistryCredentialFingerprints(runtimeRequest, (credentialFingerprints) =>
+      scanExternalProviders(settings, { credentialFingerprints }))
+  })
+
+  const appendProviderProfile = async (profile: ModelProviderProfileV1): Promise<void> => {
+    await store.update((current) => {
+      const providerSettings = getModelProviderSettings(current)
+      return {
+        ...current,
+        provider: {
+          ...providerSettings,
+          providers: [...providerSettings.providers, profile]
+        }
+      }
+    })
+  }
+
+  ipcMain.handle('provider:external-import', async (event, payload: unknown) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    const request = parseIpcPayload(
+      'provider:external-import',
+      externalImportPayloadSchema,
+      payload
+    )
+    const result = importExternalProvider(await store.load(), request)
+    if (!result.ok) return { ok: false, message: result.message }
+    await appendProviderProfile(result.profile)
+    return { ok: true, providerId: result.providerId }
+  })
+
+  // kun://import paste fallback. The staged key stays main-side; the renderer
+  // only sees the sanitized draft + token until it commits.
+  ipcMain.handle('provider:import-link:stage', async (event, payload: unknown) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    const request = parseIpcPayload(
+      'provider:import-link:stage',
+      z.object({ link: z.string().min(8).max(8192) }).strict(),
+      payload
+    )
+    return stageProviderImportLink(request.link)
+  })
+
+  ipcMain.handle('provider:import-link:commit', async (event, payload: unknown) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    const request = parseIpcPayload(
+      'provider:import-link:commit',
+      z.object({ token: z.string().min(1).max(64) }).strict(),
+      payload
+    )
+    const result = commitProviderImportLink(request.token, await store.load())
+    if (!result.ok) return { ok: false, message: result.message }
+    await appendProviderProfile(result.profile)
+    return { ok: true, providerId: result.profile.id }
+  })
+
+  ipcMain.handle('provider:icon:import', async (event, payload: unknown) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    const request = parseIpcPayload(
+      'provider:icon:import',
+      z.object({
+        mime: z.string().min(1).max(64),
+        dataBase64: z.string().min(1).max(1_500_000)
+      }).strict(),
+      payload
+    )
+    const result = await importProviderIcon(request)
+    if (result.ok) void pruneProviderIcons(await store.load()).catch(() => undefined)
+    return result
+  })
+
+  ipcMain.handle('provider:icon:data', async (event, payload: unknown) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    const request = parseIpcPayload(
+      'provider:icon:data',
+      z.object({ iconId: z.string().min(1).max(128) }).strict(),
+      payload
+    )
+    return { dataUrl: await providerIconDataUrl(request.iconId) }
   })
 
   ipcMain.handle('prompt:optimize', async (_, payload: unknown) => {

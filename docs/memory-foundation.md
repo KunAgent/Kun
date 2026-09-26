@@ -6,8 +6,10 @@
 ## 核心约束
 
 - `{dataDir}/memory/*.json` 是唯一标准数据；SQLite 只是可删除、可重建的检索投影。
-- 每条记录的 `authority` 固定为 `reference`。用户、导入、工具、网页和推断内容都不能成为
-  system/user instruction，也不能覆盖审批、sandbox 或工具策略。
+- 每条记录的 `authority` 为 `reference`（默认）或 `directive`。`directive` 只能经由用户明确
+  确认产生——设置页编辑或 `authority=directive` 的 memory_create/memory_update 审批——导入与
+  蒸馏永远不会产生。规则以 user 权威注入，但不能覆盖审批、sandbox、工具策略或最新的显式
+  用户指令；`reference` 记录始终是不可信证据，不是指令。
 - `confidence`、`freshness`、`importance`、相关性与作用域亲和度是独立信号；不会再通过修改
   置信度来模拟时间衰减。
 - 检索先执行作用域和生命周期过滤，再执行 FTS5 与排序。未授权、已删除、已禁用、被替代、
@@ -66,6 +68,37 @@ npm run dev
 `MEMORY_REFERENCE_DATA untrusted="true" authority="reference"` 中。每条记录附带类型、
 置信度、新鲜度等级和有界来源标签；内容即使写着“忽略先前指令”也只作为不可信证据。
 
+## 用户规则（directive）
+
+`authority: 'directive'` 的记录是用户批准的长期规则。与参考记忆不同，它们不做相关性过滤：
+每一轮都会以 user 权威注入到动态上下文（`<kun_memory_directives>` 块），因此“回复一律使用
+英文”这类偏好会被可靠遵循。约束如下：
+
+- 只允许 `user` 与 `workspace` 作用域；`project` 与 agent 作用域的记录不能成为规则。
+- 单条内容上限 `MEMORY_DIRECTIVE_MAX_CONTENT_CHARS`（1_000 字符）；每轮注入受
+  `capabilities.memory.directives.maxRecords`（默认 20）与 `maxCharacters`（默认 4_000）
+  预算约束，超出部分记录到 `lastDirectiveInjection.excludedByBudget`。
+- 创建或提升为规则始终需要人工批准（`requiresUserDecision`），即使在 full-access 模式下；
+  修改规则的 `memory_update` 也必须显式携带 `authority: 'directive'`。
+- 导入（kunpack、`kun-memory-v2` 归档、profile 导入）一律降级为 `reference`，设置页导入
+  报告会列出被降级的记录数；蒸馏写入也永远是 `reference`。
+- 规则可以改写行为但不能提升权限：它们不能覆盖 Kun 策略、sandbox、工具权限、审批要求或
+  最新的显式用户指令。
+
+规则与 `AGENTS.md` 的区别：规则跨 workspace、短小、可在设置页逐条启用/禁用；
+`AGENTS.md` 适合项目级的长文档约定。
+
+## 模型可用的只读工具
+
+除 `memory_create` / `memory_update` / `memory_delete`（均需审批）外，模型还可用两个
+只读工具，无需审批：
+
+- `memory_search`：按查询词 + scope/authority/type 过滤检索活动记忆。
+- `memory_list`：分页枚举活动记忆，支持 scope/authority/type 过滤与 `includeDisabled`。
+
+两者都不返回隐藏的 agent 上下文记忆，查询不写入检索诊断，结果标注规则与参考记忆的
+区分信息。
+
 ## 诊断
 
 `GET /v1/memory/diagnostics` 和设置页 Memory 概览提供：
@@ -76,6 +109,75 @@ npm run dev
 - 最近一次检索模式、过滤计数、独立排序特征、选中 ID、预算排除和截断 ID。
 
 诊断只保存有界元数据和记录 ID，不保存查询文本或记忆正文。
+
+## Feedback ledger 与排序演化
+
+反馈账本位于独立的 `memory-feedback/` 数据根下，是追加写入、可重建投影、由
+Manager 统一拥有的审计数据；它不改变 `memory/*.json` 的权威性，也不会更新记忆的
+`updatedAt`、`observedAt`、`confidence`、`importance` 或 freshness。`retrieved` 只在
+携带引用块的模型请求实际发出时记录，`confirmed` 必须来自用户明确操作，`corrected`
+会在同一作用域
+创建新版本并用 `supersedes` 保留旧事实。事件不保存查询、正文、模型输出、来源摘录、凭据
+或本机路径；默认 `memory.feedback.enabled=false`，账本不可用时检索和回合继续使用原路径。
+
+### 开启反馈采集
+
+反馈采集是显式 opt-in。在 `{dataDir}/config.json`（数据目录默认为 `~/.kun/data`，
+除非修改了 Kun 数据目录设置）中设置：
+
+```json
+{
+  "capabilities": {
+    "memory": {
+      "enabled": true,
+      "feedback": { "enabled": true }
+    }
+  }
+}
+```
+
+前提是 Memory 已开启（设置 -> Memory，或 `capabilities.memory.enabled`）；GUI 重写托管
+配置时会保留 `feedback` 子树。该标志在下一次配置热更新（例如保存 Kun 设置）或重启后
+生效。即使采集关闭，显式纠正仍然可用，因为纠正是对记忆的正式变更而非采集行为。
+
+反馈频次、确认、纠正、freshness、importance 和 confidence 目前只在匿名 fixture 上通过
+离线 evaluator 观察，并分别出现在 trace 中。预注册的 P3 v1 候选在开发集通过、留出集
+bootstrap 下界仍无收益，故结论为 no-go；生产仍使用 lexical/FTS5 foundation，不存在
+隐藏权重或 dormant flag。任何未来生产排序提案都必须另建版本并重新通过相关性、不确定性、
+安全、隐私、确定性和资源门禁。
+
+### 账本尾部损坏的手工恢复
+
+诊断报告 `malformed final event` 时，反馈写入保持暂停，避免在未知数据之后追加新的审计
+事件。恢复步骤：停止 Kun 与 Manager，完整备份 `memory-feedback/`，只删除最新活跃
+`events-*.jsonl` 段中最后一行不完整的事件，并原子替换该段。不要改动内部事件、
+`checkpoint.json` 或 `aggregates.json`。重启后 `ready()` 会从有效前缀重建投影；诊断恢复
+`ready` 之后再继续使用反馈。如果损坏位于段内部、涉及 checkpoint 或范围不确定，不要手工
+编辑，保留备份并保持反馈降级，等待维护者恢复。
+
+### 纠正回执的恢复
+
+每次纠正在变更正式记忆之前，都会在 `{dataDir}/memory-feedback-corrections/` 写入可恢复的
+回执，被中断的纠正会在下次启动时继续完成。当旧记录永远无法再被纠正——已 purge、删除、
+被取代或过期、replacement id 被占用、或存储不支持按 id 重建——回执进入终态 `abandoned`，
+不再每次启动重试告警。仅处于 `disabled` 或 `not-yet-valid` 的记录对应的回执保持
+`prepared`，下次启动继续重试。
+
+不可读或哈希不匹配的回执会被原地隔离为 `*.corrupt`，单个坏文件不会阻塞其余回执的协调；
+检查后可手工删除。终态回执（`feedback-recorded` 与 `abandoned`）在每次协调后裁剪到最新
+64 条，手工删除这两种状态也是安全的：只丢失 operationId 重放映射，审计事件仍保留在
+`memory-feedback/` 中。不要删除 `prepared` 或 `canonical-applied` 回执——它们仍持有未完成的
+变更。
+
+### 账本写满后的恢复
+
+账本受 `{dataDir}/config.json` 中 `capabilities.memory.feedback.maxSegmentBytes`
+（默认 4 MiB）与 `maxTotalBytes`（默认 32 MiB）约束。达到上限且压缩无法回收足够空间时，
+写入暂停、诊断报告 `degraded`；检索与回合不受影响。恢复步骤：停止 Kun 与 Manager，完整
+备份 `memory-feedback/`，然后提高限额或整体删除该目录以从空账本重新开始。删除整个目录会
+丢失全部反馈历史——检索计数以及 `checkpoint.json` 保存的显式确认/纠正审计记录——但不会
+影响正式记忆 `memory/*.json`。在已覆盖段被删除后不要单独删除 `checkpoint.json`，因为剩余
+`events-*.jsonl` 已不再包含那部分历史。重启并确认诊断恢复 `ready` 后再依赖反馈数据。
 
 ## 从源码运行
 
@@ -170,6 +272,11 @@ git diff --check
 5. 分别验证编辑、禁用、恢复、删除、导入和导出；导入记录应显示 `imported/imported` 来源。
 6. 切换到其他 workspace，确认 workspace/project 记忆不会泄漏；用户级记忆也必须先相关才注入。
 7. 使用 `KUN_MEMORY_STORE_BACKEND=file` 重启，确认状态显示文件回退且 CRUD/检索仍可用。
+8. 在设置页新建一条 user 作用域规则（如“回复一律使用英文”），开新会话问一个无关问题，
+   确认模型遵守该规则且聊天 chip 显示注入的规则数；同内容存为普通记忆则不应被当作指令。
+9. 对一条记忆点击“设为规则/取消规则”，确认需要 PATCH `authority` 生效且 project 作用域
+   无法提升；导出含规则的归档再导入，确认导入报告列出降级条数且记录为 `reference`。
+10. 让模型调用 `memory_list`/`memory_search`，确认无需审批即可枚举记忆。
 
 本地默认数据目录通常是 `~/.kun/data`；Windows 对应当前用户目录下的 `.kun\data`。测试前如需
 隔离真实数据，应使用单独的 `--data-dir` 或测试配置，不要直接删除日常数据目录。

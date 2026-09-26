@@ -10,7 +10,7 @@ import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js
 import type { TurnService } from '../services/turn-service.js'
 import type { ThreadItemProjectionService } from '../services/thread-item-projection.js'
 import type { GoalTurnCoordinator } from './goal-turn-coordinator.js'
-import type { HistoryCompactionService } from './history-compaction-service.js'
+import type { CompactionDispatch } from './context-window-strategy.js'
 import type { LoopTelemetry } from './loop-telemetry.js'
 import type { ModelRoutingService } from './model-routing-service.js'
 import type { ModelRoundEngine } from './model-round-engine.js'
@@ -21,6 +21,7 @@ import type { TurnContextResolver } from './turn-context-resolver.js'
 import type { TurnExecutionFailure } from './turn-execution-types.js'
 import type { TokenEconomyConfig } from './token-economy.js'
 import type { TurnLimitsConfig } from './turn-limits.js'
+import type { MemoryRetrievalFeedbackTarget } from '../memory/memory-retrieval-feedback.js'
 
 export type ModelStepServiceDeps = {
   threadStore: ThreadStore
@@ -32,6 +33,7 @@ export type ModelStepServiceDeps = {
   prefix: ImmutablePrefix
   ids: Pick<IdGenerator, 'next'>
   nowIso: () => string
+  memoryFeedback?: MemoryRetrievalFeedbackTarget
   modelCapabilities?: (model: string, providerId?: string) => ModelCapabilityMetadata
   activePlanContext?: GuiPlanContext
   tokenEconomy?: TokenEconomyConfig
@@ -44,7 +46,7 @@ export type ModelStepServiceDeps = {
   threadItems: Pick<ThreadItemProjectionService, 'syncFromSession'>
   turnContextResolver: TurnContextResolver
   telemetry: Pick<LoopTelemetry, 'recordToolCatalogFingerprint'>
-  historyCompaction: HistoryCompactionService
+  historyCompaction: CompactionDispatch
   turnAttachments: TurnAttachmentService
   modelRoundEngine: ModelRoundEngine
   roundOutcome: RoundOutcomeCoordinator

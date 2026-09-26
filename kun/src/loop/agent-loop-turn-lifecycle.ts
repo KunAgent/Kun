@@ -194,6 +194,10 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
     }
     try {
       goalTimer = await this.goalTurns.begin(threadId)
+      if (delegatedSdkRuntime && owningThread?.roomContext &&
+        delegatedSdkRuntime.capabilities(delegatedProviderId)?.roomToolPolicy !== true) {
+        throw new Error('This provider cannot enforce the room tool policy; select an API model or a supported SDK provider.')
+      }
       await this.recordPipelineStage(threadId, turnId, 'setup')
       if (!delegatedSdkRuntime && this.opts.toolStorm?.enabled !== false) {
         this.toolStormBreakers.set(turnId, new ToolStormBreaker(this.opts.toolStorm))
@@ -394,7 +398,7 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
           })
           try {
             runWithoutTurnMutationFence(() => {
-              this.opts.memoryDistillation?.schedule({
+              if (!owningThread?.roomContext) this.opts.memoryDistillation?.schedule({
                 threadId,
                 turnId,
                 status: finalStatus ?? 'failed'

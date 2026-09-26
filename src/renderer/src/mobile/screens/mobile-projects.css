@@ -1,0 +1,134 @@
+.kun-mobile-projects {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  color: var(--ds-text);
+  background: var(--ds-bg-main);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.kun-mobile-projects > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: var(--kun-mobile-header-h, 52px);
+  padding: 4px var(--kun-mobile-gutter, 16px);
+}
+.kun-mobile-projects h1 {
+  margin: 0;
+  min-width: 0;
+  font-size: 24px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kun-mobile-projects > header > div { display: flex; align-items: center; flex-shrink: 0; }
+.kun-mobile-project-icon {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 9999px;
+  color: inherit;
+  background: transparent;
+}
+.kun-mobile-project-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 var(--kun-mobile-gutter, 16px) 10px;
+  padding-inline: 12px;
+  border-radius: var(--kun-mobile-radius, 12px);
+  background: var(--ds-surface-subtle);
+}
+.kun-mobile-project-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--kun-mobile-touch, 44px);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: var(--kun-mobile-font-input, 16px);
+}
+.kun-mobile-project-search input:focus-visible { outline: none; }
+.kun-mobile-project-search:focus-within { outline: 2px solid var(--ds-accent); outline-offset: -2px; }
+.kun-mobile-project-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--kun-mobile-gutter, 16px) var(--kun-mobile-safe-bottom, 16px);
+  overscroll-behavior: contain;
+}
+.kun-mobile-recent { margin-bottom: 12px; }
+:is(.kun-mobile-recent, .kun-mobile-projects-section) > h2 {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ds-text-muted);
+}
+.kun-mobile-recent > ul { list-style: none; margin: 0; padding: 0; }
+.kun-mobile-project-row {
+  display: grid;
+  width: 100%;
+  min-height: var(--kun-mobile-row-min, 60px);
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  text-align: start;
+  border: 0;
+  border-bottom: 1px solid var(--ds-border-muted);
+  color: inherit;
+  background: transparent;
+}
+.kun-mobile-project-row:active:not(:disabled) { background: var(--ds-surface-hover); }
+.kun-mobile-project-row > svg:first-child {
+  width: 20px;
+  height: 20px;
+  padding: 8px;
+  box-sizing: content-box;
+  border-radius: 10px;
+  color: var(--ds-text-muted);
+  background: var(--ds-surface-subtle);
+}
+.kun-mobile-project-row > svg:last-child { color: var(--ds-text-faint, var(--ds-text-muted)); }
+.kun-mobile-project-row > span { display: grid; min-width: 0; gap: 3px; }
+.kun-mobile-project-row strong { font-size: var(--kun-mobile-font-body, 15px); font-weight: 500; }
+.kun-mobile-project-row :is(strong, small) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kun-mobile-project-row small { color: var(--ds-text-muted); font-size: var(--kun-mobile-font-meta, 12.5px); }
+.kun-mobile-project-time {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ds-text-faint, var(--ds-text-muted));
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.kun-mobile-project-time:empty { display: none; }
+.kun-mobile-project-empty { display: grid; gap: 16px; padding: 28px 4px; color: var(--ds-text-muted); line-height: 1.6; }
+.kun-mobile-project-empty p { margin: 0; }
+.kun-mobile-project-add {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid var(--ds-border);
+  border-radius: 12px;
+  color: inherit;
+  background: var(--ds-surface-subtle);
+}
+.kun-mobile-projects button:disabled { opacity: .5; }
+@media (prefers-reduced-motion: reduce) {
+  .kun-mobile-project-row { transition: none; }
+}

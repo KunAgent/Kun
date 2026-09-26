@@ -29,6 +29,9 @@ import type { ImmutablePrefix } from '../cache/immutable-prefix.js'
 import type { AttachmentStore } from '../attachments/attachment-store.js'
 import type { InflightTracker } from '../loop/inflight-tracker.js'
 import type { SteeringQueue } from '../loop/steering-queue.js'
+import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
+import type { ContextWindowTurnModes } from './context-window-turn-modes.js'
+import type { ContextWindowService } from './context-window-service.js'
 import { ContextCompactor, extractSkillPins } from '../loop/context-compactor.js'
 import {
   effectiveHistoryAfterLatestCompaction,
@@ -93,6 +96,15 @@ export type TurnServiceDeps = {
   executionLeases?: ThreadExecutionLeasePort
   /** Dispose machine-local continuation state after a successful manual compaction. */
   onCompacted?: (threadId: string) => Promise<void>
+  /** Per-turn context-window mode snapshots frozen at turn admission. */
+  contextWindowModes?: ContextWindowTurnModes
+  /** Window service used to register summary boundaries after manual compaction. */
+  contextWindows?: ContextWindowService
+  /**
+   * Resolve effective model capabilities for the route a turn would use.
+   * Window-mode admission fails closed when the route cannot execute tools.
+   */
+  modelCapabilities?: (model: string, providerId?: string) => ModelCapabilityMetadata
   /** Resolve durable Graph ownership without coupling TurnService to the Graph store. */
   resolveGraphLeadRun?: (input: {
     threadId: string
@@ -271,6 +283,13 @@ export function ownerLeaseExpiredTurnMessage(reason: OwnerLeaseExpiredTurnAbortR
  */
 export const DEFAULT_MAX_CONCURRENT_TURNS = 256
 
+export type TurnCapacitySnapshot = {
+  activeTurns: number
+  queuedTurns: number
+  maxConcurrentTurns: number
+  busy: boolean
+}
+
 /**
  * Turn service: owns the turn lifecycle (start, finish, abort, steer,
  * compact). The service is the only place that emits turn lifecycle
@@ -401,6 +420,29 @@ export class TurnService {
       nowIso: deps.nowIso
     })
     this.maxConcurrentTurns = normalizeMaxConcurrentTurns(deps.maxConcurrentTurns)
+  }
+
+  /** Global persisted workload, including room and delegated side threads. */
+  async capacitySnapshot(): Promise<TurnCapacitySnapshot> {
+    const { threadStore } = this.deps
+    const summaries = await threadStore.list({ includeArchived: true, includeSide: true })
+    let activeTurns = 0
+    let queuedTurns = 0
+    for (const summary of summaries) {
+      const thread = await (
+        threadStore.getMetadata?.(summary.id) ?? threadStore.get(summary.id)
+      )
+      for (const turn of thread?.turns ?? []) {
+        if (turn.status === 'running') activeTurns += 1
+        if (turn.status === 'queued') queuedTurns += 1
+      }
+    }
+    return {
+      activeTurns,
+      queuedTurns,
+      maxConcurrentTurns: this.maxConcurrentTurns,
+      busy: activeTurns > 0 || queuedTurns > 0
+    }
   }
 
   async closeAdmissionForShutdown(): Promise<void> {

@@ -4,6 +4,7 @@ import type {
 } from '@shared/app-settings'
 import {
   DEFAULT_MODEL_PROVIDER_ID,
+  defaultKunContextCompactionSettings,
   defaultKunGraphSettings
 } from '@shared/app-settings'
 import { defaultKunBrowserUseSettings } from '@shared/app-settings-kun-defaults'
@@ -15,6 +16,7 @@ import type {
   ComputerUsePermissionState
 } from '@shared/kun-gui-api'
 import {
+  AppWindow,
   Columns3,
   Globe2,
   Monitor,
@@ -37,22 +39,26 @@ import {
 } from './settings-section-agent-panels'
 import { GraphModeSettingsPanel } from './settings-section-graph-panel'
 import { ConversationVisualizationSettingsPanel } from './settings-section-lab-conversation-visualization'
+import { ContextWindowSettingsPanel } from './settings-section-lab-context-window'
 import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
 import { AutoPlanBuildSettingsPanel } from './settings-section-lab-auto-plan-build'
+import { CodexReferenceBranchesSettingsPanel } from './settings-section-lab-codex-reference'
 import { ProjectBoardSettingsPanel } from './settings-section-lab-project-board'
 
 type LaboratorySettingsPanel =
   | 'visualization'
+  | 'contextWindow'
   | 'autoPlanBuild'
   | 'computer'
   | 'browser'
   | 'graph'
   | 'ppt'
   | 'projectBoard'
+  | 'codexReferenceBranches'
 
 export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
   const { t, form, kun, updateKun, selectControlClass, runtimeInfo } = ctx
-  const [activePanel, setActivePanel] = useState<LaboratorySettingsPanel>('visualization')
+  const [activePanel, setActivePanel] = useState<LaboratorySettingsPanel>('contextWindow')
   const provider = form.provider ?? defaultModelProviderSettings()
   const modelProviders = provider.providers as ModelProviderProfileV1[]
   const activeProviderId = kun.providerId?.trim() || DEFAULT_MODEL_PROVIDER_ID
@@ -65,6 +71,7 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
   const browserUse = kun.browserUse ?? defaultKunBrowserUseSettings()
   const graph = kun.graph ?? defaultKunGraphSettings()
   const lab = kun.lab ?? defaultKunLabSettings()
+  const contextCompaction = kun.contextCompaction ?? defaultKunContextCompactionSettings()
 
   const updateComputerUse = (patch: Record<string, unknown>): void => {
     updateKun({
@@ -90,12 +97,14 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
         ariaLabel={t('agentsQuickLaboratory')}
         contentSized
         items={[
+          { id: 'contextWindow', label: t('labContextWindowTitle'), icon: AppWindow },
           { id: 'visualization', label: t('labConversationVisualizationTitle'), icon: Waypoints },
           { id: 'autoPlanBuild', label: t('labAutoPlanBuildTitle'), icon: Sparkles },
           { id: 'computer', label: t('computerUseTitle'), icon: Monitor },
           { id: 'browser', label: t('browserUseSettingsTitle'), icon: Globe2 },
           { id: 'graph', label: t('graphSettingsTitle'), icon: Workflow },
           { id: 'ppt', label: t('labPptTitle'), icon: Presentation },
+          { id: 'codexReferenceBranches', label: t('labCodexReferenceBranchesTitle'), icon: Waypoints },
           { id: 'projectBoard', label: t('labProjectBoardTitle'), icon: Columns3 }
         ]}
         value={activePanel}
@@ -112,6 +121,24 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           t={t}
           value={lab}
           onChange={(patch) => updateKun({ lab: patch })}
+        />
+      </SettingsTabPanel>
+
+      <SettingsTabPanel<LaboratorySettingsPanel>
+        baseId="laboratory-settings"
+        tabId="contextWindow"
+        active={activePanel === 'contextWindow'}
+        className="[&>div]:mt-0"
+      >
+        <ContextWindowSettingsPanel
+          t={t}
+          windowModeEnabled={contextCompaction.windowModeEnabled === true}
+          onChange={(windowModeEnabled) => updateKun({
+            contextCompaction: {
+              ...contextCompaction,
+              windowModeEnabled
+            }
+          })}
         />
       </SettingsTabPanel>
 
@@ -199,6 +226,14 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           selectControlClass={selectControlClass}
           onChange={(patch) => updateKun({ lab: patch })}
         />
+      </SettingsTabPanel>
+      <SettingsTabPanel<LaboratorySettingsPanel>
+        baseId="laboratory-settings"
+        tabId="codexReferenceBranches"
+        active={activePanel === 'codexReferenceBranches'}
+        className="[&>div]:mt-0"
+      >
+        <CodexReferenceBranchesSettingsPanel t={t} value={lab} onChange={(patch) => updateKun({ lab: patch })} />
       </SettingsTabPanel>
       <SettingsTabPanel<LaboratorySettingsPanel>
         baseId="laboratory-settings"

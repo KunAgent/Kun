@@ -23,6 +23,7 @@ import type { SkillRuntime } from '../skills/skill-runtime.js'
 import type { InstructionRuntime } from '../instructions/instruction-runtime.js'
 import type { AttachmentStore } from '../attachments/attachment-store.js'
 import type { MemoryStore } from '../memory/memory-store.js'
+import type { MemoryRetrievalFeedbackTarget } from '../memory/memory-retrieval-feedback.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import type { PptWorkflowScope } from '../ports/tool-host.js'
 import type { ResolvedHook } from '../hooks/hook-engine.js'
@@ -32,6 +33,10 @@ import type { TurnLimitsConfig } from './turn-limits.js'
 import type { GoalTurnCoordinatorOptions } from './goal-turn-coordinator.js'
 import type { InterruptedTurnResumeOptions } from './interrupted-turn-coordinator.js'
 import type { TurnRunOutcome } from './turn-execution-types.js'
+import type { ContextWindowTurnModes } from '../services/context-window-turn-modes.js'
+import type { ContextWindowTransitionCoordinator } from '../services/context-window-transition-coordinator.js'
+import type { ContextWindowBudget } from './context-window-budget.js'
+import type { ContextWindowStateRestore } from '../services/context-window-state.js'
 
 export type AgentLoopOptions = {
   threadStore: ThreadStore
@@ -57,6 +62,7 @@ export type AgentLoopOptions = {
   instructionRuntime?: InstructionRuntime
   attachmentStore?: AttachmentStore
   memoryStore?: MemoryStore
+  memoryFeedback?: MemoryRetrievalFeedbackTarget
   memoryDistillation?: {
     schedule(input: {
       threadId: string
@@ -132,6 +138,8 @@ export type AgentLoopOptions = {
   allowedSkillIds?: readonly string[]
   /** Workspace-relative read scopes captured at the delegated child boundary. */
   allowedReadPaths?: readonly string[]
+  /** Host-wide reads for delegated loops whose parent granted them. */
+  allowHostReads?: boolean
   /** Workspace-relative write scopes captured at the delegated child boundary. */
   allowedWritePaths?: readonly string[]
   /** Artifact capability set captured at the delegated child boundary. */
@@ -185,4 +193,12 @@ export type AgentLoopOptions = {
    * Kun's HTTP model loop.
    */
   sdkRuntime?: DelegatedTurnRuntime
+  /** Accepted per-turn context-window mode snapshots (frozen at admission). */
+  contextWindowModes?: ContextWindowTurnModes
+  /** Window transition coordinator backing the new_context tool. */
+  contextWindowTransition?: ContextWindowTransitionCoordinator
+  /** Per-window budget for threshold notices in window mode. */
+  contextWindowBudget?: ContextWindowBudget
+  /** Restart restore for window identity and covered threshold marks. */
+  contextWindowStateRestore?: ContextWindowStateRestore
 }

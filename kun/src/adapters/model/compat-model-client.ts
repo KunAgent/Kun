@@ -1,24 +1,34 @@
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { goalContextTexts } from '../../contracts/items.js'
 import { startLlmDebugRoundIfEnabled, type LlmDebugRound } from '../../services/llm-debug-recorder.js'
-import { exponentialRetryDelayMs, normalizeModelRequestRetryConfig, retryDelayMs, sleepWithAbort } from './compat-retry-policy.js'
+import { exponentialRetryDelayMs, normalizeModelRequestRetryConfig, sleepWithAbort } from './compat-retry-policy.js'
 import { CompatModelStreamingClient } from './compat-model-client-stream.js'
+import { materializeCompatNonStreaming } from './compat-model-client-stream-payloads.js'
 import { summarizeModelRetryFailure } from './model-retry-failure-summary.js'
 import { summarizeHttpErrorBody } from './compat-http-diagnostics.js'
+import {
+  httpFailureRetryDecision,
+  rateLimitRecoverySuffix,
+  retryDelayForBudget
+} from './failure-reason.js'
 import type { ChatCompletionResponse, CompatModelClientConfig, CompatPostResult } from './compat-model-types.js'
 import {
   buildChatCompletionsUrl,
   buildModelEndpointUrl,
   ignoreModelTraceFailure,
   isCodexEndpoint,
+  isStreamRequiredError,
   normalizeCodexResponsesUrl,
   normalizeModelStreamLimits,
   normalizeStreamIdleTimeoutMs,
+  openCodeSessionRuntimeHeaders,
   readLimitedResponseJson,
   readLimitedResponseText,
   reasoningFromMessage,
+  shouldDropUnreplayableToolRounds,
   shouldRetryWithoutSamplingParams,
   shouldRetryWithoutStreamUsage,
+  shouldRetryWithReasoningRoundTrip,
   stripSamplingFromBody,
   warnModelTraceFailure
 } from './compat-model-support.js'
@@ -127,8 +137,10 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       }
       return
     }
-    const url = buildModelEndpointUrl(this.config.baseUrl, configuredEndpointFormat)
-    const stream = request.stream ?? !this.config.nonStreaming
+    const url = buildModelEndpointUrl(this.baseUrlForFormat(configuredEndpointFormat), configuredEndpointFormat)
+    // Codex Responses only accepts streamed requests; explicit stream:false
+    // callers (subagents, background distillations) get forced streaming.
+    const stream = isCodex ? true : (request.stream ?? !this.config.nonStreaming)
     const body = this.buildRequestBody(request, stream, { endpointFormat })
     let credentials: { apiKey: string; headers?: Record<string, string>; refreshable: boolean }
     try {
@@ -145,19 +157,25 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
     }
     const responsesLite = isCodexEndpoint(this.config.baseUrl) &&
       this.capabilitiesForModel(requestModel).responsesMode === 'lite'
-    const openCodeGoSessionId = this.openCodeGoSessionId(request.threadId)
-    const runtimeHeaders = openCodeGoSessionId
-      ? { 'x-opencode-session': openCodeGoSessionId }
-      : undefined
+    const runtimeHeaders = openCodeSessionRuntimeHeaders({
+      presetSource: this.config.presetSource,
+      providerId: this.config.providerId,
+      baseUrl: this.config.baseUrl
+    }, request.threadId)
     let headers = this.buildHeaders(stream, endpointFormat, responsesLite, credentials, runtimeHeaders)
     const retry = normalizeModelRequestRetryConfig(this.config.retry)
     const modelStreamLimits = normalizeModelStreamLimits(this.config.streamLimits)
     const maxErrorBodyBytes = Math.min(modelStreamLimits.maxTotalBytes, 1 * 1024 * 1024)
     const retryStatuses = new Set(retry.httpStatusCodes)
+    // A per-request retry ceiling (probes pass 0 to fail fast without
+    // burning failover state) caps the configured budget.
+    const maxRetryAttempts = request.maxRetryAttempts !== undefined
+      ? Math.min(retry.maxAttempts, request.maxRetryAttempts)
+      : retry.maxAttempts
     let attemptOrdinal = 0
     const post = (
       requestBody: Record<string, unknown>,
-      reason: 'initial' | 'transport_retry' | 'credential_refresh' | 'stream_options_fallback'
+      reason: 'initial' | 'transport_retry' | 'credential_refresh' | 'stream_options_fallback' | 'request_fallback'
     ) => this.postChatCompletion(url, headers, requestBody, request.abortSignal, {
       round,
       endpointFormat,
@@ -168,20 +186,31 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
     let result = await post(body, 'initial')
     let transportRetryAttempt = 0
     let credentialRefreshAttempted = false
+    let terminalErrorBody: { text: string; exceeded: boolean } | undefined
+    let rateLimitRecoveryMs: number | undefined
     while (true) {
       if (result.kind === 'error') {
+        // With declared failover alternatives a same-target network retry is
+        // capped at one fast attempt — waiting out backoff just delays the
+        // switch the user configured.
+        const failoverCap = (request.failover?.alternatives ?? 0) > 0
+          ? Math.min(1, maxRetryAttempts)
+          : maxRetryAttempts
         if (
           request.abortSignal.aborted ||
           result.failure.failoverAllowed === false ||
-          transportRetryAttempt >= retry.maxAttempts
+          transportRetryAttempt >= failoverCap
         ) break
         const nextAttempt = transportRetryAttempt + 1
-        const delayMs = exponentialRetryDelayMs(retry.initialDelayMs, transportRetryAttempt)
+        const delayMs = Math.min(
+          (request.failover?.alternatives ?? 0) > 0 ? 3_000 : Number.MAX_SAFE_INTEGER,
+          exponentialRetryDelayMs(retry.initialDelayMs, transportRetryAttempt)
+        )
         const failureSummary = summarizeModelRetryFailure(result.message, [credentials.apiKey])
         yield {
           kind: 'retrying',
           attempt: nextAttempt,
-          maxAttempts: retry.maxAttempts,
+          maxAttempts: maxRetryAttempts,
           delayMs,
           reason: 'network',
           ...(failureSummary ? { failureSummary } : {})
@@ -217,13 +246,33 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
         result = await post(body, 'credential_refresh')
         continue
       }
-      if (
-        transportRetryAttempt >= retry.maxAttempts ||
-        !retryStatuses.has(result.response.status)
-      ) break
-      const delayMs = retryDelayMs(result.response, retry.initialDelayMs, transportRetryAttempt)
+      if (!retryStatuses.has(result.response.status)) break
+      // Read the body once: the failure classifier and any terminal error
+      // report share it, so a consumed response never gets read twice.
       const status = result.response.status
       const errorBody = await readLimitedResponseText(result.response, maxErrorBodyBytes)
+      const { classification, budget } = httpFailureRetryDecision({
+        status,
+        body: errorBody.exceeded ? '' : errorBody.text,
+        headers: result.response.headers,
+        alternatives: request.failover?.alternatives,
+        policyMaxAttempts: maxRetryAttempts
+      })
+      if (transportRetryAttempt >= budget.maxAttempts) {
+        // Long rate-limit waits surface the recovery instant so the user can
+        // retry deliberately instead of watching the turn stall.
+        if (classification.reason === 'rate') {
+          rateLimitRecoveryMs = classification.retryAfterMs
+        }
+        terminalErrorBody = errorBody
+        break
+      }
+      const delayMs = retryDelayForBudget({
+        response: result.response,
+        budget,
+        initialDelayMs: retry.initialDelayMs,
+        attempt: transportRetryAttempt
+      })
       const failureSummary = errorBody.exceeded
         ? `model error response exceeded ${maxErrorBodyBytes} bytes`
         : summarizeModelRetryFailure(summarizeHttpErrorBody(errorBody.text), [credentials.apiKey])
@@ -231,7 +280,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
         kind: 'retrying',
         status,
         attempt: transportRetryAttempt + 1,
-        maxAttempts: retry.maxAttempts,
+        maxAttempts: maxRetryAttempts,
         delayMs,
         ...(failureSummary ? { failureSummary } : {})
       }
@@ -256,7 +305,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
     }
     let response = result.response
     if (!response.ok) {
-      const errorBody = await readLimitedResponseText(response, maxErrorBodyBytes)
+      const errorBody = terminalErrorBody ?? await readLimitedResponseText(response, maxErrorBodyBytes)
       if (errorBody.exceeded) {
         yield {
           kind: 'error',
@@ -266,16 +315,38 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
         return
       }
       const text = errorBody.text
-      const retryBody = shouldRetryWithoutSamplingParams(response.status, text, body)
-        ? stripSamplingFromBody(body)
-        : (
-          usesChatCompletionsShape(endpointFormat) &&
-            shouldRetryWithoutStreamUsage(response.status, text, body)
-            ? this.buildRequestBody(request, stream, { endpointFormat, includeStreamUsage: false })
-            : null
-        )
+      let forcedStream = false
+      let retryBody: Record<string, unknown> | null = null
+      let retryReason: 'stream_options_fallback' | 'request_fallback' = 'request_fallback'
+      if (!stream && isStreamRequiredError(response.status, text)) {
+        forcedStream = true
+        headers = this.buildHeaders(true, endpointFormat, responsesLite, credentials, runtimeHeaders)
+        retryBody = this.buildRequestBody(request, true, { endpointFormat })
+      } else if (shouldRetryWithoutSamplingParams(response.status, text, body)) {
+        retryBody = stripSamplingFromBody(body)
+        retryReason = 'stream_options_fallback'
+      } else if (
+        usesChatCompletionsShape(endpointFormat) &&
+        shouldRetryWithoutStreamUsage(response.status, text, body)
+      ) {
+        retryBody = this.buildRequestBody(request, stream, { endpointFormat, includeStreamUsage: false })
+        retryReason = 'stream_options_fallback'
+      } else if (
+        usesChatCompletionsShape(endpointFormat) &&
+        shouldRetryWithReasoningRoundTrip(response.status, text, body)
+      ) {
+        retryBody = this.buildRequestBody(request, stream, { endpointFormat, forceReasoningRoundTrip: true })
+      } else if (
+        endpointFormat === 'responses' &&
+        shouldDropUnreplayableToolRounds(response.status, text, body)
+      ) {
+        retryBody = this.buildRequestBody(request, stream, {
+          endpointFormat,
+          dropUnreplayableResponsesToolRounds: true
+        })
+      }
       if (retryBody) {
-        const fallbackResult = await post(retryBody, 'stream_options_fallback')
+        const fallbackResult = await post(retryBody, retryReason)
         if (fallbackResult.kind === 'error') {
           yield {
             kind: 'error',
@@ -287,7 +358,10 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
         }
         response = fallbackResult.response
         if (response.ok) {
-          if (this.config.nonStreaming || response.headers.get('content-type')?.includes('application/json')) {
+          if (
+            (this.config.nonStreaming && !forcedStream) ||
+            response.headers.get('content-type')?.includes('application/json')
+          ) {
             const json = await readLimitedResponseJson(response, modelStreamLimits.maxTotalBytes)
             if (json.kind === 'limit') {
               yield {
@@ -301,11 +375,15 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
               yield { kind: 'error', message: `model response contained invalid JSON: ${json.message}` }
               return
             }
-            yield* this.materializeNonStreaming(
+            yield* materializeCompatNonStreaming(
               json.value as ChatCompletionResponse,
               endpointFormat,
               requestModel,
-              modelStreamLimits
+              modelStreamLimits,
+              {
+                normalizeUsage: (usage) => this.mapUsage(usage, requestModel),
+                parseToolArguments: (raw) => this.parseToolArguments(raw)
+              }
             )
             return
           }
@@ -347,7 +425,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
           configuredEndpointFormat,
           model: requestModel
         })
-        const retryClassified = await this.classifyHttpError(response.status, retryText, response.headers.get('retry-after'))
+        const retryClassified = await this.classifyHttpError(response.status, retryText, response.headers.get('retry-after'), response.headers)
         yield {
           kind: 'error',
           message: retryClassified.message,
@@ -364,10 +442,10 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
         configuredEndpointFormat,
         model: requestModel
       })
-      const classified = await this.classifyHttpError(response.status, text, response.headers.get('retry-after'))
+      const classified = await this.classifyHttpError(response.status, text, response.headers.get('retry-after'), response.headers)
       yield {
         kind: 'error',
-        message: classified.message,
+        message: `${classified.message}${rateLimitRecoverySuffix(rateLimitRecoveryMs)}`,
         code: classified.code,
         failure: classified.failure
       }
@@ -387,11 +465,15 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
         yield { kind: 'error', message: `model response contained invalid JSON: ${json.message}` }
         return
       }
-      yield* this.materializeNonStreaming(
+      yield* materializeCompatNonStreaming(
         json.value as ChatCompletionResponse,
         endpointFormat,
         requestModel,
-        modelStreamLimits
+        modelStreamLimits,
+        {
+          normalizeUsage: (usage) => this.mapUsage(usage, requestModel),
+          parseToolArguments: (raw) => this.parseToolArguments(raw)
+        }
       )
       return
     }

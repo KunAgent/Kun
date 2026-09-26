@@ -300,6 +300,8 @@ export function ensureTurn(
     activeSkillIds: [],
     injectedMemoryIds: [],
     injectedMemorySummaries: [],
+    injectedDirectiveIds: [],
+    injectedDirectiveSummaries: [],
     injectedInstructionSources: [],
     mode: thread.mode,
     ...metadata

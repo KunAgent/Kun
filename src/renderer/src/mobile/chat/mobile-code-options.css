@@ -1,0 +1,60 @@
+/* Options-sheet-only styles. Field/select/button primitives live in
+ * mobile-sheet-form.css; segmented + chip-grid are specific to pickers. */
+.kun-mobile-segmented {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--kun-mobile-radius, 12px);
+  background: var(--ds-surface-subtle);
+}
+.kun-mobile-segmented button {
+  min-width: 0;
+  min-height: var(--kun-mobile-touch, 44px);
+  padding: 8px 4px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--ds-text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kun-mobile-segmented button[aria-pressed='true'] {
+  color: var(--ds-text);
+  background: var(--ds-surface-elevated);
+  box-shadow: 0 1px 4px rgb(0 0 0 / .12);
+}
+.kun-mobile-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.kun-mobile-chip-grid button {
+  min-width: 0;
+  min-height: var(--kun-mobile-touch, 44px);
+  padding: 8px 4px;
+  border: 1px solid var(--ds-border);
+  border-radius: 9999px;
+  color: var(--ds-text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kun-mobile-chip-grid button[aria-pressed='true'] {
+  color: var(--ds-accent);
+  border-color: var(--ds-accent);
+  background: var(--ds-accent-soft);
+}
+.kun-mobile-field > legend {
+  margin-bottom: 6px;
+  padding: 0;
+  color: var(--ds-text-muted);
+  font-size: 13px;
+}

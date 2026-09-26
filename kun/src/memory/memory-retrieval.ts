@@ -1,9 +1,13 @@
+import type { AgentMemoryAccess } from './agent-memory-scope.js'
 import type { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import {
   MEMORY_MAX_TRACE_RANKINGS,
+  type MemoryAuthority,
   type MemoryRecord,
   type MemoryRetrievalMode,
-  type MemoryRetrievalTrace
+  type MemoryRetrievalTrace,
+  type MemoryScope,
+  type MemoryType
 } from '../contracts/memory.js'
 import {
   compareRankedMemories,
@@ -29,12 +33,20 @@ import {
 export const DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT = 64
 
 export type MemoryRetrieveRequest = {
+  agent?: AgentMemoryAccess
   query: string
   workspace?: string
   project?: string
   limit: number
   promptCharacterBudget?: number
   policy?: MemoryCapabilityConfig
+  /** 'tool' lookups keep directives visible and must not overwrite injection diagnostics. */
+  purpose?: 'injection' | 'tool'
+  filter?: {
+    scope?: MemoryScope
+    type?: MemoryType
+    authority?: MemoryAuthority
+  }
 }
 
 export type MemoryRetrievalResult = {
@@ -67,7 +79,13 @@ export function retrieveMemoryRecords(input: {
   )
   const supersededIds = new Set(lifecycleEligible.flatMap((record) => record.supersedes ? [record.supersedes] : []))
   const lifecycleActive = lifecycleEligible.filter((record) => !supersededIds.has(record.id))
-  const ranked = lifecycleActive
+  // Directives are injected through their own authoritative channel every turn;
+  // they must never double as untrusted reference evidence in the memory block.
+  const purposeEligible = input.request.purpose === 'tool'
+    ? lifecycleActive
+    : lifecycleActive.filter((record) => record.authority !== 'directive')
+  const requested = requestFilterEligible(purposeEligible, input.request.filter)
+  const ranked = requested
     .map((record) => rankMemory({
       record,
       query: input.request.query,
@@ -91,7 +109,7 @@ export function retrieveMemoryRecords(input: {
   const selected = applyMemoryContextBudget(relevant, recordLimit, promptCharacterBudget, nowMs)
   const filtered = {
     scope: (input.preFiltered?.scope ?? 0) + input.records.length - scoped.length,
-    lifecycle: (input.preFiltered?.lifecycle ?? 0) + scoped.length - lifecycleActive.length,
+    lifecycle: (input.preFiltered?.lifecycle ?? 0) + scoped.length - requested.length,
     irrelevant: ranked.length - relevant.length
   }
   return {
@@ -101,7 +119,7 @@ export function retrieveMemoryRecords(input: {
       mode: input.mode,
       queryTokenCount: queryTokens.tokens.length,
       queryTokensTruncated: queryTokens.truncated,
-      candidateCount: lifecycleActive.length,
+      candidateCount: requested.length,
       filtered,
       ranked: relevant,
       selected,
@@ -109,4 +127,29 @@ export function retrieveMemoryRecords(input: {
       promptCharacterBudget
     })
   }
+}
+
+/**
+ * Lifecycle + supersede visibility shared by retrieval and the model-facing
+ * memory_list tool so both hide disabled/superseded/expired/future records.
+ */
+export function filterActiveMemories(
+  records: readonly MemoryRecord[],
+  nowMs: number
+): MemoryRecord[] {
+  const eligible = records.filter((record) => memoryLifecycleState(record, nowMs) === 'active')
+  const supersededIds = new Set(eligible.flatMap((record) => record.supersedes ? [record.supersedes] : []))
+  return eligible.filter((record) => !supersededIds.has(record.id))
+}
+
+function requestFilterEligible(
+  records: readonly MemoryRecord[],
+  filter: MemoryRetrieveRequest['filter']
+): MemoryRecord[] {
+  if (!filter) return [...records]
+  return records.filter((record) =>
+    (filter.scope === undefined || record.scope === filter.scope) &&
+    (filter.type === undefined || record.type === filter.type) &&
+    (filter.authority === undefined || record.authority === filter.authority)
+  )
 }

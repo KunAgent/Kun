@@ -1,0 +1,4 @@
+.kun-mobile-approval { display: grid; gap: 8px; margin-bottom: 8px; padding: 12px; border: 1px solid var(--ds-border); border-radius: 12px; background: var(--ds-surface-subtle); }
+.kun-mobile-approval p { margin: 0; overflow-wrap: anywhere; }
+.kun-mobile-approval > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.kun-mobile-approval button { min-height: 44px; border: 1px solid var(--ds-border); border-radius: 9999px; color: inherit; background: var(--ds-surface-elevated); }

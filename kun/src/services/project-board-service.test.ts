@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile, readFile, readdir, stat } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -8,7 +9,7 @@ import { InMemorySessionStore } from '../adapters/in-memory-session-store.js'
 import { InMemoryThreadStore } from '../adapters/in-memory-thread-store.js'
 import { createThreadRecord } from '../domain/thread.js'
 import { SequentialIdGenerator } from '../ports/id-generator.js'
-import { ProjectBoardService } from './project-board-service.js'
+import { ProjectBoardNotFoundError, ProjectBoardReadUnavailableError, ProjectBoardService } from './project-board-service.js'
 import { RuntimeEventRecorder } from './runtime-event-recorder.js'
 import { ThreadService } from './thread-service.js'
 import { ProjectBoardPlanMetadataCache } from './project-board-plan-metadata-cache.js'
@@ -53,10 +54,66 @@ async function harness(options: { planMetadataCache?: ProjectBoardPlanMetadataCa
     ids: new SequentialIdGenerator(),
     nowIso
   })
-  return { workspace, threads, threadService, store, service, nowIso }
+  return { workspace, threads, threadService, store, service, nowIso, dataDir: join(root, 'data') }
 }
 
 describe('ProjectBoardService', () => {
+  it('reads an exact manual card beyond the first 500 without paging or scanning thread projections', async () => {
+    const f = await harness(), workspace = await realpath(f.workspace)
+    const now = '2026-09-15T00:00:00Z'
+    await f.store.mutate(workspace, 0, (document) => {
+      for (let index = 0; index <= 1000; index += 1) {
+        const id = 'card-' + String(index).padStart(4, '0')
+        document.manualCards[id] = { id, title: id, description: 'Recorded card', status: 'pending',
+          category: 'feature', priority: null, archived: index === 999, createdAt: now, updatedAt: now }
+      }
+      document.manualCards['legacy-map-key'] = { ...document.manualCards['card-1000'], id: 'legacy-projected-id' }
+      return document
+    })
+    const first = await f.service.snapshot({ workspace, includeArchived: true })
+    expect(first.cards).toHaveLength(500)
+    expect(first.cards.some((card) => card.id === 'manual:card-1000')).toBe(false)
+    const list = vi.spyOn(f.threads, 'list')
+    const exact = await f.service.card({ workspace: f.workspace, cardId: 'manual:card-1000' })
+    expect(exact).toMatchObject({ workspaceRoot: workspace, revision: 1,
+      card: { id: 'manual:card-1000', title: 'card-1000', kind: 'manual' } })
+    expect((await f.service.card({ workspace, cardId: 'manual:card-0999' })).card.archived).toBe(true)
+    expect(list).not.toHaveBeenCalled()
+    expect((await f.service.card({ workspace, cardId: 'manual:legacy-projected-id' })).card.id).toBe('manual:legacy-projected-id')
+    await expect(f.service.card({ workspace, cardId: 'manual:legacy-map-key' })).rejects.toBeInstanceOf(ProjectBoardNotFoundError)
+    await expect(f.service.card({ workspace, cardId: 'manual:constructor' })).rejects.toBeInstanceOf(ProjectBoardNotFoundError)
+    expect((await f.store.read(workspace)).document.revision).toBe(1)
+  })
+
+  it('resolves the exact Plan todo and rejects the same card identity from another workspace', async () => {
+    const f = await harness(), workspace = await realpath(f.workspace)
+    const thread = createThreadRecord({ id: 'source-thread', title: 'Plan source', workspace, model: 'fake' })
+    thread.todos = { threadId: thread.id, updatedAt: '2026-09-15T00:00:00Z', items: [{ id: 'source-todo', content: 'Build board API', status: 'pending',
+      source: { kind: 'plan', planId: 'plan', relativePath: '.kunsdd/plan/demo.md', ordinal: 0, contentHash: 'hash' },
+      createdAt: '2026-09-15T00:00:00Z', updatedAt: '2026-09-15T00:00:00Z' }] }
+    await f.threads.upsert(thread)
+    const exact = await f.service.card({ workspace, cardId: 'todo:source-thread:source-todo' })
+    expect(exact.card).toMatchObject({ kind: 'thread_todo', description: 'Persist project tasks safely.',
+      source: { threadId: 'source-thread', todoId: 'source-todo', sectionTitle: 'Runtime' } })
+    const other = join(f.dataDir, 'other-workspace')
+    await mkdir(other, { recursive: true })
+    await expect(f.service.card({ workspace: other, cardId: exact.card.id })).rejects.toBeInstanceOf(ProjectBoardNotFoundError)
+  })
+
+  it('never renames or repairs a corrupt board while resolving references or listing readonly options', async () => {
+    const f = await harness(), workspace = await realpath(f.workspace)
+    await f.store.mutate(workspace, 0, (document) => document)
+    const directory = join(f.dataDir, 'project-boards')
+    const hash = createHash('sha256').update(workspace).digest('hex').slice(0, 24)
+    const path = join(directory, hash + '.json')
+    await writeFile(path, '{broken')
+    const before = await stat(path), files = await readdir(directory)
+    await expect(f.service.card({ workspace, cardId: 'manual:missing' })).rejects.toBeInstanceOf(ProjectBoardReadUnavailableError)
+    expect((await f.service.snapshot({ workspace, readOnly: true })).warning).toMatch(/corrupt/i)
+    expect(await readFile(path, 'utf8')).toBe('{broken')
+    expect((await stat(path)).mtimeMs).toBe(before.mtimeMs)
+    expect(await readdir(directory)).toEqual(files)
+  })
   it('federates only Plan todos and keeps manual cards workspace-scoped', async () => {
     const { workspace, threads, service } = await harness()
     const thread = createThreadRecord({ id: 'thr_plan', title: 'Plan thread', workspace, model: 'test' })

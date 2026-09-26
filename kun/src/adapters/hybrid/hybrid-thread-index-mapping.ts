@@ -49,9 +49,11 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
     forked_from_turn_count: thread.forkedFromTurnCount ?? null,
     goal_json: thread.goal ? JSON.stringify(thread.goal) : null,
     todos_json: thread.todos ? JSON.stringify(thread.todos) : null,
-    extension_metadata_json: thread.ownerExtensionId || thread.planBuildRunId
+    extension_metadata_json: thread.forkedFromTurnId || thread.historyRefId || thread.ownerExtensionId || thread.planBuildRunId
       || thread.planBuildAdmissionFingerprint || thread.planBuildAdmissionCapabilityHash
       || thread.planBuildAdmissionFrozen !== undefined ? JSON.stringify({
+      historyRefId: thread.historyRefId,
+      forkedFromTurnId: thread.forkedFromTurnId,
       ownerExtensionId: thread.ownerExtensionId,
       ownerExtensionVersion: thread.ownerExtensionVersion,
       accountId: thread.accountId,
@@ -98,7 +100,7 @@ export function summaryFromRow(row: ThreadRow): ThreadSummary {
 }
 
 type ExtensionThreadMetadata = Pick<ThreadRecord,
-  'ownerExtensionId' | 'ownerExtensionVersion' | 'accountId' | 'extensionVisibility'
+  'forkedFromTurnId' | 'historyRefId' | 'ownerExtensionId' | 'ownerExtensionVersion' | 'accountId' | 'extensionVisibility'
   | 'extensionProfile' | 'extensionBudget' | 'toolCatalogEpoch' | 'planBuildRunId'
   | 'planBuildAdmissionFingerprint' | 'planBuildAdmissionCapabilityHash'
   | 'planBuildAdmissionFrozen'>
@@ -109,7 +111,11 @@ export function filterThreadSummaries(summaries: ThreadSummary[], options: Threa
     : options.includeArchived ? summaries
       : summaries.filter((thread) => thread.status !== 'archived' && thread.status !== 'deleted')
   if (!options.includeSide) out = out.filter((thread) => (thread.relation ?? 'primary') !== 'side')
-  if (options.workspace) out = out.filter((thread) => thread.workspace === options.workspace)
+  const workspaceSet = new Set(
+    [options.workspace, ...(options.workspaces ?? [])]
+      .filter((value): value is string => Boolean(value))
+  )
+  if (workspaceSet.size > 0) out = out.filter((thread) => workspaceSet.has(thread.workspace))
   if (query) out = out.filter((thread) => searchTextForThread(thread).includes(query))
   return typeof options.limit === 'number' ? out.slice(0, options.limit) : out
 }

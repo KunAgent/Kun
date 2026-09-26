@@ -31,6 +31,7 @@ import {
   saveThreadWorktreeRegistry
 } from '../lib/thread-worktree-registry'
 import { workspaceLabelFromPath } from '../lib/workspace-label'
+import { writeConversationResourcePath } from '../paper/paper-mode-actions'
 import {
   isInternalTemporaryWorkspace,
   normalizeWorkspaceRoot,
@@ -50,6 +51,7 @@ import type {
   WriteAssistantMessageContext
 } from './chat-store-types'
 import { queuedMessageGuidancePayload } from './queued-message-guidance'
+import { syncThreadAdditionalWorkspaces } from './chat-store-workspace-folder-sync'
 import { currentTurnStartGeneration } from './turn-start-fence'
 import {
   isPendingQueuedMessage,
@@ -259,6 +261,10 @@ export async function sendThreadMessage(
   const { set, get } = context
     const trimmedText = text.trim()
     if (!trimmedText) return false
+    const activeSyncThreadId = get().activeThreadId
+    if (activeSyncThreadId) {
+      await syncThreadAdditionalWorkspaces({ set, get, threadId: activeSyncThreadId })
+    }
     // The first streaming token usually lands before the lazy Streamdown
     // chunk finishes loading on a cold start. Warm it as soon as the user
     // commits a turn so the fallback plain-text frame is as short as possible.
@@ -357,7 +363,10 @@ export async function sendThreadMessage(
           : null
         : await get().ensureWriteThreadForWorkspace(
             writeContext?.workspaceRoot,
-            writeContext ? writeContext.activeFilePath ?? '' : undefined
+            writeContext
+              ? writeConversationResourcePath(
+                  writeContext.workspaceRoot, writeContext.activeFilePath)
+              : undefined
           )
       if (!writeThreadId) return false
       if (writeContext?.threadId && writeThreadId !== writeContext.threadId) return false
@@ -479,6 +488,7 @@ export async function sendThreadMessage(
           ...(expectedThreadId ? { expectedThreadId } : {}),
           ...((queued?.guiPlan ?? overrides?.guiPlan) ? { guiPlan: queued?.guiPlan ?? overrides?.guiPlan } : {}),
           ...((queued?.guiDesignCanvas ?? overrides?.guiDesignCanvas) ? { guiDesignCanvas: true } : {}),
+          ...((queued?.guiExcalidrawCanvas ?? overrides?.guiExcalidrawCanvas) ? { guiExcalidrawCanvas: true } : {}),
           ...((queued?.guiDesignMode ?? overrides?.guiDesignMode) ? { guiDesignMode: true } : {}),
           ...(persona ? { persona } : {}),
           ...(requestedAgentSurface ? { agentSurface: requestedAgentSurface } : {}),
@@ -565,6 +575,7 @@ export async function sendThreadMessage(
         : undefined
     const subagentResume = queued?.subagentResume ?? overrides?.subagentResume
     const guiDesignCanvas = (queued?.guiDesignCanvas ?? overrides?.guiDesignCanvas) === true
+    const guiExcalidrawCanvas = (queued?.guiExcalidrawCanvas ?? overrides?.guiExcalidrawCanvas) === true
     const guiDesignMode = (queued?.guiDesignMode ?? overrides?.guiDesignMode) === true
     const orchestration = queued?.orchestration ??
       overrides?.orchestration ??
@@ -603,6 +614,7 @@ export async function sendThreadMessage(
       ...(expectedThreadId ? { expectedThreadId } : {}),
       ...((queued?.guiPlan ?? overrides?.guiPlan) ? { guiPlan: queued?.guiPlan ?? overrides?.guiPlan } : {}),
       ...(guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+      ...(guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
       ...(guiDesignMode ? { guiDesignMode: true } : {}),
       ...(persona ? { persona } : {}),
       ...(requestedAgentSurface ? { agentSurface: requestedAgentSurface } : {}),
@@ -656,6 +668,7 @@ export async function sendThreadMessage(
       reasoningEffort,
       serviceTier,
       guiDesignCanvas,
+      guiExcalidrawCanvas,
       guiDesignMode,
       persona,
       orchestration,

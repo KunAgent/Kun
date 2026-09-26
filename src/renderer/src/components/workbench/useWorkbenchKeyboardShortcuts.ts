@@ -10,6 +10,7 @@ import {
 } from '@shared/keyboard-shortcuts'
 import { useKeyboardShortcutSettings } from '../../lib/keyboard-shortcut-settings'
 import { isNativeDialogOpen } from '../../lib/native-dialog-activity'
+import { runPaperModeShortcut } from '../../paper/paper-mode-actions'
 
 const DESKTOP_SHORTCUT_COMMANDS: Partial<Record<KeyboardShortcutCommandId, DesktopCommand>> = {
   quit: 'quit',
@@ -54,6 +55,10 @@ export type WorkbenchShortcutCommandContext = {
   setUseWorktreePool: (enabled: boolean) => void
   worktreeBranch: string
   navigationLocked?: boolean
+  /** Opens the in-conversation find bar; omitted where no chat stage exists. */
+  openFindInChat?: () => void
+  /** Opens the keyboard-shortcut cheatsheet overlay. */
+  openKeyboardShortcuts?: () => void
 }
 
 /**
@@ -94,6 +99,19 @@ export function runWorkbenchShortcutCommand(
     context.openSettings()
     return
   }
+  if (commandId === 'find-in-chat') {
+    context.openFindInChat?.()
+    return
+  }
+  if (commandId === 'open-keyboard-shortcuts') {
+    context.openKeyboardShortcuts?.()
+    return
+  }
+  // Paper mode lives on the Work route; the runner navigates there first.
+  if (commandId === 'toggle-paper-mode' || commandId === 'paper-import') {
+    void runPaperModeShortcut(commandId === 'toggle-paper-mode' ? 'toggle' : 'import')
+    return
+  }
 
   const desktopCommand = DESKTOP_SHORTCUT_COMMANDS[commandId]
   if (desktopCommand && typeof window.kunGui?.runDesktopCommand === 'function') {
@@ -105,6 +123,29 @@ export type WorkbenchShortcutKeyDownEvent = KeyboardShortcutEventLike & {
   defaultPrevented: boolean
   repeat: boolean
   isComposing: boolean
+  /** Event target; used to keep printable chords typing instead of firing. */
+  target?: unknown
+}
+
+/**
+ * True when a resolved chord ends in a printable character without Ctrl/Alt/
+ * Meta — `Shift+?`, for example. Such chords produce text inside editable
+ * fields, so they must not run their command while the user is typing.
+ */
+function isPrintableCharacterChord(shortcut: string): boolean {
+  const parts = shortcut.split('+')
+  const key = parts[parts.length - 1]
+  if (!key || key.length !== 1) return false
+  return !parts
+    .slice(0, -1)
+    .some((modifier) => modifier === 'Ctrl' || modifier === 'Alt' || modifier === 'Meta')
+}
+
+function isEditableShortcutTarget(target: unknown): boolean {
+  if (typeof Element === 'undefined' || !(target instanceof Element)) return false
+  return Boolean(
+    target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]')
+  )
 }
 
 /**
@@ -120,8 +161,12 @@ export function resolveWorkbenchShortcutKeyDown(
   options: { slashMenuOpen: boolean; nativeDialogOpen?: boolean }
 ): KeyboardShortcutCommandId | null {
   if (event.defaultPrevented || event.repeat || event.isComposing) return null
-  const commandId = findKeyboardShortcutCommand(bindings, keyboardEventToShortcut(event))
-  if (!commandId) return null
+  const shortcut = keyboardEventToShortcut(event)
+  const commandId = findKeyboardShortcutCommand(bindings, shortcut)
+  if (!commandId || !shortcut) return null
+  // A chord like `Shift+?` is how a user types `?` — inside an editable it
+  // must produce text, not open the cheatsheet.
+  if (isPrintableCharacterChord(shortcut) && isEditableShortcutTarget(event.target)) return null
   if (commandId === 'command-palette' && (options.slashMenuOpen || options.nativeDialogOpen)) {
     return null
   }
@@ -151,6 +196,8 @@ export function useWorkbenchKeyboardShortcuts({
   navigationLocked = false,
   slashMenuOpen = false,
   openCommandPalette,
+  openFindInChat,
+  openKeyboardShortcuts,
   keyboardShortcutBindings: providedBindings
 }: UseWorkbenchKeyboardShortcutsInput): void {
   const keyboardShortcuts = useKeyboardShortcutSettings()
@@ -190,7 +237,9 @@ export function useWorkbenchKeyboardShortcuts({
         useWorktreePool,
         setUseWorktreePool,
         worktreeBranch,
-        navigationLocked
+        navigationLocked,
+        openFindInChat,
+        openKeyboardShortcuts
       })
     }
 
@@ -204,6 +253,8 @@ export function useWorkbenchKeyboardShortcuts({
     keyboardShortcutBindings,
     navigationLocked,
     openCommandPalette,
+    openFindInChat,
+    openKeyboardShortcuts,
     openSettings,
     setComposerMode,
     setUseWorktreePool,

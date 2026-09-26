@@ -121,6 +121,35 @@ describe('ToolCallDispatcher', () => {
     expect(executed).toEqual(['read', 'grep'])
   })
 
+  it('rejects a batch mixing new_context before any side effect', async () => {
+    const executeSafely = vi.fn(async (input: { call: ToolCallLike }) => resultFor(input.call))
+    const persisted: Array<{ call: ToolCallLike; isError: boolean }> = []
+    const dispatcher = new ToolCallDispatcher({
+      executeSafely,
+      persistResult: vi.fn(async (_t: string, _u: string, entry: ToolCallLike, result: ToolHostResult) => {
+        persisted.push({ call: entry, isError: result.item.kind === 'tool_result' ? result.item.isError : false })
+      }),
+      persistSuppressed: vi.fn(async () => undefined)
+    } as never)
+
+    await expect(dispatcher.dispatch({
+      dispatch: dispatchInput([call('read', 'read_1'), call('new_context', 'nc_1')]),
+      context
+    })).resolves.toBe('continue')
+
+    expect(executeSafely).not.toHaveBeenCalled()
+    expect(persisted).toHaveLength(2)
+    expect(persisted.every((entry) => entry.isError)).toBe(true)
+
+    // A lone new_context call is admissible and reaches execution.
+    executeSafely.mockClear()
+    await dispatcher.dispatch({
+      dispatch: dispatchInput([call('new_context', 'nc_2')]),
+      context
+    })
+    expect(executeSafely).toHaveBeenCalledTimes(1)
+  })
+
   it('reports execution only after the result is durably persisted', async () => {
     const onToolExecuted = vi.fn()
     const dispatcher = new ToolCallDispatcher({

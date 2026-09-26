@@ -1,4 +1,4 @@
-import type { AppSettingsV1, WindowCloseAction } from '@shared/app-settings'
+import type { AppSettingsV1 } from '@shared/app-settings'
 import {
   APP_LOCALE_OPTIONS,
   CHAT_CONTENT_MAX_WIDTH_MAX,
@@ -106,8 +106,6 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
   const startMinimizedSupported = platform === 'win32'
   const systemTitleBarSupported = platform === 'linux'
   const desktopBehavior = form.appBehavior
-  const closeAction = desktopBehavior.closeAction ?? (desktopBehavior.closeToTray ? 'tray' : 'ask')
-  const closeActionOptions: WindowCloseAction[] = ['ask', 'tray', 'quit']
   const fontScale = normalizeUiFontScale(form.uiFontScale)
   const fontScalePercent = Math.round(fontScale * 100)
   const setFontScale = (value: number): void => update({ uiFontScale: normalizeUiFontScale(value) })
@@ -436,7 +434,7 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
       <GeneralDesktopSettingsPanel view={{
         t, form, update, selectControlClass, logPath, logDirOpenError, setLogDirOpenError,
         compactHomePath, activeTab, desktopSubTab, setDesktopSubTab, openAtLoginSupported,
-        startMinimizedSupported, systemTitleBarSupported, desktopBehavior, closeAction, closeActionOptions
+        startMinimizedSupported, systemTitleBarSupported, desktopBehavior
       }} />
     </>
   )

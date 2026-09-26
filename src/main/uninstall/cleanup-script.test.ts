@@ -40,11 +40,14 @@ function windowsRequest(overrides: Partial<CleanupRequest> = {}): CleanupRequest
 }
 
 describe('POSIX cleanup script', () => {
-  it('waits for the main PID and only force-kills a guarded process on timeout', () => {
+  it('fails without deleting data when Main does not exit, and bounds its own process group', () => {
     const script = buildPosixCleanupScript(posixRequest())
     expect(script).toContain('MAIN_PID=4242')
     expect(script).toContain('while kill -0 "$MAIN_PID" 2>/dev/null; do')
-    expect(script).toContain('*"$GUARD"*) kill -9 "$MAIN_PID" 2>/dev/null || true ;;')
+    expect(script).toContain('if [ "$i" -ge 120 ]; then exit 124; fi')
+    expect(script).not.toContain('kill -9 "$MAIN_PID"')
+    expect(script).toContain('kill -KILL "-$HELPER_PID"')
+    expect(script).toContain('wait "$WATCHDOG_PID"')
     expect(script).toContain("GUARD='/Applications/Kun.app/Contents/MacOS/Kun'")
   })
 
@@ -79,12 +82,14 @@ describe('POSIX cleanup script', () => {
 })
 
 describe('Windows cleanup script', () => {
-  it('waits for the main PID and guards the force-kill with the executable path', () => {
+  it('preserves data if Main stays alive and contains uninstall descendants in a bounded Job', () => {
     const script = buildWindowsCleanupScript(windowsRequest())
     expect(script).toContain('$mainPid = 4242')
     expect(script).toContain("$guard = 'C:\\Program Files\\Kun\\Kun.exe'")
-    expect(script).toContain('$proc.ExecutablePath.Contains($guard)')
-    expect(script).toContain('Stop-Process -Id $mainPid -Force')
+    expect(script).toContain('if (Get-Process -Id $mainPid -ErrorAction SilentlyContinue) { exit 124 }')
+    expect(script).not.toContain('Stop-Process -Id $mainPid')
+    expect(script).toContain('AssignProcessToJobObject')
+    expect(script).toContain('[KunOneShotDeadline]::Start(300000, $true)')
   })
 
   it('removes data paths, runs the NSIS uninstaller with /S, and cleans the marker', () => {

@@ -3,6 +3,7 @@ import type {
   CSSProperties,
   ReactElement
 } from 'react'
+import { useEffect, useState } from 'react'
 import alibabaIconUrl from '../assets/provider-icons/alibaba.svg?url'
 import antigravityIconUrl from '../assets/provider-icons/antigravity.svg?url'
 import claudeIconUrl from '../assets/provider-icons/claude.svg?url'
@@ -19,6 +20,7 @@ import mimoIconUrl from '../assets/provider-icons/mimo.svg?url'
 import minimaxIconUrl from '../assets/provider-icons/minimax.svg?url'
 import ollamaIconUrl from '../assets/provider-icons/ollama.svg?url'
 import opencodeGoIconUrl from '../assets/provider-icons/opencodego.svg?url'
+import stepfunIconUrl from '../assets/provider-icons/stepfun.svg?url'
 import zaiIconUrl from '../assets/provider-icons/zai.svg?url'
 import zenmuxIconUrl from '../assets/provider-icons/zenmux.svg?url'
 import kunIconUrl from '../../../asset/img/kun_tray_mac.svg?url'
@@ -41,6 +43,7 @@ export type ProviderBrandIconKey =
   | 'minimax'
   | 'ollama'
   | 'opencodego'
+  | 'stepfun'
   | 'zai'
   | 'zenmux'
 
@@ -62,6 +65,7 @@ const PROVIDER_ICON_ASSETS: Readonly<Record<ProviderBrandIconKey, string>> = {
   minimax: minimaxIconUrl,
   ollama: ollamaIconUrl,
   opencodego: opencodeGoIconUrl,
+  stepfun: stepfunIconUrl,
   zai: zaiIconUrl,
   zenmux: zenmuxIconUrl
 }
@@ -82,6 +86,7 @@ const ICON_BY_PRESET_ID: Readonly<Record<string, ProviderBrandIconKey>> = {
   'moonshot-global': 'kimi',
   ollama: 'ollama',
   'opencode-go': 'opencodego',
+  stepfun: 'stepfun',
   volcengine: 'doubao',
   'volcengine-agent-plan': 'doubao',
   'volcengine-coding-plan': 'doubao',
@@ -132,7 +137,22 @@ export type ProviderIconProps = ProviderIconIdentity &
   Omit<ComponentPropsWithoutRef<'span'>, 'children'> & {
     label?: string
     size?: number | string
+    /** Content-addressed custom icon stored via `provider:icon:import`. */
+    iconId?: string | null
   }
+
+const customIconCache = new Map<string, Promise<string | null>>()
+function customIconDataUrl(iconId: string): Promise<string | null> {
+  let cached = customIconCache.get(iconId)
+  if (!cached) {
+    cached = window.kunGui
+      .providerIconDataUrl({ iconId })
+      .then((result) => result.dataUrl)
+      .catch(() => null)
+    customIconCache.set(iconId, cached)
+  }
+  return cached
+}
 
 /** Monochrome provider mark that follows the surrounding foreground color. */
 export function ProviderIcon({
@@ -140,6 +160,7 @@ export function ProviderIcon({
   providerId,
   label,
   size,
+  iconId,
   className = '',
   style,
   role,
@@ -147,9 +168,39 @@ export function ProviderIcon({
   'aria-hidden': ariaHidden,
   ...spanProps
 }: ProviderIconProps): ReactElement {
+  const [customUrl, setCustomUrl] = useState<string | null>(null)
   const iconKey = resolveProviderIconKey({ presetId, providerId })
   const iconUrl = PROVIDER_ICON_ASSETS[iconKey]
   const accessibleLabel = label ?? ariaLabel
+  useEffect(() => {
+    if (!iconId) {
+      setCustomUrl(null)
+      return
+    }
+    let cancelled = false
+    void customIconDataUrl(iconId).then((dataUrl) => {
+      if (!cancelled) setCustomUrl(dataUrl)
+    })
+    return () => { cancelled = true }
+  }, [iconId])
+  if (iconId && customUrl) {
+    return (
+      <img
+        src={customUrl}
+        alt={accessibleLabel ?? ''}
+        aria-hidden={accessibleLabel ? undefined : (ariaHidden ?? true)}
+        data-provider-icon="custom"
+        className={className}
+        style={{
+          display: 'inline-block',
+          flex: 'none',
+          objectFit: 'contain',
+          ...(size !== undefined ? { width: size, height: size } : {}),
+          ...style
+        }}
+      />
+    )
+  }
   const classControlsSize = /(?:^|\s)(?:(?:[^\s:]+):)*(?:h|w|size)-/.test(className)
   const dimensions: CSSProperties = size !== undefined
     ? { width: size, height: size }

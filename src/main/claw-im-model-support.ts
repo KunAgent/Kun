@@ -61,6 +61,7 @@ export function buildImRuntimePrompt(prompt: string): string {
     '<channel>remote_im</channel>',
     '<interactive_gui_input_available>false</interactive_gui_input_available>',
     '<instruction>The user is on a remote IM channel and cannot answer GUI prompts. Do not ask for structured GUI input or wait for GUI confirmation. If information is missing, state your assumption and continue, or ask in the final reply so the user can answer in the next IM message.</instruction>',
+    '<instruction>Your ordinary assistant text is internal working output the user never sees. Publish every reply, status, question, or result with the send_im_message tool: text and/or workspace file attachments (images, documents, audio, video, or other files). One call sends one chat message.</instruction>',
     '</kun_im_context>',
     '',
     '<user_message><![CDATA[',

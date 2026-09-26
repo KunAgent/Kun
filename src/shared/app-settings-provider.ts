@@ -79,3 +79,26 @@ export {
   normalizeTextToSpeechProtocol,
   normalizeVideoGenerationProtocol
 } from './app-settings-provider-capabilities'
+export {
+  isLocalModelProviderBaseUrl,
+  modelProviderDisplayId,
+  modelProviderFailoverAfterRemoval,
+  modelProviderFailoverGroup,
+  modelProviderIsOauthOrDelegated,
+  modelProviderFailoverMemberIds,
+  modelProviderInFailoverGroup,
+  normalizeModelProviderCatalogSources,
+  normalizeModelProviderEndpoints,
+  normalizeModelProviderFailover,
+  normalizeProviderAccountStrategy,
+  normalizeProviderIconId,
+  projectExecutableProviderFailover,
+  projectFailoverGroupsForRuntime
+} from './app-settings-provider-failover'
+export {
+  listModelProviderReferences,
+  modelProviderReferenceKinds,
+  type ModelProviderReference,
+  type ModelProviderReferenceKind
+} from './app-settings-provider-references'
+export { resolveProviderEndpointBaseUrl } from './model-provider-endpoints'

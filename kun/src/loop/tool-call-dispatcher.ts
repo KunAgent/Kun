@@ -1,4 +1,6 @@
 import type { ToolCallLike, ToolHostContext, ToolHostResult } from '../ports/tool-host.js'
+import { makeToolResultItem } from '../domain/item.js'
+import { exclusiveNewContextBatchError } from '../services/context-window-transition-coordinator.js'
 import type { ToolDispatchInput, ToolDispatchOutcome } from './turn-execution-types.js'
 import { collectParallelToolDispatchCandidates } from './tool-dispatch-policy.js'
 import type { ToolStormBreaker } from './tool-storm-breaker.js'
@@ -44,6 +46,30 @@ export class ToolCallDispatcher {
     const { dispatch } = input
     let index = 0
     let executedAny = false
+
+    // Window transitions are exclusive: a batch mixing new_context with any
+    // other call is rejected before a single side effect runs. Every call
+    // still receives an error result so the model is told to retry the
+    // transition on its own.
+    const exclusiveError = exclusiveNewContextBatchError(dispatch.calls)
+    if (exclusiveError) {
+      for (const call of dispatch.calls) {
+        await this.toolExecution.persistResult(dispatch.threadId, dispatch.turnId, call, {
+          item: makeToolResultItem({
+            id: `item_${call.callId}`,
+            turnId: dispatch.turnId,
+            threadId: dispatch.threadId,
+            callId: call.callId,
+            toolName: call.toolName,
+            toolKind: call.toolKind ?? 'tool_call',
+            output: { code: 'mixed_batch_rejected', error: exclusiveError.message },
+            isError: true
+          }),
+          approved: false
+        })
+      }
+      return 'continue'
+    }
 
     while (index < dispatch.calls.length) {
       if (dispatch.signal.aborted) return 'aborted'

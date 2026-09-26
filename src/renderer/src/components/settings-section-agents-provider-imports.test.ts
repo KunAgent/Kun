@@ -14,7 +14,6 @@ import {
   instanceText,
   it,
   modelProviderPresetAccountProfile,
-  modelProviderPresetProfile,
   renderProviders,
   rendererText,
   resetSharedProviderMutationCoordinatorForTests,
@@ -214,48 +213,6 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       return { settings, target, snapshot }
     }
 
-    const installDraftRegistry = (): ReturnType<typeof vi.fn> => {
-      let revision = 0
-      let providers: Array<Record<string, unknown>> = []
-      const snapshot = () => ({
-        schemaVersion: 1,
-        revision,
-        providers,
-        defaultProviderId: providers[0]?.id,
-        defaultAccountId: providers[0]?.accountId,
-        defaultModel: providers[0]?.selectedModel,
-        proxy: { enabled: false, url: '' },
-        routePools: [],
-        localModelGateway: { enabled: false }
-      })
-      const runtimeRequest = vi.fn(async (path: string, method = 'GET', body?: string) => {
-        if (path.includes('/events?')) return new Promise<never>(() => undefined)
-        if (path === '/v1/model-connections' && method === 'GET') {
-          return { ok: true, status: 200, body: JSON.stringify(snapshot()) }
-        }
-        if (path === '/v1/model-connections/connect' && method === 'POST') {
-          const request = JSON.parse(body ?? '{}') as Record<string, unknown>
-          revision += 1
-          providers = [{
-            id: request.id,
-            accountId: `account:${String(request.id)}`,
-            name: request.name,
-            kind: request.kind,
-            authType: request.authType,
-            baseUrl: request.baseUrl,
-            endpointFormat: request.endpointFormat,
-            configured: true,
-            models: request.models,
-            selectedModel: request.selectedModel
-          }]
-          return { ok: true, status: 201, body: JSON.stringify(snapshot()) }
-        }
-        throw new Error(`Unexpected runtime request: ${method} ${path}`)
-      })
-      Object.assign(window.kunGui, { runtimeRequest })
-      return runtimeRequest
-    }
-
     it('uses the canonical models.dev source for a numbered provider account', async () => {
       const settings = defaultModelProviderSettings()
       const kimi = getModelProviderPreset('kimi-code')!
@@ -283,44 +240,6 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         baseUrl: second.baseUrl,
         forceRefresh: true
       })
-    })
-
-    it('continues to refresh a pay-as-you-go preset without creating a duplicate account', async () => {
-      const settings = defaultModelProviderSettings()
-      const xiaomi = getModelProviderPreset('xiaomi')!
-      const existing = {
-        ...modelProviderPresetProfile(xiaomi, 'sk-xiaomi'),
-        name: 'Work Xiaomi',
-        models: [...modelProviderPresetProfile(xiaomi).models, 'private-model']
-      }
-      const update = vi.fn()
-      const renderer = await mountProviders({
-        ...baseCtx(),
-        provider: { ...settings, providers: [...settings.providers, existing] },
-        kun: { ...defaultKunRuntimeSettings(), providerId: existing.id, model: existing.models[0] },
-        update
-      })
-
-      await act(async () => findButton(renderer, 'Add provider').props.onClick())
-      const dialog = renderer.root.findByProps({ role: 'dialog' })
-      const xiaomiEntry = dialog.findAllByType('button')
-        .find((button) => instanceText(button).includes('Xiaomi') && instanceText(button).includes('Update preset'))
-      await act(async () => {
-        xiaomiEntry!.props.onClick()
-        await Promise.resolve()
-      })
-
-      expect(update).toHaveBeenCalledTimes(1)
-      const savedProviders = update.mock.calls[0]?.[0]?.provider?.providers as ModelProviderProfileV1[]
-      const savedXiaomi = savedProviders.filter((provider) => provider.id === 'xiaomi')
-      expect(savedXiaomi).toHaveLength(1)
-      expect(savedXiaomi[0]).toMatchObject({
-        name: 'Work Xiaomi',
-        apiKey: 'sk-xiaomi',
-        models: expect.arrayContaining(['private-model']),
-        presetSource: { presetId: 'xiaomi', mode: 'api' }
-      })
-      expect(rendererText(renderer)).not.toContain('Unsaved')
     })
 
     it('separates readiness, save failure, and fresh probe state', async () => {

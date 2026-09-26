@@ -11,11 +11,14 @@ import type {
   WriteEditorLayoutOrientation,
   WriteEditorLayoutV1,
   WriteEditorTab,
+  WritePaperViewId,
+  WritePaperViewTab,
   WriteWhiteboardTab,
   WritePreviewMode,
   WriteWorkspaceState
 } from './write-workspace-store-types'
 import { emptySelection, normalizePath } from './write-workspace-store-helpers'
+import { writeSurfaceKeySuffix } from './write-surface'
 
 const LAYOUT_KEY_PREFIX = 'kun.write.editor-layout:v1:'
 
@@ -53,19 +56,34 @@ export function writeDocumentKey(path: string): string {
 }
 
 const WRITE_WHITEBOARD_TAB_PREFIX = 'whiteboard:'
+const WRITE_PAPER_VIEW_TAB_PREFIX = 'paper-view:'
+
+const WRITE_PAPER_VIEW_IDS: readonly WritePaperViewId[] = [
+  'library',
+  'discover:search',
+  'discover:arxiv',
+  'discover:feeds',
+  'discover:venue'
+]
 
 export function isWriteWhiteboardTab(item: WriteEditorItem): item is WriteWhiteboardTab {
   return item.kind === 'whiteboard'
 }
 
+export function isWritePaperViewTab(item: WriteEditorItem): item is WritePaperViewTab {
+  return (item as { kind?: string }).kind === 'paper-view'
+}
+
 export function isWriteFileTab(item: WriteEditorItem): item is WriteEditorTab {
-  return !isWriteWhiteboardTab(item)
+  return !isWriteWhiteboardTab(item) && !isWritePaperViewTab(item)
 }
 
 export function writeEditorItemKey(item: WriteEditorItem): string {
   return isWriteWhiteboardTab(item)
     ? `${WRITE_WHITEBOARD_TAB_PREFIX}${item.boardId}`
-    : writeDocumentKey(item.path)
+    : isWritePaperViewTab(item)
+      ? writePaperViewTabKey(item.view)
+      : writeDocumentKey(item.path)
 }
 
 export function writeWhiteboardIdFromTabKey(key: string | null | undefined): string | null {
@@ -73,12 +91,37 @@ export function writeWhiteboardIdFromTabKey(key: string | null | undefined): str
   return key.slice(WRITE_WHITEBOARD_TAB_PREFIX.length).trim() || null
 }
 
+export function writePaperViewTabKey(view: WritePaperViewId): string {
+  return `${WRITE_PAPER_VIEW_TAB_PREFIX}${view}`
+}
+
+export function writePaperViewIdFromTabKey(key: string | null | undefined): WritePaperViewId | null {
+  if (!key?.startsWith(WRITE_PAPER_VIEW_TAB_PREFIX)) return null
+  const id = key.slice(WRITE_PAPER_VIEW_TAB_PREFIX.length)
+  return (WRITE_PAPER_VIEW_IDS as readonly string[]).includes(id)
+    ? (id as WritePaperViewId)
+    : null
+}
+
+/** Tab keys that name a non-document surface (no file on disk). */
+export function isWriteVirtualTabKey(key: string | null | undefined): boolean {
+  return Boolean(writeWhiteboardIdFromTabKey(key) || writePaperViewIdFromTabKey(key))
+}
+
+/** The focused group's active paper view ('library', 'discover:*'), if any. */
+export function activePaperViewId(layout: WriteEditorLayoutV1): WritePaperViewId | null {
+  const group = focusedWriteGroup(layout)
+  const item = writeEditorItemForKey(group, group.activePath)
+  if (item && isWritePaperViewTab(item)) return item.view
+  return writePaperViewIdFromTabKey(group.activePath)
+}
+
 export function writeEditorItemForKey(
   group: WriteEditorGroup,
   key: string | null | undefined
 ): WriteEditorItem | null {
   if (!key) return null
-  const normalizedKey = writeWhiteboardIdFromTabKey(key) ? key : writeDocumentKey(key)
+  const normalizedKey = isWriteVirtualTabKey(key) ? key : writeDocumentKey(key)
   return group.tabs.find((item) => writeEditorItemKey(item) === normalizedKey) ?? null
 }
 
@@ -169,7 +212,10 @@ export function projectFocusedDocument(
   const boardId = activeItem && isWriteWhiteboardTab(activeItem)
     ? activeItem.boardId
     : writeWhiteboardIdFromTabKey(activeKey)
-  if (boardId) {
+  const paperViewId = activeItem && isWritePaperViewTab(activeItem)
+    ? activeItem.view
+    : writePaperViewIdFromTabKey(activeKey)
+  if (boardId || paperViewId) {
     return {
       activeFilePath: null,
       activeFileKind: null,
@@ -267,14 +313,59 @@ export function captureFocusedDocument(state: WriteWorkspaceState): Record<strin
   return { ...state.documentsByPath, [key]: document }
 }
 
+/** New-tab default: `.mdx` opens as plain text — its JSX would not survive
+ * a rich-mode round trip. */
+export function defaultWriteViewModeForPath(path: string): WritePreviewMode {
+  return /\.mdx$/i.test(path) ? 'plain' : 'rich'
+}
+
+/**
+ * Migrate persisted view modes (implementation §8.1): the old
+ * `source`/`live`/`preview` surfaces collapse into the single document
+ * view (`'rich'`); `'plain'` maps to the plain-text editor.
+ */
+export function normalizeWriteViewMode(value: unknown): WritePreviewMode {
+  return value === 'plain' ? 'plain' : 'rich'
+}
+
+export type WriteEditorSurface = 'document' | 'plain'
+
+/**
+ * Pick the editing surface for an open file (implementation §8.2):
+ * non-markdown text, `.mdx`, truncated content, oversized markdown, or an
+ * explicit `plain` view mode all go to the plain-text editor; everything
+ * else renders the block document editor.
+ */
+export function resolveWriteEditorSurface(input: {
+  path: string
+  viewMode: WritePreviewMode
+  contentLength: number
+  truncated: boolean
+  isMarkdown?: boolean
+  /** `write.documentEditorV2` rollout gate; absent/undefined means on. */
+  documentEditorV2?: boolean
+}): { surface: WriteEditorSurface; notice?: 'large-file' | 'mdx' | 'truncated' } {
+  const isMarkdown = input.isMarkdown ?? /\.(md|markdown)$/i.test(input.path)
+  if (input.truncated) return { surface: 'plain', notice: 'truncated' }
+  if (!isMarkdown) return { surface: 'plain' }
+  if (/\.mdx$/i.test(input.path)) return { surface: 'plain', notice: 'mdx' }
+  if (input.documentEditorV2 === false) return { surface: 'plain' }
+  if (input.viewMode === 'plain') return { surface: 'plain' }
+  if (input.contentLength > 300_000) return { surface: 'plain', notice: 'large-file' }
+  return { surface: 'document' }
+}
+
 export function addTabToGroup(
   layout: WriteEditorLayoutV1,
   groupId: WriteEditorGroupId,
   path: string,
-  viewMode: WritePreviewMode = 'rich'
+  viewMode?: WritePreviewMode
 ): WriteEditorLayoutV1 {
   const normalized = writeDocumentKey(path)
-  return addEditorItemToGroup(layout, groupId, { path: normalized, viewMode })
+  return addEditorItemToGroup(layout, groupId, {
+    path: normalized,
+    viewMode: viewMode ?? defaultWriteViewModeForPath(normalized)
+  })
 }
 
 export function addEditorItemToGroup(
@@ -299,11 +390,13 @@ export function addEditorItemToGroup(
 }
 
 export function layoutStorageKey(workspaceRoot: string): string {
-  return `${LAYOUT_KEY_PREFIX}${normalizePath(workspaceRoot)}`
+  // The papers surface namespaces the key so docs/papers tabs stay separate
+  // even when both point at the same directory (plan D2).
+  return `${LAYOUT_KEY_PREFIX}${normalizePath(workspaceRoot)}${writeSurfaceKeySuffix()}`
 }
 
 function validMode(value: unknown): value is WritePreviewMode {
-  return value === 'rich' || value === 'source' || value === 'live' || value === 'preview'
+  return value === 'rich' || value === 'source' || value === 'live' || value === 'preview' || value === 'plain'
 }
 
 function normalizeStoredTab(value: unknown, workspaceRoot: string): WriteEditorTab | null {
@@ -314,7 +407,8 @@ function normalizeStoredTab(value: unknown, workspaceRoot: string): WriteEditorT
   if (!path || !isWriteWorkspaceFilePath(path) || (path !== root && !path.startsWith(`${root}/`))) return null
   return {
     path,
-    viewMode: validMode(candidate.viewMode) ? candidate.viewMode : 'rich',
+    viewMode: validMode(candidate.viewMode) ? normalizeWriteViewMode(candidate.viewMode) : 'rich',
+    ...(candidate.pdfView === 'translated' ? { pdfView: 'translated' as const } : {}),
     ...(Number.isFinite(candidate.cursorOffset) ? { cursorOffset: Math.max(0, Number(candidate.cursorOffset)) } : {}),
     ...(Number.isFinite(candidate.scrollTop) ? { scrollTop: Math.max(0, Number(candidate.scrollTop)) } : {})
   }
@@ -327,6 +421,12 @@ function normalizeStoredItem(value: unknown, workspaceRoot: string): WriteEditor
       const boardId = candidate.boardId.trim()
       return /^[a-zA-Z0-9_-]+$/.test(boardId)
         ? { kind: 'whiteboard', boardId, viewMode: 'rich' }
+        : null
+    }
+    if (candidate.kind === 'paper-view' && typeof (candidate as { view?: unknown }).view === 'string') {
+      const view = (candidate as { view: string }).view
+      return (WRITE_PAPER_VIEW_IDS as readonly string[]).includes(view)
+        ? { kind: 'paper-view', view: view as WritePaperViewId, viewMode: 'rich' }
         : null
     }
   }
@@ -349,7 +449,7 @@ function normalizeStoredGroup(
     .filter((tab): tab is WriteEditorItem => Boolean(tab))
     .filter((tab, index, items) => items.findIndex((candidate) => writeEditorItemKey(candidate) === writeEditorItemKey(tab)) === index)
   const rawActive = typeof value.activePath === 'string' ? value.activePath : ''
-  const requestedActive = writeWhiteboardIdFromTabKey(rawActive) ? rawActive : normalizePath(rawActive)
+  const requestedActive = isWriteVirtualTabKey(rawActive) ? rawActive : normalizePath(rawActive)
   return {
     id,
     tabs,

@@ -29,6 +29,10 @@ export const ModelRequestFailureContextSchema = z.object({
   httpStatus: z.number().int().min(100).max(599).optional(),
   providerCode: z.string().min(1).max(128).optional(),
   category: ModelRequestFailureCategorySchema.optional(),
+  /** Unified failure reason from the shared classifier, when known. */
+  reason: z.enum([
+    'credit', 'quota', 'rate', 'overloaded', 'auth', 'model', 'request', 'other'
+  ]).optional(),
   retryAfterMs: z.number().int().nonnegative().max(3_600_000).optional()
 }).strict()
 export type ModelRequestFailureContext = z.infer<typeof ModelRequestFailureContextSchema>

@@ -14,9 +14,9 @@ import type { ChatBlock, RuntimeChildActivity } from '../../agent/types'
 import { threadSnapshotLooksRunning } from '../../store/chat-store-runtime-helpers'
 import {
   calculateComposerPopoverPlacement,
-  currentComposerBodyZoom,
   type ComposerPopoverPlacement
 } from './floating-composer-popover-placement'
+import { bodyZoom } from '../../lib/body-zoom'
 import { ExplorePeekBody } from './explore-peek-body'
 import {
   formatChildActivityLabel,
@@ -120,7 +120,7 @@ export function ExplorePeekPopover({
         popoverHeight: popoverRef.current?.offsetHeight ?? PEEK_POPOVER_ESTIMATED_HEIGHT,
         viewportHeight: window.innerHeight,
         viewportWidth: window.innerWidth,
-        coordinateScale: currentComposerBodyZoom(),
+        coordinateScale: bodyZoom(),
         preferredWidth: PEEK_POPOVER_WIDTH,
         maximumHeight: PEEK_POPOVER_MAX_HEIGHT
       }))

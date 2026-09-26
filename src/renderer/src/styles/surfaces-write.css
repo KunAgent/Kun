@@ -1,4 +1,5 @@
 @import './surfaces-write/host-surfaces.css';
+@import './surfaces-write/paper-reader.css';
 @import './surfaces-write/plugin-presentation.css';
 @import './surfaces-write/plugin-scene-layout.css';
 @import './surfaces-write/plugin-chrome-recipes.css';

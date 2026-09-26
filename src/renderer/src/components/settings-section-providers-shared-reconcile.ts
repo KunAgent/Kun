@@ -7,8 +7,7 @@ import {
   DEFAULT_MODEL_PROVIDER_ID,
   MAX_MODEL_CONTEXT_WINDOW_TOKENS,
   MAX_MODEL_OUTPUT_TOKENS,
-  defaultModelRequestRetrySettings,
-  resolveModelProviderPresetSource
+  defaultModelRequestRetrySettings
 } from '@shared/app-settings'
 import {
   modelProviderRequiresApiKey
@@ -21,7 +20,6 @@ import {
 
 export { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
 
-import { isSubscriptionProvider } from './settings-section-providers-profile'
 import {
   SharedModelConnectionConflictError,
   requestSharedModelConnections,
@@ -33,13 +31,8 @@ import {
 /** Kinds that authenticate through their own CLI/SDK login instead of a
  * user-entered baseUrl. `gemini-cli-api` always targets Google's Code Assist
  * endpoint from the runtime client, so its AppSettings baseUrl stays empty. */
-export function sharedConnectionBaseUrlOptional(kind: string | undefined): boolean {
-  return kind === 'agent-sdk' ||
-    kind === 'antigravity-cli' ||
-    kind === 'gemini-cli-api' ||
-    kind === 'gemini-code-assist' ||
-    kind === 'cursor-sdk'
-}
+export { sharedConnectionBaseUrlOptional } from './settings-section-providers-shared-payloads'
+import { sharedConnectionBaseUrlOptional } from './settings-section-providers-shared-payloads'
 
 export function reconcilePendingSharedProviderDeletions(
   snapshot: SharedModelConnectionsSnapshot,
@@ -83,42 +76,20 @@ export function reconcilePendingSharedProviderNames(
   return next
 }
 
-export function normalizedModelId(model: string): string {
-  return model.trim().toLowerCase()
-}
-
-export function modelProfileFor(
-  profiles: Readonly<Record<string, ModelProviderModelProfileV1>>,
-  model: string
-): ModelProviderModelProfileV1 | undefined {
-  return profiles[model] ?? profiles[normalizedModelId(model)]
-}
-
-export function wireModelCapability(
-  model: string,
-  profile: ModelProviderModelProfileV1 | undefined
-): NonNullable<SharedModelConnection['modelCapabilities']>[string] | undefined {
-  if (!profile) return undefined
-  const { aliases: _aliases, ...capability } = profile
-  return { id: model, ...capability }
-}
-
-export function catalogCapabilities(
-  models: readonly string[],
-  profiles: Readonly<Record<string, ModelProviderModelProfileV1>>
-): NonNullable<SharedModelConnection['modelCapabilities']> {
-  return Object.fromEntries(models.flatMap((model) => {
-    const capability = wireModelCapability(model, modelProfileFor(profiles, model))
-    return capability ? [[model, capability]] : []
-  }))
-}
-
-export function sameCatalogCapabilities(
-  left: SharedModelConnection['modelCapabilities'],
-  right: SharedModelConnection['modelCapabilities']
-): boolean {
-  return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {})
-}
+export {
+  normalizedModelId,
+  modelProfileFor,
+  wireModelCapability,
+  catalogCapabilities,
+  sameCatalogCapabilities
+} from './settings-section-providers-shared-payloads'
+import {
+  normalizedModelId,
+  modelProfileFor,
+  wireModelCapability,
+  catalogCapabilities,
+  sameCatalogCapabilities
+} from './settings-section-providers-shared-payloads'
 
 export function reconcilePendingSharedProviderCatalogs(
   snapshot: SharedModelConnectionsSnapshot,
@@ -293,17 +264,8 @@ export async function commitSharedModelConnectionCatalog(
   return snapshot
 }
 
-export function sharedConnectionProfilePatch(provider: ModelProviderProfileV1): Record<string, unknown> {
-  const baseUrlOptional = sharedConnectionBaseUrlOptional(provider.kind)
-  return {
-    name: provider.name.trim() || provider.id,
-    kind: provider.kind ?? 'http',
-    authType: isSubscriptionProvider(provider) ? 'subscription' : 'api-key',
-    ...(baseUrlOptional ? {} : { baseUrl: provider.baseUrl }),
-    endpointFormat: provider.endpointFormat,
-    useProxy: provider.useProxy
-  }
-}
+export { sharedConnectionProfilePatch } from './settings-section-providers-shared-payloads'
+import { sharedConnectionProfilePatch } from './settings-section-providers-shared-payloads'
 
 async function connectSharedModelConnectionWithCatalog(
   snapshot: SharedModelConnectionsSnapshot,
@@ -311,19 +273,11 @@ async function connectSharedModelConnectionWithCatalog(
   pending: PendingSharedProviderCatalog,
   credential?: string
 ): Promise<SharedModelConnectionsSnapshot> {
-  const baseUrlOptional = sharedConnectionBaseUrlOptional(provider.kind)
   const resolvedCredential = (credential ?? provider.apiKey).trim()
   const selectedModel = pending.localModels[0]
   return await requestSharedModelConnections('/v1/model-connections/connect', 'POST', {
     expectedRevision: snapshot.revision,
-    id: provider.id,
-    name: provider.name.trim() || provider.id,
-    ...registryPresetFields(provider),
-    kind: provider.kind ?? 'http',
-    authType: isSubscriptionProvider(provider) ? 'subscription' : 'api-key',
-    ...(baseUrlOptional ? {} : { baseUrl: provider.baseUrl }),
-    endpointFormat: provider.endpointFormat,
-    useProxy: provider.useProxy,
+    ...sharedConnectionConnectFields(provider),
     ...(resolvedCredential ? { credential: resolvedCredential } : {}),
     models: pending.localModels,
     modelCapabilities: catalogCapabilities(pending.localModels, pending.localModelProfiles),
@@ -447,17 +401,9 @@ export async function connectOrReplaceSharedModelConnectionCredential(
         )
       }
       if (operation && !operation.isCurrent()) return snapshot
-      const baseUrlOptional = sharedConnectionBaseUrlOptional(provider.kind)
       const connected = await requestSharedModelConnections('/v1/model-connections/connect', 'POST', {
         expectedRevision: snapshot.revision,
-        id: provider.id,
-        name: provider.name.trim() || provider.id,
-        ...registryPresetFields(provider),
-        kind: provider.kind ?? 'http',
-        authType: isSubscriptionProvider(provider) ? 'subscription' : 'api-key',
-        ...(baseUrlOptional ? {} : { baseUrl: provider.baseUrl }),
-        endpointFormat: provider.endpointFormat,
-        useProxy: provider.useProxy,
+        ...sharedConnectionConnectFields(provider),
         ...(!operation ? { credential } : {}),
         models: provider.models,
         modelCapabilities: sharedCapabilitiesFromProvider(provider),
@@ -482,12 +428,8 @@ export async function connectOrReplaceSharedModelConnectionCredential(
   return snapshot
 }
 
-export function registryPresetFields(
-  provider: Pick<ModelProviderProfileV1, 'id' | 'presetSource'>
-): { presetSource?: string; presetMode?: 'api' | 'token-plan' } {
-  const source = resolveModelProviderPresetSource(provider)
-  return source ? { presetSource: source.preset.id, presetMode: source.mode } : {}
-}
+export { registryPresetFields } from './settings-section-providers-shared-payloads'
+import { registryPresetFields } from './settings-section-providers-shared-payloads'
 
 export function createSharedModelMutationQueue(): <T>(operation: () => Promise<T>) => Promise<T> {
   let tail: Promise<void> = Promise.resolve()
@@ -566,7 +508,7 @@ export function projectSharedModelConnections(
   pendingNames: Pick<ReadonlyMap<string, PendingSharedProviderName>, 'get'> = new Map(),
   pendingCatalogs: Pick<ReadonlyMap<string, PendingSharedProviderCatalog>, 'get'> = new Map()
 ): {
-  provider: Pick<ModelProviderSettingsV1, 'providers' | 'proxy' | 'routePools' | 'localGateway'>
+  provider: Pick<ModelProviderSettingsV1, 'providers' | 'proxy' | 'routePools' | 'failover' | 'localGateway'>
   kun: ProjectedKunSelectionPatch
 } {
   const existingById = new Map(current.providers.map((item) => [item.id, item]))
@@ -599,6 +541,7 @@ export function projectSharedModelConnections(
       apiKey: '',
       baseUrl: pendingNames.get(connection.id)?.localBaseUrl ?? connection.baseUrl ?? '',
       endpointFormat: pendingNames.get(connection.id)?.localEndpointFormat ?? connection.endpointFormat,
+      endpoints: connection.endpoints,
       useProxy: connection.useProxy,
       kind: connection.kind,
       models: pendingCatalog ? [...pendingCatalog.localModels] : [...connection.models],
@@ -650,6 +593,7 @@ export function projectSharedModelConnections(
       // A registry snapshot may lag that draft while its globals are being
       // persisted, so it must never replace the renderer's intended config.
       routePools: current.routePools,
+      failover: current.failover,
       localGateway: current.localGateway
     },
     kun: hasUsableDefault
@@ -664,6 +608,7 @@ export function sharedSettingsFingerprint(input: {
   model: string
   proxy: ModelProviderSettingsV1['proxy']
   routePools: ModelProviderSettingsV1['routePools']
+  failover: ModelProviderSettingsV1['failover']
   localGateway: ModelProviderSettingsV1['localGateway']
 }): string {
   return JSON.stringify({
@@ -672,6 +617,9 @@ export function sharedSettingsFingerprint(input: {
       name: item.name,
       baseUrl: item.baseUrl,
       endpointFormat: item.endpointFormat,
+      endpoints: item.endpoints,
+      catalogSources: item.catalogSources,
+      iconId: item.iconId,
       useProxy: item.useProxy,
       kind: item.kind,
       models: item.models,
@@ -681,12 +629,16 @@ export function sharedSettingsFingerprint(input: {
     model: input.model,
     proxy: input.proxy,
     routePools: input.routePools,
+    failover: input.failover,
     localGateway: input.localGateway
   })
 }
 
-export function sharedCapabilitiesFromProvider(
-  provider: ModelProviderProfileV1
-): SharedModelConnection['modelCapabilities'] {
-  return catalogCapabilities(provider.models, provider.modelProfiles)
-}
+export {
+  sharedCapabilitiesFromProvider,
+  sharedConnectionConnectFields
+} from './settings-section-providers-shared-payloads'
+import {
+  sharedCapabilitiesFromProvider,
+  sharedConnectionConnectFields
+} from './settings-section-providers-shared-payloads'

@@ -5,6 +5,8 @@ import { getProvider } from '../../agent/registry'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { useChatStore } from '../../store/chat-store'
 import { threadLooksRunning } from '../../store/chat-store-runtime-helpers'
+import { writeThreadActivity, type WriteResourceActivityContext } from '../../write/write-resource-activity'
+import type { SidebarActivity } from '../sidebar/SidebarActivityIndicator'
 import { workWhiteboardThreadIds } from '../../write/work-whiteboard'
 import {
   readWriteThreadRegistry,
@@ -17,6 +19,10 @@ import {
   writeBasenameFromPath,
   writeRelativeToWorkspace
 } from '../../write/write-workspace-store'
+import { usePaperStore } from '../../write/paper/paper-store'
+import { paperConversationResourcePath } from '../../paper/paper-conversation-scope'
+import { paperModeView } from '../../paper/paper-view'
+import { normalizePath } from '../../write/write-workspace-store-helpers'
 
 export type WriteResourceConversationEntry = {
   id: string
@@ -25,11 +31,12 @@ export type WriteResourceConversationEntry = {
   current: boolean
   missing: boolean
   archived: boolean
+  activity?: SidebarActivity
 }
 
 export type WriteResourceConversationHistoryModel = {
   scopeKey: string
-  resourceKind: 'file' | 'whiteboard'
+  resourceKind: 'file' | 'whiteboard' | 'paper'
   resourceLabel: string
   entries: WriteResourceConversationEntry[]
   running: boolean
@@ -44,7 +51,7 @@ export type WriteResourceConversationHistoryModel = {
 
 type ResourceScope = {
   key: string
-  kind: 'file' | 'whiteboard'
+  kind: 'file' | 'whiteboard' | 'paper'
   workspaceRoot: string
   resourceId: string
   label: string
@@ -60,6 +67,18 @@ function scopeMatchesCurrentResource(scope: ResourceScope): boolean {
   const state = useWriteWorkspaceStore.getState()
   if (writeWorkspaceKey(state.workspaceRoot) !== writeWorkspaceKey(scope.workspaceRoot)) return false
   if (scope.kind === 'whiteboard') return state.activeWhiteboardId === scope.resourceId
+  if (scope.kind === 'paper') {
+    if (state.activeWhiteboardId) return false
+    const resource = paperConversationResourcePath({
+      surface: state.workSurface,
+      workspaceRoot: state.workspaceRoot,
+      activeFilePath: state.activeFilePath,
+      unitDirs: Object.keys(usePaperStore.getState().unitsByDir),
+      entriesByDir: state.entriesByDir,
+      view: paperModeView(state)
+    })
+    return writeFileKey(resource) === scope.resourceId
+  }
   return !state.activeWhiteboardId && writeFileKey(state.activeFilePath) === scope.resourceId
 }
 
@@ -105,6 +124,7 @@ export function useWriteResourceConversationHistory(
     activeFilePath,
     activeWhiteboardId,
     activeWhiteboard,
+    workSurface,
     bindWhiteboardThread
   } = useWriteWorkspaceStore(
     useShallow((state) => ({
@@ -114,16 +134,22 @@ export function useWriteResourceConversationHistory(
       activeWhiteboard: state.activeWhiteboardId
         ? state.whiteboards[state.activeWhiteboardId] ?? null
         : null,
+      workSurface: state.workSurface,
       bindWhiteboardThread: state.bindWhiteboardThread
     }))
   )
+  const paperView = useWriteWorkspaceStore(paperModeView)
   const {
     activeThreadId,
     threads,
     runtimeConnection,
     selectWriteThread,
     renameThread,
-    archiveThread
+    archiveThread,
+    storeBusy,
+    watchTurnCompletion,
+    awaitingUserInputThreadIds,
+    unreadThreadIds
   } = useChatStore(
     useShallow((state) => ({
       activeThreadId: state.activeThreadId,
@@ -131,10 +157,22 @@ export function useWriteResourceConversationHistory(
       runtimeConnection: state.runtimeConnection,
       selectWriteThread: state.selectWriteThread,
       renameThread: state.renameThread,
-      archiveThread: state.archiveThread
+      archiveThread: state.archiveThread,
+      storeBusy: state.busy,
+      watchTurnCompletion: state.watchTurnCompletion,
+      awaitingUserInputThreadIds: state.awaitingUserInputThreadIds,
+      unreadThreadIds: state.unreadThreadIds
     }))
   )
   const [cachedThreads, setCachedThreads] = useState<Record<string, NormalizedThread>>({})
+  const activityContext: WriteResourceActivityContext = {
+    threads,
+    activeThreadId,
+    busy: storeBusy,
+    watchTurnCompletion,
+    awaitingUserInputThreadIds,
+    unreadThreadIds
+  }
 
   const scope = useMemo<ResourceScope | null>(() => {
     const normalizedWorkspace = normalizeWorkspaceRoot(workspaceRoot)
@@ -148,6 +186,40 @@ export function useWriteResourceConversationHistory(
         label: activeWhiteboard.title,
         threadIds: workWhiteboardThreadIds(activeWhiteboard),
         workflowLocked: Boolean(activeWhiteboard.workflowId)
+      }
+    }
+    if (workSurface === 'papers') {
+      const state = useWriteWorkspaceStore.getState()
+      const resource = paperConversationResourcePath({
+        surface: workSurface,
+        workspaceRoot: normalizedWorkspace,
+        activeFilePath,
+        unitDirs: Object.keys(usePaperStore.getState().unitsByDir),
+        entriesByDir: state.entriesByDir,
+        view: paperView
+      })
+      const fileKey = writeFileKey(resource)
+      if (!fileKey) return null
+      const activeKey = writeFileKey(activeFilePath)
+      const isPaperScope = fileKey !== activeKey
+      const relDir = normalizePath(fileKey).startsWith(`${normalizePath(normalizedWorkspace)}/`)
+        ? normalizePath(fileKey).slice(normalizePath(normalizedWorkspace).length + 1)
+        : ''
+      const paperMeta = relDir ? usePaperStore.getState().unitsByDir[relDir] : undefined
+      return {
+        key: `paper:${writeWorkspaceKey(normalizedWorkspace)}:${fileKey}`,
+        kind: isPaperScope ? 'paper' : 'file',
+        workspaceRoot: normalizedWorkspace,
+        resourceId: fileKey,
+        label: paperMeta?.title?.trim() ||
+          writeRelativeToWorkspace(normalizedWorkspace, fileKey) ||
+          writeBasenameFromPath(fileKey),
+        threadIds: writeThreadIdsForFile(
+          normalizedWorkspace,
+          fileKey,
+          readWriteThreadRegistry()
+        ),
+        workflowLocked: false
       }
     }
     const fileKey = writeFileKey(activeFilePath)
@@ -166,7 +238,7 @@ export function useWriteResourceConversationHistory(
       ),
       workflowLocked: false
     }
-  }, [activeFilePath, activeWhiteboard, activeWhiteboardId, activeThreadId, threads, workspaceRoot])
+  }, [activeFilePath, activeWhiteboard, activeWhiteboardId, paperView, workSurface, workspaceRoot])
 
   useEffect(() => {
     setCachedThreads({})
@@ -221,7 +293,7 @@ export function useWriteResourceConversationHistory(
     const resourceRunning = busy || scope.threadIds.some((id) =>
       associatedThreadLooksRunning(latestThreads.get(id)))
     if (runtimeConnection !== 'ready' || resourceRunning || scope.workflowLocked) return
-    if (scope.kind === 'file') {
+    if (scope.kind === 'file' || scope.kind === 'paper') {
       await selectWriteThread(threadId, scope.workspaceRoot, scope.resourceId)
       return
     }
@@ -266,7 +338,7 @@ export function useWriteResourceConversationHistory(
       return thread ? { ...current, [threadId]: { ...thread, archived: true } } : current
     })
     if (!fallbackThreadId || !scopeMatchesCurrentResource(scope)) return
-    if (scope.kind === 'file') {
+    if (scope.kind === 'file' || scope.kind === 'paper') {
       await selectWriteThread(fallbackThreadId, scope.workspaceRoot, scope.resourceId)
       return
     }
@@ -294,7 +366,8 @@ export function useWriteResourceConversationHistory(
       updatedAt: thread?.updatedAt ?? null,
       current: id === activeThreadId,
       missing: !thread,
-      archived: thread?.archived === true
+      archived: thread?.archived === true,
+      activity: writeThreadActivity(id, activityContext)
     }
   }).filter((entry) => !entry.archived)
   const running = busy || scope.threadIds.some((id) =>

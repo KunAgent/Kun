@@ -523,4 +523,40 @@ describe('deriveTurnSections', () => {
     expect(result.assistantContentBlocks).toEqual([])
     expect(result.processBlocks.map((block) => block.id)).toEqual(['tool_1', 'answer', 'tool_2'])
   })
+
+  it('keeps completed charts out of the process lane and pending charts off the tool timeline', () => {
+    const completed = sections([
+      { kind: 'assistant', id: 'answer', text: 'Latency rose this week.' },
+      {
+        kind: 'chart',
+        id: 'chart_1',
+        spec: {
+          version: 1,
+          type: 'line',
+          title: 'Latency',
+          data: [{ day: 'Mon', ms: 12 }],
+          x: { field: 'day' },
+          series: [{ field: 'ms', label: 'ms' }],
+          actions: ['expand']
+        }
+      }
+    ])
+    expect(completed.assistantContentBlocks.map((block) => block.id)).toEqual(['answer'])
+    expect(completed.chartBlocks.map((block) => block.id)).toEqual(['chart_1'])
+    expect(completed.pendingChartBlocks).toEqual([])
+    expect(completed.processBlocks).toEqual([])
+
+    const pending = processingSections({
+      blocks: [{
+        kind: 'tool',
+        id: 'chart_running',
+        summary: 'render_chart',
+        status: 'running',
+        toolKind: 'tool_call',
+        meta: { toolName: 'render_chart' }
+      }]
+    })
+    expect(pending.processBlocks).toEqual([])
+    expect(pending.pendingChartBlocks.map((block) => block.id)).toEqual(['chart_running'])
+  })
 })

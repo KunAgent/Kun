@@ -32,6 +32,7 @@ import { sameCanonicalPath } from './canonical-path.js'
 import { withRuntimeDataDirAncillaryWriter } from '../server/runtime-data-dir-lease.js'
 import { ManagerResourceLeaseSchema, type ManagerResourceFence } from './resource-lease-state.js'
 import type { ManagerRequestOptions } from './manager-client-support.js'
+import { terminateSpawnedRuntime } from '../cli/shared-runtime-launch.js'
 import {
   inspectServiceManager,
   resolveServiceManager
@@ -109,6 +110,11 @@ export class ManagerResourceLeaseClient {
     private readonly flavor: RuntimeFlavor,
     private readonly instanceId: string
   ) {}
+
+  getFence(resource: string): ManagerResourceFence | undefined {
+    const state = this.resources.get(resource)
+    return state?.held && state.fence ? { ...state.fence } : undefined
+  }
 
   async maintain(input: {
     resource: string
@@ -307,13 +313,20 @@ export async function ensureServiceManagerWithStartLockHeld(
     ...(input.buildId ? { buildId: input.buildId } : {}),
     ...(input.launch ? { launch: input.launch } : {})
   })
-  while (Date.now() < readyDeadline) {
-    const inspected = await inspectServiceManager(controlDir, fetchImpl, { deadline: readyDeadline })
-    if (inspected.state === 'ready') return { discovery: inspected.discovery }
-    if (child.exitCode !== null) break
-    await delay(POLL_MS)
+  let spawnError: Error | undefined
+  child.on('error', (error) => { spawnError = error })
+  try {
+    while (Date.now() < readyDeadline) {
+      const inspected = await inspectServiceManager(controlDir, fetchImpl, { deadline: readyDeadline })
+      if (inspected.state === 'ready') return { discovery: inspected.discovery }
+      if (spawnError || child.exitCode !== null || child.signalCode !== null) break
+      await delay(POLL_MS)
+    }
+    throw spawnError ?? new Error(`Kun Service Manager did not become ready; inspect ${logPath}`)
+  } catch (error) {
+    await terminateSpawnedRuntime(child)
+    throw error
   }
-  throw new Error(`Kun Service Manager did not become ready; inspect ${logPath}`)
 }
 
 function assertManagerBootstrapAllowed(input: EnsureServiceManagerInput): void {
@@ -480,7 +493,7 @@ export async function registerRuntimeWithManager(input: {
 }): Promise<RuntimeRegistration> {
   const response = await requestManagerResponse(input.manager, `/v1/runtimes/${input.registration.flavor}/register`, {
     method: 'PUT',
-    body: input.registration,
+    body: { ...input.registration, ...(input.manager.discovery.appOwner ? { appOwner: input.manager.discovery.appOwner } : {}) },
     fetch: input.fetch
   })
   if (response.status === 409) {

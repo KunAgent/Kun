@@ -1,17 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from 'react'
 import { ChevronLeft, ChevronRight, Loader2, Minus, Plus, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import {
-  GlobalWorkerOptions,
-  getDocument,
-  type PDFDocumentProxy
-} from 'pdfjs-dist/build/pdf.mjs'
+import { GlobalWorkerOptions } from 'pdfjs-dist/build/pdf.mjs'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import type {
   WriteEditorSelectionState,
   WriteSelectionPageRect
 } from './WriteMarkdownEditor'
-import { subscribeKnowledgeSourceNavigation } from '../../lib/knowledge-source-navigation'
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -27,12 +22,12 @@ type Props = {
 
 import {
   WritePdfPage,
-  bytesFromBase64,
   emptyPdfSelection,
   formatSize,
-  selectionFromPdf,
-  type PageText
+  selectionFromPdf
 } from './WritePdfPage'
+import { useWritePdfDocument } from './use-write-pdf-document'
+import { useWritePdfNavigation } from './use-write-pdf-navigation'
 export function WritePdfViewer({
   filePath,
   dataBase64,
@@ -45,22 +40,11 @@ export function WritePdfViewer({
   const { t } = useTranslation('common')
   const localViewerRef = useRef<HTMLDivElement | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
-  const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const selectionSyncTimerRef = useRef<number | null>(null)
-  const scrollRafRef = useRef<number | null>(null)
-  const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [scale, setScale] = useState(1.15)
-  const [pageInput, setPageInput] = useState('1')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchIndex, setSearchIndex] = useState(0)
-  const [pageTexts, setPageTexts] = useState<PageText[]>([])
   const [committedSelectionRects, setCommittedSelectionRects] = useState<WriteSelectionPageRect[]>([])
   // Precise fragment rects are shown while dragging and kept after focus moves
   // into the assist popup, while the DOM Selection remains the text source.
-  const pageCount = pdfDocument?.numPages ?? 0
   const rootRef = viewerRef ?? localViewerRef
 
   // The PDF loading task must be rebuilt only when the underlying resource
@@ -72,43 +56,34 @@ export function WritePdfViewer({
     selectionCallbackRef.current(selection)
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError('')
-    setPdfDocument(null)
-    setPageTexts([])
-    setCommittedSelectionRects([])
-    publishSelection(emptyPdfSelection())
-    const task = getDocument({
-      data: bytesFromBase64(dataBase64),
-      isEvalSupported: false
-    })
-    void task.promise.then((pdf) => {
-      if (cancelled) {
-        void pdf.destroy()
-        return
-      }
-      setPdfDocument(pdf)
-      setPageInput('1')
-      setCurrentPage(1)
-      setLoading(false)
-    }).catch((reason: unknown) => {
-      if (!cancelled) {
-        setError(reason instanceof Error ? reason.message : String(reason))
-        setLoading(false)
-      }
-    })
-    return () => {
-      cancelled = true
-      task.destroy()
-    }
-  }, [dataBase64, filePath, mtimeMs, publishSelection])
+  const {
+    pdfDocument,
+    loading,
+    error,
+    pageCount,
+    pageTexts,
+    allPageTextLoaded,
+    pdfHasText,
+    updatePageText
+  } = useWritePdfDocument({ filePath, dataBase64, mtimeMs, publishSelection })
 
+  const {
+    currentPage,
+    pageInput,
+    setPageInput,
+    searchQuery,
+    setSearchQuery,
+    searchMatches,
+    searchIndex,
+    pageRefs,
+    scrollToPage,
+    schedulePageSync,
+    jumpSearch
+  } = useWritePdfNavigation({ filePath, pdfDocument, pageCount, pageTexts, scrollerRef })
+
+  // The document load resets page state; mirror that for the selection.
   useEffect(() => {
-    return () => {
-      if (pdfDocument) void pdfDocument.destroy()
-    }
+    setCommittedSelectionRects([])
   }, [pdfDocument])
 
   useEffect(() => {
@@ -116,16 +91,6 @@ export function WritePdfViewer({
     publishSelection(emptyPdfSelection())
   }, [publishSelection, scale])
 
-  const searchMatches = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase()
-    if (!query) return []
-    return pageTexts
-      .filter((page) => page.text.toLowerCase().includes(query))
-      .map((page) => page.page)
-      .sort((a, b) => a - b)
-  }, [pageTexts, searchQuery])
-  const allPageTextLoaded = pageCount > 0 && pageTexts.length >= pageCount
-  const pdfHasText = pageTexts.some((page) => page.text.trim().length > 0)
   const committedRectsByPage = useMemo(() => {
     const byPage = new Map<number, WriteSelectionPageRect[]>()
     for (const rect of committedSelectionRects) {
@@ -135,72 +100,6 @@ export function WritePdfViewer({
     }
     return byPage
   }, [committedSelectionRects])
-
-  const updatePageText = useCallback((page: PageText): void => {
-    setPageTexts((current) => {
-      const existing = current.find((item) => item.page === page.page)
-      if (existing?.text === page.text) return current
-      const next = current.filter((item) => item.page !== page.page)
-      next.push(page)
-      return next.sort((a, b) => a.page - b.page)
-    })
-  }, [])
-
-  const scrollToPage = useCallback((page: number): void => {
-    const clamped = Math.max(1, Math.min(pageCount || 1, Math.round(page)))
-    setCurrentPage(clamped)
-    setPageInput(String(clamped))
-    pageRefs.current.get(clamped)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
-  }, [pageCount])
-
-  useEffect(() => subscribeKnowledgeSourceNavigation(filePath, (location) => {
-    if (location.kind !== 'pdf' || !pdfDocument) return false
-    scrollToPage(location.pageStart)
-    return true
-  }), [filePath, pdfDocument, scrollToPage])
-
-  const updateCurrentPageFromScroll = useCallback((): void => {
-    const scroller = scrollerRef.current
-    if (!scroller || pageRefs.current.size === 0) return
-    const scrollerRect = scroller.getBoundingClientRect()
-    const targetY = scrollerRect.top + scrollerRect.height * 0.42
-    let bestPage = 1
-    let bestDistance = Number.POSITIVE_INFINITY
-
-    pageRefs.current.forEach((node, page) => {
-      const rect = node.getBoundingClientRect()
-      const distance = targetY >= rect.top && targetY <= rect.bottom
-        ? 0
-        : Math.min(Math.abs(targetY - rect.top), Math.abs(targetY - rect.bottom))
-      if (distance < bestDistance) {
-        bestDistance = distance
-        bestPage = page
-      }
-    })
-
-    setCurrentPage((value) => value === bestPage ? value : bestPage)
-    setPageInput((value) => value === String(bestPage) ? value : String(bestPage))
-  }, [])
-
-  const schedulePageSync = useCallback((): void => {
-    if (scrollRafRef.current != null) return
-    scrollRafRef.current = window.requestAnimationFrame(() => {
-      scrollRafRef.current = null
-      updateCurrentPageFromScroll()
-    })
-  }, [updateCurrentPageFromScroll])
-
-  const jumpSearch = (direction: 1 | -1): void => {
-    if (searchMatches.length === 0) return
-    const nextIndex = (searchIndex + direction + searchMatches.length) % searchMatches.length
-    setSearchIndex(nextIndex)
-    scrollToPage(searchMatches[nextIndex])
-  }
-
-  useEffect(() => {
-    setSearchIndex(0)
-    if (searchMatches.length > 0) scrollToPage(searchMatches[0])
-  }, [scrollToPage, searchMatches])
 
   const syncSelection = useCallback((): void => {
     const root = rootRef.current
@@ -250,15 +149,6 @@ export function WritePdfViewer({
       }
     }
   }, [rootRef, syncSelectionSoon])
-
-  useEffect(() => {
-    return () => {
-      if (scrollRafRef.current != null) {
-        window.cancelAnimationFrame(scrollRafRef.current)
-        scrollRafRef.current = null
-      }
-    }
-  }, [])
 
   const beginPdfSelection = useCallback((): void => {
     setCommittedSelectionRects([])

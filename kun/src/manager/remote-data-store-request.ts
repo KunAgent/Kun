@@ -54,12 +54,15 @@ export function resolveManagerDataRequestTimeoutMs(
 /** Explicit read allowlist: new/unknown RPCs fail closed rather than replay writes. */
 export function isManagerStoreRead(store: ManagerStore, operation: string): boolean {
   const reads: Record<ManagerStore, readonly string[]> = {
-    thread: ['list', 'listPage', 'get', 'getMetadata'],
+    thread: ['list', 'listPage', 'get', 'getMetadata', 'hasHistoryReference'],
     session: ['loadItemSnapshot', 'loadEventsSince', 'loadEventPage', 'eventReplayFloorSeq',
       'loadItems', 'searchItemText', 'loadItemPage', 'loadSession', 'highestSeq',
       'loadUsageRecords', 'aggregateUsage', 'loadLatestUsageSnapshots'],
     artifact: ['list', 'get', 'readRange', 'stat'],
-    memory: ['list', 'retrieve', 'diagnostics', 'distillationPending'],
+    memory: [
+      'list', 'listDirectives', 'retrieve', 'diagnostics', 'distillationPending',
+      'feedbackEvent', 'feedbackAggregate', 'feedbackAggregates', 'feedbackDiagnostics'
+    ],
     graph: ['get', 'list', 'events', 'eventReplay', 'snapshot', 'diagnostics'],
     attachment: ['get', 'resolveContent', 'diagnostics']
   }

@@ -1,4 +1,5 @@
 import type { ModelConnectionProfile } from '../contracts/model-connections.js'
+import { resolveModelEndpointUrl } from '../contracts/model-endpoint-format.js'
 import { createProxyFetch } from '../adapters/model/proxy-fetch.js'
 import { CODEX_CLI_VERSION } from '../adapters/model/provider-cli-identity.js'
 
@@ -10,6 +11,8 @@ export async function probeModels(input: {
   kind: ModelConnectionProfile['kind']
   baseUrl?: string
   endpointFormat?: ModelConnectionProfile['endpointFormat']
+  /** Per-protocol base URL overrides; the probe resolves `endpoints[format] ?? baseUrl`. */
+  endpoints?: ModelConnectionProfile['endpoints']
   apiKey: string
   headers?: Record<string, string>
   fallbackModels: readonly string[]
@@ -52,7 +55,10 @@ export async function probeModels(input: {
     }
     return configured
   }
-  const url = modelsUrl(input.baseUrl, input.endpointFormat)
+  const override = input.endpointFormat
+    ? input.endpoints?.[input.endpointFormat]?.trim()
+    : undefined
+  const url = modelsUrl(override || input.baseUrl, input.endpointFormat)
   const usesAnthropicHeaders = input.endpointFormat === 'messages'
   const authHeaders: Record<string, string> = input.apiKey
     ? usesAnthropicHeaders
@@ -78,32 +84,5 @@ export function modelsUrl(
   baseUrl: string,
   endpointFormat: ModelConnectionProfile['endpointFormat'] | undefined
 ): string {
-  if (endpointFormat === 'custom_endpoint') {
-    throw new Error(
-      'provider probe failed: custom_endpoint does not define a models URL; configure models explicitly with probe disabled'
-    )
-  }
-  const url = new URL(baseUrl)
-  url.search = ''
-  url.hash = ''
-  const segments = url.pathname.split('/').filter(Boolean)
-  const last = segments.at(-1)?.toLowerCase()
-  if (last === 'models') {
-    url.pathname = `/${segments.join('/')}`
-    return url.toString()
-  }
-  if (last === 'responses' || last === 'messages') {
-    segments.pop()
-  } else if (last === 'completions' && segments.at(-2)?.toLowerCase() === 'chat') {
-    segments.splice(-2)
-  }
-  const version = segments.at(-1)?.toLowerCase()
-  if (version === 'beta') {
-    segments[segments.length - 1] = 'v1'
-  } else if (!version || !/^v\d+$/u.test(version)) {
-    segments.push('v1')
-  }
-  if (segments.at(-1)?.toLowerCase() !== 'models') segments.push('models')
-  url.pathname = `/${segments.join('/')}`
-  return url.toString()
+  return resolveModelEndpointUrl(baseUrl, endpointFormat ?? 'chat_completions', 'models')
 }

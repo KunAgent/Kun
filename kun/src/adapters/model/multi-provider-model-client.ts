@@ -21,7 +21,10 @@ export class MultiProviderModelClient implements ModelClient {
   private providers: Map<string, ModelClient>
   private readonly turnPins = new Map<string, {
     client: ModelClient
-    providerId: string
+    /** Pin identity: the provider id, or a routing selection (`kind:id`). */
+    pinKey: string
+    label: string
+    routed: boolean
     touchedAt: number
   }>()
 
@@ -70,14 +73,36 @@ export class MultiProviderModelClient implements ModelClient {
 
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
     const providerId = request.providerId?.trim().toLowerCase() || 'default'
+    const selection = request.routeSelection
+    // A declared routing selection pins the turn to the *selection*, not to
+    // the first resolved provider, so an explicit route-pool/account-group
+    // failover is allowed while a silent provider switch still throws.
+    const pinKey = selection
+      ? `${selection.kind}:${selection.id}`.toLowerCase()
+      : `provider:${providerId}`
+    const label = selection ? pinKey : providerId
     const pinned = this.turnPins.get(request.turnId)
-    if (pinned && pinned.providerId !== providerId) {
+    if (pinned && pinned.pinKey !== pinKey) {
       throw new Error(
-        `model provider changed within turn ${request.turnId}: ${pinned.providerId} -> ${providerId}`
+        `model provider changed within turn ${request.turnId}: ${pinned.label} -> ${label}`
       )
     }
-    const client = pinned?.client ?? this.resolve(request.providerId)
-    this.turnPins.set(request.turnId, { client, providerId, touchedAt: Date.now() })
+    if (selection && selection.targetProviderId?.trim().toLowerCase() !== providerId) {
+      throw new Error(
+        `route selection ${pinKey} target mismatch within turn ${request.turnId}: ` +
+        `${selection.targetProviderId ?? ''} != ${providerId}`
+      )
+    }
+    // Routed requests re-resolve per attempt because each failover target is
+    // a different provider client; unrouted requests keep the pinned client.
+    const client = pinned && !selection ? pinned.client : this.resolve(request.providerId)
+    this.turnPins.set(request.turnId, {
+      client,
+      pinKey,
+      label,
+      routed: Boolean(selection),
+      touchedAt: Date.now()
+    })
     this.pruneTurnPins()
     return client.stream(request)
   }

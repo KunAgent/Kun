@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/core'
+import type { JSONContent } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import { parseWriteMarkdown } from './markdown-manager'
 import { writeRichExternalSyncMeta } from './extensions/term-propagation'
@@ -64,10 +65,28 @@ export function computeBlockSyncReplacement(
  *
  * Returns false when the snapshot cannot be parsed into the schema.
  */
-export function applyExternalMarkdownToEditor(editor: Editor, markdown: string): boolean {
+export function applyExternalMarkdownToEditor(
+  editor: Editor,
+  markdown: string,
+  parse: (markdown: string) => JSONContent = parseWriteMarkdown
+): boolean {
+  let parsed: JSONContent
+  try {
+    parsed = parse(markdown)
+  } catch {
+    return false
+  }
+  return applyParsedDocToEditor(editor, parsed)
+}
+
+/**
+ * Same minimal-replacement apply as {@link applyExternalMarkdownToEditor}
+ * for a doc that was already parsed — e.g. off-thread in the parse worker.
+ */
+export function applyParsedDocToEditor(editor: Editor, docJson: JSONContent): boolean {
   let nextDoc: PMNode
   try {
-    nextDoc = editor.schema.nodeFromJSON(parseWriteMarkdown(markdown))
+    nextDoc = editor.schema.nodeFromJSON(docJson)
   } catch {
     return false
   }

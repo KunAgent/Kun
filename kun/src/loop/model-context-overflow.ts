@@ -13,7 +13,13 @@ const CONTEXT_OVERFLOW_PATTERNS = [
   /(?:prompt|input).{0,80}too (?:large|long)/iu,
   /too many (?:input )?tokens/iu,
   /reduce (?:the )?(?:length|number) of (?:the )?(?:messages|prompt|input)/iu,
-  /token limit.{0,40}(?:exceed|overflow)/iu
+  /token limit.{0,40}(?:exceed|overflow)/iu,
+  // Provider-specific variants: "exceeded model token limit: 262144"
+  // (Kimi) and Chinese input/context length rejections.
+  /exceed(?:ed|s)?.{0,40}(?:context|token limit|input|prompt)/iu,
+  /(?:context|input|prompt).{0,40}(?:token )?(?:limit|maximum|too (?:large|long))/iu,
+  /(?:输入|上下文|对话|消息|内容).{0,20}(?:长度|字数)?.{0,10}(?:超过|超出)/u,
+  /超过.{0,20}(?:上下文|输入|模型.{0,6}上限|最大长度)/u
 ]
 
 export class ModelContextOverflowError extends Error {

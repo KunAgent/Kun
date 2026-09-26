@@ -108,12 +108,12 @@ describe('useWriteEditorGroupFileWatches', () => {
         groups: [
           {
             id: 'primary',
-            tabs: [{ path: '/work/shared.md', viewMode: 'live' }],
+            tabs: [{ path: '/work/shared.md', viewMode: 'rich' }],
             activePath: '/work/shared.md'
           },
           {
             id: 'secondary',
-            tabs: [{ path: '/work/shared.md', viewMode: 'preview' }],
+            tabs: [{ path: '/work/shared.md', viewMode: 'plain' }],
             activePath: '/work/shared.md'
           }
         ]
@@ -184,7 +184,7 @@ describe('useWriteEditorGroupFileWatches', () => {
         focusedGroupId: 'primary',
         groups: [{
           id: 'primary',
-          tabs: [{ path: '/work/app.ts', viewMode: 'source' }],
+          tabs: [{ path: '/work/app.ts', viewMode: 'plain' }],
           activePath: '/work/app.ts'
         }]
       }

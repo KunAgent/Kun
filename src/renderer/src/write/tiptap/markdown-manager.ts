@@ -1,22 +1,25 @@
 import {
+  getSchema,
   textblockTypeInputRule,
   type AnyExtension,
-  type JSONContent
+  type JSONContent,
+  type MarkdownTokenizer
 } from '@tiptap/core'
 import { MarkdownManager } from '@tiptap/markdown'
 import { StarterKit } from '@tiptap/starter-kit'
 import { TableKit } from '@tiptap/extension-table'
-import { TaskItem, TaskList } from '@tiptap/extension-list'
+import { OrderedList, TaskItem, TaskList } from '@tiptap/extension-list'
 import { CodeBlock, tildeInputRegex } from '@tiptap/extension-code-block'
 import { Plugin, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
+import type { Schema } from '@tiptap/pm/model'
+import { createHighlightPlugin } from 'prosemirror-highlight'
 import { WriteLocalImage } from './local-image'
+import { buildWorkConstructExtensions } from './nodes'
+import { createCodeBlockNodeView } from './nodes/code-block-view'
+import { codeHighlightParser } from './code-highlight'
 
-export type WriteRichFidelity =
-  | { eligible: true; normalized: string }
-  | { eligible: false; reason: 'parse-error' | 'unstable' | 'text-loss'; detail?: string }
-
-// Rich mode refuses documents above this size; CodeMirror handles them better
-// and the open-time fidelity audit below would get expensive.
+// Documents above this size open in the plain-text editor; CodeMirror handles
+// them better and the document parse would get expensive (§8.2).
 export const WRITE_RICH_MAX_CHARS = 300_000
 export const WRITE_BACKTICK_FENCE_INPUT_REGEX = /^(`{3,})([A-Za-z0-9_+#.-]+)?[\s\n]$/
 
@@ -65,6 +68,14 @@ export const WriteCodeBlock = CodeBlock.extend({
       writeFenceLength: {
         default: 3,
         rendered: false
+      },
+      fenceChar: {
+        default: '`',
+        rendered: false
+      },
+      meta: {
+        default: null,
+        rendered: false
       }
     }
   },
@@ -94,39 +105,144 @@ export const WriteCodeBlock = CodeBlock.extend({
     return [fence + language, code, fence].join('\n')
   },
 
+  addNodeView() {
+    return ({ node, editor, getPos }) =>
+      createCodeBlockNodeView(node, editor, getPos as () => number | undefined)
+  },
+
   addProseMirrorPlugins() {
-    return [...(this.parent?.() ?? []), new Plugin({
-      props: {
-        handleTextInput: (view, from, to, text) => {
-          const tr = closeWriteRichCodeFence(view.state, from, to, text)
-          if (!tr) return false
-          view.dispatch(tr)
-          return true
+    return [
+      ...(this.parent?.() ?? []),
+      new Plugin({
+        props: {
+          handleTextInput: (view, from, to, text) => {
+            const tr = closeWriteRichCodeFence(view.state, from, to, text)
+            if (!tr) return false
+            view.dispatch(tr)
+            return true
+          }
         }
-      }
-    })]
+      }),
+      createHighlightPlugin({
+        parser: codeHighlightParser,
+        nodeTypes: ['codeBlock'],
+        languageExtractor: (node) => {
+          const language = typeof node.attrs.language === 'string' ? node.attrs.language : ''
+          return language || undefined
+        }
+      })
+    ]
   }
 })
 
-export function buildWriteRichExtensions(): AnyExtension[] {
+/**
+ * marked calls every registered block tokenizer at every block boundary with
+ * the whole remaining document; the stock orderedList/taskList tokenizers
+ * then `src.split("\n")` the remainder, which is O(n^2) over the document.
+ * Both can only produce a token when the first relevant line is a list item,
+ * so a cheap guard skips the split entirely (byte-identical output).
+ * Note: `collectOrderedListItems` breaks on a non-matching first line, while
+ * `parseIndentedBlocks` (taskList) skips leading blank lines first — so the
+ * guards differ: strict first line vs. first non-blank line.
+ */
+function guardFirstLine(
+  tokenizer: MarkdownTokenizer,
+  itemLine: RegExp,
+  skipBlankLines: boolean
+): MarkdownTokenizer {
+  return {
+    ...tokenizer,
+    tokenize(src, tokens, lexer) {
+      let offset = 0
+      let line = ''
+      while (true) {
+        const newline = src.indexOf('\n', offset)
+        line = newline < 0 ? src.slice(offset) : src.slice(offset, newline)
+        if (line.trim() !== '' || !skipBlankLines || newline < 0) break
+        offset = newline + 1
+      }
+      // All-blank input delegates to the original so edge behavior is kept.
+      if (line.trim() !== '' && !itemLine.test(line)) return undefined
+      return tokenizer.tokenize(src, tokens, lexer)
+    }
+  }
+}
+
+export const WriteOrderedList = OrderedList.extend({
+  markdownTokenizer: guardFirstLine(
+    OrderedList.config.markdownTokenizer!,
+    /^(\s*)(\d+)\.\s+/,
+    false
+  ),
+
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      tight: { default: true, rendered: false }
+    }
+  }
+})
+
+export const WriteTaskList = TaskList.extend({
+  markdownTokenizer: guardFirstLine(
+    TaskList.config.markdownTokenizer!,
+    /^(\s*)([-+*])\s+\[([ xX])\]\s+/,
+    true
+  ),
+
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      tight: { default: true, rendered: false }
+    }
+  }
+})
+
+export type WriteRichRuntimeOptions = {
+  /** Configured WriteLocalImage instance (the base schema uses the plain one). */
+  image?: AnyExtension
+  /** Runtime-only extensions: inline completion, paste image, shortcuts, badges. */
+  extra?: AnyExtension[]
+  /** Current file path — raw-block previews resolve relative images with it. */
+  getFilePath?: () => string
+}
+
+export function buildWriteRichExtensions(runtime?: WriteRichRuntimeOptions): AnyExtension[] {
   return [
     StarterKit.configure({
-      link: { openOnClick: false },
+      link: false,
+      bulletList: false,
       codeBlock: false,
+      orderedList: false,
       // The rich editor manages undo depth like the CodeMirror history()
       undoRedo: { depth: 200 }
     }),
     TableKit.configure({
-      table: { resizable: false }
+      table: { resizable: false },
+      tableHeader: false,
+      tableCell: false
     }),
-    TaskList,
+    WriteOrderedList,
+    WriteTaskList,
     TaskItem.configure({ nested: true }),
     WriteCodeBlock,
-    WriteLocalImage
+    ...buildWorkConstructExtensions({ getFilePath: runtime?.getFilePath }),
+    runtime?.image ?? WriteLocalImage,
+    ...(runtime?.extra ?? [])
   ]
 }
 
 let sharedManager: MarkdownManager | null = null
+let sharedSchema: Schema | null = null
+
+/**
+ * Schema built from the base extension set — used to validate converted
+ * blocks before an Editor exists (parse path sanitizes to raw blocks).
+ */
+export function workCodecSchema(): Schema {
+  if (!sharedSchema) sharedSchema = getSchema(buildWriteRichExtensions())
+  return sharedSchema
+}
 
 export function getWriteMarkdownManager(): MarkdownManager {
   if (!sharedManager) {
@@ -146,52 +262,3 @@ export function serializeWriteMarkdown(doc: JSONContent): string {
   return getWriteMarkdownManager().serialize(doc)
 }
 
-function collectPlainText(node: JSONContent | undefined, acc: string[]): string[] {
-  if (!node) return acc
-  if (node.type === 'text' && node.text) acc.push(node.text)
-  if (Array.isArray(node.content)) {
-    for (const child of node.content) collectPlainText(child, acc)
-  }
-  return acc
-}
-
-function normalizedPlainText(doc: JSONContent): string {
-  return collectPlainText(doc, []).join(' ').replace(/\s+/g, ' ').trim()
-}
-
-/**
- * Open-time gate for the rich editor. A document is eligible only when the
- * markdown round-trip is idempotent after one pass and loses no plain text;
- * everything else (hard-wrapped list continuations, raw HTML blocks, syntax
- * the schema cannot represent) stays in the CodeMirror editor so the file on
- * disk is never silently rewritten.
- */
-export function auditWriteMarkdownFidelity(markdown: string): WriteRichFidelity {
-  if (markdown.length > WRITE_RICH_MAX_CHARS) {
-    return { eligible: false, reason: 'text-loss', detail: 'document too large for rich mode' }
-  }
-  const manager = getWriteMarkdownManager()
-  let firstDoc: JSONContent
-  let firstPass: string
-  let secondPass: string
-  let secondDoc: JSONContent
-  try {
-    firstDoc = manager.parse(markdown)
-    firstPass = manager.serialize(firstDoc)
-    secondDoc = manager.parse(firstPass)
-    secondPass = manager.serialize(secondDoc)
-  } catch (error) {
-    return {
-      eligible: false,
-      reason: 'parse-error',
-      detail: error instanceof Error ? error.message : String(error)
-    }
-  }
-  if (firstPass !== secondPass) {
-    return { eligible: false, reason: 'unstable' }
-  }
-  if (normalizedPlainText(firstDoc) !== normalizedPlainText(secondDoc)) {
-    return { eligible: false, reason: 'text-loss' }
-  }
-  return { eligible: true, normalized: firstPass }
-}

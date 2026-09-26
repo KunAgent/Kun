@@ -50,7 +50,7 @@ describe('WriteAssistantPanel presentation view', () => {
       },
       editorLayout: {
         version: 1, orientation: 'single', ratio: 0.5, focusedGroupId: 'primary',
-        groups: [{ id: 'primary', activePath: path, tabs: [{ path, viewMode: 'preview' }] }]
+        groups: [{ id: 'primary', activePath: path, tabs: [{ path, viewMode: 'rich' }] }]
       },
       presentationViewByGroup: {
         primary: {

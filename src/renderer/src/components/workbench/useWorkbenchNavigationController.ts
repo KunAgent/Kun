@@ -7,6 +7,9 @@ import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
 import { requestCodeCanvasPanelOpen } from '../../lib/code-canvas-panel-event'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { usePaperStore } from '../../write/paper/paper-store'
+import { paperModeView } from '../../paper/paper-view'
+import { paperConversationResourcePath } from '../../paper/paper-conversation-scope'
 import type { SddDraft } from '../../sdd/sdd-draft-store'
 import { useSddDraftStore } from '../../sdd/sdd-draft-store'
 import { markSddAssistantThread } from '../../sdd/sdd-thread-registry'
@@ -20,6 +23,7 @@ import { formatWorkspacePickerError } from '../../lib/format-workspace-picker-er
 import { normalizeWorkspaceRoot, workspaceRootScopeKey } from '../../lib/workspace-path'
 import type { RightPanelMode } from '../chat/WorkbenchTopBar'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
+import { activateThreadTurnTarget, prepareThreadTurnTarget, useThreadTurnTarget } from '../chat/thread-turn-target'
 import {
   workbenchTaskIntentScope,
   writeWorkbenchTaskIntent,
@@ -77,7 +81,7 @@ export type WorkbenchNavigationController = {
   openBoardView: () => void
   openExtensionsView: () => void
   openScheduleView: () => void
-  openThread: (id: string) => void
+  openThread: (id: string, turnId?: string) => Promise<void>
   openWorkflowView: () => void
   openWriteMode: () => void
   pickWriteAssistantWorkspace: () => Promise<void>
@@ -185,11 +189,24 @@ export function useWorkbenchNavigationController({
     return 'chat'
   }, [pluginHostRoute, route])
 
-  const openThread = useCallback((id: string): void => {
+  const openThread = useCallback((id: string, turnId?: string): Promise<void> => {
     const requestId = beginNavigation()
     const isCurrentRequest = (): boolean => navigationIsCurrent(requestId)
     setConnectPhoneSidebarOpen(false)
-    void (async () => {
+    return (async () => {
+      if (turnId) {
+        const detail = await prepareThreadTurnTarget(id, turnId)
+        if (!isCurrentRequest()) return
+        if (useSddDraftStore.getState().activeDraft) dismissActiveSddDraft({ closeAssistant: true })
+        await selectThread(id, { selectionGuard: isCurrentRequest })
+        if (!isCurrentRequest()) return
+        const selected = useChatStore.getState()
+        if (selected.activeThreadId !== id || selected.error) throw new Error(selected.error ?? 'Requested thread is unavailable')
+        activateThreadTurnTarget(id, turnId, detail)
+        setRoute('chat')
+        return
+      }
+      useThreadTurnTarget.setState({ target: null })
       const thread = threads.find((item) => item.id === id) ?? null
       const designRegistry = readDesignThreadRegistry()
       if (isWorkbenchDesignThread(id, thread, designRegistry)) {
@@ -535,9 +552,19 @@ export function useWorkbenchNavigationController({
     // identity (or create an unrelated Write task with no board to own it).
     if (activeBoard?.workflowId) return
     const writeWorkspaceScope = workspaceRootScopeKey(writeWorkspaceRoot)
+    const conversationResource = writeState.workSurface === 'papers'
+      ? paperConversationResourcePath({
+          surface: writeState.workSurface,
+          workspaceRoot: writeWorkspaceRoot,
+          activeFilePath: writeState.activeFilePath,
+          unitDirs: Object.keys(usePaperStore.getState().unitsByDir),
+          entriesByDir: writeState.entriesByDir,
+          view: paperModeView(writeState)
+        }) ?? ''
+      : writeState.activeFilePath ?? undefined
     void createWriteThread(
       writeWorkspaceRoot,
-      writeState.activeFilePath ?? undefined,
+      conversationResource,
       activeBoard
         ? { title: activeBoard.title, titleAuto: false }
         : undefined

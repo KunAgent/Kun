@@ -3,6 +3,7 @@
  * This is the only place that touches the SDK package and kun's concrete stores,
  * keeping the orchestration (and its tests) free of both.
  */
+import { historyReferenceInstructions } from '../../prompt/history-reference-context.js'
 import {
   AgentSdkCredentialUnavailableError,
   AgentSdkRuntime,
@@ -31,6 +32,7 @@ import type { SessionStore } from '../../ports/session-store.js'
 import type { ThreadStore } from '../../ports/thread-store.js'
 import type { CapabilityRegistry } from '../../adapters/tool/capability-registry.js'
 import type { ToolHost, ToolHostContext } from '../../ports/tool-host.js'
+import { applyRoomToolPolicy, mergeRoomDeniedIds } from '../../loop/room-turn-policy.js'
 import {
   DEFAULT_APPROVAL_REVIEWER,
   DEFAULT_SANDBOX_MODE,
@@ -43,11 +45,12 @@ import type { AttachmentStore } from '../../attachments/attachment-store.js'
 import type { SkillRuntime } from '../../skills/skill-runtime.js'
 import type { InstructionRuntime } from '../../instructions/instruction-runtime.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
-import { DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT } from '../../memory/memory-retrieval.js'
+import { resolveMemoryTurnContext } from '../../memory/memory-turn-context.js'
+import { memoryInjectionMetadata } from '../../loop/model-step-preparation-memory.js'
+import { recordRetrieved } from '../../memory/memory-retrieval-feedback.js'
 import {
   PLAN_MODE_INSTRUCTION,
   todoContinuationInstruction,
-  memoryInstructions,
   isStalePlanContext
 } from '../../loop/agent-loop.js'
 import {
@@ -88,7 +91,7 @@ import type { TurnLimitsConfig } from '../../loop/turn-limits.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
 import { mkdir } from 'node:fs/promises'
 import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
-import { buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.js'
+import { buildAdditionalWorkspacesInstruction, buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.js'
 import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
 import {
   delegatedCapabilityFingerprint,
@@ -216,18 +219,20 @@ export function createAgentSdkTurnRuntimeDeps(
       const token = normalizeClaudeOAuthToken(rawToken)
       // Resolve skills before listing bridgeable tools so the SDK sees the
       // same per-turn catalog as the native Kun loop.
-      const skillResolution = deps.skillRuntime
+      const roomSkillsDisabled = thread.roomContext?.skillsEnabled === false
+      const blockedSkillIds = mergeRoomDeniedIds(
+        deps.toolContextBoundary?.blockedSkillIds,
+        thread.roomContext?.blockedSkillIds
+      )
+      const allowedSkillIds = roomSkillsDisabled ? [] : deps.toolContextBoundary?.allowedSkillIds
+      const skillResolution = !roomSkillsDisabled && deps.skillRuntime
         ? await deps.skillRuntime.resolveTurn({
             prompt: userText,
             workspace: thread.workspace,
             threadId,
             turnId,
-            ...(deps.toolContextBoundary?.allowedSkillIds
-              ? { allowedSkillIds: deps.toolContextBoundary.allowedSkillIds }
-              : {}),
-            ...(deps.toolContextBoundary?.blockedSkillIds
-              ? { blockedSkillIds: deps.toolContextBoundary.blockedSkillIds }
-              : {})
+            ...(allowedSkillIds ? { allowedSkillIds } : {}),
+            ...(blockedSkillIds.length ? { blockedSkillIds } : {})
           })
         : undefined
       const activeSkillIds = skillResolution?.activeSkillIds ?? []
@@ -271,17 +276,18 @@ export function createAgentSdkTurnRuntimeDeps(
       // by skills visible in this workspace; executeKunTool still re-resolves
       // the real active ids for every call, so schema visibility is not
       // execution authority.
-      const availableSkillIds = typeof deps.skillRuntime?.availableSkillIdsForWorkspace === 'function'
+      const availableSkillIds = !roomSkillsDisabled && typeof deps.skillRuntime?.availableSkillIdsForWorkspace === 'function'
         ? await deps.skillRuntime.availableSkillIdsForWorkspace(
             thread.workspace,
-            deps.toolContextBoundary?.blockedSkillIds,
-            deps.toolContextBoundary?.allowedSkillIds
+            blockedSkillIds,
+            allowedSkillIds
           )
         : activeSkillIds
       const listingOptions = {
         additionalWorkspaces: thread.additionalWorkspaces,
         ...plan,
         ...(turn?.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+        ...(turn?.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
         ...(turn?.guiDesignMode ? { guiDesignMode: true } : {}),
         ...(turn?.guiDesignArtifact ? { guiDesignArtifact: turn.guiDesignArtifact } : {}),
         activeSkillIds: [...new Set([...activeSkillIds, ...availableSkillIds])],
@@ -328,7 +334,9 @@ export function createAgentSdkTurnRuntimeDeps(
             }
           : {})
       })
-      const bridgeableTools: BridgeableTool[] = deps.registry.listTools(bridgeListingContext).map((spec) => ({
+      const bridgeableTools: BridgeableTool[] = deps.registry.listTools(
+        thread.roomContext ? applyRoomToolPolicy(bridgeListingContext, thread) : bridgeListingContext
+      ).map((spec) => ({
         name: spec.name,
         description: spec.description,
         inputSchema: spec.inputSchema,
@@ -337,7 +345,7 @@ export function createAgentSdkTurnRuntimeDeps(
       }))
       const bridgedTools = selectBridgeableTools(
         bridgeableTools,
-        graphPolicy || plan.planMode || managedPptScope ? { overlap: new Set() } : undefined
+        graphPolicy || thread.roomContext || plan.planMode || managedPptScope ? { overlap: new Set() } : undefined
       )
 
       // This is the portable rebase handoff. Compatible consecutive turns use
@@ -358,32 +366,38 @@ export function createAgentSdkTurnRuntimeDeps(
         ? await deps.instructionRuntime.resolveTurn({ workspace: thread.workspace })
         : undefined
 
-      let memoryBlocks: string[] = []
-      if (deps.memoryStore && userText.trim()) {
-        const memories = await deps.memoryStore.retrieve({
-          query: userText,
-          workspace: thread.workspace,
-          limit: DEFAULT_MEMORY_RETRIEVAL_CANDIDATE_LIMIT
-        })
-        deps.memoryStore.setLastInjected(memories.map((memory) => memory.id))
-        memoryBlocks = memoryInstructions(memories)
-      }
+      // Directives are injected on every turn — including empty-prompt
+      // continuations — while reference memories stay relevance-gated. Rooms
+      // keep the memory-free boundary.
+      const memoryContext = await resolveMemoryTurnContext(
+        thread.roomContext ? undefined : deps.memoryStore,
+        { query: userText, workspace: thread.workspace }
+      )
+      const directiveBlocks = memoryContext.directiveBlocks
+      const memoryBlocks = memoryContext.referenceBlocks
+      const memoryIds = memoryContext.memories.map((memory) => memory.id)
 
       const todoInstruction = planMode ? null : todoContinuationInstruction(thread.todos)
-      if (instructionResolution) {
+      if (instructionResolution || memoryContext.memories.length > 0 || memoryContext.directives.length > 0) {
         await deps.turns.updateTurnMetadata(threadId, turnId, {
-          injectedInstructionSources: instructionResolution.sources,
-          instructionInjectionBytes: instructionResolution.injectedBytes
+          ...memoryInjectionMetadata({
+            memories: memoryContext.memories,
+            directives: memoryContext.directives
+          }),
+          ...(instructionResolution ? {
+            injectedInstructionSources: instructionResolution.sources,
+            instructionInjectionBytes: instructionResolution.injectedBytes
+          } : {})
         })
       }
 
+      const additionalWorkspacesInstruction = buildAdditionalWorkspacesInstruction(thread.additionalWorkspaces)
       const contextInstructions = managedPptScope ? [
         ...turnDynamicContext.instructions
       ] : [
+        ...historyReferenceInstructions(thread),
         buildClientSurfaceInstruction(clientSurface),
-        ...(thread.additionalWorkspaces?.length
-          ? [`Additional workspace roots explicitly added by the user:\n${thread.additionalWorkspaces.map((path) => `- ${JSON.stringify(path)}`).join('\n')}`]
-          : []),
+        ...(additionalWorkspacesInstruction ? [additionalWorkspacesInstruction] : []),
         ...(graphPolicy ? [graphPolicy.instruction] : []),
         ...(planMode ? [PLAN_MODE_INSTRUCTION] : []),
         ...(turn?.guiDesignArtifact?.kind === 'svg'
@@ -393,6 +407,7 @@ export function createAgentSdkTurnRuntimeDeps(
             : []),
         ...(instructionResolution?.instruction ? [instructionResolution.instruction] : []),
         ...(todoInstruction ? [todoInstruction] : []),
+        ...directiveBlocks,
         ...memoryBlocks,
         ...turnDynamicContext.instructions,
         ...(skillResolution?.catalogInstruction ? [skillResolution.catalogInstruction] : []),
@@ -424,7 +439,7 @@ export function createAgentSdkTurnRuntimeDeps(
               approvalReviewer,
               planMode,
               allowSdkBuiltins:
-                graphPolicy || planMode || turn?.guiDesignArtifact?.kind === 'svg'
+                graphPolicy || thread.roomContext || planMode || turn?.guiDesignArtifact?.kind === 'svg'
                   ? false
                   : deps.allowSdkBuiltins ?? true,
               capabilities: agentSdkCapabilities(),
@@ -448,6 +463,13 @@ export function createAgentSdkTurnRuntimeDeps(
         sessionGoalContextKeysByTurn.set(skillTurnKey(threadId, turnId), goalContextKeyForHistory)
       }
 
+      void recordRetrieved({
+        feedback: deps.memoryFeedback,
+        selectedIds: memoryIds,
+        threadId,
+        turnId,
+        occurredAt: turn.createdAt
+      })
       return {
         workspace: thread.workspace,
         additionalWorkspaces: thread.additionalWorkspaces,
@@ -462,10 +484,10 @@ export function createAgentSdkTurnRuntimeDeps(
         actingModelRoute,
         planMode,
         allowSdkBuiltins:
-          graphPolicy || planMode || turn?.guiDesignArtifact?.kind === 'svg'
+          graphPolicy || thread.roomContext || planMode || turn?.guiDesignArtifact?.kind === 'svg'
             ? false
             : deps.allowSdkBuiltins ?? true,
-        ...(graphPolicy || managedPptScope ? { bridgeKunBuiltinOverlaps: true } : {}),
+        ...(graphPolicy || thread.roomContext || managedPptScope ? { bridgeKunBuiltinOverlaps: true } : {}),
         ...(graphPolicy ? { graphPhase: graphPolicy.phase } : {}),
         ...(turn?.guiDesignArtifact?.kind === 'svg' ? { requireSvgCompletion: true } : {}),
         // Claude Code only accepts Anthropic models; coerce a thread's non-Claude

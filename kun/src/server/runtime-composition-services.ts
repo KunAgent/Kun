@@ -17,6 +17,7 @@ import {
   createTaskGraphTool,
   buildMcpToolProviders,
   buildMemoryToolProviders,
+  buildContextWindowToolProviders,
   KnowledgeBaseService,
   buildKnowledgeToolProvider,
   buildSkillToolProviders,
@@ -52,11 +53,13 @@ import type { createRuntimeModelComposition } from './runtime-composition-model.
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import {
   builtinToolOptionsForOptions,
+  contextWindowModeFor,
   skillsConfigForRuntime,
   toolOutputLimitsForOptions
 } from './runtime-factory-config.js'
 import {
   createPersistentAttachmentStore,
+  createPersistentMemoryFeedback,
   createPersistentMemoryStore,
   seedUsageCarryover
 } from './runtime-factory-storage.js'
@@ -158,6 +161,9 @@ export async function createRuntimeServices(
     dataDir: core.activeOptions.dataDir,
     snapshots: threadSnapshots,
     onCompacted: (threadId) => delegatedSessions.invalidate(threadId),
+    contextWindowModes: core.contextWindowModes,
+    contextWindows: core.contextWindows,
+    modelCapabilities,
     resolveGraphLeadRun,
     createGraphPlanningDraft: (input) => graphRuntime.createPlanningDraft(input),
 	    resolveGraphPlanningDraft: (input) => graphRuntime.resolvePlanningDraft(input),
@@ -287,6 +293,10 @@ export async function createRuntimeServices(
   })
   sessionStore.setEventIndexRebuildWake?.(() => backgroundMaintenance.wake())
   let memoryStore = createPersistentMemoryStore(core.activeOptions, nowIso)
+  let memoryFeedback = createPersistentMemoryFeedback(core.activeOptions, memoryStore)
+  await memoryFeedback?.ready().catch((error) => {
+    console.warn('[kun] memory feedback initialization failed:', error)
+  })
   const memoryDistillationPending = core.activeOptions.serviceManager
     ? new ManagerRemoteMemoryDistillationPendingStore(core.activeOptions.serviceManager)
     : new MemoryDistillationPendingStore({ dataDir: core.activeOptions.dataDir, nowIso })
@@ -319,6 +329,7 @@ export async function createRuntimeServices(
   })
 	  const migrationService = new RuntimeMigrationService({
 	    rootDir: join(core.activeOptions.dataDir, 'migrations', 'exports'),
+        historyReferences: core.historyReferences.store,
 	    threads: threadService,
 	    turns: turnService,
 	    sessions: sessionStore,
@@ -331,6 +342,7 @@ export async function createRuntimeServices(
 	  })
 	  const migrationImportService = new RuntimeMigrationImportService({
 	    rootDir: join(core.activeOptions.dataDir, 'migrations', 'imports'),
+        historyReferences: core.historyReferences.store,
 	    threadStore: rawThreadStore,
 	    sessionStore: rawSessionStore,
 	    maintenance: migrationMaintenance,
@@ -445,6 +457,11 @@ export async function createRuntimeServices(
     ...mcpProviders.providers,
     ...webProviders.providers,
     ...buildMemoryToolProviders(memoryStore),
+    ...buildContextWindowToolProviders({
+      service: core.contextWindows,
+      mode: contextWindowModeFor(core.contextWindowModes),
+      newContextTransition: (context, args) => core.contextWindowTransition.asToolTransition(context.model?.id)(context, args)
+    }),
     buildKnowledgeToolProvider(knowledgeBaseService),
     ...buildSkillToolProviders(skillRuntime),
     ...imageGenProviders.providers,
@@ -515,6 +532,8 @@ export async function createRuntimeServices(
     set attachmentStore(value: typeof attachmentStore) { attachmentStore = value },
     get memoryStore() { return memoryStore },
     set memoryStore(value: typeof memoryStore) { memoryStore = value },
+    get memoryFeedback() { return memoryFeedback },
+    set memoryFeedback(value: typeof memoryFeedback) { memoryFeedback = value },
     get webProviders() { return webProviders },
     set webProviders(value: typeof webProviders) { webProviders = value },
     get imageGenProviders() { return imageGenProviders },

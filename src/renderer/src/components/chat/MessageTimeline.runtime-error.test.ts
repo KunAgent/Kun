@@ -6,6 +6,7 @@ import {
   TimelineRuntimeError,
   timelineTurnAllowsRecoveryContinue
 } from './MessageTimeline'
+import { useChatStore } from '../../store/chat-store'
 
 describe('TimelineRuntimeError', () => {
   let renderer: ReactTestRenderer
@@ -125,6 +126,44 @@ describe('TimelineRuntimeError', () => {
     })
     await act(async () => button.props.onClick())
     expect(onContinue).toHaveBeenCalledOnce()
+  })
+
+  it('explains output truncation as a generation cap and offers continue plus settings', async () => {
+    const onContinue = vi.fn()
+    const openSettings = vi.fn()
+    const previousOpenSettings = useChatStore.getState().openSettings
+    useChatStore.setState({ openSettings })
+    try {
+      await act(async () => {
+        renderer = create(createElement(TimelineRuntimeError, {
+          block: {
+            kind: 'system',
+            id: 'error_output_truncated',
+            text: 'The model reached its maximum output length and the response was truncated.',
+            code: 'output_truncated',
+            severity: 'warning',
+            runtimeError: true
+          },
+          onContinue
+        }))
+      })
+
+      const message = renderer.root.findAllByType('p')[0]?.children.join('')
+      expect(message).toContain('output limit')
+      expect(message).toContain('not your account balance')
+      const continueButton = renderer.root.findByProps({
+        'data-testid': 'timeline-runtime-error-continue'
+      })
+      await act(async () => continueButton.props.onClick())
+      expect(onContinue).toHaveBeenCalledOnce()
+      const settingsButton = renderer.root.findByProps({
+        'data-testid': 'timeline-runtime-error-provider-settings'
+      })
+      await act(async () => settingsButton.props.onClick())
+      expect(openSettings).toHaveBeenCalledWith('providers')
+    } finally {
+      useChatStore.setState({ openSettings: previousOpenSettings })
+    }
   })
 
   it('hides the Continue fallback while another turn is running', async () => {

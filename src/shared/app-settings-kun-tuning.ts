@@ -237,6 +237,7 @@ export function normalizeKunContextCompactionSettings(
     // longer a user-selectable mode, so any stored value coerces to 'model' —
     // this self-heals stale 'heuristic' configs from the removed UI toggle.
     summaryMode: 'model',
+    windowModeEnabled: upgraded.windowModeEnabled === true,
     summaryTimeoutMs: boundedPositiveInt(upgraded.summaryTimeoutMs, defaults.summaryTimeoutMs, 120_000),
     summaryMaxTokens: boundedPositiveInt(upgraded.summaryMaxTokens, defaults.summaryMaxTokens, 16_000),
     summaryInputMaxBytes: boundedPositiveInt(upgraded.summaryInputMaxBytes, defaults.summaryInputMaxBytes, 8 * 1024 * 1024),

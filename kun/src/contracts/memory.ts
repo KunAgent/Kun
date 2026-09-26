@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AgentMemoryOwnershipSchema } from '../memory/agent-memory-scope.js'
 
 export const MEMORY_SCHEMA_VERSION = 2 as const
 export const MEMORY_MAX_SOURCES = 8
@@ -22,8 +23,11 @@ export const MemoryType = z.enum([
 ])
 export type MemoryType = z.infer<typeof MemoryType>
 
-export const MemoryAuthority = z.literal('reference')
+export const MemoryAuthority = z.enum(['reference', 'directive'])
 export type MemoryAuthority = z.infer<typeof MemoryAuthority>
+
+/** A directive is injected as a user-level instruction every turn, so it must stay short. */
+export const MEMORY_DIRECTIVE_MAX_CONTENT_CHARS = 1_000
 
 export const MemoryEvidenceKind = z.enum([
   'user',
@@ -68,6 +72,7 @@ export const MemoryProvenance = z.object({
 export type MemoryProvenance = z.infer<typeof MemoryProvenance>
 
 const MemoryRecordInput = z.object({
+  agentContext: AgentMemoryOwnershipSchema.optional(),
   id: z.string().min(1),
   content: z.string().min(1),
   scope: MemoryScope,
@@ -101,7 +106,7 @@ export const MemoryRecord = MemoryRecordInput.transform((record) => ({
   ...record,
   schemaVersion: MEMORY_SCHEMA_VERSION,
   type: record.type ?? inferLegacyMemoryType(record.tags),
-  authority: 'reference' as const,
+  authority: record.authority ?? 'reference',
   importance: record.importance ?? defaultImportance(record.provenance?.kind),
   observedAt: record.observedAt ?? validTimestamp(record.updatedAt, record.createdAt),
   sources: record.sources ?? legacyEvidence(record)
@@ -116,6 +121,7 @@ const MemorySourceEvidenceInputList = z.array(MemorySourceEvidenceInput)
   .superRefine(reportDuplicateSourceIds)
 
 export const MemoryCreateRequest = z.object({
+  agentContext: AgentMemoryOwnershipSchema.optional(),
   content: z.string().min(1),
   scope: MemoryScope.default('workspace'),
   workspace: z.string().optional(),
@@ -130,6 +136,7 @@ export const MemoryCreateRequest = z.object({
   tags: z.array(z.string()).default([]),
   confidence: z.number().min(0).max(1).optional(),
   type: MemoryType.optional(),
+  authority: MemoryAuthority.optional(),
   importance: z.number().min(0).max(1).optional(),
   observedAt: z.string().datetime().optional(),
   validFrom: z.string().datetime().optional(),
@@ -138,21 +145,26 @@ export const MemoryCreateRequest = z.object({
 }).strict()
   .superRefine(reportInvalidValidityInterval)
   .superRefine(reportConflictingExpiry)
+  .superRefine(reportMemoryDirectiveConstraints)
 export type MemoryCreateRequest = z.input<typeof MemoryCreateRequest>
 
 export const MemoryUpdateRequest = z.object({
+  agentContext: AgentMemoryOwnershipSchema.optional(),
   content: z.string().min(1).optional(),
   tags: z.array(z.string()).optional(),
   confidence: z.number().min(0).max(1).optional(),
   importance: z.number().min(0).max(1).optional(),
   type: MemoryType.optional(),
+  authority: MemoryAuthority.optional(),
   observedAt: z.string().datetime().optional(),
   validFrom: z.string().datetime().nullable().optional(),
   validTo: z.string().datetime().nullable().optional(),
   sources: MemorySourceEvidenceInputList.optional(),
   expiresAt: z.string().datetime().nullable().optional(),
   disabled: z.boolean().optional()
-}).strict().superRefine(reportInvalidValidityInterval)
+}).strict()
+  .superRefine(reportInvalidValidityInterval)
+  .superRefine(reportMemoryDirectiveConstraints)
 export type MemoryUpdateRequest = z.input<typeof MemoryUpdateRequest>
 
 export const MemoryFreshnessClass = z.enum(['fresh', 'recent', 'aging', 'stale'])
@@ -216,7 +228,25 @@ export const MemoryDiagnostics = z.object({
     remaining: z.number().int().nonnegative()
   }).strict().optional(),
   degradedReason: z.string().max(512).optional(),
-  lastRetrieval: MemoryRetrievalTrace.optional()
+  feedback: z.object({
+    enabled: z.boolean(),
+    state: z.enum(['disabled', 'ready', 'degraded']),
+    projection: z.enum(['missing', 'ready', 'rebuilding', 'degraded']),
+    eventCount: z.number().int().nonnegative(),
+    aggregateCount: z.number().int().nonnegative(),
+    duplicateCount: z.number().int().nonnegative(),
+    malformedCount: z.number().int().nonnegative(),
+    lastCheckpointAt: z.string().datetime().optional(),
+    degradedReason: z.string().max(512).optional()
+  }).strict().optional(),
+  lastRetrieval: MemoryRetrievalTrace.optional(),
+  directiveCount: z.number().int().nonnegative().optional(),
+  lastDirectiveInjection: z.object({
+    ids: z.array(z.string()).max(MEMORY_MAX_TRACE_RANKINGS),
+    excludedByBudget: z.array(z.string()).max(MEMORY_MAX_TRACE_RANKINGS),
+    truncatedIds: z.array(z.string()).max(MEMORY_MAX_TRACE_RANKINGS),
+    characters: z.number().int().nonnegative()
+  }).strict().optional()
 }).strict()
 export type MemoryDiagnostics = z.infer<typeof MemoryDiagnostics>
 
@@ -306,4 +336,41 @@ function reportConflictingExpiry(
     path: ['expiresAt'],
     message: 'memory ttlMs and expiresAt are mutually exclusive'
   })
+}
+
+/**
+ * Directives become user-authority prompt instructions, so their creation and
+ * promotion face stricter shape rules than ordinary reference memories.
+ */
+function reportMemoryDirectiveConstraints(
+  value: {
+    agentContext?: unknown
+    authority?: MemoryAuthority
+    content?: string
+    scope?: MemoryScope
+  },
+  context: z.RefinementCtx
+): void {
+  if (value.authority !== 'directive') return
+  if (value.agentContext) {
+    context.addIssue({
+      code: 'custom',
+      path: ['authority'],
+      message: 'agent-scoped memories cannot become directives'
+    })
+  }
+  if (value.scope !== undefined && value.scope === 'project') {
+    context.addIssue({
+      code: 'custom',
+      path: ['authority'],
+      message: 'project-scoped memories cannot become directives'
+    })
+  }
+  if (value.content !== undefined && value.content.length > MEMORY_DIRECTIVE_MAX_CONTENT_CHARS) {
+    context.addIssue({
+      code: 'custom',
+      path: ['content'],
+      message: `directive content must be at most ${MEMORY_DIRECTIVE_MAX_CONTENT_CHARS} characters`
+    })
+  }
 }

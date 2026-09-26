@@ -11,6 +11,9 @@ import type { RuntimeEvent } from '../contracts/events.js'
  */
 export type AgentSession = {
   threadId: string
+  /** Host-owned reference identity; never source message bodies. */
+  historyRefId?: string
+  workspace?: string
   turnId: string
   startedAt: string
   updatedAt: string

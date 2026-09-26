@@ -222,7 +222,8 @@ Kun 内置 DeepSeek V4 默认模型画像：
     "summaryMode": "model",
     "summaryTimeoutMs": 15000,
     "summaryMaxTokens": 2048,
-    "summaryInputMaxBytes": 98304
+    "summaryInputMaxBytes": 98304,
+    "windowModeEnabled": false
   }
 }
 ```
@@ -237,6 +238,13 @@ Kun 内置 DeepSeek V4 默认模型画像：
 - `summaryTimeoutMs`: 模型摘要调用超时时间。
 - `summaryMaxTokens`: 模型摘要输出 token 上限。
 - `summaryInputMaxBytes`: 摘要输入文本最大字节数。
+- `windowModeEnabled`: 默认 `false`。GUI 设置页 实验室 → 窗口式上下文 的
+  开关映射到这个字段。开启后自动上下文压力改用窗口策略：
+  模型保存笔记、按需检索历史并通过 `new_context` 无摘要切换上下文窗口，旧对话保持
+  完整可见；手动 `/compact` 仍走摘要并登记为窗口边界。模式在 turn 接纳时冻结，热更新
+  从下一 turn 生效；无法执行所需工具的模型路由会在接纳时直接报错。关闭后回退到现有
+  摘要压缩，从最后有效边界继续，摘要模型、阈值和尾部预算等参数全部保留。详见
+  [kun-architecture.md](kun-architecture.md) 的「窗口式上下文（实验性）」。
 
 ## Agent 配置写在哪里
 

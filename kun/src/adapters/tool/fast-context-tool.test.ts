@@ -162,6 +162,23 @@ describe('fast_context Fast Context provider', () => {
     expect(received?.systemPrompt).not.toContain('列目录')
   })
 
+  it('inherits host-wide reads instead of clamping Fast Context to the workspace', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'fast-context-host-read-'))
+    let received: Record<string, unknown> | undefined
+    const runtime = makeRuntime(dir, async (input) => {
+      received = { ...input, signal: undefined }
+      return { summary: 'Task 1: first', evidencePack: evidencePack(input.fastContextTasks ?? []) }
+    })
+    const tool = buildFastContextToolProvider(runtime, () => ({ enabled: true }))[0]!.tools[0]!
+    await tool.execute({ tasks: tasks(1) }, { ...baseContext, allowHostReads: true })
+    expect(received?.security).toMatchObject({
+      sandboxRoot: '/workspace',
+      allowHostReads: true
+    })
+    expect((received?.security as { allowedReadPaths?: string[] } | undefined)?.allowedReadPaths)
+      .toBeUndefined()
+  })
+
   it('starts exactly one retrieval child for every accepted batch size', async () => {
     dir = await mkdtemp(join(tmpdir(), 'fast-context-tool-'))
     const childTaskCounts: number[] = []

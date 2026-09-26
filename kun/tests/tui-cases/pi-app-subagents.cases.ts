@@ -137,7 +137,8 @@ function modelSnapshot(): ModelConnectionSnapshot {
       }
     ],
     defaultProviderId: 'deepseek', defaultAccountId: 'account:deepseek', defaultModel: 'deepseek-v4-pro',
-    proxy: { enabled: false, url: '' }, routePools: [], localModelGateway: { enabled: false }
+    proxy: { enabled: false, url: '' }, routePools: [], localModelGateway: { enabled: false, exposeProviderModels: false },
+    failover: [],
   }
 }
 
@@ -170,6 +171,8 @@ function renderAssistantMessage(text: string, width: number, running = false): s
     activeSkillIds: [],
     injectedMemoryIds: [],
     injectedMemorySummaries: [],
+    injectedDirectiveIds: [],
+    injectedDirectiveSummaries: [],
     injectedInstructionSources: []
   }]
   const transcript = new TranscriptComponent()
@@ -203,6 +206,8 @@ describe("PiTuiApplication subagent rendering and controls", () => {
         toolKind: 'tool_call', arguments: { label: 'Inspect streaming', prompt: 'Find the TUI event bug' },
         summary: 'Inspect streaming'
       }], attachmentIds: [], activeSkillIds: [], injectedMemoryIds: [], injectedMemorySummaries: [],
+      injectedDirectiveIds: [],
+      injectedDirectiveSummaries: [],
       injectedInstructionSources: []
     }]
     let onEvent: ((event: RuntimeEvent) => void) | undefined
@@ -338,6 +343,8 @@ describe("PiTuiApplication subagent rendering and controls", () => {
         id: 'user_parent', threadId: parent.id, turnId: 'turn_parent', role: 'user', status: 'completed',
         createdAt: parent.createdAt, kind: 'user_message', text: 'Delegate this'
       }], attachmentIds: [], activeSkillIds: [], injectedMemoryIds: [], injectedMemorySummaries: [],
+      injectedDirectiveIds: [],
+      injectedDirectiveSummaries: [],
       injectedInstructionSources: []
     }]
     const child: ThreadDetail = {
@@ -354,6 +361,8 @@ describe("PiTuiApplication subagent rendering and controls", () => {
           id: 'reason_child', threadId: 'child_1', turnId: 'turn_child', role: 'assistant', status: 'running',
           createdAt: parent.createdAt, kind: 'assistant_reasoning', text: 'private child reasoning'
         }], attachmentIds: [], activeSkillIds: [], injectedMemoryIds: [], injectedMemorySummaries: [],
+        injectedDirectiveIds: [],
+        injectedDirectiveSummaries: [],
         injectedInstructionSources: []
       }]
     }

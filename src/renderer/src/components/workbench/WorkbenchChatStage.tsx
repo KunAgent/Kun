@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next'
 import type { ChatBlock, RuntimeConnectionStatus } from '../../agent/types'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { FloatingComposer } from '../chat/FloatingComposer'
+import { ChatFindBar } from '../chat/ChatFindBar'
 import { ConversationFileDropZone } from '../chat/ConversationFileDropZone'
 import { LazyMessageTimeline } from '../chat/LazyMessageTimeline'
 import { ThreadHydrationLoading } from '../chat/ThreadHydrationLoading'
@@ -32,7 +33,7 @@ import type { PlanBuildOrchestration } from '../../plan/plan-build'
 import type { GuiPlanToolMeta } from '../../plan/plan-tool'
 import { useChatStore } from '../../store/chat-store'
 import { hasLivePendingUserInput } from '../../store/chat-store-runtime-helpers'
-import { shouldUseEmptyTaskLayout } from './workbench-chat-layout'
+import { isActiveThreadRefreshing, shouldUseEmptyTaskLayout } from './workbench-chat-layout'
 import { CircleHelp, Loader2 } from 'lucide-react'
 import type {
   GeneratedDocumentArtifact,
@@ -96,6 +97,8 @@ export type WorkbenchChatStageProps = {
   onToggleRightWorkspace: () => void
   onOpenCommandPalette?: () => void
   onOpenRequirementDraft?: () => void
+  /** Remote-mobile only: opens the bottom-sheet version of the right rail. */
+  onOpenMobileRail?: () => void
   extensionTopBarActions?: readonly RegisteredContribution<'actions.topBar'>[]
   extensionComposerActions?: readonly RegisteredContribution<'actions.composer'>[]
   extensionMessageActions?: readonly RegisteredContribution<'actions.message'>[]
@@ -161,6 +164,7 @@ export function WorkbenchChatStage({
   onToggleRightWorkspace,
   onOpenCommandPalette,
   onOpenRequirementDraft,
+  onOpenMobileRail,
   extensionTopBarActions = [],
   extensionComposerActions = [],
   extensionMessageActions = [],
@@ -281,7 +285,7 @@ export function WorkbenchChatStage({
                   compact
                 />
               ) : null}
-              {threadRefreshingId === activeThreadId ? (
+              {isActiveThreadRefreshing(threadRefreshingId, activeThreadId) ? (
                 <span
                   className="inline-flex shrink-0 items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground"
                   role="status"
@@ -309,6 +313,7 @@ export function WorkbenchChatStage({
                 rightWorkspaceExpanded={rightWorkspaceExpanded}
                 onToggleRightWorkspace={onToggleRightWorkspace}
                 onOpenCommandPalette={onOpenCommandPalette}
+                onOpenMobileRail={onOpenMobileRail}
               />
             </div>
           </div>
@@ -324,6 +329,7 @@ export function WorkbenchChatStage({
               : ''
           }`}
         >
+          <ChatFindBar activeThreadId={activeThreadId} blocks={blocks} />
           <ConversationFileDropZone
             className={`${trajectoryOpen ? 'hidden' : 'flex'} min-h-0 min-w-0 flex-col ${emptyTaskLayout ? 'flex-none' : 'flex-1'}`}
             options={conversationFileDropOptions}

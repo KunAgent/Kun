@@ -38,6 +38,8 @@
     "providerNameAria": "リレープロバイダー名",
     "providerDesc": "1 つのプロバイダーが複数のパブリック モデルを提供し、それぞれが独立したルート ターゲットと負荷戦略を備えています。",
     "enableLocalApi": "ローカル API を有効にする",
+    "exposeProviderModels": "プロバイダーモデルを共有",
+    "exposeProviderModelsDesc": "オンにすると、ゲートウェイキーを持つローカルアプリが provider/model 形式で API キープロバイダーを呼び出し、そのクォータを消費できます。サブスクリプションと OAuth アカウントは公開されません。",
     "localOnlyNoAuth": "ローカルアクセスのみ・認証なし",
     "retrySave": "保存を再試行",
     "runtimeUnavailableHint": "ローカル設定は影響を受けず、Kun の起動時に自動的に同期されます。",

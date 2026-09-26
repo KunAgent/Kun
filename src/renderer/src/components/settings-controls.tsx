@@ -171,9 +171,11 @@ function SettingsTabList<T extends string>({
       className={
         secondary
           ? 'ds-settings-subtabs flex w-full min-w-0 items-center gap-1 overflow-x-auto rounded-full border border-ds-border-muted bg-ds-main/60 p-1'
-          : `ds-settings-tabs grid w-full grid-flow-col gap-1 overflow-x-auto rounded-full border border-ds-border bg-ds-main p-1 ${
-              contentSized ? 'auto-cols-max' : 'auto-cols-[minmax(8rem,1fr)]'
-            }`
+          : `ds-settings-tabs grid w-full ${
+              contentSized
+                ? 'grid-flow-row grid-cols-[repeat(auto-fit,minmax(9.5rem,max-content))] justify-start rounded-[22px]'
+                : 'grid-flow-col overflow-x-auto rounded-full auto-cols-[minmax(8rem,1fr)]'
+            } gap-1 border border-ds-border bg-ds-main p-1`
       }
     >
       {items.map((item, index) => {

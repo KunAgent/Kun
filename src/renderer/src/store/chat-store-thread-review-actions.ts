@@ -15,6 +15,7 @@ import {
   getDefaultThreadTitle,
   shouldAutoTitleThread
 } from '../lib/thread-title'
+import { currentCodeWorkspaceRoot } from './chat-store-current-workspace'
 import { filterThreadsForSidebar } from '../lib/thread-sidebar-visibility'
 import {
   enrichThreadsWithForkInfo,
@@ -199,7 +200,7 @@ export function createThreadReviewActions(
     try {
       if (!activeThreadId) {
         const settings = await rendererRuntimeClient.getSettings()
-        const workspaceRoot = normalizeWorkspaceRoot(settings.workspaceRoot)
+        const workspaceRoot = currentCodeWorkspaceRoot(get(), settings)
         if (!workspaceRoot) {
           set({ error: i18n.t('common:workspaceRequiredToCreateThread') })
           return false

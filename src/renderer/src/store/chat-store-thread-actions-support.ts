@@ -144,6 +144,7 @@ import { readDesignThreadRegistry } from '../design/design-thread-registry'
 import { readSddThreadRegistry } from '../sdd/sdd-thread-registry'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import { mergeChatBlocks } from '../agent/kun-mapper'
+import { orderSourceHistoryBlocks } from '../agent/source-history-order'
 
 const GUIDED_MESSAGE_RACE_WINDOW_MS = 5_000
 
@@ -190,12 +191,12 @@ export function prependOlderHistoryBlocks(
     const olderTool = block.kind === 'tool' ? olderTools.get(block.id) : undefined
     return olderTool ? mergeChatBlocks([olderTool, block])[0]! : block
   })
-  return [
+  return orderSourceHistoryBlocks([
     ...older.filter((block) => !currentIds.has(block.id)),
-    // Preserve the current page's order while enriching a result whose call
-    // item fell on the preceding page.
+    // Preserve native page order while enriching a result whose call item
+    // fell on the preceding page. Source items use their recorded ordinals.
     ...mergedCurrent
-  ]
+  ])
 }
 
 export type SseAbortRef = { current: AbortController | null }

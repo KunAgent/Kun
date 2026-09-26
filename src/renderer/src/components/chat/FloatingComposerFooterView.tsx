@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { summarizeThreadMoney } from '../../hooks/use-thread-usage'
+import { summarizeThreadMoney, type MoneySummaryItem } from '../../hooks/use-thread-usage'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 
 type AnimatedCacheValueState = {
@@ -42,6 +42,53 @@ function AnimatedCacheValue({ value }: { value: string }): ReactElement {
       <span key={state.revision} className="ds-composer-usage-cache-value-in">
         {state.current}
       </span>
+    </span>
+  )
+}
+
+function ComposerUsageMoneyMetric({
+  items,
+  t
+}: {
+  items: MoneySummaryItem[]
+  t: (key: string, values?: Record<string, unknown>) => string
+}): ReactElement | null {
+  const actual = items.find((item) => item.kind === 'actual')
+  const estimate = items.find((item) => item.kind === 'estimate')
+  if (!actual && !estimate) return null
+
+  const primary = actual ?? estimate
+  const secondary = actual && estimate ? estimate : null
+  const titleParts = [
+    actual
+      ? t('sessionUsageActualCostTitle', {
+          defaultValue: 'Estimated from published token prices, or the cost field in the provider response. Not a live billing sync from the DeepSeek console.'
+        })
+      : null,
+    estimate
+      ? t('sessionUsageEstimateTitle', {
+          defaultValue: 'Public API-price equivalent of subscription usage; not the plan charge, and not the metered API bill.'
+        })
+      : null,
+    estimate?.coverage === 'partial'
+      ? t('turnUsageEstimatePartial', { defaultValue: 'Partial estimate' })
+      : null
+  ].filter((part): part is string => Boolean(part))
+
+  return (
+    <span
+      className="ds-composer-usage-metric ds-composer-usage-money shrink-0 tabular-nums"
+      data-session-usage-estimate-partial={estimate?.coverage === 'partial' ? 'true' : undefined}
+      title={titleParts.join(' · ')}
+    >
+      {primary?.kind === 'estimate'
+        ? t('sessionUsageFooterEstimate', { value: primary.value, defaultValue: 'Plan value ≈{{value}}' })
+        : t('sessionUsageFooterActualCost', { value: primary!.value, defaultValue: 'API {{value}}' })}
+      {secondary ? (
+        <span className="ds-composer-usage-money-estimate">
+          {t('sessionUsageFooterEstimate', { value: secondary.value, defaultValue: 'Plan value ≈{{value}}' })}
+        </span>
+      ) : null}
     </span>
   )
 }
@@ -136,24 +183,9 @@ export function FloatingComposerFooterView({
                     })}
                   </span>
                 ) : null}
-                {moneyItems.length > 0 ? moneyItems.map((item) => (
-                  <span
-                    key={item.kind}
-                    className="ds-composer-usage-metric ds-composer-usage-money shrink-0 tabular-nums"
-                    title={item.kind === 'estimate'
-                      ? t('sessionUsageEstimateTitle', { defaultValue: 'Reference API-price estimate, not an actual subscription charge.' })
-                      : t('sessionUsageActualCostTitle', { defaultValue: 'Recorded API cost.' })}
-                  >
-                    {item.kind === 'estimate'
-                      ? t('sessionUsageFooterEstimate', { value: item.value, defaultValue: 'Estimate ≈{{value}}' })
-                      : t('sessionUsageFooterActualCost', { value: item.value, defaultValue: 'Cost {{value}}' })}
-                    {item.kind === 'estimate' && item.coverage === 'partial' ? (
-                      <span className="ml-1" data-session-usage-estimate-partial>
-                        · {t('turnUsageEstimatePartial', { defaultValue: 'Partial estimate' })}
-                      </span>
-                    ) : null}
-                  </span>
-                )) : threadUsage.totalTokens > 0 ? (
+                {moneyItems.length > 0 ? (
+                  <ComposerUsageMoneyMetric items={moneyItems} t={t} />
+                ) : threadUsage.totalTokens > 0 ? (
                   <span
                     className="ds-composer-usage-metric ds-composer-usage-money shrink-0"
                     title={t('sessionUsagePriceUnavailableTitle', {

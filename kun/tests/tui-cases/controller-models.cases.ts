@@ -83,7 +83,8 @@ function credentialSnapshot(
     defaultModel: 'model-a',
     proxy: { enabled: false, url: '' },
     routePools: [],
-    localModelGateway: { enabled: false }
+    failover: [],
+    localModelGateway: { enabled: false, exposeProviderModels: false }
   }
 }
 
@@ -112,7 +113,8 @@ describe("TuiController model selection and turn startup", () => {
       defaultModel: 'gpt-next',
       proxy: { enabled: false, url: '' },
       routePools: [],
-      localModelGateway: { enabled: false }
+      failover: [],
+      localModelGateway: { enabled: false, exposeProviderModels: false }
     }
     const client = {
       modelConnections: vi.fn(async () => snapshot),
@@ -286,7 +288,8 @@ describe("TuiController model selection and turn startup", () => {
       defaultModel: 'MiniMax-M3',
       proxy: { enabled: false, url: '' },
       routePools: [],
-      localModelGateway: { enabled: false }
+      failover: [],
+      localModelGateway: { enabled: false, exposeProviderModels: false }
     }, false)
 
     expect(tuiOptions).toMatchObject({
@@ -410,7 +413,8 @@ describe("TuiController model selection and turn startup", () => {
       providers: [],
       proxy: { enabled: false, url: '' },
       routePools: [],
-      localModelGateway: { enabled: false }
+      failover: [],
+      localModelGateway: { enabled: false, exposeProviderModels: false }
     }, false)
 
     await controller.createThread()

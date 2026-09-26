@@ -13,10 +13,10 @@ function translate(key: string, values: Record<string, unknown> = {}): string {
   const text = {
     sessionUsageFooterLabel: 'Session usage',
     sessionUsageFooterTokens: `${values.tokens} tokens`,
-    sessionUsageFooterActualCost: `Cost ${values.value}`,
-    sessionUsageFooterEstimate: `Estimate ≈${values.value}`,
-    sessionUsageActualCostTitle: 'Recorded API/Gateway cost.',
-    sessionUsageEstimateTitle: 'Reference estimate.',
+    sessionUsageFooterActualCost: `API ${values.value}`,
+    sessionUsageFooterEstimate: `Plan value ≈${values.value}`,
+    sessionUsageActualCostTitle: 'Metered from published prices or the provider cost field.',
+    sessionUsageEstimateTitle: 'Public API-price equivalent of subscription usage.',
     sessionUsagePriceUnavailable: 'Price unavailable',
     sessionUsagePriceUnavailableTitle: 'No trusted price.',
     turnUsageEstimatePartial: 'Partial estimate',
@@ -116,11 +116,11 @@ describe('FloatingComposerFooterView', () => {
     expect(html).not.toContain('41% cache')
   })
 
-  it('shows a gpt-5.6-luna subscription estimate after throughput', () => {
+  it('shows a gpt-5.6-luna subscription plan value after throughput', () => {
     const html = renderFooter({
       i18n: { language: 'zh' },
       t: (key: string, values: Record<string, unknown> = {}) => key === 'sessionUsageFooterEstimate'
-        ? `参考估值 ≈${values.value}`
+        ? `订阅折合 ≈${values.value}`
         : translate(key, values),
       threadUsage: usageSummary({
         totalTokens: 26_000,
@@ -131,7 +131,7 @@ describe('FloatingComposerFooterView', () => {
       })
     })
 
-    expect(html).toContain('参考估值 ≈￥0.2160')
+    expect(html).toContain('订阅折合 ≈￥0.2160')
     expect(html).toContain('ds-composer-usage-money')
     expect(html.indexOf('ds-composer-usage-tps')).toBeLessThan(html.indexOf('ds-composer-usage-money'))
   })
@@ -151,7 +151,7 @@ describe('FloatingComposerFooterView', () => {
     expect(html.indexOf('ds-composer-usage-tps')).toBeLessThan(html.indexOf('ds-composer-usage-money'))
   })
 
-  it('keeps zero-price estimates visible and labels partial cumulative coverage', () => {
+  it('keeps zero-price estimates visible and puts partial coverage in the tooltip', () => {
     const zero = renderFooter({
       threadUsage: usageSummary({
         costUsd: null,
@@ -161,7 +161,7 @@ describe('FloatingComposerFooterView', () => {
         valueEstimateCoverage: 'complete'
       })
     })
-    expect(zero).toContain('Estimate ≈$0.0000')
+    expect(zero).toContain('Plan value ≈$0.0000')
     expect(zero).not.toContain('Price unavailable')
 
     const partial = renderFooter({
@@ -173,8 +173,27 @@ describe('FloatingComposerFooterView', () => {
         valueEstimateCoverage: 'partial'
       })
     })
-    expect(partial).toContain('Partial estimate')
-    expect(partial).toContain('data-session-usage-estimate-partial')
+    expect(partial).toContain('title="Public API-price equivalent of subscription usage. · Partial estimate"')
+    expect(partial).toContain('data-session-usage-estimate-partial="true"')
+    expect(partial).not.toContain(' · Partial estimate</span>')
+  })
+
+  it('keeps metered cost primary and plan value secondary in one money metric', () => {
+    const html = renderFooter({
+      threadUsage: usageSummary({
+        costUsd: 1.25,
+        valueEstimateUsd: 3.5,
+        valueEstimateCny: 25.2,
+        valueEstimateCoverage: 'partial'
+      })
+    })
+
+    expect(html).toContain('API $1.25')
+    expect(html).toContain('ds-composer-usage-money-estimate')
+    expect(html).toContain('Plan value ≈$3.50')
+    expect(html.match(/ds-composer-usage-money(?!-estimate)/g)).toHaveLength(1)
+    expect(html).toContain('Partial estimate')
+    expect(html).not.toContain(' · Partial estimate</span>')
   })
 
   it('falls back to cumulative cache telemetry when latest-request telemetry is unavailable', () => {
@@ -216,6 +235,7 @@ describe('FloatingComposerFooterView', () => {
     expect(css).toMatch(/@container \(max-width: 760px\)[\s\S]*?\.ds-composer-footer-hint/s)
     expect(css).toMatch(/@container \(max-width: 640px\)[\s\S]*?\.ds-composer-usage-label/s)
     expect(css).toMatch(/@container \(max-width: 560px\)[\s\S]*?\.ds-composer-usage-ttft/s)
+    expect(css).toContain('.ds-composer-usage-money-estimate')
     expect(css).toMatch(/@container \(max-width: 460px\)[\s\S]*?\.ds-composer-usage-turns/s)
   })
 })

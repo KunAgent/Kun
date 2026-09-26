@@ -2,6 +2,7 @@ import type { StartTurnRequest, StartTurnResponse } from '../contracts/turns.js'
 import { withManagerDataMutex } from '../manager/data-mutex.js'
 import { TurnConflictError, ThreadClosingError, fingerprintStartTurnRequest, type TurnService } from './turn-service-core.js'
 import { queuedResponse } from './turn-service-queue-operations.js'
+import { assertRoomTurnAdmission } from './room-thread-admission-policy.js'
 
 export class QueueAdmissionUncertainError extends Error {
   readonly code = 'queue_admission_uncertain'
@@ -61,6 +62,7 @@ export async function enqueueTurnDurably(service: TurnService, input: {
         if (service['deps'].lifecycleFence?.isClosing(input.threadId)) throw new ThreadClosingError(input.threadId)
         const thread = await service['deps'].threadStore.get(input.threadId)
         if (!thread) throw new Error(`thread not found: ${input.threadId}`)
+        assertRoomTurnAdmission(thread, input.request)
         if (thread.status === 'archived') throw new TurnConflictError(`thread is archived: ${input.threadId}`)
         const replay = service['idempotentStartFromThread'](thread, input.request, fingerprint)
         if (replay) {

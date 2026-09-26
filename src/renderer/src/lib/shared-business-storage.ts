@@ -1,4 +1,5 @@
 import { setBrowserStorageMutationObserver } from './browser-storage'
+import { isPageHidden, shouldParkWhenHidden } from './page-visibility'
 import {
   SHARED_BUSINESS_KEYS,
   changedSharedKeys,
@@ -37,6 +38,9 @@ export type SharedBusinessStorageSyncResult = SharedBusinessStorageCursor & {
 }
 
 const POLL_INTERVAL_MS = 1_000
+// Remote-web pages keep a slower cadence: every tick is an HTTP invoke over
+// the LAN tunnel, not a local IPC call.
+const REMOTE_POLL_INTERVAL_MS = 4_000
 const INITIAL_READ_ATTEMPTS = 3
 const INITIAL_READ_RETRY_DELAY_MS = 300
 const UNLOAD_FLUSH_DEADLINE_MS = 250
@@ -93,6 +97,7 @@ async function doInstallSharedBusinessStorage(): Promise<void> {
   const localAtStartup = readSharedLocalEntries()
   let snapshot = await readInitialSnapshot(api)
   let journal = readSharedBusinessStorageJournal()
+  const hasSyncedBefore = journal !== null
   if (!journal) {
     const dirtyKeys = SHARED_BUSINESS_KEYS.filter((key) =>
       localAtStartup[key] !== undefined && localAtStartup[key] !== snapshot.value[key]
@@ -106,10 +111,17 @@ async function doInstallSharedBusinessStorage(): Promise<void> {
     writeSharedBusinessStorageJournal(journal)
   }
 
-  const startupDirty = new Set([
-    ...journal.dirtyKeys,
-    ...changedSharedKeys(journal.acknowledgedEntries, localAtStartup)
-  ])
+  // A first-seen client (new origin/profile — remote web pages are always one:
+  // their URL port is auto-picked per launch) has never synced, so keys missing
+  // locally were simply never downloaded — pushing them as deletions would wipe
+  // the shared document for every other client. Only a returning client may
+  // tombstone keys that were acknowledged before and are gone locally now.
+  const startupDirty = new Set(journal.dirtyKeys)
+  if (hasSyncedBefore) {
+    for (const key of changedSharedKeys(journal.acknowledgedEntries, localAtStartup)) {
+      startupDirty.add(key)
+    }
+  }
   applyEntries(snapshot.value, startupDirty)
   let baseline = journal.acknowledgedEntries
   let revision = journal.acknowledgedRevision
@@ -144,7 +156,18 @@ async function doInstallSharedBusinessStorage(): Promise<void> {
     persistAcknowledgement(snapshot, readSharedLocalEntries())
   }
 
-  const timer = window.setInterval(() => void sync(), POLL_INTERVAL_MS)
+  // Remote Web pages (phone lock screen, background tab) skip their ticks;
+  // desktop keeps syncing while minimized. The first visible frame syncs
+  // immediately so pending changes still land fast.
+  const pollMs = window.kunGui?.isRemoteWeb ? REMOTE_POLL_INTERVAL_MS : POLL_INTERVAL_MS
+  const timer = window.setInterval(() => {
+    if (shouldParkWhenHidden()) return
+    void sync()
+  }, pollMs)
+  const handleVisible = (): void => {
+    if (!isPageHidden()) void sync()
+  }
+  document.addEventListener('visibilitychange', handleVisible)
   const handleUnload = (): void => {
     window.clearInterval(timer)
     persistDirtyAgainstAcknowledgement()
@@ -154,6 +177,7 @@ async function doInstallSharedBusinessStorage(): Promise<void> {
   window.addEventListener('pagehide', handleUnload, { once: true })
   installedCleanup = () => {
     window.clearInterval(timer)
+    document.removeEventListener('visibilitychange', handleVisible)
     window.removeEventListener('beforeunload', handleUnload)
     window.removeEventListener('pagehide', handleUnload)
   }

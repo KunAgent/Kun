@@ -70,7 +70,19 @@ export function hydrateThreadItems(
 }
 
 export function normalizeThreadMetadata(thread: ThreadRecord, entries: ThreadMetadataLine[]): ThreadRecord {
-  const recovery = collectTurnMetadata(entries, thread.id)
+  return normalizeThreadMetadataFromRecovered(thread, collectTurnMetadata(entries, thread.id))
+}
+
+/**
+ * Normalizes a metadata snapshot against a recovery map accumulated over the
+ * whole JSONL history. `accumulateTurnMetadata` keeps the map incrementally
+ * mergeable, so readers that tail-append the log can fold new lines into it
+ * instead of re-parsing every historical entry.
+ */
+export function normalizeThreadMetadataFromRecovered(
+  thread: ThreadRecord,
+  recovery: ReadonlyMap<string, RecoveredTurnMetadata>
+): ThreadRecord {
   const mergedById = new Map<string, Turn>()
   const order: string[] = []
   for (const turn of thread.turns) {
@@ -83,7 +95,7 @@ export function normalizeThreadMetadata(thread: ThreadRecord, entries: ThreadMet
     ? thread : { ...thread, turns }
 }
 
-type RecoveredTurnMetadata = {
+export type RecoveredTurnMetadata = {
   attachmentIds: string[]
   model?: string
   mode?: Turn['mode']
@@ -94,41 +106,52 @@ type RecoveredTurnMetadata = {
   approvalReviewer?: Turn['approvalReviewer']
 }
 
-function collectTurnMetadata(entries: ThreadMetadataLine[], threadId: string): Map<string, RecoveredTurnMetadata> {
+/** Folds one parsed metadata snapshot's turn metadata into `recovered`. */
+export function accumulateTurnMetadata(
+  recovered: Map<string, RecoveredTurnMetadata>,
+  thread: ThreadRecord
+): void {
+  for (const turn of thread.turns) {
+    const current = recovered.get(turn.id) ?? { attachmentIds: [] }
+    recovered.set(turn.id, {
+      attachmentIds: mergeStringArrays(current.attachmentIds, turn.attachmentIds),
+      ...(turn.model ? { model: turn.model } : current.model ? { model: current.model } : {}),
+      ...(turn.mode ? { mode: turn.mode } : current.mode ? { mode: current.mode } : {}),
+      ...(turn.guiPlan ? { guiPlan: turn.guiPlan } : current.guiPlan ? { guiPlan: current.guiPlan } : {}),
+      ...(turn.actingModelRoute
+        ? { actingModelRoute: turn.actingModelRoute }
+        : current.actingModelRoute
+          ? { actingModelRoute: current.actingModelRoute }
+          : {}),
+      ...(turn.approvalPolicy
+        ? { approvalPolicy: turn.approvalPolicy }
+        : current.approvalPolicy
+          ? { approvalPolicy: current.approvalPolicy }
+          : {}),
+      ...(turn.sandboxMode
+        ? { sandboxMode: turn.sandboxMode }
+        : current.sandboxMode
+          ? { sandboxMode: current.sandboxMode }
+          : {}),
+      ...(turn.approvalReviewer
+        ? { approvalReviewer: turn.approvalReviewer }
+        : current.approvalReviewer
+          ? { approvalReviewer: current.approvalReviewer }
+          : {})
+    })
+  }
+}
+
+function collectTurnMetadata(
+  entries: ThreadMetadataLine[],
+  threadId: string
+): Map<string, RecoveredTurnMetadata> {
   const recovered = new Map<string, RecoveredTurnMetadata>()
   for (const entry of entries) {
     if (entry?.kind !== 'thread_metadata' || entry.thread?.id !== threadId) continue
     const parsed = ThreadSchemaReadable.safeParse(entry.thread)
     if (!parsed.success) continue
-    for (const turn of parsed.data.turns) {
-      const current = recovered.get(turn.id) ?? { attachmentIds: [] }
-      recovered.set(turn.id, {
-        attachmentIds: mergeStringArrays(current.attachmentIds, turn.attachmentIds),
-        ...(turn.model ? { model: turn.model } : current.model ? { model: current.model } : {}),
-        ...(turn.mode ? { mode: turn.mode } : current.mode ? { mode: current.mode } : {}),
-        ...(turn.guiPlan ? { guiPlan: turn.guiPlan } : current.guiPlan ? { guiPlan: current.guiPlan } : {}),
-        ...(turn.actingModelRoute
-          ? { actingModelRoute: turn.actingModelRoute }
-          : current.actingModelRoute
-            ? { actingModelRoute: current.actingModelRoute }
-            : {}),
-        ...(turn.approvalPolicy
-          ? { approvalPolicy: turn.approvalPolicy }
-          : current.approvalPolicy
-            ? { approvalPolicy: current.approvalPolicy }
-            : {}),
-        ...(turn.sandboxMode
-          ? { sandboxMode: turn.sandboxMode }
-          : current.sandboxMode
-            ? { sandboxMode: current.sandboxMode }
-            : {}),
-        ...(turn.approvalReviewer
-          ? { approvalReviewer: turn.approvalReviewer }
-          : current.approvalReviewer
-            ? { approvalReviewer: current.approvalReviewer }
-            : {})
-      })
-    }
+    accumulateTurnMetadata(recovered, parsed.data)
   }
   return recovered
 }
@@ -141,6 +164,8 @@ function mergeTurnMetadata(previous: Turn, next: Turn): Turn {
     activeSkillIds: mergeStringArrays(previous.activeSkillIds, next.activeSkillIds),
     injectedMemoryIds: mergeStringArrays(previous.injectedMemoryIds, next.injectedMemoryIds),
     injectedMemorySummaries: next.injectedMemorySummaries.length > 0 ? next.injectedMemorySummaries : previous.injectedMemorySummaries,
+    injectedDirectiveIds: mergeStringArrays(previous.injectedDirectiveIds, next.injectedDirectiveIds),
+    injectedDirectiveSummaries: next.injectedDirectiveSummaries.length > 0 ? next.injectedDirectiveSummaries : previous.injectedDirectiveSummaries,
     injectedInstructionSources: next.injectedInstructionSources.length > 0 ? next.injectedInstructionSources : previous.injectedInstructionSources,
     items: mergeTurnItems(previous.items, next.items)
   }
@@ -186,7 +211,7 @@ function turnFromItems(threadId: string, turnId: string, items: TurnItem[], fall
     id: turnId, threadId,
     status: hasOpenItem ? 'running' : hasFailedItem ? 'failed' : 'completed',
     prompt, orchestration: 'direct', steering: [], attachmentIds: attachmentIdsFromItems(items), activeSkillIds: [],
-    injectedMemoryIds: [], injectedMemorySummaries: [], injectedInstructionSources: [],
+    injectedMemoryIds: [], injectedMemorySummaries: [], injectedDirectiveIds: [], injectedDirectiveSummaries: [], injectedInstructionSources: [],
     createdAt,
     finishedAt: hasOpenItem ? undefined : items[items.length - 1]?.finishedAt ?? fallbackTime,
     items

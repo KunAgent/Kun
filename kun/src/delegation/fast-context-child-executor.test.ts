@@ -359,4 +359,26 @@ describe('Fast Context child executor', () => {
       allowedReadPaths: ['.']
     })
   })
+
+  it('inherits host-wide reads for Fast Context when the parent granted them', async () => {
+    const model = new ReadThenConcludeModel()
+    let sourceContext: ToolHostContext | undefined
+    const executor = createChildAgentExecutor({
+      model,
+      toolHost: new LocalToolHost({ tools: [
+        sourceTool('grep'), sourceTool('glob'), sourceTool('read', (context) => { sourceContext = context })
+      ] }),
+      prefix: createImmutablePrefix({ systemPrompt: 'test' }), defaultModel: model.model
+    })
+
+    await expect(executor({
+      ...fastContextInput(model.model),
+      security: { sandboxRoot: '/workspace', allowHostReads: true, memoryEnabled: false }
+    })).resolves.toMatchObject({ evidencePack: { version: 1 } })
+    expect(sourceContext).toMatchObject({
+      fastContext: true,
+      allowHostReads: true
+    })
+    expect(sourceContext?.allowedReadPaths).toBeUndefined()
+  })
 })

@@ -1,3 +1,4 @@
+import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 import {
   join,
   isDeepStrictEqual,
@@ -5,12 +6,11 @@ import {
   CapabilityRegistry,
   buildGoalLocalTools,
   buildTodoLocalTools,
-  buildPptAgentLocalTools,
-  PPT_AGENT_LOCAL_PROVIDER_ID,
   buildDefaultLocalTools,
   createReadArtifactTool,
   buildMcpToolProviders,
   buildMemoryToolProviders,
+  buildContextWindowToolProviders,
   buildKnowledgeToolProvider,
   buildSkillToolProviders,
   buildDelegationToolProviders,
@@ -45,9 +45,12 @@ import {
   InstructionRuntime,
   resolveConfiguredHooks
 } from './runtime-factory-dependencies.js'
+import { buildPaperSearchToolProvider, resolvePaperSearchCredentials } from '../adapters/tool/paper-search-tool-provider.js'
 import type { createRuntimeExtensionComposition } from './runtime-composition-extensions.js'
 import {
+  buildPptAgentRuntimeProvider,
   builtinToolOptionsForOptions,
+  contextWindowModeFor,
   llmDebugCaptureEnabled,
   mergeRuntimeConfigApplyOptions,
   modelRequestCaptureDefaultEnabled,
@@ -56,9 +59,8 @@ import {
 } from './runtime-factory-config.js'
 import { stageBrowserUseHostBinding } from './runtime-browser-use-binding.js'
 import { buildModelClientRouterInput, hydrateLegacyCredentialOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
-import { createPersistentAttachmentStore, createPersistentMemoryStore } from './runtime-factory-storage.js'
+import { createPersistentAttachmentStore, createPersistentMemoryStore, createReadyPersistentMemoryFeedback } from './runtime-factory-storage.js'
 import { delegationRuntimeConfigView } from './runtime-delegation-config-view.js'
-
 export function createRuntimeConfigController(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>
 ) {
@@ -306,6 +308,7 @@ export function createRuntimeConfigController(
 	    const nextAttachmentStore = createPersistentAttachmentStore(nextOptions, nowIso)
 	    await pruneUnsentAttachments(nextAttachmentStore)
 	    const nextMemoryStore = createPersistentMemoryStore(nextOptions, nowIso)
+            const nextMemoryFeedback = await createReadyPersistentMemoryFeedback(nextOptions, nextMemoryStore)
 	    const nextWebProviders = buildWebToolProviders(nextOptions.capabilities?.web)
 	    const nextImageGenProviders = buildImageGenToolProviders(nextOptions.capabilities?.imageGen, {
 	      attachmentStore: nextAttachmentStore,
@@ -326,21 +329,7 @@ export function createRuntimeConfigController(
 	    })
 	    const nextComputerUseProviders = await buildComputerUseToolProviders(nextOptions.capabilities?.computerUse)
 	    const nextBrowserUseProviders = buildBrowserUseToolProviders(nextOptions.capabilities?.browserUse)
-    const nextPptAgentProvider = {
-      id: PPT_AGENT_LOCAL_PROVIDER_ID,
-      kind: 'built-in' as const,
-	      enabled: true,
-      available: true,
-      tools: [
-        ...buildPptAgentLocalTools({
-	          enabled: () => nextOptions.lab?.pptAgent?.enabled !== false,
-	          toolchainDirectory: () => process.env.KUN_PPT_TOOLCHAIN_DIR,
-	          governanceDirectory: () => join(nextOptions.dataDir, 'ppt-governance'),
-	          resolveSourceRequest: async (context) =>
-	            (await turnService.getTurn(context.threadId, context.turnId))?.prompt
-	        })
-	      ]
-	    }
+    const nextPptAgentProvider = buildPptAgentRuntimeProvider(nextOptions, turnService)
 	    const nextResolvedHooks = [
 	      ...buildBuiltinHooks({ quality: nextOptions.quality ?? DEFAULT_QUALITY_CONFIG }),
 	      ...resolveConfiguredHooks(nextOptions.hooks)
@@ -383,6 +372,7 @@ export function createRuntimeConfigController(
 	      ...nextMcpProviders.providers,
 	      ...nextWebProviders.providers,
 	      ...buildMemoryToolProviders(nextMemoryStore),
+	      ...buildContextWindowToolProviders({ service: core.contextWindows, mode: contextWindowModeFor(core.contextWindowModes), newContextTransition: (context, args) => core.contextWindowTransition.asToolTransition(context.model?.id)(context, args) }),
 	      buildKnowledgeToolProvider(services.knowledgeBaseService),
 	      ...buildSkillToolProviders(nextSkillRuntime),
 	      ...nextImageGenProviders.providers,
@@ -394,7 +384,9 @@ export function createRuntimeConfigController(
 	      designCanvasProvider
 	    ]
 	    const nextChildRegistry = new CapabilityRegistry(nextBaseToolProviders)
-	    const nextRegistry = new CapabilityRegistry([
+    const nextRegistry = new CapabilityRegistry([
+      buildHistoryReferenceToolProvider(services.model.core.historyReferences),
+      roomResultProvider(services.model.core.threadStore),
 	      ...nextBaseToolProviders,
 	      ...nextComputerUseProviders.providers,
 	      ...nextBrowserUseProviders.providers,
@@ -446,10 +438,14 @@ export function createRuntimeConfigController(
 	      ...buildConversationVisualizationToolProvider(
 	        () => activeOptions.lab?.conversationVisualization
 	      ),
-	      ...buildChartToolProvider(() => activeOptions.lab?.conversationVisualization)
-	    ])
-
-	    // GUI/TUI own the live Registry through revisioned writes. Hot apply is
+	      ...buildChartToolProvider(() => activeOptions.lab?.conversationVisualization),
+	      ...buildPaperSearchToolProvider({
+	        proxyUrl: () => activeOptions.modelProxyUrl,
+	        enabledSources: () => activeOptions.capabilities?.paperSearch?.enabledSources,
+	        credentials: () => resolvePaperSearchCredentials(activeOptions.capabilities?.paperSearch)
+	      })
+            ])
+            // GUI/TUI own the live Registry through revisioned writes. Hot apply is
 	    // a read-only Registry consumer: startup composition or explicit
 	    // model-connection APIs perform initialization and selection mutations.
 	    // Keeping this path read-only guarantees failed preflight cannot leave a
@@ -475,27 +471,28 @@ export function createRuntimeConfigController(
 	        providers: Object.fromEntries(materializedConnections.providers.entries()),
 	        modelProxyUrl: selected?.config.modelProxyUrl,
 	        routePools: materializedConnections.routePools,
+	        providerFailover: materializedConnections.failover,
 	        localModelGateway: materializedConnections.localModelGateway
 	      }
-	    }
-	    await migrateLegacyProviderCredentials(nextOptions)
-
+            }
+            await migrateLegacyProviderCredentials(nextOptions)
 	    const nextModelClients = buildModelClientRouterInput(
 	      nextOptions,
 	      (model) => modelCapabilitiesForModel(model, nextModelProfiles),
 	      llmDebug,
 	      resolveLegacyRequestCredentials
 	    )
-	    for (const [providerId, client] of extensionModelProviders.clientMap()) {
-	      nextModelClients.providers.set(providerId, client)
-	    }
-	    const nextDelegatedRuntime = buildMainDelegatedRuntime({
+            for (const [providerId, client] of extensionModelProviders.clientMap()) {
+              nextModelClients.providers.set(providerId, client)
+            }
+            const nextDelegatedRuntime = buildMainDelegatedRuntime({
 	      options: nextOptions,
 	      registry: nextRegistry,
 	      skillRuntime: nextSkillRuntime,
 	      instructionRuntime: nextInstructionRuntime,
 	      attachmentStore: nextAttachmentStore,
-	      memoryStore: nextMemoryStore
+	      memoryStore: nextMemoryStore,
+	      memoryFeedback: nextMemoryFeedback
 	    })
 	    const nextLoopOptions: AgentLoopOptions = {
 	      ...loopOptions,
@@ -509,7 +506,8 @@ export function createRuntimeConfigController(
 	      toolArgumentRepair: nextOptions.runtime?.toolArgumentRepair,
 	      hooks: nextResolvedHooks,
 	      attachmentStore: nextAttachmentStore,
-	      memoryStore: nextMemoryStore
+	      memoryStore: nextMemoryStore,
+	      memoryFeedback: nextMemoryFeedback
 	    }
 	    const nextLoop = new AgentLoop(nextLoopOptions)
 	    const previousLoop = loop
@@ -550,6 +548,7 @@ export function createRuntimeConfigController(
 	    directModelClient.replace(nextModelClients)
 	    approvalReviewModelClient.replace(nextApprovalReviewClients)
 	    modelClient.replacePools(activeOptions.routePools ?? [])
+	    modelClient.replaceFailoverGroups(activeOptions.providerFailover ?? [])
 	    if (delegationRuntime && nextSubagentConfig) {
 	      delegationRuntime.replaceConfig(nextSubagentConfig)
 	    }
@@ -559,6 +558,7 @@ export function createRuntimeConfigController(
 	    webProviders = nextWebProviders
 	    attachmentStore = nextAttachmentStore
 	    memoryStore = nextMemoryStore
+            services.memoryFeedback = nextMemoryFeedback
 	    imageGenProviders = nextImageGenProviders
 	    speechGenProviders = nextSpeechGenProviders
 	    musicGenProviders = nextMusicGenProviders
@@ -694,3 +694,4 @@ export function createRuntimeConfigController(
     get loop() { return loop }
   }
 }
+import { roomResultProvider } from '../rooms/room-result-tools.js'

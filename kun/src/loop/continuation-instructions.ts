@@ -148,6 +148,14 @@ export const TOOL_SUPPRESSION_FINAL_ANSWER_RECOVERY_STEP = 2
  */
 export const POST_TOOL_FAILURE_FINAL_ANSWER_RECOVERY_STEP = 2
 export const POST_TOOL_FAILURE_MAX_RECOVERY_STEPS = POST_TOOL_FAILURE_FINAL_ANSWER_RECOVERY_STEP
+/**
+ * Provider `length` stops used to end the turn immediately with a warning,
+ * leaving the user to guess that a manual "continue" was required. The loop
+ * now requests a bounded continuation itself; this caps how many extra model
+ * rounds one truncated turn may consume before the visible warning owns
+ * settlement.
+ */
+export const OUTPUT_TRUNCATION_MAX_RECOVERY_STEPS = 3
 
 export function goalNoToolRecoveryInstruction(recoveryStep: number): string {
   return [
@@ -206,6 +214,16 @@ export function toolSuppressionRecoveryInstruction(
     '- Do not repeat the same tool with the same arguments.',
     '- Either use a meaningfully different available tool or provide a clear, non-empty final answer.',
     '- Do not stop with an empty response.'
+  ].join('\n')
+}
+
+export function outputTruncationRecoveryInstruction(recoveryStep: number): string {
+  return [
+    'Output truncation recovery:',
+    `- The previous response was cut off at the model's maximum output length (continuation ${recoveryStep} of ${OUTPUT_TRUNCATION_MAX_RECOVERY_STEPS}).`,
+    '- Resume from exactly where the truncated response stopped; do not restart or repeat content already emitted.',
+    '- Deliver the remaining work in smaller pieces or incremental tool calls instead of one very large response.',
+    '- If everything essential is already delivered, finish now with a brief final answer.'
   ].join('\n')
 }
 
@@ -424,4 +442,26 @@ export function intersectAllowedToolNames(
   if (!base) return [...forced]
   const forcedSet = new Set(forced)
   return base.filter((name) => forcedSet.has(name))
+}
+
+/**
+ * Agent conversation delivery contract. Ordinary assistant text is internal
+ * working output; only an explicit `send_im_message` call becomes a visible
+ * chat bubble. Injected on every model step that advertises the tool so
+ * threads created before the tool existed still learn the contract. A
+ * positive `recoveryStep` switches to the bounded no-publication nudge.
+ */
+export function conversationDeliveryInstruction(recoveryStep = 0, maxSteps = 0): string {
+  if (recoveryStep > 0) {
+    return [
+      `You stopped without calling \`send_im_message\`, so the user saw nothing (recovery ${recoveryStep}/${maxSteps}).`,
+      'Ordinary assistant text is internal and never reaches the user.',
+      'Call `send_im_message` now with the text and/or workspace file attachments the user should receive.'
+    ].join(' ')
+  }
+  return [
+    'This is an IM-style agent conversation. Your ordinary assistant text is internal working output the user never sees.',
+    'Publish every user-visible reply, status, question, or result with the `send_im_message` tool: text and/or workspace file attachments (images, documents, audio, video, or other files).',
+    'Each call creates one chat bubble. Do not repeat tool-published content in assistant text, and do not end the turn expecting your text to be shown.'
+  ].join(' ')
 }

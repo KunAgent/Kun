@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { TurnService } from '../services/turn-service.js'
+import { dispatchRoomContinuation } from '../rooms/room-continuation-dispatch.js'
 import {
   formatDetachedChildNotice,
   proactiveRetryStatus
@@ -81,6 +82,14 @@ export class DetachedChildHandoffCoordinator {
         return
       }
       if (thread.status === 'running') throw new Error('parent thread is still running')
+      if (thread.roomContext) {
+        await dispatchRoomContinuation(threadStore, {
+          threadId: thread.id, sourceTurnId: handoff.parentTurnId,
+          key: handoff.id, prompt: handoff.notice, kind: 'background_subagent'
+        })
+        await this.options.store.ack(handoff.id)
+        return
+      }
       let admittedTurnId: string | undefined
       await turns.startTurn({
         threadId: handoff.parentThreadId,

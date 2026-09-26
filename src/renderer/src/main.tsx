@@ -12,6 +12,9 @@ import './styles/surfaces-write.css'
 import './styles/markdown-code.css'
 import './styles/write-editor.css'
 import './styles/write-rich-editor.css'
+import './styles/write-rich-blocks.css'
+import './styles/write-rich-ui.css'
+import './styles/write-format-toolbar.css'
 import './styles/workflow-canvas.css'
 import './styles/graph-workbench.css'
 import './styles/neutral-polish.css'
@@ -26,6 +29,7 @@ import { installProviderMutationFlushHandler } from './services/provider-mutatio
 document.documentElement.dataset.platform = window.kunGui?.platform ?? 'unknown'
 document.documentElement.dataset.desktopTitleBar = window.kunGui?.desktopTitleBarMode
   ?? resolveDesktopTitleBarMode(window.kunGui?.platform ?? 'unknown', false)
+if (window.kunGui?.isRemoteWeb === true) document.documentElement.dataset.remoteWeb = 'true'
 initializeStartupTheme(window.kunGui?.getSettings)
 applyCursorSpotlight(true)
 installCursorSpotlightTracking()

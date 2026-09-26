@@ -12,8 +12,6 @@ describe('write render safety', () => {
       fileSize: 12_000,
       truncated: false
     })).toEqual({
-      livePreviewEnabled: true,
-      markdownPreviewEnabled: true,
       readOnly: false,
       notice: 'none'
     })
@@ -26,8 +24,6 @@ describe('write render safety', () => {
       fileSize: WRITE_SAFE_MARKDOWN_RENDER_MAX_CHARS + 1,
       truncated: false
     })).toEqual({
-      livePreviewEnabled: false,
-      markdownPreviewEnabled: false,
       readOnly: false,
       notice: 'large-file'
     })
@@ -40,8 +36,6 @@ describe('write render safety', () => {
       fileSize: 1_500_000,
       truncated: true
     })).toEqual({
-      livePreviewEnabled: false,
-      markdownPreviewEnabled: false,
       readOnly: true,
       notice: 'truncated'
     })
@@ -54,8 +48,6 @@ describe('write render safety', () => {
       fileSize: WRITE_SAFE_MARKDOWN_RENDER_MAX_CHARS + 50_000,
       truncated: false
     })).toEqual({
-      livePreviewEnabled: false,
-      markdownPreviewEnabled: false,
       readOnly: false,
       notice: 'none'
     })

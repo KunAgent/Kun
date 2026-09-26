@@ -73,6 +73,7 @@ export function normalizeKunTurnItem(
     case 'tool_result':
       return { type: 'tool_updated', payload: deps.tool(item, child) }
     case 'compaction':
+    case 'context_window':
       return { type: 'compaction_updated', payload: deps.compaction(item) }
     case 'review':
       return { type: 'review_updated', payload: deps.review(item) }
@@ -143,6 +144,7 @@ function normalizeKunRuntimeEventPayload(
     }
     case 'tool_result_upload_wait':
     case 'model_request_retry':
+    case 'model_route_switch':
     case 'tool_storm_suppressed':
     case 'required_tool_gate': {
       const status = deps.runtimeStatus(event)
@@ -190,6 +192,10 @@ function normalizeKunRuntimeEventPayload(
     case 'compaction_started':
       return [deps.compactionAction(event, 'running')]
     case 'compaction_completed':
+      return [deps.compactionAction(event, 'success')]
+    case 'context_window':
+      // A committed checkpoint arrives with its durable item snapshot; replay
+      // upserts the same timeline id so reconnects cannot duplicate the marker.
       return [deps.compactionAction(event, 'success')]
     case 'goal_updated':
       return [deps.goalAction(event, false)]

@@ -3,17 +3,9 @@ import {
   defaultMemoryExportFileName
 } from '@shared/memory-import-export'
 import {
-  Ban,
-  BrainCircuit,
   Database,
-  Download,
-  Eye,
   LayoutDashboard,
-  Plus,
-  RotateCcw,
-  Sparkles,
-  Trash2,
-  Upload
+  Sparkles
 } from 'lucide-react'
 import type { ReactElement } from 'react'
 import { useMemo, useState } from 'react'
@@ -29,6 +21,7 @@ import {
 import { MemoryImportDialog, MemoryRecordDialog } from './settings-section-memory-dialogs'
 import { MemoryDiagnosticsPanel } from './settings-section-memory-diagnostics'
 import { MemoryCandidatesPanel } from './settings-section-memory-candidates'
+import { MemoryRecordList, projectForMemory } from './settings-section-memory-list'
 import {
   filterDuplicateMemoryImports,
   prepareMemoryImport,
@@ -45,12 +38,14 @@ export type MemoryDraft = {
   confidence: number
   type: NonNullable<CoreMemoryRecordJson['type']>
   importance: number
+  directive: boolean
 }
 
 export type MemoryDialogState =
   | { mode: 'create' }
   | { mode: 'view'; memory: CoreMemoryRecordJson }
   | { mode: 'edit'; memory: CoreMemoryRecordJson }
+  | { mode: 'correct'; memory: CoreMemoryRecordJson }
 
 const EMPTY_DRAFT: MemoryDraft = {
   content: '',
@@ -59,7 +54,8 @@ const EMPTY_DRAFT: MemoryDraft = {
   tags: '',
   confidence: 1,
   type: 'fact',
-  importance: 0.8
+  importance: 0.8,
+  directive: false
 }
 
 const DEFAULT_DRAFT_SCOPE: MemoryScope = EMPTY_DRAFT.scope
@@ -82,6 +78,7 @@ export function memoryDraftMutation(draft: MemoryDraft): {
   confidence: number
   type: MemoryDraft['type']
   importance: number
+  authority: 'reference' | 'directive'
 } {
   return {
     content: draft.content.trim(),
@@ -91,7 +88,8 @@ export function memoryDraftMutation(draft: MemoryDraft): {
       .filter(Boolean),
     confidence: draft.confidence,
     type: draft.type,
-    importance: draft.importance
+    importance: draft.importance,
+    authority: draft.directive ? ('directive' as const) : ('reference' as const)
   }
 }
 
@@ -106,7 +104,7 @@ export function isMemoryDraftDirty(
   draft: MemoryDraft
 ): boolean {
   if (dialog.mode === 'view') return false
-  if (dialog.mode === 'edit') {
+  if (dialog.mode === 'edit' || dialog.mode === 'correct') {
     const original = dialog.memory
     const originalTags = serializeMemoryTags(original.tags)
     return (
@@ -116,7 +114,8 @@ export function isMemoryDraftDirty(
       draft.tags !== originalTags ||
       draft.confidence !== (original.confidence ?? 1) ||
       draft.type !== (original.type ?? 'fact') ||
-      draft.importance !== (original.importance ?? 0.5)
+      draft.importance !== (original.importance ?? 0.5) ||
+      draft.directive !== (original.authority === 'directive')
     )
   }
   // create
@@ -127,7 +126,8 @@ export function isMemoryDraftDirty(
     draft.scope !== DEFAULT_DRAFT_SCOPE ||
     draft.confidence !== EMPTY_DRAFT.confidence ||
     draft.type !== EMPTY_DRAFT.type ||
-    draft.importance !== EMPTY_DRAFT.importance
+    draft.importance !== EMPTY_DRAFT.importance ||
+    draft.directive !== EMPTY_DRAFT.directive
   )
 }
 
@@ -154,18 +154,6 @@ export async function attemptCloseMemoryDialog(args: {
   return { prompted: true, closed: false }
 }
 
-function projectForMemory(memory: CoreMemoryRecordJson): string | null {
-  if (memory.scope === 'user') return null
-  const path = (memory.scope === 'project' ? memory.project ?? memory.workspace : memory.workspace)?.trim()
-  return path || null
-}
-
-function memoryPreview(content: string): string {
-  const compact = content.replace(/\s+/g, ' ').trim()
-  if (compact.length <= 140) return compact
-  return `${compact.slice(0, 140).trimEnd()}...`
-}
-
 export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
   const {
     t,
@@ -177,6 +165,8 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     memoryDiagnostics,
     createMemoryRecord,
     updateMemoryRecord,
+    confirmMemoryRecord,
+    correctMemoryRecord,
     disableMemoryRecord,
     restoreMemoryRecord,
     deleteMemoryRecord,
@@ -194,14 +184,7 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
   const [notice, setNotice] = useState<string | null>(null)
   const [memoryDialogNotice, setMemoryDialogNotice] = useState<string | null>(null)
   const [draft, setDraft] = useState<MemoryDraft>(EMPTY_DRAFT)
-  const [scopeFilter, setScopeFilter] = useState<'all' | MemoryScope>('all')
   const [activeTab, setActiveTab] = useState<MemorySettingsTab>('overview')
-
-  const filteredRecords = useMemo(() => {
-    const records: CoreMemoryRecordJson[] = memoryRecords ?? []
-    if (scopeFilter === 'all') return records
-    return records.filter((record) => record.scope === scopeFilter)
-  }, [memoryRecords, scopeFilter])
 
   const preparedImport = useMemo(
     () => prepareMemoryImport(importText, importScope, importTargetPath.trim()),
@@ -232,10 +215,36 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
       tags: (record.tags ?? []).join(', '),
       confidence: record.confidence ?? 1,
       type: record.type ?? 'fact',
-      importance: record.importance ?? 0.5
+      importance: record.importance ?? 0.5,
+      directive: record.authority === 'directive'
     })
     setMemoryDialogNotice(null)
     setDialog({ mode: 'edit', memory: record })
+  }
+
+  const beginCorrection = (record: CoreMemoryRecordJson): void => {
+    setDraft({
+      content: record.content,
+      scope: record.scope,
+      targetPath: projectForMemory(record) ?? '',
+      tags: (record.tags ?? []).join(', '),
+      confidence: record.confidence ?? 1,
+      type: record.type ?? 'fact',
+      importance: record.importance ?? 0.5,
+      directive: record.authority === 'directive'
+    })
+    setMemoryDialogNotice(null)
+    setDialog({ mode: 'correct', memory: record })
+  }
+
+  const confirmMemory = async (record: CoreMemoryRecordJson): Promise<void> => {
+    const confirmed = await confirmMemoryRecord(record.id)
+    setMemoryDialogNotice(confirmed ? t('memoryConfirmed') : t('memoryConfirmFailed'))
+  }
+
+  const setDirective = async (record: CoreMemoryRecordJson, directive: boolean): Promise<void> => {
+    const ok = await updateMemoryRecord(record.id, { authority: directive ? 'directive' : 'reference' })
+    if (!ok) setNotice(t('memoryDirectiveUpdateFailed'))
   }
 
   const closeDialog = (): void => {
@@ -317,8 +326,11 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
       const skipMessage = selected.skipped > 0
         ? ` ${t('memoryImportSkippedPrefix')}${selected.skipped}${t('memoryImportSkippedSuffix')}`
         : ''
-      if (failed === 0) setNotice(`${message}${skipMessage}`)
-      else setImportNotice(`${message}${skipMessage}`)
+      const downgradeMessage = preparedImport.downgradedDirectives > 0
+        ? ` ${t('memoryImportDowngradedPrefix')}${preparedImport.downgradedDirectives}${t('memoryImportDowngradedSuffix')}`
+        : ''
+      if (failed === 0) setNotice(`${message}${skipMessage}${downgradeMessage}`)
+      else setImportNotice(`${message}${skipMessage}${downgradeMessage}`)
     } finally {
       setImportBusy(false)
     }
@@ -339,6 +351,8 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
       })
     } else if (dialog?.mode === 'edit') {
       ok = await updateMemoryRecord(dialog.memory.id, mutation)
+    } else if (dialog?.mode === 'correct') {
+      ok = await correctMemoryRecord(dialog.memory.id, mutation)
     }
     if (ok) closeDialog()
     else setMemoryDialogNotice(t('memorySaveFailed'))
@@ -373,6 +387,17 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
               <Toggle
                 checked={kun?.memoryEnabled ?? false}
                 onChange={(checked: boolean) => updateKun({ memoryEnabled: checked })}
+              />
+            }
+          />
+          <SettingRow
+            title={t('memoryDirectivesEnable')}
+            description={t('memoryDirectivesEnableDesc')}
+            control={
+              <Toggle
+                checked={kun?.memoryDirectivesEnabled ?? true}
+                disabled={!(kun?.memoryEnabled ?? false)}
+                onChange={(checked: boolean) => updateKun({ memoryDirectivesEnabled: checked })}
               />
             }
           />
@@ -429,157 +454,21 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
         description={t('memoryRecordsDesc')}
         wideControl
         control={
-          <div className="flex flex-col gap-3">
-            {memoryDiagnostics?.enabled === false ? (
-              <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-[12px] text-amber-700 dark:border-amber-800/40 dark:bg-amber-500/10 dark:text-amber-300">
-                {t('memoryDisabledHint')}
-              </div>
-            ) : null}
-            {/* Toolbar: scope filter + create button */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-1 text-[12px]">
-                {(['all', 'user', 'workspace', 'project'] as const).map((scope) => (
-                  <button
-                    key={scope}
-                    type="button"
-                    onClick={() => setScopeFilter(scope)}
-                    className={`rounded-lg px-2 py-1 font-medium transition ${
-                      scopeFilter === scope
-                        ? 'bg-ds-ink text-ds-main'
-                        : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
-                    }`}
-                  >
-                    {t(`memoryScope_${scope}`)}
-                  </button>
-                ))}
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={beginImport}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border-muted px-2.5 py-1.5 text-[12px] font-semibold text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-                >
-                  <Upload className="h-3.5 w-3.5" strokeWidth={2} />
-                  {t('memoryImport')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void exportMemories()}
-                  disabled={exportBusy}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border-muted px-2.5 py-1.5 text-[12px] font-semibold text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Download className="h-3.5 w-3.5" strokeWidth={2} />
-                  {t('memoryExport')}
-                </button>
-                <button
-                  type="button"
-                  onClick={beginCreate}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-ds-ink px-2.5 py-1.5 text-[12px] font-semibold text-ds-main transition hover:opacity-85"
-                >
-                  <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                  {t('memoryCreate')}
-                </button>
-              </div>
-            </div>
-
-            {notice ? (
-              <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2 text-[12px] text-ds-muted">
-                {notice}
-              </div>
-            ) : null}
-
-            {/* List */}
-            {filteredRecords.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-ds-border-muted bg-ds-main/40 px-3 py-8 text-center">
-                <BrainCircuit className="h-6 w-6 text-ds-faint" strokeWidth={1.5} />
-                <div className="text-[13px] text-ds-faint">{t('memoryEmpty')}</div>
-              </div>
-            ) : (
-              filteredRecords.map((memory) => {
-                const project = projectForMemory(memory)
-                return (
-                  <div
-                    key={memory.id}
-                    className={`rounded-xl border px-3 py-2 transition ${
-                      memory.disabledAt
-                        ? 'border-ds-border-muted bg-ds-main/20 opacity-60'
-                        : 'border-ds-border-muted bg-ds-main/40'
-                    }`}
-                  >
-                    <div className="flex min-w-0 items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-[13px] font-medium text-ds-ink" title={memory.content}>
-                          {memoryPreview(memory.content)}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ds-faint">
-                          <span className="rounded bg-ds-hover/60 px-1.5 py-0.5 font-medium">{memory.scope}</span>
-                          {memory.confidence !== undefined && memory.confidence !== 1 && (
-                            <span className="font-mono">★ {memory.confidence.toFixed(2)}</span>
-                          )}
-                          {memory.type ? <span>{memory.type}</span> : null}
-                          {memory.importance !== undefined ? <span className="font-mono">I {memory.importance.toFixed(2)}</span> : null}
-                          {memory.tags?.length ? (
-                            <span>{memory.tags.join(' · ')}</span>
-                          ) : null}
-                          {project ? (
-                            <span className="flex min-w-0 max-w-full items-baseline gap-1">
-                              <span>{t('memoryProject')}:</span>
-                              <span className="break-all font-mono" title={project}>
-                                {project}
-                              </span>
-                            </span>
-                          ) : null}
-                          {memory.disabledAt ? <span className="text-amber-600">{t('memoryDisabled')}</span> : null}
-                          <span className="font-mono opacity-60">{memory.id.slice(0, 8)}</span>
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => setDialog({ mode: 'view', memory })}
-                          className="rounded-lg p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-                          aria-label={t('memoryDetails')}
-                          title={t('memoryDetails')}
-                        >
-                          <Eye className="h-3.5 w-3.5" strokeWidth={1.8} />
-                        </button>
-                        {memory.disabledAt ? (
-                          <button
-                            type="button"
-                            onClick={() => void restoreMemoryRecord(memory.id)}
-                            className="rounded-lg p-1.5 text-ds-muted transition hover:bg-emerald-500/10 hover:text-emerald-600"
-                            aria-label={t('memoryRestore')}
-                            title={t('memoryRestore')}
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => void disableMemoryRecord(memory.id)}
-                            className="rounded-lg p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-                            aria-label={t('memoryDisable')}
-                            title={t('memoryDisable')}
-                          >
-                            <Ban className="h-3.5 w-3.5" strokeWidth={1.8} />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => void deleteMemoryRecord(memory.id)}
-                          className="rounded-lg p-1.5 text-ds-muted transition hover:bg-red-500/10 hover:text-red-600"
-                          aria-label={t('memoryDelete')}
-                          title={t('memoryDelete')}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })
-            )}
-          </div>
+          <MemoryRecordList
+            t={t}
+            records={memoryRecords ?? []}
+            memoryDisabled={memoryDiagnostics?.enabled === false}
+            notice={notice}
+            exportBusy={exportBusy}
+            onImport={beginImport}
+            onExport={() => void exportMemories()}
+            onCreate={beginCreate}
+            onView={(memory) => setDialog({ mode: 'view', memory })}
+            onDisable={(id) => void disableMemoryRecord(id)}
+            onRestore={(id) => void restoreMemoryRecord(id)}
+            onDelete={(id) => void deleteMemoryRecord(id)}
+            onSetDirective={(memory, directive) => void setDirective(memory, directive)}
+          />
         }
       />
 
@@ -591,8 +480,11 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
           notice={memoryDialogNotice}
           onClose={() => void requestCloseDialog()}
           onBeginEdit={beginEdit}
+          onBeginCorrection={beginCorrection}
+          onConfirm={(memory) => void confirmMemory(memory)}
           onDraftChange={setDraft}
           onSave={() => void saveDraft()}
+          feedbackEnabled={memoryDiagnostics?.feedback?.enabled === true}
         />
       ) : null}
 

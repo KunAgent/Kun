@@ -332,6 +332,20 @@ describe('app-ipc-schemas runtime', () => {
       method: 'PATCH',
       body: '{}'
     }).path).toBe('/v1/memory/mem_1')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/memory/mem_1/confirm',
+      method: 'POST',
+      body: '{}'
+    }).path).toBe('/v1/memory/mem_1/confirm')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/memory/mem_1/correct',
+      method: 'POST',
+      body: '{}'
+    }).path).toBe('/v1/memory/mem_1/correct')
+    expect(runtimeRequestPayloadSchema.safeParse({
+      path: '/v1/memory/mem_1/confirm',
+      method: 'GET'
+    }).success).toBe(false)
   })
 
   it('accepts https GitHub skill import URLs and rejects other schemes', () => {
@@ -570,6 +584,7 @@ describe('app-ipc-schemas runtime', () => {
       { path: '/v1/project-boards/summaries', method: 'POST', body: '{"workspaces":[]}' },
       { path: '/v1/project-boards/cards', method: 'POST', body: '{}' },
       { path: '/v1/project-boards/cards/status', method: 'PATCH', body: '{}' },
+      { path: '/v1/project-boards/cards/board_1', method: 'GET' },
       { path: '/v1/project-boards/cards/board_1', method: 'PATCH', body: '{}' },
       { path: '/v1/project-boards/cards/board_1', method: 'DELETE', body: '{}' },
       { path: '/v1/project-boards/todo-overlays/thr_1/todo_1', method: 'PATCH', body: '{}' },
@@ -579,7 +594,6 @@ describe('app-ipc-schemas runtime', () => {
     }
     for (const payload of [
       { path: '/v1/project-boards/snapshot', method: 'POST' },
-      { path: '/v1/project-boards/cards/board_1', method: 'GET' },
       { path: '/v1/project-boards/cards/status', method: 'POST' },
       { path: '/v1/project-boards/todo-overlays/thr_1/todo_1', method: 'DELETE' },
       { path: '/v1/threads/thr_1/todos/todo_1', method: 'POST' }

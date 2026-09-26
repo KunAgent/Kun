@@ -25,58 +25,16 @@ import type { MemoryStore } from '../memory/memory-store.js'
 import type { ScopedMigrationMaintenanceLock } from '../ports/migration-maintenance-lock.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
+import { toSessionSnapshot } from './thread-service-core.js'
 import { sanitizeMigrationValue } from './runtime-migration-service.js'
 import { iterateSnapshotFile, parseImportState, rewriteImportedSession, rewriteImportedValue } from './runtime-migration-import-service-request-state.js'
 import { appendHistoricalProvider, type ArtifactMigrationMetadata, canonicalLine, decodeBase64, increment, isSafeImportedThreadId, isThreadOwnedRecord, parseArtifactMetadata, parseChunkedContentDescriptor, parseContentChunk, rewriteWorkspace, startPendingContent, verifyChunkedContent } from './runtime-migration-import-service-content-support.js'
+import type { HistoryReferenceStore } from '../history/history-reference-store.js'
+import { addHistoryMigrationReference, preflightHistoryReferences, parseHistoryMigrationState, importHistoryReferences, verifyHistoryReferences, rollbackHistoryReferences } from './runtime-migration-history-references.js'
 import { canonicalMemoryHash } from '../memory/memory-record-normalizer.js'
 
-export const MAX_IMPORT_RECORD_BYTES = 8 * 1024 * 1024
-
-export const MAX_IMPORT_RECORDS = 1_000_000
-
-export const MAX_IMPORT_CONTENT_BYTES = 512 * 1024 * 1024
-
-export type ChunkedContentDescriptor = {
-  encoding: 'base64-chunks'
-  byteSize: number
-  sha256: string
-  chunkCount: number
-}
-
-export type PendingChunkedContent = {
-  kind: 'attachment' | 'artifact'
-  sourceId: string
-  ownerId?: string
-  contentId?: string
-  descriptor: ChunkedContentDescriptor
-  metadata: unknown
-  nextIndex: number
-  byteSize: number
-  chunks: Buffer[]
-}
-
-export type ImportState = {
-  importId: string
-  filePath: string
-  statePath: string
-  control: RuntimeMigrationImportControlType['value']
-  preflight: RuntimeMigrationImportPreflightType
-  status: RuntimeMigrationImportResultType['status'] | 'committing'
-  introducedThreadIds: string[]
-  deduplicatedThreadIds: string[]
-  attachmentIdMap: Record<string, string>
-  artifactIdMap: Record<string, string>
-  memoryIdMap: Record<string, string>
-  attachmentBefore: Record<string, AttachmentMetadata | null>
-  attachmentAfter: Record<string, AttachmentMetadata>
-  memoryAfter: Record<string, MemoryRecord>
-  threadAfter: Record<string, ThreadRecord>
-  introducedAttachmentIds: string[]
-  introducedArtifactIds: string[]
-  introducedMemoryIds: string[]
-  counts: Record<string, number>
-  warnings: string[]
-}
+import { MAX_IMPORT_RECORD_BYTES, MAX_IMPORT_RECORDS, MAX_IMPORT_CONTENT_BYTES, type ImportState, type PendingChunkedContent } from './runtime-migration-import-types.js'
+export { MAX_IMPORT_RECORD_BYTES, MAX_IMPORT_RECORDS, MAX_IMPORT_CONTENT_BYTES, type ImportState, type PendingChunkedContent, type ChunkedContentDescriptor } from './runtime-migration-import-types.js'
 
 export class RuntimeMigrationImportService {
   private readonly rootDir: string
@@ -84,6 +42,7 @@ export class RuntimeMigrationImportService {
 
   constructor(private readonly deps: {
     rootDir: string
+    historyReferences?: HistoryReferenceStore
     threadStore: ThreadStore
     sessionStore: SessionStore
     maintenance: ScopedMigrationMaintenanceLock
@@ -109,6 +68,7 @@ export class RuntimeMigrationImportService {
     const threadRecords = new Map<string, ThreadRecord>()
     const recordOwners = new Set<string>()
     let recordCount = 0
+    const historyReferences = parseHistoryMigrationState({})
     try {
       for await (const raw of records) {
         if (recordCount >= MAX_IMPORT_RECORDS) throw new Error(`runtime migration import exceeds ${MAX_IMPORT_RECORDS} records`)
@@ -117,7 +77,9 @@ export class RuntimeMigrationImportService {
         if (Buffer.byteLength(line) > MAX_IMPORT_RECORD_BYTES) throw new Error('runtime migration import record exceeds byte limit')
         await appendFile(filePath, line, { encoding: 'utf8', flag: recordCount === 0 ? 'wx' : 'a', mode: 0o600 })
         recordCount += 1
-        if (record.type === 'thread') {
+        if (record.type === 'history-reference') {
+          addHistoryMigrationReference(historyReferences, record.value)
+        } else if (record.type === 'thread') {
           const thread = ThreadSchema.parse(record.value)
           threadRecords.set(thread.id, thread)
           recordOwners.add(thread.id)
@@ -136,6 +98,7 @@ export class RuntimeMigrationImportService {
           throw new Error(`runtime migration record references an unknown thread: ${record.ownerId}`)
         }
       }
+      await preflightHistoryReferences(historyReferences, threadRecords.values(), this.deps.historyReferences)
       const threadIdMap: Record<string, string> = {}
       const introducedThreadIds: string[] = []
       const deduplicatedThreadIds: string[] = []
@@ -166,6 +129,7 @@ export class RuntimeMigrationImportService {
         warnings: []
       })
       const state: ImportState = {
+        historyReferences,
         importId,
         filePath,
         statePath,
@@ -200,6 +164,11 @@ export class RuntimeMigrationImportService {
   }
 
   async commit(importId: string): Promise<RuntimeMigrationImportResultType> {
+    const run = () => this.commitLocked(importId)
+    return this.deps.historyReferences?.withLifecycleMutation(run) ?? run()
+  }
+
+  private async commitLocked(importId: string): Promise<RuntimeMigrationImportResultType> {
     const state = await this.mustState(importId)
     if (state.status === 'committed' || state.status === 'verified') return this.result(state)
     if (state.status === 'rolled-back') throw new Error('runtime migration import was already rolled back')
@@ -207,6 +176,7 @@ export class RuntimeMigrationImportService {
     try {
       state.status = 'committing'
       await this.persistState(state)
+      await importHistoryReferences(state.historyReferences, this.deps.historyReferences, () => this.persistState(state))
       await this.importContentRecords(state)
       const existingItemIds = new Map<string, Set<string>>()
       const highestEventSeq = new Map<string, number>()
@@ -216,6 +186,9 @@ export class RuntimeMigrationImportService {
         if (!targetThreadId) continue
         if (record.type === 'thread') {
           const source = ThreadSchema.parse(record.value)
+          if (source.historyRefId && !await this.deps.historyReferences?.get(source.historyRefId)) {
+            throw new Error(`migration is missing history reference descriptor: ${source.historyRefId}`)
+          }
           const rewritten = rewriteImportedValue(source, {
             threadIdMap: state.preflight.threadIdMap,
             workspacePathMap: state.control.workspacePathMap,
@@ -294,6 +267,16 @@ export class RuntimeMigrationImportService {
           }
         }
       }
+      for (const thread of Object.values(state.threadAfter)) {
+        if (!thread.historyRefId) continue
+        const snapshot = await this.deps.sessionStore.loadSession(thread.id)
+        if (!snapshot || snapshot.historyRefId !== thread.historyRefId) {
+          await this.deps.sessionStore.upsertSession({
+            ...(snapshot ?? toSessionSnapshot(thread, thread.updatedAt, await this.deps.sessionStore.loadItems(thread.id))),
+            historyRefId: thread.historyRefId, workspace: thread.workspace
+          })
+        }
+      }
       state.status = 'committed'
       await this.persistState(state)
       return this.result(state)
@@ -311,9 +294,13 @@ export class RuntimeMigrationImportService {
     for (const threadId of state.introducedThreadIds) {
       const thread = await this.deps.threadStore.get(threadId)
       if (!thread) throw new Error(`imported thread is missing after commit: ${threadId}`)
+      if (thread.historyRefId !== state.threadAfter[threadId]?.historyRefId) {
+        throw new Error(`imported thread history reference changed: ${threadId}`)
+      }
       await this.deps.sessionStore.loadItems(threadId)
       await this.deps.sessionStore.highestSeq(threadId)
     }
+    await verifyHistoryReferences(state.historyReferences, this.deps.historyReferences)
     await this.verifyImportedContent(state)
     state.status = 'verified'
     await this.persistState(state)
@@ -321,6 +308,11 @@ export class RuntimeMigrationImportService {
   }
 
   async rollback(importId: string): Promise<RuntimeMigrationImportResultType> {
+    const run = () => this.rollbackLocked(importId)
+    return this.deps.historyReferences?.withLifecycleMutation(run) ?? run()
+  }
+
+  private async rollbackLocked(importId: string): Promise<RuntimeMigrationImportResultType> {
     const state = await this.mustState(importId)
     const lease = this.deps.maintenance.acquire(state.control.operationId)
     try {
@@ -455,6 +447,9 @@ export class RuntimeMigrationImportService {
           tags: rewritten.tags,
           confidence: rewritten.confidence,
           type: rewritten.type,
+          // Imported snapshots never arrive with user confirmation, so they
+          // always come back as reference memories, never directives.
+          authority: 'reference' as const,
           importance: rewritten.importance,
           observedAt: rewritten.observedAt,
           validFrom: rewritten.validFrom,
@@ -592,6 +587,7 @@ export class RuntimeMigrationImportService {
         state.warnings.push(`Preserved memory modified after migration import: ${id}`)
       }
     }
+    await rollbackHistoryReferences(state.historyReferences, this.deps.historyReferences, this.deps.threadStore, state.warnings)
     state.status = 'rolled-back'
     await this.persistState(state)
   }

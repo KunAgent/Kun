@@ -1,7 +1,15 @@
 import type { AppLocale } from './app-locales'
+import type {
+  WritePaperModeSettingsPatchV1,
+  WritePaperModeSettingsV1
+} from './app-settings-types-paper-mode'
 import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
 import type { LocalWhisperDownloadSourceId } from './local-whisper'
+import type {
+  RemoteAccessSettingsPatchV1,
+  RemoteAccessSettingsV1
+} from './app-settings-remote'
 import type {
   ApprovalPolicy,
   ApprovalReviewer,
@@ -322,16 +330,32 @@ export type CodeAgentPresetV1 = {
   persona: string
 }
 
+export type WritePaperReadingSettingsV1 = {
+  /** Workspace-relative directory holding paper units. Default "papers". */
+  papersDir: string
+  /** User template for the interpretation turn; empty = built-in default. */
+  interpretTemplate: string
+  outputLanguage: 'zh' | 'en' | 'auto'
+  /** Extract paper.md + figures/ automatically after import. */
+  autoPreprocess: boolean
+  /** Cool Papers notes fetching can be disabled on locked-down networks. */
+  coolNotesEnabled: boolean
+}
+
 export type WriteSettingsV1 = {
   defaultWorkspaceRoot: string
   activeWorkspaceRoot: string
   workspaces: string[]
   autoSaveEnabled: boolean
   autoSaveDelayMs: number
+  /** S1–S4 gate: unified remark codec + single-view document editor. */
+  documentEditorV2: boolean
   inlineCompletion: WriteInlineCompletionSettingsV1
   selectionAssist: WriteSelectionAssistSettingsV1
   typography: WriteTypographySettingsV1
   agentPresets: WriteAgentPresetV1[]
+  paperReading: WritePaperReadingSettingsV1
+  paperMode: WritePaperModeSettingsV1
 }
 
 export type ClawSettingsPatchV1 = Partial<Omit<ClawSettingsV1, 'skills' | 'im' | 'channels' | 'tasks'>> & {
@@ -349,7 +373,7 @@ export type ScheduleSettingsPatchV1 = Partial<
   tasks?: Array<Partial<ScheduledTaskV1>>
 }
 
-export type WriteSettingsPatchV1 = Partial<Omit<WriteSettingsV1, 'inlineCompletion' | 'selectionAssist' | 'typography' | 'agentPresets'>> & {
+export type WriteSettingsPatchV1 = Partial<Omit<WriteSettingsV1, 'inlineCompletion' | 'selectionAssist' | 'typography' | 'agentPresets' | 'paperReading' | 'paperMode'>> & {
   inlineCompletion?: Partial<WriteInlineCompletionSettingsV1>
   selectionAssist?: Partial<Omit<WriteSelectionAssistSettingsV1, 'quickActions'>> & {
     /** Replaced wholesale when present. */
@@ -358,6 +382,8 @@ export type WriteSettingsPatchV1 = Partial<Omit<WriteSettingsV1, 'inlineCompleti
   typography?: Partial<WriteTypographySettingsV1>
   /** Replaced wholesale when present. */
   agentPresets?: Array<Partial<WriteAgentPresetV1>>
+  paperReading?: Partial<WritePaperReadingSettingsV1>
+  paperMode?: WritePaperModeSettingsPatchV1
 }
 
 export type DesignSystemPreset =
@@ -583,6 +609,7 @@ export type AppSettingsV1 = {
   design: DesignSettingsV1
   guiUpdate: GuiUpdateConfigV1
   terminal: TerminalSettingsV1
+  remote: RemoteAccessSettingsV1
   codePromptPrefix: string
   /**
    * Custom empty-chat welcome title. Empty string keeps the locale default
@@ -598,7 +625,7 @@ export type AppSettingsV1 = {
 }
 
 export type AppSettingsPatch = Partial<
-  Omit<AppSettingsV1, 'provider' | 'agents' | 'log' | 'checkpointCleanup' | 'notifications' | 'appBehavior' | 'keyboardShortcuts' | 'write' | 'claw' | 'schedule' | 'design' | 'workflow' | 'guiUpdate' | 'terminal' | 'darkUiColors'>
+  Omit<AppSettingsV1, 'provider' | 'agents' | 'log' | 'checkpointCleanup' | 'notifications' | 'appBehavior' | 'keyboardShortcuts' | 'write' | 'claw' | 'schedule' | 'design' | 'workflow' | 'guiUpdate' | 'terminal' | 'remote' | 'darkUiColors'>
 > & {
   darkUiColors?: DarkUiColorsPatchV1
   provider?: ModelProviderSettingsPatchV1
@@ -615,4 +642,5 @@ export type AppSettingsPatch = Partial<
   design?: DesignSettingsPatchV1
   guiUpdate?: Partial<GuiUpdateConfigV1>
   terminal?: TerminalSettingsPatchV1
+  remote?: RemoteAccessSettingsPatchV1
 }

@@ -1,14 +1,15 @@
 import { BrowserWindow, clipboard, dialog } from 'electron'
 import { createRequire } from 'node:module'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { createElement, type ComponentPropsWithoutRef, type ReactNode } from 'react'
+import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { renderWorkMarkdownToHtml } from '../../shared/markdown/render-html'
+import { highlightExportCodeBlocks } from './write-export-highlight'
 import type {
   WriteExportFormat,
   WriteExportPayload,
@@ -19,6 +20,7 @@ import type {
 import type { DesignExportPayload, DesignExportResult } from '../../shared/design-export'
 import { resolveWriteMarkdownResource } from '../../shared/write-markdown-resource'
 import { resolveWorkspaceFile } from './workspace-service'
+import { copyWriteXArticleToSystemClipboard } from './write-x-article-clipboard'
 
 type HtmlToDocxDocumentOptions = {
   title?: string
@@ -319,49 +321,37 @@ function renderPlainTextFragment(content: string): string {
   )
 }
 
-function renderMarkdownFragment(content: string, sourcePath: string): string {
-  return renderToStaticMarkup(
-    createElement(
-      ReactMarkdown,
-      {
-        remarkPlugins: [remarkGfm],
-        components: {
-          a: ({
-            href,
-            children,
-            ...props
-          }: ComponentPropsWithoutRef<'a'> & { href?: string; children?: ReactNode }): ReactNode =>
-            createElement(
-              'a',
-              {
-                ...props,
-                href: resolveWriteMarkdownResource(href, sourcePath) ?? href
-              },
-              children
-            ),
-          img: ({
-            src,
-            alt,
-            ...props
-          }: ComponentPropsWithoutRef<'img'> & { src?: string; alt?: string | null }): ReactNode =>
-            createElement('img', {
-              ...props,
-              src: resolveWriteMarkdownResource(src, sourcePath),
-              alt: alt ?? ''
-            })
-        }
-      },
-      content
-    )
-  )
+async function renderMarkdownFragment(
+  content: string,
+  sourcePath: string,
+  options?: {
+    format?: WriteExportFormat
+    renderedDiagrams?: Record<string, string>
+    /** Export-document math: KaTeX HTML fallback beside MathML. */
+    mathFallback?: boolean
+  }
+): Promise<string> {
+  const mathMode = options?.format === 'doc' || options?.format === 'docx'
+    ? 'latex'
+    : options?.mathFallback ? 'mathmlDual' : 'mathml'
+  const highlightedCode = await highlightExportCodeBlocks(content)
+  return renderWorkMarkdownToHtml(content, {
+    math: mathMode,
+    highlightedCode,
+    ...(options?.renderedDiagrams ? { renderedDiagrams: options.renderedDiagrams } : {}),
+    resolveResource: (src) => resolveWriteMarkdownResource(src, sourcePath) ?? src
+  })
 }
 
 export async function buildWriteClipboardHtmlFragment(options: {
   sourcePath: string
   content: string
+  format?: WriteExportFormat
+  renderedDiagrams?: Record<string, string>
+  mathFallback?: boolean
 }): Promise<string> {
   const fragment = isMarkdownFile(options.sourcePath)
-    ? renderMarkdownFragment(options.content, options.sourcePath)
+    ? await renderMarkdownFragment(options.content, options.sourcePath, options)
     : renderPlainTextFragment(options.content)
   const body = await inlineLocalImagesInHtml(fragment)
   return `<article class="markdown-body">${body}</article>`
@@ -371,22 +361,49 @@ export function buildWriteExportFileName(sourcePath: string, format: WriteExport
   return `${basenameWithoutExtension(sourcePath)}${exportExtension(format)}`
 }
 
+/**
+ * KaTeX stylesheet with font URLs rewritten to absolute file:// paths so
+ * exported HTML/PDF render KaTeX markup even where no system math fonts
+ * exist (common on Linux). Cached after first read; empty on failure —
+ * the MathML output still covers fonted environments then.
+ */
+let katexCssCache: string | null = null
+
+function katexExportCss(): string {
+  if (katexCssCache !== null) return katexCssCache
+  try {
+    const cssPath = require.resolve('katex/dist/katex.min.css')
+    const fontsBase = `${pathToFileURL(dirname(cssPath)).href}/`
+    katexCssCache = readFileSync(cssPath, 'utf8')
+      .replace(/url\(fonts\//g, `url(${fontsBase}fonts/`)
+  } catch {
+    katexCssCache = ''
+  }
+  return katexCssCache
+}
+
 export async function buildWriteExportHtmlDocument(options: {
   sourcePath: string
   content: string
   title?: string
   wordCompatible?: boolean
+  format?: WriteExportFormat
+  renderedDiagrams?: Record<string, string>
 }): Promise<string> {
   const title = options.title?.trim() || basenameWithoutExtension(options.sourcePath)
   const body = await buildWriteClipboardHtmlFragment({
     sourcePath: options.sourcePath,
-    content: options.content
+    content: options.content,
+    mathFallback: true,
+    ...(options.format ? { format: options.format } : {}),
+    ...(options.renderedDiagrams ? { renderedDiagrams: options.renderedDiagrams } : {})
   })
   const baseHref = pathToFileURL(`${dirname(options.sourcePath)}/`).href
   const namespaces = options.wordCompatible
     ? ' xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"'
     : ''
 
+  const katexCss = body.includes('katex') ? katexExportCss() : ''
   return [
     '<!DOCTYPE html>',
     `<html lang="en"${namespaces}>`,
@@ -396,6 +413,7 @@ export async function buildWriteExportHtmlDocument(options: {
     `  <title>${escapeHtml(title)}</title>`,
     `  <base href="${escapeHtml(baseHref)}" />`,
     `  <style>${EXPORT_CSS}</style>`,
+    ...(katexCss ? [`  <style>${katexCss}</style>`] : []),
     '</head>',
     '<body>',
     '  <main class="document-shell">',
@@ -421,6 +439,11 @@ export async function copyWriteDocumentAsRichText(
       }
     }
 
+    const profile = payload.profile ?? 'online-docs'
+    if (profile === 'x-articles' || profile === 'x-articles-image') {
+      return copyWriteXArticleToSystemClipboard(payload, resolved.path)
+    }
+
     const html = await buildWriteClipboardHtmlFragment({
       sourcePath: resolved.path,
       content: payload.content
@@ -433,7 +456,8 @@ export async function copyWriteDocumentAsRichText(
 
     return {
       ok: true,
-      copiedAt: new Date().toISOString()
+      copiedAt: new Date().toISOString(),
+      profile
     }
   } catch (error) {
     return {
@@ -581,7 +605,9 @@ export async function exportWriteDocument(
       sourcePath,
       content: payload.content,
       title,
-      wordCompatible: payload.format === 'doc'
+      wordCompatible: payload.format === 'doc',
+      format: payload.format,
+      ...(payload.renderedDiagrams ? { renderedDiagrams: payload.renderedDiagrams } : {})
     })
 
     if (payload.format === 'html' || payload.format === 'doc') {

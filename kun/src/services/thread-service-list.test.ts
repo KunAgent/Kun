@@ -14,6 +14,7 @@ import {
   ThreadLifecycleFence
 } from './thread-lifecycle-fence.js'
 import { RuntimeEventRecorder } from './runtime-event-recorder.js'
+import { createThreadRecord, toThreadSummary } from '../domain/thread.js'
 
 class CapturingThreadStore implements ThreadStore {
   listOptions?: ThreadStoreListOptions
@@ -27,6 +28,31 @@ class CapturingThreadStore implements ThreadStore {
   async listPage(options?: ThreadStoreListOptions): Promise<ThreadStoreListPage> {
     this.pageOptions = options
     return { threads: [], hasMore: false, total: 0 }
+  }
+
+  async get(_threadId: string): Promise<ThreadRecord | null> {
+    return null
+  }
+
+  async upsert(thread: ThreadRecord): Promise<ThreadRecord> {
+    return thread
+  }
+
+  async delete(_threadId: string): Promise<boolean> {
+    return false
+  }
+}
+
+/** A store without `listPage`: the service falls back to list + in-memory
+ * filtering, which must see every thread regardless of workspace options. */
+class ListOnlyThreadStore implements ThreadStore {
+  listOptions?: ThreadStoreListOptions
+
+  constructor(private readonly summaries: ThreadSummary[]) {}
+
+  async list(options?: ThreadStoreListOptions): Promise<ThreadSummary[]> {
+    this.listOptions = options
+    return this.summaries
   }
 
   async get(_threadId: string): Promise<ThreadRecord | null> {
@@ -101,5 +127,60 @@ describe('ThreadService sidebar listing', () => {
     await serviceWith(raw).listPage()
 
     expect(raw.pageOptions).toEqual({ limit: 100 })
+  })
+})
+
+describe('ThreadService multi-workspace paging', () => {
+  it('forwards project worktree roots alongside the workspace filter', async () => {
+    const raw = new CapturingThreadStore()
+
+    await serviceWith(raw).listPage({
+      workspace: '/repo',
+      workspaces: ['/repo-wt-a', '/repo-wt-b'],
+      limit: 50
+    })
+
+    expect(raw.pageOptions).toEqual({
+      workspace: '/repo',
+      workspaces: ['/repo-wt-a', '/repo-wt-b'],
+      limit: 50
+    })
+  })
+
+  it('clears both workspace filters before a no-listPage store lists everything', async () => {
+    const summaries = [
+      toThreadSummary(createThreadRecord({ id: 'thr-repo', title: 'Repo', workspace: '/repo', model: 'm' })),
+      toThreadSummary(createThreadRecord({ id: 'thr-wt', title: 'Worktree', workspace: '/wt', model: 'm' })),
+      toThreadSummary(createThreadRecord({ id: 'thr-other', title: 'Other', workspace: '/other', model: 'm' }))
+    ]
+    const store = new ListOnlyThreadStore(summaries)
+
+    const page = await serviceWith(store).listPage({
+      workspace: '/repo',
+      workspaces: ['/wt'],
+      limit: 50
+    })
+
+    expect(store.listOptions).toMatchObject({ workspace: undefined, workspaces: undefined })
+    expect(page.threads.map((thread) => thread.id).sort()).toEqual(['thr-repo', 'thr-wt'])
+    expect(page.total).toBe(2)
+  })
+
+  it('filters list() on the union of workspace and workspaces', async () => {
+    const summaries = [
+      toThreadSummary(createThreadRecord({ id: 'thr-repo', title: 'Repo', workspace: '/repo', model: 'm' })),
+      toThreadSummary(createThreadRecord({ id: 'thr-wt', title: 'Worktree', workspace: '/wt', model: 'm' })),
+      toThreadSummary(createThreadRecord({ id: 'thr-other', title: 'Other', workspace: '/other', model: 'm' }))
+    ]
+    const store = new ListOnlyThreadStore(summaries)
+
+    const threads = await serviceWith(store).list({
+      workspace: '/repo',
+      workspaces: ['/wt'],
+      includeArchived: true,
+      includeSide: true
+    })
+
+    expect(threads.map((thread) => thread.id).sort()).toEqual(['thr-repo', 'thr-wt'])
   })
 })

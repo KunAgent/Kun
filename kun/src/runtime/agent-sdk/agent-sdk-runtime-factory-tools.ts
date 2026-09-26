@@ -30,6 +30,7 @@ import type { SessionStore } from '../../ports/session-store.js'
 import type { ThreadStore } from '../../ports/thread-store.js'
 import type { CapabilityRegistry } from '../../adapters/tool/capability-registry.js'
 import type { ToolHost, ToolHostContext } from '../../ports/tool-host.js'
+import { applyRoomToolPolicy } from '../../loop/room-turn-policy.js'
 import {
   DEFAULT_APPROVAL_REVIEWER,
   DEFAULT_SANDBOX_MODE,
@@ -114,6 +115,7 @@ const SDK_ON_REQUEST_AUTO_ALLOWED_TOOLS = new Set([
   'Grep',
   'TodoWrite'
 ])
+import { isPendingReceiptOutput } from '../../services/canvas-receipt-registry.js'
 import type { AgentSdkRuntimeFactoryDeps } from './agent-sdk-runtime-factory-contracts.js'
 import { resolveTurnPlanContext } from './agent-sdk-runtime-factory-plan.js'
 import type { AgentSdkFactoryContext } from './agent-sdk-runtime-factory-context.js'
@@ -124,7 +126,7 @@ export function createAgentSdkToolRuntimeDeps(
 ): Pick<SdkRuntimeDeps, 'executeKunTool' | 'decideToolApproval'> {
   const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, activeSkillIdsByTurn, skillPromptByTurn, skillTurnKey, resolveActiveSkillIds, nowIso, makeAwaitUserInput, makeAwaitApproval, toolContext, resolveImages } = context
   return {
-    async executeKunTool(threadId, turnId, toolName, args, signal): Promise<KunToolResult> {
+    async executeKunTool(threadId, turnId, toolName, args, signal, sdkCallId): Promise<KunToolResult> {
       const thread = await deps.threadStore.get(threadId)
       const turn = thread?.turns.find((candidate) => candidate.id === turnId)
       if (!thread || !turn || signal?.aborted) {
@@ -158,6 +160,7 @@ export function createAgentSdkToolRuntimeDeps(
         additionalWorkspaces: thread.additionalWorkspaces,
         ...(plan ?? {}),
         ...(turn?.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+        ...(turn?.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
         ...(turn?.guiDesignMode ? { guiDesignMode: true } : {}),
         ...(turn?.guiDesignArtifact ? { guiDesignArtifact: turn.guiDesignArtifact } : {}),
         ...(activeSkillIds ? { activeSkillIds } : {}),
@@ -180,12 +183,15 @@ export function createAgentSdkToolRuntimeDeps(
           ? {}
           : { awaitUserInput: makeAwaitUserInput(threadId, turnId, toolSignal) })
       }
-      const discoveryContext = toolContext(threadId, turnId, thread.workspace, {
+      const rawDiscoveryContext = toolContext(threadId, turnId, thread.workspace, {
         ...executionOptions,
         ...(!graphPolicy && turn.guiDesignArtifact?.kind === 'svg'
           ? { allowedToolNames: SVG_ARTIFACT_ALLOWED_TOOL_NAMES }
           : {})
       })
+      const discoveryContext = thread.roomContext
+        ? applyRoomToolPolicy(rawDiscoveryContext, thread)
+        : rawDiscoveryContext
       const graphAllowedToolNames = graphPolicy
         ? delegatedGraphAllowedToolNames(
             deps.registry.listTools(discoveryContext),
@@ -193,7 +199,7 @@ export function createAgentSdkToolRuntimeDeps(
           )
         : undefined
       // Real per-call signal so an interactive user_input cancels on turn abort.
-      const ctx = toolContext(threadId, turnId, thread.workspace, {
+      const rawContext = toolContext(threadId, turnId, thread.workspace, {
         ...executionOptions,
         ...(intersectDelegatedToolNames(
           !graphPolicy && turn.guiDesignArtifact?.kind === 'svg'
@@ -211,25 +217,31 @@ export function createAgentSdkToolRuntimeDeps(
             }
           : {})
       })
+      const ctx = thread.roomContext ? applyRoomToolPolicy(rawContext, thread) : rawContext
       try {
         // The SDK's MCP handler must cross the same LocalToolHost boundary as
         // native turns. Calling CapabilityRegistry.tool.execute directly skips
         // policy/sandbox/approval gates, hooks, read-before-edit validation,
         // and the operation journal.
-        const result = await deps.toolHost.execute({
-          // A bridge call can be concurrent with another invocation of the
-          // same tool in one turn. Keep each call's approval and operation
-          // journal identity distinct so one pending approval cannot replace
-          // another in the gate.
-          callId: deps.ids.next('call_sdk'),
-          toolName,
-          arguments: args
-        }, ctx)
+        const call = { callId: sdkCallId ?? deps.ids.next('call_sdk'), toolName, arguments: args }
+        const result = await deps.toolHost.execute(call, ctx)
         if (result.item.kind !== 'tool_result') {
           return {
             output: `Kun tool ${toolName} returned an invalid result item`,
             isError: true
           }
+        }
+        if (isPendingReceiptOutput(result.item.output)) {
+          if (!deps.receipts || !sdkCallId) return { output: 'Canvas receipt service or SDK call identity is unavailable; application was not verified.', isError: true }
+          const item = { ...result.item, id: `item_toolresult_${turnId}_${sdkCallId}` }
+          let finalized: KunToolResult | undefined
+          deps.receipts.register({ receiptKey: result.item.output.receiptKey, threadId, turnId,
+            call, itemId: item.id, acceptedOutput: result.item.output,
+            onFinalized: (settled) => { finalized = { output: settled.output, isError: settled.isError } } })
+          await deps.turns.applyItem(threadId, item)
+          await deps.receipts.awaitReceipt(result.item.output.receiptKey, 30_000)
+          if (finalized) return finalized
+          return { output: 'Renderer receipt timed out; the canvas was not verified.', isError: true }
         }
         return { output: result.item.output, isError: result.item.isError }
       } catch (err) {
@@ -243,6 +255,9 @@ export function createAgentSdkToolRuntimeDeps(
       if (toolName.startsWith('mcp__kun__')) return { allow: true }
       const thread = await deps.threadStore.get(threadId)
       const turn = thread?.turns.find((candidate) => candidate.id === turnId)
+      if (thread?.roomContext || deps.allowSdkBuiltins === false) {
+        return { allow: false, message: 'This turn only allows Kun-gated tools.' }
+      }
       const approvalPolicy =
         turn?.approvalPolicy ?? thread?.approvalPolicy ?? deps.defaultApprovalPolicy
       if (approvalPolicy === 'never') {

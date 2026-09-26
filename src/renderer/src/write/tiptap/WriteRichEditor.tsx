@@ -7,47 +7,68 @@ import {
   type ReactNode
 } from 'react'
 import { Editor, Extension, type AnyExtension } from '@tiptap/core'
-import { StarterKit } from '@tiptap/starter-kit'
-import { TableKit } from '@tiptap/extension-table'
-import { TaskItem, TaskList } from '@tiptap/extension-list'
-import { TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import i18n from '../../i18n'
+import 'katex/dist/katex.min.css'
 import type {
-  WriteEditorSelectionState,
-  WriteSelectionAnchorRect,
-  WriteSelectionRange
+  WriteEditorSelectionState
 } from '../../components/write/WriteMarkdownEditor'
-import { NodeSelection } from '@tiptap/pm/state'
-import type { EditorState } from '@tiptap/pm/state'
+import { computeWriteDocumentStatsFromText } from '../../components/write/write-workspace-view-utils'
 import { buildInlineCompletionPayload } from '../inline-completion'
-import { isSelectableRasterImageSrc } from '../selected-image'
 import type { WriteBlockType } from '../block-type'
 import type { WriteInlineFormatKind } from '../inline-format'
 import { createWriteRecentEdit, type WriteRecentEdit } from '../recent-edits'
-import {
-  WriteCodeBlock,
-  auditWriteMarkdownFidelity,
-  getWriteMarkdownManager,
-  parseWriteMarkdown,
-  type WriteRichFidelity
-} from './markdown-manager'
+import { buildWriteRichExtensions, workCodecSchema } from './markdown-manager'
 import {
   buildWriteRichMarkdownProjection,
-  posForProjectedOffset,
-  projectedOffsetForPos
+  posForProjectedOffset
 } from './markdown-projection'
+import { selectionStateFromEditor } from './rich-selection-state'
+import {
+  createWorkDocContext,
+  parseWorkDocument,
+  serializeWorkDocument,
+  type ParsedWorkDocument,
+  type WorkDocContext
+} from '../markdown/document-codec'
+import {
+  scheduleWorkParse,
+  WORK_PARSE_WORKER_THRESHOLD
+} from '../markdown/parse-work-async'
+import { sanitizeWorkDocContent } from '../markdown/schema-check'
+import { splitFrontmatter } from '@shared/markdown/frontmatter'
+import { WritePropertiesPanel } from '../../components/write/WritePropertiesPanel'
 import { recentEditsFromRichTransaction } from './recent-edits-pm'
 import { replaceRangeWithMarkdown } from './markdown-insert'
-import { applyExternalMarkdownToEditor } from './markdown-sync'
+import { applyExternalMarkdownToEditor, applyParsedDocToEditor } from './markdown-sync'
 import { WriteLocalImage } from './local-image'
 import { WritePasteImage } from './paste-image'
 import { WriteRichInlineCompletion } from './extensions/inline-completion'
+import { WriteSaveShortcut } from './extensions/write-save-shortcut'
 import {
   WriteRichTermPropagation,
   writeRichExternalSyncMeta
 } from './extensions/term-propagation'
 import { WriteRichTemplateShortcuts } from './extensions/template-shortcuts'
 import { SddRequirementBadges } from './extensions/sdd-requirement-badges'
+import { WriteDiffReview } from './review/review-plugin'
+import { WriteReviewSession } from './review/review-session'
+import { WriteWorkLinks } from './extensions/work-links'
+import { requestKnowledgeSourceNavigation } from '../../lib/knowledge-source-navigation'
+import { useWriteWorkspaceStore } from '../write-workspace-store'
+import { WriteDocumentReviewBar } from '../../components/write/WriteDocumentReviewBar'
+import { NodeRange } from '@tiptap/extension-node-range'
+import { Placeholder } from '@tiptap/extensions'
+import { search } from 'prosemirror-search'
+import { WriteBlockHandle } from './blocks/block-handle'
+import { WriteBlockSelection } from './blocks/block-selection'
+import { WriteSlashMenu, insertPickedImage } from './blocks/slash-menu'
+import { setRichBlockType, toggleRichInlineFormat } from './rich-format-commands'
+import { WritePasteMarkdown } from './blocks/write-paste'
+import { WriteTableToolbar } from './blocks/table-toolbar'
+import { WriteBlockShortcuts } from './blocks/write-shortcuts'
+import { WriteFindBar } from '../../components/write/WriteFindBar'
+import { WriteOutlineRail } from '../../components/write/WriteOutlineRail'
 
 /**
  * Imperative surface for flows that operate on the markdown projection
@@ -73,24 +94,24 @@ export type WriteRichEditorHandle = {
   toggleInlineFormat: (kind: WriteInlineFormatKind) => boolean
   /** Set the block type of the current selection (selection toolbar). */
   setBlockType: (type: WriteBlockType) => boolean
-}
-
-/** Block type of the current selection, walking outward from the cursor. */
-function richSelectionBlockType(state: EditorState): WriteBlockType {
-  const { $from } = state.selection
-  for (let depth = $from.depth; depth >= 0; depth -= 1) {
-    const node = $from.node(depth)
-    const name = node.type.name
-    if (name === 'heading') {
-      const level = Number(node.attrs.level) || 1
-      return level === 1 ? 'heading1' : level === 2 ? 'heading2' : 'heading3'
-    }
-    if (name === 'codeBlock') return 'code'
-    if (name === 'blockquote') return 'quote'
-    if (name === 'bulletList') return 'bullet'
-    if (name === 'orderedList') return 'ordered'
-  }
-  return 'paragraph'
+  /** Live Tiptap instance for the fixed format toolbar's active states. */
+  getEditor: () => Editor | null
+  openFind: () => void
+  /** Pick a workspace image and insert it at the cursor (toolbar button). */
+  insertImage: () => void
+  /** Word/character counts computed from the live editor document — cheap
+   *  compared to re-parsing the markdown source on every keystroke. */
+  getDocumentStats: () => { characterCount: number; wordCount: number } | null
+  /**
+   * Enter the block-level diff review (V2 codec only): swaps the document
+   * to `nextDoc` and shows per-chunk accept/reject decorations against
+   * `original`. Returns false when the editor is read-only, not using the
+   * V2 codec, or the texts are identical.
+   */
+  beginDiffReview: (params: { original: string; nextDoc: string }) => boolean
+  isDiffReviewActive: () => boolean
+  acceptAllDiff: () => void
+  rejectAllDiff: () => void
 }
 
 type Props = {
@@ -116,134 +137,12 @@ type Props = {
   onSaveShortcut: () => void
   onImagePasteSaved?: () => void
   onImagePasteError?: (message: string) => void
-  onFidelityChange?: (fidelity: WriteRichFidelity) => void
+  onReviewStateChange?: (active: boolean) => void
   handleRef?: MutableRefObject<WriteRichEditorHandle | null>
-  /** Rendered instead of the rich editor when the open document fails the
-   * round-trip fidelity gate (typically the CodeMirror editor). */
-  fallback?: ReactNode
-}
-
-type GateState = {
-  fileKey: string
-  eligible: boolean
 }
 
 function fileKeyOf(filePath?: string | null): string {
   return (filePath ?? '').trim()
-}
-
-function unionRects(
-  rects: Array<{ left: number; right: number; top: number; bottom: number }>
-): WriteSelectionAnchorRect | undefined {
-  if (rects.length === 0) return undefined
-  let left = Number.POSITIVE_INFINITY
-  let right = Number.NEGATIVE_INFINITY
-  let top = Number.POSITIVE_INFINITY
-  let bottom = Number.NEGATIVE_INFINITY
-  for (const rect of rects) {
-    left = Math.min(left, rect.left)
-    right = Math.max(right, rect.right)
-    top = Math.min(top, rect.top)
-    bottom = Math.max(bottom, rect.bottom)
-  }
-  if (!Number.isFinite(left) || !Number.isFinite(right) || !Number.isFinite(top) || !Number.isFinite(bottom)) {
-    return undefined
-  }
-  return { left, right, top, bottom, width: right - left, height: bottom - top }
-}
-
-function lineColumnOfText(prefix: string): { line: number; column: number } {
-  const breaks = prefix.match(/\n/g)?.length ?? 0
-  const lastBreak = prefix.lastIndexOf('\n')
-  return { line: breaks + 1, column: prefix.length - lastBreak }
-}
-
-/**
- * Build the selection contract from the ProseMirror selection. Offsets,
- * line/column values, and the selected text are all expressed in markdown
- * projection coordinates so inline edit scopes and quoted selections share
- * one coordinate space with the completion contexts.
- */
-export function selectionStateFromEditor(editor: Editor): WriteEditorSelectionState {
-  const { state, view } = editor
-  const doc = state.doc
-  const projection = buildWriteRichMarkdownProjection(doc)
-  const ranges: WriteSelectionRange[] = []
-  const rects: Array<{ left: number; right: number; top: number; bottom: number }> = []
-
-  // A node-selected raster image surfaces the image-aware toolbar;
-  // text ranges below stay empty for node selections (pmFrom === pmTo - size
-  // collapses to no projected text).
-  const nodeSelection = state.selection instanceof NodeSelection ? state.selection : null
-  if (nodeSelection?.node.type.name === 'image') {
-    const src = typeof nodeSelection.node.attrs.src === 'string' ? nodeSelection.node.attrs.src : ''
-    if (isSelectableRasterImageSrc(src)) {
-      const alt = typeof nodeSelection.node.attrs.alt === 'string' ? nodeSelection.node.attrs.alt : ''
-      let anchorRect: WriteEditorSelectionState['anchorRect']
-      const nodeDom = view.nodeDOM(nodeSelection.from)
-      if (nodeDom instanceof HTMLElement) {
-        const rect = nodeDom.getBoundingClientRect()
-        anchorRect = {
-          left: rect.left,
-          right: rect.right,
-          top: rect.top,
-          bottom: rect.bottom,
-          width: rect.width,
-          height: rect.height
-        }
-      } else {
-        try {
-          const coords = view.coordsAtPos(nodeSelection.from)
-          anchorRect = { ...coords, width: coords.right - coords.left, height: coords.bottom - coords.top }
-        } catch {
-          anchorRect = undefined
-        }
-      }
-      return {
-        text: '',
-        ranges: [],
-        charCount: 0,
-        selectedImage: { src, alt },
-        ...(anchorRect ? { anchorRect } : {})
-      }
-    }
-  }
-
-  for (const range of state.selection.ranges) {
-    const pmFrom = range.$from.pos
-    const pmTo = range.$to.pos
-    if (pmFrom === pmTo) continue
-    const from = projectedOffsetForPos(doc, projection, pmFrom)
-    const to = projectedOffsetForPos(doc, projection, pmTo)
-    try {
-      rects.push(view.coordsAtPos(pmFrom), view.coordsAtPos(pmTo))
-    } catch {
-      // coordsAtPos throws while the view is being torn down; skip the rect.
-    }
-    if (from === null || to === null || to <= from) continue
-    const text = projection.text.slice(from, to)
-    const start = lineColumnOfText(projection.text.slice(0, from))
-    const end = lineColumnOfText(projection.text.slice(0, Math.max(from, to - 1)))
-    ranges.push({
-      from,
-      to,
-      startLine: start.line,
-      startColumn: start.column,
-      endLine: end.line,
-      endColumn: end.column,
-      text,
-      charCount: to - from
-    })
-  }
-
-  const text = ranges.map((range) => range.text).join('\n\n')
-  return {
-    text,
-    ranges,
-    charCount: ranges.reduce((total, range) => total + range.charCount, 0),
-    blockType: richSelectionBlockType(state),
-    ...(rects.length > 0 ? { anchorRect: unionRects(rects) } : {})
-  }
 }
 
 const INLINE_EDIT_RECENT_CONTEXT_CHARS = 180
@@ -270,12 +169,12 @@ export function WriteRichEditor({
   onSaveShortcut,
   onImagePasteSaved,
   onImagePasteError,
-  onFidelityChange,
-  handleRef,
-  fallback
+  onReviewStateChange,
+  handleRef
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const scrollHostRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor | null>(null)
   const workspaceRootRef = useRef(workspaceRoot ?? '')
   const filePathRef = useRef(filePath ?? '')
@@ -296,9 +195,24 @@ export function WriteRichEditor({
   const onSaveShortcutRef = useRef(onSaveShortcut)
   const onImagePasteSavedRef = useRef(onImagePasteSaved)
   const onImagePasteErrorRef = useRef(onImagePasteError)
-  const onFidelityChangeRef = useRef(onFidelityChange)
+  const onReviewStateChangeRef = useRef(onReviewStateChange)
   const lastEmittedValueRef = useRef<string | null>(null)
-  const [gate, setGate] = useState<GateState | null>(null)
+  const workCtxRef = useRef<WorkDocContext>(createWorkDocContext())
+  const reviewSessionRef = useRef<WriteReviewSession | null>(null)
+  const [reviewUi, setReviewUi] = useState<{ active: boolean; total: number; index: number }>({
+    active: false,
+    total: 0,
+    index: 0
+  })
+  const [frontmatter, setFrontmatter] = useState('')
+  const [findBar, setFindBar] = useState<{ open: boolean; withReplace: boolean }>({
+    open: false,
+    withReplace: false
+  })
+  const [mountedEditor, setMountedEditor] = useState<Editor | null>(null)
+  // Initial parse result; large documents parse in a Web Worker and arrive
+  // asynchronously (§3.9/§11).
+  const [boot, setBoot] = useState<{ parsed: ParsedWorkDocument; source: string } | null>(null)
 
   workspaceRootRef.current = workspaceRoot ?? ''
   filePathRef.current = filePath ?? ''
@@ -319,114 +233,193 @@ export function WriteRichEditor({
   onSaveShortcutRef.current = onSaveShortcut
   onImagePasteSavedRef.current = onImagePasteSaved
   onImagePasteErrorRef.current = onImagePasteError
-  onFidelityChangeRef.current = onFidelityChange
+  onReviewStateChangeRef.current = onReviewStateChange
 
   const fileKey = fileKeyOf(filePath)
-  const eligible = gate?.fileKey === fileKey ? gate.eligible : null
 
-  // Audit every payload that arrives from outside the editor (file open,
-  // disk sync). Our own serialized output is round-trip safe by construction
-  // and is never re-audited.
+  // Parse the initial document — synchronously for small files, in the
+  // worker past the threshold so opening a large file never blocks the UI.
   useEffect(() => {
-    if (value === lastEmittedValueRef.current && gate?.fileKey === fileKey) return
-    const fidelity = auditWriteMarkdownFidelity(value)
-    onFidelityChangeRef.current?.(fidelity)
-    setGate((current) => {
-      if (current?.fileKey === fileKey && current.eligible === fidelity.eligible) return current
-      return { fileKey, eligible: fidelity.eligible }
-    })
-    if (!fidelity.eligible) {
-      lastEmittedValueRef.current = null
-      return
-    }
-
-    const editor = editorRef.current
-    if (editor && !editor.isDestroyed) {
-      if (applyExternalMarkdownToEditor(editor, value)) {
-        lastEmittedValueRef.current = value
-      }
-    }
+    setBoot(null)
+    return scheduleWorkParse(value, (parsed) => setBoot({ parsed, source: value }))
+    // `value` is captured at file open; later updates flow through the
+    // sync effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, fileKey])
+  }, [fileKey])
+
+  // Apply every payload that arrives from outside the editor (file open,
+  // disk sync). The unified codec preserves every construct, so no
+  // fidelity gate runs here. Our own serialized output is never re-parsed.
+  useEffect(() => {
+    if (value === lastEmittedValueRef.current) return
+    // During an active diff review the agent's next snapshot re-enters
+    // through `beginDiffReview` (§6.3.4); applying it here would clobber
+    // chunk positions.
+    if (reviewSessionRef.current?.isActive()) return
+    const editor = editorRef.current
+    if (!editor || editor.isDestroyed) return
+
+    if (value.length >= WORK_PARSE_WORKER_THRESHOLD && typeof Worker !== 'undefined') {
+      // Off-thread parse; a newer snapshot arriving mid-parse supersedes
+      // this one (streaming agent edits coalesce naturally).
+      return scheduleWorkParse(value, (parsed) => {
+        const instance = editorRef.current
+        if (!instance || instance.isDestroyed) return
+        const doc = sanitizeWorkDocContent(parsed.doc, parsed.ctx, instance.schema)
+        if (applyParsedDocToEditor(instance, doc)) {
+          workCtxRef.current = parsed.ctx
+          setFrontmatter(parsed.ctx.frontmatter)
+          lastEmittedValueRef.current = value
+        }
+      })
+    }
+
+    if (applyExternalMarkdownToEditor(editor, value, (markdown) => {
+      const parsed = parseWorkDocument(markdown)
+      const doc = sanitizeWorkDocContent(parsed.doc, parsed.ctx, editor.schema)
+      workCtxRef.current = parsed.ctx
+      setFrontmatter(parsed.ctx.frontmatter)
+      return doc
+    })) {
+      lastEmittedValueRef.current = value
+    }
+  }, [value, fileKey, mountedEditor])
 
   useEffect(() => {
-    if (eligible !== true || !hostRef.current || editorRef.current) return
+    if (!hostRef.current || editorRef.current || !boot) return
 
-    const manager = getWriteMarkdownManager()
-    const saveShortcut = Extension.create({
-      name: 'writeSaveShortcut',
-      addKeyboardShortcuts() {
-        return {
-          'Mod-s': () => {
-            onSaveShortcutRef.current()
-            return true
-          }
-        }
-      }
+    const saveShortcut = WriteSaveShortcut.configure({
+      onSave: () => onSaveShortcutRef.current(),
+      onFind: (withReplace) => setFindBar({ open: true, withReplace })
     })
 
-    const extensions: AnyExtension[] = [
-      StarterKit.configure({
-        link: { openOnClick: false },
-        codeBlock: false,
-        undoRedo: { depth: 200 }
-      }),
-      TableKit.configure({ table: { resizable: false } }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      WriteCodeBlock,
-      WriteLocalImage.configure({
+    const pickerOptions = {
+      isReadOnly: () => readOnlyRef.current,
+      getWorkspaceRoot: () => workspaceRootRef.current,
+      getFilePath: () => filePathRef.current,
+      getImageDirectory: () => imageDirectoryRef.current
+    }
+    const extensions: AnyExtension[] = buildWriteRichExtensions({
+      getFilePath: () => filePathRef.current,
+      image: WriteLocalImage.configure({
         getFilePath: () => filePathRef.current,
         getWorkspaceRoot: () => workspaceRootRef.current
       }),
-      WritePasteImage.configure({
-        getWorkspaceRoot: () => workspaceRootRef.current,
-        getFilePath: () => filePathRef.current,
-        getDocumentEpoch: () => documentEpochRef.current,
-        getImageDirectory: () => imageDirectoryRef.current,
-        isReadOnly: () => readOnlyRef.current,
-        onSaved: () => onImagePasteSavedRef.current?.(),
-        onError: (message) => onImagePasteErrorRef.current?.(message)
-      }),
-      WriteRichInlineCompletion.configure({
-        getDebounceMs: () => completionDebounceMsRef.current,
-        getMinAcceptScore: () => completionMinAcceptScoreRef.current,
-        getLongDebounceMs: () => completionLongDebounceMsRef.current,
-        getLongMinAcceptScore: () => completionLongMinAcceptScoreRef.current,
-        isLongEnabled: () => completionLongEnabledRef.current,
-        isEnabled: () => completionEnabledRef.current && !readOnlyRef.current,
-        getFilePath: () => filePathRef.current,
-        requestCompletion: async (context, mode) => {
-          if (typeof window.kunGui?.requestWriteInlineCompletion !== 'function') return null
-          const result = await window.kunGui.requestWriteInlineCompletion(
-            buildInlineCompletionPayload(context, {
-              model: completionModelRef.current,
-              workspaceRoot: workspaceRootRef.current,
-              mode,
-              recentEdits: recentEditsRef.current
-            })
-          )
-          if (!result.ok) return null
-          if (result.action?.kind === 'edit') {
-            return { text: result.action.replacement, action: result.action, mode }
+      extra: [
+        WritePasteImage.configure({
+          getWorkspaceRoot: () => workspaceRootRef.current,
+          getFilePath: () => filePathRef.current,
+          getDocumentEpoch: () => documentEpochRef.current,
+          getImageDirectory: () => imageDirectoryRef.current,
+          isReadOnly: () => readOnlyRef.current,
+          onSaved: () => onImagePasteSavedRef.current?.(),
+          onError: (message) => onImagePasteErrorRef.current?.(message)
+        }),
+        WriteRichInlineCompletion.configure({
+          getDebounceMs: () => completionDebounceMsRef.current,
+          getMinAcceptScore: () => completionMinAcceptScoreRef.current,
+          getLongDebounceMs: () => completionLongDebounceMsRef.current,
+          getLongMinAcceptScore: () => completionLongMinAcceptScoreRef.current,
+          isLongEnabled: () => completionLongEnabledRef.current,
+          isEnabled: () =>
+            completionEnabledRef.current &&
+            !readOnlyRef.current &&
+            !reviewSessionRef.current?.isActive(),
+          getFilePath: () => filePathRef.current,
+          requestCompletion: async (context, mode) => {
+            if (typeof window.kunGui?.requestWriteInlineCompletion !== 'function') return null
+            const result = await window.kunGui.requestWriteInlineCompletion(
+              buildInlineCompletionPayload(context, {
+                model: completionModelRef.current,
+                workspaceRoot: workspaceRootRef.current,
+                mode,
+                recentEdits: recentEditsRef.current
+              })
+            )
+            if (!result.ok) return null
+            if (result.action?.kind === 'edit') {
+              return { text: result.action.replacement, action: result.action, mode }
+            }
+            const completionText = result.action ? result.action.text : result.completion
+            if (!completionText) return null
+            return { text: completionText, action: result.action, mode }
           }
-          const completionText = result.action ? result.action.text : result.completion
-          if (!completionText) return null
-          return { text: completionText, action: result.action, mode }
-        }
-      }),
-      WriteRichTermPropagation,
-      WriteRichTemplateShortcuts.configure({
-        isReadOnly: () => readOnlyRef.current
-      }),
-      ...(requirementBadges ? [SddRequirementBadges] : []),
-      saveShortcut
-    ]
+        }),
+        WriteRichTermPropagation,
+        WriteWorkLinks.configure({
+          navigation: {
+            getFilePath: () => filePathRef.current,
+            getWorkspaceRoot: () => workspaceRootRef.current,
+            openFile: (path, heading, page) => {
+              // Heading positioning after open is a follow-up; the store
+              // action only accepts the path today. PDF `#page=N` links
+              // (paper citations) are delivered through the knowledge-source
+              // navigation channel once the reader mounts.
+              void heading
+              void useWriteWorkspaceStore.getState().openFile(workspaceRootRef.current, path)
+              if (typeof page === 'number' && Number.isFinite(page)) {
+                requestKnowledgeSourceNavigation({
+                  filePath: path,
+                  location: { kind: 'pdf', pageStart: page, pageEnd: page }
+                })
+              }
+            }
+          }
+        }),
+        WriteRichTemplateShortcuts.configure({
+          isReadOnly: () => readOnlyRef.current
+        }),
+        WriteDiffReview.configure({
+          getFilePath: () => filePathRef.current
+        }),
+        ...(requirementBadges ? [SddRequirementBadges] : []),
+        NodeRange.configure({ depth: undefined, key: 'Shift' }),
+        WriteBlockSelection.configure({
+          getCtx: () => workCtxRef.current,
+          isReadOnly: () => readOnlyRef.current
+        }),
+        WriteBlockHandle.configure({
+          getCtx: () => workCtxRef.current,
+          getFilePath: () => filePathRef.current,
+          getWorkspaceRoot: () => workspaceRootRef.current,
+          isReadOnly: () => readOnlyRef.current,
+          isReviewActive: () => reviewSessionRef.current?.isActive() ?? false
+        }),
+        WriteSlashMenu.configure(pickerOptions),
+        WritePasteMarkdown.configure({ isReadOnly: () => readOnlyRef.current }),
+        WriteTableToolbar.configure({ isReadOnly: () => readOnlyRef.current }),
+        WriteBlockShortcuts.configure({ isReadOnly: () => readOnlyRef.current }),
+        Extension.create({
+          name: 'writeSearch',
+          addProseMirrorPlugins() {
+            return [search()]
+          }
+        }),
+        Placeholder.configure({
+          showOnlyCurrent: false,
+          includeChildren: false,
+          placeholder: ({ editor: instance, node, hasAnchor }) => {
+            if (instance.state.doc.childCount === 1 && instance.state.doc.firstChild === node) {
+              return i18n.t('writePlaceholderEmpty', { ns: 'common' })
+            }
+            if (hasAnchor) return i18n.t('writePlaceholderSlash', { ns: 'common' })
+            return ''
+          }
+        }),
+        saveShortcut
+      ]
+    })
+
+    const initialContent = (() => {
+      workCtxRef.current = boot.parsed.ctx
+      setFrontmatter(boot.parsed.ctx.frontmatter)
+      return sanitizeWorkDocContent(boot.parsed.doc, boot.parsed.ctx, workCodecSchema())
+    })()
 
     const editor = new Editor({
       element: hostRef.current,
       extensions,
-      content: parseWriteMarkdown(value),
+      content: initialContent,
       editable: !readOnlyRef.current,
       editorProps: {
         attributes: {
@@ -440,11 +433,12 @@ export function WriteRichEditor({
         // re-emitting them as user changes would mark the file dirty and
         // autosave a normalized rewrite of content the agent just wrote.
         if (transaction.getMeta(writeRichExternalSyncMeta)) {
-          onSelectionChangeRef.current(selectionStateFromEditor(instance))
+          onSelectionChangeRef.current(selectionStateFromEditor(instance, workCtxRef.current))
           return
         }
         try {
-          const markdown = manager.serialize(instance.state.doc.toJSON())
+          const docJson = instance.state.doc.toJSON()
+          const markdown = serializeWorkDocument(docJson, workCtxRef.current)
           lastEmittedValueRef.current = markdown
           onChangeRef.current(markdown)
         } catch (error) {
@@ -456,16 +450,46 @@ export function WriteRichEditor({
           const edits = recentEditsFromRichTransaction(transaction, filePathRef.current)
           if (edits.length > 0) onDocumentEditRef.current(edits)
         }
-        onSelectionChangeRef.current(selectionStateFromEditor(instance))
+        onSelectionChangeRef.current(selectionStateFromEditor(instance, workCtxRef.current))
       },
       onSelectionUpdate({ editor: instance }) {
-        onSelectionChangeRef.current(selectionStateFromEditor(instance))
+        onSelectionChangeRef.current(selectionStateFromEditor(instance, workCtxRef.current))
       }
     })
 
     editorRef.current = editor
-    lastEmittedValueRef.current = value
-    onSelectionChangeRef.current(selectionStateFromEditor(editor))
+    setMountedEditor(editor)
+    lastEmittedValueRef.current = boot.source
+    onSelectionChangeRef.current(selectionStateFromEditor(editor, workCtxRef.current))
+
+    reviewSessionRef.current = new WriteReviewSession(
+      editor,
+      {
+        onFinish: (markdown) => {
+          lastEmittedValueRef.current = markdown
+          onChangeRef.current(markdown)
+        },
+        onStateChange: (active) => {
+          setReviewUi((current) => ({
+            active,
+            total: active ? current.total : 0,
+            index: 0
+          }))
+          onReviewStateChangeRef.current?.(active)
+        },
+        onChunksChange: (count) => {
+          setReviewUi((current) => ({
+            active: current.active,
+            total: count,
+            index: Math.min(current.index, Math.max(0, count - 1))
+          }))
+        }
+      },
+      () => workCtxRef.current,
+      (ctx) => {
+        workCtxRef.current = ctx
+      }
+    )
 
     if (handleRef) {
       handleRef.current = {
@@ -556,50 +580,44 @@ export function WriteRichEditor({
             markdown
           )
         },
-        toggleInlineFormat: (kind) => {
+        getDocumentStats: () => {
           const instance = editorRef.current
-          if (!instance || instance.isDestroyed || readOnlyRef.current) return false
-          const chain = instance.chain().focus()
-          if (kind === 'bold') return chain.toggleBold().run()
-          if (kind === 'italic') return chain.toggleItalic().run()
-          if (kind === 'strikethrough') return chain.toggleStrike().run()
-          return chain.toggleCode().run()
+          if (!instance || instance.isDestroyed) return null
+          const doc = instance.state.doc
+          return computeWriteDocumentStatsFromText(
+            doc.textBetween(0, doc.content.size, '\n', '\n')
+          )
         },
-        setBlockType: (type) => {
+        toggleInlineFormat: (kind) => toggleRichInlineFormat(editorRef.current, readOnlyRef.current, kind),
+        setBlockType: (type) => setRichBlockType(editorRef.current, readOnlyRef.current, type),
+        getEditor: () => editorRef.current,
+        openFind: () => setFindBar({ open: true, withReplace: false }),
+        insertImage: () => {
           const instance = editorRef.current
-          if (!instance || instance.isDestroyed || readOnlyRef.current) return false
-          const chain = instance.chain().focus()
-          switch (type) {
-            case 'heading1':
-              return chain.toggleHeading({ level: 1 }).run()
-            case 'heading2':
-              return chain.toggleHeading({ level: 2 }).run()
-            case 'heading3':
-              return chain.toggleHeading({ level: 3 }).run()
-            case 'quote':
-              return chain.toggleBlockquote().run()
-            case 'bullet':
-              return chain.toggleBulletList().run()
-            case 'ordered':
-              return chain.toggleOrderedList().run()
-            case 'code':
-              return chain.toggleCodeBlock().run()
-            default:
-              return chain.setParagraph().run()
-          }
-        }
+          if (instance && !instance.isDestroyed && !readOnlyRef.current) void insertPickedImage(instance, pickerOptions)
+        },
+        beginDiffReview: ({ original, nextDoc }) => {
+          const session = reviewSessionRef.current
+          if (!session || readOnlyRef.current) return false
+          return session.begin({ original, nextDoc })
+        },
+        isDiffReviewActive: () => reviewSessionRef.current?.isActive() ?? false,
+        acceptAllDiff: () => reviewSessionRef.current?.resolveAll('accept'),
+        rejectAllDiff: () => reviewSessionRef.current?.resolveAll('reject')
       }
     }
 
     return () => {
       if (handleRef) handleRef.current = null
+      reviewSessionRef.current = null
       editor.destroy()
       editorRef.current = null
+      setMountedEditor(null)
     }
-    // The editor is created once per eligible file; value/file changes flow
-    // through the audit effect above.
+    // The editor is created once per file once the initial parse (`boot`)
+    // resolves; value/file changes flow through the sync effect above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eligible, fileKey])
+  }, [fileKey, boot])
 
   useEffect(() => {
     const editor = editorRef.current
@@ -607,22 +625,67 @@ export function WriteRichEditor({
     editor.setEditable(!readOnly)
   }, [readOnly])
 
-  if (eligible === false) {
-    return (
-      <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
-        <div className="write-rich-fallback-notice flex shrink-0 items-center gap-2 border-b border-amber-200/80 bg-amber-50/90 px-4 py-2 text-[12.5px] text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/35 dark:text-amber-100">
-          <TriangleAlert className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
-          <span>{t('writeRichFallbackNotice')}</span>
-        </div>
-        <div className="min-h-0 min-w-0 flex-1">{fallback}</div>
-      </div>
-    )
+  const fileName = (() => {
+    const path = filePathRef.current.replace(/\\/g, '/')
+    const base = path.split('/').pop() ?? ''
+    return base.replace(/\.[^.]+$/, '')
+  })()
+
+  const handleFrontmatterChange = (block: string): void => {
+    workCtxRef.current.frontmatter = block
+    setFrontmatter(block)
+    const instance = editorRef.current
+    if (instance && !instance.isDestroyed) {
+      const markdown = serializeWorkDocument(instance.state.doc.toJSON(), workCtxRef.current)
+      lastEmittedValueRef.current = markdown
+      onChangeRef.current(markdown)
+    }
   }
 
   return (
-    <div
-      ref={hostRef}
-      className="write-rich-host flex h-full min-h-0 w-full min-w-0 flex-col overflow-y-auto"
-    />
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
+      {reviewUi.active ? (
+        <WriteDocumentReviewBar
+          total={reviewUi.total}
+          index={reviewUi.index}
+          onPrev={() => {
+            const index = Math.max(0, reviewUi.index - 1)
+            setReviewUi((current) => ({ ...current, index }))
+            reviewSessionRef.current?.scrollToChunk(index)
+          }}
+          onNext={() => {
+            const index = Math.min(reviewUi.total - 1, reviewUi.index + 1)
+            setReviewUi((current) => ({ ...current, index }))
+            reviewSessionRef.current?.scrollToChunk(index)
+          }}
+          onAcceptAll={() => reviewSessionRef.current?.resolveAll('accept')}
+          onRejectAll={() => reviewSessionRef.current?.resolveAll('reject')}
+        />
+      ) : null}
+      <WriteFindBar
+        editor={mountedEditor}
+        open={findBar.open}
+        withReplace={findBar.withReplace}
+        onClose={() => setFindBar({ open: false, withReplace: false })}
+      />
+      <div className="write-rich-scroll-wrap relative flex min-h-0 w-full min-w-0 flex-1">
+        <div
+          ref={scrollHostRef}
+          className="write-rich-host flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto"
+        >
+          <div className="write-doc-head">
+            <WritePropertiesPanel
+              frontmatter={frontmatter}
+              onFrontmatterChange={handleFrontmatterChange}
+              readOnly={readOnly}
+              getDocumentText={() => splitFrontmatter(lastEmittedValueRef.current ?? '').body}
+            />
+            {fileName ? <div className="write-doc-title" aria-hidden="true">{fileName}</div> : null}
+          </div>
+          <div ref={hostRef} className="write-rich-editor-mount" />
+        </div>
+        <WriteOutlineRail editor={mountedEditor} scrollHost={scrollHostRef.current} />
+      </div>
+    </div>
   )
 }

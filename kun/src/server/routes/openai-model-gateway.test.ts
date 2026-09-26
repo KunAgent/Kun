@@ -55,7 +55,28 @@ function authorizedRequest(path: string, init: RequestInit = {}): Request {
   })
 }
 
-function runtime(enabled = true, modelClient: ModelClient = new GatewayModel()): ServerRuntime {
+function gatewayProviders(): Array<{
+  id: string
+  kind: string
+  authType: string
+  configured: boolean
+  credentialStatus?: string
+  models: string[]
+}> {
+  return [
+    { id: 'relay-key', kind: 'http', authType: 'api-key', configured: true, credentialStatus: 'ready', models: ['relay-a', 'relay-b'] },
+    { id: 'sub-account', kind: 'http', authType: 'subscription', configured: true, credentialStatus: 'ready', models: ['sub-model'] },
+    { id: 'oauth-account', kind: 'http', authType: 'oauth', configured: true, credentialStatus: 'ready', models: ['oauth-model'] },
+    { id: 'cli-provider', kind: 'gemini-cli-api', authType: 'api-key', configured: true, credentialStatus: 'ready', models: ['cli-model'] },
+    { id: 'unconfigured', kind: 'http', authType: 'api-key', configured: false, credentialStatus: 'missing', models: ['gone'] }
+  ]
+}
+
+function runtime(
+  enabled = true,
+  modelClient: ModelClient = new GatewayModel(),
+  exposeProviderModels = false
+): ServerRuntime {
   const health = new RoutePoolHealthStore()
   const pools = [
     {
@@ -78,6 +99,7 @@ function runtime(enabled = true, modelClient: ModelClient = new GatewayModel()):
     modelClient,
     modelGateway: {
       enabled: () => enabled,
+      exposeProviderModels: () => exposeProviderModels,
       pools: () => pools,
       configuredPools: () => pools,
       health,
@@ -90,6 +112,9 @@ function runtime(enabled = true, modelClient: ModelClient = new GatewayModel()):
         rotate: async () => ({ key: 'rotated-gateway-key' }),
         revoke: async () => true
       }
+    },
+    modelConnections: {
+      snapshot: async () => ({ providers: gatewayProviders() })
     }
   } as unknown as ServerRuntime
 }
@@ -99,17 +124,50 @@ describe('local OpenAI model gateway', () => {
     expect(ServeOptionsSchema.safeParse({ ...DEFAULT_SERVE_OPTIONS, dataDir: '/tmp/kun', host: '0.0.0.0', localModelGateway: { enabled: true } }).success).toBe(false)
     expect(ServeOptionsSchema.safeParse({ ...DEFAULT_SERVE_OPTIONS, dataDir: '/tmp/kun', host: '127.0.0.1', localModelGateway: { enabled: true } }).success).toBe(true)
   })
-  it('lists every routed model exposed by the local provider', () => {
-    const response = gatewayModels(runtime(), authorizedRequest('/v1/models'))
+  it('lists every routed model exposed by the local provider', async () => {
+    const response = await gatewayModels(runtime(), authorizedRequest('/v1/models'))
     expect(JSON.parse(response.body).data).toEqual([
       expect.objectContaining({ id: 'local-model', owned_by: 'kun-route-pool' }),
       expect.objectContaining({ id: 'local-coding', owned_by: 'kun-route-pool' })
     ])
   })
 
+  it('hides provider models and rejects provider/model while exposure is off', async () => {
+    const response = await gatewayModels(runtime(), authorizedRequest('/v1/models'))
+    const ids = (JSON.parse(response.body).data as { id: string }[]).map((entry) => entry.id)
+    expect(ids).toEqual(['local-model', 'local-coding'])
+
+    const direct = await gatewayChatCompletions(runtime(), authorizedRequest('/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'relay-key/relay-a', messages: [{ role: 'user', content: 'hi' }] })
+    }))
+    expect((direct as { status: number }).status).toBe(404)
+  })
+
+  it('lists only api-key HTTP providers and routes provider/model when exposure is on', async () => {
+    const testRuntime = runtime(true, new GatewayModel(), true)
+    const response = await gatewayModels(testRuntime, authorizedRequest('/v1/models'))
+    const ids = (JSON.parse(response.body).data as { id: string }[]).map((entry) => entry.id)
+    expect(ids).toEqual(['local-model', 'local-coding', 'relay-key/relay-a', 'relay-key/relay-b'])
+
+    const direct = await gatewayChatCompletions(testRuntime, authorizedRequest('/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'relay-key/relay-a', messages: [{ role: 'user', content: 'hi' }], stream: false })
+    }))
+    expect(direct.status).toBe(200)
+    expect((testRuntime.modelClient as GatewayModel).last?.providerId).toBe('relay-key')
+    expect((testRuntime.modelClient as GatewayModel).last?.model).toBe('relay-a')
+
+    const blocked = await gatewayChatCompletions(testRuntime, authorizedRequest('/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'sub-account/sub-model', messages: [{ role: 'user', content: 'hi' }] })
+    }))
+    expect((blocked as { status: number }).status).toBe(404)
+  })
+
   it('reports the effective local gateway state with route status', () => {
     expect(JSON.parse(routePoolStatus(runtime(true)).body)).toMatchObject({
-      localGateway: { enabled: true },
+      localGateway: { enabled: true, exposeProviderModels: false },
       pools: expect.arrayContaining([expect.objectContaining({ id: 'pool' })]),
       configuredPools: expect.arrayContaining([expect.objectContaining({ id: 'pool' })])
     })
@@ -166,7 +224,7 @@ describe('local OpenAI model gateway', () => {
   })
 
   it('requires independent Bearer auth on all three public routes', async () => {
-    expect(gatewayModels(runtime(), new Request('http://localhost/v1/models')).status).toBe(401)
+    expect((await gatewayModels(runtime(), new Request('http://localhost/v1/models'))).status).toBe(401)
     expect((await gatewayChatCompletions(runtime(), new Request('http://localhost/v1/chat/completions', {
       method: 'POST', body: '{}'
     }))).status).toBe(401)

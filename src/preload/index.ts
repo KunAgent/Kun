@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import type { KunGuiApi } from '../shared/kun-gui-api'
+import { providerBridge } from './provider-bridge'
 import type { ProviderMutationFlushRequestHandler } from '../shared/provider-mutation-barrier'
 import { normalizeDesktopTitleBarMode } from '../shared/desktop-title-bar'
 import { registerExtensionContentScriptPreload } from './extension-content-script'
@@ -10,7 +11,10 @@ import { createGitHubMcpAuthorizationPreloadApi } from './github-mcp-authorizati
 import { createDataMigrationPreloadApi } from './data-migration'
 import { getWorkspaceCreationTimes } from './workspace-creation-times'
 import { runtimeRequestPreloadApi } from './runtime-request'
-import { kokoroSpeechBridge } from './kokoro-speech-bridge'
+import { sanottsSpeechBridge } from './sanotts-speech-bridge'
+import { writeBridge } from './write-bridge'
+import { onIpcEvent } from './ipc-event'
+import { paperApi } from './paper-api'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
 // The preload runs sandboxed (webPreferences.sandbox = true), so it cannot
 // require node built-ins like node:os. The home dir is passed in from the main
@@ -95,6 +99,7 @@ const api = {
   saveSettingsSilent: (partial) =>
     ipcRenderer.invoke('settings:save-silent', partial),
   ...runtimeRequestPreloadApi,
+  setRoomPermissions: (request) => ipcRenderer.invoke('room:permissions:set', request),
   gatewayCredential: (action) => ipcRenderer.invoke('gateway:credential', action),
   getRuntimeSettingsSyncStatus: () =>
     ipcRenderer.invoke('runtime:settings-sync-status:get'),
@@ -112,9 +117,7 @@ const api = {
   restartRuntime: () => ipcRenderer.invoke('runtime:restart'),
   restartKunServe: () => ipcRenderer.invoke('runtime:restart-serve'),
   fetchUpstreamModels: () => ipcRenderer.invoke('upstream:models'),
-  probeModelProvider: (payload) => ipcRenderer.invoke('provider:probe', payload),
-  listProviderQuotas: () => ipcRenderer.invoke('provider:quota:list'),
-  fetchModelsDevCatalog: (payload) => ipcRenderer.invoke('provider:models-dev-catalog', payload),
+  ...providerBridge,
   optimizePrompt: (payload) => ipcRenderer.invoke('prompt:optimize', payload),
   getClawStatus: () => ipcRenderer.invoke('claw:status'),
   runClawTask: (taskId) => ipcRenderer.invoke('claw:task:run', taskId),
@@ -306,6 +309,8 @@ const api = {
     ipcRenderer.invoke('file:save-workspace-image-bytes', payload),
   readClipboardImage: () =>
     ipcRenderer.invoke('clipboard:read-image'),
+  writeClipboardImage: (payload) =>
+    ipcRenderer.invoke('clipboard:write-image', payload),
   getPathForFile: (file) =>
     webUtils.getPathForFile(file),
   renameWorkspaceEntry: (payload) =>
@@ -324,27 +329,13 @@ const api = {
     ipcRenderer.on('file:workspace-changed', wrapped)
     return () => ipcRenderer.removeListener('file:workspace-changed', wrapped)
   },
-  exportWriteDocument: (payload) =>
-    ipcRenderer.invoke('write:export', payload),
+  ...writeBridge,
   exportConversation: (payload) =>
     ipcRenderer.invoke('conversation:export', payload),
   exportMemoryMarkdown: (payload) =>
     ipcRenderer.invoke('memory:export-markdown', payload),
   exportDesignPrototype: (payload) =>
     ipcRenderer.invoke('design:export-prototype', payload),
-  copyWriteDocumentAsRichText: (payload) =>
-    ipcRenderer.invoke('write:copy-rich-text', payload),
-  requestWriteInlineCompletion: (payload) =>
-    ipcRenderer.invoke('write:inline-completion', payload),
-  retrieveWriteContext: (payload) =>
-    ipcRenderer.invoke('write:retrieve-context', payload),
-  readWriteDocumentSha256: (payload) => ipcRenderer.invoke('write:read-document-sha256', payload),
-  generateWriteInfographic: (payload) =>
-    ipcRenderer.invoke('write:generate-infographic', payload),
-  authorizeWritePrototype: (payload) =>
-    ipcRenderer.invoke('write:authorize-prototype', payload),
-  openWritePrototype: (payload) =>
-    ipcRenderer.invoke('write:open-prototype', payload),
   transcribeSpeech: (payload) =>
     ipcRenderer.invoke('speech:transcribe', payload),
   getLocalWhisperModelStatus: (modelId) =>
@@ -365,11 +356,7 @@ const api = {
     ipcRenderer.on('speech:local-whisper:progress', wrapped)
     return () => ipcRenderer.removeListener('speech:local-whisper:progress', wrapped)
   },
-  ...kokoroSpeechBridge,
-  listWriteInlineCompletionDebugEntries: () =>
-    ipcRenderer.invoke('write:inline-completion-debug:list'),
-  clearWriteInlineCompletionDebugEntries: () =>
-    ipcRenderer.invoke('write:inline-completion-debug:clear'),
+  ...sanottsSpeechBridge,
   startSse: (threadId, sinceSeq, streamId, options) =>
     ipcRenderer.invoke('runtime:sse:start', { threadId, sinceSeq, streamId, ...options }),
   stopSse: (streamId) => ipcRenderer.invoke('runtime:sse:stop', streamId),
@@ -430,6 +417,7 @@ const api = {
     ipcRenderer.on('runtime:status', wrapped)
     return () => ipcRenderer.removeListener('runtime:status', wrapped)
   },
+  onAppQuitting: (handler) => onIpcEvent('app:quitting', handler),
   onRuntimeSettingsSyncStatus: (handler) => {
     const wrapped = (
       _: Electron.IpcRendererEvent,
@@ -675,6 +663,20 @@ const api = {
     ) => handler(payload)
     ipcRenderer.on('terminal:exit', wrapped)
     return () => ipcRenderer.removeListener('terminal:exit', wrapped)
-  }
+  },
+  remoteAccessGetStatus: () => ipcRenderer.invoke('remote:status:get'),
+  remoteAccessSetConfig: (patch) => ipcRenderer.invoke('remote:config:set', patch),
+  remoteAccessSetPassword: (password) => ipcRenderer.invoke('remote:password:set', password),
+  remoteAccessRevokeSessions: () => ipcRenderer.invoke('remote:sessions:revoke'),
+  remoteAccessDetectTailscale: () => ipcRenderer.invoke('remote:tailscale:detect'),
+  onRemoteAccessStatusChanged: (handler) => {
+    const wrapped = (
+      _: Electron.IpcRendererEvent,
+      payload: Parameters<typeof handler>[0]
+    ) => handler(payload)
+    ipcRenderer.on('remote:status-changed', wrapped)
+    return () => ipcRenderer.removeListener('remote:status-changed', wrapped)
+  },
+  ...paperApi
 } satisfies KunGuiApi
 contextBridge.exposeInMainWorld('kunGui', api)

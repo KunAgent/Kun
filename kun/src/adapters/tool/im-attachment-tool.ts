@@ -3,7 +3,7 @@ import { basename, isAbsolute, relative, resolve, sep } from 'node:path'
 import type { LocalTool } from './local-tool-host.js'
 import { withToolBoundary, workspaceRoot } from './builtin-tool-utils.js'
 
-const MAX_IM_ATTACHMENT_BYTES = 50 * 1024 * 1024
+export const MAX_IM_ATTACHMENT_BYTES = 50 * 1024 * 1024
 const MAX_IM_ATTACHMENTS = 3
 
 function rawPaths(args: Record<string, unknown>): string[] {
@@ -24,7 +24,7 @@ function fileNameFor(args: Record<string, unknown>, index: number, fallback: str
   return fallback
 }
 
-async function resolveImAttachmentPath(
+export async function resolveImAttachmentPath(
   inputPath: string,
   contextWorkspace: string
 ): Promise<{

@@ -1,8 +1,9 @@
 import type { ModelStreamChunk } from '../../ports/model-client.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
-import { isCustomModelEndpointFormat, modelEndpointPath, type ModelEndpointFormat } from '../../contracts/model-endpoint-format.js'
+import { resolveModelEndpointUrl, type ModelEndpointFormat } from '../../contracts/model-endpoint-format.js'
 import { DEFAULT_MODEL_STREAM_LIMITS, ModelStreamResourceBudget, ModelStreamResourceLimitError, type ModelStreamLimits } from './model-stream-resource-budget.js'
 import type { ChatCompletionResponse, ChatMessage, StreamReadResult } from './compat-model-types.js'
+import { modelFailureMetadata } from './failure-reason.js'
 
 export function mergeStreamFinishReason(current: string | null, next: string): string {
   if (current && current !== 'stop' && next === 'stop') return current
@@ -22,33 +23,12 @@ export function isCodexEndpoint(baseUrl: string): boolean {
   }
 }
 
-/**
- * OpenCode Go (the subscription tier at opencode.ai/zen/go) requires a
- * per-session routing header (`x-opencode-session`) on every request. Identify
- * it from the stable preset source first, then from the exact host + path
- * boundary for manually configured official Go endpoints. Never use a loose
- * substring match: `opencode-free` and other `opencode.ai` paths must not be
- * misclassified.
- */
-export function isOpenCodeGo(input: {
-  presetSource?: string
-  providerId?: string
-  baseUrl: string
-}): boolean {
-  if (input.presetSource === 'opencode-go') return true
-  const providerId = input.providerId?.trim().toLowerCase() ?? ''
-  // Multi-account preset ids resolve to presetSource 'opencode-go', but a
-  // profile that lost that binding still keeps an `opencode-go[-N]` id.
-  if (/^opencode-go(?:-[0-9]+)?$/u.test(providerId)) return true
-  try {
-    const url = new URL(input.baseUrl.trim())
-    if (url.protocol !== 'https:' || url.hostname !== 'opencode.ai') return false
-    const path = url.pathname.replace(/\/+$/u, '')
-    return path === '/zen/go' || path.startsWith('/zen/go/')
-  } catch {
-    return false
-  }
-}
+export {
+  isOpenCodeFree,
+  isOpenCodeGo,
+  openCodeSessionRuntimeHeaders,
+  requiresOpenCodeSessionHeader
+} from './compat-opencode-session.js'
 
 export function normalizeCodexResponsesUrl(baseUrl: string): string {
   try {
@@ -70,26 +50,11 @@ export function normalizeCodexResponsesUrl(baseUrl: string): string {
 }
 
 export function buildModelEndpointUrl(baseUrl: string, endpointFormat: ModelEndpointFormat): string {
-  if (isCodexEndpoint(baseUrl)) return normalizeCodexResponsesUrl(baseUrl)
-  if (isCustomModelEndpointFormat(endpointFormat)) return exactModelEndpointUrl(baseUrl)
-  const path = modelEndpointPath(endpointFormat)
-  const normalized = baseUrl.trim().replace(/\/+$/, '')
-  if (!normalized) return `/v1/${path}`
-  const lastSegment = normalized.split('/').pop()?.toLowerCase() ?? ''
-  if (lastSegment === 'beta') {
-    return `${normalized.slice(0, -'/beta'.length)}/v1/${path}`
-  }
-  if (/^v\d+$/.test(lastSegment)) {
-    return `${normalized}/${path}`
-  }
-  return `${normalized}/v1/${path}`
+  return resolveModelEndpointUrl(baseUrl, endpointFormat, 'generate')
 }
 
 export function exactModelEndpointUrl(baseUrl: string): string {
-  const trimmed = baseUrl.trim()
-  const query = trimmed.search(/[?#]/)
-  if (query < 0) return trimmed.replace(/\/+$/, '')
-  return `${trimmed.slice(0, query).replace(/\/+$/, '')}${trimmed.slice(query)}`
+  return resolveModelEndpointUrl(baseUrl, 'custom_endpoint', 'generate')
 }
 
 
@@ -136,26 +101,23 @@ export function modelPayloadError(payload: Record<string, unknown>): { message: 
 export function modelPayloadFailure(
   error: { message: string; code?: string }
 ): import('../../contracts/model-route-pool.js').ModelFailureMetadata {
-  const signal = `${error.code ?? ''} ${error.message}`.toLowerCase()
-  const category = /rate.?limit|too many requests/.test(signal)
-    ? 'rate_limit' as const
-    : /overload|at capacity|unavailable|server busy/.test(signal)
-      ? 'unavailable' as const
-      : /auth|unauthor|forbidden|credential|api.?key/.test(signal)
-        ? 'authentication' as const
-        : /quota|credit|balance|payment/.test(signal)
-          ? 'quota' as const
-          : /model.*(?:missing|not found|unavailable)/.test(signal)
-            ? 'model_not_found' as const
-            : 'unknown' as const
-  return {
-    category,
-    responseReceived: true,
-    ...(error.code ? { providerCode: error.code } : {}),
-    // Preserve existing route behavior: streamed provider rejections were not
-    // failover-eligible before provenance was attached.
-    failoverAllowed: false
+  const metadata = modelFailureMetadata({
+    providerCode: error.code,
+    body: error.message,
+    responseReceived: true
+  })
+  if (metadata.category === 'unknown') {
+    // Streamed provider rejections carry no HTTP status; keep the legacy
+    // keyword categories for auth/model errors the new classifier leaves
+    // unmapped.
+    const signal = `${error.code ?? ''} ${error.message}`.toLowerCase()
+    metadata.category = /auth|unauthor|forbidden|credential|api.?key/.test(signal)
+      ? 'authentication'
+      : /model.*(?:missing|not found|unavailable)/.test(signal)
+        ? 'model_not_found'
+        : 'unknown'
   }
+  return metadata
 }
 
 function modelErrorObject(error: Record<string, unknown> | null): { message: string; code?: string } | null {
@@ -230,6 +192,73 @@ export function shouldRetryWithoutStreamUsage(
   if (status !== 400 && status !== 422) return false
   if (!Object.prototype.hasOwnProperty.call(body, 'stream_options')) return false
   return /\b(stream_options|include_usage)\b/i.test(text)
+}
+
+/**
+ * Stream-only endpoints (e.g. Codex Responses) reject explicit
+ * `stream: false` requests. The body can be resent unchanged with
+ * `stream: true` and consumed through the SSE decoder.
+ */
+export function isStreamRequiredError(status: number, text: string): boolean {
+  if (status !== 400 && status !== 422) return false
+  return /stream[^a-z0-9]{0,30}(must|required|only|unsupported)/i.test(text)
+}
+
+/**
+ * Chat-completions thinking endpoints require `reasoning_content` to be
+ * replayed on assistant messages. Retryable only when the body did not
+ * already carry it — otherwise the failure is unrelated and a retry would
+ * be identical.
+ */
+export function shouldRetryWithReasoningRoundTrip(
+  status: number,
+  text: string,
+  body: Record<string, unknown>
+): boolean {
+  if (status !== 400 && status !== 422) return false
+  if (!/reasoning_content|reasoning[^a-z]{0,60}(must|required|missing|passed back)/i.test(text)) {
+    return false
+  }
+  const messages = Array.isArray(body.messages) ? body.messages : []
+  return !messages.some(
+    (message) =>
+      message !== null &&
+      typeof message === 'object' &&
+      typeof (message as Record<string, unknown>).reasoning_content === 'string'
+  )
+}
+
+/**
+ * Responses endpoints with `store: false` reject a function_call that is not
+ * preceded by its reasoning items. Retryable when the input still contains a
+ * function_call with no reasoning item immediately ahead of it (history
+ * recorded before reasoning capture existed); the retry drops those rounds.
+ */
+export function shouldDropUnreplayableToolRounds(
+  status: number,
+  text: string,
+  body: Record<string, unknown>
+): boolean {
+  if (status !== 400 && status !== 422) return false
+  if (!/reasoning/i.test(text)) return false
+  const input = Array.isArray(body.input) ? body.input : []
+  let precededByReasoning = false
+  for (const item of input) {
+    const type = item !== null && typeof item === 'object'
+      ? (item as Record<string, unknown>).type
+      : undefined
+    if (type === 'reasoning') {
+      precededByReasoning = true
+      continue
+    }
+    if (type === 'function_call') {
+      if (!precededByReasoning) return true
+      precededByReasoning = false
+      continue
+    }
+    if (type === 'function_call_output' || type === 'message') precededByReasoning = false
+  }
+  return false
 }
 
 export {

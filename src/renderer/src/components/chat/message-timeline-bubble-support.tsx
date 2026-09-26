@@ -80,6 +80,7 @@ export function RuntimeMetaChips({
   const attachmentIds = hideTurnDisclosure || hideAttachments ? [] : metaStringArray(meta, 'attachmentIds')
   const activeSkillIds = hideTurnDisclosure ? [] : metaStringArray(meta, 'activeSkillIds')
   const injectedMemoryIds = hideTurnDisclosure ? [] : metaStringArray(meta, 'injectedMemoryIds')
+  const injectedDirectiveIds = hideTurnDisclosure ? [] : metaStringArray(meta, 'injectedDirectiveIds')
   const injectedInstructionSources = hideTurnDisclosure ? [] : metaInstructionSources(meta)
   const composerContextLabels = hideTurnDisclosure ? [] : metaComposerContextLabels(meta)
   const officeViewPositions = hideTurnDisclosure ? [] : metaOfficeViewPositions(meta)
@@ -97,6 +98,7 @@ export function RuntimeMetaChips({
     (hideAttachments || attachmentIds.length === 0) &&
     activeSkillIds.length === 0 &&
     injectedMemoryIds.length === 0 &&
+    injectedDirectiveIds.length === 0 &&
     injectedInstructionSources.length === 0 &&
     composerContextLabels.length === 0 &&
     officeViewPositions.length === 0 &&
@@ -118,7 +120,7 @@ export function RuntimeMetaChips({
           {t('toolActiveSkills')} {activeSkillIds.length}
         </span>
       ) : null}
-      {injectedMemoryIds.length > 0 ? (
+      {injectedMemoryIds.length > 0 || injectedDirectiveIds.length > 0 ? (
         <InjectedMemoryMetaChip meta={meta} memoryIds={injectedMemoryIds} chipClass={chipClass} />
       ) : null}
       {injectedInstructionSources.length > 0 ? (
@@ -239,6 +241,7 @@ export function CopyFeedbackButton({
             ? 'text-rose-400'
             : 'text-ds-faint hover:text-ds-muted'
       }`}
+      data-assistant-action="copy"
     >
       {success ? (
         <Check className={iconClassName} strokeWidth={2} />
@@ -294,7 +297,7 @@ export function AssistantExportButton({
   }
 
   return (
-    <details ref={detailsRef} className="relative">
+    <details ref={detailsRef} className="relative" data-assistant-action="export">
       <summary
         className="flex cursor-pointer list-none items-center gap-1 rounded-md px-1.5 py-0.5 text-ds-faint transition hover:bg-ds-hover hover:text-ds-muted"
         title={error ? t('exportAnswerFailed', { message: error }) : t('exportAnswer')}

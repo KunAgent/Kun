@@ -1,11 +1,12 @@
 # Kun 客户端持有单运行时方案
 
 本文记录 Kun 桌面应用和独立 TUI 如何使用同一套 Kun 协议与持久化数据，
-但各自持有自己的运行时进程。结论先说清楚：GUI 只保留一个 agent，唯一
+但各自持有本次应用会话的完整服务进程。GUI 只保留一个 agent，唯一
 ID 是 `kun`；GUI、TUI、脚本、扩展和连接手机都通过同一条 `kun serve`
-HTTP/SSE 边界工作。正常 GUI/TUI 在同一 `(规范化 dataDir, runtime flavor)`
-槽位内互斥：谁启动 Runtime，谁负责在真实退出时关闭它。对话、设置、记忆
-和用量继续由 Service Manager 持久化并可被后续客户端顺序复用。历史运行时、
+HTTP/SSE 边界工作。同一规范化 `dataDir` 在所有 runtime flavor 之间只有一个
+应用所有者：谁启动 Manager、Runtime 和工作进程，谁负责在退出时关闭整套服务。
+主窗口关闭即退出应用。对话、设置、记忆和用量继续由 Service Manager 持久化，
+后续客户端顺序打开时读取原址历史。历史运行时、
 旧绘画/设计 starter、运行时诊断面板、agent 切换都不再是产品表面。
 
 Graph 编排、自进化项目 Agent、恢复与治理仍运行在同一个 Kun 边界内，完整设计与
@@ -15,9 +16,17 @@ Work 工作区可以按线程挂载为 Code 的只读、无向量结构知识库
 与检索流程见 [`docs/knowledge-bases.md`](./knowledge-bases.md)。知识库挂载不会扩大
 普通文件工具或 sandbox 的可写根。
 
+GUI Code 项目可以把附加目录挂到主项目上（侧边栏「添加目录到项目」），写入该项目线程的
+`additionalWorkspaces`。附加目录不是新的侧边栏项目，也不是知识库。`git_inspect`、`/review`、
+plan worktree、bash 默认 cwd 和 `.kun/project.json` 仍只跟随主目录；文件工具用绝对路径访问附加根。
+
 长期记忆使用“原子 JSON 标准数据 + 可重建 SQLite FTS5 投影”。检索必须先做作用域和生命周期
 过滤，记忆只能作为动态、不可信的 `reference` 证据，不能进入稳定 system 前缀或获得指令权限。
 数据布局、迁移、降级与验证见 [`docs/memory-foundation.md`](./memory-foundation.md)。
+反馈账本是独立的、默认关闭的本地审计投影：`retrieved` 只记录实际注入，`confirmed` 只接受
+显式用户动作，`corrected` 创建同作用域的新版本并保留 `supersedes` 链。它不保存查询、正文、
+模型输出、凭据或本机路径，也不参与当前 lexical/FTS5 生产排序；离线候选若未通过预注册门禁，
+不得添加隐藏权重或 dormant flag。详见记忆基础文档的 Feedback ledger 章节。
 
 ## 客户端能力边界
 
@@ -34,6 +43,21 @@ Work 工作区可以按线程挂载为 Code 的只读、无向量结构知识库
   可用交互和禁止假设的界面能力，通过每个 turn 的动态 context 注入。
 - GUI、TUI、CLI、订阅 SDK 和 HTTP 模型路径必须使用同一条能力过滤规则，
   不能只在某个前端隐藏菜单。
+- 桌面 Rooms 私聊与 Code 是同一 Kun Agent 的不同呈现入口：在模型、权限、工作区和任务阶段相同的前提下，
+  通用工具发现、审批、子代理、目标续跑、结构化结果与文件交付必须等价。Rooms 可增加成员/任务协议工具，
+  但不得维护一份需要逐项同步的通用工具白名单。群聊 coordination/discussion/review 仍按其阶段保持只读；
+  已授权 execution 继承 Code 的通用执行能力和同一 sandbox/approval 上限。
+- 订阅 SDK 只有在声明并实际使用 Kun tool bridge、原生工具拦截、外部审批和 scoped workspace 时才能进入 Rooms。
+  Claude Agent SDK 的房间调用禁用原生工具，统一经过 LocalToolHost；Cursor SDK 尚无原生工具拦截入口，
+  与 `kunTools: false` 的 Antigravity 一样保持禁用，不能仅因存在工具桥接就宣称等价。
+- Rooms 的后台子代理、Shell、目标和重启 continuation 由共享 coordinator 提供明确 source turn，
+  经 RoomRuntime 校验原请求、权限快照、workspace/epoch 和取消状态后，先持久化 request，再通过原房间队列执行。
+  不扫描历史线程接管未知 turn；同根后台通知可连续交付，但新用户请求或权限变更会使旧通知失效。
+  历史 run inspector 永远只读，不得因查看历史重新执行工具。
+- GUI 结构化结果使用 Code 的 canonical mapper/renderer（chart、visualization、generatedFiles）；
+  文件引用来自成功的结构化 tool result，并验证文件存在及 canonical path 在工作区内，不能从模型文字或目录时间戳猜交付物。
+- Excalidraw apply 不会先把旧的本地草稿写回磁盘。保存带读取版本，冲突时保留草稿并提示保存副本后重载；
+  Claude bridge 的 accepted/applied 使用同一个 SDK callId，回执等待直到最终结果持久化完成。
 
 ## 目标边界
 
@@ -48,8 +72,9 @@ Preload IPC bridge
         |
         v
 Main process
-  RuntimeHost -> kunRuntimeAdapter
-  exact GUI child/config/port/token management only
+  DesktopProcessStack -> owned Service Manager
+  RuntimeHost -> kunRuntimeAdapter -> owned Runtime
+  session / generation / admission / ordered shutdown
         |
         v
 GUI-owned kun serve (TypeScript package)
@@ -66,15 +91,16 @@ GUI-owned kun serve (TypeScript package)
 
 Default TUI process
         |
-        | starts/stops its exact owned Runtime
+        | owns/stops its Service Manager and exact Runtime
         v
 TUI-owned kun serve
 
 GUI/TUI-owned Runtime
         |
         v
-Service Manager
+Application-owned Service Manager
   election / fencing / canonical persisted data
+  closes after Runtime and desktop data consumers
 ```
 
 这个边界采用本地 HTTP 服务架构：GUI 不直接嵌 agent loop，不通过
@@ -82,33 +108,57 @@ stdio/RPC 混跑多个状态机，只把 `kun serve` 当成稳定协议。Kun �
 cache-first loop：immutable prefix、append-only log、bounded LRU/TTL cache、
 inflight cleanup、steering queue、context compaction、usage/cache telemetry。
 
-## 客户端持有的生命周期
+## 应用会话持有的生命周期
 
-- GUI 在 `autoStart` 开启且目标槽位空闲时启动一个受监督的非 detached
-  Runtime 子进程，只把请求路由到这个精确子进程。关闭自动启动时，GUI
-  不启动也不接管已有 Runtime。
-- 真正的应用 Quit、平台退出快捷键、保存的 `closeAction: quit`、更新退出和
-  非 macOS 最后窗口退出都进入同一 quit barrier：停止恢复调度、优雅关闭
-  精确 GUI 子进程并等待退出。隐藏窗口、最小化到托盘以及 Electron 仍存活的
-  macOS 无窗口状态不算退出，Runtime 继续运行。
-- 默认 TUI 启动自己的 Runtime，并在 `/quit`、信号退出、初始化失败或其他
-  command 退出路径的 `finally` 中关闭精确实例。`--url` 和 `--no-start` 是
-  显式外部连接例外：它们不拥有、不启动，也不停止目标 Runtime；目标 owner
-  退出时，这类连接可以随之断开。
-- 同一 `(Service Manager profile, runtime flavor)` 已有 live/starting GUI 或
-  TUI owner 时，另一个正常客户端必须返回可操作的 ownership conflict，不能
-  attach、steal、replace 或 silent kill。默认 Manager profile 绑定一个 canonical
-  dataDir，production/development flavor 仍是独立槽位；若确实需要并行的第二套
-  profile，必须显式隔离 Manager control directory，不能只换 `dataDir` 参数。
-- GUI 顶部重启只优雅停止并重拉当前 Electron 持有的 Runtime；不再扫描当前
-  用户的所有 `kun serve`，不触碰 TUI、其他 dataDir/flavor 或 Service Manager。
-- Service Manager 是独立、轻量的选举与数据面进程。普通 GUI/TUI 退出和 Runtime
-  restart 都不停止 Manager；Manager 可以在没有 Runtime slot 时继续保留持久化
-  状态，但它自身不执行 Agent turn。
-- 首次升级到 client-owned 生命周期时，可以只对同一 canonical dataDir 中、
-  已认证且身份精确、`launchMode: shared` 且无 client-owner 元数据的旧 daemon
-  做一次优雅退休并等待 PID 退出。任何 discovery、PID、endpoint、dataDir、
-  Manager registration 或认证歧义都必须 fail closed，禁止扩大为全用户进程扫描。
+- `DesktopProcessStack` 统一持有 GUI 的 Manager、启动代次和退出状态。GUI
+  在 `autoStart` 开启时启动受监督的 Runtime，只向精确 owned 实例发送请求。
+  `autoStart: false` 只关闭 Runtime 自动启动；GUI 数据服务使用的 Manager
+  仍属于本次应用，不能在 GUI 退出后常驻。
+- 主窗口关闭、平台 Quit、更新安装和数据搬迁退出进入同一 quit barrier。
+  macOS 不保留关闭主窗口后的无窗口驻留。旧 `ask` / `tray` / `closeToTray`
+  设置迁移为 `closeAction: quit` / `closeToTray: false`。普通最小化、mini
+  模式切换和辅助窗口关闭保持局部行为；mini 模式下关闭主窗口仍退出应用。
+- 退出先同步禁止新工作、恢复和重启，再 flush GUI 修改、撤销 GUI 工具授权、
+  停止调度/手机入口并 drain Main/Runtime 的数据消费者。每个资源独立收尾；
+  单项失败不能跳过其他资源。消费者退出后才关闭 Manager 的队列、存储和端口。
+  共享截止时间必须给消费者升级终止、Manager 落盘和最后的 guard 回收留出预算。
+- 退出完成以实际进程死亡为准，不能用 shutdown accepted、已发 TERM/KILL 或
+  stopped 标志替代。清理仅删除匹配自身 session/instance/generation 的登记。
+  活跃 writer 或执行进程尚未退出时保留所有权并记录失败，避免另一个实例抢占。
+- POSIX 受管启动使用独立进程组、执行前登记 gate 和独立 owner-loss guard；
+  Windows native launcher 先创建 suspended 子进程、纳入 Job Object 再恢复执行。
+  PTY 使用同一所有权工具，支持等待 shell 后台 job 和包装器的后代退出；默认
+  session daemon、LSP、MCP 等也必须等待整棵受管树，不因直接 child 先退就
+  取消后续回收。外部浏览器、编辑器和远程服务只断开 Kun 的连接。
+- 进程组及后代轮询不等价于能阻挡任意快速 `setsid` / double-fork 的 OS 沙箱。
+  受支持适配器、父强杀场景和各平台打包产物需要真实进程证据；未验证的平台与
+  不能纳管的特殊脱离方式必须保留为明确限制，不能由 mock 或单平台测试推断。
+- 默认 TUI 与前台 serve 自行 bootstrap 时持有完整 stack，并在退出、信号和
+  初始化失败的 finally 中按先 Runtime 后 Manager 的顺序清理。`--url` 和
+  `--no-start` 仅连接外部服务，不能停止或延长目标 owner 的生命周期。
+- 同一 canonical `dataDir`、settingsPath 已有 live/starting 应用 session 时，
+  第二个正常 GUI/TUI 返回 ownership conflict，不能 attach、steal 或 silent kill。
+  production/development 不能共享同一数据 owner；并行实例必须显式隔离
+  dataDir、Manager controlDir 和 settingsPath，不能自动换历史目录。
+- GUI Runtime 重启只替换本次 Runtime，Manager 保持本次 session。Manager
+  崩溃恢复由应用 owner 决定：先停旧 Runtime 与消费者，再启动下一 generation
+  并统一重绑。app-owned Runtime 不能因 Manager 断连自行 ensure 或 re-election。
+- 旧版常驻实例只有在认证身份、规范化目录、原子冻结新接入和空闲状态均可证明时
+  才允许退休。discovery、PID、endpoint、owner 或 Manager registration 存在歧义，
+  或旧协议不能证明无活跃外部工作时，必须停止接管并提示关闭旧应用。同版本
+  Manager 通过 `/v1/manager/retire-idle` 原子退休；协议或 capability 不兼容的
+  旧 Manager 由启动流程自动执行同一套验证空闲退休：在 `/health` 与
+  `/v1/manager/status` 上认证记录身份，要求规范化 dataDir/settingsPath 一致、
+  无仍活着的 appOwner 且无仍活着的 Runtime slot，再经 instanceId 围栏的
+  `/v1/manager/shutdown` 退出并确认进程真实退出。已用同一套进程身份验证确认
+  死亡的 owner / slot 视为空闲。任何一步验证失败都 fail closed，保留旧进程并提示
+  手动处理。确认旧客户端
+  已关闭后，可在匹配的 `KUN_MANAGER_CONTROL_DIR` / `KUN_MANAGER_SETTINGS_PATH`
+  下显式运行 `kun manager retire --data-dir <旧目录>` 作为手动兜底；该命令拒绝
+  仍活着的 app-owned Manager 或 live Runtime slot。
+- GUI 关闭后手机连接、定时执行和本地后台任务停止；已有任务定义、会话、配置、
+  记忆和用量仍保存在原址。重开沿用已有到期策略，不重复派发已完成任务。回滚前
+  先退出新版整套服务并确认 writer 释放，再打开旧版本，不回滚或删除业务历史。
 
 ## 缓存命中优化
 
@@ -186,6 +236,62 @@ request id、计划身份和定时任务指纹处理任务切换与重启恢复�
 
 优化前已经持久化的旧 usage 事件不会被事后改写，因为当时没有保存
 provider 原生缓存字段；这些历史数据只能作为旧实现的证据，不能证明新实现仍然低命中。
+
+## 窗口式上下文（实验性）
+
+默认关闭的独立开关 `agents.kun.contextCompaction.windowModeEnabled`（默认 `false`），
+在设置页 实验室 → 窗口式上下文 显示。开启后模型
+可以感知当前窗口剩余容量、保存工作笔记并通过 `new_context` 切换上下文窗口，旧对话保留
+完整可见时间线并按需检索；关闭后沿用现有摘要压缩，全部摘要参数（摘要模型、阈值、尾部
+预算）原样保留，旧配置无需迁移。
+
+- 模式在 turn admission 时冻结：热更新只影响之后接纳的 turn，进行中的 turn 保持进入时
+  的模式。自动续跑和子代理线程继承父线程最后接受的模式，但各自持有独立窗口状态和数据。
+- 预算是当前请求窗口，不是累计任务用量：窗口开始时给出窗口编号和非负剩余容量，
+  25/50/75% 使用率各至多提示一次，一轮跨多个阈值只发送当前最高阈值提示并把较低阈值
+  标记为已覆盖。剩余容量 = 模型 profile 有效容量（无 profile 时按有界兜底容量）减去
+  完整请求估算（system、tools、动态 context、附件、新输入、输出预留和已发提示本身）；
+  provider 最近一次同窗口实际用量只作读数校准，不使用跨窗口累计账单 token，也不重置
+  既有任务预算或 cache usage。immutable system prefix 不变，窗口编号和预算上下文只追加
+  在稳定前缀之后；窗口或模型切换时按新窗口、新容量重新计算。
+- `new_context({})` 是当前 agent 的专属控制工具。工具批次预检查发现它与其他调用混用时，
+  整批在执行任何副作用前拒绝，并要求模型单独发起换窗；存在未完成的工具、审批或用户
+  输入请求时不提交换窗。换窗顺序固定：保存原始历史 → 建立持久边界 → CAS 原子提交
+  检查点 → 发送 SSE → 清理旧请求压力/read tracker → 用权威运行时上下文和有界历史/笔记
+  指针重建初始上下文 → 同一 turn 继续。同一 operation 重放只返回已提交结果；上一次换窗
+  之后没有普通模型/工具工作进展时再次换窗会被拒绝。
+- 所有自动压缩入口（自动预检、发送边界兜底、内存压力清扫、provider overflow 恢复）都
+  经过同一个策略协调器分派。窗口模式下软阈值只发去重的预算提示，硬阈值或
+  `输入 + 输出预留` 超限时执行恰好一次确定性的无摘要换窗，然后由调用方重建请求；
+  绝不隐式调用摘要模型降级。硬容量口径（profile hard threshold 或容量的 85%）和
+  「只有一次启发式兜底重建」的 overflow 规则不变；新窗口初始上下文本身加输出预留仍
+  放不下、或 overflow 恢复再次失败时，仅以 `unrecoverable` 结果让当前 turn 以可操作
+  错误失败，不反复清窗、不重放采样。
+- 换窗提交版本化的 `context_window` item/event：窗口 id、前一窗口、原因
+  （`model` / `pressure` / `overflow` / `manual-summary`）、源历史 revision、切分位置、
+  初始化引用和幂等 operation id。重启或 resume 从最后已提交边界恢复一次，不重复换窗；
+  fork 复制分叉点的可见历史、边界和该时点笔记快照到新线程，之后互相独立；归档保持
+  可恢复；删除线程按现有生命周期级联移除窗口索引、笔记版本和专用历史数据。GUI 经
+  通用 SSE 把该事件投影成时间线上的「已切换上下文窗口」标记：与摘要压缩区分显示，
+  不隐藏原始消息、不产生新任务、不恢复任何已删除的运行时面板。手动 `/compact` 在窗口
+  模式下仍是摘要压缩，并登记为 `manual-summary` 类型的窗口边界，下一请求按边界重新
+  初始化预算。
+- 历史和笔记由本地 Service Manager 拥有的标准数据承载，窗口索引只记录 item 范围并复用
+  标准对话数据，不以 events.jsonl 作为唯一历史源；分页读取和检索用有界扫描，不把全部
+  窗口加载成常驻数组。工具使用扁平名称（`history_list_windows` / `history_list_items` /
+  `history_read_item` / `history_search_contents` 和 `notes_list_files_by_prefix` /
+  `notes_read_file` / `notes_search_contents` / `notes_append_to_file` /
+  `notes_write_file`），身份取自可信执行上下文，参数不能指定其他线程。笔记是线程私有
+  逻辑路径，不是 workspace 文件：拒绝绝对路径、`..`、NUL 和越界路径；写入带 revision
+  CAS，追加带 operation id 幂等。限额：单次读写文本最多 16 KiB UTF-8，单文件 256 KiB，
+  每线程最多 100 个文件、共 2 MiB；列表每页默认 20、最多 100；检索 query 最多 1024
+  字符；工具输出同时受 16 KiB 和 min(现有工具 token 上限, 4096) 限制，返回结构化
+  truncated/cursor。笔记不会自动进入长期记忆，也不改变长期记忆的现有生命周期。
+- 边界与回退：不做向量检索，不接入 Codex 后端或私有认证；无法执行所需工具的模型路由
+  在 turn admission 直接失败（报告不支持的能力），不会清上下文或静默改策略，摘要模式
+  仍可正常使用。关闭开关是功能回退路径：从最后有效边界起继续使用摘要策略，不展开全部
+  旧历史，已提交的窗口数据和全部历史读取能力保留。注意降级 caveat：旧二进制不认识新
+  item/数据时不应直接读取新数据；二进制回滚需要先做好数据备份或兼容导出。
 
 ## Subagent 召回与派发
 
@@ -498,11 +604,13 @@ npm run build
    “暂无用量”，而显示 token、回合、缓存命中等指标。
 8. 线程搜索、归档视图、fork、resume session、request_user_input 回答/取消
    都能通过 Kun HTTP 路径完成。
-9. 最小化到托盘后 GUI Runtime PID 不变；真正退出应用后该精确 PID 退出，
-   Service Manager 仍可用且 Runtime slot 已释放。
-10. 默认 TUI 退出后没有遗留 owned Runtime；`--url` / `--no-start` 退出不停止
-    外部 Runtime。
-11. 同一 `(dataDir, flavor)` 的第二个正常 GUI/TUI 启动明确报 ownership conflict，
-    首个 owner 退出后另一个客户端能启动并读取原有会话。
-12. GUI 顶部重启只更换自己的 Runtime PID/instance，不停止 TUI、其他 dataDir /
-    flavor 或 Service Manager。
+9. 普通最小化后 GUI Runtime/Manager PID 不变；关闭主窗口或平台 Quit 后，
+   本次 Runtime、Manager、guard 和已登记工作进程退出，端口与匹配登记释放。
+10. 默认 TUI 退出后没有遗留 owned Runtime/Manager；`--url` / `--no-start`
+    退出不停止外部 stack。
+11. 同一 canonical `dataDir` 的第二个正常 GUI/TUI 启动报 ownership conflict，
+    即使 flavor 不同；显式隔离三类路径后可并行，关闭一套不影响另一套。
+    首个 owner 退出后重开继续读取原有会话、设置和任务定义。
+12. GUI Runtime 重启只更换自己的 Runtime PID/instance，不停止同 session 的
+    Service Manager 或其他隔离 profile。启动中关闭、父强杀、清理抛错与
+    恢复/退出竞争需要真实进程测试；各目标平台的打包验收结果分别记录。

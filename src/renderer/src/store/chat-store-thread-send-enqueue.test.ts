@@ -175,6 +175,28 @@ describe('submitToRuntimeQueue', () => {
     expect(persistActiveQueuedMessages).toHaveBeenCalled()
   })
 
+  it('falls back to the store workspaceRoot for checkpoints, not the host setting', async () => {
+    // Remote mobile picked /local/picked with persist: false — the host still
+    // owns /host/project. A checkpoint must follow the store's selection.
+    runtimeClientMock.getSettings.mockResolvedValue({ workspaceRoot: '/host/project' })
+    const sendUserMessage = vi.fn(async () => ({
+      turnId: 'turn_new', userMessageItemId: 'user_new'
+    }))
+    const { state, set, get } = buildHarness({ workspaceRoot: '/local/picked' })
+
+    const result = await submitToRuntimeQueue({
+      provider: { sendUserMessage } as never,
+      activeThreadId: 'thr_1', trimmedText: 'hi', clientRequestId: 'req-local',
+      orchestration: 'direct', composerModel: 'm', composerProviderId: 'p',
+      composerContexts: [], set, get, persistActiveQueuedMessages: vi.fn()
+    } as unknown as Parameters<typeof submitToRuntimeQueue>[0])
+
+    expect(result).toBe(true)
+    expect(checkpointMock.startWorkspaceCheckpointSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({ fallbackWorkspaceRoot: '/local/picked' })
+    )
+  })
+
   it('keeps the runtime request scoped to attachment ids while persisting renderer attachments', async () => {
     let capturedOptions: Record<string, unknown> | undefined
     const sendUserMessage = vi.fn(async (

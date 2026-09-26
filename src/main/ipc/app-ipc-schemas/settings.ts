@@ -11,6 +11,7 @@ import { GUI_UPDATE_CHANNELS } from '../../../shared/gui-update'
 import { KEYBOARD_SHORTCUT_COMMANDS } from '../../../shared/keyboard-shortcuts'
 import { kunGraphPatchSchema } from './settings-graph'
 import { kunLabPatchSchema } from './settings-lab'
+import { writePaperModePatchSchema } from './settings-paper-mode'
 import {
   MAX_BODY_BYTES,
   MAX_CHANNEL_TEXT_LENGTH,
@@ -45,9 +46,9 @@ export {
   clawImProviderSchema,
   clawRunModeSchema,
   cursorSubscriptionDiscoveryPayloadSchema,
-  localKokoroDownloadSourceSchema,
-  localKokoroModelIdSchema,
-  localKokoroVoiceIdSchema,
+  localSanottsDownloadSourceSchema,
+  localSanottsVoiceIdSchema,
+  localSanottsVoiceSettingSchema,
   localWhisperDownloadSourceSchema,
   localWhisperModelIdSchema,
   modelIdSchema,
@@ -174,6 +175,14 @@ const codeAgentPresetSchema = z.object({
   persona: z.string().max(2_000).optional()
 }).strict()
 
+const writePaperReadingPatchSchema = z.object({
+  papersDir: trimmedString(MAX_PATH_LENGTH).optional(),
+  interpretTemplate: z.string().max(8_000).optional(),
+  outputLanguage: z.enum(['zh', 'en', 'auto']).optional(),
+  autoPreprocess: z.boolean().optional(),
+  coolNotesEnabled: z.boolean().optional()
+}).strict()
+
 const writeSettingsPatchSchema = z.object({
   defaultWorkspaceRoot: defaultPathSchema,
   activeWorkspaceRoot: defaultPathSchema,
@@ -183,7 +192,10 @@ const writeSettingsPatchSchema = z.object({
   inlineCompletion: writeInlineCompletionPatchSchema.optional(),
   selectionAssist: writeSelectionAssistPatchSchema.optional(),
   typography: writeTypographyPatchSchema.optional(),
-  agentPresets: z.array(writeAgentPresetSchema).max(24).optional()
+  agentPresets: z.array(writeAgentPresetSchema).max(24).optional(),
+  documentEditorV2: z.boolean().optional(),
+  paperReading: writePaperReadingPatchSchema.optional(),
+  paperMode: writePaperModePatchSchema.optional()
 }).strict()
 
 const terminalColorPatchSchema = z.object({
@@ -212,6 +224,14 @@ const terminalColorPatchSchema = z.object({
 
 const terminalSettingsPatchSchema = z.object({
   colors: terminalColorPatchSchema.optional()
+}).strict()
+
+const remoteAccessSettingsPatchSchema = z.object({
+  enabled: z.boolean().optional(),
+  bind: z.enum(['lan', 'loopback']).optional(),
+  port: z.number().int().min(0).max(65_535).optional(),
+  passwordHash: z.string().max(512).optional(),
+  sessionTtlHours: z.number().int().min(1).max(720).optional()
 }).strict()
 
 const clawSkillPatchSchema = z.object({
@@ -318,25 +338,32 @@ const clawImChannelPatchSchema = z.object({
   feishuStream: z.boolean().optional()
 }).strict()
 
-const clawTaskSchedulePatchSchema = z.object({
+const scheduledTaskSchedulePatchSchema = z.object({
   kind: clawScheduleKindSchema.optional(),
   everyMinutes: z.number().int().min(1).max(10_080).optional(),
   timeOfDay: z.string().max(16).optional(),
-  atTime: z.string().max(128).optional()
+  atTime: z.string().max(128).optional(),
+  timeZone: z.string().trim().max(128).optional()
 }).strict()
 
-const clawTaskPatchSchema = z.object({
+const scheduledTaskPatchSchema = z.object({
   id: z.string().max(MAX_ID_LENGTH).optional(),
   title: z.string().max(512).optional(),
   enabled: z.boolean().optional(),
   prompt: z.string().max(MAX_CHANNEL_TEXT_LENGTH).optional(),
   workspaceRoot: defaultPathSchema,
+  sourcePlanId: z.string().trim().max(MAX_ID_LENGTH).optional(),
+  sourceThreadId: z.string().trim().max(MAX_ID_LENGTH).optional(),
   clawChannelId: z.string().trim().max(MAX_ID_LENGTH).optional(),
   providerId: z.string().trim().max(64).optional(),
   model: modelIdSchema.optional(),
   reasoningEffort: scheduleReasoningEffortSchema.optional(),
   mode: clawRunModeSchema.optional(),
-  schedule: clawTaskSchedulePatchSchema.optional(),
+  orchestration: z.enum(['direct', 'graph']).optional(),
+  priority: z.number().int().min(0).max(100).optional(),
+  dependsOn: z.array(z.string().trim().min(1).max(MAX_ID_LENGTH)).max(32).optional(),
+  useWorktree: z.boolean().optional(),
+  schedule: scheduledTaskSchedulePatchSchema.optional(),
   createdAt: z.string().max(128).optional(),
   updatedAt: z.string().max(128).optional(),
   lastRunAt: z.string().max(128).optional(),
@@ -351,7 +378,7 @@ const clawSettingsPatchSchema = z.object({
   skills: clawSkillPatchSchema.optional(),
   im: clawImPatchSchema.optional(),
   channels: z.array(clawImChannelPatchSchema).max(512).optional(),
-  tasks: z.array(clawTaskPatchSchema).max(512).optional()
+  tasks: z.array(scheduledTaskPatchSchema).max(512).optional()
 }).strict()
 
 const scheduleSkillPatchSchema = z.object({
@@ -363,37 +390,6 @@ const scheduleSkillPatchSchema = z.object({
 const scheduleInternalPatchSchema = z.object({
   port: z.number().int().min(MIN_KUN_LOCAL_PORT).max(65_535).optional(),
   secret: z.string().max(MAX_BODY_BYTES).optional()
-}).strict()
-
-const scheduledTaskSchedulePatchSchema = z.object({
-  kind: clawScheduleKindSchema.optional(),
-  everyMinutes: z.number().int().min(1).max(10_080).optional(),
-  timeOfDay: z.string().max(16).optional(),
-  atTime: z.string().max(128).optional()
-}).strict()
-
-const scheduledTaskPatchSchema = z.object({
-  id: z.string().max(MAX_ID_LENGTH).optional(),
-  title: z.string().max(512).optional(),
-  enabled: z.boolean().optional(),
-  prompt: z.string().max(MAX_CHANNEL_TEXT_LENGTH).optional(),
-  workspaceRoot: defaultPathSchema,
-  clawChannelId: z.string().trim().max(MAX_ID_LENGTH).optional(),
-  providerId: z.string().trim().max(64).optional(),
-  model: modelIdSchema.optional(),
-  reasoningEffort: scheduleReasoningEffortSchema.optional(),
-  mode: clawRunModeSchema.optional(),
-  priority: z.number().int().min(0).max(100).optional(),
-  dependsOn: z.array(z.string().trim().min(1).max(MAX_ID_LENGTH)).max(32).optional(),
-  useWorktree: z.boolean().optional(),
-  schedule: scheduledTaskSchedulePatchSchema.optional(),
-  createdAt: z.string().max(128).optional(),
-  updatedAt: z.string().max(128).optional(),
-  lastRunAt: z.string().max(128).optional(),
-  nextRunAt: z.string().max(128).optional(),
-  lastStatus: clawTaskStatusSchema.optional(),
-  lastMessage: z.string().max(MAX_CHANNEL_TEXT_LENGTH).optional(),
-  lastThreadId: z.string().max(MAX_ID_LENGTH).optional()
 }).strict()
 
 const sessionDaemonPushPatchSchema = z.object({
@@ -520,6 +516,7 @@ const settingsPatchObjectSchema = z.object({
   workflow: workflowSettingsPatchSchema.optional(),
   design: designSettingsPatchSchema.optional(),
   terminal: terminalSettingsPatchSchema.optional(),
+  remote: remoteAccessSettingsPatchSchema.optional(),
   guiUpdate: z.object({
     channel: z.enum(GUI_UPDATE_CHANNELS).optional()
   }).strict().optional(),

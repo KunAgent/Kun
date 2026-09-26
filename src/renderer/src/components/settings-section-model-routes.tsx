@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 import { SettingsSubTabs, SettingsTabPanel, Toggle } from './settings-controls'
 import {
   ApiCompatibilityPill,
+  EmptyRoutePoolState,
   Field,
   LocalGatewayApiDialog,
   ToggleRow,
@@ -38,7 +39,7 @@ import { ModelRouteTargets } from './settings-section-model-routes-targets'
 import { useGatewayCredentialControls } from './use-gateway-credential-controls'
 
 export type RouteStatus = {
-  localGateway?: { enabled: boolean; credential?: GatewayCredentialStatus }
+  localGateway?: { enabled: boolean; exposeProviderModels?: boolean; credential?: GatewayCredentialStatus }
   pools?: ModelRoutePoolV1[]
   configuredPools?: ModelRoutePoolV1[]
   metrics?: Record<string, { successes: number; failures: number; ewmaLatencyMs?: number; lastError?: string }>
@@ -84,27 +85,8 @@ const strategyTranslationKeys: Record<ModelRouteStrategy, string> = {
   'round-robin': 'modelRoutes.strategyRoundRobin',
   'weighted-round-robin': 'modelRoutes.strategyWeightedRoundRobin',
   'least-latency': 'modelRoutes.strategyLeastLatency',
+  'least-used': 'modelRoutes.strategyLeastUsed',
   adaptive: 'modelRoutes.strategyAdaptive'
-}
-
-function EmptyRoutePoolState({ onAdd, t }: { onAdd: () => void; t: TFunction }): ReactElement {
-  return (
-    <div className="grid min-h-[360px] place-items-center text-center">
-      <div>
-        <Route className="mx-auto h-10 w-10 text-ds-faint" />
-        <h3 className="mt-3 text-[14px] font-semibold text-ds-ink">{t('modelRoutes.emptyTitle')}</h3>
-        <p className="mt-1 text-[12px] text-ds-faint">{t('modelRoutes.gatewayMultipleModelsDesc')}</p>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="mt-4 inline-flex h-9 items-center gap-2 rounded-full bg-accent px-4 text-[12px] font-semibold text-white"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          {t('modelRoutes.addModel')}
-        </button>
-      </div>
-    </div>
-  )
 }
 
 export function ModelRoutesSettings({
@@ -145,8 +127,13 @@ export function ModelRoutesSettings({
   const executablePools = useMemo(() => projectExecutableModelRoutePools(settings), [settings])
   const executableSelected = executablePools.find((pool) => pool.id === selected?.id)
   const configurationSynced = useMemo(
-    () => runtimeConfigurationMatches(executablePools, settings.localGateway.enabled, status),
-    [executablePools, settings.localGateway.enabled, status]
+    () => runtimeConfigurationMatches(
+      executablePools,
+      settings.localGateway.enabled,
+      settings.localGateway.exposeProviderModels,
+      status
+    ),
+    [executablePools, settings.localGateway.enabled, settings.localGateway.exposeProviderModels, status]
   )
   useEffect(() => {
     if (!selected && settings.routePools[0]) setSelectedId(settings.routePools[0].id)
@@ -402,6 +389,21 @@ export function ModelRoutesSettings({
             disabled={credentialPending}
             onChange={(enabled) => { void gatewayCredential.setEnabled(enabled) }}
             ariaLabel={t('modelRoutes.enableLocalApi')}
+          />
+        </div>
+        <div className="flex items-center gap-3 rounded-xl border border-ds-border bg-ds-card px-3 py-2.5">
+          <div>
+            <div className="text-[12px] font-medium text-ds-ink">{t('modelRoutes.exposeProviderModels')}</div>
+            <div className="mt-0.5 max-w-[340px] text-[10.5px] text-ds-faint">{t('modelRoutes.exposeProviderModelsDesc')}</div>
+          </div>
+          <Toggle
+            checked={settings.localGateway.exposeProviderModels}
+            disabled={!settings.localGateway.enabled}
+            onChange={(exposeProviderModels) => onChange({
+              ...settings,
+              localGateway: { ...settings.localGateway, exposeProviderModels }
+            })}
+            ariaLabel={t('modelRoutes.exposeProviderModels')}
           />
         </div>
         <div className="flex basis-full flex-wrap items-center gap-2 border-t border-ds-border-muted pt-3">

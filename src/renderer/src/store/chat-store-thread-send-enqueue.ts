@@ -5,6 +5,7 @@ import type { AttachmentReference } from '../agent/types'
 import type { ChatState, ChatStoreGet, ChatStoreSet, QueuedUserMessage, SendMessageOverrides } from './chat-store-types'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { describeRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
+import { currentCodeWorkspaceRoot } from './chat-store-current-workspace'
 import { runtimePromptForSurface } from './chat-store-send-prompt'
 import { startWorkspaceCheckpointSnapshot } from './chat-store-thread-send-checkpoint'
 import { rememberPendingClawFeishuMirror } from './chat-store-runtime-notifications'
@@ -104,7 +105,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       settings,
       threads: initialState.threads,
       activeThreadId,
-      fallbackWorkspaceRoot: settings.workspaceRoot
+      fallbackWorkspaceRoot: currentCodeWorkspaceRoot(get(), settings)
     })
     const sendOptions = {
       clientRequestId,

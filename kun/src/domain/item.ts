@@ -26,6 +26,7 @@ export function makeUserItem(input: {
   attachmentIds?: string[]
   composerContexts?: ComposerContextAttachmentJson[]
   fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
+  historyRefId?: string
   workspaceCheckpointId?: string
   workspace?: string
   threadAgentSurface?: 'code' | 'write' | 'design'
@@ -59,6 +60,7 @@ export function makeUserItem(input: {
     ...(attachmentIds?.length ? { attachmentIds } : {}),
     ...(input.composerContexts?.length ? { composerContexts: input.composerContexts } : {}),
     ...(fileReferences?.length ? { fileReferences } : {}),
+    ...(input.historyRefId ? { historyRefId: input.historyRefId } : {}),
     ...(input.workspaceCheckpointId ? { workspaceCheckpointId: input.workspaceCheckpointId } : {}),
     ...(input.workspace ? { workspace: input.workspace } : {}),
     ...(input.threadAgentSurface ? { threadAgentSurface: input.threadAgentSurface } : {}),
@@ -227,6 +229,7 @@ export function makeToolResultItem(input: {
   toolName: string
   toolKind?: 'tool_call' | 'command_execution' | 'file_change'
   output: unknown
+  meta?: Record<string, unknown>
   isError?: boolean
   status?: 'pending' | 'running' | 'completed' | 'failed' | 'aborted'
   finishedAt?: string
@@ -249,7 +252,8 @@ export function makeToolResultItem(input: {
     callId: input.callId,
     toolKind: input.toolKind ?? 'tool_call',
     output: input.output,
-    isError: input.isError ?? false
+    isError: input.isError ?? false,
+    ...(input.meta ? { meta: input.meta } : {})
   }
 }
 

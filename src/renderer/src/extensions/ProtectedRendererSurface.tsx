@@ -25,6 +25,16 @@ export function ProtectedRendererSurface({
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    // A Remote browser has no Direct DOM extension principal to isolate from,
+    // and the host-only extensionSyncHostContentScripts IPC does not exist
+    // there — waiting on it would fail closed and show the fallback forever.
+    // Desktop keeps failing closed when the bridge is missing: mounting the
+    // credentials surface without isolation would be a security regression.
+    if (window.kunGui?.isRemoteWeb === true) {
+      clearProtectedSurfaceRestore(restoreTarget)
+      setReady(true)
+      return undefined
+    }
     let cancelled = false
     setReady(false)
     markProtectedSurfaceRestore(restoreTarget)

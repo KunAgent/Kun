@@ -223,6 +223,10 @@
         "name": "Citation Researcher",
         "desc": "Authoritative sources and traceable citations · read-only"
       },
+      "literature-researcher": {
+        "name": "Исследователь литературы",
+        "desc": "Обзор научных индексов по подтемам · только чтение"
+      },
       "design-product-planner": {
         "name": "Product Design Planner",
         "desc": "Direction, goals, flows, and tradeoffs · read-only"

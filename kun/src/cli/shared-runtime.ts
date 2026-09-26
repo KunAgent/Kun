@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { spawnOwnedProcess } from '../process/owned-process.js'
 import { RuntimeInfoResponse, type RuntimeInfoResponse as RuntimeInfo } from '../contracts/runtime-info.js'
 import {
   createRuntimeDiscoveryRecord,
@@ -13,6 +14,7 @@ import {
   removeRuntimeDiscovery,
   withRuntimeStartLock
 } from '../server/runtime-discovery.js'
+import { runtimeProcessIsAlive } from '../server/runtime-process-identity.js'
 import {
   hasUnpublishedGuiRuntime,
   readGuiSharedSettings
@@ -25,6 +27,7 @@ import {
   type RuntimeClientOwnerKind
 } from '../contracts/runtime-owner.js'
 import { defaultKunControlDir } from '../manager/manager-discovery.js'
+import { KUN_APP_SESSION_OWNER_ENV } from '../contracts/app-session-owner.js'
 import {
   readManagerRuntime,
   resolveServiceManager,
@@ -210,7 +213,7 @@ export async function inspectSharedRuntime(
   }
   const discoveryDir = runtimeDiscoveryDirectory(dataDir, flavor, scope.controlDir)
   const discovery = await readRuntimeDiscovery(discoveryDir, flavor).catch(() => null)
-  if (!discovery || !safeDiscoveryUrl(discovery) || !processAlive(discovery.pid)) {
+  if (!discovery || !safeDiscoveryUrl(discovery) || !runtimeProcessIsAlive(discovery.pid, discovery)) {
     return null
   }
   return {
@@ -353,7 +356,8 @@ export async function ensureSharedRuntime(input: {
             KUN_MANAGER_INSTANCE_ID: input.manager.discovery.instanceId,
             KUN_MANAGER_TOKEN: input.manager.discovery.managerToken,
             KUN_MANAGER_DATA_DIR: input.manager.discovery.dataDir,
-            KUN_MANAGER_SETTINGS_PATH: input.manager.discovery.settingsPath
+            KUN_MANAGER_SETTINGS_PATH: input.manager.discovery.settingsPath,
+            ...(input.manager.discovery.appOwner ? { [KUN_APP_SESSION_OWNER_ENV]: JSON.stringify(input.manager.discovery.appOwner) } : {})
           }
         : {}),
       ...(sourceBuildId ? { KUN_RUNTIME_BUILD_ID: sourceBuildId } : {})
@@ -365,12 +369,15 @@ export async function ensureSharedRuntime(input: {
     else delete env.ELECTRON_RUN_AS_NODE
     let child
     try {
-      child = spawn(command, args, {
+      const spawnOptions = {
         detached: true,
         windowsHide: true,
-        stdio: input.clientOwnerKind ? ['ignore', logFd, logFd, 'ipc'] : ['ignore', logFd, logFd],
+        stdio: input.clientOwnerKind ? ['ignore', logFd, logFd, 'ipc'] as const : ['ignore', logFd, logFd] as const,
         env
-      })
+      }
+      child = input.clientOwnerKind
+        ? await spawnOwnedProcess(command, args, { ...spawnOptions, stdio: [...spawnOptions.stdio] })
+        : spawn(command, args, { ...spawnOptions, stdio: [...spawnOptions.stdio] })
       child.unref()
       if (input.clientOwnerKind) child.channel?.unref()
     } finally {
@@ -533,7 +540,7 @@ export async function stopSharedRuntime(
   const inspected = await inspectSharedRuntime(dataDir, fetchImpl, scope)
   if (!inspected) {
     const stale = await readRuntimeDiscovery(discoveryDir, runtimeFlavor).catch(() => null)
-    if (stale && !processAlive(stale.pid)) {
+    if (stale && !runtimeProcessIsAlive(stale.pid, stale)) {
       await removeSharedRuntimeDiscovery(
         dataDir,
         discoveryDir,
@@ -569,7 +576,7 @@ export async function stopInspectedSharedRuntime(
   }
   const deadline = Date.now() + STOP_TIMEOUT_MS
   while (Date.now() < deadline) {
-    if (!processAlive(record.pid)) {
+    if (!runtimeProcessIsAlive(record.pid, record)) {
       await removeSharedRuntimeDiscovery(
         dataDir,
         discoveryDir,
@@ -600,7 +607,7 @@ async function inspectManagerRuntime(
 ): Promise<SharedRuntimeInspection | null> {
   const registration = await readManagerRuntime(manager, flavor, fetchImpl)
   if (!registration) return null
-  if (!processAlive(registration.pid)) {
+  if (!runtimeProcessIsAlive(registration.pid, registration)) {
     await unregisterRuntimeWithManager({
       manager,
       flavor,
@@ -640,7 +647,7 @@ async function probeManagerRuntimeRegistration(
   fetchImpl: typeof fetch
 ): Promise<SharedRuntimeConnection | null> {
   const fallback = discoveryFromManagerRegistration(registration)
-  if (!safeDiscoveryUrl(fallback) || !processAlive(registration.pid)) return null
+  if (!safeDiscoveryUrl(fallback) || !runtimeProcessIsAlive(registration.pid, registration)) return null
   try {
     const response = await fetchImpl(`${registration.baseUrl.replace(/\/$/u, '')}/v1/runtime/info`, {
       headers: registration.runtimeToken
@@ -678,7 +685,6 @@ async function probeManagerRuntimeRegistration(
 import {
   delay,
   discoveryFromManagerRegistration,
-  processAlive,
   rotateLog,
   runtimeDataDir,
   runtimeDiscoveryDirectory,

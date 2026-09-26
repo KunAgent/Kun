@@ -15,6 +15,7 @@ import { resolveTurnClientSurface } from './turn-context-resolver.js'
 import type { ToolHostResult } from '../ports/tool-host.js'
 import { launchContinuationTurn } from './continuation-turn-launch.js'
 import type { RestartRecoverySource } from './restart-recovery-source.js'
+import { dispatchRoomContinuation } from '../rooms/room-continuation-dispatch.js'
 
 const GOAL_RESUME_PROMPT = [
   'Continue working toward the active goal.',
@@ -64,6 +65,7 @@ export class GoalTurnCoordinator {
       launch: (threadId) => this.launchResumeTurn(threadId),
       getActiveGoalKey: async (threadId) => {
         const thread = await this.deps.threadStore.get(threadId)
+        if (thread?.roomContext && thread.roomContext.kind !== 'conversation') return null
         const expectedSource = this.restartSourceTurnByThread.get(threadId)
         const latest = thread?.turns.at(-1)
         if (expectedSource && (latest?.id !== expectedSource || latest.status !== 'failed')) {
@@ -207,7 +209,7 @@ export class GoalTurnCoordinator {
   ): Promise<void> {
     const thread = await this.deps.threadStore.get(threadId)
     const goal = thread?.goal
-    if (!thread || !goal || goal.status !== 'active') {
+    if (!thread || thread.roomContext && thread.roomContext.kind !== 'conversation' || !goal || goal.status !== 'active') {
       this.resume.clear(threadId)
       return
     }
@@ -237,8 +239,21 @@ export class GoalTurnCoordinator {
     const thread = await this.deps.threadStore.get(threadId)
     const goal = thread?.goal
     const sourceTurnId = this.restartSourceTurnByThread.get(threadId)
-    if (!thread || !goal || goal.status !== 'active') return
+    if (!thread || thread.roomContext && thread.roomContext.kind !== 'conversation' || !goal || goal.status !== 'active') return
     const lastTurn = thread.turns[thread.turns.length - 1]
+    if (thread.roomContext) {
+      try {
+        if (lastTurn) await dispatchRoomContinuation(this.deps.threadStore, {
+          threadId, sourceTurnId: lastTurn.id, key: goalResumeKey(threadId, goal),
+          kind: 'goal', prompt: GOAL_RESUME_PROMPT
+        })
+      } catch (error) {
+        this.resume.defer(threadId)
+        throw error
+      }
+      this.restartSourceTurnByThread.delete(threadId)
+      return
+    }
     let started
     try {
       const startRequest = {
@@ -252,6 +267,7 @@ export class GoalTurnCoordinator {
             ? {
                 messageSource: 'design_continuation' as const,
                 ...(lastTurn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
+                ...(lastTurn.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
                 ...(lastTurn.guiDesignMode ? { guiDesignMode: true } : {})
               }
             : {}),

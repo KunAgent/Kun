@@ -3,6 +3,7 @@ import type { AppSettingsV1, ModelReasoningEffort } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { extensionWorkbenchClient } from '../extensions/extension-workbench-client'
+import { readRemoteLocaleOverride } from '../lib/remote-mobile'
 import {
   effectiveCodeWorkspaceRoot,
   readRemovedCodeWorkspaces
@@ -375,7 +376,11 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       if (typeof window.kunGui === 'undefined') return
       const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
       const removedRegistry = readRemovedCodeWorkspaces()
-      const workspaceRoot = effectiveCodeWorkspaceRoot(settings.workspaceRoot, removedRegistry)
+      // A renderer-local selection (Remote mobile, persist: false) survives a
+      // settings reload — the host's workspaceRoot must not snap it back.
+      const workspaceRoot = get().workspaceRootLocal
+        ? normalizeWorkspaceRoot(get().workspaceRoot)
+        : effectiveCodeWorkspaceRoot(settings.workspaceRoot, removedRegistry)
       applyTheme(settings.theme)
       applyUiFontScale(settings.uiFontScale)
       applyChatContentMaxWidth(settings.chatContentMaxWidthPx)
@@ -403,7 +408,9 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
           ? get().activeClawChannelId
           : settings.claw.channels.find((channel) => channel.enabled)?.id ?? ''
       })
-      await get().applyI18nFromSettings(settings.locale)
+      // A Remote client's localStorage pick wins over the host's locale so a
+      // phone's language choice does not follow the desktop's setting.
+      await get().applyI18nFromSettings(readRemoteLocaleOverride() ?? settings.locale)
       if (get().runtimeConnection === 'ready') {
         void get().refreshThreads()
       }

@@ -1,4 +1,5 @@
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
+import type { RoomThreadSource } from '@shared/rooms-api'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { CoreTurnJson } from './kun-contract-runtime'
 import type { DesignTaskProfile } from './design-task-profile'
@@ -19,6 +20,8 @@ export type CoreItemStatus =
   | string
 
 export type CoreThreadSummaryJson = {
+  historyRefId?: string
+  roomContext?: RoomThreadSource
   id: string
   title: string
   /** Durable product surface that owns the thread. Absent for legacy Code threads. */
@@ -36,6 +39,7 @@ export type CoreThreadSummaryJson = {
   /** Optional whole-conversation summary produced by the summarize route. */
   summary?: string
   workspace?: string
+  additionalWorkspaces?: string[]
   knowledgeBases?: Array<{
     id: string
     root: string
@@ -64,6 +68,7 @@ export type CoreThreadSummaryJson = {
   forkedAt?: string
   forkedFromMessageCount?: number
   forkedFromTurnCount?: number
+  forkedFromTurnId?: string
   goal?: CoreThreadGoalJson | null
   todos?: CoreThreadTodoListJson | null
   createdAt: string
@@ -83,6 +88,7 @@ export type CoreThreadTimelineJson = CoreThreadJson & {
   activeTurn?: Omit<CoreTurnJson, 'items'> | null
   latestTurn?: Omit<CoreTurnJson, 'items'> | null
   timeline: {
+    target?: { turnId: string; itemId?: string; previousCursor?: string; nextCursor?: string }
     nextCursor?: string
     hasMore: boolean
     itemCount: number
@@ -176,12 +182,15 @@ export type CoreMemoryRecordJson = {
   tags?: string[]
   confidence?: number
   type?: 'fact' | 'preference' | 'decision' | 'episode' | 'relationship' | 'insight'
-  authority?: 'reference'
+  authority?: 'reference' | 'directive'
   importance?: number
   observedAt?: string
   validFrom?: string
   validTo?: string
   expiresAt?: string
+  supersedes?: string
+  supersededAt?: string
+  correctedFrom?: string
   sources?: CoreMemorySourceEvidenceJson[]
   createdAt: string
   updatedAt: string
@@ -303,6 +312,24 @@ export type CoreMemoryDiagnosticsJson = {
   staleCount?: number
   backfill?: { running: boolean; scanned: number; remaining: number }
   degradedReason?: string
+  feedback?: {
+    enabled: boolean
+    state: 'disabled' | 'ready' | 'degraded'
+    projection: 'missing' | 'ready' | 'rebuilding' | 'degraded'
+    eventCount: number
+    aggregateCount: number
+    duplicateCount: number
+    malformedCount: number
+    lastCheckpointAt?: string
+    degradedReason?: string
+  }
+  directiveCount?: number
+  lastDirectiveInjection?: {
+    ids: string[]
+    excludedByBudget: string[]
+    truncatedIds: string[]
+    characters: number
+  }
   lastRetrieval?: {
     timestamp: string
     mode: 'sqlite-fts5' | 'filesystem-fallback'
@@ -332,6 +359,21 @@ export type CoreMemoryDiagnosticsJson = {
     promptCharacterBudget: number
     rankingWeights: Record<string, number>
   }
+}
+
+export type CoreMemoryConfirmResultJson = {
+  memoryId: string
+  eventId: string
+  confirmedAt: string
+  replayed: boolean
+}
+
+export type CoreMemoryCorrectResultJson = {
+  previousMemoryId: string
+  replacementMemoryId: string
+  eventId: string
+  correctedAt: string
+  replayed: boolean
 }
 
 export type CoreRuntimeCapabilityStateJson = {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import {
   ModelConnectionConflictError,
@@ -6,6 +7,8 @@ import {
 import type { ModelConnectionOAuthService } from '../../services/model-connection-oauth.js'
 import type { OfficialProviderAuthService } from '../../services/official-provider-cli.js'
 import { ModelConnectionOAuthSubmitRequestSchema } from '../../contracts/model-connections.js'
+import { detectProviderProtocols } from '../../services/model-protocol-detection.js'
+import type { ModelClient } from '../../ports/model-client.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { ERRORS } from './runtime-error.js'
 
@@ -104,11 +107,240 @@ export async function updateModelConnectionGlobals(
   return mutate(registry, async () => registry!.updateGlobals(await readJson(request)))
 }
 
+const ModelConnectionProbeRequestSchema = z.object({
+  mode: z.enum(['list', 'inference']).default('list'),
+  model: z.string().min(1).max(512).optional()
+}).strict()
+
 export async function probeModelConnection(
+  runtime: {
+    modelConnections?: ModelConnectionRegistry
+    modelClient?: ModelClient
+    directModelClient?: ModelClient
+  } | ModelConnectionRegistry | undefined,
+  providerId: string,
+  request?: Request
+): Promise<JsonResponse> {
+  // Back-compat: callers may pass a bare registry with no request body.
+  const registry = runtime && 'snapshot' in runtime
+    ? runtime as ModelConnectionRegistry
+    : (runtime as { modelConnections?: ModelConnectionRegistry } | undefined)?.modelConnections
+  if (!registry) return ERRORS.unavailable('model connection registry is unavailable')
+  let probeModel: string | undefined
+  let mode: 'list' | 'inference' = 'list'
+  if (request) {
+    const body = await readJson(request)
+    if (body !== null) {
+      const parsed = ModelConnectionProbeRequestSchema.safeParse(body)
+      if (!parsed.success) {
+        return ERRORS.validation('invalid probe request', parsed.error.issues)
+      }
+      mode = parsed.data.mode
+      probeModel = parsed.data.model
+    }
+  }
+  if (mode === 'inference') {
+    // Probes must hit the exact provider under test: the routed pool client
+    // would silently pass a dead key through a healthy alternative and still
+    // report success, while writing probe failures into real traffic health.
+    // Fall back to the routed client only for embedders that do not expose
+    // the direct one (test scaffolds).
+    const scoped = runtime && 'snapshot' in runtime
+      ? undefined
+      : (runtime as { directModelClient?: ModelClient; modelClient?: ModelClient })
+    const client = scoped?.directModelClient ?? scoped?.modelClient
+    return inferenceProbe(registry, client, providerId, probeModel, request)
+  }
+  return mutate(registry, () => registry.probe(providerId))
+}
+
+const INFERENCE_PROBE_TIMEOUT_MS = 30_000
+
+/**
+ * Maps a classified probe failure to the actionable hint shown next to the
+ * endpoint row in Settings > Providers.
+ */
+function inferenceProbeHint(
+  reason: string | undefined,
+  httpStatus: number | undefined
+): string | undefined {
+  if (reason === 'auth') return 'Key invalid or revoked — replace the API key.'
+  if (reason === 'credit') return 'Account balance exhausted — top up or switch account.'
+  if (reason === 'quota') return 'Quota exhausted — wait for reset or switch account.'
+  if (reason === 'rate') return 'Rate limited — retry later or lower request rate.'
+  if (reason === 'overloaded') return 'Provider overloaded — retry later.'
+  if (reason === 'model') return 'Model unavailable on this provider — check the model id.'
+  if (reason === 'request') return 'Request rejected — check endpoint format and model capability.'
+  if (httpStatus === 404) return 'Check Base URL and Endpoint format.'
+  return undefined
+}
+
+/**
+ * Real inference probe: sends a bounded 1-token request through the routed
+ * model client so credential, protocol, and quota failures surface with
+ * their classified reason. Unlike the `/models` list probe this proves the
+ * provider can actually generate. Probe turns never reach the usage recorder
+ * (recording happens in the agent loop, which this bypasses) and never
+ * return credential material.
+ */
+async function inferenceProbe(
+  registry: ModelConnectionRegistry,
+  client: ModelClient | undefined,
+  providerId: string,
+  model: string | undefined,
+  request: Request | undefined
+): Promise<JsonResponse> {
+  if (!client) return ERRORS.unavailable('model client is unavailable')
+  const snapshot = await registry.snapshot()
+  const profile = snapshot.providers.find((entry) => entry.id === providerId)
+  if (!profile) return ERRORS.notFound(`model connection ${providerId} not found`)
+  const probeModelName = (model ?? '').trim() || profile.selectedModel || profile.models[0] || ''
+  if (!probeModelName) {
+    return jsonResponse({
+      ok: false,
+      providerId,
+      format: profile.endpointFormat,
+      latencyMs: 0,
+      message: 'Provider has no configured model to probe.'
+    })
+  }
+  const started = Date.now()
+  // A Promise.race timeout leaves the upstream request running; instead abort
+  // the merged signal so the provider fetch actually tears down.
+  const abort = new AbortController()
+  const timeoutTimer = setTimeout(() => abort.abort(), INFERENCE_PROBE_TIMEOUT_MS)
+  timeoutTimer.unref?.()
+  const probeSignal = request?.signal
+    ? AbortSignal.any([request.signal, abort.signal])
+    : abort.signal
+  const run = async (): Promise<JsonResponse> => {
+    const turnId = `probe_${randomUUID()}`
+    const stream = client.stream({
+      threadId: `probe_${providerId}`,
+      turnId,
+      model: probeModelName,
+      providerId,
+      systemPrompt: '',
+      prefix: [],
+      history: [{
+        id: 'probe_msg_1',
+        turnId,
+        threadId: `probe_${providerId}`,
+        role: 'user',
+        kind: 'user_message',
+        status: 'completed',
+        createdAt: new Date().toISOString(),
+        text: 'ping'
+      }],
+      tools: [],
+      stream: true,
+      // OpenAI Responses rejects maxTokens below 16.
+      maxTokens: 16,
+      // Keep reasoning off so the probe cost stays at a single token.
+      reasoningEffort: 'off',
+      // Probes must fail fast on the exact target — retrying would hide a
+      // dead key behind a slow success and leak into route health.
+      maxRetryAttempts: 0,
+      abortSignal: probeSignal
+    })
+    let sawContent = false
+    let ttftMs: number | undefined
+    let lastError: { message: string; code?: string; reason?: string; httpStatus?: number } | undefined
+    for await (const chunk of stream) {
+      if (chunk.kind === 'assistant_text_delta' || chunk.kind === 'assistant_reasoning_delta') {
+        if (!sawContent) ttftMs = Date.now() - started
+        sawContent = true
+        // First token is enough proof; stop early so the probe stays cheap
+        // even when the provider ignores maxTokens.
+        break
+      } else if (chunk.kind === 'error') {
+        lastError = {
+          message: chunk.message,
+          ...(chunk.code ? { code: chunk.code } : {}),
+          ...(chunk.failure?.reason ? { reason: chunk.failure.reason } : {}),
+          ...(chunk.failure?.httpStatus ? { httpStatus: chunk.failure.httpStatus } : {})
+        }
+        break
+      } else if (chunk.kind === 'completed') {
+        break
+      }
+    }
+    const latencyMs = Date.now() - started
+    const base = { providerId, model: probeModelName, format: profile.endpointFormat }
+    if (abort.signal.aborted && !sawContent && !lastError) {
+      return jsonResponse({
+        ...base,
+        ok: false,
+        latencyMs,
+        reason: 'other',
+        message: 'Inference probe timed out.',
+        hint: 'Provider did not answer in time — check connectivity and proxy settings.'
+      })
+    }
+    if (request?.signal.aborted && !sawContent && !lastError) {
+      return jsonResponse({
+        ...base,
+        ok: false,
+        latencyMs,
+        reason: 'other',
+        message: 'Inference probe aborted.'
+      })
+    }
+    if (lastError) {
+      return jsonResponse({
+        ...base,
+        ok: false,
+        latencyMs,
+        ...(ttftMs !== undefined ? { ttftMs } : {}),
+        ...lastError,
+        hint: inferenceProbeHint(lastError.reason, lastError.httpStatus)
+      })
+    }
+    return jsonResponse({
+      ...base,
+      ok: true,
+      latencyMs,
+      ...(ttftMs !== undefined ? { ttftMs } : {})
+    })
+  }
+  try {
+    return await run()
+  } finally {
+    clearTimeout(timeoutTimer)
+    abort.abort()
+  }
+}
+
+/**
+ * Protocol detection for the custom-provider add flow: probes the model
+ * listing for the OpenAI and Anthropic header families in parallel and can
+ * optionally verify ambiguous formats with a bounded inference request.
+ */
+export async function detectModelConnectionProtocols(
+  registry: ModelConnectionRegistry | undefined,
+  request: Request
+): Promise<JsonResponse> {
+  if (!registry) return ERRORS.unavailable('model connection registry is unavailable')
+  try {
+    const snapshot = await registry.snapshot()
+    const globalProxy = snapshot.proxy.enabled ? snapshot.proxy.url : ''
+    return jsonResponse(await detectProviderProtocols(await readJson(request), globalProxy))
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return ERRORS.validation('invalid protocol detection request', error.issues)
+    }
+    return ERRORS.validation(error instanceof Error ? error.message : String(error))
+  }
+}
+
+export async function getModelConnectionCatalog(
   registry: ModelConnectionRegistry | undefined,
   providerId: string
 ): Promise<JsonResponse> {
-  return mutate(registry, () => registry!.probe(providerId))
+  if (!registry) return ERRORS.unavailable('model connection registry is unavailable')
+  const catalog = await registry.catalog(providerId)
+  if (!catalog) return jsonResponse({ cached: false })
+  return jsonResponse({ cached: true, ...catalog })
 }
 
 export async function getModelConnectionCustomHeaders(

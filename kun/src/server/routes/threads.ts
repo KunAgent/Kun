@@ -28,6 +28,7 @@ import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
 import { threadStateLoadFailure } from './thread-state-error.js'
 import { parseThreadTimelineQuery } from './thread-timeline-read-key.js'
+import { getExactTurnTimeline } from './thread-turn-timeline.js'
 import type { ForkThreadOptions, ListThreadsOptions, ThreadService } from '../../services/thread-service.js'
 import type { RuntimeError } from './runtime-error.js'
 import type { SessionStore } from '../../ports/session-store.js'
@@ -347,6 +348,9 @@ export async function getThreadTimeline(
       { code: 'not_found', message: `thread not found: ${threadId}` },
       404
     )
+  }
+  if (parsedQuery.data.turnId) {
+    return getExactTurnTimeline(thread, parsedQuery.data.turnId, parsedQuery.data, sessionStore, latestSeq)
   }
   // The newest page keeps the active turn's opening user message anchored so
   // a long running turn cannot push the visible request onto an older page
@@ -671,10 +675,12 @@ function parseListThreadsOptions(
       response: validationError('invalid list threads query', parsed.error.issues)
     }
   }
-  const includeSide = (parsed.data.include ?? '')
-    .split(',')
-    .map((value) => value.trim().toLowerCase())
+  const includeSide = (parsed.data.include ?? '').split(',').map((value) => value.trim().toLowerCase())
     .includes('side')
+  // Repeated workspaces params are trimmed and capped; an absent/empty list
+  // omits the option entirely rather than serializing workspaces: [].
+  const workspaces = url.searchParams.getAll('workspaces').map((value) => value.trim())
+    .filter(Boolean).slice(0, 64)
   return {
     ok: true,
     options: {
@@ -685,6 +691,7 @@ function parseListThreadsOptions(
       includeSide,
       cursor: parsed.data.cursor,
       workspace: parsed.data.workspace,
+      ...(workspaces.length > 0 ? { workspaces } : {}),
       lean: parsed.data.lean === true
     }
   }

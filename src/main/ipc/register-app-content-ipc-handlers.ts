@@ -34,16 +34,15 @@ import {
   notificationPayloadSchema,
   projectDesignMdLintPayloadSchema,
   shellOpenExternalUrlSchema,
-  localKokoroDownloadPayloadSchema,
-  localKokoroModelIdPayloadSchema,
-  localKokoroReadinessPayloadSchema,
-  localKokoroSpeakCancelPayloadSchema,
-  localKokoroSpeakPayloadSchema,
-  localKokoroTrackExportPayloadSchema,
-  localKokoroTrackFinalizePayloadSchema,
-  localKokoroTrackKeySchema,
-  localKokoroVoiceDownloadPayloadSchema,
-  localKokoroVoiceIdPayloadSchema,
+  localSanottsReadinessPayloadSchema,
+  localSanottsRuntimeDownloadPayloadSchema,
+  localSanottsSpeakCancelPayloadSchema,
+  localSanottsSpeakPayloadSchema,
+  localSanottsTrackExportPayloadSchema,
+  localSanottsTrackFinalizePayloadSchema,
+  localSanottsTrackKeySchema,
+  localSanottsVoiceDownloadPayloadSchema,
+  localSanottsVoiceIdPayloadSchema,
   localWhisperDownloadPayloadSchema,
   localWhisperModelIdPayloadSchema,
   localWhisperSourceStatusPayloadSchema,
@@ -54,6 +53,7 @@ import {
   writeRichClipboardPayloadSchema,
   writeDocumentSha256PayloadSchema,
   writeInfographicPayloadSchema,
+  writeAiPropertiesPayloadSchema,
   writeInlineCompletionPayloadSchema,
   writePrototypeFilePayloadSchema,
   writeRetrievalPayloadSchema
@@ -69,6 +69,9 @@ import {
   listWriteInlineCompletionDebugEntries,
   requestWriteInlineCompletion
 } from '../services/write-inline-completion-service'
+import {
+  requestWriteAiProperties
+} from '../services/write-ai-properties-service'
 import {
   retrieveWriteContext
 } from '../services/write-retrieval-service'
@@ -90,33 +93,32 @@ import {
   setLocalWhisperProgressEmitter
 } from '../services/local-whisper-service'
 import {
-  cancelLocalKokoroModel,
-  checkLocalKokoroDownloadSources,
-  deleteLocalKokoroModel,
-  downloadLocalKokoroModel,
-  downloadLocalKokoroVoice,
-  getLocalKokoroModelStatus,
-  getLocalKokoroReadiness,
-  getLocalKokoroVoiceStatus,
-  listDownloadedLocalKokoroVoices,
-  listLocalKokoroModelStatuses,
-  setLocalKokoroProgressEmitter
-} from '../services/local-kokoro-download-service'
+  cancelLocalSanottsRuntime,
+  checkLocalSanottsDownloadSources,
+  deleteLocalSanottsRuntime,
+  downloadLocalSanottsRuntime,
+  downloadLocalSanottsVoice,
+  getLocalSanottsReadiness,
+  getLocalSanottsRuntimeStatus,
+  getLocalSanottsVoiceStatus,
+  listDownloadedLocalSanottsVoices,
+  setLocalSanottsProgressEmitter
+} from '../services/local-sanotts-download-service'
 import {
-  cancelLocalKokoroSpeech,
-  resetLocalKokoroSession,
-  clearLocalKokoroCapture,
-  synthesizeLocalKokoroSpeech
-} from '../services/local-kokoro-synthesis-service'
+  cancelLocalSanottsSpeech,
+  resetLocalSanottsSession,
+  clearLocalSanottsCapture,
+  synthesizeLocalSanottsSpeech
+} from '../services/local-sanotts-synthesis-service'
 import {
-  clearLocalKokoroTracks,
-  discardLocalKokoroTrackCapture,
-  exportLocalKokoroTrack,
-  finalizeLocalKokoroTrack,
-  listLocalKokoroTrackKeys,
-  localKokoroTrackUsage,
-  readLocalKokoroTrackPcm
-} from '../services/local-kokoro-track-store'
+  clearLocalSanottsTracks,
+  discardLocalSanottsTrackCapture,
+  exportLocalSanottsTrack,
+  finalizeLocalSanottsTrack,
+  listLocalSanottsTrackKeys,
+  localSanottsTrackUsage,
+  readLocalSanottsTrackPcm
+} from '../services/local-sanotts-track-store'
 import {
   getComputerUsePermissions,
   requestComputerUsePermission
@@ -164,8 +166,8 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
   setLocalWhisperProgressEmitter((payload) => {
     getMainWindow()?.webContents.send('speech:local-whisper:progress', payload)
   })
-  setLocalKokoroProgressEmitter((payload) => {
-    getMainWindow()?.webContents.send('speak:kokoro:progress', payload)
+  setLocalSanottsProgressEmitter((payload) => {
+    getMainWindow()?.webContents.send('speak:sanotts:progress', payload)
   })
   ipcMain.handle('write:export', async (_, payload: unknown) =>
     exportWriteDocument(
@@ -204,6 +206,12 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
     requestWriteInlineCompletion(
       await withRegistryCredentials(await store.load()),
       parseIpcPayload('write:inline-completion', writeInlineCompletionPayloadSchema, payload)
+    )
+  )
+  ipcMain.handle('write:ai-properties', async (_, payload: unknown) =>
+    requestWriteAiProperties(
+      await withRegistryCredentials(await store.load()),
+      parseIpcPayload('write:ai-properties', writeAiPropertiesPayloadSchema, payload)
     )
   )
   ipcMain.handle('write:retrieve-context', async (_, payload: unknown) => {
@@ -282,54 +290,44 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
   ipcMain.handle('speech:local-whisper:delete', async (_, modelId: unknown) =>
     deleteLocalWhisperModel(parseIpcPayload('speech:local-whisper:delete', localWhisperModelIdPayloadSchema, modelId))
   )
-  ipcMain.handle('speak:kokoro:status', async (_, modelId: unknown) =>
-    getLocalKokoroModelStatus(parseIpcPayload('speak:kokoro:status', localKokoroModelIdPayloadSchema, modelId))
-  )
-  ipcMain.handle('speak:kokoro:statuses', async () => listLocalKokoroModelStatuses())
+  ipcMain.handle('speak:sanotts:runtime-status', async () => getLocalSanottsRuntimeStatus())
   /**
    * Liveness probe with no I/O: a slow reply means the Main event loop itself is
    * blocked. Speech synthesis used to do exactly that, so the development smoke
    * watches this channel while an answer is spoken.
    */
-  ipcMain.handle('speak:kokoro:ping', () => Date.now())
-  ipcMain.handle('speak:kokoro:download', async (event, payload: unknown) => {
+  ipcMain.handle('speak:sanotts:ping', () => Date.now())
+  ipcMain.handle('speak:sanotts:runtime-download', async (event, payload: unknown) => {
     watchSpeechSender(event)
-    const request = parseIpcPayload('speak:kokoro:download', localKokoroDownloadPayloadSchema, payload)
-    return downloadLocalKokoroModel(request?.modelId, request?.sourceId, request?.ownerId)
+    const request = parseIpcPayload('speak:sanotts:runtime-download', localSanottsRuntimeDownloadPayloadSchema, payload)
+    return downloadLocalSanottsRuntime(request?.sourceId, request?.ownerId)
   })
-  ipcMain.handle('speak:kokoro:cancel', async (_, modelId: unknown) =>
-    cancelLocalKokoroModel(parseIpcPayload('speak:kokoro:cancel', localKokoroModelIdPayloadSchema, modelId))
-  )
-  ipcMain.handle('speak:kokoro:delete', async (_, modelId: unknown) => {
-    const result = await deleteLocalKokoroModel(
-      parseIpcPayload('speak:kokoro:delete', localKokoroModelIdPayloadSchema, modelId)
-    )
-    await resetLocalKokoroSession()
+  ipcMain.handle('speak:sanotts:runtime-cancel', async () => cancelLocalSanottsRuntime())
+  ipcMain.handle('speak:sanotts:runtime-delete', async () => {
+    const result = await deleteLocalSanottsRuntime()
+    await resetLocalSanottsSession()
     return result
   })
-  ipcMain.handle('speak:kokoro:sources', async (_, payload: unknown) => {
-    const request = parseIpcPayload('speak:kokoro:sources', localKokoroDownloadPayloadSchema, payload)
-    return checkLocalKokoroDownloadSources(request?.modelId)
-  })
-  ipcMain.handle('speak:kokoro:voice-status', async (_, voiceId: unknown) =>
-    getLocalKokoroVoiceStatus(parseIpcPayload('speak:kokoro:voice-status', localKokoroVoiceIdPayloadSchema, voiceId))
+  ipcMain.handle('speak:sanotts:sources', async () => checkLocalSanottsDownloadSources())
+  ipcMain.handle('speak:sanotts:voice-status', async (_, voiceId: unknown) =>
+    getLocalSanottsVoiceStatus(parseIpcPayload('speak:sanotts:voice-status', localSanottsVoiceIdPayloadSchema, voiceId))
   )
-  ipcMain.handle('speak:kokoro:voices', async () => listDownloadedLocalKokoroVoices())
-  ipcMain.handle('speak:kokoro:voice-download', async (event, payload: unknown) => {
+  ipcMain.handle('speak:sanotts:voices', async () => listDownloadedLocalSanottsVoices())
+  ipcMain.handle('speak:sanotts:voice-download', async (event, payload: unknown) => {
     watchSpeechSender(event)
-    const request = parseIpcPayload('speak:kokoro:voice-download', localKokoroVoiceDownloadPayloadSchema, payload)
-    return downloadLocalKokoroVoice(request?.voiceId, request?.sourceId, request?.ownerId)
+    const request = parseIpcPayload('speak:sanotts:voice-download', localSanottsVoiceDownloadPayloadSchema, payload)
+    return downloadLocalSanottsVoice(request?.voiceId, request?.sourceId, request?.ownerId)
   })
-  ipcMain.handle('speak:kokoro:readiness', async (_, payload: unknown) => {
-    const request = parseIpcPayload('speak:kokoro:readiness', localKokoroReadinessPayloadSchema, payload)
-    return getLocalKokoroReadiness(request?.modelId, request?.voiceId)
+  ipcMain.handle('speak:sanotts:readiness', async (_, payload: unknown) => {
+    const request = parseIpcPayload('speak:sanotts:readiness', localSanottsReadinessPayloadSchema, payload)
+    return getLocalSanottsReadiness(request?.voiceId)
   })
   const watchedSpeechSenders = new WeakSet<Electron.WebContents>()
   const watchSpeechSender = (event: Electron.IpcMainInvokeEvent): void => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     if (!watchedSpeechSenders.has(event.sender)) {
       watchedSpeechSenders.add(event.sender)
-      const cleanup = (): void => { void resetLocalKokoroSession() }
+      const cleanup = (): void => { void resetLocalSanottsSession() }
       event.sender.on('destroyed', cleanup)
       event.sender.on('render-process-gone', cleanup)
       event.sender.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => {
@@ -337,51 +335,51 @@ export function registerAppContentIpcHandlers(options: RegisterAppIpcHandlersOpt
       })
     }
   }
-  ipcMain.handle('speak:kokoro:synthesize', async (event, payload: unknown) => {
+  ipcMain.handle('speak:sanotts:synthesize', async (event, payload: unknown) => {
     watchSpeechSender(event)
-    return synthesizeLocalKokoroSpeech(parseIpcPayload('speak:kokoro:synthesize', localKokoroSpeakPayloadSchema, payload))
+    return synthesizeLocalSanottsSpeech(parseIpcPayload('speak:sanotts:synthesize', localSanottsSpeakPayloadSchema, payload))
   })
-  ipcMain.handle('speak:kokoro:synthesize-cancel', async (_, requestId: unknown) => {
-    cancelLocalKokoroSpeech(
-      parseIpcPayload('speak:kokoro:synthesize-cancel', localKokoroSpeakCancelPayloadSchema, requestId)
+  ipcMain.handle('speak:sanotts:synthesize-cancel', async (_, requestId: unknown) => {
+    cancelLocalSanottsSpeech(
+      parseIpcPayload('speak:sanotts:synthesize-cancel', localSanottsSpeakCancelPayloadSchema, requestId)
     )
     return true
   })
-  ipcMain.handle('speak:kokoro:track:keys', async () => listLocalKokoroTrackKeys())
-  ipcMain.handle('speak:kokoro:track:usage', async () => localKokoroTrackUsage())
-  ipcMain.handle('speak:kokoro:track:finalize', async (_, payload: unknown) => {
+  ipcMain.handle('speak:sanotts:track:keys', async () => listLocalSanottsTrackKeys())
+  ipcMain.handle('speak:sanotts:track:usage', async () => localSanottsTrackUsage())
+  ipcMain.handle('speak:sanotts:track:finalize', async (_, payload: unknown) => {
     const request = parseIpcPayload(
-      'speak:kokoro:track:finalize',
-      localKokoroTrackFinalizePayloadSchema,
+      'speak:sanotts:track:finalize',
+      localSanottsTrackFinalizePayloadSchema,
       payload
     )
-    const info = await finalizeLocalKokoroTrack(request.requestId, request.key)
-    clearLocalKokoroCapture(request.requestId)
+    const info = await finalizeLocalSanottsTrack(request.requestId, request.key)
+    clearLocalSanottsCapture(request.requestId)
     return info
   })
-  ipcMain.handle('speak:kokoro:track:discard', async (_, requestId: unknown) => {
+  ipcMain.handle('speak:sanotts:track:discard', async (_, requestId: unknown) => {
     const id = parseIpcPayload(
-      'speak:kokoro:track:discard',
-      localKokoroSpeakCancelPayloadSchema,
+      'speak:sanotts:track:discard',
+      localSanottsSpeakCancelPayloadSchema,
       requestId
     )
-    discardLocalKokoroTrackCapture(id)
-    clearLocalKokoroCapture(id)
+    discardLocalSanottsTrackCapture(id)
+    clearLocalSanottsCapture(id)
     return true
   })
-  ipcMain.handle('speak:kokoro:track:read', async (_, key: unknown) =>
-    readLocalKokoroTrackPcm(parseIpcPayload('speak:kokoro:track:read', localKokoroTrackKeySchema, key))
+  ipcMain.handle('speak:sanotts:track:read', async (_, key: unknown) =>
+    readLocalSanottsTrackPcm(parseIpcPayload('speak:sanotts:track:read', localSanottsTrackKeySchema, key))
   )
-  ipcMain.handle('speak:kokoro:track:export', async (event, payload: unknown) => {
+  ipcMain.handle('speak:sanotts:track:export', async (event, payload: unknown) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
-    return exportLocalKokoroTrack(
-      parseIpcPayload('speak:kokoro:track:export', localKokoroTrackExportPayloadSchema, payload),
+    return exportLocalSanottsTrack(
+      parseIpcPayload('speak:sanotts:track:export', localSanottsTrackExportPayloadSchema, payload),
       { parentWindow: getMainWindow() }
     )
   })
-  ipcMain.handle('speak:kokoro:track:clear', async (event) => {
+  ipcMain.handle('speak:sanotts:track:clear', async (event) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
-    return clearLocalKokoroTracks()
+    return clearLocalSanottsTracks()
   })
   ipcMain.handle('write:inline-completion-debug:list', async () => listWriteInlineCompletionDebugEntries())
   ipcMain.handle('write:inline-completion-debug:clear', async () => {

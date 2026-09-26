@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import {
-  Eye,
-  FileCode2,
-  Type
-} from 'lucide-react'
+import { FileCode2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WriteExportFormat } from '@shared/write-export'
 import { useChatStore } from '../../store/chat-store'
@@ -17,21 +13,26 @@ import {
   writeRelativeToWorkspace
 } from '../../write/write-workspace-store'
 import { getWriteRenderSafety } from '../../write/write-render-safety'
+import { resolveWriteEditorSurface } from '../../write/write-editor-layout'
 import { resolveWriteQuickActions } from '../../write/quick-actions'
 import type { WriteRichEditorHandle } from '../../write/tiptap/WriteRichEditor'
 import { useWriteWorkspaceLifecycle } from './use-write-workspace-lifecycle'
 import { WriteWorkspaceEmptyState } from './WriteWorkspaceEmptyState'
 import { WriteWorkspaceToolbar } from './WriteWorkspaceToolbar'
+import { WriteFormatToolbar } from './WriteFormatToolbar'
+import { WriteDocumentStatusBar } from './WriteDocumentStatusBar'
 import { WriteInlineAgent } from './WriteInlineAgent'
 import { resolveWriteAgentPreset } from '../../write/agent-presets'
 import type { WriteMarkdownEditorHandle } from './WriteMarkdownEditor'
+import type { WriteDocumentReviewHandle } from './write-document-editor-handle'
 import {
   WRITE_RICH_CLIPBOARD_ACTION,
   formatSaveLabel,
   isInlineCompletionToggleShortcut,
   inlineAgentPosition,
   isMarkdownFile,
-  computeWriteDocumentStats,
+  computeWriteDocumentStatsCached,
+  type WriteDocumentStats,
   type WriteNotice
 } from './write-workspace-view-utils'
 import { isPresentationMarkdownPath } from '../../write/write-presentation'
@@ -51,6 +52,8 @@ import { useWriteWorkspaceViewEffects } from './use-write-workspace-view-effects
 import { WriteEditorGroups } from './WriteEditorGroups'
 import { useWriteEditorGroupFileWatches } from './use-write-editor-group-file-watches'
 import { shouldShowWriteInlineAgent } from './write-inline-agent-visibility'
+import { usePaperSurfaceSlots } from './use-paper-surface-slots'
+import { enterPaperMode } from '../../paper/paper-mode-actions'
 
 type Props = {
   leftSidebarCollapsed: boolean; onToggleLeftSidebar: () => void
@@ -85,6 +88,7 @@ export function WriteWorkspaceView({
     activeFileKind,
     autoSaveEnabled,
     autoSaveDelayMs,
+    documentEditorV2,
     rootDirectory,
     entriesByDir,
     loadingDirs,
@@ -92,6 +96,8 @@ export function WriteWorkspaceView({
     inlineCompletion,
     inlineCompletionApiReady,
     selectionAssist,
+    paperReading,
+    workSurface,
     imageGenReady,
     fileContent,
     fileSize,
@@ -137,6 +143,7 @@ export function WriteWorkspaceView({
       activeFileKind: s.activeFileKind,
       autoSaveEnabled: s.autoSaveEnabled,
       autoSaveDelayMs: s.autoSaveDelayMs,
+      documentEditorV2: s.documentEditorV2,
       rootDirectory: s.rootDirectory,
       entriesByDir: s.entriesByDir,
       loadingDirs: s.loadingDirs,
@@ -144,6 +151,8 @@ export function WriteWorkspaceView({
       inlineCompletion: s.inlineCompletion,
       inlineCompletionApiReady: s.inlineCompletionApiReady,
       selectionAssist: s.selectionAssist,
+      paperReading: s.paperReading,
+      workSurface: s.workSurface,
       agentPresets: s.agentPresets,
       assistantAgentPresetId: s.assistantAgentPresetId,
       setAssistantAgentPresetId: s.setAssistantAgentPresetId,
@@ -181,20 +190,28 @@ export function WriteWorkspaceView({
   )
   const saveTimerRef = useRef<number | null>(null)
   const exportMenuRef = useRef<HTMLDivElement | null>(null)
-  const modeMenuRef = useRef<HTMLDivElement | null>(null)
   const editorPaneRef = useRef<HTMLDivElement | null>(null)
   const exportNoticeTimerRef = useRef<number | null>(null)
   const richHandleRef = useRef<WriteRichEditorHandle | null>(null)
   const markdownHandleRef = useRef<WriteMarkdownEditorHandle | null>(null)
+  // Unified diff-review surface (§6.1): whichever editor is mounted answers
+  // review calls; only one handle is non-null at a time.
+  const documentHandleRef = useRef<WriteDocumentReviewHandle | null>(null)
+  Object.defineProperty(documentHandleRef, 'current', {
+    configurable: true,
+    get: () => richHandleRef.current ?? markdownHandleRef.current,
+    set: () => {}
+  })
   const [pointerSelecting, setPointerSelecting] = useState(false)
   const resolvedAgentPresets = agentPresets.map((preset) => resolveWriteAgentPreset(preset))
   const [inlineEditInFlight, setInlineEditInFlight] = useState(false)
-  const [modeMenuOpen, setModeMenuOpen] = useState(false)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [documentFocusMode, setDocumentFocusMode] = useState(false)
   const [exportingFormat, setExportingFormat] = useState<WriteExportFormat | typeof WRITE_RICH_CLIPBOARD_ACTION | null>(null)
   const [exportNotice, setExportNotice] = useState<WriteNotice | null>(null)
   const [presentationInFlight, setPresentationInFlight] = useState(false)
+  const [xArticleImageCount, setXArticleImageCount] = useState(0)
+  const [xArticleImageIndex, setXArticleImageIndex] = useState(0)
   const [onboardingComplete, setOnboardingComplete] = useState(readWriteOnboardingComplete)
   const workspaceReady = workspaceRoot.trim().length > 0
   const activeFileIsImage = activeFileKind === 'image'
@@ -218,12 +235,26 @@ export function WriteWorkspaceView({
     fileSize,
     truncated: fileTruncated
   })
-  const richModeActive =
-    previewMode === 'rich' && isMarkdown && renderSafety.livePreviewEnabled && activeFileIsText
+  // Single-view surface decision (§8.2/§8.3): the document editor handles
+  // markdown up to the safety cap; everything else renders plain text.
+  const { surface: editorSurface } = resolveWriteEditorSurface({
+    path: activeFilePath ?? '',
+    viewMode: previewMode,
+    contentLength: fileContent.length,
+    truncated: fileTruncated,
+    isMarkdown,
+    documentEditorV2
+  })
+  const richModeActive = editorSurface === 'document' && activeFileIsText
   const toggleInlineCompletion = useCallback((): void => {
     const writeState = useWriteWorkspaceStore.getState()
     void writeState.setInlineCompletionEnabled(!writeState.inlineCompletion.enabled)
   }, [])
+
+  useEffect(() => {
+    setXArticleImageCount(0)
+    setXArticleImageIndex(0)
+  }, [activeFilePath])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -254,14 +285,39 @@ export function WriteWorkspaceView({
     ? writeRelativeToWorkspace(workspaceRoot, activeFilePath)
     : t('writeNoFileOpen')
   const activeFileName = activeFilePath ? writeBasenameFromPath(activeFilePath) : t('writeStudio')
-  const documentStats = useMemo(
-    () => (activeFileIsText ? computeWriteDocumentStats(fileContent, isMarkdown) : null),
-    [activeFileIsText, fileContent, isMarkdown],
-  )
+  // Word counts must not re-parse the document on every keystroke: while the
+  // rich editor is active it answers from its own document, and everything
+  // else computes at idle time with a single-entry content cache.
+  const [documentStats, setDocumentStats] = useState<WriteDocumentStats | null>(null)
+  useEffect(() => {
+    if (!activeFileIsText) {
+      setDocumentStats(null)
+      return
+    }
+    let cancelled = false
+    const compute = (): void => {
+      if (cancelled) return
+      const fromEditor = richModeActive ? richHandleRef.current?.getDocumentStats() ?? null : null
+      setDocumentStats(fromEditor ?? computeWriteDocumentStatsCached(fileContent, isMarkdown))
+    }
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(compute, { timeout: 400 })
+      return () => {
+        cancelled = true
+        window.cancelIdleCallback(id)
+      }
+    }
+    const id = window.setTimeout(compute, 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(id)
+    }
+  }, [activeFileIsText, fileContent, isMarkdown, richModeActive])
   const documentStatsLabel = documentStats
     ? t('writeDocumentStats', {
         words: documentStats.wordCount,
-        characters: documentStats.characterCount
+        characters: documentStats.characterCount,
+        minutes: Math.max(1, Math.ceil(documentStats.wordCount / 200))
       })
     : null
   const workspacePathLabel = rootDirectory || workspaceRoot
@@ -314,7 +370,7 @@ export function WriteWorkspaceView({
     pendingAgentReview,
     reviewSurfaceKey: previewMode,
     saveTimerRef,
-    markdownHandleRef,
+    documentHandleRef,
     flushSave,
     syncActiveFileFromDisk,
     syncActiveImageFromDisk,
@@ -324,6 +380,17 @@ export function WriteWorkspaceView({
     setReviewActive
   })
   useWriteEditorGroupFileWatches({ workspaceRoot, editorLayout })
+
+  const { paperBar, paperDialog, openPaperImport } = usePaperSurfaceSlots({
+    workspaceRoot,
+    paperReading,
+    activeFilePath,
+    surface: workSurface,
+    input,
+    setInput,
+    onSubmitPrompt,
+    t
+  })
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent): void => {
@@ -380,6 +447,7 @@ export function WriteWorkspaceView({
     onSubmitPrompt,
     richHandleRef,
     markdownHandleRef,
+    documentHandleRef,
     setAssistantOpen,
     setInlineEditInFlight,
     setFileContent,
@@ -392,6 +460,8 @@ export function WriteWorkspaceView({
 
   const {
     copyCurrentFileAsRichText,
+    copyCurrentFileAsXArticle,
+    copyCurrentFileAsXArticleImage,
     createDraftFile,
     exportCurrentFile,
     generatePresentation,
@@ -421,7 +491,12 @@ export function WriteWorkspaceView({
     showExportNotice,
     setExportMenuOpen,
     setExportingFormat,
-    setPresentationInFlight
+    setPresentationInFlight,
+    xArticleImageIndex,
+    setXArticleImageState: ({ count, index }) => {
+      setXArticleImageCount(count)
+      setXArticleImageIndex(index)
+    }
   })
 
 
@@ -435,13 +510,10 @@ export function WriteWorkspaceView({
     previewMode,
     editorPaneRef,
     exportMenuRef,
-    modeMenuRef,
     exportNoticeTimerRef,
     exportMenuOpen,
-    modeMenuOpen,
     exportNotice,
     setExportMenuOpen,
-    setModeMenuOpen,
     setPointerSelecting,
     setExportNotice
   })
@@ -464,37 +536,21 @@ export function WriteWorkspaceView({
     .map((quickAction) => activeFileIsOffice
       ? { ...quickAction, mode: 'chat' as const }
       : quickAction)
-  const liveModeActive = previewMode === 'live' && renderSafety.livePreviewEnabled
-  const sourceModeActive =
-    previewMode === 'source' ||
-    ((previewMode === 'live' || previewMode === 'rich') && !renderSafety.livePreviewEnabled) ||
-    (previewMode === 'rich' && !richModeActive)
 
-  const modeMenuItems: Array<{ mode: WritePreviewMode; label: string; shortLabel: string; icon: ReactElement; active: boolean }> = [
-    {
-      mode: 'rich',
-      label: t('writeModeRich'),
-      shortLabel: t('writeModeRich'),
-      icon: <Type className="h-4 w-4" strokeWidth={1.85} />,
-      active: richModeActive
-    },
-    {
-      mode: 'source',
-      label: t('writeModeSource'),
-      shortLabel: t('writeModeSource'),
-      icon: <FileCode2 className="h-4 w-4" strokeWidth={1.85} />,
-      active: sourceModeActive
-    },
-    {
-      mode: 'preview',
-      label: t('writeModePreview'),
-      shortLabel: t('writeModePreview'),
-      icon: <Eye className="h-4 w-4" strokeWidth={1.85} />,
-      active: previewMode === 'preview'
-    }
-  ]
 
-  const focusedToolbar = (
+  const saveNow = (): void => {
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
+    void flushSave(workspaceRoot, { resolveExternalConflict: 'keep-local' })
+  }
+  const focusedStatusBar = activeFileIsText ? (
+    <WriteDocumentStatusBar documentStatsLabel={documentStatsLabel} saveLabel={saveLabel} saveStatus={saveStatus}
+      readOnly={renderSafety.readOnly} reviewActive={reviewActive} onSave={saveNow} />
+  ) : null
+  // U1: on the papers surface the reader owns its chrome — the 52px file
+  // toolbar is replaced by the PDF reader's floating capsules; unit-file
+  // actions live in the sidebar info panel instead of the paper strip.
+  const hidePaperReaderChrome = workSurface === 'papers' && activeFileIsPdf
+  const focusedToolbar = hidePaperReaderChrome ? null : (
     <WriteWorkspaceToolbar
         embedded
         showSidebarToggle={false}
@@ -507,33 +563,37 @@ export function WriteWorkspaceView({
         activeFileLabel={activeFileLabel}
         activeFileName={activeFileName}
         activeFilePath={activeFilePath ?? ''}
-        documentStatsLabel={documentStatsLabel}
+        formatToolbar={richModeActive
+          ? <WriteFormatToolbar richHandleRef={richHandleRef} disabled={renderSafety.readOnly || reviewActive} />
+          : null}
+        onOpenFind={richModeActive ? () => richHandleRef.current?.openFind() : null}
         inlineCompletionEnabled={inlineCompletion.enabled}
         exportInFlight={exportInFlight}
         exportMenuOpen={exportMenuOpen}
         exportMenuRef={exportMenuRef}
         leftSidebarCollapsed={leftSidebarCollapsed}
-        liveModeActive={liveModeActive}
-        modeMenuItems={modeMenuItems}
-        modeMenuOpen={modeMenuOpen}
-        modeMenuRef={modeMenuRef}
-        previewMode={previewMode}
+        isMarkdown={isMarkdown}
+        surfacePlain={editorSurface === 'plain'}
+        onToggleSurface={() => setPreviewMode(editorSurface === 'plain' ? 'rich' : 'plain')}
         presentationEnabled={presentationEnabled}
         presentationInFlight={presentationInFlight}
         readOnly={renderSafety.readOnly}
         saveLabel={saveLabel}
         saveStatus={saveStatus}
-        reviewActive={reviewActive}
         setExportMenuOpen={setExportMenuOpen}
-        setModeMenuOpen={setModeMenuOpen}
-        setPreviewMode={setPreviewMode}
         onCopyRichText={() => void copyCurrentFileAsRichText()}
+        onCopyMarkdown={
+          activeFileIsText && isMarkdown
+            ? () => void navigator.clipboard?.writeText(fileContent)
+            : null
+        }
+        onCopyXArticle={() => void copyCurrentFileAsXArticle()}
+        onCopyXArticleImage={() => void copyCurrentFileAsXArticleImage()}
+        xArticleImageCount={xArticleImageCount}
+        xArticleImageIndex={xArticleImageIndex}
         onExportFile={(format) => void exportCurrentFile(format)}
         onGeneratePresentation={() => void generatePresentation()}
-        onSave={() => {
-          if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
-          void flushSave(workspaceRoot, { resolveExternalConflict: 'keep-local' })
-        }}
+        onSave={saveNow}
         onToggleInlineCompletion={toggleInlineCompletion}
         onToggleLeftSidebar={onToggleLeftSidebar}
       />
@@ -556,9 +616,12 @@ export function WriteWorkspaceView({
           markdownHandleRef={markdownHandleRef}
           editorPaneRef={editorPaneRef}
           focusedToolbar={focusedToolbar}
+          focusedStatusBar={focusedStatusBar}
+          paperBar={paperBar}
           onboardingDecision={onboardingDecision}
           onAskAssistant={setAssistantPrompt}
           onCreateDraft={() => void createDraftFile()}
+          onImportPaper={workSurface === 'papers' ? openPaperImport : () => void enterPaperMode()}
           onPickWorkspace={() => void pickWriteWorkspace()}
         />
       </div>
@@ -588,6 +651,7 @@ export function WriteWorkspaceView({
           {fileError}
         </div>
       ) : null}
+      {paperDialog}
       {exportNotice ? (
         <div
           className={`pointer-events-none fixed left-1/2 -translate-x-1/2 rounded-full border px-4 py-2 text-[13px] shadow-[0_14px_32px_rgba(20,47,95,0.12)] ${writeFocusModeFloatingLayerClassName(documentFocusMode, 'z-40')} ${

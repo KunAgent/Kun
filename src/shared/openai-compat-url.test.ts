@@ -14,22 +14,21 @@ describe('openai compatible url builders', () => {
     expect(upstreamOpenAiModelsUrl('https://api.example.com')).toBe('https://api.example.com/v1/models')
   })
 
-  it('appends chat completions suffix even when the base URL already looks like an endpoint', () => {
+  it('returns a base URL that already ends with the target suffix unchanged', () => {
     expect(upstreamOpenAiChatCompletionsUrl('https://api.example.com/custom/chat/completions')).toBe(
-      'https://api.example.com/custom/chat/completions/v1/chat/completions'
+      'https://api.example.com/custom/chat/completions'
     )
     expect(upstreamOpenAiChatCompletionsUrl('https://api.example.com/custom/chat/completions/')).toBe(
-      'https://api.example.com/custom/chat/completions/v1/chat/completions'
+      'https://api.example.com/custom/chat/completions'
     )
   })
 
-  it('appends chat completions suffix before query strings outside custom endpoint mode', () => {
-    const endpoint = 'https://api.example.com/openai/deployments/m/chat/completions?api-version=2026-01-01'
-
+  it('treats a configured full endpoint path as the versioned base', () => {
     expect(
-      upstreamOpenAiChatCompletionsUrl(endpoint)
-    ).toBe(
-      'https://api.example.com/openai/deployments/m/chat/completions/v1/chat/completions?api-version=2026-01-01'
+      upstreamOpenAiChatCompletionsUrl('https://api.example.com/openai/deployments/m/chat/completions?api-version=2026-01-01')
+    ).toBe('https://api.example.com/openai/deployments/m/chat/completions?api-version=2026-01-01')
+    expect(upstreamOpenAiModelsUrl('https://api.example.com/api/v3/chat/completions')).toBe(
+      'https://api.example.com/api/v3/models'
     )
   })
 
@@ -45,12 +44,6 @@ describe('openai compatible url builders', () => {
     )
     expect(upstreamOpenAiCustomEndpointUrl('https://api.example.com/custom-path/?api-version=2026-01-01')).toBe(
       'https://api.example.com/custom-path?api-version=2026-01-01'
-    )
-  })
-
-  it('appends models suffix without stripping endpoint-looking paths', () => {
-    expect(upstreamOpenAiModelsUrl('https://api.example.com/api/v3/chat/completions')).toBe(
-      'https://api.example.com/api/v3/chat/completions/v1/models'
     )
   })
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, type MutableRefObject } from 'react'
 import { useWriteWorkspaceStore, type WriteWorkspaceState } from '../../write/write-workspace-store'
 import { writeDocumentContextMatches } from '../../write/write-document-context'
-import type { WriteMarkdownEditorHandle } from './WriteMarkdownEditor'
+import type { WriteDocumentReviewHandle } from './write-document-editor-handle'
 import i18n from '../../i18n'
 
 type PendingAgentReview = NonNullable<WriteWorkspaceState['pendingAgentReview']>
@@ -35,7 +35,7 @@ type UseWriteWorkspaceLifecycleOptions = {
   pendingAgentReview: PendingAgentReview | null
   reviewSurfaceKey: string
   saveTimerRef: MutableRefObject<number | null>
-  markdownHandleRef: MutableRefObject<WriteMarkdownEditorHandle | null>
+  documentHandleRef: MutableRefObject<WriteDocumentReviewHandle | null>
   flushSave: WriteWorkspaceState['flushSave']
   syncActiveFileFromDisk: WriteWorkspaceState['syncActiveFileFromDisk']
   syncActiveImageFromDisk: WriteWorkspaceState['syncActiveImageFromDisk']
@@ -60,7 +60,7 @@ export function useWriteWorkspaceLifecycle({
   pendingAgentReview,
   reviewSurfaceKey,
   saveTimerRef,
-  markdownHandleRef,
+  documentHandleRef,
   flushSave,
   syncActiveFileFromDisk,
   syncActiveImageFromDisk,
@@ -77,11 +77,11 @@ export function useWriteWorkspaceLifecycle({
     const current = useWriteWorkspaceStore.getState()
     if (!pendingWriteAgentReviewMatches(current, pendingAgentReview)) {
       clearPendingAgentReview()
-      if (!markdownHandleRef.current?.isDiffReviewActive()) setReviewActive(false)
+      if (!documentHandleRef.current?.isDiffReviewActive()) setReviewActive(false)
       return
     }
     const baseline = current.fileContent
-    const started = markdownHandleRef.current?.beginDiffReview({
+    const started = documentHandleRef.current?.beginDiffReview({
       original: baseline,
       nextDoc: pendingAgentReview.nextContent
     }) ?? false
@@ -113,7 +113,7 @@ export function useWriteWorkspaceLifecycle({
     }
   }, [
     clearPendingAgentReview,
-    markdownHandleRef,
+    documentHandleRef,
     pendingAgentReview,
     reviewSurfaceKey,
     setFileContent,

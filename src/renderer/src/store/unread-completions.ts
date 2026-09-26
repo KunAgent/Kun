@@ -13,7 +13,7 @@ export const MAX_UNREAD_COMPLETION_IDS = 1_000
 
 type CompletionVisibilityState = Pick<
   ChatState,
-  'route' | 'activeThreadId' | 'sideConversations' | 'sidePanel'
+  'route' | 'activeThreadId' | 'writeAssistantVisibleThreadId' | 'sideConversations' | 'sidePanel'
 >
 
 export type DocumentAttention = {
@@ -144,6 +144,9 @@ export function completionIsCurrentlyVisible(
     return state.route === 'chat' &&
       state.sidePanel.open &&
       state.sidePanel.activeSideId === normalized
+  }
+  if (state.route === 'write') {
+    return state.writeAssistantVisibleThreadId === normalized
   }
   return mainConversationRouteIsVisible(state.route) && state.activeThreadId === normalized
 }

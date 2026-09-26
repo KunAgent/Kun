@@ -59,7 +59,7 @@ export type LocalTool = {
     args: Record<string, unknown>,
     context: ToolHostContext,
     onUpdate?: (update: ToolExecutionUpdate) => Promise<void> | void
-  ) => Promise<{ output: unknown; isError?: boolean }>
+  ) => Promise<{ output: unknown; isError?: boolean; meta?: Record<string, unknown> }>
 }
 
 export type LocalToolHostOptions = {

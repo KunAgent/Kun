@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { spawn } from 'node:child_process'
 import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { encodePowershellCommand, ONE_SHOT_HELPER_TIMEOUT_SECONDS, powershellHelperDeadline } from './one-shot-helper-script'
 import type { InstallerRecoveryEnvironment } from './gui-updater-pending'
 import {
   clearGuiUpdateRecovery,
@@ -24,38 +25,60 @@ const defaultDeps: UpdateTransactionHelperDeps = {
   isPackaged: () => app.isPackaged,
   resourcesPath: () => process.resourcesPath,
   cwd: () => process.cwd(),
-  run: (scriptPath, action, environment) => new Promise((resolve, reject) => {
-    const child = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-Action', action], {
+  run: runBoundedUpdateTransaction,
+  scheduleRollback: scheduleBoundedUpdateRollback
+}
+
+export function runBoundedUpdateTransaction(
+  scriptPath: string,
+  action: 'RecoverUpdateTransaction' | 'FinalizeUpdateTransaction',
+  environment: InstallerRecoveryEnvironment,
+  spawnHelper: typeof spawn = spawn
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const command = `${powershellHelperDeadline()}\n& '${scriptPath.replace(/'/gu, "''")}' -Action ${action}\nexit $LASTEXITCODE`
+    const child = spawnHelper('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encodePowershellCommand(command)], {
       windowsHide: true,
+      stdio: 'ignore',
+      timeout: (ONE_SHOT_HELPER_TIMEOUT_SECONDS + 10) * 1_000,
       env: { ...process.env, ...environment }
     })
     child.once('error', reject)
     child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(`Update transaction ${action} exited with ${code}.`)))
-  }),
-  scheduleRollback: (scriptPath, environment, pid) => new Promise((resolve, reject) => {
+  })
+}
+
+export function scheduleBoundedUpdateRollback(
+  scriptPath: string,
+  environment: InstallerRecoveryEnvironment,
+  pid: number,
+  spawnHelper: typeof spawn = spawn
+): Promise<void> {
+  return new Promise((resolve, reject) => {
     const encode = (value: string) => Buffer.from(value, 'utf8').toString('base64')
     const assignments = Object.entries(environment).map(([key, value]) =>
       `$env:${key}=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(value)}'))`
     )
-    const command = [
+    const command = `${powershellHelperDeadline()}\n` + [
       `$script=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(scriptPath)}'))`,
       `$waitPid=${pid}`,
       ...assignments,
-      'Wait-Process -Id $waitPid -ErrorAction SilentlyContinue',
+      'if (Get-Process -Id $waitPid -ErrorAction SilentlyContinue) { Wait-Process -Id $waitPid -Timeout 90 -ErrorAction Stop }',
       '& $script -Action RecoverUpdateTransaction',
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
       '$exe=((& $script -Action ResolveRecoveryExecutable | Select-Object -Last 1).Trim())',
       'if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($exe)) { exit 1 }',
       '& $script -Action FinalizeUpdateTransaction',
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
-      'Start-Process -FilePath $exe'
+      'Start-Process -FilePath $exe -ErrorAction Stop',
+      'exit 0'
     ].join('; ')
-    const encoded = Buffer.from(command, 'utf16le').toString('base64')
+    const encoded = encodePowershellCommand(command)
     const elevated = environment.KUN_INSTALLER_INSTALL_MODE === 'all'
     const args = elevated
-      ? ['-NoProfile', '-Command', `Start-Process powershell.exe -Verb RunAs -ArgumentList '-NoProfile','-EncodedCommand','${encoded}'`]
+      ? ['-NoProfile', '-Command', `${powershellHelperDeadline()}\nStart-Process powershell.exe -Verb RunAs -ArgumentList '-NoProfile','-EncodedCommand','${encoded}' -ErrorAction Stop\nexit 0`]
       : ['-NoProfile', '-EncodedCommand', encoded]
-    const child = spawn('powershell.exe', args, { detached: true, stdio: 'ignore', windowsHide: true })
+    const child = spawnHelper('powershell.exe', args, { detached: true, stdio: 'ignore', windowsHide: true })
     child.once('error', reject)
     child.once('spawn', () => { child.unref(); resolve() })
   })

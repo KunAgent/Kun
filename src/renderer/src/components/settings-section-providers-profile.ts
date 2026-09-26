@@ -4,6 +4,7 @@ import type {
   KunRuntimeSettingsPatchV1,
   KunRuntimeSettingsV1,
   ModelEndpointFormat,
+  ModelProviderFailoverV1,
   ModelProviderImageCapabilityV1,
   ModelProviderModelProfileV1,
   ModelProviderMusicCapabilityV1,
@@ -84,7 +85,7 @@ export const VIDEO_GENERATION_PROTOCOL_LABEL_KEYS: Record<VideoGenerationProtoco
   'volcengine-ark-video': 'videoGenerationProtocolVolcengineArk'
 }
 
-export type ProviderTaskTab = 'connection' | 'models' | 'capabilities' | 'advanced'
+export type ProviderTaskTab = 'connection' | 'models' | 'capabilities' | 'reliability' | 'advanced'
 export type ProviderWorkspaceMode = 'providers' | 'routes'
 export type ProviderCapability = 'image' | 'speech' | 'tts' | 'music' | 'video'
 export type SubscriptionRegionFilter = 'all' | ModelProviderSubscriptionRegion
@@ -124,6 +125,7 @@ export const PROVIDER_TASK_TABS: Array<{ id: ProviderTaskTab; labelKey: string }
   { id: 'connection', labelKey: 'modelProviderTabConnection' },
   { id: 'models', labelKey: 'modelProviderTabModels' },
   { id: 'capabilities', labelKey: 'modelProviderTabCapabilities' },
+  { id: 'reliability', labelKey: 'modelProviderTabReliability' },
   { id: 'advanced', labelKey: 'modelProviderTabAdvanced' }
 ]
 
@@ -328,6 +330,12 @@ export function modelProvidersSettingsPatch(input: {
   providers: ModelProviderProfileV1[]
   kun?: KunRuntimeSettingsPatchV1
   currentKun?: Partial<KunRuntimeSettingsV1>
+  /**
+   * Explicit failover replacement — provider deletion writes the pruned list
+   * here so a later provider with the same id cannot resurrect stale groups.
+   * Absent means "keep current failover".
+   */
+  failover?: ModelProviderFailoverV1[]
 }): AppSettingsPatch {
   const defaultProvider = input.providers.find((item) => item.id === DEFAULT_MODEL_PROVIDER_ID)
   const excludedBuiltinProviderIds = [DEFAULT_MODEL_PROVIDER_ID, OPENCODE_FREE_PROVIDER_ID]
@@ -359,6 +367,7 @@ export function modelProvidersSettingsPatch(input: {
       providers: input.providers,
       excludedBuiltinProviderIds,
       routePools: input.provider.routePools,
+      ...(input.failover ? { failover: input.failover } : {}),
       localGateway: input.provider.localGateway
     },
     ...(Object.keys(kunPatch).length > 0 ? { agents: { kun: kunPatch } } : {})

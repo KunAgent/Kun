@@ -22,6 +22,7 @@ import {
   formatProjectDesignSystemLines
 } from './html-and-canvas'
 import { buildSvgTurnPrompt } from './svg'
+import { formatExcalidrawScenePrompt } from '../../whiteboard/excalidraw-outbound'
 
 export function buildParallelDesignPagesPrompt(options: ParallelDesignPagesPromptOptions): string {
   const jobs = options.jobs.filter((job) => job.artifactId.trim() && job.relativePath.trim())
@@ -89,6 +90,11 @@ export function buildParallelDesignPagesPrompt(options: ParallelDesignPagesPromp
 }
 
 export function buildDesignTurnPrompt(options: DesignTurnOptions): string {
+  if (options.target === 'canvas' && options.canvasEngine === 'excalidraw') {
+    return formatExcalidrawScenePrompt(options.excalidrawScene, {
+      ...(options.excalidrawScenePath ? { scenePath: options.excalidrawScenePath } : {})
+    })
+  }
   if (options.target === 'canvas') {
     return buildCanvasTurnPrompt(options)
   }

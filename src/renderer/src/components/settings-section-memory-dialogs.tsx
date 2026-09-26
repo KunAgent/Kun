@@ -1,7 +1,7 @@
 import {
   MEMORY_IMPORT_PROFILE_PROMPT
 } from '@shared/memory-import-export'
-import { Clipboard, Pencil, X } from 'lucide-react'
+import { Check, Clipboard, Pencil, X } from 'lucide-react'
 import { useState, type ReactElement } from 'react'
 import type { CoreMemoryRecordJson } from '../agent/kun-contract'
 import type { MemoryDialogState, MemoryDraft } from './settings-section-memory'
@@ -210,8 +210,11 @@ export function MemoryRecordDialog({
   notice,
   onClose,
   onBeginEdit,
+  onBeginCorrection,
+  onConfirm,
   onDraftChange,
-  onSave
+  onSave,
+  feedbackEnabled = false
 }: {
   dialog: MemoryDialogState
   draft: MemoryDraft
@@ -219,14 +222,19 @@ export function MemoryRecordDialog({
   notice: string | null
   onClose: () => void
   onBeginEdit: (record: CoreMemoryRecordJson) => void
+  onBeginCorrection: (record: CoreMemoryRecordJson) => void
+  onConfirm: (record: CoreMemoryRecordJson) => void
   onDraftChange: (draft: MemoryDraft | ((prev: MemoryDraft) => MemoryDraft)) => void
   onSave: () => void
+  feedbackEnabled?: boolean
 }): ReactElement {
-  const editing = dialog.mode === 'create' || dialog.mode === 'edit'
+  const editing = dialog.mode === 'create' || dialog.mode === 'edit' || dialog.mode === 'correct'
   const memory = dialog.mode === 'create' ? null : dialog.memory
   const project = memory ? projectForMemory(memory) : null
   const title = dialog.mode === 'create'
     ? t('memoryCreateTitle')
+    : dialog.mode === 'correct'
+      ? t('memoryCorrectTitle')
     : editing
       ? t('memoryEditTitle')
       : t('memoryDetails')
@@ -246,6 +254,7 @@ export function MemoryRecordDialog({
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="rounded bg-ds-hover/60 px-1.5 py-0.5 font-medium">{memory.scope}</span>
                   {memory.tags?.length ? <span>{memory.tags.join(' · ')}</span> : null}
+                  {memory.supersededAt ? <span className="text-amber-600">{t('memorySuperseded')}</span> : null}
                   <span className="font-mono opacity-60">{memory.id}</span>
                 </div>
                 {project ? (
@@ -287,7 +296,9 @@ export function MemoryRecordDialog({
                   >
                     <option value="user">{t('memoryScope_user')}</option>
                     <option value="workspace">{t('memoryScope_workspace')}</option>
-                    <option value="project">{t('memoryScope_project')}</option>
+                    {draft.directive ? null : (
+                      <option value="project">{t('memoryScope_project')}</option>
+                    )}
                   </select>
                 ) : null}
                 {dialog.mode === 'create' && draft.scope !== 'user' ? (
@@ -350,6 +361,30 @@ export function MemoryRecordDialog({
                   />
                 </div>
               </div>
+              {dialog.mode === 'create' || (dialog.mode === 'edit' && dialog.memory.scope !== 'project') ? (
+                <div className="flex flex-col gap-1.5 rounded-lg border border-ds-border-muted bg-ds-surface-subtle px-3 py-2.5">
+                  <label className="flex items-center gap-2 text-[12px] font-medium text-ds-ink">
+                    <input
+                      type="checkbox"
+                      checked={draft.directive}
+                      onChange={(e) => onDraftChange((prev) => ({
+                        ...prev,
+                        directive: e.target.checked,
+                        scope: e.target.checked && prev.scope === 'project' ? 'user' : prev.scope
+                      }))}
+                      className="h-3.5 w-3.5 accent-ds-ink"
+                    />
+                    {t('memoryAsDirective')}
+                  </label>
+                  <div className="text-[11px] leading-5 text-ds-faint">{t('memoryAsDirectiveDesc')}</div>
+                  {draft.directive ? (
+                    <div className={`text-[11px] font-mono ${draft.content.trim().length > 1000 ? 'text-amber-600' : 'text-ds-faint'}`}>
+                      {draft.content.trim().length} / 1000
+                      {draft.content.trim().length > 1000 ? ` · ${t('memoryDirectiveTooLong')}` : ''}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {notice ? (
                 <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-[12px] text-amber-700 dark:border-amber-800/40 dark:bg-amber-500/10 dark:text-amber-300">
                   {notice}
@@ -398,6 +433,7 @@ export function MemoryRecordDialog({
               onClick={onSave}
               disabled={
                 !draft.content.trim() ||
+                (draft.directive && draft.content.trim().length > 1000) ||
                 (dialog.mode === 'create' && draft.scope !== 'user' && !draft.targetPath.trim())
               }
               className="rounded-lg bg-ds-ink px-3 py-1.5 text-[12px] font-semibold text-ds-main transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45"
@@ -405,14 +441,38 @@ export function MemoryRecordDialog({
               {t('memorySave')}
             </button>
           ) : memory ? (
-            <button
-              type="button"
-              onClick={() => onBeginEdit(memory)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-ds-ink px-3 py-1.5 text-[12px] font-semibold text-ds-main transition hover:opacity-85"
-            >
-              <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} />
-              {t('memoryEdit')}
-            </button>
+            <>
+              {!memory.disabledAt && !memory.deletedAt && !memory.supersededAt ? (
+                <>
+                  {feedbackEnabled ? (
+                    <button
+                      type="button"
+                      onClick={() => onConfirm(memory)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 px-3 py-1.5 text-[12px] font-semibold text-emerald-700 transition hover:bg-emerald-500/10 dark:text-emerald-300"
+                    >
+                      <Check className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      {t('memoryConfirm')}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => onBeginCorrection(memory)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border-muted px-3 py-1.5 text-[12px] font-semibold text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                  >
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} />
+                    {t('memoryCorrect')}
+                  </button>
+                </>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => onBeginEdit(memory)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-ds-ink px-3 py-1.5 text-[12px] font-semibold text-ds-main transition hover:opacity-85"
+              >
+                <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} />
+                {t('memoryEdit')}
+              </button>
+            </>
           ) : null}
         </div>
       </div>

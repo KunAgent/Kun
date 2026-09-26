@@ -402,6 +402,20 @@ summary,
   border-radius: 8px;
 }
 
+.write-markdown-preview .write-markdown-preview-image-button {
+  display: block;
+  max-width: 100%;
+  margin: 1.2rem auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.write-markdown-preview .write-markdown-preview-image-button img {
+  margin: 0;
+}
+
 [data-theme='dark'] .write-markdown-preview pre {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }

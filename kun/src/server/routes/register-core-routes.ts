@@ -12,6 +12,7 @@ import {
   routePoolStatus,
   testRoutePool
 } from './openai-model-gateway.js'
+import { gatewayMessages } from './openai-model-gateway-anthropic.js'
 import { registerExtensionManagementRoutes } from './extensions.js'
 import { registerExtensionPublicRoutes } from './extension-public.js'
 import {
@@ -37,6 +38,8 @@ import {
   connectModelConnection,
   deleteModelConnection,
   fenceModelCredential,
+  detectModelConnectionProtocols,
+  getModelConnectionCatalog,
   getModelConnectionCustomHeaders,
   listModelConnections,
   modelConnectionEvents,
@@ -69,6 +72,7 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('GET', '/v1/models', (request) => gatewayModels(runtime, request))
   router.add('POST', '/v1/chat/completions', (request) => gatewayChatCompletions(runtime, request))
   router.add('POST', '/v1/responses', (request) => gatewayResponses(runtime, request))
+  router.add('POST', '/v1/messages', (request) => gatewayMessages(runtime, request))
   const strictGatewayAdmin = (request: Request) => strictRuntimeTokenAuthorized(request, runtime.runtimeToken)
   router.add('GET', '/v1/model-gateway/credential/status', (request) => {
     if (!strictGatewayAdmin(request)) return ERRORS.unauthorized()
@@ -229,6 +233,13 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return modelConnectionEvents(runtime.modelConnections, request)
   })
+  router.add('GET', '/v1/model-connections/credentials/fingerprints', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if (!runtime.modelConnections) return ERRORS.unavailable('model connections unavailable')
+    return jsonResponse({
+      fingerprints: await runtime.modelConnections.credentialFingerprints()
+    })
+  })
   router.add('PATCH', '/v1/model-connections/:providerId', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return patchModelConnection(runtime.modelConnections, ctx.params.providerId, request)
@@ -255,7 +266,15 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   })
   router.add('POST', '/v1/model-connections/:providerId/probe', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
-    return probeModelConnection(runtime.modelConnections, ctx.params.providerId)
+    return probeModelConnection(runtime, ctx.params.providerId, request)
+  })
+  router.add('POST', '/v1/model-connections/detect-protocol', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return detectModelConnectionProtocols(runtime.modelConnections, request)
+  })
+  router.add('GET', '/v1/model-connections/:providerId/catalog', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return getModelConnectionCatalog(runtime.modelConnections, ctx.params.providerId)
   })
   router.add('GET', '/v1/model-connections/:providerId/custom-headers', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

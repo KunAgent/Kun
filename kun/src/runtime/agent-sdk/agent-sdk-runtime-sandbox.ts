@@ -12,10 +12,13 @@ const KUN_BRIDGED_TOOL_PREFIX = 'mcp__kun__'
 export function decideSdkBuiltinSandbox(
   toolName: string,
   input: Record<string, unknown>,
-  context: Pick<SdkTurnContext, 'workspace' | 'additionalWorkspaces' | 'sandboxMode' | 'planMode'>
+  context: Pick<SdkTurnContext, 'workspace' | 'additionalWorkspaces' | 'sandboxMode' | 'planMode' | 'allowSdkBuiltins'>
 ): ToolApprovalDecision | null {
   if (context.planMode && !toolName.startsWith(KUN_BRIDGED_TOOL_PREFIX)) {
     return denySandbox(`tool ${toolName} is blocked because Plan mode only allows Kun-gated read-only tools and create_plan`)
+  }
+  if (context.allowSdkBuiltins === false && !toolName.startsWith(KUN_BRIDGED_TOOL_PREFIX)) {
+    return denySandbox(`tool ${toolName} is blocked; this turn only allows Kun-gated tools`)
   }
   const mode = context.sandboxMode ?? 'danger-full-access'
   if (!isKnownSdkTool(toolName)) {

@@ -36,9 +36,12 @@ import {
   ExtensionVisualAnalysisService
 } from './runtime-factory-dependencies.js'
 import type { createRuntimeAgentComposition } from './runtime-composition-agent.js'
+import { ExtensionRoomsService } from '../services/extension-rooms-service.js'
+import type { RoomRuntime } from '../rooms/room-runtime.js'
 
 export async function createRuntimeExtensionComposition(
-  agent: Awaited<ReturnType<typeof createRuntimeAgentComposition>>
+  agent: Awaited<ReturnType<typeof createRuntimeAgentComposition>>,
+  rooms: () => RoomRuntime | undefined
 ) {
   const { registryComposition } = agent
   const { services } = registryComposition
@@ -61,6 +64,7 @@ export async function createRuntimeExtensionComposition(
 	    'commands', 'storage', 'secrets', 'configuration', 'network', 'ui', 'agent', 'threads', 'tools',
 	    'modelProviders', 'authentication', 'workspace', 'media', 'jobs'
 	  ]
+	  const currentExtensionApiCapabilities = [...extensionApiCapabilities, 'agent.capacity', 'rooms.read']
 	  const legacyExtensionApiCapabilities = extensionApiCapabilities.filter((capability) =>
 	    capability !== 'media' && capability !== 'jobs')
 	  const extensionValidation = {
@@ -71,7 +75,9 @@ export async function createRuntimeExtensionComposition(
 	      capabilitiesByApiVersion: Object.fromEntries(
 	        SUPPORTED_EXTENSION_API_VERSIONS.map((version) => [
 	          version,
-	          version === '1.3.0'
+	          version === '1.5.0'
+	            ? currentExtensionApiCapabilities
+	            : version === '1.3.0'
 	            ? extensionApiCapabilities
 	            : version === '1.0.0'
 	              ? legacyExtensionApiCapabilities.filter((capability) => capability !== 'secrets')
@@ -157,7 +163,7 @@ export async function createRuntimeExtensionComposition(
 	    ...(core.activeOptions.extensionHostRunnerPath
 	      ? { runnerPath: core.activeOptions.extensionHostRunnerPath }
 	      : {}),
-	    capabilitiesForExtension: () => extensionApiCapabilities,
+	    capabilitiesForExtension: () => currentExtensionApiCapabilities,
 	    broker: (request) => extensionBroker.handle(request),
 	    requiredPermission: requiredExtensionBrokerPermission,
 	    onNotification: (principal, method, params) =>
@@ -212,6 +218,10 @@ export async function createRuntimeExtensionComposition(
 	  }
 	  extensionBroker = new ExtensionHostBroker({
 	    agent: agent.extensionAgent,
+	    rooms: new ExtensionRoomsService({
+	      rooms,
+	      get attachments() { return services.attachmentStore }
+	    }),
 	    profiles: agent.extensionProfiles,
 	    tools: agent.extensionTools,
 	    modelProviders: extensionModelProviders,

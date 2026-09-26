@@ -77,7 +77,7 @@ function ensurePdfJsNodePolyfills(): void {
   target.Path2D ??= class Path2D {}
 }
 
-async function loadPdfJs(): Promise<PdfJsModule> {
+export async function loadPdfJs(): Promise<PdfJsModule> {
   if (!pdfJsModulePromise) {
     ensurePdfJsNodePolyfills()
     pdfJsModulePromise = import('pdfjs-dist/legacy/build/pdf.mjs')
@@ -85,7 +85,7 @@ async function loadPdfJs(): Promise<PdfJsModule> {
   return pdfJsModulePromise
 }
 
-async function loadCanvas(): Promise<CanvasModule> {
+export async function loadCanvas(): Promise<CanvasModule> {
   if (!canvasModulePromise) {
     canvasModulePromise = import('@napi-rs/canvas').then((canvas) => {
       const target = globalThis as unknown as Record<string, unknown>

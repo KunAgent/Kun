@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CANVAS_GENERATED_IMAGE_FILE_PATTERN,
+  EXCALIDRAW_PNG_SIDECAR_PATTERN,
   KUN_GENERATED_IMAGE_DIR
 } from './generated-image-path.js'
 
@@ -13,5 +14,12 @@ describe('canvas generated image paths', () => {
   it('accepts legacy receipts but rejects traversal', () => {
     expect(CANVAS_GENERATED_IMAGE_FILE_PATTERN.test('.deepseekgui-images/board.png')).toBe(true)
     expect(CANVAS_GENERATED_IMAGE_FILE_PATTERN.test('.kun/images/../board.png')).toBe(false)
+  })
+
+  it('accepts Excalidraw PNG sidecars under a whiteboard directory', () => {
+    expect(EXCALIDRAW_PNG_SIDECAR_PATTERN.test('.kun-whiteboards/arch-map/excalidraw.png')).toBe(true)
+    expect(CANVAS_GENERATED_IMAGE_FILE_PATTERN.test('.kun-whiteboards/arch-map/excalidraw.png')).toBe(true)
+    expect(CANVAS_GENERATED_IMAGE_FILE_PATTERN.test('.kun-whiteboards/arch-map/../excalidraw.png')).toBe(false)
+    expect(CANVAS_GENERATED_IMAGE_FILE_PATTERN.test('.kun-whiteboards/arch-map/other.png')).toBe(false)
   })
 })

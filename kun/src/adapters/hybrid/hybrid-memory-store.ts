@@ -23,6 +23,10 @@ import {
   type MemoryStore
 } from '../../memory/memory-store.js'
 import { memoryLifecycleState } from '../../memory/memory-ranking.js'
+import {
+  selectMemoryDirectives,
+  type MemoryDirectiveResult
+} from '../../memory/memory-directives.js'
 import { retrieveMemoryRecords, type MemoryRetrieveRequest } from '../../memory/memory-retrieval.js'
 import { MEMORY_MAX_QUERY_SEARCH_TOKENS, memorySearchTokens } from '../../memory/memory-search-tokens.js'
 import { yieldToEventLoop } from './hybrid-thread-support.js'
@@ -54,6 +58,7 @@ export class HybridMemoryStore implements MemoryStore {
   private indexStale = false
   private lastRetrieval: MemoryRetrievalTrace | undefined
   private lastInjectedIds: string[] = []
+  private lastDirectiveInjection: MemoryDirectiveResult | undefined
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private mutationGeneration = 0
 
@@ -112,6 +117,8 @@ export class HybridMemoryStore implements MemoryStore {
     })
   }
 
+  async getById(id: string, access?: MemoryAccess): Promise<MemoryRecord> { return this.canonical.getById(id, access) }
+
   async create(input: MemoryCreateRequest): Promise<MemoryRecord> {
     return this.enqueueMutation(async () => {
       this.mutationGeneration += 1
@@ -152,11 +159,11 @@ export class HybridMemoryStore implements MemoryStore {
     })
   }
 
-  async purge(id: string): Promise<void> {
+  async purge(id: string, access?: MemoryAccess): Promise<void> {
     return this.enqueueMutation(async () => {
       this.mutationGeneration += 1
       await this.ready()
-      await this.canonical.purge(id)
+      await this.canonical.purge(id, access)
       if (!this.index) return
       try {
         this.options.beforeIndexRemove?.(id)
@@ -185,6 +192,34 @@ export class HybridMemoryStore implements MemoryStore {
     return records
   }
 
+  async listDirectives(
+    access: MemoryAccess = {},
+    policy: MemoryCapabilityConfig = this.config()
+  ): Promise<MemoryDirectiveResult> {
+    await this.ready()
+    if (this.indexReady()) {
+      try {
+        this.options.beforeIndexQuery?.('list')
+        const rows = this.index!.list({ ...access, authority: 'directive', includeDeleted: false })
+        const result = selectMemoryDirectives({
+          records: rows,
+          access,
+          policy,
+          nowMs: Date.parse(this.now())
+        })
+        this.lastDirectiveInjection = result
+        this.degraded.recover()
+        return result
+      } catch (error) {
+        this.degraded.fail('directive query', error)
+      }
+    }
+    const result = await this.canonical.listDirectives(access, policy)
+    this.lastDirectiveInjection = result
+    this.reconcileStaleIndex()
+    return result
+  }
+
   async retrieve(request: MemoryRetrieveRequest): Promise<MemoryRecord[]> {
     await this.ready()
     const policy = request.policy ?? this.config()
@@ -206,8 +241,10 @@ export class HybridMemoryStore implements MemoryStore {
           channels: candidates.channels,
           preFiltered: candidates.filtered
         })
-        this.lastRetrieval = result.trace
-        this.lastInjectedIds = [...result.trace.selectedIds]
+        if (request.purpose !== 'tool') {
+          this.lastRetrieval = result.trace
+          this.lastInjectedIds = [...result.trace.selectedIds]
+        }
         this.degraded.recover()
         return result.records
       } catch (error) {
@@ -272,7 +309,18 @@ export class HybridMemoryStore implements MemoryStore {
       staleCount,
       backfill: this.backfillState,
       degradedReason: reason,
-      lastRetrieval: this.lastRetrieval
+      lastRetrieval: this.lastRetrieval,
+      directiveCount: canonical.records.filter((record) =>
+        record.authority === 'directive' && memoryLifecycleState(record, nowMs) === 'active'
+      ).length,
+      ...(this.lastDirectiveInjection ? {
+        lastDirectiveInjection: {
+          ids: this.lastDirectiveInjection.records.map((record) => record.id),
+          excludedByBudget: this.lastDirectiveInjection.excludedByBudget,
+          truncatedIds: this.lastDirectiveInjection.truncatedIds,
+          characters: this.lastDirectiveInjection.characters
+        }
+      } : {})
     })
   }
 

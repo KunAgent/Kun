@@ -24,6 +24,7 @@ import type { AgentSession } from '../../domain/session.js'
 import { DEFAULT_EVENT_REPLAY_MAX_RECORD_BYTES, readLatestItemsFromJsonl, warnUsageCompaction } from './file-session-jsonl.js'
 import { ItemsCache } from './file-session-items-cache.js'
 import { atomicWriteFile } from './atomic-write.js'
+import { readSessionSnapshot, writeSessionSnapshot } from './session-snapshot.js'
 import { isPathBelowDirectory } from './path-containment.js'
 import { SessionCompactionScheduler } from './session-compaction-scheduler.js'
 import { searchItemTextFile } from './file-session-text-search.js'
@@ -32,6 +33,7 @@ import { FileSessionUsageMaintenance, sessionDirectoryExists } from './file-sess
 import { FileSessionUsageIndex } from './file-session-usage-index.js'
 import { listThreadDirs, loadLatestUsageSnapshotsFromIndex, loadUsageRecordsFromIndex } from './file-session-usage-read.js'
 import { JsonlFileAccessCoordinator } from './jsonl-file-access.js'
+import { serializeRuntimeEvent } from '../event-serialization.js'
 import { loadIndexedLiveItemPageFromStore } from './file-session-page.js'
 import { FileSessionLiveItems, liveReplayAfterSeq, overlayLiveItems, readRecoveredLiveItems, readLiveItems, serializeItemRecord, serializeItemRecords } from './file-session-live-items.js'
 import { FileSessionLiveCheckpointCoordinator } from './file-session-live-checkpoint-coordinator.js'
@@ -44,7 +46,10 @@ import { FileSessionEventHistory, createFileSessionEventSubsystem, type FileSess
 import { FileSessionEventRetention } from './file-session-event-retention.js'
 import { FileSessionEventsSizeTracker } from './file-session-events-size-tracker.js'
 import { UsageCompactionDebtTracker } from './file-session-usage-debt.js'
-import { loadCursorCheckpoint, persistCursorCheckpointEvent } from './file-session-cursor-checkpoint.js'
+import {
+  clearCursorCheckpointState, loadCursorCheckpoint,
+  persistCursorCheckpointEvent, resetCursorCheckpointState
+} from './file-session-cursor-checkpoint.js'
 import { FileSessionRevisionCache } from './file-session-revision-cache.js'
 export { DEFAULT_EVENT_REPLAY_MAX_RECORD_BYTES, readLatestItemsFromJsonl } from './file-session-jsonl.js'
 const DEFAULT_USAGE_EVENT_COMPACTION_MAX_BYTES = 5 * 1024 * 1024
@@ -187,35 +192,38 @@ export class FileSessionStore implements SessionStore {
 
   async appendEvent(threadId: string, event: RuntimeEvent): Promise<void> {
     assertSafeThreadId(threadId)
-    if (await persistCursorCheckpointEvent(
-      event, this.threadDir(threadId), (operation) => this.withThreadWrite(threadId, operation)
-    )) {
-      this.highestSeqCache.delete(threadId)
+    if (await persistCursorCheckpointEvent(event, this.threadDir(threadId),
+      (operation) => this.withThreadWrite(threadId, operation))) {
+      // events.cursor is a separate log: the durable high-water cache stays
+      // valid and the cursor side is served from memory.
       return
     }
     const path = this.eventsPath(threadId)
-    const record = `${JSON.stringify(event)}\n`
+    const record = `${serializeRuntimeEvent(event)}\n`
     let usageCompactionDue = false
-    await this.eventHistory.withEventIndexMutation(threadId, () =>
-      this.fileAccess.withRead(path, () => this.withThreadWrite(threadId, async () => {
-        await mkdir(this.threadDir(threadId), { recursive: true, mode: 0o700 })
-        if (!this.verifiedEventTails.has(threadId)) this.eventsSizeTracker.invalidate(threadId)
-        await ensureEventTailReady({
-          verified: this.verifiedEventTails, threadId, path,
-          evidencePath: join(this.threadDir(threadId), 'events.torn-tail.json')
+    await this.withThreadWrite(threadId, () =>
+      this.fileAccess.withRead(path, async () => {
+        const info = await this.eventHistory.withEventIndexMutation(threadId, async () => {
+          await mkdir(this.threadDir(threadId), { recursive: true, mode: 0o700 })
+          if (!this.verifiedEventTails.has(threadId)) this.eventsSizeTracker.invalidate(threadId)
+          await ensureEventTailReady({
+            verified: this.verifiedEventTails, threadId, path,
+            evidencePath: join(this.threadDir(threadId), 'events.torn-tail.json')
+          })
+          await appendFile(path, record, { encoding: 'utf-8', mode: 0o600 })
+          this.verifiedEventTails.add(threadId)
+          this.bumpEventHistoryRevision(threadId)
+          const info = await this.eventsSizeTracker.observeAfterAppend(threadId, Buffer.byteLength(record))
+          await this.eventHistory.recordAppend(threadId, event.seq, Buffer.byteLength(record), info).catch(() => undefined)
+          return info
         })
-        await appendFile(path, record, { encoding: 'utf-8', mode: 0o600 })
-        this.verifiedEventTails.add(threadId)
-        this.bumpEventHistoryRevision(threadId)
-        const info = await this.eventsSizeTracker.observeAfterAppend(threadId, Buffer.byteLength(record))
-        await this.eventHistory.recordAppend(threadId, event.seq, Buffer.byteLength(record), info).catch(() => undefined)
         this.cacheHighestSeq(threadId, event.seq, { size: info.size, mtimeMs: null }, { preserveHigher: true })
         if (this.eventRetention.shouldSchedule(info.size)) this.compactionScheduler.schedule(threadId, 'events')
         if (event.kind === 'usage') {
           await this.usageIndex.recordUsage(threadId, event)
           usageCompactionDue = this.usageCompactionDebt.record(threadId, event, Buffer.byteLength(record), info.size)
         }
-      })))
+      }))
     // Never await usage compaction on the live append path — a multi-hundred-MB
     // events.jsonl rewrite would starve lease heartbeats (#621 family).
     if (usageCompactionDue) this.scheduleUsageEventCompaction(threadId)
@@ -225,7 +233,7 @@ export class FileSessionStore implements SessionStore {
     assertSafeThreadId(threadId)
     const path = this.messagesPath(threadId)
     const record = serializeItemRecord(item)
-    await this.fileAccess.withRead(path, () => this.withThreadWrite(threadId, async () => {
+    await this.withThreadWrite(threadId, () => this.fileAccess.withRead(path, async () => {
       await mkdir(this.threadDir(threadId), { recursive: true, mode: 0o700 })
       await this.itemIndex.append({
         sourcePath: path,
@@ -252,7 +260,7 @@ export class FileSessionStore implements SessionStore {
     await this.liveCheckpoints.remove(threadId, item.id)
     const path = this.messagesPath(threadId)
     const record = serializeItemRecord(item)
-    await this.fileAccess.withRead(path, () => this.withThreadWrite(threadId, async () => {
+    await this.withThreadWrite(threadId, () => this.fileAccess.withRead(path, async () => {
       await mkdir(this.threadDir(threadId), { recursive: true, mode: 0o700 })
       await this.liveItems.stageFinal(this.liveItemsPath(threadId), threadId, item)
       await this.itemIndex.append({
@@ -276,7 +284,7 @@ export class FileSessionStore implements SessionStore {
     const checkpointGeneration = await this.liveCheckpoints.flushThread(threadId)
     this.liveCheckpoints.clearThread(threadId, checkpointGeneration)
     const path = this.messagesPath(threadId)
-    await this.fileAccess.withReplacement(path, () => this.withThreadWrite(threadId, async () => {
+    await this.withThreadWrite(threadId, () => this.fileAccess.withReplacement(path, async () => {
       await mkdir(this.threadDir(threadId), { recursive: true, mode: 0o700 })
       await atomicWriteFile(path, serializeItemRecords(items))
       await this.liveItems.reconcileAfterRewrite(this.liveItemsPath(threadId), threadId, items)
@@ -289,7 +297,7 @@ export class FileSessionStore implements SessionStore {
 
   async loadItemSnapshot(threadId: string): Promise<ItemHistorySnapshot> {
     if (!isSafeThreadId(threadId)) return { revision: 0, items: [] }
-    return this.fileAccess.withRead(this.messagesPath(threadId), () => this.withThreadWrite(threadId, async () => {
+    return this.withThreadWrite(threadId, () => this.fileAccess.withRead(this.messagesPath(threadId), async () => {
       const live = await readLiveItems(this.liveItemsPath(threadId))
       return {
         revision: this.itemHistoryRevision(threadId),
@@ -310,7 +318,7 @@ export class FileSessionStore implements SessionStore {
     const checkpointGeneration = await this.liveCheckpoints.flushThread(threadId)
     this.liveCheckpoints.clearThread(threadId, checkpointGeneration)
     const path = this.messagesPath(threadId)
-    return this.fileAccess.withReplacement(path, () => this.withThreadWrite(threadId, async () => {
+    return this.withThreadWrite(threadId, () => this.fileAccess.withReplacement(path, async () => {
       const revision = this.itemHistoryRevision(threadId)
       if (revision !== expectedRevision) {
         return { applied: false, reason: 'conflict', revision }
@@ -328,7 +336,7 @@ export class FileSessionStore implements SessionStore {
   async updateItem(threadId: string, itemId: string, patch: Partial<TurnItem>): Promise<TurnItem | null> {
     assertSafeThreadId(threadId)
     await this.liveCheckpoints.remove(threadId, itemId)
-    return this.fileAccess.withRead(this.messagesPath(threadId), () => this.withThreadWrite(threadId, async () => {
+    return this.withThreadWrite(threadId, () => this.fileAccess.withRead(this.messagesPath(threadId), async () => {
       const items = await this.loadItemsUnlocked(threadId)
       const current = items.find((item) => item.id === itemId)
       if (!current) return null
@@ -425,10 +433,9 @@ export class FileSessionStore implements SessionStore {
 
   async loadItems(threadId: string): Promise<TurnItem[]> {
     if (!isSafeThreadId(threadId)) return []
-    return this.fileAccess.withRead(
-      this.messagesPath(threadId),
-      () => this.withThreadWrite(threadId, () => this.loadItemsUnlocked(threadId))
-    )
+    return this.withThreadWrite(threadId, () => this.fileAccess.withRead(
+      this.messagesPath(threadId), () => this.loadItemsUnlocked(threadId)
+    ))
   }
 
   /**
@@ -512,21 +519,15 @@ export class FileSessionStore implements SessionStore {
     return [...overlaid]
   }
 
-  async loadSession(threadId: string): Promise<AgentSession | null> {
-    try {
-      const raw = await readFile(join(this.threadDir(threadId), 'session.json'), 'utf-8')
-      return JSON.parse(raw) as AgentSession
-    } catch {
-      return null
-    }
+  loadSession(threadId: string): Promise<AgentSession | null> {
+    return readSessionSnapshot(this.threadDir(threadId))
   }
 
   async upsertSession(session: AgentSession): Promise<void> {
     assertSafeThreadId(session.threadId)
-    await this.withThreadWrite(session.threadId, async () => {
-      await mkdir(this.threadDir(session.threadId), { recursive: true, mode: 0o700 })
-      await atomicWriteFile(join(this.threadDir(session.threadId), 'session.json'), JSON.stringify(session))
-    })
+    await this.withThreadWrite(session.threadId, () =>
+      writeSessionSnapshot(this.threadDir(session.threadId), session)
+    )
   }
 
   async highestSeq(threadId: string): Promise<number> {
@@ -549,6 +550,7 @@ export class FileSessionStore implements SessionStore {
     this.itemHistoryRevisions.clear()
     this.eventHistoryRevisions.clear()
     this.highestSeqCache.clear()
+    resetCursorCheckpointState()
     this.eventsSizeTracker.clear()
     this.usageIndex.resetMemory()
     this.usageCompactionDebt.clear()
@@ -561,6 +563,7 @@ export class FileSessionStore implements SessionStore {
     this.itemHistoryRevisions.clear(threadId)
     this.eventHistoryRevisions.clear(threadId)
     this.highestSeqCache.delete(threadId)
+    clearCursorCheckpointState(this.threadDir(threadId))
     this.eventsSizeTracker.invalidate(threadId)
     this.usageIndex.clearThreadMemory(threadId)
     this.usageCompactionDebt.clear(threadId)
@@ -614,6 +617,9 @@ export class FileSessionStore implements SessionStore {
     return path
   }
 
+  // Acquire the thread queue before any JSONL lease or event-index mutation.
+  // Release event-index mutation before waiting on usage queues: cold usage
+  // recovery needs that lock to replay events while it holds its own queue.
   async withThreadWrite<T>(threadId: string, operation: () => Promise<T>): Promise<T> {
     const previous = this.writeQueues.get(threadId) ?? Promise.resolve()
     const run = previous.catch(() => undefined).then(operation)

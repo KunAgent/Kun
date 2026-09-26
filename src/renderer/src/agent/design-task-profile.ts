@@ -62,6 +62,8 @@ export type DesignTaskProfileInput = {
   preset: DesignSystemPreset
   presetSource?: DesignPresetSource
   styleSnapshot?: DesignStyleSnapshot
+  /** Renderer locked with the task. Missing means the legacy Kun canvas. */
+  canvasEngine?: 'kun' | 'excalidraw'
   context: DesignContextSnapshot
 }
 

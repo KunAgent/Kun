@@ -33,7 +33,7 @@ export interface KunToolResult {
 }
 
 /** Executes a kun tool by name for the active turn (closes over ToolHostContext). */
-export type KunToolExecutor = (toolName: string, args: Record<string, unknown>) => Promise<KunToolResult>
+export type KunToolExecutor = (toolName: string, args: Record<string, unknown>, callId?: string) => Promise<KunToolResult>
 
 export interface SdkToolContent {
   content: Array<{ type: 'text'; text: string }>
@@ -44,7 +44,7 @@ export interface BridgedToolSpec {
   name: string
   description: string
   inputSchema: Record<string, unknown>
-  handler: (args: Record<string, unknown>) => Promise<SdkToolContent>
+  handler: (args: Record<string, unknown>, extra?: unknown) => Promise<SdkToolContent>
 }
 
 /** kun built-ins that overlap Claude Code built-ins — use the SDK's instead. */
@@ -125,9 +125,12 @@ export function buildBridgedToolSpecs(
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema,
-    handler: async (args: Record<string, unknown>): Promise<SdkToolContent> => {
+    handler: async (args: Record<string, unknown>, extra?: unknown): Promise<SdkToolContent> => {
       try {
-        const result = await execute(tool.name, args ?? {})
+        const meta = extra && typeof extra === 'object' ? (extra as { _meta?: Record<string, unknown> })._meta : undefined
+        const id = meta?.['claudecode/toolUseId']
+        const callId = typeof id === 'string' && id.length > 0 && id.length <= 256 ? id : undefined
+        const result = await execute(tool.name, args ?? {}, callId)
         return mapKunResultToSdkContent(result)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
@@ -195,7 +198,7 @@ export function toSdkMcpServer(
     sdk.tool(spec.name, spec.description, jsonSchemaToZodShape(
       spec.inputSchema,
       { nullableOptionals: spec.name === 'browser_use' }
-    ), async (args) => spec.handler((args ?? {}) as Record<string, unknown>))
+    ), async (args, extra) => spec.handler((args ?? {}) as Record<string, unknown>, extra))
   )
   return sdk.createSdkMcpServer({ name: serverName, version: '1.0.0', tools })
 }

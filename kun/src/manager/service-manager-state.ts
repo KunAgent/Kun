@@ -69,9 +69,22 @@ export const KUN_MANAGER_CAPABILITIES = [
   'shared-data-v1',
   'artifact-memory-data-v1',
   'atomic-json-v1',
+  'history-reference-cleanup-v1',
+  'history-reference-recovery-v1',
+  'history-reference-sources-v1',
+  'history-reference-sources-v2',
   'thread-leases-v1',
   'durable-leases-v1',
-  'item-page-v1'
+  'item-page-v1',
+  'item-turn-page-v1',
+  'item-call-page-v1',
+  'room-store-v1',
+  'room-store-v2',
+  'room-store-v3',
+  'room-store-v4',
+  'room-store-v5',
+  'room-store-v6',
+  'agent-direct-chat-v1', 'rooms-init-im-v1', 'agent-identities-v1'
 ] as const
 
 export const ThreadStoreOperationSchema = z.enum(MANAGER_THREAD_STORE_OPERATIONS)
@@ -87,8 +100,10 @@ export const ArtifactStoreOperationSchema = z.enum([
   'put', 'releaseOwner', 'delete', 'list', 'get', 'readRange', 'stat'
 ])
 export const MemoryStoreOperationSchema = z.enum([
-  'distillationPending', 'commitDistillation',
-  'create', 'createWithId', 'update', 'delete', 'purge', 'list', 'retrieve', 'diagnostics'
+  'distillationPending', 'commitDistillation', 'getById',
+  'create', 'createWithId', 'update', 'delete', 'purge', 'list', 'listDirectives', 'retrieve', 'diagnostics',
+  'feedbackReady', 'feedbackAppend', 'feedbackEvent', 'feedbackAggregate',
+  'feedbackAggregates', 'feedbackDiagnostics', 'feedbackConfirm', 'feedbackCorrect'
 ])
 export const GraphStoreOperationSchema = z.enum([
   'create', 'append', 'get', 'list', 'events', 'eventReplay', 'snapshot', 'remove', 'diagnostics'
@@ -577,6 +592,7 @@ function resourceFenceFrom(input: ManagerResourceFence): ManagerResourceFence {
 }
 
 export type ServiceManagerHandle = NodeHttpServerHandle & {
+  beginDrain(): void
   instanceId: string
   discovery: ManagerDiscoveryRecord
   state: ServiceManagerState

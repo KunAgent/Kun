@@ -1,0 +1,4 @@
+{
+  "approvalInterruptTurn": "Cancel turn",
+  "approvalInterruptTurnHint": "Deny remaining approvals and stop the current turn"
+}

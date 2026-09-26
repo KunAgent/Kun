@@ -10,6 +10,7 @@ import {
   modelProviderRequiresApiKey,
   resolveModelProviderPresetSource
 } from '@shared/app-settings'
+import { requiresOpenCodeSessionHeader } from '@shared/opencode-session'
 import type {
   ModelProviderTokenPlanRegion
 } from '@shared/model-provider-presets'
@@ -50,7 +51,8 @@ import {
   type SharedModelConnection, type SharedModelConnectionsSnapshot
 } from './settings-section-providers-shared-api'
 import { ProviderCustomHeadersEditor } from './provider-custom-headers-editor'
-
+import { ProviderEndpointsPanel } from './provider-endpoints-panel'
+import { ProviderIconPicker } from './provider-icon-picker'
 import {
   sharedProviderMutationCoordinator
 } from './shared-provider-mutation-coordinator'
@@ -100,17 +102,11 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
     connection: SharedModelConnection,
     model: string
   ) => Promise<void>
-  const isOpenCodeGo = activeProvider.presetSource?.presetId === 'opencode-go' ||
-    (() => {
-      try {
-        const url = new URL(activeProvider.baseUrl)
-        const path = url.pathname.replace(/\/+$/u, '')
-        return url.protocol === 'https:' && url.hostname === 'opencode.ai' &&
-          (path === '/zen/go' || path.startsWith('/zen/go/'))
-      } catch {
-        return false
-      }
-    })()
+  const needsOpenCodeSessionHeader = requiresOpenCodeSessionHeader({
+    presetSource: activeProvider.presetSource?.presetId,
+    providerId: activeProvider.id,
+    baseUrl: activeProvider.baseUrl
+  })
   return (
     <>
                 <SettingsTabPanel<ProviderTaskTab>
@@ -405,6 +401,14 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                       {t('modelEndpointCustomEndpointDesc')}
                     </p>
                   ) : null}
+                  {!isOAuthSubscriptionProvider(activeProvider) &&
+                  !isDelegatedEndpointProvider(activeProvider) ? (
+                    <ProviderEndpointsPanel
+                      provider={activeProvider}
+                      t={t}
+                      onChange={(patch) => updateModelProvider(activeProvider.id, patch)}
+                    />
+                  ) : null}
                 </DetailSection>
                 <SharedDefaultModelPicker
                   snapshot={sharedConnections}
@@ -447,6 +451,11 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                           {t('modelProviderIdentityHint')}
                         </span>
                       </label>
+                      <ProviderIconPicker
+                        provider={activeProvider}
+                        t={t}
+                        onChange={(patch) => updateModelProvider(activeProvider.id, patch)}
+                      />
                     </DetailSection>
                 <DetailSection
                   title={t('modelProviderRetrySection')}
@@ -527,7 +536,7 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                   <ProviderCustomHeadersEditor
                     providerId={activeProvider.id}
                     zh={zh}
-                    isOpenCodeGo={isOpenCodeGo}
+                    needsOpenCodeSessionHeader={needsOpenCodeSessionHeader}
                   />
                 ) : (
                   <DetailSection title={zh ? '自定义请求头' : 'Custom request headers'}>

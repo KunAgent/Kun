@@ -26,6 +26,19 @@ export function buildThreadProfileInstruction(profile: string | undefined): stri
   ].join('\n')
 }
 
+export function buildAdditionalWorkspacesInstruction(
+  additionalWorkspaces: readonly string[] | undefined
+): string | null {
+  const roots = [...new Set((additionalWorkspaces ?? []).map((path) => path.trim()).filter(Boolean))]
+  if (roots.length === 0) return null
+  return [
+    'Additional workspace roots explicitly added by the user:',
+    ...roots.map((path) => `- ${JSON.stringify(path)}`),
+    'Relative paths, bash cwd, git_inspect, /review, and plan worktrees stay on the primary workspace.',
+    'Read and write additional roots with absolute paths. Do not assume they share the primary git repository, plan worktree, or .kun/project.json.'
+  ].join('\n')
+}
+
 /**
  * Body of the turn-scoped persona context block. The block markers and the
  * turn-context preamble already carry provenance and authority, so this only
@@ -65,6 +78,7 @@ export function buildClientSurfaceInstruction(surface: TurnClientSurface): strin
       return [
         'This turn was initiated through a messaging client.',
         'Do not rely on desktop workbench, terminal controls, or structured dialogs; use messaging-specific tools only when advertised.',
+        'Ordinary assistant text is internal and never shown to the user; publish every visible message with the send_im_message tool when it is advertised.',
         common
       ].join(' ')
     case 'extension':

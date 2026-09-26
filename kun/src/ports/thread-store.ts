@@ -19,6 +19,12 @@ export type ThreadStoreListOptions = {
   cursor?: string
   /** Filter by workspace root path. */
   workspace?: string
+  /**
+   * Extra workspace roots matched alongside `workspace` (e.g. worktrees owned
+   * by the project). A thread matches when its workspace equals any listed
+   * root.
+   */
+  workspaces?: string[]
 }
 
 /**
@@ -46,6 +52,8 @@ export interface ThreadStore {
   listPage?(options?: ThreadStoreListOptions): Promise<ThreadStoreListPage>
   /** Rebuildable index lifecycle/progress; `unavailable` when no index exists. */
   indexStatus?(): ThreadIndexStatusInfo
+  /** Authoritative metadata-only lookup; includes archived and side threads. */
+  hasHistoryReference?(referenceId: string): Promise<boolean>
   get(threadId: string): Promise<ThreadRecord | null>
   /** Read the durable Thread/Turn projection without hydrating item history. */
   getMetadata?(threadId: string): Promise<ThreadRecord | null>

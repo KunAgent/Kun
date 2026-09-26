@@ -11,7 +11,8 @@ const policy: MemoryCapabilityConfig = {
   enabled: true,
   scopes: ['user', 'workspace', 'project'],
   maxInjectedRecords: 8,
-  distillation: { enabled: false }
+  distillation: { enabled: false },
+  directives: { enabled: true, maxRecords: 20, maxCharacters: 4_000 },
 }
 
 afterEach(async () => {
@@ -35,7 +36,7 @@ describe('HybridMemoryStore', () => {
       .resolves.toMatchObject([{ id: 'mem_cjk' }])
     const diagnostics = await store.diagnostics()
     expect(diagnostics).toMatchObject({
-      canonicalCount: 2, indexedCount: 2, staleCount: 0, indexState: 'ready', indexSchemaVersion: 1
+      canonicalCount: 2, indexedCount: 2, staleCount: 0, indexState: 'ready', indexSchemaVersion: 2
     })
     expect(diagnostics.lastRetrieval?.mode).toBe('sqlite-fts5')
     await store.shutdown()

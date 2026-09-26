@@ -1,0 +1,546 @@
+/* Write rich editor — document chrome (head/properties/find/outline)
+   and editor mount. Block-level widgets live in write-rich-blocks.css. */
+
+/* ---- S5 block experience ------------------------------------------ */
+
+/* Document head: properties panel + filename title, aligned with the
+   editor's centered 720px text column (720 + 2*28px padding = 776px). */
+.write-doc-head {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 776px;
+  margin: 0 auto;
+  padding: clamp(36px, 6vh, 60px) 28px 4px;
+}
+
+.write-doc-head:empty {
+  display: none;
+}
+
+.write-doc-title {
+  padding: 4px 0 6px;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ds-text, #1f2328);
+  user-select: none;
+}
+
+/* Editor mount: tiptap appends .tiptap.write-rich-editor here. Flex so the
+   editor fills the remaining viewport height (clicks below the last block
+   still place the caret). Overlay plugins position against this element. */
+.write-rich-editor-mount {
+  position: relative;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.write-rich-editor-mount > .tiptap.write-rich-editor {
+  flex: 1 0 auto;
+  padding-top: 8px;
+}
+
+/* frontmatter properties panel (§4) */
+.write-properties-panel {
+  margin-bottom: 2px;
+}
+
+.write-properties-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ds-text-faint, #9aa0a8);
+  font-size: 12.5px;
+  padding: 3px 8px 3px 4px;
+  margin-left: -4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.write-doc-head:hover .write-properties-add,
+.write-properties-add:focus-visible {
+  opacity: 1;
+}
+
+.write-properties-add:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+  color: var(--ds-text-secondary, #5c616b);
+}
+
+.write-properties-collapsed {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.write-properties-ai {
+  color: var(--ds-accent, #3b82f6);
+}
+
+.write-properties-ai:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.write-properties-inline-error {
+  font-size: 12px;
+  color: var(--ds-danger, #d93025);
+  margin-left: 4px;
+}
+
+.write-properties-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.write-properties-actions .write-properties-addrow {
+  margin-top: 0;
+}
+
+.write-properties-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ds-text-muted, #71717a);
+  font-size: 12.5px;
+  padding: 3px 8px 3px 4px;
+  margin-left: -4px;
+  cursor: pointer;
+}
+
+.write-properties-head:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+}
+
+.write-properties-body {
+  margin: 4px 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ds-border, rgba(0, 0, 0, 0.09));
+  border-radius: 8px;
+  background: var(--ds-surface-subtle, var(--ds-card, #fafbfc));
+}
+
+.write-properties-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.write-properties-tabs button {
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ds-text-muted, #71717a);
+  font-size: 12px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.write-properties-tabs button.is-active {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+  color: var(--ds-text, #1f2328);
+}
+
+.write-properties-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.write-properties-kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ds-text-muted, #71717a);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.write-properties-kind:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+}
+
+.write-properties-key {
+  width: 140px;
+  border: none;
+  background: transparent;
+  color: var(--ds-text-secondary, #5c616b);
+  font-size: 13px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  outline: none;
+}
+
+.write-properties-value {
+  flex: 1;
+  min-width: 60px;
+  border: none;
+  background: transparent;
+  color: var(--ds-text, #1f2328);
+  font-size: 13px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  outline: none;
+}
+
+.write-properties-key:focus,
+.write-properties-value:focus {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.04));
+}
+
+.write-properties-check {
+  accent-color: var(--ds-accent, #3b82f6);
+}
+
+.write-properties-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ds-text-faint, #9aa0a8);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.write-properties-row:hover .write-properties-remove {
+  opacity: 1;
+}
+
+.write-properties-remove:hover {
+  color: var(--ds-danger, #d93025);
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+}
+
+.write-properties-addrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ds-text-muted, #71717a);
+  font-size: 12.5px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.write-properties-addrow:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+}
+
+.write-properties-note {
+  font-size: 12px;
+  color: var(--ds-text-muted, #71717a);
+  margin-bottom: 6px;
+}
+
+.write-properties-yaml {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--ds-border, rgba(0, 0, 0, 0.09));
+  border-radius: 6px;
+  background: var(--ds-background, #fff);
+  color: var(--ds-text, #1f2328);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  padding: 6px 8px;
+  resize: vertical;
+  outline: none;
+}
+
+.write-properties-error {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ds-danger, #d93025);
+}
+
+/* find bar */
+.write-find-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ds-border, rgba(0, 0, 0, 0.09));
+  background: var(--ds-surface-elevated, var(--ds-card, #fafbfc));
+}
+
+.write-find-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.write-find-input {
+  flex: 1;
+  min-width: 120px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--ds-border, rgba(0, 0, 0, 0.12));
+  border-radius: 6px;
+  background: var(--ds-background, #fff);
+  color: var(--ds-text, #1f2328);
+  font-size: 13px;
+  outline: none;
+}
+
+.write-find-input:focus {
+  border-color: var(--ds-accent, #3b82f6);
+}
+
+.write-find-count {
+  min-width: 52px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--ds-text-faint, #8b8f98);
+  font-variant-numeric: tabular-nums;
+}
+
+.write-find-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ds-text-secondary, #5c616b);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.write-find-button:hover {
+  background: var(--ds-hover, rgba(0, 0, 0, 0.06));
+  color: var(--ds-text, #1f2328);
+}
+
+.write-find-button.is-active {
+  background: color-mix(in srgb, var(--ds-accent, #3b82f6) 14%, transparent);
+  color: var(--ds-accent, #3b82f6);
+}
+
+.write-find-text-button {
+  padding: 0 8px;
+}
+
+.write-find-button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.write-rich-host .ProseMirror .search-match {
+  background: rgba(250, 204, 21, 0.4);
+  border-radius: 2px;
+}
+
+.write-rich-host .ProseMirror .search-match-current {
+  background: rgba(249, 115, 22, 0.55);
+}
+
+/* outline rail */
+.write-rich-scroll-wrap {
+  position: relative;
+  container-type: inline-size;
+  container-name: write-rich;
+}
+
+.write-outline-rail {
+  position: absolute;
+  top: 25%;
+  right: 8px;
+  z-index: 40;
+  width: 40px;
+  transition: width 0.2s ease-out;
+}
+
+.write-outline-rail:hover,
+.write-outline-rail:focus-within {
+  width: 256px;
+}
+
+.write-outline-card {
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  transition:
+    background-color 0.2s ease-out,
+    border-color 0.2s ease-out,
+    box-shadow 0.2s ease-out;
+}
+
+.write-outline-rail:hover .write-outline-card,
+.write-outline-rail:focus-within .write-outline-card {
+  border-color: color-mix(in srgb, var(--ds-border, rgba(0, 0, 0, 0.09)) 60%, transparent);
+  background: color-mix(in srgb, var(--ds-surface-card, #fff) 95%, transparent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.write-outline-list {
+  position: relative;
+  max-height: min(46vh, 28rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.write-outline-list::-webkit-scrollbar {
+  display: none;
+}
+
+.write-outline-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0;
+  width: 100%;
+  height: 20px;
+  padding-right: 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ds-text-muted, #6b7280);
+  cursor: pointer;
+  outline: none;
+  transition: color 0.2s ease-out, background-color 0.2s ease-out;
+}
+
+.write-outline-item.is-section {
+  margin-top: 6px;
+}
+
+.write-outline-item.depth-1 {
+  color: color-mix(in srgb, var(--ds-text, #1f2328) 80%, transparent);
+}
+
+.write-outline-item:hover,
+.write-outline-item.is-active {
+  color: var(--ds-text, #1f2328);
+}
+
+.write-outline-item:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent, #3b82f6) 45%, transparent);
+}
+
+.write-outline-rail:hover .write-outline-item,
+.write-outline-rail:focus-within .write-outline-item {
+  gap: 6px;
+}
+
+.write-outline-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 400;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(4px);
+  transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+}
+
+.write-outline-item.depth-1 .write-outline-label {
+  font-weight: 500;
+}
+
+.write-outline-item.is-active .write-outline-label {
+  font-weight: 600;
+}
+
+.write-outline-rail:hover .write-outline-label,
+.write-outline-rail:focus-within .write-outline-label {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.write-outline-marker {
+  flex-shrink: 0;
+  width: 8px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ds-text-muted, #6b7280) 35%, transparent);
+  transition:
+    width 0.2s ease-out,
+    height 0.2s ease-out,
+    background-color 0.2s ease-out,
+    box-shadow 0.2s ease-out;
+}
+
+.write-outline-item.depth-1 .write-outline-marker { width: 20px; }
+.write-outline-item.depth-2 .write-outline-marker { width: 16px; }
+.write-outline-item.depth-3 .write-outline-marker { width: 14px; }
+.write-outline-item.depth-4 .write-outline-marker { width: 12px; }
+.write-outline-item.depth-5 .write-outline-marker { width: 10px; }
+
+.write-outline-item:hover .write-outline-marker {
+  background: color-mix(in srgb, var(--ds-text-muted, #6b7280) 70%, transparent);
+}
+
+.write-outline-item.is-active .write-outline-marker {
+  height: 4px;
+  background: var(--ds-text, #1f2328);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-text, #1f2328) 15%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .write-outline-rail,
+  .write-outline-label,
+  .write-outline-marker {
+    transition: none;
+  }
+}
+
+.write-outline-flash {
+  animation: writeOutlineFlash 1.2s ease;
+}
+
+@keyframes writeOutlineFlash {
+  0% {
+    background: color-mix(in srgb, var(--ds-accent, #3b82f6) 22%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+/* hide outline under 18rem wide editors */
+@container write-rich (max-width: 18rem) {
+  .write-outline-rail {
+    display: none;
+  }
+}
+
+/* placeholder */
+.write-rich-host .ProseMirror p.is-empty::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  color: var(--ds-text-faint, #9aa0a8);
+  pointer-events: none;
+  height: 0;
+}

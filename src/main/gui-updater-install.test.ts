@@ -35,7 +35,8 @@ vi.mock('electron', () => ({
   app: {
     getVersion: () => version,
     relaunch: vi.fn(),
-    exit: vi.fn()
+    exit: vi.fn(),
+    quit: vi.fn()
   }
 }))
 
@@ -155,8 +156,76 @@ describe('GuiUpdateInstaller preflight', () => {
     dependencies.prepare.mockRejectedValueOnce(new Error('Runtime stop failed'))
     await expect(instance.install()).resolves.toMatchObject({ ok: false, message: 'Runtime stop failed' })
     await vi.waitFor(() => expect(app.relaunch).toHaveBeenCalledOnce())
-    expect(app.exit).toHaveBeenCalledWith(0)
+    expect(app.quit).toHaveBeenCalledOnce()
+    expect(app.exit).not.toHaveBeenCalled()
     expect(dependencies.quitAndInstall).not.toHaveBeenCalled()
+  })
+})
+
+describe('failed update lifetime recovery', () => {
+  it('joins normal application cleanup before the relaunched owner can replace it', async () => {
+    const { app } = await import('electron')
+    const { ManagedRuntimeShutdownCoordinator } = await import('./runtime/managed-runtime-shutdown-coordinator')
+    const { instance, dependencies } = await readyInstaller()
+    let finishRemainingCleanup!: () => void
+    const remainingCleanup = new Promise<void>((resolve) => { finishRemainingCleanup = resolve })
+    const cleanup = vi.fn()
+      .mockRejectedValueOnce(new Error('Runtime cleanup partially failed'))
+      .mockImplementationOnce(() => remainingCleanup)
+    const shutdown = new ManagedRuntimeShutdownCoordinator(cleanup)
+    dependencies.prepare.mockImplementation(async () => { await shutdown.prepareForUpdate(); return undefined })
+    dependencies.setQuitting.mockImplementation((active: boolean) => shutdown.setUpdateInstallQuit(active))
+    let normalQuit: Promise<void> | undefined
+    vi.mocked(app.quit).mockImplementationOnce(() => { normalQuit = shutdown.stopForQuit() })
+
+    await expect(instance.install()).resolves.toMatchObject({ ok: false })
+    await vi.waitFor(() => expect(app.quit).toHaveBeenCalledOnce())
+    expect(cleanup).toHaveBeenCalledTimes(2)
+    expect(shutdown.isStoppedForQuit).toBe(false)
+    expect(app.exit).not.toHaveBeenCalled()
+    expect(clearPending.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(app.relaunch).mock.invocationCallOrder[0])
+    expect(vi.mocked(app.relaunch).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(app.quit).mock.invocationCallOrder[0])
+    finishRemainingCleanup()
+    await normalQuit
+    expect(shutdown.isStoppedForQuit).toBe(true)
+  })
+
+  it('clears pending state and does not install again when the new application reconciles', async () => {
+    const { app } = await import('electron')
+    const { instance, dependencies } = await readyInstaller()
+    dependencies.prepare.mockRejectedValueOnce(new Error('Manager cleanup failed'))
+    await instance.install()
+    await vi.waitFor(() => expect(app.quit).toHaveBeenCalledOnce())
+    expect(pending).toBeNull()
+    expect(dependencies.quitAndInstall).not.toHaveBeenCalled()
+    const restarted = await readyInstaller()
+    await restarted.instance.reconcile()
+    expect(restarted.dependencies.prepare).not.toHaveBeenCalled()
+    expect(restarted.dependencies.quitAndInstall).not.toHaveBeenCalled()
+    expect(app.relaunch).toHaveBeenCalledOnce()
+    expect(app.quit).toHaveBeenCalledOnce()
+  })
+
+  it('uses the same single recovery when native updater preparation fails', async () => {
+    const { app } = await import('electron')
+    const { instance, dependencies } = await readyInstaller()
+    dependencies.prepare.mockRejectedValue(new Error('Native update cleanup failed'))
+    instance.onBeforeQuitForUpdate()
+    instance.onBeforeQuitForUpdate()
+    await vi.waitFor(() => expect(app.quit).toHaveBeenCalledOnce())
+    expect(app.relaunch).toHaveBeenCalledOnce()
+    expect(app.exit).not.toHaveBeenCalled()
+    expect(dependencies.quitAndInstall).not.toHaveBeenCalled()
+  })
+
+  it('still quits the partially stopped application if relaunch registration fails', async () => {
+    const { app } = await import('electron')
+    const { instance, dependencies } = await readyInstaller()
+    dependencies.prepare.mockRejectedValueOnce(new Error('Resource cleanup failed'))
+    vi.mocked(app.relaunch).mockImplementationOnce(() => { throw new Error('Relaunch unavailable') })
+    await instance.install()
+    await vi.waitFor(() => expect(app.quit).toHaveBeenCalledOnce())
+    expect(app.exit).not.toHaveBeenCalled()
   })
 })
 

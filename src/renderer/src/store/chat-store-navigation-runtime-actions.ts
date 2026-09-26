@@ -13,6 +13,8 @@ import {
 } from '../lib/apply-theme'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
 import { formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
+import { isAppQuitting, markAppQuitting } from '../lib/app-quitting'
+import { readRemoteLocaleOverride } from '../lib/remote-mobile'
 import {
   deriveThreadTitleFromPrompt,
   getDefaultThreadTitle,
@@ -105,8 +107,10 @@ import {
   readSddThreadRegistry
 } from '../sdd/sdd-thread-registry'
 import {
+  cancelOfflineRuntimeProbe,
   clearBusyWatchdog,
   resetBusyRecoveryAttempts,
+  scheduleOfflineRuntimeProbe,
   scheduleStartupRuntimeProbe,
   stopTurnCompletionPoll
 } from './chat-store-schedulers'
@@ -143,6 +147,7 @@ import {
   markUnreadCompletion,
   retainUnreadCompletions
 } from './unread-completions'
+import { teardownAllSideSubscriptions } from './chat-store-side-runtime'
 
 type SseAbortRef = { current: AbortController | null }
 
@@ -157,12 +162,14 @@ let refreshThreadsGeneration = 0
 let clawChannelActivityUnsubscribe: (() => void) | null = null
 let runtimeStatusUnsubscribe: (() => void) | null = null
 let trayActionUnsubscribe: (() => void) | null = null
+let appQuittingUnsubscribe: (() => void) | null = null
 
 export function createNavigationRuntimeActions(
   { set, get, sseAbortRef }: StoreActionContext
 ): Pick<ChatState, 'probeRuntime' | 'boot'> {
   return {
   probeRuntime: async (mode = 'user', options) => {
+    if (isAppQuitting()) return
     const prev = get().runtimeConnection
     if (mode === 'user') {
       set((s) => ({
@@ -173,6 +180,7 @@ export function createNavigationRuntimeActions(
         ...(s.threads.length === 0 ? { threadListStatus: 'loading' as const } : {})
       }))
     }
+    let kunAutoStart: boolean | undefined
     try {
       if (typeof window.kunGui === 'undefined') {
         throw new Error(
@@ -180,12 +188,23 @@ export function createNavigationRuntimeActions(
         )
       }
       const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
-      if (options?.restart) {
-        await rendererRuntimeClient.restartRuntime()
-      }
+      kunAutoStart = settings.agents.kun.autoStart === true
       const p = getProvider()
-      await p.connect()
+      try {
+        // Prefer the cheap path first: `runtimeRequest` already runs
+        // ensureRuntime for a missing or hung serve, so a plain reconnect
+        // recovers a crashed runtime without paying restartRuntime's
+        // turn-idle wait. Escalate to the heavyweight restart only when the
+        // runtime still refuses a connection.
+        await p.connect()
+      } catch (error) {
+        if (!options?.restart) throw error
+        await rendererRuntimeClient.restartRuntime()
+        await p.connect()
+      }
+      if (isAppQuitting()) return
       set({ runtimeConnection: 'ready', error: null, runtimeErrorDetail: null })
+      cancelOfflineRuntimeProbe()
       void get().loadComposerModels()
       if (prev !== 'ready' || mode === 'user') {
         try {
@@ -195,7 +214,8 @@ export function createNavigationRuntimeActions(
         }
       }
     } catch (e) {
-      const msg = formatRuntimeError(e)
+      if (isAppQuitting()) return
+      const msg = formatRuntimeError(e, { kunAutoStart })
       const detail = runtimeErrorDetail(e)
       const needsSettings = shouldOpenSettingsForError(e)
       if (mode === 'user') {
@@ -223,6 +243,12 @@ export function createNavigationRuntimeActions(
             : {})
         })
       }
+      // Offline is not a terminal state: keep a slow background re-probe
+      // alive so the GUI reconnects on its own once the runtime recovers
+      // (crash restart, transient manager outage, missed status event).
+      if (get().runtimeConnection === 'offline') {
+        scheduleOfflineRuntimeProbe(get)
+      }
     }
   },
 
@@ -240,6 +266,7 @@ export function createNavigationRuntimeActions(
             initialSetupOpen: false,
             initialSetupMode: 'required'
           })
+          scheduleOfflineRuntimeProbe(get)
           return
         }
         const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
@@ -274,9 +301,21 @@ export function createNavigationRuntimeActions(
         applyCursorSpotlightColor(settings.cursorSpotlightColor)
         applyDarkUiColors(settings.darkUiColors)
         if (settings.write?.typography) applyWriteTypography(settings.write.typography)
-        await get().applyI18nFromSettings(settings.locale)
+        await get().applyI18nFromSettings(readRemoteLocaleOverride() ?? settings.locale)
+        if (!appQuittingUnsubscribe && typeof window.kunGui.onAppQuitting === 'function') {
+          appQuittingUnsubscribe = window.kunGui.onAppQuitting(() => {
+            markAppQuitting()
+            sseAbortRef.current?.abort()
+            sseAbortRef.current = null
+            cancelOfflineRuntimeProbe()
+            teardownAllSideSubscriptions()
+            stopTurnCompletionPoll()
+            set({ error: null, runtimeErrorDetail: null })
+          })
+        }
         if (!runtimeStatusUnsubscribe && typeof window.kunGui.onRuntimeStatus === 'function') {
           runtimeStatusUnsubscribe = window.kunGui.onRuntimeStatus((status) => {
+            if (isAppQuitting()) return
             set({ runtimeStatus: status })
             if (status.state === 'restarting' || status.state === 'crashed') {
               set({ error: null, runtimeErrorDetail: null })
@@ -391,6 +430,7 @@ export function createNavigationRuntimeActions(
             ? { route: 'settings' as const, settingsSection: 'agents' as const }
             : {})
         })
+        scheduleOfflineRuntimeProbe(get)
       }
     })().finally(() => {
       bootPromise = null

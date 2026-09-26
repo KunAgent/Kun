@@ -137,7 +137,8 @@ function modelSnapshot(): ModelConnectionSnapshot {
       }
     ],
     defaultProviderId: 'deepseek', defaultAccountId: 'account:deepseek', defaultModel: 'deepseek-v4-pro',
-    proxy: { enabled: false, url: '' }, routePools: [], localModelGateway: { enabled: false }
+    proxy: { enabled: false, url: '' }, routePools: [], localModelGateway: { enabled: false, exposeProviderModels: false },
+    failover: [],
   }
 }
 
@@ -170,6 +171,8 @@ function renderAssistantMessage(text: string, width: number, running = false): s
     activeSkillIds: [],
     injectedMemoryIds: [],
     injectedMemorySummaries: [],
+    injectedDirectiveIds: [],
+    injectedDirectiveSummaries: [],
     injectedInstructionSources: []
   }]
   const transcript = new TranscriptComponent()
@@ -347,6 +350,8 @@ describe("PiTuiApplication exploration rendering", () => {
       activeSkillIds: [],
       injectedMemoryIds: [],
       injectedMemorySummaries: [],
+      injectedDirectiveIds: [],
+      injectedDirectiveSummaries: [],
       injectedInstructionSources: []
     }]
 
@@ -435,6 +440,8 @@ describe("PiTuiApplication exploration rendering", () => {
       activeSkillIds: [],
       injectedMemoryIds: [],
       injectedMemorySummaries: [],
+      injectedDirectiveIds: [],
+      injectedDirectiveSummaries: [],
       injectedInstructionSources: []
     }]
 

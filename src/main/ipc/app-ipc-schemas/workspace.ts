@@ -3,8 +3,12 @@ import {
   CONVERSATION_EXPORT_FORMATS,
   CONVERSATION_EXPORT_MAX_MARKDOWN_CHARS
 } from '../../../shared/conversation-export'
-import { WRITE_EXPORT_FORMATS } from '../../../shared/write-export'
+import { WRITE_EXPORT_FORMATS, WRITE_RICH_CLIPBOARD_PROFILES } from '../../../shared/write-export'
 import { WRITE_INFOGRAPHIC_MAX_TEXT_CHARS } from '../../../shared/write-infographic'
+import {
+  WRITE_AI_PROPERTIES_MAX_DOCUMENT_CHARS,
+  WRITE_AI_PROPERTIES_MAX_YAML_CHARS
+} from '../../../shared/write-ai-properties'
 import {
   MAX_WORKSPACE_SPREADSHEET_CELL_TEXT_CHARS,
   MAX_WORKSPACE_SPREADSHEET_FORMULA_CHARS,
@@ -408,6 +412,21 @@ export const workspaceClipboardImageSavePayloadSchema = z
   })
   .strict()
 
+export const clipboardImageWritePayloadSchema = z
+  .object({
+    path: optionalTrimmedString(MAX_PATH_LENGTH),
+    workspaceRoot: optionalTrimmedString(MAX_PATH_LENGTH),
+    dataBase64: z.string().max(MAX_SAVE_FILE_BASE64_BYTES).optional(),
+    mimeType: optionalTrimmedString(255)
+  })
+  .strict()
+  .refine((payload) => Boolean(payload.path || payload.dataBase64), {
+    message: 'Either path or dataBase64 is required.'
+  })
+  .refine((payload) => !(payload.path && payload.dataBase64), {
+    message: 'Provide either path or dataBase64, not both.'
+  })
+
 export const workspaceImagePickPayloadSchema = z
   .object({
     workspaceRoot: trimmedString(MAX_PATH_LENGTH),
@@ -472,7 +491,10 @@ export const writeExportPayloadSchema = z
     title: optionalTrimmedString(200),
     workspaceRoot: optionalTrimmedString(MAX_PATH_LENGTH),
     format: z.enum(WRITE_EXPORT_FORMATS),
-    content: z.string().max(MAX_BODY_BYTES)
+    content: z.string().max(MAX_BODY_BYTES),
+    renderedDiagrams: z
+      .record(z.string().max(MAX_BODY_BYTES), z.string().max(MAX_BODY_BYTES))
+      .optional()
   })
   .strict()
   .refine((payload) => Boolean(payload.path || payload.title), {
@@ -508,7 +530,9 @@ export const writeRichClipboardPayloadSchema = z
   .object({
     path: trimmedString(MAX_PATH_LENGTH),
     workspaceRoot: optionalTrimmedString(MAX_PATH_LENGTH),
-    content: z.string().max(MAX_BODY_BYTES)
+    content: z.string().max(MAX_BODY_BYTES),
+    profile: z.enum(WRITE_RICH_CLIPBOARD_PROFILES).optional(),
+    imageIndex: z.number().int().min(0).max(10_000).optional()
   })
   .strict()
 
@@ -601,6 +625,14 @@ export const writeInlineCompletionPayloadSchema = z
       .strict(),
     editCandidate: writeInlineCompletionEditCandidateSchema.optional(),
     recentEdits: z.array(writeInlineEditRecentEditSchema).max(12).optional(),
+    model: optionalModelIdSchema
+  })
+  .strict()
+
+export const writeAiPropertiesPayloadSchema = z
+  .object({
+    documentText: z.string().max(WRITE_AI_PROPERTIES_MAX_DOCUMENT_CHARS),
+    existingYaml: z.string().max(WRITE_AI_PROPERTIES_MAX_YAML_CHARS).optional(),
     model: optionalModelIdSchema
   })
   .strict()

@@ -35,10 +35,10 @@ let loading = false
  */
 export function ensureSpeakTrackKeys(): void {
   if (loading || typeof window === 'undefined') return
-  if (typeof window.kunGui?.listLocalKokoroTrackKeys !== 'function') return
+  if (typeof window.kunGui?.listLocalSanottsTrackKeys !== 'function') return
   loading = true
   void window.kunGui
-    .listLocalKokoroTrackKeys()
+    .listLocalSanottsTrackKeys()
     .then((keys) => useSpeakTrackStore.getState().setKeys(keys))
     .catch(() => {
       loading = false
@@ -47,9 +47,9 @@ export function ensureSpeakTrackKeys(): void {
 
 /** Reload the keys after they change outside the normal Speak flow. */
 export function refreshSpeakTrackKeys(): void {
-  if (typeof window.kunGui?.listLocalKokoroTrackKeys !== 'function') return
+  if (typeof window.kunGui?.listLocalSanottsTrackKeys !== 'function') return
   void window.kunGui
-    .listLocalKokoroTrackKeys()
+    .listLocalSanottsTrackKeys()
     .then((keys) => useSpeakTrackStore.getState().setKeys(keys))
     .catch(() => undefined)
 }

@@ -1,4 +1,11 @@
-import type { WriteAgentPresetV1, WriteInlineCompletionSettingsV1, WriteSelectionAssistSettingsV1 } from '@shared/app-settings'
+import type {
+  WriteAgentPresetV1,
+  WriteInlineCompletionSettingsV1,
+  WritePaperModeSettingsV1,
+  WritePaperReadingSettingsV1,
+  WriteSelectionAssistSettingsV1
+} from '@shared/app-settings'
+import type { WriteWorkSurface } from './write-surface'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import type {
   WorkspaceOfficePreviewSuccess,
@@ -8,8 +15,9 @@ import type { WriteEditorSelectionState } from '../components/write/WriteMarkdow
 import type { WriteQuotedSelection } from './quoted-selection'
 import type { WriteRecentEdit } from './recent-edits'
 import type { WorkspaceSpreadsheetMutation } from '@shared/workspace-spreadsheet'
+import type { CanvasEngine } from '../whiteboard/canvas-engine'
 
-export type WritePreviewMode = 'rich' | 'source' | 'live' | 'preview'
+export type WritePreviewMode = 'rich' | 'plain'
 export type WriteSaveStatus = 'saved' | 'dirty' | 'saving' | 'error'
 export type WriteActiveFileKind = 'text' | 'code' | 'image' | 'pdf' | 'office'
 export type WriteEditorGroupId = 'primary' | 'secondary'
@@ -19,6 +27,11 @@ export type WriteEditorTab = {
   kind?: 'file'
   path: string
   viewMode: WritePreviewMode
+  /**
+   * R2.3 side-by-side translation: a same-path tab in the secondary group
+   * marked `translated` renders the reader's overlay-only mirror.
+   */
+  pdfView?: 'translated'
   cursorOffset?: number
   scrollTop?: number
 }
@@ -29,7 +42,25 @@ export type WriteWhiteboardTab = {
   viewMode: 'rich'
 }
 
-export type WriteEditorItem = WriteEditorTab | WriteWhiteboardTab
+/**
+ * Non-document tabs on the papers surface (plan U4): the paper library plus
+ * one discover tab per source. They live in the editor layout like ordinary
+ * tabs, persist across restarts, and never own a file.
+ */
+export type WritePaperViewId =
+  | 'library'
+  | 'discover:search'
+  | 'discover:arxiv'
+  | 'discover:feeds'
+  | 'discover:venue'
+
+export type WritePaperViewTab = {
+  kind: 'paper-view'
+  view: WritePaperViewId
+  viewMode: 'rich'
+}
+
+export type WriteEditorItem = WriteEditorTab | WriteWhiteboardTab | WritePaperViewTab
 
 export type WriteEditorGroup = {
   id: WriteEditorGroupId
@@ -55,7 +86,17 @@ export type WorkWhiteboard = {
   revision: number
   createdAt: string
   updatedAt: string
+  /** Renderer for this board. Missing means the legacy Kun canvas. */
+  engine?: CanvasEngine
 }
+
+export type FindOrCreateExcalidrawWhiteboardResult =
+  | { ok: true; board: WorkWhiteboard; created: boolean }
+  | {
+      ok: false
+      code: 'workspace_mismatch' | 'invalid_id' | 'engine_locked' | 'create_failed'
+      board?: WorkWhiteboard
+    }
 
 export type WriteEditorLayoutV1 = {
   version: 1
@@ -114,12 +155,20 @@ export type WriteWorkspaceState = {
   workspaceRoots: string[]
   autoSaveEnabled: boolean
   autoSaveDelayMs: number
+  /** S1–S4 gate: unified remark codec + single-view document editor. */
+  documentEditorV2: boolean
   inlineCompletion: WriteInlineCompletionSettingsV1
   inlineCompletionApiReady: boolean
   /** Selection toolbar AI assists: quick action prompts + infographic prompt. */
   selectionAssist: WriteSelectionAssistSettingsV1
   /** Named writing-assistant personas for quick switching. */
   agentPresets: WriteAgentPresetV1[]
+  /** Paper-reading units: papers dir, interpretation template, preprocessing. */
+  paperReading: WritePaperReadingSettingsV1
+  /** Paper-mode settings: enabled flag + library list/active library. */
+  paperMode: WritePaperModeSettingsV1
+  /** Active Work surface: ordinary docs workspace vs the paper workbench. */
+  workSurface: WriteWorkSurface
   /** True when the image generation provider is fully configured (enables 生成信息图). */
   imageGenReady: boolean
   /** True when the primary chat provider is configured (enables 生成交互原型). */
@@ -176,11 +225,15 @@ export type WriteWorkspaceState = {
   quotedSelections: WriteQuotedSelection[]
   recentEdits: WriteRecentEdit[]
   loadWriteSettings: () => Promise<void>
+  setWorkSurface: (surface: WriteWorkSurface) => void
   selectWriteWorkspace: (workspaceRoot: string) => Promise<void>
   addWriteWorkspace: (workspaceRoot: string) => Promise<void>
   removeWriteWorkspace: (workspaceRoot: string) => Promise<void>
   setInlineCompletionEnabled: (enabled: boolean) => Promise<void>
-  initializeWorkspace: (workspaceRoot: string) => Promise<void>
+  initializeWorkspace: (
+    workspaceRoot: string,
+    options?: { force?: boolean }
+  ) => Promise<void>
   loadDirectory: (workspaceRoot: string, path?: string) => Promise<string | null>
   toggleDirectory: (workspaceRoot: string, path: string) => Promise<void>
   refreshWorkspace: (workspaceRoot: string) => Promise<void>
@@ -192,11 +245,13 @@ export type WriteWorkspaceState = {
   loadWhiteboards: (workspaceRoot: string) => Promise<void>
   createWhiteboard: (workspaceRoot: string, options: {
     title: string
+    id?: string
     groupId?: WriteEditorGroupId
     sourcePath?: string
     threadId?: string
     workflowId?: string
     childId?: string
+    engine?: CanvasEngine
   }) => Promise<WorkWhiteboard | null>
   openWhiteboard: (boardId: string, groupId?: WriteEditorGroupId) => void
   findOrCreatePptWhiteboard: (input: {
@@ -207,7 +262,14 @@ export type WriteWorkspaceState = {
     childId?: string
     sourcePath?: string
   }) => Promise<WorkWhiteboard | null>
+  findOrCreateExcalidrawWhiteboard: (input: {
+    workspaceRoot: string
+    boardId?: string
+    title?: string
+    threadId?: string
+  }) => Promise<FindOrCreateExcalidrawWhiteboardResult>
   renameWhiteboard: (boardId: string, title: string) => Promise<boolean>
+  setWhiteboardEngine: (boardId: string, engine: CanvasEngine) => Promise<boolean>
   deleteWhiteboard: (boardId: string) => Promise<boolean>
   bindWhiteboardThread: (boardId: string, threadId: string) => Promise<boolean>
   forgetWhiteboardThread: (threadId: string) => Promise<boolean>
@@ -217,6 +279,7 @@ export type WriteWorkspaceState = {
     childId?: string
     revision?: number
   }) => Promise<boolean>
+  openPaperViewTab: (view: WritePaperViewId, groupId?: WriteEditorGroupId) => void
   activateTab: (groupId: WriteEditorGroupId, path: string) => void
   closeTab: (groupId: WriteEditorGroupId, path: string, force?: boolean) => Promise<boolean>
   moveTab: (path: string, fromGroupId: WriteEditorGroupId, toGroupId: WriteEditorGroupId, index?: number) => void
@@ -224,6 +287,8 @@ export type WriteWorkspaceState = {
   splitEditorGroup: (orientation: Exclude<WriteEditorLayoutOrientation, 'single'>, path?: string) => void
   closeEditorGroup: (groupId: WriteEditorGroupId) => void
   setTabViewMode: (groupId: WriteEditorGroupId, path: string, mode: WritePreviewMode) => void
+  /** R2.3: mark/unmark a file tab as the read-only translated mirror. */
+  setTabPdfView: (groupId: WriteEditorGroupId, path: string, pdfView?: 'translated') => void
   setSplitOrientation: (orientation: Exclude<WriteEditorLayoutOrientation, 'single'>) => void
   setSplitRatio: (ratio: number) => void
   setPresentationViewForGroup: (

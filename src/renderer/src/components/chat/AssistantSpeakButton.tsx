@@ -69,7 +69,7 @@ export function AssistantSpeakButton({
   // The bridge is absent in server-rendered tests, so nothing is touched at
   // render time; availability is resolved after mount.
   useEffect(() => {
-    setAvailable(typeof window !== 'undefined' && typeof window.kunGui?.synthesizeLocalKokoroSpeech === 'function')
+    setAvailable(typeof window !== 'undefined' && typeof window.kunGui?.synthesizeLocalSanottsSpeech === 'function')
   }, [])
 
   if (!speakButtonVisible(available, speakEnabled)) return null
@@ -98,6 +98,7 @@ export function AssistantSpeakButton({
       aria-label={title}
       aria-busy={busy && !playing}
       data-speak-state={busy ? phase : showError ? 'error' : 'idle'}
+      data-assistant-action="speak"
       className={`flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition hover:bg-ds-hover ${
         showError
           ? 'text-rose-400 hover:text-rose-300'

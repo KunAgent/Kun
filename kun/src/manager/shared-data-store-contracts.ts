@@ -69,7 +69,8 @@ export const ThreadStoreListOptionsSchema: z.ZodType<ThreadStoreListOptions> = z
   archivedOnly: z.boolean().optional(),
   includeSide: z.boolean().optional(),
   cursor: z.string().min(1).optional(),
-  workspace: z.string().optional()
+  workspace: z.string().optional(),
+  workspaces: z.array(z.string()).max(64).optional()
 }).strict()
 
 export function finishedTurnStatus(status: string): FinishedTurnStatus | null {
@@ -85,14 +86,19 @@ export function ownerLeaseExpiredItemId(turnId: string): string {
 }
 
 export const AgentSessionSchema = z.object({
+  historyRefId: z.string().min(1).optional(),
+  workspace: z.string().min(1).optional(),
   threadId: ThreadIdSchema,
-  turnId: z.string().min(1).max(256),
+  turnId: z.string().max(256),
   startedAt: z.string(),
   updatedAt: z.string(),
   items: z.array(TurnItem),
   events: z.array(RuntimeEvent),
   closed: z.boolean()
-})
+}).refine((session) => session.turnId.length > 0 || (
+  Boolean(session.historyRefId) && session.items.length === 0 &&
+  session.events.every((event) => !event.turnId)
+), { message: 'An empty turn ID is only valid for an empty external-history branch snapshot' })
 
 export const SessionUsageQuerySchema = z.object({
   threadId: ThreadIdSchema.optional(),
@@ -127,6 +133,7 @@ export const MANAGER_THREAD_STORE_OPERATIONS = [
   'listPage',
   'get',
   'getMetadata',
+  'hasHistoryReference',
   'touch',
   'upsert',
   'upsertIfRevision',
@@ -179,6 +186,7 @@ export type ManagerArtifactStoreOperation =
   | 'stat'
 
 export type ManagerMemoryStoreOperation =
+  | 'getById'
   | 'distillationPending'
   | 'commitDistillation'
   | 'create'
@@ -187,8 +195,17 @@ export type ManagerMemoryStoreOperation =
   | 'delete'
   | 'purge'
   | 'list'
+  | 'listDirectives'
   | 'retrieve'
   | 'diagnostics'
+  | 'feedbackReady'
+  | 'feedbackAppend'
+  | 'feedbackEvent'
+  | 'feedbackAggregate'
+  | 'feedbackAggregates'
+  | 'feedbackDiagnostics'
+  | 'feedbackConfirm'
+  | 'feedbackCorrect'
 
 export type ManagerGraphStoreOperation =
   | 'create'

@@ -16,7 +16,7 @@ function settings(): ModelProviderSettingsV1 {
   const defaults = defaultModelProviderSettings()
   return {
     ...defaults,
-    localGateway: { enabled: true, name: 'Kun API' },
+    localGateway: { enabled: true, name: 'Kun API', exposeProviderModels: false },
     routePools: [
       {
         id: 'kimi-pool', name: 'Kimi pool', modelId: 'kimi-auto', enabled: true, strategy: 'adaptive',
@@ -565,7 +565,13 @@ function routeStatus(
   pools = draft.routePools,
   configuredPools = pools
 ): string {
-  return JSON.stringify({ localGateway: { enabled: draft.localGateway.enabled }, pools, configuredPools, metrics: {}, events: [], tests })
+  return JSON.stringify({
+    localGateway: {
+      enabled: draft.localGateway.enabled,
+      exposeProviderModels: draft.localGateway.exposeProviderModels
+    },
+    pools, configuredPools, metrics: {}, events: [], tests
+  })
 }
 
 function testRecord(status: 'running' | 'succeeded') {

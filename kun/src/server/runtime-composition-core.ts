@@ -38,6 +38,18 @@ import {
   ThreadLifecycleFence,
   LlmDebugRecorder,
   ThreadService,
+  ContextWindowService,
+  ContextWindowNotes,
+  ContextWindowTurnModes,
+  ContextWindowTransitionCoordinator,
+  ContextWindowBudget,
+  ContextWindowStateRestore,
+  FileContextWindowStateStore,
+  countOrdinaryWorkItems,
+  FileContextWindowStore,
+  CONTEXT_WINDOWS_NOTE_FILE_MAX_BYTES,
+  CONTEXT_WINDOWS_NOTE_MAX_FILES_PER_THREAD,
+  CONTEXT_WINDOWS_NOTE_TOTAL_MAX_BYTES,
   FileProjectBoardStore,
   ProjectBoardService,
   UsageService,
@@ -45,6 +57,7 @@ import {
   type RuntimeDataDirLease
 } from './runtime-factory-dependencies.js'
 import {
+  liveContextWindowMode,
   llmDebugCaptureEnabled,
   modelRequestCaptureDefaultEnabled,
   tokenEconomyConfigForOptions
@@ -52,6 +65,7 @@ import {
 import { modelContextProfilesByProvider } from './runtime-factory-model.js'
 import { createPersistentStores } from './runtime-factory-storage.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
+import { HistoryReferenceService } from '../history/history-reference-service.js'
 
 export async function createRuntimeCore(
   options: KunServeRuntimeOptions,
@@ -59,7 +73,11 @@ export async function createRuntimeCore(
 ) {
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
   let activeOptions: KunServeRuntimeOptions = { ...options }
-  const eventBus = new InMemoryEventBus()
+  // Production replay reads the durable session store; nothing calls
+  // snapshotSince on the live bus, so skip retaining a serialized tail.
+  const eventBus = new InMemoryEventBus({
+    retainTail: options.eventBusRetainTail === true
+  })
   const eventStreamRegistry = new ThreadEventStreamRegistry()
   const stores = await createPersistentStores({
     dataDir: options.dataDir,
@@ -113,6 +131,33 @@ export async function createRuntimeCore(
     dataDir: activeOptions.dataDir
   })
   const threadActivity = new ThreadActivityRegistry()
+  const contextWindowModes = new ContextWindowTurnModes(
+    liveContextWindowMode(() => activeOptions)
+  )
+  const contextWindowBudget = new ContextWindowBudget({
+    profiles: modelProfiles,
+    nowIso
+  })
+  const contextWindowNotes: ContextWindowNotes = new ContextWindowNotes({
+    store: new FileContextWindowStore({
+      dataDir: activeOptions.dataDir,
+      limits: {
+        maxFileBytes: CONTEXT_WINDOWS_NOTE_FILE_MAX_BYTES,
+        maxFilesPerThread: CONTEXT_WINDOWS_NOTE_MAX_FILES_PER_THREAD,
+        maxTotalBytes: CONTEXT_WINDOWS_NOTE_TOTAL_MAX_BYTES
+      }
+    }),
+    // Version stamps need the thread's public history position at commit
+    // time so a fork can copy only the revisions available at the fork
+    // point; the closure resolves once `contextWindows` is assigned below.
+    commitPosition: (threadId): Promise<number> => contextWindows.historyPosition(threadId)
+  })
+  const contextWindows: ContextWindowService = new ContextWindowService({
+    sessionStore,
+    notes: contextWindowNotes,
+    ids,
+    nowIso
+  })
   const observers = [
     threadActivity,
     ...(agentObservability ? [agentObservability] : [])
@@ -125,6 +170,35 @@ export async function createRuntimeCore(
     lifecycleFence,
     observers
   })
+  const contextWindowState = new FileContextWindowStateStore({ dataDir: activeOptions.dataDir })
+  const contextWindowStateRestore = new ContextWindowStateRestore({
+    store: contextWindowState,
+    modes: contextWindowModes,
+    budget: contextWindowBudget,
+    sessionStore,
+    nowIso
+  })
+  const contextWindowTransition = new ContextWindowTransitionCoordinator({
+    contextWindows,
+    events,
+    modes: contextWindowModes,
+    budget: contextWindowBudget,
+    ids,
+    sessionStore,
+    stateRestore: contextWindowStateRestore,
+    hasPendingInteractions: (threadId, excludedCallId) =>
+      approvalGate.pending(threadId).length > 0 ||
+      userInputGate.pending(threadId).length > 0 ||
+      inflight.list().some((record) =>
+        record.threadId === threadId && record.kind === 'tool' && record.callId !== excludedCallId),
+    requestItemCount: async (threadId) =>
+      countOrdinaryWorkItems(await sessionStore.loadItems(threadId)),
+    committedOperation: (threadId, operationId) => contextWindows.hasWindowOperation(threadId, operationId)
+  })
+  // Late binding: restart restore completes the durable window initialization
+  // for the restored checkpoint before any model request is served.
+  contextWindowStateRestore.ensureInitialization = (checkpoint) =>
+    contextWindowTransition.ensureInitialization(checkpoint)
   let prefix = createImmutablePrefix({
     systemPrompt: KUN_SYSTEM_PROMPT,
     pinnedConstraints: [
@@ -145,7 +219,7 @@ export async function createRuntimeCore(
     new FileDelegatedSessionBindingStore(delegatedSessionRoot(activeOptions.dataDir)),
     nowIso
   )
-  const threadService = new ThreadService({
+  const threadService: ThreadService = new ThreadService({
     threadStore,
     deleteThreadStore: rawThreadStore,
     sessionStore,
@@ -161,19 +235,37 @@ export async function createRuntimeCore(
       abortThreadExecution?.(threadId)
       await stopThreadAuxiliaryWork?.(threadId)
     },
-    onDeleted: async (threadId) => {
+    recoverHistoryReference: (threadId) => historyReferences.recoverBinding(threadId),
+    withHistoryReferenceMutation: (operation) => historyReferences.store.withLifecycleMutation(operation),
+    onDeleted: async (threadId, historyRefId) => {
       eventStreamRegistry.closeThread(threadId)
       usageService.reset(threadId)
       events.clearThread(threadId)
       eventBus.clearThread(threadId)
       await Promise.all([
         ...(llmDebug ? [llmDebug.deleteThread(threadId)] : []),
-        delegatedSessions.invalidate(threadId)
+        delegatedSessions.invalidate(threadId),
+        contextWindows.deleteThreadData(threadId),
+        contextWindowState.deleteThreadData(threadId),
+        historyReferences.cleanupDeletedThread(threadId, historyRefId)
       ])
     },
     onStatusChanged: (threadId, status) => handleGraphThreadStatus?.(threadId, status),
     onForked: (sourceThreadId, targetThreadId) =>
-      handleGraphThreadFork?.(sourceThreadId, targetThreadId)
+      Promise.all([
+        handleGraphThreadFork?.(sourceThreadId, targetThreadId),
+        contextWindows.forkThreadData(sourceThreadId, targetThreadId)
+      ]).then(() => undefined)
+  })
+  const historyReferences: HistoryReferenceService = new HistoryReferenceService({
+    dataDir: options.dataDir,
+    threadService,
+    threadStore: rawThreadStore,
+    enabled: () => activeOptions.lab?.codexReferenceBranches?.enabled === true,
+    enabledFor: (provider) => provider === 'codex' ? activeOptions.lab?.codexReferenceBranches?.enabled === true
+      : provider === 'claude-code' ? activeOptions.lab?.claudeCodeReferenceBranches?.enabled === true
+        : activeOptions.lab?.opencodeReferenceBranches?.enabled === true,
+    defaultModel: () => ({ model: activeOptions.model, providerId: activeOptions.activeProviderId })
   })
   const projectBoardStore = new FileProjectBoardStore({
     dataDir: options.dataDir,
@@ -293,12 +385,18 @@ export async function createRuntimeCore(
     allocateSeq,
     llmDebug,
     agentObservability,
+    contextWindows,
+    contextWindowModes,
+    contextWindowTransition,
+    contextWindowBudget,
+    contextWindowStateRestore,
     events,
     threadActivity,
     prefix,
     delegatedSessions,
     threadService,
     projectBoardStore,
+    historyReferences,
     projectBoardService,
     artifactStore,
     graphConfig,

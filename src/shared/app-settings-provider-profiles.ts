@@ -83,6 +83,11 @@ import {
 } from './model-provider-presets'
 
 import {
+  normalizeModelProviderCatalogSources,
+  normalizeModelProviderEndpoints,
+  normalizeProviderIconId
+} from './app-settings-provider-failover'
+import {
   normalizeModelKey,
   normalizeModelProviderBaseUrl,
   normalizeModelProviderId,
@@ -179,6 +184,10 @@ export function normalizeModelProviderProfile(
   const textToSpeech = normalizeModelProviderTextToSpeechCapability(input?.textToSpeech)
   const music = normalizeModelProviderMusicCapability(input?.music)
   const video = normalizeModelProviderVideoCapability(input?.video)
+  const endpoints = normalizeModelProviderEndpoints(input?.endpoints)
+  const catalogSources = normalizeModelProviderCatalogSources(input?.catalogSources) ??
+    (resolvedPresetSource?.mode === 'api' ? resolvedPresetSource.preset.catalogSources : undefined)
+  const iconId = normalizeProviderIconId(input?.iconId)
   return providerWithPresetCapabilities({
     id,
     name,
@@ -191,6 +200,9 @@ export function normalizeModelProviderProfile(
           : '',
     baseUrl,
     endpointFormat,
+    ...(endpoints ? { endpoints } : {}),
+    ...(catalogSources ? { catalogSources: [...catalogSources] } : {}),
+    ...(iconId ? { iconId } : {}),
     useProxy: typeof input?.useProxy === 'boolean' ? input.useProxy : missingUseProxy,
     retry: normalizeModelRequestRetrySettings(
       input?.retry,

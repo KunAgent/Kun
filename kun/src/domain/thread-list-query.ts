@@ -41,7 +41,11 @@ export function filterThreadSummaries(
       ? [...summaries]
       : summaries.filter((thread) => thread.status !== 'archived' && thread.status !== 'deleted')
   if (!options.includeSide) out = out.filter((thread) => (thread.relation ?? 'primary') !== 'side')
-  if (options.workspace) out = out.filter((thread) => thread.workspace === options.workspace)
+  const workspaceSet = new Set(
+    [options.workspace, ...(options.workspaces ?? [])]
+      .filter((value): value is string => Boolean(value))
+  )
+  if (workspaceSet.size > 0) out = out.filter((thread) => workspaceSet.has(thread.workspace))
   if (query) out = out.filter((thread) => threadSearchText(thread).includes(query))
   return out.sort(compareThreadSummaries)
 }

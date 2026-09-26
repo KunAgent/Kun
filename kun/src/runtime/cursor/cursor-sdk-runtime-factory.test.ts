@@ -16,6 +16,7 @@ import {
   type CursorSdkRuntimeFactoryDeps
 } from './cursor-sdk-runtime-factory.js'
 import type { CursorSdkApi } from './cursor-sdk-runtime.js'
+import { MemoryRecord } from '../../contracts/memory.js'
 
 function messages(values: SDKMessage[]): AsyncGenerator<SDKMessage, void> {
   return (async function* () {
@@ -340,6 +341,85 @@ describe('Cursor SDK runtime factory', () => {
     thread.mode = 'plan'
     await loadKunTurnContext(input)
     expect(ensureGoalContext).toHaveBeenCalledTimes(1)
+  })
+
+  test('records only Cursor memories included after retrieval', async () => {
+    const registry = CapabilityRegistry.fromLocalTools([])
+    const thread = {
+      id: 'thread_memory',
+      title: 'Cursor memory',
+      workspace: '/tmp/cursor-memory',
+      model: 'cursor-model',
+      mode: 'agent',
+      approvalPolicy: 'auto',
+      approvalReviewer: 'user',
+      sandboxMode: 'danger-full-access',
+      turns: [{
+        id: 'turn_memory',
+        prompt: 'Use my saved preference.',
+        createdAt: '2026-09-15T03:00:00.000Z',
+        actingModelRoute: { model: 'cursor-model', providerId: 'cursor-provider' }
+      }]
+    }
+    const memory = MemoryRecord.parse({
+      id: 'memory_cursor',
+      content: 'Prefer concise release notes.',
+      scope: 'workspace',
+      workspace: '/tmp/cursor-memory',
+      createdAt: '2026-09-15T02:00:00.000Z',
+      updatedAt: '2026-09-15T02:00:00.000Z'
+    })
+    const memoryStore = {
+      retrieve: vi.fn(async () => [memory]),
+      setLastInjected: vi.fn()
+    }
+    const append = vi.fn(async () => ({ status: 'appended' as const }))
+    const runtime = createCursorSdkRuntime({
+      registry,
+      toolHost: new LocalToolHost({ registry }),
+      providerConfigs: {},
+      providerIds: new Set(['cursor-provider']),
+      defaultIsCursor: false,
+      defaultModel: 'cursor-model',
+      defaultApprovalPolicy: 'auto',
+      defaultSandboxMode: 'danger-full-access',
+      threadStore: { get: async () => thread } as never,
+      sessionStore: {} as never,
+      turns: { updateTurnMetadata: async () => undefined } as never,
+      events: { record: async () => undefined } as never,
+      ids: { next: (prefix) => `${prefix}_1` },
+      memoryStore: memoryStore as never,
+      memoryFeedback: { enabled: () => true, append }
+    })
+    const loadKunTurnContext = (runtime as unknown as {
+      deps: {
+        loadKunTurnContext(input: {
+          threadId: string
+          turnId: string
+          userText: string
+          actingModelRoute: { model: string, providerId?: string }
+          signal: AbortSignal
+        }): Promise<{ instructionBlocks: string[] }>
+      }
+    }).deps.loadKunTurnContext
+
+    const context = await loadKunTurnContext({
+      threadId: 'thread_memory',
+      turnId: 'turn_memory',
+      userText: 'Use my saved preference.',
+      actingModelRoute: { model: 'cursor-model', providerId: 'cursor-provider' },
+      signal: new AbortController().signal
+    })
+
+    expect(context.instructionBlocks.join('\n')).toContain('Prefer concise release notes.')
+    expect(memoryStore.setLastInjected).toHaveBeenCalledWith(['memory_cursor'])
+    expect(append).toHaveBeenCalledOnce()
+    expect(append).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'retrieved',
+      memoryId: 'memory_cursor',
+      threadId: 'thread_memory',
+      turnId: 'turn_memory'
+    }))
   })
 
   test('bridges policy-filtered MCP and extension tools through Kun ToolHost', async () => {

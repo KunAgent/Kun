@@ -8,6 +8,8 @@ import {
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_DEBOUNCE_MS,
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_MAX_TOKENS,
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_MIN_ACCEPT_SCORE,
+  defaultWritePaperModeSettings,
+  defaultWritePaperReadingSettings,
   defaultWriteSelectionAssistSettings
 } from '@shared/app-settings'
 import { normalizeWriteQuotedSelections, quotedSelectionFromEditor } from './quoted-selection'
@@ -21,6 +23,7 @@ import { createWritePresentationViewActions } from './write-presentation-view-st
 import { createWorkWhiteboardActions } from './work-whiteboard'
 import { writeDocumentKey } from './write-editor-layout'
 import { createWriteSpreadsheetActions } from './write-workspace-spreadsheet-actions'
+import { createWriteSurfaceActions } from './write-workspace-surface-actions'
 import { writeBrowserStorageItem } from '../lib/browser-storage'
 import {
   captureWriteDocumentContext,
@@ -63,6 +66,8 @@ export type {
   WriteEditorLayoutOrientation,
   WriteEditorLayoutV1,
   WriteEditorTab,
+  WritePaperViewId,
+  WritePaperViewTab,
   WriteWhiteboardTab,
   WritePreviewMode,
   WriteSaveStatus,
@@ -93,6 +98,7 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
   workspaceRoots: [],
   autoSaveEnabled: true,
   autoSaveDelayMs: DEFAULT_WRITE_AUTOSAVE_DELAY_MS,
+  documentEditorV2: true,
   inlineCompletion: {
     enabled: true,
     retrievalEnabled: true,
@@ -113,6 +119,9 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
   inlineCompletionApiReady: false,
   selectionAssist: defaultWriteSelectionAssistSettings(),
   agentPresets: [],
+  paperReading: defaultWritePaperReadingSettings(),
+  paperMode: defaultWritePaperModeSettings(),
+  workSurface: 'docs',
   imageGenReady: false,
   prototypeReady: false,
   settingsLoading: false,
@@ -125,6 +134,7 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
   assistantAgentPresetId: '',
 
   ...createWriteSettingsActions({ set, get }),
+  ...createWriteSurfaceActions({ set, get }),
   ...createWriteFileActions({
     set,
     get,

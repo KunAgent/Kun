@@ -38,15 +38,15 @@ import { KEYBOARD_SHORTCUT_COMMANDS } from '../../../shared/keyboard-shortcuts'
 import { LOCAL_WHISPER_DOWNLOAD_SOURCES, LOCAL_WHISPER_MODELS } from '../../../shared/local-whisper'
 import type { LocalWhisperDownloadSourceId } from '../../../shared/local-whisper'
 import {
-  LOCAL_KOKORO_DOWNLOAD_SOURCES,
-  LOCAL_KOKORO_MODELS,
-  type LocalKokoroDownloadSourceId,
-  type LocalKokoroModelId
-} from '../../../shared/local-kokoro'
+  LOCAL_SANOTTS_DOWNLOAD_SOURCES,
+  type LocalSanottsDownloadSourceId
+} from '../../../shared/local-sanotts'
 import {
-  LOCAL_KOKORO_VOICES,
-  type LocalKokoroVoiceId
-} from '../../../shared/local-kokoro-voices'
+  LOCAL_SANOTTS_VOICE_AUTO_ID,
+  LOCAL_SANOTTS_VOICES,
+  type LocalSanottsVoiceId,
+  type LocalSanottsVoiceSetting
+} from '../../../shared/local-sanotts-voices'
 import { kunGraphPatchSchema } from './settings-graph'
 import { kunFastContextPatchSchema, kunLabPatchSchema } from './settings-lab'
 import {
@@ -116,21 +116,21 @@ const localWhisperDownloadSourceIds = LOCAL_WHISPER_DOWNLOAD_SOURCES.map((source
 export const localWhisperDownloadSourceSchema = z.enum(
   localWhisperDownloadSourceIds
 )
-const localKokoroModelIds = LOCAL_KOKORO_MODELS.map((model) => model.id) as [
-  LocalKokoroModelId,
-  ...LocalKokoroModelId[]
+const localSanottsDownloadSourceIds = LOCAL_SANOTTS_DOWNLOAD_SOURCES.map((source) => source.id) as [
+  LocalSanottsDownloadSourceId,
+  ...LocalSanottsDownloadSourceId[]
 ]
-export const localKokoroModelIdSchema = z.enum(localKokoroModelIds)
-const localKokoroDownloadSourceIds = LOCAL_KOKORO_DOWNLOAD_SOURCES.map((source) => source.id) as [
-  LocalKokoroDownloadSourceId,
-  ...LocalKokoroDownloadSourceId[]
+export const localSanottsDownloadSourceSchema = z.enum(localSanottsDownloadSourceIds)
+const localSanottsVoiceIds = LOCAL_SANOTTS_VOICES.map((voice) => voice.id) as [
+  LocalSanottsVoiceId,
+  ...LocalSanottsVoiceId[]
 ]
-export const localKokoroDownloadSourceSchema = z.enum(localKokoroDownloadSourceIds)
-const localKokoroVoiceIds = LOCAL_KOKORO_VOICES.map((voice) => voice.id) as [
-  LocalKokoroVoiceId,
-  ...LocalKokoroVoiceId[]
+export const localSanottsVoiceIdSchema = z.enum(localSanottsVoiceIds)
+const localSanottsVoiceSettings = [LOCAL_SANOTTS_VOICE_AUTO_ID, ...localSanottsVoiceIds] as [
+  LocalSanottsVoiceSetting,
+  ...LocalSanottsVoiceSetting[]
 ]
-export const localKokoroVoiceIdSchema = z.enum(localKokoroVoiceIds)
+export const localSanottsVoiceSettingSchema = z.enum(localSanottsVoiceSettings)
 export const textToSpeechProtocolSchema = z.enum(TEXT_TO_SPEECH_PROTOCOLS)
 export const musicGenerationProtocolSchema = z.enum(MUSIC_GENERATION_PROTOCOLS)
 export const videoGenerationProtocolSchema = z.enum(VIDEO_GENERATION_PROTOCOLS)
@@ -195,6 +195,13 @@ export const modelProviderPatchSchema = z.object({
     apiKey: z.string().max(MAX_BODY_BYTES).optional(),
     baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     endpointFormat: modelEndpointFormatSchema.optional(),
+    endpoints: z.object({
+      chat_completions: z.string().trim().max(MAX_URL_LENGTH).optional(),
+      responses: z.string().trim().max(MAX_URL_LENGTH).optional(),
+      messages: z.string().trim().max(MAX_URL_LENGTH).optional()
+    }).strict().nullable().optional(),
+    catalogSources: z.array(z.string().trim().min(1).max(64)).max(8).optional(),
+    iconId: z.string().trim().min(1).max(128).optional(),
     useProxy: z.boolean().optional(),
     retry: z.object({
       maxAttempts: z.number().int().min(0).max(10).optional(),
@@ -252,7 +259,7 @@ export const modelProviderPatchSchema = z.object({
     name: z.string().trim().min(1).max(80).optional(),
     modelId: modelIdSchema.optional(),
     enabled: z.boolean().optional(),
-    strategy: z.enum(['priority', 'round-robin', 'weighted-round-robin', 'least-latency', 'adaptive']).optional(),
+    strategy: z.enum(['priority', 'round-robin', 'weighted-round-robin', 'least-latency', 'least-used', 'adaptive']).optional(),
     targets: z.array(z.object({
       id: z.string().trim().min(1).max(64),
       providerId: z.string().trim().min(1).max(64),
@@ -269,12 +276,29 @@ export const modelProviderPatchSchema = z.object({
     healthPolicy: z.object({
       failureThreshold: z.number().int().min(1).max(20),
       cooldownMs: z.number().int().min(1000).max(3_600_000),
-      halfOpenMaxAttempts: z.number().int().min(1).max(10)
+      halfOpenMaxAttempts: z.number().int().min(1).max(10),
+      creditCooldownMs: z.number().int().min(1000).max(86_400_000).optional(),
+      quotaCooldownMs: z.number().int().min(1000).max(86_400_000).optional(),
+      authCooldownMs: z.number().int().min(1000).max(86_400_000).optional(),
+      maxCooldownMs: z.number().int().min(1000).max(86_400_000).optional()
     }).strict().optional()
+  }).strict()).max(100).optional(),
+  failover: z.array(z.object({
+    providerId: z.string().trim().min(1).max(64).optional(),
+    accounts: z.array(z.object({
+      providerId: z.string().trim().min(1).max(64),
+      enabled: z.boolean()
+    }).strict()).max(20).optional(),
+    strategy: z.enum(['smart', 'order', 'rotate', 'least-used']).optional(),
+    fallbackTargets: z.array(z.object({
+      providerId: z.string().trim().min(1).max(64),
+      modelId: modelIdSchema
+    }).strict()).max(20).optional()
   }).strict()).max(100).optional(),
   localGateway: z.object({
     enabled: z.boolean().optional(),
-    name: z.string().trim().min(1).max(80).optional()
+    name: z.string().trim().min(1).max(80).optional(),
+    exposeProviderModels: z.boolean().optional()
   }).strict().optional()
 }).strict()
 
@@ -403,6 +427,7 @@ export const kunRuntimePatchSchema = z.object({
     defaultSoftThreshold: z.number().int().positive().optional(),
     defaultHardThreshold: z.number().int().positive().optional(),
     summaryMode: kunCompactionSummaryModeSchema.optional(),
+    windowModeEnabled: z.boolean().optional(),
     summaryTimeoutMs: z.number().int().positive().max(120_000).optional(),
     summaryMaxTokens: z.number().int().positive().max(16_000).optional(),
     summaryInputMaxBytes: z.number().int().positive().max(8 * 1024 * 1024).optional(),
@@ -459,10 +484,9 @@ export const kunRuntimePatchSchema = z.object({
   }).strict().optional(),
   speak: z.object({
     enabled: z.boolean().optional(),
-    model: localKokoroModelIdSchema.optional(),
-    voice: localKokoroVoiceIdSchema.optional(),
+    voice: localSanottsVoiceSettingSchema.optional(),
     speed: z.number().min(0.5).max(2).optional(),
-    downloadSource: localKokoroDownloadSourceSchema.optional(),
+    downloadSource: localSanottsDownloadSourceSchema.optional(),
     autoDownload: z.boolean().optional(),
     keepTracks: z.boolean().optional()
   }).strict().optional(),
@@ -532,6 +556,7 @@ export const kunRuntimePatchSchema = z.object({
   ).optional(),
   memoryEnabled: z.boolean().optional(),
   memoryDistillationEnabled: z.boolean().optional(),
+  memoryDirectivesEnabled: z.boolean().optional(),
   instructions: z.object({
     enabled: z.boolean().optional()
   }).strict().optional(),

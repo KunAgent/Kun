@@ -11,6 +11,9 @@ import {
   readWriteThreadRegistry
 } from '../../write/write-thread-registry'
 import { workWhiteboardThreadIds } from '../../write/work-whiteboard'
+import { usePaperStore } from '../../write/paper/paper-store'
+import { paperModeView } from '../../paper/paper-view'
+import { paperConversationResourcePath } from '../../paper/paper-conversation-scope'
 
 type WorkbenchWriteAssistantRuntimeOptions = {
   composerPickList: string[]
@@ -26,6 +29,8 @@ export function useWorkbenchWriteAssistantRuntime({
   const writeAssistantModel = useWriteWorkspaceStore((s) => s.assistantModel)
   const writeAssistantProviderId = useWriteWorkspaceStore((s) => s.assistantProviderId)
   const writeWorkspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
+  const workSurface = useWriteWorkspaceStore((s) => s.workSurface)
+  const paperView = useWriteWorkspaceStore((s) => paperModeView(s))
   const activeWriteFilePath = useWriteWorkspaceStore((s) => s.activeFilePath)
   const activeWhiteboardId = useWriteWorkspaceStore((s) => s.activeWhiteboardId)
   const activeWhiteboard = useWriteWorkspaceStore((s) =>
@@ -102,7 +107,10 @@ export function useWorkbenchWriteAssistantRuntime({
       })
       return
     }
-    if (!activeWriteFilePath) {
+    // Docs surface keeps the legacy rule: no open file, no selected thread.
+    // On the papers surface the library/discover views fall through to the
+    // library-level (workspace) thread below.
+    if (!activeWriteFilePath && workSurface === 'docs') {
       if (activeThreadId) chatState.clearActiveThreadSelection()
       return
     }
@@ -111,17 +119,25 @@ export function useWorkbenchWriteAssistantRuntime({
       return
     }
 
+    const resourcePath = paperConversationResourcePath({
+      surface: workSurface,
+      workspaceRoot: writeWorkspaceRoot,
+      activeFilePath: activeWriteFilePath,
+      unitDirs: Object.keys(usePaperStore.getState().unitsByDir),
+      entriesByDir: useWriteWorkspaceStore.getState().entriesByDir,
+      view: paperView
+    })
     const target = activeWriteThreadForWorkspace(
       writeWorkspaceRoot,
       threads,
       readWriteThreadRegistry(),
-      activeWriteFilePath
+      resourcePath
     )
     if (target?.id === activeThreadId) return
     if (target) {
       if (pendingThreadIdRef.current === target.id) return
       pendingThreadIdRef.current = target.id
-      void chatState.selectWriteThread(target.id, writeWorkspaceRoot, activeWriteFilePath).finally(() => {
+      void chatState.selectWriteThread(target.id, writeWorkspaceRoot, resourcePath).finally(() => {
         if (pendingThreadIdRef.current === target.id) pendingThreadIdRef.current = null
       })
     } else if (activeThreadId) {
@@ -132,9 +148,11 @@ export function useWorkbenchWriteAssistantRuntime({
     activeWhiteboard,
     activeWhiteboardId,
     activeWriteFilePath,
+    paperView,
     route,
     runtimeConnection,
     threads,
+    workSurface,
     writeWorkspaceRoot
   ])
 

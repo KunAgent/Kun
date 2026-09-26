@@ -16,6 +16,8 @@ function turn(attachmentIds: string[] = []): Turn {
     activeSkillIds: [],
     injectedMemoryIds: [],
     injectedMemorySummaries: [],
+    injectedDirectiveIds: [],
+    injectedDirectiveSummaries: [],
     injectedInstructionSources: [],
     items: [],
     steering: []

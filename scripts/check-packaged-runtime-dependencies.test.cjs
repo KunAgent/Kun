@@ -32,6 +32,30 @@ test('collects static ESM, dynamic import, and CommonJS dependencies', () => {
   )
 })
 
+test('collects esbuild-minified ESM imports without whitespace around from', () => {
+  assert.deepEqual(
+    sourceSpecifiers(
+      'import{app as a}from"electron";import"side-effect/pkg";export{x}from"re-export/pkg";'
+    ),
+    ['electron', 'side-effect/pkg', 're-export/pkg']
+  )
+})
+
+test('filters import/export keywords inside string and regex literals', () => {
+  const raw = sourceSpecifiers(
+    'const k="import";x=kind==="import"?1:0;x.handle("write:export",()=>{});' +
+      'x="before export";const r=/^(?:export\\s+)?function/;const q=/^import\\s+[\'"]/'
+  )
+  assert.deepEqual(raw.map(packageNameFromSpecifier).filter(Boolean), [])
+})
+
+test('rejects specifiers that are not valid npm package names', () => {
+  assert.equal(packageNameFromSpecifier(');const w=e.categories.includes('), undefined)
+  assert.equal(packageNameFromSpecifier(',async(p,m)=>oae(D('), undefined)
+  assert.equal(packageNameFromSpecifier('zod'), 'zod')
+  assert.equal(packageNameFromSpecifier('@scope/name/subpath'), '@scope/name')
+})
+
 test('accepts only non-dev package-lock entries as packaged dependencies', () => {
   const lockfile = {
     packages: {

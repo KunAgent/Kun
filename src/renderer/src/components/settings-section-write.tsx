@@ -27,6 +27,7 @@ import { WRITE_PROTOTYPE_DEFAULT_PROMPT } from '@shared/write-prototype'
 import {
   Bot,
   FolderOpen,
+  GraduationCap,
   Plus,
   RotateCcw,
   Sparkles,
@@ -47,6 +48,7 @@ import {
   Toggle
 } from './settings-controls'
 import { WriteAgentPresetsSettingsPanel } from './settings-section-write-agent-presets'
+import { WritePaperReadingSettingsPanel } from './settings-section-write-paper'
 
 const textInputClass =
   'w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30'
@@ -120,7 +122,7 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
       : undefined)
     || (kun?.model?.trim() || DEFAULT_WRITE_INLINE_COMPLETION_MODEL)
   const [activeTab, setActiveTab] = useState<
-    'workspace' | 'typography' | 'suggestions' | 'selection' | 'agents'
+    'workspace' | 'typography' | 'suggestions' | 'selection' | 'agents' | 'paper'
   >('workspace')
 
   return (
@@ -135,7 +137,8 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                   { id: 'typography', label: t('writeTypography'), icon: Type },
                   { id: 'suggestions', label: t('writeInlineCompletion'), icon: Sparkles },
                   { id: 'selection', label: t('writeSelectionAssistTitle'), icon: TextCursorInput },
-                  { id: 'agents', label: t('writeAgentPresets'), icon: Bot }
+                  { id: 'agents', label: t('writeAgentPresets'), icon: Bot },
+                  { id: 'paper', label: t('writePaperModeSettingsTitle'), icon: GraduationCap }
                 ]}
               />
               <SettingsTabPanel baseId="write-settings" tabId="workspace" active={activeTab === 'workspace'}>
@@ -668,6 +671,10 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
               </SettingsTabPanel>
 
               <WriteAgentPresetsSettingsPanel view={{ t, agentPresets, updateAgentPresets, setWriteDebugModalOpen, loadWriteDebugEntries, activeTab }} />
+
+              <SettingsTabPanel baseId="write-settings" tabId="paper" active={activeTab === 'paper'}>
+                <WritePaperReadingSettingsPanel form={form} update={update} />
+              </SettingsTabPanel>
             </>
   )
 }

@@ -51,6 +51,7 @@
   --ds-skill: #7a68e8;
   --ds-skill-soft: rgba(122, 104, 232, 0.13);
   --ds-success-soft: rgba(17, 185, 129, 0.14);
+  --ds-warning: #d97706;
   --ds-warning-soft: rgba(240, 162, 63, 0.16);
   --ds-danger-soft: rgba(244, 116, 100, 0.14);
   --ds-shadow-shell: none;
@@ -204,6 +205,7 @@
   --ds-skill: #a89bf5;
   --ds-skill-soft: rgba(168, 155, 245, 0.16);
   --ds-success-soft: rgba(64, 201, 119, 0.18);
+  --ds-warning: #f2a63f;
   --ds-warning-soft: rgba(242, 162, 63, 0.18);
   --ds-danger-soft: rgba(248, 115, 106, 0.18);
   --ds-shadow-shell: none;
@@ -305,6 +307,7 @@
   --ds-control: #d8730d;
   --ds-control-foreground: #ffffff;
   --ds-focus-ring: #d8730d;
+  --ds-warning: #d8730d;
   --ds-warning-soft: rgba(216, 115, 13, 0.16);
   --ds-shadow-shell: 0 12px 30px rgba(96, 64, 18, 0.08);
   --ds-shadow-panel: 0 16px 44px rgba(96, 64, 18, 0.06);
@@ -396,6 +399,7 @@
   --ds-success-soft: rgba(115, 127, 22, 0.14);
   --ds-danger: #b03030;
   --ds-danger-soft: rgba(176, 48, 48, 0.14);
+  --ds-warning: #b07a10;
   --ds-warning-soft: rgba(176, 122, 16, 0.16);
   --ds-diff-added: #737f16;
   --ds-diff-added-soft: rgba(115, 127, 22, 0.1);
@@ -489,6 +493,7 @@
   --ds-control: #f2b13d;
   --ds-control-foreground: #16110d;
   --ds-focus-ring: #f2b13d;
+  --ds-warning: #f2b13d;
   --ds-warning-soft: rgba(242, 177, 61, 0.18);
   --ds-shadow-shell: 0 38px 96px rgba(12, 7, 2, 0.55);
   --ds-shadow-panel: 0 22px 58px rgba(12, 7, 2, 0.35);

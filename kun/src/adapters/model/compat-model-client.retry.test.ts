@@ -671,5 +671,4 @@ describe('CompatModelClient refreshed credentials', () => {
     expect(bodies[1]).not.toHaveProperty('temperature')
     expect(bodies[1]).not.toHaveProperty('top_p')
     expect(chunks.at(-1)).toEqual({ kind: 'completed', stopReason: 'stop' })
-  })
-})
+  })})
