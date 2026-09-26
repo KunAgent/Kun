@@ -3,6 +3,7 @@ import type { ActivityPollResponse, ActivityRow } from '@shared/activity-row'
 import {
   ACTIVITY_HIDDEN_INTERVAL_MS,
   ACTIVITY_POLL_WAIT_MS,
+  activityFeedCoversThread,
   startActivityFeed,
   stopActivityFeed,
   useActivityStore,
@@ -159,6 +160,43 @@ describe('activity feed store', () => {
       expect(waits.slice(0, 2)).toEqual([ACTIVITY_POLL_WAIT_MS, 0])
       expect(sleeps).toContain(ACTIVITY_HIDDEN_INTERVAL_MS)
     })
+  })
+
+  it('clears rows and cursor on stop so stale coverage cannot linger', async () => {
+    const { deps } = depsHarness({
+      snapshot: vi.fn(async () => ({ cursor: 'c1', rows: [row('t1')] }))
+    })
+    startActivityFeed(deps)
+    await vi.waitFor(() => {
+      expect(useActivityStore.getState().rows.t1?.unitId).toBe('t1')
+    })
+
+    stopActivityFeed()
+
+    expect(useActivityStore.getState().rows).toEqual({})
+    expect(useActivityStore.getState().cursor).toBeNull()
+    expect(useActivityStore.getState().status).toBe('idle')
+  })
+
+  it('only covers threads while the feed is live', async () => {
+    const { deps } = depsHarness({
+      snapshot: vi.fn(async () => ({ cursor: 'c1', rows: [row('t1')] }))
+    })
+    expect(activityFeedCoversThread('t1')).toBe(false)
+
+    startActivityFeed(deps)
+    await vi.waitFor(() => {
+      expect(activityFeedCoversThread('t1')).toBe(true)
+    })
+    expect(activityFeedCoversThread('other')).toBe(false)
+
+    // A stale row snapshot left behind by a stopped feed must not keep
+    // suppressing ordinary notifications (B4).
+    useActivityStore.setState({ status: 'idle' })
+    expect(activityFeedCoversThread('t1')).toBe(false)
+
+    stopActivityFeed()
+    expect(activityFeedCoversThread('t1')).toBe(false)
   })
 
   it('backs off exponentially on errors', async () => {

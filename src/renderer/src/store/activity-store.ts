@@ -71,18 +71,23 @@ export function stopActivityFeed(): void {
   feedGeneration += 1
   feedAbort?.abort()
   feedAbort = null
-  useActivityStore.setState({ status: 'idle' })
+  // Rows are feed-owned state: dropping them releases the needs-you badge and
+  // hands every tracked thread back to the ordinary notification path.
+  useActivityStore.setState({ rows: {}, cursor: null, status: 'idle' })
 }
 
 /**
  * True when the live feed tracks this thread (workers and task-workspace
  * threads always have rows; plain one-on-one ADE threads do once bound).
- * Callers use it to defer legacy notifications to the activity notifier.
+ * Callers use it to defer legacy notifications to the activity notifier; a
+ * stopped or not-yet-connected feed does not suppress them.
  */
 export function activityFeedCoversThread(threadId: string | null | undefined): boolean {
   const id = threadId?.trim()
   if (!id) return false
-  return Object.values(useActivityStore.getState().rows).some((row) => row.threadId === id)
+  const state = useActivityStore.getState()
+  if (state.status !== 'live') return false
+  return Object.values(state.rows).some((row) => row.threadId === id)
 }
 
 function applyChanges(changes: ActivityChange[]): void {

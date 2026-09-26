@@ -26,6 +26,7 @@ import {
 } from '../plan/auto-plan-build-intents'
 import { clearBusyWatchdog, resetBusyRecoveryAttempts } from './chat-store-schedulers'
 import { resolveSendWorkspaceRoot } from './chat-store-runtime-notifications'
+import { useActivityStore } from './activity-store'
 import type { ChatState, ChatStoreSet, WriteAssistantMessageContext } from './chat-store-types'
 import { emptyDesignThreadRegistry, markDesignThread } from '../design/design-thread-registry'
 import {
@@ -194,5 +195,56 @@ describe('watched completion notifications', () => {
     expect(await resolveSendWorkspaceRoot(state, paper, documentContext, paper)).toBe('/document')
     expect(await resolveSendWorkspaceRoot({ ...state, route: 'chat' }, paper, undefined, null))
       .toBe('/library')
+  })
+
+  it('defers worker completions to a live feed, then notifies again once it stops', () => {
+    const values = new Map<string, string>()
+    const showTurnCompleteNotification = vi.fn(async () => ({ ok: true }))
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key)
+      },
+      kunGui: { showTurnCompleteNotification }
+    })
+    const workerRow = {
+      unitId: 'worker-1',
+      kind: 'worker' as const,
+      threadId: 'worker-1',
+      harnessId: 'kun',
+      title: 'Reviewer',
+      workspace: { path: '/ws', kind: 'local' as const },
+      state: 'working' as const,
+      mainState: 'working' as const,
+      children: { working: 0, waiting: 0, done: 0, failed: 0 },
+      stateSince: '2026-09-01T12:00:00.000Z',
+      updatedAt: '2026-09-01T12:00:00.000Z',
+      provenance: 'runtime' as const,
+      restoredUnconfirmed: false,
+      stalled: false,
+      visibility: 'active' as const,
+      residency: 'live' as const,
+      pinned: false
+    }
+    const state = {
+      threads: [makeThread({ id: 'worker-1', title: 'Reviewer' })],
+      activeThreadId: null,
+      activeThreadRelation: null,
+      sideConversations: {}
+    } as never
+
+    useActivityStore.setState({
+      rows: { 'worker-1': workerRow },
+      cursor: 'c1',
+      status: 'live'
+    })
+    notifyTurnComplete('worker-1', state, 'turn:live-covered', undefined, 'turn-live')
+    expect(showTurnCompleteNotification).not.toHaveBeenCalled()
+
+    useActivityStore.setState({ rows: {}, cursor: null, status: 'idle' })
+    notifyTurnComplete('worker-1', state, 'turn:after-stop', undefined, 'turn-stop')
+    expect(showTurnCompleteNotification).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
   })
 })

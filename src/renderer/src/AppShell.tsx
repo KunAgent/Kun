@@ -15,8 +15,13 @@ import { useRoomEvents } from './components/rooms/useRoomEvents'
 import { useRemoteSurface } from './mobile/use-remote-surface'
 import { useRemoteReconnectRecovery } from './use-remote-reconnect-recovery'
 import { clearCurrentlyVisibleUnreadCompletions } from './store/unread-completions'
-import { useActivityStore } from './store/activity-store'
+import { startActivityFeed, stopActivityFeed, useActivityStore } from './store/activity-store'
+import {
+  startActivityNotifications,
+  stopActivityNotifications
+} from './store/activity-notifications'
 import { syncAppBadgeCount } from './store/app-badge'
+import { useAdeEnabled } from './components/ade/use-ade-enabled'
 
 const extensionSettingsService = new RuntimeExtensionSettingsService()
 
@@ -95,6 +100,7 @@ export default function AppShell(): React.ReactElement {
   useRemoteReconnectRecovery()
   const route = useChatStore((s) => s.route)
   const surface = useRemoteSurface()
+  const { enabled: adeEnabled } = useAdeEnabled()
   const initialSetupOpen = useChatStore((s) => s.initialSetupOpen)
   const platform = typeof window !== 'undefined' ? window.kunGui?.platform ?? 'unknown' : 'unknown'
   const appEnvironment = typeof window !== 'undefined' ? window.kunGui?.appEnvironment : undefined
@@ -108,6 +114,21 @@ export default function AppShell(): React.ReactElement {
   const MobileApp = preparedMobileAppShell ?? MobileAppShell
 
   useEffect(() => installSidebarActivityLifecycle(useChatStore), [])
+
+  // The ADE activity feed is app-level (06 §9): while the lab flag is on it
+  // stays live across routes so worker completions and waits still notify —
+  // and badge counts stay fresh — after the user leaves the ADE view. The
+  // Mission Control popout owns its own window's feed; the mobile surface
+  // does not consume it yet.
+  useEffect(() => {
+    if (surface !== 'desktop' || !adeEnabled) return
+    startActivityFeed()
+    startActivityNotifications()
+    return () => {
+      stopActivityFeed()
+      stopActivityNotifications()
+    }
+  }, [adeEnabled, surface])
 
   useEffect(() => {
     let previousUnread = useChatStore.getState().unreadThreadIds
