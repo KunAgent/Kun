@@ -497,7 +497,10 @@ installServiceOperations(
 export function fingerprintStartTurnRequest(request: StartTurnRequest): string | undefined {
   if (!request.clientRequestId?.trim()) return undefined
   const normalized = StartTurnRequestSchema.parse(request)
-  const canonical = canonicalizeFingerprintValue(normalized)
+  // ackNoticeIds is transport metadata the renderer refetches per attempt;
+  // hashing it would break idempotent replay of an otherwise identical send.
+  const { ackNoticeIds: _ackNoticeIds, ...content } = normalized
+  const canonical = canonicalizeFingerprintValue(content)
   return createHash('sha256').update(JSON.stringify(canonical), 'utf8').digest('hex')
 }
 

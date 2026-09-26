@@ -6,6 +6,15 @@ import { adeNoticesFile } from './ade-paths.js'
 import { readAdeJson, withAdeTeamMutex, writeAdeJson } from './ade-file.js'
 
 /**
+ * Minimal write-side surface for worker notices. The store satisfies it
+ * directly; the WorkerNoticeCoordinator wraps the store so every enqueue
+ * also schedules a manager wake-up (09 §6.2).
+ */
+export interface WorkerNoticeSink {
+  enqueue(notice: WorkerNotice): Promise<WorkerNotice>
+}
+
+/**
  * Pending-notice inbox per manager team. Notices persist before delivery;
  * `ack` marks them consumed after the manager turn is durably admitted, and
  * `pending` is the restart-replay source (09 §6.2).
@@ -37,6 +46,31 @@ export class FileWorkerNoticeStore {
   async list(teamId: string): Promise<WorkerNotice[]> {
     const file = await this.readFile(teamId)
     return [...file.notices].sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+  }
+
+  /** Record a failed delivery attempt on each listed pending notice. */
+  async markAttempt(
+    teamId: string,
+    noticeIds: readonly string[],
+    error: string,
+    now?: string
+  ): Promise<number> {
+    if (noticeIds.length === 0) return 0
+    const wanted = new Set(noticeIds)
+    return withAdeTeamMutex(teamId, async () => {
+      const file = await this.readFile(teamId)
+      const at = now ?? this.nowIso()
+      let count = 0
+      for (const entry of file.notices) {
+        if (!wanted.has(entry.noticeId) || entry.ackedAt !== undefined) continue
+        entry.attempts += 1
+        entry.lastAttemptAt = at
+        entry.lastError = error.slice(0, 1_024)
+        count += 1
+      }
+      if (count > 0) await this.writeFile(teamId, file.notices)
+      return count
+    })
   }
 
   /** Acknowledge delivered notices; unknown ids are ignored. */

@@ -15,6 +15,8 @@ export async function handleAdeThreadDeleted(options: {
   teams: FileTeamStore
   revokeThreadGrants: (threadId: string) => unknown
   nowIso: () => string
+  /** Drop coordinator state (holds, timers) for the deleted manager. */
+  onManagerDeleted?: (managerThreadId: string) => void
 }): Promise<void> {
   const { thread, teams, revokeThreadGrants, nowIso } = options
   if (!thread) return
@@ -29,6 +31,7 @@ export async function handleAdeThreadDeleted(options: {
     }
     const team = await teams.byManager(thread.id)
     if (!team) return
+    options.onManagerDeleted?.(thread.id)
     for (const worker of team.workers) {
       try {
         revokeThreadGrants(worker.workerId)

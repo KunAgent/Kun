@@ -315,6 +315,8 @@ export interface AgentProvider {
       workspaceCheckpointRequestId?: string
       fileReferences?: UserFileReference[]
       composerContexts?: ComposerContextAttachment[]
+      /** ADE manager sends acknowledge these worker notices on admission. */
+      ackNoticeIds?: string[]
       writeContext?: WriteTurnContext
     }
   ): Promise<{

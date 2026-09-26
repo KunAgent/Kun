@@ -193,7 +193,7 @@ export type RuntimeDisclosureMetadata = {
   designProfile?: import('./design-task-profile').DesignTaskProfileInput | import('./design-task-profile').DesignTaskProfile
   designDocumentTarget?: import('./design-task-profile').DesignDocumentTarget
   designImagePlacementTarget?: import('./design-task-profile').DesignImagePlacementTarget
-  messageSource?: 'background_shell' | 'background_subagent' | 'graph_runtime' | 'subagent_resume' | 'design_continuation' // client-only rendering hint
+  messageSource?: 'background_shell' | 'background_subagent' | 'graph_runtime' | 'subagent_resume' | 'design_continuation' | 'worker_update' // client-only rendering hint
   turnId?: string
   workspaceCheckpointId?: string
   attachmentIds?: string[]

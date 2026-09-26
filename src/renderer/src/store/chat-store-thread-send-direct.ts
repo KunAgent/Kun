@@ -92,6 +92,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     attachments,
     fileReferences,
     composerContexts,
+    ackNoticeIds,
     displayText,
     userDisplayText,
     generatedTitle,
@@ -370,7 +371,8 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         ...(attachmentIds.length ? { attachmentIds } : {}),
         ...(workspaceCheckpointRequestId ? { workspaceCheckpointRequestId } : {}),
         ...(fileReferences.length ? { fileReferences } : {}),
-        ...(composerContexts.length ? { composerContexts } : {})
+        ...(composerContexts.length ? { composerContexts } : {}),
+        ...(ackNoticeIds?.length ? { ackNoticeIds } : {})
       })
       runtimeTurnAccepted = true
       if (submittedMessageForQueue.waitForRuntimeAdmission) settleRuntimeTurnAdmission(clientRequestId, true)

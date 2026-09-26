@@ -375,6 +375,11 @@ export const StartTurnRequest = z.object({
       { message: 'composerContexts must not contain duplicate attachmentId values' }
     )
     .default([]),
+  /**
+   * ADE manager threads (09 §6.2): pending worker-notice ids attached via
+   * composerContexts, acked after admission. Request-scoped, not persisted.
+   */
+  ackNoticeIds: z.array(z.string().trim().min(1).max(256)).max(1_024).optional(),
   fileReferences: z.array(UserFileReferenceSchema).default([]),
   workspaceCheckpointId: z.string().min(1).optional(),
   workspaceCheckpointRequestId: z.string().min(1).optional(),

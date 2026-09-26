@@ -8,6 +8,7 @@ import { MessageBubble } from './message-timeline-bubbles'
 import {
   isBackgroundShellNoticeBlock,
   isBackgroundSubagentNoticeBlock,
+  isWorkerUpdateNoticeBlock,
   splitThink
 } from './message-timeline-turns'
 import {
@@ -54,6 +55,7 @@ export type ProcessDetail =
   | { kind: 'user_input' }
   | { kind: 'background_shell' }
   | { kind: 'background_subagent' }
+  | { kind: 'worker_update' }
   | { kind: 'handoff' }
   | { kind: 'text'; text: string }
 
@@ -366,6 +368,7 @@ export function getProcessDetail(block: ChatBlock, summaryText?: string): Proces
   if (block.kind === 'user_input') return { kind: 'user_input' }
   if (isBackgroundShellNoticeBlock(block)) return { kind: 'background_shell' }
   if (isBackgroundSubagentNoticeBlock(block)) return { kind: 'background_subagent' }
+  if (isWorkerUpdateNoticeBlock(block)) return { kind: 'worker_update' }
   if (block.kind === 'system' && block.text.trim()) {
     if (block.detail?.trim()) return { kind: 'text', text: block.detail }
     // Short system messages already fit in the summary line — skip the
@@ -454,7 +457,12 @@ export function ProcessEntryDetail({
   if (detail.kind === 'handoff' && block.kind === 'handoff') {
     return <HandoffBriefDetail block={block} />
   }
-  if ((detail.kind === 'background_shell' || detail.kind === 'background_subagent') && block.kind === 'user') {
+  if (
+    (detail.kind === 'background_shell' ||
+      detail.kind === 'background_subagent' ||
+      detail.kind === 'worker_update') &&
+    block.kind === 'user'
+  ) {
     return <MessageBubble block={block} nested allowThreadActions={allowThreadActions} />
   }
   return null
@@ -478,6 +486,9 @@ export function describeProcessBlock(
   }
   if (block.kind === 'user' && isBackgroundSubagentNoticeBlock(block)) {
     return block.meta?.displayText?.trim() || t('backgroundSubagentNotice.title', { defaultValue: 'Background subagent completed' })
+  }
+  if (block.kind === 'user' && isWorkerUpdateNoticeBlock(block)) {
+    return block.meta?.displayText?.trim() || t('workerUpdateNotice.title', { defaultValue: 'Worker updates' })
   }
   if (block.kind === 'compaction') {
     if (block.variant === 'window') return t('contextWindowSwitched')

@@ -46,6 +46,7 @@ import { FileTeamStore } from '../ade/team-store.js'
 import { handleAdeThreadDeleted } from '../ade/team-lifecycle.js'
 import { DispatchDeliverer } from '../ade/dispatch-deliverer.js'
 import { ManagerRuntime } from '../ade/manager-runtime.js'
+import { WorkerNoticeCoordinator } from '../ade/worker-notice-coordinator.js'
 import { createManagerToolProvider } from '../adapters/tool/manager-tool-provider.js'
 import { FileDelegationStore } from './runtime-factory-dependencies.js'
 import { effectiveCapabilitiesForRoute } from '../harness/effective-capabilities.js'
@@ -365,15 +366,15 @@ export async function createRuntimeAgentComposition(
       threadId,
       (childId) => threadService.delete(childId)
     )
-    // ADE cascade (09 §3.2): deleting a manager thread removes its team
-    // directory and revokes every worker grant; deleting a worker thread
-    // marks its team record released.
+    // ADE cascade (09 §3.2): deleting a manager removes its team directory and
+    // worker grants; deleting a worker marks its team record released.
     const deleted = await threadService.getMetadata(threadId).catch(() => null)
     await handleAdeThreadDeleted({
       thread: deleted,
       teams: adeTeamStore,
       revokeThreadGrants: (id) => services.harnesses.tokens.revokeThread(id),
-      nowIso
+      nowIso,
+      onManagerDeleted: (id) => workerNoticeCoordinator.clearManager(id)
     })
   }
   const harnessRuntimeMap = new HarnessRuntimeMap(
@@ -423,8 +424,21 @@ export async function createRuntimeAgentComposition(
     turns: turnService,
     language: () => Intl.DateTimeFormat().resolvedOptions().locale
   })
+  // Worker-notice wake-ups (09 §6.2); runTurn is late-bound to runAgentTurn.
+  const workerNoticeCoordinator = new WorkerNoticeCoordinator({
+    notices: services.adeStores.notices,
+    teams: services.adeStores.teams,
+    threads: threadStore,
+    turns: turnService,
+    runTurn: () => runAgentTurn,
+    nowIso,
+    language: () => Intl.DateTimeFormat().resolvedOptions().locale,
+    managerModel: () => core.activeOptions.ade?.managerModel
+  })
+  services.workerCallbacks.setNoticeSink(workerNoticeCoordinator)
   const managerRuntime = new ManagerRuntime({
     ...services.adeStores,
+    notices: workerNoticeCoordinator,
     threads: threadStore,
     turns: turnService,
     sessionStore,
@@ -451,12 +465,9 @@ export async function createRuntimeAgentComposition(
       core.activeOptions.ade?.allowUnattendedFullAccess === true,
     teamLimits: () => core.activeOptions.ade?.limits
   })
-  // Dispatch turnId backfill on turn_started + worker terminal handling on
-  // turn_completed/failed/aborted (09 §5, §6.1). Late-bound: the recorder is
-  // created in the core composition before this runtime exists.
-  core.events.addObserver({
-    record: (event) => managerRuntime.handleRuntimeEvent(event)
-  })
+  // Dispatch turnId backfill on turn_started + worker terminal handling
+  // (09 §5, §6.1); the recorder is created in the core composition first.
+  core.events.addObserver({ record: (event) => managerRuntime.handleRuntimeEvent(event) })
   registryComposition.registry.registerProvider(createManagerToolProvider({
     manager: managerRuntime,
     harnessList: {
@@ -514,6 +525,9 @@ export async function createRuntimeAgentComposition(
 	        !shuttingDown
 	      ) {
 	        await graphRuntime.handleSourceTurnTerminal(threadId, turnId, outcome)
+	        // 09 §6.1 worker terminal hook; idempotent with the event observer.
+	        await managerRuntime.handleWorkerTurnTerminal(threadId, turnId, outcome)
+	          .catch((error) => console.warn('[kun] ade worker terminal failed:', error))
 	      }
 	      return outcome
 	    }))
@@ -669,6 +683,7 @@ export async function createRuntimeAgentComposition(
     queuedTurnDispatcher,
     managerRuntime,
     dispatchDeliverer,
+    workerNoticeCoordinator,
     extensionProfiles,
     extensionAgent,
     get prepareExtensionContributions() { return prepareExtensionContributions },

@@ -186,6 +186,7 @@ describe('FileWorkerNoticeStore', () => {
       kind: 'dispatch_completed',
       dispatchId: 'dsp_1',
       title: 'fix login',
+      attempts: 0,
       createdAt: '2026-09-26T00:00:00.000Z'
     })
     // Duplicate enqueue is idempotent.
@@ -196,11 +197,43 @@ describe('FileWorkerNoticeStore', () => {
       kind: 'dispatch_completed',
       dispatchId: 'dsp_1',
       title: 'fix login',
+      attempts: 0,
       createdAt: '2026-09-26T00:00:00.000Z'
     })
     expect(await notices.pending('thr_mgr')).toHaveLength(1)
     expect(await notices.ack('thr_mgr', ['ntc_1', 'ntc_missing'])).toBe(1)
     expect(await notices.pending('thr_mgr')).toHaveLength(0)
     expect(await notices.list('thr_mgr')).toHaveLength(1)
+  })
+
+  it('records delivery attempts on pending notices only', async () => {
+    await teams.ensure('thr_mgr')
+    await notices.enqueue({
+      noticeId: 'ntc_1',
+      teamId: 'thr_mgr',
+      workerId: 'wrk_1',
+      kind: 'dispatch_completed',
+      title: 'fix login',
+      attempts: 0,
+      createdAt: '2026-09-26T00:00:00.000Z'
+    })
+    await notices.enqueue({
+      noticeId: 'ntc_2',
+      teamId: 'thr_mgr',
+      workerId: 'wrk_2',
+      kind: 'question',
+      title: 'need input',
+      attempts: 0,
+      createdAt: '2026-09-26T00:00:00.000Z'
+    })
+    await notices.ack('thr_mgr', ['ntc_2'])
+    expect(await notices.markAttempt('thr_mgr', ['ntc_1', 'ntc_2', 'ntc_missing'], 'busy')).toBe(1)
+    const stored = (await notices.list('thr_mgr')).find((entry) => entry.noticeId === 'ntc_1')!
+    expect(stored.attempts).toBe(1)
+    expect(stored.lastError).toBe('busy')
+    expect(stored.lastAttemptAt).toBeTruthy()
+    // Acked rows are untouched by attempt bookkeeping.
+    expect((await notices.list('thr_mgr')).find((entry) => entry.noticeId === 'ntc_2')?.attempts).toBe(0)
+    expect(await notices.markAttempt('thr_mgr', [], 'x')).toBe(0)
   })
 })

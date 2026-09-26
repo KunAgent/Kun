@@ -189,7 +189,8 @@ export function createServerRuntimeComposition(
       stores: services.adeStores,
       workerCallbacks: services.workerCallbacks,
       manager: agent.managerRuntime,
-      deliverer: agent.dispatchDeliverer
+      deliverer: agent.dispatchDeliverer,
+      noticeCoordinator: agent.workerNoticeCoordinator
     },
     liveCounters: () => ({
       inflight: inflight.size(),
@@ -208,6 +209,11 @@ export function createServerRuntimeComposition(
       // (09 §5): found turns are adopted; missing ones redeliver idempotently.
       await agent.managerRuntime.reconcileOnStartup().catch((error) => {
         console.warn('[kun] ade dispatch reconciliation failed:', error)
+      })
+      // Restart replay (09 §6.2): notices still unacknowledged after the last
+      // run get one merged wake-up per manager thread.
+      await agent.workerNoticeCoordinator.replayPending().catch((error) => {
+        console.warn('[kun] ade worker-notice replay failed:', error)
       })
     },
     inspectThreadStore: () => services.threadStoreGuardian.run(),
