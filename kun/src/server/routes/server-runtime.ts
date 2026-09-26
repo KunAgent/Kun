@@ -202,6 +202,8 @@ export type ServerRuntime = {
   taskWorkspaces?: import('../../workspace-tasks/task-workspace-service.js').TaskWorkspaceService
   /** AI line-attribution ledger for workspace files (docs/ade/11 §6). */
   attribution?: import('../../ade/attribution-ledger.js').AttributionLedger
+  /** Forge change requests on workspace branches (docs/ade/11 §7.2). */
+  changeRequests?: import('../../ade/change-request-service.js').ChangeRequestService
   /** Active SSE streams, so a successful thread delete can close them. */
   eventStreamRegistry?: ThreadEventStreamRegistry
   /** Optional troubleshooting buffer of the most recent LLM rounds (in-memory). */

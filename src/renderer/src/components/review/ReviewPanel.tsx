@@ -15,6 +15,7 @@ import {
 import { ReviewFileTree } from './ReviewFileTree'
 import { ReviewDiffBlock } from './ReviewDiffBlock'
 import { ReviewPrimaryAction } from './ReviewPrimaryAction'
+import { ChangeRequestPanel } from './ChangeRequestPanel'
 import { ReviewSendMenu } from './ReviewSendMenu'
 
 /**
@@ -109,6 +110,7 @@ export function ReviewPanel({ className }: { className?: string }): ReactElement
       </div>
 
       {binding ? <ReviewPrimaryAction binding={binding} /> : null}
+      {binding ? <ChangeRequestPanel binding={binding} /> : null}
 
       {!binding ? (
         <div className="flex flex-1 items-center justify-center px-6 text-center text-[12px] text-ds-muted">

@@ -53,6 +53,32 @@ export const TaskWorkspaceEnvironmentFillSchema = z.object({
 }).strict()
 export type TaskWorkspaceEnvironmentFill = z.infer<typeof TaskWorkspaceEnvironmentFillSchema>
 
+/** One CI check row from the forge's status rollup (11 §7.2). */
+export const ChangeRequestCheckSchema = z.object({
+  name: z.string().max(256),
+  status: z.enum(['pending', 'in_progress', 'completed']),
+  /** Raw conclusion: success / failure / neutral / skipped / timed_out. */
+  conclusion: z.string().max(64).optional(),
+  detailsUrl: z.string().max(2_048).optional(),
+  durationMs: z.number().int().nonnegative().optional()
+}).strict()
+export type ChangeRequestCheck = z.infer<typeof ChangeRequestCheckSchema>
+
+/** Persisted change-request snapshot on the workspace record. */
+export const ChangeRequestSnapshotSchema = z.object({
+  provider: z.literal('github'),
+  number: z.number().int().positive(),
+  url: z.string().min(1).max(2_048),
+  title: z.string().max(512),
+  state: z.enum(['open', 'merged', 'closed']),
+  isDraft: z.boolean().optional(),
+  base: z.string().max(256).optional(),
+  head: z.string().max(256).optional(),
+  checks: z.array(ChangeRequestCheckSchema).max(200).default([]),
+  checkedAt: z.string()
+}).strict()
+export type ChangeRequestSnapshot = z.infer<typeof ChangeRequestSnapshotSchema>
+
 export const TaskWorkspaceRecordSchema = z.object({
   workspaceId: z.string().regex(/^tws_[a-z0-9]{8,32}$/),
   ownerThreadId: z.string().min(1),          // initiator: manager thread, one-to-one thread, or Graph thread
@@ -74,6 +100,8 @@ export const TaskWorkspaceRecordSchema = z.object({
   environmentFill: TaskWorkspaceEnvironmentFillSchema.optional(),
   changedFiles: z.array(z.string().max(4_096)).max(10_000).default([]),
   patchArtifactId: z.string().optional(),
+  /** Latest known forge change-request state (11 §7.2); refreshed on poll. */
+  changeRequest: ChangeRequestSnapshotSchema.optional(),
   lastError: z.string().max(2_048).optional(),
   /** User-facing recovery steps set alongside lastError on conflicts. */
   recovery: z.array(z.string().max(512)).max(8).optional(),
@@ -109,6 +137,25 @@ export const TaskWorkspaceIntegrateOutcomeSchema = z.enum([
   'applied', 'merged', 'needs_human', 'conflict'
 ])
 export type TaskWorkspaceIntegrateOutcome = z.infer<typeof TaskWorkspaceIntegrateOutcomeSchema>
+
+/** POST /v1/task-workspaces/:id/change-request body (11 §7.2). */
+export const CreateChangeRequestSchema = z.object({
+  base: z.string().min(1).max(256).optional(),
+  title: z.string().min(1).max(256).optional(),
+  body: z.string().max(32_768).optional()
+}).strict()
+export type CreateChangeRequestRequest = z.infer<typeof CreateChangeRequestSchema>
+
+/** `gh`/forge availability + the persisted or freshly read snapshot. */
+export type ChangeRequestStatus = {
+  available: boolean
+  forge?: 'github' | 'gitlab' | 'other'
+  /** Machine-stable reason when `available` is false. */
+  reason?: 'no-remote' | 'forge-not-supported' | 'gh-not-installed' | 'gh-not-authed' | 'no-branch'
+  /** Transient refresh failure detail (persisted snapshot still returns). */
+  error?: string
+  request?: ChangeRequestSnapshot
+}
 
 /**
  * GET /v1/task-workspaces/:id/integrate-preview response (11 §7.1).

@@ -15,6 +15,8 @@ import {
   preservedBranchesResponse,
   retryTaskWorkspaceResponse,
   taskWorkspaceAttributionResponse,
+  taskWorkspaceChangeRequestCreateResponse,
+  taskWorkspaceChangeRequestStatusResponse,
   taskWorkspaceDiffFileResponse,
   taskWorkspaceDiffResponse,
   taskWorkspaceIntegratePreviewResponse,
@@ -101,6 +103,22 @@ export function registerTaskWorkspaceRoutes(router: Router, runtime: ServerRunti
     if (!svc || !ledger) return ERRORS.unavailable('attribution is unavailable')
     return taskWorkspaceAttributionResponse(
       svc, ledger, runtime.ade?.stores.teams, request, ctx.params.workspaceId
+    )
+  })
+  router.add('GET', '/v1/task-workspaces/:workspaceId/change-request', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const svc = service()
+    const changeRequests = runtime.changeRequests
+    if (!svc || !changeRequests) return ERRORS.unavailable('change requests are unavailable')
+    return taskWorkspaceChangeRequestStatusResponse(svc, changeRequests, ctx.params.workspaceId)
+  })
+  router.add('POST', '/v1/task-workspaces/:workspaceId/change-request', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const svc = service()
+    const changeRequests = runtime.changeRequests
+    if (!svc || !changeRequests) return ERRORS.unavailable('change requests are unavailable')
+    return taskWorkspaceChangeRequestCreateResponse(
+      svc, changeRequests, request, ctx.params.workspaceId
     )
   })
   router.add('GET', '/v1/task-workspaces/:workspaceId/integrate-preview', async (request, ctx) => {

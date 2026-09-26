@@ -210,6 +210,32 @@ describe('review routes', () => {
     expect(unknown.status).toBe(400)
   })
 
+  it('accepts note-only sends for CI failure feedback', async () => {
+    const { request, reviews, dispatched } = await harness()
+    const res = await request('POST', `/v1/reviews/${WS}/send`, {
+      commentIds: [],
+      note: 'CI check "unit" failed: https://ci/1',
+      target: { kind: 'worker', workerId: 'w7' }
+    })
+    expect(res.status).toBe(200)
+    const body = await json(res)
+    expect(body.dispatchId).toBe('dsp_1')
+    expect(dispatched).toHaveLength(1)
+    const task = (dispatched[0]!.input as { task: string }).task
+    expect(task).toContain('CI check "unit" failed: https://ci/1')
+    const stored = await reviews.list(WS)
+    expect(stored.requests).toHaveLength(1)
+    expect(stored.requests[0]).toMatchObject({
+      round: 1, commentIds: [], note: 'CI check "unit" failed: https://ci/1'
+    })
+
+    const noNote = await request('POST', `/v1/reviews/${WS}/send`, {
+      commentIds: [],
+      target: { kind: 'manager' }
+    })
+    expect(noNote.status).toBe(400)
+  })
+
   it('propagates dispatch refusal from the manager', async () => {
     const { request } = await harness({
       guiDispatch: async () => ({ ok: false, userReport: 'worker under user control' })

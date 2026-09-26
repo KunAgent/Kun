@@ -171,12 +171,17 @@ export type ReviewSendTarget = z.infer<typeof ReviewSendTargetSchema>
 /** POST /v1/reviews/:workspaceId/send body. */
 export const SendReviewRequestSchema = z
   .object({
-    commentIds: z.array(ReviewCommentIdSchema).min(1).max(200),
+    /** Empty only when a note-only request goes out (e.g. a failed CI check). */
+    commentIds: z.array(ReviewCommentIdSchema).max(200),
     target: ReviewSendTargetSchema,
     /** Free-form note prepended to the rendered revision request. */
     note: z.string().max(8_000).optional()
   })
   .strict()
+  .refine(
+    (data) => data.commentIds.length > 0 || (data.note ?? '').trim().length > 0,
+    { message: 'commentIds or a note is required' }
+  )
 export type SendReviewRequest = z.infer<typeof SendReviewRequestSchema>
 
 /** Durable record of one sent batch; `round` = its ordinal for the workspace. */
@@ -185,7 +190,7 @@ export const ReviewSendRecordSchema = z
     requestId: z.string().regex(/^rvq_[a-z0-9]{8,32}$/),
     round: z.number().int().positive(),
     target: ReviewSendTargetSchema,
-    commentIds: z.array(ReviewCommentIdSchema).min(1),
+    commentIds: z.array(ReviewCommentIdSchema).max(200),
     note: z.string().max(8_000).optional(),
     /** Dispatch id (worker target) or new worker id (new-worker target). */
     outcomeRef: z.string().min(1).max(256).optional(),

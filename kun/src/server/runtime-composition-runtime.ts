@@ -182,6 +182,7 @@ export function createServerRuntimeComposition(
     activityHibernation: agent.activityHibernation,
     taskWorkspaces,
     attribution: services.attribution,
+    changeRequests: services.changeRequests,
     eventStreamRegistry,
     llmDebug,
     canvasReceipts,

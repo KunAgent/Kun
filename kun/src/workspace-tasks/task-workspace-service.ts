@@ -141,6 +141,19 @@ export class TaskWorkspaceService {
     return record
   }
 
+  /** Persist the latest change-request snapshot so every client sees it (11 §7.2). */
+  setChangeRequest(
+    workspaceId: string,
+    changeRequest: TaskWorkspaceRecord['changeRequest']
+  ): TaskWorkspaceRecord | undefined {
+    const record = this.options.store.update(workspaceId, {
+      changeRequest,
+      updatedAt: this.nowIso()
+    })
+    if (record) this.emit(workspaceId)
+    return record
+  }
+
   create(input: CreateTaskWorkspaceRequest, callerSignal?: AbortSignal): TaskWorkspaceRecord {
     const now = this.nowIso()
     const record = this.options.store.insert({

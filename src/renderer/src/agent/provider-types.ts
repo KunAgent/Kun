@@ -273,6 +273,15 @@ export interface AgentProvider {
     workspaceId: string,
     path: string
   ): Promise<import('@shared/task-workspace').TaskWorkspaceAttribution>
+  /** Forge availability + PR snapshot for the workspace (11 §7.2). */
+  getChangeRequest?(
+    workspaceId: string
+  ): Promise<import('@shared/task-workspace').ChangeRequestStatus>
+  /** Push the workspace branch and open a PR through `gh`. */
+  createChangeRequest?(
+    workspaceId: string,
+    input?: import('@shared/task-workspace').CreateChangeRequestRequest
+  ): Promise<{ request: import('@shared/task-workspace').ChangeRequestSnapshot | undefined }>
   /** Read-only integrate availability for the review primary action (11 §7.1). */
   getTaskWorkspaceIntegratePreview?(
     workspaceId: string

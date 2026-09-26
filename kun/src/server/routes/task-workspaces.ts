@@ -3,8 +3,10 @@ import { isAbsolute, relative, resolve } from 'node:path'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { ERRORS } from './runtime-error.js'
 import type { AttributionLedger } from '../../ade/attribution-ledger.js'
+import type { ChangeRequestService } from '../../ade/change-request-service.js'
 import type { FileTeamStore } from '../../ade/team-store.js'
 import {
+  CreateChangeRequestSchema,
   CreateTaskWorkspaceRequestSchema,
   DiscardTaskWorkspaceRequestSchema,
   IntegrateTaskWorkspaceRequestSchema
@@ -213,6 +215,42 @@ export async function taskWorkspaceAttributionResponse(
       label: line.unitId ? labels.get(line.unitId) : undefined
     }))
   })
+}
+
+/**
+ * GET /v1/task-workspaces/:id/change-request — forge availability plus the
+ * persisted PR snapshot, refreshed live through `gh` when available (11 §7.2).
+ */
+export async function taskWorkspaceChangeRequestStatusResponse(
+  service: TaskWorkspaceService,
+  changeRequests: ChangeRequestService,
+  workspaceId: string
+): Promise<JsonResponse> {
+  if (!service.get(workspaceId)) return ERRORS.notFound('task workspace not found')
+  return jsonResponse(await changeRequests.status(workspaceId))
+}
+
+/**
+ * POST /v1/task-workspaces/:id/change-request — push the workspace branch
+ * and open a PR through `gh` (GitHub only; other forges report unsupported).
+ */
+export async function taskWorkspaceChangeRequestCreateResponse(
+  service: TaskWorkspaceService,
+  changeRequests: ChangeRequestService,
+  request: Request,
+  workspaceId: string
+): Promise<JsonResponse> {
+  if (!service.get(workspaceId)) return ERRORS.notFound('task workspace not found')
+  const body = await request.json().catch(() => undefined)
+  const parsed = CreateChangeRequestSchema.safeParse(body ?? {})
+  if (!parsed.success) {
+    return ERRORS.validation('invalid change-request create request', parsed.error.issues)
+  }
+  const result = await changeRequests.create(workspaceId, parsed.data)
+  if (!result.ok) {
+    return jsonResponse({ error: result.userReport, reason: result.reason }, 409)
+  }
+  return jsonResponse({ request: result.request }, 201)
 }
 
 /** POST /v1/task-workspaces/:id/capture — snapshot worktree changes. */

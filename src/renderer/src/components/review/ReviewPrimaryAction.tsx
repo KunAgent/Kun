@@ -62,7 +62,9 @@ export function ReviewPrimaryAction({
 
   if (!['ready', 'captured', 'conflict'].includes(binding.state)) return null
 
-  const primaryMode = reviewPrimaryMode(preview)
+  // 11 §7.1: an open change request makes "view PR" the single primary.
+  const openRequest = binding.changeRequest?.state === 'open' ? binding.changeRequest : null
+  const primaryMode = openRequest ? null : reviewPrimaryMode(preview)
 
   const runIntegrate = (mode: TaskWorkspaceIntegrateMode): void => {
     void integrateWorkspace(workspaceId, mode).then((response) => {
@@ -125,6 +127,17 @@ export function ReviewPrimaryAction({
       data-testid="review-primary-action"
     >
       <div className="flex items-center gap-2 px-3 py-1.5">
+      {openRequest ? (
+        <button
+          type="button"
+          onClick={() => void window.kunGui?.openExternal?.(openRequest.url)}
+          className="inline-flex h-7 items-center gap-1.5 rounded-[7px] bg-sky-600 px-2.5 text-[11.5px] font-medium text-white hover:bg-sky-500"
+          data-primary
+        >
+          <GitPullRequestArrow className="h-3.5 w-3.5" strokeWidth={1.8} />
+          {t('reviewCrView')}
+        </button>
+      ) : null}
       {actionButton(
         'merge-branch',
         t('reviewMergeBranch'),
