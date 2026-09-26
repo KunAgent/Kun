@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { Archive, Loader2, PanelRight, Square } from 'lucide-react'
+import { Archive, History, Loader2, Square } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ChatBlock } from '../../../agent/types'
 import { useChatStore } from '../../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
+import { normalizePath } from '../../../write/write-workspace-store-helpers'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { usePaperStore } from '../../../write/paper/paper-store'
 import { buildResearchPool } from '../../../paper/paper-research-pool'
 import {
   listResearchSessions,
+  listResearchSessionsAcrossLibraries,
   readLastResearchSession,
   researchResourcePath
 } from '../../../paper/paper-research-sessions'
 import {
+  openPaperResearchSession,
   selectPaperResearchSession,
   startPaperResearch,
   type PaperResearchRequest
@@ -20,24 +23,34 @@ import {
 import { useWriteAssistantStage } from '../../write/WriteAssistantStageContext'
 import { paperResearchStageActive } from '../../../paper/paper-view'
 import { PaperSearchTabs } from '../discover/PaperSearchScope'
+import {
+  PaperAgentSessionRows,
+  PaperSearchRail,
+  PaperSearchRailClose,
+  usePaperSearchRail,
+  type AgentHistorySession
+} from '../discover/PaperSearchHistoryPane'
+import layout from '../discover/PaperSearchLayout.module.css'
 import { PaperResearchEmpty } from './PaperResearchEmpty'
 import { PaperResearchPool } from './PaperResearchPool'
 import { PaperResearchStage } from './PaperResearchStage'
 
-const POOL_KEY = 'kun.paper.research.poolOpen'
+const RAIL_TAB_KEY = 'kun.paper.research.railTab'
 const NO_BLOCKS: ChatBlock[] = []
 
-function readPoolOpen(): boolean {
+type RailTab = 'history' | 'pool'
+
+function readRailTab(): RailTab {
   try {
-    return window.localStorage.getItem(POOL_KEY) !== '0'
+    return window.localStorage.getItem(RAIL_TAB_KEY) === 'pool' ? 'pool' : 'history'
   } catch {
-    return true
+    return 'history'
   }
 }
 
-function writePoolOpen(open: boolean): void {
+function writeRailTab(tab: RailTab): void {
   try {
-    window.localStorage.setItem(POOL_KEY, open ? '1' : '0')
+    window.localStorage.setItem(RAIL_TAB_KEY, tab)
   } catch {
     // Panel memory is a convenience only.
   }
@@ -58,23 +71,31 @@ function useElapsed(since: string | undefined, running: boolean): string {
 
 /**
  * Agent research stage (paper search → Agent tab), laid out like a Code
- * conversation: a slim header, the session's Work conversation in the
- * center and the paper pool on the right. Sessions live in the sidebar
- * under 论文搜索.
+ * conversation: a slim header, the session's Work conversation in the center,
+ * and a shared right rail with two tabs — cross-workspace research history
+ * and, while a session is running, the literature pool.
  */
 export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }): ReactElement {
-  const { t } = useTranslation('common')
+  const { t, i18n } = useTranslation('common')
   const assistant = useWriteAssistantStage()
   const libraryRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
+  const libraries = useWriteWorkspaceStore((s) => s.paperMode.libraries)
   const sessionId = useWriteWorkspaceStore((s) => s.paperResearch.sessionId)
   const threads = useChatStore((s) => s.threads)
   const draft = usePaperModeStore((s) => s.discover.researchDraft)
-  const [poolOpen, setPoolOpen] = useState(readPoolOpen)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const { railOpen, narrow, railRef, toggleRail, closeRail } = usePaperSearchRail(rootRef)
+  const [railTab, setRailTab] = useState<RailTab>(readRailTab)
+  const userPickedTab = useRef(false)
   const [starting, setStarting] = useState(false)
   const stageRef = useRef<HTMLDivElement | null>(null)
   const restoredFor = useRef<string | null>(null)
 
   const sessions = useMemo(() => listResearchSessions(libraryRoot, threads), [libraryRoot, threads])
+  const history = useMemo(
+    () => listResearchSessionsAcrossLibraries([...libraries, libraryRoot], threads),
+    [libraries, libraryRoot, threads]
+  )
   const activeSession = sessions.find((session) => session.sessionId === sessionId) ?? null
   const bound = Boolean(activeSession && assistant && assistant.activeThreadId === activeSession.threadId)
   const blocks = bound && assistant ? assistant.blocks : NO_BLOCKS
@@ -108,6 +129,23 @@ export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }
     return () => clearTimeout(timer)
   }, [activeSession, bound, libraryRoot])
 
+  // Default the rail tab with the session state (history on the empty state,
+  // pool inside a session) until the user picks one explicitly this mount.
+  useEffect(() => {
+    if (userPickedTab.current) return
+    setRailTab((current) => {
+      const next: RailTab = activeSession ? 'pool' : 'history'
+      if (current !== next) writeRailTab(next)
+      return next
+    })
+  }, [activeSession])
+
+  const pickRailTab = (tab: RailTab): void => {
+    userPickedTab.current = true
+    writeRailTab(tab)
+    setRailTab(tab)
+  }
+
   const start = (request: PaperResearchRequest): void => {
     setStarting(true)
     void startPaperResearch(request).then((result) => {
@@ -134,10 +172,44 @@ export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }
     target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
-  const showPool = Boolean(activeSession && bound && poolOpen)
+  const openSession = (session: AgentHistorySession): void => {
+    void openPaperResearchSession(
+      { libraryRoot: session.libraryRoot, sessionId: session.sessionId },
+      t
+    )
+  }
+
+  const railTabs = (
+    <>
+      <div className="flex min-w-0 flex-1 items-center gap-1">
+        <button
+          type="button"
+          onClick={() => pickRailTab('history')}
+          className={`min-w-0 truncate rounded-md px-2 py-1 text-[12px] transition ${
+            railTab === 'history' ? 'bg-ds-subtle font-medium text-ds-ink' : 'text-ds-muted hover:text-ds-ink'
+          }`}
+        >
+          {t('paperSearchHistory')}
+        </button>
+        <button
+          type="button"
+          onClick={() => pickRailTab('pool')}
+          className={`min-w-0 truncate rounded-md px-2 py-1 text-[12px] transition ${
+            railTab === 'pool' ? 'bg-ds-subtle font-medium text-ds-ink' : 'text-ds-muted hover:text-ds-ink'
+          }`}
+        >
+          {t('paperResearchPoolTitle')}
+          {pool.entries.length ? (
+            <span className="ml-1 text-[10.5px] tabular-nums text-ds-faint">{pool.entries.length}</span>
+          ) : null}
+        </button>
+      </div>
+      {narrow ? <PaperSearchRailClose onClose={closeRail} label={t('close')} /> : null}
+    </>
+  )
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div ref={rootRef} className={layout.surface}>
       <header className="flex h-11 shrink-0 items-center gap-3 border-b border-ds-border-muted px-4">
         <PaperSearchTabs tab="agent" compact onChange={(tab) => tab === 'direct' && onShowDirect()} />
         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -177,29 +249,22 @@ export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }
             <Archive className="h-3.5 w-3.5" strokeWidth={1.8} />
           </button>
         ) : null}
-        {activeSession ? (
-          <button
-            type="button"
-            onClick={() => {
-              setPoolOpen((open) => {
-                writePoolOpen(!open)
-                return !open
-              })
-            }}
-            aria-pressed={poolOpen}
-            title={t('paperResearchPoolTitle')}
-            className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-[12px] transition hover:bg-ds-hover hover:text-ds-ink ${
-              poolOpen ? 'text-ds-ink' : 'text-ds-muted'
-            }`}
-          >
-            <PanelRight className="h-4 w-4" strokeWidth={1.8} />
-            <span className="tabular-nums">{pool.entries.length}</span>
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={toggleRail}
+          aria-pressed={railOpen}
+          title={t('paperSearchHistory')}
+          aria-label={t('paperSearchHistory')}
+          className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition hover:bg-ds-hover hover:text-ds-ink ${
+            railOpen ? 'bg-accent-tint/15 text-accent' : 'text-ds-muted'
+          }`}
+        >
+          <History className="h-4 w-4" strokeWidth={1.8} />
+        </button>
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        <div ref={stageRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className={layout.body} data-rail={railOpen ? 'open' : 'closed'}>
+        <div ref={stageRef} className={`${layout.stage} flex flex-col`}>
           {!assistant ? (
             <div className="m-auto flex items-center gap-2 text-[12.5px] text-ds-faint">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -216,10 +281,24 @@ export function PaperResearchView({ onShowDirect }: { onShowDirect: () => void }
             <PaperResearchStage assistant={assistant} newCountByBlock={pool.newCountByBlock} />
           )}
         </div>
-        {showPool ? (
-          <div className="hidden w-[300px] shrink-0 border-l border-ds-border-muted min-[1100px]:block">
-            <PaperResearchPool pool={pool} onFocusBlock={focusBlock} />
-          </div>
+        {railOpen ? (
+          <PaperSearchRail overlay={narrow} railRef={railRef} header={railTabs} flush={railTab === 'pool'}>
+            {railTab === 'history' ? (
+              <PaperAgentSessionRows
+                sessions={history}
+                activeRoot={normalizePath(libraryRoot)}
+                activeSessionId={sessionId}
+                locale={i18n.language}
+                onSelect={openSession}
+                onNew={() => selectPaperResearchSession(null)}
+                emptyLabel={t('paperSearchHistoryEmpty')}
+                newLabel={t('paperResearchNew')}
+                runningLabel={t('paperResearchStatusRunning')}
+              />
+            ) : (
+              <PaperResearchPool pool={pool} onFocusBlock={focusBlock} />
+            )}
+          </PaperSearchRail>
         ) : null}
       </div>
     </div>
