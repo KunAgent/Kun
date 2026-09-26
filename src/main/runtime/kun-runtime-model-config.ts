@@ -212,7 +212,9 @@ export function harnessesConfigForRuntime(
     binaryPaths: sortedRecord(harnesses?.binaryPaths),
     custom,
     defaultPermissionMode: sortedRecord(harnesses?.defaultPermissionMode),
-    defaultHarnessId: harnesses?.defaultHarnessId ?? 'kun'
+    defaultHarnessId: harnesses?.defaultHarnessId ?? 'kun',
+    // Ordering is significant: the worker selector reads it as preference rank.
+    agentOrder: [...(harnesses?.agentOrder ?? [])]
   }
 }
 

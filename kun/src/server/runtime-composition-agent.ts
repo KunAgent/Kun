@@ -45,27 +45,11 @@ import { createKunToolBridgeHost } from '../harness/kun-tool-bridge-host.js'
 import { FileTeamStore } from '../ade/team-store.js'
 import { handleAdeThreadDeleted } from '../ade/team-lifecycle.js'
 import { DispatchDeliverer } from '../ade/dispatch-deliverer.js'
-import { ManagerRuntime } from '../ade/manager-runtime.js'
 import { WorkerNoticeCoordinator } from '../ade/worker-notice-coordinator.js'
+import { createManagerRuntime } from './runtime-composition-manager.js'
 import { createManagerToolProvider } from '../adapters/tool/manager-tool-provider.js'
 import { FileDelegationStore } from './runtime-factory-dependencies.js'
-import { effectiveCapabilitiesForRoute } from '../harness/effective-capabilities.js'
-import {
-  HARNESS_CAPABILITY_KEYS,
-  unsupported,
-  type HarnessCapabilities,
-  type HarnessCapabilityStatuses
-} from '../contracts/harness-capabilities.js'
 import { join } from 'node:path'
-
-function noHarnessCapabilities(): HarnessCapabilities {
-  return {
-    statuses: Object.fromEntries(
-      HARNESS_CAPABILITY_KEYS.map((key) => [key, unsupported('not-implemented')])
-    ) as HarnessCapabilityStatuses,
-    facts: { sandbox: 'none', usageReporting: 'none', compactionOwner: 'none' }
-  }
-}
 
 export async function createRuntimeAgentComposition(
   registryComposition: ReturnType<typeof createRuntimeRegistry>
@@ -434,38 +418,22 @@ export async function createRuntimeAgentComposition(
     managerModel: () => core.activeOptions.ade?.managerModel
   })
   services.workerCallbacks.setNoticeSink(workerNoticeCoordinator)
-  const managerRuntime = new ManagerRuntime({
-    ...services.adeStores,
+  const managerRuntime = createManagerRuntime({
+    services,
+    core,
+    delegationRuntime,
+    harnessRuntimeMap,
+    listQuota: () => model.providerQuotaService.list(),
     notices: workerNoticeCoordinator,
     threads: threadStore,
     turns: turnService,
     sessionStore,
-    taskWorkspaces: core.taskWorkspaces,
-    activity: core.activityStore,
-    delegation: delegationRuntime ?? undefined,
     childRuns: childRunStore,
-    catalog: services.harnesses.catalog,
-    detector: services.harnesses.detector,
-    capabilitiesForRoute: (route) => {
-      const def = services.harnesses.catalog.get(route.harnessId)
-      if (!def) return Promise.resolve(noHarnessCapabilities())
-      return Promise.resolve(effectiveCapabilitiesForRoute(
-        def,
-        harnessRuntimeMap.get()[def.transport],
-        route.providerId
-      ))
-    },
     deliverer: dispatchDeliverer,
     ids,
     nowIso,
-    language: () => Intl.DateTimeFormat().resolvedOptions().locale,
-    allowUnattendedFullAccess: () => core.activeOptions.ade?.allowUnattendedFullAccess === true,
-    teamLimits: () => core.activeOptions.ade?.limits,
-    // P1-14: worker question answers (09 §6.4) + gated worker_approve (§6.5).
-    workerCallbacks: services.workerCallbacks,
     approvalGate,
-    approvalEvents: events,
-    managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true
+    approvalEvents: events
   })
   // Dispatch backfill + worker terminal hooks on the recorder (09 §5, §6.1).
   core.events.addObserver({ record: (event) => managerRuntime.handleRuntimeEvent(event) })

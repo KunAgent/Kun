@@ -187,15 +187,18 @@ export const ChildRoutingMetadata = z.object({
     'bm25-fallback-profile',
     'bm25-fallback-skill',
     'bm25-fallback-custom',
-    'bm25-fallback-generated'
+    'bm25-fallback-generated',
+    /** ADE manager worker selection (10 §3.3). */
+    'worker-selector'
   ]),
-  selectedKind: z.enum(['profile', 'skill', 'custom', 'generated']),
+  /** 'harness' marks a worker-selector pick with no bound profile (10 §3.3). */
+  selectedKind: z.enum(['profile', 'skill', 'custom', 'generated', 'harness']),
   selectedId: z.string().min(1),
   agentSurface: z.enum(['code', 'write', 'design']).optional(),
   reason: z.string().max(2_000).optional(),
   confidence: z.number().min(0).max(1).optional(),
   candidates: z.array(z.object({
-    kind: z.enum(['profile', 'skill']),
+    kind: z.enum(['profile', 'skill', 'harness']),
     targetId: z.string().min(1),
     name: z.string().min(1).max(256),
     description: z.string().max(2_000).optional(),

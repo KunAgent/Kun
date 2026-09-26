@@ -72,6 +72,12 @@ export type KunSubagentProfileV1 = {
   blockedSkills?: string[]
   /** Reasoning depth applied to this profile's child model requests. Default 'off'. */
   reasoningEffort?: ModelReasoningEffort
+  /** ADE worker harness binding (10 §3.1); empty/absent = native Kun loop. */
+  harnessId?: string
+  /** Credential path on the bound harness; empty/absent = harness default. */
+  credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+  /** "Best for / not for" notes read by the manager worker selector. */
+  delegationNotes?: string
 }
 
 export type KunSubagentsSettingsV1 = {
@@ -368,6 +374,8 @@ export type KunHarnessSettingsV1 = {
   defaultPermissionMode: Record<string, string>
   /** Default harness for new one-to-one ADE conversations. */
   defaultHarnessId: string
+  /** User preference order for ADE worker selection (10 §3.2 userPreference). */
+  agentOrder: string[]
 }
 
 export type KunAdeSettingsV1 = {

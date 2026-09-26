@@ -5,7 +5,7 @@ import type {
   TurnRunOutcome,
   WorkerRecord
 } from '../contracts/ade.js'
-import type { HarnessRoute, HarnessCredentialMode, HarnessId } from '../contracts/harness.js'
+import type { HarnessRoute, HarnessId } from '../contracts/harness.js'
 import type { HarnessCapabilities } from '../contracts/harness-capabilities.js'
 import type { TaskWorkspaceRecord, StartFrom } from '../contracts/task-workspace.js'
 import type { ThreadRecord } from '../contracts/threads.js'
@@ -31,6 +31,12 @@ import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js
 import type { WorkerCallbackService } from '../services/worker-callback-service.js'
 import { ManagerControls } from './manager-controls.js'
 import { TeamControls } from './team-controls.js'
+import {
+  NoEligibleWorkerError,
+  selectWorkerRoute,
+  type WorkerSelectorDeps
+} from './worker-selector.js'
+import { resolveWorkerRoute, type ResolvedWorkerRoute } from './worker-route.js'
 import { checkHarnessAdmission, type AdmissionResult } from '../harness/harness-admission.js'
 import { effectiveCapabilitiesForRoute } from '../harness/effective-capabilities.js'
 import {
@@ -123,6 +129,8 @@ export type WorkerCreateResult = {
   dispatched?: boolean
   deliveryPending?: DeliverOutcome['pendingReason']
   route?: HarnessRoute
+  /** Selector decision when `agent` was omitted (10 §3.2/§3.3). */
+  selection?: WorkerRecord['selection'] & { profileId?: string }
   permissionMode?: { requested?: string; effective: string; downgraded: boolean }
   admission?: AdmissionResult
   refusal?: 'worker_limit' | 'admission' | 'escalation_declined' | 'invalid_agent'
@@ -167,6 +175,14 @@ export type ManagerRuntimeDeps = {
   approvalEvents?: Pick<RuntimeEventRecorder, 'record'>
   /** `agents.kun.ade.managerMayApprove` — gates the worker_approve tool. */
   managerMayApprove?: () => boolean
+  /**
+   * Worker-route selector inputs (10 §3.2); `isolated`/`unattended` come from
+   * the create call. Absent → the manager's own provider/model on `kun`.
+   */
+  selector?: Omit<
+    WorkerSelectorDeps,
+    'catalog' | 'detector' | 'capabilitiesForRoute' | 'isolated' | 'unattended' | 'allowUnattendedFullAccess' | 'recentFailures' | 'managerRoute' | 'language'
+  >
 }
 
 /**
@@ -196,47 +212,73 @@ export class ManagerRuntime {
 
   private async resolveRoute(
     ctx: ManagerToolContext,
-    input: WorkerCreateInput
-  ): Promise<HarnessRoute | { error: string }> {
+    input: WorkerCreateInput,
+    isolated: boolean
+  ): Promise<ResolvedWorkerRoute | { error: string }> {
     const managerThread = await this.deps.threads.get(ctx.threadId).catch(() => null)
-    const requested = input.agent
-    if (requested?.harnessId) {
-      const def = this.deps.catalog.get(requested.harnessId)
-      if (!def) return { error: `unknown harness ${requested.harnessId}` }
-      const model = requested.model?.trim()
-      if (def.staticModels.length > 0 && (!model || !def.staticModels.includes(model))) {
-        return {
-          error: `model ${model || '(missing)'} is not in harness ${def.id}'s model list`
-        }
-      }
-      const credentialMode = requested.credentialMode?.trim()
-      if (credentialMode && !def.credentialModes.includes(credentialMode as HarnessCredentialMode)) {
-        return {
-          error: `credentialMode ${credentialMode} is not supported by harness ${def.id}`
-        }
-      }
-      // Provider-sourced harnesses share the manager's provider pool; probed
-      // harnesses keep their own default when no model was requested.
-      const fallbackModel = def.modelSource === 'provider' ? managerThread?.model?.trim() : ''
-      const fallbackProvider = def.modelSource === 'provider' ? managerThread?.providerId?.trim() : undefined
-      return {
-        harnessId: def.id,
-        model: model || def.staticModels[0] || fallbackModel || '',
-        ...(requested.providerId?.trim() || fallbackProvider
-          ? { providerId: requested.providerId?.trim() ?? fallbackProvider }
-          : {}),
-        credentialMode: (credentialMode as HarnessCredentialMode | undefined)
-          ?? def.credentialModes[0]
-      }
-    }
-    // P1-12 default until the P1-15 selector lands: the manager's own
-    // provider + model on the native Kun loop.
-    return {
-      harnessId: 'kun' as HarnessId,
-      model: managerThread?.model?.trim() || '',
-      ...(managerThread?.providerId?.trim() ? { providerId: managerThread.providerId.trim() } : {}),
-      credentialMode: 'provider' as HarnessCredentialMode
-    }
+    const selector = this.deps.selector
+    return resolveWorkerRoute({
+      catalog: this.deps.catalog,
+      managerModel: managerThread?.model,
+      managerProviderId: managerThread?.providerId,
+      agent: input.agent,
+      ...(selector
+        ? {
+            // No explicit agent: deterministic worker selection (10 §3.2).
+            select: () =>
+              selectWorkerRoute(
+                {
+                  catalog: this.deps.catalog,
+                  detector: this.deps.detector,
+                  capabilitiesForRoute: (route) => this.deps.capabilitiesForRoute(route),
+                  ...selector,
+                  isolated,
+                  unattended: !ctx.authority.interactive,
+                  allowUnattendedFullAccess:
+                    this.deps.allowUnattendedFullAccess?.() === true,
+                  managerRoute: () => ({
+                    model: managerThread?.model?.trim() || undefined,
+                    providerId: managerThread?.providerId?.trim() || undefined
+                  }),
+                  recentFailures: (teamId, harnessId) =>
+                    this.recentFailures(teamId, harnessId),
+                  language: this.deps.language
+                },
+                {
+                  task: `${input.label}\n${input.task}`,
+                  ...(input.role ? { role: input.role } : {}),
+                  teamId: ctx.threadId,
+                  workspace: ctx.workspace
+                }
+              ).catch((error) => {
+                if (error instanceof NoEligibleWorkerError) {
+                  return { error: error.message }
+                }
+                throw error
+              })
+          }
+        : {})
+    })
+  }
+
+  /**
+   * Same-team same-harness dispatch failures within the last hour (10 §3.2
+   * `recentFailurePenalty`). Feeds `worker_selector` via `selector` deps.
+   */
+  private async recentFailures(teamId: string, harnessId: HarnessId): Promise<number> {
+    const team = await this.deps.teams.get(teamId)
+    if (!team) return 0
+    const harnessByWorker = new Map(
+      team.workers.map((worker) => [worker.workerId, worker.route.harnessId])
+    )
+    const cutoff = Date.now() - 60 * 60_000
+    const dispatches = await this.deps.dispatches.list(teamId).catch(() => [] as DispatchRecord[])
+    return dispatches.filter(
+      (dispatch) =>
+        dispatch.state === 'failed' &&
+        harnessByWorker.get(dispatch.workerId) === harnessId &&
+        Date.parse(dispatch.updatedAt) >= cutoff
+    ).length
   }
 
   /**
@@ -278,15 +320,16 @@ export class ManagerRuntime {
           : `Worker limit reached (${team.limits.hardWorkers}); nothing was created.`
       }
     }
-    const route = await this.resolveRoute(ctx, input)
-    if ('error' in route) {
-      return { ok: false, refusal: 'invalid_agent', userReport: route.error }
+    const isolation = input.workspace?.isolation ?? 'worktree'
+    const resolved = await this.resolveRoute(ctx, input, isolation === 'worktree')
+    if ('error' in resolved) {
+      return { ok: false, refusal: 'invalid_agent', userReport: resolved.error }
     }
+    const { route, profileId, selection } = resolved
     const definition = this.deps.catalog.get(route.harnessId)
     if (!definition) {
       return { ok: false, refusal: 'invalid_agent', userReport: `unknown harness ${route.harnessId}` }
     }
-    const isolation = input.workspace?.isolation ?? 'worktree'
     if (isolation === 'worktree' && !this.deps.taskWorkspaces) {
       // Admission would report `isolated` for a run that would actually write
       // into the manager's own workspace — refuse instead (09 §7.1).
@@ -373,6 +416,8 @@ export class ManagerRuntime {
       label: input.label,
       ...(input.role ? { role: input.role } : {}),
       route,
+      ...(profileId ? { profileId } : {}),
+      ...(selection ? { selection } : {}),
       permissionMode: effectivePermissionMode,
       lifecycle: input.lifecycle ?? 'persistent',
       ...(tws ? { taskWorkspaceId: tws.workspaceId } : {}),
@@ -417,6 +462,7 @@ export class ManagerRuntime {
       dispatched: delivered.accepted,
       ...(delivered.pendingReason ? { deliveryPending: delivered.pendingReason } : {}),
       route,
+      ...(selection ? { selection: { ...selection, ...(profileId ? { profileId } : {}) } } : {}),
       permissionMode: {
         ...(permission.requestedMode ? { requested: permission.requestedMode.id } : {}),
         effective: effectivePermissionMode,
@@ -432,7 +478,8 @@ export class ManagerRuntime {
             ...permission,
             downgraded: permission.downgraded && effectivePermissionMode === permission.effective
           },
-          harnessLabel: definition.displayName
+          harnessLabel: definition.displayName,
+          selectionReason: selection?.reason
         },
         language
       )

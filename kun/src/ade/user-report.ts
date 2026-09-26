@@ -20,6 +20,8 @@ type CreatedInput = {
   pendingReason?: 'workspace' | 'worker-busy' | 'user-control'
   permission: Pick<PermissionClamp, 'downgraded' | 'requestedMode'>
   harnessLabel?: string
+  /** Selector's one-line reason (10 §3.2), already localized. */
+  selectionReason?: string
 }
 
 function harnessName(input: CreatedInput): string {
@@ -40,7 +42,8 @@ export function reportWorkerCreated(input: CreatedInput, language: ReportLanguag
     const downgrade = input.permission.downgraded
       ? `请求的权限档 ${input.permission.requestedMode?.id ?? ''} 超出总管权限，已按 ${input.worker.permissionMode} 运行。`
       : ''
-    return base + pending + downgrade
+    const reason = input.selectionReason ? ` ${input.selectionReason}` : ''
+    return base + pending + downgrade + reason
   }
   const base = `Created worker "${input.worker.label}" (${engine})`
   const pending = input.pendingReason === 'workspace'
@@ -53,7 +56,8 @@ export function reportWorkerCreated(input: CreatedInput, language: ReportLanguag
   const downgrade = input.permission.downgraded
     ? ` The requested permission mode ${input.permission.requestedMode?.id ?? ''} exceeds the manager's authority; running at ${input.worker.permissionMode}.`
     : ''
-  return base + pending + downgrade
+  const reason = input.selectionReason ? ` ${input.selectionReason}` : ''
+  return base + pending + downgrade + reason
 }
 
 export type BatchReportInput = {

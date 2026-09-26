@@ -324,6 +324,7 @@ export type KunHarnessSettingsPatchV1 = {
   custom?: KunHarnessCustomEntryV1[]
   defaultPermissionMode?: Record<string, string>
   defaultHarnessId?: string
+  agentOrder?: string[]
 }
 
 /** Patch shape for agents.kun.ade; nested objects merge field-wise. */
