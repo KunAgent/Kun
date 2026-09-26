@@ -24,6 +24,7 @@ import {
   type WindowsShellResolverOptions
 } from '../../../kun/src/adapters/tool/windows-shell-resolver.js'
 import {
+  TERMINAL_AGENT_CALLBACK_APPENDIX,
   TERMINAL_DEFAULT_COLS,
   TERMINAL_DEFAULT_ROWS,
   TERMINAL_MAX_SESSIONS,
@@ -235,10 +236,14 @@ async function resolveAgentLaunch(
     }
   }
   const argv = [...(terminal.argv as string[])]
-  const task = agent.task?.trim()
+  let task = agent.task?.trim()
   if (task) {
     // `argv` injection is the design-doc default; a harness may also declare
-    // a flag that carries the initial task (05 §6.1).
+    // a flag that carries the initial task (05 §6.1). The callback appendix
+    // (05 §5.3) rides along only when the credentials it relies on exist.
+    if (env.KUN_WORKER_ENDPOINT && env.KUN_WORKER_TOKEN) {
+      task += TERMINAL_AGENT_CALLBACK_APPENDIX
+    }
     if (typeof terminal.taskFlag === 'string' && terminal.taskFlag) {
       argv.push(terminal.taskFlag, task)
     } else {
