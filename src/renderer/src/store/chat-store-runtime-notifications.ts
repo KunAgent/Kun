@@ -41,6 +41,7 @@ import {
   completionIsCurrentlyVisible,
   markUnreadCompletion
 } from './unread-completions'
+import { activityFeedCoversThread } from './activity-store'
 import { isAutoPlanIntermediatePlanCompletion } from '../plan/auto-plan-build-intents'
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
 import {
@@ -366,6 +367,9 @@ export function notifyTurnComplete(
   // before the build turn begins. Suppress it so the final build turn keeps
   // the ordinary once-only notification semantics.
   if (isAutoPlanIntermediatePlanCompletion(threadId, turnId)) return
+  // Workers and task-workspace threads are tracked by the activity feed:
+  // their completions already surface through its transition notifications.
+  if (activityFeedCoversThread(threadId)) return
   if (!rememberCompletionNotificationKey(dedupeKey)) return
 
   const threadTitle =
@@ -413,6 +417,9 @@ export function notifyUserInputAwaiting(
   ) {
     return
   }
+  // Activity-tracked units surface waits through the feed's 'waiting'
+  // transition notification; a second desktop alert would double-report.
+  if (activityFeedCoversThread(threadId)) return
   if (!rememberCompletionNotificationKey(dedupeKey)) return
 
   const threadTitle =

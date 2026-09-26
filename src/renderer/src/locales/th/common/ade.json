@@ -173,5 +173,15 @@
     "prepFailed": "เตรียมเวิร์กทรีไม่สำเร็จ",
     "prepFailedRetry": "เวิร์กทรีล้มเหลว — ลองใหม่"
   },
-  "slashHarnessCommandFallback": "คำสั่งฮาร์เนส"
+  "slashHarnessCommandFallback": "คำสั่งฮาร์เนส",
+  "adeNotify": {
+    "waitingTitle": "รอข้อมูลจากคุณ",
+    "waitingBody": "{{title}} กำลังรอคุณ",
+    "failedTitle": "การทำงานล้มเหลว",
+    "failedBody": "{{title}} ล้มเหลว",
+    "doneTitle": "พร้อมรีวิว",
+    "doneBody": "{{title}} เสร็จแล้วและพร้อมรีวิว",
+    "stalledTitle": "อาจค้าง",
+    "stalledBody": "{{title}} อาจค้างอยู่"
+  }
 }

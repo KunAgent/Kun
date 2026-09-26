@@ -173,5 +173,15 @@
     "prepFailed": "worktree 准备失败",
     "prepFailedRetry": "worktree 失败 — 重试"
   },
-  "slashHarnessCommandFallback": "Harness 命令"
+  "slashHarnessCommandFallback": "Harness 命令",
+  "adeNotify": {
+    "waitingTitle": "等待你处理",
+    "waitingBody": "{{title}} 正在等待你处理",
+    "failedTitle": "运行失败",
+    "failedBody": "{{title}} 运行失败",
+    "doneTitle": "待审查",
+    "doneBody": "{{title}} 已完成，待你审查",
+    "stalledTitle": "可能卡住",
+    "stalledBody": "{{title}} 可能已卡住"
+  }
 }

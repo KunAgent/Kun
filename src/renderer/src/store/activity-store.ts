@@ -74,6 +74,17 @@ export function stopActivityFeed(): void {
   useActivityStore.setState({ status: 'idle' })
 }
 
+/**
+ * True when the live feed tracks this thread (workers and task-workspace
+ * threads always have rows; plain one-on-one ADE threads do once bound).
+ * Callers use it to defer legacy notifications to the activity notifier.
+ */
+export function activityFeedCoversThread(threadId: string | null | undefined): boolean {
+  const id = threadId?.trim()
+  if (!id) return false
+  return Object.values(useActivityStore.getState().rows).some((row) => row.threadId === id)
+}
+
 function applyChanges(changes: ActivityChange[]): void {
   if (changes.length === 0) return
   useActivityStore.setState((state) => {

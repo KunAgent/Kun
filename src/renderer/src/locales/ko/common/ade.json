@@ -173,5 +173,15 @@
     "prepFailed": "worktree 준비 실패",
     "prepFailedRetry": "worktree 실패 — 다시 시도"
   },
-  "slashHarnessCommandFallback": "하네스 명령"
+  "slashHarnessCommandFallback": "하네스 명령",
+  "adeNotify": {
+    "waitingTitle": "입력이 필요합니다",
+    "waitingBody": "{{title}}이(가) 기다리고 있습니다",
+    "failedTitle": "실행 실패",
+    "failedBody": "{{title}} 실패",
+    "doneTitle": "리뷰 가능",
+    "doneBody": "{{title}}이(가) 완료되어 리뷰할 수 있습니다",
+    "stalledTitle": "멈춘 것 같습니다",
+    "stalledBody": "{{title}}이(가) 멈춘 것 같습니다"
+  }
 }
