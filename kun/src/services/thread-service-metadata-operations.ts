@@ -190,6 +190,7 @@ async create(this: ThreadService,
       ...(request.providerId?.trim() ? { providerId: request.providerId.trim() } : {}),
       ...(request.harnessId?.trim() ? { harnessId: request.harnessId.trim() } : {}),
       ...(request.workspaceMode ? { workspaceMode: request.workspaceMode } : {}),
+      ...(request.taskWorkspaceId?.trim() ? { taskWorkspaceId: request.taskWorkspaceId.trim() } : {}),
       ...(request.accountId?.trim() ? { accountId: request.accountId.trim() } : {}),
       ...(options.extensionMetadata ?? {}),
       ...(options.roomContext ? { roomContext: options.roomContext } : {}),
@@ -240,6 +241,8 @@ async update(this: ThreadService, threadId: string, patch: {
     titleAuto?: boolean
     summary?: string
     workspace?: string
+    /** Set-only binding to a host-managed task workspace (07 §5). */
+    taskWorkspaceId?: string
     additionalWorkspaces?: string[]
     knowledgeBases?: KnowledgeBaseMount[]
     mode?: ThreadMode
@@ -258,7 +261,7 @@ async update(this: ThreadService, threadId: string, patch: {
       const current = await this['threadStore'].get(threadId)
       if (!current) throw new Error(`thread not found: ${threadId}`)
       if (current.roomContext) {
-        const protectedFields = ['workspace', 'additionalWorkspaces', 'knowledgeBases', 'mode',
+        const protectedFields = ['workspace', 'taskWorkspaceId', 'additionalWorkspaces', 'knowledgeBases', 'mode',
           'approvalPolicy', 'sandboxMode', 'approvalReviewer', 'status', 'relation'] as const
         if (Object.hasOwn(patch, 'roomContext') || protectedFields.some((key) =>
           patch[key] !== undefined && JSON.stringify(patch[key]) !== JSON.stringify(current[key]))) {
@@ -271,6 +274,13 @@ async update(this: ThreadService, threadId: string, patch: {
       // thread's lifecycle marker.
       if (patch.status !== undefined && patch.status !== 'idle' && patch.status !== 'archived') {
         throw new Error(`thread status is managed by the runtime: ${patch.status}`)
+      }
+      if (
+        patch.taskWorkspaceId !== undefined &&
+        current.taskWorkspaceId !== undefined &&
+        patch.taskWorkspaceId !== current.taskWorkspaceId
+      ) {
+        throw new Error('taskWorkspaceId is bound once; create a new thread to rebind')
       }
       const { costBudgetUsd, costBudgetWarningSent, status, ...standardPatch } = patch
       if (standardPatch.additionalWorkspaces) {

@@ -15,6 +15,7 @@ import {
   rememberTurnModel
 } from './chat-store-helpers'
 import { findReusableEmptyThreadId, reconcileOptimisticUserBlock } from './chat-store-runtime-helpers'
+import { prepareAdeThreadWorktree } from './chat-store-thread-send-worktree'
 import { clearBusyWatchdog, resetBusyRecoveryAttempts } from './chat-store-schedulers'
 import {
   armBusyWatchdog,
@@ -33,8 +34,10 @@ import { readDesignThreadRegistry } from '../design/design-thread-registry'
 import { mergeThreadDesignProfile } from '../design/design-locked-profile'
 import {
   executionSnapshotOverrides,
+  capturePreSendSnapshot,
   failQueuedSubmission,
   localConversationErrorBlock,
+  preSendSnapshotPatch,
   resetQueuedSubmission,
   resetUnknownOutcomeAttempts,
   scheduleUnknownOutcomeRetry,
@@ -46,7 +49,7 @@ import {
   withoutConsumedComposerContexts
 } from './chat-store-thread-actions-support'
 import type { PreparedThreadSend } from './chat-store-thread-send-direct-types'
-import { copyLiveProjection, emptyLiveProjection } from './chat-store-live-projection'
+import { emptyLiveProjection } from './chat-store-live-projection'
 
 /**
  * A queued message freezes the model captured when it was enqueued. Draining
@@ -100,6 +103,8 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     composerModel,
     composerProviderId,
     composerAccountId,
+    composerHarnessId,
+    composerCredentialMode,
     reasoningEffort,
     serviceTier,
     guiDesignCanvas, guiExcalidrawCanvas,
@@ -110,21 +115,10 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     submittedMessageForQueue
   } = input
   const { set, get, sseAbortRef } = context
-    const previousBlocks = get().blocks
-    const previousActiveThreadId = get().activeThreadId
-    const previousLastSeq = get().lastSeq
-    const previousCurrentTurnId = get().currentTurnId
-    const previousCurrentTurnOrchestration = get().currentTurnOrchestration
-    const previousCurrentTurnUserId = get().currentTurnUserId
-    const previousLiveProjection = copyLiveProjection(get())
-    const previousTurnStartedAtByUserId = get().turnStartedAtByUserId
-    const previousTurnDurationByUserId = get().turnDurationByUserId
-    const previousTurnReasoningFirstAtByUserId = get().turnReasoningFirstAtByUserId
-    const previousTurnReasoningLastAtByUserId = get().turnReasoningLastAtByUserId
-    const previousQueuedMessages = get().queuedMessages
+    const previous = capturePreSendSnapshot(get())
     resetBusyRecoveryAttempts()
     // Fence stale detail hydration before publishing the optimistic turn.
-    runtime.fenceThreadMutation(previousActiveThreadId ?? undefined)
+    runtime.fenceThreadMutation(previous.activeThreadId ?? undefined)
     set((s) => ({
       busy: true,
       busyUnconfirmed: false,
@@ -176,18 +170,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         const workspaceRoot = currentCodeWorkspaceRoot(get(), settings)
         if (!workspaceRoot) {
           set({
-            blocks: previousBlocks,
-            busy: false,
-            busyUnconfirmed: false,
-            ...previousLiveProjection,
-            currentTurnId: previousCurrentTurnId,
-            currentTurnOrchestration: previousCurrentTurnOrchestration,
-            currentTurnUserId: previousCurrentTurnUserId,
-            turnStartedAtByUserId: previousTurnStartedAtByUserId,
-            turnDurationByUserId: previousTurnDurationByUserId,
-            turnReasoningFirstAtByUserId: previousTurnReasoningFirstAtByUserId,
-            turnReasoningLastAtByUserId: previousTurnReasoningLastAtByUserId,
-            queuedMessages: previousQueuedMessages,
+            ...preSendSnapshotPatch(previous),
             error: i18n.t('common:workspaceRequiredToCreateThread')
           })
           runtime.persistActiveQueuedMessages()
@@ -207,6 +190,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         shouldRenameThreadAfterSend =
           shouldAutoRenameForRoute &&
           reusableThreadId != null && shouldAutoTitleThread(reusableThread)
+        const adeSend = get().route === 'ade'
         const createdThread =
           reusableThreadId == null
             ? await p.createThread({
@@ -216,6 +200,9 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
                 ...(composerModel ? { model: composerModel } : {}),
                 ...(composerProviderId ? { providerId: composerProviderId } : {}),
                 ...(composerAccountId ? { accountId: composerAccountId } : {}),
+                ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
+                ...(composerCredentialMode ? { credentialMode: composerCredentialMode } : {}),
+                ...(adeSend ? { workspaceMode: 'ade' as const } : {}),
                 // Design is turn intent; workbench thread ownership stays Code.
                 agentSurface: requestedAgentSurface === 'write' ? 'write' : 'code',
                 mode: mode ?? 'agent'
@@ -227,7 +214,15 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         }
         activeThreadId = threadId
         if (composerModel && !queuedModelWouldOverwriteUserSelection(queued, threadId, composerModel)) {
-          rememberThreadComposerSelection(threadId, composerModel, composerProviderId)
+          rememberThreadComposerSelection(
+            threadId,
+            composerModel,
+            composerProviderId,
+            'user',
+            composerHarnessId
+              ? { harnessId: composerHarnessId, credentialMode: composerCredentialMode }
+              : undefined
+          )
         }
         set((s) => ({
           activeThreadId: threadId,
@@ -241,28 +236,32 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           threads:
             createdThread && !s.threads.some((thread) => thread.id === createdThread.id)
               ? [createdThread, ...s.threads]
-              : s.threads
+              : s.threads,
+          adeThreads:
+            createdThread && adeSend && !(s.adeThreads ?? []).some((thread) => thread.id === createdThread.id)
+              ? [createdThread, ...(s.adeThreads ?? [])]
+              : (s.adeThreads ?? [])
         }))
         void get().refreshThreads()
+        // New-session worktree isolation: start async prep, subscribe for the
+        // ready event, and park this submission in the local queue (12 §7.3).
+        if (adeSend && createdThread && get().composerIsolation === 'worktree' && p.createTaskWorkspace) {
+          await prepareAdeThreadWorktree({
+            provider: p,
+            threadId,
+            workspaceRoot,
+            context,
+            submittedMessageForQueue,
+            persistActiveQueuedMessages: runtime.persistActiveQueuedMessages
+          })
+          return true
+        }
       } catch (e) {
         void window.kunGui.logError('create-thread', 'Failed to create thread', {
           message: e instanceof Error ? e.message : String(e)
         }).catch(() => undefined)
         set({
-          activeThreadId: previousActiveThreadId,
-          blocks: previousBlocks,
-          lastSeq: previousLastSeq,
-          busy: false,
-          busyUnconfirmed: false,
-          ...previousLiveProjection,
-          currentTurnId: previousCurrentTurnId,
-          currentTurnOrchestration: previousCurrentTurnOrchestration,
-          currentTurnUserId: previousCurrentTurnUserId,
-          turnStartedAtByUserId: previousTurnStartedAtByUserId,
-          turnDurationByUserId: previousTurnDurationByUserId,
-          turnReasoningFirstAtByUserId: previousTurnReasoningFirstAtByUserId,
-          turnReasoningLastAtByUserId: previousTurnReasoningLastAtByUserId,
-          queuedMessages: previousQueuedMessages,
+          ...preSendSnapshotPatch(previous),
           error: formatRuntimeError(e),
           ...(shouldOpenSettingsForError(e)
             ? { route: 'settings' as const, settingsSection: 'agents' as const }
@@ -284,7 +283,15 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         composerModel &&
         !queuedModelWouldOverwriteUserSelection(queued, activeThreadId, composerModel)
       ) {
-        rememberThreadComposerSelection(activeThreadId, composerModel, composerProviderId)
+        rememberThreadComposerSelection(
+          activeThreadId,
+          composerModel,
+          composerProviderId,
+          'user',
+          composerHarnessId
+            ? { harnessId: composerHarnessId, credentialMode: composerCredentialMode }
+            : undefined
+        )
       }
       await ensureRuntimeProviderForSend({
         providerId: channel ? undefined : composerProviderId,
@@ -309,19 +316,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         const current = get()
         if (current.activeThreadId === activeThreadId) {
           set({
-            blocks: previousBlocks,
-            lastSeq: previousLastSeq,
-            busy: false,
-            busyUnconfirmed: false,
-            ...previousLiveProjection,
-            currentTurnId: previousCurrentTurnId,
-            currentTurnOrchestration: previousCurrentTurnOrchestration,
-            currentTurnUserId: previousCurrentTurnUserId,
-            turnStartedAtByUserId: previousTurnStartedAtByUserId,
-            turnDurationByUserId: previousTurnDurationByUserId,
-            turnReasoningFirstAtByUserId: previousTurnReasoningFirstAtByUserId,
-            turnReasoningLastAtByUserId: previousTurnReasoningLastAtByUserId,
-            queuedMessages: previousQueuedMessages,
+            ...preSendSnapshotPatch(previous),
             error: i18n.t('common:designThreadChangedBeforeSend')
           })
           runtime.persistActiveQueuedMessages()
@@ -352,6 +347,10 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         ...(composerModel ? { model: composerModel } : {}),
         ...(!channel && composerProviderId ? { providerId: composerProviderId } : {}),
         ...(!channel && composerAccountId ? { accountId: composerAccountId } : {}),
+        ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
+        ...(composerCredentialMode
+          ? { credentialMode: composerCredentialMode as 'native-login' | 'provider' | 'kun-gateway' }
+          : {}),
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(!channel && serviceTier ? { serviceTier } : {}),
         ...((queued?.subagentResume ?? overrides?.subagentResume) ? { subagentResume: queued?.subagentResume ?? overrides?.subagentResume } : {}),
@@ -406,7 +405,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           ...(userMessageItemId ? { userMessageItemId } : {}),
           ...(userModelChip ? { modelLabel: userModelChip } : {}),
           queued,
-          previousQueuedMessages
+          previousQueuedMessages: previous.queuedMessages
         })
         void get().refreshThreads()
         return true
@@ -561,19 +560,19 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
       const runtimeErrorCode = getRuntimeErrorCode(e)
       if (runtimeErrorCode === 'thread_busy' || looksLikeActiveTurnError(e)) {
         set((state) => ({
-          blocks: previousBlocks,
+          blocks: previous.blocks,
           busy: true,
           busyUnconfirmed: false,
-          ...previousLiveProjection,
-          currentTurnId: previousCurrentTurnId,
-          currentTurnOrchestration: previousCurrentTurnOrchestration,
-          currentTurnUserId: previousCurrentTurnUserId,
-          turnStartedAtByUserId: previousTurnStartedAtByUserId,
-          turnDurationByUserId: previousTurnDurationByUserId,
-          turnReasoningFirstAtByUserId: previousTurnReasoningFirstAtByUserId,
-          turnReasoningLastAtByUserId: previousTurnReasoningLastAtByUserId,
+          ...previous.liveProjection,
+          currentTurnId: previous.currentTurnId,
+          currentTurnOrchestration: previous.currentTurnOrchestration,
+          currentTurnUserId: previous.currentTurnUserId,
+          turnStartedAtByUserId: previous.turnStartedAtByUserId,
+          turnDurationByUserId: previous.turnDurationByUserId,
+          turnReasoningFirstAtByUserId: previous.turnReasoningFirstAtByUserId,
+          turnReasoningLastAtByUserId: previous.turnReasoningLastAtByUserId,
           queuedMessages: upsertQueuedSubmission(
-            previousQueuedMessages,
+            previous.queuedMessages,
             submittedMessageForQueue
           ),
           extensionComposerContexts: withoutConsumedComposerContexts(state, composerContexts),
@@ -605,15 +604,15 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
       if (turnAdmissionOutcomeMayBeUnknown(e)) {
         const view = describeRuntimeError(e)
         set((state) => ({
-          blocks: previousBlocks,
+          blocks: previous.blocks,
           busy: false,
           busyUnconfirmed: false,
-          ...previousLiveProjection,
-          currentTurnId: previousCurrentTurnId,
-          currentTurnOrchestration: previousCurrentTurnOrchestration,
-          currentTurnUserId: previousCurrentTurnUserId,
+          ...previous.liveProjection,
+          currentTurnId: previous.currentTurnId,
+          currentTurnOrchestration: previous.currentTurnOrchestration,
+          currentTurnUserId: previous.currentTurnUserId,
           queuedMessages: startingQueuedSubmission(
-            previousQueuedMessages,
+            previous.queuedMessages,
             submittedMessageForQueue
           ),
           extensionComposerContexts: withoutConsumedComposerContexts(state, composerContexts),
@@ -671,7 +670,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         currentTurnStartedAtMs: null,
         currentTurnOrchestration: null,
         queuedMessages: failQueuedSubmission(
-          previousQueuedMessages,
+          previous.queuedMessages,
           submittedMessageForQueue.id,
           view
         ),

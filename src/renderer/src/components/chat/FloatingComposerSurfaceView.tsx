@@ -14,11 +14,12 @@ export function FloatingComposerSurfaceView({
 }): ReactElement {
   const {
     FileText, FloatingComposerAgentPicker, FloatingComposerAttachments,
-    FloatingComposerContextCapacity, FloatingComposerExecutionPicker, FloatingComposerModelPicker,
+    FloatingComposerContextCapacity, FloatingComposerExecutionPicker, FloatingComposerHarnessPicker,
+    FloatingComposerIsolationPicker, FloatingComposerModelPicker,
     FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker,
     Bot, Folder, GitBranchPicker, ListTodo, Loader2, Mic, Plus, Send, Share2, Sparkles,
     Square, Target, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThreadGoal,
-    activeThreadId, attachmentUploadEnabled, attachmentUploadError, attachments, busy,
+    activeThreadId, adeComposer, adeComposerEnabled, attachmentUploadEnabled, attachmentUploadError, attachments, busy,
     canChangeModel, canCompose, canEditComposer, canOpenComposerMenu, canOptimizePrompt,
     canToggleWorktreeMode, compact, composerFastMode, composerMenuButtonRef, composerMenuOpen, composerShellRef,
     composerModel, composerModelGroups, composerPickList, composerProviderId,
@@ -383,6 +384,29 @@ export function FloatingComposerSurfaceView({
                       selectedProviderId={composerProviderId}
                     />
                   )}
+                  {adeComposerEnabled === true && !side && adeComposer ? (
+                    <FloatingComposerIsolationPicker
+                      disabled={!canCompose || busy}
+                      showPicker={!activeThreadId}
+                      value={adeComposer.isolation}
+                      prep={adeComposer.prep}
+                      boundWorkspacePath={adeComposer.boundWorkspaceId}
+                      onSelect={adeComposer.selectIsolation}
+                      onRetryPrep={adeComposer.retryWorkspacePrep}
+                    />
+                  ) : null}
+                  {adeComposerEnabled === true && !side && adeComposer ? (
+                    <FloatingComposerHarnessPicker
+                      disabled={!canCompose || busy}
+                      harnessId={adeComposer.harnessId}
+                      harnessLabel={adeComposer.harnessLabel}
+                      rows={adeComposer.rows}
+                      loading={adeComposer.rowsLoading}
+                      needsConfirm={adeComposer.needsSwitchConfirm}
+                      onOpen={adeComposer.refreshRows}
+                      onSelect={adeComposer.selectHarness}
+                    />
+                  ) : null}
                   {hideModelPicker ? null : (
                     <FloatingComposerModelPicker
                       compact={compact}

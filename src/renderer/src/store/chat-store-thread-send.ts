@@ -52,6 +52,7 @@ import type {
   WriteAssistantMessageContext
 } from './chat-store-types'
 import { queuedMessageGuidancePayload } from './queued-message-guidance'
+import { threadWorkspacePreparing } from './task-workspace-store'
 import { syncThreadAdditionalWorkspaces } from './chat-store-workspace-folder-sync'
 import { currentTurnStartGeneration } from './turn-start-fence'
 import {
@@ -76,6 +77,7 @@ import {
   rememberThreadComposerSelection,
   rememberTurnModel
 } from './chat-store-helpers'
+import { resolveSendHarnessSelection } from '../lib/ade-composer-harness'
 import {
   clearedThreadSelection,
   collectAssistantTextForTurn,
@@ -350,7 +352,10 @@ export async function sendThreadMessage(
     const adeExtras = await adeWorkerNoticeSendExtras(get(), queued?.ackNoticeIds, i18n.language)
     const ackNoticeIds = adeExtras.ackNoticeIds
     const hasPendingActiveTurn = threadHasPendingRuntimeWork(get().blocks)
-    if (get().busy || hasPendingActiveTurn || (queued && !shouldWaitForRuntimeAdmission)) {
+    // Task-worktree prep queues locally (12 §7.3): the runtime cannot admit
+    // a turn until the thread is bound to the ready workspace path.
+    const workspacePreparing = threadWorkspacePreparing(get().activeThreadId)
+    if (get().busy || hasPendingActiveTurn || workspacePreparing || (queued && !shouldWaitForRuntimeAdmission)) {
       const state = get()
       const activeThreadId = state.activeThreadId
       const threadSnap = activeThreadId
@@ -370,6 +375,14 @@ export async function sendThreadMessage(
           composerProviderId,
           composerModel
         )
+      const { harnessId: composerHarnessId, credentialMode: composerCredentialMode } =
+        resolveSendHarnessSelection({
+          queued,
+          overrides,
+          adeEligible: threadSnap?.workspaceMode === 'ade',
+          composerHarnessId: state.composerHarnessId,
+          composerCredentialMode: state.composerCredentialMode
+        })
       const userModelChip =
         queued?.modelLabel ?? overrides?.modelLabel ?? optimisticUserModelLabel(composerModel, threadSnap?.model)
       const displayText = queued?.displayText ?? overrides?.displayText?.trim()
@@ -401,7 +414,7 @@ export async function sendThreadMessage(
       // enqueueIfBusy so it executes even when this conversation is never
       // opened again. Write sends now carry a durable `writeContext` reference
       // so they can join the runtime queue too.
-      if (activeThreadId && !shouldWaitForRuntimeAdmission) {
+      if (activeThreadId && !shouldWaitForRuntimeAdmission && !workspacePreparing) {
         const submitted = await submitToRuntimeQueue({
           provider: p,
           activeThreadId,
@@ -414,6 +427,8 @@ export async function sendThreadMessage(
           composerModel,
           composerProviderId,
           composerAccountId,
+          composerHarnessId,
+          composerCredentialMode,
           userModelChip,
           displayText,
           reasoningEffort,
@@ -451,6 +466,8 @@ export async function sendThreadMessage(
           ...(composerModel ? { model: composerModel } : {}),
           ...(composerProviderId ? { providerId: composerProviderId } : {}),
           ...(composerAccountId ? { accountId: composerAccountId } : {}),
+          ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
+          ...(composerCredentialMode ? { credentialMode: composerCredentialMode } : {}),
           ...(userModelChip ? { modelLabel: userModelChip } : {}),
           ...(reasoningEffort ? { reasoningEffort } : {}),
           ...(serviceTier ? { serviceTier } : {}),
@@ -543,6 +560,14 @@ export async function sendThreadMessage(
       queued?.accountId ??
       overrides?.accountId?.trim() ??
       accountIdForComposerSelection(get().composerModelGroups, composerProviderId, composerModel)
+    const { harnessId: composerHarnessId, credentialMode: composerCredentialMode } =
+      resolveSendHarnessSelection({
+        queued,
+        overrides,
+        adeEligible: threadSnap?.workspaceMode === 'ade' || (!activeThreadId && get().route === 'ade'),
+        composerHarnessId: get().composerHarnessId,
+        composerCredentialMode: get().composerCredentialMode
+      })
     const reasoningEffort = queued?.reasoningEffort ?? overrides?.reasoningEffort?.trim()
     const serviceTier =
       (queued?.serviceTier ?? overrides?.serviceTier) === 'priority'
@@ -581,6 +606,8 @@ export async function sendThreadMessage(
       ...(composerModel ? { model: composerModel } : {}),
       ...(composerProviderId ? { providerId: composerProviderId } : {}),
       ...(composerAccountId ? { accountId: composerAccountId } : {}),
+      ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
+      ...(composerCredentialMode ? { credentialMode: composerCredentialMode } : {}),
       ...(userModelChip ? { modelLabel: userModelChip } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(serviceTier ? { serviceTier } : {}),
@@ -642,6 +669,8 @@ export async function sendThreadMessage(
       composerModel,
       composerProviderId,
       composerAccountId,
+      composerHarnessId,
+      composerCredentialMode,
       reasoningEffort,
       serviceTier,
       guiDesignCanvas,

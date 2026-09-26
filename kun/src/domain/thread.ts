@@ -58,6 +58,7 @@ export function createThreadRecord(input: {
   providerId?: string
   harnessId?: string
   workspaceMode?: 'code' | 'ade'
+  taskWorkspaceId?: string
   ownerExtensionId?: string
   ownerExtensionVersion?: string
   accountId?: string
@@ -112,6 +113,7 @@ export function createThreadRecord(input: {
     ...(input.providerId ? { providerId: input.providerId } : {}),
     ...(input.harnessId ? { harnessId: input.harnessId } : {}),
     ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
+    ...(input.taskWorkspaceId ? { taskWorkspaceId: input.taskWorkspaceId } : {}),
     ...(input.ownerExtensionId ? { ownerExtensionId: input.ownerExtensionId } : {}),
     ...(input.ownerExtensionVersion ? { ownerExtensionVersion: input.ownerExtensionVersion } : {}),
     ...(input.accountId ? { accountId: input.accountId } : {}),
@@ -183,6 +185,7 @@ export function toThreadSummary(
     ...(thread.providerId ? { providerId: thread.providerId } : {}),
     ...(thread.harnessId ? { harnessId: thread.harnessId } : {}),
     ...(thread.workspaceMode ? { workspaceMode: thread.workspaceMode } : {}),
+    ...(thread.taskWorkspaceId ? { taskWorkspaceId: thread.taskWorkspaceId } : {}),
     ...(thread.ownerExtensionId ? { ownerExtensionId: thread.ownerExtensionId } : {}),
     ...(thread.ownerExtensionVersion ? { ownerExtensionVersion: thread.ownerExtensionVersion } : {}),
     ...(thread.accountId ? { accountId: thread.accountId } : {}),

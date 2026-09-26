@@ -10,9 +10,12 @@
   "adeHandoffShow": "查看简报",
   "adeHandoffHide": "收起简报",
   "adeHandoffLoadError": "无法重建交接简报",
-  "workerUpdateNotice.title": "工作者更新",
+  "workerUpdateNotice": {
+    "title": "工作者更新"
+  },
   "rightPanelReview": "审查",
   "reviewEmpty": "还没有改动",
+  "reviewFileCount": "{{count}} 个文件",
   "reviewFileCount_other": "{{count}} 个文件",
   "reviewBinary": "二进制文件",
   "reviewTooLarge": "文件过大，无法渲染",
@@ -54,7 +57,9 @@
   "reviewDiscardTitle": "丢弃这个任务工作区？",
   "reviewDiscardHint": "对应的 worktree 与分支将被永久删除。",
   "reviewDiscardUncommitted": "{{count}} 个未提交文件将丢失",
+  "reviewDiscardUncommitted_other": "{{count}} 个未提交文件将丢失",
   "reviewDiscardUnpushed": "{{count}} 个未推送提交将丢失",
+  "reviewDiscardUnpushed_other": "{{count}} 个未推送提交将丢失",
   "reviewDiscardConfirm": "永久丢弃",
   "reviewDiscardCancel": "取消",
   "reviewIntegrateResultTitle": "合入结果",
@@ -138,5 +143,35 @@
   "assignmentCardTitle": "来自总管的任务",
   "assignmentCardFrom": "由 {{from}} 派发",
   "assignmentCardManager": "总管",
-  "subagentWorktreeBadge": "worktree"
+  "subagentWorktreeBadge": "worktree",
+  "adeCredential": {
+    "nativeLogin": "原生登录",
+    "provider": "Provider",
+    "kunGateway": "Kun 网关"
+  },
+  "adeHarnessPicker": {
+    "title": "Harness",
+    "nextTurnHint": "对下一轮生效。Code 会话始终使用 Kun。",
+    "switchConfirmTitle": "切换到 {{name}}？",
+    "switchConfirmBody": "下一轮会在新 harness 中开启全新会话并携带交接简报；此前的轮次仍保留在原 harness。",
+    "switchConfirmYes": "切换 harness"
+  },
+  "adeHarnessUnavailable": {
+    "notInstalled": "未安装",
+    "detecting": "检测中",
+    "signedOut": "未登录",
+    "versionLow": "版本过低",
+    "unavailable": "不可用"
+  },
+  "adeIsolation": {
+    "title": "隔离方式",
+    "local": "本地目录",
+    "localHint": "直接在所选工作区目录中运行。",
+    "worktree": "新 worktree",
+    "worktreeHint": "由宿主为该任务准备新的 git worktree。",
+    "preparing": "正在准备 worktree…",
+    "prepFailed": "worktree 准备失败",
+    "prepFailedRetry": "worktree 失败 — 重试"
+  },
+  "slashHarnessCommandFallback": "Harness 命令"
 }

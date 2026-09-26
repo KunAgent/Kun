@@ -208,6 +208,10 @@ export type ThreadEventSink = {
   onContextSnapshot?(snapshot: RequestContextSnapshot): void
   onDelegatedRuntimeState?(state: DelegatedRuntimeState): void
   onHarnessRuntimeState?(state: HarnessRuntimeState): void
+  /** Harness-reported session surface: native commands, mode (03 §7.3). */
+  onHarnessSessionState?(state: import('@shared/ade-harnesses').AdeHarnessSessionState): void
+  /** Task-workspace lifecycle on the owning thread (docs/ade/07 §5). */
+  onTaskWorkspace?(ev: import('@shared/task-workspace').TaskWorkspaceThreadEvent): void
   /** Deterministic handoff brief injected into a delegated turn (docs/ade/08). */
   onHandoff?(ev: HandoffEventPayload): void
   /** Safe child lifecycle/activity projected onto the parent thread. */
@@ -252,6 +256,10 @@ export interface AgentProvider {
     boundThreadId?: string
     ownerThreadId?: string
   }): Promise<import('@shared/task-workspace').TaskWorkspaceListResponse>
+  /** Create an isolated task workspace; returns the `creating` record (07 §5). */
+  createTaskWorkspace?(
+    input: import('@shared/task-workspace').CreateTaskWorkspaceRequest
+  ): Promise<import('@shared/task-workspace').TaskWorkspaceRecordResponse>
   /** Per-file diff stats for the review panel (docs/ade/11 §3). */
   getTaskWorkspaceDiff?(
     workspaceId: string
@@ -287,6 +295,12 @@ export interface AgentProvider {
   getTeamWorker?(
     workerId: string
   ): Promise<{ team: import('@shared/ade-teams').AdeTeamRecord; worker: import('@shared/ade-teams').AdeTeamWorker } | null>
+  /** Harness catalog rows with cached detection status (01 §7, 12 §7.2). */
+  listHarnesses?(): Promise<import('@shared/ade-harnesses').AdeHarnessRow[]>
+  /** Models a harness accepts (01 §9): static, probed, or provider-derived. */
+  listHarnessModels?(
+    harnessId: string
+  ): Promise<import('@shared/ade-harnesses').AdeHarnessModels>
   /** Worker control: take-over / hand-back / stop / detach (09 §9). */
   controlTeamWorker?(
     workerId: string,
@@ -321,7 +335,7 @@ export interface AgentProvider {
     briefDigest: string
     recordedBriefDigest: string
   }>
-  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; workspaceMode?: 'code' | 'ade'; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string; additionalWorkspaces?: string[] }): Promise<NormalizedThread>
+  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; workspaceMode?: 'code' | 'ade'; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string; additionalWorkspaces?: string[]; harnessId?: string; credentialMode?: string; taskWorkspaceId?: string }): Promise<NormalizedThread>
   getThreadDetail(threadId: string, options?: {
     before?: string
     turnId?: string
@@ -346,6 +360,10 @@ export interface AgentProvider {
       model?: string
       providerId?: string
       accountId?: string
+      /** ADE harness override for this turn; absent inherits the thread (01 §4). */
+      harnessId?: string
+      /** Harness credential path; absent = the harness's default. */
+      credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
       reasoningEffort?: string
       serviceTier?: 'priority'
       subagentResume?: { childId: string; expectedResumeCount: number }
@@ -509,6 +527,11 @@ export interface AgentProvider {
    */
   renameThread(threadId: string, title: string, auto?: boolean): Promise<void>
   updateThreadWorkspace?(threadId: string, workspace: string): Promise<void>
+  /** Atomically bind a ready task workspace (07 §5): path + taskWorkspaceId. */
+  bindThreadTaskWorkspace?(
+    threadId: string,
+    input: { taskWorkspaceId: string; workspace: string }
+  ): Promise<NormalizedThread>
   updateThreadAdditionalWorkspaces?(threadId: string, additionalWorkspaces: string[]): Promise<NormalizedThread>
   updateThreadKnowledgeBases?(threadId: string, mounts: KnowledgeBaseMount[]): Promise<NormalizedThread>
   getThreadKnowledgeBases?(threadId: string): Promise<{

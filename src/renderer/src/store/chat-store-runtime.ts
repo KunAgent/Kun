@@ -36,6 +36,7 @@ import { reconcileCompletedTurnFromThreadDetail } from './chat-store-runtime-rec
 import { createBatchedStoreAccess } from './chat-store-batch'
 import { hydrateBlockModelLabels, isClawThread } from './chat-store-helpers'
 import {
+  bindReadyTaskWorkspace,
   collectAssistantTextForTurn,
   isOptimisticUserBlockId,
   reconcileOptimisticUserBlock,
@@ -52,6 +53,8 @@ import {
   resolveUnreadCompletionForTurn
 } from './unread-completions'
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
+import { receiveHarnessSessionState } from './harness-store'
+import { receiveTaskWorkspaceThreadEvent } from './task-workspace-store'
 import {
   isWriteAssistantThread,
   type WriteThreadRegistry
@@ -650,6 +653,17 @@ export function buildThreadEventSink(
         type: 'harness_runtime_received',
         payload: runtimeState
       }))
+    },
+    onHarnessSessionState: (state) => {
+      // Per-thread session surface is not stream-scoped: a harness may report
+      // its command list while the composer views that thread.
+      receiveHarnessSessionState(state)
+    },
+    onTaskWorkspace: (event) => {
+      // Workspace prep is owner-thread-scoped, not stream-scoped: a worktree
+      // may finish preparing while the user already navigated away.
+      receiveTaskWorkspaceThreadEvent(event)
+      if (event.state === 'ready') void bindReadyTaskWorkspace(event, set, get)
     },
     onHandoff: (event) => {
       if (!isCurrentStream()) return

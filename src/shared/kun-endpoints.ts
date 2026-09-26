@@ -269,6 +269,11 @@ export function kunTeamWorkerActionPath(
   return `${kunTeamWorkerPath(workerId)}/${action}`
 }
 
+export const KUN_HARNESSES_PATH = '/v1/harnesses'
+export function kunHarnessModelsPath(harnessId: string): string {
+  return `${KUN_HARNESSES_PATH}/${encodeURIComponent(harnessId)}/models`
+}
+
 export const KUN_THREADS_PATH = '/v1/threads'
 export const KUN_THREADS_TEMPLATE = '/v1/threads'
 

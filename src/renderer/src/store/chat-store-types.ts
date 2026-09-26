@@ -278,6 +278,19 @@ export type ChatState = {
   composerModel: string
   composerProviderId: string
   composerReasoningEffort: ModelReasoningEffort
+  /**
+   * ADE harness id for the next turn/thread. Empty = thread/runtime default.
+   * Persisted per thread via `ThreadComposerSelection`; Code mode ignores it.
+   */
+  composerHarnessId: string
+  /** Credential mode for the selected harness route (`native-login` or a provider id). */
+  composerCredentialMode: string
+  /**
+   * ADE new-session isolation (12 §7.3): 'local' binds the picked workspace
+   * directly; 'worktree' asks the host to prepare a fresh task workspace.
+   */
+  composerIsolation: 'local' | 'worktree'
+  composerWorktreeStartFrom?: import('@shared/task-workspace').TaskWorkspaceStartFrom
   /** User preference; effective only for eligible ChatGPT subscription models. */
   composerFastMode: boolean
   composerPickList: string[]
@@ -326,6 +339,26 @@ export type ChatState = {
   } | null) => void
   setComposerOrchestration: (mode: 'direct' | 'graph') => void
   setComposerModel: (modelId: string, providerId?: string) => void
+  /**
+   * ADE-only: switch the harness (and optional credential mode) used by the
+   * next turn or next new thread. Confirmed switches on a non-empty thread
+   * apply to subsequent turns only — the runtime opens a fresh native
+   * session with a deterministic handoff summary (docs/ade/08).
+   */
+  setComposerHarness: (harnessId: string, credentialMode?: string) => void
+  /** ADE-only: pick the isolation used by the next new session (12 §7.3). */
+  setComposerIsolation: (
+    isolation: 'local' | 'worktree',
+    startFrom?: import('@shared/task-workspace').TaskWorkspaceStartFrom
+  ) => void
+  /**
+   * ADE-only: (re)request a task worktree for an existing thread — used by
+   * the isolation picker's retry affordance after a failed preparation.
+   */
+  requestAdeThreadWorkspace: (
+    threadId: string,
+    startFrom?: import('@shared/task-workspace').TaskWorkspaceStartFrom
+  ) => Promise<boolean>
   setComposerReasoningEffort: (effort: ModelReasoningEffort) => void
   setComposerFastMode: (enabled: boolean) => void
   setComposerAgentId: (agentId: string) => void

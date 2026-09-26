@@ -392,10 +392,8 @@ export type CoreReviewOutputJson = {
 }
 
 /**
- * Structured plan metadata the renderer expects on a successful
- * `create_plan` tool result. Mirrors the Kun output contract
- * so the Workbench can reload the saved plan file and update the
- * Plan panel without parsing assistant prose.
+ * Structured plan metadata from a `create_plan` tool result; mirrors the Kun
+ * output contract so the Plan panel reloads without parsing assistant prose.
  */
 export type CorePlanToolResultJson = {
   summary?: string
@@ -467,11 +465,7 @@ export type CoreResumeSessionMetadataJson = {
   requiresIndependentDesignTarget: boolean
 }
 
-/**
- * Optional plan context attached to a start-turn request. Carries the
- * reserved plan id, workspace root, and relative path the Kun
- * should expose to the model via the `create_plan` tool.
- */
+/** Optional plan context on a start-turn request for the `create_plan` tool. */
 export type CoreStartTurnPlanContextJson = {
   operation: 'draft' | 'refine'
   workspaceRoot: string
@@ -593,6 +587,17 @@ export type CoreRuntimeEventJson = {
   }
   /** Explicit harness identity on delegated_runtime / harness_runtime events. */
   harnessId?: string
+  /** harness_session_state: native commands + mode surface (docs/ade/03 §7.3). */
+  commands?: Array<{ name?: unknown; description?: unknown; inputHint?: unknown }>
+  configOptions?: Array<{ id?: unknown; name?: unknown; currentValue?: unknown }>
+  currentModeId?: string
+  /** task_workspace lifecycle/state transition on the owner thread (docs/ade/07 §5). */
+  taskWorkspace?: {
+    workspaceId?: string; unitId?: string; state?: string
+    progress?: { step?: string; percent?: number; message?: string }
+    setup?: { steps?: unknown[] }
+    workspace?: { path?: string; sourceRoot?: string; kind?: string; branch?: string }
+  }
   /** handoff_injected: handoff provenance + brief stats (docs/ade/08). */
   from?: { harnessName: string; model?: string }
   to?: { harnessName: string; model?: string }

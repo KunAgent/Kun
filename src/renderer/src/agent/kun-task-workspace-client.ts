@@ -1,4 +1,5 @@
 import type {
+  CreateTaskWorkspaceRequest,
   TaskWorkspaceDiffFileResponse,
   TaskWorkspaceDiffListResponse,
   TaskWorkspaceDiscardPreview,
@@ -49,6 +50,20 @@ export function createKunTaskWorkspaceClient() {
       return get(
         `${KUN_TASK_WORKSPACES_PATH}${query}`,
         'failed to load task workspaces'
+      )
+    },
+
+    /**
+     * New task workspace for a composer-picked isolation (07 §5). Returns the
+     * `creating` record immediately; readiness arrives via `task_workspace`.
+     */
+    createTaskWorkspace(
+      input: CreateTaskWorkspaceRequest
+    ): Promise<TaskWorkspaceRecordResponse> {
+      return post(
+        KUN_TASK_WORKSPACES_PATH,
+        input,
+        'failed to create task workspace'
       )
     },
 
