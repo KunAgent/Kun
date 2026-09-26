@@ -1,6 +1,8 @@
 import type { SubagentToolPolicy } from '../contracts/capabilities.js'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '../contracts/policy.js'
 import type { TurnClientSurface } from '../contracts/turns.js'
+import type { HarnessCredentialMode, HarnessId } from '../contracts/harness.js'
+import type { ThreadExecutionUnit } from '../contracts/threads.js'
 import type { PptWorkflowScope } from '../ports/tool-host.js'
 import type { ChildExecutionState } from './delegation-runtime-base.js'
 import type {
@@ -47,6 +49,10 @@ export type ChildExecutionArgs = {
   prompt: string
   source: ChildSourceEnvelope | undefined
   clientRequestId: string | undefined
+  harnessId: HarnessId | undefined
+  credentialMode: HarnessCredentialMode | undefined
+  /** Only meaningful on first delivery; resumes reuse the persisted thread. */
+  executionUnit?: ThreadExecutionUnit
   controlPrompt: string | undefined
   pptWorkflowScope: PptWorkflowScope | undefined
   resumeChild?: boolean

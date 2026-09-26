@@ -21,6 +21,8 @@ import {
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import type { UsageSnapshot } from '../contracts/usage.js'
 import type { TurnClientSurface } from '../contracts/turns.js'
+import type { HarnessCredentialMode, HarnessId } from '../contracts/harness.js'
+import type { ThreadExecutionUnit } from '../contracts/threads.js'
 import {
   ChildRunActivity,
   type ChildRunActivity as ChildRunActivityValue,
@@ -158,6 +160,21 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
      * after the parent turn finishes. Default: false (synchronous).
      */
     detach?: boolean
+    /**
+     * Host-allocated child thread id (ADE worker dispatch). The dispatch record
+     * is written before execution so the id must be chosen by the host, not by
+     * the id generator. Host-only; public tools never set it.
+     */
+    childId?: string
+    /** Frozen harness for the child thread and first turn (ADE worker route). */
+    harnessId?: HarnessId
+    /** Frozen credential mode for the first turn; later resumes use the thread pin. */
+    credentialMode?: HarnessCredentialMode
+    /**
+     * Host-only execution-unit metadata persisted on the created child thread
+     * (ADE worker identity). Never accepted from model-supplied input.
+     */
+    executionUnit?: ThreadExecutionUnit
     /**
      * Invoked once, as soon as the child id is allocated (before the child
      * finishes), so the caller can surface the id while the child is still
@@ -298,7 +315,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     const clientSurface = input.guiDesignCanvas || input.guiExcalidrawCanvas ? 'gui' : input.clientSurface ?? 'api'
 
     const queuedAt = this.now()
-    const id = this.options.idGenerator?.() ?? `child_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+    const id = input.childId ?? this.options.idGenerator?.() ?? `child_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
     let record = ChildRunRecord.parse({
       id,
       parentThreadId: input.parentThreadId,
@@ -425,6 +442,9 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
         prompt: input.prompt,
         source,
         clientRequestId: input.clientRequestId,
+        harnessId: input.harnessId,
+        credentialMode: input.credentialMode,
+        executionUnit: input.executionUnit,
         controlPrompt,
         pptWorkflowScope: input.pptWorkflowScope,
         signal: detachedController.signal
@@ -499,6 +519,9 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       prompt: input.prompt,
       source,
       clientRequestId: input.clientRequestId,
+      harnessId: input.harnessId,
+      credentialMode: input.credentialMode,
+      executionUnit: input.executionUnit,
       controlPrompt,
       pptWorkflowScope: input.pptWorkflowScope,
       signal: controller.signal

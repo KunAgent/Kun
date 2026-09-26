@@ -22,6 +22,8 @@ import {
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import type { UsageSnapshot } from '../contracts/usage.js'
 import type { TurnClientSurface } from '../contracts/turns.js'
+import type { HarnessCredentialMode, HarnessId } from '../contracts/harness.js'
+import type { ThreadExecutionUnit } from '../contracts/threads.js'
 import type { PptWorkflowScope } from '../ports/tool-host.js'
 import { ChildProviderFallbackSchema, ChildRunFailureSchema } from '../contracts/subagent-retry.js'
 import { MAX_TURN_ATTACHMENT_IDS } from '../contracts/attachments.js'
@@ -372,6 +374,12 @@ export type ChildRunExecutor = (input: {
    * of starting a second one.
    */
   clientRequestId?: string
+  /** Host-pinned harness for the created thread / first turn (ADE worker route). */
+  harnessId?: HarnessId
+  /** Host-pinned credential mode for this turn (e.g. `kun-gateway`). */
+  credentialMode?: HarnessCredentialMode
+  /** Host-only execution-unit metadata persisted on first thread creation. */
+  executionUnit?: ThreadExecutionUnit
   /** Trusted host control emitted as private chronological model context. */
   controlPrompt?: string
   /** Host-minted PPT capability for this execution only. */

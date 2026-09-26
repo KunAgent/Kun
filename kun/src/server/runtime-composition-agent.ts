@@ -44,6 +44,27 @@ import { HarnessRouter, HarnessRuntimeMap } from '../harness/harness-router.js'
 import { createKunToolBridgeHost } from '../harness/kun-tool-bridge-host.js'
 import { FileTeamStore } from '../ade/team-store.js'
 import { handleAdeThreadDeleted } from '../ade/team-lifecycle.js'
+import { DispatchDeliverer } from '../ade/dispatch-deliverer.js'
+import { ManagerRuntime } from '../ade/manager-runtime.js'
+import { createManagerToolProvider } from '../adapters/tool/manager-tool-provider.js'
+import { FileDelegationStore } from './runtime-factory-dependencies.js'
+import { effectiveCapabilitiesForRoute } from '../harness/effective-capabilities.js'
+import {
+  HARNESS_CAPABILITY_KEYS,
+  unsupported,
+  type HarnessCapabilities,
+  type HarnessCapabilityStatuses
+} from '../contracts/harness-capabilities.js'
+import { join } from 'node:path'
+
+function noHarnessCapabilities(): HarnessCapabilities {
+  return {
+    statuses: Object.fromEntries(
+      HARNESS_CAPABILITY_KEYS.map((key) => [key, unsupported('not-implemented')])
+    ) as HarnessCapabilityStatuses,
+    facts: { sandbox: 'none', usageReporting: 'none', compactionOwner: 'none' }
+  }
+}
 
 export async function createRuntimeAgentComposition(
   registryComposition: ReturnType<typeof createRuntimeRegistry>
@@ -388,6 +409,70 @@ export async function createRuntimeAgentComposition(
     allowUnattendedFullAccess: () =>
       core.activeOptions.ade?.allowUnattendedFullAccess === true
   })
+  // ADE manager control plane (09 §4-§5): exactly-once dispatch delivery plus
+  // the worker_* tool surface. The deliverer owns per-worker AbortControllers
+  // so worker runs outlive the manager turn that dispatched them.
+  const childRunStore = new FileDelegationStore(join(core.activeOptions.dataDir, 'child-runs'))
+  const dispatchDeliverer = new DispatchDeliverer({
+    teams: services.adeStores.teams,
+    dispatches: services.adeStores.dispatches,
+    taskWorkspaces: core.taskWorkspaces,
+    delegation: delegationRuntime ?? undefined,
+    childRuns: childRunStore,
+    threads: threadStore,
+    turns: turnService,
+    language: () => Intl.DateTimeFormat().resolvedOptions().locale
+  })
+  const managerRuntime = new ManagerRuntime({
+    ...services.adeStores,
+    threads: threadStore,
+    turns: turnService,
+    sessionStore,
+    taskWorkspaces: core.taskWorkspaces,
+    activity: core.activityStore,
+    delegation: delegationRuntime ?? undefined,
+    childRuns: childRunStore,
+    catalog: services.harnesses.catalog,
+    detector: services.harnesses.detector,
+    capabilitiesForRoute: (route) => {
+      const def = services.harnesses.catalog.get(route.harnessId)
+      if (!def) return Promise.resolve(noHarnessCapabilities())
+      return Promise.resolve(effectiveCapabilitiesForRoute(
+        def,
+        harnessRuntimeMap.get()[def.transport],
+        route.providerId
+      ))
+    },
+    deliverer: dispatchDeliverer,
+    ids,
+    nowIso,
+    language: () => Intl.DateTimeFormat().resolvedOptions().locale,
+    allowUnattendedFullAccess: () =>
+      core.activeOptions.ade?.allowUnattendedFullAccess === true,
+    teamLimits: () => core.activeOptions.ade?.limits
+  })
+  // Dispatch turnId backfill on turn_started + worker terminal handling on
+  // turn_completed/failed/aborted (09 §5, §6.1). Late-bound: the recorder is
+  // created in the core composition before this runtime exists.
+  core.events.addObserver({
+    record: (event) => managerRuntime.handleRuntimeEvent(event)
+  })
+  registryComposition.registry.registerProvider(createManagerToolProvider({
+    manager: managerRuntime,
+    harnessList: {
+      catalog: services.harnesses.catalog,
+      detector: services.harnesses.detector,
+      runtimes: harnessRuntimeMap,
+      profiles: () => delegationRuntime?.listProfiles() ?? []
+    }
+  }))
+  // A worker dispatch queued behind workspace provisioning fires the moment
+  // the workspace resolves (09 §5 triggers).
+  core.taskWorkspaces.onChange((record) => {
+    void managerRuntime.handleWorkspaceChange(record).catch((error) => {
+      console.warn('[kun] ade workspace-change delivery failed:', error)
+    })
+  })
   model.refreshModelConnectionDelegatedDeps = () => {
     const next = buildHarnessRuntimes(
       buildMainDelegatedRuntime({
@@ -582,6 +667,8 @@ export async function createRuntimeAgentComposition(
     runAgentTurn,
     runReview,
     queuedTurnDispatcher,
+    managerRuntime,
+    dispatchDeliverer,
     extensionProfiles,
     extensionAgent,
     get prepareExtensionContributions() { return prepareExtensionContributions },

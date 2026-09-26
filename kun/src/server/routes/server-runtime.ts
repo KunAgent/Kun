@@ -281,6 +281,9 @@ export type ServerRuntime = {
       notices: import('../../ade/worker-notice-store.js').FileWorkerNoticeStore
     }
     workerCallbacks: import('../../services/worker-callback-service.js').WorkerCallbackService
+    /** Manager control plane + exactly-once dispatch delivery (09 §4-§5). */
+    manager?: import('../../ade/manager-runtime.js').ManagerRuntime
+    deliverer?: import('../../ade/dispatch-deliverer.js').DispatchDeliverer
   }
   /**
    * Admission evaluation for a harness in a usage surface (one-to-one,

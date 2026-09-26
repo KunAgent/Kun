@@ -407,7 +407,9 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         ...(input.accountId ? { accountId: input.accountId } : {}),
         // Persist the resolved profile id so the GUI can label explore/side
         // sessions (e.g. return-bar "viewing explore process").
-        ...(input.profile?.trim() ? { agentId: input.profile.trim() } : {})
+        ...(input.profile?.trim() ? { agentId: input.profile.trim() } : {}),
+        // ADE workers pin the dispatch's harness so resumes reuse the engine.
+        ...(input.harnessId ? { harnessId: input.harnessId } : {})
       }, {
         id: input.childId,
         title,
@@ -415,7 +417,9 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         // list, but loadable on demand so the user can open the subagent's own
         // session from the parent's delegate_task card.
         relation: 'side',
-        parentThreadId: input.parentThreadId
+        parentThreadId: input.parentThreadId,
+        // Host-only ADE worker/team identity; callbacks never trust args.
+        ...(input.executionUnit ? { executionUnit: input.executionUnit } : {})
       })
     if (!thread) throw new Error(`child thread ${input.childId} no longer exists`)
     if (input.resumeChild && (thread.relation !== 'side' || thread.parentThreadId !== input.parentThreadId)) {
@@ -465,6 +469,8 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         model,
         clientSurface: input.guiDesignCanvas || input.guiExcalidrawCanvas ? 'gui' : input.clientSurface ?? 'api',
         ...(input.providerId ? { providerId: input.providerId } : {}),
+        ...(input.harnessId ? { harnessId: input.harnessId } : {}),
+        ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
         ...(input.accountId ? { accountId: input.accountId } : {}),
         approvalPolicy,
         ...(sandboxMode ? { sandboxMode } : {}),

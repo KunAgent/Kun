@@ -81,6 +81,7 @@ export const TurnRunOutcomeSchema = z.enum([
   'suspended',
   'suspended_pending_supervision'
 ])
+export type TurnRunOutcome = z.infer<typeof TurnRunOutcomeSchema>
 
 /** Explicit task context the manager attaches to a dispatch. */
 export const DispatchContextSchema = z
