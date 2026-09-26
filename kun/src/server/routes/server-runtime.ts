@@ -57,6 +57,7 @@ import type { GraphRuntimeConfig, RolesConfig } from '../../config/kun-config.js
 import type { ServeProviderConfig } from '../../config/kun-config-application.js'
 import type { HarnessCatalog } from '../../harness/harness-catalog.js'
 import type { HarnessDetector } from '../../harness/harness-detector.js'
+import type { AcpModelProbe } from '../../harness/acp-model-probe.js'
 import type { HarnessDefinition, HarnessStatus } from '../../contracts/harness.js'
 import type {
   FileGraphWriteCoordinator,
@@ -249,6 +250,8 @@ export type ServerRuntime = {
   harnesses?: {
     catalog: HarnessCatalog
     detector: HarnessDetector
+    /** ACP `session/new` model probing for `modelSource: 'probe'` harnesses. */
+    acpModels?: AcpModelProbe
   }
   /**
    * Admission evaluation for a harness in a usage surface (one-to-one,

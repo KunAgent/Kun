@@ -116,7 +116,8 @@ export async function startAcpProcess(input: {
   const child = await spawn(input.command, input.args ?? [], {
     env,
     stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true
+    windowsHide: true,
+    ...(input.cwd ? { cwd: input.cwd } : {})
   })
   return new AcpProcess(child, { stderrTailBytes: input.stderrTailBytes })
 }

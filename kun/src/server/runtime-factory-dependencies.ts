@@ -68,6 +68,13 @@ export {
   FileDelegatedSessionBindingStore,
   delegatedSessionRoot
 } from '../runtime/delegated-session-binding.js'
+export {
+  AcpConnectionPool,
+  AcpClientHost,
+  AcpSessionManager,
+  AcpRuntime,
+  type AcpRuntimeDeps
+} from '../runtime/acp/acp-runtime-entry.js'
 export { buildGoalLocalTools } from '../adapters/tool/goal-tools.js'
 export { buildTodoLocalTools } from '../adapters/tool/todo-tools.js'
 export { buildDesignCanvasLocalTools } from '../adapters/tool/design-canvas-tool.js'

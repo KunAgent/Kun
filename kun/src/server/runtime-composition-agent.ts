@@ -8,6 +8,7 @@ import {
   type AntigravityCliRuntimeDeps,
   createCursorSdkRuntime,
   type CursorSdkRuntimeFactoryDeps,
+  type AcpRuntimeDeps,
   composeDelegatedTurnRuntimes,
   ReplaceableDelegatedTurnRuntime,
   LocalToolHost,
@@ -257,10 +258,41 @@ export async function createRuntimeAgentComposition(
       deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
       ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
     }
+    const acpRuntimeDeps: AcpRuntimeDeps = {
+      catalog: services.harnesses.catalog,
+      binaryPath: (harnessId) =>
+        core.activeOptions.harnesses?.binaryPaths?.[harnessId],
+      threadStore,
+      sessionStore,
+      turns: turnService,
+      events,
+      ids,
+      systemPrompt: prefix.systemPrompt,
+      sessionCoordinator: delegatedSessions,
+      connectionPool: core.acpConnectionPool,
+      clientHost: core.acpClientHost,
+      sessionManager: core.acpSessionManager,
+      approvalGate,
+      approvalReview: approvalReviewService,
+      ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
+      deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
+      allowUnattendedFullAccess:
+        input.options.ade?.allowUnattendedFullAccess === true,
+      defaultApprovalPolicy: input.options.approvalPolicy,
+      defaultSandboxMode: input.options.sandboxMode,
+      defaultApprovalReviewer: input.options.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
+      turnLimits: input.options.runtime?.turnLimits,
+      awaitWorkspaceCheckpoint: (requestId, signal) =>
+        waitForWorkspaceCheckpoint(core.activeOptions.dataDir, requestId, signal),
+      ...(llmDebug ? { debugSink: llmDebug } : {}),
+      nowIso,
+      ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
+    }
     return {
       agentSdk: sdkRuntimeDeps,
       antigravity: antigravityRuntimeDeps,
-      cursor: cursorRuntimeDeps
+      cursor: cursorRuntimeDeps,
+      acp: acpRuntimeDeps
     }
   }
 

@@ -170,5 +170,65 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     staticModels: [],
     capabilities: ANTIGRAVITY_CAPABILITIES,
     builtin: true
+  },
+  {
+    id: 'gemini-cli',
+    displayName: 'Gemini CLI',
+    transport: 'acp',
+    // `--acp` is the current flag; `--experimental-acp` still works on older
+    // releases but is deprecated upstream (docs/ade/impl/p1 §P1-05).
+    detect: { command: 'gemini', aliases: [], versionArgs: ['--version'] },
+    launch: { command: 'gemini', args: ['--acp'], env: {} },
+    credentialModes: ['native-login'],
+    permissionModes: [
+      // Gemini CLI approval modes, strictest first.
+      { id: 'plan', label: 'Plan', kunPermissionMode: 'ask-for-approval' },
+      { id: 'default', label: 'Default', kunPermissionMode: 'ask-for-approval' },
+      // auto_edit self-approves file edits, which approve-for-me cannot cover.
+      { id: 'auto_edit', label: 'Auto edit', kunPermissionMode: 'full-access' },
+      { id: 'yolo', label: 'YOLO', kunPermissionMode: 'full-access' }
+    ],
+    modelSource: 'probe',
+    staticModels: [],
+    capabilities: ACP_DEFAULT_CAPABILITIES,
+    builtin: true
+  },
+  {
+    id: 'codex',
+    displayName: 'Codex',
+    transport: 'acp',
+    // `codex acp` requires a TTY; ACP runs through the separate adapter binary.
+    detect: { command: 'codex-acp', aliases: [], versionArgs: ['--version'] },
+    launch: { command: 'codex-acp', args: [], env: {} },
+    credentialModes: ['native-login'],
+    permissionModes: [
+      // codex-acp adapter modes, strictest first.
+      { id: 'read-only', label: 'Read only', kunPermissionMode: 'ask-for-approval' },
+      { id: 'auto', label: 'Auto', kunPermissionMode: 'full-access' },
+      { id: 'full-access', label: 'Full access', kunPermissionMode: 'full-access' }
+    ],
+    modelSource: 'probe',
+    staticModels: [],
+    historySource: 'codex',
+    capabilities: ACP_DEFAULT_CAPABILITIES,
+    builtin: true
+  },
+  {
+    id: 'opencode',
+    displayName: 'OpenCode',
+    transport: 'acp',
+    detect: { command: 'opencode', aliases: [], versionArgs: ['--version'] },
+    launch: { command: 'opencode', args: ['acp'], env: {} },
+    credentialModes: ['native-login'],
+    permissionModes: [
+      // OpenCode exposes its agents as session modes; plan is read-only.
+      { id: 'plan', label: 'Plan', kunPermissionMode: 'ask-for-approval' },
+      { id: 'build', label: 'Build', kunPermissionMode: 'full-access' }
+    ],
+    modelSource: 'probe',
+    staticModels: [],
+    historySource: 'opencode',
+    capabilities: ACP_DEFAULT_CAPABILITIES,
+    builtin: true
   }
 ]
