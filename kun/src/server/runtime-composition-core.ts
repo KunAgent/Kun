@@ -9,6 +9,9 @@ import {
   DelegatedSessionCoordinator,
   FileDelegatedSessionBindingStore,
   delegatedSessionRoot,
+  AcpConnectionPool,
+  AcpClientHost,
+  AcpSessionManager,
   FileArtifactStore,
   type ArtifactStore,
   LocalWorkspaceInspector,
@@ -251,6 +254,11 @@ export async function createRuntimeCore(
     new FileDelegatedSessionBindingStore(delegatedSessionRoot(activeOptions.dataDir)),
     nowIso
   )
+  // ACP serve-process singletons: pooled agent connections and the mediation
+  // host must outlive hot config reloads that rebuild the runtime objects.
+  const acpConnectionPool = new AcpConnectionPool()
+  const acpClientHost = new AcpClientHost()
+  const acpSessionManager = new AcpSessionManager({ coordinator: delegatedSessions })
   const threadService: ThreadService = new ThreadService({
     threadStore,
     deleteThreadStore: rawThreadStore,
@@ -457,6 +465,9 @@ export async function createRuntimeCore(
     taskWorkspaces,
     prefix,
     delegatedSessions,
+    acpConnectionPool,
+    acpClientHost,
+    acpSessionManager,
     threadService,
     projectBoardStore,
     historyReferences,

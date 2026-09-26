@@ -16,7 +16,7 @@ import type {
  * Structural view of the task-workspace service a delegated runtime needs —
  * avoids a hard dependency on the service implementation.
  */
-type TaskWorkspaceLister = {
+export type TaskWorkspaceLister = {
   list(filter: { ownerThreadId: string }): readonly {
     path: string
     branch?: string

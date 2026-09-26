@@ -87,8 +87,14 @@ export async function listHarnessModels(
         models: providerModels(legacyProviderKindFor(definition.id))
       })
     case 'probe':
-      // Probe-based model listing is added with the ACP runtime; until then the
-      // static list is the best available answer.
+      if (definition.transport === 'acp' && harnesses.acpModels) {
+        const probed = await harnesses.acpModels.probe(definition)
+        if (probed.length > 0) {
+          return jsonResponse({ harnessId: definition.id, models: probed })
+        }
+      }
+      // A probe that fails (missing binary, auth gate, timeout) falls back to
+      // the harness's static list rather than failing the models request.
       return jsonResponse({ harnessId: definition.id, models: definition.staticModels })
   }
 }

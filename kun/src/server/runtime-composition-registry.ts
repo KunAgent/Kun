@@ -219,7 +219,46 @@ export function createRuntimeRegistry(
           deterministicHandoff: core.activeOptions.ade?.deterministicHandoff !== false,
           ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {})
         })
-      : undefined)
+      : undefined),
+    // ACP children share the process-scoped pool/host/manager; mediation roots
+    // narrow to the child's declared read/write boundary.
+    acp: {
+      catalog: services.harnesses.catalog,
+      binaryPath: (harnessId: string) =>
+        core.activeOptions.harnesses?.binaryPaths?.[harnessId],
+      threadStore: child.threadStore,
+      sessionStore: child.sessionStore,
+      turns: child.turns,
+      events: child.events,
+      ids: child.ids,
+      systemPrompt: child.prefix.systemPrompt,
+      sessionCoordinator: delegatedSessions,
+      connectionPool: core.acpConnectionPool,
+      clientHost: core.acpClientHost,
+      sessionManager: core.acpSessionManager,
+      approvalGate,
+      approvalReview: approvalReviewService,
+      ...(services.attachmentStore
+        ? { attachmentStore: services.attachmentStore }
+        : {}),
+      deterministicHandoff: core.activeOptions.ade?.deterministicHandoff !== false,
+      enforceReadOnly: child.toolPolicy === 'readOnly',
+      ...(child.allowedReadPaths
+        ? { allowedReadPaths: child.allowedReadPaths }
+        : {}),
+      ...(child.allowedWritePaths
+        ? { allowedWritePaths: child.allowedWritePaths }
+        : {}),
+      allowUnattendedFullAccess:
+        core.activeOptions.ade?.allowUnattendedFullAccess === true,
+      defaultApprovalPolicy: core.activeOptions.approvalPolicy,
+      defaultSandboxMode: core.activeOptions.sandboxMode,
+      defaultApprovalReviewer: core.activeOptions.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
+      turnLimits: core.activeOptions.runtime?.turnLimits,
+      ...(llmDebug ? { debugSink: llmDebug } : {}),
+      nowIso,
+      ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {})
+    }
     })
     const childRouter = new HarnessRouter({
       enabled: () => core.activeOptions.ade?.harnessRouter !== false,

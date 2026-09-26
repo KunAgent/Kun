@@ -5,6 +5,7 @@ import type { KunServeRuntimeOptions } from '../server/runtime-factory-types.js'
 import { HarnessCatalog } from './harness-catalog.js'
 import { HarnessDetector, spawnCaptured } from './harness-detector.js'
 import { probeHarnessLogin } from './harness-login-probes.js'
+import { AcpModelProbe } from './acp-model-probe.js'
 
 const runtimeRequire = createRequire(import.meta.url)
 
@@ -26,6 +27,8 @@ function bundledRuntime(def: HarnessDefinition): { version?: string; command?: s
 export type HarnessRuntimeComposition = {
   catalog: HarnessCatalog
   detector: HarnessDetector
+  /** ACP `session/new` model probing for `modelSource: 'probe'` harnesses. */
+  acpModels: AcpModelProbe
 }
 
 /**
@@ -57,5 +60,8 @@ export function createHarnessComposition(
     nowMs: () => Date.now(),
     nowIso: () => new Date().toISOString()
   })
-  return { catalog, detector }
+  const acpModels = new AcpModelProbe({
+    binaryPath: (id) => options().harnesses?.binaryPaths?.[id]
+  })
+  return { catalog, detector, acpModels }
 }

@@ -9,6 +9,10 @@ import {
   type AntigravityCliRuntimeDeps
 } from '../runtime/antigravity/antigravity-cli-runtime.js'
 import {
+  AcpRuntime,
+  type AcpRuntimeDeps
+} from '../runtime/acp/acp-runtime.js'
+import {
   createCursorSdkRuntime,
   type CursorSdkRuntimeFactoryDeps
 } from '../runtime/cursor/cursor-sdk-runtime-factory.js'
@@ -22,10 +26,12 @@ export function buildHarnessRuntimes(input: {
   agentSdk?: AgentSdkRuntimeFactoryDeps | null
   antigravity?: AntigravityCliRuntimeDeps | null
   cursor?: CursorSdkRuntimeFactoryDeps | null
+  acp?: AcpRuntimeDeps | null
 }): Partial<Record<HarnessTransport, DelegatedTurnRuntime>> {
   const map: Partial<Record<HarnessTransport, DelegatedTurnRuntime>> = {}
   if (input.agentSdk) map['agent-sdk'] = createAgentSdkRuntime(input.agentSdk)
   if (input.antigravity) map['antigravity-cli'] = new AntigravityCliRuntime(input.antigravity)
   if (input.cursor) map['cursor-sdk'] = createCursorSdkRuntime(input.cursor)
+  if (input.acp) map.acp = new AcpRuntime(input.acp)
   return map
 }
