@@ -85,7 +85,7 @@ export class FileTeamStore {
   async updateWorker(
     teamId: string,
     workerId: string,
-    patch: Partial<Pick<WorkerRecord, 'control' | 'state' | 'releasedAt' | 'taskWorkspaceId' | 'role' | 'label'>>
+    patch: Partial<Pick<WorkerRecord, 'control' | 'state' | 'releasedAt' | 'taskWorkspaceId' | 'role' | 'label' | 'takeoverBaseline'>>
   ): Promise<WorkerRecord | null> {
     return withAdeTeamMutex(teamId, async () => {
       const team = await this.readFile(teamId)

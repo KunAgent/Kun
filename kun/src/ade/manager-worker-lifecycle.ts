@@ -7,16 +7,20 @@ import type {
   WorkerRecord
 } from '../contracts/ade.js'
 import type { ManagerRuntimeDeps } from './manager-runtime.js'
+import type { TeamControls } from './team-controls.js'
 
 /**
  * ADE worker lifecycle events (09 §5 turnId backfill, §6.1 terminal hook,
- * ephemeral release, startup reconciliation). Extracted from ManagerRuntime;
- * every method here runs detached from the calling turn — event handling is
- * fire-and-forget so the runtime event pipeline is never held by workspace
- * captures or store writes.
+ * §6.5 approval notices, §9 implicit takeover, ephemeral release, startup
+ * reconciliation). Extracted from ManagerRuntime; every method here runs
+ * detached from the calling turn — event handling is fire-and-forget so the
+ * runtime event pipeline is never held by workspace captures or store writes.
  */
 export class ManagerWorkerLifecycle {
-  constructor(private readonly deps: ManagerRuntimeDeps) {}
+  constructor(
+    private readonly deps: ManagerRuntimeDeps,
+    private readonly teamControls: Pick<TeamControls, 'takeOverWorker'>
+  ) {}
 
   /**
    * Runtime-event observer hook (09 §5 turnId backfill + §6.1 terminal
@@ -32,6 +36,12 @@ export class ManagerWorkerLifecycle {
         void this.backfillDispatchTurnId(event.threadId, turnId).catch((error) => {
           console.warn('[kun] ade dispatch turnId backfill failed:', error)
         })
+        return
+      case 'approval_requested':
+        void this.handleWorkerApprovalRequested(event.threadId, event.approvalId, event.summary)
+          .catch((error) => {
+            console.warn('[kun] ade approval notice failed:', error)
+          })
         return
       case 'turn_completed':
       case 'turn_failed':
@@ -54,6 +64,7 @@ export class ManagerWorkerLifecycle {
   /**
    * `turn_started` on a worker thread: the admitted turn's clientRequestId
    * is the dispatchId — backfill `turnId` on the accepted dispatch (09 §5).
+   * A turn without a dispatch is a user message: implicit take-over (09 §9).
    */
   private async backfillDispatchTurnId(workerThreadId: string, turnId: string): Promise<void> {
     const thread = await this.deps.threads.get(workerThreadId).catch(() => null)
@@ -62,13 +73,56 @@ export class ManagerWorkerLifecycle {
     const turn = thread.turns.find((entry) => entry.id === turnId)
       ?? await this.deps.turns.getTurn(workerThreadId, turnId).catch(() => null)
     const key = turn?.clientRequestId
-    if (!key) return
-    const dispatch = await this.deps.dispatches.findByClientRequestId(unit.teamId, key)
-    if (!dispatch || dispatch.turnId === turnId) return
+    const dispatch = key
+      ? await this.deps.dispatches.findByClientRequestId(unit.teamId, key)
+      : null
+    if (!dispatch) {
+      // User typing in a worker thread takes it over (09 §9); the notice
+      // tells the manager and the queue holds until hand-back.
+      await this.teamControls.takeOverWorker(workerThreadId)
+      return
+    }
+    if (dispatch.turnId === turnId) return
     if (dispatch.state === 'completed' || dispatch.state === 'failed' || dispatch.state === 'cancelled') {
       return
     }
     await this.deps.dispatches.update(unit.teamId, dispatch.dispatchId, { turnId }).catch(() => undefined)
+  }
+
+  /**
+   * `approval_requested` on a worker thread (09 §6.5): the request itself
+   * stays user-only, but the manager sees a "waiting for approval" notice so
+   * it can tell the user — or answer it via `worker_approve` when
+   * `managerMayApprove` is on.
+   */
+  private async handleWorkerApprovalRequested(
+    workerThreadId: string,
+    approvalId: string,
+    summary?: string
+  ): Promise<void> {
+    // 09 §6.5 / P1-14: the notice exists so the manager can `worker_approve`
+    // — with the gate off the request is user-only and nothing is reported.
+    if (this.deps.managerMayApprove?.() !== true) return
+    const thread = await this.deps.threads.get(workerThreadId).catch(() => null)
+    const unit = thread?.executionUnit
+    if (unit?.kind !== 'worker') return
+    const team = await this.deps.teams.get(unit.teamId)
+    const worker = team?.workers.find((entry) => entry.workerId === workerThreadId)
+    if (!team || !worker) return
+    await this.deps.notices.enqueue({
+      noticeId: `ntc_appr_${approvalId}`,
+      teamId: team.teamId,
+      workerId: workerThreadId,
+      kind: 'worker_approval',
+      title: worker.label,
+      harnessLabel: this.harnessLabel(worker),
+      approvalId,
+      ...(summary ? { detail: summary.slice(0, 4_000) } : {}),
+      attempts: 0,
+      createdAt: this.deps.nowIso()
+    }).catch((error) => {
+      console.warn(`[kun] ade approval notice enqueue failed for ${workerThreadId}:`, error)
+    })
   }
 
   /**

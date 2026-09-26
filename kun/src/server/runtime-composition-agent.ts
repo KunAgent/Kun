@@ -407,12 +407,10 @@ export async function createRuntimeAgentComposition(
       if (!cached) void services.harnesses.detector.status(id).catch(() => undefined)
       return cached
     },
-    allowUnattendedFullAccess: () =>
-      core.activeOptions.ade?.allowUnattendedFullAccess === true
+    allowUnattendedFullAccess: () => core.activeOptions.ade?.allowUnattendedFullAccess === true
   })
-  // ADE manager control plane (09 §4-§5): exactly-once dispatch delivery plus
-  // the worker_* tool surface. The deliverer owns per-worker AbortControllers
-  // so worker runs outlive the manager turn that dispatched them.
+  // ADE manager control plane (09 §4-§5): durable dispatch delivery + the
+  // worker_* tool surface; AbortControllers outlive the manager turn.
   const childRunStore = new FileDelegationStore(join(core.activeOptions.dataDir, 'child-runs'))
   const dispatchDeliverer = new DispatchDeliverer({
     teams: services.adeStores.teams,
@@ -461,12 +459,15 @@ export async function createRuntimeAgentComposition(
     ids,
     nowIso,
     language: () => Intl.DateTimeFormat().resolvedOptions().locale,
-    allowUnattendedFullAccess: () =>
-      core.activeOptions.ade?.allowUnattendedFullAccess === true,
-    teamLimits: () => core.activeOptions.ade?.limits
+    allowUnattendedFullAccess: () => core.activeOptions.ade?.allowUnattendedFullAccess === true,
+    teamLimits: () => core.activeOptions.ade?.limits,
+    // P1-14: worker question answers (09 §6.4) + gated worker_approve (§6.5).
+    workerCallbacks: services.workerCallbacks,
+    approvalGate,
+    approvalEvents: events,
+    managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true
   })
-  // Dispatch turnId backfill on turn_started + worker terminal handling
-  // (09 §5, §6.1); the recorder is created in the core composition first.
+  // Dispatch backfill + worker terminal hooks on the recorder (09 §5, §6.1).
   core.events.addObserver({ record: (event) => managerRuntime.handleRuntimeEvent(event) })
   registryComposition.registry.registerProvider(createManagerToolProvider({
     manager: managerRuntime,
@@ -475,14 +476,13 @@ export async function createRuntimeAgentComposition(
       detector: services.harnesses.detector,
       runtimes: harnessRuntimeMap,
       profiles: () => delegationRuntime?.listProfiles() ?? []
-    }
+    },
+    managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true
   }))
-  // A worker dispatch queued behind workspace provisioning fires the moment
-  // the workspace resolves (09 §5 triggers).
+  // Worker dispatches queued on workspace provisioning fire when it resolves (09 §5).
   core.taskWorkspaces.onChange((record) => {
-    void managerRuntime.handleWorkspaceChange(record).catch((error) => {
-      console.warn('[kun] ade workspace-change delivery failed:', error)
-    })
+    void managerRuntime.handleWorkspaceChange(record).catch((error) =>
+      console.warn('[kun] ade workspace-change delivery failed:', error))
   })
   model.refreshModelConnectionDelegatedDeps = () => {
     const next = buildHarnessRuntimes(

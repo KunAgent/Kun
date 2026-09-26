@@ -21,7 +21,7 @@ import { withAdeTeamMutex } from './ade-file.js'
 
 export type DeliverOutcome = {
   accepted: boolean
-  pendingReason?: 'workspace' | 'worker-busy'
+  pendingReason?: 'workspace' | 'worker-busy' | 'user-control'
 }
 
 type RunChildInput = {
@@ -63,6 +63,8 @@ type ResumeChildInput = {
 export type DelivererDelegation = {
   runChild(input: RunChildInput): Promise<ChildRunRecord>
   resumeChild(input: ResumeChildInput): Promise<ChildRunRecord>
+  /** Cancels a live detached/foreground child run (worker_stop, release). */
+  abortChild?(childId: string): boolean
 }
 
 export type DispatchDelivererDeps = {
@@ -111,11 +113,27 @@ export class DispatchDeliverer {
     return thread?.turns.some((turn) => turn.status === 'running' || turn.status === 'queued') ?? false
   }
 
-  private async abortWorkerTurn(workerId: string): Promise<void> {
+  private async abortWorkerTurn(workerId: string): Promise<boolean> {
     const thread = await this.deps.threads.get(workerId).catch(() => null)
     const active = thread?.turns.find((turn) => turn.status === 'running' || turn.status === 'queued')
-    if (!active) return
+    if (!active) return false
+    // Detached worker runs ignore turn status — the delegation controller is
+    // what actually stops them; interruptTurn records the intent.
+    this.deps.delegation?.abortChild?.(workerId)
     await this.deps.turns.interruptTurn({ threadId: workerId, turnId: active.id }).catch(() => undefined)
+    return true
+  }
+
+  /**
+   * `worker_stop` (09 §4.1): abort the detached run's controller and interrupt
+   * any active/queued turn. The turn-terminal hook marks the dispatch
+   * cancelled; queued dispatches stay pending for the next free slot.
+   */
+  async stopWorker(workerId: string): Promise<{ turnStopped: boolean; runAborted: boolean }> {
+    const runAborted = this.deps.delegation?.abortChild?.(workerId) === true
+    const turnStopped = await this.abortWorkerTurn(workerId)
+    this.abortWorker(workerId)
+    return { turnStopped, runAborted }
   }
 
   /**
@@ -172,12 +190,13 @@ export class DispatchDeliverer {
       await this.fail(teamId, dispatch, 'team or worker record missing')
       return { accepted: false }
     }
-    if (worker.control === 'user' || worker.state !== 'active') {
-      await this.cancel(
-        teamId,
-        dispatch,
-        worker.control === 'user' ? 'worker is under user control' : 'worker released'
-      )
+    if (worker.control === 'user') {
+      // User takeover (09 §9) holds the queue instead of destroying it —
+      // hand-back resumes delivery through tryDeliverNext.
+      return { accepted: false, pendingReason: 'user-control' }
+    }
+    if (worker.state !== 'active') {
+      await this.cancel(teamId, dispatch, 'worker released')
       return { accepted: false }
     }
     const workspace = worker.taskWorkspaceId && this.deps.taskWorkspaces

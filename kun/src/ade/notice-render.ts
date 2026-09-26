@@ -14,7 +14,10 @@ const KIND_LABEL: Record<WorkerNotice['kind'], Record<ReportLanguage, string>> =
   dispatch_cancelled: { zh: '取消', en: 'Cancelled' },
   question: { zh: '提问', en: 'Question' },
   worker_released: { zh: '已释放', en: 'Released' },
-  worker_detached: { zh: '已分离', en: 'Detached' }
+  worker_detached: { zh: '已分离', en: 'Detached' },
+  worker_taken_over: { zh: '用户接管', en: 'Taken over' },
+  worker_handed_back: { zh: '已交还', en: 'Handed back' },
+  worker_approval: { zh: '待审批', en: 'Approval needed' }
 }
 
 function escapeXml(text: string): string {
@@ -31,7 +34,8 @@ function clipDetail(detail: string): string {
 function noticeHeader(notice: WorkerNotice, language: ReportLanguage): string {
   const label = KIND_LABEL[notice.kind][language]
   const harness = notice.harnessLabel?.trim()
-  const ref = notice.questionId ?? notice.dispatchId ?? notice.noticeId
+  const ref =
+    notice.approvalId ?? notice.questionId ?? notice.dispatchId ?? notice.noticeId
   const name = escapeXml(notice.title)
   return `- [${label}] ${name}${harness ? `（${escapeXml(harness)}）` : ''}${ref ? ` ${escapeXml(ref)}` : ''}`
 }

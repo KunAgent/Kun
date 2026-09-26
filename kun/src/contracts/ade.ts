@@ -34,6 +34,11 @@ export const WorkerRecordSchema = z
      */
     securitySnapshot: ChildSecuritySnapshot,
     control: z.enum(['manager', 'user']),
+    /**
+     * Working-tree sha captured when control flipped to 'user' (09 §9);
+     * hand-back reports the diff between this baseline and the live tree.
+     */
+    takeoverBaseline: z.string().min(1).max(128).optional(),
     state: z.enum(['active', 'released', 'detached']),
     createdAt: z.string(),
     releasedAt: z.string().optional()
@@ -197,10 +202,15 @@ export const WorkerNoticeSchema = z
       'dispatch_cancelled',
       'question',
       'worker_released',
-      'worker_detached'
+      'worker_detached',
+      'worker_taken_over',
+      'worker_handed_back',
+      'worker_approval'
     ]),
     dispatchId: z.string().min(1).max(256).optional(),
     questionId: z.string().min(1).max(256).optional(),
+    /** Approval id for worker_approval notices (feeds `worker_approve`). */
+    approvalId: z.string().min(1).max(256).optional(),
     /** Short worker/dispatch label used in the aggregated notice text. */
     title: z.string().min(1).max(240),
     /** Harness/model pairing for display, e.g. `claude-code · claude-opus-4-8`. */
@@ -236,6 +246,30 @@ export const WorkerNoticeHoldRequestSchema = z
   .object({ holdMs: z.number().int().min(1).max(60_000) })
   .strict()
 export type WorkerNoticeHoldRequest = z.infer<typeof WorkerNoticeHoldRequestSchema>
+
+/**
+ * `POST /v1/teams/questions/:questionId/answer` (09 §9): the user answers a
+ * worker question directly; the record stores `answeredBy: 'user'`.
+ */
+export const QuestionAnswerRequestSchema = z
+  .object({ answer: z.string().min(1).max(8_000) })
+  .strict()
+export type QuestionAnswerRequest = z.infer<typeof QuestionAnswerRequestSchema>
+
+/**
+ * `POST /v1/teams/workers/:workerId/dispatch` (09 §9): a GUI-originated
+ * dispatch (review comments sent back to the worker, P1-18). Same durable
+ * dispatch + delivery semantics as manager-created work.
+ */
+export const WorkerDispatchRequestSchema = z
+  .object({
+    title: z.string().min(1).max(240).optional(),
+    task: z.string().min(1).max(32_000),
+    context: DispatchContextSchema.optional(),
+    mode: z.enum(['queue', 'interrupt']).optional()
+  })
+  .strict()
+export type WorkerDispatchRequest = z.infer<typeof WorkerDispatchRequestSchema>
 
 /** File shells: one JSON document per collection inside the team directory. */
 export const TeamFileSchema = z

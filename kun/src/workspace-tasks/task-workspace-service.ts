@@ -233,6 +233,43 @@ export class TaskWorkspaceService {
     }
   }
 
+  /**
+   * Working-tree baseline sha for the ADE user-takeover interval (09 §9).
+   * Only worktree-isolated workspaces have a host worktree to snapshot.
+   */
+  async snapshotBaseline(workspaceId: string): Promise<string | undefined> {
+    const record = this.options.store.get(workspaceId)
+    if (
+      !record?.path ||
+      record.isolation !== 'worktree' ||
+      record.path === record.sourceRoot ||
+      !['ready', 'captured', 'conflict'].includes(record.state)
+    ) {
+      return undefined
+    }
+    return this.options.lifecycle.snapshot(record.path).catch(() => undefined)
+  }
+
+  /** Diff stats between a snapshotBaseline() sha and the live worktree. */
+  async diffSinceBaseline(
+    workspaceId: string,
+    baseTree: string
+  ): Promise<{ changedFiles: number; insertions: number; deletions: number } | undefined> {
+    const record = this.options.store.get(workspaceId)
+    if (
+      !record?.path ||
+      record.isolation !== 'worktree' ||
+      record.path === record.sourceRoot
+    ) {
+      return undefined
+    }
+    const diff = await this.options.lifecycle
+      .diffSince({ path: record.path, baseTree })
+      .catch(() => undefined)
+    if (!diff) return undefined
+    return { changedFiles: diff.changedFiles.length, ...patchDiffStats(diff.patch) }
+  }
+
   /** Integrate into the source repository; serialized per repo (07 §8). */
   async integrate(
     workspaceId: string,
