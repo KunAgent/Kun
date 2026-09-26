@@ -223,7 +223,14 @@ describe('TaskWorkspaceService', () => {
   it('cancels mid-setup, removes the worktree, and records cancelled', async () => {
     const setupStarted = vi.fn()
     const { service } = await harness({
-      approvedSetup: () => [
+      projectConfig: async () => ({
+        worktree: {
+          sharedDirectories: [], copyFiles: [],
+          setup: [{ name: 'wait', command: 'sleep', args: ['60'], timeoutMs: 60_000 }],
+          branchPrefix: 'kun/'
+        }
+      }),
+      approvedSetup: async () => [
         { name: 'wait', command: 'sleep', args: ['60'], timeoutMs: 60_000 }
       ],
       setupRunner: {
@@ -298,9 +305,38 @@ describe('TaskWorkspaceService', () => {
     expect(last?.kind === 'task_workspace' && last.taskWorkspace.state).toBe('ready')
   })
 
+  it('marks unapproved declared setup as not-approved and still ready', async () => {
+    const { service } = await harness({
+      projectConfig: async () => ({
+        worktree: {
+          sharedDirectories: [], copyFiles: [],
+          setup: [{ name: 'install', command: 'bun', args: ['install'], timeoutMs: 5_000 }],
+          branchPrefix: 'kun/'
+        }
+      }),
+      // No approvedSetup grant: declared steps stay unapproved.
+      approvedSetup: async () => []
+    }).make()
+    const root = await mkdtemp(join(tmpdir(), 'kun-tws-unapproved-'))
+    roots.push(root)
+    const repo = join(root, 'repo')
+    await initRepo(repo, { 'a.txt': 'a\n' })
+    const record = service.create(input(repo))
+    const done = await waitState(service, record.workspaceId, ['ready', 'failed'])
+    expect(done.state).toBe('ready')
+    expect(done.setup.status).toBe('not-approved')
+  })
+
   it('markReady rescues a failed setup record', async () => {
     const { service } = await harness({
-      approvedSetup: () => [{ name: 'boom', command: 'false', args: [], timeoutMs: 5_000 }],
+      projectConfig: async () => ({
+        worktree: {
+          sharedDirectories: [], copyFiles: [],
+          setup: [{ name: 'boom', command: 'false', args: [], timeoutMs: 5_000 }],
+          branchPrefix: 'kun/'
+        }
+      }),
+      approvedSetup: async () => [{ name: 'boom', command: 'false', args: [], timeoutMs: 5_000 }],
       setupRunner: { run: async () => ({ status: 'failed' as const }) }
     }).make()
     const root = await mkdtemp(join(tmpdir(), 'kun-tws-markready-'))

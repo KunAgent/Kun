@@ -4,8 +4,10 @@ import {
   defaultKunHarnessSettings,
   mergeKunAdeSettings,
   mergeKunHarnessSettings,
+  mergeKunWorktreeSettings,
   normalizeKunAdeSettings,
-  normalizeKunHarnessSettings
+  normalizeKunHarnessSettings,
+  normalizeKunWorktreeSettings
 } from './app-settings-kun-harness'
 
 describe('normalizeKunHarnessSettings', () => {
@@ -92,5 +94,41 @@ describe('normalizeKunAdeSettings', () => {
     expect(merged.limits).toEqual({ softWorkers: 4, hardWorkers: 12 })
     expect(merged.notifications.sound).toBe(false)
     expect(merged.notifications.keepAwake).toBe(true)
+  })
+})
+
+describe('normalizeKunWorktreeSettings', () => {
+  it('keeps valid sharedPaths entries and drops malformed ones', () => {
+    const normalized = normalizeKunWorktreeSettings({
+      sharedPaths: {
+        '/repo/a': [
+          { path: '.env.local', mode: 'copy' },
+          { path: 'deps', mode: 'symlink' },
+          { path: '', mode: 'copy' },
+          { path: 'x', mode: 'bogus' },
+          'junk'
+        ],
+        '': [{ path: 'x', mode: 'copy' }],
+        '/repo/b': 'not-a-list'
+      }
+    })
+    expect(normalized.sharedPaths).toEqual({
+      '/repo/a': [
+        { path: '.env.local', mode: 'copy' },
+        { path: 'deps', mode: 'symlink' }
+      ]
+    })
+  })
+
+  it('merge replaces sharedPaths wholesale and defaults missing input', () => {
+    const current = normalizeKunWorktreeSettings({
+      sharedPaths: { '/repo/a': [{ path: 'deps' }] }
+    })
+    expect(current.sharedPaths['/repo/a']).toEqual([{ path: 'deps', mode: 'symlink' }])
+    const merged = mergeKunWorktreeSettings(current, {
+      sharedPaths: { '/repo/b': [{ path: '.env', mode: 'copy' }] }
+    })
+    expect(merged.sharedPaths).toEqual({ '/repo/b': [{ path: '.env', mode: 'copy' }] })
+    expect(mergeKunWorktreeSettings(current, undefined).sharedPaths['/repo/a']).toHaveLength(1)
   })
 })

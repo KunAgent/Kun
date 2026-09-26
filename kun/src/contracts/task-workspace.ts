@@ -38,6 +38,21 @@ export const TaskWorkspaceSetupSchema = z.object({
 }).strict()
 export type TaskWorkspaceSetup = z.infer<typeof TaskWorkspaceSetupSchema>
 
+/** Result of sharing/copying ignored paths into a new worktree (07 §6). */
+export const TaskWorkspaceEnvironmentFillSchema = z.object({
+  shared: z.array(z.string().max(4_096)).max(256).default([]),
+  copied: z.array(z.string().max(4_096)).max(256).default([]),
+  skipped: z
+    .array(z.object({
+      path: z.string().max(4_096),
+      reason: z.string().max(64)
+    }).strict())
+    .max(256)
+    .default([]),
+  warnings: z.array(z.string().max(256)).max(64).default([])
+}).strict()
+export type TaskWorkspaceEnvironmentFill = z.infer<typeof TaskWorkspaceEnvironmentFillSchema>
+
 export const TaskWorkspaceRecordSchema = z.object({
   workspaceId: z.string().regex(/^tws_[a-z0-9]{8,32}$/),
   ownerThreadId: z.string().min(1),          // initiator: manager thread, one-to-one thread, or Graph thread
@@ -54,6 +69,7 @@ export const TaskWorkspaceRecordSchema = z.object({
   state: TaskWorkspaceStateSchema,
   progress: TaskWorkspaceProgressSchema.optional(),
   setup: TaskWorkspaceSetupSchema,
+  environmentFill: TaskWorkspaceEnvironmentFillSchema.optional(),
   changedFiles: z.array(z.string().max(4_096)).max(10_000).default([]),
   patchArtifactId: z.string().optional(),
   lastError: z.string().max(2_048).optional(),

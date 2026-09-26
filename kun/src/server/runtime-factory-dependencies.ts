@@ -180,6 +180,13 @@ export { ActivityStore } from '../services/activity-store.js'
 export { ActivityFactsStore } from '../services/activity-facts-store.js'
 export { TaskWorkspaceStore } from '../workspace-tasks/task-workspace-store.js'
 export { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
+export { TaskWorkspaceSetupRunner } from '../workspace-tasks/setup-runner.js'
+export { fillTaskWorktreeEnvironment } from '../workspace-tasks/environment-fill.js'
+export {
+  createApprovedSetupResolver,
+  userSharedPathsForRepo
+} from '../workspace-tasks/approved-setup.js'
+export { loadKunProjectConfig } from '../config/project-config.js'
 export { createWorktreeLifecycle } from '../workspace-tasks/worktree-lifecycle.js'
 export {
   workspaceGit,

@@ -47,6 +47,7 @@ import {
 } from '../contracts/tool-output-limits.js'
 import { HooksConfigSchema } from '../hooks/hook-config.js'
 import { LocalModelGatewayConfigSchema, ModelFailoverGroupSchema, ModelRoutePoolConfigSchema } from '../contracts/model-route-pool.js'
+import { KunProjectWorktreeConfigSchema } from './project-config.js'
 
 import {
   ContextCompactionConfigSchema,
@@ -458,8 +459,29 @@ export const AdeConfigSchema = z
       })
       .strict()
       .default({ structuredMinutes: 10, terminalMinutes: 20 }),
-    /** Repository roots approved for host-managed task workspaces. */
-    approvedWorktreeConfigs: z.array(z.string().min(1).max(1_024)).max(64).default([])
+    /**
+     * Repositories whose `.kun/project.json` is approved for task workspaces.
+     * Each entry carries the verbatim `worktree` section plus the digest it
+     * was approved under; Kun only runs setup when the live digest matches.
+     */
+    approvedWorktreeConfigs: z
+      .array(z.object({
+        repoRoot: z.string().min(1).max(4_096),
+        digest: z.string().min(1).max(128),
+        worktree: KunProjectWorktreeConfigSchema
+      }).strict())
+      .max(64)
+      .default([]),
+    /** User-level per-repo fill entries: `sharedPaths[repoRoot]`. */
+    worktreeSharedPaths: z
+      .record(
+        z.string().min(1).max(4_096),
+        z.array(z.object({
+          path: z.string().min(1).max(1_024),
+          mode: z.enum(['symlink', 'clone', 'copy']).default('symlink')
+        }).strict()).max(64)
+      )
+      .default({})
   })
   .strict()
 export type AdeConfig = z.infer<typeof AdeConfigSchema>

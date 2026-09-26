@@ -632,8 +632,16 @@ export const kunRuntimePatchSchema = z.object({
       stalled: z.boolean().optional(),
       sound: z.boolean().optional(),
       keepAwake: z.boolean().optional()
-    }).strict().optional(),
-    approvedWorktreeConfigs: z.array(z.string().min(1).max(1_024)).max(64).optional()
+    }).strict().optional()
+  }).strict().optional(),
+  worktrees: z.object({
+    sharedPaths: z.record(
+      z.string().trim().min(1).max(4_096),
+      z.array(z.object({
+        path: z.string().trim().min(1).max(1_024),
+        mode: z.enum(['symlink', 'clone', 'copy']).optional()
+      }).strict()).max(64)
+    ).optional()
   }).strict().optional(),
   subagents: subagentsPatchSchema.optional(),
   lab: kunLabPatchSchema.optional()

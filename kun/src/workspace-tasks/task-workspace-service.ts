@@ -8,6 +8,12 @@ import { workspaceGit, workspaceWriteMutexContext } from './workspace-git.js'
 import { resolveStartFrom } from './start-from-resolver.js'
 import type { WorktreeLifecycle } from './worktree-lifecycle.js'
 import type { TaskWorkspaceStore } from './task-workspace-store.js'
+import type { KunProjectWorktreeConfig } from '../config/project-config.js'
+import type {
+  ApprovedSetupStep,
+  SetupRunOptions
+} from './setup-runner.js'
+import type { EnvFillResult } from './environment-fill.js'
 import {
   taskBranchName,
   type CreateTaskWorkspaceRequest,
@@ -15,12 +21,7 @@ import {
   type TaskWorkspaceSetup
 } from '../contracts/task-workspace.js'
 
-export type SetupStep = {
-  name: string
-  command: string
-  args: string[]
-  timeoutMs: number
-}
+export type SetupStep = ApprovedSetupStep
 
 export type TaskWorkspaceServiceOptions = {
   store: TaskWorkspaceStore
@@ -31,30 +32,31 @@ export type TaskWorkspaceServiceOptions = {
   fetchTimeoutMs?: number
   nowIso?: () => string
   newId?: () => string
-  projectConfig?: (repoRoot: string) => TaskWorkspaceProjectConfig | null
-  /** Approved setup steps for a repo (P0-11); absent → setup 'skipped'. */
-  approvedSetup?: (repoRoot: string) => SetupStep[]
-  /** Runs the setup steps (P0-11); absent → setup 'skipped'. */
+  /** Live `.kun/project.json` resolution; absent → no env fill, setup 'skipped'. */
+  projectConfig?: (repoRoot: string) => Promise<TaskWorkspaceProjectConfig | null>
+  /** Approved setup steps for a repo (07 §7.1); absent/[] → 'not-approved'. */
+  approvedSetup?: (repoRoot: string) => Promise<SetupStep[]>
+  /** Runs the approved setup steps; absent → 'not-approved' when declared. */
   setupRunner?: {
     run(
       workspaceId: string,
       cwd: string,
       steps: SetupStep[],
-      signal: AbortSignal
+      signal: AbortSignal,
+      options?: SetupRunOptions
     ): Promise<TaskWorkspaceSetup>
   }
-  /** shareDirectories + copyIncludedFiles (P0-11); absent → no env fill. */
+  /** shareDirectories + copyIncludedFiles (07 §6); absent → no env fill. */
   environmentFill?: (input: {
     repoRoot: string
     worktreePath: string
-    config: TaskWorkspaceProjectConfig['worktree'] | undefined
-  }) => Promise<{ shared: string[]; copied: string[]; skipped: Array<{ path: string; reason: string }> }>
+    config: KunProjectWorktreeConfig | undefined
+  }) => Promise<EnvFillResult>
 }
 
-/** Shape this service needs from `.kun/project.json`; the `worktree`
- *  section lands in P0-11, so the dep is typed structurally here. */
+/** Shape this service needs from `.kun/project.json`. */
 export type TaskWorkspaceProjectConfig = {
-  worktree?: { branchPrefix?: string }
+  worktree?: KunProjectWorktreeConfig
 }
 
 const WRITE_MUTEX_RESOURCE = 'ade/task-workspace-git'
@@ -244,7 +246,9 @@ export class TaskWorkspaceService {
       }
       await this.progress(workspaceId, 'worktree', 'Creating worktree')
       const path = this.worktreePath(repo.root, workspaceId)
-      const config = this.options.projectConfig?.(repo.root)
+      const config = this.options.projectConfig
+        ? await this.options.projectConfig(repo.root)
+        : null
       const branch = taskBranchName(
         config?.worktree?.branchPrefix ?? 'kun/',
         input.label ?? 'task',
@@ -271,6 +275,15 @@ export class TaskWorkspaceService {
           repoRoot: repo.root,
           worktreePath: path,
           config: config?.worktree
+        })
+        this.options.store.update(workspaceId, {
+          environmentFill: {
+            shared: fill.shared.slice(0, 256),
+            copied: fill.copied.slice(0, 256),
+            skipped: fill.skipped.slice(0, 256),
+            warnings: fill.warnings.slice(0, 64)
+          },
+          updatedAt: this.nowIso()
         })
         const summary =
           `shared ${fill.shared.length}, copied ${fill.copied.length}, skipped ${fill.skipped.length}`
@@ -300,15 +313,40 @@ export class TaskWorkspaceService {
     })
     this.emit(workspaceId)
     signal.throwIfAborted()
-    const steps = this.options.approvedSetup?.(repoRoot) ?? []
+    const config = this.options.projectConfig
+      ? await this.options.projectConfig(repoRoot)
+      : null
+    const declared = config?.worktree?.setup ?? []
     let setup: TaskWorkspaceSetup
-    if (!this.options.setupRunner) {
-      setup = { status: steps.length ? 'not-approved' : 'skipped' }
-    } else if (!steps.length && this.options.approvedSetup) {
-      setup = { status: 'not-approved' }
+    if (!declared.length) {
+      setup = { status: 'skipped' }
     } else {
-      await this.progress(workspaceId, 'setup', 'Running setup')
-      setup = await this.options.setupRunner.run(workspaceId, path, steps, signal)
+      const approved = this.options.approvedSetup
+        ? await this.options.approvedSetup(repoRoot)
+        : []
+      if (!approved.length || !this.options.setupRunner) {
+        setup = { status: 'not-approved' }
+      } else {
+        await this.progress(workspaceId, 'setup', 'Running setup')
+        this.options.store.update(workspaceId, {
+          setup: { status: 'running' },
+          updatedAt: this.nowIso()
+        })
+        this.emit(workspaceId)
+        const fill = this.options.store.get(workspaceId)?.environmentFill
+        const logHeader = fill
+          ? [
+              `shared: ${fill.shared.join(', ') || '-'}`,
+              `copied: ${fill.copied.join(', ') || '-'}`,
+              `skipped: ${fill.skipped.map((entry) => `${entry.path} (${entry.reason})`).join(', ') || '-'}`,
+              ...fill.warnings.map((warning) => `warning: ${warning}`)
+            ].join('\n')
+          : undefined
+        setup = await this.options.setupRunner.run(
+          workspaceId, path, approved, signal,
+          logHeader ? { logHeader } : {}
+        )
+      }
     }
     this.finish(workspaceId, {
       state: setup.status === 'failed' ? 'failed' : 'ready',

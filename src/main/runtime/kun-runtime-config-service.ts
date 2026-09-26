@@ -99,6 +99,7 @@ import {
 } from '../legacy-provider-settings-migration'
 import {
   approvedProjectMcpServers,
+  approvedWorktreeConfigs,
   stripGeneratedProjectMcpServers
 } from '../services/project-config-service'
 import { assertManagedKunDataDirIsCurrent } from '../kun-data-dir-paths'
@@ -140,6 +141,9 @@ export async function syncGuiManagedKunConfig(
   const projectMcpServers = appSettings
     ? await approvedProjectMcpServers(appSettings)
     : {}
+  const approvedWorktrees = appSettings
+    ? await approvedWorktreeConfigs(appSettings)
+    : []
   const serve = objectValue(existing?.serve)
   const capabilities = objectValue(existing?.capabilities)
   const mcp = objectValue(capabilities.mcp)
@@ -212,7 +216,10 @@ export async function syncGuiManagedKunConfig(
     ),
     graph: graphConfigForRuntime(runtime.graph),
     harnesses: harnessesConfigForRuntime(runtime.harnesses),
-    ade: adeConfigForRuntime(runtime.ade),
+    ade: adeConfigForRuntime(runtime.ade, {
+      approvedWorktreeConfigs: approvedWorktrees,
+      worktreeSharedPaths: runtime.worktrees?.sharedPaths ?? {}
+    }),
     quality: qualityConfigForRuntime(runtime.quality, objectValue(existing?.quality)),
     ...(Object.keys(roles).length ? { roles } : {}),
     fastContext: fastContextConfigForRuntime(runtime.fastContext),
@@ -381,7 +388,7 @@ type KunRuntimeConfigSettings = Pick<KunRuntimeSettingsV1,
   'videoGeneration' | 'computerUse' | 'browserUse' | 'modelProfiles' | 'memoryEnabled' |
   'memoryDistillationEnabled' | 'memoryDirectivesEnabled' |
   'instructions' | 'quality' | 'subagents' | 'graph' | 'fastContext' | 'lab' | 'githubMcp' | 'smallModel' |
-  'harnesses' | 'ade' |
+  'harnesses' | 'ade' | 'worktrees' |
   'smallModelProviderId' | 'smallModelAccountId' |
   'titleModel' | 'titleProviderId' | 'titleAccountId' |
   'summaryModel' | 'summaryProviderId' | 'summaryAccountId' |

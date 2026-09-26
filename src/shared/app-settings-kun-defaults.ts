@@ -98,7 +98,8 @@ import {
 
 import {
   defaultKunAdeSettings,
-  defaultKunHarnessSettings
+  defaultKunHarnessSettings,
+  defaultKunWorktreeSettings
 } from './app-settings-kun-harness'
 import {
   defaultKunFastContextSettings,
@@ -239,6 +240,7 @@ export function defaultKunRuntimeSettings(
     planExecution: { useWorktreeByDefault: true },
     harnesses: defaultKunHarnessSettings(),
     ade: defaultKunAdeSettings(),
+    worktrees: defaultKunWorktreeSettings(),
     fastContext: defaultKunFastContextSettings(),
     lab: defaultKunLabSettings()
   }
