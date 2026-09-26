@@ -95,3 +95,17 @@ export type HarnessRuntimeState = {
   harnessId: string
   capabilitiesV2: HarnessCapabilities
 }
+
+/** `handoff_injected` event metadata (docs/ade/08 §4). */
+export type HandoffEventPayload = {
+  threadId: string
+  turnId?: string
+  reason: 'harness-switch' | 'rebase' | 'worker-dispatch' | 'context-overflow'
+  mode: 'full' | 'delta'
+  toHarnessName: string
+  toModel?: string
+  recentTurns: number
+  files: number
+  briefDigest: string
+  createdAt?: string
+}

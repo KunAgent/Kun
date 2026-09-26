@@ -37,6 +37,7 @@ import type {
   CompactionEventPayload,
   DelegatedRuntimeState,
   HarnessRuntimeState,
+  HandoffEventPayload,
   NormalizedThread,
   KnowledgeBaseMount,
   KnowledgeBaseIndexStatus,
@@ -207,6 +208,8 @@ export type ThreadEventSink = {
   onContextSnapshot?(snapshot: RequestContextSnapshot): void
   onDelegatedRuntimeState?(state: DelegatedRuntimeState): void
   onHarnessRuntimeState?(state: HarnessRuntimeState): void
+  /** Deterministic handoff brief injected into a delegated turn (docs/ade/08). */
+  onHandoff?(ev: HandoffEventPayload): void
   /** Safe child lifecycle/activity projected onto the parent thread. */
   onChildRuntimeEvent?(event: RuntimeChildEventPayload): void
   /** Raw versioned Graph envelope; the Graph projection owns validation/reconciliation. */
@@ -242,6 +245,17 @@ export interface AgentProvider {
   ackActivity?(unitId: string): Promise<void>
   dismissActivity?(unitId: string): Promise<void>
   pinActivity?(unitId: string, pinned?: boolean): Promise<void>
+  /** Rebuild a recorded handoff brief on demand (docs/ade/impl §P0-14). */
+  getHandoffPreview?(threadId: string, turnId: string): Promise<{
+    turnId: string
+    reason: string
+    mode: string
+    from: { harnessName: string; model?: string }
+    to: { harnessName: string; model?: string }
+    brief: string
+    briefDigest: string
+    recordedBriefDigest: string
+  }>
   createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; workspaceMode?: 'code' | 'ade'; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string; additionalWorkspaces?: string[] }): Promise<NormalizedThread>
   getThreadDetail(threadId: string, options?: {
     before?: string

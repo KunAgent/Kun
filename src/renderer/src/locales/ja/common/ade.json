@@ -4,5 +4,10 @@
   "adeGroupRunning": "進行中",
   "adeGroupConversations": "会話",
   "adeGroupArchived": "アーカイブ済み",
-  "adeEmpty": "エージェント会話はまだありません"
+  "adeEmpty": "エージェント会話はまだありません",
+  "adeHandoff": "{{agent}} にコンテキストを引き継ぎました（直近 {{turns}} ターン、{{files}} ファイル）",
+  "adeHandoffDelta": "差分ブリーフで {{agent}} を再開",
+  "adeHandoffShow": "ブリーフを表示",
+  "adeHandoffHide": "ブリーフを隠す",
+  "adeHandoffLoadError": "引き継ぎブリーフを再構築できませんでした"
 }

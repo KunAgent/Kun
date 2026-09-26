@@ -17,6 +17,7 @@ import type {
   ThreadUsageSnapshot,
   DelegatedRuntimeState,
   HarnessRuntimeState,
+  HandoffEventPayload,
   ToolEventPayload,
   TurnTerminalEvent,
   UserInputRequestPayload,
@@ -55,6 +56,7 @@ type RuntimeProjectionActionPayload =
   | { type: 'context_snapshot_received'; payload: RequestContextSnapshot }
   | { type: 'delegated_runtime_received'; payload: DelegatedRuntimeState }
   | { type: 'harness_runtime_received'; payload: HarnessRuntimeState }
+  | { type: 'handoff_received'; payload: HandoffEventPayload }
   | { type: 'usage_received'; payload: ThreadUsageSnapshot }
   | {
       type: 'thread_snapshot_reconciled'

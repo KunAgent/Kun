@@ -37,6 +37,7 @@ import {
 } from './runtime-factory-model.js'
 import { resumeInterruptedGraphPlanning } from './runtime-graph-lifecycle.js'
 import { CanvasReceiptRegistry } from '../services/canvas-receipt-registry.js'
+import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
 import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
 import { HarnessRouter, HarnessRuntimeMap } from '../harness/harness-router.js'
 
@@ -148,6 +149,7 @@ export async function createRuntimeAgentComposition(
     instructionRuntime: InstructionRuntime
     attachmentStore?: AttachmentStore
     memoryStore?: MemoryStore
+    taskWorkspaces?: TaskWorkspaceService
     memoryFeedback?: MemoryFeedbackRuntime
   }) => {
     const providerConfigs = Object.fromEntries(
@@ -190,7 +192,9 @@ export async function createRuntimeAgentComposition(
         ? { pathToClaudeCodeExecutable: process.env.KUN_CLAUDE_BINARY }
         : {}),
       sessionCoordinator: delegatedSessions,
-      contextProfile: delegatedContextProfile
+      contextProfile: delegatedContextProfile,
+      deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
+      ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
     }
     const antigravityRuntimeDeps: AntigravityCliRuntimeDeps = {
       providerConfigs,
@@ -209,7 +213,9 @@ export async function createRuntimeAgentComposition(
       ...(llmDebug ? { debugSink: llmDebug } : {}),
       turnLimits: input.options.runtime?.turnLimits,
       sessionCoordinator: delegatedSessions,
-      contextProfile: delegatedContextProfile
+      contextProfile: delegatedContextProfile,
+      deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
+      ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
     }
     const cursorRuntimeDeps: CursorSdkRuntimeFactoryDeps = {
       registry: input.registry,
@@ -247,7 +253,9 @@ export async function createRuntimeAgentComposition(
       ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
       turnLimits: input.options.runtime?.turnLimits,
       sessionCoordinator: delegatedSessions,
-      contextProfile: delegatedContextProfile
+      contextProfile: delegatedContextProfile,
+      deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
+      ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
     }
     return {
       agentSdk: sdkRuntimeDeps,
@@ -280,7 +288,8 @@ export async function createRuntimeAgentComposition(
         instructionRuntime: services.instructionRuntime,
         attachmentStore: services.attachmentStore,
         memoryStore: services.memoryStore,
-        memoryFeedback: services.memoryFeedback
+        memoryFeedback: services.memoryFeedback,
+        taskWorkspaces: core.taskWorkspaces
       })
     )
   )
@@ -312,7 +321,8 @@ export async function createRuntimeAgentComposition(
         instructionRuntime: services.instructionRuntime,
         attachmentStore: services.attachmentStore,
         memoryStore: services.memoryStore,
-        memoryFeedback: services.memoryFeedback
+        memoryFeedback: services.memoryFeedback,
+        taskWorkspaces: core.taskWorkspaces
       })
     )
     harnessRuntimeMap.replace(next)

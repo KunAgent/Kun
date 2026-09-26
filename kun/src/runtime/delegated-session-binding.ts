@@ -26,6 +26,8 @@ export type DelegatedSessionBinding = DelegatedSessionRoute & {
   nativeSessionId?: string
   synchronizedHistoryDigest: string
   lastCommittedTurnId: string
+  /** Digest of the last injected handoff brief, for audit (docs/ade/08 §4). */
+  handoffBriefDigest?: string
   createdAt: string
   updatedAt: string
 }
@@ -38,7 +40,16 @@ export type DelegatedSessionPreparation = {
   nativeSessionId?: string
   resumed: boolean
   /** Set when this resume restored a parked session (docs/ade/08 §5). */
-  parkedDelta?: { lastCommittedTurnId: string }
+  parkedDelta?: {
+    lastCommittedTurnId: string
+    /** Route that ran most recently before this restore (the switch source). */
+    fromRoute?: { providerKind: DelegatedProviderKind; providerId: string; model: string }
+  }
+  /**
+   * The superseded binding's provider coordinates when a rebase switched
+   * routes — used to label the handoff brief's 来源 (source) field.
+   */
+  rebasedFrom?: { providerKind: DelegatedProviderKind; providerId: string; model: string }
   rebaseReason?:
     | 'new'
     | 'route_changed'
@@ -228,6 +239,15 @@ export class DelegatedSessionCoordinator {
       route: input.route,
       priorHistoryDigest,
       resumed: false,
+      ...(binding
+        ? {
+            rebasedFrom: {
+              providerKind: binding.providerKind,
+              providerId: binding.providerId,
+              model: binding.model
+            }
+          }
+        : {}),
       rebaseReason: rebaseReason(binding, input.route, priorHistoryDigest)
     }
   }
@@ -237,6 +257,7 @@ export class DelegatedSessionCoordinator {
     committedItems: readonly TurnItem[]
     lastCommittedTurnId: string
     nativeSessionId?: string
+    handoffBriefDigest?: string
   }): Promise<DelegatedSessionBinding> {
     const previous = await this.store.load(input.preparation.threadId)
     if (
@@ -260,6 +281,9 @@ export class DelegatedSessionCoordinator {
       ...(nativeSessionId ? { nativeSessionId } : {}),
       synchronizedHistoryDigest: delegatedHistoryDigest(input.committedItems),
       lastCommittedTurnId: input.lastCommittedTurnId,
+      ...(input.handoffBriefDigest
+        ? { handoffBriefDigest: input.handoffBriefDigest }
+        : {}),
       createdAt:
         previous?.generation === input.preparation.generation
           ? previous.createdAt
@@ -453,6 +477,10 @@ function parseBinding(value: unknown): DelegatedSessionBinding | null {
     (
       record.nativeSessionId !== undefined &&
       !boundedString(record.nativeSessionId, MAX_NATIVE_SESSION_ID_LENGTH)
+    ) ||
+    (
+      record.handoffBriefDigest !== undefined &&
+      !hexDigest(record.handoffBriefDigest)
     )
   ) return null
   return record as DelegatedSessionBinding

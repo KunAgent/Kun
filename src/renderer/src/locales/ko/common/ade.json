@@ -4,5 +4,10 @@
   "adeGroupRunning": "진행 중",
   "adeGroupConversations": "대화",
   "adeGroupArchived": "보관됨",
-  "adeEmpty": "에이전트 대화가 아직 없습니다"
+  "adeEmpty": "에이전트 대화가 아직 없습니다",
+  "adeHandoff": "{{agent}}(으)로 컨텍스트를 넘겼습니다 (최근 {{turns}}턴, {{files}}개 파일)",
+  "adeHandoffDelta": "델타 브리프로 {{agent}} 재개",
+  "adeHandoffShow": "브리프 보기",
+  "adeHandoffHide": "브리프 숨기기",
+  "adeHandoffLoadError": "핸드오프 브리프를 다시 만들 수 없습니다"
 }

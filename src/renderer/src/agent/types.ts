@@ -368,6 +368,24 @@ export type ReviewOutput = {
   overallConfidenceScore: number
 }
 
+/**
+ * Deterministic handoff marker (docs/ade/08 §4) — a delegated turn continued
+ * under a fresh/delta handoff brief. Click expands the rebuilt brief text.
+ */
+export type HandoffBlock = {
+  kind: 'handoff'
+  id: string
+  turnId?: string
+  createdAt?: string
+  reason: 'harness-switch' | 'rebase' | 'worker-dispatch' | 'context-overflow'
+  handoffMode: 'full' | 'delta'
+  toHarnessName: string
+  toModel?: string
+  recentTurns: number
+  files: number
+  briefDigest: string
+}
+
 export type ReviewBlock = {
   kind: 'review'
   id: string
@@ -411,6 +429,7 @@ export type ChatBlock = ({
   | ToolBlock
   | CompactionBlock
   | ReviewBlock
+  | HandoffBlock
   | ChartBlock
   | {
       kind: 'system'
@@ -666,6 +685,7 @@ export type { AgentProvider, ThreadDetail, ThreadEventSink } from './provider-ty
 export type {
   DelegatedRuntimeState,
   HarnessRuntimeState,
+  HandoffEventPayload,
   RequestContextSnapshot,
   ThreadUsageSnapshot
 } from './thread-runtime-types'

@@ -3,6 +3,8 @@ import type { TurnItem } from '../../contracts/items.js'
 import type { ModelRequestTraceDelegated } from '../../contracts/model-request-trace.js'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '../../contracts/policy.js'
 import type { ActingTurnModelRoute } from '../../contracts/turns.js'
+import type { HandoffInjectedEvent } from '../../contracts/events.js'
+import type { TurnHandoff } from '../../handoff/turn-handoff.js'
 import type { LlmDebugSink } from '../../services/llm-debug-recorder.js'
 import type { TurnLimitsConfig } from '../../loop/turn-limits.js'
 import type { TurnRunOutcome } from '../../loop/turn-execution-types.js'
@@ -89,6 +91,23 @@ export interface SdkTurnContext {
    * native session. Resumed turns send only their current delta.
    */
   historyTranscript?: string
+  /**
+   * Deterministic handoff brief (docs/ade/08) — replaces `historyTranscript`
+   * in the prompt when set.
+   */
+  handoffBrief?: string
+  /** `handoff_injected` payload to record once the run actually starts. */
+  handoffEvent?: Omit<
+    HandoffInjectedEvent,
+    'seq' | 'timestamp' | 'threadId' | 'turnId'
+  >
+  /**
+   * Re-resolve the turn handoff after a rejected native resume — the rotated
+   * preparation produces a fresh full brief instead of the raw transcript.
+   */
+  resolveHandoff?: (
+    preparation: DelegatedSessionPreparation | undefined
+  ) => TurnHandoff | undefined
   /** Internal context values that must be removed from request diagnostics. */
   redactedRequestValues?: string[]
   /**
@@ -177,8 +196,14 @@ export interface SdkRuntimeDeps {
   ): Promise<DelegatedGraphCompletionCheck>
   /** Stage the SDK session id for commit after Kun finishes successfully. */
   saveSessionId(threadId: string, turnId: string, sessionId: string): Promise<void>
-  /** Rotate an unusable native resume preparation before the portable retry. */
-  rejectResume?(threadId: string, turnId: string): Promise<void> | void
+  /**
+   * Rotate an unusable native resume preparation before the portable retry;
+   * returns the superseded binding's fresh rebase preparation when present.
+   */
+  rejectResume?(
+    threadId: string,
+    turnId: string
+  ): Promise<DelegatedSessionPreparation | void> | DelegatedSessionPreparation | void
   /** Lazy-load the real `@anthropic-ai/claude-agent-sdk`. */
   loadSdk(): Promise<SdkApi>
   /** Base process env to scope for the Claude Code subprocess. */

@@ -394,6 +394,27 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     return this.mutateActivityFact(unitId, 'pin', JSON.stringify({ pinned }))
   }
 
+  /** Rebuild a recorded handoff brief on demand (docs/ade/impl §P0-14). */
+  async getHandoffPreview(threadId: string, turnId: string): Promise<{
+    turnId: string
+    reason: string
+    mode: string
+    from: { harnessName: string; model?: string }
+    to: { harnessName: string; model?: string }
+    brief: string
+    briefDigest: string
+    recordedBriefDigest: string
+  }> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      `/v1/threads/${encodeURIComponent(threadId)}/handoff-preview${buildQuery({ turnId })}`,
+      'GET'
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to load handoff preview'))
+    }
+    return readRuntimeJson(response.body, 'runtime returned an invalid handoff preview')
+  }
+
   async createThread(input: {
     workspace?: string
     additionalWorkspaces?: string[]

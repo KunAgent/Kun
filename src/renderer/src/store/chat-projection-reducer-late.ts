@@ -219,6 +219,45 @@ export function reduceLateChatProjection(
       return state.activeThreadId === action.payload.threadId
         ? { lastContextSnapshot: action.payload }
         : {}
+    case 'handoff_received': {
+      const event = action.payload
+      const id = `handoff-${event.turnId ?? 'turn'}-${event.briefDigest || 'brief'}`
+      const index = state.blocks.findIndex(
+        (block) => block.kind === 'handoff' && block.id === id
+      )
+      if (index >= 0) {
+        const current = state.blocks[index]
+        if (current.kind !== 'handoff') return {}
+        const blocks = [...state.blocks]
+        blocks[index] = {
+          ...current,
+          turnId: event.turnId ?? current.turnId,
+          reason: event.reason,
+          handoffMode: event.mode,
+          toHarnessName: event.toHarnessName,
+          toModel: event.toModel,
+          recentTurns: event.recentTurns,
+          files: event.files,
+          briefDigest: event.briefDigest
+        }
+        return { blocks }
+      }
+      const block: Extract<ChatBlock, { kind: 'handoff' }> = {
+        kind: 'handoff',
+        id,
+        turnId: event.turnId,
+        createdAt: event.createdAt ?? new Date(context.now).toISOString(),
+        reason: event.reason,
+        handoffMode: event.mode,
+        toHarnessName: event.toHarnessName,
+        toModel: event.toModel,
+        recentTurns: event.recentTurns,
+        files: event.files,
+        briefDigest: event.briefDigest
+      }
+      const blocks = upsertProjectedTimelineBlock(state, block)
+      return blocks === state.blocks ? {} : { blocks }
+    }
     case 'delegated_runtime_received':
       return state.activeThreadId === action.payload.threadId
         ? { lastDelegatedRuntimeState: action.payload }

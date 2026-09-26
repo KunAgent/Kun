@@ -29,6 +29,7 @@ import type { TurnUsageSummary } from '../../hooks/use-turn-usage'
 import { ToolAttachmentPreviews } from './message-timeline-media-views'
 import { LiveAssistantStreamingProvider } from './live-assistant-streaming'
 import { metaString } from './message-timeline-bubble-meta'
+import { HandoffEntry } from './message-timeline-handoff-entry'
 import { MemoryApprovalHint } from './memory-approval-hint'
 import { useTimelineSurface } from './timeline-surface'
 import { useMobileMessageActionsStore } from '../../stores/mobile-message-actions'
@@ -378,6 +379,9 @@ function MessageBubbleImpl({
         {block.detail || block.summary}
       </div>
     )
+  }
+  if (block.kind === 'handoff') {
+    return <HandoffEntry block={block} />
   }
   if (block.kind === 'review') {
     return (

@@ -125,7 +125,7 @@ export function createAgentSdkLifecycleRuntimeDeps(
   SdkRuntimeDeps,
   'handlesProvider' | 'loadTurnContext' | 'executeKunTool' | 'decideToolApproval'
 > {
-  const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, activeSkillIdsByTurn, skillPromptByTurn, skillTurnKey, resolveActiveSkillIds, nowIso, makeAwaitUserInput, makeAwaitApproval, toolContext, resolveImages } = context
+  const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, activeSkillIdsByTurn, skillPromptByTurn, handoffBriefDigestsByTurn, skillTurnKey, resolveActiveSkillIds, nowIso, makeAwaitUserInput, makeAwaitApproval, toolContext, resolveImages } = context
   return {
     async recordEvent(draft): Promise<void> {
       await deps.events.record(draft)
@@ -189,7 +189,10 @@ export function createAgentSdkLifecycleRuntimeDeps(
                   sessionGoalContextKeysByTurn.get(key)
                 ),
                 lastCommittedTurnId: turnId,
-                nativeSessionId: sessionIdsByTurn.get(key)
+                nativeSessionId: sessionIdsByTurn.get(key),
+                ...(handoffBriefDigestsByTurn.has(key)
+                  ? { handoffBriefDigest: handoffBriefDigestsByTurn.get(key) }
+                  : {})
               })
             } catch {
               // Native continuation is an optimization. A failed checkpoint
@@ -205,6 +208,7 @@ export function createAgentSdkLifecycleRuntimeDeps(
         sessionIdsByTurn.delete(key)
         sessionPreparationsByTurn.delete(key)
         sessionGoalContextKeysByTurn.delete(key)
+        handoffBriefDigestsByTurn.delete(key)
         if (typeof deps.skillRuntime?.clearTurnActivation === 'function') {
           deps.skillRuntime.clearTurnActivation(threadId, turnId)
         }
@@ -221,14 +225,13 @@ export function createAgentSdkLifecycleRuntimeDeps(
       sessionIdsByTurn.set(skillTurnKey(threadId, turnId), sessionId)
     },
 
-    async rejectResume(threadId, turnId): Promise<void> {
+    async rejectResume(threadId, turnId) {
       const key = skillTurnKey(threadId, turnId)
       const preparation = sessionPreparationsByTurn.get(key)
-      if (!preparation) return
-      sessionPreparationsByTurn.set(
-        key,
-        await deps.sessionCoordinator!.rejectResume(preparation)
-      )
+      if (!preparation) return undefined
+      const rejected = await deps.sessionCoordinator!.rejectResume(preparation)
+      sessionPreparationsByTurn.set(key, rejected)
+      return rejected
     },
 
     loadSdk,

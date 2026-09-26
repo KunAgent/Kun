@@ -28,6 +28,7 @@ import {
   type SdkTurnContext,
   type TurnStatus
 } from './agent-sdk-runtime-contracts.js'
+import { recordHandoffInjected } from '../../handoff/turn-handoff.js'
 import {
   MAX_SVG_COMPLETION_ATTEMPTS,
   assistantDeltaOf,
@@ -40,7 +41,7 @@ import {
 } from './agent-sdk-runtime-items.js'
 import {
   captureAgentSdkTraceDraft,
-  estimatedTokens,
+  recordAgentSdkContextSnapshot,
   finishAgentSdkTrace,
   sanitizeAgentSdkError,
   startAgentSdkTrace
@@ -300,9 +301,11 @@ export class AgentSdkRuntime {
       const composeTurnText = (): string => ctx.preserveExactUserPrompt
         ? ctx.userText
         : composeSdkPromptText({
-            ...(!resumeSessionId && ctx.historyTranscript
-              ? { historyTranscript: ctx.historyTranscript }
-              : {}),
+            ...(ctx.handoffBrief
+              ? { handoffBrief: ctx.handoffBrief }
+              : !resumeSessionId && ctx.historyTranscript
+                ? { historyTranscript: ctx.historyTranscript }
+                : {}),
             userText: ctx.userText,
             ...(ctx.contextInstructions?.length ? { instructionBlocks: ctx.contextInstructions } : {})
           })
@@ -322,35 +325,23 @@ export class AgentSdkRuntime {
         capabilities,
         capabilitiesV2
       })
-      const recordContextSnapshot = async (): Promise<void> => {
-        if (!ctx.contextProfile) return
-        const system = estimatedTokens([
-          this.deps.kunSystemPrompt(),
-          ctx.threadPersona ?? ''
-        ].join('\n'))
-        const tools = estimatedTokens(JSON.stringify(selectedKunTools))
-        const skills = estimatedTokens((ctx.contextInstructions ?? []).join('\n'))
-        const messages = estimatedTokens([
-          resumeSessionId ? '' : ctx.historyTranscript ?? '',
-          ctx.userText
-        ].join('\n'))
-        const other = (ctx.images?.length ?? 0) * 1_024
-        await this.deps.recordEvent({
-          kind: 'context_snapshot',
+      await recordHandoffInjected(
+        (event) => this.deps.recordEvent(event),
+        { threadId, turnId, harnessId: 'claude-code' },
+        ctx.handoffEvent
+      )
+      const recordContextSnapshot = (): Promise<void> =>
+        recordAgentSdkContextSnapshot({
+          ctx,
           threadId,
           turnId,
-          model: ctx.model ?? 'claude-default',
-          providerId: ctx.sessionPreparation?.route.providerId ?? 'default',
-          stepIndex: 0,
-          ...ctx.contextProfile,
-          estimatedInputTokens: tools + system + skills + messages + other,
-          breakdown: { tools, system, skills, messages, other },
-          toolCount: selectedKunTools.length,
-          activeSkillIds: [...(ctx.activeSkillIds ?? [])],
-          contextManagement: 'sdk-managed',
-          nativeHistory: resumeSessionId ? 'unknown' : 'none'
+          resumed: Boolean(resumeSessionId),
+          historyText:
+            ctx.handoffBrief ?? (resumeSessionId ? '' : ctx.historyTranscript ?? ''),
+          selectedKunTools,
+          record: (draft) => this.deps.recordEvent(draft),
+          kunSystemPrompt: () => this.deps.kunSystemPrompt()
         })
-      }
       await recordContextSnapshot()
       const svgCompletion: SdkSvgCompletionState = {
         sequence: 0,
@@ -515,7 +506,13 @@ export class AgentSdkRuntime {
             resumeSessionId = undefined
             activeRebaseReason = 'native_state_unavailable'
             activeStream = undefined
-            await this.deps.rejectResume?.(threadId, turnId)
+            const rejected = await this.deps.rejectResume?.(threadId, turnId)
+            if (rejected) ctx.sessionPreparation = rejected
+            if (ctx.resolveHandoff) {
+              const retryHandoff = ctx.resolveHandoff(rejected ?? ctx.sessionPreparation)
+              ctx.handoffBrief = retryHandoff?.brief.text
+              ctx.handoffEvent = retryHandoff?.event
+            }
             await this.deps.recordEvent({
               kind: 'delegated_runtime',
               threadId,
@@ -528,6 +525,11 @@ export class AgentSdkRuntime {
               capabilities,
               capabilitiesV2
             })
+            await recordHandoffInjected(
+              (event) => this.deps.recordEvent(event),
+              { threadId, turnId, harnessId: 'claude-code' },
+              ctx.handoffEvent
+            )
             await recordContextSnapshot()
             attempt -= 1
             continue

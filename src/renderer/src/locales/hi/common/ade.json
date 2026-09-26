@@ -4,5 +4,10 @@
   "adeGroupRunning": "प्रगति पर",
   "adeGroupConversations": "बातचीत",
   "adeGroupArchived": "संग्रहीत",
-  "adeEmpty": "अभी कोई एजेंट बातचीत नहीं"
+  "adeEmpty": "अभी कोई एजेंट बातचीत नहीं",
+  "adeHandoff": "संदर्भ {{agent}} को सौंपा (आखिरी {{turns}} दौर, {{files}} फ़ाइलें)",
+  "adeHandoffDelta": "डेल्टा ब्रीफ़ के साथ {{agent}} जारी",
+  "adeHandoffShow": "ब्रीफ़ दिखाएँ",
+  "adeHandoffHide": "ब्रीफ़ छिपाएँ",
+  "adeHandoffLoadError": "हैंडऑफ़ ब्रीफ़ नहीं बन सका"
 }

@@ -132,7 +132,9 @@ export function createRuntimeRegistry(
             : {}),
           nowIso,
           sessionCoordinator: delegatedSessions,
-          contextProfile: delegatedContextProfile
+          contextProfile: delegatedContextProfile,
+          deterministicHandoff: core.activeOptions.ade?.deterministicHandoff !== false,
+          ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {})
         }) : undefined),
     antigravity: ((antigravityProviderIds.size > 0 || defaultIsAntigravity) &&
       !child.allowedReadPaths &&
@@ -155,7 +157,9 @@ export function createRuntimeRegistry(
           turnLimits: core.activeOptions.runtime?.turnLimits,
           enforceReadOnly: child.toolPolicy === 'readOnly',
           sessionCoordinator: delegatedSessions,
-          contextProfile: delegatedContextProfile
+          contextProfile: delegatedContextProfile,
+          deterministicHandoff: core.activeOptions.ade?.deterministicHandoff !== false,
+          ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {})
         }) : undefined),
     cursor: (cursorSdkProviderIds.size > 0 || defaultIsCursorSdk
       ? ({
@@ -211,7 +215,9 @@ export function createRuntimeRegistry(
             : {}),
           nowIso,
           sessionCoordinator: delegatedSessions,
-          contextProfile: delegatedContextProfile
+          contextProfile: delegatedContextProfile,
+          deterministicHandoff: core.activeOptions.ade?.deterministicHandoff !== false,
+          ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {})
         })
       : undefined)
     })
