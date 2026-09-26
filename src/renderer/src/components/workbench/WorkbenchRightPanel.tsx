@@ -40,6 +40,9 @@ const ChangeInspector = lazy(() =>
 const ReviewPanel = lazy(() =>
   import('../review/ReviewPanel').then((module) => ({ default: module.ReviewPanel }))
 )
+const WorkersPanel = lazy(() =>
+  import('../workers/WorkersPanel').then((module) => ({ default: module.WorkersPanel }))
+)
 const DevBrowserPanel = lazy(() =>
   import('../DevBrowserPanel').then((module) => ({ default: module.DevBrowserPanel }))
 )
@@ -304,6 +307,9 @@ function CodeRightPanelWorkspace({
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.review) {
       return <ReviewPanel className="h-full max-h-full w-full" />
+    }
+    if (id === BUILTIN_RIGHT_PANEL_IDS.workers) {
+      return <WorkersPanel className="h-full max-h-full w-full" />
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.browser) {
       return (

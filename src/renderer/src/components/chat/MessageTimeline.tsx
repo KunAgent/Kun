@@ -17,6 +17,7 @@ import { useTimelineTurnTargetBlocks } from './thread-turn-target'
 import { useTimelineTurnNavigation } from './use-timeline-turn-navigation'
 import { useTimelineFindJump } from './use-timeline-find-jump'
 import { MessageTimelineEmptyHero, ThreadForkBanner, ThreadForkPoint } from './message-timeline-empty'
+import { WorkerControlBanner } from '../workers/WorkerControlBanner'
 import {
   activeTimelineTurnIndex,
   groupTurns,
@@ -408,6 +409,7 @@ export function MessageTimeline({
         {activeThread?.forkedFromThreadId ? (
           <ThreadForkBanner parentTitle={forkedFromTitle} />
         ) : null}
+        {activeThread ? <WorkerControlBanner threadId={activeThread.id} /> : null}
         {hasEarlierTurns ? (
           <div className="flex items-center justify-center">
             <button

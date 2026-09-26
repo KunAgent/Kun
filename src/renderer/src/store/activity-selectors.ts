@@ -49,3 +49,18 @@ export function selectRowsForParent(
     Object.values(rows).filter((row) => row.parentThreadId === parentThreadId)
   )
 }
+
+/**
+ * ADE workers only (12 §6.1): side-chat and graph-attempt children also set
+ * `parentThreadId`, so the Workers pill/panel must filter by `kind`.
+ */
+export function selectWorkerRowsForParent(
+  rows: Record<string, ActivityRow>,
+  parentThreadId: string
+): ActivityRow[] {
+  return sortRows(
+    Object.values(rows).filter(
+      (row) => row.parentThreadId === parentThreadId && row.kind === 'worker'
+    )
+  )
+}

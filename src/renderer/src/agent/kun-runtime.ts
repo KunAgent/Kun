@@ -343,6 +343,8 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   private readonly teams = createKunTeamsClient()
   readonly getTeamOverview = this.teams.getTeamOverview
   readonly answerTeamQuestion = this.teams.answerTeamQuestion
+  readonly getTeamWorker = this.teams.getTeamWorker
+  readonly controlTeamWorker = this.teams.controlTeamWorker
 
   private readonly reviews = createKunReviewClient()
   readonly listReviewComments = this.reviews.listReviewComments

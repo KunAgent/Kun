@@ -155,6 +155,8 @@ export type CoreChildRunActivityJson = {
   updatedAt: string
 }
 
+export type CoreChildLauncher =
+  'delegate_task' | 'fast_context' | 'ppt_agent' | 'component_design' | 'graph' | 'manager-worker'
 export type CoreChildRuntimeMetadataJson = {
   parentThreadId: string
   parentTurnId: string
@@ -162,7 +164,7 @@ export type CoreChildRuntimeMetadataJson = {
   childLabel?: string
   childStatus: 'queued' | 'running' | 'completed' | 'failed' | 'aborted'
   childSeq: number
-  childLauncher?: 'delegate_task' | 'fast_context' | 'ppt_agent' | 'component_design' | 'graph'
+  childLauncher?: CoreChildLauncher
   childTerminationReason?: 'user_stop' | 'manual_stop' | 'runtime_restart' | 'child_error'
   resumable?: boolean
   resumeCount?: number
@@ -615,17 +617,9 @@ export type CoreRuntimeEventJson = {
   /** thread_created / thread_updated: whether that title is auto/provisional. */
   titleAuto?: boolean
   stage?:
-    | 'setup'
-    | 'pre_start'
-    | 'post_start'
-    | 'input_received'
-    | 'input_cached'
-    | 'input_routed'
-    | 'input_compressed'
-    | 'input_remembered'
-    | 'pre_send'
-    | 'post_send'
-    | 'response_received'
+    | 'setup' | 'pre_start' | 'post_start' | 'input_received' | 'input_cached'
+    | 'input_routed' | 'input_compressed' | 'input_remembered' | 'pre_send'
+    | 'post_send' | 'response_received'
   label?: string
   code?: string
   details?: unknown

@@ -98,9 +98,8 @@ export function SubagentCallCard({
   const generated = detail.generated === true || (child.childProfile?.startsWith('generated:') ?? false)
   const animate = !reducedMotion && onScreen && status === 'running'
   const launcher = child.childLauncher || detail.launcher
-  const isFastContext = launcher === 'fast_context' || (launcher as string | undefined) === 'explore_agent' || (
-    block.kind === 'tool' && isFastContextToolBlock(block as ToolBlock)
-  )
+  const isFastContext = launcher === 'fast_context' || (launcher as string | undefined) === 'explore_agent' ||
+    (block.kind === 'tool' && isFastContextToolBlock(block as ToolBlock))
 
   // Profile id: prefer the live `childProfile` from the runtime metadata (set on
   // the first queued/running event) so the agent type shows immediately; the
@@ -437,6 +436,12 @@ export function SubagentCallCard({
           <FastContextEvidenceDetail pack={evidencePack} t={t} />
 
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {launcher === 'manager-worker' && detail.harnessId ? (
+              <MetaChip title={detail.harnessId}>{detail.harnessId}</MetaChip>
+            ) : null}
+            {launcher === 'manager-worker' && detail.taskWorkspaceId ? (
+              <MetaChip title={detail.taskWorkspaceId}>{t('subagentWorktreeBadge', { defaultValue: 'worktree' })}</MetaChip>
+            ) : null}
             {detail.profile ? <MetaChip title={detail.profile}>{detail.profile}</MetaChip> : null}
             {typeof (child.totalTokens ?? detail.totalTokens) === 'number' && (child.totalTokens ?? detail.totalTokens ?? 0) > 0 ? (
               <MetaChip>{t('subagentTokensChip', { count: child.totalTokens ?? detail.totalTokens })}</MetaChip>

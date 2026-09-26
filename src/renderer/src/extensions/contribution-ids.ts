@@ -16,7 +16,8 @@ export const BUILTIN_RIGHT_PANEL_IDS = {
   agentPerspective: 'builtin:right-panel-agent-perspective',
   graph: 'builtin:right-panel-graph',
   remote: 'builtin:right-panel-remote',
-  review: 'builtin:right-panel-review'
+  review: 'builtin:right-panel-review',
+  workers: 'builtin:right-panel-workers'
 } as const
 
 export type BuiltinRightPanelId = (typeof BUILTIN_RIGHT_PANEL_IDS)[keyof typeof BUILTIN_RIGHT_PANEL_IDS]

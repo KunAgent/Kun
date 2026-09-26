@@ -259,8 +259,14 @@ export function kunTeamByManagerPath(managerThreadId: string): string {
 export function kunTeamQuestionAnswerPath(questionId: string): string {
   return `${KUN_TEAMS_PATH}/questions/${encodeURIComponent(questionId)}/answer`
 }
-export function kunTeamWorkerPath(workerId: string, action: 'take-over' | 'hand-back' | 'detach' | 'dispatch'): string {
-  return `${KUN_TEAMS_PATH}/workers/${encodeURIComponent(workerId)}/${action}`
+export function kunTeamWorkerPath(workerId: string): string {
+  return `${KUN_TEAMS_PATH}/workers/${encodeURIComponent(workerId)}`
+}
+export function kunTeamWorkerActionPath(
+  workerId: string,
+  action: 'take-over' | 'hand-back' | 'detach' | 'dispatch' | 'stop'
+): string {
+  return `${kunTeamWorkerPath(workerId)}/${action}`
 }
 
 export const KUN_THREADS_PATH = '/v1/threads'

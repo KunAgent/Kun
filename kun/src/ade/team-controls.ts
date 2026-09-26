@@ -21,6 +21,35 @@ export class TeamControls {
     private readonly controls: ManagerControls
   ) {}
 
+  /**
+   * `GET /v1/teams/workers/:workerId` (09 §9): the worker record plus its
+   * owning team — the worker thread's control banner keys off `control`.
+   */
+  async workerById(workerId: string): Promise<{
+    team: TeamRecord
+    worker: WorkerRecord
+  } | null> {
+    return this.controls.teamForWorker(workerId)
+  }
+
+  /**
+   * `POST /v1/teams/workers/:workerId/stop` (09 §9): the user stops the
+   * worker's active turn; queued dispatches stay pending, exactly like the
+   * manager tool's `worker_stop`.
+   */
+  async stopWorker(workerId: string): Promise<{
+    ok: boolean
+    refusal?: string
+    stopped?: boolean
+  }> {
+    const found = await this.controls.teamForWorker(workerId)
+    if (!found) return { ok: false, refusal: 'worker_not_found' }
+    const { worker } = found
+    if (worker.state !== 'active') return { ok: false, refusal: 'worker_not_active' }
+    const stopped = await this.deps.deliverer.stopWorker(workerId)
+    return { ok: true, stopped: stopped.turnStopped || stopped.runAborted }
+  }
+
   /** `GET /v1/teams/by-manager/:threadId` (09 §9): roster + recent work. */
   async teamOverview(managerThreadId: string): Promise<{
     team: TeamRecord

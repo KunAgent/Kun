@@ -174,4 +174,42 @@ describe('teams routes', () => {
         .status
     ).toBe(401)
   })
+
+  it('serves a worker record with its owning team (09 §9 banner)', async () => {
+    const worker = {
+      workerId: 'wrk_1',
+      label: 'backend',
+      control: 'manager',
+      state: 'active',
+      route: { harnessId: 'kun', model: 'deepseek-chat', credentialMode: 'api-key' },
+      permissionMode: 'safe'
+    }
+    const workerById = vi.fn(async (workerId: string) =>
+      workerId === 'wrk_1' ? { team: { teamId: 'team_1' }, worker } : null)
+    const { request } = await harness({ manager: { teamControls: { workerById } } })
+    const res = await request('GET', '/v1/teams/workers/wrk_1')
+    expect(res.status).toBe(200)
+    const body = JSON.parse(res.body)
+    expect(body.worker.label).toBe('backend')
+    expect(body.team.teamId).toBe('team_1')
+    expect((await request('GET', '/v1/teams/workers/wrk_ghost')).status).toBe(404)
+    expect((await request('GET', '/v1/teams/workers/wrk_1', undefined, false)).status).toBe(401)
+  })
+
+  it('stops a worker turn and maps refusals (09 §9)', async () => {
+    const stopWorker = vi.fn(async (workerId: string) =>
+      workerId === 'wrk_gone'
+        ? { ok: false, refusal: 'worker_not_found' }
+        : workerId === 'wrk_idle'
+          ? { ok: true, stopped: false }
+          : { ok: true, stopped: true })
+    const { request } = await harness({ manager: { teamControls: { stopWorker } } })
+    const stopped = await request('POST', '/v1/teams/workers/wrk_1/stop')
+    expect(stopped.status).toBe(200)
+    expect(JSON.parse(stopped.body)).toMatchObject({ ok: true, stopped: true })
+    expect(JSON.parse((await request('POST', '/v1/teams/workers/wrk_idle/stop')).body))
+      .toMatchObject({ ok: true, stopped: false })
+    expect((await request('POST', '/v1/teams/workers/wrk_gone/stop')).status).toBe(404)
+    expect((await request('POST', '/v1/teams/workers/wrk_1/stop', {}, false)).status).toBe(401)
+  })
 })

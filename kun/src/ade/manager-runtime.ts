@@ -91,6 +91,8 @@ export type WorkerCreateResult = {
   ok: boolean
   workerId?: string
   dispatchId?: string
+  /** Bound task workspace (07) — renderer shows it as the workspace badge. */
+  taskWorkspaceId?: string
   dispatched?: boolean
   deliveryPending?: DeliverOutcome['pendingReason']
   route?: HarnessRoute
@@ -440,6 +442,7 @@ export class ManagerRuntime {
       ok: true,
       workerId,
       dispatchId: dispatch.dispatchId,
+      ...(worker.taskWorkspaceId ? { taskWorkspaceId: worker.taskWorkspaceId } : {}),
       dispatched: delivered.accepted,
       ...(delivered.pendingReason ? { deliveryPending: delivered.pendingReason } : {}),
       route,

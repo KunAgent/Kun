@@ -72,6 +72,8 @@ export const WorkerApproveInputSchema = z
 
 export type WorkerSendResult = {
   ok: boolean
+  /** The receiving worker — the renderer links the card to its thread. */
+  workerId?: string
   dispatchId?: string
   dispatched?: boolean
   deliveryPending?: DeliverOutcome['pendingReason']
@@ -224,6 +226,7 @@ export class ManagerControls {
     })
     return {
       ok: true,
+      workerId: worker.workerId,
       dispatchId: dispatch.dispatchId,
       dispatched: delivered.accepted,
       ...(delivered.pendingReason ? { deliveryPending: delivered.pendingReason } : {}),

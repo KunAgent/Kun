@@ -13,6 +13,8 @@ import { resolveCommandOpenView } from '../../extensions/ExtensionWorkbenchSurfa
 import { normalizeWorkbenchRoute } from './workbench-route'
 import { shouldShowSideSessionReturnBar } from './workbench-side-session-mode'
 import { ensureThreadBinding, useReviewStore } from '../../store/review-store'
+import { useActivityStore } from '../../store/activity-store'
+import { selectWorkerRowsForParent } from '../../store/activity-selectors'
 
 type Context = Record<string, any>
 
@@ -50,6 +52,14 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
   const activeConversationThread = threads.find((thread: any) => thread.id === activeThreadId)
   const reviewEnabled = useReviewStore((s) =>
     activeThreadId ? Boolean(s.bindings[activeThreadId]) : false)
+  // 12 §6.1: the Workers rail button appears while worker rows exist under
+  // the active (manager) thread; the panel itself also self-disables.
+  const workersEnabled = useActivityStore((s) =>
+    Boolean(
+      activeConversationThread?.workspaceMode === 'ade' &&
+        activeThreadId &&
+        selectWorkerRowsForParent(s.rows, activeThreadId).length > 0
+    ))
   useEffect(() => {
     if (activeThreadId) void ensureThreadBinding(activeThreadId)
   }, [activeThreadId])
@@ -258,6 +268,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
             canvasEnabled: true,
             graphEnabled,
             reviewEnabled,
+            workersEnabled,
             sideChatRunningCount: currentSideRunningCount,
             sideChatOpen: rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.sideConversations,
             sideChatEnabled: runtimeConnection === 'ready' && Boolean(activeThreadId),

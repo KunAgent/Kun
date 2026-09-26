@@ -283,6 +283,15 @@ export interface AgentProvider {
   ): Promise<import('@shared/ade-teams').AdeTeamOverview | null>
   /** User answers a worker question (09 §6.4; `answeredBy: 'user'`). */
   answerTeamQuestion?(questionId: string, answer: string): Promise<void>
+  /** Worker + owning team for the worker-thread banner (09 §9). */
+  getTeamWorker?(
+    workerId: string
+  ): Promise<{ team: import('@shared/ade-teams').AdeTeamRecord; worker: import('@shared/ade-teams').AdeTeamWorker } | null>
+  /** Worker control: take-over / hand-back / stop / detach (09 §9). */
+  controlTeamWorker?(
+    workerId: string,
+    action: 'take-over' | 'hand-back' | 'stop' | 'detach'
+  ): Promise<void>
   /** Per-workspace review comments shared across clients (docs/ade/11 §4). */
   listReviewComments?(
     workspaceId: string

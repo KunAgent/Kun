@@ -83,6 +83,24 @@ export async function teamOverviewResponse(
   return jsonResponse(overview)
 }
 
+/** GET /v1/teams/workers/:workerId — worker + team for the control banner. */
+export async function workerByIdResponse(
+  manager: ManagerRuntime,
+  workerId: string
+): Promise<JsonResponse> {
+  const found = await manager.teamControls.workerById(workerId)
+  if (!found) return ERRORS.notFound(`no ade worker ${workerId}`)
+  return jsonResponse(found)
+}
+
+/** POST /v1/teams/workers/:workerId/stop — user stops the active turn (09 §9). */
+export async function workerStopResponse(
+  manager: ManagerRuntime,
+  workerId: string
+): Promise<JsonResponse> {
+  return controlResultResponse(await manager.teamControls.stopWorker(workerId))
+}
+
 /** POST /v1/teams/workers/:workerId/take-over — user takes control (09 §9). */
 export async function workerTakeOverResponse(
   manager: ManagerRuntime,
