@@ -167,10 +167,11 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       'Graph mode',
       'PPT agent',
       'Codex history branches',
-      'Project board'
+      'Project board',
+      'adeSettings.labTitle'
     ])
     expect(laboratoryTabs.map((tab) => tab.props['aria-selected']))
-      .toEqual([true, false, false, false, false, false, false, false, false])
+      .toEqual([true, false, false, false, false, false, false, false, false, false])
     expect(laboratoryTabs.map((tab) => tab.props['aria-controls'])).toEqual([
       'laboratory-settings-panel-contextWindow',
       'laboratory-settings-panel-visualization',
@@ -180,7 +181,8 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       'laboratory-settings-panel-graph',
       'laboratory-settings-panel-ppt',
       'laboratory-settings-panel-codexReferenceBranches',
-      'laboratory-settings-panel-projectBoard'
+      'laboratory-settings-panel-projectBoard',
+      'laboratory-settings-panel-ade'
     ])
     expect(laboratoryTabs.every((tab) => tab.props.className.includes('min-w-max'))).toBe(true)
     expect(laboratoryTabs.flatMap((tab) => tab.findAllByType('span'))
@@ -189,9 +191,9 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     const laboratoryPanels = renderer.root
       .findAllByProps({ role: 'tabpanel' })
       .filter((panel) => String(panel.props.id ?? '').startsWith('laboratory-settings-panel-'))
-    expect(laboratoryPanels).toHaveLength(9)
+    expect(laboratoryPanels).toHaveLength(10)
     expect(laboratoryPanels.map((panel) => panel.props.hidden))
-      .toEqual([true, false, true, true, true, true, true, true, true])
+      .toEqual([true, false, true, true, true, true, true, true, true, true])
     expect(renderer.root.findAllByProps({
       id: 'laboratory-settings-panel-persona'
     })).toHaveLength(0)
