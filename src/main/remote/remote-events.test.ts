@@ -279,6 +279,14 @@ describe('RemoteEventHub', () => {
     expect(hub.clientInfos().map((info) => info.id)).toEqual(['client-b'])
   })
 
+  it('does not rebind an existing client id to a different session', () => {
+    const hub = new RemoteEventHub()
+    const owner = hub.clientFor('shared-id', { sessionToken: 'first' })
+    expect(hub.belongsToAnotherSession('shared-id', 'second')).toBe(true)
+    expect(() => hub.clientFor('shared-id', { sessionToken: 'second' })).toThrow('another session')
+    expect(hub.clientFor('shared-id', { sessionToken: 'first' })).toBe(owner)
+  })
+
   it('drops a stalled stream once its socket backlog exceeds the byte cap', () => {
     const hub = new RemoteEventHub()
     const stream = fakeStream()

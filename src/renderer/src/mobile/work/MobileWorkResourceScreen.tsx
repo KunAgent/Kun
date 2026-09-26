@@ -90,10 +90,12 @@ export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView, on
   // Single document view (§8.4): read mode renders the same editor
   // read-only instead of a separate preview surface.
   const viewMode = 'rich' as const
-  const assistantSupported = Boolean(board || document?.kind === 'text' || document?.kind === 'code')
+  const editable = Boolean(document && (document.kind === 'text' || document.kind === 'code') && !renderSafety.readOnly)
+  const assistantSupported = Boolean(board || editable)
   const supportedViews: WorkResourceView[] = board
     ? ['whiteboard', ...(assistantSupported ? ['assistant' as const] : [])]
-    : ['read', 'edit', ...(assistantSupported ? ['assistant' as const] : []),
+    : ['read', ...(editable ? ['edit' as const] : []),
+        ...(assistantSupported ? ['assistant' as const] : []),
         ...(document?.pendingAgentReview || work.reviewActive ? ['review' as const] : [])]
   const effectiveView = supportedViews.includes(view) ? view : board ? 'whiteboard' : 'read'
   const readOnlyView = effectiveView !== 'edit'
@@ -113,7 +115,7 @@ export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView, on
           recentEdits={document?.recentEdits ?? []} focused focusMode={false}
           markdownHandleRef={markdownHandleRef}
           onFocusModeChange={() => undefined} onFocus={() => undefined}
-          onAskAssistant={() => onView('assistant')} onCreateDraft={() => undefined}
+          onAskAssistant={() => { if (assistantSupported) onView('assistant') }} onCreateDraft={() => undefined}
           onPickWorkspace={() => onBack()} onRefreshWorkspace={() => void work.refreshWorkspace(work.workspaceRoot)}
           onContentChange={(content) => { if (file) work.setDocumentContent(file.path, content) }}
           onDocumentEdit={work.recordRecentEdits} onSelectionChange={work.setSelection}

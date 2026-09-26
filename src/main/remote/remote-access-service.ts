@@ -1,7 +1,7 @@
 import http, { type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { createServer as createNetServer } from 'node:net'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { app, type BrowserWindow, type WebContents } from 'electron'
 import type { AppSettingsV1, RemoteAccessSettingsPatchV1 } from '../../shared/app-settings'
 import {
@@ -46,7 +46,7 @@ import {
 } from './remote-http-utils'
 import { resolveOpenTargetPath } from '../services/workspace-paths'
 import { createReadStream, existsSync } from 'node:fs'
-import { mkdtemp, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 
 const REMOTE_PORT_SCAN_START = 18_900
 const REMOTE_PORT_RANDOM_ATTEMPTS = 25
@@ -109,6 +109,7 @@ export class RemoteAccessService {
   private readonly serverCloseGraceMs: number
   private readonly loginLimiter = new RemoteLoginRateLimiter()
   private readonly mirroredContents = new WeakSet<WebContents>()
+  private readonly uploads = new Map<string, { session: string; client: string; timer: ReturnType<typeof setTimeout> }>()
 
   private server: Server | null = null
   private syncQueue: Promise<void> = Promise.resolve()
@@ -130,6 +131,9 @@ export class RemoteAccessService {
     this.sessions.setOnRemoved((token) => {
       if (token === null) this.hub.disconnectAll()
       else this.hub.disconnectClientsForSession(token)
+      for (const [path, upload] of this.uploads) {
+        if (token === null || upload.session === token) void this.clearUpload(path)
+      }
     })
   }
 
@@ -252,6 +256,7 @@ export class RemoteAccessService {
   async destroy(): Promise<void> {
     if (this.onBrowserWindowCreated) app.off('browser-window-created', this.onBrowserWindowCreated)
     await this.stopServer()
+    await Promise.all([...this.uploads.keys()].map((path) => this.clearUpload(path)))
   }
 
   status(settings?: AppSettingsV1): RemoteAccessStatus {
@@ -468,6 +473,12 @@ export class RemoteAccessService {
    * host path, matching the desktop webUtils.getPathForFile contract.
    */
   private async handleUpload(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const session = this.sessionFor(req)
+    const client = String(req.headers[REMOTE_CLIENT_HEADER] ?? '')
+    if (!session || !req.headers[REMOTE_CSRF_HEADER] || !client || client.length > 128) {
+      sendRemoteJson(res, 403, { error: 'Remote upload requires an authenticated client' })
+      return
+    }
     try {
       const body = await readRemoteRequestBody(req, 64 * 1024 * 1024)
       const parsed = JSON.parse(body || '{}') as { name?: unknown; dataBase64?: unknown }
@@ -481,12 +492,23 @@ export class RemoteAccessService {
       const dir = await mkdtemp(join(tmpdir(), 'kun-remote-upload-'))
       const target = join(dir, safeName)
       await writeFile(target, Buffer.from(dataBase64, 'base64'), { mode: 0o600 })
+      const timer = setTimeout(() => { void this.clearUpload(target) }, 60 * 60 * 1000)
+      timer.unref?.()
+      this.uploads.set(target, { session: session.token, client, timer })
       sendRemoteJson(res, 200, { ok: true, path: target, name: safeName })
     } catch (error) {
       sendRemoteJson(res, error instanceof RemoteRequestBodyTooLargeError ? 413 : 400, {
         error: error instanceof Error ? error.message : 'Upload failed'
       })
     }
+  }
+
+  private async clearUpload(path: string): Promise<void> {
+    const entry = this.uploads.get(path)
+    if (!entry) return
+    clearTimeout(entry.timer)
+    this.uploads.delete(path)
+    await rm(dirname(path), { recursive: true, force: true }).catch(() => undefined)
   }
 
   private handleEvents(req: IncomingMessage, res: ServerResponse): void {
@@ -499,6 +521,10 @@ export class RemoteAccessService {
     const session = this.sessionFor(req)
     if (!session) {
       sendRemoteJson(res, 401, { error: 'Remote session required' })
+      return
+    }
+    if (this.hub.belongsToAnotherSession(clientId, session.token)) {
+      sendRemoteJson(res, 403, { error: 'Remote client belongs to another session' })
       return
     }
     res.writeHead(200, remoteSseHeaders())
@@ -542,21 +568,38 @@ export class RemoteAccessService {
       sendRemoteJson(res, 401, { error: 'Remote session required' })
       return
     }
+    if (this.hub.belongsToAnotherSession(clientId, session.token)) {
+      sendRemoteJson(res, 403, { ok: false, error: 'Remote client belongs to another session' })
+      return
+    }
     const sender = this.hub.clientFor(clientId, {
       remoteAddress: remoteAddressOf(req),
       userAgent: String(req.headers['user-agent'] ?? ''),
       sessionToken: session.token
     })
+    const upload = body?.channel === 'paper:import' && body?.args?.[0]?.localPdfPath
+    if (upload) {
+      const owned = this.uploads.get(upload)
+      if (!owned || owned.session !== session.token || owned.client !== clientId) {
+        sendRemoteJson(res, 403, { ok: false, error: 'Paper PDF must be uploaded by this Remote client' })
+        return
+      }
+      clearTimeout(owned.timer)
+      this.uploads.delete(upload)
+    }
+    let responseStatus = 200
+    let responseBody: unknown
     try {
       const result = await dispatchRemoteInvoke(body, sender)
-      sendRemoteJson(res, 200, { ok: true, result })
+      responseBody = { ok: true, result }
     } catch (error) {
       const status = error instanceof RemoteInvokeError ? error.status : 500
-      sendRemoteJson(res, status === 500 ? 200 : status, {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error)
-      })
+      responseStatus = status === 500 ? 200 : status
+      responseBody = { ok: false, error: error instanceof Error ? error.message : String(error) }
+    } finally {
+      if (upload) await rm(dirname(upload), { recursive: true, force: true }).catch(() => undefined)
     }
+    sendRemoteJson(res, responseStatus, responseBody)
   }
 
   private serveBridge(res: ServerResponse): void {

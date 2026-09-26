@@ -219,6 +219,20 @@ describe('RemoteAccessService HTTP surface', () => {
     }
   })
 
+  it('rejects uploads without client and request headers', async () => {
+    const cookie = await login()
+    const payload = JSON.stringify({ name: 'paper.pdf', dataBase64: 'YQ==' })
+    const missingHeaders = await fetch(`${baseUrl}/remote/upload`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: payload
+    })
+    expect(missingHeaders.status).toBe(403)
+    const unauthenticated = await fetch(`${baseUrl}/remote/upload`, {
+      method: 'POST', headers: { 'content-type': 'application/json',
+        'x-kun-remote-request': '1', 'x-kun-remote-client': 'anonymous' }, body: payload
+    })
+    expect(unauthenticated.status).toBe(401)
+  })
+
   it('accepts uploads and stores them in a host temp directory', async () => {
     const cookie = await login()
     const response = await fetch(`${baseUrl}/remote/upload`, {
@@ -240,9 +254,36 @@ describe('RemoteAccessService HTTP surface', () => {
     await rm(dirname(body.path), { recursive: true, force: true })
   })
 
+  it('requires upload ownership before accepting a paper local path', async () => {
+    const cookie = await login()
+    const uploaded = await fetch(`${baseUrl}/remote/upload`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie,
+        'x-kun-remote-request': '1', 'x-kun-remote-client': 'paper-owner' },
+      body: JSON.stringify({ name: 'paper.pdf', dataBase64: Buffer.from('%PDF-1.4').toString('base64') })
+    })
+    expect(uploaded.status).toBe(200)
+    const { path } = await uploaded.json() as { path: string }
+    const invoke = (client: string, localPdfPath: string, session = cookie) => fetch(`${baseUrl}/remote/invoke`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: session,
+        'x-kun-remote-request': '1', 'x-kun-remote-client': client },
+      body: JSON.stringify({ channel: 'paper:import', args: [{
+        workspaceRoot: '/test', input: '', requestId: 'test-import', localPdfPath
+      }] })
+    })
+    expect((await invoke('paper-other', path)).status).toBe(403)
+    expect((await invoke('paper-owner', '/etc/hosts')).status).toBe(403)
+    const secondCookie = await login()
+    expect((await invoke('paper-owner', path, secondCookie)).status).toBe(403)
+    expect(await readFile(path, 'utf8')).toContain('%PDF')
+    await invoke('paper-owner', path)
+    await expect(readFile(path)).rejects.toThrow()
+  })
+
   it('opens the SSE event stream for authenticated clients', async () => {
     const cookie = await login()
-    const response = await fetch(`${baseUrl}/remote/events?client=test-client`, {
+    const response = await fetch(`${baseUrl}/remote/events?client=test-client-event`, {
       headers: { cookie }
     })
     expect(response.status).toBe(200)

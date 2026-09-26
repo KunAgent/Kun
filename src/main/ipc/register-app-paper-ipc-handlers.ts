@@ -174,7 +174,7 @@ export function registerAppPaperIpcHandlers(options: RegisterAppIpcHandlersOptio
       jobStatus = job.signal.aborted ? 'canceled' : 'error'
       return paperErrorResult<PaperImportResult>(error, 'io')
     } finally {
-      finishPaperJob(request.requestId, jobStatus)
+      finishPaperJob(request.requestId, jobStatus, event.sender, job.signal)
     }
   })
 
@@ -228,7 +228,7 @@ export function registerAppPaperIpcHandlers(options: RegisterAppIpcHandlersOptio
       jobStatus = job.signal.aborted ? 'canceled' : 'error'
       return paperErrorResult<PaperImportBatchResult>(error, 'io')
     } finally {
-      finishPaperJob(request.requestId, jobStatus)
+      finishPaperJob(request.requestId, jobStatus, event.sender, job.signal)
     }
   })
 
@@ -334,7 +334,7 @@ export function registerAppPaperIpcHandlers(options: RegisterAppIpcHandlersOptio
       if (job.signal.aborted) return { ok: false, code: 'canceled', message: 'Canceled.' }
       return paperErrorResult<PaperCoolNotesResult>(error, 'network')
     } finally {
-      finishPaperJob(request.requestId, jobStatus)
+      finishPaperJob(request.requestId, jobStatus, event.sender, job.signal)
     }
   })
 
@@ -403,7 +403,7 @@ export function registerAppPaperIpcHandlers(options: RegisterAppIpcHandlersOptio
       if (job.signal.aborted) return { ok: false, code: 'canceled', message: 'Canceled.' }
       return paperErrorResult<PaperPreprocessResult>(error, 'io')
     } finally {
-      finishPaperJob(request.requestId, jobStatus)
+      finishPaperJob(request.requestId, jobStatus, event.sender, job.signal)
     }
   })
 
@@ -435,6 +435,6 @@ export function registerAppPaperIpcHandlers(options: RegisterAppIpcHandlersOptio
   ipcMain.handle('paper:cancel', async (event, payload: unknown): Promise<void> => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     const request = parseIpcPayload('paper:cancel', paperCancelPayloadSchema, payload)
-    cancelPaperJob(request.requestId)
+    cancelPaperJob(request.requestId, event.sender)
   })
 }
