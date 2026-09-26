@@ -280,7 +280,9 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
       intent: string,
       signal: AbortSignal
     ): ((approval: ApprovalRequest) => Promise<'allow' | 'deny' | ApprovalResolution>) => async (approval) => {
-      const requiresUserDecision = approval.action?.requiresUserDecision === true
+      const requiresUserDecision =
+        approval.action?.requiresUserDecision === true ||
+        approval.action?.reviewerRequirement === 'user'
       if (!requiresUserDecision && approvalPolicy === 'auto' && sandboxMode === 'danger-full-access') return 'allow'
       if (approvalReviewer === 'agent' && !requiresUserDecision) {
         if (!deps.approvalReview) {

@@ -57,7 +57,9 @@ export class InteractiveToolBridge {
   async awaitApproval(
     input: AwaitToolApprovalInput
   ): Promise<'allow' | 'deny' | ApprovalResolution> {
-    const requiresUserDecision = input.approval.action?.requiresUserDecision === true
+    const requiresUserDecision =
+      input.approval.action?.requiresUserDecision === true ||
+      input.approval.action?.reviewerRequirement === 'user'
     if (
       !requiresUserDecision &&
       input.approvalPolicy === 'auto' &&

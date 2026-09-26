@@ -56,7 +56,14 @@ export const ApprovalActionEnvelopeSchema = z.object({
    * configured hooks, and the automatic agent reviewer must not decide it
    * (for example promoting content into a standing user directive).
    */
-  requiresUserDecision: z.boolean().optional()
+  requiresUserDecision: z.boolean().optional(),
+  /**
+   * Who may resolve this request. 'user' is equivalent to requiresUserDecision:
+   * the approval always waits for the human queue — auto policy and the agent
+   * reviewer are skipped. ADE uses it for worker permission escalation, where
+   * only the user may widen a worker's ceiling above the manager's authority.
+   */
+  reviewerRequirement: z.literal('user').optional()
 }).strict()
 export type ApprovalActionEnvelope = z.infer<typeof ApprovalActionEnvelopeSchema>
 
