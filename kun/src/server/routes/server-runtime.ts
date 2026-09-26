@@ -253,6 +253,11 @@ export type ServerRuntime = {
     detector: HarnessDetector
     /** ACP `session/new` model probing for `modelSource: 'probe'` harnesses. */
     acpModels?: AcpModelProbe
+    /**
+     * Loopback `kun serve` endpoint shared with harness env injection; the
+     * serve layer fills `baseUrl` once the listener binds.
+     */
+    gatewayEndpoint?: { baseUrl?: string }
   }
   /**
    * Process-local `kgw_` bearer tokens scoped to spawned harnesses

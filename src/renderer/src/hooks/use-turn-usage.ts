@@ -49,6 +49,8 @@ export type TurnUsageSummary = {
   estimateCoverage: 'complete' | 'partial' | 'unavailable'
   providerIds: string[]
   models: string[]
+  /** Record origins; 'harness-gateway' marks requests routed via the local Kun gateway. */
+  sources?: string[]
 }
 
 export type TurnUsageState = {
@@ -116,7 +118,10 @@ export function parseTurnUsageResponse(
       referencePriceBreakdown,
       estimateCoverage: coverage,
       providerIds: stringArray(value.provider_ids),
-      models: stringArray(value.models)
+      models: stringArray(value.models),
+      ...(Array.isArray(value.sources) && value.sources.length
+        ? { sources: stringArray(value.sources) }
+        : {})
     })
   }
   return byTurnId

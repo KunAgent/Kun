@@ -1,20 +1,26 @@
 import { randomUUID } from 'node:crypto'
+import type { UsageSnapshot } from '../../contracts/usage.js'
+import type { HarnessTokenGrant } from '../../harness/harness-token-service.js'
 import type { ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { readJsonBody } from '../read-json-body.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import type { GatewayLease } from './gateway-request-guard.js'
 import type { ServerRuntime } from './server-runtime.js'
 import {
+  acquireHarnessGrantLease,
   asRecord,
+  authorizeGateway,
   errorMessage,
   errorStatus,
   estimateModelRequestTokens,
+  gatewayRunningTurnId,
   guardFor,
   makeModelRequest,
   MAX_GATEWAY_BODY_BYTES,
   nextGatewayChunk,
   numberValue,
   parseArguments,
+  recordHarnessGatewayUsage,
   resolveGatewayModel,
   stringValue
 } from './model-gateway-core.js'
@@ -43,12 +49,26 @@ function anthropicError(message: string, status: number): JsonResponse {
   return response
 }
 
-/** Same Bearer/x-api-key credential + token bucket, with Anthropic error bodies. */
-function authorizeAnthropicGateway(runtime: ServerRuntime, request: Request): JsonResponse | null {
-  const guard = guardFor(runtime)
-  if (!guard || !guard.authorize(request)) return anthropicError('Invalid gateway API key.', 401)
-  if (!guard.consumeToken()) return anthropicError('Gateway rate limit exceeded.', 429)
-  return null
+/**
+ * Harness `kgw_` grants are checked before public credentials; a failed
+ * grant verify falls through to nothing — it is never a public credential.
+ */
+function authorizeAnthropicGateway(
+  runtime: ServerRuntime,
+  request: Request
+): { grant?: HarnessTokenGrant } | JsonResponse {
+  const verdict = authorizeGateway(runtime, request)
+  if (!verdict.ok) {
+    return verdict.reason === 'rate_limited'
+      ? anthropicError('Gateway rate limit exceeded.', 429)
+      : anthropicError('Invalid gateway API key.', 401)
+  }
+  return { grant: verdict.auth.kind === 'harness' ? verdict.auth.grant : undefined }
+}
+
+/** Per-grant concurrency/body limits replace the public guard's when a `kgw_` grant authorized the request. */
+function acquireGatewayLease(runtime: ServerRuntime, request: Request, grant: HarnessTokenGrant | undefined): GatewayLease | null {
+  return grant ? acquireHarnessGrantLease(grant, request.signal) : guardFor(runtime)?.acquire(request.signal) ?? null
 }
 
 function anthropicStopReason(
@@ -61,15 +81,15 @@ function anthropicStopReason(
 }
 
 export async function gatewayMessages(runtime: ServerRuntime, request: Request): Promise<Response | JsonResponse> {
-  const rejected = authorizeAnthropicGateway(runtime, request)
-  if (rejected) return rejected
+  const gate = authorizeAnthropicGateway(runtime, request)
+  if ('status' in gate) return gate
+  const grant = gate.grant
   if (!runtime.modelGateway?.enabled() || !runtime.modelClient) return anthropicError('Local model gateway is disabled.', 404)
-  const guard = guardFor(runtime)!
-  const lease = guard.acquire(request.signal)
+  const lease = acquireGatewayLease(runtime, request, grant)
   if (!lease) return anthropicError('Too many concurrent gateway requests.', 429)
   let body: Awaited<ReturnType<typeof readJsonBody>>
   try {
-    body = await readJsonBody(request, MAX_GATEWAY_BODY_BYTES, lease.signal)
+    body = await readJsonBody(request, grant?.maxBodyBytes ?? MAX_GATEWAY_BODY_BYTES, lease.signal)
   } catch (error) {
     lease.release()
     return anthropicError(lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error), lease.timedOut() ? 504 : 400)
@@ -86,14 +106,18 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
     return anthropicError(error instanceof Error ? error.message : String(error), 400)
   }
   const model = stringValue(input.model)
-  const resolved = model ? await resolveGatewayModel(runtime, model) : null
+  const resolved = model ? await resolveGatewayModel(runtime, model, grant) : null
   if (!resolved) {
     lease.release()
     return anthropicError(`The model '${model || '(missing)'}' does not exist.`, 404)
   }
+  // Grant requests run under the grant's thread and the currently running
+  // turn when one exists, so items and usage attribute to the real turn.
+  const turnId = grant ? await gatewayRunningTurnId(runtime, grant.threadId) : undefined
   let modelRequest: ModelRequest
   try {
-    modelRequest = makeModelRequest({ ...input, model: resolved.model }, lease.signal, resolved.providerId)
+    modelRequest = makeModelRequest({ ...input, model: resolved.model }, lease.signal, resolved.providerId,
+      grant ? { threadId: grant.threadId, turnId: turnId ?? `gateway_${grant.grantId}` } : undefined)
   } catch (error) {
     lease.release()
     return anthropicError(error instanceof Error ? error.message : String(error), 400)
@@ -107,12 +131,15 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
       return anthropicError(`The model '${resolved.model}' does not support image inputs.`, 400)
     }
   }
+  const attribute = grant
+    ? (usage?: UsageSnapshot) => recordHarnessGatewayUsage(runtime, grant, resolved, usage, turnId)
+    : undefined
   const stream = input.stream === true
   try {
     const chunks = runtime.modelClient.stream(modelRequest)
     return stream
-      ? anthropicStreamingResponse(chunks, model, lease)
-      : anthropicNonStreamingResponse(chunks, model, lease)
+      ? anthropicStreamingResponse(chunks, model, lease, attribute)
+      : anthropicNonStreamingResponse(chunks, model, lease, attribute)
   } catch (error) {
     lease.release()
     return anthropicError(errorMessage(error), 502)
@@ -126,23 +153,23 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
  * response as approximate rather than provider-authoritative.
  */
 export async function gatewayCountTokens(runtime: ServerRuntime, request: Request): Promise<JsonResponse> {
-  const rejected = authorizeAnthropicGateway(runtime, request)
-  if (rejected) return rejected
+  const gate = authorizeAnthropicGateway(runtime, request)
+  if ('status' in gate) return gate
+  const grant = gate.grant
   if (!runtime.modelGateway?.enabled()) return anthropicError('Local model gateway is disabled.', 404)
-  const guard = guardFor(runtime)!
-  const lease = guard.acquire(request.signal)
+  const lease = acquireGatewayLease(runtime, request, grant)
   if (!lease) return anthropicError('Too many concurrent gateway requests.', 429)
   try {
     let body: Awaited<ReturnType<typeof readJsonBody>>
     try {
-      body = await readJsonBody(request, MAX_GATEWAY_BODY_BYTES, lease.signal)
+      body = await readJsonBody(request, grant?.maxBodyBytes ?? MAX_GATEWAY_BODY_BYTES, lease.signal)
     } catch (error) {
       return anthropicError(lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error), lease.timedOut() ? 504 : 400)
     }
     if (!body.ok) return anthropicError(JSON.parse(body.response.body).message, body.response.status)
     const input = anthropicToChatInput(asRecord(body.value))
     const model = stringValue(input.model)
-    const resolved = model ? await resolveGatewayModel(runtime, model) : null
+    const resolved = model ? await resolveGatewayModel(runtime, model, grant) : null
     if (!resolved) return anthropicError(`The model '${model || '(missing)'}' does not exist.`, 404)
     const modelRequest = makeModelRequest({ ...input, model: resolved.model }, lease.signal, resolved.providerId)
     return {
@@ -254,10 +281,10 @@ function anthropicUsage(usage: unknown): Record<string, number> {
   }
 }
 
-async function anthropicNonStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, model: string, lease: GatewayLease): Promise<JsonResponse> {
+async function anthropicNonStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, model: string, lease: GatewayLease, attribute?: (usage?: UsageSnapshot) => Promise<void>): Promise<JsonResponse> {
   let text = ''
   let thinking = ''
-  let usage: unknown
+  let usage: UsageSnapshot | undefined
   let stopReason: 'stop' | 'tool_calls' | 'length' | 'error' | undefined
   const content: AnthropicBlock[] = []
   const toolCalls: { id: string; name: string; input: unknown }[] = []
@@ -289,6 +316,7 @@ async function anthropicNonStreamingResponse(chunks: AsyncIterable<ModelStreamCh
     return anthropicError(lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error), lease.timedOut() ? 504 : 502)
   } finally {
     if (!completed) await iterator.return?.().catch(() => undefined)
+    await attribute?.(usage).catch(() => undefined)
     lease.release()
   }
   for (const [callId, entry] of deltaToolCalls) {
@@ -313,17 +341,18 @@ async function anthropicNonStreamingResponse(chunks: AsyncIterable<ModelStreamCh
   return response
 }
 
-function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, model: string, lease: GatewayLease): Response {
+function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, model: string, lease: GatewayLease, attribute?: (usage?: UsageSnapshot) => Promise<void>): Response {
   const encoder = new TextEncoder()
   const id = `msg_${randomUUID()}`
   const iterator = chunks[Symbol.asyncIterator]()
   let cancelled = false
   let finished = false
   let iteratorClosed = false
+  let attributed = false
   let blockIndex = 0
   let openBlock: 'text' | 'thinking' | 'tool_use' | null = null
   let openToolCallId = ''
-  let usage: unknown
+  let usage: UsageSnapshot | undefined
   let sawToolUse = false
   let stopReason: 'stop' | 'tool_calls' | 'length' | 'error' | undefined
   const closeIterator = async (): Promise<void> => {
@@ -331,10 +360,16 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
     iteratorClosed = true
     await iterator.return?.().catch(() => undefined)
   }
+  const settleUsage = async (): Promise<void> => {
+    if (attributed) return
+    attributed = true
+    await attribute?.(usage).catch(() => undefined)
+  }
   const finish = async (controller: ReadableStreamDefaultController<Uint8Array>, closeUpstream: boolean): Promise<void> => {
     if (finished) return
     finished = true
     if (closeUpstream) await closeIterator()
+    await settleUsage()
     lease.release()
     if (!cancelled) controller.close()
   }
@@ -362,6 +397,9 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
     async pull(controller) {
       if (finished || cancelled) return
       try {
+        // A pull that enqueues nothing is not re-invoked, so bookkeeping-only
+        // chunks (usage) loop back for another read instead of returning.
+        for (;;) {
         const result = await nextGatewayChunk(iterator, lease.signal)
         const chunk = result.done ? { kind: 'completed' as const, stopReason: 'stop' as const } : result.value
         if (result.done) iteratorClosed = true
@@ -385,7 +423,7 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
         }
         if (chunk.kind === 'usage') {
           usage = chunk.usage
-          return
+          continue
         }
         if (chunk.kind === 'assistant_text_delta') {
           if (openBlock !== 'text') {
@@ -457,6 +495,8 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
           sendEvent(controller, 'content_block_stop', { type: 'content_block_stop', index: blockIndex })
           blockIndex += 1
         }
+        return
+        }
       } catch (error) {
         if (!cancelled) {
           sendEvent(controller, 'error', { type: 'error', error: { type: 'api_error', message: lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error) } })
@@ -470,6 +510,7 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
       await closeIterator()
       if (!finished) {
         finished = true
+        await settleUsage()
         lease.release()
       }
     }

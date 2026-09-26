@@ -216,6 +216,7 @@
   "turnUsageDetailsOpenLabel": "ターンの使用量詳細を表示",
   "turnUsageDetailsTitle": "ターンの使用量",
   "turnUsageDetailsMeta": "{{models}} · モデルリクエスト {{requests}} 件",
+  "turnUsageDetailsGatewaySource": "ローカル Kun ゲートウェイ経由でルーティングされたリクエストを含みます。",
   "turnUsageDetailsUnknownModel": "不明なモデル",
   "turnUsageDetailsTokens": "トークン使用量",
   "turnUsageDetailsInput": "入力",

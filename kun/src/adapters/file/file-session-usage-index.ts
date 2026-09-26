@@ -50,6 +50,8 @@ const UsageIndexRowSchema = z.discriminatedUnion('type', [
     turnId: z.string().optional(),
     model: z.string().optional(),
     providerId: z.string().optional(),
+    source: z.enum(['native', 'harness-gateway', 'harness-reported']).optional(),
+    harnessId: z.string().optional(),
     usage: UsageSnapshotSchema,
     cumulative: UsageSnapshotSchema
   }),
@@ -163,6 +165,8 @@ export class FileSessionUsageIndex {
         ...(row.turnId ? { turnId: row.turnId } : {}),
         ...(row.model ? { model: row.model } : {}),
         ...(row.providerId ? { providerId: row.providerId } : {}),
+        ...(row.source ? { source: row.source } : {}),
+        ...(row.harnessId ? { harnessId: row.harnessId } : {}),
         completedAt: row.timestamp,
         usage: row.usage
       })
@@ -444,6 +448,8 @@ function appendRowsForEvent(
     ...(event.turnId ? { turnId: event.turnId } : {}),
     ...(event.model ? { model: event.model } : {}),
     ...(event.providerId ? { providerId: event.providerId } : {}),
+    ...(event.source ? { source: event.source } : {}),
+    ...(event.harnessId ? { harnessId: event.harnessId } : {}),
     usage: diffUsage(event.usage, state.cumulative),
     cumulative: event.usage
   })

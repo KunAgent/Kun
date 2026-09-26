@@ -140,6 +140,21 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
       hooks: { kind: 'claude-settings', events: ['Stop', 'Notification', 'PostToolUse'] }
     },
     capabilities: CLAUDE_CODE_CAPABILITIES,
+    gateway: {
+      protocol: 'anthropic-messages',
+      env: {
+        baseUrl: 'ANTHROPIC_BASE_URL',
+        token: 'ANTHROPIC_AUTH_TOKEN',
+        model: 'ANTHROPIC_MODEL',
+        smallModel: 'ANTHROPIC_SMALL_FAST_MODEL'
+      },
+      stripEnv: [
+        'ANTHROPIC_API_KEY',
+        'CLAUDE_CODE_OAUTH_TOKEN',
+        'CLAUDE_CODE_USE_BEDROCK',
+        'CLAUDE_CODE_USE_VERTEX'
+      ]
+    },
     builtin: true
   },
   {

@@ -52,6 +52,13 @@ export function composeDelegatedTurnRuntimes(
     handlesProvider(providerId) {
       return active.some((runtime) => runtime.handlesProvider(providerId))
     },
+    handlesRoute(route) {
+      return active.some((runtime) =>
+        runtime.handlesRoute
+          ? runtime.handlesRoute(route)
+          : runtime.handlesProvider(route.providerId)
+      )
+    },
     capabilities(providerId) {
       return active.find((candidate) => candidate.handlesProvider(providerId))
         ?.capabilities(providerId)
@@ -81,6 +88,14 @@ export class ReplaceableDelegatedTurnRuntime implements DelegatedTurnRuntime {
 
   handlesProvider(providerId: string | undefined): boolean {
     return this.current?.handlesProvider(providerId) === true
+  }
+
+  handlesRoute(route: HarnessRoute): boolean {
+    return this.current
+      ? this.current.handlesRoute
+        ? this.current.handlesRoute(route)
+        : this.current.handlesProvider(route.providerId)
+      : false
   }
 
   capabilities(providerId: string | undefined): DelegatedRuntimeCapabilities | undefined {

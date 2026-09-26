@@ -31,11 +31,26 @@ export class AgentSdkProtocolError extends Error {
 
 /** Safe, source-id-free failure raised when a managed Claude credential is fenced or unreadable. */
 export class AgentSdkCredentialUnavailableError extends Error {
-  readonly code = 'agent_sdk_credential_unavailable'
+  readonly code: string = 'agent_sdk_credential_unavailable'
 
   constructor() {
     super('Protected Claude subscription credentials are unavailable. Reconnect the provider in Settings.')
     this.name = 'AgentSdkCredentialUnavailableError'
+  }
+}
+
+/**
+ * `kun-gateway` mode cannot run without a listening kun serve endpoint, a
+ * wired token service, or a resolvable route. Extends the credential error so
+ * runTurnOwned's existing availability branch records + fails the turn.
+ */
+export class AgentSdkGatewayUnavailableError extends AgentSdkCredentialUnavailableError {
+  override readonly code = 'agent_sdk_gateway_unavailable'
+
+  constructor(detail: string) {
+    super()
+    this.message = `kun-gateway credential mode is unavailable: ${detail}`
+    this.name = 'AgentSdkGatewayUnavailableError'
   }
 }
 
@@ -82,6 +97,11 @@ export interface SdkTurnContext {
   }
   /** Subscription OAuth token; absent => rely on the host's Claude Code login. */
   oauthToken?: string
+  /**
+   * `kun-gateway` turns replace `oauthToken` entirely: the harness reaches the
+   * loopback kun serve gateway with this env injection (docs/ade/04 §5.5).
+   */
+  gateway?: import('./sdk-options-builder.js').SdkGatewayEnv
   /** Image attachments to forward to the model (base64 + media type). */
   images?: Array<{ mediaType: string; base64: string }>
   /** kun tool catalog to consider bridging (overlap/excluded are filtered here). */

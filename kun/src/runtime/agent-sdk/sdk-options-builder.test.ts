@@ -26,6 +26,14 @@ describe('resolveSdkModel', () => {
     expect(resolveSdkModel('deepseek-v4-flash', 'gpt-5')).toBeUndefined()
     expect(resolveSdkModel(undefined, undefined)).toBeUndefined()
   })
+
+  test('passes kun/<provider>/<model> gateway addresses through untouched', () => {
+    expect(resolveSdkModel('kun/anthropic-sub/claude-sonnet-4-6', 'claude-haiku-4-5'))
+      .toBe('kun/anthropic-sub/claude-sonnet-4-6')
+    expect(resolveSdkModel(undefined, 'kun/p/m')).toBe('kun/p/m')
+    // A model id with slashes but no kun/ prefix is still not a gateway id.
+    expect(resolveSdkModel('vendor/claude-x', 'kun/p/m')).toBe('kun/p/m')
+  })
 })
 
 describe('buildScopedEnv', () => {
@@ -64,6 +72,41 @@ describe('buildScopedEnv', () => {
     const base = { ANTHROPIC_API_KEY: 'k' }
     buildScopedEnv(base, 'sk-ant-oat01-valid')
     expect(base.ANTHROPIC_API_KEY).toBe('k')
+  })
+
+  test('gateway mode strips provider credentials and injects only the scoped grant', () => {
+    const env = buildScopedEnv(
+      {
+        PATH: '/usr/bin',
+        ANTHROPIC_API_KEY: 'sk-ant-xxx',
+        CLAUDE_CODE_OAUTH_TOKEN: 'oat-token',
+        ANTHROPIC_BASE_URL: 'https://upstream',
+        CLAUDE_CODE_USE_BEDROCK: '1'
+      },
+      'sk-ant-oat01-should-not-be-used',
+      {
+        baseUrl: 'http://127.0.0.1:18899',
+        token: 'kgw_abc.sig',
+        model: 'kun/p/m',
+        smallModel: 'kun/p/small',
+        env: {
+          baseUrl: 'ANTHROPIC_BASE_URL',
+          token: 'ANTHROPIC_AUTH_TOKEN',
+          model: 'ANTHROPIC_MODEL',
+          smallModel: 'ANTHROPIC_SMALL_FAST_MODEL'
+        },
+        stripEnv: ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_USE_BEDROCK']
+      }
+    )
+    expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:18899')
+    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('kgw_abc.sig')
+    expect(env.ANTHROPIC_MODEL).toBe('kun/p/m')
+    expect(env.ANTHROPIC_SMALL_FAST_MODEL).toBe('kun/p/small')
+    // OAuth + provider credentials are gone; the strip list wins over the token arg.
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined()
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
+    expect(env.CLAUDE_CODE_USE_BEDROCK).toBeUndefined()
+    expect(env.PATH).toBe('/usr/bin')
   })
 
   test('rejects wrapped or malformed setup tokens without echoing the secret', () => {

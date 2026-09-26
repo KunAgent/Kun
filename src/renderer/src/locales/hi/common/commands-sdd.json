@@ -216,6 +216,7 @@
   "turnUsageDetailsOpenLabel": "टर्न उपयोग विवरण दिखाएँ",
   "turnUsageDetailsTitle": "टर्न उपयोग",
   "turnUsageDetailsMeta": "{{models}} · {{requests}} मॉडल अनुरोध",
+  "turnUsageDetailsGatewaySource": "लोकल Kun गेटवे के माध्यम से रूट किए गए अनुरोध शामिल हैं।",
   "turnUsageDetailsUnknownModel": "अज्ञात मॉडल",
   "turnUsageDetailsTokens": "टोकन उपयोग",
   "turnUsageDetailsInput": "इनपुट",

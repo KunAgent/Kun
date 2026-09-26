@@ -4,6 +4,7 @@ import { RoutePoolHealthStore } from '../../adapters/model/route-pool-model-clie
 import type { ServerRuntime } from './server-runtime.js'
 import { gatewayCountTokens, gatewayMessages } from './anthropic-messages-gateway.js'
 import { RoutePoolTestService } from '../../services/route-pool-test-service.js'
+import { HarnessTokenService } from '../../harness/harness-token-service.js'
 
 class ScriptedModel implements ModelClient {
   provider = 'test'
@@ -302,5 +303,134 @@ describe('anthropic count_tokens endpoint', () => {
     expect(missing.status).toBe(404)
     const malformed = await gatewayCountTokens(runtime(), countRequest({ model: 'local-model' }))
     expect(malformed.status).toBe(400)
+  })
+})
+
+describe('harness-grant gateway requests', () => {
+  function grantRuntime(modelClient: ModelClient, tokens: HarnessTokenService) {
+    const usageEvents: Record<string, unknown>[] = []
+    const records: { threadId: string; turnId?: string }[] = []
+    const base = runtime(modelClient) as unknown as Record<string, unknown>
+    base.harnessTokens = tokens
+    base.threadService = {
+      get: async (threadId: string) => threadId === 'worker-thread'
+        ? { id: threadId, turns: [{ id: 'turn_live', status: 'running' }] }
+        : null
+    }
+    base.usageService = {
+      record: (threadId: string, usage: unknown, _sig: unknown, turnId?: string) => {
+        records.push({ threadId, turnId })
+        return usage
+      }
+    }
+    base.events = {
+      record: async (event: Record<string, unknown>) => { usageEvents.push(event); return event }
+    }
+    base.modelConnections = {
+      snapshot: async () => ({
+        providers: [
+          { id: 'anthropic-sub', kind: 'http', authType: 'subscription', configured: true, credentialStatus: 'ready', models: ['claude-sonnet-4-6'] }
+        ]
+      })
+    }
+    return { base: base as unknown as ServerRuntime, usageEvents, records }
+  }
+
+  function grantRequest(body: Record<string, unknown>, token: string): Request {
+    return new Request('http://localhost/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify(body)
+    })
+  }
+
+  function issue(tokens: HarnessTokenService, routes: { providerId: string; model: string; role: 'main' | 'small' }[]) {
+    return tokens.issue({
+      threadId: 'worker-thread',
+      harnessId: 'claude-code',
+      credentialIdentity: 'kun-gateway:anthropic-sub/claude-sonnet-4-6',
+      scopes: ['gateway'],
+      routes
+    })
+  }
+
+  it('routes kun/<provider>/<model> through the grant and attributes usage to the running turn', async () => {
+    const tokens = new HarnessTokenService()
+    const model = new ScriptedModel([
+      { kind: 'assistant_text_delta', text: 'hi' },
+      { kind: 'usage', usage: { promptTokens: 7, completionTokens: 3, totalTokens: 10, cacheHitRate: null } as never },
+      { kind: 'completed', stopReason: 'stop' }
+    ])
+    const { base, usageEvents, records } = grantRuntime(model, tokens)
+    const token = issue(tokens, [{ providerId: 'anthropic-sub', model: 'claude-sonnet-4-6', role: 'main' }])
+
+    const response = await gatewayMessages(base, grantRequest({
+      model: 'kun/anthropic-sub/claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'hi' }]
+    }, token))
+    expect(response.status).toBe(200)
+    // The request landed on the granted provider, not the route pool.
+    expect(model.last?.providerId).toBe('anthropic-sub')
+    expect(model.last?.model).toBe('claude-sonnet-4-6')
+    expect(model.last?.threadId).toBe('worker-thread')
+    expect(model.last?.turnId).toBe('turn_live')
+
+    expect(records).toEqual([{ threadId: 'worker-thread', turnId: 'turn_live' }])
+    const usage = usageEvents.find((event) => event.kind === 'usage')
+    expect(usage).toMatchObject({
+      threadId: 'worker-thread',
+      turnId: 'turn_live',
+      model: 'claude-sonnet-4-6',
+      providerId: 'anthropic-sub',
+      source: 'harness-gateway',
+      harnessId: 'claude-code'
+    })
+  })
+
+  it('rejects grant routes the token was not issued for', async () => {
+    const tokens = new HarnessTokenService()
+    const { base } = grantRuntime(new ScriptedModel([]), tokens)
+    const token = issue(tokens, [{ providerId: 'anthropic-sub', model: 'claude-sonnet-4-6', role: 'main' }])
+    const response = await gatewayMessages(base, grantRequest({
+      model: 'kun/anthropic-sub/claude-opus-4-8',
+      messages: [{ role: 'user', content: 'hi' }]
+    }, token))
+    expect(response.status).toBe(404)
+  })
+
+  it('never treats a kgw_ token as a public credential', async () => {
+    const tokens = new HarnessTokenService()
+    const { base } = grantRuntime(new ScriptedModel([]), tokens)
+    const foreign = 'kgw_deadbeef.invalid'
+    const response = await gatewayMessages(base, grantRequest({
+      model: 'local-model', messages: [{ role: 'user', content: 'hi' }]
+    }, foreign))
+    expect(response.status).toBe(401)
+  })
+
+  it('rejects kun/ direct addressing for public credentials', async () => {
+    const tokens = new HarnessTokenService()
+    const { base } = grantRuntime(new ScriptedModel([]), tokens)
+    const response = await gatewayMessages(base, authorizedRequest({
+      model: 'kun/anthropic-sub/claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'hi' }]
+    }))
+    expect(response.status).toBe(404)
+  })
+
+  it('lets a granted token count tokens on its own route', async () => {
+    const tokens = new HarnessTokenService()
+    const { base } = grantRuntime(new ScriptedModel([]), tokens)
+    const token = issue(tokens, [{ providerId: 'anthropic-sub', model: 'claude-sonnet-4-6', role: 'main' }])
+    const response = await gatewayCountTokens(base, new Request('http://localhost/v1/messages/count_tokens', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        model: 'kun/anthropic-sub/claude-sonnet-4-6',
+        messages: [{ role: 'user', content: 'count me' }]
+      })
+    }))
+    expect(response.status).toBe(200)
+    expect((JSON.parse(response.body) as { input_tokens: number }).input_tokens).toBeGreaterThan(0)
   })
 })
