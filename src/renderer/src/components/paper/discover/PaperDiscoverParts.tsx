@@ -1,17 +1,29 @@
 import { useState, type ReactElement } from 'react'
 import { ChevronDown, ChevronUp, Loader2, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import type { PaperImportHintMeta } from '@shared/paper/paper-types'
 import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { newPaperRequestId, usePaperStore } from '../../../write/paper/paper-store'
 
-/** Import a discover hit into the library, or show that it is already there. */
+/** Normalized title key, mirroring `paperTitleKey` in the unit service. */
+function titleKey(title: string | undefined): string {
+  return title ? title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() : ''
+}
+
+/**
+ * Import a discover hit into the library, or show that it is already there.
+ * `meta` (plan P3.2) carries the search-card fields so DOI imports skip the
+ * Crossref round-trip and the in-library badge dedupes 4 ways.
+ */
 export function ImportButton({
   input,
+  meta,
   workspaceRoot,
   t
 }: {
   input: string
+  meta?: PaperImportHintMeta
   workspaceRoot: string
   t: (key: string) => string
 }): ReactElement | null {
@@ -19,11 +31,18 @@ export function ImportButton({
   const refreshEntries = usePaperModeStore((s) => s.refreshEntries)
   const paperReading = useWriteWorkspaceStore((s) => s.paperReading)
   const [busy, setBusy] = useState(false)
+  const wantTitle = titleKey(meta?.title)
   const inLibrary = entries.some(
     (e) =>
       e.meta.arxivId === input ||
       e.meta.coolPapers?.id === input ||
-      e.meta.doi?.toLowerCase() === input.toLowerCase()
+      e.meta.doi?.toLowerCase() === input.toLowerCase() ||
+      (meta?.arxivId ? e.meta.arxivId === meta.arxivId : false) ||
+      (meta?.doi ? e.meta.doi?.toLowerCase() === meta.doi.toLowerCase() : false) ||
+      (meta?.coolId ? e.meta.coolPapers?.id === meta.coolId : false) ||
+      (wantTitle && meta?.year
+        ? titleKey(e.meta.title) === wantTitle && (!e.meta.year || e.meta.year === meta.year)
+        : false)
   )
   if (inLibrary) {
     return (
@@ -39,6 +58,7 @@ export function ImportButton({
       const result = await window.kunGui.paperImport({
         workspaceRoot,
         input,
+        meta,
         parentDir: paperReading.papersDir || 'papers',
         requestId: newPaperRequestId()
       })

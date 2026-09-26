@@ -4,6 +4,8 @@ import type {
   WritePaperModeSettingsPatchV1,
   WritePaperModeSettingsV1
 } from './app-settings-types-paper-mode'
+import type { PaperSearchSource } from './paper/paper-search'
+import { DEFAULT_PAPER_SEARCH_SOURCES, PAPER_SEARCH_SOURCES } from './paper/paper-search'
 
 export const PAPER_MODE_MAX_LIBRARIES = 64
 export const PAPER_MODE_MAX_FEEDS = 64
@@ -36,11 +38,26 @@ export function defaultWritePaperModeSettings(): WritePaperModeSettingsV1 {
       crossrefMailto: '',
       onlineReferences: true
     },
+    search: {
+      enabledSources: [...DEFAULT_PAPER_SEARCH_SOURCES],
+      semanticScholarApiKey: '',
+      coreApiKey: '',
+      openAlexMailto: '',
+      unpaywallEmail: ''
+    },
     reader: { paperTone: 'white' }
   }
 }
 
 const PAPER_TONES = new Set(['white', 'sepia', 'green', 'dark'])
+const PAPER_SEARCH_SOURCE_SET = new Set<string>(PAPER_SEARCH_SOURCES)
+
+function normalizeSearchSources(input: unknown, fallback: PaperSearchSource[]): PaperSearchSource[] {
+  const valid = compactStrings(input)
+    .map((value) => value.trim())
+    .filter((value): value is PaperSearchSource => PAPER_SEARCH_SOURCE_SET.has(value))
+  return valid.length > 0 ? [...new Set(valid)] : [...fallback]
+}
 
 function normalizeFeeds(input: unknown): WritePaperModeFeedV1[] {
   if (!Array.isArray(input)) return []
@@ -52,7 +69,8 @@ function normalizeFeeds(input: unknown): WritePaperModeFeedV1[] {
     const url = typeof candidate.url === 'string'
       ? candidate.url.trim().slice(0, PAPER_MODE_FEED_URL_MAX_CHARS)
       : ''
-    if (!url.startsWith('https://')) continue
+    // `kun-paper-search://` encodes a saved search subscription (plan P5).
+    if (!url.startsWith('https://') && !url.startsWith('kun-paper-search://')) continue
     const id = typeof candidate.id === 'string' && candidate.id.trim()
       ? candidate.id.trim().slice(0, 64)
       : `feed-${feeds.length + 1}`
@@ -88,6 +106,7 @@ export function normalizeWritePaperModeSettings(
   const translate = source.translate ?? {}
   const discover = source.discover ?? {}
   const scholar = source.scholar ?? {}
+  const search = source.search ?? {}
   const reader = source.reader ?? {}
   return {
     enabled: source.enabled === true,
@@ -124,6 +143,17 @@ export function normalizeWritePaperModeSettings(
         typeof scholar.crossrefMailto === 'string' ? scholar.crossrefMailto.trim().slice(0, 200) : '',
       onlineReferences: scholar.onlineReferences !== false
     },
+    search: {
+      enabledSources: normalizeSearchSources(search.enabledSources, defaults.search.enabledSources),
+      semanticScholarApiKey:
+        typeof search.semanticScholarApiKey === 'string' ? search.semanticScholarApiKey.trim().slice(0, 512) : '',
+      coreApiKey:
+        typeof search.coreApiKey === 'string' ? search.coreApiKey.trim().slice(0, 512) : '',
+      openAlexMailto:
+        typeof search.openAlexMailto === 'string' ? search.openAlexMailto.trim().slice(0, 320) : '',
+      unpaywallEmail:
+        typeof search.unpaywallEmail === 'string' ? search.unpaywallEmail.trim().slice(0, 320) : ''
+    },
     reader: {
       paperTone: PAPER_TONES.has(reader.paperTone ?? '') ? reader.paperTone! : defaults.reader.paperTone
     }
@@ -147,6 +177,7 @@ export function mergeWritePaperModeSettings(
     translate: { ...current.translate, ...(patch?.translate ?? {}) },
     discover: nextDiscover,
     scholar: { ...current.scholar, ...(patch?.scholar ?? {}) },
+    search: { ...current.search, ...(patch?.search ?? {}) },
     reader: { ...current.reader, ...(patch?.reader ?? {}) }
   })
 }

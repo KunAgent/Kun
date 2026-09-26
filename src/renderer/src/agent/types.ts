@@ -11,6 +11,7 @@ import type { CoreModelRequestFailureJson } from './kun-contract'
 import type { CoreApprovalActionJson } from './kun-contract-runtime'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { RendererChartSpec } from './chart-spec-adapter'
+import type { RendererPaperList } from './paper-list-adapter'
 
 export type ToolItemKind = 'tool_call' | 'command_execution' | 'file_change'
 export type RuntimeErrorSeverity = 'info' | 'warning' | 'error'
@@ -388,6 +389,14 @@ export type ChartBlock = {
   spec: RendererChartSpec
 }
 
+export type PaperListBlock = {
+  kind: 'paper-list'
+  id: string
+  turnId?: string
+  createdAt?: string
+  list: RendererPaperList
+}
+
 export type SourceHistoryOrder = { referenceId: string; turnIndex: number; itemIndex: number }
 export type SourceHistoryAttachment = { index: number; name: string; mimeType?: string }
 export type ChatBlock = ({
@@ -412,6 +421,7 @@ export type ChatBlock = ({
   | CompactionBlock
   | ReviewBlock
   | ChartBlock
+  | PaperListBlock
   | {
       kind: 'system'
       id: string

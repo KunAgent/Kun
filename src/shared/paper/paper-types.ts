@@ -136,6 +136,39 @@ export type PaperImportResult =
   | { ok: true; unitDir: string; meta: PaperUnitMeta; reused: boolean }
   | { ok: false; code: PaperErrorCode; message: string }
 
+/**
+ * Search-card metadata carried into a batch import (plan P3): the merged
+ * search result already has title/authors/identifiers, so the import can skip
+ * the Crossref round-trip and feed the OA-PDF resolver directly.
+ */
+export type PaperImportHintMeta = {
+  title?: string
+  authors?: string[]
+  abstract?: string
+  year?: string
+  venue?: string
+  doi?: string
+  arxivId?: string
+  coolId?: string
+  pdfUrl?: string
+  sourceUrl?: string
+  pmid?: string
+}
+
+export type PaperImportBatchItemResult = {
+  input: string
+  ok: boolean
+  unitDir?: string
+  title?: string
+  reused?: boolean
+  code?: PaperErrorCode
+  message?: string
+}
+
+export type PaperImportBatchResult =
+  | { ok: true; results: PaperImportBatchItemResult[] }
+  | { ok: false; code: PaperErrorCode; message: string }
+
 export type PaperUnitListEntry = {
   /** Paper directory path relative to the workspace root (forward slashes). */
   unitDir: string

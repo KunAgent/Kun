@@ -233,6 +233,11 @@ const BUILTIN_AGENT_CATALOG_BASE = [
     routingTerms: ['citation', 'source', 'bibliography', 'reference', '引用', '来源', '参考文献']
   },
   {
+    id: 'literature-researcher', name: 'Literature Researcher', color: '#0e7490', toolPolicy: 'readOnly', category: 'research',
+    description: 'Sweeps scholarly indexes along one sub-topic for survey-scale literature coverage.',
+    routingTerms: ['literature', 'survey', 'papers', 'related work', '文献', '综述', '论文', '相关工作']
+  },
+  {
     id: 'design-product-planner', name: 'Product Design Planner', color: '#3b82d8', toolPolicy: 'readOnly', category: 'planning',
     description: 'Defines product directions, user goals, key flows, screens, and design tradeoffs.',
     routingTerms: ['product design', 'direction', 'user goals', 'screen plan', '产品设计', '用户目标', '页面规划']
@@ -290,7 +295,8 @@ const WRITE_AGENT_IDS = new Set([
   'write-developmental-editor',
   'write-copy-editor',
   'write-fact-checker',
-  'write-citation-researcher'
+  'write-citation-researcher',
+  'literature-researcher'
 ])
 
 const DESIGN_AGENT_IDS = new Set([

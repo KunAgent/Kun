@@ -223,6 +223,10 @@
         "name": "Citation Researcher",
         "desc": "Authoritative sources and traceable citations · read-only"
       },
+      "literature-researcher": {
+        "name": "문헌 연구원",
+        "desc": "하위 주제별 학술 색인 탐색 · 읽기 전용"
+      },
       "design-product-planner": {
         "name": "Product Design Planner",
         "desc": "Direction, goals, flows, and tradeoffs · read-only"

@@ -21,6 +21,7 @@ import { ComponentPrototypeCard } from './ComponentPrototypeCard'
 import { DiagramPrototypeCard } from './DiagramPrototypeCard'
 import { ConversationVisualizationCard } from './ConversationVisualizationCard'
 import { ChartRenderer, ChartSkeleton } from './ChartRenderer'
+import { PaperListCard, PaperListSkeleton } from './PaperListCard'
 import type { OpenChildThreadHandler } from './SubagentCallCard'
 import { sameTurnContent, splitThink, type Turn } from './message-timeline-turns'
 import { extractPlanMetadataFromBlock, type GuiPlanToolMeta } from '../../plan/plan-tool'
@@ -146,6 +147,8 @@ export function ConversationTurn({
     turnFileChanges,
     chartBlocks,
     pendingChartBlocks,
+    paperListBlocks,
+    pendingPaperListBlocks,
     timelineEntries
   } = useMemo(
     () =>
@@ -286,6 +289,8 @@ export function ConversationTurn({
     conversationVisualizationBlocks.length > 0 ||
     pendingChartBlocks.length > 0 ||
     chartBlocks.length > 0 ||
+    pendingPaperListBlocks.length > 0 ||
+    paperListBlocks.length > 0 ||
     Boolean(devPreviewCard)
   )
   const forkFromTurn = async (): Promise<void> => {
@@ -461,6 +466,14 @@ export function ConversationTurn({
 
       {chartBlocks.map((block) => (
         <ChartRenderer key={block.id} spec={block.spec} />
+      ))}
+
+      {pendingPaperListBlocks.map((block) => (
+        <PaperListSkeleton key={block.id} title={block.summary} />
+      ))}
+
+      {paperListBlocks.map((block) => (
+        <PaperListCard key={block.id} list={block.list} workspaceRoot={filePreviewWorkspaceRoot} />
       ))}
 
       {/* Mobile moves per-turn usage into the message actions sheet (U9). */}

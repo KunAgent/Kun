@@ -16,6 +16,7 @@ import {
   type ModelProviderProfileV1,
   type KunRuntimeSettingsV1, type AppSettingsV1
 } from '../shared/app-settings'
+import { normalizeWritePaperModeSettings } from '../shared/app-settings-paper-mode'
 import {
   buildKunServeArgs,
   resolveKunExecutable,
@@ -480,6 +481,7 @@ async function prepareKunLaunch(
   const computerUseBridge = runtime.computerUse.enabled
     ? await prepareComputerUseHostForKunLaunch()
     : undefined
+  const paperSearch = normalizeWritePaperModeSettings(settings.write?.paperMode)
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     ...kunManagerLaunchEnvironment({
@@ -488,6 +490,12 @@ async function prepareKunLaunch(
       settingsPath: serviceManagerSettingsPath
     }),
     DEEPSEEK_API_KEY: defaultClientApiKey || process.env.DEEPSEEK_API_KEY || '',
+    // Paper-search credentials: env passes them to `kun serve` without touching kun.config.json.
+    KUN_SEMANTIC_SCHOLAR_API_KEY:
+      paperSearch.search.semanticScholarApiKey || paperSearch.scholar.semanticScholarApiKey || process.env.KUN_SEMANTIC_SCHOLAR_API_KEY || '',
+    KUN_CORE_API_KEY: paperSearch.search.coreApiKey || process.env.KUN_CORE_API_KEY || '',
+    KUN_OPENALEX_MAILTO: paperSearch.search.openAlexMailto || paperSearch.scholar.crossrefMailto || '',
+    KUN_UNPAYWALL_EMAIL: paperSearch.search.unpaywallEmail || '',
     KUN_PPT_TOOLCHAIN_DIR: pptToolchainDirectory,
     ...(activeProviderKind ? { KUN_RUNTIME_PROVIDER_KIND: activeProviderKind } : {}),
     ...(claudeBinary ? { KUN_CLAUDE_BINARY: claudeBinary } : {}),

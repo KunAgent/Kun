@@ -1,3 +1,5 @@
+import type { PaperSearchSource } from './paper/paper-search'
+
 /**
  * `write.paperMode` settings slice (§5.1 of the work-paper-mode plan).
  * `enabled` persists the Work surface toggle; `libraries`/`activeLibrary`
@@ -36,6 +38,24 @@ export type WritePaperModeScholarSettingsV1 = {
   onlineReferences: boolean
 }
 
+/**
+ * Multi-source paper search settings (`write.paperMode.search`). API keys are
+ * write-only in the renderer projection: `withoutRendererPlaintextCredentials`
+ * strips them and the `*ApiKeyConfigured` flags carry the configured state.
+ */
+export type WritePaperModeSearchSettingsV1 = {
+  enabledSources: PaperSearchSource[]
+  semanticScholarApiKey: string
+  coreApiKey: string
+  /** Polite-pool identifier shared by OpenAlex and Crossref. */
+  openAlexMailto: string
+  /** Required for Unpaywall lookups in the OA-PDF resolver. */
+  unpaywallEmail: string
+  /** Renderer-only flag: a key exists in persisted settings. */
+  semanticScholarApiKeyConfigured?: boolean
+  coreApiKeyConfigured?: boolean
+}
+
 export type WritePaperModeReaderSettingsV1 = {
   paperTone: 'white' | 'sepia' | 'green' | 'dark'
 }
@@ -50,11 +70,12 @@ export type WritePaperModeSettingsV1 = {
   translate: WritePaperModeTranslateSettingsV1
   discover: WritePaperModeDiscoverSettingsV1
   scholar: WritePaperModeScholarSettingsV1
+  search: WritePaperModeSearchSettingsV1
   reader: WritePaperModeReaderSettingsV1
 }
 
 export type WritePaperModeSettingsPatchV1 = Partial<
-  Omit<WritePaperModeSettingsV1, 'translate' | 'discover' | 'scholar' | 'reader'>
+  Omit<WritePaperModeSettingsV1, 'translate' | 'discover' | 'scholar' | 'search' | 'reader'>
 > & {
   translate?: Partial<WritePaperModeTranslateSettingsV1>
   discover?: Partial<Omit<WritePaperModeDiscoverSettingsV1, 'feeds' | 'embedding'>> & {
@@ -63,5 +84,6 @@ export type WritePaperModeSettingsPatchV1 = Partial<
     embedding?: Partial<WritePaperModeDiscoverSettingsV1['embedding']>
   }
   scholar?: Partial<WritePaperModeScholarSettingsV1>
+  search?: Partial<WritePaperModeSearchSettingsV1>
   reader?: Partial<WritePaperModeReaderSettingsV1>
 }

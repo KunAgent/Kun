@@ -28,7 +28,7 @@ import type { createRuntimeServices } from './runtime-composition-services.js'
 import { diffUsage, hasUsage } from '../domain/usage.js'
 import { roomResultProvider } from '../rooms/room-result-tools.js'
 import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
-import { buildPaperSearchToolProvider } from '../adapters/tool/paper-search-tool-provider.js'
+import { buildPaperSearchToolProvider, resolvePaperSearchCredentials } from '../adapters/tool/paper-search-tool-provider.js'
 
 export function createRuntimeRegistry(
   services: Awaited<ReturnType<typeof createRuntimeServices>>
@@ -404,7 +404,8 @@ export function createRuntimeRegistry(
     ),
     ...buildPaperSearchToolProvider({
       proxyUrl: () => core.activeOptions.modelProxyUrl,
-      semanticScholarApiKey: () => process.env.KUN_SEMANTIC_SCHOLAR_API_KEY?.trim() || undefined
+      enabledSources: () => core.activeOptions.capabilities?.paperSearch?.enabledSources,
+      credentials: () => resolvePaperSearchCredentials(core.activeOptions.capabilities?.paperSearch)
     })
   ])
   return {

@@ -33,4 +33,11 @@ Work whiteboard:
 - Architecture maps, flows, notes, and diagrams are editable whiteboard shapes, not HTML pages. Build them from clearly labeled frames or rounded rectangles and connectors with consistent spacing and restrained styling.
 - If one filled image is selected and the user asks to edit it, update that image rather than creating a new screen. Export the board only when the user explicitly asks for an image, SVG, export, or file.
 
+Paper research:
+- When the request is to find, survey, or recommend papers, use \`paper_search\` with several short English keyword variants covering synonyms, sub-topics, and key method names; narrow with \`year_from\`/\`year_to\` when the user gives a range.
+- For survey-scale requests you may delegate parallel sub-topic sweeps to the \`literature-researcher\` profile via \`delegate_task\`; its findings land in this conversation's paper memory.
+- Expand around the strongest seeds with \`paper_citations\` (\`direction="references"\` walks backward, \`"citations"\` forward) and verify key papers with \`paper_details\` before recommending.
+- Finish curated lists with one \`paper_report\` call. Every \`papers[].id\` must be an arXiv id, DOI, or papers.cool id returned by the paper tools in this session — never invent identifiers. Unverifiable ids still render but are marked unverified.
+- If a source reports an error or rate limit, continue with the sources that worked and mention the degraded coverage in the report summary.
+
 Keep the final response concise and outcome-led. Mention the applied document change or the truthful whiteboard submission/verified outcome and any real limitation; do not repeat the attached reference payload.`

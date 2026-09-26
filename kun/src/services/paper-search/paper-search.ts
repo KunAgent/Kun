@@ -2,10 +2,13 @@ import {
   DEFAULT_PAPER_SEARCH_SOURCES,
   PAPER_SEARCH_SOURCES,
   PAPER_SEARCH_SOURCE_LABELS,
+  type PaperSearchCardHit,
+  type PaperSearchCredentials,
   type PaperSearchFetch,
   type PaperSearchHit,
   type PaperSearchRequest,
   type PaperSearchResponse,
+  type PaperSearchResultMeta,
   type PaperSearchSource,
   type PaperSearchSourceReport,
   type PaperSourceConnector,
@@ -15,15 +18,25 @@ import {
 import {
   PaperSourceHttpError,
   searchArxiv,
+  searchBiorxiv,
   searchCrossref,
   searchEuropePmc,
   searchOpenAlex,
   searchSemanticScholar
 } from './paper-search-api-sources.js'
 import { searchCoolArxiv, searchCoolVenues } from './paper-search-cool-sources.js'
-import { titleKey } from './paper-search-text.js'
+import { searchCore } from './paper-search-core.js'
+import { searchDblp } from './paper-search-dblp.js'
+import { searchHal } from './paper-search-hal.js'
+import { searchOpenReview } from './paper-search-openreview.js'
+import { searchPubMed } from './paper-search-pubmed.js'
+import { searchZenodo } from './paper-search-zenodo.js'
+import { PaperSearchCache, paperSourceCacheKey } from './paper-search-cache.js'
+import { PaperRateLimiter, PaperRateLimitError } from './paper-search-rate-limit.js'
+import { jaccardSimilarity, titleKey, titleTokens } from './paper-search-text.js'
 
 export * from './paper-search-types.js'
+export { PaperSearchCache, PaperRateLimiter, PaperRateLimitError }
 
 const CONNECTORS: Record<PaperSearchSource, PaperSourceConnector> = {
   arxiv: searchArxiv,
@@ -32,7 +45,14 @@ const CONNECTORS: Record<PaperSearchSource, PaperSourceConnector> = {
   venues: searchCoolVenues,
   paperscool: searchCoolArxiv,
   crossref: searchCrossref,
-  europepmc: searchEuropePmc
+  europepmc: searchEuropePmc,
+  openreview: searchOpenReview,
+  pubmed: searchPubMed,
+  hal: searchHal,
+  zenodo: searchZenodo,
+  core: searchCore,
+  biorxiv: searchBiorxiv,
+  dblp: searchDblp
 }
 
 const DEFAULT_LIMIT = 10
@@ -45,11 +65,15 @@ const RRF_K = 60
 export type PaperSearchOptions = {
   fetch?: PaperSearchFetch
   signal?: AbortSignal
-  semanticScholarApiKey?: string
+  credentials?: PaperSearchCredentials
   userAgent?: string
   timeoutMs?: number
-  /** Test seam for the retry delay. */
+  /** Test seam for the retry delay and rate-limit pacing. */
   sleep?: (ms: number) => Promise<void>
+  /** Shared per-source result cache; omit to disable caching. */
+  cache?: PaperSearchCache<PaperSourceHit[]>
+  /** Shared per-source pacing + degradation tracker; omit to disable. */
+  rateLimiter?: PaperRateLimiter
 }
 
 export function normalizePaperSearchSources(raw: readonly string[] | undefined): PaperSearchSource[] {
@@ -73,6 +97,18 @@ async function runSource(
   options: Required<Pick<PaperSearchOptions, 'fetch' | 'timeoutMs' | 'sleep'>> & PaperSearchOptions
 ): Promise<{ report: PaperSearchSourceReport; hits: PaperSourceHit[] }> {
   const started = Date.now()
+  const limiter = options.rateLimiter
+  if (limiter?.isDegraded(source)) {
+    return {
+      report: { source, count: 0, ms: 0, error: 'rate limited (auto-skipped)', degraded: true },
+      hits: []
+    }
+  }
+  const cacheKey = options.cache ? paperSourceCacheKey(source, query) : undefined
+  const cached = cacheKey ? options.cache!.get(cacheKey) : undefined
+  if (cached) {
+    return { report: { source, count: cached.length, ms: Date.now() - started, cached: true }, hits: cached }
+  }
   const controller = new AbortController()
   const abort = (): void => controller.abort()
   options.signal?.addEventListener('abort', abort, { once: true })
@@ -80,22 +116,29 @@ async function runSource(
   const context = {
     fetch: options.fetch,
     signal: controller.signal,
-    semanticScholarApiKey: options.semanticScholarApiKey
+    credentials: options.credentials
   }
   try {
     let hits: PaperSourceHit[]
+    let firstRateLimit: unknown
     try {
+      await limiter?.acquire(source, { credentials: options.credentials, signal: controller.signal })
       hits = await CONNECTORS[source](query, context)
     } catch (error) {
       // Keyless Semantic Scholar shares a global rate limit; one late retry
       // recovers most bursts without stalling the other sources.
       if (!(error instanceof PaperSourceHttpError && error.status === 429) || controller.signal.aborted) throw error
+      firstRateLimit = error
       await options.sleep(RATE_LIMIT_RETRY_MS)
       hits = await CONNECTORS[source](query, context)
     }
+    // A 429-then-success still counts once toward the degradation streak.
+    limiter?.recordOutcome(source, firstRateLimit)
+    if (cacheKey && hits.length) options.cache!.set(cacheKey, hits)
     return { report: { source, count: hits.length, ms: Date.now() - started }, hits }
   } catch (error) {
-    const message = controller.signal.aborted && !options.signal?.aborted
+    limiter?.recordOutcome(source, error)
+    const message = controller.signal.aborted && !options.signal?.aborted && !(error instanceof PaperRateLimitError)
       ? `timed out after ${Math.round(options.timeoutMs / 1000)}s`
       : error instanceof Error ? error.message : String(error)
     return { report: { source, count: 0, ms: Date.now() - started, error: message }, hits: [] }
@@ -125,15 +168,44 @@ function mergeInto(target: PaperSearchHit, hit: PaperSourceHit): void {
   if (hit.citations !== undefined) target.citations = Math.max(target.citations ?? 0, hit.citations)
 }
 
+/** Years within this delta may be the same paper (preprint vs published). */
+const FUZZY_YEAR_DELTA = 1
+/** Token-Jaccard threshold for treating two titles as the same work. */
+const FUZZY_TITLE_JACCARD = 0.9
+
+function fuzzyMatch(
+  merged: PaperSearchHit[],
+  mergedTokens: Array<Set<string>>,
+  hit: PaperSourceHit
+): PaperSearchHit | undefined {
+  const tokens = titleTokens(hit.title)
+  if (tokens.size === 0) return undefined
+  for (let i = 0; i < merged.length; i += 1) {
+    const target = merged[i]
+    if (
+      hit.year !== undefined &&
+      target.year !== undefined &&
+      Math.abs(hit.year - target.year) > FUZZY_YEAR_DELTA
+    ) {
+      continue
+    }
+    if (jaccardSimilarity(tokens, mergedTokens[i]) >= FUZZY_TITLE_JACCARD) return target
+  }
+  return undefined
+}
+
 /**
  * Merge per-source ranked lists: duplicates collapse on DOI, arXiv id,
- * papers.cool id or normalized title, and the fused score rewards papers
- * that several sources rank highly.
+ * papers.cool id or normalized title, plus a fuzzy pass that treats titles
+ * with token Jaccard >= 0.9 and a publication year within 1 as the same
+ * work (catches preprint vs proceedings versions). The fused score rewards
+ * papers that several sources rank highly.
  */
 export function mergePaperSearchResults(
   lists: Array<{ source: PaperSearchSource; hits: PaperSourceHit[] }>
 ): PaperSearchHit[] {
   const merged: PaperSearchHit[] = []
+  const mergedTokens: Array<Set<string>> = []
   const index = new Map<string, PaperSearchHit>()
   const lookupKeys = (hit: PaperSourceHit): string[] => [
     ...(hit.doi ? [`doi:${hit.doi}`] : []),
@@ -144,10 +216,11 @@ export function mergePaperSearchResults(
   for (const { source, hits } of lists) {
     hits.forEach((hit, rank) => {
       const keys = lookupKeys(hit)
-      let target = keys.map((key) => index.get(key)).find(Boolean)
+      let target = keys.map((key) => index.get(key)).find(Boolean) ?? fuzzyMatch(merged, mergedTokens, hit)
       if (!target) {
         target = { ...hit, authors: [...hit.authors], key: '', sources: [], score: 0 }
         merged.push(target)
+        mergedTokens.push(titleTokens(hit.title))
       } else {
         mergeInto(target, hit)
       }
@@ -192,6 +265,45 @@ export async function runPaperSearch(
 
 function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`
+}
+
+/** Preferred stable identifier for imports and `paper_report` ids. */
+export function paperHitId(hit: Pick<PaperSearchHit, 'arxivId' | 'coolId' | 'doi' | 'title'>): string {
+  return hit.arxivId ?? hit.coolId ?? hit.doi ?? `t:${titleKey(hit.title).slice(0, 48)}`
+}
+
+const CARD_ABSTRACT_CHARS = 600
+export const PAPER_SEARCH_CARD_LIMIT = 40
+
+/** Project a merged hit into the compact card shape used by `meta.paperSearch`. */
+export function paperHitToCard(hit: PaperSearchHit): PaperSearchCardHit {
+  const card: PaperSearchCardHit = {
+    id: paperHitId(hit),
+    title: hit.title,
+    authors: hit.authors,
+    sources: [...hit.sources]
+  }
+  if (hit.abstract) card.abstract = truncate(hit.abstract, CARD_ABSTRACT_CHARS)
+  if (hit.year !== undefined) card.year = hit.year
+  if (hit.venue) card.venue = hit.venue
+  if (hit.doi) card.doi = hit.doi
+  if (hit.arxivId) card.arxivId = hit.arxivId
+  if (hit.coolId) card.coolId = hit.coolId
+  if (hit.url) card.url = hit.url
+  if (hit.pdfUrl) card.pdfUrl = hit.pdfUrl
+  if (hit.citations !== undefined) card.citations = hit.citations
+  return card
+}
+
+/** Structured renderer payload for `paper_search` tool results. */
+export function buildPaperSearchMeta(response: PaperSearchResponse): PaperSearchResultMeta {
+  return {
+    version: 1,
+    query: response.query,
+    total: response.hits.length,
+    papers: response.hits.slice(0, PAPER_SEARCH_CARD_LIMIT).map(paperHitToCard),
+    sources: response.sources
+  }
 }
 
 /** Compact, citation-friendly listing for model context. */

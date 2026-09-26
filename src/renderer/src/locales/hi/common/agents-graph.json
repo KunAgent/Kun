@@ -223,6 +223,10 @@
         "name": "Citation Researcher",
         "desc": "Authoritative sources and traceable citations · read-only"
       },
+      "literature-researcher": {
+        "name": "साहित्य शोधकर्ता",
+        "desc": "उप-विषयवार शैक्षणिक अनुक्रमणिका खोज · केवल पढ़ने के लिए"
+      },
       "design-product-planner": {
         "name": "Product Design Planner",
         "desc": "Direction, goals, flows, and tradeoffs · read-only"

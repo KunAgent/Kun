@@ -302,6 +302,7 @@ export class ToolExecutionService {
                 const existing = await this.deps.turns.updateItem(input.threadId, item.id, {
                     output: item.kind === 'tool_result' ? item.output : undefined,
                     isError: item.kind === 'tool_result' ? item.isError : undefined,
+                    meta: item.kind === 'tool_result' ? item.meta : undefined,
                     status: 'running'
                   } as Partial<TurnItem>)
                 if (!existing) await this.deps.turns.applyItem(input.threadId, runningItem)
@@ -498,7 +499,7 @@ export class ToolExecutionService {
 
 function progressFingerprint(item: TurnItem): string {
   if (item.kind !== 'tool_result') return JSON.stringify(item)
-  return JSON.stringify([item.output, item.isError, item.status])
+  return JSON.stringify([item.output, item.isError, item.status, item.meta])
 }
 
 function isRecoverableToolDispatchError(error: unknown): boolean {

@@ -229,6 +229,10 @@
         "name": "引文研究员",
         "desc": "权威来源与可追溯引用 · 只读"
       },
+      "literature-researcher": {
+        "name": "文献研究员",
+        "desc": "按子方向横扫学术索引 · 只读"
+      },
       "design-product-planner": {
         "name": "产品设计规划师",
         "desc": "方向、目标、流程与取舍 · 只读"

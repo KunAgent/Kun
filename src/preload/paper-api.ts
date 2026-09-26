@@ -9,6 +9,7 @@ import type { PaperProgressEvent } from '../shared/paper/paper-types'
  */
 export const paperApi: KunGuiPaperApi = {
   paperImport: (payload) => ipcRenderer.invoke('paper:import', payload),
+  paperImportBatch: (payload) => ipcRenderer.invoke('paper:import-batch', payload),
   paperReadUnit: (payload) => ipcRenderer.invoke('paper:read-unit', payload),
   paperListUnits: (payload) => ipcRenderer.invoke('paper:list-units', payload),
   paperFetchCoolNotes: (payload) => ipcRenderer.invoke('paper:fetch-cool-notes', payload),
@@ -61,5 +62,7 @@ export const paperApi: KunGuiPaperApi = {
   paperArxivToday: (payload) => ipcRenderer.invoke('paper-discover:arxiv-today', payload),
   paperListVenue: (payload) => ipcRenderer.invoke('paper-discover:venue', payload),
   paperVenueCatalog: (payload) => ipcRenderer.invoke('paper-discover:venue-catalog', payload),
-  paperSearch: (payload) => ipcRenderer.invoke('paper-discover:search', payload)
+  paperSearch: (payload) => ipcRenderer.invoke('paper-discover:search', payload),
+  paperTestSource: (payload) => ipcRenderer.invoke('paper-discover:test-source', payload),
+  paperDetail: (payload) => ipcRenderer.invoke('paper-discover:paper-detail', payload)
 }

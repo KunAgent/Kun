@@ -60,3 +60,32 @@ export function inYearRange(year: number | undefined, from?: number, to?: number
   if (to !== undefined && year > to) return false
   return true
 }
+
+/** True when the text contains CJK characters (used for query-language hints). */
+export function containsCjk(text: string): boolean {
+  return /[぀-ヿ㐀-䶿一-鿿가-힯]/u.test(text)
+}
+
+const TITLE_STOPWORDS = new Set([
+  'a', 'an', 'the', 'of', 'for', 'in', 'on', 'at', 'to', 'and', 'or', 'with',
+  'via', 'by', 'is', 'are', 'be', 'as', 'from', 'using', 'based'
+])
+
+/**
+ * Content-word token set of a title for fuzzy merging. Stopwords and tokens
+ * shorter than 2 chars are dropped so "A Survey of X" ≈ "Survey of X".
+ */
+export function titleTokens(title: string): Set<string> {
+  const tokens = new Set<string>()
+  for (const raw of title.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
+    if (raw.length >= 2 && !TITLE_STOPWORDS.has(raw)) tokens.add(raw)
+  }
+  return tokens
+}
+
+export function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0
+  let intersection = 0
+  for (const token of a) if (b.has(token)) intersection += 1
+  return intersection / (a.size + b.size - intersection)
+}

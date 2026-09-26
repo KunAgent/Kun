@@ -229,6 +229,7 @@ export function makeToolResultItem(input: {
   toolName: string
   toolKind?: 'tool_call' | 'command_execution' | 'file_change'
   output: unknown
+  meta?: Record<string, unknown>
   isError?: boolean
   status?: 'pending' | 'running' | 'completed' | 'failed' | 'aborted'
   finishedAt?: string
@@ -251,7 +252,8 @@ export function makeToolResultItem(input: {
     callId: input.callId,
     toolKind: input.toolKind ?? 'tool_call',
     output: input.output,
-    isError: input.isError ?? false
+    isError: input.isError ?? false,
+    ...(input.meta ? { meta: input.meta } : {})
   }
 }
 

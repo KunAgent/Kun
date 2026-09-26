@@ -287,6 +287,8 @@ export type CoreTurnItemJson = {
   toolKind?: 'tool_call' | 'command_execution' | 'file_change'
   arguments?: Record<string, unknown>
   output?: unknown
+  /** Tool-result sideband (e.g. `paperList`/`paperSearch`); never model-facing. */
+  meta?: Record<string, unknown>
   isError?: boolean
   approvalId?: string
   approvalReviewer?: 'user' | 'agent'

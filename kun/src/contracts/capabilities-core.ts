@@ -258,6 +258,24 @@ export const WebCapabilityConfig = CapabilityToggleConfig.extend({
 }).strict()
 export type WebCapabilityConfig = z.infer<typeof WebCapabilityConfig>
 
+/**
+ * Scholarly-search capability: which connectors the paper engine may use and
+ * the credentials/connectivity hints for each. `enabledSources` is a
+ * capability-level allow-list layered on top of the tool's `sources` arg;
+ * empty means the engine default set.
+ */
+export const PaperSearchCapabilityConfig = z
+  .object({
+    enabledSources: z.array(z.string().min(1)).default([]),
+    semanticScholarApiKey: z.string().max(512).default(''),
+    coreApiKey: z.string().max(512).default(''),
+    /** Polite-pool identifiers (shared by OpenAlex + Crossref). */
+    openAlexMailto: z.string().max(320).default(''),
+    unpaywallEmail: z.string().max(320).default('')
+  })
+  .strict()
+export type PaperSearchCapabilityConfig = z.infer<typeof PaperSearchCapabilityConfig>
+
 export const SkillsCapabilityConfig = CapabilityToggleConfig.extend({
   roots: z.array(z.string().min(1)).default([]),
   workspaceRoots: z.array(z.string().min(1)).default([]),
@@ -322,7 +340,12 @@ export const SUBAGENT_READ_ONLY_TOOL_NAMES = [
   'repo_map',
   'fast_context',
   'web_fetch',
-  'web_search'
+  'web_search',
+  // Scholarly retrieval is read-only; literature subagents need the same
+  // search/citation tools as the parent Work surface.
+  'paper_search',
+  'paper_citations',
+  'paper_details'
 ] as const
 
 export const SubagentProfileConfig = z

@@ -44,6 +44,14 @@ export type PaperDiscoverState = {
   searchResult: PaperSearchResponse | null
   searchLoading: boolean
   searchError: string | null
+  /** Search page mode: direct multi-source search vs. delegated agent search. */
+  searchTab: 'direct' | 'agent'
+  /**
+   * Agent-search tracking (P1.4): `anchorIndex` is the chat-block count at
+   * submit time, so the pane can slice off this run's tool rows and the final
+   * paper-list block even while other turns scroll by.
+   */
+  agentSearch: { query: string; anchorIndex: number; startedAt: string } | null
 }
 
 /**
@@ -128,7 +136,9 @@ const emptyDiscover = (): PaperDiscoverState => ({
   searchQuery: '',
   searchResult: null,
   searchLoading: false,
-  searchError: null
+  searchError: null,
+  searchTab: 'direct',
+  agentSearch: null
 })
 
 export const usePaperModeStore = create<PaperModeState>((set) => ({

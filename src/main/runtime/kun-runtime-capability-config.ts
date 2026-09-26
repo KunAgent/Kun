@@ -1,4 +1,5 @@
 import type { KunRuntimeSettingsV1 } from '../../shared/app-settings'
+import type { WritePaperModeSearchSettingsV1 } from '../../shared/app-settings-types-paper-mode'
 import { resolveCodexOAuthApiKey } from '../codex-auth'
 import { resolveGrokMediaOAuthApiKey } from '../grok-auth'
 
@@ -212,4 +213,35 @@ function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {}
+}
+
+/**
+ * `capabilities.paperSearch` for the persisted config: source allow-list and
+ * polite-pool identifiers only. API keys never land in kun.config.json — the
+ * hot-apply body and launch env carry them in process memory instead.
+ */
+export function paperSearchConfigForRuntime(
+  search: WritePaperModeSearchSettingsV1 | undefined,
+  fallbackMailto: string,
+  existing: Record<string, unknown>
+): Record<string, unknown> {
+  if (!search) return existing
+  return {
+    ...existing,
+    enabledSources: [...search.enabledSources],
+    openAlexMailto: search.openAlexMailto || fallbackMailto,
+    unpaywallEmail: search.unpaywallEmail
+  }
+}
+
+/** In-memory secret fields injected into the hot-apply body only. */
+export function paperSearchSecretsForRuntime(
+  search: WritePaperModeSearchSettingsV1 | undefined,
+  scholarApiKey: string
+): Record<string, unknown> {
+  if (!search) return {}
+  return {
+    semanticScholarApiKey: search.semanticScholarApiKey || scholarApiKey,
+    coreApiKey: search.coreApiKey
+  }
 }

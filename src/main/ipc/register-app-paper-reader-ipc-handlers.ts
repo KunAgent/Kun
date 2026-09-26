@@ -8,6 +8,8 @@ import {
   paperListVenuePayloadSchema,
   paperVenueCatalogPayloadSchema,
   paperSearchPayloadSchema,
+  paperTestSourcePayloadSchema,
+  paperDetailPayloadSchema,
   paperMarksReadPayloadSchema,
   paperMarksWritePayloadSchema,
   paperReferencesPayloadSchema,
@@ -69,7 +71,7 @@ import {
   searchPapersByTitle
 } from '../services/paper/paper-discover-service'
 import { fetchCoolVenue, fetchCoolVenueCatalog } from '../services/paper/coolpapers-venue-client'
-import { searchPapersForGui } from '../services/paper/paper-search-service'
+import { paperDetailForGui, searchPapersForGui } from '../services/paper/paper-search-service'
 import { identifyLocalPdf } from '../services/paper/paper-identify-service'
 import { fetchCrossrefWork } from '../services/paper/crossref-client'
 import { beginPaperJob, finishPaperJob, isPaperJobCanceled } from '../services/paper/paper-jobs'
@@ -112,6 +114,26 @@ export function registerAppPaperReaderIpcHandlers(
     const settings = await store.load()
     const runtime = resolveKunRuntimeSettings(settings)
     return { proxyUrl: resolveProviderProxyUrl(settings, runtime.providerId) }
+  }
+
+  const searchContext = async () => {
+    const settings = await store.load()
+    const paperMode = normalizeWritePaperModeSettings(
+      (settings.write as { paperMode?: WritePaperModeSettingsPatchV1 } | undefined)?.paperMode
+    )
+    const { search, scholar } = paperMode
+    return {
+      ...(await fetchContext()),
+      enabledSources: search.enabledSources,
+      credentials: {
+        // Fall back to the reader's scholar key so existing installs keep working.
+        semanticScholarApiKey:
+          search.semanticScholarApiKey || scholar.semanticScholarApiKey || process.env.KUN_SEMANTIC_SCHOLAR_API_KEY?.trim() || undefined,
+        coreApiKey: search.coreApiKey || process.env.KUN_CORE_API_KEY?.trim() || undefined,
+        openAlexMailto: search.openAlexMailto || scholar.crossrefMailto || undefined,
+        unpaywallEmail: search.unpaywallEmail || process.env.KUN_UNPAYWALL_EMAIL?.trim() || undefined
+      }
+    }
   }
 
   // ---- marks ----------------------------------------------------------------
@@ -497,7 +519,34 @@ export function registerAppPaperReaderIpcHandlers(
     async (event, payload: unknown) => {
       assertTrustedWorkbenchSender(event, getMainWindow)
       const request = parseIpcPayload('paper-discover:search', paperSearchPayloadSchema, payload)
-      return searchPapersForGui(request, await fetchContext())
+      return searchPapersForGui(request, await searchContext())
+    }
+  )
+
+  ipcMain.handle(
+    'paper-discover:test-source',
+    async (event, payload: unknown) => {
+      assertTrustedWorkbenchSender(event, getMainWindow)
+      const request = parseIpcPayload('paper-discover:test-source', paperTestSourcePayloadSchema, payload)
+      const started = Date.now()
+      const result = await searchPapersForGui(
+        { query: 'machine learning', sources: [request.source], limit: 3 },
+        await searchContext()
+      )
+      if (!result.ok) return { ok: false as const, ms: Date.now() - started, error: result.message }
+      const report = result.sources.find((r) => r.source === request.source)
+      if (report?.error) return { ok: false as const, ms: Date.now() - started, error: report.error }
+      return { ok: true as const, ms: Date.now() - started, count: report?.count ?? result.hits.length }
+    }
+  )
+
+  // Detail pane (plan P5): S2 tldr/fields + OpenAlex citation trend.
+  ipcMain.handle(
+    'paper-discover:paper-detail',
+    async (event, payload: unknown) => {
+      assertTrustedWorkbenchSender(event, getMainWindow)
+      const request = parseIpcPayload('paper-discover:paper-detail', paperDetailPayloadSchema, payload)
+      return paperDetailForGui(request.id, await searchContext())
     }
   )
 }

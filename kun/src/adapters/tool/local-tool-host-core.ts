@@ -375,7 +375,14 @@ export class LocalToolHost implements ToolHost {
     const replayed = this.operationJournal.getCompleted(operationIdentity)
     if (replayed) {
       return {
-        item: this.completedToolResult(context, activeCall, tool, replayed.output, replayed.isError),
+        item: this.completedToolResult(
+          context,
+          activeCall,
+          tool,
+          replayed.output,
+          replayed.isError,
+          replayed.meta
+        ),
         approved: !needsApproval
       }
     }
@@ -408,6 +415,7 @@ export class LocalToolHost implements ToolHost {
           toolKind: activeCall.toolKind ?? tool.toolKind,
           output: update.output,
           isError: update.isError,
+          ...(update.meta ? { meta: update.meta } : {}),
           status: 'running'
         })
         await onUpdate(partialItem)
@@ -431,6 +439,9 @@ export class LocalToolHost implements ToolHost {
         approved: true
       }
     }
+    // `meta` is tool-owned structured sideband for clients; hooks only
+    // rewrite the model-facing output, so capture it before the hook run.
+    const meta = result.meta
     let hookedResult: PostToolUseOutcome
     try {
       hookedResult = await runPostToolUseHooks(components.hooks, {
@@ -455,8 +466,8 @@ export class LocalToolHost implements ToolHost {
       isError
     })
     if (!isError) output = await offloadLargeToolOutput(output, activeCall.toolName, context)
-    this.operationJournal.complete(operationIdentity, { output, isError })
-    const item = this.completedToolResult(context, activeCall, tool, output, isError)
+    this.operationJournal.complete(operationIdentity, { output, isError, ...(meta ? { meta } : {}) })
+    const item = this.completedToolResult(context, activeCall, tool, output, isError, meta)
     return { item, approved: !needsApproval }
   }
 
@@ -581,7 +592,8 @@ export class LocalToolHost implements ToolHost {
     call: ToolCallLike,
     tool: LocalTool,
     output: unknown,
-    isError?: boolean
+    isError?: boolean,
+    meta?: Record<string, unknown>
   ): TurnItem {
     return makeToolResultItem({
       id: `item_${call.callId}`,
@@ -591,7 +603,8 @@ export class LocalToolHost implements ToolHost {
       toolName: call.toolName,
       toolKind: call.toolKind ?? tool.toolKind,
       output,
-      isError
+      isError,
+      ...(meta ? { meta } : {})
     })
   }
 

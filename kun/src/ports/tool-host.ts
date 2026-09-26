@@ -302,6 +302,12 @@ export type ToolCallLike = {
 export type ToolExecutionUpdate = {
   output: unknown
   isError?: boolean
+  /**
+   * Structured sideband stored on the tool_result item for clients. It is
+   * never projected into model context; keep `output` as the model-facing
+   * summary when both are present.
+   */
+  meta?: Record<string, unknown>
 }
 
 export type ToolHostResult = {

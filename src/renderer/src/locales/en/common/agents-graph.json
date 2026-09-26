@@ -229,6 +229,10 @@
         "name": "Citation Researcher",
         "desc": "Authoritative sources and traceable citations · read-only"
       },
+      "literature-researcher": {
+        "name": "Literature Researcher",
+        "desc": "Scholarly sweeps per sub-topic · read-only"
+      },
       "design-product-planner": {
         "name": "Product Design Planner",
         "desc": "Direction, goals, flows, and tradeoffs · read-only"

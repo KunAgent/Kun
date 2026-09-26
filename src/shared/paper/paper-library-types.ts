@@ -215,6 +215,8 @@ export type PaperFeedItem = {
   summary?: string
   arxivId?: string
   doi?: string
+  /** Saved-search subscriptions (plan P5): first seen after last check. */
+  isNew?: boolean
 }
 
 export type PaperFeedFetchResult =

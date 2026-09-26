@@ -1,4 +1,9 @@
-import type { PaperSearchFetch, PaperSourceConnector, PaperSourceHit } from './paper-search-types.js'
+import type {
+  PaperSearchFetch,
+  PaperSourceConnector,
+  PaperSourceHit,
+  PaperSourceQuery
+} from './paper-search-types.js'
 import {
   cleanText,
   decodeEntities,
@@ -77,14 +82,25 @@ export function parseArxivAtom(xml: string): PaperSourceHit[] {
   return hits
 }
 
-/** Words ANDed across all fields; quoted phrases stay intact. */
+const ARXIV_STOPWORDS = new Set([
+  'a', 'an', 'the', 'of', 'for', 'in', 'on', 'at', 'to', 'and', 'or', 'not',
+  'with', 'via', 'by', 'is', 'are', 'be', 'as', 'from', 'using', 'based',
+  'paper', 'papers', 'study', 'research', 'about', 'how', 'what', 'find',
+  'search', 'review', 'survey'
+])
+
+/** Words ANDed across all fields; quoted phrases stay intact, stopwords dropped. */
 export function arxivSearchQuery(query: string): string {
   const terms = query.match(/"[^"]+"|[^\s"]+/g) ?? []
   const clean = terms
     .map((term) => term.replace(/[():]/g, ' ').trim())
     .filter((term) => term.length > 0 && !/^(and|or|not)$/i.test(term))
+  const phrases = clean.filter((term) => /\s/.test(term))
+  const words = clean.filter((term) => !/\s/.test(term) && !ARXIV_STOPWORDS.has(term.toLowerCase()))
+  return [...phrases, ...words]
     .slice(0, 12)
-  return clean.map((term) => `all:${term}`).join(' AND ')
+    .map((term) => `all:${term}`)
+    .join(' AND ')
 }
 
 export const searchArxiv: PaperSourceConnector = async (q, { fetch, signal }) => {
@@ -152,7 +168,7 @@ export function mapOpenAlexWork(work: OpenAlexWork): PaperSourceHit | null {
   }
 }
 
-export const searchOpenAlex: PaperSourceConnector = async (q, { fetch, signal }) => {
+export const searchOpenAlex: PaperSourceConnector = async (q, { fetch, signal, credentials }) => {
   const filters = [`title_and_abstract.search:${q.query.replace(/[,|:]/g, ' ')}`]
   if (q.yearFrom !== undefined) filters.push(`from_publication_date:${q.yearFrom}-01-01`)
   if (q.yearTo !== undefined) filters.push(`to_publication_date:${q.yearTo}-12-31`)
@@ -161,6 +177,8 @@ export const searchOpenAlex: PaperSourceConnector = async (q, { fetch, signal })
     per_page: String(q.limit),
     select: 'display_name,publication_year,doi,cited_by_count,abstract_inverted_index,authorships,primary_location,best_oa_location,ids,locations'
   })
+  const mailto = credentials?.openAlexMailto?.trim()
+  if (mailto) params.set('mailto', mailto)
   const body = await getJson<{ results?: OpenAlexWork[] }>(fetch, `https://api.openalex.org/works?${params.toString()}`, signal)
   return (body.results ?? []).map(mapOpenAlexWork).filter((hit): hit is PaperSourceHit => hit !== null)
 }
@@ -179,7 +197,7 @@ type S2Paper = {
   openAccessPdf?: { url?: string } | null
 }
 
-export const searchSemanticScholar: PaperSourceConnector = async (q, { fetch, signal, semanticScholarApiKey }) => {
+export const searchSemanticScholar: PaperSourceConnector = async (q, { fetch, signal, credentials }) => {
   const params = new URLSearchParams({
     query: q.query,
     limit: String(q.limit),
@@ -188,7 +206,8 @@ export const searchSemanticScholar: PaperSourceConnector = async (q, { fetch, si
   if (q.yearFrom !== undefined || q.yearTo !== undefined) {
     params.set('year', `${q.yearFrom ?? ''}-${q.yearTo ?? ''}`)
   }
-  const headers: Record<string, string> = semanticScholarApiKey ? { 'x-api-key': semanticScholarApiKey } : {}
+  const apiKey = credentials?.semanticScholarApiKey
+  const headers: Record<string, string> = apiKey ? { 'x-api-key': apiKey } : {}
   const body = await getJson<{ data?: S2Paper[] }>(
     fetch,
     `https://api.semanticscholar.org/graph/v1/paper/search?${params.toString()}`,
@@ -227,12 +246,14 @@ type CrossrefItem = {
   URL?: string
 }
 
-export const searchCrossref: PaperSourceConnector = async (q, { fetch, signal }) => {
+export const searchCrossref: PaperSourceConnector = async (q, { fetch, signal, credentials }) => {
   const params = new URLSearchParams({
     'query.bibliographic': q.query,
     rows: String(q.limit),
     select: 'DOI,title,author,issued,container-title,abstract,is-referenced-by-count,URL'
   })
+  const mailto = credentials?.openAlexMailto?.trim()
+  if (mailto) params.set('mailto', mailto)
   const filters: string[] = []
   if (q.yearFrom !== undefined) filters.push(`from-pub-date:${q.yearFrom}`)
   if (q.yearTo !== undefined) filters.push(`until-pub-date:${q.yearTo}`)
@@ -275,13 +296,34 @@ type EuropePmcResult = {
   pmcid?: string
 }
 
-export const searchEuropePmc: PaperSourceConnector = async (q, { fetch, signal }) => {
-  let query = q.query
+export function mapEuropePmcResult(item: EuropePmcResult): PaperSourceHit | null {
+  const title = cleanText(item.title).replace(/\.$/, '')
+  if (!title) return null
+  return {
+    title,
+    authors: (item.authorString ?? '').replace(/\.$/, '').split(/,\s*/).filter(Boolean),
+    abstract: cleanText(item.abstractText) || undefined,
+    year: yearOf(item.pubYear),
+    venue: item.journalInfo?.journal?.title ?? item.journalTitle,
+    doi: normalizeDoi(item.doi),
+    url: item.pmid
+      ? `https://europepmc.org/article/MED/${item.pmid}`
+      : item.pmcid ? `https://europepmc.org/article/PMC/${item.pmcid}` : undefined,
+    citations: item.citedByCount
+  }
+}
+
+async function searchEuropePmcQuery(
+  query: string,
+  q: PaperSourceQuery,
+  { fetch, signal }: { fetch: PaperSearchFetch; signal?: AbortSignal }
+): Promise<PaperSourceHit[]> {
+  let fullQuery = query
   if (q.yearFrom !== undefined || q.yearTo !== undefined) {
-    query = `(${query}) AND PUB_YEAR:[${q.yearFrom ?? 1800} TO ${q.yearTo ?? 2100}]`
+    fullQuery = `(${fullQuery}) AND PUB_YEAR:[${q.yearFrom ?? 1800} TO ${q.yearTo ?? 2100}]`
   }
   const params = new URLSearchParams({
-    query,
+    query: fullQuery,
     format: 'json',
     resultType: 'core',
     pageSize: String(q.limit)
@@ -291,22 +333,18 @@ export const searchEuropePmc: PaperSourceConnector = async (q, { fetch, signal }
     `https://www.ebi.ac.uk/europepmc/webservices/rest/search?${params.toString()}`,
     signal
   )
-  return (body.resultList?.result ?? []).flatMap((item): PaperSourceHit[] => {
-    const title = cleanText(item.title).replace(/\.$/, '')
-    if (!title) return []
-    const year = yearOf(item.pubYear)
-    if (!inYearRange(year, q.yearFrom, q.yearTo) && year !== undefined) return []
-    return [{
-      title,
-      authors: (item.authorString ?? '').replace(/\.$/, '').split(/,\s*/).filter(Boolean),
-      abstract: cleanText(item.abstractText) || undefined,
-      year,
-      venue: item.journalInfo?.journal?.title ?? item.journalTitle,
-      doi: normalizeDoi(item.doi),
-      url: item.pmid
-        ? `https://europepmc.org/article/MED/${item.pmid}`
-        : item.pmcid ? `https://europepmc.org/article/PMC/${item.pmcid}` : undefined,
-      citations: item.citedByCount
-    }]
-  })
+  return (body.resultList?.result ?? [])
+    .map(mapEuropePmcResult)
+    .filter((hit): hit is PaperSourceHit => hit !== null)
+    .filter((hit) => hit.year === undefined || inYearRange(hit.year, q.yearFrom, q.yearTo))
 }
+
+export const searchEuropePmc: PaperSourceConnector = async (q, context) =>
+  searchEuropePmcQuery(q.query, q, context)
+
+/**
+ * bioRxiv/medRxiv preprints are indexed by Europe PMC under `SRC:PPR`.
+ * `PREPRINT_SRC` terms keep the query scoped to those two servers.
+ */
+export const searchBiorxiv: PaperSourceConnector = async (q, context) =>
+  searchEuropePmcQuery(`(${q.query}) AND SRC:PPR`, q, context)

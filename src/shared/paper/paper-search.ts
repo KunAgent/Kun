@@ -5,12 +5,18 @@
  */
 export {
   DEFAULT_PAPER_SEARCH_SOURCES,
+  PAPER_SEARCH_KEY_GATED_SOURCES,
   PAPER_SEARCH_SOURCES,
   PAPER_SEARCH_SOURCE_LABELS
 } from '../../../kun/src/services/paper-search/paper-search-types.js'
 export type {
+  PaperListEntryMeta,
+  PaperListMeta,
+  PaperReportPriority,
+  PaperSearchCardHit,
   PaperSearchHit,
   PaperSearchResponse,
+  PaperSearchResultMeta,
   PaperSearchSource,
   PaperSearchSourceReport
 } from '../../../kun/src/services/paper-search/paper-search-types.js'

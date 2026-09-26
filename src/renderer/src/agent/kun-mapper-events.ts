@@ -63,6 +63,7 @@ import {
 } from './kun-mapper-core'
 import { toolBlockFromItem } from './kun-mapper-tools'
 import { chartSpecFromToolItem } from './chart-spec-adapter'
+import { paperListFromToolItem, paperSearchMetaFromToolItem } from './paper-list-adapter'
 import {
   approvalBlockFromItem,
   approvalReviewFromEvent,
@@ -120,6 +121,16 @@ function baseChatBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeM
           spec
         }
       }
+      const paperList = paperListFromToolItem(item)
+      if (paperList) {
+        return {
+          kind: 'paper-list',
+          id: toolBlockId(item),
+          turnId: item.turnId,
+          createdAt: itemCreatedAt(item),
+          list: paperList
+        }
+      }
       return toolBlockFromItem(item, child)
     }
     case 'approval':
@@ -145,6 +156,12 @@ function baseChatBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeM
 export function toolEventFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeMetadataJson): ToolEventPayload {
   const block = toolBlockFromItem(item, child)
   const chartSpec = chartSpecFromToolItem(item)
+  const paperList = paperListFromToolItem(item)
+  const paperSearch = paperSearchMetaFromToolItem(item)
+  let meta = block.meta
+  if (chartSpec) meta = { ...meta, chartSpec }
+  if (paperList) meta = { ...meta, paperList }
+  if (paperSearch) meta = { ...meta, paperSearch }
   return {
     itemId: block.id,
     turnId: item.turnId,
@@ -154,7 +171,7 @@ export function toolEventFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     toolKind: block.toolKind,
     detail: block.detail,
     filePath: block.filePath,
-    meta: chartSpec ? { ...block.meta, chartSpec } : block.meta
+    meta
   }
 }
 

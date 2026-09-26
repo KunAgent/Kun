@@ -20,6 +20,12 @@ import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
 import { openPaperViewTab } from '../../paper/paper-view'
 import type { PaperArxivTodayItem, PaperFeedItem } from '@shared/paper/paper-library-types'
+import {
+  decodePaperSearchFeed,
+  readSearchSeen,
+  writeSearchSeen,
+  type PaperSearchFeedSpec
+} from '../../paper/paper-search-prefs'
 import { ExpandableAbstract, ImportButton } from './discover/PaperDiscoverParts'
 import { PaperVenuePane } from './discover/PaperVenuePane'
 
@@ -290,7 +296,57 @@ function FeedsPane({
     setNewFeedUrl('')
   }
 
+  // Saved-search subscriptions (plan P5): `kun-paper-search://` feeds re-run
+  // the multi-source search and mark hits not seen on the previous check.
+  const loadSearchFeed = (feedId: string, spec: PaperSearchFeedSpec): void => {
+    if (typeof window.kunGui?.paperSearch !== 'function') return
+    patchDiscover({ feedLoading: true, feedError: null, activeFeedId: feedId })
+    void window.kunGui
+      .paperSearch({
+        query: spec.query,
+        sources: spec.sources,
+        limit: 20,
+        yearFrom: spec.yearFrom,
+        yearTo: spec.yearTo
+      })
+      .then((result) => {
+        if (!result.ok) {
+          patchDiscover({ feedLoading: false, feedError: result.message })
+          return
+        }
+        const seen = readSearchSeen(feedId)
+        const seenKeys = new Set(seen.keys)
+        const items: PaperFeedItem[] = result.hits.map((hit) => ({
+          title: hit.title,
+          url:
+            hit.url ??
+            (hit.doi ? `https://doi.org/${hit.doi}` : hit.arxivId ? `https://arxiv.org/abs/${hit.arxivId}` : ''),
+          publishedAt: hit.year ? String(hit.year) : undefined,
+          summary: hit.abstract,
+          arxivId: hit.arxivId,
+          doi: hit.doi,
+          isNew: Boolean(seen.checkedAt) && !seenKeys.has(hit.key)
+        }))
+        writeSearchSeen(feedId, result.hits.map((hit) => hit.key))
+        patchDiscover({
+          feedItems: { ...usePaperModeStore.getState().discover.feedItems, [feedId]: items },
+          feedLoading: false
+        })
+      })
+      .catch((error: unknown) => {
+        patchDiscover({
+          feedLoading: false,
+          feedError: error instanceof Error ? error.message : String(error)
+        })
+      })
+  }
+
   const loadFeed = (feedId: string, url: string): void => {
+    const searchSpec = decodePaperSearchFeed(url)
+    if (searchSpec) {
+      loadSearchFeed(feedId, searchSpec)
+      return
+    }
     if (typeof window.kunGui?.paperFetchFeed !== 'function') return
     patchDiscover({ feedLoading: true, feedError: null, activeFeedId: feedId })
     void window.kunGui
@@ -396,7 +452,14 @@ function FeedsPane({
           >
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
-                <p className="text-[13.5px] font-semibold leading-5 text-ds-ink">{item.title}</p>
+                <p className="text-[13.5px] font-semibold leading-5 text-ds-ink">
+                  {item.isNew ? (
+                    <span className="mr-1.5 inline-block rounded bg-accent-tint/15 px-1 py-px align-middle text-[9.5px] font-medium text-accent">
+                      {t('writePaperDiscoverFeedNew')}
+                    </span>
+                  ) : null}
+                  {item.title}
+                </p>
                 <p className="mt-0.5 text-[10.5px] text-ds-faint">{item.publishedAt ?? ''}</p>
               </div>
             </div>

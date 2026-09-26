@@ -3,6 +3,7 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import {
   paperCancelPayloadSchema,
+  paperImportBatchPayloadSchema,
   paperImportPayloadSchema,
   paperJobPayloadSchema,
   paperListUnitsPayloadSchema,
@@ -15,6 +16,7 @@ import {
   normalizeWritePapersDir,
   normalizeWritePaperReadingSettings
 } from '../../shared/app-settings-write'
+import { normalizeWritePaperModeSettings } from '../../shared/app-settings-paper-mode'
 import { resolveModelProviderProxyUrl } from '../../shared/app-settings-provider-core'
 import {
   PAPER_CACHE_DIR_NAME,
@@ -23,6 +25,8 @@ import {
   PAPER_NOTES_FILE_NAME,
   type PaperCoolNotesResult,
   type PaperFigureSource,
+  type PaperImportBatchItemResult,
+  type PaperImportBatchResult,
   type PaperImportResult,
   type PaperListUnitsResult,
   type PaperPreprocessResult,
@@ -91,11 +95,25 @@ export function registerAppPaperIpcHandlers(options: RegisterAppIpcHandlersOptio
 
   const loadPaperSettings = async () => {
     const settings = await store.load()
+    const paperMode = normalizeWritePaperModeSettings(
+      (settings.write as { paperMode?: unknown } | undefined)?.paperMode as never
+    )
     return {
       paperReading: normalizeWritePaperReadingSettings(
         (settings.write as { paperReading?: unknown } | undefined)?.paperReading as never
       ),
-      proxyUrl: resolveModelProviderProxyUrl(settings)
+      proxyUrl: resolveModelProviderProxyUrl(settings),
+      // OA-PDF resolver credentials (Unpaywall / CORE / OpenAlex polite pool).
+      searchCredentials: {
+        semanticScholarApiKey:
+          paperMode.search.semanticScholarApiKey ||
+          paperMode.scholar.semanticScholarApiKey ||
+          process.env.KUN_SEMANTIC_SCHOLAR_API_KEY?.trim() ||
+          undefined,
+        coreApiKey: paperMode.search.coreApiKey || process.env.KUN_CORE_API_KEY?.trim() || undefined,
+        openAlexMailto: paperMode.search.openAlexMailto || paperMode.scholar.crossrefMailto || undefined,
+        unpaywallEmail: paperMode.search.unpaywallEmail || process.env.KUN_UNPAYWALL_EMAIL?.trim() || undefined
+      }
     }
   }
 
@@ -105,7 +123,7 @@ export function registerAppPaperIpcHandlers(options: RegisterAppIpcHandlersOptio
     const job = beginPaperJob(request.requestId, 'import', event.sender)
     let jobStatus: 'done' | 'error' | 'canceled' = 'done'
     try {
-      const { paperReading, proxyUrl } = await loadPaperSettings()
+      const { paperReading, proxyUrl, searchCredentials } = await loadPaperSettings()
       const workspacePath = await canonicalPath(resolvePath(request.workspaceRoot))
       const parentRel = normalizeWritePapersDir(request.parentDir ?? paperReading.papersDir)
       const parentAbs = await resolveTargetPathWithinWorkspace(parentRel, workspacePath)
@@ -120,7 +138,7 @@ export function registerAppPaperIpcHandlers(options: RegisterAppIpcHandlersOptio
         signal: job.signal,
         proxyUrl,
         onProgress: job.progress
-      })
+      }, { prefetched: request.meta, credentials: searchCredentials })
       return {
         ok: true,
         unitDir: workspaceRelativeDir(workspacePath, outcome.unitDir),
@@ -131,6 +149,57 @@ export function registerAppPaperIpcHandlers(options: RegisterAppIpcHandlersOptio
       logError?.('paper', 'paper:import failed', error)
       jobStatus = job.signal.aborted ? 'canceled' : 'error'
       return paperErrorResult<PaperImportResult>(error, 'io')
+    } finally {
+      finishPaperJob(request.requestId, jobStatus)
+    }
+  })
+
+  // Batch import for the paper-search cards (plan P3): one job, per-item
+  // outcome capture, 4-way dedupe + OA-PDF resolution inside importPaperUnit.
+  ipcMain.handle('paper:import-batch', async (event, payload: unknown): Promise<PaperImportBatchResult> => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    const request = parseIpcPayload('paper:import-batch', paperImportBatchPayloadSchema, payload)
+    const job = beginPaperJob(request.requestId, 'import', event.sender)
+    let jobStatus: 'done' | 'error' | 'canceled' = 'done'
+    try {
+      const { paperReading, proxyUrl, searchCredentials } = await loadPaperSettings()
+      const workspacePath = await canonicalPath(resolvePath(request.workspaceRoot))
+      const parentRel = normalizeWritePapersDir(request.parentDir ?? paperReading.papersDir)
+      const parentAbs = await resolveTargetPathWithinWorkspace(parentRel, workspacePath)
+      const results: PaperImportBatchItemResult[] = []
+      for (const [index, item] of request.items.entries()) {
+        if (job.signal.aborted) {
+          results.push({ input: item.input, ok: false, code: 'canceled', message: 'Canceled.' })
+          continue
+        }
+        job.progress('import', `importing ${index + 1}/${request.items.length}`)
+        const resolution = resolvePaperImportSource({ input: item.input })
+        if (!resolution) {
+          results.push({ input: item.input, ok: false, code: 'invalid-input', message: 'Unrecognized paper input.' })
+          continue
+        }
+        try {
+          const outcome = await importPaperUnit(parentAbs, resolution, {
+            signal: job.signal,
+            proxyUrl
+          }, { prefetched: item.meta, credentials: searchCredentials })
+          results.push({
+            input: item.input,
+            ok: true,
+            unitDir: workspaceRelativeDir(workspacePath, outcome.unitDir),
+            title: outcome.meta.title,
+            reused: outcome.reused
+          })
+        } catch (error) {
+          const mapped = paperErrorResult<{ ok: false; code: PaperImportBatchItemResult['code']; message: string }>(error, 'io')
+          results.push({ input: item.input, ok: false, code: mapped.code, message: mapped.message })
+        }
+      }
+      return { ok: true, results }
+    } catch (error) {
+      logError?.('paper', 'paper:import-batch failed', error)
+      jobStatus = job.signal.aborted ? 'canceled' : 'error'
+      return paperErrorResult<PaperImportBatchResult>(error, 'io')
     } finally {
       finishPaperJob(request.requestId, jobStatus)
     }

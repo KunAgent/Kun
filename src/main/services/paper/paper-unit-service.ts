@@ -5,7 +5,7 @@
  * inside the workspace by the IPC layer.
  */
 import { basename, join, relative } from 'node:path'
-import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import {
   isVenueCoolId,
   paperSlugForArxiv,
@@ -20,6 +20,7 @@ import {
   paperFigureIndexV1Schema,
   paperUnitMetaV1Schema,
   type PaperFigureIndexV1,
+  type PaperImportHintMeta,
   type PaperUnitMetaV1
 } from '../../../shared/paper/paper-types'
 import { atomicWriteFile } from '../../atomic-json-file'
@@ -40,6 +41,8 @@ import { fetchCoolPageMeta } from './coolpapers-client'
 import { fetchCrossrefWork } from './crossref-client'
 import { fetchUrlPaperMeta } from './paper-discover-service'
 import { identifyLocalPdf, type PaperIdentifyResult } from './paper-identify-service'
+import { downloadVerifiedOaPdf, isPaperOaAbort, type PaperOaFetchContext } from './paper-oa-import'
+import type { PaperSearchCredentials } from '../../../../kun/src/services/paper-search/paper-search-types'
 
 export type PaperProgressReporter = (stage: string, message?: string) => void
 
@@ -203,6 +206,17 @@ export type PaperImportOutcome = {
   reused: boolean
 }
 
+export type PaperImportOptions = {
+  /**
+   * Batch-import metadata from the caller (P3): when a search card already
+   * resolved title/authors/identifiers, a DOI import can skip the Crossref
+   * round-trip and seed the OA-PDF resolver directly.
+   */
+  prefetched?: PaperImportHintMeta
+  /** Unpaywall/CORE/OpenAlex credentials for the OA-PDF chain. */
+  credentials?: PaperSearchCredentials
+}
+
 /**
  * Create a paper unit under `parentAbs`. Existing units are returned instead
  * of re-importing (`reused: true`).
@@ -210,9 +224,15 @@ export type PaperImportOutcome = {
 export async function importPaperUnit(
   parentAbs: string,
   resolution: PaperSourceResolution,
-  fetch: PaperFetchContext & { onProgress?: PaperProgressReporter }
+  fetch: PaperFetchContext & { onProgress?: PaperProgressReporter },
+  options: PaperImportOptions = {}
 ): Promise<PaperImportOutcome> {
   const progress = fetch.onProgress ?? (() => undefined)
+  const oaContext: PaperOaFetchContext = {
+    signal: fetch.signal,
+    proxyUrl: fetch.proxyUrl,
+    credentials: options.credentials
+  }
   await mkdir(parentAbs, { recursive: true })
 
   if (resolution.kind === 'local') {
@@ -299,9 +319,13 @@ export async function importPaperUnit(
   }
 
   if (resolution.kind === 'arxiv') {
-    const existing = await findExistingUnit(parentAbs, {
+    // 4-way dedupe (plan P3.3): search cards carry DOI/title alongside the id.
+    const existing = await findPaperUnitByIds(parentAbs, {
       arxivId: resolution.arxivId,
-      coolId: resolution.coolId
+      coolId: resolution.coolId,
+      doi: options.prefetched?.doi,
+      title: options.prefetched?.title,
+      year: options.prefetched?.year
     })
     if (existing) return { unitDir: existing.dir, meta: existing.meta, reused: true }
     progress('metadata', 'fetching arXiv metadata')
@@ -337,14 +361,29 @@ export async function importPaperUnit(
   }
 
   if (resolution.kind === 'doi') {
-    progress('metadata', 'resolving DOI via Crossref')
-    const work = await fetchCrossrefWork(resolution.doi, fetch)
+    // Batch imports carry search-card metadata (`prefetched`); otherwise the
+    // DOI resolves through Crossref as before.
+    const prefetched = options.prefetched
+    progress('metadata', prefetched?.title ? 'using search metadata' : 'resolving DOI via Crossref')
+    const work = prefetched?.title
+      ? {
+          title: prefetched.title,
+          authors: prefetched.authors ?? [],
+          abstract: prefetched.abstract,
+          year: prefetched.year,
+          venue: prefetched.venue,
+          doi: prefetched.doi ?? resolution.doi,
+          arxivId: prefetched.arxivId,
+          pdfUrl: prefetched.pdfUrl
+        }
+      : await fetchCrossrefWork(resolution.doi, fetch)
     if (!work?.title) {
       throw new PaperUnitError('not-found', `DOI ${resolution.doi} was not found.`)
     }
     const existing = await findPaperUnitByIds(parentAbs, {
       arxivId: work.arxivId,
       doi: work.doi,
+      coolId: prefetched?.coolId,
       title: work.title,
       year: work.year
     })
@@ -364,28 +403,31 @@ export async function importPaperUnit(
       year: work.year,
       venue: work.venue,
       doi: work.doi,
-      pdfUrl: work.pdfUrl,
       sourceUrl: resolution.sourceUrl ?? `https://doi.org/${work.doi}`,
       source: 'doi' as const
     }
-    if (work.pdfUrl) {
-      progress('pdf', 'downloading PDF')
+    // P3 OA chain: hit pdfUrl → arXiv twin → Unpaywall → Europe PMC → CORE;
+    // every download must pass the page-1 title check before it lands.
+    progress('pdf', 'resolving open-access PDF')
+    const downloaded = await downloadVerifiedOaPdf(
+      { doi: work.doi, arxivId: work.arxivId, pdfUrl: work.pdfUrl, pmid: prefetched?.pmid },
+      { title: work.title, doi: work.doi, arxivId: work.arxivId },
+      oaContext
+    ).catch((error) => {
+      if (isPaperOaAbort(error, fetch.signal)) throw error
+      return { status: 'rejected' as const, tried: 0 }
+    })
+    if (downloaded.status === 'ok') {
       const dir = await uniqueUnitDir(parentAbs, slugHint)
       await mkdir(dir, { recursive: true })
       const pdfFile = `${basename(dir)}.pdf`
-      try {
-        const pdf = await downloadArxivPdfFromUrl(work.pdfUrl, fetch)
-        await writeFile(join(dir, pdfFile), pdf)
-      } catch (error) {
-        // PDF fetch is best-effort for DOI imports — fall back to meta-only.
-        await rm(dir, { recursive: true, force: true })
-        return importPaperUnitFromMeta({ parentAbs, slugHint, meta: metaBase })
-      }
+      await writeFile(join(dir, pdfFile), downloaded.pdf)
       // `source` is a v2 field, so this unit is written as v2 from the start.
       const meta: PaperUnitMetaV2 = {
         version: 2,
         slug: basename(dir),
         ...metaBase,
+        pdfUrl: downloaded.url,
         pdfFile,
         importedAt: new Date().toISOString()
       }
@@ -393,7 +435,16 @@ export async function importPaperUnit(
       await writeFile(join(dir, PAPER_NOTES_FILE_NAME), buildPaperNotesShell(meta), 'utf8')
       return { unitDir: dir, meta, reused: false }
     }
-    return importPaperUnitFromMeta({ parentAbs, slugHint, meta: metaBase })
+    return importPaperUnitFromMeta({
+      parentAbs,
+      slugHint,
+      meta: {
+        ...metaBase,
+        pdfUrl: work.pdfUrl,
+        // A rejected candidate means we probably saw the wrong file — flag it.
+        ...(downloaded.status === 'rejected' && downloaded.tried > 0 ? { needsReview: true } : {})
+      }
+    })
   }
 
   if (resolution.kind === 'url') {
@@ -435,26 +486,31 @@ export async function importPaperUnit(
     }
     if (meta.pdfUrl) {
       progress('pdf', 'downloading PDF')
-      const dir = await uniqueUnitDir(parentAbs, slugHint)
-      await mkdir(dir, { recursive: true })
-      const pdfFile = `${basename(dir)}.pdf`
-      try {
-        const pdf = await downloadArxivPdfFromUrl(meta.pdfUrl, fetch)
-        await writeFile(join(dir, pdfFile), pdf)
-      } catch {
-        await rm(dir, { recursive: true, force: true })
-        return importPaperUnitFromMeta({ parentAbs, slugHint, meta: metaBase })
+      const downloaded = await downloadVerifiedOaPdf(
+        { pdfUrl: meta.pdfUrl },
+        { title: meta.title, doi: meta.doi, arxivId: meta.arxivId },
+        oaContext
+      ).catch((error) => {
+        if (isPaperOaAbort(error, fetch.signal)) throw error
+        return { status: 'rejected' as const, tried: 0 }
+      })
+      if (downloaded.status === 'ok') {
+        const dir = await uniqueUnitDir(parentAbs, slugHint)
+        await mkdir(dir, { recursive: true })
+        const pdfFile = `${basename(dir)}.pdf`
+        await writeFile(join(dir, pdfFile), downloaded.pdf)
+        const unitMeta: PaperUnitMetaV2 = {
+          version: 2,
+          slug: basename(dir),
+          importedAt: new Date().toISOString(),
+          ...metaBase,
+          pdfUrl: downloaded.url,
+          pdfFile
+        }
+        await atomicWriteFile(paperMetaPath(dir), `${JSON.stringify(unitMeta, null, 2)}\n`)
+        await writeFile(join(dir, PAPER_NOTES_FILE_NAME), buildPaperNotesShell(unitMeta), 'utf8')
+        return { unitDir: dir, meta: unitMeta, reused: false }
       }
-      const unitMeta: PaperUnitMetaV2 = {
-        version: 2,
-        slug: basename(dir),
-        importedAt: new Date().toISOString(),
-        ...metaBase,
-        pdfFile
-      }
-      await atomicWriteFile(paperMetaPath(dir), `${JSON.stringify(unitMeta, null, 2)}\n`)
-      await writeFile(join(dir, PAPER_NOTES_FILE_NAME), buildPaperNotesShell(unitMeta), 'utf8')
-      return { unitDir: dir, meta: unitMeta, reused: false }
     }
     return importPaperUnitFromMeta({ parentAbs, slugHint, meta: metaBase })
   }
@@ -508,12 +564,12 @@ export function paperTitleKey(title: string): string {
 }
 
 /**
- * Dedupe lookup for import flows (plan §PM4): arXiv id → DOI → normalized
- * title+year, in that order.
+ * Dedupe lookup for import flows (plan P3): arXiv id → DOI → papers.cool id →
+ * normalized title+year, in that order.
  */
 export async function findPaperUnitByIds(
   parentAbs: string,
-  match: { arxivId?: string; doi?: string; title?: string; year?: string }
+  match: { arxivId?: string; doi?: string; coolId?: string; title?: string; year?: string }
 ): Promise<ResolvedPaperUnit | null> {
   const units = await listPaperUnits(parentAbs)
   const wantTitle = match.title ? paperTitleKey(match.title) : ''
@@ -521,6 +577,7 @@ export async function findPaperUnitByIds(
     units.find((unit) => {
       if (match.arxivId && unit.meta.arxivId === match.arxivId) return true
       if (match.doi && unit.meta.doi?.toLowerCase() === match.doi.toLowerCase()) return true
+      if (match.coolId && unit.meta.coolPapers?.id === match.coolId) return true
       if (wantTitle && match.year) {
         const sameTitle = unit.meta.title && paperTitleKey(unit.meta.title) === wantTitle
         if (sameTitle && (!unit.meta.year || unit.meta.year === match.year)) return true

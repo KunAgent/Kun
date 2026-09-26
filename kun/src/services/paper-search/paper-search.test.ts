@@ -49,8 +49,8 @@ describe('paper search parsing', () => {
     }])
   })
 
-  it('builds an AND query and drops boolean operators', () => {
-    expect(arxivSearchQuery('code agent AND "issue resolution"')).toBe('all:code AND all:agent AND all:"issue resolution"')
+  it('builds an AND query, keeps phrases first and drops boolean operators', () => {
+    expect(arxivSearchQuery('code agent AND "issue resolution"')).toBe('all:"issue resolution" AND all:code AND all:agent')
   })
 
   it('rebuilds OpenAlex abstracts from the inverted index', () => {

@@ -148,3 +148,12 @@ export const paperSearchPayloadSchema = z
     yearTo: z.number().int().min(1900).max(2100).optional()
   })
   .strict()
+
+export const paperTestSourcePayloadSchema = z
+  .object({ source: z.enum(PAPER_SEARCH_SOURCES) })
+  .strict()
+
+/** Detail-pane lookup id: DOI, arXiv id, PMID/PMCID, CorpusId, or S2 id. */
+export const paperDetailPayloadSchema = z
+  .object({ id: trimmedString(300) })
+  .strict()

@@ -29,6 +29,7 @@ import {
   McpCapabilityConfig,
   MemoryCapabilityConfig,
   MusicGenCapabilityConfig,
+  PaperSearchCapabilityConfig,
   SkillsCapabilityConfig,
   SpeechGenCapabilityConfig,
   SubagentsCapabilityConfig,
@@ -48,6 +49,7 @@ import {
   type ModelReasoningEffort,
   type KunRuntimeSettingsV1
 } from '../../shared/app-settings'
+import { normalizeWritePaperModeSettings } from '../../shared/app-settings-paper-mode'
 import {
   BUILTIN_GITHUB_MCP_SERVER_ID,
   buildBuiltinGitHubMcpServer,
@@ -64,6 +66,8 @@ import {
   graphConfigForRuntime,
   imageGenConfigForRuntime,
   musicGenConfigForRuntime,
+  paperSearchConfigForRuntime,
+  paperSearchSecretsForRuntime,
   qualityConfigForRuntime,
   runtimeTuningConfigForRuntime,
   speechGenConfigForRuntime,
@@ -225,6 +229,11 @@ export async function syncGuiManagedKunConfig(
       videoGen: videoGenConfigForRuntime(runtime.videoGeneration, objectValue(capabilities.videoGen)),
       computerUse: computerUseConfigForRuntime(runtime.computerUse, objectValue(capabilities.computerUse)),
       browserUse: browserUseConfigForRuntime(runtime.browserUse, objectValue(capabilities.browserUse)),
+      paperSearch: paperSearchConfigForRuntime(
+        appSettings ? normalizeWritePaperModeSettings(appSettings.write?.paperMode).search : undefined,
+        appSettings ? normalizeWritePaperModeSettings(appSettings.write?.paperMode).scholar.crossrefMailto : '',
+        objectValue(capabilities.paperSearch)
+      ),
       memory: {
         ...objectValue(capabilities.memory),
         enabled: runtime.memoryEnabled,
@@ -419,6 +428,14 @@ export function buildManagedRuntimeHotApplyBody(
           ...config.capabilities?.memory?.directives,
           enabled: runtime.memoryDirectivesEnabled
         }
+      },
+      paperSearch: {
+        ...config.capabilities?.paperSearch,
+        // API keys ride the in-memory body only; the persisted file strips them.
+        ...paperSearchSecretsForRuntime(
+          normalizeWritePaperModeSettings(settings.write?.paperMode).search,
+          normalizeWritePaperModeSettings(settings.write?.paperMode).scholar.semanticScholarApiKey
+        )
       }
     },
     serve: {
@@ -516,7 +533,8 @@ function sanitizeCapabilities(value: unknown): Record<string, unknown> {
     musicGen: MusicGenCapabilityConfig,
     videoGen: VideoGenCapabilityConfig,
     computerUse: ComputerUseCapabilityConfig,
-    browserUse: BrowserUseCapabilityConfig
+    browserUse: BrowserUseCapabilityConfig,
+    paperSearch: PaperSearchCapabilityConfig
   }
   const next: Record<string, unknown> = {}
   for (const [key, schema] of Object.entries(schemas)) {

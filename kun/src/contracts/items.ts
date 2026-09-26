@@ -284,7 +284,13 @@ export const ToolResultTurnItem = TurnItemBase.extend({
   callId: z.string().min(1),
   toolKind: z.enum(['tool_call', 'command_execution', 'file_change']),
   output: z.unknown(),
-  isError: z.boolean().default(false)
+  isError: z.boolean().default(false),
+  /**
+   * Structured sideband for clients; never projected into model context.
+   * Tool authors use it for reviewable payloads (e.g. paper lists) while
+   * `output` stays a compact model-facing summary.
+   */
+  meta: z.record(z.string(), z.unknown()).optional()
 })
 export type ToolResultTurnItem = z.infer<typeof ToolResultTurnItem>
 

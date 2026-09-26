@@ -8,6 +8,7 @@ import {
   McpCapabilityConfig,
   McpToolDiscoveryMode,
   ModelCapabilityMetadata,
+  PaperSearchCapabilityConfig,
   ProactiveSubagentRetryConfig,
   RUNTIME_CAPABILITY_CONTRACT_VERSION,
   RuntimeCapabilityState,
@@ -191,7 +192,8 @@ export const KunCapabilitiesConfig = z
     musicGen: MusicGenCapabilityConfig.default(() => MusicGenCapabilityConfig.parse({})),
     videoGen: VideoGenCapabilityConfig.default(() => VideoGenCapabilityConfig.parse({})),
     computerUse: ComputerUseCapabilityConfig.default(() => ComputerUseCapabilityConfig.parse({})),
-    browserUse: BrowserUseCapabilityConfig.default(() => BrowserUseCapabilityConfig.parse({}))
+    browserUse: BrowserUseCapabilityConfig.default(() => BrowserUseCapabilityConfig.parse({})),
+    paperSearch: PaperSearchCapabilityConfig.default(() => PaperSearchCapabilityConfig.parse({}))
   })
   .strict()
 export type KunCapabilitiesConfig = z.infer<typeof KunCapabilitiesConfig>

@@ -178,6 +178,23 @@ export function withoutRendererPlaintextCredentials(settings: AppSettingsV1): Ap
     remote: {
       ...settings.remote,
       passwordHash: ''
+    },
+    write: {
+      ...settings.write,
+      paperMode: {
+        ...settings.write.paperMode,
+        search: {
+          ...settings.write.paperMode.search,
+          semanticScholarApiKey: '',
+          coreApiKey: '',
+          ...(settings.write.paperMode.search.semanticScholarApiKey.trim()
+            ? { semanticScholarApiKeyConfigured: true }
+            : {}),
+          ...(settings.write.paperMode.search.coreApiKey.trim()
+            ? { coreApiKeyConfigured: true }
+            : {})
+        }
+      }
     }
   }
 }

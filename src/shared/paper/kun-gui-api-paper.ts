@@ -1,6 +1,8 @@
 import type { PaperSearchResult, PaperSearchSource } from './paper-search'
 import type {
   PaperCoolNotesResult,
+  PaperImportBatchResult,
+  PaperImportHintMeta,
   PaperImportResult,
   PaperListUnitsResult,
   PaperPreprocessResult,
@@ -47,10 +49,23 @@ export type PaperUnitApi = {
     workspaceRoot: string
     input: string
     localPdfPath?: string
+    /** Search-card metadata that seeds the DOI/OA path (plan P3.2). */
+    meta?: PaperImportHintMeta
     /** Parent dir relative to the workspace root; defaults to the setting. */
     parentDir?: string
     requestId: string
   }) => Promise<PaperImportResult>
+  /**
+   * Batch import (plan P3): each item resolves like `paperImport`; `meta`
+   * carries the search-card fields so DOI entries skip Crossref and feed the
+   * OA-PDF chain directly.
+   */
+  paperImportBatch: (payload: {
+    workspaceRoot: string
+    items: Array<{ input: string; meta?: PaperImportHintMeta }>
+    parentDir?: string
+    requestId: string
+  }) => Promise<PaperImportBatchResult>
   paperReadUnit: (payload: {
     workspaceRoot: string
     unitDir: string
@@ -269,6 +284,35 @@ export type PaperDiscoverApi = {
     yearFrom?: number
     yearTo?: number
   }) => Promise<PaperSearchResult>
+  /** Probe one source with a tiny query; used by the settings "Test connection" button. */
+  paperTestSource: (payload: {
+    source: PaperSearchSource
+  }) => Promise<{ ok: true; ms: number; count: number } | { ok: false; ms: number; error: string }>
+  /**
+   * Detail-pane lookup (plan P5): resolves a DOI/arXiv/PMID/S2 id to full
+   * metadata (tldr, fields, OA pdf) plus the OpenAlex citation trend.
+   */
+  paperDetail: (payload: { id: string }) => Promise<
+    | {
+        ok: true
+        paper: {
+          title: string
+          authors: string[]
+          abstract?: string
+          year?: number
+          venue?: string
+          doi?: string
+          arxivId?: string
+          url?: string
+          pdfUrl?: string
+          citations?: number
+          tldr?: string
+          fieldsOfStudy?: string[]
+        }
+        countsByYear?: Array<{ year: number; citations: number }>
+      }
+    | { ok: false; message: string }
+  >
 }
 
 /**

@@ -1,13 +1,19 @@
-import type { ReactElement } from 'react'
-import { RotateCcw } from 'lucide-react'
+import { useState, type ReactElement } from 'react'
+import { Loader2, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { defaultWritePaperReadingSettings, type WritePaperReadingSettingsV1 } from '@shared/app-settings'
 import { defaultWritePaperModeSettings } from '@shared/app-settings-paper-mode'
 import type {
+  WritePaperModeSearchSettingsV1,
   WritePaperModeSettingsPatchV1,
   WritePaperModeSettingsV1
 } from '@shared/app-settings-types-paper-mode'
 import { DEFAULT_PAPER_INTERPRET_TEMPLATE } from '@shared/paper/paper-interpret-template'
+import {
+  PAPER_SEARCH_KEY_GATED_SOURCES,
+  PAPER_SEARCH_SOURCES,
+  type PaperSearchSource
+} from '@shared/paper/paper-search'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { SettingRow, SettingsCard, Toggle } from './settings-controls'
 
@@ -48,7 +54,8 @@ export function WritePaperReadingSettingsPanel({
     ...(form.write.paperMode ?? {}),
     translate: { ...modeDefaults.translate, ...(form.write.paperMode?.translate ?? {}) },
     discover: { ...modeDefaults.discover, ...(form.write.paperMode?.discover ?? {}) },
-    scholar: { ...modeDefaults.scholar, ...(form.write.paperMode?.scholar ?? {}) }
+    scholar: { ...modeDefaults.scholar, ...(form.write.paperMode?.scholar ?? {}) },
+    search: { ...modeDefaults.search, ...(form.write.paperMode?.search ?? {}) }
   }
   const updateMode = (paperMode: WritePaperModeSettingsPatchV1): void =>
     update({ write: { paperMode } })
@@ -199,6 +206,7 @@ export function WritePaperReadingSettingsPanel({
         }
       />
     </SettingsCard>
+    <PaperSearchSettingsCard mode={mode.search} update={updateMode} />
     <SettingsCard title={t('writePaperSettingsTitle')}>
       <SettingRow
         title={t('writePaperDirLabel')}
@@ -283,5 +291,195 @@ export function WritePaperReadingSettingsPanel({
       </div>
     </SettingsCard>
     </>
+  )
+}
+
+/**
+ * Paper search card (plan P2.2): per-source toggles, optional credentials and
+ * a "test connection" probe. Keys are write-only in the renderer projection —
+ * `*Configured` flags drive the masked placeholder instead of the secret.
+ */
+function PaperSearchSettingsCard({
+  mode,
+  update
+}: {
+  mode: WritePaperModeSearchSettingsV1
+  update: (patch: WritePaperModeSettingsPatchV1) => void
+}): ReactElement {
+  const { t } = useTranslation('common')
+  const [testSource, setTestSource] = useState<PaperSearchSource>('arxiv')
+  const [testState, setTestState] = useState<{ running: boolean; text?: string; failed?: boolean }>({
+    running: false
+  })
+
+  const updateSearch = (search: Partial<WritePaperModeSearchSettingsV1>): void =>
+    update({ search })
+
+  const toggleSource = (source: PaperSearchSource): void => {
+    const next = mode.enabledSources.includes(source)
+      ? mode.enabledSources.filter((value) => value !== source)
+      : PAPER_SEARCH_SOURCES.filter(
+          (value) => value === source || mode.enabledSources.includes(value)
+        )
+    // An empty list normalizes back to defaults — keep at least one on.
+    if (!next.length) return
+    updateSearch({ enabledSources: next })
+  }
+
+  const runTest = (): void => {
+    if (testState.running || typeof window.kunGui?.paperTestSource !== 'function') return
+    setTestState({ running: true })
+    void window.kunGui
+      .paperTestSource({ source: testSource })
+      .then((result) =>
+        setTestState({
+          running: false,
+          failed: !result.ok,
+          text: result.ok
+            ? t('writePaperSearchTestOk', { count: result.count, ms: result.ms })
+            : t('writePaperSearchTestFail', { error: result.error })
+        })
+      )
+      .catch((error: unknown) =>
+        setTestState({
+          running: false,
+          failed: true,
+          text: error instanceof Error ? error.message : String(error)
+        })
+      )
+  }
+
+  const coreMissingKey =
+    PAPER_SEARCH_KEY_GATED_SOURCES.length > 0 &&
+    !mode.coreApiKey.trim() &&
+    !mode.coreApiKeyConfigured
+
+  return (
+    <SettingsCard title={t('writePaperSearchSettingsTitle')}>
+      <SettingRow
+        title={t('writePaperSearchSettingsSources')}
+        description={t('writePaperSearchSettingsSourcesDesc')}
+        wideControl
+        control={
+          <div className="flex flex-wrap gap-1.5">
+            {PAPER_SEARCH_SOURCES.map((source) => {
+              const active = mode.enabledSources.includes(source)
+              const gated =
+                PAPER_SEARCH_KEY_GATED_SOURCES.includes(source) && coreMissingKey
+              return (
+                <button
+                  key={source}
+                  type="button"
+                  aria-pressed={active}
+                  title={gated ? t('writePaperSearchKeyGated') : undefined}
+                  onClick={() => toggleSource(source)}
+                  className={`h-7 rounded-md border px-2.5 text-[12px] transition ${
+                    active
+                      ? 'border-transparent bg-[var(--ds-sidebar-row-active)] font-medium text-ds-ink'
+                      : 'border-ds-border-muted text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
+                  }`}
+                >
+                  {t(`writePaperSearchSource_${source}`)}
+                  {gated ? ' *' : ''}
+                </button>
+              )
+            })}
+          </div>
+        }
+      />
+      <SettingRow
+        title={t('writePaperSearchSettingsScholarKey')}
+        description={t('writePaperSearchSettingsScholarKeyDesc')}
+        control={
+          <input
+            className={`${textInputClass} w-56`}
+            type="password"
+            autoComplete="off"
+            value={mode.semanticScholarApiKey}
+            placeholder={
+              mode.semanticScholarApiKeyConfigured ? '••••••••••••' : t('writePaperOptional')
+            }
+            spellCheck={false}
+            onChange={(e) => updateSearch({ semanticScholarApiKey: e.target.value })}
+          />
+        }
+      />
+      <SettingRow
+        title={t('writePaperSearchSettingsCoreKey')}
+        description={t('writePaperSearchSettingsCoreKeyDesc')}
+        control={
+          <input
+            className={`${textInputClass} w-56`}
+            type="password"
+            autoComplete="off"
+            value={mode.coreApiKey}
+            placeholder={mode.coreApiKeyConfigured ? '••••••••••••' : t('writePaperOptional')}
+            spellCheck={false}
+            onChange={(e) => updateSearch({ coreApiKey: e.target.value })}
+          />
+        }
+      />
+      <SettingRow
+        title={t('writePaperSearchSettingsOpenAlexMailto')}
+        description={t('writePaperSearchSettingsOpenAlexMailtoDesc')}
+        control={
+          <input
+            className={`${textInputClass} w-56`}
+            value={mode.openAlexMailto}
+            placeholder="you@example.com"
+            spellCheck={false}
+            onChange={(e) => updateSearch({ openAlexMailto: e.target.value })}
+          />
+        }
+      />
+      <SettingRow
+        title={t('writePaperSearchSettingsUnpaywall')}
+        description={t('writePaperSearchSettingsUnpaywallDesc')}
+        control={
+          <input
+            className={`${textInputClass} w-56`}
+            value={mode.unpaywallEmail}
+            placeholder="you@example.com"
+            spellCheck={false}
+            onChange={(e) => updateSearch({ unpaywallEmail: e.target.value })}
+          />
+        }
+      />
+      <SettingRow
+        title={t('writePaperSearchTest')}
+        description={t('writePaperSearchTestDesc')}
+        control={
+          <div className="flex items-center gap-2">
+            <select
+              className={selectControlClass}
+              value={testSource}
+              onChange={(e) => setTestSource(e.target.value as PaperSearchSource)}
+            >
+              {PAPER_SEARCH_SOURCES.map((source) => (
+                <option key={source} value={source}>
+                  {t(`writePaperSearchSource_${source}`)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className={ghostButtonClass}
+              disabled={testState.running}
+              onClick={runTest}
+            >
+              {testState.running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {t('writePaperSearchTestRun')}
+            </button>
+            {testState.text ? (
+              <span
+                className={`text-[12px] ${testState.failed ? 'text-red-600 dark:text-red-300' : 'text-ds-faint'}`}
+              >
+                {testState.text}
+              </span>
+            ) : null}
+          </div>
+        }
+      />
+    </SettingsCard>
   )
 }

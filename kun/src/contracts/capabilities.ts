@@ -20,6 +20,7 @@ export {
   McpServerConfig,
   McpCapabilityConfig,
   WebCapabilityConfig,
+  PaperSearchCapabilityConfig,
   SkillsCapabilityConfig,
   InstructionsCapabilityConfig,
   SubagentToolPolicy,

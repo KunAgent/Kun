@@ -6,6 +6,7 @@ import {
   PAPER_MODE_MAX_FEEDS,
   PAPER_MODE_MAX_LIBRARIES
 } from '../../../shared/app-settings-paper-mode'
+import { PAPER_SEARCH_SOURCES } from '../../../shared/paper/paper-search'
 import { MAX_PATH_LENGTH, optionalTrimmedString, trimmedString } from './common'
 
 /**
@@ -42,6 +43,13 @@ export const writePaperModePatchSchema = z.object({
     semanticScholarApiKey: z.string().max(512).optional(),
     crossrefMailto: optionalTrimmedString(200),
     onlineReferences: z.boolean().optional()
+  }).strict().optional(),
+  search: z.object({
+    enabledSources: z.array(z.enum(PAPER_SEARCH_SOURCES)).max(PAPER_SEARCH_SOURCES.length).optional(),
+    semanticScholarApiKey: z.string().max(512).optional(),
+    coreApiKey: z.string().max(512).optional(),
+    openAlexMailto: optionalTrimmedString(320),
+    unpaywallEmail: optionalTrimmedString(320)
   }).strict().optional(),
   reader: z.object({
     paperTone: z.enum(['white', 'sepia', 'green', 'dark']).optional()

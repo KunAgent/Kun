@@ -30,6 +30,10 @@ import type {
 } from './types'
 import { normalizeKunRuntimeEvent, type KunEventNormalizerDeps } from './kun-event-normalizer'
 import type { RuntimeProjectionAction } from './runtime-projection-actions'
+import {
+  paperDetailsFromToolItem,
+  paperSearchMetaFromToolItem
+} from './paper-list-adapter'
 import { dedupeTimelineTextBlocks } from './timeline-text-blocks'
 import { earliestSourceHistoryOrder, orderSourceHistoryBlocks } from './source-history-order'
 import { visualizationFromToolPayload } from './conversation-visualization'
@@ -366,6 +370,10 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
   }
   const presentation = inferToolPresentation(item)
   const payload = payloadFor(item)
+  const paperSearch = paperSearchMetaFromToolItem(item)
+  if (paperSearch) meta.paperSearch = paperSearch
+  const paperDetails = paperDetailsFromToolItem(item)
+  if (paperDetails) meta.paperDetails = paperDetails
   applyOfficeEditMeta(meta, item, payload)
   if (presentation.command) meta.command = presentation.command
   if (presentation.toolKind === 'command_execution' || item.toolName === 'background_shell') {
