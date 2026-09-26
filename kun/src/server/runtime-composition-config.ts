@@ -45,6 +45,7 @@ import {
   InstructionRuntime,
   resolveConfiguredHooks
 } from './runtime-factory-dependencies.js'
+import { buildPaperSearchToolProvider } from '../adapters/tool/paper-search-tool-provider.js'
 import type { createRuntimeExtensionComposition } from './runtime-composition-extensions.js'
 import {
   buildPptAgentRuntimeProvider,
@@ -437,7 +438,11 @@ export function createRuntimeConfigController(
 	      ...buildConversationVisualizationToolProvider(
 	        () => activeOptions.lab?.conversationVisualization
 	      ),
-	      ...buildChartToolProvider(() => activeOptions.lab?.conversationVisualization)
+	      ...buildChartToolProvider(() => activeOptions.lab?.conversationVisualization),
+	      ...buildPaperSearchToolProvider({
+	        proxyUrl: () => activeOptions.modelProxyUrl,
+	        semanticScholarApiKey: () => process.env.KUN_SEMANTIC_SCHOLAR_API_KEY?.trim() || undefined
+	      })
             ])
             // GUI/TUI own the live Registry through revisioned writes. Hot apply is
 	    // a read-only Registry consumer: startup composition or explicit

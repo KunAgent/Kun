@@ -72,6 +72,7 @@ function fileIcon(document: WriteDocumentSession | undefined): ReactElement {
 
 const PAPER_VIEW_ICONS: Record<WritePaperViewId, ReactElement> = {
   library: <LibraryBig className="h-3.5 w-3.5" strokeWidth={1.9} />,
+  'discover:search': <Search className="h-3.5 w-3.5" strokeWidth={1.9} />,
   'discover:arxiv': <Newspaper className="h-3.5 w-3.5" strokeWidth={1.9} />,
   'discover:feeds': <Rss className="h-3.5 w-3.5" strokeWidth={1.9} />,
   'discover:venue': <Trophy className="h-3.5 w-3.5" strokeWidth={1.9} />

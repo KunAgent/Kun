@@ -47,7 +47,12 @@ export type WriteWhiteboardTab = {
  * one discover tab per source. They live in the editor layout like ordinary
  * tabs, persist across restarts, and never own a file.
  */
-export type WritePaperViewId = 'library' | 'discover:arxiv' | 'discover:feeds' | 'discover:venue'
+export type WritePaperViewId =
+  | 'library'
+  | 'discover:search'
+  | 'discover:arxiv'
+  | 'discover:feeds'
+  | 'discover:venue'
 
 export type WritePaperViewTab = {
   kind: 'paper-view'

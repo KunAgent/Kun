@@ -1,3 +1,4 @@
+import type { PaperSearchResult, PaperSearchSource } from './paper-search'
 import type {
   PaperCoolNotesResult,
   PaperImportResult,
@@ -260,6 +261,14 @@ export type PaperDiscoverApi = {
   paperListVenue: (payload: { venue: string; group?: string; skip?: number }) => Promise<PaperVenueListResult>
   /** Conference editions and tracks available on papers.cool. */
   paperVenueCatalog: (payload: { force?: boolean }) => Promise<PaperVenueCatalogResult>
+  /** Merged multi-source scholarly search (same engine as the `paper_search` tool). */
+  paperSearch: (payload: {
+    query: string
+    sources?: PaperSearchSource[]
+    limit?: number
+    yearFrom?: number
+    yearTo?: number
+  }) => Promise<PaperSearchResult>
 }
 
 /**

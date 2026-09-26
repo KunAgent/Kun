@@ -1,5 +1,5 @@
 import { useState, type ReactElement, type ReactNode } from 'react'
-import { ChevronRight, Compass, LibraryBig, Newspaper, Rss, Trophy } from 'lucide-react'
+import { ChevronRight, Compass, LibraryBig, Newspaper, Rss, Search, Trophy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WritePaperViewId } from '../../../write/write-workspace-store-types'
 import { openPaperViewTab } from '../../../paper/paper-view'
@@ -65,8 +65,9 @@ function NavRow({
 }
 
 /**
- * Virtual nodes above the paper tree: the library table and the discover
- * sources (arXiv today, venues, feeds), each opening its own center tab.
+ * Virtual nodes above the paper tree: the library table, paper search and
+ * the discover sources (arXiv today, venues, feeds), each opening its own
+ * center tab.
  */
 export function PaperSidebarNav({
   activeView,
@@ -91,6 +92,12 @@ export function PaperSidebarNav({
         active={activeView === 'library'}
         onClick={() => openPaperViewTab('library')}
         trailing={<span className="shrink-0 text-[11px] tabular-nums text-ds-faint">{total}</span>}
+      />
+      <NavRow
+        icon={<Search className="h-3.5 w-3.5" strokeWidth={1.8} />}
+        label={t('writePaperDiscoverTab_search')}
+        active={activeView === 'discover:search'}
+        onClick={() => openPaperViewTab('discover:search')}
       />
       <NavRow
         icon={(

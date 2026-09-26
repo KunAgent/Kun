@@ -60,6 +60,7 @@ const WRITE_PAPER_VIEW_TAB_PREFIX = 'paper-view:'
 
 const WRITE_PAPER_VIEW_IDS: readonly WritePaperViewId[] = [
   'library',
+  'discover:search',
   'discover:arxiv',
   'discover:feeds',
   'discover:venue'

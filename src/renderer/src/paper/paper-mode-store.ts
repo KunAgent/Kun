@@ -8,6 +8,7 @@ import type {
   PaperVenueCatalogEntry,
   PaperVenueItem
 } from '@shared/paper/paper-library-types'
+import type { PaperSearchResponse } from '@shared/paper/paper-search'
 import type { PaperModeView } from './paper-conversation-scope'
 import { usePaperStore } from '../write/paper/paper-store'
 
@@ -39,6 +40,10 @@ export type PaperDiscoverState = {
   venueCatalog: PaperVenueCatalogEntry[]
   venueCatalogLoading: boolean
   venueCatalogError: string | null
+  searchQuery: string
+  searchResult: PaperSearchResponse | null
+  searchLoading: boolean
+  searchError: string | null
 }
 
 /**
@@ -119,7 +124,11 @@ const emptyDiscover = (): PaperDiscoverState => ({
   venueError: null,
   venueCatalog: [],
   venueCatalogLoading: false,
-  venueCatalogError: null
+  venueCatalogError: null,
+  searchQuery: '',
+  searchResult: null,
+  searchLoading: false,
+  searchError: null
 })
 
 export const usePaperModeStore = create<PaperModeState>((set) => ({

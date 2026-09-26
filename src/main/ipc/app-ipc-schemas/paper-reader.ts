@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PAPER_SEARCH_SOURCES } from '../../../shared/paper/paper-search'
 import { MAX_PATH_LENGTH, trimmedString } from './common'
 
 const unitDirSchema = z.string().trim().min(1).max(MAX_PATH_LENGTH)
@@ -136,4 +137,14 @@ export const paperListVenuePayloadSchema = z
 
 export const paperVenueCatalogPayloadSchema = z
   .object({ force: z.boolean().optional() })
+  .strict()
+
+export const paperSearchPayloadSchema = z
+  .object({
+    query: trimmedString(300),
+    sources: z.array(z.enum(PAPER_SEARCH_SOURCES)).max(PAPER_SEARCH_SOURCES.length).optional(),
+    limit: z.number().int().min(1).max(25).optional(),
+    yearFrom: z.number().int().min(1900).max(2100).optional(),
+    yearTo: z.number().int().min(1900).max(2100).optional()
+  })
   .strict()

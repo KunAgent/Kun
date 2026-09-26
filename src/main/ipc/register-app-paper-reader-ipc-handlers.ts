@@ -7,6 +7,7 @@ import {
   paperIdentifyPdfPayloadSchema,
   paperListVenuePayloadSchema,
   paperVenueCatalogPayloadSchema,
+  paperSearchPayloadSchema,
   paperMarksReadPayloadSchema,
   paperMarksWritePayloadSchema,
   paperReferencesPayloadSchema,
@@ -68,6 +69,7 @@ import {
   searchPapersByTitle
 } from '../services/paper/paper-discover-service'
 import { fetchCoolVenue, fetchCoolVenueCatalog } from '../services/paper/coolpapers-venue-client'
+import { searchPapersForGui } from '../services/paper/paper-search-service'
 import { identifyLocalPdf } from '../services/paper/paper-identify-service'
 import { fetchCrossrefWork } from '../services/paper/crossref-client'
 import { beginPaperJob, finishPaperJob, isPaperJobCanceled } from '../services/paper/paper-jobs'
@@ -487,6 +489,15 @@ export function registerAppPaperReaderIpcHandlers(
       assertTrustedWorkbenchSender(event, getMainWindow)
       const request = parseIpcPayload('paper-discover:venue-catalog', paperVenueCatalogPayloadSchema, payload)
       return fetchCoolVenueCatalog({ ...(await fetchContext()), force: request.force })
+    }
+  )
+
+  ipcMain.handle(
+    'paper-discover:search',
+    async (event, payload: unknown) => {
+      assertTrustedWorkbenchSender(event, getMainWindow)
+      const request = parseIpcPayload('paper-discover:search', paperSearchPayloadSchema, payload)
+      return searchPapersForGui(request, await fetchContext())
     }
   )
 }

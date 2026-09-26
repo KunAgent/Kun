@@ -3,6 +3,7 @@ import type { WritePaperViewId } from '../../write/write-workspace-store-types'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
 import { PaperDiscoverView, type PaperDiscoverSource } from './PaperDiscoverView'
 import { PaperLibraryView } from './PaperLibraryView'
+import { PaperSearchView } from './discover/PaperSearchView'
 
 const DISCOVER_SOURCES: Record<string, PaperDiscoverSource> = {
   'discover:arxiv': 'arxiv',
@@ -17,6 +18,7 @@ const DISCOVER_SOURCES: Record<string, PaperDiscoverSource> = {
  */
 export function PaperViewSurface({ view }: { view: WritePaperViewId }): ReactElement {
   const submit = usePaperModeStore((s) => s.composerBridge?.submit)
+  if (view === 'discover:search') return <PaperSearchView />
   const source = DISCOVER_SOURCES[view]
   if (source) return <PaperDiscoverView source={source} />
   return <PaperLibraryView onSubmitPrompt={submit ?? undefined} />
