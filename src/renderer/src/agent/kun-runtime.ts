@@ -52,6 +52,7 @@ import { parseRuntimeErrorBody, runtimeErrorToError, type RuntimeError } from '@
 import { createKunActivityClient } from './kun-activity-client'
 import { createKunTaskWorkspaceClient } from './kun-task-workspace-client'
 import { createKunReviewClient } from './kun-review-client'
+import { createKunTeamsClient } from './kun-teams-client'
 import { extraRootsForWorkspace } from '../lib/code-workspace-folder-lookup'
 import { additionalWorkspacesForThread, readCodeWorkspaceFolderSets } from '../lib/code-workspace-folder-sets'
 import {
@@ -338,6 +339,10 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   readonly previewTaskWorkspaceDiscard = this.taskWorkspaces.previewTaskWorkspaceDiscard
   readonly discardTaskWorkspace = this.taskWorkspaces.discardTaskWorkspace
   readonly cleanupTaskWorkspace = this.taskWorkspaces.cleanupTaskWorkspace
+
+  private readonly teams = createKunTeamsClient()
+  readonly getTeamOverview = this.teams.getTeamOverview
+  readonly answerTeamQuestion = this.teams.answerTeamQuestion
 
   private readonly reviews = createKunReviewClient()
   readonly listReviewComments = this.reviews.listReviewComments

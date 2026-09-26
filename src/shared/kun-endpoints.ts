@@ -251,6 +251,18 @@ export function kunActivityUnitPath(unitId: string, action: 'ack' | 'dismiss' | 
   return `${KUN_ACTIVITY_PATH}/${encodeURIComponent(unitId)}/${action}`
 }
 
+/** ADE team control surface (docs/ade/09 §9). */
+export const KUN_TEAMS_PATH = '/v1/teams'
+export function kunTeamByManagerPath(managerThreadId: string): string {
+  return `${KUN_TEAMS_PATH}/by-manager/${encodeURIComponent(managerThreadId)}`
+}
+export function kunTeamQuestionAnswerPath(questionId: string): string {
+  return `${KUN_TEAMS_PATH}/questions/${encodeURIComponent(questionId)}/answer`
+}
+export function kunTeamWorkerPath(workerId: string, action: 'take-over' | 'hand-back' | 'detach' | 'dispatch'): string {
+  return `${KUN_TEAMS_PATH}/workers/${encodeURIComponent(workerId)}/${action}`
+}
+
 export const KUN_THREADS_PATH = '/v1/threads'
 export const KUN_THREADS_TEMPLATE = '/v1/threads'
 

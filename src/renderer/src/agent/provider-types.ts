@@ -277,6 +277,12 @@ export interface AgentProvider {
   cleanupTaskWorkspace?(
     workspaceId: string
   ): Promise<import('@shared/task-workspace').TaskWorkspaceRecordResponse>
+  /** ADE team overview for Mission Control cards (docs/ade/09 §9). */
+  getTeamOverview?(
+    managerThreadId: string
+  ): Promise<import('@shared/ade-teams').AdeTeamOverview | null>
+  /** User answers a worker question (09 §6.4; `answeredBy: 'user'`). */
+  answerTeamQuestion?(questionId: string, answer: string): Promise<void>
   /** Per-workspace review comments shared across clients (docs/ade/11 §4). */
   listReviewComments?(
     workspaceId: string

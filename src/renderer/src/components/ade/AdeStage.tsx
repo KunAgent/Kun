@@ -1,8 +1,9 @@
-import { lazy, Suspense, type ReactElement } from 'react'
+import { lazy, Suspense, useEffect, type ReactElement } from 'react'
 import {
   WorkbenchConversationStage,
   type WorkbenchConversationStageProps
 } from '../workbench/WorkbenchConversationStage'
+import { startActivityFeed, stopActivityFeed } from '../../store/activity-store'
 
 const AdeMissionControl = lazy(() =>
   import('./AdeMissionControl').then((module) => ({ default: module.AdeMissionControl }))
@@ -20,6 +21,14 @@ export type AdeStageProps = {
  * Code-only surface.
  */
 export function AdeStage({ conversation, activeThreadId }: AdeStageProps): ReactElement {
+  // The shared ActivityStore feed (06 §9) powers Mission Control, the
+  // sidebar needs-you count, and later ADE surfaces; it lives as long as
+  // ADE mode is mounted and releases its long-poll when the user leaves.
+  useEffect(() => {
+    startActivityFeed()
+    return () => stopActivityFeed()
+  }, [])
+
   if (!activeThreadId) {
     return (
       <Suspense fallback={<div className="h-full min-h-0 w-full bg-ds-main" aria-hidden />}>
