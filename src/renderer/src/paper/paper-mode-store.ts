@@ -92,14 +92,19 @@ export type PaperModeState = {
   entriesRefreshToken: number
   discover: PaperDiscoverState
   /**
-   * Unit dir (relative) whose meta is pinned in the sidebar info panel —
+   * Unit dir (relative) whose meta is pinned in the metadata drawer —
    * tracks the active reader unit and the last library row the user opened.
    */
   infoUnitDir: string | null
+  /** Editor-side metadata drawer (replaces the old fixed sidebar panel). */
+  infoDrawerOpen: boolean
   /** Live reader position for the focused paper, used by assistant context. */
   readerPage: { unitDir: string; page: number; pageCount: number } | null
   composerBridge: PaperComposerBridge | null
   setInfoUnitDir: (unitDir: string | null) => void
+  setInfoDrawerOpen: (open: boolean) => void
+  /** Open the metadata drawer; `unitDir` optionally repins the shown unit. */
+  openInfoDrawer: (unitDir?: string | null) => void
   setReaderPage: (page: PaperModeState['readerPage']) => void
   setComposerBridge: (bridge: PaperComposerBridge | null) => void
   setFilter: (patch: Partial<PaperLibraryFilter>) => void
@@ -164,9 +169,16 @@ export const usePaperModeStore = create<PaperModeState>((set) => ({
   entriesRefreshToken: 0,
   discover: emptyDiscover(),
   infoUnitDir: null,
+  infoDrawerOpen: false,
   readerPage: null,
   composerBridge: null,
   setInfoUnitDir: (infoUnitDir) => set({ infoUnitDir }),
+  setInfoDrawerOpen: (infoDrawerOpen) => set({ infoDrawerOpen }),
+  openInfoDrawer: (unitDir) =>
+    set((state) => ({
+      infoDrawerOpen: true,
+      infoUnitDir: unitDir === undefined ? state.infoUnitDir : unitDir
+    })),
   setReaderPage: (readerPage) => set({ readerPage }),
   setComposerBridge: (composerBridge) => set({ composerBridge }),
   setFilter: (patch) => set((state) => ({ filter: { ...state.filter, ...patch } })),

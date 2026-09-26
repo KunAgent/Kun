@@ -468,5 +468,17 @@
   "paperImportFolderTooltip": "新导入的论文会放进「{{folder}}」",
   "paperImportedToFolder": "已导入到「{{folder}}」",
   "paperImportIntoFolder": "导入论文到此文件夹",
-  "paperFolderEmpty": "空文件夹"
+  "paperFolderEmpty": "空文件夹",
+  "paperWorkspaces": "工作空间",
+  "paperWorkspaceAdd": "添加工作空间",
+  "paperWorkspaceMenu": "工作空间操作",
+  "paperWorkspaceRemove": "移除工作空间",
+  "paperWorkspaceFilterTitle": "筛选论文",
+  "paperWorkspaceFilterPlaceholder": "按标题筛选…",
+  "paperWorkspaceFilterEmpty": "没有匹配的论文。",
+  "paperWorkspaceScanning": "正在索引…",
+  "paperWorkspaceLoadError": "无法索引该工作空间。",
+  "paperWorkspaceRetry": "重试",
+  "paperSearchHistory": "检索历史",
+  "paperSearchHistoryEmpty": "暂无检索历史。"
 }

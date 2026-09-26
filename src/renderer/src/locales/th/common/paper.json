@@ -468,5 +468,17 @@
   "paperImportFolderTooltip": "บทความใหม่จะอยู่ใน \"{{folder}}\"",
   "paperImportedToFolder": "นำเข้าไปที่ \"{{folder}}\" แล้ว",
   "paperImportIntoFolder": "นำเข้าบทความไปยังโฟลเดอร์นี้",
-  "paperFolderEmpty": "โฟลเดอร์ว่าง"
+  "paperFolderEmpty": "โฟลเดอร์ว่าง",
+  "paperWorkspaces": "พื้นที่ทำงาน",
+  "paperWorkspaceAdd": "เพิ่มพื้นที่ทำงาน",
+  "paperWorkspaceMenu": "การกระทำพื้นที่ทำงาน",
+  "paperWorkspaceRemove": "ลบพื้นที่ทำงาน",
+  "paperWorkspaceFilterTitle": "กรองเอกสาร",
+  "paperWorkspaceFilterPlaceholder": "กรองตามชื่อเรื่อง…",
+  "paperWorkspaceFilterEmpty": "ไม่มีเอกสารที่ตรงกัน",
+  "paperWorkspaceScanning": "กำลังจัดทำดัชนี…",
+  "paperWorkspaceLoadError": "ไม่สามารถจัดทำดัชนีพื้นที่ทำงานนี้ได้",
+  "paperWorkspaceRetry": "ลองอีกครั้ง",
+  "paperSearchHistory": "ประวัติการค้นหา",
+  "paperSearchHistoryEmpty": "ยังไม่มีประวัติ"
 }

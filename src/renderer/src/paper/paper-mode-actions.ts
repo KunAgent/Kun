@@ -124,6 +124,7 @@ export async function switchPaperLibrary(libraryRoot: string): Promise<PaperMode
   const normalized = normalizePath(libraryRoot)
   if (!normalized) return { ok: false, message: 'invalid-path' }
   const store = useWriteWorkspaceStore.getState()
+  const rootChanged = normalizePath(store.paperMode.activeLibrary) !== normalized
   const saved = await store.saveAllDocuments(store.workspaceRoot)
   if (!saved) return { ok: false, message: 'save-failed' }
   const paperMode = useWriteWorkspaceStore.getState().paperMode
@@ -134,6 +135,33 @@ export async function switchPaperLibrary(libraryRoot: string): Promise<PaperMode
     return { ok: false, message: error instanceof Error ? error.message : String(error) }
   }
   usePaperModeStore.getState().clearSelection()
+  // A research selection from the previous root can never resolve here;
+  // clearing it lets the view restore the new library's last session.
+  if (rootChanged) {
+    useWriteWorkspaceStore.getState().setPaperResearch({ sessionId: null })
+  }
+  return { ok: true }
+}
+
+/**
+ * Register a folder as a library without mounting it. The first registered
+ * library becomes active so the editor has a workspace; later additions only
+ * join the sidebar workspace list.
+ */
+export async function registerPaperLibrary(libraryRoot: string): Promise<PaperModeToggleResult> {
+  const normalized = normalizePath(libraryRoot)
+  if (!normalized) return { ok: false, message: 'invalid-path' }
+  const paperMode = useWriteWorkspaceStore.getState().paperMode
+  if (paperMode.libraries.some((item) => normalizePath(item) === normalized)) {
+    return { ok: true }
+  }
+  const libraries = compactLibraries([...paperMode.libraries, normalized])
+  const activeLibrary = normalizePath(paperMode.activeLibrary) || normalized
+  try {
+    await patchPaperModeLibraries(libraries, activeLibrary)
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) }
+  }
   return { ok: true }
 }
 

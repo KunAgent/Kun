@@ -1,11 +1,11 @@
-import { useMemo, useRef, useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react'
 import {
   BookOpen,
   Calendar,
-  ChevronRight,
   ExternalLink,
   FileText,
   ImageDown,
+  Info,
   Library,
   Pencil,
   Sparkles,
@@ -25,11 +25,6 @@ import { PaperMetaEditDialog } from '../library/PaperMetaEditDialog'
 import { PaperTitleText } from '../PaperTitleText'
 import { pathInsidePaperUnit } from './PaperTree'
 import type { PaperLibraryEntry } from '@shared/paper/paper-library-types'
-
-const HEADER_HEIGHT = 32
-const MIN_CONTENT = 96
-const MAX_CONTENT = 460
-const DEFAULT_CONTENT = 320
 
 type Translate = (key: string, opts?: Record<string, unknown>) => string
 
@@ -141,23 +136,36 @@ function ActionButton({ icon, label, onClick }: { icon: ReactNode; label: string
 }
 
 /**
- * Paper info panel pinned to the bottom of the sidebar: collapsible header
- * (arXiv id on the right, click to copy), icon rows for title / authors /
- * date / venue / tags, brand link chips, paper actions, and "edit metadata".
- * Keeps showing the last focused paper while notes or other files are open.
+ * Paper metadata drawer: the old sidebar info panel moved into the editor
+ * column as a right-side overlay (320px, capped at 85% of the column). Icon
+ * rows for title / authors / date / venue / tags, brand link chips, paper
+ * actions, and "edit metadata". Keeps showing the last focused paper while
+ * notes or other files are open. Closes on Escape or outside pointer down.
  */
-export function PaperInfoPanel(): ReactElement {
+export function PaperMetadataDrawer({ onClose }: { onClose: () => void }): ReactElement {
   const { t } = useTranslation('common')
   const workspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
   const activeFilePath = useWriteWorkspaceStore((s) => s.activeFilePath)
   const entries = usePaperModeStore((s) => s.entries)
   const infoUnitDir = usePaperModeStore((s) => s.infoUnitDir)
-  const [open, setOpen] = useState(true)
-  const [content, setContent] = useState(DEFAULT_CONTENT)
-  const [dragging, setDragging] = useState(false)
   const [editing, setEditing] = useState(false)
   const lastEntryRef = useRef<PaperLibraryEntry | null>(null)
-  const drag = useRef<{ y: number; start: number } | null>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose()
+    }
+    const onPointerDown = (event: PointerEvent): void => {
+      if (!rootRef.current?.contains(event.target as Node)) onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('pointerdown', onPointerDown, true)
+    }
+  }, [onClose])
 
   const current = useMemo(() => {
     const byDir = (dir: string | null | undefined): PaperLibraryEntry | undefined =>
@@ -172,20 +180,6 @@ export function PaperInfoPanel(): ReactElement {
       ? entries.find((item) => item.unitDir === lastEntryRef.current?.unitDir) ?? null
       : null)
 
-  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
-    drag.current = { y: event.clientY, start: content }
-    setDragging(true)
-    event.currentTarget.setPointerCapture(event.pointerId)
-  }
-  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>): void => {
-    if (!drag.current) return
-    setContent(Math.min(MAX_CONTENT, Math.max(MIN_CONTENT, drag.current.start + (drag.current.y - event.clientY))))
-  }
-  const onPointerUp = (): void => {
-    drag.current = null
-    setDragging(false)
-  }
-
   const meta = entry?.meta
   const settings = (): ReturnType<typeof useWriteWorkspaceStore.getState>['paperReading'] =>
     useWriteWorkspaceStore.getState().paperReading
@@ -193,50 +187,42 @@ export function PaperInfoPanel(): ReactElement {
 
   return (
     <div
-      className={`relative flex min-h-0 shrink-0 flex-col overflow-hidden border-t border-ds-border-muted ${
-        dragging ? '' : 'transition-[height] duration-200 ease-out'
-      }`}
-      style={{ height: open ? content + HEADER_HEIGHT : HEADER_HEIGHT }}
+      ref={rootRef}
+      role="complementary"
+      aria-label={t('writePaperInfoTitle')}
+      className="ds-no-drag absolute inset-y-0 right-0 z-20 flex w-[320px] max-w-[85%] min-w-0 flex-col border-l border-ds-border-muted bg-ds-card shadow-[0_18px_48px_rgba(20,47,95,0.18)]"
     >
-      {open ? (
-        <div
-          role="separator"
-          aria-orientation="horizontal"
-          aria-label={t('writePaperInfoResize')}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-          className="absolute inset-x-0 -top-[3px] z-10 h-[7px] cursor-row-resize after:absolute after:inset-x-0 after:top-[3px] after:h-px hover:after:bg-[var(--ds-border)]"
-        />
-      ) : null}
-      <div className="flex h-8 min-h-8 shrink-0 items-center pr-2">
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          aria-expanded={open}
-          className="flex min-w-0 flex-1 items-center gap-1.5 px-2 text-left text-[13px] font-medium text-ds-muted outline-none transition hover:text-ds-ink"
-        >
-          <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} strokeWidth={1.9} />
-          <span className="truncate">{t('writePaperInfoTitle')}</span>
-        </button>
+      <div className="flex h-9 min-h-9 shrink-0 items-center gap-1.5 border-b border-ds-border-muted pl-3 pr-2">
+        <Info className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.9} />
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ds-ink">
+          {t('writePaperInfoTitle')}
+        </span>
         {meta?.arxivId ? (
           <button
             type="button"
             title={t('writePaperInfoCopyHint', { label: 'arXiv ID' })}
             onClick={() => copyText(meta.arxivId as string, 'arXiv ID', t)}
-            className="max-w-[55%] truncate px-1 text-[11px] tabular-nums text-ds-faint transition hover:text-ds-ink"
+            className="max-w-[45%] truncate px-1 text-[11px] tabular-nums text-ds-faint transition hover:text-ds-ink"
           >
             {meta.arxivId}
           </button>
         ) : null}
+        <button
+          type="button"
+          aria-label={t('close')}
+          title={t('close')}
+          onClick={onClose}
+          className="rounded-full p-1 text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+        >
+          <X className="h-3.5 w-3.5" strokeWidth={2} />
+        </button>
       </div>
 
-      <div className={`flex min-h-0 flex-1 flex-col ${open ? '' : 'pointer-events-none'}`} aria-hidden={!open}>
+      <div className="flex min-h-0 flex-1 flex-col">
         {!entry || !meta ? (
-          <p className="px-3 pb-3 text-[12px] leading-snug text-ds-faint">{t('writePaperInfoEmpty')}</p>
+          <p className="px-3 py-3 text-[12px] leading-snug text-ds-faint">{t('writePaperInfoEmpty')}</p>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2 [scrollbar-width:thin]">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-2 pt-1 [scrollbar-width:thin]">
             <MetaRow icon={<BookOpen className="h-3.5 w-3.5" strokeWidth={1.8} />} label={t('writePaperColTitle')}>
               <CopyValue text={meta.title} label={t('writePaperColTitle')} t={t}>
                 <PaperTitleText title={meta.title} className="font-medium" />
@@ -333,7 +319,9 @@ export function PaperInfoPanel(): ReactElement {
           </div>
         )}
       </div>
-      {editing && entry ? <PaperMetaEditDialog entry={entry} onClose={() => setEditing(false)} /> : null}
+      {editing && entry ? (
+        <PaperMetaEditDialog entry={entry} libraryRoot={workspaceRoot} onClose={() => setEditing(false)} />
+      ) : null}
     </div>
   )
 }

@@ -7,7 +7,14 @@ import { createPaperFolder } from '../../../paper/paper-import-target'
  * Inline "new folder" input at the top of the sidebar paper tree. Enter
  * creates `<papersDir>/<name>` (nested with `/`); Escape or blur cancels.
  */
-export function PaperNewFolderRow({ onDone }: { onDone: () => void }): ReactElement {
+export function PaperNewFolderRow({
+  libraryRoot,
+  onDone
+}: {
+  /** Library the folder is created in; defaults to the mounted root. */
+  libraryRoot?: string
+  onDone: () => void
+}): ReactElement {
   const { t } = useTranslation('common')
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -20,7 +27,7 @@ export function PaperNewFolderRow({ onDone }: { onDone: () => void }): ReactElem
       return
     }
     setBusy(true)
-    const result = await createPaperFolder(value)
+    const result = await createPaperFolder(value, libraryRoot)
     setBusy(false)
     if (result.ok) onDone()
     else setError(result.message === 'invalid' ? t('paperImportFolderInvalid') : result.message)

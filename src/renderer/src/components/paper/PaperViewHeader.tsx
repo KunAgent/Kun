@@ -36,12 +36,15 @@ export function PaperHeaderIconButton({
   label,
   onClick,
   children,
-  disabled
+  disabled,
+  active
 }: {
   label: string
   onClick: () => void
   children: ReactNode
   disabled?: boolean
+  /** Pinned/toggled state (accent tint). */
+  active?: boolean
 }): ReactElement {
   return (
     <button
@@ -49,8 +52,11 @@ export function PaperHeaderIconButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
+      aria-pressed={active}
       title={label}
-      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40"
+      className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40 ${
+        active ? 'bg-accent-tint/15 text-accent' : 'text-ds-muted'
+      }`}
     >
       {children}
     </button>
