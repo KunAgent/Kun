@@ -232,3 +232,27 @@ export function composeSdkPromptText(parts: SdkPromptParts): string {
   }
   return sections.join('\n\n')
 }
+
+/**
+ * Per-attempt prompt text for a delegated turn: exact user text when the turn
+ * preserves it verbatim, otherwise the assembled context prompt. Prior history
+ * travels only when the SDK is not resuming a compatible native session.
+ */
+export function composeSdkTurnText(
+  ctx: Pick<
+    import('./agent-sdk-runtime-contracts.js').SdkTurnContext,
+    'preserveExactUserPrompt' | 'userText' | 'handoffBrief' | 'historyTranscript' | 'contextInstructions'
+  >,
+  resumed: boolean
+): string {
+  if (ctx.preserveExactUserPrompt) return ctx.userText
+  return composeSdkPromptText({
+    ...(ctx.handoffBrief
+      ? { handoffBrief: ctx.handoffBrief }
+      : !resumed && ctx.historyTranscript
+        ? { historyTranscript: ctx.historyTranscript }
+        : {}),
+    userText: ctx.userText,
+    ...(ctx.contextInstructions?.length ? { instructionBlocks: ctx.contextInstructions } : {})
+  })
+}

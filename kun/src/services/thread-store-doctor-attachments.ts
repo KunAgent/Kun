@@ -211,6 +211,7 @@ export const REQUIRED_SQLITE_COLUMNS: Readonly<Record<string, readonly SqliteCol
     sqliteColumn('workspace', 'TEXT', true),
     sqliteColumn('model', 'TEXT', true),
     sqliteColumn('agent_surface', 'TEXT', false),
+    sqliteColumn('workspace_mode', 'TEXT', false),
     sqliteColumn('mode', 'TEXT', true),
     sqliteColumn('status', 'TEXT', true),
     sqliteColumn('approval_policy', 'TEXT', true),
@@ -250,6 +251,8 @@ export const REQUIRED_SQLITE_COLUMNS: Readonly<Record<string, readonly SqliteCol
     sqliteColumn('turn_id', 'TEXT', false),
     sqliteColumn('model', 'TEXT', false),
     sqliteColumn('provider_id', 'TEXT', false),
+    sqliteColumn('source', 'TEXT', false),
+    sqliteColumn('harness_id', 'TEXT', false),
     sqliteColumn('usage_json', 'TEXT', true)
   ]
 }

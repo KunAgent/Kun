@@ -284,15 +284,16 @@ export class HybridThreadStore implements ThreadStore {
     try {
       this.cachedStatement(`
         INSERT INTO usage_events (
-          thread_id, seq, timestamp, turn_id, model, provider_id, usage_json
+          thread_id, seq, timestamp, turn_id, model, provider_id, source, harness_id, usage_json
         )
         VALUES (
-          @thread_id, @seq, @timestamp, @turn_id, @model, @provider_id, @usage_json
+          @thread_id, @seq, @timestamp, @turn_id, @model, @provider_id, @source, @harness_id, @usage_json
         )
         ON CONFLICT(thread_id, seq) DO UPDATE SET
           timestamp = excluded.timestamp,
           turn_id = excluded.turn_id,
           model = excluded.model, provider_id = excluded.provider_id,
+          source = excluded.source, harness_id = excluded.harness_id,
           usage_json = excluded.usage_json
       `).run(usageRowFromEvent(event))
       this.usageQueries.invalidate()

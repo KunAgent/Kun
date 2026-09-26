@@ -158,6 +158,7 @@ export function createCanonicalSqliteSchema(
       workspace TEXT NOT NULL,
       model TEXT NOT NULL,
       agent_surface TEXT,
+      workspace_mode TEXT,
       mode TEXT NOT NULL,
       status TEXT NOT NULL,
       approval_policy TEXT NOT NULL,
@@ -205,6 +206,8 @@ export function createCanonicalSqliteSchema(
       turn_id TEXT,
       model TEXT,
       provider_id TEXT,
+      source TEXT,
+      harness_id TEXT,
       usage_json TEXT NOT NULL,
       PRIMARY KEY(thread_id, seq)
     );

@@ -61,7 +61,8 @@ export function createRuntimeRegistry(
     cursorSdkProviderIds,
     approvalReviewService,
     timedModelClient,
-    subagentRouter
+    subagentRouter,
+    modelConnections
   } = model
   const {
     turnService,
@@ -134,6 +135,12 @@ export function createRuntimeRegistry(
           sessionCoordinator: delegatedSessions,
           contextProfile: delegatedContextProfile,
           deterministicHandoff: core.activeOptions.ade?.deterministicHandoff !== false,
+          harnessTokens: services.harnesses.tokens,
+          harnessGatewayBaseUrl: () => services.harnesses.gatewayEndpoint.baseUrl,
+          roles: () => core.activeOptions.roles,
+          harnessCatalog: services.harnesses.catalog,
+          resolveDefaultProviderId: async () =>
+            (await modelConnections.snapshot()).defaultProviderId,
           ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {})
         }) : undefined),
     antigravity: ((antigravityProviderIds.size > 0 || defaultIsAntigravity) &&

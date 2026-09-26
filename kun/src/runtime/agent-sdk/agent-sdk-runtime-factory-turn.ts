@@ -6,11 +6,14 @@
 import { historyReferenceInstructions } from '../../prompt/history-reference-context.js'
 import {
   AgentSdkCredentialUnavailableError,
+  AgentSdkGatewayUnavailableError,
   agentSdkCapabilities,
   type SdkRuntimeDeps,
   type SdkTurnContext
 } from './agent-sdk-runtime.js'
-import { normalizeClaudeOAuthToken, resolveSdkModel } from './sdk-options-builder.js'
+import { normalizeClaudeOAuthToken, resolveSdkModel, type SdkGatewayEnv } from './sdk-options-builder.js'
+import { parseGatewayModelId } from '../../harness/gateway-model-id.js'
+import { resolveAgentSdkGatewayEnv } from './agent-sdk-gateway.js'
 import { subscriptionBillingKind } from '../../shared/subscription-billing.js'
 import type { TurnService } from '../../services/turn-service.js'
 import { DEFAULT_APPROVAL_REVIEWER } from '../../contracts/policy.js'
@@ -106,10 +109,48 @@ export function createAgentSdkTurnRuntimeDeps(
           ? thread.accountId?.trim()
           : undefined
       )
-      const selectedModel = resolveSdkModel(turn?.model || thread.model, deps.defaultModel)
+      // `kun-gateway` turns address the routed provider through the loopback
+      // gateway as `kun/<provider>/<model>`; the grant only authorizes those
+      // routes (docs/ade/04 §5.5). Provider credentials never enter the env.
+      const gatewayMode = turn.credentialMode === 'kun-gateway'
+      const rawModel = turn?.model || thread.model
+      const gatewayAddress = gatewayMode ? parseGatewayModelId(rawModel) : null
+      const gatewayProviderId = gatewayMode
+        ? gatewayAddress?.providerId ?? explicitRouteProviderId ??
+          await deps.resolveDefaultProviderId?.().catch(() => undefined)
+        : undefined
+      const gatewayModelId = gatewayAddress?.model ?? rawModel
+      let gatewayEnv: SdkGatewayEnv | undefined
+      if (gatewayMode) {
+        if (!gatewayProviderId || !gatewayModelId) {
+          throw new AgentSdkGatewayUnavailableError(
+            'the turn has no provider/model route to address through the gateway'
+          )
+        }
+        const harnessId = turn.harnessId ?? 'claude-code'
+        gatewayEnv = resolveAgentSdkGatewayEnv({
+          deps: {
+            tokens: deps.harnessTokens,
+            baseUrl: deps.harnessGatewayBaseUrl,
+            roles: deps.roles,
+            gateway: () => deps.harnessCatalog?.get(harnessId)?.gateway
+          },
+          threadId,
+          harnessId,
+          providerId: gatewayProviderId,
+          model: gatewayModelId
+        })
+      }
+      const selectedModel = gatewayMode
+        ? gatewayModelId
+        : resolveSdkModel(turn?.model || thread.model, deps.defaultModel)
       const actingModelRoute: ActingTurnModelRoute = turn.actingModelRoute ?? {
         model: selectedModel ?? 'claude-default',
-        ...(actingProviderId ? { providerId: actingProviderId } : {}),
+        ...(gatewayProviderId
+          ? { providerId: gatewayProviderId }
+          : actingProviderId
+            ? { providerId: actingProviderId }
+            : {}),
         ...(requestedAccountId ? { accountId: requestedAccountId } : {})
       }
       if (!turn.actingModelRoute) {
@@ -140,16 +181,20 @@ export function createAgentSdkTurnRuntimeDeps(
       // ambient Claude Code login only when it has no managed credential
       // source. Managed sources are re-read for every turn so a fence written
       // by another Runtime fails closed before the SDK can use cached material.
-      const credentialSourceId = explicitRouteProviderId
-        ? providerCfg?.credentialSourceId
-        : deps.defaultCredentialSourceId
-      let rawToken = explicitRouteProviderId ? providerCfg?.apiKey : deps.defaultToken
-      if (credentialSourceId) {
-        const resolved = await deps.resolveCredentialSource?.(credentialSourceId).catch(() => null)
-        rawToken = resolved?.apiKey ?? ''
-        if (!rawToken.trim()) throw new AgentSdkCredentialUnavailableError()
+      // Gateway turns skip this entirely — the gateway token is the credential.
+      let token: string | undefined
+      if (!gatewayEnv) {
+        const credentialSourceId = explicitRouteProviderId
+          ? providerCfg?.credentialSourceId
+          : deps.defaultCredentialSourceId
+        let rawToken = explicitRouteProviderId ? providerCfg?.apiKey : deps.defaultToken
+        if (credentialSourceId) {
+          const resolved = await deps.resolveCredentialSource?.(credentialSourceId).catch(() => null)
+          rawToken = resolved?.apiKey ?? ''
+          if (!rawToken.trim()) throw new AgentSdkCredentialUnavailableError()
+        }
+        token = normalizeClaudeOAuthToken(rawToken)
       }
-      const token = normalizeClaudeOAuthToken(rawToken)
       // Resolve the shared turn scope (skills, plan, graph, surface) before
       // listing bridgeable tools so the SDK sees the same per-turn catalog as
       // the native Kun loop.
@@ -251,7 +296,9 @@ export function createAgentSdkTurnRuntimeDeps(
             credentialIdentity: delegatedCredentialIdentity({
               providerId: providerId || 'default',
               accountId,
-              credentialSourceId: providerCfg?.credentialSourceId,
+              // Gateway turns bind sessions to the route, not a provider
+              // credential — the grant token never enters the identity.
+              credentialSourceId: gatewayEnv ? 'kun-gateway' : providerCfg?.credentialSourceId,
               credentialSecret: token
             }),
             workspace: thread.workspace,
@@ -280,7 +327,7 @@ export function createAgentSdkTurnRuntimeDeps(
           },
           priorItems: priorItemsForDelegatedTurn(items, turnId)
         })
-        if (token) {
+        if (token || gatewayEnv) {
           claudeConfigDir = deps.sessionCoordinator.store.providerStateDir(
             'agent-sdk',
             threadId,
@@ -362,7 +409,8 @@ export function createAgentSdkTurnRuntimeDeps(
         // Claude Code only accepts Anthropic models; coerce a thread's non-Claude
         // model (e.g. an old deepseek thread now routed to the subscription) to
         // the runtime default so the turn doesn't fail "model may not exist".
-        model,
+        // Gateway turns send the `kun/<provider>/<model>` address instead.
+        model: gatewayEnv?.model ?? model,
         ...(billingKind ? { billingKind } : {}),
         ...(turn?.reasoningEffort ? { reasoningEffort: turn.reasoningEffort } : {}),
         ...(preparation?.nativeSessionId && turnDynamicContext.instructions.length === 0
@@ -377,13 +425,15 @@ export function createAgentSdkTurnRuntimeDeps(
           ? { contextProfile: deps.contextProfile(model ?? 'claude-default') }
           : {}),
         oauthToken: token || undefined,
+        ...(gatewayEnv ? { gateway: gatewayEnv } : {}),
         ...(images.length ? { images } : {}),
         bridgeableTools: bridgedTools,
-        ...([...goalContextTexts(items), ...turnDynamicContext.privateValues].length
+        ...([...goalContextTexts(items), ...turnDynamicContext.privateValues, ...(gatewayEnv ? [gatewayEnv.token] : [])].length
           ? {
               redactedRequestValues: [
                 ...goalContextTexts(items),
-                ...turnDynamicContext.privateValues
+                ...turnDynamicContext.privateValues,
+                ...(gatewayEnv ? [gatewayEnv.token] : [])
               ]
             }
           : {}),

@@ -40,6 +40,24 @@ export const HarnessPermissionModeSchema = z
   .strict()
 export type HarnessPermissionMode = z.infer<typeof HarnessPermissionModeSchema>
 
+/** Loopback model-gateway wiring for SDK harnesses; see docs/ade/04-model-gateway-bridge.md. */
+export const HarnessGatewaySchema = z
+  .object({
+    protocol: z.enum(['anthropic-messages', 'openai-chat', 'openai-responses']),
+    env: z
+      .object({
+        baseUrl: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
+        token: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
+        model: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/).optional(),
+        smallModel: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/).optional()
+      })
+      .strict(),
+    /** Provider/OAuth env vars removed from the harness process in gateway mode. */
+    stripEnv: z.array(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/)).max(32).default([])
+  })
+  .strict()
+export type HarnessGateway = z.infer<typeof HarnessGatewaySchema>
+
 export const HarnessDefinitionSchema = z
   .object({
     id: HarnessIdSchema,
@@ -95,6 +113,8 @@ export const HarnessDefinitionSchema = z
     historySource: z.enum(['claude-code', 'codex', 'opencode']).optional(),
     /** Static declaration; the runtime may narrow it further per version/login. */
     capabilities: HarnessCapabilitiesSchema,
+    /** Present when the harness can run through the loopback model gateway. */
+    gateway: HarnessGatewaySchema.optional(),
     builtin: z.boolean()
   })
   .strict()

@@ -216,6 +216,7 @@
   "turnUsageDetailsOpenLabel": "แสดงรายละเอียดการใช้งานรอบนี้",
   "turnUsageDetailsTitle": "การใช้งานรอบนี้",
   "turnUsageDetailsMeta": "{{models}} · คำขอโมเดล {{requests}} ครั้ง",
+  "turnUsageDetailsGatewaySource": "รวมคำขอที่กำหนดเส้นทางผ่าน Kun gateway ในเครื่อง",
   "turnUsageDetailsUnknownModel": "โมเดลที่ไม่รู้จัก",
   "turnUsageDetailsTokens": "การใช้โทเค็น",
   "turnUsageDetailsInput": "อินพุต",

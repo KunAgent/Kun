@@ -32,6 +32,12 @@ export type HarnessRuntimeComposition = {
   acpModels: AcpModelProbe
   /** Process-local scoped bearer tokens for spawned harnesses (04 §4). */
   tokens: HarnessTokenService
+  /**
+   * Loopback `kun serve` endpoint for harness gateway env injection. The
+   * serve layer fills `baseUrl` after the listener binds; absent means this
+   * runtime is not serve-hosted (gateway credential mode fails fast).
+   */
+  gatewayEndpoint: { baseUrl?: string }
 }
 
 /**
@@ -66,5 +72,5 @@ export function createHarnessComposition(
   const acpModels = new AcpModelProbe({
     binaryPath: (id) => options().harnesses?.binaryPaths?.[id]
   })
-  return { catalog, detector, acpModels, tokens: new HarnessTokenService() }
+  return { catalog, detector, acpModels, tokens: new HarnessTokenService(), gatewayEndpoint: {} }
 }

@@ -8,6 +8,7 @@
  * functions so the wiring is testable with fakes.
  */
 import type { ApprovalPolicy, SandboxMode } from '../../contracts/policy.js'
+import { isGatewayModelId } from '../../harness/gateway-model-id.js'
 import { buildHarnessEnv } from '../../harness/harness-env.js'
 import type {
   SdkCanUseTool,
@@ -58,15 +59,50 @@ export function normalizeClaudeOAuthToken(raw: string | undefined): string | und
 }
 
 /**
+ * Loopback gateway credentials injected into the harness environment for
+ * `kun-gateway` credential mode (docs/ade/04 §6). `env` names the variables
+ * the harness's protocol expects (`ANTHROPIC_BASE_URL`, ...); `model` and
+ * `smallModel` are `kun/<provider>/<model>` direct addresses resolved by the
+ * gateway against the grant's routes.
+ */
+export type SdkGatewayEnv = {
+  baseUrl: string
+  token: string
+  model: string
+  smallModel?: string
+  env: { baseUrl: string; token: string; model?: string; smallModel?: string }
+  stripEnv: readonly string[]
+}
+
+/**
  * Produce a clean env for the SDK's Claude Code subprocess: strip anything that
  * would outrank the subscription token, then inject the token (when provided).
  * When no token is given we rely on the user's existing Claude Code login
  * (~/.claude credentials), so we still strip the overrides but set nothing.
+ *
+ * Gateway mode replaces that entirely: the harness talks to the loopback kun
+ * serve gateway, so OAuth and provider credentials are stripped unconditionally
+ * and only the gateway base URL/token/model variables are injected.
  */
 export function buildScopedEnv(
   baseEnv: Record<string, string | undefined>,
-  oauthToken?: string
+  oauthToken?: string,
+  gateway?: SdkGatewayEnv
 ): Record<string, string | undefined> {
+  if (gateway) {
+    return buildHarnessEnv({
+      base: baseEnv,
+      strip: [...gateway.stripEnv, 'CLAUDE_CODE_OAUTH_TOKEN'],
+      add: {
+        [gateway.env.baseUrl]: gateway.baseUrl,
+        [gateway.env.token]: gateway.token,
+        ...(gateway.env.model ? { [gateway.env.model]: gateway.model } : {}),
+        ...(gateway.env.smallModel && gateway.smallModel
+          ? { [gateway.env.smallModel]: gateway.smallModel }
+          : {})
+      }
+    })
+  }
   const env = buildHarnessEnv({ base: baseEnv })
   const token = normalizeClaudeOAuthToken(oauthToken)
   if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token
@@ -108,12 +144,16 @@ export function isAnthropicModel(model: string | undefined): boolean {
  * Pick the model to hand the SDK: the thread's own model when it's a Claude id,
  * else the runtime's default Claude model, else undefined (let Claude Code use
  * its built-in default). Guarantees we never send a non-Anthropic id to the SDK.
+ * `kun/<provider>/<model>` gateway addresses pass through untouched — the
+ * loopback gateway resolves them against the harness grant's routes.
  */
 export function resolveSdkModel(
   threadModel: string | undefined,
   defaultModel: string | undefined
 ): string | undefined {
+  if (isGatewayModelId(threadModel)) return threadModel!.trim()
   if (isAnthropicModel(threadModel)) return threadModel!.trim()
+  if (isGatewayModelId(defaultModel)) return defaultModel!.trim()
   if (isAnthropicModel(defaultModel)) return defaultModel!.trim()
   return undefined
 }
@@ -189,6 +229,8 @@ export interface AssembleSdkOptionsParams {
   resume?: string
   baseEnv: Record<string, string | undefined>
   oauthToken?: string
+  /** Loopback gateway injection for `kun-gateway` turns (overrides oauthToken). */
+  gateway?: SdkGatewayEnv
   settingSources?: SdkSettingSource[]
   pathToClaudeCodeExecutable?: string
   abortController?: AbortController
@@ -225,7 +267,7 @@ export function assembleSdkOptions(params: AssembleSdkOptionsParams): SdkQueryOp
       params.sandboxMode
     ),
     includePartialMessages: true,
-    env: buildScopedEnv(params.baseEnv, params.oauthToken),
+    env: buildScopedEnv(params.baseEnv, params.gateway ? undefined : params.oauthToken, params.gateway),
     // Only load kun-provided config; don't auto-absorb the host's ~/.claude.
     settingSources: params.settingSources ?? [],
     ...(params.model ? { model: params.model } : {}),

@@ -108,6 +108,33 @@ describe('FileSessionStore usage index', () => {
     })
   })
 
+  it('round-trips harness-gateway source attribution through the index', async () => {
+    const threadId = 'thread-gateway'
+    await store.appendEvent(threadId, usageEvent(threadId, 1, '2026-08-20T10:00:00.000Z', 100, 10))
+    await store.appendEvent(threadId, usageEvent(threadId, 2, '2026-08-20T10:01:00.000Z', 300, 30, {
+      turnId: 'turn-gw',
+      model: 'claude-sonnet-4-6',
+      providerId: 'anthropic-sub',
+      source: 'harness-gateway',
+      harnessId: 'claude-code'
+    }))
+
+    const records = await store.loadUsageRecords({
+      threadId,
+      fromInclusive: '2026-08-20T00:00:00.000Z',
+      toExclusive: '2026-08-21T00:00:00.000Z'
+    })
+    expect(records).toHaveLength(2)
+    expect(records[0].source).toBeUndefined()
+    expect(records[1]).toMatchObject({
+      turnId: 'turn-gw',
+      providerId: 'anthropic-sub',
+      source: 'harness-gateway',
+      harnessId: 'claude-code',
+      usage: { promptTokens: 200, completionTokens: 20 }
+    })
+  })
+
   it('writes an atomic sidecar with sparse day offsets and the indexed byte boundary', async () => {
     const threadId = 'thread-sidecar'
     await store.appendEvent(threadId, usageEvent(threadId, 1, '2026-08-20T00:00:00.000Z', 100, 10))

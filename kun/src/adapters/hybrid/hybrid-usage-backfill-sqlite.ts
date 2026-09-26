@@ -18,10 +18,10 @@ export async function insertUsageEventsChunked(
 
   const insert = db.prepare(`
     INSERT OR REPLACE INTO usage_events (
-      thread_id, seq, timestamp, turn_id, model, provider_id, usage_json
+      thread_id, seq, timestamp, turn_id, model, provider_id, source, harness_id, usage_json
     )
     VALUES (
-      @thread_id, @seq, @timestamp, @turn_id, @model, @provider_id, @usage_json
+      @thread_id, @seq, @timestamp, @turn_id, @model, @provider_id, @source, @harness_id, @usage_json
     )
   `)
   const updateHighWater = db.prepare(`

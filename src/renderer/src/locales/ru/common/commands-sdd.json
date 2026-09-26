@@ -216,6 +216,7 @@
   "turnUsageDetailsOpenLabel": "Показать детали использования хода",
   "turnUsageDetailsTitle": "Использование хода",
   "turnUsageDetailsMeta": "{{models}} · запросов модели: {{requests}}",
+  "turnUsageDetailsGatewaySource": "Включая запросы, маршрутизированные через локальный шлюз Kun.",
   "turnUsageDetailsUnknownModel": "Неизвестная модель",
   "turnUsageDetailsTokens": "Использование токенов",
   "turnUsageDetailsInput": "Ввод",

@@ -71,6 +71,8 @@ export function migrateHybridThreadStore(db: BetterSqliteDatabase): void {
   addColumnIfMissing(db, 'threads', 'agent_surface TEXT')
   addColumnIfMissing(db, 'threads', 'workspace_mode TEXT')
   addColumnIfMissing(db, 'usage_events', 'provider_id TEXT')
+  addColumnIfMissing(db, 'usage_events', 'source TEXT')
+  addColumnIfMissing(db, 'usage_events', 'harness_id TEXT')
 }
 
 export function migrateHybridUsageIndexes(db: BetterSqliteDatabase): void {

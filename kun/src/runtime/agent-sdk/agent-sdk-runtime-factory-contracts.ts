@@ -208,6 +208,23 @@ export interface AgentSdkRuntimeFactoryDeps {
     softThresholdTokens: number
     hardThresholdTokens: number
   }
+  /**
+   * `kun-gateway` mode wiring (docs/ade/04 §5.5): the token service issuing
+   * turn-scoped `kgw_` grants, the loopback serve base URL, the roles config
+   * for the small/fast model, the harness catalog for the gateway env block,
+   * and the real default provider id for routes that omit `turn.providerId`.
+   */
+  harnessTokens?: Pick<
+    import('../../harness/harness-token-service.js').HarnessTokenService,
+    'issue'
+  >
+  harnessGatewayBaseUrl?: () => string | undefined
+  roles?: () => import('../../config/kun-config.js').RolesConfig | undefined
+  harnessCatalog?: Pick<
+    import('../../harness/harness-catalog.js').HarnessCatalog,
+    'get'
+  >
+  resolveDefaultProviderId?: () => Promise<string | undefined>
 }
 
 /** Lazily load the real SDK without a static import (so kun typechecks without it). */

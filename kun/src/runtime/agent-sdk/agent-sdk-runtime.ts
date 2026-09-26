@@ -1,5 +1,6 @@
 export {
   AgentSdkCredentialUnavailableError,
+  AgentSdkGatewayUnavailableError,
   type SdkRuntimeDeps,
   type SdkTurnContext,
   type TurnStatus

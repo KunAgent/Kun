@@ -1,6 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import type { TurnItem } from '../../contracts/items.js'
 import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../../contracts/model-route-pool.js'
+import type { UsageSnapshot } from '../../contracts/usage.js'
+import { hasUsage } from '../../domain/usage.js'
+import { parseGatewayModelId } from '../../harness/gateway-model-id.js'
+import {
+  HARNESS_TOKEN_PREFIX,
+  type HarnessTokenGrant
+} from '../../harness/harness-token-service.js'
 import { estimateTokens } from '../../loop/request-history-hygiene.js'
 import { IMAGE_TOOL_RESULT_TOKEN_ESTIMATE } from '../../loop/tool-result-image.js'
 import type { ModelRequest, ModelStreamChunk, ModelToolSpec } from '../../ports/model-client.js'
@@ -56,6 +63,54 @@ export function authorizePublicGateway(runtime: ServerRuntime, request: Request)
   return null
 }
 
+/**
+ * Gateway caller identity (docs/ade/04 §5.2): either a public gateway
+ * credential or a `kgw_` harness grant. Harness tokens are checked first and
+ * fail closed — a `kgw_` token is never accepted as a public credential.
+ */
+export type GatewayAuth =
+  | { kind: 'public' }
+  | { kind: 'harness'; grant: HarnessTokenGrant }
+
+export type GatewayAuthVerdict =
+  | { ok: true; auth: GatewayAuth }
+  | { ok: false; reason: 'unauthorized' | 'rate_limited' }
+
+export function bearerCandidate(request: Request): string | null {
+  const header = request.headers.get('authorization')
+  const match = /^Bearer ([^\s]+)$/.exec(header ?? '')
+  const candidate = match?.[1] ?? request.headers.get('x-api-key')
+  return candidate && candidate.trim() ? candidate : null
+}
+
+export function authorizeGateway(runtime: ServerRuntime, request: Request): GatewayAuthVerdict {
+  const candidate = bearerCandidate(request)
+  if (candidate?.startsWith(HARNESS_TOKEN_PREFIX)) {
+    const grant = runtime.harnessTokens?.verifyScope(candidate, 'gateway')
+    return grant ? { ok: true, auth: { kind: 'harness', grant } } : { ok: false, reason: 'unauthorized' }
+  }
+  const guard = guardFor(runtime)
+  if (!guard || !guard.authorize(request)) return { ok: false, reason: 'unauthorized' }
+  if (!guard.consumeToken()) return { ok: false, reason: 'rate_limited' }
+  return { ok: true, auth: { kind: 'public' } }
+}
+
+/**
+ * Harness grants carry their own concurrency budget (default 4). Each grant
+ * gets a dedicated guard so its leases share the public guard's timeout and
+ * abort semantics without consuming public slots.
+ */
+const GRANT_GUARDS = new WeakMap<HarnessTokenGrant, GatewayRequestGuard>()
+
+export function acquireHarnessGrantLease(grant: HarnessTokenGrant, signal: AbortSignal): GatewayLease | null {
+  let guard = GRANT_GUARDS.get(grant)
+  if (!guard) {
+    guard = new GatewayRequestGuard({ verify: () => false }, { maxConcurrency: grant.maxConcurrent })
+    GRANT_GUARDS.set(grant, guard)
+  }
+  return guard.acquire(signal)
+}
+
 export function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error) }
 export function openAiError(message: string, code: string, status: number): JsonResponse {
   return jsonResponse({ error: { message, type: status >= 500 ? 'server_error' : 'invalid_request_error', param: null, code } }, status)
@@ -71,11 +126,30 @@ export function parseArguments(value: unknown): Record<string, unknown> { try { 
  * `providerId/modelId` addressing a usable provider directly (§6.13). For the
  * direct form the returned providerId overrides the gateway sentinel so the
  * request lands on that provider's client.
+ *
+ * Harness grants instead address `kun/<provider>/<model>` and may only reach
+ * providers listed in the grant's routes — anything else resolves to null
+ * (the caller answers 404). Grant routes bypass `exposableProvider` because
+ * the grant itself is the authorization boundary: a worker may be granted a
+ * subscription/OAuth provider without ever seeing its credential.
  */
 export async function resolveGatewayModel(
   runtime: ServerRuntime,
-  model: string
+  model: string,
+  grant?: HarnessTokenGrant
 ): Promise<{ model: string; providerId?: string } | null> {
+  if (grant) {
+    const direct = parseGatewayModelId(model)
+    if (!direct || !runtime.modelConnections) return null
+    const allowed = grant.routes.some(
+      (route) => route.providerId === direct.providerId && route.model === direct.model
+    )
+    if (!allowed) return null
+    const snapshot = await runtime.modelConnections.snapshot()
+    return snapshot.providers.some((provider) => provider.id === direct.providerId)
+      ? { model: direct.model, providerId: direct.providerId }
+      : null
+  }
   if (runtime.modelGateway?.pools().some((pool) => pool.enabled && pool.modelId === model)) {
     return { model }
   }
@@ -113,14 +187,19 @@ export function exposableProvider(provider: {
  * `systemPrompt`, assistant tool_calls and tool results become TurnItems, and
  * image parts become attachments.
  */
-export function makeModelRequest(input: Record<string, unknown>, signal: AbortSignal, providerId?: string): ModelRequest {
+export function makeModelRequest(
+  input: Record<string, unknown>,
+  signal: AbortSignal,
+  providerId?: string,
+  identity?: { threadId: string; turnId: string }
+): ModelRequest {
   const model = stringValue(input.model)
   if (!model) throw new Error('model is required')
   const rawMessages = Array.isArray(input.messages) ? input.messages : []
   if (rawMessages.length === 0) throw new Error('messages or input is required')
   const now = new Date().toISOString()
-  const threadId = `gateway_${randomUUID()}`
-  const turnId = `turn_${randomUUID()}`
+  const threadId = identity?.threadId ?? `gateway_${randomUUID()}`
+  const turnId = identity?.turnId ?? `turn_${randomUUID()}`
   const history: TurnItem[] = []
   const attachments: NonNullable<ModelRequest['attachments']> = []
   let systemPrompt = ''
@@ -214,6 +293,44 @@ export function messageContent(value: unknown, attachments: NonNullable<ModelReq
     else if (url) throw new Error('gateway image inputs must use a base64 data URL')
   }
   return text.join('\n')
+}
+
+/**
+ * The currently running turn for a grant's thread, per the admissionPending
+ * convention shared with delegated runtimes. When no turn is running the
+ * caller attributes usage at thread level only.
+ */
+export async function gatewayRunningTurnId(runtime: ServerRuntime, threadId: string): Promise<string | undefined> {
+  const thread = await runtime.threadService.get(threadId).catch(() => undefined)
+  return thread?.turns.find((turn) => turn.status === 'running' && !turn.admissionPending)?.id
+}
+
+/**
+ * Persist usage observed on a grant-scoped request (docs/ade/04 §6): one
+ * `source: 'harness-gateway'` event per completed call, counted into the
+ * usage service with the grant's thread (and running turn, when present).
+ * The event carries the service's cumulative snapshot so it lands on the
+ * same persisted axis as native `usage` events.
+ */
+export async function recordHarnessGatewayUsage(
+  runtime: ServerRuntime,
+  grant: HarnessTokenGrant,
+  resolved: { model: string; providerId?: string },
+  usage: UsageSnapshot | undefined,
+  turnId?: string
+): Promise<void> {
+  if (!usage || !hasUsage(usage)) return
+  const cumulative = runtime.usageService.record(grant.threadId, usage, undefined, turnId)
+  await runtime.events.record({
+    kind: 'usage',
+    threadId: grant.threadId,
+    ...(turnId ? { turnId } : {}),
+    model: resolved.model,
+    ...(resolved.providerId ? { providerId: resolved.providerId } : {}),
+    source: 'harness-gateway',
+    harnessId: grant.harnessId,
+    usage: cumulative
+  })
 }
 
 function stringifyToolOutput(output: unknown): string {

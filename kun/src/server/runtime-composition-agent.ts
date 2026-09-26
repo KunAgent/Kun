@@ -77,7 +77,8 @@ export async function createRuntimeAgentComposition(
     agentSdkProviderIds,
     resolveLegacyRequestCredentials,
     approvalReviewService,
-    timedModelClient
+    timedModelClient,
+    modelConnections
   } = model
   const {
     turnService,
@@ -217,6 +218,13 @@ export async function createRuntimeAgentComposition(
       sessionCoordinator: delegatedSessions,
       contextProfile: delegatedContextProfile,
       deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
+      // `kun-gateway` credential mode (docs/ade/04 §5.5): grant issuance,
+      // loopback endpoint, roles, and the catalog's gateway env block.
+      harnessTokens: services.harnesses.tokens,
+      harnessGatewayBaseUrl: () => services.harnesses.gatewayEndpoint.baseUrl,
+      roles: () => core.activeOptions.roles,
+      harnessCatalog: services.harnesses.catalog,
+      resolveDefaultProviderId: async () => (await modelConnections.snapshot()).defaultProviderId,
       ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
     }
     const antigravityRuntimeDeps: AntigravityCliRuntimeDeps = {

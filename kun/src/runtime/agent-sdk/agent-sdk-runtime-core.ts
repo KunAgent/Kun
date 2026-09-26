@@ -9,7 +9,7 @@ import {
   selectBridgeableTools,
   toSdkMcpServer
 } from './sdk-tool-bridge.js'
-import { composeSdkPromptText } from './sdk-context-assembler.js'
+import { composeSdkTurnText } from './sdk-context-assembler.js'
 import type { SdkQueryResult } from './sdk-protocol.js'
 import type { DelegatedRuntimeCapabilities } from '../delegated-turn-runtime.js'
 import { capabilitiesV2FromLegacy } from '../../harness/effective-capabilities.js'
@@ -28,6 +28,7 @@ import {
   type SdkTurnContext,
   type TurnStatus
 } from './agent-sdk-runtime-contracts.js'
+import type { HarnessRoute } from '../../contracts/harness.js'
 import { recordHandoffInjected } from '../../handoff/turn-handoff.js'
 import {
   MAX_SVG_COMPLETION_ATTEMPTS,
@@ -61,6 +62,12 @@ export class AgentSdkRuntime {
 
   handlesProvider(providerId: string | undefined): boolean {
     return this.deps.handlesProvider(providerId)
+  }
+
+  /** Claude Code runs native subscription login or the loopback kun gateway. */
+  handlesRoute(route: HarnessRoute): boolean {
+    return route.harnessId === 'claude-code' &&
+      (route.credentialMode === 'native-login' || route.credentialMode === 'kun-gateway')
   }
 
   capabilities(providerId: string | undefined): DelegatedRuntimeCapabilities | undefined {
@@ -286,6 +293,7 @@ export class AgentSdkRuntime {
             ...(ctx.claudeConfigDir ? { CLAUDE_CONFIG_DIR: ctx.claudeConfigDir } : {})
           },
           oauthToken: ctx.oauthToken,
+          ...(ctx.gateway ? { gateway: ctx.gateway } : {}),
           abortController: abort,
           ...(maxTurns !== undefined ? { maxTurns } : {}),
           ...(ctx.model ? { model: ctx.model } : {}),
@@ -298,17 +306,7 @@ export class AgentSdkRuntime {
 
       // A compatible native session already owns prior context. Portable
       // history is sent only when seeding a new generation.
-      const composeTurnText = (): string => ctx.preserveExactUserPrompt
-        ? ctx.userText
-        : composeSdkPromptText({
-            ...(ctx.handoffBrief
-              ? { handoffBrief: ctx.handoffBrief }
-              : !resumeSessionId && ctx.historyTranscript
-                ? { historyTranscript: ctx.historyTranscript }
-                : {}),
-            userText: ctx.userText,
-            ...(ctx.contextInstructions?.length ? { instructionBlocks: ctx.contextInstructions } : {})
-          })
+      const composeTurnText = (): string => composeSdkTurnText(ctx, Boolean(resumeSessionId))
       const capabilities = agentSdkCapabilities()
       const capabilitiesV2 = capabilitiesV2FromLegacy(capabilities, CLAUDE_CODE_CAPABILITIES)
       await this.deps.recordEvent({
@@ -449,6 +447,9 @@ export class AgentSdkRuntime {
               // Preserve the mapper's exact event order: milestones, tools,
               // usage, and errors may not overtake pending assistant deltas.
               await deltaEvents.flush()
+              // Gateway mode: the loopback gateway already recorded this usage
+              // (docs/ade/04 §6); the SDK report stays trace telemetry only.
+              if (ctx.gateway && draft.kind === 'usage') continue
               const item = itemOf(draft)
               if (ctx.requireSvgCompletion && item) observeSvgToolResult(svgCompletion, item)
               if (item && shouldPersist(item)) {

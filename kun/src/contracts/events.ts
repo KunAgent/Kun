@@ -8,7 +8,7 @@ import {
   UserMessageSource
 } from './items.js'
 import { ThreadAgentSurface, ThreadGoalSchema, ThreadTodoListSchema } from './threads.js'
-import { UsageSnapshotSchema } from './usage.js'
+import { UsageEventSourceSchema, UsageSnapshotSchema } from './usage.js'
 import { RuntimeErrorSeverity } from './errors.js'
 import {
   ApprovalPolicySchema,
@@ -583,6 +583,8 @@ export const UsageEvent = RuntimeEventBase.extend({
   providerId: z.string().min(1).optional(),
   accountId: z.string().min(1).optional(),
   attribution: z.enum(['agent-turn', 'approval-review', 'memory-distillation']).optional(),
+  source: UsageEventSourceSchema.optional(),
+  harnessId: HarnessIdSchema.optional(),
   usage: UsageSnapshotSchema
 })
 export type UsageEvent = z.infer<typeof UsageEvent>
