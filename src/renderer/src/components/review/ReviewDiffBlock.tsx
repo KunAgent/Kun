@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, type ReactElement } from 'react'
-import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
+import { ChevronDown, ChevronRight, FileJson2, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { parsePatch } from 'diff'
 import { MergeView } from '@codemirror/merge'
@@ -7,6 +7,8 @@ import { EditorView, lineNumbers } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import type { TaskWorkspaceDiffFile } from '@shared/task-workspace'
 import type { ReviewComment, ReviewCommentSide, ReviewSendRecord } from '@shared/review-comment'
+import { identityColor } from '@shared/identity-color'
+import { getProvider } from '../../agent/registry'
 import {
   createReviewDraft,
   loadWorkspaceDiffFile,
@@ -43,6 +45,9 @@ function ReviewSplitMerge({ oldText, newText }: { oldText: string; newText: stri
 }
 
 type UnifiedLine = { oldNo: number | null; newNo: number | null; text: string; tone: 'add' | 'del' | 'ctx' }
+
+/** Gutter identity mark for an attributed new-side line (11 §6.3). */
+export type AttributionMark = { color: string; title: string }
 
 function unifiedLines(patch: string): { hunks: { header: string; lines: UnifiedLine[] }[] } {
   const [parsed] = parsePatch(patch)
@@ -85,12 +90,14 @@ function UnifiedPatch({
   workspaceId,
   comments,
   requests,
+  attribution,
   onAddComment
 }: {
   patch: string
   workspaceId: string
   comments: ReviewComment[]
   requests: ReviewSendRecord[]
+  attribution?: Map<number, AttributionMark>
   onAddComment: (anchor: LineAnchor) => void
 }): ReactElement {
   const { hunks } = unifiedLines(patch)
@@ -151,7 +158,17 @@ function UnifiedPatch({
                   <span className="w-10 shrink-0 select-none pr-2 text-right text-ds-faint">
                     {line.oldNo ?? ''}
                   </span>
-                  <span className="w-10 shrink-0 select-none pr-2 text-right text-ds-faint border-r border-ds-border-muted">
+                  <span
+                    className="w-10 shrink-0 select-none pr-2 text-right text-ds-faint border-r border-ds-border-muted"
+                    style={
+                      line.newNo !== null && attribution?.get(line.newNo)
+                        ? { boxShadow: `inset 3px 0 0 ${attribution.get(line.newNo)!.color}` }
+                        : undefined
+                    }
+                    title={
+                      line.newNo !== null ? attribution?.get(line.newNo)?.title : undefined
+                    }
+                  >
                     {line.newNo ?? ''}
                   </span>
                   <span className="pl-2 pr-3 min-w-0">
@@ -215,6 +232,52 @@ export function ReviewDiffBlock({
   const detachedComments = fileComments.filter((c) =>
     c.outdated || (visibleKeys !== null && !visibleKeys.has(`${c.side}:${c.line}`)))
   const requests = review?.requests ?? []
+  const [attribution, setAttribution] = useState<Map<number, AttributionMark> | null>(null)
+  const [attributionData, setAttributionData] = useState<unknown>(null)
+
+  // Per-line authorship, fetched once per expanded file (11 §6.3).
+  useEffect(() => {
+    if (!expanded || !detail || detail.binary || detail.tooLarge) return
+    const fetchAttribution = getProvider().getTaskWorkspaceAttribution
+    if (!fetchAttribution) return
+    let cancelled = false
+    void fetchAttribution(workspaceId, file.path)
+      .then((result) => {
+        if (cancelled) return
+        setAttributionData(result)
+        const marks = new Map<number, AttributionMark>()
+        for (const line of result.lines) {
+          const label = line.label ?? line.harnessId ?? 'agent'
+          marks.set(line.line, {
+            color: identityColor(line.unitId ?? line.harnessId ?? ''),
+            title: line.dispatchId
+              ? `${t('reviewAttributionBy', { label })} · ${line.dispatchId}`
+              : t('reviewAttributionBy', { label })
+          })
+        }
+        setAttribution(marks.size ? marks : null)
+      })
+      .catch(() => undefined)
+    return () => { cancelled = true }
+  }, [expanded, detail, workspaceId, file.path, t])
+
+  const exportAttribution = (): void => {
+    const run = async (): Promise<void> => {
+      const fetchAttribution = getProvider().getTaskWorkspaceAttribution
+      const data = attributionData
+        ?? (fetchAttribution ? await fetchAttribution(workspaceId, file.path) : undefined)
+      if (!data || typeof document === 'undefined') return
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `attribution-${file.path.split('/').pop() ?? 'file'}.json`
+      anchor.click()
+      URL.revokeObjectURL(url)
+    }
+    void run()
+  }
+
   const onAddComment = useCallback(
     (anchor: LineAnchor) => {
       createReviewDraft(workspaceId, {
@@ -251,26 +314,39 @@ export function ReviewDiffBlock({
       id={`review-file-${encodeURIComponent(file.path)}`}
       className="border-b border-ds-border-muted"
     >
-      <button
-        type="button"
-        onClick={() => toggleReviewFileExpanded(workspaceId, file.path)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-ds-hover"
-      >
-        {expanded
-          ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ds-faint" />
-          : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ds-faint" />}
-        <span className="min-w-0 flex-1 truncate font-mono text-ds-ink">
-          {file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
-        </span>
-        <span className={`shrink-0 ${STATUS_TONE[file.status]}`}>
-          {t(`review${file.status[0].toUpperCase()}${file.status.slice(1)}`)}
-        </span>
-        <span className="shrink-0 font-mono">
-          <span className="text-emerald-600 dark:text-emerald-400">+{file.insertions}</span>
-          {' '}
-          <span className="text-red-600 dark:text-red-400">−{file.deletions}</span>
-        </span>
-      </button>
+      <div className="flex items-center">
+        <button
+          type="button"
+          onClick={() => toggleReviewFileExpanded(workspaceId, file.path)}
+          className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-ds-hover"
+        >
+          {expanded
+            ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ds-faint" />
+            : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ds-faint" />}
+          <span className="min-w-0 flex-1 truncate font-mono text-ds-ink">
+            {file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
+          </span>
+          <span className={`shrink-0 ${STATUS_TONE[file.status]}`}>
+            {t(`review${file.status[0].toUpperCase()}${file.status.slice(1)}`)}
+          </span>
+          <span className="shrink-0 font-mono">
+            <span className="text-emerald-600 dark:text-emerald-400">+{file.insertions}</span>
+            {' '}
+            <span className="text-red-600 dark:text-red-400">−{file.deletions}</span>
+          </span>
+        </button>
+        {!file.binary ? (
+          <button
+            type="button"
+            onClick={exportAttribution}
+            aria-label={t('reviewExportAttribution')}
+            title={t('reviewExportAttribution')}
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[7px] text-ds-faint hover:bg-ds-hover hover:text-ds-ink"
+          >
+            <FileJson2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+          </button>
+        ) : null}
+      </div>
       {expanded ? (
         <div className="border-t border-ds-border-muted">
           {file.binary || detail?.binary ? (
@@ -303,6 +379,7 @@ export function ReviewDiffBlock({
                 workspaceId={workspaceId}
                 comments={anchoredComments}
                 requests={requests}
+                attribution={attribution ?? undefined}
                 onAddComment={onAddComment}
               />
               <ReviewDetachedComments

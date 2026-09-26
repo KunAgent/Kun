@@ -17,6 +17,7 @@ import type { DelegationRuntime } from '../delegation/delegation-runtime.js'
 import type { createRuntimeServices } from './runtime-composition-services.js'
 import type { FileReviewStore } from '../ade/review-store.js'
 import { reanchorWorkspaceComments } from '../ade/review-reanchor.js'
+import { createAttributionObserver } from '../ade/attribution-observer.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
 
 type RuntimeServices = Awaited<ReturnType<typeof createRuntimeServices>>
@@ -52,7 +53,7 @@ export function createCapabilitiesForRoute(
  * isolated/unattended/recentFailures/managerRoute/language per call.
  */
 export function createManagerRuntime(input: {
-  services: Pick<RuntimeServices, 'adeStores' | 'harnesses' | 'workerCallbacks'>
+  services: Pick<RuntimeServices, 'adeStores' | 'harnesses' | 'workerCallbacks' | 'attribution'>
   core: Pick<
     RuntimeServices['model']['core'],
     | 'taskWorkspaces'
@@ -60,6 +61,7 @@ export function createManagerRuntime(input: {
     | 'activeOptions'
     | 'modelCapabilities'
     | 'artifactStore'
+    | 'events'
   >
   delegationRuntime: DelegationRuntime | undefined
   harnessRuntimeMap: HarnessRuntimeMap
@@ -79,6 +81,8 @@ export function createManagerRuntime(input: {
     listQuota,
     ...runtimeDeps
   } = input
+  // AI line attribution (11 §6.1): file-change items feed the ledger.
+  wireAttributionObserver(core, services, runtimeDeps.threads, runtimeDeps.nowIso)
   return new ManagerRuntime({
     ...runtimeDeps,
     ...services.adeStores,
@@ -172,4 +176,24 @@ export function wireTaskWorkspaceChange(
         console.warn('[kun] ade review reanchor failed:', error))
     }
   })
+}
+
+/**
+ * AI line attribution (11 §6.1): file-change tool items from every runtime
+ * feed the per-workspace ledger through the recorder's observer tap.
+ */
+export function wireAttributionObserver(
+  core: Pick<RuntimeServices['model']['core'], 'events' | 'taskWorkspaces'>,
+  services: Pick<RuntimeServices, 'attribution' | 'adeStores'>,
+  threads: Parameters<typeof createAttributionObserver>[0]['threads'],
+  nowIso: () => string
+): void {
+  core.events.addObserver(createAttributionObserver({
+    ledger: services.attribution,
+    taskWorkspaces: core.taskWorkspaces,
+    threads,
+    teams: services.adeStores.teams,
+    dispatches: services.adeStores.dispatches,
+    nowIso
+  }))
 }

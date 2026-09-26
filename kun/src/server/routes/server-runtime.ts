@@ -200,6 +200,8 @@ export type ServerRuntime = {
   activityHibernation?: import('../../services/activity-hibernation.js').ActivityHibernation
   /** Host-owned task workspaces (docs/ade/07). */
   taskWorkspaces?: import('../../workspace-tasks/task-workspace-service.js').TaskWorkspaceService
+  /** AI line-attribution ledger for workspace files (docs/ade/11 §6). */
+  attribution?: import('../../ade/attribution-ledger.js').AttributionLedger
   /** Active SSE streams, so a successful thread delete can close them. */
   eventStreamRegistry?: ThreadEventStreamRegistry
   /** Optional troubleshooting buffer of the most recent LLM rounds (in-memory). */

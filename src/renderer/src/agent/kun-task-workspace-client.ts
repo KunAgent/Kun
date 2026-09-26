@@ -1,6 +1,7 @@
 import type {
   CreateTaskWorkspaceRequest,
   PreservedBranchesResponse,
+  TaskWorkspaceAttribution,
   TaskWorkspaceDiffFileResponse,
   TaskWorkspaceDiffListResponse,
   TaskWorkspaceDiscardPreview,
@@ -85,6 +86,18 @@ export function createKunTaskWorkspaceClient() {
       return get(
         `${kunTaskWorkspacePath(workspaceId, '/diff/file')}${query}`,
         'failed to load task workspace file diff'
+      )
+    },
+
+    /** Per-line AI authorship for the file's current content (11 §6). */
+    getTaskWorkspaceAttribution(
+      workspaceId: string,
+      path: string
+    ): Promise<TaskWorkspaceAttribution> {
+      const query = buildQuery({ path })
+      return get(
+        `${kunTaskWorkspacePath(workspaceId, '/attribution')}${query}`,
+        'failed to load line attribution'
       )
     },
 
