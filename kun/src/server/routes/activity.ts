@@ -2,6 +2,10 @@ import { resolve } from 'node:path'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import type { ActivityStore } from '../../services/activity-store.js'
 import type { ActivityFactsStore } from '../../services/activity-facts-store.js'
+import {
+  ACTIVITY_FOREGROUND_TTL_MS,
+  type ActivityHibernation
+} from '../../services/activity-hibernation.js'
 
 const HEARTBEAT_MS = 15_000
 const MAX_WAIT_MS = 30_000
@@ -138,6 +142,25 @@ export function activityEventStream(store: ActivityStore, request: Request): Res
       connection: 'keep-alive'
     }
   })
+}
+
+/**
+ * POST /v1/activity/foreground — a client reports the thread currently in
+ * its foreground; the mark expires after 30 s (docs/ade/06 §7.2 cond. 4).
+ */
+export async function activityForegroundResponse(
+  hibernation: ActivityHibernation,
+  request: Request
+): Promise<JsonResponse> {
+  const body = (await request.json().catch(() => undefined)) as
+    | { threadId?: unknown }
+    | undefined
+  const threadId = typeof body?.threadId === 'string' ? body.threadId : ''
+  if (!threadId || threadId.length > 256) {
+    return jsonResponse({ code: 'validation_error', message: 'invalid threadId' }, 400)
+  }
+  hibernation.markForeground(threadId)
+  return jsonResponse({ threadId, expiresInMs: ACTIVITY_FOREGROUND_TTL_MS })
 }
 
 type UserFactMutation = 'ack' | 'dismiss' | 'pin'

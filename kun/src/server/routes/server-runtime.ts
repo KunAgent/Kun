@@ -196,6 +196,8 @@ export type ServerRuntime = {
   activityStore?: import('../../services/activity-store.js').ActivityStore
   /** Persisted user facts (ack/dismiss/pin) for activity rows. */
   activityFacts?: import('../../services/activity-facts-store.js').ActivityFactsStore
+  /** Stall/dormancy scanner plus the client foreground registry (06 §6-§7). */
+  activityHibernation?: import('../../services/activity-hibernation.js').ActivityHibernation
   /** Host-owned task workspaces (docs/ade/07). */
   taskWorkspaces?: import('../../workspace-tasks/task-workspace-service.js').TaskWorkspaceService
   /** Active SSE streams, so a successful thread delete can close them. */

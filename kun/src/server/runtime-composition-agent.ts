@@ -47,6 +47,7 @@ import { handleAdeThreadDeleted } from '../ade/team-lifecycle.js'
 import { DispatchDeliverer } from '../ade/dispatch-deliverer.js'
 import { WorkerNoticeCoordinator } from '../ade/worker-notice-coordinator.js'
 import {
+  createActivityHibernation,
   createCapabilitiesForRoute,
   createManagerRuntime
 } from './runtime-composition-manager.js'
@@ -451,6 +452,7 @@ export async function createRuntimeAgentComposition(
   })
   // Dispatch backfill + worker terminal hooks on the recorder (09 §5, §6.1).
   core.events.addObserver({ record: (event) => managerRuntime.handleRuntimeEvent(event) })
+  const activityHibernation = createActivityHibernation({ core, managerRuntime })
   registryComposition.registry.registerProvider(createManagerToolProvider({
     manager: managerRuntime,
     harnessList: {
@@ -679,6 +681,7 @@ export async function createRuntimeAgentComposition(
     runReview,
     queuedTurnDispatcher,
     managerRuntime,
+    activityHibernation,
     dispatchDeliverer,
     workerNoticeCoordinator,
     extensionProfiles,

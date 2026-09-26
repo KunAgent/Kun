@@ -179,6 +179,7 @@ export function createServerRuntimeComposition(
     threadActivity,
     activityStore,
     activityFacts,
+    activityHibernation: agent.activityHibernation,
     taskWorkspaces,
     eventStreamRegistry,
     llmDebug,
@@ -492,6 +493,7 @@ export function createServerRuntimeComposition(
             shutdownLeases: async () => { await executionLeases?.shutdown() }
           })
         },
+        () => { agent.activityHibernation.stop() },
         async () => { await services.memoryDistillation.shutdown() },
         () => backgroundShellRuntime.shutdown(),
         () => extensionJobs.handleRuntimeShutdown(),

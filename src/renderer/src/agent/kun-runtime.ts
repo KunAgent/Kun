@@ -17,8 +17,6 @@ import type {
   SandboxMode as KunSandboxMode
 } from '@shared/app-settings'
 import {
-  KUN_ACTIVITY_EVENTS_PATH,
-  KUN_ACTIVITY_PATH,
   KUN_ATTACHMENT_DIAGNOSTICS_PATH,
   KUN_ATTACHMENTS_PATH,
   KUN_HEALTH_PATH,
@@ -30,7 +28,6 @@ import {
   KUN_RUNTIME_TOOLS_PATH,
   KUN_SKILLS_PATH,
   KUN_THREADS_CONTENT_SEARCH_PATH,
-  kunActivityUnitPath,
   kunThreadCompactPath,
   kunThreadEventsPath,
   kunThreadForkPath,
@@ -52,10 +49,7 @@ import {
   type KunThreadMode
 } from '@shared/kun-endpoints'
 import { parseRuntimeErrorBody, runtimeErrorToError, type RuntimeError } from '@shared/runtime-error'
-import type {
-  ActivityPollResponse,
-  ActivitySnapshotResponse
-} from '@shared/activity-row'
+import { createKunActivityClient } from './kun-activity-client'
 import { extraRootsForWorkspace } from '../lib/code-workspace-folder-lookup'
 import { additionalWorkspacesForThread, readCodeWorkspaceFolderSets } from '../lib/code-workspace-folder-sets'
 import {
@@ -323,76 +317,14 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     }
   }
 
-  /** Execution-unit activity snapshot (docs/ade/06 §9). */
-  async getActivitySnapshot(options: {
-    scope?: 'all' | 'workspace'
-    workspace?: string
-  } = {}): Promise<ActivitySnapshotResponse> {
-    const query = buildQuery({
-      scope: options.scope ?? 'all',
-      workspace: options.workspace
-    })
-    const response = await rendererRuntimeClient.runtimeRequest(
-      `${KUN_ACTIVITY_PATH}${query}`,
-      'GET'
-    )
-    if (!response.ok) {
-      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to load activity'))
-    }
-    return readRuntimeJson<ActivitySnapshotResponse>(
-      response.body,
-      'runtime returned an invalid activity snapshot'
-    )
-  }
-
-  /** Long-poll execution-unit activity changes after `cursor`. */
-  async pollActivity(
-    cursor: string,
-    waitMs: number,
-    signal?: AbortSignal
-  ): Promise<ActivityPollResponse> {
-    const query = buildQuery({ cursor, wait_ms: waitMs })
-    const response = await rendererRuntimeClient.runtimeRequest(
-      `${KUN_ACTIVITY_EVENTS_PATH}${query}`,
-      'GET',
-      undefined,
-      signal ? { signal } : {}
-    )
-    if (!response.ok) {
-      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to poll activity'))
-    }
-    return readRuntimeJson<ActivityPollResponse>(
-      response.body,
-      'runtime returned an invalid activity events response'
-    )
-  }
-
-  private async mutateActivityFact(
-    unitId: string,
-    action: 'ack' | 'dismiss' | 'pin',
-    body?: string
-  ): Promise<void> {
-    const response = await rendererRuntimeClient.runtimeRequest(
-      kunActivityUnitPath(unitId, action),
-      'POST',
-      body
-    )
-    if (!response.ok) {
-      throw runtimeErrorToError(readRuntimeError(response.body, `failed to ${action} activity`))
-    }
-  }
-
-  async ackActivity(unitId: string): Promise<void> {
-    return this.mutateActivityFact(unitId, 'ack')
-  }
-
-  async dismissActivity(unitId: string): Promise<void> {
-    return this.mutateActivityFact(unitId, 'dismiss')
-  }
-
-  async pinActivity(unitId: string, pinned = true): Promise<void> {
-    return this.mutateActivityFact(unitId, 'pin', JSON.stringify({ pinned }))
-  }
+  /** Execution-unit activity surface (docs/ade/06 §9, §7.2 foreground). */
+  private readonly activity = createKunActivityClient()
+  readonly getActivitySnapshot = this.activity.getActivitySnapshot
+  readonly pollActivity = this.activity.pollActivity
+  readonly ackActivity = this.activity.ackActivity
+  readonly dismissActivity = this.activity.dismissActivity
+  readonly pinActivity = this.activity.pinActivity
+  readonly reportActivityForeground = this.activity.reportActivityForeground
 
   /** Rebuild a recorded handoff brief on demand (docs/ade/impl §P0-14). */
   async getHandoffPreview(threadId: string, turnId: string): Promise<{

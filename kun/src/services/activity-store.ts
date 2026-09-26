@@ -61,7 +61,7 @@ export class ActivityStore implements RuntimeEventObserver {
   private readonly rows = new Map<string, ActivityRow>()
   private readonly changes: StoredChange[] = []
   private readonly listeners = new Set<() => void>()
-  private readonly lastEventAt = new Map<string, number>()
+  private readonly lastEventTimes = new Map<string, number>()
   private readonly lastPreviewAt = new Map<string, number>()
   private readonly pendingPreview = new Map<string, string>()
   private readonly previewTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -139,7 +139,7 @@ export class ActivityStore implements RuntimeEventObserver {
     const row = this.rows.get(unitId)
     if (!row) return
     this.rows.delete(unitId)
-    this.lastEventAt.delete(unitId)
+    this.lastEventTimes.delete(unitId)
     this.pendingPreview.delete(unitId)
     this.lastPreviewAt.delete(unitId)
     const timer = this.previewTimers.get(unitId)
@@ -163,6 +163,14 @@ export class ActivityStore implements RuntimeEventObserver {
 
   get(unitId: string): ActivityRow | undefined {
     return this.rows.get(unitId)
+  }
+
+  /**
+   * Most recent runtime-event time for a unit (06 §6 quiet window). Not part
+   * of the row — excluded from row equality and emitted rows.
+   */
+  lastEventAt(unitId: string): number | undefined {
+    return this.lastEventTimes.get(unitId)
   }
 
   list(): ActivityRow[] {
@@ -232,11 +240,11 @@ export class ActivityStore implements RuntimeEventObserver {
   }
 
   record(event: RuntimeEvent): void {
-    this.lastEventAt.set(event.threadId, Date.now())
+    this.lastEventTimes.set(event.threadId, this.nowMs())
     const projections = projectRuntimeEvent(event)
     for (const projection of projections) {
       const unitId = this.options.unitIdForChild?.(projection.unitId) ?? projection.unitId
-      this.lastEventAt.set(unitId, Date.now())
+      this.lastEventTimes.set(unitId, this.nowMs())
       if (!this.rows.has(unitId)) {
         this.autoRegister(event, unitId)
       }
@@ -290,7 +298,13 @@ export class ActivityStore implements RuntimeEventObserver {
   private applyRuntime(event: RuntimeEvent, unitId: string, patch: ActivityPatch): void {
     const row = this.rows.get(unitId)
     if (row?.stalled) patch = { stalled: false, ...patch }
+    // Any fresh runtime activity wakes a dormant unit (06 §7.2).
+    if (row?.residency === 'dormant') patch = { residency: 'live', ...patch }
     this.apply(unitId, patch, 'runtime')
+  }
+
+  private nowMs(): number {
+    return this.options.nowMs?.() ?? Date.now()
   }
 
   /**
@@ -343,7 +357,7 @@ export class ActivityStore implements RuntimeEventObserver {
 
   private applyPreviewThrottled(unitId: string, text: string): void {
     this.pendingPreview.set(unitId, text)
-    const nowMs = this.options.nowMs?.() ?? Date.now()
+    const nowMs = this.nowMs()
     const throttle = this.options.previewThrottleMs ?? DEFAULT_PREVIEW_THROTTLE_MS
     const last = this.lastPreviewAt.get(unitId) ?? 0
     const remaining = throttle - (nowMs - last)
@@ -366,7 +380,7 @@ export class ActivityStore implements RuntimeEventObserver {
     const text = this.pendingPreview.get(unitId)
     if (text === undefined) return
     this.pendingPreview.delete(unitId)
-    this.lastPreviewAt.set(unitId, this.options.nowMs?.() ?? Date.now())
+    this.lastPreviewAt.set(unitId, this.nowMs())
     this.apply(unitId, { lastMessagePreview: text.slice(-PREVIEW_MAX) }, 'runtime')
   }
 

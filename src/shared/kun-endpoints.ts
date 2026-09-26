@@ -236,6 +236,7 @@ export const KUN_ACTIVITY_PATH = '/v1/activity'
 export const KUN_ACTIVITY_TEMPLATE = '/v1/activity'
 export const KUN_ACTIVITY_EVENTS_PATH = '/v1/activity/events'
 export const KUN_ACTIVITY_EVENTS_TEMPLATE = '/v1/activity/events'
+export const KUN_ACTIVITY_FOREGROUND_PATH = '/v1/activity/foreground'
 export function kunActivityUnitPath(unitId: string, action: 'ack' | 'dismiss' | 'pin'): string {
   return `${KUN_ACTIVITY_PATH}/${encodeURIComponent(unitId)}/${action}`
 }
