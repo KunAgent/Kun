@@ -10,5 +10,22 @@
   "adeHandoffShow": "Show brief",
   "adeHandoffHide": "Hide brief",
   "adeHandoffLoadError": "Could not rebuild the handoff brief",
-  "workerUpdateNotice.title": "Worker updates"
+  "workerUpdateNotice.title": "Worker updates",
+  "rightPanelReview": "Review",
+  "reviewEmpty": "No changes yet",
+  "reviewFileCount": "{{count}} file",
+  "reviewFileCount_other": "{{count}} files",
+  "reviewBinary": "Binary file",
+  "reviewTooLarge": "File too large to render",
+  "reviewExpandLarge": "Expand large file",
+  "reviewUnified": "Unified",
+  "reviewSplit": "Side by side",
+  "reviewRefresh": "Refresh",
+  "reviewLoading": "Loading diff…",
+  "reviewLoadError": "Could not load the diff",
+  "reviewNoWorkspace": "No task workspace is bound to this thread",
+  "reviewAdded": "Added",
+  "reviewModified": "Modified",
+  "reviewDeleted": "Deleted",
+  "reviewRenamed": "Renamed"
 }

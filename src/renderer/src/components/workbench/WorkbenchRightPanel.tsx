@@ -37,6 +37,9 @@ import { X } from 'lucide-react'
 const ChangeInspector = lazy(() =>
   import('../ChangeInspector').then((module) => ({ default: module.ChangeInspector }))
 )
+const ReviewPanel = lazy(() =>
+  import('../review/ReviewPanel').then((module) => ({ default: module.ReviewPanel }))
+)
 const DevBrowserPanel = lazy(() =>
   import('../DevBrowserPanel').then((module) => ({ default: module.DevBrowserPanel }))
 )
@@ -298,6 +301,9 @@ function CodeRightPanelWorkspace({
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.changes) {
       return <ChangeInspector {...changes} className="h-full max-h-full w-full flex-col" />
+    }
+    if (id === BUILTIN_RIGHT_PANEL_IDS.review) {
+      return <ReviewPanel className="h-full max-h-full w-full" />
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.browser) {
       return (

@@ -123,7 +123,7 @@ export class TaskWorkspaceService {
     return this.options.store.get(workspaceId)
   }
 
-  list(filter?: { ownerThreadId?: string }): TaskWorkspaceRecord[] {
+  list(filter?: { ownerThreadId?: string; boundThreadId?: string }): TaskWorkspaceRecord[] {
     return this.options.store.list(filter)
   }
 

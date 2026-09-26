@@ -10,5 +10,21 @@
   "adeHandoffShow": "查看简报",
   "adeHandoffHide": "收起简报",
   "adeHandoffLoadError": "无法重建交接简报",
-  "workerUpdateNotice.title": "工作者更新"
+  "workerUpdateNotice.title": "工作者更新",
+  "rightPanelReview": "审查",
+  "reviewEmpty": "还没有改动",
+  "reviewFileCount_other": "{{count}} 个文件",
+  "reviewBinary": "二进制文件",
+  "reviewTooLarge": "文件过大，无法渲染",
+  "reviewExpandLarge": "展开大文件",
+  "reviewUnified": "统一视图",
+  "reviewSplit": "并排视图",
+  "reviewRefresh": "刷新",
+  "reviewLoading": "正在加载 diff…",
+  "reviewLoadError": "无法加载 diff",
+  "reviewNoWorkspace": "该线程未绑定任务工作区",
+  "reviewAdded": "新增",
+  "reviewModified": "修改",
+  "reviewDeleted": "删除",
+  "reviewRenamed": "重命名"
 }

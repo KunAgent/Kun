@@ -51,6 +51,17 @@ async function harness() {
   const store = new TaskWorkspaceStore({ dataDir, flushDelayMs: 1 })
   await store.load()
   stores.push(store)
+  const artifactContents = new Map<string, string>()
+  let artifactSeq = 0
+  const artifacts = {
+    put: async (input: { content: string }) => {
+      artifactSeq += 1
+      const id = `art-${artifactSeq}`
+      artifactContents.set(id, input.content)
+      return { meta: { id } }
+    },
+    get: async (id: string) => artifactContents.get(id) ?? null
+  }
   const service = new TaskWorkspaceService({
     store,
     lifecycle: createWorktreeLifecycle({
@@ -59,13 +70,15 @@ async function harness() {
       fence: assertWorkspaceWriteFence,
       withCommit: withWorkspaceWriteCommit
     }),
-    worktreeRoot
+    worktreeRoot,
+    artifacts
   })
   const router = new Router()
   registerTaskWorkspaceRoutes(router, {
     runtimeToken: 'test-token',
     insecure: false,
-    taskWorkspaces: service
+    taskWorkspaces: service,
+    graph: { artifacts }
   } as unknown as ServerRuntime)
   const request = async (
     method: string,
@@ -120,6 +133,10 @@ describe('task workspace routes', () => {
     const body = JSON.parse(listed.body)
     expect(body.records).toHaveLength(1)
     expect(body.records[0].state).toBe('ready')
+    const bound = await request('GET', '/v1/task-workspaces?boundThreadId=thread-a')
+    expect(JSON.parse(bound.body).records).toHaveLength(1)
+    const unbound = await request('GET', '/v1/task-workspaces?boundThreadId=other')
+    expect(JSON.parse(unbound.body).records).toHaveLength(0)
     const single = await request('GET', `/v1/task-workspaces/${record.workspaceId}`)
     expect((JSON.parse(single.body)).record.workspaceId).toBe(record.workspaceId)
   })
@@ -224,6 +241,68 @@ describe('task workspace routes', () => {
     )
     expect(confirmed.status).toBe(200)
     expect((JSON.parse(confirmed.body)).record.state).toBe('removed')
+  })
+
+  it('serves the captured diff file list and per-file texts', async () => {
+    const { service, request, repo } = await harness()
+    const created = await request('POST', '/v1/task-workspaces', {
+      ownerThreadId: 'thread-a',
+      sourceRoot: repo,
+      isolation: 'worktree',
+      startFrom: { kind: 'current-head' }
+    })
+    const record = (JSON.parse(created.body)).record
+    await waitTerminal(service, record.workspaceId)
+    const worktree = service.get(record.workspaceId)!.path
+    await writeFile(join(worktree, 'a.txt'), 'changed\nextra\n')
+    await writeFile(join(worktree, 'b.ts'), 'export const b = 1\n')
+    const diff = await request('GET', `/v1/task-workspaces/${record.workspaceId}/diff`)
+    expect(diff.status).toBe(200)
+    const body = JSON.parse(diff.body)
+    expect(body.headRevision).toMatch(/^[a-f0-9]{40}$/)
+    expect(body.files).toHaveLength(2)
+    const a = body.files.find((f: { path: string }) => f.path === 'a.txt')
+    const b = body.files.find((f: { path: string }) => f.path === 'b.ts')
+    expect(a).toMatchObject({ status: 'modified', insertions: 2, deletions: 1, binary: false })
+    expect(b).toMatchObject({ status: 'added', insertions: 1, deletions: 0 })
+    const file = await request(
+      'GET',
+      `/v1/task-workspaces/${record.workspaceId}/diff/file?path=${encodeURIComponent('a.txt')}`
+    )
+    expect(file.status).toBe(200)
+    const detail = JSON.parse(file.body)
+    expect(detail.patch).toContain('diff --git a/a.txt b/a.txt')
+    expect(detail.oldText).toBe('a\n')
+    expect(detail.newText).toBe('changed\nextra\n')
+    const added = await request(
+      'GET',
+      `/v1/task-workspaces/${record.workspaceId}/diff/file?path=b.ts`
+    )
+    const addedBody = JSON.parse(added.body)
+    expect(addedBody.newText).toBe('export const b = 1\n')
+    expect(addedBody.oldText).toBeUndefined()
+  })
+
+  it('diff/file validates the path and 404s for unknown files', async () => {
+    const { service, request, repo } = await harness()
+    const created = await request('POST', '/v1/task-workspaces', {
+      ownerThreadId: 'thread-a',
+      sourceRoot: repo,
+      isolation: 'worktree',
+      startFrom: { kind: 'current-head' }
+    })
+    const record = (JSON.parse(created.body)).record
+    await waitTerminal(service, record.workspaceId)
+    const worktree = service.get(record.workspaceId)!.path
+    await writeFile(join(worktree, 'a.txt'), 'changed\n')
+    const missing = await request(
+      'GET', `/v1/task-workspaces/${record.workspaceId}/diff/file`
+    )
+    expect(missing.status).toBe(400)
+    const unknown = await request(
+      'GET', `/v1/task-workspaces/${record.workspaceId}/diff/file?path=nope.ts`
+    )
+    expect(unknown.status).toBe(404)
   })
 
   it('preserved-branches is not swallowed by the :workspaceId route', async () => {

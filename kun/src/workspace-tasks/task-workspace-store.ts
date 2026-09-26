@@ -49,10 +49,16 @@ export class TaskWorkspaceStore {
     return this.records.find((record) => record.workspaceId === workspaceId)
   }
 
-  list(filter?: { ownerThreadId?: string }): TaskWorkspaceRecord[] {
-    const rows = filter?.ownerThreadId
-      ? this.records.filter((record) => record.ownerThreadId === filter.ownerThreadId)
-      : this.records
+  list(filter?: { ownerThreadId?: string; boundThreadId?: string }): TaskWorkspaceRecord[] {
+    const rows = this.records.filter((record) => {
+      if (filter?.ownerThreadId && record.ownerThreadId !== filter.ownerThreadId) return false
+      if (filter?.boundThreadId) {
+        const bound = record.ownerThreadId === filter.boundThreadId ||
+          record.unitId === filter.boundThreadId
+        if (!bound) return false
+      }
+      return true
+    })
     return rows.map((record) => ({ ...record }))
   }
 

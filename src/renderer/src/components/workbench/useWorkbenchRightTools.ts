@@ -4,6 +4,7 @@ import {
   type RightPanelContributionId,
   type RightPanelMode
 } from '../../extensions/contribution-ids'
+import { useReviewStore } from '../../store/review-store'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
 import { requestCodeCanvasPanelOpen } from '../../lib/code-canvas-panel-event'
@@ -149,12 +150,18 @@ export function useWorkbenchRightTools({
     else expandRightPanel()
   }, [codeRightTabs.expanded, collapseRightPanel, expandRightPanel])
 
+  // The review tab only exists while the active thread binds a task
+  // workspace (11 §3); the binding lookup itself runs in WorkbenchContent.
+  const reviewEnabled = useReviewStore((s) =>
+    Boolean(activeThreadId && s.bindings[activeThreadId]))
+
   useEffect(() => {
     const unavailable: RightPanelContributionId[] = []
     unavailable.push(BUILTIN_RIGHT_PANEL_IDS.agentPerspective)
     if (!activeGuiPlan) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.plan)
     if (!fileTreeWorkspaceRoot) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.files)
     if (!filePreviewTarget) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.file)
+    if (!reviewEnabled) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.review)
     if (!activeThreadId) {
       unavailable.push(BUILTIN_RIGHT_PANEL_IDS.sideConversations)
     }
@@ -167,7 +174,8 @@ export function useWorkbenchRightTools({
     closeRightPanelTab,
     codeRightTabs.tabs,
     filePreviewTarget,
-    fileTreeWorkspaceRoot
+    fileTreeWorkspaceRoot,
+    reviewEnabled
   ])
 
   return {
