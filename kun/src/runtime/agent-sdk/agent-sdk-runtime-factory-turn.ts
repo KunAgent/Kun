@@ -97,6 +97,7 @@ import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
 import {
   delegatedCapabilityFingerprint,
   delegatedCredentialIdentity,
+  delegatedRouteKey,
   priorItemsForDelegatedTurn,
   type DelegatedSessionCoordinator,
   type DelegatedSessionPreparation
@@ -449,7 +450,11 @@ export function createAgentSdkTurnRuntimeDeps(
           priorItems: priorItemsForDelegatedTurn(items, turnId)
         })
         if (token) {
-          claudeConfigDir = deps.sessionCoordinator.store.providerStateDir('agent-sdk', threadId)
+          claudeConfigDir = deps.sessionCoordinator.store.providerStateDir(
+            'agent-sdk',
+            threadId,
+            delegatedRouteKey(preparation.route)
+          )
           await mkdir(claudeConfigDir, { recursive: true, mode: 0o700 })
         }
         sessionPreparationsByTurn.set(skillTurnKey(threadId, turnId), preparation)
