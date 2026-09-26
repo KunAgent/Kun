@@ -6,7 +6,9 @@ import {
   ensureThreadBinding,
   loadWorkspaceDiff,
   setReviewViewMode,
+  unwatchReviewWorkspace,
   useReviewStore,
+  watchReviewWorkspace,
   type ReviewViewMode
 } from '../../store/review-store'
 import { ReviewFileTree } from './ReviewFileTree'
@@ -36,6 +38,13 @@ export function ReviewPanel({ className }: { className?: string }): ReactElement
       void loadWorkspaceDiff(workspaceId)
     }
   }, [workspaceId, review?.files.length, review?.loading])
+
+  // Live refresh: settled work on the bound unit reloads the diff (11 §4.4).
+  useEffect(() => {
+    if (!workspaceId) return
+    watchReviewWorkspace(workspaceId)
+    return () => unwatchReviewWorkspace(workspaceId)
+  }, [workspaceId])
 
   const viewMode = review?.viewMode ?? 'unified'
   const modeButton = (mode: ReviewViewMode, label: string): ReactElement => (

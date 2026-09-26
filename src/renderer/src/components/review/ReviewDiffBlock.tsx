@@ -8,12 +8,10 @@ import { EditorState } from '@codemirror/state'
 import type { TaskWorkspaceDiffFile } from '@shared/task-workspace'
 import {
   loadWorkspaceDiffFile,
+  REVIEW_LARGE_FILE_LINES,
   toggleReviewFileExpanded,
   useReviewStore
 } from '../../store/review-store'
-
-/** Files with more changed lines than this start collapsed (11 §3 perf). */
-export const REVIEW_LARGE_FILE_LINES = 5_000
 
 const readOnlyExtensions = [
   EditorView.editable.of(false),
