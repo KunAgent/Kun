@@ -131,6 +131,7 @@ function makeRuntime(opts: {
   runChild?: (input: { childId?: string; prompt?: string }) => Promise<ChildRunRecord>
   capabilities?: typeof KUN_NATIVE_CAPABILITIES
   teamLimits?: ManagerRuntimeDeps['teamLimits']
+  selector?: ManagerRuntimeDeps['selector']
 } = {}) {
   const workspace = workspaceRecord(opts.workspaceState ?? 'ready')
   const runChild = vi.fn(opts.runChild ?? (async (input: { childId?: string }) =>
@@ -170,7 +171,11 @@ function makeRuntime(opts: {
     activity: activity as never,
     delegation,
     childRuns,
-    catalog: { get: (id: string) => BUILTIN_HARNESSES.find((def) => def.id === id) } as never,
+    catalog: {
+      get: (id: string) => BUILTIN_HARNESSES.find((def) => def.id === id),
+      list: () => BUILTIN_HARNESSES,
+      isDisabled: () => false
+    } as never,
     detector: { status: async (id: string) => readyStatus(id) } as never,
     capabilitiesForRoute: async () => opts.capabilities ?? KUN_NATIVE_CAPABILITIES,
     deliverer,
@@ -178,7 +183,8 @@ function makeRuntime(opts: {
     nowIso: () => NOW,
     language: () => 'en',
     allowUnattendedFullAccess: () => false,
-    teamLimits: opts.teamLimits
+    teamLimits: opts.teamLimits,
+    ...(opts.selector ? { selector: opts.selector } : {})
   })
   return { runtime, deliverer, runChild, resumeChild, taskWorkspaces, activity, turns, workspace }
 }
@@ -231,6 +237,91 @@ describe('ManagerRuntime.createWorker', () => {
     expect(runInput.childId).toBe(result.workerId)
     expect(runInput.clientRequestId).toBe(result.dispatchId)
     expect(result.userReport).toContain('fixer')
+  })
+
+  it('routes omitted-agent creates through the selector and persists its decision', async () => {
+    const { runtime, runChild } = makeRuntime({
+      selector: {
+        profiles: async () => [{
+          kind: 'profile' as const,
+          id: 'reviewer',
+          source: 'configured' as const,
+          profile: {
+            mode: 'subagent' as const,
+            toolPolicy: 'inherit' as const,
+            name: 'Reviewer',
+            description: 'reviews diffs',
+            delegationNotes: 'login redirect specialist',
+            harnessId: 'claude-code' as const,
+            credentialMode: 'native-login' as const,
+            model: 'claude-sonnet-4-6'
+          }
+        }],
+        quota: async () => null,
+        agentOrder: () => [],
+        modelCostTier: () => 0 as const
+      }
+    })
+    const result = await runtime.createWorker(managerCtx(), {
+      label: 'fixer', role: 'reviewer', task: 'repair login redirect'
+    }, TOOL_CONTEXT)
+    expect(result.ok).toBe(true)
+    const worker = (await teams.get('thr_mgr'))!.workers[0]!
+    expect(worker.route).toMatchObject({
+      harnessId: 'claude-code',
+      credentialMode: 'native-login',
+      model: 'claude-sonnet-4-6'
+    })
+    expect(worker.profileId).toBe('reviewer')
+    expect(worker.selection).toMatchObject({ reason: expect.stringContaining('Reviewer') })
+    expect(worker.selection!.score).toBeCloseTo(1, 5)
+    expect(worker.selection!.alternatives.length).toBeGreaterThan(0)
+    expect(result.selection?.reason).toBe(worker.selection!.reason)
+    expect(result.userReport).toContain('Selected Reviewer')
+    const runInput = runChild.mock.calls[0]![0] as Record<string, unknown>
+    expect(runInput.profile).toBe('reviewer')
+    expect(runInput.routing).toMatchObject({
+      method: 'worker-selector',
+      selectedKind: 'profile',
+      selectedId: 'reviewer'
+    })
+    expect((runInput.routing as { candidates: unknown[] }).candidates.length)
+      .toBeGreaterThan(0)
+  })
+
+  it('keeps the manager-route fallback when selector inputs are absent', async () => {
+    const { runtime } = makeRuntime()
+    const result = await runtime.createWorker(managerCtx(), {
+      label: 'fixer', task: 'task'
+    }, TOOL_CONTEXT)
+    expect(result.ok).toBe(true)
+    const worker = (await teams.get('thr_mgr'))!.workers[0]!
+    expect(worker.route).toMatchObject({
+      harnessId: 'kun', model: 'model-x', providerId: 'prov-1', credentialMode: 'provider'
+    })
+    expect(worker.profileId).toBeUndefined()
+    expect(worker.selection).toBeUndefined()
+  })
+
+  it('returns a refusal when the selector finds no eligible route', async () => {
+    const { runtime, taskWorkspaces } = makeRuntime({
+      selector: {
+        profiles: async () => [],
+        quota: async () => null,
+        agentOrder: () => [],
+        modelCostTier: () => 0 as const
+      },
+      capabilities: {
+        statuses: {},
+        facts: { sandbox: 'none', usageReporting: 'none', compactionOwner: 'harness' }
+      } as never
+    })
+    const result = await runtime.createWorker(managerCtx(), {
+      label: 'fixer', task: 'task'
+    }, TOOL_CONTEXT)
+    expect(result.ok).toBe(false)
+    expect(result.refusal).toBe('invalid_agent')
+    expect(taskWorkspaces.create).not.toHaveBeenCalled()
   })
 
   it('refuses at the hard worker limit without touching workspaces', async () => {

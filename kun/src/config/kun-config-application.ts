@@ -407,7 +407,9 @@ export const HarnessesConfigSchema = z
     /** Per-harness default permission level (a permissionModes[].id). */
     defaultPermissionMode: z.record(HarnessIdSchema, z.string().min(1).max(64)).default({}),
     /** Default harness for new one-to-one ADE conversations. */
-    defaultHarnessId: HarnessIdSchema.default('kun')
+    defaultHarnessId: HarnessIdSchema.default('kun'),
+    /** Ordered user preference for the ADE worker selector (10 §3.2). */
+    agentOrder: z.array(HarnessIdSchema).max(16).default([])
   })
   .strict()
 export type HarnessesConfig = z.infer<typeof HarnessesConfigSchema>

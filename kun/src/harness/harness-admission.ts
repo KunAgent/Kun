@@ -98,7 +98,7 @@ export function checkHarnessAdmission(input: {
   }
   const rule = ADMISSION_RULES[input.usage]
   const missing = rule.required.filter(
-    (key) => !input.effective.statuses[key].supported
+    (key) => !input.effective.statuses[key]?.supported
   )
   if (missing.length) {
     return {

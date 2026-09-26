@@ -323,6 +323,9 @@ const subagentProfilePatchSchema = z
     blockedMcpServers: z.array(z.string().max(128)).max(200).optional(),
     blockedSkills: z.array(z.string().max(128)).max(200).optional(),
     reasoningEffort: modelReasoningEffortSchema.optional(),
+    harnessId: z.string().trim().min(1).max(64).optional(),
+    credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
+    delegationNotes: z.string().max(1_000).optional(),
     builtin: z.boolean().optional()
   })
   .passthrough()
@@ -597,7 +600,8 @@ export const kunRuntimePatchSchema = z.object({
       env: z.record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024)).optional()
     }).strict()).max(32).optional(),
     defaultPermissionMode: z.record(z.string().trim().min(1).max(128), z.string().min(1).max(64)).optional(),
-    defaultHarnessId: z.string().trim().min(1).max(128).optional()
+    defaultHarnessId: z.string().trim().min(1).max(128).optional(),
+    agentOrder: z.array(z.string().trim().min(1).max(64)).max(16).optional()
   }).strict().optional(),
   ade: z.object({
     enabled: z.boolean().optional(),

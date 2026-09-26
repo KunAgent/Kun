@@ -18,7 +18,15 @@ import type {
  */
 
 /** Builtin harness ids; custom entries colliding with these are dropped. */
-export const BUILTIN_HARNESS_IDS = ['kun', 'claude-code', 'cursor', 'antigravity'] as const
+export const BUILTIN_HARNESS_IDS = [
+  'kun',
+  'claude-code',
+  'cursor',
+  'antigravity',
+  'gemini-cli',
+  'codex',
+  'opencode'
+] as const
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -65,7 +73,8 @@ export function defaultKunHarnessSettings(): KunHarnessSettingsV1 {
     binaryPaths: {},
     custom: [],
     defaultPermissionMode: {},
-    defaultHarnessId: 'kun'
+    defaultHarnessId: 'kun',
+    agentOrder: []
   }
 }
 
@@ -101,8 +110,30 @@ export function normalizeKunHarnessSettings(value: unknown): KunHarnessSettingsV
     binaryPaths: stringRecord(input.binaryPaths),
     custom,
     defaultPermissionMode: stringRecord(input.defaultPermissionMode),
-    defaultHarnessId: defaultHarnessId ?? defaults.defaultHarnessId
+    defaultHarnessId: defaultHarnessId ?? defaults.defaultHarnessId,
+    agentOrder: agentOrderList(input.agentOrder, builtinIds, custom)
   }
+}
+
+/**
+ * ADE worker-selection preference (10 §3.2): an ordered harness-id list.
+ * Unknown/duplicate ids drop; custom ACP ids are allowed alongside builtins.
+ */
+function agentOrderList(
+  value: unknown,
+  builtinIds: ReadonlySet<string>,
+  custom: readonly KunHarnessCustomEntryV1[]
+): string[] {
+  if (!Array.isArray(value)) return []
+  const known = new Set<string>([...builtinIds, ...custom.map((entry) => entry.id)])
+  const out: string[] = []
+  for (const entry of value) {
+    const id = nonEmpty(entry, 128)
+    if (!id || !known.has(id) || out.includes(id)) continue
+    out.push(id)
+    if (out.length >= 16) break
+  }
+  return out
 }
 
 export function mergeKunHarnessSettings(
@@ -116,7 +147,8 @@ export function mergeKunHarnessSettings(
     binaryPaths: patch.binaryPaths ?? base.binaryPaths,
     custom: patch.custom ?? base.custom,
     defaultPermissionMode: patch.defaultPermissionMode ?? base.defaultPermissionMode,
-    defaultHarnessId: patch.defaultHarnessId ?? base.defaultHarnessId
+    defaultHarnessId: patch.defaultHarnessId ?? base.defaultHarnessId,
+    agentOrder: patch.agentOrder ?? base.agentOrder
   })
 }
 

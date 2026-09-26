@@ -24,6 +24,33 @@ export const WorkerRecordSchema = z
     role: z.string().max(64).optional(),
     /** Frozen route chosen at creation (01: harness/provider/model/credential). */
     route: HarnessRouteSchema,
+    /** Profile that produced this route when the worker selector chose one. */
+    profileId: z.string().min(1).max(128).optional(),
+    /**
+     * Selector decision captured for reproducibility (10 §3.3): the reason
+     * sentence plus runner-up candidates with their deterministic scores.
+     */
+    selection: z
+      .object({
+        reason: z.string().min(1).max(2_000),
+        /** Deterministic score of the winning candidate. */
+        score: z.number(),
+        alternatives: z
+          .array(
+            z
+              .object({
+                route: HarnessRouteSchema,
+                profileId: z.string().min(1).max(128).optional(),
+                label: z.string().min(1).max(128),
+                score: z.number()
+              })
+              .strict()
+          )
+          .max(3)
+          .default([])
+      })
+      .strict()
+      .optional(),
     /** Harness permission mode id after the manager-authority clamp. */
     permissionMode: z.string().min(1).max(128),
     lifecycle: z.enum(['persistent', 'ephemeral']),

@@ -126,8 +126,17 @@ describe('harness/ade settings bridge', () => {
       binaryPaths: {},
       custom: [],
       defaultPermissionMode: {},
-      defaultHarnessId: 'kun'
+      defaultHarnessId: 'kun',
+      agentOrder: []
     })
+  })
+
+  it('carries agentOrder into runtime config and drops unknown harness ids', () => {
+    const runtime = runtimeWith({
+      harnesses: { agentOrder: ['claude-code', 'kun', 'not-a-harness' as never] }
+    })
+    expect(harnessesConfigForRuntime(runtime.harnesses).agentOrder)
+      .toEqual(['claude-code', 'kun'])
   })
 
   it('accepts a full harnesses/ade patch and rejects unknown subkeys', () => {

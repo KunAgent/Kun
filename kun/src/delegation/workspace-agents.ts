@@ -26,14 +26,18 @@ import {
  *     allowedTools: [read, grep]
  *     omit_base_prompt: false # when true, role prompt replaces Kun base
  *     color: "#3b82f6"
+ *     harness: claude-code    # optional ADE worker binding (10 §3.1)
+ *     credential-mode: native-login   # optional harness credential path
+ *     delegation-notes: use for code review on changed files
+ *     model: claude-sonnet-4-6        # optional harness model pin
  *     ---
  *     Body becomes the systemPrompt verbatim (kun's base prompt is
  *     prepended unless omit_base_prompt: true).
  *
  * Workspace roles enter automatic BM25/LLM routing (indexed by id/name/
- * description only — body is never searchable). They may opt into
- * `toolPolicy: inherit` for write tools under the parent capability
- * snapshot. They still cannot choose a model/provider/reasoning level,
+ * description/delegation-notes only — body is never searchable). They may
+ * opt into `toolPolicy: inherit` for write tools under the parent capability
+ * snapshot. They cannot choose a provider/reasoning level,
  * cannot load skills, and cannot nest `delegate_task` / `generate_subagent`.
  * Files with invalid frontmatter are dropped silently so a single broken
  * file doesn't take down delegation.
@@ -62,6 +66,9 @@ export type WorkspaceAgentCatalogProfile = {
   blockedTools?: string[]
   omitBasePrompt?: boolean
   surfaces?: NonNullable<SubagentProfileConfig['surfaces']>
+  harnessId?: SubagentProfileConfig['harnessId']
+  credentialMode?: SubagentProfileConfig['credentialMode']
+  delegationNotes?: string
 }
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
@@ -133,7 +140,10 @@ export async function loadWorkspaceAgentCatalogProfiles(
       ...(profile.promptPreamble ? { promptPreamble: profile.promptPreamble } : {}),
       ...(profile.allowedTools ? { allowedTools: profile.allowedTools } : {}),
       ...(profile.blockedTools ? { blockedTools: profile.blockedTools } : {}),
-      ...(profile.omitBasePrompt ? { omitBasePrompt: true } : {})
+      ...(profile.omitBasePrompt ? { omitBasePrompt: true } : {}),
+      ...(profile.harnessId ? { harnessId: profile.harnessId } : {}),
+      ...(profile.credentialMode ? { credentialMode: profile.credentialMode } : {}),
+      ...(profile.delegationNotes ? { delegationNotes: profile.delegationNotes } : {})
     }
   })
 }
@@ -226,7 +236,19 @@ function parseAgentMarkdown(text: string, defaultId: string): {
     ])],
     ...(parseListField(fields, 'blockedMcpServers') ? { blockedMcpServers: parseListField(fields, 'blockedMcpServers') } : {}),
     ...(parseListField(fields, 'blockedSkills') ? { blockedSkills: parseListField(fields, 'blockedSkills') } : {}),
-    skillsEnabled: false
+    skillsEnabled: false,
+    // ADE worker binding (10 §3.1): a workspace role may pin the harness and
+    // model it dispatches onto; the credential path defaults to the harness's.
+    ...(fields.harness?.trim() || fields.harnessId?.trim()
+      ? { harnessId: (fields.harness ?? fields.harnessId)!.trim() }
+      : {}),
+    ...(fields['credential-mode']?.trim() || fields.credentialMode?.trim()
+      ? { credentialMode: (fields['credential-mode'] ?? fields.credentialMode)!.trim() }
+      : {}),
+    ...(fields['delegation-notes']?.trim() || fields.delegationNotes?.trim()
+      ? { delegationNotes: (fields['delegation-notes'] ?? fields.delegationNotes)!.trim() }
+      : {}),
+    ...(fields.model?.trim() ? { model: fields.model.trim() } : {})
   }
   const parsed = SubagentProfileConfig.safeParse(raw)
   if (!parsed.success) return null

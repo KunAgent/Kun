@@ -1,5 +1,6 @@
 import type {
   ChildRunRecord,
+  ChildRoutingMetadata,
   ChildSecuritySnapshot,
   FileDelegationStore
 } from '../delegation/delegation-runtime-contracts.js'
@@ -34,6 +35,10 @@ type RunChildInput = {
   workspace?: string
   model?: string
   providerId?: string
+  /** Resolved subagent profile id applied to the child's role (10 §3.1). */
+  profile?: string
+  /** Selector decision metadata recorded on the child run (10 §3.3). */
+  routing?: ChildRoutingMetadata
   security?: ChildSecuritySnapshot
   harnessId?: WorkerRecord['route']['harnessId']
   credentialMode?: WorkerRecord['route']['credentialMode']
@@ -289,6 +294,43 @@ export class DispatchDeliverer {
       workspace: workspace?.path,
       model: worker.route.model,
       providerId: worker.route.providerId,
+      ...(worker.selection
+        ? {
+            ...(worker.profileId ? { profile: worker.profileId } : {}),
+            routing: {
+              method: 'worker-selector' as const,
+              selectedKind: (worker.profileId ? 'profile' : 'harness') as 'profile' | 'harness',
+              selectedId: worker.profileId ?? worker.route.harnessId,
+              candidates: [
+                ...(worker.profileId
+                  ? [{
+                      kind: 'profile' as const,
+                      targetId: worker.profileId,
+                      name: worker.profileId,
+                      source: 'configured' as const,
+                      score: Math.max(0, worker.selection.score)
+                    }]
+                  : []),
+                ...worker.selection.alternatives.map((alt) => alt.profileId
+                  ? {
+                      kind: 'profile' as const,
+                      targetId: alt.profileId,
+                      name: alt.label,
+                      source: 'configured' as const,
+                      score: Math.max(0, alt.score)
+                    }
+                  : {
+                      kind: 'harness' as const,
+                      targetId: alt.route.harnessId,
+                      name: alt.label,
+                      source: 'configured' as const,
+                      score: Math.max(0, alt.score)
+                    })
+              ].slice(0, 5),
+              reason: worker.selection.reason.slice(0, 2_000)
+            }
+          }
+        : {}),
       executionUnit: {
         kind: 'worker',
         teamId: team.teamId,
