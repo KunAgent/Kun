@@ -19,6 +19,7 @@ import {
   type TaskWorkspaceIntegrateResult,
   type WorkspaceIntegrationContext
 } from './task-workspace-integration.js'
+import { taskWorkspaceIntegratePreview } from './task-workspace-preview.js'
 import type { KunProjectWorktreeConfig } from '../config/project-config.js'
 import type {
   ApprovedSetupStep,
@@ -28,6 +29,7 @@ import type { EnvFillResult } from './environment-fill.js'
 import {
   taskBranchName,
   type CreateTaskWorkspaceRequest,
+  type TaskWorkspaceIntegratePreview,
   type TaskWorkspaceRecord,
   type TaskWorkspaceSetup
 } from '../contracts/task-workspace.js'
@@ -65,6 +67,8 @@ export type TaskWorkspaceServiceOptions = {
   }) => Promise<EnvFillResult>
   /** Patch/log artifact storage (07 §8.1); absent → capture keeps no patch. */
   artifacts?: TaskWorkspaceArtifacts
+  /** Git override for the read-only integrate preview (tests). */
+  git?: typeof workspaceGit
 }
 
 /** Shape this service needs from `.kun/project.json`. */
@@ -304,6 +308,17 @@ export class TaskWorkspaceService {
       .catch(() => undefined)
     if (!diff) return undefined
     return { record, changedFiles: diff.changedFiles, patch: diff.patch }
+  }
+
+  /**
+   * Read-only integrate preview (11 §7.1): reports which modes the Review
+   * panel may enable. Never stages, writes, or locks.
+   */
+  async integratePreview(workspaceId: string): Promise<TaskWorkspaceIntegratePreview> {
+    return taskWorkspaceIntegratePreview(
+      { store: this.options.store, git: this.options.git },
+      workspaceId
+    )
   }
 
   /** Integrate into the source repository; serialized per repo (07 §8). */

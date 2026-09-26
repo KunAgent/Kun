@@ -47,5 +47,20 @@
   "reviewSendSubmit": "发送",
   "reviewSendSending": "发送中…",
   "reviewSendDone": "已发送给{{target}} · 第 {{round}} 轮",
-  "reviewSendFailed": "发送失败"
+  "reviewSendFailed": "发送失败",
+  "reviewMergeBranch": "合并分支",
+  "reviewApplyPatch": "应用到当前分支",
+  "reviewDiscard": "丢弃",
+  "reviewDiscardTitle": "丢弃这个任务工作区？",
+  "reviewDiscardHint": "对应的 worktree 与分支将被永久删除。",
+  "reviewDiscardUncommitted": "{{count}} 个未提交文件将丢失",
+  "reviewDiscardUnpushed": "{{count}} 个未推送提交将丢失",
+  "reviewDiscardConfirm": "永久丢弃",
+  "reviewDiscardCancel": "取消",
+  "reviewIntegrateResultTitle": "合入结果",
+  "reviewIntegrateDone": "{{mode}}完成",
+  "reviewIntegrateNeedsHuman": "需要你处理",
+  "reviewIntegrateConflict": "合并冲突",
+  "reviewOpenInTerminal": "在终端打开该 worktree",
+  "reviewCleanup": "清理 worktree"
 }

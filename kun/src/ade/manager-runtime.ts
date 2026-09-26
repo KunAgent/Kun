@@ -33,6 +33,7 @@ import { ManagerControls } from './manager-controls.js'
 import { TeamControls } from './team-controls.js'
 import { QualityVerdicts } from './quality-verdict.js'
 import { ReviewRequests } from './review-request.js'
+import { WorkspaceIntegrations } from './workspace-integrate.js'
 import { hasOpenWorkerWork } from './worker-open-work.js'
 import {
   countRecentWorkerFailures,
@@ -162,12 +163,15 @@ export class ManagerRuntime {
   /** Quality verdicts + cross-review (10 §4/§5). */
   readonly verdicts: QualityVerdicts
   readonly reviews: ReviewRequests
+  /** User-approved workspace integration (11 §7.2). */
+  readonly workspaces: WorkspaceIntegrations
 
   constructor(private readonly deps: ManagerRuntimeDeps) {
     this.controls = new ManagerControls(deps)
     this.teamControls = new TeamControls(deps, this.controls)
     this.verdicts = new QualityVerdicts(deps)
     this.reviews = new ReviewRequests(deps)
+    this.workspaces = new WorkspaceIntegrations(deps)
     this.lifecycle = new ManagerWorkerLifecycle(deps, this.teamControls, this.verdicts)
   }
 

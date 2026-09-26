@@ -14,6 +14,7 @@ import {
 } from '../../store/review-store'
 import { ReviewFileTree } from './ReviewFileTree'
 import { ReviewDiffBlock } from './ReviewDiffBlock'
+import { ReviewPrimaryAction } from './ReviewPrimaryAction'
 import { ReviewSendMenu } from './ReviewSendMenu'
 
 /**
@@ -106,6 +107,8 @@ export function ReviewPanel({ className }: { className?: string }): ReactElement
           <ListTree className="h-3.5 w-3.5" strokeWidth={1.8} />
         </button>
       </div>
+
+      {binding ? <ReviewPrimaryAction binding={binding} /> : null}
 
       {!binding ? (
         <div className="flex flex-1 items-center justify-center px-6 text-center text-[12px] text-ds-muted">

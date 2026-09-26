@@ -48,5 +48,22 @@
   "reviewSendSubmit": "Send",
   "reviewSendSending": "Sending…",
   "reviewSendDone": "Sent to {{target}} · round {{round}}",
-  "reviewSendFailed": "Send failed"
+  "reviewSendFailed": "Send failed",
+  "reviewMergeBranch": "Merge branch",
+  "reviewApplyPatch": "Apply to current branch",
+  "reviewDiscard": "Discard",
+  "reviewDiscardTitle": "Discard this task workspace?",
+  "reviewDiscardHint": "The worktree and its branch are removed permanently.",
+  "reviewDiscardUncommitted": "{{count}} uncommitted file will be lost",
+  "reviewDiscardUncommitted_other": "{{count}} uncommitted files will be lost",
+  "reviewDiscardUnpushed": "{{count}} unpushed commit will be lost",
+  "reviewDiscardUnpushed_other": "{{count}} unpushed commits will be lost",
+  "reviewDiscardConfirm": "Discard permanently",
+  "reviewDiscardCancel": "Cancel",
+  "reviewIntegrateResultTitle": "Integration result",
+  "reviewIntegrateDone": "{{mode}} finished",
+  "reviewIntegrateNeedsHuman": "Needs your input",
+  "reviewIntegrateConflict": "Merge conflict",
+  "reviewOpenInTerminal": "Open worktree in terminal",
+  "reviewCleanup": "Clean up worktree"
 }

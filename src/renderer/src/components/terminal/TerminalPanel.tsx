@@ -19,6 +19,7 @@ import type { RemoteSshHost } from '@shared/remote-ssh'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
 import { terminalBackend } from './terminal-backend'
+import { useTerminalOpenAt } from './terminal-open'
 import { terminalSessionIdForWorkspace, terminalWorkspaceSessionKey } from './terminal-session'
 import { TerminalTabContextMenu } from './TerminalTabContextMenu'
 import { TerminalNewTabMenu, type TerminalNewTabMenuAnchor } from './TerminalNewTabMenu'
@@ -284,7 +285,9 @@ export function TerminalPanel({
     try {
       let result = await backend.create({
         sessionId,
-        cwd: tab.target.kind === 'local' ? (workspaceRoot || undefined) : undefined,
+        cwd: tab.target.kind === 'local'
+          ? (tab.target.cwd ?? (workspaceRoot || undefined))
+          : undefined,
         cols,
         rows
       })
@@ -406,9 +409,7 @@ export function TerminalPanel({
     setNewTabMenuAnchor(null)
   }, [tabs.length])
 
-  const handleNewTab = useCallback(() => {
-    createTab({ kind: 'local' })
-  }, [createTab])
+  useTerminalOpenAt(tabsRef, setTabs, setActiveTabId)
 
   const toggleNewTabMenu = useCallback((): void => {
     setNewTabMenuAnchor((current) => {
@@ -649,7 +650,7 @@ export function TerminalPanel({
             <TerminalNewTabMenu
               anchor={newTabMenuAnchor}
               remoteHosts={remoteHosts}
-              onNewLocalTab={handleNewTab}
+              onNewLocalTab={() => createTab({ kind: 'local' })}
               onNewSshTab={(host) => createTab({ kind: 'ssh', hostId: host.id, hostName: host.label })}
               t={t}
             />,

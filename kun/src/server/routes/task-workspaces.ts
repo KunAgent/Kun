@@ -173,6 +173,15 @@ export async function captureTaskWorkspaceResponse(
   }
 }
 
+/** GET /v1/task-workspaces/:id/integrate-preview — read-only availability. */
+export async function taskWorkspaceIntegratePreviewResponse(
+  service: TaskWorkspaceService,
+  workspaceId: string
+): Promise<JsonResponse> {
+  if (!service.get(workspaceId)) return ERRORS.notFound('task workspace not found')
+  return jsonResponse({ preview: await service.integratePreview(workspaceId) })
+}
+
 /** POST /v1/task-workspaces/:id/integrate — apply-patch or merge-branch. */
 export async function integrateTaskWorkspaceResponse(
   service: TaskWorkspaceService,

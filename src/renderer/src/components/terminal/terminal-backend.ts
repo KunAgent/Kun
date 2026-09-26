@@ -13,7 +13,8 @@ import type {
 } from '@shared/terminal'
 
 export type TerminalTarget =
-  | { kind: 'local' }
+  /** `cwd` overrides the workspace root (e.g. a task worktree opened for review). */
+  | { kind: 'local'; cwd?: string }
   | { kind: 'ssh'; hostId: string; hostName: string }
 
 export type TerminalBackend = {

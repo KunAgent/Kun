@@ -68,3 +68,40 @@ export type TaskWorkspaceDiffFileResponse = TaskWorkspaceDiffFile & {
   oldText?: string
   newText?: string
 }
+
+/** GET /v1/task-workspaces/:id/integrate-preview (docs/ade/11 §7.1). */
+export type TaskWorkspaceIntegratePreview = {
+  canApplyPatch: boolean
+  applyBlockReason?: string
+  canMergeBranch: boolean
+  mergeBlockReason?: string
+  hasUncommitted: boolean
+  hasRemote: boolean
+}
+
+export type TaskWorkspaceIntegratePreviewResponse = {
+  preview: TaskWorkspaceIntegratePreview
+}
+
+export type TaskWorkspaceIntegrateOutcome =
+  | 'applied'
+  | 'merged'
+  | 'needs_human'
+  | 'conflict'
+
+export type TaskWorkspaceIntegrateMode = 'apply-patch' | 'merge-branch'
+
+export type TaskWorkspaceIntegrateResponse = {
+  record: TaskWorkspaceRecord
+  outcome: TaskWorkspaceIntegrateOutcome
+  reason?: string
+  recovery?: string[]
+}
+
+export type TaskWorkspaceRecordResponse = { record: TaskWorkspaceRecord }
+
+/** 409 body of POST discard without `confirm` (damage preview, 07 §9). */
+export type TaskWorkspaceDiscardPreview = {
+  uncommittedFiles: number
+  unpushedCommits: number
+}
