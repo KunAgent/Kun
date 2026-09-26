@@ -268,6 +268,15 @@ export function kunTeamWorkerActionPath(
 ): string {
   return `${kunTeamWorkerPath(workerId)}/${action}`
 }
+export function kunTeamRacePath(raceId: string): string {
+  return `${KUN_TEAMS_PATH}/races/${encodeURIComponent(raceId)}`
+}
+export function kunTeamRaceActionPath(
+  raceId: string,
+  action: 'decide' | 'discard-others'
+): string {
+  return `${kunTeamRacePath(raceId)}/${action}`
+}
 
 export const KUN_HARNESSES_PATH = '/v1/harnesses'
 export function kunHarnessModelsPath(harnessId: string): string {

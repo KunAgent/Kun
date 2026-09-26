@@ -173,5 +173,45 @@
     "doneBody": "{{title}} finished and is ready for review",
     "stalledTitle": "May be stuck",
     "stalledBody": "{{title}} may be stuck"
+  },
+  "raceCompareTitle": "Race comparison",
+  "raceRefresh": "Refresh",
+  "raceClose": "Close",
+  "raceLoading": "Loading race…",
+  "raceFiles": "files",
+  "racePickWinner": "Pick {{label}}",
+  "raceDiscardOthers": "Discard the rest",
+  "raceDiscardConfirm": "Delete {{count}} worktree(s) and their branches?",
+  "raceDiscardConfirmButton": "Delete",
+  "raceDiscardCancel": "Cancel",
+  "raceRowAgent": "Agent",
+  "raceRowStatus": "Status / verdict",
+  "raceRowChanges": "Changes",
+  "raceRowChecks": "Checks",
+  "raceRowReport": "Worker report",
+  "raceRowUsage": "Duration / usage",
+  "raceRowRecommendation": "Manager recommendation",
+  "raceState": {
+    "running": "Running",
+    "ready": "Ready",
+    "decided": "Decided"
+  },
+  "raceDispatchState": {
+    "pending": "Queued",
+    "delivering": "Delivering",
+    "uncertain": "Uncertain",
+    "accepted": "Accepted",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "create_failed": "Create failed",
+    "timed_out": "Timed out"
+  },
+  "raceVerdict": {
+    "pending": "Pending",
+    "passed": "Passed",
+    "needs_changes": "Needs changes",
+    "rejected": "Rejected",
+    "waived": "Waived"
   }
 }

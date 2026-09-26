@@ -253,7 +253,8 @@ export const WorkerNoticeSchema = z
       'worker_taken_over',
       'worker_handed_back',
       'worker_approval',
-      'review_completed'
+      'review_completed',
+      'race_ready'
     ]),
     dispatchId: z.string().min(1).max(256).optional(),
     questionId: z.string().min(1).max(256).optional(),
@@ -375,3 +376,105 @@ export const WorkerNoticeFileSchema = z
     notices: z.array(WorkerNoticeSchema).max(1_024).default([])
   })
   .strict()
+
+/**
+ * Same-task race across 2–3 harnesses (10 §6): every contender forks its own
+ * worktree from the same resolved sha; the manager may write a `notes`
+ * recommendation but only the user decides (`decide` is GUI-only).
+ */
+export const RaceContenderSchema = z
+  .object({
+    dispatchId: z.string().min(1).max(256).optional(),
+    workerId: z.string().min(1).max(256).optional(),
+    harnessId: z.string().min(1).max(64),
+    model: z.string().min(1).max(512).optional(),
+    label: z.string().min(1).max(64),
+    /** Worker creation refusal — the contender never ran. */
+    createError: z.string().max(1_000).optional()
+  })
+  .strict()
+export type RaceContender = z.infer<typeof RaceContenderSchema>
+
+export const RaceRecordSchema = z
+  .object({
+    raceId: z.string().min(1).max(256),
+    teamId: z.string().min(1).max(256),
+    label: z.string().min(1).max(240),
+    task: z.string().min(1).max(32_000),
+    /** Shared baseline sha every contender's worktree forked from. */
+    startSha: z.string().max(64).optional(),
+    contenders: z.array(RaceContenderSchema).min(1).max(8),
+    state: z.enum(['running', 'ready', 'decided']),
+    winnerDispatchId: z.string().min(1).max(256).optional(),
+    /** Manager recommendation (10 §6.4) — a hint, never an auto-integrate. */
+    notes: z.string().max(4_000).optional(),
+    deadlineAt: z.string(),
+    /** Set when the race_ready notice was enqueued (idempotent). */
+    notifiedAt: z.string().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string()
+  })
+  .strict()
+export type RaceRecord = z.infer<typeof RaceRecordSchema>
+
+export const RaceFileSchema = z
+  .object({
+    version: z.literal(1),
+    races: z.array(RaceRecordSchema).max(256).default([])
+  })
+  .strict()
+
+/** `worker_race` tool input (10 §6.1). */
+export const RaceStartInputSchema = z
+  .object({
+    label: z.string().min(1).max(64),
+    task: z.string().min(1).max(32_000),
+    contenders: z
+      .array(
+        z
+          .object({
+            harnessId: z.string().min(1).max(64),
+            model: z.string().min(1).max(512).optional()
+          })
+          .strict()
+      )
+      .min(2)
+      .max(3),
+    startFrom: z
+      .discriminatedUnion('kind', [
+        z.object({ kind: z.literal('default-branch') }).strict(),
+        z.object({ kind: z.literal('current-head') }).strict(),
+        z.object({ kind: z.literal('branch'), name: z.string().min(1).max(256) }).strict()
+      ])
+      .optional(),
+    timeoutMinutes: z.number().int().min(5).max(480).optional()
+  })
+  .strict()
+export type RaceStartInput = z.infer<typeof RaceStartInputSchema>
+
+/**
+ * `race_recommend` tool input (10 §6.4): the manager's only write on a race
+ * record is the recommendation note; decide belongs to the user.
+ */
+export const RaceRecommendInputSchema = z
+  .object({
+    raceId: z.string().min(1).max(256),
+    notes: z.string().min(1).max(4_000)
+  })
+  .strict()
+export type RaceRecommendInput = z.infer<typeof RaceRecommendInputSchema>
+
+/** `POST /v1/teams/races/:raceId/decide` — GUI-only winner selection. */
+export const RaceDecideRequestSchema = z
+  .object({ winnerDispatchId: z.string().min(1).max(256) })
+  .strict()
+
+/**
+ * `POST /v1/teams/races/:raceId/discard-others` — drops every non-winner
+ * task workspace (07 §8.3); confirm echoes the dialog's acknowledgment.
+ */
+export const RaceDiscardRequestSchema = z
+  .object({ confirm: z.boolean().optional() })
+  .strict()
+export type RaceDecideRequest = z.infer<typeof RaceDecideRequestSchema>
+export type RaceDiscardRequest = z.infer<typeof RaceDiscardRequestSchema>

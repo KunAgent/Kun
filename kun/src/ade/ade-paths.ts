@@ -43,6 +43,11 @@ export function adeNoticesFile(dataDir: string, managerThreadId: string): string
   return join(adeTeamDir(dataDir, managerThreadId), 'notices.json')
 }
 
+/** Same-task race records per manager team (10 §6). */
+export function adeRacesFile(dataDir: string, managerThreadId: string): string {
+  return join(adeTeamDir(dataDir, managerThreadId), 'races.json')
+}
+
 /** Line-level review comments live per task workspace (11 §4.1). */
 export function adeReviewsDir(dataDir: string): string {
   return join(adeRootDir(dataDir), 'reviews')

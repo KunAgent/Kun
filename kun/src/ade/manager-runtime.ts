@@ -28,6 +28,7 @@ import type { WorkerNoticeSink } from './worker-notice-store.js'
 import type { DispatchDeliverer, DelivererDelegation, DeliverOutcome } from './dispatch-deliverer.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
+import type { UsageService } from '../services/usage-service-core.js'
 import type { WorkerCallbackService } from '../services/worker-callback-service.js'
 import { ManagerControls } from './manager-controls.js'
 import { TeamControls } from './team-controls.js'
@@ -108,6 +109,8 @@ export type ManagerRuntimeDeps = {
   teams: FileTeamStore
   dispatches: FileDispatchStore
   questions: FileQuestionStore
+  /** Same-task race records (10 §6); absent disables the worker_race tool. */
+  races?: import('./race.js').FileRaceStore
   /** Raw store or the wake-up coordinator wrapping it (09 §6.2). */
   notices: WorkerNoticeSink
   threads: ThreadStore
@@ -142,6 +145,8 @@ export type ManagerRuntimeDeps = {
   approvalEvents?: Pick<RuntimeEventRecorder, 'record'>
   /** `agents.kun.ade.managerMayApprove` — gates the worker_approve tool. */
   managerMayApprove?: () => boolean
+  /** Per-worker usage rollup for race compare (11 §5). */
+  usage?: Pick<UsageService, 'forThread'>
   /**
    * Worker-route selector inputs (10 §3.2); `isolated`/`unattended` come from
    * the create call. Absent → the manager's own provider/model on `kun`.
@@ -175,6 +180,24 @@ export class ManagerRuntime {
     this.reviews = new ReviewRequests(deps)
     this.workspaces = new WorkspaceIntegrations(deps)
     this.lifecycle = new ManagerWorkerLifecycle(deps, this.teamControls, this.verdicts)
+  }
+
+  /** Race tool/route deps (10 §6); undefined without a race store. */
+  get raceServiceDeps():
+    | (import('./race.js').RaceServiceDeps & { ids: { next(prefix: string): string } })
+    | undefined {
+    if (!this.deps.races) return undefined
+    return {
+      races: this.deps.races,
+      dispatches: this.deps.dispatches,
+      notices: this.deps.notices,
+      teams: this.deps.teams,
+      taskWorkspaces: this.deps.taskWorkspaces,
+      usage: this.deps.usage,
+      language: this.deps.language,
+      nowIso: this.deps.nowIso,
+      ids: this.deps.ids
+    }
   }
 
   private reportLanguage(): 'en' | 'zh' {

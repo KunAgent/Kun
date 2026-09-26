@@ -183,5 +183,45 @@
     "doneBody": "{{title}} पूरा हुआ और समीक्षा के लिए तैयार है",
     "stalledTitle": "शायद अटका है",
     "stalledBody": "{{title}} शायद अटक गया है"
+  },
+  "raceCompareTitle": "रेस तुलना",
+  "raceRefresh": "रिफ्रेश",
+  "raceClose": "बंद करें",
+  "raceLoading": "रेस लोड हो रही है…",
+  "raceFiles": "फ़ाइलें",
+  "racePickWinner": "{{label}} को विजेता चुनें",
+  "raceDiscardOthers": "बाकी हटाएँ",
+  "raceDiscardConfirm": "{{count}} worktree और ब्रांच हटाएँ?",
+  "raceDiscardConfirmButton": "हटाएँ",
+  "raceDiscardCancel": "रद्द करें",
+  "raceRowAgent": "एजेंट",
+  "raceRowStatus": "स्थिति / निर्णय",
+  "raceRowChanges": "बदलाव",
+  "raceRowChecks": "जाँचें",
+  "raceRowReport": "वर्कर रिपोर्ट",
+  "raceRowUsage": "अवधि / उपयोग",
+  "raceRowRecommendation": "प्रबंधक अनुशंसा",
+  "raceState": {
+    "running": "चल रहा",
+    "ready": "चुनाव बाकी",
+    "decided": "चुना गया"
+  },
+  "raceDispatchState": {
+    "pending": "कतार में",
+    "delivering": "डिलीवरी",
+    "uncertain": "अनिश्चित",
+    "accepted": "स्वीकृत",
+    "completed": "पूर्ण",
+    "failed": "विफल",
+    "cancelled": "रद्द",
+    "create_failed": "निर्माण विफल",
+    "timed_out": "समय समाप्त"
+  },
+  "raceVerdict": {
+    "pending": "लंबित",
+    "passed": "पास",
+    "needs_changes": "सुधार चाहिए",
+    "rejected": "अस्वीकृत",
+    "waived": "माफ़"
   }
 }

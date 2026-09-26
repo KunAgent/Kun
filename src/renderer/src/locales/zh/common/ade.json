@@ -183,5 +183,45 @@
     "doneBody": "{{title}} 已完成，待你审查",
     "stalledTitle": "可能卡住",
     "stalledBody": "{{title}} 可能已卡住"
+  },
+  "raceCompareTitle": "赛马比较",
+  "raceRefresh": "刷新",
+  "raceClose": "关闭",
+  "raceLoading": "正在加载赛马…",
+  "raceFiles": "个文件",
+  "racePickWinner": "选为胜者（{{label}}）",
+  "raceDiscardOthers": "丢弃其余",
+  "raceDiscardConfirm": "将删除 {{count}} 个 worktree 及其分支？",
+  "raceDiscardConfirmButton": "删除",
+  "raceDiscardCancel": "取消",
+  "raceRowAgent": "代理",
+  "raceRowStatus": "状态 / 验收",
+  "raceRowChanges": "改动",
+  "raceRowChecks": "检查",
+  "raceRowReport": "worker 汇报",
+  "raceRowUsage": "耗时 / 用量",
+  "raceRowRecommendation": "总管推荐",
+  "raceState": {
+    "running": "进行中",
+    "ready": "待选择",
+    "decided": "已选定"
+  },
+  "raceDispatchState": {
+    "pending": "排队中",
+    "delivering": "派发中",
+    "uncertain": "不确定",
+    "accepted": "已接受",
+    "completed": "已完成",
+    "failed": "失败",
+    "cancelled": "已取消",
+    "create_failed": "创建失败",
+    "timed_out": "超时"
+  },
+  "raceVerdict": {
+    "pending": "待验收",
+    "passed": "通过",
+    "needs_changes": "需修改",
+    "rejected": "已驳回",
+    "waived": "已豁免"
   }
 }

@@ -183,5 +183,45 @@
     "doneBody": "{{title}} завершён и ждёт ревью",
     "stalledTitle": "Возможно, завис",
     "stalledBody": "{{title}} возможно завис"
+  },
+  "raceCompareTitle": "Сравнение гонки",
+  "raceRefresh": "Обновить",
+  "raceClose": "Закрыть",
+  "raceLoading": "Загрузка гонки…",
+  "raceFiles": "файлов",
+  "racePickWinner": "Выбрать {{label}}",
+  "raceDiscardOthers": "Отбросить остальные",
+  "raceDiscardConfirm": "Удалить worktree и ветки: {{count}}?",
+  "raceDiscardConfirmButton": "Удалить",
+  "raceDiscardCancel": "Отмена",
+  "raceRowAgent": "Агент",
+  "raceRowStatus": "Статус / вердикт",
+  "raceRowChanges": "Изменения",
+  "raceRowChecks": "Проверки",
+  "raceRowReport": "Отчёт воркера",
+  "raceRowUsage": "Время / использование",
+  "raceRowRecommendation": "Рекомендация менеджера",
+  "raceState": {
+    "running": "Выполняется",
+    "ready": "Ждёт выбора",
+    "decided": "Выбрано"
+  },
+  "raceDispatchState": {
+    "pending": "В очереди",
+    "delivering": "Доставка",
+    "uncertain": "Неясно",
+    "accepted": "Принято",
+    "completed": "Завершено",
+    "failed": "Ошибка",
+    "cancelled": "Отменено",
+    "create_failed": "Не создан",
+    "timed_out": "Таймаут"
+  },
+  "raceVerdict": {
+    "pending": "Ожидает",
+    "passed": "Принято",
+    "needs_changes": "Нужны правки",
+    "rejected": "Отклонено",
+    "waived": "Пропущено"
   }
 }

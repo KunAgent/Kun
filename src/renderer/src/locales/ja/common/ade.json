@@ -183,5 +183,45 @@
     "doneBody": "{{title}} が完了しレビュー可能です",
     "stalledTitle": "停滞の可能性",
     "stalledBody": "{{title}} が停滞している可能性があります"
+  },
+  "raceCompareTitle": "レース比較",
+  "raceRefresh": "更新",
+  "raceClose": "閉じる",
+  "raceLoading": "レースを読み込み中…",
+  "raceFiles": "ファイル",
+  "racePickWinner": "{{label}} を勝者に",
+  "raceDiscardOthers": "残りを破棄",
+  "raceDiscardConfirm": "{{count}} 個の worktree とブランチを削除しますか？",
+  "raceDiscardConfirmButton": "削除",
+  "raceDiscardCancel": "キャンセル",
+  "raceRowAgent": "エージェント",
+  "raceRowStatus": "状態 / 判定",
+  "raceRowChanges": "変更",
+  "raceRowChecks": "チェック",
+  "raceRowReport": "ワーカー報告",
+  "raceRowUsage": "所要時間 / 使用量",
+  "raceRowRecommendation": "マネージャーの推薦",
+  "raceState": {
+    "running": "実行中",
+    "ready": "選択待ち",
+    "decided": "決定済み"
+  },
+  "raceDispatchState": {
+    "pending": "キュー中",
+    "delivering": "配送中",
+    "uncertain": "不明",
+    "accepted": "受理",
+    "completed": "完了",
+    "failed": "失敗",
+    "cancelled": "キャンセル",
+    "create_failed": "作成失敗",
+    "timed_out": "タイムアウト"
+  },
+  "raceVerdict": {
+    "pending": "保留",
+    "passed": "合格",
+    "needs_changes": "要修正",
+    "rejected": "却下",
+    "waived": "免除"
   }
 }

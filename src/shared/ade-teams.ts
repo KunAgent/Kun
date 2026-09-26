@@ -70,9 +70,61 @@ export type AdeQuestionRecord = {
   updatedAt: string
 }
 
+/** Same-task race record (docs/ade/10 §6). */
+export type AdeRaceContender = {
+  dispatchId?: string
+  workerId?: string
+  harnessId: string
+  model?: string
+  label: string
+  createError?: string
+}
+
+export type AdeRaceRecord = {
+  raceId: string
+  teamId: string
+  label: string
+  startSha?: string
+  contenders: AdeRaceContender[]
+  state: 'running' | 'ready' | 'decided'
+  winnerDispatchId?: string
+  notes?: string
+  deadlineAt: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** One column in the compare view (docs/ade/11 §5). */
+export type AdeRaceCompareContender = AdeRaceContender & {
+  dispatchState?: AdeDispatchRecord['state']
+  timedOut: boolean
+  verdict?: AdeQualityVerdict
+  capture?: AdeDispatchCapture
+  workerReport?: { summary: string; outcome: 'succeeded' | 'partial' | 'failed' }
+  resultExcerpt?: string
+  durationMs?: number
+  taskWorkspaceId?: string
+  checks?: Array<{ name: string; status: string; detail?: string }>
+  usage?: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    costUsd?: number
+    costCny?: number
+    valueEstimateUsd?: number
+  }
+}
+
+/** GET /v1/teams/races/:raceId */
+export type AdeRaceComparison = {
+  race: AdeRaceRecord
+  contenders: AdeRaceCompareContender[]
+}
+
 /** GET /v1/teams/by-manager/:threadId */
 export type AdeTeamOverview = {
   team: AdeTeamRecord
   dispatches: AdeDispatchRecord[]
   questions: AdeQuestionRecord[]
+  races?: AdeRaceRecord[]
 }

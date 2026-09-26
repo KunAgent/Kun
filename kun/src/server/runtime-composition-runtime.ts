@@ -193,7 +193,8 @@ export function createServerRuntimeComposition(
       hookWriter: services.hookWriter,
       manager: agent.managerRuntime,
       deliverer: agent.dispatchDeliverer,
-      noticeCoordinator: agent.workerNoticeCoordinator
+      noticeCoordinator: agent.workerNoticeCoordinator,
+      races: agent.raceDeps
     },
     liveCounters: () => ({
       inflight: inflight.size(),

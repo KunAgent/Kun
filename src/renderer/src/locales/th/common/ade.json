@@ -183,5 +183,45 @@
     "doneBody": "{{title}} เสร็จแล้วและพร้อมรีวิว",
     "stalledTitle": "อาจค้าง",
     "stalledBody": "{{title}} อาจค้างอยู่"
+  },
+  "raceCompareTitle": "เปรียบเทียบการแข่งขัน",
+  "raceRefresh": "รีเฟรช",
+  "raceClose": "ปิด",
+  "raceLoading": "กำลังโหลด…",
+  "raceFiles": "ไฟล์",
+  "racePickWinner": "เลือก {{label}}",
+  "raceDiscardOthers": "ทิ้งที่เหลือ",
+  "raceDiscardConfirm": "ลบ {{count}} worktree และบรานช์?",
+  "raceDiscardConfirmButton": "ลบ",
+  "raceDiscardCancel": "ยกเลิก",
+  "raceRowAgent": "เอเจนต์",
+  "raceRowStatus": "สถานะ / ผลตรวจ",
+  "raceRowChanges": "การเปลี่ยนแปลง",
+  "raceRowChecks": "การตรวจสอบ",
+  "raceRowReport": "รายงาน worker",
+  "raceRowUsage": "ระยะเวลา / การใช้",
+  "raceRowRecommendation": "คำแนะนำของผู้จัดการ",
+  "raceState": {
+    "running": "กำลังทำงาน",
+    "ready": "รอเลือก",
+    "decided": "ตัดสินแล้ว"
+  },
+  "raceDispatchState": {
+    "pending": "รอคิว",
+    "delivering": "กำลังส่ง",
+    "uncertain": "ไม่แน่นอน",
+    "accepted": "รับแล้ว",
+    "completed": "เสร็จ",
+    "failed": "ล้มเหลว",
+    "cancelled": "ยกเลิก",
+    "create_failed": "สร้างไม่สำเร็จ",
+    "timed_out": "หมดเวลา"
+  },
+  "raceVerdict": {
+    "pending": "รอ",
+    "passed": "ผ่าน",
+    "needs_changes": "ต้องแก้ไข",
+    "rejected": "ปฏิเสธ",
+    "waived": "ยกเว้น"
   }
 }

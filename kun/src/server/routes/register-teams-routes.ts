@@ -4,11 +4,15 @@ import { authorize } from './route-auth.js'
 import { ERRORS } from './runtime-error.js'
 import type { JsonResponse } from '../response.js'
 import type { ManagerRuntime } from '../../ade/manager-runtime.js'
+import type { RaceServiceDeps } from '../../ade/race.js'
 import {
   dispatchVerdictResponse,
   noticeHoldResponse,
   pendingNoticesResponse,
   questionAnswerResponse,
+  raceDecideResponse,
+  raceDiscardOthersResponse,
+  raceResponse,
   teamOverviewResponse,
   workerByIdResponse,
   workerDetachResponse,
@@ -24,7 +28,7 @@ export function registerTeamsRoutes(router: Router, runtime: ServerRuntime): voi
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return runtime.ade?.manager ?? ERRORS.unavailable('ade manager runtime is unavailable')
   }
-  const denied = (resolved: JsonResponse | ManagerRuntime): resolved is JsonResponse =>
+  const denied = <T extends object>(resolved: JsonResponse | T): resolved is JsonResponse =>
     'status' in resolved
   router.add('POST', '/v1/teams/:managerThreadId/notice-hold', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
@@ -83,5 +87,24 @@ export function registerTeamsRoutes(router: Router, runtime: ServerRuntime): voi
     const resolved = manager(request)
     if (denied(resolved)) return resolved
     return dispatchVerdictResponse(resolved, ctx.params.dispatchId, request)
+  })
+  const races = (request: Request): JsonResponse | RaceServiceDeps => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return runtime.ade?.races ?? ERRORS.unavailable('ade races are unavailable')
+  }
+  router.add('GET', '/v1/teams/races/:raceId', async (request, ctx) => {
+    const resolved = races(request)
+    if (denied(resolved)) return resolved
+    return raceResponse(resolved, ctx.params.raceId)
+  })
+  router.add('POST', '/v1/teams/races/:raceId/decide', async (request, ctx) => {
+    const resolved = races(request)
+    if (denied(resolved)) return resolved
+    return raceDecideResponse(resolved, ctx.params.raceId, request)
+  })
+  router.add('POST', '/v1/teams/races/:raceId/discard-others', async (request, ctx) => {
+    const resolved = races(request)
+    if (denied(resolved)) return resolved
+    return raceDiscardOthersResponse(resolved, ctx.params.raceId, request)
   })
 }

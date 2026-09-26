@@ -285,6 +285,8 @@ export type ServerRuntime = {
       reviews: import('../../ade/review-store.js').FileReviewStore
     }
     workerCallbacks: import('../../services/worker-callback-service.js').WorkerCallbackService
+    /** Same-task race records + services (10 §6); optional for test scaffolds. */
+    races?: import('../../ade/race.js').RaceServiceDeps
     /**
      * Tier-0 terminal-agent units + scoped token issuance (05 §6.1).
      * Optional so test scaffolds can omit it.
