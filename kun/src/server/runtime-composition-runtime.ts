@@ -268,7 +268,8 @@ export function createServerRuntimeComposition(
 	      configuredPools: () => modelClient.configuredPools(),
 	      health: routeHealth,
 	      tests: routePoolTests,
-	      credentials: gatewayCredentials
+	      credentials: gatewayCredentials,
+	      modelCapabilities: core.modelCapabilities
 	    },
 	    modelConnections,
 	    modelConnectionOAuth,

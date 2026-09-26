@@ -19,6 +19,7 @@ import type {
   McpCapabilityConfig,
   McpServerConfig
 } from '../../contracts/capabilities.js'
+import type { ModelCapabilityMetadata } from '../../contracts/capabilities-core.js'
 import type {
   RuntimeConfigApplyRequest,
   RuntimeConfigApplyResponse
@@ -301,6 +302,13 @@ export type ServerRuntime = {
     health: RoutePoolHealthStore
     tests: RoutePoolTestService
     credentials: GatewayCredentialService
+    /**
+     * Capability lookup for a gateway-addressed model (pool model id or a
+     * providerId/modelId pair). Lets gateway entry points reject inputs the
+     * resolved model cannot consume (e.g. images for text-only models).
+     * Optional for test scaffolds.
+     */
+    modelCapabilities?(model: string, providerId?: string): ModelCapabilityMetadata
   }
   defaultModel?: string
   /**

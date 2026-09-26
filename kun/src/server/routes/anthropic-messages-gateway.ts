@@ -8,17 +8,16 @@ import {
   asRecord,
   errorMessage,
   errorStatus,
+  estimateModelRequestTokens,
   guardFor,
+  makeModelRequest,
   MAX_GATEWAY_BODY_BYTES,
   nextGatewayChunk,
   numberValue,
   parseArguments,
+  resolveGatewayModel,
   stringValue
-} from './openai-model-gateway-support.js'
-import {
-  makeModelRequest,
-  resolveGatewayModel
-} from './openai-model-gateway.js'
+} from './model-gateway-core.js'
 
 /**
  * Anthropic wire errors keep the `{ type: 'error', error: { type, message } }`
@@ -39,7 +38,9 @@ function anthropicErrorType(status: number): string {
 }
 
 function anthropicError(message: string, status: number): JsonResponse {
-  return jsonResponse({ type: 'error', error: { type: anthropicErrorType(status), message } }, status)
+  const response = jsonResponse({ type: 'error', error: { type: anthropicErrorType(status), message } }, status)
+  response.headers['anthropic-version'] = '2023-06-01'
+  return response
 }
 
 /** Same Bearer/x-api-key credential + token bucket, with Anthropic error bodies. */
@@ -97,6 +98,15 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
     lease.release()
     return anthropicError(error instanceof Error ? error.message : String(error), 400)
   }
+  if (modelRequest.attachments?.length) {
+    // Anthropic returns a 400 when the model cannot consume image blocks;
+    // mirror that instead of silently degrading them to text.
+    const capabilities = runtime.modelGateway?.modelCapabilities?.(resolved.model, resolved.providerId)
+    if (capabilities && !capabilities.inputModalities.includes('image')) {
+      lease.release()
+      return anthropicError(`The model '${resolved.model}' does not support image inputs.`, 400)
+    }
+  }
   const stream = input.stream === true
   try {
     const chunks = runtime.modelClient.stream(modelRequest)
@@ -109,10 +119,56 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
   }
 }
 
+/**
+ * `POST /v1/messages/count_tokens`: validates the request through the same
+ * Anthropic→ModelRequest conversion, then returns a local estimate built from
+ * the loop's context-hygiene token counter. `x-kun-estimate: true` marks the
+ * response as approximate rather than provider-authoritative.
+ */
+export async function gatewayCountTokens(runtime: ServerRuntime, request: Request): Promise<JsonResponse> {
+  const rejected = authorizeAnthropicGateway(runtime, request)
+  if (rejected) return rejected
+  if (!runtime.modelGateway?.enabled()) return anthropicError('Local model gateway is disabled.', 404)
+  const guard = guardFor(runtime)!
+  const lease = guard.acquire(request.signal)
+  if (!lease) return anthropicError('Too many concurrent gateway requests.', 429)
+  try {
+    let body: Awaited<ReturnType<typeof readJsonBody>>
+    try {
+      body = await readJsonBody(request, MAX_GATEWAY_BODY_BYTES, lease.signal)
+    } catch (error) {
+      return anthropicError(lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error), lease.timedOut() ? 504 : 400)
+    }
+    if (!body.ok) return anthropicError(JSON.parse(body.response.body).message, body.response.status)
+    const input = anthropicToChatInput(asRecord(body.value))
+    const model = stringValue(input.model)
+    const resolved = model ? await resolveGatewayModel(runtime, model) : null
+    if (!resolved) return anthropicError(`The model '${model || '(missing)'}' does not exist.`, 404)
+    const modelRequest = makeModelRequest({ ...input, model: resolved.model }, lease.signal, resolved.providerId)
+    return {
+      status: 200,
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'anthropic-version': '2023-06-01',
+        'x-kun-estimate': 'true'
+      },
+      body: JSON.stringify({ input_tokens: estimateModelRequestTokens(modelRequest) })
+    }
+  } catch (error) {
+    return anthropicError(error instanceof Error ? error.message : String(error), 400)
+  } finally {
+    lease.release()
+  }
+}
+
 type AnthropicBlock = Record<string, unknown>
 
 function anthropicToChatInput(input: Record<string, unknown>): Record<string, unknown> {
   const messages: Record<string, unknown>[] = []
+  // tool_result blocks whose tool_use_id never appeared in a preceding
+  // tool_use block are orphans (malformed replayed history) and get dropped,
+  // matching the loop's orphan-result repair.
+  const seenToolUseIds = new Set<string>()
   const systemParts: string[] = []
   const system = input.system
   if (typeof system === 'string' && system.trim()) systemParts.push(system)
@@ -151,20 +207,26 @@ function anthropicToChatInput(input: Record<string, unknown>): Record<string, un
           })
         }
       } else if (type === 'tool_use') {
+        const callId = stringValue(record.id) || `call_${toolCalls.length}`
+        seenToolUseIds.add(callId)
         toolCalls.push({
-          id: stringValue(record.id) || `call_${toolCalls.length}`,
+          id: callId,
           type: 'function',
           function: { name: stringValue(record.name) || 'unknown', arguments: JSON.stringify(record.input ?? {}) }
         })
       } else if (type === 'tool_result') {
+        const toolUseId = stringValue(record.tool_use_id)
+        if (!seenToolUseIds.has(toolUseId)) continue
         const resultText = typeof record.content === 'string'
           ? record.content
           : (Array.isArray(record.content) ? record.content : [])
             .map((entry) => stringValue(asRecord(entry).text))
             .filter(Boolean)
             .join('\n')
-        messages.push({ role: 'tool', tool_call_id: stringValue(record.tool_use_id), content: resultText })
+        messages.push({ role: 'tool', tool_call_id: toolUseId, content: resultText })
       }
+      // Other block kinds (thinking, redacted_thinking, document, server
+      // tool results, ...) are intentionally dropped, not rejected.
     }
     if (parts.length > 0 || toolCalls.length > 0) {
       messages.push({
@@ -194,10 +256,12 @@ function anthropicUsage(usage: unknown): Record<string, number> {
 
 async function anthropicNonStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, model: string, lease: GatewayLease): Promise<JsonResponse> {
   let text = ''
+  let thinking = ''
   let usage: unknown
   let stopReason: 'stop' | 'tool_calls' | 'length' | 'error' | undefined
   const content: AnthropicBlock[] = []
   const toolCalls: { id: string; name: string; input: unknown }[] = []
+  const deltaToolCalls = new Map<string, { name: string; json: string }>()
   const iterator = chunks[Symbol.asyncIterator]()
   let completed = false
   try {
@@ -206,7 +270,17 @@ async function anthropicNonStreamingResponse(chunks: AsyncIterable<ModelStreamCh
       if (result.done) { completed = true; break }
       const chunk = result.value
       if (chunk.kind === 'assistant_text_delta') text += chunk.text
-      else if (chunk.kind === 'tool_call_complete') toolCalls.push({ id: chunk.callId, name: chunk.toolName, input: chunk.arguments })
+      else if (chunk.kind === 'assistant_reasoning_delta') thinking += chunk.text
+      else if (chunk.kind === 'tool_call_delta') {
+        const entry = deltaToolCalls.get(chunk.callId) ?? { name: chunk.toolName ?? '', json: '' }
+        entry.name = chunk.toolName ?? entry.name
+        entry.json += chunk.argumentsDelta ?? ''
+        deltaToolCalls.set(chunk.callId, entry)
+      }
+      else if (chunk.kind === 'tool_call_complete') {
+        deltaToolCalls.delete(chunk.callId)
+        toolCalls.push({ id: chunk.callId, name: chunk.toolName, input: chunk.arguments })
+      }
       else if (chunk.kind === 'usage') usage = chunk.usage
       else if (chunk.kind === 'completed') stopReason = chunk.stopReason
       else if (chunk.kind === 'error') return anthropicError(chunk.message, errorStatus(chunk))
@@ -217,11 +291,15 @@ async function anthropicNonStreamingResponse(chunks: AsyncIterable<ModelStreamCh
     if (!completed) await iterator.return?.().catch(() => undefined)
     lease.release()
   }
+  for (const [callId, entry] of deltaToolCalls) {
+    toolCalls.push({ id: callId, name: entry.name || 'unknown', input: parseArguments(entry.json) })
+  }
+  if (thinking) content.push({ type: 'thinking', thinking, signature: '' })
   if (text) content.push({ type: 'text', text })
   for (const call of toolCalls) {
     content.push({ type: 'tool_use', id: call.id, name: call.name, input: call.input })
   }
-  return jsonResponse({
+  const response = jsonResponse({
     id: `msg_${randomUUID()}`,
     type: 'message',
     role: 'assistant',
@@ -231,6 +309,8 @@ async function anthropicNonStreamingResponse(chunks: AsyncIterable<ModelStreamCh
     stop_sequence: null,
     usage: anthropicUsage(usage)
   })
+  response.headers['anthropic-version'] = '2023-06-01'
+  return response
 }
 
 function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, model: string, lease: GatewayLease): Response {
@@ -241,7 +321,8 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
   let finished = false
   let iteratorClosed = false
   let blockIndex = 0
-  let textOpen = false
+  let openBlock: 'text' | 'thinking' | 'tool_use' | null = null
+  let openToolCallId = ''
   let usage: unknown
   let sawToolUse = false
   let stopReason: 'stop' | 'tool_calls' | 'length' | 'error' | undefined
@@ -260,11 +341,12 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
   const sendEvent = (controller: ReadableStreamDefaultController<Uint8Array>, event: string, value: unknown): void => {
     controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(value)}\n\n`))
   }
-  const closeTextBlock = (controller: ReadableStreamDefaultController<Uint8Array>): void => {
-    if (!textOpen) return
+  const closeOpenBlock = (controller: ReadableStreamDefaultController<Uint8Array>): void => {
+    if (!openBlock) return
     sendEvent(controller, 'content_block_stop', { type: 'content_block_stop', index: blockIndex })
     blockIndex += 1
-    textOpen = false
+    openBlock = null
+    openToolCallId = ''
   }
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -285,7 +367,7 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
         if (result.done) iteratorClosed = true
         if (chunk.kind === 'completed' || result.done) {
           if (chunk.kind === 'completed') stopReason = chunk.stopReason
-          closeTextBlock(controller)
+          closeOpenBlock(controller)
           const parsedUsage = anthropicUsage(usage)
           sendEvent(controller, 'message_delta', {
             type: 'message_delta',
@@ -306,12 +388,13 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
           return
         }
         if (chunk.kind === 'assistant_text_delta') {
-          if (!textOpen) {
+          if (openBlock !== 'text') {
+            closeOpenBlock(controller)
             sendEvent(controller, 'content_block_start', {
               type: 'content_block_start', index: blockIndex,
               content_block: { type: 'text', text: '' }
             })
-            textOpen = true
+            openBlock = 'text'
           }
           sendEvent(controller, 'content_block_delta', {
             type: 'content_block_delta', index: blockIndex,
@@ -319,9 +402,50 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
           })
           return
         }
+        if (chunk.kind === 'assistant_reasoning_delta') {
+          if (openBlock !== 'thinking') {
+            closeOpenBlock(controller)
+            sendEvent(controller, 'content_block_start', {
+              type: 'content_block_start', index: blockIndex,
+              content_block: { type: 'thinking', thinking: '' }
+            })
+            openBlock = 'thinking'
+          }
+          sendEvent(controller, 'content_block_delta', {
+            type: 'content_block_delta', index: blockIndex,
+            delta: { type: 'thinking_delta', thinking: chunk.text }
+          })
+          return
+        }
+        if (chunk.kind === 'tool_call_delta') {
+          if (openBlock !== 'tool_use' || openToolCallId !== chunk.callId) {
+            closeOpenBlock(controller)
+            sendEvent(controller, 'content_block_start', {
+              type: 'content_block_start', index: blockIndex,
+              content_block: { type: 'tool_use', id: chunk.callId, name: chunk.toolName || 'unknown', input: {} }
+            })
+            openBlock = 'tool_use'
+            openToolCallId = chunk.callId
+          }
+          sawToolUse = true
+          if (chunk.argumentsDelta) {
+            sendEvent(controller, 'content_block_delta', {
+              type: 'content_block_delta', index: blockIndex,
+              delta: { type: 'input_json_delta', partial_json: chunk.argumentsDelta }
+            })
+          }
+          return
+        }
         if (chunk.kind === 'tool_call_complete') {
           sawToolUse = true
-          closeTextBlock(controller)
+          if (openBlock === 'tool_use' && openToolCallId === chunk.callId) {
+            // Arguments already streamed as input_json_delta chunks.
+            closeOpenBlock(controller)
+            return
+          }
+          // Providers that only emit complete calls fall back to a single
+          // input_json_delta carrying the full JSON arguments.
+          closeOpenBlock(controller)
           sendEvent(controller, 'content_block_start', {
             type: 'content_block_start', index: blockIndex,
             content_block: { type: 'tool_use', id: chunk.callId, name: chunk.toolName, input: {} }
