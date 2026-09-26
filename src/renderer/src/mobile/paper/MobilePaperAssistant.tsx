@@ -17,6 +17,7 @@ import { mergeRestoredDraft } from '../chat/mobile-draft-restore'
 import { readMobilePage } from '../navigation/mobile-page'
 import { paperResourceKey } from './paper-resource-key'
 import { buildMobilePaperQuestion } from './mobile-paper-turn'
+import { forgetPendingResearchSession } from './mobile-paper-research-pending'
 import '../work/mobile-work-assistant.css'
 
 type Quote = { text: string; page: number }
@@ -29,11 +30,11 @@ function writeDraft(key: string, value: string): void {
 }
 
 export function MobilePaperAssistant({ root, unitDir, page, quote, researchSessionId, researchRequest,
-  researchBlockedReason, onSettings, onClearQuote }: {
+  researchBlockedReason, onSettings, onClearQuote, onSessionAdmitted }: {
   root: string; unitDir: string; page: number; quote: Quote | null; researchSessionId?: string
   researchRequest?: Omit<PaperResearchRequest, 'query'>
   researchBlockedReason?: string | null
-  onSettings: () => void; onClearQuote: () => void
+  onSettings: () => void; onClearQuote: () => void; onSessionAdmitted?: () => void
 }) {
   const { t } = useTranslation('common')
   const unitPath = researchSessionId ? researchResourcePath(root, researchSessionId) : writeJoinPath(root, unitDir)
@@ -115,6 +116,10 @@ export function MobilePaperAssistant({ root, unitDir, page, quote, researchSessi
           ...(references.length ? { fileReferences: references } : {})
         })
         if (!sent) throw new Error(t('mobileWorkPaperSendFailed'))
+        if (researchSessionId) {
+          forgetPendingResearchSession(root, researchSessionId)
+          if (stillCurrent()) onSessionAdmitted?.()
+        }
         if (readDraft(draftKey) === rawInput) writeDraft(draftKey, '')
         if (stillCurrent()) onClearQuote()
       } catch (cause) {

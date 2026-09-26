@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaperLibraryEntry, PaperLibraryEntriesResult } from '@shared/paper/paper-library-types'
 import { findMobilePaperResource, useMobilePaperLibraryIndex } from './mobile-paper-library-index'
 import { paperResourceKey } from './paper-resource-key'
+import { readMobilePaperRoute, rememberMobilePaperRoute } from './mobile-paper-route'
 
 const entry = (title: string): PaperLibraryEntry => ({ unitDir: 'papers/unit', group: '', hasPdf: false,
   hasNotes: false, interpretationCount: 0,
@@ -18,7 +19,7 @@ beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
 })
-afterEach(() => { act(() => root.unmount()); host.remove() })
+afterEach(() => { act(() => root.unmount()); host.remove(); window.sessionStorage.clear() })
 
 describe('mobile paper library ownership', () => {
   it('resolves a B-library history key while A is the phone preference', async () => {
@@ -35,6 +36,17 @@ describe('mobile paper library ownership', () => {
       workspaceRoot === '/A' ? { ok: false, code: 'io', message: 'A unavailable' } : listing('B'))
     await expect(findMobilePaperResource(['/A', '/B'], '/B', paperResourceKey('/B', 'papers/unit'),
       'papers', list)).rejects.toThrow('A unavailable')
+  })
+
+  it('uses a validated same-tab route without loading unrelated unavailable libraries', async () => {
+    const key = rememberMobilePaperRoute('/B', 'papers/unit')
+    const route = readMobilePaperRoute(key, ['/A', '/B'])
+    const list = vi.fn(async ({ workspaceRoot }: { workspaceRoot: string }): Promise<PaperLibraryEntriesResult> =>
+      workspaceRoot === '/A' ? { ok: false, code: 'io', message: 'A unavailable' } : listing('B'))
+    const found = await findMobilePaperResource(['/A', '/B'], '/A', key, 'papers', list, route)
+    expect(found).toMatchObject({ root: '/B' })
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(list).toHaveBeenCalledWith({ workspaceRoot: '/B', papersDir: 'papers' })
   })
 
   it('hides A rows immediately on B selection and ignores the delayed A response', async () => {

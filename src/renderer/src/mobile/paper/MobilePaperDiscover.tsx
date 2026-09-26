@@ -11,6 +11,10 @@ import { MobilePaperBrowse } from './MobilePaperBrowse'
 import { buildResearchPool } from '../../paper/paper-research-pool'
 import { useMobilePaperLibraryIndex } from './mobile-paper-library-index'
 import { mobilePaperLibraryRoot } from './mobile-paper-library-root'
+import {
+  readPendingResearchSessions,
+  rememberPendingResearchSession
+} from './mobile-paper-research-pending'
 import { mobilePaperYearRange } from './mobile-paper-year-range'
 import './mobile-paper.css'
 
@@ -29,10 +33,10 @@ export function MobilePaperDiscover({ onBack, onSettings, onBusyChange }: Props)
   const libraryEntries = libraryListing?.entries
   const sessions = useMemo(() => listResearchSessions(root, threads), [root, threads])
   const [session, setSession] = useState<string | null>(null)
-  const [newSessionId, setNewSessionId] = useState<string | null>(null)
+  const [pendingSessions, setPendingSessions] = useState<string[]>([])
   const activeRootRef = useRef(root)
   activeRootRef.current = root
-  const sessionReady = Boolean(session && (newSessionId === session || sessions.some((item) => item.sessionId === session)))
+  const sessionReady = Boolean(session && (pendingSessions.includes(session) || sessions.some((item) => item.sessionId === session)))
   const pool = useMemo(() => buildResearchPool(
     session && activeThreadId === sessions.find((item) => item.sessionId === session)?.threadId ? blocks : []
   ), [session, activeThreadId, sessions, blocks])
@@ -60,7 +64,7 @@ export function MobilePaperDiscover({ onBack, onSettings, onBusyChange }: Props)
     requestSeq.current += 1
     if (jobRef.current) { cancelBatch.current = true
       void window.kunGui.paperCancel({ requestId: jobRef.current }) }
-    setSession(readLastResearchSession(root)); setNewSessionId(null); setSelected([])
+    setSession(readLastResearchSession(root)); setPendingSessions(readPendingResearchSessions(root)); setSelected([])
     setHits([]); setReports([]); setLoading(false); setMessage(''); setError('')
   }, [root])
   useEffect(() => { onBusyChange(importing || browseBusy); return () => onBusyChange(false) }, [importing, browseBusy, onBusyChange])
@@ -136,7 +140,9 @@ export function MobilePaperDiscover({ onBack, onSettings, onBusyChange }: Props)
   const startResearch = (): void => {
     if (!root || importing || browseBusy) return
     const id = newResearchSessionId()
-    setNewSessionId(id); setSession(id); setSelected([]); writeLastResearchSession(root, id); setTab('research')
+    rememberPendingResearchSession(root, id)
+    setPendingSessions(readPendingResearchSessions(root)); setSession(id); setSelected([])
+    writeLastResearchSession(root, id); setTab('research')
   }
   if (!root) return <section className="kun-mobile-paper"><header><button type="button" onClick={onBack}>‹ {t('mobileWorkPaperBackLibrary')}</button>
     <h1>{t('mobileWorkPaperDiscover')}</h1></header><p role="status">{t('mobileWorkPaperNoLibraryResearch')}</p></section>
@@ -190,9 +196,12 @@ export function MobilePaperDiscover({ onBack, onSettings, onBusyChange }: Props)
         </label></li>)}</ul></div>
     </> : <>
       <div className="kun-mobile-paper-actions"><label>{t('mobileWorkPaperResearchSession')} <select value={session ?? ''} onChange={(event) => {
-        setNewSessionId(null); setSession(event.target.value || null); setSelected([])
+        setSession(event.target.value || null); setSelected([])
         writeLastResearchSession(root, event.target.value || null)
-      }}><option value="">{t('mobileWorkPaperNewSession')}</option>{sessions.map((item) => <option key={item.sessionId} value={item.sessionId}>{item.title}</option>)}</select></label>
+      }}><option value="">{t('mobileWorkPaperNewSession')}</option>
+        {pendingSessions.filter((id) => !sessions.some((item) => item.sessionId === id)).map((id) =>
+          <option key={id} value={id}>{t('mobileWorkPaperPendingResearch')}</option>)}
+        {sessions.map((item) => <option key={item.sessionId} value={item.sessionId}>{item.title}</option>)}</select></label>
         <button type="button" disabled={importing || browseBusy} onClick={startResearch}>{t('mobileWorkPaperStartResearch')}</button></div>
       <div className="kun-mobile-paper-year-scope">
         <label>{t('mobileWorkPaperDepth')} <select value={depth} onChange={(event) => setDepth(event.target.value as typeof depth)}>
@@ -214,7 +223,8 @@ export function MobilePaperDiscover({ onBack, onSettings, onBusyChange }: Props)
       {sessionReady && session ? <MobilePaperAssistant key={session} root={root} unitDir="" page={0} quote={null}
         researchSessionId={session} researchRequest={{ depth, sources, ...(years ?? {}) }}
         researchBlockedReason={!years ? t('mobileWorkPaperYearInvalid') : !sources.length ? t('mobileWorkPaperNoResearchSource') : null}
-        onSettings={onSettings} onClearQuote={() => undefined} />
+        onSettings={onSettings} onClearQuote={() => undefined}
+        onSessionAdmitted={() => setPendingSessions(readPendingResearchSessions(root))} />
         : <p role={session ? 'alert' : 'status'}>{session ? t('mobileWorkPaperMissingSession')
           : t('mobileWorkPaperResearchEmpty')}</p>}
       {session ? <div className="kun-mobile-paper-pool">

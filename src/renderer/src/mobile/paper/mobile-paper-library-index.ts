@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { PaperLibraryEntry, PaperLibraryEntriesResult } from '@shared/paper/paper-library-types'
 import type { PaperLibraryApi } from '@shared/paper/kun-gui-api-paper'
 import { paperResourceKey } from './paper-resource-key'
+import type { MobilePaperRoute } from './mobile-paper-route'
 
 type Listing = Extract<PaperLibraryEntriesResult, { ok: true }>
 type ListPapers = PaperLibraryApi['paperLibraryList']
@@ -42,8 +43,15 @@ export function useMobilePaperLibraryIndex(root: string, papersDir: string) {
 /** Resolve an opaque URL key against configured libraries, not the last phone preference. */
 export async function findMobilePaperResource(
   libraries: readonly string[], preferred: string, paperKey: string, papersDir: string,
-  list: ListPapers
+  list: ListPapers, knownRoute?: MobilePaperRoute | null
 ): Promise<{ root: string; entry: PaperLibraryEntry } | null> {
+  if (knownRoute && libraries.includes(knownRoute.root) &&
+    paperResourceKey(knownRoute.root, knownRoute.unitDir) === paperKey) {
+    const result = await list({ workspaceRoot: knownRoute.root, papersDir })
+    if (!result.ok) throw new Error(result.message)
+    const entry = result.entries.find((item) => item.unitDir === knownRoute.unitDir)
+    return entry ? { root: knownRoute.root, entry } : null
+  }
   const roots = [...new Set([preferred, ...libraries].filter((root) => Boolean(root) && libraries.includes(root)))]
   let firstError: string | null = null
   let found: { root: string; entry: PaperLibraryEntry } | null = null

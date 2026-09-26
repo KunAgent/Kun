@@ -30,21 +30,26 @@ export function useMobilePaperPageProgress(position: Position, onError: (message
   const { root, unitDir, page, pageCount } = position
   const pending = useRef<Position | null>(null)
   const timer = useRef<number | null>(null)
-  const queue = useRef<Promise<void>>(Promise.resolve())
+  const queue = useRef<Promise<boolean>>(Promise.resolve(true))
   const mounted = useRef(true)
   const errorRef = useRef(onError)
   errorRef.current = onError
-  const flush = useCallback((): Promise<void> => {
+  const flush = useCallback((): Promise<boolean> => {
     if (timer.current !== null) window.clearTimeout(timer.current)
     timer.current = null
     const snapshot = pending.current
     pending.current = null
     if (!snapshot) return queue.current
     queue.current = queue.current.then(async () => {
-      await window.kunGui.paperLocalStateWrite({ libraryRoot: snapshot.root,
+      const result = await window.kunGui.paperLocalStateWrite({ libraryRoot: snapshot.root,
         unitRelDir: snapshot.unitDir, patch: { lastPage: snapshot.page, pageCount: snapshot.pageCount } })
+      if (!result.ok) throw new Error(result.message)
+      if (mounted.current) errorRef.current('')
+      return true
     }).catch((cause: unknown) => {
+      if (!pending.current) pending.current = snapshot
       if (mounted.current) errorRef.current(cause instanceof Error ? cause.message : String(cause))
+      return false
     })
     return queue.current
   }, [])
