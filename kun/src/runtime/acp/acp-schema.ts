@@ -135,7 +135,9 @@ export const ACP_RPC_ERROR = {
   invalidParams: -32602,
   internalError: -32603,
   /** Kun policy rejected a client-mediated action (write/command). */
-  policyDenied: -32001
+  policyDenied: -32001,
+  /** The sessionId has no live host context (turn ended or unknown). */
+  sessionUnavailable: -32002
 } as const
 
 // ---- Errors -----------------------------------------------------------------
@@ -147,6 +149,8 @@ export type AcpErrorCode =
   | 'harness_crashed'
   /** Agent returned a JSON-RPC error object for the request. */
   | 'agent_error'
+  /** Kun policy rejected an agent-requested client action (§8). */
+  | 'policy_denied'
   | 'request_timeout'
   | 'request_aborted'
   | 'connection_closed'
