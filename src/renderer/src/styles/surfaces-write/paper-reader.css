@@ -59,7 +59,11 @@
    so page edges read clearly (tint derives from the theme text color, which
    works in both light and dark themes). */
 .paper-reader-stage {
-  background: color-mix(in srgb, var(--ds-text) 5%, var(--ds-bg-main));
+  background-color: var(--ds-bg-main);
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--ds-text) 5%, transparent),
+    color-mix(in srgb, var(--ds-text) 5%, transparent)
+  );
 }
 
 .paper-reader-stage .write-pdf-page {
