@@ -234,7 +234,19 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     displayName: 'Codex',
     transport: 'acp',
     // `codex acp` requires a TTY; ACP runs through the separate adapter binary.
-    detect: { command: 'codex-acp', aliases: [], versionArgs: ['--version'] },
+    detect: {
+      command: 'codex-acp',
+      aliases: [],
+      versionArgs: ['--version'],
+      // P3-11: codex present but codex-acp absent is "needs the adapter",
+      // not "not installed".
+      adapterHint: {
+        command: 'codex',
+        message:
+          'Codex CLI is installed but the ACP adapter codex-acp is missing — ' +
+          'install it (npm i -g @zed-industries/codex-acp) to use Codex as a Kun agent'
+      }
+    },
     launch: { command: 'codex-acp', args: [], env: {} },
     credentialModes: ['native-login', 'kun-gateway'],
     permissionModes: [

@@ -70,7 +70,20 @@ export const HarnessDefinitionSchema = z
         aliases: z.array(z.string().min(1).max(256)).max(8).default([]),
         versionArgs: z.array(z.string().max(64)).max(4).default(['--version']),
         versionPattern: z.string().max(256).optional(),
-        minVersion: z.string().max(32).optional()
+        minVersion: z.string().max(32).optional(),
+        /**
+         * When the primary command is absent, this fallback binary is
+         * resolved; if it IS present the harness is not "not installed" —
+         * it is an installed tool missing its adapter, and `message`
+         * carries the install guidance (P3-11, e.g. codex -> codex-acp).
+         */
+        adapterHint: z
+          .object({
+            command: z.string().min(1).max(256),
+            message: z.string().max(256)
+          })
+          .strict()
+          .optional()
       })
       .strict()
       .optional(),
@@ -137,6 +150,12 @@ export const HarnessStatusSchema = z
     installed: z.enum(['yes', 'no', 'unknown']),
     version: z.string().max(64).optional(),
     versionSupported: z.boolean().optional(),
+    /**
+     * ACP initialize handshake after the version probe (P3-11): the binary
+     * exists but may still crash, time out, or speak a wrong protocol.
+     * Only set for harnesses the handshake probe covers (transport `acp`).
+     */
+    ready: z.enum(['yes', 'no', 'unknown']).optional(),
     login: z.enum(['signed-in', 'signed-out', 'unknown', 'not-required']),
     resolvedCommand: z.string().max(4_096).optional(),
     checkedAt: z.string().datetime(),

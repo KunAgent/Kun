@@ -88,6 +88,15 @@ export class HarnessDetector {
       spawnCaptured: SpawnCaptured
       /** Command resolution; injectable so tests avoid real PATH lookups. */
       resolveExecutable?: (command: string) => Promise<string | undefined>
+      /**
+       * ACP initialize handshake after the version probe (P3-11). Only runs
+       * for `transport: 'acp'` definitions with a resolved command; its
+       * verdict lands on `status.ready` with a sanitized stderr summary.
+       */
+      probeReady?: (
+        def: HarnessDefinition,
+        command: string
+      ) => Promise<{ ready: 'yes' | 'no'; detail?: string }>
       probeLogin: (def: HarnessDefinition, command: string) => Promise<HarnessLoginState>
       nowMs: () => number
       nowIso: () => string
@@ -171,12 +180,24 @@ export class HarnessDetector {
     const bundled = this.deps.bundled?.(def)
     const command = bundled?.command ?? (await this.resolveCommand(def))
     if (!command && !bundled) {
+      // A fallback binary that resolves (e.g. `codex` when `codex-acp` is
+      // absent) means an installed tool missing its ACP adapter — surface the
+      // definition's install guidance instead of a bare "not found" (P3-11).
+      const hint = def.detect?.adapterHint
+      const hintPresent = hint
+        ? await (this.deps.resolveExecutable ?? defaultResolveExecutable)(
+            hint.command
+          ).catch(() => undefined)
+        : undefined
       return this.store(id, {
         harnessId: id,
         installed: 'no',
         login: 'unknown',
         checkedAt,
-        message: `command not found: ${def.detect?.command ?? def.id}`
+        message:
+          hint && hintPresent
+            ? hint.message
+            : `command not found: ${def.detect?.command ?? def.id}`
       })
     }
     const version = bundled?.version
@@ -197,14 +218,29 @@ export class HarnessDetector {
       })
     }
     const login = await this.deps.probeLogin(def, probeCommand).catch(() => 'unknown' as HarnessLoginState)
+    // ACP harnesses also prove readiness: the binary answers `initialize`
+    // within the timeout, speaks a supported protocol, and stays alive.
+    let ready: HarnessStatus['ready']
+    let readyMessage: string | undefined
+    if (def.transport === 'acp' && command && this.deps.probeReady) {
+      const result = await this.deps
+        .probeReady(def, command)
+        .catch((error) => ({ ready: 'no' as const, detail: String(error) }))
+      ready = result.ready
+      if (result.ready === 'no') {
+        readyMessage = `ACP initialize failed: ${result.detail ?? 'no response'}`
+      }
+    }
     return this.store(id, {
       harnessId: id,
       installed: 'yes',
       version: version.text || undefined,
       versionSupported: versionSupported(version.semver, def.detect?.minVersion),
+      ...(ready ? { ready } : {}),
       login,
       resolvedCommand: command,
-      checkedAt
+      checkedAt,
+      ...(readyMessage ? { message: readyMessage.slice(0, 512) } : {})
     })
   }
 

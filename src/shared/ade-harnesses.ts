@@ -50,6 +50,11 @@ export type AdeHarnessStatus = {
   installed: 'yes' | 'no' | 'unknown'
   version?: string
   versionSupported?: boolean
+  /**
+   * ACP initialize handshake after the version probe (P3-11): 'no' means the
+   * binary exists but cannot serve turns; `message` carries the stderr summary.
+   */
+  ready?: 'yes' | 'no' | 'unknown'
   login: 'signed-in' | 'signed-out' | 'unknown' | 'not-required'
   resolvedCommand?: string
   checkedAt: string
