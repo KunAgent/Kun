@@ -1,0 +1,22 @@
+{
+  "sessionId": "sess-crash",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": { "loadSession": true, "promptCapabilities": {} },
+    "authMethods": []
+  },
+  "turns": [
+    {
+      "steps": [
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "about to die" } } }
+      ],
+      "crash": { "stderr": "fatal: leaked token sk-testsecret123456789 in log", "code": 7 }
+    },
+    {
+      "steps": [
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "recovered turn" } } }
+      ],
+      "stopReason": "end_turn"
+    }
+  ]
+}

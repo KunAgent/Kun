@@ -1,12 +1,21 @@
-import { createHash, scryptSync } from 'node:crypto'
-import { mkdir, rm } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { scryptSync } from 'node:crypto'
+import { resolve } from 'node:path'
 import type { TurnItem } from '../contracts/items.js'
 import { effectiveHistoryAfterLatestCompaction } from '../loop/compaction-history.js'
-import { AtomicJsonFile } from '../extensions/atomic-json.js'
-import { withManagerDataMutex } from '../manager/data-mutex.js'
+import {
+  delegatedRouteKey,
+  sha256,
+  stableStringify
+} from './delegated-session-binding-keys.js'
 
-export type DelegatedProviderKind = 'agent-sdk' | 'cursor-sdk' | 'antigravity-cli'
+export { FileDelegatedSessionBindingStore } from './delegated-session-binding-store.js'
+export { delegatedRouteKey } from './delegated-session-binding-keys.js'
+
+export type DelegatedProviderKind =
+  | 'agent-sdk'
+  | 'cursor-sdk'
+  | 'antigravity-cli'
+  | 'acp'
 export type DelegatedContinuationMode = 'native' | 'portable'
 
 export type DelegatedSessionRoute = {
@@ -19,13 +28,36 @@ export type DelegatedSessionRoute = {
   continuationMode: DelegatedContinuationMode
 }
 
+/**
+ * A delegated session displaced by a harness switch (docs/ade/08 §5.2). The
+ * provider state directory `provider-state/<thread>/<kind>/<key>` stays on
+ * disk so a later turn on the same route can resume natively.
+ */
+export type ParkedSession = DelegatedSessionRoute & {
+  /** delegatedRouteKey() of the parked route. */
+  key: string
+  nativeSessionId?: string
+  synchronizedHistoryDigest: string
+  /** History item count at commit, used by prefix validation on restore. */
+  priorItemCount?: number
+  lastCommittedTurnId: string
+  handoffBriefDigest?: string
+  parkedAt: string
+}
+
 export type DelegatedSessionBinding = DelegatedSessionRoute & {
-  schemaVersion: 1
+  schemaVersion: 2
   threadId: string
   generation: number
   nativeSessionId?: string
   synchronizedHistoryDigest: string
+  /** History item count at commit, used by prefix validation on restore. */
+  priorItemCount?: number
   lastCommittedTurnId: string
+  /** Digest of the last injected handoff brief, for audit (docs/ade/08 §4). */
+  handoffBriefDigest?: string
+  /** Sessions parked by earlier harness switches; newest last, max 3, ≤7d. */
+  parked?: ParkedSession[]
   createdAt: string
   updatedAt: string
 }
@@ -37,6 +69,17 @@ export type DelegatedSessionPreparation = {
   priorHistoryDigest: string
   nativeSessionId?: string
   resumed: boolean
+  /** Set when this resume restored a parked session (docs/ade/08 §5). */
+  parkedDelta?: {
+    lastCommittedTurnId: string
+    /** Route that ran most recently before this restore (the switch source). */
+    fromRoute?: { providerKind: DelegatedProviderKind; providerId: string; model: string }
+  }
+  /**
+   * The superseded binding's provider coordinates when a rebase switched
+   * routes — used to label the handoff brief's 来源 (source) field.
+   */
+  rebasedFrom?: { providerKind: DelegatedProviderKind; providerId: string; model: string }
   rebaseReason?:
     | 'new'
     | 'route_changed'
@@ -49,100 +92,28 @@ export interface DelegatedSessionBindingStore {
   load(threadId: string): Promise<DelegatedSessionBinding | null>
   save(binding: DelegatedSessionBinding): Promise<void>
   delete(threadId: string): Promise<void>
-  clearProviderState(providerKind: DelegatedProviderKind, threadId: string): Promise<void>
-  providerStateDir(providerKind: DelegatedProviderKind, threadId: string): string
-}
-
-const BINDING_SCHEMA_VERSION = 1
-const MAX_NATIVE_SESSION_ID_LENGTH = 1_024
-const MAX_IDENTITY_LENGTH = 1_024
-
-export class FileDelegatedSessionBindingStore implements DelegatedSessionBindingStore {
-  private readonly bindingDir: string
-  private readonly stateDir: string
-
-  constructor(private readonly rootDir: string) {
-    this.bindingDir = join(rootDir, 'bindings')
-    this.stateDir = join(rootDir, 'provider-state')
-  }
-
-  async load(threadId: string): Promise<DelegatedSessionBinding | null> {
-    const file = this.bindingFile(threadId)
-    const binding = await file.read(() => null).catch(async () => {
-      await this.deleteBinding(threadId, file)
-      return null
-    })
-    if (!binding || binding.threadId !== threadId) {
-      if (binding) await this.deleteBinding(threadId, file)
-      return null
-    }
-    return binding
-  }
-
-  async save(binding: DelegatedSessionBinding): Promise<void> {
-    const parsed = parseBinding(binding)
-    if (!parsed) throw new Error('invalid delegated session binding')
-    await withManagerDataMutex(this.resourceKey(binding.threadId), (context) =>
-      context.withCommit(() => this.bindingFile(binding.threadId).write(parsed)))
-  }
-
-  async delete(threadId: string): Promise<void> {
-    await withManagerDataMutex(this.resourceKey(threadId), async (context) => {
-      await context.withCommit(async () => {
-        await context.assertCurrent()
-        await this.bindingFile(threadId).delete()
-        await rm(this.providerStateRoot(threadId), { recursive: true, force: true })
-        await context.assertCurrent()
-      })
-    })
-  }
-
-  async clearProviderState(
+  clearProviderState(
     providerKind: DelegatedProviderKind,
-    threadId: string
-  ): Promise<void> {
-    const directory = this.providerStateDir(providerKind, threadId)
-    await withManagerDataMutex(this.resourceKey(threadId), async (context) => {
-      await context.withCommit(async () => {
-        await context.assertCurrent()
-        await rm(directory, { recursive: true, force: true })
-        await mkdir(directory, { recursive: true, mode: 0o700 })
-        await context.assertCurrent()
-      })
-    })
-  }
-
-  providerStateDir(providerKind: DelegatedProviderKind, threadId: string): string {
-    return join(this.providerStateRoot(threadId), providerKind)
-  }
-
-  private resourceKey(threadId: string): string {
-    return `delegated-session:${threadId}`
-  }
-
-  private async deleteBinding(
     threadId: string,
-    file = this.bindingFile(threadId)
-  ): Promise<void> {
-    await withManagerDataMutex(this.resourceKey(threadId), (context) =>
-      context.withCommit(() => file.delete()))
-  }
-
-  private bindingPath(threadId: string): string {
-    return join(this.bindingDir, `${threadKey(threadId)}.json`)
-  }
-
-  private bindingFile(threadId: string): AtomicJsonFile<DelegatedSessionBinding | null> {
-    return new AtomicJsonFile(
-      this.bindingPath(threadId),
-      (value) => parseBinding(value)
-    )
-  }
-
-  private providerStateRoot(threadId: string): string {
-    return join(this.stateDir, threadKey(threadId))
-  }
+    routeKey: string
+  ): Promise<void>
+  /** rm-only variant for evicted/expired parked state — no dir recreation. */
+  removeProviderState(
+    providerKind: DelegatedProviderKind,
+    threadId: string,
+    routeKey: string
+  ): Promise<void>
+  providerStateDir(
+    providerKind: DelegatedProviderKind,
+    threadId: string,
+    routeKey: string
+  ): string
 }
+
+const BINDING_SCHEMA_VERSION = 2
+const PARKED_SESSION_LIMIT = 3
+const PARKED_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1_000
+const MAX_NATIVE_SESSION_ID_LENGTH = 1_024
 
 export class DelegatedSessionCoordinator {
   private readonly leases = new Map<string, Promise<void>>()
@@ -211,14 +182,97 @@ export class DelegatedSessionCoordinator {
         resumed: false
       }
     }
-    if (binding) {
-      const providerKinds = new Set<DelegatedProviderKind>([
-        binding.providerKind,
-        input.route.providerKind
-      ])
-      for (const providerKind of providerKinds) {
-        await this.store.clearProviderState(providerKind, input.threadId)
+    if (binding && !routeMatches) {
+      // Route switch: park the displaced session (bounded to the newest 3
+      // within 7 days), then try to restore a parked session for the new route.
+      const now = this.nowIso()
+      const pruned = pruneParked(
+        [...(binding.parked ?? []), toParkedSession(binding, now)],
+        now
+      )
+      for (const evicted of pruned.evicted) {
+        await this.store.removeProviderState(
+          evicted.providerKind,
+          input.threadId,
+          evicted.key
+        )
       }
+      const key = delegatedRouteKey(input.route)
+      const candidate = pruned.kept.find((entry) => entry.key === key)
+      const prefixOk = candidate
+        ? this.prefixMatches(candidate, input.priorItems)
+        : false
+      if (
+        candidate &&
+        prefixOk &&
+        input.route.continuationMode === 'native' &&
+        candidate.nativeSessionId
+      ) {
+        await this.store.save({
+          ...binding,
+          schemaVersion: BINDING_SCHEMA_VERSION,
+          parked: pruned.kept.filter((entry) => entry.key !== key),
+          updatedAt: now
+        })
+        return {
+          threadId: input.threadId,
+          generation: binding.generation + 1,
+          route: input.route,
+          priorHistoryDigest,
+          nativeSessionId: candidate.nativeSessionId,
+          resumed: true,
+          parkedDelta: {
+            lastCommittedTurnId: candidate.lastCommittedTurnId,
+            fromRoute: {
+              providerKind: binding.providerKind,
+              providerId: binding.providerId,
+              model: binding.model
+            }
+          }
+        }
+      }
+      let retained = pruned.kept
+      if (candidate) {
+        // Parked but unrestorable (prefix mismatch / non-native route): the
+        // fresh session reuses this route key, so drop the stale entry and
+        // reset its provider state — the prefix cannot become valid again on
+        // an append-only history.
+        await this.store.clearProviderState(
+          input.route.providerKind,
+          input.threadId,
+          key
+        )
+        retained = pruned.kept.filter((entry) => entry.key !== key)
+      }
+      await this.store.save({
+        ...binding,
+        schemaVersion: BINDING_SCHEMA_VERSION,
+        parked: retained,
+        updatedAt: now
+      })
+      return {
+        threadId: input.threadId,
+        generation: binding.generation + 1,
+        route: input.route,
+        priorHistoryDigest,
+        resumed: false,
+        rebasedFrom: {
+          providerKind: binding.providerKind,
+          providerId: binding.providerId,
+          model: binding.model
+        },
+        rebaseReason: rebaseReason(binding, input.route, priorHistoryDigest)
+      }
+    }
+    if (binding) {
+      // Same route but rebased in place (capability/history change): stale
+      // native state for this exact route must not leak into the fresh
+      // generation; parked sessions under other route keys stay parked.
+      await this.store.clearProviderState(
+        input.route.providerKind,
+        input.threadId,
+        delegatedRouteKey(input.route)
+      )
     }
     return {
       threadId: input.threadId,
@@ -226,6 +280,15 @@ export class DelegatedSessionCoordinator {
       route: input.route,
       priorHistoryDigest,
       resumed: false,
+      ...(binding
+        ? {
+            rebasedFrom: {
+              providerKind: binding.providerKind,
+              providerId: binding.providerId,
+              model: binding.model
+            }
+          }
+        : {}),
       rebaseReason: rebaseReason(binding, input.route, priorHistoryDigest)
     }
   }
@@ -235,6 +298,7 @@ export class DelegatedSessionCoordinator {
     committedItems: readonly TurnItem[]
     lastCommittedTurnId: string
     nativeSessionId?: string
+    handoffBriefDigest?: string
   }): Promise<DelegatedSessionBinding> {
     const previous = await this.store.load(input.preparation.threadId)
     if (
@@ -257,7 +321,18 @@ export class DelegatedSessionCoordinator {
       continuationMode,
       ...(nativeSessionId ? { nativeSessionId } : {}),
       synchronizedHistoryDigest: delegatedHistoryDigest(input.committedItems),
+      // The prefix check counts the post-filter item stream the runtimes feed
+      // into prepare(); runtime_context_source items never reach that stream.
+      priorItemCount: input.committedItems.filter(
+        (item) => item.kind !== 'runtime_context_source'
+      ).length,
       lastCommittedTurnId: input.lastCommittedTurnId,
+      ...(input.handoffBriefDigest
+        ? { handoffBriefDigest: input.handoffBriefDigest }
+        : {}),
+      // Parked sessions live on the stored binding — carry them across
+      // commits since the preparation only knows the active route.
+      ...(previous?.parked?.length ? { parked: previous.parked } : {}),
       createdAt:
         previous?.generation === input.preparation.generation
           ? previous.createdAt
@@ -268,12 +343,32 @@ export class DelegatedSessionCoordinator {
     return binding
   }
 
+  /**
+   * A parked session may resume only if the canonical prefix it was committed
+   * against is still intact: digest the first `priorItemCount` prior items and
+   * compare to the parked checkpoint's synchronized digest.
+   */
+  private prefixMatches(
+    candidate: ParkedSession,
+    priorItems: readonly TurnItem[]
+  ): boolean {
+    if (
+      candidate.priorItemCount === undefined ||
+      priorItems.length < candidate.priorItemCount
+    ) return false
+    return (
+      delegatedHistoryDigest(priorItems.slice(0, candidate.priorItemCount)) ===
+      candidate.synchronizedHistoryDigest
+    )
+  }
+
   async rejectResume(
     preparation: DelegatedSessionPreparation
   ): Promise<DelegatedSessionPreparation> {
     await this.store.clearProviderState(
       preparation.route.providerKind,
-      preparation.threadId
+      preparation.threadId,
+      delegatedRouteKey(preparation.route)
     )
     return {
       ...preparation,
@@ -282,6 +377,50 @@ export class DelegatedSessionCoordinator {
       resumed: false,
       rebaseReason: 'native_state_unavailable'
     }
+  }
+
+  /**
+   * A delegated backing process died (docs/ade/03 §4.3): drop the stored
+   * nativeSessionId and any parked entries that lived on the same connection
+   * (same providerKind + providerId + credentialIdentity, regardless of
+   * model/workspace since one process hosts many sessions). The next
+   * prepare() then rebases with rebaseReason 'native_state_unavailable' and
+   * rebuilds portable.
+   */
+  async markNativeStateUnavailable(input: {
+    threadId: string
+    providerKind: DelegatedProviderKind
+    providerId: string
+    credentialIdentity: string
+  }): Promise<boolean> {
+    const binding = await this.store.load(input.threadId)
+    if (!binding) return false
+    const onConnection = (route: DelegatedSessionRoute) =>
+      route.providerKind === input.providerKind &&
+      route.providerId === input.providerId &&
+      route.credentialIdentity === input.credentialIdentity
+    const parked = binding.parked ?? []
+    const deadParked = parked.filter(onConnection)
+    for (const entry of deadParked) {
+      await this.store.removeProviderState(
+        entry.providerKind,
+        input.threadId,
+        entry.key
+      )
+    }
+    const keptParked = parked.filter((entry) => !onConnection(entry))
+    const clearActive =
+      onConnection(binding) && binding.nativeSessionId !== undefined
+    if (!clearActive && deadParked.length === 0) return false
+    const { nativeSessionId: _cleared, ...rest } = binding
+    const next: DelegatedSessionBinding = {
+      ...rest,
+      ...(clearActive ? {} : { nativeSessionId: binding.nativeSessionId }),
+      parked: keptParked.length ? keptParked : undefined,
+      updatedAt: this.nowIso()
+    }
+    await this.store.save(next)
+    return true
   }
 
   async invalidate(threadId: string): Promise<void> {
@@ -351,6 +490,65 @@ export function priorItemsForDelegatedTurn(
   ]
 }
 
+function toParkedSession(
+  binding: DelegatedSessionBinding,
+  parkedAt: string
+): ParkedSession {
+  return {
+    key: delegatedRouteKey(binding),
+    providerKind: binding.providerKind,
+    providerId: binding.providerId,
+    credentialIdentity: binding.credentialIdentity,
+    workspace: binding.workspace,
+    model: binding.model,
+    capabilityFingerprint: binding.capabilityFingerprint,
+    continuationMode: binding.continuationMode,
+    ...(binding.nativeSessionId ? { nativeSessionId: binding.nativeSessionId } : {}),
+    synchronizedHistoryDigest: binding.synchronizedHistoryDigest,
+    ...(binding.priorItemCount !== undefined
+      ? { priorItemCount: binding.priorItemCount }
+      : {}),
+    lastCommittedTurnId: binding.lastCommittedTurnId,
+    ...(binding.handoffBriefDigest
+      ? { handoffBriefDigest: binding.handoffBriefDigest }
+      : {}),
+    parkedAt
+  }
+}
+
+/**
+ * Bound the parked list to the newest PARKED_SESSION_LIMIT entries younger
+ * than PARKED_SESSION_TTL_MS. Later duplicates of the same route key replace
+ * earlier ones. Returns the retained list plus every evicted entry so the
+ * caller can remove their provider-state directories.
+ */
+function pruneParked(
+  list: readonly ParkedSession[],
+  nowIso: string
+): { kept: ParkedSession[]; evicted: ParkedSession[] } {
+  const byKey = new Map<string, ParkedSession>()
+  for (const entry of list) {
+    byKey.delete(entry.key)
+    byKey.set(entry.key, entry)
+  }
+  const cutoff = Date.parse(nowIso) - PARKED_SESSION_TTL_MS
+  const fresh: ParkedSession[] = []
+  const evicted: ParkedSession[] = []
+  for (const entry of byKey.values()) {
+    const parkedAtMs = Date.parse(entry.parkedAt)
+    if (Number.isFinite(parkedAtMs) && parkedAtMs >= cutoff) {
+      fresh.push(entry)
+    } else {
+      evicted.push(entry)
+    }
+  }
+  const overflow = Math.max(0, fresh.length - PARKED_SESSION_LIMIT)
+  return {
+    kept: fresh.slice(overflow),
+    evicted: [...evicted, ...fresh.slice(0, overflow)]
+  }
+}
+
 function sameRoute(
   binding: DelegatedSessionBinding,
   route: DelegatedSessionRoute
@@ -394,25 +592,8 @@ function digestItem(item: TurnItem): unknown {
   return semantic
 }
 
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value)
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
-  const record = value as Record<string, unknown>
-  return `{${Object.keys(record).sort().map((key) =>
-    `${JSON.stringify(key)}:${stableStringify(record[key])}`
-  ).join(',')}}`
-}
-
-function sha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex')
-}
-
 function credentialIdentityDigest(value: string): string {
   return scryptSync(value, 'kun-delegated-session-credential-identity-v1', 32).toString('hex')
-}
-
-function threadKey(threadId: string): string {
-  return sha256(threadId)
 }
 
 function validNativeSessionId(value: string | undefined): string | undefined {
@@ -420,48 +601,6 @@ function validNativeSessionId(value: string | undefined): string | undefined {
   return normalized && normalized.length <= MAX_NATIVE_SESSION_ID_LENGTH
     ? normalized
     : undefined
-}
-
-function parseBinding(value: unknown): DelegatedSessionBinding | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const record = value as Record<string, unknown>
-  const providerKind = record.providerKind
-  const continuationMode = record.continuationMode
-  if (
-    record.schemaVersion !== BINDING_SCHEMA_VERSION ||
-    typeof record.threadId !== 'string' ||
-    !record.threadId ||
-    !Number.isInteger(record.generation) ||
-    Number(record.generation) < 1 ||
-    (
-      providerKind !== 'agent-sdk' &&
-      providerKind !== 'cursor-sdk' &&
-      providerKind !== 'antigravity-cli'
-    ) ||
-    (continuationMode !== 'native' && continuationMode !== 'portable') ||
-    !boundedString(record.providerId) ||
-    !boundedString(record.credentialIdentity) ||
-    !boundedString(record.workspace, 16_384) ||
-    !boundedString(record.model) ||
-    !hexDigest(record.capabilityFingerprint) ||
-    !hexDigest(record.synchronizedHistoryDigest) ||
-    !boundedString(record.lastCommittedTurnId) ||
-    !boundedString(record.createdAt) ||
-    !boundedString(record.updatedAt) ||
-    (
-      record.nativeSessionId !== undefined &&
-      !boundedString(record.nativeSessionId, MAX_NATIVE_SESSION_ID_LENGTH)
-    )
-  ) return null
-  return record as DelegatedSessionBinding
-}
-
-function boundedString(value: unknown, max = MAX_IDENTITY_LENGTH): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= max
-}
-
-function hexDigest(value: unknown): value is string {
-  return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
 }
 
 export function delegatedSessionRoot(dataDir: string): string {

@@ -310,7 +310,7 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
         />
       </SettingsTabPanel>
 
-      <GeneralConversationSettingsPanel view={{ t, form, update, selectControlClass, openOnboardingPreview, activeTab }} />
+      <GeneralConversationSettingsPanel view={{ t, form, update, selectControlClass, openOnboardingPreview, activeTab, kun, updateKun }} />
 
       <SettingsTabPanel
         baseId="general-settings"

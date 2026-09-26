@@ -3,7 +3,8 @@ import type { AppSettingsV1 } from '../../shared/app-settings'
 import { getKunRuntimeSettings } from '../../shared/app-settings'
 import {
   loadKunProjectConfig,
-  type KunProjectConfigLoadResult
+  type KunProjectConfigLoadResult,
+  type KunProjectWorktreeConfig
 } from '../../../kun/src/config/project-config.js'
 import { McpServerConfig } from '../../../kun/src/contracts/capabilities.js'
 
@@ -90,6 +91,39 @@ export async function approvedProjectMcpServers(
     }
   }
   return servers
+}
+
+export type ApprovedWorktreeConfigEntry = {
+  repoRoot: string
+  digest: string
+  worktree: KunProjectWorktreeConfig
+}
+
+/**
+ * Repositories whose `.kun/project.json` is grant-approved carry their
+ * `worktree` section verbatim into `ade.approvedWorktreeConfigs` so Kun can
+ * run setup without touching GUI settings (docs/ade/07 §7.1). The whole-file
+ * digest check means changing any section — including MCP — revokes approval.
+ */
+export async function approvedWorktreeConfigs(
+  settings: AppSettingsV1
+): Promise<ApprovedWorktreeConfigEntry[]> {
+  const grants = getKunRuntimeSettings(settings).projectConfig.grants
+  const entries: ApprovedWorktreeConfigEntry[] = []
+  const seen = new Set<string>()
+  for (const grant of grants.slice(0, 64)) {
+    const loaded = await loadKunProjectConfig(grant.workspaceRoot)
+    if (loaded.status !== 'valid' || loaded.digest !== grant.configDigest) continue
+    const key = comparablePath(loaded.workspaceRoot)
+    if (seen.has(key)) continue
+    seen.add(key)
+    entries.push({
+      repoRoot: loaded.workspaceRoot,
+      digest: loaded.digest,
+      worktree: loaded.worktree
+    })
+  }
+  return entries.sort((a, b) => comparablePath(a.repoRoot).localeCompare(comparablePath(b.repoRoot)))
 }
 
 export function stripGeneratedProjectMcpServers<T>(

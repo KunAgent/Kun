@@ -14,6 +14,7 @@ import { resolveThreadAgentSurface } from '../../domain/thread.js'
 export type ThreadRow = {
   id: string; title: string; workspace: string; model: string; mode: ThreadMode; status: ThreadStatus
   agent_surface: ThreadAgentSurface | null
+  workspace_mode: 'code' | 'ade' | null
   approval_policy: ApprovalPolicy; sandbox_mode: SandboxMode
   approval_reviewer: ApprovalReviewer | null
   cost_budget_usd: number | null
@@ -37,6 +38,7 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
   return {
     id: thread.id, title: thread.title, workspace: thread.workspace, model: thread.model,
     agent_surface: resolveThreadAgentSurface(thread),
+    workspace_mode: thread.workspaceMode ?? 'code',
     mode: thread.mode, status: thread.status, approval_policy: thread.approvalPolicy,
     sandbox_mode: thread.sandboxMode,
     approval_reviewer: thread.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
@@ -82,6 +84,7 @@ export function summaryFromRow(row: ThreadRow): ThreadSummary {
   return {
     id: row.id, title: row.title, workspace: row.workspace, model: row.model, mode: row.mode,
     agentSurface: row.agent_surface ?? 'code',
+    ...(row.workspace_mode === 'ade' ? { workspaceMode: 'ade' as const } : {}),
     status: row.status, approvalPolicy: row.approval_policy, sandboxMode: row.sandbox_mode,
     approvalReviewer: row.approval_reviewer ?? DEFAULT_APPROVAL_REVIEWER,
     modelRequestCaptureEnabled: Boolean(row.model_request_capture_enabled),
@@ -116,6 +119,9 @@ export function filterThreadSummaries(summaries: ThreadSummary[], options: Threa
       .filter((value): value is string => Boolean(value))
   )
   if (workspaceSet.size > 0) out = out.filter((thread) => workspaceSet.has(thread.workspace))
+  if (options.workspaceMode) {
+    out = out.filter((thread) => (thread.workspaceMode ?? 'code') === options.workspaceMode)
+  }
   if (query) out = out.filter((thread) => searchTextForThread(thread).includes(query))
   return typeof options.limit === 'number' ? out.slice(0, options.limit) : out
 }

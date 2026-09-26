@@ -232,6 +232,57 @@ export function kunGraphProjectConsolidatePath(projectId: string): string {
 export const KUN_THREAD_ACTIVITY_EVENTS_PATH = '/v1/thread-activity/events'
 export const KUN_THREAD_ACTIVITY_EVENTS_TEMPLATE = '/v1/thread-activity/events'
 
+export const KUN_ACTIVITY_PATH = '/v1/activity'
+export const KUN_ACTIVITY_TEMPLATE = '/v1/activity'
+export const KUN_ACTIVITY_EVENTS_PATH = '/v1/activity/events'
+export const KUN_ACTIVITY_EVENTS_TEMPLATE = '/v1/activity/events'
+export const KUN_ACTIVITY_FOREGROUND_PATH = '/v1/activity/foreground'
+export const KUN_TASK_WORKSPACES_PATH = '/v1/task-workspaces'
+export function kunTaskWorkspacePath(workspaceId: string, suffix = ''): string {
+  return `${KUN_TASK_WORKSPACES_PATH}/${encodeURIComponent(workspaceId)}${suffix}`
+}
+
+/** ADE line-level review comments (docs/ade/11 §4). */
+export const KUN_REVIEWS_PATH = '/v1/reviews'
+export function kunReviewsPath(workspaceId: string, suffix = ''): string {
+  return `${KUN_REVIEWS_PATH}/${encodeURIComponent(workspaceId)}${suffix}`
+}
+export function kunActivityUnitPath(unitId: string, action: 'ack' | 'dismiss' | 'pin'): string {
+  return `${KUN_ACTIVITY_PATH}/${encodeURIComponent(unitId)}/${action}`
+}
+
+/** ADE team control surface (docs/ade/09 §9). */
+export const KUN_TEAMS_PATH = '/v1/teams'
+export function kunTeamByManagerPath(managerThreadId: string): string {
+  return `${KUN_TEAMS_PATH}/by-manager/${encodeURIComponent(managerThreadId)}`
+}
+export function kunTeamQuestionAnswerPath(questionId: string): string {
+  return `${KUN_TEAMS_PATH}/questions/${encodeURIComponent(questionId)}/answer`
+}
+export function kunTeamWorkerPath(workerId: string): string {
+  return `${KUN_TEAMS_PATH}/workers/${encodeURIComponent(workerId)}`
+}
+export function kunTeamWorkerActionPath(
+  workerId: string,
+  action: 'take-over' | 'hand-back' | 'detach' | 'dispatch' | 'stop' | 'run-checks'
+): string {
+  return `${kunTeamWorkerPath(workerId)}/${action}`
+}
+export function kunTeamRacePath(raceId: string): string {
+  return `${KUN_TEAMS_PATH}/races/${encodeURIComponent(raceId)}`
+}
+export function kunTeamRaceActionPath(
+  raceId: string,
+  action: 'decide' | 'discard-others'
+): string {
+  return `${kunTeamRacePath(raceId)}/${action}`
+}
+
+export const KUN_HARNESSES_PATH = '/v1/harnesses'
+export function kunHarnessModelsPath(harnessId: string): string {
+  return `${KUN_HARNESSES_PATH}/${encodeURIComponent(harnessId)}/models`
+}
+
 export const KUN_THREADS_PATH = '/v1/threads'
 export const KUN_THREADS_TEMPLATE = '/v1/threads'
 

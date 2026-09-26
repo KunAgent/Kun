@@ -16,6 +16,7 @@ import {
   MessageSquare,
   MessageSquarePlus,
   Minimize2,
+  Network,
   Palette,
   PencilLine,
   Pin,
@@ -87,6 +88,8 @@ export type PaletteSourcesInput = {
   activeThreadPinned: boolean
   /** Laboratory project board gate; the board route entry is hidden while off. */
   projectBoardEnabled?: boolean
+  /** agents.kun.ade.enabled gate; the ADE route entry is hidden while off. */
+  adeEnabled?: boolean
 }
 
 /**
@@ -104,7 +107,8 @@ const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
   claw: 'claw',
   board: 'projectBoardNav',
   schedule: 'schedule',
-  workflow: 'workflowCreate'
+  workflow: 'workflowCreate',
+  ade: 'workspaceModeAdeLabel'
 }
 
 const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
@@ -118,7 +122,8 @@ const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
   claw: Smartphone,
   board: Columns3,
   schedule: Clock3,
-  workflow: Workflow
+  workflow: Workflow,
+  ade: Network
 }
 
 /**
@@ -251,6 +256,7 @@ function routeEntries(input: PaletteSourcesInput): PaletteEntry[] {
   const { t } = input
   return (Object.keys(ROUTE_LABEL_KEYS) as AppRoute[])
     .filter((route) => route !== 'board' || input.projectBoardEnabled === true)
+    .filter((route) => route !== 'ade' || input.adeEnabled === true)
     .map((route) => {
       const title = t(ROUTE_LABEL_KEYS[route])
       return {

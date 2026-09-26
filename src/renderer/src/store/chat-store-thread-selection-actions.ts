@@ -185,7 +185,8 @@ export function createThreadSelectionActions(
       set({ error: i18n.t('common:sidebarWorkspaceRemoveDialogDetail') })
       return
     }
-    const targetThread = currentState.threads.find((thread) => thread.id === id) ?? null
+    const targetThread = currentState.threads.find((thread) => thread.id === id) ??
+      currentState.adeThreads.find((thread) => thread.id === id) ?? null
     if (get().runtimeConnection !== 'ready') {
       set({ error: i18n.t('common:runtimeActionNeedsConnection') })
       return
@@ -263,6 +264,8 @@ export function createThreadSelectionActions(
           readDesignThreadRegistry(),
           readSddThreadRegistry()
         )
+      const remembersAdeThread = targetThread != null &&
+        targetThread.archived !== true && targetThread.workspaceMode === 'ade'
       const composerState = resolveThreadComposerState(get(), targetThread, {
         hasUserMessages: cached.blocks.some((block) => block.kind === 'user')
       })
@@ -292,7 +295,11 @@ export function createThreadSelectionActions(
         threads: state.threads.map((thread) => thread.id === id
           ? { ...thread, status: cached.busy ? 'running' : 'idle' }
           : thread),
-        ...(remembersCodeThread ? { lastCodeThreadId: id } : {})
+        adeThreads: (state.adeThreads ?? []).map((thread) => thread.id === id
+          ? { ...thread, status: cached.busy ? 'running' : 'idle' }
+          : thread),
+        ...(remembersCodeThread ? { lastCodeThreadId: id } : {}),
+        ...(remembersAdeThread ? { lastAdeThreadId: id } : {})
       }))
       saveQueuedMessagesForThread(id, queuedMessages)
       syncTurnCompletionPoll(set, get)
@@ -408,7 +415,8 @@ export function createThreadSelectionActions(
       const currentTurnUserId = busy
         ? latestUserMessageId ?? findLatestUserBlockId(blocks)
         : null
-      const threadSnap = get().threads.find((thread) => thread.id === id) ?? null
+      const threadSnap = get().threads.find((thread) => thread.id === id) ??
+        get().adeThreads.find((thread) => thread.id === id) ?? null
       // Code 工作台返回记忆：记录最近一次选中的 Code 或 Design 任务，
       // 供从设置、Work 或 Connect Phone 返回时恢复。Work/Claw 会话以及
       // 已归档会话不写入记忆。
@@ -421,6 +429,8 @@ export function createThreadSelectionActions(
           readDesignThreadRegistry(),
           readSddThreadRegistry()
         )
+      const remembersAdeThread = threadSnap != null &&
+        threadSnap.archived !== true && threadSnap.workspaceMode === 'ade'
       const composerState = resolveThreadComposerState(get(), threadSnap, {
         hasUserMessages: rawBlocks.some((block) => block.kind === 'user'),
         runtimeModel: threadModel
@@ -488,7 +498,16 @@ export function createThreadSelectionActions(
               ...(threadDesignProfile ? { designProfile: threadDesignProfile } : {})
             }
           : thread),
+        adeThreads: (get().adeThreads ?? []).map((thread) => thread.id === id
+          ? {
+              ...thread,
+              status: thread.archived ? thread.status : (busy ? 'running' : 'idle'),
+              ...(latestTurnId ? { latestTurnId } : {}),
+              ...(latestTurnStatus ? { latestTurnStatus } : {})
+            }
+          : thread),
         ...(remembersCodeThread ? { lastCodeThreadId: id } : {}),
+        ...(remembersAdeThread ? { lastAdeThreadId: id } : {})
       })
       snapshotThreadProjection(get(), payloadBytes)
       saveQueuedMessagesForThread(id, queuedMessages)

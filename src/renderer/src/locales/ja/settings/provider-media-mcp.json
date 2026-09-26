@@ -557,7 +557,7 @@
   "projectConfigEditor": "プロジェクトJSON",
   "projectConfigEditorDesc": "バージョン 1 の JSON。スキル ルートと stdio cwd 値はワークスペースに相対的であり、ワークスペース内で解決される必要があります。",
   "projectConfigActions": "プロジェクト構成アクション",
-  "projectConfigActionsDesc": "保存するとファイルが検証され、再適用されますが、新しい MCP 信頼は付与されません。別途レビューして承認します。",
+  "projectConfigActionsDesc": "保存するとファイルが検証され、再適用されますが、新しい MCP 信頼は付与されません。別途レビューして承認します。承認には worktree のインストール/セットアップコマンドも含まれます。",
   "projectConfigSave": "プロジェクト構成を保存する",
   "projectConfigRefresh": "リフレッシュ",
   "projectConfigOpenDir": ".kunフォルダを開く",

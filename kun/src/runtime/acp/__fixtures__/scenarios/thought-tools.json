@@ -1,0 +1,82 @@
+{
+  "sessionId": "sess-tools",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": {
+      "loadSession": true,
+      "promptCapabilities": { "image": true, "embeddedContext": true }
+    },
+    "authMethods": []
+  },
+  "turns": [
+    {
+      "steps": [
+        { "update": { "sessionUpdate": "agent_thought_chunk", "content": { "type": "text", "text": "Let me read the file." } } },
+        {
+          "update": {
+            "sessionUpdate": "tool_call",
+            "toolCallId": "call-1",
+            "title": "Read config",
+            "kind": "read",
+            "status": "pending",
+            "locations": [{ "path": "src/config.ts", "line": 1 }],
+            "rawInput": { "path": "src/config.ts" }
+          }
+        },
+        {
+          "update": {
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": "call-1",
+            "status": "in_progress"
+          }
+        },
+        {
+          "update": {
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": "call-1",
+            "status": "completed",
+            "content": [
+              { "type": "content", "content": { "type": "text", "text": "file contents" } }
+            ]
+          }
+        },
+        {
+          "update": {
+            "sessionUpdate": "tool_call",
+            "toolCallId": "call-2",
+            "title": "Edit config",
+            "kind": "edit",
+            "status": "completed",
+            "locations": [{ "path": "src/config.ts" }],
+            "content": [
+              {
+                "type": "diff",
+                "path": "src/config.ts",
+                "oldText": "a = 1",
+                "newText": "a = 2"
+              },
+              {
+                "type": "diff",
+                "path": "src/new-file.ts",
+                "oldText": null,
+                "newText": "export {}"
+              }
+            ]
+          }
+        },
+        {
+          "update": {
+            "sessionUpdate": "plan",
+            "entries": [
+              { "content": "Read config", "priority": "high", "status": "completed" },
+              { "content": "Edit config", "priority": "medium", "status": "in_progress" }
+            ]
+          }
+        },
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "Done." } } },
+        { "update": { "sessionUpdate": "usage_update", "used": 1234, "size": 200000, "cost": { "amount": 0.01, "currency": "USD" } } }
+      ],
+      "stopReason": "end_turn"
+    }
+  ]
+}

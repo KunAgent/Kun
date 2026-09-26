@@ -1,0 +1,28 @@
+:root {
+  /* ADE activity status family (docs/ade/12 §3): the single source for
+     needs-you/working/review/done/idle coloring across Mission Control,
+     the ADE sidebar, and status dots. */
+  --ds-status-success: var(--ds-success);
+  --ds-status-danger: var(--ds-danger);
+  --ds-status-warning: var(--ds-warning);
+  --ds-status-running: var(--ds-accent);
+  --ds-status-muted: var(--ds-text-faint);
+  --ds-status-dot-success: #128a4a;
+  --ds-status-dot-danger: #d6493f;
+  --ds-status-dot-warning: #d97706;
+  --ds-status-dot-running: #5b78ff;
+  --ds-status-dot-muted: #8f95a1;
+}
+
+[data-theme='dark'] {
+  --ds-status-success: var(--ds-success);
+  --ds-status-danger: var(--ds-danger);
+  --ds-status-warning: var(--ds-warning);
+  --ds-status-running: var(--ds-accent);
+  --ds-status-muted: var(--ds-text-faint);
+  --ds-status-dot-success: #40c977;
+  --ds-status-dot-danger: #f8736a;
+  --ds-status-dot-warning: #f2a63f;
+  --ds-status-dot-running: #78a3ea;
+  --ds-status-dot-muted: #6e7380;
+}

@@ -24,6 +24,8 @@ import {
   type ChildDelegatedRuntimeFactory,
   resolveAntigravityCliCommand
 } from './runtime-factory-dependencies.js'
+import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
+import { HarnessRouter } from '../harness/harness-router.js'
 import type { createRuntimeServices } from './runtime-composition-services.js'
 import { diffUsage, hasUsage } from '../domain/usage.js'
 import { roomResultProvider } from '../rooms/room-result-tools.js'
@@ -60,7 +62,8 @@ export function createRuntimeRegistry(
     cursorSdkProviderIds,
     approvalReviewService,
     timedModelClient,
-    subagentRouter
+    subagentRouter,
+    modelConnections
   } = model
   const {
     turnService,
@@ -70,10 +73,11 @@ export function createRuntimeRegistry(
     defaultIsAntigravity,
     defaultIsCursorSdk
   } = services
-  const createChildDelegatedRuntime: ChildDelegatedRuntimeFactory = (child) =>
-    composeDelegatedTurnRuntimes([
-    ...(agentSdkProviderIds.size > 0 || defaultIsAgentSdk
-      ? [createAgentSdkRuntime({
+  const createChildDelegatedRuntime: ChildDelegatedRuntimeFactory = (child) => {
+    const childRuntimes = buildHarnessRuntimes({
+    agentSdk:
+    (agentSdkProviderIds.size > 0 || defaultIsAgentSdk
+      ? ({
           registry: services.childRegistry,
           toolHost: childToolHost,
           turns: child.turns,
@@ -130,13 +134,20 @@ export function createRuntimeRegistry(
             : {}),
           nowIso,
           sessionCoordinator: delegatedSessions,
-          contextProfile: delegatedContextProfile
-        })]
-      : []),
-    ...((antigravityProviderIds.size > 0 || defaultIsAntigravity) &&
+          contextProfile: delegatedContextProfile,
+          deterministicHandoff: core.activeOptions.ade?.deterministicHandoff !== false,
+          harnessTokens: services.harnesses.tokens,
+          harnessGatewayBaseUrl: () => services.harnesses.gatewayEndpoint.baseUrl,
+          roles: () => core.activeOptions.roles,
+          harnessCatalog: services.harnesses.catalog,
+          resolveDefaultProviderId: async () =>
+            (await modelConnections.snapshot()).defaultProviderId,
+          ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {})
+        }) : undefined),
+    antigravity: ((antigravityProviderIds.size > 0 || defaultIsAntigravity) &&
       !child.allowedReadPaths &&
       !child.allowedWritePaths
-      ? [new AntigravityCliRuntime({
+      ? ({
           providerConfigs: core.activeOptions.providers ?? {},
           providerIds: antigravityProviderIds,
           defaultIsAntigravity,
@@ -154,11 +165,12 @@ export function createRuntimeRegistry(
           turnLimits: core.activeOptions.runtime?.turnLimits,
           enforceReadOnly: child.toolPolicy === 'readOnly',
           sessionCoordinator: delegatedSessions,
-          contextProfile: delegatedContextProfile
-        })]
-      : []),
-    ...(cursorSdkProviderIds.size > 0 || defaultIsCursorSdk
-      ? [createCursorSdkRuntime({
+          contextProfile: delegatedContextProfile,
+          deterministicHandoff: core.activeOptions.ade?.deterministicHandoff !== false,
+          ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {})
+        }) : undefined),
+    cursor: (cursorSdkProviderIds.size > 0 || defaultIsCursorSdk
+      ? ({
           registry: services.childRegistry,
           toolHost: childToolHost,
           providerConfigs: core.activeOptions.providers ?? {},
@@ -211,10 +223,70 @@ export function createRuntimeRegistry(
             : {}),
           nowIso,
           sessionCoordinator: delegatedSessions,
-          contextProfile: delegatedContextProfile
-        })]
-      : [])
-    ])
+          contextProfile: delegatedContextProfile,
+          deterministicHandoff: core.activeOptions.ade?.deterministicHandoff !== false,
+          ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {})
+        })
+      : undefined),
+    // ACP children share the process-scoped pool/host/manager; mediation roots
+    // narrow to the child's declared read/write boundary.
+    acp: {
+      catalog: services.harnesses.catalog,
+      binaryPath: (harnessId: string) =>
+        core.activeOptions.harnesses?.binaryPaths?.[harnessId],
+      threadStore: child.threadStore,
+      sessionStore: child.sessionStore,
+      turns: child.turns,
+      events: child.events,
+      ids: child.ids,
+      systemPrompt: child.prefix.systemPrompt,
+      sessionCoordinator: delegatedSessions,
+      connectionPool: core.acpConnectionPool,
+      clientHost: core.acpClientHost,
+      sessionManager: core.acpSessionManager,
+      approvalGate,
+      approvalReview: approvalReviewService,
+      ...(services.attachmentStore
+        ? { attachmentStore: services.attachmentStore }
+        : {}),
+      deterministicHandoff: core.activeOptions.ade?.deterministicHandoff !== false,
+      enforceReadOnly: child.toolPolicy === 'readOnly',
+      ...(child.allowedReadPaths
+        ? { allowedReadPaths: child.allowedReadPaths }
+        : {}),
+      ...(child.allowedWritePaths
+        ? { allowedWritePaths: child.allowedWritePaths }
+        : {}),
+      allowUnattendedFullAccess:
+        core.activeOptions.ade?.allowUnattendedFullAccess === true,
+      defaultApprovalPolicy: core.activeOptions.approvalPolicy,
+      defaultSandboxMode: core.activeOptions.sandboxMode,
+      defaultApprovalReviewer: core.activeOptions.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
+      turnLimits: core.activeOptions.runtime?.turnLimits,
+      ...(llmDebug ? { debugSink: llmDebug } : {}),
+      nowIso,
+      ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {})
+    }
+    })
+    const childRouter = new HarnessRouter({
+      enabled: () => core.activeOptions.ade?.harnessRouter !== false,
+      catalog: services.harnesses.catalog,
+      runtimes: () => childRuntimes,
+      providerKinds: services.providerKinds,
+      defaultModel: () => core.activeOptions.model,
+      status: (id) => {
+        const cached = services.harnesses.detector.cachedStatus(id)
+        if (!cached) void services.harnesses.detector.status(id).catch(() => undefined)
+        return cached
+      },
+      allowUnattendedFullAccess: () =>
+        core.activeOptions.ade?.allowUnattendedFullAccess === true
+    })
+    return {
+      delegated: composeDelegatedTurnRuntimes(Object.values(childRuntimes)),
+      router: childRouter
+    }
+  }
 	  let delegationRuntime = core.activeOptions.capabilities?.subagents.enabled
 	    ? new DelegationRuntime({
 	        config: mergeBuiltinSubagentProfiles(core.activeOptions.capabilities.subagents),

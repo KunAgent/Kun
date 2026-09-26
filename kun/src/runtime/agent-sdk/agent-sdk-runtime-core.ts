@@ -9,9 +9,11 @@ import {
   selectBridgeableTools,
   toSdkMcpServer
 } from './sdk-tool-bridge.js'
-import { composeSdkPromptText } from './sdk-context-assembler.js'
+import { composeSdkTurnText } from './sdk-context-assembler.js'
 import type { SdkQueryResult } from './sdk-protocol.js'
 import type { DelegatedRuntimeCapabilities } from '../delegated-turn-runtime.js'
+import { capabilitiesV2FromLegacy } from '../../harness/effective-capabilities.js'
+import { CLAUDE_CODE_CAPABILITIES } from '../../harness/builtin-harnesses.js'
 import {
   delegatedGraphPlanCanRetry,
   delegatedGraphPlanRepairFeedback,
@@ -26,6 +28,8 @@ import {
   type SdkTurnContext,
   type TurnStatus
 } from './agent-sdk-runtime-contracts.js'
+import type { HarnessRoute } from '../../contracts/harness.js'
+import { recordHandoffInjected } from '../../handoff/turn-handoff.js'
 import {
   MAX_SVG_COMPLETION_ATTEMPTS,
   assistantDeltaOf,
@@ -38,7 +42,7 @@ import {
 } from './agent-sdk-runtime-items.js'
 import {
   captureAgentSdkTraceDraft,
-  estimatedTokens,
+  recordAgentSdkContextSnapshot,
   finishAgentSdkTrace,
   sanitizeAgentSdkError,
   startAgentSdkTrace
@@ -58,6 +62,12 @@ export class AgentSdkRuntime {
 
   handlesProvider(providerId: string | undefined): boolean {
     return this.deps.handlesProvider(providerId)
+  }
+
+  /** Claude Code runs native subscription login or the loopback kun gateway. */
+  handlesRoute(route: HarnessRoute): boolean {
+    return route.harnessId === 'claude-code' &&
+      (route.credentialMode === 'native-login' || route.credentialMode === 'kun-gateway')
   }
 
   capabilities(providerId: string | undefined): DelegatedRuntimeCapabilities | undefined {
@@ -283,6 +293,7 @@ export class AgentSdkRuntime {
             ...(ctx.claudeConfigDir ? { CLAUDE_CONFIG_DIR: ctx.claudeConfigDir } : {})
           },
           oauthToken: ctx.oauthToken,
+          ...(ctx.gateway ? { gateway: ctx.gateway } : {}),
           abortController: abort,
           ...(maxTurns !== undefined ? { maxTurns } : {}),
           ...(ctx.model ? { model: ctx.model } : {}),
@@ -295,57 +306,40 @@ export class AgentSdkRuntime {
 
       // A compatible native session already owns prior context. Portable
       // history is sent only when seeding a new generation.
-      const composeTurnText = (): string => ctx.preserveExactUserPrompt
-        ? ctx.userText
-        : composeSdkPromptText({
-            ...(!resumeSessionId && ctx.historyTranscript
-              ? { historyTranscript: ctx.historyTranscript }
-              : {}),
-            userText: ctx.userText,
-            ...(ctx.contextInstructions?.length ? { instructionBlocks: ctx.contextInstructions } : {})
-          })
+      const composeTurnText = (): string => composeSdkTurnText(ctx, Boolean(resumeSessionId))
       const capabilities = agentSdkCapabilities()
+      const capabilitiesV2 = capabilitiesV2FromLegacy(capabilities, CLAUDE_CODE_CAPABILITIES)
       await this.deps.recordEvent({
         kind: 'delegated_runtime',
         threadId,
         turnId,
         providerKind: 'agent-sdk',
         providerId: ctx.sessionPreparation?.route.providerId ?? 'default',
+        harnessId: 'claude-code',
         phase: resumeSessionId ? 'resumed' : 'rebased',
         ...(ctx.sessionPreparation?.rebaseReason
           ? { reason: ctx.sessionPreparation.rebaseReason }
           : {}),
-        capabilities
+        capabilities,
+        capabilitiesV2
       })
-      const recordContextSnapshot = async (): Promise<void> => {
-        if (!ctx.contextProfile) return
-        const system = estimatedTokens([
-          this.deps.kunSystemPrompt(),
-          ctx.threadPersona ?? ''
-        ].join('\n'))
-        const tools = estimatedTokens(JSON.stringify(selectedKunTools))
-        const skills = estimatedTokens((ctx.contextInstructions ?? []).join('\n'))
-        const messages = estimatedTokens([
-          resumeSessionId ? '' : ctx.historyTranscript ?? '',
-          ctx.userText
-        ].join('\n'))
-        const other = (ctx.images?.length ?? 0) * 1_024
-        await this.deps.recordEvent({
-          kind: 'context_snapshot',
+      await recordHandoffInjected(
+        (event) => this.deps.recordEvent(event),
+        { threadId, turnId, harnessId: 'claude-code' },
+        ctx.handoffEvent
+      )
+      const recordContextSnapshot = (): Promise<void> =>
+        recordAgentSdkContextSnapshot({
+          ctx,
           threadId,
           turnId,
-          model: ctx.model ?? 'claude-default',
-          providerId: ctx.sessionPreparation?.route.providerId ?? 'default',
-          stepIndex: 0,
-          ...ctx.contextProfile,
-          estimatedInputTokens: tools + system + skills + messages + other,
-          breakdown: { tools, system, skills, messages, other },
-          toolCount: selectedKunTools.length,
-          activeSkillIds: [...(ctx.activeSkillIds ?? [])],
-          contextManagement: 'sdk-managed',
-          nativeHistory: resumeSessionId ? 'unknown' : 'none'
+          resumed: Boolean(resumeSessionId),
+          historyText:
+            ctx.handoffBrief ?? (resumeSessionId ? '' : ctx.historyTranscript ?? ''),
+          selectedKunTools,
+          record: (draft) => this.deps.recordEvent(draft),
+          kunSystemPrompt: () => this.deps.kunSystemPrompt()
         })
-      }
       await recordContextSnapshot()
       const svgCompletion: SdkSvgCompletionState = {
         sequence: 0,
@@ -453,6 +447,9 @@ export class AgentSdkRuntime {
               // Preserve the mapper's exact event order: milestones, tools,
               // usage, and errors may not overtake pending assistant deltas.
               await deltaEvents.flush()
+              // Gateway mode: the loopback gateway already recorded this usage
+              // (docs/ade/04 §6); the SDK report stays trace telemetry only.
+              if (ctx.gateway && draft.kind === 'usage') continue
               const item = itemOf(draft)
               if (ctx.requireSvgCompletion && item) observeSvgToolResult(svgCompletion, item)
               if (item && shouldPersist(item)) {
@@ -510,17 +507,30 @@ export class AgentSdkRuntime {
             resumeSessionId = undefined
             activeRebaseReason = 'native_state_unavailable'
             activeStream = undefined
-            await this.deps.rejectResume?.(threadId, turnId)
+            const rejected = await this.deps.rejectResume?.(threadId, turnId)
+            if (rejected) ctx.sessionPreparation = rejected
+            if (ctx.resolveHandoff) {
+              const retryHandoff = ctx.resolveHandoff(rejected ?? ctx.sessionPreparation)
+              ctx.handoffBrief = retryHandoff?.brief.text
+              ctx.handoffEvent = retryHandoff?.event
+            }
             await this.deps.recordEvent({
               kind: 'delegated_runtime',
               threadId,
               turnId,
               providerKind: 'agent-sdk',
               providerId: ctx.sessionPreparation?.route.providerId ?? 'default',
+              harnessId: 'claude-code',
               phase: 'rebased',
               reason: 'native_state_unavailable',
-              capabilities
+              capabilities,
+              capabilitiesV2
             })
+            await recordHandoffInjected(
+              (event) => this.deps.recordEvent(event),
+              { threadId, turnId, harnessId: 'claude-code' },
+              ctx.handoffEvent
+            )
             await recordContextSnapshot()
             attempt -= 1
             continue

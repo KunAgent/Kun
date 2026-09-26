@@ -302,6 +302,8 @@ async function loadUsageRecords(
         ...(record.turnId ? { turnId: record.turnId } : {}),
         ...(record.model ? { model: record.model } : {}),
         ...(providerId ? { providerId } : {}),
+        ...(record.source ? { source: record.source } : {}),
+        ...(record.harnessId ? { harnessId: record.harnessId } : {}),
         relation: thread?.relation ?? record.relation ?? 'primary',
         completedAt: record.completedAt,
         usage: record.usage
@@ -435,6 +437,8 @@ async function loadUsageRecordsForSource(
       ...(usageRecordProvider(thread, event)
         ? { providerId: usageRecordProvider(thread, event) }
         : {}),
+      ...(event.source ? { source: event.source } : {}),
+      ...(event.harnessId ? { harnessId: event.harnessId } : {}),
       relation: thread.relation,
       completedAt: event.timestamp,
       usage: delta

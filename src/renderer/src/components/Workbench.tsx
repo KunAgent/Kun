@@ -41,6 +41,8 @@ import { useWorkbenchPlanController } from './workbench-plan-controller'
 import { useGuiPlanStore } from '../plan/plan-store'
 import { useAutoPlanBuildController } from '../plan/use-auto-plan-build-controller'
 import { useProjectBoardEnabled } from '../project-board/use-project-board-enabled'
+import { useAdeEnabled } from './ade/use-ade-enabled'
+import { useWorkbenchModeGuards } from './workbench/useWorkbenchModeGuards'
 import { normalizeWorkspaceRoot, workspaceRootScopeKey } from '../lib/workspace-path'
 import { relativeWorkspacePath } from '../lib/composer-file-references'
 import { useDesignWorkspaceStore } from '../design/design-workspace-store'
@@ -98,13 +100,13 @@ import { useWorkbenchGraphRuntimeState } from './workbench/useWorkbenchGraphRunt
 export function Workbench(): ReactElement {
   const { t, i18n } = useTranslation('common')
   const {
-    threads, threadSearch, showArchivedThreads, activeThreadId, threadLoadingId, activeThreadRelation,
+    threads, adeThreads, threadSearch, showArchivedThreads, activeThreadId, threadLoadingId, activeThreadRelation,
     activeThreadParentId, selectThread, createThread, createConversation, blocks,
     liveReasoning, liveAssistant, error, runtimeErrorDetail, runtimeStatus, busy,
     currentTurnOrchestration,
     route, pluginHostRoute, workspaceRoot, conversationWorkspaceRoot, runtimeConnection,
     codeWorkspaceRoots, selectWorkspaceRoot,
-    setRoute, openCode, openWrite, openDesign, ensureWriteThreadForWorkspace,
+    setRoute, openCode, openAde, openWrite, openDesign, ensureWriteThreadForWorkspace,
     ensureDesignThreadForWorkspace, createWriteThread, clearDesignHistory, openSettings,
     openPlugins, openClaw, openBoard, openSchedule, openWorkflow, chooseWorkspace, clawChannels,
     activeClawChannelId, selectClawChannel, resetClawChannelSession, setClawChannelModel,
@@ -116,7 +118,7 @@ export function Workbench(): ReactElement {
     composerPersonaId, composerPersonaEnabled, codeAgentPresets, setComposerPersonaId,
     composerMode, composerOrchestration, graphEnabled, setComposerMode,
     setComposerOrchestration, setComposerModel, setComposerReasoningEffort, setComposerFastMode,
-    setThreadSearch, renameThread, pinThread, archiveThread, deleteThread,
+    setThreadSearch, renameThread, pinThread, archiveThread, deleteThread, refreshAdeThreads,
     clearActiveThreadSelection, spawnSideConversation, openSideConversationDraft, selectSideConversation, setSidePanelOpen,
     sideConversations, sidePanel
   } = useWorkbenchChatStoreState()
@@ -224,11 +226,9 @@ export function Workbench(): ReactElement {
   }, [busy])
 
   const { enabled: projectBoardEnabled, loaded: projectBoardSettingsLoaded } = useProjectBoardEnabled()
-  useEffect(() => {
-    routeRef.current = route
-    if (projectBoardSettingsLoaded && !projectBoardEnabled && route === 'board') setRoute('chat')
-    runtimeConnectionRef.current = runtimeConnection
-  }, [projectBoardEnabled, projectBoardSettingsLoaded, route, runtimeConnection, setRoute])
+  const { enabled: adeEnabled, loaded: adeSettingsLoaded } = useAdeEnabled()
+  useWorkbenchModeGuards({ routeRef, runtimeConnectionRef, route, runtimeConnection,
+    projectBoardEnabled, projectBoardSettingsLoaded, adeEnabled, adeSettingsLoaded, setRoute, refreshAdeThreads })
 
   const stageInsetClass = 'ds-stage-inset'
   const prevThreadId = useRef<string | null>(null)
@@ -546,15 +546,15 @@ export function Workbench(): ReactElement {
   }, [activeSddDraft, handleCodeSend, input, route, sendDesignPrompt, taskSurface])
 
   const {
-    closeRightPanel, exploreSddRequirementInDesign, openCodeMode, openPluginsView, openExtensionsView, openBoardView, openScheduleView,
+    closeRightPanel, exploreSddRequirementInDesign, openCodeMode, openAdeMode, openPluginsView, openExtensionsView, openBoardView, openScheduleView,
     openThread, openWorkflowView, openWriteMode, pickWriteAssistantWorkspace, sidebarView,
-    startNewChat, startNewChatInWorkspace, startNewConversation, startNewWriteAssistantConversation,
+    startNewChat, startNewAdeChat, startNewChatInWorkspace, startNewConversation, startNewWriteAssistantConversation,
     toggleConnectPhone
   } = useWorkbenchNavigationController({
     activeSddDraft: Boolean(activeSddDraft), activeThreadId, pluginHostRoute, rightPanelMode, route,
-    runtimeConnection, sddDraftContent, threads, useWorktreePool, workspaceRoot, worktreeBranch,
+    runtimeConnection, sddDraftContent, threads, adeThreads, useWorktreePool, workspaceRoot, worktreeBranch,
     clearFilePreviewTargets, createConversation, createThread, createWriteThread, dismissActiveSddDraft,
-    ensureWriteThreadForWorkspace, findSddDraftForSidebarThread, openClaw, openCode,
+    ensureWriteThreadForWorkspace, findSddDraftForSidebarThread, openClaw, openCode, openAde,
     openPlugins, openBoard, openSchedule, openWorkflow, openWrite,
     selectThread, setConnectPhoneSidebarOpen, setDesignAssistantOpen, setFilePreviewTarget, setInput,
     setRightPanelMode, setRoute, setUseWorktreePool, setWriteAssistantOpen
@@ -641,14 +641,14 @@ export function Workbench(): ReactElement {
     {autoPlanBuildDialog}
     <WorkbenchContent context={{
     shellRef, extensionHostContextMenus, activeExtensionCenterView, route, setWorkspaceContextMenu,
-    leftSidebarCollapsed, leftSidebarWidth, codeThreads, activeThreadId, sidebarView,
+    leftSidebarCollapsed, leftSidebarWidth, codeThreads, adeThreads, activeThreadId, sidebarView,
     connectPhoneSidebarOpen, connectPhoneInitialTarget, activeExtensionLeftSidebar, extensionWorkspaceRoot,
     selectExtensionSurface, runtimeConnection, threadSearch, showArchivedThreads, focusModeEnabled,
     updateFocusMode, setThreadSearch, openThread, renameThread, pinThread, archiveThread,
-    deleteThread, deleteDrawing, startNewChat, startNewChatInWorkspace,
+    deleteThread, deleteDrawing, startNewChat, startNewAdeChat, startNewChatInWorkspace,
     openSettings, openPluginsView, openExtensionsView, toggleTheme, toggleConnectPhone,
     openConnectWeixin: () => { setConnectPhoneInitialTarget('weixin'); openClaw(); setConnectPhoneSidebarOpen(true) },
-    openCodeMode, openWriteMode, openDesignMode, openBoardView, openScheduleView, openWorkflowView,
+    openCodeMode, openAdeMode, openWriteMode, openDesignMode, openBoardView, openScheduleView, openWorkflowView,
     startNewConversation, beginLeftResize, toggleLeftSidebar, busy, implementDesignInCode,
     handleDesignHtmlElementAsContext, selectCanvasShape, sendDesignPrompt,
     handleDesignRuntimeQualityFindings, handleDesignQualityRepairRequest, rightPanelSharedProps,
@@ -685,11 +685,11 @@ export function Workbench(): ReactElement {
         hasReviewCommand: route !== 'claw', skillCommands: runtimeSkills, disabledSkillIds,
         extensionRightRailItems, composerModel, composerModelGroups,
         activeThreadPinned: threads.find((item) => item.id === activeThreadId)?.pinned === true,
-        projectBoardEnabled }}
+        projectBoardEnabled, adeEnabled }}
       shortcutContext={{ composerMode, setComposerMode, handleGuiPlanCommand, createThread,
         chooseWorkspace, toggleTerminal, openSettings, useWorktreePool, setUseWorktreePool,
         worktreeBranch, navigationLocked: designDrawingCreationSubmitting }}
-      actions={{ routes: { chat: openCodeMode, write: openWriteMode, design: openDesignMode, rooms: () => setRoute('rooms'),
+      actions={{ routes: { chat: openCodeMode, ade: openAdeMode, write: openWriteMode, design: openDesignMode, rooms: () => setRoute('rooms'),
         settings: openSettings, plugins: openPluginsView, extensions: openExtensionsView,
         claw: openClaw, board: openBoardView, schedule: openScheduleView, workflow: openWorkflowView },
         openSettings, openThread, selectWorkspaceRoot, selectExtension: selectRightRailExtension,

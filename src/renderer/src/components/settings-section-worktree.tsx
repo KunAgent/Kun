@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
-import { GitBranch, Loader2, RefreshCw, Trash2 } from 'lucide-react'
+import { GitBranch, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import type { NormalizedThread } from '../agent/types'
 import type { GitBranchWorktreeRow, GitBranchWorktreesResult } from '@shared/git-branches'
+import type { KunWorktreeSharedPathV1 } from '@shared/app-settings'
+import type { PreservedBranchInfo } from '@shared/task-workspace'
 import { DEFAULT_GIT_BRANCH_PREFIX } from '@shared/app-settings'
+import { getProvider } from '../agent/registry'
 import { readThreadWorktreeRegistry } from '../lib/thread-worktree-registry'
+import { useChatStore } from '../store/chat-store'
 import { SettingsCard, SettingRow, Toggle } from './settings-controls'
 
 type WorktreeDisplayRow = GitBranchWorktreeRow & {
@@ -30,6 +34,43 @@ export function WorktreeSettingsSection({ ctx }: { ctx: Record<string, any> }): 
   const [loading, setLoading] = useState(false)
   const [busyPath, setBusyPath] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const composerIsolation = useChatStore((state) => state.composerIsolation)
+  const setComposerIsolation = useChatStore((state) => state.setComposerIsolation)
+  const [preserved, setPreserved] = useState<PreservedBranchInfo[] | null>(null)
+  const sharedPaths = useMemo(
+    () => (kun?.worktrees?.sharedPaths?.[projectPath] ?? []) as KunWorktreeSharedPathV1[],
+    [kun?.worktrees?.sharedPaths, projectPath]
+  )
+  const [draftSharedPath, setDraftSharedPath] = useState('')
+  const [draftSharedMode, setDraftSharedMode] = useState<KunWorktreeSharedPathV1['mode']>('symlink')
+
+  const setSharedPaths = useCallback(
+    (next: KunWorktreeSharedPathV1[]): void => {
+      if (!projectPath) return
+      const all = { ...(kun?.worktrees?.sharedPaths ?? {}) }
+      if (next.length) all[projectPath] = next
+      else delete all[projectPath]
+      updateKun({ worktrees: { sharedPaths: all } })
+    },
+    [kun?.worktrees?.sharedPaths, projectPath, updateKun]
+  )
+
+  const loadPreserved = useCallback(async (): Promise<void> => {
+    if (!projectPath || !getProvider().listPreservedBranches) {
+      setPreserved(null)
+      return
+    }
+    try {
+      const response = await getProvider().listPreservedBranches!(projectPath)
+      setPreserved(response.branches)
+    } catch {
+      setPreserved(null)
+    }
+  }, [projectPath])
+
+  useEffect(() => {
+    void loadPreserved()
+  }, [loadPreserved])
 
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -122,6 +163,118 @@ export function WorktreeSettingsSection({ ctx }: { ctx: Record<string, any> }): 
             spellCheck={false}
             onChange={(event) => ctx.update({ gitBranchPrefix: event.target.value })}
           />
+        }
+      />
+      <SettingRow
+        title={t('adeSettings.defaultIsolation')}
+        description={t('adeSettings.defaultIsolationDesc')}
+        control={
+          <select
+            className="w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none"
+            value={composerIsolation}
+            onChange={(event) =>
+              setComposerIsolation(event.target.value as 'local' | 'worktree')
+            }
+          >
+            <option value="local">{t('adeSettings.isolationLocal')}</option>
+            <option value="worktree">{t('adeSettings.isolationWorktree')}</option>
+          </select>
+        }
+      />
+      <SettingRow
+        title={t('adeSettings.sharedPathsTitle')}
+        description={t('adeSettings.sharedPathsDesc')}
+        wideControl
+        control={
+          <div className="flex flex-col gap-2">
+            {sharedPaths.map((entry, index) => (
+              <div key={`${entry.path}-${index}`} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ds-ink" title={entry.path}>
+                  {entry.path}
+                </span>
+                <span className="shrink-0 rounded-md bg-ds-main/70 px-1.5 py-0.5 font-mono text-[11px] text-ds-muted">
+                  {entry.mode}
+                </span>
+                <button
+                  type="button"
+                  aria-label={t('adeSettings.sharedPathRemove')}
+                  onClick={() => setSharedPaths(sharedPaths.filter((_, i) => i !== index))}
+                  className="shrink-0 rounded-lg px-1.5 py-1 text-red-600 transition hover:bg-red-500/10"
+                >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                </button>
+              </div>
+            ))}
+            {sharedPaths.length === 0 ? (
+              <div className="text-[12px] text-ds-faint">{t('adeSettings.sharedPathsEmpty')}</div>
+            ) : null}
+            <div className="flex items-center gap-2">
+              <input
+                className="min-w-0 flex-1 rounded-xl border border-ds-border bg-ds-card px-3 py-2 font-mono text-[12px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none"
+                value={draftSharedPath}
+                placeholder={t('adeSettings.sharedPathPlaceholder')}
+                spellCheck={false}
+                disabled={!projectPath}
+                onChange={(event) => setDraftSharedPath(event.target.value)}
+              />
+              <select
+                className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-2 py-2 text-[12px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none"
+                value={draftSharedMode}
+                onChange={(event) =>
+                  setDraftSharedMode(event.target.value as KunWorktreeSharedPathV1['mode'])
+                }
+              >
+                <option value="symlink">symlink</option>
+                <option value="clone">clone</option>
+                <option value="copy">copy</option>
+              </select>
+              <button
+                type="button"
+                disabled={!projectPath || !draftSharedPath.trim()}
+                onClick={() => {
+                  setSharedPaths([
+                    ...sharedPaths,
+                    { path: draftSharedPath.trim(), mode: draftSharedMode }
+                  ])
+                  setDraftSharedPath('')
+                }}
+                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-ds-border-muted px-2.5 py-2 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-45"
+              >
+                <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
+                {t('adeSettings.sharedPathAdd')}
+              </button>
+            </div>
+            {!projectPath ? (
+              <div className="text-[11px] text-ds-faint">{t('adeSettings.sharedPathsNoProject')}</div>
+            ) : null}
+          </div>
+        }
+      />
+      <SettingRow
+        title={t('adeSettings.preservedBranchesTitle')}
+        description={t('adeSettings.preservedBranchesDesc')}
+        wideControl
+        control={
+          <div className="flex flex-col gap-1.5">
+            {!preserved?.length ? (
+              <div className="text-[12px] text-ds-faint">{t('adeSettings.preservedBranchesEmpty')}</div>
+            ) : (
+              preserved.map((branch) => (
+                <div
+                  key={branch.branch}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-ds-border-muted bg-ds-main/40 px-3 py-2"
+                >
+                  <span className="min-w-0 truncate font-mono text-[12px] text-ds-ink" title={branch.branch}>
+                    {branch.branch}
+                  </span>
+                  <span className="shrink-0 text-[11px] text-ds-faint">
+                    {branch.lastCommit ? `${branch.lastCommit} · ` : ''}
+                    {t('adeSettings.preservedBranchAheadBy', { count: branch.aheadBy })}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
         }
       />
       <SettingRow

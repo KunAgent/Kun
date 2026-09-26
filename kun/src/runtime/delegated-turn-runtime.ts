@@ -1,4 +1,6 @@
 import type { TurnRunOutcome } from '../loop/turn-execution-types.js'
+import type { HarnessRoute } from '../contracts/harness.js'
+import type { HarnessCapabilities } from '../contracts/harness-capabilities.js'
 
 export type DelegatedRuntimeCapabilities = {
   nativeResume: boolean
@@ -19,6 +21,14 @@ export type DelegatedRuntimeCapabilities = {
 export interface DelegatedTurnRuntime {
   handlesProvider(providerId: string | undefined): boolean
   capabilities(providerId: string | undefined): DelegatedRuntimeCapabilities | undefined
+  /**
+   * Harness-aware admission. When present the HarnessRouter uses it instead
+   * of `handlesProvider` so a runtime can decide on the full route
+   * (harnessId x providerId x model x credentialMode).
+   */
+  handlesRoute?(route: HarnessRoute): boolean
+  /** Capability v2 view; defaults are derived from the legacy booleans. */
+  capabilitiesV2?(providerId: string | undefined): HarnessCapabilities | undefined
   /**
    * Resolve the immutable runtime generation that owns a provider. AgentLoop
    * calls this before any lifecycle await so a later hot configuration cannot
@@ -41,6 +51,13 @@ export function composeDelegatedTurnRuntimes(
   return {
     handlesProvider(providerId) {
       return active.some((runtime) => runtime.handlesProvider(providerId))
+    },
+    handlesRoute(route) {
+      return active.some((runtime) =>
+        runtime.handlesRoute
+          ? runtime.handlesRoute(route)
+          : runtime.handlesProvider(route.providerId)
+      )
     },
     capabilities(providerId) {
       return active.find((candidate) => candidate.handlesProvider(providerId))
@@ -71,6 +88,14 @@ export class ReplaceableDelegatedTurnRuntime implements DelegatedTurnRuntime {
 
   handlesProvider(providerId: string | undefined): boolean {
     return this.current?.handlesProvider(providerId) === true
+  }
+
+  handlesRoute(route: HarnessRoute): boolean {
+    return this.current
+      ? this.current.handlesRoute
+        ? this.current.handlesRoute(route)
+        : this.current.handlesProvider(route.providerId)
+      : false
   }
 
   capabilities(providerId: string | undefined): DelegatedRuntimeCapabilities | undefined {

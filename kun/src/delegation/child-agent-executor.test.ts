@@ -452,13 +452,13 @@ describe('createChildAgentExecutor', () => {
       toolHost: new LocalToolHost({ tools: [] }),
       prefix: createImmutablePrefix({ systemPrompt: 'test system prompt' }),
       defaultModel: 'fallback-model',
-      createDelegatedRuntime: (boundary) => ({
-        handlesProvider: (providerId) => providerId === 'native-test',
+      createDelegatedRuntime: (boundary) => ({ delegated: {
+        handlesProvider: (providerId: string | undefined) => providerId === 'native-test',
         capabilities: () => ({
           nativeResume: true, structuredStreaming: true, kunTools: true,
           externalApproval: true, liveSteering: true, nativeContextTelemetry: true, fork: true
         }),
-        runTurn: async (threadId, turnId) => {
+        runTurn: async (threadId: string, turnId: string) => {
           await boundary.turns.applyItem(threadId, makeToolCallItem({
             id: 'item_direction_call', threadId, turnId, callId: 'call_direction',
             toolName: 'ppt_create_direction_bundle', arguments: {}, status: 'completed'
@@ -474,7 +474,7 @@ describe('createChildAgentExecutor', () => {
           await boundary.turns.finishTurn({ threadId, turnId, status: 'failed' })
           return 'failed'
         }
-      })
+      } })
     })
 
     const run = executor({
@@ -544,9 +544,9 @@ describe('createChildAgentExecutor', () => {
       defaultModel: 'http-model',
       createDelegatedRuntime: (boundary) => {
         capturedBoundary = boundary
-        return {
-          handlesProvider: (providerId) => providerId === 'claude-subscription',
-          capabilities: (providerId) => providerId === 'claude-subscription'
+        return { delegated: {
+          handlesProvider: (providerId: string | undefined) => providerId === 'claude-subscription',
+          capabilities: (providerId: string | undefined) => providerId === 'claude-subscription'
             ? {
                 nativeResume: true,
                 structuredStreaming: true,
@@ -557,7 +557,7 @@ describe('createChildAgentExecutor', () => {
                 fork: true
               }
             : undefined,
-          runTurn: async (threadId, turnId) => {
+          runTurn: async (threadId: string, turnId: string) => {
             await boundary.turns.applyItem(
               threadId,
               makeAssistantTextItem({
@@ -571,7 +571,7 @@ describe('createChildAgentExecutor', () => {
             await boundary.turns.finishTurn({ threadId, turnId, status: 'completed' })
             return 'completed'
           }
-        }
+        } }
       }
     })
 
@@ -615,6 +615,7 @@ describe('createChildAgentExecutor', () => {
       memoryEnabled: false
     })
   })
+
 })
 
 describe('DelegationRuntime detached children', () => {

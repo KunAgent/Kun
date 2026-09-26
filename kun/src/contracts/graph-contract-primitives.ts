@@ -18,3 +18,20 @@ export const GraphToolProviderIdSchema = z.string().trim().min(1).max(256).refin
 )
 export const GraphTimestampSchema = z.string().datetime({ offset: true })
 export const GraphBoundedSummarySchema = z.string().max(4_096)
+
+export const GraphRunIdSchema = GraphIdentifierSchema
+export type GraphRunId = z.infer<typeof GraphRunIdSchema>
+export const GraphNodeIdSchema = GraphIdentifierSchema
+export type GraphNodeId = z.infer<typeof GraphNodeIdSchema>
+export const GraphEdgeIdSchema = GraphIdentifierSchema
+export type GraphEdgeId = z.infer<typeof GraphEdgeIdSchema>
+export const GraphAttemptIdSchema = GraphIdentifierSchema
+export type GraphAttemptId = z.infer<typeof GraphAttemptIdSchema>
+export const GraphReviewIdSchema = GraphIdentifierSchema
+export type GraphReviewId = z.infer<typeof GraphReviewIdSchema>
+export const GraphMessageIdSchema = GraphIdentifierSchema
+export type GraphMessageId = z.infer<typeof GraphMessageIdSchema>
+export const GraphCommandIdSchema = GraphIdentifierSchema
+export type GraphCommandId = z.infer<typeof GraphCommandIdSchema>
+export const GraphProfileIdSchema = GraphIdentifierSchema
+export type GraphProfileId = z.infer<typeof GraphProfileIdSchema>

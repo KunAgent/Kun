@@ -144,6 +144,21 @@ async function resolveCommand(command: string, options: SpawnOptions): Promise<s
   throw Object.assign(new Error(`Could not start executable: ${command}`), { code: 'ENOENT', syscall: 'spawn' })
 }
 
+/**
+ * Read-only executable resolution for detection paths that must not spawn.
+ * Returns undefined instead of throwing when the command cannot be resolved.
+ */
+export async function resolveExecutable(
+  command: string,
+  options: Pick<SpawnOptions, 'cwd' | 'env'> = {}
+): Promise<string | undefined> {
+  try {
+    return await resolveCommand(command, options)
+  } catch {
+    return undefined
+  }
+}
+
 function withLaunchPipe(stdio: StdioOptions | undefined): Exclude<StdioOptions, string> {
   const result: Exclude<StdioOptions, string> = Array.isArray(stdio)
     ? [...stdio]

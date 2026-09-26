@@ -71,6 +71,7 @@ import type { ModelStepServiceDeps } from './model-step-service-types.js'
 import {
   buildExtensionProfileInstruction,
   buildToolCatalogDriftMessage,
+  graphHarnessContextBlock,
   hasSuccessfulToolResult,
   knowledgeBaseContextBlocks,
   pptWorkflowCompletionToolGate,
@@ -520,6 +521,8 @@ export abstract class ModelStepPreparationService {
       ...(runtimeContextInstruction
         ? [kunContextBlock('runtime-context', 'runtime', runtimeContextInstruction)]
         : []),
+      await graphHarnessContextBlock(turn.orchestration, graphCreateSatisfied,
+        this.deps.graphHarnessSummary),
       ...turnDynamicContext.blocks.filter((block) => block.authority === 'runtime'),
       ...(workflowGate.subagentResumeInstruction
         ? [kunContextBlock(

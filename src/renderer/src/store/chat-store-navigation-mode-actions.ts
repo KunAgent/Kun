@@ -151,7 +151,7 @@ let trayActionUnsubscribe: (() => void) | null = null
 
 export function createNavigationModeActions(
   { set, get, sseAbortRef }: StoreActionContext
-): Pick<ChatState, 'openCode' | 'openDesign' | 'clearActiveThreadSelection' | 'openWrite' | 'ensureWriteThreadForWorkspace' | 'createWriteThread' | 'selectWriteThread' | 'ensureDesignThreadForWorkspace' | 'createDesignThread'> {
+): Pick<ChatState, 'openCode' | 'openAde' | 'openDesign' | 'clearActiveThreadSelection' | 'openWrite' | 'ensureWriteThreadForWorkspace' | 'createWriteThread' | 'selectWriteThread' | 'ensureDesignThreadForWorkspace' | 'createDesignThread'> {
   return {
   openCode: async (options) => {
     const activationAllowed = (): boolean => options?.activationGuard?.() !== false
@@ -236,6 +236,65 @@ export function createNavigationModeActions(
     set({
       ...clearedThreadSelection(),
       route: 'chat',
+      watchTurnCompletion: nextWatch
+    })
+    syncTurnCompletionPoll(set, get)
+  },
+
+  openAde: async (options) => {
+    const activationAllowed = (): boolean => options?.activationGuard?.() !== false
+    if (!activationAllowed()) return
+    const state = get()
+    const activeThread = state.activeThreadId
+      ? (state.adeThreads ?? []).find((thread) => thread.id === state.activeThreadId) ?? null
+      : null
+    // Stay put when the active session already belongs to ADE mode.
+    if (activeThread && activeThread.archived !== true) {
+      if (activationAllowed()) set({ route: 'ade' })
+      return
+    }
+
+    // ADE 模式记忆与 Code 互相独立:优先恢复上次打开的 ADE 会话。
+    const rememberedId = state.lastAdeThreadId?.trim()
+    const rememberedThread = rememberedId
+      ? (state.adeThreads ?? []).find(
+          (thread) => thread.id === rememberedId && thread.archived !== true
+        ) ?? null
+      : null
+
+    if (!activationAllowed()) return
+    set({ route: 'ade' })
+    if (rememberedThread && state.runtimeConnection === 'ready') {
+      await get().selectThread(rememberedThread.id, {
+        selectionGuard: activationAllowed
+      })
+      return
+    }
+
+    const target = latestThread(
+      (state.adeThreads ?? []).filter((thread) => thread.archived !== true)
+    )
+    if (target && state.runtimeConnection === 'ready') {
+      await get().selectThread(target.id, { selectionGuard: activationAllowed })
+      return
+    }
+
+    if (!activationAllowed()) return
+    sseAbortRef.current?.abort()
+    sseAbortRef.current = null
+    clearBusyWatchdog()
+    const nextWatch = { ...state.watchTurnCompletion }
+    if (state.activeThreadId && state.busy) {
+      nextWatch[state.activeThreadId] = true
+      watchTurnCompletionNotification(
+        state.activeThreadId,
+        Date.now(),
+        turnCompleteNotificationSource(state.activeThreadId, state)
+      )
+    }
+    set({
+      ...clearedThreadSelection(),
+      route: 'ade',
       watchTurnCompletion: nextWatch
     })
     syncTurnCompletionPoll(set, get)

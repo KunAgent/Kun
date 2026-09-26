@@ -1,4 +1,5 @@
 @import './base-shell/tokens-window-workspace.css';
+@import './base-shell/tokens-ade-status.css';
 @import './base-shell/window-navigation-logo.css';
 @import './base-shell/work-logo-activity.css';
 @import './base-shell/work-logo-keyframes.css';

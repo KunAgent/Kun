@@ -109,10 +109,12 @@ import {
   syncTray
 } from './main-tray'
 import type { MainServices } from './main-ready-services'
+import { registerMissionControlPopoutIpc } from './mission-control-popout'
 import { registerProviderMutationBarrierIpc } from './provider-mutation-barrier'
 
 export function registerMainIpc(services: MainServices): void {
   registerProviderMutationBarrierIpc(() => mainState.mainWindow)
+  registerMissionControlPopoutIpc(() => mainState.mainWindow)
   const {
     browserUseManager,
     credentialMigration,
@@ -559,7 +561,18 @@ export function registerMainIpc(services: MainServices): void {
       ipcMain,
       getMainWindow: () => mainState.mainWindow,
       logError,
-      getTerminalColorMode: async () => resolveTerminalColorMode(await mainState.store.load())
+      getTerminalColorMode: async () => resolveTerminalColorMode(await mainState.store.load()),
+      runtimeFetch: async (path, init = {}) => {
+        const settings = await mainState.store.load()
+        const ensured = await ensureRuntime(settings)
+        const requestSettings = ensured ?? settings
+        const headers = runtimeAuthHeaders(requestSettings)
+        const normalizedPath = path.startsWith('/') ? path : `/${path}`
+        return fetch(`${getRuntimeBaseUrlForSettings(requestSettings)}${normalizedPath}`, {
+          ...init,
+          headers
+        } as RequestInit)
+      }
     })
     const remoteSshDataDir = join(app.getPath('userData'), 'remote-ssh')
     mainState.remoteSshController = registerRemoteSshIpc({

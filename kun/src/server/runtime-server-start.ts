@@ -11,6 +11,7 @@ import {
   unregisterRuntimeWithManager
 } from './runtime-factory-dependencies.js'
 import { createKunServeRuntime } from './runtime-composition.js'
+import { makeKgwTokenGuard } from './kgw-token-guard.js'
 import { settleCleanupSteps } from './runtime-factory-cleanup.js'
 import { startMemoryPressureMonitor } from './memory-pressure-monitor.js'
 import type { KunServeHandle, KunServeRuntimeOptions } from './runtime-factory-types.js'
@@ -63,11 +64,23 @@ export async function startKunServe(
       router,
       host: options.host,
       port: options.port,
-      ...(options.faultInjection ? { faultInjection: options.faultInjection } : {})
+      ...(options.faultInjection ? { faultInjection: options.faultInjection } : {}),
+      ...(runtime.harnessTokens
+        ? { requestGuard: makeKgwTokenGuard(runtime.harnessTokens) }
+        : {})
     })
   } catch (error) {
     await runtime.shutdown?.().catch(() => undefined)
     throw error
+  }
+  // The loopback endpoint harness gateway env is injected with (docs/ade/04
+  // §5.5). Fill the shared cell right after bind so turns can resolve it.
+  if (runtime.harnesses?.gatewayEndpoint) {
+    const gatewayHost =
+      isLoopbackHost(server.host) || server.host === '0.0.0.0' || server.host === '::'
+        ? '127.0.0.1'
+        : server.host
+    runtime.harnesses.gatewayEndpoint.baseUrl = runtimeBaseUrl(gatewayHost, server.port)
   }
   let discovery: Awaited<ReturnType<typeof publishRuntimeDiscovery>>
   const runtimeFlavor = options.runtimeFlavor ?? 'production'

@@ -22,6 +22,8 @@ import {
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import type { UsageSnapshot } from '../contracts/usage.js'
 import type { TurnClientSurface } from '../contracts/turns.js'
+import type { HarnessCredentialMode, HarnessId } from '../contracts/harness.js'
+import type { ThreadExecutionUnit } from '../contracts/threads.js'
 import type { PptWorkflowScope } from '../ports/tool-host.js'
 import { ChildProviderFallbackSchema, ChildRunFailureSchema } from '../contracts/subagent-retry.js'
 import { MAX_TURN_ATTACHMENT_IDS } from '../contracts/attachments.js'
@@ -91,7 +93,8 @@ export const ChildRunLauncher = z.preprocess(
     'ppt_agent',
     'component_design',
     'diagram_design',
-    'graph'
+    'graph',
+    'manager-worker'
   ])
 )
 export type ChildRunLauncher = z.infer<typeof ChildRunLauncher>
@@ -184,15 +187,18 @@ export const ChildRoutingMetadata = z.object({
     'bm25-fallback-profile',
     'bm25-fallback-skill',
     'bm25-fallback-custom',
-    'bm25-fallback-generated'
+    'bm25-fallback-generated',
+    /** ADE manager worker selection (10 §3.3). */
+    'worker-selector'
   ]),
-  selectedKind: z.enum(['profile', 'skill', 'custom', 'generated']),
+  /** 'harness' marks a worker-selector pick with no bound profile (10 §3.3). */
+  selectedKind: z.enum(['profile', 'skill', 'custom', 'generated', 'harness']),
   selectedId: z.string().min(1),
   agentSurface: z.enum(['code', 'write', 'design']).optional(),
   reason: z.string().max(2_000).optional(),
   confidence: z.number().min(0).max(1).optional(),
   candidates: z.array(z.object({
-    kind: z.enum(['profile', 'skill']),
+    kind: z.enum(['profile', 'skill', 'harness']),
     targetId: z.string().min(1),
     name: z.string().min(1).max(256),
     description: z.string().max(2_000).optional(),
@@ -365,6 +371,18 @@ export type ChildRunExecutor = (input: {
   prompt: string
   /** Exact active parent turn source; never synthesized by the parent model. */
   source?: ChildSourceEnvelope
+  /**
+   * Host-owned idempotency key forwarded verbatim into `startTurn`. A retry
+   * with the same key reattaches to the already-admitted child turn instead
+   * of starting a second one.
+   */
+  clientRequestId?: string
+  /** Host-pinned harness for the created thread / first turn (ADE worker route). */
+  harnessId?: HarnessId
+  /** Host-pinned credential mode for this turn (e.g. `kun-gateway`). */
+  credentialMode?: HarnessCredentialMode
+  /** Host-only execution-unit metadata persisted on first thread creation. */
+  executionUnit?: ThreadExecutionUnit
   /** Trusted host control emitted as private chronological model context. */
   controlPrompt?: string
   /** Host-minted PPT capability for this execution only. */

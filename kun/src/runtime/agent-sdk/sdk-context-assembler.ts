@@ -12,6 +12,9 @@
 import type { TurnItem } from '../../contracts/items.js'
 import { effectiveHistoryAfterLatestCompaction } from '../../loop/compaction-history.js'
 import { buildSessionTranscript } from '../../loop/session-summary.js'
+import { fitUtf8, utf8Bytes } from '../../handoff/utf8-budget.js'
+
+export { fitUtf8, utf8Bytes } from '../../handoff/utf8-budget.js'
 
 /** Default cap for the replayed history transcript (bytes). */
 export const DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES = 48 * 1024
@@ -165,23 +168,6 @@ function renderChunk(items: readonly TurnItem[]): string {
     .trim()
 }
 
-function utf8Bytes(text: string): number {
-  return Buffer.byteLength(text, 'utf8')
-}
-
-function fitUtf8(text: string, maxBytes: number): string {
-  if (utf8Bytes(text) <= maxBytes) return text
-  let out = ''
-  let used = 0
-  for (const char of text) {
-    const bytes = utf8Bytes(char)
-    if (used + bytes > maxBytes) break
-    out += char
-    used += bytes
-  }
-  return out
-}
-
 function truncateRecentChunk(text: string, maxBytes: number): string {
   if (maxBytes <= 0) return ''
   if (utf8Bytes(text) <= maxBytes) return text
@@ -204,6 +190,12 @@ function truncateRecentChunk(text: string, maxBytes: number): string {
 export interface SdkPromptParts {
   /** Prior-conversation transcript ('' when none). */
   historyTranscript?: string
+  /**
+   * Deterministic handoff brief (docs/ade/08). When set it replaces
+   * `historyTranscript` — the brief already carries the prior-conversation
+   * digest plus the recent originals.
+   */
+  handoffBrief?: string
   /** The live user request text for this turn. */
   userText: string
   /** Trailing per-turn instruction blocks (skill catalog, memories, plan, ...). */
@@ -218,8 +210,11 @@ export interface SdkPromptParts {
  */
 export function composeSdkPromptText(parts: SdkPromptParts): string {
   const sections: string[] = []
-  const transcript = parts.historyTranscript?.trim()
-  if (transcript) {
+  const handoff = parts.handoffBrief?.trim()
+  const transcript = handoff ? undefined : parts.historyTranscript?.trim()
+  if (handoff) {
+    sections.push(handoff)
+  } else if (transcript) {
     sections.push(
       [
         'Earlier conversation in this thread (context — continue it; do not restart):',
@@ -233,7 +228,31 @@ export function composeSdkPromptText(parts: SdkPromptParts): string {
   if (blocks.length > 0) sections.push(blocks.join('\n\n'))
   const userText = parts.userText.trim()
   if (userText) {
-    sections.push(transcript || blocks.length > 0 ? `Current request:\n${userText}` : userText)
+    sections.push(handoff || transcript || blocks.length > 0 ? `Current request:\n${userText}` : userText)
   }
   return sections.join('\n\n')
+}
+
+/**
+ * Per-attempt prompt text for a delegated turn: exact user text when the turn
+ * preserves it verbatim, otherwise the assembled context prompt. Prior history
+ * travels only when the SDK is not resuming a compatible native session.
+ */
+export function composeSdkTurnText(
+  ctx: Pick<
+    import('./agent-sdk-runtime-contracts.js').SdkTurnContext,
+    'preserveExactUserPrompt' | 'userText' | 'handoffBrief' | 'historyTranscript' | 'contextInstructions'
+  >,
+  resumed: boolean
+): string {
+  if (ctx.preserveExactUserPrompt) return ctx.userText
+  return composeSdkPromptText({
+    ...(ctx.handoffBrief
+      ? { handoffBrief: ctx.handoffBrief }
+      : !resumed && ctx.historyTranscript
+        ? { historyTranscript: ctx.historyTranscript }
+        : {}),
+    userText: ctx.userText,
+    ...(ctx.contextInstructions?.length ? { instructionBlocks: ctx.contextInstructions } : {})
+  })
 }

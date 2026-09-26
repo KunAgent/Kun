@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { KUN_MANAGED_GITHUB_MCP_MARKER } from './builtin-mcp.js'
 import { MODEL_ENDPOINT_FORMATS } from './model-endpoint-format.js'
+import { HarnessCredentialModeSchema, HarnessIdSchema } from './harness.js'
 
 export const RUNTIME_CAPABILITY_CONTRACT_VERSION = 1
 export const MAX_MODEL_CONTEXT_WINDOW_TOKENS = 10_000_000
@@ -368,6 +369,12 @@ export const SubagentProfileConfig = z
     model: z.string().min(1).optional(),
     /** Routes this role's child to a specific provider id (falls back to the runtime default provider). */
     providerId: z.string().min(1).optional(),
+    /** ADE worker harness binding; omitted means the native Kun loop (10 §3.1). */
+    harnessId: HarnessIdSchema.optional(),
+    /** Credential path on the bound harness; omitted uses the harness default. */
+    credentialMode: HarnessCredentialModeSchema.optional(),
+    /** "Best for / not for" notes for the manager selector; participates in recall. */
+    delegationNotes: z.string().min(1).max(1_000).optional(),
     /** Persona/instructions appended to the base system prompt for this role (not a full replace). */
     systemPrompt: z.string().min(1).optional(),
     /**
@@ -406,11 +413,15 @@ export const SubagentProfileConfig = z
     const hasModel = Boolean(profile.model?.trim())
     const hasProvider = Boolean(profile.providerId?.trim())
     if (hasModel === hasProvider) return
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: hasModel ? ['providerId'] : ['model'],
-      message: 'subagent model and providerId must be configured together'
-    })
+    // providerId without a model is always incomplete; a bare model is fine
+    // when the role binds a harness that owns its model list (10 §3.1).
+    if (!hasModel || !profile.harnessId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: hasModel ? ['providerId'] : ['model'],
+        message: 'subagent model and providerId must be configured together'
+      })
+    }
   })
 export type SubagentProfileConfig = z.infer<typeof SubagentProfileConfig>
 

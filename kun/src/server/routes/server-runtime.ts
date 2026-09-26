@@ -19,6 +19,7 @@ import type {
   McpCapabilityConfig,
   McpServerConfig
 } from '../../contracts/capabilities.js'
+import type { ModelCapabilityMetadata } from '../../contracts/capabilities-core.js'
 import type {
   RuntimeConfigApplyRequest,
   RuntimeConfigApplyResponse
@@ -54,6 +55,11 @@ import type { GatewayCredentialService } from '../../services/gateway-credential
 import type { RoutePoolHealthStore } from '../../adapters/model/route-pool-model-client.js'
 import type { RoutePoolTestService } from '../../services/route-pool-test-service.js'
 import type { GraphRuntimeConfig, RolesConfig } from '../../config/kun-config.js'
+import type { ServeProviderConfig } from '../../config/kun-config-application.js'
+import type { HarnessCatalog } from '../../harness/harness-catalog.js'
+import type { HarnessDetector } from '../../harness/harness-detector.js'
+import type { AcpModelProbe } from '../../harness/acp-model-probe.js'
+import type { HarnessDefinition, HarnessStatus } from '../../contracts/harness.js'
 import type {
   FileGraphWriteCoordinator,
   FileGraphThreadReferenceStore,
@@ -186,6 +192,18 @@ export type ServerRuntime = {
   events: RuntimeEventRecorder
   /** Compact process-wide invalidations used by sidebar observers. */
   threadActivity?: ThreadActivityRegistry
+  /** Execution-unit activity rows shared by all clients (docs/ade/06). */
+  activityStore?: import('../../services/activity-store.js').ActivityStore
+  /** Persisted user facts (ack/dismiss/pin) for activity rows. */
+  activityFacts?: import('../../services/activity-facts-store.js').ActivityFactsStore
+  /** Stall/dormancy scanner plus the client foreground registry (06 §6-§7). */
+  activityHibernation?: import('../../services/activity-hibernation.js').ActivityHibernation
+  /** Host-owned task workspaces (docs/ade/07). */
+  taskWorkspaces?: import('../../workspace-tasks/task-workspace-service.js').TaskWorkspaceService
+  /** AI line-attribution ledger for workspace files (docs/ade/11 §6). */
+  attribution?: import('../../ade/attribution-ledger.js').AttributionLedger
+  /** Forge change requests on workspace branches (docs/ade/11 §7.2). */
+  changeRequests?: import('../../ade/change-request-service.js').ChangeRequestService
   /** Active SSE streams, so a successful thread delete can close them. */
   eventStreamRegistry?: ThreadEventStreamRegistry
   /** Optional troubleshooting buffer of the most recent LLM rounds (in-memory). */
@@ -233,6 +251,78 @@ export type ServerRuntime = {
   /** Single extension platform instance shared by HTTP, CLI-style services, tools, and model routing. */
   extensionPlatform?: ExtensionPlatformRuntime
   /**
+   * Harness catalog + detection status cache for `/v1/harnesses`. Optional so
+   * test scaffolds can omit it.
+   */
+  harnesses?: {
+    catalog: HarnessCatalog
+    detector: HarnessDetector
+    /** ACP `session/new` model probing for `modelSource: 'probe'` harnesses. */
+    acpModels?: AcpModelProbe
+    /**
+     * Loopback `kun serve` endpoint shared with harness env injection; the
+     * serve layer fills `baseUrl` once the listener binds.
+     */
+    gatewayEndpoint?: { baseUrl?: string }
+  }
+  /**
+   * Process-local `kgw_` bearer tokens scoped to spawned harnesses
+   * (docs/ade/04 §4). Optional so test scaffolds can omit it.
+   */
+  harnessTokens?: import('../../harness/harness-token-service.js').HarnessTokenService
+  /**
+   * Shared Kun-tool bridge host backing the `/mcp/kun` route (docs/ade/05
+   * §3.3). Optional so test scaffolds can omit it.
+   */
+  kunToolBridge?: import('../../harness/kun-tool-bridge-host.js').KunToolBridgeHost
+  /**
+   * ADE control-plane stores + worker callback service (docs/ade/05 §2,
+   * 09 §3.2). Optional so test scaffolds can omit it.
+   */
+  ade?: {
+    stores: {
+      teams: import('../../ade/team-store.js').FileTeamStore
+      dispatches: import('../../ade/dispatch-store.js').FileDispatchStore
+      questions: import('../../ade/question-store.js').FileQuestionStore
+      notices: import('../../ade/worker-notice-store.js').FileWorkerNoticeStore
+      /** Line-level review comments per task workspace (11 §4). */
+      reviews: import('../../ade/review-store.js').FileReviewStore
+    }
+    workerCallbacks: import('../../services/worker-callback-service.js').WorkerCallbackService
+    /** Same-task race records + services (10 §6); optional for test scaffolds. */
+    races?: import('../../ade/race.js').RaceServiceDeps
+    /**
+     * Tier-0 terminal-agent units + scoped token issuance (05 §6.1).
+     * Optional so test scaffolds can omit it.
+     */
+    terminalAgents?: import('../../services/terminal-agent-registry.js').TerminalAgentRegistry
+    /**
+     * Managed-hook config writer for terminal launches (05 §6.2, P2-03).
+     * Returns argv/env additions; null when the harness kind is unsupported.
+     */
+    hookWriter?: (
+      unitId: string,
+      hooks: { kind: string; events: string[] }
+    ) => Promise<{ args: string[]; env: Record<string, string>; dir: string } | null>
+    /** Manager control plane + exactly-once dispatch delivery (09 §4-§5). */
+    manager?: import('../../ade/manager-runtime.js').ManagerRuntime
+    deliverer?: import('../../ade/dispatch-deliverer.js').DispatchDeliverer
+    /** Manager wake-up batching + composer holds (09 §6.2). */
+    noticeCoordinator?: import('../../ade/worker-notice-coordinator.js').WorkerNoticeCoordinator
+  }
+  /**
+   * Admission evaluation for a harness in a usage surface (one-to-one,
+   * worker, graph, ...). Added in the admission step; routes only call it
+   * when present.
+   */
+  harnessAdmission?(input: {
+    definition: HarnessDefinition
+    status: HarnessStatus
+    usage: string
+  }): Promise<unknown>
+  /** Read-only view of the configured provider map (serve.providers). */
+  providerConfigs?(): Record<string, ServeProviderConfig>
+  /**
    * Default ModelClient + model id for one-shot completions outside the
    * agent loop (e.g. AI-generated subagent profiles). Optional so test
    * scaffolds can omit it.
@@ -258,6 +348,13 @@ export type ServerRuntime = {
     health: RoutePoolHealthStore
     tests: RoutePoolTestService
     credentials: GatewayCredentialService
+    /**
+     * Capability lookup for a gateway-addressed model (pool model id or a
+     * providerId/modelId pair). Lets gateway entry points reject inputs the
+     * resolved model cannot consume (e.g. images for text-only models).
+     * Optional for test scaffolds.
+     */
+    modelCapabilities?(model: string, providerId?: string): ModelCapabilityMetadata
   }
   defaultModel?: string
   /**

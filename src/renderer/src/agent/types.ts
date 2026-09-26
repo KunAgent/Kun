@@ -1,14 +1,14 @@
 import type {
   CoreAttachmentContentResponseJson, CoreAttachmentMetadataJson,
   CoreAttachmentTextFallbackJson, CoreMemoryDiagnosticsJson,
-  CoreChildRuntimeMetadataJson, CoreMemoryRecordJson, CoreMcpOAuthDiagnosticJson, CoreRuntimeInfoJson,
+  CoreChildLauncher, CoreChildRuntimeMetadataJson, CoreMemoryRecordJson, CoreMcpOAuthDiagnosticJson, CoreRuntimeInfoJson,
   CoreRuntimeSkillJson, CoreRuntimeToolDiagnosticsJson
 } from './kun-contract'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '@shared/app-settings'
 import type { NormalizedThread } from './types-thread'
 export type { NormalizedThread } from './types-thread'
 import type { CoreModelRequestFailureJson } from './kun-contract'
-import type { CoreApprovalActionJson } from './kun-contract-runtime'
+import type { CoreApprovalActionJson } from './kun-contract-approval'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { RendererChartSpec } from './chart-spec-adapter'
 import type { RendererPaperList } from './paper-list-adapter'
@@ -128,7 +128,8 @@ export type RuntimeChildMetadata = {
   childToolPolicy?: 'readOnly' | 'inherit'
   childStatus: 'queued' | 'running' | 'completed' | 'failed' | 'aborted'
   childSeq: number
-  childLauncher?: 'delegate_task' | 'fast_context' | 'ppt_agent' | 'component_design' | 'graph'
+  childLauncher?: CoreChildLauncher
+
   childTerminationReason?: 'user_stop' | 'manual_stop' | 'runtime_restart' | 'child_error'
   resumable?: boolean
   resumeCount?: number
@@ -194,7 +195,7 @@ export type RuntimeDisclosureMetadata = {
   designProfile?: import('./design-task-profile').DesignTaskProfileInput | import('./design-task-profile').DesignTaskProfile
   designDocumentTarget?: import('./design-task-profile').DesignDocumentTarget
   designImagePlacementTarget?: import('./design-task-profile').DesignImagePlacementTarget
-  messageSource?: 'background_shell' | 'background_subagent' | 'graph_runtime' | 'subagent_resume' | 'design_continuation' // client-only rendering hint
+  messageSource?: 'background_shell' | 'background_subagent' | 'graph_runtime' | 'subagent_resume' | 'design_continuation' | 'worker_update' // client-only rendering hint
   turnId?: string
   workspaceCheckpointId?: string
   attachmentIds?: string[]
@@ -340,8 +341,7 @@ export type CompactionBlock = {
   auto?: boolean
   messagesBefore?: number
   messagesAfter?: number
-  // 'window' marks a committed context-window checkpoint; it renders the fixed
-  // marker label and no generated summary, unlike summary compaction.
+  // 'window' = committed context-window checkpoint (fixed marker label, no summary).
   variant?: 'summary' | 'window'
 }
 
@@ -367,6 +367,21 @@ export type ReviewOutput = {
   overallCorrectness: 'patch is correct' | 'patch is incorrect'
   overallExplanation: string
   overallConfidenceScore: number
+}
+
+/** Deterministic handoff marker (docs/ade/08 §4); click expands the rebuilt brief. */
+export type HandoffBlock = {
+  kind: 'handoff'
+  id: string
+  turnId?: string
+  createdAt?: string
+  reason: 'harness-switch' | 'rebase' | 'worker-dispatch' | 'context-overflow'
+  handoffMode: 'full' | 'delta'
+  toHarnessName: string
+  toModel?: string
+  recentTurns: number
+  files: number
+  briefDigest: string
 }
 
 export type ReviewBlock = {
@@ -420,6 +435,7 @@ export type ChatBlock = ({
   | ToolBlock
   | CompactionBlock
   | ReviewBlock
+  | HandoffBlock
   | ChartBlock
   | PaperListBlock
   | {
@@ -675,6 +691,8 @@ export type ThreadErrorOptions = {
 export type { AgentProvider, ThreadDetail, ThreadEventSink } from './provider-types'
 export type {
   DelegatedRuntimeState,
+  HarnessRuntimeState,
+  HandoffEventPayload,
   RequestContextSnapshot,
   ThreadUsageSnapshot
 } from './thread-runtime-types'

@@ -1,5 +1,9 @@
 import type { KunSubagentsSettingsV1 } from '../../shared/app-settings'
 import { SubagentsCapabilityConfig } from '../../../kun/src/contracts/capabilities.js'
+import {
+  HarnessCredentialModeSchema,
+  HarnessIdSchema
+} from '../../../kun/src/contracts/harness.js'
 import { appendManagedLogLine } from '../logger'
 import { BUILTIN_AGENT_CATALOG } from '../../../kun/src/delegation/builtin-agent-catalog.js'
 
@@ -78,13 +82,36 @@ function stripBlankProfileFields(profile: Record<string, unknown>): Record<strin
     }
     next[key] = value
   }
+  // ADE harness binding (10 §3.1): invalid ids/modes drop individually so one
+  // malformed profile can never fail the whole roster parse.
+  if (next.harnessId !== undefined && !HarnessIdSchema.safeParse(next.harnessId).success) {
+    delete next.harnessId
+  }
+  if (
+    next.credentialMode !== undefined &&
+    !HarnessCredentialModeSchema.safeParse(next.credentialMode).success
+  ) {
+    delete next.credentialMode
+  }
+  if (
+    next.delegationNotes !== undefined &&
+    (typeof next.delegationNotes !== 'string' || next.delegationNotes.length > 1000)
+  ) {
+    delete next.delegationNotes
+  }
+  if (next.credentialMode !== undefined && next.harnessId === undefined) {
+    // A credential path only applies to a bound harness; kun keeps 'provider'.
+    if (next.credentialMode !== 'provider') delete next.credentialMode
+  }
   const hasModel = typeof next.model === 'string' && next.model.trim().length > 0
   const hasProviderId =
     typeof next.providerId === 'string' && next.providerId.trim().length > 0
-  if (hasModel !== hasProviderId) {
+  const boundHarness = typeof next.harnessId === 'string'
+  if (hasModel !== hasProviderId && !(hasModel && boundHarness)) {
     // Legacy settings allowed either field independently. Drop the ambiguous
     // override as a pair so the profile stays valid and inherits the active
-    // session's coherent model/provider selection.
+    // session's coherent model/provider selection. A bare model is valid when
+    // the profile binds a harness that owns its model list (10 §3.1).
     delete next.model
     delete next.providerId
   }

@@ -323,6 +323,9 @@ const subagentProfilePatchSchema = z
     blockedMcpServers: z.array(z.string().max(128)).max(200).optional(),
     blockedSkills: z.array(z.string().max(128)).max(200).optional(),
     reasoningEffort: modelReasoningEffortSchema.optional(),
+    harnessId: z.string().trim().min(1).max(64).optional(),
+    credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
+    delegationNotes: z.string().max(1_000).optional(),
     builtin: z.boolean().optional()
   })
   .passthrough()
@@ -586,6 +589,64 @@ export const kunRuntimePatchSchema = z.object({
   fastContext: kunFastContextPatchSchema.optional(),
   planExecution: z.object({
     useWorktreeByDefault: z.boolean().optional()
+  }).strict().optional(),
+  harnesses: z.object({
+    disabledIds: z.array(z.string().trim().min(1).max(128)).max(64).optional(),
+    binaryPaths: z.record(z.string().trim().min(1).max(128), z.string().min(1).max(4_096)).optional(),
+    custom: z.array(z.object({
+      id: z.string().trim().min(1).max(128),
+      displayName: z.string().trim().min(1).max(128).optional(),
+      command: z.string().trim().min(1).max(4_096),
+      args: z.array(z.string().max(1_024)).max(32).optional(),
+      env: z.record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024)).optional()
+    }).strict()).max(32).optional(),
+    defaultPermissionMode: z.record(z.string().trim().min(1).max(128), z.string().min(1).max(64)).optional(),
+    defaultHarnessId: z.string().trim().min(1).max(128).optional(),
+    agentOrder: z.array(z.string().trim().min(1).max(64)).max(16).optional()
+  }).strict().optional(),
+  ade: z.object({
+    enabled: z.boolean().optional(),
+    harnessRouter: z.boolean().optional(),
+    deterministicHandoff: z.boolean().optional(),
+    managerModel: z.object({
+      providerId: z.string().trim().min(1).max(128).optional(),
+      model: z.string().trim().min(1).max(512).optional()
+    }).strict().optional(),
+    managerMayApprove: z.boolean().optional(),
+    allowUnattendedFullAccess: z.boolean().optional(),
+    limits: z.object({
+      softWorkers: z.number().int().min(1).max(16).optional(),
+      hardWorkers: z.number().int().min(1).max(32).optional()
+    }).strict().optional(),
+    budget: z.object({
+      softTokens: z.number().int().positive().optional(),
+      hardTokens: z.number().int().positive().optional()
+    }).strict().nullable().optional(),
+    hibernation: z.object({
+      enabled: z.boolean().optional(),
+      idleMinutes: z.number().int().min(1).max(1_440).optional()
+    }).strict().optional(),
+    stall: z.object({
+      structuredMinutes: z.number().int().min(1).max(240).optional(),
+      terminalMinutes: z.number().int().min(1).max(480).optional()
+    }).strict().optional(),
+    notifications: z.object({
+      waiting: z.boolean().optional(),
+      failed: z.boolean().optional(),
+      done: z.boolean().optional(),
+      stalled: z.boolean().optional(),
+      sound: z.boolean().optional(),
+      keepAwake: z.boolean().optional()
+    }).strict().optional()
+  }).strict().optional(),
+  worktrees: z.object({
+    sharedPaths: z.record(
+      z.string().trim().min(1).max(4_096),
+      z.array(z.object({
+        path: z.string().trim().min(1).max(1_024),
+        mode: z.enum(['symlink', 'clone', 'copy']).optional()
+      }).strict()).max(64)
+    ).optional()
   }).strict().optional(),
   subagents: subagentsPatchSchema.optional(),
   lab: kunLabPatchSchema.optional()

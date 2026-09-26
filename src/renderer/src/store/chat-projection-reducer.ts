@@ -142,6 +142,16 @@ export function reduceChatProjection(
             event.turnId
           )
         : state.threads
+      // ADE inventory is a separate projection of the same events.
+      const statusAdeThreads = !backgroundNotice && event.turnId && state.activeThreadId
+        ? updateProjectedThreadStatus(
+            state.adeThreads ?? [],
+            state.activeThreadId,
+            'running',
+            'running',
+            event.turnId
+          )
+        : state.adeThreads
       const observedSeq = action.seq
       const threads = typeof observedSeq === 'number' && state.activeThreadId
         ? statusThreads.map((thread) =>
@@ -151,6 +161,14 @@ export function reduceChatProjection(
               : thread
           )
         : statusThreads
+      const adeThreads = typeof observedSeq === 'number' && state.activeThreadId
+        ? (statusAdeThreads ?? []).map((thread) =>
+            thread.id === state.activeThreadId &&
+            (thread.latestSeq === undefined || thread.latestSeq < observedSeq)
+              ? { ...thread, latestSeq: observedSeq }
+              : thread
+          )
+        : statusAdeThreads
       const blocks = upsertUserBlock(reconciledBlocks, event)
       const queuedMessages = consumeQueuedMessagesStartedByRuntime(state.queuedMessages, {
         turnId: event.turnId ?? state.currentTurnId,
@@ -176,6 +194,7 @@ export function reduceChatProjection(
               [event.itemId]: state.turnStartedAtByUserId[event.itemId] ?? startedAt
             },
         ...(threads !== state.threads ? { threads } : {}),
+        ...(adeThreads !== state.adeThreads ? { adeThreads } : {}),
         ...(queuedMessages !== state.queuedMessages && queuedMessages !== undefined
           ? { queuedMessages }
           : {}),

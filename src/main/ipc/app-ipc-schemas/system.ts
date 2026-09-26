@@ -121,6 +121,7 @@ export const notificationPayloadSchema = z
     roomId: optionalTrimmedString(MAX_ID_LENGTH),
     threadId: optionalTrimmedString(MAX_ID_LENGTH),
     source: z.enum(['main-agent', 'subagent']),
+    category: z.enum(['waiting', 'failed', 'done', 'stalled']).optional(),
     title: trimmedString(MAX_NOTIFICATION_TITLE_LENGTH),
     body: trimmedString(MAX_NOTIFICATION_BODY_LENGTH)
   })
@@ -270,7 +271,22 @@ export const terminalCreatePayloadSchema = z
     sessionId: trimmedString(TERMINAL_MAX_SESSION_ID_LENGTH),
     cwd: optionalTrimmedString(TERMINAL_MAX_CWD_LENGTH),
     cols: z.number().int().min(1).max(TERMINAL_MAX_COLS).optional(),
-    rows: z.number().int().min(1).max(TERMINAL_MAX_ROWS).optional()
+    rows: z.number().int().min(1).max(TERMINAL_MAX_ROWS).optional(),
+    /**
+     * ADE terminal agent (docs/ade/05 §6.1): registers an execution unit in
+     * kun, injects callback tokens into the PTY env, and reports exit.
+     */
+    agent: z
+      .object({
+        harnessId: trimmedString(128),
+        title: trimmedString(200),
+        task: z.string().max(8_192).optional(),
+        taskWorkspaceId: trimmedString(256).optional(),
+        parentThreadId: trimmedString(256).optional(),
+        workspaceKind: z.enum(['worktree', 'local', 'directory']).optional()
+      })
+      .strict()
+      .optional()
   })
   .strict()
 

@@ -23,6 +23,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Workflow,
   Wrench
 } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
@@ -30,6 +31,7 @@ import {
   SettingsTabs
 } from './settings-controls'
 import { AgentsAssistantSettingsPanel } from './settings-section-agents-assistant'
+import { AgentsHarnessesSettingsPanel } from './settings-section-agents-harnesses'
 import { AgentsPermissionsSettingsPanel } from './settings-section-agents-permissions'
 import { AgentsProjectSettingsPanel } from './settings-section-agents-project'
 import { AgentsRuntimeSettingsPanel } from './settings-section-agents-runtime'
@@ -53,6 +55,7 @@ type AgentsSettingsPanel =
   | 'tools'
   | 'project'
   | 'runtime'
+  | 'harnesses'
 type PermissionsSettingsPanel = 'policy' | 'quality'
 type LaboratorySettingsPanel = 'computer' | 'browser' | 'graph' | 'explore' | 'ppt'
 
@@ -488,7 +491,8 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                   { id: 'skills', label: t('agentsQuickSkill'), icon: Sparkles },
                   { id: 'tools', label: t('agentsQuickMcp'), icon: Wrench },
                   { id: 'project', label: t('projectConfigTitle'), icon: FolderOpen },
-                  { id: 'runtime', label: t('kunAdvanced'), icon: Settings }
+                  { id: 'runtime', label: t('kunAdvanced'), icon: Settings },
+                  { id: 'harnesses', label: t('adeSettings.harnessesTitle'), icon: Workflow }
                 ]}
                 value={activePanel}
                 onChange={setActivePanel}
@@ -499,6 +503,7 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
       <AgentsProjectSettingsPanel view={view} />
       <AgentsToolsSettingsPanels view={view} />
       <AgentsRuntimeSettingsPanel view={view} />
+      <AgentsHarnessesSettingsPanel view={view} />
             </>
   )
 }

@@ -192,8 +192,10 @@ export function createThreadCreationActions(
       const settings = await rendererRuntimeClient.getSettings()
       const runtime = getKunRuntimeSettings(settings)
       const activeThread = get().activeThreadId
-        ? get().threads.find((thread) => thread.id === get().activeThreadId)
+        ? get().threads.find((thread) => thread.id === get().activeThreadId) ??
+          (get().adeThreads ?? []).find((thread) => thread.id === get().activeThreadId)
         : null
+      const isAdeThread = options.workspaceMode === 'ade'
       const requestedAgentSurface = options.conversation ? 'code' : options.agentSurface ?? 'code'
       const pickedAgentId = options.agentId?.trim() || get().composerAgentId?.trim() || ''
       const personaProfile = pickedAgentId
@@ -271,15 +273,19 @@ export function createThreadCreationActions(
       }
       if (!activationAllowed()) return null
       // Creating a thread here is an explicit re-add for a removed project.
-      const restoredRegistry = removedRegistryAfterRestore(workspaceRoot, get().removedCodeWorkspaces)
-      const codeWorkspaceRoots = rememberRootForRestore(
-        codeRootsAfterRemoval(get().codeWorkspaceRoots, restoredRegistry),
-        workspaceRoot
-      )
-      set({ codeWorkspaceRoots, removedCodeWorkspaces: restoredRegistry })
+      // ADE threads do not enter Code's project/workspace bookkeeping.
+      if (!isAdeThread) {
+        const restoredRegistry = removedRegistryAfterRestore(workspaceRoot, get().removedCodeWorkspaces)
+        const codeWorkspaceRoots = rememberRootForRestore(
+          codeRootsAfterRemoval(get().codeWorkspaceRoots, restoredRegistry),
+          workspaceRoot
+        )
+        set({ codeWorkspaceRoots, removedCodeWorkspaces: restoredRegistry })
+      }
       // Worktree pool mode always needs a fresh thread bound to a fresh pool
       // slot, so never reuse an existing main-workspace thread in that case.
-      const reusableThreadId = options.forceNew || options.useWorktreePool || personaProfile
+      // ADE 不复用 Code 线程:复用池只扫 Code 清单,跨模式必须新建。
+      const reusableThreadId = isAdeThread || options.forceNew || options.useWorktreePool || personaProfile
         ? null
         : await findReusableEmptyThreadId(
             get(),
@@ -356,6 +362,7 @@ export function createThreadCreationActions(
         title: getDefaultThreadTitle(),
         mode: 'agent',
         agentSurface: requestedAgentSurface,
+        ...(isAdeThread ? { workspaceMode: 'ade' as const } : {}),
         ...(initialProviderId ? { providerId: initialProviderId } : {}),
         ...(initialModel ? { model: initialModel } : {}),
         ...(personaProfile ? {
@@ -378,11 +385,19 @@ export function createThreadCreationActions(
       set((s) => ({
         ...(activate ? { activeThreadId: t.id } : {}),
         ...(pickedAgentId && !options.agentId ? { composerAgentId: '' } : {}),
-        codeWorkspaceRoots: rememberCodeWorkspaceRoots(
-          s.codeWorkspaceRoots,
-          [acquiredWorktree?.projectPath ?? workspaceRoot]
-        ),
-        threads: s.threads.some((thread) => thread.id === t.id) ? s.threads : [t, ...s.threads]
+        ...(isAdeThread
+          ? {
+              adeThreads: (s.adeThreads ?? []).some((thread) => thread.id === t.id)
+                ? s.adeThreads
+                : [t, ...(s.adeThreads ?? [])]
+            }
+          : {
+              codeWorkspaceRoots: rememberCodeWorkspaceRoots(
+                s.codeWorkspaceRoots,
+                [acquiredWorktree?.projectPath ?? workspaceRoot]
+              ),
+              threads: s.threads.some((thread) => thread.id === t.id) ? s.threads : [t, ...s.threads]
+            })
       }))
       if (activate) await get().selectThread(t.id)
       if (acquiredWorktree) {
@@ -395,7 +410,9 @@ export function createThreadCreationActions(
           })
         )
       }
-      if (activate) await get().refreshThreads()
+      if (activate) {
+        await (isAdeThread ? get().refreshAdeThreads() : get().refreshThreads())
+      }
       return t.id
     } catch (e) {
       set({

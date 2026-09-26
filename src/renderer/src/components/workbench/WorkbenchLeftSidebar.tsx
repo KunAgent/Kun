@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { SettingsRouteSection } from '../../store/chat-store'
 import type { ClawInstallTarget } from '../chat/SidebarClawDialogHelpers'
 import { Sidebar } from '../chat/Sidebar'
+import { AdeSidebar } from '../ade/AdeSidebar'
 import { WriteSidebar } from '../write/WriteSidebar'
 import { PaperSidebar } from '../paper/PaperSidebar'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
@@ -19,8 +20,10 @@ export type WorkbenchLeftSidebarProps = {
   width: number
   route: string
   codeThreads: CodeSidebarProps['threads']
+  /** ADE inventory is fully separate from the Code thread list. */
+  adeThreads: CodeSidebarProps['threads']
   activeThreadId: CodeSidebarProps['activeThreadId']
-  sidebarView: CodeSidebarProps['activeView']
+  sidebarView: CodeSidebarProps['activeView'] | 'ade'
   connectPhoneSidebarOpen: boolean
   connectPhoneInitialTarget?: ClawInstallTarget
   extensionsActive: boolean
@@ -47,6 +50,8 @@ export type WorkbenchLeftSidebarProps = {
   onToggleTheme: CodeSidebarProps['onToggleTheme']
   onToggleConnectPhone: CodeSidebarProps['onToggleConnectPhone']
   onCodeOpen: CodeSidebarProps['onCodeOpen']
+  onAdeOpen: () => void
+  onNewAdeChat: () => void
   onWriteOpen: CodeSidebarProps['onWriteOpen']
   onScheduleOpen: CodeSidebarProps['onScheduleOpen']
   onBoardOpen?: CodeSidebarProps['onBoardOpen']
@@ -66,6 +71,7 @@ export function WorkbenchLeftSidebar({
   width,
   route,
   codeThreads,
+  adeThreads,
   activeThreadId,
   sidebarView,
   connectPhoneSidebarOpen,
@@ -94,6 +100,8 @@ export function WorkbenchLeftSidebar({
   onToggleTheme,
   onToggleConnectPhone,
   onCodeOpen,
+  onAdeOpen,
+  onNewAdeChat,
   onWriteOpen,
   onScheduleOpen,
   onBoardOpen,
@@ -126,6 +134,29 @@ export function WorkbenchLeftSidebar({
           workspaceRoot={workspaceRoot}
           onClose={wrapCloseOpt(onCloseExtensionView)}
         />
+      ) : normalizedRoute === 'ade' ? (
+        <AdeSidebar
+          threads={adeThreads}
+          activeThreadId={activeThreadId}
+          connectPhoneSidebarOpen={connectPhoneSidebarOpen}
+          runtimeReady={runtimeReady}
+          showArchivedThreads={showArchivedThreads}
+          focusModeEnabled={focusModeEnabled}
+          onFocusModeChange={onFocusModeChange}
+          onSelectThread={wrapClose(onSelectThread)}
+          onRenameThread={onRenameThread}
+          onPinThread={onPinThread}
+          onArchiveThread={onArchiveThread}
+          onDeleteThread={onDeleteThread}
+          onRestoreThread={onRestoreThread}
+          onNewChat={wrapClose(onNewAdeChat)}
+          onOpenSettings={wrapClose(onOpenSettings)}
+          onToggleTheme={onToggleTheme}
+          onToggleConnectPhone={onToggleConnectPhone}
+          onCodeOpen={wrapClose(onCodeOpen)}
+          onWriteOpen={wrapClose(onWriteOpen)}
+          onAdeOpen={wrapClose(onAdeOpen)}
+        />
       ) : normalizedRoute === 'write' ? (
         <Suspense fallback={<SidebarFallback />}>
           {workSurface === 'papers' ? (
@@ -156,7 +187,7 @@ export function WorkbenchLeftSidebar({
         <Sidebar
           threads={codeThreads}
           activeThreadId={activeThreadId}
-          activeView={sidebarView}
+          activeView={sidebarView === 'ade' ? 'chat' : sidebarView}
           connectPhoneSidebarOpen={connectPhoneSidebarOpen}
           connectPhoneInitialTarget={connectPhoneInitialTarget}
           pluginsActive={route === 'plugins'}

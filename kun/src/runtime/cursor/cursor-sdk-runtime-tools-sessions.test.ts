@@ -591,10 +591,10 @@ describe('CursorSdkRuntime', () => {
     )).resolves.toBe('completed')
 
     expect(h.resumedAgentIds).toEqual([])
-    expect(String(h.sentMessages[0])).toContain('<prior_conversation>')
+    expect(String(h.sentMessages[0])).toContain('<kun_handoff')
     expect(String(h.sentMessages[0])).toContain('portable context before the goal')
     expect(String(h.sentMessages[0])).toContain(
-      '[active goal] Finish the migration before answering anything else.'
+      'Finish the migration before answering anything else.'
     )
   })
 

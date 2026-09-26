@@ -391,8 +391,8 @@ custom agent 都禁用 Skills 自动激活。child record 持久化 route method
 
 Renderer 只应展示 Kun。需要删除或保持删除的 UI 面包括：
 
-- Agent 切换器：`AgentSwitcher` 不再出现，`AGENT_CATALOG` 只有
-  `kun`。
+- 不恢复切换运行时的 Agent 切换器；harness 选择器选择的是 turn 引擎
+  （见 `docs/ade/01-harness-routing.md`）。
 - 顶部连接状态条和 runtime 诊断按钮：不再把运行时检测作为用户入口。
 - Runtime insights/right panel：右侧面板可以展示只读 Kun 用量与 provider
   订阅额度，但不恢复 runtime 诊断、切换或控制台。
@@ -400,7 +400,8 @@ Renderer 只应展示 Kun。需要删除或保持删除的 UI 面包括：
   `GET /v1/usage` 生成用量报告，不代表可切换或可控制的运行时。
 - 设置页 provider selector：Settings -> Agents 直接展示 Kun 配置，
   包含 binary path、port、autoStart、API key、base URL、runtime token、
-  data dir、model、approval policy、sandbox mode、insecure。
+  data dir、model、approval policy、sandbox mode、insecure。Agents 分组
+  可列出 harness（检测、登录、默认权限），它们都在 Kun 运行时内执行。
 - 旧绘画/设计 starter：不恢复独立 Design 工作区入口。核心工作区入口只有
   Code、Work；Design 是 Code 工作台内的任务类型并使用右侧白板，连接手机和自动化仍走各自入口。
 
@@ -579,6 +580,27 @@ agent。
 历史独立 TUI 包及其旧更新清单不在本次变更中删除。旧独立客户端不会收到 0.3.8
 独立包；需要安装桌面应用才能获得后续版本。TUI 的只读用量、provider 额度和上下文
 命令继续复用已有协议，不增加 GUI Runtime 诊断或控制入口。
+
+## ADE：总管与 worker
+
+Kun 的 Code 模式可以升级为 ADE（Agentic Development Environment）：一对一
+会话可以跑在 Kun 原生 loop 或某个外部 harness 上；总管（Kun 原生 loop）可以
+拆任务、派 worker、盯进度、验收、汇报。完整设计与实施拆解见
+[`docs/ade/README.md`](./ade/README.md)。不变量：
+
+- 外部 agent 只能以 `kun serve` 内部的 `DelegatedTurnRuntime` 身份进入；
+  GUI 永远只和 `kun serve` 通信。唯一例外是终端 agent：PTY 由主进程持有，
+  但状态必须经 Kun 的 ActivityStore 上报。
+- 每个线程/回合的 harness 在准入时冻结；没有 `harnessId` 的历史线程按
+  provider kind 推断，行为与引入 harness 之前一致。
+- worker 的有效权限是总管快照与所选档位的交集，只降不升；无人值守路径不
+  升级权限。
+- 任务工作区（worktree）由宿主创建、采集与合入；合入绝不改动用户源
+  checkout 里的未提交改动。
+- 交接上下文由代码确定性生成（`kun_handoff` 简报），不靠模型摘要；
+  `docs/AGENTS.md` 的不可变前缀不因 ADE 改变。
+- `agents.kun.ade.*` 是唯一设置入口；`enabled` 关闭时所有 ADE 界面不出现，
+  `harnessRouter` 关闭时回到旧的 provider 推断路径。
 
 ## 验证清单
 

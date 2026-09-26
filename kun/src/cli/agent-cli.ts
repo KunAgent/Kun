@@ -46,6 +46,8 @@ Commands:
   runtime <command>          Inspect, stop, or restart the shared runtime
   update [--check|--yes]     Check or update a stable standalone TUI archive
   exec [options] <tool>      List or invoke tools directly
+  mcp-bridge --token-env <V> Forward stdio JSON-RPC to a Kun server's /mcp/kun
+  worker <subcommand>        Worker callbacks (progress/ask/result/context/hook)
   extension <command>        Create, validate, pack, install, and manage extensions
 
 Common options:
@@ -72,7 +74,7 @@ Exec options:
   --args <json>              JSON object passed to the selected tool
 `
 
-export type KunCliCommand = 'serve' | 'run' | 'chat' | 'tui' | 'exec' | 'runtime' | 'update' | 'version' | 'help'
+export type KunCliCommand = 'serve' | 'run' | 'chat' | 'tui' | 'exec' | 'runtime' | 'update' | 'mcp-bridge' | 'version' | 'help'
 
 export function splitKunCliCommand(argv: readonly string[]): {
   command: KunCliCommand
@@ -94,7 +96,8 @@ export function splitKunCliCommand(argv: readonly string[]): {
     first === 'tui' ||
     first === 'exec' ||
     first === 'runtime' ||
-    first === 'update'
+    first === 'update' ||
+    first === 'mcp-bridge'
   ) {
     return { command: first, args: [...argv.slice(1)] }
   }
@@ -105,7 +108,7 @@ export function splitKunCliCommand(argv: readonly string[]): {
 }
 
 export async function runAgentCommand(
-  command: Exclude<KunCliCommand, 'serve' | 'runtime' | 'update' | 'version' | 'help'>,
+  command: Exclude<KunCliCommand, 'serve' | 'runtime' | 'update' | 'mcp-bridge' | 'version' | 'help'>,
   argv: readonly string[],
   io: CliIo
 ): Promise<number> {

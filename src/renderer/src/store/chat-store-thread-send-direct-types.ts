@@ -33,6 +33,7 @@ export type PreparedThreadSend = {
   attachments: NonNullable<QueuedUserMessage['attachments']>
   fileReferences: NonNullable<QueuedUserMessage['fileReferences']>
   composerContexts: ComposerContextAttachment[]
+  ackNoticeIds: string[] | undefined
   activeThreadId: string | null
   displayText: string
   userDisplayText: string | undefined
@@ -42,6 +43,8 @@ export type PreparedThreadSend = {
   composerModel: string
   composerProviderId: string
   composerAccountId: string
+  composerHarnessId: string
+  composerCredentialMode: string
   reasoningEffort: string | undefined
   serviceTier: QueuedUserMessage['serviceTier']
   guiDesignCanvas: boolean

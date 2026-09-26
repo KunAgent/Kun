@@ -10,6 +10,7 @@ import {
   saveThreadRightPanelExpansionRegistry
 } from '../lib/thread-right-panel-expansion'
 import { WORKSPACE_FILE_PREVIEW_EVENT, type WorkspaceFilePreviewDetail } from '../lib/workspace-file-preview'
+import { TERMINAL_OPEN_AT_EVENT } from './terminal/terminal-open'
 import { isNarrowViewportNow, isRemoteWeb } from '../lib/remote-mobile'
 import {
   CODE_CANVAS_OPEN_REQUEST_EVENT,
@@ -559,6 +560,15 @@ export function useWorkbenchLayout({
   const toggleTerminal = (): void => {
     setTerminalOpen((current) => !current)
   }
+
+  // "Open this worktree in a terminal" requests come from other surfaces
+  // (e.g. the review result dialog); they only open the panel — the mounted
+  // TerminalPanel drains the pending cwd itself (terminal-open.ts).
+  useEffect(() => {
+    const onOpenAt = (): void => setTerminalOpen(true)
+    window.addEventListener(TERMINAL_OPEN_AT_EVENT, onOpenAt)
+    return () => window.removeEventListener(TERMINAL_OPEN_AT_EVENT, onOpenAt)
+  }, [])
 
   return {
     beginLeftResize,

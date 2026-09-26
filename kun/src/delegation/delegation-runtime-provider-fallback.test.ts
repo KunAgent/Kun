@@ -161,14 +161,14 @@ describe('automatic child provider fallback', () => {
     const nativeRun = vi.fn()
     const executor = createChildAgentExecutor({ model,
       toolHost: new LocalToolHost({ tools: [] }), prefix: createImmutablePrefix({ systemPrompt: 'test' }), defaultModel: 'child-model',
-      createDelegatedRuntime: ({ turns, threadStore }) => ({
-        handlesProvider: (id) => id === 'parent-provider', capabilities: () => undefined,
-        async runTurn(threadId, turnId) {
+      createDelegatedRuntime: ({ turns, threadStore }) => ({ delegated: {
+        handlesProvider: (id: string | undefined) => id === 'parent-provider', capabilities: () => undefined,
+        async runTurn(threadId: string, turnId: string) {
           nativeRun((await threadStore.get(threadId))?.turns.at(-1))
           await turns.finishTurn({ threadId, turnId, status: 'completed' })
           return 'completed'
         }
-      })
+      } })
     })
     const { runtime } = await setup(executor)
     const record = await runtime.runChild(common())

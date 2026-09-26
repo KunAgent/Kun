@@ -96,6 +96,9 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
 4. Map the endpoint/event in `src/renderer/src/agent/kun-runtime.ts` and
    `src/renderer/src/agent/kun-mapper.ts`.
 5. Add settings only under `agents.kun`.
+6. New agent engines are added as harness definitions (`kun/src/harness/`) plus, when
+   needed, a `DelegatedTurnRuntime` implementation. Prefer the generic ACP runtime;
+   a dedicated adapter needs a capability that ACP cannot provide.
 
 ## Agent-Managed Plan Worktrees
 
@@ -155,13 +158,21 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
 
 ## Forbidden Paths
 
-- No `AgentSwitcher`.
+- No `AgentSwitcher` that switches the host runtime. Choosing a **harness** for a
+  thread or turn (Kun native, Claude Code, Codex, an ACP agent, ...) is not a
+  runtime switch: every harness runs inside `kun serve` as a `DelegatedTurnRuntime`,
+  and the GUI still talks only to `kun serve`.
 - No `ConnectionStatusBar`.
 - No `RuntimeDiagnosticsDialog` or runtime self-check UI.
 - No CodeWhale/Reasonix adapter, process manager, RPC bridge, updater, or
   importer. (This bans the legacy external-tool/diagnostics importer; it does
   not cover the `/import` command that brings other coding agents' instruction
   files into Kun's own `AGENTS.md`.)
+  External agent processes may only be started by `kun serve` through the harness
+  runtimes (`kun/src/runtime/`), using the owned-process launcher, and must be
+  reachable only through Kun's HTTP/SSE boundary. The GUI main process may start a
+  terminal agent in a PTY only after registering it with `kun serve`, and it must
+  report that agent's state only through Kun's activity store.
 - No legacy drawing/painting starter card outside the current Design mode.
 - No `/usage` or `/runtime` slash command that opens a runtime control panel.
   The standalone TUI may expose `/usage` as a read-only report backed by

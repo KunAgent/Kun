@@ -10,6 +10,7 @@ import {
   delegatedCapabilityFingerprint,
   delegatedCredentialIdentity,
   delegatedHistoryDigest,
+  delegatedRouteKey,
   priorItemsForDelegatedTurn,
   type DelegatedSessionRoute
 } from './delegated-session-binding.js'
@@ -314,7 +315,7 @@ describe('DelegatedSessionCoordinator', () => {
       lastCommittedTurnId: 'turn_1',
       nativeSessionId: 'agent_1'
     })
-    const stateDir = store.providerStateDir('cursor-sdk', 'thread_1')
+    const stateDir = store.providerStateDir('cursor-sdk', 'thread_1', delegatedRouteKey(route()))
     await mkdir(stateDir, { recursive: true })
     const checkpoint = join(stateDir, 'checkpoint')
     await writeFile(checkpoint, 'stale')
@@ -334,13 +335,14 @@ describe('DelegatedSessionCoordinator', () => {
     await expect(access(checkpoint)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
-  test('clears both old and new provider state after a provider switch', async () => {
+  test('parks the displaced provider state on a provider switch', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-delegated-'))
     const store = new FileDelegatedSessionBindingStore(root)
     const coordinator = new DelegatedSessionCoordinator(store)
+    const routeA = route({ providerKind: 'agent-sdk' })
     const prepared = await coordinator.prepare({
       threadId: 'thread_1',
-      route: route({ providerKind: 'agent-sdk' }),
+      route: routeA,
       priorItems: []
     })
     await coordinator.commit({
@@ -349,27 +351,24 @@ describe('DelegatedSessionCoordinator', () => {
       lastCommittedTurnId: 'turn_1',
       nativeSessionId: 'session_1'
     })
-    const oldCheckpoint = join(
-      store.providerStateDir('agent-sdk', 'thread_1'),
-      'checkpoint'
-    )
-    const newCheckpoint = join(
-      store.providerStateDir('cursor-sdk', 'thread_1'),
-      'checkpoint'
-    )
-    await mkdir(join(oldCheckpoint, '..'), { recursive: true })
-    await mkdir(join(newCheckpoint, '..'), { recursive: true })
-    await writeFile(oldCheckpoint, 'old')
-    await writeFile(newCheckpoint, 'new')
+    const parkedDir = store.providerStateDir('agent-sdk', 'thread_1', delegatedRouteKey(routeA))
+    const parkedCheckpoint = join(parkedDir, 'checkpoint')
+    await mkdir(parkedDir, { recursive: true })
+    await writeFile(parkedCheckpoint, 'old')
 
-    await coordinator.prepare({
+    const next = await coordinator.prepare({
       threadId: 'thread_1',
       route: route({ providerKind: 'cursor-sdk' }),
       priorItems: [user('turn_1', 'first')]
     })
 
-    await expect(access(oldCheckpoint)).rejects.toMatchObject({ code: 'ENOENT' })
-    await expect(access(newCheckpoint)).rejects.toMatchObject({ code: 'ENOENT' })
+    // The displaced agent-sdk session is parked with its provider state intact
+    // so a later A -> B -> A switch can resume it natively.
+    expect(next).toMatchObject({ resumed: false, rebaseReason: 'route_changed' })
+    await expect(access(parkedCheckpoint)).resolves.toBeUndefined()
+    expect((await store.load('thread_1'))?.parked).toMatchObject([
+      { providerKind: 'agent-sdk', nativeSessionId: 'session_1' }
+    ])
   })
 
   test('removes malformed records and writes complete atomic JSON', async () => {
@@ -485,7 +484,7 @@ describe('DelegatedSessionCoordinator', () => {
       lastCommittedTurnId: 'turn_1',
       nativeSessionId: 'agent_1'
     })
-    const stateDir = store.providerStateDir('cursor-sdk', 'thread_source')
+    const stateDir = store.providerStateDir('cursor-sdk', 'thread_source', delegatedRouteKey(route()))
     await mkdir(stateDir, { recursive: true })
     await writeFile(join(stateDir, 'checkpoint'), 'opaque')
 

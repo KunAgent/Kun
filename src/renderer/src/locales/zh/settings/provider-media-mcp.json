@@ -557,7 +557,7 @@
   "projectConfigEditor": "项目 JSON",
   "projectConfigEditorDesc": "版本 1 JSON。技能目录和 stdio cwd 使用工作区相对路径，且真实路径必须位于工作区内。",
   "projectConfigActions": "项目配置操作",
-  "projectConfigActionsDesc": "保存会校验并重新应用文件，但绝不会自动授予新的 MCP 信任；请另行审阅和批准。",
+  "projectConfigActionsDesc": "保存会校验并重新应用文件，但绝不会自动授予新的 MCP 信任；请另行审阅和批准。批准范围同时包括 worktree 安装/初始化命令。",
   "projectConfigSave": "保存项目配置",
   "projectConfigRefresh": "刷新",
   "projectConfigOpenDir": "打开 .kun 目录",

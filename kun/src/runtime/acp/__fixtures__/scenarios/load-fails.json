@@ -1,0 +1,20 @@
+{
+  "sessionId": "sess-load-fails",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": {
+      "loadSession": true,
+      "promptCapabilities": {}
+    },
+    "authMethods": []
+  },
+  "loadSession": { "error": { "code": -32002, "message": "session not found" } },
+  "turns": [
+    {
+      "steps": [
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "fresh session reply" } } }
+      ],
+      "stopReason": "end_turn"
+    }
+  ]
+}

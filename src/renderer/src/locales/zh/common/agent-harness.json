@@ -1,0 +1,16 @@
+{
+  "agent": {
+    "harness": {
+      "reason": {
+        "upstream": "上游 Harness 不支持",
+        "notImplemented": "该 Harness 尚未实现此能力",
+        "platform": "当前平台不支持"
+      },
+      "steerUnavailable": "当前 Agent 无法在回合运行中接收引导",
+      "planModeUnavailable": "当前 Agent 不支持计划模式",
+      "rewindUnavailable": "当前 Agent 不支持回退",
+      "effortUnavailable": "当前 Agent 不支持调整思考强度",
+      "approveForMeUnavailable": "当前 Agent 无法代为审批，请手动批准"
+    }
+  }
+}

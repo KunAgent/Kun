@@ -16,6 +16,7 @@ import {
 } from '../server/event-loop-monitor.js'
 import { installServeCrashHandlers } from './serve-crash-handlers.js'
 import { runExtensionCommand } from './extension-cli.js'
+import { runMcpBridgeCommand } from './mcp-bridge-cli.js'
 import { inspectSharedRuntime, resolveSharedRuntime, runRuntimeCommand } from './shared-runtime.js'
 import { withRuntimeStartLock } from '../server/runtime-discovery.js'
 import { RuntimeBuildIdSchema } from '../contracts/runtime-info.js'
@@ -54,6 +55,7 @@ import { createOwnedServiceManagerSession } from '../manager/owned-service-manag
 import { bindRuntimeManagerDataPlane, connectInjectedServiceManager } from '../manager/owned-manager-binding.js'
 import { shutdownOwnedProcesses } from '../process/owned-process.js'
 import { runManagerRetireCommand } from './manager-retire.js'
+import { runWorkerCallbackCommand } from './worker-callback-cli.js'
 
 export const KUN_READY_PREFIX = 'KUN_READY '
 // Replacement clients wait 15 seconds before escalating to a hard kill. Keep
@@ -431,6 +433,14 @@ export async function main(argv: readonly string[]): Promise<number> {
       cwd: () => process.cwd()
     })
   }
+  if (argv[0] === 'worker') {
+    return runWorkerCallbackCommand(argv.slice(1), {
+      stdin: process.stdin,
+      stdout: process.stdout,
+      stderr: process.stderr,
+      env: process.env
+    })
+  }
   const command = splitKunCliCommand(argv)
   if (command.command === 'help') {
     if (command.error) {
@@ -457,6 +467,14 @@ export async function main(argv: readonly string[]): Promise<number> {
   }
   if (command.command === 'update') {
     return runSelfUpdateCommand(command.args, {
+      stdout: process.stdout,
+      stderr: process.stderr,
+      env: process.env
+    })
+  }
+  if (command.command === 'mcp-bridge') {
+    return runMcpBridgeCommand(command.args, {
+      stdin: process.stdin,
       stdout: process.stdout,
       stderr: process.stderr,
       env: process.env

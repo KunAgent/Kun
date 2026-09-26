@@ -409,6 +409,9 @@ const api = {
     ipcRenderer.on('tray:action', wrapped)
     return () => ipcRenderer.removeListener('tray:action', wrapped)
   },
+  missionControlTogglePopout: () => ipcRenderer.invoke('mission-control:popout:toggle'),
+  missionControlOpenThread: (threadId) =>
+    ipcRenderer.invoke('mission-control:open-thread', { threadId }),
   onRuntimeStatus: (handler) => {
     const wrapped = (
       _: Electron.IpcRendererEvent,
