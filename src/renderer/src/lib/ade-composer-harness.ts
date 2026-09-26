@@ -1,6 +1,7 @@
 import type {
   AdeHarnessCommand,
   AdeHarnessCredentialMode,
+  AdeHarnessProviderModelGroup,
   AdeHarnessRow
 } from '@shared/ade-harnesses'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
@@ -21,15 +22,22 @@ export function credentialGroupKey(mode: AdeHarnessCredentialMode): string {
   return `${ADE_CREDENTIAL_GROUP_PREFIX}${mode}`
 }
 
-export function credentialModeFromGroupKey(
+/**
+ * Sentinel group keys are `ade-cred:<mode>` for native sign-in and
+ * `ade-cred:<mode>:<providerId>` for the per-provider groups provider-backed
+ * modes list. Returns the credential mode plus the addressed provider.
+ */
+export function credentialGroupFromKey(
   groupKey: string | undefined
-): AdeHarnessCredentialMode | null {
+): { mode: AdeHarnessCredentialMode; providerId?: string } | null {
   const raw = groupKey?.trim() ?? ''
   if (!raw.startsWith(ADE_CREDENTIAL_GROUP_PREFIX)) return null
-  const mode = raw.slice(ADE_CREDENTIAL_GROUP_PREFIX.length)
-  return mode === 'native-login' || mode === 'provider' || mode === 'kun-gateway'
-    ? mode
-    : null
+  const rest = raw.slice(ADE_CREDENTIAL_GROUP_PREFIX.length)
+  const sep = rest.indexOf(':')
+  const mode = (sep === -1 ? rest : rest.slice(0, sep)) as AdeHarnessCredentialMode
+  if (mode !== 'native-login' && mode !== 'provider' && mode !== 'kun-gateway') return null
+  const providerId = sep === -1 ? undefined : rest.slice(sep + 1)
+  return providerId === '' ? null : { mode, providerId }
 }
 
 /** Resolve the harness a turn on this thread would use (store → thread → kun). */
@@ -52,17 +60,21 @@ export type AdeCredentialGroupLabels = {
 }
 
 /**
- * Synthesize pick-list groups: one per credential mode the harness declares,
- * filtered to modes that can actually work. `provider`/`kun-gateway` modes
- * stay available only when a configured provider exists to route through.
+ * Synthesize pick-list groups: `native-login` lists the harness's own models;
+ * `provider`/`kun-gateway` list one group per exposable configured provider
+ * (P3-05) so a picked entry pins both the credential mode and the provider —
+ * the raw model id plus `providerId` resolves to the `kun/<provider>/<model>`
+ * route in `parseGatewayModelId` semantics. Provider modes stay hidden when
+ * no provider is configured or none are exposable.
  */
 export function adeHarnessModelGroups(input: {
   row: AdeHarnessRow | undefined
   models: readonly string[]
+  providerGroups?: readonly AdeHarnessProviderModelGroup[]
   labels: AdeCredentialGroupLabels
   hasConfiguredProvider: boolean
 }): ModelProviderModelGroup[] {
-  const { row, models, labels, hasConfiguredProvider } = input
+  const { row, models, providerGroups = [], labels, hasConfiguredProvider } = input
   if (!row) return []
   const labelFor: Record<AdeHarnessCredentialMode, string> = {
     'native-login': labels.nativeLogin,
@@ -71,12 +83,23 @@ export function adeHarnessModelGroups(input: {
   }
   const groups: ModelProviderModelGroup[] = []
   for (const mode of row.definition.credentialModes) {
-    if (mode !== 'native-login' && !hasConfiguredProvider) continue
-    groups.push({
-      providerId: credentialGroupKey(mode),
-      label: labelFor[mode],
-      modelIds: [...models]
-    })
+    if (mode === 'native-login') {
+      groups.push({
+        providerId: credentialGroupKey(mode),
+        label: labelFor[mode],
+        modelIds: [...models]
+      })
+      continue
+    }
+    if (!hasConfiguredProvider) continue
+    for (const provider of providerGroups) {
+      if (provider.models.length === 0) continue
+      groups.push({
+        providerId: `${credentialGroupKey(mode)}:${provider.providerId}`,
+        label: `${labelFor[mode]} · ${provider.label}`,
+        modelIds: [...provider.models]
+      })
+    }
   }
   return groups
 }

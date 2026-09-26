@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type {
   AdeHarnessCommand,
+  AdeHarnessProviderModelGroup,
   AdeHarnessRow,
   AdeHarnessSessionState
 } from '@shared/ade-harnesses'
@@ -28,6 +29,16 @@ type HarnessStoreState = {
   rowsLoading: boolean
   rowsError?: string
   models: Record<string, { models: string[]; loading: boolean; error?: string }>
+  /**
+   * Provider-grouped models for `provider`/`kun-gateway` credential modes
+   * (12 §7.2): the exposable providers each harness turn could address. The
+   * two modes share one exposable set, so a single per-harness entry serves
+   * both.
+   */
+  providerGroups: Record<
+    string,
+    { groups: AdeHarnessProviderModelGroup[]; loading: boolean; error?: string }
+  >
   sessions: Record<string, HarnessSessionSurface>
 }
 
@@ -36,6 +47,7 @@ export const useHarnessStore = create<HarnessStoreState>(() => ({
   rowsLoaded: false,
   rowsLoading: false,
   models: {},
+  providerGroups: {},
   sessions: {}
 }))
 
@@ -75,6 +87,43 @@ export async function loadHarnessModels(harnessId: string, force = false): Promi
         ...state.models,
         [harnessId]: {
           models: existing?.models ?? [],
+          loading: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }))
+  }
+}
+
+/** Lazy load of the provider-grouped model catalog for provider/gateway modes. */
+export async function loadHarnessProviderGroups(
+  harnessId: string,
+  force = false
+): Promise<void> {
+  const provider = getProvider()
+  if (!provider.listHarnessModels) return
+  const existing = useHarnessStore.getState().providerGroups[harnessId]
+  if (existing?.loading || (existing && !existing.error && !force)) return
+  useHarnessStore.setState((state) => ({
+    providerGroups: {
+      ...state.providerGroups,
+      [harnessId]: { groups: existing?.groups ?? [], loading: true }
+    }
+  }))
+  try {
+    const result = await provider.listHarnessModels(harnessId, 'kun-gateway')
+    useHarnessStore.setState((state) => ({
+      providerGroups: {
+        ...state.providerGroups,
+        [harnessId]: { groups: result.groups ?? [], loading: false }
+      }
+    }))
+  } catch (error) {
+    useHarnessStore.setState((state) => ({
+      providerGroups: {
+        ...state.providerGroups,
+        [harnessId]: {
+          groups: existing?.groups ?? [],
           loading: false,
           error: error instanceof Error ? error.message : String(error)
         }

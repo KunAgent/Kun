@@ -2,6 +2,7 @@ import { jsonResponse, type JsonResponse } from '../response.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { HarnessIdSchema } from '../../contracts/harness.js'
+import { exposableProvider, providerModelIds } from './model-gateway-core.js'
 
 /**
  * `GET /v1/harnesses` — definitions plus cached detection status. Never blocks
@@ -66,6 +67,25 @@ export async function listHarnessModels(
   if (!parsedId.success) return ERRORS.validation('invalid harness id')
   const definition = harnesses.catalog.get(parsedId.data)
   if (!definition) return ERRORS.notFound(`unknown harness: ${parsedId.data}`)
+
+  const url = new URL(request.url)
+  const credentialMode = url.searchParams.get('credential_mode') ?? undefined
+
+  // `provider`/`kun-gateway` modes route through configured providers, so the
+  // picker needs them grouped — and filtered to the exposable set the grant
+  // could actually address (04 §5.5). Native modes keep the flat list below.
+  if (credentialMode === 'provider' || credentialMode === 'kun-gateway') {
+    const snapshot = await runtime.modelConnections?.snapshot().catch(() => undefined)
+    const groups = (snapshot?.providers ?? [])
+      .filter(exposableProvider)
+      .map((provider) => ({
+        providerId: provider.id,
+        label: provider.name,
+        models: providerModelIds(provider)
+      }))
+      .filter((group) => group.models.length > 0)
+    return jsonResponse({ harnessId: definition.id, credentialMode, models: [], groups })
+  }
 
   const providerModels = (kind: string | undefined): string[] => {
     const providers = runtime.providerConfigs?.() ?? {}

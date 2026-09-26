@@ -127,6 +127,19 @@ export function createAgentSdkTurnRuntimeDeps(
             'the turn has no provider/model route to address through the gateway'
           )
         }
+        // A bare model id only reaches the gateway when the resolved provider
+        // actually offers it — otherwise a stale pick like `claude-sonnet-4-6`
+        // would be addressed to DeepSeek and fail upstream as a 404.
+        if (!gatewayAddress) {
+          const offered = await deps.listProviderModels?.(gatewayProviderId)
+            .catch(() => undefined)
+          if (offered && offered.length > 0 && !offered.includes(gatewayModelId)) {
+            throw new AgentSdkGatewayUnavailableError(
+              `model "${gatewayModelId}" is not offered by provider "${gatewayProviderId}" — ` +
+                'pick a model from that provider’s gateway group or check provider settings'
+            )
+          }
+        }
         const harnessId = turn.harnessId ?? 'claude-code'
         gatewayEnv = resolveAgentSdkGatewayEnv({
           deps: {
