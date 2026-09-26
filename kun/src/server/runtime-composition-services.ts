@@ -68,6 +68,12 @@ import { createRuntimeMaintenanceSlices } from './runtime-maintenance-slices.js'
 import { ThreadStoreGuardian } from '../services/thread-store-guardian.js'
 import { ThreadSnapshotStore } from '../services/thread-snapshot-store.js'
 import { SessionGuardian } from '../services/session-guardian.js'
+import { WorkerCallbackService } from '../services/worker-callback-service.js'
+import { FileTeamStore } from '../ade/team-store.js'
+import { FileDispatchStore } from '../ade/dispatch-store.js'
+import { FileQuestionStore } from '../ade/question-store.js'
+import { FileWorkerNoticeStore } from '../ade/worker-notice-store.js'
+import { createWorkerCallbackToolProvider } from '../adapters/tool/worker-callback-tool-provider.js'
 import {
   MemoryDistillationCoordinator,
   MemoryDistillationPendingStore
@@ -435,6 +441,20 @@ export async function createRuntimeServices(
     ...(officeCliRunner ? { runner: officeCliRunner } : {})
   })
 	  const taskGraphTool = createTaskGraphTool({ rootDir: join(core.activeOptions.dataDir, 'task-graphs') })
+  const adeStores = {
+    teams: new FileTeamStore(core.activeOptions.dataDir, nowIso),
+    dispatches: new FileDispatchStore(core.activeOptions.dataDir, nowIso),
+    questions: new FileQuestionStore(core.activeOptions.dataDir, nowIso),
+    notices: new FileWorkerNoticeStore(core.activeOptions.dataDir, nowIso)
+  }
+  const workerCallbacks = new WorkerCallbackService({
+    threadStore,
+    sessionStore,
+    ...adeStores,
+    activity: core.activityStore,
+    nowIso,
+    idGenerator: () => ids.next('q')
+  })
 	  let baseToolProviders = [
     {
       id: 'builtin',
@@ -476,6 +496,7 @@ export async function createRuntimeServices(
     }),
     ...buildThreadHistoryToolProviders({ sessionStore, threadStore }),
     buildKnowledgeToolProvider(knowledgeBaseService),
+    createWorkerCallbackToolProvider(workerCallbacks),
     ...buildSkillToolProviders(skillRuntime),
     ...imageGenProviders.providers,
     ...speechGenProviders.providers,
@@ -532,6 +553,8 @@ export async function createRuntimeServices(
     officeCliProviders,
     taskGraphTool,
     childToolHost,
+    adeStores,
+    workerCallbacks,
     defaultIsAgentSdk,
     defaultIsAntigravity,
     defaultIsCursorSdk,
