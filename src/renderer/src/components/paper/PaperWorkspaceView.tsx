@@ -76,6 +76,17 @@ export function PaperWorkspaceView({
     if (!pinned) openPaperViewTab('library')
   }, [hasLibrary, openPaperViewTab])
 
+  // Paper mode never shows the docs start page: when the reader closes the
+  // last tab of a split group (typically the NOTES column), fold the group
+  // back so the remaining view takes the full width.
+  const editorLayout = useWriteWorkspaceStore((s) => s.editorLayout)
+  const closeEditorGroup = useWriteWorkspaceStore((s) => s.closeEditorGroup)
+  useEffect(() => {
+    if (editorLayout.groups.length < 2) return
+    const empty = editorLayout.groups.find((group) => group.tabs.length === 0)
+    if (empty) closeEditorGroup(empty.id)
+  }, [editorLayout, closeEditorGroup])
+
   // Register the composer bridge for sidebar/reader actions (interpret,
   // quick-ask cards, suggested prompts). Re-registered per render so `input`
   // stays fresh.

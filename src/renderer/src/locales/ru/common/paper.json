@@ -285,5 +285,18 @@
   "writePaperReaderRegionAsk": "В ассистент",
   "writePaperReaderRegionAskPrompt": "В статье \"{{title}}\" на стр. {{page}} эта область: {{comment}}",
   "writePaperReaderRegionNoImage": "(Текущая модель не читает изображения — см. текст.)",
-  "writePaperReaderCopyCitation": "Копировать цитату"
+  "writePaperReaderCopyCitation": "Копировать цитату",
+  "writePaperMetaAuthorsShort": "Авторы",
+  "writePaperMetaTagsShort": "Теги",
+  "writePaperLibraryNoMatch": "Нет статей, подходящих под фильтры.",
+  "writePaperDiscoverNav_arxiv": "arXiv сегодня",
+  "writePaperDiscoverNav_venue": "Статьи конференций",
+  "writePaperDiscoverNav_feeds": "Подписки",
+  "writePaperInfoCopied": "Скопировано: {{label}}",
+  "writePaperInfoCopyHint": "Нажмите, чтобы скопировать: {{label}}",
+  "writePaperTagRemove": "Удалить тег {{tag}}",
+  "writePaperTagAddPlaceholder": "Добавить тег…",
+  "writePaperInfoResize": "Изменить высоту панели",
+  "writePaperInfoEmpty": "Выберите статью, чтобы увидеть сведения.",
+  "writePaperInfoProgress": "Стр. {{page}}/{{total}}"
 }

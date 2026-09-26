@@ -142,7 +142,7 @@ function ImportButton({
       type="button"
       disabled={busy}
       onClick={() => void run()}
-      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-ds-border px-2 py-1 text-[11.5px] font-medium text-ds-muted transition hover:border-accent/40 hover:bg-accent/[0.06] hover:text-accent disabled:opacity-60"
+      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-ds-border px-2 py-1 text-[11.5px] font-medium text-ds-muted transition hover:border-accent-tint/40 hover:bg-accent-tint/[0.06] hover:text-accent disabled:opacity-60"
     >
       {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
       {t('writePaperImport')}
@@ -285,11 +285,11 @@ function ArxivRow({
   t: (key: string) => string
 }): ReactElement {
   return (
-    <li className="rounded-xl border border-ds-border-muted bg-ds-card/60 p-3.5 transition hover:border-ds-border hover:bg-ds-card">
+    <li className="rounded-xl border border-ds-border-muted bg-ds-card p-3.5 transition hover:border-ds-border hover:bg-ds-card">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-[13.5px] font-semibold leading-5 text-ds-ink">{item.title}</p>
-          <p className="mt-0.5 truncate text-[11.5px] text-accent/80">
+          <p className="mt-0.5 truncate text-[11.5px] text-accent-tint/80">
             {item.authors.slice(0, 4).join(', ')}
           </p>
           <p className="mt-0.5 truncate text-[10.5px] text-ds-faint">
@@ -297,7 +297,7 @@ function ArxivRow({
           </p>
         </div>
         {item.relevance > 0 ? (
-          <span className="shrink-0 rounded-full bg-accent/[0.08] px-1.5 py-px text-[10px] text-accent">
+          <span className="shrink-0 rounded-full bg-accent-tint/[0.08] px-1.5 py-px text-[10px] text-accent">
             {Math.round(item.relevance * 100)}%
           </span>
         ) : null}
@@ -305,7 +305,7 @@ function ArxivRow({
       {item.abstract ? <ExpandableAbstract text={item.abstract} /> : null}
       <div className="mt-2 flex items-center gap-1.5">
         <a
-          className="inline-flex items-center gap-1 rounded-full border border-ds-border px-2 py-0.5 text-[10.5px] font-medium text-ds-muted transition hover:border-accent/40 hover:text-accent"
+          className="inline-flex items-center gap-1 rounded-full border border-ds-border px-2 py-0.5 text-[10.5px] font-medium text-ds-muted transition hover:border-accent-tint/40 hover:text-accent"
           href="#"
           onClick={(event) => {
             event.preventDefault()
@@ -316,7 +316,7 @@ function ArxivRow({
           arXiv
         </a>
         <a
-          className="inline-flex items-center gap-1 rounded-full border border-ds-border px-2 py-0.5 text-[10.5px] font-medium text-ds-muted transition hover:border-accent/40 hover:text-accent"
+          className="inline-flex items-center gap-1 rounded-full border border-ds-border px-2 py-0.5 text-[10.5px] font-medium text-ds-muted transition hover:border-accent-tint/40 hover:text-accent"
           href="#"
           onClick={(event) => {
             event.preventDefault()
@@ -413,13 +413,13 @@ function FeedsPane({
           onKeyDown={(event) => { if (event.key === 'Enter') addFeed() }}
           placeholder={t('writePaperDiscoverAddFeed')}
           spellCheck={false}
-          className="h-7 min-w-0 flex-1 rounded-lg border border-ds-border bg-ds-main/65 px-2 text-[12px] text-ds-ink outline-none focus:border-accent/40"
+          className="h-7 min-w-0 flex-1 rounded-lg border border-ds-border bg-ds-main px-2 text-[12px] text-ds-ink outline-none focus:border-accent-tint/40"
         />
         <button
           type="button"
           onClick={addFeed}
           disabled={!newFeedUrl.trim()}
-          className="inline-flex h-7 items-center gap-1 rounded-lg bg-accent/10 px-2 text-[12px] font-medium text-accent transition hover:bg-accent/15 disabled:opacity-50"
+          className="inline-flex h-7 items-center gap-1 rounded-lg bg-accent-tint/10 px-2 text-[12px] font-medium text-accent transition hover:bg-accent-tint/15 disabled:opacity-50"
         >
           <Plus className="h-3 w-3" />
           {t('writePaperDiscoverAddFeedButton')}
@@ -432,7 +432,7 @@ function FeedsPane({
               key={feed.id}
               className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11.5px] ${
                 discover.activeFeedId === feed.id
-                  ? 'border-accent/40 bg-accent/10 text-accent'
+                  ? 'border-accent-tint/40 bg-accent-tint/10 text-accent'
                   : 'border-ds-border text-ds-muted'
               }`}
             >
@@ -469,7 +469,7 @@ function FeedsPane({
         {activeItems.map((item: PaperFeedItem) => (
           <li
             key={item.url}
-            className="rounded-xl border border-ds-border-muted bg-ds-card/60 p-3.5 transition hover:border-ds-border hover:bg-ds-card"
+            className="rounded-xl border border-ds-border-muted bg-ds-card p-3.5 transition hover:border-ds-border hover:bg-ds-card"
           >
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
@@ -481,7 +481,7 @@ function FeedsPane({
             <div className="mt-2 flex items-center gap-1.5">
               {item.url ? (
                 <a
-                  className="inline-flex items-center gap-1 rounded-full border border-ds-border px-2 py-0.5 text-[10.5px] font-medium text-ds-muted transition hover:border-accent/40 hover:text-accent"
+                  className="inline-flex items-center gap-1 rounded-full border border-ds-border px-2 py-0.5 text-[10.5px] font-medium text-ds-muted transition hover:border-accent-tint/40 hover:text-accent"
                   href="#"
                   onClick={(event) => {
                     event.preventDefault()
@@ -552,13 +552,13 @@ function VenuePane({
           onKeyDown={(event) => { if (event.key === 'Enter') loadVenue() }}
           placeholder={t('writePaperDiscoverVenuePlaceholder')}
           spellCheck={false}
-          className="h-7 w-56 rounded-lg border border-ds-border bg-ds-main/65 px-2 font-mono text-[12px] text-ds-ink outline-none focus:border-accent/40"
+          className="h-7 w-56 rounded-lg border border-ds-border bg-ds-main px-2 font-mono text-[12px] text-ds-ink outline-none focus:border-accent-tint/40"
         />
         <button
           type="button"
           onClick={loadVenue}
           disabled={!venueInput.trim() || discover.venueLoading}
-          className="inline-flex h-7 items-center rounded-lg bg-accent/10 px-2.5 text-[12px] font-medium text-accent transition hover:bg-accent/15 disabled:opacity-50"
+          className="inline-flex h-7 items-center rounded-lg bg-accent-tint/10 px-2.5 text-[12px] font-medium text-accent transition hover:bg-accent-tint/15 disabled:opacity-50"
         >
           {discover.venueLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : t('writePaperDiscoverVenueGo')}
         </button>
@@ -572,19 +572,19 @@ function VenuePane({
         {discover.venueItems.map((item: PaperVenueItem) => (
           <li
             key={item.coolId}
-            className="rounded-xl border border-ds-border-muted bg-ds-card/60 p-3.5 transition hover:border-ds-border hover:bg-ds-card"
+            className="rounded-xl border border-ds-border-muted bg-ds-card p-3.5 transition hover:border-ds-border hover:bg-ds-card"
           >
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
                 <p className="text-[13.5px] font-semibold leading-5 text-ds-ink">{item.title}</p>
-                <p className="mt-0.5 truncate text-[11.5px] text-accent/80">
+                <p className="mt-0.5 truncate text-[11.5px] text-accent-tint/80">
                   {item.authors.slice(0, 4).join(', ')}
                 </p>
               </div>
             </div>
             <div className="mt-2 flex items-center gap-1.5">
               <a
-                className="inline-flex items-center gap-1 rounded-full border border-ds-border px-2 py-0.5 text-[10.5px] font-medium text-ds-muted transition hover:border-accent/40 hover:text-accent"
+                className="inline-flex items-center gap-1 rounded-full border border-ds-border px-2 py-0.5 text-[10.5px] font-medium text-ds-muted transition hover:border-accent-tint/40 hover:text-accent"
                 href="#"
                 onClick={(event) => {
                   event.preventDefault()

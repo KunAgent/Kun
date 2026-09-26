@@ -115,7 +115,7 @@
   "writePaperImportTitle": "导入论文",
   "writePaperInfoCollapse": "收起面板",
   "writePaperInfoExpand": "展开面板",
-  "writePaperInfoTitle": "论文信息",
+  "writePaperInfoTitle": "信息",
   "writePaperInterpret": "一键解读",
   "writePaperInterpretHint": "让论文阅读助手解读该论文，并把解读写入独立文件",
   "writePaperJob_bibtex-import": "BibTeX 导入",
@@ -285,5 +285,18 @@
   "writePaperReaderRegionAsk": "加入对话",
   "writePaperReaderRegionAskPrompt": "论文《{{title}}》第 {{page}} 页的这个区域：{{comment}}",
   "writePaperReaderRegionNoImage": "（当前模型不支持图片，请以文字描述为准）",
-  "writePaperReaderCopyCitation": "复制引用"
+  "writePaperReaderCopyCitation": "复制引用",
+  "writePaperMetaAuthorsShort": "作者",
+  "writePaperMetaTagsShort": "标签",
+  "writePaperLibraryNoMatch": "没有符合当前筛选条件的论文。",
+  "writePaperDiscoverNav_arxiv": "arXiv 今日",
+  "writePaperDiscoverNav_venue": "顶会论文",
+  "writePaperDiscoverNav_feeds": "订阅",
+  "writePaperInfoCopied": "已复制{{label}}",
+  "writePaperInfoCopyHint": "点击复制{{label}}",
+  "writePaperTagRemove": "移除标签 {{tag}}",
+  "writePaperTagAddPlaceholder": "添加标签…",
+  "writePaperInfoResize": "调整信息面板高度",
+  "writePaperInfoEmpty": "选中一篇论文后在这里查看信息。",
+  "writePaperInfoProgress": "读到 {{page}}/{{total}} 页"
 }

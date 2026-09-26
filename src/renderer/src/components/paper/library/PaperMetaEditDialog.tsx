@@ -116,7 +116,7 @@ export function PaperMetaEditDialog({
     if (ok) onClose()
   }
 
-  const input = 'w-full rounded-lg border border-ds-border-muted bg-ds-main px-2.5 py-1.5 text-[13px] text-ds-ink outline-none focus:border-accent/50'
+  const input = 'w-full rounded-lg border border-ds-border-muted bg-ds-main px-2.5 py-1.5 text-[13px] text-ds-ink outline-none focus:border-accent-tint/50'
   return (
     <div
       className="ds-no-drag fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/18 px-4 backdrop-blur-[2px] dark:bg-black/35"

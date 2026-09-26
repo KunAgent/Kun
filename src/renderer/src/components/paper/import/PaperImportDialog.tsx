@@ -163,11 +163,11 @@ export function PaperImportDialog({
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         className={`flex max-h-[80vh] w-full max-w-lg flex-col rounded-[24px] border bg-ds-card p-5 shadow-[0_24px_72px_rgba(20,47,95,0.22)] ${
-          dragOver ? 'border-accent/60' : 'border-ds-border'
+          dragOver ? 'border-accent-tint/60' : 'border-ds-border'
         }`}
       >
         <div className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-tint/10 text-accent">
             <GraduationCap className="h-5 w-5" strokeWidth={1.9} />
           </span>
           <h2 className="text-[18px] font-semibold tracking-[-0.035em] text-ds-ink">
@@ -185,7 +185,7 @@ export function PaperImportDialog({
           placeholder={t('writePaperImportLinesPlaceholder')}
           spellCheck={false}
           rows={4}
-          className="mt-3 w-full resize-none rounded-xl border border-ds-border bg-ds-main/65 px-3 py-2 font-mono text-[12.5px] leading-5 text-ds-ink outline-none transition focus:border-accent/40 focus:ring-1 focus:ring-accent/25 disabled:opacity-60"
+          className="mt-3 w-full resize-none rounded-xl border border-ds-border bg-ds-main px-3 py-2 font-mono text-[12.5px] leading-5 text-ds-ink outline-none transition focus:border-accent-tint/40 focus:ring-1 focus:ring-accent-tint/25 disabled:opacity-60"
         />
 
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -213,7 +213,7 @@ export function PaperImportDialog({
         {items.length ? (
           <div className="mt-3 min-h-0 flex-1 overflow-y-auto rounded-xl border border-ds-border-muted">
             {items.map((item) => (
-              <div key={item.id} className="border-b border-ds-border-muted/60 px-3 py-2 last:border-b-0">
+              <div key={item.id} className="border-b border-ds-border-muted px-3 py-2 last:border-b-0">
                 <div className="flex items-center gap-2">
                   {STATUS_ICON[item.status]}
                   <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ds-ink">

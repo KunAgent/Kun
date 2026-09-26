@@ -79,7 +79,7 @@ export function PaperAskPopover({
       >
         <input
           autoFocus
-          className="min-w-0 flex-1 rounded-md border border-ds-border-muted bg-ds-subtle px-2 py-1 text-[12px] text-ds-ink outline-none focus:border-accent/50"
+          className="min-w-0 flex-1 rounded-md border border-ds-border-muted bg-ds-subtle px-2 py-1 text-[12px] text-ds-ink outline-none focus:border-accent-tint/50"
           value={question}
           placeholder={t('writePaperReaderAskPlaceholder')}
           onChange={(event) => setQuestion(event.target.value)}

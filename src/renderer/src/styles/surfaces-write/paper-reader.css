@@ -54,3 +54,17 @@
 .write-pdf-scroller[data-paper-tone='sepia'] .paper-translate-block { background: #f4ecd8; }
 .write-pdf-scroller[data-paper-tone='green'] .paper-translate-block { background: #e4f0e0; }
 .write-pdf-scroller[data-paper-tone='dark'] .paper-translate-block { background: #333338; color: #e5e7eb; }
+
+/* Reading stage: a neutral gray desk under white paper with a soft shadow,
+   so page edges read clearly (tint derives from the theme text color, which
+   works in both light and dark themes). */
+.paper-reader-stage {
+  background: color-mix(in srgb, var(--ds-text) 5%, var(--ds-bg-main));
+}
+
+.paper-reader-stage .write-pdf-page {
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ds-text) 7%, transparent),
+    0 2px 10px color-mix(in srgb, var(--ds-text) 9%, transparent);
+}

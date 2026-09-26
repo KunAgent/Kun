@@ -17,7 +17,7 @@ export function PaperSearchCandidates({
 }): ReactElement {
   const { t } = useTranslation('common')
   return (
-    <div className="mt-1.5 space-y-1 rounded-lg border border-ds-border-muted bg-ds-subtle/40 p-1.5">
+    <div className="mt-1.5 space-y-1 rounded-lg border border-ds-border-muted bg-ds-subtle p-1.5">
       <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-ds-faint">
         {t('writePaperImportCandidates')}
       </p>

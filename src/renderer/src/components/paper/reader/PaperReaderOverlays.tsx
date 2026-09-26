@@ -49,7 +49,7 @@ export function PaperReaderOverlays({
 }): ReactElement {
   return <>
     {translateNotice || regionNotice ? (
-      <div className="pointer-events-none absolute bottom-14 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-ds-border bg-ds-card/95 px-3 py-1 text-[11px] text-ds-muted shadow">
+      <div className="pointer-events-none absolute bottom-14 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-ds-border bg-ds-elevated px-3 py-1 text-[11px] text-ds-muted shadow">
         <span>{regionNotice || translateNotice?.message}</span>
         {!regionNotice && translateNotice?.config ? (
           <button

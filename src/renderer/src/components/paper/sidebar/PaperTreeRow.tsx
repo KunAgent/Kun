@@ -136,7 +136,7 @@ export function PaperTreeRow({
       {!entry.hasPdf ? <FileText className="h-3 w-3 shrink-0 text-ds-faint" strokeWidth={1.6} /> : null}
       {progress > 0 ? (
         <span
-          className="pointer-events-none absolute inset-x-3 bottom-0 h-px bg-accent/50"
+          className="pointer-events-none absolute inset-x-3 bottom-0 h-px bg-accent-tint/50"
           style={{ width: `${Math.round(progress * 90)}%` }}
         />
       ) : null}

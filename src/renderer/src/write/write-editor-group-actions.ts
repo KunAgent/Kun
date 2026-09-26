@@ -361,12 +361,15 @@ export function createWriteEditorGroupActions(
           }
         })
       }
-      const editorLayout = addEditorItemToGroup(
+      let editorLayout = addEditorItemToGroup(
         cleared,
         target,
         { kind: 'paper-view', view, viewMode: 'rich' },
         view === 'library' ? 0 : undefined
       )
+      // Focus the target group: a focused full-page view is what lets paper
+      // mode expand it to the whole center (WriteEditorGroups).
+      editorLayout = { ...editorLayout, focusedGroupId: target }
       persist(state.workspaceRoot, editorLayout)
       set(withProjection(state.documentsByPath, editorLayout))
     },

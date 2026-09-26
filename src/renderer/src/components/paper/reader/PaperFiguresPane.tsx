@@ -57,7 +57,7 @@ export function PaperFiguresPane({
             type="button"
             disabled={!item.page}
             onClick={() => { if (item.page) onJumpToPage(item.page) }}
-            className="w-full rounded-lg border border-ds-border-muted p-1.5 text-left transition hover:border-accent/40 hover:bg-ds-hover disabled:cursor-default"
+            className="w-full rounded-lg border border-ds-border-muted p-1.5 text-left transition hover:border-accent-tint/40 hover:bg-ds-hover disabled:cursor-default"
           >
             <FigureThumb workspaceRoot={workspaceRoot} path={writeJoinPath(unitAbs, item.path)} />
             <div className="mt-1 flex items-baseline gap-1.5">
@@ -96,7 +96,7 @@ function FigureThumb({ workspaceRoot, path }: { workspaceRoot: string; path: str
   }, [workspaceRoot, path])
   if (failed) {
     return (
-      <div className="flex h-16 items-center justify-center rounded bg-ds-subtle/60 text-ds-faint">
+      <div className="flex h-16 items-center justify-center rounded bg-ds-subtle text-ds-faint">
         <ImageOff className="h-4 w-4" strokeWidth={1.6} />
       </div>
     )
@@ -104,6 +104,6 @@ function FigureThumb({ workspaceRoot, path }: { workspaceRoot: string; path: str
   return src ? (
     <img src={src} alt="" className="max-h-40 w-full rounded bg-white object-contain" loading="lazy" />
   ) : (
-    <div className="h-16 animate-pulse rounded bg-ds-subtle/60" />
+    <div className="h-16 animate-pulse rounded bg-ds-subtle" />
   )
 }

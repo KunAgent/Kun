@@ -17,7 +17,8 @@ import {
   isWriteWhiteboardTab,
   writeEditorItemForKey,
   writeDocumentKey,
-  writeEditorGroupFlex
+  writeEditorGroupFlex,
+  activePaperViewId
 } from '../../write/write-editor-layout'
 import { WriteEditorGroupContent } from './WriteEditorGroupContent'
 import { WriteEditorTabBar } from './WriteEditorTabBar'
@@ -144,6 +145,13 @@ export function WriteEditorGroups({
   const [pendingWhiteboardGroupId, setPendingWhiteboardGroupId] = useState<'primary' | 'secondary' | null>(null)
   const [creatingWhiteboard, setCreatingWhiteboard] = useState(false)
   const splitActive = isWriteEditorLayoutSplit(editorLayout)
+  const workSurface = useWriteWorkspaceStore((state) => state.workSurface)
+  // Paper mode: a full-page view (library / discover) owns the whole center;
+  // the other group (the paper's NOTES) stays mounted but hidden until a
+  // reader tab is focused again.
+  const expandedGroupId = workSurface === 'papers' && splitActive && activePaperViewId(editorLayout)
+    ? editorLayout.focusedGroupId
+    : null
   const quickOpenFiles = useMemo(() => {
     const byPath = new Map<string, string>()
     for (const entries of Object.values(entriesByDir)) {
@@ -223,9 +231,15 @@ export function WriteEditorGroups({
         const pane = (
           <section
             key={group.id}
-            className="write-editor-group flex min-h-0 min-w-0 flex-col"
+            className={`write-editor-group min-h-0 min-w-0 flex-col ${
+              expandedGroupId && expandedGroupId !== group.id ? 'hidden' : 'flex'
+            }`}
             data-focused={focused}
-            style={{ flex: writeEditorGroupFlex(editorLayout, index) }}
+            style={{
+              flex: expandedGroupId
+                ? (expandedGroupId === group.id ? '1 1 100%' : '0 0 0%')
+                : writeEditorGroupFlex(editorLayout, index)
+            }}
           >
             <WriteEditorTabBar
               group={group}
@@ -332,7 +346,7 @@ export function WriteEditorGroups({
             )}
           </section>
         )
-        if (index === 0 || !splitActive) return pane
+        if (index === 0 || !splitActive || expandedGroupId) return pane
         return (
           <div key={`${group.id}-with-divider`} className="contents">
             <div

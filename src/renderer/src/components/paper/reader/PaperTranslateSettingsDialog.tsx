@@ -8,7 +8,7 @@ import { rendererRuntimeClient } from '../../../agent/runtime-client'
 import { Toggle } from '../../settings-controls'
 
 const fieldClass =
-  'w-full min-w-0 rounded-lg border border-ds-border-muted bg-ds-main px-2.5 py-1.5 text-[13px] text-ds-ink outline-none focus:border-accent/50'
+  'w-full min-w-0 rounded-lg border border-ds-border-muted bg-ds-main px-2.5 py-1.5 text-[13px] text-ds-ink outline-none focus:border-accent-tint/50'
 const linkButtonClass =
   'inline-flex items-center gap-1 rounded-full border border-ds-border-muted px-2.5 py-1 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink'
 

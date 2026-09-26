@@ -12,9 +12,9 @@ import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { SettingRow, SettingsCard, Toggle } from './settings-controls'
 
 const textInputClass =
-  'w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30'
+  'w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent-tint/40 focus:outline-none focus:ring-1 focus:ring-accent-tint/30'
 const selectControlClass =
-  'rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30'
+  'rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink shadow-sm focus:border-accent-tint/40 focus:outline-none focus:ring-1 focus:ring-accent-tint/30'
 const ghostButtonClass =
   'inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover'
 

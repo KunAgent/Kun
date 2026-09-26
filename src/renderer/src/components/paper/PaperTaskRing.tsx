@@ -41,7 +41,7 @@ export function PaperTaskRing(): ReactElement | null {
   return (
     <div className="pointer-events-none absolute bottom-4 left-4 z-30 flex flex-col items-start gap-2">
       {open && running ? (
-        <div className="pointer-events-auto w-[240px] rounded-2xl border border-ds-border bg-ds-card/95 p-1.5 shadow-2xl backdrop-blur-xl">
+        <div className="pointer-events-auto w-[240px] rounded-2xl border border-ds-border bg-ds-elevated p-1.5 shadow-2xl backdrop-blur-xl">
           {jobs.map((job) => (
             <div
               key={job.requestId}
@@ -73,7 +73,7 @@ export function PaperTaskRing(): ReactElement | null {
         </div>
       ) : null}
       {flash ? (
-        <div className="pointer-events-auto flex max-w-[300px] items-center gap-1.5 rounded-full border border-ds-border bg-ds-card/95 px-3 py-1.5 shadow-lg backdrop-blur-xl">
+        <div className="pointer-events-auto flex max-w-[300px] items-center gap-1.5 rounded-full border border-ds-border bg-ds-elevated px-3 py-1.5 shadow-lg backdrop-blur-xl">
           <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" strokeWidth={2} />
           <span className="truncate text-[11.5px] text-ds-muted">{flash}</span>
         </div>
@@ -84,7 +84,7 @@ export function PaperTaskRing(): ReactElement | null {
           onClick={() => setOpen((value) => !value)}
           title={t('writePaperTasksRunning', { count: running })}
           aria-label={t('writePaperTasksRunning', { count: running })}
-          className="pointer-events-auto relative flex h-9 w-9 items-center justify-center rounded-full border border-ds-border bg-ds-card/95 text-accent shadow-lg backdrop-blur-xl transition hover:scale-105"
+          className="pointer-events-auto relative flex h-9 w-9 items-center justify-center rounded-full border border-ds-border bg-ds-elevated text-accent shadow-lg backdrop-blur-xl transition hover:scale-105"
         >
           <Loader2 className="h-4.5 w-4.5 animate-spin" strokeWidth={2} />
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[9px] font-bold text-white">

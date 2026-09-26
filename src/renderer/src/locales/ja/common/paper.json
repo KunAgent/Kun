@@ -285,5 +285,18 @@
   "writePaperReaderRegionAsk": "アシスタントへ送る",
   "writePaperReaderRegionAskPrompt": "論文『{{title}}』{{page}} ページのこの領域：{{comment}}",
   "writePaperReaderRegionNoImage": "（現在のモデルは画像を読めません。テキストを参照してください）",
-  "writePaperReaderCopyCitation": "引用をコピー"
+  "writePaperReaderCopyCitation": "引用をコピー",
+  "writePaperMetaAuthorsShort": "著者",
+  "writePaperMetaTagsShort": "タグ",
+  "writePaperLibraryNoMatch": "条件に一致する論文はありません。",
+  "writePaperDiscoverNav_arxiv": "今日の arXiv",
+  "writePaperDiscoverNav_venue": "会議論文",
+  "writePaperDiscoverNav_feeds": "フィード",
+  "writePaperInfoCopied": "{{label}}をコピーしました",
+  "writePaperInfoCopyHint": "クリックで{{label}}をコピー",
+  "writePaperTagRemove": "タグ {{tag}} を削除",
+  "writePaperTagAddPlaceholder": "タグを追加…",
+  "writePaperInfoResize": "情報パネルの高さを調整",
+  "writePaperInfoEmpty": "論文を選択すると詳細が表示されます。",
+  "writePaperInfoProgress": "{{page}}/{{total}} ページ"
 }

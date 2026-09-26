@@ -38,14 +38,14 @@ export function PaperReaderDrawer({
 }): ReactElement {
   const [tab, setTab] = useState<DrawerTab>('annotations')
   return (
-    <aside className="flex w-[260px] shrink-0 flex-col border-r border-ds-border-muted bg-ds-card/60">
+    <aside className="flex w-[260px] shrink-0 flex-col border-r border-ds-border-muted bg-ds-card">
       <div className="flex shrink-0 gap-1 border-b border-ds-border-muted p-1.5">
         {(['outline', 'figures', 'annotations', 'references', 'citations'] as const).map((key) => (
           <button
             key={key}
             type="button"
             className={`flex-1 rounded-md px-2 py-1 text-[11.5px] ${
-              tab === key ? 'bg-accent/15 font-medium text-accent' : 'text-ds-muted hover:bg-ds-hover'
+              tab === key ? 'bg-accent-tint/15 font-medium text-accent' : 'text-ds-muted hover:bg-ds-hover'
             }`}
             onClick={() => setTab(key)}
           >
@@ -248,7 +248,7 @@ function AnnotationsPane({
           <li
             key={card.id}
             className={`group rounded-lg border p-2 ${
-              visual ? 'border-dashed border-[#3b82f6]/50' : 'border-accent/30 bg-accent/5'
+              visual ? 'border-dashed border-[#3b82f6]/50' : 'border-accent-tint/30 bg-accent-tint/5'
             }`}
           >
             <button

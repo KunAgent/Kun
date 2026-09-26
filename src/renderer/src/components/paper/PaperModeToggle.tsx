@@ -46,7 +46,7 @@ export function PaperModeToggle(): ReactElement | null {
       disabled={pending}
       title={`${t('writePaperModeToggleTitle')} · ${enabled ? t('switchOn') : t('switchOff')}`}
       onClick={() => onChange(!enabled)}
-      className="ds-sidebar-command-row flex min-h-9 w-full items-center gap-2.5 rounded-full border border-transparent px-3 py-1.5 text-[13px] font-normal text-ds-muted transition hover:bg-[var(--ds-sidebar-row-hover)] hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-wait disabled:opacity-60"
+      className="ds-sidebar-command-row flex min-h-9 w-full items-center gap-2.5 rounded-full border border-transparent px-3 py-1.5 text-[13px] font-normal text-ds-muted transition hover:bg-[var(--ds-sidebar-row-hover)] hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/30 disabled:cursor-wait disabled:opacity-60"
     >
       <span className="flex h-5 w-5 shrink-0 items-center justify-center text-ds-muted">
         <GraduationCap className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
@@ -55,7 +55,7 @@ export function PaperModeToggle(): ReactElement | null {
       <span
         className={`ds-focus-mode-toggle-track relative h-4 w-7 shrink-0 rounded-full transition ${
           enabled
-            ? 'bg-accent/80 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]'
+            ? 'bg-accent-tint/80 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)]'
             : 'bg-slate-300/75 shadow-[inset_0_0_0_1px_rgba(100,116,139,0.16)] dark:bg-white/[0.14] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]'
         }`}
         aria-hidden="true"

@@ -215,7 +215,7 @@ export function PaperLinkLayer({ page, viewport }: PaperPageLayerProps): ReactEl
               <button
                 key={`link-${index}`}
                 type="button"
-                className="pointer-events-auto absolute rounded-[3px] transition-colors hover:bg-accent/15"
+                className="pointer-events-auto absolute rounded-[3px] transition-colors hover:bg-accent-tint/15"
                 style={link.rect}
                 title={link.kind === 'external' ? link.url : undefined}
                 aria-label={link.kind === 'external' ? link.url : t('writePaperCitationInternalLink')}
@@ -233,7 +233,7 @@ export function PaperLinkLayer({ page, viewport }: PaperPageLayerProps): ReactEl
                 <button
                   key={`cite-${index}-${rectIndex}`}
                   type="button"
-                  className="pointer-events-auto absolute rounded-[2px] transition-colors hover:bg-accent/15"
+                  className="pointer-events-auto absolute rounded-[2px] transition-colors hover:bg-accent-tint/15"
                   style={rect}
                   aria-label={target.hit.raw}
                   onPointerEnter={() => openCitationCard(target)}

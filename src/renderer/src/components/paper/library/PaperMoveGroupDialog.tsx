@@ -80,7 +80,7 @@ export function PaperMoveGroupDialog({
           value={value}
           onChange={(event) => setValue(event.target.value)}
           placeholder={t('writePaperGroupPlaceholder')}
-          className="w-full rounded-lg border border-ds-border-muted bg-ds-main px-2.5 py-1.5 text-[13px] text-ds-ink outline-none focus:border-accent/50"
+          className="w-full rounded-lg border border-ds-border-muted bg-ds-main px-2.5 py-1.5 text-[13px] text-ds-ink outline-none focus:border-accent-tint/50"
         />
         {target === null ? (
           <p className="mt-1 text-[11.5px] text-red-600 dark:text-red-300">{t('writePaperGroupInvalid')}</p>
@@ -99,7 +99,7 @@ export function PaperMoveGroupDialog({
               type="button"
               onClick={() => setValue(group)}
               className={`rounded-full border px-2 py-0.5 text-[11.5px] hover:bg-ds-hover ${
-                value === group ? 'border-accent/50 text-accent' : 'border-ds-border-muted text-ds-muted'
+                value === group ? 'border-accent-tint/50 text-accent' : 'border-ds-border-muted text-ds-muted'
               }`}
             >
               {group}

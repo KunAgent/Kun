@@ -285,5 +285,18 @@
   "writePaperReaderRegionAsk": "ส่งให้ผู้ช่วย",
   "writePaperReaderRegionAskPrompt": "ในเอกสาร \"{{title}}\" หน้า {{page}} พื้นที่นี้: {{comment}}",
   "writePaperReaderRegionNoImage": "(โมเดลปัจจุบันอ่านรูปไม่ได้ โปรดดูข้อความ)",
-  "writePaperReaderCopyCitation": "คัดลอกการอ้างอิง"
+  "writePaperReaderCopyCitation": "คัดลอกการอ้างอิง",
+  "writePaperMetaAuthorsShort": "ผู้เขียน",
+  "writePaperMetaTagsShort": "แท็ก",
+  "writePaperLibraryNoMatch": "ไม่มีบทความที่ตรงกับตัวกรอง",
+  "writePaperDiscoverNav_arxiv": "arXiv วันนี้",
+  "writePaperDiscoverNav_venue": "บทความงานประชุม",
+  "writePaperDiscoverNav_feeds": "ฟีด",
+  "writePaperInfoCopied": "คัดลอก {{label}} แล้ว",
+  "writePaperInfoCopyHint": "คลิกเพื่อคัดลอก {{label}}",
+  "writePaperTagRemove": "ลบแท็ก {{tag}}",
+  "writePaperTagAddPlaceholder": "เพิ่มแท็ก…",
+  "writePaperInfoResize": "ปรับความสูงแผงข้อมูล",
+  "writePaperInfoEmpty": "เลือกบทความเพื่อดูรายละเอียด",
+  "writePaperInfoProgress": "หน้า {{page}}/{{total}}"
 }

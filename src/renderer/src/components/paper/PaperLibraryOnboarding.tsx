@@ -75,8 +75,8 @@ export function PaperLibraryOnboarding(): ReactElement {
 
   return (
     <div className="flex h-full min-h-0 items-center justify-center px-6">
-      <div className="w-full max-w-lg rounded-[28px] border border-ds-border bg-ds-card/90 px-8 py-8 text-center shadow-[0_22px_56px_rgba(20,47,95,0.08)] backdrop-blur-xl">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 text-accent">
+      <div className="w-full max-w-lg rounded-[28px] border border-ds-border bg-ds-elevated px-8 py-8 text-center shadow-[0_22px_56px_rgba(20,47,95,0.08)] backdrop-blur-xl">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-tint/10 text-accent">
           <GraduationCap className="h-6 w-6" strokeWidth={1.9} />
         </div>
         <h2 className="mt-5 text-[24px] font-semibold tracking-[-0.04em] text-ds-ink">
@@ -111,7 +111,7 @@ export function PaperLibraryOnboarding(): ReactElement {
                   type="button"
                   disabled={pending}
                   onClick={() => void adopt(candidate.workspaceRoot)}
-                  className="flex w-full items-center gap-2.5 rounded-xl border border-ds-border-muted bg-white/55 px-3 py-2 text-left transition hover:border-accent/30 hover:bg-white/80 disabled:opacity-60 dark:bg-white/[0.04] dark:hover:bg-white/[0.07]"
+                  className="flex w-full items-center gap-2.5 rounded-xl border border-ds-border-muted bg-white/55 px-3 py-2 text-left transition hover:border-accent-tint/30 hover:bg-white/80 disabled:opacity-60 dark:bg-white/[0.04] dark:hover:bg-white/[0.07]"
                 >
                   <FolderOpen className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.8} />
                   <span className="min-w-0 flex-1">

@@ -101,7 +101,7 @@ export function PaperRowMenu({
             onClick={() => run({ status: value })}
             className={`flex-1 rounded-full border px-1.5 py-0.5 text-[11px] transition ${
               status === value
-                ? 'border-accent/50 bg-accent/10 text-accent'
+                ? 'border-accent-tint/50 bg-accent-tint/10 text-accent'
                 : 'border-ds-border-muted text-ds-muted hover:bg-ds-hover'
             }`}
           >

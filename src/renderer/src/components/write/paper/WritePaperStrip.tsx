@@ -63,14 +63,14 @@ export function WritePaperStrip({
 
   if (loosePdfPath) {
     return (
-      <div className="flex items-center gap-2 border-b border-ds-border-muted bg-ds-subtle/40 px-3 py-1.5">
+      <div className="flex items-center gap-2 border-b border-ds-border-muted bg-ds-subtle px-3 py-1.5">
         <GraduationCap className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.9} />
         <span className="min-w-0 flex-1 truncate text-[12.5px] text-ds-muted">
           {t('writePaperLoosePdfHint')}
         </span>
         <button
           type="button"
-          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/[0.08] px-2.5 text-[12px] font-medium text-accent transition hover:bg-accent/15"
+          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-accent-tint/30 bg-accent-tint/[0.08] px-2.5 text-[12px] font-medium text-accent transition hover:bg-accent-tint/15"
           onClick={() => void openPdfAsPaper({ ...deps, pdfPath: loosePdfPath })}
         >
           <GraduationCap className="h-3.5 w-3.5" strokeWidth={1.9} />

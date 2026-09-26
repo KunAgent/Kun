@@ -45,10 +45,10 @@ export function PaperPageTranslateTab({
         translating
           ? 'bg-ds-card text-accent'
           : status === 'done'
-            ? 'bg-accent/15 text-accent'
+            ? 'bg-accent-tint/15 text-accent'
             : status === 'hidden'
-              ? 'bg-ds-card/70 text-ds-faint'
-              : 'bg-ds-card/85 opacity-0 hover:text-accent group-hover/page:opacity-100'
+              ? 'bg-ds-card text-ds-faint'
+              : 'bg-ds-elevated opacity-0 hover:text-accent group-hover/page:opacity-100'
       }`}
     >
       {translating ? (

@@ -31,7 +31,7 @@ function useNow(active: boolean): number {
 }
 
 const actionClass =
-  'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-ds-border-muted bg-ds-card/80 px-2.5 text-[12px] font-medium text-ds-muted transition hover:border-accent/30 hover:bg-white hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-55 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]'
+  'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-ds-border-muted bg-ds-card px-2.5 text-[12px] font-medium text-ds-muted transition hover:border-accent-tint/30 hover:bg-white hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-55 dark:bg-white/[0.04] dark:hover:bg-white/[0.08]'
 
 const iconActionClass =
   'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-55'
@@ -85,7 +85,7 @@ export function WritePaperBar({
   }
 
   return (
-    <div className="write-paper-bar flex flex-col gap-1.5 border-b border-ds-border-muted bg-ds-subtle/40 px-3 py-2">
+    <div className="write-paper-bar flex flex-col gap-1.5 border-b border-ds-border-muted bg-ds-subtle px-3 py-2">
       <div className="flex min-w-0 items-center gap-2">
         <GraduationCap className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.9} />
         <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ds-ink" title={meta.title}>
@@ -98,7 +98,7 @@ export function WritePaperBar({
         ) : null}
         {meta.year ? <span className="shrink-0 text-[12px] text-ds-faint">{meta.year}</span> : null}
         {meta.venue ? (
-          <span className="hidden shrink-0 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent lg:inline">
+          <span className="hidden shrink-0 rounded-full bg-accent-tint/10 px-2 py-0.5 text-[11px] font-medium text-accent lg:inline">
             {meta.venue}
           </span>
         ) : null}
@@ -128,12 +128,12 @@ export function WritePaperBar({
 
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         {coolRunning ? (
-          <span className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-accent/25 bg-accent/10 px-2.5 text-[12px] font-medium text-accent">
+          <span className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-accent-tint/25 bg-accent-tint/10 px-2.5 text-[12px] font-medium text-accent">
             <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
             {elapsedLabel(coolJob.startedAt, now, t)}
             <button
               type="button"
-              className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full transition hover:bg-accent/15"
+              className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full transition hover:bg-accent-tint/15"
               title={t('writePaperCancel')}
               aria-label={t('writePaperCancel')}
               onClick={() => onCancel('cool-notes')}
@@ -160,7 +160,7 @@ export function WritePaperBar({
 
         <button
           type="button"
-          className={`${actionClass} border-accent/30 bg-accent/[0.08] text-accent hover:bg-accent/15 hover:text-accent`}
+          className={`${actionClass} border-accent-tint/30 bg-accent-tint/[0.08] text-accent hover:bg-accent-tint/15 hover:text-accent`}
           disabled={coolRunning || preprocessRunning}
           title={t('writePaperInterpretHint')}
           onClick={onInterpret}
@@ -170,12 +170,12 @@ export function WritePaperBar({
         </button>
 
         {preprocessRunning ? (
-          <span className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-accent/25 bg-accent/10 px-2.5 text-[12px] font-medium text-accent">
+          <span className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-accent-tint/25 bg-accent-tint/10 px-2.5 text-[12px] font-medium text-accent">
             <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
             {preprocessJob.message || t(`writePaperStage_${preprocessJob.stage}`, { defaultValue: preprocessJob.stage })}
             <button
               type="button"
-              className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full transition hover:bg-accent/15"
+              className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full transition hover:bg-accent-tint/15"
               title={t('writePaperCancel')}
               aria-label={t('writePaperCancel')}
               onClick={() => onCancel('preprocess')}

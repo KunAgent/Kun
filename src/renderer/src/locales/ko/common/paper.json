@@ -285,5 +285,18 @@
   "writePaperReaderRegionAsk": "어시스턴트로 보내기",
   "writePaperReaderRegionAskPrompt": "논문 \"{{title}}\" {{page}}페이지의 이 영역: {{comment}}",
   "writePaperReaderRegionNoImage": "(현재 모델은 이미지를 읽을 수 없습니다. 텍스트를 참조하세요.)",
-  "writePaperReaderCopyCitation": "인용 복사"
+  "writePaperReaderCopyCitation": "인용 복사",
+  "writePaperMetaAuthorsShort": "저자",
+  "writePaperMetaTagsShort": "태그",
+  "writePaperLibraryNoMatch": "현재 필터에 맞는 논문이 없습니다.",
+  "writePaperDiscoverNav_arxiv": "오늘의 arXiv",
+  "writePaperDiscoverNav_venue": "학회 논문",
+  "writePaperDiscoverNav_feeds": "구독",
+  "writePaperInfoCopied": "{{label}} 복사됨",
+  "writePaperInfoCopyHint": "클릭하여 {{label}} 복사",
+  "writePaperTagRemove": "태그 {{tag}} 제거",
+  "writePaperTagAddPlaceholder": "태그 추가…",
+  "writePaperInfoResize": "정보 패널 높이 조절",
+  "writePaperInfoEmpty": "논문을 선택하면 정보가 표시됩니다.",
+  "writePaperInfoProgress": "{{page}}/{{total}} 페이지"
 }

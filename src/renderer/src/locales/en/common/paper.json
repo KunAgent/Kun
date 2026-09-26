@@ -285,5 +285,18 @@
   "writePaperReaderRegionAsk": "Send to assistant",
   "writePaperReaderRegionAskPrompt": "In the paper \"{{title}}\", page {{page}}, this region: {{comment}}",
   "writePaperReaderRegionNoImage": "(The current model cannot read images; refer to the text.)",
-  "writePaperReaderCopyCitation": "Copy citation"
+  "writePaperReaderCopyCitation": "Copy citation",
+  "writePaperMetaAuthorsShort": "Authors",
+  "writePaperMetaTagsShort": "Tags",
+  "writePaperLibraryNoMatch": "No papers match the current filters.",
+  "writePaperDiscoverNav_arxiv": "arXiv today",
+  "writePaperDiscoverNav_venue": "Conference papers",
+  "writePaperDiscoverNav_feeds": "Feeds",
+  "writePaperInfoCopied": "Copied {{label}}",
+  "writePaperInfoCopyHint": "Click to copy {{label}}",
+  "writePaperTagRemove": "Remove tag {{tag}}",
+  "writePaperTagAddPlaceholder": "Add tag…",
+  "writePaperInfoResize": "Resize paper info",
+  "writePaperInfoEmpty": "Select a paper to see its details.",
+  "writePaperInfoProgress": "Page {{page}}/{{total}}"
 }

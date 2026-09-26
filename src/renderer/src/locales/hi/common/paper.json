@@ -285,5 +285,18 @@
   "writePaperReaderRegionAsk": "असिस्टेंट को भेजें",
   "writePaperReaderRegionAskPrompt": "पेपर \"{{title}}\" के पेज {{page}} का यह क्षेत्र: {{comment}}",
   "writePaperReaderRegionNoImage": "(वर्तमान मॉडल छवि नहीं पढ़ सकता; टेक्स्ट देखें।)",
-  "writePaperReaderCopyCitation": "उद्धरण कॉपी करें"
+  "writePaperReaderCopyCitation": "उद्धरण कॉपी करें",
+  "writePaperMetaAuthorsShort": "लेखक",
+  "writePaperMetaTagsShort": "टैग",
+  "writePaperLibraryNoMatch": "वर्तमान फ़िल्टर से कोई पेपर मेल नहीं खाता।",
+  "writePaperDiscoverNav_arxiv": "आज का arXiv",
+  "writePaperDiscoverNav_venue": "सम्मेलन पेपर",
+  "writePaperDiscoverNav_feeds": "फ़ीड",
+  "writePaperInfoCopied": "{{label}} कॉपी हुआ",
+  "writePaperInfoCopyHint": "{{label}} कॉपी करने के लिए क्लिक करें",
+  "writePaperTagRemove": "टैग {{tag}} हटाएँ",
+  "writePaperTagAddPlaceholder": "टैग जोड़ें…",
+  "writePaperInfoResize": "जानकारी पैनल की ऊँचाई बदलें",
+  "writePaperInfoEmpty": "विवरण देखने के लिए एक पेपर चुनें।",
+  "writePaperInfoProgress": "पृष्ठ {{page}}/{{total}}"
 }

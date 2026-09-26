@@ -28,7 +28,7 @@ type Tone = WritePaperModeReaderSettingsV1['paperTone']
 const TONES: Tone[] = ['white', 'sepia', 'green', 'dark']
 
 const PILL =
-  'pointer-events-auto flex items-center gap-0.5 rounded-full border border-ds-border bg-ds-card/92 px-1.5 py-1 shadow-lg backdrop-blur'
+  'pointer-events-auto flex items-center gap-0.5 rounded-full border border-ds-border bg-ds-elevated px-1.5 py-1 shadow-lg backdrop-blur'
 const ICON = 'write-pdf-icon-button'
 
 const LAYOUT_OPTIONS: ReadonlyArray<{
@@ -165,7 +165,7 @@ export function PaperFloatingControls({
           </button>
           <button
             type="button"
-            className={`${ICON} ${drawerOpen ? 'bg-accent/15 text-accent' : ''}`}
+            className={`${ICON} ${drawerOpen ? 'bg-accent-tint/15 text-accent' : ''}`}
             title={t('writePaperReaderDrawer')}
             aria-label={t('writePaperReaderDrawer')}
             onClick={onToggleDrawer}
@@ -176,7 +176,7 @@ export function PaperFloatingControls({
           <div ref={layoutRef} className="relative flex">
             <button
               type="button"
-              className={`${ICON} ${layoutOpen ? 'bg-accent/15 text-accent' : ''}`}
+              className={`${ICON} ${layoutOpen ? 'bg-accent-tint/15 text-accent' : ''}`}
               title={t('writePaperReaderLayout')}
               aria-label={t('writePaperReaderLayout')}
               aria-expanded={layoutOpen}
@@ -211,7 +211,7 @@ export function PaperFloatingControls({
           <span className="mx-0.5 h-4 w-px bg-ds-border-muted" />
           <button
             type="button"
-            className={`${ICON} ${searchOpen ? 'bg-accent/15 text-accent' : ''}`}
+            className={`${ICON} ${searchOpen ? 'bg-accent-tint/15 text-accent' : ''}`}
             title={t('writePdfSearchPlaceholder')}
             aria-label={t('writePdfSearchPlaceholder')}
             onClick={() => setSearchOpen((open) => !open)}
@@ -262,7 +262,7 @@ export function PaperFloatingControls({
             <div ref={translateMenuRef} className="relative flex">
               <button
                 type="button"
-                className={`${ICON} ${translateMenuOpen ? 'bg-accent/15 text-accent' : ''}`}
+                className={`${ICON} ${translateMenuOpen ? 'bg-accent-tint/15 text-accent' : ''}`}
                 title={t('writePaperReaderTranslateDoc')}
                 aria-label={t('writePaperReaderTranslateDoc')}
                 aria-expanded={translateMenuOpen}
@@ -426,7 +426,7 @@ export function PaperFloatingControls({
           <span className="mx-0.5 h-4 w-px bg-ds-border-muted" />
           <button
             type="button"
-            className={`${ICON} ${regionSelectActive ? 'bg-accent/15 text-accent' : ''}`}
+            className={`${ICON} ${regionSelectActive ? 'bg-accent-tint/15 text-accent' : ''}`}
             title={`${t('writePaperReaderRegionSelect')} · ⌘.`}
             aria-label={t('writePaperReaderRegionSelect')}
             aria-pressed={regionSelectActive}
@@ -436,7 +436,7 @@ export function PaperFloatingControls({
           </button>
           <button
             type="button"
-            className={`${ICON} ${immersive ? 'bg-accent/15 text-accent' : ''}`}
+            className={`${ICON} ${immersive ? 'bg-accent-tint/15 text-accent' : ''}`}
             title={`${t(immersive ? 'writePaperReaderExitImmersive' : 'writePaperReaderImmersive')} · F`}
             aria-label={t(immersive ? 'writePaperReaderExitImmersive' : 'writePaperReaderImmersive')}
             aria-pressed={immersive}

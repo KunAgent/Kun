@@ -56,7 +56,7 @@ export function PaperTranslatedMirror({
       >
         <div
           ref={scrollerRef}
-          className="write-pdf-scroller min-h-0 flex-1 overflow-auto bg-ds-main/55 px-4 py-5 dark:bg-black/20"
+          className="write-pdf-scroller paper-reader-stage min-h-0 flex-1 overflow-auto px-4 py-5"
           onScroll={onScrollerScroll}
         >
           {loading ? (

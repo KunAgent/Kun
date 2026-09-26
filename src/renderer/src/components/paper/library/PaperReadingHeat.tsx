@@ -26,7 +26,7 @@ export function PaperReadingHeat({
   const last = Math.min(lastPage ?? 0, segments)
   return (
     <span className="flex w-12 items-center" title={tooltip}>
-      <span className="flex h-1 w-full overflow-hidden rounded-full bg-ds-border-muted/70">
+      <span className="flex h-1 w-full overflow-hidden rounded-full bg-ds-border-muted">
         {Array.from({ length: segments }, (_, index) => {
           const marks = pages[index] ?? 0
           const isRead = index + 1 <= last

@@ -12,7 +12,11 @@ export default {
         accent: {
           DEFAULT: 'var(--ds-accent)',
           foreground: 'var(--ds-control-foreground)',
-          soft: 'var(--ds-accent-soft)'
+          soft: 'var(--ds-accent-soft)',
+          // Alpha-capable accent: `bg-accent-tint/10` works, while
+          // `bg-accent/10` is silently dropped (full var() colors cannot take
+          // an opacity modifier in Tailwind 3.4).
+          tint: 'color-mix(in srgb, var(--ds-accent) calc(<alpha-value> * 100%), transparent)'
         },
         control: {
           DEFAULT: 'var(--ds-control)',

@@ -74,7 +74,7 @@ export function PaperLibrarySwitcher(): ReactElement {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex h-8 w-full items-center gap-2 rounded-lg border border-ds-border-muted bg-ds-subtle/40 px-2 text-left transition hover:bg-ds-hover"
+        className="flex h-8 w-full items-center gap-2 rounded-lg border border-ds-border-muted bg-ds-subtle px-2 text-left transition hover:bg-ds-hover"
       >
         <LibraryBig className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.9} />
         <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-ds-ink">
