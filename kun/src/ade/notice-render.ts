@@ -17,7 +17,8 @@ const KIND_LABEL: Record<WorkerNotice['kind'], Record<ReportLanguage, string>> =
   worker_detached: { zh: '已分离', en: 'Detached' },
   worker_taken_over: { zh: '用户接管', en: 'Taken over' },
   worker_handed_back: { zh: '已交还', en: 'Handed back' },
-  worker_approval: { zh: '待审批', en: 'Approval needed' }
+  worker_approval: { zh: '待审批', en: 'Approval needed' },
+  review_completed: { zh: '审查完成', en: 'Review done' }
 }
 
 function escapeXml(text: string): string {

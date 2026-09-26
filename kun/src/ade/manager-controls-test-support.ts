@@ -22,6 +22,8 @@ import { DispatchDeliverer, type DelivererDelegation } from './dispatch-delivere
 import { ManagerControls } from './manager-controls.js'
 import { TeamControls } from './team-controls.js'
 import { ManagerWorkerLifecycle } from './manager-worker-lifecycle.js'
+import { QualityVerdicts } from './quality-verdict.js'
+import { ReviewRequests } from './review-request.js'
 import type { ManagerRuntimeDeps, ManagerToolContext } from './manager-runtime.js'
 
 /** Shared fixtures for the P1-14 control-plane suites (09 §4.1/§9/§6.5). */
@@ -38,7 +40,7 @@ export type AdeStores = {
   threads: InMemoryThreadStore
 }
 
-export async function setupAdeStores(): Promise<AdeStores> {
+export async function setupAdeStores(limits?: { hardWorkers?: number }): Promise<AdeStores> {
   const dataDir = await mkdtemp(join(tmpdir(), 'kun-ade-controls-'))
   const stores: AdeStores = {
     dataDir,
@@ -49,7 +51,7 @@ export async function setupAdeStores(): Promise<AdeStores> {
     childRuns: new FileDelegationStore(join(dataDir, 'child-runs')),
     threads: new InMemoryThreadStore()
   }
-  await stores.teams.ensure('thr_mgr')
+  await stores.teams.ensure('thr_mgr', limits)
   return stores
 }
 
@@ -200,6 +202,13 @@ export function childRun(overrides: Partial<ChildRunRecord> = {}): ChildRunRecor
 export function makeHarness(stores: AdeStores, opts: {
   workspaceStat?: { changedFiles: number; insertions: number; deletions: number }
   mayApprove?: boolean
+  /** Worker-selector inputs for review_request/worker_create tests (10 §5). */
+  selector?: ManagerRuntimeDeps['selector']
+  /** Harness defs the catalog lists (default: all builtins). */
+  harnesses?: typeof BUILTIN_HARNESSES[number][]
+  capabilities?: unknown
+  statusFor?: (harnessId: string) => unknown
+  reviewSnapshot?: unknown
 } = {}) {
   const gate = new InMemoryApprovalGate()
   const recorded: unknown[] = []
@@ -220,7 +229,8 @@ export function makeHarness(stores: AdeStores, opts: {
     })),
     discard: vi.fn(async () => workspace),
     snapshotBaseline: vi.fn(async () => 'tree_base1'),
-    diffSinceBaseline: vi.fn(async () => INTERVAL_STAT)
+    diffSinceBaseline: vi.fn(async () => INTERVAL_STAT),
+    reviewSnapshot: vi.fn(async () => opts.reviewSnapshot)
   }
   const answerQuestion = vi.fn(async (input: {
     teamId: string
@@ -255,9 +265,13 @@ export function makeHarness(stores: AdeStores, opts: {
     activity: activity as never,
     delegation,
     childRuns: stores.childRuns,
-    catalog: { get: (id: string) => BUILTIN_HARNESSES.find((def) => def.id === id) } as never,
-    detector: { status: vi.fn(async () => null) } as never,
-    capabilitiesForRoute: async () => ({}) as never,
+    catalog: {
+      get: (id: string) => (opts.harnesses ?? BUILTIN_HARNESSES).find((def) => def.id === id),
+      list: () => opts.harnesses ?? BUILTIN_HARNESSES,
+      isDisabled: () => false
+    } as never,
+    detector: { status: vi.fn(async (id: string) => opts.statusFor?.(id) ?? null) } as never,
+    capabilitiesForRoute: async () => (opts.capabilities ?? {}) as never,
     deliverer,
     ids: (() => { let seq = 0; return { next: (p: string) => `${p}_${(seq += 1)}` } })(),
     nowIso: () => NOW,
@@ -265,14 +279,18 @@ export function makeHarness(stores: AdeStores, opts: {
     workerCallbacks: { answerQuestion },
     approvalGate: gate,
     approvalEvents: { record: vi.fn(async (draft: unknown) => { recorded.push(draft) }) } as never,
-    managerMayApprove: () => opts.mayApprove === true
+    managerMayApprove: () => opts.mayApprove === true,
+    ...(opts.selector ? { selector: opts.selector } : {})
   }
   const controls = new ManagerControls(deps)
   const teamControls = new TeamControls(deps, controls)
+  const verdicts = new QualityVerdicts(deps)
   return {
     controls,
     teamControls,
-    lifecycle: new ManagerWorkerLifecycle(deps, teamControls),
+    verdicts,
+    reviews: new ReviewRequests(deps),
+    lifecycle: new ManagerWorkerLifecycle(deps, teamControls, verdicts),
     gate,
     recorded,
     delegation,

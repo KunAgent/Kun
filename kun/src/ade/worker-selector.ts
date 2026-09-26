@@ -16,6 +16,8 @@ import {
 } from '../delegation/subagent-router.js'
 import { quotaEntryFor, quotaUsedPercent } from './quota-snapshot.js'
 import { reportLanguage, type ReportLanguage } from './user-report.js'
+import type { FileTeamStore } from './team-store.js'
+import type { FileDispatchStore } from './dispatch-store.js'
 
 /**
  * Deterministic worker route selection (10 §3.2). `worker_create` without an
@@ -379,4 +381,31 @@ export async function selectWorkerRoute(
       .slice(0, 3)
       .map((entry) => ({ ...entry.candidate, score: entry.score }))
   }
+}
+
+/**
+ * Same-team same-harness dispatch failures within the last hour (10 §3.2
+ * `recentFailurePenalty`). Shared by worker_create and cross-review routing.
+ */
+export async function countRecentWorkerFailures(
+  stores: {
+    teams: Pick<FileTeamStore, 'get'>
+    dispatches: Pick<FileDispatchStore, 'list'>
+  },
+  teamId: string,
+  harnessId: HarnessId
+): Promise<number> {
+  const team = await stores.teams.get(teamId)
+  if (!team) return 0
+  const harnessByWorker = new Map(
+    team.workers.map((worker) => [worker.workerId, worker.route.harnessId])
+  )
+  const cutoff = Date.now() - 60 * 60_000
+  const dispatches = await stores.dispatches.list(teamId).catch(() => [])
+  return dispatches.filter(
+    (dispatch) =>
+      dispatch.state === 'failed' &&
+      harnessByWorker.get(dispatch.workerId) === harnessId &&
+      Date.parse(dispatch.updatedAt) >= cutoff
+  ).length
 }

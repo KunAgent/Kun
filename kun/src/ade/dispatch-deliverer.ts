@@ -10,6 +10,7 @@ import type {
   WorkerRecord
 } from '../contracts/ade.js'
 import type { ThreadExecutionUnit } from '../contracts/threads.js'
+import type { SandboxMode } from '../contracts/policy.js'
 import type { TaskWorkspaceRecord } from '../contracts/task-workspace.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
 import type { ThreadStore } from '../ports/thread-store.js'
@@ -42,6 +43,9 @@ type RunChildInput = {
   security?: ChildSecuritySnapshot
   harnessId?: WorkerRecord['route']['harnessId']
   credentialMode?: WorkerRecord['route']['credentialMode']
+  /** Read-only policy/sandbox ceiling for reviewer workers (10 §5). */
+  toolPolicyCeiling?: 'readOnly'
+  sandboxMode?: SandboxMode
   childId?: string
   executionUnit?: ThreadExecutionUnit
   detach?: boolean
@@ -291,9 +295,16 @@ export class DispatchDeliverer {
       launcher: 'manager-worker',
       label: worker.label,
       childId: dispatch.workerId,
-      workspace: workspace?.path,
+      // Reviewers hold no task-workspace record; their sandboxRoot is the
+      // reviewed worker's workspace (10 §5 local semantics).
+      workspace: workspace?.path ?? (worker.reviewOf ? worker.securitySnapshot.sandboxRoot : undefined),
       model: worker.route.model,
       providerId: worker.route.providerId,
+      // Reviewers run under the host read-only ceiling (10 §5); resumeChild
+      // inherits the policy from the stored run record automatically.
+      ...(worker.reviewOf
+        ? { toolPolicyCeiling: 'readOnly' as const, sandboxMode: 'read-only' as const }
+        : {}),
       ...(worker.selection
         ? {
             ...(worker.profileId ? { profile: worker.profileId } : {}),

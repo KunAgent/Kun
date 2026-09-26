@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { HarnessRouteSchema } from './harness.js'
+import { SUBAGENT_READ_ONLY_TOOL_NAMES } from './capabilities-core.js'
 import { ChildSecuritySnapshot } from '../delegation/delegation-runtime-contracts.js'
 
 /**
@@ -55,6 +56,12 @@ export const WorkerRecordSchema = z
     permissionMode: z.string().min(1).max(128),
     lifecycle: z.enum(['persistent', 'ephemeral']),
     taskWorkspaceId: z.string().min(1).optional(),
+    /**
+     * Cross-review (10 §5): the dispatch this ephemeral reviewer inspects.
+     * Reviewers run read-only in the reviewed worker's task workspace and
+     * hold no write lease on it.
+     */
+    reviewOf: z.string().min(1).max(256).optional(),
     /**
      * Immutable security snapshot captured at creation. Every later dispatch
      * runs under this ceiling; it does not widen with later manager turns.
@@ -136,6 +143,17 @@ export const QualityCheckSchema = z
   .strict()
 export type QualityCheck = z.infer<typeof QualityCheckSchema>
 
+/** A decided verdict displaced by a later one (10 §4.1: keep both on record). */
+export const SupersededVerdictSchema = z
+  .object({
+    status: z.enum(['passed', 'needs_changes', 'rejected', 'waived']),
+    decidedBy: z.enum(['manager', 'user', 'reviewer']),
+    notes: z.string().max(4_000).optional(),
+    decidedAt: z.string().optional()
+  })
+  .strict()
+export type SupersededVerdict = z.infer<typeof SupersededVerdictSchema>
+
 export const QualityVerdictSchema = z
   .object({
     status: z.enum(['pending', 'passed', 'needs_changes', 'rejected', 'waived']),
@@ -143,7 +161,9 @@ export const QualityVerdictSchema = z
     reviewerWorkerId: z.string().min(1).max(256).optional(),
     checks: z.array(QualityCheckSchema).max(64).default([]),
     notes: z.string().max(4_000).optional(),
-    decidedAt: z.string().optional()
+    decidedAt: z.string().optional(),
+    /** Prior decided verdicts, newest first; the current verdict stays effective. */
+    superseded: z.array(SupersededVerdictSchema).max(8).optional()
   })
   .strict()
 export type QualityVerdict = z.infer<typeof QualityVerdictSchema>
@@ -232,7 +252,8 @@ export const WorkerNoticeSchema = z
       'worker_detached',
       'worker_taken_over',
       'worker_handed_back',
-      'worker_approval'
+      'worker_approval',
+      'review_completed'
     ]),
     dispatchId: z.string().min(1).max(256).optional(),
     questionId: z.string().min(1).max(256).optional(),
@@ -297,6 +318,40 @@ export const WorkerDispatchRequestSchema = z
   })
   .strict()
 export type WorkerDispatchRequest = z.infer<typeof WorkerDispatchRequestSchema>
+
+/**
+ * `POST /v1/teams/dispatches/:dispatchId/verdict` (10 §4.3): the user records
+ * a quality verdict from the review panel. `decidedBy: 'user'` overrides a
+ * manager verdict while both stay on record.
+ */
+export const DispatchVerdictRequestSchema = z
+  .object({
+    status: z.enum(['passed', 'needs_changes', 'rejected', 'waived']),
+    notes: z.string().min(1).max(4_000).optional()
+  })
+  .strict()
+export type DispatchVerdictRequest = z.infer<typeof DispatchVerdictRequestSchema>
+
+/** Worker-callback tools every ADE worker keeps even under a read-only ceiling. */
+export const ADE_WORKER_CALLBACK_TOOL_NAMES = [
+  'report_progress',
+  'ask_manager',
+  'read_manager_context',
+  'submit_result'
+] as const
+
+/**
+ * Read-only tool ceiling for a child run (10 §5): ADE worker children keep
+ * their manager-callback channel — a reviewer could not `submit_result`
+ * without it. Non-worker read-only children get the base subagent ceiling.
+ */
+export function readOnlyToolCeiling(
+  executionUnit: { kind: string } | undefined
+): readonly string[] {
+  return executionUnit?.kind === 'worker'
+    ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, ...ADE_WORKER_CALLBACK_TOOL_NAMES]
+    : SUBAGENT_READ_ONLY_TOOL_NAMES
+}
 
 /** File shells: one JSON document per collection inside the team directory. */
 export const TeamFileSchema = z

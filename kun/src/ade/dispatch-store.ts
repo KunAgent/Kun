@@ -122,6 +122,36 @@ export class FileDispatchStore {
     })
   }
 
+  /**
+   * Atomic read-modify-write under the team mutex (verdict decisions and
+   * reviewer merges need the current row, not a blind patch). `fn` returns
+   * the patch — same `state`-transition rules as `update` — or null for a
+   * no-op that still returns the untouched record.
+   */
+  async mutate(
+    teamId: string,
+    dispatchId: string,
+    fn: (current: DispatchRecord) => Partial<Omit<DispatchRecord, 'dispatchId' | 'teamId' | 'createdAt'>> | null
+  ): Promise<DispatchRecord | null> {
+    return withAdeTeamMutex(teamId, async () => {
+      const file = await this.readFile(teamId)
+      const index = file.dispatches.findIndex((entry) => entry.dispatchId === dispatchId)
+      if (index < 0) return null
+      const current = file.dispatches[index]
+      const patch = fn(current)
+      if (!patch) return current
+      if (patch.state !== undefined && patch.state !== current.state) {
+        if (!ALLOWED_DISPATCH_TRANSITIONS[current.state].includes(patch.state)) {
+          throw new DispatchTransitionError(current.state, patch.state)
+        }
+      }
+      const next: DispatchRecord = { ...current, ...patch, updatedAt: this.nowIso() }
+      file.dispatches[index] = next
+      await this.writeFile(teamId, file.dispatches)
+      return next
+    })
+  }
+
   private async readFile(teamId: string): Promise<{ dispatches: DispatchRecord[] }> {
     const file = await readAdeJson(
       adeDispatchesFile(this.dataDir, teamId),
