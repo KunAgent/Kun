@@ -37,7 +37,8 @@ function makeTurn(overrides: Partial<Turn> & { id: string; status: Turn['status'
   return {
     threadId: 'thread', prompt: 'p', orchestration: 'direct', steering: [],
     createdAt: NOW, items: [], attachmentIds: [], activeSkillIds: [],
-    injectedMemoryIds: [], injectedMemorySummaries: [], injectedInstructionSources: [],
+    injectedMemoryIds: [], injectedMemorySummaries: [], injectedDirectiveIds: [],
+    injectedDirectiveSummaries: [], injectedInstructionSources: [],
     ...overrides
   }
 }

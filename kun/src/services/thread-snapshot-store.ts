@@ -131,6 +131,16 @@ export class ThreadSnapshotStore {
     return parsed.success && parsed.data.threadId === threadId ? parsed.data : null
   }
 
+  async remove(threadId: string, snapshotId: string): Promise<boolean> {
+    const manifest = await this.get(threadId, snapshotId)
+    if (!manifest) return false
+    await rm(join(this.threadsDir, threadId, 'snapshots', snapshotId), {
+      recursive: true,
+      force: true
+    })
+    return true
+  }
+
   /** Read a snapshot file's bytes after verification. */
   async readFile(threadId: string, snapshotId: string, name: string): Promise<Buffer | null> {
     if (!SNAPSHOT_FILES.includes(name as SnapshotFile)) return null

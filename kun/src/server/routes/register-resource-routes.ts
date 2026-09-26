@@ -38,6 +38,7 @@ import { auditSupplyChainPackage, checkSupplyChainUpdate } from './supply-chain.
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { authorize } from './route-auth.js'
+import { consolidationPreview, runSessionConsolidation } from './session-consolidation.js'
 
 export function registerResourceRoutes(router: Router, runtime: ServerRuntime): void {
   router.add('POST', '/v1/skills/refresh', async (request) => {
@@ -91,6 +92,14 @@ export function registerResourceRoutes(router: Router, runtime: ServerRuntime): 
   router.add('GET', '/v1/memory/diagnostics', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return memoryDiagnostics(runtime.memoryStore, runtime.memoryFeedback)
+  })
+  router.add('GET', '/v1/memory/consolidation/preview', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return consolidationPreview(runtime)
+  })
+  router.add('POST', '/v1/memory/consolidation/run', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return runSessionConsolidation(runtime)
   })
   router.add('POST', '/v1/memory/:id/confirm', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

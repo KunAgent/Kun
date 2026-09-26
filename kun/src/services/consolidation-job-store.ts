@@ -37,6 +37,17 @@ import {
 // list({status: 'pruning'}) / list({status: 'deleting'}) on startup.
 const RECOVERABLE_INTERRUPTED_STATUSES: readonly ConsolidationJobStatus[] = ['extracting']
 
+const ALLOWED_TRANSITIONS: Readonly<Record<ConsolidationJobStatus, readonly ConsolidationJobStatus[]>> = {
+  eligible: ['extracting', 'failed'],
+  extracting: ['materialized', 'failed'],
+  materialized: ['materialized', 'extracting', 'verified', 'failed'],
+  verified: ['verified', 'pruning', 'deleting', 'failed'],
+  pruning: ['pruning', 'completed', 'failed'],
+  deleting: ['deleting', 'completed', 'failed'],
+  completed: [],
+  failed: ['eligible']
+}
+
 // Local to this file: the session/consolidation layer must not depend on
 // kun/src/memory/ internals, so this does not reuse memory-mutation-queue.ts.
 //
@@ -158,6 +169,10 @@ export class ConsolidationJobStore {
       reason?: string
       error?: string
       measuredBytes?: ConsolidationJobMeasuredBytes
+      recoverySnapshotId?: string
+      archiveExpiresAt?: string
+      cutoffTurnId?: string
+      artifactOwnerIds?: string[]
     } = {}
   ): Promise<ConsolidationJobValue> {
     return this.withMutation(async () => {
@@ -174,6 +189,9 @@ export class ConsolidationJobStore {
           `consolidation job ${jobId} cannot transition to ${to} without a persisted checkpoint`
         )
       }
+      if (!ALLOWED_TRANSITIONS[current.status].includes(to)) {
+        throw new Error(`invalid consolidation job transition ${current.status} -> ${to}`)
+      }
       const at = this.now()
       const next = ConsolidationJob.parse({
         ...current,
@@ -181,6 +199,10 @@ export class ConsolidationJobStore {
         ...(patch.error ? { error: patch.error.slice(0, 512) } : {}),
         ...(to === 'failed' ? { retryCount: current.retryCount + 1 } : {}),
         ...(patch.measuredBytes ? { measuredBytes: { ...current.measuredBytes, ...patch.measuredBytes } } : {}),
+        ...(patch.recoverySnapshotId ? { recoverySnapshotId: patch.recoverySnapshotId } : {}),
+        ...(patch.archiveExpiresAt ? { archiveExpiresAt: patch.archiveExpiresAt } : {}),
+        ...(patch.cutoffTurnId ? { cutoffTurnId: patch.cutoffTurnId } : {}),
+        ...(patch.artifactOwnerIds ? { artifactOwnerIds: [...patch.artifactOwnerIds] } : {}),
         history: [...current.history, {
           status: to,
           at,
@@ -196,16 +218,24 @@ export class ConsolidationJobStore {
 
   async persistCheckpoint(
     jobId: string,
-    checkpoint: { memoryIds: string[]; cutoffRevision: string }
+    checkpoint: { memoryIds: string[]; cutoffRevision: string; itemRevision?: number }
   ): Promise<ConsolidationJobValue> {
     return this.withMutation(async () => {
       const state = copyState(await this.load())
       const current = state.jobs[jobId]
       if (!current) throw new Error(`consolidation job not found: ${jobId}`)
+      if (checkpoint.cutoffRevision !== current.cutoffRevision) {
+        throw new Error(`consolidation checkpoint revision does not match job ${jobId}`)
+      }
+      if (checkpoint.memoryIds.length !== current.memoryIds.length ||
+        checkpoint.memoryIds.some((id, index) => id !== current.memoryIds[index])) {
+        throw new Error(`consolidation checkpoint memory ids do not match job ${jobId}`)
+      }
       const at = this.now()
       const persisted: ConsolidationJobCheckpoint = {
         memoryIds: checkpoint.memoryIds,
         cutoffRevision: checkpoint.cutoffRevision,
+        ...(checkpoint.itemRevision === undefined ? {} : { itemRevision: checkpoint.itemRevision }),
         persistedAt: at
       }
       const next = ConsolidationJob.parse({
