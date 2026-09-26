@@ -1,0 +1,36 @@
+{
+  "sessionId": "sess-cancel-perm",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": { "loadSession": false, "promptCapabilities": {} },
+    "authMethods": []
+  },
+  "turns": [
+    {
+      "steps": [
+        {
+          "clientRequest": {
+            "method": "session/request_permission",
+            "params": {
+              "toolCall": {
+                "toolCallId": "call-cp1",
+                "title": "Run command",
+                "kind": "execute",
+                "status": "pending",
+                "rawInput": { "command": "rm -rf build" }
+              },
+              "options": [
+                { "optionId": "allow-once", "name": "Allow once", "kind": "allow_once" },
+                { "optionId": "allow-always", "name": "Always", "kind": "allow_always" },
+                { "optionId": "reject-once", "name": "Reject", "kind": "reject_once" }
+              ]
+            }
+          }
+        },
+        { "sleep": 30000 }
+      ],
+      "neverRespond": true
+    }
+  ],
+  "onCancel": { "settle": "cancelled" }
+}

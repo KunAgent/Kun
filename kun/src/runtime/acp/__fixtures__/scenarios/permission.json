@@ -1,0 +1,44 @@
+{
+  "sessionId": "sess-perm",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": { "loadSession": false, "promptCapabilities": {} },
+    "authMethods": []
+  },
+  "turns": [
+    {
+      "steps": [
+        {
+          "clientRequest": {
+            "method": "session/request_permission",
+            "params": {
+              "toolCall": {
+                "toolCallId": "call-p1",
+                "title": "Write file",
+                "kind": "edit",
+                "status": "pending",
+                "locations": [{ "path": "README.md" }]
+              },
+              "options": [
+                { "optionId": "allow-once", "name": "Allow once", "kind": "allow_once" },
+                { "optionId": "allow-always", "name": "Always allow", "kind": "allow_always" },
+                { "optionId": "reject-once", "name": "Reject", "kind": "reject_once" }
+              ]
+            }
+          }
+        },
+        {
+          "update": {
+            "sessionUpdate": "tool_call",
+            "toolCallId": "call-p1",
+            "title": "Write file",
+            "kind": "edit",
+            "status": "completed"
+          }
+        },
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "Wrote the file." } } }
+      ],
+      "stopReason": "end_turn"
+    }
+  ]
+}

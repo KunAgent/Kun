@@ -8,6 +8,7 @@
  * functions so the wiring is testable with fakes.
  */
 import type { ApprovalPolicy, SandboxMode } from '../../contracts/policy.js'
+import { buildHarnessEnv } from '../../harness/harness-env.js'
 import type {
   SdkCanUseTool,
   SdkMcpServerConfig,
@@ -43,33 +44,6 @@ export const DEFAULT_SDK_BUILTIN_TOOLS: readonly string[] = [
  */
 export const DEFAULT_SDK_DISALLOWED_TOOLS: readonly string[] = ['AskUserQuestion']
 
-/**
- * Env vars that, if present in the spawned Claude Code process, would override
- * the subscription OAuth token (auth precedence: ANTHROPIC_API_KEY >
- * ANTHROPIC_AUTH_TOKEN > apiKeyHelper > CLAUDE_CODE_OAUTH_TOKEN). They MUST be
- * stripped or the turn silently bills a pay-as-you-go key / wrong provider.
- */
-const AUTH_OVERRIDE_ENV_KEYS: readonly string[] = [
-  'ANTHROPIC_API_KEY',
-  'ANTHROPIC_AUTH_TOKEN',
-  'ANTHROPIC_BASE_URL',
-  'CLAUDE_CODE_USE_BEDROCK',
-  'CLAUDE_CODE_USE_VERTEX',
-  'CLAUDE_CODE_USE_FOUNDRY',
-  'CLAUDE_CODE_USE_ANTHROPIC_AWS'
-]
-
-/**
- * Main/Kun-only browser bridge credentials. The model-controlled Claude Code
- * child must never inherit these, even when a caller supplies a broader
- * `baseEnv` than the production shell allow-list.
- */
-const PRIVATE_BROWSER_BRIDGE_ENV_KEYS: readonly string[] = [
-  'KUN_BROWSER_USE_BRIDGE_URL',
-  'KUN_BROWSER_USE_BRIDGE_TOKEN',
-  'KUN_BROWSER_USE_APPROVAL_SIGNING_KEY'
-]
-
 const CLAUDE_OAUTH_TOKEN_PATTERN = /^sk-ant-oat[\w-]+$/
 
 export function normalizeClaudeOAuthToken(raw: string | undefined): string | undefined {
@@ -93,16 +67,7 @@ export function buildScopedEnv(
   baseEnv: Record<string, string | undefined>,
   oauthToken?: string
 ): Record<string, string | undefined> {
-  const env: Record<string, string | undefined> = { ...baseEnv }
-  const deniedKeys = new Set([
-    ...AUTH_OVERRIDE_ENV_KEYS,
-    ...PRIVATE_BROWSER_BRIDGE_ENV_KEYS
-  ])
-  // Windows environment keys are case-insensitive. Filter by normalized name
-  // on every platform so alternate casing cannot bypass this child boundary.
-  for (const key of Object.keys(env)) {
-    if (deniedKeys.has(key.toUpperCase())) delete env[key]
-  }
+  const env = buildHarnessEnv({ base: baseEnv })
   const token = normalizeClaudeOAuthToken(oauthToken)
   if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token
   return env
