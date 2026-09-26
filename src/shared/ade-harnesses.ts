@@ -30,6 +30,8 @@ export type AdeHarnessDefinition = {
   permissionModes: AdeHarnessPermissionMode[]
   modelSource: 'static' | 'probe' | 'provider'
   staticModels: string[]
+  /** Existing local-history source this harness can continue (01 §8). */
+  historySource?: 'claude-code' | 'codex' | 'opencode'
   /**
    * Tier-0 PTY launch support (docs/ade/05 §6.1). Present only for
    * harnesses that can run inside the built-in terminal.

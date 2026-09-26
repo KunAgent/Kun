@@ -243,6 +243,8 @@ async update(this: ThreadService, threadId: string, patch: {
     workspace?: string
     /** Set-only binding to a host-managed task workspace (07 §5). */
     taskWorkspaceId?: string
+    /** Harness rebind for external-session continuation (01 §8). */
+    harnessId?: string
     additionalWorkspaces?: string[]
     knowledgeBases?: KnowledgeBaseMount[]
     mode?: ThreadMode
@@ -262,7 +264,7 @@ async update(this: ThreadService, threadId: string, patch: {
       if (!current) throw new Error(`thread not found: ${threadId}`)
       if (current.roomContext) {
         const protectedFields = ['workspace', 'taskWorkspaceId', 'additionalWorkspaces', 'knowledgeBases', 'mode',
-          'approvalPolicy', 'sandboxMode', 'approvalReviewer', 'status', 'relation'] as const
+          'approvalPolicy', 'sandboxMode', 'approvalReviewer', 'status', 'relation', 'harnessId'] as const
         if (Object.hasOwn(patch, 'roomContext') || protectedFields.some((key) =>
           patch[key] !== undefined && JSON.stringify(patch[key]) !== JSON.stringify(current[key]))) {
           throw new Error('room thread execution policy is frozen; change the room configuration or task instead')
@@ -288,9 +290,10 @@ async update(this: ThreadService, threadId: string, patch: {
           standardPatch.additionalWorkspaces.map((entry) => entry.trim()).filter(Boolean)
         )].filter((entry) => entry !== (standardPatch.workspace ?? current.workspace))
       }
-      if (standardPatch.knowledgeBases !== undefined || standardPatch.workspace !== undefined) {
+      if (standardPatch.knowledgeBases !== undefined || standardPatch.workspace !== undefined
+        || standardPatch.harnessId !== undefined) {
         if (current.status === 'running') {
-          throw new Error('workspace and knowledge bases cannot be changed while the thread is running')
+          throw new Error('workspace, knowledge bases, and harness cannot be changed while the thread is running')
         }
       }
       if (standardPatch.knowledgeBases !== undefined || standardPatch.workspace !== undefined) {

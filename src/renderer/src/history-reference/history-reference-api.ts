@@ -52,6 +52,18 @@ export function createReferenceBranch(input: ReferenceBranchInput): Promise<{
   return historyRequest('/v1/threads/reference-branches', input)
 }
 
+/** Rebind a freshly-branched thread onto the selected harness (01 §8). */
+export async function updateThreadHarness(threadId: string, harnessId: string): Promise<void> {
+  const response = await rendererRuntimeClient.runtimeRequest(
+    `/v1/threads/${encodeURIComponent(threadId)}`, 'PATCH', JSON.stringify({ harnessId })
+  )
+  if (!response.ok) {
+    let message = `HTTP ${response.status}`
+    try { message = JSON.parse(response.body)?.message ?? message } catch { /* keep status */ }
+    throw new Error(message)
+  }
+}
+
 export function historyBlocks(turn: CoreTurnJson): ChatBlock[] {
   return mergeChatBlocks((turn.items ?? []).map((item) => chatBlockFromItem(item))
     .filter((block): block is ChatBlock => block !== null))

@@ -633,6 +633,8 @@ export const UpdateThreadRequest = z
     workspace: z.string().min(1).optional(),
     /** Bind a host-managed task workspace once it reaches `ready` (07 §5); set-only. */
     taskWorkspaceId: z.string().min(1).optional(),
+    /** Rebind the harness (01 §8); refused while the thread is running. */
+    harnessId: HarnessIdSchema.optional(),
     additionalWorkspaces: z.array(z.string().min(1)).max(32).optional(),
     knowledgeBases: KnowledgeBaseMountsSchema.optional(),
     mode: ThreadMode.optional(),
@@ -657,6 +659,7 @@ export const UpdateThreadRequest = z
       value.titleAuto !== undefined ||
       value.workspace !== undefined ||
       value.taskWorkspaceId !== undefined ||
+      value.harnessId !== undefined ||
       value.additionalWorkspaces !== undefined ||
       value.knowledgeBases !== undefined ||
       value.mode !== undefined ||

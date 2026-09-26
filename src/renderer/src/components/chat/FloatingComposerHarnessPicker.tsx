@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Bot, ChevronDown, Loader2 } from 'lucide-react'
+import { Bot, ChevronDown, History, Loader2 } from 'lucide-react'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import { harnessRowUnavailableReason } from '../../store/harness-store'
 
@@ -16,6 +16,12 @@ type Props = {
    * runtime starts a fresh native session and carries a handoff brief.
    */
   needsConfirm: (harnessId: string) => boolean
+  /**
+   * New-session continuation entry (01 §8): shown only for a fresh
+   * one-to-one thread whose selected harness exposes a `historySource`
+   * and the matching lab flag is on.
+   */
+  onContinueLocalSession?: () => void
   onOpen?: () => void
   onSelect: (harnessId: string) => void
 }
@@ -28,6 +34,7 @@ export function FloatingComposerHarnessPicker({
   rows,
   loading,
   needsConfirm,
+  onContinueLocalSession,
   onOpen,
   onSelect
 }: Props): ReactElement {
@@ -167,6 +174,22 @@ export function FloatingComposerHarnessPicker({
                   </button>
                 )
               })}
+              {onContinueLocalSession ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false)
+                    onContinueLocalSession()
+                  }}
+                  className="flex w-full items-center gap-2 border-t border-ds-border px-3 py-2 text-left text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                  data-continue-local-session
+                >
+                  <History className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                  <span className="min-w-0 flex-1 truncate">
+                    {t('adeHarnessPicker.continueLocalSession')}
+                  </span>
+                </button>
+              ) : null}
               <div className="border-t border-ds-border px-3 py-2 text-[11px] text-ds-faint">
                 {t('adeHarnessPicker.nextTurnHint')}
               </div>

@@ -169,6 +169,7 @@
   "adeCredential.provider": "Provider",
   "adeCredential.kunGateway": "Kun gateway",
   "adeHarnessPicker.title": "Harness",
+  "adeHarnessPicker.continueLocalSession": "Continue a local session",
   "adeHarnessPicker.nextTurnHint": "Applies to the next turn. Code threads always use Kun.",
   "adeHarnessPicker.switchConfirmTitle": "Switch to {{name}}?",
   "adeHarnessPicker.switchConfirmBody": "The next turn starts a fresh session in the new harness and carries a handoff summary. Earlier turns keep their original harness.",
