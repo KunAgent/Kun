@@ -12,7 +12,7 @@ import {
   routePoolStatus,
   testRoutePool
 } from './openai-model-gateway.js'
-import { gatewayMessages } from './openai-model-gateway-anthropic.js'
+import { gatewayCountTokens, gatewayMessages } from './anthropic-messages-gateway.js'
 import { registerExtensionManagementRoutes } from './extensions.js'
 import { registerExtensionPublicRoutes } from './extension-public.js'
 import {
@@ -74,6 +74,7 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('POST', '/v1/chat/completions', (request) => gatewayChatCompletions(runtime, request))
   router.add('POST', '/v1/responses', (request) => gatewayResponses(runtime, request))
   router.add('POST', '/v1/messages', (request) => gatewayMessages(runtime, request))
+  router.add('POST', '/v1/messages/count_tokens', (request) => gatewayCountTokens(runtime, request))
   // Kun Tools MCP endpoint lives outside /v1 so harness-scoped kgw_ tokens
   // never share the runtime-token authorization surface (docs/ade/05 §3.3).
   router.add('POST', '/mcp/kun', (request) => handleKunToolsMcp(runtime, request))
