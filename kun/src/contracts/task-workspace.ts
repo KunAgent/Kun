@@ -65,6 +65,8 @@ export const TaskWorkspaceRecordSchema = z.object({
   startFrom: StartFromSchema,
   baseRevision: z.string().regex(/^[a-f0-9]{40,64}$/).optional(),
   branch: z.string().max(256).optional(),
+  /** Local branch merge-branch integration targets (none for detached starts). */
+  targetBranch: z.string().max(256).optional(),
   headRevision: z.string().regex(/^[a-f0-9]{40,64}$/).optional(),
   state: TaskWorkspaceStateSchema,
   progress: TaskWorkspaceProgressSchema.optional(),
@@ -73,6 +75,8 @@ export const TaskWorkspaceRecordSchema = z.object({
   changedFiles: z.array(z.string().max(4_096)).max(10_000).default([]),
   patchArtifactId: z.string().optional(),
   lastError: z.string().max(2_048).optional(),
+  /** User-facing recovery steps set alongside lastError on conflicts. */
+  recovery: z.array(z.string().max(512)).max(8).optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
 }).strict()
@@ -88,6 +92,36 @@ export const CreateTaskWorkspaceRequestSchema = z.object({
   startFrom: StartFromSchema.default({ kind: 'default-branch' })
 }).strict()
 export type CreateTaskWorkspaceRequest = z.infer<typeof CreateTaskWorkspaceRequestSchema>
+
+/** POST /v1/task-workspaces/:id/integrate request body. */
+export const IntegrateTaskWorkspaceRequestSchema = z.object({
+  mode: z.enum(['apply-patch', 'merge-branch']).default('apply-patch')
+}).strict()
+export type IntegrateTaskWorkspaceRequest = z.infer<typeof IntegrateTaskWorkspaceRequestSchema>
+
+/** POST /v1/task-workspaces/:id/discard request body. */
+export const DiscardTaskWorkspaceRequestSchema = z.object({
+  confirm: z.literal(true).optional()
+}).strict()
+export type DiscardTaskWorkspaceRequest = z.infer<typeof DiscardTaskWorkspaceRequestSchema>
+
+export const TaskWorkspaceIntegrateOutcomeSchema = z.enum([
+  'applied', 'merged', 'needs_human', 'conflict'
+])
+export type TaskWorkspaceIntegrateOutcome = z.infer<typeof TaskWorkspaceIntegrateOutcomeSchema>
+
+/** Preview returned with HTTP 409 when discard lacks `confirm: true`. */
+export const TaskWorkspaceDiscardPreviewSchema = z.object({
+  uncommittedFiles: z.number().int().nonnegative(),
+  unpushedCommits: z.number().int().nonnegative()
+}).strict()
+export type TaskWorkspaceDiscardPreview = z.infer<typeof TaskWorkspaceDiscardPreviewSchema>
+
+export type PreservedBranchInfo = {
+  branch: string
+  lastCommit: string
+  aheadBy: number
+}
 
 /**
  * Runtime event emitted on every progress/state transition, attached to

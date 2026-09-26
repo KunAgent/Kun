@@ -171,4 +171,69 @@ describe('task workspace routes', () => {
     expect(ready.status).toBe(200)
     expect((JSON.parse(ready.body)).record.state).toBe('ready')
   })
+
+  it('captures, integrates and cleans up a workspace over HTTP', async () => {
+    const { service, request, repo } = await harness()
+    const created = await request('POST', '/v1/task-workspaces', {
+      ownerThreadId: 'thread-a',
+      sourceRoot: repo,
+      isolation: 'worktree',
+      startFrom: { kind: 'current-head' }
+    })
+    const record = (JSON.parse(created.body)).record
+    await waitTerminal(service, record.workspaceId)
+    expect(service.get(record.workspaceId)?.state).toBe('ready')
+    const worktree = service.get(record.workspaceId)!.path
+    await writeFile(join(worktree, 'a.txt'), 'via worktree\n')
+    const captured = await request(
+      'POST', `/v1/task-workspaces/${record.workspaceId}/capture`
+    )
+    expect(captured.status).toBe(200)
+    expect((JSON.parse(captured.body)).record.state).toBe('captured')
+    const integrated = await request(
+      'POST', `/v1/task-workspaces/${record.workspaceId}/integrate`, {}
+    )
+    expect(integrated.status).toBe(200)
+    expect((JSON.parse(integrated.body)).outcome).toBe('applied')
+    const cleaned = await request(
+      'POST', `/v1/task-workspaces/${record.workspaceId}/cleanup`
+    )
+    expect(cleaned.status).toBe(200)
+    // Dirty-but-captured worktree cannot be non-force removed → preserved.
+    expect((JSON.parse(cleaned.body)).record.state).toBe('preserved')
+  })
+
+  it('returns 409 with a damage preview for unconfirmed discard', async () => {
+    const { service, request, repo } = await harness()
+    const created = await request('POST', '/v1/task-workspaces', {
+      ownerThreadId: 'thread-a',
+      sourceRoot: repo,
+      isolation: 'worktree',
+      startFrom: { kind: 'current-head' }
+    })
+    const record = (JSON.parse(created.body)).record
+    await waitTerminal(service, record.workspaceId)
+    const preview = await request(
+      'POST', `/v1/task-workspaces/${record.workspaceId}/discard`, {}
+    )
+    expect(preview.status).toBe(409)
+    const body = JSON.parse(preview.body)
+    expect(body.preview.uncommittedFiles).toBeGreaterThanOrEqual(0)
+    const confirmed = await request(
+      'POST', `/v1/task-workspaces/${record.workspaceId}/discard`, { confirm: true }
+    )
+    expect(confirmed.status).toBe(200)
+    expect((JSON.parse(confirmed.body)).record.state).toBe('removed')
+  })
+
+  it('preserved-branches is not swallowed by the :workspaceId route', async () => {
+    const { request, repo } = await harness()
+    const listed = await request(
+      'GET', `/v1/task-workspaces/preserved-branches?repo=${encodeURIComponent(repo)}`
+    )
+    expect(listed.status).toBe(200)
+    expect((JSON.parse(listed.body)).branches).toEqual([])
+    const missing = await request('GET', '/v1/task-workspaces/preserved-branches')
+    expect(missing.status).toBe(400)
+  })
 })
