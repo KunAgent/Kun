@@ -9,5 +9,6 @@
   "adeHandoffDelta": "Resumed {{agent}} with a delta brief",
   "adeHandoffShow": "Show brief",
   "adeHandoffHide": "Hide brief",
-  "adeHandoffLoadError": "Could not rebuild the handoff brief"
+  "adeHandoffLoadError": "Could not rebuild the handoff brief",
+  "workerUpdateNotice.title": "Worker updates"
 }

@@ -218,10 +218,24 @@ export const WorkerNoticeSchema = z
       .strict()
       .optional(),
     createdAt: z.string(),
+    /** Failed wake-up deliveries; drives backoff and restart replay. */
+    attempts: z.number().int().nonnegative().default(0),
+    lastAttemptAt: z.string().optional(),
+    lastError: z.string().max(1_024).optional(),
     ackedAt: z.string().optional()
   })
   .strict()
 export type WorkerNotice = z.infer<typeof WorkerNoticeSchema>
+
+/**
+ * `POST /v1/teams/:managerThreadId/notice-hold` (09 §6.2): the renderer
+ * renews this while the composer has focus and unsent text so a wake-up
+ * turn never interrupts a user mid-draft.
+ */
+export const WorkerNoticeHoldRequestSchema = z
+  .object({ holdMs: z.number().int().min(1).max(60_000) })
+  .strict()
+export type WorkerNoticeHoldRequest = z.infer<typeof WorkerNoticeHoldRequestSchema>
 
 /** File shells: one JSON document per collection inside the team directory. */
 export const TeamFileSchema = z

@@ -540,6 +540,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       workspaceCheckpointRequestId?: string
       fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
       composerContexts?: ComposerContextAttachment[]
+      ackNoticeIds?: string[]
       writeContext?: WriteTurnContext
     }
   ): Promise<{
@@ -646,6 +647,9 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     }
     if (options?.composerContexts?.length) {
       body.composerContexts = options.composerContexts
+    }
+    if (options?.ackNoticeIds?.length) {
+      body.ackNoticeIds = options.ackNoticeIds
     }
     if (options?.writeContext) {
       body.writeContext = options.writeContext

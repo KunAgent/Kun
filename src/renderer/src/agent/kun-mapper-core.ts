@@ -489,7 +489,8 @@ export function applyRuntimeDisclosureMeta(
     item.messageSource === 'background_subagent' ||
     item.messageSource === 'graph_runtime' ||
     item.messageSource === 'subagent_resume' ||
-    item.messageSource === 'design_continuation'
+    item.messageSource === 'design_continuation' ||
+    item.messageSource === 'worker_update'
   ) {
     meta.messageSource = item.messageSource
   }

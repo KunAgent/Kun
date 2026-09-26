@@ -5,7 +5,7 @@ import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { extractUnifiedDiffText } from '../../lib/diff-stats'
 import { useChatStore } from '../../store/chat-store'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
-import { isBackgroundShellNoticeBlock, isBackgroundSubagentNoticeBlock } from './message-timeline-turns'
+import { isBackgroundShellNoticeBlock, isBackgroundSubagentNoticeBlock, isWorkerUpdateNoticeBlock } from './message-timeline-turns'
 import { DiffView } from '../DiffView'
 import { AssistantMarkdown } from './AssistantMarkdown'
 import { readNumber, formatDuration, summarizeBackgroundShellToolBlock } from './message-timeline-tools'
@@ -13,7 +13,8 @@ import { formatTtftSeconds, formatTps } from '../../hooks/use-thread-usage'
 import {
   BackgroundShellNoticeBubble,
   BackgroundSubagentNoticeBubble,
-  UserMessageBubble
+  UserMessageBubble,
+  WorkerUpdateNoticeBubble
 } from './message-timeline-user-bubbles'
 import {
   AssistantExportButton,
@@ -122,6 +123,9 @@ function MessageBubbleImpl({
   }
   if (block.kind === 'user' && isBackgroundSubagentNoticeBlock(block)) {
     return <BackgroundSubagentNoticeBubble block={block} nested={nested} />
+  }
+  if (block.kind === 'user' && isWorkerUpdateNoticeBlock(block)) {
+    return <WorkerUpdateNoticeBubble block={block} nested={nested} />
   }
   if (block.kind === 'user') {
     return <UserMessageBubble block={block} allowThreadActions={allowThreadActions} />

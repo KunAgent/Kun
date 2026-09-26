@@ -130,7 +130,8 @@ function queuedSendOptions(message: QueuedUserMessage, input: {
     ...(message.attachmentIds?.length ? { attachmentIds: message.attachmentIds } : {}),
     ...(input.checkpointRequestId ? { workspaceCheckpointRequestId: input.checkpointRequestId } : {}),
     ...(message.fileReferences?.length ? { fileReferences: message.fileReferences } : {}),
-    ...(message.composerContexts?.length ? { composerContexts: message.composerContexts } : {})
+    ...(message.composerContexts?.length ? { composerContexts: message.composerContexts } : {}),
+    ...(message.ackNoticeIds?.length ? { ackNoticeIds: message.ackNoticeIds } : {})
   }
 }
 

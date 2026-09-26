@@ -6,7 +6,7 @@ import type { AssistantTextTurnItem, TurnItem, UserTurnItem } from '../contracts
 import type { FileTeamStore } from '../ade/team-store.js'
 import type { FileDispatchStore } from '../ade/dispatch-store.js'
 import type { FileQuestionStore } from '../ade/question-store.js'
-import type { FileWorkerNoticeStore } from '../ade/worker-notice-store.js'
+import type { FileWorkerNoticeStore, WorkerNoticeSink } from '../ade/worker-notice-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { SessionStore } from '../ports/session-store.js'
 
@@ -21,7 +21,11 @@ export type WorkerCallbackServiceDeps = {
   teams: FileTeamStore
   dispatches: FileDispatchStore
   questions: FileQuestionStore
-  notices: FileWorkerNoticeStore
+  /**
+   * Initial sink; composition rebinds it to the WorkerNoticeCoordinator so
+   * question notices schedule manager wake-ups too (09 §6.2).
+   */
+  notices: WorkerNoticeSink
   activity?: { apply(unitId: string, patch: ActivityPatch, provenance: ActivityProvenance): void }
   nowIso?: () => string
   nowMs?: () => number
@@ -78,10 +82,20 @@ export class WorkerCallbackService {
   private readonly nowMs: () => number
   private readonly lastProgressAt = new Map<string, number>()
   private readonly waiters = new Map<string, QuestionWaiter>()
+  private noticeSink: WorkerNoticeSink
 
   constructor(private readonly deps: WorkerCallbackServiceDeps) {
+    this.noticeSink = deps.notices
     this.nowIso = deps.nowIso ?? (() => new Date().toISOString())
     this.nowMs = deps.nowMs ?? (() => Date.now())
+  }
+
+  /**
+   * Late binding: the coordinator only exists after agent composition, while
+   * this service is built earlier for the tool providers.
+   */
+  setNoticeSink(sink: WorkerNoticeSink): void {
+    this.noticeSink = sink
   }
 
   /** Resolve the calling worker's team binding or throw "not a worker". */
@@ -165,7 +179,7 @@ export class WorkerCallbackService {
       mainState: 'waiting',
       waitingReason: 'question'
     }, 'callback')
-    await this.deps.notices.enqueue({
+    await this.noticeSink.enqueue({
       noticeId: `ntc_${questionId}`,
       teamId: worker.teamId,
       workerId: workerThreadId,
@@ -176,6 +190,7 @@ export class WorkerCallbackService {
       ...(worker.harnessLabel ? { harnessLabel: worker.harnessLabel } : {}),
       detail: input.question.slice(0, 4_000),
       ...(input.options?.length ? { options: input.options } : {}),
+      attempts: 0,
       createdAt: now
     })
     try {

@@ -24,7 +24,7 @@ import type { FileDelegationStore } from '../delegation/delegation-runtime-contr
 import type { FileTeamStore } from './team-store.js'
 import type { FileDispatchStore } from './dispatch-store.js'
 import type { FileQuestionStore } from './question-store.js'
-import type { FileWorkerNoticeStore } from './worker-notice-store.js'
+import type { WorkerNoticeSink } from './worker-notice-store.js'
 import type { DispatchDeliverer, DelivererDelegation } from './dispatch-deliverer.js'
 import { checkHarnessAdmission, type AdmissionResult } from '../harness/harness-admission.js'
 import { effectiveCapabilitiesForRoute } from '../harness/effective-capabilities.js'
@@ -128,7 +128,8 @@ export type ManagerRuntimeDeps = {
   teams: FileTeamStore
   dispatches: FileDispatchStore
   questions: FileQuestionStore
-  notices: FileWorkerNoticeStore
+  /** Raw store or the wake-up coordinator wrapping it (09 §6.2). */
+  notices: WorkerNoticeSink
   threads: ThreadStore
   turns: Pick<TurnService, 'getTurn'>
   sessionStore: Pick<SessionStore, 'loadItems'>

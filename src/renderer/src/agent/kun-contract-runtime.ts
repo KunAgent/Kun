@@ -281,7 +281,7 @@ export type CoreTurnItemJson = {
   designProfile?: DesignTaskProfile
   designDocumentTarget?: DesignDocumentTarget
   designImagePlacementTarget?: DesignImagePlacementTarget
-  messageSource?: 'background_shell' | 'background_subagent' | 'graph_runtime' | 'subagent_resume' | 'design_continuation'
+  messageSource?: 'background_shell' | 'background_subagent' | 'graph_runtime' | 'subagent_resume' | 'design_continuation' | 'worker_update'
   toolName?: string
   callId?: string
   cancelRequestedAt?: string

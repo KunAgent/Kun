@@ -1,6 +1,7 @@
 import type { ChatBlock, NormalizedThread, ReviewTarget } from '../agent/types'
 import type { DesignDocumentTarget, DesignTaskProfileInput } from '../agent/design-task-profile'
 import { getProvider } from '../agent/registry'
+import { adeWorkerNoticeSendExtras } from '../agent/ade-notices'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { prepareAssistantMarkdownRenderer } from '../lib/assistant-markdown-loader'
 import {
@@ -146,12 +147,11 @@ import { GitCheckpointAvailabilityCache } from '../lib/git-checkpoint-availabili
 import { readDesignThreadRegistry } from '../design/design-thread-registry'
 import { isDesignThreadId } from '../design/design-thread-registry'
 import { readSddThreadRegistry } from '../sdd/sdd-thread-registry'
-import { isWorkspaceOfficeViewPositionAttachment } from '../lib/workspace-office-view-context'
-import { isWriteTurnReferenceAttachment } from '../write/write-turn-reference-context'
+import type { ComposerContextAttachment } from '@kun/extension-api'
 import {
-  MAX_COMPOSER_CONTEXT_ATTACHMENTS,
-  type ComposerContextAttachment
-} from '@kun/extension-api'
+  mergeTurnComposerContexts,
+  routeComposerContexts
+} from './chat-store-composer-context-routing'
 import { mergeChatBlocks } from '../agent/kun-mapper'
 import {
   activeChatWorkspaceRoot,
@@ -177,42 +177,6 @@ import { performPreparedThreadSend } from './chat-store-thread-send-direct'
 import { submitToRuntimeQueue } from './chat-store-thread-send-enqueue'
 import { runtimePromptForSurface } from './chat-store-send-prompt'
 import { startWorkspaceCheckpointSnapshot } from './chat-store-thread-send-checkpoint'
-
-function mergeTurnComposerContexts(
-  primary: readonly ComposerContextAttachment[],
-  pending: readonly ComposerContextAttachment[]
-): ComposerContextAttachment[] {
-  const merged: ComposerContextAttachment[] = []
-  const seen = new Set<string>()
-  for (const context of [...primary, ...pending]) {
-    if (seen.has(context.attachmentId)) continue
-    seen.add(context.attachmentId)
-    merged.push(context)
-    if (merged.length === MAX_COMPOSER_CONTEXT_ATTACHMENTS) break
-  }
-  return merged
-}
-
-function routeComposerContexts(
-  route: ChatState['route'],
-  primary: readonly ComposerContextAttachment[],
-  pending: readonly ComposerContextAttachment[]
-): ComposerContextAttachment[] {
-  if (route === 'chat') return mergeTurnComposerContexts(primary, pending)
-  if (route === 'write') {
-    const currentView = primary.find(isWorkspaceOfficeViewPositionAttachment)
-    const references = primary.filter(isWriteTurnReferenceAttachment)
-    const pptContexts = primary.filter((context) =>
-      'source' in context.provenance &&
-      context.provenance.source === 'dev-preview' &&
-      (context.reference.kind === 'ppt-review' || context.reference.kind === 'ppt-direction'))
-    return mergeTurnComposerContexts(
-      [...references, ...(currentView ? [currentView] : []), ...pptContexts],
-      []
-    )
-  }
-  return []
-}
 
 export const routeComposerContextsForTests = routeComposerContexts
 
@@ -382,6 +346,9 @@ export async function sendThreadMessage(
     const admissionPromise = !queued && shouldWaitForRuntimeAdmission
       ? waitForRuntimeTurnAdmission(clientRequestId)
       : null
+    // ADE manager sends fold pending worker notices into the turn (09 §6.2).
+    const adeExtras = await adeWorkerNoticeSendExtras(get(), queued?.ackNoticeIds, i18n.language)
+    const ackNoticeIds = adeExtras.ackNoticeIds
     const hasPendingActiveTurn = threadHasPendingRuntimeWork(get().blocks)
     if (get().busy || hasPendingActiveTurn || (queued && !shouldWaitForRuntimeAdmission)) {
       const state = get()
@@ -418,10 +385,13 @@ export async function sendThreadMessage(
         reference.relativePath.trim().length > 0 &&
         reference.name.trim().length > 0
       )
-      const composerContexts = routeComposerContexts(
-        state.route,
-        queued?.composerContexts ?? overrides?.composerContexts ?? [],
-        queued ? [] : pendingComposerContexts(state)
+      const composerContexts = mergeTurnComposerContexts(
+        routeComposerContexts(
+          state.route,
+          queued?.composerContexts ?? overrides?.composerContexts ?? [],
+          queued ? [] : pendingComposerContexts(state)
+        ),
+        adeExtras.contexts
       )
       const orchestration = queued?.orchestration ?? overrides?.orchestration ??
         (mode === 'agent' && state.route === 'chat' && state.graphEnabled
@@ -458,6 +428,7 @@ export async function sendThreadMessage(
           attachments,
           fileReferences,
           composerContexts,
+          ackNoticeIds,
           queued,
           overrides,
           set,
@@ -502,7 +473,8 @@ export async function sendThreadMessage(
           ...(attachmentIds?.length ? { attachmentIds } : {}),
           ...(attachments?.length ? { attachments } : {}),
           ...(fileReferences?.length ? { fileReferences } : {}),
-          ...(composerContexts.length ? { composerContexts } : {})
+          ...(composerContexts.length ? { composerContexts } : {}),
+          ...(ackNoticeIds?.length ? { ackNoticeIds } : {})
         }),
         extensionComposerContexts: withoutConsumedComposerContexts(s, composerContexts),
         error: null
@@ -533,10 +505,13 @@ export async function sendThreadMessage(
         reference.name.trim().length > 0
       ) ??
       []
-    const composerContexts = routeComposerContexts(
-      get().route,
-      queued?.composerContexts ?? overrides?.composerContexts ?? [],
-      queued ? [] : pendingComposerContexts(get())
+    const composerContexts = mergeTurnComposerContexts(
+      routeComposerContexts(
+        get().route,
+        queued?.composerContexts ?? overrides?.composerContexts ?? [],
+        queued ? [] : pendingComposerContexts(get())
+      ),
+      adeExtras.contexts
     )
     let activeThreadId = get().activeThreadId
     if (!expectedThreadStillActive()) {
@@ -631,7 +606,8 @@ export async function sendThreadMessage(
       ...(attachmentIds.length ? { attachmentIds } : {}),
       ...(attachments.length ? { attachments } : {}),
       ...(fileReferences.length ? { fileReferences } : {}),
-      ...(composerContexts.length ? { composerContexts } : {})
+      ...(composerContexts.length ? { composerContexts } : {}),
+      ...(ackNoticeIds?.length ? { ackNoticeIds } : {})
     })
     const sent = await performPreparedThreadSend({
       context,
@@ -656,6 +632,7 @@ export async function sendThreadMessage(
       attachments,
       fileReferences,
       composerContexts,
+      ackNoticeIds,
       activeThreadId,
       displayText,
       userDisplayText,

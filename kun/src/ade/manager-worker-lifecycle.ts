@@ -179,6 +179,7 @@ export class ManagerWorkerLifecycle {
       kind: 'worker_released',
       title: worker.label,
       harnessLabel: this.harnessLabel(worker),
+      attempts: 0,
       createdAt: this.deps.nowIso()
     }).catch(() => undefined)
   }
@@ -207,6 +208,7 @@ export class ManagerWorkerLifecycle {
             }
           }
         : {}),
+      attempts: 0,
       createdAt: this.deps.nowIso()
     }
   }

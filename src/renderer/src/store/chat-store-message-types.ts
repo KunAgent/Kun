@@ -51,6 +51,9 @@ export type QueuedUserMessage = {
   attachments?: AttachmentReference[]
   fileReferences?: UserFileReference[]
   composerContexts?: ComposerContextAttachment[]
+  /** ADE worker notices acknowledged by this send; paired with the attached
+   *  worker-notices composer context frozen at enqueue time. */
+  ackNoticeIds?: string[]
   /** GUI plan context forwarded to Kun for its reserved plan artifact. */
   guiPlan?: {
     operation: 'draft' | 'refine'

@@ -284,6 +284,8 @@ export type ServerRuntime = {
     /** Manager control plane + exactly-once dispatch delivery (09 §4-§5). */
     manager?: import('../../ade/manager-runtime.js').ManagerRuntime
     deliverer?: import('../../ade/dispatch-deliverer.js').DispatchDeliverer
+    /** Manager wake-up batching + composer holds (09 §6.2). */
+    noticeCoordinator?: import('../../ade/worker-notice-coordinator.js').WorkerNoticeCoordinator
   }
   /**
    * Admission evaluation for a harness in a usage surface (one-to-one,

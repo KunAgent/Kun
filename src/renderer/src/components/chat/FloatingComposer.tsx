@@ -415,7 +415,8 @@ export function FloatingComposer({
     () => (codeAgentPresets ?? []).map((preset) => resolveCodeAgentPreset(preset)),
     [codeAgentPresets]
   )
-  const draft = useComposerDraft({ input, canCompose: canEditComposer })
+  const noticeHoldThreadId = activeThread?.workspaceMode === 'ade' ? activeThread.id : null
+  const draft = useComposerDraft({ input, canCompose: canEditComposer, noticeHoldThreadId })
   const { focusComposer } = draft
   useEffect(() => {
     const onFocusRequest = (): void => focusComposer()

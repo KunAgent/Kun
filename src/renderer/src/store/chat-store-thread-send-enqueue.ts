@@ -52,6 +52,7 @@ export type RuntimeQueueSendInput = {
   attachments: readonly AttachmentReference[] | undefined
   fileReferences: SendMessageOverrides['fileReferences']
   composerContexts: ComposerContextAttachment[]
+  ackNoticeIds: string[] | undefined
   queued: QueuedUserMessage | undefined
   overrides: SendMessageOverrides | undefined
   set: ChatStoreSet
@@ -72,7 +73,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
     composerAccountId, userModelChip, displayText, reasoningEffort, serviceTier,
     subagentResume, messageSource, persona, designProfile, designDocumentTarget,
     designImagePlacementTarget, attachmentIds, attachments, fileReferences, composerContexts,
-    queued, overrides, set: setStore, get
+    ackNoticeIds, queued, overrides, set: setStore, get
   } = input
   const initialState = { ...get() }
   const set: ChatStoreSet = (partial) => {
@@ -138,7 +139,8 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(attachmentIds?.length ? { attachmentIds: [...attachmentIds] } : {}),
       ...(checkpointRequestId ? { workspaceCheckpointRequestId: checkpointRequestId } : {}),
       ...(fileReferences?.length ? { fileReferences } : {}),
-      ...(composerContexts.length ? { composerContexts } : {})
+      ...(composerContexts.length ? { composerContexts } : {}),
+      ...(ackNoticeIds?.length ? { ackNoticeIds } : {})
     }
     const queuedRow = pendingQueuedMessage({
       ...queued,
@@ -149,6 +151,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       text: trimmedText,
       clientRequestId,
       ...(composerContexts.length ? { composerContexts } : {}),
+      ...(ackNoticeIds?.length ? { ackNoticeIds } : {}),
       ...(fileReferences?.length ? { fileReferences } : {}),
       ...(attachmentIds?.length ? { attachmentIds: [...attachmentIds] } : {}),
       ...(attachments?.length ? { attachments: [...attachments] } : {}),

@@ -265,7 +265,10 @@ export function registerThreadRoutes(
       ({ threadId, turnId }) => {
         runtime.runTurn(threadId, turnId)
       },
-      () => runtime.graph?.config().enabled === true
+      () => runtime.graph?.config().enabled === true,
+      async (threadId, noticeIds) => {
+        await runtime.ade?.stores.notices.ack(threadId, noticeIds)
+      }
     )
   })
   router.add('POST', '/v1/threads/:id/rewind', async (request, ctx) => {

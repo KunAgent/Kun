@@ -1,6 +1,7 @@
 import type { ChatBlock } from '../../agent/types'
 import { isBackgroundShellNoticeUserMessage } from '@shared/background-shell-notice'
 import { isBackgroundSubagentNoticeUserMessage } from '@shared/background-subagent-notice'
+import { isWorkerUpdateNoticeUserMessage } from '@shared/worker-update-notice'
 import { hasPendingRuntimeWork } from '../../store/chat-store-runtime-helpers'
 
 export type Turn = {
@@ -32,12 +33,18 @@ export function isDesignContinuationBlock(block: ChatBlock): boolean {
   return block.kind === 'user' && block.meta?.messageSource === 'design_continuation'
 }
 
+/** ADE manager wake-up batch (09 §6.2) — card content, not a user bubble. */
+export function isWorkerUpdateNoticeBlock(block: ChatBlock): boolean {
+  return block.kind === 'user' && isWorkerUpdateNoticeUserMessage(block)
+}
+
 export function isBackgroundNoticeBlock(block: ChatBlock): boolean {
   return (
     isBackgroundShellNoticeBlock(block) ||
     isBackgroundSubagentNoticeBlock(block) ||
     isGraphRuntimeNoticeBlock(block) ||
-    isDesignContinuationBlock(block)
+    isDesignContinuationBlock(block) ||
+    isWorkerUpdateNoticeBlock(block)
   )
 }
 
@@ -62,7 +69,9 @@ export function groupTurns(blocks: ChatBlock[]): Turn[] {
     )
     if (
       block.kind === 'user' &&
-      (isBackgroundShellNoticeBlock(block) || isBackgroundSubagentNoticeBlock(block))
+      (isBackgroundShellNoticeBlock(block) ||
+        isBackgroundSubagentNoticeBlock(block) ||
+        isWorkerUpdateNoticeBlock(block))
     ) {
       let turn = turnId ? turnsById.get(turnId) : undefined
       if (!turn) turn = current ?? undefined
@@ -160,6 +169,7 @@ export function isProcessBlock(block: ChatBlock): boolean {
   return (
     isBackgroundShellNoticeBlock(block) ||
     isBackgroundSubagentNoticeBlock(block) ||
+    isWorkerUpdateNoticeBlock(block) ||
     block.kind === 'reasoning' ||
     block.kind === 'tool' ||
     block.kind === 'compaction' ||

@@ -9,5 +9,6 @@
   "adeHandoffDelta": "已用增量简报继续 {{agent}}",
   "adeHandoffShow": "查看简报",
   "adeHandoffHide": "收起简报",
-  "adeHandoffLoadError": "无法重建交接简报"
+  "adeHandoffLoadError": "无法重建交接简报",
+  "workerUpdateNotice.title": "工作者更新"
 }
