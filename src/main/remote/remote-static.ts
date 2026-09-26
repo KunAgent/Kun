@@ -25,6 +25,7 @@ const REMOTE_MIME_TYPES: Record<string, string> = {
   '.ttf': 'font/ttf',
   '.wasm': 'application/wasm',
   '.txt': 'text/plain; charset=utf-8',
+  '.pdf': 'application/pdf',
   '.webmanifest': 'application/manifest+json'
 }
 

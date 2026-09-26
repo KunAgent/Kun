@@ -80,6 +80,24 @@ describe('write workspace settings actions', () => {
     expect(useWriteWorkspaceStore.getState().workspaceRoots).toContain('/workspace/b')
     expect(useWriteWorkspaceStore.getState().workspaceRoots).not.toContain('/workspace/a')
   })
+  it('loads mobile documents independently of the host paper mode without persisting a switch', async () => {
+    const settings = normalizeAppSettings({ write: {
+      defaultWorkspaceRoot: '/workspace/docs', activeWorkspaceRoot: '/workspace/library',
+      workspaces: ['/workspace/docs', '/workspace/library'],
+      paperMode: { enabled: true, activeLibrary: '/workspace/library', libraries: ['/workspace/library'] }
+    } } as AppSettingsV1)
+    vi.spyOn(rendererRuntimeClient, 'getSettings').mockResolvedValue(settings)
+    const setSettings = vi.spyOn(rendererRuntimeClient, 'setSettings')
+    const initializeWorkspace = vi.fn(async () => undefined)
+    useWriteWorkspaceStore.setState({ initializeWorkspace, workSurface: 'docs' })
+
+    await useWriteWorkspaceStore.getState().loadWriteSettings({ mobile: true })
+
+    expect(initializeWorkspace).toHaveBeenCalledWith('/workspace/docs')
+    expect(useWriteWorkspaceStore.getState().workSurface).toBe('docs')
+    expect(useWriteWorkspaceStore.getState().paperMode.enabled).toBe(true)
+    expect(setSettings).not.toHaveBeenCalled()
+  })
 })
 
 describe('loadWriteSettings concurrency and surface switch', () => {

@@ -44,6 +44,7 @@ import {
   sendRemoteJson,
   sendRemoteText
 } from './remote-http-utils'
+import { parsePdfByteRange } from './remote-file-range'
 import { resolveOpenTargetPath } from '../services/workspace-paths'
 import { createReadStream, existsSync } from 'node:fs'
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
@@ -450,9 +451,20 @@ export class RemoteAccessService {
         sendRemoteJson(res, 404, { error: 'File not previewable' })
         return
       }
-      res.writeHead(200, {
-        'content-type': remoteMimeType(resolved),
-        'content-length': info.size,
+      const mimeType = remoteMimeType(resolved)
+      const range = mimeType === 'application/pdf'
+        ? parsePdfByteRange(typeof req.headers.range === 'string' ? req.headers.range : undefined, info.size)
+        : null
+      if (range === 'invalid') {
+        res.writeHead(416, { 'content-range': `bytes */${info.size}`, 'cache-control': 'no-store' })
+        res.end()
+        return
+      }
+      res.writeHead(range ? 206 : 200, {
+        'content-type': mimeType,
+        'content-length': range ? range.end - range.start + 1 : info.size,
+        ...(mimeType === 'application/pdf' ? { 'accept-ranges': 'bytes' } : {}),
+        ...(range ? { 'content-range': `bytes ${range.start}-${range.end}/${info.size}` } : {}),
         'cache-control': 'no-store',
         // Workspace files are untrusted: previewing .html/.svg under the Remote
         // origin would let their scripts invoke /remote/invoke with the
@@ -461,7 +473,7 @@ export class RemoteAccessService {
         'content-security-policy': 'sandbox',
         'x-content-type-options': 'nosniff'
       })
-      createReadStream(resolved).pipe(res)
+      createReadStream(resolved, range ?? undefined).pipe(res)
     } catch {
       sendRemoteJson(res, 404, { error: 'File not found' })
     }

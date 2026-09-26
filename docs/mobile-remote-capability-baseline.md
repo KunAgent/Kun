@@ -23,7 +23,8 @@ This checklist prevents the mobile shell from treating every product area as a C
 - Resource engines: Markdown source/rich editor, image, PDF, Office presentation/document preview, spreadsheet mutation/editor and code preview.
 - Data safety: autosave/debounce, serialized per-file save queue, external-change/hash conflicts, truncated-file guard and explicit save/error state.
 - Assistant: resource-bound thread, selection context, pending AI review, accept/reject/undo and document-epoch checks.
-- Current mobile limitation: desktop tree, tabs, split editor and right assistant remain the presentation model; export/download-to-phone semantics require real remote verification.
+- Remote 手机 Work 现在以「文档 / 论文」作为手机本地导航状态：文档目录、受限递归文件名搜索、最近资源、创建/改名/删除/下载及资源阅读/编辑/提问；论文库、导入、阅读标注/笔记、发现与研究会话均复用主机服务，不切换桌面 `write.paperMode.enabled`。
+- 当前验收限制：真实 Remote 上传、PDF 选择/下载、键盘安全区与触控仍须在 iOS Safari 和 Android Chrome 实测；设备清单见 `docs/mobile-remote-work-paper-qa.zh-CN.md`。
 
 ## Shared release gates
 

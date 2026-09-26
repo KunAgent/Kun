@@ -1,7 +1,8 @@
 export type MobileMode = 'code' | 'rooms' | 'work'
 export type WorkResourceView = 'read' | 'edit' | 'assistant' | 'review' | 'whiteboard'
+export type PaperResourceView = 'read' | 'notes' | 'assistant' | 'info'
 export type MobilePage =
-  | { mode: MobileMode; kind: 'home' }
+  | { mode: MobileMode; kind: 'home'; surface?: 'documents' | 'papers' }
   | { mode: 'code' | 'rooms'; kind: 'new'; group?: true }
   | { mode: 'code'; kind: 'conversation'; threadId: string }
   | { mode: 'rooms'; kind: 'room'; roomId: string }
@@ -11,12 +12,16 @@ export type MobilePage =
   | { mode: 'rooms'; kind: 'task'; roomId: string; taskId: string }
   | { mode: 'rooms'; kind: 'member'; roomId: string; memberId: string }
   | { mode: 'work'; kind: 'resource'; resourceKey: string; view: WorkResourceView }
+  | { mode: 'work'; kind: 'folder'; folderKey: string }
+  | { mode: 'work'; kind: 'paper'; paperKey: string; view: PaperResourceView }
+  | { mode: 'work'; kind: 'discover' }
   | { mode: MobileMode; kind: 'settings' }
 
 const MAX_IDENTIFIER_LENGTH = 512
 const MODES = new Set<MobileMode>(['code', 'rooms', 'work'])
 const WORK_VIEWS = new Set<WorkResourceView>(['read', 'edit', 'assistant', 'review', 'whiteboard'])
-const MANAGED_KEYS = ['mode', 'mobile', 'thread', 'room', 'message', 'run', 'task', 'member', 'resource', 'view', 'group']
+const PAPER_VIEWS = new Set<PaperResourceView>(['read', 'notes', 'assistant', 'info'])
+const MANAGED_KEYS = ['mode', 'mobile', 'thread', 'room', 'message', 'run', 'task', 'member', 'resource', 'view', 'group', 'surface', 'folder', 'paper']
 
 function identifier(url: URL, key: string): string | null {
   const value = url.searchParams.get(key)
@@ -28,7 +33,8 @@ export function readMobilePage(url: URL): MobilePage {
   const mode: MobileMode = MODES.has(rawMode as MobileMode) ? rawMode as MobileMode : 'code'
   const kind = url.searchParams.get('mobile')
   if (kind === 'settings') return { mode, kind }
-  if (kind === 'home' || !kind) return { mode, kind: 'home' }
+  if (kind === 'home' || !kind) return mode === 'work' && url.searchParams.get('surface') === 'papers'
+    ? { mode, kind: 'home', surface: 'papers' } : { mode, kind: 'home' }
   if ((mode === 'code' || mode === 'rooms') && kind === 'new') {
     return mode === 'rooms' && url.searchParams.get('group') === '1' ? { mode, kind, group: true } : { mode, kind }
   }
@@ -55,6 +61,18 @@ export function readMobilePage(url: URL): MobilePage {
     const view = url.searchParams.get('view') as WorkResourceView | null
     if (resourceKey && view && WORK_VIEWS.has(view)) return { mode, kind, resourceKey, view }
   }
+  if (mode === 'work') {
+    if (kind === 'folder') {
+      const folderKey = identifier(url, 'folder')
+      if (folderKey) return { mode, kind, folderKey }
+    }
+    if (kind === 'paper') {
+      const paperKey = identifier(url, 'paper')
+      const view = url.searchParams.get('view') as PaperResourceView | null
+      if (paperKey && view && PAPER_VIEWS.has(view)) return { mode, kind, paperKey, view }
+    }
+    if (kind === 'discover') return { mode, kind }
+  }
   return { mode, kind: 'home' }
 }
 
@@ -71,6 +89,12 @@ export function mobilePageUrl(url: URL, page: MobilePage): string {
   if (page.kind === 'run') next.searchParams.set('run', page.runId)
   if (page.kind === 'task') next.searchParams.set('task', page.taskId)
   if (page.kind === 'member') next.searchParams.set('member', page.memberId)
+  if (page.kind === 'home' && page.surface === 'papers') next.searchParams.set('surface', 'papers')
+  if (page.kind === 'folder') next.searchParams.set('folder', page.folderKey)
+  if (page.kind === 'paper') {
+    next.searchParams.set('paper', page.paperKey)
+    next.searchParams.set('view', page.view)
+  }
   if (page.kind === 'resource') {
     next.searchParams.set('resource', page.resourceKey)
     next.searchParams.set('view', page.view)

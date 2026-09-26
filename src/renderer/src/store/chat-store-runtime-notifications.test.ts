@@ -25,7 +25,8 @@ import {
   saveAutoPlanBuildIntent
 } from '../plan/auto-plan-build-intents'
 import { clearBusyWatchdog, resetBusyRecoveryAttempts } from './chat-store-schedulers'
-import type { ChatState, ChatStoreSet } from './chat-store-types'
+import { resolveSendWorkspaceRoot } from './chat-store-runtime-notifications'
+import type { ChatState, ChatStoreSet, WriteAssistantMessageContext } from './chat-store-types'
 import { emptyDesignThreadRegistry, markDesignThread } from '../design/design-thread-registry'
 import {
   WRITE_ASSISTANT_THREAD_TITLE,
@@ -183,5 +184,15 @@ describe('watched completion notifications', () => {
     notifyTurnComplete('thread-1', state, 'turn:turn-build', undefined, 'turn-build')
     expect(showTurnCompleteNotification).toHaveBeenCalledTimes(1)
     vi.unstubAllGlobals()
+  })
+
+  it('keeps a paper Work turn in its selected library without changing document sends', async () => {
+    const paper = makeThread({ id: 'paper-thread', workspace: '/library', agentSurface: 'write' })
+    const state = makeSinkHarness({ route: 'write', workspaceRoot: '/fallback', threads: [paper] }).get()
+    expect(await resolveSendWorkspaceRoot(state, paper, undefined, paper)).toBe('/library')
+    const documentContext = { workspaceRoot: '/document' } as WriteAssistantMessageContext
+    expect(await resolveSendWorkspaceRoot(state, paper, documentContext, paper)).toBe('/document')
+    expect(await resolveSendWorkspaceRoot({ ...state, route: 'chat' }, paper, undefined, null))
+      .toBe('/library')
   })
 })

@@ -24,7 +24,7 @@ import {
 import type { ClawImChannelV1 } from '@shared/app-settings'
 import type { TurnCompleteNotificationSource } from '@shared/kun-gui-api'
 import { isBackgroundShellNoticeUserMessage } from '@shared/background-shell-notice'
-import type { ChatState } from './chat-store-types'
+import type { ChatState, WriteAssistantMessageContext } from './chat-store-types'
 import { isPendingQueuedMessage } from './queued-message-persistence'
 import { hydrateBlockModelLabels, isClawThread } from './chat-store-helpers'
 import {
@@ -257,6 +257,20 @@ export async function readActiveWriteWorkspace(fallbackWorkspaceRoot: string): P
   } catch {
     return normalizeWorkspaceRoot(fallbackWorkspaceRoot)
   }
+}
+
+export async function resolveSendWorkspaceRoot(
+  state: ChatState,
+  activeThread: NormalizedThread | null,
+  writeContext: WriteAssistantMessageContext | undefined,
+  scopedWriteThread: NormalizedThread | null
+): Promise<string> {
+  if (writeContext) return normalizeWorkspaceRoot(writeContext.workspaceRoot)
+  if (state.route !== 'write') return normalizeWorkspaceRoot(activeThread?.workspace)
+  // A paper thread has no document fence, but must stay in its selected library.
+  return scopedWriteThread && activeThread?.id === scopedWriteThread.id
+    ? normalizeWorkspaceRoot(scopedWriteThread.workspace)
+    : readActiveWriteWorkspace(state.workspaceRoot)
 }
 
 export async function readWriteWorkspaceRoots(): Promise<string[]> {
