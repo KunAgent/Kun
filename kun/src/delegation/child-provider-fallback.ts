@@ -46,6 +46,7 @@ export type ChildExecutionArgs = {
   parentTurnId: string
   prompt: string
   source: ChildSourceEnvelope | undefined
+  clientRequestId: string | undefined
   controlPrompt: string | undefined
   pptWorkflowScope: PptWorkflowScope | undefined
   resumeChild?: boolean
@@ -84,6 +85,9 @@ export async function executeWithProviderFallback(
       serviceTier: route.serviceTier,
       resumeChild: true,
       providerFallbackContinuation: true,
+      // The fallback turn appends a control prompt, so it is a distinct
+      // request and must not reuse the original idempotency key.
+      clientRequestId: undefined,
       controlPrompt: [
         input.controlPrompt,
         'The previous model provider failed. Continue the same task using the existing conversation and completed tool results. Do not repeat completed actions.'

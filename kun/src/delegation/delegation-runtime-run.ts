@@ -87,6 +87,12 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     prompt: string
     /** Exact active parent turn source forwarded by a first-class host. */
     source?: ChildSourceEnvelope
+    /**
+     * Host-owned idempotency key for the child turn start. Retried deliveries
+     * with the same key reattach to the already-admitted turn (manager
+     * dispatch exactly-once, 09 §5).
+     */
+    clientRequestId?: string
     /** Trusted host workflow control kept outside the child user message. */
     controlPrompt?: string
     pptWorkflowScope?: PptWorkflowScope
@@ -418,6 +424,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
         parentTurnId: input.parentTurnId,
         prompt: input.prompt,
         source,
+        clientRequestId: input.clientRequestId,
         controlPrompt,
         pptWorkflowScope: input.pptWorkflowScope,
         signal: detachedController.signal
@@ -491,6 +498,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       parentTurnId: input.parentTurnId,
       prompt: input.prompt,
       source,
+      clientRequestId: input.clientRequestId,
       controlPrompt,
       pptWorkflowScope: input.pptWorkflowScope,
       signal: controller.signal

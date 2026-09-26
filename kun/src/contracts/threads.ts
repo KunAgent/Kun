@@ -24,6 +24,27 @@ export * from './thread-knowledge.js'
 export const ThreadStatus = z.enum(['idle', 'running', 'archived', 'deleted'])
 export type ThreadStatus = z.infer<typeof ThreadStatus>
 
+/**
+ * ADE execution-unit identity persisted on a worker side thread (09 §3.1).
+ * Host-written only — never exposed on `CreateThreadRequest`.
+ */
+export const ThreadExecutionUnitSchema = z
+  .object({
+    kind: z.literal('worker'),
+    teamId: z.string().min(1),
+    managerThreadId: z.string().min(1),
+    label: z.string().min(1).max(64),
+    /** 'implementer' | 'reviewer' | 'tester' | ... free-form role text. */
+    role: z.string().max(64).optional(),
+    lifecycle: z.enum(['persistent', 'ephemeral']),
+    /** Host-managed task workspace (07) backing this worker's turns. */
+    taskWorkspaceId: z.string().min(1).optional(),
+    /** 'manager' while the manager drives; 'user' after a user takeover. */
+    control: z.enum(['manager', 'user'])
+  })
+  .strict()
+export type ThreadExecutionUnit = z.infer<typeof ThreadExecutionUnitSchema>
+
 export const THREAD_RUNTIME_STATE_SCHEMA_VERSION = 1
 
 /**
@@ -374,6 +395,13 @@ export const ThreadSchemaBase = z.object({
   costBudgetWarningSent: z.boolean().optional(),
   relation: ThreadRelation.default('primary'),
   parentThreadId: z.string().optional(),
+  /**
+   * ADE execution-unit identity (09 §3.1). Host-written only: worker threads
+   * carry their team/manager binding here so stores, tools, and completion
+   * hooks can resolve the owning manager without trusting caller input.
+   * Never exposed on `CreateThreadRequest`.
+   */
+  executionUnit: ThreadExecutionUnitSchema.optional(),
   planBuildRunId: z.string().trim().min(1).max(160).optional(),
   /** Legacy plan-build metadata retained only for read compatibility. */
   planBuildAdmissionFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
@@ -451,6 +479,7 @@ export const ThreadSummarySchema = ThreadSchemaBase.pick({
   costBudgetWarningSent: true,
   relation: true,
   parentThreadId: true,
+  executionUnit: true,
   planBuildRunId: true,
   planBuildAdmissionFingerprint: true,
   planBuildAdmissionCapabilityHash: true,

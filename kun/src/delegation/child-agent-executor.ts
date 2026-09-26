@@ -457,6 +457,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       threadId: thread.id,
       request: {
         prompt,
+        ...(input.clientRequestId ? { clientRequestId: input.clientRequestId } : {}),
         ...(source?.displayText !== undefined ? { displayText: source.displayText } : {}),
         ...(source?.attachmentIds.length ? { attachmentIds: source.attachmentIds } : {}),
         ...(source?.composerContexts.length ? { composerContexts: source.composerContexts } : {}),

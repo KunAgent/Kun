@@ -120,6 +120,8 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     parentTurnId: string
     prompt: string
     source?: ChildSourceEnvelope
+    /** Host-owned idempotency key for the resumed turn start. */
+    clientRequestId?: string
     controlPrompt?: string
     pptWorkflowScope?: PptWorkflowScope
     expectedProfile?: string
@@ -155,6 +157,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     parentTurnId: string
     prompt: string
     source?: ChildSourceEnvelope
+    clientRequestId?: string
     controlPrompt?: string
     pptWorkflowScope?: PptWorkflowScope
     expectedProfile?: string
@@ -332,6 +335,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
       parentTurnId: input.parentTurnId,
       prompt: input.prompt,
       source,
+      clientRequestId: input.clientRequestId,
       controlPrompt,
       pptWorkflowScope: input.pptWorkflowScope,
       resumeChild: true,

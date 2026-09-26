@@ -91,7 +91,8 @@ export const ChildRunLauncher = z.preprocess(
     'ppt_agent',
     'component_design',
     'diagram_design',
-    'graph'
+    'graph',
+    'manager-worker'
   ])
 )
 export type ChildRunLauncher = z.infer<typeof ChildRunLauncher>
@@ -365,6 +366,12 @@ export type ChildRunExecutor = (input: {
   prompt: string
   /** Exact active parent turn source; never synthesized by the parent model. */
   source?: ChildSourceEnvelope
+  /**
+   * Host-owned idempotency key forwarded verbatim into `startTurn`. A retry
+   * with the same key reattaches to the already-admitted child turn instead
+   * of starting a second one.
+   */
+  clientRequestId?: string
   /** Trusted host control emitted as private chronological model context. */
   controlPrompt?: string
   /** Host-minted PPT capability for this execution only. */
