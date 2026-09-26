@@ -48,6 +48,7 @@ const target = {
 
 describe('useProviderProbeOperations shared connection barrier', () => {
   let setProbeStates: ReturnType<typeof vi.fn>
+  let openModelImport: ReturnType<typeof vi.fn>
   let runProbe: (provider: ModelProviderProfileV1, mode: 'test' | 'fetch') => Promise<void>
 
   beforeEach(async () => {
@@ -55,6 +56,7 @@ describe('useProviderProbeOperations shared connection barrier', () => {
     probeMock.mockResolvedValue(['deepseek-chat'])
     flushMock.mockResolvedValue({ ok: true })
     setProbeStates = vi.fn()
+    openModelImport = vi.fn()
     const scope = {
       t: (key: string) => key,
       setProbeStates,
@@ -62,7 +64,7 @@ describe('useProviderProbeOperations shared connection barrier', () => {
       sharedConnectionFor: () => ({ configured: true, credentialStatus: 'valid' }),
       patchProviderProfile: vi.fn(),
       fetchModelsDevCatalogFor: vi.fn(async () => ({ models: [] })),
-      openModelImport: vi.fn(),
+      openModelImport,
       flushSharedProviderCatalog: vi.fn(async () => undefined)
     }
     const { useProviderProbeOperations } = await import('./use-provider-probe-operations')
@@ -110,6 +112,15 @@ describe('useProviderProbeOperations shared connection barrier', () => {
     expect(probeMock).toHaveBeenCalledTimes(1)
   })
 
+  it('forwards shared Codex probe IDs to the import dialog without models.dev metadata', async () => {
+    probeMock.mockResolvedValue(['gpt-6-sol', 'gpt-6-luna'])
+    await runProbe({ ...target, id: 'codex' }, 'fetch')
+    expect(openModelImport).toHaveBeenCalledWith(expect.objectContaining({
+      authoritative: true,
+      providerModelIds: ['gpt-6-sol', 'gpt-6-luna']
+    }))
+  })
+
   it('reports a sync failure instead of probing when the barrier fails', async () => {
     flushMock.mockResolvedValue({ ok: false, error: new Error('registry unavailable'), timedOut: false })
     await runProbe(target, 'test')
@@ -144,6 +155,16 @@ describe('useProviderProbeOperations shared connection barrier', () => {
     expect(flushMock).toHaveBeenCalledTimes(1)
     expect(probeMock).toHaveBeenCalledWith('deepseek')
   })
+})
+
+it('saves officially discovered gpt-6 models as selectable Codex models', async () => {
+  const { applyProviderModelImport } = await import('./use-provider-probe-operations')
+  const codex = { ...target, id: 'codex', modelProfiles: {} }
+  const saved = applyProviderModelImport(codex, {
+    chat: ['gpt-6-sol', 'gpt-6-luna'],
+    image: [], speech: [], tts: [], music: [], video: [], catalogModels: []
+  }, true)
+  expect(saved.models).toEqual(['gpt-6-sol', 'gpt-6-luna'])
 })
 
 describe('mergeDiscoveredModelProfile', () => {

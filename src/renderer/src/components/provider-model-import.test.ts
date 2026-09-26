@@ -130,6 +130,25 @@ describe('provider model import merging', () => {
     expect(entries[0]?.sources).toEqual(['provider-api', 'models-dev'])
   })
 
+  it('imports official gpt-6 IDs without models.dev metadata but never imports catalog-only IDs', () => {
+    const codex = provider({ id: 'codex', baseUrl: 'https://chatgpt.com/backend-api/codex/responses' })
+    const entries = buildProviderModelImportEntries(
+      codex,
+      ['gpt-6-sol', 'gpt-6-luna'],
+      catalog([
+        { id: 'gpt-6-sol', inputModalities: ['text'], outputModalities: ['text'] },
+        { id: 'gpt-6-unavailable', inputModalities: ['text'], outputModalities: ['text'] }
+      ], 'enrichment-only')
+    )
+    expect(entries.map(({ modelId, sources }) => [modelId, sources])).toEqual([
+      ['gpt-6-sol', ['provider-api', 'models-dev']],
+      ['gpt-6-luna', ['provider-api']]
+    ])
+    const picked = providerModelImportResult(entries, defaultSelectedProviderModelImportKeys(entries))
+    expect(picked.chat).toEqual(['gpt-6-sol', 'gpt-6-luna'])
+    expect(picked.catalogModels.map(({ id }) => id)).toEqual(['gpt-6-sol'])
+  })
+
   it('imports Ollama Cloud API models while using its catalog only for matching metadata', () => {
     const ollama = provider({
       id: 'ollama',
