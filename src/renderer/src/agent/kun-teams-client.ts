@@ -1,5 +1,6 @@
 import type {
   AdeRaceComparison,
+  AdeRunWorkerChecksResult,
   AdeTeamOverview,
   AdeTeamRecord,
   AdeTeamWorker
@@ -126,6 +127,21 @@ export function createKunTeamsClient() {
           readRuntimeError(response.body, 'failed to discard race workspaces')
         )
       }
+    },
+
+    /** Host check commands against the worker's task workspace (10 §4.2). */
+    async runTeamWorkerChecks(workerId: string): Promise<AdeRunWorkerChecksResult> {
+      const response = await rendererRuntimeClient.runtimeRequest(
+        kunTeamWorkerActionPath(workerId, 'run-checks'), 'POST', '{}'
+      )
+      if (!response.ok) {
+        throw runtimeErrorToError(
+          readRuntimeError(response.body, 'failed to run checks')
+        )
+      }
+      return readRuntimeJson<AdeRunWorkerChecksResult>(
+        response.body, 'runtime returned an invalid response'
+      )
     }
   }
 }

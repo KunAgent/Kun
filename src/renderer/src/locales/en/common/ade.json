@@ -60,6 +60,8 @@
   "reviewDiscardUnpushed_other": "{{count}} unpushed commits will be lost",
   "reviewDiscardConfirm": "Discard permanently",
   "reviewDiscardCancel": "Cancel",
+  "reviewRunChecks": "Run checks",
+  "reviewChecksDismiss": "Dismiss",
   "reviewIntegrateResultTitle": "Integration result",
   "reviewIntegrateDone": "{{mode}} finished",
   "reviewIntegrateNeedsHuman": "Needs your input",

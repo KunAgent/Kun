@@ -23,10 +23,13 @@ export function comparableRepoPath(value: string): string {
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
-export function createApprovedSetupResolver(opts: {
-  approvedEntries: () => readonly ApprovedWorktreeConfigEntry[]
-  loadConfig?: (repoRoot: string) => Promise<{ status: string; digest?: string } | null>
-}): (repoRoot: string) => Promise<ApprovedSetupStep[]> {
+function createApprovedSectionResolver(
+  opts: {
+    approvedEntries: () => readonly ApprovedWorktreeConfigEntry[]
+    loadConfig?: (repoRoot: string) => Promise<{ status: string; digest?: string } | null>
+  },
+  pick: (worktree: KunProjectWorktreeConfig) => ApprovedSetupStep[]
+): (repoRoot: string) => Promise<ApprovedSetupStep[]> {
   const loadConfig = opts.loadConfig ??
     ((repoRoot: string) => loadKunProjectConfig(repoRoot).catch(() => null))
   return async (repoRoot) => {
@@ -37,8 +40,23 @@ export function createApprovedSetupResolver(opts: {
     if (!entry) return []
     const current = await loadConfig(repoRoot)
     if (!current || current.status !== 'valid' || current.digest !== entry.digest) return []
-    return entry.worktree.setup
+    return pick(entry.worktree)
   }
+}
+
+export function createApprovedSetupResolver(opts: {
+  approvedEntries: () => readonly ApprovedWorktreeConfigEntry[]
+  loadConfig?: (repoRoot: string) => Promise<{ status: string; digest?: string } | null>
+}): (repoRoot: string) => Promise<ApprovedSetupStep[]> {
+  return createApprovedSectionResolver(opts, (worktree) => worktree.setup)
+}
+
+/** `worktree.checks` follow the same whole-config digest approval (10 §4.2). */
+export function createApprovedChecksResolver(opts: {
+  approvedEntries: () => readonly ApprovedWorktreeConfigEntry[]
+  loadConfig?: (repoRoot: string) => Promise<{ status: string; digest?: string } | null>
+}): (repoRoot: string) => Promise<ApprovedSetupStep[]> {
+  return createApprovedSectionResolver(opts, (worktree) => worktree.checks)
 }
 
 /** User-level `worktreeSharedPaths` lookup with repo-root normalization. */

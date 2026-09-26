@@ -9,6 +9,7 @@ import { ManagerRuntime } from '../ade/manager-runtime.js'
 import { ActivityHibernation } from '../services/activity-hibernation.js'
 import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
 import { costTierFromPricing } from '../ade/worker-selector.js'
+import { createApprovedChecksResolver } from '../workspace-tasks/approved-setup.js'
 import { effectiveCapabilitiesForRoute } from '../harness/effective-capabilities.js'
 import type { HarnessRoute } from '../contracts/harness.js'
 import type { HarnessRuntimeMap } from '../harness/harness-router.js'
@@ -54,7 +55,11 @@ export function createManagerRuntime(input: {
   services: Pick<RuntimeServices, 'adeStores' | 'harnesses' | 'workerCallbacks'>
   core: Pick<
     RuntimeServices['model']['core'],
-    'taskWorkspaces' | 'activityStore' | 'activeOptions' | 'modelCapabilities'
+    | 'taskWorkspaces'
+    | 'activityStore'
+    | 'activeOptions'
+    | 'modelCapabilities'
+    | 'artifactStore'
   >
   delegationRuntime: DelegationRuntime | undefined
   harnessRuntimeMap: HarnessRuntimeMap
@@ -91,6 +96,13 @@ export function createManagerRuntime(input: {
     teamLimits: () => core.activeOptions.ade?.limits,
     workerCallbacks: services.workerCallbacks,
     managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true,
+    // Approved worktree.checks runner (10 §4.2) — digest-bound like setup.
+    checks: {
+      approvedChecks: createApprovedChecksResolver({
+        approvedEntries: () => core.activeOptions.ade?.approvedWorktreeConfigs ?? []
+      }),
+      artifacts: core.artifactStore
+    },
     selector: {
       profiles: (workspace) =>
         delegationRuntime?.listRoutingProfiles(workspace) ?? Promise.resolve([]),

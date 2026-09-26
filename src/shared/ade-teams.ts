@@ -39,10 +39,35 @@ export type AdeDispatchCapture = {
   patchArtifactId?: string
 }
 
+export type AdeQualityCheck = {
+  name: string
+  status: 'passed' | 'failed' | 'skipped'
+  source: 'worker' | 'host' | 'reviewer'
+  detail?: string
+}
+
 export type AdeQualityVerdict = {
   status: 'pending' | 'passed' | 'needs_changes' | 'rejected' | 'waived'
   decidedBy?: 'manager' | 'user' | 'reviewer'
+  checks?: AdeQualityCheck[]
+  notes?: string
   decidedAt?: string
+}
+
+/** POST /v1/teams/workers/:workerId/run-checks (docs/ade/10 §4.2). */
+export type AdeRunWorkerChecksResult = {
+  ok: boolean
+  refusal?:
+    | 'worker_not_found'
+    | 'checks_unavailable'
+    | 'no_workspace'
+    | 'workspace_not_ready'
+    | 'no_approved_checks'
+    | 'no_dispatch'
+  checks?: AdeQualityCheck[]
+  dispatchId?: string
+  logArtifactId?: string
+  userReport: string
 }
 
 export type AdeDispatchRecord = {

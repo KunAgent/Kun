@@ -116,7 +116,9 @@ describe('TaskWorkspaceSetupRunner', () => {
 })
 
 describe('createApprovedSetupResolver', () => {
-  const worktree = { sharedDirectories: [], copyFiles: [], setup: [], branchPrefix: 'kun/' }
+  const worktree = {
+    sharedDirectories: [], copyFiles: [], setup: [], checks: [], branchPrefix: 'kun/'
+  }
   const entry = {
     repoRoot: '/repo/a',
     digest: 'digest-1',

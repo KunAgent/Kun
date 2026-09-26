@@ -62,6 +62,8 @@
   "reviewDiscardUnpushed_other": "{{count}} अनपुश्ड कमिट खो जाएंगे",
   "reviewDiscardConfirm": "स्थायी रूप से त्यागें",
   "reviewDiscardCancel": "रद्द करें",
+  "reviewRunChecks": "चेक चलाएँ",
+  "reviewChecksDismiss": "बंद करें",
   "reviewIntegrateResultTitle": "इंटीग्रेशन परिणाम",
   "reviewIntegrateDone": "{{mode}} पूर्ण",
   "reviewIntegrateNeedsHuman": "आपका इनपुट चाहिए",

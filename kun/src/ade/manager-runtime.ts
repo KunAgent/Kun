@@ -147,6 +147,11 @@ export type ManagerRuntimeDeps = {
   managerMayApprove?: () => boolean
   /** Per-worker usage rollup for race compare (11 §5). */
   usage?: Pick<UsageService, 'forThread'>
+  /** Approved `worktree.checks` inputs (10 §4.2); absent hides the tool. */
+  checks?: Pick<
+    import('./check-runner.js').WorkspaceCheckRunnerDeps,
+    'approvedChecks' | 'artifacts' | 'spawn' | 'env'
+  >
   /**
    * Worker-route selector inputs (10 §3.2); `isolated`/`unattended` come from
    * the create call. Absent → the manager's own provider/model on `kun`.
@@ -156,6 +161,9 @@ export type ManagerRuntimeDeps = {
     'catalog' | 'detector' | 'capabilitiesForRoute' | 'isolated' | 'unattended' | 'allowUnattendedFullAccess' | 'recentFailures' | 'managerRoute' | 'language'
   >
 }
+
+type RaceServiceDepsWithIds =
+  import('./race.js').RaceServiceDeps & { ids: { next(prefix: string): string } }
 
 /**
  * The ADE manager control plane (09 §4): worker creation with route
@@ -183,20 +191,23 @@ export class ManagerRuntime {
   }
 
   /** Race tool/route deps (10 §6); undefined without a race store. */
-  get raceServiceDeps():
-    | (import('./race.js').RaceServiceDeps & { ids: { next(prefix: string): string } })
-    | undefined {
+  get raceServiceDeps(): RaceServiceDepsWithIds | undefined {
     if (!this.deps.races) return undefined
     return {
-      races: this.deps.races,
-      dispatches: this.deps.dispatches,
-      notices: this.deps.notices,
-      teams: this.deps.teams,
-      taskWorkspaces: this.deps.taskWorkspaces,
-      usage: this.deps.usage,
-      language: this.deps.language,
-      nowIso: this.deps.nowIso,
-      ids: this.deps.ids
+      races: this.deps.races, dispatches: this.deps.dispatches,
+      notices: this.deps.notices, teams: this.deps.teams,
+      taskWorkspaces: this.deps.taskWorkspaces, usage: this.deps.usage,
+      language: this.deps.language, nowIso: this.deps.nowIso, ids: this.deps.ids
+    }
+  }
+
+  /** Check-runner deps (10 §4.2); undefined without approved-checks wiring. */
+  get checkRunnerDeps(): import('./check-runner.js').WorkspaceCheckRunnerDeps | undefined {
+    if (!this.deps.checks) return undefined
+    return {
+      teams: this.deps.teams, dispatches: this.deps.dispatches,
+      taskWorkspaces: this.deps.taskWorkspaces, ...this.deps.checks,
+      language: this.deps.language, nowIso: this.deps.nowIso
     }
   }
 

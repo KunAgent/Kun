@@ -95,6 +95,14 @@ export const KunProjectMcpServerConfig = z
   })
 export type KunProjectMcpServerConfig = z.infer<typeof KunProjectMcpServerConfig>
 
+/** A repo-declared managed command (07 §7 setup / 10 §4.2 checks). */
+const WorktreeCommandStepSchema = z.object({
+  name: z.string().min(1).max(64),
+  command: z.string().min(1).max(256),
+  args: z.array(z.string().max(1_024)).max(32).default([]),
+  timeoutMs: z.number().int().positive().max(30 * 60_000).default(10 * 60_000)
+}).strict()
+
 export const KunProjectWorktreeConfigSchema = z
   .object({
     /** Ignored directories shared into new task worktrees (dependencies, caches). */
@@ -108,19 +116,19 @@ export const KunProjectWorktreeConfigSchema = z
     /** Ignored files copied into new task worktrees (.env and friends). */
     copyFiles: z.array(RelativeProjectPath).max(64).default([]),
     /** Install commands run after creation; require user approval (07 §7). */
-    setup: z
-      .array(z.object({
-        name: z.string().min(1).max(64),
-        command: z.string().min(1).max(256),
-        args: z.array(z.string().max(1_024)).max(32).default([]),
-        timeoutMs: z.number().int().positive().max(30 * 60_000).default(10 * 60_000)
-      }).strict())
-      .max(8)
-      .default([]),
+    setup: z.array(WorktreeCommandStepSchema).max(8).default([]),
+    /** Quality checks run on demand inside the worktree (10 §4.2). */
+    checks: z.array(WorktreeCommandStepSchema).max(16).default([]),
     branchPrefix: z.string().regex(/^[a-z0-9][a-z0-9/_-]{0,31}$/).default('kun/')
   })
   .strict()
-  .default({ sharedDirectories: [], copyFiles: [], setup: [], branchPrefix: 'kun/' })
+  .default({
+    sharedDirectories: [],
+    copyFiles: [],
+    setup: [],
+    checks: [],
+    branchPrefix: 'kun/'
+  })
 export type KunProjectWorktreeConfig = z.infer<typeof KunProjectWorktreeConfigSchema>
 
 export const KunProjectConfigSchema = z

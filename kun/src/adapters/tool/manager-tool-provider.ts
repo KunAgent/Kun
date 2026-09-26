@@ -23,6 +23,8 @@ import { workerVerdict } from '../../ade/tools/worker-verdict.js'
 import { reviewRequest } from '../../ade/tools/review-request.js'
 import { workspaceIntegrate } from '../../ade/tools/workspace-integrate.js'
 import { raceRecommend, workerRace, type RaceToolDeps } from '../../ade/tools/worker-race.js'
+import { workspaceRunChecks } from '../../ade/tools/workspace-run-checks.js'
+import type { WorkspaceCheckRunnerDeps } from '../../ade/check-runner.js'
 
 export type ManagerToolProviderDeps = {
   manager: ManagerRuntime
@@ -31,6 +33,8 @@ export type ManagerToolProviderDeps = {
   managerMayApprove?: () => boolean
   /** Race store/services (10 §6); absent → worker_race tools hidden. */
   race?: RaceToolDeps
+  /** Host check runner (10 §4.2); absent → workspace_run_checks hidden. */
+  checks?: WorkspaceCheckRunnerDeps
 }
 
 const START_FROM_SCHEMA = {
@@ -567,6 +571,35 @@ export function createManagerToolProvider(
         execute: async (args, context) => {
           const ctx = await managerCtx(context)
           return { output: await raceRecommend(deps.race!, ctx, args) }
+        }
+      }),
+      LocalToolHost.defineTool({
+        name: 'workspace_run_checks',
+        description:
+          'Run the repository\'s approved `worktree.checks` commands inside ' +
+          'a worker\'s task workspace under managed processes. Results merge ' +
+          'into the dispatch verdict as host checks; relay `userReport` to ' +
+          'the user verbatim. Checks require whole-config user approval — if ' +
+          'none is granted the tool reports that instead of running.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            workerId: { type: 'string', maxLength: 256 },
+            names: {
+              type: 'array',
+              maxItems: 16,
+              items: { type: 'string', maxLength: 64 }
+            }
+          },
+          required: ['workerId'],
+          additionalProperties: false
+        },
+        toolKind: 'tool_call',
+        policy: 'auto',
+        shouldAdvertise: (context) => advertise(context) && Boolean(deps.checks),
+        execute: async (args, context) => {
+          const ctx = await managerCtx(context)
+          return { output: await workspaceRunChecks(deps.checks!, ctx, args) }
         }
       }),
       LocalToolHost.defineTool({

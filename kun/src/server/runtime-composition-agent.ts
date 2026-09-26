@@ -463,7 +463,8 @@ export async function createRuntimeAgentComposition(
       profiles: () => delegationRuntime?.listProfiles() ?? []
     },
     managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true,
-    race: managerRuntime.raceServiceDeps
+    race: managerRuntime.raceServiceDeps,
+    checks: managerRuntime.checkRunnerDeps
   }))
   wireTaskWorkspaceChange(core.taskWorkspaces, managerRuntime, services.adeStores.reviews)
   model.refreshModelConnectionDelegatedDeps = () => {

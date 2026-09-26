@@ -227,7 +227,7 @@ describe('TaskWorkspaceService', () => {
         worktree: {
           sharedDirectories: [], copyFiles: [],
           setup: [{ name: 'wait', command: 'sleep', args: ['60'], timeoutMs: 60_000 }],
-          branchPrefix: 'kun/'
+          checks: [], branchPrefix: 'kun/'
         }
       }),
       approvedSetup: async () => [
@@ -311,7 +311,7 @@ describe('TaskWorkspaceService', () => {
         worktree: {
           sharedDirectories: [], copyFiles: [],
           setup: [{ name: 'install', command: 'bun', args: ['install'], timeoutMs: 5_000 }],
-          branchPrefix: 'kun/'
+          checks: [], branchPrefix: 'kun/'
         }
       }),
       // No approvedSetup grant: declared steps stay unapproved.
@@ -333,7 +333,7 @@ describe('TaskWorkspaceService', () => {
         worktree: {
           sharedDirectories: [], copyFiles: [],
           setup: [{ name: 'boom', command: 'false', args: [], timeoutMs: 5_000 }],
-          branchPrefix: 'kun/'
+          checks: [], branchPrefix: 'kun/'
         }
       }),
       approvedSetup: async () => [{ name: 'boom', command: 'false', args: [], timeoutMs: 5_000 }],

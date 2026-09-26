@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
-import { GitMerge, GitPullRequestArrow, Loader2, Trash2 } from 'lucide-react'
+import { GitMerge, GitPullRequestArrow, ListChecks, Loader2, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
   TaskWorkspaceDiscardPreview,
@@ -9,6 +9,7 @@ import type {
   TaskWorkspaceIntegrateResponse,
   TaskWorkspaceRecord
 } from '@shared/task-workspace'
+import type { AdeRunWorkerChecksResult } from '@shared/ade-teams'
 import { getProvider } from '../../agent/registry'
 import {
   discardWorkspace,
@@ -50,6 +51,10 @@ export function ReviewPrimaryAction({
   } | null>(null)
   const [discardPreview, setDiscardPreview] = useState<TaskWorkspaceDiscardPreview | null>(null)
   const [discardOpen, setDiscardOpen] = useState(false)
+  const [checks, setChecks] = useState<AdeRunWorkerChecksResult | null>(null)
+  const [checksPending, setChecksPending] = useState(false)
+  const canRunChecks = Boolean(binding.unitId)
+    && typeof getProvider().runTeamWorkerChecks === 'function'
 
   useEffect(() => {
     if (!previewLoaded) void loadIntegratePreview(workspaceId)
@@ -102,11 +107,24 @@ export function ReviewPrimaryAction({
     )
   }
 
+  const runChecks = (): void => {
+    if (!binding.unitId) return
+    setChecksPending(true)
+    void getProvider().runTeamWorkerChecks?.(binding.unitId)
+      .then(setChecks)
+      .catch((error: unknown) => setChecks({
+        ok: false,
+        userReport: error instanceof Error ? error.message : String(error)
+      }))
+      .finally(() => setChecksPending(false))
+  }
+
   return (
     <div
-      className="flex shrink-0 items-center gap-2 border-b border-ds-border-muted px-3 py-1.5"
+      className="shrink-0 border-b border-ds-border-muted"
       data-testid="review-primary-action"
     >
+      <div className="flex items-center gap-2 px-3 py-1.5">
       {actionButton(
         'merge-branch',
         t('reviewMergeBranch'),
@@ -121,6 +139,19 @@ export function ReviewPrimaryAction({
         preview?.canApplyPatch === true,
         preview?.applyBlockReason
       )}
+      {canRunChecks ? (
+        <button
+          type="button"
+          onClick={runChecks}
+          disabled={checksPending}
+          className="inline-flex h-7 items-center gap-1.5 rounded-[7px] border border-ds-border-muted px-2.5 text-[11.5px] font-medium text-ds-muted hover:text-ds-ink disabled:opacity-50"
+        >
+          {checksPending
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.8} />
+            : <ListChecks className="h-3.5 w-3.5" strokeWidth={1.8} />}
+          {t('reviewRunChecks')}
+        </button>
+      ) : null}
       <div className="min-w-0 flex-1" />
       <button
         type="button"
@@ -133,6 +164,39 @@ export function ReviewPrimaryAction({
           : <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />}
         {t('reviewDiscard')}
       </button>
+      </div>
+
+      {checks ? (
+        <div
+          className="flex flex-wrap items-center gap-1.5 px-3 pb-1.5 text-[11px] text-ds-muted"
+          data-testid="review-checks-result"
+        >
+          <span className="min-w-0 flex-1">{checks.userReport}</span>
+          {checks.checks?.map((check) => (
+            <span
+              key={check.name}
+              title={check.detail}
+              className={`rounded-full px-1.5 py-0.5 ${
+                check.status === 'passed'
+                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                  : check.status === 'failed'
+                    ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+                    : 'bg-ds-hover text-ds-faint'
+              }`}
+            >
+              {check.name}
+            </span>
+          ))}
+          <button
+            type="button"
+            onClick={() => setChecks(null)}
+            aria-label={t('reviewChecksDismiss')}
+            className="inline-flex h-5 w-5 items-center justify-center rounded text-ds-faint hover:text-ds-ink"
+          >
+            <X className="h-3 w-3" strokeWidth={1.8} />
+          </button>
+        </div>
+      ) : null}
 
       {result ? (
         <IntegrateResultDialog
