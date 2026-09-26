@@ -9,10 +9,22 @@ import {
 } from '../../ade/tools/harness-list.js'
 import { workerCreate, workerCreateBatch } from '../../ade/tools/worker-create.js'
 import { workerRead, workerStatus } from '../../ade/tools/worker-status.js'
+import {
+  dispatchCancel,
+  dispatchQueue,
+  dispatchUpdate,
+  workerAnswer,
+  workerApprove,
+  workerRelease,
+  workerSend,
+  workerStop
+} from '../../ade/tools/worker-controls.js'
 
 export type ManagerToolProviderDeps = {
   manager: ManagerRuntime
   harnessList: HarnessListDeps
+  /** `agents.kun.ade.managerMayApprove` — gates worker_approve (09 §6.5). */
+  managerMayApprove?: () => boolean
 }
 
 const START_FROM_SCHEMA = {
@@ -229,6 +241,200 @@ export function createManagerToolProvider(
         execute: async (args, context) => {
           const ctx = await managerCtx(context)
           return { output: await workerRead(deps.manager, ctx, args) }
+        }
+      }),
+      LocalToolHost.defineTool({
+        name: 'worker_send',
+        description:
+          'Dispatch new work to an existing worker. mode "queue" (default) runs ' +
+          'after its current task; "interrupt" stops the current turn first. ' +
+          'Refused while the user has taken the worker over. Relay `userReport` ' +
+          'to the user verbatim.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            workerId: { type: 'string', maxLength: 256 },
+            task: { type: 'string', maxLength: 32_000 },
+            title: { type: 'string', maxLength: 240 },
+            context: {
+              type: 'object',
+              properties: {
+                files: { type: 'array', items: { type: 'string' }, maxItems: 64 },
+                links: { type: 'array', items: { type: 'string' }, maxItems: 32 },
+                constraints: { type: 'array', items: { type: 'string' }, maxItems: 32 },
+                notes: { type: 'string', maxLength: 4_000 }
+              },
+              additionalProperties: false
+            },
+            mode: { type: 'string', enum: ['queue', 'interrupt'] }
+          },
+          required: ['workerId', 'task'],
+          additionalProperties: false
+        },
+        toolKind: 'tool_call',
+        policy: 'auto',
+        shouldAdvertise: advertise,
+        execute: async (args, context) => {
+          const ctx = await managerCtx(context)
+          return { output: await workerSend(deps.manager, ctx, args) }
+        }
+      }),
+      LocalToolHost.defineTool({
+        name: 'worker_stop',
+        description:
+          'Interrupt a worker\'s current turn. The running dispatch is marked ' +
+          'cancelled; queued dispatches stay queued.',
+        inputSchema: {
+          type: 'object',
+          properties: { workerId: { type: 'string', maxLength: 256 } },
+          required: ['workerId'],
+          additionalProperties: false
+        },
+        toolKind: 'tool_call',
+        policy: 'auto',
+        shouldAdvertise: advertise,
+        execute: async (args, context) => {
+          const ctx = await managerCtx(context)
+          return { output: await workerStop(deps.manager, ctx, args) }
+        }
+      }),
+      LocalToolHost.defineTool({
+        name: 'worker_release',
+        description:
+          'Release a worker: stop its current work, mark it dormant, optionally ' +
+          'archive it. Its task workspace is kept when it still has unmerged ' +
+          'changes — the report says so. Relay `userReport` to the user verbatim.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            workerId: { type: 'string', maxLength: 256 },
+            archive: { type: 'boolean' }
+          },
+          required: ['workerId'],
+          additionalProperties: false
+        },
+        toolKind: 'tool_call',
+        policy: 'auto',
+        shouldAdvertise: advertise,
+        execute: async (args, context) => {
+          const ctx = await managerCtx(context)
+          return { output: await workerRelease(deps.manager, ctx, args) }
+        }
+      }),
+      LocalToolHost.defineTool({
+        name: 'worker_answer',
+        description:
+          'Answer a worker\'s question (its askManager call resumes with your ' +
+          'answer). Use the questionId from the worker-updates notice.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            questionId: { type: 'string', maxLength: 256 },
+            answer: { type: 'string', maxLength: 8_000 }
+          },
+          required: ['questionId', 'answer'],
+          additionalProperties: false
+        },
+        toolKind: 'tool_call',
+        policy: 'auto',
+        shouldAdvertise: advertise,
+        execute: async (args, context) => {
+          const ctx = await managerCtx(context)
+          return { output: await workerAnswer(deps.manager, ctx, args) }
+        }
+      }),
+      LocalToolHost.defineTool({
+        name: 'dispatch_queue',
+        description:
+          'List this team\'s not-yet-accepted dispatches (pending, delivering, ' +
+          'uncertain), optionally for one worker. Read-only.',
+        inputSchema: {
+          type: 'object',
+          properties: { workerId: { type: 'string', maxLength: 256 } },
+          additionalProperties: false
+        },
+        toolKind: 'tool_call',
+        policy: 'auto',
+        sideEffect: 'read-only',
+        shouldAdvertise: advertise,
+        execute: async (args, context) => {
+          const ctx = await managerCtx(context)
+          return { output: await dispatchQueue(deps.manager, ctx, args) }
+        }
+      }),
+      LocalToolHost.defineTool({
+        name: 'dispatch_update',
+        description:
+          'Rewrite a still-pending dispatch\'s task or context. Dispatches ' +
+          'already delivered to a worker cannot be edited.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            dispatchId: { type: 'string', maxLength: 256 },
+            task: { type: 'string', maxLength: 32_000 },
+            context: {
+              type: 'object',
+              properties: {
+                files: { type: 'array', items: { type: 'string' }, maxItems: 64 },
+                links: { type: 'array', items: { type: 'string' }, maxItems: 32 },
+                constraints: { type: 'array', items: { type: 'string' }, maxItems: 32 },
+                notes: { type: 'string', maxLength: 4_000 }
+              },
+              additionalProperties: false
+            }
+          },
+          required: ['dispatchId'],
+          additionalProperties: false
+        },
+        toolKind: 'tool_call',
+        policy: 'auto',
+        shouldAdvertise: advertise,
+        execute: async (args, context) => {
+          const ctx = await managerCtx(context)
+          return { output: await dispatchUpdate(deps.manager, ctx, args) }
+        }
+      }),
+      LocalToolHost.defineTool({
+        name: 'dispatch_cancel',
+        description:
+          'Withdraw a still-pending dispatch before it reaches the worker.',
+        inputSchema: {
+          type: 'object',
+          properties: { dispatchId: { type: 'string', maxLength: 256 } },
+          required: ['dispatchId'],
+          additionalProperties: false
+        },
+        toolKind: 'tool_call',
+        policy: 'auto',
+        shouldAdvertise: advertise,
+        execute: async (args, context) => {
+          const ctx = await managerCtx(context)
+          return { output: await dispatchCancel(deps.manager, ctx, args) }
+        }
+      }),
+      LocalToolHost.defineTool({
+        name: 'worker_approve',
+        description:
+          'Approve or deny a worker\'s pending tool-approval request, but only ' +
+          'when the action stays inside your own authority (e.g. file writes ' +
+          'inside that worker\'s workspace). User-only actions can never be ' +
+          'delegated. Available only while the managerMayApprove setting is on.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            approvalId: { type: 'string', maxLength: 256 },
+            decision: { type: 'string', enum: ['allow', 'deny'] }
+          },
+          required: ['approvalId', 'decision'],
+          additionalProperties: false
+        },
+        toolKind: 'tool_call',
+        policy: 'auto',
+        shouldAdvertise: (context) =>
+          advertise(context) && deps.managerMayApprove?.() === true,
+        execute: async (args, context) => {
+          const ctx = await managerCtx(context)
+          return { output: await workerApprove(deps.manager, ctx, args) }
         }
       })
     ]

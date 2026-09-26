@@ -39,6 +39,13 @@ export class FileQuestionStore {
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
   }
 
+  /** All questions oldest-first (Mission Control / team overview). */
+  async list(teamId: string): Promise<QuestionRecord[]> {
+    const file = await this.readFile(teamId)
+    return [...file.questions]
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+  }
+
   async listOpen(teamId: string): Promise<QuestionRecord[]> {
     const file = await this.readFile(teamId)
     return file.questions

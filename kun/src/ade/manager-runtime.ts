@@ -25,7 +25,12 @@ import type { FileTeamStore } from './team-store.js'
 import type { FileDispatchStore } from './dispatch-store.js'
 import type { FileQuestionStore } from './question-store.js'
 import type { WorkerNoticeSink } from './worker-notice-store.js'
-import type { DispatchDeliverer, DelivererDelegation } from './dispatch-deliverer.js'
+import type { DispatchDeliverer, DelivererDelegation, DeliverOutcome } from './dispatch-deliverer.js'
+import type { ApprovalGate } from '../ports/approval-gate.js'
+import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
+import type { WorkerCallbackService } from '../services/worker-callback-service.js'
+import { ManagerControls } from './manager-controls.js'
+import { TeamControls } from './team-controls.js'
 import { checkHarnessAdmission, type AdmissionResult } from '../harness/harness-admission.js'
 import { effectiveCapabilitiesForRoute } from '../harness/effective-capabilities.js'
 import {
@@ -116,7 +121,7 @@ export type WorkerCreateResult = {
   workerId?: string
   dispatchId?: string
   dispatched?: boolean
-  deliveryPending?: 'workspace' | 'worker-busy'
+  deliveryPending?: DeliverOutcome['pendingReason']
   route?: HarnessRoute
   permissionMode?: { requested?: string; effective: string; downgraded: boolean }
   admission?: AdmissionResult
@@ -151,6 +156,17 @@ export type ManagerRuntimeDeps = {
   teamLimits?: () => Partial<{ softWorkers: number; hardWorkers: number }> | undefined
   /** Delay before an ephemeral worker is released after completion (default 30s). */
   ephemeralReleaseDelayMs?: () => number
+  /** worker_answer / GUI question answers (09 §6.4); absent → answer refuses. */
+  workerCallbacks?: Pick<WorkerCallbackService, 'answerQuestion'>
+  /** worker_approve decision channel (09 §6.5); gated by managerMayApprove. */
+  approvalGate?: Pick<
+    ApprovalGate,
+    'get' | 'reserveDecision' | 'commitDecision' | 'rollbackDecision'
+  >
+  /** Audit sink for manager-resolved approvals (09 §6.5). */
+  approvalEvents?: Pick<RuntimeEventRecorder, 'record'>
+  /** `agents.kun.ade.managerMayApprove` — gates the worker_approve tool. */
+  managerMayApprove?: () => boolean
 }
 
 /**
@@ -160,9 +176,14 @@ export type ManagerRuntimeDeps = {
  */
 export class ManagerRuntime {
   private readonly lifecycle: ManagerWorkerLifecycle
+  /** Control operations (09 §4.1/§9) — worker/dispatch tools + team routes. */
+  readonly controls: ManagerControls
+  readonly teamControls: TeamControls
 
   constructor(private readonly deps: ManagerRuntimeDeps) {
-    this.lifecycle = new ManagerWorkerLifecycle(deps)
+    this.controls = new ManagerControls(deps)
+    this.teamControls = new TeamControls(deps, this.controls)
+    this.lifecycle = new ManagerWorkerLifecycle(deps, this.teamControls)
   }
 
   private reportLanguage(): 'en' | 'zh' {

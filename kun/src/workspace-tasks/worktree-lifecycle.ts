@@ -128,6 +128,37 @@ export function createWorktreeLifecycle(deps: WorktreeLifecycleDeps) {
     }
   }
 
+  /**
+   * Working-tree baseline for ADE user takeover (09 §9): `write-tree` after
+   * staging covers committed and uncommitted state, unlike rev-parse HEAD.
+   */
+  async function snapshot(path: string): Promise<string> {
+    await deps.commitGit(path, ['add', '-A'])
+    return (await deps.git(path, ['write-tree'])).trim()
+  }
+
+  /** Diff between a snapshot() tree and the current working-tree state. */
+  async function diffSince(input: { path: string; baseTree: string }): Promise<{
+    changedFiles: string[]
+    patch: string
+  }> {
+    await deps.commitGit(input.path, ['add', '-A'])
+    const [files, patch] = await Promise.all([
+      deps.git(input.path, [
+        'diff', '--cached', '-z', '--name-only', '--no-renames', input.baseTree
+      ]),
+      deps.git(input.path, [
+        'diff', '--cached', '--binary', '--no-ext-diff', input.baseTree
+      ])
+    ])
+    return {
+      changedFiles: [
+        ...new Set(files.split('\0').filter(Boolean).map(normalizeGraphRelativePath))
+      ].sort(),
+      patch
+    }
+  }
+
   async function remove(
     record: { repositoryRoot: string; path: string },
     opts: { force: boolean }
@@ -141,7 +172,7 @@ export function createWorktreeLifecycle(deps: WorktreeLifecycleDeps) {
     ])
   }
 
-  return { create, capture, applyPatch, remove }
+  return { create, capture, snapshot, diffSince, applyPatch, remove }
 }
 
 export type WorktreeLifecycle = ReturnType<typeof createWorktreeLifecycle>

@@ -291,15 +291,27 @@ describe('DispatchDeliverer.tryDeliver', () => {
     expect((await dispatches.get('thr_mgr', 'dsp_1'))?.state).toBe('uncertain')
   })
 
-  it('cancels dispatches for user-controlled or released workers', async () => {
+  it('holds dispatches for user-controlled workers until hand-back', async () => {
     await teams.upsertWorker('thr_mgr', workerRecord({ control: 'user' }))
+    await dispatches.create(dispatchRecord())
+    const { delegation, runChild } = makeDelegation()
+    const deliverer = makeDeliverer({ delegation })
+    const outcome = await deliverer.tryDeliver('thr_mgr', 'dsp_1')
+    expect(outcome).toEqual({ accepted: false, pendingReason: 'user-control' })
+    const dispatch = await dispatches.get('thr_mgr', 'dsp_1')
+    expect(dispatch?.state).toBe('pending')
+    expect(runChild).not.toHaveBeenCalled()
+  })
+
+  it('cancels dispatches for released workers', async () => {
+    await teams.upsertWorker('thr_mgr', workerRecord({ state: 'released' }))
     await dispatches.create(dispatchRecord())
     const { delegation, runChild } = makeDelegation()
     const deliverer = makeDeliverer({ delegation })
     await deliverer.tryDeliver('thr_mgr', 'dsp_1')
     const dispatch = await dispatches.get('thr_mgr', 'dsp_1')
     expect(dispatch?.state).toBe('cancelled')
-    expect(dispatch?.failureReason).toContain('user control')
+    expect(dispatch?.failureReason).toContain('released')
     expect(runChild).not.toHaveBeenCalled()
   })
 

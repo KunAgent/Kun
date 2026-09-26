@@ -68,7 +68,7 @@ export function parseWorkerUpdatesNotice(text: string): WorkerUpdateEntry[] | nu
       if (tail) ref = tail.split(/\s+/)[0]
     } else {
       const tokens = title.split(/\s+/)
-      if (tokens.length > 1 && /^(dsp|q|ntc)_/.test(tokens.at(-1) ?? '')) {
+      if (tokens.length > 1 && /^(dsp|q|ntc|appr)_/.test(tokens.at(-1) ?? '')) {
         ref = tokens.pop()
       }
       title = tokens.join(' ').trim()
