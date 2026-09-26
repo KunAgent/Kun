@@ -5,6 +5,7 @@ import { ERRORS } from './runtime-error.js'
 import {
   activityEventsResponse,
   activityFactResponse,
+  activityForegroundResponse,
   activitySnapshotResponse
 } from './activity.js'
 
@@ -19,6 +20,13 @@ export function registerActivityRoutes(router: Router, runtime: ServerRuntime): 
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     if (!runtime.activityStore) return ERRORS.unavailable('activity is unavailable')
     return activityEventsResponse(runtime.activityStore, request)
+  })
+  router.add('POST', '/v1/activity/foreground', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    if (!runtime.activityHibernation) {
+      return ERRORS.unavailable('activity is unavailable')
+    }
+    return activityForegroundResponse(runtime.activityHibernation, request)
   })
   for (const mutation of ['ack', 'dismiss', 'pin'] as const) {
     router.add('POST', `/v1/activity/:unitId/${mutation}`, async (request, ctx) => {

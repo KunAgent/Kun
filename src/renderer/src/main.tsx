@@ -25,6 +25,7 @@ import { installDataMigrationRendererRpc } from './data-migration/renderer-state
 import { resolveDesktopTitleBarMode } from '@shared/desktop-title-bar'
 import { StartupGate } from './StartupGate'
 import { installProviderMutationFlushHandler } from './services/provider-mutation-flush-service'
+import { startActivityForegroundReporting } from './store/activity-foreground'
 
 document.documentElement.dataset.platform = window.kunGui?.platform ?? 'unknown'
 document.documentElement.dataset.desktopTitleBar = window.kunGui?.desktopTitleBarMode
@@ -37,6 +38,7 @@ const storageRelocationMode = new URLSearchParams(window.location.search).get('s
 const runtimeMigrationRecoveryMode = new URLSearchParams(window.location.search).get('runtimeMigrationRecovery') === '1'
 if (!storageRelocationMode && !runtimeMigrationRecoveryMode) installDataMigrationRendererRpc()
 installProviderMutationFlushHandler()
+startActivityForegroundReporting()
 
 // The renderer owns exactly one React root for the whole app lifecycle.
 // Startup phases, boot views, and the workbench all render through StartupGate.

@@ -6,6 +6,7 @@ import {
 } from '../contracts/harness-capabilities.js'
 import type { ManagerRuntimeDeps } from '../ade/manager-runtime.js'
 import { ManagerRuntime } from '../ade/manager-runtime.js'
+import { ActivityHibernation } from '../services/activity-hibernation.js'
 import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
 import { costTierFromPricing } from '../ade/worker-selector.js'
 import { effectiveCapabilitiesForRoute } from '../harness/effective-capabilities.js'
@@ -96,4 +97,44 @@ export function createManagerRuntime(input: {
         costTierFromPricing(core.modelCapabilities(route.model, route.providerId).pricing)
     }
   })
+}
+
+/**
+ * Activity stall + dormancy scanner (docs/ade/06 §6, §7.2). A dormant
+ * worker keeps its session binding; the next turn resumes natively or
+ * falls back to portable through the delegated session coordinator.
+ */
+export function createActivityHibernation(input: {
+  core: Pick<
+    RuntimeServices['model']['core'],
+    'activityStore' | 'activeOptions' | 'acpConnectionPool'
+  >
+  managerRuntime: ManagerRuntime
+}): ActivityHibernation {
+  const { core, managerRuntime } = input
+  const hibernation = new ActivityHibernation(
+    {
+      apply: (unitId, patch) => core.activityStore.apply(unitId, patch, 'inferred'),
+      list: () => core.activityStore.list(),
+      lastEventAt: (unitId) => core.activityStore.lastEventAt(unitId),
+      hasOpenWork: (row) => managerRuntime.hasOpenWork(row.unitId),
+      // Structured harnesses always continue portably; terminal agents need
+      // resumeArgs, which the terminal runtime supplies when it lands (P2-03).
+      canResume: (row) => row.kind === 'worker',
+      releaseResident: (row) => core.acpConnectionPool?.releaseForUnit(row.threadId)
+    },
+    {
+      thresholds: () => {
+        const ade = core.activeOptions.ade
+        return {
+          enabled: ade?.hibernation?.enabled !== false,
+          dormantMs: (ade?.hibernation?.idleMinutes ?? 30) * 60_000,
+          stallStructuredMs: (ade?.stall?.structuredMinutes ?? 10) * 60_000,
+          stallTerminalMs: (ade?.stall?.terminalMinutes ?? 20) * 60_000
+        }
+      }
+    }
+  )
+  hibernation.start()
+  return hibernation
 }

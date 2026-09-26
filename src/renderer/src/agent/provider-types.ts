@@ -245,6 +245,8 @@ export interface AgentProvider {
   ackActivity?(unitId: string): Promise<void>
   dismissActivity?(unitId: string): Promise<void>
   pinActivity?(unitId: string, pinned?: boolean): Promise<void>
+  /** Foreground-thread report for activity dormancy (docs/ade/06 §7.2 cond. 4). */
+  reportActivityForeground?(threadId: string): Promise<void>
   /** Rebuild a recorded handoff brief on demand (docs/ade/impl §P0-14). */
   getHandoffPreview?(threadId: string, turnId: string): Promise<{
     turnId: string

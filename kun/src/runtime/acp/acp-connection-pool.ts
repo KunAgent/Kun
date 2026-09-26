@@ -67,6 +67,21 @@ export class AcpConnectionPool {
     void this.closeEntry(key, entry)
   }
 
+  /**
+   * Activity dormancy (docs/ade/06 §7.2): close the pooled connection hosting
+   * this unit's ACP session — but only when no turn still leases it, so live
+   * sibling sessions on the same agent process are never released with it.
+   * Session bindings survive the close; the next turn resumes natively or
+   * falls back to portable through the session coordinator.
+   */
+  releaseForUnit(unitId: string): void {
+    for (const [key, entry] of this.entries) {
+      if (entry.refs !== 0 || entry.closing) continue
+      if (!entry.connection.sessionThreadIds().includes(unitId)) continue
+      void this.closeEntry(key, entry)
+    }
+  }
+
   async dispose(): Promise<void> {
     for (const [key, entry] of [...this.entries]) {
       await this.closeEntry(key, entry)

@@ -33,6 +33,7 @@ import { ManagerControls } from './manager-controls.js'
 import { TeamControls } from './team-controls.js'
 import { QualityVerdicts } from './quality-verdict.js'
 import { ReviewRequests } from './review-request.js'
+import { hasOpenWorkerWork } from './worker-open-work.js'
 import {
   countRecentWorkerFailures,
   NoEligibleWorkerError,
@@ -616,6 +617,14 @@ export class ManagerRuntime {
       if (!worker) continue
       await this.deps.deliverer.tryDeliverNext(team.teamId, worker.workerId)
     }
+  }
+
+  /**
+   * Activity hibernation gate (docs/ade/06 §7.2 conditions 2-3): unfinished
+   * dispatches or unanswered questions for this worker.
+   */
+  hasOpenWork(workerId: string): Promise<boolean> {
+    return hasOpenWorkerWork(this.deps, workerId)
   }
 
   /**

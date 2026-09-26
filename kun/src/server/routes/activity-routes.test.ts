@@ -7,6 +7,7 @@ import type { JsonResponse } from '../response.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { ActivityStore } from '../../services/activity-store.js'
 import { ActivityFactsStore } from '../../services/activity-facts-store.js'
+import { ActivityHibernation } from '../../services/activity-hibernation.js'
 import { registerActivityRoutes } from './register-activity-routes.js'
 
 const NOW = '2026-09-01T12:00:00.000Z'
@@ -27,12 +28,21 @@ async function harness() {
   const facts = new ActivityFactsStore({ dataDir, flushDelayMs: 5 })
   await facts.load()
   const store = new ActivityStore({ nowIso: () => NOW, facts })
+  const activityHibernation = new ActivityHibernation({
+    apply: (unitId, patch) => store.apply(unitId, patch, 'inferred'),
+    list: () => store.list(),
+    lastEventAt: (unitId) => store.lastEventAt(unitId),
+    hasOpenWork: () => Promise.resolve(false),
+    canResume: () => true,
+    releaseResident: () => undefined
+  })
   const router = new Router()
   registerActivityRoutes(router, {
     runtimeToken: 'test-token',
     insecure: false,
     activityStore: store,
     activityFacts: facts,
+    activityHibernation,
     nowIso: () => NOW
   } as unknown as ServerRuntime)
   const request = async (method: string, path: string, body?: unknown, authorized = true) => {
@@ -50,7 +60,7 @@ async function harness() {
       { params: route.params }
     ) as Promise<JsonResponse>
   }
-  return { store, facts, request, dataDir }
+  return { store, facts, activityHibernation, request, dataDir }
 }
 
 function registerRow(store: ActivityStore, unitId = 't1', workspace = '/ws/a') {
@@ -124,6 +134,17 @@ describe('activity routes', () => {
     const poll = await request('GET', `/v1/activity/events?cursor=${encodeURIComponent(cursor)}&wait_ms=0`)
     const body = JSON.parse(poll.body)
     expect(body.changes[0].row.acknowledgedAt).toBe(NOW)
+  })
+
+  it('foreground report marks the thread and requires a valid id', async () => {
+    const { activityHibernation, request } = await harness()
+    const res = await request('POST', '/v1/activity/foreground', { threadId: 't1' })
+    expect(res.status).toBe(200)
+    expect(activityHibernation.isForeground('t1')).toBe(true)
+    expect(activityHibernation.isForeground('t2')).toBe(false)
+    for (const body of [{}, { threadId: '' }, { threadId: 7 }]) {
+      expect((await request('POST', '/v1/activity/foreground', body)).status).toBe(400)
+    }
   })
 
   it('dismiss and pin persist their facts', async () => {
