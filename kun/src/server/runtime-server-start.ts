@@ -11,6 +11,7 @@ import {
   unregisterRuntimeWithManager
 } from './runtime-factory-dependencies.js'
 import { createKunServeRuntime } from './runtime-composition.js'
+import { makeKgwTokenGuard } from './kgw-token-guard.js'
 import { settleCleanupSteps } from './runtime-factory-cleanup.js'
 import { startMemoryPressureMonitor } from './memory-pressure-monitor.js'
 import type { KunServeHandle, KunServeRuntimeOptions } from './runtime-factory-types.js'
@@ -63,7 +64,10 @@ export async function startKunServe(
       router,
       host: options.host,
       port: options.port,
-      ...(options.faultInjection ? { faultInjection: options.faultInjection } : {})
+      ...(options.faultInjection ? { faultInjection: options.faultInjection } : {}),
+      ...(runtime.harnessTokens
+        ? { requestGuard: makeKgwTokenGuard(runtime.harnessTokens) }
+        : {})
     })
   } catch (error) {
     await runtime.shutdown?.().catch(() => undefined)

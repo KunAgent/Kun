@@ -103,6 +103,7 @@ export function createServerRuntimeComposition(
     toolHost,
     extensionTools,
     canvasReceipts,
+    kunToolBridge,
     activeRuntimeRuns,
     runAgentTurn,
     runReview,
@@ -182,6 +183,8 @@ export function createServerRuntimeComposition(
     eventStreamRegistry,
     llmDebug,
     canvasReceipts,
+    kunToolBridge,
+    harnessTokens: services.harnesses.tokens,
     liveCounters: () => ({
       inflight: inflight.size(),
       activeCaptures: llmDebug?.activeCaptureCount ?? 0

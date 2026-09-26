@@ -66,6 +66,7 @@ import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { authorize } from './route-auth.js'
 import { strictRuntimeTokenAuthorized } from './gateway-request-guard.js'
+import { handleKunToolsMcp } from './kun-tools-mcp.js'
 
 export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void {
   router.add('GET', '/health', () => healthJsonResponse())
@@ -73,6 +74,10 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('POST', '/v1/chat/completions', (request) => gatewayChatCompletions(runtime, request))
   router.add('POST', '/v1/responses', (request) => gatewayResponses(runtime, request))
   router.add('POST', '/v1/messages', (request) => gatewayMessages(runtime, request))
+  // Kun Tools MCP endpoint lives outside /v1 so harness-scoped kgw_ tokens
+  // never share the runtime-token authorization surface (docs/ade/05 §3.3).
+  router.add('POST', '/mcp/kun', (request) => handleKunToolsMcp(runtime, request))
+  router.add('GET', '/mcp/kun', (request) => handleKunToolsMcp(runtime, request))
   const strictGatewayAdmin = (request: Request) => strictRuntimeTokenAuthorized(request, runtime.runtimeToken)
   router.add('GET', '/v1/model-gateway/credential/status', (request) => {
     if (!strictGatewayAdmin(request)) return ERRORS.unauthorized()

@@ -16,6 +16,7 @@ import {
 } from '../server/event-loop-monitor.js'
 import { installServeCrashHandlers } from './serve-crash-handlers.js'
 import { runExtensionCommand } from './extension-cli.js'
+import { runMcpBridgeCommand } from './mcp-bridge-cli.js'
 import { inspectSharedRuntime, resolveSharedRuntime, runRuntimeCommand } from './shared-runtime.js'
 import { withRuntimeStartLock } from '../server/runtime-discovery.js'
 import { RuntimeBuildIdSchema } from '../contracts/runtime-info.js'
@@ -457,6 +458,14 @@ export async function main(argv: readonly string[]): Promise<number> {
   }
   if (command.command === 'update') {
     return runSelfUpdateCommand(command.args, {
+      stdout: process.stdout,
+      stderr: process.stderr,
+      env: process.env
+    })
+  }
+  if (command.command === 'mcp-bridge') {
+    return runMcpBridgeCommand(command.args, {
+      stdin: process.stdin,
       stdout: process.stdout,
       stderr: process.stderr,
       env: process.env

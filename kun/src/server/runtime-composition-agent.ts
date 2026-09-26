@@ -41,6 +41,7 @@ import { CanvasReceiptRegistry } from '../services/canvas-receipt-registry.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
 import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
 import { HarnessRouter, HarnessRuntimeMap } from '../harness/harness-router.js'
+import { createKunToolBridgeHost } from '../harness/kun-tool-bridge-host.js'
 
 export async function createRuntimeAgentComposition(
   registryComposition: ReturnType<typeof createRuntimeRegistry>
@@ -143,6 +144,27 @@ export async function createRuntimeAgentComposition(
   // with an initially empty provider set so /connect can add an account
   // without requiring the standalone TUI runtime to restart.
   const canvasReceipts = new CanvasReceiptRegistry({ turns: turnService, events, nowIso })
+  // Route-level bridge host for the Kun Tools MCP server (docs/ade/05 §3.3):
+  // same execution authority as the SDK adapters with main-scope defaults.
+  const kunToolBridge = createKunToolBridgeHost({
+    threadStore,
+    sessionStore,
+    registry: registryComposition.registry,
+    toolHost,
+    turns: turnService,
+    events,
+    ids,
+    receipts: canvasReceipts,
+    userInputGate,
+    approvalGate,
+    approvalReview: approvalReviewService,
+    skillRuntime: services.skillRuntime,
+    defaultApprovalPolicy: core.activeOptions.approvalPolicy,
+    defaultSandboxMode: core.activeOptions.sandboxMode,
+    defaultApprovalReviewer: core.activeOptions.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
+    callIdPrefix: 'mcp',
+    nowIso
+  })
   const buildMainDelegatedRuntime = (input: {
     options: KunServeRuntimeOptions
     registry: CapabilityRegistry
@@ -528,6 +550,7 @@ export async function createRuntimeAgentComposition(
     toolHost,
     extensionTools,
     canvasReceipts,
+    kunToolBridge,
     buildMainDelegatedRuntime,
     sdkRuntime,
     harnessRouter,
