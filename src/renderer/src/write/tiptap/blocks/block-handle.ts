@@ -1,7 +1,7 @@
 import { Extension } from '@tiptap/core'
 import { NodeSelection, Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
-import { GripVertical, Plus, createElement } from 'lucide'
+import { GripVertical, Plus, createElement } from './lucide-dom-icons'
 import type { WorkDocContext } from '../../markdown/document-codec'
 import { blockTargetFromCoords, type BlockTarget } from './block-target'
 import { openBlockMenu, type BlockMenuDeps, type BlockMenuHandle } from './block-menu'

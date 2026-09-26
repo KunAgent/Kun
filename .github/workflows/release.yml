@@ -117,10 +117,10 @@ jobs:
       APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
       APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
       CSC_FOR_PULL_REQUEST: 'true'
-      # The renderer bundle can exceed Node's default ~2 GiB heap on the
-      # macOS ARM runner; signed release packaging needs the same allowance
-      # that PR packaging uses.
-      NODE_OPTIONS: '--max-old-space-size=4096'
+      # The 0.3.11 renderer build peaks just above 4 GiB of live heap. 5 GiB
+      # clears it while leaving ~2 GiB of the 7 GB macOS ARM runner for the OS
+      # and esbuild; do not raise further without shrinking the renderer.
+      NODE_OPTIONS: '--max-old-space-size=5120'
     steps:
       - name: Check out merge commit
         uses: actions/checkout@v4

@@ -8,7 +8,7 @@ import {
   Scissors,
   Trash2,
   createElement
-} from 'lucide'
+} from './lucide-dom-icons'
 import { bodyZoom, toLayoutPx } from '../../../lib/body-zoom'
 import type { MenuEntry, MenuIconName } from './block-menu'
 

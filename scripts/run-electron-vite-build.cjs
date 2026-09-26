@@ -21,7 +21,7 @@ const ELECTRON_VITE_BIN = join(
 )
 
 // A caller-provided cap in NODE_OPTIONS (for example the macOS packaging jobs,
-// whose 7 GB runners intentionally pin 4096) wins over the default.
+// whose 7 GB runners intentionally pin a lower 5120) wins over the default.
 function heapArgs(env) {
   const options = env.NODE_OPTIONS ?? ''
   return options.includes(HEAP_FLAG) ? [] : [`${HEAP_FLAG}=${DEFAULT_MAX_OLD_SPACE_MB}`]
