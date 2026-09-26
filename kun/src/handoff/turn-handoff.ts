@@ -79,6 +79,8 @@ export function delegatedProviderKindLabel(kind: DelegatedProviderKind | 'kun'):
       return 'Cursor'
     case 'antigravity-cli':
       return 'Antigravity'
+    case 'acp':
+      return 'ACP agent'
     case 'kun':
       return 'Kun'
   }

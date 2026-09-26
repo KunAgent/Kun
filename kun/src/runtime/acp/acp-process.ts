@@ -11,6 +11,7 @@ import type { ChildProcess } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import { redactApprovalSensitiveText } from '../../domain/approval.js'
 import {
+  isOwnedProcess,
   spawnOwnedProcess,
   stopOwnedProcess,
   type SpawnOwnedProcessOptions
@@ -80,7 +81,12 @@ export class AcpProcess {
   }
 
   async stop(graceMs = 1_000, timeoutMs = 5_000): Promise<void> {
-    await stopOwnedProcess(this.child, { graceMs, timeoutMs })
+    if (isOwnedProcess(this.child)) {
+      await stopOwnedProcess(this.child, { graceMs, timeoutMs })
+    } else {
+      // Test-injected children have no containment registration.
+      this.child.kill('SIGKILL')
+    }
     await this.exit.catch(() => undefined)
   }
 }

@@ -158,7 +158,8 @@ function parseBinding(value: unknown): DelegatedSessionBinding | null {
     (
       providerKind !== 'agent-sdk' &&
       providerKind !== 'cursor-sdk' &&
-      providerKind !== 'antigravity-cli'
+      providerKind !== 'antigravity-cli' &&
+      providerKind !== 'acp'
     ) ||
     (continuationMode !== 'native' && continuationMode !== 'portable') ||
     !boundedString(record.providerId) ||
@@ -201,7 +202,8 @@ function isParkedSession(value: unknown): value is ParkedSession {
     (
       providerKind === 'agent-sdk' ||
       providerKind === 'cursor-sdk' ||
-      providerKind === 'antigravity-cli'
+      providerKind === 'antigravity-cli' ||
+      providerKind === 'acp'
     ) &&
     (continuationMode === 'native' || continuationMode === 'portable') &&
     boundedString(record.providerId) &&

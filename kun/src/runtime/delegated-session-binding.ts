@@ -11,7 +11,11 @@ import {
 export { FileDelegatedSessionBindingStore } from './delegated-session-binding-store.js'
 export { delegatedRouteKey } from './delegated-session-binding-keys.js'
 
-export type DelegatedProviderKind = 'agent-sdk' | 'cursor-sdk' | 'antigravity-cli'
+export type DelegatedProviderKind =
+  | 'agent-sdk'
+  | 'cursor-sdk'
+  | 'antigravity-cli'
+  | 'acp'
 export type DelegatedContinuationMode = 'native' | 'portable'
 
 export type DelegatedSessionRoute = {
@@ -373,6 +377,50 @@ export class DelegatedSessionCoordinator {
       resumed: false,
       rebaseReason: 'native_state_unavailable'
     }
+  }
+
+  /**
+   * A delegated backing process died (docs/ade/03 §4.3): drop the stored
+   * nativeSessionId and any parked entries that lived on the same connection
+   * (same providerKind + providerId + credentialIdentity, regardless of
+   * model/workspace since one process hosts many sessions). The next
+   * prepare() then rebases with rebaseReason 'native_state_unavailable' and
+   * rebuilds portable.
+   */
+  async markNativeStateUnavailable(input: {
+    threadId: string
+    providerKind: DelegatedProviderKind
+    providerId: string
+    credentialIdentity: string
+  }): Promise<boolean> {
+    const binding = await this.store.load(input.threadId)
+    if (!binding) return false
+    const onConnection = (route: DelegatedSessionRoute) =>
+      route.providerKind === input.providerKind &&
+      route.providerId === input.providerId &&
+      route.credentialIdentity === input.credentialIdentity
+    const parked = binding.parked ?? []
+    const deadParked = parked.filter(onConnection)
+    for (const entry of deadParked) {
+      await this.store.removeProviderState(
+        entry.providerKind,
+        input.threadId,
+        entry.key
+      )
+    }
+    const keptParked = parked.filter((entry) => !onConnection(entry))
+    const clearActive =
+      onConnection(binding) && binding.nativeSessionId !== undefined
+    if (!clearActive && deadParked.length === 0) return false
+    const { nativeSessionId: _cleared, ...rest } = binding
+    const next: DelegatedSessionBinding = {
+      ...rest,
+      ...(clearActive ? {} : { nativeSessionId: binding.nativeSessionId }),
+      parked: keptParked.length ? keptParked : undefined,
+      updatedAt: this.nowIso()
+    }
+    await this.store.save(next)
+    return true
   }
 
   async invalidate(threadId: string): Promise<void> {

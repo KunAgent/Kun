@@ -274,8 +274,7 @@ export const AcpInitializeResultSchema = MetaSchema.extend({
     version: z.string().optional()
   }).nullish()
 })
-export type AcpInitializeResult = z.infer<typeof AcpInitializeResultSchema> &
-  Pick<InitializeResponse, 'agentInfo'>
+export type AcpInitializeResult = z.infer<typeof AcpInitializeResultSchema>
 
 const ConfigOptionValueSchema = MetaSchema.extend({
   value: z.string(),
@@ -312,8 +311,14 @@ export const AcpConfigOptionSchema = z.intersection(
   })
 )
 
+export type AcpConfigOption = z.infer<typeof AcpConfigOptionSchema>
+
 /** Flattened select values regardless of grouped/flat `options` shape. */
-export function acpConfigOptionValues(option: SessionConfigOption): string[] {
+export function acpConfigOptionValues(option: {
+  options?: ReadonlyArray<
+    { value: string } | { options: ReadonlyArray<{ value: string }> }
+  > | null
+}): string[] {
   const options = 'options' in option ? option.options : undefined
   if (!Array.isArray(options)) return []
   const values: string[] = []
@@ -327,7 +332,7 @@ export function acpConfigOptionValues(option: SessionConfigOption): string[] {
   return values
 }
 
-const SessionModeStateSchema = MetaSchema.extend({
+export const SessionModeStateSchema = MetaSchema.extend({
   currentModeId: z.string(),
   availableModes: z.array(
     MetaSchema.extend({
@@ -336,6 +341,7 @@ const SessionModeStateSchema = MetaSchema.extend({
     })
   )
 })
+export type AcpSessionModes = z.infer<typeof SessionModeStateSchema>
 
 export const AcpNewSessionResultSchema = MetaSchema.extend({
   sessionId: z.string().min(1).max(1_024),
