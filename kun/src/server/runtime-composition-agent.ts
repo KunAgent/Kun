@@ -308,8 +308,7 @@ export async function createRuntimeAgentComposition(
     }
     const acpRuntimeDeps: AcpRuntimeDeps = {
       catalog: services.harnesses.catalog,
-      binaryPath: (harnessId) =>
-        core.activeOptions.harnesses?.binaryPaths?.[harnessId],
+      binaryPath: (harnessId) => core.activeOptions.harnesses?.binaryPaths?.[harnessId],
       threadStore,
       sessionStore,
       turns: turnService,
@@ -322,10 +321,10 @@ export async function createRuntimeAgentComposition(
       sessionManager: core.acpSessionManager,
       approvalGate,
       approvalReview: approvalReviewService,
+      userInputGate, workerCallbacks: services.workerCallbacks,
       ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
       deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
-      allowUnattendedFullAccess:
-        input.options.ade?.allowUnattendedFullAccess === true,
+      allowUnattendedFullAccess: input.options.ade?.allowUnattendedFullAccess === true,
       defaultApprovalPolicy: input.options.approvalPolicy,
       defaultSandboxMode: input.options.sandboxMode,
       defaultApprovalReviewer: input.options.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,

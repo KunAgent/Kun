@@ -102,7 +102,9 @@ export class AcpConnection {
         protocolVersion: ACP_PROTOCOL_VERSION,
         clientCapabilities: {
           fs: { readTextFile: true, writeTextFile: true },
-          terminal: true
+          terminal: true,
+          // Form elicitation only (P2-10): url mode has no Kun surface.
+          elicitation: { form: {} }
         },
         clientInfo: { name: 'kun', title: 'Kun', version: KUN_VERSION }
       },

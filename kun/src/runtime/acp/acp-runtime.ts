@@ -37,6 +37,8 @@ import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
 import { historyReferenceInstructions } from '../../prompt/history-reference-context.js'
 import type { SessionStore } from '../../ports/session-store.js'
 import type { ThreadStore } from '../../ports/thread-store.js'
+import type { UserInputGate } from '../../ports/user-input-gate.js'
+import type { WorkerCallbackService } from '../../services/worker-callback-service.js'
 import type { ApprovalGate } from '../../ports/approval-gate.js'
 import type { ApprovalReviewPort } from '../../ports/approval-review.js'
 import type { AttachmentStore } from '../../attachments/attachment-store.js'
@@ -65,6 +67,7 @@ import {
 } from '../agent-sdk/sdk-context-assembler.js'
 import { AcpConnectionPool } from './acp-connection-pool.js'
 import { AcpClientHost, type AcpClientContext } from './acp-client-host.js'
+import { acpElicitForTurn } from './acp-elicitation.js'
 import {
   AcpSessionManager,
   type AcpSessionHandle
@@ -128,6 +131,9 @@ export interface AcpRuntimeDeps {
   spawn?: AcpSpawnFn
   approvalGate?: ApprovalGate
   approvalReview?: ApprovalReviewPort
+  /** Elicitation (P2-10): user_input gate / ask_manager bridges per turn. */
+  userInputGate?: UserInputGate
+  workerCallbacks?: Pick<WorkerCallbackService, 'askManager'>
   /**
    * Credential env for `kun-gateway`/`provider` modes (`native-login`
    * receives none). Default: none — gateway bridging lands in P1-08.
@@ -304,14 +310,11 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       this.deps.defaultApprovalReviewer ??
       DEFAULT_APPROVAL_REVIEWER
 
+    const credentialEnvInput = { harnessId: definition.id, credentialMode, accountId }
     const credentialEnv =
       credentialMode === 'native-login'
         ? {}
-        : await (this.deps.credentialEnv?.({
-              harnessId: definition.id,
-              credentialMode,
-              accountId
-            }) ?? Promise.resolve({}))
+        : await (this.deps.credentialEnv?.(credentialEnvInput) ?? Promise.resolve({}))
     const credentialIdentity = delegatedCredentialIdentity({
       providerId: `${credentialMode}:${definition.id}`,
       accountId
@@ -319,20 +322,14 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     const poolKey = `${definition.id}:${credentialIdentity}`
     const limits = normalizeTurnLimits(this.deps.turnLimits)
 
-    const lease = await acquireAcpConnection(
-      this.deps,
-      this.pool,
-      this.host,
-      this.sessions,
-      {
-        poolKey,
-        definition,
-        credentialEnv,
-        identity: credentialIdentity,
-        workspace,
-        signal
-      }
-    ).catch(async (error) => {
+    const lease = await acquireAcpConnection(this.deps, this.pool, this.host, this.sessions, {
+      poolKey,
+      definition,
+      credentialEnv,
+      identity: credentialIdentity,
+      workspace,
+      signal
+    }).catch(async (error) => {
       await this.failFromAcpError(threadId, turnId, error, true)
       return undefined
     })
@@ -403,9 +400,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     // Protocol errors on this session's traffic fail the turn (§9).
     const unsubscribeSessionErrors = conn.subscribeSession(session.sessionId, {
       onUpdate: () => undefined,
-      onError: (error: AcpError) => {
-        streamError ??= error
-      }
+      onError: (error: AcpError) => { streamError ??= error }
     })
 
     const preparation = session.preparation
@@ -520,6 +515,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         signal
       ),
       recordChange: (item) => this.deps.turns.applyItem(threadId, item),
+      elicit: acpElicitForTurn(this.deps, thread, turn, signal),
       terminalEnv: acpChildEnv(this.deps, definition, credentialEnv),
       signal,
       nextId: (prefix) => this.deps.ids.next(prefix)

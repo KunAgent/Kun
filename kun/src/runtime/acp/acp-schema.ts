@@ -39,9 +39,11 @@ export type {
   ClientCapabilities,
   ConfigOptionUpdate,
   ContentBlock,
+  CreateElicitationResponse,
   CreateTerminalRequest,
   CreateTerminalResponse,
   CurrentModeUpdate,
+  ElicitationContentValue,
   EmbeddedResource,
   EnvVariable,
   FileSystemCapabilities,
@@ -666,6 +668,18 @@ export const AcpTerminalCreateParamsSchema = MetaSchema.extend({
 export const AcpTerminalIdParamsSchema = MetaSchema.extend({
   sessionId: z.string().min(1).max(1_024),
   terminalId: z.string().min(1).max(1_024)
+})
+
+/** `elicitation/create`; `requestedSchema` stays opaque, read leniently downstream. */
+export const AcpCreateElicitationParamsSchema = MetaSchema.extend({
+  sessionId: z.string().min(1).max(1_024).nullish(),
+  requestId: AcpJsonRpcIdSchema.nullish(),
+  toolCallId: z.string().max(1_024).nullish(),
+  mode: z.string().min(1).max(128),
+  message: z.string().min(1).max(16_384),
+  requestedSchema: z.unknown().nullish(),
+  elicitationId: z.string().max(1_024).nullish(),
+  url: z.string().max(8_192).nullish()
 })
 
 /** Narrow + cast: params that fail validation surface as JSON-RPC -32602. */

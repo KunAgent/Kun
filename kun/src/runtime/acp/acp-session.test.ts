@@ -145,6 +145,12 @@ describe('AcpConnection.initialize', () => {
     const initRequests = requests('initialize')
     expect(initRequests).toHaveLength(1)
     expect(initRequests[0].params?.clientInfo).toMatchObject({ name: 'kun' })
+    // P2-10: form-mode elicitation is advertised; url stays unadvertised.
+    const caps = initRequests[0].params?.clientCapabilities as
+      | { elicitation?: Record<string, unknown> }
+      | undefined
+    expect(caps?.elicitation).toMatchObject({ form: {} })
+    expect(caps?.elicitation).not.toHaveProperty('url')
     await conn.close()
   })
 
