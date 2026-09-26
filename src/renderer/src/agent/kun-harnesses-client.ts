@@ -38,6 +38,22 @@ export function createKunHarnessesClient() {
         response.body,
         'runtime returned an invalid harness model list'
       )
+    },
+
+    /** Force a fresh detection pass for one harness (settings re-detect). */
+    async probeHarness(harnessId: string): Promise<AdeHarnessRow> {
+      const response = await rendererRuntimeClient.runtimeRequest(
+        `${KUN_HARNESSES_PATH}/${encodeURIComponent(harnessId)}/probe`, 'POST', '{}'
+      )
+      if (!response.ok) {
+        throw runtimeErrorToError(
+          readRuntimeError(response.body, 'failed to re-detect harness')
+        )
+      }
+      return readRuntimeJson<AdeHarnessRow>(
+        response.body,
+        'runtime returned an invalid harness probe result'
+      )
     }
   }
 }

@@ -557,7 +557,7 @@
   "projectConfigEditor": "프로젝트 JSON",
   "projectConfigEditorDesc": "버전-1 JSON. 스킬 루트 및 stdio cwd 값은 작업공간에 상대적이며 작업공간 내부에서 확인되어야 합니다.",
   "projectConfigActions": "프로젝트 구성 작업",
-  "projectConfigActionsDesc": "저장하면 파일의 유효성을 검사하고 다시 적용하지만 새 MCP 신뢰를 부여하지는 않습니다. 별도로 검토하고 승인하세요.",
+  "projectConfigActionsDesc": "저장하면 파일의 유효성을 검사하고 다시 적용하지만 새 MCP 신뢰를 부여하지는 않습니다. 별도로 검토하고 승인하세요. 승인에는 worktree 설치/설정 명령도 포함됩니다.",
   "projectConfigSave": "프로젝트 구성 저장",
   "projectConfigRefresh": "새로고침",
   "projectConfigOpenDir": ".kun 폴더 열기",

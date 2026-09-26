@@ -1,5 +1,6 @@
 import type {
   CreateTaskWorkspaceRequest,
+  PreservedBranchesResponse,
   TaskWorkspaceDiffFileResponse,
   TaskWorkspaceDiffListResponse,
   TaskWorkspaceDiscardPreview,
@@ -147,6 +148,14 @@ export function createKunTaskWorkspaceClient() {
         kunTaskWorkspacePath(workspaceId, '/cleanup'),
         {},
         'failed to clean up task workspace'
+      )
+    },
+
+    /** Branches cleanup declined to delete; users review them (07 §8.3). */
+    listPreservedBranches(repoRoot: string): Promise<PreservedBranchesResponse> {
+      return get(
+        `${KUN_TASK_WORKSPACES_PATH}/preserved-branches${buildQuery({ repo: repoRoot })}`,
+        'failed to load preserved branches'
       )
     }
   }
