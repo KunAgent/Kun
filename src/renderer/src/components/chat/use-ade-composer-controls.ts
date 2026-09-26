@@ -119,7 +119,7 @@ export function useAdeComposerControls(input: {
    * of that source, then the new thread is rebound to the same harness.
    * Hidden while a thread is open or the matching lab flag is off.
    */
-  const continuationSource = activeThreadId ? undefined : row?.definition.historySource
+  const continuationSource = enabled && !activeThreadId ? row?.definition.historySource : undefined
   const continuationEnabled = useCodexReferenceEnabled(continuationSource)
   const continuation = enabled && continuationSource && continuationEnabled
     ? { source: continuationSource, harnessId }
