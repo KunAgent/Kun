@@ -317,6 +317,9 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
       ...(turn.orchestration ? { orchestration: turn.orchestration } : {}),
       ...(turn.harnessId ? { harnessId: turn.harnessId } : {}),
       ...(thread.workspaceMode ? { workspaceMode: thread.workspaceMode } : {}),
+      ...(thread.executionUnit?.kind
+        ? { executionUnitKind: thread.executionUnit.kind }
+        : {}),
       ...(scope.plan.planMode ? { threadMode: 'plan' as const } : {}),
       ...(scope.plan.guiPlan ? { guiPlan: scope.plan.guiPlan } : {}),
       ...(turn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),

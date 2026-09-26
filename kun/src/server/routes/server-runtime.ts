@@ -270,6 +270,19 @@ export type ServerRuntime = {
    */
   kunToolBridge?: import('../../harness/kun-tool-bridge-host.js').KunToolBridgeHost
   /**
+   * ADE control-plane stores + worker callback service (docs/ade/05 §2,
+   * 09 §3.2). Optional so test scaffolds can omit it.
+   */
+  ade?: {
+    stores: {
+      teams: import('../../ade/team-store.js').FileTeamStore
+      dispatches: import('../../ade/dispatch-store.js').FileDispatchStore
+      questions: import('../../ade/question-store.js').FileQuestionStore
+      notices: import('../../ade/worker-notice-store.js').FileWorkerNoticeStore
+    }
+    workerCallbacks: import('../../services/worker-callback-service.js').WorkerCallbackService
+  }
+  /**
    * Admission evaluation for a harness in a usage surface (one-to-one,
    * worker, graph, ...). Added in the admission step; routes only call it
    * when present.

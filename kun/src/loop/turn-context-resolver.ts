@@ -202,6 +202,10 @@ export class TurnContextResolver {
         : {}),
       // Thread-owned workspace mode; manager tools only advertise on 'ade'.
       ...(input.thread.workspaceMode ? { workspaceMode: input.thread.workspaceMode } : {}),
+      // Worker threads expose the callback tools; all other threads hide them.
+      ...(input.thread.executionUnit?.kind
+        ? { executionUnitKind: input.thread.executionUnit.kind }
+        : {}),
       activeSkillIds: skillResolution.activeSkillIds,
       ...(allowedToolNames ? { allowedToolNames } : {}),
       ...(input.thread.toolCatalogEpoch

@@ -1,4 +1,4 @@
-import { rm } from 'node:fs/promises'
+import { readdir, rm } from 'node:fs/promises'
 import {
   TeamFileSchema,
   TeamLimitsSchema,
@@ -6,7 +6,7 @@ import {
   type TeamRecord,
   type WorkerRecord
 } from '../contracts/ade.js'
-import { adeTeamDir, adeTeamFile } from './ade-paths.js'
+import { adeTeamDir, adeTeamFile, adeTeamsDir } from './ade-paths.js'
 import { readAdeJson, withAdeTeamMutex, writeAdeJson } from './ade-file.js'
 
 /**
@@ -45,6 +45,22 @@ export class FileTeamStore {
 
   async byManager(managerThreadId: string): Promise<TeamRecord | null> {
     return this.readFile(managerThreadId)
+  }
+
+  /** Enumerate every persisted team (startup reconciliation, Mission Control). */
+  async list(): Promise<TeamRecord[]> {
+    let entries: string[] = []
+    try {
+      entries = await readdir(adeTeamsDir(this.dataDir))
+    } catch {
+      return []
+    }
+    const teams: TeamRecord[] = []
+    for (const entry of entries) {
+      const team = await this.readFile(entry)
+      if (team) teams.push(team)
+    }
+    return teams.sort((left, right) => left.createdAt.localeCompare(right.createdAt))
   }
 
   async worker(teamId: string, workerId: string): Promise<WorkerRecord | null> {

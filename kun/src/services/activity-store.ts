@@ -23,9 +23,9 @@ const ARCHIVED_CLOSED_EVICT_MS = 7 * 24 * 60 * 60_000
 
 /**
  * Only these producers may drive `mainState` for a unit kind. Everyone
- * else may still write supplementary fields — and the single exception
- * `mainState: waiting` + `waitingReason: question`, which workers use to
- * surface a question to the manager (docs/ade/06 §4.1).
+ * else may still write supplementary fields — and the question-wait
+ * exception workers use to surface a `question` wait to the manager and to
+ * leave it once the answer arrives (docs/ade/06 §4.1, 09 §6.4).
  */
 const AUTHORITY: Record<ExecutionUnitKind, readonly ActivityProvenance[]> = {
   thread: ['runtime'],
@@ -111,7 +111,8 @@ export class ActivityStore implements RuntimeEventObserver {
     if (
       patch.mainState !== undefined &&
       !AUTHORITY[row.kind].includes(provenance) &&
-      !(patch.mainState === 'waiting' && patch.waitingReason === 'question')
+      !(patch.mainState === 'waiting' && patch.waitingReason === 'question') &&
+      !(patch.mainState === 'working' && row.waitingReason === 'question')
     ) {
       return
     }

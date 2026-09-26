@@ -185,6 +185,10 @@ export function createServerRuntimeComposition(
     canvasReceipts,
     kunToolBridge,
     harnessTokens: services.harnesses.tokens,
+    ade: {
+      stores: services.adeStores,
+      workerCallbacks: services.workerCallbacks
+    },
     liveCounters: () => ({
       inflight: inflight.size(),
       activeCaptures: llmDebug?.activeCaptureCount ?? 0
@@ -193,7 +197,12 @@ export function createServerRuntimeComposition(
       backgroundMaintenance.start()
       roomComposition.start()
     },
-    prepareForRequests: prepareUsageCarryover,
+    prepareForRequests: async () => {
+      await prepareUsageCarryover()
+      // Interrupted ask_manager waiters can never resolve after a restart;
+      // mark their persisted questions timed out before serving requests.
+      await services.workerCallbacks.reconcileAllTeams().catch(() => undefined)
+    },
     inspectThreadStore: () => services.threadStoreGuardian.run(),
     sessionGuardian: services.sessionGuardian,
     threadSnapshots: services.threadSnapshots,
