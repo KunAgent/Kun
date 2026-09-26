@@ -25,6 +25,10 @@ import {
   normalizeRawToolArgumentsEnvelope
 } from '../../domain/tool-argument-envelope.js'
 import { graphCreateBudgetDefaults } from './graph-create-run-tool.js'
+import {
+  checkGraphPlanHarnesses,
+  type GraphPlanHarnessAdmission
+} from './graph-plan-admission.js'
 import { restoreMissingTaskTitles } from './graph-plan-candidate-repair.js'
 import {
   MINIMAL_VALID_PLAN_EXAMPLE,
@@ -71,6 +75,8 @@ export function buildGraphDefinePlanTool(options: {
   nowIso: () => string
   nextId: (prefix: string) => string
   config?: () => GraphRuntimeConfig
+  /** Late-bound harness services for per-node admission (P1-25). */
+  harnesses?: () => GraphPlanHarnessAdmission | undefined
 }): LocalTool {
   return LocalToolHost.defineTool({
     name: GRAPH_DEFINE_PLAN_TOOL_NAME,
@@ -200,6 +206,23 @@ export function buildGraphDefinePlanTool(options: {
             return recordInvalidCandidate(options, draft, candidateHash, error.issues)
           }
           throw error
+        }
+
+        const harnessAdmission = options.harnesses?.()
+        if (harnessAdmission) {
+          const harnessIssues = await checkGraphPlanHarnesses({
+            plan,
+            admission: harnessAdmission,
+            isolation: config.writeIsolation
+          })
+          if (harnessIssues.length > 0) {
+            return recordInvalidPlanningIssues(
+              options,
+              draft,
+              candidateHash,
+              harnessIssues
+            )
+          }
         }
 
         await options.drafts.writeCommitPlan(draft.id, plan)

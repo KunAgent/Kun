@@ -58,6 +58,11 @@ export interface CursorSdkRuntimeFactoryDeps extends Omit<
   defaultApprovalReviewer?: ApprovalReviewer
   skillRuntime?: SkillRuntime
   instructionRuntime?: InstructionRuntime
+  /**
+   * Dynamic Graph planning harness summary (P1-25): injected while the turn
+   * is still in the planning phase (not the stable session prefix).
+   */
+  graphHarnessSummary?: () => Promise<string | undefined>
   memoryStore?: MemoryStore
   memoryFeedback?: MemoryRetrievalFeedbackTarget
   userInputGate?: UserInputGate
@@ -181,9 +186,14 @@ export function createCursorSdkRuntime(
         return { instructionBlocks: [], activeSkillIds: [], tools: [], customTools: {} }
       }
       const todoInstruction = plan.planMode ? null : todoContinuationInstruction(thread.todos)
+      const graphHarnessInstruction =
+        graphPolicy?.phase === 'planning'
+          ? await deps.graphHarnessSummary?.().catch(() => undefined)
+          : undefined
       const instructionBlocks = [
         ...historyReferenceInstructions(thread),
         ...(graphPolicy ? [graphPolicy.instruction] : []),
+        ...(graphHarnessInstruction ? [graphHarnessInstruction] : []),
         ...(plan.planMode ? [PLAN_MODE_INSTRUCTION] : []),
         ...(turn.guiDesignArtifact?.kind === 'svg'
           ? [SVG_ARTIFACT_MODE_INSTRUCTION]

@@ -150,10 +150,14 @@ export async function createRuntimeCore(
   const threadActivity = new ThreadActivityRegistry()
   const activityFacts = new ActivityFactsStore({ dataDir: activeOptions.dataDir })
   await activityFacts.load().catch(() => undefined)
-  const activityStore = new ActivityStore({
+  const activityStore: ActivityStore = new ActivityStore({
     nowIso,
     threadMetadata: (id) => threadStore.getMetadata?.(id) ?? Promise.resolve(null),
-    facts: activityFacts
+    facts: activityFacts,
+    // Graph attempt rows are keyed by attemptId while event.child carries the
+    // worker child thread id (P1-25); resolved lazily at event time.
+    unitIdForChild: (childId: string): string | undefined =>
+      graphRuntime.workerSessions.get(childId)?.attemptId
   })
   const contextWindowModes = new ContextWindowTurnModes(
     liveContextWindowMode(() => activeOptions)
@@ -351,7 +355,7 @@ export async function createRuntimeCore(
   taskWorkspaces.recoverInterrupted()
   const graphConfig = (): GraphRuntimeConfig =>
     activeOptions.graph ?? DEFAULT_GRAPH_RUNTIME_CONFIG
-  const graphRuntime = new GraphRuntimeComposition({
+  const graphRuntime: GraphRuntimeComposition = new GraphRuntimeComposition({
     dataDir: activeOptions.dataDir,
     config: graphConfig,
     artifactStore,

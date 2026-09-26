@@ -30,6 +30,7 @@ import {
   GRAPH_DEFINE_PLAN_INPUT_JSON_SCHEMA,
   GraphDefinePlanInputSchema
 } from './graph-define-plan-tool.js'
+import type { GraphPlanHarnessAdmission } from './graph-plan-admission.js'
 import { buildGraphLeadSupervisionTool } from './graph-lead-supervision-tool.js'
 import { buildGraphLeadReviewTool } from './graph-lead-review-tool.js'
 import {
@@ -82,6 +83,8 @@ export function buildGraphModeLocalTools(options: {
     updatedAt: string
   } | undefined>
   config?: () => import('../../config/kun-config.js').GraphRuntimeConfig
+  /** Late-bound harness services for plan-phase admission (P1-25). */
+  harnesses?: () => GraphPlanHarnessAdmission | undefined
   enabled: () => boolean
   signalSupervision?: (input: {
     runId: string
@@ -121,7 +124,8 @@ export function buildGraphModeLocalTools(options: {
       shouldAdvertise: graphPlannerOnly,
       nowIso,
       nextId,
-      config: options.config
+      config: options.config,
+      harnesses: options.harnesses
     }),
     buildGraphCreateRunTool({
       control: options.control,

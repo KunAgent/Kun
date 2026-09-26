@@ -42,6 +42,12 @@ export type ActivityStoreOptions = {
   threadMetadata?: (threadId: string) => Promise<ThreadRecord | null>
   /** User-fact persistence; cleared when a row's thread is deleted. */
   facts?: { removeFact(unitId: string): void }
+  /**
+   * Maps a `event.child.childId` to the owning execution-unit row when the
+   * unit id differs from the child thread id (graph attempts are keyed by
+   * attemptId; docs/ade/impl p1-manager §P1-25).
+   */
+  unitIdForChild?: (childId: string) => string | undefined
   maxRows?: number
   changesCapacity?: number
   previewThrottleMs?: number
@@ -229,14 +235,16 @@ export class ActivityStore implements RuntimeEventObserver {
     this.lastEventAt.set(event.threadId, Date.now())
     const projections = projectRuntimeEvent(event)
     for (const projection of projections) {
-      if (!this.rows.has(projection.unitId)) {
-        this.autoRegister(event, projection.unitId)
+      const unitId = this.options.unitIdForChild?.(projection.unitId) ?? projection.unitId
+      this.lastEventAt.set(unitId, Date.now())
+      if (!this.rows.has(unitId)) {
+        this.autoRegister(event, unitId)
       }
       if (projection.patch.lastMessagePreview !== undefined) {
-        this.applyPreviewThrottled(projection.unitId, projection.patch.lastMessagePreview)
+        this.applyPreviewThrottled(unitId, projection.patch.lastMessagePreview)
         continue
       }
-      this.applyRuntime(event, projection.unitId, projection.patch)
+      this.applyRuntime(event, unitId, projection.patch)
     }
   }
 

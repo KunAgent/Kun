@@ -163,6 +163,12 @@ export class GraphAssignmentResolver {
       model,
       providerId,
       ...(accountId ? { accountId } : {}),
+      ...(input.reference.kind === 'ephemeral' && input.reference.harnessId
+        ? { harnessId: input.reference.harnessId }
+        : {}),
+      ...(input.reference.kind === 'ephemeral' && input.reference.credentialMode
+        ? { credentialMode: input.reference.credentialMode }
+        : {}),
       allowedModelProviderIds,
       allowedModels,
       allowedProviderIds,

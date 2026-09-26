@@ -262,6 +262,12 @@ export function createAgentSdkTurnRuntimeDeps(
       }
 
       const additionalWorkspacesInstruction = buildAdditionalWorkspacesInstruction(thread.additionalWorkspaces)
+      // P1-25: planning-phase harness menu as dynamic context (not the
+      // stable delegated-session prefix).
+      const graphHarnessInstruction =
+        graphPolicy?.phase === 'planning'
+          ? await deps.graphHarnessSummary?.().catch(() => undefined)
+          : undefined
       const contextInstructions = managedPptScope ? [
         ...turnDynamicContext.instructions
       ] : [
@@ -269,6 +275,7 @@ export function createAgentSdkTurnRuntimeDeps(
         buildClientSurfaceInstruction(clientSurface),
         ...(additionalWorkspacesInstruction ? [additionalWorkspacesInstruction] : []),
         ...(graphPolicy ? [graphPolicy.instruction] : []),
+        ...(graphHarnessInstruction ? [graphHarnessInstruction] : []),
         ...(planMode ? [PLAN_MODE_INSTRUCTION] : []),
         ...(turn?.guiDesignArtifact?.kind === 'svg'
           ? [SVG_ARTIFACT_MODE_INSTRUCTION]

@@ -192,6 +192,30 @@ describe('ActivityStore', () => {
     })
   })
 
+  it('remaps child events onto the graph-attempt unit row', () => {
+    const store = makeStore({
+      unitIdForChild: (childId) => (childId === 'child_1' ? 'attempt_1' : undefined)
+    })
+    store.register({
+      unitId: 'attempt_1',
+      kind: 'graph-attempt',
+      threadId: 'child_1',
+      parentThreadId: 'parent_1',
+      harnessId: 'claude-code',
+      title: 'Research',
+      workspace: { path: '/ws/worktrees/a1', kind: 'worktree' }
+    })
+    store.record(ev('turn_started', 'parent_1', {
+      child: {
+        childId: 'child_1',
+        parentThreadId: 'parent_1',
+        childStatus: 'running'
+      }
+    }))
+    expect(store.get('attempt_1')).toMatchObject({ mainState: 'working' })
+    expect(store.get('child_1')).toBeUndefined()
+  })
+
   it('ignores writes for unregistered units', () => {
     const store = makeStore()
     store.apply('missing', { mainState: 'done' }, 'runtime')
