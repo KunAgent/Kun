@@ -57,6 +57,20 @@ export class FileDispatchStore {
     return file.dispatches.find((entry) => entry.dispatchId === clientRequestId) ?? null
   }
 
+  /** Reverse lookup for turn-completion reconciliation (09 §7.4). */
+  async findByTurn(teamId: string, turnId: string): Promise<DispatchRecord | null> {
+    const file = await this.readFile(teamId)
+    return file.dispatches.find((entry) => entry.turnId === turnId) ?? null
+  }
+
+  /** Oldest `pending` dispatch still waiting for a delivery slot. */
+  async nextPending(teamId: string): Promise<DispatchRecord | null> {
+    const file = await this.readFile(teamId)
+    return file.dispatches
+      .filter((entry) => entry.state === 'pending')
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0] ?? null
+  }
+
   async listByWorker(teamId: string, workerId: string): Promise<DispatchRecord[]> {
     const file = await this.readFile(teamId)
     return file.dispatches
@@ -80,17 +94,22 @@ export class FileDispatchStore {
   /**
    * Apply a patch under the team mutex. A `state` change is validated against
    * the transition table; invalid transitions throw DispatchTransitionError.
+   * `opts.expect` makes the write conditional: the current state must be one
+   * of the listed states or the update is skipped (returns null). Completion
+   * hooks use this to make terminal writes exactly-once.
    */
   async update(
     teamId: string,
     dispatchId: string,
-    patch: Partial<Omit<DispatchRecord, 'dispatchId' | 'teamId' | 'createdAt'>>
+    patch: Partial<Omit<DispatchRecord, 'dispatchId' | 'teamId' | 'createdAt'>>,
+    opts?: { expect?: readonly DispatchState[] }
   ): Promise<DispatchRecord | null> {
     return withAdeTeamMutex(teamId, async () => {
       const file = await this.readFile(teamId)
       const index = file.dispatches.findIndex((entry) => entry.dispatchId === dispatchId)
       if (index < 0) return null
       const current = file.dispatches[index]
+      if (opts?.expect && !opts.expect.includes(current.state)) return null
       if (patch.state !== undefined && patch.state !== current.state) {
         if (!ALLOWED_DISPATCH_TRANSITIONS[current.state].includes(patch.state)) {
           throw new DispatchTransitionError(current.state, patch.state)

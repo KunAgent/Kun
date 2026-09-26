@@ -10,6 +10,7 @@ import type { WorktreeLifecycle } from './worktree-lifecycle.js'
 import type { TaskWorkspaceStore } from './task-workspace-store.js'
 import {
   captureTaskWorkspace,
+  patchDiffStats,
   cleanupIntegratedTaskWorkspace,
   discardTaskWorkspace,
   integrateTaskWorkspace,
@@ -204,7 +205,32 @@ export class TaskWorkspaceService {
 
   /** Capture committed + uncommitted worktree changes into a patch artifact. */
   async capture(workspaceId: string): Promise<TaskWorkspaceRecord> {
-    return captureTaskWorkspace(this.integrationContext(), workspaceId)
+    const { record } = await captureTaskWorkspace(this.integrationContext(), workspaceId)
+    return record
+  }
+
+  /**
+   * Capture plus the dispatch-facing diff stat (09 §6.1): changed-file count,
+   * insertions/deletions parsed from the patch, and the patch artifact id.
+   */
+  async captureForDispatch(workspaceId: string): Promise<{
+    record: TaskWorkspaceRecord
+    stat: {
+      changedFiles: number
+      insertions: number
+      deletions: number
+      patchArtifactId?: string
+    }
+  }> {
+    const { record, patch } = await captureTaskWorkspace(this.integrationContext(), workspaceId)
+    return {
+      record,
+      stat: {
+        changedFiles: record.changedFiles.length,
+        ...patchDiffStats(patch),
+        ...(record.patchArtifactId ? { patchArtifactId: record.patchArtifactId } : {})
+      }
+    }
   }
 
   /** Integrate into the source repository; serialized per repo (07 §8). */

@@ -187,7 +187,9 @@ export function createServerRuntimeComposition(
     harnessTokens: services.harnesses.tokens,
     ade: {
       stores: services.adeStores,
-      workerCallbacks: services.workerCallbacks
+      workerCallbacks: services.workerCallbacks,
+      manager: agent.managerRuntime,
+      deliverer: agent.dispatchDeliverer
     },
     liveCounters: () => ({
       inflight: inflight.size(),
@@ -202,6 +204,11 @@ export function createServerRuntimeComposition(
       // Interrupted ask_manager waiters can never resolve after a restart;
       // mark their persisted questions timed out before serving requests.
       await services.workerCallbacks.reconcileAllTeams().catch(() => undefined)
+      // Re-resolve dispatches stuck in delivering/uncertain before the crash
+      // (09 §5): found turns are adopted; missing ones redeliver idempotently.
+      await agent.managerRuntime.reconcileOnStartup().catch((error) => {
+        console.warn('[kun] ade dispatch reconciliation failed:', error)
+      })
     },
     inspectThreadStore: () => services.threadStoreGuardian.run(),
     sessionGuardian: services.sessionGuardian,

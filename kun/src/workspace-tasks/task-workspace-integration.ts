@@ -118,11 +118,25 @@ export async function assertSourceUntouched(
   }
 }
 
+/**
+ * Unified-diff line stats for a captured patch. `+++`/`---` headers are
+ * excluded; binary hunks contribute a changed file but no line counts.
+ */
+export function patchDiffStats(patch: string): { insertions: number; deletions: number } {
+  let insertions = 0
+  let deletions = 0
+  for (const line of patch.split('\n')) {
+    if (line.startsWith('+') && !line.startsWith('+++')) insertions += 1
+    else if (line.startsWith('-') && !line.startsWith('---')) deletions += 1
+  }
+  return { insertions, deletions }
+}
+
 /** Capture committed + uncommitted worktree changes into a patch artifact. */
 export async function captureTaskWorkspace(
   ctx: WorkspaceIntegrationContext,
   workspaceId: string
-): Promise<TaskWorkspaceRecord> {
+): Promise<{ record: TaskWorkspaceRecord; patch: string }> {
   const record = requireRecord(ctx, workspaceId)
   requireWorktree(record)
   if (!CAPTURABLE.has(record.state)) {
@@ -139,14 +153,17 @@ export async function captureTaskWorkspace(
         origin: `task-workspace:${workspaceId}`
       })
     : undefined
-  return touch(ctx, workspaceId, {
-    state: 'captured',
-    changedFiles: captured.changedFiles,
-    headRevision: captured.headRevision,
-    ...(artifact ? { patchArtifactId: artifact.meta.id } : {}),
-    lastError: undefined,
-    recovery: undefined
-  })
+  return {
+    record: touch(ctx, workspaceId, {
+      state: 'captured',
+      changedFiles: captured.changedFiles,
+      headRevision: captured.headRevision,
+      ...(artifact ? { patchArtifactId: artifact.meta.id } : {}),
+      lastError: undefined,
+      recovery: undefined
+    }),
+    patch: captured.patch
+  }
 }
 
 /** Integrate a captured/ready worktree into its source repository. */
