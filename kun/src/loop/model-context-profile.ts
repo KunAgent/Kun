@@ -302,7 +302,8 @@ function providerReasoningCapability(
 
   if (
     (input.kind === 'agent-sdk' || provider.includes('claude-subscription')) &&
-    (model.includes('claude-opus-4-8') || model.includes('claude-sonnet-4-6'))
+    (model.startsWith('claude-') ||
+      model === 'sonnet' || model === 'opus' || model === 'haiku' || model === 'fable')
   ) {
     return reasoning(['low', 'medium', 'high', 'max'], 'high', 'anthropic-thinking')
   }

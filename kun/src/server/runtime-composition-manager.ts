@@ -100,7 +100,7 @@ export function createHarnessListDeps(input: {
     catalog: input.services.harnesses.catalog,
     detector: input.services.harnesses.detector,
     runtimes: input.harnessRuntimeMap,
-    probedModels: (definition) => input.services.harnesses.acpModels.peek(definition),
+    probedModels: (definition) => input.services.harnesses.probedModels(definition),
     ...(input.providers ? { providers: input.providers } : {}),
     profiles: input.listProfiles
   }

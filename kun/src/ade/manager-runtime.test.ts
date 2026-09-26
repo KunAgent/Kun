@@ -258,7 +258,7 @@ describe('ManagerRuntime.createWorker', () => {
             delegationNotes: 'login redirect specialist',
             harnessId: 'claude-code' as const,
             credentialMode: 'native-login' as const,
-            model: 'claude-sonnet-4-6'
+            model: 'claude-sonnet-5'
           }
         }],
         quota: async () => null,
@@ -274,7 +274,7 @@ describe('ManagerRuntime.createWorker', () => {
     expect(worker.route).toMatchObject({
       harnessId: 'claude-code',
       credentialMode: 'native-login',
-      model: 'claude-sonnet-4-6'
+      model: 'claude-sonnet-5'
     })
     expect(worker.profileId).toBe('reviewer')
     expect(worker.selection).toMatchObject({ reason: expect.stringContaining('Reviewer') })

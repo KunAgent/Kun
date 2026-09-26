@@ -233,4 +233,38 @@ describe('harness routes', () => {
       }
     ])
   })
+
+  it('serves probed agent-sdk models and falls back when the probe fails', async () => {
+    const catalog = new HarnessCatalog()
+    const detector = new HarnessDetector({
+      definitions: () => catalog.list(),
+      overrides: () => ({}),
+      spawnCaptured: async () => ({ stdout: '', stderr: '', timedOut: false, exitCode: null }),
+      probeLogin: async () => 'unknown',
+      nowMs: () => 1_000,
+      nowIso: () => '2026-01-01T00:00:00.000Z'
+    })
+    const runtime = (probed: string[]) =>
+      buildRouter({
+        runtimeToken: TOKEN,
+        insecure: false,
+        nowIso: () => '2026-01-01T00:00:00.000Z',
+        harnesses: {
+          catalog,
+          detector,
+          agentSdkModels: { probe: async () => probed }
+        }
+      } as unknown as ServerRuntime)
+    const ok = await dispatch(
+      runtime(['claude-opus-5', 'claude-sonnet-5']),
+      'GET', '/v1/harnesses/claude-code/models', authed
+    )
+    expect(JSON.parse(ok.body).models).toEqual(['claude-opus-5', 'claude-sonnet-5'])
+    const fallback = await dispatch(
+      runtime([]), 'GET', '/v1/harnesses/claude-code/models', authed
+    )
+    const staticModels = JSON.parse(fallback.body).models as string[]
+    expect(staticModels.length).toBeGreaterThan(0)
+    expect(staticModels).not.toContain('claude-opus-4-8')
+  })
 })
