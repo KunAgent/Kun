@@ -484,6 +484,7 @@ export abstract class DelegationRuntimeBase {
           ...(args.profileName ? { profile: args.profileName } : {}),
           prompt: args.prompt,
           ...(args.source ? { source: args.source } : {}),
+          ...(args.clientRequestId ? { clientRequestId: args.clientRequestId } : {}),
           ...(args.controlPrompt ? { controlPrompt: args.controlPrompt } : {}),
           ...(args.pptWorkflowScope ? { pptWorkflowScope: args.pptWorkflowScope } : {}),
           workspace: args.workspace,

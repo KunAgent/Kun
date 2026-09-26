@@ -42,6 +42,8 @@ import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-ser
 import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
 import { HarnessRouter, HarnessRuntimeMap } from '../harness/harness-router.js'
 import { createKunToolBridgeHost } from '../harness/kun-tool-bridge-host.js'
+import { FileTeamStore } from '../ade/team-store.js'
+import { handleAdeThreadDeleted } from '../ade/team-lifecycle.js'
 
 export async function createRuntimeAgentComposition(
   registryComposition: ReturnType<typeof createRuntimeRegistry>
@@ -327,6 +329,7 @@ export async function createRuntimeAgentComposition(
     }
   }
 
+  const adeTeamStore = new FileTeamStore(core.activeOptions.dataDir, nowIso)
   // The main turn abort signal already reaches foreground children. Detached
   // children and background shells intentionally have independent lifetimes,
   // so a destructive thread delete must cancel them explicitly before the
@@ -341,6 +344,16 @@ export async function createRuntimeAgentComposition(
       threadId,
       (childId) => threadService.delete(childId)
     )
+    // ADE cascade (09 §3.2): deleting a manager thread removes its team
+    // directory and revokes every worker grant; deleting a worker thread
+    // marks its team record released.
+    const deleted = await threadService.getMetadata(threadId).catch(() => null)
+    await handleAdeThreadDeleted({
+      thread: deleted,
+      teams: adeTeamStore,
+      revokeThreadGrants: (id) => services.harnesses.tokens.revokeThread(id),
+      nowIso
+    })
   }
   const harnessRuntimeMap = new HarnessRuntimeMap(
     buildHarnessRuntimes(

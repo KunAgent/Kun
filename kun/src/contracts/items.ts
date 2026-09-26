@@ -89,7 +89,8 @@ export const UserMessageSource = z.enum([
   'background_subagent',
   'graph_runtime',
   'subagent_resume',
-  'design_continuation'
+  'design_continuation',
+  'worker_update'
 ])
 export type UserMessageSource = z.infer<typeof UserMessageSource>
 

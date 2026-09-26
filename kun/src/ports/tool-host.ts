@@ -4,7 +4,7 @@ import type {
   SandboxMode
 } from '../contracts/policy.js'
 import type { ApprovalRequest, ApprovalResolution } from '../domain/approval.js'
-import type { TurnItem } from '../contracts/items.js'
+import type { TurnItem, UserMessageSource } from '../contracts/items.js'
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
 import type {
   ActingTurnModelRoute,
@@ -163,7 +163,7 @@ export type ToolHostContext = {
   /** Pending desktop checkpoint gate for the first workspace mutation. */
   workspaceCheckpointRequestId?: string
   orchestration?: 'direct' | 'graph'
-  messageSource?: 'background_shell' | 'background_subagent' | 'graph_runtime' | 'subagent_resume' | 'design_continuation'
+  messageSource?: UserMessageSource
   /** Structured child identity bound to a one-click resume turn. */
   subagentResume?: SubagentResumeRequest
   /** Additional explicitly trusted workspace roots for this persisted thread. */

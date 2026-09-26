@@ -14,7 +14,8 @@ import {
   type ExtensionAgentProfileSnapshot,
   type ExtensionRunBudget,
   type ExtensionThreadVisibility,
-  type ExtensionToolCatalogEpoch
+  type ExtensionToolCatalogEpoch,
+  type ThreadExecutionUnit
 } from '../contracts/threads.js'
 import type { DesignTaskProfile } from '../contracts/design-task-profile.js'
 import {
@@ -77,6 +78,7 @@ export function createThreadRecord(input: {
   costBudgetWarningSent?: boolean
   relation?: ThreadRelation
   parentThreadId?: string
+  executionUnit?: ThreadExecutionUnit
   planBuildRunId?: string
   planBuildAdmissionFingerprint?: string
   planBuildAdmissionCapabilityHash?: string
@@ -131,6 +133,7 @@ export function createThreadRecord(input: {
     ...(input.costBudgetWarningSent !== undefined ? { costBudgetWarningSent: input.costBudgetWarningSent } : {}),
     relation: input.relation ?? 'primary',
     ...(input.parentThreadId ? { parentThreadId: input.parentThreadId } : {}),
+    ...(input.executionUnit ? { executionUnit: input.executionUnit } : {}),
     ...(input.planBuildRunId ? { planBuildRunId: input.planBuildRunId } : {}),
     ...(input.planBuildAdmissionFingerprint
       ? { planBuildAdmissionFingerprint: input.planBuildAdmissionFingerprint }
@@ -200,6 +203,7 @@ export function toThreadSummary(
     ...(thread.costBudgetWarningSent !== undefined ? { costBudgetWarningSent: thread.costBudgetWarningSent } : {}),
     relation: thread.relation ?? 'primary',
     ...(thread.parentThreadId ? { parentThreadId: thread.parentThreadId } : {}),
+    ...(thread.executionUnit ? { executionUnit: thread.executionUnit } : {}),
     ...(thread.planBuildRunId ? { planBuildRunId: thread.planBuildRunId } : {}),
     ...(thread.planBuildAdmissionFingerprint
       ? { planBuildAdmissionFingerprint: thread.planBuildAdmissionFingerprint }

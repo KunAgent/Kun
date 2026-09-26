@@ -1,7 +1,7 @@
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
 import type { RuntimeErrorSeverity } from '../contracts/errors.js'
 import type { ModelRequestFailureContext } from '../contracts/model-request-failure.js'
-import type { TurnItem } from '../contracts/items.js'
+import type { TurnItem, UserMessageSource } from '../contracts/items.js'
 import type { MemoryRecord } from '../contracts/memory.js'
 import type {
   ModelDocumentAttachment,
@@ -72,7 +72,7 @@ export type PreparedTurnContext = Readonly<{
   turnId: string
   workspace: string
   orchestration: 'direct' | 'graph'
-  messageSource?: 'background_shell' | 'background_subagent' | 'graph_runtime' | 'subagent_resume' | 'design_continuation'
+  messageSource?: UserMessageSource
   subagentResume?: SubagentResumeRequest
   additionalWorkspaces?: readonly string[]
   knowledgeBases?: readonly KnowledgeBaseMount[]
@@ -117,7 +117,7 @@ export type ToolTurnContextInput = {
   workspace: string
   workspaceCheckpointRequestId?: string
   orchestration?: 'direct' | 'graph'
-  messageSource?: 'background_shell' | 'background_subagent' | 'graph_runtime' | 'subagent_resume' | 'design_continuation'
+  messageSource?: UserMessageSource
   subagentResume?: SubagentResumeRequest
   additionalWorkspaces?: readonly string[]
   knowledgeBases?: readonly KnowledgeBaseMount[]

@@ -166,6 +166,8 @@ async create(this: ThreadService,
       relation?: ThreadRelation
       /** Parent thread this thread branches from (used by `side`/`fork` relations). */
       parentThreadId?: string
+      /** Host-only ADE worker identity; never accepted from the request body. */
+      executionUnit?: ThreadRecord['executionUnit']
       /** Broker-derived metadata. Never populated from the public thread request body. */
       extensionMetadata?: ExtensionThreadMetadata
       roomContext?: ThreadRecord['roomContext']
@@ -203,6 +205,7 @@ async create(this: ThreadService,
       ...(request.costBudgetUsd !== undefined ? { costBudgetUsd: request.costBudgetUsd } : {}),
       ...(options.relation ? { relation: options.relation } : {}),
       ...(options.parentThreadId ? { parentThreadId: options.parentThreadId } : {}),
+      ...(options.executionUnit ? { executionUnit: options.executionUnit } : {}),
       status: options.status
     })
     // `create` and destructive delete use the same per-thread mutation queue.
