@@ -254,6 +254,16 @@ export type ServerRuntime = {
     acpModels?: AcpModelProbe
   }
   /**
+   * Process-local `kgw_` bearer tokens scoped to spawned harnesses
+   * (docs/ade/04 §4). Optional so test scaffolds can omit it.
+   */
+  harnessTokens?: import('../../harness/harness-token-service.js').HarnessTokenService
+  /**
+   * Shared Kun-tool bridge host backing the `/mcp/kun` route (docs/ade/05
+   * §3.3). Optional so test scaffolds can omit it.
+   */
+  kunToolBridge?: import('../../harness/kun-tool-bridge-host.js').KunToolBridgeHost
+  /**
    * Admission evaluation for a harness in a usage surface (one-to-one,
    * worker, graph, ...). Added in the admission step; routes only call it
    * when present.

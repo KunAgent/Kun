@@ -6,6 +6,7 @@ import { HarnessCatalog } from './harness-catalog.js'
 import { HarnessDetector, spawnCaptured } from './harness-detector.js'
 import { probeHarnessLogin } from './harness-login-probes.js'
 import { AcpModelProbe } from './acp-model-probe.js'
+import { HarnessTokenService } from './harness-token-service.js'
 
 const runtimeRequire = createRequire(import.meta.url)
 
@@ -29,6 +30,8 @@ export type HarnessRuntimeComposition = {
   detector: HarnessDetector
   /** ACP `session/new` model probing for `modelSource: 'probe'` harnesses. */
   acpModels: AcpModelProbe
+  /** Process-local scoped bearer tokens for spawned harnesses (04 §4). */
+  tokens: HarnessTokenService
 }
 
 /**
@@ -63,5 +66,5 @@ export function createHarnessComposition(
   const acpModels = new AcpModelProbe({
     binaryPath: (id) => options().harnesses?.binaryPaths?.[id]
   })
-  return { catalog, detector, acpModels }
+  return { catalog, detector, acpModels, tokens: new HarnessTokenService() }
 }
