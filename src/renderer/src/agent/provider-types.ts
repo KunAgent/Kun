@@ -247,6 +247,19 @@ export interface AgentProvider {
   pinActivity?(unitId: string, pinned?: boolean): Promise<void>
   /** Foreground-thread report for activity dormancy (docs/ade/06 §7.2 cond. 4). */
   reportActivityForeground?(threadId: string): Promise<void>
+  /** Task workspaces bound to a thread (docs/ade/07 §11). */
+  listTaskWorkspaces?(options?: {
+    boundThreadId?: string
+    ownerThreadId?: string
+  }): Promise<import('@shared/task-workspace').TaskWorkspaceListResponse>
+  /** Per-file diff stats for the review panel (docs/ade/11 §3). */
+  getTaskWorkspaceDiff?(
+    workspaceId: string
+  ): Promise<import('@shared/task-workspace').TaskWorkspaceDiffListResponse>
+  getTaskWorkspaceDiffFile?(
+    workspaceId: string,
+    path: string
+  ): Promise<import('@shared/task-workspace').TaskWorkspaceDiffFileResponse>
   /** Rebuild a recorded handoff brief on demand (docs/ade/impl §P0-14). */
   getHandoffPreview?(threadId: string, turnId: string): Promise<{
     turnId: string

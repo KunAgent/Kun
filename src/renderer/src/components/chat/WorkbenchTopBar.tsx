@@ -15,6 +15,7 @@ import {
   Globe2,
   Gauge,
   GitBranch,
+  GitCompare,
   LockKeyhole,
   Loader2,
   MessageCircleMore,
@@ -56,6 +57,8 @@ type Props = {
   planPanelEnabled?: boolean
   canvasEnabled?: boolean
   graphEnabled?: boolean
+  /** Thread binds a task workspace → offer the review tab (11 §3). */
+  reviewEnabled?: boolean
   sideChatRunningCount?: number
   sideChatOpen?: boolean
   sideChatEnabled?: boolean
@@ -351,6 +354,7 @@ export function WorkbenchSideRail({
   planPanelEnabled = false,
   canvasEnabled = false,
   graphEnabled = false,
+  reviewEnabled = false,
   sideChatRunningCount = 0,
   sideChatOpen = false,
   sideChatEnabled = true,
@@ -368,6 +372,11 @@ export function WorkbenchSideRail({
   const items = [
     ...(planPanelEnabled ? [{ mode: BUILTIN_RIGHT_PANEL_IDS.plan, label: t('rightPanelPlan'), icon: ClipboardList }] : []),
     { mode: BUILTIN_RIGHT_PANEL_IDS.changes, label: t('rightPanelChanges'), icon: FileEdit },
+    ...(reviewEnabled ? [{
+      mode: BUILTIN_RIGHT_PANEL_IDS.review,
+      label: t('rightPanelReview', { defaultValue: 'Review' }),
+      icon: GitCompare
+    }] : []),
     { mode: BUILTIN_RIGHT_PANEL_IDS.browser, label: t('rightPanelBrowser'), icon: Globe2 },
     ...(canvasEnabled ? [{ mode: BUILTIN_RIGHT_PANEL_IDS.canvas, label: t('rightPanelWhiteboard'), icon: Shapes }] : []),
     ...(graphEnabled ? [{

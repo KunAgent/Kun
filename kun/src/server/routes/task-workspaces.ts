@@ -7,6 +7,10 @@ import {
 } from '../../contracts/task-workspace.js'
 import { TaskWorkspaceError, type TaskWorkspaceService } from '../../workspace-tasks/task-workspace-service.js'
 import {
+  taskWorkspaceDiffFile,
+  taskWorkspaceDiffList
+} from '../../workspace-tasks/task-workspace-diff.js'
+import {
   TaskWorkspaceConflictError,
   TaskWorkspaceDiscardPending
 } from '../../workspace-tasks/task-workspace-integration.js'
@@ -50,14 +54,18 @@ export async function createTaskWorkspaceResponse(
   }
 }
 
-/** GET /v1/task-workspaces?ownerThreadId=… */
+/** GET /v1/task-workspaces?ownerThreadId=…|boundThreadId=… */
 export function listTaskWorkspacesResponse(
   service: TaskWorkspaceService,
   request: Request
 ): JsonResponse {
-  const ownerThreadId = new URL(request.url).searchParams.get('ownerThreadId') ?? undefined
+  const params = new URL(request.url).searchParams
+  const ownerThreadId = params.get('ownerThreadId') ?? undefined
+  const boundThreadId = params.get('boundThreadId') ?? undefined
   return jsonResponse({
-    records: service.list(ownerThreadId ? { ownerThreadId } : undefined)
+    records: service.list(
+      ownerThreadId || boundThreadId ? { ownerThreadId, boundThreadId } : undefined
+    )
   })
 }
 
@@ -118,6 +126,39 @@ export async function taskWorkspaceSetupLogResponse(
   const content = await artifacts.get(logArtifactId).catch(() => null)
   if (content === null) return ERRORS.notFound('setup log artifact not found')
   return jsonResponse({ log: content, status: record.setup.status })
+}
+
+/** GET /v1/task-workspaces/:id/diff — capture, then per-file stats (11 §3). */
+export async function taskWorkspaceDiffResponse(
+  service: TaskWorkspaceService,
+  artifacts: { get(id: string): Promise<string | null> },
+  workspaceId: string
+): Promise<JsonResponse> {
+  try {
+    const record = await service.capture(workspaceId)
+    return jsonResponse(await taskWorkspaceDiffList(record, artifacts))
+  } catch (error) {
+    return serviceError(error)
+  }
+}
+
+/** GET /v1/task-workspaces/:id/diff/file?path= — one file's patch + texts. */
+export async function taskWorkspaceDiffFileResponse(
+  service: TaskWorkspaceService,
+  artifacts: { get(id: string): Promise<string | null> },
+  request: Request,
+  workspaceId: string
+): Promise<JsonResponse> {
+  const path = new URL(request.url).searchParams.get('path')
+  if (!path) return ERRORS.validation('missing path query parameter')
+  try {
+    const record = await service.capture(workspaceId)
+    const file = await taskWorkspaceDiffFile(record, artifacts, path)
+    if (!file) return ERRORS.notFound('file not present in workspace diff')
+    return jsonResponse(file)
+  } catch (error) {
+    return serviceError(error)
+  }
 }
 
 /** POST /v1/task-workspaces/:id/capture — snapshot worktree changes. */

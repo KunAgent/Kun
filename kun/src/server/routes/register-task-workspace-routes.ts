@@ -14,6 +14,8 @@ import {
   markReadyTaskWorkspaceResponse,
   preservedBranchesResponse,
   retryTaskWorkspaceResponse,
+  taskWorkspaceDiffFileResponse,
+  taskWorkspaceDiffResponse,
   taskWorkspaceSetupLogResponse
 } from './task-workspaces.js'
 
@@ -69,6 +71,20 @@ export function registerTaskWorkspaceRoutes(router: Router, runtime: ServerRunti
     const artifacts = runtime.graph?.artifacts
     if (!svc || !artifacts) return ERRORS.unavailable('task workspaces are unavailable')
     return taskWorkspaceSetupLogResponse(svc, artifacts, ctx.params.workspaceId)
+  })
+  router.add('GET', '/v1/task-workspaces/:workspaceId/diff', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const svc = service()
+    const artifacts = runtime.graph?.artifacts
+    if (!svc || !artifacts) return ERRORS.unavailable('task workspaces are unavailable')
+    return taskWorkspaceDiffResponse(svc, artifacts, ctx.params.workspaceId)
+  })
+  router.add('GET', '/v1/task-workspaces/:workspaceId/diff/file', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const svc = service()
+    const artifacts = runtime.graph?.artifacts
+    if (!svc || !artifacts) return ERRORS.unavailable('task workspaces are unavailable')
+    return taskWorkspaceDiffFileResponse(svc, artifacts, request, ctx.params.workspaceId)
   })
   router.add('POST', '/v1/task-workspaces/:workspaceId/capture', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

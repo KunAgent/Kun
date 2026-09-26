@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import { useEffect, type ReactElement } from 'react'
 import { WorkbenchLeftSidebar } from './WorkbenchLeftSidebar'
 import { WorkbenchStageRouter } from './WorkbenchStageRouter'
 import { AgentBrowserFloatingPreview } from '../AgentBrowserFloatingPreview'
@@ -12,6 +12,7 @@ import { extensionWorkbenchClient } from '../../extensions/extension-workbench-c
 import { resolveCommandOpenView } from '../../extensions/ExtensionWorkbenchSurfaces'
 import { normalizeWorkbenchRoute } from './workbench-route'
 import { shouldShowSideSessionReturnBar } from './workbench-side-session-mode'
+import { ensureThreadBinding, useReviewStore } from '../../store/review-store'
 
 type Context = Record<string, any>
 
@@ -47,6 +48,11 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
   } = context
   const normalizedRoute = normalizeWorkbenchRoute(route)
   const activeConversationThread = threads.find((thread: any) => thread.id === activeThreadId)
+  const reviewEnabled = useReviewStore((s) =>
+    activeThreadId ? Boolean(s.bindings[activeThreadId]) : false)
+  useEffect(() => {
+    if (activeThreadId) void ensureThreadBinding(activeThreadId)
+  }, [activeThreadId])
   return (
     <div
       ref={shellRef}
@@ -251,6 +257,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
             planPanelEnabled: Boolean(activeGuiPlan),
             canvasEnabled: true,
             graphEnabled,
+            reviewEnabled,
             sideChatRunningCount: currentSideRunningCount,
             sideChatOpen: rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.sideConversations,
             sideChatEnabled: runtimeConnection === 'ready' && Boolean(activeThreadId),

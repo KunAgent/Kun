@@ -14,6 +14,7 @@ import {
   Gauge,
   Globe2,
   GitBranch,
+  GitCompare,
   MessageCircleMore,
   PanelRightClose,
   Plus,
@@ -100,6 +101,11 @@ export function CodeRightPanelTabs({
       icon: Gauge
     },
     { id: BUILTIN_RIGHT_PANEL_IDS.remote, label: t('rightPanelRemote'), icon: Radio },
+    {
+      id: BUILTIN_RIGHT_PANEL_IDS.review,
+      label: t('rightPanelReview', { defaultValue: 'Review' }),
+      icon: GitCompare
+    },
   ], [t])
 
   const builtinById = useMemo(
