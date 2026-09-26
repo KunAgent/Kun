@@ -302,6 +302,7 @@ async startTurn(this: TurnService, input: {
             graphPlanningLifecycle,
             disableUserInput: input.request.disableUserInput,
             imContext: input.request.imContext,
+            planBuild: input.request.planBuild,
             workspaceCheckpointId: input.request.workspaceCheckpointId,
             workspaceCheckpointRequestId: input.request.workspaceCheckpointRequestId,
             ...(options.extensionBudgetTokenBaseline !== undefined

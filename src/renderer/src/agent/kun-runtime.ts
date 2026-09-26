@@ -531,6 +531,8 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
       composerContexts?: ComposerContextAttachment[]
       ackNoticeIds?: string[]
+      /** Managed plan-build turn; Kun enforces isolated-worktree admission. */
+      planBuild?: boolean
       writeContext?: WriteTurnContext
     }
   ): Promise<{
@@ -606,6 +608,9 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     }
     if (options?.guiDesignMode) {
       body.guiDesignMode = true
+    }
+    if (options?.planBuild) {
+      body.planBuild = true
     }
     if (options?.persona?.trim()) {
       body.persona = options.persona.trim()

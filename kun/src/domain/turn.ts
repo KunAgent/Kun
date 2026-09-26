@@ -65,6 +65,7 @@ export function createTurnRecord(input: {
   orchestration?: GraphOrchestrationStrategy
   disableUserInput?: boolean
   imContext?: boolean
+  planBuild?: boolean
   workspaceCheckpointId?: string
   workspaceCheckpointRequestId?: string
   extensionBudgetTokenBaseline?: number
@@ -125,6 +126,7 @@ export function createTurnRecord(input: {
     ...(input.mode ? { mode: input.mode } : {}),
     ...(input.disableUserInput ? { disableUserInput: true } : {}),
     ...(input.imContext ? { imContext: true } : {}),
+    ...(input.planBuild ? { planBuild: true } : {}),
     ...(input.workspaceCheckpointId ? { workspaceCheckpointId: input.workspaceCheckpointId } : {}),
     ...(input.workspaceCheckpointRequestId
       ? { workspaceCheckpointRequestId: input.workspaceCheckpointRequestId }

@@ -238,4 +238,38 @@ describe('performPreparedThreadSend ADE worktree isolation', () => {
       expect.objectContaining({ harnessId: 'claude-code', credentialMode: 'native-login' })
     )
   })
+
+  it('forwards the frozen planBuild flag when a queued build row drains', async () => {
+    const { state, ...harness } = buildHarness({
+      composerIsolation: 'local',
+      activeThreadId: 'thr_build',
+      threads: [
+        { id: 'thr_build', workspace: '/repo/wt', workspaceMode: 'ade' } as never
+      ]
+    })
+    const provider = {
+      sendUserMessage: vi.fn(async () => ({ turnId: 'turn_1' }))
+    }
+    const queued = {
+      ...submission(),
+      planBuild: true,
+      harnessId: 'claude-code',
+      credentialMode: 'native-login'
+    }
+    const input = inputFor({ state, ...harness }, provider as never)
+    input.activeThreadId = 'thr_build'
+    input.queued = queued
+    input.submittedMessageForQueue = queued
+    const result = await performPreparedThreadSend(input)
+    expect(result).toBe(true)
+    expect(provider.sendUserMessage).toHaveBeenCalledWith(
+      'thr_build',
+      'ship it',
+      expect.objectContaining({
+        planBuild: true,
+        harnessId: 'claude-code',
+        credentialMode: 'native-login'
+      })
+    )
+  })
 })

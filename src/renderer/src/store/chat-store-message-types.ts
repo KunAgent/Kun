@@ -84,6 +84,8 @@ export type QueuedUserMessage = {
   approvalPolicy?: ApprovalPolicy
   sandboxMode?: SandboxMode
   approvalReviewer?: ApprovalReviewer
+  /** Managed plan-build turn (07 §10); Kun admission enforces an isolated worktree. */
+  planBuild?: boolean
 }
 
 /**
@@ -132,6 +134,8 @@ export type SendMessageOverrides = {
   approvalReviewer?: ApprovalReviewer
   /** Resolve the send only after Kun accepts it, including when it first enters the queue. */
   waitForRuntimeAdmission?: boolean
+  /** Managed plan-build turn (07 §10); Kun admission enforces an isolated worktree. */
+  planBuild?: boolean
   model?: string
   providerId?: string
   accountId?: string
@@ -190,3 +194,24 @@ export type ClearDesignHistoryResult = {
 }
 
 export type InitialSetupMode = 'required' | 'preview'
+
+/**
+ * External-harness plan build dispatch input (07 §10). The controller
+ * resolves the harness selection; the store action owns thread creation,
+ * host-worktree preparation, and the parked build turn.
+ */
+export type ExternalPlanBuildRequest = {
+  /** Full task instructions — the plan build prompt without protocol injection. */
+  prompt: string
+  /** User-visible bubble text for the kickoff message. */
+  displayText: string
+  /** Plan title reused for the thread title + workspace label. */
+  title?: string
+  /** Source checkout the task worktree branches from. */
+  workspaceRoot: string
+  harnessId: string
+  credentialMode?: string
+  model?: string
+  providerId?: string
+  accountId?: string
+}

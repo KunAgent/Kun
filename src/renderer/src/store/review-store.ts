@@ -75,6 +75,12 @@ export type ReviewStoreState = {
   /** threadId → bound workspace (`null` once looked up and absent). */
   bindings: Record<string, TaskWorkspaceRecord | null | undefined>
   workspaces: Record<string, WorkspaceReview>
+  /**
+   * threadId → workspaceId for an external-harness plan build whose worker
+   * turn just settled (07 §10). The workbench consumes the flag to open the
+   * Review panel so the user can choose the integration mode.
+   */
+  pendingPlanBuildReview: Record<string, string>
 }
 
 const patchWorkspace = (
@@ -88,7 +94,8 @@ const patchWorkspace = (
 
 export const useReviewStore = create<ReviewStoreState>(() => ({
   bindings: {},
-  workspaces: {}
+  workspaces: {},
+  pendingPlanBuildReview: {}
 }))
 
 /** Latest record for a thread; `null` results are re-checked on each call. */

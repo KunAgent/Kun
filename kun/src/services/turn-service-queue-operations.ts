@@ -198,6 +198,7 @@ export const turnServiceQueueOperations = {
       orchestration: input.request.orchestration,
       disableUserInput: input.request.disableUserInput,
       imContext: input.request.imContext,
+      planBuild: input.request.planBuild,
       workspaceCheckpointId: input.request.workspaceCheckpointId,
       workspaceCheckpointRequestId: input.request.workspaceCheckpointRequestId
     })

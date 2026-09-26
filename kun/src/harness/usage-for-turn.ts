@@ -35,11 +35,15 @@ export function usageForTurn(
     | 'graphLeadLifecycle'
     | 'graphPlanningLifecycle'
     | 'imContext'
+    | 'planBuild'
     | 'clientSurface'
     | 'disableUserInput'
     | 'agentSurface'
   >
 ): HarnessUsage {
+  // An explicit plan-build marker wins: the isolated-workspace rule must
+  // apply regardless of which host feature scheduled the turn.
+  if (turn.planBuild === true) return 'plan-build'
   if (thread.roomContext) return 'room-execution'
   if (turn.orchestration === 'graph') {
     return turn.graphLeadLifecycle || turn.graphPlanningLifecycle

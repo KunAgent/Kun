@@ -46,6 +46,7 @@ import type {
   ClearDesignHistoryOptions,
   ClearDesignHistoryResult,
   CreateDesignThreadOptions,
+  ExternalPlanBuildRequest,
   GuiDesignArtifactMessageContext,
   GuiPlanMessageContext,
   InitialSetupMode,
@@ -57,6 +58,7 @@ export type {
   ClearDesignHistoryOptions,
   ClearDesignHistoryResult,
   CreateDesignThreadOptions,
+  ExternalPlanBuildRequest,
   GuiDesignArtifactMessageContext,
   GuiPlanMessageContext,
   InitialSetupMode,
@@ -507,6 +509,13 @@ export type ChatState = {
   subscribeThreadEventsLive: (threadId: string) => Promise<void>
   recoverActiveTurn: (options?: ThreadRecoveryOptions) => Promise<boolean>
   sendMessage: (text: string, mode?: string, overrides?: SendMessageOverrides) => Promise<boolean>
+  /**
+   * Run a plan build on an external harness inside a host-managed task
+   * worktree (07 §10): creates the ADE build thread, parks the
+   * `planBuild`-marked turn until the worktree is ready, and flags the
+   * Review panel when the turn settles.
+   */
+  dispatchExternalPlanBuild: (input: ExternalPlanBuildRequest) => Promise<boolean>
   reviewActiveThread: (target: ReviewTarget) => Promise<boolean>
   drainQueuedMessages: () => Promise<void>
   removeQueuedMessage: (id: string) => Promise<void> | void

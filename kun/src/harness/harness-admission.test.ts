@@ -225,6 +225,31 @@ describe('usageForTurn', () => {
     expect(usageForTurn(plainThread, plainTurn)).toBe('one-to-one')
   })
 
+  it('flags managed plan-build turns for the stricter admission usage', () => {
+    expect(usageForTurn(plainThread, { planBuild: true } as Turn)).toBe('plan-build')
+    // The explicit marker outranks even room/graph context: the
+    // isolated-workspace rule is a property of the build, not the caller.
+    expect(usageForTurn(
+      { roomContext: { roomId: 'r', memberId: 'm', kind: 'execution' } } as ThreadRecord,
+      { planBuild: true } as Turn
+    )).toBe('plan-build')
+    expect(usageForTurn(plainThread, { planBuild: true, orchestration: 'graph' } as Turn))
+      .toBe('plan-build')
+  })
+
+  it('plan-build rejects a sandboxless harness without an isolated workspace', () => {
+    const result = admit({
+      usage: 'plan-build',
+      harness: def('antigravity'),
+      effective: {
+        ...ANTIGRAVITY_CAPABILITIES,
+        statuses: { ...ANTIGRAVITY_CAPABILITIES.statuses, abort: { supported: true } }
+      },
+      isolated: false
+    })
+    expect(result.ok).toBe(false)
+  })
+
   it('detects unattended turns only via turn flags', () => {
     expect(isUnattendedTurn({} as Turn)).toBe(false)
     expect(isUnattendedTurn({ disableUserInput: true } as Turn)).toBe(true)
