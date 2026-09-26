@@ -326,6 +326,7 @@ export async function createRuntimeAgentComposition(
       approvalGate,
       approvalReview: approvalReviewService,
       userInputGate, workerCallbacks: services.workerCallbacks,
+      kunToolsMcp: services.kunToolsMcp,
       ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
       deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
       allowUnattendedFullAccess: input.options.ade?.allowUnattendedFullAccess === true,

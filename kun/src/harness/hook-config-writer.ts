@@ -37,10 +37,21 @@ function shQuote(value: string): string {
  * falls back to `node <serve-entry.js>`.
  */
 export function kunHookCommand(env: NodeJS.ProcessEnv = process.env): string {
+  const { command, args } = kunCommandParts(env)
+  return [command, ...args].map(shQuote).join(' ')
+}
+
+/**
+ * The same invocation split into spawn-ready parts — MCP stdio descriptors
+ * and execve-style callers need the bare executable plus its args.
+ */
+export function kunCommandParts(
+  env: NodeJS.ProcessEnv = process.env
+): { command: string; args: string[] } {
   const packaged = env.KUN_PACKAGED_RUNTIME_EXECUTABLE?.trim()
-  if (packaged) return shQuote(packaged)
+  if (packaged) return { command: packaged, args: [] }
   const entry = fileURLToPath(new URL('../cli/serve-entry.js', import.meta.url))
-  return `${shQuote(process.execPath)} ${shQuote(entry)}`
+  return { command: process.execPath, args: [entry] }
 }
 
 /**

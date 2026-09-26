@@ -71,7 +71,11 @@ import { ThreadSnapshotStore } from '../services/thread-snapshot-store.js'
 import { SessionGuardian } from '../services/session-guardian.js'
 import { WorkerCallbackService } from '../services/worker-callback-service.js'
 import { TerminalAgentRegistry } from '../services/terminal-agent-registry.js'
-import { kunHookCommand, writeHookConfig } from '../harness/hook-config-writer.js'
+import {
+  kunCommandParts,
+  kunHookCommand,
+  writeHookConfig
+} from '../harness/hook-config-writer.js'
 import { FileTeamStore } from '../ade/team-store.js'
 import { FileDispatchStore } from '../ade/dispatch-store.js'
 import { FileQuestionStore } from '../ade/question-store.js'
@@ -87,6 +91,7 @@ import {
 } from '../memory/index.js'
 import { createWriteDocumentGuard } from './runtime-write-document-guard.js'
 import { createHarnessComposition } from '../harness/harness-runtime.js'
+import { KunToolsMcpProvider } from '../runtime/acp/kun-tools-mcp.js'
 import { providerKindsForOptions } from './runtime-factory-model.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
 
@@ -158,6 +163,14 @@ export async function createRuntimeServices(
     nowIso
   })
   const harnesses = createHarnessComposition(() => core.activeOptions)
+  // Per-turn `kun-tools` grants + http/stdio MCP descriptors for ACP sessions
+  // (P3-08). One provider is shared across every delegated-runtime build so
+  // revocation stays consistent no matter which runtime built the turn.
+  const kunToolsMcp = new KunToolsMcpProvider({
+    tokens: harnesses.tokens,
+    endpoint: () => harnesses.gatewayEndpoint.baseUrl,
+    command: kunCommandParts
+  })
   const providerKinds = () =>
     providerKindsForOptions(core.activeOptions, {
       defaultIsAgentSdk,
@@ -591,6 +604,7 @@ export async function createRuntimeServices(
     defaultIsAntigravity,
     defaultIsCursorSdk,
     harnesses,
+    kunToolsMcp,
     providerKinds,
     get mcpProviders() { return mcpProviders },
     set mcpProviders(value: typeof mcpProviders) { mcpProviders = value },
