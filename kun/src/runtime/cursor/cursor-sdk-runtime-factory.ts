@@ -254,7 +254,9 @@ export function createCursorSdkRuntime(
     intent: string,
     signal: AbortSignal
   ): ToolHostContext['awaitApproval'] => async (approval: ApprovalRequest) => {
-    const requiresUserDecision = approval.action?.requiresUserDecision === true
+    const requiresUserDecision =
+      approval.action?.requiresUserDecision === true ||
+      approval.action?.reviewerRequirement === 'user'
     if (!requiresUserDecision && approvalPolicy === 'auto' && sandboxMode === 'danger-full-access') return 'allow'
     if (approvalReviewer === 'agent' && !requiresUserDecision) {
       if (!approvalReview) {
