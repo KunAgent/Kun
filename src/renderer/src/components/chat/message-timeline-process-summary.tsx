@@ -2,6 +2,7 @@ import type { MouseEvent as ReactMouseEvent, ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LucideIcon } from 'lucide-react'
 import {
+  ArrowRightLeft,
   BellRing,
   Bot,
   BookOpen,
@@ -206,6 +207,7 @@ export function processBlockIcon(block: ChatBlock): LucideIcon | null {
   if (block.kind === 'reasoning') return Brain
   if (block.kind === 'assistant') return MessageSquareQuote
   if (block.kind === 'compaction') return Minimize2
+  if (block.kind === 'handoff') return ArrowRightLeft
   if (block.kind === 'approval') return Wrench
   if (block.kind === 'approval_review') return Bot
   if (block.kind === 'user_input') return MessageSquareQuote

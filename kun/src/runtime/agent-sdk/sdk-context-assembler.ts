@@ -190,6 +190,12 @@ function truncateRecentChunk(text: string, maxBytes: number): string {
 export interface SdkPromptParts {
   /** Prior-conversation transcript ('' when none). */
   historyTranscript?: string
+  /**
+   * Deterministic handoff brief (docs/ade/08). When set it replaces
+   * `historyTranscript` — the brief already carries the prior-conversation
+   * digest plus the recent originals.
+   */
+  handoffBrief?: string
   /** The live user request text for this turn. */
   userText: string
   /** Trailing per-turn instruction blocks (skill catalog, memories, plan, ...). */
@@ -204,8 +210,11 @@ export interface SdkPromptParts {
  */
 export function composeSdkPromptText(parts: SdkPromptParts): string {
   const sections: string[] = []
-  const transcript = parts.historyTranscript?.trim()
-  if (transcript) {
+  const handoff = parts.handoffBrief?.trim()
+  const transcript = handoff ? undefined : parts.historyTranscript?.trim()
+  if (handoff) {
+    sections.push(handoff)
+  } else if (transcript) {
     sections.push(
       [
         'Earlier conversation in this thread (context — continue it; do not restart):',
@@ -219,7 +228,7 @@ export function composeSdkPromptText(parts: SdkPromptParts): string {
   if (blocks.length > 0) sections.push(blocks.join('\n\n'))
   const userText = parts.userText.trim()
   if (userText) {
-    sections.push(transcript || blocks.length > 0 ? `Current request:\n${userText}` : userText)
+    sections.push(handoff || transcript || blocks.length > 0 ? `Current request:\n${userText}` : userText)
   }
   return sections.join('\n\n')
 }

@@ -1,6 +1,5 @@
 import type { Run, SDKAgent, SDKUserMessage } from '@cursor/sdk'
 import { goalContextTexts } from '../../contracts/items.js'
-import type { ActingTurnModelRoute } from '../../contracts/turns.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
 import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
 import { normalizeTurnLimits } from '../../loop/turn-limits.js'
@@ -10,6 +9,7 @@ import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
 import { buildHistoryTranscript, composeSdkPromptText, DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES } from '../agent-sdk/sdk-context-assembler.js'
 import { filterGoalContextsForGoalKey, goalContextKey } from '../../loop/continuation-instructions.js'
 import { delegatedCapabilityFingerprint, delegatedCredentialIdentity, priorItemsForDelegatedTurn, type DelegatedSessionPreparation } from '../delegated-session-binding.js'
+import { recordHandoffInjected, resolveTurnHandoff, type TurnHandoff } from '../../handoff/turn-handoff.js'
 import { delegatedGraphCompletionCheck, delegatedGraphRecoveryInstruction, parkDelegatedGraphTurnAfterRecovery } from '../delegated-graph-turn-policy.js'
 import { CursorSdkEventMapper } from './cursor-sdk-event-mapper.js'
 import {
@@ -17,8 +17,8 @@ import {
   CursorTurnInterruptedError,
   cursorAgentExecutionOptions,
   cursorSdkErrorCode,
-  normalizeCursorModel,
   resolveCursorSdkImages,
+  resolveCursorTurnCredentials,
   sanitizeCursorSdkError,
   type CursorKunTurnContext,
   type CursorSdkApi,
@@ -74,52 +74,17 @@ export async function runCursorSdkTurnOwned(
       return 'failed'
     }
 
-    const requestedProviderId = turn.providerId?.trim()
-    const fallbackProviderId =
-      requestedProviderId ||
-      providerId?.trim() ||
-      thread.providerId?.trim() ||
-      'cursor-subscription'
-    const requestedAccountId = turn.accountId?.trim() || (
-      !requestedProviderId || requestedProviderId === thread.providerId?.trim()
-        ? thread.accountId?.trim()
-        : undefined
-    )
-    const actingModelRoute: ActingTurnModelRoute = turn.actingModelRoute ?? {
-      model: normalizeCursorModel(turn.model || thread.model || deps.defaultModel),
-      providerId: fallbackProviderId,
-      ...(requestedAccountId ? { accountId: requestedAccountId } : {})
-    }
-    const resolvedProviderId = actingModelRoute.providerId ?? fallbackProviderId
-    const resolvedAccountId =
-      actingModelRoute.accountId ??
-      requestedAccountId
-    const provider = deps.providerConfigs[resolvedProviderId]
-    const credentialSourceId = provider?.credentialSourceId ?? (
-      resolvedProviderId === 'cursor-subscription'
-        ? deps.defaultCredentialSourceId
-        : undefined
-    )
-    const resolvedCredential = credentialSourceId
-      ? await deps.resolveCredentialSource?.(credentialSourceId).catch(() => null)
-      : undefined
-    const apiKey = credentialSourceId
-      ? resolvedCredential?.apiKey?.trim() ?? ''
-      : provider?.apiKey?.trim() ||
-        (resolvedProviderId === 'cursor-subscription'
-          ? deps.defaultApiKey?.trim() || ''
-          : '')
-    if (!apiKey) {
-      await deps.turns.finishTurn({
-        threadId,
-        turnId,
-        status: 'failed',
-        error: 'Cursor subscription API key is not configured',
-        code: 'cursor_sdk_missing_credential',
-        severity: 'error'
-      })
-      return 'failed'
-    }
+    const credentials = await resolveCursorTurnCredentials({
+      deps, thread, turn, providerId, threadId, turnId
+    })
+    if (credentials === 'failed') return 'failed'
+    const {
+      actingModelRoute,
+      resolvedProviderId,
+      resolvedAccountId,
+      credentialSourceId,
+      apiKey
+    } = credentials
     if (signal.aborted) {
       await deps.turns.finishTurn({ threadId, turnId, status: 'aborted' })
       return 'aborted'
@@ -195,11 +160,13 @@ export async function runCursorSdkTurnOwned(
       items: filteredHistory
     })
     const historyItems = [...turnDynamicContext.historyItems]
-    const historyTranscript = buildHistoryTranscript(
-      historyItems,
-      turnId,
-      DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
-    )
+    let historyTranscript: string | undefined
+    const ensureHistoryTranscript = (): string =>
+      historyTranscript ??= buildHistoryTranscript(
+        historyItems,
+        turnId,
+        DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
+      )
     const instructionBlocks = [
       deps.systemPrompt?.trim(),
       buildClientSurfaceInstruction(resolveTurnClientSurface(turn)),
@@ -249,7 +216,7 @@ export async function runCursorSdkTurnOwned(
           credentialIdentity: delegatedCredentialIdentity({
             providerId: resolvedProviderId,
             accountId: resolvedAccountId,
-            credentialSourceId: provider?.credentialSourceId,
+            credentialSourceId,
             credentialSecret: apiKey
           }),
           workspace: thread.workspace,
@@ -281,8 +248,26 @@ export async function runCursorSdkTurnOwned(
         priorItems: priorItemsForDelegatedTurn(historyItems, turnId)
       })
     }
+    const resolveHandoff = (
+      prep: DelegatedSessionPreparation | undefined
+    ): TurnHandoff | undefined =>
+      resolveTurnHandoff({
+        enabled: Boolean(deps.sessionCoordinator) && deps.deterministicHandoff !== false,
+        preparation: prep,
+        items: historyItems,
+        currentTurnId: turnId,
+        ownerThreadId: threadId,
+        workspacePath: thread.workspace,
+        taskWorkspaces: deps.taskWorkspaces
+      })
+    let turnHandoff = resolveHandoff(preparation)
+    let handoffBriefDigest = turnHandoff?.brief.digest
     const buildPrompt = (includeHistory: boolean): string => composeSdkPromptText({
-      ...(includeHistory && historyTranscript ? { historyTranscript } : {}),
+      ...(turnHandoff
+        ? { handoffBrief: turnHandoff.brief.text }
+        : includeHistory
+          ? { historyTranscript: ensureHistoryTranscript() }
+          : {}),
       userText,
       instructionBlocks
     })
@@ -293,6 +278,12 @@ export async function runCursorSdkTurnOwned(
     let sdkMessage: string | SDKUserMessage = resolvedImages.images.length > 0
       ? { text: prompt, images: resolvedImages.images }
       : prompt
+    const recordHandoff = (): Promise<void> =>
+      recordHandoffInjected(
+        (event) => deps.events.record(event),
+        { threadId, turnId, harnessId: 'cursor' },
+        turnHandoff
+      )
     await deps.events.record({
       kind: 'delegated_runtime',
       threadId,
@@ -305,12 +296,13 @@ export async function runCursorSdkTurnOwned(
       capabilities,
       capabilitiesV2: capabilitiesV2FromLegacy(capabilities, CURSOR_CAPABILITIES)
     })
+    await recordHandoff()
     const contextProfile = deps.contextProfile?.(model)
     const recordContextSnapshot = async (resumed: boolean): Promise<void> => {
       if (!contextProfile) return
       const system = estimateDelegatedTokens(instructionBlocks.join('\n'))
       const messages = estimateDelegatedTokens([
-        resumed ? '' : historyTranscript,
+        turnHandoff?.brief.text ?? (resumed ? '' : ensureHistoryTranscript()),
         userText
       ].join('\n'))
       const tools = estimateDelegatedTokens(JSON.stringify(kunContext.tools))
@@ -423,6 +415,9 @@ export async function runCursorSdkTurnOwned(
                 resumed: false,
                 rebaseReason: 'native_state_unavailable'
               }
+          // The rebased preparation may now need a full handoff brief.
+          turnHandoff = resolveHandoff(preparation)
+          handoffBriefDigest = turnHandoff?.brief.digest
           attachIsolatedStore()
           prompt = buildPrompt(true)
           sdkMessage = resolvedImages.images.length > 0
@@ -440,6 +435,7 @@ export async function runCursorSdkTurnOwned(
             capabilities,
             capabilitiesV2: capabilitiesV2FromLegacy(capabilities, CURSOR_CAPABILITIES)
           })
+          await recordHandoff()
           await recordContextSnapshot(false)
           agent = await Promise.race([sdk.Agent.create(options), interrupted])
         }
@@ -641,7 +637,8 @@ export async function runCursorSdkTurnOwned(
             lastCommittedTurnId: turnId,
             nativeSessionId: turnDynamicContext.instructions.length > 0
               ? undefined
-              : agent.agentId
+              : agent.agentId,
+            ...(handoffBriefDigest ? { handoffBriefDigest } : {})
           })
         } catch {
           // The canonical Kun turn is already durable. A checkpoint write

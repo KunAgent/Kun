@@ -219,6 +219,29 @@ function normalizeKunRuntimeEventPayload(
       const state = deps.harnessRuntime(event)
       return state ? [{ type: 'harness_runtime_received', payload: state }] : []
     }
+    case 'handoff_injected': {
+      if (!event.threadId || !event.to) return []
+      return [{
+        type: 'handoff_received',
+        payload: {
+          threadId: event.threadId,
+          ...(event.turnId ? { turnId: event.turnId } : {}),
+          reason:
+            event.reason === 'harness-switch' ||
+            event.reason === 'worker-dispatch' ||
+            event.reason === 'context-overflow'
+              ? event.reason
+              : 'rebase',
+          mode: event.mode === 'delta' ? 'delta' : 'full',
+          toHarnessName: event.to.harnessName,
+          ...(event.to.model ? { toModel: event.to.model } : {}),
+          recentTurns: event.stats?.recentTurns ?? 0,
+          files: event.stats?.files ?? 0,
+          briefDigest: event.briefDigest ?? '',
+          ...(event.timestamp ? { createdAt: event.timestamp } : {})
+        }
+      }]
+    }
     case 'usage': {
       const usage = deps.usage(event)
       return usage ? [{ type: 'usage_received', payload: usage }] : []

@@ -651,6 +651,13 @@ export function buildThreadEventSink(
         payload: runtimeState
       }))
     },
+    onHandoff: (event) => {
+      if (!isCurrentStream()) return
+      set((state) => reduce(state, {
+        type: 'handoff_received',
+        payload: event
+      }))
+    },
     onChildRuntimeEvent: (event) => {
       if (!isCurrentStream()) return
       receiveGraphChildRuntimeEvent(event)

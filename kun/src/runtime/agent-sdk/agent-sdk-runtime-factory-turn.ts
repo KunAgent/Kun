@@ -86,6 +86,7 @@ import {
   buildHistoryTranscript,
   DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
 } from './sdk-context-assembler.js'
+import { resolveTurnHandoff, type TurnHandoff } from '../../handoff/turn-handoff.js'
 import { shellSpawnEnv } from '../../adapters/tool/builtin-tool-utils.js'
 import type { TurnLimitsConfig } from '../../loop/turn-limits.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
@@ -128,7 +129,7 @@ export function createAgentSdkTurnRuntimeDeps(
   deps: AgentSdkRuntimeFactoryDeps,
   context: AgentSdkFactoryContext
 ): Pick<SdkRuntimeDeps, 'handlesProvider' | 'loadTurnContext'> {
-  const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, activeSkillIdsByTurn, skillPromptByTurn, skillTurnKey, resolveActiveSkillIds, nowIso, makeAwaitUserInput, makeAwaitApproval, toolContext, resolveImages } = context
+  const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, activeSkillIdsByTurn, skillPromptByTurn, handoffBriefDigestsByTurn, skillTurnKey, resolveActiveSkillIds, nowIso, makeAwaitUserInput, makeAwaitApproval, toolContext, resolveImages } = context
   return {
     handlesProvider: (providerId) => {
       if (providerId && deps.agentSdkProviderIds.has(providerId)) return true
@@ -350,16 +351,6 @@ export function createAgentSdkTurnRuntimeDeps(
         graphPolicy || thread.roomContext || plan.planMode || managedPptScope ? { overlap: new Set() } : undefined
       )
 
-      // This is the portable rebase handoff. Compatible consecutive turns use
-      // the official SDK resume id and do not send this transcript again.
-      const historyTranscript = managedPptScope
-        ? ''
-        : buildHistoryTranscript(
-            items,
-            turnId,
-            deps.historyTranscriptMaxBytes ?? DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
-          )
-
       // A plan turn suppresses goal/todo continuation and injects the plan-mode
       // instruction telling the model to call create_plan (now advertised above).
       const planMode = plan.planMode
@@ -465,6 +456,46 @@ export function createAgentSdkTurnRuntimeDeps(
         sessionGoalContextKeysByTurn.set(skillTurnKey(threadId, turnId), goalContextKeyForHistory)
       }
 
+      // The deterministic handoff brief (docs/ade/08 §4) replaces the portable
+      // transcript whenever the session is new/rebased or a parked session is
+      // restored with a delta. Compatible native resumes send neither. The
+      // closure is re-invoked after a rejected native resume to produce the
+      // fresh-session full brief for the portable retry.
+      const resolveHandoff = (
+        prep: DelegatedSessionPreparation | undefined
+      ): TurnHandoff | undefined => {
+        const resolved = resolveTurnHandoff({
+          enabled: Boolean(deps.sessionCoordinator) &&
+            !managedPptScope &&
+            deps.deterministicHandoff !== false,
+          preparation: prep,
+          items,
+          currentTurnId: turnId,
+          ownerThreadId: threadId,
+          workspacePath: thread.workspace,
+          taskWorkspaces: deps.taskWorkspaces
+        })
+        if (resolved) {
+          handoffBriefDigestsByTurn.set(
+            skillTurnKey(threadId, turnId),
+            resolved.brief.digest
+          )
+        }
+        return resolved
+      }
+      const turnHandoff = resolveHandoff(preparation)
+
+      // This is the portable rebase handoff. Compatible consecutive turns use
+      // the official SDK resume id and do not send this transcript again.
+      const historyTranscript =
+        managedPptScope || turnHandoff
+          ? ''
+          : buildHistoryTranscript(
+              items,
+              turnId,
+              deps.historyTranscriptMaxBytes ?? DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
+            )
+
       void recordRetrieved({
         feedback: deps.memoryFeedback,
         selectedIds: memoryIds,
@@ -520,7 +551,12 @@ export function createAgentSdkTurnRuntimeDeps(
               ]
             }
           : {}),
-        ...(historyTranscript ? { historyTranscript } : {}),
+        resolveHandoff,
+        ...(turnHandoff
+          ? { handoffBrief: turnHandoff.brief.text, handoffEvent: turnHandoff.event }
+          : historyTranscript
+            ? { historyTranscript }
+            : {}),
         ...(contextInstructions.length ? { contextInstructions } : {}),
         ...(activeSkillIds.length ? { activeSkillIds: [...activeSkillIds] } : {})
       }

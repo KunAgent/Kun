@@ -591,6 +591,12 @@ export type CoreRuntimeEventJson = {
   }
   /** Explicit harness identity on delegated_runtime / harness_runtime events. */
   harnessId?: string
+  /** handoff_injected: handoff provenance + brief stats (docs/ade/08). */
+  from?: { harnessName: string; model?: string }
+  to?: { harnessName: string; model?: string }
+  sinceTurnId?: string
+  stats?: { recentTurns?: number; digestLines?: number; files?: number; commands?: number; bytes?: number }
+  briefDigest?: string
   /** Capability v2 snapshot; validated by isHarnessCapabilities before use. */
   capabilitiesV2?: unknown
   status?: string | number
@@ -598,7 +604,8 @@ export type CoreRuntimeEventJson = {
   accountId?: string
   reasoningEffort?: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'max'
   serviceTier?: 'priority'
-  mode?: 'agent' | 'plan'
+  /** turn_started uses 'agent' | 'plan'; handoff_injected uses 'full' | 'delta'. */
+  mode?: 'agent' | 'plan' | 'full' | 'delta'
   agentSurface?: 'code' | 'write' | 'design'
   threadAgentSurface?: 'code' | 'write' | 'design'
   designProfile?: DesignTaskProfile

@@ -202,6 +202,20 @@ export interface AgentSdkRuntimeFactoryDeps {
   pathToClaudeCodeExecutable?: string
   /** Shared durable provider-session coordinator. */
   sessionCoordinator?: DelegatedSessionCoordinator
+  /** Host task-workspace index for handoff work-state merging (docs/ade/07). */
+  taskWorkspaces?: {
+    list(filter?: { ownerThreadId?: string }): Array<{
+      ownerThreadId: string
+      path: string
+      branch?: string
+      changedFiles: readonly string[]
+    }>
+  }
+  /**
+   * `ade.deterministicHandoff` — when false the runtime sends the raw portable
+   * transcript instead of the deterministic brief (docs/ade/08 §4).
+   */
+  deterministicHandoff?: boolean
   contextProfile?: (model: string) => {
     contextWindowTokens: number
     softThresholdTokens: number

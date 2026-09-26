@@ -4,5 +4,10 @@
   "adeGroupRunning": "进行中",
   "adeGroupConversations": "会话",
   "adeGroupArchived": "已归档",
-  "adeEmpty": "暂无 agent 会话"
+  "adeEmpty": "暂无 agent 会话",
+  "adeHandoff": "已把上下文交接给 {{agent}}（最近 {{turns}} 轮、{{files}} 个文件）",
+  "adeHandoffDelta": "已用增量简报继续 {{agent}}",
+  "adeHandoffShow": "查看简报",
+  "adeHandoffHide": "收起简报",
+  "adeHandoffLoadError": "无法重建交接简报"
 }

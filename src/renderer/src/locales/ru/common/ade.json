@@ -4,5 +4,10 @@
   "adeGroupRunning": "В работе",
   "adeGroupConversations": "Разговоры",
   "adeGroupArchived": "Архив",
-  "adeEmpty": "Пока нет разговоров с агентами"
+  "adeEmpty": "Пока нет разговоров с агентами",
+  "adeHandoff": "Контекст передан {{agent}} (последние {{turns}} ходов, {{files}} файлов)",
+  "adeHandoffDelta": "{{agent}} продолжен с дельта-брифом",
+  "adeHandoffShow": "Показать бриф",
+  "adeHandoffHide": "Скрыть бриф",
+  "adeHandoffLoadError": "Не удалось восстановить бриф передачи"
 }

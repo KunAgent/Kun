@@ -75,6 +75,7 @@ import {
 import { createWriteDocumentGuard } from './runtime-write-document-guard.js'
 import { createHarnessComposition } from '../harness/harness-runtime.js'
 import { providerKindsForOptions } from './runtime-factory-model.js'
+import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
 
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
@@ -473,6 +474,7 @@ export async function createRuntimeServices(
       mode: contextWindowModeFor(core.contextWindowModes),
       newContextTransition: (context, args) => core.contextWindowTransition.asToolTransition(context.model?.id)(context, args)
     }),
+    ...buildThreadHistoryToolProviders({ sessionStore, threadStore }),
     buildKnowledgeToolProvider(knowledgeBaseService),
     ...buildSkillToolProviders(skillRuntime),
     ...imageGenProviders.providers,

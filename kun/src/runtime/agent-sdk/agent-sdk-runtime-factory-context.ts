@@ -147,6 +147,9 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
     // Client-neutral structured input pause/resume.
     const activeSkillIdsByTurn = new Map<string, readonly string[]>()
     const skillPromptByTurn = new Map<string, string>()
+    // Digest of the deterministic handoff brief injected into this turn; the
+    // lifecycle commit stores it on the binding for audit (docs/ade/08 §4).
+    const handoffBriefDigestsByTurn = new Map<string, string>()
     const skillTurnKey = (threadId: string, turnId: string): string => `${threadId}\u0000${turnId}`
 
     const resolveActiveSkillIds = async (
@@ -493,7 +496,7 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
       }
       return images
     }
-  return { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, activeSkillIdsByTurn, skillPromptByTurn, skillTurnKey, resolveActiveSkillIds, nowIso, makeAwaitUserInput, makeAwaitApproval, toolContext, resolveImages }
+  return { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, activeSkillIdsByTurn, skillPromptByTurn, handoffBriefDigestsByTurn, skillTurnKey, resolveActiveSkillIds, nowIso, makeAwaitUserInput, makeAwaitApproval, toolContext, resolveImages }
 }
 
 export type AgentSdkFactoryContext = ReturnType<typeof createAgentSdkFactoryContext>

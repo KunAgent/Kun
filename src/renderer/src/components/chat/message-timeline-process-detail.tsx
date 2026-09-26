@@ -18,6 +18,7 @@ import {
 } from './message-timeline-tools'
 import { InjectedMemoryMetaChip } from './injected-memory-meta-chip'
 import { KnowledgeEvidenceDetail, parseKnowledgeEvidence } from './KnowledgeEvidenceDetail'
+import { HandoffBriefDetail } from './message-timeline-handoff-entry'
 
 export function toolNameForBlock(block: ToolBlock): string {
   const rawSummary = block.summary?.trim() ?? ''
@@ -53,6 +54,7 @@ export type ProcessDetail =
   | { kind: 'user_input' }
   | { kind: 'background_shell' }
   | { kind: 'background_subagent' }
+  | { kind: 'handoff' }
   | { kind: 'text'; text: string }
 
 export function summarizeProcessText(text: string, max = 96): string {
@@ -358,6 +360,9 @@ export function getProcessDetail(block: ChatBlock, summaryText?: string): Proces
   }
   if (block.kind === 'approval') return { kind: 'approval' }
   if (block.kind === 'approval_review') return { kind: 'approval_review' }
+  // Handoff briefs are rebuilt on demand through the preview route instead of
+  // being persisted into the block, so the detail is just a fetch trigger.
+  if (block.kind === 'handoff') return { kind: 'handoff' }
   if (block.kind === 'user_input') return { kind: 'user_input' }
   if (isBackgroundShellNoticeBlock(block)) return { kind: 'background_shell' }
   if (isBackgroundSubagentNoticeBlock(block)) return { kind: 'background_subagent' }
@@ -446,6 +451,9 @@ export function ProcessEntryDetail({
   if (detail.kind === 'user_input' && block.kind === 'user_input') {
     return <MessageBubble block={block} nested allowThreadActions={allowThreadActions} />
   }
+  if (detail.kind === 'handoff' && block.kind === 'handoff') {
+    return <HandoffBriefDetail block={block} />
+  }
   if ((detail.kind === 'background_shell' || detail.kind === 'background_subagent') && block.kind === 'user') {
     return <MessageBubble block={block} nested allowThreadActions={allowThreadActions} />
   }
@@ -491,6 +499,15 @@ export function describeProcessBlock(
         : t('compactionManualCompletedWithTokens', { tokens })
     }
     return block.auto === true ? t('compactionAutoCompleted') : t('compactionManualCompleted')
+  }
+  if (block.kind === 'handoff') {
+    return block.handoffMode === 'delta'
+      ? t('adeHandoffDelta', { agent: block.toHarnessName })
+      : t('adeHandoff', {
+          agent: block.toHarnessName,
+          turns: block.recentTurns,
+          files: block.files
+        })
   }
   if (block.kind === 'approval') {
     return block.summary || t('approvalTitle')
