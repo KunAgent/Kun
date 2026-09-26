@@ -74,7 +74,7 @@ export async function acquireAcpConnection(
       args: input.definition.launch?.args ?? [],
       env: input.definition.launch?.env ?? {},
       credentialEnv: input.credentialEnv,
-      stripEnv: deps.stripEnv,
+      stripEnv: acpStripEnv(deps, input.definition, input.credentialEnv),
       cwd: input.workspace,
       spawn: deps.spawn
     })
@@ -105,6 +105,23 @@ export async function acquireAcpConnection(
   })
 }
 
+/**
+ * Strip keys for an ACP child (spawn or mediated terminal). In gateway mode
+ * the child must not inherit provider secrets the generated config replaces.
+ */
+function acpStripEnv(
+  deps: Pick<AcpLifecycleDeps, 'stripEnv'>,
+  definition: HarnessDefinition,
+  credentialEnv: Record<string, string>
+): readonly string[] {
+  return [
+    ...(deps.stripEnv ?? []),
+    ...(Object.keys(credentialEnv).length > 0
+      ? (definition.gateway?.stripEnv ?? [])
+      : [])
+  ]
+}
+
 /** The scoped env a mediated terminal sees — identical to the agent's. */
 export function acpChildEnv(
   deps: Pick<AcpLifecycleDeps, 'stripEnv'>,
@@ -113,7 +130,7 @@ export function acpChildEnv(
 ): NodeJS.ProcessEnv {
   return buildHarnessEnv({
     base: process.env,
-    strip: deps.stripEnv,
+    strip: acpStripEnv(deps, definition, credentialEnv),
     add: { ...(definition.launch?.env ?? {}), ...credentialEnv }
   }) as NodeJS.ProcessEnv
 }

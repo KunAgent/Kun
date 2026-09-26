@@ -58,7 +58,6 @@ import type {
   DelegatedTurnRuntime
 } from '../delegated-turn-runtime.js'
 import type { DelegatedSessionCoordinator } from '../delegated-session-binding.js'
-import { delegatedCredentialIdentity } from '../delegated-session-binding.js'
 import { parkDelegatedGraphTurnAfterRecovery } from '../delegated-graph-turn-policy.js'
 
 import {
@@ -82,7 +81,9 @@ import {
   finishAcpTrace,
   kunToolsDescriptorOf,
   mapAcpFailure,
+  resolveAcpCredentialContext,
   startAcpTrace,
+  type AcpCredentialEnvInput,
   type AcpTrace
 } from './acp-runtime-support.js'
 import {
@@ -107,11 +108,7 @@ import type { AcpMcpCapabilities, KunToolsMcpProvider } from './kun-tools-mcp.js
 /** How long the runtime waits for prompt settlement after session/cancel. */
 export const ACP_CANCEL_SETTLE_MS = 5_000
 
-export type AcpCredentialEnvInput = {
-  harnessId: HarnessId
-  credentialMode: HarnessRoute['credentialMode']
-  accountId?: string
-}
+export type { AcpCredentialEnvInput }
 
 export interface AcpRuntimeDeps {
   /** Harness catalog lookup for the frozen route's definition. */
@@ -314,15 +311,16 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       this.deps.defaultApprovalReviewer ??
       DEFAULT_APPROVAL_REVIEWER
 
-    const credentialEnvInput = { harnessId: definition.id, credentialMode, accountId }
-    const credentialEnv =
-      credentialMode === 'native-login'
-        ? {}
-        : await (this.deps.credentialEnv?.(credentialEnvInput) ?? Promise.resolve({}))
-    const credentialIdentity = delegatedCredentialIdentity({
-      providerId: `${credentialMode}:${definition.id}`,
-      accountId
-    })
+    const { credentialIdentity, env: credentialEnv } =
+      await resolveAcpCredentialContext(this.deps.credentialEnv, {
+        definition,
+        credentialMode,
+        threadId,
+        turnId,
+        providerId: actingModelRoute.providerId,
+        model: actingModelRoute.model,
+        accountId
+      })
     const poolKey = `${definition.id}:${credentialIdentity}`
     const limits = normalizeTurnLimits(this.deps.turnLimits)
 

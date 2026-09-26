@@ -250,6 +250,7 @@ export function createRuntimeRegistry(
       approvalGate,
       approvalReview: approvalReviewService,
       kunToolsMcp,
+      credentialEnv: services.acpCredentialEnv,
       ...(services.attachmentStore
         ? { attachmentStore: services.attachmentStore }
         : {}),
