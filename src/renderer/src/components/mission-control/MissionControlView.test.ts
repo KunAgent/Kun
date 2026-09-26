@@ -16,6 +16,19 @@ vi.mock('../../agent/registry', () => ({
   getProvider: () => provider
 }))
 
+const popoutState = vi.hoisted(() => ({
+  popout: false,
+  canPopout: false,
+  opened: [] as string[]
+}))
+
+vi.mock('./mission-popout', () => ({
+  isMissionControlPopout: () => popoutState.popout,
+  canPopoutMissionControl: () => popoutState.canPopout,
+  toggleMissionControlPopout: vi.fn(),
+  openMissionControlThread: (threadId: string) => popoutState.opened.push(threadId)
+}))
+
 import { MissionControlView } from './MissionControlView'
 import { useActivityStore } from '../../store/activity-store'
 import { useChatStore } from '../../store/chat-store'
@@ -88,6 +101,9 @@ function cardTitles(renderer: ReactTestRenderer, bucket: string): string[] {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  popoutState.popout = false
+  popoutState.canPopout = false
+  popoutState.opened.length = 0
   now = Date.now()
   provider.listTaskWorkspaces.mockResolvedValue({ records: [] })
   provider.getTeamOverview.mockResolvedValue(null)
@@ -264,5 +280,45 @@ describe('MissionControlView', () => {
     // Clicking sets openRaceId; RaceCompareView portals to document.body so
     // it renders nothing in the node test env — assert no crash on click.
     await act(async () => pill!.props.onClick())
+  })
+
+  it('forwards card activation to the main window when popped out', async () => {
+    popoutState.popout = true
+    const selectThread = vi.fn(async () => undefined)
+    const original = useChatStore.getState().selectThread
+    useChatStore.setState({ selectThread } as never)
+    try {
+      const seeded = waiting('u9', 'Wait A')
+      useActivityStore.setState({ rows: { u9: seeded } })
+      const renderer = await renderView()
+      const cardRoot = columnOf(renderer, 'needs-you')
+        .findAll((n) => n.props['data-mission-card'] !== undefined)[0]
+      const button = cardRoot!.findAll((n) => n.props.role === 'button')[0]
+      await act(async () => button!.props.onClick())
+      // The popout has no chat session state: selection is delegated to the
+      // main window over the mission-control bridge.
+      expect(popoutState.opened).toEqual([seeded.threadId])
+      expect(selectThread).not.toHaveBeenCalled()
+    } finally {
+      useChatStore.setState({ selectThread: original } as never)
+    }
+  })
+
+  it('offers the popout control only when the bridge supports it', async () => {
+    useActivityStore.setState({ rows: { u1: waiting('u1', 'Wait A') } })
+    let renderer = await renderView()
+    expect(
+      renderer.root.findAll((n) => n.props['aria-label'] === 'Pop out to window')
+    ).toHaveLength(0)
+    await act(async () => renderer.unmount())
+
+    popoutState.canPopout = true
+    renderer = await renderView()
+    const button = renderer.root
+      .findAll((n) => n.props['aria-label'] === 'Pop out to window')[0]
+    expect(button).toBeTruthy()
+    const { toggleMissionControlPopout } = await import('./mission-popout')
+    await act(async () => button!.props.onClick())
+    expect(toggleMissionControlPopout).toHaveBeenCalled()
   })
 })

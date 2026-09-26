@@ -92,6 +92,7 @@
   "reviewOpenInTerminal": "Открыть worktree в терминале",
   "reviewCleanup": "Очистить worktree",
   "missionControl": "Центр управления",
+  "missionPopout": "Открыть в отдельном окне",
   "missionSearch": "Поиск по названию, проекту, агенту…",
   "missionFilterProject": "Проект",
   "missionFilterAgent": "Агент",

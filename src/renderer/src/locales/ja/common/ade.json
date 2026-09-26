@@ -92,6 +92,7 @@
   "reviewOpenInTerminal": "ワークツリーをターミナルで開く",
   "reviewCleanup": "ワークツリーをクリーンアップ",
   "missionControl": "ミッションコントロール",
+  "missionPopout": "別ウィンドウで開く",
   "missionSearch": "タイトル・プロジェクト・エージェントを検索…",
   "missionFilterProject": "プロジェクト",
   "missionFilterAgent": "エージェント",
