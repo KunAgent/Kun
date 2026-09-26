@@ -92,6 +92,7 @@ export const RuntimeEventKind = z.enum([
   'pipeline_stage',
   'delegated_runtime',
   'harness_runtime',
+  'harness_session_state',
   'handoff_injected',
   'graph_planning',
   'graph_event',
@@ -484,6 +485,41 @@ export const HarnessRuntimeEvent = RuntimeEventBase.extend({
 })
 export type HarnessRuntimeEvent = z.infer<typeof HarnessRuntimeEvent>
 
+/** Sanitized snapshot of one harness session config option (ACP §7.3). */
+export const HarnessConfigOptionSchema = z
+  .object({
+    id: z.string().min(1).max(256),
+    name: z.string().max(256).optional(),
+    category: z.string().max(64).optional(),
+    currentValue: z.union([z.string().max(1_024), z.boolean()]).optional(),
+    values: z.array(z.string().max(1_024)).max(128).optional()
+  })
+  .strict()
+
+/**
+ * Harness-reported session surface state: slash commands, current mode, and
+ * config options (docs/ade/03 §7.3). Composer controls refresh off this.
+ */
+export const HarnessSessionStateEvent = RuntimeEventBase.extend({
+  kind: z.literal('harness_session_state'),
+  harnessId: HarnessIdSchema,
+  commands: z
+    .array(
+      z
+        .object({
+          name: z.string().min(1).max(256),
+          description: z.string().max(4_096).optional(),
+          inputHint: z.string().max(4_096).optional()
+        })
+        .strict()
+    )
+    .max(200)
+    .optional(),
+  configOptions: z.array(HarnessConfigOptionSchema).max(32).optional(),
+  currentModeId: z.string().max(256).optional()
+})
+export type HarnessSessionStateEvent = z.infer<typeof HarnessSessionStateEvent>
+
 export const GraphRuntimeEvent = RuntimeEventBase.extend({
   kind: z.literal('graph_event'),
   graph: GraphEventEnvelopeV1Schema
@@ -620,6 +656,7 @@ export const RuntimeEvent = z.discriminatedUnion('kind', [
   PipelineStageEvent,
   DelegatedRuntimeEvent,
   HarnessRuntimeEvent,
+  HarnessSessionStateEvent,
   HandoffInjectedEvent,
   GraphPlanningRuntimeEvent,
   GraphRuntimeEvent,
