@@ -19,12 +19,9 @@ import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
 import { openPaperViewTab } from '../../paper/paper-view'
-import { newPaperRequestId, usePaperStore } from '../../write/paper/paper-store'
-import type {
-  PaperArxivTodayItem,
-  PaperFeedItem,
-  PaperVenueItem
-} from '@shared/paper/paper-library-types'
+import type { PaperArxivTodayItem, PaperFeedItem } from '@shared/paper/paper-library-types'
+import { ExpandableAbstract, ImportButton } from './discover/PaperDiscoverParts'
+import { PaperVenuePane } from './discover/PaperVenuePane'
 
 export type PaperDiscoverSource = 'arxiv' | 'feeds' | 'venue'
 
@@ -46,6 +43,7 @@ export function PaperDiscoverView({ source }: { source?: PaperDiscoverSource }):
   const activeFeedId = usePaperModeStore((s) => s.discover.activeFeedId)
   const feedTitle = feeds.find((feed) => feed.id === activeFeedId)?.title ?? ''
   const venue = usePaperModeStore((s) => s.discover.venue)
+  const venueGroup = usePaperModeStore((s) => s.discover.venueGroup)
   const effectiveSource = source ?? 'arxiv'
   const [reloadKey, setReloadKey] = useState(0)
 
@@ -54,7 +52,7 @@ export function PaperDiscoverView({ source }: { source?: PaperDiscoverSource }):
       ? 'arxiv.org · new'
       : effectiveSource === 'feeds'
         ? feedTitle || t('writePaperDiscoverTab_feeds')
-        : `papers.cool · ${venue || 'venue'}`
+        : ['papers.cool', venue || 'venue', venueGroup].filter(Boolean).join(' · ')
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -91,84 +89,9 @@ export function PaperDiscoverView({ source }: { source?: PaperDiscoverSource }):
         ) : effectiveSource === 'feeds' ? (
           <FeedsPane workspaceRoot={workspaceRoot} reloadKey={reloadKey} />
         ) : (
-          <VenuePane workspaceRoot={workspaceRoot} reloadKey={reloadKey} />
+          <PaperVenuePane workspaceRoot={workspaceRoot} reloadKey={reloadKey} />
         )}
       </div>
-    </div>
-  )
-}
-
-function ImportButton({
-  input,
-  workspaceRoot,
-  t
-}: {
-  input: string
-  workspaceRoot: string
-  t: (key: string) => string
-}): ReactElement | null {
-  const entries = usePaperModeStore((s) => s.entries)
-  const refreshEntries = usePaperModeStore((s) => s.refreshEntries)
-  const paperReading = useWriteWorkspaceStore((s) => s.paperReading)
-  const [busy, setBusy] = useState(false)
-  const inLibrary = entries.some(
-    (e) => e.meta.arxivId === input || e.meta.doi?.toLowerCase() === input.toLowerCase()
-  )
-  if (inLibrary) {
-    return (
-      <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10.5px] font-medium text-emerald-700 dark:text-emerald-300">
-        {t('writePaperRefInLibrary')}
-      </span>
-    )
-  }
-  const run = async (): Promise<void> => {
-    if (busy || typeof window.kunGui?.paperImport !== 'function') return
-    setBusy(true)
-    try {
-      const result = await window.kunGui.paperImport({
-        workspaceRoot,
-        input,
-        parentDir: paperReading.papersDir || 'papers',
-        requestId: newPaperRequestId()
-      })
-      if (result.ok) refreshEntries()
-      else usePaperStore.getState().setNotice({ tone: 'error', message: result.message })
-    } finally {
-      setBusy(false)
-    }
-  }
-  return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={() => void run()}
-      className="inline-flex shrink-0 items-center gap-1 rounded-full border border-ds-border px-2 py-1 text-[11.5px] font-medium text-ds-muted transition hover:border-accent-tint/40 hover:bg-accent-tint/[0.06] hover:text-accent disabled:opacity-60"
-    >
-      {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-      {t('writePaperImport')}
-    </button>
-  )
-}
-
-/** Abstract with an expand/collapse affordance (site-like card body). */
-function ExpandableAbstract({ text }: { text: string }): ReactElement {
-  const { t } = useTranslation('common')
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="mt-1.5">
-      <p
-        className={`text-[11.5px] leading-[1.45] text-ds-muted ${open ? '' : 'line-clamp-3'}`}
-      >
-        {text}
-      </p>
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="mt-0.5 inline-flex items-center gap-0.5 text-[10.5px] font-medium text-accent transition hover:brightness-110"
-      >
-        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-        {open ? t('writePaperDiscoverShowLess') : t('writePaperDiscoverShowMore')}
-      </button>
     </div>
   )
 }
@@ -500,102 +423,6 @@ function FeedsPane({
                   t={t}
                 />
               ) : null}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-function VenuePane({
-  workspaceRoot,
-  reloadKey
-}: {
-  workspaceRoot: string
-  reloadKey: number
-}): ReactElement {
-  const { t } = useTranslation('common')
-  const discover = usePaperModeStore((s) => s.discover)
-  const patchDiscover = usePaperModeStore((s) => s.patchDiscover)
-  const [venueInput, setVenueInput] = useState(discover.venue)
-
-  const loadVenue = (): void => {
-    const venue = venueInput.trim()
-    if (!venue || typeof window.kunGui?.paperListVenue !== 'function') return
-    patchDiscover({ venue, venueLoading: true, venueError: null })
-    void window.kunGui
-      .paperListVenue({ venue })
-      .then((result) => {
-        if (result.ok) patchDiscover({ venueItems: result.items, venueLoading: false })
-        else patchDiscover({ venueLoading: false, venueError: result.message })
-      })
-      .catch((error: unknown) => {
-        patchDiscover({
-          venueLoading: false,
-          venueError: error instanceof Error ? error.message : String(error)
-        })
-      })
-  }
-
-  useEffect(() => {
-    if (reloadKey > 0) loadVenue()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reloadKey])
-
-  return (
-    <div>
-      <div className="mb-3 flex items-center gap-2">
-        <input
-          value={venueInput}
-          onChange={(event) => setVenueInput(event.target.value)}
-          onKeyDown={(event) => { if (event.key === 'Enter') loadVenue() }}
-          placeholder={t('writePaperDiscoverVenuePlaceholder')}
-          spellCheck={false}
-          className="h-7 w-56 rounded-lg border border-ds-border bg-ds-main px-2 font-mono text-[12px] text-ds-ink outline-none focus:border-accent-tint/40"
-        />
-        <button
-          type="button"
-          onClick={loadVenue}
-          disabled={!venueInput.trim() || discover.venueLoading}
-          className="inline-flex h-7 items-center rounded-lg bg-accent-tint/10 px-2.5 text-[12px] font-medium text-accent transition hover:bg-accent-tint/15 disabled:opacity-50"
-        >
-          {discover.venueLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : t('writePaperDiscoverVenueGo')}
-        </button>
-      </div>
-      {discover.venueError ? (
-        <p className="mb-2 rounded-lg border border-red-200/70 bg-red-50/80 px-3 py-2 text-[12px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
-          {discover.venueError}
-        </p>
-      ) : null}
-      <ul className="space-y-2.5">
-        {discover.venueItems.map((item: PaperVenueItem) => (
-          <li
-            key={item.coolId}
-            className="rounded-xl border border-ds-border-muted bg-ds-card p-3.5 transition hover:border-ds-border hover:bg-ds-card"
-          >
-            <div className="flex items-start gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-[13.5px] font-semibold leading-5 text-ds-ink">{item.title}</p>
-                <p className="mt-0.5 truncate text-[11.5px] text-accent-tint/80">
-                  {item.authors.slice(0, 4).join(', ')}
-                </p>
-              </div>
-            </div>
-            <div className="mt-2 flex items-center gap-1.5">
-              <a
-                className="inline-flex items-center gap-1 rounded-full border border-ds-border px-2 py-0.5 text-[10.5px] font-medium text-ds-muted transition hover:border-accent-tint/40 hover:text-accent"
-                href="#"
-                onClick={(event) => {
-                  event.preventDefault()
-                  void window.kunGui?.openExternal?.(`https://papers.cool/venue/${item.coolId}`)
-                }}
-              >
-                <ExternalLink className="h-3 w-3" />
-                papers.cool
-              </a>
-              <span className="flex-1" />
-              <ImportButton input={item.coolId} workspaceRoot={workspaceRoot} t={t} />
             </div>
           </li>
         ))}

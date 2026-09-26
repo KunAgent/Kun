@@ -298,5 +298,18 @@
   "writePaperTagAddPlaceholder": "添加标签…",
   "writePaperInfoResize": "调整信息面板高度",
   "writePaperInfoEmpty": "选中一篇论文后在这里查看信息。",
-  "writePaperInfoProgress": "读到 {{page}}/{{total}} 页"
+  "writePaperInfoProgress": "读到 {{page}}/{{total}} 页",
+  "writePaperVenueSeries": "会议",
+  "writePaperVenueGroup": "分组",
+  "writePaperVenueGroupAll": "全部",
+  "writePaperVenueFilterPlaceholder": "筛选已加载的论文",
+  "writePaperVenueLoaded": "已加载 {{shown}} / {{total}} 篇",
+  "writePaperVenueLoadMore": "加载更多（{{shown}} / {{total}}）",
+  "writePaperVenueEmpty": "这里还没有论文。",
+  "writePaperVenueNoMatch": "已加载的论文中没有匹配项。",
+  "writePaperVenueCatalogLoading": "正在加载会议列表…",
+  "writePaperVenueCatalogError": "会议列表加载失败（{{message}}），也可以直接输入会议 ID：",
+  "writePaperVenueRetry": "重试",
+  "writePaperVenuePaperPage": "论文页",
+  "writePaperVenueReads": "papers.cool 上的 PDF 阅读数"
 }

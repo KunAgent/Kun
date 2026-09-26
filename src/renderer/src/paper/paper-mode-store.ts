@@ -5,6 +5,7 @@ import type {
   PaperLibraryEntry,
   PaperLibraryFilter,
   PaperLibrarySort,
+  PaperVenueCatalogEntry,
   PaperVenueItem
 } from '@shared/paper/paper-library-types'
 import type { PaperModeView } from './paper-conversation-scope'
@@ -29,9 +30,15 @@ export type PaperDiscoverState = {
   feedError: string | null
   activeFeedId: string
   venue: string
+  /** Track within the venue (`Oral`, `Poster`, ...); '' lists every paper. */
+  venueGroup: string
   venueItems: PaperVenueItem[]
+  venueTotal: number
   venueLoading: boolean
   venueError: string | null
+  venueCatalog: PaperVenueCatalogEntry[]
+  venueCatalogLoading: boolean
+  venueCatalogError: string | null
 }
 
 /**
@@ -105,9 +112,14 @@ const emptyDiscover = (): PaperDiscoverState => ({
   feedError: null,
   activeFeedId: '',
   venue: '',
+  venueGroup: '',
   venueItems: [],
+  venueTotal: 0,
   venueLoading: false,
-  venueError: null
+  venueError: null,
+  venueCatalog: [],
+  venueCatalogLoading: false,
+  venueCatalogError: null
 })
 
 export const usePaperModeStore = create<PaperModeState>((set) => ({

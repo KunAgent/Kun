@@ -298,5 +298,18 @@
   "writePaperTagAddPlaceholder": "टैग जोड़ें…",
   "writePaperInfoResize": "जानकारी पैनल की ऊँचाई बदलें",
   "writePaperInfoEmpty": "विवरण देखने के लिए एक पेपर चुनें।",
-  "writePaperInfoProgress": "पृष्ठ {{page}}/{{total}}"
+  "writePaperInfoProgress": "पृष्ठ {{page}}/{{total}}",
+  "writePaperVenueSeries": "सम्मेलन",
+  "writePaperVenueGroup": "ट्रैक",
+  "writePaperVenueGroupAll": "सभी",
+  "writePaperVenueFilterPlaceholder": "लोड किए गए पेपर फ़िल्टर करें",
+  "writePaperVenueLoaded": "{{total}} में से {{shown}} लोड हुए",
+  "writePaperVenueLoadMore": "और लोड करें ({{shown}} / {{total}})",
+  "writePaperVenueEmpty": "यहाँ अभी कोई पेपर नहीं है।",
+  "writePaperVenueNoMatch": "फ़िल्टर से मेल खाने वाला कोई पेपर नहीं।",
+  "writePaperVenueCatalogLoading": "सम्मेलन सूची लोड हो रही है…",
+  "writePaperVenueCatalogError": "सम्मेलन सूची लोड नहीं हुई ({{message}})। वेन्यू आईडी दर्ज करें:",
+  "writePaperVenueRetry": "फिर से कोशिश करें",
+  "writePaperVenuePaperPage": "पेपर पेज",
+  "writePaperVenueReads": "papers.cool पर PDF रीड"
 }

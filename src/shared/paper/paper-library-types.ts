@@ -247,14 +247,35 @@ export type PaperArxivTodayResult =
   | { ok: false; code: 'network' | 'timeout' | 'invalid-input'; message: string }
 
 export type PaperVenueItem = {
-  /** Venue-catalog id on papers.cool (e.g. `ICLR.2025-<n>` style keys). */
+  /** papers.cool venue row id (e.g. `GMwRl2e9Y1@OpenReview`, `38818@AAAI`). */
   coolId: string
   title: string
   authors: string[]
+  abstract?: string
+  pdfUrl?: string
+  /** Publisher/forum page (OpenReview, ACL Anthology, ...). */
+  sourceUrl?: string
+  /** Track within the venue, e.g. `Oral` or `Poster`. */
+  group?: string
+  /** papers.cool PDF reading count. */
+  stars?: number
 }
 
 export type PaperVenueListResult =
-  | { ok: true; venue: string; items: PaperVenueItem[] }
+  | { ok: true; venue: string; group: string; skip: number; total: number; items: PaperVenueItem[] }
+  | { ok: false; code: 'network' | 'timeout' | 'invalid-input'; message: string }
+
+/** One conference edition in the papers.cool catalog, e.g. `ICLR.2025`. */
+export type PaperVenueCatalogEntry = {
+  id: string
+  series: string
+  year: string
+  /** `?group=` tracks listed for this edition (may be empty). */
+  groups: string[]
+}
+
+export type PaperVenueCatalogResult =
+  | { ok: true; venues: PaperVenueCatalogEntry[] }
   | { ok: false; code: 'network' | 'timeout' | 'invalid-input'; message: string }
 
 // ---- references ---------------------------------------------------------------

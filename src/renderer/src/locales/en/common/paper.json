@@ -298,5 +298,18 @@
   "writePaperTagAddPlaceholder": "Add tag…",
   "writePaperInfoResize": "Resize paper info",
   "writePaperInfoEmpty": "Select a paper to see its details.",
-  "writePaperInfoProgress": "Page {{page}}/{{total}}"
+  "writePaperInfoProgress": "Page {{page}}/{{total}}",
+  "writePaperVenueSeries": "Conferences",
+  "writePaperVenueGroup": "Track",
+  "writePaperVenueGroupAll": "All",
+  "writePaperVenueFilterPlaceholder": "Filter loaded papers",
+  "writePaperVenueLoaded": "{{shown}} of {{total}} loaded",
+  "writePaperVenueLoadMore": "Load more ({{shown}} / {{total}})",
+  "writePaperVenueEmpty": "No papers in this listing yet.",
+  "writePaperVenueNoMatch": "No loaded paper matches the filter.",
+  "writePaperVenueCatalogLoading": "Loading conference list…",
+  "writePaperVenueCatalogError": "Couldn't load the conference list ({{message}}). Enter a venue id instead:",
+  "writePaperVenueRetry": "Retry",
+  "writePaperVenuePaperPage": "Paper page",
+  "writePaperVenueReads": "PDF reads on papers.cool"
 }

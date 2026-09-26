@@ -298,5 +298,18 @@
   "writePaperTagAddPlaceholder": "Добавить тег…",
   "writePaperInfoResize": "Изменить высоту панели",
   "writePaperInfoEmpty": "Выберите статью, чтобы увидеть сведения.",
-  "writePaperInfoProgress": "Стр. {{page}}/{{total}}"
+  "writePaperInfoProgress": "Стр. {{page}}/{{total}}",
+  "writePaperVenueSeries": "Конференции",
+  "writePaperVenueGroup": "Секция",
+  "writePaperVenueGroupAll": "Все",
+  "writePaperVenueFilterPlaceholder": "Фильтр загруженных статей",
+  "writePaperVenueLoaded": "Загружено {{shown}} из {{total}}",
+  "writePaperVenueLoadMore": "Загрузить ещё ({{shown}} / {{total}})",
+  "writePaperVenueEmpty": "Здесь пока нет статей.",
+  "writePaperVenueNoMatch": "Нет статей, подходящих под фильтр.",
+  "writePaperVenueCatalogLoading": "Загрузка списка конференций…",
+  "writePaperVenueCatalogError": "Не удалось загрузить список конференций ({{message}}). Введите id вручную:",
+  "writePaperVenueRetry": "Повторить",
+  "writePaperVenuePaperPage": "Страница статьи",
+  "writePaperVenueReads": "Прочтения PDF на papers.cool"
 }

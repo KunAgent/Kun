@@ -298,5 +298,18 @@
   "writePaperTagAddPlaceholder": "태그 추가…",
   "writePaperInfoResize": "정보 패널 높이 조절",
   "writePaperInfoEmpty": "논문을 선택하면 정보가 표시됩니다.",
-  "writePaperInfoProgress": "{{page}}/{{total}} 페이지"
+  "writePaperInfoProgress": "{{page}}/{{total}} 페이지",
+  "writePaperVenueSeries": "학회",
+  "writePaperVenueGroup": "트랙",
+  "writePaperVenueGroupAll": "전체",
+  "writePaperVenueFilterPlaceholder": "불러온 논문 필터",
+  "writePaperVenueLoaded": "{{total}}편 중 {{shown}}편 불러옴",
+  "writePaperVenueLoadMore": "더 불러오기 ({{shown}} / {{total}})",
+  "writePaperVenueEmpty": "아직 논문이 없습니다.",
+  "writePaperVenueNoMatch": "조건에 맞는 논문이 없습니다.",
+  "writePaperVenueCatalogLoading": "학회 목록 불러오는 중…",
+  "writePaperVenueCatalogError": "학회 목록을 불러오지 못했습니다 ({{message}}). 학회 ID를 직접 입력하세요:",
+  "writePaperVenueRetry": "다시 시도",
+  "writePaperVenuePaperPage": "논문 페이지",
+  "writePaperVenueReads": "papers.cool PDF 조회수"
 }

@@ -24,6 +24,7 @@ import type {
   PaperLocalPdfIdentifyResult,
   PaperFeedFetchResult,
   PaperArxivTodayResult,
+  PaperVenueCatalogResult,
   PaperVenueListResult,
   PaperReadingActivityResult,
   PaperReferencesResult,
@@ -255,8 +256,10 @@ export type PaperDiscoverApi = {
     date?: string
     force?: boolean
   }) => Promise<PaperArxivTodayResult>
-  /** papers.cool venue listing, e.g. `ICLR.2025`. */
-  paperListVenue: (payload: { venue: string }) => Promise<PaperVenueListResult>
+  /** papers.cool venue listing page, e.g. `ICLR.2025`, optionally one track. */
+  paperListVenue: (payload: { venue: string; group?: string; skip?: number }) => Promise<PaperVenueListResult>
+  /** Conference editions and tracks available on papers.cool. */
+  paperVenueCatalog: (payload: { force?: boolean }) => Promise<PaperVenueCatalogResult>
 }
 
 /**

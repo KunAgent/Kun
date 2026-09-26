@@ -298,5 +298,18 @@
   "writePaperTagAddPlaceholder": "タグを追加…",
   "writePaperInfoResize": "情報パネルの高さを調整",
   "writePaperInfoEmpty": "論文を選択すると詳細が表示されます。",
-  "writePaperInfoProgress": "{{page}}/{{total}} ページ"
+  "writePaperInfoProgress": "{{page}}/{{total}} ページ",
+  "writePaperVenueSeries": "会議",
+  "writePaperVenueGroup": "トラック",
+  "writePaperVenueGroupAll": "すべて",
+  "writePaperVenueFilterPlaceholder": "読み込み済みの論文を絞り込む",
+  "writePaperVenueLoaded": "{{total}} 件中 {{shown}} 件を読み込み済み",
+  "writePaperVenueLoadMore": "さらに読み込む（{{shown}} / {{total}}）",
+  "writePaperVenueEmpty": "まだ論文がありません。",
+  "writePaperVenueNoMatch": "条件に一致する論文はありません。",
+  "writePaperVenueCatalogLoading": "会議一覧を読み込み中…",
+  "writePaperVenueCatalogError": "会議一覧を読み込めませんでした（{{message}}）。会議 ID を直接入力できます：",
+  "writePaperVenueRetry": "再試行",
+  "writePaperVenuePaperPage": "論文ページ",
+  "writePaperVenueReads": "papers.cool での PDF 閲覧数"
 }

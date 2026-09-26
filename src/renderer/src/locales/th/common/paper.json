@@ -298,5 +298,18 @@
   "writePaperTagAddPlaceholder": "เพิ่มแท็ก…",
   "writePaperInfoResize": "ปรับความสูงแผงข้อมูล",
   "writePaperInfoEmpty": "เลือกบทความเพื่อดูรายละเอียด",
-  "writePaperInfoProgress": "หน้า {{page}}/{{total}}"
+  "writePaperInfoProgress": "หน้า {{page}}/{{total}}",
+  "writePaperVenueSeries": "การประชุม",
+  "writePaperVenueGroup": "แทร็ก",
+  "writePaperVenueGroupAll": "ทั้งหมด",
+  "writePaperVenueFilterPlaceholder": "กรองบทความที่โหลดแล้ว",
+  "writePaperVenueLoaded": "โหลดแล้ว {{shown}} จาก {{total}}",
+  "writePaperVenueLoadMore": "โหลดเพิ่ม ({{shown}} / {{total}})",
+  "writePaperVenueEmpty": "ยังไม่มีบทความ",
+  "writePaperVenueNoMatch": "ไม่มีบทความที่ตรงกับตัวกรอง",
+  "writePaperVenueCatalogLoading": "กำลังโหลดรายชื่อการประชุม…",
+  "writePaperVenueCatalogError": "โหลดรายชื่อการประชุมไม่สำเร็จ ({{message}}) ใส่รหัสการประชุมแทนได้:",
+  "writePaperVenueRetry": "ลองอีกครั้ง",
+  "writePaperVenuePaperPage": "หน้าบทความ",
+  "writePaperVenueReads": "จำนวนการอ่าน PDF บน papers.cool"
 }

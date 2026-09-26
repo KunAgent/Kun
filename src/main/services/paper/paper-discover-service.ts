@@ -3,8 +3,7 @@ import { join } from 'node:path'
 import type {
   PaperArxivTodayItem,
   PaperFeedItem,
-  PaperTitleSearchCandidate,
-  PaperVenueItem
+  PaperTitleSearchCandidate
 } from '../../../shared/paper/paper-library-types'
 import { decodeEntities, stripTags } from './coolpapers-client'
 import type { PaperFetchContext } from './arxiv-client'
@@ -15,7 +14,7 @@ import { PaperFetchError, paperFetchText, PAPER_HTML_MAX_BYTES } from './paper-h
 /**
  * Discovery/import enrichment (plan §6.4): RSS 2.0 / Atom / JSON Feed
  * fetching for user subscriptions, arXiv category "today" RSS with a per-day
- * disk cache, papers.cool venue listings, `citation_*` meta extraction for
+ * disk cache, `citation_*` meta extraction for
  * publisher pages, and the parallel S2+arXiv title search.
  */
 
@@ -209,41 +208,6 @@ export async function fetchArxivToday(input: {
     .then(() => writeFile(arxivTodayCachePath(input.cacheDir, input.date), JSON.stringify(cache), 'utf8'))
     .catch(() => undefined)
   return { ok: true, date: input.date, items, fromCache: false }
-}
-
-// ---- papers.cool venue ---------------------------------------------------------
-
-export async function fetchCoolVenue(
-  venue: string,
-  options: PaperFetchContext = {}
-): Promise<
-  | { ok: true; venue: string; items: PaperVenueItem[] }
-  | { ok: false; code: 'network' | 'timeout' | 'invalid-input'; message: string }
-> {
-  const clean = venue.trim()
-  if (!/^[A-Za-z0-9.+-]{1,60}$/.test(clean)) {
-    return { ok: false, code: 'invalid-input', message: 'Invalid venue id.' }
-  }
-  try {
-    const html = await paperFetchText(`https://papers.cool/venue/${encodeURIComponent(clean)}`, {
-      ...options,
-      timeoutMs: 20_000
-    })
-    const items = new Map<string, PaperVenueItem>()
-    for (const match of html.matchAll(/href="\/(?:arxiv|venue)\/([^"?#]+)"[^>]*>([\s\S]*?)<\/a>/gi)) {
-      const coolId = decodeEntities(match[1].trim())
-      const title = decodeEntities(stripTags(match[2])).replace(/\s+/g, ' ').trim()
-      if (coolId && title && !items.has(coolId)) {
-        items.set(coolId, { coolId, title, authors: [] })
-      }
-    }
-    return { ok: true, venue: clean, items: [...items.values()].slice(0, 500) }
-  } catch (error) {
-    if (error instanceof PaperFetchError && error.code === 'timeout') {
-      return { ok: false, code: 'timeout', message: error.message }
-    }
-    return { ok: false, code: 'network', message: error instanceof Error ? error.message : String(error) }
-  }
 }
 
 // ---- publisher-page citation_* meta --------------------------------------------

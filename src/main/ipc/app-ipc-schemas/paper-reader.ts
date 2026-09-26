@@ -127,5 +127,13 @@ export const paperArxivTodayPayloadSchema = z
   .strict()
 
 export const paperListVenuePayloadSchema = z
-  .object({ venue: trimmedString(80) })
+  .object({
+    venue: trimmedString(80),
+    group: z.string().trim().max(160).optional(),
+    skip: z.number().int().min(0).max(20_000).optional()
+  })
+  .strict()
+
+export const paperVenueCatalogPayloadSchema = z
+  .object({ force: z.boolean().optional() })
   .strict()

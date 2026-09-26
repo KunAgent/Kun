@@ -59,5 +59,6 @@ export const paperApi: KunGuiPaperApi = {
   paperIdentifyLocalPdf: (payload) => ipcRenderer.invoke('paper-discover:identify-pdf', payload),
   paperFetchFeed: (payload) => ipcRenderer.invoke('paper-discover:feed', payload),
   paperArxivToday: (payload) => ipcRenderer.invoke('paper-discover:arxiv-today', payload),
-  paperListVenue: (payload) => ipcRenderer.invoke('paper-discover:venue', payload)
+  paperListVenue: (payload) => ipcRenderer.invoke('paper-discover:venue', payload),
+  paperVenueCatalog: (payload) => ipcRenderer.invoke('paper-discover:venue-catalog', payload)
 }
