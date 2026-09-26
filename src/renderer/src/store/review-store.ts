@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { ActivityRow } from '@shared/activity-row'
 import type {
   TaskWorkspaceDiffFile,
   TaskWorkspaceDiffFileResponse,
@@ -13,6 +14,9 @@ import { getProvider } from '../agent/registry'
  * provider so tests can substitute them.
  */
 export type ReviewViewMode = 'unified' | 'split'
+
+/** Files with more changed lines than this start collapsed (11 §3 perf). */
+export const REVIEW_LARGE_FILE_LINES = 5_000
 
 export type ReviewFileEntry = {
   detail?: TaskWorkspaceDiffFileResponse
@@ -93,15 +97,14 @@ export async function loadWorkspaceDiff(workspaceId: string): Promise<void> {
         files,
         loading: false,
         ...(headRevision ? { headRevision } : {}),
-        // Drop cached details for files that vanished from the new list.
-        details: Object.fromEntries(
-          Object.entries(current?.details ?? {})
-            .filter(([path]) => files.some((f) => f.path === path))
-        )
+        // A fresh capture invalidates every cached per-file payload; blocks
+        // still expanded refetch lazily on render.
+        details: {}
       })
-      // Files over the lazy threshold stay collapsed; others default open.
+      // Files over the lazy/large threshold default to collapsed (11 §3).
       next[workspaceId].expandedPaths = Object.fromEntries(
-        files.map((f) => [f.path, current?.expandedPaths[f.path] ?? !f.tooLarge])
+        files.map((f) => [f.path, current?.expandedPaths[f.path]
+          ?? (!f.tooLarge && f.insertions + f.deletions <= REVIEW_LARGE_FILE_LINES)])
       )
       return { workspaces: next }
     })
@@ -168,4 +171,59 @@ export function setReviewViewMode(workspaceId: string, viewMode: ReviewViewMode)
   useReviewStore.setState((s) => ({
     workspaces: patchWorkspace(s.workspaces, workspaceId, { viewMode })
   }))
+}
+
+const SETTLED_MAIN_STATES: ReadonlySet<string> = new Set(['done', 'failed', 'idle', 'closed'])
+
+/** A row settles when the unit finished work (last outcome) or went quiet. */
+const settled = (row?: ActivityRow): boolean =>
+  Boolean(row && (row.lastOutcome || SETTLED_MAIN_STATES.has(row.mainState)))
+
+const watchControllers = new Map<string, AbortController>()
+
+/**
+ * Auto-refresh the diff after the bound unit reports settled work via the
+ * activity feed (11 §3/§4.4): a finished worker mutates the worktree, so the
+ * panel reloads instead of showing a stale patch. No-ops without an activity
+ * provider surface; manual refresh stays available.
+ */
+export function watchReviewWorkspace(workspaceId: string): void {
+  if (watchControllers.has(workspaceId)) return
+  const binding = Object.values(useReviewStore.getState().bindings)
+    .find((record) => record?.workspaceId === workspaceId)
+  const unitId = binding?.unitId ?? binding?.ownerThreadId
+  const provider = getProvider()
+  const snapshot = provider.getActivitySnapshot?.bind(provider)
+  const poll = provider.pollActivity?.bind(provider)
+  if (!unitId || !snapshot || !poll) return
+  const controller = new AbortController()
+  watchControllers.set(workspaceId, controller)
+  void (async () => {
+    try {
+      let { cursor } = await snapshot({})
+      while (!controller.signal.aborted) {
+        const response = await poll(cursor, 30_000, controller.signal)
+        if (response.type === 'reset_required') {
+          cursor = (await snapshot({})).cursor
+          continue
+        }
+        cursor = response.cursor
+        if (controller.signal.aborted) break
+        if (response.changes.some((change) => change.unitId === unitId && settled(change.row))) {
+          await loadWorkspaceDiff(workspaceId)
+        }
+      }
+    } catch {
+      // Aborted or runtime offline: the panel's manual refresh covers this.
+    } finally {
+      if (watchControllers.get(workspaceId) === controller) {
+        watchControllers.delete(workspaceId)
+      }
+    }
+  })()
+}
+
+export function unwatchReviewWorkspace(workspaceId: string): void {
+  watchControllers.get(workspaceId)?.abort()
+  watchControllers.delete(workspaceId)
 }

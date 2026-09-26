@@ -57,10 +57,11 @@ export async function taskWorkspaceDiffList(
   }
 }
 
-async function readCapped(path: string): Promise<string | undefined> {
+async function readCapped(path: string): Promise<{ text?: string; tooLarge: boolean }> {
   const info = await stat(path).catch(() => undefined)
-  if (!info?.isFile() || info.size > DIFF_TEXT_LIMIT_BYTES) return undefined
-  return readFile(path, 'utf8').catch(() => undefined)
+  if (!info?.isFile()) return { tooLarge: false }
+  if (info.size > DIFF_TEXT_LIMIT_BYTES) return { tooLarge: true }
+  return { text: await readFile(path, 'utf8').catch(() => undefined), tooLarge: false }
 }
 
 export async function taskWorkspaceDiffFile(
@@ -86,13 +87,14 @@ export async function taskWorkspaceDiffFile(
         record.path,
         ['show', `${record.baseRevision}:${section.oldPath ?? section.path}`]
       ).catch(() => undefined)
-  const newText = section.binary || section.status === 'deleted'
-    ? undefined
+  const newRead = section.binary || section.status === 'deleted'
+    ? { tooLarge: false }
     : await readCapped(resolve(record.path, section.path))
+  const newText = newRead.text
   const tooLarge =
     bytes(section.patch) > DIFF_TEXT_LIMIT_BYTES ||
     bytes(oldText) > DIFF_TEXT_LIMIT_BYTES ||
-    bytes(newText) > DIFF_TEXT_LIMIT_BYTES
+    newRead.tooLarge
   if (tooLarge) return { ...stats, tooLarge: true }
   return {
     ...stats,

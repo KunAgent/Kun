@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ActivityRow } from '@shared/activity-row'
 import type { TaskWorkspaceRecord } from '@shared/task-workspace'
 
 const provider = {
   listTaskWorkspaces: vi.fn(),
   getTaskWorkspaceDiff: vi.fn(),
-  getTaskWorkspaceDiffFile: vi.fn()
+  getTaskWorkspaceDiffFile: vi.fn(),
+  getActivitySnapshot: vi.fn(),
+  pollActivity: vi.fn()
 }
 
 vi.mock('../agent/registry', () => ({
@@ -17,7 +20,9 @@ import {
   loadWorkspaceDiffFile,
   setReviewViewMode,
   toggleReviewFileExpanded,
-  useReviewStore
+  unwatchReviewWorkspace,
+  useReviewStore,
+  watchReviewWorkspace
 } from './review-store'
 
 function record(overrides: Partial<TaskWorkspaceRecord> = {}): TaskWorkspaceRecord {
@@ -113,15 +118,70 @@ describe('review-store', () => {
     expect(useReviewStore.getState().workspaces['tws_deadbeef'].viewMode).toBe('split')
   })
 
-  it('drops cached details for files that disappear on reload', async () => {
+  it('invalidates every cached detail after a fresh capture reload', async () => {
     provider.getTaskWorkspaceDiff.mockResolvedValue({
       files: [{ path: 'a.ts', status: 'modified', insertions: 1, deletions: 0, binary: false, tooLarge: false }]
     })
     provider.getTaskWorkspaceDiffFile.mockResolvedValue({ path: 'a.ts', status: 'modified', binary: false, tooLarge: false })
     await loadWorkspaceDiff('tws_deadbeef')
     await loadWorkspaceDiffFile('tws_deadbeef', 'a.ts')
-    provider.getTaskWorkspaceDiff.mockResolvedValue({ files: [] })
+    provider.getTaskWorkspaceDiff.mockResolvedValue({
+      files: [{ path: 'a.ts', status: 'modified', insertions: 2, deletions: 0, binary: false, tooLarge: false }]
+    })
     await loadWorkspaceDiff('tws_deadbeef')
-    expect(useReviewStore.getState().workspaces['tws_deadbeef'].details['a.ts']).toBeUndefined()
+    const ws = useReviewStore.getState().workspaces['tws_deadbeef']
+    expect(ws.details['a.ts']).toBeUndefined()
+    expect(ws.expandedPaths['a.ts']).toBe(true)
+  })
+
+  it('defaults a file over 5000 changed lines to collapsed', async () => {
+    provider.getTaskWorkspaceDiff.mockResolvedValue({
+      files: [{ path: 'huge.ts', status: 'modified', insertions: 4000, deletions: 1500, binary: false, tooLarge: false }]
+    })
+    await loadWorkspaceDiff('tws_deadbeef')
+    expect(useReviewStore.getState().workspaces['tws_deadbeef'].expandedPaths['huge.ts']).toBe(false)
+  })
+
+  it('auto-refreshes the diff when the bound unit reports settled work', async () => {
+    provider.listTaskWorkspaces.mockResolvedValue({ records: [record({ unitId: 'w-9' })] })
+    await ensureThreadBinding('thread-1')
+    provider.getActivitySnapshot.mockResolvedValue({ cursor: 'c1', rows: [] })
+    provider.pollActivity
+      .mockResolvedValueOnce({
+        type: 'activity',
+        cursor: 'c2',
+        changes: [{ unitId: 'other', row: { mainState: 'done' } as ActivityRow }]
+      })
+      .mockResolvedValueOnce({
+        type: 'activity',
+        cursor: 'c3',
+        changes: [{ unitId: 'w-9', row: { mainState: 'working' } as ActivityRow }]
+      })
+      .mockResolvedValueOnce({
+        type: 'activity',
+        cursor: 'c4',
+        changes: [{ unitId: 'w-9', row: { mainState: 'done', lastOutcome: 'completed' } as ActivityRow }]
+      })
+      .mockImplementation((_cursor, _wait, signal) => new Promise((_r, reject) => {
+        signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+      }))
+    provider.getTaskWorkspaceDiff.mockResolvedValue({ files: [] })
+    watchReviewWorkspace('tws_deadbeef')
+    await vi.waitFor(() => {
+      expect(provider.getTaskWorkspaceDiff).toHaveBeenCalledTimes(1)
+      expect(provider.getTaskWorkspaceDiff).toHaveBeenCalledWith('tws_deadbeef')
+    })
+    unwatchReviewWorkspace('tws_deadbeef')
+    expect(provider.getTaskWorkspaceDiff).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips the watch without an activity surface', async () => {
+    provider.listTaskWorkspaces.mockResolvedValue({ records: [record()] })
+    await ensureThreadBinding('thread-1')
+    provider.getActivitySnapshot.mockResolvedValue(undefined)
+    watchReviewWorkspace('tws_deadbeef')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(provider.pollActivity).not.toHaveBeenCalled()
+    unwatchReviewWorkspace('tws_deadbeef')
   })
 })
