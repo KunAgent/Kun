@@ -55,15 +55,17 @@ describe('loadWorkspaceAgentProfiles ADE bindings', () => {
     expect(profile?.profile.delegationNotes).toBeUndefined()
   })
 
-  it('drops a file whose bare model lacks a harness binding', async () => {
+  it('ignores a bare model pin that lacks a harness binding', async () => {
     const root = await workspaceWith([
       '---',
       'name: Broken',
       'model: claude-sonnet-4-6',
       '---',
-      'No harness means a bare model still needs providerId.'
+      'No harness means the model pin is meaningless on the native loop.'
     ].join('\n'))
-    expect(await loadWorkspaceAgentProfiles(root)).toEqual([])
+    const [profile] = await loadWorkspaceAgentProfiles(root)
+    expect(profile?.profile.model).toBeUndefined()
+    expect(profile?.profile.harnessId).toBeUndefined()
   })
 
   it('accepts camelCase aliases', async () => {
