@@ -70,6 +70,7 @@ import { ThreadSnapshotStore } from '../services/thread-snapshot-store.js'
 import { SessionGuardian } from '../services/session-guardian.js'
 import { WorkerCallbackService } from '../services/worker-callback-service.js'
 import { TerminalAgentRegistry } from '../services/terminal-agent-registry.js'
+import { kunHookCommand, writeHookConfig } from '../harness/hook-config-writer.js'
 import { FileTeamStore } from '../ade/team-store.js'
 import { FileDispatchStore } from '../ade/dispatch-store.js'
 import { FileQuestionStore } from '../ade/question-store.js'
@@ -464,6 +465,8 @@ export async function createRuntimeServices(
     nowIso,
     idGenerator: () => ids.next('tu')
   })
+  const hookWriter = (unitId: string, hooks: { kind: string; events: string[] }) =>
+    writeHookConfig(core.activeOptions.dataDir, unitId, hooks, kunHookCommand())
 	  let baseToolProviders = [
     {
       id: 'builtin',
@@ -565,6 +568,7 @@ export async function createRuntimeServices(
     adeStores,
     workerCallbacks,
     terminalAgents,
+    hookWriter,
     defaultIsAgentSdk,
     defaultIsAntigravity,
     defaultIsCursorSdk,

@@ -11,6 +11,7 @@ import { HarnessIdSchema, type HarnessId } from '../contracts/harness.js'
 import { adeRootDir } from '../ade/ade-paths.js'
 import { readAdeJson, writeAdeJson } from '../ade/ade-file.js'
 import { withManagerDataMutex } from '../manager/data-mutex.js'
+import { cleanupHookConfig } from '../harness/hook-config-writer.js'
 
 /**
  * Tier-0 terminal agents (05 §6.1): execution units launched as PTY
@@ -30,6 +31,8 @@ export const TerminalAgentRecordSchema = z
     mainState: z.enum(['initializing', 'working', 'waiting', 'done', 'failed', 'idle', 'closed']),
     /** Set by an interrupt hint; consumed by the Stop-hook mapping. */
     inferredInterrupt: z.boolean().default(false),
+    /** Harness-native session id reported by SessionStart (used for resume). */
+    nativeSessionId: z.string().max(256).optional(),
     exitCode: z.number().int().optional(),
     signal: z.string().max(64).optional(),
     createdAt: z.string(),
@@ -119,6 +122,7 @@ export class TerminalAgentRegistry {
     unitId: string,
     exit: { exitCode: number; signal?: string }
   ): Promise<TerminalAgentRecord | null> {
+    await cleanupHookConfig(this.deps.dataDir, unitId)
     await this.mutate((file) => {
       const entry = file.units.find((unit) => unit.unitId === unitId)
       if (!entry) return file
@@ -204,12 +208,14 @@ export class TerminalAgentRegistry {
   /** Hook/channel state writes also persist so a restart keeps truth. */
   async applyState(unitId: string, patch: {
     mainState?: ActivityState
+    nativeSessionId?: string
     provenance: 'runtime' | 'inferred' | 'hook'
   }): Promise<void> {
     await this.mutate((file) => {
       const entry = file.units.find((unit) => unit.unitId === unitId)
       if (!entry) return file
       if (patch.mainState) entry.mainState = patch.mainState
+      if (patch.nativeSessionId) entry.nativeSessionId = patch.nativeSessionId
       entry.updatedAt = this.nowIso()
       return file
     })

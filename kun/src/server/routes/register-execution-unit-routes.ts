@@ -23,7 +23,8 @@ export function registerExecutionUnitRoutes(router: Router, runtime: ServerRunti
       registry,
       tokens,
       catalog,
-      endpoint: () => runtime.harnesses?.gatewayEndpoint?.baseUrl
+      endpoint: () => runtime.harnesses?.gatewayEndpoint?.baseUrl,
+      hookWriter: runtime.ade?.hookWriter
     }
   }
   router.add('POST', '/v1/execution-units', async (request) => {

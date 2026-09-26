@@ -290,6 +290,14 @@ export type ServerRuntime = {
      * Optional so test scaffolds can omit it.
      */
     terminalAgents?: import('../../services/terminal-agent-registry.js').TerminalAgentRegistry
+    /**
+     * Managed-hook config writer for terminal launches (05 §6.2, P2-03).
+     * Returns argv/env additions; null when the harness kind is unsupported.
+     */
+    hookWriter?: (
+      unitId: string,
+      hooks: { kind: string; events: string[] }
+    ) => Promise<{ args: string[]; env: Record<string, string>; dir: string } | null>
     /** Manager control plane + exactly-once dispatch delivery (09 §4-§5). */
     manager?: import('../../ade/manager-runtime.js').ManagerRuntime
     deliverer?: import('../../ade/dispatch-deliverer.js').DispatchDeliverer

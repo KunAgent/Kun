@@ -137,7 +137,21 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
       argv: [],
       taskFlag: undefined,
       resumeArgs: ['--continue'],
-      hooks: { kind: 'claude-settings', events: ['Stop', 'Notification', 'PostToolUse'] }
+      hooks: {
+        kind: 'claude-settings',
+        events: [
+          'SessionStart',
+          'UserPromptSubmit',
+          'PreToolUse',
+          'PostToolUse',
+          'PermissionRequest',
+          'Notification',
+          'Stop',
+          'SubagentStop',
+          'PreCompact',
+          'SessionEnd'
+        ]
+      }
     },
     capabilities: CLAUDE_CODE_CAPABILITIES,
     gateway: {

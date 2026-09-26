@@ -1,14 +1,21 @@
 import { resolve } from 'node:path'
+import { z } from 'zod'
 import { jsonResponse, type JsonResponse } from '../response.js'
+import { readJsonBody } from '../read-json-body.js'
 import type { ActivityStore } from '../../services/activity-store.js'
 import type { ActivityFactsStore } from '../../services/activity-facts-store.js'
+import type { TerminalAgentRegistry } from '../../services/terminal-agent-registry.js'
+import type { HarnessTokenService } from '../../harness/harness-token-service.js'
+import type { HarnessCatalog } from '../../harness/harness-catalog.js'
 import {
   ACTIVITY_FOREGROUND_TTL_MS,
   type ActivityHibernation
 } from '../../services/activity-hibernation.js'
+import { mapHookEvent } from '../../services/hook-activity-mapping.js'
 
 const HEARTBEAT_MS = 15_000
 const MAX_WAIT_MS = 30_000
+const HOOK_BODY_LIMIT_BYTES = 64 * 1024
 
 /**
  * GET /v1/activity — snapshot of all rows plus the change cursor.
@@ -200,4 +207,59 @@ export async function activityFactResponse(
   const row = store.get(unitId)
   if (row) store.apply(unitId, patch, row.provenance)
   return jsonResponse({ unitId, fact })
+}
+
+const HookPayloadSchema = z
+  .object({
+    event: z.string().min(1).max(64),
+    sessionId: z.string().max(256).optional(),
+    toolName: z.string().max(128).optional(),
+    timestamp: z.string().max(64).optional()
+  })
+  .strict()
+
+export type ActivityHookDeps = {
+  tokens: HarnessTokenService
+  registry: TerminalAgentRegistry
+  catalog: HarnessCatalog
+  activity?: ActivityStore
+}
+
+/**
+ * POST /v1/activity/hooks — managed-hook ingest (05 §6.2–6.3). Called by
+ * `kun worker hook <event>` inside the unit's own temporary config; the
+ * `hook-ingest` grant pins the unit. The payload is already trimmed by the
+ * CLI to event/sessionId/toolName/timestamp; unknown units and unknown
+ * events are rejected/ignored rather than guessed.
+ */
+export async function activityHookResponse(
+  deps: ActivityHookDeps,
+  request: Request
+): Promise<JsonResponse> {
+  const grant = deps.tokens.verifyScope(
+    /^Bearer ([^\s]+)$/.exec(request.headers.get('authorization') ?? '')?.[1],
+    'hook-ingest'
+  )
+  if (!grant) return jsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
+  const body = await readJsonBody(request, HOOK_BODY_LIMIT_BYTES)
+  if (!body.ok) return body.response
+  const parsed = HookPayloadSchema.safeParse(body.value)
+  if (!parsed.success) {
+    return jsonResponse({ code: 'validation_error', message: 'invalid hook payload' }, 400)
+  }
+  const unit = await deps.registry.get(grant.threadId)
+  if (!unit) return jsonResponse({ code: 'not_found', message: 'unknown execution unit' }, 404)
+  const kind = deps.catalog.get(unit.harnessId)?.terminal?.hooks?.kind
+  const inferredInterrupt = parsed.data.event === 'Stop'
+    ? await deps.registry.consumeInterruptHint(unit.unitId)
+    : false
+  const mapping = mapHookEvent(kind, parsed.data, { inferredInterrupt })
+  if (!mapping) return jsonResponse({ unitId: unit.unitId, status: 'ignored' })
+  deps.activity?.apply(unit.unitId, mapping.patch, 'hook')
+  await deps.registry.applyState(unit.unitId, {
+    ...(mapping.patch.mainState ? { mainState: mapping.patch.mainState } : {}),
+    ...(mapping.nativeSessionId ? { nativeSessionId: mapping.nativeSessionId } : {}),
+    provenance: 'hook'
+  })
+  return jsonResponse({ unitId: unit.unitId, status: 'applied' })
 }

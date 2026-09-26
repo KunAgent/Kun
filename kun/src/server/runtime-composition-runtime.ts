@@ -190,6 +190,7 @@ export function createServerRuntimeComposition(
       stores: services.adeStores,
       workerCallbacks: services.workerCallbacks,
       terminalAgents: services.terminalAgents,
+      hookWriter: services.hookWriter,
       manager: agent.managerRuntime,
       deliverer: agent.dispatchDeliverer,
       noticeCoordinator: agent.workerNoticeCoordinator

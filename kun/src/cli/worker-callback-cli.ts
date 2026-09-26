@@ -1,3 +1,5 @@
+import { trimHookPayload } from '../services/hook-activity-mapping.js'
+
 /**
  * `kun worker <subcommand>` — shell-facing worker callbacks (05 §5). A
  * terminal agent or shell-only worker reaches the runtime's
@@ -259,14 +261,8 @@ export async function runWorkerCallbackCommand(argv: readonly string[], io: Work
       } catch {
         return fail(io, EXIT.usage, 'hook payload is not valid JSON')
       }
-      const record = typeof payload === 'object' && payload !== null ? payload as Record<string, unknown> : {}
-      const body = {
-        event: parsed.positionals[0],
-        sessionId: record.session_id ?? record.sessionId,
-        toolName: record.tool_name ?? record.toolName,
-        timestamp: record.timestamp ?? record.ts ?? record.time
-      }
-      const result = await post(io, auth.endpoint, auth.token, '/v1/activity/hooks', body)
+      const result = await post(io, auth.endpoint, auth.token, '/v1/activity/hooks',
+        trimHookPayload(payload, parsed.positionals[0]!))
       return result.code
     }
     default:

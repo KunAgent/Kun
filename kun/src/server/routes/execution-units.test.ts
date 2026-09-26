@@ -35,12 +35,22 @@ async function harness() {
     nowIso: () => NOW,
     idGenerator: (() => { let n = 0; return () => `tu_${++n}` })()
   })
+  const hookWriter = async (
+    unitId: string,
+    hooks: { kind: string; events: string[] }
+  ) => hooks.events.length === 0
+    ? null
+    : {
+        args: ['--settings', `${dataDir}/ade/hooks/${unitId}/settings.json`],
+        env: { KUN_HOOK_DIR: `${dataDir}/ade/hooks/${unitId}` },
+        dir: `${dataDir}/ade/hooks/${unitId}`
+      }
   const router = new Router()
   registerExecutionUnitRoutes(router, {
     runtimeToken: 'test-token',
     insecure: false,
     activityStore: store,
-    ade: { terminalAgents: registry },
+    ade: { terminalAgents: registry, hookWriter },
     harnessTokens: tokens,
     harnesses: { catalog, gatewayEndpoint: { baseUrl: 'http://127.0.0.1:18899' } },
     nowIso: () => NOW
@@ -95,6 +105,11 @@ describe('execution-unit routes', () => {
       mainState: 'working',
       harnessId: 'claude-code'
     })
+    // Managed hooks populate the launch extras for claude-settings (P2-03).
+    const launch = body.launch as { args: string[]; env: Record<string, string> }
+    expect(launch.args[0]).toBe('--settings')
+    expect(launch.args[1]).toContain('/ade/hooks/tu_1/settings.json')
+    expect(launch.env.KUN_HOOK_DIR).toContain('/ade/hooks/tu_1')
   })
 
   it('rejects harnesses without a terminal launch definition', async () => {
