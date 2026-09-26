@@ -18,6 +18,7 @@ import { AcpSessionManager } from './acp-session-manager.js'
 import { AcpRuntime, type AcpRuntimeDeps } from './acp-runtime.js'
 import { KunToolsMcpProvider } from './kun-tools-mcp.js'
 import { HarnessTokenService } from '../../harness/harness-token-service.js'
+import { checkHarnessAdmission } from '../../harness/harness-admission.js'
 
 const FIXTURE_AGENT = fileURLToPath(
   new URL('./__fixtures__/fake-acp-agent.mjs', import.meta.url)
@@ -54,6 +55,7 @@ async function makeHarness(scenarioFile: string, input: {
   onDelta?: () => void
 } = {}): Promise<{
   runtime: AcpRuntime
+  definition: HarnessDefinition
   thread: { turns: Array<Record<string, unknown>> }
   workspace: string
   journalPath: string
@@ -195,6 +197,7 @@ async function makeHarness(scenarioFile: string, input: {
 
   return {
     runtime: new AcpRuntime(deps),
+    definition,
     thread: thread as { turns: Array<Record<string, unknown>> },
     workspace,
     journalPath,
@@ -458,14 +461,15 @@ describe('AcpRuntime.runTurn', () => {
     )
     expect(outcome).toBe('completed')
     const servers = h.requests('session/new')[0]?.params?.mcpServers as Array<{
-      type: string
+      type?: string
       command: string
       args: string[]
       env: Array<{ name: string; value: string }>
     }>
     expect(servers).toHaveLength(1)
     const server = servers[0]
-    expect(server.type).toBe('stdio')
+    // Stdio descriptors omit `type`; command/args imply the stdio transport.
+    expect(server.type).toBeUndefined()
     expect(server.command).toBe('/abs/kun')
     expect(server.args).toEqual([
       '/abs/serve-entry.js',
@@ -476,5 +480,106 @@ describe('AcpRuntime.runTurn', () => {
     const token = server.env.find((e) => e.name === 'KUN_TOOLS_TOKEN')!.value
     expect(token.startsWith('kgw_')).toBe(true)
     expect(tokens.verify(token)).toBeNull()
+  })
+
+  test('sends no descriptor when the agent rejects both MCP transports', async () => {
+    const provider = new KunToolsMcpProvider({
+      tokens: new HarnessTokenService({ secret: Buffer.alloc(32, 9) }),
+      endpoint: () => 'http://127.0.0.1:18899',
+      command: () => ({ command: '/abs/kun', args: [] })
+    })
+    const h = await makeHarness('mcp-declined.json', {
+      deps: { kunToolsMcp: provider }
+    })
+    const outcome = await h.runtime.runTurn(
+      'thread_1',
+      'turn_1',
+      new AbortController().signal
+    )
+    expect(outcome).toBe('completed')
+    const servers =
+      h.requests('session/new')[0]?.params?.mcpServers ?? []
+    expect(servers).toHaveLength(0)
+    // Honest caps on the delegated_runtime event: no descriptor, so kunTools
+    // unsupported; the agent declared elicitation, so userInput supported.
+    const delegated = h.recorded.find((e) => e.kind === 'delegated_runtime')
+    const caps = (delegated as { capabilitiesV2?: { statuses: Record<string, { supported: boolean }> } })
+      ?.capabilitiesV2?.statuses
+    expect(caps?.kunTools?.supported).toBe(false)
+    expect(caps?.userInput?.supported).toBe(true)
+  })
+
+  test('reports kunTools delivered and userInput absent on a plain agent', async () => {
+    const provider = new KunToolsMcpProvider({
+      tokens: new HarnessTokenService({ secret: Buffer.alloc(32, 9) }),
+      endpoint: () => 'http://127.0.0.1:18899',
+      command: () => ({ command: '/abs/kun', args: [] })
+    })
+    const h = await makeHarness('basic-chat.json', {
+      deps: { kunToolsMcp: provider }
+    })
+    const outcome = await h.runtime.runTurn(
+      'thread_1',
+      'turn_1',
+      new AbortController().signal
+    )
+    expect(outcome).toBe('completed')
+    const delegated = h.recorded.find((e) => e.kind === 'delegated_runtime')
+    const caps = (delegated as { capabilitiesV2?: { statuses: Record<string, { supported: boolean }> } })
+      ?.capabilitiesV2?.statuses
+    // basic-chat advertises http MCP → descriptor delivered → supported.
+    expect(caps?.kunTools?.supported).toBe(true)
+    // The fixture never declares elicitation → userInput stays unsupported.
+    expect(caps?.userInput?.supported).toBe(false)
+  })
+
+  test('capabilitiesV2 only claims kunTools when descriptors can be served', async () => {
+    const tokens = new HarnessTokenService({ secret: Buffer.alloc(32, 9) })
+    const serving = new KunToolsMcpProvider({
+      tokens,
+      endpoint: () => 'http://127.0.0.1:18899',
+      command: () => ({ command: '/abs/kun', args: [] })
+    })
+    const notServing = new KunToolsMcpProvider({
+      tokens,
+      endpoint: () => undefined,
+      command: () => ({ command: '/abs/kun', args: [] })
+    })
+    const served = await makeHarness('basic-chat.json', {
+      deps: { kunToolsMcp: serving }
+    })
+    expect(served.runtime.capabilitiesV2()?.statuses.kunTools.supported).toBe(true)
+    const unserved = await makeHarness('basic-chat.json', {
+      deps: { kunToolsMcp: notServing }
+    })
+    expect(unserved.runtime.capabilitiesV2()?.statuses.kunTools.supported).toBe(false)
+    const bare = await makeHarness('basic-chat.json')
+    expect(bare.runtime.capabilitiesV2()?.statuses.kunTools.supported).toBe(false)
+  })
+
+  test('graph-worker admission rejects an ACP harness that cannot serve MCP', async () => {
+    // P3-09: a runtime with no kun-tools provider cannot deliver a
+    // descriptor, so graph admission must refuse it with a readable reason.
+    const h = await makeHarness('basic-chat.json')
+    const verdict = checkHarnessAdmission({
+      usage: 'graph-worker',
+      harness: h.definition,
+      effective: h.runtime.capabilitiesV2()!,
+      status: {
+        harnessId: h.definition.id,
+        installed: 'yes',
+        login: 'signed-in',
+        checkedAt: new Date().toISOString()
+      },
+      workspace: { isolated: true },
+      unattended: true,
+      allowUnattendedFullAccess: true
+    })
+    expect(verdict.ok).toBe(false)
+    if (!verdict.ok) {
+      expect(verdict.code).toBe('capability_missing')
+      expect(verdict.missing).toContain('kunTools')
+      expect(verdict.message).toContain('serve-hosted runtime')
+    }
   })
 })

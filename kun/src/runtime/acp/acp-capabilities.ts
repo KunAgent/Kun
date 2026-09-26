@@ -11,10 +11,11 @@ import {
   type HarnessCapabilities,
   type HarnessCapabilityStatuses
 } from '../../contracts/harness-capabilities.js'
-import type {
-  AcpInitializeResult,
-  AcpSessionModes,
-  AcpConfigOption
+import {
+  capabilityFlagOn,
+  type AcpInitializeResult,
+  type AcpSessionModes,
+  type AcpConfigOption
 } from './acp-schema.js'
 
 /** Facts learned after `initialize` — from session/new or live updates. */
@@ -27,6 +28,12 @@ export type AcpSessionFacts = {
   sawUsageTelemetry?: boolean
   /** usage_update or a prompt result carried token counts. */
   sawUsageTokens?: boolean
+  /**
+   * Which Kun Tools MCP transport descriptor was actually delivered with
+   * session/new (P3-09). 'none' or absent means the agent runs tool-less and
+   * `kunTools` must not report supported.
+   */
+  kunToolsDescriptor?: 'http' | 'stdio' | 'none'
 }
 
 function hasConfigCategory(
@@ -63,7 +70,14 @@ export function capabilitiesFromAcp(
       : unsupported('upstream'),
     planMode: unsupported('upstream'),
     manualCompact: unsupported('upstream'),
-    kunTools: SUPPORTED,
+    // Honest declaration (P3-09): kunTools counts only when a descriptor was
+    // actually delivered on a transport the agent accepts.
+    kunTools:
+      session.kunToolsDescriptor === 'http' || session.kunToolsDescriptor === 'stdio'
+        ? SUPPORTED
+        : unsupported('upstream', {
+            message: 'no Kun Tools MCP descriptor was delivered for this session'
+          }),
     externalApproval: SUPPORTED,
     nativeToolInterception: SUPPORTED,
     fsMediated: SUPPORTED,
@@ -85,8 +99,9 @@ export function capabilitiesFromAcp(
       (session.modes?.availableModes?.length ?? 0) > 0
         ? SUPPORTED
         : unsupported('upstream'),
-    // Form elicitation bridges to the user_input gate / ask_manager (P2-10).
-    userInput: SUPPORTED
+    // Form elicitation bridges to the user_input gate / ask_manager (P2-10),
+    // but only when the agent declares it supports elicitation (P3-09).
+    userInput: capabilityFlagOn(agent?.elicitation) ? SUPPORTED : unsupported('upstream')
   }
   return {
     statuses,

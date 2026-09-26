@@ -60,7 +60,7 @@ import type {
 import type { DelegatedSessionCoordinator } from '../delegated-session-binding.js'
 import { delegatedCredentialIdentity } from '../delegated-session-binding.js'
 import { parkDelegatedGraphTurnAfterRecovery } from '../delegated-graph-turn-policy.js'
-import { ACP_DEFAULT_CAPABILITIES } from '../../harness/builtin-harnesses.js'
+
 import {
   buildHistoryTranscript,
   DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
@@ -78,7 +78,9 @@ import { buildAcpPromptBlocks, attachmentFallbackPaths } from './acp-prompt.js'
 import type { AcpSpawnFn } from './acp-process.js'
 import {
   acpLegacyCapabilities,
+  acpStaticCapabilities,
   finishAcpTrace,
+  kunToolsDescriptorOf,
   mapAcpFailure,
   startAcpTrace,
   type AcpTrace
@@ -197,7 +199,9 @@ export class AcpRuntime implements DelegatedTurnRuntime {
   }
 
   capabilitiesV2() {
-    return ACP_DEFAULT_CAPABILITIES
+    // kunTools is honest (P3-09): only claim it when this runtime can hand
+    // the agent an MCP descriptor — i.e. it is serve-hosted.
+    return acpStaticCapabilities(this.deps.kunToolsMcp?.canDeliver() === true)
   }
 
   async runTurn(
@@ -375,11 +379,17 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       emitQueue = emitQueue.then(() => emitter.emitAll(drafts))
     }
 
-    let session: AcpSessionHandle
-    try {
-      const mcpCapabilities = conn.initResult?.agentCapabilities?.mcpCapabilities as
+    const kunToolsServers = this.deps.kunToolsMcp?.servers({
+      threadId,
+      turnId,
+      harnessId: definition.id,
+      credentialIdentity,
+      mcpCapabilities: conn.initResult?.agentCapabilities?.mcpCapabilities as
         | AcpMcpCapabilities
         | undefined
+    }) ?? []
+    let session: AcpSessionHandle
+    try {
       session = await this.sessions.ensureSession(
         {
           threadId,
@@ -389,10 +399,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           model,
           permissionModeId,
           reasoningEffort: turn.reasoningEffort,
-          mcpServers:
-            this.deps.kunToolsMcp?.servers({
-              threadId, turnId, harnessId: definition.id, credentialIdentity, mcpCapabilities
-            }) ?? [],
+          mcpServers: kunToolsServers,
           items
         },
         conn,
@@ -436,7 +443,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       session: {
         configOptions: session.configOptions,
         modes: session.modes,
-        sawAvailableCommands: session.sawAvailableCommands
+        sawAvailableCommands: session.sawAvailableCommands,
+        kunToolsDescriptor: kunToolsDescriptorOf(kunToolsServers)
       },
       sandbox: definition.capabilities.facts?.sandbox ?? 'native'
     })
@@ -640,12 +648,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     }
   }
 
-  private async failTurn(
-    threadId: string,
-    turnId: string,
-    error: string,
-    code?: string
-  ): Promise<'failed'> {
+  private async failTurn(threadId: string, turnId: string, error: string, code?: string): Promise<'failed'> {
     await this.deps.turns.finishTurn({
       threadId,
       turnId,

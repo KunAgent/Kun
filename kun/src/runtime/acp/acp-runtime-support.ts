@@ -12,7 +12,12 @@ import {
   type LlmDebugSink
 } from '../../services/llm-debug-recorder.js'
 import type { DelegatedRuntimeCapabilities } from '../delegated-turn-runtime.js'
-import { AcpError } from './acp-schema.js'
+import {
+  unsupported,
+  type HarnessCapabilities
+} from '../../contracts/harness-capabilities.js'
+import { ACP_DEFAULT_CAPABILITIES } from '../../harness/builtin-harnesses.js'
+import { AcpError, type McpServer } from './acp-schema.js'
 
 export type AcpTrace = {
   sink: LlmDebugSink
@@ -156,4 +161,30 @@ export function mapAcpFailure(
 
 function sanitize(message: string): string {
   return message.slice(0, 2_000)
+}
+
+/**
+ * Pre-connect capability view (P3-09): the static ACP declaration, narrowed
+ * to not claim `kunTools` when this runtime cannot hand out MCP descriptors.
+ */
+export function acpStaticCapabilities(kunToolsDeliverable: boolean): HarnessCapabilities {
+  if (kunToolsDeliverable) return ACP_DEFAULT_CAPABILITIES
+  return {
+    ...ACP_DEFAULT_CAPABILITIES,
+    statuses: {
+      ...ACP_DEFAULT_CAPABILITIES.statuses,
+      kunTools: unsupported('not-implemented', {
+        message: 'Kun Tools MCP requires a serve-hosted runtime to deliver descriptors'
+      })
+    }
+  }
+}
+
+/** Which kun-tools transport a session request actually carried. */
+export function kunToolsDescriptorOf(
+  servers: readonly McpServer[]
+): 'http' | 'stdio' | 'none' {
+  const first = servers[0] as { type?: string } | undefined
+  if (!first) return 'none'
+  return first.type === 'http' ? 'http' : 'stdio'
 }
