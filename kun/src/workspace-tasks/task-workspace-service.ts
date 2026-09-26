@@ -270,6 +270,32 @@ export class TaskWorkspaceService {
     return { changedFiles: diff.changedFiles.length, ...patchDiffStats(diff.patch) }
   }
 
+  /**
+   * Reviewer input for cross-review (10 §5): the live committed+uncommitted
+   * patch against the workspace's start point. Undefined when the workspace
+   * is local-isolated or has no git baseline.
+   */
+  async reviewSnapshot(workspaceId: string): Promise<{
+    record: TaskWorkspaceRecord
+    changedFiles: string[]
+    patch: string
+  } | undefined> {
+    const record = this.options.store.get(workspaceId)
+    if (
+      !record?.path ||
+      !record.baseRevision ||
+      record.isolation !== 'worktree' ||
+      record.path === record.sourceRoot
+    ) {
+      return undefined
+    }
+    const diff = await this.options.lifecycle
+      .diffSince({ path: record.path, baseTree: record.baseRevision })
+      .catch(() => undefined)
+    if (!diff) return undefined
+    return { record, changedFiles: diff.changedFiles, patch: diff.patch }
+  }
+
   /** Integrate into the source repository; serialized per repo (07 §8). */
   async integrate(
     workspaceId: string,

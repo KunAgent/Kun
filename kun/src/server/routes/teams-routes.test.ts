@@ -29,7 +29,7 @@ function notice(id: string): WorkerNotice {
   }
 }
 
-async function harness(options: { withCoordinator?: boolean } = {}) {
+async function harness(options: { withCoordinator?: boolean; manager?: unknown } = {}) {
   const dataDir = await mkdtemp(join(tmpdir(), 'kun-teams-routes-'))
   tempDirs.push(dataDir)
   const notices = new FileWorkerNoticeStore(dataDir, () => NOW)
@@ -44,7 +44,8 @@ async function harness(options: { withCoordinator?: boolean } = {}) {
       stores: { notices },
       ...(options.withCoordinator === false
         ? {}
-        : { noticeCoordinator: { holdNotices } })
+        : { noticeCoordinator: { holdNotices } }),
+      ...(options.manager ? { manager: options.manager } : {})
     }
   } as unknown as ServerRuntime)
   const request = async (method: string, path: string, body?: unknown, authorized = true) => {
@@ -126,5 +127,51 @@ describe('teams routes', () => {
     const body = JSON.parse(res.body)
     expect(body.notices).toEqual([])
     expect(body.text).toBeUndefined()
+  })
+
+  it('records a user verdict and maps refusals (10 §4.3)', async () => {
+    const setVerdict = vi.fn(async (input: Record<string, unknown>) =>
+      input.dispatchId === 'dsp_ghost'
+        ? { ok: false, refusal: 'dispatch_not_found', userReport: 'not found' }
+        : input.status === 'rejected'
+          ? { ok: false, refusal: 'user_verdict_locked', userReport: 'locked' }
+          : {
+              ok: true,
+              dispatchId: input.dispatchId,
+              verdict: { status: input.status, decidedBy: 'user', checks: [] },
+              userReport: 'Verdict recorded: passed.'
+            })
+    const { request } = await harness({ manager: { verdicts: { setVerdict } } })
+
+    const res = await request('POST', '/v1/teams/dispatches/dsp_1/verdict', {
+      status: 'passed',
+      notes: 'lgtm'
+    })
+    expect(res.status).toBe(200)
+    expect(setVerdict).toHaveBeenCalledWith({
+      dispatchId: 'dsp_1',
+      status: 'passed',
+      notes: 'lgtm',
+      decidedBy: 'user'
+    })
+    const body = JSON.parse(res.body)
+    expect(body.verdict).toMatchObject({ status: 'passed', decidedBy: 'user' })
+
+    expect(
+      (await request('POST', '/v1/teams/dispatches/dsp_ghost/verdict', { status: 'passed' })).status
+    ).toBe(404)
+    expect(
+      (await request('POST', '/v1/teams/dispatches/dsp_1/verdict', { status: 'rejected' })).status
+    ).toBe(409)
+    for (const invalid of [{}, { status: 'pending' }, { status: 'passed', extra: 1 }]) {
+      expect(
+        (await request('POST', '/v1/teams/dispatches/dsp_1/verdict', invalid)).status,
+        JSON.stringify(invalid)
+      ).toBe(400)
+    }
+    expect(
+      (await request('POST', '/v1/teams/dispatches/dsp_1/verdict', { status: 'passed' }, false))
+        .status
+    ).toBe(401)
   })
 })

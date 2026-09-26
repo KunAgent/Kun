@@ -1,6 +1,7 @@
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { ERRORS } from './runtime-error.js'
 import {
+  DispatchVerdictRequestSchema,
   QuestionAnswerRequestSchema,
   WorkerDispatchRequestSchema,
   WorkerNoticeHoldRequestSchema
@@ -140,4 +141,25 @@ export async function workerDispatchResponse(
     return ERRORS.validation('invalid worker dispatch', parsed.error.issues)
   }
   return controlResultResponse(await manager.teamControls.guiDispatch(workerId, parsed.data))
+}
+
+/**
+ * POST /v1/teams/dispatches/:dispatchId/verdict — user records a quality
+ * verdict from the review panel (10 §4.3); `decidedBy: 'user'` overrides a
+ * manager verdict while both stay on record.
+ */
+export async function dispatchVerdictResponse(
+  manager: ManagerRuntime,
+  dispatchId: string,
+  request: Request
+): Promise<JsonResponse> {
+  const body = await readJsonBody(request)
+  if (!body.ok) return body.response
+  const parsed = DispatchVerdictRequestSchema.safeParse(body.value)
+  if (!parsed.success) {
+    return ERRORS.validation('invalid dispatch verdict', parsed.error.issues)
+  }
+  return controlResultResponse(
+    await manager.verdicts.setVerdict({ dispatchId, ...parsed.data, decidedBy: 'user' })
+  )
 }

@@ -19,6 +19,8 @@ import {
   workerSend,
   workerStop
 } from '../../ade/tools/worker-controls.js'
+import { workerVerdict } from '../../ade/tools/worker-verdict.js'
+import { reviewRequest } from '../../ade/tools/review-request.js'
 
 export type ManagerToolProviderDeps = {
   manager: ManagerRuntime
@@ -410,6 +412,69 @@ export function createManagerToolProvider(
         execute: async (args, context) => {
           const ctx = await managerCtx(context)
           return { output: await dispatchCancel(deps.manager, ctx, args) }
+        }
+      }),
+      LocalToolHost.defineTool({
+        name: 'worker_verdict',
+        description:
+          'Record a quality verdict for a dispatch (acceptance stays separate ' +
+          'from execution state). A later decision supersedes the earlier one ' +
+          'and both stay on record; a user verdict can only be changed by the ' +
+          'user. Status: passed / needs_changes / rejected / waived.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            dispatchId: { type: 'string', maxLength: 256 },
+            status: {
+              type: 'string',
+              enum: ['passed', 'needs_changes', 'rejected', 'waived']
+            },
+            notes: { type: 'string', maxLength: 4_000 }
+          },
+          required: ['dispatchId', 'status'],
+          additionalProperties: false
+        },
+        toolKind: 'tool_call',
+        policy: 'auto',
+        shouldAdvertise: advertise,
+        execute: async (args, context) => {
+          const ctx = await managerCtx(context)
+          return { output: await workerVerdict(deps.manager, ctx, args) }
+        }
+      }),
+      LocalToolHost.defineTool({
+        name: 'review_request',
+        description:
+          'Ask a different harness to cross-review a worker\'s completed ' +
+          'dispatch. The reviewer is an ephemeral read-only worker in the ' +
+          'reviewed worker\'s task workspace; its findings merge into the ' +
+          'dispatch verdict.checks and you (or the user) make the final ' +
+          'verdict. Refuses when no alternative harness exists. Relay ' +
+          '`userReport` to the user verbatim.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            workerId: { type: 'string', maxLength: 256 },
+            dispatchId: { type: 'string', maxLength: 256 },
+            reviewer: {
+              type: 'object',
+              properties: {
+                harnessId: { type: 'string', maxLength: 64 },
+                model: { type: 'string', maxLength: 512 }
+              },
+              additionalProperties: false
+            },
+            focus: { type: 'string', maxLength: 4_000 }
+          },
+          required: ['workerId'],
+          additionalProperties: false
+        },
+        toolKind: 'tool_call',
+        policy: 'auto',
+        shouldAdvertise: advertise,
+        execute: async (args, context) => {
+          const ctx = await managerCtx(context)
+          return { output: await reviewRequest(deps.manager, ctx, args, context) }
         }
       }),
       LocalToolHost.defineTool({

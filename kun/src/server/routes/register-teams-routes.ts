@@ -5,6 +5,7 @@ import { ERRORS } from './runtime-error.js'
 import type { JsonResponse } from '../response.js'
 import type { ManagerRuntime } from '../../ade/manager-runtime.js'
 import {
+  dispatchVerdictResponse,
   noticeHoldResponse,
   pendingNoticesResponse,
   questionAnswerResponse,
@@ -65,5 +66,10 @@ export function registerTeamsRoutes(router: Router, runtime: ServerRuntime): voi
     const resolved = manager(request)
     if (denied(resolved)) return resolved
     return workerDispatchResponse(resolved, ctx.params.workerId, request)
+  })
+  router.add('POST', '/v1/teams/dispatches/:dispatchId/verdict', async (request, ctx) => {
+    const resolved = manager(request)
+    if (denied(resolved)) return resolved
+    return dispatchVerdictResponse(resolved, ctx.params.dispatchId, request)
   })
 }

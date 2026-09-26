@@ -8,6 +8,7 @@ import type {
 } from '../contracts/ade.js'
 import type { ManagerRuntimeDeps } from './manager-runtime.js'
 import type { TeamControls } from './team-controls.js'
+import type { QualityVerdicts } from './quality-verdict.js'
 
 /**
  * ADE worker lifecycle events (09 §5 turnId backfill, §6.1 terminal hook,
@@ -19,7 +20,8 @@ import type { TeamControls } from './team-controls.js'
 export class ManagerWorkerLifecycle {
   constructor(
     private readonly deps: ManagerRuntimeDeps,
-    private readonly teamControls: Pick<TeamControls, 'takeOverWorker'>
+    private readonly teamControls: Pick<TeamControls, 'takeOverWorker'>,
+    private readonly verdicts: Pick<QualityVerdicts, 'mergeReviewerFindings'>
   ) {}
 
   /**
@@ -161,7 +163,9 @@ export class ManagerWorkerLifecycle {
     ) {
       return
     }
-    const capture = worker.taskWorkspaceId && this.deps.taskWorkspaces
+    // Reviewer workers share the reviewed workspace read-only (10 §5): a
+    // capture here would only re-read the reviewed worker's diff.
+    const capture = worker.taskWorkspaceId && !worker.reviewOf && this.deps.taskWorkspaces
       ? await this.deps.taskWorkspaces
           .captureForDispatch(worker.taskWorkspaceId)
           .then((result) => result.stat)
@@ -192,6 +196,18 @@ export class ManagerWorkerLifecycle {
       { expect: ['accepted'] }
     )
     if (!updated) return
+    // A reviewer's submit_result merges into the reviewed dispatch's
+    // verdict.checks (source 'reviewer'); status/decision stay untouched.
+    if (worker.reviewOf && updated.workerReport) {
+      await this.verdicts.mergeReviewerFindings({
+        teamId: team.teamId,
+        dispatchId: worker.reviewOf,
+        reviewerWorkerId: worker.workerId,
+        report: updated.workerReport
+      }).catch((error) => {
+        console.warn(`[kun] ade reviewer merge failed for ${worker.reviewOf}:`, error)
+      })
+    }
     await this.deps.notices.enqueue(this.noticeForDispatch(updated, worker)).catch((error) => {
       console.warn(`[kun] ade worker notice enqueue failed for ${updated.dispatchId}:`, error)
     })
@@ -245,11 +261,12 @@ export class ManagerWorkerLifecycle {
       teamId: dispatch.teamId,
       workerId: dispatch.workerId,
       kind: dispatch.state === 'completed'
-        ? 'dispatch_completed'
+        ? worker.reviewOf ? 'review_completed' : 'dispatch_completed'
         : dispatch.state === 'cancelled'
           ? 'dispatch_cancelled'
           : 'dispatch_failed',
-      dispatchId: dispatch.dispatchId,
+      // For reviewers the actionable ref is the dispatch under review.
+      dispatchId: worker.reviewOf ?? dispatch.dispatchId,
       title: dispatch.title,
       harnessLabel: this.harnessLabel(worker),
       ...(detail ? { detail: detail.slice(0, 4_000) } : {}),

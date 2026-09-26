@@ -31,7 +31,10 @@ import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js
 import type { WorkerCallbackService } from '../services/worker-callback-service.js'
 import { ManagerControls } from './manager-controls.js'
 import { TeamControls } from './team-controls.js'
+import { QualityVerdicts } from './quality-verdict.js'
+import { ReviewRequests } from './review-request.js'
 import {
+  countRecentWorkerFailures,
   NoEligibleWorkerError,
   selectWorkerRoute,
   type WorkerSelectorDeps
@@ -195,11 +198,16 @@ export class ManagerRuntime {
   /** Control operations (09 §4.1/§9) — worker/dispatch tools + team routes. */
   readonly controls: ManagerControls
   readonly teamControls: TeamControls
+  /** Quality verdicts + cross-review (10 §4/§5). */
+  readonly verdicts: QualityVerdicts
+  readonly reviews: ReviewRequests
 
   constructor(private readonly deps: ManagerRuntimeDeps) {
     this.controls = new ManagerControls(deps)
     this.teamControls = new TeamControls(deps, this.controls)
-    this.lifecycle = new ManagerWorkerLifecycle(deps, this.teamControls)
+    this.verdicts = new QualityVerdicts(deps)
+    this.reviews = new ReviewRequests(deps)
+    this.lifecycle = new ManagerWorkerLifecycle(deps, this.teamControls, this.verdicts)
   }
 
   private reportLanguage(): 'en' | 'zh' {
@@ -266,19 +274,11 @@ export class ManagerRuntime {
    * `recentFailurePenalty`). Feeds `worker_selector` via `selector` deps.
    */
   private async recentFailures(teamId: string, harnessId: HarnessId): Promise<number> {
-    const team = await this.deps.teams.get(teamId)
-    if (!team) return 0
-    const harnessByWorker = new Map(
-      team.workers.map((worker) => [worker.workerId, worker.route.harnessId])
+    return countRecentWorkerFailures(
+      { teams: this.deps.teams, dispatches: this.deps.dispatches },
+      teamId,
+      harnessId
     )
-    const cutoff = Date.now() - 60 * 60_000
-    const dispatches = await this.deps.dispatches.list(teamId).catch(() => [] as DispatchRecord[])
-    return dispatches.filter(
-      (dispatch) =>
-        dispatch.state === 'failed' &&
-        harnessByWorker.get(dispatch.workerId) === harnessId &&
-        Date.parse(dispatch.updatedAt) >= cutoff
-    ).length
   }
 
   /**
@@ -450,6 +450,7 @@ export class ManagerRuntime {
       ...(input.context ? { context: input.context } : {}),
       mode: input.mode ?? 'queue',
       state: 'pending',
+      verdict: { status: 'pending', checks: [] },
       createdAt: this.deps.nowIso(),
       updatedAt: this.deps.nowIso()
     }

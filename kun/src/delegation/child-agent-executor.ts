@@ -4,7 +4,8 @@ import { InMemorySessionStore } from '../adapters/in-memory-session-store.js'
 import { InMemoryThreadStore } from '../adapters/in-memory-thread-store.js'
 import { InMemoryUserInputGate } from '../adapters/in-memory-user-input-gate.js'
 import { setSystemPrompt, type ImmutablePrefix } from '../cache/immutable-prefix.js'
-import { SUBAGENT_READ_ONLY_TOOL_NAMES, type ModelCapabilityMetadata } from '../contracts/capabilities.js'
+import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
+import { readOnlyToolCeiling } from '../contracts/ade.js'
 import { ChildRunFailureSchema, type ChildRunFailure } from '../contracts/subagent-retry.js'
 import {
   DEFAULT_APPROVAL_REVIEWER,
@@ -217,7 +218,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     // capabilities are added only after that narrowing and remain subject to
     // the parent snapshot plus explicit tool/provider deny-lists.
     const ordinaryAllowedToolNames = intersectDefinedLists(
-      input.toolPolicy === 'readOnly' ? SUBAGENT_READ_ONLY_TOOL_NAMES : undefined,
+      input.toolPolicy === 'readOnly' ? readOnlyToolCeiling(input.executionUnit) : undefined,
       input.fastContext ? ['grep', 'glob', 'read'] : undefined,
       input.allowedTools,
       input.security?.allowedToolNames

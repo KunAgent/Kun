@@ -153,6 +153,8 @@ export class ManagerControls {
       ...(input.context ? { context: input.context } : {}),
       mode: input.mode ?? 'queue',
       state: 'pending',
+      // 10 §4.1: execution state and acceptance stay independent tracks.
+      verdict: { status: 'pending', checks: [] },
       createdAt: now,
       updatedAt: now
     }
