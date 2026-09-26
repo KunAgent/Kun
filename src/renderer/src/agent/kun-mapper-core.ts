@@ -94,6 +94,7 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     ...(thread.systemPrompt ? { systemPrompt: thread.systemPrompt } : {}),
     relation: thread.relation,
     parentThreadId: thread.parentThreadId,
+    ...(thread.executionUnit ? { executionUnit: { ...thread.executionUnit } } : {}),
     ...(thread.roomContext ? { roomContext: thread.roomContext } : {}),
     planBuildRunId: thread.planBuildRunId,
     forkedFromThreadId: thread.forkedFromThreadId,

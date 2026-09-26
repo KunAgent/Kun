@@ -167,8 +167,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       'Graph mode',
       'PPT agent',
       'Codex history branches',
-      'Project board',
-      'adeSettings.labTitle'
+      'Project board', 'adeSettings.labTitle'
     ])
     expect(laboratoryTabs.map((tab) => tab.props['aria-selected']))
       .toEqual([true, false, false, false, false, false, false, false, false, false])
@@ -181,8 +180,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       'laboratory-settings-panel-graph',
       'laboratory-settings-panel-ppt',
       'laboratory-settings-panel-codexReferenceBranches',
-      'laboratory-settings-panel-projectBoard',
-      'laboratory-settings-panel-ade'
+      'laboratory-settings-panel-projectBoard', 'laboratory-settings-panel-ade'
     ])
     expect(laboratoryTabs.every((tab) => tab.props.className.includes('min-w-max'))).toBe(true)
     expect(laboratoryTabs.flatMap((tab) => tab.findAllByType('span'))

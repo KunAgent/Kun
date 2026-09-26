@@ -68,6 +68,17 @@ export type CoreThreadSummaryJson = {
   systemPrompt?: string
   relation?: 'primary' | 'fork' | 'side'
   parentThreadId?: string
+  /** Host-written ADE worker binding (09 §3.1); absent for normal threads. */
+  executionUnit?: {
+    kind: 'worker'
+    teamId: string
+    managerThreadId: string
+    label: string
+    role?: string
+    lifecycle: 'persistent' | 'ephemeral'
+    taskWorkspaceId?: string
+    control: 'manager' | 'user'
+  }
   planBuildRunId?: string
   forkedFromThreadId?: string
   forkedFromTitle?: string
