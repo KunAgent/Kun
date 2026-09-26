@@ -46,7 +46,12 @@ import { FileTeamStore } from '../ade/team-store.js'
 import { handleAdeThreadDeleted } from '../ade/team-lifecycle.js'
 import { DispatchDeliverer } from '../ade/dispatch-deliverer.js'
 import { WorkerNoticeCoordinator } from '../ade/worker-notice-coordinator.js'
-import { createManagerRuntime } from './runtime-composition-manager.js'
+import {
+  createCapabilitiesForRoute,
+  createManagerRuntime
+} from './runtime-composition-manager.js'
+import { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
+import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
 import { createManagerToolProvider } from '../adapters/tool/manager-tool-provider.js'
 import { FileDelegationStore } from './runtime-factory-dependencies.js'
 import { join } from 'node:path'
@@ -232,6 +237,7 @@ export async function createRuntimeAgentComposition(
       harnessGatewayBaseUrl: () => services.harnesses.gatewayEndpoint.baseUrl,
       roles: () => core.activeOptions.roles,
       harnessCatalog: services.harnesses.catalog,
+      graphHarnessSummary,
       resolveDefaultProviderId: async () => (await modelConnections.snapshot()).defaultProviderId,
       ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
     }
@@ -287,6 +293,7 @@ export async function createRuntimeAgentComposition(
       userInputGate,
       skillRuntime: input.skillRuntime,
       instructionRuntime: input.instructionRuntime,
+      graphHarnessSummary,
       nowIso,
       ...(input.memoryStore ? { memoryStore: input.memoryStore } : {}),
       ...(input.memoryFeedback ? { memoryFeedback: input.memoryFeedback } : {}),
@@ -361,6 +368,13 @@ export async function createRuntimeAgentComposition(
       onManagerDeleted: (id) => workerNoticeCoordinator.clearManager(id)
     })
   }
+  // Graph planning harness menu (P1-25): shared by the native loop and the
+  // delegated runtimes so the planner sees the same routing menu.
+  const graphHarnessSummary = createGraphHarnessSummary({
+    catalog: services.harnesses.catalog,
+    detector: services.harnesses.detector,
+    quota: createQuotaSnapshot({ list: () => model.providerQuotaService.list() })
+  })
   const harnessRuntimeMap = new HarnessRuntimeMap(
     buildHarnessRuntimes(
       buildMainDelegatedRuntime({
@@ -510,6 +524,7 @@ export async function createRuntimeAgentComposition(
     toolHost,
     sdkRuntime,
     harnessRouter,
+    graphHarnessSummary,
     usage: usageService,
     events,
     turns: turnService,
@@ -568,6 +583,19 @@ export async function createRuntimeAgentComposition(
 	    }
 	    return trackRuntimeRun(reviewService.runReview(input))
 	  }
+	  // Plan-phase admission (P1-25): define_plan validates each task's
+	  // harnessId through the same catalog/detector/capability gates the
+	  // HarnessRouter applies at dispatch time.
+	  graphRuntime.harnessAdmission = {
+	    catalog: services.harnesses.catalog,
+	    detector: services.harnesses.detector,
+	    capabilitiesForRoute: createCapabilitiesForRoute(
+	      services.harnesses.catalog,
+	      harnessRuntimeMap
+	    ),
+	    allowUnattendedFullAccess: () =>
+	      core.activeOptions.ade?.allowUnattendedFullAccess === true
+	  }
 	  await graphRuntime.start(createGraphRuntimeStartOptions({
 	    delegation: () => delegationRuntime,
 	    threads: threadStore,
@@ -592,7 +620,8 @@ export async function createRuntimeAgentComposition(
 	        core.activeOptions.capabilities?.web.searchEnabled === true
 	    }),
 	    tools: () => registryComposition.registry.listTools(),
-	    skillIds: () => services.skillRuntime.diagnostics().skills.map((skill) => skill.id)
+	    skillIds: () => services.skillRuntime.diagnostics().skills.map((skill) => skill.id),
+	    activity: core.activityStore
 	  }))
 	  await resumeInterruptedGraphPlanning({
 	    graphRuntime,

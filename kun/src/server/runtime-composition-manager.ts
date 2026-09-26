@@ -9,6 +9,7 @@ import { ManagerRuntime } from '../ade/manager-runtime.js'
 import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
 import { costTierFromPricing } from '../ade/worker-selector.js'
 import { effectiveCapabilitiesForRoute } from '../harness/effective-capabilities.js'
+import type { HarnessRoute } from '../contracts/harness.js'
 import type { HarnessRuntimeMap } from '../harness/harness-router.js'
 import type { DelegationRuntime } from '../delegation/delegation-runtime.js'
 import type { createRuntimeServices } from './runtime-composition-services.js'
@@ -21,6 +22,22 @@ export function noHarnessCapabilities(): HarnessCapabilities {
       HARNESS_CAPABILITY_KEYS.map((key) => [key, unsupported('not-implemented')])
     ) as HarnessCapabilityStatuses,
     facts: { sandbox: 'none', usageReporting: 'none', compactionOwner: 'none' }
+  }
+}
+
+export function createCapabilitiesForRoute(
+  catalog: Pick<ManagerRuntimeDeps['catalog'], 'get'>,
+  harnessRuntimeMap: HarnessRuntimeMap
+): (route: HarnessRoute) => Promise<HarnessCapabilities> {
+  return (route) => {
+    const def = catalog.get(route.harnessId)
+    return Promise.resolve(def
+      ? effectiveCapabilitiesForRoute(
+          def,
+          harnessRuntimeMap.get()[def.transport],
+          route.providerId
+        )
+      : noHarnessCapabilities())
   }
 }
 
@@ -61,16 +78,10 @@ export function createManagerRuntime(input: {
     delegation: delegationRuntime,
     catalog: services.harnesses.catalog,
     detector: services.harnesses.detector,
-    capabilitiesForRoute: (route) => {
-      const def = services.harnesses.catalog.get(route.harnessId)
-      return Promise.resolve(def
-        ? effectiveCapabilitiesForRoute(
-            def,
-            harnessRuntimeMap.get()[def.transport],
-            route.providerId
-          )
-        : noHarnessCapabilities())
-    },
+    capabilitiesForRoute: createCapabilitiesForRoute(
+      services.harnesses.catalog,
+      harnessRuntimeMap
+    ),
     language: () => Intl.DateTimeFormat().resolvedOptions().locale,
     allowUnattendedFullAccess: () => core.activeOptions.ade?.allowUnattendedFullAccess === true,
     teamLimits: () => core.activeOptions.ade?.limits,

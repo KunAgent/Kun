@@ -224,6 +224,11 @@ export interface AgentSdkRuntimeFactoryDeps {
     import('../../harness/harness-catalog.js').HarnessCatalog,
     'get'
   >
+  /**
+   * Dynamic Graph planning harness summary (P1-25): injected into
+   * `contextInstructions` while the turn is still in the planning phase.
+   */
+  graphHarnessSummary?: () => Promise<string | undefined>
   resolveDefaultProviderId?: () => Promise<string | undefined>
 }
 

@@ -182,6 +182,21 @@ export function kunContextBlock(
   return { kind, authority, content }
 }
 
+/**
+ * P1-25: while a Graph turn is still planning, the dynamic-context block
+ * listing the ready worker harnesses. Empty content is filtered downstream.
+ */
+export async function graphHarnessContextBlock(
+  orchestration: Turn['orchestration'],
+  planCommitted: boolean,
+  summary?: () => Promise<string | undefined>
+): Promise<KunTurnContextBlock> {
+  const content = orchestration === 'graph' && !planCommitted && summary
+    ? (await summary().catch(() => undefined)) ?? ''
+    : ''
+  return kunContextBlock('graph-harnesses', 'runtime', content)
+}
+
 export function knowledgeBaseContextBlocks(
   thread: Pick<ThreadRecord, 'knowledgeBases'> | undefined
 ): KunTurnContextBlock[] {

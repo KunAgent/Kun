@@ -73,6 +73,8 @@ export type ModelStepServiceDeps = {
     sentInputTokens: number
   }) => Promise<void>
   rememberFailure: (turnId: string, failure: TurnExecutionFailure) => void
+  /** Dynamic Graph planning harness summary (P1-25); per-turn, never prefix. */
+  graphHarnessSummary?: () => Promise<string | undefined>
   awaitWorkspaceCheckpoint?: (
     checkpointRequestId: string,
     signal: AbortSignal

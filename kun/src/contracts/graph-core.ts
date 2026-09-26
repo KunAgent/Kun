@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ModelReasoningEffort, SubagentToolPolicy } from './capabilities.js'
+import { HarnessCredentialModeSchema, HarnessIdSchema } from './harness.js'
 import {
   ApprovalPolicySchema,
   ApprovalReviewerSchema,
@@ -22,20 +23,22 @@ import {
   GraphRunStatusSchema
 } from './graph-status.js'
 import {
+  GraphAttemptIdSchema,
   GraphBoundedSummarySchema,
+  GraphCommandIdSchema,
+  GraphEdgeIdSchema,
   GraphIdentifierSchema,
   GraphIdempotencyKeySchema,
+  GraphMessageIdSchema,
+  GraphNodeIdSchema,
+  GraphProfileIdSchema,
+  GraphReviewIdSchema,
+  GraphRunIdSchema,
   GraphTimestampSchema,
   GraphToolProviderIdSchema
 } from './graph-contract-primitives.js'
 import { GraphArtifactReferenceV1Schema, GraphCheckResultV1Schema, GraphVerifiedCheckResultV1Schema, type GraphArtifactReferenceV1, type GraphCheckResultV1, type GraphVerifiedCheckResultV1 } from './graph-contract-artifacts.js'
-export {
-  GraphBoundedSummarySchema,
-  GraphIdentifierSchema,
-  GraphIdempotencyKeySchema,
-  GraphTimestampSchema,
-  GraphToolProviderIdSchema
-} from './graph-contract-primitives.js'
+export * from './graph-contract-primitives.js'
 export * from './graph-contract-artifacts.js'
 export {
   GraphBudgetLedgerV1Schema,
@@ -55,23 +58,6 @@ const Identifier = GraphIdentifierSchema
 const IdempotencyKey = GraphIdempotencyKeySchema
 const Timestamp = GraphTimestampSchema
 const BoundedSummary = GraphBoundedSummarySchema
-
-export const GraphRunIdSchema = Identifier
-export type GraphRunId = z.infer<typeof GraphRunIdSchema>
-export const GraphNodeIdSchema = Identifier
-export type GraphNodeId = z.infer<typeof GraphNodeIdSchema>
-export const GraphEdgeIdSchema = Identifier
-export type GraphEdgeId = z.infer<typeof GraphEdgeIdSchema>
-export const GraphAttemptIdSchema = Identifier
-export type GraphAttemptId = z.infer<typeof GraphAttemptIdSchema>
-export const GraphReviewIdSchema = Identifier
-export type GraphReviewId = z.infer<typeof GraphReviewIdSchema>
-export const GraphMessageIdSchema = Identifier
-export type GraphMessageId = z.infer<typeof GraphMessageIdSchema>
-export const GraphCommandIdSchema = Identifier
-export type GraphCommandId = z.infer<typeof GraphCommandIdSchema>
-export const GraphProfileIdSchema = Identifier
-export type GraphProfileId = z.infer<typeof GraphProfileIdSchema>
 
 export const GraphWorkerResultV1Schema = z.object({
   version: z.literal(GRAPH_CONTRACT_VERSION),
@@ -191,8 +177,7 @@ const GraphLoopGateV1CompatibilitySchema = z.object({
 }).strict()
 export const GraphLoopGateV1Schema = GraphLoopGateV1CompatibilitySchema.transform((gate) => {
   const { maxTokenBudget, ...activeGate } = gate
-  void maxTokenBudget
-  return activeGate
+  return (void maxTokenBudget, activeGate)
 })
 export type GraphLoopGateV1 = z.infer<typeof GraphLoopGateV1Schema>
 
@@ -209,6 +194,8 @@ export const GraphAssignmentReferenceV1Schema = z.discriminatedUnion('kind', [
     systemPrompt: BoundedText,
     model: z.string().trim().min(1).max(256).optional(),
     providerId: z.string().trim().min(1).max(128).optional(),
+    harnessId: HarnessIdSchema.optional(),
+    credentialMode: HarnessCredentialModeSchema.optional(),
     reasoningEffort: ModelReasoningEffort.optional(),
     toolPolicy: SubagentToolPolicy.default('readOnly'),
     allowedTools: z.array(Identifier).max(256).optional(),
@@ -234,6 +221,8 @@ const GraphAssignmentSnapshotV1CompatibilitySchema = z.object({
   model: z.string().trim().min(1).max(256),
   providerId: z.string().trim().min(1).max(128),
   accountId: z.string().trim().min(1).max(256).optional(),
+  harnessId: HarnessIdSchema.optional(),
+  credentialMode: HarnessCredentialModeSchema.optional(),
   allowedModelProviderIds: z.array(Identifier).min(1).max(128),
   allowedModels: z.array(z.string().trim().min(1).max(256)).min(1).max(256),
   allowedProviderIds: z.array(GraphToolProviderIdSchema).max(128),
@@ -259,8 +248,7 @@ const GraphAssignmentSnapshotV1CompatibilitySchema = z.object({
 export const GraphAssignmentSnapshotV1Schema =
   GraphAssignmentSnapshotV1CompatibilitySchema.transform((assignment) => {
     const { maxTokens, ...activeAssignment } = assignment
-    void maxTokens
-    return activeAssignment
+    return (void maxTokens, activeAssignment)
   })
 export type GraphAssignmentSnapshotV1 = z.infer<typeof GraphAssignmentSnapshotV1Schema>
 
