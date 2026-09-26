@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactElement } from 'react'
+import { useCallback, useEffect, useRef, type ReactElement } from 'react'
 import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { parsePatch } from 'diff'
@@ -6,12 +6,16 @@ import { MergeView } from '@codemirror/merge'
 import { EditorView, lineNumbers } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import type { TaskWorkspaceDiffFile } from '@shared/task-workspace'
+import type { ReviewComment, ReviewCommentSide, ReviewSendRecord } from '@shared/review-comment'
 import {
+  createReviewDraft,
   loadWorkspaceDiffFile,
   REVIEW_LARGE_FILE_LINES,
   toggleReviewFileExpanded,
   useReviewStore
 } from '../../store/review-store'
+import { ReviewCommentGutter } from './ReviewCommentGutter'
+import { ReviewCommentThread, ReviewDetachedComments } from './ReviewCommentThread'
 
 const readOnlyExtensions = [
   EditorView.editable.of(false),
@@ -58,40 +62,128 @@ function unifiedLines(patch: string): { hunks: { header: string; lines: UnifiedL
   return { hunks }
 }
 
-function UnifiedPatch({ patch }: { patch: string }): ReactElement {
+type LineAnchor = {
+  side: ReviewCommentSide
+  line: number
+  lineText: string
+  before: string[]
+  after: string[]
+}
+
+/** Row match keys: ctx lines anchor comments on either side (11 §4.1). */
+function rowKeys(line: UnifiedLine): { side: ReviewCommentSide; line: number }[] {
+  if (line.tone === 'del' && line.oldNo !== null) return [{ side: 'old', line: line.oldNo }]
+  if (line.tone === 'add' && line.newNo !== null) return [{ side: 'new', line: line.newNo }]
+  return [
+    ...(line.newNo !== null ? [{ side: 'new' as const, line: line.newNo }] : []),
+    ...(line.oldNo !== null ? [{ side: 'old' as const, line: line.oldNo }] : [])
+  ]
+}
+
+function UnifiedPatch({
+  patch,
+  workspaceId,
+  comments,
+  requests,
+  onAddComment
+}: {
+  patch: string
+  workspaceId: string
+  comments: ReviewComment[]
+  requests: ReviewSendRecord[]
+  onAddComment: (anchor: LineAnchor) => void
+}): ReactElement {
   const { hunks } = unifiedLines(patch)
+  const commentable = (line: UnifiedLine): boolean => line.oldNo !== null || line.newNo !== null
+  const anchorFor = (lines: UnifiedLine[], i: number): LineAnchor | null => {
+    const line = lines[i]
+    const side: ReviewCommentSide = line.tone === 'del' ? 'old' : 'new'
+    const lineNo = side === 'old' ? line.oldNo : line.newNo
+    if (lineNo === null) return null
+    return {
+      side,
+      line: lineNo,
+      lineText: line.text,
+      before: lines.slice(Math.max(0, i - 3), i).map((l) => l.text),
+      after: lines.slice(i + 1, i + 4).map((l) => l.text)
+    }
+  }
+  const commentsFor = (line: UnifiedLine): ReviewComment[] => {
+    const keys = rowKeys(line)
+    return comments.filter((c) =>
+      !c.outdated && keys.some((k) => c.side === k.side && c.line === k.line))
+  }
   return (
     <div className="overflow-x-auto font-mono text-[12px] leading-5">
       {hunks.map((hunk, index) => (
         <div key={index}>
           <div className="px-3 py-1 text-ds-faint bg-ds-hover/40 select-none">{hunk.header}</div>
-          {hunk.lines.map((line, i) => (
-            <div
-              key={i}
-              className={`flex whitespace-pre ${
-                line.tone === 'add'
-                  ? 'bg-emerald-500/10'
-                  : line.tone === 'del'
-                    ? 'bg-red-500/10'
-                    : ''
-              }`}
-            >
-              <span className="w-10 shrink-0 select-none pr-2 text-right text-ds-faint">
-                {line.oldNo ?? ''}
-              </span>
-              <span className="w-10 shrink-0 select-none pr-2 text-right text-ds-faint border-r border-ds-border-muted">
-                {line.newNo ?? ''}
-              </span>
-              <span className="pl-2 pr-3 min-w-0">
-                {line.tone === 'add' ? '+ ' : line.tone === 'del' ? '- ' : '  '}
-                {line.text}
-              </span>
-            </div>
-          ))}
+          {hunk.lines.map((line, i) => {
+            const anchored = commentsFor(line)
+            const anchor = anchorFor(hunk.lines, i)
+            return (
+              <div key={i}>
+                <div
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === 'c' && !event.metaKey && !event.ctrlKey
+                      && event.target === event.currentTarget && anchor
+                    ) {
+                      event.preventDefault()
+                      onAddComment(anchor)
+                    }
+                  }}
+                  className={`group flex whitespace-pre outline-none focus:bg-sky-500/5 ${
+                    line.tone === 'add'
+                      ? 'bg-emerald-500/10'
+                      : line.tone === 'del'
+                        ? 'bg-red-500/10'
+                        : ''
+                  }`}
+                >
+                  {commentable(line) ? (
+                    <ReviewCommentGutter
+                      commentCount={anchored.length}
+                      onAdd={() => anchor && onAddComment(anchor)}
+                    />
+                  ) : <span className="w-4 shrink-0" />}
+                  <span className="w-10 shrink-0 select-none pr-2 text-right text-ds-faint">
+                    {line.oldNo ?? ''}
+                  </span>
+                  <span className="w-10 shrink-0 select-none pr-2 text-right text-ds-faint border-r border-ds-border-muted">
+                    {line.newNo ?? ''}
+                  </span>
+                  <span className="pl-2 pr-3 min-w-0">
+                    {line.tone === 'add' ? '+ ' : line.tone === 'del' ? '- ' : '  '}
+                    {line.text}
+                  </span>
+                </div>
+                {anchored.length ? (
+                  <ReviewCommentThread
+                    workspaceId={workspaceId}
+                    comments={anchored}
+                    requests={requests}
+                  />
+                ) : null}
+              </div>
+            )
+          })}
         </div>
       ))}
     </div>
   )
+}
+
+/** Every side:line the patch renders — comments beyond it detach (11 §4.3). */
+function patchAnchorKeys(patch: string): Set<string> {
+  const keys = new Set<string>()
+  for (const hunk of unifiedLines(patch).hunks) {
+    for (const line of hunk.lines) {
+      for (const key of rowKeys(line)) keys.add(`${key.side}:${key.line}`)
+    }
+  }
+  return keys
 }
 
 const STATUS_TONE: Record<TaskWorkspaceDiffFile['status'], string> = {
@@ -115,6 +207,25 @@ export function ReviewDiffBlock({
   const entry = review?.details[file.path]
   const viewMode = review?.viewMode ?? 'unified'
   const expanded = review?.expandedPaths[file.path] ?? (!file.tooLarge && changedLines <= REVIEW_LARGE_FILE_LINES)
+  const fileComments = (review?.comments ?? []).filter((c) => c.path === file.path)
+  const detail = entry?.detail
+  const visibleKeys = detail?.patch ? patchAnchorKeys(detail.patch) : null
+  const anchoredComments = fileComments.filter((c) =>
+    !c.outdated && (!visibleKeys || visibleKeys.has(`${c.side}:${c.line}`)))
+  const detachedComments = fileComments.filter((c) =>
+    c.outdated || (visibleKeys !== null && !visibleKeys.has(`${c.side}:${c.line}`)))
+  const requests = review?.requests ?? []
+  const onAddComment = useCallback(
+    (anchor: LineAnchor) => {
+      createReviewDraft(workspaceId, {
+        path: file.path,
+        side: anchor.side,
+        line: anchor.line,
+        anchor: { lineText: anchor.lineText, before: anchor.before, after: anchor.after }
+      })
+    },
+    [workspaceId, file.path]
+  )
 
   // Lazy: fetch the file payload only once the block scrolls into view (11 §3).
   useEffect(() => {
@@ -134,7 +245,6 @@ export function ReviewDiffBlock({
     return () => observer.disconnect()
   }, [workspaceId, file.path, expanded, entry?.detail, entry?.loading])
 
-  const detail = entry?.detail
   return (
     <div
       ref={wrapRef}
@@ -175,9 +285,32 @@ export function ReviewDiffBlock({
           ) : entry?.error ? (
             <div className="px-6 py-4 text-[12px] text-red-600 dark:text-red-400">{entry.error}</div>
           ) : viewMode === 'split' ? (
-            <ReviewSplitMerge oldText={detail.oldText ?? ''} newText={detail.newText ?? ''} />
+            <>
+              <ReviewSplitMerge oldText={detail.oldText ?? ''} newText={detail.newText ?? ''} />
+              {/* Split view has no per-line gutter; threads list per file. */}
+              {fileComments.length ? (
+                <ReviewCommentThread
+                  workspaceId={workspaceId}
+                  comments={fileComments}
+                  requests={requests}
+                />
+              ) : null}
+            </>
           ) : detail.patch ? (
-            <UnifiedPatch patch={detail.patch} />
+            <>
+              <UnifiedPatch
+                patch={detail.patch}
+                workspaceId={workspaceId}
+                comments={anchoredComments}
+                requests={requests}
+                onAddComment={onAddComment}
+              />
+              <ReviewDetachedComments
+                workspaceId={workspaceId}
+                comments={detachedComments}
+                requests={requests}
+              />
+            </>
           ) : (
             <div className="px-6 py-4 text-[12px] text-ds-muted">{t('reviewEmpty')}</div>
           )}

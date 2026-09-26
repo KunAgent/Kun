@@ -49,9 +49,12 @@ import {
   type ManagerAuthority,
   type PermissionClamp
 } from './permission-clamp.js'
+import { DEFAULT_APPROVAL_POLICY } from '../contracts/policy.js'
 import { requestUserOnlyEscalation } from './escalation-approval.js'
 import type { EscalationApprovalContext } from './escalation-approval.js'
 import { childSecurity } from '../adapters/tool/delegation-tool-context.js'
+import { guiCreateWorker } from './manager-gui-worker.js'
+import { buildManagerToolContext, type ManagerToolContextInput } from './manager-tool-context.js'
 import { reportWorkerCreated, reportWorkerCreateBatch, reportLanguage } from './user-report.js'
 import { ManagerWorkerLifecycle } from './manager-worker-lifecycle.js'
 
@@ -68,63 +71,20 @@ export type ManagerToolContext = {
   awaitApproval: EscalationApprovalContext['awaitApproval']
 }
 
-export const WorkerCreateInputSchema = z
-  .object({
-    label: z.string().min(1).max(64),
-    role: z.string().max(64).optional(),
-    task: z.string().min(1).max(32_000),
-    context: z
-      .object({
-        files: z.array(z.string().min(1)).max(64).optional(),
-        links: z.array(z.string().min(1)).max(32).optional(),
-        constraints: z.array(z.string().min(1)).max(32).optional()
-      })
-      .strict()
-      .optional(),
-    agent: z
-      .object({
-        harnessId: z.string().min(1).max(64).optional(),
-        model: z.string().min(1).max(512).optional(),
-        providerId: z.string().min(1).max(128).optional(),
-        credentialMode: z.string().min(1).max(64).optional()
-      })
-      .strict()
-      .optional(),
-    workspace: z
-      .object({
-        isolation: z.enum(['worktree', 'local']).optional(),
-        startFrom: z
-          .discriminatedUnion('kind', [
-            z.object({ kind: z.literal('default-branch') }).strict(),
-            z.object({ kind: z.literal('current-head') }).strict(),
-            z.object({ kind: z.literal('branch'), name: z.string().min(1).max(256) }).strict()
-          ])
-          .optional()
-      })
-      .strict()
-      .optional(),
-    permissionMode: z.string().min(1).max(64).optional(),
-    lifecycle: z.enum(['persistent', 'ephemeral']).optional(),
-    mode: z.enum(['queue', 'interrupt']).optional()
-  })
-  .strict()
-export type WorkerCreateInput = z.infer<typeof WorkerCreateInputSchema>
-
-export const WorkerCreateBatchInputSchema = z
-  .object({ items: z.array(WorkerCreateInputSchema).min(1).max(16) })
-  .strict()
-export type WorkerCreateBatchInput = z.infer<typeof WorkerCreateBatchInputSchema>
-
-export const WorkerStatusInputSchema = z
-  .object({ workerId: z.string().min(1).max(256).optional() })
-  .strict()
-
-export const WorkerReadInputSchema = z
-  .object({
-    workerId: z.string().min(1).max(256),
-    limit: z.number().int().min(1).max(50).optional()
-  })
-  .strict()
+export {
+  WorkerCreateBatchInputSchema,
+  WorkerCreateInputSchema,
+  WorkerReadInputSchema,
+  WorkerStatusInputSchema
+} from './manager-worker-inputs.js'
+export type { WorkerCreateBatchInput, WorkerCreateInput } from './manager-worker-inputs.js'
+import {
+  WorkerCreateBatchInputSchema,
+  WorkerCreateInputSchema,
+  WorkerReadInputSchema,
+  WorkerStatusInputSchema,
+  type WorkerCreateInput
+} from './manager-worker-inputs.js'
 
 export type WorkerCreateResult = {
   ok: boolean
@@ -137,7 +97,7 @@ export type WorkerCreateResult = {
   selection?: WorkerRecord['selection'] & { profileId?: string }
   permissionMode?: { requested?: string; effective: string; downgraded: boolean }
   admission?: AdmissionResult
-  refusal?: 'worker_limit' | 'admission' | 'escalation_declined' | 'invalid_agent'
+  refusal?: 'worker_limit' | 'admission' | 'escalation_declined' | 'invalid_agent' | 'workspace_unavailable'
   userReport: string
 }
 
@@ -321,7 +281,18 @@ export class ManagerRuntime {
           : `Worker limit reached (${team.limits.hardWorkers}); nothing was created.`
       }
     }
-    const isolation = input.workspace?.isolation ?? 'worktree'
+    const reuseId = input.workspace?.reuseTaskWorkspaceId
+    const reused = reuseId ? this.deps.taskWorkspaces?.get(reuseId) : undefined
+    if (reuseId && (!reused || !['ready', 'captured', 'conflict'].includes(reused.state))) {
+      return {
+        ok: false,
+        refusal: 'workspace_unavailable',
+        userReport: language === 'zh'
+          ? `任务工作区 ${reuseId} 不可复用，未创建 worker。`
+          : `Task workspace ${reuseId} is not reusable; worker not created.`
+      }
+    }
+    const isolation = reused?.isolation ?? input.workspace?.isolation ?? 'worktree'
     const resolved = await this.resolveRoute(ctx, input, isolation === 'worktree')
     if ('error' in resolved) {
       return { ok: false, refusal: 'invalid_agent', userReport: resolved.error }
@@ -401,7 +372,11 @@ export class ManagerRuntime {
       effectivePermissionMode = permission.requestedMode.id
     }
     const workerId = this.deps.ids.next('child')
-    const tws = this.deps.taskWorkspaces
+    if (reused && reused.unitId !== workerId) {
+      // The workspace now belongs to the new worker (11 §4.4 'new-worker').
+      this.deps.taskWorkspaces?.bindUnit(reused.workspaceId, workerId)
+    }
+    const tws = reused ?? (this.deps.taskWorkspaces
       ? await this.deps.taskWorkspaces.create({
           ownerThreadId: ctx.threadId,
           unitId: workerId,
@@ -410,7 +385,7 @@ export class ManagerRuntime {
           isolation,
           startFrom: (input.workspace?.startFrom ?? { kind: 'default-branch' }) as StartFrom
         }, ctx.signal)
-      : null
+      : null)
     const security = this.workerSecurity(childSecurity(toolContext), tws?.path ?? ctx.workspace)
     const worker: WorkerRecord = {
       workerId,
@@ -438,7 +413,7 @@ export class ManagerRuntime {
       title: input.label,
       workspace: {
         path: tws?.path ?? ctx.workspace,
-        kind: isolation === 'worktree' ? 'worktree' : 'local'
+        kind: isolation === 'worktree' ? 'worktree' : isolation === 'directory' ? 'directory' : 'local'
       }
     })
     const dispatch: DispatchRecord = {
@@ -657,32 +632,24 @@ export class ManagerRuntime {
   }
 
   /** Manager context for tool execution — built from host-side records. */
-  async toolContext(input: {
-    threadId: string
-    turnId: string
-    workspace: string
-    signal: AbortSignal
-    awaitApproval: ManagerToolContext['awaitApproval']
-    thread?: Pick<
-      ThreadRecord,
-      'approvalPolicy' | 'sandboxMode' | 'approvalReviewer'
-    > | null
-    turn?: Pick<
-      Turn,
-      'approvalPolicy' | 'sandboxMode' | 'approvalReviewer' | 'clientSurface' | 'imContext'
-    > | null
-  }): Promise<ManagerToolContext> {
-    const thread = input.thread ?? await this.deps.threads.get(input.threadId).catch(() => null)
-    const turn = input.turn ?? await this.deps.turns.getTurn(input.threadId, input.turnId).catch(() => null)
-    if (!thread) throw new Error(`manager thread ${input.threadId} not found`)
-    return {
-      threadId: input.threadId,
-      turnId: input.turnId,
-      workspace: input.workspace,
-      authority: authorityFromTurn(thread, turn ?? undefined),
-      signal: input.signal,
-      awaitApproval: input.awaitApproval
-    }
+  /** GUI-originated worker create — see `manager-gui-worker.ts` (11 §4.4). */
+  guiCreateWorker(
+    workspace: TaskWorkspaceRecord,
+    input: { label: string; task: string; harnessId?: string },
+    signal?: AbortSignal
+  ): Promise<WorkerCreateResult> {
+    return guiCreateWorker(
+      this.deps,
+      this.createWorker.bind(this),
+      workspace,
+      input,
+      signal
+    )
+  }
+
+  /** Projects a tool context from a live turn — see `manager-tool-context.ts`. */
+  toolContext(input: ManagerToolContextInput): Promise<ManagerToolContext> {
+    return buildManagerToolContext(this.deps, input)
   }
 }
 

@@ -260,6 +260,24 @@ export interface AgentProvider {
     workspaceId: string,
     path: string
   ): Promise<import('@shared/task-workspace').TaskWorkspaceDiffFileResponse>
+  /** Per-workspace review comments shared across clients (docs/ade/11 §4). */
+  listReviewComments?(
+    workspaceId: string
+  ): Promise<import('@shared/review-comment').ReviewCommentFile>
+  createReviewComment?(
+    workspaceId: string,
+    input: import('@shared/review-comment').CreateReviewCommentInput
+  ): Promise<{ comment: import('@shared/review-comment').ReviewComment }>
+  updateReviewComment?(
+    workspaceId: string,
+    commentId: string,
+    input: import('@shared/review-comment').UpdateReviewCommentInput
+  ): Promise<{ comment: import('@shared/review-comment').ReviewComment }>
+  sendReview?(
+    workspaceId: string,
+    input: import('@shared/review-comment').SendReviewInput,
+    language?: string
+  ): Promise<import('@shared/review-comment').SendReviewResponse>
   /** Rebuild a recorded handoff brief on demand (docs/ade/impl §P0-14). */
   getHandoffPreview?(threadId: string, turnId: string): Promise<{
     turnId: string

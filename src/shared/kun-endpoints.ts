@@ -241,6 +241,12 @@ export const KUN_TASK_WORKSPACES_PATH = '/v1/task-workspaces'
 export function kunTaskWorkspacePath(workspaceId: string, suffix = ''): string {
   return `${KUN_TASK_WORKSPACES_PATH}/${encodeURIComponent(workspaceId)}${suffix}`
 }
+
+/** ADE line-level review comments (docs/ade/11 §4). */
+export const KUN_REVIEWS_PATH = '/v1/reviews'
+export function kunReviewsPath(workspaceId: string, suffix = ''): string {
+  return `${KUN_REVIEWS_PATH}/${encodeURIComponent(workspaceId)}${suffix}`
+}
 export function kunActivityUnitPath(unitId: string, action: 'ack' | 'dismiss' | 'pin'): string {
   return `${KUN_ACTIVITY_PATH}/${encodeURIComponent(unitId)}/${action}`
 }

@@ -7,7 +7,11 @@ const provider = {
   getTaskWorkspaceDiff: vi.fn(),
   getTaskWorkspaceDiffFile: vi.fn(),
   getActivitySnapshot: vi.fn(),
-  pollActivity: vi.fn()
+  pollActivity: vi.fn(),
+  listReviewComments: vi.fn(),
+  createReviewComment: vi.fn(),
+  updateReviewComment: vi.fn(),
+  sendReview: vi.fn()
 }
 
 vi.mock('../agent/registry', () => ({
@@ -15,12 +19,19 @@ vi.mock('../agent/registry', () => ({
 }))
 
 import {
+  createReviewDraft,
   ensureThreadBinding,
+  flushReviewDrafts,
+  loadReviewComments,
   loadWorkspaceDiff,
   loadWorkspaceDiffFile,
+  pendingReviewComments,
+  resolveReviewComment,
+  sendReviewBatch,
   setReviewViewMode,
   toggleReviewFileExpanded,
   unwatchReviewWorkspace,
+  updateReviewDraftBody,
   useReviewStore,
   watchReviewWorkspace
 } from './review-store'
@@ -183,5 +194,136 @@ describe('review-store', () => {
     await new Promise((resolve) => setTimeout(resolve, 10))
     expect(provider.pollActivity).not.toHaveBeenCalled()
     unwatchReviewWorkspace('tws_deadbeef')
+  })
+})
+
+const WS = 'tws_deadbeef'
+const draftInput = {
+  path: 'a.ts',
+  side: 'new' as const,
+  line: 3,
+  anchor: { lineText: 'const x = 1', before: ['b'], after: ['a'] }
+}
+
+const syncedComment = (over: Record<string, unknown> = {}) => ({
+  commentId: 'rvc_synced01',
+  workspaceId: WS,
+  ...draftInput,
+  body: 'rename',
+  state: 'draft',
+  outdated: false,
+  author: 'user',
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+  ...over
+})
+
+describe('review comments', () => {
+  it('creates a draft locally and syncs it on flush', async () => {
+    provider.createReviewComment.mockResolvedValue({ comment: syncedComment({ body: 'rename this' }) })
+    const id = createReviewDraft(WS, { ...draftInput, body: 'rename this' })
+    expect(id).toMatch(/^local_/)
+    expect(useReviewStore.getState().workspaces[WS].comments[0].state).toBe('draft')
+    await flushReviewDrafts(WS)
+    expect(provider.createReviewComment).toHaveBeenCalledWith(WS, expect.objectContaining({
+      path: 'a.ts',
+      side: 'new',
+      line: 3
+    }))
+    const ws = useReviewStore.getState().workspaces[WS]
+    expect(ws.comments[0].commentId).toBe('rvc_synced01')
+    expect(ws.dirtyComments).toEqual({})
+  })
+
+  it('debounced edits patch the synced comment once', async () => {
+    provider.listReviewComments.mockResolvedValue({ comments: [syncedComment()], requests: [] })
+    await loadReviewComments(WS)
+    updateReviewDraftBody(WS, 'rvc_synced01', 'first')
+    updateReviewDraftBody(WS, 'rvc_synced01', 'final text')
+    await flushReviewDrafts(WS)
+    expect(provider.updateReviewComment).toHaveBeenCalledTimes(1)
+    expect(provider.updateReviewComment).toHaveBeenCalledWith(WS, 'rvc_synced01', {
+      body: 'final text',
+      state: 'draft'
+    })
+  })
+
+  it('keeps unsynced drafts across reloads and retries after reconnect', async () => {
+    provider.createReviewComment.mockRejectedValueOnce(new Error('offline'))
+    const id = createReviewDraft(WS, { ...draftInput, body: 'x' })
+    await flushReviewDrafts(WS)
+    expect(useReviewStore.getState().workspaces[WS].dirtyComments[id]).toBe('create')
+
+    provider.listReviewComments.mockResolvedValue({ comments: [], requests: [] })
+    await loadReviewComments(WS)
+    // Unsynced local draft survives the server merge.
+    expect(useReviewStore.getState().workspaces[WS].comments).toHaveLength(1)
+
+    provider.createReviewComment.mockResolvedValueOnce({ comment: syncedComment({ body: 'x' }) })
+    await flushReviewDrafts(WS)
+    expect(provider.createReviewComment).toHaveBeenCalledTimes(2)
+    expect(useReviewStore.getState().workspaces[WS].comments[0].commentId).toBe('rvc_synced01')
+  })
+
+  it('resolve marks synced comments and drops never-synced local drafts', async () => {
+    provider.listReviewComments.mockResolvedValue({ comments: [syncedComment()], requests: [] })
+    await loadReviewComments(WS)
+    const localId = createReviewDraft(WS, { ...draftInput })
+    resolveReviewComment(WS, localId)
+    expect(useReviewStore.getState().workspaces[WS].comments.some((c) => c.commentId === localId))
+      .toBe(false)
+
+    resolveReviewComment(WS, 'rvc_synced01')
+    await flushReviewDrafts(WS)
+    expect(provider.updateReviewComment).toHaveBeenCalledWith(WS, 'rvc_synced01', {
+      body: 'rename',
+      state: 'resolved'
+    })
+  })
+
+  it('sends all unresolved comments and records the round', async () => {
+    provider.listReviewComments.mockResolvedValue({
+      comments: [
+        syncedComment(),
+        syncedComment({ commentId: 'rvc_sent0001', state: 'sent' }),
+        syncedComment({ commentId: 'rvc_done0001', state: 'resolved' })
+      ],
+      requests: []
+    })
+    await loadReviewComments(WS)
+    provider.sendReview.mockResolvedValue({
+      request: {
+        requestId: 'rvq_1',
+        round: 1,
+        target: { kind: 'manager' },
+        commentIds: ['rvc_synced01', 'rvc_sent0001'],
+        sentAt: '2026-01-02T00:00:00Z'
+      },
+      composerContext: { kind: 'review_request', title: 'Review comments round 1', body: 'x' }
+    })
+    const response = await sendReviewBatch(WS, { kind: 'manager' }, 'handle these')
+    expect(provider.sendReview).toHaveBeenCalledTimes(1)
+    expect(provider.sendReview.mock.calls[0][0]).toBe(WS)
+    expect(provider.sendReview.mock.calls[0][1]).toEqual({
+      commentIds: ['rvc_synced01', 'rvc_sent0001'],
+      target: { kind: 'manager' },
+      note: 'handle these'
+    })
+    expect(response?.request.round).toBe(1)
+    const ws = useReviewStore.getState().workspaces[WS]
+    expect(ws.comments.find((c) => c.commentId === 'rvc_synced01')?.state).toBe('sent')
+    expect(ws.comments.find((c) => c.commentId === 'rvc_done0001')?.state).toBe('resolved')
+    expect(ws.lastSent).toMatchObject({ round: 1, targetKind: 'manager' })
+    expect(ws.requests).toHaveLength(1)
+  })
+
+  it('reports send errors on the workspace', async () => {
+    provider.listReviewComments.mockResolvedValue({ comments: [syncedComment()], requests: [] })
+    await loadReviewComments(WS)
+    provider.sendReview.mockRejectedValue(new Error('worker under user control'))
+    const response = await sendReviewBatch(WS, { kind: 'worker', workerId: 'w1' })
+    expect(response).toBeNull()
+    expect(useReviewStore.getState().workspaces[WS].sendError).toBe('worker under user control')
+    expect(pendingReviewComments(WS)).toHaveLength(1)
   })
 })

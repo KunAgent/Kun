@@ -49,7 +49,8 @@ import { WorkerNoticeCoordinator } from '../ade/worker-notice-coordinator.js'
 import {
   createActivityHibernation,
   createCapabilitiesForRoute,
-  createManagerRuntime
+  createManagerRuntime,
+  wireTaskWorkspaceChange
 } from './runtime-composition-manager.js'
 import { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
 import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
@@ -463,11 +464,7 @@ export async function createRuntimeAgentComposition(
     },
     managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true
   }))
-  // Worker dispatches queued on workspace provisioning fire when it resolves (09 §5).
-  core.taskWorkspaces.onChange((record) => {
-    void managerRuntime.handleWorkspaceChange(record).catch((error) =>
-      console.warn('[kun] ade workspace-change delivery failed:', error))
-  })
+  wireTaskWorkspaceChange(core.taskWorkspaces, managerRuntime, services.adeStores.reviews)
   model.refreshModelConnectionDelegatedDeps = () => {
     const next = buildHarnessRuntimes(
       buildMainDelegatedRuntime({

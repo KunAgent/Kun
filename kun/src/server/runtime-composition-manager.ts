@@ -14,6 +14,9 @@ import type { HarnessRoute } from '../contracts/harness.js'
 import type { HarnessRuntimeMap } from '../harness/harness-router.js'
 import type { DelegationRuntime } from '../delegation/delegation-runtime.js'
 import type { createRuntimeServices } from './runtime-composition-services.js'
+import type { FileReviewStore } from '../ade/review-store.js'
+import { reanchorWorkspaceComments } from '../ade/review-reanchor.js'
+import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
 
 type RuntimeServices = Awaited<ReturnType<typeof createRuntimeServices>>
 
@@ -137,4 +140,24 @@ export function createActivityHibernation(input: {
   )
   hibernation.start()
   return hibernation
+}
+
+/**
+ * Task-workspace change side-effects: deliver dispatches queued while the
+ * workspace was provisioning (09 §5), and re-anchor unresolved review
+ * comments after every fresh capture (11 §4.3).
+ */
+export function wireTaskWorkspaceChange(
+  taskWorkspaces: Pick<TaskWorkspaceService, 'onChange'>,
+  managerRuntime: ManagerRuntime,
+  reviews: FileReviewStore
+): void {
+  taskWorkspaces.onChange((record) => {
+    void managerRuntime.handleWorkspaceChange(record).catch((error) =>
+      console.warn('[kun] ade workspace-change delivery failed:', error))
+    if (record.state === 'captured' && record.patchArtifactId) {
+      void reanchorWorkspaceComments(reviews, record).catch((error) =>
+        console.warn('[kun] ade review reanchor failed:', error))
+    }
+  })
 }
