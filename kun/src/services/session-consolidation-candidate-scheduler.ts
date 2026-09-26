@@ -6,12 +6,13 @@ import {
   type ConsolidationExcludedPreview,
   type SessionConsolidationPreviewOptions
 } from './session-consolidation-preview.js'
+import type { ConsolidationReclaimMode, ConsolidationReclaimTier } from '../contracts/consolidation-job.js'
 
 /**
  * Phase 1 stage 2 (tasks.md 3.2): wires Phase 0's candidate eligibility
  * (`SessionConsolidationPreviewService`) into the consolidation job store.
  *
- * Still strictly dry-run: the only side effect is deriving/creating a job
+ * The only side effect is deriving/creating a job
  * record via `ConsolidationJobStore.ensureJob`. This never calls MemoryStore
  * and never trims or deletes a thread or its content — extraction, episode
  * writing, and trim/delete are later stages (3.3+, 4.x, 5.x).
@@ -32,14 +33,18 @@ export type ConsolidationCandidateScheduleReport = {
 
 export type SessionConsolidationCandidateSchedulerOptions = SessionConsolidationPreviewOptions & {
   jobStore: ConsolidationJobStorePort
+  reclaimMode?: ConsolidationReclaimMode
+  reclaimTier?: ConsolidationReclaimTier
 }
 
 export class SessionConsolidationCandidateScheduler {
   private readonly preview: SessionConsolidationPreviewService
   private readonly threadStore: Pick<ThreadStore, 'list' | 'get' | 'getMetadata'>
   private readonly jobStore: ConsolidationJobStorePort
+  private readonly options: SessionConsolidationCandidateSchedulerOptions
 
   constructor(options: SessionConsolidationCandidateSchedulerOptions) {
+    this.options = options
     this.preview = new SessionConsolidationPreviewService(options)
     this.threadStore = options.threadStore
     this.jobStore = options.jobStore
@@ -54,19 +59,27 @@ export class SessionConsolidationCandidateScheduler {
    * derives a different job id rather than mutating the prior job.
    */
   async run(): Promise<ConsolidationCandidateScheduleReport> {
+    // The first pass is a cheap preview for diagnostics. Re-run the complete
+    // eligibility scan immediately before creating jobs so a pin, active turn,
+    // approval, or fork relation that appeared during the first read cannot
+    // become a scheduled mutation (TOCTOU guard).
+    await this.preview.run()
     const report = await this.preview.run()
     const scheduled: ConsolidationCandidateScheduleEntry[] = []
 
     for (const candidate of report.candidates) {
-      const record = this.threadStore.getMetadata
-        ? await this.threadStore.getMetadata(candidate.threadId).catch(() => null)
-        : await this.threadStore.get(candidate.threadId).catch(() => null)
+      const record = await this.threadStore.get(candidate.threadId).catch(() => null)
       // The thread vanished (or became unreadable) between the preview pass
       // and scheduling; skip rather than schedule a job against stale data.
       if (!record) continue
 
       const cutoffRevision = String(record.revision ?? 0)
-      const job = await this.jobStore.ensureJob({ threadId: candidate.threadId, cutoffRevision })
+      const job = await this.jobStore.ensureJob({
+        threadId: candidate.threadId,
+        cutoffRevision,
+        ...(this.options.reclaimMode ? { reclaimMode: this.options.reclaimMode } : {}),
+        ...(this.options.reclaimTier ? { reclaimTier: this.options.reclaimTier } : {})
+      })
       scheduled.push({ threadId: candidate.threadId, jobId: job.id, status: job.status, cutoffRevision })
     }
 
