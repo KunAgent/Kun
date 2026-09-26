@@ -36,6 +36,21 @@ export const DEFAULT_ATTACHMENT_DOCUMENT_MIME_TYPES = [
 export const DEFAULT_ATTACHMENT_MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 export const DEFAULT_ATTACHMENT_MAX_DOCUMENT_TEXT_CHARS = 200_000
 
+const MemoryConsolidationConfig = z.object({
+  /** Historical-session consolidation is deliberately opt-in. */
+  enabled: z.boolean().default(false),
+  scheduleIntervalMs: z.number().int().positive().default(24 * 60 * 60 * 1_000),
+  tier: z.enum(['tier-1', 'tier-2']).default('tier-1'),
+  reclaimMode: z.enum(['safe', 'reclaim-now']).default('safe'),
+  idleAfterMs: z.number().int().positive().default(30 * 24 * 60 * 60 * 1_000),
+  minBytes: z.number().int().positive().default(64 * 1024),
+  archiveTtlMs: z.number().int().positive().default(7 * 24 * 60 * 60 * 1_000),
+  maxThreadsPerRun: z.number().int().positive().max(16).default(1),
+  summaryInputMaxBytes: z.number().int().positive().max(512 * 1024).default(96 * 1024),
+  summaryMaxTokens: z.number().int().positive().max(2_048).default(400)
+}).strict()
+export type MemoryConsolidationConfig = z.infer<typeof MemoryConsolidationConfig>
+
 export const AttachmentsCapabilityConfig = CapabilityToggleConfig.extend({
   maxImageBytes: z.number().int().positive().default(5 * 1024 * 1024),
   maxImageDimension: z.number().int().positive().default(4096),
@@ -52,6 +67,18 @@ export type AttachmentsCapabilityConfig = z.infer<typeof AttachmentsCapabilityCo
 export const MemoryCapabilityConfig = CapabilityToggleConfig.extend({
   scopes: z.array(z.enum(['user', 'workspace', 'project'])).default(['user', 'workspace', 'project']),
   maxInjectedRecords: z.number().int().positive().default(8),
+  consolidation: MemoryConsolidationConfig.default(() => ({
+    enabled: false,
+    scheduleIntervalMs: 24 * 60 * 60 * 1_000,
+    tier: 'tier-1' as const,
+    reclaimMode: 'safe' as const,
+    idleAfterMs: 30 * 24 * 60 * 60 * 1_000,
+    minBytes: 64 * 1024,
+    archiveTtlMs: 7 * 24 * 60 * 60 * 1_000,
+    maxThreadsPerRun: 1,
+    summaryInputMaxBytes: 96 * 1024,
+    summaryMaxTokens: 400
+  })),
   distillation: z.object({
     enabled: z.boolean().default(false)
   }).strict().default(() => ({ enabled: false })),
@@ -62,7 +89,13 @@ export const MemoryCapabilityConfig = CapabilityToggleConfig.extend({
   }).strict().default(() => ({ enabled: true, maxRecords: 20, maxCharacters: 4_000 })),
   feedback: MemoryFeedbackConfig.optional()
 }).strict()
-export type MemoryCapabilityConfig = z.infer<typeof MemoryCapabilityConfig>
+/**
+ * Callers constructing legacy in-memory test/config fixtures may omit this
+ * newly added opt-in block; parsed runtime config still receives defaults.
+ */
+export type MemoryCapabilityConfig = Omit<z.infer<typeof MemoryCapabilityConfig>, 'consolidation'> & {
+  consolidation?: MemoryConsolidationConfig
+}
 
 export const ImageGenerationProtocol = z.enum([
   'openai-images',

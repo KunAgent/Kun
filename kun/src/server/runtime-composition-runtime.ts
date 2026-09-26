@@ -98,7 +98,8 @@ export function createServerRuntimeComposition(
     prepareUsageCarryover,
     migrationService,
     migrationImportService,
-    knowledgeBaseService
+    knowledgeBaseService,
+    sessionConsolidation
   } = services
   const { delegationRuntime } = registryComposition
   const {
@@ -255,6 +256,7 @@ export function createServerRuntimeComposition(
 	    migrationService,
 	    migrationImportService,
 	    knowledgeBaseService,
+    sessionConsolidation,
 	    get delegationRuntime() {
 	      return delegationRuntime
 	    },
@@ -500,6 +502,7 @@ export function createServerRuntimeComposition(
               agent.shuttingDown = true
               await agent.queuedTurnDispatcher.dispose()
               backgroundMaintenance.stop()
+              sessionConsolidation.stop()
               modelConnectionOAuth.close()
               eventStreamRegistry.closeAll()
               agent.loop.shutdownGoalResume()

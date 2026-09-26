@@ -83,9 +83,10 @@ export class SessionConsolidationPreviewService {
     const records: ThreadRecord[] = []
     for (const summary of summaries) {
       if (!isSafeThreadId(summary.id)) continue
-      const record = this.threadStore.getMetadata
-        ? await this.threadStore.getMetadata(summary.id).catch(() => null)
-        : await this.threadStore.get(summary.id).catch(() => null)
+      // Eligibility needs the authoritative turn/item projection. Metadata
+      // lookups intentionally omit items and cannot prove that no approval or
+      // user-input gate is still pending.
+      const record = await this.threadStore.get(summary.id).catch(() => null)
       if (record) records.push(record)
     }
 
@@ -138,11 +139,11 @@ export class SessionConsolidationPreviewService {
     if (hasPendingApproval(record)) return 'pending_approval'
     if (hasPendingUserInput(record)) return 'pending_user_input'
     if (record.pinned === true) return 'pinned'
-    if (dependedOn.has(record.id)) return 'fork_dependency'
+    if (dependedOn.has(record.id) || record.parentThreadId || record.forkedFromThreadId) return 'fork_dependency'
     // Hard rule: a thread with zero completed turns is always excluded here.
     // `updatedAt` is never consulted to admit it, no matter how old it is.
     if (!lastCompletedTurn) return 'no_completed_turn'
-    const idleSince = Date.parse(lastCompletedTurn.finishedAt ?? lastCompletedTurn.createdAt)
+    const idleSince = Date.parse(lastCompletedTurn.finishedAt ?? '')
     if (!Number.isFinite(idleSince) || now - idleSince < this.idleAfterMs) return 'not_idle'
     if (threadPayloadBytes < this.minBytes) return 'below_min_size'
     return null
@@ -153,9 +154,11 @@ function lastCompletedTurnOf(turns: readonly Turn[]): Turn | undefined {
   let latest: Turn | undefined
   for (const turn of turns) {
     if (turn.status !== 'completed') continue
+    if (!turn.finishedAt) continue
     if (!latest) { latest = turn; continue }
-    const latestAt = Date.parse(latest.finishedAt ?? latest.createdAt)
-    const turnAt = Date.parse(turn.finishedAt ?? turn.createdAt)
+    if (!latest.finishedAt) { latest = turn; continue }
+    const latestAt = Date.parse(latest.finishedAt)
+    const turnAt = Date.parse(turn.finishedAt)
     if (turnAt > latestAt) latest = turn
   }
   return latest
