@@ -1,0 +1,432 @@
+import { realpath, stat } from 'node:fs/promises'
+import { createHash, randomBytes } from 'node:crypto'
+import { homedir } from 'node:os'
+import { basename, join } from 'node:path'
+import type { RuntimeEventDraft } from '../services/runtime-event-recorder.js'
+import { withManagerDataMutex } from '../manager/data-mutex.js'
+import { workspaceGit, workspaceWriteMutexContext } from './workspace-git.js'
+import { resolveStartFrom } from './start-from-resolver.js'
+import type { WorktreeLifecycle } from './worktree-lifecycle.js'
+import type { TaskWorkspaceStore } from './task-workspace-store.js'
+import {
+  taskBranchName,
+  type CreateTaskWorkspaceRequest,
+  type TaskWorkspaceRecord,
+  type TaskWorkspaceSetup
+} from '../contracts/task-workspace.js'
+
+export type SetupStep = {
+  name: string
+  command: string
+  args: string[]
+  timeoutMs: number
+}
+
+export type TaskWorkspaceServiceOptions = {
+  store: TaskWorkspaceStore
+  lifecycle: WorktreeLifecycle
+  events?: { record(draft: RuntimeEventDraft): Promise<unknown> | unknown }
+  /** Root under which task worktrees live; defaults to ~/.kun/worktrees/tasks. */
+  worktreeRoot?: string
+  fetchTimeoutMs?: number
+  nowIso?: () => string
+  newId?: () => string
+  projectConfig?: (repoRoot: string) => TaskWorkspaceProjectConfig | null
+  /** Approved setup steps for a repo (P0-11); absent → setup 'skipped'. */
+  approvedSetup?: (repoRoot: string) => SetupStep[]
+  /** Runs the setup steps (P0-11); absent → setup 'skipped'. */
+  setupRunner?: {
+    run(
+      workspaceId: string,
+      cwd: string,
+      steps: SetupStep[],
+      signal: AbortSignal
+    ): Promise<TaskWorkspaceSetup>
+  }
+  /** shareDirectories + copyIncludedFiles (P0-11); absent → no env fill. */
+  environmentFill?: (input: {
+    repoRoot: string
+    worktreePath: string
+    config: TaskWorkspaceProjectConfig['worktree'] | undefined
+  }) => Promise<{ shared: string[]; copied: string[]; skipped: Array<{ path: string; reason: string }> }>
+}
+
+/** Shape this service needs from `.kun/project.json`; the `worktree`
+ *  section lands in P0-11, so the dep is typed structurally here. */
+export type TaskWorkspaceProjectConfig = {
+  worktree?: { branchPrefix?: string }
+}
+
+const WRITE_MUTEX_RESOURCE = 'ade/task-workspace-git'
+
+function boundedError(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error)).slice(0, 2_048)
+}
+
+/** Host-owned task workspace lifecycle (docs/ade/07 §5). */
+export class TaskWorkspaceService {
+  private readonly options: TaskWorkspaceServiceOptions
+  private readonly nowIso: () => string
+  private readonly newId: () => string
+  private readonly worktreeRoot: string
+  private readonly repoLocks = new Map<string, Promise<void>>()
+  private readonly controllers = new Map<string, AbortController>()
+  private readonly listeners = new Set<(record: TaskWorkspaceRecord) => void>()
+
+  constructor(options: TaskWorkspaceServiceOptions) {
+    this.options = options
+    this.nowIso = options.nowIso ?? (() => new Date().toISOString())
+    this.newId =
+      options.newId ??
+      (() => `tws_${randomBytes(9).toString('base64url').toLowerCase().replace(/[^a-z0-9]/g, '0')}`)
+    this.worktreeRoot =
+      options.worktreeRoot ?? join(homedir(), '.kun', 'worktrees', 'tasks')
+  }
+
+  /** creating/setting-up records from a previous process are stale. */
+  recoverInterrupted(): number {
+    let recovered = 0
+    for (const record of this.options.store.list()) {
+      if (record.state === 'creating' || record.state === 'setting-up') {
+        this.options.store.update(record.workspaceId, {
+          state: 'failed',
+          lastError: 'interrupted: runtime restarted while the workspace was being created',
+          updatedAt: this.nowIso()
+        })
+        recovered += 1
+      }
+    }
+    return recovered
+  }
+
+  onChange(listener: (record: TaskWorkspaceRecord) => void): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  get(workspaceId: string): TaskWorkspaceRecord | undefined {
+    return this.options.store.get(workspaceId)
+  }
+
+  list(filter?: { ownerThreadId?: string }): TaskWorkspaceRecord[] {
+    return this.options.store.list(filter)
+  }
+
+  create(input: CreateTaskWorkspaceRequest, callerSignal?: AbortSignal): TaskWorkspaceRecord {
+    const now = this.nowIso()
+    const record = this.options.store.insert({
+      workspaceId: this.newId(),
+      ownerThreadId: input.ownerThreadId,
+      ...(input.unitId ? { unitId: input.unitId } : {}),
+      ...(input.label ? { label: input.label } : {}),
+      isolation: input.isolation,
+      sourceRoot: input.sourceRoot,
+      path: input.sourceRoot,
+      startFrom: input.startFrom,
+      state: 'creating',
+      setup: { status: 'pending' },
+      changedFiles: [],
+      createdAt: now,
+      updatedAt: now
+    })
+    const controller = new AbortController()
+    if (callerSignal) {
+      if (callerSignal.aborted) controller.abort()
+      else callerSignal.addEventListener('abort', () => controller.abort(), { once: true })
+    }
+    this.controllers.set(record.workspaceId, controller)
+    void this.runCreate(record.workspaceId, input, controller.signal)
+    return record
+  }
+
+  retry(workspaceId: string): TaskWorkspaceRecord {
+    const record = this.options.store.get(workspaceId)
+    if (!record) throw new TaskWorkspaceError('not_found', 'task workspace not found')
+    if (record.state !== 'failed') {
+      throw new TaskWorkspaceError('conflict', `task workspace is ${record.state}, not failed`)
+    }
+    if (this.controllers.has(workspaceId)) {
+      throw new TaskWorkspaceError('conflict', 'task workspace creation is still running')
+    }
+    const input: CreateTaskWorkspaceRequest = {
+      ownerThreadId: record.ownerThreadId,
+      ...(record.unitId ? { unitId: record.unitId } : {}),
+      ...(record.label ? { label: record.label } : {}),
+      sourceRoot: record.sourceRoot,
+      isolation: record.isolation,
+      startFrom: record.startFrom
+    }
+    const controller = new AbortController()
+    this.controllers.set(workspaceId, controller)
+    this.options.store.update(workspaceId, {
+      state: 'creating',
+      lastError: undefined,
+      updatedAt: this.nowIso()
+    })
+    this.emit(workspaceId)
+    void this.runCreate(workspaceId, input, controller.signal)
+    return this.options.store.get(workspaceId) ?? record
+  }
+
+  markReady(workspaceId: string): TaskWorkspaceRecord {
+    const record = this.options.store.get(workspaceId)
+    if (!record) throw new TaskWorkspaceError('not_found', 'task workspace not found')
+    if (record.state !== 'failed') {
+      throw new TaskWorkspaceError('conflict', `task workspace is ${record.state}, not failed`)
+    }
+    return this.finish(workspaceId, { state: 'ready' })
+  }
+
+  cancel(workspaceId: string): TaskWorkspaceRecord {
+    const record = this.options.store.get(workspaceId)
+    if (!record) throw new TaskWorkspaceError('not_found', 'task workspace not found')
+    const controller = this.controllers.get(workspaceId)
+    if (!controller || (record.state !== 'creating' && record.state !== 'setting-up')) {
+      throw new TaskWorkspaceError('conflict', `task workspace is ${record.state}; nothing to cancel`)
+    }
+    controller.abort()
+    return this.options.store.get(workspaceId) ?? record
+  }
+
+  // ------------------------------------------------------------------
+
+  private async runCreate(
+    workspaceId: string,
+    input: CreateTaskWorkspaceRequest,
+    signal: AbortSignal
+  ): Promise<void> {
+    try {
+      signal.throwIfAborted()
+      const repo = await this.detectRepository(input.sourceRoot)
+      if (!repo) {
+        if (input.isolation === 'worktree') {
+          this.fail(
+            workspaceId,
+            'source is not a git repository; choose local or directory isolation'
+          )
+          return
+        }
+        this.finish(workspaceId, {
+          state: 'ready',
+          path: input.sourceRoot,
+          setup: { status: 'skipped' }
+        })
+        return
+      }
+      if (input.isolation !== 'worktree') {
+        this.finish(workspaceId, {
+          state: 'ready',
+          path: input.sourceRoot,
+          repositoryRoot: repo.root,
+          setup: { status: 'skipped' }
+        })
+        return
+      }
+
+      const existing = this.options.store.get(workspaceId)
+      const resumable =
+        existing?.baseRevision !== undefined &&
+        existing.path !== input.sourceRoot &&
+        (await stat(existing.path).then(() => true, () => false))
+      if (resumable && existing) {
+        // Retry after a post-worktree failure: keep the existing checkout.
+        await this.runSettingUp(workspaceId, repo.root, existing.path, signal)
+        return
+      }
+
+      await this.progress(workspaceId, 'resolve', 'Resolving start point')
+      const start = await resolveStartFrom(repo, input.startFrom, {
+        signal,
+        fetchTimeoutMs: this.options.fetchTimeoutMs
+      })
+      if (start.warning) {
+        await this.progress(workspaceId, 'resolve', start.warning.slice(0, 256))
+      }
+      await this.progress(workspaceId, 'worktree', 'Creating worktree')
+      const path = this.worktreePath(repo.root, workspaceId)
+      const config = this.options.projectConfig?.(repo.root)
+      const branch = taskBranchName(
+        config?.worktree?.branchPrefix ?? 'kun/',
+        input.label ?? 'task',
+        workspaceId
+      )
+      await this.withRepoLock(repo.root, () =>
+        this.withWriteContext(() =>
+          this.options.lifecycle.create({
+            repositoryRoot: repo.root,
+            path,
+            startRevision: start.sha,
+            branch
+          })))
+      this.options.store.update(workspaceId, {
+        repositoryRoot: repo.root,
+        path,
+        baseRevision: start.sha,
+        branch,
+        updatedAt: this.nowIso()
+      })
+      if (this.options.environmentFill) {
+        await this.progress(workspaceId, 'share', 'Linking shared directories')
+        const fill = await this.options.environmentFill({
+          repoRoot: repo.root,
+          worktreePath: path,
+          config: config?.worktree
+        })
+        const summary =
+          `shared ${fill.shared.length}, copied ${fill.copied.length}, skipped ${fill.skipped.length}`
+        await this.progress(workspaceId, 'copy', `Local files: ${summary}`.slice(0, 256))
+      }
+      await this.runSettingUp(workspaceId, repo.root, path, signal)
+    } catch (error) {
+      if (signal.aborted) {
+        await this.rollbackWorktree(workspaceId)
+        return this.fail(workspaceId, 'cancelled')
+      }
+      return this.fail(workspaceId, boundedError(error))
+    }
+  }
+
+  private async runSettingUp(
+    workspaceId: string,
+    repoRoot: string,
+    path: string,
+    signal: AbortSignal
+  ): Promise<void> {
+    this.options.store.update(workspaceId, {
+      state: 'setting-up',
+      repositoryRoot: repoRoot,
+      path,
+      updatedAt: this.nowIso()
+    })
+    this.emit(workspaceId)
+    signal.throwIfAborted()
+    const steps = this.options.approvedSetup?.(repoRoot) ?? []
+    let setup: TaskWorkspaceSetup
+    if (!this.options.setupRunner) {
+      setup = { status: steps.length ? 'not-approved' : 'skipped' }
+    } else if (!steps.length && this.options.approvedSetup) {
+      setup = { status: 'not-approved' }
+    } else {
+      await this.progress(workspaceId, 'setup', 'Running setup')
+      setup = await this.options.setupRunner.run(workspaceId, path, steps, signal)
+    }
+    this.finish(workspaceId, {
+      state: setup.status === 'failed' ? 'failed' : 'ready',
+      setup
+    })
+  }
+
+  private async detectRepository(sourceRoot: string): Promise<{ root: string } | null> {
+    try {
+      const topLevel = (await workspaceGit(sourceRoot, ['rev-parse', '--show-toplevel'])).trim()
+      const root = await realpath(topLevel).catch(() => topLevel)
+      return { root }
+    } catch {
+      return null
+    }
+  }
+
+  private worktreePath(repoRoot: string, workspaceId: string): string {
+    const name = basename(repoRoot).replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-|-$/g, '') || 'repo'
+    const hash = createHash('sha256').update(repoRoot).digest('hex').slice(0, 8)
+    return join(this.worktreeRoot, `${name}-${hash}`, workspaceId)
+  }
+
+  private async rollbackWorktree(workspaceId: string): Promise<void> {
+    const record = this.options.store.get(workspaceId)
+    if (!record?.repositoryRoot || record.path === record.sourceRoot) return
+    const exists = await stat(record.path).then(() => true, () => false)
+    if (!exists) return
+    await this.withWriteContext(() =>
+      this.options.lifecycle.remove(
+        { repositoryRoot: record.repositoryRoot as string, path: record.path },
+        { force: true }
+      )).catch(() => undefined)
+  }
+
+  private withRepoLock<T>(repoRoot: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.repoLocks.get(repoRoot) ?? Promise.resolve()
+    const run = previous.catch(() => undefined).then(operation)
+    this.repoLocks.set(repoRoot, run.then(() => undefined, () => undefined))
+    return run
+  }
+
+  private withWriteContext<T>(operation: () => Promise<T>): Promise<T> {
+    return withManagerDataMutex(WRITE_MUTEX_RESOURCE, (context) =>
+      workspaceWriteMutexContext.run(context, operation))
+  }
+
+  private async progress(
+    workspaceId: string,
+    step: 'resolve' | 'fetch' | 'worktree' | 'share' | 'copy' | 'setup',
+    message: string
+  ): Promise<void> {
+    this.options.store.update(workspaceId, {
+      progress: { step, message },
+      updatedAt: this.nowIso()
+    })
+    this.emit(workspaceId)
+  }
+
+  private finish(
+    workspaceId: string,
+    patch: Partial<TaskWorkspaceRecord>
+  ): TaskWorkspaceRecord {
+    const record = this.options.store.update(workspaceId, {
+      progress: undefined,
+      ...patch,
+      updatedAt: this.nowIso()
+    })
+    this.controllers.delete(workspaceId)
+    this.emit(workspaceId)
+    if (!record) throw new TaskWorkspaceError('not_found', 'task workspace not found')
+    return record
+  }
+
+  private fail(workspaceId: string, reason: string): void {
+    this.finish(workspaceId, { state: 'failed', lastError: reason.slice(0, 2_048) })
+  }
+
+  private emit(workspaceId: string): void {
+    const record = this.options.store.get(workspaceId)
+    if (!record) return
+    for (const listener of this.listeners) {
+      try {
+        listener(record)
+      } catch {
+        // listeners are best-effort
+      }
+    }
+    if (!this.options.events) return
+    try {
+      void Promise.resolve(this.options.events.record({
+        kind: 'task_workspace',
+        threadId: record.ownerThreadId,
+        taskWorkspace: {
+          workspaceId: record.workspaceId,
+          ...(record.unitId ? { unitId: record.unitId } : {}),
+          state: record.state,
+          ...(record.progress ? { progress: record.progress } : {}),
+          setup: record.setup,
+          workspace: {
+            path: record.path,
+            sourceRoot: record.sourceRoot,
+            kind: record.isolation,
+            ...(record.branch ? { branch: record.branch } : {})
+          }
+        }
+      })).catch(() => undefined)
+    } catch {
+      // event fan-out must never break workspace operations
+    }
+  }
+}
+
+export class TaskWorkspaceError extends Error {
+  constructor(
+    readonly code: 'not_found' | 'conflict',
+    message: string
+  ) {
+    super(message)
+  }
+}

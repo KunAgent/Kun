@@ -119,6 +119,30 @@ describe('projectRuntimeEvent', () => {
     expect(projectRuntimeEvent(ev('heartbeat', 't1'))).toEqual([])
     expect(projectRuntimeEvent(ev('assistant_reasoning_delta', 't1'))).toEqual([])
   })
+
+  it('projects task_workspace updates onto the bound unit workspace', () => {
+    const event = ev('task_workspace', 'owner-thread', {
+      taskWorkspace: {
+        workspaceId: 'tws_abc12345',
+        unitId: 'worker-1',
+        state: 'ready' as const,
+        workspace: {
+          path: '/tmp/wt',
+          sourceRoot: '/repo',
+          kind: 'worktree' as const,
+          branch: 'kun/task-abc123'
+        }
+      }
+    })
+    expect(projectRuntimeEvent(event)).toEqual([
+      {
+        unitId: 'worker-1',
+        patch: {
+          workspace: { path: '/tmp/wt', kind: 'worktree', branch: 'kun/task-abc123' }
+        }
+      }
+    ])
+  })
 })
 
 describe('ActivityStore', () => {
