@@ -19,6 +19,12 @@ import type { FileReviewStore } from '../ade/review-store.js'
 import { reanchorWorkspaceComments } from '../ade/review-reanchor.js'
 import { createAttributionObserver } from '../ade/attribution-observer.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
+import type {
+  HarnessListDeps,
+  HarnessProviderModelGroup
+} from '../ade/tools/harness-list.js'
+import type { ModelConnectionSnapshot } from '../contracts/model-connections.js'
+import { providerModelIds } from './routes/model-gateway-core.js'
 
 type RuntimeServices = Awaited<ReturnType<typeof createRuntimeServices>>
 
@@ -44,6 +50,59 @@ export function createCapabilitiesForRoute(
           route.providerId
         )
       : noHarnessCapabilities())
+  }
+}
+
+/**
+ * Provider-pool access shared by worker-route validation and `harness_list`
+ * (P3-06): reads the modelConnections snapshot, tolerating snapshot failures
+ * as "no providers" so the manager tools degrade to static lists.
+ */
+export function createProviderPoolAccess(
+  modelConnections: Pick<RuntimeServices['model'], 'modelConnections'>['modelConnections']
+): {
+  providers: () => Promise<HarnessProviderModelGroup[]>
+  poolEntry: NonNullable<ManagerRuntimeDeps['providerPool']>
+} {
+  const snapshot = (): Promise<ModelConnectionSnapshot | undefined> =>
+    modelConnections.snapshot().catch(() => undefined)
+  const providers = async () =>
+    ((await snapshot())?.providers ?? []).map((provider) => ({
+      providerId: provider.id,
+      label: provider.name,
+      kind: provider.kind,
+      models: providerModelIds(provider)
+    }))
+  const poolEntry = async (providerId: string) => {
+    const provider = (await snapshot())?.providers
+      .find((candidate) => candidate.id === providerId)
+    return provider ? { kind: provider.kind, models: providerModelIds(provider) } : undefined
+  }
+  return { providers, poolEntry }
+}
+
+/**
+ * `harness_list` deps (10 §2): catalog + detector + runtime map plus the
+ * cached probe read and provider pool for per-credential-mode model lists.
+ */
+export function createHarnessListDeps(input: {
+  services: Pick<RuntimeServices, 'harnesses'>
+  harnessRuntimeMap: HarnessRuntimeMap
+  listProfiles: () => Array<{
+    name: string
+    model?: string
+    providerId?: string
+    description?: string
+  }>
+  providers?: () => Promise<HarnessProviderModelGroup[]>
+}): HarnessListDeps {
+  return {
+    catalog: input.services.harnesses.catalog,
+    detector: input.services.harnesses.detector,
+    runtimes: input.harnessRuntimeMap,
+    probedModels: (definition) => input.services.harnesses.acpModels.peek(definition),
+    ...(input.providers ? { providers: input.providers } : {}),
+    profiles: input.listProfiles
   }
 }
 

@@ -5,7 +5,7 @@ import type {
   TurnRunOutcome,
   WorkerRecord
 } from '../contracts/ade.js'
-import type { HarnessRoute, HarnessId } from '../contracts/harness.js'
+import type { HarnessDefinition, HarnessRoute, HarnessId } from '../contracts/harness.js'
 import type { HarnessCapabilities } from '../contracts/harness-capabilities.js'
 import type { TaskWorkspaceRecord, StartFrom } from '../contracts/task-workspace.js'
 import type { ThreadRecord } from '../contracts/threads.js'
@@ -38,11 +38,13 @@ import { WorkspaceIntegrations } from './workspace-integrate.js'
 import { hasOpenWorkerWork } from './worker-open-work.js'
 import {
   countRecentWorkerFailures,
-  NoEligibleWorkerError,
-  selectWorkerRoute,
   type WorkerSelectorDeps
 } from './worker-selector.js'
-import { resolveWorkerRoute, type ResolvedWorkerRoute } from './worker-route.js'
+import {
+  resolveManagerWorkerRoute,
+  type ResolvedWorkerRoute,
+  type WorkerProviderPoolEntry
+} from './worker-route.js'
 import { checkHarnessAdmission, type AdmissionResult } from '../harness/harness-admission.js'
 import { effectiveCapabilitiesForRoute } from '../harness/effective-capabilities.js'
 import {
@@ -152,6 +154,10 @@ export type ManagerRuntimeDeps = {
     import('./check-runner.js').WorkspaceCheckRunnerDeps,
     'approvedChecks' | 'artifacts' | 'spawn' | 'env'
   >
+  /** Provider pool for provider/gateway route validation (P3-06). */
+  providerPool?: (providerId: string) => Promise<WorkerProviderPoolEntry | undefined>
+  /** Last cached model-probe list per harness; absent → static list. */
+  probedModels?: (definition: HarnessDefinition) => string[] | undefined
   /**
    * Worker-route selector inputs (10 §3.2); `isolated`/`unattended` come from
    * the create call. Absent → the manager's own provider/model on `kun`.
@@ -219,55 +225,15 @@ export class ManagerRuntime {
     return team.workers.filter((worker) => worker.state === 'active')
   }
 
-  private async resolveRoute(
+  private resolveRoute(
     ctx: ManagerToolContext,
     input: WorkerCreateInput,
     isolated: boolean
   ): Promise<ResolvedWorkerRoute | { error: string }> {
-    const managerThread = await this.deps.threads.get(ctx.threadId).catch(() => null)
-    const selector = this.deps.selector
-    return resolveWorkerRoute({
-      catalog: this.deps.catalog,
-      managerModel: managerThread?.model,
-      managerProviderId: managerThread?.providerId,
-      agent: input.agent,
-      ...(selector
-        ? {
-            // No explicit agent: deterministic worker selection (10 §3.2).
-            select: () =>
-              selectWorkerRoute(
-                {
-                  catalog: this.deps.catalog,
-                  detector: this.deps.detector,
-                  capabilitiesForRoute: (route) => this.deps.capabilitiesForRoute(route),
-                  ...selector,
-                  isolated,
-                  unattended: !ctx.authority.interactive,
-                  allowUnattendedFullAccess:
-                    this.deps.allowUnattendedFullAccess?.() === true,
-                  managerRoute: () => ({
-                    model: managerThread?.model?.trim() || undefined,
-                    providerId: managerThread?.providerId?.trim() || undefined
-                  }),
-                  recentFailures: (teamId, harnessId) =>
-                    this.recentFailures(teamId, harnessId),
-                  language: this.deps.language
-                },
-                {
-                  task: `${input.label}\n${input.task}`,
-                  ...(input.role ? { role: input.role } : {}),
-                  teamId: ctx.threadId,
-                  workspace: ctx.workspace
-                }
-              ).catch((error) => {
-                if (error instanceof NoEligibleWorkerError) {
-                  return { error: error.message }
-                }
-                throw error
-              })
-          }
-        : {})
-    })
+    return resolveManagerWorkerRoute(
+      this.deps, ctx, input, isolated,
+      (teamId, harnessId) => this.recentFailures(teamId, harnessId)
+    )
   }
 
   /**
