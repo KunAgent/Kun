@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useChatStore } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
@@ -24,6 +25,7 @@ export function useMobileWorkAssistantSend(): {
   error: string
   send: (text: string) => Promise<boolean>
 } {
+  const { t } = useTranslation('common')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const chat = useChatStore(useShallow((state) => ({
@@ -36,7 +38,9 @@ export function useMobileWorkAssistantSend(): {
   })))
   const send = async (text: string): Promise<boolean> => {
     const prompt = text.trim()
-    if (!prompt || sending || chat.runtimeConnection !== 'ready') return false
+    if (!prompt || sending) return false
+    const reject = (reason: string): false => { setError(reason); return false }
+    if (chat.runtimeConnection !== 'ready') return reject(t('mobileWorkDocConnectionLost'))
     const work = useWriteWorkspaceStore.getState()
     const document = work.activeFilePath ? work.documentsByPath[work.activeFilePath] : null
     const whiteboard = work.activeWhiteboardId ? work.whiteboards[work.activeWhiteboardId] ?? null : null
@@ -44,7 +48,7 @@ export function useMobileWorkAssistantSend(): {
       ...selection,
       ...(selection.rects ? { rects: selection.rects.map((rect) => ({ ...rect })) } : {})
     }))
-    if (!work.workspaceRoot || (!document && !whiteboard)) return false
+    if (!work.workspaceRoot || (!document && !whiteboard)) return reject(t('mobileWorkDocNotReady'))
     const sameResource = (): boolean => {
       const live = useWriteWorkspaceStore.getState()
       const page = readMobilePage(new URL(window.location.href))
@@ -56,35 +60,37 @@ export function useMobileWorkAssistantSend(): {
         page.kind === 'resource' && page.resourceKey === resourceKey
     }
     if (document && !['text', 'code'].includes(document.kind)) {
-      setError('This resource needs its full semantic assistant context before it can be sent on mobile.')
+      setError(t('mobileWorkDocSemanticContextNeeded'))
       return false
     }
     setSending(true)
     setError('')
     try {
       if (document && !await work.saveAllDocuments(work.workspaceRoot)) {
-        setError('Save the document before sending it to the assistant.')
+        setError(t('mobileWorkDocSaveBeforeSend'))
         return false
       }
-      if (!sameResource()) return false
+      if (!sameResource()) return reject(t('mobileWorkDocChanged'))
       let threadId = whiteboard?.threadId ?? null
       if (whiteboard && !threadId) {
         threadId = await chat.createThread(work.workspaceRoot, undefined, {
           title: whiteboard.title,
           titleAuto: false
         })
-        if (!sameResource()) return false
+        if (!sameResource()) return reject(t('mobileWorkDocChanged'))
         if (threadId && !await work.bindWhiteboardThread(whiteboard.id, threadId)) {
-          setError('The whiteboard conversation could not be bound.')
+          setError(t('mobileWorkDocBindBoardFailed'))
           return false
         }
       }
       threadId ??= await chat.ensureThread(work.workspaceRoot, work.activeFilePath ?? undefined)
-      if (!threadId || !sameResource()) return false
+      if (!threadId || !sameResource()) return reject(t('mobileWorkDocThreadNotReady'))
       if (useChatStore.getState().activeThreadId !== threadId) {
         await chat.selectThread(threadId, work.workspaceRoot, work.activeFilePath ?? undefined)
       }
-      if (!sameResource() || useChatStore.getState().activeThreadId !== threadId) return false
+      if (!sameResource() || useChatStore.getState().activeThreadId !== threadId) {
+        return reject(t('mobileWorkDocThreadChanged'))
+      }
       const whiteboardContexts = whiteboard
         ? await activeWorkWhiteboardComposerContexts(work.workspaceRoot, whiteboard, threadId, prompt)
         : []
@@ -104,7 +110,7 @@ export function useMobileWorkAssistantSend(): {
       if (whiteboard && !workWhiteboardSnapshotMatches(useWriteWorkspaceStore.getState(), {
         ...whiteboard, threadId
       })) {
-        setError('The active whiteboard changed before the message was sent.')
+        setError(t('mobileWorkDocBoardChanged'))
         return false
       }
       const expectedSha256 = document
@@ -115,7 +121,7 @@ export function useMobileWorkAssistantSend(): {
       const fileReference = document
         ? workbenchWriteSourceReference(work.workspaceRoot, work.activeFilePath)
         : undefined
-      if (!sameResource()) return false
+      if (!sameResource()) return reject(t('mobileWorkDocChanged'))
       const sent = await chat.sendMessage(prompt, 'agent', {
         expectedThreadId: threadId,
         agentSurface: 'write',

@@ -15,7 +15,9 @@ export type MobileWorkHomeProps = {
   search: string
   loading: boolean
   error: string
-  labels: { title: string; search: string; create: string; more: string; empty: string; loading: string; retry: string }
+  labels: { title: string; search: string; create: string; more: string; empty: string; loading: string; retry: string
+    documents?: string; papers?: string; backFolder?: string; recent?: string; filesBoards?: string; loadMore?: string
+    status?: Partial<Record<MobileWorkResource['status'], string>> }
   onWorkspace: (() => void) | null
   onSearch: (value: string) => void
   onOpen: (resource: MobileWorkResource) => void
@@ -37,30 +39,30 @@ export function MobileWorkHome(props: MobileWorkHomeProps) {
     <header><div><h1>{labels.title}</h1>{onWorkspace ? <button type="button" onClick={onWorkspace}>{workspaceLabel}</button> : <span>{workspaceLabel}</span>}</div>
       {onCreate ? <button type="button" className="kun-mobile-work-icon" onClick={onCreate} aria-label={labels.create}><Plus aria-hidden /></button> : null}</header>
     {props.onMode ? <nav className="kun-mobile-work-tabs" aria-label={labels.title}>
-      <button type="button" aria-current={props.mode === 'documents' ? 'page' : undefined} onClick={() => props.onMode?.('documents')}>文档</button>
-      <button type="button" aria-current={props.mode === 'papers' ? 'page' : undefined} onClick={() => props.onMode?.('papers')}>论文</button>
+      <button type="button" aria-current={props.mode === 'documents' ? 'page' : undefined} onClick={() => props.onMode?.('documents')}>{labels.documents ?? 'Documents'}</button>
+      <button type="button" aria-current={props.mode === 'papers' ? 'page' : undefined} onClick={() => props.onMode?.('papers')}>{labels.papers ?? 'Papers'}</button>
     </nav> : null}
-    {props.onBackFolder ? <button className="kun-mobile-work-folder-back" type="button" onClick={props.onBackFolder}>← 返回上一级</button> : null}
+    {props.onBackFolder ? <button className="kun-mobile-work-folder-back" type="button" onClick={props.onBackFolder}>← {labels.backFolder ?? 'Back to parent folder'}</button> : null}
     <label className="kun-mobile-work-search"><Search size={18} aria-hidden />
       <input type="search" value={search} onChange={(event) => onSearch(event.target.value)} aria-label={labels.search} placeholder={labels.search} /></label>
     <div className="kun-mobile-work-list" aria-busy={loading}>
       {error ? <div role="alert"><p>{error}</p><button type="button" disabled={loading} onClick={onRetry}>{labels.retry}</button></div> : null}
       {!error && resources.length === 0 ? loading ? <MobileLoadingState label={labels.loading} />
         : <p role="status">{labels.empty}</p> : null}
-      {props.recent?.length ? <><h2>最近打开</h2><ul>{props.recent.map((resource) => <li key={`recent-${resource.key}`}>
+      {props.recent?.length ? <><h2>{labels.recent ?? 'Recently opened'}</h2><ul>{props.recent.map((resource) => <li key={`recent-${resource.key}`}>
         <button type="button" className="kun-mobile-work-open" onClick={() => onOpen(resource)}><FileText aria-hidden />
           <span><strong>{resource.title}</strong><small>{resource.detail}</small></span></button>
-      </li>)}</ul><h2>文件与白板</h2></> : null}
+      </li>)}</ul><h2>{labels.filesBoards ?? 'Files and whiteboards'}</h2></> : null}
       <ul>{resources.map((resource) => <li key={resource.key}>
         <button type="button" className="kun-mobile-work-open" onClick={() => onOpen(resource)}>
           {resource.kind === 'whiteboard' ? <Shapes aria-hidden /> : resource.kind === 'directory' ? <Folder aria-hidden /> : <FileText aria-hidden />}
           <span><strong>{resource.title}</strong><small>{resource.detail}</small></span>
-          <span className={`kun-mobile-work-status is-${resource.status}`}>{resource.status}</span>
+          <span className={`kun-mobile-work-status is-${resource.status}`}>{labels.status?.[resource.status] ?? resource.status}</span>
         </button>
         {onMenu ? <button type="button" className="kun-mobile-work-icon" onClick={() => onMenu(resource)} aria-label={`${labels.more}: ${resource.title}`}>
           <MoreHorizontal aria-hidden /></button> : null}
       </li>)}</ul>
-      {props.hasMore && props.onLoadMore ? <button type="button" className="kun-mobile-work-load-more" onClick={props.onLoadMore}>加载更多</button> : null}
+      {props.hasMore && props.onLoadMore ? <button type="button" className="kun-mobile-work-load-more" onClick={props.onLoadMore}>{labels.loadMore ?? 'Load more'}</button> : null}
     </div>
   </section>
 }

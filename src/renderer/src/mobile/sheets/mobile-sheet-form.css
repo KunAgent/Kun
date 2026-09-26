@@ -7,7 +7,7 @@
   gap: 6px;
   min-width: 0;
   color: var(--ds-text-muted);
-  font-size: 13px;
+  font-size: .8125rem;
 }
 fieldset.kun-mobile-field { margin: 0; padding: 0; border: 0; min-inline-size: 0; }
 .kun-mobile-field > :is(input, select, textarea) {
@@ -20,8 +20,8 @@ fieldset.kun-mobile-field { margin: 0; padding: 0; border: 0; min-inline-size: 0
   color: var(--ds-text);
   background: var(--ds-bg-main);
   font: inherit;
-  font-size: var(--kun-mobile-font-input, 16px);
-  line-height: 22px;
+  font-size: max(1rem, var(--kun-mobile-font-input, 16px));
+  line-height: 1.4;
 }
 .kun-mobile-field > select {
   appearance: none;
@@ -45,11 +45,11 @@ fieldset.kun-mobile-field { margin: 0; padding: 0; border: 0; min-inline-size: 0
   border-radius: var(--kun-mobile-radius, 12px);
   background: var(--ds-surface-subtle);
 }
-.kun-mobile-kv dt { color: var(--ds-text-muted); font-size: 13px; line-height: 20px; white-space: nowrap; }
-.kun-mobile-kv dd { margin: 0; min-width: 0; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.kun-mobile-kv dt { color: var(--ds-text-muted); font-size: .8125rem; line-height: 1.4; white-space: nowrap; }
+.kun-mobile-kv dd { margin: 0; min-width: 0; font-size: .875rem; line-height: 1.4; overflow-wrap: anywhere; }
 .kun-mobile-kv dd[data-mono] {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12.5px;
+  font-size: .78125rem;
 }
 @media (max-width: 339px) {
   .kun-mobile-kv { grid-template-columns: minmax(0, 1fr); gap: 2px; }

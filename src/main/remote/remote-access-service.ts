@@ -21,6 +21,7 @@ import {
   verifyRemoteAccessPassword
 } from './remote-auth'
 import { RemoteEventHub, remoteSseHeaders, startSseHeartbeat } from './remote-events'
+import { remoteFeedAccessError } from './remote-feed-authorization'
 import { dispatchRemoteInvoke, RemoteInvokeError } from './remote-invoke'
 import { lanUrlsForPort } from './remote-lan-urls'
 import { KUN_LOGIN_ART_DATA_URL } from './remote-login-art'
@@ -111,6 +112,7 @@ export class RemoteAccessService {
   private readonly loginLimiter = new RemoteLoginRateLimiter()
   private readonly mirroredContents = new WeakSet<WebContents>()
   private readonly uploads = new Map<string, { session: string; client: string; timer: ReturnType<typeof setTimeout> }>()
+  private approvedFeedUrls: ReadonlySet<string> | null = null
 
   private server: Server | null = null
   private syncQueue: Promise<void> = Promise.resolve()
@@ -178,6 +180,10 @@ export class RemoteAccessService {
       await this.stopServer()
     }
     if (!this.server) {
+      // Freeze host-approved feed targets for this process; Remote settings writes and rebinds cannot expand them.
+      if (this.approvedFeedUrls === null) {
+        this.approvedFeedUrls = new Set((settings?.write?.paperMode?.discover?.feeds ?? []).map((feed) => feed.url))
+      }
       try {
         await this.listen(port, host)
         this.appliedBind = bind
@@ -582,6 +588,11 @@ export class RemoteAccessService {
     }
     if (this.hub.belongsToAnotherSession(clientId, session.token)) {
       sendRemoteJson(res, 403, { ok: false, error: 'Remote client belongs to another session' })
+      return
+    }
+    const feedError = await remoteFeedAccessError(body, this.approvedFeedUrls, this.getSettings)
+    if (feedError) {
+      sendRemoteJson(res, 403, { ok: false, error: feedError })
       return
     }
     const sender = this.hub.clientFor(clientId, {

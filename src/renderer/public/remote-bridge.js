@@ -205,6 +205,10 @@
     paperTranslateSelection: invokePayload('paper-reader:translate-selection'),
     paperFetchReferences: invokePayload('paper-reader:references'),
     paperSearch: invokePayload('paper-discover:search'),
+    paperFetchFeed: invokePayload('paper-discover:feed'),
+    paperArxivToday: invokePayload('paper-discover:arxiv-today'),
+    paperListVenue: invokePayload('paper-discover:venue'),
+    paperVenueCatalog: invokePayload('paper-discover:venue-catalog'),
     onPaperProgress: on('paper:progress'),
 
     // Workspace selection + files. Native pickers open on the host machine.

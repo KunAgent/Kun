@@ -4,6 +4,7 @@ import {
   resolveWriteInlineCompletionApiKey
 } from '@shared/app-settings'
 import { rendererRuntimeClient } from '../agent/runtime-client'
+import { mobileDocumentsWorkspaceRoot } from '../mobile/work/mobile-documents-workspace'
 import { prepareActiveWriteFileForNavigation } from './write-workspace-file-action-helpers'
 import type { WriteWorkspaceGet, WriteWorkspaceSet, WriteWorkspaceState } from './write-workspace-store-types'
 import {
@@ -111,8 +112,13 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
       // The Remote phone owns its Work/Papers navigation locally. Never
       // apply the host's persisted paper surface switch to that browser.
       if (mobile) {
-        await get().initializeWorkspace(write.paperMode.enabled
-          ? write.defaultWorkspaceRoot : write.activeWorkspaceRoot)
+        const root = mobileDocumentsWorkspaceRoot({
+          workspaces: write.workspaces,
+          activeWorkspaceRoot: write.activeWorkspaceRoot,
+          defaultWorkspaceRoot: write.defaultWorkspaceRoot,
+          paperModeEnabled: write.paperMode.enabled
+        })
+        await get().initializeWorkspace(root)
         if (requestIsCurrent(generation)) set({ settingsLoading: false })
         return
       }

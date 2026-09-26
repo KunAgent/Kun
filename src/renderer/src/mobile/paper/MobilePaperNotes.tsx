@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { writeJoinPath } from '../../write/write-workspace-store-helpers'
 
 export function MobilePaperNotes({ workspaceRoot, unitDir, onDirty }: {
@@ -6,7 +7,11 @@ export function MobilePaperNotes({ workspaceRoot, unitDir, onDirty }: {
   unitDir: string
   onDirty: (dirty: boolean) => void
 }) {
+  const { t } = useTranslation('common')
+  const translateRef = useRef(t)
+  translateRef.current = t
   const path = writeJoinPath(writeJoinPath(workspaceRoot, unitDir), 'NOTES.md')
+  const loadedTarget = useRef({ workspaceRoot, path })
   const [text, setText] = useState('')
   const [saved, setSaved] = useState('')
   const [mtime, setMtime] = useState<number | undefined>()
@@ -19,14 +24,20 @@ export function MobilePaperNotes({ workspaceRoot, unitDir, onDirty }: {
   const textRef = useRef(text)
   textRef.current = text
   const dirty = text !== saved
+  const dirtyRef = useRef(false)
+  dirtyRef.current = dirty || conflict
   useEffect(() => onDirty(dirty || conflict), [dirty, conflict, onDirty])
   useEffect(() => {
+    if (dirtyRef.current && (loadedTarget.current.path !== path || loadedTarget.current.workspaceRoot !== workspaceRoot)) {
+      setError(translateRef.current('mobileWorkPaperNotesTargetChanged')); return
+    }
+    loadedTarget.current = { workspaceRoot, path }
     let live = true
     setError(''); setMissing(false); setLoading(true); setText(''); setSaved(''); setMtime(undefined)
     void window.kunGui.readWorkspaceFile({ workspaceRoot, path }).then((result) => {
       if (!live) return
       if (!result.ok) { setMissing(/ENOENT|not found/i.test(result.message)); setError(result.message); return }
-      if (result.truncated) { setError('笔记过大，手机暂不编辑截断内容'); return }
+      if (result.truncated) { setError(translateRef.current('mobileWorkPaperNotesLarge')); return }
       setText(result.content); setSaved(result.content); setMtime(result.mtimeMs)
     }).catch((cause: unknown) => { if (live) setError(String(cause)) })
       .finally(() => { if (live) setLoading(false) })
@@ -37,29 +48,41 @@ export function MobilePaperNotes({ workspaceRoot, unitDir, onDirty }: {
     setBusy(true); setError('')
     const snapshot = textRef.current
     try {
-      const result = await window.kunGui.writeWorkspaceFile({ workspaceRoot, path, content: snapshot,
+      const result = await window.kunGui.writeWorkspaceFile({ workspaceRoot: loadedTarget.current.workspaceRoot,
+        path: loadedTarget.current.path, content: snapshot,
         ...(force ? { force: true } : { expectedMtimeMs: mtime }) })
       if (!result.ok) { setConflict(result.code === 'modified_on_disk'); throw new Error(result.message) }
       setMtime(result.mtimeMs); setSaved(snapshot); setConflict(false)
+      if (loadedTarget.current.path !== path || loadedTarget.current.workspaceRoot !== workspaceRoot) {
+        setRetry((value) => value + 1)
+      }
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
     finally { setBusy(false) }
   }
-  if (loading) return <p role="status">正在读取笔记…</p>
+  if (loading) return <p role="status">{t('mobileWorkPaperNotesLoading')}</p>
   if (error && !dirty && mtime === undefined && !missing) return <div role="alert"><p>{error}</p>
-    <button type="button" onClick={() => setRetry((value) => value + 1)}>重试读取笔记</button></div>
-  if (missing) return <div className="kun-mobile-paper-reader-body"><p role="alert">笔记文件尚不存在：{error}</p>
+    <button type="button" onClick={() => setRetry((value) => value + 1)}>{t('mobileWorkPaperNotesRetry')}</button></div>
+  if (missing) return <div className="kun-mobile-paper-reader-body"><p role="alert">{t('mobileWorkPaperNotesMissing', { error })}</p>
     <button type="button" disabled={busy} onClick={() => {
       setBusy(true); void window.kunGui.createWorkspaceFile({ workspaceRoot, path, content: '' })
         .then((result) => { if (result.ok) setRetry((value) => value + 1); else setError(result.message) })
-        .finally(() => setBusy(false)) }}>创建 NOTES.md</button></div>
+        .finally(() => setBusy(false)) }}>{t('mobileWorkPaperNotesCreate')}</button></div>
   return <div className="kun-mobile-paper-reader-body">
     <label className="kun-mobile-field">NOTES.md
       <textarea rows={18} value={text} onChange={(event) => { onDirty(true); setText(event.target.value) }} spellCheck={false} /></label>
     <button type="button" className="kun-mobile-work-sheet-button" disabled={busy || !dirty} onClick={() => void save()}>
-      {busy ? '保存中…' : dirty ? '保存笔记到主机' : '已保存'}</button>
-    {conflict ? <div role="alert"><p>主机笔记已被修改。请决定保留哪一份。</p>
-      <button type="button" onClick={() => { if (window.confirm('覆盖主机 NOTES.md？')) void save(true) }}>用手机笔记覆盖主机</button>
-      <button type="button" onClick={() => { if (window.confirm('放弃手机未保存笔记？')) { setConflict(false); setRetry((value) => value + 1) } }}>放弃草稿并重新读取</button>
+      {busy ? t('mobileWorkPaperNotesSaving') : dirty ? t('mobileWorkPaperSaveNotes') : t('mobileWorkPaperNotesSaved')}</button>
+    {dirty && (loadedTarget.current.path !== path || loadedTarget.current.workspaceRoot !== workspaceRoot) ?
+      <div role="alert"><p>{t('mobileWorkPaperNotesTargetChanged')}</p>
+        <button type="button" onClick={() => { if (window.confirm(t('mobileWorkPaperNotesDiscardConfirm'))) {
+          setText(saved); textRef.current = saved; setConflict(false); setRetry((value) => value + 1)
+        } }}>{t('mobileWorkPaperNotesDiscard')}</button>
+      </div> : null}
+    {conflict ? <div role="alert"><p>{t('mobileWorkPaperNotesConflict')}</p>
+      <button type="button" onClick={() => { if (window.confirm(t('mobileWorkPaperNotesOverwriteConfirm'))) void save(true) }}>{t('mobileWorkPaperNotesOverwrite')}</button>
+      <button type="button" onClick={() => { if (window.confirm(t('mobileWorkPaperNotesDiscardConfirm'))) {
+        setText(saved); textRef.current = saved; setConflict(false); setRetry((value) => value + 1)
+      } }}>{t('mobileWorkPaperNotesDiscard')}</button>
     </div> : null}
     {error ? <p role="alert">{error}</p> : null}
   </div>

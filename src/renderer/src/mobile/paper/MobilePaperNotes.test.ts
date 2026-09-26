@@ -3,6 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobilePaperNotes } from './MobilePaperNotes'
+import i18n from '../../i18n'
 
 let root: Root
 let host: HTMLDivElement
@@ -47,7 +48,7 @@ describe('mobile paper notes', () => {
     const textarea = await mount()
     await edit(textarea, 'changed')
     expect(onDirty).toHaveBeenCalledWith(true)
-    const save = [...host.querySelectorAll('button')].find((item) => item.textContent?.includes('保存笔记'))!
+    const save = host.querySelector('.kun-mobile-work-sheet-button') as HTMLButtonElement
     await act(async () => save.click())
     expect(write).toHaveBeenCalledWith({ workspaceRoot: '/library', path: '/library/papers/x/NOTES.md',
       content: 'changed', expectedMtimeMs: 7 })
@@ -58,10 +59,35 @@ describe('mobile paper notes', () => {
     write.mockResolvedValue({ ok: false, code: 'modified_on_disk', message: 'changed on host' })
     const textarea = await mount()
     await edit(textarea, 'local draft')
-    const save = [...host.querySelectorAll('button')].find((item) => item.textContent?.includes('保存笔记'))!
+    const save = host.querySelector('.kun-mobile-work-sheet-button') as HTMLButtonElement
     await act(async () => save.click())
     expect(textarea.value).toBe('local draft')
     expect(onDirty).toHaveBeenLastCalledWith(true)
-    expect(host.textContent).toContain('主机笔记已被修改')
+    expect(host.textContent).toContain('The host note changed')
+  })
+
+  it('never sends an unsaved draft to a newly selected library', async () => {
+    const textarea = await mount()
+    await edit(textarea, 'local draft')
+    await act(async () => root.render(createElement(MobilePaperNotes, {
+      workspaceRoot: '/another', unitDir: 'papers/y', onDirty
+    })))
+    expect(textarea.value).toBe('local draft')
+    expect(host.textContent).toContain('The paper changed')
+    await act(async () => (host.querySelector('.kun-mobile-work-sheet-button') as HTMLButtonElement).click())
+    expect(write).toHaveBeenCalledWith(expect.objectContaining({
+      workspaceRoot: '/library', path: '/library/papers/x/NOTES.md', content: 'local draft'
+    }))
+  })
+
+  it('keeps the local draft while switching the visible language', async () => {
+    const old = i18n.language
+    const textarea = await mount()
+    await edit(textarea, 'local draft')
+    try {
+      await act(async () => { await i18n.changeLanguage('zh') })
+      expect(textarea.value).toBe('local draft')
+      expect(host.textContent).toContain('保存笔记到主机')
+    } finally { await act(async () => { await i18n.changeLanguage(old) }) }
   })
 })
