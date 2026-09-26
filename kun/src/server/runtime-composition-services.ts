@@ -69,6 +69,7 @@ import { ThreadStoreGuardian } from '../services/thread-store-guardian.js'
 import { ThreadSnapshotStore } from '../services/thread-snapshot-store.js'
 import { SessionGuardian } from '../services/session-guardian.js'
 import { WorkerCallbackService } from '../services/worker-callback-service.js'
+import { TerminalAgentRegistry } from '../services/terminal-agent-registry.js'
 import { FileTeamStore } from '../ade/team-store.js'
 import { FileDispatchStore } from '../ade/dispatch-store.js'
 import { FileQuestionStore } from '../ade/question-store.js'
@@ -457,6 +458,12 @@ export async function createRuntimeServices(
     nowIso,
     idGenerator: () => ids.next('q')
   })
+  const terminalAgents = new TerminalAgentRegistry({
+    dataDir: core.activeOptions.dataDir,
+    activity: core.activityStore,
+    nowIso,
+    idGenerator: () => ids.next('tu')
+  })
 	  let baseToolProviders = [
     {
       id: 'builtin',
@@ -557,6 +564,7 @@ export async function createRuntimeServices(
     childToolHost,
     adeStores,
     workerCallbacks,
+    terminalAgents,
     defaultIsAgentSdk,
     defaultIsAntigravity,
     defaultIsCursorSdk,

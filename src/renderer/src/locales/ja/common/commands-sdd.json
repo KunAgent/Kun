@@ -76,6 +76,7 @@
   "terminalClear": "クリア端子",
   "terminalRestart": "端末を再起動します",
   "terminalNewTab": "新しいターミナルタブ",
+  "terminalRunAgent": "ターミナルでエージェントを実行",
   "terminalCloseTab": "ターミナルタブを閉じる",
   "terminalTabMenuTitle": "「ターミナル」タブのアクション",
   "terminalRenameTab": "ターミナルタブの名前を変更",

@@ -16,6 +16,45 @@ export type TerminalTarget =
   /** `cwd` overrides the workspace root (e.g. a task worktree opened for review). */
   | { kind: 'local'; cwd?: string }
   | { kind: 'ssh'; hostId: string; hostName: string }
+  /**
+   * ADE terminal agent (docs/ade/05 §6.1): a harness CLI registered with kun
+   * as an execution unit and launched inside a local PTY.
+   */
+  | {
+      kind: 'agent'
+      harnessId: string
+      title: string
+      task?: string
+      cwd?: string
+      taskWorkspaceId?: string
+      parentThreadId?: string
+      workspaceKind?: 'worktree' | 'local' | 'directory'
+    }
+
+/**
+ * Extra `terminal:create` fields a target contributes. Agent targets carry
+ * the execution-unit request; SSH keeps its own create surface.
+ */
+export function terminalTargetCreateExtras(
+  target: TerminalTarget,
+  workspaceRoot?: string
+): Pick<TerminalCreatePayload, 'cwd' | 'agent'> {
+  if (target.kind === 'agent') {
+    return {
+      cwd: target.cwd ?? workspaceRoot,
+      agent: {
+        harnessId: target.harnessId,
+        title: target.title,
+        ...(target.task ? { task: target.task } : {}),
+        ...(target.taskWorkspaceId ? { taskWorkspaceId: target.taskWorkspaceId } : {}),
+        ...(target.parentThreadId ? { parentThreadId: target.parentThreadId } : {}),
+        ...(target.workspaceKind ? { workspaceKind: target.workspaceKind } : {})
+      }
+    }
+  }
+  if (target.kind === 'local') return { cwd: target.cwd ?? workspaceRoot }
+  return {}
+}
 
 export type TerminalBackend = {
   create: (payload: TerminalCreatePayload) => Promise<TerminalCreateResult | RemoteSshTerminalCreateResult>
@@ -27,7 +66,7 @@ export type TerminalBackend = {
 }
 
 export function terminalBackend(target: TerminalTarget): TerminalBackend {
-  if (target.kind === 'local') {
+  if (target.kind === 'local' || target.kind === 'agent') {
     return {
       create: window.kunGui.createTerminal,
       write: window.kunGui.writeToTerminal,

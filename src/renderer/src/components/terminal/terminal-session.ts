@@ -23,9 +23,10 @@ export function terminalSessionIdForWorkspace(
 ): string {
   const workspaceKey = terminalWorkspaceSessionKey(workspaceRoot)
   const tabKey = tabId.trim() || 'main'
-  if (target.kind === 'local') {
+  if (target.kind === 'local' || target.kind === 'agent') {
     const cwdKey = target.cwd ? `:cwd-${hashString(target.cwd)}` : ''
-    return `${TERMINAL_SESSION_PREFIX}:${hashString(workspaceKey)}${cwdKey}:${tabKey}`
+    const agentKey = target.kind === 'agent' ? `:agent-${hashString(target.harnessId)}` : ''
+    return `${TERMINAL_SESSION_PREFIX}:${hashString(workspaceKey)}${cwdKey}${agentKey}:${tabKey}`
   }
   return `${TERMINAL_SESSION_PREFIX}:${hashString(workspaceKey)}:ssh-${hashString(target.hostId)}:${tabKey}`
 }

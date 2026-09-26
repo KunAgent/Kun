@@ -18,7 +18,7 @@ import { defaultTerminalColors, type TerminalColorSettingsV1 } from '@shared/app
 import type { RemoteSshHost } from '@shared/remote-ssh'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
-import { terminalBackend } from './terminal-backend'
+import { terminalBackend, terminalTargetCreateExtras } from './terminal-backend'
 import { useTerminalOpenAt } from './terminal-open'
 import { terminalSessionIdForWorkspace, terminalWorkspaceSessionKey } from './terminal-session'
 import { TerminalTabContextMenu } from './TerminalTabContextMenu'
@@ -285,11 +285,9 @@ export function TerminalPanel({
     try {
       let result = await backend.create({
         sessionId,
-        cwd: tab.target.kind === 'local'
-          ? (tab.target.cwd ?? (workspaceRoot || undefined))
-          : undefined,
         cols,
-        rows
+        rows,
+        ...terminalTargetCreateExtras(tab.target, workspaceRoot || undefined)
       })
       if (!result.ok && 'reason' in result && result.reason === 'hostKeyConfirmationRequired') {
         const accepted = window.confirm(`Trust SSH host key?\n\n${result.fingerprint}`)
@@ -402,7 +400,8 @@ export function TerminalPanel({
     const tab: TerminalTab = {
       id: `tab-${Date.now().toString(36)}-${nextIndex}`,
       index: nextIndex,
-      target
+      target,
+      ...(target.kind === 'agent' ? { title: target.title } : {})
     }
     setTabs((current) => [...current, tab])
     setActiveTabId(tab.id)
@@ -652,6 +651,8 @@ export function TerminalPanel({
               remoteHosts={remoteHosts}
               onNewLocalTab={() => createTab({ kind: 'local' })}
               onNewSshTab={(host) => createTab({ kind: 'ssh', hostId: host.id, hostName: host.label })}
+              onNewAgentTab={(harness) =>
+                createTab({ kind: 'agent', harnessId: harness.definition.id, title: harness.definition.displayName })}
               t={t}
             />,
             document.body

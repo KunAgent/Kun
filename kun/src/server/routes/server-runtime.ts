@@ -285,6 +285,11 @@ export type ServerRuntime = {
       reviews: import('../../ade/review-store.js').FileReviewStore
     }
     workerCallbacks: import('../../services/worker-callback-service.js').WorkerCallbackService
+    /**
+     * Tier-0 terminal-agent units + scoped token issuance (05 §6.1).
+     * Optional so test scaffolds can omit it.
+     */
+    terminalAgents?: import('../../services/terminal-agent-registry.js').TerminalAgentRegistry
     /** Manager control plane + exactly-once dispatch delivery (09 §4-§5). */
     manager?: import('../../ade/manager-runtime.js').ManagerRuntime
     deliverer?: import('../../ade/dispatch-deliverer.js').DispatchDeliverer

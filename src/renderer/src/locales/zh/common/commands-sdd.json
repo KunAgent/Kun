@@ -74,7 +74,7 @@
   "terminalPanelTitle": "终端",
   "terminalClear": "清空终端",
   "terminalRestart": "重启终端",
-  "terminalNewTab": "新建终端标签",
+  "terminalNewTab": "新建终端标签",   "terminalRunAgent": "在终端里运行 agent",
   "terminalCloseTab": "关闭终端标签",
   "terminalTabMenuTitle": "终端标签操作",
   "terminalRenameTab": "重命名终端标签",
