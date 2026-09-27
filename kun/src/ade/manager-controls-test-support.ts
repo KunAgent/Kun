@@ -223,6 +223,8 @@ export function makeHarness(stores: AdeStores, opts: {
   const workspace = workspaceRecord()
   const taskWorkspaces = {
     get: vi.fn(() => workspace),
+    list: vi.fn(() => [workspace]),
+    integrate: vi.fn(async () => ({ outcome: 'applied' as const, record: workspace })),
     captureForDispatch: vi.fn(async () => ({
       record: workspace,
       stat: opts.workspaceStat ?? { changedFiles: 0, insertions: 0, deletions: 0 }

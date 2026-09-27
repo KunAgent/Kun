@@ -16,6 +16,7 @@ import {
   retryTaskWorkspaceResponse,
   taskWorkspaceDiffFileResponse,
   taskWorkspaceDiffResponse,
+  taskWorkspaceIntegratePreviewResponse,
   taskWorkspaceSetupLogResponse
 } from './task-workspaces.js'
 
@@ -91,6 +92,12 @@ export function registerTaskWorkspaceRoutes(router: Router, runtime: ServerRunti
     const svc = service()
     if (!svc) return ERRORS.unavailable('task workspaces are unavailable')
     return captureTaskWorkspaceResponse(svc, ctx.params.workspaceId)
+  })
+  router.add('GET', '/v1/task-workspaces/:workspaceId/integrate-preview', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const svc = service()
+    if (!svc) return ERRORS.unavailable('task workspaces are unavailable')
+    return taskWorkspaceIntegratePreviewResponse(svc, ctx.params.workspaceId)
   })
   router.add('POST', '/v1/task-workspaces/:workspaceId/integrate', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

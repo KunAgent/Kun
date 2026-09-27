@@ -24,7 +24,8 @@ export function terminalSessionIdForWorkspace(
   const workspaceKey = terminalWorkspaceSessionKey(workspaceRoot)
   const tabKey = tabId.trim() || 'main'
   if (target.kind === 'local') {
-    return `${TERMINAL_SESSION_PREFIX}:${hashString(workspaceKey)}:${tabKey}`
+    const cwdKey = target.cwd ? `:cwd-${hashString(target.cwd)}` : ''
+    return `${TERMINAL_SESSION_PREFIX}:${hashString(workspaceKey)}${cwdKey}:${tabKey}`
   }
   return `${TERMINAL_SESSION_PREFIX}:${hashString(workspaceKey)}:ssh-${hashString(target.hostId)}:${tabKey}`
 }

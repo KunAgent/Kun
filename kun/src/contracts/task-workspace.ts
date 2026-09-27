@@ -110,6 +110,20 @@ export const TaskWorkspaceIntegrateOutcomeSchema = z.enum([
 ])
 export type TaskWorkspaceIntegrateOutcome = z.infer<typeof TaskWorkspaceIntegrateOutcomeSchema>
 
+/**
+ * GET /v1/task-workspaces/:id/integrate-preview response (11 §7.1).
+ * Computed with read-only git commands; never mutates workspace or repo.
+ */
+export const TaskWorkspaceIntegratePreviewSchema = z.object({
+  canApplyPatch: z.boolean(),
+  applyBlockReason: z.string().max(2_048).optional(),
+  canMergeBranch: z.boolean(),
+  mergeBlockReason: z.string().max(2_048).optional(),
+  hasUncommitted: z.boolean(),
+  hasRemote: z.boolean()
+}).strict()
+export type TaskWorkspaceIntegratePreview = z.infer<typeof TaskWorkspaceIntegratePreviewSchema>
+
 /** Preview returned with HTTP 409 when discard lacks `confirm: true`. */
 export const TaskWorkspaceDiscardPreviewSchema = z.object({
   uncommittedFiles: z.number().int().nonnegative(),

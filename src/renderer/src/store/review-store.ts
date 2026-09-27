@@ -10,6 +10,9 @@ import type {
 import type {
   TaskWorkspaceDiffFile,
   TaskWorkspaceDiffFileResponse,
+  TaskWorkspaceIntegrateMode,
+  TaskWorkspaceIntegratePreview,
+  TaskWorkspaceIntegrateResponse,
   TaskWorkspaceRecord
 } from '@shared/task-workspace'
 import { getProvider } from '../agent/registry'
@@ -48,6 +51,11 @@ export type WorkspaceReview = {
   sending: boolean
   sendError?: string
   lastSent?: { round: number; targetKind: ReviewSendTarget['kind']; outcomeRef?: string }
+  /** Read-only integrate availability for the primary action (11 §7.1). */
+  integratePreview?: TaskWorkspaceIntegratePreview
+  integratePreviewLoaded?: boolean
+  actionPending?: 'integrate' | 'discard' | 'cleanup'
+  actionError?: string
 }
 
 const emptyWorkspaceReview = (): WorkspaceReview => ({
@@ -533,6 +541,134 @@ export async function sendReviewBatch(
         sending: false,
         sendError: error instanceof Error ? error.message : String(error)
       })
+    }))
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Integrate / discard / cleanup (docs/ade/11 §7): user-initiated lifecycle
+// actions behind the review panel's single primary action.
+// ---------------------------------------------------------------------------
+
+/** Every thread binding pointing at this workspace shows its latest record. */
+function patchBindingRecords(
+  bindings: ReviewStoreState['bindings'],
+  workspaceId: string,
+  record: TaskWorkspaceRecord | null
+): ReviewStoreState['bindings'] {
+  let changed = false
+  const next = { ...bindings }
+  for (const [threadId, bound] of Object.entries(next)) {
+    if (bound?.workspaceId === workspaceId) {
+      next[threadId] = record && record.state !== 'removed' ? record : null
+      changed = true
+    }
+  }
+  return changed ? next : bindings
+}
+
+export async function loadIntegratePreview(workspaceId: string): Promise<void> {
+  const provider = getProvider()
+  if (!provider.getTaskWorkspaceIntegratePreview) return
+  try {
+    const { preview } = await provider.getTaskWorkspaceIntegratePreview(workspaceId)
+    useReviewStore.setState((s) => ({
+      workspaces: patchWorkspace(s.workspaces, workspaceId, {
+        integratePreview: preview,
+        integratePreviewLoaded: true
+      })
+    }))
+  } catch {
+    useReviewStore.setState((s) => ({
+      workspaces: patchWorkspace(s.workspaces, workspaceId, { integratePreviewLoaded: true })
+    }))
+  }
+}
+
+/**
+ * Apply-patch or merge-branch integration. Returns the response so the
+ * caller can open the result dialog; state/binding refresh happens here so
+ * every client sees the same record.
+ */
+export async function integrateWorkspace(
+  workspaceId: string,
+  mode: TaskWorkspaceIntegrateMode
+): Promise<TaskWorkspaceIntegrateResponse | null> {
+  const provider = getProvider()
+  if (!provider.integrateTaskWorkspace) return null
+  useReviewStore.setState((s) => ({
+    workspaces: patchWorkspace(s.workspaces, workspaceId, {
+      actionPending: 'integrate',
+      actionError: undefined
+    })
+  }))
+  try {
+    const response = await provider.integrateTaskWorkspace(workspaceId, mode)
+    useReviewStore.setState((s) => ({
+      bindings: patchBindingRecords(s.bindings, workspaceId, response.record),
+      workspaces: patchWorkspace(s.workspaces, workspaceId, { actionPending: undefined })
+    }))
+    // The diff the user was reviewing just became the source checkout.
+    void loadIntegratePreview(workspaceId)
+    return response
+  } catch (error) {
+    useReviewStore.setState((s) => ({
+      workspaces: patchWorkspace(s.workspaces, workspaceId, {
+        actionPending: undefined,
+        actionError: error instanceof Error ? error.message : String(error)
+      })
+    }))
+    return null
+  }
+}
+
+export async function discardWorkspace(
+  workspaceId: string
+): Promise<TaskWorkspaceRecord | null> {
+  const provider = getProvider()
+  if (!provider.discardTaskWorkspace) return null
+  useReviewStore.setState((s) => ({
+    workspaces: patchWorkspace(s.workspaces, workspaceId, {
+      actionPending: 'discard',
+      actionError: undefined
+    })
+  }))
+  try {
+    const { record } = await provider.discardTaskWorkspace(workspaceId)
+    useReviewStore.setState((s) => ({
+      bindings: patchBindingRecords(s.bindings, workspaceId, record),
+      workspaces: patchWorkspace(s.workspaces, workspaceId, { actionPending: undefined })
+    }))
+    return record
+  } catch (error) {
+    useReviewStore.setState((s) => ({
+      workspaces: patchWorkspace(s.workspaces, workspaceId, {
+        actionPending: undefined,
+        actionError: error instanceof Error ? error.message : String(error)
+      })
+    }))
+    return null
+  }
+}
+
+/** Non-force worktree removal offered after a successful integrate. */
+export async function cleanupWorkspace(workspaceId: string): Promise<TaskWorkspaceRecord | null> {
+  const provider = getProvider()
+  if (!provider.cleanupTaskWorkspace) return null
+  useReviewStore.setState((s) => ({
+    workspaces: patchWorkspace(s.workspaces, workspaceId, { actionPending: 'cleanup' })
+  }))
+  try {
+    const { record } = await provider.cleanupTaskWorkspace(workspaceId)
+    useReviewStore.setState((s) => ({
+      bindings: patchBindingRecords(s.bindings, workspaceId, record),
+      workspaces: patchWorkspace(s.workspaces, workspaceId, { actionPending: undefined })
+    }))
+    return record
+  } catch {
+    useReviewStore.setState((s) => ({
+      workspaces: patchWorkspace(s.workspaces, workspaceId, { actionPending: undefined })
     }))
     return null
   }

@@ -260,6 +260,23 @@ export interface AgentProvider {
     workspaceId: string,
     path: string
   ): Promise<import('@shared/task-workspace').TaskWorkspaceDiffFileResponse>
+  /** Read-only integrate availability for the review primary action (11 §7.1). */
+  getTaskWorkspaceIntegratePreview?(
+    workspaceId: string
+  ): Promise<import('@shared/task-workspace').TaskWorkspaceIntegratePreviewResponse>
+  integrateTaskWorkspace?(
+    workspaceId: string,
+    mode: import('@shared/task-workspace').TaskWorkspaceIntegrateMode
+  ): Promise<import('@shared/task-workspace').TaskWorkspaceIntegrateResponse>
+  previewTaskWorkspaceDiscard?(
+    workspaceId: string
+  ): Promise<import('@shared/task-workspace').TaskWorkspaceDiscardPreview>
+  discardTaskWorkspace?(
+    workspaceId: string
+  ): Promise<import('@shared/task-workspace').TaskWorkspaceRecordResponse>
+  cleanupTaskWorkspace?(
+    workspaceId: string
+  ): Promise<import('@shared/task-workspace').TaskWorkspaceRecordResponse>
   /** Per-workspace review comments shared across clients (docs/ade/11 §4). */
   listReviewComments?(
     workspaceId: string

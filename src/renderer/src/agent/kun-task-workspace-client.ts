@@ -1,7 +1,12 @@
 import type {
   TaskWorkspaceDiffFileResponse,
   TaskWorkspaceDiffListResponse,
-  TaskWorkspaceListResponse
+  TaskWorkspaceDiscardPreview,
+  TaskWorkspaceIntegrateMode,
+  TaskWorkspaceIntegratePreviewResponse,
+  TaskWorkspaceIntegrateResponse,
+  TaskWorkspaceListResponse,
+  TaskWorkspaceRecordResponse
 } from '@shared/task-workspace'
 import { KUN_TASK_WORKSPACES_PATH, kunTaskWorkspacePath } from '@shared/kun-endpoints'
 import { runtimeErrorToError } from '@shared/runtime-error'
@@ -17,6 +22,14 @@ import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
 export function createKunTaskWorkspaceClient() {
   const get = async <T>(path: string, fallback: string): Promise<T> => {
     const response = await rendererRuntimeClient.runtimeRequest(path, 'GET')
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, fallback))
+    }
+    return readRuntimeJson<T>(response.body, 'runtime returned an invalid response')
+  }
+
+  const post = async <T>(path: string, body: unknown, fallback: string): Promise<T> => {
+    const response = await rendererRuntimeClient.runtimeRequest(path, 'POST', JSON.stringify(body))
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, fallback))
     }
@@ -56,6 +69,69 @@ export function createKunTaskWorkspaceClient() {
       return get(
         `${kunTaskWorkspacePath(workspaceId, '/diff/file')}${query}`,
         'failed to load task workspace file diff'
+      )
+    },
+
+    /** Read-only availability for the review primary action (11 §7.1). */
+    getTaskWorkspaceIntegratePreview(
+      workspaceId: string
+    ): Promise<TaskWorkspaceIntegratePreviewResponse> {
+      return get(
+        kunTaskWorkspacePath(workspaceId, '/integrate-preview'),
+        'failed to load integrate preview'
+      )
+    },
+
+    /** Integrate the worktree back into its source checkout (user action). */
+    integrateTaskWorkspace(
+      workspaceId: string,
+      mode: TaskWorkspaceIntegrateMode
+    ): Promise<TaskWorkspaceIntegrateResponse> {
+      return post(
+        kunTaskWorkspacePath(workspaceId, '/integrate'),
+        { mode },
+        'failed to integrate task workspace'
+      )
+    },
+
+    /**
+     * Damage preview for the discard confirmation dialog: POSTs without
+     * `confirm`, reading the 409 `{ uncommittedFiles, unpushedCommits }`.
+     */
+    async previewTaskWorkspaceDiscard(
+      workspaceId: string
+    ): Promise<TaskWorkspaceDiscardPreview> {
+      const response = await rendererRuntimeClient.runtimeRequest(
+        kunTaskWorkspacePath(workspaceId, '/discard'), 'POST', '{}'
+      )
+      if (response.status === 409) {
+        const body = readRuntimeJson<{ preview: TaskWorkspaceDiscardPreview }>(
+          response.body, 'runtime returned an invalid discard preview'
+        )
+        return body.preview
+      }
+      if (!response.ok) {
+        throw runtimeErrorToError(readRuntimeError(response.body, 'failed to preview discard'))
+      }
+      // Already gone: nothing left to discard.
+      return { uncommittedFiles: 0, unpushedCommits: 0 }
+    },
+
+    /** Force-remove the worktree + branch; requires `confirm: true`. */
+    discardTaskWorkspace(workspaceId: string): Promise<TaskWorkspaceRecordResponse> {
+      return post(
+        kunTaskWorkspacePath(workspaceId, '/discard'),
+        { confirm: true },
+        'failed to discard task workspace'
+      )
+    },
+
+    /** Non-force worktree removal after a successful integrate. */
+    cleanupTaskWorkspace(workspaceId: string): Promise<TaskWorkspaceRecordResponse> {
+      return post(
+        kunTaskWorkspacePath(workspaceId, '/cleanup'),
+        {},
+        'failed to clean up task workspace'
       )
     }
   }

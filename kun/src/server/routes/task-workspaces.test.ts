@@ -220,6 +220,46 @@ describe('task workspace routes', () => {
     expect((JSON.parse(cleaned.body)).record.state).toBe('preserved')
   })
 
+  it('serves a read-only integrate preview with block reasons', async () => {
+    const { service, request, repo } = await harness()
+    const created = await request('POST', '/v1/task-workspaces', {
+      ownerThreadId: 'thread-a',
+      sourceRoot: repo,
+      isolation: 'worktree',
+      startFrom: { kind: 'current-head' }
+    })
+    const record = (JSON.parse(created.body)).record
+    await waitTerminal(service, record.workspaceId)
+    const missing = await request(
+      'GET', '/v1/task-workspaces/tws_missing0/integrate-preview'
+    )
+    expect(missing.status).toBe(404)
+    const clean = await request(
+      'GET', `/v1/task-workspaces/${record.workspaceId}/integrate-preview`
+    )
+    expect(clean.status).toBe(200)
+    const cleanPreview = (JSON.parse(clean.body)).preview
+    expect(cleanPreview.canMergeBranch).toBe(true)
+    expect(cleanPreview.hasUncommitted).toBe(false)
+    // A clean worktree has nothing to apply.
+    expect(cleanPreview.canApplyPatch).toBe(false)
+    expect(cleanPreview.applyBlockReason).toMatch(/nothing to integrate/)
+    const worktree = service.get(record.workspaceId)!.path
+    await writeFile(join(worktree, 'a.txt'), 'changed\n')
+    // Move the source HEAD: apply-patch must block, merge stays open.
+    await writeFile(join(repo, 'a.txt'), 'moved\n')
+    await git(repo, ['add', '.'])
+    await git(repo, ['commit', '-m', 'moved'])
+    const moved = await request(
+      'GET', `/v1/task-workspaces/${record.workspaceId}/integrate-preview`
+    )
+    const movedPreview = (JSON.parse(moved.body)).preview
+    expect(movedPreview.canApplyPatch).toBe(false)
+    expect(movedPreview.applyBlockReason).toMatch(/HEAD changed/)
+    expect(movedPreview.canMergeBranch).toBe(true)
+    expect(movedPreview.hasUncommitted).toBe(true)
+  })
+
   it('returns 409 with a damage preview for unconfirmed discard', async () => {
     const { service, request, repo } = await harness()
     const created = await request('POST', '/v1/task-workspaces', {

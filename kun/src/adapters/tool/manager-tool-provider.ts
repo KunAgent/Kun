@@ -21,6 +21,7 @@ import {
 } from '../../ade/tools/worker-controls.js'
 import { workerVerdict } from '../../ade/tools/worker-verdict.js'
 import { reviewRequest } from '../../ade/tools/review-request.js'
+import { workspaceIntegrate } from '../../ade/tools/workspace-integrate.js'
 
 export type ManagerToolProviderDeps = {
   manager: ManagerRuntime
@@ -475,6 +476,30 @@ export function createManagerToolProvider(
         execute: async (args, context) => {
           const ctx = await managerCtx(context)
           return { output: await reviewRequest(deps.manager, ctx, args, context) }
+        }
+      }),
+      LocalToolHost.defineTool({
+        name: 'workspace_integrate',
+        description:
+          'Integrate a finished task worktree back into the user\'s source ' +
+          'checkout (apply-patch or merge-branch). This asks the user to ' +
+          'confirm — it is never silent. When running unattended, do not ' +
+          'call this repeatedly: it defers to the user. Relay `userReport` ' +
+          'to the user verbatim.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            workspaceId: { type: 'string', maxLength: 128 },
+            mode: { type: 'string', enum: ['apply-patch', 'merge-branch'] }
+          },
+          additionalProperties: false
+        },
+        toolKind: 'tool_call',
+        policy: 'auto',
+        shouldAdvertise: advertise,
+        execute: async (args, context) => {
+          const ctx = await managerCtx(context)
+          return { output: await workspaceIntegrate(deps.manager, ctx, args) }
         }
       }),
       LocalToolHost.defineTool({
