@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   contextThresholdsForModel,
   modelCapabilitiesForModel,
   modelCapabilitiesForProviderModel,
   modelContextProfilesFromConfig,
+  resolveModelContextProfile,
   safeProviderReasoningCapability
 } from './model-context-profile.js'
 
@@ -75,6 +76,87 @@ describe('contextThresholdsForModel safety cap', () => {
       contextWindowTokens: 1_048_576,
       maxOutputTokens: 65_536
     })
+  })
+})
+
+describe('sparse provider model profiles', () => {
+  it('merges a pricing/reasoning-only profile for an unknown model without throwing', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const profiles = modelContextProfilesFromConfig({
+        models: {
+          profiles: {
+            'my-private-model': {
+              pricing: { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 },
+              reasoning: {
+                supportedEfforts: ['low', 'high'],
+                defaultEffort: 'low',
+                requestProtocol: 'openai-chat-completions'
+              }
+            }
+          }
+        }
+      })
+
+      // No window/thresholds configured -> the shared 256k assumption applies,
+      // with thresholds derived at the standard 75%/85% ratios.
+      expect(resolveModelContextProfile('my-private-model', profiles)).toMatchObject({
+        contextWindowTokens: 256_000,
+        softThreshold: 192_000,
+        hardThreshold: 217_600,
+        pricing: { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 },
+        reasoning: { requestProtocol: 'openai-chat-completions' }
+      })
+      expect(warn).toHaveBeenCalledOnce()
+      expect(warn.mock.calls[0]?.[0]).toContain('my-private-model')
+      expect(modelCapabilitiesForModel('my-private-model', profiles)).toMatchObject({
+        contextWindowTokens: 256_000,
+        pricing: { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 }
+      })
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('derives the window from configured thresholds when no window is given', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const profiles = modelContextProfilesFromConfig({
+        models: {
+          profiles: {
+            'thresholds-only': { softThreshold: 24_000, hardThreshold: 30_000 }
+          }
+        }
+      })
+
+      expect(resolveModelContextProfile('thresholds-only', profiles)).toMatchObject({
+        contextWindowTokens: 30_000,
+        softThreshold: 24_000,
+        hardThreshold: 30_000
+      })
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('still rejects a hard threshold below the soft threshold', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(() => modelContextProfilesFromConfig({
+        models: {
+          profiles: {
+            'inverted': { softThreshold: 30_000, hardThreshold: 24_000 }
+          }
+        }
+      })).toThrow('hard threshold must be >= soft threshold')
+      // A lone threshold is still not enough capacity information.
+      expect(() => modelContextProfilesFromConfig({
+        models: { profiles: { 'half-configured': { softThreshold: 30_000 } } }
+      })).toThrow('needs a context window or thresholds')
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
 
