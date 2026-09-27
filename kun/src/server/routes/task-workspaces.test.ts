@@ -17,6 +17,7 @@ import {
   withWorkspaceWriteCommit
 } from '../../workspace-tasks/workspace-git.js'
 import { registerTaskWorkspaceRoutes } from './register-task-workspace-routes.js'
+import { AttributionLedger, lineHashesFor } from '../../ade/attribution-ledger.js'
 
 const execFileAsync = promisify(execFile)
 const tempDirs: string[] = []
@@ -73,11 +74,23 @@ async function harness() {
     worktreeRoot,
     artifacts
   })
+  const attribution = new AttributionLedger(dataDir, () => '2026-01-01T00:00:00Z')
   const router = new Router()
   registerTaskWorkspaceRoutes(router, {
     runtimeToken: 'test-token',
     insecure: false,
     taskWorkspaces: service,
+    attribution,
+    ade: {
+      stores: {
+        teams: {
+          list: async () => [{
+            teamId: 'team_1',
+            workers: [{ workerId: 'thr_w1', label: 'Worker A' }]
+          }]
+        }
+      }
+    },
     graph: { artifacts }
   } as unknown as ServerRuntime)
   const request = async (
@@ -100,7 +113,7 @@ async function harness() {
       { params: route.params }
     ) as Promise<JsonResponse>
   }
-  return { service, request, repo }
+  return { service, request, repo, attribution }
 }
 
 async function waitTerminal(
@@ -341,6 +354,52 @@ describe('task workspace routes', () => {
     expect(missing.status).toBe(400)
     const unknown = await request(
       'GET', `/v1/task-workspaces/${record.workspaceId}/diff/file?path=nope.ts`
+    )
+    expect(unknown.status).toBe(404)
+  })
+
+  it('serves per-line attribution for workspace files', async () => {
+    const { service, request, repo, attribution } = await harness()
+    const created = await request('POST', '/v1/task-workspaces', {
+      ownerThreadId: 'thread-a',
+      sourceRoot: repo,
+      isolation: 'worktree',
+      startFrom: { kind: 'current-head' }
+    })
+    const record = (JSON.parse(created.body)).record
+    await waitTerminal(service, record.workspaceId)
+    const worktree = service.get(record.workspaceId)!.path
+    await writeFile(join(worktree, 'a.txt'), 'changed\nextra\nhuman\n')
+    await attribution.record(record.workspaceId, {
+      path: 'a.txt',
+      lineHashes: lineHashesFor('changed\nextra'),
+      unitId: 'thr_w1',
+      harnessId: 'codex',
+      dispatchId: 'dsp_1',
+      at: '2026-01-01T00:00:00Z'
+    })
+    const res = await request(
+      'GET',
+      `/v1/task-workspaces/${record.workspaceId}/attribution?path=a.txt`
+    )
+    expect(res.status).toBe(200)
+    const body = JSON.parse(res.body)
+    expect(body.path).toBe('a.txt')
+    expect(body.lines).toEqual([
+      { line: 1, unitId: 'thr_w1', harnessId: 'codex', dispatchId: 'dsp_1', label: 'Worker A' },
+      { line: 2, unitId: 'thr_w1', harnessId: 'codex', dispatchId: 'dsp_1', label: 'Worker A' }
+    ])
+    const missing = await request(
+      'GET', `/v1/task-workspaces/${record.workspaceId}/attribution`
+    )
+    expect(missing.status).toBe(400)
+    const escaping = await request(
+      'GET',
+      `/v1/task-workspaces/${record.workspaceId}/attribution?path=${encodeURIComponent('../a.txt')}`
+    )
+    expect(escaping.status).toBe(400)
+    const unknown = await request(
+      'GET', `/v1/task-workspaces/${record.workspaceId}/attribution?path=nope.txt`
     )
     expect(unknown.status).toBe(404)
   })

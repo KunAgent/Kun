@@ -138,6 +138,10 @@ export function ReviewPanel({ className }: { className?: string }): ReactElement
             {review.files.map((file) => (
               <ReviewDiffBlock key={file.path} workspaceId={binding.workspaceId} file={file} />
             ))}
+            {/* 11 §6: attribution is best-effort — only Kun-observable writes. */}
+            <div className="px-3 py-2 text-[10.5px] text-ds-faint">
+              {t('reviewAttributionNote')}
+            </div>
           </div>
         </div>
       )}

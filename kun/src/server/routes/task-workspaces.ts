@@ -1,5 +1,9 @@
+import { readFile } from 'node:fs/promises'
+import { isAbsolute, relative, resolve } from 'node:path'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { ERRORS } from './runtime-error.js'
+import type { AttributionLedger } from '../../ade/attribution-ledger.js'
+import type { FileTeamStore } from '../../ade/team-store.js'
 import {
   CreateTaskWorkspaceRequestSchema,
   DiscardTaskWorkspaceRequestSchema,
@@ -159,6 +163,56 @@ export async function taskWorkspaceDiffFileResponse(
   } catch (error) {
     return serviceError(error)
   }
+}
+
+const ATTRIBUTION_CONTENT_LIMIT = 4 * 1024 * 1024
+
+/**
+ * GET /v1/task-workspaces/:id/attribution?path= — per-line authorship for
+ * the file's current workspace content (11 §6). Lines without a ledger
+ * match are human-or-unknown; `label` enriches worker ids for the hover.
+ */
+export async function taskWorkspaceAttributionResponse(
+  service: TaskWorkspaceService,
+  ledger: AttributionLedger,
+  teams: Pick<FileTeamStore, 'list'> | undefined,
+  request: Request,
+  workspaceId: string
+): Promise<JsonResponse> {
+  const record = service.get(workspaceId)
+  if (!record) return ERRORS.notFound('task workspace not found')
+  const rawPath = new URL(request.url).searchParams.get('path')
+  if (!rawPath) return ERRORS.validation('missing path query parameter')
+  const rel = relative(record.path, resolve(record.path, rawPath))
+  if (!rel || rel.startsWith('..') || isAbsolute(rel)) {
+    return ERRORS.validation('path escapes the task workspace')
+  }
+  const key = rel.split(/[\\/]+/).join('/')
+  let content: string
+  try {
+    const buffer = await readFile(resolve(record.path, rel))
+    if (buffer.byteLength > ATTRIBUTION_CONTENT_LIMIT) {
+      return jsonResponse({ workspaceId, path: key, lines: [], tooLarge: true })
+    }
+    content = buffer.toString('utf8')
+  } catch {
+    return ERRORS.notFound('file not found in task workspace')
+  }
+  const lines = await ledger.attribute(workspaceId, key, content)
+  const labels = new Map<string, string>()
+  if (teams && lines.length) {
+    for (const team of await teams.list().catch(() => [])) {
+      for (const worker of team.workers) labels.set(worker.workerId, worker.label)
+    }
+  }
+  return jsonResponse({
+    workspaceId,
+    path: key,
+    lines: lines.map((line) => ({
+      ...line,
+      label: line.unitId ? labels.get(line.unitId) : undefined
+    }))
+  })
 }
 
 /** POST /v1/task-workspaces/:id/capture — snapshot worktree changes. */

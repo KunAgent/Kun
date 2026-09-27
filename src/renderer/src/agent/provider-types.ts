@@ -268,6 +268,11 @@ export interface AgentProvider {
     workspaceId: string,
     path: string
   ): Promise<import('@shared/task-workspace').TaskWorkspaceDiffFileResponse>
+  /** Per-line AI authorship for the file's current content (11 §6). */
+  getTaskWorkspaceAttribution?(
+    workspaceId: string,
+    path: string
+  ): Promise<import('@shared/task-workspace').TaskWorkspaceAttribution>
   /** Read-only integrate availability for the review primary action (11 §7.1). */
   getTaskWorkspaceIntegratePreview?(
     workspaceId: string

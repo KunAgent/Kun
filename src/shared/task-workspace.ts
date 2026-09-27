@@ -147,3 +147,22 @@ export type PreservedBranchInfo = {
 }
 
 export type PreservedBranchesResponse = { branches: PreservedBranchInfo[] }
+
+/** GET /v1/task-workspaces/:id/attribution?path= (docs/ade/11 §6). */
+export type TaskWorkspaceAttributionLine = {
+  /** 1-based line in the file's current content. */
+  line: number
+  unitId?: string
+  harnessId?: string
+  dispatchId?: string
+  /** Worker/agent display label resolved from the team roster. */
+  label?: string
+}
+
+export type TaskWorkspaceAttribution = {
+  workspaceId: string
+  path: string
+  /** Only attributed lines are listed; absence means human-or-unknown. */
+  lines: TaskWorkspaceAttributionLine[]
+  tooLarge?: boolean
+}

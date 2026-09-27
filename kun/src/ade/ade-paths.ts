@@ -56,3 +56,12 @@ export function adeReviewsDir(dataDir: string): string {
 export function adeReviewFile(dataDir: string, workspaceId: string): string {
   return join(adeReviewsDir(dataDir), `${safeId(workspaceId)}.json`)
 }
+
+/** AI line-attribution ledgers, one file per task workspace (11 §6.2). */
+export function adeAttributionDir(dataDir: string): string {
+  return join(adeRootDir(dataDir), 'attribution')
+}
+
+export function adeAttributionFile(dataDir: string, workspaceId: string): string {
+  return join(adeAttributionDir(dataDir), `${safeId(workspaceId)}.json`)
+}

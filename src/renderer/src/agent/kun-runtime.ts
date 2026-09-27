@@ -336,6 +336,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   readonly createTaskWorkspace = this.taskWorkspaces.createTaskWorkspace
   readonly getTaskWorkspaceDiff = this.taskWorkspaces.getTaskWorkspaceDiff
   readonly getTaskWorkspaceDiffFile = this.taskWorkspaces.getTaskWorkspaceDiffFile
+  readonly getTaskWorkspaceAttribution = this.taskWorkspaces.getTaskWorkspaceAttribution
   readonly getTaskWorkspaceIntegratePreview = this.taskWorkspaces.getTaskWorkspaceIntegratePreview
   readonly integrateTaskWorkspace = this.taskWorkspaces.integrateTaskWorkspace
   readonly previewTaskWorkspaceDiscard = this.taskWorkspaces.previewTaskWorkspaceDiscard

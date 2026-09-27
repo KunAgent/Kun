@@ -3,8 +3,9 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../i18n'
 
+const providerHolder: { value: Record<string, unknown> } = { value: {} }
 vi.mock('../../agent/registry', () => ({
-  getProvider: () => ({})
+  getProvider: () => providerHolder.value
 }))
 
 import { useReviewStore } from '../../store/review-store'
@@ -70,6 +71,7 @@ const drafts = () =>
   }))
 
 beforeEach(() => {
+  providerHolder.value = {}
   useReviewStore.setState({ bindings: {}, workspaces: {} })
 })
 
@@ -116,5 +118,42 @@ describe('ReviewDiffBlock comments', () => {
       row!.props.onKeyDown({ key: 'x', metaKey: false, ctrlKey: false, target: row, currentTarget: row, preventDefault: () => {} })
     })
     expect(drafts()).toHaveLength(0)
+  })
+})
+
+describe('ReviewDiffBlock attribution', () => {
+  it('marks attributed new-side lines with the unit identity color', async () => {
+    providerHolder.value = {
+      getTaskWorkspaceAttribution: async () => ({
+        workspaceId: WS,
+        path: 'a.ts',
+        lines: [{
+          line: 3, unitId: 'thr_w', harnessId: 'codex',
+          dispatchId: 'dsp_1', label: 'Worker A'
+        }]
+      })
+    }
+    const renderer = await renderBlock()
+    // Flushes the async attribution fetch.
+    await act(async () => {})
+    const marked = renderer.root.findAll(
+      (n) => typeof n.props?.style?.boxShadow === 'string'
+        && n.props.style.boxShadow.startsWith('inset 3px 0 0')
+    )
+    expect(marked).toHaveLength(1)
+    expect(marked[0].props.title).toContain('Worker A')
+    expect(marked[0].props.title).toContain('dsp_1')
+  })
+
+  it('renders an export control as a sibling of the file toggle', async () => {
+    const renderer = await renderBlock()
+    const buttons = renderer.root.findAllByType('button' as never)
+    const exportButton = buttons.find((b) =>
+      typeof b.props['aria-label'] === 'string'
+        && /export attribution/i.test(b.props['aria-label']))
+    expect(exportButton).toBeTruthy()
+    // The export control must not live inside the toggle button (11 §6).
+    expect(exportButton!.parent?.type).toBe('div')
+    await act(async () => exportButton!.props.onClick())
   })
 })

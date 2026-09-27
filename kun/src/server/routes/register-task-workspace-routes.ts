@@ -14,6 +14,7 @@ import {
   markReadyTaskWorkspaceResponse,
   preservedBranchesResponse,
   retryTaskWorkspaceResponse,
+  taskWorkspaceAttributionResponse,
   taskWorkspaceDiffFileResponse,
   taskWorkspaceDiffResponse,
   taskWorkspaceIntegratePreviewResponse,
@@ -92,6 +93,15 @@ export function registerTaskWorkspaceRoutes(router: Router, runtime: ServerRunti
     const svc = service()
     if (!svc) return ERRORS.unavailable('task workspaces are unavailable')
     return captureTaskWorkspaceResponse(svc, ctx.params.workspaceId)
+  })
+  router.add('GET', '/v1/task-workspaces/:workspaceId/attribution', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const svc = service()
+    const ledger = runtime.attribution
+    if (!svc || !ledger) return ERRORS.unavailable('attribution is unavailable')
+    return taskWorkspaceAttributionResponse(
+      svc, ledger, runtime.ade?.stores.teams, request, ctx.params.workspaceId
+    )
   })
   router.add('GET', '/v1/task-workspaces/:workspaceId/integrate-preview', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
