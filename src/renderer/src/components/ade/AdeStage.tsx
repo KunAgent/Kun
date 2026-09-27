@@ -4,6 +4,10 @@ import {
   type WorkbenchConversationStageProps
 } from '../workbench/WorkbenchConversationStage'
 import { startActivityFeed, stopActivityFeed } from '../../store/activity-store'
+import {
+  startActivityNotifications,
+  stopActivityNotifications
+} from '../../store/activity-notifications'
 
 const AdeMissionControl = lazy(() =>
   import('./AdeMissionControl').then((module) => ({ default: module.AdeMissionControl }))
@@ -26,7 +30,11 @@ export function AdeStage({ conversation, activeThreadId }: AdeStageProps): React
   // ADE mode is mounted and releases its long-poll when the user leaves.
   useEffect(() => {
     startActivityFeed()
-    return () => stopActivityFeed()
+    startActivityNotifications()
+    return () => {
+      stopActivityFeed()
+      stopActivityNotifications()
+    }
   }, [])
 
   if (!activeThreadId) {

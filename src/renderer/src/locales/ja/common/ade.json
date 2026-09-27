@@ -173,5 +173,15 @@
     "prepFailed": "worktree の準備に失敗しました",
     "prepFailedRetry": "worktree 失敗 — 再試行"
   },
-  "slashHarnessCommandFallback": "ハーネスコマンド"
+  "slashHarnessCommandFallback": "ハーネスコマンド",
+  "adeNotify": {
+    "waitingTitle": "入力が必要です",
+    "waitingBody": "{{title}} があなたを待っています",
+    "failedTitle": "実行に失敗しました",
+    "failedBody": "{{title}} が失敗しました",
+    "doneTitle": "レビュー可能",
+    "doneBody": "{{title}} が完了しレビュー可能です",
+    "stalledTitle": "停滞の可能性",
+    "stalledBody": "{{title}} が停滞している可能性があります"
+  }
 }

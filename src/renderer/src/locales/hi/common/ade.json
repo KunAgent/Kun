@@ -173,5 +173,15 @@
     "prepFailed": "worktree तैयारी विफल",
     "prepFailedRetry": "worktree विफल — पुनः प्रयास करें"
   },
-  "slashHarnessCommandFallback": "हार्नेस कमांड"
+  "slashHarnessCommandFallback": "हार्नेस कमांड",
+  "adeNotify": {
+    "waitingTitle": "आपका इनपुट चाहिए",
+    "waitingBody": "{{title}} आपकी प्रतीक्षा कर रहा है",
+    "failedTitle": "रन विफल",
+    "failedBody": "{{title}} विफल हुआ",
+    "doneTitle": "समीक्षा के लिए तैयार",
+    "doneBody": "{{title}} पूरा हुआ और समीक्षा के लिए तैयार है",
+    "stalledTitle": "शायद अटका है",
+    "stalledBody": "{{title}} शायद अटक गया है"
+  }
 }

@@ -121,6 +121,7 @@ export const notificationPayloadSchema = z
     roomId: optionalTrimmedString(MAX_ID_LENGTH),
     threadId: optionalTrimmedString(MAX_ID_LENGTH),
     source: z.enum(['main-agent', 'subagent']),
+    category: z.enum(['waiting', 'failed', 'done', 'stalled']).optional(),
     title: trimmedString(MAX_NOTIFICATION_TITLE_LENGTH),
     body: trimmedString(MAX_NOTIFICATION_BODY_LENGTH)
   })

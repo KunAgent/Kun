@@ -173,5 +173,15 @@
     "prepFailed": "Не удалось подготовить worktree",
     "prepFailedRetry": "Worktree не создан — повторить"
   },
-  "slashHarnessCommandFallback": "Команда harness"
+  "slashHarnessCommandFallback": "Команда harness",
+  "adeNotify": {
+    "waitingTitle": "Ждёт вашего ответа",
+    "waitingBody": "{{title}} ждёт вас",
+    "failedTitle": "Запуск завершился ошибкой",
+    "failedBody": "{{title}} завершился с ошибкой",
+    "doneTitle": "Готово к ревью",
+    "doneBody": "{{title}} завершён и ждёт ревью",
+    "stalledTitle": "Возможно, завис",
+    "stalledBody": "{{title}} возможно завис"
+  }
 }

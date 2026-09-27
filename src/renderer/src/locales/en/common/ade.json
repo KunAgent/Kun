@@ -163,5 +163,15 @@
   "adeIsolation.preparing": "Preparing worktree…",
   "adeIsolation.prepFailed": "Worktree preparation failed",
   "adeIsolation.prepFailedRetry": "Worktree failed — retry",
-  "slashHarnessCommandFallback": "Harness command"
+  "slashHarnessCommandFallback": "Harness command",
+  "adeNotify": {
+    "waitingTitle": "Needs your input",
+    "waitingBody": "{{title}} is waiting for you",
+    "failedTitle": "Run failed",
+    "failedBody": "{{title}} failed",
+    "doneTitle": "Ready for review",
+    "doneBody": "{{title}} finished and is ready for review",
+    "stalledTitle": "May be stuck",
+    "stalledBody": "{{title}} may be stuck"
+  }
 }
