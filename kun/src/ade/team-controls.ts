@@ -8,6 +8,10 @@ import type {
 } from '../contracts/ade.js'
 import type { ManagerRuntimeDeps } from './manager-runtime.js'
 import type { ManagerControls, WorkerSendResult } from './manager-controls.js'
+import {
+  runWorkspaceChecks,
+  type RunWorkspaceChecksResult
+} from './check-runner.js'
 
 /**
  * GUI team-control operations (09 §9): manager-thread overview, user
@@ -196,6 +200,34 @@ export class TeamControls {
     })
     if (!answered) return { ok: false, refusal: 'answer_failed' }
     return { ok: true, question: answered }
+  }
+
+  /**
+   * `POST /v1/teams/workers/:workerId/run-checks` (10 §4.2): the review
+   * panel's run-checks button — same host check runner the manager tool
+   * uses, resolved through the worker's owning team.
+   */
+  async runWorkerChecks(
+    workerId: string,
+    names?: string[]
+  ): Promise<RunWorkspaceChecksResult> {
+    const found = await this.controls.teamForWorker(workerId)
+    if (!found) return { ok: false, refusal: 'worker_not_found', userReport: 'worker not found' }
+    const deps = this.deps.checks
+    if (!deps) {
+      return { ok: false, refusal: 'checks_unavailable', userReport: 'check runner unavailable' }
+    }
+    return runWorkspaceChecks(
+      {
+        teams: this.deps.teams,
+        dispatches: this.deps.dispatches,
+        taskWorkspaces: this.deps.taskWorkspaces,
+        ...deps,
+        language: this.deps.language,
+        nowIso: this.deps.nowIso
+      },
+      { teamId: found.team.teamId, workerId, ...(names ? { names } : {}) }
+    )
   }
 
   /**

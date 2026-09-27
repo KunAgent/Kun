@@ -62,6 +62,8 @@
   "reviewDiscardUnpushed_other": "푸시되지 않은 커밋 {{count}}개가 손실됩니다",
   "reviewDiscardConfirm": "영구적으로 버리기",
   "reviewDiscardCancel": "취소",
+  "reviewRunChecks": "검사 실행",
+  "reviewChecksDismiss": "닫기",
   "reviewIntegrateResultTitle": "통합 결과",
   "reviewIntegrateDone": "{{mode}} 완료",
   "reviewIntegrateNeedsHuman": "입력이 필요합니다",

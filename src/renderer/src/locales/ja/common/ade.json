@@ -62,6 +62,8 @@
   "reviewDiscardUnpushed_other": "未プッシュのコミット {{count}} 件が失われます",
   "reviewDiscardConfirm": "完全に破棄",
   "reviewDiscardCancel": "キャンセル",
+  "reviewRunChecks": "チェックを実行",
+  "reviewChecksDismiss": "閉じる",
   "reviewIntegrateResultTitle": "統合結果",
   "reviewIntegrateDone": "{{mode}} が完了しました",
   "reviewIntegrateNeedsHuman": "入力が必要です",

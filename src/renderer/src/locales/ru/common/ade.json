@@ -62,6 +62,8 @@
   "reviewDiscardUnpushed_other": "Будут потеряны {{count}} неотправленных коммитов",
   "reviewDiscardConfirm": "Удалить безвозвратно",
   "reviewDiscardCancel": "Отмена",
+  "reviewRunChecks": "Запустить проверки",
+  "reviewChecksDismiss": "Скрыть",
   "reviewIntegrateResultTitle": "Результат интеграции",
   "reviewIntegrateDone": "{{mode}} завершено",
   "reviewIntegrateNeedsHuman": "Требуется ваше участие",

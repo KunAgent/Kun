@@ -318,6 +318,10 @@ export interface AgentProvider {
   getRaceComparison?(raceId: string): Promise<import('@shared/ade-teams').AdeRaceComparison>
   decideRace?(raceId: string, winnerDispatchId: string): Promise<void>
   discardRaceOthers?(raceId: string): Promise<void>
+  /** Host check commands against the worker's task workspace (10 §4.2). */
+  runTeamWorkerChecks?(
+    workerId: string
+  ): Promise<import('@shared/ade-teams').AdeRunWorkerChecksResult>
   /** Per-workspace review comments shared across clients (docs/ade/11 §4). */
   listReviewComments?(
     workspaceId: string

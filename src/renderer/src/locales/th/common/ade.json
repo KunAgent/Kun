@@ -62,6 +62,8 @@
   "reviewDiscardUnpushed_other": "คอมมิตที่ยังไม่ได้พุช {{count}} รายการจะหายไป",
   "reviewDiscardConfirm": "ทิ้งถาวร",
   "reviewDiscardCancel": "ยกเลิก",
+  "reviewRunChecks": "รันการตรวจสอบ",
+  "reviewChecksDismiss": "ปิด",
   "reviewIntegrateResultTitle": "ผลการรวม",
   "reviewIntegrateDone": "{{mode}} เสร็จสิ้น",
   "reviewIntegrateNeedsHuman": "ต้องการข้อมูลจากคุณ",

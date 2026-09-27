@@ -18,6 +18,7 @@ import {
   workerDetachResponse,
   workerDispatchResponse,
   workerHandBackResponse,
+  workerRunChecksResponse,
   workerStopResponse,
   workerTakeOverResponse
 } from './teams.js'
@@ -82,6 +83,11 @@ export function registerTeamsRoutes(router: Router, runtime: ServerRuntime): voi
     const resolved = manager(request)
     if (denied(resolved)) return resolved
     return workerDispatchResponse(resolved, ctx.params.workerId, request)
+  })
+  router.add('POST', '/v1/teams/workers/:workerId/run-checks', async (request, ctx) => {
+    const resolved = manager(request)
+    if (denied(resolved)) return resolved
+    return workerRunChecksResponse(resolved, ctx.params.workerId, request)
   })
   router.add('POST', '/v1/teams/dispatches/:dispatchId/verdict', async (request, ctx) => {
     const resolved = manager(request)

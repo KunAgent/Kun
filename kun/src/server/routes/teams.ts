@@ -5,6 +5,7 @@ import {
   QuestionAnswerRequestSchema,
   RaceDecideRequestSchema,
   RaceDiscardRequestSchema,
+  RunChecksInputSchema,
   WorkerDispatchRequestSchema,
   WorkerNoticeHoldRequestSchema
 } from '../../contracts/ade.js'
@@ -169,6 +170,29 @@ export async function workerDispatchResponse(
     return ERRORS.validation('invalid worker dispatch', parsed.error.issues)
   }
   return controlResultResponse(await manager.teamControls.guiDispatch(workerId, parsed.data))
+}
+
+/**
+ * POST /v1/teams/workers/:workerId/run-checks — `{ names? }` (10 §4.2):
+ * the review panel's run-checks button. Runs the repo's approved
+ * `worktree.checks` inside the worker task workspace and merges results
+ * into the latest dispatch verdict as `source: 'host'`.
+ */
+export async function workerRunChecksResponse(
+  manager: ManagerRuntime,
+  workerId: string,
+  request: Request
+): Promise<JsonResponse> {
+  const body = await readJsonBody(request)
+  if (!body.ok) return body.response
+  const parsed = RunChecksInputSchema.safeParse(body.value ?? {})
+  if (!parsed.success) {
+    return ERRORS.validation('invalid run-checks request', parsed.error.issues)
+  }
+  // Refusals stay 200 so the caller can render the localized userReport.
+  return jsonResponse(
+    await manager.teamControls.runWorkerChecks(workerId, parsed.data.names)
+  )
 }
 
 /**

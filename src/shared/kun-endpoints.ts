@@ -264,7 +264,7 @@ export function kunTeamWorkerPath(workerId: string): string {
 }
 export function kunTeamWorkerActionPath(
   workerId: string,
-  action: 'take-over' | 'hand-back' | 'detach' | 'dispatch' | 'stop'
+  action: 'take-over' | 'hand-back' | 'detach' | 'dispatch' | 'stop' | 'run-checks'
 ): string {
   return `${kunTeamWorkerPath(workerId)}/${action}`
 }

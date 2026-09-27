@@ -478,3 +478,12 @@ export const RaceDiscardRequestSchema = z
   .strict()
 export type RaceDecideRequest = z.infer<typeof RaceDecideRequestSchema>
 export type RaceDiscardRequest = z.infer<typeof RaceDiscardRequestSchema>
+
+/** `workspace_run_checks` tool input + `POST …/run-checks` body (10 §4.2). */
+export const RunChecksInputSchema = z
+  .object({
+    workerId: z.string().min(1).max(256).optional(),
+    names: z.array(z.string().min(1).max(64)).max(16).optional()
+  })
+  .strict()
+export type RunChecksInput = z.infer<typeof RunChecksInputSchema>

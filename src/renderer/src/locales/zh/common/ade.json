@@ -62,6 +62,8 @@
   "reviewDiscardUnpushed_other": "{{count}} 个未推送提交将丢失",
   "reviewDiscardConfirm": "永久丢弃",
   "reviewDiscardCancel": "取消",
+  "reviewRunChecks": "运行检查",
+  "reviewChecksDismiss": "关闭",
   "reviewIntegrateResultTitle": "合入结果",
   "reviewIntegrateDone": "{{mode}}完成",
   "reviewIntegrateNeedsHuman": "需要你处理",

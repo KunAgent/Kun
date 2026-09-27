@@ -240,6 +240,30 @@ describe('teams routes', () => {
     expect((await request('POST', '/v1/teams/workers/wrk_gone/stop')).status).toBe(404)
     expect((await request('POST', '/v1/teams/workers/wrk_1/stop', {}, false)).status).toBe(401)
   })
+
+  it('runs host checks and returns the localized report even on refusal (10 §4.2)', async () => {
+    const runWorkerChecks = vi.fn(async (workerId: string, names?: string[]) =>
+      workerId === 'wrk_idle'
+        ? { ok: false, refusal: 'no_approved_checks', userReport: 'No approved check commands match.' }
+        : {
+            ok: true,
+            checks: [{ name: 'typecheck', status: 'passed', source: 'host', detail: 'exit 0' }],
+            dispatchId: 'dsp_1',
+            logArtifactId: 'art_1',
+            userReport: 'Checks done: all 1 passed.',
+            names
+          })
+    const { request } = await harness({ manager: { teamControls: { runWorkerChecks } } })
+    const res = await request('POST', '/v1/teams/workers/wrk_1/run-checks', { names: ['typecheck'] })
+    expect(res.status).toBe(200)
+    const body = JSON.parse(res.body)
+    expect(body.checks[0]).toMatchObject({ name: 'typecheck', status: 'passed', source: 'host' })
+    expect(runWorkerChecks).toHaveBeenCalledWith('wrk_1', ['typecheck'])
+    const refused = await request('POST', '/v1/teams/workers/wrk_idle/run-checks')
+    expect(refused.status).toBe(200)
+    expect(JSON.parse(refused.body)).toMatchObject({ ok: false, refusal: 'no_approved_checks' })
+    expect((await request('POST', '/v1/teams/workers/wrk_1/run-checks', {}, false)).status).toBe(401)
+  })
 })
 
 describe('race routes', () => {
