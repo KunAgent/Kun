@@ -189,6 +189,7 @@ export function createServerRuntimeComposition(
     ade: {
       stores: services.adeStores,
       workerCallbacks: services.workerCallbacks,
+      terminalAgents: services.terminalAgents,
       manager: agent.managerRuntime,
       deliverer: agent.dispatchDeliverer,
       noticeCoordinator: agent.workerNoticeCoordinator
@@ -206,6 +207,9 @@ export function createServerRuntimeComposition(
       // Interrupted ask_manager waiters can never resolve after a restart;
       // mark their persisted questions timed out before serving requests.
       await services.workerCallbacks.reconcileAllTeams().catch(() => undefined)
+      // Terminal-agent units whose exit reports were lost with the last
+      // session come back as restoredUnconfirmed rows (05 §6.1).
+      await services.terminalAgents.restore().catch(() => undefined)
       // Re-resolve dispatches stuck in delivering/uncertain before the crash
       // (09 §5): found turns are adopted; missing ones redeliver idempotently.
       await agent.managerRuntime.reconcileOnStartup().catch((error) => {

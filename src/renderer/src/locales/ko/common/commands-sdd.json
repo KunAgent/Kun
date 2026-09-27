@@ -76,6 +76,7 @@
   "terminalClear": "터미널 지우기",
   "terminalRestart": "터미널 다시 시작",
   "terminalNewTab": "새 터미널 탭",
+  "terminalRunAgent": "터미널에서 에이전트 실행",
   "terminalCloseTab": "터미널 탭 닫기",
   "terminalTabMenuTitle": "터미널 탭 작업",
   "terminalRenameTab": "터미널 탭 이름 바꾸기",

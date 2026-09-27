@@ -32,7 +32,7 @@ const AUTHORITY: Record<ExecutionUnitKind, readonly ActivityProvenance[]> = {
   worker: ['runtime'],
   'side-chat': ['runtime'],
   'graph-attempt': ['runtime'],
-  'terminal-agent': ['hook', 'runtime']
+  'terminal-agent': ['hook', 'runtime', 'inferred']
 }
 
 export type ActivityStoreOptions = {

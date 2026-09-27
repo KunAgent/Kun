@@ -76,6 +76,7 @@
   "terminalClear": "ล้างเทอร์มินัล",
   "terminalRestart": "รีสตาร์ทเทอร์มินัล",
   "terminalNewTab": "แท็บเทอร์มินัลใหม่",
+  "terminalRunAgent": "เรียกใช้เอเจนต์ในเทอร์มินัล",
   "terminalCloseTab": "ปิดแท็บเทอร์มินัล",
   "terminalTabMenuTitle": "การกระทำของแท็บเทอร์มินัล",
   "terminalRenameTab": "เปลี่ยนชื่อแท็บเทอร์มินัล",

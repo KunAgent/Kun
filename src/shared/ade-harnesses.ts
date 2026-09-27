@@ -30,6 +30,16 @@ export type AdeHarnessDefinition = {
   permissionModes: AdeHarnessPermissionMode[]
   modelSource: 'static' | 'probe' | 'provider'
   staticModels: string[]
+  /**
+   * Tier-0 PTY launch support (docs/ade/05 §6.1). Present only for
+   * harnesses that can run inside the built-in terminal.
+   */
+  terminal?: {
+    argv: string[]
+    taskFlag?: string
+    resumeArgs?: string[]
+    hooks?: { kind: string; events: string[] }
+  }
   builtin: boolean
 }
 

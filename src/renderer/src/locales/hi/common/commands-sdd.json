@@ -76,6 +76,7 @@
   "terminalClear": "साफ़ टर्मिनल",
   "terminalRestart": "टर्मिनल पुनः प्रारंभ करें",
   "terminalNewTab": "नया टर्मिनल टैब",
+  "terminalRunAgent": "टर्मिनल में एजेंट चलाएँ",
   "terminalCloseTab": "टर्मिनल टैब बंद करें",
   "terminalTabMenuTitle": "टर्मिनल टैब क्रियाएँ",
   "terminalRenameTab": "टर्मिनल टैब का नाम बदलें",

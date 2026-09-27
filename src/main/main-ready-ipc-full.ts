@@ -559,7 +559,18 @@ export function registerMainIpc(services: MainServices): void {
       ipcMain,
       getMainWindow: () => mainState.mainWindow,
       logError,
-      getTerminalColorMode: async () => resolveTerminalColorMode(await mainState.store.load())
+      getTerminalColorMode: async () => resolveTerminalColorMode(await mainState.store.load()),
+      runtimeFetch: async (path, init = {}) => {
+        const settings = await mainState.store.load()
+        const ensured = await ensureRuntime(settings)
+        const requestSettings = ensured ?? settings
+        const headers = runtimeAuthHeaders(requestSettings)
+        const normalizedPath = path.startsWith('/') ? path : `/${path}`
+        return fetch(`${getRuntimeBaseUrlForSettings(requestSettings)}${normalizedPath}`, {
+          ...init,
+          headers
+        } as RequestInit)
+      }
     })
     const remoteSshDataDir = join(app.getPath('userData'), 'remote-ssh')
     mainState.remoteSshController = registerRemoteSshIpc({

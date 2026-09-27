@@ -1,6 +1,8 @@
-import type { ReactElement } from 'react'
-import { Server, TerminalSquare } from 'lucide-react'
+import { useEffect, type ReactElement } from 'react'
+import { Bot, Server, TerminalSquare } from 'lucide-react'
 import type { RemoteSshHost } from '@shared/remote-ssh'
+import type { AdeHarnessRow } from '@shared/ade-harnesses'
+import { loadHarnesses, useHarnessStore } from '../../store/harness-store'
 
 export type TerminalNewTabMenuAnchor = {
   /** Viewport x of the anchor button's left edge. */
@@ -19,14 +21,25 @@ export function TerminalNewTabMenu({
   remoteHosts,
   onNewLocalTab,
   onNewSshTab,
+  onNewAgentTab,
   t
 }: {
   anchor: TerminalNewTabMenuAnchor
   remoteHosts: RemoteSshHost[]
   onNewLocalTab: () => void
   onNewSshTab: (host: RemoteSshHost) => void
+  onNewAgentTab?: (harness: AdeHarnessRow) => void
   t: (key: string, options?: Record<string, unknown>) => string
 }): ReactElement {
+  const harnessRows = useHarnessStore((state) => state.rows)
+  useEffect(() => {
+    if (onNewAgentTab) void loadHarnesses()
+  }, [onNewAgentTab])
+  const agentHarnesses = onNewAgentTab
+    ? harnessRows.filter(
+        (row) => row.definition.terminal && row.status.installed === 'yes'
+      )
+    : []
   const left = Math.min(Math.max(anchor.x, 8), window.innerWidth - MENU_MIN_WIDTH - 8)
   const bottom = Math.max(window.innerHeight - anchor.y + 8, 8)
   return (
@@ -68,6 +81,31 @@ export function TerminalNewTabMenu({
         <p className="px-3 py-2 text-ds-muted">
           {t('terminalNoSshServers', { defaultValue: 'Add an SSH server in Terminal settings.' })}
         </p>
+      ) : null}
+      {agentHarnesses.length > 0 ? (
+        <>
+          <div className="mx-2 my-1 border-t border-ds-border" />
+          <p className="px-3 pb-1 pt-1.5 text-[10px] font-medium uppercase tracking-wide text-ds-faint">
+            {t('terminalRunAgent', { defaultValue: 'Run agent in terminal' })}
+          </p>
+          {agentHarnesses.map((row) => (
+            <button
+              key={row.definition.id}
+              type="button"
+              role="menuitem"
+              onClick={() => onNewAgentTab?.(row)}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-ds-ink hover:bg-ds-hover"
+            >
+              <Bot className="h-4 w-4 shrink-0" strokeWidth={1.8} />
+              <span className="min-w-0">
+                <span className="block truncate">{row.definition.displayName}</span>
+                <span className="block truncate text-[10px] text-ds-muted">
+                  {row.status.version ?? row.definition.id}
+                </span>
+              </span>
+            </button>
+          ))}
+        </>
       ) : null}
     </div>
   )

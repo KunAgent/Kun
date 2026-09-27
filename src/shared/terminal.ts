@@ -19,6 +19,17 @@ export const TERMINAL_MAX_COLS = 500
 export const TERMINAL_MAX_ROWS = 200
 export const TERMINAL_MAIN_SESSION_ID = 'main'
 
+/** ADE terminal-agent launch request bundled onto `terminal:create` (05 §6.1). */
+export type TerminalAgentCreate = {
+  harnessId: string
+  title: string
+  /** Initial task text injected through the harness's argv/taskFlag. */
+  task?: string
+  taskWorkspaceId?: string
+  parentThreadId?: string
+  workspaceKind?: 'worktree' | 'local' | 'directory'
+}
+
 export type TerminalCreatePayload = {
   /** 稳定的 PTY 会话标识,渲染端会按工作区和标签页生成命名空间。 */
   sessionId: string
@@ -26,6 +37,7 @@ export type TerminalCreatePayload = {
   cwd?: string
   cols?: number
   rows?: number
+  agent?: TerminalAgentCreate
 }
 
 export type TerminalWritePayload = {

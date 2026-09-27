@@ -74,7 +74,7 @@
   "terminalPanelTitle": "Terminal",
   "terminalClear": "Clear terminal",
   "terminalRestart": "Restart terminal",
-  "terminalNewTab": "New terminal tab",
+  "terminalNewTab": "New terminal tab",   "terminalRunAgent": "Run agent in terminal",
   "terminalCloseTab": "Close terminal tab",
   "terminalTabMenuTitle": "Terminal tab actions",
   "terminalRenameTab": "Rename terminal tab",
