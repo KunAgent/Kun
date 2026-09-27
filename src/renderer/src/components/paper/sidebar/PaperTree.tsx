@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { ChevronRight, FolderInput } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
@@ -41,9 +41,16 @@ export function PaperTree({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => readCollapsedGroups(libraryRoot)
   )
+  // While filtering, persisted folds are ignored so matches stay visible; row
+  // clicks hide groups for this filter session only (never persisted).
+  const [filterHidden, setFilterHidden] = useState<ReadonlySet<string>>(() => new Set())
   const { host, openMenu } = usePaperRowMenu()
 
   const query = filter.trim().toLowerCase()
+
+  useEffect(() => {
+    if (!query) setFilterHidden(new Set())
+  }, [query])
   const visibleEntries = useMemo(
     () => query
       ? entries.filter((entry) => entry.meta.title.toLowerCase().includes(query))
@@ -72,6 +79,15 @@ export function PaperTree({
   }, [visibleEntries, folders])
 
   const toggle = (group: string): void => {
+    if (query) {
+      setFilterHidden((current) => {
+        const next = new Set(current)
+        if (next.has(group)) next.delete(group)
+        else next.add(group)
+        return next
+      })
+      return
+    }
     setCollapsed((current) => {
       const next = new Set(current)
       if (next.has(group)) next.delete(group)
@@ -113,8 +129,7 @@ export function PaperTree({
     )
   }
 
-  // While filtering, groups stay expanded so matches are visible.
-  const isCollapsed = (group: string): boolean => !query && collapsed.has(group)
+  const isCollapsed = (group: string): boolean => (query ? filterHidden : collapsed).has(group)
 
   return (
     <div className="px-1 pb-2">

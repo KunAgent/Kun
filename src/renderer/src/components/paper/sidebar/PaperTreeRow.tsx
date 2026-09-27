@@ -99,7 +99,11 @@ export function PaperTreeRow({
       tabIndex={0}
       onClick={() => void openLibraryEntry(entry, libraryRoot, t)}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') void openLibraryEntry(entry, libraryRoot, t)
+        if (event.target !== event.currentTarget) return
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          void openLibraryEntry(entry, libraryRoot, t)
+        }
       }}
       onContextMenu={(event) => {
         event.preventDefault()

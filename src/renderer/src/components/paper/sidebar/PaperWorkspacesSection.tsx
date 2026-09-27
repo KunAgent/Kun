@@ -192,7 +192,11 @@ export function PaperWorkspacesSection(): ReactElement {
                 tabIndex={0}
                 onClick={() => setWorkspaceCollapsed(root, expanded)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') setWorkspaceCollapsed(root, expanded)
+                  if (event.target !== event.currentTarget) return
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    setWorkspaceCollapsed(root, expanded)
+                  }
                 }}
                 onContextMenu={(event) => {
                   event.preventDefault()
