@@ -197,10 +197,22 @@ export function createAgentSdkTurnRuntimeDeps(
       // Gateway turns skip this entirely — the gateway token is the credential.
       let token: string | undefined
       if (!gatewayEnv) {
+        // The apiKey/credentialSource fallback belongs to the single-engine
+        // deployment where `default` IS the agent-sdk subscription route. On a
+        // mixed runtime it holds an unrelated HTTP provider key — a harness-
+        // pinned native-login turn must fall back to the CLI's ambient login
+        // instead of being force-fed a token it cannot parse.
+        const defaultIsSubscriptionRoute = !explicitRouteProviderId && deps.defaultIsAgentSdk
         const credentialSourceId = explicitRouteProviderId
           ? providerCfg?.credentialSourceId
-          : deps.defaultCredentialSourceId
-        let rawToken = explicitRouteProviderId ? providerCfg?.apiKey : deps.defaultToken
+          : defaultIsSubscriptionRoute
+            ? deps.defaultCredentialSourceId
+            : undefined
+        let rawToken = explicitRouteProviderId
+          ? providerCfg?.apiKey
+          : defaultIsSubscriptionRoute
+            ? deps.defaultToken
+            : undefined
         if (credentialSourceId) {
           const resolved = await deps.resolveCredentialSource?.(credentialSourceId).catch(() => null)
           rawToken = resolved?.apiKey ?? ''

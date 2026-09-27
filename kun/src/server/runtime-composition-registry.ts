@@ -78,9 +78,12 @@ export function createRuntimeRegistry(
   const kunToolsMcp = services.kunToolsMcp
   const createChildDelegatedRuntime: ChildDelegatedRuntimeFactory = (child) => {
     const childRuntimes = buildHarnessRuntimes({
+    // Always present: pinned harness routes (ADE workers, graph attempts)
+    // reach this runtime without a configured agent-sdk provider — claude-code
+    // serves native-login/kun-gateway routes on its own subscription or grant.
+    // Construction is lazy; the SDK is imported only when a turn runs.
     agentSdk:
-    (agentSdkProviderIds.size > 0 || defaultIsAgentSdk
-      ? ({
+    ({
           registry: services.childRegistry,
           toolHost: childToolHost,
           turns: child.turns,
@@ -146,7 +149,7 @@ export function createRuntimeRegistry(
           resolveDefaultProviderId: async () =>
             (await modelConnections.snapshot()).defaultProviderId,
           ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {})
-        }) : undefined),
+        }),
     antigravity: ((antigravityProviderIds.size > 0 || defaultIsAntigravity) &&
       !child.allowedReadPaths &&
       !child.allowedWritePaths
