@@ -20,6 +20,17 @@ describe('Codex catalog', () => {
     })
   })
 
+  it('keeps account-visible gpt-6-sol and gpt-6-luna but not hidden catalog rows', () => {
+    const result = parseCodexModelCatalog(JSON.stringify({ models: [
+      { slug: 'gpt-6-sol', visibility: 'list', context_window: 372000 },
+      { slug: 'gpt-6-luna', visibility: 'list', supported_in_api: false },
+      { slug: 'gpt-6-sol-internal', visibility: 'hide' },
+      { slug: 'gpt-6-luna-preview', visibility: 'hide' }
+    ] }))
+    expect(result.modelIds).toEqual(['gpt-6-sol', 'gpt-6-luna'])
+    expect(result.modelProfiles['gpt-6-sol'].contextWindowTokens).toBe(372000)
+  })
+
   it('keeps a missing tier field unknown and a declared tier list explicit', () => {
     const result = parseCodexModelCatalog(JSON.stringify({ models: [
       { slug: 'gpt-6-astra', visibility: 'list', service_tiers: [] },
