@@ -90,6 +90,7 @@
   "reviewOpenInTerminal": "Open worktree in terminal",
   "reviewCleanup": "Clean up worktree",
   "missionControl": "Mission Control",
+  "missionPopout": "Pop out to window",
   "missionSearch": "Search title, project, agent…",
   "missionFilterProject": "Project",
   "missionFilterAgent": "Agent",

@@ -109,10 +109,12 @@ import {
   syncTray
 } from './main-tray'
 import type { MainServices } from './main-ready-services'
+import { registerMissionControlPopoutIpc } from './mission-control-popout'
 import { registerProviderMutationBarrierIpc } from './provider-mutation-barrier'
 
 export function registerMainIpc(services: MainServices): void {
   registerProviderMutationBarrierIpc(() => mainState.mainWindow)
+  registerMissionControlPopoutIpc(() => mainState.mainWindow)
   const {
     browserUseManager,
     credentialMigration,

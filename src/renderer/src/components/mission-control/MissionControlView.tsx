@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Swords } from 'lucide-react'
+import { SquareArrowOutUpRight, Swords } from 'lucide-react'
 import type { ActivityRow } from '@shared/activity-row'
 import type { ActivityDisplayBucket } from '@shared/activity-display'
 import { useActivityStore } from '../../store/activity-store'
@@ -21,6 +21,12 @@ import {
   type MissionFilters
 } from './mission-filters'
 import type { MissionCardStats } from './MissionCard'
+import {
+  canPopoutMissionControl,
+  isMissionControlPopout,
+  openMissionControlThread,
+  toggleMissionControlPopout
+} from './mission-popout'
 
 const SHOW_IDLE_KEY = 'kun.ade.mission.showIdle'
 
@@ -144,7 +150,14 @@ export function MissionControlView(): ReactElement {
       /* persistence is best-effort */
     }
   }
+  const popout = useMemo(() => isMissionControlPopout(), [])
+  const canPopout = canPopoutMissionControl()
   const onOpen = (row: ActivityRow): void => {
+    // The popout owns no chat state; card activation jumps to the main window.
+    if (popout) {
+      openMissionControlThread(row.threadId)
+      return
+    }
     void useChatStore.getState().selectThread(row.threadId)
   }
   const onAnswer = async (questionId: string, answer: string): Promise<void> => {
@@ -169,8 +182,21 @@ export function MissionControlView(): ReactElement {
     <div className="flex h-full min-h-0 w-full flex-col bg-ds-main" data-mission-control>
       <div className="flex items-center justify-between px-4 pt-3">
         <h1 className="text-[14px] font-semibold text-ds-ink">{t('missionControl')}</h1>
-        <span className="text-[11px] text-ds-faint" data-feed-status={status}>
-          {status === 'live' ? '' : t(`missionFeed_${status}`)}
+        <span className="flex items-center gap-2">
+          <span className="text-[11px] text-ds-faint" data-feed-status={status}>
+            {status === 'live' ? '' : t(`missionFeed_${status}`)}
+          </span>
+          {canPopout ? (
+            <button
+              type="button"
+              aria-label={t('missionPopout')}
+              title={t('missionPopout')}
+              onClick={toggleMissionControlPopout}
+              className="flex h-6 w-6 items-center justify-center rounded-md text-ds-faint hover:bg-ds-subtle hover:text-ds-ink"
+            >
+              <SquareArrowOutUpRight className="h-3.5 w-3.5" strokeWidth={1.8} />
+            </button>
+          ) : null}
         </span>
       </div>
       <MissionToolbar

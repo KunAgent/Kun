@@ -92,6 +92,7 @@
   "reviewOpenInTerminal": "워크트리를 터미널에서 열기",
   "reviewCleanup": "워크트리 정리",
   "missionControl": "미션 컨트롤",
+  "missionPopout": "별도 창으로 열기",
   "missionSearch": "제목, 프로젝트, 에이전트 검색…",
   "missionFilterProject": "프로젝트",
   "missionFilterAgent": "에이전트",

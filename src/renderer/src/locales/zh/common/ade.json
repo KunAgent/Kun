@@ -92,6 +92,7 @@
   "reviewOpenInTerminal": "在终端打开该 worktree",
   "reviewCleanup": "清理 worktree",
   "missionControl": "任务总控",
+  "missionPopout": "弹出为独立窗口",
   "missionSearch": "搜索标题、项目、agent…",
   "missionFilterProject": "项目",
   "missionFilterAgent": "Agent",

@@ -36,9 +36,15 @@ applyCursorSpotlight(true)
 installCursorSpotlightTracking()
 const storageRelocationMode = new URLSearchParams(window.location.search).get('storageRelocation') === '1'
 const runtimeMigrationRecoveryMode = new URLSearchParams(window.location.search).get('runtimeMigrationRecovery') === '1'
-if (!storageRelocationMode && !runtimeMigrationRecoveryMode) installDataMigrationRendererRpc()
-installProviderMutationFlushHandler()
-startActivityForegroundReporting()
+const missionControlPopoutMode = new URLSearchParams(window.location.search).get('popout') === '1'
+if (!storageRelocationMode && !runtimeMigrationRecoveryMode && !missionControlPopoutMode) {
+  installDataMigrationRendererRpc()
+}
+if (!missionControlPopoutMode) {
+  installProviderMutationFlushHandler()
+  // The popout owns no chat thread, so it must not claim activity foreground.
+  startActivityForegroundReporting()
+}
 
 // The renderer owns exactly one React root for the whole app lifecycle.
 // Startup phases, boot views, and the workbench all render through StartupGate.
@@ -54,6 +60,17 @@ void bootstrap().catch((error: unknown) => {
 
 async function bootstrap(): Promise<void> {
   await import('./i18n')
+  if (missionControlPopoutMode) {
+    const { MissionControlPopoutView } = await import(
+      './components/mission-control/MissionControlPopoutView'
+    )
+    reactRoot.render(
+      <React.StrictMode>
+        <MissionControlPopoutView />
+      </React.StrictMode>
+    )
+    return
+  }
   reactRoot.render(
     <React.StrictMode>
       <StartupGate
