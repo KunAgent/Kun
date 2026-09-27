@@ -158,6 +158,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         leftSidebarCollapsed={leftSidebarCollapsed}
         onToggleLeftSidebar={toggleLeftSidebar}
         onOpenThread={openThread}
+        onOpenPlugins={openPluginsView}
         onConnectWeixin={openConnectWeixin}
         write={{
           runtimeBanner: writeRuntimeBanner,

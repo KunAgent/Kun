@@ -61,6 +61,11 @@ export const KUN_SUPPLY_CHAIN_UPDATE_CHECK_TEMPLATE = '/v1/supply-chain/update-c
 export const KUN_MCP_OAUTH_PATH = '/v1/mcp/oauth'
 export const KUN_MCP_OAUTH_TEMPLATE = '/v1/mcp/oauth'
 export const KUN_MCP_OAUTH_SERVER_TEMPLATE = '/v1/mcp/oauth/{id}'
+export const KUN_MCP_CONFIG_TEMPLATE = '/v1/mcp/config'
+export const KUN_MCP_REMOTE_APP_TEMPLATE = '/v1/mcp/remote-apps/{id}'
+export function kunMcpRemoteAppPath(serverId: string): string {
+  return `/v1/mcp/remote-apps/${encodeURIComponent(serverId)}`
+}
 export function kunMcpOAuthServerPath(serverId: string): string {
   return `/v1/mcp/oauth/${encodeURIComponent(serverId)}`
 }

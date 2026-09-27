@@ -72,6 +72,13 @@ describe('RoomDirectHeader session sidebar button', () => {
     })
     expect(renderer.root.findByProps({ 'aria-label': 'Model settings' }).findByType('span').children).toEqual(['kimi-code'])
   })
+
+  it('opens connected apps from a private Room header', async () => {
+    const onApps = vi.fn()
+    await act(async () => { renderer = create(createElement(RoomDirectHeader, { ...baseProps(), onApps })) })
+    await act(async () => { renderer.root.findByProps({ 'aria-label': 'Connected apps' }).props.onClick() })
+    expect(onApps).toHaveBeenCalledTimes(1)
+  })
 })
 
 const directState = (overrides: {

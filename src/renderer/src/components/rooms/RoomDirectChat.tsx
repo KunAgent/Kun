@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, CircleAlert, FolderOpen, Menu, MoreHorizontal, PanelRight, PanelRightOpen, RotateCcw, Search, X } from 'lucide-react'
+import { ChevronDown, CircleAlert, FolderOpen, Menu, MoreHorizontal, PanelRight, PanelRightOpen, PlugZap, RotateCcw, Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room, RoomContentReference } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
@@ -40,9 +40,9 @@ export function RoomNoticeDismiss({ onDismiss }: { onDismiss: () => void }) {
   return <button type="button" className="rooms-notice-dismiss" aria-label={t('roomsDismissNotice')} title={t('roomsDismissNotice')}
     onClick={onDismiss}><X size={13} aria-hidden="true" /></button>
 }
-export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile, onModels, onFiles, onReminders, onReset, onConnect, onTasks, onSession, sessionOpen, sessionDisabled }: {
+export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile, onModels, onFiles, onReminders, onReset, onConnect, onApps, onTasks, onSession, sessionOpen, sessionDisabled }: {
   room: Room; models?: AgentModels | null; onSidebar: () => void; onSearch: () => void; onProfile: () => void; onModels: () => void
-  onFiles: () => void; onReminders: () => void; onReset: () => void; onConnect: () => void; onTasks: () => void
+  onFiles: () => void; onReminders: () => void; onReset: () => void; onConnect: () => void; onApps?: () => void; onTasks: () => void
   onSession: () => void; sessionOpen: boolean; sessionDisabled: boolean
 }) {
   const { t } = useTranslation('common')
@@ -56,6 +56,7 @@ export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile,
     <button className="direct-chat-title" onClick={onProfile}><RoomAvatar member={member} label={member.displayName} size={36} /><strong>{member.displayName}</strong></button>
     <button className="direct-current-model" aria-label={t('directModels')} onClick={onModels}><span title={modelLabel(current?.main)}>{modelLabel(current?.main)}</span><ChevronDown size={13} /></button>
     <div className="direct-header-spacer" />
+    {onApps ? <button className="rooms-icon-button" aria-label={t('roomsAppsTitle')} title={t('roomsAppsTitle')} onClick={onApps}><PlugZap size={18} /></button> : null}
     <button className="rooms-icon-button" aria-label={t('roomsSearchMessages')} onClick={onSearch}><Search size={18} /></button>
     <button type="button" className="rooms-icon-button" aria-label={t('roomsViewAgentSession')} title={t('roomsViewAgentSession')}
       aria-pressed={sessionOpen} disabled={sessionDisabled} onClick={onSession}><PanelRight size={18} /></button>
@@ -66,6 +67,7 @@ export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile,
         <button onClick={() => { close(); onFiles() }}>{t('directFiles')}</button>
         <button onClick={() => { close(); onReminders() }}>{t('roomsReminders')}</button>
         <button onClick={() => { close(); onConnect() }}>{t('directConnectProject')}</button>
+        {onApps ? <button onClick={() => { close(); onApps() }}>{t('roomsAppsTitle')}</button> : null}
         <button onClick={() => { close(); onReset() }}>{t('directNewContext')}</button>
         <button onClick={() => { close(); onTasks() }}>{t('roomsTasks')}</button>
       </div>}

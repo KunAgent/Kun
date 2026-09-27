@@ -57,18 +57,22 @@ import { openRoomContentTarget } from './room-content-navigation'
 import { otherUserInputAnswers, RoomChoiceCard, submitRoomUserInput } from './RoomChoiceCard'
 import { RoomExcalidrawConsumer } from './useRoomExcalidrawConsumer'
 import { RoomExcalidrawPanel } from './RoomExcalidrawPanel'
+import { RoomAppsPanel } from './RoomAppsPanel'
 import { useRoomExcalidrawStore, roomExcalidrawBoard } from './room-excalidraw-store'
 
 export function RoomsWorkspaceView({
   onOpenThread,
-  onOpenContentTarget
+  onOpenContentTarget,
+  onOpenPlugins = () => undefined
 }: {
   onOpenThread: (id: string, turnId?: string) => void | Promise<void>
   onOpenContentTarget?: (target: RoomContentOpenTarget) => void | Promise<void>
+  onOpenPlugins?: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
   const state = useRooms('group', false)
   const [newChatOpen, setNewChatOpen] = useState(false)
+  const [appsOpen, setAppsOpen] = useState(false)
   const [sidebarActivity, setSidebarActivity] = useState<RoomSidebarEntry>()
   const receiveSidebarActivity = useCallback((entry: RoomSidebarEntry | undefined) => setSidebarActivity((previous) =>
     previous?.roomId === entry?.roomId && previous?.runningCount === entry?.runningCount && previous?.attentionCount === entry?.attentionCount ? previous : entry), [])
@@ -129,6 +133,7 @@ export function RoomsWorkspaceView({
     state.select(id)
     drawer.close()
     setSidebarOpen(false)
+    setAppsOpen(false)
     setJumpMessageId(null)
   }
   const openAgent = async (agentId: string) => {
@@ -277,9 +282,11 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           onProfile={() => drawer.open({ kind: 'agent', agentId: room.members[0].participantAgentId })} onModels={() => drawer.open({ kind: 'models' })}
           onFiles={() => drawer.open({ kind: 'files' })} onReminders={() => drawer.open({ kind: 'reminders' })}
           onReset={() => void direct.context('reset')} onConnect={() => void direct.context('workspace')}
+          onApps={() => setAppsOpen(true)}
           onTasks={() => drawer.section('tasks')} onSession={toggleSession} sessionOpen={Boolean(openRunId)} sessionDisabled={!latestRunId} /> : <RoomHeader room={room} busy={busy} searchOpen={searchOpen}
           onSidebar={() => setSidebarOpen(true)}
           onSearch={() => setSearchOpen((value) => !value)}
+          onApps={() => setAppsOpen(true)}
           onDetails={() => drawer.section('discussion')}
           onMembers={() => drawer.section('members')}
           onSettings={() => drawer.open({ kind: 'settings' })}
@@ -446,6 +453,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           return <RoomTaskStrip key={key} stacked room={room} tasks={state.tasks} selectedId={null} onTask={openTask}
             cursor={state.taskCursor} moreBusy={state.moreBusy} loadMore={state.loadMoreTasks} />
         }} /> : null}
+      {appsOpen ? <RoomAppsPanel onClose={() => setAppsOpen(false)} onOpenPlugins={() => { setAppsOpen(false); onOpenPlugins() }} /> : null}
       {newChatOpen ? <RoomNewChat onClose={() => setNewChatOpen(false)} onOpen={chooseRoom} onAgent={(id) => void openAgent(id)}
         onFill={() => drawer.open({ kind: 'agent' })} /> : null}
     </div>
