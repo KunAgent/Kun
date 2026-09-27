@@ -212,10 +212,13 @@
   - 可用 agent 摘要，复用 `harness_list` 的数据。
 - 遵守 13 §6 的指标门禁：同一组任务对比改动前后的缓存命中率、首字延迟、准确性（块注入在稳定前缀之后、逐轮重建，前缀不受影响；量化对比归入 P3-16 评测）。
 
-**P3-15 预算执行与用量汇总（M，K R）**
+**P3-15 预算执行与用量汇总（M，K R）** ✅ 已实现
 - 按 worker 线程用量求和，得到 team 合计。超过软上限时向总管发 notice；超过硬上限时 `worker_create` / `worker_send` 返回 `budget_exceeded`，已在运行的不打断。
-- Workers 面板顶部与 Mission Control 卡片显示合计用量；赛马比较视图显示每个参赛者的用量。
-- 测试：软上限只通知一次；硬上限拒绝的理由写进 `userReport`。
+- `FileTeamStore.ensure` 接受可选 `budget`（`softTokens`/`hardTokens`，由 `ade.budget` 配置注入）；`TeamBudgetGate`（`kun/src/ade/team-budget.ts`）区分未越界 / 首次软越界 / 重复软越界 / 硬越界。
+- 软越界只在首次去重发一条 `team_budget` notice（`notice-render` 中文「预算提醒」）；在跑的 worker 与 turn 不打断；team 终态时再补一次检查发现。
+- 硬越界拒绝 `worker_create`、`worker_send` 与 GUI 派活路由，`refusal: 'budget_exceeded'`，`userReport` 带 `当前用量/硬上限`。
+- 用量字段挂在 team overview 的 `usage`（合计 + 每个 worker）：Workers 面板顶部徽标显示 `total/hard tok`（软黄硬红），Mission Control 行级统计带每个 worker 的 tokens，赛马比较已带参赛者用量。
+- 测试：`team-budget.test.ts` 覆盖求和、软/硬阈值、只通知一次、重复检查、worker_send/worker_create 拒绝、GUI 派活拒绝、overview 用量字段；`manager-controls` 的 dispatch 创建/汇报抽到 `dispatch-create.ts` 保持行数门禁。
 
 **P3-16 总管评测集（M，K D）**
 - 固定 10~20 个仓库级任务（修 bug、加测试、跨文件重构、带审查的并行任务），对比"单个 Kun"和"总管 + 多 worker"两种方式的成功率、token 数、总耗时、需要用户介入的次数。
