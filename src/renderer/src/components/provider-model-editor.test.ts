@@ -8,6 +8,7 @@ import {
   describeContextWindowTokens,
   newProviderModelForm,
   parseContextWindowInput,
+  parsePricingInput,
   providerModelFormForExisting,
   providerModelListEntries,
   removeProviderModel,
@@ -101,6 +102,175 @@ describe('provider-model-editor', () => {
       defaultEffort: 'max',
       requestProtocol: 'deepseek-chat-completions'
     })
+  })
+
+  it('keeps catalog pricing and service tiers when editing a chat model', () => {
+    const target = provider({
+      models: ['priced-model'],
+      modelProfiles: {
+        'priced-model': {
+          inputModalities: ['text'],
+          outputModalities: ['text'],
+          supportsToolCalling: true,
+          messageParts: ['text'],
+          pricing: {
+            inputUsdPerMillion: 0.15,
+            outputUsdPerMillion: 0.6,
+            cacheReadUsdPerMillion: 0.015
+          },
+          serviceTiers: ['priority']
+        }
+      }
+    })
+    const form = {
+      ...providerModelFormForExisting(target, 'chat', 'priced-model'),
+      modelId: 'renamed-model'
+    }
+    const next = applyProviderModelForm(target, form)
+    expect(next.modelProfiles['priced-model']).toBeUndefined()
+    expect(next.modelProfiles['renamed-model']).toMatchObject({
+      pricing: {
+        inputUsdPerMillion: 0.15,
+        outputUsdPerMillion: 0.6,
+        cacheReadUsdPerMillion: 0.015
+      },
+      serviceTiers: ['priority']
+    })
+  })
+
+  it('prefills pricing fields from an existing chat profile', () => {
+    const target = provider({
+      models: ['priced'],
+      modelProfiles: {
+        priced: {
+          inputModalities: ['text'],
+          outputModalities: ['text'],
+          supportsToolCalling: true,
+          messageParts: ['text'],
+          pricing: {
+            inputUsdPerMillion: 0.3,
+            outputUsdPerMillion: 1.2,
+            cacheReadUsdPerMillion: 0.03
+          }
+        }
+      }
+    })
+    expect(providerModelFormForExisting(target, 'chat', 'priced').pricing).toEqual({
+      inputUsdPerMillion: 0.3,
+      outputUsdPerMillion: 1.2,
+      cacheReadUsdPerMillion: 0.03,
+      cacheWriteUsdPerMillion: null
+    })
+    // Models without stored pricing start with the empty (no-price) state.
+    expect(providerModelFormForExisting(provider(), 'chat', 'model-a').pricing).toBeNull()
+  })
+
+  it('writes pricing into the saved chat profile', () => {
+    const target = provider()
+    const form = chatForm(target, {
+      modelId: 'priced',
+      pricing: {
+        inputUsdPerMillion: 0.3,
+        outputUsdPerMillion: 1.2,
+        cacheReadUsdPerMillion: 0.03,
+        cacheWriteUsdPerMillion: 0.45
+      }
+    })
+    expect(validateProviderModelForm(form, target)).toEqual([])
+    const next = applyProviderModelForm(target, form)
+    expect(next.modelProfiles['priced'].pricing).toEqual({
+      inputUsdPerMillion: 0.3,
+      outputUsdPerMillion: 1.2,
+      cacheReadUsdPerMillion: 0.03,
+      cacheWriteUsdPerMillion: 0.45
+    })
+  })
+
+  it('treats empty pricing as a legal no-price state and drops cleared pricing', () => {
+    const target = provider({
+      models: ['priced'],
+      modelProfiles: {
+        priced: {
+          inputModalities: ['text'],
+          outputModalities: ['text'],
+          supportsToolCalling: true,
+          messageParts: ['text'],
+          pricing: { inputUsdPerMillion: 0.3, outputUsdPerMillion: 1.2 }
+        }
+      }
+    })
+    const cleared = { ...providerModelFormForExisting(target, 'chat', 'priced'), pricing: null }
+    expect(validateProviderModelForm(cleared, target)).toEqual([])
+    expect(applyProviderModelForm(target, cleared).modelProfiles['priced'].pricing).toBeUndefined()
+
+    const fresh = chatForm(provider(), { modelId: 'unpriced', pricing: null })
+    expect(applyProviderModelForm(provider(), fresh).modelProfiles['unpriced'].pricing)
+      .toBeUndefined()
+  })
+
+  it('rejects half-filled, negative or unparsable pricing', () => {
+    const target = provider()
+    const pricingCases: ProviderModelForm['pricing'][] = [
+      // only one of the required pair
+      {
+        inputUsdPerMillion: 0.3,
+        outputUsdPerMillion: null,
+        cacheReadUsdPerMillion: null,
+        cacheWriteUsdPerMillion: null
+      },
+      // negative price
+      {
+        inputUsdPerMillion: -0.5,
+        outputUsdPerMillion: 1,
+        cacheReadUsdPerMillion: null,
+        cacheWriteUsdPerMillion: null
+      },
+      // unparsable required field (NaN marker)
+      {
+        inputUsdPerMillion: Number.NaN,
+        outputUsdPerMillion: 1,
+        cacheReadUsdPerMillion: null,
+        cacheWriteUsdPerMillion: null
+      },
+      // unparsable optional cache field
+      {
+        inputUsdPerMillion: 0.3,
+        outputUsdPerMillion: 1.2,
+        cacheReadUsdPerMillion: Number.NaN,
+        cacheWriteUsdPerMillion: null
+      },
+      // cache-only input without the required pair
+      {
+        inputUsdPerMillion: null,
+        outputUsdPerMillion: null,
+        cacheReadUsdPerMillion: 0.03,
+        cacheWriteUsdPerMillion: null
+      }
+    ]
+    for (const pricing of pricingCases) {
+      expect(validateProviderModelForm(chatForm(target, { modelId: 'bad', pricing }), target))
+        .toContainEqual({ code: 'invalidPricing' })
+    }
+    // Zero prices are legal (free tier).
+    expect(validateProviderModelForm(chatForm(target, {
+      modelId: 'free',
+      pricing: {
+        inputUsdPerMillion: 0,
+        outputUsdPerMillion: 0,
+        cacheReadUsdPerMillion: null,
+        cacheWriteUsdPerMillion: null
+      }
+    }), target)).toEqual([])
+  })
+
+  it('parses pricing text input', () => {
+    expect(parsePricingInput('')).toBeNull()
+    expect(parsePricingInput('   ')).toBeNull()
+    expect(parsePricingInput('0.15')).toBe(0.15)
+    expect(parsePricingInput('$0.50')).toBe(0.5)
+    expect(parsePricingInput('1.5e-3')).toBe(0.0015)
+    expect(parsePricingInput('abc')).toBeNaN()
+    expect(parsePricingInput('-1')).toBe(-1)
   })
 
   it('renames a chat model and drops the previous profile entry', () => {
