@@ -73,7 +73,6 @@ import {
   stopComputerUseHost
 } from './computer-use/computer-use-host'
 import {
-  __dirname,
   developmentRendererUrl,
   extensionViewSessions,
   mainState,
@@ -331,7 +330,7 @@ export function installDevPreviewWebviewGuards(options: {
       ? [mainState.mainWindow.webContents]
       : [],
     sessions: extensionViewSessions,
-    extensionPreloadPath: resolveNamedPreloadPath(__dirname, 'extension-view'),
+    extensionPreloadPath: resolveNamedPreloadPath(app.getAppPath(), 'extension-view'),
     assertExtensionPartitionPrepared: (record) => options.viewProtocols.assertPrepared(record),
     isPreparedExtensionNavigation: (contents, url) =>
       options.viewProtocols.isPreparedInitialNavigation(contents.session.protocol, url),

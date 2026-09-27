@@ -10,45 +10,59 @@ describe('main paths', () => {
   })
 
   it('prefers the CommonJS preload build when present', () => {
-    const distDir = 'C:\\app\\out\\main'
+    const appPath = 'C:\\app'
 
-    expect(resolvePreloadPath(distDir, (path) => path.endsWith('index.cjs'))).toBe(
-      join(distDir, '../preload/index.cjs')
+    expect(resolvePreloadPath(appPath, (path) => path.endsWith('index.cjs'))).toBe(
+      join(appPath, 'out', 'preload', 'index.cjs')
     )
   })
 
   it('falls back to the ESM preload build', () => {
-    const distDir = 'C:\\app\\out\\main'
+    const appPath = 'C:\\app'
 
-    expect(resolvePreloadPath(distDir, () => false)).toBe(
-      join(distDir, '../preload/index.mjs')
+    expect(resolvePreloadPath(appPath, () => false)).toBe(
+      join(appPath, 'out', 'preload', 'index.mjs')
+    )
+  })
+
+  it('resolves preloads under a packaged app.asar application root', () => {
+    // Regression for the chunk-layout bug: callers bundled into
+    // out/main/chunks produced <app>/out/main/preload/<name> paths. Anchoring
+    // on app.getAppPath() keeps the target under <app>/out/preload regardless
+    // of where the calling bundle lives.
+    const appPath = '/Applications/Kun.app/Contents/Resources/app.asar'
+    expect(resolveNamedPreloadPath(appPath, 'index', (path) => path.endsWith('index.cjs'))).toBe(
+      join(appPath, 'out', 'preload', 'index.cjs')
+    )
+    expect(resolveNamedPreloadPath(appPath, 'index', () => false)).toBe(
+      join(appPath, 'out', 'preload', 'index.mjs')
     )
   })
 
   it('resolves packaged extension preloads independently from the workbench preload', () => {
-    const distDir = 'C:\\app\\out\\main'
-    expect(resolveNamedPreloadPath(distDir, 'extension-view', () => true)).toBe(
-      join(distDir, '../preload/extension-view.cjs')
+    const appPath = 'C:\\app'
+    expect(resolveNamedPreloadPath(appPath, 'extension-view', () => true)).toBe(
+      join(appPath, 'out', 'preload', 'extension-view.cjs')
     )
-    expect(resolveNamedPreloadPath(distDir, 'extension-protected-surface', () => false)).toBe(
-      join(distDir, '../preload/extension-protected-surface.mjs')
+    expect(resolveNamedPreloadPath(appPath, 'extension-protected-surface', () => false)).toBe(
+      join(appPath, 'out', 'preload', 'extension-protected-surface.mjs')
     )
   })
 
   it('resolves the isolated tray quota preload', () => {
-    const distDir = 'C:\\app\\out\\main'
-    expect(resolveNamedPreloadPath(distDir, 'tray-quota', () => true)).toBe(
-      join(distDir, '../preload/tray-quota.cjs')
+    const appPath = 'C:\\app'
+    expect(resolveNamedPreloadPath(appPath, 'tray-quota', () => true)).toBe(
+      join(appPath, 'out', 'preload', 'tray-quota.cjs')
     )
   })
 
   it('resolves dedicated recovery preloads', () => {
-    const distDir = 'C:\\app\\out\\main'
-    expect(resolveNamedPreloadPath(distDir, 'storage-relocation-recovery', () => true)).toBe(
-      join(distDir, '../preload/storage-relocation-recovery.cjs')
+    const appPath = 'C:\\app'
+    expect(resolveNamedPreloadPath(appPath, 'storage-relocation-recovery', () => true)).toBe(
+      join(appPath, 'out', 'preload', 'storage-relocation-recovery.cjs')
     )
-    expect(resolveNamedPreloadPath(distDir, 'runtime-data-recovery', () => false)).toBe(
-      join(distDir, '../preload/runtime-data-recovery.mjs')
+    expect(resolveNamedPreloadPath(appPath, 'runtime-data-recovery', () => false)).toBe(
+      join(appPath, 'out', 'preload', 'runtime-data-recovery.mjs')
     )
   })
 })
