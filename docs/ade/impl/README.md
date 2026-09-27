@@ -19,6 +19,7 @@
 | [flows.md](./flows.md) | 关键流程时序（含失败分支） |
 | [contracts.md](./contracts.md) | 汇总：HTTP 接口、事件、字段、设置、持久化文件、错误码 |
 | [p3-review-followup.md](./p3-review-followup.md) | 2026-09-28 实施复核（P0 ~ P2 已合入）：缺口、红测、实机验证记录与 P3 后续计划 |
+| [p4-usable-ade.md](./p4-usable-ade.md) | 2026-09-29 界面可用性诊断（选择器被裁剪、检测状态不刷新、设置热应用被拒）、harness 添加与配置设计、P4 修复计划 |
 
 ## 2. 约定
 
