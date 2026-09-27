@@ -468,5 +468,17 @@
   "paperImportFolderTooltip": "New papers are filed in \"{{folder}}\"",
   "paperImportedToFolder": "Imported into \"{{folder}}\"",
   "paperImportIntoFolder": "Import papers into this folder",
-  "paperFolderEmpty": "Empty folder"
+  "paperFolderEmpty": "Empty folder",
+  "paperWorkspaces": "Workspaces",
+  "paperWorkspaceAdd": "Add workspace",
+  "paperWorkspaceMenu": "Workspace actions",
+  "paperWorkspaceRemove": "Remove workspace",
+  "paperWorkspaceFilterTitle": "Filter papers",
+  "paperWorkspaceFilterPlaceholder": "Filter by title…",
+  "paperWorkspaceFilterEmpty": "No papers match the filter.",
+  "paperWorkspaceScanning": "Indexing…",
+  "paperWorkspaceLoadError": "Could not index this workspace.",
+  "paperWorkspaceRetry": "Retry",
+  "paperSearchHistory": "Search history",
+  "paperSearchHistoryEmpty": "No history yet."
 }

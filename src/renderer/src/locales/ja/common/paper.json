@@ -468,5 +468,17 @@
   "paperImportFolderTooltip": "新しい論文は「{{folder}}」に保存されます",
   "paperImportedToFolder": "「{{folder}}」にインポートしました",
   "paperImportIntoFolder": "このフォルダに論文をインポート",
-  "paperFolderEmpty": "空のフォルダ"
+  "paperFolderEmpty": "空のフォルダ",
+  "paperWorkspaces": "ワークスペース",
+  "paperWorkspaceAdd": "ワークスペースを追加",
+  "paperWorkspaceMenu": "ワークスペース操作",
+  "paperWorkspaceRemove": "ワークスペースを削除",
+  "paperWorkspaceFilterTitle": "論文を絞り込む",
+  "paperWorkspaceFilterPlaceholder": "タイトルで絞り込み…",
+  "paperWorkspaceFilterEmpty": "一致する論文がありません。",
+  "paperWorkspaceScanning": "インデックス中…",
+  "paperWorkspaceLoadError": "このワークスペースをインデックスできません。",
+  "paperWorkspaceRetry": "再試行",
+  "paperSearchHistory": "検索履歴",
+  "paperSearchHistoryEmpty": "履歴はまだありません。"
 }

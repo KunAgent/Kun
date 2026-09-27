@@ -1,10 +1,5 @@
-import { useState, type ReactElement } from 'react'
-import {
-  FolderPlus,
-  Settings,
-  Smartphone,
-  WandSparkles
-} from 'lucide-react'
+import type { ReactElement } from 'react'
+import { Settings, Smartphone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore, type SettingsRouteSection } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
@@ -15,15 +10,12 @@ import { ConnectPhoneSidebarPanel } from '../chat/ConnectPhoneView'
 import {
   SidebarCommandRow,
   SidebarFrame,
-  SidebarIconButton,
-  SidebarSectionHeader
+  SidebarIconButton
 } from '../sidebar/SidebarPrimitives'
 import { SidebarFocusModeControl } from '../sidebar/SidebarFocusModeControl'
 import { PaperModeToggle } from './PaperModeToggle'
-import { PaperLibrarySwitcher } from './sidebar/PaperLibrarySwitcher'
-import { PaperTree } from './sidebar/PaperTree'
-import { PaperInfoPanel } from './sidebar/PaperInfoPanel'
 import { PaperSidebarNav } from './sidebar/PaperSidebarNav'
+import { PaperWorkspacesSection } from './sidebar/PaperWorkspacesSection'
 
 type Props = {
   activeView: 'chat' | 'write' | 'claw' | 'schedule' | 'workflow'
@@ -37,10 +29,11 @@ type Props = {
 }
 
 /**
- * Papers-surface sidebar: mode toggle, library switcher with the import
- * action, library/discover nodes, the grouped paper tree (title rows, not the
- * raw file tree), and the collapsible info panel pinned to the bottom. Search
- * and status/tag/group filters live in the library tab toolbar.
+ * Papers-surface sidebar: mode toggle, library/search/discover nav, then the
+ * 工作空间 section listing every configured library as its own collapsible
+ * paper tree. Paper metadata moved out of the sidebar into the editor-side
+ * info drawer; search and status/tag/group filters live in the library tab
+ * toolbar.
  */
 export function PaperSidebar({
   activeView,
@@ -58,8 +51,6 @@ export function PaperSidebar({
   const deleteClawChannel = useChatStore((s) => s.deleteClawChannel)
   const activePaperView = useWriteWorkspaceStore((s) => activePaperViewId(s.editorLayout))
   const counts = usePaperModeStore((s) => s.counts)
-  const setImportDialogOpen = usePaperModeStore((s) => s.setImportDialogOpen)
-  const [creatingFolder, setCreatingFolder] = useState(false)
 
   return (
     <SidebarFrame
@@ -114,37 +105,10 @@ export function PaperSidebar({
         />
       ) : (
         <div className="ds-no-drag flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center gap-0.5 pr-1.5">
-            <div className="min-w-0 flex-1">
-              <PaperLibrarySwitcher />
-            </div>
-            <SidebarIconButton
-              title={t('writePaperImport')}
-              ariaLabel={t('writePaperImport')}
-              onClick={() => setImportDialogOpen(true)}
-            >
-              <WandSparkles className="h-4 w-4" strokeWidth={1.75} />
-            </SidebarIconButton>
-          </div>
-
           <div className="pt-2">
             <PaperSidebarNav activeView={activePaperView} total={counts.total} />
           </div>
-
-          <SidebarSectionHeader
-            label={t('writePaperModePapers')}
-            actions={(
-              <SidebarIconButton
-                title={t('paperImportFolderNew')}
-                ariaLabel={t('paperImportFolderNew')}
-                onClick={() => setCreatingFolder(true)}
-              >
-                <FolderPlus className="h-3.5 w-3.5" strokeWidth={1.75} />
-              </SidebarIconButton>
-            )}
-          />
-          <PaperTree creatingFolder={creatingFolder} onCreatingFolderDone={() => setCreatingFolder(false)} />
-          <PaperInfoPanel />
+          <PaperWorkspacesSection />
         </div>
       )}
     </SidebarFrame>

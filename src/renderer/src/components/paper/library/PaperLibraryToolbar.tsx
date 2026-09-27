@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { FileDown, FileWarning, Import, RefreshCw, Search, X } from 'lucide-react'
+import { FileDown, FileWarning, Import, Info, RefreshCw, Search, X } from 'lucide-react'
 import type { PaperLibraryFilter } from '@shared/paper/paper-library-types'
 
 type Translate = (key: string, opts?: Record<string, unknown>) => string
@@ -36,6 +36,7 @@ export function PaperLibraryToolbar({
   onDownloadMissing,
   onExportBibtex,
   onImport,
+  onShowInfo,
   t
 }: {
   filter: PaperLibraryFilter
@@ -50,6 +51,8 @@ export function PaperLibraryToolbar({
   onDownloadMissing: () => void
   onExportBibtex: () => void
   onImport: () => void
+  /** Open the editor-side metadata drawer for the focused unit. */
+  onShowInfo: () => void
   t: Translate
 }): ReactElement {
   const activeTab = filter.recent ? 'recent' : filter.status || 'all'
@@ -136,6 +139,9 @@ export function PaperLibraryToolbar({
       </span>
 
       <div className="ml-auto flex items-center gap-1">
+        <button type="button" onClick={onShowInfo} title={t('writePaperInfoTitle')} aria-label={t('writePaperInfoTitle')} className={iconButtonClass}>
+          <Info className="h-3.5 w-3.5" strokeWidth={1.8} />
+        </button>
         <button type="button" onClick={onRefresh} title={t('writeRefreshWorkspace')} aria-label={t('writeRefreshWorkspace')} className={iconButtonClass}>
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} strokeWidth={1.8} />
         </button>

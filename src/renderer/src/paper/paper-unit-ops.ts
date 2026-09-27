@@ -3,18 +3,36 @@ import { useWriteWorkspaceStore, writeJoinPath } from '../write/write-workspace-
 import { isWriteFileTab } from '../write/write-editor-layout'
 import { normalizePath } from '../write/write-workspace-store-helpers'
 import { usePaperModeStore } from './paper-mode-store'
+import { invalidatePaperLibraryIndex } from './paper-library-index'
 
 /**
  * Directory-level operations on paper units that must keep the editor in
  * sync: trashing a unit closes its open tabs (otherwise autosave would write
  * NOTES.md back into the trashed path), and moving a unit into a group
  * reopens its tabs at the new location.
+ *
+ * `libraryRoot` is the root of the tree the unit lives in. Open tabs only
+ * exist under the mounted root, so tab fixups and document saves apply only
+ * when it matches the mounted workspace.
  */
 
 type OpenUnitTab = { groupId: WriteEditorGroupId; relPath: string; viewMode: WritePreviewMode }
 
 function unitAbsDir(root: string, unitDir: string): string {
   return normalizePath(writeJoinPath(root, unitDir))
+}
+
+function mountedRoot(): string {
+  return normalizePath(useWriteWorkspaceStore.getState().workspaceRoot)
+}
+
+function unitRoot(libraryRoot?: string): string {
+  return normalizePath(libraryRoot ?? '') || mountedRoot()
+}
+
+function refreshRoot(root: string): void {
+  if (root === mountedRoot()) usePaperModeStore.getState().refreshEntries()
+  else invalidatePaperLibraryIndex(root)
 }
 
 /** Open file tabs inside `unitDir`, as paths relative to the unit dir. */
@@ -44,8 +62,11 @@ async function closeTabsInUnit(root: string, unitDir: string, tabs: OpenUnitTab[
 
 export type PaperUnitOpsOutcome = { done: string[]; failed: { unitDir: string; message: string }[] }
 
-export async function trashPaperUnits(unitDirs: readonly string[]): Promise<PaperUnitOpsOutcome> {
-  const root = normalizePath(useWriteWorkspaceStore.getState().workspaceRoot)
+export async function trashPaperUnits(
+  unitDirs: readonly string[],
+  libraryRoot?: string
+): Promise<PaperUnitOpsOutcome> {
+  const root = unitRoot(libraryRoot)
   const outcome: PaperUnitOpsOutcome = { done: [], failed: [] }
   if (!root || typeof window.kunGui?.paperTrashUnit !== 'function') return outcome
   for (const unitDir of unitDirs) {
@@ -55,23 +76,26 @@ export async function trashPaperUnits(unitDirs: readonly string[]): Promise<Pape
     if (result.ok) outcome.done.push(unitDir)
     else outcome.failed.push({ unitDir, message: result.message })
   }
-  if (outcome.done.length) usePaperModeStore.getState().refreshEntries()
+  if (outcome.done.length) refreshRoot(root)
   return outcome
 }
 
 export async function movePaperUnitsToGroup(
   unitDirs: readonly string[],
-  group: string
+  group: string,
+  libraryRoot?: string
 ): Promise<PaperUnitOpsOutcome> {
   const store = useWriteWorkspaceStore.getState()
-  const root = normalizePath(store.workspaceRoot)
+  const root = unitRoot(libraryRoot)
   const outcome: PaperUnitOpsOutcome = { done: [], failed: [] }
   if (!root || typeof window.kunGui?.paperMoveToGroup !== 'function') return outcome
-  if (!(await store.saveAllDocuments(root))) {
+  // Only the mounted library can hold dirty documents / open unit tabs.
+  const isMounted = root === normalizePath(store.workspaceRoot)
+  if (isMounted && !(await store.saveAllDocuments(root))) {
     return { done: [], failed: unitDirs.map((unitDir) => ({ unitDir, message: 'save-failed' })) }
   }
   for (const unitDir of unitDirs) {
-    const tabs = openTabsInUnit(root, unitDir)
+    const tabs = isMounted ? openTabsInUnit(root, unitDir) : []
     await closeTabsInUnit(root, unitDir, tabs)
     const result = await window.kunGui.paperMoveToGroup({ workspaceRoot: root, unitDir, group })
       .catch((error: unknown) => ({ ok: false as const, message: String(error) }))
@@ -87,6 +111,6 @@ export async function movePaperUnitsToGroup(
       )
     }
   }
-  if (outcome.done.length) usePaperModeStore.getState().refreshEntries()
+  if (outcome.done.length) refreshRoot(root)
   return outcome
 }

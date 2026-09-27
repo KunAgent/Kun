@@ -5,11 +5,21 @@ import { normalizePath } from '../write/write-workspace-store-helpers'
 import { usePaperStore } from '../write/paper/paper-store'
 import { revealWorkspacePathInFileManager } from '../lib/open-workspace-path'
 import { usePaperModeStore } from './paper-mode-store'
+import { invalidatePaperLibraryIndex } from './paper-library-index'
 
 type Translate = (key: string, opts?: Record<string, unknown>) => string
 
-function libraryRoot(): string {
+function activeLibraryRoot(): string {
   return normalizePath(useWriteWorkspaceStore.getState().workspaceRoot)
+}
+
+/**
+ * Rows now come from every configured workspace, so every action takes the
+ * root of the tree the row lives in. Falling back to the mounted root keeps
+ * legacy single-library callers (library table, dialogs) unchanged.
+ */
+function rowRoot(libraryRoot?: string): string {
+  return normalizePath(libraryRoot ?? '') || activeLibraryRoot()
 }
 
 function notice(tone: 'success' | 'error' | 'info', message: string): void {
@@ -32,9 +42,10 @@ function applyRowMeta(unitDir: string, meta: PaperUnitMetaV2): void {
 export async function updatePaperEntryMeta(
   entry: PaperLibraryEntry,
   patch: PaperLibraryMetaPatch,
-  t: Translate
+  t: Translate,
+  libraryRoot?: string
 ): Promise<boolean> {
-  const root = libraryRoot()
+  const root = rowRoot(libraryRoot)
   if (!root || typeof window.kunGui?.paperUpdateMeta !== 'function') return false
   const result = await window.kunGui.paperUpdateMeta({ workspaceRoot: root, unitDir: entry.unitDir, patch })
     .catch((error: unknown) => ({ ok: false as const, message: String(error) }))
@@ -42,12 +53,20 @@ export async function updatePaperEntryMeta(
     notice('error', t('writePaperErrorGeneric', { message: result.message }))
     return false
   }
-  applyRowMeta(entry.unitDir, result.meta)
+  if (root === activeLibraryRoot()) {
+    applyRowMeta(entry.unitDir, result.meta)
+  } else {
+    invalidatePaperLibraryIndex(root)
+  }
   return true
 }
 
-export async function copyPaperEntryBibtex(entry: PaperLibraryEntry, t: Translate): Promise<void> {
-  const root = libraryRoot()
+export async function copyPaperEntryBibtex(
+  entry: PaperLibraryEntry,
+  t: Translate,
+  libraryRoot?: string
+): Promise<void> {
+  const root = rowRoot(libraryRoot)
   if (!root || typeof window.kunGui?.paperExportBibtex !== 'function') return
   const result = await window.kunGui.paperExportBibtex({ workspaceRoot: root, unitDir: entry.unitDir })
   if (!result.ok) {
@@ -62,8 +81,11 @@ export async function copyPaperEntryBibtex(entry: PaperLibraryEntry, t: Translat
   }
 }
 
-export async function revealPaperEntry(entry: PaperLibraryEntry): Promise<void> {
-  const root = libraryRoot()
+export async function revealPaperEntry(
+  entry: PaperLibraryEntry,
+  libraryRoot?: string
+): Promise<void> {
+  const root = rowRoot(libraryRoot)
   if (!root) return
   const result = await revealWorkspacePathInFileManager(writeJoinPath(root, entry.unitDir), root)
   if (!result.ok) notice('error', result.message)
@@ -75,9 +97,10 @@ export async function revealPaperEntry(entry: PaperLibraryEntry): Promise<void> 
  */
 export async function downloadMissingPaperPdfs(
   entries: readonly PaperLibraryEntry[],
-  t: Translate
+  t: Translate,
+  libraryRoot?: string
 ): Promise<void> {
-  const root = libraryRoot()
+  const root = rowRoot(libraryRoot)
   if (!root || typeof window.kunGui?.paperDownloadPdf !== 'function') return
   const targets = entries.filter((entry) => !entry.hasPdf)
   if (targets.length === 0) return
@@ -90,7 +113,11 @@ export async function downloadMissingPaperPdfs(
     if (result.ok) done += 1
     else failures.push(`${entry.meta.title}: ${result.message}`)
   }
-  usePaperModeStore.getState().refreshEntries()
+  if (root === activeLibraryRoot()) {
+    usePaperModeStore.getState().refreshEntries()
+  } else {
+    invalidatePaperLibraryIndex(root)
+  }
   notice(
     failures.length ? 'error' : 'success',
     failures.length
