@@ -6,9 +6,11 @@ import {
   type ReactElement
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Moon, Plus, Settings, Smartphone, Sun } from 'lucide-react'
+import { LayoutGrid, Moon, Plus, Settings, Smartphone, Sun } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
 import { useChatStore, type SettingsRouteSection } from '../../store/chat-store'
+import { useActivityStore } from '../../store/activity-store'
+import { selectNeedsYouCount } from '../../store/activity-selectors'
 import {
   SidebarCommandRow,
   SidebarFrame,
@@ -103,6 +105,8 @@ export function AdeSidebar({
   }, [])
 
   const busy = useChatStore((s) => s.busy)
+  const clearActiveThreadSelection = useChatStore((s) => s.clearActiveThreadSelection)
+  const needsYouCount = useActivityStore((s) => selectNeedsYouCount(s.rows))
   const watchTurnCompletion = useChatStore((s) => s.watchTurnCompletion)
   const unreadThreadIds = useChatStore((s) => s.unreadThreadIds)
   const scheduledThreadActivities = useChatStore((s) => s.scheduledThreadActivities)
@@ -259,6 +263,22 @@ export function AdeSidebar({
           disabled={!runtimeReady}
           disabledHint={t('runtimeActionNeedsConnection')}
           variant="accent"
+        />
+        <SidebarCommandRow
+          icon={<LayoutGrid className="h-4 w-4" strokeWidth={1.75} />}
+          label={t('missionControl')}
+          onClick={clearActiveThreadSelection}
+          active={activeThreadId === null}
+          trailing={
+            needsYouCount > 0 ? (
+              <span
+                data-mission-needs-you-count
+                className="rounded-full bg-ds-warning-soft px-1.5 text-[10.5px] font-medium leading-4 text-ds-status-warning"
+              >
+                {needsYouCount}
+              </span>
+            ) : null
+          }
         />
       </div>
       <div className="ds-no-drag mt-1 min-h-0 flex-1 overflow-y-auto pb-2" data-ade-thread-list>
