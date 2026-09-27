@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Swords } from 'lucide-react'
 import type { ActivityRow } from '@shared/activity-row'
 import type { ActivityDisplayBucket } from '@shared/activity-display'
 import { useActivityStore } from '../../store/activity-store'
@@ -8,6 +9,7 @@ import { useChatStore } from '../../store/chat-store'
 import { getProvider } from '../../agent/registry'
 import { MissionColumn } from './MissionColumn'
 import { MissionToolbar } from './MissionToolbar'
+import { RaceCompareView } from '../review/RaceCompareView'
 import { useMissionLazyData } from './mission-lazy-data'
 import {
   EMPTY_MISSION_FILTERS,
@@ -57,6 +59,7 @@ export function MissionControlView(): ReactElement {
     showIdle: readShowIdle()
   }))
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
+  const [openRaceId, setOpenRaceId] = useState<string | null>(null)
 
   const buckets = useMemo(() => selectBuckets(rows), [rows])
   const allVisible = useMemo(
@@ -84,6 +87,15 @@ export function MissionControlView(): ReactElement {
         ])
       ) as Record<ActivityDisplayBucket, ActivityRow[]>,
     [buckets, filters, verdictOf]
+  )
+
+  // Same-task races reported by manager overviews (10 §6); opens compare view.
+  const races = useMemo(
+    () =>
+      Object.values(lazy.overviews)
+        .flatMap((overview) => overview?.races ?? [])
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [lazy.overviews]
   )
 
   const projects = useMemo(
@@ -169,6 +181,22 @@ export function MissionControlView(): ReactElement {
         resultCount={resultCount}
         onChange={onChange}
       />
+      {races.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1.5 px-4 pb-2">
+          {races.map((race) => (
+            <button
+              key={race.raceId}
+              type="button"
+              onClick={() => setOpenRaceId(race.raceId)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-ds-border-muted bg-ds-card px-2.5 py-1 text-[11px] text-ds-muted hover:text-ds-ink"
+            >
+              <Swords className="h-3 w-3 text-ds-faint" strokeWidth={1.8} />
+              <span className="max-w-40 truncate">{race.label}</span>
+              <span className="text-ds-faint">{t(`raceState.${race.state}`)}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="flex min-h-0 flex-1 gap-2 overflow-x-auto px-4 pb-3">
         {visibleColumns.map(({ bucket, labelKey, tinted }) => (
           <MissionColumn
@@ -192,6 +220,9 @@ export function MissionControlView(): ReactElement {
           </div>
         ) : null}
       </div>
+      {openRaceId ? (
+        <RaceCompareView raceId={openRaceId} onClose={() => setOpenRaceId(null)} />
+      ) : null}
     </div>
   )
 }

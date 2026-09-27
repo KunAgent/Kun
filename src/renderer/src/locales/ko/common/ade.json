@@ -183,5 +183,45 @@
     "doneBody": "{{title}}이(가) 완료되어 리뷰할 수 있습니다",
     "stalledTitle": "멈춘 것 같습니다",
     "stalledBody": "{{title}}이(가) 멈춘 것 같습니다"
+  },
+  "raceCompareTitle": "레이스 비교",
+  "raceRefresh": "새로 고침",
+  "raceClose": "닫기",
+  "raceLoading": "레이스 로딩 중…",
+  "raceFiles": "파일",
+  "racePickWinner": "{{label}} 선택",
+  "raceDiscardOthers": "나머지 버리기",
+  "raceDiscardConfirm": "{{count}}개의 worktree와 브랜치를 삭제할까요?",
+  "raceDiscardConfirmButton": "삭제",
+  "raceDiscardCancel": "취소",
+  "raceRowAgent": "에이전트",
+  "raceRowStatus": "상태 / 판정",
+  "raceRowChanges": "변경",
+  "raceRowChecks": "검사",
+  "raceRowReport": "워커 보고",
+  "raceRowUsage": "소요 시간 / 사용량",
+  "raceRowRecommendation": "매니저 추천",
+  "raceState": {
+    "running": "진행 중",
+    "ready": "선택 대기",
+    "decided": "결정됨"
+  },
+  "raceDispatchState": {
+    "pending": "대기",
+    "delivering": "전달 중",
+    "uncertain": "불확실",
+    "accepted": "수락됨",
+    "completed": "완료",
+    "failed": "실패",
+    "cancelled": "취소됨",
+    "create_failed": "생성 실패",
+    "timed_out": "시간 초과"
+  },
+  "raceVerdict": {
+    "pending": "대기",
+    "passed": "통과",
+    "needs_changes": "수정 필요",
+    "rejected": "거절",
+    "waived": "면제"
   }
 }

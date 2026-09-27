@@ -448,10 +448,8 @@ export async function createRuntimeAgentComposition(
     sessionStore,
     childRuns: childRunStore,
     deliverer: dispatchDeliverer,
-    ids,
-    nowIso,
-    approvalGate,
-    approvalEvents: events
+    ids, nowIso, usage: usageService,
+    approvalGate, approvalEvents: events
   })
   // Dispatch backfill + worker terminal hooks on the recorder (09 §5, §6.1).
   core.events.addObserver({ record: (event) => managerRuntime.handleRuntimeEvent(event) })
@@ -464,7 +462,8 @@ export async function createRuntimeAgentComposition(
       runtimes: harnessRuntimeMap,
       profiles: () => delegationRuntime?.listProfiles() ?? []
     },
-    managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true
+    managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true,
+    race: managerRuntime.raceServiceDeps
   }))
   wireTaskWorkspaceChange(core.taskWorkspaces, managerRuntime, services.adeStores.reviews)
   model.refreshModelConnectionDelegatedDeps = () => {
@@ -683,6 +682,7 @@ export async function createRuntimeAgentComposition(
     activityHibernation,
     dispatchDeliverer,
     workerNoticeCoordinator,
+    raceDeps: managerRuntime.raceServiceDeps,
     extensionProfiles,
     extensionAgent,
     get prepareExtensionContributions() { return prepareExtensionContributions },

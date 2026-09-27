@@ -221,4 +221,48 @@ describe('MissionControlView', () => {
     await act(async () => form!.props.onSubmit({ preventDefault: () => undefined }))
     expect(provider.answerTeamQuestion).toHaveBeenCalledWith('q1', 'yes, both')
   })
+
+  it('lists team races as pills that open the compare view', async () => {
+    const overview: AdeTeamOverview = {
+      team: {
+        teamId: 'team_1',
+        managerThreadId: 'thr_mgr',
+        status: 'active',
+        workers: [],
+        createdAt: 'x',
+        updatedAt: 'x'
+      },
+      dispatches: [],
+      questions: [],
+      races: [{
+        raceId: 'race_1',
+        teamId: 'team_1',
+        label: 'fix the bug',
+        contenders: [
+          { harnessId: 'claude-code', label: 'a' },
+          { harnessId: 'codex', label: 'b' }
+        ],
+        state: 'ready',
+        deadlineAt: 'x',
+        createdAt: 'x',
+        updatedAt: 'x'
+      }]
+    }
+    provider.getTeamOverview.mockResolvedValue(overview)
+    // A worker row is required for the overview fetch to fire.
+    const worker = row({
+      unitId: 'wrk_1', kind: 'worker', threadId: 'thr_w1',
+      parentThreadId: 'thr_mgr', title: 'w', state: 'done'
+    })
+    useActivityStore.setState({ rows: { wrk_1: worker } })
+    const renderer = await renderView()
+    const pill = renderer.root
+      .findAllByType('button' as never)
+      .find((b) => b.findAllByType('span' as never)
+        .some((s) => s.children.join('').includes('fix the bug')))
+    expect(pill).toBeTruthy()
+    // Clicking sets openRaceId; RaceCompareView portals to document.body so
+    // it renders nothing in the node test env — assert no crash on click.
+    await act(async () => pill!.props.onClick())
+  })
 })

@@ -22,12 +22,15 @@ import {
 import { workerVerdict } from '../../ade/tools/worker-verdict.js'
 import { reviewRequest } from '../../ade/tools/review-request.js'
 import { workspaceIntegrate } from '../../ade/tools/workspace-integrate.js'
+import { raceRecommend, workerRace, type RaceToolDeps } from '../../ade/tools/worker-race.js'
 
 export type ManagerToolProviderDeps = {
   manager: ManagerRuntime
   harnessList: HarnessListDeps
   /** `agents.kun.ade.managerMayApprove` — gates worker_approve (09 §6.5). */
   managerMayApprove?: () => boolean
+  /** Race store/services (10 §6); absent → worker_race tools hidden. */
+  race?: RaceToolDeps
 }
 
 const START_FROM_SCHEMA = {
@@ -500,6 +503,70 @@ export function createManagerToolProvider(
         execute: async (args, context) => {
           const ctx = await managerCtx(context)
           return { output: await workspaceIntegrate(deps.manager, ctx, args) }
+        }
+      }),
+      LocalToolHost.defineTool({
+        name: 'worker_race',
+        description:
+          'Race 2–3 harnesses on the same task: each contender gets an ' +
+          'ephemeral worker and a worktree forked from the same resolved ' +
+          'commit. You are woken when the race is ready; write your pick ' +
+          'rationale with race_recommend — the user chooses the winner in ' +
+          'the compare view. Relay `userReport` to the user verbatim.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            label: { type: 'string', maxLength: 64 },
+            task: { type: 'string', maxLength: 32_000 },
+            contenders: {
+              type: 'array',
+              minItems: 2,
+              maxItems: 3,
+              items: {
+                type: 'object',
+                properties: {
+                  harnessId: { type: 'string', maxLength: 64 },
+                  model: { type: 'string', maxLength: 512 }
+                },
+                required: ['harnessId'],
+                additionalProperties: false
+              }
+            },
+            startFrom: START_FROM_SCHEMA,
+            timeoutMinutes: { type: 'integer', minimum: 5, maximum: 480 }
+          },
+          required: ['label', 'task', 'contenders'],
+          additionalProperties: false
+        },
+        toolKind: 'tool_call',
+        policy: 'auto',
+        shouldAdvertise: (context) => advertise(context) && Boolean(deps.race),
+        execute: async (args, context) => {
+          const ctx = await managerCtx(context)
+          return { output: await workerRace(deps.manager, deps.race!, ctx, args, context) }
+        }
+      }),
+      LocalToolHost.defineTool({
+        name: 'race_recommend',
+        description:
+          'Record your winner recommendation for a ready race as notes on ' +
+          'the record. This is advisory only — the user still picks the ' +
+          'winner in the compare view; never integrate a race result yourself.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            raceId: { type: 'string', maxLength: 256 },
+            notes: { type: 'string', maxLength: 4_000 }
+          },
+          required: ['raceId', 'notes'],
+          additionalProperties: false
+        },
+        toolKind: 'tool_call',
+        policy: 'auto',
+        shouldAdvertise: (context) => advertise(context) && Boolean(deps.race),
+        execute: async (args, context) => {
+          const ctx = await managerCtx(context)
+          return { output: await raceRecommend(deps.race!, ctx, args) }
         }
       }),
       LocalToolHost.defineTool({

@@ -32,7 +32,9 @@ export const WorkerCreateInputSchema = z
           .discriminatedUnion('kind', [
             z.object({ kind: z.literal('default-branch') }).strict(),
             z.object({ kind: z.literal('current-head') }).strict(),
-            z.object({ kind: z.literal('branch'), name: z.string().min(1).max(256) }).strict()
+            z.object({ kind: z.literal('branch'), name: z.string().min(1).max(256) }).strict(),
+            // Pre-resolved pin — races fork every contender from the same sha (10 §6).
+            z.object({ kind: z.literal('commit'), sha: z.string().regex(/^[a-f0-9]{7,64}$/) }).strict()
           ])
           .optional()
       })

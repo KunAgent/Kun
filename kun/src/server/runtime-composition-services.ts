@@ -76,6 +76,7 @@ import { FileDispatchStore } from '../ade/dispatch-store.js'
 import { FileQuestionStore } from '../ade/question-store.js'
 import { FileWorkerNoticeStore } from '../ade/worker-notice-store.js'
 import { FileReviewStore } from '../ade/review-store.js'
+import { FileRaceStore } from '../ade/race.js'
 import { createWorkerCallbackToolProvider } from '../adapters/tool/worker-callback-tool-provider.js'
 import {
   MemoryDistillationCoordinator,
@@ -449,7 +450,8 @@ export async function createRuntimeServices(
     dispatches: new FileDispatchStore(core.activeOptions.dataDir, nowIso),
     questions: new FileQuestionStore(core.activeOptions.dataDir, nowIso),
     notices: new FileWorkerNoticeStore(core.activeOptions.dataDir, nowIso),
-    reviews: new FileReviewStore(core.activeOptions.dataDir, nowIso, (p) => ids.next(p))
+    reviews: new FileReviewStore(core.activeOptions.dataDir, nowIso, (p) => ids.next(p)),
+    races: new FileRaceStore(core.activeOptions.dataDir, nowIso)
   }
   const workerCallbacks = new WorkerCallbackService({
     threadStore,

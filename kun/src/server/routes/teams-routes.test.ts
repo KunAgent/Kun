@@ -7,6 +7,9 @@ import type { JsonResponse } from '../response.js'
 import type { ServerRuntime } from './server-runtime.js'
 import type { WorkerNotice } from '../../contracts/ade.js'
 import { FileWorkerNoticeStore } from '../../ade/worker-notice-store.js'
+import { FileDispatchStore } from '../../ade/dispatch-store.js'
+import { FileRaceStore } from '../../ade/race.js'
+import { FileTeamStore } from '../../ade/team-store.js'
 import { registerTeamsRoutes } from './register-teams-routes.js'
 
 const NOW = '2026-09-26T00:00:00.000Z'
@@ -29,13 +32,21 @@ function notice(id: string): WorkerNotice {
   }
 }
 
-async function harness(options: { withCoordinator?: boolean; manager?: unknown } = {}) {
+async function harness(options: {
+  withCoordinator?: boolean
+  manager?: unknown
+  withRaces?: boolean
+} = {}) {
   const dataDir = await mkdtemp(join(tmpdir(), 'kun-teams-routes-'))
   tempDirs.push(dataDir)
   const notices = new FileWorkerNoticeStore(dataDir, () => NOW)
   const holdNotices = vi.fn((threadId: string, holdMs: number) => ({
     heldUntil: new Date(Date.parse(NOW) + holdMs).toISOString()
   }))
+  const races = new FileRaceStore(dataDir, () => NOW)
+  const dispatches = new FileDispatchStore(dataDir, () => NOW)
+  const teams = new FileTeamStore(dataDir, () => NOW)
+  const discarded: string[] = []
   const router = new Router()
   registerTeamsRoutes(router, {
     runtimeToken: 'test-token',
@@ -45,7 +56,24 @@ async function harness(options: { withCoordinator?: boolean; manager?: unknown }
       ...(options.withCoordinator === false
         ? {}
         : { noticeCoordinator: { holdNotices } }),
-      ...(options.manager ? { manager: options.manager } : {})
+      ...(options.manager ? { manager: options.manager } : {}),
+      ...(options.withRaces
+        ? {
+            races: {
+              races,
+              dispatches,
+              teams,
+              notices: { enqueue: async (notice: WorkerNotice) => notice },
+              taskWorkspaces: {
+                discard: async (workspaceId: string) => {
+                  discarded.push(workspaceId)
+                  return {}
+                }
+              },
+              nowIso: () => NOW
+            }
+          }
+        : {})
     }
   } as unknown as ServerRuntime)
   const request = async (method: string, path: string, body?: unknown, authorized = true) => {
@@ -63,7 +91,7 @@ async function harness(options: { withCoordinator?: boolean; manager?: unknown }
       { params: route.params }
     ) as Promise<JsonResponse>
   }
-  return { notices, holdNotices, request }
+  return { notices, holdNotices, request, races, dispatches, teams, discarded }
 }
 
 describe('teams routes', () => {
@@ -211,5 +239,120 @@ describe('teams routes', () => {
       .toMatchObject({ ok: true, stopped: false })
     expect((await request('POST', '/v1/teams/workers/wrk_gone/stop')).status).toBe(404)
     expect((await request('POST', '/v1/teams/workers/wrk_1/stop', {}, false)).status).toBe(401)
+  })
+})
+
+describe('race routes', () => {
+  const raceRecord = (state: 'running' | 'ready' | 'decided' = 'running') => ({
+    raceId: 'race_1',
+    teamId: MANAGER,
+    label: 'fix bug',
+    task: 'task',
+    contenders: [
+      { dispatchId: 'dsp_1', workerId: 'wrk_1', harnessId: 'claude-code', label: 'a' },
+      { dispatchId: 'dsp_2', workerId: 'wrk_2', harnessId: 'codex', label: 'b' }
+    ],
+    state,
+    deadlineAt: '2026-10-01T01:00:00.000Z',
+    createdAt: NOW,
+    updatedAt: NOW
+  })
+  const dispatch = (overrides: Record<string, unknown> = {}) => ({
+    dispatchId: 'dsp_1',
+    teamId: MANAGER,
+    workerId: 'wrk_1',
+    parentTurnId: 'turn_mgr',
+    title: 'contender',
+    task: 'task',
+    mode: 'queue' as const,
+    state: 'accepted' as const,
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...overrides
+  })
+
+  it('serves race comparisons with lazy reconcile', async () => {
+    const { races, dispatches, request } = await harness({ withRaces: true })
+    await races.create(raceRecord())
+    await dispatches.create(dispatch({ dispatchId: 'dsp_1', workerId: 'wrk_1' }))
+    await dispatches.create(dispatch({ dispatchId: 'dsp_2', workerId: 'wrk_2' }))
+    await dispatches.update(MANAGER, 'dsp_1', { state: 'completed' }, { expect: ['accepted'] })
+    await dispatches.update(MANAGER, 'dsp_2', { state: 'failed' }, { expect: ['accepted'] })
+
+    const res = await request('GET', '/v1/teams/races/race_1')
+    expect(res.status).toBe(200)
+    const body = JSON.parse(res.body)
+    expect(body.race.state).toBe('ready')
+    expect(body.contenders).toHaveLength(2)
+    expect(body.contenders[0]).toMatchObject({ dispatchId: 'dsp_1', dispatchState: 'completed' })
+    expect(body.contenders[1].dispatchState).toBe('failed')
+
+    expect((await request('GET', '/v1/teams/races/missing')).status).toBe(404)
+    expect((await request('GET', '/v1/teams/races/race_1', undefined, false)).status).toBe(401)
+  })
+
+  it('decides only a ready race, then discards other workspaces with confirm', async () => {
+    const { races, dispatches, teams, discarded, request } = await harness({ withRaces: true })
+    await races.create(raceRecord())
+    await teams.ensure(MANAGER)
+    await teams.upsertWorker(MANAGER, {
+      workerId: 'wrk_1',
+      label: 'a',
+      route: { harnessId: 'claude-code', model: 'm', credentialMode: 'native-login' },
+      permissionMode: 'default',
+      lifecycle: 'ephemeral',
+      taskWorkspaceId: 'tws_win',
+      securitySnapshot: { sandboxRoot: '/r', memoryEnabled: false },
+      control: 'manager',
+      state: 'active',
+      createdAt: NOW
+    })
+    await teams.upsertWorker(MANAGER, {
+      workerId: 'wrk_2',
+      label: 'b',
+      route: { harnessId: 'codex', model: 'm', credentialMode: 'provider' },
+      permissionMode: 'default',
+      lifecycle: 'ephemeral',
+      taskWorkspaceId: 'tws_lose',
+      securitySnapshot: { sandboxRoot: '/r', memoryEnabled: false },
+      control: 'manager',
+      state: 'active',
+      createdAt: NOW
+    })
+    await dispatches.create(dispatch({ dispatchId: 'dsp_1', workerId: 'wrk_1' }))
+    await dispatches.create(dispatch({ dispatchId: 'dsp_2', workerId: 'wrk_2' }))
+
+    // Still running — decide must refuse.
+    expect(
+      (await request('POST', '/v1/teams/races/race_1/decide', { winnerDispatchId: 'dsp_1' })).status
+    ).toBe(409)
+    for (const id of ['dsp_1', 'dsp_2']) {
+      await dispatches.update(MANAGER, id, { state: 'completed' }, { expect: ['accepted'] })
+    }
+    // decide on a non-contender dispatch → 409.
+    expect(
+      (await request('POST', '/v1/teams/races/race_1/decide', { winnerDispatchId: 'dsp_x' })).status
+    ).toBe(409)
+    const decided = await request('POST', '/v1/teams/races/race_1/decide', { winnerDispatchId: 'dsp_1' })
+    expect(decided.status).toBe(200)
+    expect(JSON.parse(decided.body).race?.state).toBe('decided')
+
+    // discard-others requires confirm + decided state.
+    expect(
+      (await request('POST', '/v1/teams/races/race_1/discard-others', {})).status
+    ).toBe(409)
+    const dropped = await request(
+      'POST', '/v1/teams/races/race_1/discard-others', { confirm: true }
+    )
+    expect(dropped.status).toBe(200)
+    expect(discarded).toEqual(['tws_lose'])
+    expect(JSON.parse(dropped.body).discarded).toEqual([
+      { dispatchId: 'dsp_2', workspaceId: 'tws_lose', ok: true }
+    ])
+  })
+
+  it('reports unavailability when races are not wired', async () => {
+    const { request } = await harness()
+    expect((await request('GET', '/v1/teams/races/race_1')).status).toBe(503)
   })
 })

@@ -314,6 +314,10 @@ export interface AgentProvider {
     workerId: string,
     action: 'take-over' | 'hand-back' | 'stop' | 'detach'
   ): Promise<void>
+  /** Same-task race compare + user decision (docs/ade/10 §6, 11 §5). */
+  getRaceComparison?(raceId: string): Promise<import('@shared/ade-teams').AdeRaceComparison>
+  decideRace?(raceId: string, winnerDispatchId: string): Promise<void>
+  discardRaceOthers?(raceId: string): Promise<void>
   /** Per-workspace review comments shared across clients (docs/ade/11 §4). */
   listReviewComments?(
     workspaceId: string

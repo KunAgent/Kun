@@ -348,6 +348,9 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   readonly answerTeamQuestion = this.teams.answerTeamQuestion
   readonly getTeamWorker = this.teams.getTeamWorker
   readonly controlTeamWorker = this.teams.controlTeamWorker
+  readonly getRaceComparison = this.teams.getRaceComparison
+  readonly decideRace = this.teams.decideRace
+  readonly discardRaceOthers = this.teams.discardRaceOthers
 
   private readonly harnesses = createKunHarnessesClient()
   readonly listHarnesses = this.harnesses.listHarnesses

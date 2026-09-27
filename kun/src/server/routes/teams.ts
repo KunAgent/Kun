@@ -3,6 +3,8 @@ import { ERRORS } from './runtime-error.js'
 import {
   DispatchVerdictRequestSchema,
   QuestionAnswerRequestSchema,
+  RaceDecideRequestSchema,
+  RaceDiscardRequestSchema,
   WorkerDispatchRequestSchema,
   WorkerNoticeHoldRequestSchema
 } from '../../contracts/ade.js'
@@ -10,6 +12,13 @@ import type { FileWorkerNoticeStore } from '../../ade/worker-notice-store.js'
 import type { WorkerNoticeCoordinator } from '../../ade/worker-notice-coordinator.js'
 import type { ManagerRuntime } from '../../ade/manager-runtime.js'
 import { renderWorkerUpdates } from '../../ade/notice-render.js'
+import {
+  decideRace,
+  discardRaceOthers,
+  reconcileRaces,
+  type RaceServiceDeps
+} from '../../ade/race.js'
+import { buildRaceComparison } from '../../ade/race-compare.js'
 import { readJsonBody } from '../read-json-body.js'
 
 /**
@@ -58,7 +67,8 @@ function refusalResponse(refusal: string | undefined): JsonResponse {
     refusal === 'worker_not_found' ||
     refusal === 'question_not_found' ||
     refusal === 'dispatch_not_found' ||
-    refusal === 'approval_not_found'
+    refusal === 'approval_not_found' ||
+    refusal === 'race_not_found'
   ) {
     return ERRORS.notFound(`refused: ${refusal}`)
   }
@@ -179,5 +189,64 @@ export async function dispatchVerdictResponse(
   }
   return controlResultResponse(
     await manager.verdicts.setVerdict({ dispatchId, ...parsed.data, decidedBy: 'user' })
+  )
+}
+
+/**
+ * GET /v1/teams/races/:raceId (10 §6.3, 11 §5): lazily reconcile the owning
+ * team's races (covers restarts that dropped deadline timers), then return
+ * the record with per-contender compare data.
+ */
+export async function raceResponse(
+  deps: RaceServiceDeps,
+  raceId: string
+): Promise<JsonResponse> {
+  const race = await deps.races.findRace(raceId)
+  if (!race) return ERRORS.notFound('race not found')
+  await reconcileRaces(deps, race.teamId).catch((error) => {
+    console.warn(`[kun] ade race reconcile failed for ${race.teamId}:`, error)
+  })
+  const fresh = await deps.races.get(race.teamId, raceId)
+  if (!fresh) return ERRORS.notFound('race not found')
+  return jsonResponse(await buildRaceComparison(deps, fresh))
+}
+
+/**
+ * POST /v1/teams/races/:raceId/decide — `{ winnerDispatchId }` (10 §6.4).
+ * GUI-only path; managers reach race records through race_recommend only.
+ */
+export async function raceDecideResponse(
+  deps: RaceServiceDeps,
+  raceId: string,
+  request: Request
+): Promise<JsonResponse> {
+  const body = await readJsonBody(request)
+  if (!body.ok) return body.response
+  const parsed = RaceDecideRequestSchema.safeParse(body.value)
+  if (!parsed.success) {
+    return ERRORS.validation('invalid race decision', parsed.error.issues)
+  }
+  return controlResultResponse(
+    await decideRace(deps, raceId, parsed.data.winnerDispatchId)
+  )
+}
+
+/**
+ * POST /v1/teams/races/:raceId/discard-others — `{ confirm: true }` (10 §6.5,
+ * 07 §8.3): force-discard each non-winner task workspace.
+ */
+export async function raceDiscardOthersResponse(
+  deps: RaceServiceDeps,
+  raceId: string,
+  request: Request
+): Promise<JsonResponse> {
+  const body = await readJsonBody(request)
+  if (!body.ok) return body.response
+  const parsed = RaceDiscardRequestSchema.safeParse(body.value)
+  if (!parsed.success) {
+    return ERRORS.validation('invalid discard-others request', parsed.error.issues)
+  }
+  return controlResultResponse(
+    await discardRaceOthers(deps, raceId, parsed.data.confirm === true)
   )
 }

@@ -7,6 +7,7 @@ import type {
   WorkerRecord
 } from '../contracts/ade.js'
 import type { ManagerRuntimeDeps } from './manager-runtime.js'
+import { reconcileRaces } from './race.js'
 import type { TeamControls } from './team-controls.js'
 import type { QualityVerdicts } from './quality-verdict.js'
 
@@ -211,6 +212,22 @@ export class ManagerWorkerLifecycle {
     await this.deps.notices.enqueue(this.noticeForDispatch(updated, worker)).catch((error) => {
       console.warn(`[kun] ade worker notice enqueue failed for ${updated.dispatchId}:`, error)
     })
+    // Race contenders resolve their shared race when the last one lands (10 §6.3).
+    if (this.deps.races) {
+      await reconcileRaces(
+        {
+          races: this.deps.races,
+          dispatches: this.deps.dispatches,
+          notices: this.deps.notices,
+          teams: this.deps.teams,
+          language: this.deps.language,
+          nowIso: this.deps.nowIso
+        },
+        team.teamId
+      ).catch((error) => {
+        console.warn(`[kun] ade race reconcile failed for ${team.teamId}:`, error)
+      })
+    }
     await this.deps.deliverer.tryDeliverNext(team.teamId, worker.workerId).catch((error) => {
       console.warn(`[kun] ade next-dispatch delivery failed for ${worker.workerId}:`, error)
     })

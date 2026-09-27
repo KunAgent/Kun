@@ -1,6 +1,7 @@
 import type {
   DispatchRecord,
   QuestionRecord,
+  RaceRecord,
   TeamRecord,
   WorkerNotice,
   WorkerRecord
@@ -50,18 +51,20 @@ export class TeamControls {
     return { ok: true, stopped: stopped.turnStopped || stopped.runAborted }
   }
 
-  /** `GET /v1/teams/by-manager/:threadId` (09 §9): roster + recent work. */
+  /** `GET /v1/teams/by-manager/:threadId` (09 §9): roster + recent work + races. */
   async teamOverview(managerThreadId: string): Promise<{
     team: TeamRecord
     dispatches: DispatchRecord[]
     questions: QuestionRecord[]
+    races: RaceRecord[]
   } | null> {
     const team = await this.deps.teams.get(managerThreadId)
     if (!team) return null
     return {
       team,
       dispatches: (await this.deps.dispatches.list(managerThreadId)).slice(-50),
-      questions: (await this.deps.questions.list(managerThreadId)).slice(-50)
+      questions: (await this.deps.questions.list(managerThreadId)).slice(-50),
+      races: this.deps.races ? (await this.deps.races.list(managerThreadId)).slice(-50) : []
     }
   }
 

@@ -1,7 +1,14 @@
-import type { AdeTeamOverview, AdeTeamRecord, AdeTeamWorker } from '@shared/ade-teams'
+import type {
+  AdeRaceComparison,
+  AdeTeamOverview,
+  AdeTeamRecord,
+  AdeTeamWorker
+} from '@shared/ade-teams'
 import {
   kunTeamByManagerPath,
   kunTeamQuestionAnswerPath,
+  kunTeamRaceActionPath,
+  kunTeamRacePath,
   kunTeamWorkerActionPath,
   kunTeamWorkerPath
 } from '@shared/kun-endpoints'
@@ -74,6 +81,49 @@ export function createKunTeamsClient() {
       if (!response.ok) {
         throw runtimeErrorToError(
           readRuntimeError(response.body, `failed to ${action} worker`)
+        )
+      }
+    },
+
+    /** Race record + per-contender compare data (10 §6.3, 11 §5). */
+    async getRaceComparison(raceId: string): Promise<AdeRaceComparison> {
+      const response = await rendererRuntimeClient.runtimeRequest(
+        kunTeamRacePath(raceId), 'GET'
+      )
+      if (!response.ok) {
+        throw runtimeErrorToError(
+          readRuntimeError(response.body, 'failed to load race')
+        )
+      }
+      return readRuntimeJson<AdeRaceComparison>(
+        response.body, 'runtime returned an invalid response'
+      )
+    },
+
+    /** User picks the winning dispatch (10 §6.4). */
+    async decideRace(raceId: string, winnerDispatchId: string): Promise<void> {
+      const response = await rendererRuntimeClient.runtimeRequest(
+        kunTeamRaceActionPath(raceId, 'decide'),
+        'POST',
+        JSON.stringify({ winnerDispatchId })
+      )
+      if (!response.ok) {
+        throw runtimeErrorToError(
+          readRuntimeError(response.body, 'failed to decide race')
+        )
+      }
+    },
+
+    /** Discards every non-winner task workspace (10 §6.5). */
+    async discardRaceOthers(raceId: string): Promise<void> {
+      const response = await rendererRuntimeClient.runtimeRequest(
+        kunTeamRaceActionPath(raceId, 'discard-others'),
+        'POST',
+        JSON.stringify({ confirm: true })
+      )
+      if (!response.ok) {
+        throw runtimeErrorToError(
+          readRuntimeError(response.body, 'failed to discard race workspaces')
         )
       }
     }
