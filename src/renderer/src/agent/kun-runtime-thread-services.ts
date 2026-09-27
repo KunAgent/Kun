@@ -331,6 +331,25 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     }
   }
 
+  /** Bind a ready task workspace: workspace path + marker land atomically. */
+  async bindThreadTaskWorkspace(
+    threadId: string,
+    input: { taskWorkspaceId: string; workspace: string }
+  ): Promise<NormalizedThread> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      kunThreadPath(threadId),
+      'PATCH',
+      JSON.stringify({ workspace: input.workspace, taskWorkspaceId: input.taskWorkspaceId })
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'bind task workspace failed'))
+    }
+    return threadFromCore(readRuntimeJson<CoreThreadJson>(
+      response.body,
+      'runtime returned an invalid thread response'
+    ))
+  }
+
   async updateThreadAdditionalWorkspaces(
     threadId: string,
     additionalWorkspaces: string[]
@@ -503,10 +522,7 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to load thread goal'))
     }
-    const body = readRuntimeJson<CoreThreadGoalResponseJson>(
-      response.body,
-      'runtime returned an invalid thread goal response'
-    )
+    const body = readRuntimeJson<CoreThreadGoalResponseJson>(response.body, 'runtime returned an invalid thread goal response')
     return body.goal ? goalFromCore(body.goal) : null
   }
 
@@ -526,10 +542,7 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to set thread goal'))
     }
-    const body = readRuntimeJson<CoreThreadGoalResponseJson>(
-      response.body,
-      'runtime returned an invalid thread goal response'
-    )
+    const body = readRuntimeJson<CoreThreadGoalResponseJson>(response.body, 'runtime returned an invalid thread goal response')
     if (!body.goal) {
       throw runtimeErrorToError({
         code: 'unknown',
@@ -547,10 +560,7 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to clear thread goal'))
     }
-    return readRuntimeJson<CoreClearThreadGoalResponseJson>(
-      response.body,
-      'runtime returned an invalid clear thread goal response'
-    ).cleared
+    return readRuntimeJson<CoreClearThreadGoalResponseJson>(response.body, 'runtime returned an invalid clear thread goal response').cleared
   }
 
   async getThreadTodos(threadId: string): Promise<NonNullable<NormalizedThread['todos']> | null> {
@@ -561,10 +571,7 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to load thread todos'))
     }
-    const body = readRuntimeJson<CoreThreadTodosResponseJson>(
-      response.body,
-      'runtime returned an invalid thread todos response'
-    )
+    const body = readRuntimeJson<CoreThreadTodosResponseJson>(response.body, 'runtime returned an invalid thread todos response')
     return body.todos ? todosFromCore(body.todos) : null
   }
 
@@ -580,15 +587,9 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to set thread todos'))
     }
-    const body = readRuntimeJson<CoreThreadTodosResponseJson>(
-      response.body,
-      'runtime returned an invalid thread todos response'
-    )
+    const body = readRuntimeJson<CoreThreadTodosResponseJson>(response.body, 'runtime returned an invalid thread todos response')
     if (!body.todos) {
-      throw runtimeErrorToError({
-        code: 'unknown',
-        message: 'set thread todos returned an invalid response'
-      })
+      throw runtimeErrorToError({ code: 'unknown', message: 'set thread todos returned an invalid response' })
     }
     return todosFromCore(body.todos)
   }
@@ -605,10 +606,7 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to sync plan todos'))
     }
-    const body = readRuntimeJson<CoreThreadTodosResponseJson>(
-      response.body,
-      'runtime returned an invalid thread todos response'
-    )
+    const body = readRuntimeJson<CoreThreadTodosResponseJson>(response.body, 'runtime returned an invalid thread todos response')
     if (!body.todos) {
       throw runtimeErrorToError({ code: 'unknown', message: 'sync plan todos returned no todos' })
     }
@@ -623,10 +621,7 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to clear thread todos'))
     }
-    return readRuntimeJson<CoreClearThreadTodosResponseJson>(
-      response.body,
-      'runtime returned an invalid clear thread todos response'
-    ).cleared
+    return readRuntimeJson<CoreClearThreadTodosResponseJson>(response.body, 'runtime returned an invalid clear thread todos response').cleared
   }
 
   async submitApprovalDecision(

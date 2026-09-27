@@ -50,6 +50,7 @@ import type {
 } from './chat-store-types'
 import { queuedMessageGuidancePayload } from './queued-message-guidance'
 import { currentTurnStartGeneration } from './turn-start-fence'
+import { copyLiveProjection, type LiveProjectionState } from './chat-store-live-projection'
 import {
   isPendingQueuedMessage,
   queuedMessagesForThread,
@@ -487,4 +488,58 @@ export type ThreadActionRuntime = {
   threadHydrationAbort?: AbortController
   fenceThreadMutation: (threadId?: string) => number
   persistActiveQueuedMessages: () => void
+}
+
+/** Snapshot of chat state captured before an optimistic send publishes. */
+export type PreSendSnapshot = Pick<
+  ChatState,
+  | 'activeThreadId'
+  | 'blocks'
+  | 'lastSeq'
+  | 'currentTurnId'
+  | 'currentTurnOrchestration'
+  | 'currentTurnUserId'
+  | 'turnStartedAtByUserId'
+  | 'turnDurationByUserId'
+  | 'turnReasoningFirstAtByUserId'
+  | 'turnReasoningLastAtByUserId'
+  | 'queuedMessages'
+> & {
+  liveProjection: LiveProjectionState
+}
+
+export function capturePreSendSnapshot(s: ChatState): PreSendSnapshot {
+  return {
+    activeThreadId: s.activeThreadId,
+    blocks: s.blocks,
+    lastSeq: s.lastSeq,
+    currentTurnId: s.currentTurnId,
+    currentTurnOrchestration: s.currentTurnOrchestration,
+    currentTurnUserId: s.currentTurnUserId,
+    liveProjection: copyLiveProjection(s),
+    turnStartedAtByUserId: s.turnStartedAtByUserId,
+    turnDurationByUserId: s.turnDurationByUserId,
+    turnReasoningFirstAtByUserId: s.turnReasoningFirstAtByUserId,
+    turnReasoningLastAtByUserId: s.turnReasoningLastAtByUserId,
+    queuedMessages: s.queuedMessages
+  }
+}
+
+export function preSendSnapshotPatch(prev: PreSendSnapshot): Partial<ChatState> {
+  return {
+    activeThreadId: prev.activeThreadId,
+    blocks: prev.blocks,
+    lastSeq: prev.lastSeq,
+    busy: false,
+    busyUnconfirmed: false,
+    ...prev.liveProjection,
+    currentTurnId: prev.currentTurnId,
+    currentTurnOrchestration: prev.currentTurnOrchestration,
+    currentTurnUserId: prev.currentTurnUserId,
+    turnStartedAtByUserId: prev.turnStartedAtByUserId,
+    turnDurationByUserId: prev.turnDurationByUserId,
+    turnReasoningFirstAtByUserId: prev.turnReasoningFirstAtByUserId,
+    turnReasoningLastAtByUserId: prev.turnReasoningLastAtByUserId,
+    queuedMessages: prev.queuedMessages
+  }
 }

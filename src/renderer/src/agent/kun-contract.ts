@@ -60,6 +60,10 @@ export type CoreThreadSummaryJson = {
   modelRequestCaptureEnabled?: boolean
   pinned?: boolean
   providerId?: string
+  /** Explicit harness identity inherited by new turns (01 §4). */
+  harnessId?: string
+  /** Host-managed task workspace bound to this thread (07 §5). */
+  taskWorkspaceId?: string
   agentId?: string
   systemPrompt?: string
   relation?: 'primary' | 'fork' | 'side'

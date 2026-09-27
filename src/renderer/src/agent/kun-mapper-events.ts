@@ -477,6 +477,8 @@ export async function applyRuntimeProjectionAction(
     case 'context_snapshot_received': sink.onContextSnapshot?.(action.payload); return
     case 'delegated_runtime_received': sink.onDelegatedRuntimeState?.(action.payload); return
     case 'harness_runtime_received': sink.onHarnessRuntimeState?.(action.payload); return
+    case 'harness_session_state_received': sink.onHarnessSessionState?.(action.payload); return
+    case 'task_workspace_received': sink.onTaskWorkspace?.(action.payload); return
     case 'handoff_received': sink.onHandoff?.(action.payload); return
     case 'usage_received': sink.onUsage?.(action.payload); return
     case 'turn_completed': sink.onTurnComplete(action.payload); return

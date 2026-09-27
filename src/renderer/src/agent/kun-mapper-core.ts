@@ -88,6 +88,8 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     archived: thread.status === 'archived',
     pinned: thread.pinned === true,
     ...(thread.providerId ? { providerId: thread.providerId } : {}),
+    ...(thread.harnessId ? { harnessId: thread.harnessId } : {}),
+    ...(thread.taskWorkspaceId ? { taskWorkspaceId: thread.taskWorkspaceId } : {}),
     ...(thread.agentId ? { agentId: thread.agentId } : {}),
     ...(thread.systemPrompt ? { systemPrompt: thread.systemPrompt } : {}),
     relation: thread.relation,

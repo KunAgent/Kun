@@ -319,18 +319,11 @@ export const ThreadSchemaBase = z.object({
   revision: z.number().int().nonnegative().optional(),
   title: z.string(),
   /**
-   * Whether the current title was auto-derived (client-side first-message
-   * heuristic or the backend LLM titler) rather than set by the user.
-   * - `true`  → provisional/auto title; the backend LLM titler may upgrade it.
-   * - `false` → the user renamed it manually; never auto-overwrite.
-   * - absent  → legacy/unknown; the backend only upgrades placeholder titles.
+   * `true` → provisional/auto title (titler may upgrade); `false` → user-renamed,
+   * never auto-overwrite; absent → legacy, upgrade placeholders only.
    */
   titleAuto: z.boolean().optional(),
-  /**
-   * Optional whole-conversation summary (~1 paragraph) produced on demand by
-   * the Summary internal-LLM role. Surfaced as the conversation's hover /
-   * subtitle in the thread list. Absent until the user runs "summarize".
-   */
+  /** Optional ~1-paragraph summary produced on demand; absent until "summarize" runs. */
   summary: z.string().optional(),
   workspace: z.string(),
   additionalWorkspaces: z.array(z.string().min(1)).max(32).optional(),
@@ -342,24 +335,14 @@ export const ThreadSchemaBase = z.object({
   designProfile: DesignTaskProfileSchema.optional(),
   /** Idempotency audit record for a renderer-prepared independent Design clone. */
   designCloneOperation: DesignCloneOperationSchema.optional(),
-  /**
-   * Optional provider id. When set, every turn on this thread routes its
-   * model request to the matching per-provider client; absent → use the
-   * runtime's default provider. Lets workflow / scheduled-task / IM
-   * bridges pin a non-runtime provider per thread.
-   */
+  /** Optional provider id pinning this thread's model requests; absent → runtime default. */
   providerId: z.string().optional(),
-  /**
-   * Optional explicit harness identity. Turns inherit it at admission; when
-   * absent the harness is inferred from the resolved provider for
-   * backwards compatibility.
-   */
+  /** Optional explicit harness identity; absent → inferred from the resolved provider. */
   harnessId: HarnessIdSchema.optional(),
-  /**
-   * Workspace-mode ownership: which mode (Code vs ADE) the thread belongs to.
-   * Set at create, immutable afterwards; missing values count as `code`.
-   */
+  /** Code vs ADE ownership, set at create and immutable; missing values count as `code`. */
   workspaceMode: z.enum(['code', 'ade']).optional(),
+  /** Host-managed task workspace bound to this thread (07 §5); counts as isolated (02 §6). */
+  taskWorkspaceId: z.string().min(1).optional(),
   /** Stable owner derived from the authenticated Extension Host session. */
   ownerExtensionId: z.string().min(1).optional(),
   /** Creating extension version retained as audit metadata across upgrades. */
@@ -459,6 +442,7 @@ export const ThreadSummarySchema = ThreadSchemaBase.pick({
   providerId: true,
   harnessId: true,
   workspaceMode: true,
+  taskWorkspaceId: true,
   ownerExtensionId: true,
   ownerExtensionVersion: true,
   accountId: true,
@@ -534,6 +518,8 @@ export const CreateThreadRequest = z.object({
    * absent and legacy threads count as 'code'.
    */
   workspaceMode: z.enum(['code', 'ade']).optional(),
+  /** Bind a host-managed task workspace to this thread (07 §5). */
+  taskWorkspaceId: z.string().min(1).optional(),
   /** Opaque core-managed account reference for the selected provider. */
   accountId: z.string().min(1).optional(),
   /** Optional subagent profile id to bind this thread to. */
@@ -645,6 +631,8 @@ export const UpdateThreadRequest = z
     /** Marks the new title as auto/provisional (true) or user-set/locked (false). */
     titleAuto: z.boolean().optional(),
     workspace: z.string().min(1).optional(),
+    /** Bind a host-managed task workspace once it reaches `ready` (07 §5); set-only. */
+    taskWorkspaceId: z.string().min(1).optional(),
     additionalWorkspaces: z.array(z.string().min(1)).max(32).optional(),
     knowledgeBases: KnowledgeBaseMountsSchema.optional(),
     mode: ThreadMode.optional(),
@@ -668,6 +656,7 @@ export const UpdateThreadRequest = z
       value.title !== undefined ||
       value.titleAuto !== undefined ||
       value.workspace !== undefined ||
+      value.taskWorkspaceId !== undefined ||
       value.additionalWorkspaces !== undefined ||
       value.knowledgeBases !== undefined ||
       value.mode !== undefined ||

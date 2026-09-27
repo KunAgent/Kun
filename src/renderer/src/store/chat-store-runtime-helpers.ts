@@ -10,6 +10,8 @@ import {
 } from '@shared/background-shell-notice'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { shouldAutoTitleThread } from '../lib/thread-title'
+import { getProvider } from '../agent/registry'
+import type { TaskWorkspaceThreadEvent } from '@shared/task-workspace'
 import type { ChatState } from './chat-store-types'
 import { emptyLiveProjection } from './chat-store-live-projection'
 
@@ -406,4 +408,34 @@ function runtimeStatusLooksRunning(status?: string): boolean {
 
 function threadHasUserMessage(blocks: ChatBlock[]): boolean {
   return blocks.some((block) => block.kind === 'user')
+}
+
+/** Ready task workspace: PATCH the binding, patch the thread, drain queue. */
+export async function bindReadyTaskWorkspace(
+  event: TaskWorkspaceThreadEvent,
+  set: (partial: Partial<ChatState> | ((state: ChatState) => Partial<ChatState>)) => void,
+  get: () => ChatState
+): Promise<void> {
+  const path = event.workspace?.path?.trim()
+  if (!path) return
+  try {
+    const provider = getProvider()
+    if (provider.bindThreadTaskWorkspace) {
+      await provider.bindThreadTaskWorkspace(event.threadId, {
+        taskWorkspaceId: event.workspaceId,
+        workspace: path
+      })
+    }
+    set((s) => ({
+      threads: s.threads.map((thread) => thread.id === event.threadId
+        ? { ...thread, taskWorkspaceId: event.workspaceId, workspace: path }
+        : thread),
+      adeThreads: (s.adeThreads ?? []).map((thread) => thread.id === event.threadId
+        ? { ...thread, taskWorkspaceId: event.workspaceId, workspace: path }
+        : thread)
+    }))
+    if (get().activeThreadId === event.threadId) void get().drainQueuedMessages()
+  } catch (error) {
+    set({ error: error instanceof Error ? error.message : String(error) })
+  }
 }

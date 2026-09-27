@@ -1,4 +1,6 @@
 import type { CoreRuntimeEventJson } from './kun-contract'
+import type { AdeHarnessSessionState } from '@shared/ade-harnesses'
+import type { TaskWorkspaceThreadEvent } from '@shared/task-workspace'
 import type {
   ApprovalStatusPayload,
   ApprovalReviewEventPayload,
@@ -56,6 +58,8 @@ type RuntimeProjectionActionPayload =
   | { type: 'context_snapshot_received'; payload: RequestContextSnapshot }
   | { type: 'delegated_runtime_received'; payload: DelegatedRuntimeState }
   | { type: 'harness_runtime_received'; payload: HarnessRuntimeState }
+  | { type: 'harness_session_state_received'; payload: AdeHarnessSessionState }
+  | { type: 'task_workspace_received'; payload: TaskWorkspaceThreadEvent }
   | { type: 'handoff_received'; payload: HandoffEventPayload }
   | { type: 'usage_received'; payload: ThreadUsageSnapshot }
   | {

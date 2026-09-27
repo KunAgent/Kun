@@ -28,11 +28,12 @@ export const CANONICAL_SLASH_COMMAND_TEXT: Record<BuiltinSlashCommandId, string>
   btw: '/btw '
 }
 export type SkillSlashCommandId = `skill:${string}`
-export type SlashCommandId = BuiltinSlashCommandId | SkillSlashCommandId
+export type HarnessSlashCommandId = `harness:${string}`
+export type SlashCommandId = BuiltinSlashCommandId | SkillSlashCommandId | HarnessSlashCommandId
 
 export type SlashCommand = {
   id: SlashCommandId
-  kind?: 'builtin' | 'skill'
+  kind?: 'builtin' | 'skill' | 'harness'
   title: string
   description: string
   keywords: string[]
@@ -40,6 +41,12 @@ export type SlashCommand = {
   badge?: string
   scopeLabel?: string
   skillPrompt?: string
+  /**
+   * Harness-native command text sent verbatim on selection (12 §7.4). The
+   * runtime must receive the exact `/<name>` — the composer never rewrites
+   * or expands it.
+   */
+  nativeText?: string
   disabled?: boolean
 }
 

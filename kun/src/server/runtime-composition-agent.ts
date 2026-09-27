@@ -407,7 +407,9 @@ export async function createRuntimeAgentComposition(
       if (!cached) void services.harnesses.detector.status(id).catch(() => undefined)
       return cached
     },
-    allowUnattendedFullAccess: () => core.activeOptions.ade?.allowUnattendedFullAccess === true
+    allowUnattendedFullAccess: () => core.activeOptions.ade?.allowUnattendedFullAccess === true,
+    taskWorkspaceIsolated: (workspaceId) =>
+      core.taskWorkspaces.get(workspaceId)?.isolation === 'worktree'
   })
   // ADE manager control plane (09 §4-§5): durable dispatch delivery + the
   // worker_* tool surface; AbortControllers outlive the manager turn.

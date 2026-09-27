@@ -40,6 +40,9 @@ export type QueuedUserMessage = {
   model?: string
   providerId?: string
   accountId?: string
+  /** ADE harness + credential path frozen at enqueue time (12 §7.2). */
+  harnessId?: string
+  credentialMode?: string
   modelLabel?: string
   reasoningEffort?: string
   serviceTier?: 'priority'
@@ -132,6 +135,9 @@ export type SendMessageOverrides = {
   model?: string
   providerId?: string
   accountId?: string
+  /** ADE harness + credential path for this turn (12 §7.2). */
+  harnessId?: string
+  credentialMode?: string
   modelLabel?: string
   reasoningEffort?: string
   serviceTier?: 'priority'

@@ -53,6 +53,7 @@ import { createKunActivityClient } from './kun-activity-client'
 import { createKunTaskWorkspaceClient } from './kun-task-workspace-client'
 import { createKunReviewClient } from './kun-review-client'
 import { createKunTeamsClient } from './kun-teams-client'
+import { createKunHarnessesClient } from './kun-harnesses-client'
 import { extraRootsForWorkspace } from '../lib/code-workspace-folder-lookup'
 import { additionalWorkspacesForThread, readCodeWorkspaceFolderSets } from '../lib/code-workspace-folder-sets'
 import {
@@ -332,6 +333,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   /** Host task-workspace surface (docs/ade/07 §11, 11 §3 review diff). */
   private readonly taskWorkspaces = createKunTaskWorkspaceClient()
   readonly listTaskWorkspaces = this.taskWorkspaces.listTaskWorkspaces
+  readonly createTaskWorkspace = this.taskWorkspaces.createTaskWorkspace
   readonly getTaskWorkspaceDiff = this.taskWorkspaces.getTaskWorkspaceDiff
   readonly getTaskWorkspaceDiffFile = this.taskWorkspaces.getTaskWorkspaceDiffFile
   readonly getTaskWorkspaceIntegratePreview = this.taskWorkspaces.getTaskWorkspaceIntegratePreview
@@ -345,6 +347,10 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   readonly answerTeamQuestion = this.teams.answerTeamQuestion
   readonly getTeamWorker = this.teams.getTeamWorker
   readonly controlTeamWorker = this.teams.controlTeamWorker
+
+  private readonly harnesses = createKunHarnessesClient()
+  readonly listHarnesses = this.harnesses.listHarnesses
+  readonly listHarnessModels = this.harnesses.listHarnessModels
 
   private readonly reviews = createKunReviewClient()
   readonly listReviewComments = this.reviews.listReviewComments
@@ -386,6 +392,11 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     accountId?: string
     model?: string
     systemPrompt?: string
+    /** ADE harness binding for one-to-one threads (01 §4, 12 §7.2). */
+    harnessId?: string
+    credentialMode?: string
+    /** Bind a host-managed task workspace (07 §5); workspace must still be set. */
+    taskWorkspaceId?: string
   }): Promise<NormalizedThread> {
     const settings = await rendererRuntimeClient.getSettings()
     const runtime = getKunRuntimeSettings(settings)
@@ -394,13 +405,19 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       throw new Error(workspaceMissingError())
     }
     const sharedDefault = await sharedDefaultModelSelection()
-    const requestedProviderId = input.providerId?.trim() || sharedDefault.providerId
+    // A harness thread on native login owns its model selection; the
+    // provider-registry gate below only applies to gateway/provider routes.
+    const harnessNativeLogin = Boolean(input.harnessId?.trim()) && input.credentialMode === 'native-login'
+    const requestedProviderId = harnessNativeLogin
+      ? undefined
+      : input.providerId?.trim() || sharedDefault.providerId
     const requestedModel = input.model?.trim() ||
       (requestedProviderId === sharedDefault.providerId ? sharedDefault.model : undefined)
     const requestedProfile = sharedDefault.providers?.find((profile) =>
       profile.id === requestedProviderId
     )
     if (
+      !harnessNativeLogin &&
       sharedDefault.registryAvailable &&
       (
         !requestedProviderId ||
@@ -425,6 +442,8 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         ...(input.titleAuto !== undefined ? { titleAuto: input.titleAuto } : {}),
         ...(input.agentSurface ? { agentSurface: input.agentSurface } : {}),
         ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
+        ...(input.harnessId?.trim() ? { harnessId: input.harnessId.trim() } : {}),
+        ...(input.taskWorkspaceId?.trim() ? { taskWorkspaceId: input.taskWorkspaceId.trim() } : {}),
         model: requestedModel || runtime.model,
         mode: normalizeThreadMode(input.mode),
         approvalPolicy: runtime.approvalPolicy,
@@ -462,6 +481,10 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       model?: string
       providerId?: string
       accountId?: string
+      /** ADE harness override for this turn; absent inherits the thread. */
+      harnessId?: string
+      /** Harness credential path; absent = the harness's default. */
+      credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
       reasoningEffort?: string
       serviceTier?: 'priority'
       subagentResume?: { childId: string; expectedResumeCount: number }
@@ -532,6 +555,8 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       ...(selectedModel ? { model: selectedModel } : {}),
       ...(selectedProviderId ? { providerId: selectedProviderId } : {}),
       ...(selectedAccountId ? { accountId: selectedAccountId } : {}),
+      ...(options?.harnessId?.trim() ? { harnessId: options.harnessId.trim() } : {}),
+      ...(options?.credentialMode ? { credentialMode: options.credentialMode } : {}),
       approvalPolicy: options?.approvalPolicy ?? runtime.approvalPolicy,
       sandboxMode: options?.sandboxMode ?? runtime.sandboxMode,
       approvalReviewer: options?.approvalReviewer ?? runtime.approvalReviewer

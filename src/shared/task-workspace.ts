@@ -100,6 +100,35 @@ export type TaskWorkspaceIntegrateResponse = {
 
 export type TaskWorkspaceRecordResponse = { record: TaskWorkspaceRecord }
 
+/** POST /v1/task-workspaces `startFrom` discriminated union (07 §4). */
+export type TaskWorkspaceStartFrom =
+  | { kind: 'default-branch' }
+  | { kind: 'current-head' }
+  | { kind: 'branch'; name: string }
+  | { kind: 'commit'; sha: string }
+  | { kind: 'remote-branch'; remote: string; name: string }
+
+/** POST /v1/task-workspaces request body (07 §5). */
+export type CreateTaskWorkspaceRequest = {
+  ownerThreadId: string
+  unitId?: string
+  label?: string
+  sourceRoot: string
+  isolation?: TaskWorkspaceIsolation
+  startFrom?: TaskWorkspaceStartFrom
+}
+
+/** `task_workspace` runtime-event payload projected onto the owner thread (07 §5). */
+export type TaskWorkspaceThreadEvent = {
+  threadId: string
+  turnId?: string
+  workspaceId: string
+  unitId?: string
+  state: TaskWorkspaceState
+  progress?: { step?: string; percent?: number; message?: string }
+  workspace?: { path?: string; sourceRoot?: string; kind?: string; branch?: string }
+}
+
 /** 409 body of POST discard without `confirm` (damage preview, 07 §9). */
 export type TaskWorkspaceDiscardPreview = {
   uncommittedFiles: number

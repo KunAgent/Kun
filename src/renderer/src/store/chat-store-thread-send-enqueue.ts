@@ -38,6 +38,8 @@ export type RuntimeQueueSendInput = {
   composerModel: string
   composerProviderId: string
   composerAccountId: string | undefined
+  composerHarnessId: string
+  composerCredentialMode: string
   userModelChip: string | undefined
   displayText: string | undefined
   reasoningEffort: string | undefined
@@ -70,7 +72,8 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
   const {
     provider: p, activeThreadId, trimmedText, clientRequestId, mode, orchestration,
     requestedAgentSurface, writeContext, composerModel, composerProviderId,
-    composerAccountId, userModelChip, displayText, reasoningEffort, serviceTier,
+    composerAccountId, composerHarnessId, composerCredentialMode,
+    userModelChip, displayText, reasoningEffort, serviceTier,
     subagentResume, messageSource, persona, designProfile, designDocumentTarget,
     designImagePlacementTarget, attachmentIds, attachments, fileReferences, composerContexts,
     ackNoticeIds, queued, overrides, set: setStore, get
@@ -122,6 +125,10 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(composerModel ? { model: composerModel } : {}),
       ...(!channel && composerProviderId ? { providerId: composerProviderId } : {}),
       ...(!channel && composerAccountId ? { accountId: composerAccountId } : {}),
+      ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
+      ...(composerCredentialMode
+        ? { credentialMode: composerCredentialMode as 'native-login' | 'provider' | 'kun-gateway' }
+        : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(!channel && serviceTier ? { serviceTier } : {}),
       ...(subagentResume ? { subagentResume } : {}),
@@ -166,6 +173,8 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       agentSurface: sendOptions.agentSurface,
       ...(composerProviderId ? { providerId: composerProviderId } : {}),
       ...(composerAccountId ? { accountId: composerAccountId } : {}),
+      ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
+      ...(composerCredentialMode ? { credentialMode: composerCredentialMode } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(serviceTier ? { serviceTier } : {}),
       ...(subagentResume ? { subagentResume } : {}),

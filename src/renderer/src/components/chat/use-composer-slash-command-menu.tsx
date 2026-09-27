@@ -15,10 +15,13 @@ import {
   Search,
   SearchCode,
   Sparkles,
+  SquareSlash,
   Target
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
+import type { AdeHarnessCommand } from '@shared/ade-harnesses'
+import { harnessSlashCommandText } from '../../lib/ade-composer-harness'
 import type { AppRoute } from '../../store/chat-store-types'
 import {
   COMPACT_COMMAND_ALIASES,
@@ -58,6 +61,8 @@ type Options = {
   hasReviewCommand: boolean
   skillCommands: ComposerSkillCommand[]
   disabledSkillIds?: string[]
+  /** Native commands the active harness advertised (12 §7.4); ADE only. */
+  harnessCommands?: { harnessLabel: string; commands: AdeHarnessCommand[] }
   onDismiss: () => void
 }
 
@@ -127,6 +132,7 @@ export type ComposerSlashCommandCatalogInput = {
   hasReviewCommand: boolean
   skillCommands: ComposerSkillCommand[]
   disabledSkillIds?: string[]
+  harnessCommands?: { harnessLabel: string; commands: AdeHarnessCommand[] }
 }
 
 /**
@@ -149,7 +155,8 @@ export function buildComposerSlashCommands({
   hideBtwCommand,
   hasReviewCommand,
   skillCommands,
-  disabledSkillIds
+  disabledSkillIds,
+  harnessCommands
 }: ComposerSlashCommandCatalogInput): SlashCommand[] {
     const threadActionDisabled = !runtimeReady || busy || !activeThreadId
     const disabledSkills = disabledSkillIdSet(disabledSkillIds)
@@ -284,6 +291,37 @@ export function buildComposerSlashCommands({
             icon: <Archive className="h-4 w-4" strokeWidth={1.9} />,
             disabled: threadActionDisabled
           })
+
+      // Harness-native commands advertised via `harness_session_state`
+      // (12 §7.4): a separate, scope-labeled section after the builtins.
+      if (harnessCommands && harnessCommands.commands.length > 0) {
+        const seen = new Set<string>()
+        commands.push(...harnessCommands.commands
+          .filter((command) => {
+            const name = command.name.trim()
+            if (!name || seen.has(name)) return false
+            seen.add(name)
+            return true
+          })
+          .slice(0, 40)
+          .map<SlashCommand>((command) => {
+            const text = harnessSlashCommandText(command)
+            return {
+              id: `harness:${command.name.trim()}`,
+              kind: 'harness',
+              title: text,
+              description: command.description?.trim()
+                || command.inputHint?.trim()
+                || t('slashHarnessCommandFallback'),
+              keywords: [command.name.trim(), text, harnessCommands.harnessLabel],
+              icon: <SquareSlash className="h-4 w-4" strokeWidth={1.9} />,
+              badge: text,
+              scopeLabel: harnessCommands.harnessLabel,
+              nativeText: text,
+              disabled: !runtimeReady
+            }
+          }))
+      }
     }
     return commands
 }
@@ -304,7 +342,8 @@ function useComposerSlashCommands(options: Options): SlashCommand[] {
     hideBtwCommand,
     hasReviewCommand,
     skillCommands,
-    disabledSkillIds
+    disabledSkillIds,
+    harnessCommands
   } = options
   return useMemo(
     () => buildComposerSlashCommands({
@@ -322,7 +361,8 @@ function useComposerSlashCommands(options: Options): SlashCommand[] {
       hideBtwCommand,
       hasReviewCommand,
       skillCommands,
-      disabledSkillIds
+      disabledSkillIds,
+      harnessCommands
     }),
     [
       activeThreadArchived,
@@ -331,6 +371,7 @@ function useComposerSlashCommands(options: Options): SlashCommand[] {
       canCreateNewThread,
       canOpenGoalPanel,
       disabledSkillIds,
+      harnessCommands,
       hasBtwCommand,
       hasPlanCommand,
       hasReviewCommand,
