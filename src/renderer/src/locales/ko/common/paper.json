@@ -92,7 +92,6 @@
   "writePaperFilterTag": "Tag",
   "writePaperFilterTagAll": "All tags",
   "writePaperFilterUnread": "Unread",
-  "writePaperGroupInvalid": "그룹 이름에 빈 구간, \".\" 또는 \"..\"를 쓸 수 없습니다.",
   "writePaperGroupPlaceholder": "그룹 이름 (예: nlp, agents/code)",
   "writePaperGroupTopLevel": "최상위",
   "writePaperImport": "Import paper",

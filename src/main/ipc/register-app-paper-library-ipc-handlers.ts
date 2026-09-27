@@ -43,6 +43,7 @@ import {
   detectPaperLibraries,
   listPaperGroups,
   movePaperUnitToGroup,
+  normalizePaperGroupPath,
   readPaperUnitMetaV2,
   scanPaperLibrary,
   scannedUnitToEntry,
@@ -226,8 +227,8 @@ export function registerAppPaperLibraryIpcHandlers(
         const papersDir = await papersDirFor()
         const papersDirAbs = await resolveTargetPathWithinWorkspace(papersDir, workspacePath)
         const unitDirAbs = await resolveTargetPathWithinWorkspace(request.unitDir, workspacePath)
-        const group = request.group.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
-        if (group.split('/').some((segment) => !segment || segment === '.' || segment === '..')) {
+        const group = normalizePaperGroupPath(request.group.replace(/^[\\/]+|[\\/]+$/g, ''))
+        if (group === null) {
           return { ok: false, code: 'invalid-group', message: 'Invalid group path.' }
         }
         if (!(await readPaperUnitMetaV2(unitDirAbs))) {

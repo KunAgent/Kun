@@ -92,7 +92,6 @@
   "writePaperFilterTag": "Tag",
   "writePaperFilterTagAll": "All tags",
   "writePaperFilterUnread": "Unread",
-  "writePaperGroupInvalid": "Имя группы не может содержать пустые части, «.» или «..».",
   "writePaperGroupPlaceholder": "Имя группы, напр. nlp или agents/code",
   "writePaperGroupTopLevel": "Верхний уровень",
   "writePaperImport": "Import paper",

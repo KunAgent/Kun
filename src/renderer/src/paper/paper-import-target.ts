@@ -10,6 +10,8 @@ import { usePaperModeStore } from './paper-mode-store'
 
 const KEY_PREFIX = 'kun.paper.importFolder.'
 const MAX_FOLDER_DEPTH = 3
+/** Paper-unit internals; the main process refuses them as folder names too. */
+const RESERVED_FOLDER_NAMES = new Set(['figures', 'marks', 'source', 'assets'])
 
 /**
  * Folder names are relative paths under `<papersDir>/`; '' is the top level.
@@ -22,7 +24,7 @@ export function normalizePaperFolderInput(value: string): string | null {
   const segments = folder.split('/').map((segment) => segment.trim())
   if (segments.length > MAX_FOLDER_DEPTH) return null
   const invalid = segments.some(
-    (segment) => !segment || segment.startsWith('.') || /[<>:"|?*]/.test(segment)
+    (segment) => !segment || segment.startsWith('.') || RESERVED_FOLDER_NAMES.has(segment) || /[<>:"|?*]/.test(segment)
   )
   return invalid ? null : segments.join('/')
 }

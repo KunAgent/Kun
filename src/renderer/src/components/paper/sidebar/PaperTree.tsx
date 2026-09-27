@@ -117,16 +117,18 @@ export function PaperTree({
             {!isCollapsed && !items.length && !hasChildFolder ? (
               <p style={{ paddingLeft: 24 + depth * 14 }} className="py-1 text-[11px] text-ds-faint">{t('paperFolderEmpty')}</p>
             ) : null}
-            {!isCollapsed
-              ? items.map((entry) => (
+            {!isCollapsed && items.length ? (
+              <div style={{ paddingLeft: depth * 14 }}>
+                {items.map((entry) => (
                   <PaperTreeRow
                     key={entry.unitDir}
                     entry={entry}
                     workspaceRoot={workspaceRoot}
                     onMenu={openMenu}
                   />
-                ))
-              : null}
+                ))}
+              </div>
+            ) : null}
           </div>
         )
       })}

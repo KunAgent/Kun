@@ -92,7 +92,6 @@
   "writePaperFilterTag": "标签",
   "writePaperFilterTagAll": "全部标签",
   "writePaperFilterUnread": "未读",
-  "writePaperGroupInvalid": "分组名不能包含空段、「.」或「..」。",
   "writePaperGroupPlaceholder": "分组名，例如 nlp 或 agents/code",
   "writePaperGroupTopLevel": "顶层",
   "writePaperImport": "导入论文",

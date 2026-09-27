@@ -92,7 +92,6 @@
   "writePaperFilterTag": "Tag",
   "writePaperFilterTagAll": "All tags",
   "writePaperFilterUnread": "Unread",
-  "writePaperGroupInvalid": "ชื่อกลุ่มต้องไม่มีส่วนว่าง \".\" หรือ \"..\"",
   "writePaperGroupPlaceholder": "ชื่อกลุ่ม เช่น nlp หรือ agents/code",
   "writePaperGroupTopLevel": "ระดับบนสุด",
   "writePaperImport": "Import paper",

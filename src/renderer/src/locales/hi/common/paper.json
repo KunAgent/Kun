@@ -92,7 +92,6 @@
   "writePaperFilterTag": "Tag",
   "writePaperFilterTagAll": "All tags",
   "writePaperFilterUnread": "Unread",
-  "writePaperGroupInvalid": "समूह नाम में खाली खंड, \".\" या \"..\" नहीं हो सकते।",
   "writePaperGroupPlaceholder": "समूह नाम, जैसे nlp या agents/code",
   "writePaperGroupTopLevel": "शीर्ष स्तर",
   "writePaperImport": "Import paper",

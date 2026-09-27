@@ -4,7 +4,14 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { findPaperUnitByIds, importPaperUnit, listPaperUnitsDeep } from './paper-unit-service'
-import { createPaperGroup, importPaperBibtex, listPaperGroups, scanPaperLibrary } from './paper-library-service'
+import {
+  createPaperGroup,
+  importPaperBibtex,
+  listPaperGroups,
+  movePaperUnitToGroup,
+  normalizePaperGroupPath,
+  scanPaperLibrary
+} from './paper-library-service'
 
 async function writeUnit(dir: string, meta: Record<string, unknown>): Promise<void> {
   await mkdir(dir, { recursive: true })
@@ -87,5 +94,25 @@ describe('paper folders', () => {
     for (const bad of ['', '..', '../x', '.hidden', 'a//b', '/a', 'a/', 'a/b/c/d', 'figures', 'a:b', 'paper-a/inner', 'link-out/inner']) {
       await expect(createPaperGroup(papers, bad)).rejects.toThrow()
     }
+  })
+
+  it('moves papers only into folders the library scan can see', async () => {
+    const root = dirname(papers)
+    await writeUnit(join(papers, 'paper-a'), {})
+    await writeUnit(join(papers, 'paper-b'), {})
+    const moved = await movePaperUnitToGroup(root, papers, join(papers, 'paper-a'), 'x/y/z')
+    expect((await scanPaperLibrary(root, papers)).map((unit) => unit.group).sort()).toEqual(['', 'x/y/z'])
+    const back = await movePaperUnitToGroup(root, papers, moved.unitDirAbs, '')
+    expect(back.unitDirAbs).toBe(join(papers, 'paper-a'))
+    for (const bad of ['a/b/c/d', '.hidden', 'figures', 'paper-b', 'paper-b/inner']) {
+      await expect(movePaperUnitToGroup(root, papers, join(papers, 'paper-a'), bad)).rejects.toThrow()
+    }
+  })
+
+  it('normalizes group paths with the top level allowed', () => {
+    expect(normalizePaperGroupPath('')).toBe('')
+    expect(normalizePaperGroupPath(' a / b ')).toBe('a/b')
+    expect(normalizePaperGroupPath('a/b/c/d')).toBeNull()
+    expect(normalizePaperGroupPath('a//b')).toBeNull()
   })
 })

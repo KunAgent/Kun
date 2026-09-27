@@ -92,7 +92,6 @@
   "writePaperFilterTag": "Tag",
   "writePaperFilterTagAll": "All tags",
   "writePaperFilterUnread": "Unread",
-  "writePaperGroupInvalid": "グループ名に空の区切り、「.」「..」は使えません。",
   "writePaperGroupPlaceholder": "グループ名（例：nlp、agents/code）",
   "writePaperGroupTopLevel": "最上位",
   "writePaperImport": "Import paper",

@@ -92,7 +92,6 @@
   "writePaperFilterTag": "Tag",
   "writePaperFilterTagAll": "All tags",
   "writePaperFilterUnread": "Unread",
-  "writePaperGroupInvalid": "Group names cannot be empty segments, \".\" or \"..\".",
   "writePaperGroupPlaceholder": "Group name, e.g. nlp or agents/code",
   "writePaperGroupTopLevel": "Top level",
   "writePaperImport": "Import paper",

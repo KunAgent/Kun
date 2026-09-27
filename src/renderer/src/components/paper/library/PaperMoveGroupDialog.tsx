@@ -3,16 +3,8 @@ import { FolderInput, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { movePaperUnitsToGroup } from '../../../paper/paper-unit-ops'
+import { normalizePaperFolderInput } from '../../../paper/paper-import-target'
 import { usePaperStore } from '../../../write/paper/paper-store'
-
-/** Group names are relative paths under `<papersDir>/`; '' is the top level. */
-function normalizeGroupInput(value: string): string | null {
-  const group = value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
-  if (!group) return ''
-  const segments = group.split('/')
-  if (segments.some((segment) => !segment.trim() || segment === '.' || segment === '..')) return null
-  return segments.map((segment) => segment.trim()).join('/')
-}
 
 /**
  * Move one or more library units into a group (a subdirectory of the papers
@@ -30,7 +22,7 @@ export function PaperMoveGroupDialog({
   const groups = usePaperModeStore((s) => s.groups)
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
-  const target = normalizeGroupInput(value)
+  const target = normalizePaperFolderInput(value)
 
   const submit = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
@@ -83,7 +75,7 @@ export function PaperMoveGroupDialog({
           className="w-full rounded-lg border border-ds-border-muted bg-ds-main px-2.5 py-1.5 text-[13px] text-ds-ink outline-none focus:border-accent-tint/50"
         />
         {target === null ? (
-          <p className="mt-1 text-[11.5px] text-red-600 dark:text-red-300">{t('writePaperGroupInvalid')}</p>
+          <p className="mt-1 text-[11.5px] text-red-600 dark:text-red-300">{t('paperImportFolderInvalid')}</p>
         ) : null}
         <div className="mt-2 flex flex-wrap gap-1">
           <button

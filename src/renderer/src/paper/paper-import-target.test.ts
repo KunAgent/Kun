@@ -10,7 +10,7 @@ describe('paper import target', () => {
   })
 
   it('rejects dot segments, reserved characters and deep paths', () => {
-    for (const bad of ['..', 'a/../b', '.hidden', 'a//b', 'a:b', 'a/b/c/d']) {
+    for (const bad of ['..', 'a/../b', '.hidden', 'a//b', 'a:b', 'a/b/c/d', 'figures', 'x/assets']) {
       expect(normalizePaperFolderInput(bad)).toBeNull()
     }
   })

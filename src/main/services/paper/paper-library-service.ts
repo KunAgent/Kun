@@ -205,9 +205,9 @@ export async function updatePaperUnitMetaV2(
 }
 
 /**
- * Move a unit into `<papersDir>/<group>` ('' = top level). Group names are
- * single path segments chains; '..' / separators escaping the papers dir are
- * rejected by the caller's containment check.
+ * Move a unit into `<papersDir>/<group>` ('' = top level). The group is
+ * validated like a new folder, so a moved paper always stays within the
+ * depth the library scan reaches.
  */
 export async function movePaperUnitToGroup(
   rootAbs: string,
@@ -219,11 +219,9 @@ export async function movePaperUnitToGroup(
   if (!insidePapers || insidePapers.startsWith('..') || insidePapers.startsWith('/')) {
     throw new PaperUnitError('invalid-unit', 'Paper unit is outside the papers directory.')
   }
-  const targetParent = group ? join(papersDirAbs, group) : papersDirAbs
-  const parentInside = toSlashes(relative(papersDirAbs, targetParent))
-  if (parentInside.startsWith('..') || parentInside.startsWith('/')) {
-    throw new PaperUnitError('invalid-unit', 'Group path escapes the papers directory.')
-  }
+  const normalized = normalizePaperGroupPath(group)
+  if (normalized === null) throw new PaperUnitError('invalid-unit', 'Invalid folder name.')
+  const targetParent = normalized ? await paperGroupDirAbs(papersDirAbs, normalized) : papersDirAbs
   await mkdir(targetParent, { recursive: true })
   const target = join(targetParent, basename(unitDirAbs))
   if (target === unitDirAbs) {
@@ -243,18 +241,26 @@ function validFolderSegment(segment: string): boolean {
 }
 
 /**
- * Create `<papersDir>/<group>` (nested paths allowed, depth <= 3) and return
- * the normalized group. Rejects empty, dot and escaping segments, and
- * refuses to create a folder inside an existing paper unit.
+ * Normalize a folder path under `<papersDir>/` ('' = top level). Returns null
+ * for empty/dot segments, reserved names or characters, and paths deeper
+ * than the library scan reaches (3 levels).
  */
-export async function createPaperGroup(papersDirAbs: string, rawGroup: string): Promise<string> {
-  const segments = rawGroup.replace(/\\/g, '/').split('/').map((segment) => segment.trim())
-  const invalid = !segments.length
-    || segments.length > SCAN_MAX_DEPTH
+export function normalizePaperGroupPath(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  const segments = trimmed.replace(/\\/g, '/').split('/').map((segment) => segment.trim())
+  const invalid = segments.length > SCAN_MAX_DEPTH
     || segments.some((segment) => !segment || segment.startsWith('.') || PAPER_UNIT_CHILD_DIRS.has(segment) || !validFolderSegment(segment))
-  if (invalid) throw new PaperUnitError('invalid-unit', 'Invalid folder name.')
+  return invalid ? null : segments.join('/')
+}
+
+/**
+ * Absolute dir for a normalized non-empty group. Refuses symlinked segments
+ * and segments that are existing paper units (no folders inside a paper).
+ */
+async function paperGroupDirAbs(papersDirAbs: string, group: string): Promise<string> {
   let current = papersDirAbs
-  for (const segment of segments) {
+  for (const segment of group.split('/')) {
     current = join(current, segment)
     const existing = await lstat(current).catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return null
@@ -269,8 +275,18 @@ export async function createPaperGroup(papersDirAbs: string, rawGroup: string): 
   }
   const inside = toSlashes(relative(papersDirAbs, current))
   if (!inside || inside.startsWith('..')) throw new PaperUnitError('invalid-unit', 'Folder escapes the papers directory.')
-  await mkdir(current, { recursive: true })
-  return segments.join('/')
+  return current
+}
+
+/**
+ * Create `<papersDir>/<group>` (nested paths allowed, depth <= 3) and return
+ * the normalized group.
+ */
+export async function createPaperGroup(papersDirAbs: string, rawGroup: string): Promise<string> {
+  const group = normalizePaperGroupPath(rawGroup)
+  if (!group) throw new PaperUnitError('invalid-unit', 'Invalid folder name.')
+  await mkdir(await paperGroupDirAbs(papersDirAbs, group), { recursive: true })
+  return group
 }
 
 /** List every folder beneath `<papersDir>/`, including empty nested folders. */
