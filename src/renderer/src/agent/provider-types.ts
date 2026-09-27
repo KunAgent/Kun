@@ -430,6 +430,8 @@ export interface AgentProvider {
       composerContexts?: ComposerContextAttachment[]
       /** ADE manager sends acknowledge these worker notices on admission. */
       ackNoticeIds?: string[]
+      /** Managed plan-build turn; Kun enforces isolated-worktree admission (07 §10). */
+      planBuild?: boolean
       writeContext?: WriteTurnContext
     }
   ): Promise<{

@@ -371,7 +371,8 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         ...(workspaceCheckpointRequestId ? { workspaceCheckpointRequestId } : {}),
         ...(fileReferences.length ? { fileReferences } : {}),
         ...(composerContexts.length ? { composerContexts } : {}),
-        ...(ackNoticeIds?.length ? { ackNoticeIds } : {})
+        ...(ackNoticeIds?.length ? { ackNoticeIds } : {}),
+        ...((queued?.planBuild ?? overrides?.planBuild) ? { planBuild: true } : {})
       })
       runtimeTurnAccepted = true
       if (submittedMessageForQueue.waitForRuntimeAdmission) settleRuntimeTurnAdmission(clientRequestId, true)

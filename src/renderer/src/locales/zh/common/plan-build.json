@@ -48,6 +48,8 @@
   "planBuildMoreWays": "更多构建方式",
   "planWorktreePromptHint": "仅支持 Direct · Worktree 创建、合入和清理由 Agent 完成",
   "planWorktreeGraphUnsupported": "提示词 Worktree 仅支持 Direct 构建",
+  "planBuildExternalGraphUnsupported": "Graph 构建需要 Kun harness。请改用 Kun，或使用 Direct 构建。",
+  "planBuildExternalUnsupported": "此构建需要隔离的任务工作区，当前运行时暂不支持。",
   "planWorktreeCurrentWorkspaceWarning": "在当前工作区构建",
   "planWorktreeDetachedHead": "提示词 Worktree 执行需要先检出一个本地分支。",
   "planWorktreeTaskChanged": "读取分支后活动任务已变化，未启动本次构建。",

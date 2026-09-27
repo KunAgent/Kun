@@ -11,6 +11,7 @@ import {
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { shouldAutoTitleThread } from '../lib/thread-title'
 import { getProvider } from '../agent/registry'
+import { ensureThreadBinding } from './review-store'
 import type { TaskWorkspaceThreadEvent } from '@shared/task-workspace'
 import type { ChatState } from './chat-store-types'
 import { emptyLiveProjection } from './chat-store-live-projection'
@@ -426,6 +427,9 @@ export async function bindReadyTaskWorkspace(
         workspace: path
       })
     }
+    // Mid-session binds must refresh the review binding so the Review tab
+    // appears without waiting for a thread re-selection.
+    void ensureThreadBinding(event.threadId)
     set((s) => ({
       threads: s.threads.map((thread) => thread.id === event.threadId
         ? { ...thread, taskWorkspaceId: event.workspaceId, workspace: path }

@@ -5,6 +5,7 @@ import {
   type RightPanelMode
 } from '../../extensions/contribution-ids'
 import { useReviewStore } from '../../store/review-store'
+import { takePlanBuildReview } from '../../store/plan-build-watch'
 import { useActivityStore } from '../../store/activity-store'
 import { selectWorkerRowsForParent } from '../../store/activity-selectors'
 import { OPEN_WORKERS_PANEL_EVENT } from '../chat/FloatingComposerWorkersPill'
@@ -161,6 +162,18 @@ export function useWorkbenchRightTools({
   // activity rows under it.
   const workersEnabled = useActivityStore((s) =>
     Boolean(activeThreadId && selectWorkerRowsForParent(s.rows, activeThreadId).length > 0))
+
+  // External-harness plan builds (07 §10): when the build turn settles the
+  // watcher flags the thread; once the review binding is live, open the tab
+  // so the user chooses the integration mode. The flag survives navigation —
+  // returning to the thread still surfaces the finished build.
+  const pendingPlanBuildReview = useReviewStore((s) =>
+    activeThreadId ? s.pendingPlanBuildReview[activeThreadId] : undefined)
+  useEffect(() => {
+    if (!activeThreadId || !pendingPlanBuildReview || !reviewEnabled) return
+    takePlanBuildReview(activeThreadId)
+    openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.review)
+  }, [activeThreadId, pendingPlanBuildReview, reviewEnabled, openRightPanelTab])
 
   // The composer Workers pill asks the workbench to open the panel (12 §6.1).
   useEffect(() => {

@@ -107,6 +107,11 @@ function queuedSendOptions(message: QueuedUserMessage, input: {
     ...(message.model ? { model: message.model } : {}),
     ...(!input.claw && message.providerId ? { providerId: message.providerId } : {}),
     ...(!input.claw && message.accountId ? { accountId: message.accountId } : {}),
+    ...(message.harnessId ? { harnessId: message.harnessId } : {}),
+    ...(message.credentialMode
+      ? { credentialMode: message.credentialMode as 'native-login' | 'provider' | 'kun-gateway' }
+      : {}),
+    ...(message.planBuild ? { planBuild: true } : {}),
     ...(message.reasoningEffort ? { reasoningEffort: message.reasoningEffort } : {}),
     ...(!input.claw && message.serviceTier ? { serviceTier: message.serviceTier } : {}),
     ...(message.subagentResume ? { subagentResume: message.subagentResume } : {}),

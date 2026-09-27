@@ -294,12 +294,10 @@ export const TurnSchema = z.object({
    * rejects calls to them instead of blocking on a GUI answer.
    */
   disableUserInput: z.boolean().optional(),
-  /**
-   * True when this turn originated from an IM bridge. Kun exposes
-   * IM-only tools such as outbound attachment delivery only for these
-   * turns.
-   */
+  /** IM-bridge turn; gates IM-only tools such as outbound attachment delivery. */
   imContext: z.boolean().optional(),
+  /** Managed plan build (07 §10): selects the `plan-build` admission usage. */
+  planBuild: z.boolean().optional(),
   /** Optional stable machine-readable reason for a terminal turn. */
   terminalCode: z.string().trim().min(1).max(128).optional(),
   /** Internal Manager-authored ownership-expiry provenance. */
@@ -424,6 +422,8 @@ export const StartTurnRequest = z.object({
    * IM-only tool exposure separately from generic headless turns.
    */
   imContext: z.boolean().optional(),
+  /** External-harness plan build (07 §10): admission enforces the host worktree. */
+  planBuild: z.boolean().optional(),
   /**
    * When true and the thread already has an active turn, the request is
    * persisted as a queued turn instead of being rejected with a busy

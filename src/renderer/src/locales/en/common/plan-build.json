@@ -48,6 +48,8 @@
   "planBuildMoreWays": "More build options",
   "planWorktreePromptHint": "Direct only · the Agent creates, integrates, and cleans up the worktree",
   "planWorktreeGraphUnsupported": "Prompt-managed worktrees are available for Direct builds only",
+  "planBuildExternalGraphUnsupported": "Graph builds need the Kun harness. Pick Kun for this build, or use a Direct build.",
+  "planBuildExternalUnsupported": "This build needs isolated task workspaces, which the current runtime does not support.",
   "planWorktreeCurrentWorkspaceWarning": "Build in the current workspace",
   "planWorktreeDetachedHead": "Prompt-managed worktree execution requires a checked-out local branch.",
   "planWorktreeTaskChanged": "The active task changed before the worktree build could start.",

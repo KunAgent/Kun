@@ -147,7 +147,8 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(checkpointRequestId ? { workspaceCheckpointRequestId: checkpointRequestId } : {}),
       ...(fileReferences?.length ? { fileReferences } : {}),
       ...(composerContexts.length ? { composerContexts } : {}),
-      ...(ackNoticeIds?.length ? { ackNoticeIds } : {})
+      ...(ackNoticeIds?.length ? { ackNoticeIds } : {}),
+      ...((queued?.planBuild ?? overrides?.planBuild) ? { planBuild: true } : {})
     }
     const queuedRow = pendingQueuedMessage({
       ...queued,
@@ -181,7 +182,8 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(messageSource ? { messageSource } : {}),
       ...(persona ? { persona } : {}),
       ...(composerModel ? { model: composerModel } : {}),
-      ...(userModelChip ? { modelLabel: userModelChip } : {})
+      ...(userModelChip ? { modelLabel: userModelChip } : {}),
+      ...((queued?.planBuild ?? overrides?.planBuild) ? { planBuild: true } : {})
     })
     // Persist a `starting` row before admission so a crash between the runtime
     // accepting the turn and the local state update cannot silently drop a
