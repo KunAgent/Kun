@@ -228,6 +228,38 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                         </span>
                       </label>
 
+                      <div className="grid gap-1.5">
+                        <span className="text-[12px] font-semibold text-ds-muted">
+                          {t('providerModelPricingLabel')}
+                        </span>
+                        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4">
+                          {([
+                            ['pricingInputText', 'providerModelPricingInput'],
+                            ['pricingOutputText', 'providerModelPricingOutput'],
+                            ['pricingCacheReadText', 'providerModelPricingCacheRead'],
+                            ['pricingCacheWriteText', 'providerModelPricingCacheWrite']
+                          ] as const).map(([field, labelKey]) => (
+                            <label key={field} className={fieldLabelClass}>
+                              {t(labelKey)}
+                              <input
+                                className="w-full min-w-0 rounded-xl border border-ds-border bg-ds-card px-3 py-1.5 font-mono text-[12.5px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
+                                value={editor[field]}
+                                placeholder={t('providerModelPricingPlaceholder')}
+                                inputMode="decimal"
+                                spellCheck={false}
+                                onChange={(e) => {
+                                  const value = e.target.value
+                                  setEditor((prev) => prev ? { ...prev, [field]: value } : prev)
+                                }}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                        <span className="text-[12px] leading-5 text-ds-faint">
+                          {t('providerModelPricingHint')}
+                        </span>
+                      </div>
+
                       {editor.form.reasoningEnabled ? (
                         <div className="grid gap-3 rounded-xl border border-ds-border-muted bg-ds-card/60 p-3">
                           <div className="grid gap-1.5">
