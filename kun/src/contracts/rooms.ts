@@ -141,7 +141,12 @@ export const RoomMessageSchema = z.object({
   handoffId: RoomIdSchema.optional(),
   displayThreadRootId: RoomIdSchema.optional(),
   replyCount: z.number().int().nonnegative().optional(),
-  presentationKind: z.enum(['poll', 'choice', 'setup', 'proposal', 'reminder']).optional(),
+  presentationKind: z.enum(['poll', 'choice', 'setup', 'proposal', 'reminder', 'app_connection']).optional(),
+  appConnection: z.object({
+    serverId: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/),
+    status: z.enum(['requested', 'connected', 'skipped']),
+    resumed: z.boolean().default(false)
+  }).strict().optional(),
   pollId: RoomIdSchema.optional(),
   proposalId: RoomIdSchema.optional(),
   reminderId: RoomIdSchema.optional(),

@@ -13,6 +13,25 @@ writes. `POST /v1/mcp/oauth/:id` explicitly starts browser authorization; Kun
 stores and refreshes the resulting tokens. A successful authorization registers
 the server's tools in the live runtime without restarting the desktop app.
 
+## Connection cards in a conversation
+
+A private Agent can list app IDs with `list_room_apps` and request one with
+`request_app_connection`. The tool accepts a built-in app or an already
+configured OAuth MCP server. It checks the active Room, member, turn, run and
+Agent MCP deny-list, then publishes one durable `app_connection` message. Model
+text supplies only a short reason. The card resolves the server ID against
+Kun's configuration or built-in catalog; the model never supplies an OAuth URL.
+
+The user can select **Continue** or **Skip** in the card. Continue installs a
+built-in endpoint if needed and opens the provider's browser OAuth flow. The
+Room route checks both the persisted OAuth status and live MCP connection
+before marking the card connected. Kun then queues one continuation of the
+original private request. Skip records the decision and queues a continuation
+that proceeds without app access. The continuation service rechecks the
+original turn, Room membership, Agent permissions and whether a newer user
+turn has superseded the request. When it cannot safely resume, the resolved
+card remains visible and the user can continue with a new message.
+
 The suggested Google Workspace endpoints are part of Google's Developer
 Preview. Users must complete Google's Cloud/OAuth setup before sign-in can
 succeed. The panel links to the

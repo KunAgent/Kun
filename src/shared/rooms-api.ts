@@ -22,6 +22,7 @@ export type {
   SendRoomMessage
 } from '../../kun/src/contracts/rooms'
 export type { RoomTask } from '../../kun/src/contracts/room-tasks'
+export { ROOM_APP_CATALOG } from '../../kun/src/contracts/room-app-catalog'
 export type { RoomLatestMessage, RoomListEntry } from '../../kun/src/contracts/room-list'
 export type {
   RoomDelivery,
@@ -62,7 +63,9 @@ export const ROOM_ENDPOINTS = {
   recovery: '/v1/rooms/{roomId}/tasks/{taskId}/recovery',
   deliveries: '/v1/rooms/{roomId}/tasks/{taskId}/deliveries',
   integrations: '/v1/rooms/{roomId}/tasks/{taskId}/integrations',
-  cleanup: '/v1/rooms/{roomId}/tasks/{taskId}/cleanup'
+  cleanup: '/v1/rooms/{roomId}/tasks/{taskId}/cleanup',
+  appConnectionComplete: '/v1/rooms/{roomId}/app-connections/{messageId}/complete',
+  appConnectionSkip: '/v1/rooms/{roomId}/app-connections/{messageId}/skip'
 } as const
 
 export const ROOM_TASK_ACTIONS = [

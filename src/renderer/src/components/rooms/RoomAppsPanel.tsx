@@ -1,14 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, ExternalLink, PlugZap, RefreshCw, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { GOOGLE_WORKSPACE_MCP_SERVERS } from '../plugin-marketplace-config'
+import { ROOM_APP_CATALOG } from '@shared/rooms-api'
 import { addRoomApp, authorizeRoomApp, listRoomApps, type RoomAppInventory } from './room-apps-client'
 
-const recommended = [
-  { id: 'google_gmail', name: 'Gmail', url: GOOGLE_WORKSPACE_MCP_SERVERS.google_gmail },
-  { id: 'google_drive', name: 'Google Drive', url: GOOGLE_WORKSPACE_MCP_SERVERS.google_drive },
-  { id: 'google_calendar', name: 'Google Calendar', url: GOOGLE_WORKSPACE_MCP_SERVERS.google_calendar }
-] as const
+const recommended = Object.entries(ROOM_APP_CATALOG).map(([id, app]) => ({ id, ...app }))
 
 const googleGuide = 'https://developers.google.com/workspace/guides/configure-mcp-servers'
 

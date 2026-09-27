@@ -20,7 +20,7 @@ export async function listMcpConfig(runtime: ServerRuntime): Promise<JsonRespons
       transport: server.transport,
       target: safeTarget(server),
       trustScope: server.trustScope,
-      oauth: Boolean(server.oauth),
+      oauth: Boolean(server.oauth && server.oauth.enabled !== false),
       timeoutMs: server.timeoutMs
     }))
   })

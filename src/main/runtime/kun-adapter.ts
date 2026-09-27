@@ -265,6 +265,7 @@ export type RuntimeRequestLease = Readonly<{
 
 const DEFAULT_RUNTIME_GET_TIMEOUT_MS = 15_000
 const DEFAULT_RUNTIME_POST_TIMEOUT_MS = 60_000
+const MCP_OAUTH_POST_TIMEOUT_MS = 180_000
 const THREAD_TIMELINE_GET_TIMEOUT_MS = 120_000
 const THREAD_SUMMARIZE_POST_TIMEOUT_MS = 120_000
 const PROVIDER_QUOTA_GET_TIMEOUT_MS = 120_000
@@ -322,6 +323,9 @@ export function resolveRuntimeRequestTimeoutMs(
   requestedTimeoutMs?: number
 ): number {
   if (requestedTimeoutMs !== undefined) return requestedTimeoutMs
+  if (method === 'POST' && /^\/v1\/mcp\/oauth\/[A-Za-z0-9._-]+$/.test(pathNorm)) {
+    return MCP_OAUTH_POST_TIMEOUT_MS
+  }
   const fallback = method === 'POST'
     ? DEFAULT_RUNTIME_POST_TIMEOUT_MS
     : DEFAULT_RUNTIME_GET_TIMEOUT_MS
