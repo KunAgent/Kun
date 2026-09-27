@@ -4,7 +4,7 @@
 - 复核对象：`develop@29cdd3daf`（ADE 分支已于 `e779bf43a` 合入，61 个提交覆盖 P0-01 ~ P2-11）
 - 结论：**计划里的每一项都有对应提交，代码量约 7 万行，类型检查与行数门禁通过；但核心卖点有 4 处没接通，合入带来 11 个红测文件，且没有任何实机验证记录。** 目前的状态是"代码齐了、端到端还跑不通"，还不能移出实验室。
 
-> 实施进度（同日，`codex/ade-p3-followup`）：P3-01 ~ P3-11 已按本文档完成并各自成 commit；P3-12 拿到 OpenCode 1.1.47 真实录制与 Gemini 上游阻断证据，回放测试已加。逐项状态见 §3 标题注记与 §4 记录。
+> 实施进度（同日，`codex/ade-p3-followup`）：P3-01 ~ P3-11 已按本文档完成并各自成 commit；P3-12 拿到 OpenCode 1.1.47 真实录制与 Gemini 上游阻断证据，回放测试已加；P3-13 的 `kun/scripts/ade-e2e.mjs` 实机跑通，暴露并修复三处接线缺陷（native-login model-only 路由、child scope agent-sdk transport 与凭据回落、worker 安全快照取未结算工作区路径），结果表见 §4。逐项状态见 §3 标题注记与 §4 记录。
 
 ## 1. 本次实际跑过的检查
 
@@ -103,9 +103,9 @@
 | P0-6 确定性交接 | 单测通过，未实机 | — |
 | P0-7 权限降级与升级确认 | 单测通过，未实机 | — |
 | P1-1 线程跑在 Gemini（ACP） | 受阻（上游） | 握手正常；`session/new` 被 Code Assist 个人版后端拒绝（§4）；Kun 工具链路已由 P3-08 接通；改以 OpenCode 录制佐证协议路径 |
-| P1-2 Claude Code 用 DeepSeek（网关） | 已实现 | A2/A3 由 P3-05/P3-06 修复；待 P3-13 实机 |
-| P1-3 总管派 3 种 harness | 已实现（待实机） | A1、A3、A4 已修；Claude Code 网关 + ACP harness 链路齐 |
-| P1-4 worker 提问往返 | 已实现（待实机） | Kun / Claude Code worker 可以；ACP 侧 Kun 工具已下发（P3-08），elicitation 仍取决于 agent 声明 |
+| P1-2 Claude Code 用 DeepSeek（网关） | 已实现 + 实机通过 | A2/A3 由 P3-05/P3-06 修复；P3-13 实机记录见 §4（kun e252f9fb） |
+| P1-3 总管派 3 种 harness | 已实现 + 实机通过 | A1、A3、A4 已修；kun + claude-code worker 各带任务工作区跑通（§4）。ACP worker 取决于本机就绪 |
+| P1-4 worker 提问往返 | 已实现 + 实机通过 | kun worker 实机完成问答与审批放行（§4）；ACP 侧 Kun 工具已下发（P3-08），elicitation 仍取决于 agent 声明 |
 | P1-5 审查批注往返 | 已实现 | 未实机 |
 | P1-6 额度 ≥ 95% 不被自动选中 | 已实现 | — |
 | P1-7 通知与角标 | 已实现 | B4 由 P3-04 修复；待实机 |
@@ -198,7 +198,7 @@
 - 映射器增加录制回放快照测试。
 - 录制数据脱敏后提交到 `kun/src/runtime/acp/__fixtures__/recorded/`。
 
-**P3-13 端到端验收脚本与手工清单（M，K D）**
+**P3-13 端到端验收脚本与手工清单（M，K D）** ✅ 已实现 + 实机已跑
 - 新建 `kun/scripts/ade-e2e.mjs`（不进发布包）：对本机 `kun serve` 走 HTTP，依次跑 13 §8 的 P1-1、P1-2、P1-3、P1-4，并断言事件序列与 ActivityStore 终态。
 - 需要真实账号，只在开发机或夜间任务运行；输出一份带版本号的结果表，追加到本文件 §4。
 - 手工清单补上界面部分：审查批注、合入、通知、弹出窗口。
@@ -266,3 +266,8 @@
 | 2026-09-28 | Gemini CLI 0.52.0 | ACP `initialize` | 通过 | 声明 `loadSession`、图片 / 音频输入、HTTP 与 SSE MCP；认证方式含 `gateway`（google 协议） |
 | 2026-09-28 | OpenCode 1.1.47 | ACP `initialize` | 失败 | `opencode acp` 启动即抛出未预期错误，属于上游问题 |
 | 2026-09-28 | Codex CLI 0.145.0 | ACP | 不适用 | 没有 `acp` 子命令，需要单独的 `codex-acp` 适配器 |
+
+| 2026-09-29 | kun e252f9fb | P1-1 ACP harness 线程 | 跳过 | 本机无可就绪 ACP harness：gemini `--acp` initialize 10s 探测超时，opencode acp 启动即崩（上游），codex 未安装；回放测试仍覆盖协议路径 |
+| 2026-09-29 | kun e252f9fb | P1-2 Claude Code 走 Kun 网关 | 通过 | `claude-code x kun/default/deepseek-v4-pro` 全链路：`harness-grant` → 网关 → `turn_completed`；按线程用量 9,944 tokens |
+| 2026-09-29 | kun e252f9fb | P1-3 总管跨 harness 派工 | 通过 | manager（`default/deepseek-v4-pro`）派 `kun` + `claude-code` 两种 worker，各自隔离任务工作区，dispatch 全部 `completed`，Activity 行齐 |
+| 2026-09-29 | kun e252f9fb | P1-4 worker 提问往返 | 通过 | kun worker `ask_manager` → 用户作答 → `answered`；worker 审批由脚本以签名同意令牌放行（09 §6.5）；dispatch `completed` |
