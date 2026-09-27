@@ -6,7 +6,7 @@ import {
   type ConsolidationExcludedPreview,
   type SessionConsolidationPreviewOptions
 } from './session-consolidation-preview.js'
-import type { ConsolidationReclaimMode, ConsolidationReclaimTier } from '../contracts/consolidation-job.js'
+import type { ConsolidationJob, ConsolidationReclaimMode, ConsolidationReclaimTier } from '../contracts/consolidation-job.js'
 
 /**
  * Phase 1 stage 2 (tasks.md 3.2): wires Phase 0's candidate eligibility
@@ -35,6 +35,7 @@ export type SessionConsolidationCandidateSchedulerOptions = SessionConsolidation
   jobStore: ConsolidationJobStorePort
   reclaimMode?: ConsolidationReclaimMode
   reclaimTier?: ConsolidationReclaimTier
+  policy?: ConsolidationJob['policy']
 }
 
 export class SessionConsolidationCandidateScheduler {
@@ -78,7 +79,8 @@ export class SessionConsolidationCandidateScheduler {
         threadId: candidate.threadId,
         cutoffRevision,
         ...(this.options.reclaimMode ? { reclaimMode: this.options.reclaimMode } : {}),
-        ...(this.options.reclaimTier ? { reclaimTier: this.options.reclaimTier } : {})
+        ...(this.options.reclaimTier ? { reclaimTier: this.options.reclaimTier } : {}),
+        ...(this.options.policy ? { policy: this.options.policy } : {})
       })
       scheduled.push({ threadId: candidate.threadId, jobId: job.id, status: job.status, cutoffRevision })
     }
