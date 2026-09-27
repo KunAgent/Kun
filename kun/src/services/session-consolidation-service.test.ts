@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRecord as MemoryRecordSchema } from '../contracts/memory.js'
 import type { ThreadRecord, ThreadSummary } from '../contracts/threads.js'
 import type { TurnItem } from '../contracts/items.js'
@@ -80,18 +80,22 @@ function makeSessionStore(items: TurnItem[]): SessionStore {
 }
 
 function makeMemoryStore(calls: { count: number }, withCreateWithId: boolean): MemoryStore {
-  let record: ReturnType<typeof MemoryRecordSchema.parse> | undefined
+  const records = new Map<string, ReturnType<typeof MemoryRecordSchema.parse>>()
   const store = {
     ...(withCreateWithId ? {
       async createWithId(id: string, input: Parameters<NonNullable<MemoryStore['createWithId']>>[1]) {
+        const existing = records.get(id)
+        if (existing) return existing
         calls.count += 1
-        record = MemoryRecordSchema.parse({
+        const record = MemoryRecordSchema.parse({
           id, ...input, schemaVersion: 2, createdAt: NOW, updatedAt: NOW
         })
+        records.set(id, record)
         return record
       }
     } : {}),
-    async getById() {
+    async getById(id: string) {
+      const record = records.get(id)
       if (!record) throw new Error('memory not found')
       return record
     }
@@ -116,6 +120,7 @@ function makeService(input: {
   }
   deleteThread?: (threadId: string) => Promise<void>
   releasedArtifactOwners?: string[]
+  jobStore?: ConsolidationJobStore
 }): SessionConsolidationService {
   const threadStore = makeThreadStore(input.records)
   const configState = input.configState ?? {
@@ -124,7 +129,7 @@ function makeService(input: {
     archiveTtlMs: input.archiveTtlMs ?? 1
   }
   const snapshots = new ThreadSnapshotStore({ dataDir: input.dataDir, nowIso: input.nowIso ?? (() => NOW) })
-  const jobStore = new ConsolidationJobStore({ dataDir: input.dataDir, nowIso: input.nowIso ?? (() => NOW) })
+  const jobStore = input.jobStore ?? new ConsolidationJobStore({ dataDir: input.dataDir, nowIso: input.nowIso ?? (() => NOW) })
   const threadService = {
     async delete(threadId: string) {
       if (!input.deleteThread) throw new Error('unexpected Tier-2 delete')
@@ -225,6 +230,135 @@ describe('SessionConsolidationService', () => {
     expect(job?.status).toBe('materialized')
     expect(job?.checkpoint).toBeUndefined()
     expect(job?.error).toBe('memory store lacks createWithId')
+  })
+
+  it.each([false, true])('recovers missing write capability, unless source changed: %s', async (sourceChanged) => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-consolidation-capability-'))
+    roots.push(dataDir)
+    await mkdir(join(dataDir, 'threads', 'thread_1'), { recursive: true })
+    await writeFile(join(dataDir, 'threads', 'thread_1', 'messages.jsonl'), 'x'.repeat(500))
+    const records = new Map([['thread_1', makeThread()]])
+    const memoryCalls = { count: 0 }
+    const pruneCalls = { count: 0 }
+    const clock = { now: NOW }
+    const jobStore = new ConsolidationJobStore({ dataDir, nowIso: () => clock.now })
+    const input = {
+      dataDir, records, modelClient: modelClient({ count: 0 }),
+      memoryStore: makeMemoryStore(memoryCalls, false), pruneCalls, jobStore, nowIso: () => clock.now
+    }
+    const service = makeService(input)
+    expect((await service.runOnce()).completed).toBe(0)
+    const [pending] = await jobStore.list()
+    expect(pending).toMatchObject({ status: 'materialized', error: 'memory store lacks createWithId' })
+
+    input.memoryStore = makeMemoryStore(memoryCalls, true)
+    clock.now = new Date(Date.parse(NOW) + 1_000).toISOString()
+    if (sourceChanged) records.set('thread_1', { ...makeThread(), revision: 2 })
+    const report = await service.runOnce()
+    const resumed = await jobStore.get(pending!.id)
+    if (sourceChanged) {
+      expect(report.failures[0]?.error).toContain('revision changed')
+      expect(pruneCalls.count).toBe(0)
+      expect(memoryCalls.count).toBe(0)
+    } else {
+      expect(report).toMatchObject({ completed: 1, failures: [] })
+      expect(pruneCalls.count).toBe(1)
+      expect(memoryCalls.count).toBe(1)
+      expect(resumed?.checkpoint?.memoryHash).toMatch(/^[a-f0-9]{64}$/)
+      expect(resumed?.error).toBeUndefined()
+    }
+  })
+
+  it('replays an interrupted pre-checkpoint materialization without a duplicate episode', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-consolidation-checkpoint-'))
+    roots.push(dataDir)
+    await mkdir(join(dataDir, 'threads', 'thread_1'), { recursive: true })
+    await writeFile(join(dataDir, 'threads', 'thread_1', 'messages.jsonl'), 'x'.repeat(500))
+    const memoryCalls = { count: 0 }
+    const pruneCalls = { count: 0 }
+    const jobStore = new ConsolidationJobStore({ dataDir, nowIso: () => NOW })
+    const input = {
+      dataDir, records: new Map([['thread_1', makeThread()]]),
+      modelClient: modelClient({ count: 0 }), memoryStore: makeMemoryStore(memoryCalls, true),
+      pruneCalls, jobStore
+    }
+    const transition = jobStore.transition.bind(jobStore)
+    const failure = vi.spyOn(jobStore, 'transition').mockImplementation((id, from, to, patch) => {
+      if (to === 'failed') return Promise.reject(new Error('storage unavailable'))
+      return transition(id, from, to, patch)
+    })
+    const checkpoint = vi.spyOn(jobStore, 'persistCheckpoint').mockRejectedValueOnce(new Error('storage unavailable'))
+    expect((await makeService(input).runOnce()).failures).toHaveLength(1)
+    const [pending] = await jobStore.list()
+    expect(pending?.status).toBe('materialized')
+    expect(pending?.checkpoint).toBeUndefined()
+    expect(pruneCalls.count).toBe(0)
+    checkpoint.mockRestore()
+    failure.mockRestore()
+
+    const restarted = makeService({ ...input, jobStore: new ConsolidationJobStore({ dataDir, nowIso: () => NOW }) })
+    expect(await restarted.runOnce()).toMatchObject({ completed: 1, failures: [] })
+    expect(pruneCalls.count).toBe(1)
+    expect(memoryCalls.count).toBe(1)
+    expect((await jobStore.get(pending!.id))?.checkpoint).toBeDefined()
+  })
+
+  it.each(['tier-1', 'tier-2'] as const)('does not let a %s recovery TTL block another thread', async (tier) => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-consolidation-fairness-'))
+    roots.push(dataDir)
+    await mkdir(join(dataDir, 'threads', 'thread_1'), { recursive: true })
+    await writeFile(join(dataDir, 'threads', 'thread_1', 'messages.jsonl'), 'x'.repeat(500))
+    const records = new Map([['thread_1', makeThread()]])
+    const clock = { now: NOW }
+    const modelCalls = { count: 0 }
+    const service = makeService({
+      dataDir, records, modelClient: modelClient(modelCalls), memoryStore: makeMemoryStore({ count: 0 }, true),
+      pruneCalls: { count: 0 }, tier, reclaimMode: 'safe', archiveTtlMs: 60_000, nowIso: () => clock.now,
+      deleteThread: async (id) => {
+        records.delete(id)
+        await rm(join(dataDir, 'threads', id), { recursive: true, force: true })
+      }
+    })
+    expect(await service.runOnce()).toMatchObject({ processed: 1, completed: 0, pendingArchiveCleanup: 1, failures: [] })
+    const jobStore = new ConsolidationJobStore({ dataDir, nowIso: () => clock.now })
+    const [first] = await jobStore.list()
+
+    clock.now = new Date(Date.parse(NOW) + 1_000).toISOString()
+    records.set('thread_2', { ...makeThread(), id: 'thread_2' })
+    await mkdir(join(dataDir, 'threads', 'thread_2'), { recursive: true })
+    await writeFile(join(dataDir, 'threads', 'thread_2', 'messages.jsonl'), 'x'.repeat(500))
+    expect(await service.runOnce()).toMatchObject({ processed: 1, completed: 0, pendingArchiveCleanup: 2, failures: [] })
+    expect(modelCalls.count).toBe(2)
+    expect(await jobStore.get(first!.id)).toEqual(first)
+
+    clock.now = new Date(Date.parse(NOW) + 60_000).toISOString()
+    expect(await service.runOnce()).toMatchObject({ processed: 1, completed: 1, pendingArchiveCleanup: 1, failures: [] })
+    expect((await jobStore.get(first!.id))?.status).toBe('completed')
+    expect(modelCalls.count).toBe(2)
+  })
+
+  it('does not let a missing write capability monopolize the run budget', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-consolidation-capability-wait-'))
+    roots.push(dataDir)
+    const records = new Map([['thread_1', makeThread()]])
+    const modelCalls = { count: 0 }
+    const pruneCalls = { count: 0 }
+    const service = makeService({
+      dataDir, records, modelClient: modelClient(modelCalls),
+      memoryStore: makeMemoryStore({ count: 0 }, false), pruneCalls
+    })
+    await mkdir(join(dataDir, 'threads', 'thread_1'), { recursive: true })
+    await writeFile(join(dataDir, 'threads', 'thread_1', 'messages.jsonl'), 'x'.repeat(500))
+    expect((await service.runOnce()).processed).toBe(1)
+    records.set('thread_2', { ...makeThread(), id: 'thread_2' })
+    await mkdir(join(dataDir, 'threads', 'thread_2'), { recursive: true })
+    await writeFile(join(dataDir, 'threads', 'thread_2', 'messages.jsonl'), 'x'.repeat(500))
+    expect(await service.runOnce()).toMatchObject({ processed: 1, completed: 0, failures: [] })
+    expect(modelCalls.count).toBe(2)
+    expect(pruneCalls.count).toBe(0)
+    const jobs = await new ConsolidationJobStore({ dataDir, nowIso: () => NOW }).list()
+    expect(jobs).toHaveLength(2)
+    expect(jobs.every((job) => job.status === 'materialized' && !job.checkpoint)).toBe(true)
   })
 
   it('keeps a Tier-2 safe recovery copy until its TTL, then completes deletion', async () => {
