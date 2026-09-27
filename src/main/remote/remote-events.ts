@@ -198,6 +198,11 @@ export class RemoteEventHub {
    */
   readonly epoch = randomUUID()
 
+  belongsToAnotherSession(clientId: string, token: string): boolean {
+    const owner = this.clients.get(clientId)?.sessionToken
+    return Boolean(owner && owner !== token)
+  }
+
   clientFor(
     clientId: string,
     meta: { remoteAddress?: string; userAgent?: string; sessionToken?: string } = {}
@@ -403,6 +408,9 @@ export class RemoteEventHub {
   ): RemoteClient {
     const existing = this.clients.get(clientId)
     if (existing) {
+      if (existing.sessionToken && meta.sessionToken && existing.sessionToken !== meta.sessionToken) {
+        throw new Error('Remote client belongs to another session')
+      }
       if (meta.sessionToken) existing.sessionToken = meta.sessionToken
       if (existing.sender.isDestroyed()) {
         // The idle grace elapsed; hand the client a fresh sender so owned
