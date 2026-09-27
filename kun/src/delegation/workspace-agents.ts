@@ -236,20 +236,21 @@ function parseAgentMarkdown(text: string, defaultId: string): {
     ])],
     ...(parseListField(fields, 'blockedMcpServers') ? { blockedMcpServers: parseListField(fields, 'blockedMcpServers') } : {}),
     ...(parseListField(fields, 'blockedSkills') ? { blockedSkills: parseListField(fields, 'blockedSkills') } : {}),
-    skillsEnabled: false,
-    // ADE worker binding (10 §3.1): a workspace role may pin the harness and
-    // model it dispatches onto; the credential path defaults to the harness's.
-    ...(fields.harness?.trim() || fields.harnessId?.trim()
-      ? { harnessId: (fields.harness ?? fields.harnessId)!.trim() }
-      : {}),
-    ...(fields['credential-mode']?.trim() || fields.credentialMode?.trim()
-      ? { credentialMode: (fields['credential-mode'] ?? fields.credentialMode)!.trim() }
-      : {}),
-    ...(fields['delegation-notes']?.trim() || fields.delegationNotes?.trim()
-      ? { delegationNotes: (fields['delegation-notes'] ?? fields.delegationNotes)!.trim() }
-      : {}),
-    ...(fields.model?.trim() ? { model: fields.model.trim() } : {})
+    skillsEnabled: false
   }
+  // ADE worker binding (10 §3.1): a workspace role may pin the harness and
+  // model it dispatches onto; the credential path defaults to the harness's.
+  // `model` only applies alongside a harness pin — on the native Kun loop a
+  // workspace role still cannot choose a model/provider/reasoning level.
+  const harnessId = (fields.harness ?? fields.harnessId)?.trim()
+  if (harnessId) {
+    raw.harnessId = harnessId
+    if (fields.model?.trim()) raw.model = fields.model.trim()
+  }
+  const credentialMode = (fields['credential-mode'] ?? fields.credentialMode)?.trim()
+  if (credentialMode) raw.credentialMode = credentialMode
+  const delegationNotes = (fields['delegation-notes'] ?? fields.delegationNotes)?.trim()
+  if (delegationNotes) raw.delegationNotes = delegationNotes
   const parsed = SubagentProfileConfig.safeParse(raw)
   if (!parsed.success) return null
   return { id, surfacesDeclared: Boolean(surfaceValues), profile: parsed.data }
