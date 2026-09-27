@@ -248,5 +248,16 @@
     "needs_changes": "सुधार चाहिए",
     "rejected": "अस्वीकृत",
     "waived": "माफ़"
-  }
+  },
+  "adeNewManager": "प्रबंधक सत्र",
+  "adeNewOneOnOne": "एक-से-एक",
+  "adeAgentPickerLoading": "एजेंट लोड हो रहे हैं…",
+  "adeAgentPickerEmpty": "कोई एजेंट उपलब्ध नहीं",
+  "adeGroupReview": "समीक्षा हेतु",
+  "adeGroupDone": "पूर्ण",
+  "adeGroupByStatus": "स्थिति अनुसार समूह",
+  "adeGroupByProject": "प्रोजेक्ट अनुसार समूह",
+  "adeGroupToggleHint": "वार्तालाप समूह विधि बदलें",
+  "adeWorkerCount": "{{count}} वर्कर",
+  "adeWorkerCount_other": "{{count}} वर्कर"
 }

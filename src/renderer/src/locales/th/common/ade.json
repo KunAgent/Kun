@@ -248,5 +248,16 @@
     "needs_changes": "ต้องแก้ไข",
     "rejected": "ปฏิเสธ",
     "waived": "ยกเว้น"
-  }
+  },
+  "adeNewManager": "เซสชันผู้จัดการ",
+  "adeNewOneOnOne": "แบบตัวต่อตัว",
+  "adeAgentPickerLoading": "กำลังโหลดเอเจนต์…",
+  "adeAgentPickerEmpty": "ไม่มีเอเจนต์ที่ใช้ได้",
+  "adeGroupReview": "รอตรวจสอบ",
+  "adeGroupDone": "เสร็จแล้ว",
+  "adeGroupByStatus": "จัดกลุ่มตามสถานะ",
+  "adeGroupByProject": "จัดกลุ่มตามโปรเจกต์",
+  "adeGroupToggleHint": "สลับวิธีจัดกลุ่มการสนทนา",
+  "adeWorkerCount": "เวิร์กเกอร์ {{count}} ตัว",
+  "adeWorkerCount_other": "เวิร์กเกอร์ {{count}} ตัว"
 }
