@@ -61,26 +61,28 @@ describe('new Agent dual-path setup UI', () => {
     await act(async () => {
       renderer = create(createElement(RoomChoiceCard, { input, onUpdated }))
     })
-    const option = renderer.root.findAllByType('button').find((item) => item.children.includes('Write docs'))!
+    const option = renderer.root.findAllByType('button').find((item) =>
+      item.findAllByType('b').some((label) => label.props.children === 'Write docs'))!
     await act(async () => option.props.onClick())
     expect(api.request).toHaveBeenCalledWith('/v1/user-inputs/in_abc123', 'POST', {
       answers: [{ id: 'q1', label: 'Write docs', value: 'Write docs' }]
     })
     api.request.mockClear()
     await act(async () => {
-      renderer.update(createElement(RoomChoiceCard, { input, onUpdated }))
+      renderer.update(createElement(RoomChoiceCard, { key: 'freeform', input, onUpdated }))
     })
     await act(async () => {
       renderer.root.findByType('input').props.onChange({ target: { value: 'custom' } })
     })
-    await act(async () => renderer.root.findByType('form').props.onSubmit({ preventDefault: () => undefined }))
+    await act(async () => renderer.root.findByProps({ className: 'direct-choice-submit' }).props.onClick())
     expect(api.request).toHaveBeenCalledWith('/v1/user-inputs/in_abc123', 'POST', {
       answers: [{ id: 'q1', label: 'Other', value: 'custom' }]
     })
     api.request.mockClear()
     await act(async () => {
-      renderer.root.findByProps({ 'aria-label': 'Dismiss question' }).props.onClick()
+      renderer.update(createElement(RoomChoiceCard, { key: 'cancel', input, onUpdated }))
     })
+    await act(async () => renderer.root.findByProps({ 'aria-label': 'Dismiss question' }).props.onClick())
     expect(api.request).toHaveBeenCalledWith('/v1/user-inputs/in_abc123', 'POST', { cancelled: true })
   })
 })

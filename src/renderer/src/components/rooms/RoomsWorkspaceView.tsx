@@ -39,7 +39,7 @@ import {
   RoomPeerActivity,
   RoomPeerSummary
 } from './RoomPeerActivity'
-import { RoomTypingRow } from './RoomTypingRow'
+import { RoomAgentActivity, directActivityLabelKey, groupActivity } from './RoomAgentActivity'
 import { useRoomReplyAwaiting } from './use-room-reply-awaiting'
 import { RoomPendingSendRow } from './RoomPendingSendRow'
 import { useRoomPendingSends } from './useRoomPendingSends'
@@ -55,6 +55,7 @@ import { RoomRunSummary } from './RoomRunSummary'
 import { useRoomPresentationPreferences } from './room-presentation-preferences'
 import { openRoomContentTarget } from './room-content-navigation'
 import { otherUserInputAnswers, RoomChoiceCard, submitRoomUserInput } from './RoomChoiceCard'
+import { RoomExecutionGates } from './RoomTaskGates'
 import { RoomExcalidrawConsumer } from './useRoomExcalidrawConsumer'
 import { RoomExcalidrawPanel } from './RoomExcalidrawPanel'
 import { RoomAppsPanel } from './RoomAppsPanel'
@@ -74,6 +75,7 @@ export function RoomsWorkspaceView({
   const [newChatOpen, setNewChatOpen] = useState(false)
   const [appsOpen, setAppsOpen] = useState(false)
   const [sidebarActivity, setSidebarActivity] = useState<RoomSidebarEntry>()
+  const [choiceReplies, setChoiceReplies] = useState<Record<string, string>>({})
   const receiveSidebarActivity = useCallback((entry: RoomSidebarEntry | undefined) => setSidebarActivity((previous) =>
     previous?.roomId === entry?.roomId && previous?.runningCount === entry?.runningCount && previous?.attentionCount === entry?.attentionCount ? previous : entry), [])
   useRoomUserProfileSync()
@@ -109,6 +111,7 @@ export function RoomsWorkspaceView({
 
   useEffect(() => {
     setSearchOpen(false)
+    setChoiceReplies({})
   }, [selectedId])
 
   const perform = async (action: () => Promise<unknown>): Promise<void> => {
@@ -176,12 +179,13 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
   ), [direct.data?.requests])
   const pendingSends = useRoomPendingSends(room?.id, messages, steeredSendIds)
   const replyAwaiting = useRoomReplyAwaiting(Boolean(direct.data?.active) || roomRespondingMemberIds(topicState.topics).length > 0, messages)
-  const waitingForReply = pendingSends.hasUnsettled || replyAwaiting.awaiting
+  const waitingForReply = pendingSends.pending.some((item) => item.state === 'sent' || item.state === 'steered') || replyAwaiting.awaiting
   const send = async (message: SendRoomMessage): Promise<void> => {
     if (!room) return
     const pending = choiceInputs[0]
     if (privateChat && pending && message.body.trim()) {
       await submitRoomUserInput(pending.id, { answers: otherUserInputAnswers(pending, message.body) })
+      setChoiceReplies((current) => ({ ...current, [pending.id]: message.body.trim() }))
       await Promise.all([state.refresh(), direct.refresh(), topicState.refresh()])
       return
     }
@@ -203,22 +207,15 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
     const message = pendingSends.retry(clientRequestId)
     if (message) void send(message).catch(() => undefined)
   }
-  const memberName = useCallback(
-    (id: string) =>
-      room?.members.find((member) => member.id === id)?.displayName ?? id,
-    [room]
-  )
-  const typingNames = useMemo(
-    () => (privateChat ? [] : roomRespondingMemberIds(topicState.topics).map(memberName)).filter(Boolean),
-    [memberName, privateChat, topicState.topics]
-  )
-  const waitingNames = useMemo(
-    () =>
-      privateChat || !waitingForReply
-        ? []
-        : roomWaitingMemberIds(topicState.topics).map(memberName),
-    [memberName, waitingForReply, privateChat, topicState.topics]
-  )
+  const respondingIds = useMemo(() => privateChat ? [] : roomRespondingMemberIds(topicState.topics),
+    [privateChat, topicState.topics])
+  const waitingIds = useMemo(() => privateChat ? [] : roomWaitingMemberIds(topicState.topics),
+    [privateChat, topicState.topics])
+  const directActivityKey = privateChat ? directActivityLabelKey(direct.data, waitingForReply) : null
+  const activity = room ? (directActivityKey ? { label: t(directActivityKey) }
+    : room.conversationKind === 'group' ? groupActivity(room, respondingIds, waitingIds, waitingForReply, t) : null) : null
+  const showActivity = Boolean(activity && messages.at(-1)?.status !== 'streaming' &&
+    !(privateChat && (choiceInputs.length || direct.data?.approvals.length)))
   const skipSetup = async (): Promise<void> => {
     if (!agentId || !setupPending) return
     await roomsRequest('/v1/agents/' + encodeURIComponent(agentId) + '/setup', 'POST', {
@@ -335,7 +332,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             />
             <div className="agent-collaboration-strip"><button type="button" onClick={() => drawer.open({ kind: 'handoffs' })}>{t('agentsHandoffs')}</button>
             </div></> : null}
-            {!messages.length && privateChat && !direct.data?.active?.runId && !choiceInputs.length ? <div className="direct-empty-chat"><h2>{t('directWelcome', { name: room.members[0].displayName })}</h2>
+            {!messages.length && privateChat && !direct.data?.active && !choiceInputs.length && !pendingSends.pending.length && !waitingForReply ? <div className="direct-empty-chat"><h2>{t('directWelcome', { name: room.members[0].displayName })}</h2>
               <p>{t(setupPending ? 'directSetupWelcomeHint' : 'directWelcomeHint')}</p>
               {setupPending ? <button type="button" onClick={() => void skipSetup()}>{t('directSkipSetup')}</button> : null}
             </div> : <RoomTimeline
@@ -357,23 +354,25 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
               onTask={openTask}
               jumpMessageId={jumpMessageId}
               onJumped={() => setJumpMessageId(null)}
+              hideEmpty={Boolean(choiceInputs.length || pendingSends.pending.length || showActivity || direct.data?.approvals.length)}
               afterMessages={<>
                 {choiceInputs.filter((input) => !messages.some((message) => message.clientRequestId === input.id)).map((input) =>
-                  <RoomChoiceCard key={input.id} input={input} setupPending={setupPending} onUpdated={async () => { await direct.refresh(); await state.refresh() }} onSkipSetup={skipSetup} />)}
+                  <RoomChoiceCard key={input.id} input={input} resolvedAnswer={choiceReplies[input.id]} setupPending={setupPending} onUpdated={async () => { await direct.refresh(); await state.refresh() }} onSkipSetup={skipSetup} />)}
                 {setupPending && !choiceInputs.length ? <button type="button" className="direct-choice-skip" onClick={() => void skipSetup()}>{t('directSkipSetup')}</button> : null}
                 {pendingSends.pending.map((item) =>
                   <RoomPendingSendRow key={item.clientRequestId} item={item} onRetry={retryPendingSend} onDismiss={pendingSends.dismiss} />)}
+                {privateChat && direct.data?.approvals.length ? <div className="rooms-timeline-gates">
+                  <RoomExecutionGates detail={{ approvals: direct.data.approvals, userInputs: [] }}
+                    onUpdated={async () => { await direct.refresh(); await state.refresh() }} />
+                </div> : null}
+                {showActivity && activity ? <RoomAgentActivity room={room} memberId={activity.memberId} label={activity.label} /> : null}
               </>}
               renderChoice={(message) => <RoomChoiceCard input={choiceInputs.find((input) => input.id === message.clientRequestId)} title={message.body}
+                resolvedAnswer={choiceReplies[message.clientRequestId ?? '']}
                 setupPending={setupPending} onUpdated={async () => { await direct.refresh(); await state.refresh() }} onSkipSetup={skipSetup} />}
             />}
-            {privateChat ? <RoomDirectProgress room={room} state={direct} onRun={openRun} openRunId={openRunId} onModels={() => drawer.open({ kind: 'models' })} /> : null}
+            {privateChat ? <RoomDirectProgress room={room} state={direct} onRun={openRun} openRunId={openRunId} onModels={() => drawer.open({ kind: 'models' })} activityInTimeline gatesInTimeline /> : null}
             {room.conversationKind === 'agent_agent' ? <p className="agent-conversation-note">{t('agentsPairReadOnly')}</p> : <>
-              <RoomTypingRow
-                names={typingNames}
-                waitingNames={waitingNames}
-                fallback={!typingNames.length && waitingForReply && !(privateChat && direct.data?.active) ? t('roomsReceipt_fallback') : ''}
-              />
               <RoomComposer
               key={room.id + '-composer'}
               room={room}

@@ -6,7 +6,7 @@ import { MobileRoomUserInput } from './MobileRoomUserInput'
 import { MobileSheet } from '../sheets/MobileSheet'
 
 /** Private-chat gates must be reachable without opening the desktop run inspector. */
-export function MobileRoomPendingActions({ direct, onUpdated }: { direct: ReturnType<typeof useDirectChat>; onUpdated: () => Promise<void> }) {
+export function MobileRoomPendingActions({ direct, onUpdated, showInputs = true }: { direct: ReturnType<typeof useDirectChat>; onUpdated: () => Promise<void>; showInputs?: boolean }) {
   const { t } = useTranslation('common')
   const [approvalsOpen, setApprovalsOpen] = useState(false)
   const [dismissedError, setDismissedError] = useState('')
@@ -16,7 +16,7 @@ export function MobileRoomPendingActions({ direct, onUpdated }: { direct: Return
   if (!inputs.length && !approvals.length && !showError) return null
   const refresh = async () => { direct.refresh(); await onUpdated() }
   return <div className="kun-mobile-room-gates">
-    {inputs.slice(0, 1).map((input) => <MobileRoomUserInput key={input.id} input={input} onUpdated={refresh} />)}
+    {showInputs ? inputs.slice(0, 1).map((input) => <MobileRoomUserInput key={input.id} input={input} onUpdated={refresh} />) : null}
     {approvals.length ? <button type="button" className="kun-mobile-input-trigger" onClick={() => setApprovalsOpen(true)}>
       {t('approvalTitle')} · {approvals.length}
     </button> : null}

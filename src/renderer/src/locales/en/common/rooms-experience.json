@@ -58,6 +58,7 @@
   "roomsReceipt_waiting_other": "Delivered · waiting for {{name}} and {{count}} more…",
   "roomsReceipt_fallback": "Delivered, waiting for a response…",
   "roomsSend_pending": "Sending…",
+  "roomsSend_sent": "Sent",
   "roomsSend_failed": "Failed to send",
   "roomsSend_retry": "Retry",
   "roomsSend_dismiss": "Discard"
