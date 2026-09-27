@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chat-store'
 import {
   ensureThreadBinding,
+  loadReviewComments,
   loadWorkspaceDiff,
   setReviewViewMode,
   unwatchReviewWorkspace,
@@ -13,6 +14,7 @@ import {
 } from '../../store/review-store'
 import { ReviewFileTree } from './ReviewFileTree'
 import { ReviewDiffBlock } from './ReviewDiffBlock'
+import { ReviewSendMenu } from './ReviewSendMenu'
 
 /**
  * ADE review surface (docs/ade/11 §3): workspace header on top, then a
@@ -37,7 +39,10 @@ export function ReviewPanel({ className }: { className?: string }): ReactElement
     if (workspaceId && !review?.files.length && !review?.loading) {
       void loadWorkspaceDiff(workspaceId)
     }
-  }, [workspaceId, review?.files.length, review?.loading])
+    if (workspaceId && !review?.commentsLoaded) {
+      void loadReviewComments(workspaceId)
+    }
+  }, [workspaceId, review?.files.length, review?.loading, review?.commentsLoaded])
 
   // Live refresh: settled work on the bound unit reloads the diff (11 §4.4).
   useEffect(() => {
@@ -75,6 +80,7 @@ export function ReviewPanel({ className }: { className?: string }): ReactElement
             {binding.state}
           </span>
         ) : null}
+        {binding ? <ReviewSendMenu binding={binding} /> : null}
         <div className="ml-1 flex shrink-0 items-center rounded-[7px] border border-ds-border-muted p-0.5">
           {modeButton('unified', t('reviewUnified'))}
           {modeButton('split', t('reviewSplit'))}

@@ -51,6 +51,7 @@ import {
 import { parseRuntimeErrorBody, runtimeErrorToError, type RuntimeError } from '@shared/runtime-error'
 import { createKunActivityClient } from './kun-activity-client'
 import { createKunTaskWorkspaceClient } from './kun-task-workspace-client'
+import { createKunReviewClient } from './kun-review-client'
 import { extraRootsForWorkspace } from '../lib/code-workspace-folder-lookup'
 import { additionalWorkspacesForThread, readCodeWorkspaceFolderSets } from '../lib/code-workspace-folder-sets'
 import {
@@ -332,6 +333,12 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   readonly listTaskWorkspaces = this.taskWorkspaces.listTaskWorkspaces
   readonly getTaskWorkspaceDiff = this.taskWorkspaces.getTaskWorkspaceDiff
   readonly getTaskWorkspaceDiffFile = this.taskWorkspaces.getTaskWorkspaceDiffFile
+
+  private readonly reviews = createKunReviewClient()
+  readonly listReviewComments = this.reviews.listReviewComments
+  readonly createReviewComment = this.reviews.createReviewComment
+  readonly updateReviewComment = this.reviews.updateReviewComment
+  readonly sendReview = this.reviews.sendReview
 
   /** Rebuild a recorded handoff brief on demand (docs/ade/impl §P0-14). */
   async getHandoffPreview(threadId: string, turnId: string): Promise<{

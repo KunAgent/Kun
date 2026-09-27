@@ -127,6 +127,16 @@ export class TaskWorkspaceService {
     return this.options.store.list(filter)
   }
 
+  /** Rebind an existing workspace to a different execution unit (11 §4.4). */
+  bindUnit(workspaceId: string, unitId: string): TaskWorkspaceRecord | undefined {
+    const record = this.options.store.update(workspaceId, {
+      unitId,
+      updatedAt: this.nowIso()
+    })
+    if (record) this.emit(workspaceId)
+    return record
+  }
+
   create(input: CreateTaskWorkspaceRequest, callerSignal?: AbortSignal): TaskWorkspaceRecord {
     const now = this.nowIso()
     const record = this.options.store.insert({

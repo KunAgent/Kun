@@ -281,6 +281,8 @@ export type ServerRuntime = {
       dispatches: import('../../ade/dispatch-store.js').FileDispatchStore
       questions: import('../../ade/question-store.js').FileQuestionStore
       notices: import('../../ade/worker-notice-store.js').FileWorkerNoticeStore
+      /** Line-level review comments per task workspace (11 §4). */
+      reviews: import('../../ade/review-store.js').FileReviewStore
     }
     workerCallbacks: import('../../services/worker-callback-service.js').WorkerCallbackService
     /** Manager control plane + exactly-once dispatch delivery (09 §4-§5). */

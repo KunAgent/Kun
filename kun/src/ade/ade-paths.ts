@@ -42,3 +42,12 @@ export function adeQuestionsFile(dataDir: string, managerThreadId: string): stri
 export function adeNoticesFile(dataDir: string, managerThreadId: string): string {
   return join(adeTeamDir(dataDir, managerThreadId), 'notices.json')
 }
+
+/** Line-level review comments live per task workspace (11 §4.1). */
+export function adeReviewsDir(dataDir: string): string {
+  return join(adeRootDir(dataDir), 'reviews')
+}
+
+export function adeReviewFile(dataDir: string, workspaceId: string): string {
+  return join(adeReviewsDir(dataDir), `${safeId(workspaceId)}.json`)
+}

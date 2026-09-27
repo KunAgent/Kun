@@ -151,18 +151,23 @@ const WorkerNoticesComposerContextProvenanceSchema = z.strictObject({
   source: z.literal('worker-notices'),
   workspaceId: z.string().regex(/^[a-f0-9]{64}$/)
 })
+const ReviewRequestComposerContextProvenanceSchema = z.strictObject({
+  source: z.literal('review-request'),
+  workspaceId: z.string().regex(/^[a-f0-9]{64}$/)
+})
 export const ComposerContextProvenanceSchema = z.union([
   ExtensionComposerContextProvenanceSchema,
   DevPreviewComposerContextProvenanceSchema,
   WorkspaceSelectionComposerContextProvenanceSchema,
   WorkspaceViewComposerContextProvenanceSchema,
-  WorkerNoticesComposerContextProvenanceSchema
+  WorkerNoticesComposerContextProvenanceSchema,
+  ReviewRequestComposerContextProvenanceSchema
 ])
 export type ComposerContextProvenance = z.infer<typeof ComposerContextProvenanceSchema>
 
 export const ComposerContextAttachmentSchema = ComposerContextAttachmentRequestSchema.extend({
   attachmentId: z.string().regex(
-    /^(?:extension-context|dev-preview-context|workspace-selection-context|workspace-view-context|worker-notices-context):[a-f0-9]{64}$/
+    /^(?:extension-context|dev-preview-context|workspace-selection-context|workspace-view-context|worker-notices-context|review-request-context):[a-f0-9]{64}$/
   ),
   provenance: ComposerContextProvenanceSchema
 })
