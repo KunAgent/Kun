@@ -26,6 +26,7 @@ function fakeConn(): { conn: AcpConnection; handlers: Map<string, Handler> } {
 
 async function makeHarness(input: {
   approve?: (req: ApprovalRequest) => Promise<'allow' | 'deny'>
+  elicit?: AcpClientContext['elicit']
   spawnTerminal?: (cmd: string, args: readonly string[], opts: { cwd: string; env: NodeJS.ProcessEnv }) => Promise<import('node:child_process').ChildProcess>
   stopTerminal?: (child: import('node:child_process').ChildProcess) => Promise<void>
 } = {}) {
@@ -64,6 +65,7 @@ async function makeHarness(input: {
     recordChange: (item) => {
       recorded.push(item)
     },
+    ...(input.elicit ? { elicit: input.elicit } : {}),
     nextId: (p) => `${p}_${++idSeq}`
   }
   host.registerContext(ctx)
@@ -299,5 +301,88 @@ describe('AcpClientHost', () => {
       .then(() => null)
       .catch((e: unknown) => e as AcpError)
     expect((error as AcpError).rpcCode).toBe(-32002)
+  })
+
+  // ---- elicitation (P2-10) ---------------------------------------------------
+
+  const FORM_PARAMS = {
+    sessionId: 'sess-1',
+    mode: 'form',
+    message: 'Pick a mode',
+    requestedSchema: {
+      type: 'object',
+      properties: { mode: { type: 'string', enum: ['a', 'b'] } }
+    }
+  }
+
+  test('elicitation/create delegates to the turn context and returns its response', async () => {
+    const calls: { message: string; requestedSchema: unknown }[] = []
+    const h = await makeHarness({
+      elicit: async (input) => {
+        calls.push(input)
+        return { action: 'accept', content: { mode: 'b' } }
+      }
+    })
+    const res = await h.call<{ action: string; content?: unknown }>(
+      ACP_CLIENT_METHODS.elicitationCreate,
+      FORM_PARAMS
+    )
+    expect(res).toEqual({ action: 'accept', content: { mode: 'b' } })
+    expect(calls).toHaveLength(1)
+    expect(calls[0].message).toBe('Pick a mode')
+  })
+
+  test('turns without an elicitation handler decline; unknown sessions error', async () => {
+    const h = await makeHarness()
+    await expect(
+      h.call(ACP_CLIENT_METHODS.elicitationCreate, FORM_PARAMS)
+    ).resolves.toEqual({ action: 'decline' })
+    const error = await h
+      .call(ACP_CLIENT_METHODS.elicitationCreate, { ...FORM_PARAMS, sessionId: 'gone' })
+      .then(() => null)
+      .catch((e: unknown) => e as AcpError)
+    expect((error as AcpError).rpcCode).toBe(-32002)
+  })
+
+  test('url/custom modes decline and request-scoped forms cancel', async () => {
+    const calls: unknown[] = []
+    const h = await makeHarness({
+      elicit: async (input) => {
+        calls.push(input)
+        return { action: 'accept' }
+      }
+    })
+    await expect(
+      h.call(ACP_CLIENT_METHODS.elicitationCreate, {
+        ...FORM_PARAMS,
+        mode: 'url',
+        elicitationId: 'e1',
+        url: 'https://agent.example/auth'
+      })
+    ).resolves.toEqual({ action: 'decline' })
+    await expect(
+      h.call(ACP_CLIENT_METHODS.elicitationCreate, {
+        ...FORM_PARAMS,
+        mode: '_agent.custom'
+      })
+    ).resolves.toEqual({ action: 'decline' })
+    await expect(
+      h.call(ACP_CLIENT_METHODS.elicitationCreate, {
+        requestId: 7,
+        mode: 'form',
+        message: 'pre-session question',
+        requestedSchema: { type: 'object' }
+      })
+    ).resolves.toEqual({ action: 'cancel' })
+    expect(calls).toHaveLength(0)
+  })
+
+  test('malformed elicitation params surface as JSON-RPC errors', async () => {
+    const h = await makeHarness({ elicit: async () => ({ action: 'accept' }) })
+    const error = await h
+      .call(ACP_CLIENT_METHODS.elicitationCreate, { sessionId: 'sess-1', mode: 'form' })
+      .then(() => null)
+      .catch((e: unknown) => e as AcpError)
+    expect((error as AcpError).rpcCode).toBe(-32602)
   })
 })

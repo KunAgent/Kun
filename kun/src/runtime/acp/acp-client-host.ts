@@ -18,13 +18,16 @@ import {
   ACP_CLIENT_METHODS,
   ACP_RPC_ERROR,
   AcpError,
+  AcpCreateElicitationParamsSchema,
   AcpReadTextFileParamsSchema,
   AcpRequestPermissionParamsSchema,
   AcpTerminalCreateParamsSchema,
   AcpTerminalIdParamsSchema,
   AcpWriteTextFileParamsSchema,
-  parseAcpParams
+  parseAcpParams,
+  type CreateElicitationResponse
 } from './acp-schema.js'
+import type { AcpElicitFn } from './acp-elicitation.js'
 import {
   AcpApprovalMemo,
   AcpPendingPermissions,
@@ -60,6 +63,11 @@ export type AcpClientContext = {
   recordChange?: (item: TurnItem) => void | Promise<void>
   /** Scoped env for agent terminals — the same stripped env the agent got. */
   terminalEnv?: NodeJS.ProcessEnv
+  /**
+   * Form elicitation handler (P2-10): user_input gate on interactive turns,
+   * ask_manager on worker turns; absent when the turn disables user input.
+   */
+  elicit?: AcpElicitFn
   signal?: AbortSignal
   nextId?: (prefix: string) => string
 }
@@ -110,6 +118,9 @@ export class AcpClientHost {
     )
     rpc.onRequest(ACP_CLIENT_METHODS.terminalRelease, (params) =>
       this.handleTerminalRelease(params)
+    )
+    rpc.onRequest(ACP_CLIENT_METHODS.elicitationCreate, (params) =>
+      this.handleElicitation(params)
     )
   }
 
@@ -350,5 +361,28 @@ export class AcpClientHost {
     const parsed = parseAcpParams(AcpTerminalIdParamsSchema, params)
     this.contextFor(parsed.sessionId)
     return this.terminals.release(parsed.terminalId)
+  }
+
+  // ---- elicitation -----------------------------------------------------------
+
+  /**
+   * `elicitation/create` (P2-10): only the form mode is advertised, so url
+   * and custom modes decline politely; request-scoped elicitations carry no
+   * sessionId and cancel since no turn context can own them.
+   */
+  private async handleElicitation(
+    params: unknown
+  ): Promise<CreateElicitationResponse> {
+    const parsed = parseAcpParams(AcpCreateElicitationParamsSchema, params)
+    if (parsed.mode !== 'form' || parsed.requestedSchema === undefined) {
+      return { action: 'decline' }
+    }
+    if (!parsed.sessionId) return { action: 'cancel' }
+    const ctx = this.contextFor(parsed.sessionId)
+    if (!ctx.elicit) return { action: 'decline' }
+    return ctx.elicit({
+      message: parsed.message,
+      requestedSchema: parsed.requestedSchema
+    })
   }
 }

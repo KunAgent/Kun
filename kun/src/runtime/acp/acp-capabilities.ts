@@ -85,8 +85,8 @@ export function capabilitiesFromAcp(
       (session.modes?.availableModes?.length ?? 0) > 0
         ? SUPPORTED
         : unsupported('upstream'),
-    // elicitation exists in the spec but is deferred to P2 (§8.4).
-    userInput: unsupported('not-implemented')
+    // Form elicitation bridges to the user_input gate / ask_manager (P2-10).
+    userInput: SUPPORTED
   }
   return {
     statuses,
