@@ -131,8 +131,20 @@ export class SessionConsolidationService {
     }
     await this.options.jobStore.ready()
     const selection = await this.scheduler().run()
+    const nowMs = Date.parse(this.now())
+    const canWriteMemory = Boolean(this.options.memoryStore()?.createWithId)
+    const isWaiting = (job: ConsolidationJob): boolean => {
+      if (job.status === 'materialized' && !job.checkpoint && !canWriteMemory) return true
+      const reclaimed = (job.status === 'pruning' && job.prunedRevision) ||
+        (job.status === 'deleting' && job.deletedAt)
+      return Boolean(reclaimed && job.reclaimMode === 'safe' && job.archiveExpiresAt &&
+        Date.parse(job.archiveExpiresAt) > nowMs)
+    }
     const jobs = (await this.options.jobStore.list())
       .filter((job) => ['eligible', 'materialized', 'verified', 'pruning', 'deleting'].includes(job.status))
+      // Keep the run bounded without letting the oldest TTL/capability wait
+      // monopolize its only slot. Due cleanup retains its original queue order.
+      .sort((left, right) => Number(isWaiting(left)) - Number(isWaiting(right)))
       .slice(0, config.maxThreadsPerRun)
     const failures: SessionConsolidationRunReport['failures'] = []
     const counters: RunCounters = { episodesWritten: 0, durableCandidatesQueued: 0 }
@@ -198,15 +210,13 @@ export class SessionConsolidationService {
     this.policy(job)
     if (job.status === 'eligible') return this.extract(job, counters)
     if (job.status === 'materialized') {
-      let current = job
-      if (job.error) {
+      if (!job.checkpoint) {
         if (!this.options.memoryStore()?.createWithId) return 'pending'
-        current = await this.options.jobStore.transition(job.id, ['materialized'], 'materialized', {
-          clearError: true,
-          reason: 'memory store capability is available again'
-        })
+        // A capability wait or interrupted checkpoint write is not proof of
+        // materialization. Revalidate source and repeat the input-keyed write.
+        return this.extract(job, counters)
       }
-      return this.prepareVerified(current)
+      return this.prepareVerified(job)
     }
     if (job.status === 'verified') return this.reclaim(job)
     if (job.status === 'pruning' || job.status === 'deleting') return this.reclaim(job)
@@ -224,7 +234,9 @@ export class SessionConsolidationService {
       mainAccountId: thread.accountId
     })
     if (!resolved) throw new Error('no model is configured for session consolidation')
-    let current = await this.options.jobStore.transition(job.id, ['eligible'], 'extracting')
+    let current = await this.options.jobStore.transition(job.id, ['eligible', 'materialized'], 'extracting', {
+      clearError: true
+    })
     const snapshot = await this.options.sessionStore.loadItemSnapshot(thread.id)
     const now = this.now()
     const episode = await buildConsolidationEpisode({
