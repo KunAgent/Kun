@@ -52,7 +52,11 @@ function fakePtyModule(): FakePtyModule {
 
 type RuntimeFetch = (path: string, init?: { method?: string; body?: string }) => Promise<Response>
 
-function setup(runtimeFetch: RuntimeFetch, ptyModule: FakePtyModule = fakePtyModule()) {
+function setup(
+  runtimeFetch: RuntimeFetch,
+  ptyModule: FakePtyModule = fakePtyModule(),
+  extra: { resolveKunCli?: () => Promise<{ binDir: string; cliPath: string } | null> } = {}
+) {
   const handlers = new Map<string, (...args: never[]) => unknown>()
   const sender = Object.assign(new EventEmitter(), {
     isDestroyed: (): boolean => false,
@@ -65,7 +69,8 @@ function setup(runtimeFetch: RuntimeFetch, ptyModule: FakePtyModule = fakePtyMod
     getMainWindow: () => null,
     logError: vi.fn(),
     runtimeFetch,
-    loadPty: async () => ptyModule
+    loadPty: async () => ptyModule,
+    ...extra
   })
   return {
     ptyModule,
@@ -130,7 +135,7 @@ describe('terminal agent PTY launch', () => {
     const taskArg = spawned.args[8]
     // The injected task carries the 05 §5.3 callback appendix.
     expect(taskArg).toMatch(/^fix the flake\n---\nReporting back to Kun/)
-    expect(taskArg).toContain('kun worker progress')
+    expect(taskArg).toContain('$KUN_CLI" worker progress')
     expect(spawned.args.slice(6)).toEqual([
       '--dangerously-skip-permissions', '-t', taskArg,
       '--settings', '/tmp/ade/hooks/tu_77.json'
@@ -141,6 +146,38 @@ describe('terminal agent PTY launch', () => {
     expect(env.KUN_HOOK_TOKEN).toBe('kgw_hook')
     expect(env.KUN_WORKER_ENDPOINT).toBe('http://127.0.0.1:18899')
     expect(env.KUN_HOOK_DIR).toBe('/tmp/ade/hooks/tu_77')
+  })
+
+  it('puts the bundled kun bin dir first on PATH and exports KUN_CLI', async () => {
+    const calls: Array<{ path: string; body: unknown }> = []
+    const resolveKunCli = vi.fn(async () => ({
+      binDir: '/opt/kun/bin',
+      cliPath: '/opt/kun/bin/kun'
+    }))
+    const { ptyModule, call } = setup(fakeRuntime(calls), fakePtyModule(), { resolveKunCli })
+    const result = await call('terminal:create', {
+      sessionId: 'agent-cli',
+      agent: { harnessId: 'claude-code', title: 'claude term', task: 'fix it' }
+    }) as { ok: boolean }
+    expect(result.ok).toBe(true)
+    expect(resolveKunCli).toHaveBeenCalledOnce()
+    const env = ptyModule.spawnArgs!.options.env ?? {}
+    expect(env.KUN_CLI).toBe('/opt/kun/bin/kun')
+    expect(env.PATH?.startsWith('/opt/kun/bin')).toBe(true)
+  })
+
+  it('still launches the agent when kun CLI resolution fails', async () => {
+    const calls: Array<{ path: string; body: unknown }> = []
+    const { ptyModule, call } = setup(fakeRuntime(calls), fakePtyModule(), {
+      resolveKunCli: async () => { throw new Error('no cli') }
+    })
+    const result = await call('terminal:create', {
+      sessionId: 'agent-cli-null',
+      agent: { harnessId: 'claude-code', title: 'claude term' }
+    }) as { ok: boolean }
+    expect(result.ok).toBe(true)
+    const env = ptyModule.spawnArgs!.options.env ?? {}
+    expect(env.KUN_CLI).toBeUndefined()
   })
 
   it('reports exit and interrupt hints for agent sessions only', async () => {
