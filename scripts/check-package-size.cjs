@@ -10,6 +10,13 @@ const MAC_ARM64_BUDGETS = {
   dmg: 272 * MIB,
   zip: 285 * MIB
 }
+// Keep PR ad-hoc packages on the tighter limits. Official Developer ID signed
+// and stapled artifacts have a separate 300 MiB ceiling.
+const MAC_ARM64_SIGNED_BUDGETS = {
+  ...MAC_ARM64_BUDGETS,
+  dmg: 300 * MIB,
+  zip: 300 * MIB
+}
 
 function parseArgs(argv) {
   const options = {
@@ -159,17 +166,18 @@ function buildReport(options) {
   }
 }
 
-function budgetFailures(report) {
+function budgetFailures(report, { signed = false } = {}) {
   if (report.platform !== 'darwin' || report.arch !== 'arm64') return []
+  const budgets = signed ? MAC_ARM64_SIGNED_BUDGETS : MAC_ARM64_BUDGETS
   const failures = []
-  if (report.appBytes > MAC_ARM64_BUDGETS.app) {
+  if (report.appBytes > budgets.app) {
     failures.push(
-      `application ${formatBytes(report.appBytes)} exceeds ${formatBytes(MAC_ARM64_BUDGETS.app)}`
+      `application ${formatBytes(report.appBytes)} exceeds ${formatBytes(budgets.app)}`
     )
   }
   for (const [extension, budget] of [
-    ['.dmg', MAC_ARM64_BUDGETS.dmg],
-    ['.zip', MAC_ARM64_BUDGETS.zip]
+    ['.dmg', budgets.dmg],
+    ['.zip', budgets.zip]
   ]) {
     const artifact = report.artifacts.find((entry) => entry.extension === extension)
     if (!artifact) {
@@ -273,11 +281,12 @@ function main() {
     printBaselineComparison(compareWithBaseline(report, baseline))
   }
   if (!options.enforce) return
-  const failures = budgetFailures(report)
+  const signed = process.env.MAC_SIGN === '1'
+  const failures = budgetFailures(report, { signed })
   if (failures.length > 0) {
     throw new Error(`Package size budget failed:\n${failures.map((entry) => `- ${entry}`).join('\n')}`)
   }
-  console.log('[package-size] macOS arm64 package is within the release budgets.')
+  console.log(`[package-size] macOS arm64 ${signed ? 'signed ' : ''}package is within the release budgets.`)
 }
 
 if (require.main === module) {
@@ -292,6 +301,7 @@ if (require.main === module) {
 module.exports = {
   MIB,
   MAC_ARM64_BUDGETS,
+  MAC_ARM64_SIGNED_BUDGETS,
   parseArgs,
   packagedAppPath,
   resourcesPath,

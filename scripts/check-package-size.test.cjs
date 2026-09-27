@@ -1,7 +1,8 @@
 'use strict'
 
 const assert = require('node:assert/strict')
-const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = require('node:fs')
+const { mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } = require('node:fs')
+const { spawnSync } = require('node:child_process')
 const { tmpdir } = require('node:os')
 const { join, resolve } = require('node:path')
 const test = require('node:test')
@@ -62,6 +63,42 @@ test('enforces all macOS arm64 application and artifact budgets', () => {
     budgetFailures({ ...report, platform: 'linux', artifacts: [] }),
     []
   )
+})
+
+test('enforces a separate 300 MiB signed ceiling without relaxing ad-hoc budgets', () => {
+  const report = {
+    platform: 'darwin',
+    arch: 'arm64',
+    appBytes: 731 * MIB,
+    artifacts: [
+      { name: 'Kun-test-mac-arm64.dmg', extension: '.dmg', bytes: 272.6 * MIB },
+      { name: 'Kun-test-mac-arm64.zip', extension: '.zip', bytes: 286.4 * MIB }
+    ]
+  }
+  assert.equal(budgetFailures(report).length, 2)
+  assert.deepEqual(budgetFailures(report, { signed: true }), [])
+  assert.equal(budgetFailures({
+    ...report,
+    artifacts: report.artifacts.map((artifact) => ({ ...artifact, bytes: 300 * MIB + 1 }))
+  }, { signed: true }).length, 2)
+})
+
+test('CLI selects the signed budget only when MAC_SIGN is enabled', (t) => {
+  const distDir = mkdtempSync(join(tmpdir(), 'kun-package-size-signed-'))
+  t.after(() => rmSync(distDir, { recursive: true, force: true }))
+  mkdirSync(join(distDir, 'mac-arm64', 'Kun.app'), { recursive: true })
+  for (const [extension, mib] of [['dmg', 272.6], ['zip', 286.4]]) {
+    const path = join(distDir, `Kun-0.3.11-mac-arm64.${extension}`)
+    writeFileSync(path, '')
+    truncateSync(path, Math.ceil(mib * MIB))
+  }
+  const args = [join(__dirname, 'check-package-size.cjs'), '--platform', 'darwin', '--arch', 'arm64', '--dist-dir', distDir, '--enforce']
+  const unsigned = spawnSync(process.execPath, args, { encoding: 'utf8', env: { ...process.env, MAC_SIGN: '0' } })
+  const signed = spawnSync(process.execPath, args, { encoding: 'utf8', env: { ...process.env, MAC_SIGN: '1' } })
+  assert.equal(unsigned.status, 1)
+  assert.match(unsigned.stderr, /Package size budget failed/u)
+  assert.equal(signed.status, 0, signed.stderr)
+  assert.match(signed.stdout, /signed package is within the release budgets/u)
 })
 
 test('formats binary package sizes explicitly', () => {
