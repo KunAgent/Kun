@@ -124,6 +124,10 @@ export type PaperLocalLibraryState = {
   >
 }
 
+export type PaperLocalStateWriteResult =
+  | { ok: true }
+  | { ok: false; message: string }
+
 // ---- reading activity (heat bar) ---------------------------------------------
 
 /**

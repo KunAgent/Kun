@@ -6,14 +6,16 @@ import { readMobilePaperPage, useMobilePaperPageProgress } from './mobile-paper-
 
 let host: HTMLDivElement
 let root: Root
-const save = vi.fn(async () => ({ ok: true }))
+const save = vi.fn(async (): Promise<{ ok: true } | { ok: false; message: string }> => ({ ok: true }))
+const onError = vi.fn()
 function View({ page }: { page: number }) {
-  useMobilePaperPageProgress({ root: '/library', unitDir: 'papers/unit', page, pageCount: 100 }, vi.fn())
+  useMobilePaperPageProgress({ root: '/library', unitDir: 'papers/unit', page, pageCount: 100 }, onError)
   return createElement('div', null, page)
 }
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   window.sessionStorage.clear(); vi.useFakeTimers()
+  save.mockReset(); save.mockResolvedValue({ ok: true }); onError.mockClear()
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
   ;(window as unknown as { kunGui: unknown }).kunGui = { paperLocalStateWrite: save }
 })
@@ -35,5 +37,14 @@ describe('mobile paper page position', () => {
   it('does not override a more recently opened host position', async () => {
     await act(async () => root.render(createElement(View, { page: 12 })))
     expect(readMobilePaperPage('/library', 'papers/unit', 4, new Date(Date.now() + 1000).toISOString())).toBe(4)
+  })
+  it('reports a host write failure and retries the same position', async () => {
+    save.mockResolvedValueOnce({ ok: false, message: 'disk full' })
+    await act(async () => root.render(createElement(View, { page: 12 })))
+    await act(async () => { await vi.runAllTimersAsync() })
+    expect(onError).toHaveBeenCalledWith('disk full')
+    await act(async () => { window.dispatchEvent(new Event('pagehide')); await Promise.resolve() })
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(onError).toHaveBeenLastCalledWith('')
   })
 })

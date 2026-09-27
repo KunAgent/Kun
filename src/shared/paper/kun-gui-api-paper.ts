@@ -19,6 +19,7 @@ import type {
   PaperLibraryTrashResult,
   PaperDownloadPdfResult,
   PaperLocalLibraryState,
+  PaperLocalStateWriteResult,
   PaperBibtexImportResult,
   PaperMoveToGroupResult,
   PaperCreateGroupResult,
@@ -165,7 +166,7 @@ export type PaperLibraryApi = {
       lastPage: number
       pageCount: number
     }>
-  }) => Promise<void>
+  }) => Promise<PaperLocalStateWriteResult>
   /** BibTeX for one unit ('unitDir') or the whole library ('all'). */
   paperExportBibtex: (payload: {
     workspaceRoot: string

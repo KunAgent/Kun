@@ -9,6 +9,7 @@ import { MobilePaperNotes } from './MobilePaperNotes'
 import { MobilePaperAssistant } from './MobilePaperAssistant'
 import { readMobilePaperPage, useMobilePaperPageProgress } from './mobile-paper-page-progress'
 import { mobilePaperLibraryRoot } from './mobile-paper-library-root'
+import { readMobilePaperRoute } from './mobile-paper-route'
 import type { PaperResourceView } from '../navigation/mobile-page'
 import type { PaperLibraryEntry, PaperReferenceItem } from '@shared/paper/paper-library-types'
 import type { PaperUnitReadResult } from '@shared/paper/paper-types'
@@ -51,6 +52,7 @@ export function MobilePaperReader({ paperKey, view, onBack, onView, onSettings, 
   const [colorDraft, setColorDraft] = useState<PaperHighlightColor>('yellow')
   const [page, setPage] = useState(1)
   const [pageCount, setPageCount] = useState(0)
+  const [pageSyncError, setPageSyncError] = useState('')
   const [quote, setQuote] = useState<{ text: string; page: number } | null>(null)
   const [translation, setTranslation] = useState('')
   const [translationOpen, setTranslationOpen] = useState(false)
@@ -64,18 +66,19 @@ export function MobilePaperReader({ paperKey, view, onBack, onView, onSettings, 
   const referencesSeq = useRef(0)
   const [retry, setRetry] = useState(0)
   const unitDir = entry?.unitDir ?? ''
-  const flushPage = useMobilePaperPageProgress({ root, unitDir, page, pageCount }, setError)
-  const goBack = (): void => { void flushPage(); onBack() }
+  const flushPage = useMobilePaperPageProgress({ root, unitDir, page, pageCount }, setPageSyncError)
+  const goBack = (): void => { void flushPage().then((saved) => { if (saved) onBack() }) }
   useEffect(() => () => { translationSeq.current += 1 }, [root, unitDir])
   useEffect(() => {
     if (dirtyRef.current) { setError(translateRef.current('mobileWorkPaperLibraryChangedPending')); return }
     let live = true
     setRoot(''); setEntry(null); setUnit(null); setMarks([]); marksRef.current = []; removedIdsRef.current.clear(); setMarksReady(false); setCards([]); setError(''); setQuote(null)
     referencesSeq.current += 1; setReferences(null); setReferencesOpen(false); setReferencesError(''); setReferencesLoading(false)
-    setMarksDirty(false); setNotesDirty(false); setPageCount(0)
+    setMarksDirty(false); setNotesDirty(false); setPageCount(0); setPageSyncError('')
     if (!paperMode.libraries.length) { setError(translateRef.current('mobileWorkPaperNoLibrary')); return }
     void findMobilePaperResource(paperMode.libraries, preferredRoot, paperKey, papersDir,
-      (payload) => window.kunGui.paperLibraryList(payload)).then((found) => {
+      (payload) => window.kunGui.paperLibraryList(payload),
+      readMobilePaperRoute(paperKey, paperMode.libraries)).then((found) => {
       if (!live || dirtyRef.current) return
       if (!found) { setError(translateRef.current('mobileWorkPaperPaperNotFound')); return }
       const { root: foundRoot, entry: foundEntry } = found
@@ -97,7 +100,7 @@ export function MobilePaperReader({ paperKey, view, onBack, onView, onSettings, 
         setMarksReady(true)
       }).catch((cause: unknown) => { if (live) setError(String(cause)) })
       void window.kunGui.paperLocalStateWrite({ libraryRoot: foundRoot, unitRelDir: foundEntry.unitDir,
-        patch: { lastOpenedAt: new Date().toISOString() } })
+        patch: { lastOpenedAt: new Date().toISOString() } }).catch(() => undefined)
     }).catch((cause: unknown) => { if (live) setError(String(cause)) })
     return () => { live = false }
   }, [paperMode.libraries, preferredRoot, papersDir, paperKey, retry])
@@ -209,6 +212,9 @@ export function MobilePaperReader({ paperKey, view, onBack, onView, onSettings, 
       {t('mobileWorkPaperMarks', { count: marks.length })}</button></div>
     {error ? <p role="alert">{error} {marksDirty ? <button type="button" disabled={savingMarks}
       onClick={() => void persistMarks(marks)}>{t('mobileWorkPaperSaveMarksRetry')}</button> : null}</p> : null}
+    {pageSyncError ? <p role="alert">{t('mobileWorkPaperPageSyncFailed', { error: pageSyncError })}
+      <button type="button" onClick={() => void flushPage()}>{t('mobileWorkPaperRetry')}</button>
+      <button type="button" onClick={onBack}>{t('mobileWorkPaperLeaveWithoutPageSync')}</button></p> : null}
     {view === 'read' ? pdfPath ? <MobilePaperPdf workspaceRoot={root} path={pdfPath}
       initialPage={page} marks={marks} onPage={onPage} onHighlight={addHighlight} onTranslate={translate}
       onQuote={(selection) => { setQuote(selection); changeView('assistant') }} />
