@@ -19,6 +19,7 @@ import {
 import type { ComposerPlanMode } from './chat-store-helpers'
 import {
   composerReasoningEffortForSelection,
+  persistComposerIsolation,
   persistComposerMode,
   persistComposerPersonaId,
   persistComposerProviderId,
@@ -208,6 +209,9 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
     },
 
     setComposerIsolation: (isolation, startFrom) => {
+      // Persisted so the choice doubles as the default for new sessions
+      // (the Worktree settings "default isolation" row edits the same key).
+      persistComposerIsolation(isolation)
       set({
         composerIsolation: isolation,
         composerWorktreeStartFrom: isolation === 'worktree' ? startFrom : undefined

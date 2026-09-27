@@ -56,6 +56,7 @@ const COMPOSER_PERSONA_STORAGE_KEY = 'kun.composerPersonaId'
 const COMPOSER_REASONING_EFFORT_STORAGE_KEY = 'kun.composerReasoningEffortByModel.v1'
 const COMPOSER_FAST_MODE_STORAGE_KEY = 'kun.composerFastMode.v1'
 const COMPOSER_MODE_STORAGE_KEY = 'kun.composerMode'
+const COMPOSER_ISOLATION_STORAGE_KEY = 'kun.composerIsolation'
 const CODE_WORKSPACE_ROOTS_STORAGE_KEY = 'kun.codeWorkspaceRoots.v1'
 export const MAX_CODE_WORKSPACE_ROOTS = 30
 export const MAX_THREAD_COMPOSER_SELECTIONS = 500
@@ -95,6 +96,16 @@ export function readStoredComposerModel(allowedIds: readonly string[]): string {
 
 export function persistComposerModel(model: string): void {
   writeBrowserStorageItem(COMPOSER_MODEL_STORAGE_KEY, model)
+}
+
+export function readStoredComposerIsolation(): 'local' | 'worktree' {
+  return readBrowserStorageItem(COMPOSER_ISOLATION_STORAGE_KEY) === 'worktree'
+    ? 'worktree'
+    : 'local'
+}
+
+export function persistComposerIsolation(isolation: 'local' | 'worktree'): void {
+  writeBrowserStorageItem(COMPOSER_ISOLATION_STORAGE_KEY, isolation)
 }
 
 export function readStoredComposerProviderId(

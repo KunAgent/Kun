@@ -134,3 +134,16 @@ export type TaskWorkspaceDiscardPreview = {
   uncommittedFiles: number
   unpushedCommits: number
 }
+
+/**
+ * Branch kept for human review after cleanup declined to delete it
+ * (`git branch -d` refused — unmerged commits). Listed by
+ * GET /v1/task-workspaces/preserved-branches (07 §8.3).
+ */
+export type PreservedBranchInfo = {
+  branch: string
+  lastCommit: string
+  aheadBy: number
+}
+
+export type PreservedBranchesResponse = { branches: PreservedBranchInfo[] }

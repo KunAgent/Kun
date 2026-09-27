@@ -557,7 +557,7 @@
   "projectConfigEditor": "Project JSON",
   "projectConfigEditorDesc": "Version-1 JSON. Skill roots and stdio cwd values are relative to the workspace and must resolve inside it.",
   "projectConfigActions": "Project configuration actions",
-  "projectConfigActionsDesc": "Saving validates and reapplies the file but never grants new MCP trust. Review and approve it separately.",
+  "projectConfigActionsDesc": "Saving validates and reapplies the file but never grants new MCP trust. Review and approve it separately. Approval also covers worktree install/setup commands.",
   "projectConfigSave": "Save project config",
   "projectConfigRefresh": "Refresh",
   "projectConfigOpenDir": "Open .kun folder",

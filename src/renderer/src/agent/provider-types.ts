@@ -285,6 +285,10 @@ export interface AgentProvider {
   cleanupTaskWorkspace?(
     workspaceId: string
   ): Promise<import('@shared/task-workspace').TaskWorkspaceRecordResponse>
+  /** Branches kept for human review after integrate cleanup (07 §8.3). */
+  listPreservedBranches?(
+    repoRoot: string
+  ): Promise<import('@shared/task-workspace').PreservedBranchesResponse>
   /** ADE team overview for Mission Control cards (docs/ade/09 §9). */
   getTeamOverview?(
     managerThreadId: string
@@ -301,6 +305,10 @@ export interface AgentProvider {
   listHarnessModels?(
     harnessId: string
   ): Promise<import('@shared/ade-harnesses').AdeHarnessModels>
+  /** Force fresh detection for one harness; returns the updated row. */
+  probeHarness?(
+    harnessId: string
+  ): Promise<import('@shared/ade-harnesses').AdeHarnessRow>
   /** Worker control: take-over / hand-back / stop / detach (09 §9). */
   controlTeamWorker?(
     workerId: string,

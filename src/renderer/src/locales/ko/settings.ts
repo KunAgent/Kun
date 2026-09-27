@@ -7,6 +7,7 @@ import memory from './settings/memory.json'
 import migrationSystem from './settings/migration-system.json'
 import codePersonas from './settings/code-personas.json'
 import speak from './settings/speak.json'
+import ade from './settings/ade.json'
 
 const settings = {
   ...navigationProviders,
@@ -19,6 +20,7 @@ const settings = {
   ...codePersonas,
   guiUpdateErrFeedUnavailable: '현재 사용할 수 있는 업데이트 소스가 없습니다. 나중에 다시 시도하거나 다운로드 페이지를 이용하세요.',
   ...speak,
+  ...ade,
 }
 
 export default settings

@@ -5,6 +5,7 @@ import { Bot, Check, Plug, Search, Sparkles, Wrench, X } from 'lucide-react'
 import type { KunSubagentProfileV1 } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { ModelSelect, ReasoningEffortPicker } from './SubagentProfileControls'
+import { loadHarnesses, useHarnessStore } from '../../store/harness-store'
 import {
   BUILTIN_TOOL_NAMES,
   loadCapabilityCatalog,
@@ -34,6 +35,11 @@ export function ProfileDialog({
   const [tab, setTab] = useState<'basic' | 'permissions'>('basic')
   const [catalog, setCatalog] = useState<CapabilityCatalog | null>(null)
   const [catalogLoading, setCatalogLoading] = useState(false)
+  const harnessRows = useHarnessStore((state) => state.rows)
+
+  useEffect(() => {
+    void loadHarnesses()
+  }, [])
   const set = <K extends keyof KunSubagentProfileV1>(k: K, v: KunSubagentProfileV1[K]): void =>
     setD((p) => ({ ...p, [k]: v }))
 
@@ -136,6 +142,62 @@ export function ProfileDialog({
               onChange={(m, pid) => setD((p) => ({ ...p, model: m || undefined, providerId: pid || undefined }))}
             />
           </Field>
+          <Field label={t('adeSettings.profileHarness', 'Agent (harness)')}>
+            <select
+              value={d.harnessId ?? ''}
+              onChange={(e) => {
+                const harnessId = e.target.value || undefined
+                setD((p) => ({
+                  ...p,
+                  harnessId,
+                  credentialMode: harnessId ? p.credentialMode : undefined
+                }))
+              }}
+              className="w-full rounded-md border border-ds-border bg-[var(--ds-surface-elevated)] px-3 py-1.5 text-sm"
+            >
+              <option value="">{t('adeSettings.profileHarnessKun', 'Kun (native loop)')}</option>
+              {harnessRows
+                .filter((row) => row.definition.id !== 'kun')
+                .map((row) => (
+                  <option key={row.definition.id} value={row.definition.id}>
+                    {row.definition.displayName}
+                  </option>
+                ))}
+            </select>
+          </Field>
+          {(() => {
+            const row = harnessRows.find((r) => r.definition.id === d.harnessId)
+            return row && row.definition.credentialModes.length > 1 ? (
+              <Field label={t('adeSettings.profileCredentialMode', 'Credentials')}>
+                <select
+                  value={d.credentialMode ?? ''}
+                  onChange={(e) =>
+                    set('credentialMode', (e.target.value || undefined) as KunSubagentProfileV1['credentialMode'])
+                  }
+                  className="w-full rounded-md border border-ds-border bg-[var(--ds-surface-elevated)] px-3 py-1.5 text-sm"
+                >
+                  <option value="">{t('adeSettings.profileCredentialDefault', 'Harness default')}</option>
+                  {row.definition.credentialModes.map((mode) => (
+                    <option key={mode} value={mode}>{mode}</option>
+                  ))}
+                </select>
+              </Field>
+            ) : null
+          })()}
+          {d.harnessId ? (
+            <Field label={t('adeSettings.profileDelegationNotes', 'Best for')}>
+              <textarea
+                value={d.delegationNotes ?? ''}
+                rows={2}
+                placeholder={t(
+                  'adeSettings.profileDelegationNotesHint',
+                  'What this worker is good at; the manager reads this when picking workers.'
+                )}
+                onChange={(e) => set('delegationNotes', e.target.value || undefined)}
+                className="w-full resize-none rounded-md border border-ds-border bg-[var(--ds-surface-elevated)] px-3 py-1.5 text-sm"
+              />
+            </Field>
+          ) : null}
           <Field label={t('subagentsPanel.reasoning', 'Reasoning')}>
             <ReasoningEffortPicker
               value={normalizeStoredReasoning(d.reasoningEffort)}

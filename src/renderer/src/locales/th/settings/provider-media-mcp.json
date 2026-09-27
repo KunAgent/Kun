@@ -557,7 +557,7 @@
   "projectConfigEditor": "โปรเจ็กต์ JSON",
   "projectConfigEditorDesc": "JSON เวอร์ชัน-1 รูททักษะและค่า stdio cwd สัมพันธ์กับพื้นที่ทำงานและต้องแก้ไขภายในนั้น",
   "projectConfigActions": "การดำเนินการกำหนดค่าโครงการ",
-  "projectConfigActionsDesc": "การบันทึกจะตรวจสอบและนำไฟล์ไปใช้อีกครั้ง แต่จะไม่ให้ความน่าเชื่อถือของ MCP ใหม่ ตรวจสอบและอนุมัติแยกกัน",
+  "projectConfigActionsDesc": "การบันทึกจะตรวจสอบและนำไฟล์ไปใช้อีกครั้ง แต่จะไม่ให้ความน่าเชื่อถือของ MCP ใหม่ ตรวจสอบและอนุมัติแยกกัน การอนุมัติครอบคลุมคำสั่งติดตั้ง/เตรียม worktree ด้วย",
   "projectConfigSave": "บันทึกการกำหนดค่าโครงการ",
   "projectConfigRefresh": "รีเฟรช",
   "projectConfigOpenDir": "เปิดโฟลเดอร์ .kun",

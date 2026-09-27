@@ -341,6 +341,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   readonly previewTaskWorkspaceDiscard = this.taskWorkspaces.previewTaskWorkspaceDiscard
   readonly discardTaskWorkspace = this.taskWorkspaces.discardTaskWorkspace
   readonly cleanupTaskWorkspace = this.taskWorkspaces.cleanupTaskWorkspace
+  readonly listPreservedBranches = this.taskWorkspaces.listPreservedBranches
 
   private readonly teams = createKunTeamsClient()
   readonly getTeamOverview = this.teams.getTeamOverview
@@ -351,6 +352,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   private readonly harnesses = createKunHarnessesClient()
   readonly listHarnesses = this.harnesses.listHarnesses
   readonly listHarnessModels = this.harnesses.listHarnessModels
+  readonly probeHarness = this.harnesses.probeHarness
 
   private readonly reviews = createKunReviewClient()
   readonly listReviewComments = this.reviews.listReviewComments
