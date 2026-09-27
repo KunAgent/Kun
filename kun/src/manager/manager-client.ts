@@ -34,8 +34,7 @@ import { ManagerResourceLeaseSchema, type ManagerResourceFence } from './resourc
 import type { ManagerRequestOptions } from './manager-client-support.js'
 import { terminateSpawnedRuntime } from '../cli/shared-runtime-launch.js'
 import {
-  inspectServiceManager,
-  resolveServiceManager
+  inspectServiceManager
 } from './manager-resolution.js'
 import {
   launchServiceManagerProcess,
@@ -253,15 +252,19 @@ export async function ensureServiceManager(
   const controlDir = input.controlDir ?? defaultKunControlDir()
   const settingsPath = input.settingsPath ?? defaultProductionSettingsPath()
   const fetchImpl = input.fetch ?? fetch
-  const existing = await resolveServiceManager(controlDir, fetchImpl)
-  if (existing) {
-    if (!managerOwnsPaths(existing.discovery, input.dataDir, settingsPath)) {
+  const inspected = await inspectServiceManager(controlDir, fetchImpl, {
+    attempts: 3,
+    deadline: Date.now() + (input.timeoutMs ?? START_TIMEOUT_MS)
+  })
+  if (inspected.state === 'ready') {
+    if (!managerOwnsPaths(inspected.discovery, input.dataDir, settingsPath)) {
       throw new Error(
         'Kun Service Manager owns a different canonical data or settings path'
       )
     }
-    return existing
+    return { discovery: inspected.discovery }
   }
+  if (inspected.state === 'unavailable') throw inspected.error
   assertManagerBootstrapAllowed(input)
   return withManagerStartLock(
     controlDir,

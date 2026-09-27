@@ -6,6 +6,7 @@ import {
   publishManagerDiscovery,
   type ManagerDiscoveryRecord
 } from './manager-discovery.js'
+import { ensureServiceManager } from './manager-client.js'
 import {
   resolveServiceManager,
   resolveServiceManagerForHandoff,
@@ -28,6 +29,26 @@ describe('Service Manager resolution', () => {
       discovery: fixture.discovery
     })
     expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries a busy Manager before rejecting a development Runtime', async () => {
+    const fixture = await managerFixture([...KUN_MANAGER_CAPABILITIES])
+    const healthyFetch = managerFetch(fixture)
+    let calls = 0
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      calls += 1
+      if (calls === 1) throw new Error('health probe temporarily busy')
+      return healthyFetch(input, init)
+    }) as typeof fetch
+
+    await expect(ensureServiceManager({
+      flavor: 'development',
+      dataDir: fixture.discovery.dataDir,
+      controlDir: fixture.controlDir,
+      settingsPath: fixture.discovery.settingsPath,
+      fetch: fetchImpl
+    })).resolves.toEqual({ discovery: fixture.discovery })
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
 
   it('authenticates an older same-protocol manager only for migration handoff', async () => {
