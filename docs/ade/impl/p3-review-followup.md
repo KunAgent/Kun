@@ -235,9 +235,10 @@
 - 启动器回调抽成 `use-workbench-chat-starters.ts`（startNewChat / startNewAdeChat / startNewAdeOneOnOne / startNewChatInWorkspace），导航守卫语义不变。
 - 测试：`ade-sidebar-groups.test.ts` 覆盖分组优先级、父子归并、按项目分组；`chat-store-ade-actions.test.ts` 原有 8 例保持绿。
 
-**P3-18 终端 agent 的 CLI 与恢复（S，M K）**
+**P3-18 终端 agent 的 CLI 与恢复（S，M K）** ✅ `353ec24d5` + `be46bcbc9`
 - PTY 环境：把内置 `kun` 所在目录（打包后是 `resources/bin`，开发时用生成的 shim）放到 PATH 最前，并额外导出 `KUN_CLI` 绝对命令；回调说明改为优先使用 `$KUN_CLI`。
 - 休眠恢复：有 `terminal.resumeArgs` 的 harness 允许恢复；同时更新 `runtime-composition-manager.ts:141` 的过时注释。
+- 实现：`terminal-agent-cli-env.ts` 负责 launcher/shim 解析与 `applyKunCliEnv`；打包版优先 `resources/bin/kun`（Windows 为可执行文件旁的 `bin/kun.cmd`），开发版在 `userData/cli-bin` 生成 exec shim。`canResume` 现在按 catalog 的 `terminal.resumeArgs` 判定 terminal-agent 是否可休眠恢复。
 
 **P3-19 手机端 ADE（L，R M）**
 - 手机端接入活动流，提供只读的 Mission Control 与"待你处理"列表（审批、worker 提问），可以回答和批准，不在手机上派活。
