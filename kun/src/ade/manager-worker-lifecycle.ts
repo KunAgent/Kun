@@ -21,7 +21,7 @@ import type { QualityVerdicts } from './quality-verdict.js'
 export class ManagerWorkerLifecycle {
   constructor(
     private readonly deps: ManagerRuntimeDeps,
-    private readonly teamControls: Pick<TeamControls, 'takeOverWorker'>,
+    private readonly teamControls: Pick<TeamControls, 'takeOverWorker' | 'notifyBudgetCheck'>,
     private readonly verdicts: Pick<QualityVerdicts, 'mergeReviewerFindings'>
   ) {}
 
@@ -212,6 +212,9 @@ export class ManagerWorkerLifecycle {
     await this.deps.notices.enqueue(this.noticeForDispatch(updated, worker)).catch((error) => {
       console.warn(`[kun] ade worker notice enqueue failed for ${updated.dispatchId}:`, error)
     })
+    // P3-15: a soft-cap crossing discovered at terminal still reaches the
+    // manager once even if no new dispatch is sent afterwards.
+    this.teamControls.notifyBudgetCheck(team, this.deps.teamBudget?.check(team))
     // Race contenders resolve their shared race when the last one lands (10 §6.3).
     if (this.deps.races) {
       await reconcileRaces(

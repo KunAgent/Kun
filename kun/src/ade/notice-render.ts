@@ -19,6 +19,7 @@ const KIND_LABEL: Record<WorkerNotice['kind'], Record<ReportLanguage, string>> =
   worker_handed_back: { zh: '已交还', en: 'Handed back' },
   worker_approval: { zh: '待审批', en: 'Approval needed' },
   review_completed: { zh: '审查完成', en: 'Review done' },
+  team_budget: { zh: '预算提醒', en: 'Budget warning' },
   race_ready: { zh: '赛马就绪', en: 'Race ready' }
 }
 

@@ -28,8 +28,20 @@ export type AdeTeamRecord = {
   managerThreadId: string
   status: 'active' | 'ended'
   workers: AdeTeamWorker[]
+  /** Token budget written at team creation (P3-15). */
+  budget?: { softTokens?: number; hardTokens?: number }
   createdAt: string
   updatedAt: string
+}
+
+/** Summed worker-thread usage + budget verdicts (P3-15). */
+export type AdeTeamUsage = {
+  totalTokens: number
+  perWorker: Array<{ workerId: string; label: string; totalTokens: number }>
+  softTokens?: number
+  hardTokens?: number
+  softExceeded: boolean
+  hardExceeded: boolean
 }
 
 export type AdeDispatchCapture = {
@@ -152,4 +164,6 @@ export type AdeTeamOverview = {
   dispatches: AdeDispatchRecord[]
   questions: AdeQuestionRecord[]
   races?: AdeRaceRecord[]
+  /** Team usage rollup (P3-15); absent when usage tracking is unwired. */
+  usage?: AdeTeamUsage
 }
