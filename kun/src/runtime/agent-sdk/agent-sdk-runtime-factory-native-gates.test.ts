@@ -508,7 +508,12 @@ describe('createAgentSdkRuntime turn context', () => {
           turns: [{ id: 'tn', prompt: 'ask' } as ThreadRecord['turns'][number]]
         })
       } as never,
-      events: { record: async (event: { kind: string; inputId?: string }) => { events.push(event) } } as never,
+      events: {
+        record: async (event: { kind: string; inputId?: string }) => {
+          events.push(event)
+          return { seq: events.length } as never
+        }
+      } as never,
       ids: { next: (prefix) => prefix },
       prefix: { systemPrompt: '' },
       providerConfigs: {},
@@ -569,6 +574,7 @@ describe('createAgentSdkRuntime turn context', () => {
               answers: []
             }) === 'settled'
           }
+          return { seq: 1 } as never
         }
       } as never,
       ids: { next: (prefix) => `${prefix}_1` },

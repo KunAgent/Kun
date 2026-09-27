@@ -1,4 +1,3 @@
-import type { TurnItem } from '../contracts/items.js'
 import { makeUserInputItem } from '../domain/item.js'
 import type { ApprovalRequest, ApprovalResolution } from '../domain/approval.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
@@ -17,7 +16,7 @@ import {
   awaitAbortableGate,
   userInputRequestWithDeadline
 } from '../services/interactive-gate.js'
-import { sessionEventExists } from '../adapters/session-event-query.js'
+import { settleUserInputResolution } from '../services/user-input-settlement.js'
 
 export type InteractiveToolBridgeDeps = {
   approvalGate: ApprovalGate
@@ -193,21 +192,24 @@ export class InteractiveToolBridge {
         ? { timeoutSeconds: input.input.timeoutSeconds }
         : {})
     })
+    let requestedSeq: number | undefined
     try {
       await this.deps.turns.applyItem(input.threadId, item)
-      await this.deps.events.record({
-        kind: 'user_input_requested',
-        threadId: input.threadId,
-        turnId: input.turnId,
-        itemId: item.id,
-        inputId: input.input.id,
-        status: 'pending',
-        prompt: input.input.prompt,
-        questions: input.input.questions,
-        ...(input.input.timeoutSeconds !== undefined
-          ? { timeoutSeconds: input.input.timeoutSeconds }
-          : {})
-      })
+      requestedSeq = (
+        await this.deps.events.record({
+          kind: 'user_input_requested',
+          threadId: input.threadId,
+          turnId: input.turnId,
+          itemId: item.id,
+          inputId: input.input.id,
+          status: 'pending',
+          prompt: input.input.prompt,
+          questions: input.input.questions,
+          ...(input.input.timeoutSeconds !== undefined
+            ? { timeoutSeconds: input.input.timeoutSeconds }
+            : {})
+        })
+      ).seq
     } catch (error) {
       this.deps.userInputGate.resolve(input.input.id, { status: 'cancelled' })
       void pending.catch(() => undefined)
@@ -227,32 +229,29 @@ export class InteractiveToolBridge {
         () => { this.deps.userInputGate.resolve(input.input.id, { status: 'cancelled' }) },
         'cancelled while awaiting user input'
       )
+    } catch {
+      // The abort callback already resolved the gate as cancelled. Fall
+      // through so the terminal item state and resolution event still land
+      // instead of leaving a pending item behind an aborted turn.
+      resolution = { status: 'cancelled' }
     } finally {
       disarmTimeout()
     }
-    await this.deps.turns.updateItem(input.threadId, item.id, {
-      status: resolution.status,
-      finishedAt: this.deps.nowIso(),
-      ...(resolution.status === 'submitted' ? { answers: resolution.answers } : {})
-    } as Partial<TurnItem>)
-    const alreadyRecorded = await sessionEventExists(
-      this.deps.sessionStore,
-      input.threadId,
-      (event) => event.kind === 'user_input_resolved' && event.inputId === input.input.id
-    )
-    if (!alreadyRecorded) {
-      await this.deps.events.record({
-        kind: 'user_input_resolved',
-        threadId: input.threadId,
-        turnId: input.turnId,
-        itemId: item.id,
-        inputId: input.input.id,
-        status: resolution.status,
-        prompt: input.input.prompt,
-        questions: input.input.questions,
-        ...(resolution.status === 'submitted' ? { answers: resolution.answers } : {})
-      })
-    }
+    await settleUserInputResolution({
+      turns: this.deps.turns,
+      events: this.deps.events,
+      sessionStore: this.deps.sessionStore,
+      threadId: input.threadId,
+      turnId: input.turnId,
+      itemId: item.id,
+      inputId: input.input.id,
+      prompt: input.input.prompt,
+      questions: input.input.questions,
+      resolution,
+      requestedSeq,
+      nowIso: this.deps.nowIso,
+      signal: input.signal
+    })
     return resolution
   }
 }

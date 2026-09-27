@@ -63,10 +63,24 @@ async function resolveUserInputLocked(input: {
       ...(resolution.status === 'submitted' ? { answers: resolution.answers } : {})
     })
   } catch (error) {
+    // The claim is released without settling, so a retry can still deliver
+    // the answer; log to make the interrupted hand-off visible.
+    console.warn(
+      `[kun] user_input ${input.inputId}: failed to persist resolution event ` +
+        `(thread=${claim.request.threadId} turn=${claim.request.turnId}): ` +
+        `${error instanceof Error ? error.message : String(error)}`
+    )
     claim.release()
     throw error
   }
   if (!claim.resolve(resolution)) {
+    // The durable event says resolved but the gate settled through another
+    // path (timeout/abort/reset) — log the divergence instead of a bare 409.
+    console.warn(
+      `[kun] user_input ${input.inputId}: resolution event recorded but gate ` +
+        `already settled (thread=${claim.request.threadId} turn=${claim.request.turnId} ` +
+        `status=${resolution.status})`
+    )
     return ERRORS.conflict(`user input already resolved: ${input.inputId}`)
   }
   return jsonResponse({

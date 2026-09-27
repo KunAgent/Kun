@@ -200,12 +200,15 @@ describe('InteractiveToolBridge', () => {
       applyItem: vi.fn(async () => { order.push('item_created') }),
       updateItem: vi.fn(async () => { order.push('item_updated') })
     } as unknown as TurnService
+    let seq = 0
     const events = {
       record: vi.fn(async (event: { kind: string; inputId?: string }) => {
         order.push(event.kind)
         if (event.kind === 'user_input_requested' && event.inputId) {
           expect(userInputGate.resolve(event.inputId, { status: 'submitted', answers: [] })).toBe('settled')
         }
+        seq += 1
+        return { seq } as never
       })
     } as unknown as RuntimeEventRecorder
     const bridge = new InteractiveToolBridge({
@@ -265,9 +268,12 @@ describe('InteractiveToolBridge', () => {
         updateItem: vi.fn(async () => undefined)
       } as unknown as TurnService
       const recorded: Array<Record<string, unknown>> = []
+      let seq = 0
       const events = {
         record: vi.fn(async (event: Record<string, unknown>) => {
           recorded.push(event)
+          seq += 1
+          return { seq } as never
         })
       } as unknown as RuntimeEventRecorder
       const bridge = new InteractiveToolBridge({
@@ -322,7 +328,7 @@ describe('InteractiveToolBridge', () => {
         updateItem: vi.fn(async () => undefined)
       } as unknown as TurnService
       const events = {
-        record: vi.fn(async () => undefined)
+        record: vi.fn(async () => ({ seq: 1 }) as never)
       } as unknown as RuntimeEventRecorder
       const bridge = new InteractiveToolBridge({
         approvalGate: new InMemoryApprovalGate(),

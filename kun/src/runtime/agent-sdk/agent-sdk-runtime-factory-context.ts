@@ -28,7 +28,7 @@ import type { TurnService } from '../../services/turn-service.js'
 import type { TurnRunOutcome } from '../../loop/turn-execution-types.js'
 import type { SessionStore } from '../../ports/session-store.js'
 import type { ThreadStore } from '../../ports/thread-store.js'
-import { sessionEventExists } from '../../adapters/session-event-query.js'
+import { settleUserInputResolution } from '../../services/user-input-settlement.js'
 import type { CapabilityRegistry } from '../../adapters/tool/capability-registry.js'
 import type { ToolHost, ToolHostContext } from '../../ports/tool-host.js'
 import { mergeRoomDeniedIds } from '../../loop/room-turn-policy.js'
@@ -66,7 +66,7 @@ import type {
   UserInputRequest,
   UserInputResolution
 } from '../../ports/user-input-gate.js'
-import { goalContextTexts, type TurnItem } from '../../contracts/items.js'
+import { goalContextTexts } from '../../contracts/items.js'
 import type { ApprovalGate } from '../../ports/approval-gate.js'
 import {
   createApprovalActionEnvelope,
@@ -211,19 +211,22 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
           questions: input.questions,
           ...(input.timeoutSeconds !== undefined ? { timeoutSeconds: input.timeoutSeconds } : {})
         })
+        let requestedSeq: number | undefined
         try {
           await deps.turns.applyItem(threadId, item)
-          await deps.events.record({
-            kind: 'user_input_requested',
-            threadId,
-            turnId,
-            itemId: item.id,
-            inputId: input.id,
-            status: 'pending',
-            prompt: input.prompt,
-            questions: input.questions,
-            ...(input.timeoutSeconds !== undefined ? { timeoutSeconds: input.timeoutSeconds } : {})
-          })
+          requestedSeq = (
+            await deps.events.record({
+              kind: 'user_input_requested',
+              threadId,
+              turnId,
+              itemId: item.id,
+              inputId: input.id,
+              status: 'pending',
+              prompt: input.prompt,
+              questions: input.questions,
+              ...(input.timeoutSeconds !== undefined ? { timeoutSeconds: input.timeoutSeconds } : {})
+            })
+          ).seq
         } catch (error) {
           gate.resolve(input.id, { status: 'cancelled' })
           void pending.catch(() => undefined)
@@ -242,29 +245,21 @@ export function createAgentSdkFactoryContext(deps: AgentSdkRuntimeFactoryDeps) {
         } finally {
           disarmTimeout()
         }
-        await deps.turns.updateItem(threadId, item.id, {
-          status: resolution.status,
-          finishedAt: nowIso(),
-          ...(resolution.status === 'submitted' ? { answers: resolution.answers } : {})
-        } as Partial<TurnItem>)
-        const alreadyRecorded = await sessionEventExists(
-          deps.sessionStore,
+        await settleUserInputResolution({
+          turns: deps.turns,
+          events: deps.events,
+          sessionStore: deps.sessionStore,
           threadId,
-          (event) => event.kind === 'user_input_resolved' && event.inputId === input.id
-        )
-        if (!alreadyRecorded) {
-          await deps.events.record({
-            kind: 'user_input_resolved',
-            threadId,
-            turnId,
-            itemId: item.id,
-            inputId: input.id,
-            status: resolution.status,
-            prompt: input.prompt,
-            questions: input.questions,
-            ...(resolution.status === 'submitted' ? { answers: resolution.answers } : {})
-          })
-        }
+          turnId,
+          itemId: item.id,
+          inputId: input.id,
+          prompt: input.prompt,
+          questions: input.questions,
+          resolution,
+          requestedSeq,
+          nowIso,
+          signal
+        })
         return resolution
       }
     }

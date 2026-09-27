@@ -73,6 +73,14 @@ export class InMemoryUserInputGate implements UserInputGate {
     this.requests.delete(inputId)
     const resolver = this.resolvers.get(inputId)
     this.resolvers.delete(inputId)
+    if (!resolver) {
+      // The request was dropped from the map while a waiter should still be
+      // suspended: settling "successfully" would lose the answer silently.
+      console.warn(
+        `[kun] user_input gate settled ${inputId} without a live resolver ` +
+          `(thread=${request.threadId} turn=${request.turnId} status=${resolution.status})`
+      )
+    }
     resolver?.resolve(resolution)
     return 'settled'
   }
