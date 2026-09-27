@@ -31,7 +31,6 @@ export type ModelProviderPresetId =
   | 'volcengine-agent-plan'
   | 'volcengine-coding-plan'
   | 'opencode-go'
-  | 'opencode-free'
   | 'zenmux'
   | 'codex'
   | 'claude-subscription'
@@ -96,22 +95,6 @@ export const CURSOR_SUBSCRIPTION_MODEL_IDS = ['auto'] as const
 export const OLLAMA_CLOUD_PROVIDER_ID = 'ollama'
 
 export const OLLAMA_CLOUD_PROVIDER_NAME = 'Ollama Cloud'
-
-export const OPENCODE_FREE_PROVIDER_ID = 'opencode-free'
-
-export const OPENCODE_FREE_PROVIDER_NAME = 'OpenCore Free'
-
-// Bootstrap snapshot of the non-deprecated zero-cost models that OpenCode Zen
-// serves anonymously through Chat Completions. Settings may import newer
-// zero-cost models from models.dev, but a mixed endpoint family must not be
-// seeded into this single-protocol provider.
-export const OPENCODE_FREE_MODEL_IDS = [
-  'big-pickle',
-  'mimo-v2.5-free',
-  'ling-3.0-flash-fin-free',
-  'nemotron-3-ultra-free',
-  'nemotron-3.5-lightning-free'
-] as const
 
 // Bootstrap snapshot from Ollama Cloud's official GET /v1/models response.
 // The live endpoint remains authoritative and Settings can import additions.

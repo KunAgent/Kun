@@ -13,7 +13,6 @@ import {
   VOLCENGINE_AGENT_PLAN_CHAT_MODELS,
   VOLCENGINE_CHAT_MODELS
 } from './model-lists.js'
-import { OPENCODE_FREE_MODELS } from './opencode-free-models.js'
 
 /**
  * The connection-level source of truth shared by GUI Settings, Kun runtime,
@@ -190,20 +189,6 @@ export const PROVIDER_CATALOG = [
     models: ['doubao-seed-1-6-250615', 'doubao-seed-1-6-flash-250828'],
     docsUrl: 'https://www.volcengine.com/docs/82379/1928262',
     credentialUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey'
-  },
-  {
-    id: 'opencode-free',
-    name: 'OpenCore Free',
-    category: 'free',
-    kind: 'http',
-    authFlow: 'api-key',
-    authType: 'api-key',
-    credentialRequirement: 'optional',
-    baseUrl: 'https://opencode.ai/zen/v1',
-    endpointFormat: 'chat_completions',
-    models: OPENCODE_FREE_MODELS,
-    docsUrl: 'https://opencode.ai/docs/zen/',
-    credentialUrl: 'https://opencode.ai/docs/zen/'
   },
   {
     id: 'opencode-go',

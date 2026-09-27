@@ -4,7 +4,6 @@ import type {
 } from '@shared/app-settings'
 import {
   MODEL_PROVIDER_PRESETS,
-  OPENCODE_FREE_PROVIDER_ID,
   modelProviderPresetAccountCount,
   resolveModelProviderPresetSource,
   tokenPlanProviderId
@@ -51,17 +50,6 @@ import {
 import { modelProviderReferenceKinds } from '@shared/app-settings'
 
 export { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
-
-
-
-
-
-
-
-export function isOpenCodeFreeProvider(provider: Pick<ModelProviderProfileV1, 'id' | 'presetSource'>): boolean {
-  return provider.id === OPENCODE_FREE_PROVIDER_ID ||
-    resolveModelProviderPresetSource(provider)?.preset.id === OPENCODE_FREE_PROVIDER_ID
-}
 
 export function buildProvidersViewModel(scope: Record<string, any>): Record<string, any> {
   const { t, showApiKey, sharedConnections, revealedCredential, credentialRevealPendingProviderId, setSelectedProviderId, addProviderQuery, subscriptionRegion, providerListQuery, probeStates, cursorAccounts, pendingImport, draftProvider, activeProvider, sharedConnectionFor, hasConfiguredCredential, activeKunProviderId, closeAddProviderDialog, addPresetModelProvider, refreshPresetProvider, updateProviderProxy, updateModelProvider, setGlobalNetworkOpen, providerProxy, runProbe, openQuickAdd, form } = scope
@@ -191,11 +179,9 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
       )
     : displayProviders
   const planProviders = filteredProviders.filter((item) => isSubscriptionProvider(item))
-  const freeProviders = filteredProviders.filter(isOpenCodeFreeProvider)
-  const apiProviders = filteredProviders.filter((item) =>
-    !isSubscriptionProvider(item) && !isOpenCodeFreeProvider(item)
-  )
-  const grouped = freeProviders.length > 0 || displayProviders.some((item) => isSubscriptionProvider(item))
+  const freeProviders: ModelProviderProfileV1[] = []
+  const apiProviders = filteredProviders.filter((item) => !isSubscriptionProvider(item))
+  const grouped = displayProviders.some((item) => isSubscriptionProvider(item))
 
   const renderProviderButton = (item: ModelProviderProfileV1): ReactElement => {
     const selected = activeProvider?.id === item.id

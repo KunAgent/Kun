@@ -45,6 +45,7 @@ import {
   normalizeModelProviderSettings
 } from './app-settings-provider-core'
 import { defaultMiniMaxMediaGenerationKunPatch } from './app-settings-provider-media'
+import { isRetiredOpenCodeFreeProviderId } from './app-settings-provider-profiles'
 import { normalizeDeepseekBaseUrl } from './app-settings-normalizers'
 import { normalizeClawSettings } from './app-settings-claw'
 import { normalizeScheduleSettings } from './app-settings-schedule'
@@ -224,7 +225,7 @@ function normalizeModelProviderPair(
   providers: readonly ModelProviderProfileV1[],
   preferModelOwner: boolean
 ): { providerId: string; model: string } {
-  const providerId = providerInput.trim()
+  const providerId = isRetiredOpenCodeFreeProviderId(providerInput.trim()) ? '' : providerInput.trim()
   const model = modelInput.trim()
   const selected = providerId
     ? providers.find((provider) => provider.id === providerId)

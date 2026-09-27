@@ -28,8 +28,6 @@ import {
   CHATGPT_SUBSCRIPTION_MODEL_IDS,
   GROK_SUBSCRIPTION_PROVIDER_ID,
   OLLAMA_CLOUD_MODEL_IDS,
-  OPENCODE_FREE_MODEL_IDS,
-  OPENCODE_FREE_PROVIDER_ID,
   listMusicGenerationProviderProfiles,
   listSpeechToTextProviderProfiles,
   listTextToSpeechProviderProfiles,
@@ -39,6 +37,7 @@ import {
   modelSupportsImageInput,
   defaultDesignSettings,
   normalizeModelProviderSettings,
+  normalizeAppSettings,
   projectExecutableModelRoutePools,
   resolveModelRouteTargetReference,
   resolveKunImageGenerationSettings,
@@ -278,39 +277,17 @@ describe('provider presets', () => {
     }
   })
 
-  it('ships OpenCore Free as a no-key built-in provider with ten retries', () => {
-    const preset = getModelProviderPreset(OPENCODE_FREE_PROVIDER_ID)
-    expect(preset).toMatchObject({
-      id: OPENCODE_FREE_PROVIDER_ID,
-      name: 'OpenCore Free',
-      baseUrl: 'https://opencode.ai/zen/v1',
-      endpointFormat: 'chat_completions',
-      defaultRetryMaxAttempts: 10,
-      models: [...OPENCODE_FREE_MODEL_IDS]
-    })
-
-    const profile = modelProviderPresetProfile(preset!)
-    expect(profile.retry?.maxAttempts).toBe(10)
-    expect(profile.modelProfiles['mimo-v2.5-free']).toMatchObject({
-      contextWindowTokens: 200_000,
-      maxOutputTokens: 32_000,
-      inputModalities: ['text', 'image']
-    })
-    expect(modelProviderRequiresApiKey(profile)).toBe(false)
-
-    const defaults = defaultModelProviderSettings()
-    expect(defaults.providers.find((provider) => provider.id === OPENCODE_FREE_PROVIDER_ID))
-      .toMatchObject({ retry: { maxAttempts: 10 } })
-
-    const normalized = normalizeModelProviderSettings({ providers: [] })
-    expect(normalized.providers.find((provider) => provider.id === OPENCODE_FREE_PROVIDER_ID))
-      .toMatchObject({ retry: { maxAttempts: 10 } })
+  it('does not ship OpenCode Free as a built-in provider', () => {
+    expect(getModelProviderPreset('opencode-free')).toBeNull()
+    expect(defaultModelProviderSettings().providers.map((provider) => provider.id)).toEqual(['deepseek'])
+    expect(normalizeModelProviderSettings({ providers: [] }).providers.map((provider) => provider.id))
+      .toEqual(['deepseek'])
   })
 
-  it('repairs a stored OpenCore Free profile to the built-in free preset', () => {
+  it('drops stored OpenCode Free profiles during normalization', () => {
     const normalized = normalizeModelProviderSettings({
       providers: [{
-        id: OPENCODE_FREE_PROVIDER_ID,
+        id: 'opencode-free',
         name: 'opencode-free',
         apiKey: '',
         baseUrl: 'https://opencode.ai/zen/v1',
@@ -318,27 +295,51 @@ describe('provider presets', () => {
         useProxy: false,
         models: ['gpt-5-nano'],
         modelProfiles: {}
+      }, {
+        id: 'opencode-free-2',
+        name: 'OpenCore Free 2',
+        presetSource: { presetId: 'opencode-free', mode: 'api' },
+        apiKey: '',
+        baseUrl: 'https://opencode.ai/zen/v1',
+        endpointFormat: 'chat_completions',
+        useProxy: false,
+        models: ['big-pickle'],
+        modelProfiles: {}
       }]
-    }).providers.find((provider) => provider.id === OPENCODE_FREE_PROVIDER_ID)
-
-    expect(normalized).toMatchObject({
-      presetSource: { presetId: OPENCODE_FREE_PROVIDER_ID, mode: 'api' },
-      name: 'opencode-free',
-      retry: { maxAttempts: 10 }
     })
-    expect(normalized && modelProviderRequiresApiKey(normalized)).toBe(false)
+
+    expect(normalized.providers.map((provider) => provider.id)).toEqual(['deepseek'])
+    expect(normalized.providers.some((provider) => provider.id.startsWith('opencode-free'))).toBe(false)
   })
 
-  it('preserves explicit OpenCore Free retry settings during normalization', () => {
-    const profile = modelProviderPresetProfile(getModelProviderPreset(OPENCODE_FREE_PROVIDER_ID)!)
-    const normalized = normalizeModelProviderSettings({
-      providers: [{
-        ...profile,
-        retry: { maxAttempts: 2, initialDelayMs: 3_000, httpStatusCodes: [429, 500, 502, 503, 504], defaultsVersion: 1 }
-      }]
-    }).providers.find((provider) => provider.id === OPENCODE_FREE_PROVIDER_ID)
+  it('remaps a saved OpenCode Free runtime selection onto remaining providers', () => {
+    const normalized = normalizeAppSettings({
+      ...settings(),
+      provider: {
+        ...defaultModelProviderSettings(),
+        providers: [{
+          id: 'opencode-free',
+          name: 'OpenCore Free',
+          apiKey: '',
+          baseUrl: 'https://opencode.ai/zen/v1',
+          endpointFormat: 'chat_completions',
+          useProxy: false,
+          models: ['big-pickle'],
+          modelProfiles: {}
+        }]
+      },
+      agents: {
+        kun: {
+          ...defaultKunRuntimeSettings(),
+          providerId: 'opencode-free',
+          model: 'big-pickle'
+        }
+      }
+    })
 
-    expect(normalized?.retry?.maxAttempts).toBe(2)
+    expect(normalized.provider.providers.map((provider) => provider.id)).toEqual(['deepseek'])
+    expect(normalized.agents.kun.providerId).toBe('')
+    expect(normalized.agents.kun.model).not.toBe('big-pickle')
   })
 
   it('keeps per-model endpointFormat overrides on the OpenCode Go preset', () => {

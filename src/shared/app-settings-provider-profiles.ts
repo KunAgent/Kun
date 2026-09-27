@@ -73,7 +73,6 @@ import {
   CHATGPT_SUBSCRIPTION_NAME,
   CHATGPT_SUBSCRIPTION_PROVIDER_ID,
   GEMINI_SUBSCRIPTION_MODEL_IDS,
-  OPENCODE_FREE_PROVIDER_ID,
   TOKEN_PLAN_PROVIDER_ID_SUFFIX,
   getModelProviderPreset,
   modelProviderPresetProfile,
@@ -132,15 +131,18 @@ export function defaultModelProviderProfile(apiKey: string, baseUrl: string): Mo
   }
 }
 
+export function isRetiredOpenCodeFreeProviderId(id: string): boolean {
+  return /^opencode-free(?:-[0-9]+)?$/u.test(id)
+}
+
 export function normalizeModelProviderProfile(
   input: ModelProviderProfilePatchV1 | undefined,
   missingUseProxy = false
 ): ModelProviderProfileV1 | null {
   const id = normalizeModelProviderId(input?.id)
-  if (!id) return null
-  const presetSource = id === OPENCODE_FREE_PROVIDER_ID
-    ? { presetId: OPENCODE_FREE_PROVIDER_ID, mode: 'api' as const }
-    : normalizeModelProviderPresetSource(input, id)
+  if (!id || isRetiredOpenCodeFreeProviderId(id)) return null
+  if (input?.presetSource?.presetId === 'opencode-free') return null
+  const presetSource = normalizeModelProviderPresetSource(input, id)
   const resolvedPresetSource = presetSource
     ? resolveModelProviderPresetSource({ id, presetSource })
     : null

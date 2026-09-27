@@ -17,7 +17,6 @@ import type {
   ModelProviderModelProfileV1,
   ModelProviderPresetMode,
   ModelProviderProfileV1,
-  ModelProviderReasoningCapabilityV1,
   ModelProviderSpeechCapabilityV1,
   ModelProviderTextToSpeechCapabilityV1,
   ModelProviderVideoCapabilityV1,
@@ -55,9 +54,6 @@ import {
   OLLAMA_CLOUD_MODEL_IDS,
   OLLAMA_CLOUD_PROVIDER_ID,
   OLLAMA_CLOUD_PROVIDER_NAME,
-  OPENCODE_FREE_MODEL_IDS,
-  OPENCODE_FREE_PROVIDER_ID,
-  OPENCODE_FREE_PROVIDER_NAME,
   VOLCENGINE_AGENT_PLAN_CHAT_MODELS,
   VOLCENGINE_CHAT_MODELS,
   VOLCENGINE_IMAGE_MODELS,
@@ -65,12 +61,6 @@ import {
   ZAI_CODING_PLAN_MODELS,
   ZHIPU_CODING_PLAN_MODELS
 } from './model-provider-preset-types'
-
-const OPENCODE_FREE_REASONING: ModelProviderReasoningCapabilityV1 = {
-  supportedEfforts: ['auto'],
-  defaultEffort: 'auto',
-  requestProtocol: 'none'
-}
 
 /** models.dev/kun-agent explicitly publish Coding Plan models as zero-cost. */
 function codingPlanProfile(
@@ -363,26 +353,6 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
     apiKeyUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey'
   },
 {
-    id: OPENCODE_FREE_PROVIDER_ID,
-    name: OPENCODE_FREE_PROVIDER_NAME,
-    category: 'free',
-    // Anonymous requests use Bearer public; the gateway treats it as no
-    // account key and permits only allowAnonymous models.
-    baseUrl: 'https://opencode.ai/zen/v1',
-    endpointFormat: 'chat_completions',
-    defaultRetryMaxAttempts: 10,
-    models: [...OPENCODE_FREE_MODEL_IDS],
-    modelProfiles: {
-      'big-pickle': openCodeFreeProfile(200_000, 32_000),
-      'mimo-v2.5-free': openCodeFreeProfile(200_000, 32_000, true),
-      'ling-3.0-flash-fin-free': openCodeFreeProfile(262_144, 32_768),
-      'nemotron-3-ultra-free': openCodeFreeProfile(1_000_000, 128_000),
-      'nemotron-3.5-lightning-free': openCodeFreeProfile(262_144, 262_144)
-    },
-    docsUrl: 'https://opencode.ai/docs/zen/',
-    apiKeyUrl: 'https://opencode.ai/docs/zen/'
-  },
-{
     id: 'opencode-go',
     name: 'OpenCode Go',
     category: 'subscription',
@@ -500,17 +470,3 @@ export const MODEL_PROVIDER_PRESETS_CORE: ModelProviderPreset[] = [
     apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys'
   }
 ]
-
-function openCodeFreeProfile(
-  contextWindowTokens: number,
-  maxOutputTokens: number,
-  supportsImageInput = false,
-  supportsReasoning = true
-): ModelProviderModelProfileV1 {
-  return {
-    ...(supportsImageInput
-      ? visionChatProfile(contextWindowTokens, supportsReasoning ? OPENCODE_FREE_REASONING : undefined)
-      : textChatProfile(contextWindowTokens, supportsReasoning ? OPENCODE_FREE_REASONING : undefined)),
-    maxOutputTokens
-  }
-}
