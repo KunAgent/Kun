@@ -251,6 +251,8 @@ export interface AgentProvider {
   pinActivity?(unitId: string, pinned?: boolean): Promise<void>
   /** Foreground-thread report for activity dormancy (docs/ade/06 §7.2 cond. 4). */
   reportActivityForeground?(threadId: string): Promise<void>
+  /** Pending approvals, optionally scoped to a thread (P3-19 attention list). */
+  listPendingApprovals?(threadId?: string): Promise<import('@shared/ade-approvals').PendingApprovalItem[]>
   /** Task workspaces bound to a thread (docs/ade/07 §11). */
   listTaskWorkspaces?(options?: {
     boundThreadId?: string

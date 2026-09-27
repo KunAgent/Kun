@@ -5,6 +5,7 @@ import {
   KUN_ACTIVITY_PATH,
   kunActivityUnitPath
 } from '@shared/kun-endpoints'
+import type { PendingApprovalItem } from '@shared/ade-approvals'
 import { runtimeErrorToError } from '@shared/runtime-error'
 import { buildQuery } from './kun-query'
 import { rendererRuntimeClient } from './runtime-client'
@@ -75,6 +76,27 @@ export function createKunActivityClient() {
         response.body,
         'runtime returned an invalid activity events response'
       )
+    },
+
+    /**
+     * Pending approval requests, optionally scoped to one thread (P3-19).
+     * The mobile attention surface resolves approval ids per waiting row.
+     */
+    async listPendingApprovals(threadId?: string): Promise<PendingApprovalItem[]> {
+      const query = buildQuery({ threadId })
+      const response = await rendererRuntimeClient.runtimeRequest(
+        `/v1/approvals${query}`,
+        'GET'
+      )
+      if (!response.ok) {
+        throw runtimeErrorToError(
+          readRuntimeError(response.body, 'failed to list pending approvals')
+        )
+      }
+      return readRuntimeJson<{ approvals: PendingApprovalItem[] }>(
+        response.body,
+        'runtime returned an invalid approvals response'
+      ).approvals
     },
 
     ackActivity: (unitId: string): Promise<void> => mutateActivityFact(unitId, 'ack'),
