@@ -38,6 +38,11 @@ export type ExecutionUnitRouteDeps = {
   catalog: HarnessCatalog
   /** Loopback base URL filled once the listener binds. */
   endpoint?: () => string | undefined
+  /** Managed-hook config writer (05 §6.2); absent disables hook injection. */
+  hookWriter?: (
+    unitId: string,
+    hooks: { kind: string; events: string[] }
+  ) => Promise<{ args: string[]; env: Record<string, string>; dir: string } | null>
 }
 
 export async function executionUnitCreateResponse(
@@ -72,6 +77,10 @@ export async function executionUnitCreateResponse(
       credentialIdentity: `terminal-agent:${record.unitId}`,
       scopes
     })
+  const hooks = definition.terminal.hooks
+  const launch = hooks?.events.length && deps.hookWriter
+    ? await deps.hookWriter(record.unitId, hooks).catch(() => null)
+    : null
   return jsonResponse({
     unitId: record.unitId,
     tokens: {
@@ -80,10 +89,10 @@ export async function executionUnitCreateResponse(
     },
     endpoint: deps.endpoint?.() ?? null,
     /**
-     * Launch additions managed hooks inject (05 §6.2, P2-03): extra argv
-     * flags or env (config dirs) the PTY spawn merges verbatim.
+     * Launch additions managed hooks inject (05 §6.2): extra argv flags or
+     * env (config dirs) the PTY spawn merges verbatim.
      */
-    launch: { args: [] as string[], env: {} as Record<string, string> }
+    launch: { args: launch?.args ?? [], env: launch?.env ?? {} }
   })
 }
 

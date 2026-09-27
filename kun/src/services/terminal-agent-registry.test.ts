@@ -1,4 +1,5 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -116,6 +117,51 @@ describe('TerminalAgentRegistry', () => {
     await first.registry.applyState('tu_1', { mainState: 'idle', provenance: 'hook' })
     const second = harness(dir)
     expect((await second.registry.get('tu_1'))?.mainState).toBe('idle')
+  })
+
+  it('persists native session ids reported by SessionStart hooks', async () => {
+    const { registry } = harness(await tempDir())
+    await registry.register(CREATE)
+    await registry.applyState('tu_1', {
+      mainState: 'idle', nativeSessionId: 'sess_native', provenance: 'hook'
+    })
+    expect((await registry.get('tu_1'))?.nativeSessionId).toBe('sess_native')
+  })
+
+  it('removes the managed-hook config directory on exit', async () => {
+    const dir = await tempDir()
+    const { registry } = harness(dir)
+    await registry.register(CREATE)
+    const hookDir = join(dir, 'ade', 'hooks', 'tu_1')
+    await mkdir(hookDir, { recursive: true })
+    await writeFile(join(hookDir, 'settings.json'), '{}')
+    await registry.reportExit('tu_1', { exitCode: 0 })
+    expect(existsSync(hookDir)).toBe(false)
+  })
+
+  it('throttles tier-0 progress writes with callback provenance', async () => {
+    let now = 0
+    const dir = await tempDir()
+    const applied: Array<{ unitId: string; patch: ActivityPatch; provenance: string }> = []
+    const registry = new TerminalAgentRegistry({
+      dataDir: dir,
+      nowIso: () => NOW,
+      nowMs: () => now,
+      idGenerator: () => 'tu_1',
+      activity: {
+        register: (input) => input,
+        apply: (unitId, patch, provenance) => { applied.push({ unitId, patch, provenance }) }
+      }
+    })
+    await registry.register(CREATE)
+    expect(await registry.reportProgress('tu_1', { summary: 'first', phase: 'implementing' }))
+      .toBe('recorded')
+    expect(await registry.reportProgress('tu_1', { summary: 'second' })).toBe('rate_limited')
+    now += 10_001
+    expect(await registry.reportProgress('tu_1', { summary: 'third' })).toBe('recorded')
+    expect(await registry.reportProgress('tu_ghost', { summary: 'x' })).toBe('unknown')
+    expect(applied.map((entry) => entry.patch.progressNote)).toEqual(['first', 'third'])
+    expect(applied[0]?.provenance).toBe('callback')
   })
 })
 
