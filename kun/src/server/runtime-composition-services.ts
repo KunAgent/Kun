@@ -78,6 +78,7 @@ import { FileWorkerNoticeStore } from '../ade/worker-notice-store.js'
 import { FileReviewStore } from '../ade/review-store.js'
 import { FileRaceStore } from '../ade/race.js'
 import { AttributionLedger } from '../ade/attribution-ledger.js'
+import { ChangeRequestService } from '../ade/change-request-service.js'
 import { createWorkerCallbackToolProvider } from '../adapters/tool/worker-callback-tool-provider.js'
 import {
   MemoryDistillationCoordinator,
@@ -455,6 +456,12 @@ export async function createRuntimeServices(
     races: new FileRaceStore(core.activeOptions.dataDir, nowIso)
   }
   const attribution = new AttributionLedger(core.activeOptions.dataDir, nowIso)
+  const changeRequests = new ChangeRequestService({
+    taskWorkspaces: core.taskWorkspaces,
+    teams: adeStores.teams,
+    dispatches: adeStores.dispatches,
+    nowIso
+  })
   const workerCallbacks = new WorkerCallbackService({
     threadStore,
     sessionStore,
@@ -571,6 +578,7 @@ export async function createRuntimeServices(
     childToolHost,
     adeStores,
     attribution,
+    changeRequests,
     workerCallbacks,
     terminalAgents,
     hookWriter,

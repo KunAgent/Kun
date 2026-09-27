@@ -34,6 +34,8 @@ export type TaskWorkspaceRecord = {
   state: TaskWorkspaceState
   changedFiles: string[]
   patchArtifactId?: string
+  /** Latest forge change-request snapshot (11 §7.2). */
+  changeRequest?: ChangeRequestSnapshot
   lastError?: string
   recovery?: string[]
   createdAt: string
@@ -147,6 +149,42 @@ export type PreservedBranchInfo = {
 }
 
 export type PreservedBranchesResponse = { branches: PreservedBranchInfo[] }
+
+/** GET/POST /v1/task-workspaces/:id/change-request (docs/ade/11 §7.2). */
+export type ChangeRequestCheck = {
+  name: string
+  status: 'pending' | 'in_progress' | 'completed'
+  conclusion?: string
+  detailsUrl?: string
+  durationMs?: number
+}
+
+export type ChangeRequestSnapshot = {
+  provider: 'github'
+  number: number
+  url: string
+  title: string
+  state: 'open' | 'merged' | 'closed'
+  isDraft?: boolean
+  base?: string
+  head?: string
+  checks: ChangeRequestCheck[]
+  checkedAt: string
+}
+
+export type ChangeRequestStatus = {
+  available: boolean
+  forge?: 'github' | 'gitlab' | 'other'
+  reason?: 'no-remote' | 'forge-not-supported' | 'gh-not-installed' | 'gh-not-authed' | 'no-branch'
+  error?: string
+  request?: ChangeRequestSnapshot
+}
+
+export type CreateChangeRequestRequest = {
+  base?: string
+  title?: string
+  body?: string
+}
 
 /** GET /v1/task-workspaces/:id/attribution?path= (docs/ade/11 §6). */
 export type TaskWorkspaceAttributionLine = {

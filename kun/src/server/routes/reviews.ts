@@ -92,7 +92,10 @@ export async function sendReviewResponse(
     return ERRORS.validation('unknown review comment ids in commentIds')
   }
   const unresolved = sendable.filter((c) => c.state !== 'resolved')
-  if (!unresolved.length) return ERRORS.conflict('all selected comments are resolved')
+  // Note-only sends (e.g. a failed CI check summary) carry no comments (11 §7.2).
+  if (!unresolved.length && !note?.trim()) {
+    return ERRORS.conflict('all selected comments are resolved')
+  }
   const round = file.requests.length + 1
   const zh = deps.language?.startsWith('zh') ?? false
   const title = zh ? `审查意见 第 ${round} 轮` : `Review comments round ${round}`

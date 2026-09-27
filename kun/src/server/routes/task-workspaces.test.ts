@@ -75,12 +75,43 @@ async function harness() {
     artifacts
   })
   const attribution = new AttributionLedger(dataDir, () => '2026-01-01T00:00:00Z')
+  const changeRequests = {
+    statusCalls: [] as string[],
+    createCalls: [] as Array<{ id: string; body: unknown }>,
+    statusResult: {
+      available: false as const,
+      forge: 'github' as const,
+      reason: 'gh-not-authed' as const,
+      request: null
+    },
+    createResult: {
+      ok: true as const,
+      request: {
+        provider: 'github' as const,
+        number: 34,
+        url: 'https://github.com/org/repo/pull/34',
+        title: 'My PR',
+        state: 'open' as const,
+        checks: [],
+        checkedAt: 't'
+      }
+    },
+    status: async (id: string) => {
+      changeRequests.statusCalls.push(id)
+      return changeRequests.statusResult
+    },
+    create: async (id: string, body: unknown) => {
+      changeRequests.createCalls.push({ id, body })
+      return changeRequests.createResult
+    }
+  }
   const router = new Router()
   registerTaskWorkspaceRoutes(router, {
     runtimeToken: 'test-token',
     insecure: false,
     taskWorkspaces: service,
     attribution,
+    changeRequests,
     ade: {
       stores: {
         teams: {
@@ -113,7 +144,7 @@ async function harness() {
       { params: route.params }
     ) as Promise<JsonResponse>
   }
-  return { service, request, repo, attribution }
+  return { service, request, repo, attribution, changeRequests }
 }
 
 async function waitTerminal(
@@ -402,6 +433,53 @@ describe('task workspace routes', () => {
       'GET', `/v1/task-workspaces/${record.workspaceId}/attribution?path=nope.txt`
     )
     expect(unknown.status).toBe(404)
+  })
+
+  it('serves change-request status and creates PRs through the service', async () => {
+    const { service, request, repo, changeRequests } = await harness()
+    const created = await request('POST', '/v1/task-workspaces', {
+      ownerThreadId: 'thread-a',
+      sourceRoot: repo,
+      isolation: 'worktree',
+      startFrom: { kind: 'current-head' }
+    })
+    const record = (JSON.parse(created.body)).record
+    await waitTerminal(service, record.workspaceId)
+
+    const status = await request(
+      'GET', `/v1/task-workspaces/${record.workspaceId}/change-request`
+    )
+    expect(status.status).toBe(200)
+    expect(JSON.parse(status.body)).toMatchObject({
+      available: false, forge: 'github', reason: 'gh-not-authed'
+    })
+    expect(changeRequests.statusCalls).toEqual([record.workspaceId])
+
+    const missing = await request('GET', '/v1/task-workspaces/nope/change-request')
+    expect(missing.status).toBe(404)
+
+    const bad = await request(
+      'POST', `/v1/task-workspaces/${record.workspaceId}/change-request`,
+      { title: 5 }
+    )
+    expect(bad.status).toBe(400)
+
+    const create = await request(
+      'POST', `/v1/task-workspaces/${record.workspaceId}/change-request`,
+      { title: 'My PR' }
+    )
+    expect(create.status).toBe(201)
+    expect(JSON.parse(create.body).request).toMatchObject({ number: 34, url: 'https://github.com/org/repo/pull/34' })
+    expect(changeRequests.createCalls).toEqual([{ id: record.workspaceId, body: { title: 'My PR' } }])
+
+    changeRequests.createResult = {
+      ok: false, reason: 'gh-not-authed', userReport: 'run gh auth login'
+    } as never
+    const refused = await request(
+      'POST', `/v1/task-workspaces/${record.workspaceId}/change-request`, {}
+    )
+    expect(refused.status).toBe(409)
+    expect(JSON.parse(refused.body)).toMatchObject({ reason: 'gh-not-authed' })
   })
 
   it('preserved-branches is not swallowed by the :workspaceId route', async () => {

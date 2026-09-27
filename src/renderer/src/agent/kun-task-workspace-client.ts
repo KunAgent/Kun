@@ -1,4 +1,6 @@
 import type {
+  ChangeRequestStatus,
+  CreateChangeRequestRequest,
   CreateTaskWorkspaceRequest,
   PreservedBranchesResponse,
   TaskWorkspaceAttribution,
@@ -98,6 +100,26 @@ export function createKunTaskWorkspaceClient() {
       return get(
         `${kunTaskWorkspacePath(workspaceId, '/attribution')}${query}`,
         'failed to load line attribution'
+      )
+    },
+
+    /** Forge availability + persisted/fresh PR snapshot (11 §7.2). */
+    getChangeRequest(workspaceId: string): Promise<ChangeRequestStatus> {
+      return get(
+        kunTaskWorkspacePath(workspaceId, '/change-request'),
+        'failed to load the change request'
+      )
+    },
+
+    /** Push the workspace branch and open a PR (GitHub + `gh` only). */
+    createChangeRequest(
+      workspaceId: string,
+      input: CreateChangeRequestRequest = {}
+    ): Promise<{ request: ChangeRequestStatus['request'] }> {
+      return post(
+        kunTaskWorkspacePath(workspaceId, '/change-request'),
+        input,
+        'failed to create the change request'
       )
     },
 
