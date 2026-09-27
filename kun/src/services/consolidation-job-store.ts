@@ -45,7 +45,7 @@ const ALLOWED_TRANSITIONS: Readonly<Record<ConsolidationJobStatus, readonly Cons
   pruning: ['pruning', 'completed', 'failed'],
   deleting: ['deleting', 'completed', 'failed'],
   completed: [],
-  failed: ['eligible']
+  failed: ['eligible', 'materialized', 'verified', 'pruning', 'deleting']
 }
 
 // Local to this file: the session/consolidation layer must not depend on
@@ -92,6 +92,7 @@ export class ConsolidationJobStore {
     pipelineVersion?: string
     reclaimMode?: ConsolidationReclaimMode
     reclaimTier?: ConsolidationReclaimTier
+    policy?: ConsolidationJobValue['policy']
   }): Promise<ConsolidationJobValue> {
     return this.withMutation(async () => {
       const pipelineVersion = input.pipelineVersion ?? CONSOLIDATION_PIPELINE_VERSION
@@ -133,6 +134,7 @@ export class ConsolidationJobStore {
         status: 'eligible',
         ...(input.reclaimMode ? { reclaimMode: input.reclaimMode } : {}),
         ...(input.reclaimTier ? { reclaimTier: input.reclaimTier } : {}),
+        ...(input.policy ? { policy: input.policy } : {}),
         retryCount: 0,
         history: [{ status: 'eligible', at: createdAt }],
         createdAt,
@@ -168,11 +170,14 @@ export class ConsolidationJobStore {
     patch: {
       reason?: string
       error?: string
+      clearError?: boolean
       measuredBytes?: ConsolidationJobMeasuredBytes
       recoverySnapshotId?: string
       archiveExpiresAt?: string
       cutoffTurnId?: string
       artifactOwnerIds?: string[]
+      prunedRevision?: ConsolidationJobValue['prunedRevision']
+      deletedAt?: string
     } = {}
   ): Promise<ConsolidationJobValue> {
     return this.withMutation(async () => {
@@ -192,17 +197,25 @@ export class ConsolidationJobStore {
       if (!ALLOWED_TRANSITIONS[current.status].includes(to)) {
         throw new Error(`invalid consolidation job transition ${current.status} -> ${to}`)
       }
+      if (current.status === 'failed' && to !== retryState(current)) {
+        throw new Error('retry must resume the failed consolidation phase')
+      }
       const at = this.now()
       const next = ConsolidationJob.parse({
         ...current,
         status: to,
         ...(patch.error ? { error: patch.error.slice(0, 512) } : {}),
+        ...(patch.clearError ? { error: undefined } : {}),
+        ...(current.status === 'failed' ? { error: undefined, resumeFrom: undefined } : {}),
+        ...(to === 'failed' ? { resumeFrom: current.status } : {}),
         ...(to === 'failed' ? { retryCount: current.retryCount + 1 } : {}),
         ...(patch.measuredBytes ? { measuredBytes: { ...current.measuredBytes, ...patch.measuredBytes } } : {}),
         ...(patch.recoverySnapshotId ? { recoverySnapshotId: patch.recoverySnapshotId } : {}),
         ...(patch.archiveExpiresAt ? { archiveExpiresAt: patch.archiveExpiresAt } : {}),
         ...(patch.cutoffTurnId ? { cutoffTurnId: patch.cutoffTurnId } : {}),
         ...(patch.artifactOwnerIds ? { artifactOwnerIds: [...patch.artifactOwnerIds] } : {}),
+        ...(patch.prunedRevision ? { prunedRevision: patch.prunedRevision } : {}),
+        ...(patch.deletedAt ? { deletedAt: patch.deletedAt } : {}),
         history: [...current.history, {
           status: to,
           at,
@@ -218,12 +231,20 @@ export class ConsolidationJobStore {
 
   async persistCheckpoint(
     jobId: string,
-    checkpoint: { memoryIds: string[]; cutoffRevision: string; itemRevision?: number }
+    checkpoint: { memoryIds: string[]; cutoffRevision: string; itemRevision?: number; memoryHash?: string }
   ): Promise<ConsolidationJobValue> {
     return this.withMutation(async () => {
       const state = copyState(await this.load())
       const current = state.jobs[jobId]
       if (!current) throw new Error(`consolidation job not found: ${jobId}`)
+      if (current.status !== 'materialized') throw new Error('checkpoint requires materialized job')
+      if (current.checkpoint) {
+        const { persistedAt: _persistedAt, ...existing } = current.checkpoint
+        if (JSON.stringify(existing) !== JSON.stringify(checkpoint)) {
+          throw new Error('consolidation checkpoint is immutable')
+        }
+        return current
+      }
       if (checkpoint.cutoffRevision !== current.cutoffRevision) {
         throw new Error(`consolidation checkpoint revision does not match job ${jobId}`)
       }
@@ -236,6 +257,7 @@ export class ConsolidationJobStore {
         memoryIds: checkpoint.memoryIds,
         cutoffRevision: checkpoint.cutoffRevision,
         ...(checkpoint.itemRevision === undefined ? {} : { itemRevision: checkpoint.itemRevision }),
+        ...(checkpoint.memoryHash ? { memoryHash: checkpoint.memoryHash } : {}),
         persistedAt: at
       }
       const next = ConsolidationJob.parse({
@@ -249,15 +271,12 @@ export class ConsolidationJobStore {
     })
   }
 
-  // Explicit retry entry point for a failed job: transitions failed -> eligible
-  // so a coordinator can re-run the pipeline from scratch. Deliberately not
-  // folded into ensureJob — ensureJob's idempotent return-existing behavior
-  // must never silently re-arm a failed job (that would hide failures behind
-  // an unrelated call), so retry is only ever explicit. retryCount is carried
-  // over unchanged; it only increments when a job enters `failed`, not when it
-  // leaves it, so it reflects the total number of failures across all retries.
+  // Retrying must never re-extract a thread already pruned/deleted. The recorded
+  // failed phase (or legacy history) is the only permitted re-entry point.
   async retryFailedJob(jobId: string, patch: { reason?: string } = {}): Promise<ConsolidationJobValue> {
-    return this.transition(jobId, ['failed'], 'eligible', { reason: patch.reason ?? 'retry' })
+    const job = await this.get(jobId)
+    if (!job || job.status !== 'failed') throw new Error('job is not failed')
+    return this.transition(jobId, ['failed'], retryState(job), { reason: patch.reason ?? 'retry' })
   }
 
   private async recoverInterruptedLocked(): Promise<void> {
@@ -272,6 +291,7 @@ export class ConsolidationJobStore {
         ...job,
         status: 'failed',
         error: 'interrupted',
+        resumeFrom: job.status,
         retryCount: job.retryCount + 1,
         history: [...job.history, { status: 'failed', at, reason: 'interrupted' }],
         updatedAt: at
@@ -324,6 +344,13 @@ export class ConsolidationJobStore {
 
 function copyState(state: ConsolidationJobStoreStateValue): ConsolidationJobStoreStateValue {
   return ConsolidationJobStoreState.parse(structuredClone(state))
+}
+
+function retryState(job: ConsolidationJobValue): ConsolidationJobStatus {
+  const phase = job.resumeFrom ?? [...job.history].reverse().find((entry) => entry.status !== 'failed')?.status
+  if (phase === 'pruning' || phase === 'deleting' || phase === 'verified') return phase
+  if (phase === 'materialized' && job.checkpoint) return phase
+  return 'eligible'
 }
 
 export type ConsolidationJobStorePort = Pick<ConsolidationJobStore,

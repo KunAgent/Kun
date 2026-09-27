@@ -1,10 +1,6 @@
 import type { ThreadRecord } from '../contracts/threads.js'
 import { join } from 'node:path'
-import {
-  MemoryRecord as MemoryRecordSchema,
-  type MemoryCreateRequest,
-  type MemoryRecord
-} from '../contracts/memory.js'
+import type { MemoryCreateRequest, MemoryRecord } from '../contracts/memory.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { ModelClient } from '../ports/model-client.js'
@@ -27,6 +23,7 @@ import type { ConsolidationExclusionReason } from './session-consolidation-previ
 import { computeDirectoryByteSize } from './fs-directory-size.js'
 import { buildConsolidationEpisode } from './session-consolidation-episode.js'
 import { ConsolidationRecoveryStore } from './consolidation-recovery-store.js'
+import { consolidationMemoryHash, verifyConsolidationEvidence } from './session-consolidation-evidence.js'
 
 export type SessionConsolidationConfig = {
   enabled: boolean
@@ -161,7 +158,8 @@ export class SessionConsolidationService {
     for (const entry of selection.excluded) {
       skippedByReason[entry.reason] = (skippedByReason[entry.reason] ?? 0) + 1
     }
-    const cleanup = await this.cleanupExpiredArchives(config.maxThreadsPerRun)
+    const pendingArchiveCleanup = (await this.options.jobStore.list())
+      .filter((job) => ['pruning', 'deleting'].includes(job.status) && job.archiveExpiresAt).length
     return {
       enabled: true,
       scheduled: selection.scheduled.length,
@@ -171,7 +169,7 @@ export class SessionConsolidationService {
       durableCandidatesQueued: counters.durableCandidatesQueued,
       bytesReclaimed,
       skippedByReason,
-      pendingArchiveCleanup: cleanup.pending,
+      pendingArchiveCleanup,
       failures
     }
   }
@@ -186,15 +184,29 @@ export class SessionConsolidationService {
       idleAfterMs: config.idleAfterMs,
       minBytes: config.minBytes,
       reclaimMode: config.reclaimMode,
-      reclaimTier: config.tier
+      reclaimTier: config.tier,
+      policy: {
+        archiveTtlMs: config.archiveTtlMs,
+        summaryInputMaxBytes: config.summaryInputMaxBytes,
+        summaryMaxTokens: config.summaryMaxTokens
+      }
     })
   }
 
   private async process(job: ConsolidationJob, counters?: RunCounters): Promise<'completed' | 'pending'> {
+    this.assertRunning()
+    this.policy(job)
     if (job.status === 'eligible') return this.extract(job, counters)
     if (job.status === 'materialized') {
-      if (job.error) return 'pending'
-      return this.prepareVerified(job)
+      let current = job
+      if (job.error) {
+        if (!this.options.memoryStore()?.createWithId) return 'pending'
+        current = await this.options.jobStore.transition(job.id, ['materialized'], 'materialized', {
+          clearError: true,
+          reason: 'memory store capability is available again'
+        })
+      }
+      return this.prepareVerified(current)
     }
     if (job.status === 'verified') return this.reclaim(job)
     if (job.status === 'pruning' || job.status === 'deleting') return this.reclaim(job)
@@ -229,8 +241,8 @@ export class SessionConsolidationService {
       ...(this.options.roles?.()?.summaryReasoningEffort
         ? { reasoningEffort: this.options.roles()!.summaryReasoningEffort }
         : {}),
-      inputMaxBytes: this.options.config().summaryInputMaxBytes,
-      maxTokens: this.options.config().summaryMaxTokens,
+      inputMaxBytes: this.policy(job).summaryInputMaxBytes,
+      maxTokens: this.policy(job).summaryMaxTokens,
       nowIso: now
     })
     if ('blocked' in episode) throw new Error(`episode ${episode.blocked}${'reason' in episode ? `: ${episode.reason}` : ''}`)
@@ -243,6 +255,11 @@ export class SessionConsolidationService {
       return 'pending'
     }
     await memoryStore.createWithId(current.memoryIds[0]!, episode.input)
+    const persistedMemory = await this.readMemory(current.memoryIds[0]!)
+    verifyConsolidationEvidence(current, persistedMemory)
+    if (persistedMemory.sources.find((source) => source.threadId === current.threadId)?.contentHash !== episode.contentHash) {
+      throw new Error('existing episode evidence differs from extraction input')
+    }
     if (counters) counters.episodesWritten += 1
     const durableTurnId = completedCutoff(thread)
     if (durableTurnId) {
@@ -258,7 +275,8 @@ export class SessionConsolidationService {
     current = await this.options.jobStore.persistCheckpoint(current.id, {
       memoryIds: current.memoryIds,
       cutoffRevision: current.cutoffRevision,
-      itemRevision: snapshot.revision
+      itemRevision: snapshot.revision,
+      memoryHash: consolidationMemoryHash(persistedMemory)
     })
     return this.prepareVerified(current)
   }
@@ -266,17 +284,17 @@ export class SessionConsolidationService {
   private async prepareVerified(job: ConsolidationJob): Promise<'completed' | 'pending'> {
     const checkpoint = job.checkpoint
     if (!checkpoint) throw new Error('consolidation checkpoint is missing')
-    const config = this.options.config()
+    const policy = this.policy(job)
     let current = job
-    if (config.reclaimMode === 'safe' && !current.recoverySnapshotId) {
+    if (job.reclaimMode === 'safe' && !current.recoverySnapshotId) {
       const thread = await this.currentThread(current)
       // Tier-1 snapshots live inside the thread directory. Capture the
       // source size before creating that snapshot so the later delta cannot
       // count the recovery copy as reclaimed payload.
-      const baselineBytes = config.tier === 'tier-1'
+      const baselineBytes = job.reclaimTier === 'tier-1'
         ? await computeDirectoryByteSize(this.threadPath(thread.id))
         : undefined
-      if (config.tier === 'tier-1') {
+      if (job.reclaimTier === 'tier-1') {
         const itemSnapshot = await this.options.sessionStore.loadItemSnapshot(thread.id)
         const manifest = await this.options.snapshots.capture({
           threadId: thread.id,
@@ -287,14 +305,14 @@ export class SessionConsolidationService {
         })
         current = await this.options.jobStore.transition(current.id, ['materialized'], 'materialized', {
           recoverySnapshotId: manifest.snapshotId,
-          archiveExpiresAt: new Date(Date.parse(this.now()) + config.archiveTtlMs).toISOString(),
+          archiveExpiresAt: new Date(Date.parse(this.now()) + policy.archiveTtlMs).toISOString(),
           ...(baselineBytes === undefined ? {} : { measuredBytes: { before: baselineBytes } })
         })
       } else {
         await this.recovery.capture({ jobId: current.id, threadId: thread.id })
         current = await this.options.jobStore.transition(current.id, ['materialized'], 'materialized', {
           recoverySnapshotId: current.id,
-          archiveExpiresAt: new Date(Date.parse(this.now()) + config.archiveTtlMs).toISOString()
+          archiveExpiresAt: new Date(Date.parse(this.now()) + policy.archiveTtlMs).toISOString()
         })
       }
     }
@@ -310,15 +328,23 @@ export class SessionConsolidationService {
     if (job.checkpoint?.itemRevision !== undefined && snapshot.revision !== job.checkpoint.itemRevision) {
       throw new Error('session item revision changed during consolidation')
     }
-    const memory = await this.readMemory(job.memoryIds[0]!)
-    const parsed = MemoryRecordSchema.parse(memory)
-    const evidence = parsed.sources.find((source) => source.threadId === job.threadId)
-    if (!evidence?.excerpt || !evidence.contentHash || parsed.type !== 'episode' || parsed.authority !== 'reference') {
-      throw new Error('episode evidence is incomplete')
+    await this.verifyMemory(job)
+    await this.verifyRecovery(job)
+  }
+
+  private async verifyMemory(job: ConsolidationJob): Promise<void> {
+    if (!job.checkpoint || job.checkpoint.cutoffRevision !== job.cutoffRevision ||
+      JSON.stringify(job.checkpoint.memoryIds) !== JSON.stringify(job.memoryIds)) {
+      throw new Error('consolidation checkpoint is missing or mismatched')
     }
-    if (this.options.config().reclaimMode === 'safe') {
+    verifyConsolidationEvidence(job, await this.readMemory(job.memoryIds[0]!))
+  }
+
+  private async verifyRecovery(job: ConsolidationJob): Promise<void> {
+    if (job.reclaimMode === 'safe') {
       if (!job.recoverySnapshotId) throw new Error('recovery archive is missing')
-      const valid = this.options.config().tier === 'tier-1'
+      if (!job.archiveExpiresAt) throw new Error('recovery archive expiry is missing')
+      const valid = job.reclaimTier === 'tier-1'
         ? await this.options.snapshots.verify(job.threadId, job.recoverySnapshotId)
         : await this.recovery.verify(job.recoverySnapshotId, job.threadId)
       if (!valid) throw new Error('recovery archive verification failed')
@@ -326,18 +352,20 @@ export class SessionConsolidationService {
   }
 
   private async reclaim(job: ConsolidationJob): Promise<'completed' | 'pending'> {
-    const config = this.options.config()
-    if (config.tier === 'tier-1') {
-      return this.reclaimTier1(job, config.reclaimMode)
+    this.assertRunning()
+    this.policy(job)
+    await this.verifyMemory(job)
+    if (job.reclaimTier === 'tier-1') {
+      return this.reclaimTier1(job, job.reclaimMode!)
     }
-    return this.reclaimTier2(job, config.reclaimMode)
+    return this.reclaimTier2(job, job.reclaimMode!)
   }
 
   private async reclaimTier1(job: ConsolidationJob, mode: ConsolidationReclaimMode): Promise<'completed' | 'pending'> {
     let current = job
     const thread = await this.currentThread(current)
     if (current.status === 'verified') {
-      await this.assertEligibleForMutation(thread, current)
+      await this.verify(current)
       const before = current.measuredBytes?.before ?? await computeDirectoryByteSize(this.threadPath(thread.id))
       const cutoff = completedCutoff(thread)
       if (!cutoff) throw new Error('completed cutoff turn is unavailable')
@@ -348,28 +376,32 @@ export class SessionConsolidationService {
     }
     if (current.status === 'pruning') {
       const latest = await this.currentThread(current)
-      if (mode === 'safe' && current.archiveExpiresAt && Date.parse(current.archiveExpiresAt) <= Date.parse(this.now())) {
-        if (current.recoverySnapshotId) await this.options.snapshots.remove(latest.id, current.recoverySnapshotId)
-        const after = await computeDirectoryByteSize(this.threadPath(latest.id))
-        const reclaimed = Math.max(0, (current.measuredBytes?.before ?? after) - after)
-        if (reclaimed <= 0) throw new Error('thread payload space reclamation was not observed')
-        await this.options.jobStore.transition(current.id, ['pruning'], 'completed', {
-          measuredBytes: { after, reclaimed },
-          reason: 'recovery archive ttl expired'
-        })
-        return 'completed'
-      }
-      const cutoff = current.cutoffTurnId ?? completedCutoff(latest)
+      const cutoff = current.cutoffTurnId
       if (!cutoff) throw new Error('completed cutoff turn is unavailable')
-      const alreadyPruned = !latest.turns.some((turn) => turn.id === cutoff)
-      if (!alreadyPruned) {
+      if (!current.prunedRevision) {
+        // Missing cutoff alone cannot prove that our prune committed. Preserve
+        // the archive if a crash lost the durable post-prune receipt.
+        await this.verify(current)
+        if (!latest.turns.some((turn) => turn.id === cutoff)) throw new Error('prune completion is ambiguous')
+        this.assertRunning()
         await this.options.turnService.pruneThread({
           threadId: latest.id,
           request: { throughTurnId: cutoff, archiveBeforePrune: false, expectedThreadRevision: Number(current.cutoffRevision) }
         })
+        const pruned = await this.currentThread(current)
+        if (pruned.turns.some((turn) => turn.id === cutoff)) throw new Error('prune did not remove cutoff turn')
+        const snapshot = await this.options.sessionStore.loadItemSnapshot(pruned.id)
+        current = await this.options.jobStore.transition(current.id, ['pruning'], 'pruning', {
+          prunedRevision: { thread: pruned.revision ?? 0, items: snapshot.revision }
+        })
       }
-      const after = await computeDirectoryByteSize(this.threadPath(latest.id))
+      const afterPruneThread = await this.currentThread(current)
+      await this.assertEligibleForMutation(afterPruneThread, current, current.prunedRevision!.thread)
+      const snapshot = await this.options.sessionStore.loadItemSnapshot(afterPruneThread.id)
+      if (snapshot.revision !== current.prunedRevision!.items) throw new Error('pruned session revision changed')
+      const after = await computeDirectoryByteSize(this.threadPath(afterPruneThread.id))
       if (mode === 'safe' && current.archiveExpiresAt && Date.parse(current.archiveExpiresAt) > Date.parse(this.now())) {
+        await this.verifyRecovery(current)
         await this.options.jobStore.transition(current.id, ['pruning'], 'pruning', {
           measuredBytes: { after, reclaimed: Math.max(0, (current.measuredBytes?.before ?? after) - after) },
           reason: 'waiting for recovery archive ttl'
@@ -377,9 +409,11 @@ export class SessionConsolidationService {
         return 'pending'
       }
       if (mode === 'safe' && current.recoverySnapshotId) {
-        await this.options.snapshots.remove(latest.id, current.recoverySnapshotId)
+        this.assertRunning()
+        await this.verifyRecovery(current)
+        await this.options.snapshots.remove(afterPruneThread.id, current.recoverySnapshotId)
       }
-      const finalAfter = await computeDirectoryByteSize(this.threadPath(latest.id))
+      const finalAfter = await computeDirectoryByteSize(this.threadPath(afterPruneThread.id))
       const reclaimed = Math.max(0, (current.measuredBytes?.before ?? finalAfter) - finalAfter)
       if (reclaimed <= 0) throw new Error('thread payload space reclamation was not observed')
       await this.options.jobStore.transition(current.id, ['pruning'], 'completed', {
@@ -394,7 +428,7 @@ export class SessionConsolidationService {
     let current = job
     if (current.status === 'verified') {
       const thread = await this.currentThread(current)
-      await this.assertEligibleForMutation(thread, current)
+      await this.verify(current)
       const before = await computeDirectoryByteSize(this.threadPath(thread.id))
       current = await this.options.jobStore.transition(current.id, ['verified'], 'deleting', {
         measuredBytes: { before },
@@ -402,23 +436,36 @@ export class SessionConsolidationService {
       })
     }
     if (current.status !== 'deleting') return 'pending'
-    if (mode === 'safe' && current.recoverySnapshotId && !await this.recovery.verify(current.recoverySnapshotId, current.threadId)) {
-      throw new Error('external recovery archive verification failed')
+    // Read errors are not evidence of deletion. Never swallow them here.
+    const exists = await this.options.threadStore.get(current.threadId)
+    if (exists) {
+      if (current.deletedAt) throw new Error('deleted thread was recreated; refusing cleanup')
+      await this.verify(current)
+      this.assertRunning()
+      await this.options.threadService.delete(current.threadId)
+      if (await this.options.threadStore.get(current.threadId)) throw new Error('thread deletion was not observed')
     }
-    const exists = await this.options.threadStore.get(current.threadId).catch(() => null)
-    if (exists) await this.options.threadService.delete(current.threadId)
+    if (!current.deletedAt) {
+      if (!exists) {
+        if (mode !== 'safe') throw new Error('thread deletion is ambiguous without a recovery archive')
+        await this.verifyRecovery(current)
+      }
+      current = await this.options.jobStore.transition(current.id, ['deleting'], 'deleting', { deletedAt: this.now() })
+    }
     const after = await computeDirectoryByteSize(this.threadPath(current.threadId))
     if (mode === 'safe' && current.archiveExpiresAt && Date.parse(current.archiveExpiresAt) > Date.parse(this.now())) {
+      await this.verifyRecovery(current)
       await this.options.jobStore.transition(current.id, ['deleting'], 'deleting', {
         measuredBytes: { after, reclaimed: Math.max(0, (current.measuredBytes?.before ?? after) - after) },
         reason: 'waiting for recovery archive ttl'
       })
       return 'pending'
     }
-    if (mode === 'safe') await this.recovery.remove(current.id)
+    this.assertRunning()
     for (const ownerId of current.artifactOwnerIds ?? [current.threadId]) {
       await this.options.artifactStore?.releaseOwner?.(ownerId)
     }
+    if (mode === 'safe') await this.recovery.remove(current.id)
     const finalAfter = await computeDirectoryByteSize(this.threadPath(current.threadId))
     const reclaimed = Math.max(0, (current.measuredBytes?.before ?? finalAfter) - finalAfter)
     if (reclaimed <= 0) throw new Error('thread payload space reclamation was not observed')
@@ -431,18 +478,15 @@ export class SessionConsolidationService {
     return 'completed'
   }
 
-  private async cleanupExpiredArchives(limit: number): Promise<{ pending: number }> {
-    const jobs = (await this.options.jobStore.list())
-      .filter((job) => (job.status === 'pruning' || job.status === 'deleting') && job.archiveExpiresAt)
-      .slice(0, limit)
-    let pending = 0
-    for (const job of jobs) {
-      if (Date.parse(job.archiveExpiresAt!) > Date.parse(this.now())) { pending += 1; continue }
-      await this.process(job).catch(async (error) => {
-        await this.fail(job.id, safeError(error)).catch(() => undefined)
-      })
-    }
-    return { pending }
+  private policy(job: ConsolidationJob): NonNullable<ConsolidationJob['policy']> {
+    if (!job.reclaimMode || !job.reclaimTier || !job.policy) throw new Error('job has no frozen consolidation policy')
+    if ((job.status === 'pruning' && job.reclaimTier !== 'tier-1') ||
+      (job.status === 'deleting' && job.reclaimTier !== 'tier-2')) throw new Error('job phase contradicts frozen tier')
+    return job.policy
+  }
+
+  private assertRunning(): void {
+    if (this.stopped || !this.options.config().enabled) throw new Error('session consolidation is stopped or disabled')
   }
 
   private async readMemory(id: string): Promise<MemoryRecord> {
@@ -461,7 +505,8 @@ export class SessionConsolidationService {
     return thread
   }
 
-  private async assertEligibleForMutation(thread: ThreadRecord, job: ConsolidationJob): Promise<void> {
+  private async assertEligibleForMutation(thread: ThreadRecord, job: ConsolidationJob, expectedRevision = Number(job.cutoffRevision)): Promise<void> {
+    this.assertRunning()
     if (thread.status !== 'archived') throw new Error('thread is no longer archived')
     if (thread.pinned === true) throw new Error('thread is pinned')
     if (thread.parentThreadId || thread.forkedFromThreadId) throw new Error('thread has a fork dependency')
@@ -469,7 +514,7 @@ export class SessionConsolidationService {
       throw new Error('thread has an active turn')
     }
     if (this.options.hasPendingInteractions?.(thread.id)) throw new Error('thread has pending interaction')
-    if (String(thread.revision ?? 0) !== job.cutoffRevision) throw new Error('thread revision changed')
+    if ((thread.revision ?? 0) !== expectedRevision) throw new Error('thread revision changed')
     const summaries = await this.options.threadStore.list({ includeArchived: true, includeSide: true })
     if (summaries.some((summary) => summary.id !== thread.id &&
       (summary.parentThreadId === thread.id || summary.forkedFromThreadId === thread.id))) {

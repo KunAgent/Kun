@@ -12,7 +12,7 @@ import {
   generateSessionSummary,
   type SessionSummaryOutcome
 } from '../loop/session-summary.js'
-import { containsSensitiveConsolidationData } from './session-consolidation-safety.js'
+import { containsSensitiveConsolidationData, containsSensitiveConsolidationSource } from './session-consolidation-safety.js'
 
 export const CONSOLIDATION_EPISODE_MAX_CONTENT_CHARS = 4_096
 
@@ -38,8 +38,11 @@ export async function buildConsolidationEpisode(input: {
   timeoutMs?: number
   nowIso: string
 }): Promise<ConsolidationEpisode | { blocked: 'sensitive' } | { blocked: 'summary_failed'; reason: string }> {
-  const excerpt = buildSessionTranscript(input.items, input.inputMaxBytes)
-  if (!excerpt.trim() || containsSensitiveConsolidationData(input.thread.title, excerpt)) {
+  if (containsSensitiveConsolidationData(input.thread.title) || containsSensitiveConsolidationSource(input.items)) {
+    return { blocked: 'sensitive' }
+  }
+  const excerpt = buildSessionTranscript(input.items, input.inputMaxBytes).slice(0, MEMORY_MAX_SOURCE_EXCERPT_CHARS)
+  if (!excerpt.trim()) {
     return { blocked: 'sensitive' }
   }
 
@@ -61,6 +64,8 @@ export async function buildConsolidationEpisode(input: {
 
   const content = `Session episode: ${outcome.summary}`.slice(0, CONSOLIDATION_EPISODE_MAX_CONTENT_CHARS)
   const contentHash = createHash('sha256').update(excerpt, 'utf8').digest('hex')
+  const cutoffTurnId = lastCompletedTurnId(input.thread)
+  const cutoffTurn = input.thread.turns.find((turn) => turn.id === cutoffTurnId)
   const sourceDigest = createHash('sha256')
     .update(JSON.stringify([input.thread.id, input.cutoffRevision, contentHash]), 'utf8')
     .digest('hex')
@@ -68,8 +73,8 @@ export async function buildConsolidationEpisode(input: {
     id: `src_consolidation_${sourceDigest.slice(0, 24)}`,
     kind: 'inference',
     threadId: input.thread.id,
-    ...(lastCompletedTurnId(input.thread) ? { turnId: lastCompletedTurnId(input.thread) } : {}),
-    excerpt: excerpt.slice(0, MEMORY_MAX_SOURCE_EXCERPT_CHARS),
+    ...(cutoffTurnId ? { turnId: cutoffTurnId } : {}),
+    excerpt,
     contentHash,
     trust: 'inferred'
   }
@@ -79,17 +84,17 @@ export async function buildConsolidationEpisode(input: {
       scope: 'workspace',
       workspace: input.thread.workspace,
       sourceThreadId: input.thread.id,
-      ...(lastCompletedTurnId(input.thread) ? { sourceTurnId: lastCompletedTurnId(input.thread) } : {}),
+      ...(cutoffTurnId ? { sourceTurnId: cutoffTurnId } : {}),
       provenance: {
         kind: 'inference',
-        ...(lastCompletedTurnId(input.thread) ? { turnId: lastCompletedTurnId(input.thread) } : {})
+        ...(cutoffTurnId ? { turnId: cutoffTurnId } : {})
       },
       tags: ['session-episode', 'archive'],
       confidence: 0.7,
       type: 'episode',
       authority: 'reference',
       importance: 0.5,
-      observedAt: input.nowIso,
+      observedAt: cutoffTurn?.finishedAt ?? input.nowIso,
       sources: [source]
     },
     excerpt,

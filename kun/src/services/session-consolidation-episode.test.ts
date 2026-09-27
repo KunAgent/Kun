@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { TurnItem } from '../contracts/items.js'
@@ -76,6 +77,7 @@ describe('buildConsolidationEpisode', () => {
     expect(result.input.sources?.[0]?.threadId).toBe('thread_1')
     expect(result.input.sources?.[0]?.excerpt).toBe(result.excerpt)
     expect(result.input.sources?.[0]?.contentHash).toBe(result.contentHash)
+    expect(result.contentHash).toBe(createHash('sha256').update(result.excerpt, 'utf8').digest('hex'))
     expect(result.contentHash).toMatch(/^[a-f0-9]{64}$/)
   })
 
@@ -94,6 +96,15 @@ describe('buildConsolidationEpisode', () => {
     const result = await buildConsolidationEpisode(prepared.value)
 
     expect(result).toEqual({ blocked: 'sensitive' })
+  })
+
+  it('rejects a secret outside the bounded model transcript before calling the model', async () => {
+    const longPrefix = 'ordinary conversation '.repeat(10_000)
+    const prepared = input({ items: [userItem(`${longPrefix}api_key=abcdefgh12345678`)] })
+    const result = await buildConsolidationEpisode(prepared.value)
+
+    expect(result).toEqual({ blocked: 'sensitive' })
+    expect(prepared.calls.count).toBe(0)
   })
 
   it('preserves a non-sensitive multilingual episode as evidence', async () => {

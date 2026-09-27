@@ -262,4 +262,26 @@ describe('ConsolidationJobStore', () => {
     const all = await store.list()
     expect(all).toHaveLength(1)
   })
+
+  it('resumes a failed destructive phase instead of restarting extraction', async () => {
+    const dataDir = await newRoot()
+    const store = new ConsolidationJobStore({ dataDir })
+    await store.ready()
+    const job = await store.ensureJob({
+      threadId: 'thread_1', cutoffRevision: 'rev_1',
+      reclaimMode: 'safe', reclaimTier: 'tier-1',
+      policy: { archiveTtlMs: 1, summaryInputMaxBytes: 1024, summaryMaxTokens: 100 }
+    })
+    await store.transition(job.id, ['eligible'], 'extracting')
+    await store.transition(job.id, ['extracting'], 'materialized')
+    await store.persistCheckpoint(job.id, { memoryIds: job.memoryIds, cutoffRevision: job.cutoffRevision })
+    const verified = await store.transition(job.id, ['materialized'], 'verified')
+    const pruning = await store.transition(verified.id, ['verified'], 'pruning')
+    const failed = await store.transition(pruning.id, ['pruning'], 'failed', { error: 'post-prune receipt failed' })
+
+    const retried = await store.retryFailedJob(failed.id)
+    expect(retried.status).toBe('pruning')
+    expect(retried.error).toBeUndefined()
+    expect(retried.checkpoint).toBeDefined()
+  })
 })

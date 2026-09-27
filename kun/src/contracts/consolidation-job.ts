@@ -33,6 +33,7 @@ export const ConsolidationJobCheckpoint = z.object({
   memoryIds: z.array(z.string().min(1)).min(1),
   cutoffRevision: z.string().min(1),
   itemRevision: z.number().int().nonnegative().optional(),
+  memoryHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   persistedAt: z.string().datetime()
 }).strict()
 export type ConsolidationJobCheckpoint = z.infer<typeof ConsolidationJobCheckpoint>
@@ -55,6 +56,17 @@ export const ConsolidationJob = z.object({
   status: ConsolidationJobStatus,
   reclaimMode: ConsolidationReclaimMode.optional(),
   reclaimTier: ConsolidationReclaimTier.optional(),
+  policy: z.object({
+    archiveTtlMs: z.number().int().positive(),
+    summaryInputMaxBytes: z.number().int().positive(),
+    summaryMaxTokens: z.number().int().positive()
+  }).strict().optional(),
+  resumeFrom: ConsolidationJobStatus.optional(),
+  prunedRevision: z.object({
+    thread: z.number().int().nonnegative(),
+    items: z.number().int().nonnegative()
+  }).strict().optional(),
+  deletedAt: z.string().datetime().optional(),
   cutoffTurnId: z.string().min(1).max(256).optional(),
   artifactOwnerIds: z.array(z.string().min(1).max(256)).max(512).optional(),
   measuredBytes: ConsolidationJobMeasuredBytes.optional(),

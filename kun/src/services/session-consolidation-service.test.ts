@@ -109,10 +109,20 @@ function makeService(input: {
   tier?: 'tier-1' | 'tier-2'
   reclaimMode?: 'safe' | 'reclaim-now'
   archiveTtlMs?: number
+  configState?: {
+    tier: 'tier-1' | 'tier-2'
+    reclaimMode: 'safe' | 'reclaim-now'
+    archiveTtlMs: number
+  }
   deleteThread?: (threadId: string) => Promise<void>
   releasedArtifactOwners?: string[]
 }): SessionConsolidationService {
   const threadStore = makeThreadStore(input.records)
+  const configState = input.configState ?? {
+    tier: input.tier ?? 'tier-1',
+    reclaimMode: input.reclaimMode ?? 'reclaim-now',
+    archiveTtlMs: input.archiveTtlMs ?? 1
+  }
   const snapshots = new ThreadSnapshotStore({ dataDir: input.dataDir, nowIso: input.nowIso ?? (() => NOW) })
   const jobStore = new ConsolidationJobStore({ dataDir: input.dataDir, nowIso: input.nowIso ?? (() => NOW) })
   const threadService = {
@@ -135,8 +145,8 @@ function makeService(input: {
 
   return new SessionConsolidationService({
     config: () => ({
-      enabled: true, tier: input.tier ?? 'tier-1', reclaimMode: input.reclaimMode ?? 'reclaim-now', idleAfterMs: 1, minBytes: 1,
-      archiveTtlMs: input.archiveTtlMs ?? 1, maxThreadsPerRun: 1, summaryInputMaxBytes: 96 * 1024, summaryMaxTokens: 400
+      enabled: true, tier: configState.tier, reclaimMode: configState.reclaimMode, idleAfterMs: 1, minBytes: 1,
+      archiveTtlMs: configState.archiveTtlMs, maxThreadsPerRun: 1, summaryInputMaxBytes: 96 * 1024, summaryMaxTokens: 400
     }),
     dataDir: input.dataDir,
     threadStore,
@@ -257,6 +267,66 @@ describe('SessionConsolidationService', () => {
     expect(deleteCalls.count).toBe(1)
     expect(pruneCalls.count).toBe(0)
     expect(releasedArtifactOwners).toEqual(['thread_1', 'turn_1'])
+  })
+
+  it('refuses cleanup when a deleted thread id is recreated before the TTL expires', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-consolidation-service-'))
+    roots.push(dataDir)
+    const threadDir = join(dataDir, 'threads', 'thread_1')
+    await mkdir(threadDir, { recursive: true })
+    await writeFile(join(threadDir, 'messages.jsonl'), 'x'.repeat(500))
+
+    const records = new Map([['thread_1', makeThread()]])
+    const deleteCalls = { count: 0 }
+    const service = makeService({
+      dataDir, records, modelClient: modelClient({ count: 0 }),
+      memoryStore: makeMemoryStore({ count: 0 }, true), pruneCalls: { count: 0 },
+      tier: 'tier-2', reclaimMode: 'safe', archiveTtlMs: 60_000,
+      deleteThread: async (threadId) => {
+        deleteCalls.count += 1
+        records.delete(threadId)
+        await rm(join(dataDir, 'threads', threadId), { recursive: true, force: true })
+      }
+    })
+
+    const first = await service.runOnce()
+    expect(first.pendingArchiveCleanup).toBe(1)
+    records.set('thread_1', makeThread())
+
+    const second = await service.runOnce()
+    expect(second.failures[0]?.error).toContain('recreated')
+    expect(deleteCalls.count).toBe(1)
+    expect(await new ConsolidationRecoveryStore(dataDir).list()).toHaveLength(1)
+  })
+
+  it('keeps the job policy when global reclaim configuration changes during its TTL', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-consolidation-service-'))
+    roots.push(dataDir)
+    const threadDir = join(dataDir, 'threads', 'thread_1')
+    await mkdir(threadDir, { recursive: true })
+    await writeFile(join(threadDir, 'messages.jsonl'), 'x'.repeat(500))
+
+    const records = new Map([['thread_1', makeThread()]])
+    const configState: { tier: 'tier-1' | 'tier-2'; reclaimMode: 'safe' | 'reclaim-now'; archiveTtlMs: number } = {
+      tier: 'tier-2', reclaimMode: 'safe', archiveTtlMs: 60_000
+    }
+    const deleteCalls = { count: 0 }
+    const service = makeService({
+      dataDir, records, configState, modelClient: modelClient({ count: 0 }),
+      memoryStore: makeMemoryStore({ count: 0 }, true), pruneCalls: { count: 0 },
+      deleteThread: async (threadId) => {
+        deleteCalls.count += 1
+        records.delete(threadId)
+        await rm(join(dataDir, 'threads', threadId), { recursive: true, force: true })
+      }
+    })
+
+    expect((await service.runOnce()).pendingArchiveCleanup).toBe(1)
+    configState.tier = 'tier-1'
+    const second = await service.runOnce()
+    expect(second.failures).toEqual([])
+    expect(second.pendingArchiveCleanup).toBe(1)
+    expect(deleteCalls.count).toBe(1)
   })
 
   it('measures Tier-1 reclaim against the source bytes, excluding the in-thread snapshot', async () => {
