@@ -127,8 +127,12 @@ describe('terminal agent PTY launch', () => {
     // comes from resolvedCommand, flags+task and hook extras follow.
     const spawned = ptyModule.spawnArgs!
     expect(spawned.args[5]).toBe('/usr/local/bin/claude')
+    const taskArg = spawned.args[8]
+    // The injected task carries the 05 §5.3 callback appendix.
+    expect(taskArg).toMatch(/^fix the flake\n---\nReporting back to Kun/)
+    expect(taskArg).toContain('kun worker progress')
     expect(spawned.args.slice(6)).toEqual([
-      '--dangerously-skip-permissions', '-t', 'fix the flake',
+      '--dangerously-skip-permissions', '-t', taskArg,
       '--settings', '/tmp/ade/hooks/tu_77.json'
     ])
     const env = spawned.options.env ?? {}

@@ -67,3 +67,20 @@ export type TerminalExitPayload = {
 export type TerminalCreateResult =
   | { ok: true; sessionId: string; replayed?: boolean }
   | { ok: false; message: string }
+
+/**
+ * Callback-channel appendix appended to a terminal agent's injected task
+ * (05 §5.3): the `kun worker` commands are the shell-facing twin of the
+ * worker callback tools. This text is turn input — it never enters any
+ * system prompt or user-global agent config.
+ */
+export const TERMINAL_AGENT_CALLBACK_APPENDIX = [
+  '',
+  '---',
+  'Reporting back to Kun (the `kun` CLI is on PATH; KUN_WORKER_* env vars are already set):',
+  '- `kun worker progress "<summary>" [--phase investigating|implementing|verifying|blocked]` — report progress.',
+  '- `kun worker ask "<question>" [--options a,b] [--timeout 600]` — ask the manager; blocks until answered.',
+  '- `kun worker context [--query "<text>"] [--limit 10]` — read earlier manager-thread context.',
+  '- `kun worker result --outcome <succeeded|partial|failed> --summary "<text>" [--files a,b] [--check name=status]` — submit the final report.',
+  'Ask/result/context require a manager dispatch; standalone runs support `progress`.'
+].join('\n')

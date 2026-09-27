@@ -15,6 +15,7 @@ import { registerTeamsRoutes } from './register-teams-routes.js'
 import { registerReviewRoutes } from './register-review-routes.js'
 import { registerHandoffRoutes } from './register-handoff-routes.js'
 import { registerExecutionUnitRoutes } from './register-execution-unit-routes.js'
+import { registerWorkerCallbackRoutes } from './register-worker-callback-routes.js'
 
 /** Build the full HTTP router while preserving first-match registration order. */
 export function buildRouter(runtime: ServerRuntime): Router {
@@ -28,6 +29,7 @@ export function buildRouter(runtime: ServerRuntime): Router {
   registerReviewRoutes(router, runtime)
   registerHandoffRoutes(router, runtime)
   registerExecutionUnitRoutes(router, runtime)
+  registerWorkerCallbackRoutes(router, runtime)
   registerGraphRoutes(router, runtime)
   registerResourceRoutes(router, runtime)
   registerProjectBoardRoutes(router, runtime)

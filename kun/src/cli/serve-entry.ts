@@ -55,6 +55,7 @@ import { createOwnedServiceManagerSession } from '../manager/owned-service-manag
 import { bindRuntimeManagerDataPlane, connectInjectedServiceManager } from '../manager/owned-manager-binding.js'
 import { shutdownOwnedProcesses } from '../process/owned-process.js'
 import { runManagerRetireCommand } from './manager-retire.js'
+import { runWorkerCallbackCommand } from './worker-callback-cli.js'
 
 export const KUN_READY_PREFIX = 'KUN_READY '
 // Replacement clients wait 15 seconds before escalating to a hard kill. Keep
@@ -430,6 +431,14 @@ export async function main(argv: readonly string[]): Promise<number> {
       stderr: process.stderr,
       env: process.env,
       cwd: () => process.cwd()
+    })
+  }
+  if (argv[0] === 'worker') {
+    return runWorkerCallbackCommand(argv.slice(1), {
+      stdin: process.stdin,
+      stdout: process.stdout,
+      stderr: process.stderr,
+      env: process.env
     })
   }
   const command = splitKunCliCommand(argv)

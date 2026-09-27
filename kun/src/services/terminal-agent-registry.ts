@@ -3,6 +3,7 @@ import { z } from 'zod'
 import {
   ActivityWorkspaceSchema,
   type ActivityPatch,
+  type ActivityProvenance,
   type ActivityState,
   type RegisterUnit
 } from '../contracts/activity.js'
@@ -54,17 +55,14 @@ export type TerminalAgentCreateInput = {
 
 type ActivitySink = {
   register(input: RegisterUnit): unknown
-  apply(
-    unitId: string,
-    patch: ActivityPatch,
-    provenance: 'runtime' | 'restored' | 'inferred' | 'hook'
-  ): void
+  apply(unitId: string, patch: ActivityPatch, provenance: ActivityProvenance): void
 }
 
 export type TerminalAgentRegistryDeps = {
   dataDir: string
   activity?: ActivitySink
   nowIso?: () => string
+  nowMs?: () => number
   idGenerator?: () => string
 }
 
@@ -72,11 +70,16 @@ function filePath(dataDir: string): string {
   return join(adeRootDir(dataDir), 'terminal-agents.json')
 }
 
+const PROGRESS_MIN_INTERVAL_MS = 10_000
+
 export class TerminalAgentRegistry {
   private readonly nowIso: () => string
+  private readonly nowMs: () => number
+  private readonly lastProgressAt = new Map<string, number>()
 
   constructor(private readonly deps: TerminalAgentRegistryDeps) {
     this.nowIso = deps.nowIso ?? (() => new Date().toISOString())
+    this.nowMs = deps.nowMs ?? (() => Date.now())
   }
 
   async register(input: TerminalAgentCreateInput): Promise<TerminalAgentRecord> {
@@ -173,6 +176,29 @@ export class TerminalAgentRegistry {
 
   async list(): Promise<TerminalAgentRecord[]> {
     return (await this.read()).units
+  }
+
+  /**
+   * `kun worker progress` from a tier-0 unit (05 §5): throttled like the
+   * worker tool path, writes only supplementary row fields.
+   */
+  async reportProgress(
+    unitId: string,
+    input: { summary: string; phase?: ActivityPatch['phase'] }
+  ): Promise<'recorded' | 'rate_limited' | 'unknown'> {
+    const record = await this.get(unitId)
+    if (!record) return 'unknown'
+    const now = this.nowMs()
+    const last = this.lastProgressAt.get(unitId)
+    if (last !== undefined && now - last < PROGRESS_MIN_INTERVAL_MS) {
+      return 'rate_limited'
+    }
+    this.lastProgressAt.set(unitId, now)
+    this.deps.activity?.apply(unitId, {
+      ...(input.phase ? { phase: input.phase } : {}),
+      progressNote: input.summary
+    }, 'callback')
+    return 'recorded'
   }
 
   /** Hook/channel state writes also persist so a restart keeps truth. */

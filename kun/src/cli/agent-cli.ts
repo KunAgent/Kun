@@ -47,6 +47,7 @@ Commands:
   update [--check|--yes]     Check or update a stable standalone TUI archive
   exec [options] <tool>      List or invoke tools directly
   mcp-bridge --token-env <V> Forward stdio JSON-RPC to a Kun server's /mcp/kun
+  worker <subcommand>        Worker callbacks (progress/ask/result/context/hook)
   extension <command>        Create, validate, pack, install, and manage extensions
 
 Common options:
