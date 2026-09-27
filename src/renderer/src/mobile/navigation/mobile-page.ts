@@ -1,4 +1,4 @@
-export type MobileMode = 'code' | 'rooms' | 'work'
+export type MobileMode = 'code' | 'rooms' | 'work' | 'agents'
 export type WorkResourceView = 'read' | 'edit' | 'assistant' | 'review' | 'whiteboard'
 export type PaperResourceView = 'read' | 'notes' | 'assistant' | 'info'
 export type MobilePage =
@@ -18,7 +18,7 @@ export type MobilePage =
   | { mode: MobileMode; kind: 'settings' }
 
 const MAX_IDENTIFIER_LENGTH = 512
-const MODES = new Set<MobileMode>(['code', 'rooms', 'work'])
+const MODES = new Set<MobileMode>(['code', 'rooms', 'work', 'agents'])
 const WORK_VIEWS = new Set<WorkResourceView>(['read', 'edit', 'assistant', 'review', 'whiteboard'])
 const PAPER_VIEWS = new Set<PaperResourceView>(['read', 'notes', 'assistant', 'info'])
 const MANAGED_KEYS = ['mode', 'mobile', 'thread', 'room', 'message', 'run', 'task', 'member', 'resource', 'view', 'group', 'surface', 'folder', 'paper']

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useWorkbenchChatStarters } from './use-workbench-chat-starters'
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
 import type { NormalizedThread, RuntimeConnectionStatus } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
@@ -92,6 +93,11 @@ export type WorkbenchNavigationController = {
   sidebarView: WorkbenchSidebarView
   startNewChat: () => void
   startNewAdeChat: () => void
+  /** One-to-one thread pinned to a harness; isolation defaults to a new worktree (00 §5). */
+  startNewAdeOneOnOne: (input: {
+    harnessId: string
+    credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+  }) => void
   startNewChatInWorkspace: (
     workspaceRoot: string,
     options?: { forceNew?: boolean }
@@ -186,6 +192,20 @@ export function useWorkbenchNavigationController({
       connectPhoneReturnRouteRef.current = route === 'design' ? 'chat' : route
     }
   }, [route])
+
+  const { startNewChat, startNewAdeChat, startNewAdeOneOnOne, startNewChatInWorkspace } =
+    useWorkbenchChatStarters({
+      activeSddDraft,
+      beginNavigation,
+      createThread,
+      dismissActiveSddDraft,
+      navigationIsCurrent,
+      setConnectPhoneSidebarOpen,
+      setRoute,
+      setUseWorktreePool,
+      useWorktreePool,
+      worktreeBranch
+    })
 
   const sidebarView: WorkbenchSidebarView = useMemo(() => {
     if (route === 'claw' || (route === 'plugins' && pluginHostRoute === 'claw')) return 'claw'
@@ -350,88 +370,6 @@ export function useWorkbenchNavigationController({
     setConnectPhoneSidebarOpen,
     setRoute,
     threads
-  ])
-
-  const startNewChat = useCallback((): void => {
-    const requestId = beginNavigation()
-    if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
-    setConnectPhoneSidebarOpen(false)
-    setRoute('chat')
-    void createThread({
-      useWorktreePool,
-      worktreeBranch,
-      agentSurface: 'code',
-      activationGuard: () => navigationIsCurrent(requestId)
-    })
-    if (useWorktreePool) setUseWorktreePool(false)
-  }, [
-    activeSddDraft,
-    beginNavigation,
-    createThread,
-    dismissActiveSddDraft,
-    navigationIsCurrent,
-    setConnectPhoneSidebarOpen,
-    setRoute,
-    setUseWorktreePool,
-    useWorktreePool,
-    worktreeBranch
-  ])
-
-  const startNewAdeChat = useCallback((): void => {
-    const requestId = beginNavigation()
-    if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
-    setConnectPhoneSidebarOpen(false)
-    setRoute('ade')
-    void createThread({
-      useWorktreePool,
-      worktreeBranch,
-      agentSurface: 'code',
-      workspaceMode: 'ade',
-      activationGuard: () => navigationIsCurrent(requestId)
-    })
-    if (useWorktreePool) setUseWorktreePool(false)
-  }, [
-    activeSddDraft,
-    beginNavigation,
-    createThread,
-    dismissActiveSddDraft,
-    navigationIsCurrent,
-    setConnectPhoneSidebarOpen,
-    setRoute,
-    setUseWorktreePool,
-    useWorktreePool,
-    worktreeBranch
-  ])
-
-  const startNewChatInWorkspace = useCallback(async (
-    targetWorkspaceRoot: string,
-    options?: { forceNew?: boolean }
-  ): Promise<string | null> => {
-    const requestId = beginNavigation()
-    if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
-    setConnectPhoneSidebarOpen(false)
-    setRoute('chat')
-    const threadId = await createThread({
-      workspaceRoot: targetWorkspaceRoot,
-      forceNew: options?.forceNew,
-      agentSurface: 'code',
-      useWorktreePool,
-      worktreeBranch,
-      activationGuard: () => navigationIsCurrent(requestId)
-    })
-    if (useWorktreePool) setUseWorktreePool(false)
-    return threadId
-  }, [
-    activeSddDraft,
-    beginNavigation,
-    createThread,
-    dismissActiveSddDraft,
-    navigationIsCurrent,
-    setConnectPhoneSidebarOpen,
-    setRoute,
-    setUseWorktreePool,
-    useWorktreePool,
-    worktreeBranch
   ])
 
   const startNewConversation = useCallback((): void => {
@@ -674,6 +612,7 @@ export function useWorkbenchNavigationController({
     sidebarView,
     startNewChat,
     startNewAdeChat,
+    startNewAdeOneOnOne,
     startNewChatInWorkspace,
     startNewConversation,
     startNewWriteAssistantConversation,

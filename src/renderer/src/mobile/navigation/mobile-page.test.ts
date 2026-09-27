@@ -26,7 +26,7 @@ describe('mobile page URLs', () => {
       .toEqual({ mode: 'rooms', kind: 'home' })
   })
 
-  it.each(['code', 'rooms', 'work'] as const)('round trips %s home and settings', (mode) => {
+  it.each(['code', 'rooms', 'work', 'agents'] as const)('round trips %s home and settings', (mode) => {
     roundTrip({ mode, kind: 'home' })
     roundTrip({ mode, kind: 'settings' })
   })

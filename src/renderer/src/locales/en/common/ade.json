@@ -238,5 +238,16 @@
     "needs_changes": "Needs changes",
     "rejected": "Rejected",
     "waived": "Waived"
-  }
+  },
+  "adeNewManager": "Manager session",
+  "adeNewOneOnOne": "One-on-one",
+  "adeAgentPickerLoading": "Loading agents…",
+  "adeAgentPickerEmpty": "No agents available",
+  "adeGroupReview": "To review",
+  "adeGroupDone": "Done",
+  "adeGroupByStatus": "Group by status",
+  "adeGroupByProject": "Group by project",
+  "adeGroupToggleHint": "Switch how conversations are grouped",
+  "adeWorkerCount": "{{count}} worker",
+  "adeWorkerCount_other": "{{count}} workers"
 }

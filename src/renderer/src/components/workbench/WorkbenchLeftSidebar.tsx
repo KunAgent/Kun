@@ -52,6 +52,10 @@ export type WorkbenchLeftSidebarProps = {
   onCodeOpen: CodeSidebarProps['onCodeOpen']
   onAdeOpen: () => void
   onNewAdeChat: () => void
+  onNewAdeOneOnOne: (input: {
+    harnessId: string
+    credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+  }) => void
   onWriteOpen: CodeSidebarProps['onWriteOpen']
   onScheduleOpen: CodeSidebarProps['onScheduleOpen']
   onBoardOpen?: CodeSidebarProps['onBoardOpen']
@@ -102,6 +106,7 @@ export function WorkbenchLeftSidebar({
   onCodeOpen,
   onAdeOpen,
   onNewAdeChat,
+  onNewAdeOneOnOne,
   onWriteOpen,
   onScheduleOpen,
   onBoardOpen,
@@ -150,6 +155,7 @@ export function WorkbenchLeftSidebar({
           onDeleteThread={onDeleteThread}
           onRestoreThread={onRestoreThread}
           onNewChat={wrapClose(onNewAdeChat)}
+          onNewOneOnOne={wrapClose(onNewAdeOneOnOne)}
           onOpenSettings={wrapClose(onOpenSettings)}
           onToggleTheme={onToggleTheme}
           onToggleConnectPhone={onToggleConnectPhone}

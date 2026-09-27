@@ -2,6 +2,9 @@ import { lazy, Suspense, useEffect, useRef, useState, type ReactElement } from '
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useChatStore } from '../store/chat-store'
+import { useActivityStore } from '../store/activity-store'
+import { selectNeedsYouCount } from '../store/activity-selectors'
+import { useAdeEnabled } from '../components/ade/use-ade-enabled'
 import { useRoomAttentionCount } from '../components/rooms/useRoomEvents'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { MobileModeNav } from './MobileModeNav'
@@ -49,6 +52,9 @@ const MobilePaperDiscover = lazy(() => import('./paper/MobilePaperDiscover').the
 const MobileSettingsScreen = lazy(() => import('./settings/MobileSettingsScreen').then((module) => ({
   default: module.MobileSettingsScreen
 })))
+const MobileAgentsHome = lazy(() => import('./agents/MobileAgentsHome').then((module) => ({
+  default: module.MobileAgentsHome
+})))
 
 function MobileUnavailable({ title, onBack }: { title: string; onBack: () => void }): ReactElement {
   return <section className="kun-mobile-unavailable"><h1>{title}</h1><p>This mobile workspace is still loading.</p>
@@ -64,6 +70,9 @@ export function MobileAppShell(): ReactElement {
     modeForWorkbenchRoute(useChatStore.getState().route)
   )
   const roomAttention = useRoomAttentionCount()
+  const { enabled: adeEnabled } = useAdeEnabled()
+  const agentsAttention = useActivityStore((s) =>
+    adeEnabled ? selectNeedsYouCount(s.rows) : 0)
   const [notice, setNotice] = useState('')
   const [paperUnsaved, setPaperUnsaved] = useState(false)
   const [paperBusy, setPaperBusy] = useState(false)
@@ -239,6 +248,13 @@ export function MobileAppShell(): ReactElement {
     content = <MobileUnavailable title={page.kind} onBack={() => navigate({ mode: page.mode, kind: 'home' })} />
   } else if (page.mode === 'rooms') {
     content = <MobileRoomsRoot navigate={navigate} />
+  } else if (page.mode === 'agents') {
+    content = <MobileAgentsHome
+      onOpenThread={(threadId) => {
+        void chat.selectThread(threadId).then(() =>
+          navigate({ mode: 'code', kind: 'conversation', threadId }))
+      }}
+      onOpenSettings={() => openSettingsPage(page)} />
   } else if (page.mode === 'work' && page.kind === 'home' && page.surface !== 'papers') {
     content = <MobileDocumentsHome page={page} navigate={navigate} canLeave={canLeaveWork}
       onPapers={() => navigate({ mode: 'work', kind: 'home', surface: 'papers' })} />
@@ -253,8 +269,10 @@ export function MobileAppShell(): ReactElement {
   return <div className="kun-mobile-app" data-mobile-mode={page.mode}>
     {notice ? <div className="kun-mobile-notice" role="alert">{notice}</div> : null}
     <div className="kun-mobile-app-content"><Suspense fallback={<MobileLoadingState className="kun-mobile-page-loading" label={t('loading')} />}>{content}</Suspense></div>
-    {page.kind === 'home' ? <MobileModeNav active={page.mode} attentionCount={roomAttention}
-      labels={{ code: 'Code', rooms: t('roomsLabel'), work: t('workspaceModeWorkLabel') }}
+    {page.kind === 'home' ? <MobileModeNav active={page.mode}
+      attention={{ rooms: roomAttention, agents: agentsAttention }}
+      modes={adeEnabled ? ['code', 'rooms', 'work', 'agents'] : ['code', 'rooms', 'work']}
+      labels={{ code: 'Code', rooms: t('roomsLabel'), work: t('workspaceModeWorkLabel'), agents: t('missionControl') }}
       onSelect={(mode) => void selectMode(mode)} /> : null}
   </div>
 }

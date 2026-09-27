@@ -253,6 +253,10 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     const selection = resolveChildModelSelection({
       explicitModel: ephemeralAgentInheritsSessionSelection ? undefined : input.model,
       explicitProviderId: ephemeralAgentInheritsSessionSelection ? undefined : input.providerId,
+      // A pinned harnessId means the model/provider pair is a frozen route
+      // already validated by worker-route resolution; native-login harness
+      // models carry no Kun providerId by design.
+      allowUnpairedExplicitModel: input.harnessId != null,
       profileModel: ephemeralAgentInheritsSessionSelection ? undefined : profile?.model,
       profileProviderId: ephemeralAgentInheritsSessionSelection ? undefined : profile?.providerId,
       inheritedModel: input.inheritedModel,

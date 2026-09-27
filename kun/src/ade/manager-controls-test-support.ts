@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi } from 'vitest'
 import type { DispatchRecord, WorkerRecord } from '../contracts/ade.js'
+import { emptyUsageSnapshot, type UsageSnapshot } from '../contracts/usage.js'
+import { TeamBudgetGate } from './team-budget.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { TaskWorkspaceRecord } from '../contracts/task-workspace.js'
 import type { Turn } from '../contracts/turns.js'
@@ -40,7 +42,10 @@ export type AdeStores = {
   threads: InMemoryThreadStore
 }
 
-export async function setupAdeStores(limits?: { hardWorkers?: number }): Promise<AdeStores> {
+export async function setupAdeStores(
+  limits?: { hardWorkers?: number },
+  budget?: import('../contracts/ade.js').TeamRecord['budget']
+): Promise<AdeStores> {
   const dataDir = await mkdtemp(join(tmpdir(), 'kun-ade-controls-'))
   const stores: AdeStores = {
     dataDir,
@@ -51,7 +56,7 @@ export async function setupAdeStores(limits?: { hardWorkers?: number }): Promise
     childRuns: new FileDelegationStore(join(dataDir, 'child-runs')),
     threads: new InMemoryThreadStore()
   }
-  await stores.teams.ensure('thr_mgr', limits)
+  await stores.teams.ensure('thr_mgr', limits, budget)
   return stores
 }
 
@@ -209,6 +214,8 @@ export function makeHarness(stores: AdeStores, opts: {
   capabilities?: unknown
   statusFor?: (harnessId: string) => unknown
   reviewSnapshot?: unknown
+  /** P3-15: wire deps.usage + a shared TeamBudgetGate over these snapshots. */
+  usageForThread?: (threadId: string) => UsageSnapshot | undefined
 } = {}) {
   const gate = new InMemoryApprovalGate()
   const recorded: unknown[] = []
@@ -282,6 +289,17 @@ export function makeHarness(stores: AdeStores, opts: {
     approvalGate: gate,
     approvalEvents: { record: vi.fn(async (draft: unknown) => { recorded.push(draft) }) } as never,
     managerMayApprove: () => opts.mayApprove === true,
+    ...(opts.usageForThread
+      ? {
+          usage: {
+            forThread: (id: string) =>
+              opts.usageForThread!(id) ?? emptyUsageSnapshot()
+          },
+          teamBudget: new TeamBudgetGate({
+            forThread: (id) => opts.usageForThread!(id) ?? emptyUsageSnapshot()
+          })
+        }
+      : {}),
     ...(opts.selector ? { selector: opts.selector } : {})
   }
   const controls = new ManagerControls(deps)

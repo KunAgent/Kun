@@ -59,6 +59,7 @@ import type { ServeProviderConfig } from '../../config/kun-config-application.js
 import type { HarnessCatalog } from '../../harness/harness-catalog.js'
 import type { HarnessDetector } from '../../harness/harness-detector.js'
 import type { AcpModelProbe } from '../../harness/acp-model-probe.js'
+import type { AgentSdkModelProbe } from '../../harness/agent-sdk-model-probe.js'
 import type { HarnessDefinition, HarnessStatus } from '../../contracts/harness.js'
 import type {
   FileGraphWriteCoordinator,
@@ -259,6 +260,13 @@ export type ServerRuntime = {
     detector: HarnessDetector
     /** ACP `session/new` model probing for `modelSource: 'probe'` harnesses. */
     acpModels?: AcpModelProbe
+    /** Agent SDK `supportedModels()` probing for `modelSource: 'probe'` harnesses. */
+    agentSdkModels?: AgentSdkModelProbe
+    /**
+     * Spawn-free read of the freshest probed model list, dispatched by
+     * transport; `undefined` means no fresh successful probe is cached.
+     */
+    probedModels?: (definition: HarnessDefinition) => string[] | undefined
     /**
      * Loopback `kun serve` endpoint shared with harness env injection; the
      * serve layer fills `baseUrl` once the listener binds.

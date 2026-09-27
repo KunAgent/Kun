@@ -50,6 +50,11 @@ export type AdeHarnessStatus = {
   installed: 'yes' | 'no' | 'unknown'
   version?: string
   versionSupported?: boolean
+  /**
+   * ACP initialize handshake after the version probe (P3-11): 'no' means the
+   * binary exists but cannot serve turns; `message` carries the stderr summary.
+   */
+  ready?: 'yes' | 'no' | 'unknown'
   login: 'signed-in' | 'signed-out' | 'unknown' | 'not-required'
   resolvedCommand?: string
   checkedAt: string
@@ -63,10 +68,24 @@ export type AdeHarnessRow = {
   status: AdeHarnessStatus
 }
 
+/** Per-provider model group for `provider`/`kun-gateway` credential modes. */
+export type AdeHarnessProviderModelGroup = {
+  providerId: string
+  label: string
+  models: string[]
+}
+
 /** `GET /v1/harnesses/:id/models` response (01 §9). */
 export type AdeHarnessModels = {
   harnessId: string
   models: string[]
+  /**
+   * Present when `credential_mode=provider|kun-gateway` was requested: the
+   * gateway-exposable providers (04 §5.5 `exposableProvider`) with the model
+   * ids each can actually serve, grouped for the composer picker.
+   */
+  credentialMode?: string
+  groups?: AdeHarnessProviderModelGroup[]
 }
 
 /** A native slash command the harness advertised (03 §7.3). */

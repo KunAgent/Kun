@@ -24,10 +24,17 @@ export function createKunHarnessesClient() {
       return Array.isArray(body.harnesses) ? body.harnesses : []
     },
 
-    /** Models for one harness (01 §9): static, probed, or provider-derived. */
-    async listHarnessModels(harnessId: string): Promise<AdeHarnessModels> {
+    /**
+     * Models for one harness (01 §9): static, probed, or provider-derived.
+     * With `credentialMode` set to `provider`/`kun-gateway` the response
+     * carries `groups` — gateway-exposable providers and their models.
+     */
+    async listHarnessModels(
+      harnessId: string,
+      credentialMode?: string
+    ): Promise<AdeHarnessModels> {
       const response = await rendererRuntimeClient.runtimeRequest(
-        kunHarnessModelsPath(harnessId), 'GET'
+        kunHarnessModelsPath(harnessId, credentialMode), 'GET'
       )
       if (!response.ok) {
         throw runtimeErrorToError(

@@ -230,6 +230,11 @@ export interface AgentSdkRuntimeFactoryDeps {
    */
   graphHarnessSummary?: () => Promise<string | undefined>
   resolveDefaultProviderId?: () => Promise<string | undefined>
+  /**
+   * Models a configured provider advertises (`models` + `selectedModel`); used
+   * to fail gateway turns early when the picked model cannot be served.
+   */
+  listProviderModels?: (providerId: string) => Promise<string[] | undefined>
 }
 
 /** Lazily load the real SDK without a static import (so kun typechecks without it). */

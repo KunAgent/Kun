@@ -132,6 +132,8 @@ function makeRuntime(opts: {
   capabilities?: typeof KUN_NATIVE_CAPABILITIES
   teamLimits?: ManagerRuntimeDeps['teamLimits']
   selector?: ManagerRuntimeDeps['selector']
+  providerPool?: ManagerRuntimeDeps['providerPool']
+  probedModels?: ManagerRuntimeDeps['probedModels']
 } = {}) {
   const workspace = workspaceRecord(opts.workspaceState ?? 'ready')
   const runChild = vi.fn(opts.runChild ?? (async (input: { childId?: string }) =>
@@ -142,6 +144,7 @@ function makeRuntime(opts: {
   const taskWorkspaces = {
     create: vi.fn(async () => workspace),
     get: vi.fn(() => workspace),
+    onChange: vi.fn(() => () => {}),
     captureForDispatch: vi.fn(async () => ({
       record: workspace,
       stat: { changedFiles: 1, insertions: 3, deletions: 2 }
@@ -184,6 +187,8 @@ function makeRuntime(opts: {
     language: () => 'en',
     allowUnattendedFullAccess: () => false,
     teamLimits: opts.teamLimits,
+    providerPool: opts.providerPool,
+    probedModels: opts.probedModels,
     ...(opts.selector ? { selector: opts.selector } : {})
   })
   return { runtime, deliverer, runChild, resumeChild, taskWorkspaces, activity, turns, workspace }
@@ -239,6 +244,39 @@ describe('ManagerRuntime.createWorker', () => {
     expect(result.userReport).toContain('fixer')
   })
 
+  it('scopes the snapshot to the settled worktree path, not the provisional source root', async () => {
+    // Regression: `create` returns before the checkout exists — its `path`
+    // still points at the manager workspace. The snapshot must wait for
+    // settlement or the worker can write nowhere (09 §7.1).
+    const { runtime, runChild, taskWorkspaces } = makeRuntime()
+    taskWorkspaces.create.mockResolvedValue({ ...workspaceRecord('creating'), path: '/repo' })
+    taskWorkspaces.get.mockReturnValueOnce(workspaceRecord('ready'))
+    const result = await runtime.createWorker(managerCtx(), {
+      label: 'fixer', task: 'repair login redirect'
+    }, TOOL_CONTEXT)
+    expect(result.ok).toBe(true)
+    const worker = (await teams.get('thr_mgr'))!.workers[0]!
+    expect(worker.securitySnapshot.sandboxRoot).toBe('/repo/.worktrees/fix-login')
+    expect(worker.securitySnapshot.allowedWritePaths).toEqual(['/repo/.worktrees/fix-login'])
+    expect(runChild).toHaveBeenCalled()
+  })
+
+  it('refuses worker creation when the task workspace fails to materialize', async () => {
+    const { runtime, runChild, taskWorkspaces } = makeRuntime()
+    taskWorkspaces.create.mockResolvedValue({ ...workspaceRecord('creating'), path: '/repo' })
+    taskWorkspaces.get.mockReturnValueOnce({
+      ...workspaceRecord('failed'), lastError: 'source is not a git repository'
+    })
+    const result = await runtime.createWorker(managerCtx(), {
+      label: 'fixer', task: 'repair login redirect'
+    }, TOOL_CONTEXT)
+    expect(result.ok).toBe(false)
+    expect(result.refusal).toBe('workspace_unavailable')
+    expect(result.userReport).toContain('not a git repository')
+    expect((await teams.get('thr_mgr'))!.workers).toHaveLength(0)
+    expect(runChild).not.toHaveBeenCalled()
+  })
+
   it('routes omitted-agent creates through the selector and persists its decision', async () => {
     const { runtime, runChild } = makeRuntime({
       selector: {
@@ -254,7 +292,7 @@ describe('ManagerRuntime.createWorker', () => {
             delegationNotes: 'login redirect specialist',
             harnessId: 'claude-code' as const,
             credentialMode: 'native-login' as const,
-            model: 'claude-sonnet-4-6'
+            model: 'claude-sonnet-5'
           }
         }],
         quota: async () => null,
@@ -270,7 +308,7 @@ describe('ManagerRuntime.createWorker', () => {
     expect(worker.route).toMatchObject({
       harnessId: 'claude-code',
       credentialMode: 'native-login',
-      model: 'claude-sonnet-4-6'
+      model: 'claude-sonnet-5'
     })
     expect(worker.profileId).toBe('reviewer')
     expect(worker.selection).toMatchObject({ reason: expect.stringContaining('Reviewer') })
@@ -375,6 +413,49 @@ describe('ManagerRuntime.createWorker', () => {
     expect(result.userReport).toContain('not-a-model')
   })
 
+  it('dispatches claude-code on a kun/<provider>/<model> gateway route', async () => {
+    const { runtime } = makeRuntime({
+      providerPool: async (providerId) =>
+        providerId === 'deepseek'
+          ? { kind: 'http', models: ['deepseek-chat', 'deepseek-reasoner'] }
+          : undefined
+    })
+    const result = await runtime.createWorker(managerCtx(), {
+      label: 'fixer', task: 'task',
+      agent: {
+        harnessId: 'claude-code',
+        credentialMode: 'kun-gateway',
+        model: 'kun/deepseek/deepseek-chat'
+      }
+    }, TOOL_CONTEXT)
+    expect(result.ok).toBe(true)
+    const worker = (await teams.get('thr_mgr'))!.workers[0]!
+    expect(worker.route).toMatchObject({
+      harnessId: 'claude-code',
+      credentialMode: 'kun-gateway',
+      providerId: 'deepseek',
+      model: 'kun/deepseek/deepseek-chat'
+    })
+  })
+
+  it('rejects a gateway route whose provider is not configured', async () => {
+    const { runtime, taskWorkspaces } = makeRuntime({
+      providerPool: async () => undefined
+    })
+    const result = await runtime.createWorker(managerCtx(), {
+      label: 'fixer', task: 'task',
+      agent: {
+        harnessId: 'claude-code',
+        credentialMode: 'kun-gateway',
+        model: 'kun/ghost/some-model'
+      }
+    }, TOOL_CONTEXT)
+    expect(result.ok).toBe(false)
+    expect(result.refusal).toBe('invalid_agent')
+    expect(result.userReport).toContain('"ghost"')
+    expect(taskWorkspaces.create).not.toHaveBeenCalled()
+  })
+
   it('clamps a requested permission mode past the manager authority', async () => {
     const { runtime, runChild } = makeRuntime()
     const result = await runtime.createWorker(
@@ -432,6 +513,10 @@ describe('ManagerRuntime.createWorker', () => {
 
   it('reports workspace-pending and delivers once the workspace is ready', async () => {
     const { runtime, taskWorkspaces, runChild } = makeRuntime({ workspaceState: 'creating' })
+    // createWorker settles the snapshot on the final path (first get → ready);
+    // the store can still report mid-creation state when the deliverer looks
+    // the workspace up.
+    taskWorkspaces.get.mockReturnValueOnce(workspaceRecord('ready'))
     const result = await runtime.createWorker(managerCtx(), {
       label: 'fixer', task: 'task'
     }, TOOL_CONTEXT)

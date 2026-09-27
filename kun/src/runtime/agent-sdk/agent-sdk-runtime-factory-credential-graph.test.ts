@@ -112,6 +112,7 @@ describe('createAgentSdkRuntime turn context', () => {
     providerToken?: string
     defaultToken?: string
     credentialSourceId?: string
+    defaultIsAgentSdk?: boolean
     resolveCredentialSource?: (sourceId: string) => Promise<{ apiKey: string } | null>
   }
   type CredentialContext = {
@@ -166,7 +167,7 @@ describe('createAgentSdkRuntime turn context', () => {
         : {},
       agentSdkProviderIds: new Set(options.providerId ? [options.providerId] : []),
       defaultApprovalPolicy: 'auto',
-      defaultIsAgentSdk: !options.providerId,
+      defaultIsAgentSdk: options.defaultIsAgentSdk ?? !options.providerId,
       defaultToken: options.defaultToken,
       ...(options.credentialSourceId && !options.providerId
         ? { defaultCredentialSourceId: options.credentialSourceId }
@@ -212,6 +213,18 @@ describe('createAgentSdkRuntime turn context', () => {
     expect(context?.actingModelRoute).toMatchObject({
       providerId: 'default'
     })
+  })
+
+  test('a harness-pinned native-login turn on a mixed runtime uses ambient login', async () => {
+    // The serve apiKey is an HTTP provider credential here (e.g. DeepSeek);
+    // routing it into CLAUDE_CODE_OAUTH_TOKEN both crashes OAuth normalization
+    // and would silently swap the account detection reported.
+    const context = await credentialContext({
+      defaultToken: 'sk-ant-oat01-unrelated-serve-key',
+      defaultIsAgentSdk: false
+    })
+    expect(context?.oauthToken).toBeUndefined()
+    expect(context?.actingModelRoute?.providerId).toBeUndefined()
   })
 
   test('persists an active goal context before assembling delegated history', async () => {

@@ -248,5 +248,16 @@
     "needs_changes": "要修正",
     "rejected": "却下",
     "waived": "免除"
-  }
+  },
+  "adeNewManager": "マネージャーセッション",
+  "adeNewOneOnOne": "1対1",
+  "adeAgentPickerLoading": "エージェントを読み込み中…",
+  "adeAgentPickerEmpty": "利用可能なエージェントがありません",
+  "adeGroupReview": "要レビュー",
+  "adeGroupDone": "完了",
+  "adeGroupByStatus": "ステータスでグループ化",
+  "adeGroupByProject": "プロジェクトでグループ化",
+  "adeGroupToggleHint": "会話のグループ化を切り替え",
+  "adeWorkerCount": "ワーカー {{count}} 件",
+  "adeWorkerCount_other": "ワーカー {{count}} 件"
 }

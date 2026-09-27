@@ -279,8 +279,10 @@ export function kunTeamRaceActionPath(
 }
 
 export const KUN_HARNESSES_PATH = '/v1/harnesses'
-export function kunHarnessModelsPath(harnessId: string): string {
-  return `${KUN_HARNESSES_PATH}/${encodeURIComponent(harnessId)}/models`
+export function kunHarnessModelsPath(harnessId: string, credentialMode?: string): string {
+  const base = `${KUN_HARNESSES_PATH}/${encodeURIComponent(harnessId)}/models`
+  const mode = credentialMode?.trim()
+  return mode ? `${base}?credential_mode=${encodeURIComponent(mode)}` : base
 }
 
 export const KUN_THREADS_PATH = '/v1/threads'

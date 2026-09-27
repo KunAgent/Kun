@@ -329,6 +329,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   readonly dismissActivity = this.activity.dismissActivity
   readonly pinActivity = this.activity.pinActivity
   readonly reportActivityForeground = this.activity.reportActivityForeground
+  readonly listPendingApprovals = this.activity.listPendingApprovals
 
   /** Host task-workspace surface (docs/ade/07 §11, 11 §3 review diff). */
   private readonly taskWorkspaces = createKunTaskWorkspaceClient()

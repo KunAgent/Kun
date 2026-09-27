@@ -5,6 +5,8 @@ import {
   type HarnessCapabilityStatuses
 } from '../contracts/harness-capabilities.js'
 import type { ManagerRuntimeDeps } from '../ade/manager-runtime.js'
+import { createManagerToolProvider } from '../adapters/tool/manager-tool-provider.js'
+import { TeamBudgetGate } from '../ade/team-budget.js'
 import { ManagerRuntime } from '../ade/manager-runtime.js'
 import { ActivityHibernation } from '../services/activity-hibernation.js'
 import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
@@ -19,6 +21,12 @@ import type { FileReviewStore } from '../ade/review-store.js'
 import { reanchorWorkspaceComments } from '../ade/review-reanchor.js'
 import { createAttributionObserver } from '../ade/attribution-observer.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
+import type {
+  HarnessListDeps,
+  HarnessProviderModelGroup
+} from '../ade/tools/harness-list.js'
+import type { ModelConnectionSnapshot } from '../contracts/model-connections.js'
+import { providerModelIds } from './routes/model-gateway-core.js'
 
 type RuntimeServices = Awaited<ReturnType<typeof createRuntimeServices>>
 
@@ -44,6 +52,59 @@ export function createCapabilitiesForRoute(
           route.providerId
         )
       : noHarnessCapabilities())
+  }
+}
+
+/**
+ * Provider-pool access shared by worker-route validation and `harness_list`
+ * (P3-06): reads the modelConnections snapshot, tolerating snapshot failures
+ * as "no providers" so the manager tools degrade to static lists.
+ */
+export function createProviderPoolAccess(
+  modelConnections: Pick<RuntimeServices['model'], 'modelConnections'>['modelConnections']
+): {
+  providers: () => Promise<HarnessProviderModelGroup[]>
+  poolEntry: NonNullable<ManagerRuntimeDeps['providerPool']>
+} {
+  const snapshot = (): Promise<ModelConnectionSnapshot | undefined> =>
+    modelConnections.snapshot().catch(() => undefined)
+  const providers = async () =>
+    ((await snapshot())?.providers ?? []).map((provider) => ({
+      providerId: provider.id,
+      label: provider.name,
+      kind: provider.kind,
+      models: providerModelIds(provider)
+    }))
+  const poolEntry = async (providerId: string) => {
+    const provider = (await snapshot())?.providers
+      .find((candidate) => candidate.id === providerId)
+    return provider ? { kind: provider.kind, models: providerModelIds(provider) } : undefined
+  }
+  return { providers, poolEntry }
+}
+
+/**
+ * `harness_list` deps (10 §2): catalog + detector + runtime map plus the
+ * cached probe read and provider pool for per-credential-mode model lists.
+ */
+export function createHarnessListDeps(input: {
+  services: Pick<RuntimeServices, 'harnesses'>
+  harnessRuntimeMap: HarnessRuntimeMap
+  listProfiles: () => Array<{
+    name: string
+    model?: string
+    providerId?: string
+    description?: string
+  }>
+  providers?: () => Promise<HarnessProviderModelGroup[]>
+}): HarnessListDeps {
+  return {
+    catalog: input.services.harnesses.catalog,
+    detector: input.services.harnesses.detector,
+    runtimes: input.harnessRuntimeMap,
+    probedModels: (definition) => input.services.harnesses.probedModels(definition),
+    ...(input.providers ? { providers: input.providers } : {}),
+    profiles: input.listProfiles
   }
 }
 
@@ -98,6 +159,9 @@ export function createManagerRuntime(input: {
     language: () => Intl.DateTimeFormat().resolvedOptions().locale,
     allowUnattendedFullAccess: () => core.activeOptions.ade?.allowUnattendedFullAccess === true,
     teamLimits: () => core.activeOptions.ade?.limits,
+    teamBudgetPolicy: () => core.activeOptions.ade?.budget,
+    teamBudget: runtimeDeps.teamBudget
+      ?? (runtimeDeps.usage ? new TeamBudgetGate(runtimeDeps.usage) : undefined),
     workerCallbacks: services.workerCallbacks,
     managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true,
     // Approved worktree.checks runner (10 §4.2) — digest-bound like setup.
@@ -129,17 +193,21 @@ export function createActivityHibernation(input: {
     'activityStore' | 'activeOptions' | 'acpConnectionPool'
   >
   managerRuntime: ManagerRuntime
+  catalog: Pick<ManagerRuntimeDeps['catalog'], 'get'>
 }): ActivityHibernation {
-  const { core, managerRuntime } = input
+  const { core, managerRuntime, catalog } = input
   const hibernation = new ActivityHibernation(
     {
       apply: (unitId, patch) => core.activityStore.apply(unitId, patch, 'inferred'),
       list: () => core.activityStore.list(),
       lastEventAt: (unitId) => core.activityStore.lastEventAt(unitId),
       hasOpenWork: (row) => managerRuntime.hasOpenWork(row.unitId),
-      // Structured harnesses always continue portably; terminal agents need
-      // resumeArgs, which the terminal runtime supplies when it lands (P2-03).
-      canResume: (row) => row.kind === 'worker',
+      // Structured harnesses always continue portably; terminal agents
+      // resume only when the harness declares `terminal.resumeArgs` (05 §7.3).
+      canResume: (row) =>
+        row.kind === 'worker' ||
+        (row.kind === 'terminal-agent' &&
+          (catalog.get(row.harnessId)?.terminal?.resumeArgs?.length ?? 0) > 0),
       releaseResident: (row) => core.acpConnectionPool?.releaseForUnit(row.threadId)
     },
     {
@@ -196,4 +264,38 @@ export function wireAttributionObserver(
     dispatches: services.adeStores.dispatches,
     nowIso
   }))
+}
+
+/** ADE manager tool surface + workspace review wiring (09 §4, 10 §6). */
+export function registerAdeManagerTooling(input: {
+  registry: { registerProvider(provider: unknown): void }
+  managerRuntime: ManagerRuntime
+  services: RuntimeServices
+  harnessRuntimeMap: HarnessRuntimeMap
+  delegationRuntime?: DelegationRuntime
+  providerPool: {
+    providers: HarnessListDeps['providers']
+  }
+  core: RuntimeServices['model']['core']
+}): void {
+  input.registry.registerProvider(
+    createManagerToolProvider({
+      manager: input.managerRuntime,
+      harnessList: createHarnessListDeps({
+        services: input.services,
+        harnessRuntimeMap: input.harnessRuntimeMap,
+        listProfiles: () => input.delegationRuntime?.listProfiles() ?? [],
+        providers: input.providerPool.providers
+      }),
+      managerMayApprove: () =>
+        input.core.activeOptions.ade?.managerMayApprove === true,
+      race: input.managerRuntime.raceServiceDeps,
+      checks: input.managerRuntime.checkRunnerDeps
+    })
+  )
+  wireTaskWorkspaceChange(
+    input.core.taskWorkspaces,
+    input.managerRuntime,
+    input.services.adeStores.reviews
+  )
 }

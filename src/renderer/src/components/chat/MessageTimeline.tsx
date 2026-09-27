@@ -409,7 +409,9 @@ export function MessageTimeline({
         {activeThread?.forkedFromThreadId ? (
           <ThreadForkBanner parentTitle={forkedFromTitle} />
         ) : null}
-        {activeThread ? <WorkerControlBanner threadId={activeThread.id} /> : null}
+        {activeThread?.workspaceMode === 'ade' && activeThread.executionUnit?.kind === 'worker' ? (
+          <WorkerControlBanner threadId={activeThread.id} />
+        ) : null}
         {hasEarlierTurns ? (
           <div className="flex items-center justify-center">
             <button

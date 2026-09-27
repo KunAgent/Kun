@@ -68,18 +68,24 @@ export function filterMissionRows(
 export function workerDispatchStats(
   overview: AdeTeamOverview | null | undefined,
   workerId: string
-): { insertions?: number; deletions?: number; verdict?: string } {
+): { insertions?: number; deletions?: number; verdict?: string; tokens?: number } {
   if (!overview) return {}
   const latest = [...overview.dispatches]
     .filter((d) => d.workerId === workerId)
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0]
-  return latest
-    ? {
-        insertions: latest.capture?.insertions,
-        deletions: latest.capture?.deletions,
-        verdict: latest.verdict?.status
-      }
-    : {}
+  const tokens = overview.usage?.perWorker.find(
+    (entry) => entry.workerId === workerId
+  )?.totalTokens
+  return {
+    ...(latest
+      ? {
+          insertions: latest.capture?.insertions,
+          deletions: latest.capture?.deletions,
+          verdict: latest.verdict?.status
+        }
+      : {}),
+    ...(tokens !== undefined ? { tokens } : {})
+  }
 }
 
 /** Open question a needs-you worker row is blocked on, if any. */

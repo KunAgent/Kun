@@ -251,6 +251,8 @@ export interface AgentProvider {
   pinActivity?(unitId: string, pinned?: boolean): Promise<void>
   /** Foreground-thread report for activity dormancy (docs/ade/06 §7.2 cond. 4). */
   reportActivityForeground?(threadId: string): Promise<void>
+  /** Pending approvals, optionally scoped to a thread (P3-19 attention list). */
+  listPendingApprovals?(threadId?: string): Promise<import('@shared/ade-approvals').PendingApprovalItem[]>
   /** Task workspaces bound to a thread (docs/ade/07 §11). */
   listTaskWorkspaces?(options?: {
     boundThreadId?: string
@@ -317,7 +319,8 @@ export interface AgentProvider {
   listHarnesses?(): Promise<import('@shared/ade-harnesses').AdeHarnessRow[]>
   /** Models a harness accepts (01 §9): static, probed, or provider-derived. */
   listHarnessModels?(
-    harnessId: string
+    harnessId: string,
+    credentialMode?: string
   ): Promise<import('@shared/ade-harnesses').AdeHarnessModels>
   /** Force fresh detection for one harness; returns the updated row. */
   probeHarness?(

@@ -26,7 +26,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
     connectPhoneSidebarOpen, connectPhoneInitialTarget, activeExtensionLeftSidebar, extensionWorkspaceRoot,
     selectExtensionSurface, runtimeConnection, threadSearch, showArchivedThreads, focusModeEnabled,
     updateFocusMode, setThreadSearch, openThread, renameThread, pinThread, archiveThread,
-    deleteThread, startNewChat, startNewAdeChat, startNewChatInWorkspace,
+    deleteThread, startNewChat, startNewAdeChat, startNewAdeOneOnOne, startNewChatInWorkspace,
     openSettings, openPluginsView, openExtensionsView, toggleTheme, toggleConnectPhone, openConnectWeixin,
     openCodeMode, openAdeMode, openWriteMode, openBoardView, openScheduleView, openWorkflowView,
     startNewConversation, beginLeftResize, toggleLeftSidebar, busy,
@@ -130,6 +130,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         onCodeOpen={openCodeMode}
         onAdeOpen={openAdeMode}
         onNewAdeChat={startNewAdeChat}
+        onNewAdeOneOnOne={startNewAdeOneOnOne}
         onWriteOpen={openWriteMode}
         onScheduleOpen={openScheduleView}
         onBoardOpen={openBoardView}

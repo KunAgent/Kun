@@ -14,6 +14,26 @@ import {
 
 const approvalDecisionFlights = new WeakMap<ApprovalGate, Map<string, Promise<boolean>>>()
 
+/**
+ * GET /v1/approvals?threadId=<id> — pending approval requests, optionally
+ * scoped to one thread (P3-19). Read-only projection; the decision route
+ * stays `POST /v1/approvals/:id`.
+ */
+export function listPendingApprovals(
+  gate: Pick<ApprovalGate, 'pending'>,
+  threadId?: string
+): JsonResponse {
+  const approvals = gate.pending(threadId).map((approval) => ({
+    approvalId: approval.id,
+    threadId: approval.threadId,
+    turnId: approval.turnId,
+    toolName: approval.toolName,
+    summary: approval.summary,
+    createdAt: approval.createdAt
+  }))
+  return jsonResponse({ approvals })
+}
+
 function resolvedDecision(status: string): 'allow' | 'deny' | null {
   return status === 'allowed' ? 'allow' : status === 'denied' ? 'deny' : null
 }

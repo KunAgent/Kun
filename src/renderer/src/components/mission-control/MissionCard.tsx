@@ -13,6 +13,8 @@ export type MissionCardStats = {
   insertions?: number
   deletions?: number
   verdict?: string
+  /** P3-15: summed usage for the row's unit (team total on manager rows). */
+  tokens?: number
 }
 
 export type MissionCardProps = {
@@ -135,6 +137,11 @@ export function MissionCard({
           {stats?.verdict ? (
             <span className={`shrink-0 font-medium ${VERDICT_TONE[stats.verdict] ?? 'text-ds-status-muted'}`}>
               {t(`missionVerdict_${stats.verdict}`)}
+            </span>
+          ) : null}
+          {stats?.tokens !== undefined ? (
+            <span className="shrink-0 text-ds-faint" data-mission-tokens>
+              {stats.tokens.toLocaleString()} tok
             </span>
           ) : null}
           <span className="ml-auto shrink-0">{formatRelativeTime(row.stateSince, i18n.language)}</span>

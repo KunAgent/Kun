@@ -121,14 +121,28 @@ export function MissionControlView(): ReactElement {
   const statsOf = useCallback(
     (row: ActivityRow): MissionCardStats | null | undefined => {
       const filesChanged = lazy.filesChanged[row.unitId]
-      const { insertions, deletions, verdict } = workerDispatchStats(
+      const { insertions, deletions, verdict, tokens } = workerDispatchStats(
         overviewFor(row),
         row.unitId
       )
-      if (filesChanged === undefined && insertions === undefined && !verdict) {
+      const totalTokens = row.parentThreadId
+        ? tokens
+        : overviewFor(row)?.usage?.totalTokens ?? tokens
+      if (
+        filesChanged === undefined &&
+        insertions === undefined &&
+        !verdict &&
+        totalTokens === undefined
+      ) {
         return undefined
       }
-      return { filesChanged: filesChanged ?? undefined, insertions, deletions, verdict }
+      return {
+        filesChanged: filesChanged ?? undefined,
+        insertions,
+        deletions,
+        verdict,
+        ...(totalTokens !== undefined ? { tokens: totalTokens } : {})
+      }
     },
     [lazy.filesChanged, overviewFor]
   )

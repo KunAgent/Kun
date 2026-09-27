@@ -2,7 +2,7 @@
 
 - 日期：2026-09-25
 - 基线：`develop@0cd036104`
-- 状态：计划，未实施
+- 状态：P0 ~ P2 已全部实施并合入 `develop`（合并提交 `e779bf43a`）；P3 复核跟进进行中，ADE 仍以实验室开关发布。详见下方"实现状态"。
 - 参考项目（只作为设计输入；下文分别简称"终端编排台"、"连接层产品"、"多 agent 控制台"）：
   - 终端编排台：`github.com/stablyai/orca`（`122b8c25`），终端优先的多 agent 编排台
   - 连接层产品：`/Users/zxy/codeproject/ds_project/cindy`（`e70e335b2`），多 harness 连接层 + Lead/Worker 协同
@@ -10,6 +10,12 @@
 - 实现约束：参考项目只作为设计输入。**源码、文件名、类名、注释、i18n 键里都不要出现参考项目的名字**，按 Kun 自己的语义命名（harness、worker、dispatch、activity、task workspace 等）。
 
 ---
+
+## 实现状态
+
+- P0 ~ P2（P0-01 ~ P2-11）已全部实施：harness 路由与能力声明、ACP 运行时、MCP 与模型网关、总管/worker 编排、任务工作区、活动流与通知、交接与审查、Mission Control、终端 agent、赛马与检查、PR/CI 视图、休眠。逐项状态与实施提交见 [impl/README.md](./impl/README.md) 的 PR 总表（均随 `e779bf43a` 合入 `develop`）。
+- P3 复核（2026-09-28 起）修补了四条端到端链路的缺口并补齐实机验证：活动流提升到应用级、ADE composer 门控、ACP 真机握手与 wire 回放、Claude Code 经 kun-gateway 的 worker 链路、团队 token 预算、总管动态上下文、侧栏分组与嵌套 worker、终端 agent 的 `KUN_CLI` 环境与休眠恢复、手机端只读 Mission Control 与内联审批/作答。
+- 当前进展、实机验证记录与默认开启门槛见 [impl/p3-review-followup.md](./impl/p3-review-followup.md)。
 
 ## 1. 目标
 

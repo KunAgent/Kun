@@ -426,6 +426,38 @@ describe('capabilitiesFromAcp', () => {
     })
   })
 
+  test('kunTools follows the delivered descriptor, never a bare claim', () => {
+    const base = { sandbox: 'native' as const }
+    expect(capabilitiesFromAcp(init, {}, base).statuses.kunTools.supported).toBe(false)
+    for (const kunToolsDescriptor of ['stdio', 'http'] as const) {
+      expect(
+        capabilitiesFromAcp(init, { kunToolsDescriptor }, base).statuses.kunTools.supported
+      ).toBe(true)
+    }
+    expect(
+      capabilitiesFromAcp(init, { kunToolsDescriptor: 'none' }, base).statuses.kunTools.supported
+    ).toBe(false)
+  })
+
+  test('userInput requires an agent-declared elicitation capability', () => {
+    const base = { sandbox: 'native' as const }
+    expect(capabilitiesFromAcp(init, {}, base).statuses.userInput.supported).toBe(false)
+    for (const elicitation of [true, { form: {} }]) {
+      const caps = capabilitiesFromAcp(
+        { ...init, agentCapabilities: { ...init.agentCapabilities, elicitation } },
+        {},
+        base
+      )
+      expect(caps.statuses.userInput.supported).toBe(true)
+    }
+    const refused = capabilitiesFromAcp(
+      { ...init, agentCapabilities: { ...init.agentCapabilities, elicitation: false } },
+      {},
+      base
+    )
+    expect(refused.statuses.userInput.supported).toBe(false)
+  })
+
   test('modes derive from config option category or legacy modes list', () => {
     const withModes = capabilitiesFromAcp(
       init,

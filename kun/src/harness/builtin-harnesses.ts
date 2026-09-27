@@ -131,7 +131,14 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
       { id: 'bypassPermissions', label: 'Full access', kunPermissionMode: 'full-access' }
     ],
     modelSource: 'probe',
-    staticModels: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+    // Fallback list when the SDK `supportedModels()` probe cannot run;
+    // mirrors what Claude Code 2.1.x reports (P3-07).
+    staticModels: [
+      'claude-opus-5',
+      'claude-sonnet-5',
+      'claude-fable-5-1',
+      'claude-haiku-4-5-20251001'
+    ],
     historySource: 'claude-code',
     terminal: {
       argv: [],
@@ -227,9 +234,21 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     displayName: 'Codex',
     transport: 'acp',
     // `codex acp` requires a TTY; ACP runs through the separate adapter binary.
-    detect: { command: 'codex-acp', aliases: [], versionArgs: ['--version'] },
+    detect: {
+      command: 'codex-acp',
+      aliases: [],
+      versionArgs: ['--version'],
+      // P3-11: codex present but codex-acp absent is "needs the adapter",
+      // not "not installed".
+      adapterHint: {
+        command: 'codex',
+        message:
+          'Codex CLI is installed but the ACP adapter codex-acp is missing — ' +
+          'install it (npm i -g @zed-industries/codex-acp) to use Codex as a Kun agent'
+      }
+    },
     launch: { command: 'codex-acp', args: [], env: {} },
-    credentialModes: ['native-login'],
+    credentialModes: ['native-login', 'kun-gateway'],
     permissionModes: [
       // codex-acp adapter modes, strictest first.
       { id: 'read-only', label: 'Read only', kunPermissionMode: 'ask-for-approval' },
@@ -240,6 +259,18 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     staticModels: [],
     historySource: 'codex',
     capabilities: ACP_DEFAULT_CAPABILITIES,
+    // Generated CODEX_HOME/config.toml declares a `kun` responses provider
+    // (verified against codex 0.145.0 via `codex doctor`, P3-10).
+    gateway: {
+      protocol: 'openai-responses',
+      env: { baseUrl: 'KUN_GATEWAY_BASE_URL', token: 'KUN_GATEWAY_TOKEN' },
+      stripEnv: [
+        'OPENAI_API_KEY',
+        'OPENAI_BASE_URL',
+        'OPENAI_API_BASE',
+        'CODEX_HOME'
+      ]
+    },
     builtin: true
   },
   {
@@ -248,7 +279,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     transport: 'acp',
     detect: { command: 'opencode', aliases: [], versionArgs: ['--version'] },
     launch: { command: 'opencode', args: ['acp'], env: {} },
-    credentialModes: ['native-login'],
+    credentialModes: ['native-login', 'kun-gateway'],
     permissionModes: [
       // OpenCode exposes its agents as session modes; plan is read-only.
       { id: 'plan', label: 'Plan', kunPermissionMode: 'ask-for-approval' },
@@ -258,6 +289,26 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     staticModels: [],
     historySource: 'opencode',
     capabilities: ACP_DEFAULT_CAPABILITIES,
+    // Generated opencode.json pins a single `kun` provider selected via
+    // OPENCODE_CONFIG (verified against opencode 1.1.47, P3-10).
+    gateway: {
+      protocol: 'openai-chat',
+      env: { baseUrl: 'KUN_GATEWAY_BASE_URL', token: 'KUN_GATEWAY_TOKEN' },
+      stripEnv: [
+        'OPENAI_API_KEY',
+        'OPENAI_BASE_URL',
+        'OPENAI_API_BASE',
+        'AZURE_OPENAI_API_KEY',
+        'DEEPSEEK_API_KEY',
+        'GEMINI_API_KEY',
+        'GOOGLE_API_KEY',
+        'GROQ_API_KEY',
+        'MISTRAL_API_KEY',
+        'OPENROUTER_API_KEY',
+        'XAI_API_KEY',
+        'OPENCODE_CONFIG'
+      ]
+    },
     builtin: true
   }
 ]

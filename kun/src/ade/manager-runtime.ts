@@ -5,7 +5,7 @@ import type {
   TurnRunOutcome,
   WorkerRecord
 } from '../contracts/ade.js'
-import type { HarnessRoute, HarnessId } from '../contracts/harness.js'
+import type { HarnessDefinition, HarnessRoute, HarnessId } from '../contracts/harness.js'
 import type { HarnessCapabilities } from '../contracts/harness-capabilities.js'
 import type { TaskWorkspaceRecord, StartFrom } from '../contracts/task-workspace.js'
 import type { ThreadRecord } from '../contracts/threads.js'
@@ -20,6 +20,7 @@ import type { TurnService } from '../services/turn-service.js'
 import type { HarnessCatalog } from '../harness/harness-catalog.js'
 import type { HarnessDetector } from '../harness/harness-detector.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
+import { waitForTaskWorkspaceSettlement } from '../workspace-tasks/task-workspace-settlement.js'
 import type { FileDelegationStore } from '../delegation/delegation-runtime-contracts.js'
 import type { FileTeamStore } from './team-store.js'
 import type { FileDispatchStore } from './dispatch-store.js'
@@ -31,6 +32,7 @@ import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js
 import type { UsageService } from '../services/usage-service-core.js'
 import type { WorkerCallbackService } from '../services/worker-callback-service.js'
 import { ManagerControls } from './manager-controls.js'
+import { budgetHardRefusal } from './team-budget.js'
 import { TeamControls } from './team-controls.js'
 import { QualityVerdicts } from './quality-verdict.js'
 import { ReviewRequests } from './review-request.js'
@@ -38,11 +40,13 @@ import { WorkspaceIntegrations } from './workspace-integrate.js'
 import { hasOpenWorkerWork } from './worker-open-work.js'
 import {
   countRecentWorkerFailures,
-  NoEligibleWorkerError,
-  selectWorkerRoute,
   type WorkerSelectorDeps
 } from './worker-selector.js'
-import { resolveWorkerRoute, type ResolvedWorkerRoute } from './worker-route.js'
+import {
+  resolveManagerWorkerRoute,
+  type ResolvedWorkerRoute,
+  type WorkerProviderPoolEntry
+} from './worker-route.js'
 import { checkHarnessAdmission, type AdmissionResult } from '../harness/harness-admission.js'
 import { effectiveCapabilitiesForRoute } from '../harness/effective-capabilities.js'
 import {
@@ -101,7 +105,7 @@ export type WorkerCreateResult = {
   selection?: WorkerRecord['selection'] & { profileId?: string }
   permissionMode?: { requested?: string; effective: string; downgraded: boolean }
   admission?: AdmissionResult
-  refusal?: 'worker_limit' | 'admission' | 'escalation_declined' | 'invalid_agent' | 'workspace_unavailable'
+  refusal?: 'worker_limit' | 'admission' | 'escalation_declined' | 'invalid_agent' | 'workspace_unavailable' | 'budget_exceeded'
   userReport: string
 }
 
@@ -147,11 +151,19 @@ export type ManagerRuntimeDeps = {
   managerMayApprove?: () => boolean
   /** Per-worker usage rollup for race compare (11 §5). */
   usage?: Pick<UsageService, 'forThread'>
+  /** Team-token budget gate (P3-15); absent → budget unenforced. */
+  teamBudget?: import('./team-budget.js').TeamBudgetGate
+  /** Configured team budget written into newly ensured teams (P3-15). */
+  teamBudgetPolicy?: () => TeamRecord['budget'] | undefined
   /** Approved `worktree.checks` inputs (10 §4.2); absent hides the tool. */
   checks?: Pick<
     import('./check-runner.js').WorkspaceCheckRunnerDeps,
     'approvedChecks' | 'artifacts' | 'spawn' | 'env'
   >
+  /** Provider pool for provider/gateway route validation (P3-06). */
+  providerPool?: (providerId: string) => Promise<WorkerProviderPoolEntry | undefined>
+  /** Last cached model-probe list per harness; absent → static list. */
+  probedModels?: (definition: HarnessDefinition) => string[] | undefined
   /**
    * Worker-route selector inputs (10 §3.2); `isolated`/`unattended` come from
    * the create call. Absent → the manager's own provider/model on `kun`.
@@ -219,55 +231,15 @@ export class ManagerRuntime {
     return team.workers.filter((worker) => worker.state === 'active')
   }
 
-  private async resolveRoute(
+  private resolveRoute(
     ctx: ManagerToolContext,
     input: WorkerCreateInput,
     isolated: boolean
   ): Promise<ResolvedWorkerRoute | { error: string }> {
-    const managerThread = await this.deps.threads.get(ctx.threadId).catch(() => null)
-    const selector = this.deps.selector
-    return resolveWorkerRoute({
-      catalog: this.deps.catalog,
-      managerModel: managerThread?.model,
-      managerProviderId: managerThread?.providerId,
-      agent: input.agent,
-      ...(selector
-        ? {
-            // No explicit agent: deterministic worker selection (10 §3.2).
-            select: () =>
-              selectWorkerRoute(
-                {
-                  catalog: this.deps.catalog,
-                  detector: this.deps.detector,
-                  capabilitiesForRoute: (route) => this.deps.capabilitiesForRoute(route),
-                  ...selector,
-                  isolated,
-                  unattended: !ctx.authority.interactive,
-                  allowUnattendedFullAccess:
-                    this.deps.allowUnattendedFullAccess?.() === true,
-                  managerRoute: () => ({
-                    model: managerThread?.model?.trim() || undefined,
-                    providerId: managerThread?.providerId?.trim() || undefined
-                  }),
-                  recentFailures: (teamId, harnessId) =>
-                    this.recentFailures(teamId, harnessId),
-                  language: this.deps.language
-                },
-                {
-                  task: `${input.label}\n${input.task}`,
-                  ...(input.role ? { role: input.role } : {}),
-                  teamId: ctx.threadId,
-                  workspace: ctx.workspace
-                }
-              ).catch((error) => {
-                if (error instanceof NoEligibleWorkerError) {
-                  return { error: error.message }
-                }
-                throw error
-              })
-          }
-        : {})
-    })
+    return resolveManagerWorkerRoute(
+      this.deps, ctx, input, isolated,
+      (teamId, harnessId) => this.recentFailures(teamId, harnessId)
+    )
   }
 
   /**
@@ -310,7 +282,11 @@ export class ManagerRuntime {
           : 'Worker not created: the delegation runtime is not enabled.'
       }
     }
-    const team = await this.deps.teams.ensure(ctx.threadId, this.deps.teamLimits?.())
+    const team = await this.deps.teams.ensure(
+      ctx.threadId,
+      this.deps.teamLimits?.(),
+      this.deps.teamBudgetPolicy?.()
+    )
     const active = this.activeWorkers(team)
     if (active.length >= team.limits.hardWorkers) {
       return {
@@ -321,6 +297,10 @@ export class ManagerRuntime {
           : `Worker limit reached (${team.limits.hardWorkers}); nothing was created.`
       }
     }
+    const budgetCheck = this.deps.teamBudget?.check(team)
+    const budgetRefusal = budgetHardRefusal(budgetCheck, language)
+    if (budgetRefusal) return budgetRefusal
+    this.controls.notifyBudgetCheck(team, budgetCheck)
     const reuseId = input.workspace?.reuseTaskWorkspaceId
     const reused = reuseId ? this.deps.taskWorkspaces?.get(reuseId) : undefined
     if (reuseId && (!reused || !['ready', 'captured', 'conflict'].includes(reused.state))) {
@@ -416,7 +396,7 @@ export class ManagerRuntime {
       // The workspace now belongs to the new worker (11 §4.4 'new-worker').
       this.deps.taskWorkspaces?.bindUnit(reused.workspaceId, workerId)
     }
-    const tws = reused ?? (this.deps.taskWorkspaces
+    let tws = reused ?? (this.deps.taskWorkspaces
       ? await this.deps.taskWorkspaces.create({
           ownerThreadId: ctx.threadId,
           unitId: workerId,
@@ -426,6 +406,25 @@ export class ManagerRuntime {
           startFrom: (input.workspace?.startFrom ?? { kind: 'default-branch' }) as StartFrom
         }, ctx.signal)
       : null)
+    if (tws && !reused) {
+      // `create` returns a provisional record: `path` still names the source
+      // root until the async checkout finishes. The snapshot must name the
+      // real task workspace — it is both the worker's only write root
+      // (09 §7.1) and its thread workspace (delegation-runtime-run).
+      tws = (await waitForTaskWorkspaceSettlement(
+        this.deps.taskWorkspaces!, tws.workspaceId, ctx.signal)) ?? tws
+      if (!['ready', 'captured', 'conflict'].includes(tws.state)) {
+        // The promised isolation could not be materialized — refuse rather
+        // than scope the worker to the manager's own workspace.
+        return {
+          ok: false,
+          refusal: 'workspace_unavailable',
+          userReport: language === 'zh'
+            ? `任务工作区创建失败（${tws.lastError ?? tws.state}），未创建 worker。`
+            : `Task workspace could not be created (${tws.lastError ?? tws.state}); worker not created.`
+        }
+      }
+    }
     const security = this.workerSecurity(childSecurity(toolContext), tws?.path ?? ctx.workspace)
     const worker: WorkerRecord = {
       workerId,
