@@ -38,7 +38,9 @@ export function ProfileDialog({
   const harnessRows = useHarnessStore((state) => state.rows)
 
   useEffect(() => {
-    void loadHarnesses()
+    // P4-02: opening the dialog force-refreshes; waitMs lets an in-flight
+    // detection settle so harness options do not stay stuck on 'unknown'.
+    void loadHarnesses(true, { waitMs: 3_000 })
   }, [])
   const set = <K extends keyof KunSubagentProfileV1>(k: K, v: KunSubagentProfileV1[K]): void =>
     setD((p) => ({ ...p, [k]: v }))

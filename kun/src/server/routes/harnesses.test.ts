@@ -72,7 +72,9 @@ describe('harness routes', () => {
     const kun = body.harnesses.find(
       (row: { definition: { id: string } }) => row.definition.id === 'kun'
     )
-    expect(kun.status.installed).toBe('unknown')
+    // P4-02: native-loop detection settles synchronously, so the fresh cache
+    // wins over the optimistic peek placeholder by the time rows render.
+    expect(kun.status.installed).toBe('yes')
     // Listing kicks off background detection but must not spawn for the kun loop.
     await new Promise((resolve) => setTimeout(resolve, 0))
     const spawnedFor = spawn.mock.calls.map((call) => call[0])
@@ -266,5 +268,102 @@ describe('harness routes', () => {
     const staticModels = JSON.parse(fallback.body).models as string[]
     expect(staticModels.length).toBeGreaterThan(0)
     expect(staticModels).not.toContain('claude-opus-4-8')
+  })
+
+  function acpDef(): HarnessDefinition {
+    return {
+      id: 'fake-cli',
+      displayName: 'Fake CLI',
+      transport: 'acp',
+      detect: { command: 'fake-cli', aliases: [], versionArgs: ['--version'] },
+      launch: { command: 'fake-cli', args: [], env: {} },
+      credentialModes: ['native-login'],
+      permissionModes: [],
+      modelSource: 'static',
+      staticModels: [],
+      capabilities: {
+        statuses: allSupportedStatuses(),
+        facts: { sandbox: 'none', usageReporting: 'none', compactionOwner: 'none' }
+      },
+      builtin: false
+    }
+  }
+
+  function slowDetectorRouter(
+    spawn: (command: string) => Promise<{ stdout: string; stderr: string; timedOut: boolean; exitCode: number | null }>
+  ) {
+    const catalog = new HarnessCatalog()
+    catalog.list = () => [acpDef()]
+    const detector = new HarnessDetector({
+      definitions: () => catalog.list(),
+      overrides: () => ({}),
+      resolveExecutable: async (command) => `/fake/bin/${command}`,
+      spawnCaptured: spawn,
+      probeLogin: async () => 'signed-in',
+      nowMs: () => Date.now(),
+      nowIso: () => new Date().toISOString()
+    })
+    return buildRouter({
+      runtimeToken: TOKEN,
+      insecure: false,
+      nowIso: () => '2026-01-01T00:00:00.000Z',
+      harnesses: { catalog, detector }
+    } as unknown as ServerRuntime)
+  }
+
+  it('marks rows detecting while a probe is inflight', async () => {
+    let release: (() => void) | undefined
+    const router = slowDetectorRouter(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({ stdout: 'fake 1.2.3', stderr: '', timedOut: false, exitCode: 0 })
+        })
+    )
+    const response = await dispatch(router, 'GET', '/v1/harnesses', authed)
+    expect(response.status).toBe(200)
+    const row = JSON.parse(response.body).harnesses[0]
+    expect(row.status.installed).toBe('unknown')
+    expect(row.status.detecting).toBe(true)
+    release?.()
+  })
+
+  it('wait_ms holds the response until inflight detections settle', async () => {
+    let release: (() => void) | undefined
+    const router = slowDetectorRouter(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({ stdout: 'fake 1.2.3', stderr: '', timedOut: false, exitCode: 0 })
+        })
+    )
+    const pending = dispatch(router, 'GET', '/v1/harnesses?wait_ms=5000', authed)
+    // Let peek() start the inflight detection before releasing it.
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    release?.()
+    const response = await pending
+    expect(response.status).toBe(200)
+    const row = JSON.parse(response.body).harnesses[0]
+    expect(row.status.installed).toBe('yes')
+    expect(row.status.version).toBe('1.2.3')
+    expect(row.status.detecting).toBeFalsy()
+  })
+
+  it('wait_ms is bounded: rows still probing return with detecting=true', async () => {
+    let release: (() => void) | undefined
+    const router = slowDetectorRouter(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({ stdout: 'fake 1.2.3', stderr: '', timedOut: false, exitCode: 0 })
+        })
+    )
+    const startedAt = Date.now()
+    const response = await dispatch(router, 'GET', '/v1/harnesses?wait_ms=50', authed)
+    expect(Date.now() - startedAt).toBeLessThan(2_000)
+    const row = JSON.parse(response.body).harnesses[0]
+    expect(row.status.installed).toBe('unknown')
+    expect(row.status.detecting).toBe(true)
+    release?.()
   })
 })

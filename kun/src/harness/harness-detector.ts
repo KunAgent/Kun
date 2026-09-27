@@ -128,6 +128,11 @@ export class HarnessDetector {
     return cached && cached.expiresAt > this.deps.nowMs() ? cached.status : undefined
   }
 
+  /** True while a detection pass is inflight for this harness. */
+  detecting(id: HarnessId): boolean {
+    return this.inflight.has(id)
+  }
+
   /** Non-blocking snapshot: cached status or an optimistic unknown entry. */
   peek(id: HarnessId): HarnessStatus | undefined {
     const cached = this.cache.get(id)
@@ -137,7 +142,8 @@ export class HarnessDetector {
       harnessId: id,
       installed: 'unknown',
       login: 'unknown',
-      checkedAt: this.deps.nowIso()
+      checkedAt: this.deps.nowIso(),
+      detecting: true
     }
   }
 

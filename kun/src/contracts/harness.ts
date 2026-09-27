@@ -159,6 +159,12 @@ export const HarnessStatusSchema = z
     login: z.enum(['signed-in', 'signed-out', 'unknown', 'not-required']),
     resolvedCommand: z.string().max(4_096).optional(),
     checkedAt: z.string().datetime(),
+    /**
+     * True while a detection pass is inflight for this harness (P4-02):
+     * clients should show a spinner and poll instead of treating a
+     * provisional `unknown` verdict as final.
+     */
+    detecting: z.boolean().optional(),
     message: z.string().max(512).optional()
   })
   .strict()

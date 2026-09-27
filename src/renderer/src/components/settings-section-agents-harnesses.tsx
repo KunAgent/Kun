@@ -31,6 +31,9 @@ function harnessSettings(kun: KunRuntimeSettingsV1): KunHarnessSettingsV1 {
 }
 
 function loginStateKey(status: AdeHarnessRow['status']): string {
+  // P4-02: an inflight detection is provisional — say so instead of
+  // reporting a misleading "unknown" login verdict.
+  if (status.detecting === true) return 'adeHarnessUnavailable.detecting'
   if (status.installed === 'no') return 'adeSettings.harnessLoginMissing'
   switch (status.login) {
     case 'signed-in':
@@ -283,7 +286,9 @@ export function AgentsHarnessesSettingsPanel({ view }: { view: Record<string, an
   const settings = harnessSettings(kun)
 
   useEffect(() => {
-    void loadHarnesses()
+    // P4-02: the section always re-detects on mount; waitMs lets an
+    // in-flight pass settle before the first paint.
+    void loadHarnesses(true, { waitMs: 3_000 })
   }, [])
 
   return (
