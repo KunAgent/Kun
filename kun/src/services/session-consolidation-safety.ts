@@ -17,3 +17,13 @@ export function containsSensitiveConsolidationData(...values: readonly string[])
   const text = values.join('\n')
   return SENSITIVE_PATTERNS.some((pattern) => pattern.test(text))
 }
+
+/** Scan original fields before per-item and transcript clipping can hide secrets. */
+export function containsSensitiveConsolidationSource(value: unknown): boolean {
+  if (typeof value === 'string') return containsSensitiveConsolidationData(value)
+  if (Array.isArray(value)) return value.some(containsSensitiveConsolidationSource)
+  if (!value || typeof value !== 'object') return false
+  return Object.entries(value).some(([key, child]) =>
+    (typeof child === 'string' && containsSensitiveConsolidationData(`${key}=${child}`)) ||
+    containsSensitiveConsolidationSource(child))
+}
