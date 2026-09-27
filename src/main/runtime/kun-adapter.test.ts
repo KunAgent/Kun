@@ -141,6 +141,17 @@ describe('runtimeRequestViaHost', () => {
     )).toBe(45_000)
   })
 
+  it('keeps execution-unit activity long polls alive beyond their wait window', () => {
+    expect(resolveRuntimeRequestTimeoutMs(
+      '/v1/activity/events?wait_ms=25000&cursor=cursor_1',
+      'GET'
+    )).toBe(30_000)
+    expect(resolveRuntimeRequestTimeoutMs(
+      '/v1/activity/events?wait_ms=0',
+      'GET'
+    )).toBe(15_000)
+  })
+
   it('allows bounded thread timeline reads to finish cold storage scans', () => {
     expect(resolveRuntimeRequestTimeoutMs(
       '/v1/threads/thr_1/timeline?before=item_42&limit=300',

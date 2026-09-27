@@ -9,6 +9,7 @@
   "processed": "已处理",
   "processStepCount": "{{count}} 步",
   "workedFor": "用时 {{duration}}",
+  "turnUsageDetailsGatewaySource": "包含经 Kun 本地网关转发的请求。",
   "working": "执行中…",
   "workingSprint": "分析中…",
   "workingDive": "整理中…",

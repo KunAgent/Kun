@@ -106,6 +106,14 @@ export type TurnServiceDeps = {
    * route cannot execute tools.
    */
   modelCapabilities?: (model: string, providerId?: string) => ModelCapabilityMetadata
+  /**
+   * Provider-kind lookup used to freeze `harnessId` at turn admission.
+   * Optional so test scaffolds keep working; absent => every provider id maps
+   * to the native loop.
+   */
+  providerKinds?: () => import('../harness/resolve-turn-harness.js').ProviderKindsView
+  /** Optional harness catalog used to pick the default credential mode. */
+  harnessCatalog?: { get(id: string): import('../contracts/harness.js').HarnessDefinition | undefined }
   /** Resolve durable Graph ownership without coupling TurnService to the Graph store. */
   resolveGraphLeadRun?: (input: {
     threadId: string
@@ -490,7 +498,10 @@ installServiceOperations(
 export function fingerprintStartTurnRequest(request: StartTurnRequest): string | undefined {
   if (!request.clientRequestId?.trim()) return undefined
   const normalized = StartTurnRequestSchema.parse(request)
-  const canonical = canonicalizeFingerprintValue(normalized)
+  // ackNoticeIds is transport metadata the renderer refetches per attempt;
+  // hashing it would break idempotent replay of an otherwise identical send.
+  const { ackNoticeIds: _ackNoticeIds, ...content } = normalized
+  const canonical = canonicalizeFingerprintValue(content)
   return createHash('sha256').update(JSON.stringify(canonical), 'utf8').digest('hex')
 }
 

@@ -35,6 +35,7 @@ import {
   VideoGenCapabilityConfig,
   WebCapabilityConfig
 } from '../contracts/capabilities.js'
+import { HarnessIdSchema } from '../contracts/harness.js'
 import {
   DEFAULT_MODEL_ENDPOINT_FORMAT,
   MODEL_ENDPOINT_FORMATS,
@@ -46,6 +47,7 @@ import {
 } from '../contracts/tool-output-limits.js'
 import { HooksConfigSchema } from '../hooks/hook-config.js'
 import { LocalModelGatewayConfigSchema, ModelFailoverGroupSchema, ModelRoutePoolConfigSchema } from '../contracts/model-route-pool.js'
+import { KunProjectWorktreeConfigSchema } from './project-config.js'
 
 import {
   ContextCompactionConfigSchema,
@@ -380,9 +382,117 @@ export const LabConfigSchema = z
   .strict()
 export type LabConfig = z.infer<typeof LabConfigSchema>
 
+/** User-defined external harness entry (ACP/terminal transports launch it). */
+export const HarnessCustomEntrySchema = z
+  .object({
+    id: HarnessIdSchema,
+    displayName: z.string().min(1).max(64),
+    command: z.string().min(1).max(4_096),
+    args: z.array(z.string().max(1_024)).max(32).default([]),
+    /** Non-sensitive variables only; credentials are injected via credentialMode. */
+    env: z.record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024)).default({})
+  })
+  .strict()
+export type HarnessCustomEntry = z.infer<typeof HarnessCustomEntrySchema>
+
+/** `harnesses` config section: per-harness enable/override settings. */
+export const HarnessesConfigSchema = z
+  .object({
+    /** Builtin harnesses the user turned off; they stay out of pickers. */
+    disabledIds: z.array(HarnessIdSchema).max(64).default([]),
+    /** Per-harness binary path overrides (settings override > bundled > PATH). */
+    binaryPaths: z.record(HarnessIdSchema, z.string().min(1).max(4_096)).default({}),
+    /** User-defined ACP harnesses; ids colliding with builtins are dropped. */
+    custom: z.array(HarnessCustomEntrySchema).max(32).default([]),
+    /** Per-harness default permission level (a permissionModes[].id). */
+    defaultPermissionMode: z.record(HarnessIdSchema, z.string().min(1).max(64)).default({}),
+    /** Default harness for new one-to-one ADE conversations. */
+    defaultHarnessId: HarnessIdSchema.default('kun'),
+    /** Ordered user preference for the ADE worker selector (10 §3.2). */
+    agentOrder: z.array(HarnessIdSchema).max(16).default([])
+  })
+  .strict()
+export type HarnessesConfig = z.infer<typeof HarnessesConfigSchema>
+
+/** `ade` config section: runtime-side ADE switches (notifications stay GUI-side). */
+export const AdeConfigSchema = z
+  .object({
+    /** Master switch; the ADE mode entry is gated on it. Default off. */
+    enabled: z.boolean().default(false),
+    /** New harness-aware turn routing; false falls back to provider inference. */
+    harnessRouter: z.boolean().default(true),
+    /** Deterministic handoff briefs; false restores the raw transcript tail. */
+    deterministicHandoff: z.boolean().default(true),
+    managerModel: z
+      .object({
+        providerId: z.string().min(1).max(128),
+        model: z.string().min(1).max(512)
+      })
+      .strict()
+      .optional(),
+    managerMayApprove: z.boolean().default(false),
+    /** Unattended turns may keep full-access when true; otherwise clamped. */
+    allowUnattendedFullAccess: z.boolean().default(false),
+    limits: z
+      .object({
+        softWorkers: z.number().int().min(1).max(16).default(4),
+        hardWorkers: z.number().int().min(1).max(32).default(8)
+      })
+      .strict()
+      .default({ softWorkers: 4, hardWorkers: 8 }),
+    budget: z
+      .object({
+        softTokens: z.number().int().positive().optional(),
+        hardTokens: z.number().int().positive().optional()
+      })
+      .strict()
+      .optional(),
+    hibernation: z
+      .object({
+        enabled: z.boolean().default(true),
+        idleMinutes: z.number().int().min(1).max(1_440).default(30)
+      })
+      .strict()
+      .default({ enabled: true, idleMinutes: 30 }),
+    stall: z
+      .object({
+        structuredMinutes: z.number().int().min(1).max(240).default(10),
+        terminalMinutes: z.number().int().min(1).max(480).default(20)
+      })
+      .strict()
+      .default({ structuredMinutes: 10, terminalMinutes: 20 }),
+    /**
+     * Repositories whose `.kun/project.json` is approved for task workspaces.
+     * Each entry carries the verbatim `worktree` section plus the digest it
+     * was approved under; Kun only runs setup when the live digest matches.
+     */
+    approvedWorktreeConfigs: z
+      .array(z.object({
+        repoRoot: z.string().min(1).max(4_096),
+        digest: z.string().min(1).max(128),
+        worktree: KunProjectWorktreeConfigSchema
+      }).strict())
+      .max(64)
+      .default([]),
+    /** User-level per-repo fill entries: `sharedPaths[repoRoot]`. */
+    worktreeSharedPaths: z
+      .record(
+        z.string().min(1).max(4_096),
+        z.array(z.object({
+          path: z.string().min(1).max(1_024),
+          mode: z.enum(['symlink', 'clone', 'copy']).default('symlink')
+        }).strict()).max(64)
+      )
+      .default({})
+  })
+  .strict()
+export type AdeConfig = z.infer<typeof AdeConfigSchema>
+
 export const KunConfigSchema = z
   .object({
     serve: KunServeConfigSchema.optional(),
+    harnesses: HarnessesConfigSchema.optional(),
+    ade: AdeConfigSchema.optional(),
     models: ModelConfigSchema.optional(),
     contextCompaction: ContextCompactionConfigSchema.optional(),
     runtime: RuntimeTuningConfigSchema.optional(),

@@ -5,7 +5,9 @@ import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { extractUnifiedDiffText } from '../../lib/diff-stats'
 import { useChatStore } from '../../store/chat-store'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
-import { isBackgroundShellNoticeBlock, isBackgroundSubagentNoticeBlock } from './message-timeline-turns'
+import { isBackgroundShellNoticeBlock, isBackgroundSubagentNoticeBlock, isWorkerUpdateNoticeBlock } from './message-timeline-turns'
+import { isAssignmentBlock } from '@shared/assignment-card'
+import { AssignmentCard } from '../workers/AssignmentCard'
 import { DiffView } from '../DiffView'
 import { AssistantMarkdown } from './AssistantMarkdown'
 import { readNumber, formatDuration, summarizeBackgroundShellToolBlock } from './message-timeline-tools'
@@ -13,7 +15,8 @@ import { formatTtftSeconds, formatTps } from '../../hooks/use-thread-usage'
 import {
   BackgroundShellNoticeBubble,
   BackgroundSubagentNoticeBubble,
-  UserMessageBubble
+  UserMessageBubble,
+  WorkerUpdateNoticeBubble
 } from './message-timeline-user-bubbles'
 import {
   AssistantExportButton,
@@ -29,6 +32,7 @@ import type { TurnUsageSummary } from '../../hooks/use-turn-usage'
 import { ToolAttachmentPreviews } from './message-timeline-media-views'
 import { LiveAssistantStreamingProvider } from './live-assistant-streaming'
 import { metaString } from './message-timeline-bubble-meta'
+import { HandoffEntry } from './message-timeline-handoff-entry'
 import { MemoryApprovalHint } from './memory-approval-hint'
 import { useTimelineSurface } from './timeline-surface'
 import { useMobileMessageActionsStore } from '../../stores/mobile-message-actions'
@@ -121,6 +125,14 @@ function MessageBubbleImpl({
   }
   if (block.kind === 'user' && isBackgroundSubagentNoticeBlock(block)) {
     return <BackgroundSubagentNoticeBubble block={block} nested={nested} />
+  }
+  if (block.kind === 'user' && isWorkerUpdateNoticeBlock(block)) {
+    return <WorkerUpdateNoticeBubble block={block} nested={nested} />
+  }
+  // ADE worker threads fold the host-rendered `<kun_assignment>` first-turn
+  // input into a collapsed card (12 §6.3); the raw text stays in history.
+  if (block.kind === 'user' && isAssignmentBlock(block)) {
+    return <AssignmentCard block={block} nested={nested} />
   }
   if (block.kind === 'user') {
     return <UserMessageBubble block={block} allowThreadActions={allowThreadActions} />
@@ -378,6 +390,9 @@ function MessageBubbleImpl({
         {block.detail || block.summary}
       </div>
     )
+  }
+  if (block.kind === 'handoff') {
+    return <HandoffEntry block={block} />
   }
   if (block.kind === 'review') {
     return (

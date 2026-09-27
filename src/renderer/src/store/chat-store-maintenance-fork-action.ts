@@ -62,7 +62,9 @@ export function createForkActiveThreadWithOptions(
     const turnId = options.turnId?.trim()
     let preparedDesignFork: PreparedDesignDocumentFork | null = null
     let forkCommitted = false
-    const parentRecord = get().threads.find((thread) => thread.id === activeThreadId)
+    const parentRecord = get().threads.find((thread) => thread.id === activeThreadId) ??
+      (get().adeThreads ?? []).find((thread) => thread.id === activeThreadId)
+    const isAdeParent = parentRecord?.workspaceMode === 'ade'
     const parentThread = parentRecord ?? {
       id: activeThreadId,
       title: activeThreadId.slice(0, 8)
@@ -82,7 +84,8 @@ export function createForkActiveThreadWithOptions(
           readThreadForkRegistry()
         )
       )
-      await get().refreshThreads()
+      // ADE forks refresh the ADE inventory; the Code list never sees them.
+      await (isAdeParent ? get().refreshAdeThreads() : get().refreshThreads())
       await get().selectThread(forked.id)
     }
     try {

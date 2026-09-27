@@ -38,6 +38,8 @@
   "code": "Code",
   "write": "办公",
   "workspaceModeWorkLabel": "Work",
+  "workspaceModeAdeLabel": "ADE",
+  "workspaceModeAdeDescription": "指挥一组 agent 协同工作",
   "workspaceModeCodeDescription": "构建、调试与发布",
   "workspaceModeWorkDescription": "写作、整理与日常任务",
   "design": "设计",

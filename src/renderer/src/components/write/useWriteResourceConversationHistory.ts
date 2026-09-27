@@ -94,6 +94,7 @@ async function listAssociatedThreads(
     const threads = await provider.listThreads({
       workspace: workspaceRoot,
       includeArchived: true,
+      workspaceMode: 'code',
       lean: true
     })
     return threads.filter((thread) => wantedIds.has(thread.id))
@@ -104,6 +105,7 @@ async function listAssociatedThreads(
     const page = await provider.listThreadsPage({
       workspace: workspaceRoot,
       includeArchived: true,
+      workspaceMode: 'code',
       lean: true,
       limit: 100,
       ...(cursor ? { cursor } : {})

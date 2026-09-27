@@ -9,6 +9,7 @@ import type { ThreadStore } from '../ports/thread-store.js'
 import type { TurnService } from '../services/turn-service.js'
 import type { GraphRuntimeStartOptions } from './graph-runtime-factory.js'
 import type { GraphRuntimeConfig } from '../config/kun-config.js'
+import type { RegisterUnit } from '../contracts/activity.js'
 import { graphParentAuthorityToolNames } from '../graph/graph-tool-boundary.js'
 import type { CapabilityToolSpec } from '../adapters/tool/capability-registry.js'
 import type { TurnRunOutcome } from '../loop/turn-execution-types.js'
@@ -42,6 +43,8 @@ export function createGraphRuntimeStartOptions(input: {
   defaults: () => GraphAuthorityDefaults
   tools: () => CapabilityToolSpec[]
   skillIds: () => string[]
+  /** Mission-control activity rows for worker attempts (P1-25). */
+  activity?: Pick<{ register(unit: RegisterUnit): unknown }, 'register'>
 }): GraphRuntimeStartOptions {
   return {
     delegation: input.delegation,
@@ -188,6 +191,7 @@ export function createGraphRuntimeStartOptions(input: {
       }
     },
     isLeadTurnActive: (run) => input.isTurnExecutionActive(run.sourceTurnId),
+    activity: input.activity,
     authorityForRun: async (run) => {
       const thread = await input.threads.get(run.threadId)
       const sourceTurn = thread?.turns.find((turn) => turn.id === run.sourceTurnId)

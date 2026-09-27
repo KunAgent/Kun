@@ -426,7 +426,8 @@ describe('chat-store navigation workspace selection', () => {
 
     expect(provider.listThreads).toHaveBeenCalledWith({
       includeArchived: true,
-      includeSide: true
+      includeSide: true,
+      workspaceMode: 'code'
     })
     // The currently open side thread remains visible through the ordinary
     // active-thread preservation path; its legacy run id grants no special case.

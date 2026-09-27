@@ -33,8 +33,14 @@ export type NormalizedThread = {
   approvalReviewer?: ApprovalReviewer
   /** Whether future model requests are retained for Agent Perspective. */
   modelRequestCaptureEnabled?: boolean
+  /** Owning workspace mode; absent counts as 'code'. Immutable after create. */
+  workspaceMode?: 'code' | 'ade'
   /** Optional provider id when this thread is pinned to a non-default provider. */
   providerId?: string
+  /** Explicit harness identity inherited by new turns (01 §4). */
+  harnessId?: string
+  /** Host-managed task workspace bound to this thread (07 §5). */
+  taskWorkspaceId?: string
   /** Optional subagent profile id this thread is bound to (primary-agent persona). */
   agentId?: string
   /** Optional persona systemPrompt snapshot applied to every ModelRequest on this thread. */

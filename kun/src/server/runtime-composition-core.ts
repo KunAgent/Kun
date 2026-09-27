@@ -9,6 +9,9 @@ import {
   DelegatedSessionCoordinator,
   FileDelegatedSessionBindingStore,
   delegatedSessionRoot,
+  AcpConnectionPool,
+  AcpClientHost,
+  AcpSessionManager,
   FileArtifactStore,
   type ArtifactStore,
   LocalWorkspaceInspector,
@@ -32,6 +35,20 @@ import {
   KUN_SYSTEM_PROMPT,
   RuntimeEventRecorder,
   ThreadActivityRegistry,
+  ActivityStore,
+  ActivityFactsStore,
+  TaskWorkspaceStore,
+  TaskWorkspaceService,
+  TaskWorkspaceSetupRunner,
+  fillTaskWorktreeEnvironment,
+  createApprovedSetupResolver,
+  userSharedPathsForRepo,
+  loadKunProjectConfig,
+  createWorktreeLifecycle,
+  workspaceGit,
+  workspaceCommitGit,
+  assertWorkspaceWriteFence,
+  withWorkspaceWriteCommit,
   GraphRuntimeComposition,
   LifecycleFencedSessionStore,
   LifecycleFencedThreadStore,
@@ -132,6 +149,17 @@ export async function createRuntimeCore(
     dataDir: activeOptions.dataDir
   })
   const threadActivity = new ThreadActivityRegistry()
+  const activityFacts = new ActivityFactsStore({ dataDir: activeOptions.dataDir })
+  await activityFacts.load().catch(() => undefined)
+  const activityStore: ActivityStore = new ActivityStore({
+    nowIso,
+    threadMetadata: (id) => threadStore.getMetadata?.(id) ?? Promise.resolve(null),
+    facts: activityFacts,
+    // Graph attempt rows are keyed by attemptId while event.child carries the
+    // worker child thread id (P1-25); resolved lazily at event time.
+    unitIdForChild: (childId: string): string | undefined =>
+      graphRuntime.workerSessions.get(childId)?.attemptId
+  })
   const contextWindowModes = new ContextWindowTurnModes(
     liveContextWindowMode(() => activeOptions)
   )
@@ -159,8 +187,17 @@ export async function createRuntimeCore(
     ids,
     nowIso
   })
+  // Rebuild activity rows for recently-active threads from durable turn
+  // state before live events start flowing (docs/ade/06 §8), then reapply
+  // the persisted per-unit user facts.
+  await activityStore.hydrate(threadStore)
+  for (const [unitId, fact] of Object.entries(activityFacts.all())) {
+    const row = activityStore.get(unitId)
+    if (row) activityStore.apply(unitId, fact, row.provenance)
+  }
   const observers = [
     threadActivity,
+    activityStore,
     ...(agentObservability ? [agentObservability] : [])
   ]
   const events = new RuntimeEventRecorder({
@@ -171,6 +208,8 @@ export async function createRuntimeCore(
     lifecycleFence,
     observers
   })
+  const taskWorkspaceStore = new TaskWorkspaceStore({ dataDir: activeOptions.dataDir })
+  await taskWorkspaceStore.load().catch(() => undefined)
   const contextWindowState = new FileContextWindowStateStore({ dataDir: activeOptions.dataDir })
   const contextWindowStateRestore = new ContextWindowStateRestore({
     store: contextWindowState,
@@ -221,6 +260,11 @@ export async function createRuntimeCore(
     new FileDelegatedSessionBindingStore(delegatedSessionRoot(activeOptions.dataDir)),
     nowIso
   )
+  // ACP serve-process singletons: pooled agent connections and the mediation
+  // host must outlive hot config reloads that rebuild the runtime objects.
+  const acpConnectionPool = new AcpConnectionPool()
+  const acpClientHost = new AcpClientHost()
+  const acpSessionManager = new AcpSessionManager({ coordinator: delegatedSessions })
   const threadService: ThreadService = new ThreadService({
     threadStore,
     deleteThreadStore: rawThreadStore,
@@ -283,9 +327,37 @@ export async function createRuntimeCore(
   const artifactStore: ArtifactStore = activeOptions.serviceManager
     ? new ManagerRemoteArtifactStore(activeOptions.serviceManager)
     : new FileArtifactStore(join(activeOptions.dataDir, 'artifacts'), nowIso)
+  const approvedSetup = createApprovedSetupResolver({
+    approvedEntries: () => activeOptions.ade?.approvedWorktreeConfigs ?? []
+  })
+  const taskWorkspaces = new TaskWorkspaceService({
+    store: taskWorkspaceStore,
+    lifecycle: createWorktreeLifecycle({
+      git: workspaceGit,
+      commitGit: workspaceCommitGit,
+      fence: assertWorkspaceWriteFence,
+      withCommit: withWorkspaceWriteCommit
+    }),
+    events,
+    projectConfig: async (repoRoot) => {
+      const loaded = await loadKunProjectConfig(repoRoot).catch(() => null)
+      return loaded?.status === 'valid' ? loaded : null
+    },
+    approvedSetup,
+    environmentFill: (input) =>
+      fillTaskWorktreeEnvironment({
+        ...input,
+        userSharedPaths: userSharedPathsForRepo(
+          activeOptions.ade?.worktreeSharedPaths, input.repoRoot
+        )
+      }),
+    setupRunner: new TaskWorkspaceSetupRunner({ artifacts: artifactStore }),
+    artifacts: artifactStore
+  })
+  taskWorkspaces.recoverInterrupted()
   const graphConfig = (): GraphRuntimeConfig =>
     activeOptions.graph ?? DEFAULT_GRAPH_RUNTIME_CONFIG
-  const graphRuntime = new GraphRuntimeComposition({
+  const graphRuntime: GraphRuntimeComposition = new GraphRuntimeComposition({
     dataDir: activeOptions.dataDir,
     config: graphConfig,
     artifactStore,
@@ -395,8 +467,14 @@ export async function createRuntimeCore(
     contextWindowStateRestore,
     events,
     threadActivity,
+    activityStore,
+    activityFacts,
+    taskWorkspaces,
     prefix,
     delegatedSessions,
+    acpConnectionPool,
+    acpClientHost,
+    acpSessionManager,
     threadService,
     projectBoardStore,
     historyReferences,

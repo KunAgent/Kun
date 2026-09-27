@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CheckCircle2, ChevronDown, ChevronRight, CircleAlert, File, Layers3, MessageSquareQuote, PencilLine, Sparkles } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronRight, CircleAlert, File, HelpCircle, Layers3, MessageSquareQuote, PencilLine, Sparkles, Users } from 'lucide-react'
 import type { ChatBlock, RuntimeDisclosureMetadata } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { parseWritePromptForDisplay } from '../../write/quoted-selection'
@@ -8,6 +8,7 @@ import { writePromptQuotesFromComposerContexts } from '../../write/write-compose
 import { parseClawUserPromptForDisplay, type ClawUserPromptDisplay } from '@shared/app-settings'
 import { parseBackgroundShellCompletionNotice } from '@shared/background-shell-notice'
 import { parseBackgroundSubagentCompletionNotice } from '@shared/background-subagent-notice'
+import { parseWorkerUpdatesNotice } from '@shared/worker-update-notice'
 import { AssistantMarkdown } from './AssistantMarkdown'
 import { ModelMetaTag, WritePromptMetaDisclosure, WritePromptQuoteCard } from './message-timeline-cards'
 import { UserAttachmentPreviews } from './message-timeline-media-views'
@@ -227,6 +228,90 @@ export function BackgroundSubagentNoticeBubble({
             ) : null}
           </div>
         ) : null}
+      </div>
+    </div>
+  )
+}
+
+function workerUpdateStatusTone(status: string): {
+  tone: string
+  Icon: typeof CheckCircle2
+} {
+  const lowered = status.toLowerCase()
+  if (lowered === 'failed' || status === '失败') {
+    return { tone: 'border-orange-400/35 bg-orange-500/8 text-orange-800 dark:text-orange-200', Icon: CircleAlert }
+  }
+  if (lowered === 'question' || status === '提问') {
+    return { tone: 'border-accent/30 bg-accent/8 text-accent', Icon: HelpCircle }
+  }
+  if (lowered === 'cancelled' || lowered === 'released' || lowered === 'detached' || status === '取消' || status === '已释放' || status === '已分离') {
+    return { tone: 'border-ds-border/80 bg-ds-card/70 text-ds-muted', Icon: Layers3 }
+  }
+  return { tone: 'border-emerald-500/25 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300', Icon: CheckCircle2 }
+}
+
+/** ADE manager wake-up batch (09 §6.2): one card per `<kun_worker_updates>` row. */
+export function WorkerUpdateNoticeBubble({
+  block,
+  nested = false
+}: {
+  block: Extract<ChatBlock, { kind: 'user' }>
+  nested?: boolean
+}): ReactElement {
+  const { t } = useTranslation('common')
+  const entries = useMemo(() => parseWorkerUpdatesNotice(block.text), [block.text])
+  const title =
+    block.meta?.displayText?.trim() ||
+    t('workerUpdateNotice.title', { defaultValue: 'Worker updates' })
+
+  return (
+    <div className={nested ? 'min-w-0' : 'flex w-full justify-start'}>
+      <div
+        data-worker-update-card="true"
+        className="relative w-full max-w-[min(760px,calc(100vw-3rem))] overflow-hidden rounded-[16px] border border-ds-border bg-ds-card text-ds-muted shadow-[0_8px_24px_rgba(42,52,72,0.06)]"
+      >
+        <div className="flex min-w-0 items-center gap-3 px-4 py-3 pl-[18px]">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-accent/15 bg-accent/[0.07] text-accent">
+            <Users className="h-[17px] w-[17px]" strokeWidth={1.9} />
+          </span>
+          <h3 className="min-w-0 flex-1 truncate text-[14px] font-semibold leading-5 text-ds-ink">{title}</h3>
+        </div>
+        <div className="divide-y divide-ds-border/70 border-t border-ds-border/80">
+          {(entries ?? []).map((entry, index) => {
+            const { tone, Icon } = workerUpdateStatusTone(entry.status)
+            return (
+              <div key={`${entry.ref ?? entry.title}-${index}`} className="px-4 py-2.5 pl-[18px]">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  {entry.status ? (
+                    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${tone}`}>
+                      <Icon className="h-3 w-3" strokeWidth={2} />
+                      {entry.status}
+                    </span>
+                  ) : null}
+                  <span className="min-w-0 truncate text-[13px] font-medium text-ds-ink">{entry.title}</span>
+                  {entry.harnessLabel ? (
+                    <span className="truncate text-[11.5px] text-ds-faint">{entry.harnessLabel}</span>
+                  ) : null}
+                  {entry.ref ? (
+                    <span className="shrink-0 font-mono text-[11px] text-ds-faint" title={entry.ref}>
+                      {entry.ref}
+                    </span>
+                  ) : null}
+                </div>
+                {entry.rows.map((row, rowIndex) => (
+                  <p key={rowIndex} className="mt-1 whitespace-pre-wrap break-words text-[12.5px] leading-5 text-ds-muted">
+                    {row}
+                  </p>
+                ))}
+              </div>
+            )
+          })}
+          {entries === null ? (
+            <div className="px-4 py-3 pl-[18px]">
+              <pre className="whitespace-pre-wrap break-words text-[12.5px] leading-5 text-ds-muted">{block.text}</pre>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   )

@@ -25,6 +25,11 @@ export type ThreadStoreListOptions = {
    * root.
    */
   workspaces?: string[]
+  /**
+   * Filter by owning workspace mode ('code' | 'ade'). Threads without a
+   * stored value count as 'code'.
+   */
+  workspaceMode?: 'code' | 'ade'
 }
 
 /**

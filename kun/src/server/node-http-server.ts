@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { Readable } from 'node:stream'
 import type { Router } from './router.js'
 import { dispatchRequest } from './http-server.js'
+import type { KgwRequestGuard } from './kgw-token-guard.js'
 import type { FaultInjectionController } from '../services/fault-injection-controller.js'
 
 export type NodeHttpServerHandle = {
@@ -16,10 +17,12 @@ export async function startNodeHttpServer(input: {
   host: string
   port: number
   faultInjection?: FaultInjectionController
+  /** Pre-dispatch credential fence (kgw_ harness tokens) run before routing. */
+  requestGuard?: KgwRequestGuard
 }): Promise<NodeHttpServerHandle> {
   const activeRequests = new Set<Promise<void>>()
   const server = createServer((request, response) => {
-    const active = handleNodeRequest(input.router, request, response, input.faultInjection)
+    const active = handleNodeRequest(input.router, request, response, input.faultInjection, input.requestGuard)
       .finally(() => activeRequests.delete(active))
     activeRequests.add(active)
   })
@@ -53,7 +56,8 @@ async function handleNodeRequest(
   router: Router,
   incoming: IncomingMessage,
   outgoing: ServerResponse,
-  faultInjection?: FaultInjectionController
+  faultInjection?: FaultInjectionController,
+  requestGuard?: KgwRequestGuard
 ): Promise<void> {
   try {
     const timeout = await faultInjection?.activate('http-timeout')
@@ -75,7 +79,7 @@ async function handleNodeRequest(
     }
     const adapted = toFetchRequest(incoming, outgoing)
     try {
-      const response = await dispatchRequest(router, adapted.request)
+      const response = await dispatchRequest(router, adapted.request, requestGuard)
       await writeFetchResponse(outgoing, response, faultInjection)
     } finally {
       adapted.dispose()

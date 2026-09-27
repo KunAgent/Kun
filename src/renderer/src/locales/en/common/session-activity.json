@@ -9,6 +9,7 @@
   "processed": "Processed",
   "processStepCount": "{{count}} steps",
   "workedFor": "Worked for {{duration}}",
+  "turnUsageDetailsGatewaySource": "Requests routed through the local Kun gateway.",
   "working": "Running…",
   "workingSprint": "Analyzing…",
   "workingDive": "Organizing…",

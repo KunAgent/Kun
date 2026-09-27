@@ -183,6 +183,7 @@ type TurnAccumulator = {
   referenceInputs: CodexSubscriptionValueInput[]
   providerIds: Set<string>
   models: Set<string>
+  sources: Set<NonNullable<ThreadUsageRecord['source']>>
 }
 
 export function buildTurnUsageResponse(
@@ -224,7 +225,8 @@ function emptyTurnAccumulator(turnId: string): TurnAccumulator {
     actualCosts: new Map(),
     referenceInputs: [],
     providerIds: new Set(),
-    models: new Set()
+    models: new Set(),
+    sources: new Set()
   }
 }
 
@@ -242,6 +244,7 @@ function foldTurnRecord(target: TurnAccumulator, record: ThreadUsageRecord): voi
   const model = resolveUsageModel(record)
   if (model) target.models.add(model)
   if (usage.actualProviderId?.trim()) target.providerIds.add(usage.actualProviderId.trim())
+  if (record.source) target.sources.add(record.source)
   const referenceValue = usage.billingKind === 'subscription' || (
     usage.billingKind == null && isLegacyCodexModel(model)
   )
@@ -284,7 +287,8 @@ function finalizeTurnBucket(bucket: TurnAccumulator): TurnUsageResponse['buckets
   return {
     turn_id: bucket.turnId,
     ...finalizeTurnCounters(bucket),
-    reference_price_breakdown: mapReferencePriceBreakdown(reference)
+    reference_price_breakdown: mapReferencePriceBreakdown(reference),
+    ...(bucket.sources.size ? { sources: [...bucket.sources].sort() } : {})
   }
 }
 

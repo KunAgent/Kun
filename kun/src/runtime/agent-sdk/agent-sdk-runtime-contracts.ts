@@ -3,6 +3,8 @@ import type { TurnItem } from '../../contracts/items.js'
 import type { ModelRequestTraceDelegated } from '../../contracts/model-request-trace.js'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '../../contracts/policy.js'
 import type { ActingTurnModelRoute } from '../../contracts/turns.js'
+import type { HandoffInjectedEvent } from '../../contracts/events.js'
+import type { TurnHandoff } from '../../handoff/turn-handoff.js'
 import type { LlmDebugSink } from '../../services/llm-debug-recorder.js'
 import type { TurnLimitsConfig } from '../../loop/turn-limits.js'
 import type { TurnRunOutcome } from '../../loop/turn-execution-types.js'
@@ -29,11 +31,26 @@ export class AgentSdkProtocolError extends Error {
 
 /** Safe, source-id-free failure raised when a managed Claude credential is fenced or unreadable. */
 export class AgentSdkCredentialUnavailableError extends Error {
-  readonly code = 'agent_sdk_credential_unavailable'
+  readonly code: string = 'agent_sdk_credential_unavailable'
 
   constructor() {
     super('Protected Claude subscription credentials are unavailable. Reconnect the provider in Settings.')
     this.name = 'AgentSdkCredentialUnavailableError'
+  }
+}
+
+/**
+ * `kun-gateway` mode cannot run without a listening kun serve endpoint, a
+ * wired token service, or a resolvable route. Extends the credential error so
+ * runTurnOwned's existing availability branch records + fails the turn.
+ */
+export class AgentSdkGatewayUnavailableError extends AgentSdkCredentialUnavailableError {
+  override readonly code = 'agent_sdk_gateway_unavailable'
+
+  constructor(detail: string) {
+    super()
+    this.message = `kun-gateway credential mode is unavailable: ${detail}`
+    this.name = 'AgentSdkGatewayUnavailableError'
   }
 }
 
@@ -80,6 +97,11 @@ export interface SdkTurnContext {
   }
   /** Subscription OAuth token; absent => rely on the host's Claude Code login. */
   oauthToken?: string
+  /**
+   * `kun-gateway` turns replace `oauthToken` entirely: the harness reaches the
+   * loopback kun serve gateway with this env injection (docs/ade/04 §5.5).
+   */
+  gateway?: import('./sdk-options-builder.js').SdkGatewayEnv
   /** Image attachments to forward to the model (base64 + media type). */
   images?: Array<{ mediaType: string; base64: string }>
   /** kun tool catalog to consider bridging (overlap/excluded are filtered here). */
@@ -89,6 +111,23 @@ export interface SdkTurnContext {
    * native session. Resumed turns send only their current delta.
    */
   historyTranscript?: string
+  /**
+   * Deterministic handoff brief (docs/ade/08) — replaces `historyTranscript`
+   * in the prompt when set.
+   */
+  handoffBrief?: string
+  /** `handoff_injected` payload to record once the run actually starts. */
+  handoffEvent?: Omit<
+    HandoffInjectedEvent,
+    'seq' | 'timestamp' | 'threadId' | 'turnId'
+  >
+  /**
+   * Re-resolve the turn handoff after a rejected native resume — the rotated
+   * preparation produces a fresh full brief instead of the raw transcript.
+   */
+  resolveHandoff?: (
+    preparation: DelegatedSessionPreparation | undefined
+  ) => TurnHandoff | undefined
   /** Internal context values that must be removed from request diagnostics. */
   redactedRequestValues?: string[]
   /**
@@ -177,8 +216,14 @@ export interface SdkRuntimeDeps {
   ): Promise<DelegatedGraphCompletionCheck>
   /** Stage the SDK session id for commit after Kun finishes successfully. */
   saveSessionId(threadId: string, turnId: string, sessionId: string): Promise<void>
-  /** Rotate an unusable native resume preparation before the portable retry. */
-  rejectResume?(threadId: string, turnId: string): Promise<void> | void
+  /**
+   * Rotate an unusable native resume preparation before the portable retry;
+   * returns the superseded binding's fresh rebase preparation when present.
+   */
+  rejectResume?(
+    threadId: string,
+    turnId: string
+  ): Promise<DelegatedSessionPreparation | void> | DelegatedSessionPreparation | void
   /** Lazy-load the real `@anthropic-ai/claude-agent-sdk`. */
   loadSdk(): Promise<SdkApi>
   /** Base process env to scope for the Claude Code subprocess. */

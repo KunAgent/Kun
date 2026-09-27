@@ -1,4 +1,5 @@
 import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
+import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
 import {
   join,
   isDeepStrictEqual,
@@ -47,7 +48,10 @@ import {
   resolveConfiguredHooks
 } from './runtime-factory-dependencies.js'
 import { buildPaperSearchToolProvider, resolvePaperSearchCredentials } from '../adapters/tool/paper-search-tool-provider.js'
+import type { CapabilityToolProvider } from '../adapters/tool/capability-registry.js'
 import type { createRuntimeExtensionComposition } from './runtime-composition-extensions.js'
+import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
+import { composeDelegatedTurnRuntimes } from '../runtime/delegated-turn-runtime.js'
 import {
   buildPptAgentRuntimeProvider,
   builtinToolOptionsForOptions,
@@ -62,6 +66,18 @@ import { stageBrowserUseHostBinding } from './runtime-browser-use-binding.js'
 import { buildModelClientRouterInput, hydrateLegacyCredentialOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
 import { createPersistentAttachmentStore, createPersistentMemoryStore, createReadyPersistentMemoryFeedback } from './runtime-factory-storage.js'
 import { delegationRuntimeConfigView } from './runtime-delegation-config-view.js'
+
+const builtinProvider = (
+  id: string,
+  tools: CapabilityToolProvider['tools']
+): CapabilityToolProvider => ({
+  id,
+  kind: 'built-in',
+  enabled: true,
+  available: true,
+  tools
+})
+
 export function createRuntimeConfigController(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>
 ) {
@@ -115,6 +131,7 @@ export function createRuntimeConfigController(
     extensionTools,
     buildMainDelegatedRuntime,
     sdkRuntime,
+    harnessRuntimeMap,
     extensionAgent
   } = agent
   const { extensionPreparations } = extensions
@@ -352,29 +369,21 @@ export function createRuntimeConfigController(
 	      nextSubagentConfig
 	    )
 	    const nextBaseToolProviders = [
-	      {
-	        id: 'builtin',
-	        kind: 'built-in' as const,
-	        enabled: true,
-	        available: true,
-	        tools: withBackgroundShellTools(
-	          buildDefaultLocalTools({}, builtinToolOptionsForOptions(nextOptions)),
-	          nextOptions
-	        )
-	      },
-	      {
-	        id: 'artifacts',
-	        kind: 'built-in' as const,
-	        enabled: true,
-	        available: true,
-	        tools: [createReadArtifactTool()]
-	      },
+	      builtinProvider('builtin', withBackgroundShellTools(
+	        buildDefaultLocalTools({}, builtinToolOptionsForOptions(nextOptions)),
+	        nextOptions
+	      )),
+	      builtinProvider('artifacts', [createReadArtifactTool()]),
 	      graphToolsProvider,
 	      ...nextMcpProviders.providers,
 	      ...nextWebProviders.providers,
 	      ...buildMemoryToolProviders(nextMemoryStore),
 	      ...buildContextWindowToolProviders({ service: core.contextWindows, mode: contextWindowModeFor(core.contextWindowModes), newContextTransition: (context, args) => core.contextWindowTransition.asToolTransition(context.model?.id)(context, args) }),
 	      ...buildContextCompactToolProviders({ mode: contextWindowModeFor(core.contextWindowModes), compact: core.contextCompact.asTool() }),
+	      ...buildThreadHistoryToolProviders({
+	        sessionStore: services.model.core.sessionStore,
+	        threadStore: services.model.core.threadStore
+	      }),
 	      buildKnowledgeToolProvider(services.knowledgeBaseService),
 	      ...buildSkillToolProviders(nextSkillRuntime),
 	      ...nextImageGenProviders.providers,
@@ -392,27 +401,9 @@ export function createRuntimeConfigController(
 	      ...nextBaseToolProviders,
 	      ...nextComputerUseProviders.providers,
 	      ...nextBrowserUseProviders.providers,
-	      {
-	        id: 'goal',
-	        kind: 'built-in' as const,
-	        enabled: true,
-	        available: true,
-	        tools: buildGoalLocalTools(threadService)
-	      },
-	      {
-	        id: 'todo',
-	        kind: 'built-in' as const,
-	        enabled: true,
-	        available: true,
-	        tools: buildTodoLocalTools(threadService)
-	      },
-	      {
-	        id: 'planning',
-	        kind: 'built-in' as const,
-	        enabled: true,
-	        available: true,
-	        tools: [taskGraphTool]
-	      },
+	      builtinProvider('goal', buildGoalLocalTools(threadService)),
+	      builtinProvider('todo', buildTodoLocalTools(threadService)),
+	      builtinProvider('planning', [taskGraphTool]),
 	      ...buildDelegationToolProviders(nextDelegationRuntime, subagentRouter),
 	      ...buildFastContextToolProvider(
 	        nextDelegationRuntime,
@@ -495,7 +486,8 @@ export function createRuntimeConfigController(
 	      instructionRuntime: nextInstructionRuntime,
 	      attachmentStore: nextAttachmentStore,
 	      memoryStore: nextMemoryStore,
-	      memoryFeedback: nextMemoryFeedback
+	      memoryFeedback: nextMemoryFeedback,
+	      taskWorkspaces: core.taskWorkspaces
 	    })
 	    const nextLoopOptions: AgentLoopOptions = {
 	      ...loopOptions,
@@ -578,7 +570,11 @@ export function createRuntimeConfigController(
 	    extensionTools.publishStagedRegistry(stagedExtensionRegistry)
 	    childToolHost.replaceRuntimeComponents({ registry: childRegistry, hooks: resolvedHooks })
 	    toolHost.replaceRuntimeComponents({ registry, hooks: resolvedHooks })
-	    sdkRuntime.replace(nextDelegatedRuntime)
+	    // Hot config swaps rebuild the transport map wholesale: the router reads
+	    // it live while the legacy provider-inference runtime stays in sync.
+	    const nextHarnessRuntimes = buildHarnessRuntimes(nextDelegatedRuntime)
+	    harnessRuntimeMap.replace(nextHarnessRuntimes)
+	    sdkRuntime.replace(composeDelegatedTurnRuntimes(Object.values(nextHarnessRuntimes)))
 	    turnService.updateRuntimeConfig({
 	      defaultModel: activeOptions.model,
 	      contextCompaction: activeOptions.contextCompaction,

@@ -1,9 +1,19 @@
 import { normalizeComposerSendKey } from '@shared/app-settings'
+import { defaultKunAdeSettings } from '@shared/app-settings-kun-harness'
+import type { AdeActivityNotificationCategory } from '@shared/kun-gui-notification-contracts'
 import type { ReactElement } from 'react'
 import { SettingRow, SettingsCard, SettingsTabPanel, Toggle } from './settings-controls'
 
+const ADE_NOTIFICATION_CATEGORIES: readonly AdeActivityNotificationCategory[] = [
+  'waiting',
+  'failed',
+  'done',
+  'stalled'
+]
+
 export function GeneralConversationSettingsPanel({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, form, update, selectControlClass, openOnboardingPreview, activeTab } = view
+  const { t, form, update, selectControlClass, openOnboardingPreview, activeTab, kun, updateKun } = view
+  const adeNotifications = kun?.ade?.notifications ?? defaultKunAdeSettings().notifications
   return (
     <>
       <SettingsTabPanel
@@ -84,6 +94,25 @@ export function GeneralConversationSettingsPanel({ view }: { view: Record<string
                 />
               }
             />
+            {kun?.ade?.enabled
+              ? ADE_NOTIFICATION_CATEGORIES.map((category) => (
+                  <SettingRow
+                    key={category}
+                    title={t(`adeNotify.setting_${category}`)}
+                    description={t(`adeNotify.setting_${category}Desc`)}
+                    control={
+                      <Toggle
+                        checked={adeNotifications[category] !== false}
+                        disabled={!form.notifications.turnComplete}
+                        ariaLabel={t(`adeNotify.setting_${category}`)}
+                        onChange={(v) =>
+                          updateKun({ ade: { notifications: { [category]: v } } })
+                        }
+                      />
+                    }
+                  />
+                ))
+              : null}
           </div>
         </SettingsCard>
         <SettingsCard title={t('onboardingPreview')}>

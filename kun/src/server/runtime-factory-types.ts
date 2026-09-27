@@ -31,6 +31,7 @@ import type {
   TokenEconomyConfig,
   ToolOutputLimitsConfig
 } from './runtime-factory-dependencies.js'
+import type { AdeConfig, HarnessesConfig } from '../config/kun-config-application.js'
 
 export type KunServeRuntimeOptions = {
   host: string
@@ -73,6 +74,10 @@ export type KunServeRuntimeOptions = {
   capabilities?: KunCapabilitiesConfig
   hooks?: HooksConfig
   quality?: QualityConfig
+  /** `harnesses` config section (per-harness enable/path/custom entries). */
+  harnesses?: HarnessesConfig
+  /** `ade` config section (runtime-side ADE switches). */
+  ade?: AdeConfig
   fastContext?: FastContextConfig
   lab?: LabConfig
   startedAt?: string

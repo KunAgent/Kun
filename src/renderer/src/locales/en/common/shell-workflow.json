@@ -38,6 +38,8 @@
   "code": "Code",
   "write": "Work",
   "workspaceModeWorkLabel": "Work",
+  "workspaceModeAdeLabel": "ADE",
+  "workspaceModeAdeDescription": "Orchestrate a team of agents",
   "workspaceModeCodeDescription": "Build, debug, and ship",
   "workspaceModeWorkDescription": "Write, organize, and handle everyday tasks",
   "design": "Design",

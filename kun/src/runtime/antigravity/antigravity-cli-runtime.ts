@@ -39,12 +39,15 @@ import type {
   DelegatedRuntimeCapabilities,
   DelegatedTurnRuntime
 } from '../delegated-turn-runtime.js'
+import { capabilitiesV2FromLegacy } from '../../harness/effective-capabilities.js'
+import { ANTIGRAVITY_CAPABILITIES } from '../../harness/builtin-harnesses.js'
 import {
   delegatedCapabilityFingerprint,
   delegatedCredentialIdentity,
   priorItemsForDelegatedTurn,
   type DelegatedSessionCoordinator
 } from '../delegated-session-binding.js'
+import { recordHandoffInjected, resolveTurnHandoff } from '../../handoff/turn-handoff.js'
 import { runAntigravityProcess } from './antigravity-process.js'
 import { parkDelegatedGraphTurnAfterRecovery } from '../delegated-graph-turn-policy.js'
 
@@ -70,6 +73,20 @@ export interface AntigravityCliRuntimeDeps {
   /** Delegated read-only children must deny mutation regardless of parent defaults. */
   enforceReadOnly?: boolean
   sessionCoordinator?: DelegatedSessionCoordinator
+  /** Host task-workspace index for handoff work-state merging (docs/ade/07). */
+  taskWorkspaces?: {
+    list(filter?: { ownerThreadId?: string }): Array<{
+      ownerThreadId: string
+      path: string
+      branch?: string
+      changedFiles: readonly string[]
+    }>
+  }
+  /**
+   * `ade.deterministicHandoff` — when false the runtime sends the raw portable
+   * transcript instead of the deterministic brief (docs/ade/08 §4).
+   */
+  deterministicHandoff?: boolean
   contextProfile?: (model: string) => {
     contextWindowTokens: number
     softThresholdTokens: number
@@ -240,15 +257,6 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
     ].filter((value, index, all): value is string =>
       Boolean(value) && all.indexOf(value) === index
     )
-    const prompt = composeSdkPromptText({
-      historyTranscript: buildHistoryTranscript(
-        items,
-        turnId,
-        DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
-      ),
-      userText: userMessageTextWithComposerContexts(userItem),
-      instructionBlocks
-    })
     const limits = normalizeTurnLimits(this.deps.turnLimits)
     const binaryPath = this.deps.binaryPath?.trim() || process.env.KUN_ANTIGRAVITY_BINARY?.trim() || 'agy'
     const requestedProviderId = turn.providerId?.trim()
@@ -296,15 +304,6 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
     const sandboxMode = this.deps.enforceReadOnly === true
       ? 'read-only'
       : turn.sandboxMode ?? thread.sandboxMode
-    const args = buildAntigravityArgs({
-      prompt,
-      model,
-      effort,
-      timeoutMs: limits.maxWallTimeMs,
-      planMode,
-      approvalPolicy,
-      sandboxMode
-    })
     const provider = this.deps.providerConfigs[resolvedProviderId]
     const capabilities = antigravityCapabilities()
     const preparation = this.deps.sessionCoordinator
@@ -336,16 +335,56 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
           priorItems: priorItemsForDelegatedTurn(items, turnId)
         })
       : undefined
+    // Antigravity has no native continuation: every turn is portable, so the
+    // deterministic handoff brief replaces the raw transcript (docs/ade/08 §4).
+    const turnHandoff = resolveTurnHandoff({
+      enabled: this.deps.deterministicHandoff !== false,
+      preparation,
+      items,
+      currentTurnId: turnId,
+      ownerThreadId: threadId,
+      workspacePath: thread.workspace,
+      taskWorkspaces: this.deps.taskWorkspaces
+    })
+    const prompt = composeSdkPromptText({
+      ...(turnHandoff
+        ? { handoffBrief: turnHandoff.brief.text }
+        : {
+            historyTranscript: buildHistoryTranscript(
+              items,
+              turnId,
+              DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
+            )
+          }),
+      userText: userMessageTextWithComposerContexts(userItem),
+      instructionBlocks
+    })
+    const args = buildAntigravityArgs({
+      prompt,
+      model,
+      effort,
+      timeoutMs: limits.maxWallTimeMs,
+      planMode,
+      approvalPolicy,
+      sandboxMode
+    })
     await this.deps.events.record({
       kind: 'delegated_runtime',
       threadId,
       turnId,
       providerKind: 'antigravity-cli',
       providerId: resolvedProviderId,
+      harnessId: 'antigravity',
       phase: 'portable',
       ...(preparation?.rebaseReason ? { reason: preparation.rebaseReason } : {}),
-      capabilities
+      capabilities,
+      capabilitiesV2: capabilitiesV2FromLegacy(capabilities, ANTIGRAVITY_CAPABILITIES)
     })
+    await recordHandoffInjected(
+      (event) => this.deps.events.record(event),
+      { threadId, turnId, harnessId: 'antigravity' },
+      turnHandoff
+    )
     const contextProfile = this.deps.contextProfile?.(model)
     if (contextProfile) {
       const system = estimateAntigravityTokens(instructionBlocks.join('\n'))
@@ -438,7 +477,8 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
               await this.deps.sessionStore.loadItems(threadId),
               goalContextKeyForHistory
             ),
-            lastCommittedTurnId: turnId
+            lastCommittedTurnId: turnId,
+            ...(turnHandoff ? { handoffBriefDigest: turnHandoff.brief.digest } : {})
           })
         } catch {
           // Portable history remains authoritative if the disposable binding

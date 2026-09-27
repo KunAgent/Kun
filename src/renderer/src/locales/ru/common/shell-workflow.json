@@ -38,6 +38,8 @@
   "code": "Код",
   "write": "Работа",
   "workspaceModeWorkLabel": "Работа",
+  "workspaceModeAdeLabel": "ADE",
+  "workspaceModeAdeDescription": "Управление командой агентов",
   "workspaceModeCodeDescription": "Создание, отладка и выпуск",
   "workspaceModeWorkDescription": "Тексты, организация и повседневные задачи",
   "design": "Дизайн",

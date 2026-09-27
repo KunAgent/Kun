@@ -38,6 +38,8 @@ export type RuntimeQueueSendInput = {
   composerModel: string
   composerProviderId: string
   composerAccountId: string | undefined
+  composerHarnessId: string
+  composerCredentialMode: string
   userModelChip: string | undefined
   displayText: string | undefined
   reasoningEffort: string | undefined
@@ -52,6 +54,7 @@ export type RuntimeQueueSendInput = {
   attachments: readonly AttachmentReference[] | undefined
   fileReferences: SendMessageOverrides['fileReferences']
   composerContexts: ComposerContextAttachment[]
+  ackNoticeIds: string[] | undefined
   queued: QueuedUserMessage | undefined
   overrides: SendMessageOverrides | undefined
   set: ChatStoreSet
@@ -69,10 +72,11 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
   const {
     provider: p, activeThreadId, trimmedText, clientRequestId, mode, orchestration,
     requestedAgentSurface, writeContext, composerModel, composerProviderId,
-    composerAccountId, userModelChip, displayText, reasoningEffort, serviceTier,
+    composerAccountId, composerHarnessId, composerCredentialMode,
+    userModelChip, displayText, reasoningEffort, serviceTier,
     subagentResume, messageSource, persona, designProfile, designDocumentTarget,
     designImagePlacementTarget, attachmentIds, attachments, fileReferences, composerContexts,
-    queued, overrides, set: setStore, get
+    ackNoticeIds, queued, overrides, set: setStore, get
   } = input
   const initialState = { ...get() }
   const set: ChatStoreSet = (partial) => {
@@ -121,6 +125,10 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(composerModel ? { model: composerModel } : {}),
       ...(!channel && composerProviderId ? { providerId: composerProviderId } : {}),
       ...(!channel && composerAccountId ? { accountId: composerAccountId } : {}),
+      ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
+      ...(composerCredentialMode
+        ? { credentialMode: composerCredentialMode as 'native-login' | 'provider' | 'kun-gateway' }
+        : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(!channel && serviceTier ? { serviceTier } : {}),
       ...(subagentResume ? { subagentResume } : {}),
@@ -138,7 +146,9 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       ...(attachmentIds?.length ? { attachmentIds: [...attachmentIds] } : {}),
       ...(checkpointRequestId ? { workspaceCheckpointRequestId: checkpointRequestId } : {}),
       ...(fileReferences?.length ? { fileReferences } : {}),
-      ...(composerContexts.length ? { composerContexts } : {})
+      ...(composerContexts.length ? { composerContexts } : {}),
+      ...(ackNoticeIds?.length ? { ackNoticeIds } : {}),
+      ...((queued?.planBuild ?? overrides?.planBuild) ? { planBuild: true } : {})
     }
     const queuedRow = pendingQueuedMessage({
       ...queued,
@@ -149,6 +159,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       text: trimmedText,
       clientRequestId,
       ...(composerContexts.length ? { composerContexts } : {}),
+      ...(ackNoticeIds?.length ? { ackNoticeIds } : {}),
       ...(fileReferences?.length ? { fileReferences } : {}),
       ...(attachmentIds?.length ? { attachmentIds: [...attachmentIds] } : {}),
       ...(attachments?.length ? { attachments: [...attachments] } : {}),
@@ -163,13 +174,16 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       agentSurface: sendOptions.agentSurface,
       ...(composerProviderId ? { providerId: composerProviderId } : {}),
       ...(composerAccountId ? { accountId: composerAccountId } : {}),
+      ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
+      ...(composerCredentialMode ? { credentialMode: composerCredentialMode } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(serviceTier ? { serviceTier } : {}),
       ...(subagentResume ? { subagentResume } : {}),
       ...(messageSource ? { messageSource } : {}),
       ...(persona ? { persona } : {}),
       ...(composerModel ? { model: composerModel } : {}),
-      ...(userModelChip ? { modelLabel: userModelChip } : {})
+      ...(userModelChip ? { modelLabel: userModelChip } : {}),
+      ...((queued?.planBuild ?? overrides?.planBuild) ? { planBuild: true } : {})
     })
     // Persist a `starting` row before admission so a crash between the runtime
     // accepting the turn and the local state update cannot silently drop a

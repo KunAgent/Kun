@@ -2,6 +2,7 @@ import type { MouseEvent as ReactMouseEvent, ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LucideIcon } from 'lucide-react'
 import {
+  ArrowRightLeft,
   BellRing,
   Bot,
   BookOpen,
@@ -14,6 +15,7 @@ import {
   Search,
   Sparkles,
   Terminal,
+  Users,
   Wrench
 } from 'lucide-react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
@@ -22,7 +24,8 @@ import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
 import {
   blockHasPendingRuntimeWork,
   isBackgroundShellNoticeBlock,
-  isBackgroundSubagentNoticeBlock
+  isBackgroundSubagentNoticeBlock,
+  isWorkerUpdateNoticeBlock
 } from './message-timeline-turns'
 import { formatDuration, isBackgroundShellCommandBlock } from './message-timeline-tools'
 import {
@@ -206,11 +209,13 @@ export function processBlockIcon(block: ChatBlock): LucideIcon | null {
   if (block.kind === 'reasoning') return Brain
   if (block.kind === 'assistant') return MessageSquareQuote
   if (block.kind === 'compaction') return Minimize2
+  if (block.kind === 'handoff') return ArrowRightLeft
   if (block.kind === 'approval') return Wrench
   if (block.kind === 'approval_review') return Bot
   if (block.kind === 'user_input') return MessageSquareQuote
   if (isBackgroundShellNoticeBlock(block)) return BellRing
   if (isBackgroundSubagentNoticeBlock(block)) return Sparkles
+  if (isWorkerUpdateNoticeBlock(block)) return Users
   if (block.kind !== 'tool') return null
   return toolBlockIcon(block)
 }

@@ -103,19 +103,6 @@ import {
   parkDelegatedGraphTurnAfterRecovery
 } from '../delegated-graph-turn-policy.js'
 
-const CLAUDE_KUN_TOOL_INSTRUCTION = [
-  'Kun-managed capabilities are available through the mcp__kun__ tools.',
-  'Use these tools for Kun capabilities such as MCP, extensions, skills, memory, media, GUI input, and delegation.',
-  'Their execution remains governed by Kun ToolHost approval and sandbox policy.'
-].join(' ')
-
-const SDK_ON_REQUEST_AUTO_ALLOWED_TOOLS = new Set([
-  'Read',
-  'Glob',
-  'Grep',
-  'TodoWrite'
-])
-
 export interface AgentSdkRuntimeFactoryDeps {
   registry: CapabilityRegistry
   /**
@@ -202,11 +189,47 @@ export interface AgentSdkRuntimeFactoryDeps {
   pathToClaudeCodeExecutable?: string
   /** Shared durable provider-session coordinator. */
   sessionCoordinator?: DelegatedSessionCoordinator
+  /** Host task-workspace index for handoff work-state merging (docs/ade/07). */
+  taskWorkspaces?: {
+    list(filter?: { ownerThreadId?: string }): Array<{
+      ownerThreadId: string
+      path: string
+      branch?: string
+      changedFiles: readonly string[]
+    }>
+  }
+  /**
+   * `ade.deterministicHandoff` — when false the runtime sends the raw portable
+   * transcript instead of the deterministic brief (docs/ade/08 §4).
+   */
+  deterministicHandoff?: boolean
   contextProfile?: (model: string) => {
     contextWindowTokens: number
     softThresholdTokens: number
     hardThresholdTokens: number
   }
+  /**
+   * `kun-gateway` mode wiring (docs/ade/04 §5.5): the token service issuing
+   * turn-scoped `kgw_` grants, the loopback serve base URL, the roles config
+   * for the small/fast model, the harness catalog for the gateway env block,
+   * and the real default provider id for routes that omit `turn.providerId`.
+   */
+  harnessTokens?: Pick<
+    import('../../harness/harness-token-service.js').HarnessTokenService,
+    'issue'
+  >
+  harnessGatewayBaseUrl?: () => string | undefined
+  roles?: () => import('../../config/kun-config.js').RolesConfig | undefined
+  harnessCatalog?: Pick<
+    import('../../harness/harness-catalog.js').HarnessCatalog,
+    'get'
+  >
+  /**
+   * Dynamic Graph planning harness summary (P1-25): injected into
+   * `contextInstructions` while the turn is still in the planning phase.
+   */
+  graphHarnessSummary?: () => Promise<string | undefined>
+  resolveDefaultProviderId?: () => Promise<string | undefined>
 }
 
 /** Lazily load the real SDK without a static import (so kun typechecks without it). */

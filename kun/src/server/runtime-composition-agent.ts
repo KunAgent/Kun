@@ -8,6 +8,7 @@ import {
   type AntigravityCliRuntimeDeps,
   createCursorSdkRuntime,
   type CursorSdkRuntimeFactoryDeps,
+  type AcpRuntimeDeps,
   composeDelegatedTurnRuntimes,
   ReplaceableDelegatedTurnRuntime,
   LocalToolHost,
@@ -37,6 +38,25 @@ import {
 } from './runtime-factory-model.js'
 import { resumeInterruptedGraphPlanning } from './runtime-graph-lifecycle.js'
 import { CanvasReceiptRegistry } from '../services/canvas-receipt-registry.js'
+import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
+import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
+import { HarnessRouter, HarnessRuntimeMap } from '../harness/harness-router.js'
+import { createKunToolBridgeHost } from '../harness/kun-tool-bridge-host.js'
+import { FileTeamStore } from '../ade/team-store.js'
+import { handleAdeThreadDeleted } from '../ade/team-lifecycle.js'
+import { DispatchDeliverer } from '../ade/dispatch-deliverer.js'
+import { WorkerNoticeCoordinator } from '../ade/worker-notice-coordinator.js'
+import {
+  createActivityHibernation,
+  createCapabilitiesForRoute,
+  createManagerRuntime,
+  wireTaskWorkspaceChange
+} from './runtime-composition-manager.js'
+import { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
+import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
+import { createManagerToolProvider } from '../adapters/tool/manager-tool-provider.js'
+import { FileDelegationStore } from './runtime-factory-dependencies.js'
+import { join } from 'node:path'
 
 export async function createRuntimeAgentComposition(
   registryComposition: ReturnType<typeof createRuntimeRegistry>
@@ -72,7 +92,8 @@ export async function createRuntimeAgentComposition(
     agentSdkProviderIds,
     resolveLegacyRequestCredentials,
     approvalReviewService,
-    timedModelClient
+    timedModelClient,
+    modelConnections
   } = model
   const {
     turnService,
@@ -139,6 +160,27 @@ export async function createRuntimeAgentComposition(
   // with an initially empty provider set so /connect can add an account
   // without requiring the standalone TUI runtime to restart.
   const canvasReceipts = new CanvasReceiptRegistry({ turns: turnService, events, nowIso })
+  // Route-level bridge host for the Kun Tools MCP server (docs/ade/05 §3.3):
+  // same execution authority as the SDK adapters with main-scope defaults.
+  const kunToolBridge = createKunToolBridgeHost({
+    threadStore,
+    sessionStore,
+    registry: registryComposition.registry,
+    toolHost,
+    turns: turnService,
+    events,
+    ids,
+    receipts: canvasReceipts,
+    userInputGate,
+    approvalGate,
+    approvalReview: approvalReviewService,
+    skillRuntime: services.skillRuntime,
+    defaultApprovalPolicy: core.activeOptions.approvalPolicy,
+    defaultSandboxMode: core.activeOptions.sandboxMode,
+    defaultApprovalReviewer: core.activeOptions.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
+    callIdPrefix: 'mcp',
+    nowIso
+  })
   const buildMainDelegatedRuntime = (input: {
     options: KunServeRuntimeOptions
     registry: CapabilityRegistry
@@ -146,6 +188,7 @@ export async function createRuntimeAgentComposition(
     instructionRuntime: InstructionRuntime
     attachmentStore?: AttachmentStore
     memoryStore?: MemoryStore
+    taskWorkspaces?: TaskWorkspaceService
     memoryFeedback?: MemoryFeedbackRuntime
   }) => {
     const providerConfigs = Object.fromEntries(
@@ -188,7 +231,17 @@ export async function createRuntimeAgentComposition(
         ? { pathToClaudeCodeExecutable: process.env.KUN_CLAUDE_BINARY }
         : {}),
       sessionCoordinator: delegatedSessions,
-      contextProfile: delegatedContextProfile
+      contextProfile: delegatedContextProfile,
+      deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
+      // `kun-gateway` credential mode (docs/ade/04 §5.5): grant issuance,
+      // loopback endpoint, roles, and the catalog's gateway env block.
+      harnessTokens: services.harnesses.tokens,
+      harnessGatewayBaseUrl: () => services.harnesses.gatewayEndpoint.baseUrl,
+      roles: () => core.activeOptions.roles,
+      harnessCatalog: services.harnesses.catalog,
+      graphHarnessSummary,
+      resolveDefaultProviderId: async () => (await modelConnections.snapshot()).defaultProviderId,
+      ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
     }
     const antigravityRuntimeDeps: AntigravityCliRuntimeDeps = {
       providerConfigs,
@@ -207,11 +260,14 @@ export async function createRuntimeAgentComposition(
       ...(llmDebug ? { debugSink: llmDebug } : {}),
       turnLimits: input.options.runtime?.turnLimits,
       sessionCoordinator: delegatedSessions,
-      contextProfile: delegatedContextProfile
+      contextProfile: delegatedContextProfile,
+      deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
+      ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
     }
     const cursorRuntimeDeps: CursorSdkRuntimeFactoryDeps = {
       registry: input.registry,
       toolHost,
+      receipts: canvasReceipts,
       providerConfigs,
       providerIds: new Set(cursorSdkProviderIdsForOptions(input.options)),
       defaultIsCursor: defaultIsCursorSdk,
@@ -239,21 +295,55 @@ export async function createRuntimeAgentComposition(
       userInputGate,
       skillRuntime: input.skillRuntime,
       instructionRuntime: input.instructionRuntime,
+      graphHarnessSummary,
       nowIso,
       ...(input.memoryStore ? { memoryStore: input.memoryStore } : {}),
       ...(input.memoryFeedback ? { memoryFeedback: input.memoryFeedback } : {}),
       ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
       turnLimits: input.options.runtime?.turnLimits,
       sessionCoordinator: delegatedSessions,
-      contextProfile: delegatedContextProfile
+      contextProfile: delegatedContextProfile,
+      deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
+      ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
     }
-    return composeDelegatedTurnRuntimes([
-      createAgentSdkRuntime(sdkRuntimeDeps),
-      new AntigravityCliRuntime(antigravityRuntimeDeps),
-      createCursorSdkRuntime(cursorRuntimeDeps)
-    ])
+    const acpRuntimeDeps: AcpRuntimeDeps = {
+      catalog: services.harnesses.catalog,
+      binaryPath: (harnessId) => core.activeOptions.harnesses?.binaryPaths?.[harnessId],
+      threadStore,
+      sessionStore,
+      turns: turnService,
+      events,
+      ids,
+      systemPrompt: prefix.systemPrompt,
+      sessionCoordinator: delegatedSessions,
+      connectionPool: core.acpConnectionPool,
+      clientHost: core.acpClientHost,
+      sessionManager: core.acpSessionManager,
+      approvalGate,
+      approvalReview: approvalReviewService,
+      userInputGate, workerCallbacks: services.workerCallbacks,
+      ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
+      deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
+      allowUnattendedFullAccess: input.options.ade?.allowUnattendedFullAccess === true,
+      defaultApprovalPolicy: input.options.approvalPolicy,
+      defaultSandboxMode: input.options.sandboxMode,
+      defaultApprovalReviewer: input.options.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
+      turnLimits: input.options.runtime?.turnLimits,
+      awaitWorkspaceCheckpoint: (requestId, signal) =>
+        waitForWorkspaceCheckpoint(core.activeOptions.dataDir, requestId, signal),
+      ...(llmDebug ? { debugSink: llmDebug } : {}),
+      nowIso,
+      ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
+    }
+    return {
+      agentSdk: sdkRuntimeDeps,
+      antigravity: antigravityRuntimeDeps,
+      cursor: cursorRuntimeDeps,
+      acp: acpRuntimeDeps
+    }
   }
 
+  const adeTeamStore = new FileTeamStore(core.activeOptions.dataDir, nowIso)
   // The main turn abort signal already reaches foreground children. Detached
   // children and background shells intentionally have independent lifetimes,
   // so a destructive thread delete must cancel them explicitly before the
@@ -268,26 +358,129 @@ export async function createRuntimeAgentComposition(
       threadId,
       (childId) => threadService.delete(childId)
     )
+    // ADE cascade (09 §3.2): deleting a manager removes its team directory and
+    // worker grants; deleting a worker marks its team record released.
+    const deleted = await threadService.getMetadata(threadId).catch(() => null)
+    await handleAdeThreadDeleted({
+      thread: deleted,
+      teams: adeTeamStore,
+      revokeThreadGrants: (id) => services.harnesses.tokens.revokeThread(id),
+      nowIso,
+      onManagerDeleted: (id) => workerNoticeCoordinator.clearManager(id)
+    })
   }
-  const sdkRuntime = new ReplaceableDelegatedTurnRuntime(buildMainDelegatedRuntime({
-    options: core.activeOptions,
-    registry: registryComposition.registry,
-    skillRuntime: services.skillRuntime,
-    instructionRuntime: services.instructionRuntime,
-    attachmentStore: services.attachmentStore,
-    memoryStore: services.memoryStore,
-    memoryFeedback: services.memoryFeedback
+  // Graph planning harness menu (P1-25): shared by the native loop and the
+  // delegated runtimes so the planner sees the same routing menu.
+  const graphHarnessSummary = createGraphHarnessSummary({
+    catalog: services.harnesses.catalog,
+    detector: services.harnesses.detector,
+    quota: createQuotaSnapshot({ list: () => model.providerQuotaService.list() })
+  })
+  const harnessRuntimeMap = new HarnessRuntimeMap(
+    buildHarnessRuntimes(
+      buildMainDelegatedRuntime({
+        options: core.activeOptions,
+        registry: registryComposition.registry,
+        skillRuntime: services.skillRuntime,
+        instructionRuntime: services.instructionRuntime,
+        attachmentStore: services.attachmentStore,
+        memoryStore: services.memoryStore,
+        memoryFeedback: services.memoryFeedback,
+        taskWorkspaces: core.taskWorkspaces
+      })
+    )
+  )
+  // Legacy provider-inference view kept in sync with the router's map so the
+  // disabled-router path behaves exactly as before.
+  const sdkRuntime = new ReplaceableDelegatedTurnRuntime(
+    composeDelegatedTurnRuntimes(Object.values(harnessRuntimeMap.get()))
+  )
+  const harnessRouter = new HarnessRouter({
+    enabled: () => core.activeOptions.ade?.harnessRouter !== false,
+    catalog: services.harnesses.catalog,
+    runtimes: () => harnessRuntimeMap.get(),
+    providerKinds: services.providerKinds,
+    defaultModel: () => core.activeOptions.model,
+    status: (id) => {
+      const cached = services.harnesses.detector.cachedStatus(id)
+      if (!cached) void services.harnesses.detector.status(id).catch(() => undefined)
+      return cached
+    },
+    allowUnattendedFullAccess: () => core.activeOptions.ade?.allowUnattendedFullAccess === true,
+    taskWorkspaceIsolated: (workspaceId) =>
+      core.taskWorkspaces.get(workspaceId)?.isolation === 'worktree'
+  })
+  // ADE manager control plane (09 §4-§5): durable dispatch delivery + the
+  // worker_* tool surface; AbortControllers outlive the manager turn.
+  const childRunStore = new FileDelegationStore(join(core.activeOptions.dataDir, 'child-runs'))
+  const dispatchDeliverer = new DispatchDeliverer({
+    teams: services.adeStores.teams,
+    dispatches: services.adeStores.dispatches,
+    taskWorkspaces: core.taskWorkspaces,
+    delegation: delegationRuntime ?? undefined,
+    childRuns: childRunStore,
+    threads: threadStore,
+    turns: turnService,
+    language: () => Intl.DateTimeFormat().resolvedOptions().locale
+  })
+  // Worker-notice wake-ups (09 §6.2); runTurn is late-bound to runAgentTurn.
+  const workerNoticeCoordinator = new WorkerNoticeCoordinator({
+    notices: services.adeStores.notices,
+    teams: services.adeStores.teams,
+    threads: threadStore,
+    turns: turnService,
+    runTurn: () => runAgentTurn,
+    nowIso,
+    language: () => Intl.DateTimeFormat().resolvedOptions().locale,
+    managerModel: () => core.activeOptions.ade?.managerModel
+  })
+  services.workerCallbacks.setNoticeSink(workerNoticeCoordinator)
+  const managerRuntime = createManagerRuntime({
+    services,
+    core,
+    delegationRuntime,
+    harnessRuntimeMap,
+    listQuota: () => model.providerQuotaService.list(),
+    notices: workerNoticeCoordinator,
+    threads: threadStore,
+    turns: turnService,
+    sessionStore,
+    childRuns: childRunStore,
+    deliverer: dispatchDeliverer,
+    ids, nowIso, usage: usageService,
+    approvalGate, approvalEvents: events
+  })
+  // Dispatch backfill + worker terminal hooks on the recorder (09 §5, §6.1).
+  core.events.addObserver({ record: (event) => managerRuntime.handleRuntimeEvent(event) })
+  const activityHibernation = createActivityHibernation({ core, managerRuntime })
+  registryComposition.registry.registerProvider(createManagerToolProvider({
+    manager: managerRuntime,
+    harnessList: {
+      catalog: services.harnesses.catalog,
+      detector: services.harnesses.detector,
+      runtimes: harnessRuntimeMap,
+      profiles: () => delegationRuntime?.listProfiles() ?? []
+    },
+    managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true,
+    race: managerRuntime.raceServiceDeps,
+    checks: managerRuntime.checkRunnerDeps
   }))
+  wireTaskWorkspaceChange(core.taskWorkspaces, managerRuntime, services.adeStores.reviews)
   model.refreshModelConnectionDelegatedDeps = () => {
-    sdkRuntime.replace(buildMainDelegatedRuntime({
-      options: core.activeOptions,
-      registry: registryComposition.registry,
-      skillRuntime: services.skillRuntime,
-      instructionRuntime: services.instructionRuntime,
-      attachmentStore: services.attachmentStore,
-      memoryStore: services.memoryStore,
-      memoryFeedback: services.memoryFeedback
-    }))
+    const next = buildHarnessRuntimes(
+      buildMainDelegatedRuntime({
+        options: core.activeOptions,
+        registry: registryComposition.registry,
+        skillRuntime: services.skillRuntime,
+        instructionRuntime: services.instructionRuntime,
+        attachmentStore: services.attachmentStore,
+        memoryStore: services.memoryStore,
+        memoryFeedback: services.memoryFeedback,
+        taskWorkspaces: core.taskWorkspaces
+      })
+    )
+    harnessRuntimeMap.replace(next)
+    sdkRuntime.replace(composeDelegatedTurnRuntimes(Object.values(next)))
   }
 	  const activeRuntimeRuns = new Set<Promise<TurnRunOutcome>>()
 	  let shuttingDown = false
@@ -314,6 +507,9 @@ export async function createRuntimeAgentComposition(
 	        !shuttingDown
 	      ) {
 	        await graphRuntime.handleSourceTurnTerminal(threadId, turnId, outcome)
+	        // 09 §6.1 worker terminal hook; idempotent with the event observer.
+	        await managerRuntime.handleWorkerTurnTerminal(threadId, turnId, outcome)
+	          .catch((error) => console.warn('[kun] ade worker terminal failed:', error))
 	      }
 	      return outcome
 	    }))
@@ -327,6 +523,8 @@ export async function createRuntimeAgentComposition(
     model: timedModelClient,
     toolHost,
     sdkRuntime,
+    harnessRouter,
+    graphHarnessSummary,
     usage: usageService,
     events,
     turns: turnService,
@@ -386,6 +584,19 @@ export async function createRuntimeAgentComposition(
 	    }
 	    return trackRuntimeRun(reviewService.runReview(input))
 	  }
+	  // Plan-phase admission (P1-25): define_plan validates each task's
+	  // harnessId through the same catalog/detector/capability gates the
+	  // HarnessRouter applies at dispatch time.
+	  graphRuntime.harnessAdmission = {
+	    catalog: services.harnesses.catalog,
+	    detector: services.harnesses.detector,
+	    capabilitiesForRoute: createCapabilitiesForRoute(
+	      services.harnesses.catalog,
+	      harnessRuntimeMap
+	    ),
+	    allowUnattendedFullAccess: () =>
+	      core.activeOptions.ade?.allowUnattendedFullAccess === true
+	  }
 	  await graphRuntime.start(createGraphRuntimeStartOptions({
 	    delegation: () => delegationRuntime,
 	    threads: threadStore,
@@ -410,7 +621,8 @@ export async function createRuntimeAgentComposition(
 	        core.activeOptions.capabilities?.web.searchEnabled === true
 	    }),
 	    tools: () => registryComposition.registry.listTools(),
-	    skillIds: () => services.skillRuntime.diagnostics().skills.map((skill) => skill.id)
+	    skillIds: () => services.skillRuntime.diagnostics().skills.map((skill) => skill.id),
+	    activity: core.activityStore
 	  }))
 	  await resumeInterruptedGraphPlanning({
 	    graphRuntime,
@@ -456,13 +668,22 @@ export async function createRuntimeAgentComposition(
     toolHost,
     extensionTools,
     canvasReceipts,
+    kunToolBridge,
     buildMainDelegatedRuntime,
     sdkRuntime,
+    harnessRouter,
+    harnessRuntimeMap,
+    harnesses: services.harnesses,
     activeRuntimeRuns,
     trackRuntimeRun,
     runAgentTurn,
     runReview,
     queuedTurnDispatcher,
+    managerRuntime,
+    activityHibernation,
+    dispatchDeliverer,
+    workerNoticeCoordinator,
+    raceDeps: managerRuntime.raceServiceDeps,
     extensionProfiles,
     extensionAgent,
     get prepareExtensionContributions() { return prepareExtensionContributions },

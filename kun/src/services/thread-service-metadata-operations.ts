@@ -97,6 +97,11 @@ async list(this: ThreadService, options: ListThreadsOptions = {}): Promise<Threa
     if (workspaceSet.size > 0) {
       threads = threads.filter((thread) => workspaceSet.has(thread.workspace))
     }
+    if (options.workspaceMode) {
+      threads = threads.filter(
+        (thread) => (thread.workspaceMode ?? 'code') === options.workspaceMode
+      )
+    }
     if (query) {
       threads = threads.filter((thread) => matchesThreadSearch(thread, query))
     }
@@ -161,6 +166,8 @@ async create(this: ThreadService,
       relation?: ThreadRelation
       /** Parent thread this thread branches from (used by `side`/`fork` relations). */
       parentThreadId?: string
+      /** Host-only ADE worker identity; never accepted from the request body. */
+      executionUnit?: ThreadRecord['executionUnit']
       /** Broker-derived metadata. Never populated from the public thread request body. */
       extensionMetadata?: ExtensionThreadMetadata
       roomContext?: ThreadRecord['roomContext']
@@ -181,6 +188,9 @@ async create(this: ThreadService,
       model: request.model,
       ...(request.agentSurface ? { agentSurface: request.agentSurface } : {}),
       ...(request.providerId?.trim() ? { providerId: request.providerId.trim() } : {}),
+      ...(request.harnessId?.trim() ? { harnessId: request.harnessId.trim() } : {}),
+      ...(request.workspaceMode ? { workspaceMode: request.workspaceMode } : {}),
+      ...(request.taskWorkspaceId?.trim() ? { taskWorkspaceId: request.taskWorkspaceId.trim() } : {}),
       ...(request.accountId?.trim() ? { accountId: request.accountId.trim() } : {}),
       ...(options.extensionMetadata ?? {}),
       ...(options.roomContext ? { roomContext: options.roomContext } : {}),
@@ -196,6 +206,7 @@ async create(this: ThreadService,
       ...(request.costBudgetUsd !== undefined ? { costBudgetUsd: request.costBudgetUsd } : {}),
       ...(options.relation ? { relation: options.relation } : {}),
       ...(options.parentThreadId ? { parentThreadId: options.parentThreadId } : {}),
+      ...(options.executionUnit ? { executionUnit: options.executionUnit } : {}),
       status: options.status
     })
     // `create` and destructive delete use the same per-thread mutation queue.
@@ -230,6 +241,10 @@ async update(this: ThreadService, threadId: string, patch: {
     titleAuto?: boolean
     summary?: string
     workspace?: string
+    /** Set-only binding to a host-managed task workspace (07 §5). */
+    taskWorkspaceId?: string
+    /** Harness rebind for external-session continuation (01 §8). */
+    harnessId?: string
     additionalWorkspaces?: string[]
     knowledgeBases?: KnowledgeBaseMount[]
     mode?: ThreadMode
@@ -248,8 +263,8 @@ async update(this: ThreadService, threadId: string, patch: {
       const current = await this['threadStore'].get(threadId)
       if (!current) throw new Error(`thread not found: ${threadId}`)
       if (current.roomContext) {
-        const protectedFields = ['workspace', 'additionalWorkspaces', 'knowledgeBases', 'mode',
-          'approvalPolicy', 'sandboxMode', 'approvalReviewer', 'status', 'relation'] as const
+        const protectedFields = ['workspace', 'taskWorkspaceId', 'additionalWorkspaces', 'knowledgeBases', 'mode',
+          'approvalPolicy', 'sandboxMode', 'approvalReviewer', 'status', 'relation', 'harnessId'] as const
         if (Object.hasOwn(patch, 'roomContext') || protectedFields.some((key) =>
           patch[key] !== undefined && JSON.stringify(patch[key]) !== JSON.stringify(current[key]))) {
           throw new Error('room thread execution policy is frozen; change the room configuration or task instead')
@@ -262,15 +277,23 @@ async update(this: ThreadService, threadId: string, patch: {
       if (patch.status !== undefined && patch.status !== 'idle' && patch.status !== 'archived') {
         throw new Error(`thread status is managed by the runtime: ${patch.status}`)
       }
+      if (
+        patch.taskWorkspaceId !== undefined &&
+        current.taskWorkspaceId !== undefined &&
+        patch.taskWorkspaceId !== current.taskWorkspaceId
+      ) {
+        throw new Error('taskWorkspaceId is bound once; create a new thread to rebind')
+      }
       const { costBudgetUsd, costBudgetWarningSent, status, ...standardPatch } = patch
       if (standardPatch.additionalWorkspaces) {
         standardPatch.additionalWorkspaces = [...new Set(
           standardPatch.additionalWorkspaces.map((entry) => entry.trim()).filter(Boolean)
         )].filter((entry) => entry !== (standardPatch.workspace ?? current.workspace))
       }
-      if (standardPatch.knowledgeBases !== undefined || standardPatch.workspace !== undefined) {
+      if (standardPatch.knowledgeBases !== undefined || standardPatch.workspace !== undefined
+        || standardPatch.harnessId !== undefined) {
         if (current.status === 'running') {
-          throw new Error('workspace and knowledge bases cannot be changed while the thread is running')
+          throw new Error('workspace, knowledge bases, and harness cannot be changed while the thread is running')
         }
       }
       if (standardPatch.knowledgeBases !== undefined || standardPatch.workspace !== undefined) {

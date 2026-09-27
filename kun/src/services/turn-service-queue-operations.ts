@@ -22,6 +22,10 @@ import {
   firstNonBlank,
   fingerprintStartTurnRequest
 } from './turn-service-core.js'
+import {
+  defaultCredentialMode,
+  resolveAdmissionHarness
+} from '../harness/resolve-turn-harness.js'
 import { resolveDesignTurnAdmission } from './turn-service-design-admission.js'
 
 export const QUEUE_CANCELLED_TURN_CODE = 'queue_cancelled'
@@ -138,6 +142,21 @@ export const turnServiceQueueOperations = {
     const requestedProviderId = firstNonBlank(input.request.providerId)
     const threadProviderId = firstNonBlank(thread.providerId)
     const turnProviderId = requestedProviderId ?? threadProviderId ?? 'default'
+    // Queued turns freeze the same route fields so a later admit cannot
+    // resolve a different harness than the one requested at enqueue time.
+    const providerKindsView = this['deps'].providerKinds?.() ?? {
+      byId: {},
+      defaultKind: 'http' as const
+    }
+    const turnHarnessId = resolveAdmissionHarness({
+      request: input.request,
+      thread,
+      turnProviderId,
+      providerKinds: providerKindsView
+    })
+    const turnCredentialMode =
+      input.request.credentialMode ??
+      defaultCredentialMode(turnHarnessId, this['deps'].harnessCatalog?.get(turnHarnessId))
     const turnAccountId = firstNonBlank(input.request.accountId) ?? (
       !requestedProviderId || requestedProviderId === threadProviderId
         ? firstNonBlank(thread.accountId)
@@ -154,6 +173,8 @@ export const turnServiceQueueOperations = {
       subagentResume: input.request.subagentResume,
       model: turnModel,
       providerId: turnProviderId,
+      harnessId: turnHarnessId,
+      credentialMode: turnCredentialMode,
       accountId: turnAccountId,
       reasoningEffort: input.request.reasoningEffort,
       serviceTier: input.request.serviceTier,
@@ -177,6 +198,7 @@ export const turnServiceQueueOperations = {
       orchestration: input.request.orchestration,
       disableUserInput: input.request.disableUserInput,
       imContext: input.request.imContext,
+      planBuild: input.request.planBuild,
       workspaceCheckpointId: input.request.workspaceCheckpointId,
       workspaceCheckpointRequestId: input.request.workspaceCheckpointRequestId
     })

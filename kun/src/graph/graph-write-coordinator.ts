@@ -1,9 +1,8 @@
-import { mkdir, realpath, rm } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { mkdir, realpath } from 'node:fs/promises'
+import { join } from 'node:path'
 import { z } from 'zod'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import type { GraphRuntimeConfig } from '../config/kun-config.js'
-import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import { AtomicJsonFile } from '../extensions/atomic-json.js'
 import { withManagerDataMutex } from '../manager/data-mutex.js'
 import {
@@ -15,10 +14,10 @@ import {
   graphWriteMutexContext,
   normalizeGraphScopes as normalizeScopes,
   safeGraphId as safeId,
-  workingTreeChangedFiles,
   workspaceChangeSnapshot,
   withGraphWriteCommit
 } from './graph-write-coordinator-side-effects.js'
+import { createWorktreeLifecycle } from '../workspace-tasks/worktree-lifecycle.js'
 import {
   GraphRelativePathSchema,
   graphRelativePathsOverlap
@@ -96,6 +95,7 @@ export class FileGraphWriteCoordinator {
   private readonly stateFile: AtomicJsonFile<WriteState>
   private readonly nowIso: () => string
   private readonly nextId: (prefix: string) => string
+  private readonly lifecycle: ReturnType<typeof createWorktreeLifecycle>
 
   constructor(private readonly options: {
     rootDir: string
@@ -105,6 +105,13 @@ export class FileGraphWriteCoordinator {
     nextId?: (prefix: string) => string
   }) {
     this.stateFile = new AtomicJsonFile(this.statePath(), (value) => WriteStateSchema.parse(value))
+    this.lifecycle = createWorktreeLifecycle({
+      git,
+      commitGit: graphCommitGit,
+      fence: assertGraphWriteFence,
+      withCommit: withGraphWriteCommit,
+      boundedError
+    })
     this.nowIso = options.nowIso ?? (() => new Date().toISOString())
     let next = 0
     this.nextId = options.nextId ?? ((prefix) => `${prefix}_${Date.now()}_${++next}`)
@@ -259,10 +266,11 @@ export class FileGraphWriteCoordinator {
       }
       const worktree = state.worktrees.find((entry) => entry.attemptId === lease.attemptId)
       if (worktree && worktree.state === 'active') {
-        await assertGraphWriteFence()
-        await graphCommitGit(
-          worktree.repositoryRoot, ['worktree', 'remove', '--force', worktree.path]
-        )
+        await this.lifecycle
+          .remove(
+            { repositoryRoot: worktree.repositoryRoot, path: worktree.path },
+            { force: true }
+          )
           .catch((error) => {
             worktree.state = 'orphaned'
             worktree.lastError = boundedError(error)
@@ -279,15 +287,12 @@ export class FileGraphWriteCoordinator {
       const state = await this.load()
       const record = state.worktrees.find((entry) => entry.attemptId === attemptId)
       if (!record) return null
-      await assertGraphWriteFence()
-      await graphCommitGit(record.path, ['add', '-A'])
-      const [head, files, patch] = await Promise.all([
-        git(record.path, ['rev-parse', 'HEAD']),
-        git(record.path, ['diff', '--cached', '-z', '--name-only', '--no-renames', record.baseRevision]),
-        git(record.path, ['diff', '--cached', '--binary', '--no-ext-diff', record.baseRevision])
-      ])
-      record.headRevision = head.trim()
-      record.changedFiles = normalizeScopes(files.split('\0').filter(Boolean))
+      const captured = await this.lifecycle.capture({
+        path: record.path,
+        baseRevision: record.baseRevision
+      })
+      record.headRevision = captured.headRevision
+      record.changedFiles = captured.changedFiles
       const scopeError = this.scopeViolation(state, record)
       if (scopeError) {
         record.state = 'conflict'
@@ -296,9 +301,9 @@ export class FileGraphWriteCoordinator {
         await this.persist(state)
         return WorktreeRecordSchema.parse(record)
       }
-      if (patch && this.options.artifactStore) {
+      if (captured.patch && this.options.artifactStore) {
         const stored = await this.options.artifactStore.put({
-          content: patch,
+          content: captured.patch,
           mimeType: 'text/x-diff',
           source: 'other',
           origin: `graph-worktree:${attemptId}`,
@@ -351,16 +356,11 @@ export class FileGraphWriteCoordinator {
       if (record.state === 'accepted' || record.state === 'cleaned') {
         return { outcome: 'applied', record }
       }
-      await assertGraphWriteFence()
-      await graphCommitGit(record.path, ['add', '-A'])
-      record.changedFiles = normalizeScopes((await git(record.path, [
-        'diff',
-        '--cached',
-        '-z',
-        '--name-only',
-        '--no-renames',
-        record.baseRevision
-      ])).split('\0').filter(Boolean))
+      const captured = await this.lifecycle.capture({
+        path: record.path,
+        baseRevision: record.baseRevision
+      })
+      record.changedFiles = captured.changedFiles
       const scopeError = this.scopeViolation(state, record)
       if (scopeError) {
         record.state = 'conflict'
@@ -369,67 +369,31 @@ export class FileGraphWriteCoordinator {
         await this.persist(state)
         return { outcome: 'needs_human', record, reason: scopeError }
       }
-      const currentHead = (await git(record.repositoryRoot, ['rev-parse', 'HEAD'])).trim()
-      if (currentHead !== record.baseRevision) {
-        record.state = 'conflict'
-        record.lastError = 'repository HEAD changed since worktree allocation'
-        record.updatedAt = this.nowIso()
-        await this.persist(state)
-        return { outcome: 'needs_human', record, reason: record.lastError }
-      }
       const graphOwned = new Set(state.worktrees
         .filter((entry) =>
           entry.worktreeId !== record.worktreeId &&
           (entry.state === 'accepted' || entry.state === 'cleaned'))
         .flatMap((entry) => entry.changedFiles))
-      const overlappingDirty = (await workingTreeChangedFiles(record.repositoryRoot))
-        .filter((path) => !graphOwned.has(path) && scopesOverlap([path], record.changedFiles))
-      if (overlappingDirty.length) {
-        record.state = 'conflict'
-        record.lastError =
-          `repository contains uncommitted changes overlapping Graph patch: ${overlappingDirty.slice(0, 20).join(', ')}`
-        record.updatedAt = this.nowIso()
-        await this.persist(state)
-        return { outcome: 'needs_human', record, reason: record.lastError }
-      }
-      const patch = await git(record.path, [
-        'diff',
-        '--cached',
-        '--binary',
-        '--no-ext-diff',
-        record.baseRevision
-      ])
-      if (!patch.trim()) {
+      const result = await this.lifecycle.applyPatch(
+        {
+          repositoryRoot: record.repositoryRoot,
+          baseRevision: record.baseRevision,
+          changedFiles: record.changedFiles,
+          patch: captured.patch
+        },
+        { ownedPaths: graphOwned, patchLabel: 'Graph patch' }
+      )
+      if (result.outcome === 'applied') {
         record.state = 'accepted'
         record.updatedAt = this.nowIso()
         await this.persist(state)
         return { outcome: 'applied', record }
       }
-      const patchPath = join(
-        this.options.rootDir,
-        'patches',
-        `${safeId(record.worktreeId)}-${safeId(this.nextId('commit'))}.patch`
-      )
-      return withGraphWriteCommit(async (context) => {
-        await mkdir(dirname(patchPath), { recursive: true, mode: 0o700 })
-        await atomicWriteFile(patchPath, patch, { signal: context.signal })
-        try {
-          await git(record.repositoryRoot, ['apply', '--check', patchPath])
-          await graphCommitGit(record.repositoryRoot, ['apply', '--index', patchPath])
-          record.state = 'accepted'
-          record.updatedAt = this.nowIso()
-          await this.persist(state)
-          return { outcome: 'applied' as const, record }
-        } catch (error) {
-          record.state = 'conflict'
-          record.lastError = boundedError(error)
-          record.updatedAt = this.nowIso()
-          await this.persist(state)
-          return { outcome: 'conflict' as const, record, reason: record.lastError }
-        } finally {
-          await rm(patchPath, { force: true }).catch(() => undefined)
-        }
-      })
+      record.state = 'conflict'
+      record.lastError = result.reason
+      record.updatedAt = this.nowIso()
+      await this.persist(state)
+      return { outcome: result.outcome, record, reason: result.reason }
     })
   }
 
@@ -541,14 +505,11 @@ export class FileGraphWriteCoordinator {
     const worktreeId = this.nextId('graph_worktree')
     const worktreePath = join(this.worktreeRoot(), safeId(worktreeId))
     await mkdir(this.worktreeRoot(), { recursive: true, mode: 0o700 })
-    await assertGraphWriteFence()
-    await graphCommitGit(canonicalRepositoryRoot, [
-      'worktree',
-      'add',
-      '--detach',
-      worktreePath,
-      baseRevision
-    ])
+    await this.lifecycle.create({
+      repositoryRoot: canonicalRepositoryRoot,
+      path: worktreePath,
+      startRevision: baseRevision
+    })
     const now = this.nowIso()
     return WorktreeRecordSchema.parse({
       worktreeId,
@@ -601,8 +562,10 @@ export class FileGraphWriteCoordinator {
     if (!isGraphPhysicalPathContained(root, candidate)) {
       throw new Error('refusing to clean worktree outside graph root')
     }
-    await assertGraphWriteFence()
-    await graphCommitGit(record.repositoryRoot, ['worktree', 'remove', '--force', candidate])
+    await this.lifecycle.remove(
+      { repositoryRoot: record.repositoryRoot, path: candidate },
+      { force: true }
+    )
     record.state = 'cleaned'
     record.updatedAt = this.nowIso()
   }

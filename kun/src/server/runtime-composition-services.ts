@@ -69,11 +69,26 @@ import { createRuntimeMaintenanceSlices } from './runtime-maintenance-slices.js'
 import { ThreadStoreGuardian } from '../services/thread-store-guardian.js'
 import { ThreadSnapshotStore } from '../services/thread-snapshot-store.js'
 import { SessionGuardian } from '../services/session-guardian.js'
+import { WorkerCallbackService } from '../services/worker-callback-service.js'
+import { TerminalAgentRegistry } from '../services/terminal-agent-registry.js'
+import { kunHookCommand, writeHookConfig } from '../harness/hook-config-writer.js'
+import { FileTeamStore } from '../ade/team-store.js'
+import { FileDispatchStore } from '../ade/dispatch-store.js'
+import { FileQuestionStore } from '../ade/question-store.js'
+import { FileWorkerNoticeStore } from '../ade/worker-notice-store.js'
+import { FileReviewStore } from '../ade/review-store.js'
+import { FileRaceStore } from '../ade/race.js'
+import { AttributionLedger } from '../ade/attribution-ledger.js'
+import { ChangeRequestService } from '../ade/change-request-service.js'
+import { createWorkerCallbackToolProvider } from '../adapters/tool/worker-callback-tool-provider.js'
 import {
   MemoryDistillationCoordinator,
   MemoryDistillationPendingStore
 } from '../memory/index.js'
 import { createWriteDocumentGuard } from './runtime-write-document-guard.js'
+import { createHarnessComposition } from '../harness/harness-runtime.js'
+import { providerKindsForOptions } from './runtime-factory-model.js'
+import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
 
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
@@ -142,6 +157,13 @@ export async function createRuntimeServices(
     dataDir: core.activeOptions.dataDir,
     nowIso
   })
+  const harnesses = createHarnessComposition(() => core.activeOptions)
+  const providerKinds = () =>
+    providerKindsForOptions(core.activeOptions, {
+      defaultIsAgentSdk,
+      defaultIsCursorSdk,
+      defaultIsAntigravity
+    })
   const turnService = new TurnService({
     threadStore,
     sessionStore,
@@ -174,7 +196,9 @@ export async function createRuntimeServices(
 	      graphRuntime.cancelSourceTurnRunsExplicitly(threadId, sourceTurnId),
 	    migrationMaintenance,
 	    ids,
-	    nowIso
+	    nowIso,
+	    providerKinds,
+	    harnessCatalog: harnesses.catalog
   })
   executionLeases?.setLeaseLostHandler((lease) => {
     turnService.abortTurnExecution(lease.turnId, ownerLeaseExpiredTurnAbortReason(lease))
@@ -424,6 +448,37 @@ export async function createRuntimeServices(
     ...(officeCliRunner ? { runner: officeCliRunner } : {})
   })
 	  const taskGraphTool = createTaskGraphTool({ rootDir: join(core.activeOptions.dataDir, 'task-graphs') })
+  const adeStores = {
+    teams: new FileTeamStore(core.activeOptions.dataDir, nowIso),
+    dispatches: new FileDispatchStore(core.activeOptions.dataDir, nowIso),
+    questions: new FileQuestionStore(core.activeOptions.dataDir, nowIso),
+    notices: new FileWorkerNoticeStore(core.activeOptions.dataDir, nowIso),
+    reviews: new FileReviewStore(core.activeOptions.dataDir, nowIso, (p) => ids.next(p)),
+    races: new FileRaceStore(core.activeOptions.dataDir, nowIso)
+  }
+  const attribution = new AttributionLedger(core.activeOptions.dataDir, nowIso)
+  const changeRequests = new ChangeRequestService({
+    taskWorkspaces: core.taskWorkspaces,
+    teams: adeStores.teams,
+    dispatches: adeStores.dispatches,
+    nowIso
+  })
+  const workerCallbacks = new WorkerCallbackService({
+    threadStore,
+    sessionStore,
+    ...adeStores,
+    activity: core.activityStore,
+    nowIso,
+    idGenerator: () => ids.next('q')
+  })
+  const terminalAgents = new TerminalAgentRegistry({
+    dataDir: core.activeOptions.dataDir,
+    activity: core.activityStore,
+    nowIso,
+    idGenerator: () => ids.next('tu')
+  })
+  const hookWriter = (unitId: string, hooks: { kind: string; events: string[] }) =>
+    writeHookConfig(core.activeOptions.dataDir, unitId, hooks, kunHookCommand())
 	  let baseToolProviders = [
     {
       id: 'builtin',
@@ -467,7 +522,9 @@ export async function createRuntimeServices(
       mode: contextWindowModeFor(core.contextWindowModes),
       compact: core.contextCompact.asTool()
     }),
+    ...buildThreadHistoryToolProviders({ sessionStore, threadStore }),
     buildKnowledgeToolProvider(knowledgeBaseService),
+    createWorkerCallbackToolProvider(workerCallbacks),
     ...buildSkillToolProviders(skillRuntime),
     ...imageGenProviders.providers,
     ...speechGenProviders.providers,
@@ -524,9 +581,17 @@ export async function createRuntimeServices(
     officeCliProviders,
     taskGraphTool,
     childToolHost,
+    adeStores,
+    attribution,
+    changeRequests,
+    workerCallbacks,
+    terminalAgents,
+    hookWriter,
     defaultIsAgentSdk,
     defaultIsAntigravity,
     defaultIsCursorSdk,
+    harnesses,
+    providerKinds,
     get mcpProviders() { return mcpProviders },
     set mcpProviders(value: typeof mcpProviders) { mcpProviders = value },
     get skillRuntime() { return skillRuntime },

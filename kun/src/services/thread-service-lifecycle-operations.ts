@@ -244,6 +244,7 @@ async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {
           }
         : {}),
       ...(current.providerId ? { providerId: current.providerId } : {}),
+      ...(current.workspaceMode ? { workspaceMode: current.workspaceMode } : {}),
       ...(current.accountId ? { accountId: current.accountId } : {}),
       ...(current.agentId ? { agentId: current.agentId } : {}),
       ...(current.systemPrompt ? { systemPrompt: current.systemPrompt } : {}),

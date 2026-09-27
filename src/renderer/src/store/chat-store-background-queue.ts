@@ -107,6 +107,11 @@ function queuedSendOptions(message: QueuedUserMessage, input: {
     ...(message.model ? { model: message.model } : {}),
     ...(!input.claw && message.providerId ? { providerId: message.providerId } : {}),
     ...(!input.claw && message.accountId ? { accountId: message.accountId } : {}),
+    ...(message.harnessId ? { harnessId: message.harnessId } : {}),
+    ...(message.credentialMode
+      ? { credentialMode: message.credentialMode as 'native-login' | 'provider' | 'kun-gateway' }
+      : {}),
+    ...(message.planBuild ? { planBuild: true } : {}),
     ...(message.reasoningEffort ? { reasoningEffort: message.reasoningEffort } : {}),
     ...(!input.claw && message.serviceTier ? { serviceTier: message.serviceTier } : {}),
     ...(message.subagentResume ? { subagentResume: message.subagentResume } : {}),
@@ -130,7 +135,8 @@ function queuedSendOptions(message: QueuedUserMessage, input: {
     ...(message.attachmentIds?.length ? { attachmentIds: message.attachmentIds } : {}),
     ...(input.checkpointRequestId ? { workspaceCheckpointRequestId: input.checkpointRequestId } : {}),
     ...(message.fileReferences?.length ? { fileReferences: message.fileReferences } : {}),
-    ...(message.composerContexts?.length ? { composerContexts: message.composerContexts } : {})
+    ...(message.composerContexts?.length ? { composerContexts: message.composerContexts } : {}),
+    ...(message.ackNoticeIds?.length ? { ackNoticeIds: message.ackNoticeIds } : {})
   }
 }
 

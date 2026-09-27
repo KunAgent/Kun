@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import {
+  AdeConfigSchema,
   ContextCompactionConfigSchema,
   FastContextConfigSchema,
   GraphRuntimeConfigSchema,
+  HarnessesConfigSchema,
   KunServeConfigSchema,
   LabConfigSchema,
   ModelConfigSchema,
@@ -63,6 +65,8 @@ export const RuntimeConfigApplyRequest = z
     contextCompaction: ContextCompactionConfigSchema.optional(),
     runtime: RuntimeTuningConfigSchema.optional(),
     graph: GraphRuntimeConfigSchema.optional(),
+    harnesses: HarnessesConfigSchema.optional(),
+    ade: AdeConfigSchema.optional(),
     roles: RolesConfigSchema.optional(),
     fastContext: FastContextConfigSchema.optional(),
     capabilities: KunCapabilitiesConfig.optional(),

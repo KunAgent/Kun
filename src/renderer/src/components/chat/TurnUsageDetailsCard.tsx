@@ -120,6 +120,9 @@ export function TurnUsageDetailsCard({
       ) : null}
 
       <div className="border-t border-ds-border-muted px-4 py-2.5 text-[10.5px] leading-4 text-ds-faint">
+        {usage.sources?.includes('harness-gateway') ? (
+          <p data-turn-usage-gateway-source>{t('turnUsageDetailsGatewaySource')}</p>
+        ) : null}
         {usage.referenceEstimateUsd !== null ? <p>{t('sessionUsageEstimateTitle')}</p> : null}
         {usage.estimateCoverage === 'partial' ? <p>{t('turnUsageEstimatePartial')}</p> : null}
         {stale ? <p>{t('turnUsageStaleTitle')}</p> : null}

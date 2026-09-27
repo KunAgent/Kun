@@ -266,6 +266,7 @@ export abstract class AgentLoopBase {
       get toolArgumentRepair() { return opts.toolArgumentRepair },
       get turnLimits() { return opts.turnLimits },
       get finalAnswerOnlyStep() { return opts.finalAnswerOnlyStep },
+      get graphHarnessSummary() { return opts.graphHarnessSummary },
       modelRouting: this.modelRouting,
       budgetGate: this.budgetGate,
       goalTurns: this.goalTurns,

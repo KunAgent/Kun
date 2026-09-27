@@ -15,6 +15,7 @@ import type {
   SandboxMode
 } from '../contracts/policy.js'
 import type { GraphOrchestrationStrategy } from '../contracts/graph.js'
+import type { HarnessCredentialMode } from '../contracts/harness.js'
 import type { ThreadMode } from '../contracts/threads.js'
 import type { TurnItem, UserMessageSource } from '../contracts/items.js'
 import type { ComposerContextAttachmentJson } from '../contracts/composer-context.js'
@@ -37,6 +38,8 @@ export function createTurnRecord(input: {
   subagentResume?: SubagentResumeRequest
   model?: string
   providerId?: string
+  harnessId?: string
+  credentialMode?: HarnessCredentialMode
   accountId?: string
   actingModelRoute?: ActingTurnModelRoute
   reasoningEffort?: TurnReasoningEffort
@@ -62,6 +65,7 @@ export function createTurnRecord(input: {
   orchestration?: GraphOrchestrationStrategy
   disableUserInput?: boolean
   imContext?: boolean
+  planBuild?: boolean
   workspaceCheckpointId?: string
   workspaceCheckpointRequestId?: string
   extensionBudgetTokenBaseline?: number
@@ -99,6 +103,8 @@ export function createTurnRecord(input: {
     injectedInstructionSources: [],
     ...(model ? { model } : {}),
     ...(providerId ? { providerId } : {}),
+    ...(input.harnessId?.trim() ? { harnessId: input.harnessId.trim() } : {}),
+    ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
     ...(accountId ? { accountId } : {}),
     ...(input.actingModelRoute ? { actingModelRoute: { ...input.actingModelRoute } } : {}),
     ...(reasoningEffort ? { reasoningEffort } : {}),
@@ -120,6 +126,7 @@ export function createTurnRecord(input: {
     ...(input.mode ? { mode: input.mode } : {}),
     ...(input.disableUserInput ? { disableUserInput: true } : {}),
     ...(input.imContext ? { imContext: true } : {}),
+    ...(input.planBuild ? { planBuild: true } : {}),
     ...(input.workspaceCheckpointId ? { workspaceCheckpointId: input.workspaceCheckpointId } : {}),
     ...(input.workspaceCheckpointRequestId
       ? { workspaceCheckpointRequestId: input.workspaceCheckpointRequestId }

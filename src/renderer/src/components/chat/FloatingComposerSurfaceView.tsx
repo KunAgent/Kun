@@ -1,5 +1,7 @@
-import type { ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import type { ComposerFileReference } from '../../lib/composer-file-references'
+import { CodexReferenceDialog } from '../../history-reference/CodexReferenceDialog'
+import { useChatStore } from '../../store/chat-store'
 import { ComposerInlineError } from './ComposerInlineError'
 import { FloatingComposerFooterView } from './FloatingComposerFooterView'
 import { FloatingComposerContextChips } from './FloatingComposerContextChips'
@@ -14,11 +16,12 @@ export function FloatingComposerSurfaceView({
 }): ReactElement {
   const {
     FileText, FloatingComposerAgentPicker, FloatingComposerAttachments,
-    FloatingComposerContextCapacity, FloatingComposerExecutionPicker, FloatingComposerModelPicker,
+    FloatingComposerContextCapacity, FloatingComposerExecutionPicker, FloatingComposerHarnessPicker,
+    FloatingComposerIsolationPicker, FloatingComposerModelPicker,
     FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker,
     Bot, Folder, GitBranchPicker, ListTodo, Loader2, Mic, Plus, Send, Share2, Sparkles,
     Square, Target, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThreadGoal,
-    activeThreadId, attachmentUploadEnabled, attachmentUploadError, attachments, busy,
+    activeThreadId, adeComposer, adeComposerEnabled, attachmentUploadEnabled, attachmentUploadError, attachments, busy,
     canChangeModel, canCompose, canEditComposer, canOpenComposerMenu, canOptimizePrompt,
     canToggleWorktreeMode, compact, composerFastMode, composerMenuButtonRef, composerMenuOpen, composerShellRef,
     composerModel, composerModelGroups, composerPickList, composerProviderId,
@@ -40,6 +43,12 @@ export function FloatingComposerSurfaceView({
     worktreeBranch
   } = context
   const documentQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'document-quote')
+  // 01 §8: "continue local session" is offered only on a fresh thread when
+  // the picked harness exposes a matching historySource + lab flag.
+  const [continueDialogOpen, setContinueDialogOpen] = useState(false)
+  const openContinueLocalSession = adeComposer?.continuation
+    ? () => setContinueDialogOpen(true)
+    : undefined
   return (
     <>
         {!compact && !emptyTaskLayout && taskSurface === 'design' && designTaskProfile ? (
@@ -383,6 +392,30 @@ export function FloatingComposerSurfaceView({
                       selectedProviderId={composerProviderId}
                     />
                   )}
+                  {adeComposerEnabled === true && !side && adeComposer ? (
+                    <FloatingComposerIsolationPicker
+                      disabled={!canCompose || busy}
+                      showPicker={!activeThreadId}
+                      value={adeComposer.isolation}
+                      prep={adeComposer.prep}
+                      boundWorkspacePath={adeComposer.boundWorkspaceId}
+                      onSelect={adeComposer.selectIsolation}
+                      onRetryPrep={adeComposer.retryWorkspacePrep}
+                    />
+                  ) : null}
+                  {adeComposerEnabled === true && !side && adeComposer ? (
+                    <FloatingComposerHarnessPicker
+                      disabled={!canCompose || busy}
+                      harnessId={adeComposer.harnessId}
+                      harnessLabel={adeComposer.harnessLabel}
+                      rows={adeComposer.rows}
+                      loading={adeComposer.rowsLoading}
+                      needsConfirm={adeComposer.needsSwitchConfirm}
+                      onContinueLocalSession={openContinueLocalSession}
+                      onOpen={adeComposer.refreshRows}
+                      onSelect={adeComposer.selectHarness}
+                    />
+                  ) : null}
                   {hideModelPicker ? null : (
                     <FloatingComposerModelPicker
                       compact={compact}
@@ -474,6 +507,18 @@ export function FloatingComposerSurfaceView({
           </div>
         </div>
         <FloatingComposerFooterView context={context} />
+        {continueDialogOpen && adeComposer?.continuation ? (
+          <CodexReferenceDialog
+            workspaceRoot={effectiveWorkspaceRoot}
+            fixedProvider={adeComposer.continuation.source}
+            harnessId={adeComposer.continuation.harnessId}
+            onClose={() => setContinueDialogOpen(false)}
+            onCreated={(id) => {
+              setContinueDialogOpen(false)
+              void useChatStore.getState().selectThread(id)
+            }}
+          />
+        ) : null}
     </>
   )
 }

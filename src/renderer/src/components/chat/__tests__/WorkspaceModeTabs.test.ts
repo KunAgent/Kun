@@ -11,22 +11,33 @@ vi.mock('../../rooms/useRoomEvents', () => ({
   useRoomAttentionCount: () => attention.count
 }))
 
+const adeFlag = vi.hoisted(() => ({ enabled: false }))
+vi.mock('../../ade/use-ade-enabled', () => ({
+  useAdeEnabled: () => ({ enabled: adeFlag.enabled, loaded: true })
+}))
+
 describe('WorkspaceModeTabs', () => {
   beforeEach(async () => {
     attention.count = 0
+    adeFlag.enabled = false
     await i18n.changeLanguage('en')
   })
 
-  function props(activeView: 'chat' | 'workflow' | 'write' | 'design' | 'rooms' = 'chat') {
+  function props(
+    activeView: 'chat' | 'workflow' | 'write' | 'design' | 'rooms' | 'ade' = 'chat'
+  ) {
     return {
       activeView,
       onCodeOpen: vi.fn(),
       onWriteOpen: vi.fn(),
+      onAdeOpen: vi.fn(),
       onRoomsOpen: vi.fn()
     }
   }
 
-  function renderInteractive(activeView: 'chat' | 'workflow' | 'write' | 'design' | 'rooms' = 'chat') {
+  function renderInteractive(
+    activeView: 'chat' | 'workflow' | 'write' | 'design' | 'rooms' | 'ade' = 'chat'
+  ) {
     const componentProps = props(activeView)
     let renderer!: ReactTestRenderer
     act(() => {
@@ -139,6 +150,41 @@ describe('WorkspaceModeTabs', () => {
     expect(JSON.stringify(renderer.toJSON())).not.toContain('>3<')
     expect(JSON.stringify(renderer.toJSON())).not.toContain(' · 3')
     act(() => renderer.unmount())
+  })
+
+  it('hides the ADE entry while agents.kun.ade.enabled is off', () => {
+    const { renderer } = renderInteractive()
+    act(() => renderer.root.findByProps({ 'data-workspace-mode-trigger': true }).props.onClick())
+
+    const options = renderer.root.findAllByProps({ role: 'menuitemradio' })
+    expect(options.map((option) => option.props['data-workspace-mode'])).toEqual([
+      'write', 'chat', 'rooms'
+    ])
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('data-workspace-mode="ade"')
+    act(() => renderer.unmount())
+  })
+
+  it('shows the ADE entry between Code and Bot when the lab flag is on', () => {
+    adeFlag.enabled = true
+    const { componentProps, renderer } = renderInteractive()
+    act(() => renderer.root.findByProps({ 'data-workspace-mode-trigger': true }).props.onClick())
+
+    const options = renderer.root.findAllByProps({ role: 'menuitemradio' })
+    expect(options.map((option) => option.props['data-workspace-mode'])).toEqual([
+      'write', 'chat', 'ade', 'rooms'
+    ])
+    act(() => options[2]?.props.onClick())
+    expect(componentProps.onAdeOpen).toHaveBeenCalledOnce()
+    act(() => renderer.unmount())
+    expect(
+      renderToStaticMarkup(createElement(WorkspaceModeTabs, props('ade')))
+    ).toContain('data-workspace-mode="ade"')
+  })
+
+  it('keeps an ADE thread projected to Code while the flag is off', () => {
+    const html = renderToStaticMarkup(createElement(WorkspaceModeTabs, props('ade')))
+    expect(html).toContain('data-workspace-mode="chat"')
+    expect(html).not.toContain('data-workspace-mode="ade"')
   })
 
   it('opens Rooms through the dedicated callback and labels its active mode', () => {

@@ -24,6 +24,7 @@ import {
   type WindowsShellResolverOptions
 } from '../../../kun/src/adapters/tool/windows-shell-resolver.js'
 import {
+  TERMINAL_AGENT_CALLBACK_APPENDIX,
   TERMINAL_DEFAULT_COLS,
   TERMINAL_DEFAULT_ROWS,
   TERMINAL_MAX_SESSIONS,
@@ -47,6 +48,10 @@ type TerminalSession = {
   cleanupPromise: Promise<void> | null
   exitPromise: Promise<void>
   ownership?: { stop(): Promise<void> }
+  /** ADE terminal-agent unit this PTY hosts (05 §6.1). */
+  agent?: { unitId: string }
+  /** Last interrupt-hint report; Esc bursts in TUIs would spam otherwise. */
+  lastInterruptHintAt?: number
 }
 
 let nodePty: typeof import('node-pty') | null | undefined
@@ -146,6 +151,118 @@ function buildShellEnv(colorMode: TerminalColorMode): NodeJS.ProcessEnv {
   return env
 }
 
+/**
+ * ADE terminal-agent launch plan (05 §6.1). The command comes from the kun
+ * harness row (never from renderer-supplied argv), the execution unit is
+ * registered before spawn, and `launch` extras carry managed hook config.
+ */
+type AgentLaunchPlan = {
+  file: string
+  args: string[]
+  env: Record<string, string>
+  unitId: string
+}
+
+type RuntimeFetch = NonNullable<RegisterTerminalPtyIpcOptions['runtimeFetch']>
+
+async function readJson(response: Response): Promise<Record<string, unknown> | null> {
+  try {
+    const body = (await response.json()) as unknown
+    return body && typeof body === 'object' ? (body as Record<string, unknown>) : null
+  } catch {
+    return null
+  }
+}
+
+async function resolveAgentLaunch(
+  agent: {
+    harnessId: string
+    title: string
+    task?: string
+    taskWorkspaceId?: string
+    parentThreadId?: string
+    workspaceKind?: 'worktree' | 'local' | 'directory'
+  },
+  cwd: string,
+  runtimeFetch: RuntimeFetch
+): Promise<AgentLaunchPlan | { error: string }> {
+  const listRes = await runtimeFetch('/v1/harnesses').catch(() => null)
+  const rows = listRes?.ok ? ((await readJson(listRes))?.harnesses as unknown[] | undefined) : undefined
+  const row = (rows ?? []).find(
+    (entry): entry is { definition: Record<string, unknown>; status?: Record<string, unknown> } =>
+      Boolean(entry && typeof entry === 'object' &&
+        (entry as { definition?: { id?: unknown } }).definition?.id === agent.harnessId)
+  )
+  const terminal = (row?.definition?.terminal ?? undefined) as
+    | { argv?: unknown; taskFlag?: unknown }
+    | undefined
+  if (!row || !Array.isArray(terminal?.argv)) {
+    return { error: `Harness '${agent.harnessId}' is not available as a terminal agent.` }
+  }
+  const command =
+    typeof row.status?.resolvedCommand === 'string' && row.status.resolvedCommand
+      ? row.status.resolvedCommand
+      : typeof (row.definition.detect as { command?: unknown } | undefined)?.command === 'string'
+        ? (row.definition.detect as { command: string }).command
+        : null
+  if (!command) return { error: `Harness '${agent.harnessId}' has no launch command.` }
+
+  const unitRes = await runtimeFetch('/v1/execution-units', {
+    method: 'POST',
+    body: JSON.stringify({
+      kind: 'terminal-agent',
+      harnessId: agent.harnessId,
+      ...(agent.taskWorkspaceId ? { workspaceId: agent.taskWorkspaceId } : {}),
+      workspace: { path: cwd, kind: agent.workspaceKind ?? 'local' },
+      title: agent.title,
+      ...(agent.parentThreadId ? { parentThreadId: agent.parentThreadId } : {})
+    })
+  }).catch(() => null)
+  const unit = unitRes?.ok ? await readJson(unitRes) : null
+  const unitId = typeof unit?.unitId === 'string' ? unit.unitId : null
+  if (!unitId) {
+    return { error: 'Failed to register the terminal agent with kun.' }
+  }
+  const tokens = unit?.tokens as { workerCallback?: unknown; hookIngest?: unknown } | undefined
+  const launch = unit?.launch as { args?: unknown; env?: unknown } | undefined
+  const endpoint = typeof unit?.endpoint === 'string' ? unit.endpoint : ''
+  const env: Record<string, string> = { KUN_UNIT_ID: unitId }
+  if (endpoint) env.KUN_WORKER_ENDPOINT = endpoint
+  if (typeof tokens?.workerCallback === 'string') env.KUN_WORKER_TOKEN = tokens.workerCallback
+  if (typeof tokens?.hookIngest === 'string') env.KUN_HOOK_TOKEN = tokens.hookIngest
+  if (launch?.env && typeof launch.env === 'object') {
+    for (const [key, value] of Object.entries(launch.env as Record<string, unknown>)) {
+      if (typeof value === 'string') env[key] = value
+    }
+  }
+  const argv = [...(terminal.argv as string[])]
+  let task = agent.task?.trim()
+  if (task) {
+    // `argv` injection is the design-doc default; a harness may also declare
+    // a flag that carries the initial task (05 §6.1). The callback appendix
+    // (05 §5.3) rides along only when the credentials it relies on exist.
+    if (env.KUN_WORKER_ENDPOINT && env.KUN_WORKER_TOKEN) {
+      task += TERMINAL_AGENT_CALLBACK_APPENDIX
+    }
+    if (typeof terminal.taskFlag === 'string' && terminal.taskFlag) {
+      argv.push(terminal.taskFlag, task)
+    } else {
+      argv.push(task)
+    }
+  }
+  const extraArgs = Array.isArray(launch?.args) ? launch.args.filter((a): a is string => typeof a === 'string') : []
+  return { file: command, args: [...argv, ...extraArgs], env, unitId }
+}
+
+function reportAgentEvent(
+  runtimeFetch: RuntimeFetch | undefined,
+  path: string,
+  body: unknown
+): void {
+  if (!runtimeFetch) return
+  void runtimeFetch(path, { method: 'POST', body: JSON.stringify(body) }).catch(() => undefined)
+}
+
 function pushToRingBuffer(session: TerminalSession, chunk: string): void {
   session.ringBuffer += chunk
   if (session.ringBuffer.length > TERMINAL_RING_BUFFER_BYTES) {
@@ -168,6 +285,11 @@ export type RegisterTerminalPtyIpcOptions = {
    * when not provided.
    */
   getTerminalColorMode?: () => TerminalColorMode | Promise<TerminalColorMode>
+  /**
+   * Kun runtime HTTP access for terminal-agent registration/exit/hints
+   * (docs/ade/05 §6.1). Required only when a create carries `agent`.
+   */
+  runtimeFetch?: (path: string, init?: { method?: string; body?: string }) => Promise<Response>
   /** Test seam for native PTY and setup cancellation. */
   loadPty?: () => Promise<Pick<typeof import('node-pty'), 'spawn'> | null>
 }
@@ -288,13 +410,33 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
 
     if (cancelled()) return { ok: false as const, message: 'Terminal service is stopping.' }
     if (sessions.has(request.sessionId)) return { ok: false as const, message: 'Terminal session is already starting.' }
+
+    let agentPlan: AgentLaunchPlan | undefined
+    if (request.agent) {
+      if (!options.runtimeFetch) {
+        return { ok: false as const, message: 'Terminal agents require a kun runtime connection.' }
+      }
+      const resolved = await resolveAgentLaunch(request.agent, cwd, options.runtimeFetch)
+      if ('error' in resolved) return { ok: false as const, message: resolved.error }
+      agentPlan = resolved
+      if (cancelled()) {
+        reportAgentEvent(options.runtimeFetch,
+          `/v1/execution-units/${agentPlan.unitId}/exit`, { exitCode: 1, signal: 'cancelled' })
+        return { ok: false as const, message: 'Terminal service is stopping.' }
+      }
+    }
+
     let pty: IPty | undefined
     let launch: Awaited<ReturnType<typeof spawnPtyBehindGate>> | undefined
     const spawnAttempts: Array<{ file: string; message: string }> = []
-    for (const candidate of resolveTerminalShellCandidates()) {
+    const candidates = agentPlan
+      ? [{ file: agentPlan.file, args: agentPlan.args, gitBash: false }]
+      : resolveTerminalShellCandidates()
+    for (const candidate of candidates) {
       try {
         const env = buildShellEnv(colorMode)
         if (candidate.gitBash) env.CHERE_INVOKING = '1'
+        if (agentPlan) Object.assign(env, agentPlan.env)
         launch = await spawnPtyBehindGate(ptyModule, candidate.file, candidate.args, {
           name: 'xterm-256color',
           cols,
@@ -312,6 +454,11 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
           message: error instanceof Error ? error.message : String(error)
         })
       }
+    }
+    // A registered unit whose PTY never started must not linger as a live row.
+    if (!pty && agentPlan) {
+      reportAgentEvent(options.runtimeFetch,
+        `/v1/execution-units/${agentPlan.unitId}/exit`, { exitCode: 1, signal: 'spawn-failed' })
     }
 
     if (!pty) {
@@ -331,7 +478,8 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
         ready: false,
         cleanupPromise: null,
         exitPromise: launch!.exited,
-        ownership: launch?.ownership
+        ownership: launch?.ownership,
+        ...(agentPlan ? { agent: { unitId: agentPlan.unitId } } : {})
       }
       sessions.set(request.sessionId, session)
       await launch?.ready
@@ -352,9 +500,14 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
         sendToSender(session.sender, 'terminal:data', { sessionId: request.sessionId, data: initialOutput })
       }
 
-      pty.onExit(({ exitCode }) => {
+      pty.onExit(({ exitCode, signal }) => {
         session.exited = true
         sendToSender(session.sender, 'terminal:exit', { sessionId: request.sessionId, exitCode })
+        if (session.agent) {
+          reportAgentEvent(options.runtimeFetch,
+            `/v1/execution-units/${session.agent.unitId}/exit`,
+            { exitCode, ...(signal !== undefined ? { signal: String(signal) } : {}) })
+        }
         // Keep the entry briefly so a slow re-attach can still replay; the
         // next create disposes it. Full cleanup also happens on app quit.
       })
@@ -392,6 +545,16 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
     const request = terminalWritePayloadSchema.parse(args)
     const session = sessions.get(request.sessionId)
     if (stopping || !session || !session.ready || session.exited || session.cleanupPromise) return false
+    // Interrupt inference (05 §6.3): a Ctrl+C or a bare Escape inside a
+    // terminal-agent PTY is recorded so the next Stop hook reads cancelled.
+    if (session.agent && (request.data === '\x03' || request.data === '\x1b')) {
+      const now = Date.now()
+      if (!session.lastInterruptHintAt || now - session.lastInterruptHintAt > 1_500) {
+        session.lastInterruptHintAt = now
+        reportAgentEvent(options.runtimeFetch,
+          `/v1/execution-units/${session.agent.unitId}/interrupt-hint`, {})
+      }
+    }
     try {
       session.pty.write(request.data)
       return true

@@ -14,6 +14,7 @@ import {
   Gauge,
   Globe2,
   GitBranch,
+  GitCompare,
   MessageCircleMore,
   PanelRightClose,
   Plus,
@@ -21,6 +22,7 @@ import {
   Radio,
   ScanSearch,
   Shapes,
+  Users,
   X,
   type LucideIcon
 } from 'lucide-react'
@@ -100,6 +102,16 @@ export function CodeRightPanelTabs({
       icon: Gauge
     },
     { id: BUILTIN_RIGHT_PANEL_IDS.remote, label: t('rightPanelRemote'), icon: Radio },
+    {
+      id: BUILTIN_RIGHT_PANEL_IDS.review,
+      label: t('rightPanelReview', { defaultValue: 'Review' }),
+      icon: GitCompare
+    },
+    {
+      id: BUILTIN_RIGHT_PANEL_IDS.workers,
+      label: t('rightPanelWorkers', { defaultValue: 'Workers' }),
+      icon: Users
+    },
   ], [t])
 
   const builtinById = useMemo(

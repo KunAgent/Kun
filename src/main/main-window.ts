@@ -38,7 +38,7 @@ export function trustedWorkbenchRendererUrl(): string {
   return developmentRendererUrl() ?? pathToFileURL(join(__dirname, '../renderer/index.html')).href
 }
 
-function hardenTrustedRendererWindow(window: BrowserWindow, surface: RendererSurface): void {
+export function hardenTrustedRendererWindow(window: BrowserWindow, surface: RendererSurface): void {
   const trustedRendererUrl = trustedWorkbenchRendererUrl()
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   const preventUntrustedNavigation = (event: Electron.Event, targetUrl: string): void => {
