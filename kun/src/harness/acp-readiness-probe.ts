@@ -1,9 +1,14 @@
 /**
- * ACP readiness probe (docs/ade impl P3-11): after `--version` proves the
- * binary exists, a real `initialize` handshake decides whether the agent can
- * actually serve turns. A binary that crashes, hangs, or speaks a different
- * protocol version reports `ready: 'no'` with a sanitized stderr summary —
- * installed but not ready — instead of failing the first real turn.
+ * ACP readiness probe (docs/ade impl P3-11, relaxed in P4-03): after
+ * `--version` proves the binary exists, a real `initialize` handshake
+ * decides whether the agent can actually serve turns.
+ *
+ * Verdicts are tiered:
+ * - `yes` — the handshake completed.
+ * - `no` — the process crashed, could not spawn, or answered with an
+ *   unsupported protocol; the harness genuinely cannot serve turns.
+ * - `unknown` — the handshake timed out (slow cold start, loaded host);
+ *   the UI should offer a retry instead of pinning the harness disabled.
  */
 import { tmpdir } from 'node:os'
 import { AcpConnection } from '../runtime/acp/acp-connection.js'
@@ -13,23 +18,27 @@ import {
   type AcpProcess,
   type AcpSpawnFn
 } from '../runtime/acp/acp-process.js'
+import { AcpError } from '../runtime/acp/acp-schema.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 
-export const ACP_READINESS_TIMEOUT_MS = 10_000
+// P4-03: 10s misjudged cold ACP starts (Gemini needed ~8.6s alone, worse
+// under parallel probes). 30s leaves headroom without hanging the list.
+export const ACP_READINESS_TIMEOUT_MS = 30_000
 
-export type AcpReadiness = { ready: 'yes' | 'no'; detail?: string }
+export type AcpReadiness = { ready: 'yes' | 'no' | 'unknown'; detail?: string }
 
 export type AcpReadinessProbeDeps = {
   spawn?: AcpSpawnFn
   timeoutMs?: number
 }
 
-/** Never throws: every failure mode maps to `ready: 'no'` + a short detail. */
+/** Never throws: every failure mode maps to a verdict + a short detail. */
 export async function probeAcpReadiness(
   definition: HarnessDefinition,
   command: string,
   deps: AcpReadinessProbeDeps = {}
 ): Promise<AcpReadiness> {
+  const timeoutMs = deps.timeoutMs ?? ACP_READINESS_TIMEOUT_MS
   let process: AcpProcess
   try {
     process = await startAcpProcess({
@@ -49,13 +58,19 @@ export async function probeAcpReadiness(
   // sessionUnavailable reply instead of touching the real workspace.
   new AcpClientHost().attach(conn)
   try {
-    await conn.initialize({ timeoutMs: deps.timeoutMs ?? ACP_READINESS_TIMEOUT_MS })
+    await conn.initialize({ timeoutMs })
     return { ready: 'yes' }
   } catch (error) {
     const parts = [errorMessage(error)]
     const stderr = process.sanitizedStderrTail()
     if (stderr) parts.push(`stderr: ${stderr}`)
-    return { ready: 'no', detail: parts.join(' — ').slice(0, 400) }
+    const detail = parts.join(' — ').slice(0, 400)
+    // A timeout means "no answer yet", not "cannot answer" — a heavy cold
+    // start under parallel probes must not mark the harness unavailable.
+    if (error instanceof AcpError && error.code === 'request_timeout') {
+      return { ready: 'unknown', detail: `probe timed out after ${timeoutMs}ms` }
+    }
+    return { ready: 'no', detail }
   } finally {
     await conn.close().catch(() => undefined)
   }
