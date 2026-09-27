@@ -49,15 +49,14 @@ import { WorkerNoticeCoordinator } from '../ade/worker-notice-coordinator.js'
 import {
   createActivityHibernation,
   createCapabilitiesForRoute,
-  createHarnessListDeps,
   createManagerRuntime,
   createProviderPoolAccess,
-  wireTaskWorkspaceChange
+  registerAdeManagerTooling
 } from './runtime-composition-manager.js'
 import { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
+import { createAdeManagerContext } from '../ade/manager-context.js'
 import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
 import { providerModelIds } from './routes/model-gateway-core.js'
-import { createManagerToolProvider } from '../adapters/tool/manager-tool-provider.js'
 import { FileDelegationStore } from './runtime-factory-dependencies.js'
 import { join } from 'node:path'
 
@@ -381,6 +380,11 @@ export async function createRuntimeAgentComposition(
     detector: services.harnesses.detector,
     quota: createQuotaSnapshot({ list: () => model.providerQuotaService.list() })
   })
+  // P3-14: manager turns get delegation contract + team state + harness menu.
+  const adeManagerContext = createAdeManagerContext({
+    ...services.adeStores,
+    harnessSummary: graphHarnessSummary
+  })
   const harnessRuntimeMap = new HarnessRuntimeMap(
     buildHarnessRuntimes(
       buildMainDelegatedRuntime({
@@ -460,19 +464,15 @@ export async function createRuntimeAgentComposition(
   // Dispatch backfill + worker terminal hooks on the recorder (09 §5, §6.1).
   core.events.addObserver({ record: (event) => managerRuntime.handleRuntimeEvent(event) })
   const activityHibernation = createActivityHibernation({ core, managerRuntime })
-  registryComposition.registry.registerProvider(createManagerToolProvider({
-    manager: managerRuntime,
-    harnessList: createHarnessListDeps({
-      services,
-      harnessRuntimeMap,
-      listProfiles: () => delegationRuntime?.listProfiles() ?? [],
-      providers: providerPool.providers
-    }),
-    managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true,
-    race: managerRuntime.raceServiceDeps,
-    checks: managerRuntime.checkRunnerDeps
-  }))
-  wireTaskWorkspaceChange(core.taskWorkspaces, managerRuntime, services.adeStores.reviews)
+  registerAdeManagerTooling({
+    registry: registryComposition.registry,
+    managerRuntime,
+    services,
+    harnessRuntimeMap,
+    delegationRuntime: delegationRuntime ?? undefined,
+    providerPool,
+    core
+  })
   model.refreshModelConnectionDelegatedDeps = () => {
     const next = buildHarnessRuntimes(
       buildMainDelegatedRuntime({
@@ -531,7 +531,7 @@ export async function createRuntimeAgentComposition(
     toolHost,
     sdkRuntime,
     harnessRouter,
-    graphHarnessSummary,
+    graphHarnessSummary, adeManagerContext,
     usage: usageService,
     events,
     turns: turnService,
