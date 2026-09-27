@@ -20,6 +20,7 @@ import type { TurnService } from '../services/turn-service.js'
 import type { HarnessCatalog } from '../harness/harness-catalog.js'
 import type { HarnessDetector } from '../harness/harness-detector.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
+import { waitForTaskWorkspaceSettlement } from '../workspace-tasks/task-workspace-settlement.js'
 import type { FileDelegationStore } from '../delegation/delegation-runtime-contracts.js'
 import type { FileTeamStore } from './team-store.js'
 import type { FileDispatchStore } from './dispatch-store.js'
@@ -382,7 +383,7 @@ export class ManagerRuntime {
       // The workspace now belongs to the new worker (11 §4.4 'new-worker').
       this.deps.taskWorkspaces?.bindUnit(reused.workspaceId, workerId)
     }
-    const tws = reused ?? (this.deps.taskWorkspaces
+    let tws = reused ?? (this.deps.taskWorkspaces
       ? await this.deps.taskWorkspaces.create({
           ownerThreadId: ctx.threadId,
           unitId: workerId,
@@ -392,6 +393,25 @@ export class ManagerRuntime {
           startFrom: (input.workspace?.startFrom ?? { kind: 'default-branch' }) as StartFrom
         }, ctx.signal)
       : null)
+    if (tws && !reused) {
+      // `create` returns a provisional record: `path` still names the source
+      // root until the async checkout finishes. The snapshot must name the
+      // real task workspace — it is both the worker's only write root
+      // (09 §7.1) and its thread workspace (delegation-runtime-run).
+      tws = (await waitForTaskWorkspaceSettlement(
+        this.deps.taskWorkspaces!, tws.workspaceId, ctx.signal)) ?? tws
+      if (!['ready', 'captured', 'conflict'].includes(tws.state)) {
+        // The promised isolation could not be materialized — refuse rather
+        // than scope the worker to the manager's own workspace.
+        return {
+          ok: false,
+          refusal: 'workspace_unavailable',
+          userReport: language === 'zh'
+            ? `任务工作区创建失败（${tws.lastError ?? tws.state}），未创建 worker。`
+            : `Task workspace could not be created (${tws.lastError ?? tws.state}); worker not created.`
+        }
+      }
+    }
     const security = this.workerSecurity(childSecurity(toolContext), tws?.path ?? ctx.workspace)
     const worker: WorkerRecord = {
       workerId,
