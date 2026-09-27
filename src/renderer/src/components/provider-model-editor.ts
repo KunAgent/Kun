@@ -343,7 +343,7 @@ export function applyProviderModelForm(
     models: appendModelId(withoutOriginal.models, modelId),
     modelProfiles: {
       ...withoutOriginal.modelProfiles,
-      [modelKey(modelId)]: chatProfileFromForm(form)
+      [modelKey(modelId)]: chatProfileFromForm(provider, form)
     }
   }
 }
@@ -433,8 +433,16 @@ export function parseContextWindowInput(raw: string): number | null {
   return tokens > 0 ? tokens : null
 }
 
-function chatProfileFromForm(form: ProviderModelForm): ModelProviderModelProfileV1 {
+function chatProfileFromForm(
+  provider: Pick<ModelProviderProfileV1, 'modelProfiles'>,
+  form: ProviderModelForm
+): ModelProviderModelProfileV1 {
   const aliases = normalizeAliases(form.aliases)
+  // The form only covers part of the profile. Catalog metadata without an
+  // editor field (pricing, serviceTiers) is carried over from the stored
+  // profile so a routine edit cannot silently drop it. On a rename the
+  // previous entry lives under originalModelId.
+  const previous = chatModelProfile(provider, form.originalModelId || form.modelId)
   return {
     ...(aliases.length > 0 ? { aliases } : {}),
     ...(form.contextWindowTokens && form.contextWindowTokens > 0
@@ -450,6 +458,8 @@ function chatProfileFromForm(form: ProviderModelForm): ModelProviderModelProfile
     ...(form.reasoningEnabled && form.reasoningEfforts.length > 0
       ? { reasoning: reasoningCapabilityFromForm(form) }
       : {}),
+    ...(previous?.pricing ? { pricing: { ...previous.pricing } } : {}),
+    ...(previous?.serviceTiers?.length ? { serviceTiers: [...previous.serviceTiers] } : {}),
     ...(form.endpointFormat ? { endpointFormat: form.endpointFormat } : {}),
     ...(form.responsesMode ? { responsesMode: form.responsesMode } : {})
   }
