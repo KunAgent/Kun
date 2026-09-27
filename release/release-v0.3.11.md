@@ -23,6 +23,7 @@
 - **Rooms 可靠性**：私有响应流式渲染、无轮询与历史重绘；侧边栏置顶即时生效；缓冲文本快照在 context_window 事件后保持类型；失败终态回合的已受理提交被消费；协调器租约围栏提交。
 - **供应商与模型**：OpenCode 免费层请求携带会话头；StepFun API 域名更新；registry 凭证处理新增 OAuth 刷新控制；模型连接状态监测；修正 Gemini 预设、各协议端点 URL、重试提示与配额故障判断。
 - **Write/编辑器**：修复块菜单布局、缩放位置与列表复制；保留文件边缘、frontmatter 原位修补；空段落显示块手柄；恢复 Notion 风格块 UI。
+- **论文与输入可靠性**：移动论文时校验文件夹层级与保留目录，避免移入后从文库消失；大线程的 `user_input` 结算只探测请求之后的事件，并在中止时保留提交或取消结果；Service Manager 忙碌时，Runtime 启动探测会有界重试。
 - **其他**：修复首见客户端清空共享业务状态；移动端 Sheet 内容折叠修复；设置补丁接受规范化定时任务字段；bot 通知可关闭；Rooms 成员面板可切换模型；拆分超限 i18n 资源文件。
 
 **兼容提醒**：若降级到不认识“记忆规则”的旧版本，已创建的规则记录会被保留，但旧版本不会显示或使用它们；重新升级后可恢复。需要每轮遵守的偏好可在新版本中经确认提升为规则。
@@ -56,6 +57,7 @@ Kun 0.3.11 adds Rooms multi-agent collaboration, remote mobile access, and a pap
 - **Rooms reliability**: streaming private responses without polling or history redraws; immediate sidebar pinning; buffered text snapshots stay typed after context_window events; accepted submissions consumed from failed terminal turns; coordinator-lease fenced commits.
 - **Providers & models**: OpenCode free-tier session headers; updated StepFun API domain; OAuth refresh controls for registry credentials; model connection watch; fixes for the Gemini preset, per-protocol endpoint URLs, retry hints, and quota-failure classification.
 - **Write/editor**: block menu layout, zoom placement, and list copy fixes; preserved file edges with in-place frontmatter patching; block handle on empty paragraphs; restored Notion-style block UI.
+- **Paper and input reliability**: paper moves validate folder depth and reserved paths so units remain visible; `user_input` settlement on large threads probes only events after the request and preserves submitted or canceled results during abort; Runtime startup retries a temporarily busy Service Manager within a bounded deadline.
 - **Misc**: first-seen clients no longer wipe shared business state; mobile sheet collapse fix; normalized scheduled-task fields accepted in settings patches; dismissible bot notices; model switching from the room members panel; oversized i18n locale files split.
 
 **Compatibility note**: If you downgrade to a version that does not understand memory directives, existing directive records are retained but hidden and inactive until you upgrade again. Preferences that must apply every turn can be promoted to directives with your confirmation.
