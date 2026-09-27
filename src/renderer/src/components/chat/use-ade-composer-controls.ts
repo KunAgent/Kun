@@ -11,6 +11,7 @@ import {
   useHarnessStore
 } from '../../store/harness-store'
 import { useTaskWorkspaceStore } from '../../store/task-workspace-store'
+import { useCodexReferenceEnabled } from '../../history-reference/use-codex-reference-enabled'
 import {
   credentialModeFromGroupKey,
   defaultCredentialModeForRow,
@@ -112,6 +113,18 @@ export function useAdeComposerControls(input: {
     }
   }, [composerProviderId, enabled, harnessId, isNativeHarness, onComposerModelChange, setComposerHarness, setComposerModel])
 
+  /**
+   * External-session continuation (01 §8): a fresh one-to-one thread whose
+   * selected harness exposes a `historySource` can import a local session
+   * of that source, then the new thread is rebound to the same harness.
+   * Hidden while a thread is open or the matching lab flag is off.
+   */
+  const continuationSource = activeThreadId ? undefined : row?.definition.historySource
+  const continuationEnabled = useCodexReferenceEnabled(continuationSource)
+  const continuation = enabled && continuationSource && continuationEnabled
+    ? { source: continuationSource, harnessId }
+    : null
+
   const needsSwitchConfirm = (nextHarnessId: string): boolean =>
     harnessSwitchNeedsConfirmation({
       threadHasUserMessages,
@@ -149,6 +162,7 @@ export function useAdeComposerControls(input: {
     harnessCommands,
     needsSwitchConfirm,
     selectHarness,
+    continuation,
     isolation,
     selectIsolation: (next: 'local' | 'worktree'): void => {
       setComposerIsolation(next, next === 'worktree' ? { kind: 'default-branch' } : undefined)

@@ -53,6 +53,7 @@ function textOf(root: ReactTestRenderer): string {
 async function renderPicker(props: {
   needsConfirm?: (id: string) => boolean
   onSelect?: (id: string) => void
+  onContinueLocalSession?: () => void
 }): Promise<ReactTestRenderer> {
   let renderer!: ReactTestRenderer
   await act(async () => {
@@ -62,6 +63,9 @@ async function renderPicker(props: {
       rows,
       loading: false,
       needsConfirm: props.needsConfirm ?? (() => false),
+      ...(props.onContinueLocalSession
+        ? { onContinueLocalSession: props.onContinueLocalSession }
+        : {}),
       onSelect: props.onSelect ?? vi.fn()
     }))
   })
@@ -121,6 +125,19 @@ describe('FloatingComposerHarnessPicker', () => {
       renderer.root.findByProps({ 'data-harness-switch-confirm-yes': true }).props.onClick()
     })
     expect(onSelect).toHaveBeenCalledWith('claude-code')
+  })
+
+  it('shows the continue-local-session entry only when wired', async () => {
+    const onContinue = vi.fn()
+    const withEntry = await renderPicker({ onContinueLocalSession: onContinue })
+    await openMenu(withEntry)
+    const entry = withEntry.root.findByProps({ 'data-continue-local-session': true })
+    await act(async () => entry.props.onClick())
+    expect(onContinue).toHaveBeenCalledTimes(1)
+
+    const without = await renderPicker({})
+    await openMenu(without)
+    expect(without.root.findAllByProps({ 'data-continue-local-session': true })).toHaveLength(0)
   })
 
   it('never confirms a re-pick of the current harness', async () => {

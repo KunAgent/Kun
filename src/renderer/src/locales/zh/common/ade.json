@@ -174,6 +174,7 @@
   },
   "adeHarnessPicker": {
     "title": "Harness",
+    "continueLocalSession": "接续本机会话",
     "nextTurnHint": "对下一轮生效。Code 会话始终使用 Kun。",
     "switchConfirmTitle": "切换到 {{name}}？",
     "switchConfirmBody": "下一轮会在新 harness 中开启全新会话并携带交接简报；此前的轮次仍保留在原 harness。",

@@ -5,22 +5,32 @@ import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 import { useChatStore } from '../store/chat-store'
 import { SourceHistoryPreview } from './SourceHistoryPreview'
-import { createReferenceBranch, historyRequest, type HistoryPreview, type HistorySession, type HistorySourceProvider } from './history-reference-api'
+import { createReferenceBranch, historyRequest, updateThreadHarness, type HistoryPreview, type HistorySession, type HistorySourceProvider } from './history-reference-api'
 import { useCodexReferenceEnabled } from './use-codex-reference-enabled'
 
 const control = 'min-w-0 rounded-lg border border-ds-border-muted bg-ds-card px-3 py-2 text-sm text-ds-ink'
 
-export function CodexReferenceDialog({ workspaceRoot, onClose, onCreated }: {
-  workspaceRoot: string; onClose: () => void; onCreated: (id: string) => void
+export function CodexReferenceDialog({ workspaceRoot, onClose, onCreated, fixedProvider, harnessId }: {
+  workspaceRoot: string
+  onClose: () => void
+  onCreated: (id: string) => void
+  /** ADE continuation: pin the source to the picked harness (01 §8). */
+  fixedProvider?: HistorySourceProvider
+  /** PATCH the created branch onto this harness before reporting success. */
+  harnessId?: string
 }): ReactElement | null {
   const { t } = useTranslation('common')
   const codexEnabled = useCodexReferenceEnabled('codex')
   const claudeEnabled = useCodexReferenceEnabled('claude-code')
   const opencodeEnabled = useCodexReferenceEnabled('opencode')
   const [manualPaths, setManualPaths] = useState<string[]>([])
-  const [sourceProvider, setSourceProvider] = useState<HistorySourceProvider>(codexEnabled ? 'codex' : 'claude-code')
+  const [sourceProvider, setSourceProvider] = useState<HistorySourceProvider>(
+    fixedProvider ?? (codexEnabled ? 'codex' : 'claude-code'))
   const sourceEnabled = { codex: codexEnabled, 'claude-code': claudeEnabled, opencode: opencodeEnabled }
-  const provider = sourceEnabled[sourceProvider] ? sourceProvider : (Object.keys(sourceEnabled) as HistorySourceProvider[]).find((key) => sourceEnabled[key]) ?? sourceProvider
+  const provider = fixedProvider ?? (
+    sourceEnabled[sourceProvider]
+      ? sourceProvider
+      : (Object.keys(sourceEnabled) as HistorySourceProvider[]).find((key) => sourceEnabled[key]) ?? sourceProvider)
   const enabled = sourceEnabled[provider]
   const [sessions, setSessions] = useState<HistorySession[]>([])
   const [selected, setSelected] = useState<string[]>([])
@@ -132,6 +142,7 @@ export function CodexReferenceDialog({ workspaceRoot, onClose, onCreated }: {
       requestKeys.current.set(identity, key)
       try {
         const created = await createReferenceBranch({ ...input, idempotencyKey: key })
+        if (harnessId) await updateThreadHarness(created.thread.id, harnessId)
         completed.push({ path, id: created.thread.id })
       } catch (err) { completed.push({ path, error: err instanceof Error ? err.message : String(err) }) }
       setResults([...completed])
@@ -164,12 +175,14 @@ export function CodexReferenceDialog({ workspaceRoot, onClose, onCreated }: {
       </header>
       {!enabled ? <p>{t('codexHistoryDisabled')}</p> : <>
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <label className="text-sm">{t('historySourceLabel')} <select className={control} value={provider} disabled={creating}
-            onChange={(event) => { ++previewVersion.current; setSourceProvider(event.target.value as HistorySourceProvider) }}>
-            {codexEnabled ? <option value="codex">Codex</option> : null}
-            {claudeEnabled ? <option value="claude-code">Claude Code</option> : null}
-            {opencodeEnabled ? <option value="opencode">OpenCode</option> : null}
-          </select></label>
+          {fixedProvider ? null : (
+            <label className="text-sm">{t('historySourceLabel')} <select className={control} value={provider} disabled={creating}
+              onChange={(event) => { ++previewVersion.current; setSourceProvider(event.target.value as HistorySourceProvider) }}>
+              {codexEnabled ? <option value="codex">Codex</option> : null}
+              {claudeEnabled ? <option value="claude-code">Claude Code</option> : null}
+              {opencodeEnabled ? <option value="opencode">OpenCode</option> : null}
+            </select></label>
+          )}
           <input className={control} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('codexHistorySearch')} aria-label={t('codexHistorySearch')} />
           <label className="text-sm"><input type="checkbox" checked={projectOnly} disabled={!workspaceRoot} onChange={(event) => setProjectOnly(event.target.checked)} /> {t('codexHistoryCurrentProject')}</label>
           {provider !== 'claude-code' ? <label className="text-sm"><input type="checkbox" checked={archived} onChange={(event) => setArchived(event.target.checked)} /> {t('codexHistoryArchived')}</label> : null}

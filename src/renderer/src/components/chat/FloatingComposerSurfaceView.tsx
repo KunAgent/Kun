@@ -1,5 +1,7 @@
-import type { ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import type { ComposerFileReference } from '../../lib/composer-file-references'
+import { CodexReferenceDialog } from '../../history-reference/CodexReferenceDialog'
+import { useChatStore } from '../../store/chat-store'
 import { ComposerInlineError } from './ComposerInlineError'
 import { FloatingComposerFooterView } from './FloatingComposerFooterView'
 import { FloatingComposerContextChips } from './FloatingComposerContextChips'
@@ -41,6 +43,12 @@ export function FloatingComposerSurfaceView({
     worktreeBranch
   } = context
   const documentQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'document-quote')
+  // 01 §8: "continue local session" is offered only on a fresh thread when
+  // the picked harness exposes a matching historySource + lab flag.
+  const [continueDialogOpen, setContinueDialogOpen] = useState(false)
+  const openContinueLocalSession = adeComposer?.continuation
+    ? () => setContinueDialogOpen(true)
+    : undefined
   return (
     <>
         {!compact && !emptyTaskLayout && taskSurface === 'design' && designTaskProfile ? (
@@ -403,6 +411,7 @@ export function FloatingComposerSurfaceView({
                       rows={adeComposer.rows}
                       loading={adeComposer.rowsLoading}
                       needsConfirm={adeComposer.needsSwitchConfirm}
+                      onContinueLocalSession={openContinueLocalSession}
                       onOpen={adeComposer.refreshRows}
                       onSelect={adeComposer.selectHarness}
                     />
@@ -498,6 +507,18 @@ export function FloatingComposerSurfaceView({
           </div>
         </div>
         <FloatingComposerFooterView context={context} />
+        {continueDialogOpen && adeComposer?.continuation ? (
+          <CodexReferenceDialog
+            workspaceRoot={effectiveWorkspaceRoot}
+            fixedProvider={adeComposer.continuation.source}
+            harnessId={adeComposer.continuation.harnessId}
+            onClose={() => setContinueDialogOpen(false)}
+            onCreated={(id) => {
+              setContinueDialogOpen(false)
+              void useChatStore.getState().selectThread(id)
+            }}
+          />
+        ) : null}
     </>
   )
 }

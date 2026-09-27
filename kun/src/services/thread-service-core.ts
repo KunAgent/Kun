@@ -207,6 +207,8 @@ export interface ThreadService {
     workspace?: string
     /** Set-only binding to a host-managed task workspace (07 §5). */
     taskWorkspaceId?: string
+    /** Harness rebind for external-session continuation (01 §8). */
+    harnessId?: string
     additionalWorkspaces?: string[]
     knowledgeBases?: KnowledgeBaseMount[]
     mode?: ThreadMode

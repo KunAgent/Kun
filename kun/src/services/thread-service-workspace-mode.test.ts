@@ -117,6 +117,34 @@ describe('ThreadService workspace mode', () => {
   })
 })
 
+describe('ThreadService harnessId update (01 §8)', () => {
+  it('rebinds the harness on an idle thread and records the update', async () => {
+    const service = serviceWith()
+    const thread = await service.create({
+      title: 'continuation', workspace: '/repo', model: 'm', mode: 'agent'
+    })
+    expect(thread.harnessId).toBeUndefined()
+    const updated = await service.update(thread.id, { harnessId: 'claude-code' })
+    expect(updated.harnessId).toBe('claude-code')
+    expect((await service.get(thread.id))?.harnessId).toBe('claude-code')
+  })
+
+  it('validates the schema and rejects harness changes while running', async () => {
+    expect(UpdateThreadRequest.safeParse({ harnessId: 'claude-code' }).success).toBe(true)
+    expect(UpdateThreadRequest.safeParse({ harnessId: 'BAD_ID' }).success).toBe(false)
+    expect(UpdateThreadRequest.safeParse({}).success).toBe(false)
+
+    const store = new InMemoryThreadStore()
+    const service = serviceWith(store)
+    const thread = await service.create({
+      title: 'running', workspace: '/repo', model: 'm', mode: 'agent'
+    })
+    await store.upsert({ ...thread, status: 'running' })
+    await expect(service.update(thread.id, { harnessId: 'claude-code' }))
+      .rejects.toThrow(/cannot be changed while the thread is running/)
+  })
+})
+
 describe('manager tool advertisement', () => {
   it('advertises only for native-loop ADE primary threads', () => {
     const base = { workspaceMode: 'ade' as const }
