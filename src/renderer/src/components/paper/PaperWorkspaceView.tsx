@@ -9,6 +9,7 @@ import { WritePdfRendererProvider } from '../write/write-pdf-renderer-context'
 import { PaperPdfReader } from './reader/PaperPdfReader'
 import { PaperImportDialogHost } from './PaperImportDialogHost'
 import { PaperLibraryOnboarding } from './PaperLibraryOnboarding'
+import { PaperMetadataDrawer } from './sidebar/PaperMetadataDrawer'
 import { PaperTaskRing } from './PaperTaskRing'
 
 export type PaperWorkspaceViewProps = {
@@ -52,6 +53,8 @@ export function PaperWorkspaceView({
   const setEntriesLoading = usePaperModeStore((s) => s.setEntriesLoading)
   const setEntriesResult = usePaperModeStore((s) => s.setEntriesResult)
   const setEntriesError = usePaperModeStore((s) => s.setEntriesError)
+  const infoDrawerOpen = usePaperModeStore((s) => s.infoDrawerOpen)
+  const setInfoDrawerOpen = usePaperModeStore((s) => s.setInfoDrawerOpen)
 
   const hasLibrary = paperMode.libraries.length > 0
 
@@ -165,6 +168,9 @@ export function PaperWorkspaceView({
               </WritePdfRendererProvider>
             </PaperWorkbenchChromeContext.Provider>
           )}
+          {hasLibrary && infoDrawerOpen ? (
+            <PaperMetadataDrawer onClose={() => setInfoDrawerOpen(false)} />
+          ) : null}
           {hasLibrary ? <PaperTaskRing /> : null}
         </div>
         {rightPanel}

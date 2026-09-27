@@ -216,7 +216,7 @@ export function PaperLibraryView({
   const bulkTrash = async (): Promise<void> => {
     if (selection.size === 0) return
     if (!(await confirmDialog(t('writePaperTrashConfirm', { count: selection.size })))) return
-    const outcome = await trashPaperUnits([...selection])
+    const outcome = await trashPaperUnits([...selection], workspaceRoot)
     clearSelection()
     if (outcome.failed.length) {
       usePaperStore.getState().setNotice({
@@ -231,31 +231,31 @@ export function PaperLibraryView({
 
   const runRowAction = async (entry: PaperLibraryEntry, action: PaperRowMenuAction): Promise<void> => {
     if (typeof action === 'object') {
-      await updatePaperEntryMeta(entry, { status: action.status }, t)
+      await updatePaperEntryMeta(entry, { status: action.status }, t, workspaceRoot)
       return
     }
     switch (action) {
       case 'open':
-        await openLibraryEntry(entry)
+        await openLibraryEntry(entry, workspaceRoot, t)
         return
       case 'edit':
         setEditEntry(entry)
         return
       case 'download-pdf':
-        await downloadMissingPaperPdfs([entry], t)
+        await downloadMissingPaperPdfs([entry], t, workspaceRoot)
         return
       case 'copy-bibtex':
-        await copyPaperEntryBibtex(entry, t)
+        await copyPaperEntryBibtex(entry, t, workspaceRoot)
         return
       case 'reveal':
-        await revealPaperEntry(entry)
+        await revealPaperEntry(entry, workspaceRoot)
         return
       case 'move':
         setMoveUnits([entry.unitDir])
         return
       case 'trash': {
         if (!(await confirmDialog(t('writePaperTrashConfirm', { count: 1 })))) return
-        const outcome = await trashPaperUnits([entry.unitDir])
+        const outcome = await trashPaperUnits([entry.unitDir], workspaceRoot)
         if (outcome.failed.length) {
           usePaperStore.getState().setNotice({
             tone: 'error',
@@ -328,9 +328,10 @@ export function PaperLibraryView({
         missingPdf={counts.missingPdf}
         onFilter={setFilter}
         onRefresh={() => void reload()}
-        onDownloadMissing={() => void downloadMissingPaperPdfs(entries, t)}
+        onDownloadMissing={() => void downloadMissingPaperPdfs(entries, t, workspaceRoot)}
         onExportBibtex={() => void exportBibtex()}
         onImport={() => setImportDialogOpen(true)}
+        onShowInfo={() => usePaperModeStore.getState().openInfoDrawer()}
         t={t}
       />
 
@@ -437,7 +438,7 @@ export function PaperLibraryView({
             onToggleAll={() => setSelection(
               allVisibleSelected ? new Set<string>() : new Set(visible.map((entry) => entry.unitDir))
             )}
-            onOpen={(entry) => void openLibraryEntry(entry)}
+            onOpen={(entry) => void openLibraryEntry(entry, workspaceRoot, t)}
             onMenu={(entry, x, y) => setMenu({ entry, x, y })}
             t={t}
           />
@@ -452,8 +453,12 @@ export function PaperLibraryView({
           onClose={() => setMenu(null)}
         />
       ) : null}
-      {editEntry ? <PaperMetaEditDialog entry={editEntry} onClose={() => setEditEntry(null)} /> : null}
-      {moveUnits ? <PaperMoveGroupDialog unitDirs={moveUnits} onClose={() => setMoveUnits(null)} /> : null}
+      {editEntry ? (
+        <PaperMetaEditDialog entry={editEntry} libraryRoot={workspaceRoot} onClose={() => setEditEntry(null)} />
+      ) : null}
+      {moveUnits ? (
+        <PaperMoveGroupDialog unitDirs={moveUnits} libraryRoot={workspaceRoot} onClose={() => setMoveUnits(null)} />
+      ) : null}
     </div>
   )
 }

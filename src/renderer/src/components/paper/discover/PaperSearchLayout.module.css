@@ -1,0 +1,134 @@
+/* Paper search page shell shared by the direct and Agent tabs: a scrollable
+ * stage column plus a 320px history rail. Below ~980px (container width) the
+ * rail turns into an overlay toggled from the header. */
+
+.surface {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  container-type: inline-size;
+}
+
+.body {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.body[data-rail='open'] {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.stage {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+
+.rail {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  border-left: 1px solid var(--ds-border-muted);
+  background: var(--ds-card);
+}
+
+.historyHeader {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--ds-border-muted);
+  padding: 0 8px 0 12px;
+}
+
+.historyList {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.historyRow {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: 8px;
+  padding: 6px 8px;
+  text-align: left;
+  transition: background-color 75ms;
+}
+
+.historyRow:hover {
+  background: var(--ds-hover);
+}
+
+.historyRow[data-active='true'] {
+  background: var(--ds-sidebar-row-active);
+}
+
+.historyTitle {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--ds-ink);
+}
+
+.historyTitle > svg {
+  flex-shrink: 0;
+  color: var(--ds-faint);
+}
+
+.historyTitle > span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.historyMeta {
+  min-width: 0;
+  overflow: hidden;
+  padding-left: 20px;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--ds-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.historyEmpty {
+  padding: 14px 10px;
+  font-size: 12px;
+  color: var(--ds-faint);
+}
+
+@container (max-width: 980px) {
+  .body[data-rail='open'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rail {
+    display: none;
+  }
+
+  .rail[data-overlay='true'] {
+    position: absolute;
+    z-index: 30;
+    inset-block: 44px 0;
+    inset-inline-end: 0;
+    display: flex;
+    width: min(320px, 85%);
+    box-shadow: var(--ds-shadow-overlay, 0 18px 48px rgba(20, 47, 95, 0.22));
+  }
+}

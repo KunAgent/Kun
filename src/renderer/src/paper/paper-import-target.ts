@@ -7,6 +7,7 @@
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { normalizePath } from '../write/write-workspace-store-helpers'
 import { usePaperModeStore } from './paper-mode-store'
+import { refreshPaperLibrary } from './paper-library-index'
 
 const KEY_PREFIX = 'kun.paper.importFolder.'
 const MAX_FOLDER_DEPTH = 3
@@ -78,11 +79,16 @@ export function currentImportParentDir(folder = currentImportFolder()): string {
   return paperImportParentDir(useWriteWorkspaceStore.getState().paperReading.papersDir, folder)
 }
 
-export function setImportFolder(folder: string): void {
-  const library = currentLibrary()
-  if (!library) return
-  usePaperModeStore.getState().setImportFolder(library, folder)
-  writeImportFolder(library, folder)
+/**
+ * Remember the import folder for `library` (defaults to the mounted root).
+ * Sidebar trees pass their own root so choosing a folder in another library
+ * never writes into the active library's slot.
+ */
+export function setImportFolder(folder: string, library?: string): void {
+  const target = normalizePath(library ?? '') || currentLibrary()
+  if (!target) return
+  usePaperModeStore.getState().setImportFolder(target, folder)
+  writeImportFolder(target, folder)
 }
 
 /** Hook: the open library's import folder, re-rendering on change. */
@@ -94,16 +100,19 @@ export function useImportFolder(): string {
 
 export type CreatePaperFolderResult = { ok: true; folder: string } | { ok: false; message: string }
 
-/** Create `<papersDir>/<folder>` on disk and add it to the folder list. */
-export async function createPaperFolder(raw: string): Promise<CreatePaperFolderResult> {
+/** Create `<papersDir>/<folder>` on disk inside `library` (default: mounted root). */
+export async function createPaperFolder(
+  raw: string,
+  library?: string
+): Promise<CreatePaperFolderResult> {
   const folder = normalizePaperFolderInput(raw)
   if (!folder) return { ok: false, message: 'invalid' }
-  const library = currentLibrary()
-  if (!library || typeof window.kunGui?.paperCreateGroup !== 'function') {
+  const root = normalizePath(library ?? '') || currentLibrary()
+  if (!root || typeof window.kunGui?.paperCreateGroup !== 'function') {
     return { ok: false, message: 'unavailable' }
   }
   const result = await window.kunGui
-    .paperCreateGroup({ workspaceRoot: library, group: folder })
+    .paperCreateGroup({ workspaceRoot: root, group: folder })
     .catch((error: unknown) => ({ ok: false as const, message: String(error) }))
   if (!result.ok) {
     return {
@@ -111,7 +120,7 @@ export async function createPaperFolder(raw: string): Promise<CreatePaperFolderR
       message: 'code' in result && result.code === 'invalid-group' ? 'invalid' : result.message
     }
   }
-  usePaperModeStore.getState().addGroup(result.group)
-  usePaperModeStore.getState().refreshEntries()
+  if (root === currentLibrary()) usePaperModeStore.getState().addGroup(result.group)
+  refreshPaperLibrary(root)
   return { ok: true, folder: result.group }
 }

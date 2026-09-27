@@ -1,9 +1,8 @@
 import { useState, type ReactElement, type ReactNode } from 'react'
-import { ChevronRight, Compass, LibraryBig, Newspaper, Rss, Trophy } from 'lucide-react'
+import { ChevronRight, Compass, LibraryBig, Newspaper, Rss, Search, Trophy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WritePaperViewId } from '../../../write/write-workspace-store-types'
 import { openPaperViewTab } from '../../../paper/paper-view'
-import { PaperSearchNavGroup } from './PaperSearchNavGroup'
 
 const DISCOVER_OPEN_KEY = 'kun.paper.discoverNavOpen'
 
@@ -94,7 +93,12 @@ export function PaperSidebarNav({
         onClick={() => openPaperViewTab('library')}
         trailing={<span className="shrink-0 text-[11px] tabular-nums text-ds-faint">{total}</span>}
       />
-      <PaperSearchNavGroup activeView={activeView} />
+      <NavRow
+        icon={<Search className="h-3.5 w-3.5" strokeWidth={1.8} />}
+        label={t('writePaperDiscoverTab_search')}
+        active={activeView === 'discover:search'}
+        onClick={() => openPaperViewTab('discover:search')}
+      />
       <NavRow
         icon={(
           <>

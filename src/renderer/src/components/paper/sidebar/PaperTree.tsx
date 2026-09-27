@@ -3,38 +3,59 @@ import { ChevronRight, FolderInput } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 import { normalizePath } from '../../../write/write-workspace-store-helpers'
+import { usePaperStore } from '../../../write/paper/paper-store'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { setImportFolder } from '../../../paper/paper-import-target'
+import { switchPaperLibrary } from '../../../paper/paper-mode-actions'
 import { usePaperRowMenu } from '../library/use-paper-row-menu'
 import { PaperTreeRow } from './PaperTreeRow'
 import { PaperNewFolderRow } from './PaperNewFolderRow'
+import { readCollapsedGroups, writeCollapsedGroups } from './paper-sidebar-collapse'
 import type { PaperLibraryEntry } from '@shared/paper/paper-library-types'
 
 /**
- * Sidebar paper tree (U3): library entries grouped by `entry.group` into
- * collapsible sections, then paper rows — no raw file tree, so paper.md /
- * figures/ internals stay hidden. Flattened to a plain list when the library
- * has no groups.
+ * Sidebar paper tree for one library root (U3): entries grouped by
+ * `entry.group` into collapsible sections, then paper rows — no raw file
+ * tree, so paper.md / figures/ internals stay hidden. Flattened to a plain
+ * list when the library has no groups. Every row action runs against
+ * `libraryRoot`, not the globally mounted root.
  */
 export function PaperTree({
+  libraryRoot,
+  entries,
+  groups: folders,
+  filter = '',
   creatingFolder = false,
   onCreatingFolderDone
 }: {
+  /** Normalized root of the library this tree belongs to. */
+  libraryRoot: string
+  entries: PaperLibraryEntry[]
+  groups: string[]
+  /** Title filter text ('' = show everything). */
+  filter?: string
   creatingFolder?: boolean
   onCreatingFolderDone?: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
-  const workspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
-  const entries = usePaperModeStore((s) => s.entries)
-  const folders = usePaperModeStore((s) => s.groups)
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
+    () => readCollapsedGroups(libraryRoot)
+  )
   const { host, openMenu } = usePaperRowMenu()
+
+  const query = filter.trim().toLowerCase()
+  const visibleEntries = useMemo(
+    () => query
+      ? entries.filter((entry) => entry.meta.title.toLowerCase().includes(query))
+      : entries,
+    [entries, query]
+  )
 
   const sections = useMemo(() => {
     // Empty folders stay visible so they can be filled by imports.
     const groups = new Map<string, PaperLibraryEntry[]>(folders.map((folder) => [folder, []]))
     const top: PaperLibraryEntry[] = []
-    const sorted = [...entries].sort(
+    const sorted = [...visibleEntries].sort(
       (a, b) => (Date.parse(b.lastOpenedAt ?? '') || 0) - (Date.parse(a.lastOpenedAt ?? '') || 0)
         || a.meta.title.localeCompare(b.meta.title)
     )
@@ -48,46 +69,63 @@ export function PaperTree({
       }
     }
     return { groups: [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)), top }
-  }, [entries, folders])
+  }, [visibleEntries, folders])
 
   const toggle = (group: string): void => {
     setCollapsed((current) => {
       const next = new Set(current)
       if (next.has(group)) next.delete(group)
       else next.add(group)
+      writeCollapsedGroups(libraryRoot, next)
       return next
     })
   }
 
-  const importInto = (folder: string): void => {
-    setImportFolder(folder)
+  const importInto = async (folder: string): Promise<void> => {
+    setImportFolder(folder, libraryRoot)
+    const mounted = normalizePath(useWriteWorkspaceStore.getState().workspaceRoot)
+    if (libraryRoot !== mounted) {
+      // The import dialog targets the mounted library; switch first.
+      const switched = await switchPaperLibrary(libraryRoot)
+      if (!switched.ok) {
+        usePaperStore.getState().setNotice({
+          tone: 'error',
+          message: switched.message === 'save-failed' ? t('writePaperSaveFailed') : switched.message
+        })
+        return
+      }
+    }
     usePaperModeStore.getState().setImportDialogOpen(true)
   }
 
   const newFolderRow = creatingFolder && onCreatingFolderDone
-    ? <PaperNewFolderRow onDone={onCreatingFolderDone} />
+    ? <PaperNewFolderRow libraryRoot={libraryRoot} onDone={onCreatingFolderDone} />
     : null
 
-  if (!entries.length && !folders.length) {
+  if (!visibleEntries.length && !folders.length) {
     return (
-      <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
+      <div className="px-1 pb-2">
         {newFolderRow}
-        <p className="px-2 py-6 text-center text-[12px] text-ds-faint">
-          {t('writePaperLibraryEmpty')}
+        <p className="px-2 py-3 text-[11.5px] text-ds-faint">
+          {query ? t('paperWorkspaceFilterEmpty') : t('writePaperLibraryEmpty')}
         </p>
       </div>
     )
   }
 
+  // While filtering, groups stay expanded so matches are visible.
+  const isCollapsed = (group: string): boolean => !query && collapsed.has(group)
+
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
+    <div className="px-1 pb-2">
       {newFolderRow}
       {sections.groups.map(([group, items]) => {
         const parts = group.split('/')
         const depth = parts.length - 1
         const ancestors = parts.slice(0, -1).map((_, index) => parts.slice(0, index + 1).join('/'))
-        if (ancestors.some((parent) => collapsed.has(parent))) return null
-        const isCollapsed = collapsed.has(group)
+        if (ancestors.some((parent) => isCollapsed(parent))) return null
+        if (query && !items.length && !group.toLowerCase().includes(query)) return null
+        const collapsedGroup = isCollapsed(group)
         const hasChildFolder = sections.groups.some(([other]) => other.startsWith(`${group}/`))
         return (
           <div key={group} className="group/folder relative mt-0.5">
@@ -99,7 +137,7 @@ export function PaperTree({
               className="flex h-7 w-full items-center gap-1 rounded-md px-1.5 pr-8 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
             >
               <ChevronRight
-                className={`h-3 w-3 shrink-0 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
+                className={`h-3 w-3 shrink-0 transition-transform ${collapsedGroup ? '' : 'rotate-90'}`}
                 strokeWidth={2}
               />
               <span className="min-w-0 flex-1 truncate">{parts[depth]}</span>
@@ -107,23 +145,23 @@ export function PaperTree({
             </button>
             <button
               type="button"
-              onClick={() => importInto(group)}
+              onClick={() => void importInto(group)}
               title={t('paperImportIntoFolder')}
               aria-label={t('paperImportIntoFolder')}
               className="absolute right-1 top-1 hidden h-5 w-5 items-center justify-center rounded text-ds-faint transition hover:bg-ds-main hover:text-ds-ink group-hover/folder:flex"
             >
               <FolderInput className="h-3.5 w-3.5" strokeWidth={1.8} />
             </button>
-            {!isCollapsed && !items.length && !hasChildFolder ? (
+            {!collapsedGroup && !items.length && !hasChildFolder ? (
               <p style={{ paddingLeft: 24 + depth * 14 }} className="py-1 text-[11px] text-ds-faint">{t('paperFolderEmpty')}</p>
             ) : null}
-            {!isCollapsed && items.length ? (
+            {!collapsedGroup && items.length ? (
               <div style={{ paddingLeft: depth * 14 }}>
                 {items.map((entry) => (
                   <PaperTreeRow
                     key={entry.unitDir}
                     entry={entry}
-                    workspaceRoot={workspaceRoot}
+                    libraryRoot={libraryRoot}
                     onMenu={openMenu}
                   />
                 ))}
@@ -136,7 +174,7 @@ export function PaperTree({
         <PaperTreeRow
           key={entry.unitDir}
           entry={entry}
-          workspaceRoot={workspaceRoot}
+          libraryRoot={libraryRoot}
           onMenu={openMenu}
         />
       ))}
