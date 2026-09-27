@@ -26,7 +26,8 @@ import {
   Search,
   Shapes,
   Smartphone,
-  Terminal
+  Terminal,
+  Users
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { readPreferredEditorId, writePreferredEditorId } from '../../lib/editor-preferences'
@@ -59,6 +60,8 @@ type Props = {
   graphEnabled?: boolean
   /** Thread binds a task workspace → offer the review tab (11 §3). */
   reviewEnabled?: boolean
+  /** ADE thread has worker activity rows → offer the Workers tab (12 §6.1). */
+  workersEnabled?: boolean
   sideChatRunningCount?: number
   sideChatOpen?: boolean
   sideChatEnabled?: boolean
@@ -355,6 +358,7 @@ export function WorkbenchSideRail({
   canvasEnabled = false,
   graphEnabled = false,
   reviewEnabled = false,
+  workersEnabled = false,
   sideChatRunningCount = 0,
   sideChatOpen = false,
   sideChatEnabled = true,
@@ -376,6 +380,11 @@ export function WorkbenchSideRail({
       mode: BUILTIN_RIGHT_PANEL_IDS.review,
       label: t('rightPanelReview', { defaultValue: 'Review' }),
       icon: GitCompare
+    }] : []),
+    ...(workersEnabled ? [{
+      mode: BUILTIN_RIGHT_PANEL_IDS.workers,
+      label: t('rightPanelWorkers', { defaultValue: 'Workers' }),
+      icon: Users
     }] : []),
     { mode: BUILTIN_RIGHT_PANEL_IDS.browser, label: t('rightPanelBrowser'), icon: Globe2 },
     ...(canvasEnabled ? [{ mode: BUILTIN_RIGHT_PANEL_IDS.canvas, label: t('rightPanelWhiteboard'), icon: Shapes }] : []),

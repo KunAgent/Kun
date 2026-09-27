@@ -112,6 +112,7 @@ import { FloatingComposerFileMentionMenu } from './FloatingComposerFileMentionMe
 import { useComposerSlashCommandMenu } from './use-composer-slash-command-menu'
 import { FloatingComposerSlashCommandMenu } from './FloatingComposerSlashCommandMenu'
 import { FloatingComposerTodoProgress } from './FloatingComposerTodoProgress'
+import { FloatingComposerWorkersPill } from './FloatingComposerWorkersPill'
 import { FloatingComposerGraphProgress } from './FloatingComposerGraphProgress'
 import { FloatingComposerAboveInputStack } from './FloatingComposerAboveInputStack'
 import {
@@ -430,9 +431,7 @@ export function FloatingComposer({
   const [goalInputMode, setGoalInputMode] = useState(false)
   const [promptOptimizationBusy, setPromptOptimizationBusy] = useState(false)
   const [promptOptimizationError, setPromptOptimizationError] = useState<string | null>(null)
-  const onDismissPromptOptimizationError = useCallback((): void => {
-    setPromptOptimizationError(null)
-  }, [])
+  const onDismissPromptOptimizationError = useCallback((): void => setPromptOptimizationError(null), [])
   useEffect(() => {
     setGoalInputMode(false)
     setGoalPanelOpen(false)
@@ -656,12 +655,12 @@ export function FloatingComposer({
     ...composerActions,
     BackgroundShellOverlay, BarChart3, Bot, FileText, FloatingComposerAboveInputStack, FloatingComposerAgentPicker, FloatingComposerAttachments, FloatingComposerContextCapacity, FloatingComposerExecutionPicker,
     FloatingComposerApprovalPanel,
-    FloatingComposerFileMentionMenu, FloatingComposerGraphProgress, FloatingComposerModelPicker, FloatingComposerQueuedMessages, FloatingComposerSlashCommandMenu, FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker, FloatingComposerTodoProgress, FloatingComposerUsageHistory, FloatingComposerUserInputPanel,
+    FloatingComposerFileMentionMenu, FloatingComposerGraphProgress, FloatingComposerModelPicker, FloatingComposerQueuedMessages, FloatingComposerSlashCommandMenu, FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker, FloatingComposerTodoProgress, FloatingComposerUsageHistory, FloatingComposerUserInputPanel, FloatingComposerWorkersPill,
     FloatingComposerActionMenu,
     Folder, GitBranchPicker, ImagePlus, ListTodo, Loader2, Mic, Monitor, Paperclip,
     PauseCircle, Pencil, PlayCircle, Plus, Puzzle, Send, Share2, Sparkles,
     Square, Target, Trash2, TypeIcon, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThreadGoal,
-    activeThreadId, activeThreadTodos, attachmentUploadBusy, attachmentUploadEnabled, attachmentUploadError, attachments, busy, canChangeModel,
+    activeThreadId, activeThreadTodos, adeComposerEnabled: activeThread?.workspaceMode === 'ade', attachmentUploadBusy, attachmentUploadEnabled, attachmentUploadError, attachments, busy, canChangeModel,
     canCompose, canEditComposer, canOpenComposerMenu, canOpenGoalPanel, canOptimizePrompt, canPickAttachment, canPickDesignReference, canPickFileReference,
     canPickLocalFileReference, canSetGoalPanelDraft, canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode, canToggleWorktreeMode, clearActiveThreadGoal, compact, composerFastMode,
     composerMenuButtonRef, composerMenuOpen, composerMenuPanelRef, composerShellRef, composerModel, composerModelGroups, composerPickList, composerProviderId, composerReasoningEffort,

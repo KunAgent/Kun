@@ -1,7 +1,7 @@
 import type {
   CoreAttachmentContentResponseJson, CoreAttachmentMetadataJson,
   CoreAttachmentTextFallbackJson, CoreMemoryDiagnosticsJson,
-  CoreChildRuntimeMetadataJson, CoreMemoryRecordJson, CoreMcpOAuthDiagnosticJson, CoreRuntimeInfoJson,
+  CoreChildLauncher, CoreChildRuntimeMetadataJson, CoreMemoryRecordJson, CoreMcpOAuthDiagnosticJson, CoreRuntimeInfoJson,
   CoreRuntimeSkillJson, CoreRuntimeToolDiagnosticsJson
 } from './kun-contract'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '@shared/app-settings'
@@ -127,7 +127,8 @@ export type RuntimeChildMetadata = {
   childToolPolicy?: 'readOnly' | 'inherit'
   childStatus: 'queued' | 'running' | 'completed' | 'failed' | 'aborted'
   childSeq: number
-  childLauncher?: 'delegate_task' | 'fast_context' | 'ppt_agent' | 'component_design' | 'graph'
+  childLauncher?: CoreChildLauncher
+
   childTerminationReason?: 'user_stop' | 'manual_stop' | 'runtime_restart' | 'child_error'
   resumable?: boolean
   resumeCount?: number

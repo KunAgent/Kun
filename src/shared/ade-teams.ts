@@ -2,11 +2,23 @@
  * Renderer-facing mirror of the /v1/teams surface (docs/ade/09 §9).
  * The wire shape is owned by kun/src/contracts/ade.ts; keep names aligned.
  */
+export type AdeHarnessRoute = {
+  harnessId: string
+  providerId?: string
+  model: string
+  credentialMode: string
+}
+
 export type AdeTeamWorker = {
   workerId: string
   label: string
   role?: string
+  route?: AdeHarnessRoute
+  permissionMode?: string
+  lifecycle?: 'persistent' | 'ephemeral'
   taskWorkspaceId?: string
+  /** Ephemeral cross-reviewer inspecting this dispatch (10 §5). */
+  reviewOf?: string
   control: 'manager' | 'user'
   state: 'active' | 'released' | 'detached'
 }

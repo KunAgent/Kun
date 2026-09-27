@@ -22,6 +22,7 @@ import {
   Radio,
   ScanSearch,
   Shapes,
+  Users,
   X,
   type LucideIcon
 } from 'lucide-react'
@@ -105,6 +106,11 @@ export function CodeRightPanelTabs({
       id: BUILTIN_RIGHT_PANEL_IDS.review,
       label: t('rightPanelReview', { defaultValue: 'Review' }),
       icon: GitCompare
+    },
+    {
+      id: BUILTIN_RIGHT_PANEL_IDS.workers,
+      label: t('rightPanelWorkers', { defaultValue: 'Workers' }),
+      icon: Users
     },
   ], [t])
 

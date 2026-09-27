@@ -10,9 +10,11 @@ import {
   pendingNoticesResponse,
   questionAnswerResponse,
   teamOverviewResponse,
+  workerByIdResponse,
   workerDetachResponse,
   workerDispatchResponse,
   workerHandBackResponse,
+  workerStopResponse,
   workerTakeOverResponse
 } from './teams.js'
 
@@ -41,6 +43,16 @@ export function registerTeamsRoutes(router: Router, runtime: ServerRuntime): voi
     const resolved = manager(request)
     if (denied(resolved)) return resolved
     return teamOverviewResponse(resolved, ctx.params.threadId)
+  })
+  router.add('GET', '/v1/teams/workers/:workerId', async (request, ctx) => {
+    const resolved = manager(request)
+    if (denied(resolved)) return resolved
+    return workerByIdResponse(resolved, ctx.params.workerId)
+  })
+  router.add('POST', '/v1/teams/workers/:workerId/stop', async (request, ctx) => {
+    const resolved = manager(request)
+    if (denied(resolved)) return resolved
+    return workerStopResponse(resolved, ctx.params.workerId)
   })
   router.add('POST', '/v1/teams/workers/:workerId/take-over', async (request, ctx) => {
     const resolved = manager(request)

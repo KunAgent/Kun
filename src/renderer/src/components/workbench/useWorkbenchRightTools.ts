@@ -5,6 +5,9 @@ import {
   type RightPanelMode
 } from '../../extensions/contribution-ids'
 import { useReviewStore } from '../../store/review-store'
+import { useActivityStore } from '../../store/activity-store'
+import { selectWorkerRowsForParent } from '../../store/activity-selectors'
+import { OPEN_WORKERS_PANEL_EVENT } from '../chat/FloatingComposerWorkersPill'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
 import { requestCodeCanvasPanelOpen } from '../../lib/code-canvas-panel-event'
@@ -154,6 +157,17 @@ export function useWorkbenchRightTools({
   // workspace (11 §3); the binding lookup itself runs in WorkbenchContent.
   const reviewEnabled = useReviewStore((s) =>
     Boolean(activeThreadId && s.bindings[activeThreadId]))
+  // Workers panel (12 §6.1): only while the active ADE thread has worker
+  // activity rows under it.
+  const workersEnabled = useActivityStore((s) =>
+    Boolean(activeThreadId && selectWorkerRowsForParent(s.rows, activeThreadId).length > 0))
+
+  // The composer Workers pill asks the workbench to open the panel (12 §6.1).
+  useEffect(() => {
+    const open = (): void => openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.workers)
+    window.addEventListener(OPEN_WORKERS_PANEL_EVENT, open)
+    return () => window.removeEventListener(OPEN_WORKERS_PANEL_EVENT, open)
+  }, [openRightPanelTab])
 
   useEffect(() => {
     const unavailable: RightPanelContributionId[] = []
@@ -162,6 +176,7 @@ export function useWorkbenchRightTools({
     if (!fileTreeWorkspaceRoot) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.files)
     if (!filePreviewTarget) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.file)
     if (!reviewEnabled) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.review)
+    if (!workersEnabled) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.workers)
     if (!activeThreadId) {
       unavailable.push(BUILTIN_RIGHT_PANEL_IDS.sideConversations)
     }
@@ -175,7 +190,8 @@ export function useWorkbenchRightTools({
     codeRightTabs.tabs,
     filePreviewTarget,
     fileTreeWorkspaceRoot,
-    reviewEnabled
+    reviewEnabled,
+    workersEnabled
   ])
 
   return {

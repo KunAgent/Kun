@@ -31,7 +31,10 @@ export type DelegateDetail = {
   parentThreadId?: string
   parentTurnId?: string
   status?: 'queued' | 'running' | 'completed' | 'failed' | 'aborted'
-  launcher?: 'delegate_task' | 'fast_context' | 'ppt_agent' | 'component_design' | 'graph'
+  launcher?: 'delegate_task' | 'fast_context' | 'ppt_agent' | 'component_design' | 'graph' | 'manager-worker'
+  /** ADE worker route/worker workspace from the `worker_create` result (09 §4.2). */
+  harnessId?: string
+  taskWorkspaceId?: string
   terminationReason?: 'user_stop' | 'manual_stop' | 'runtime_restart' | 'child_error'
   resumable?: boolean
   resumeCount?: number
@@ -132,11 +135,12 @@ export function parseDelegateDetail(detail: string | undefined): DelegateDetail 
   const num = (v: unknown): number | undefined =>
     typeof v === 'number' && Number.isFinite(v) ? v : undefined
   const launcher = (v: unknown): DelegateDetail['launcher'] =>
-    v === 'delegate_task' || v === 'ppt_agent' || v === 'component_design' || v === 'graph' || v === 'fast_context'
+    v === 'delegate_task' || v === 'ppt_agent' || v === 'component_design' || v === 'graph' || v === 'fast_context' || v === 'manager-worker'
       ? v
       : v === 'explore_agent'
         ? 'fast_context'
         : undefined
+  const route = recordValue(obj.route)
   const evidencePack = parseFastContextEvidencePack(detail)
   const singleTask = evidencePack?.tasks.length === 1 ? evidencePack.tasks[0] : undefined
   const resultRef = recordValue(obj.resultRef) ?? recordValue(child?.resultRef)
@@ -146,11 +150,14 @@ export function parseDelegateDetail(detail: string | undefined): DelegateDetail 
   const byteSize = num(resultRef?.byteSize)
   const lineCount = num(resultRef?.lineCount)
   return {
-    childId: str(obj.childId) ?? str(child?.childId),
+    // `worker_send` names its target `workerId`; it IS the child thread id.
+    childId: str(obj.childId) ?? str(child?.childId) ?? str(obj.workerId),
     parentThreadId: str(obj.parentThreadId) ?? str(child?.parentThreadId),
     parentTurnId: str(obj.parentTurnId) ?? str(child?.parentTurnId),
     status: status(obj.status) ?? status(child?.status),
     launcher: launcher(obj.launcher) ?? launcher(child?.launcher),
+    harnessId: str(route?.harnessId),
+    taskWorkspaceId: str(obj.taskWorkspaceId),
     terminationReason: obj.terminationReason === 'user_stop' || obj.terminationReason === 'manual_stop' ||
       obj.terminationReason === 'runtime_restart' || obj.terminationReason === 'child_error'
       ? obj.terminationReason
@@ -403,7 +410,7 @@ export function readChildMeta(block: ChatBlock): ChildMeta {
   const str = (v: unknown): string | undefined =>
     typeof v === 'string' && v.trim() ? v.trim() : undefined
   const launcher = (v: unknown): DelegateDetail['launcher'] =>
-    v === 'delegate_task' || v === 'ppt_agent' || v === 'component_design' || v === 'graph' || v === 'fast_context'
+    v === 'delegate_task' || v === 'ppt_agent' || v === 'component_design' || v === 'graph' || v === 'fast_context' || v === 'manager-worker'
       ? v
       : v === 'explore_agent'
         ? 'fast_context'

@@ -1,5 +1,10 @@
-import type { AdeTeamOverview } from '@shared/ade-teams'
-import { kunTeamByManagerPath, kunTeamQuestionAnswerPath } from '@shared/kun-endpoints'
+import type { AdeTeamOverview, AdeTeamRecord, AdeTeamWorker } from '@shared/ade-teams'
+import {
+  kunTeamByManagerPath,
+  kunTeamQuestionAnswerPath,
+  kunTeamWorkerActionPath,
+  kunTeamWorkerPath
+} from '@shared/kun-endpoints'
 import { runtimeErrorToError } from '@shared/runtime-error'
 import { rendererRuntimeClient } from './runtime-client'
 import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
@@ -36,6 +41,39 @@ export function createKunTeamsClient() {
       if (!response.ok) {
         throw runtimeErrorToError(
           readRuntimeError(response.body, 'failed to answer worker question')
+        )
+      }
+    },
+
+    /** Worker + owning team; null when the thread is not an ADE worker. */
+    async getTeamWorker(
+      workerId: string
+    ): Promise<{ team: AdeTeamRecord; worker: AdeTeamWorker } | null> {
+      const response = await rendererRuntimeClient.runtimeRequest(
+        kunTeamWorkerPath(workerId), 'GET'
+      )
+      if (response.status === 404) return null
+      if (!response.ok) {
+        throw runtimeErrorToError(
+          readRuntimeError(response.body, 'failed to load worker record')
+        )
+      }
+      return readRuntimeJson<{ team: AdeTeamRecord; worker: AdeTeamWorker }>(
+        response.body, 'runtime returned an invalid response'
+      )
+    },
+
+    /** Worker control actions (09 §9): take-over, hand-back, stop, detach. */
+    async controlTeamWorker(
+      workerId: string,
+      action: 'take-over' | 'hand-back' | 'stop' | 'detach'
+    ): Promise<void> {
+      const response = await rendererRuntimeClient.runtimeRequest(
+        kunTeamWorkerActionPath(workerId, action), 'POST', '{}'
+      )
+      if (!response.ok) {
+        throw runtimeErrorToError(
+          readRuntimeError(response.body, `failed to ${action} worker`)
         )
       }
     }

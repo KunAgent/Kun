@@ -6,6 +6,8 @@ import { extractUnifiedDiffText } from '../../lib/diff-stats'
 import { useChatStore } from '../../store/chat-store'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import { isBackgroundShellNoticeBlock, isBackgroundSubagentNoticeBlock, isWorkerUpdateNoticeBlock } from './message-timeline-turns'
+import { isAssignmentBlock } from '@shared/assignment-card'
+import { AssignmentCard } from '../workers/AssignmentCard'
 import { DiffView } from '../DiffView'
 import { AssistantMarkdown } from './AssistantMarkdown'
 import { readNumber, formatDuration, summarizeBackgroundShellToolBlock } from './message-timeline-tools'
@@ -126,6 +128,11 @@ function MessageBubbleImpl({
   }
   if (block.kind === 'user' && isWorkerUpdateNoticeBlock(block)) {
     return <WorkerUpdateNoticeBubble block={block} nested={nested} />
+  }
+  // ADE worker threads fold the host-rendered `<kun_assignment>` first-turn
+  // input into a collapsed card (12 §6.3); the raw text stays in history.
+  if (block.kind === 'user' && isAssignmentBlock(block)) {
+    return <AssignmentCard block={block} nested={nested} />
   }
   if (block.kind === 'user') {
     return <UserMessageBubble block={block} allowThreadActions={allowThreadActions} />
