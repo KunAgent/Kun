@@ -220,16 +220,20 @@
 - 用量字段挂在 team overview 的 `usage`（合计 + 每个 worker）：Workers 面板顶部徽标显示 `total/hard tok`（软黄硬红），Mission Control 行级统计带每个 worker 的 tokens，赛马比较已带参赛者用量。
 - 测试：`team-budget.test.ts` 覆盖求和、软/硬阈值、只通知一次、重复检查、worker_send/worker_create 拒绝、GUI 派活拒绝、overview 用量字段；`manager-controls` 的 dispatch 创建/汇报抽到 `dispatch-create.ts` 保持行数门禁。
 
-**P3-16 总管评测集（M，K D）**
-- 固定 10~20 个仓库级任务（修 bug、加测试、跨文件重构、带审查的并行任务），对比"单个 Kun"和"总管 + 多 worker"两种方式的成功率、token 数、总耗时、需要用户介入的次数。
-- 结果写进本文件 §4，作为是否默认开启 ADE 的依据。
+**P3-16 总管评测集（M，K D）** ✅ 已实现 + 首轮已跑（见 §4）
+- `kun/scripts/ade-eval-tasks.mjs` 固定 10 个仓库级任务（修 bug×3、写测试×2、重构×2、特性×2、并行独立任务×2、文档×1），`kun/scripts/ade-eval.mjs` 每个任务跑两遍：普通 Kun 线程 vs `workspaceMode: 'ade'` 总管线程，同款 prompt。
+- 度量：成功率（`verify.run` 在最终工作区通过）、token 数（按线程用量求和，ade 侧=总管+worker）、总耗时、用户介入次数（审批+问答+工作区合入）。
+- 首轮结果（kun e252f9fbc7d0）：**总管 7/10 ≥ 单 Kun 5/10**，token 总量 ×2.3、耗时 ×1.7、介入 ×2.25；明细见 §4。
+- 已知诚实项：10 个任务都偏小，总管每轮都选择自己做（worker=0），没有触发派工；差异主要来自总管上下文块与工具面（P3-14）+ 审批通道。并行的 t07/t08 也未派工——"何时该派活"的引导值得后续调优，但不影响接线正确性（P1-3 已实机证明派工路径）。
 
 ### 阶段五：体验补齐
 
-**P3-17 ADE 侧栏补齐（M，R）**
-- "新建"拆成"总管会话"和"一对一"两项：一对一先选 agent，隔离方式默认新 worktree。
-- 分组增加"待审查""已完成"，可切换为按项目分组。
-- worker 线程默认折叠在所属总管下面。
+**P3-17 ADE 侧栏补齐（M，R）** ✅ 已实现
+- "新建"拆成"总管会话"和"一对一"两项：一对一先选 agent（harness 列表复用 `harness-store`，不可用的给出原因），隔离方式默认新 worktree（`useWorktreePool: true`，`credentialMode` 取 harness 第一个模式）。链路：`AdeSidebar` → `onNewOneOnOne` → `startNewAdeOneOnOne` → `createThread({workspaceMode:'ade', harnessId, credentialMode})`；store 的 `createThread` options 透传 `harnessId`/`credentialMode` 到 `kun-runtime`。
+- 分组顺序按 00 §4：待你处理 / 待审查 / 进行中 / 已完成 / 会话 / 已归档；待审查/已完成来自活动行 `displayBucket`（`ade-sidebar-groups.ts`），右上角可切换为按项目分组。
+- worker 线程以 `relation:'side'` + `parentThreadId` 到达列表（`refreshAdeThreads` 保留父线程在 ADE 清单内的 side 线程），在所属总管行下折叠展示，默认收起。
+- 启动器回调抽成 `use-workbench-chat-starters.ts`（startNewChat / startNewAdeChat / startNewAdeOneOnOne / startNewChatInWorkspace），导航守卫语义不变。
+- 测试：`ade-sidebar-groups.test.ts` 覆盖分组优先级、父子归并、按项目分组；`chat-store-ade-actions.test.ts` 原有 8 例保持绿。
 
 **P3-18 终端 agent 的 CLI 与恢复（S，M K）**
 - PTY 环境：把内置 `kun` 所在目录（打包后是 `resources/bin`，开发时用生成的 shim）放到 PATH 最前，并额外导出 `KUN_CLI` 绝对命令；回调说明改为优先使用 `$KUN_CLI`。
@@ -274,3 +278,7 @@
 | 2026-09-29 | kun e252f9fb | P1-2 Claude Code 走 Kun 网关 | 通过 | `claude-code x kun/default/deepseek-v4-pro` 全链路：`harness-grant` → 网关 → `turn_completed`；按线程用量 9,944 tokens |
 | 2026-09-29 | kun e252f9fb | P1-3 总管跨 harness 派工 | 通过 | manager（`default/deepseek-v4-pro`）派 `kun` + `claude-code` 两种 worker，各自隔离任务工作区，dispatch 全部 `completed`，Activity 行齐 |
 | 2026-09-29 | kun e252f9fb | P1-4 worker 提问往返 | 通过 | kun worker `ask_manager` → 用户作答 → `answered`；worker 审批由脚本以签名同意令牌放行（09 §6.5）；dispatch `completed` |
+
+| 2026-09-29 | kun e252f9fb | P3-16 首轮评测（10 任务 × 2 模式） | 通过 | 总管 7/10 ≥ 单 Kun 5/10；token 399,691 → 912,216（×2.3）、耗时 140s → 233s（×1.7）、介入 8 → 18；逐任务见下表 |
+| 2026-09-29 | kun e252f9fb | P3-16 逐任务对比 | 记录 | t01 双双通过（155,521→98,330）；t02 双双通过（20,141→74,321）；t03 双双通过；t04 双双通过；t05 单 Kun 未落盘、总管通过；t06 同 t05；t07 双双失败；t08 双双通过；t09 双双失败；t10 双双失败 |
+| 2026-09-29 | kun e252f9fb | P3-16 派工观察 | 记录 | 全部 10 个 ade 运行 worker=0：任务规模偏小，总管按 P3-14 上下文判断自做更划算；开销可解释（总管上下文块 + worker 工具面 + 审批通道），并行任务未派工待后续引导调优 |
