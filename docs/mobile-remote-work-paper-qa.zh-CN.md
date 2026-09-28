@@ -26,13 +26,13 @@
 
 在隔离 worktree 运行 `npm run typecheck`、针对性 Vitest、`npm run build`、`npm run check:file-lines`、`git diff --check`。上述设备项须人工实测，自动化检查不能代替真实 Remote 登录和设备验证。
 
-## 发布阻断项（未验证前不得合并）
+## 合入后仍待确认（不等于发布验收通过）
 
-- 本清单的 iOS Safari / Android Chrome 真机路径和截图尚未执行，不能以桌面窄窗或单测代替。
+- 用户本次明确要求合入并跳过 iOS Safari / Android Chrome 真机验收；本清单中的设备路径和截图仍未执行，不能以桌面窄窗或单测代替。
 - 新增手机 Work / 论文页面仍有中文硬编码；非中文 locale 的本地化与屏幕阅读器语义须补齐并实测。
 - 已认证 Remote 的 `/remote/file-preview` 仅校验文件在**请求者指定**的 `workspaceRoot` 内；未将 root 绑定到服务端许可列表。这沿用现有 Remote 选取主机工作区的权限模型；若产品预期限制远程用户仅访问预设目录，必须一起收紧预览与对应文件 IPC，不能只更改预览端点。
 
 ## 自动化验证记录（2026-09-28）
 
 - 变基到当时的 `develop` 后，`npm run typecheck`、`npm run build`、`npm run check:file-lines` 和新增能力的定向 Vitest 通过；构建产物包含 `pdf.worker-*.mjs`。
-- 全量 `npx vitest run`：1,498 个测试文件通过、13 个失败；10,807 项测试通过、11 项失败，另 86 项跳过。失败栈涉及未改动的 `react-i18next` 测试 mock、`window.kunGui.getSettings` 测试 mock、PTY `posix_spawnp`、composerHarness 状态和时间线加载断言；抽样单独复跑仍可复现。不能把全量测试标为通过，也不能仅凭文件未改动就断言它们与本分支无关；合并前应另行确认最新 `develop` 基线及修复归属。
+- 全量 `npx vitest run`：1,498 个测试文件通过、13 个失败；10,807 项测试通过、11 项失败，另 86 项跳过。失败栈涉及未改动的 `react-i18next` 测试 mock、`window.kunGui.getSettings` 测试 mock、PTY `posix_spawnp`、composerHarness 状态和时间线加载断言；抽样单独复跑仍可复现。不能把全量测试标为通过，也不能仅凭文件未改动就断言它们与本分支无关；后续应确认最新 `develop` 基线及修复归属。
