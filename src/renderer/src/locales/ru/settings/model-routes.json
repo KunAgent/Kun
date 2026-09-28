@@ -27,6 +27,12 @@
     "runtimeNotRunning": "Kun Runtime не работает",
     "runtimeNotConnected": "Kun Runtime не подключено",
     "runtimeSyncing": "Синхронизация с Kun Runtime",
+    "gatewayFix": "Исправить",
+    "gatewayIssue": {
+      "gateway_key_missing": "У локального шлюза нет отдельного API-ключа",
+      "gateway_non_loopback_host": "Локальный шлюз требует адрес loopback",
+      "gateway_disabled": "Локальный шлюз был отключён (не удалось создать API-ключ)"
+    },
     "runtimeWaitingForSync": "Ожидание синхронизации Kun Runtime",
     "tabsAria": "Настройки маршрута модели",
     "tabGateway": "Шлюз и API",

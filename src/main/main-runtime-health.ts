@@ -21,6 +21,7 @@ import type { KunUnexpectedExitInfo } from './kun-process'
 import { stopBrowserUseHost } from './browser-use/browser-use-host'
 import { stopComputerUseHost } from './computer-use/computer-use-host'
 import { stableSettingsStringify } from './runtime-settings-apply-mode'
+import { scheduleLocalGatewayCredentialReconcile } from './runtime/local-gateway-credential'
 import { mainState } from './main-app-context'
 import { isAppQuitInProgress, runtimeShutdown } from './main-lifecycle'
 import { desktopProcessStack } from './runtime/desktop-process-stack'
@@ -227,6 +228,11 @@ export function noteRuntimeHealthy(source: string, settings?: AppSettingsV1): vo
     runtimeSupervisor.setManagedRuntimeExpected(true)
   }
   scheduleRuntimeMigrationHistoryVerification()
+  // P4-04: heal the persisted "local gateway enabled without an API key"
+  // state so it cannot veto every later hot apply.
+  if (settings) {
+    scheduleLocalGatewayCredentialReconcile(runtimeSupervisor.latestOr(settings), source)
+  }
   runtimeSupervisor.noteHealthy(source)
 }
 

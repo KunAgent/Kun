@@ -27,6 +27,12 @@
     "runtimeNotRunning": "Kun Runtime가 실행되지 않음",
     "runtimeNotConnected": "Kun Runtime가 연결되지 않음",
     "runtimeSyncing": "Kun Runtime로 동기화하는 중",
+    "gatewayFix": "수정하기",
+    "gatewayIssue": {
+      "gateway_key_missing": "로컬 게이트웨이에 독립 API 키가 없습니다",
+      "gateway_non_loopback_host": "로컬 게이트웨이에는 루프백 주소가 필요합니다",
+      "gateway_disabled": "로컬 게이트웨이가 자동으로 꺼졌습니다 (API 키를 만들 수 없음)"
+    },
     "runtimeWaitingForSync": "Kun Runtime 동기화를 기다리는 중",
     "tabsAria": "모델 루트 설정",
     "tabGateway": "게이트웨이 및 API",

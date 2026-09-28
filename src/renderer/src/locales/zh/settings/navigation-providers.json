@@ -420,6 +420,12 @@
     "runtimeNotRunning": "Kun Runtime 未运行",
     "runtimeNotConnected": "Kun Runtime 未连接",
     "runtimeSyncing": "正在同步到 Kun Runtime",
+    "gatewayFix": "去修复",
+    "gatewayIssue": {
+      "gateway_key_missing": "本地网关缺少独立 API Key",
+      "gateway_non_loopback_host": "本地网关要求监听本机回环地址",
+      "gateway_disabled": "本地网关已自动关闭（无法生成独立密钥）"
+    },
     "runtimeWaitingForSync": "等待 Kun Runtime 同步",
     "tabsAria": "模型路由设置",
     "tabGateway": "网关与 API",
