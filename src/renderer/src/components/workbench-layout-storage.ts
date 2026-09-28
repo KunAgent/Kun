@@ -195,7 +195,7 @@ export function workbenchWidthConstraintsForRightPanel(
   route: AppRoute,
   _rightPanelMode: RightPanelMode
 ): WorkbenchWidthConstraints {
-  if (route === 'chat') return CODE_TABS_WIDTH_CONSTRAINTS
+  if (route === 'chat' || route === 'ade') return CODE_TABS_WIDTH_CONSTRAINTS
   return DEFAULT_WIDTH_CONSTRAINTS
 }
 

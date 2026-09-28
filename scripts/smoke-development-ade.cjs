@@ -171,7 +171,9 @@ async function main() {
     page = await findWorkbenchWindow(electronApplication, timeoutMs)
     page.setDefaultTimeout(30_000)
     page.on('pageerror', (error) => pageErrors.push(error.message))
-    await page.waitForLoadState('domcontentloaded')
+    // The smoke run uses a fresh vite cache each time, so the first module
+    // graph transform can exceed the default 30s window on a busy machine.
+    await page.waitForLoadState('domcontentloaded', { timeout: 120_000 })
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
 
     // 1) Enter ADE; Mission Control renders with the P4-14 readiness

@@ -7,6 +7,7 @@ import {
 import { useReviewStore } from '../../store/review-store'
 import { takePlanBuildReview } from '../../store/plan-build-watch'
 import { useActivityStore } from '../../store/activity-store'
+import { useChatStore } from '../../store/chat-store'
 import { selectWorkerRowsForParent } from '../../store/activity-selectors'
 import { OPEN_WORKERS_PANEL_EVENT } from '../chat/FloatingComposerWorkersPill'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
@@ -158,10 +159,17 @@ export function useWorkbenchRightTools({
   // workspace (11 §3); the binding lookup itself runs in WorkbenchContent.
   const reviewEnabled = useReviewStore((s) =>
     Boolean(activeThreadId && s.bindings[activeThreadId]))
-  // Workers panel (12 §6.1): only while the active ADE thread has worker
-  // activity rows under it.
-  const workersEnabled = useActivityStore((s) =>
+  // Workers panel (12 §6.1, p4 §3.7): stays available for the whole ADE
+  // session — manager sessions open it by default before any worker rows
+  // exist, and worker threads keep it while their siblings run.
+  const activeThreadIsAde = useChatStore((s) =>
+    Boolean(
+      activeThreadId &&
+      (s.adeThreads ?? []).some((thread) => thread.id === activeThreadId)
+    ))
+  const hasWorkerRows = useActivityStore((s) =>
     Boolean(activeThreadId && selectWorkerRowsForParent(s.rows, activeThreadId).length > 0))
+  const workersEnabled = activeThreadIsAde || hasWorkerRows
 
   // External-harness plan builds (07 §10): when the build turn settles the
   // watcher flags the thread; once the review binding is live, open the tab
