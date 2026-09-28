@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode, RefObject } from 'react'
 import {
   BookOpen,
+  Bot,
   Copy,
   Images,
   FileCode2,
@@ -17,6 +18,7 @@ import type { WriteExportFormat } from '@shared/write-export'
 import type { WriteSaveStatus } from '../../write/write-workspace-store'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import { WriteFontSizeControl } from './WriteFontSizeControl'
+import { sendWorkFileToBot } from '../rooms/workbench-bridge-actions'
 import {
   WRITE_EXPORT_FORMATS,
   exportFormatLabel,
@@ -153,6 +155,16 @@ export function WriteWorkspaceToolbar({
             </div>
 
             <div className="write-pdf-topbar-actions">
+              <button
+                type="button"
+                onClick={() => void sendWorkFileToBot(activeFilePath)}
+                disabled={!activeFilePath}
+                className={`${toolbarIconButtonClass} disabled:cursor-default disabled:opacity-45`}
+                title={t('roomsWorkbenchSendToBot')}
+                aria-label={t('roomsWorkbenchSendToBot')}
+              >
+                <Bot className="h-4 w-4" strokeWidth={1.9} />
+              </button>
               {activeFileIsEditableSpreadsheet ? (
                 <button
                   type="button"
@@ -326,6 +338,16 @@ export function WriteWorkspaceToolbar({
               </div>
             ) : null}
           </div>
+          <button
+            type="button"
+            onClick={() => void sendWorkFileToBot(activeFilePath)}
+            disabled={!activeFilePath}
+            className="write-format-toolbar-button"
+            title={t('roomsWorkbenchSendToBot')}
+            aria-label={t('roomsWorkbenchSendToBot')}
+          >
+            <Bot className="h-4 w-4" strokeWidth={1.9} />
+          </button>
           {onOpenFind ? (
             <button
               type="button"

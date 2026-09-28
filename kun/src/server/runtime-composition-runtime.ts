@@ -16,6 +16,7 @@ import { bindImMessageService } from '../rooms/room-im-message-tool.js'
 import { bindRoomAppAccess } from '../rooms/room-app-connection-tools.js'
 import { bindAgentHandoffService } from '../agents/agent-handoff-tools.js'
 import { bindAgentSetupDirectory } from '../agents/agent-setup-tools.js'
+import { bindWorkbenchBridge } from '../workbench-bridge/bridge.js'
 import {
   persistRuntimeCapabilitySection,
   persistRuntimeMcpConfig,
@@ -168,6 +169,9 @@ export function createServerRuntimeComposition(
   }))
   bindAgentHandoffService(core.threadStore, roomComposition.rooms.handoffs)
   bindAgentSetupDirectory(core.threadStore, roomComposition.rooms.agents)
+  // The tool registry holds the lifecycle-fenced facade, which is a different identity from the room runtime's store.
+  bindWorkbenchBridge(core.threadStore, roomComposition.rooms.workbench)
+  roomComposition.rooms.workbench.attach({ taskWorkspaces, projectBoard: projectBoardService })
   return {
     threadService,
     historyReferences: core.historyReferences,

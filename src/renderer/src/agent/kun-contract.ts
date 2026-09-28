@@ -79,6 +79,8 @@ export type CoreThreadSummaryJson = {
     taskWorkspaceId?: string
     control: 'manager' | 'user'
   }
+  /** Host-written: a bot Agent started this Code/Work session on the user's behalf. */
+  workbenchOrigin?: { kind: 'bot'; roomId: string; linkId: string; agentId: string; agentName: string; messageId?: string }
   planBuildRunId?: string
   forkedFromThreadId?: string
   forkedFromTitle?: string

@@ -8,6 +8,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import {
   Archive,
+  Bot,
   CalendarClock,
   ChevronDown,
   ChevronRight,
@@ -334,6 +335,15 @@ export function ThreadRow({
     >
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
         {pinned ? <Pin className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.9} /> : null}
+        {thread.workbenchOrigin ? (
+          <span
+            className="shrink-0"
+            title={t('roomsWorkbenchFrom', { name: thread.workbenchOrigin.agentName || t('roomsLabel') })}
+            aria-label={t('roomsWorkbenchFrom', { name: thread.workbenchOrigin.agentName || t('roomsLabel') })}
+          >
+            <Bot className="h-3.5 w-3.5 text-accent" strokeWidth={1.9} />
+          </span>
+        ) : null}
         {worktreeRecord ? (
           <span
             className="flex min-w-0 max-w-[42%] shrink items-center gap-1 rounded-md border border-ds-border-muted bg-ds-card/80 px-1.5 py-0.5 text-[10.5px] leading-4 text-ds-muted"

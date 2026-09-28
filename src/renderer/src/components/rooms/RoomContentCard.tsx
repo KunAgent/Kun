@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { File, FolderGit2, Image, KanbanSquare, PackageCheck, ListTodo, ArrowUpRight, Music, Video } from 'lucide-react'
+import { Code, File, FileText, FolderGit2, Image, KanbanSquare, PackageCheck, ListTodo, ArrowUpRight, Music, Video } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomContentReference, RoomPreviewImage } from '@shared/rooms-api'
 import { useRoomContent, useRoomContentVisibility, roomContentPath, roomContentStatusKey } from './room-content-client'
@@ -8,7 +8,7 @@ import { RoomImageLightbox } from './RoomImageLightbox'
 import { useRoomExcalidrawStore } from './room-excalidraw-store'
 import './rooms-content.css'
 
-const icons = { agent_file: File, attachment: File, repository_file: FolderGit2, task: ListTodo, delivery: PackageCheck, board_card: KanbanSquare }
+const icons = { agent_file: File, attachment: File, repository_file: FolderGit2, task: ListTodo, delivery: PackageCheck, board_card: KanbanSquare, code_thread: Code, work_document: FileText }
 export function RoomContentCard({ room, reference, messageId, onOpen }: {
   room: Room
   reference: RoomContentReference

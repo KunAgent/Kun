@@ -23,6 +23,12 @@ export type {
 } from '../../kun/src/contracts/rooms'
 export type { RoomTask } from '../../kun/src/contracts/room-tasks'
 export { ROOM_APP_CATALOG } from '../../kun/src/contracts/room-app-catalog'
+export type {
+  WorkbenchLink, WorkbenchLinkEntry, WorkbenchLinkKind, WorkbenchLinkStatus, WorkbenchRequest, WorkbenchResult,
+  WorkbenchDirectory, ConfirmWorkbenchLink
+} from '../../kun/src/contracts/workbench-links'
+export type { AgentWorkbenchPolicy } from '../../kun/src/contracts/workbench-policy'
+export type { ThreadWorkbenchOrigin } from '../../kun/src/contracts/thread-workbench-origin'
 export type { RoomLatestMessage, RoomListEntry } from '../../kun/src/contracts/room-list'
 export type {
   RoomDelivery,
@@ -65,7 +71,10 @@ export const ROOM_ENDPOINTS = {
   integrations: '/v1/rooms/{roomId}/tasks/{taskId}/integrations',
   cleanup: '/v1/rooms/{roomId}/tasks/{taskId}/cleanup',
   appConnectionComplete: '/v1/rooms/{roomId}/app-connections/{messageId}/complete',
-  appConnectionSkip: '/v1/rooms/{roomId}/app-connections/{messageId}/skip'
+  appConnectionSkip: '/v1/rooms/{roomId}/app-connections/{messageId}/skip',
+  workbenchLinks: '/v1/rooms/{roomId}/workbench-links',
+  workbenchLink: '/v1/rooms/{roomId}/workbench-links/{linkId}',
+  workbenchWatch: '/v1/rooms/{roomId}/workbench-links/watch'
 } as const
 
 export const ROOM_TASK_ACTIONS = [

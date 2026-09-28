@@ -54,6 +54,7 @@ import { RoomPanelResizeHandle } from './RoomPanelResizeHandle'
 import { RoomRunSummary } from './RoomRunSummary'
 import { useRoomPresentationPreferences } from './room-presentation-preferences'
 import { openRoomContentTarget } from './room-content-navigation'
+import { registerRoomThreadOpener } from './workbench-navigation'
 import { otherUserInputAnswers, RoomChoiceCard, submitRoomUserInput } from './RoomChoiceCard'
 import { RoomExecutionGates } from './RoomTaskGates'
 import { RoomExcalidrawConsumer } from './useRoomExcalidrawConsumer'
@@ -71,6 +72,7 @@ export function RoomsWorkspaceView({
   onOpenPlugins?: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
+  useEffect(() => registerRoomThreadOpener(onOpenThread), [onOpenThread])
   const state = useRooms('group', false)
   const [newChatOpen, setNewChatOpen] = useState(false)
   const [appsOpen, setAppsOpen] = useState(false)

@@ -9,6 +9,7 @@ import { GIT_BRANCH_STATUS_CHANGED_EVENT } from '../lib/git-branch-status-event'
 import { middleEllipsize } from '../lib/middle-ellipsize'
 import { workspaceLabelFromPath } from '../lib/workspace-label'
 import { SessionExportMenu } from './SessionExportMenu'
+import { WorkbenchSessionActions, WorkbenchOriginChip } from './rooms/WorkbenchSessionBits'
 import {
   formatCompactNumber,
   formatCacheMissReason,
@@ -246,6 +247,7 @@ export function SessionHeader({
                 />
               ) : null}
             </div>
+            <WorkbenchSessionActions thread={active} running={busy} />
             <SessionExportMenu
               title={active.title}
               blocks={blocks}
@@ -317,6 +319,7 @@ export function SessionHeader({
                   {active.workspace.split(/[/\\]/).pop()}
                 </span>
               ) : null}
+              {active.workbenchOrigin ? <WorkbenchOriginChip origin={active.workbenchOrigin} /> : null}
               {active.forkedFromThreadId ? (
                 <span
                   className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-accent/18 bg-accent/8 px-2.5 py-1 font-medium text-accent"

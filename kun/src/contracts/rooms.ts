@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { ConversationKind, ParticipantAgentId, AgentModelRef } from './agent-identities.js'
 import { SubagentProfileConfig } from './capabilities-core.js'
 import { RoomAvatarReferenceSchema, RoomContentReferenceSchema } from './room-content.js'
+import { AgentWorkbenchPolicySchema } from './workbench-policy.js'
 
 export const RoomIdSchema = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/)
 const Revision = z.number().int().nonnegative()
@@ -17,6 +18,8 @@ export const RoomMemberSchema = z.object({
   configuredReviewerAgentId: ParticipantAgentId.optional(),
   taskScopedMemory: z.boolean().optional(),
   agentInstructions: z.string().max(8000).optional(),
+  /** Frozen from the Agent identity: how far this Agent may reach into Code and Work. */
+  workbenchPolicy: AgentWorkbenchPolicySchema.optional(),
   presetSnapshot: SubagentProfileConfig.nullable().optional(),
   id: RoomIdSchema,
   displayName: z.string().trim().min(1).max(80),
@@ -142,7 +145,7 @@ export const RoomMessageSchema = z.object({
   handoffId: RoomIdSchema.optional(),
   displayThreadRootId: RoomIdSchema.optional(),
   replyCount: z.number().int().nonnegative().optional(),
-  presentationKind: z.enum(['poll', 'choice', 'setup', 'proposal', 'reminder', 'app_connection']).optional(),
+  presentationKind: z.enum(['poll', 'choice', 'setup', 'proposal', 'reminder', 'app_connection', 'workbench_task']).optional(),
   /** Public delivery meaning; message status still tracks persistence/streaming. */
   deliveryPhase: z.enum(['start', 'progress', 'final']).optional(),
   appConnection: z.object({
@@ -153,6 +156,7 @@ export const RoomMessageSchema = z.object({
   pollId: RoomIdSchema.optional(),
   proposalId: RoomIdSchema.optional(),
   reminderId: RoomIdSchema.optional(),
+  workbenchLinkId: RoomIdSchema.optional(),
   references: z.array(RoomContentReferenceSchema).max(20).optional(),
   status: z.enum(['streaming', 'final', 'failed']).optional(),
   messageSeq: z.number().int().positive(),

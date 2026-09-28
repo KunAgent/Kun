@@ -13,6 +13,9 @@ import type { ServerRuntime } from '../server/routes/server-runtime.js'
 import { roomGit } from './room-git.js'
 import { roomPreviewImage } from './room-preview-image.js'
 import { roomUploadedPreviewImage } from './room-uploaded-preview.js'
+import { pathWithin } from '../workbench-bridge/directory.js'
+import { previewThread } from '../workbench-bridge/result-summary.js'
+import { citableCodeThread } from '../workbench-bridge/references.js'
 
 export type RoomContentMode = 'summary' | 'thumbnail' | 'preview'
 export function roomContentReferenceKey(reference: RoomContentReference): string {
@@ -237,6 +240,27 @@ export async function resolveRoomContent(runtime: ServerRuntime, room: Room, ref
           result.preview = { type: 'text', text: artifact.value.slice(0, 64000), truncated: artifact.value.length > 64000 }
         }
       }
+    } else if (reference.kind === 'code_thread') {
+      const thread = await runtime.rooms!.deps.threads.getMetadata(reference.threadId)
+      if (!citableCodeThread(thread)) throw new Error('thread_unavailable')
+      Object.assign(result, { title: thread.title, kind: 'code_thread', status: thread.status, description: thread.workspace,
+        openTarget: { kind: 'thread', threadId: thread.id, ...(reference.turnId ? { turnId: reference.turnId } : {}) } })
+      if (mode === 'preview') {
+        const view = previewThread(thread, await runtime.rooms!.deps.sessions.loadItems(thread.id), 1, { approvals: 0, inputs: 0 })
+        const last = view.turns.at(-1)
+        result.preview = { type: 'text', truncated: false, text: [thread.workspace, last ? `\n${last.prompt}\n\n${last.reply}` : ''].join('').trim() }
+      }
+    } else if (reference.kind === 'work_document') {
+      const directory = await runtime.rooms!.workbench.directory.get()
+      const root = await realpath(reference.workspaceRoot)
+      if (!directory.workRoots.some((registered) => registered === root || pathWithin(registered, root))) throw new Error('workspace_unavailable')
+      const file = await readRoomRepositoryFile({ canonicalRoot: root }, reference.relativePath, mode === 'summary' ? 0 : 64000)
+      const extension = extname(reference.relativePath).toLowerCase()
+      Object.assign(result, { title: reference.relativePath.split('/').at(-1), description: reference.relativePath,
+        kind: 'work_document', byteSize: file.size,
+        openTarget: { kind: 'work_file', workspaceRoot: root, relativePath: reference.relativePath } })
+      if (mode === 'preview' && textExtensions.has(extension) && !file.data.includes(0)) result.preview = {
+        type: 'text', text: file.data.toString('utf8'), truncated: file.size > file.data.length }
     } else {
       const repository = await assertRoomContentRepository(room, reference.repositoryId)
       if (!runtime.projectBoardService) throw new Error('board_unavailable')

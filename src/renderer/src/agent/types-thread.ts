@@ -1,10 +1,12 @@
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '@shared/app-settings'
-import type { RoomThreadSource } from '@shared/rooms-api'
+import type { RoomThreadSource, ThreadWorkbenchOrigin } from '@shared/rooms-api'
 import type { KnowledgeBaseMount, ThreadGoal, ThreadTodoList } from './types'
 
 export type NormalizedThread = {
   historyRefId?: string
   roomContext?: RoomThreadSource
+  /** A bot Agent started this session on the user's behalf (host-written, immutable). */
+  workbenchOrigin?: ThreadWorkbenchOrigin
   id: string
   title: string
   /** Durable product surface that owns this thread. Absent for legacy Code threads. */

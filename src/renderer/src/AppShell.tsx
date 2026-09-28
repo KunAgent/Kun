@@ -12,6 +12,8 @@ import { createInitialWorkbenchPreparer } from './initial-workbench-preparation'
 import { DataMigrationActivityIndicator } from './components/DataMigrationActivityIndicator'
 import { SpeakDownloadToast } from './components/SpeakDownloadToast'
 import { useRoomEvents } from './components/rooms/useRoomEvents'
+import { useWorkbenchDirectorySync } from './components/rooms/workbench-bridge-actions'
+import { WorkbenchFlash } from './components/rooms/workbench-flash'
 import { useRemoteSurface } from './mobile/use-remote-surface'
 import { useRemoteReconnectRecovery } from './use-remote-reconnect-recovery'
 import { clearCurrentlyVisibleUnreadCompletions } from './store/unread-completions'
@@ -100,6 +102,8 @@ export default function AppShell(): React.ReactElement {
   useRemoteReconnectRecovery()
   const route = useChatStore((s) => s.route)
   const surface = useRemoteSurface()
+  // Only the desktop knows the user's real workspaces; a phone must never overwrite them.
+  useWorkbenchDirectorySync(surface === 'desktop')
   const { enabled: adeEnabled } = useAdeEnabled()
   const initialSetupOpen = useChatStore((s) => s.initialSetupOpen)
   const platform = typeof window !== 'undefined' ? window.kunGui?.platform ?? 'unknown' : 'unknown'
@@ -203,6 +207,7 @@ export default function AppShell(): React.ReactElement {
           </Suspense>
         </div>
         <SpeakDownloadToast />
+        <WorkbenchFlash />
         {initialSetupOpen ? (
           surface === 'mobile' ? (
             <div className="kun-mobile-setup-hint" role="alertdialog" aria-modal="true">

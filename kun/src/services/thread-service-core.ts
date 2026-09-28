@@ -197,6 +197,8 @@ export interface ThreadService {
       /** Broker-derived metadata. Never populated from the public thread request body. */
       extensionMetadata?: ExtensionThreadMetadata
       roomContext?: ThreadRecord['roomContext']
+      /** Host-written provenance for a thread a bot Agent started; never from a request body. */
+      workbenchOrigin?: ThreadRecord['workbenchOrigin']
       historyRefId?: string
     }
   ): Promise<ThreadRecord>;

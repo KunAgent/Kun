@@ -7,6 +7,7 @@ import { registerResourceRoutes } from './register-resource-routes.js'
 import { registerThreadRoutes } from './register-thread-routes.js'
 import { registerProjectBoardRoutes } from './register-project-board-routes.js'
 import { registerRoomRoutes } from './register-room-routes.js'
+import { registerWorkbenchDirectoryRoutes } from './register-workbench-link-routes.js'
 import { registerHistoryReferenceRoutes } from './register-history-reference-routes.js'
 import { registerHarnessRoutes } from './register-harness-routes.js'
 import { registerActivityRoutes } from './register-activity-routes.js'
@@ -34,6 +35,7 @@ export function buildRouter(runtime: ServerRuntime): Router {
   registerResourceRoutes(router, runtime)
   registerProjectBoardRoutes(router, runtime)
   registerRoomRoutes(router, runtime)
+  registerWorkbenchDirectoryRoutes(router, runtime)
   registerHistoryReferenceRoutes(router, runtime)
   registerThreadRoutes(router, runtime, approvalConsent)
   return router

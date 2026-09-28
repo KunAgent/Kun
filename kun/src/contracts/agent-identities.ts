@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { RoomAvatarReferenceSchema } from './room-content.js'
+import { AgentWorkbenchPolicySchema } from './workbench-policy.js'
 
 export const ParticipantAgentId = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/)
 export const ConversationKind = z.enum(['group', 'user_agent', 'agent_agent'])
@@ -38,6 +39,7 @@ const fields = {
   capabilityOverrides: AgentCapabilityOverrides.optional(),
   allowedRepositoryRoots: z.array(z.string().min(1).max(4096)).max(100).optional(),
   reviewerAgentId: ParticipantAgentId.optional(),
+  workbench: AgentWorkbenchPolicySchema.optional(),
   memory: AgentMemorySettings.default({ readEnabled: true, captureEnabled: true })
 }
 export const AgentIdentitySchema = z.object({
@@ -63,7 +65,8 @@ export const UpdateAgentRequest = z.object({
   modelRef: AgentModelRef.nullable().optional(), fastModelRef: AgentModelRef.nullable().optional(), avatar: RoomAvatarReferenceSchema.nullable().optional(),
   capabilityOverrides: AgentCapabilityOverrides.nullable().optional(),
   allowedRepositoryRoots: z.array(z.string().min(1).max(4096)).max(100).nullable().optional(),
-  reviewerAgentId: ParticipantAgentId.nullable().optional()
+  reviewerAgentId: ParticipantAgentId.nullable().optional(),
+  workbench: AgentWorkbenchPolicySchema.nullable().optional()
 }).strict()
 export const AgentPageQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(30),
