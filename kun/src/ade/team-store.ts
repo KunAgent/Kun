@@ -19,7 +19,11 @@ export class FileTeamStore {
     private readonly nowIso: () => string = () => new Date().toISOString()
   ) {}
 
-  async ensure(managerThreadId: string, limits?: Partial<TeamLimits>): Promise<TeamRecord> {
+  async ensure(
+    managerThreadId: string,
+    limits?: Partial<TeamLimits>,
+    budget?: TeamRecord['budget']
+  ): Promise<TeamRecord> {
     return withAdeTeamMutex(managerThreadId, async () => {
       const existing = await this.readFile(managerThreadId)
       if (existing) return existing
@@ -30,6 +34,7 @@ export class FileTeamStore {
         managerThreadId,
         status: 'active',
         limits: TeamLimitsSchema.parse(limits ?? {}),
+        ...(budget ? { budget } : {}),
         workers: [],
         createdAt: now,
         updatedAt: now

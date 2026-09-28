@@ -8,6 +8,7 @@ import type {
 } from '../contracts/ade.js'
 import type { ManagerRuntimeDeps } from './manager-runtime.js'
 import type { ManagerControls, WorkerSendResult } from './manager-controls.js'
+import { computeTeamUsage } from './team-budget.js'
 import {
   runWorkspaceChecks,
   type RunWorkspaceChecksResult
@@ -25,6 +26,14 @@ export class TeamControls {
     private readonly deps: ManagerRuntimeDeps,
     private readonly controls: ManagerControls
   ) {}
+
+  /** P3-15 soft-cap notice passthrough for lifecycle hooks. */
+  notifyBudgetCheck(
+    team: TeamRecord,
+    check: import('./team-budget.js').TeamBudgetCheck | undefined
+  ): void {
+    this.controls.notifyBudgetCheck(team, check)
+  }
 
   /**
    * `GET /v1/teams/workers/:workerId` (09 §9): the worker record plus its
@@ -61,6 +70,8 @@ export class TeamControls {
     dispatches: DispatchRecord[]
     questions: QuestionRecord[]
     races: RaceRecord[]
+    /** P3-15: summed worker-thread usage + soft/hard exceed flags. */
+    usage?: import('./team-budget.js').TeamUsageReport
   } | null> {
     const team = await this.deps.teams.get(managerThreadId)
     if (!team) return null
@@ -68,7 +79,10 @@ export class TeamControls {
       team,
       dispatches: (await this.deps.dispatches.list(managerThreadId)).slice(-50),
       questions: (await this.deps.questions.list(managerThreadId)).slice(-50),
-      races: this.deps.races ? (await this.deps.races.list(managerThreadId)).slice(-50) : []
+      races: this.deps.races ? (await this.deps.races.list(managerThreadId)).slice(-50) : [],
+      ...(this.deps.usage
+        ? { usage: computeTeamUsage(team, this.deps.usage) }
+        : {})
     }
   }
 
@@ -269,6 +283,8 @@ export class TeamControls {
           : 'The worker is under user control; send a normal message in its thread instead.'
       }
     }
+    const budgetRefusal = this.controls.budgetRefusal(team, language)
+    if (budgetRefusal) return budgetRefusal
     const parentTurnId = (await this.deps.threads.get(team.managerThreadId).catch(() => null))
       ?.turns.at(-1)?.id ?? 'gui'
     const { dispatch, delivered } = await this.controls.createDispatch({

@@ -6,6 +6,7 @@ import {
 } from '../contracts/harness-capabilities.js'
 import type { ManagerRuntimeDeps } from '../ade/manager-runtime.js'
 import { createManagerToolProvider } from '../adapters/tool/manager-tool-provider.js'
+import { TeamBudgetGate } from '../ade/team-budget.js'
 import { ManagerRuntime } from '../ade/manager-runtime.js'
 import { ActivityHibernation } from '../services/activity-hibernation.js'
 import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
@@ -158,6 +159,9 @@ export function createManagerRuntime(input: {
     language: () => Intl.DateTimeFormat().resolvedOptions().locale,
     allowUnattendedFullAccess: () => core.activeOptions.ade?.allowUnattendedFullAccess === true,
     teamLimits: () => core.activeOptions.ade?.limits,
+    teamBudgetPolicy: () => core.activeOptions.ade?.budget,
+    teamBudget: runtimeDeps.teamBudget
+      ?? (runtimeDeps.usage ? new TeamBudgetGate(runtimeDeps.usage) : undefined),
     workerCallbacks: services.workerCallbacks,
     managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true,
     // Approved worktree.checks runner (10 §4.2) — digest-bound like setup.

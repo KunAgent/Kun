@@ -254,7 +254,8 @@ export const WorkerNoticeSchema = z
       'worker_handed_back',
       'worker_approval',
       'review_completed',
-      'race_ready'
+      'race_ready',
+      'team_budget'
     ]),
     dispatchId: z.string().min(1).max(256).optional(),
     questionId: z.string().min(1).max(256).optional(),

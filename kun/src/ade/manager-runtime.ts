@@ -32,6 +32,7 @@ import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js
 import type { UsageService } from '../services/usage-service-core.js'
 import type { WorkerCallbackService } from '../services/worker-callback-service.js'
 import { ManagerControls } from './manager-controls.js'
+import { budgetHardRefusal } from './team-budget.js'
 import { TeamControls } from './team-controls.js'
 import { QualityVerdicts } from './quality-verdict.js'
 import { ReviewRequests } from './review-request.js'
@@ -104,7 +105,7 @@ export type WorkerCreateResult = {
   selection?: WorkerRecord['selection'] & { profileId?: string }
   permissionMode?: { requested?: string; effective: string; downgraded: boolean }
   admission?: AdmissionResult
-  refusal?: 'worker_limit' | 'admission' | 'escalation_declined' | 'invalid_agent' | 'workspace_unavailable'
+  refusal?: 'worker_limit' | 'admission' | 'escalation_declined' | 'invalid_agent' | 'workspace_unavailable' | 'budget_exceeded'
   userReport: string
 }
 
@@ -150,6 +151,10 @@ export type ManagerRuntimeDeps = {
   managerMayApprove?: () => boolean
   /** Per-worker usage rollup for race compare (11 §5). */
   usage?: Pick<UsageService, 'forThread'>
+  /** Team-token budget gate (P3-15); absent → budget unenforced. */
+  teamBudget?: import('./team-budget.js').TeamBudgetGate
+  /** Configured team budget written into newly ensured teams (P3-15). */
+  teamBudgetPolicy?: () => TeamRecord['budget'] | undefined
   /** Approved `worktree.checks` inputs (10 §4.2); absent hides the tool. */
   checks?: Pick<
     import('./check-runner.js').WorkspaceCheckRunnerDeps,
@@ -277,7 +282,11 @@ export class ManagerRuntime {
           : 'Worker not created: the delegation runtime is not enabled.'
       }
     }
-    const team = await this.deps.teams.ensure(ctx.threadId, this.deps.teamLimits?.())
+    const team = await this.deps.teams.ensure(
+      ctx.threadId,
+      this.deps.teamLimits?.(),
+      this.deps.teamBudgetPolicy?.()
+    )
     const active = this.activeWorkers(team)
     if (active.length >= team.limits.hardWorkers) {
       return {
@@ -288,6 +297,10 @@ export class ManagerRuntime {
           : `Worker limit reached (${team.limits.hardWorkers}); nothing was created.`
       }
     }
+    const budgetCheck = this.deps.teamBudget?.check(team)
+    const budgetRefusal = budgetHardRefusal(budgetCheck, language)
+    if (budgetRefusal) return budgetRefusal
+    this.controls.notifyBudgetCheck(team, budgetCheck)
     const reuseId = input.workspace?.reuseTaskWorkspaceId
     const reused = reuseId ? this.deps.taskWorkspaces?.get(reuseId) : undefined
     if (reuseId && (!reused || !['ready', 'captured', 'conflict'].includes(reused.state))) {

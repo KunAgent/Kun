@@ -127,6 +127,27 @@ export function WorkersPanel({ className }: { className?: string }): ReactElemen
               done: summary.done,
               failed: summary.failed
             })}
+            {overview.usage ? (
+              <span
+                data-workers-usage
+                data-budget-exceeded={
+                  overview.usage.hardExceeded ? 'hard'
+                    : overview.usage.softExceeded ? 'soft' : undefined
+                }
+                className={
+                  overview.usage.hardExceeded
+                    ? 'text-ds-status-danger'
+                    : overview.usage.softExceeded
+                      ? 'text-ds-status-warning'
+                      : undefined
+                }
+              >
+                {' '}· {overview.usage.totalTokens.toLocaleString()}
+                {overview.usage.hardTokens !== undefined
+                  ? `/${overview.usage.hardTokens.toLocaleString()}`
+                  : ''}{' '}tok
+              </span>
+            ) : null}
           </span>
         ) : null}
       </div>

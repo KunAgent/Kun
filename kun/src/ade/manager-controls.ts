@@ -10,6 +10,14 @@ import {
 } from '../contracts/ade.js'
 import type { ApprovalRequest } from '../domain/approval.js'
 import type { DeliverOutcome } from './dispatch-deliverer.js'
+import {
+  createDispatch as createDispatchRecord,
+  sendReport as dispatchSendReport
+} from './dispatch-create.js'
+import {
+  budgetHardRefusal,
+  budgetSoftNoticeDetail
+} from './team-budget.js'
 import type { ManagerToolContext, ManagerRuntimeDeps } from './manager-runtime.js'
 import { PERMISSION_RANK } from './permission-clamp.js'
 import { reportLanguage } from './user-report.js'
@@ -134,54 +142,12 @@ export class ManagerControls {
   }
 
   /** Persist + deliver one dispatch (worker_send and the GUI route share this). */
-  async createDispatch(input: {
-    teamId: string
-    workerId: string
-    parentTurnId: string
-    title?: string
-    task: string
-    context?: DispatchRecord['context']
-    mode?: 'queue' | 'interrupt'
-  }): Promise<{ dispatch: DispatchRecord; delivered: DeliverOutcome }> {
-    const now = this.deps.nowIso()
-    const title = input.title ?? input.task.split('\n', 1)[0]?.slice(0, 80) ?? 'dispatch'
-    const dispatch: DispatchRecord = {
-      dispatchId: this.deps.ids.next('dsp'),
-      teamId: input.teamId,
-      workerId: input.workerId,
-      parentTurnId: input.parentTurnId,
-      title: title.slice(0, 240),
-      task: input.task,
-      ...(input.context ? { context: input.context } : {}),
-      mode: input.mode ?? 'queue',
-      state: 'pending',
-      // 10 §4.1: execution state and acceptance stay independent tracks.
-      verdict: { status: 'pending', checks: [] },
-      createdAt: now,
-      updatedAt: now
-    }
-    await this.deps.dispatches.create(dispatch)
-    const delivered = await this.deps.deliverer.tryDeliver(input.teamId, dispatch.dispatchId)
-    return { dispatch, delivered }
+  createDispatch(input: Parameters<typeof createDispatchRecord>[1]) {
+    return createDispatchRecord(this.deps, input)
   }
 
   sendReport(worker: WorkerRecord, delivered: DeliverOutcome, language: 'en' | 'zh'): string {
-    if (language === 'zh') {
-      const base = `已向「${worker.label}」派活`
-      if (delivered.accepted) return `${base}，已开始执行。`
-      if (delivered.pendingReason === 'user-control') return '未派出：该 worker 已由用户接管。'
-      if (delivered.pendingReason === 'worker-busy') return `${base}，当前任务结束后自动开始。`
-      return `${base}，工作区就绪后自动开始。`
-    }
-    const base = `Dispatched to "${worker.label}"`
-    if (delivered.accepted) return `${base}; it started immediately.`
-    if (delivered.pendingReason === 'user-control') {
-      return 'Not dispatched: the worker is under user control.'
-    }
-    if (delivered.pendingReason === 'worker-busy') {
-      return `${base}; it starts when the current task finishes.`
-    }
-    return `${base}; it starts once the workspace is ready.`
+    return dispatchSendReport(worker, delivered, language)
   }
 
   /** `worker_send` — refuse while the user holds control or the worker ended. */
@@ -215,6 +181,8 @@ export class ManagerControls {
           : 'Not dispatched: the user has taken over this worker; wait for hand-back.'
       }
     }
+    const budgetRefusal = this.budgetRefusal(team, language)
+    if (budgetRefusal) return budgetRefusal
     const { dispatch, delivered } = await this.createDispatch({
       teamId: team.teamId,
       workerId: worker.workerId,
@@ -658,11 +626,33 @@ export class ManagerControls {
     })
   }
 
+  /** P3-15 hard cap: refuse new work; first soft crossing sends one notice. */
+  budgetRefusal(
+    team: TeamRecord,
+    language: 'en' | 'zh'
+  ): { ok: false; refusal: 'budget_exceeded'; userReport: string } | null {
+    const check = this.deps.teamBudget?.check(team)
+    this.notifyBudgetCheck(team, check)
+    return budgetHardRefusal(check, language)
+  }
+
+  /** P3-15: first soft-cap crossing wakes the manager once. */
+  notifyBudgetCheck(
+    team: TeamRecord,
+    check: import('./team-budget.js').TeamBudgetCheck | undefined
+  ): void {
+    if (check?.exceeded !== 'soft-first') return
+    void this.enqueueNotice(
+      team.teamId, check.topWorker, 'team_budget', undefined,
+      budgetSoftNoticeDetail(check, this.language()))
+  }
+
   async enqueueNotice(
     teamId: string,
     worker: WorkerRecord,
     kind: WorkerNotice['kind'],
-    capture?: WorkerNotice['capture']
+    capture?: WorkerNotice['capture'],
+    detail?: string
   ): Promise<void> {
     await this.deps.notices.enqueue({
       noticeId: this.deps.ids.next('ntc'),
@@ -672,6 +662,7 @@ export class ManagerControls {
       title: worker.label,
       harnessLabel: this.harnessLabel(worker),
       ...(capture ? { capture } : {}),
+      ...(detail ? { detail } : {}),
       attempts: 0,
       createdAt: this.deps.nowIso()
     }).catch((error) => {
