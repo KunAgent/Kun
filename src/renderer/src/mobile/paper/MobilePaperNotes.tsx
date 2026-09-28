@@ -59,14 +59,22 @@ export function MobilePaperNotes({ workspaceRoot, unitDir, onDirty }: {
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
     finally { setBusy(false) }
   }
+  const createMissing = async (): Promise<void> => {
+    if (busy) return
+    setBusy(true); setError('')
+    try {
+      const result = await window.kunGui.createWorkspaceFile({ workspaceRoot, path, content: '' })
+      if (!result.ok) throw new Error(result.message)
+      setRetry((value) => value + 1)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally { setBusy(false) }
+  }
   if (loading) return <p role="status">{t('mobileWorkPaperNotesLoading')}</p>
   if (error && !dirty && mtime === undefined && !missing) return <div role="alert"><p>{error}</p>
     <button type="button" onClick={() => setRetry((value) => value + 1)}>{t('mobileWorkPaperNotesRetry')}</button></div>
   if (missing) return <div className="kun-mobile-paper-reader-body"><p role="alert">{t('mobileWorkPaperNotesMissing', { error })}</p>
-    <button type="button" disabled={busy} onClick={() => {
-      setBusy(true); void window.kunGui.createWorkspaceFile({ workspaceRoot, path, content: '' })
-        .then((result) => { if (result.ok) setRetry((value) => value + 1); else setError(result.message) })
-        .finally(() => setBusy(false)) }}>{t('mobileWorkPaperNotesCreate')}</button></div>
+    <button type="button" disabled={busy} onClick={() => void createMissing()}>{t('mobileWorkPaperNotesCreate')}</button></div>
   return <div className="kun-mobile-paper-reader-body">
     <label className="kun-mobile-field">NOTES.md
       <textarea rows={18} value={text} onChange={(event) => { onDirty(true); setText(event.target.value) }} spellCheck={false} /></label>

@@ -8,7 +8,7 @@ import { filterPaperEntries, sortPaperEntries } from '../../paper/paper-library-
 import { MobileSheet } from '../sheets/MobileSheet'
 import type { PaperLibraryEntry, PaperLibraryFilter, PaperLibrarySort } from '@shared/paper/paper-library-types'
 import type { MobilePage } from '../navigation/mobile-page'
-import { paperResourceKey } from './paper-resource-key'
+import { rememberMobilePaperRoute } from './mobile-paper-route'
 import { mobilePaperLibraryRoot, setMobilePaperLibraryRoot } from './mobile-paper-library-root'
 import './mobile-paper.css'
 
@@ -147,7 +147,7 @@ export function MobilePaperHome({ navigate, onDocuments, onBusyChange }: Props) 
       {listError ? <p role="alert">{listError} <button type="button" onClick={reload}>{t('mobileWorkPaperRetry')}</button></p> : null}
       {root && !listError && !loading && !filtered.length ? <p role="status">{t('mobileWorkPaperNoMatch')}</p> : null}
       <ul>{filtered.slice(0, limit).map((entry) => <li key={entry.unitDir}>
-        <button type="button" className="kun-mobile-paper-open" onClick={() => navigate({ mode: 'work', kind: 'paper', paperKey: paperResourceKey(root, entry.unitDir), view: entry.hasPdf ? 'read' : 'info' })}>
+        <button type="button" className="kun-mobile-paper-open" onClick={() => navigate({ mode: 'work', kind: 'paper', paperKey: rememberMobilePaperRoute(root, entry.unitDir), view: entry.hasPdf ? 'read' : 'info' })}>
           <strong>{entry.meta.title}</strong><span>{entry.meta.authors.slice(0, 3).join(', ')} · {entry.meta.year ?? '—'}</span>
           <small>{statusLabels[entry.meta.status ?? 'unread']} · {entry.lastPage ? t('mobileWorkPaperPage', { page: entry.lastPage }) : t('mobileWorkPaperNotStarted')} · {entry.hasPdf ? 'PDF' : t('mobileWorkPaperNoPdf')}</small></button>
         <button type="button" className="kun-mobile-paper-more" aria-label={t('mobileWorkPaperEditNamed', { title: entry.meta.title })}

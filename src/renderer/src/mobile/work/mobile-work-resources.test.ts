@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceEntry } from '@shared/workspace-file'
-import { mobileWorkResources, resolveMobileWorkEntry } from './mobile-work-resources'
+import { mobileParentFolderPage, mobileWorkResources, resolveMobileWorkEntry } from './mobile-work-resources'
 import { workFileResourceKey } from './work-resource-key'
 
 const root = '/home/w'
@@ -21,5 +21,11 @@ describe('mobile work directory selector', () => {
   it('resolves opaque keys only within loaded workspace entries', () => {
     expect(resolveMobileWorkEntry(state, workFileResourceKey(root, file.path))).toEqual(file)
     expect(resolveMobileWorkEntry(state, workFileResourceKey('/elsewhere', file.path))).toBeUndefined()
+  })
+  it('returns to the actual parent of a nested folder', () => {
+    expect(mobileParentFolderPage(root, root, `${root}/drafts/chapters`)).toEqual({
+      mode: 'work', kind: 'folder', folderKey: workFileResourceKey(root, `${root}/drafts`)
+    })
+    expect(mobileParentFolderPage(root, root, `${root}/drafts`)).toEqual({ mode: 'work', kind: 'home' })
   })
 })
