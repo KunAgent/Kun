@@ -248,5 +248,16 @@
     "needs_changes": "수정 필요",
     "rejected": "거절",
     "waived": "면제"
-  }
+  },
+  "adeNewManager": "매니저 세션",
+  "adeNewOneOnOne": "일대일",
+  "adeAgentPickerLoading": "에이전트 불러오는 중…",
+  "adeAgentPickerEmpty": "사용 가능한 에이전트 없음",
+  "adeGroupReview": "검토 필요",
+  "adeGroupDone": "완료됨",
+  "adeGroupByStatus": "상태별 그룹화",
+  "adeGroupByProject": "프로젝트별 그룹화",
+  "adeGroupToggleHint": "대화 그룹화 방식 전환",
+  "adeWorkerCount": "워커 {{count}}개",
+  "adeWorkerCount_other": "워커 {{count}}개"
 }

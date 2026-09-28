@@ -30,8 +30,18 @@ export function createAdeActions(
           includeArchived: true,
           includeSide: true
         })
+        // ADE worker threads arrive as `relation: 'side'` children of the
+        // manager (00 §5: workers nest under their manager in the sidebar).
+        // Other side conversations stay out — their parent is not an ADE
+        // thread anyway.
+        const adeIds = new Set(
+          fetched.filter((thread) => thread.relation !== 'side').map((thread) => thread.id)
+        )
         const normalized = fetched
-          .filter((thread) => thread.relation !== 'side')
+          .filter((thread) =>
+            thread.relation !== 'side' ||
+            (thread.parentThreadId != null && adeIds.has(thread.parentThreadId))
+          )
           .map((thread) => ({ ...thread, workspace: normalizeWorkspaceRoot(thread.workspace) }))
         // 新建线程可能尚未出现在列表响应中,保留当前激活线程避免闪烁。
         const state = get()

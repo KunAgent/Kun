@@ -363,6 +363,8 @@ export function createThreadCreationActions(
         mode: 'agent',
         agentSurface: requestedAgentSurface,
         ...(isAdeThread ? { workspaceMode: 'ade' as const } : {}),
+        ...(options.harnessId?.trim() ? { harnessId: options.harnessId.trim() } : {}),
+        ...(options.credentialMode ? { credentialMode: options.credentialMode } : {}),
         ...(initialProviderId ? { providerId: initialProviderId } : {}),
         ...(initialModel ? { model: initialModel } : {}),
         ...(personaProfile ? {

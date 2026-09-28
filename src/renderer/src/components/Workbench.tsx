@@ -548,7 +548,7 @@ export function Workbench(): ReactElement {
   const {
     closeRightPanel, exploreSddRequirementInDesign, openCodeMode, openAdeMode, openPluginsView, openExtensionsView, openBoardView, openScheduleView,
     openThread, openWorkflowView, openWriteMode, pickWriteAssistantWorkspace, sidebarView,
-    startNewChat, startNewAdeChat, startNewChatInWorkspace, startNewConversation, startNewWriteAssistantConversation,
+    startNewChat, startNewAdeChat, startNewAdeOneOnOne, startNewChatInWorkspace, startNewConversation, startNewWriteAssistantConversation,
     toggleConnectPhone
   } = useWorkbenchNavigationController({
     activeSddDraft: Boolean(activeSddDraft), activeThreadId, pluginHostRoute, rightPanelMode, route,
@@ -645,7 +645,7 @@ export function Workbench(): ReactElement {
     connectPhoneSidebarOpen, connectPhoneInitialTarget, activeExtensionLeftSidebar, extensionWorkspaceRoot,
     selectExtensionSurface, runtimeConnection, threadSearch, showArchivedThreads, focusModeEnabled,
     updateFocusMode, setThreadSearch, openThread, renameThread, pinThread, archiveThread,
-    deleteThread, deleteDrawing, startNewChat, startNewAdeChat, startNewChatInWorkspace,
+    deleteThread, deleteDrawing, startNewChat, startNewAdeChat, startNewAdeOneOnOne, startNewChatInWorkspace,
     openSettings, openPluginsView, openExtensionsView, toggleTheme, toggleConnectPhone,
     openConnectWeixin: () => { setConnectPhoneInitialTarget('weixin'); openClaw(); setConnectPhoneSidebarOpen(true) },
     openCodeMode, openAdeMode, openWriteMode, openDesignMode, openBoardView, openScheduleView, openWorkflowView,

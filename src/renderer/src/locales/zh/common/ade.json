@@ -248,5 +248,16 @@
     "needs_changes": "需修改",
     "rejected": "已驳回",
     "waived": "已豁免"
-  }
+  },
+  "adeNewManager": "总管会话",
+  "adeNewOneOnOne": "一对一",
+  "adeAgentPickerLoading": "正在加载 agent…",
+  "adeAgentPickerEmpty": "暂无可用 agent",
+  "adeGroupReview": "待审查",
+  "adeGroupDone": "已完成",
+  "adeGroupByStatus": "按状态分组",
+  "adeGroupByProject": "按项目分组",
+  "adeGroupToggleHint": "切换会话分组方式",
+  "adeWorkerCount": "{{count}} 个 worker",
+  "adeWorkerCount_other": "{{count}} 个 worker"
 }
