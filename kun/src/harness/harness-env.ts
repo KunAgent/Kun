@@ -23,6 +23,9 @@ export const HARNESS_CREDENTIAL_ENV_DENYLIST: readonly string[] = [
   'CLAUDE_CODE_USE_VERTEX',
   'CLAUDE_CODE_USE_FOUNDRY',
   'CLAUDE_CODE_USE_ANTHROPIC_AWS',
+  // `kun serve` accepts the host model credential via this env var; a harness
+  // child must reach the model through its own credential mode instead.
+  'DEEPSEEK_API_KEY',
   'KUN_BROWSER_USE_BRIDGE_URL',
   'KUN_BROWSER_USE_BRIDGE_TOKEN',
   'KUN_BROWSER_USE_APPROVAL_SIGNING_KEY'
