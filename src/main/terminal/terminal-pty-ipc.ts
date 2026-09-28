@@ -24,6 +24,10 @@ import {
   type WindowsShellResolverOptions
 } from '../../../kun/src/adapters/tool/windows-shell-resolver.js'
 import {
+  applyKunCliEnv,
+  type KunCliLaunch
+} from './terminal-agent-cli-env'
+import {
   TERMINAL_AGENT_CALLBACK_APPENDIX,
   TERMINAL_DEFAULT_COLS,
   TERMINAL_DEFAULT_ROWS,
@@ -161,6 +165,7 @@ type AgentLaunchPlan = {
   args: string[]
   env: Record<string, string>
   unitId: string
+  kunCli: KunCliLaunch | null
 }
 
 type RuntimeFetch = NonNullable<RegisterTerminalPtyIpcOptions['runtimeFetch']>
@@ -184,7 +189,8 @@ async function resolveAgentLaunch(
     workspaceKind?: 'worktree' | 'local' | 'directory'
   },
   cwd: string,
-  runtimeFetch: RuntimeFetch
+  runtimeFetch: RuntimeFetch,
+  resolveKunCli?: () => Promise<KunCliLaunch | null>
 ): Promise<AgentLaunchPlan | { error: string }> {
   const listRes = await runtimeFetch('/v1/harnesses').catch(() => null)
   const rows = listRes?.ok ? ((await readJson(listRes))?.harnesses as unknown[] | undefined) : undefined
@@ -251,7 +257,8 @@ async function resolveAgentLaunch(
     }
   }
   const extraArgs = Array.isArray(launch?.args) ? launch.args.filter((a): a is string => typeof a === 'string') : []
-  return { file: command, args: [...argv, ...extraArgs], env, unitId }
+  const kunCli = (await resolveKunCli?.().catch(() => null)) ?? null
+  return { file: command, args: [...argv, ...extraArgs], env, unitId, kunCli }
 }
 
 function reportAgentEvent(
@@ -290,6 +297,12 @@ export type RegisterTerminalPtyIpcOptions = {
    * (docs/ade/05 §6.1). Required only when a create carries `agent`.
    */
   runtimeFetch?: (path: string, init?: { method?: string; body?: string }) => Promise<Response>
+  /**
+   * Resolve the bundled `kun` CLI for terminal-agent PTYs (P3-18): the
+   * launch's bin dir is prepended to PATH and `KUN_CLI` exports the
+   * absolute command. Only consulted when a create carries `agent`.
+   */
+  resolveKunCli?: () => Promise<KunCliLaunch | null>
   /** Test seam for native PTY and setup cancellation. */
   loadPty?: () => Promise<Pick<typeof import('node-pty'), 'spawn'> | null>
 }
@@ -416,7 +429,12 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
       if (!options.runtimeFetch) {
         return { ok: false as const, message: 'Terminal agents require a kun runtime connection.' }
       }
-      const resolved = await resolveAgentLaunch(request.agent, cwd, options.runtimeFetch)
+      const resolved = await resolveAgentLaunch(
+        request.agent,
+        cwd,
+        options.runtimeFetch,
+        options.resolveKunCli
+      )
       if ('error' in resolved) return { ok: false as const, message: resolved.error }
       agentPlan = resolved
       if (cancelled()) {
@@ -436,7 +454,10 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
       try {
         const env = buildShellEnv(colorMode)
         if (candidate.gitBash) env.CHERE_INVOKING = '1'
-        if (agentPlan) Object.assign(env, agentPlan.env)
+        if (agentPlan) {
+          Object.assign(env, agentPlan.env)
+          if (agentPlan.kunCli) applyKunCliEnv(env, agentPlan.kunCli)
+        }
         launch = await spawnPtyBehindGate(ptyModule, candidate.file, candidate.args, {
           name: 'xterm-256color',
           cols,
