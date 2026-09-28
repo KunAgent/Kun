@@ -6,6 +6,7 @@ import { HarnessCatalog } from './harness-catalog.js'
 import { HarnessDetector, spawnCaptured } from './harness-detector.js'
 import { probeHarnessLogin } from './harness-login-probes.js'
 import { AcpModelProbe } from './acp-model-probe.js'
+import { probeAcpReadiness } from './acp-readiness-probe.js'
 import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
 import { HarnessTokenService } from './harness-token-service.js'
 
@@ -70,6 +71,8 @@ export function createHarnessComposition(
     },
     bundled: bundledRuntime,
     spawnCaptured,
+    // P3-11: an ACP harness that versions fine can still fail initialize.
+    probeReady: (def, command) => probeAcpReadiness(def, command),
     probeLogin: (def) =>
       probeHarnessLogin(def, {
         providers: () => (options().providers ?? {}) as Record<string, ServeProviderConfig>

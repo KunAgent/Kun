@@ -157,11 +157,14 @@ export function receiveHarnessSessionState(state: AdeHarnessSessionState): void 
   }))
 }
 
-/** Harness availability for pickers: installed + signed in (or not required). */
+/** Harness availability for pickers: installed + handshake-ready + signed in. */
 export function harnessRowAvailable(row: AdeHarnessRow): boolean {
   const status = row.status
   if (row.definition.transport === 'native-loop') return true
   if (status.installed !== 'yes') return false
+  // P3-11: a binary that fails the ACP initialize handshake is installed but
+  // cannot serve turns — `status.message` carries the sanitized stderr.
+  if (status.ready === 'no') return false
   return status.login !== 'signed-out'
 }
 
