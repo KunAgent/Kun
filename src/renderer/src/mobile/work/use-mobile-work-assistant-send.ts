@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useChatStore } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { readMobilePage } from '../navigation/mobile-page'
+import { workFileResourceKey, workWhiteboardResourceKey } from './work-resource-key'
 import { readWriteDocumentSha256 } from '../../components/workbench/read-write-document-sha256'
 import { workbenchWriteSourceReference } from '../../components/workbench/workbench-write-source-reference'
 import { activeWriteResourceReference } from '../../components/workbench/workbench-write-resource-context'
@@ -43,6 +45,16 @@ export function useMobileWorkAssistantSend(): {
       ...(selection.rects ? { rects: selection.rects.map((rect) => ({ ...rect })) } : {})
     }))
     if (!work.workspaceRoot || (!document && !whiteboard)) return false
+    const sameResource = (): boolean => {
+      const live = useWriteWorkspaceStore.getState()
+      const page = readMobilePage(new URL(window.location.href))
+      const resourceKey = whiteboard ? workWhiteboardResourceKey(whiteboard.id)
+        : workFileResourceKey(work.workspaceRoot, work.activeFilePath!)
+      return live.workspaceRoot === work.workspaceRoot &&
+        live.activeFilePath === work.activeFilePath &&
+        live.activeWhiteboardId === work.activeWhiteboardId &&
+        page.kind === 'resource' && page.resourceKey === resourceKey
+    }
     if (document && !['text', 'code'].includes(document.kind)) {
       setError('This resource needs its full semantic assistant context before it can be sent on mobile.')
       return false
@@ -54,22 +66,25 @@ export function useMobileWorkAssistantSend(): {
         setError('Save the document before sending it to the assistant.')
         return false
       }
+      if (!sameResource()) return false
       let threadId = whiteboard?.threadId ?? null
       if (whiteboard && !threadId) {
         threadId = await chat.createThread(work.workspaceRoot, undefined, {
           title: whiteboard.title,
           titleAuto: false
         })
+        if (!sameResource()) return false
         if (threadId && !await work.bindWhiteboardThread(whiteboard.id, threadId)) {
           setError('The whiteboard conversation could not be bound.')
           return false
         }
       }
       threadId ??= await chat.ensureThread(work.workspaceRoot, work.activeFilePath ?? undefined)
-      if (!threadId) return false
-      if (chat.activeThreadId !== threadId) {
+      if (!threadId || !sameResource()) return false
+      if (useChatStore.getState().activeThreadId !== threadId) {
         await chat.selectThread(threadId, work.workspaceRoot, work.activeFilePath ?? undefined)
       }
+      if (!sameResource() || useChatStore.getState().activeThreadId !== threadId) return false
       const whiteboardContexts = whiteboard
         ? await activeWorkWhiteboardComposerContexts(work.workspaceRoot, whiteboard, threadId, prompt)
         : []
@@ -100,6 +115,7 @@ export function useMobileWorkAssistantSend(): {
       const fileReference = document
         ? workbenchWriteSourceReference(work.workspaceRoot, work.activeFilePath)
         : undefined
+      if (!sameResource()) return false
       const sent = await chat.sendMessage(prompt, 'agent', {
         expectedThreadId: threadId,
         agentSurface: 'write',

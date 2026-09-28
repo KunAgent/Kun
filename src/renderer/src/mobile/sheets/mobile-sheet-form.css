@@ -77,6 +77,9 @@ fieldset.kun-mobile-field { margin: 0; padding: 0; border: 0; min-inline-size: 0
 }
 .kun-mobile-button:active:not(:disabled) { background: var(--ds-surface-hover); }
 .kun-mobile-button:disabled { opacity: .45; }
+.kun-mobile-work-sheet-button { display: block; width: 100%; min-height: 44px; margin: 8px 0; padding: 10px 12px; border: 1px solid var(--ds-border); border-radius: 12px; color: var(--ds-text); background: var(--ds-surface-subtle); font: inherit; text-align: start; overflow-wrap: anywhere; }
+.kun-mobile-sheet-content label { display: grid; gap: 6px; margin: 12px 0; }
+.kun-mobile-sheet-content :is(input, select, textarea) { box-sizing: border-box; width: 100%; min-height: 44px; border: 1px solid var(--ds-border); border-radius: 12px; padding: 8px 12px; background: var(--ds-bg-main); color: var(--ds-text); font: inherit; font-size: 16px; }
 .kun-mobile-button[data-variant='primary'] {
   color: var(--ds-bg-main);
   background: var(--ds-text);

@@ -16,3 +16,9 @@
 .kun-mobile-work-status { border-radius: 9999px; padding: 3px 7px; background: var(--ds-surface-subtle); color: var(--ds-text-muted); font-size: 11px; }
 .kun-mobile-work-status:is(.is-error, .is-dirty, .is-review) { color: var(--ds-text); background: var(--ds-warning-soft); }
 .kun-mobile-work-list [role='alert'] button { width: 100%; min-height: 44px; border: 1px solid var(--ds-border); border-radius: 12px; background: var(--ds-surface-subtle); }
+.kun-mobile-work-tabs { display: flex; gap: 8px; padding: 0 16px 12px; }
+.kun-mobile-work-tabs button { flex: 1; min-height: 44px; border: 1px solid var(--ds-border); border-radius: 12px; background: transparent; color: inherit; font: inherit; }
+.kun-mobile-work-tabs [aria-current='page'] { background: var(--ds-surface-subtle); font-weight: 600; }
+.kun-mobile-work-folder-back, .kun-mobile-work-load-more { min-height: 44px; margin: 0 16px 8px; border: 0; background: transparent; color: var(--ds-text); text-align: start; font: inherit; }
+.kun-mobile-work-list h2 { font-size: 14px; color: var(--ds-text-muted); }
+.kun-mobile-work-list .kun-mobile-work-load-more { width: 100%; margin: 12px 0; border: 1px solid var(--ds-border); border-radius: 12px; text-align: center; }

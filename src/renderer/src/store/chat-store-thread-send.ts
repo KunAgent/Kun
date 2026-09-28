@@ -124,7 +124,6 @@ import {
   isCodeThread,
   latestThread,
   looksLikeActiveTurnError,
-  readActiveWriteWorkspace,
   readWriteWorkspaceRoots,
   rememberPendingClawFeishuMirror,
   runtimeErrorDetail,
@@ -134,6 +133,7 @@ import {
   turnCompleteNotificationSource,
   watchTurnCompletionNotification
 } from './chat-store-runtime'
+import { resolveSendWorkspaceRoot } from './chat-store-runtime-notifications'
 import {
   getThreadSnapshot,
   invalidateThreadSnapshot,
@@ -275,6 +275,8 @@ export async function sendThreadMessage(
       )
     )
     let writeContext = queued?.writeContext ?? overrides?.writeContext
+    const scopedWriteThread = !writeContext && requestedAgentSurface === 'write' && expectedThreadId
+      ? get().threads.find((thread) => thread.id === expectedThreadId && thread.agentSurface === 'write') ?? null : null
     const requireActiveWriteContext = Boolean(writeContext && !queued)
     const activeWriteContextIsValid = (): boolean => Boolean(
       !writeContext ||
@@ -294,14 +296,8 @@ export async function sendThreadMessage(
     }
     if (get().route !== 'claw') {
       const state = get()
-      const activeThread = state.activeThreadId
-        ? state.threads.find((thread) => thread.id === state.activeThreadId) ?? null
-        : null
-      let workspaceRoot = writeContext
-        ? normalizeWorkspaceRoot(writeContext.workspaceRoot)
-        : state.route === 'write'
-          ? await readActiveWriteWorkspace(state.workspaceRoot)
-          : normalizeWorkspaceRoot(activeThread?.workspace)
+      const activeThread = state.threads.find((thread) => thread.id === state.activeThreadId) ?? null
+      let workspaceRoot = await resolveSendWorkspaceRoot(state, activeThread, writeContext, scopedWriteThread)
       if (!activeWriteContextIsValid()) return false
       if (!workspaceRoot) {
         workspaceRoot = normalizeWorkspaceRoot((await rendererRuntimeClient.getSettings()).workspaceRoot)
@@ -327,13 +323,13 @@ export async function sendThreadMessage(
         ? boardThread && normalizeWorkspaceRoot(boardThread.workspace) === boardWorkspace
           ? boardThreadId
           : null
-        : await get().ensureWriteThreadForWorkspace(
-            writeContext?.workspaceRoot,
-            writeContext
-              ? writeConversationResourcePath(
-                  writeContext.workspaceRoot, writeContext.activeFilePath)
-              : undefined
-          )
+        : scopedWriteThread && get().activeThreadId === scopedWriteThread.id
+          ? scopedWriteThread.id
+          : await get().ensureWriteThreadForWorkspace(
+              writeContext?.workspaceRoot,
+              writeContext ? writeConversationResourcePath(
+                writeContext.workspaceRoot, writeContext.activeFilePath) : undefined
+            )
       if (!writeThreadId) return false
       if (writeContext?.threadId && writeThreadId !== writeContext.threadId) return false
       // ensureWriteThreadForWorkspace may await selectThread. If the user

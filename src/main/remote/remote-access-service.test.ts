@@ -198,6 +198,27 @@ describe('RemoteAccessService HTTP surface', () => {
     expect(noRoot.status).toBe(400)
   })
 
+  it('streams authenticated PDF byte ranges without exposing another host path', async () => {
+    const cookie = await login()
+    const dir = await mkdtemp(join(tmpdir(), 'kun-remote-pdf-'))
+    await writeFile(join(dir, 'paper.pdf'), '%PDF-1.5', 'utf8')
+    const url = `${baseUrl}/remote/file-preview?workspaceRoot=${encodeURIComponent(dir)}&path=paper.pdf`
+    try {
+      const partial = await fetch(url, { headers: { cookie, Range: 'bytes=1-3' } })
+      expect(partial.status).toBe(206)
+      expect(partial.headers.get('content-range')).toBe('bytes 1-3/8')
+      expect(partial.headers.get('accept-ranges')).toBe('bytes')
+      expect(partial.headers.get('content-security-policy')).toBe('sandbox')
+      expect(await partial.text()).toBe('PDF')
+      const invalid = await fetch(url, { headers: { cookie, Range: 'bytes=8-12' } })
+      expect(invalid.status).toBe(416)
+      expect(invalid.headers.get('content-range')).toBe('bytes */8')
+      const all = await fetch(url, { headers: { cookie } })
+      expect(all.status).toBe(200)
+      expect(await all.text()).toBe('%PDF-1.5')
+    } finally { await rm(dir, { recursive: true, force: true }) }
+  })
+
   it('sandboxes active preview content so scripts cannot reach remote control APIs', async () => {
     const cookie = await login()
     const dir = await mkdtemp(join(tmpdir(), 'kun-remote-test-ws-'))

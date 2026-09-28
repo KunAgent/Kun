@@ -233,7 +233,7 @@ export type WriteWorkspaceState = {
   selection: WriteEditorSelectionState
   quotedSelections: WriteQuotedSelection[]
   recentEdits: WriteRecentEdit[]
-  loadWriteSettings: () => Promise<void>
+  loadWriteSettings: (options?: { mobile?: boolean }) => Promise<void>
   setWorkSurface: (surface: WriteWorkSurface) => void
   setPaperResearch: (patch: Partial<WritePaperResearchState>) => void
   selectWriteWorkspace: (workspaceRoot: string) => Promise<void>

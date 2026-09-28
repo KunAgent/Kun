@@ -53,6 +53,20 @@ describe('mobile page URLs', () => {
     (view) => { roundTrip({ mode: 'work', kind: 'resource', resourceKey: 'opaque-key', view }) }
   )
 
+  it('keeps phone document/paper mode and nested paper routes in browser history', () => {
+    roundTrip({ mode: 'work', kind: 'home', surface: 'papers' })
+    roundTrip({ mode: 'work', kind: 'folder', folderKey: 'f-opaque' })
+    roundTrip({ mode: 'work', kind: 'discover' })
+    for (const view of ['read', 'notes', 'assistant', 'info'] as const) {
+      const url = roundTrip({ mode: 'work', kind: 'paper', paperKey: 'p-opaque', view })
+      expect(url.search).not.toContain('workspaceRoot')
+    }
+    expect(sameMobilePage({ mode: 'work', kind: 'home' },
+      { mode: 'work', kind: 'home', surface: 'papers' })).toBe(false)
+    expect(readMobilePage(new URL('https://kun.example/?mode=work&mobile=paper&paper=p&view=edit')))
+      .toEqual({ mode: 'work', kind: 'home' })
+  })
+
   it('clears identifiers owned by the previous mode', () => {
     const url = new URL('https://kun.example/?mode=rooms&mobile=reply&room=r&message=m&thread=old')
     const next = new URL(mobilePageUrl(url, { mode: 'work', kind: 'home' }), base)

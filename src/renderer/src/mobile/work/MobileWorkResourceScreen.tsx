@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { useChatStore } from '../../store/chat-store'
@@ -11,6 +11,7 @@ import type { WriteMarkdownEditorHandle } from '../../components/write/WriteMark
 import { getWriteRenderSafety } from '../../write/write-render-safety'
 import { MobileWorkResource } from './MobileWorkResource'
 import { MobileWorkAssistant } from './MobileWorkAssistant'
+import { MobileSheet } from '../sheets/MobileSheet'
 import { workFileResourceKey, workWhiteboardResourceKey } from './work-resource-key'
 import type { WorkResourceView } from '../navigation/mobile-page'
 
@@ -36,6 +37,9 @@ export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView, on
   const openFile = work.openFile
   const openWhiteboard = work.openWhiteboard
   const activeWhiteboardId = work.activeWhiteboardId
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuError, setMenuError] = useState('')
+  const [menuBusy, setMenuBusy] = useState(false)
   const saveTimerRef = useRef<number | null>(null)
   const markdownHandleRef = useRef<WriteMarkdownEditorHandle | null>(null)
   const textDocument = document?.kind === 'text' ? document : null
@@ -100,10 +104,10 @@ export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView, on
   const effectiveView = supportedViews.includes(view) ? view : board ? 'whiteboard' : 'read'
   const readOnlyView = effectiveView !== 'edit'
 
-  return <MobileWorkResource title={title} statusLabel={status} view={effectiveView}
+  return <><MobileWorkResource title={title} statusLabel={status} view={effectiveView}
     labels={{ read: t('mobilePreview'), edit: t('mobileEdit'), assistant: t('writeAssistant'),
       review: t('mobileReview'), whiteboard: t('mobileWhiteboard'), back: t('back'), more: t('mobileMore') }}
-    supportedViews={supportedViews} onBack={onBack} onMenu={null} onView={onView}
+    supportedViews={supportedViews} onBack={onBack} onMenu={() => { setMenuOpen(true); setMenuError('') }} onView={onView}
     content={effectiveView === 'assistant'
       ? <MobileWorkAssistant expectedThreadId={expectedAssistantThreadId} onSettings={onSettings} />
       : <WriteEditorGroupContent
@@ -131,4 +135,33 @@ export function MobileWorkResourceScreen({ resourceKey, view, onBack, onView, on
           onResolveSpreadsheetConflict={work.resolveSpreadsheetConflict}
         />}
   />
+    <MobileSheet open={menuOpen} title={title} closeLabel={t('close')} onClose={() => setMenuOpen(false)}>
+      <p>修改保存在主机工作区；下载会另存到手机。</p>
+      {file && editable ? <button className="kun-mobile-work-sheet-button" type="button" disabled={menuBusy}
+        onClick={() => { setMenuBusy(true); void work.saveDocument(work.workspaceRoot, file.path).then((ok) => {
+          if (ok) setMenuOpen(false)
+          else setMenuError(useWriteWorkspaceStore.getState().fileError ?? '保存失败，请检查冲突')
+        }).finally(() => setMenuBusy(false)) }}>保存到主机</button> : null}
+      {file ? <button className="kun-mobile-work-sheet-button" type="button" disabled={menuBusy}
+        onClick={() => { setMenuBusy(true); void window.kunGui.saveWorkspaceFileAs({
+          workspaceRoot: work.workspaceRoot, sourcePath: file.path, suggestedName: file.name
+        }).then((result) => { if (result.ok) setMenuOpen(false); else setMenuError(result.message) })
+          .catch((cause: unknown) => setMenuError(String(cause))).finally(() => setMenuBusy(false)) }}>下载到手机</button> : null}
+      {file && editable && document?.saveStatus === 'error' ? <>
+        <p role="alert">保存失败或文件在主机上被修改。请选择保留哪一份。</p>
+        <button className="kun-mobile-work-sheet-button" type="button" disabled={menuBusy}
+          onClick={() => { if (!window.confirm('用手机草稿覆盖主机文件？')) return
+            setMenuBusy(true); void work.saveDocument(work.workspaceRoot, file.path, { resolveExternalConflict: 'keep-local' })
+              .then((ok) => { if (ok) setMenuOpen(false); else setMenuError('覆盖失败') })
+              .finally(() => setMenuBusy(false)) }}>保留手机草稿并覆盖主机</button>
+        <button className="kun-mobile-work-sheet-button" type="button" disabled={menuBusy}
+          onClick={() => { if (!window.confirm('放弃手机草稿并读取主机文件？')) return
+            setMenuBusy(true); void work.syncActiveFileFromDisk(work.workspaceRoot, { path: file.path, force: true })
+              .then((ok) => { if (ok) setMenuOpen(false); else setMenuError('读取主机文件失败') })
+              .finally(() => setMenuBusy(false)) }}>放弃草稿，重新读取主机文件</button>
+      </> : null}
+      {!assistantSupported && file ? <p>此资源暂不支持提问。</p> : null}
+      {menuError ? <p role="alert">{menuError}</p> : null}
+    </MobileSheet>
+  </>
 }

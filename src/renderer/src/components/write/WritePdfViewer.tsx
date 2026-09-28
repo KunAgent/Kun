@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from 'react'
 import { ChevronLeft, ChevronRight, Loader2, Minus, Plus, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { GlobalWorkerOptions } from 'pdfjs-dist/build/pdf.mjs'
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import type {
   WriteEditorSelectionState,
   WriteSelectionPageRect
 } from './WriteMarkdownEditor'
-
-GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 type Props = {
   filePath: string
