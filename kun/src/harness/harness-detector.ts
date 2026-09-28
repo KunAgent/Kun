@@ -242,6 +242,21 @@ export class HarnessDetector {
             : `command not found: ${def.detect?.command ?? def.id}`
       })
     }
+    if (def.transport === 'terminal') {
+      // Terminal agents (p4 §3.8): a resolved command is the whole verdict.
+      // Many interactive CLIs ignore `--version` and wait on stdin instead —
+      // probing would hang 5s and mask an installed agent as 'unknown'.
+      const login = await this.deps
+        .probeLogin(def, command ?? def.id)
+        .catch(() => 'unknown' as HarnessLoginState)
+      return this.store(id, {
+        harnessId: id,
+        installed: 'yes',
+        login,
+        resolvedCommand: command,
+        checkedAt
+      })
+    }
     const version = bundled?.version
       ? { text: bundled.version, semver: semver.valid(bundled.version) ? bundled.version : null }
       : command

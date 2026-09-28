@@ -17,7 +17,8 @@ export function harnessSettings(kun: KunRuntimeSettingsV1): KunHarnessSettingsV1
     custom: [],
     defaults: {},
     defaultHarnessId: 'kun',
-    agentOrder: []
+    agentOrder: [],
+    terminalAgents: []
   }
 }
 
@@ -117,12 +118,16 @@ export function AgentCenter({
                 })}
                 onProbe={() => void probe(id)}
                 onSetDefault={() => patchHarness({ defaultHarnessId: id })}
-                onRemoveCustom={row.definition.builtin ? undefined : () =>
-                  patchHarness({ custom: settings.custom.filter((entry) => entry.id !== id) })}
-                onExportCustom={row.definition.builtin ? undefined : () => {
+                // P4-13: terminal agents are catalog rows too but live under
+                // `terminalAgents[]`, not `custom[]` — only true custom ACP
+                // entries get remove/export affordances.
+                onRemoveCustom={settings.custom.some((entry) => entry.id === id) ? () =>
+                  patchHarness({ custom: settings.custom.filter((entry) => entry.id !== id) })
+                  : undefined}
+                onExportCustom={(() => {
                   const entry = settings.custom.find((candidate) => candidate.id === id)
-                  if (entry) void exportCustomEntry(entry)
-                }}
+                  return entry ? () => void exportCustomEntry(entry) : undefined
+                })()}
                 onSetBinaryPath={(path) => {
                   const binaryPaths = { ...settings.binaryPaths }
                   if (path.trim()) binaryPaths[id] = path.trim()

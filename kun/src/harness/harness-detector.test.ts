@@ -30,6 +30,11 @@ function acpDef(overrides: Partial<HarnessDefinition> = {}): HarnessDefinition {
 function makeDetector(input: {
   defs: HarnessDefinition[]
   resolve?: (command: string) => Promise<string | undefined>
+  spawnCaptured?: (
+    command: string,
+    args: readonly string[],
+    options: { timeoutMs: number }
+  ) => Promise<{ stdout: string; stderr: string; timedOut: boolean; exitCode: number | null }>
   probeReady?: (
     def: HarnessDefinition,
     command: string
@@ -44,12 +49,12 @@ function makeDetector(input: {
   return new HarnessDetector({
     definitions: () => input.defs,
     overrides: () => ({}),
-    spawnCaptured: async () => ({
+    spawnCaptured: input.spawnCaptured ?? (async () => ({
       stdout: 'opencode 1.1.47\n',
       stderr: '',
       timedOut: false,
       exitCode: 0
-    }),
+    })),
     resolveExecutable:
       input.resolve ?? (async (command) => `/usr/bin/${command}`),
     probeReady: input.probeReady,
@@ -268,5 +273,37 @@ describe('HarnessDetector readiness (P3-11)', () => {
     })
     const status = await detector.status('opencode' as HarnessId, { force: true })
     expect(status.reasonCode).toBeUndefined()
+  })
+
+  it('P4-13: terminal agents skip the version probe entirely', async () => {
+    // Interactive CLIs often ignore `--version` and wait on stdin — running
+    // it would hang the 5s timeout and mask an installed agent.
+    const spawned: string[] = []
+    const detector = makeDetector({
+      defs: [acpDef({ transport: 'terminal' })],
+      spawnCaptured: async (command) => {
+        spawned.push(command)
+        return { stdout: '', stderr: '', timedOut: true, exitCode: null }
+      }
+    })
+    const status = await detector.status('opencode' as HarnessId, { force: true })
+    expect(status).toMatchObject({
+      installed: 'yes',
+      login: 'unknown',
+      resolvedCommand: '/usr/bin/opencode'
+    })
+    expect(status.version).toBeUndefined()
+    expect(status.reasonCode).toBeUndefined()
+    expect(spawned).toEqual([])
+  })
+
+  it('P4-13: a terminal agent whose command is missing stays not_installed', async () => {
+    const detector = makeDetector({
+      defs: [acpDef({ transport: 'terminal' })],
+      resolve: async () => undefined
+    })
+    const status = await detector.status('opencode' as HarnessId, { force: true })
+    expect(status.installed).toBe('no')
+    expect(status.reasonCode).toBe('not_installed')
   })
 })

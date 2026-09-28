@@ -5,7 +5,7 @@ import { Bot, Check, Plug, Search, Sparkles, Wrench, X } from 'lucide-react'
 import type { KunSubagentProfileV1 } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { ModelSelect, ReasoningEffortPicker } from './SubagentProfileControls'
-import { loadHarnesses, useHarnessStore } from '../../store/harness-store'
+import { harnessRowRunsTurns, loadHarnesses, useHarnessStore } from '../../store/harness-store'
 import {
   BUILTIN_TOOL_NAMES,
   loadCapabilityCatalog,
@@ -159,7 +159,7 @@ export function ProfileDialog({
             >
               <option value="">{t('adeSettings.profileHarnessKun', 'Kun (native loop)')}</option>
               {harnessRows
-                .filter((row) => row.definition.id !== 'kun')
+                .filter((row) => row.definition.id !== 'kun' && harnessRowRunsTurns(row))
                 .map((row) => (
                   <option key={row.definition.id} value={row.definition.id}>
                     {row.definition.displayName}

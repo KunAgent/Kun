@@ -5,6 +5,7 @@ import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { TaskWorkspacePrep } from '../../store/task-workspace-store'
 import { useChatStore } from '../../store/chat-store'
 import {
+  harnessRowRunsTurns,
   harnessRowUnavailableCode,
   loadHarnessModels,
   loadHarnessProviderGroups,
@@ -157,6 +158,9 @@ export function useAdeComposerControls(input: {
 
   const selectHarness = (nextId: string, nextCredentialMode?: string): void => {
     const nextRow = rows.find((entry) => entry.definition.id === nextId)
+    // P4-13: picker rows are filtered, but a stale persisted pick can still
+    // call in with a terminal-only id — it cannot host turns.
+    if (nextRow && !harnessRowRunsTurns(nextRow)) return
     // P4-11: the configured per-harness defaults supply whatever the user
     // did not pick explicitly on this switch.
     const defaults = harnessDefaults[nextId]
@@ -190,7 +194,9 @@ export function useAdeComposerControls(input: {
 
   return {
     enabled,
-    rows,
+    // P4-13: terminal-only agents live in the catalog for the terminal menu
+    // and `harness_list`, but they cannot host turns — keep them out.
+    rows: rows.filter(harnessRowRunsTurns),
     rowsLoading,
     harnessId,
     credentialMode,

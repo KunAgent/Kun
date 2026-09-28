@@ -233,6 +233,17 @@ export function harnessesConfigForRuntime(
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((row) => ({ name: row.name, secretRef: row.secretRef }))
     }))
+  const terminalAgents = [...(harnesses?.terminalAgents ?? [])]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((entry) => ({
+      id: entry.id,
+      displayName: entry.displayName,
+      command: entry.command,
+      args: [...entry.args],
+      ...(entry.taskFlag ? { taskFlag: entry.taskFlag } : {}),
+      ...(entry.resumeArgs?.length ? { resumeArgs: [...entry.resumeArgs] } : {}),
+      ...(entry.hooks ? { hooks: entry.hooks } : {})
+    }))
   return {
     disabledIds: [...(harnesses?.disabledIds ?? [])].sort(),
     binaryPaths: sortedRecord(harnesses?.binaryPaths),
@@ -240,7 +251,8 @@ export function harnessesConfigForRuntime(
     defaults: sortedDefaultsRecord(harnesses?.defaults),
     defaultHarnessId: harnesses?.defaultHarnessId ?? 'kun',
     // Ordering is significant: the worker selector reads it as preference rank.
-    agentOrder: [...(harnesses?.agentOrder ?? [])]
+    agentOrder: [...(harnesses?.agentOrder ?? [])],
+    terminalAgents
   }
 }
 

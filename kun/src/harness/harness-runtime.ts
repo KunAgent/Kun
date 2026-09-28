@@ -88,6 +88,7 @@ export function createHarnessComposition(
 ): HarnessRuntimeComposition {
   const catalog = new HarnessCatalog({
     custom: () => options().harnesses?.custom ?? [],
+    terminalAgents: () => options().harnesses?.terminalAgents ?? [],
     disabled: () => options().harnesses?.disabledIds ?? []
   })
   // P4-03: persist successful ACP handshakes for 24h so a restart does not

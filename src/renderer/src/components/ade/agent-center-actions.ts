@@ -94,6 +94,16 @@ export function agentCardModel(
     // handshake timeout under P4-03): surface it on the status line and
     // offer retry without blocking the card.
     const advisory = row.status.reasonCode ?? null
+    // P4-13: terminal-only agents have no turn surface — nothing to test,
+    // set as default, or disable through the builtin-only disabledIds map.
+    if (row.definition.transport === 'terminal') {
+      return {
+        state: 'ready',
+        reasonCode: advisory,
+        primary: ACTION.none,
+        secondary: advisory ? [ACTION.probe] : []
+      }
+    }
     return {
       state: 'ready',
       reasonCode: advisory,

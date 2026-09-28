@@ -233,6 +233,15 @@ export function receiveHarnessSessionState(state: AdeHarnessSessionState): void 
   }))
 }
 
+/**
+ * Turn-serving rows (P4-13): `transport: 'terminal'` entries are interactive
+ * CLIs launched inside a Kun terminal tab — they never host a delegated turn,
+ * so every turn picker (composer, one-on-one, subagent profile) hides them.
+ */
+export function harnessRowRunsTurns(row: AdeHarnessRow): boolean {
+  return row.definition.transport !== 'terminal'
+}
+
 /** Harness availability for pickers: installed + handshake-ready + signed in. */
 export function harnessRowAvailable(row: AdeHarnessRow): boolean {
   const status = row.status

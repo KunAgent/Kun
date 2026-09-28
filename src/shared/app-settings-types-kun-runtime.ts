@@ -391,6 +391,25 @@ export type KunHarnessDefaultsEntryV1 = {
   isolation?: 'local' | 'worktree'
 }
 
+/**
+ * Terminal-only agent (docs/ade/impl/p4 §3.8, P4-13): an interactive CLI
+ * launched inside a Kun terminal tab as a registered execution unit. It
+ * cannot host delegated turns — dispatch reaches it only through the
+ * `kun worker` callback, and only when the agent cooperates.
+ */
+export type KunTerminalAgentEntryV1 = {
+  id: string
+  displayName: string
+  command: string
+  args: string[]
+  /** Flag that carries the initial task (e.g. '-i'); absent appends positionally. */
+  taskFlag?: string
+  /** Args the launcher offers for "continue session" affordances. */
+  resumeArgs?: string[]
+  /** Managed-hook mechanism; 'none' (or absent) disables hook injection. */
+  hooks?: 'none' | 'claude-settings'
+}
+
 export type KunHarnessSettingsV1 = {
   /** Builtin harnesses the user turned off; they stay out of pickers. */
   disabledIds: string[]
@@ -404,6 +423,12 @@ export type KunHarnessSettingsV1 = {
   defaultHarnessId: string
   /** User preference order for ADE worker selection (10 §3.2 userPreference). */
   agentOrder: string[]
+  /**
+   * Interactive CLIs exposed in the terminal "new agent tab" menu (p4 §3.8).
+   * They join the harness catalog as `transport: 'terminal'` — visible to
+   * `harness_list` as terminal-only, never dispatchable as turn runtimes.
+   */
+  terminalAgents: KunTerminalAgentEntryV1[]
 }
 
 export type KunAdeSettingsV1 = {

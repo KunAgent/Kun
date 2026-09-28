@@ -28,7 +28,8 @@ function settings(custom: KunHarnessSettingsV1['custom'] = []): KunHarnessSettin
     custom,
     defaults: {},
     defaultHarnessId: 'kun',
-    agentOrder: []
+    agentOrder: [],
+    terminalAgents: []
   }
 }
 

@@ -3,6 +3,7 @@ import type {
   KunHarnessCustomEntryV1,
   KunHarnessDefaultsEntryV1,
   KunHarnessSettingsV1,
+  KunTerminalAgentEntryV1,
   KunWorktreeSettingsV1,
   KunWorktreeSharedPathV1
 } from './app-settings-types-kun-runtime'
@@ -97,8 +98,49 @@ export function defaultKunHarnessSettings(): KunHarnessSettingsV1 {
     custom: [],
     defaults: {},
     defaultHarnessId: 'kun',
-    agentOrder: []
+    agentOrder: [],
+    terminalAgents: []
   }
+}
+
+const TERMINAL_AGENT_HOOKS = new Set(['none', 'claude-settings'])
+
+/**
+ * `terminalAgents[]` rows (p4 §3.8): ids must not collide with builtins or
+ * `custom[]` (both win — terminal entries are turn-inert by design).
+ * Unknown `hooks` values drop; everything else is string-list hygiene.
+ */
+function terminalAgentsList(
+  value: unknown,
+  reservedIds: ReadonlySet<string>
+): KunTerminalAgentEntryV1[] {
+  if (!Array.isArray(value)) return []
+  const out: KunTerminalAgentEntryV1[] = []
+  const seen = new Set<string>()
+  for (const entry of value) {
+    if (!isRecord(entry)) continue
+    const id = nonEmpty(entry.id, 128)
+    const command = nonEmpty(entry.command, 4_096)
+    if (!id || !command || reservedIds.has(id) || seen.has(id)) continue
+    seen.add(id)
+    const taskFlag = nonEmpty(entry.taskFlag, 64)
+    const resumeArgs = stringList(entry.resumeArgs, 32)
+    const hooks =
+      typeof entry.hooks === 'string' && TERMINAL_AGENT_HOOKS.has(entry.hooks)
+        ? (entry.hooks as KunTerminalAgentEntryV1['hooks'])
+        : undefined
+    out.push({
+      id,
+      displayName: nonEmpty(entry.displayName, 128) ?? id,
+      command,
+      args: stringList(entry.args, 32),
+      ...(taskFlag ? { taskFlag } : {}),
+      ...(resumeArgs.length > 0 ? { resumeArgs } : {}),
+      ...(hooks ? { hooks } : {})
+    })
+    if (out.length >= 32) break
+  }
+  return out
 }
 
 const HARNESS_CREDENTIAL_MODES = new Set(['native-login', 'provider', 'kun-gateway'])
@@ -197,7 +239,11 @@ export function normalizeKunHarnessSettings(value: unknown): KunHarnessSettingsV
       input.defaultPermissionMode
     ),
     defaultHarnessId: defaultHarnessId ?? defaults.defaultHarnessId,
-    agentOrder: agentOrderList(input.agentOrder, builtinIds, custom)
+    agentOrder: agentOrderList(input.agentOrder, builtinIds, custom),
+    terminalAgents: terminalAgentsList(
+      input.terminalAgents,
+      new Set([...builtinIds, ...custom.map((entry) => entry.id)])
+    )
   }
 }
 
@@ -253,7 +299,8 @@ export function mergeKunHarnessSettings(
     defaultPermissionMode:
       patch.defaults !== undefined ? patch.defaultPermissionMode : undefined,
     defaultHarnessId: patch.defaultHarnessId ?? base.defaultHarnessId,
-    agentOrder: patch.agentOrder ?? base.agentOrder
+    agentOrder: patch.agentOrder ?? base.agentOrder,
+    terminalAgents: patch.terminalAgents ?? base.terminalAgents
   })
 }
 

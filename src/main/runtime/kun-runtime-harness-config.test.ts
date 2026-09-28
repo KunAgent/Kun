@@ -53,7 +53,15 @@ describe('harness/ade settings bridge', () => {
           },
           cursor: { model: 'composer-2', permissionMode: 'ask' }
         },
-        defaultHarnessId: 'claude-code'
+        defaultHarnessId: 'claude-code',
+        terminalAgents: [
+          {
+            id: 'zed-shell', displayName: 'Zed Shell', command: '/bin/zsh-agent',
+            args: ['--tty'], taskFlag: '-i', resumeArgs: ['--resume'],
+            hooks: 'claude-settings'
+          },
+          { id: 'plain-cli', displayName: 'Plain CLI', command: '/bin/plain', args: [] }
+        ]
       },
       ade: {
         enabled: true,
@@ -90,7 +98,15 @@ describe('harness/ade settings bridge', () => {
             credentialMode: 'kun-gateway'
           }
         },
-        defaultHarnessId: 'claude-code'
+        defaultHarnessId: 'claude-code',
+        terminalAgents: [
+          { id: 'plain-cli', displayName: 'Plain CLI', command: '/bin/plain', args: [] },
+          {
+            id: 'zed-shell', displayName: 'Zed Shell', command: '/bin/zsh-agent',
+            args: ['--tty'], hooks: 'claude-settings', taskFlag: '-i',
+            resumeArgs: ['--resume']
+          }
+        ]
       },
       ade: {
         limits: { hardWorkers: 6, softWorkers: 2 },
@@ -145,6 +161,16 @@ describe('harness/ade settings bridge', () => {
       { name: 'A_KEY', secretRef: 'cred_a' },
       { name: 'Z_KEY', secretRef: 'cred_z' }
     ])
+    // P4-13: terminalAgents emit sorted by id with a fixed field order, so
+    // input key order never changes the generated config bytes.
+    expect(configA.harnesses.terminalAgents).toEqual([
+      { id: 'plain-cli', displayName: 'Plain CLI', command: '/bin/plain', args: [] },
+      {
+        id: 'zed-shell', displayName: 'Zed Shell', command: '/bin/zsh-agent',
+        args: ['--tty'], taskFlag: '-i', resumeArgs: ['--resume'],
+        hooks: 'claude-settings'
+      }
+    ])
     expect(JSON.stringify(configA)).not.toContain('api-key')
   })
 
@@ -168,7 +194,8 @@ describe('harness/ade settings bridge', () => {
       custom: [],
       defaults: {},
       defaultHarnessId: 'kun',
-      agentOrder: []
+      agentOrder: [],
+      terminalAgents: []
     })
   })
 
