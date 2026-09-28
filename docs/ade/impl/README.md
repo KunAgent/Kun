@@ -18,6 +18,7 @@
 | [p2.md](./p2.md) | P2-01 ~ P2-11：终端 agent、CLI 回调、hooks、赛马、检查、归属、PR/CI 等 |
 | [flows.md](./flows.md) | 关键流程时序（含失败分支） |
 | [contracts.md](./contracts.md) | 汇总：HTTP 接口、事件、字段、设置、持久化文件、错误码 |
+| [p3-review-followup.md](./p3-review-followup.md) | 2026-09-28 实施复核（P0 ~ P2 已合入）：缺口、红测、实机验证记录与 P3 后续计划 |
 
 ## 2. 约定
 
