@@ -271,7 +271,13 @@ export async function recordAcpDelegatedRuntime(
     ...(input.preparation.rebaseReason
       ? { reason: input.preparation.rebaseReason }
       : {}),
-    capabilities: acpLegacyCapabilities(),
+    capabilities: {
+      ...acpLegacyCapabilities(),
+      // Legacy bag mirrors v2 honesty: only a delivered descriptor counts.
+      kunTools:
+        input.session.kunToolsDescriptor === 'http' ||
+        input.session.kunToolsDescriptor === 'stdio'
+    },
     capabilitiesV2: capabilitiesFromAcp(input.initResult, input.session, {
       sandbox: input.sandbox
     })

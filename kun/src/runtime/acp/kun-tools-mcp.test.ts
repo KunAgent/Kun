@@ -54,12 +54,13 @@ describe('KunToolsMcpProvider', () => {
     const { tokens, provider } = makeProvider()
     const servers = provider.servers({ ...CTX, mcpCapabilities: { http: false } })
     const server = servers[0] as unknown as {
-      type: string
+      type?: string
       command: string
       args: string[]
       env: Array<{ name: string; value: string }>
     }
-    expect(server.type).toBe('stdio')
+    // ACP stdio descriptors carry no `type` — command/args imply stdio.
+    expect(server.type).toBeUndefined()
     expect(server.command).toBe('/abs/kun')
     expect(server.args).toEqual([
       '/abs/serve-entry.js',
@@ -80,6 +81,24 @@ describe('KunToolsMcpProvider', () => {
   it('returns no servers when the runtime is not serve-hosted', () => {
     const { provider } = makeProvider('')
     expect(provider.servers({ ...CTX })).toEqual([])
+  })
+
+  it('returns no servers when the agent rejects every usable transport', () => {
+    const { provider } = makeProvider()
+    expect(
+      provider.servers({ ...CTX, mcpCapabilities: { http: false, stdio: false } })
+    ).toEqual([])
+    // http still wins when advertised, even with stdio explicitly disabled.
+    const http = provider.servers({
+      ...CTX,
+      mcpCapabilities: { http: {}, stdio: false }
+    })
+    expect((http[0] as { type: string }).type).toBe('http')
+  })
+
+  it('reports canDeliver from the serve endpoint', () => {
+    expect(makeProvider('http://127.0.0.1:18899').provider.canDeliver()).toBe(true)
+    expect(makeProvider('').provider.canDeliver()).toBe(false)
   })
 
   it('rotates the token per turn and revokeTurn invalidates it', () => {

@@ -250,13 +250,10 @@ export function makeAcpErrorResponse(
 
 // ---- Params/results Kun reads (required fields only; rest passthrough) -------
 
-const MetaSchema = z
-  .object({ _meta: z.record(z.string(), z.unknown()).nullish() })
-  .passthrough()
+const MetaSchema = z.object({ _meta: z.record(z.string(), z.unknown()).nullish() }).passthrough()
 
 export const AcpPromptCapabilitiesSchema = MetaSchema.extend({
-  image: z.boolean().optional(),
-  audio: z.boolean().optional(),
+  image: z.boolean().optional(), audio: z.boolean().optional(),
   embeddedContext: z.boolean().optional()
 })
 
@@ -264,22 +261,25 @@ export const AcpPromptCapabilitiesSchema = MetaSchema.extend({
 // object presence (`{http: {}}`). Accept both so either dialect parses.
 const McpTransportFlagSchema = z.union([z.boolean(), MetaSchema])
 
+/** v1 boolean / v2 object-presence capability flag: truthy means supported. */
+export function capabilityFlagOn(flag: boolean | Record<string, unknown> | null | undefined): boolean {
+  return flag === true || (typeof flag === 'object' && flag !== null)
+}
+
 export const AcpAgentCapabilitiesSchema = MetaSchema.extend({
   loadSession: z.boolean().optional(),
   promptCapabilities: AcpPromptCapabilitiesSchema.optional(),
-  mcpCapabilities: MetaSchema.extend({ http: McpTransportFlagSchema.optional() }).optional()
+  elicitation: McpTransportFlagSchema.optional(),
+  mcpCapabilities: MetaSchema.extend({
+    http: McpTransportFlagSchema.optional(), stdio: McpTransportFlagSchema.optional()
+  }).optional()
 })
 
 export const AcpInitializeResultSchema = MetaSchema.extend({
   protocolVersion: z.number().int(),
   agentCapabilities: AcpAgentCapabilitiesSchema.optional(),
-  authMethods: z
-    .array(MetaSchema.extend({ id: z.string(), name: z.string().optional() }))
-    .optional(),
-  agentInfo: MetaSchema.extend({
-    name: z.string().optional(),
-    version: z.string().optional()
-  }).nullish()
+  authMethods: z.array(MetaSchema.extend({ id: z.string(), name: z.string().optional() })).optional(),
+  agentInfo: MetaSchema.extend({ name: z.string().optional(), version: z.string().optional() }).nullish()
 })
 export type AcpInitializeResult = z.infer<typeof AcpInitializeResultSchema>
 
