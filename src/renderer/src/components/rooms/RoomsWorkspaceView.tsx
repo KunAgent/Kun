@@ -269,6 +269,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           </button>
         </div>
         <RoomSidebar onActivity={receiveSidebarActivity} selectedRoomId={selectedId} onOpenAgent={(id) => void openAgent(id)} onSelect={chooseRoom}
+          onDeleted={() => state.select('')}
           onCreateAgent={() => setNewChatOpen(true)} onCreateGroup={() => setNewChatOpen(true)}
           onDetails={(agentId) => drawer.open({ kind: 'agent', agentId })}
           onSearch={(hit) => { chooseRoom(hit.roomId); setSearchTarget(hit) }}

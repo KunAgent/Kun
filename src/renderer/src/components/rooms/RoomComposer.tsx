@@ -10,10 +10,12 @@ import { uploadRuntimeAttachment } from '../../lib/runtime-attachment'
 import {
   roomRequestId,
   roomsClient,
+  roomsRequest,
   type RoomPresetCatalog
 } from './rooms-client'
 import { memberModelUnavailable, useRoomAgentModels } from './agent-client'
 import { RoomComposerContext } from './RoomComposerContext'
+import { isRoomComposerImage, roomComposerImagePreview } from './room-composer-image-preview'
 import { RoomComposerToolbar } from './RoomComposerToolbar'
 import { RoomRichInput, type RoomRichInputHandle } from './RoomRichInput'
 import { roomSendMentionIds, roomMentionToken, roomUnmarkMentions, ROOM_ALL_MENTION } from './room-mentions'
@@ -31,7 +33,7 @@ type Draft = {
   taskId: string
   repositoryId: string
   intent: SendRoomMessage['executionIntent']
-  attachments: Array<{ id: string; name: string }>
+  attachments: Array<{ id: string; name: string; mimeType?: string; previewUrl?: string }>
   requestId: string
   fingerprint: string
   replyToMessageId?: string
@@ -94,6 +96,8 @@ function RoomComposerEditor({
     return { ...stored, body: missing.map((id) => roomMentionToken(id,
       room.members.find((member) => member.id === id)?.displayName ?? id)).join(' ') + (missing.length ? ' ' : '') + stored.body }
   })
+  const draftRef = useRef(draft)
+  draftRef.current = draft
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
@@ -140,6 +144,48 @@ function RoomComposerEditor({
       )
     : []
   const fileRef = useRef<HTMLInputElement>(null)
+  const transientPreviews = useRef(new Map<string, string>())
+  const storedImagesWithoutPreviews = useRef(draft.attachments.filter((attachment) =>
+    isRoomComposerImage(attachment.name, attachment.mimeType) && !attachment.previewUrl))
+  const releasePreview = (id: string): void => {
+    const url = transientPreviews.current.get(id)
+    if (!url) return
+    URL.revokeObjectURL(url)
+    transientPreviews.current.delete(id)
+  }
+  useEffect(() => () => {
+    for (const url of transientPreviews.current.values()) URL.revokeObjectURL(url)
+    transientPreviews.current.clear()
+  }, [])
+  useEffect(() => {
+    const controller = new AbortController()
+    for (const attachment of storedImagesWithoutPreviews.current) {
+      void roomsRequest<{ attachment: { textFallback?: { dataBase64: string; mimeType: string };
+        visualPreview?: { dataBase64: string; mimeType: string } } }>(
+        '/v1/attachments/' + encodeURIComponent(attachment.id), 'GET', undefined, controller.signal
+      ).then(async ({ attachment: metadata }) => {
+        const source = metadata.visualPreview ?? metadata.textFallback
+        if (!source?.mimeType.startsWith('image/') || source.dataBase64.length > 2 * 1024 * 1024) return
+        const bytes = Uint8Array.from(atob(source.dataBase64), (char) => char.charCodeAt(0))
+        const file = new File([bytes], attachment.name, { type: source.mimeType })
+        const preview = await roomComposerImagePreview(file)
+        if (!preview) return
+        if (controller.signal.aborted) {
+          if (preview.transient) URL.revokeObjectURL(preview.url)
+          return
+        }
+        if (!draftRef.current.attachments.some((entry) => entry.id === attachment.id)) {
+          if (preview.transient) URL.revokeObjectURL(preview.url)
+          return
+        }
+        if (preview.transient) transientPreviews.current.set(attachment.id, preview.url)
+        setDraft((current) => ({ ...current, attachments: current.attachments.map((entry) =>
+          entry.id === attachment.id ? { ...entry, mimeType: source.mimeType,
+            ...(!preview.transient ? { previewUrl: preview.url } : {}) } : entry) }))
+      }).catch(() => undefined)
+    }
+    return () => controller.abort()
+  }, [storageId])
   useEffect(() => {
     const reply = (event: Event) => {
       const detail = (
@@ -283,6 +329,7 @@ function RoomComposerEditor({
     setError('')
     try {
       await onSend({ ...content, clientRequestId: requestId })
+      for (const id of transientPreviews.current.keys()) releasePreview(id)
       setDraft(emptyDraft())
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -299,30 +346,38 @@ function RoomComposerEditor({
         0,
         20 - draft.attachments.length
       )) {
-        const localFilePath = window.kunGui.getPathForFile(file)
+        const preview = await roomComposerImagePreview(file)
         let dataBase64 = ''
-        if (!localFilePath) {
-          dataBase64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = () =>
-              resolve(String(reader.result).split(',')[1] ?? '')
-            reader.onerror = () => reject(reader.error)
-            reader.readAsDataURL(file)
+        try {
+          const localFilePath = window.kunGui.getPathForFile(file)
+          if (!localFilePath) {
+            dataBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onload = () =>
+                resolve(String(reader.result).split(',')[1] ?? '')
+              reader.onerror = () => reject(reader.error)
+              reader.readAsDataURL(file)
+            })
+          }
+          const attachment = await uploadRuntimeAttachment({
+            name: file.name,
+            mimeType: file.type,
+            dataBase64,
+            localFilePath: localFilePath || undefined
           })
+          if (preview?.transient) transientPreviews.current.set(attachment.id, preview.url)
+          setDraft((current) => ({
+            ...current,
+            attachments: [
+              ...current.attachments,
+              { id: attachment.id, name: attachment.name, mimeType: attachment.mimeType || file.type,
+                ...(!preview?.transient && preview ? { previewUrl: preview.url } : {}) }
+            ]
+          }))
+        } catch (cause) {
+          if (preview?.transient) URL.revokeObjectURL(preview.url)
+          throw cause
         }
-        const attachment = await uploadRuntimeAttachment({
-          name: file.name,
-          mimeType: file.type,
-          dataBase64,
-          localFilePath: localFilePath || undefined
-        })
-        setDraft((current) => ({
-          ...current,
-          attachments: [
-            ...current.attachments,
-            { id: attachment.id, name: attachment.name }
-          ]
-        }))
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -346,10 +401,17 @@ function RoomComposerEditor({
     >
       <fieldset disabled={disabled} className="rooms-composer-surface">
         <RoomComposerContext room={room} tasks={tasks} mentions={draft.mentions}
-          attachments={draft.attachments} taskId={draft.taskId} repositoryId={draft.repositoryId}
+          attachments={draft.attachments.map((attachment) => ({ ...attachment,
+            previewUrl: transientPreviews.current.get(attachment.id) ?? attachment.previewUrl }))}
+          taskId={draft.taskId} repositoryId={draft.repositoryId}
           replyToMessageId={replyToMessageId} replyBody={draft.replyBody ?? replyTarget?.body}
           onMentions={(mentions) => patch({ mentions, body: roomUnmarkMentions(draft.body, draft.mentions.filter((id) => !mentions.includes(id))) })}
-          onAttachments={(attachments) => patch({ attachments })}
+          onAttachments={(attachments) => {
+            const kept = new Set(attachments.map((attachment) => attachment.id))
+            for (const id of transientPreviews.current.keys()) if (!kept.has(id)) releasePreview(id)
+            patch({ attachments: attachments.map(({ previewUrl, ...attachment }) =>
+              previewUrl?.startsWith('blob:') ? attachment : { ...attachment, ...(previewUrl ? { previewUrl } : {}) }) })
+          }}
           onTask={() => patch({ taskId: '' })}
           onRepository={() => patch({ repositoryId: '' })}
           onClearReply={() => patch({ replyToMessageId: undefined, replyBody: undefined })} />

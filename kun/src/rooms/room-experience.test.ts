@@ -69,6 +69,17 @@ describe('room experience projections and notification preferences', () => {
     await expect(f.store.searchRooms({ q: 'needle', kind: 'rooms', cursor: page.nextCursor })).rejects.toThrow()
   })
 
+  it('removes deleted conversations from normal lists and search while retaining the stored room', async () => {
+    const f = await fixture()
+    await f.service.update(f.first.id, { clientRequestId: 'delete-first', expectedRevision: f.first.revision, deleted: true })
+    expect((await f.store.listRooms({ conversationKind: 'group' })).rooms.map((entry) => entry.id)).toEqual([f.second.id])
+    expect((await f.store.listRooms({ conversationKind: 'group', archivedOnly: true })).rooms).toEqual([])
+    expect((await f.store.searchRooms({ q: 'Needle', kind: 'rooms', includeArchived: true })).results.map((entry) => entry.roomId))
+      .toEqual([f.second.id])
+    expect((await f.store.sidebarPage({ deletedOnly: true })).entries.map((entry) => entry.roomId)).toEqual([f.first.id])
+    expect(await f.store.get('room', f.first.id)).not.toBeNull()
+  })
+
   it('persists mute separately from room authority and discards expired deferred notifications', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime('2026-09-13T00:00:00Z')

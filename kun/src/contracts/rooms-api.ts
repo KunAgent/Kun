@@ -29,8 +29,10 @@ export const UpdateRoomRequestSchema = z.object({
   expectedRevision: z.number().int().nonnegative(),
   clientRequestId: RoomIdSchema,
   pinned: z.boolean().optional(),
-  archived: z.boolean().optional()
-}).strict()
+  archived: z.boolean().optional(),
+  deleted: z.boolean().optional()
+}).strict().refine((value) => value.archived === undefined || value.deleted === undefined,
+  'archive and delete are separate conversation actions')
 export const RoomTaskActionSchema = z.object({
   clientRequestId: RoomIdSchema,
   expectedRevision: z.number().int().nonnegative(),

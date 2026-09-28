@@ -154,6 +154,10 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
           Promise.all(taskIds.map((id) => roomsClient.task(selectedId, id, controller.signal)))
         ])
         if (controller.signal.aborted) return
+        if (detail?.room.deletedAt) {
+          select('')
+          return
+        }
         if (detail) setRoom((current) => !current || detail.room.revision >= current.revision ? detail.room : current)
         const incoming = [...(page?.messages ?? []), ...changedMessages.map((value) => value.message)]
         const loaded = new Map(messagesRef.current.map((message) => [message.id, message]))
@@ -233,7 +237,7 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
       clearTimeout(timer)
       refreshRef.current = async () => undefined
     }
-  }, [selectedId])
+  }, [selectedId, select])
 
   const loadEarlier = async (): Promise<void> => {
     if (!messageCursor || moreBusy) return

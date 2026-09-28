@@ -16,7 +16,7 @@ export function registerRoomProfileRoutes(add: Add, runtime: ServerRuntime) {
     const bool = (key: string) => z.enum(['true', 'false']).parse(p.get(key) ?? 'false') === 'true'
     return rooms.service.store.sidebarPage(RoomSidebarQuery.parse({ kind: p.get('kind') ?? undefined,
       search: p.get('search') ?? undefined, cursor: p.get('cursor') ?? undefined, limit: p.get('limit') ?? undefined,
-      repositoryRoot: p.get('repository_root') ?? undefined, archivedOnly: bool('archived_only'),
+      repositoryRoot: p.get('repository_root') ?? undefined, archivedOnly: bool('archived_only'), deletedOnly: bool('deleted_only'),
       unreadOnly: bool('unread_only'), attentionOnly: bool('attention_only') }))
   })
   const detail = async (rooms: RoomRuntime) => {

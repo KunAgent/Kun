@@ -23,7 +23,7 @@ export function MobileRoomRow({ entry, pressHandlers, onOpen }: {
   const body = latest
     ? latest.preview || (latest.attachmentCount ? t('roomsAttachmentSummary', { count: latest.attachmentCount }) : '')
     : entry.title !== name ? entry.title : ''
-  const unread = mobileRoomUnread(entry)
+  const unread = entry.deleted ? 0 : mobileRoomUnread(entry)
   const time = latest?.createdAt ? imListTime(latest.createdAt, i18n.language) : ''
   return <li data-pinned={entry.pinned || undefined}>
     <button type="button" className="kun-mobile-room-open" onClick={onOpen} {...pressHandlers}>
@@ -42,10 +42,10 @@ export function MobileRoomRow({ entry, pressHandlers, onOpen }: {
         </span>
         <span className="kun-mobile-room-line">
           <span className="kun-mobile-room-preview">
-            {entry.attentionCount > 0 ? <em>[{t('roomsAttention')}]</em> : null}
+            {!entry.deleted && entry.attentionCount > 0 ? <em>[{t('roomsAttention')}]</em> : null}
             {author}{body}
           </span>
-          {entry.pinned ? <Pin size={13} aria-label={t('roomsPin')} /> : null}
+          {entry.pinned ? <Pin size={13} aria-label={t('roomsPinConversation')} /> : null}
         </span>
       </span>
     </button>

@@ -40,7 +40,7 @@ describe('RoomSidebarRow', () => {
     act(() => root.render(createElement(RoomSidebarRow, { entry: group, selected: true, onOpen: vi.fn(), menu: null })))
     expect(host.querySelector('.rooms-im-sidebar-preview')?.textContent).toBe('[roomsAttention]Kun: Done99+')
     expect(host.querySelector('.rooms-im-sidebar-running')).not.toBeNull()
-    expect(host.querySelector('[aria-label="roomsPin"]')).not.toBeNull()
+    expect(host.querySelector('[aria-label="roomsPinConversation"]')).not.toBeNull()
     expect(host.querySelector('[aria-current="page"]')).not.toBeNull()
   })
 
