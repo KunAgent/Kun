@@ -55,6 +55,10 @@ export type WorkbenchLeftSidebarProps = {
   onNewAdeOneOnOne: (input: {
     harnessId: string
     credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+    providerId?: string
+    model?: string
+    isolation?: 'local' | 'worktree'
+    permissionMode?: string
   }) => void
   onWriteOpen: CodeSidebarProps['onWriteOpen']
   onScheduleOpen: CodeSidebarProps['onScheduleOpen']

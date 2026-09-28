@@ -173,6 +173,75 @@ describe('resolveWorkerRoute', () => {
     })
   })
 
+  it('fills unpinned route fields from harnesses.defaults (P4-11)', async () => {
+    const resolved = await resolveWorkerRoute({
+      catalog: catalog as never,
+      providerPool,
+      harnessDefaults: (id) =>
+        id === 'claude-code'
+          ? { credentialMode: 'kun-gateway', providerId: 'deepseek', model: 'deepseek-chat' }
+          : undefined,
+      agent: { harnessId: 'claude-code' }
+    })
+    expect('error' in resolved).toBe(false)
+    if ('error' in resolved) return
+    expect(resolved.route).toEqual({
+      harnessId: 'claude-code',
+      credentialMode: 'kun-gateway',
+      providerId: 'deepseek',
+      model: 'kun/deepseek/deepseek-chat'
+    })
+  })
+
+  it('explicit pins win over harnesses.defaults', async () => {
+    const resolved = await resolveWorkerRoute({
+      catalog: catalog as never,
+      providerPool,
+      harnessDefaults: (id) =>
+        id === 'claude-code'
+          ? { credentialMode: 'kun-gateway', providerId: 'deepseek', model: 'deepseek-chat' }
+          : undefined,
+      agent: {
+        harnessId: 'claude-code',
+        credentialMode: 'native-login',
+        model: 'claude-haiku-4-5-20251001'
+      }
+    })
+    expect('error' in resolved).toBe(false)
+    if ('error' in resolved) return
+    expect(resolved.route).toMatchObject({
+      credentialMode: 'native-login',
+      model: 'claude-haiku-4-5-20251001'
+    })
+  })
+
+  it('defaults providerId resolves a provider-mode pin without a provider', async () => {
+    const resolved = await resolveWorkerRoute({
+      catalog: catalog as never,
+      providerPool,
+      harnessDefaults: (id) =>
+        id === 'kun' ? { providerId: 'deepseek', model: 'deepseek-chat' } : undefined,
+      agent: { harnessId: 'kun', credentialMode: 'provider' }
+    })
+    expect('error' in resolved).toBe(false)
+    if ('error' in resolved) return
+    expect(resolved.route).toMatchObject({
+      providerId: 'deepseek',
+      model: 'deepseek-chat'
+    })
+  })
+
+  it('a defaults credentialMode the harness does not declare is rejected', async () => {
+    const resolved = await resolveWorkerRoute({
+      catalog: catalog as never,
+      harnessDefaults: () => ({ credentialMode: 'kun-gateway' }),
+      agent: { harnessId: 'gemini-cli' }
+    })
+    expect(resolved).toMatchObject({
+      error: expect.stringContaining('credentialMode kun-gateway is not supported')
+    })
+  })
+
   it('rejects a credential mode the harness does not declare', async () => {
     const resolved = await resolveWorkerRoute({
       catalog: catalog as never,

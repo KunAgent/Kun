@@ -323,7 +323,7 @@ export function AgentCenterCard({
               control={
                 <select
                   className="w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none"
-                  value={settings.defaultPermissionMode[definition.id] ?? ''}
+                  value={settings.defaults[definition.id]?.permissionMode ?? ''}
                   onChange={(event) => onSetPermissionMode(event.target.value)}
                 >
                   <option value="">{tSettings('adeSettings.harnessPermissionModeDefault')}</option>

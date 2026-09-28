@@ -15,7 +15,7 @@ export function harnessSettings(kun: KunRuntimeSettingsV1): KunHarnessSettingsV1
     disabledIds: [],
     binaryPaths: {},
     custom: [],
-    defaultPermissionMode: {},
+    defaults: {},
     defaultHarnessId: 'kun',
     agentOrder: []
   }
@@ -126,10 +126,16 @@ export function AgentCenter({
                   patchHarness({ binaryPaths })
                 }}
                 onSetPermissionMode={(modeId) => {
-                  const defaultPermissionMode = { ...settings.defaultPermissionMode }
-                  if (modeId) defaultPermissionMode[id] = modeId
-                  else delete defaultPermissionMode[id]
-                  patchHarness({ defaultPermissionMode })
+                  // P4-11: permission defaults live under defaults[id].
+                  const defaults = { ...settings.defaults }
+                  if (modeId) {
+                    defaults[id] = { ...defaults[id], permissionMode: modeId }
+                  } else if (defaults[id]) {
+                    const { permissionMode: _dropped, ...rest } = defaults[id]
+                    if (Object.keys(rest).length) defaults[id] = rest
+                    else delete defaults[id]
+                  }
+                  patchHarness({ defaults })
                 }}
                 onSetupCommand={onSetupCommand}
                 onTest={(level) => test(id, level)}

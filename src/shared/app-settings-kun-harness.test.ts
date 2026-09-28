@@ -42,6 +42,101 @@ describe('normalizeKunHarnessSettings', () => {
     expect(merged.disabledIds).toEqual(['cursor'])
     expect(merged.defaultHarnessId).toBe('antigravity')
   })
+
+  it('normalizes defaults entries and drops garbage (P4-11)', () => {
+    const normalized = normalizeKunHarnessSettings({
+      defaults: {
+        'claude-code': {
+          credentialMode: 'kun-gateway',
+          providerId: ' deepseek ',
+          model: 'deepseek-chat',
+          permissionMode: 'plan',
+          isolation: 'worktree',
+          extra: 'dropped'
+        },
+        junk: { credentialMode: 'bogus', isolation: 'nope' },
+        bad: 'not-an-object'
+      }
+    })
+    expect(normalized.defaults).toEqual({
+      'claude-code': {
+        credentialMode: 'kun-gateway',
+        providerId: 'deepseek',
+        model: 'deepseek-chat',
+        permissionMode: 'plan',
+        isolation: 'worktree'
+      }
+    })
+  })
+
+  it('folds legacy defaultPermissionMode into defaults.permissionMode', () => {
+    const normalized = normalizeKunHarnessSettings({
+      defaultPermissionMode: { 'claude-code': 'plan', cursor: 'ask', '': 'x', nope: 5 }
+    })
+    expect('defaultPermissionMode' in normalized).toBe(false)
+    expect(normalized.defaults).toEqual({
+      'claude-code': { permissionMode: 'plan' },
+      cursor: { permissionMode: 'ask' }
+    })
+  })
+
+  it('explicit defaults.permissionMode wins over the legacy map', () => {
+    const normalized = normalizeKunHarnessSettings({
+      defaultPermissionMode: { 'claude-code': 'ask' },
+      defaults: { 'claude-code': { permissionMode: 'plan', model: 'x' } }
+    })
+    expect(normalized.defaults['claude-code']).toEqual({
+      model: 'x',
+      permissionMode: 'plan'
+    })
+  })
+
+  it('patch merge replaces the defaults map whole', () => {
+    // Like binaryPaths/custom, a `defaults` patch is the full desired map —
+    // omitting an entry deletes it. Callers (Agent Center) spread the current
+    // map before dispatching.
+    const current = normalizeKunHarnessSettings({
+      defaults: { 'claude-code': { model: 'a', isolation: 'worktree' } }
+    })
+    const merged = mergeKunHarnessSettings(current, {
+      defaults: { 'claude-code': { model: 'b' }, cursor: { credentialMode: 'provider' } }
+    })
+    expect(merged.defaults).toEqual({
+      'claude-code': { model: 'b' },
+      cursor: { credentialMode: 'provider' }
+    })
+  })
+
+  it('patch merge still accepts a legacy defaultPermissionMode write', () => {
+    const current = normalizeKunHarnessSettings({
+      defaults: { cursor: { model: 'composer-2' } }
+    })
+    const merged = mergeKunHarnessSettings(current, {
+      defaultPermissionMode: { 'claude-code': 'plan' }
+    })
+    // A direct legacy write seeds defaults while keeping existing entries.
+    expect(merged.defaults).toEqual({
+      cursor: { model: 'composer-2' },
+      'claude-code': { permissionMode: 'plan' }
+    })
+  })
+
+  it('legacy map alongside a defaults map still folds on load', () => {
+    // The settings-load path merges the raw `harnesses` object as a patch.
+    // A hand-edited or downgraded file can carry both shapes; the legacy
+    // map fills entries that lack their own permissionMode.
+    const merged = mergeKunHarnessSettings(defaultKunHarnessSettings(), {
+      defaults: {
+        cursor: { model: 'composer-2' },
+        'claude-code': { permissionMode: 'plan' }
+      },
+      defaultPermissionMode: { cursor: 'ask', 'claude-code': 'default' }
+    })
+    expect(merged.defaults).toEqual({
+      cursor: { model: 'composer-2', permissionMode: 'ask' },
+      'claude-code': { permissionMode: 'plan' }
+    })
+  })
 })
 
 describe('normalizeKunAdeSettings', () => {

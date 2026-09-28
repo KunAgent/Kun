@@ -236,9 +236,11 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     const credentialMode =
       turn.credentialMode ?? defaultCredentialMode(definition.id, definition)
     const accountId = actingModelRoute.accountId
+    // P4-11: `harnesses.defaults[id].permissionMode` is the user default a
+    // turn falls back to when nothing was requested explicitly.
     const permissionModeId = resolvePermissionMode(
       definition,
-      undefined,
+      this.deps.harnessDefaults?.(definition.id)?.permissionMode,
       isUnattendedTurn(turn),
       this.deps.allowUnattendedFullAccess === true
     )

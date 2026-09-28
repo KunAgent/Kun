@@ -32,6 +32,7 @@ import {
   loadHarnesses,
   useHarnessStore
 } from '../../store/harness-store'
+import { useHarnessDefaults } from '../../lib/harness-defaults'
 import {
   SidebarCommandRow,
   SidebarFrame,
@@ -79,6 +80,10 @@ type Props = {
   onNewOneOnOne: (input: {
     harnessId: string
     credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+    providerId?: string
+    model?: string
+    isolation?: 'local' | 'worktree'
+    permissionMode?: string
   }) => void
   onOpenSettings: (section?: SettingsRouteSection) => void
   onToggleTheme: () => void
@@ -149,6 +154,7 @@ export function AdeSidebar({
   const needsYouCount = useActivityStore((s) => selectNeedsYouCount(s.rows))
   const harnessRows = useHarnessStore((s) => s.rows)
   const harnessLoading = useHarnessStore((s) => s.rowsLoading)
+  const harnessDefaults = useHarnessDefaults()
   const watchTurnCompletion = useChatStore((s) => s.watchTurnCompletion)
   const unreadThreadIds = useChatStore((s) => s.unreadThreadIds)
   const scheduledThreadActivities = useChatStore((s) => s.scheduledThreadActivities)
@@ -384,9 +390,24 @@ export function AdeSidebar({
                       className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1 text-left text-[12.5px] text-ds-text hover:bg-ds-hover"
                       onClick={() => {
                         setOneOnOneOpen(false)
+                        // P4-11: the harness's configured defaults fill in
+                        // whatever the quick pick does not ask for.
+                        const defaults = harnessDefaults[row.definition.id]
+                        const defaultCred =
+                          defaults?.credentialMode &&
+                          row.definition.credentialModes.includes(defaults.credentialMode)
+                            ? defaults.credentialMode
+                            : undefined
                         onNewOneOnOne({
                           harnessId: row.definition.id,
-                          credentialMode: row.definition.credentialModes[0]
+                          credentialMode:
+                            defaultCred ?? row.definition.credentialModes[0],
+                          ...(defaults?.providerId ? { providerId: defaults.providerId } : {}),
+                          ...(defaults?.model ? { model: defaults.model } : {}),
+                          ...(defaults?.isolation ? { isolation: defaults.isolation } : {}),
+                          ...(defaults?.permissionMode
+                            ? { permissionMode: defaults.permissionMode }
+                            : {})
                         })
                       }}
                     >
