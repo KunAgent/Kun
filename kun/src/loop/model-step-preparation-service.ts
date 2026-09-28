@@ -36,6 +36,7 @@ import {
   userInputUnavailableInstruction
 } from './continuation-instructions.js'
 import { SEND_IM_MESSAGE_TOOL_NAME } from '../rooms/room-im-message-tool.js'
+import { preparePrivateDelivery } from './private-delivery-preparation.js'
 import { healLoadedHistoryItems } from './history-healing.js'
 import {
   memoryContextBlocks,
@@ -71,6 +72,7 @@ import type { ModelStepServiceDeps } from './model-step-service-types.js'
 import {
   buildExtensionProfileInstruction,
   buildToolCatalogDriftMessage,
+  graphPlanningStepTools,
   planningTeamContextBlocks,
   hasSuccessfulToolResult,
   knowledgeBaseContextBlocks,
@@ -460,22 +462,18 @@ export abstract class ModelStepPreparationService {
       forceToolSuppressionFinalAnswerRecovery ||
       forcePostToolFailureFinalAnswerRecovery
     const imPublicationRecoveryStep = this.deps.roundOutcome.imPublicationRecoverySteps(turnId)
-    const planningToolSpecs = turn.orchestration === 'graph' && !graphCreateSatisfied
-      ? effectiveToolSpecs.filter((tool) =>
-          tool.name === GRAPH_DEFINE_PLAN_TOOL_NAME ||
-          tool.name === 'request_user_input' ||
-          tool.name === 'user_input' ||
-          tool.sideEffect === 'read-only')
-      : effectiveToolSpecs
+    const planningToolSpecs = graphPlanningStepTools(effectiveToolSpecs,
+      turn.orchestration === 'graph' && !graphCreateSatisfied)
     // Bounded internal agents reserve a final model step for synthesis so
     // they cannot spend their whole model-request budget on tools.
     const boundedFinalSynthesis = (toolContext.fastContext === true && stepIndex >= 3) ||
       stepIndex >= (this.deps.finalAnswerOnlyStep ?? Number.POSITIVE_INFINITY)
-    const requestToolSpecs = hardRequiredToolName
-      ? planningToolSpecs.filter((tool) => tool.name === hardRequiredToolName)
-      : forceFinalAnswerRecovery || boundedFinalSynthesis
-        ? []
-        : planningToolSpecs
+    const { delivery, communicationRequired, finalResponseRequired, gate: deliveryGate,
+      requiredToolName: effectiveHardRequiredToolName, requestToolSpecs } = await preparePrivateDelivery({
+        thread, turn, threadStore: this.deps.threadStore, history: historyItems,
+        planningTools: planningToolSpecs, hardRequiredToolName,
+        forceFinalAnswerRecovery, boundedFinalSynthesis, nowMs: Date.now()
+      })
     const conversationDeliveryAdvertised = toolContext.roomStepKind === 'conversation' &&
       toolContext.roomAgent === true &&
       requestToolSpecs.some((tool) => tool.name === SEND_IM_MESSAGE_TOOL_NAME)
@@ -485,9 +483,9 @@ export abstract class ModelStepPreparationService {
       graphActive: graphCreateSatisfied,
       plan: planTurnActive
     })
-    if (hardRequiredToolName && (
+    if (effectiveHardRequiredToolName && (
       requestToolSpecs.length !== 1 ||
-      requestToolSpecs[0]?.name !== hardRequiredToolName ||
+      requestToolSpecs[0]?.name !== effectiveHardRequiredToolName ||
       !modelCapabilities.supportsToolCalling
     )) {
       return failRequiredToolConstraint(this.deps, {
@@ -497,8 +495,8 @@ export abstract class ModelStepPreparationService {
           ? 'required_tool_unavailable'
           : 'required_tool_unsupported',
         message: modelCapabilities.supportsToolCalling
-          ? `The required tool \`${hardRequiredToolName}\` is unavailable for this turn.`
-          : `The selected model does not support the required tool \`${hardRequiredToolName}\`.`
+          ? `The required tool \`${effectiveHardRequiredToolName}\` is unavailable for this turn.`
+          : `The selected model does not support the required tool \`${effectiveHardRequiredToolName}\`.`
       })
     }
     const runtimeContextInstruction = initialRuntimeContextInstruction({
@@ -584,7 +582,7 @@ export abstract class ModelStepPreparationService {
           )]
         : []),
       ...(conversationDeliveryAdvertised ? [kunContextBlock('conversation-delivery', 'runtime',
-        conversationDeliveryInstruction(imPublicationRecoveryStep, IM_PUBLICATION_MAX_RECOVERY_STEPS))] : []),
+        conversationDeliveryInstruction(imPublicationRecoveryStep, IM_PUBLICATION_MAX_RECOVERY_STEPS, deliveryGate))] : []),
       ...outputTruncationRecoveryBlocks(this.deps.roundOutcome.outputTruncationRecoverySteps(turnId)),
       ...imageGenerationReferenceInstructions({
         imageAttachments: attachments.imageAttachments,
@@ -674,7 +672,7 @@ export abstract class ModelStepPreparationService {
       model,
       modelCapabilities,
       serviceTier,
-      prepared,
+      prepared: delivery ? { ...prepared, privateDelivery: { ...delivery, communicationRequired, finalResponseRequired } } : prepared,
       attachments,
       toolContext,
       skillResolution,
@@ -683,7 +681,7 @@ export abstract class ModelStepPreparationService {
       streamToolMetadata,
       toolProviderKinds,
       toolKinds,
-      hardRequiredToolName,
+      hardRequiredToolName: effectiveHardRequiredToolName,
       softRequiredToolName,
       forceToolSuppressionFinalAnswerRecovery,
       boundedFinalSynthesis,

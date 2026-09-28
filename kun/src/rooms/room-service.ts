@@ -307,6 +307,7 @@ export class RoomService {
     runId: string
     itemId: string
     body: string
+    deliveryPhase?: RoomMessage['deliveryPhase']
     memberId: string
     taskId?: string
     createdAt: string
@@ -322,12 +323,14 @@ export class RoomService {
     if (old && (old.value.status === 'final' || old.value.status === 'failed') && input.status === 'streaming') return
     const message: RoomMessage = old
       ? { ...old.value, status: input.status, body: text, bodyRevision: old.value.bodyRevision + 1,
+          ...(input.deliveryPhase ? { deliveryPhase: input.deliveryPhase } : {}),
           ...(input.references?.length ? { references: input.references } : {}),
           ...(input.displayThreadRootId ? { displayThreadRootId: input.displayThreadRootId } : {}) }
       : RoomMessageSchema.parse({ id: input.messageId, roomId: id, messageSeq: 1,
           authorKind: 'member', authorMemberId: input.memberId, originItemId: input.itemId,
           authorLabelSnapshot: '', body: text, bodyRevision: 0, mentionMemberIds: [], attachmentIds: [],
           taskId: input.taskId, status: input.status, createdAt: input.createdAt,
+          ...(input.deliveryPhase ? { deliveryPhase: input.deliveryPhase } : {}),
           ...(input.references?.length ? { references: input.references } : {}),
           ...(input.displayThreadRootId ? { displayThreadRootId: input.displayThreadRootId } : {}) })
     if (old && old.value.body === message.body && old.value.status === input.status && old.value.originRunId === input.runId) return

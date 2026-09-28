@@ -25,6 +25,7 @@ import type {
   TurnClientSurface
 } from '../contracts/turns.js'
 import type { KnowledgeBaseMount } from '../contracts/threads.js'
+import type { PrivateDeliveryState } from '../rooms/room-im-delivery.js'
 
 /** Terminal status exposed by the public AgentLoop turn boundary. */
 export type TurnExecutionStatus = 'completed' | 'failed' | 'aborted'
@@ -104,6 +105,7 @@ export type PreparedTurnContext = Readonly<{
   userInputDisabled: boolean
   toolDiscoveryContext: ToolHostContext
   tools: readonly DiscoveredTool[]
+  privateDelivery?: PrivateDeliveryState & { communicationRequired: boolean; finalResponseRequired: boolean }
 }>
 
 /**

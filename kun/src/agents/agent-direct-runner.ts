@@ -17,6 +17,7 @@ import { appendAgentResponseBudget } from './agent-response-budget.js'
 import { AGENT_COLLABORATION_TOOLS } from './agent-handoff-tools.js'
 import { persistDirectChoiceMessages } from './agent-choice-messages.js'
 import { agentSetupConversationPolicy, agentSetupPending, isHiddenAgentSetupMessage } from './agent-setup.js'
+import { AGENT_SETUP_KICKOFF } from './agent-setup-prompt.js'
 import { settleConversationRunOutcome } from './agent-direct-publication.js'
 import { withdrawRunProposals } from '../rooms/room-proposals.js'
 import { roomContinuationIsCurrent } from '../rooms/room-continuation-service.js'
@@ -139,8 +140,13 @@ export class AgentDirectRunner {
       }
     }
     const prompt = await freezeAgentMemoryInput(this.deps, scoped, identity, request.privateInput!)
+    const freshUserRequest = !request.privateContinuation && !request.privateReminder && !request.handoffReturnId &&
+      request.message.body !== AGENT_SETUP_KICKOFF
     const run = await prepareRoomRun(this.deps, scoped, identity, prompt, request.message.attachmentIds, {
-      requestId: request.id, rootRequestId: request.rootRequestId, triggerMessageId: request.sourceMessageId, phase: 'conversation', ...request.privateModel })
+      requestId: request.id, rootRequestId: request.rootRequestId, triggerMessageId: request.sourceMessageId, phase: 'conversation',
+      communicationRequired: freshUserRequest,
+      finalResponseRequired: freshUserRequest || request.privateContinuation?.kind === 'app_connection',
+      ...request.privateModel })
     if (!turn) {
       if (run.admissionAttempted || request.admissionAttempted) return this.save(row, { ...request, privateRunId: run.id, status: 'recovery_required' })
       const budget: import('../rooms/room-store.js').RoomStoreCommit = { requestId: agentStableId('private-response-budget', request.id, identity) }

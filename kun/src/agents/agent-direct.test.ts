@@ -28,12 +28,17 @@ async function fixture(outputPath = 'hello.txt', model?: ModelClient) {
     seen.push(request)
     const results = request.history.filter((item): item is Extract<typeof item, { kind: 'tool_result' }> =>
       item.turnId === request.turnId && item.kind === 'tool_result')
-    const wrote = results.some((item) => item.toolName === 'write')
-    const sent = results.some((item) => item.toolName === 'send_im_message' && item.isError !== true)
-    if (!wrote) yield { kind: 'tool_call_complete', callId: 'write-' + request.turnId, toolName: 'write', arguments: { path: outputPath, content: request.model === 'second' ? 'updated' : 'hello' } }
-    else if (!sent) yield { kind: 'tool_call_complete', callId: 'say-' + request.turnId, toolName: 'send_im_message',
-      arguments: { text: 'The file is ready.', ...(outputPath.startsWith('/') ? {} : { attachments: [{ path: outputPath }] }) } }
-    yield { kind: 'completed', stopReason: wrote && !sent ? 'tool_calls' : 'stop' }
+    const started = results.some((item) => item.toolName === 'send_im_message' && item.isError !== true &&
+      (item.output as { phase?: string })?.phase === 'start')
+    const wrote = results.some((item) => item.toolName === 'write' && item.isError !== true)
+    const finished = results.some((item) => item.toolName === 'send_im_message' && item.isError !== true &&
+      (item.output as { phase?: string })?.phase === 'final')
+    if (!started) yield { kind: 'tool_call_complete', callId: 'start-' + request.turnId, toolName: 'send_im_message',
+      arguments: { text: 'I will create the requested file.', phase: 'start' } }
+    else if (!wrote) yield { kind: 'tool_call_complete', callId: 'write-' + request.turnId, toolName: 'write', arguments: { path: outputPath, content: request.model === 'second' ? 'updated' : 'hello' } }
+    else if (!finished) yield { kind: 'tool_call_complete', callId: 'say-' + request.turnId, toolName: 'send_im_message',
+      arguments: { text: 'The file is ready.', phase: 'final', ...(outputPath.startsWith('/') ? {} : { attachments: [{ path: outputPath }] }) } }
+    yield { kind: 'completed', stopReason: !started || !wrote || !finished ? 'tool_calls' : 'stop' }
   } }
   const h = makeHarness(model ? { provider: model.provider, model: model.model,
     async *stream(request) { seen.push(request); yield* model.stream(request) } } : client)
@@ -86,7 +91,7 @@ it('queues a scoped continuation before admission and publishes its exact run on
   expect(result.threadId).toBe(source.threadId)
   expect(result.turnId).not.toBe(source.turnId)
   const messages = await f.store.list<import('../contracts/rooms.js').RoomMessage>('message', { roomId: f.created.roomId })
-  expect(messages.filter((row) => row.value.authorKind === 'member')).toHaveLength(2)
+  expect(messages.filter((row) => row.value.authorKind === 'member')).toHaveLength(4)
   expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'completed-child-two' })).toBe('queued')
   const second = (await f.store.list<RoomRequestState>('request', { roomId: f.created.roomId }))
     .find((row) => row.value.privateContinuation && row.id !== continuations[0].id)!
@@ -147,7 +152,7 @@ it('writes and updates a real file with one persistent conversation and ordinary
   expect(await readFile(join(b.privateWorkspace!, 'hello.txt'), 'utf8')).toBe('updated')
   expect(f.seen.some((request) => request.model === 'second')).toBe(true)
   const messages = await f.store.list<import('../contracts/rooms.js').RoomMessage>('message', { roomId: f.created.roomId })
-  expect(messages.filter((row) => row.value.authorKind === 'member')).toHaveLength(2)
+  expect(messages.filter((row) => row.value.authorKind === 'member')).toHaveLength(4)
   expect(messages.filter((row) => row.value.authorKind === 'member').every((row) => row.value.originRunId && !row.value.replyToMessageId)).toBe(true)
   expect(await f.store.list('task')).toHaveLength(0)
 })
@@ -165,7 +170,7 @@ it('reconciles lost admission and publication receipts without executing or publ
   const repeated = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'lost', body: 'Create hello.txt' })
   expect(repeated.requestId).toBe(sent.requestId)
   expect((await f.store.list('room_run'))).toHaveLength(1)
-  expect((await f.store.list<import('../contracts/rooms.js').RoomMessage>('message')).filter((row) => row.value.authorKind === 'member')).toHaveLength(1)
+  expect((await f.store.list<import('../contracts/rooms.js').RoomMessage>('message')).filter((row) => row.value.authorKind === 'member')).toHaveLength(2)
 })
 it('retains an unknown admission and never retries it on timeout or restart', async () => {
   const f = await fixture()
@@ -214,7 +219,7 @@ it('resets model context without erasing public history and retains active work 
   const b = await f.advance(second.requestId)
   expect(b.threadId).not.toBe(a.threadId)
   expect(JSON.stringify(f.seen.filter((request) => request.threadId === b.threadId))).not.toContain('PRIVATE_ALPHA')
-  expect((await f.store.list('message'))).toHaveLength(4)
+  expect((await f.store.list('message'))).toHaveLength(6)
   const pending = await f.runtime.service.send(room.id, { clientRequestId: 'waiting-first', body: 'Wait' })
   for (let i = 0; i < 21; i++) await f.runtime.service.send(room.id, { clientRequestId: 'waiting-' + i, body: 'Wait next' })
   const activity = await directActivity(f.runtime, room.id)
@@ -240,28 +245,30 @@ it('publishes text and workspace attachments as one visible room message', async
   const done = await f.advance(sent.requestId)
   expect(done.status).toBe('completed')
   const published = (await f.store.list<import('../contracts/rooms.js').RoomMessage>('message'))
-    .find((row) => row.value.originRunId === done.privateRunId)
+    .find((row) => row.value.originRunId === done.privateRunId && row.value.deliveryPhase === 'final')
   expect(published?.value.body).toBe('The file is ready.')
   expect(published?.value.references).toEqual([
     { kind: 'agent_file', workspaceId: expect.any(String), relativePath: 'hello.txt', titleSnapshot: 'hello.txt' }
   ])
   const run = await f.store.get<import('../contracts/room-runs.js').RoomRunRecord>('room_run', done.privateRunId!)
   expect(run?.value.outcome).toBe('published')
-  expect(run?.value.publishedMessageId).toBe(published?.id)
+  expect(run?.value.lastDeliveryPhase).toBe('final')
+  expect(run?.value.publishedMessageId).toBe((await f.store.list<import('../contracts/rooms.js').RoomMessage>('message'))
+    .find((row) => row.value.originRunId === done.privateRunId && row.value.deliveryPhase === 'start')?.id)
 })
 
-it('keeps ordinary assistant text internal and settles the run as skipped after bounded recovery', async () => {
+it('keeps ordinary assistant text internal and fails visibly after bounded publication recovery', async () => {
   const f = await fixture('hello.txt', { provider: 'test', model: 'first', async *stream() {
     yield { kind: 'assistant_text_delta', text: 'The file is ready.' }
     yield { kind: 'completed', stopReason: 'stop' }
   } })
   const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'quiet', body: 'Say something' })
   const done = await f.advance(sent.requestId)
-  expect(done.status).toBe('completed')
+  expect(done.status).toBe('failed')
   expect((await f.store.list<import('../contracts/rooms.js').RoomMessage>('message'))
     .filter((row) => row.value.authorKind === 'member')).toHaveLength(0)
   const run = await f.store.get<import('../contracts/room-runs.js').RoomRunRecord>('room_run', done.privateRunId!)
-  expect(run?.value.outcome).toBe('skipped')
+  expect(run?.value.outcome).toBe('failed')
   expect(run?.value.publishedMessageId).toBeUndefined()
   expect(f.seen).toHaveLength(1 + IM_PUBLICATION_MAX_RECOVERY_STEPS)
 })

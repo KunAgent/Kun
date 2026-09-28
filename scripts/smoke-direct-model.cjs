@@ -66,15 +66,30 @@ async function startDirectModel({ real = false } = {}) {
       if (review) stats.automaticReviews++
       const last = messages.at(-1)
       const intentIndex = messages.findLastIndex((item) => item.role === 'user' && JSON.stringify(item.content).includes('User message:'))
-      const wrote = messages.findLastIndex((item) => item.role === 'tool') > intentIndex
+      const afterIntent = messages.slice(intentIndex + 1)
+      const calls = afterIntent.flatMap((item) => item.role === 'assistant' ? item.tool_calls ?? [] : [])
+      const resultIds = new Set(afterIntent.filter((item) => item.role === 'tool').map((item) => item.tool_call_id))
+      const succeeded = (name, phase) => calls.some((call) => {
+        if (call.function?.name !== name || !resultIds.has(call.id)) return false
+        if (!phase) return true
+        try { return JSON.parse(call.function.arguments).phase === phase } catch { return false }
+      })
+      const started = succeeded('send_im_message', 'start')
+      const wrote = succeeded('write')
+      const finished = succeeded('send_im_message', 'final')
       let content = review ? JSON.stringify({ decision: 'allow', riskLevel: 'low', rationale: 'Isolated fixture write requested by the user.' }) : memory ? '{"candidates":[]}' : prompt ? '你好！我可以帮你处理问题和文件。' : 'Private chat'
       let tool
-      if (prompt && !wrote && !memory && !review) {
+      if (prompt && !memory && !review) {
         const external = /EXTERNAL_FILE_B64:([A-Za-z0-9_-]+)/.exec(prompt)
         const command = external ? { path: Buffer.from(external[1], 'base64url').toString(), content: 'external verified\n' } : prompt.includes('PROJECT_FILE') ? { path: 'project-result.txt', content: 'project verified\n' } :
           prompt.includes('UPDATE_FILE') ? { path: 'hello.txt', content: 'updated by Kun\n' } :
           prompt.includes('CREATE_FILE') ? { path: 'hello.txt', content: 'hello from Kun\n' } : undefined
-        if (command) tool = { id: 'call_' + stats.calls, type: 'function', function: { name: 'write', arguments: JSON.stringify(command) } }
+        const outgoing = command
+          ? !started ? { name: 'send_im_message', args: { text: '我先检查任务并创建文件。', phase: 'start' } }
+            : !wrote ? { name: 'write', args: command }
+              : !finished ? { name: 'send_im_message', args: { text: '文件已完成，并保存在当前工作目录。', phase: 'final' } } : null
+          : !finished ? { name: 'send_im_message', args: { text: content, phase: 'final' } } : null
+        if (outgoing) tool = { id: 'call_' + stats.calls, type: 'function', function: { name: outgoing.name, arguments: JSON.stringify(outgoing.args) } }
       }
       if (wrote && !review && !memory) content = /denied|not allowed/i.test(JSON.stringify(messages.findLast((item) => item.role === 'tool')?.content)) ? '这一步已被拒绝，未修改文件。' : '文件已完成，并保存在当前工作目录。'
       if (body.stream === false) {

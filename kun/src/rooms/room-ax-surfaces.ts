@@ -187,7 +187,7 @@ export const ROOM_AX_TOOL_DESCRIPTIONS = {
   read_room_rules: 'List the frozen project agreement sources or read an exact original rule version in pages. Original rules remain authoritative over compressed summaries. Use the bundleId from current agreementSources.',
   vote_room_poll: 'Cast the single ballot explicitly requested by the user for this exact poll invitation. Supply option IDs from the frozen invitation. Never creates tasks or grants execution permission.',
   send_im_message: 'Publish one message to the user in this IM conversation. Ordinary assistant text is internal working output the user never sees. ' +
-    'Call this tool for every reply, status, question, or result the user should see: text and/or workspace files such as images, documents, audio, or video. ' +
+    'Call this tool for every reply, status, question, or result the user should see: text and/or workspace files such as images, documents, audio, or video. Use phase start before work, progress for a material update, and final for the completed answer. ' +
     'One call creates one chat bubble; combine text with attachments or call it again for another bubble.',
   list_room_apps: 'List built-in and configured app IDs with connection status for this private Agent conversation. No credentials or authorization URLs are returned.',
   request_app_connection: 'Show a durable connection card to the user for a built-in or configured app. Supply its ID from list_room_apps and a short reason. The tool does not open a browser or authorize the app. End the turn after the card is shown; Kun resumes when the user connects or skips.',
