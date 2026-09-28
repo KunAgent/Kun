@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { UserRound, X } from 'lucide-react'
 import type { AdeHarnessCredentialMode, AdeHarnessRow } from '@shared/ade-harnesses'
@@ -164,7 +165,9 @@ export function AdeOneOnOneDialog({
     onClose()
   }
 
-  return (
+  // Portal to body: the sidebar's glass surface creates a containing block
+  // (backdrop-filter), which would clip a `fixed` overlay to the sidebar.
+  return createPortal(
     <div
       className="ds-no-drag fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/18 px-4 backdrop-blur-[2px] dark:bg-black/35"
       onMouseDown={onClose}
@@ -364,6 +367,7 @@ export function AdeOneOnOneDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
