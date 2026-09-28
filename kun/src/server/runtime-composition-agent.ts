@@ -290,8 +290,7 @@ export async function createRuntimeAgentComposition(
       turns: turnService,
       events,
       ids,
-      setThreadTodos: (threadId, request) =>
-        threadService.setTodosFromTool(threadId, request),
+      setThreadTodos: (t, r) => threadService.setTodosFromTool(t, r),
       ...(llmDebug ? { debugSink: llmDebug } : {}),
       approvalGate,
       approvalReview: approvalReviewService,
@@ -333,8 +332,8 @@ export async function createRuntimeAgentComposition(
       defaultSandboxMode: input.options.sandboxMode,
       defaultApprovalReviewer: input.options.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
       turnLimits: input.options.runtime?.turnLimits,
-      awaitWorkspaceCheckpoint: (requestId, signal) =>
-        waitForWorkspaceCheckpoint(core.activeOptions.dataDir, requestId, signal),
+      awaitWorkspaceCheckpoint: (id, sig) =>
+        waitForWorkspaceCheckpoint(core.activeOptions.dataDir, id, sig),
       ...(llmDebug ? { debugSink: llmDebug } : {}),
       nowIso,
       ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
@@ -416,8 +415,7 @@ export async function createRuntimeAgentComposition(
       return cached
     },
     allowUnattendedFullAccess: () => core.activeOptions.ade?.allowUnattendedFullAccess === true,
-    taskWorkspaceIsolated: (workspaceId) =>
-      core.taskWorkspaces.get(workspaceId)?.isolation === 'worktree'
+    taskWorkspaceIsolated: (id) => core.taskWorkspaces.get(id)?.isolation === 'worktree'
   })
   // ADE manager control plane (09 §4-§5): durable dispatch delivery + the
   // worker_* tool surface; AbortControllers outlive the manager turn.
@@ -463,7 +461,9 @@ export async function createRuntimeAgentComposition(
   })
   // Dispatch backfill + worker terminal hooks on the recorder (09 §5, §6.1).
   core.events.addObserver({ record: (event) => managerRuntime.handleRuntimeEvent(event) })
-  const activityHibernation = createActivityHibernation({ core, managerRuntime })
+  const activityHibernation = createActivityHibernation({
+    core, managerRuntime, catalog: services.harnesses.catalog
+  })
   registerAdeManagerTooling({
     registry: registryComposition.registry,
     managerRuntime,

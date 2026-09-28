@@ -193,17 +193,21 @@ export function createActivityHibernation(input: {
     'activityStore' | 'activeOptions' | 'acpConnectionPool'
   >
   managerRuntime: ManagerRuntime
+  catalog: Pick<ManagerRuntimeDeps['catalog'], 'get'>
 }): ActivityHibernation {
-  const { core, managerRuntime } = input
+  const { core, managerRuntime, catalog } = input
   const hibernation = new ActivityHibernation(
     {
       apply: (unitId, patch) => core.activityStore.apply(unitId, patch, 'inferred'),
       list: () => core.activityStore.list(),
       lastEventAt: (unitId) => core.activityStore.lastEventAt(unitId),
       hasOpenWork: (row) => managerRuntime.hasOpenWork(row.unitId),
-      // Structured harnesses always continue portably; terminal agents need
-      // resumeArgs, which the terminal runtime supplies when it lands (P2-03).
-      canResume: (row) => row.kind === 'worker',
+      // Structured harnesses always continue portably; terminal agents
+      // resume only when the harness declares `terminal.resumeArgs` (05 §7.3).
+      canResume: (row) =>
+        row.kind === 'worker' ||
+        (row.kind === 'terminal-agent' &&
+          (catalog.get(row.harnessId)?.terminal?.resumeArgs?.length ?? 0) > 0),
       releaseResident: (row) => core.acpConnectionPool?.releaseForUnit(row.threadId)
     },
     {
