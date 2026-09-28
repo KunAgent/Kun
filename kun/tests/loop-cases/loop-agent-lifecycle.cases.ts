@@ -614,5 +614,12 @@ describe('AgentLoop', () => {
     // The single-attempt rule: nothing was compactable, no compaction was
     // committed, and the turn failed without ever dispatching a model request.
     expect(events.some((event) => event.kind === 'compaction_completed')).toBe(false)
+    // The current message alone fills the cap, so advising another compaction
+    // would send the user in circles. The guidance names what can actually
+    // help instead.
+    const errorText = error?.kind === 'error' ? error.message : ''
+    expect(errorText).toContain('no_compactable_history')
+    expect(errorText).toContain('Shorten the current message')
+    expect(errorText).not.toContain('/compact')
   })
 })

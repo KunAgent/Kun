@@ -62,6 +62,7 @@ import type { ModelRoundEngine } from './model-round-engine.js'
 import { modelClientDiagnostics } from './model-client-diagnostics.js'
 import { recoverModelContextOverflow } from './model-context-overflow-recovery.js'
 import { effectiveOutputBudgetTokens, ordinaryOutputReserveTokens } from './model-request-composer.js'
+import { contextCapExceededAction } from './context-cap-exceeded-action.js'
 import { estimateModelRequestInputTokenBreakdown } from './model-request-estimator.js'
 import type { ModelRoutingService } from './model-routing-service.js'
 import {
@@ -402,9 +403,7 @@ export class ModelStepService extends ModelStepPreparationService {
           : fallbackCompactionApplied
             ? 'still_exceeds_after_compaction'
             : 'no_compactable_history'
-      const action = reason === 'output_budget_exceeds_cap'
-        ? 'Reduce the model\'s max output tokens in provider settings, or switch to a model with a larger context window.'
-        : 'Compact the conversation manually with /compact, reduce the current message or attachments, or lower the model output budget.'
+      const action = contextCapExceededAction(reason)
       const message =
         `request exceeds the ${requestHardCapTokens}-token context cap ` +
         `(${inputTokens} input + ${outputBudgetTokens} output budget; over by ${overBy}); ` +
