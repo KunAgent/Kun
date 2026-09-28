@@ -186,7 +186,11 @@
     "detecting": "감지 중",
     "signedOut": "로그아웃됨",
     "versionLow": "버전이 너무 낮습니다",
-    "unavailable": "사용할 수 없음"
+    "unavailable": "사용할 수 없음",
+    "adapterMissing": "ACP 어댑터 없음",
+    "handshakeFailed": "핸드셰이크 실패",
+    "handshakeTimeout": "감지 시간 초과",
+    "disabled": "사용 안 함"
   },
   "adeIsolation": {
     "title": "격리",
@@ -259,5 +263,15 @@
   "adeGroupByProject": "프로젝트별 그룹화",
   "adeGroupToggleHint": "대화 그룹화 방식 전환",
   "adeWorkerCount": "워커 {{count}}개",
-  "adeWorkerCount_other": "워커 {{count}}개"
+  "adeWorkerCount_other": "워커 {{count}}개",
+  "adeHarnessNextStep": {
+    "install": "설치 후 다시 시도",
+    "installAdapter": "ACP 어댑터 설치",
+    "upgrade": "업그레이드 후 다시 시도",
+    "retry": "감지 다시 시도",
+    "login": "로그인 후 다시 시도",
+    "enable": "설정에서 사용"
+  },
+  "adeHarnessViewReason": "원인 보기",
+  "adeHarnessOpenSettings": "설정 열기"
 }

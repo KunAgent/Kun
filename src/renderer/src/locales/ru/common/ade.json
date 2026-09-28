@@ -186,7 +186,11 @@
     "detecting": "Идёт проверка",
     "signedOut": "Не выполнен вход",
     "versionLow": "Версия слишком старая",
-    "unavailable": "Недоступно"
+    "unavailable": "Недоступно",
+    "adapterMissing": "Нет ACP-адаптера",
+    "handshakeFailed": "Ошибка подключения",
+    "handshakeTimeout": "Таймаут проверки",
+    "disabled": "Отключён"
   },
   "adeIsolation": {
     "title": "Изоляция",
@@ -259,5 +263,15 @@
   "adeGroupByProject": "Группировать по проекту",
   "adeGroupToggleHint": "Изменить группировку диалогов",
   "adeWorkerCount": "{{count}} исполнитель",
-  "adeWorkerCount_other": "исполнителей: {{count}}"
+  "adeWorkerCount_other": "исполнителей: {{count}}",
+  "adeHarnessNextStep": {
+    "install": "Установите и повторите",
+    "installAdapter": "Установите ACP-адаптер",
+    "upgrade": "Обновите и повторите",
+    "retry": "Повторить проверку",
+    "login": "Войдите и повторите",
+    "enable": "Включить в настройках"
+  },
+  "adeHarnessViewReason": "Показать причину",
+  "adeHarnessOpenSettings": "Открыть настройки"
 }

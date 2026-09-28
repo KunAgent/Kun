@@ -238,22 +238,78 @@ export function harnessRowAvailable(row: AdeHarnessRow): boolean {
   const status = row.status
   if (row.definition.transport === 'native-loop') return true
   if (status.installed !== 'yes') return false
+  // P4-05: a version below the definition's minVersion cannot serve turns —
+  // surface it as unavailable instead of the previous dead "version too low"
+  // label branch.
+  if (status.versionSupported === false) return false
   // P3-11: a binary that fails the ACP initialize handshake is installed but
   // cannot serve turns — `status.message` carries the sanitized stderr.
   if (status.ready === 'no') return false
   return status.login !== 'signed-out'
 }
 
-/** User-facing unavailability reason (12 §7.2: 未安装 / 未登录 / 版本过低). */
-export function harnessRowUnavailableReason(row: AdeHarnessRow): string | null {
-  // P4-02: a detection inflight is not a verdict — callers render a
-  // spinner and the localized "detecting" label for this sentinel.
+/**
+ * Stable unavailability code for pickers (P4-05). Returns the 'detecting'
+ * sentinel while a probe is inflight or the verdict is still provisional;
+ * otherwise the wire `reasonCode` (falling back to field derivation for
+ * statuses that predate it). Consumers localize `adeHarnessUnavailable.*`
+ * and `adeHarnessNextStep.*` from this — never the raw message.
+ */
+export function harnessRowUnavailableCode(row: AdeHarnessRow): string | null {
   if (row.status.detecting === true) return 'detecting'
   if (harnessRowAvailable(row)) return null
-  if (row.status.message?.trim()) return row.status.message.trim()
-  if (row.status.installed === 'no') return 'not installed'
-  if (row.status.installed === 'unknown') return 'detecting'
-  if (row.status.login === 'signed-out') return 'signed out'
-  if (row.status.versionSupported === false) return 'version too low'
+  const status = row.status
+  if (status.reasonCode) return status.reasonCode
+  if (status.installed === 'no') return 'not_installed'
+  if (status.installed === 'yes') {
+    if (status.versionSupported === false) return 'version_too_low'
+    if (status.ready === 'no') return 'handshake_failed'
+    // `ready: 'unknown'` (an inconclusive ACP probe, P4-03) stays selectable:
+    // never a blocking code. `handshake_timeout` only arrives over the wire
+    // as an advisory for management surfaces.
+    if (status.login === 'signed-out') return 'signed_out'
+  }
+  // A settled `unknown` (the version probe failed and the P4-02 polling
+  // budget is spent) is unavailable — not "detecting" forever.
   return 'unavailable'
+}
+
+/** Raw diagnostic detail; render only inside a "view reason" disclosure. */
+export function harnessRowUnavailableDetail(row: AdeHarnessRow): string | null {
+  const message = row.status.message?.trim()
+  return message || null
+}
+
+/** i18n suffix per unavailable code for `adeHarnessUnavailable.*` labels. */
+export const HARNESS_UNAVAILABLE_LABEL_KEY: Record<string, string> = {
+  detecting: 'detecting',
+  not_installed: 'notInstalled',
+  adapter_missing: 'adapterMissing',
+  version_too_low: 'versionLow',
+  handshake_failed: 'handshakeFailed',
+  handshake_timeout: 'handshakeTimeout',
+  signed_out: 'signedOut',
+  disabled: 'disabled',
+  unavailable: 'unavailable'
+}
+
+/** i18n suffix per code for `adeHarnessNextStep.*` guidance; absent = none. */
+export const HARNESS_UNAVAILABLE_NEXT_STEP_KEY: Record<string, string | undefined> = {
+  not_installed: 'install',
+  adapter_missing: 'installAdapter',
+  version_too_low: 'upgrade',
+  handshake_failed: 'retry',
+  handshake_timeout: 'retry',
+  signed_out: 'login',
+  disabled: 'enable',
+  unavailable: 'retry'
+}
+
+export function harnessUnavailableLabelKey(code: string): string {
+  return `adeHarnessUnavailable.${HARNESS_UNAVAILABLE_LABEL_KEY[code] ?? 'unavailable'}`
+}
+
+export function harnessUnavailableNextStepKey(code: string): string | null {
+  const suffix = HARNESS_UNAVAILABLE_NEXT_STEP_KEY[code]
+  return suffix ? `adeHarnessNextStep.${suffix}` : null
 }

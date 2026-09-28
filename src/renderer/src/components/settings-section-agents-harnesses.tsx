@@ -7,7 +7,13 @@ import type {
   KunRuntimeSettingsV1
 } from '@shared/app-settings'
 import { getProvider } from '../agent/registry'
-import { loadHarnesses, useHarnessStore } from '../store/harness-store'
+import {
+  harnessRowUnavailableCode,
+  harnessUnavailableLabelKey,
+  harnessUnavailableNextStepKey,
+  loadHarnesses,
+  useHarnessStore
+} from '../store/harness-store'
 import { SettingRow, SettingsCard, Toggle } from './settings-controls'
 
 type HarnessesView = {
@@ -112,8 +118,20 @@ function HarnessRow({
             ) : null}
           </div>
           <div className="mt-0.5 truncate text-[12px] text-ds-faint">
-            {t(loginStateKey(status))}
-            {status.message ? ` · ${status.message}` : ''}
+            {(() => {
+              // P4-05: localized reason label + next step; the raw status
+              // message stays inside the expanded details body below. The
+              // wire `reasonCode` also carries advisory states (e.g. a
+              // handshake timeout) for harnesses that remain selectable.
+              const code = !enabled
+                ? 'disabled'
+                : status.reasonCode ?? harnessRowUnavailableCode(row)
+              if (code && code !== 'detecting') {
+                const nextKey = harnessUnavailableNextStepKey(code)
+                return `${t(harnessUnavailableLabelKey(code))}${nextKey ? ` — ${t(nextKey)}` : ''}`
+              }
+              return t(code === 'detecting' ? 'adeHarnessUnavailable.detecting' : loginStateKey(status))
+            })()}
           </div>
         </div>
         {!isKun ? (
@@ -147,6 +165,12 @@ function HarnessRow({
             </button>
           ) : null}
         </div>
+        {status.message ? (
+          <div className="rounded-lg bg-ds-main/50 px-2.5 py-1.5 text-[11px] text-ds-muted">
+            <span className="font-medium">{t('adeHarnessViewReason')}: </span>
+            {status.message}
+          </div>
+        ) : null}
         <SettingRow
           title={t('adeSettings.harnessCommandPath')}
           description={status.resolvedCommand || t('adeSettings.harnessCommandPathDesc')}

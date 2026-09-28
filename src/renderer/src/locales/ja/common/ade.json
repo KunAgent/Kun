@@ -186,7 +186,11 @@
     "detecting": "検出中",
     "signedOut": "サインアウト済み",
     "versionLow": "バージョンが古すぎます",
-    "unavailable": "利用不可"
+    "unavailable": "利用不可",
+    "adapterMissing": "ACP アダプターなし",
+    "handshakeFailed": "ハンドシェイク失敗",
+    "handshakeTimeout": "検出タイムアウト",
+    "disabled": "無効"
   },
   "adeIsolation": {
     "title": "隔離",
@@ -259,5 +263,15 @@
   "adeGroupByProject": "プロジェクトでグループ化",
   "adeGroupToggleHint": "会話のグループ化を切り替え",
   "adeWorkerCount": "ワーカー {{count}} 件",
-  "adeWorkerCount_other": "ワーカー {{count}} 件"
+  "adeWorkerCount_other": "ワーカー {{count}} 件",
+  "adeHarnessNextStep": {
+    "install": "インストール後に再試行",
+    "installAdapter": "ACP アダプターをインストール",
+    "upgrade": "更新後に再試行",
+    "retry": "検出を再試行",
+    "login": "ログイン後に再試行",
+    "enable": "設定で有効化"
+  },
+  "adeHarnessViewReason": "原因を見る",
+  "adeHarnessOpenSettings": "設定を開く"
 }

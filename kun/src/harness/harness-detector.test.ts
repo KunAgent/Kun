@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { HarnessDetector } from './harness-detector.js'
 import { ACP_DEFAULT_CAPABILITIES } from './builtin-harnesses.js'
 import type { HarnessDefinition, HarnessId } from '../contracts/harness.js'
+import type { HarnessLoginState } from './harness-login-probes.js'
 
 function acpDef(overrides: Partial<HarnessDefinition> = {}): HarnessDefinition {
   return {
@@ -38,6 +39,7 @@ function makeDetector(input: {
     set(id: HarnessId, command: string, version: string | undefined): Promise<void>
     clear(id: HarnessId): Promise<void>
   }
+  login?: HarnessLoginState
 }) {
   return new HarnessDetector({
     definitions: () => input.defs,
@@ -52,7 +54,7 @@ function makeDetector(input: {
       input.resolve ?? (async (command) => `/usr/bin/${command}`),
     probeReady: input.probeReady,
     ...(input.readinessCache ? { readinessCache: input.readinessCache } : {}),
-    probeLogin: async () => 'unknown',
+    probeLogin: async () => input.login ?? 'unknown',
     nowMs: () => Date.now(),
     nowIso: () => new Date().toISOString()
   })
@@ -76,6 +78,7 @@ describe('HarnessDetector readiness (P3-11)', () => {
     const status = await detector.status('opencode' as HarnessId, { force: true })
     expect(status.installed).toBe('yes')
     expect(status.ready).toBe('no')
+    expect(status.reasonCode).toBe('handshake_failed')
     expect(status.message).toContain('ACP initialize failed')
     expect(status.message).toContain('boom')
   })
@@ -101,6 +104,7 @@ describe('HarnessDetector readiness (P3-11)', () => {
     })
     const status = await detector.status('codex' as HarnessId, { force: true })
     expect(status.installed).toBe('no')
+    expect(status.reasonCode).toBe('adapter_missing')
     expect(status.message).toBe('install codex-acp to enable ACP')
   })
 
@@ -124,6 +128,7 @@ describe('HarnessDetector readiness (P3-11)', () => {
     })
     const status = await detector.status('codex' as HarnessId, { force: true })
     expect(status.installed).toBe('no')
+    expect(status.reasonCode).toBe('not_installed')
     expect(status.message).toBe('command not found: codex-acp')
   })
 
@@ -135,6 +140,7 @@ describe('HarnessDetector readiness (P3-11)', () => {
     const status = await detector.status('opencode' as HarnessId, { force: true })
     expect(status.installed).toBe('yes')
     expect(status.ready).toBe('unknown')
+    expect(status.reasonCode).toBe('handshake_timeout')
     expect(status.message).toContain('inconclusive')
   })
 
@@ -221,7 +227,46 @@ describe('HarnessDetector readiness (P3-11)', () => {
     detector.recordLaunchFailure('opencode' as HarnessId, 'harness exited during initialize')
     const after = detector.cachedStatus('opencode' as HarnessId)
     expect(after?.ready).toBe('no')
+    expect(after?.reasonCode).toBe('handshake_failed')
     expect(after?.message).toContain('harness exited during initialize')
     await vi.waitFor(() => expect(cleared).toEqual(['opencode']))
+  })
+
+  it('reports version_too_low when the probed version is below minVersion', async () => {
+    const def = acpDef({
+      detect: {
+        command: 'opencode',
+        aliases: [],
+        versionArgs: ['--version'],
+        minVersion: '9.9.9'
+      }
+    })
+    const detector = makeDetector({
+      defs: [def],
+      probeReady: async () => ({ ready: 'yes' })
+    })
+    const status = await detector.status('opencode' as HarnessId, { force: true })
+    expect(status.versionSupported).toBe(false)
+    expect(status.reasonCode).toBe('version_too_low')
+  })
+
+  it('reports signed_out only after install and handshake pass', async () => {
+    const detector = makeDetector({
+      defs: [acpDef()],
+      login: 'signed-out',
+      probeReady: async () => ({ ready: 'yes' })
+    })
+    const status = await detector.status('opencode' as HarnessId, { force: true })
+    expect(status.ready).toBe('yes')
+    expect(status.reasonCode).toBe('signed_out')
+  })
+
+  it('leaves reasonCode unset when the harness is usable', async () => {
+    const detector = makeDetector({
+      defs: [acpDef()],
+      probeReady: async () => ({ ready: 'yes' })
+    })
+    const status = await detector.status('opencode' as HarnessId, { force: true })
+    expect(status.reasonCode).toBeUndefined()
   })
 })

@@ -128,9 +128,13 @@ export async function listHarnessesForManager(
       displayName: def.displayName,
       ready,
       ...(ready ? {} : {
-        notReadyReason: status?.message
-          ?? (status?.installed === 'no' ? 'not installed'
-            : status?.login === 'signed-out' ? 'signed out' : 'not ready')
+        // P4-05: stable code first for the manager; the raw message stays
+        // diagnostic detail in parentheses.
+        notReadyReason: status?.reasonCode
+          ? `${status.reasonCode}${status?.message ? ` (${status.message})` : ''}`
+          : status?.message
+            ?? (status?.installed === 'no' ? 'not installed'
+              : status?.login === 'signed-out' ? 'signed out' : 'not ready')
       }),
       models,
       ...(truncated > 0 ? { modelsTruncated: truncated } : {}),

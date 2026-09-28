@@ -122,3 +122,29 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
     expect(provider.listHarnesses).toHaveBeenCalledTimes(callsAfterBudget)
   })
 })
+
+describe('harnessRowUnavailableCode (P4-05)', () => {
+  it('prefers the wire reasonCode and honors the detecting sentinel', async () => {
+    const { harnessRowUnavailableCode } = await import('./harness-store')
+    expect(harnessRowUnavailableCode(detectingRow())).toBe('detecting')
+    expect(
+      harnessRowUnavailableCode(row('a', { installed: 'no', reasonCode: 'adapter_missing' }))
+    ).toBe('adapter_missing')
+  })
+
+  it('derives codes from fields for statuses predating reasonCode', async () => {
+    const { harnessRowUnavailableCode } = await import('./harness-store')
+    expect(harnessRowUnavailableCode(row('a', { installed: 'no' }))).toBe('not_installed')
+    expect(
+      harnessRowUnavailableCode(row('a', { versionSupported: false }))
+    ).toBe('version_too_low')
+    expect(
+      harnessRowUnavailableCode(row('a', { ready: 'no', login: 'signed-out' }))
+    ).toBe('handshake_failed')
+    // P4-03: an inconclusive handshake stays selectable — the wire
+    // `handshake_timeout` code is advisory for management surfaces only.
+    expect(harnessRowUnavailableCode(row('a', { ready: 'unknown' }))).toBeNull()
+    expect(harnessRowUnavailableCode(row('a', { login: 'signed-out' }))).toBe('signed_out')
+    expect(harnessRowUnavailableCode(row('a', { ready: 'yes' }))).toBeNull()
+  })
+})

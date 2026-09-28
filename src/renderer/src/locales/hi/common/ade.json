@@ -186,7 +186,11 @@
     "detecting": "जाँच जारी",
     "signedOut": "साइन-आउट है",
     "versionLow": "संस्करण बहुत पुराना है",
-    "unavailable": "अनुपलब्ध"
+    "unavailable": "अनुपलब्ध",
+    "adapterMissing": "ACP एडाप्टर नहीं",
+    "handshakeFailed": "हैंडशेक विफल",
+    "handshakeTimeout": "जाँच समय समाप्त",
+    "disabled": "अक्षम"
   },
   "adeIsolation": {
     "title": "आइसोलेशन",
@@ -259,5 +263,15 @@
   "adeGroupByProject": "प्रोजेक्ट अनुसार समूह",
   "adeGroupToggleHint": "वार्तालाप समूह विधि बदलें",
   "adeWorkerCount": "{{count}} वर्कर",
-  "adeWorkerCount_other": "{{count}} वर्कर"
+  "adeWorkerCount_other": "{{count}} वर्कर",
+  "adeHarnessNextStep": {
+    "install": "इंस्टॉल कर फिर कोशिश करें",
+    "installAdapter": "इसका ACP एडाप्टर इंस्टॉल करें",
+    "upgrade": "अपग्रेड कर फिर कोशिश करें",
+    "retry": "जाँच फिर से करें",
+    "login": "लॉगिन कर फिर कोशिश करें",
+    "enable": "सेटिंग में सक्षम करें"
+  },
+  "adeHarnessViewReason": "कारण देखें",
+  "adeHarnessOpenSettings": "सेटिंग खोलें"
 }

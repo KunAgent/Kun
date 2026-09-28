@@ -64,9 +64,23 @@ export type AdeHarnessStatus = {
    * pinning the row disabled.
    */
   detecting?: boolean
-  /** User-facing reason an entry is unavailable (01 §7.2 CapabilityStatus.message). */
+  /**
+   * Stable machine-readable unavailability reason (P4-05). Clients localize
+   * a label + next step from this; `message` stays diagnostic detail.
+   */
+  reasonCode?: AdeHarnessReasonCode
+  /** Raw diagnostic detail; render inside a "view reason" disclosure only. */
   message?: string
 }
+
+export type AdeHarnessReasonCode =
+  | 'disabled'
+  | 'not_installed'
+  | 'adapter_missing'
+  | 'version_too_low'
+  | 'handshake_failed'
+  | 'handshake_timeout'
+  | 'signed_out'
 
 /** Row in `GET /v1/harnesses`: definition plus cached detection status. */
 export type AdeHarnessRow = {

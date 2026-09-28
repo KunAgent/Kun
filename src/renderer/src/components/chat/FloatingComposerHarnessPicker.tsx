@@ -3,7 +3,12 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Bot, ChevronDown, History, Loader2 } from 'lucide-react'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
-import { harnessRowUnavailableReason } from '../../store/harness-store'
+import {
+  harnessRowUnavailableCode,
+  harnessRowUnavailableDetail,
+  harnessUnavailableLabelKey,
+  harnessUnavailableNextStepKey
+} from '../../store/harness-store'
 import { useComposerPickerPopover } from './use-composer-picker-popover'
 
 const MENU_WIDTH = 288
@@ -124,29 +129,27 @@ export function FloatingComposerHarnessPicker({
         <>
           {rows.map((row) => {
             const id = row.definition.id
-            const reason = harnessRowUnavailableReason(row)
-            const detecting = reason === 'detecting'
-            const reasonText = reason == null
-              ? null
-              : detecting
-                ? t('adeHarnessUnavailable.detecting')
-                : reason === 'not installed'
-                  ? t('adeHarnessUnavailable.notInstalled')
-                  : reason === 'signed out'
-                    ? t('adeHarnessUnavailable.signedOut')
-                    : reason === 'version too low'
-                      ? t('adeHarnessUnavailable.versionLow')
-                      : reason === 'unavailable'
-                        ? t('adeHarnessUnavailable.unavailable')
-                        : reason
+            // P4-05: stable reason code → localized label + next step; the
+            // raw message stays in the title tooltip as the "reason detail".
+            const code = harnessRowUnavailableCode(row)
+            const detecting = code === 'detecting'
+            const reasonText = code == null ? null : t(harnessUnavailableLabelKey(code))
+            const nextStepKey = code && !detecting ? harnessUnavailableNextStepKey(code) : null
+            const nextStepText = nextStepKey ? t(nextStepKey) : null
+            const detail = harnessRowUnavailableDetail(row)
+            const reasonLine = [reasonText, nextStepText].filter(Boolean).join(' — ')
             const selected = id === harnessId
             return (
               <button
                 key={id}
                 type="button"
-                disabled={reason != null}
+                disabled={code != null}
                 onClick={() => pick(row)}
-                title={reasonText ?? row.definition.displayName}
+                title={
+                  [reasonLine || row.definition.displayName, detail]
+                    .filter(Boolean)
+                    .join(' · ')
+                }
                 className={`flex w-full items-start gap-2 px-3 py-2 text-left text-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent ${selected ? 'bg-ds-subtle' : ''}`}
                 data-harness-id={id}
               >
@@ -160,7 +163,7 @@ export function FloatingComposerHarnessPicker({
                     {row.definition.displayName}
                   </span>
                   <span className="block truncate text-[11px] text-ds-faint">
-                    {reasonText ?? row.definition.credentialModes.join(' · ')}
+                    {reasonLine || row.definition.credentialModes.join(' · ')}
                   </span>
                 </span>
               </button>

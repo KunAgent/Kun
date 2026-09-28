@@ -186,7 +186,11 @@
     "detecting": "检测中",
     "signedOut": "未登录",
     "versionLow": "版本过低",
-    "unavailable": "不可用"
+    "unavailable": "不可用",
+    "adapterMissing": "缺 ACP 适配器",
+    "handshakeFailed": "握手失败",
+    "handshakeTimeout": "探测超时",
+    "disabled": "已停用"
   },
   "adeIsolation": {
     "title": "隔离方式",
@@ -259,5 +263,15 @@
   "adeGroupByProject": "按项目分组",
   "adeGroupToggleHint": "切换会话分组方式",
   "adeWorkerCount": "{{count}} 个 worker",
-  "adeWorkerCount_other": "{{count}} 个 worker"
+  "adeWorkerCount_other": "{{count}} 个 worker",
+  "adeHarnessNextStep": {
+    "install": "安装后重试",
+    "installAdapter": "安装其 ACP 适配器",
+    "upgrade": "升级后重试",
+    "retry": "重试检测",
+    "login": "登录后重试",
+    "enable": "在设置中启用"
+  },
+  "adeHarnessViewReason": "查看原因",
+  "adeHarnessOpenSettings": "去设置"
 }
