@@ -3,6 +3,7 @@ import {
   KUN_ACTIVITY_EVENTS_PATH,
   KUN_ACTIVITY_FOREGROUND_PATH,
   KUN_ACTIVITY_PATH,
+  KUN_APPROVALS_PATH,
   kunActivityUnitPath
 } from '@shared/kun-endpoints'
 import type { PendingApprovalItem } from '@shared/ade-approvals'
@@ -85,7 +86,7 @@ export function createKunActivityClient() {
     async listPendingApprovals(threadId?: string): Promise<PendingApprovalItem[]> {
       const query = buildQuery({ threadId })
       const response = await rendererRuntimeClient.runtimeRequest(
-        `/v1/approvals${query}`,
+        `${KUN_APPROVALS_PATH}${query}`,
         'GET'
       )
       if (!response.ok) {
