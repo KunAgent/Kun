@@ -54,6 +54,10 @@ export const REMOTE_ALLOWED_INVOKE_CHANNELS: ReadonlySet<string> = new Set([
   'paper-reader:translate-selection',
   'paper-reader:references',
   'paper-discover:search',
+  'paper-discover:feed',
+  'paper-discover:arxiv-today',
+  'paper-discover:venue',
+  'paper-discover:venue-catalog',
   // Workspace selection + file operations.
   'workspace:directory-exists',
   'workspace:creation-times',

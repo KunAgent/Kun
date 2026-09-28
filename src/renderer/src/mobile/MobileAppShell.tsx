@@ -100,7 +100,7 @@ export function MobileAppShell(): ReactElement {
   const settingsReturnRef = useRef<MobilePage | null>(null)
   const openSettingsPage = (from: MobilePage): void => {
     if ((from.kind === 'paper' && paperUnsaved) || paperBusy) {
-      setNotice('先保存论文笔记/标注或等待导入完成，再打开设置。')
+      setNotice(t('mobileWorkDocSettingsBlocked'))
       return
     }
     settingsReturnRef.current = from
@@ -130,16 +130,16 @@ export function MobileAppShell(): ReactElement {
   }, [paperUnsaved, paperBusy, page.kind])
 
   const canLeaveWork = async (): Promise<boolean> => {
-    if (paperBusy) { setNotice('导入进行中，请先取消或等待结束。'); return false }
-    if (paperUnsaved) { setNotice('先保存论文笔记或标注，再离开此页。'); return false }
+    if (paperBusy) { setNotice(t('mobileWorkDocLeaveBusy')); return false }
+    if (paperUnsaved) { setNotice(t('mobileWorkDocLeaveUnsaved')); return false }
     const decision = workLeaveDecision(leaveState)
     if (decision === 'resolve-conflict' || decision === 'confirm-discard') {
-      setNotice(decision === 'resolve-conflict' ? 'Resolve the document conflict before leaving Work.' : 'Finish or discard the current Work review before leaving.')
+      setNotice(decision === 'resolve-conflict' ? t('mobileWorkDocLeaveConflict') : t('mobileWorkDocLeaveReview'))
       return false
     }
-    if (decision === 'wait') { setNotice('Saving Work documents…'); return false }
+    if (decision === 'wait') { setNotice(t('mobileWorkDocLeaveSaving')); return false }
     if (decision === 'save' && work.workspaceRoot && !await work.saveAll(work.workspaceRoot)) {
-      setNotice('Work documents could not be saved.'); return false
+      setNotice(t('mobileWorkDocLeaveSaveFailed')); return false
     }
     return true
   }

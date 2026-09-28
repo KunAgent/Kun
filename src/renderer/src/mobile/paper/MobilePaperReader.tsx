@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { usePaperModeStore } from '../../paper/paper-mode-store'
+import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { findMobilePaperResource } from './mobile-paper-library-index'
 import { writeJoinPath } from '../../write/write-workspace-store-helpers'
-import { paperHighlightSchema, type PaperHighlight, type PaperRect } from '@shared/paper/paper-marks-types'
+import { paperHighlightSchema, type PaperHighlight, type PaperHighlightColor, type PaperRect } from '@shared/paper/paper-marks-types'
 import { MobilePaperPdf } from './MobilePaperPdf'
 import { MobilePaperNotes } from './MobilePaperNotes'
 import { MobilePaperAssistant } from './MobilePaperAssistant'
-import { paperResourceKey } from './paper-resource-key'
+import { readMobilePaperPage, useMobilePaperPageProgress } from './mobile-paper-page-progress'
 import { mobilePaperLibraryRoot } from './mobile-paper-library-root'
 import type { PaperResourceView } from '../navigation/mobile-page'
-import type { PaperLibraryEntry } from '@shared/paper/paper-library-types'
+import type { PaperLibraryEntry, PaperReferenceItem } from '@shared/paper/paper-library-types'
 import type { PaperUnitReadResult } from '@shared/paper/paper-types'
 import { MobileSheet } from '../sheets/MobileSheet'
 import './mobile-paper.css'
@@ -23,22 +24,31 @@ type Props = {
 }
 
 export function MobilePaperReader({ paperKey, view, onBack, onView, onSettings, onUnsavedChange }: Props) {
+  const { t } = useTranslation('common')
+  const translateRef = useRef(t)
+  translateRef.current = t
   const paperMode = useWriteWorkspaceStore((state) => state.paperMode)
   const papersDir = useWriteWorkspaceStore((state) => state.paperReading.papersDir)
-  const workspaceRoot = useWriteWorkspaceStore((state) => state.workspaceRoot)
-  const root = mobilePaperLibraryRoot(paperMode.libraries, paperMode.activeLibrary, workspaceRoot)
-  const setEntriesResult = usePaperModeStore((state) => state.setEntriesResult)
+  const preferredRoot = mobilePaperLibraryRoot(paperMode.libraries, paperMode.activeLibrary)
+  const [root, setRoot] = useState('')
   const [entry, setEntry] = useState<PaperLibraryEntry | null>(null)
   const [unit, setUnit] = useState<Extract<PaperUnitReadResult, { ok: true }> | null>(null)
   const [error, setError] = useState('')
   const [marks, setMarks] = useState<PaperHighlight[]>([])
   const marksRef = useRef<PaperHighlight[]>([])
+  const removedIdsRef = useRef(new Set<string>())
   const writingMarks = useRef(false)
   const [marksReady, setMarksReady] = useState(false)
   const [cards, setCards] = useState<unknown[]>([])
   const [marksDirty, setMarksDirty] = useState(false)
   const [notesDirty, setNotesDirty] = useState(false)
+  const dirtyRef = useRef(false)
+  dirtyRef.current = notesDirty || marksDirty
   const [savingMarks, setSavingMarks] = useState(false)
+  const [marksOpen, setMarksOpen] = useState(false)
+  const [editingMarkId, setEditingMarkId] = useState<string | null>(null)
+  const [commentDraft, setCommentDraft] = useState('')
+  const [colorDraft, setColorDraft] = useState<PaperHighlightColor>('yellow')
   const [page, setPage] = useState(1)
   const [pageCount, setPageCount] = useState(0)
   const [quote, setQuote] = useState<{ text: string; page: number } | null>(null)
@@ -47,26 +57,34 @@ export function MobilePaperReader({ paperKey, view, onBack, onView, onSettings, 
   const translationSeq = useRef(0)
   const [busy, setBusy] = useState(false)
   const [fetchingPdf, setFetchingPdf] = useState(false)
+  const [references, setReferences] = useState<PaperReferenceItem[] | null>(null)
+  const [referencesOpen, setReferencesOpen] = useState(false)
+  const [referencesLoading, setReferencesLoading] = useState(false)
+  const [referencesError, setReferencesError] = useState('')
+  const referencesSeq = useRef(0)
   const [retry, setRetry] = useState(0)
-  const pageTimer = useRef<number | null>(null)
   const unitDir = entry?.unitDir ?? ''
+  const flushPage = useMobilePaperPageProgress({ root, unitDir, page, pageCount }, setError)
+  const goBack = (): void => { void flushPage(); onBack() }
   useEffect(() => () => { translationSeq.current += 1 }, [root, unitDir])
   useEffect(() => {
+    if (dirtyRef.current) { setError(translateRef.current('mobileWorkPaperLibraryChangedPending')); return }
     let live = true
-    setEntry(null); setUnit(null); setMarks([]); marksRef.current = []; setMarksReady(false); setCards([]); setError(''); setQuote(null)
-    setMarksDirty(false); setNotesDirty(false)
-    if (!root) { setError('请先设置文献库'); return }
-    void window.kunGui.paperLibraryList({ workspaceRoot: root, papersDir }).then((result) => {
-      if (!live) return
-      if (!result.ok) { setError(result.message); return }
-      setEntriesResult(result)
-      const found = result.entries.find((item) => paperResourceKey(root, item.unitDir) === paperKey)
-      if (!found) { setError('论文不存在或文献库已切换'); return }
-      setEntry(found); setPage(found.lastPage ?? 1)
-      void window.kunGui.paperReadUnit({ workspaceRoot: root, unitDir: found.unitDir }).then((read) => {
+    setRoot(''); setEntry(null); setUnit(null); setMarks([]); marksRef.current = []; removedIdsRef.current.clear(); setMarksReady(false); setCards([]); setError(''); setQuote(null)
+    referencesSeq.current += 1; setReferences(null); setReferencesOpen(false); setReferencesError(''); setReferencesLoading(false)
+    setMarksDirty(false); setNotesDirty(false); setPageCount(0)
+    if (!paperMode.libraries.length) { setError(translateRef.current('mobileWorkPaperNoLibrary')); return }
+    void findMobilePaperResource(paperMode.libraries, preferredRoot, paperKey, papersDir,
+      (payload) => window.kunGui.paperLibraryList(payload)).then((found) => {
+      if (!live || dirtyRef.current) return
+      if (!found) { setError(translateRef.current('mobileWorkPaperPaperNotFound')); return }
+      const { root: foundRoot, entry: foundEntry } = found
+      setRoot(foundRoot); setEntry(foundEntry)
+      setPage(readMobilePaperPage(foundRoot, foundEntry.unitDir, foundEntry.lastPage, foundEntry.lastOpenedAt))
+      void window.kunGui.paperReadUnit({ workspaceRoot: foundRoot, unitDir: foundEntry.unitDir }).then((read) => {
         if (live) { if (read.ok) setUnit(read); else setError(read.message) }
       }).catch((cause: unknown) => { if (live) setError(String(cause)) })
-      void window.kunGui.paperMarksRead({ workspaceRoot: root, unitDir: found.unitDir }).then((read) => {
+      void window.kunGui.paperMarksRead({ workspaceRoot: foundRoot, unitDir: foundEntry.unitDir }).then((read) => {
         if (!live) return
         if (!read.ok) { setError(read.message); return }
         const loaded = read.items.flatMap((item) => {
@@ -78,38 +96,30 @@ export function MobilePaperReader({ paperKey, view, onBack, onView, onSettings, 
         setCards(read.items.filter((item) => (item as { kind?: string })?.kind !== 'highlight'))
         setMarksReady(true)
       }).catch((cause: unknown) => { if (live) setError(String(cause)) })
-      void window.kunGui.paperLocalStateWrite({ libraryRoot: root, unitRelDir: found.unitDir,
+      void window.kunGui.paperLocalStateWrite({ libraryRoot: foundRoot, unitRelDir: foundEntry.unitDir,
         patch: { lastOpenedAt: new Date().toISOString() } })
     }).catch((cause: unknown) => { if (live) setError(String(cause)) })
     return () => { live = false }
-  }, [root, papersDir, paperKey, retry, setEntriesResult])
+  }, [paperMode.libraries, preferredRoot, papersDir, paperKey, retry])
   useEffect(() => onUnsavedChange(notesDirty || marksDirty), [notesDirty, marksDirty, onUnsavedChange])
-  useEffect(() => {
-    if (!unitDir || pageCount === 0) return
-    if (pageTimer.current !== null) window.clearTimeout(pageTimer.current)
-    pageTimer.current = window.setTimeout(() => {
-      pageTimer.current = null
-      void window.kunGui.paperLocalStateWrite({ libraryRoot: root, unitRelDir: unitDir,
-        patch: { lastPage: page, pageCount } })
-    }, 700)
-    return () => { if (pageTimer.current !== null) window.clearTimeout(pageTimer.current) }
-  }, [root, unitDir, page, pageCount])
   const onPage = useCallback((next: number, count: number) => { setPage(next); setPageCount(count) }, [])
   const persistMarks = async (next: PaperHighlight[]): Promise<void> => {
     if (!unitDir || writingMarks.current) return
     writingMarks.current = true
     setSavingMarks(true); setError('')
     let saved = false
+    const removedIds = [...removedIdsRef.current]
     try {
       const result = await window.kunGui.paperMarksWrite({ workspaceRoot: root, unitDir,
-        items: [...next, ...cards] })
+        items: [...next, ...cards], removedIds })
       if (!result.ok) throw new Error(result.message)
       saved = true
-      if (marksRef.current === next) setMarksDirty(false)
+      for (const id of removedIds) removedIdsRef.current.delete(id)
+      if (marksRef.current === next && removedIdsRef.current.size === 0) setMarksDirty(false)
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); setMarksDirty(true) }
     finally {
       writingMarks.current = false; setSavingMarks(false)
-      if (saved && marksRef.current !== next) void persistMarks(marksRef.current)
+      if (saved && (marksRef.current !== next || removedIdsRef.current.size > 0)) void persistMarks(marksRef.current)
     }
   }
   const addHighlight = (selection: Selection): void => {
@@ -120,9 +130,22 @@ export function MobilePaperReader({ paperKey, view, onBack, onView, onSettings, 
     marksRef.current = merged
     setMarks(merged); setMarksDirty(true); void persistMarks(merged)
   }
+  const updateHighlight = (id: string, comment: string, color: PaperHighlightColor): void => {
+    const next = marksRef.current.map((mark) => mark.id === id
+      ? { ...mark, color, comment: comment.trim() || undefined, updatedAt: new Date().toISOString() } : mark)
+    marksRef.current = next; setMarks(next); setMarksDirty(true); setEditingMarkId(null)
+    void persistMarks(next)
+  }
+  const deleteHighlight = (id: string): void => {
+    const next = marksRef.current.filter((mark) => mark.id !== id)
+    if (next.length === marksRef.current.length) return
+    removedIdsRef.current.add(id)
+    marksRef.current = next; setMarks(next); setMarksDirty(true)
+    void persistMarks(next)
+  }
   const translate = (selection: Selection): void => {
     const request = ++translationSeq.current
-    setTranslationOpen(true); setTranslation('翻译中…'); setBusy(true)
+    setTranslationOpen(true); setTranslation(t('mobileWorkPaperTranslating')); setBusy(true)
     const settings = useWriteWorkspaceStore.getState().paperMode.translate
     void window.kunGui.paperTranslateSelection({ text: selection.text,
       targetLanguage: settings.targetLanguage }).then((result) => {
@@ -132,7 +155,8 @@ export function MobilePaperReader({ paperKey, view, onBack, onView, onSettings, 
     }).finally(() => { if (request === translationSeq.current) setBusy(false) })
   }
   const changeView = (next: PaperResourceView): void => {
-    if (notesDirty && view === 'notes' && next !== 'notes') { setError('请先保存笔记再切换'); return }
+    if (notesDirty && view === 'notes' && next !== 'notes') { setError(t('mobileWorkPaperNotesBeforeView')); return }
+    void flushPage()
     onView(next)
   }
   const download = (): void => {
@@ -140,6 +164,18 @@ export function MobilePaperReader({ paperKey, view, onBack, onView, onSettings, 
     const path = writeJoinPath(writeJoinPath(root, unitDir), unit.meta.pdfFile)
     void window.kunGui.saveWorkspaceFileAs({ workspaceRoot: root, sourcePath: path,
       suggestedName: unit.meta.pdfFile }).then((result) => { if (!result.ok) setError(result.message) })
+  }
+  const fetchReferences = async (): Promise<void> => {
+    if (!root || !unitDir || referencesLoading) return
+    const serial = ++referencesSeq.current
+    setReferencesLoading(true); setReferencesError('')
+    try {
+      const result = await window.kunGui.paperFetchReferences({ workspaceRoot: root, unitDir })
+      if (serial !== referencesSeq.current) return
+      if (!result.ok) throw new Error(result.message)
+      setReferences(result.items)
+    } catch (cause) { if (serial === referencesSeq.current) setReferencesError(String(cause)) }
+    finally { if (serial === referencesSeq.current) setReferencesLoading(false) }
   }
   const fetchMissingPdf = async (): Promise<void> => {
     if (!entry || !unit || fetchingPdf) return
@@ -154,37 +190,79 @@ export function MobilePaperReader({ paperKey, view, onBack, onView, onSettings, 
     finally { setFetchingPdf(false) }
   }
   if (!entry || !unit || !marksReady) return <section className="kun-mobile-unavailable">
-    <p role={error ? 'alert' : 'status'}>{error || '正在加载论文…'}</p>
-    {error ? <button type="button" onClick={() => setRetry((value) => value + 1)}>重试</button> : null}
-    <button type="button" onClick={onBack}>返回论文库</button>
+    <p role={error ? 'alert' : 'status'}>{error || t('mobileWorkPaperLoadingPaper')}</p>
+    {error ? <button type="button" onClick={() => setRetry((value) => value + 1)}>{t('mobileWorkPaperRetry')}</button> : null}
+    <button type="button" onClick={goBack}>{t('mobileWorkPaperBackLibrary')}</button>
   </section>
   const pdfPath = unit.meta.pdfFile
     ? writeJoinPath(writeJoinPath(root, entry.unitDir), unit.meta.pdfFile) : null
+  const status = ({ unread: t('mobileWorkPaperUnread'), reading: t('mobileWorkPaperReading'),
+    read: t('mobileWorkPaperReadStatus') })[entry.meta.status ?? 'unread']
   return <section className="kun-mobile-paper-reader">
-    <header><button type="button" onClick={onBack} aria-label="返回论文库">‹</button><h1>{unit.meta.title}</h1>
-      {pdfPath ? <button type="button" onClick={download}>下载</button> : <span />}</header>
-    <nav aria-label="论文视图">{(['read', 'notes', 'assistant', 'info'] as const).map((tab) =>
+    <header><button type="button" onClick={goBack} aria-label={t('mobileWorkPaperBackLibrary')}>‹</button><h1>{unit.meta.title}</h1>
+      {pdfPath ? <button type="button" onClick={download}>{t('mobileWorkPaperDownload')}</button> : <span />}</header>
+    <nav aria-label={t('mobileWorkPaperLibrary')}>{(['read', 'notes', 'assistant', 'info'] as const).map((tab) =>
       <button type="button" key={tab} aria-current={view === tab ? 'page' : undefined}
-        onClick={() => changeView(tab)}>{({ read: '阅读', notes: '笔记', assistant: '提问', info: '信息' })[tab]}</button>)}</nav>
+        onClick={() => changeView(tab)}>{({ read: t('mobileWorkPaperViewRead'), notes: t('mobileWorkPaperViewNotes'),
+          assistant: t('mobileWorkPaperViewAsk'), info: t('mobileWorkPaperViewInfo') })[tab]}</button>)}</nav>
+    <div className="kun-mobile-paper-actions"><button type="button" onClick={() => setMarksOpen(true)}>
+      {t('mobileWorkPaperMarks', { count: marks.length })}</button></div>
     {error ? <p role="alert">{error} {marksDirty ? <button type="button" disabled={savingMarks}
-      onClick={() => void persistMarks(marks)}>重试保存标注</button> : null}</p> : null}
+      onClick={() => void persistMarks(marks)}>{t('mobileWorkPaperSaveMarksRetry')}</button> : null}</p> : null}
     {view === 'read' ? pdfPath ? <MobilePaperPdf workspaceRoot={root} path={pdfPath}
       initialPage={page} marks={marks} onPage={onPage} onHighlight={addHighlight} onTranslate={translate}
       onQuote={(selection) => { setQuote(selection); changeView('assistant') }} />
-      : <div className="kun-mobile-paper-reader-body"><p>这篇论文尚无 PDF，可在信息页查看摘要。</p></div> : null}
+      : <div className="kun-mobile-paper-reader-body"><p>{t('mobileWorkPaperNoPdfInfo')}</p></div> : null}
     {view === 'notes' ? <MobilePaperNotes workspaceRoot={root} unitDir={unitDir} onDirty={setNotesDirty} /> : null}
     {view === 'assistant' ? <MobilePaperAssistant root={root} unitDir={unitDir} page={page}
       quote={quote} onClearQuote={() => setQuote(null)} onSettings={onSettings} /> : null}
     {view === 'info' ? <div className="kun-mobile-paper-reader-body">
       <h2>{unit.meta.title}</h2><p>{unit.meta.authors.join(', ')}</p>
-      <p>{unit.meta.year} · {unit.meta.venue}</p><p>{unit.meta.abstract || '暂无摘要'}</p>
-      <p>状态：{entry.meta.status ?? 'unread'} · 标签：{entry.meta.tags?.join('、') || '无'}</p>
+      <p>{unit.meta.year} · {unit.meta.venue}</p><p>{unit.meta.abstract || t('mobileWorkPaperNoAbstract')}</p>
+      <p>{t('mobileWorkPaperStatusTags', { status, tags: entry.meta.tags?.join(', ') || t('mobileWorkPaperNone') })}</p>
+      <button type="button" onClick={() => { setReferencesOpen(true)
+        if (!references && !referencesLoading) void fetchReferences()
+      }}>{t('mobileWorkPaperShowReferences')}</button>
       {!pdfPath && (unit.meta.pdfUrl || unit.meta.arxivId) ? <button type="button"
         className="kun-mobile-work-sheet-button" disabled={fetchingPdf}
-        onClick={() => void fetchMissingPdf()}>{fetchingPdf ? '获取 PDF 中…' : '从论文来源获取 PDF'}</button> : null}
-      <p>所在文献库：{root}</p>
+        onClick={() => void fetchMissingPdf()}>{fetchingPdf ? t('mobileWorkPaperFetchingPdf') : t('mobileWorkPaperGetPdf')}</button> : null}
+      <p>{t('mobileWorkPaperLibraryLocation', { root })}</p>
     </div> : null}
-    <MobileSheet open={translationOpen} title="选中文本翻译" closeLabel="关闭" onClose={() => setTranslationOpen(false)}>
+    <MobileSheet open={marksOpen} title={t('mobileWorkPaperMarkEditor')} closeLabel={t('close')} onClose={() => setMarksOpen(false)}>
+      {marks.length ? <ul className="kun-mobile-paper-mark-list">{marks.map((mark) => <li key={mark.id}>
+        <button type="button" disabled={!pdfPath} onClick={() => {
+          if (notesDirty && view === 'notes') { setError(t('mobileWorkPaperNoteBeforeJump')); return }
+          setPage(mark.page); changeView('read'); setMarksOpen(false)
+        }}>{t('mobileWorkPaperPage', { page: mark.page })} · {mark.quote.slice(0, 160)}</button>
+        {mark.comment ? <p>{mark.comment}</p> : null}
+        {editingMarkId === mark.id ? <>
+          <label>{t('mobileWorkPaperMarkComment')} <textarea maxLength={8000} value={commentDraft}
+            onChange={(event) => setCommentDraft(event.target.value)} /></label>
+          <label>{t('mobileWorkPaperMarkColor')} <select value={colorDraft} onChange={(event) => setColorDraft(event.target.value as PaperHighlightColor)}>
+            <option value="yellow">{t('mobileWorkPaperColorYellow')}</option><option value="green">{t('mobileWorkPaperColorGreen')}</option>
+            <option value="blue">{t('mobileWorkPaperColorBlue')}</option><option value="pink">{t('mobileWorkPaperColorPink')}</option>
+          </select></label>
+          <button type="button" onClick={() => updateHighlight(mark.id, commentDraft, colorDraft)}>{t('mobileWorkPaperSaveMark')}</button>
+        </> : <button type="button" onClick={() => { setEditingMarkId(mark.id)
+          setCommentDraft(mark.comment ?? ''); setColorDraft(mark.color) }}>{t('mobileWorkPaperEdit')}</button>}
+        <button type="button" onClick={() => { if (window.confirm(t('mobileWorkPaperDeleteMarkConfirm'))) deleteHighlight(mark.id) }}>{t('mobileWorkPaperDelete')}</button>
+      </li>)}</ul> : <p role="status">{t('mobileWorkPaperNoMarks')}</p>}
+      {marksDirty ? <p role="status">{t('mobileWorkPaperMarkPending')}</p> : null}
+    </MobileSheet>
+    <MobileSheet open={referencesOpen} title={t('mobileWorkPaperReferences')} closeLabel={t('close')}
+      onClose={() => setReferencesOpen(false)}>
+      {referencesLoading ? <p role="status">{t('mobileWorkPaperReferencesLoading')}</p> : null}
+      {referencesError ? <p role="alert">{referencesError}</p> : null}
+      <button type="button" disabled={referencesLoading} onClick={() => void fetchReferences()}>{t('mobileWorkPaperRefreshReferences')}</button>
+      {references ? references.length ? <ol className="kun-mobile-paper-references">
+        {references.slice(0, 80).map((item) => <li key={item.n}>
+          <strong>{item.title || item.raw || t('mobileWorkPaperReferenceNamed', { number: item.n })}</strong>
+          <p>{item.authors?.join(', ')} {item.year} {item.venue}</p>
+          {item.doi ? <small>DOI: {item.doi}</small> : null}
+        </li>)}</ol> : <p role="status">{t('mobileWorkPaperReferencesEmpty')}</p> : null}
+      {references && references.length > 80 ? <p role="status">{t('mobileWorkPaperReferencesLimit', { count: references.length })}</p> : null}
+    </MobileSheet>
+    <MobileSheet open={translationOpen} title={t('mobileWorkPaperTranslateSelection')} closeLabel={t('close')} onClose={() => setTranslationOpen(false)}>
       <p role={busy ? 'status' : undefined}>{translation}</p>
     </MobileSheet>
   </section>

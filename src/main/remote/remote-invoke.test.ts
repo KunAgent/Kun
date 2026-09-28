@@ -107,7 +107,9 @@ describe('remote allowlist shape', () => {
   it('exposes only the mobile reader paper data plane', () => {
     for (const channel of ['paper-library:list', 'paper:read-unit', 'paper:import',
       'paper:cancel', 'paper-library:create-group', 'paper-library:move-to-group',
-      'paper-library:download-pdf', 'paper-reader:marks-read', 'paper-reader:marks-write']) {
+      'paper-library:download-pdf', 'paper-reader:marks-read', 'paper-reader:marks-write',
+      'paper-discover:feed', 'paper-discover:arxiv-today', 'paper-discover:venue',
+      'paper-discover:venue-catalog']) {
       expect(REMOTE_ALLOWED_INVOKE_CHANNELS.has(channel)).toBe(true)
     }
     for (const channel of ['paper-library:trash', 'paper:import-batch']) {

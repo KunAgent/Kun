@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { PaperHighlight, PaperRect } from '@shared/paper/paper-marks-types'
+import type { PDFOutlineItem } from 'pdfjs-dist/build/pdf.mjs'
 import { useWritePdfDocument } from '../../components/write/use-write-pdf-document'
 import { WritePdfPage, selectionFromPdf } from '../../components/write/WritePdfPage'
+import { MobileSheet } from '../sheets/MobileSheet'
+import { findPaperPdfPage, flattenPaperOutline, resolvePaperOutlinePage } from './mobile-paper-pdf-tools'
 
 type Selection = { text: string; page: number; rects: PaperRect[] }
 
@@ -19,12 +23,30 @@ type Props = {
 function MobilePdfPage({ url, path, initialPage, marks, onPage, onQuote, onHighlight, onTranslate }: Props & {
   url: string
 }) {
+  const { t } = useTranslation('common')
   const root = useRef<HTMLDivElement>(null)
   const [page, setPage] = useState(initialPage)
   const [scale, setScale] = useState(0.72)
   const [selection, setSelection] = useState<Selection | null>(null)
+  const [query, setQuery] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [searchMessage, setSearchMessage] = useState('')
+  const searchGeneration = useRef(0)
+  const [toolsOpen, setToolsOpen] = useState<'search' | 'outline' | null>(null)
+  const outlineOpen = toolsOpen === 'outline'
+  const [outline, setOutline] = useState<PDFOutlineItem[] | null>(null)
+  useEffect(() => { setPage(initialPage); setSelection(null) }, [initialPage])
   const publishSelection = useCallback(() => undefined, [])
   const pdf = useWritePdfDocument({ filePath: path, dataBase64: '', url, mtimeMs: 0, publishSelection })
+  useEffect(() => () => { searchGeneration.current += 1 }, [pdf.pdfDocument])
+  useEffect(() => {
+    if (!outlineOpen || !pdf.pdfDocument) return
+    let live = true
+    setOutline(null)
+    void pdf.pdfDocument.getOutline().then((items) => { if (live) setOutline(items ?? []) })
+      .catch((cause: unknown) => { if (live) setSearchMessage(t('mobileWorkPaperOutlineFailed', { error: String(cause) })) })
+    return () => { live = false }
+  }, [outlineOpen, pdf.pdfDocument, t])
   useEffect(() => {
     if (!pdf.pdfDocument) return
     let canceled = false
@@ -62,39 +84,85 @@ function MobilePdfPage({ url, path, initialPage, marks, onPage, onQuote, onHighl
   const changePage = (value: number): void => {
     setPage(Math.max(1, Math.min(pdf.pageCount, value))); setSelection(null)
   }
+  const search = async (): Promise<void> => {
+    if (!pdf.pdfDocument || !query.trim() || searching) return
+    const serial = ++searchGeneration.current
+    setSearching(true); setSearchMessage(t('mobileWorkPaperSearchingPdf'))
+    try {
+      const found = await findPaperPdfPage(pdf.pdfDocument, query, page, () => serial !== searchGeneration.current)
+      if (serial !== searchGeneration.current) return
+      if (found) { changePage(found); setSearchMessage(t('mobileWorkPaperSearchFound', { page: found })) }
+      else setSearchMessage(t('mobileWorkPaperNoSearchResult'))
+    } catch (cause) { if (serial === searchGeneration.current) setSearchMessage(t('mobileWorkPaperSearchFailed', { error: String(cause) })) }
+    finally { if (serial === searchGeneration.current) setSearching(false) }
+  }
+  const jumpOutline = async (item: PDFOutlineItem): Promise<void> => {
+    if (!pdf.pdfDocument) return
+    try {
+      const target = await resolvePaperOutlinePage(pdf.pdfDocument, item)
+      if (target) { changePage(target); setToolsOpen(null) }
+      else setSearchMessage(t('mobileWorkPaperOutlineMissingTarget'))
+    } catch (cause) { setSearchMessage(t('mobileWorkPaperOutlineJumpFailed', { error: String(cause) })) }
+  }
   return <>
     <div className="kun-mobile-paper-reader-controls">
-      <button type="button" disabled={page <= 1} onClick={() => changePage(page - 1)}>上一页</button>
-      <label>第 <input type="number" min={1} max={pdf.pageCount} value={page}
-        onChange={(event) => changePage(Number(event.target.value))} style={{ width: 58 }} /> / {pdf.pageCount} 页</label>
-      <button type="button" disabled={page >= pdf.pageCount} onClick={() => changePage(page + 1)}>下一页</button>
-      <button type="button" onClick={() => setScale((old) => Math.max(.3, old - .15))}>缩小</button>
-      <button type="button" onClick={() => setScale((old) => Math.min(2, old + .15))}>放大</button>
+      <button type="button" disabled={page <= 1} onClick={() => changePage(page - 1)}>{t('mobileWorkPaperPrevPage')}</button>
+      <label>{t('mobileWorkPaperPageInput')} <input type="number" min={1} max={pdf.pageCount} value={page}
+        aria-label={t('mobileWorkPaperPageOf', { page, total: pdf.pageCount })}
+        onChange={(event) => changePage(Number(event.target.value))} style={{ width: 58 }} /> {t('mobileWorkPaperOfPages', { total: pdf.pageCount })}</label>
+      <button type="button" disabled={page >= pdf.pageCount} onClick={() => changePage(page + 1)}>{t('mobileWorkPaperNextPage')}</button>
+      <button type="button" onClick={() => setScale((old) => Math.max(.3, old - .15))}>{t('mobileWorkPaperZoomOut')}</button>
+      <button type="button" onClick={() => setScale((old) => Math.min(2, old + .15))}>{t('mobileWorkPaperZoomIn')}</button>
+      <button type="button" disabled={!pdf.pdfDocument} onClick={() => { setSearchMessage(''); setToolsOpen('search') }}>{t('mobileWorkPaperSearchPdf')}</button>
+      <button type="button" disabled={!pdf.pdfDocument} onClick={() => { setSearchMessage(''); setToolsOpen('outline') }}>{t('mobileWorkPaperOutline')}</button>
     </div>
+    <MobileSheet open={toolsOpen === 'search'} title={t('mobileWorkPaperSearchPdf')} closeLabel={t('close')}
+      onClose={() => { searchGeneration.current += 1; setSearching(false); setToolsOpen(null) }}>
+      <form className="kun-mobile-paper-pdf-search" onSubmit={(event) => { event.preventDefault(); void search() }}>
+        <label>{t('mobileWorkPaperSearchPdf')} <input type="search" maxLength={120} value={query}
+          onChange={(event) => { searchGeneration.current += 1; setSearching(false); setQuery(event.target.value) }} /></label>
+        <button type="submit" disabled={!pdf.pdfDocument || !query.trim() || searching}>{t('mobileWorkPaperFind')}</button>
+        {searching ? <button type="button" onClick={() => { searchGeneration.current += 1
+          setSearching(false); setSearchMessage(t('mobileWorkPaperSearchCancelled')) }}>{t('mobileWorkPaperCancel')}</button> : null}
+      </form>
+      {searchMessage ? <p role="status" className="kun-mobile-paper-search-status">{searchMessage}</p> : null}
+    </MobileSheet>
+    <MobileSheet open={outlineOpen} title={t('mobileWorkPaperOutline')} closeLabel={t('close')}
+      onClose={() => setToolsOpen(null)}>
+      <div className="kun-mobile-paper-outline">
+        {outline === null ? <p role="status">{t('mobileWorkPaperOutlineLoading')}</p>
+          : outline.length ? <ul>{flattenPaperOutline(outline).map(({ item, depth }, index) =>
+            <li key={index}><button type="button" style={{ paddingLeft: `${12 + depth * 12}px` }}
+              onClick={() => void jumpOutline(item)}>{item.title}</button></li>)}</ul>
+            : <p role="status">{t('mobileWorkPaperNoOutline')}</p>}
+        {searchMessage ? <p role="status">{searchMessage}</p> : null}
+      </div>
+    </MobileSheet>
     <div className="kun-mobile-paper-reader-body" ref={root} onPointerUp={capture} onTouchEnd={capture}>
-      {pdf.loading ? <p role="status">PDF 加载中…</p> : null}
+      {pdf.loading ? <p role="status">{t('mobileWorkPaperPdfLoading')}</p> : null}
       {pdf.error ? <p role="alert">{pdf.error}</p> : null}
       {pdf.pdfDocument ? <div className="kun-mobile-paper-page">
         <WritePdfPage key={`${page}:${scale}`} document={pdf.pdfDocument} pageNumber={page}
           scale={scale} selectionRects={[]} onPageText={pdf.updatePageText} />
         {marks.filter((mark) => mark.page === page).flatMap((mark) => mark.rects.map((rect, index) =>
-          <div key={`${mark.id}-${index}`} aria-label="标注" title={mark.comment || mark.quote}
+          <div key={`${mark.id}-${index}`} aria-label={t('mobileWorkPaperHighlight')} title={mark.comment || mark.quote}
             style={{ position: 'absolute', pointerEvents: 'none', left: `${rect[0] * 100}%`,
               top: `${rect[1] * 100}%`, width: `${rect[2] * 100}%`, height: `${rect[3] * 100}%`,
               backgroundColor: 'rgba(255, 215, 90, .26)' }} />))}
       </div> : null}
     </div>
     {selection ? <div className="kun-mobile-paper-selection-actions">
-      <button type="button" onClick={() => { onHighlight(selection); setSelection(null) }}>标注</button>
-      <button type="button" onClick={() => { onTranslate(selection); setSelection(null) }}>翻译</button>
-      <button type="button" onClick={() => { onQuote(selection); setSelection(null) }}>引用提问</button>
-      <button type="button" onClick={() => setSelection(null)}>取消选择</button>
+      <button type="button" onClick={() => { onHighlight(selection); setSelection(null) }}>{t('mobileWorkPaperHighlight')}</button>
+      <button type="button" onClick={() => { onTranslate(selection); setSelection(null) }}>{t('mobileWorkPaperTranslateSelection')}</button>
+      <button type="button" onClick={() => { onQuote(selection); setSelection(null) }}>{t('mobileWorkPaperQuoteAsk')}</button>
+      <button type="button" onClick={() => setSelection(null)}>{t('mobileWorkPaperCancelSelection')}</button>
     </div> : null}
   </>
 }
 
 /** PDF.js fetches the authenticated workspace preview URL; no base64 IPC copy. */
 export function MobilePaperPdf(props: Props) {
+  const { t } = useTranslation('common')
   const [pdfUrl, setPdfUrl] = useState<{ path: string; url: string } | null>(null)
   const [error, setError] = useState('')
   const [retry, setRetry] = useState(0)
@@ -114,7 +182,7 @@ export function MobilePaperPdf(props: Props) {
       if (leaseId) void window.kunGui.releaseWorkspacePreviewResource({ leaseId })
     }
   }, [props.workspaceRoot, props.path, retry])
-  if (error) return <p role="alert">{error} <button type="button" onClick={() => setRetry((value) => value + 1)}>重试</button></p>
-  if (!pdfUrl || pdfUrl.path !== props.path) return <p role="status">正在打开主机 PDF…</p>
+  if (error) return <p role="alert">{error} <button type="button" onClick={() => setRetry((value) => value + 1)}>{t('mobileWorkPaperRetry')}</button></p>
+  if (!pdfUrl || pdfUrl.path !== props.path) return <p role="status">{t('mobileWorkPaperPdfLoading')}</p>
   return <MobilePdfPage key={props.path} {...props} url={pdfUrl.url} />
 }

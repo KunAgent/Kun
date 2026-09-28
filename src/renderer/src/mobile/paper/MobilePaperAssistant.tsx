@@ -5,7 +5,8 @@ import { useChatStore } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { activeWriteThreadForWorkspace } from '../../write/write-thread-registry'
 import { paperContextReferencePaths } from '../../paper/paper-conversation-scope'
-import { researchResourcePath } from '../../paper/paper-research-sessions'
+import { buildPaperResearchBrief, type PaperResearchRequest } from '../../paper/paper-research-actions'
+import { readLastResearchSession, researchResourcePath } from '../../paper/paper-research-sessions'
 import { writeJoinPath } from '../../write/write-workspace-store-helpers'
 import { workbenchWriteSourceReference } from '../../components/workbench/workbench-write-source-reference'
 import { LazyMessageTimeline } from '../../components/chat/LazyMessageTimeline'
@@ -15,20 +16,35 @@ import { MobilePendingActions } from '../chat/MobilePendingActions'
 import { mergeRestoredDraft } from '../chat/mobile-draft-restore'
 import { readMobilePage } from '../navigation/mobile-page'
 import { paperResourceKey } from './paper-resource-key'
+import { buildMobilePaperQuestion } from './mobile-paper-turn'
 import '../work/mobile-work-assistant.css'
 
 type Quote = { text: string; page: number }
 
-export function MobilePaperAssistant({ root, unitDir, page, quote, researchSessionId, onSettings, onClearQuote }: {
+function readDraft(key: string): string {
+  try { return window.sessionStorage.getItem(key) ?? '' } catch { return '' }
+}
+function writeDraft(key: string, value: string): void {
+  try { if (value) window.sessionStorage.setItem(key, value); else window.sessionStorage.removeItem(key) } catch { /* private mode */ }
+}
+
+export function MobilePaperAssistant({ root, unitDir, page, quote, researchSessionId, researchRequest,
+  researchBlockedReason, onSettings, onClearQuote }: {
   root: string; unitDir: string; page: number; quote: Quote | null; researchSessionId?: string
+  researchRequest?: Omit<PaperResearchRequest, 'query'>
+  researchBlockedReason?: string | null
   onSettings: () => void; onClearQuote: () => void
 }) {
   const { t } = useTranslation('common')
   const unitPath = researchSessionId ? researchResourcePath(root, researchSessionId) : writeJoinPath(root, unitDir)
-  const [input, setInput] = useState('')
+  const draftKey = `kun.mobile.paper.draft.${paperResourceKey(root, unitPath)}`
+  const [input, setInput] = useState(() => readDraft(draftKey))
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const generation = useRef(0)
+  const latestPage = useRef(page)
+  latestPage.current = page
+  useEffect(() => { setInput(readDraft(draftKey)) }, [draftKey])
   useEffect(() => {
     generation.current += 1
     return () => { generation.current += 1 }
@@ -53,23 +69,28 @@ export function MobilePaperAssistant({ root, unitDir, page, quote, researchSessi
   }, [expected, ready, selectThread, root, unitPath])
   const pendingInput = ready && selectLivePendingUserInput(chat.blocks)
   const send = (): void => {
-    const text = input.trim()
-    if (!text || pendingInput || sending || chat.runtimeConnection !== 'ready') return
+    const rawInput = input
+    const text = rawInput.trim()
+    if (!text || pendingInput || sending || chat.runtimeConnection !== 'ready' || researchBlockedReason) return
     setInput(''); setSending(true); setError('')
     const started = generation.current
+    const pageAtSend = page
+    const quoteAtSend = quote
     const stillCurrent = (): boolean => {
-      if (generation.current !== started) return false
+      if (generation.current !== started || !useWriteWorkspaceStore.getState().paperMode.libraries.includes(root)) return false
       const route = readMobilePage(new URL(window.location.href))
-      return researchSessionId ? route.kind === 'discover'
-        : route.kind === 'paper' && route.paperKey === paperResourceKey(root, unitDir)
+      return researchSessionId ? route.kind === 'discover' && readLastResearchSession(root) === researchSessionId
+        : route.kind === 'paper' && route.paperKey === paperResourceKey(root, unitDir) && latestPage.current === pageAtSend
     }
     void (async () => {
       try {
         const threadId = await chat.ensureThread(root, unitPath)
-        if (!threadId) throw new Error('未能建立论文会话')
-        if (!stillCurrent()) return
+        if (!threadId) throw new Error(t('mobileWorkPaperSessionFailed'))
+        if (!stillCurrent()) throw new Error(t('mobileWorkPaperPageMoved'))
         if (useChatStore.getState().activeThreadId !== threadId) await chat.selectThread(threadId, root, unitPath)
-        if (!stillCurrent() || useChatStore.getState().activeThreadId !== threadId) return
+        if (!stillCurrent() || useChatStore.getState().activeThreadId !== threadId) {
+          throw new Error(t('mobileWorkPaperThreadMoved'))
+        }
         const references = unitDir ? (await Promise.all(paperContextReferencePaths(unitDir)
           .map(async (relative) => {
             const path = writeJoinPath(root, relative)
@@ -77,19 +98,34 @@ export function MobilePaperAssistant({ root, unitDir, page, quote, researchSessi
               .catch(() => null)
             return available?.ok ? workbenchWriteSourceReference(root, path) : undefined
           }))).filter((reference): reference is NonNullable<typeof reference> => reference !== undefined) : []
-        if (!stillCurrent() || useChatStore.getState().activeThreadId !== threadId) return
-        const prompt = quote
-          ? `${text}\n\n引用（${unitDir}，第 ${quote.page} 页）：\n> ${quote.text}` : text
+        if (!stillCurrent() || useChatStore.getState().activeThreadId !== threadId) {
+          throw new Error(t('mobileWorkPaperPageMoved'))
+        }
+        const prompt = researchSessionId
+          ? useChatStore.getState().blocks.some((block) => block.kind === 'user') ? text
+            : buildPaperResearchBrief({ query: text, depth: researchRequest?.depth ?? 'standard',
+                sources: researchRequest?.sources ?? [], yearFrom: researchRequest?.yearFrom,
+                yearTo: researchRequest?.yearTo })
+          : unitDir ? buildMobilePaperQuestion({ text, libraryRoot: root, unitDir,
+              page: pageAtSend, quote: quoteAtSend }) : text
         const sent = await chat.sendMessage(prompt, 'agent', {
           expectedThreadId: threadId, agentSurface: 'write',
           ...(workModel.model ? { model: workModel.model } : {}),
           ...(workModel.providerId ? { providerId: workModel.providerId } : {}),
           ...(references.length ? { fileReferences: references } : {})
         })
-        if (!sent) throw new Error('发送失败')
-        onClearQuote()
-      } catch (cause) { setError(String(cause)); setInput((value) => mergeRestoredDraft(text, value)) }
-      finally { setSending(false) }
+        if (!sent) throw new Error(t('mobileWorkPaperSendFailed'))
+        if (readDraft(draftKey) === rawInput) writeDraft(draftKey, '')
+        if (stillCurrent()) onClearQuote()
+      } catch (cause) {
+        if (generation.current === started) {
+          setError(String(cause)); setInput((value) => {
+            const restored = mergeRestoredDraft(rawInput, value)
+            writeDraft(draftKey, restored)
+            return restored
+          })
+        }
+      } finally { if (generation.current === started) setSending(false) }
     })()
   }
   return <section className="kun-mobile-work-assistant">
@@ -97,13 +133,14 @@ export function MobilePaperAssistant({ root, unitDir, page, quote, researchSessi
       liveReasoning={chat.liveReasoning} live={chat.liveAssistant} activeThreadId={chat.activeThreadId}
       runtimeConnection={chat.runtimeConnection} runtimeError={chat.runtimeError}
       onRetryConnection={chat.probeRuntime} onOpenSettings={onSettings} compactCards /> : null}</div>
-    {quote ? <div className="kun-mobile-work-selection">已引用第 {quote.page} 页：{quote.text.slice(0, 120)}
-      <button type="button" onClick={onClearQuote}>移除引用</button></div> : <p className="kun-mobile-work-selection">
-      {researchSessionId ? '研究会话已绑定到当前文献库。' : `提问将绑定到当前论文会话（第 ${page} 页）。`}</p>}
-    <MobileComposer value={input} onChange={setInput} onSend={send}
+    {quote ? <div className="kun-mobile-work-selection">{t('mobileWorkPaperQuotedAt', { page: quote.page, quote: quote.text.slice(0, 120) })}
+      <button type="button" onClick={onClearQuote}>{t('mobileWorkPaperRemoveQuote')}</button></div> : <p className="kun-mobile-work-selection">
+      {researchSessionId ? t('mobileWorkPaperResearchBound') : t('mobileWorkPaperQuestionBound', { page })}</p>}
+    <MobileComposer value={input} onChange={(value) => { setInput(value); writeDraft(draftKey, value) }} onSend={send}
       onStop={() => void chat.interrupt()} onAttachments={null} onOptions={null}
       running={ready && chat.busy} disabled={chat.runtimeConnection !== 'ready'} sending={sending}
-      canSend={!pendingInput && Boolean(input.trim())} error={error}
+      canSend={!pendingInput && !researchBlockedReason && Boolean(input.trim())}
+      error={error || researchBlockedReason || null}
       pendingActions={ready ? <MobilePendingActions blocks={chat.blocks} resolveApproval={chat.resolveApproval}
         resolveUserInput={chat.resolveUserInput} /> : null}
       labels={{ placeholder: t(pendingInput ? 'mobileInputComposerHint' : 'mobileComposerPlaceholder'),

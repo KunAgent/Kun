@@ -8,6 +8,8 @@ import { mobileWorkResources, resolveMobileWorkEntry } from './mobile-work-resou
 import { searchMobileWorkEntries } from './mobile-work-search'
 import { writeDirnameFromPath } from '../../write/write-workspace-store-helpers'
 import { workFileResourceKey, workWhiteboardResourceKey } from './work-resource-key'
+import { setMobileDocumentsWorkspaceRoot } from './mobile-documents-workspace'
+import { rememberMobileWorkRoute } from './mobile-work-resource-route'
 import type { MobilePage } from '../navigation/mobile-page'
 
 type Props = {
@@ -63,6 +65,20 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
   }, [folder?.path, folder?.type, entriesByDir, loadingDirs, treeError, loadDirectory, workspaceRoot])
 
   const closeSheet = (): void => { setSheet(null); setSelected(null); setError(''); setName('') }
+  const chooseWorkspace = async (root: string): Promise<void> => {
+    if (working || !await canLeave()) return
+    setWorking(true); setError('')
+    try {
+      await work.initializeWorkspace(root)
+      const current = useWriteWorkspaceStore.getState()
+      if (current.workspaceRoot !== root || !current.rootDirectory) {
+        throw new Error(current.treeError ?? t('mobileWorkDocWorkspaceOpenFailed'))
+      }
+      setMobileDocumentsWorkspaceRoot(root, current.workspaceRoots)
+      closeSheet(); navigate({ mode: 'work', kind: 'home' })
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
+    finally { setWorking(false) }
+  }
   const getEntry = (key: string): WorkspaceEntry | undefined => resolveMobileWorkEntry(work, key)
     ?? matchingSearch?.entries.find((entry) => workFileResourceKey(work.workspaceRoot, entry.path) === key)
   const openResource = async (resource: MobileWorkResource): Promise<void> => {
@@ -71,7 +87,7 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
       if (entry && !resolveMobileWorkEntry(work, resource.key)) {
         await work.loadDirectory(work.workspaceRoot, writeDirnameFromPath(entry.path))
         if (!resolveMobileWorkEntry(useWriteWorkspaceStore.getState(), resource.key)) {
-          throw new Error('资源未能从主机加载')
+          throw new Error(t('mobileWorkDocResourceLoadFailed'))
         }
       }
       if (resource.kind === 'directory' && entry) {
@@ -83,9 +99,13 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
       else if (entry?.type === 'file') {
         await work.openFile(work.workspaceRoot, entry.path)
         if (!useWriteWorkspaceStore.getState().documentsByPath[entry.path]) {
-          throw new Error(useWriteWorkspaceStore.getState().fileError ?? '文档打开失败')
+          throw new Error(useWriteWorkspaceStore.getState().fileError ?? t('mobileWorkDocOpenFailed'))
         }
       } else return
+      if (board) rememberMobileWorkRoute({ key: resource.key, root: work.workspaceRoot,
+        path: board.id, kind: 'whiteboard' })
+      else if (entry) rememberMobileWorkRoute({ key: resource.key, root: work.workspaceRoot,
+        path: entry.path, kind: 'document' })
       navigate({ mode: 'work', kind: 'resource', resourceKey: resource.key,
         view: board ? 'whiteboard' : 'read' })
     } catch (cause) {
@@ -100,20 +120,24 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
     try {
       if (kind === 'whiteboard') {
         const board = await work.createWhiteboard(work.workspaceRoot, { title: name.trim() })
-        if (!board) throw new Error('白板创建失败')
+        if (!board) throw new Error(t('mobileWorkDocBoardCreateFailed'))
         closeSheet()
         work.openWhiteboard(board.id)
+        rememberMobileWorkRoute({ key: workWhiteboardResourceKey(board.id), root: work.workspaceRoot,
+          path: board.id, kind: 'whiteboard' })
         navigate({ mode: 'work', kind: 'resource', resourceKey: workWhiteboardResourceKey(board.id), view: 'whiteboard' })
       } else if (kind === 'directory') {
         const created = await work.createDirectory(work.workspaceRoot, target)
-        if (!created) throw new Error(useWriteWorkspaceStore.getState().fileError ?? '文件夹创建失败')
+        if (!created) throw new Error(useWriteWorkspaceStore.getState().fileError ?? t('mobileWorkDocFolderCreateFailed'))
         closeSheet()
         await work.loadDirectory(work.workspaceRoot, directory)
       } else {
         const created = await work.createFile(work.workspaceRoot, target)
-        if (!created) throw new Error(useWriteWorkspaceStore.getState().fileError ?? '文档创建失败')
+        if (!created) throw new Error(useWriteWorkspaceStore.getState().fileError ?? t('mobileWorkDocCreateFailed'))
         await work.loadDirectory(work.workspaceRoot, directory)
         closeSheet()
+        rememberMobileWorkRoute({ key: workFileResourceKey(work.workspaceRoot, created), root: work.workspaceRoot,
+          path: created, kind: 'document' })
         navigate({ mode: 'work', kind: 'resource', resourceKey: workFileResourceKey(work.workspaceRoot, created), view: 'edit' })
       }
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
@@ -127,19 +151,19 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
     setWorking(true); setError('')
     try {
       if (action === 'download') {
-        if (entry?.type !== 'file') throw new Error('此资源不能下载')
+        if (entry?.type !== 'file') throw new Error(t('mobileWorkDocCannotDownload'))
         const result = await window.kunGui.saveWorkspaceFileAs({ workspaceRoot: work.workspaceRoot,
           sourcePath: entry.path, suggestedName: entry.name })
         if (!result.ok) throw new Error(result.message)
       } else if (action === 'rename') {
-        if (!name.trim()) throw new Error('请输入名称')
+        if (!name.trim()) throw new Error(t('mobileWorkDocNameRequired'))
         const ok = board ? await work.renameWhiteboard(board.id, name.trim())
           : entry ? await work.renameEntry(work.workspaceRoot, entry.path, name.trim()) : null
-        if (!ok) throw new Error(useWriteWorkspaceStore.getState().fileError ?? '重命名失败')
+        if (!ok) throw new Error(useWriteWorkspaceStore.getState().fileError ?? t('mobileWorkDocRenameFailed'))
       } else {
         const ok = board ? await work.deleteWhiteboard(board.id)
           : entry ? await work.deleteEntry(work.workspaceRoot, entry.path) : false
-        if (!ok) throw new Error(useWriteWorkspaceStore.getState().fileError ?? '删除失败')
+        if (!ok) throw new Error(useWriteWorkspaceStore.getState().fileError ?? t('mobileWorkDocDeleteFailed'))
       }
       if (query) setSearchRetry((value) => value + 1)
       closeSheet()
@@ -154,8 +178,13 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
     onLoadMore={() => setLimit((value) => value + 60)} search={search} onSearch={setSearch}
     loading={work.settingsLoading || Boolean(work.loadingDirs[directory]) || searchLoading}
     error={work.settingsError ?? work.treeError ?? searchError ?? ''}
-    labels={{ title: t('workspaceModeWorkLabel'), search: t('mobileSearch'), create: '创建',
-      more: t('mobileMore'), empty: t('writeEmptyTitle'), loading: t('loading'), retry: t('mobileRetry') }}
+    labels={{ title: t('workspaceModeWorkLabel'), search: t('mobileSearch'), create: t('mobileWorkDocCreate'),
+      more: t('mobileMore'), empty: t('writeEmptyTitle'), loading: t('loading'), retry: t('mobileRetry'),
+      documents: t('mobileWorkDocDocuments'), papers: t('mobileWorkDocPapers'),
+      backFolder: t('mobileWorkDocBackFolder'), recent: t('mobileWorkDocRecent'),
+      filesBoards: t('mobileWorkDocFilesBoards'), loadMore: t('mobileWorkDocLoadMore'),
+      status: { saved: t('mobileWorkDocSaved'), dirty: t('mobileWorkDocDirty'),
+        saving: t('mobileWorkDocSaving'), error: t('mobileWorkDocError'), review: t('mobileWorkDocReview') } }}
     mode="documents" onMode={(mode) => { if (mode === 'papers') void canLeave().then((ok) => { if (ok) onPapers() }) }}
     onBackFolder={page.kind === 'folder' ? () => navigate({ mode: 'work', kind: 'home' }) : undefined}
     onWorkspace={() => setSheet('workspace')} onCreate={() => setSheet('create')}
@@ -163,31 +192,32 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
     onMenu={(resource) => { setSelected(resource); setName(resource.title); setSheet('menu') }}
     onRetry={() => { if (query) setSearchRetry((value) => value + 1)
       else void work.initializeWorkspace(work.workspaceRoot, { force: true }) }} />
-    {matchingSearch?.truncated ? <p role="status">仅显示前 300 项或前 200 个目录；可进入文件夹缩小搜索范围。</p> : null}
-    {matchingSearch?.skipped ? <p role="status">有 {matchingSearch.skipped} 个目录无法读取，结果可能不完整。</p> : null}
-    <MobileSheet open={sheet === 'workspace'} title="选择主机工作区" closeLabel="关闭" onClose={closeSheet}>
-      <p>仅列出主机已配置的工作区；切换手机视图不会改变桌面论文模式。</p>
+    {matchingSearch?.truncated ? <p role="status">{t('mobileWorkDocTruncated')}</p> : null}
+    {matchingSearch?.skipped ? <p role="status">{t('mobileWorkDocSkipped', { count: matchingSearch.skipped })}</p> : null}
+    <MobileSheet open={sheet === 'workspace'} title={t('mobileWorkDocChooseWorkspace')} closeLabel={t('close')} onClose={() => { if (!working) closeSheet() }}>
+      <p>{t('mobileWorkDocWorkspaceHint')}</p>
       {work.workspaceRoots.map((root) => <button className="kun-mobile-work-sheet-button" type="button" key={root}
-        onClick={() => { void canLeave().then((ok) => { if (ok) { void work.initializeWorkspace(root); closeSheet(); navigate({ mode: 'work', kind: 'home' }) } }) }}>
+        disabled={working} onClick={() => void chooseWorkspace(root)}>
         {root}</button>)}
+      {error ? <p role="alert">{error}</p> : null}
     </MobileSheet>
-    <MobileSheet open={sheet === 'create'} title="创建资源" closeLabel="关闭" onClose={closeSheet}>
-      <label>类型 <select value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>
-        <option value="document">文档</option><option value="directory">文件夹</option><option value="whiteboard">白板</option>
+    <MobileSheet open={sheet === 'create'} title={t('mobileWorkDocCreateResource')} closeLabel={t('close')} onClose={closeSheet}>
+      <label>{t('mobileWorkDocType')} <select value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>
+        <option value="document">{t('mobileWorkDocDocument')}</option><option value="directory">{t('mobileWorkDocFolder')}</option><option value="whiteboard">{t('mobileWorkDocWhiteboard')}</option>
       </select></label>
-      <label>名称 <input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如 NOTES.md" /></label>
+      <label>{t('mobileWorkDocName')} <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t('mobileWorkDocNameExample')} /></label>
       {error ? <p role="alert">{error}</p> : null}
       <button className="kun-mobile-work-sheet-button" type="button" disabled={working || !name.trim()}
-        onClick={() => void create()}>创建并打开</button>
+        onClick={() => void create()}>{t('mobileWorkDocCreateOpen')}</button>
     </MobileSheet>
-    <MobileSheet open={sheet === 'menu'} title={selected?.title ?? ''} closeLabel="关闭" onClose={closeSheet}>
+    <MobileSheet open={sheet === 'menu'} title={selected?.title ?? ''} closeLabel={t('close')} onClose={closeSheet}>
       {selected?.kind === 'document' ? <button className="kun-mobile-work-sheet-button" type="button"
-        onClick={() => void actOnSelected('download')}>下载到手机</button> : null}
-      <label>新名称 <input value={name} onChange={(event) => setName(event.target.value)} /></label>
+        onClick={() => void actOnSelected('download')}>{t('mobileWorkDocDownloadPhone')}</button> : null}
+      <label>{t('mobileWorkDocNewName')} <input value={name} onChange={(event) => setName(event.target.value)} /></label>
       <button className="kun-mobile-work-sheet-button" type="button" disabled={working || !name.trim()}
-        onClick={() => void actOnSelected('rename')}>重命名</button>
+        onClick={() => void actOnSelected('rename')}>{t('mobileWorkDocRename')}</button>
       <button className="kun-mobile-work-sheet-button" type="button" disabled={working}
-        onClick={() => { if (window.confirm(`确定删除 ${selected?.title ?? ''}？`)) void actOnSelected('delete') }}>删除…</button>
+        onClick={() => { if (window.confirm(t('mobileWorkDocDeleteConfirm', { name: selected?.title ?? '' }))) void actOnSelected('delete') }}>{t('mobileWorkDocDelete')}</button>
       {error ? <p role="alert">{error}</p> : null}
     </MobileSheet>
   </>

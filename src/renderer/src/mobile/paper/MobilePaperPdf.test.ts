@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import i18n from '../../i18n'
 
 vi.mock('../../components/write/use-write-pdf-document', () => ({
   useWritePdfDocument: () => ({ pdfDocument: null, loading: true, error: '', pageCount: 0,
@@ -35,7 +36,7 @@ describe('mobile paper PDF transport', () => {
     })))
     expect(open).toHaveBeenCalledWith({ workspaceRoot: '/library', path: '/library/papers/x/paper.pdf' })
     expect(read).not.toHaveBeenCalled()
-    expect(host.textContent).toContain('PDF 加载中')
+    expect(host.textContent).toContain(i18n.t('common:mobileWorkPaperPdfLoading'))
     act(() => root.unmount())
     expect(release).toHaveBeenCalledWith({ leaseId: 'lease-1' })
     root = createRoot(host)

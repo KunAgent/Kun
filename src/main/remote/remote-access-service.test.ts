@@ -81,11 +81,14 @@ describe('RemoteAccessService port fallback', () => {
 describe('RemoteAccessService HTTP surface', () => {
   let service: RemoteAccessService
   let baseUrl = ''
+  let feedUrls = ['https://example.org/rss']
   const persistedPorts: number[] = []
 
   beforeAll(async () => {
     service = new RemoteAccessService({
-      getSettings: async () => makeSettings(),
+      getSettings: async () => ({ ...makeSettings(),
+        write: { paperMode: { discover: { feeds: feedUrls.map((url) => ({ id: url, title: url, url })) } } }
+      }) as AppSettingsV1,
       persistRemotePatch: async (patch) => {
         if (typeof patch.port === 'number') persistedPorts.push(patch.port)
       },
@@ -175,6 +178,58 @@ describe('RemoteAccessService HTTP surface', () => {
       body: JSON.stringify({ channel: 'app:version' })
     })
     expect(missingHandler.status).toBe(404)
+  })
+
+  it('rejects arbitrary Remote feed URLs unless the host configured the subscription', async () => {
+    const cookie = await login()
+    const response = await fetch(`${baseUrl}/remote/invoke`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie,
+        'x-kun-remote-request': '1', 'x-kun-remote-client': 'feed-client' },
+      body: JSON.stringify({ channel: 'paper-discover:feed',
+        args: [{ url: 'https://127.0.0.1/private' }] })
+    })
+    expect(response.status).toBe(403)
+    expect((await response.json()).error).toContain('Only host-approved feeds')
+  })
+
+  it('does not let a Remote settings change authorize new feed targets mid-session', async () => {
+    feedUrls = [...feedUrls, 'https://attacker.example/rss']
+    try {
+      const cookie = await login()
+      const response = await fetch(`${baseUrl}/remote/invoke`, {
+        method: 'POST', headers: { 'content-type': 'application/json', cookie,
+          'x-kun-remote-request': '1', 'x-kun-remote-client': 'feed-client' },
+        body: JSON.stringify({ channel: 'paper-discover:feed', args: [{ url: 'https://attacker.example/rss' }] })
+      })
+      expect(response.status).toBe(403)
+      expect((await response.json()).error).toContain('Only host-approved feeds')
+    } finally { feedUrls = ['https://example.org/rss'] }
+  })
+
+  it('rejects browser attempts to register new feed targets through either settings channel', async () => {
+    const cookie = await login()
+    for (const channel of ['settings:set', 'settings:save-silent']) {
+      const response = await fetch(`${baseUrl}/remote/invoke`, {
+        method: 'POST', headers: { 'content-type': 'application/json', cookie,
+          'x-kun-remote-request': '1', 'x-kun-remote-client': 'feed-client' },
+        body: JSON.stringify({ channel, args: [{ write: { paperMode: { discover: {
+          feeds: [{ id: 'malicious', url: 'https://attacker.example/rss', title: 'Malicious' }]
+        } } } }] })
+      })
+      expect(response.status).toBe(403)
+      expect((await response.json()).error).toContain('Remote cannot change host feed subscriptions')
+    }
+  })
+
+  it('admits feed URLs configured on the host before Remote started', async () => {
+    const cookie = await login()
+    const response = await fetch(`${baseUrl}/remote/invoke`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie,
+        'x-kun-remote-request': '1', 'x-kun-remote-client': 'feed-client' },
+      body: JSON.stringify({ channel: 'paper-discover:feed', args: [{ url: 'https://example.org/rss' }] })
+    })
+    expect(response.status).not.toBe(403)
   })
 
   it('streams workspace files to authenticated browsers within the workspace', async () => {
