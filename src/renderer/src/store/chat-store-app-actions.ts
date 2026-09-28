@@ -155,7 +155,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       const state = get()
       const activeThreadId = state.activeThreadId
       if (activeThreadId) {
-        const harnessId = state.composerHarnessId.trim()
+        const harnessId = state.composerHarnessId?.trim() ?? ''
         rememberThreadComposerSelection(
           activeThreadId,
           modelId,
