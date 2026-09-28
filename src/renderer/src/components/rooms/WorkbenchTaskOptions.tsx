@@ -5,6 +5,7 @@ import { serviceTierForComposerSelection } from '../chat/composer-fast-mode'
 import { kunToolPermissionModeFromSettings } from '@shared/app-settings'
 import { WorkbenchSchedulePicker } from './WorkbenchSchedulePicker'
 import { useTranslation } from 'react-i18next'
+import { SlidersHorizontal } from 'lucide-react'
 import { resolveCodeAgentPreset } from '../chat/code-agent-presets'
 import { resolveComposerAssistantProviderId } from '../chat/composer-model-selection'
 
@@ -48,13 +49,14 @@ export function initialWorkbenchTaskDraft(request: WorkbenchRequest): WorkbenchT
 const MODES: WorkbenchExecution['mode'][] = ['direct', 'plan', 'auto', 'goal']
 const PERMISSIONS: NonNullable<WorkbenchExecution['permission']>[] = ['ask-for-approval', 'approve-for-me', 'full-access']
 
-export function WorkbenchTaskOptions({ draft, onChange, editing, onEdit, code, permissionCeiling }: {
+export function WorkbenchTaskOptions({ draft, onChange, editing, onEdit, code, permissionCeiling, project }: {
   draft: WorkbenchTaskDraft
   onChange: (draft: WorkbenchTaskDraft) => void
   editing: boolean
   onEdit: () => void
   code: boolean
   permissionCeiling?: WorkbenchExecution['permission']
+  project?: string
 }) {
   const { t } = useTranslation('common')
   const groups = useChatStore((state) => state.composerModelGroups)
@@ -63,15 +65,23 @@ export function WorkbenchTaskOptions({ draft, onChange, editing, onEdit, code, p
   const graphEnabled = useChatStore((state) => state.graphEnabled)
   const model = draft.execution.model
   const changeExecution = (patch: Partial<WorkbenchExecution>) => onChange({ ...draft, execution: { ...draft.execution, ...patch } })
-  const tags = [t(`roomsWorkbenchMode_${draft.execution.mode}`), model ? `${model.model}${model.reasoningEffort ? ` · ${model.reasoningEffort}` : ''}` : t('roomsWorkbenchRuntimeModel'),
-    draft.execution.persona?.name ? `${t('roomsWorkbenchPersona')}: ${draft.execution.persona.name}` : `${t('roomsWorkbenchPersona')}: ${t('roomsWorkbenchNone')}`,
-    draft.schedule?.kind === 'once' ? `${t('roomsWorkbenchOnce')} · ${new Date(draft.schedule.runAt).toLocaleString()}` :
-      draft.schedule?.kind === 'recurring' ? `${t('roomsWorkbenchRecurring')} · ${draft.schedule.time}` : t('roomsWorkbenchNow'),
-    draft.isolation === 'worktree' ? t('roomsWorkbenchIsolated') : t('roomsWorkbenchCurrentProject'),
-    t(`roomsWorkbenchPermission_${draft.execution.permission ?? 'ask-for-approval'}`)]
+  const permission = draft.execution.permission ?? 'ask-for-approval'
+  // Summary row: always show mode / model / permission; the rest only when non-default.
+  const items: { label: string; tone?: 'warn' | 'strong' }[] = [
+    ...(project ? [{ label: project, tone: 'strong' as const }] : []),
+    { label: t(`roomsWorkbenchMode_${draft.execution.mode}`) },
+    { label: model ? `${model.model}${model.reasoningEffort && model.reasoningEffort !== 'auto' ? ` · ${model.reasoningEffort}` : ''}` : t('roomsWorkbenchRuntimeModel') },
+    ...(draft.isolation === 'worktree' ? [{ label: t('roomsWorkbenchIsolated') }] : []),
+    ...(draft.execution.persona?.name ? [{ label: `${t('roomsWorkbenchPersona')}: ${draft.execution.persona.name}` }] : []),
+    ...(draft.schedule?.kind === 'once' ? [{ label: `${t('roomsWorkbenchOnce')} · ${new Date(draft.schedule.runAt).toLocaleString()}` }] :
+      draft.schedule?.kind === 'recurring' ? [{ label: `${t('roomsWorkbenchRecurring')} · ${draft.schedule.time}` }] : []),
+    { label: t(`roomsWorkbenchPermission_${permission}`), ...(permission === 'full-access' ? { tone: 'warn' as const } : {}) }]
   return <>
-    <div className="rooms-workbench-option-tags">{tags.map((tag, index) => <button type="button" key={index}
-      disabled={editing} onClick={onEdit}>{tag} ▾</button>)}</div>
+    {editing ? null : <button type="button" className="rooms-workbench-option-summary" onClick={onEdit} title={t('roomsWorkbenchModify')}>
+      <SlidersHorizontal size={13} aria-hidden="true" />
+      <span className="rooms-workbench-option-items">{items.map((item, index) =>
+        <span key={index} data-tone={item.tone}>{item.label}</span>)}</span>
+      <em>{t('roomsWorkbenchModify')}</em></button>}
     {editing ? <div className="rooms-workbench-options">
       {code ? <label>{t('roomsWorkbenchExecutionMode')}<select value={draft.execution.mode} onChange={(event) => changeExecution({ mode: event.target.value as WorkbenchExecution['mode'] })}>
         {MODES.map((value) => <option value={value} key={value}>{t(`roomsWorkbenchMode_${value}`)}</option>)}

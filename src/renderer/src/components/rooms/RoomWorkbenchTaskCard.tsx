@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertCircle, Check, CircleStop, Code, ExternalLink, Eye, FilePen, FilePlus, KanbanSquare, Loader2, Play, ShieldAlert } from 'lucide-react'
+import { AlertCircle, Check, ChevronDown, CircleStop, Code, ExternalLink, Eye, FilePen, FilePlus, KanbanSquare, Loader2, Play, ShieldAlert } from 'lucide-react'
 import type { Room, RoomMessage, WorkbenchLinkEntry, WorkbenchLinkKind } from '@shared/rooms-api'
 import { workbenchClient } from './workbench-client'
 import { openWorkbenchLinkTarget, workbenchOpenTarget } from './workbench-navigation'
@@ -23,6 +23,7 @@ const CONFIRM_LABEL: Record<WorkbenchLinkKind, string> = {
   work_edit: 'roomsWorkbenchApply', board_card: 'roomsWorkbenchAdd', watch: 'roomsWorkbenchStart', schedule_series: 'roomsWorkbenchStart'
 }
 const basename = (path?: string): string => path?.split(/[\\/]/).filter(Boolean).at(-1) ?? ''
+const plainText = (value: string): string => value.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\n{3,}/g, '\n\n').trim()
 
 /**
  * A Code/Work hand-off an Agent proposed or started. The card reads the durable
@@ -38,6 +39,7 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<WorkbenchTaskDraft | null>(null)
+  const [expanded, setExpanded] = useState(false)
   const busyRef = useRef(false)
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
@@ -85,6 +87,9 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
   const opens = workbenchOpenTarget(link)
   const longRunning = kind === 'code_task' || kind === 'work_task' || kind === 'schedule_series'
   const permissionCeiling = room.privateExecutionPolicy ? kunToolPermissionModeFromSettings(room.privateExecutionPolicy) : undefined
+  const showsOptions = longRunning && ['awaiting_confirmation', 'scheduled', 'active', 'paused'].includes(status)
+  const goal = request.goal && kind !== 'work_document' && kind !== 'work_edit' ? plainText(request.goal) : ''
+  const collapsible = goal.length > 140 || (request.acceptance?.length ?? 0) > 60 || goal.split('\n').length > 3
   const startEditing = () => {
     setDraft(initialWorkbenchTaskDraft(request))
     setEditing(true)
@@ -119,19 +124,24 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
         permissionCeiling={permissionCeiling} />
     </div> : <>
       <h4>{request.title}</h4>
-      {request.goal && kind !== 'work_document' && kind !== 'work_edit' ? <p className="rooms-workbench-goal">{request.goal}</p> : null}
-      {request.acceptance ? <p className="rooms-workbench-acceptance"><strong>{t('roomsWorkbenchAcceptance')}</strong> {request.acceptance}</p> : null}
+      {goal || request.acceptance ? <div className="rooms-workbench-body" data-expanded={expanded || !collapsible}>
+        {goal ? <p className="rooms-workbench-goal">{goal}</p> : null}
+        {request.acceptance ? <div className="rooms-workbench-acceptance"><strong>{t('roomsWorkbenchAcceptance')}</strong>
+          <p>{plainText(request.acceptance)}</p></div> : null}
+        {collapsible ? <button type="button" className="rooms-workbench-more" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+          {t(expanded ? 'roomsWorkbenchShowLess' : 'roomsWorkbenchShowMore')}
+          <ChevronDown size={13} aria-hidden="true" /></button> : null}
+      </div> : null}
       <div className="rooms-workbench-meta">
-        {project && kind !== 'watch' ? <span title={request.workspaceRoot}>{t(kind === 'code_task' || kind === 'board_card' ? 'roomsWorkbenchProject' : 'roomsWorkbenchWorkspace')}: {project}</span> : null}
+        {project && kind !== 'watch' && !showsOptions ? <span title={request.workspaceRoot}>{t(kind === 'code_task' || kind === 'board_card' ? 'roomsWorkbenchProject' : 'roomsWorkbenchWorkspace')}: {project}</span> : null}
         {request.relativePath ? <span title={request.relativePath}>{request.relativePath}</span> : null}
-        {request.isolation === 'worktree' ? <span>{t('roomsWorkbenchIsolated')}</span> : null}
-        {request.mode === 'plan' && longRunning ? <span>{t('roomsWorkbenchPlanMode')}</span> : null}
+        {request.isolation === 'worktree' && !showsOptions ? <span>{t('roomsWorkbenchIsolated')}</span> : null}
+        {request.mode === 'plan' && longRunning && !showsOptions ? <span>{t('roomsWorkbenchPlanMode')}</span> : null}
         {kind === 'board_card' && request.board?.priority ? <span>{request.board.priority}</span> : null}
         {kind === 'board_card' && request.board?.category ? <span>{request.board.category}</span> : null}
       </div>
-      {(kind === 'code_task' || kind === 'work_task' || kind === 'schedule_series') && ['awaiting_confirmation', 'scheduled', 'active', 'paused'].includes(status) ?
-        <WorkbenchTaskOptions draft={initialWorkbenchTaskDraft(request)} onChange={setDraft} editing={false} onEdit={startEditing}
-          code={kind === 'code_task' || kind === 'schedule_series'} permissionCeiling={permissionCeiling} /> : null}
+      {showsOptions ? <WorkbenchTaskOptions draft={initialWorkbenchTaskDraft(request)} onChange={setDraft} editing={false} onEdit={startEditing}
+        code={kind === 'code_task' || kind === 'schedule_series'} permissionCeiling={permissionCeiling} project={project} /> : null}
       {kind === 'work_document' && request.content ? <pre className="rooms-workbench-preview" aria-label={t('roomsWorkbenchPreview')}>{request.content.slice(0, 1200)}{request.content.length > 1200 ? '…' : ''}</pre> : null}
       {kind === 'board_card' && request.board?.description ? <p className="rooms-workbench-goal">{request.board.description}</p> : null}
       {kind === 'work_edit' ? <div className="rooms-workbench-edits">
@@ -163,8 +173,7 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
     {error ? <p className="rooms-workbench-error" role="alert">{error}</p> : null}
     <div className="rooms-workbench-actions">
       {status === 'awaiting_confirmation' ? <>
-        <button type="button" disabled={busy} onClick={() => void act(() => workbenchClient.dismiss(link))}>{t('roomsWorkbenchDismiss')}</button>
-        {longRunning && !editing ? <button type="button" disabled={busy} onClick={startEditing}>{t('roomsWorkbenchEditBefore')}</button> : null}
+        <button type="button" className="is-ghost" disabled={busy} onClick={() => void act(() => workbenchClient.dismiss(link))}>{t('roomsWorkbenchDismiss')}</button>
         {editing ? <button type="button" disabled={busy} onClick={() => setEditing(false)}>{t('roomsWorkbenchCancelEdit')}</button> : null}
         <button type="button" className="is-primary" disabled={busy || (editing && !draft?.title.trim())} onClick={() => void confirm()}>
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}{draft?.schedule?.kind === 'recurring' ? t('roomsWorkbenchCreateSchedule') :
@@ -173,7 +182,6 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
       </> : null}
       {['scheduled', 'active', 'paused', 'missed'].includes(status) ? <>
         <button type="button" disabled={busy} onClick={() => void act(() => workbenchClient.runNow(link))}>{t('roomsWorkbenchRunNow')}</button>
-        {['scheduled', 'active', 'paused'].includes(status) && !editing ? <button type="button" disabled={busy} onClick={startEditing}>{t('roomsWorkbenchModify')}</button> : null}
         {editing ? <><button type="button" disabled={busy} onClick={() => setEditing(false)}>{t('roomsWorkbenchCancelEdit')}</button>
           <button type="button" className="is-primary" disabled={busy || !draft?.title.trim()} onClick={() => void confirm()}>{t('roomsWorkbenchSave')}</button></> : null}
         {kind === 'schedule_series' ? <button type="button" disabled={busy} onClick={() => void act(() => status === 'paused' ? workbenchClient.resume(link) : workbenchClient.pause(link))}>

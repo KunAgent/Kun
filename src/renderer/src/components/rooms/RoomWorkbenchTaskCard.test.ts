@@ -66,7 +66,7 @@ describe('Room workbench task card', () => {
     mocks.client.get.mockResolvedValue(link())
     mocks.client.confirm.mockResolvedValue(link({ status: 'queued', revision: 1 }))
     await mount()
-    await act(async () => { button(renderer!, 'Edit first')!.props.onClick() })
+    await act(async () => { button(renderer!, 'Edit')!.props.onClick() })
     const goal = renderer!.root.findByType('textarea')
     await act(async () => { goal.props.onChange({ target: { value: 'Reconnect with backoff' } }) })
     const location = renderer!.root.findAllByType('select').find((select) =>
@@ -80,7 +80,7 @@ describe('Room workbench task card', () => {
     mocks.client.get.mockResolvedValue(link())
     mocks.client.confirm.mockResolvedValue(link({ status: 'scheduled', revision: 1 }))
     await mount()
-    await act(async () => { button(renderer!, 'Edit first')!.props.onClick() })
+    await act(async () => { button(renderer!, 'Edit')!.props.onClick() })
     const selects = renderer!.root.findAllByType('select')
     const mode = selects.find((select) => select.findAllByType('option').some((option) => option.props.value === 'auto'))!
     const schedule = selects.find((select) => select.findAllByType('option').some((option) => option.props.value === 'once'))!
