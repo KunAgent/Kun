@@ -273,5 +273,32 @@
     "enable": "설정에서 사용"
   },
   "adeHarnessViewReason": "원인 보기",
-  "adeHarnessOpenSettings": "설정 열기"
+  "adeHarnessOpenSettings": "설정 열기",
+  "adeAgents": "에이전트",
+  "adeAgentCopied": "명령을 복사했습니다. Kun 터미널에서 실행하세요",
+  "adeAgentCenter": {
+    "title": "에이전트 센터",
+    "desc": "Kun이 작업을 위임할 수 있는 에이전트를 설치·로그인·관리합니다."
+  },
+  "adeAgentAction": {
+    "install": "설치",
+    "login": "로그인",
+    "installAdapter": "어댑터 설치",
+    "test": "연결 테스트",
+    "retry": "다시 감지",
+    "enable": "활성화",
+    "disable": "비활성화",
+    "setDefault": "기본으로 설정",
+    "isDefault": "기본",
+    "specifyPath": "명령 경로 지정",
+    "docs": "문서"
+  },
+  "adeAgentTransport": {
+    "nativeLoop": "Kun",
+    "agentSdk": "Agent SDK",
+    "cursorSdk": "Cursor SDK",
+    "antigravityCli": "CLI",
+    "acp": "ACP",
+    "terminal": "터미널"
+  }
 }

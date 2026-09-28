@@ -273,5 +273,32 @@
     "enable": "सेटिंग में सक्षम करें"
   },
   "adeHarnessViewReason": "कारण देखें",
-  "adeHarnessOpenSettings": "सेटिंग खोलें"
+  "adeHarnessOpenSettings": "सेटिंग खोलें",
+  "adeAgents": "एजेंट",
+  "adeAgentCopied": "कमांड कॉपी हुई — इसे Kun टर्मिनल में चलाएँ",
+  "adeAgentCenter": {
+    "title": "एजेंट सेंटर",
+    "desc": "Kun जिन एजेंट को काम सौंप सकता है उन्हें इंस्टॉल करें, साइन इन करें और प्रबंधित करें।"
+  },
+  "adeAgentAction": {
+    "install": "इंस्टॉल करें",
+    "login": "साइन इन",
+    "installAdapter": "एडेप्टर इंस्टॉल करें",
+    "test": "कनेक्शन जाँचें",
+    "retry": "फिर से पहचानें",
+    "enable": "सक्षम करें",
+    "disable": "अक्षम करें",
+    "setDefault": "डिफ़ॉल्ट बनाएँ",
+    "isDefault": "डिफ़ॉल्ट",
+    "specifyPath": "कमांड पथ बताएँ",
+    "docs": "दस्तावेज़"
+  },
+  "adeAgentTransport": {
+    "nativeLoop": "Kun",
+    "agentSdk": "Agent SDK",
+    "cursorSdk": "Cursor SDK",
+    "antigravityCli": "CLI",
+    "acp": "ACP",
+    "terminal": "टर्मिनल"
+  }
 }

@@ -273,5 +273,32 @@
     "enable": "在设置中启用"
   },
   "adeHarnessViewReason": "查看原因",
-  "adeHarnessOpenSettings": "去设置"
+  "adeHarnessOpenSettings": "去设置",
+  "adeAgents": "Agent",
+  "adeAgentCopied": "命令已复制，请在 Kun 终端中执行",
+  "adeAgentCenter": {
+    "title": "Agent 中心",
+    "desc": "安装、登录并管理 Kun 可以派工的 agent。"
+  },
+  "adeAgentAction": {
+    "install": "安装",
+    "login": "登录",
+    "installAdapter": "安装适配器",
+    "test": "测试连接",
+    "retry": "重试检测",
+    "enable": "启用",
+    "disable": "禁用",
+    "setDefault": "设为默认",
+    "isDefault": "默认",
+    "specifyPath": "指定命令路径",
+    "docs": "文档"
+  },
+  "adeAgentTransport": {
+    "nativeLoop": "Kun",
+    "agentSdk": "Agent SDK",
+    "cursorSdk": "Cursor SDK",
+    "antigravityCli": "CLI",
+    "acp": "ACP",
+    "terminal": "终端"
+  }
 }

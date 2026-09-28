@@ -454,6 +454,11 @@ export function AdeSidebar({
             ) : null
           }
         />
+        <SidebarCommandRow
+          icon={<Users className="h-4 w-4" strokeWidth={1.75} />}
+          label={t('adeAgents')}
+          onClick={() => onOpenSettings('agentsHarnesses')}
+        />
       </div>
       <div className="ds-no-drag mt-1 flex items-center justify-end px-2">
         <button
