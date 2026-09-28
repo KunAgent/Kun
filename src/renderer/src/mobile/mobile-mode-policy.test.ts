@@ -10,7 +10,7 @@ describe('mobile mode policy', () => {
   })
 
   it.each([
-    ['code', 'chat'], ['rooms', 'rooms'], ['work', 'write']
+    ['code', 'chat'], ['rooms', 'rooms'], ['work', 'write'], ['agents', 'chat']
   ] as const)('maps mobile mode %s to internal route %s', (mode, route) => {
     expect(workbenchRouteForMode(mode)).toBe(route)
   })

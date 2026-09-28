@@ -119,11 +119,11 @@ export default function AppShell(): React.ReactElement {
   // stays live across routes so worker completions and waits still notify —
   // and badge counts stay fresh — after the user leaves the ADE view. The
   // Mission Control popout owns its own window's feed; the mobile surface
-  // does not consume it yet.
+  // runs the same feed (P3-19) but keeps local notifications desktop-only.
   useEffect(() => {
-    if (surface !== 'desktop' || !adeEnabled) return
+    if (!adeEnabled) return
     startActivityFeed()
-    startActivityNotifications()
+    if (surface === 'desktop') startActivityNotifications()
     return () => {
       stopActivityFeed()
       stopActivityNotifications()
