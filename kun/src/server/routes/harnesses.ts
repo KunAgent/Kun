@@ -3,6 +3,7 @@ import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { HarnessIdSchema } from '../../contracts/harness.js'
 import { exposableProvider, providerModelIds } from './model-gateway-core.js'
+import { legacyProviderKindFor } from '../../harness/harness-provider-kind.js'
 
 /**
  * `GET /v1/harnesses` — definitions plus cached detection status. Never blocks
@@ -119,15 +120,3 @@ export async function listHarnessModels(
   }
 }
 
-export function legacyProviderKindFor(harnessId: string): string | undefined {
-  switch (harnessId) {
-    case 'claude-code':
-      return 'agent-sdk'
-    case 'cursor':
-      return 'cursor-sdk'
-    case 'antigravity':
-      return 'antigravity-cli'
-    default:
-      return undefined
-  }
-}

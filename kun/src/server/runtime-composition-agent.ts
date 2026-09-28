@@ -49,7 +49,9 @@ import { WorkerNoticeCoordinator } from '../ade/worker-notice-coordinator.js'
 import {
   createActivityHibernation,
   createCapabilitiesForRoute,
+  createHarnessListDeps,
   createManagerRuntime,
+  createProviderPoolAccess,
   wireTaskWorkspaceChange
 } from './runtime-composition-manager.js'
 import { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
@@ -160,6 +162,9 @@ export async function createRuntimeAgentComposition(
   // narrow delegated runtime boundary; keep them alive even with an empty
   // provider set so /connect can add an account without a TUI runtime restart.
   const canvasReceipts = new CanvasReceiptRegistry({ turns: turnService, events, nowIso })
+  // Provider pool access shared by gateway env, worker-route validation, and
+  // harness_list (P3-05/P3-06): kind + advertised models per connection.
+  const providerPool = createProviderPoolAccess(modelConnections)
   // Route-level bridge host for the Kun Tools MCP server (docs/ade/05 §3.3):
   // same execution authority as the SDK adapters with main-scope defaults.
   const kunToolBridge = createKunToolBridgeHost({
@@ -239,10 +244,7 @@ export async function createRuntimeAgentComposition(
       harnessCatalog: services.harnesses.catalog,
       graphHarnessSummary,
       resolveDefaultProviderId: async () => (await modelConnections.snapshot()).defaultProviderId,
-      listProviderModels: async (providerId) => providerModelIds(
-        (await modelConnections.snapshot()).providers
-          .find((candidate) => candidate.id === providerId) ?? { models: [] }
-      ),
+      listProviderModels: async (providerId) => (await providerPool.poolEntry(providerId))?.models ?? [],
       ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
     }
     const antigravityRuntimeDeps: AntigravityCliRuntimeDeps = {
@@ -444,6 +446,8 @@ export async function createRuntimeAgentComposition(
     harnessRuntimeMap,
     listQuota: () => model.providerQuotaService.list(),
     notices: workerNoticeCoordinator,
+    providerPool: providerPool.poolEntry,
+    probedModels: (definition) => services.harnesses.acpModels.peek(definition),
     threads: threadStore,
     turns: turnService,
     sessionStore,
@@ -457,12 +461,12 @@ export async function createRuntimeAgentComposition(
   const activityHibernation = createActivityHibernation({ core, managerRuntime })
   registryComposition.registry.registerProvider(createManagerToolProvider({
     manager: managerRuntime,
-    harnessList: {
-      catalog: services.harnesses.catalog,
-      detector: services.harnesses.detector,
-      runtimes: harnessRuntimeMap,
-      profiles: () => delegationRuntime?.listProfiles() ?? []
-    },
+    harnessList: createHarnessListDeps({
+      services,
+      harnessRuntimeMap,
+      listProfiles: () => delegationRuntime?.listProfiles() ?? [],
+      providers: providerPool.providers
+    }),
     managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true,
     race: managerRuntime.raceServiceDeps,
     checks: managerRuntime.checkRunnerDeps
@@ -555,7 +559,7 @@ export async function createRuntimeAgentComposition(
 	    ...(core.activeOptions.runtime?.toolArgumentRepair ? { toolArgumentRepair: core.activeOptions.runtime.toolArgumentRepair } : {}),
 	    ...(core.activeOptions.runtime?.interruptedTurnResume ? { interruptedResume: core.activeOptions.runtime.interruptedTurnResume } : {}),
 	    ...(services.resolvedHooks.length ? { hooks: services.resolvedHooks } : {}),
-		    ...(services.attachmentStore ? { attachmentStore: services.attachmentStore } : {}),
+	    ...(services.attachmentStore ? { attachmentStore: services.attachmentStore } : {}),
 	    artifactStore,
 	    ...(services.memoryStore ? { memoryStore: services.memoryStore } : {}),
 	    ...(services.memoryFeedback ? { memoryFeedback: services.memoryFeedback } : {}),
@@ -576,10 +580,8 @@ export async function createRuntimeAgentComposition(
 	  const runReview = (input: Parameters<typeof reviewService.runReview>[0]) => {
 	    if (shuttingDown) {
 	      return trackRuntimeRun(
-	        turnService.suspendTurnForHostShutdown({
-	          threadId: input.threadId,
-	          turnId: input.turnId
-	        }).then(() => 'aborted' as const)
+	        turnService.suspendTurnForHostShutdown({ threadId: input.threadId, turnId: input.turnId })
+	          .then(() => 'aborted' as const)
 	      )
 	    }
 	    return trackRuntimeRun(reviewService.runReview(input))
@@ -590,10 +592,7 @@ export async function createRuntimeAgentComposition(
 	  graphRuntime.harnessAdmission = {
 	    catalog: services.harnesses.catalog,
 	    detector: services.harnesses.detector,
-	    capabilitiesForRoute: createCapabilitiesForRoute(
-	      services.harnesses.catalog,
-	      harnessRuntimeMap
-	    ),
+	    capabilitiesForRoute: createCapabilitiesForRoute(services.harnesses.catalog, harnessRuntimeMap),
 	    allowUnattendedFullAccess: () =>
 	      core.activeOptions.ade?.allowUnattendedFullAccess === true
 	  }

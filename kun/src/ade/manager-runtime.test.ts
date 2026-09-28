@@ -132,6 +132,8 @@ function makeRuntime(opts: {
   capabilities?: typeof KUN_NATIVE_CAPABILITIES
   teamLimits?: ManagerRuntimeDeps['teamLimits']
   selector?: ManagerRuntimeDeps['selector']
+  providerPool?: ManagerRuntimeDeps['providerPool']
+  probedModels?: ManagerRuntimeDeps['probedModels']
 } = {}) {
   const workspace = workspaceRecord(opts.workspaceState ?? 'ready')
   const runChild = vi.fn(opts.runChild ?? (async (input: { childId?: string }) =>
@@ -184,6 +186,8 @@ function makeRuntime(opts: {
     language: () => 'en',
     allowUnattendedFullAccess: () => false,
     teamLimits: opts.teamLimits,
+    providerPool: opts.providerPool,
+    probedModels: opts.probedModels,
     ...(opts.selector ? { selector: opts.selector } : {})
   })
   return { runtime, deliverer, runChild, resumeChild, taskWorkspaces, activity, turns, workspace }
@@ -373,6 +377,49 @@ describe('ManagerRuntime.createWorker', () => {
     expect(result.ok).toBe(false)
     expect(result.refusal).toBe('invalid_agent')
     expect(result.userReport).toContain('not-a-model')
+  })
+
+  it('dispatches claude-code on a kun/<provider>/<model> gateway route', async () => {
+    const { runtime } = makeRuntime({
+      providerPool: async (providerId) =>
+        providerId === 'deepseek'
+          ? { kind: 'http', models: ['deepseek-chat', 'deepseek-reasoner'] }
+          : undefined
+    })
+    const result = await runtime.createWorker(managerCtx(), {
+      label: 'fixer', task: 'task',
+      agent: {
+        harnessId: 'claude-code',
+        credentialMode: 'kun-gateway',
+        model: 'kun/deepseek/deepseek-chat'
+      }
+    }, TOOL_CONTEXT)
+    expect(result.ok).toBe(true)
+    const worker = (await teams.get('thr_mgr'))!.workers[0]!
+    expect(worker.route).toMatchObject({
+      harnessId: 'claude-code',
+      credentialMode: 'kun-gateway',
+      providerId: 'deepseek',
+      model: 'kun/deepseek/deepseek-chat'
+    })
+  })
+
+  it('rejects a gateway route whose provider is not configured', async () => {
+    const { runtime, taskWorkspaces } = makeRuntime({
+      providerPool: async () => undefined
+    })
+    const result = await runtime.createWorker(managerCtx(), {
+      label: 'fixer', task: 'task',
+      agent: {
+        harnessId: 'claude-code',
+        credentialMode: 'kun-gateway',
+        model: 'kun/ghost/some-model'
+      }
+    }, TOOL_CONTEXT)
+    expect(result.ok).toBe(false)
+    expect(result.refusal).toBe('invalid_agent')
+    expect(result.userReport).toContain('"ghost"')
+    expect(taskWorkspaces.create).not.toHaveBeenCalled()
   })
 
   it('clamps a requested permission mode past the manager authority', async () => {
