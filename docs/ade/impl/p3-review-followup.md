@@ -240,12 +240,17 @@
 - 休眠恢复：有 `terminal.resumeArgs` 的 harness 允许恢复；同时更新 `runtime-composition-manager.ts:141` 的过时注释。
 - 实现：`terminal-agent-cli-env.ts` 负责 launcher/shim 解析与 `applyKunCliEnv`；打包版优先 `resources/bin/kun`（Windows 为可执行文件旁的 `bin/kun.cmd`），开发版在 `userData/cli-bin` 生成 exec shim。`canResume` 现在按 catalog 的 `terminal.resumeArgs` 判定 terminal-agent 是否可休眠恢复。
 
-**P3-19 手机端 ADE（L，R M）**
+**P3-19 手机端 ADE（L，R M）** ✅ `2a90ef2d9` + `a89c144b2`
 - 手机端接入活动流，提供只读的 Mission Control 与"待你处理"列表（审批、worker 提问），可以回答和批准，不在手机上派活。
 - 远程白名单不需要改（`runtime:request` 已放行 `/v1`），但要检查长轮询超时与移动端流量。
+- 实现：`AppShell` 对 mobile surface 同样启动应用级活动流（本地通知仍限桌面）；新 `agents` 移动模式（`agents.kun.ade.enabled` 开启后出现在底部导航，带待处理角标）渲染 `MobileAgentsHome` —— Mission Control 只读行（worker 折叠在所属总管下）+ 待你处理区。
+- 审批行通过新增 `GET /v1/approvals?threadId=` 列表端点解析出具体 `approvalId`，界内批准/拒绝仍走 `submitApprovalDecision`（远程侧 `runtime:request` 即同意通道）；worker 提问从 `getTeamOverview(manager)` 里找 `state:'open'` 记录并用 `answerTeamQuestion` 内联作答。其余等待（user_input、terminal_prompt）卡片打开所属会话。
+- 长轮询超时已复核：事件等待超时取 `min(wait_ms, 120s) + 5s` 余量，手机端无需改动；待你处理数据按需惰性拉取（按行 `updatedAt` 去重），不产生额外常驻流量。
+- 测试：kun `approvals.test.ts` 新增 2 例（投影字段 / 按线程过滤 + 已决议剔除）；`mobile-agents-attention.test.ts` 8 例覆盖映射与降级；`MobileAgentsHome.test.ts` 4 例覆盖内联批准、内联作答、等待卡片与会话跳转；导航策略与模式测试更新。
 
-**P3-20 文档状态（S，D）**
+**P3-20 文档状态（S，D）** ✅
 - `impl/README.md` 的 PR 总表加"状态 / 提交"列；`docs/ade/README.md` 增加"实现状态"一节并链接本文件。
+- 实现：P0 / P1 两表逐行标注实施提交（P0-10 与 P0-12 同提交 `c85a8eeb0`、P1-17 两提交并列）；P2 段改为同格式表格；`docs/ade/README.md` 头部状态行改为实施进度，并新增"实现状态"一节链接回本文档与 impl/README.md。
 
 ### 顺序与关键路径
 
