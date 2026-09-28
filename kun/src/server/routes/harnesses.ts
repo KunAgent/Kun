@@ -2,9 +2,19 @@ import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
-import { HarnessIdSchema, type HarnessStatus } from '../../contracts/harness.js'
-import { HarnessTestRequestSchema } from '../../contracts/harness-test.js'
+import {
+  HarnessDefinitionSchema,
+  HarnessIdSchema,
+  type HarnessStatus
+} from '../../contracts/harness.js'
+import {
+  HarnessProbeDefinitionRequestSchema,
+  HarnessSecretCreateRequestSchema,
+  HarnessTestRequestSchema
+} from '../../contracts/harness-test.js'
 import { runHarnessTest } from '../../services/harness-test-service.js'
+import { customToDefinition } from '../../harness/harness-catalog.js'
+import { probeAcpHandshake } from '../../harness/acp-handshake-probe.js'
 import { exposableProvider, providerModelIds } from './model-gateway-core.js'
 import { legacyProviderKindFor } from '../../harness/harness-provider-kind.js'
 
@@ -206,5 +216,84 @@ export async function listHarnessModels(
       return jsonResponse({ harnessId: definition.id, models: definition.staticModels })
     }
   }
+}
+
+/**
+ * `POST /v1/harnesses/probe-definition` (docs/ade/impl/p4 §3.7, P4-12):
+ * handshake an unsaved custom ACP definition so the Agent Center can gate
+ * "save" on a real initialize result. `secretEnv` refs resolve against the
+ * credential store; their values never appear in the response or logs.
+ */
+export async function probeHarnessDefinition(
+  runtime: ServerRuntime,
+  request: Request
+): Promise<JsonResponse> {
+  const harnesses = runtime.harnesses
+  if (!harnesses) return ERRORS.unavailable('harness catalog is unavailable')
+  const body = await readJsonBody(request)
+  if (!body.ok) return body.response
+  const parsed = HarnessProbeDefinitionRequestSchema.safeParse(body.value)
+  if (!parsed.success) {
+    return ERRORS.validation('invalid harness definition', parsed.error.issues)
+  }
+  const built = HarnessDefinitionSchema.safeParse(
+    customToDefinition({
+      id: parsed.data.id ?? 'custom-probe',
+      displayName: parsed.data.displayName,
+      command: parsed.data.command,
+      args: parsed.data.args,
+      env: parsed.data.env,
+      secretEnv: parsed.data.secretEnv
+    })
+  )
+  if (!built.success) {
+    return ERRORS.validation('invalid harness definition', built.error.issues)
+  }
+  const definition = built.data
+  const started = Date.now()
+  const handshake = await probeAcpHandshake(
+    definition,
+    definition.launch?.command ?? '',
+    { resolveSecretEnv: harnesses.resolveSecretEnv }
+  )
+  return jsonResponse({ ...handshake, durationMs: Date.now() - started })
+}
+
+/**
+ * `POST /v1/harness-secrets` — store one secret value in the credential
+ * store and return its opaque `secretRef`. The value is never echoed back,
+ * logged, or persisted into settings; entries only ever carry the ref.
+ */
+export async function createHarnessSecret(
+  runtime: ServerRuntime,
+  request: Request
+): Promise<JsonResponse> {
+  const credentials = runtime.extensionPlatform?.credentials
+  if (!credentials) return ERRORS.unavailable('credential store is unavailable')
+  const body = await readJsonBody(request)
+  if (!body.ok) return body.response
+  const parsed = HarnessSecretCreateRequestSchema.safeParse(body.value)
+  if (!parsed.success) {
+    return ERRORS.validation('invalid secret body', parsed.error.issues)
+  }
+  const secretRef = await credentials.create({ apiKey: parsed.data.value })
+  return jsonResponse({ secretRef })
+}
+
+/**
+ * `DELETE /v1/harness-secrets/:ref` — drop a stored secret so removing a
+ * secretEnv row can also release the underlying credential.
+ */
+export async function deleteHarnessSecret(
+  runtime: ServerRuntime,
+  _request: Request,
+  params: Record<string, string>
+): Promise<JsonResponse> {
+  const credentials = runtime.extensionPlatform?.credentials
+  if (!credentials) return ERRORS.unavailable('credential store is unavailable')
+  const ref = params.ref?.trim()
+  if (!ref || ref.length > 256) return ERRORS.validation('invalid secret ref')
+  await credentials.delete(ref)
+  return jsonResponse({ ok: true })
 }
 

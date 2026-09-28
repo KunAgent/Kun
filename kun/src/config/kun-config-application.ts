@@ -375,9 +375,7 @@ export const LabConfigSchema = z
     }),
     opencodeReferenceBranches: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false }),
     claudeCodeReferenceBranches: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false }),
-    codexReferenceBranches: z.object({ enabled: z.boolean().default(false) }).strict().default({
-      enabled: false
-    })
+    codexReferenceBranches: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false })
   })
   .strict()
 export type LabConfig = z.infer<typeof LabConfigSchema>
@@ -390,7 +388,18 @@ export const HarnessCustomEntrySchema = z
     command: z.string().min(1).max(4_096),
     args: z.array(z.string().max(1_024)).max(32).default([]),
     /** Non-sensitive variables only; credentials are injected via credentialMode. */
-    env: z.record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024)).default({})
+    env: z.record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024)).default({}),
+    /**
+     * Secret variables bound by credential-store reference (p4 §3.7, P4-12).
+     * Only the opaque ref is persisted; the value resolves at spawn time.
+     */
+    secretEnv: z
+      .array(z.object({
+        name: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
+        secretRef: z.string().min(1).max(256)
+      }).strict())
+      .max(32)
+      .default([])
   })
   .strict()
 export type HarnessCustomEntry = z.infer<typeof HarnessCustomEntrySchema>
@@ -408,8 +417,7 @@ export const HarnessDefaultsEntrySchema = z
     /** A permissionModes[].id on the harness definition. */
     permissionMode: z.string().min(1).max(64).optional(),
     isolation: z.enum(['local', 'worktree']).optional()
-  })
-  .strict()
+  }).strict()
 export type HarnessDefaultsEntry = z.infer<typeof HarnessDefaultsEntrySchema>
 
 /** `harnesses` config section: per-harness enable/override settings. */

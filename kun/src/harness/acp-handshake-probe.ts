@@ -15,11 +15,17 @@ import {
 import { AcpError } from '../runtime/acp/acp-schema.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import type { HarnessTestHandshake } from '../contracts/harness-test.js'
+import {
+  resolveHarnessSecretEnv,
+  type HarnessSecretRefResolver
+} from './harness-secret-env.js'
 import { ACP_READINESS_TIMEOUT_MS } from './acp-readiness-probe.js'
 
 export type AcpHandshakeProbeDeps = {
   spawn?: AcpSpawnFn
   timeoutMs?: number
+  /** Resolves `launch.secretEnv` refs so the probe sees the real env (P4-12). */
+  resolveSecretEnv?: HarnessSecretRefResolver
 }
 
 function errorMessage(error: unknown): string {
@@ -35,12 +41,14 @@ export async function probeAcpHandshake(
   const timeoutMs = deps.timeoutMs ?? ACP_READINESS_TIMEOUT_MS
   let process: AcpProcess
   try {
+    const secretEnv = await resolveHarnessSecretEnv(definition, deps.resolveSecretEnv)
     process = await startAcpProcess({
       command,
       args: definition.launch?.args ?? [],
       // Same rule as the readiness probe: no credential env — the handshake
       // reports install health, auth requirements surface via authMethods.
       env: definition.launch?.env ?? {},
+      secretEnv,
       cwd: tmpdir(),
       spawn: deps.spawn
     })

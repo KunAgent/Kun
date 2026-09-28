@@ -68,6 +68,28 @@ const stringRecord = (value: unknown): Record<string, string> => {
   return out
 }
 
+const HARNESS_ENV_NAME = /^[A-Z][A-Z0-9_]{0,63}$/
+
+/**
+ * `secretEnv` rows (p4 §3.7): name must be a valid env var, `secretRef` an
+ * opaque credential-store id. Last write wins on duplicate names.
+ */
+const secretEnvList = (
+  value: unknown
+): { name: string; secretRef: string }[] => {
+  if (!Array.isArray(value)) return []
+  const byName = new Map<string, string>()
+  for (const entry of value) {
+    if (!isRecord(entry)) continue
+    const name = nonEmpty(entry.name, 64)
+    const secretRef = nonEmpty(entry.secretRef, 256)
+    if (!name || !HARNESS_ENV_NAME.test(name) || !secretRef) continue
+    byName.set(name, secretRef)
+    if (byName.size >= 32) break
+  }
+  return [...byName.entries()].map(([name, secretRef]) => ({ name, secretRef }))
+}
+
 export function defaultKunHarnessSettings(): KunHarnessSettingsV1 {
   return {
     disabledIds: [],
@@ -150,12 +172,14 @@ export function normalizeKunHarnessSettings(value: unknown): KunHarnessSettingsV
       const command = nonEmpty(entry.command, 4_096)
       if (!id || !command || builtinIds.has(id) || seen.has(id)) continue
       seen.add(id)
+      const secretEnv = secretEnvList(entry.secretEnv)
       custom.push({
         id,
         displayName: nonEmpty(entry.displayName, 128) ?? id,
         command,
         args: stringList(entry.args, 32),
-        env: stringRecord(entry.env)
+        env: stringRecord(entry.env),
+        ...(secretEnv.length > 0 ? { secretEnv } : {})
       })
       if (custom.length >= 32) break
     }

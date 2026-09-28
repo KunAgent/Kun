@@ -65,6 +65,7 @@ export function AgentCenterCard({
   onProbe,
   onSetDefault,
   onRemoveCustom,
+  onExportCustom,
   onSetBinaryPath,
   onSetPermissionMode,
   onSetupCommand,
@@ -82,6 +83,8 @@ export function AgentCenterCard({
   onProbe: () => void
   onSetDefault: () => void
   onRemoveCustom?: () => void
+  /** P4-12: exports this custom definition as a single JSON file. */
+  onExportCustom?: () => void
   onSetBinaryPath: (path: string) => void
   onSetPermissionMode: (modeId: string) => void
   onSetupCommand?: (harnessId: string, command: string, title: string) => void
@@ -339,14 +342,27 @@ export function AgentCenterCard({
         </div>
       ) : null}
 
-      {custom && onRemoveCustom ? (
-        <button
-          type="button"
-          onClick={onRemoveCustom}
-          className="mt-2 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-medium text-red-600 transition hover:bg-red-500/10"
-        >
-          {tSettings('adeSettings.harnessRemoveCustom')}
-        </button>
+      {custom ? (
+        <div className="mt-2 flex items-center gap-1">
+          {onExportCustom ? (
+            <button
+              type="button"
+              onClick={onExportCustom}
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+            >
+              {tSettings('adeSettings.harnessExportCustom')}
+            </button>
+          ) : null}
+          {onRemoveCustom ? (
+            <button
+              type="button"
+              onClick={onRemoveCustom}
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-medium text-red-600 transition hover:bg-red-500/10"
+            >
+              {tSettings('adeSettings.harnessRemoveCustom')}
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )

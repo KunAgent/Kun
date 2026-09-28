@@ -228,7 +228,10 @@ export function harnessesConfigForRuntime(
       displayName: entry.displayName,
       command: entry.command,
       args: [...entry.args],
-      env: sortedRecord(entry.env)
+      env: sortedRecord(entry.env),
+      secretEnv: [...(entry.secretEnv ?? [])]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((row) => ({ name: row.name, secretRef: row.secretRef }))
     }))
   return {
     disabledIds: [...(harnesses?.disabledIds ?? [])].sort(),

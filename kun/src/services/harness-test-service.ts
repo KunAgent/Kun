@@ -100,7 +100,9 @@ async function runHandshake(
       : (definition.launch?.command ?? definition.detect?.command ?? definition.id)
   switch (definition.transport) {
     case 'acp':
-      return probeAcpHandshake(definition, command)
+      return probeAcpHandshake(definition, command, {
+        resolveSecretEnv: runtime.harnesses?.resolveSecretEnv
+      })
     case 'agent-sdk': {
       const models = await runtime.harnesses?.agentSdkModels?.probe(definition).catch(() => [])
       return models && models.length > 0

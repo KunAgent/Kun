@@ -34,6 +34,7 @@ import type { AcpCredentialEnvInput } from './acp-runtime-support.js'
 import type { AcpDebugLog } from './acp-jsonrpc.js'
 import type { KunToolsMcpProvider } from './kun-tools-mcp.js'
 import type { HarnessDefaultsEntry } from '../../config/kun-config-application.js'
+import type { HarnessSecretRefResolver } from '../../harness/harness-secret-env.js'
 
 export interface AcpRuntimeDeps {
   /** Harness catalog lookup for the frozen route's definition. */
@@ -45,6 +46,8 @@ export interface AcpRuntimeDeps {
    * default permission mode when the turn does not pin one.
    */
   harnessDefaults?: (harnessId: HarnessId) => HarnessDefaultsEntry | undefined
+  /** Resolves `launch.secretEnv` credential-store refs at spawn (P4-12). */
+  resolveSecretEnv?: HarnessSecretRefResolver
   threadStore: ThreadStore
   sessionStore: SessionStore
   turns: TurnService

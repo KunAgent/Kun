@@ -11,6 +11,8 @@ export type CustomHarnessConfig = {
   command: string
   args: string[]
   env: Record<string, string>
+  /** Credential-store refs resolved into env at spawn (P4-12). */
+  secretEnv?: readonly { name: string; secretRef: string }[]
 }
 
 const CUSTOM_TRANSPORT = 'acp'
@@ -55,7 +57,8 @@ export class HarnessCatalog {
   }
 }
 
-function customToDefinition(entry: CustomHarnessConfig): unknown {
+/** Build the catalog definition for a `harnesses.custom[]` entry (P4-12: also used by probe-definition). */
+export function customToDefinition(entry: CustomHarnessConfig): unknown {
   return {
     id: entry.id as HarnessId,
     displayName: entry.displayName,
@@ -65,7 +68,12 @@ function customToDefinition(entry: CustomHarnessConfig): unknown {
       aliases: [],
       versionArgs: ['--version']
     },
-    launch: { command: entry.command, args: entry.args, env: entry.env },
+    launch: {
+      command: entry.command,
+      args: entry.args,
+      env: entry.env,
+      secretEnv: entry.secretEnv ?? []
+    },
     credentialModes: ['native-login'],
     permissionModes: [
       { id: 'default', label: 'Ask', kunPermissionMode: 'ask-for-approval' },

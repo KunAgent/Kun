@@ -20,6 +20,10 @@ import {
 } from '../runtime/acp/acp-process.js'
 import { AcpError } from '../runtime/acp/acp-schema.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
+import {
+  resolveHarnessSecretEnv,
+  type HarnessSecretRefResolver
+} from './harness-secret-env.js'
 
 // P4-03: 10s misjudged cold ACP starts (Gemini needed ~8.6s alone, worse
 // under parallel probes). 30s leaves headroom without hanging the list.
@@ -30,6 +34,8 @@ export type AcpReadiness = { ready: 'yes' | 'no' | 'unknown'; detail?: string }
 export type AcpReadinessProbeDeps = {
   spawn?: AcpSpawnFn
   timeoutMs?: number
+  /** Resolves `launch.secretEnv` refs so the probe sees the real env (P4-12). */
+  resolveSecretEnv?: HarnessSecretRefResolver
 }
 
 /** Never throws: every failure mode maps to a verdict + a short detail. */
@@ -41,12 +47,14 @@ export async function probeAcpReadiness(
   const timeoutMs = deps.timeoutMs ?? ACP_READINESS_TIMEOUT_MS
   let process: AcpProcess
   try {
+    const secretEnv = await resolveHarnessSecretEnv(definition, deps.resolveSecretEnv)
     process = await startAcpProcess({
       command,
       args: definition.launch?.args ?? [],
       // No credential env: the handshake must reflect install health, not
       // the selected credential mode; auth requirements surface separately.
       env: definition.launch?.env ?? {},
+      secretEnv,
       cwd: tmpdir(),
       spawn: deps.spawn
     })

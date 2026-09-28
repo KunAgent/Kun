@@ -34,6 +34,39 @@ describe('normalizeKunHarnessSettings', () => {
     expect(normalized.defaultHarnessId).toBe('mine')
   })
 
+  // P4-12: secretEnv entries carry only opaque credential-store refs.
+  it('normalizes custom secretEnv rows and drops malformed ones', () => {
+    const normalized = normalizeKunHarnessSettings({
+      custom: [{
+        id: 'mine',
+        displayName: 'Mine',
+        command: '/bin/mine',
+        secretEnv: [
+          { name: 'GOOD_KEY', secretRef: 'cred_1' },
+          { name: 'lowercase', secretRef: 'cred_2' },   // invalid env name
+          { name: 'NO_REF', secretRef: '' },           // empty ref
+          { name: 'GOOD_KEY', secretRef: 'cred_9' },   // last write wins
+          'garbage',
+          { name: 'TOOLONG', secretRef: 'x'.repeat(300) }
+        ]
+      }]
+    })
+    expect(normalized.custom[0]?.secretEnv).toEqual([
+      { name: 'GOOD_KEY', secretRef: 'cred_9' }
+    ])
+  })
+
+  it('omits secretEnv when the entry has none (keeps settings lean)', () => {
+    const normalized = normalizeKunHarnessSettings({
+      custom: [
+        { id: 'a', displayName: 'A', command: '/bin/a', secretEnv: 'nope' },
+        { id: 'b', displayName: 'B', command: '/bin/b' }
+      ]
+    })
+    expect(normalized.custom[0]).not.toHaveProperty('secretEnv')
+    expect(normalized.custom[1]).not.toHaveProperty('secretEnv')
+  })
+
   it('merges patch fields over current', () => {
     const merged = mergeKunHarnessSettings(
       { ...defaultKunHarnessSettings(), disabledIds: ['cursor'] },

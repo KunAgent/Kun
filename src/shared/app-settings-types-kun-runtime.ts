@@ -354,6 +354,16 @@ export type KunPlanExecutionSettingsV1 = {
   useWorktreeByDefault: boolean
 }
 
+/**
+ * A `secretEnv` binding (docs/ade/impl/p4 §3.7, P4-12): settings only carry
+ * the opaque credential-store ref; the secret value resolves inside kun at
+ * spawn time and is never echoed to the UI or logs.
+ */
+export type KunHarnessSecretEnvEntryV1 = {
+  name: string
+  secretRef: string
+}
+
 /** User-defined custom (ACP) harness entry under agents.kun.harnesses.custom. */
 export type KunHarnessCustomEntryV1 = {
   id: string
@@ -361,6 +371,7 @@ export type KunHarnessCustomEntryV1 = {
   command: string
   args: string[]
   env: Record<string, string>
+  secretEnv?: KunHarnessSecretEnvEntryV1[]
 }
 
 /**

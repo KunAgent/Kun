@@ -29,6 +29,10 @@ import { startAcpProcess, type AcpSpawnFn } from './acp-process.js'
 import { AcpError, type AcpInitializeResult } from './acp-schema.js'
 import type { AcpDebugLog } from './acp-jsonrpc.js'
 import {
+  resolveHarnessSecretEnv,
+  type HarnessSecretRefResolver
+} from '../../harness/harness-secret-env.js'
+import {
   capabilitiesFromAcp,
   type AcpSessionFacts
 } from './acp-capabilities.js'
@@ -39,6 +43,8 @@ export type AcpLifecycleDeps = {
   binaryPath?: (harnessId: HarnessId) => string | undefined
   /** Extra env keys to strip from the harness child beyond the shared denylist. */
   stripEnv?: readonly string[]
+  /** Resolves `launch.secretEnv` credential-store refs at spawn (P4-12). */
+  resolveSecretEnv?: HarnessSecretRefResolver
   spawn?: AcpSpawnFn
   debug?: AcpDebugLog
 }
@@ -69,10 +75,15 @@ export async function acquireAcpConnection(
     if (!command) {
       throw new Error(`harness ${input.definition.id} has no launch command`)
     }
+    const secretEnv = await resolveHarnessSecretEnv(
+      input.definition,
+      deps.resolveSecretEnv
+    )
     const process = await startAcpProcess({
       command,
       args: input.definition.launch?.args ?? [],
       env: input.definition.launch?.env ?? {},
+      secretEnv,
       credentialEnv: input.credentialEnv,
       stripEnv: acpStripEnv(deps, input.definition, input.credentialEnv),
       cwd: input.workspace,
@@ -126,12 +137,13 @@ function acpStripEnv(
 export function acpChildEnv(
   deps: Pick<AcpLifecycleDeps, 'stripEnv'>,
   definition: HarnessDefinition,
-  credentialEnv: Record<string, string>
+  credentialEnv: Record<string, string>,
+  secretEnv: Record<string, string> = {}
 ): NodeJS.ProcessEnv {
   return buildHarnessEnv({
     base: process.env,
     strip: acpStripEnv(deps, definition, credentialEnv),
-    add: { ...(definition.launch?.env ?? {}), ...credentialEnv }
+    add: { ...(definition.launch?.env ?? {}), ...secretEnv, ...credentialEnv }
   }) as NodeJS.ProcessEnv
 }
 

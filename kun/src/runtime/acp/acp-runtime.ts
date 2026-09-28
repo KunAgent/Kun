@@ -31,6 +31,7 @@ import {
 } from '../../loop/continuation-instructions.js'
 import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
 import { normalizeTurnLimits, type TurnLimitsConfig } from '../../loop/turn-limits.js'
+import { resolveHarnessSecretEnv } from '../../harness/harness-secret-env.js'
 import type { TurnRunOutcome } from '../../loop/turn-execution-types.js'
 import { buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.js'
 import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
@@ -270,6 +271,12 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         model: actingModelRoute.model,
         accountId
       })
+    // P4-12: `launch.secretEnv` refs resolve once per turn here for the
+    // mediated-terminal env; acquireAcpConnection resolves again for spawn.
+    const secretEnv = await resolveHarnessSecretEnv(
+      definition,
+      this.deps.resolveSecretEnv
+    )
     const poolKey = `${definition.id}:${credentialIdentity}`
     const limits = normalizeTurnLimits(this.deps.turnLimits)
 
@@ -479,7 +486,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       ),
       recordChange: (item) => this.deps.turns.applyItem(threadId, item),
       elicit: acpElicitForTurn(this.deps, thread, turn, signal),
-      terminalEnv: acpChildEnv(this.deps, definition, credentialEnv),
+      terminalEnv: acpChildEnv(this.deps, definition, credentialEnv, secretEnv),
       signal,
       nextId: (prefix) => this.deps.ids.next(prefix)
     }
