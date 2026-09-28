@@ -38,6 +38,14 @@
   "adeHeroOneOnOneTitle": "एक-से-एक सत्र",
   "adeHeroOneOnOneSub": "सीधे किसी एक agent से बात करें — Kun, Claude Code या कोई भी कॉन्फ़िगर किया गया harness।",
   "adeHeroOneOnOneExample": "जैसे: \"Claude Code: src/auth में बदलावों की समीक्षा कर जोखिम सूचीबद्ध करो।\"",
+  "adeOneOnOneDialog": {
+    "title": "नया एक-से-एक सत्र",
+    "agent": "एजेंट",
+    "credential": "क्रेडेंशियल तरीका",
+    "provider": "प्रदाता",
+    "model": "मॉडल",
+    "start": "सत्र शुरू करें"
+  },
   "workerUpdateNotice": {
     "title": "वर्कर अपडेट"
   },

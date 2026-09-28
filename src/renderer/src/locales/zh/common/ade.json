@@ -38,6 +38,14 @@
   "adeHeroOneOnOneTitle": "一对一会话",
   "adeHeroOneOnOneSub": "直接和某一个 agent 对话——Kun、Claude Code 或任何已配置的 harness。",
   "adeHeroOneOnOneExample": "例如：“Claude Code：审查 src/auth 的改动，列出风险。”",
+  "adeOneOnOneDialog": {
+    "title": "新建一对一会话",
+    "agent": "Agent",
+    "credential": "凭据方式",
+    "provider": "供应商",
+    "model": "模型",
+    "start": "开始会话"
+  },
   "workerUpdateNotice": {
     "title": "工作者更新"
   },

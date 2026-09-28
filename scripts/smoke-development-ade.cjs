@@ -174,26 +174,32 @@ async function main() {
     await page.waitForLoadState('domcontentloaded')
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
 
-    // 1) Enter ADE; the Mission Control empty state renders.
+    // 1) Enter ADE; Mission Control renders with the P4-14 readiness
+    //    checklist (provider / ready agents / Kun gateway) above the toolbar.
     await switchMode(page, 'ade')
     await page.locator('[data-mission-control]').waitFor()
+    await page.locator('[data-ade-readiness-card]').waitFor()
     await capture('1-ade-home')
 
-    // 2) One-on-one picker refreshes while detection runs (P4-02): the stub
-    //    Claude row turns selectable, the custom ACP stub completes its
-    //    handshake, and a blocking row carries the localized reason + an
-    //    "Open settings" deep link (P4-05).
+    // 2) One-on-one dialog (P4-15) refreshes while detection runs (P4-02):
+    //    the stub Claude row turns selectable, the custom ACP stub completes
+    //    its handshake, and blocking rows stay disabled until an "Open
+    //    settings" deep link appears (P4-05).
     await page.getByRole('button', { name: 'One-on-one', exact: true }).click()
-    const picker = page.locator('[data-ade-agent-picker]')
+    const picker = page.locator('[data-ade-one-on-one-dialog]')
     await picker.waitFor()
-    const claudeRow = picker.getByRole('button', { name: 'Claude Code', exact: true })
-    await poll(async () => (await claudeRow.count()) > 0, 60_000, 'Claude Code row becoming selectable')
-    await poll(async () => (await picker.getByRole('button', { name: 'Smoke ACP', exact: true }).count()) > 0,
-      60_000, 'Smoke ACP readiness handshake')
-    const unavailableRows = picker.locator('[data-ade-agent-unavailable]')
-    assert((await unavailableRows.count()) > 0, 'Expected at least one unavailable harness row')
-    // A row still mid-detection has no settings link; wait for a settled
-    // blocking row, then use its "Open settings" deep link.
+    const claudeRow = picker.locator('[data-ade-one-on-one-agent="claude-code"]')
+    await claudeRow.waitFor()
+    await poll(async () => await claudeRow.isEnabled(), 60_000,
+      'Claude Code row becoming selectable')
+    const acpRow = picker.locator('[data-ade-one-on-one-agent="smoke-acp"]')
+    await acpRow.waitFor()
+    await poll(async () => await acpRow.isEnabled(), 60_000,
+      'Smoke ACP readiness handshake')
+    // A terminal agent never appears in the turn-serving list (P4-13).
+    assert.equal(await picker.locator('[data-ade-one-on-one-agent="smoke-term"]').count(), 0,
+      'Terminal-only agent must not appear in the one-on-one picker')
+    // A settled blocking row surfaces the single "Open settings" deep link.
     const settingsLink = picker.getByRole('button', { name: 'Open settings', exact: true }).first()
     await poll(async () => (await picker.getByRole('button', { name: 'Open settings', exact: true })
       .count()) > 0, 60_000, 'unavailable harness row surfacing a settings link')
@@ -317,7 +323,8 @@ async function main() {
     //    toolbar container (P4-01).
     await page.getByRole('button', { name: 'One-on-one', exact: true }).click()
     await picker.waitFor()
-    await picker.getByRole('button', { name: 'Claude Code', exact: true }).click()
+    await claudeRow.click()
+    await picker.locator('[data-ade-one-on-one-start]').click()
     const harnessTrigger = page.getByRole('button', { name: 'Harness', exact: true })
     await harnessTrigger.waitFor({ timeout: 60_000 })
     await harnessTrigger.click()
