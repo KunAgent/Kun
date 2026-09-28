@@ -58,6 +58,46 @@ export const HarnessGatewaySchema = z
   .strict()
 export type HarnessGateway = z.infer<typeof HarnessGatewaySchema>
 
+/**
+ * Install/login hints shown by the Agent Center (docs/ade/impl/p4 §3.3).
+ * Commands come from each harness's official documentation and are only ever
+ * prefilled into a Kun terminal — the user presses Enter, Kun never executes.
+ */
+export const HarnessSetupSchema = z
+  .object({
+    install: z
+      .array(
+        z
+          .object({
+            platform: z.enum(['darwin', 'linux', 'win32', 'any']),
+            command: z.string().min(1).max(512),
+            note: z.string().max(256).optional()
+          })
+          .strict()
+      )
+      .max(8)
+      .optional(),
+    login: z
+      .object({
+        command: z.string().min(1).max(256),
+        args: z.array(z.string().max(256)).max(16).default([]),
+        note: z.string().max(256).optional()
+      })
+      .strict()
+      .optional(),
+    docsUrl: z.string().url().max(512).optional(),
+    /** Adapter package when the CLI itself cannot serve the transport (codex-acp). */
+    adapter: z
+      .object({
+        command: z.string().min(1).max(256),
+        install: z.string().min(1).max(512)
+      })
+      .strict()
+      .optional()
+  })
+  .strict()
+export type HarnessSetup = z.infer<typeof HarnessSetupSchema>
+
 export const HarnessDefinitionSchema = z
   .object({
     id: HarnessIdSchema,
@@ -128,6 +168,7 @@ export const HarnessDefinitionSchema = z
     capabilities: HarnessCapabilitiesSchema,
     /** Present when the harness can run through the loopback model gateway. */
     gateway: HarnessGatewaySchema.optional(),
+    setup: HarnessSetupSchema.optional(),
     builtin: z.boolean()
   })
   .strict()
