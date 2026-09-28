@@ -13,6 +13,7 @@ import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
 import { costTierFromPricing } from '../ade/worker-selector.js'
 import { createApprovedChecksResolver } from '../workspace-tasks/approved-setup.js'
 import { effectiveCapabilitiesForRoute } from '../harness/effective-capabilities.js'
+import { harnessDefaultsFor } from '../harness/harness-defaults.js'
 import type { HarnessRoute } from '../contracts/harness.js'
 import type { HarnessRuntimeMap } from '../harness/harness-router.js'
 import type { DelegationRuntime } from '../delegation/delegation-runtime.js'
@@ -171,6 +172,8 @@ export function createManagerRuntime(input: {
       }),
       artifacts: core.artifactStore
     },
+    harnessDefaults: (harnessId) =>
+      harnessDefaultsFor(core.activeOptions.harnesses, harnessId),
     selector: {
       profiles: (workspace) =>
         delegationRuntime?.listRoutingProfiles(workspace) ?? Promise.resolve([]),

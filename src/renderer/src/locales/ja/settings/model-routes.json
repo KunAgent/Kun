@@ -27,6 +27,12 @@
     "runtimeNotRunning": "Kun Runtime が実行されていません",
     "runtimeNotConnected": "Kun Runtime が接続されていません",
     "runtimeSyncing": "Kun Runtime に同期中",
+    "gatewayFix": "修正する",
+    "gatewayIssue": {
+      "gateway_key_missing": "ローカルゲートウェイに独立した API キーがありません",
+      "gateway_non_loopback_host": "ローカルゲートウェイにはループバックアドレスが必要です",
+      "gateway_disabled": "ローカルゲートウェイは自動的にオフになりました（API キーを生成できません）"
+    },
     "runtimeWaitingForSync": "Kun Runtime 同期を待機しています",
     "tabsAria": "モデルルートの設定",
     "tabGateway": "ゲートウェイ & API",

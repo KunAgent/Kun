@@ -43,6 +43,24 @@ export type AdeHarnessDefinition = {
     hooks?: { kind: string; events: string[] }
   }
   builtin: boolean
+  /**
+   * Install/login hints for the Agent Center (docs/ade/impl/p4 §3.3). Only
+   * builtin definitions carry them, and the UI only ever prefills these into
+   * a Kun terminal — nothing is executed automatically.
+   */
+  setup?: AdeHarnessSetup
+}
+
+export type AdeHarnessSetup = {
+  install?: {
+    platform: 'darwin' | 'linux' | 'win32' | 'any'
+    command: string
+    note?: string
+  }[]
+  login?: { command: string; args: string[]; note?: string }
+  docsUrl?: string
+  /** Adapter package when the CLI cannot serve the transport (codex-acp). */
+  adapter?: { command: string; install: string }
 }
 
 export type AdeHarnessStatus = {
@@ -58,9 +76,29 @@ export type AdeHarnessStatus = {
   login: 'signed-in' | 'signed-out' | 'unknown' | 'not-required'
   resolvedCommand?: string
   checkedAt: string
-  /** User-facing reason an entry is unavailable (01 §7.2 CapabilityStatus.message). */
+  /**
+   * True while a detection pass is inflight (P4-02): the provisional
+   * `unknown` verdicts above are not final, so clients poll instead of
+   * pinning the row disabled.
+   */
+  detecting?: boolean
+  /**
+   * Stable machine-readable unavailability reason (P4-05). Clients localize
+   * a label + next step from this; `message` stays diagnostic detail.
+   */
+  reasonCode?: AdeHarnessReasonCode
+  /** Raw diagnostic detail; render inside a "view reason" disclosure only. */
   message?: string
 }
+
+export type AdeHarnessReasonCode =
+  | 'disabled'
+  | 'not_installed'
+  | 'adapter_missing'
+  | 'version_too_low'
+  | 'handshake_failed'
+  | 'handshake_timeout'
+  | 'signed_out'
 
 /** Row in `GET /v1/harnesses`: definition plus cached detection status. */
 export type AdeHarnessRow = {
@@ -87,6 +125,83 @@ export type AdeHarnessModels = {
   credentialMode?: string
   groups?: AdeHarnessProviderModelGroup[]
 }
+
+/** `POST /v1/harnesses/:id/test` request body (p4 §3.5, P4-10). */
+export type AdeHarnessTestRequest = {
+  level: 'detect' | 'handshake' | 'trial'
+  credentialMode?: AdeHarnessCredentialMode
+  providerId?: string
+  model?: string
+  timeoutMs?: number
+}
+
+/** One level's result inside a `testHarness` response. */
+export type AdeHarnessTestDetect = {
+  durationMs: number
+  ok: boolean
+  status: AdeHarnessStatus
+}
+
+export type AdeHarnessTestHandshake = {
+  durationMs: number
+  ok: boolean
+  /** False when the transport has no handshake surface at all. */
+  supported: boolean
+  protocol?: string
+  protocolVersion?: number
+  agent?: { name?: string; version?: string }
+  capabilities?: {
+    sessionResume?: boolean
+    imageInput?: boolean
+    mcpTransports?: string[]
+  }
+  authMethods?: { id: string; name?: string }[]
+  authRequired?: boolean
+  models?: string[]
+  detail?: string
+}
+
+export type AdeHarnessTestTrial = {
+  durationMs: number
+  ok: boolean
+  status: 'completed' | 'failed' | 'aborted'
+  error?: string
+  terminalCode?: string
+  usage?: {
+    totalTokens: number
+    promptTokens?: number
+    completionTokens?: number
+    model?: string
+    providerId?: string
+  }
+}
+
+export type AdeHarnessTestResult = {
+  harnessId: string
+  transport: string
+  level: 'detect' | 'handshake' | 'trial'
+  ok: boolean
+  durationMs: number
+  detect: AdeHarnessTestDetect
+  handshake?: AdeHarnessTestHandshake
+  trial?: AdeHarnessTestTrial
+}
+
+/**
+ * `POST /v1/harnesses/probe-definition` request (p4 §3.7, P4-12): handshake
+ * a custom ACP definition before it is saved into `harnesses.custom[]`.
+ */
+export type AdeHarnessProbeDefinitionRequest = {
+  id?: string
+  displayName: string
+  command: string
+  args?: string[]
+  env?: Record<string, string>
+  secretEnv?: { name: string; secretRef: string }[]
+}
+
+/** The probe-definition response is the handshake result itself. */
+export type AdeHarnessProbeDefinitionResult = AdeHarnessTestHandshake
 
 /** A native slash command the harness advertised (03 §7.3). */
 export type AdeHarnessCommand = {

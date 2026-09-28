@@ -171,7 +171,10 @@ describe('Runtime settings generation ownership', () => {
     harness.classifyHotApply.mockReturnValue({ result: 'failed', message: 'invalid credentials' })
     vi.stubGlobal('fetch', vi.fn(async () => new Response('invalid credentials', { status: 400 })))
 
-    await expect(applyManagedRuntimeSettingsHot(current, 'settings-test')).resolves.toBe('failed')
+    await expect(applyManagedRuntimeSettingsHot(current, 'settings-test')).resolves.toMatchObject({
+      result: 'failed',
+      message: 'invalid credentials'
+    })
 
     expect(harness.stopSharedAndWait).not.toHaveBeenCalled()
   })

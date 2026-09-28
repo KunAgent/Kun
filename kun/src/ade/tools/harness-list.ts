@@ -31,6 +31,12 @@ export type HarnessListEntry = {
   /** Models omitted by the per-group cap, for the manager to know they exist. */
   modelsTruncated?: number
   admission: { managerWorker: boolean; missing?: string[] }
+  /**
+   * Terminal-only agent (p4 §3.8): launches inside a Kun terminal tab;
+   * dispatch works only through the `kun worker` callback the agent itself
+   * chooses to call — never as an automatic worker pick.
+   */
+  terminalOnly?: boolean
   notes?: string
 }
 
@@ -81,6 +87,7 @@ export async function listHarnessesForManager(
   const runtimeMap = deps.runtimes?.get() ?? {}
   const providers = await deps.providers?.().catch(() => undefined) ?? []
   const agents = await Promise.all(deps.catalog.list().map(async (def) => {
+    const terminalOnly = def.transport === 'terminal'
     const status = await deps.detector.status(def.id).catch(() => undefined)
     const ready = def.transport === 'native-loop'
       ? true
@@ -128,16 +135,28 @@ export async function listHarnessesForManager(
       displayName: def.displayName,
       ready,
       ...(ready ? {} : {
-        notReadyReason: status?.message
-          ?? (status?.installed === 'no' ? 'not installed'
-            : status?.login === 'signed-out' ? 'signed out' : 'not ready')
+        // P4-05: stable code first for the manager; the raw message stays
+        // diagnostic detail in parentheses.
+        notReadyReason: status?.reasonCode
+          ? `${status.reasonCode}${status?.message ? ` (${status.message})` : ''}`
+          : status?.message
+            ?? (status?.installed === 'no' ? 'not installed'
+              : status?.login === 'signed-out' ? 'signed out' : 'not ready')
       }),
       models,
       ...(truncated > 0 ? { modelsTruncated: truncated } : {}),
       admission: {
-        managerWorker: missing.length === 0,
+        managerWorker: !terminalOnly && missing.length === 0,
         ...(missing.length ? { missing } : {})
-      }
+      },
+      ...(terminalOnly
+        ? {
+            terminalOnly: true,
+            notes:
+              'terminal only — dispatch goes through the `kun worker` ' +
+              'callback the agent chooses to call; never an automatic pick'
+          }
+        : {})
     } satisfies HarnessListEntry
   }))
   return {

@@ -272,6 +272,11 @@ export type ServerRuntime = {
      * serve layer fills `baseUrl` once the listener binds.
      */
     gatewayEndpoint?: { baseUrl?: string }
+    /**
+     * Resolves `launch.secretEnv` credential-store refs at spawn/probe time
+     * (P4-12); undefined when the runtime has no credential store.
+     */
+    resolveSecretEnv?: import('../../harness/harness-secret-env.js').HarnessSecretRefResolver
   }
   /**
    * Process-local `kgw_` bearer tokens scoped to spawned harnesses

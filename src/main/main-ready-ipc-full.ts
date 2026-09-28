@@ -92,14 +92,16 @@ import {
   shutdownServiceManagerAndWait
 } from './main-migrations'
 import {
-  preserveRuntimeTokenForFullSettingsSnapshot,
   queueRuntimeMcpConfigApply,
   queueRuntimeSettingsApply,
   reserveRuntimeSettingsApply,
   runtimeRequest,
-  runtimeRequestOnLease,
-  validateRuntimeSettingsForApply
+  runtimeRequestOnLease
 } from './main-runtime-settings'
+import {
+  preserveRuntimeTokenForFullSettingsSnapshot,
+  validateRuntimeSettingsForApply
+} from './main-runtime-settings-validate'
 import {
   ensureRuntime,
   restartGuiRuntime,

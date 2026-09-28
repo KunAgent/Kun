@@ -14,6 +14,8 @@ export type SettingsRouteSection =
   | 'speak'
   | 'speechToText'
   | 'agents'
+  /** Agents category, Harnesses sub-panel (P4-05 Agent Center deep link). */
+  | 'agentsHarnesses'
   | 'laboratory'
   | 'subagents'
   | 'archives'

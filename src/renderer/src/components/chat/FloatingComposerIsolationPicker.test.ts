@@ -1,6 +1,7 @@
-import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+// @vitest-environment jsdom
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../i18n'
 import type { TaskWorkspacePrep } from '../../store/task-workspace-store'
 import { FloatingComposerIsolationPicker } from './FloatingComposerIsolationPicker'
@@ -15,6 +16,21 @@ function prep(state: TaskWorkspacePrep['state']): TaskWorkspacePrep {
   }
 }
 
+let host: HTMLDivElement
+let root: Root
+
+beforeEach(() => {
+  host = document.createElement('div')
+  document.body.appendChild(host)
+  root = createRoot(host)
+})
+
+afterEach(() => {
+  act(() => root.unmount())
+  host.remove()
+  document.body.innerHTML = ''
+})
+
 async function renderPicker(props: {
   showPicker?: boolean
   value?: 'local' | 'worktree'
@@ -22,10 +38,9 @@ async function renderPicker(props: {
   boundWorkspaceId?: string
   onSelect?: (value: 'local' | 'worktree') => void
   onRetryPrep?: () => void
-}): Promise<ReactTestRenderer> {
-  let renderer!: ReactTestRenderer
+}): Promise<void> {
   await act(async () => {
-    renderer = create(createElement(FloatingComposerIsolationPicker, {
+    root.render(createElement(FloatingComposerIsolationPicker, {
       showPicker: props.showPicker ?? true,
       value: props.value ?? 'local',
       prep: props.prep,
@@ -34,66 +49,54 @@ async function renderPicker(props: {
       onRetryPrep: props.onRetryPrep
     }))
   })
-  return renderer
 }
-
-beforeEach(() => {
-  vi.stubGlobal('window', {
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn()
-  })
-})
 
 describe('FloatingComposerIsolationPicker', () => {
   it('offers local vs worktree for a new ADE session', async () => {
     const onSelect = vi.fn()
-    const renderer = await renderPicker({ onSelect })
-    await act(async () => {
-      renderer.root.findByProps({ 'data-composer-isolation-picker': true }).props.onClick()
-    })
-    const local = renderer.root.findByProps({ 'data-isolation': 'local' })
-    const worktree = renderer.root.findByProps({ 'data-isolation': 'worktree' })
-    await act(async () => {
-      worktree.props.onClick()
-    })
-    expect(onSelect).toHaveBeenCalledWith('worktree')
+    await renderPicker({ onSelect })
+    const trigger = host.querySelector<HTMLButtonElement>('[data-composer-isolation-picker]')
+    await act(async () => trigger!.click())
+    const menu = document.body.querySelector('[data-isolation-picker-menu]')
+    expect(menu).toBeTruthy()
+    const local = menu!.querySelector<HTMLButtonElement>('[data-isolation="local"]')
+    const worktree = menu!.querySelector<HTMLButtonElement>('[data-isolation="worktree"]')
     expect(local).toBeTruthy()
+    await act(async () => worktree!.click())
+    expect(onSelect).toHaveBeenCalledWith('worktree')
   })
 
   it('shows a preparing chip while the worktree spins up', async () => {
-    const renderer = await renderPicker({
+    await renderPicker({
       showPicker: false,
       prep: prep('setting-up')
     })
-    expect(renderer.root.findByProps({ 'data-worktree-prep': 'preparing' })).toBeTruthy()
+    expect(host.querySelector('[data-worktree-prep="preparing"]')).toBeTruthy()
   })
 
   it('shows a retry affordance when preparation failed', async () => {
     const onRetryPrep = vi.fn()
-    const renderer = await renderPicker({
+    await renderPicker({
       showPicker: false,
       prep: prep('failed'),
       onRetryPrep
     })
-    const retry = renderer.root.findByProps({ 'data-worktree-prep': 'failed' })
-    await act(async () => {
-      retry.props.onClick()
-    })
+    const retry = host.querySelector<HTMLButtonElement>('[data-worktree-prep="failed"]')
+    await act(async () => retry!.click())
     expect(onRetryPrep).toHaveBeenCalled()
   })
 
   it('shows the bound worktree badge once ready', async () => {
-    const renderer = await renderPicker({
+    await renderPicker({
       showPicker: false,
       prep: prep('ready')
     })
-    expect(renderer.root.findByProps({ 'data-worktree-prep': 'ready' })).toBeTruthy()
+    expect(host.querySelector('[data-worktree-prep="ready"]')).toBeTruthy()
   })
 
   it('renders nothing when no picker, prep, or binding applies', async () => {
-    const renderer = await renderPicker({ showPicker: false })
-    expect(renderer.toJSON()).toBeTruthy()
-    expect(renderer.root.findAllByProps({ 'data-composer-isolation-picker': true })).toHaveLength(0)
-    expect(renderer.root.findAllByProps({ 'data-worktree-prep': 'preparing' })).toHaveLength(0)
+    await renderPicker({ showPicker: false })
+    expect(host.querySelector('[data-composer-isolation-picker]')).toBeNull()
+    expect(host.querySelector('[data-worktree-prep="preparing"]')).toBeNull()
   })
 })

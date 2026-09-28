@@ -10,6 +10,45 @@
   "adeHandoffShow": "ブリーフを表示",
   "adeHandoffHide": "ブリーフを隠す",
   "adeHandoffLoadError": "引き継ぎブリーフを再構築できませんでした",
+  "adeReadiness": {
+    "checking": "確認中…",
+    "provider": {
+      "label": "マネージャーのモデルプロバイダー",
+      "ready": "{{name}}",
+      "missing": "利用可能なプロバイダーがありません",
+      "action": "設定する"
+    },
+    "agents": {
+      "label": "利用可能な agent",
+      "ready": "{{count}} 件が利用可能",
+      "missing": "利用可能な agent がありません",
+      "action": "Agent センターを開く"
+    },
+    "gateway": {
+      "label": "Kun ゲートウェイ",
+      "ready": "オン",
+      "missing": "オフ — harness がプロバイダーに到達できません",
+      "action": "管理する"
+    }
+  },
+  "adeHeroTitle": "委譲には2つの方法があります",
+  "adeHeroManagerTitle": "マネージャーセッション",
+  "adeHeroManagerSub": "マネージャーが作業を分解し、worker を並行に派遣して結果をまとめます。",
+  "adeHeroManagerExample": "例:「この機能を依存関係のない3つのタスクに分割して並行で実装して」",
+  "adeHeroOneOnOneTitle": "1対1セッション",
+  "adeHeroOneOnOneSub": "Kun、Claude Code、設定済みの任意 harness など、単一の agent と直接会話します。",
+  "adeHeroOneOnOneExample": "例:「Claude Code: src/auth の変更をレビューしてリスクを列挙して」",
+  "adeOneOnOneDialog": {
+    "title": "新しい1対1セッション",
+    "agent": "エージェント",
+    "credential": "認証方式",
+    "provider": "プロバイダー",
+    "model": "モデル",
+    "start": "セッションを開始"
+  },
+  "adeDispatchable": "派遣可能: {{names}}",
+  "adeDispatchableNone": "派遣可能な agent がありません",
+  "adeDispatchableHint": "マネージャーが作業を委譲できる agent — Agent センターで管理",
   "workerUpdateNotice": {
     "title": "ワーカー更新"
   },
@@ -186,7 +225,11 @@
     "detecting": "検出中",
     "signedOut": "サインアウト済み",
     "versionLow": "バージョンが古すぎます",
-    "unavailable": "利用不可"
+    "unavailable": "利用不可",
+    "adapterMissing": "ACP アダプターなし",
+    "handshakeFailed": "ハンドシェイク失敗",
+    "handshakeTimeout": "検出タイムアウト",
+    "disabled": "無効"
   },
   "adeIsolation": {
     "title": "隔離",
@@ -259,5 +302,52 @@
   "adeGroupByProject": "プロジェクトでグループ化",
   "adeGroupToggleHint": "会話のグループ化を切り替え",
   "adeWorkerCount": "ワーカー {{count}} 件",
-  "adeWorkerCount_other": "ワーカー {{count}} 件"
+  "adeWorkerCount_other": "ワーカー {{count}} 件",
+  "adeHarnessNextStep": {
+    "install": "インストール後に再試行",
+    "installAdapter": "ACP アダプターをインストール",
+    "upgrade": "更新後に再試行",
+    "retry": "検出を再試行",
+    "login": "ログイン後に再試行",
+    "enable": "設定で有効化"
+  },
+  "adeHarnessViewReason": "原因を見る",
+  "adeHarnessOpenSettings": "設定を開く",
+  "adeAgents": "エージェント",
+  "adeAgentCopied": "コマンドをコピーしました。Kun ターミナルで実行してください",
+  "adeAgentCenter": {
+    "title": "エージェントセンター",
+    "desc": "Kun が作業を委任できるエージェントをインストール・サインイン・管理します。"
+  },
+  "adeAgentAction": {
+    "install": "インストール",
+    "login": "サインイン",
+    "installAdapter": "アダプターをインストール",
+    "test": "接続をテスト",
+    "retry": "再検出",
+    "enable": "有効化",
+    "disable": "無効化",
+    "setDefault": "既定に設定",
+    "isDefault": "既定",
+    "specifyPath": "コマンドパスを指定",
+    "docs": "ドキュメント",
+    "trial": "試行ターンを実行"
+  },
+  "adeAgentTransport": {
+    "nativeLoop": "Kun",
+    "agentSdk": "Agent SDK",
+    "cursorSdk": "Cursor SDK",
+    "antigravityCli": "CLI",
+    "acp": "ACP",
+    "terminal": "ターミナル"
+  },
+  "adeAgentTest": {
+    "detect": "検出",
+    "handshake": "ハンドシェイク",
+    "trial": "試行ターン",
+    "tokens": "{{count}} トークン使用",
+    "noHandshake": "ハンドシェイク面なし",
+    "capSessionResume": "セッション再開",
+    "capImageInput": "画像入力"
+  }
 }

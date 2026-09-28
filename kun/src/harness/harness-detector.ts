@@ -1,6 +1,7 @@
 import semver from 'semver'
 import type { ChildProcess } from 'node:child_process'
 import type { HarnessDefinition, HarnessId, HarnessStatus } from '../contracts/harness.js'
+import { harnessStatusReasonCode } from '../contracts/harness.js'
 import {
   resolveExecutable as defaultResolveExecutable,
   spawnOwnedProcess,
@@ -92,11 +93,22 @@ export class HarnessDetector {
        * ACP initialize handshake after the version probe (P3-11). Only runs
        * for `transport: 'acp'` definitions with a resolved command; its
        * verdict lands on `status.ready` with a sanitized stderr summary.
+       * 'unknown' (P4-03) means the probe timed out — not a failure verdict.
        */
       probeReady?: (
         def: HarnessDefinition,
         command: string
-      ) => Promise<{ ready: 'yes' | 'no'; detail?: string }>
+      ) => Promise<{ ready: 'yes' | 'no' | 'unknown'; detail?: string }>
+      /**
+       * Persisted 24h readiness cache (P4-03): successful handshakes keyed
+       * by resolved command + version survive restarts; failures never
+       * enter the cache.
+       */
+      readinessCache?: {
+        get(id: HarnessId, command: string, version: string | undefined): Promise<'yes' | undefined>
+        set(id: HarnessId, command: string, version: string | undefined): Promise<void>
+        clear(id: HarnessId): Promise<void>
+      }
       probeLogin: (def: HarnessDefinition, command: string) => Promise<HarnessLoginState>
       nowMs: () => number
       nowIso: () => string
@@ -128,6 +140,34 @@ export class HarnessDetector {
     return cached && cached.expiresAt > this.deps.nowMs() ? cached.status : undefined
   }
 
+  /** True while a detection pass is inflight for this harness. */
+  detecting(id: HarnessId): boolean {
+    return this.inflight.has(id)
+  }
+
+  /**
+   * A real turn launch failed after a probe said ready (P4-03): drop the
+   * persisted readiness entry and mark the cached status `ready: 'no'` so
+   * the UI reflects the observed failure until the next detection pass.
+   */
+  recordLaunchFailure(id: HarnessId, detail: string): void {
+    void this.deps.readinessCache?.clear(id).catch(() => undefined)
+    const cached = this.cache.get(id)
+    const message = detail.slice(0, 512)
+    this.store(id, {
+      ...(cached?.status ?? {
+        harnessId: id,
+        installed: 'unknown' as const,
+        login: 'unknown' as const
+      }),
+      harnessId: id,
+      ready: 'no',
+      reasonCode: 'handshake_failed' as const,
+      checkedAt: this.deps.nowIso(),
+      message
+    })
+  }
+
   /** Non-blocking snapshot: cached status or an optimistic unknown entry. */
   peek(id: HarnessId): HarnessStatus | undefined {
     const cached = this.cache.get(id)
@@ -137,7 +177,8 @@ export class HarnessDetector {
       harnessId: id,
       installed: 'unknown',
       login: 'unknown',
-      checkedAt: this.deps.nowIso()
+      checkedAt: this.deps.nowIso(),
+      detecting: true
     }
   }
 
@@ -194,10 +235,26 @@ export class HarnessDetector {
         installed: 'no',
         login: 'unknown',
         checkedAt,
+        reasonCode: hint && hintPresent ? 'adapter_missing' : 'not_installed',
         message:
           hint && hintPresent
             ? hint.message
             : `command not found: ${def.detect?.command ?? def.id}`
+      })
+    }
+    if (def.transport === 'terminal') {
+      // Terminal agents (p4 §3.8): a resolved command is the whole verdict.
+      // Many interactive CLIs ignore `--version` and wait on stdin instead —
+      // probing would hang 5s and mask an installed agent as 'unknown'.
+      const login = await this.deps
+        .probeLogin(def, command ?? def.id)
+        .catch(() => 'unknown' as HarnessLoginState)
+      return this.store(id, {
+        harnessId: id,
+        installed: 'yes',
+        login,
+        resolvedCommand: command,
+        checkedAt
       })
     }
     const version = bundled?.version
@@ -223,15 +280,28 @@ export class HarnessDetector {
     let ready: HarnessStatus['ready']
     let readyMessage: string | undefined
     if (def.transport === 'acp' && command && this.deps.probeReady) {
-      const result = await this.deps
-        .probeReady(def, command)
-        .catch((error) => ({ ready: 'no' as const, detail: String(error) }))
-      ready = result.ready
-      if (result.ready === 'no') {
-        readyMessage = `ACP initialize failed: ${result.detail ?? 'no response'}`
+      const cached = await this.deps.readinessCache
+        ?.get(id, command, version.text || undefined)
+        .catch(() => undefined)
+      if (cached === 'yes') {
+        ready = 'yes'
+      } else {
+        const result = await this.deps
+          .probeReady(def, command)
+          .catch((error) => ({ ready: 'no' as const, detail: String(error) }))
+        ready = result.ready
+        if (result.ready === 'yes') {
+          await this.deps.readinessCache
+            ?.set(id, command, version.text || undefined)
+            .catch(() => undefined)
+        } else if (result.ready === 'no') {
+          readyMessage = `ACP initialize failed: ${result.detail ?? 'no response'}`
+        } else {
+          readyMessage = `ACP readiness probe inconclusive: ${result.detail ?? 'timeout'}`
+        }
       }
     }
-    return this.store(id, {
+    const status: HarnessStatus = {
       harnessId: id,
       installed: 'yes',
       version: version.text || undefined,
@@ -241,7 +311,11 @@ export class HarnessDetector {
       resolvedCommand: command,
       checkedAt,
       ...(readyMessage ? { message: readyMessage.slice(0, 512) } : {})
-    })
+    }
+    // P4-05: stamp the stable reason code so clients localize a label and a
+    // next step instead of parsing `message` (which stays detail-only).
+    const reasonCode = harnessStatusReasonCode(status)
+    return this.store(id, reasonCode ? { ...status, reasonCode } : status)
   }
 
   private async resolveCommand(def: HarnessDefinition): Promise<string | undefined> {

@@ -10,6 +10,45 @@
   "adeHandoffShow": "ดูบรีฟ",
   "adeHandoffHide": "ซ่อนบรีฟ",
   "adeHandoffLoadError": "สร้างบรีฟส่งต่อใหม่ไม่สำเร็จ",
+  "adeReadiness": {
+    "checking": "กำลังตรวจสอบ…",
+    "provider": {
+      "label": "ผู้ให้บริการโมเดลของผู้จัดการ",
+      "ready": "{{name}}",
+      "missing": "ยังไม่มีผู้ให้บริการที่ใช้งานได้",
+      "action": "ตั้งค่า"
+    },
+    "agents": {
+      "label": "agent ที่พร้อม",
+      "ready": "พร้อม {{count}} ตัว",
+      "missing": "ยังไม่มี agent ที่พร้อม",
+      "action": "เปิดศูนย์ Agent"
+    },
+    "gateway": {
+      "label": "เกตเวย์ Kun",
+      "ready": "เปิดอยู่",
+      "missing": "ปิดอยู่ — harness เข้าถึงผู้ให้บริการไม่ได้",
+      "action": "จัดการ"
+    }
+  },
+  "adeHeroTitle": "สองวิธีในการมอบหมายงาน",
+  "adeHeroManagerTitle": "เซสชันผู้จัดการ",
+  "adeHeroManagerSub": "ผู้จัดการวางแผนงาน ส่ง worker แบบขนาน และสรุปผลลัพธ์",
+  "adeHeroManagerExample": "เช่น \"แบ่งฟีเจอร์นี้เป็นสามงานที่ไม่พึ่งพากันแล้วทำแบบขนาน\"",
+  "adeHeroOneOnOneTitle": "เซสชันหนึ่งต่อหนึ่ง",
+  "adeHeroOneOnOneSub": "คุยกับ agent ตัวเดียวโดยตรง — Kun, Claude Code หรือ harness ที่ตั้งค่าไว้",
+  "adeHeroOneOnOneExample": "เช่น \"Claude Code: ตรวจสอบการเปลี่ยนแปลงใน src/auth และระบุความเสี่ยง\"",
+  "adeOneOnOneDialog": {
+    "title": "เซสชันหนึ่งต่อหนึ่งใหม่",
+    "agent": "เอเจนต์",
+    "credential": "วิธีพิสูจน์ตัวตน",
+    "provider": "ผู้ให้บริการ",
+    "model": "โมเดล",
+    "start": "เริ่มเซสชัน"
+  },
+  "adeDispatchable": "มอบหมายได้: {{names}}",
+  "adeDispatchableNone": "ไม่มี agent ที่มอบหมายได้",
+  "adeDispatchableHint": "agent ที่ผู้จัดการมอบหมายงานได้ — จัดการในศูนย์ Agent",
   "workerUpdateNotice": {
     "title": "อัปเดตจากวอร์กเกอร์"
   },
@@ -186,7 +225,11 @@
     "detecting": "กำลังตรวจสอบ",
     "signedOut": "ออกจากระบบแล้ว",
     "versionLow": "เวอร์ชันเก่าเกินไป",
-    "unavailable": "ไม่พร้อมใช้งาน"
+    "unavailable": "ไม่พร้อมใช้งาน",
+    "adapterMissing": "ไม่มี ACP adapter",
+    "handshakeFailed": "จับมือล้มเหลว",
+    "handshakeTimeout": "ตรวจหมดเวลา",
+    "disabled": "ปิดใช้งาน"
   },
   "adeIsolation": {
     "title": "การแยกสภาพแวดล้อม",
@@ -259,5 +302,52 @@
   "adeGroupByProject": "จัดกลุ่มตามโปรเจกต์",
   "adeGroupToggleHint": "สลับวิธีจัดกลุ่มการสนทนา",
   "adeWorkerCount": "เวิร์กเกอร์ {{count}} ตัว",
-  "adeWorkerCount_other": "เวิร์กเกอร์ {{count}} ตัว"
+  "adeWorkerCount_other": "เวิร์กเกอร์ {{count}} ตัว",
+  "adeHarnessNextStep": {
+    "install": "ติดตั้งแล้วลองใหม่",
+    "installAdapter": "ติดตั้ง ACP adapter",
+    "upgrade": "อัปเกรดแล้วลองใหม่",
+    "retry": "ลองตรวจอีกครั้ง",
+    "login": "ล็อกอินแล้วลองใหม่",
+    "enable": "เปิดในการตั้งค่า"
+  },
+  "adeHarnessViewReason": "ดูสาเหตุ",
+  "adeHarnessOpenSettings": "เปิดการตั้งค่า",
+  "adeAgents": "เอเจนต์",
+  "adeAgentCopied": "คัดลอกคำสั่งแล้ว — เรียกใช้ในเทอร์มินัล Kun",
+  "adeAgentCenter": {
+    "title": "ศูนย์เอเจนต์",
+    "desc": "ติดตั้ง ลงชื่อเข้าใช้ และจัดการเอเจนต์ที่ Kun มอบหมายงานได้"
+  },
+  "adeAgentAction": {
+    "install": "ติดตั้ง",
+    "login": "ลงชื่อเข้าใช้",
+    "installAdapter": "ติดตั้งอะแดปเตอร์",
+    "test": "ทดสอบการเชื่อมต่อ",
+    "retry": "ตรวจจับอีกครั้ง",
+    "enable": "เปิดใช้",
+    "disable": "ปิดใช้",
+    "setDefault": "ตั้งเป็นค่าเริ่มต้น",
+    "isDefault": "ค่าเริ่มต้น",
+    "specifyPath": "ระบุพาธคำสั่ง",
+    "docs": "เอกสาร",
+    "trial": "เรียกใช้เทิร์นทดลอง"
+  },
+  "adeAgentTransport": {
+    "nativeLoop": "Kun",
+    "agentSdk": "Agent SDK",
+    "cursorSdk": "Cursor SDK",
+    "antigravityCli": "CLI",
+    "acp": "ACP",
+    "terminal": "เทอร์มินัล"
+  },
+  "adeAgentTest": {
+    "detect": "ตรวจสอบ",
+    "handshake": "แฮนด์เชก",
+    "trial": "เทิร์นทดลอง",
+    "tokens": "ใช้ {{count}} โทเคน",
+    "noHandshake": "ไม่มีอินเทอร์เฟซแฮนด์เชก",
+    "capSessionResume": "กลับมาใช้เซสชัน",
+    "capImageInput": "ป้อนภาพ"
+  }
 }

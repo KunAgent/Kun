@@ -33,11 +33,35 @@ describe('harness/ade settings bridge', () => {
         disabledIds: ['cursor', 'claude-code'],
         binaryPaths: { cursor: '/opt/cursor', 'claude-code': '/opt/claude' },
         custom: [
-          { id: 'zeta', displayName: 'Zeta', command: '/bin/zeta', args: ['--x'], env: { B: '2', A: '1' } },
+          {
+            id: 'zeta', displayName: 'Zeta', command: '/bin/zeta', args: ['--x'],
+            env: { B: '2', A: '1' },
+            secretEnv: [
+              { name: 'Z_KEY', secretRef: 'cred_z' },
+              { name: 'A_KEY', secretRef: 'cred_a' }
+            ]
+          },
           { id: 'alpha', displayName: 'Alpha', command: '/bin/alpha', args: [], env: {} }
         ],
         defaultPermissionMode: { cursor: 'ask', 'claude-code': 'default' },
-        defaultHarnessId: 'claude-code'
+        defaults: {
+          'claude-code': {
+            credentialMode: 'kun-gateway',
+            providerId: 'deepseek',
+            model: 'deepseek-chat',
+            isolation: 'worktree'
+          },
+          cursor: { model: 'composer-2', permissionMode: 'ask' }
+        },
+        defaultHarnessId: 'claude-code',
+        terminalAgents: [
+          {
+            id: 'zed-shell', displayName: 'Zed Shell', command: '/bin/zsh-agent',
+            args: ['--tty'], taskFlag: '-i', resumeArgs: ['--resume'],
+            hooks: 'claude-settings'
+          },
+          { id: 'plain-cli', displayName: 'Plain CLI', command: '/bin/plain', args: [] }
+        ]
       },
       ade: {
         enabled: true,
@@ -55,10 +79,34 @@ describe('harness/ade settings bridge', () => {
         binaryPaths: { 'claude-code': '/opt/claude', cursor: '/opt/cursor' },
         custom: [
           { id: 'alpha', displayName: 'Alpha', command: '/bin/alpha', args: [], env: {} },
-          { id: 'zeta', displayName: 'Zeta', command: '/bin/zeta', args: ['--x'], env: { A: '1', B: '2' } }
+          {
+            id: 'zeta', displayName: 'Zeta', command: '/bin/zeta', args: ['--x'],
+            env: { A: '1', B: '2' },
+            secretEnv: [
+              { name: 'A_KEY', secretRef: 'cred_a' },
+              { name: 'Z_KEY', secretRef: 'cred_z' }
+            ]
+          }
         ],
         defaultPermissionMode: { 'claude-code': 'default', cursor: 'ask' },
-        defaultHarnessId: 'claude-code'
+        defaults: {
+          cursor: { permissionMode: 'ask', model: 'composer-2' },
+          'claude-code': {
+            isolation: 'worktree',
+            model: 'deepseek-chat',
+            providerId: 'deepseek',
+            credentialMode: 'kun-gateway'
+          }
+        },
+        defaultHarnessId: 'claude-code',
+        terminalAgents: [
+          { id: 'plain-cli', displayName: 'Plain CLI', command: '/bin/plain', args: [] },
+          {
+            id: 'zed-shell', displayName: 'Zed Shell', command: '/bin/zsh-agent',
+            args: ['--tty'], hooks: 'claude-settings', taskFlag: '-i',
+            resumeArgs: ['--resume']
+          }
+        ]
       },
       ade: {
         limits: { hardWorkers: 6, softWorkers: 2 },
@@ -105,6 +153,25 @@ describe('harness/ade settings bridge', () => {
     expect(configA.ade).not.toHaveProperty('notifications')
     expect((configA.harnesses.custom as Array<{ id: string }>).map((c) => c.id))
       .toEqual(['alpha', 'zeta'])
+    // P4-12: secretEnv refs emit sorted by name; values never appear — the
+    // runtime config carries only opaque credential-store references.
+    const zeta = (configA.harnesses.custom as Array<Record<string, unknown>>)
+      .find((c) => c.id === 'zeta')
+    expect(zeta?.secretEnv).toEqual([
+      { name: 'A_KEY', secretRef: 'cred_a' },
+      { name: 'Z_KEY', secretRef: 'cred_z' }
+    ])
+    // P4-13: terminalAgents emit sorted by id with a fixed field order, so
+    // input key order never changes the generated config bytes.
+    expect(configA.harnesses.terminalAgents).toEqual([
+      { id: 'plain-cli', displayName: 'Plain CLI', command: '/bin/plain', args: [] },
+      {
+        id: 'zed-shell', displayName: 'Zed Shell', command: '/bin/zsh-agent',
+        args: ['--tty'], taskFlag: '-i', resumeArgs: ['--resume'],
+        hooks: 'claude-settings'
+      }
+    ])
+    expect(JSON.stringify(configA)).not.toContain('api-key')
   })
 
   it('defaults missing sections to spec values', () => {
@@ -125,9 +192,39 @@ describe('harness/ade settings bridge', () => {
       disabledIds: [],
       binaryPaths: {},
       custom: [],
-      defaultPermissionMode: {},
+      defaults: {},
       defaultHarnessId: 'kun',
-      agentOrder: []
+      agentOrder: [],
+      terminalAgents: []
+    })
+  })
+
+  it('migrates legacy defaultPermissionMode into defaults byte-identically', () => {
+    // P4-11: a pre-migration settings file holding only
+    // `defaultPermissionMode` must produce the same config as the migrated
+    // `defaults[*].permissionMode` shape.
+    const legacy = runtimeWith({
+      harnesses: { defaultPermissionMode: { 'claude-code': 'plan', cursor: 'ask' } }
+    })
+    const migrated = runtimeWith({
+      harnesses: {
+        defaults: {
+          cursor: { permissionMode: 'ask' },
+          'claude-code': { permissionMode: 'plan' }
+        }
+      }
+    })
+    expect(JSON.stringify(harnessesConfigForRuntime(legacy.harnesses)))
+      .toBe(JSON.stringify(harnessesConfigForRuntime(migrated.harnesses)))
+    // And the explicit new shape wins over a stale legacy value.
+    const both = runtimeWith({
+      harnesses: {
+        defaultPermissionMode: { cursor: 'ask' },
+        defaults: { cursor: { permissionMode: 'edit', model: 'composer-2' } }
+      }
+    })
+    expect(harnessesConfigForRuntime(both.harnesses).defaults).toEqual({
+      cursor: { model: 'composer-2', permissionMode: 'edit' }
     })
   })
 
@@ -146,6 +243,9 @@ describe('harness/ade settings bridge', () => {
         binaryPaths: { cursor: '/usr/local/bin/cursor' },
         custom: [{ id: 'mine', displayName: 'Mine', command: '/bin/mine', args: ['--serve'], env: { PORT: '1' } }],
         defaultPermissionMode: { mine: 'default' },
+        defaults: {
+          mine: { credentialMode: 'native-login', permissionMode: 'default', isolation: 'local' }
+        },
         defaultHarnessId: 'mine'
       },
       ade: {

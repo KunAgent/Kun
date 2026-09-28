@@ -10,6 +10,45 @@
   "adeHandoffShow": "查看简报",
   "adeHandoffHide": "收起简报",
   "adeHandoffLoadError": "无法重建交接简报",
+  "adeReadiness": {
+    "checking": "检查中…",
+    "provider": {
+      "label": "总管模型供应商",
+      "ready": "{{name}}",
+      "missing": "还没有可用的供应商",
+      "action": "去配置"
+    },
+    "agents": {
+      "label": "就绪 agent",
+      "ready": "{{count}} 个就绪",
+      "missing": "还没有就绪的 agent",
+      "action": "打开 Agent 中心"
+    },
+    "gateway": {
+      "label": "Kun 网关",
+      "ready": "已开启",
+      "missing": "未开启 — harness 无法走供应商",
+      "action": "去管理"
+    }
+  },
+  "adeHeroTitle": "两种派工方式",
+  "adeHeroManagerTitle": "总管会话",
+  "adeHeroManagerSub": "总管负责拆解任务、并行派出 worker，并汇总结果。",
+  "adeHeroManagerExample": "例如：“把这个功能拆成三个互不依赖的任务，并行做完。”",
+  "adeHeroOneOnOneTitle": "一对一会话",
+  "adeHeroOneOnOneSub": "直接和某一个 agent 对话——Kun、Claude Code 或任何已配置的 harness。",
+  "adeHeroOneOnOneExample": "例如：“Claude Code：审查 src/auth 的改动，列出风险。”",
+  "adeOneOnOneDialog": {
+    "title": "新建一对一会话",
+    "agent": "Agent",
+    "credential": "凭据方式",
+    "provider": "供应商",
+    "model": "模型",
+    "start": "开始会话"
+  },
+  "adeDispatchable": "可派：{{names}}",
+  "adeDispatchableNone": "没有可派的 agent",
+  "adeDispatchableHint": "总管可以把任务派给这些 agent——在 Agent 中心管理",
   "workerUpdateNotice": {
     "title": "工作者更新"
   },
@@ -186,7 +225,11 @@
     "detecting": "检测中",
     "signedOut": "未登录",
     "versionLow": "版本过低",
-    "unavailable": "不可用"
+    "unavailable": "不可用",
+    "adapterMissing": "缺 ACP 适配器",
+    "handshakeFailed": "握手失败",
+    "handshakeTimeout": "探测超时",
+    "disabled": "已停用"
   },
   "adeIsolation": {
     "title": "隔离方式",
@@ -259,5 +302,52 @@
   "adeGroupByProject": "按项目分组",
   "adeGroupToggleHint": "切换会话分组方式",
   "adeWorkerCount": "{{count}} 个 worker",
-  "adeWorkerCount_other": "{{count}} 个 worker"
+  "adeWorkerCount_other": "{{count}} 个 worker",
+  "adeHarnessNextStep": {
+    "install": "安装后重试",
+    "installAdapter": "安装其 ACP 适配器",
+    "upgrade": "升级后重试",
+    "retry": "重试检测",
+    "login": "登录后重试",
+    "enable": "在设置中启用"
+  },
+  "adeHarnessViewReason": "查看原因",
+  "adeHarnessOpenSettings": "去设置",
+  "adeAgents": "Agent",
+  "adeAgentCopied": "命令已复制，请在 Kun 终端中执行",
+  "adeAgentCenter": {
+    "title": "Agent 中心",
+    "desc": "安装、登录并管理 Kun 可以派工的 agent。"
+  },
+  "adeAgentAction": {
+    "install": "安装",
+    "login": "登录",
+    "installAdapter": "安装适配器",
+    "test": "测试连接",
+    "retry": "重试检测",
+    "enable": "启用",
+    "disable": "禁用",
+    "setDefault": "设为默认",
+    "isDefault": "默认",
+    "specifyPath": "指定命令路径",
+    "docs": "文档",
+    "trial": "试运行一轮"
+  },
+  "adeAgentTransport": {
+    "nativeLoop": "Kun",
+    "agentSdk": "Agent SDK",
+    "cursorSdk": "Cursor SDK",
+    "antigravityCli": "CLI",
+    "acp": "ACP",
+    "terminal": "终端"
+  },
+  "adeAgentTest": {
+    "detect": "检测",
+    "handshake": "握手",
+    "trial": "试运行",
+    "tokens": "消耗 {{count}} tokens",
+    "noHandshake": "该传输无握手协议",
+    "capSessionResume": "会话恢复",
+    "capImageInput": "图片输入"
+  }
 }

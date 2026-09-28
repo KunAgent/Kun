@@ -22,11 +22,13 @@ import {
   KunFastContextSettingsV1,
   KunGraphSettingsPatchV1,
   KunHarnessCustomEntryV1,
+  KunHarnessDefaultsEntryV1,
   KunInstructionSettingsV1,
   KunLabSettingsPatchV1,
   KunPlanExecutionSettingsV1,
   KunRuntimeSettingsV1,
-  KunSubagentsSettingsPatchV1
+  KunSubagentsSettingsPatchV1,
+  KunTerminalAgentEntryV1
 } from './app-settings-types-kun-runtime'
 import {
   CheckpointCleanupIntervalDays,
@@ -331,9 +333,16 @@ export type KunHarnessSettingsPatchV1 = {
   disabledIds?: string[]
   binaryPaths?: Record<string, string>
   custom?: KunHarnessCustomEntryV1[]
+  defaults?: Record<string, KunHarnessDefaultsEntryV1>
+  /**
+   * Legacy pre-P4-11 shape: merges into `defaults[*].permissionMode` for
+   * entries that lack one. New writers should send `defaults` only.
+   */
   defaultPermissionMode?: Record<string, string>
   defaultHarnessId?: string
   agentOrder?: string[]
+  /** Terminal-only agents for the "new agent tab" menu (p4 §3.8, P4-13). */
+  terminalAgents?: KunTerminalAgentEntryV1[]
 }
 
 /** Patch shape for agents.kun.ade; nested objects merge field-wise. */

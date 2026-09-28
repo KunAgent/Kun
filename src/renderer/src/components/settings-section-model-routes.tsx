@@ -37,6 +37,7 @@ import {
 } from './settings-section-model-routes-support'
 import { ModelRouteTargets } from './settings-section-model-routes-targets'
 import { useGatewayCredentialControls } from './use-gateway-credential-controls'
+import { useRuntimeSettingsSyncStatus } from './use-runtime-settings-sync-status'
 
 export type RouteStatus = {
   localGateway?: { enabled: boolean; exposeProviderModels?: boolean; credential?: GatewayCredentialStatus }
@@ -114,7 +115,7 @@ export function ModelRoutesSettings({
   const [selectedId, setSelectedId] = useState(settings.routePools[0]?.id ?? '')
   const [status, setStatus] = useState<RouteStatus | null>(null)
   const [statusError, setStatusError] = useState('')
-  const [runtimeSyncStatus, setRuntimeSyncStatus] = useState<KunRuntimeSettingsSyncStatusPayload | null>(null)
+  const runtimeSyncStatus = useRuntimeSettingsSyncStatus(active)
   const [startPending, setStartPending] = useState(false)
   const [startError, setStartError] = useState('')
   const [apiDocsOpen, setApiDocsOpen] = useState(false)
@@ -158,34 +159,7 @@ export function ModelRoutesSettings({
     const interval = globalThis.setInterval(() => { void refreshStatus() }, 1_000)
     return () => globalThis.clearInterval(interval)
   }, [active, refreshStatus])
-  useEffect(() => {
-    if (!active) return
-    let mounted = true
-    if (typeof window.kunGui.getRuntimeSettingsSyncStatus === 'function') {
-      void window.kunGui.getRuntimeSettingsSyncStatus()
-        .then((next) => {
-          if (mounted) {
-            setRuntimeSyncStatus((current) =>
-              current && current.generation > next.generation ? current : next
-            )
-          }
-        })
-        .catch(() => undefined)
-    }
-    const unsubscribe = typeof window.kunGui.onRuntimeSettingsSyncStatus === 'function'
-      ? window.kunGui.onRuntimeSettingsSyncStatus((next) => {
-          if (mounted) {
-            setRuntimeSyncStatus((current) =>
-              current && current.generation > next.generation ? current : next
-            )
-          }
-        })
-      : undefined
-    return () => {
-      mounted = false
-      unsubscribe?.()
-    }
-  }, [active])
+
   useEffect(() => { setStartError('') }, [selected?.id])
 
   const updatePool = (patch: Partial<ModelRoutePoolV1>): void => {
@@ -317,6 +291,13 @@ export function ModelRoutesSettings({
               : runtimeSyncStatus?.state === 'syncing'
               ? t('modelRoutes.runtimeSyncing')
               : t('modelRoutes.runtimeWaitingForSync')
+  const gatewaySectionIssue = runtimeSyncStatus?.sections?.localModelGateway
+  const gatewayIssueLabel = gatewaySectionIssue
+    ? t(`modelRoutes.gatewayIssue.${gatewaySectionIssue.code}`, { defaultValue: gatewaySectionIssue.message })
+    : ''
+  const gatewayFixable = Boolean(
+    gatewaySectionIssue && ['gateway_key_missing', 'gateway_disabled'].includes(gatewaySectionIssue.code)
+  )
   const gatewayBaseUrl = `${publicBaseUrl.replace(/\/$/, '')}/v1`
   const sampleModelId = executablePools.find((pool) => pool.enabled && pool.targets.some((target) => target.enabled))?.modelId
   const apiExampleModelId = sampleModelId || 'your-public-model-id'
@@ -438,6 +419,21 @@ export function ModelRoutesSettings({
           {saveStatus === 'error' && saveError ? <span className="min-w-0 truncate text-[11px] text-red-600" title={saveError}>{saveError}</span> : null}
           {!status && statusError ? <span className="min-w-0 truncate text-[11px] text-ds-faint" title={statusError}>{t('modelRoutes.runtimeUnavailableHint')}</span> : null}
           {runtimeSyncFailed && runtimeSyncStatus?.message ? <span className="min-w-0 truncate text-[11px] text-red-600" title={runtimeSyncStatus.message}>{runtimeSyncStatus.message}</span> : null}
+          {gatewaySectionIssue ? (
+            <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] text-amber-700" title={gatewaySectionIssue.message}>
+              <span className="truncate">{gatewayIssueLabel}</span>
+              {gatewayFixable ? (
+                <button
+                  type="button"
+                  disabled={credentialPending}
+                  onClick={() => void (gatewaySectionIssue?.code === 'gateway_disabled'
+                    ? gatewayCredential.setEnabled(true)
+                    : gatewayCredential.update('ensure'))}
+                  className="rounded-full border border-amber-300 px-2 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-500/10"
+                >{t('modelRoutes.gatewayFix')}</button>
+              ) : null}
+            </span>
+          ) : null}
         </div>
 
         <section className="grid basis-full gap-3 rounded-xl border border-ds-border bg-ds-card p-3.5 lg:grid-cols-[minmax(0,1fr)_auto]">

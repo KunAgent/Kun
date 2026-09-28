@@ -25,11 +25,6 @@ import { useChatStore, type SettingsRouteSection } from '../../store/chat-store'
 import { useActivityStore } from '../../store/activity-store'
 import { selectNeedsYouCount } from '../../store/activity-selectors'
 import {
-  harnessRowUnavailableReason,
-  loadHarnesses,
-  useHarnessStore
-} from '../../store/harness-store'
-import {
   SidebarCommandRow,
   SidebarFrame,
   SidebarIconButton,
@@ -54,6 +49,7 @@ import {
   threadDisplayBuckets,
   type AdeStatusGroup
 } from './ade-sidebar-groups'
+import { AdeOneOnOneDialog } from './AdeOneOnOneDialog'
 
 const noOp = (): void => undefined
 
@@ -76,6 +72,10 @@ type Props = {
   onNewOneOnOne: (input: {
     harnessId: string
     credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+    providerId?: string
+    model?: string
+    isolation?: 'local' | 'worktree'
+    permissionMode?: string
   }) => void
   onOpenSettings: (section?: SettingsRouteSection) => void
   onToggleTheme: () => void
@@ -134,16 +134,10 @@ export function AdeSidebar({
     return () => observer.disconnect()
   }, [])
 
-  useEffect(() => {
-    if (oneOnOneOpen) void loadHarnesses()
-  }, [oneOnOneOpen])
-
   const busy = useChatStore((s) => s.busy)
   const clearActiveThreadSelection = useChatStore((s) => s.clearActiveThreadSelection)
   const activityRows = useActivityStore((s) => s.rows)
   const needsYouCount = useActivityStore((s) => selectNeedsYouCount(s.rows))
-  const harnessRows = useHarnessStore((s) => s.rows)
-  const harnessLoading = useHarnessStore((s) => s.rowsLoading)
   const watchTurnCompletion = useChatStore((s) => s.watchTurnCompletion)
   const unreadThreadIds = useChatStore((s) => s.unreadThreadIds)
   const scheduledThreadActivities = useChatStore((s) => s.scheduledThreadActivities)
@@ -351,47 +345,17 @@ export function AdeSidebar({
         <SidebarCommandRow
           icon={<UserRound className="h-4 w-4" strokeWidth={1.75} />}
           label={t('adeNewOneOnOne')}
-          onClick={runtimeReady ? () => setOneOnOneOpen((open) => !open) : undefined}
+          onClick={runtimeReady ? () => setOneOnOneOpen(true) : undefined}
           disabled={!runtimeReady}
           disabledHint={t('runtimeActionNeedsConnection')}
           active={oneOnOneOpen}
         />
         {oneOnOneOpen ? (
-          <div
-            className="mx-1 mt-1 space-y-0.5 rounded-md border border-ds-border bg-ds-panel p-1"
-            data-ade-agent-picker
-          >
-            {harnessRows.length === 0 ? (
-              <p className="px-2 py-1 text-[12px] text-ds-faint">
-                {harnessLoading ? t('adeAgentPickerLoading') : t('adeAgentPickerEmpty')}
-              </p>
-            ) : (
-              harnessRows.map((row) => {
-                const reason = harnessRowUnavailableReason(row)
-                return (
-                  <button
-                    key={row.definition.id}
-                    type="button"
-                    disabled={reason !== null}
-                    title={reason ?? undefined}
-                    className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1 text-left text-[12.5px] text-ds-text hover:bg-ds-hover disabled:cursor-not-allowed disabled:text-ds-faint"
-                    onClick={() => {
-                      setOneOnOneOpen(false)
-                      onNewOneOnOne({
-                        harnessId: row.definition.id,
-                        credentialMode: row.definition.credentialModes[0]
-                      })
-                    }}
-                  >
-                    <span className="truncate">{row.definition.displayName}</span>
-                    {reason ? (
-                      <span className="shrink-0 text-[11px] text-ds-faint">{reason}</span>
-                    ) : null}
-                  </button>
-                )
-              })
-            )}
-          </div>
+          <AdeOneOnOneDialog
+            onConfirm={(selection) => onNewOneOnOne(selection)}
+            onOpenSettings={onOpenSettings}
+            onClose={() => setOneOnOneOpen(false)}
+          />
         ) : null}
         <SidebarCommandRow
           icon={<LayoutGrid className="h-4 w-4" strokeWidth={1.75} />}
@@ -408,6 +372,11 @@ export function AdeSidebar({
               </span>
             ) : null
           }
+        />
+        <SidebarCommandRow
+          icon={<Users className="h-4 w-4" strokeWidth={1.75} />}
+          label={t('adeAgents')}
+          onClick={() => onOpenSettings('agentsHarnesses')}
         />
       </div>
       <div className="ds-no-drag mt-1 flex items-center justify-end px-2">
