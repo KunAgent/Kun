@@ -10,6 +10,34 @@
   "adeHandoffShow": "Показать бриф",
   "adeHandoffHide": "Скрыть бриф",
   "adeHandoffLoadError": "Не удалось восстановить бриф передачи",
+  "adeReadiness": {
+    "checking": "Проверка…",
+    "provider": {
+      "label": "Провайдер модели для менеджера",
+      "ready": "{{name}}",
+      "missing": "Нет доступного провайдера",
+      "action": "Настроить"
+    },
+    "agents": {
+      "label": "Готовые агенты",
+      "ready": "Готово: {{count}}",
+      "missing": "Нет готовых агентов",
+      "action": "Открыть центр агентов"
+    },
+    "gateway": {
+      "label": "Шлюз Kun",
+      "ready": "Включён",
+      "missing": "Выключен — harness не может обратиться к провайдерам",
+      "action": "Управление"
+    }
+  },
+  "adeHeroTitle": "Два способа делегировать работу",
+  "adeHeroManagerTitle": "Сессия менеджера",
+  "adeHeroManagerSub": "Менеджер планирует работу, параллельно запускает worker-ов и подводит итоги.",
+  "adeHeroManagerExample": "Например: «Разбей эту функцию на три независимые задачи и реализуй параллельно».",
+  "adeHeroOneOnOneTitle": "Сессия один на один",
+  "adeHeroOneOnOneSub": "Говорите напрямую с одним агентом — Kun, Claude Code или любым настроенным harness.",
+  "adeHeroOneOnOneExample": "Например: «Claude Code: проверь изменения в src/auth и перечисли риски».",
   "workerUpdateNotice": {
     "title": "Обновления от воркеров"
   },

@@ -10,6 +10,34 @@
   "adeHandoffShow": "查看简报",
   "adeHandoffHide": "收起简报",
   "adeHandoffLoadError": "无法重建交接简报",
+  "adeReadiness": {
+    "checking": "检查中…",
+    "provider": {
+      "label": "总管模型供应商",
+      "ready": "{{name}}",
+      "missing": "还没有可用的供应商",
+      "action": "去配置"
+    },
+    "agents": {
+      "label": "就绪 agent",
+      "ready": "{{count}} 个就绪",
+      "missing": "还没有就绪的 agent",
+      "action": "打开 Agent 中心"
+    },
+    "gateway": {
+      "label": "Kun 网关",
+      "ready": "已开启",
+      "missing": "未开启 — harness 无法走供应商",
+      "action": "去管理"
+    }
+  },
+  "adeHeroTitle": "两种派工方式",
+  "adeHeroManagerTitle": "总管会话",
+  "adeHeroManagerSub": "总管负责拆解任务、并行派出 worker，并汇总结果。",
+  "adeHeroManagerExample": "例如：“把这个功能拆成三个互不依赖的任务，并行做完。”",
+  "adeHeroOneOnOneTitle": "一对一会话",
+  "adeHeroOneOnOneSub": "直接和某一个 agent 对话——Kun、Claude Code 或任何已配置的 harness。",
+  "adeHeroOneOnOneExample": "例如：“Claude Code：审查 src/auth 的改动，列出风险。”",
   "workerUpdateNotice": {
     "title": "工作者更新"
   },

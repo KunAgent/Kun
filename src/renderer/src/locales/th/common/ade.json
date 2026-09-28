@@ -10,6 +10,34 @@
   "adeHandoffShow": "ดูบรีฟ",
   "adeHandoffHide": "ซ่อนบรีฟ",
   "adeHandoffLoadError": "สร้างบรีฟส่งต่อใหม่ไม่สำเร็จ",
+  "adeReadiness": {
+    "checking": "กำลังตรวจสอบ…",
+    "provider": {
+      "label": "ผู้ให้บริการโมเดลของผู้จัดการ",
+      "ready": "{{name}}",
+      "missing": "ยังไม่มีผู้ให้บริการที่ใช้งานได้",
+      "action": "ตั้งค่า"
+    },
+    "agents": {
+      "label": "agent ที่พร้อม",
+      "ready": "พร้อม {{count}} ตัว",
+      "missing": "ยังไม่มี agent ที่พร้อม",
+      "action": "เปิดศูนย์ Agent"
+    },
+    "gateway": {
+      "label": "เกตเวย์ Kun",
+      "ready": "เปิดอยู่",
+      "missing": "ปิดอยู่ — harness เข้าถึงผู้ให้บริการไม่ได้",
+      "action": "จัดการ"
+    }
+  },
+  "adeHeroTitle": "สองวิธีในการมอบหมายงาน",
+  "adeHeroManagerTitle": "เซสชันผู้จัดการ",
+  "adeHeroManagerSub": "ผู้จัดการวางแผนงาน ส่ง worker แบบขนาน และสรุปผลลัพธ์",
+  "adeHeroManagerExample": "เช่น \"แบ่งฟีเจอร์นี้เป็นสามงานที่ไม่พึ่งพากันแล้วทำแบบขนาน\"",
+  "adeHeroOneOnOneTitle": "เซสชันหนึ่งต่อหนึ่ง",
+  "adeHeroOneOnOneSub": "คุยกับ agent ตัวเดียวโดยตรง — Kun, Claude Code หรือ harness ที่ตั้งค่าไว้",
+  "adeHeroOneOnOneExample": "เช่น \"Claude Code: ตรวจสอบการเปลี่ยนแปลงใน src/auth และระบุความเสี่ยง\"",
   "workerUpdateNotice": {
     "title": "อัปเดตจากวอร์กเกอร์"
   },
