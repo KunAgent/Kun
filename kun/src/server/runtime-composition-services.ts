@@ -92,6 +92,7 @@ import {
 import { createWriteDocumentGuard } from './runtime-write-document-guard.js'
 import { createHarnessComposition } from '../harness/harness-runtime.js'
 import { KunToolsMcpProvider } from '../runtime/acp/kun-tools-mcp.js'
+import { createAcpCredentialEnv } from '../runtime/acp/acp-credential-env.js'
 import { providerKindsForOptions } from './runtime-factory-model.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
 
@@ -170,6 +171,13 @@ export async function createRuntimeServices(
     tokens: harnesses.tokens,
     endpoint: () => harnesses.gatewayEndpoint.baseUrl,
     command: kunCommandParts
+  })
+  // Per-turn `kun-gateway` grants + generated per-harness provider config for
+  // ACP children (P3-10). One resolver shared by every delegated-runtime build.
+  const acpCredentialEnv = createAcpCredentialEnv({
+    tokens: harnesses.tokens,
+    endpoint: () => harnesses.gatewayEndpoint.baseUrl,
+    configDir: () => join(core.activeOptions.dataDir, 'acp-gateway')
   })
   const providerKinds = () =>
     providerKindsForOptions(core.activeOptions, {
@@ -605,6 +613,7 @@ export async function createRuntimeServices(
     defaultIsCursorSdk,
     harnesses,
     kunToolsMcp,
+    acpCredentialEnv,
     providerKinds,
     get mcpProviders() { return mcpProviders },
     set mcpProviders(value: typeof mcpProviders) { mcpProviders = value },

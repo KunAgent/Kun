@@ -11,7 +11,11 @@ import {
   DelegatedSessionCoordinator,
   FileDelegatedSessionBindingStore
 } from '../delegated-session-binding.js'
-import { ACP_DEFAULT_CAPABILITIES } from '../../harness/builtin-harnesses.js'
+import {
+  ACP_DEFAULT_CAPABILITIES,
+  BUILTIN_HARNESSES
+} from '../../harness/builtin-harnesses.js'
+import { createAcpCredentialEnv } from './acp-credential-env.js'
 import { AcpConnectionPool } from './acp-connection-pool.js'
 import { AcpClientHost } from './acp-client-host.js'
 import { AcpSessionManager } from './acp-session-manager.js'
@@ -51,6 +55,7 @@ async function makeHarness(scenarioFile: string, input: {
   thread?: Record<string, unknown>
   items?: TurnItem[]
   deps?: Partial<AcpRuntimeDeps>
+  definition?: Partial<HarnessDefinition>
   /** Invoked inside applyAssistantDelta — lets tests abort mid-stream. */
   onDelta?: () => void
 } = {}): Promise<{
@@ -95,7 +100,8 @@ async function makeHarness(scenarioFile: string, input: {
     modelSource: 'static',
     staticModels: [],
     capabilities: ACP_DEFAULT_CAPABILITIES,
-    builtin: true
+    builtin: true,
+    ...input.definition
   } as unknown as HarnessDefinition
 
   const turn = {
@@ -581,5 +587,70 @@ describe('AcpRuntime.runTurn', () => {
       expect(verdict.missing).toContain('kunTools')
       expect(verdict.message).toContain('serve-hosted runtime')
     }
+  })
+
+  test('kun-gateway spawn env strips provider secrets and carries the grant', async () => {
+    // P3-10: a gateway-mode child sees the kgw_ grant and the harness's
+    // gateway env vars, but never the host's provider credentials.
+    process.env.OPENAI_API_KEY = 'sk-test-host-secret'
+    process.env.OPENCODE_CONFIG = '/tmp/user-opencode-config.json'
+    try {
+      const tokens = new HarnessTokenService({ secret: Buffer.alloc(32, 9) })
+      const configDir = mkdtempSync(join(tmpdir(), 'acp-gw-'))
+      tempDirs.push(configDir)
+      let spawnedEnv: Record<string, string | undefined> = {}
+      const h = await makeHarness('basic-chat.json', {
+        turn: {
+          credentialMode: 'kun-gateway',
+          model: 'kun/deepseek/deepseek-chat'
+        },
+        definition: {
+          id: 'opencode',
+          gateway: BUILTIN_HARNESSES.find((d) => d.id === 'opencode')!.gateway
+        },
+        deps: {
+          credentialEnv: createAcpCredentialEnv({
+            tokens,
+            endpoint: () => 'http://127.0.0.1:18899',
+            configDir: () => configDir
+          }),
+          spawn: async (command, args, options) => {
+            spawnedEnv = options.env as Record<string, string | undefined>
+            return spawn(command, [...args], {
+              env: options.env as NodeJS.ProcessEnv,
+              stdio: options.stdio as ['pipe', 'pipe', 'pipe']
+            })
+          }
+        }
+      })
+      const outcome = await h.runtime.runTurn(
+        'thread_1',
+        'turn_1',
+        new AbortController().signal
+      )
+      expect(outcome).toBe('completed')
+      expect(spawnedEnv.KUN_GATEWAY_BASE_URL).toBe('http://127.0.0.1:18899/v1')
+      expect(spawnedEnv.KUN_GATEWAY_TOKEN?.startsWith('kgw_')).toBe(true)
+      expect(spawnedEnv.OPENCODE_CONFIG).toContain(configDir)
+      // Host provider secrets and the user's own OPENCODE_CONFIG never leak.
+      expect(spawnedEnv.OPENAI_API_KEY).toBeUndefined()
+      expect(spawnedEnv.OPENCODE_CONFIG).not.toBe('/tmp/user-opencode-config.json')
+      const grant = tokens.verifyScope(spawnedEnv.KUN_GATEWAY_TOKEN, 'gateway')
+      expect(grant?.routes).toEqual([
+        { providerId: 'deepseek', model: 'deepseek-chat', role: 'main' }
+      ])
+    } finally {
+      delete process.env.OPENAI_API_KEY
+      delete process.env.OPENCODE_CONFIG
+    }
+  })
+
+  test('kun-gateway without a credential resolver fails fast', async () => {
+    const h = await makeHarness('basic-chat.json', {
+      turn: { credentialMode: 'kun-gateway', model: 'kun/deepseek/deepseek-chat' }
+    })
+    await expect(
+      h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)
+    ).rejects.toThrow('serve-hosted')
   })
 })

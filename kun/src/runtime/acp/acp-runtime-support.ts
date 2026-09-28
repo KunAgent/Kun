@@ -1,11 +1,18 @@
 /**
  * AcpRuntime support: delegated trace records (same shape as the other
- * delegated runtimes) and the ACP failure → finishTurn mapping (03 §9).
+ * delegated runtimes), the ACP failure → finishTurn mapping (03 §9), and the
+ * per-turn credential-env resolution for non-native-login credential modes.
  */
 import type {
   ModelRequestTraceDelegated,
   ModelRequestTraceRecord
 } from '../../contracts/model-request-trace.js'
+import type {
+  HarnessDefinition,
+  HarnessGateway,
+  HarnessId,
+  HarnessRoute
+} from '../../contracts/harness.js'
 import {
   startLlmDebugRoundIfEnabled,
   type LlmDebugRound,
@@ -17,6 +24,8 @@ import {
   type HarnessCapabilities
 } from '../../contracts/harness-capabilities.js'
 import { ACP_DEFAULT_CAPABILITIES } from '../../harness/builtin-harnesses.js'
+import { delegatedCredentialIdentity } from '../delegated-session-binding.js'
+import { parseGatewayModelId } from '../../harness/gateway-model-id.js'
 import { AcpError, type McpServer } from './acp-schema.js'
 
 export type AcpTrace = {
@@ -187,4 +196,73 @@ export function kunToolsDescriptorOf(
   const first = servers[0] as { type?: string } | undefined
   if (!first) return 'none'
   return first.type === 'http' ? 'http' : 'stdio'
+}
+
+export type AcpCredentialEnvInput = {
+  harnessId: HarnessId
+  credentialMode: HarnessRoute['credentialMode']
+  threadId: string
+  turnId: string
+  /** Identity the spawned connection pools under — binds the grant to it. */
+  credentialIdentity: string
+  /** Selected provider/model for `kun-gateway` routes. */
+  providerId?: string
+  model?: string
+  /** The definition's gateway block — absent for harnesses without one. */
+  gateway?: HarnessGateway
+  accountId?: string
+}
+
+/**
+ * Resolve the credential identity + child env for a turn (P3-10). A
+ * `kun-gateway` route embeds the selected provider/model in the env, so the
+ * identity — and the pooled connection it keys — folds the canonical route in
+ * (grant ids never hash routes, so a later turn cannot widen a live token).
+ */
+export async function resolveAcpCredentialContext(
+  resolve: ((input: AcpCredentialEnvInput) => Promise<Record<string, string>>) | undefined,
+  input: {
+    definition: HarnessDefinition
+    credentialMode: HarnessRoute['credentialMode']
+    threadId: string
+    turnId: string
+    providerId?: string
+    model?: string
+    accountId?: string
+  }
+): Promise<{ credentialIdentity: string; env: Record<string, string> }> {
+  const { definition, credentialMode } = input
+  const gatewayRoute =
+    credentialMode === 'kun-gateway'
+      ? parseGatewayModelId(input.model ?? '')
+      : undefined
+  const credentialIdentity = delegatedCredentialIdentity({
+    providerId:
+      credentialMode === 'kun-gateway'
+        ? `${credentialMode}:${definition.id}:` +
+          `${input.providerId ?? gatewayRoute?.providerId ?? ''}:` +
+          `${gatewayRoute?.model ?? input.model ?? ''}`
+        : `${credentialMode}:${definition.id}`,
+    accountId: input.accountId
+  })
+  if (credentialMode === 'native-login') {
+    return { credentialIdentity, env: {} }
+  }
+  if (!resolve) {
+    throw new Error(
+      `credential mode '${credentialMode}' needs a serve-hosted credential resolver`
+    )
+  }
+  const env = await resolve({
+    harnessId: definition.id,
+    credentialMode,
+    threadId: input.threadId,
+    turnId: input.turnId,
+    credentialIdentity,
+    providerId: input.providerId,
+    model: input.model,
+    gateway: definition.gateway,
+    accountId: input.accountId
+  })
+  return { credentialIdentity, env }
 }
