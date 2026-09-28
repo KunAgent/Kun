@@ -219,6 +219,33 @@ describe('kun-gateway loadTurnContext', () => {
     }))
     await expect(contextOf(runtime)).rejects.toThrow(/no provider\/model route/)
   })
+
+  test('rejects a bare model the addressed provider does not offer', async () => {
+    const thread = threadWith({
+      turns: [gatewayTurn({ model: 'claude-sonnet-4-6', providerId: 'deepseek' })]
+    })
+    const runtime = createAgentSdkRuntime(factoryDeps({
+      threadStore: { get: async () => thread } as never,
+      listProviderModels: async (providerId: string) =>
+        providerId === 'deepseek' ? ['deepseek-chat', 'deepseek-reasoner'] : undefined
+    }))
+    await expect(contextOf(runtime)).rejects.toThrow(
+      /model "claude-sonnet-4-6" is not offered by provider "deepseek"/
+    )
+  })
+
+  test('accepts a bare model the addressed provider lists', async () => {
+    const thread = threadWith({
+      turns: [gatewayTurn({ model: 'deepseek-chat', providerId: 'deepseek' })]
+    })
+    const runtime = createAgentSdkRuntime(factoryDeps({
+      threadStore: { get: async () => thread } as never,
+      listProviderModels: async () => ['deepseek-chat']
+    }))
+    const ctx = await contextOf(runtime)
+    expect(ctx?.gateway).toBeDefined()
+    expect(ctx?.model).toBe('kun/deepseek/deepseek-chat')
+  })
 })
 
 describe('AgentSdkRuntime gateway routing', () => {

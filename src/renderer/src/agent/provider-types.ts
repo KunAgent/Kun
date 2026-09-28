@@ -317,7 +317,8 @@ export interface AgentProvider {
   listHarnesses?(): Promise<import('@shared/ade-harnesses').AdeHarnessRow[]>
   /** Models a harness accepts (01 §9): static, probed, or provider-derived. */
   listHarnessModels?(
-    harnessId: string
+    harnessId: string,
+    credentialMode?: string
   ): Promise<import('@shared/ade-harnesses').AdeHarnessModels>
   /** Force fresh detection for one harness; returns the updated row. */
   probeHarness?(

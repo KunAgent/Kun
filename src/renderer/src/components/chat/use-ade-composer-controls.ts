@@ -7,13 +7,14 @@ import { useChatStore } from '../../store/chat-store'
 import {
   harnessRowAvailable,
   loadHarnessModels,
+  loadHarnessProviderGroups,
   loadHarnesses,
   useHarnessStore
 } from '../../store/harness-store'
 import { useTaskWorkspaceStore } from '../../store/task-workspace-store'
 import { useCodexReferenceEnabled } from '../../history-reference/use-codex-reference-enabled'
 import {
-  credentialModeFromGroupKey,
+  credentialGroupFromKey,
   defaultCredentialModeForRow,
   effectiveHarnessId,
   harnessSwitchNeedsConfirmation,
@@ -64,6 +65,7 @@ export function useAdeComposerControls(input: {
   const harnessId = effectiveHarnessId(composerHarnessId, threadHarnessId)
   const row = rows.find((entry) => entry.definition.id === harnessId)
   const modelCache = useHarnessStore((state) => state.models[harnessId])
+  const providerGroupCache = useHarnessStore((state) => state.providerGroups[harnessId])
   const session = useHarnessStore((state) =>
     activeThreadId ? state.sessions[activeThreadId] : undefined
   )
@@ -77,10 +79,19 @@ export function useAdeComposerControls(input: {
   useEffect(() => {
     if (enabled && harnessId !== 'kun') void loadHarnessModels(harnessId)
   }, [enabled, harnessId])
-
   const credentialMode = composerCredentialMode.trim() || defaultCredentialModeForRow(row)
   const harnessLabel = row?.definition.displayName ?? harnessId
   const isNativeHarness = harnessId !== 'kun'
+
+  // Provider/gateway credential modes need the exposable-provider groups.
+  useEffect(() => {
+    if (
+      enabled && isNativeHarness &&
+      row?.definition.credentialModes.some((mode) => mode !== 'native-login')
+    ) {
+      void loadHarnessProviderGroups(harnessId)
+    }
+  }, [enabled, harnessId, isNativeHarness, row])
 
   const harnessCommands = useMemo(() => {
     if (!enabled || !isNativeHarness || !session?.commands?.length) return null
@@ -93,20 +104,27 @@ export function useAdeComposerControls(input: {
     return adeHarnessModelGroups({
       row,
       models: modelCache?.models ?? [],
+      providerGroups: providerGroupCache?.groups ?? [],
       labels,
       hasConfiguredProvider
     })
-  }, [enabled, hasConfiguredProvider, isNativeHarness, labels, modelCache?.models, row])
+  }, [enabled, hasConfiguredProvider, isNativeHarness, labels, modelCache?.models, providerGroupCache?.groups, row])
   const pickList = modelGroups != null ? [...(modelCache?.models ?? [])] : null
 
   /** Sentinel group keys (`ade-cred:*`) route the pick through credentialMode. */
   const onModelChange = useMemo(() => {
     if (!enabled || !isNativeHarness) return null
     return (modelId: string, providerId?: string): void => {
-      const picked = credentialModeFromGroupKey(providerId)
+      const picked = credentialGroupFromKey(providerId)
       if (picked) {
-        setComposerHarness(harnessId, picked)
-        setComposerModel(modelId, picked === 'provider' ? composerProviderId : '')
+        setComposerHarness(harnessId, picked.mode)
+        // Provider-routed modes carry the picked provider id so the turn
+        // resolves `providerId + model` into the grant route; native sign-in
+        // pins no provider.
+        setComposerModel(
+          modelId,
+          picked.mode === 'native-login' ? '' : picked.providerId ?? composerProviderId
+        )
         return
       }
       onComposerModelChange?.(modelId, providerId)

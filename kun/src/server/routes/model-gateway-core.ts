@@ -181,6 +181,17 @@ export function exposableProvider(provider: {
     (!provider.credentialStatus || provider.credentialStatus === 'ready')
 }
 
+/** Sorted unique model ids a provider advertises (`selectedModel` + `models`). */
+export function providerModelIds(provider: {
+  models?: string[]
+  selectedModel?: string
+}): string[] {
+  return [...new Set(
+    [provider.selectedModel, ...(provider.models ?? [])]
+      .filter((model): model is string => typeof model === 'string' && model.length > 0)
+  )].sort()
+}
+
 /**
  * Assemble a chat-shaped `messages` array (OpenAI/normalized Anthropic input)
  * into the canonical ModelRequest: system/developer messages fold into

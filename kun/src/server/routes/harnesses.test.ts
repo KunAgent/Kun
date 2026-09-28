@@ -182,4 +182,55 @@ describe('harness routes', () => {
     expect(models).toContain('auto')
     expect(models).not.toContain('deepseek-chat')
   })
+
+  it('groups gateway-exposable providers for credential_mode=kun-gateway', async () => {
+    const catalog = new HarnessCatalog()
+    const detector = new HarnessDetector({
+      definitions: () => catalog.list(),
+      overrides: () => ({}),
+      spawnCaptured: async () => ({ stdout: '', stderr: '', timedOut: false, exitCode: null }),
+      probeLogin: async () => 'unknown',
+      nowMs: () => 1_000,
+      nowIso: () => '2026-01-01T00:00:00.000Z'
+    })
+    const router = buildRouter({
+      runtimeToken: TOKEN,
+      insecure: false,
+      nowIso: () => '2026-01-01T00:00:00.000Z',
+      harnesses: { catalog, detector },
+      modelConnections: {
+        snapshot: async () => ({
+          providers: [
+            {
+              id: 'deepseek', name: 'DeepSeek', kind: 'http', authType: 'api-key',
+              configured: true, credentialStatus: 'ready',
+              models: ['deepseek-chat'], selectedModel: 'deepseek-reasoner'
+            },
+            {
+              id: 'oauth-sub', name: 'Subscription', kind: 'http', authType: 'oauth',
+              configured: true, models: ['sub-1']
+            },
+            {
+              id: 'nokey', name: 'NoKey', kind: 'http', authType: 'api-key',
+              configured: true, credentialStatus: 'missing', models: ['x']
+            }
+          ]
+        })
+      }
+    } as unknown as ServerRuntime)
+
+    const response = await dispatch(
+      router, 'GET', '/v1/harnesses/claude-code/models?credential_mode=kun-gateway', authed
+    )
+    expect(response.status).toBe(200)
+    const body = JSON.parse(response.body)
+    expect(body.credentialMode).toBe('kun-gateway')
+    expect(body.groups).toEqual([
+      {
+        providerId: 'deepseek',
+        label: 'DeepSeek',
+        models: ['deepseek-chat', 'deepseek-reasoner']
+      }
+    ])
+  })
 })

@@ -54,6 +54,7 @@ import {
 } from './runtime-composition-manager.js'
 import { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
 import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
+import { providerModelIds } from './routes/model-gateway-core.js'
 import { createManagerToolProvider } from '../adapters/tool/manager-tool-provider.js'
 import { FileDelegationStore } from './runtime-factory-dependencies.js'
 import { join } from 'node:path'
@@ -156,9 +157,8 @@ export async function createRuntimeAgentComposition(
     }
   })
   // Provider-native subscription engines own whole turns and share the same
-  // narrow delegated runtime boundary. Keep the runtime objects alive even
-  // with an initially empty provider set so /connect can add an account
-  // without requiring the standalone TUI runtime to restart.
+  // narrow delegated runtime boundary; keep them alive even with an empty
+  // provider set so /connect can add an account without a TUI runtime restart.
   const canvasReceipts = new CanvasReceiptRegistry({ turns: turnService, events, nowIso })
   // Route-level bridge host for the Kun Tools MCP server (docs/ade/05 §3.3):
   // same execution authority as the SDK adapters with main-scope defaults.
@@ -227,9 +227,7 @@ export async function createRuntimeAgentComposition(
       ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
       ...(input.memoryStore ? { memoryStore: input.memoryStore } : {}),
       ...(input.memoryFeedback ? { memoryFeedback: input.memoryFeedback } : {}),
-      ...(process.env.KUN_CLAUDE_BINARY
-        ? { pathToClaudeCodeExecutable: process.env.KUN_CLAUDE_BINARY }
-        : {}),
+      ...(process.env.KUN_CLAUDE_BINARY ? { pathToClaudeCodeExecutable: process.env.KUN_CLAUDE_BINARY } : {}),
       sessionCoordinator: delegatedSessions,
       contextProfile: delegatedContextProfile,
       deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
@@ -241,6 +239,10 @@ export async function createRuntimeAgentComposition(
       harnessCatalog: services.harnesses.catalog,
       graphHarnessSummary,
       resolveDefaultProviderId: async () => (await modelConnections.snapshot()).defaultProviderId,
+      listProviderModels: async (providerId) => providerModelIds(
+        (await modelConnections.snapshot()).providers
+          .find((candidate) => candidate.id === providerId) ?? { models: [] }
+      ),
       ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
     }
     const antigravityRuntimeDeps: AntigravityCliRuntimeDeps = {
@@ -551,9 +553,7 @@ export async function createRuntimeAgentComposition(
 	    ...(core.activeOptions.runtime?.toolStorm ? { toolStorm: core.activeOptions.runtime.toolStorm } : {}),
 	    ...(core.activeOptions.runtime?.turnLimits ? { turnLimits: core.activeOptions.runtime.turnLimits } : {}),
 	    ...(core.activeOptions.runtime?.toolArgumentRepair ? { toolArgumentRepair: core.activeOptions.runtime.toolArgumentRepair } : {}),
-	    ...(core.activeOptions.runtime?.interruptedTurnResume
-	      ? { interruptedResume: core.activeOptions.runtime.interruptedTurnResume }
-	      : {}),
+	    ...(core.activeOptions.runtime?.interruptedTurnResume ? { interruptedResume: core.activeOptions.runtime.interruptedTurnResume } : {}),
 	    ...(services.resolvedHooks.length ? { hooks: services.resolvedHooks } : {}),
 		    ...(services.attachmentStore ? { attachmentStore: services.attachmentStore } : {}),
 	    artifactStore,
