@@ -259,6 +259,12 @@ export interface SdkQueryInput {
 export interface SdkQueryResult extends AsyncIterableIterator<SdkMessage> {
   interrupt?: () => Promise<void>
   setPermissionMode?: (mode: SdkPermissionMode) => Promise<void>
+  /** Control request listing the CLI's available models (used by probing). */
+  supportedModels?: () => Promise<
+    Array<{ value?: string; resolvedModel?: string } & Record<string, unknown>>
+  >
+  /** Terminate the spawned CLI process. */
+  close?: () => void
 }
 
 export type SdkQueryFn = (input: SdkQueryInput) => SdkQueryResult

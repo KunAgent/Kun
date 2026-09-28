@@ -50,7 +50,12 @@ describe('listHarnessesForManager', () => {
     expect(
       claude.models.filter((entry) => entry.credentialMode === 'native-login')
         .map((entry) => entry.model)
-    ).toEqual(['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'])
+    ).toEqual([
+      'claude-opus-5',
+      'claude-sonnet-5',
+      'claude-fable-5-1',
+      'claude-haiku-4-5-20251001'
+    ])
     const gateway = claude.models.filter((entry) => entry.credentialMode === 'kun-gateway')
     expect(gateway).toEqual([
       { model: 'kun/deepseek/deepseek-chat', providerId: 'deepseek', credentialMode: 'kun-gateway' },

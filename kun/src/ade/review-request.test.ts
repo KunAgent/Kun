@@ -173,7 +173,7 @@ describe('ReviewRequests.request', () => {
 
       const pinned = await harness.reviews.request(
         managerCtx(),
-        { workerId: 'wrk_1', reviewer: { harnessId: 'claude-code', model: 'claude-sonnet-4-6' } },
+        { workerId: 'wrk_1', reviewer: { harnessId: 'claude-code', model: 'claude-sonnet-5' } },
         toolContext()
       )
       expect(pinned.ok).toBe(true)

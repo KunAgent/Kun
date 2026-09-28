@@ -447,7 +447,7 @@ export async function createRuntimeAgentComposition(
     listQuota: () => model.providerQuotaService.list(),
     notices: workerNoticeCoordinator,
     providerPool: providerPool.poolEntry,
-    probedModels: (definition) => services.harnesses.acpModels.peek(definition),
+    probedModels: (definition) => services.harnesses.probedModels(definition),
     threads: threadStore,
     turns: turnService,
     sessionStore,

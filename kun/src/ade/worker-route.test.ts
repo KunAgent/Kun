@@ -73,11 +73,11 @@ describe('resolveWorkerRoute', () => {
       agent: {
         harnessId: 'claude-code',
         credentialMode: 'kun-gateway',
-        model: 'kun/deepseek/claude-sonnet-4-6'
+        model: 'kun/deepseek/claude-sonnet-5'
       }
     })
     expect(resolved).toMatchObject({
-      error: expect.stringContaining('does not offer model "claude-sonnet-4-6"')
+      error: expect.stringContaining('does not offer model "claude-sonnet-5"')
     })
   })
 
@@ -116,7 +116,7 @@ describe('resolveWorkerRoute', () => {
     const accepted = await resolveWorkerRoute({
       catalog: catalog as never,
       probedModels: () => undefined,
-      agent: { harnessId: 'claude-code', model: 'claude-haiku-4-5' }
+      agent: { harnessId: 'claude-code', model: 'claude-haiku-4-5-20251001' }
     })
     expect('error' in accepted).toBe(false)
     if ('error' in accepted) return

@@ -131,7 +131,14 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
       { id: 'bypassPermissions', label: 'Full access', kunPermissionMode: 'full-access' }
     ],
     modelSource: 'probe',
-    staticModels: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+    // Fallback list when the SDK `supportedModels()` probe cannot run;
+    // mirrors what Claude Code 2.1.x reports (P3-07).
+    staticModels: [
+      'claude-opus-5',
+      'claude-sonnet-5',
+      'claude-fable-5-1',
+      'claude-haiku-4-5-20251001'
+    ],
     historySource: 'claude-code',
     terminal: {
       argv: [],
