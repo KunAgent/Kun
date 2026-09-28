@@ -295,17 +295,21 @@ export class ReviewRequests {
   ): Promise<ResolvedWorkerRoute | { error: string; refusal: ReviewRequestRefusal }> {
     const sameHarness = { error: 'reviewer must run on a different harness than the reviewed worker', refusal: 'same_harness' as const }
     if (input.reviewer?.harnessId) {
+      // Same-harness is knowable from the pin alone — refuse before route
+      // resolution so the refusal reason stays meaningful.
+      if (input.reviewer.harnessId === meta.reviewedHarness) return sameHarness
       const resolved = await resolveWorkerRoute({
         catalog: this.deps.catalog,
         ...(meta.managerModel ? { managerModel: meta.managerModel } : {}),
         ...(meta.managerProviderId ? { managerProviderId: meta.managerProviderId } : {}),
+        providerPool: this.deps.providerPool,
+        probedModels: this.deps.probedModels,
         agent: {
           harnessId: input.reviewer.harnessId,
           ...(input.reviewer.model ? { model: input.reviewer.model } : {})
         }
       })
       if ('error' in resolved) return { error: resolved.error, refusal: 'invalid_agent' }
-      if (resolved.route.harnessId === meta.reviewedHarness) return sameHarness
       return resolved
     }
     if (!this.deps.selector) {

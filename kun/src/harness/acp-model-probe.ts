@@ -40,8 +40,20 @@ export class AcpModelProbe {
    * Best-effort probe; never throws — a harness that cannot start a probe
    * session returns `[]` so the route falls back to `staticModels`.
    */
+  /**
+   * Spawn-free read of the cached probe result. Returns `undefined` when no
+   * fresh successful list is cached (absent, expired, or a failed probe) so
+   * callers fall back to `staticModels` without blocking on a process spawn.
+   */
+  peek(definition: HarnessDefinition): string[] | undefined {
+    const cached = this.cache.get(this.cacheKey(definition))
+    return cached && cached.expiresAt > this.nowMs() && cached.models.length > 0
+      ? cached.models
+      : undefined
+  }
+
   async probe(definition: HarnessDefinition): Promise<string[]> {
-    const key = `${definition.id}:${definition.launch?.command ?? ''}`
+    const key = this.cacheKey(definition)
     const cached = this.cache.get(key)
     if (cached && cached.expiresAt > this.nowMs()) return cached.models
     const inFlight = this.pending.get(key)
@@ -103,6 +115,10 @@ export class AcpModelProbe {
     } finally {
       await conn.close().catch(() => undefined)
     }
+  }
+
+  private cacheKey(definition: HarnessDefinition): string {
+    return `${definition.id}:${definition.launch?.command ?? ''}`
   }
 
   private nowMs(): number {

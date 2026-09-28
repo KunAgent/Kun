@@ -6,6 +6,8 @@ import { HarnessCatalog } from './harness-catalog.js'
 import { HarnessDetector, spawnCaptured } from './harness-detector.js'
 import { probeHarnessLogin } from './harness-login-probes.js'
 import { AcpModelProbe } from './acp-model-probe.js'
+import { probeAcpReadiness } from './acp-readiness-probe.js'
+import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
 import { HarnessTokenService } from './harness-token-service.js'
 
 const runtimeRequire = createRequire(import.meta.url)
@@ -30,6 +32,13 @@ export type HarnessRuntimeComposition = {
   detector: HarnessDetector
   /** ACP `session/new` model probing for `modelSource: 'probe'` harnesses. */
   acpModels: AcpModelProbe
+  /** Agent SDK `supportedModels()` probing for `modelSource: 'probe'` harnesses. */
+  agentSdkModels: AgentSdkModelProbe
+  /**
+   * Spawn-free read of the freshest probed model list, dispatched by
+   * transport; `undefined` means no fresh successful probe is cached.
+   */
+  probedModels: (definition: HarnessDefinition) => string[] | undefined
   /** Process-local scoped bearer tokens for spawned harnesses (04 §4). */
   tokens: HarnessTokenService
   /**
@@ -62,6 +71,8 @@ export function createHarnessComposition(
     },
     bundled: bundledRuntime,
     spawnCaptured,
+    // P3-11: an ACP harness that versions fine can still fail initialize.
+    probeReady: (def, command) => probeAcpReadiness(def, command),
     probeLogin: (def) =>
       probeHarnessLogin(def, {
         providers: () => (options().providers ?? {}) as Record<string, ServeProviderConfig>
@@ -72,5 +83,23 @@ export function createHarnessComposition(
   const acpModels = new AcpModelProbe({
     binaryPath: (id) => options().harnesses?.binaryPaths?.[id]
   })
-  return { catalog, detector, acpModels, tokens: new HarnessTokenService(), gatewayEndpoint: {} }
+  const agentSdkModels = new AgentSdkModelProbe({
+    binaryPath: (id) =>
+      options().harnesses?.binaryPaths?.[id] ?? process.env.KUN_CLAUDE_BINARY
+  })
+  const probedModels = (definition: HarnessDefinition): string[] | undefined =>
+    definition.transport === 'acp'
+      ? acpModels.peek(definition)
+      : definition.transport === 'agent-sdk'
+        ? agentSdkModels.peek(definition)
+        : undefined
+  return {
+    catalog,
+    detector,
+    acpModels,
+    agentSdkModels,
+    probedModels,
+    tokens: new HarnessTokenService(),
+    gatewayEndpoint: {}
+  }
 }

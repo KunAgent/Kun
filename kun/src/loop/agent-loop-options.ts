@@ -205,6 +205,11 @@ export type AgentLoopOptions = {
    * turn as runtime-authority context, never into the stable prefix.
    */
   graphHarnessSummary?: () => Promise<string | undefined>
+  /**
+   * ADE manager turn context (P3-14): resolved per manager turn after the
+   * stable prefix; absent when the ADE manager block is not wired.
+   */
+  adeManagerContext?: (input: { threadId: string }) => Promise<string | undefined>
   /** Accepted per-turn context-window mode snapshots (frozen at admission). */
   contextWindowModes?: ContextWindowTurnModes
   /** Window transition coordinator backing the new_context tool. */

@@ -72,13 +72,25 @@ export function childPptWorkflowSnapshot(scope: PptWorkflowScope): {
 export function resolveChildModelSelection(input: {
   explicitModel?: string
   explicitProviderId?: string
+  /**
+   * Host-pinned harness routes (ADE worker dispatch, graph attempts) carry the
+   * frozen route produced by worker-route resolution. `native-login` models
+   * belong to the harness's own subscription and provider-fallback routes may
+   * omit providerId, so the explicit pair is allowed to be model-only.
+   */
+  allowUnpairedExplicitModel?: boolean
   profileModel?: string
   profileProviderId?: string
   inheritedModel?: string
   inheritedProviderId?: string
 }): { model?: string; providerId?: string } {
   return (
-    completeModelProviderPair('explicit child override', input.explicitModel, input.explicitProviderId) ??
+    completeModelProviderPair(
+      'explicit child override',
+      input.explicitModel,
+      input.explicitProviderId,
+      { allowDefaultProvider: input.allowUnpairedExplicitModel === true }
+    ) ??
     completeModelProviderPair('subagent profile', input.profileModel, input.profileProviderId) ??
     completeModelProviderPair(
       'inherited parent selection',

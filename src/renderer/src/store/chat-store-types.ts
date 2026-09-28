@@ -483,6 +483,12 @@ export type ChatState = {
     useWorktreePool?: boolean
     worktreeBranch?: string
     /**
+     * ADE one-to-one threads (00 §5): pin the thread to this harness from
+     * creation instead of inferring a route from the composer model.
+     */
+    harnessId?: string
+    credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+    /**
      * Optional subagent profile id to bind the new thread to. When set
      * and the profile mode is 'primary' or 'all', the agent's
      * providerId / model / systemPrompt are snapshotted onto the thread.

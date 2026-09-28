@@ -26,5 +26,7 @@ export function modeForWorkbenchRoute(route: string): MobileMode {
 export function workbenchRouteForMode(mode: MobileMode): 'chat' | 'rooms' | 'write' {
   if (mode === 'rooms') return 'rooms'
   if (mode === 'work') return 'write'
+  // 'agents' keeps the chat workbench route: Mission Control and the
+  // attention list are read surfaces over Kun threads, not a new host mode.
   return 'chat'
 }

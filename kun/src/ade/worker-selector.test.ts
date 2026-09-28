@@ -242,7 +242,7 @@ describe('selectWorkerRoute', () => {
         delegationNotes: 'login test fixer',
         harnessId: 'claude-code',
         credentialMode: 'native-login',
-        model: 'claude-sonnet-4-6'
+        model: 'claude-sonnet-5'
       }
     }]
     const deps = makeDeps({ profiles: async () => docs })
@@ -251,7 +251,7 @@ describe('selectWorkerRoute', () => {
     expect(selection.route).toMatchObject({
       harnessId: 'claude-code',
       credentialMode: 'native-login',
-      model: 'claude-sonnet-4-6'
+      model: 'claude-sonnet-5'
     })
   })
 

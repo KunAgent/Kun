@@ -58,9 +58,8 @@ import type {
   DelegatedTurnRuntime
 } from '../delegated-turn-runtime.js'
 import type { DelegatedSessionCoordinator } from '../delegated-session-binding.js'
-import { delegatedCredentialIdentity } from '../delegated-session-binding.js'
 import { parkDelegatedGraphTurnAfterRecovery } from '../delegated-graph-turn-policy.js'
-import { ACP_DEFAULT_CAPABILITIES } from '../../harness/builtin-harnesses.js'
+
 import {
   buildHistoryTranscript,
   DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
@@ -76,12 +75,15 @@ import { AcpEventMapper } from './acp-event-mapper.js'
 import { AcpDraftEmitter } from './acp-turn-emitter.js'
 import { buildAcpPromptBlocks, attachmentFallbackPaths } from './acp-prompt.js'
 import type { AcpSpawnFn } from './acp-process.js'
-import { capabilitiesFromAcp } from './acp-capabilities.js'
 import {
   acpLegacyCapabilities,
+  acpStaticCapabilities,
   finishAcpTrace,
+  kunToolsDescriptorOf,
   mapAcpFailure,
+  resolveAcpCredentialContext,
   startAcpTrace,
+  type AcpCredentialEnvInput,
   type AcpTrace
 } from './acp-runtime-support.js'
 import {
@@ -90,6 +92,7 @@ import {
   acquireAcpConnection,
   commitAcpSession,
   delegatedPhase,
+  recordAcpDelegatedRuntime,
   resolveAcpImages,
   resolveAcpRoots
 } from './acp-runtime-lifecycle.js'
@@ -97,19 +100,15 @@ import {
   ACP_AGENT_METHODS,
   AcpError,
   AcpPromptResultSchema,
-  type McpServer,
   type SessionUpdate
 } from './acp-schema.js'
 import type { AcpDebugLog } from './acp-jsonrpc.js'
+import type { AcpMcpCapabilities, KunToolsMcpProvider } from './kun-tools-mcp.js'
 
 /** How long the runtime waits for prompt settlement after session/cancel. */
 export const ACP_CANCEL_SETTLE_MS = 5_000
 
-export type AcpCredentialEnvInput = {
-  harnessId: HarnessId
-  credentialMode: HarnessRoute['credentialMode']
-  accountId?: string
-}
+export type { AcpCredentialEnvInput }
 
 export interface AcpRuntimeDeps {
   /** Harness catalog lookup for the frozen route's definition. */
@@ -142,8 +141,8 @@ export interface AcpRuntimeDeps {
   /** Extra env keys to strip from the harness child beyond the shared denylist. */
   stripEnv?: readonly string[]
   attachmentStore?: AttachmentStore
-  /** Kun Tools MCP descriptors forwarded to session/new (P1-07). */
-  kunToolsMcpServers?: () => McpServer[]
+  /** Kun Tools MCP provider (P3-08): per-turn kun-tools grant + descriptor. */
+  kunToolsMcp?: KunToolsMcpProvider
   taskWorkspaces?: TaskWorkspaceLister
   deterministicHandoff?: boolean
   /** Delegated read-only children deny mutation regardless of parent defaults. */
@@ -197,7 +196,9 @@ export class AcpRuntime implements DelegatedTurnRuntime {
   }
 
   capabilitiesV2() {
-    return ACP_DEFAULT_CAPABILITIES
+    // kunTools is honest (P3-09): only claim it when this runtime can hand
+    // the agent an MCP descriptor — i.e. it is serve-hosted.
+    return acpStaticCapabilities(this.deps.kunToolsMcp?.canDeliver() === true)
   }
 
   async runTurn(
@@ -310,15 +311,16 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       this.deps.defaultApprovalReviewer ??
       DEFAULT_APPROVAL_REVIEWER
 
-    const credentialEnvInput = { harnessId: definition.id, credentialMode, accountId }
-    const credentialEnv =
-      credentialMode === 'native-login'
-        ? {}
-        : await (this.deps.credentialEnv?.(credentialEnvInput) ?? Promise.resolve({}))
-    const credentialIdentity = delegatedCredentialIdentity({
-      providerId: `${credentialMode}:${definition.id}`,
-      accountId
-    })
+    const { credentialIdentity, env: credentialEnv } =
+      await resolveAcpCredentialContext(this.deps.credentialEnv, {
+        definition,
+        credentialMode,
+        threadId,
+        turnId,
+        providerId: actingModelRoute.providerId,
+        model: actingModelRoute.model,
+        accountId
+      })
     const poolKey = `${definition.id}:${credentialIdentity}`
     const limits = normalizeTurnLimits(this.deps.turnLimits)
 
@@ -375,6 +377,15 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       emitQueue = emitQueue.then(() => emitter.emitAll(drafts))
     }
 
+    const kunToolsServers = this.deps.kunToolsMcp?.servers({
+      threadId,
+      turnId,
+      harnessId: definition.id,
+      credentialIdentity,
+      mcpCapabilities: conn.initResult?.agentCapabilities?.mcpCapabilities as
+        | AcpMcpCapabilities
+        | undefined
+    }) ?? []
     let session: AcpSessionHandle
     try {
       session = await this.sessions.ensureSession(
@@ -386,13 +397,14 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           model,
           permissionModeId,
           reasoningEffort: turn.reasoningEffort,
-          mcpServers: this.deps.kunToolsMcpServers?.() ?? [],
+          mcpServers: kunToolsServers,
           items
         },
         conn,
         sink
       )
     } catch (error) {
+      this.deps.kunToolsMcp?.revokeTurn(turnId)
       lease.release()
       await this.failFromAcpError(threadId, turnId, error, true)
       return 'failed'
@@ -420,25 +432,19 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       { threadId, turnId, harnessId: definition.id },
       turnHandoff
     )
-    await this.deps.events.record({
-      kind: 'delegated_runtime',
+    await recordAcpDelegatedRuntime(this.deps.events, {
       threadId,
       turnId,
-      providerKind: 'acp',
-      providerId: definition.id,
       harnessId: definition.id,
-      phase: delegatedPhase(preparation),
-      ...(preparation.rebaseReason ? { reason: preparation.rebaseReason } : {}),
-      capabilities: acpLegacyCapabilities(),
-      capabilitiesV2: capabilitiesFromAcp(
-        conn.initResult,
-        {
-          configOptions: session.configOptions,
-          modes: session.modes,
-          sawAvailableCommands: session.sawAvailableCommands
-        },
-        { sandbox: definition.capabilities.facts?.sandbox ?? 'native' }
-      )
+      preparation,
+      initResult: conn.initResult,
+      session: {
+        configOptions: session.configOptions,
+        modes: session.modes,
+        sawAvailableCommands: session.sawAvailableCommands,
+        kunToolsDescriptor: kunToolsDescriptorOf(kunToolsServers)
+      },
+      sandbox: definition.capabilities.facts?.sandbox ?? 'native'
     })
 
     const imageCapable =
@@ -634,18 +640,13 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       unsubscribeSessionErrors()
       this.host.unregisterContext(session.sessionId)
       await this.host.turnEnded(turnId)
+      this.deps.kunToolsMcp?.revokeTurn(turnId)
       session.detach()
       lease.release()
     }
   }
 
-  private async failTurn(
-
-    threadId: string,
-    turnId: string,
-    error: string,
-    code?: string
-  ): Promise<'failed'> {
+  private async failTurn(threadId: string, turnId: string, error: string, code?: string): Promise<'failed'> {
     await this.deps.turns.finishTurn({
       threadId,
       turnId,

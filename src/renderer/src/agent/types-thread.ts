@@ -53,6 +53,17 @@ export type NormalizedThread = {
   latestTurnStatus?: string
   relation?: 'primary' | 'fork' | 'side'
   parentThreadId?: string
+  /** Host-written ADE worker binding (09 §3.1); absent for normal threads. */
+  executionUnit?: {
+    kind: 'worker'
+    teamId: string
+    managerThreadId: string
+    label: string
+    role?: string
+    lifecycle: 'persistent' | 'ephemeral'
+    taskWorkspaceId?: string
+    control: 'manager' | 'user'
+  }
   /** Legacy plan-build linkage retained for read-only history compatibility. */
   planBuildRunId?: string
   forkedFromThreadId?: string

@@ -26,8 +26,14 @@ import type { AcpClientHost } from './acp-client-host.js'
 import type { AcpSessionManager, AcpSessionHandle } from './acp-session-manager.js'
 import { filterGoalContextsForGoalKey } from '../../loop/continuation-instructions.js'
 import { startAcpProcess, type AcpSpawnFn } from './acp-process.js'
-import { AcpError } from './acp-schema.js'
+import { AcpError, type AcpInitializeResult } from './acp-schema.js'
 import type { AcpDebugLog } from './acp-jsonrpc.js'
+import {
+  capabilitiesFromAcp,
+  type AcpSessionFacts
+} from './acp-capabilities.js'
+import { acpLegacyCapabilities } from './acp-runtime-support.js'
+import type { RuntimeEventRecorder } from '../../services/runtime-event-recorder.js'
 
 export type AcpLifecycleDeps = {
   binaryPath?: (harnessId: HarnessId) => string | undefined
@@ -68,7 +74,7 @@ export async function acquireAcpConnection(
       args: input.definition.launch?.args ?? [],
       env: input.definition.launch?.env ?? {},
       credentialEnv: input.credentialEnv,
-      stripEnv: deps.stripEnv,
+      stripEnv: acpStripEnv(deps, input.definition, input.credentialEnv),
       cwd: input.workspace,
       spawn: deps.spawn
     })
@@ -99,6 +105,23 @@ export async function acquireAcpConnection(
   })
 }
 
+/**
+ * Strip keys for an ACP child (spawn or mediated terminal). In gateway mode
+ * the child must not inherit provider secrets the generated config replaces.
+ */
+function acpStripEnv(
+  deps: Pick<AcpLifecycleDeps, 'stripEnv'>,
+  definition: HarnessDefinition,
+  credentialEnv: Record<string, string>
+): readonly string[] {
+  return [
+    ...(deps.stripEnv ?? []),
+    ...(Object.keys(credentialEnv).length > 0
+      ? (definition.gateway?.stripEnv ?? [])
+      : [])
+  ]
+}
+
 /** The scoped env a mediated terminal sees — identical to the agent's. */
 export function acpChildEnv(
   deps: Pick<AcpLifecycleDeps, 'stripEnv'>,
@@ -107,7 +130,7 @@ export function acpChildEnv(
 ): NodeJS.ProcessEnv {
   return buildHarnessEnv({
     base: process.env,
-    strip: deps.stripEnv,
+    strip: acpStripEnv(deps, definition, credentialEnv),
     add: { ...(definition.launch?.env ?? {}), ...credentialEnv }
   }) as NodeJS.ProcessEnv
 }
@@ -239,4 +262,41 @@ export function delegatedPhase(
 ): 'portable' | 'resumed' | 'rebased' {
   if (preparation.resumed) return 'resumed'
   return preparation.rebaseReason ? 'rebased' : 'portable'
+}
+
+/** Record the `delegated_runtime` event for an ACP turn (phase + caps v2). */
+export async function recordAcpDelegatedRuntime(
+  events: Pick<RuntimeEventRecorder, 'record'>,
+  input: {
+    threadId: string
+    turnId: string
+    harnessId: HarnessId
+    preparation: DelegatedSessionPreparation
+    initResult: AcpInitializeResult | undefined
+    session: AcpSessionFacts
+    sandbox: 'host' | 'native' | 'none'
+  }
+): Promise<void> {
+  await events.record({
+    kind: 'delegated_runtime',
+    threadId: input.threadId,
+    turnId: input.turnId,
+    providerKind: 'acp',
+    providerId: input.harnessId,
+    harnessId: input.harnessId,
+    phase: delegatedPhase(input.preparation),
+    ...(input.preparation.rebaseReason
+      ? { reason: input.preparation.rebaseReason }
+      : {}),
+    capabilities: {
+      ...acpLegacyCapabilities(),
+      // Legacy bag mirrors v2 honesty: only a delivered descriptor counts.
+      kunTools:
+        input.session.kunToolsDescriptor === 'http' ||
+        input.session.kunToolsDescriptor === 'stdio'
+    },
+    capabilitiesV2: capabilitiesFromAcp(input.initResult, input.session, {
+      sandbox: input.sandbox
+    })
+  })
 }

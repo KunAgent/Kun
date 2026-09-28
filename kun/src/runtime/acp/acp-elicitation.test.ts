@@ -192,7 +192,7 @@ describe('acpElicitForTurn', () => {
       applyItem: async () => ({}),
       updateItem: async () => ({})
     } as never,
-    events: { record: async () => undefined } as never,
+    events: { record: async () => ({ seq: 1 }) } as never,
     sessionStore: { loadEventsSince: async () => [] } as never,
     ids: { next: (prefix) => `${prefix}_1` },
     ...over
@@ -238,6 +238,7 @@ describe('acpElicitForTurn', () => {
               answers: [{ id: 'mode', label: 'Fast', value: '' }]
             })
           }
+          return { seq: 1 }
         }
       } as never
     })
@@ -266,6 +267,7 @@ describe('acpElicitForTurn', () => {
           if (event.kind === 'user_input_requested' && 'inputId' in event) {
             userInputGate.resolve(event.inputId as string, { status: 'cancelled' })
           }
+          return { seq: 1 }
         }
       } as never
     })

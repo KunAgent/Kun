@@ -77,10 +77,10 @@ export type TerminalCreateResult =
 export const TERMINAL_AGENT_CALLBACK_APPENDIX = [
   '',
   '---',
-  'Reporting back to Kun (the `kun` CLI is on PATH; KUN_WORKER_* env vars are already set):',
-  '- `kun worker progress "<summary>" [--phase investigating|implementing|verifying|blocked]` — report progress.',
-  '- `kun worker ask "<question>" [--options a,b] [--timeout 600]` — ask the manager; blocks until answered.',
-  '- `kun worker context [--query "<text>"] [--limit 10]` — read earlier manager-thread context.',
-  '- `kun worker result --outcome <succeeded|partial|failed> --summary "<text>" [--files a,b] [--check name=status]` — submit the final report.',
+  'Reporting back to Kun (the bundled Kun CLI is `"$KUN_CLI"` — on Windows `%KUN_CLI%` — and also on PATH as `kun`; KUN_WORKER_* env vars are already set):',
+  '- `"$KUN_CLI" worker progress "<summary>" [--phase investigating|implementing|verifying|blocked]` — report progress.',
+  '- `"$KUN_CLI" worker ask "<question>" [--options a,b] [--timeout 600]` — ask the manager; blocks until answered.',
+  '- `"$KUN_CLI" worker context [--query "<text>"] [--limit 10]` — read earlier manager-thread context.',
+  '- `"$KUN_CLI" worker result --outcome <succeeded|partial|failed> --summary "<text>" [--files a,b] [--check name=status]` — submit the final report.',
   'Ask/result/context require a manager dispatch; standalone runs support `progress`.'
 ].join('\n')

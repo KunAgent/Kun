@@ -18,6 +18,7 @@
 | [p2.md](./p2.md) | P2-01 ~ P2-11：终端 agent、CLI 回调、hooks、赛马、检查、归属、PR/CI 等 |
 | [flows.md](./flows.md) | 关键流程时序（含失败分支） |
 | [contracts.md](./contracts.md) | 汇总：HTTP 接口、事件、字段、设置、持久化文件、错误码 |
+| [p3-review-followup.md](./p3-review-followup.md) | 2026-09-28 实施复核（P0 ~ P2 已合入）：缺口、红测、实机验证记录与 P3 后续计划 |
 
 ## 2. 约定
 
@@ -55,60 +56,76 @@
 
 ### P0 地基
 
-| ID | 名称 | 规模 | 区域 | 依赖 |
-| --- | --- | --- | --- | --- |
-| P0-01 | 红线文档改写 | S | D | — |
-| P0-02 | harness 契约、内置目录、能力 v2（纯数据与纯函数） | M | K S | P0-01 |
-| P0-03 | HarnessDetector 与 `/v1/harnesses` 只读接口 | M | K | P0-02 |
-| P0-04 | 线程/turn 字段、HarnessRouter 接入两个组合点、工具上下文字段 | L | K | P0-02 |
-| P0-05 | 准入矩阵、`delegated_runtime` 事件扩展、前端降级函数 | M | K R S | P0-04 |
-| P0-06 | 设置桥：`agents.kun.harnesses`、`agents.kun.ade` | M | S M K | P0-02 |
-| P0-07 | ActivityStore：契约、存储、事件投影、挂载 | M | K S | — |
-| P0-08 | Activity 接口、主进程长轮询、renderer store、用户事实持久化 | M | K M R | P0-07 |
-| P0-09 | 从 Graph 抽取 worktree 生命周期（行为不变） | M | K | — |
-| P0-10 | 任务工作区：契约、存储、创建、接口、事件 | L | K | P0-09 |
-| P0-11 | 环境补齐与 setup（复用项目配置批准） | M | K M S | P0-10、P0-06 |
-| P0-12 | 采集、合入、丢弃、清理、待复核分支 | M | K | P0-10 |
-| P0-13 | 交接简报与工作现场提取（纯函数） | M | K | — |
-| P0-14 | 简报注入 SDK / Antigravity、`handoff_injected`、`read_thread_history` | M | K R | P0-13、P0-06 |
-| P0-15 | 会话停泊与增量 | M | K | P0-14 |
-| P0-16 | 权限上限与升级确认基础件 | S | K | P0-02 |
-| P0-17 | **ADE 模式外壳**：`workspaceMode` 线程归属、`ade` 路由、模式切换器、`AdeStage`（见 [00 §7](../00-ade-mode.md)） | M | K R S | P0-06 |
+P0 ~ P2 各项均已实施，随合并提交 `e779bf43a` 进入 `develop`；"状态 / 提交"列记录各项的实施提交（同项多提交时并列）。P3 复核与后续项见 [p3-review-followup.md](./p3-review-followup.md)。
+
+| ID | 名称 | 规模 | 区域 | 依赖 | 状态 / 提交 |
+| --- | --- | --- | --- | --- | --- |
+| P0-01 | 红线文档改写 | S | D | — | 已合入 `1a41b1d8b` |
+| P0-02 | harness 契约、内置目录、能力 v2（纯数据与纯函数） | M | K S | P0-01 | 已合入 `d62667440` |
+| P0-03 | HarnessDetector 与 `/v1/harnesses` 只读接口 | M | K | P0-02 | 已合入 `16901818d` |
+| P0-04 | 线程/turn 字段、HarnessRouter 接入两个组合点、工具上下文字段 | L | K | P0-02 | 已合入 `cd156e500` |
+| P0-05 | 准入矩阵、`delegated_runtime` 事件扩展、前端降级函数 | M | K R S | P0-04 | 已合入 `ea26e3c6b` |
+| P0-06 | 设置桥：`agents.kun.harnesses`、`agents.kun.ade` | M | S M K | P0-02 | 已合入 `16e41e722` |
+| P0-07 | ActivityStore：契约、存储、事件投影、挂载 | M | K S | — | 已合入 `d89a27ebe` |
+| P0-08 | Activity 接口、主进程长轮询、renderer store、用户事实持久化 | M | K M R | P0-07 | 已合入 `4791175f4` |
+| P0-09 | 从 Graph 抽取 worktree 生命周期（行为不变） | M | K | — | 已合入 `55397eb40` |
+| P0-10 | 任务工作区：契约、存储、创建、接口、事件 | L | K | P0-09 | 已合入 `c85a8eeb0` |
+| P0-11 | 环境补齐与 setup（复用项目配置批准） | M | K M S | P0-10、P0-06 | 已合入 `e37105110` |
+| P0-12 | 采集、合入、丢弃、清理、待复核分支 | M | K | P0-10 | 已合入 `c85a8eeb0` |
+| P0-13 | 交接简报与工作现场提取（纯函数） | M | K | — | 已合入 `fa04f3d12` |
+| P0-14 | 简报注入 SDK / Antigravity、`handoff_injected`、`read_thread_history` | M | K R | P0-13、P0-06 | 已合入 `c41902618` |
+| P0-15 | 会话停泊与增量 | M | K | P0-14 | 已合入 `25815d4ca` |
+| P0-16 | 权限上限与升级确认基础件 | S | K | P0-02 | 已合入 `f09fb1f8b` |
+| P0-17 | **ADE 模式外壳**：`workspaceMode` 线程归属、`ade` 路由、模式切换器、`AdeStage`（见 [00 §7](../00-ade-mode.md)） | M | K R S | P0-06 | 已合入 `c071c8c7a` |
 
 ### P1 总管能派、能看、能判断
 
-| ID | 名称 | 规模 | 区域 | 依赖 |
-| --- | --- | --- | --- | --- |
-| P1-01 | ACP：JSON-RPC、进程、假 agent 夹具 | M | K | P0-04 |
-| P1-02 | ACP：会话管理、config options、能力推导 | M | K | P1-01 |
-| P1-03 | ACP：事件映射与工具调用映射 | L | K | P1-02 |
-| P1-04 | ACP：客户端方法（fs、终端、权限、取消） | L | K | P1-02、P0-10 |
-| P1-05 | ACP：运行时装配、内置定义、冒烟 | M | K | P1-03、P1-04、P1-07 |
-| P1-06 | 抽取 `KunToolBridgeHost`（行为不变） | M | K | — |
-| P1-07 | `HarnessTokenService`、Kun Tools MCP server、stdio 桥 | M | K | P1-06 |
-| P1-08 | 网关公共部分抽取 + Anthropic messages 入口 | L | K | — |
-| P1-09 | 网关直接寻址、用量归属、Claude SDK 网关模式 | M | K | P1-08、P1-07、P0-04 |
-| P1-10 | ADE 存储、`manager-worker` launcher、`clientRequestId` 透传 | M | K | P0-04 |
-| P1-11 | worker 回调工具与服务 | M | K | P1-10、P0-07 |
-| P1-12 | 总管工具（一）：`harness_list`、`worker_create(_batch)`、`worker_status/read`、投递与对账 | L | K | P1-10、P0-10、P0-16、P0-05 |
-| P1-13 | worker 完成钩子、通知合并与唤醒、`worker_update` 渲染 | M | K R | P1-12 |
-| P1-14 | 总管工具（二）：send / stop / release / answer、派活队列、提问、接管与交还 | L | K R | P1-13、P1-11 |
-| P1-15 | worker 选择、额度快照、profile 字段 | M | K S M | P1-12 |
-| P1-16 | 验收结论、交叉审查 | M | K | P1-14、P0-12 |
-| P1-17 | 审查：diff 接口与审查面板 | L | K R | P0-12 |
-| P1-18 | 审查：批注、重新定位、批量发送 | L | K R S | P1-17、P1-14 |
-| P1-19 | 合入按钮与 `workspace_integrate` | M | K R | P1-17、P0-16 |
-| P1-20 | Mission Control（ADE 模式首页） | L | R S | P0-08、P0-17 |
-| P1-21 | Workers 面板、轨道胶囊、接管横幅、任务卡片（ADE 内） | M | R | P1-14、P1-20 |
-| P1-22 | ADE composer 的 agent 选择器、模型分组、原生斜杠命令 | M | R K | P0-05、P1-05、P0-17 |
-| P1-23 | 通知接入 ActivityStore | S | R M | P0-08 |
-| P1-24 | 设置页：Agents、工作区、总管 | M | R S | P0-06、P0-11 |
-| P1-25 | Graph 节点 harness、规划摘要、计划阶段准入 | M | K | P0-05、P1-12 |
-| P1-26 | 休眠与卡住检测 | M | K | P0-08、P1-05、P1-12 |
+| ID | 名称 | 规模 | 区域 | 依赖 | 状态 / 提交 |
+| --- | --- | --- | --- | --- | --- |
+| P1-01 | ACP：JSON-RPC、进程、假 agent 夹具 | M | K | P0-04 | 已合入 `751754333` |
+| P1-02 | ACP：会话管理、config options、能力推导 | M | K | P1-01 | 已合入 `c1285b8ad` |
+| P1-03 | ACP：事件映射与工具调用映射 | L | K | P1-02 | 已合入 `2161ce23c` |
+| P1-04 | ACP：客户端方法（fs、终端、权限、取消） | L | K | P1-02、P0-10 | 已合入 `636229eb1` |
+| P1-05 | ACP：运行时装配、内置定义、冒烟 | M | K | P1-03、P1-04、P1-07 | 已合入 `4cdb957da` |
+| P1-06 | 抽取 `KunToolBridgeHost`（行为不变） | M | K | — | 已合入 `238545387` |
+| P1-07 | `HarnessTokenService`、Kun Tools MCP server、stdio 桥 | M | K | P1-06 | 已合入 `a044e23d2` |
+| P1-08 | 网关公共部分抽取 + Anthropic messages 入口 | L | K | — | 已合入 `2441b29ae` |
+| P1-09 | 网关直接寻址、用量归属、Claude SDK 网关模式 | M | K | P1-08、P1-07、P0-04 | 已合入 `efb014f9a` |
+| P1-10 | ADE 存储、`manager-worker` launcher、`clientRequestId` 透传 | M | K | P0-04 | 已合入 `fb3dac56f` |
+| P1-11 | worker 回调工具与服务 | M | K | P1-10、P0-07 | 已合入 `cd1e6f05a` |
+| P1-12 | 总管工具（一）：`harness_list`、`worker_create(_batch)`、`worker_status/read`、投递与对账 | L | K | P1-10、P0-10、P0-16、P0-05 | 已合入 `e94923a06` |
+| P1-13 | worker 完成钩子、通知合并与唤醒、`worker_update` 渲染 | M | K R | P1-12 | 已合入 `8c897760c` |
+| P1-14 | 总管工具（二）：send / stop / release / answer、派活队列、提问、接管与交还 | L | K R | P1-13、P1-11 | 已合入 `ee20211e5` |
+| P1-15 | worker 选择、额度快照、profile 字段 | M | K S M | P1-12 | 已合入 `cdd00cfa0` |
+| P1-16 | 验收结论、交叉审查 | M | K | P1-14、P0-12 | 已合入 `825ca0ed2` |
+| P1-17 | 审查：diff 接口与审查面板 | L | K R | P0-12 | 已合入 `2b4b78ef2 + 6409bb01f` |
+| P1-18 | 审查：批注、重新定位、批量发送 | L | K R S | P1-17、P1-14 | 已合入 `c575cfc77` |
+| P1-19 | 合入按钮与 `workspace_integrate` | M | K R | P1-17、P0-16 | 已合入 `6daf616ca` |
+| P1-20 | Mission Control（ADE 模式首页） | L | R S | P0-08、P0-17 | 已合入 `1e682380f` |
+| P1-21 | Workers 面板、轨道胶囊、接管横幅、任务卡片（ADE 内） | M | R | P1-14、P1-20 | 已合入 `116a7610f` |
+| P1-22 | ADE composer 的 agent 选择器、模型分组、原生斜杠命令 | M | R K | P0-05、P1-05、P0-17 | 已合入 `28ef92feb` |
+| P1-23 | 通知接入 ActivityStore | S | R M | P0-08 | 已合入 `2e08cd214` |
+| P1-24 | 设置页：Agents、工作区、总管 | M | R S | P0-06、P0-11 | 已合入 `20ae2dbb7` |
+| P1-25 | Graph 节点 harness、规划摘要、计划阶段准入 | M | K | P0-05、P1-12 | 已合入 `7752a2f02` |
+| P1-26 | 休眠与卡住检测 | M | K | P0-08、P1-05、P1-12 | 已合入 `7a60f6eef` |
 
 ### P2 扩展面
 
-见 [p2.md](./p2.md)：P2-01 终端 agent 登记与 PTY、P2-02 `kun worker` CLI、P2-03 托管 hooks、P2-04 同题赛马、P2-05 检查命令、P2-06 AI 行归属、P2-07 PR 与 CI、P2-08 外部会话接续、P2-09 Mission Control 弹出窗口、P2-10 ACP elicitation、P2-11 外部 harness 的计划构建。
+见 [p2.md](./p2.md)：各项的设计细节与验收口径；实施提交如下（均已随 `e779bf43a` 合入 `develop`）。
+
+| ID | 名称 | 状态 / 提交 |
+| --- | --- | --- |
+| P2-01 | 终端 agent 登记与 PTY | 已合入 `b8dee5ca7` |
+| P2-02 | `kun worker` CLI | 已合入 `250d5144a` |
+| P2-03 | 托管 hooks | 已合入 `3fa26486c` |
+| P2-04 | 同题赛马 | 已合入 `5eaaa3c36` |
+| P2-05 | 检查命令 | 已合入 `06ec6d07e` |
+| P2-06 | AI 行归属 | 已合入 `36821ac06` |
+| P2-07 | PR 与 CI | 已合入 `6afecb06b` |
+| P2-08 | 外部会话接续 | 已合入 `e4da35dac` |
+| P2-09 | Mission Control 弹出窗口 | 已合入 `813a6da30` |
+| P2-10 | ACP elicitation | 已合入 `0cf7b6892` |
+| P2-11 | 外部 harness 的计划构建 | 已合入 `822565728` |
 
 ## 4. 关键路径
 

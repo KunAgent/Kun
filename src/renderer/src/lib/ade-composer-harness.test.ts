@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import {
   adeHarnessModelGroups,
+  credentialGroupFromKey,
   credentialGroupKey,
-  credentialModeFromGroupKey,
   defaultCredentialModeForRow,
   effectiveHarnessId,
   harnessSlashCommandText,
@@ -42,16 +42,27 @@ function harnessRow(overrides?: {
 
 describe('credential group key codec', () => {
   it('round-trips credential modes through sentinel group keys', () => {
-    expect(credentialModeFromGroupKey(credentialGroupKey('native-login'))).toBe('native-login')
-    expect(credentialModeFromGroupKey(credentialGroupKey('kun-gateway'))).toBe('kun-gateway')
-    expect(credentialModeFromGroupKey(credentialGroupKey('provider'))).toBe('provider')
+    expect(credentialGroupFromKey(credentialGroupKey('native-login')))
+      .toEqual({ mode: 'native-login', providerId: undefined })
+    expect(credentialGroupFromKey(credentialGroupKey('kun-gateway')))
+      .toEqual({ mode: 'kun-gateway', providerId: undefined })
+    expect(credentialGroupFromKey(credentialGroupKey('provider')))
+      .toEqual({ mode: 'provider', providerId: undefined })
+  })
+
+  it('carries the provider id in per-provider group keys', () => {
+    expect(credentialGroupFromKey('ade-cred:kun-gateway:deepseek'))
+      .toEqual({ mode: 'kun-gateway', providerId: 'deepseek' })
+    expect(credentialGroupFromKey('ade-cred:provider:stepfun'))
+      .toEqual({ mode: 'provider', providerId: 'stepfun' })
+    expect(credentialGroupFromKey('ade-cred:kun-gateway:')).toBeNull()
   })
 
   it('returns null for ordinary provider ids and empty input', () => {
-    expect(credentialModeFromGroupKey('deepseek')).toBeNull()
-    expect(credentialModeFromGroupKey('')).toBeNull()
-    expect(credentialModeFromGroupKey(undefined)).toBeNull()
-    expect(credentialModeFromGroupKey('ade-cred:bogus')).toBeNull()
+    expect(credentialGroupFromKey('deepseek')).toBeNull()
+    expect(credentialGroupFromKey('')).toBeNull()
+    expect(credentialGroupFromKey(undefined)).toBeNull()
+    expect(credentialGroupFromKey('ade-cred:bogus')).toBeNull()
   })
 })
 
@@ -65,27 +76,47 @@ describe('effectiveHarnessId', () => {
 })
 
 describe('adeHarnessModelGroups', () => {
-  it('groups the harness model list by declared credential modes', () => {
+  const exposable = [
+    { providerId: 'deepseek', label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'] },
+    { providerId: 'stepfun', label: 'StepFun', models: ['step-3'] }
+  ]
+
+  it('lists harness models under native login and provider models under gateway groups', () => {
     const groups = adeHarnessModelGroups({
       row: harnessRow(),
       models: ['opus', 'sonnet'],
+      providerGroups: exposable,
       labels,
       hasConfiguredProvider: true
     })
     expect(groups.map((group) => group.providerId)).toEqual([
       credentialGroupKey('native-login'),
-      credentialGroupKey('kun-gateway')
+      `${credentialGroupKey('kun-gateway')}:deepseek`,
+      `${credentialGroupKey('kun-gateway')}:stepfun`
     ])
     expect(groups[0]?.modelIds).toEqual(['opus', 'sonnet'])
-    expect(groups[1]?.label).toBe('Kun gateway')
+    expect(groups[1]?.label).toBe('Kun gateway · DeepSeek')
+    expect(groups[1]?.modelIds).toEqual(['deepseek-chat', 'deepseek-reasoner'])
   })
 
   it('drops provider-backed groups when no provider is configured', () => {
     const groups = adeHarnessModelGroups({
       row: harnessRow({ credentialModes: ['native-login', 'provider'] }),
       models: ['opus'],
+      providerGroups: exposable,
       labels,
       hasConfiguredProvider: false
+    })
+    expect(groups.map((group) => group.providerId)).toEqual([credentialGroupKey('native-login')])
+  })
+
+  it('emits no provider groups until the exposable catalog arrives', () => {
+    const groups = adeHarnessModelGroups({
+      row: harnessRow(),
+      models: ['opus'],
+      providerGroups: [],
+      labels,
+      hasConfiguredProvider: true
     })
     expect(groups.map((group) => group.providerId)).toEqual([credentialGroupKey('native-login')])
   })
@@ -94,6 +125,7 @@ describe('adeHarnessModelGroups', () => {
     expect(adeHarnessModelGroups({
       row: undefined,
       models: ['opus'],
+      providerGroups: exposable,
       labels,
       hasConfiguredProvider: true
     })).toEqual([])

@@ -2,6 +2,8 @@ import { jsonResponse, type JsonResponse } from '../response.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { HarnessIdSchema } from '../../contracts/harness.js'
+import { exposableProvider, providerModelIds } from './model-gateway-core.js'
+import { legacyProviderKindFor } from '../../harness/harness-provider-kind.js'
 
 /**
  * `GET /v1/harnesses` — definitions plus cached detection status. Never blocks
@@ -67,6 +69,25 @@ export async function listHarnessModels(
   const definition = harnesses.catalog.get(parsedId.data)
   if (!definition) return ERRORS.notFound(`unknown harness: ${parsedId.data}`)
 
+  const url = new URL(request.url)
+  const credentialMode = url.searchParams.get('credential_mode') ?? undefined
+
+  // `provider`/`kun-gateway` modes route through configured providers, so the
+  // picker needs them grouped — and filtered to the exposable set the grant
+  // could actually address (04 §5.5). Native modes keep the flat list below.
+  if (credentialMode === 'provider' || credentialMode === 'kun-gateway') {
+    const snapshot = await runtime.modelConnections?.snapshot().catch(() => undefined)
+    const groups = (snapshot?.providers ?? [])
+      .filter(exposableProvider)
+      .map((provider) => ({
+        providerId: provider.id,
+        label: provider.name,
+        models: providerModelIds(provider)
+      }))
+      .filter((group) => group.models.length > 0)
+    return jsonResponse({ harnessId: definition.id, credentialMode, models: [], groups })
+  }
+
   const providerModels = (kind: string | undefined): string[] => {
     const providers = runtime.providerConfigs?.() ?? {}
     const models = new Set<string>()
@@ -86,28 +107,20 @@ export async function listHarnessModels(
         harnessId: definition.id,
         models: providerModels(legacyProviderKindFor(definition.id))
       })
-    case 'probe':
-      if (definition.transport === 'acp' && harnesses.acpModels) {
-        const probed = await harnesses.acpModels.probe(definition)
-        if (probed.length > 0) {
-          return jsonResponse({ harnessId: definition.id, models: probed })
-        }
+    case 'probe': {
+      const probed =
+        definition.transport === 'acp'
+          ? await harnesses.acpModels?.probe(definition)
+          : definition.transport === 'agent-sdk'
+            ? await harnesses.agentSdkModels?.probe(definition)
+            : undefined
+      if (probed && probed.length > 0) {
+        return jsonResponse({ harnessId: definition.id, models: probed })
       }
       // A probe that fails (missing binary, auth gate, timeout) falls back to
       // the harness's static list rather than failing the models request.
       return jsonResponse({ harnessId: definition.id, models: definition.staticModels })
+    }
   }
 }
 
-export function legacyProviderKindFor(harnessId: string): string | undefined {
-  switch (harnessId) {
-    case 'claude-code':
-      return 'agent-sdk'
-    case 'cursor':
-      return 'cursor-sdk'
-    case 'antigravity':
-      return 'antigravity-cli'
-    default:
-      return undefined
-  }
-}

@@ -248,5 +248,16 @@
     "needs_changes": "Нужны правки",
     "rejected": "Отклонено",
     "waived": "Пропущено"
-  }
+  },
+  "adeNewManager": "Сессия менеджера",
+  "adeNewOneOnOne": "Один на один",
+  "adeAgentPickerLoading": "Загрузка агентов…",
+  "adeAgentPickerEmpty": "Нет доступных агентов",
+  "adeGroupReview": "На проверку",
+  "adeGroupDone": "Готово",
+  "adeGroupByStatus": "Группировать по статусу",
+  "adeGroupByProject": "Группировать по проекту",
+  "adeGroupToggleHint": "Изменить группировку диалогов",
+  "adeWorkerCount": "{{count}} исполнитель",
+  "adeWorkerCount_other": "исполнителей: {{count}}"
 }

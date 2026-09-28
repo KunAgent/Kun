@@ -29,7 +29,7 @@ import {
  *     harness: claude-code    # optional ADE worker binding (10 §3.1)
  *     credential-mode: native-login   # optional harness credential path
  *     delegation-notes: use for code review on changed files
- *     model: claude-sonnet-4-6        # optional harness model pin
+ *     model: claude-sonnet-5        # optional harness model pin
  *     ---
  *     Body becomes the systemPrompt verbatim (kun's base prompt is
  *     prepended unless omit_base_prompt: true).

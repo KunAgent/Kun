@@ -127,6 +127,19 @@ export function createAgentSdkTurnRuntimeDeps(
             'the turn has no provider/model route to address through the gateway'
           )
         }
+        // A bare model id only reaches the gateway when the resolved provider
+        // actually offers it — otherwise a stale pick like `claude-sonnet-4-6`
+        // would be addressed to DeepSeek and fail upstream as a 404.
+        if (!gatewayAddress) {
+          const offered = await deps.listProviderModels?.(gatewayProviderId)
+            .catch(() => undefined)
+          if (offered && offered.length > 0 && !offered.includes(gatewayModelId)) {
+            throw new AgentSdkGatewayUnavailableError(
+              `model "${gatewayModelId}" is not offered by provider "${gatewayProviderId}" — ` +
+                'pick a model from that provider’s gateway group or check provider settings'
+            )
+          }
+        }
         const harnessId = turn.harnessId ?? 'claude-code'
         gatewayEnv = resolveAgentSdkGatewayEnv({
           deps: {
@@ -184,10 +197,22 @@ export function createAgentSdkTurnRuntimeDeps(
       // Gateway turns skip this entirely — the gateway token is the credential.
       let token: string | undefined
       if (!gatewayEnv) {
+        // The apiKey/credentialSource fallback belongs to the single-engine
+        // deployment where `default` IS the agent-sdk subscription route. On a
+        // mixed runtime it holds an unrelated HTTP provider key — a harness-
+        // pinned native-login turn must fall back to the CLI's ambient login
+        // instead of being force-fed a token it cannot parse.
+        const defaultIsSubscriptionRoute = !explicitRouteProviderId && deps.defaultIsAgentSdk
         const credentialSourceId = explicitRouteProviderId
           ? providerCfg?.credentialSourceId
-          : deps.defaultCredentialSourceId
-        let rawToken = explicitRouteProviderId ? providerCfg?.apiKey : deps.defaultToken
+          : defaultIsSubscriptionRoute
+            ? deps.defaultCredentialSourceId
+            : undefined
+        let rawToken = explicitRouteProviderId
+          ? providerCfg?.apiKey
+          : defaultIsSubscriptionRoute
+            ? deps.defaultToken
+            : undefined
         if (credentialSourceId) {
           const resolved = await deps.resolveCredentialSource?.(credentialSourceId).catch(() => null)
           rawToken = resolved?.apiKey ?? ''
