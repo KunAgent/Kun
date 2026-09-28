@@ -9,6 +9,11 @@
  * handful of model calls, but they cover the doc's spread: bug fixes, test
  * authoring, cross-file refactors, features, docs, and two parallel work
  * streams where delegation has a natural advantage.
+ *
+ * P4-16 adds `t11`–`t13`: three-way independent work where doing everything
+ * serially in one turn is clearly the slow path, so a manager that follows
+ * the delegation guidance should spawn at least two workers. `expect`
+ * fields are advisory expectations surfaced in the run notes when missed.
  */
 export const EVAL_TASKS = [
   {
@@ -87,6 +92,45 @@ export const EVAL_TASKS = [
     prompt: 'Create two independent scripts: scripts/gen-a.mjs that prints exactly `A` and scripts/gen-b.mjs that prints exactly `B`. They share no code — treat them as two independent pieces of work if helpful.',
     files: {},
     verify: { run: 'test "$(node scripts/gen-a.mjs)" = "A" && test "$(node scripts/gen-b.mjs)" = "B"' }
+  },
+  {
+    id: 't11-three-modules',
+    kind: 'parallel',
+    expect: { minWorkers: 2 },
+    prompt: 'Create three independent modules, each with its own check script: math/clamp.js exporting clamp(n,lo,hi) verified by check-clamp.mjs, text/title.js exporting titleCase(s) verified by check-title.mjs, and net/qs.js exporting encodeQuery(params) verified by check-qs.mjs. The three modules share no code and no imports — implement them as three separate pieces of work.',
+    files: {},
+    verify: {
+      run: 'node check-clamp.mjs && node check-title.mjs && node check-qs.mjs'
+    },
+    answer: 'Each module is self-contained; pick reasonable semantics (clamp bounds, title casing of space-separated words, URL-encoded key=value pairs joined with &).'
+  },
+  {
+    id: 't12-three-package-bugs',
+    kind: 'parallel',
+    expect: { minWorkers: 2 },
+    prompt: 'Three unrelated packages each have one bug: pkg-a/range.js stops one item early, pkg-b/once.js does not memoize the wrapped call, pkg-c/batch.js returns groups in the wrong order. Fix each package independently so its check script exits 0. Treat them as three independent tasks.',
+    files: {
+      'pkg-a/range.js': "export function range(n) {\n  const out = []\n  for (let i = 0; i < n - 1; i++) out.push(i)\n  return out\n}\n",
+      'pkg-a/check.mjs': "import { range } from './range.js'\nif (range(4).join(',') !== '0,1,2,3') { console.error('range wrong'); process.exit(1) }\nconsole.log('ok a')\n",
+      'pkg-b/once.js': "export function once(fn) {\n  return (...args) => fn(...args)\n}\n",
+      'pkg-b/check.mjs': "import { once } from './once.js'\nlet calls = 0\nconst f = once(() => ++calls)\nf(); f()\nif (calls !== 1) { console.error('once wrong'); process.exit(1) }\nconsole.log('ok b')\n",
+      'pkg-c/batch.js': "export function batch(xs, size) {\n  const out = []\n  for (let i = xs.length; i > 0; i -= size) out.unshift(xs.slice(Math.max(0, i - size), i))\n  return out.reverse()\n}\n",
+      'pkg-c/check.mjs': "import { batch } from './batch.js'\nif (JSON.stringify(batch([1,2,3,4,5], 2)) !== '[[1,2],[3,4],[5]]') { console.error('batch wrong'); process.exit(1) }\nconsole.log('ok c')\n"
+    },
+    verify: { run: 'node pkg-a/check.mjs && node pkg-b/check.mjs && node pkg-c/check.mjs' }
+  },
+  {
+    id: 't13-feature-tests-docs',
+    kind: 'parallel',
+    expect: { minWorkers: 2 },
+    prompt: 'Ship a small feature with its support work as three independent tracks: (1) implement lib/slug.js exporting slugify(text), (2) write node:test coverage in test/slug.test.mjs, (3) document it in README.md with a `## Slugify` section and a usage example. The three tracks touch separate files — handle them as separate tasks.',
+    files: {
+      'README.md': '# utils\n'
+    },
+    verify: {
+      run: 'node --test && node -e "import(\'./lib/slug.js\').then(m => { if (m.slugify(\'Hello World!\') !== \'hello-world\') process.exit(1) })" && grep -q "## Slugify" README.md'
+    },
+    answer: 'slugify lowercases, trims, replaces non-alphanumeric runs with single dashes, and strips edge dashes.'
   },
   {
     id: 't09-rename-calc',

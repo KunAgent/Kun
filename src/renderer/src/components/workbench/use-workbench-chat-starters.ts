@@ -8,6 +8,7 @@ import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { useChatStore } from '../../store/chat-store'
 import { useHarnessStore } from '../../store/harness-store'
 import { harnessPermissionDefault } from '../../lib/harness-defaults'
+import { requestOpenWorkersPanel } from '../chat/FloatingComposerWorkersPill'
 import type { ChatState } from '../../store/chat-store-types'
 
 export type WorkbenchChatStarterDeps = {
@@ -75,6 +76,9 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
       workspaceMode: 'ade',
       activationGuard: () => navigationIsCurrent(requestId)
     })
+    // P4-16: a fresh manager session opens with the Workers panel so the
+    // dispatched-agent view is visible from the first turn.
+    requestOpenWorkersPanel()
     if (useWorktreePool) setUseWorktreePool(false)
   }, [
     activeSddDraft,

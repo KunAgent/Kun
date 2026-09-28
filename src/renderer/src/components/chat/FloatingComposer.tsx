@@ -116,6 +116,7 @@ import { useAdeComposerControls } from './use-ade-composer-controls'
 import { FloatingComposerSlashCommandMenu } from './FloatingComposerSlashCommandMenu'
 import { FloatingComposerTodoProgress } from './FloatingComposerTodoProgress'
 import { FloatingComposerWorkersPill } from './FloatingComposerWorkersPill'
+import { FloatingComposerDispatchableAgents } from './FloatingComposerDispatchableAgents'
 import { FloatingComposerGraphProgress } from './FloatingComposerGraphProgress'
 import { FloatingComposerAboveInputStack } from './FloatingComposerAboveInputStack'
 import {
@@ -654,12 +655,13 @@ export function FloatingComposer({
     ...composerActions,
     BackgroundShellOverlay, BarChart3, Bot, FileText, FloatingComposerAboveInputStack, FloatingComposerAgentPicker, FloatingComposerAttachments, FloatingComposerContextCapacity, FloatingComposerExecutionPicker,
     FloatingComposerApprovalPanel,
+    FloatingComposerDispatchableAgents,
     FloatingComposerFileMentionMenu, FloatingComposerGraphProgress, FloatingComposerHarnessPicker, FloatingComposerIsolationPicker, FloatingComposerModelPicker, FloatingComposerQueuedMessages, FloatingComposerSlashCommandMenu, FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker, FloatingComposerTodoProgress, FloatingComposerUsageHistory, FloatingComposerUserInputPanel, FloatingComposerWorkersPill,
     FloatingComposerActionMenu,
     Folder, GitBranchPicker, ImagePlus, ListTodo, Loader2, Mic, Monitor, Paperclip,
     PauseCircle, Pencil, PlayCircle, Plus, Puzzle, Send, Share2, Sparkles,
-    Square, Target, Trash2, TypeIcon, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThreadGoal,
-    activeThreadId, activeThreadTodos, adeComposer, adeComposerEnabled, attachmentUploadBusy, attachmentUploadEnabled, attachmentUploadError, attachments, busy, canChangeModel,
+    Square, Target, Trash2, TypeIcon, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThread,
+    activeThreadGoal, activeThreadId, activeThreadTodos, adeComposer, adeComposerEnabled, attachmentUploadBusy, attachmentUploadEnabled, attachmentUploadError, attachments, busy, canChangeModel,
     canCompose, canEditComposer, canOpenComposerMenu, canOpenGoalPanel, canOptimizePrompt, canPickAttachment, canPickDesignReference, canPickFileReference,
     canPickLocalFileReference, canSetGoalPanelDraft, canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode, canToggleWorktreeMode, clearActiveThreadGoal, compact, composerFastMode,
     composerMenuButtonRef, composerMenuOpen, composerMenuPanelRef, composerShellRef, composerModel, composerModelGroups: adeComposer.modelGroups ?? composerModelGroups, composerPickList: adeComposer.pickList ?? composerPickList, composerProviderId, composerReasoningEffort,
