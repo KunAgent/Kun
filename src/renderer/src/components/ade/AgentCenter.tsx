@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement } from 'react'
+import { useTranslation } from 'react-i18next'
 import type {
   KunHarnessSettingsV1,
   KunRuntimeSettingsV1
@@ -8,8 +9,6 @@ import { loadHarnesses, useHarnessStore } from '../../store/harness-store'
 import { SettingsCard } from '../settings-controls'
 import { AgentCenterCard } from './AgentCenterCard'
 import { AgentCenterCustomForm } from './agent-center-custom-form'
-
-type T = (key: string, options?: Record<string, unknown>) => string
 
 export function harnessSettings(kun: KunRuntimeSettingsV1): KunHarnessSettingsV1 {
   return kun.harnesses ?? {
@@ -30,16 +29,19 @@ export function harnessSettings(kun: KunRuntimeSettingsV1): KunHarnessSettingsV1
  * from Settings → Agents → Agent harness so the two surfaces stay identical.
  */
 export function AgentCenter({
-  t,
   kun,
   updateKun,
   onSetupCommand
 }: {
-  t: T
   kun: KunRuntimeSettingsV1
   updateKun: (patch: { harnesses?: Partial<KunHarnessSettingsV1> }) => void
-  onSetupCommand?: (harnessId: string, command: string) => void
+  onSetupCommand?: (harnessId: string, command: string, title: string) => void
 }): ReactElement {
+  // This surface mixes namespaces: adeAgent*/adeHarness*/adeCredential.*
+  // live in `common`, the legacy adeSettings.* strings in `settings`. Both
+  // are resolved locally so callers can never feed the wrong `t`.
+  const { t } = useTranslation('common')
+  const { t: tSettings } = useTranslation('settings')
   const rows = useHarnessStore((state) => state.rows)
   const rowsLoading = useHarnessStore((state) => state.rowsLoading)
   const rowsError = useHarnessStore((state) => state.rowsError)
@@ -85,7 +87,7 @@ export function AgentCenter({
           </div>
         ) : null}
         {ordered.length === 0 && !rowsLoading ? (
-          <div className="px-1 py-3 text-[13px] text-ds-faint">{t('adeSettings.harnessesEmpty')}</div>
+          <div className="px-1 py-3 text-[13px] text-ds-faint">{tSettings('adeSettings.harnessesEmpty')}</div>
         ) : (
           ordered.map((row) => {
             const id = row.definition.id
@@ -97,6 +99,7 @@ export function AgentCenter({
                 probing={probingId === id}
                 platform={typeof window === 'undefined' ? 'darwin' : (window.kunGui?.platform ?? 'darwin')}
                 t={t}
+                tSettings={tSettings}
                 onToggleEnabled={(enabled) => patchHarness({
                   disabledIds: enabled
                     ? settings.disabledIds.filter((entry) => entry !== id)
@@ -124,9 +127,9 @@ export function AgentCenter({
           })
         )}
       </SettingsCard>
-      <SettingsCard title={t('adeSettings.acpTitle')}>
-        <div className="pb-2 text-[12px] text-ds-faint">{t('adeSettings.acpDesc')}</div>
-        <AgentCenterCustomForm settings={settings} updateKun={updateKun} t={t} />
+      <SettingsCard title={tSettings('adeSettings.acpTitle')}>
+        <div className="pb-2 text-[12px] text-ds-faint">{tSettings('adeSettings.acpDesc')}</div>
+        <AgentCenterCustomForm settings={settings} updateKun={updateKun} t={tSettings} />
       </SettingsCard>
     </div>
   )

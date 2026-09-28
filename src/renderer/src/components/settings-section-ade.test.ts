@@ -14,6 +14,15 @@ import type { ReactTestInstance } from 'react-test-renderer'
 const t = (key: string, options?: Record<string, unknown>): string =>
   options ? `${key}(${JSON.stringify(options)})` : key
 
+// AgentsHarnessesSettingsPanel resolves ADE labels via its own
+// useTranslation(['common','settings']); keep the echo-key stub.
+vi.mock('react-i18next', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-i18next')>()
+  const echo = (key: string, options?: Record<string, unknown>): string =>
+    options ? `${key}(${JSON.stringify(options)})` : key
+  return { ...actual, useTranslation: () => ({ t: echo }) }
+})
+
 function instanceText(instance: ReactTestInstance): string {
   return instance.children
     .map((child) => (typeof child === 'string' ? child : instanceText(child)))

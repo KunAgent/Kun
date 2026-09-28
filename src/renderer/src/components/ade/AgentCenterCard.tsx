@@ -24,7 +24,12 @@ const TRANSPORT_LABEL_KEY: Record<string, string> = {
 
 type T = (key: string, options?: Record<string, unknown>) => string
 
-function statusLine(model: AgentCardModel, status: AdeHarnessRow['status'], t: T): string {
+function statusLine(
+  model: AgentCardModel,
+  status: AdeHarnessRow['status'],
+  t: T,
+  tSettings: T
+): string {
   if (model.state === 'detecting') return t('adeHarnessUnavailable.detecting')
   const code = model.reasonCode
   if (code) {
@@ -33,13 +38,13 @@ function statusLine(model: AgentCardModel, status: AdeHarnessRow['status'], t: T
   }
   switch (status.login) {
     case 'signed-in':
-      return t('adeSettings.harnessLoginSignedIn')
+      return tSettings('adeSettings.harnessLoginSignedIn')
     case 'signed-out':
-      return t('adeSettings.harnessLoginSignedOut')
+      return tSettings('adeSettings.harnessLoginSignedOut')
     case 'not-required':
-      return t('adeSettings.harnessLoginNotRequired')
+      return tSettings('adeSettings.harnessLoginNotRequired')
     default:
-      return t('adeSettings.harnessLoginUnknown')
+      return tSettings('adeSettings.harnessLoginUnknown')
   }
 }
 
@@ -55,6 +60,7 @@ export function AgentCenterCard({
   probing,
   platform,
   t,
+  tSettings,
   onToggleEnabled,
   onProbe,
   onSetDefault,
@@ -67,14 +73,17 @@ export function AgentCenterCard({
   settings: KunHarnessSettingsV1
   probing: boolean
   platform: string
+  /** common-ns translator: adeAgent/adeHarness/adeCredential keys. */
   t: T
+  /** settings-ns translator: the legacy adeSettings.* keys. */
+  tSettings: T
   onToggleEnabled: (enabled: boolean) => void
   onProbe: () => void
   onSetDefault: () => void
   onRemoveCustom?: () => void
   onSetBinaryPath: (path: string) => void
   onSetPermissionMode: (modeId: string) => void
-  onSetupCommand?: (harnessId: string, command: string) => void
+  onSetupCommand?: (harnessId: string, command: string, title: string) => void
 }): ReactElement {
   const { definition, status } = row
   const isKun = definition.id === 'kun'
@@ -95,7 +104,7 @@ export function AgentCenterCard({
     switch (action.kind) {
       case 'command':
         if (onSetupCommand) {
-          onSetupCommand(definition.id, action.command)
+          onSetupCommand(definition.id, action.command, definition.displayName)
         } else {
           void navigator.clipboard?.writeText(action.command).then(() => {
             setCopied(true)
@@ -177,7 +186,7 @@ export function AgentCenterCard({
             {model.state === 'detecting' ? (
               <RefreshCw className="h-3 w-3 shrink-0 animate-spin" strokeWidth={1.8} />
             ) : null}
-            <span className="truncate">{statusLine(model, status, t)}</span>
+            <span className="truncate">{statusLine(model, status, t, tSettings)}</span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1">
             {definition.credentialModes.map((mode) => (
@@ -199,7 +208,7 @@ export function AgentCenterCard({
           {!isKun ? (
             <Toggle
               checked={enabled}
-              ariaLabel={`${definition.displayName} ${t('adeSettings.harnessEnabled')}`}
+              ariaLabel={`${definition.displayName} ${tSettings('adeSettings.harnessEnabled')}`}
               onChange={onToggleEnabled}
             />
           ) : null}
@@ -246,8 +255,8 @@ export function AgentCenterCard({
       {pathOpen ? (
         <div className="mt-2 space-y-3">
           <SettingRow
-            title={t('adeSettings.harnessCommandPath')}
-            description={status.resolvedCommand || t('adeSettings.harnessCommandPathDesc')}
+            title={tSettings('adeSettings.harnessCommandPath')}
+            description={status.resolvedCommand || tSettings('adeSettings.harnessCommandPathDesc')}
             control={
               <input
                 className="w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 font-mono text-[12px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none"
@@ -260,15 +269,15 @@ export function AgentCenterCard({
           />
           {definition.permissionModes.length ? (
             <SettingRow
-              title={t('adeSettings.harnessPermissionMode')}
-              description={t('adeSettings.harnessPermissionModeDesc')}
+              title={tSettings('adeSettings.harnessPermissionMode')}
+              description={tSettings('adeSettings.harnessPermissionModeDesc')}
               control={
                 <select
                   className="w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none"
                   value={settings.defaultPermissionMode[definition.id] ?? ''}
                   onChange={(event) => onSetPermissionMode(event.target.value)}
                 >
-                  <option value="">{t('adeSettings.harnessPermissionModeDefault')}</option>
+                  <option value="">{tSettings('adeSettings.harnessPermissionModeDefault')}</option>
                   {definition.permissionModes.map((mode) => (
                     <option key={mode.id} value={mode.id}>
                       {mode.label}
@@ -287,7 +296,7 @@ export function AgentCenterCard({
           onClick={onRemoveCustom}
           className="mt-2 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-medium text-red-600 transition hover:bg-red-500/10"
         >
-          {t('adeSettings.harnessRemoveCustom')}
+          {tSettings('adeSettings.harnessRemoveCustom')}
         </button>
       ) : null}
     </div>
