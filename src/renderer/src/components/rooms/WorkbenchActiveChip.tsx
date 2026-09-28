@@ -38,7 +38,7 @@ export function WorkbenchActiveChip({ roomId }: { roomId: string }) {
         const target = workbenchOpenTarget(link)
         return <li key={link.id} data-status={link.status}>
           <strong title={link.request.title}>{link.request.title}</strong>
-          <span>{t(`roomsWorkbenchStatus_${link.status}`)}</span>
+          <span>{t(`roomsWorkbenchStatus_${link.status}`)}{link.scheduledFor ? ` · ${new Date(link.scheduledFor).toLocaleString()}` : ''}</span>
           {target ? <button type="button" onClick={() => { close(); void openWorkbenchLinkTarget(link) }}>
             {t(target === 'code' ? 'roomsWorkbenchOpenCode' : target === 'board' ? 'roomsWorkbenchOpenBoard' : 'roomsWorkbenchOpenWork')}</button> : null}
         </li>

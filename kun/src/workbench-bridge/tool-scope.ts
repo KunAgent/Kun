@@ -100,7 +100,8 @@ export async function requestWorkbenchLink(scope: WorkbenchToolScope, input: {
       throw new Error('This turn already created the maximum number of tasks. Finish the turn and let the user review them.')
     }
   }
-  const auto = input.mode === 'auto' && scope.fresh
+  const auto = input.mode === 'auto' && scope.fresh && !input.request.schedule &&
+    !(input.request.execution?.mode === 'goal' && !input.request.execution.goalTokenBudget)
   if (!existing) {
     if (auto && await countActiveLinks(scope.store, scope.roomId, scope.agent.agentId) >= scope.agent.policy.maxActiveTasks) {
       throw new Error(`Too many tasks are already in progress (limit ${scope.agent.policy.maxActiveTasks}). Wait for one to finish.`)

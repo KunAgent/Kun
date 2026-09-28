@@ -227,11 +227,11 @@ exports[`room agent-visible surface registry > renders tool.cancel_reminder :: d
 
 exports[`room agent-visible surface registry > renders tool.commit_agent_setup :: default 1`] = `"Save the interviewed Agent identity. Call once when you have enough to write durable name, title, and standing instructions. This does not start other work."`;
 
-exports[`room agent-visible surface registry > renders tool.create_code_task :: default 1`] = `"Hand a coding task to Code. It becomes a normal Code session the user can open and take over. Supply the project path from list_code_projects, a clear goal and acceptance criteria. Unless the user's policy allows immediate start, a confirmation card is shown and nothing runs until they accept. End the turn after calling it; the outcome is delivered to you when the task ends."`;
+exports[`room agent-visible surface registry > renders tool.create_code_task :: default 1`] = `"Hand a coding task to Code. It becomes a normal Code session the user can open and take over. Supply the project path from list_code_projects, a clear goal and acceptance criteria. You may suggest executionMode (direct, plan, auto, goal), a goalTokenBudget, or a schedule; only the user chooses the model, persona and permissions on the card. Scheduled tasks and unbudgeted goals always require confirmation. Otherwise the user's policy decides whether a confirmation card is shown. End the turn after calling it; the outcome is delivered when the task ends."`;
 
 exports[`room agent-visible surface registry > renders tool.create_work_document :: default 1`] = `"Create a new document in a Work workspace (never overwrites). The user confirms on a card that previews the content unless their policy allows creating it directly."`;
 
-exports[`room agent-visible surface registry > renders tool.create_work_task :: default 1`] = `"Hand a writing, research or document task to Work's assistant, which can use Work-only tools such as paper search. The user confirms on a card unless their policy allows starting it directly; the outcome is delivered to you when it ends."`;
+exports[`room agent-visible surface registry > renders tool.create_work_task :: default 1`] = `"Hand a writing, research or document task to Work's assistant, which can use Work-only tools such as paper search. You may suggest a schedule; scheduled work always requires a confirmation card. Otherwise the user confirms unless their policy allows starting directly. The outcome is delivered when it ends."`;
 
 exports[`room agent-visible surface registry > renders tool.declare_room_checks :: default 1`] = `"Before executing verification, declare exact validation commands and their workspace. Results will be matched to actual tool executions."`;
 

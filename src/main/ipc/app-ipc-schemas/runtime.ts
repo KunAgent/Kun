@@ -69,8 +69,6 @@ import {
   KUN_SESSION_RESUME_TEMPLATE,
   KUN_SKILLS_TEMPLATE,
   KUN_THREAD_ACTIVITY_EVENTS_TEMPLATE,
-  KUN_ACTIVITY_TEMPLATE,
-  KUN_ACTIVITY_EVENTS_TEMPLATE,
   KUN_ACTIVITY_FOREGROUND_PATH,
   KUN_ACTIVITY_PATH,
   KUN_APPROVALS_PATH,
@@ -292,7 +290,8 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(ROOM_ENDPOINTS.workbenchLinks, ['GET']),
   compileEndpoint(ROOM_ENDPOINTS.workbenchWatch, ['POST']),
   compileEndpoint(ROOM_ENDPOINTS.workbenchLink, ['GET']),
-  ...['confirm', 'dismiss', 'cancel'].map((action) => compileEndpoint(ROOM_ENDPOINTS.workbenchLink + '/' + action, ['POST'])),
+  ...['confirm', 'dismiss', 'cancel', 'update', 'run-now', 'pause', 'resume', 'build', 'skip'].map((action) =>
+    compileEndpoint(ROOM_ENDPOINTS.workbenchLink + '/' + action, ['POST'])),
   compileEndpoint('/v1/workbench/directory', ['GET', 'PUT']),
   compileEndpoint('/v1/rooms/{roomId}/messages/{messageId}/run', ['GET']),
   compileEndpoint('/v1/rooms/{roomId}/runs', ['GET']),

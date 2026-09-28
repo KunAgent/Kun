@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { ThreadStore } from '../ports/thread-store.js'
 import { LocalToolHost, type LocalTool } from '../adapters/tool/local-tool-host.js'
 import { agentStableId } from '../agents/agent-identity-service.js'
-import { WORKBENCH_LIMITS, type WorkbenchLink } from '../contracts/workbench-links.js'
+import { WORKBENCH_LIMITS, WorkbenchScheduleSchema, type WorkbenchLink } from '../contracts/workbench-links.js'
 import { resolveThreadAgentSurface } from '../domain/thread.js'
 import { ROOM_AX_TOOL_DESCRIPTIONS } from '../rooms/room-ax-surfaces.js'
 import { WorkbenchBridge } from './bridge.js'
@@ -35,6 +35,9 @@ const CreateTaskInput = z.object({
   acceptance: z.string().trim().max(2000).optional(),
   projectRoot: z.string().min(1).max(4096),
   mode: z.enum(['agent', 'plan']).default('agent'),
+  executionMode: z.enum(['direct', 'plan', 'auto', 'goal']).optional(),
+  goalTokenBudget: z.number().int().positive().nullable().optional(),
+  schedule: WorkbenchScheduleSchema.optional(),
   isolation: z.enum(['inherit', 'worktree']).default('inherit'),
   report: z.enum(['final', 'silent']).default('final')
 }).strict()
@@ -131,9 +134,13 @@ export function workbenchCodeTools(threads: ThreadStore): LocalTool[] {
       if (!WorkbenchBridge.withinAgentLimits(scope.agent, root)) throw new Error('That project is outside this Agent\'s allowed directories')
       // A directory the user never used in Code always needs their explicit confirmation.
       const known = (await scope.bridge.knownCodeProjects({})).some((project) => project.path === root)
-      return requestWorkbenchLink(scope, { kind: 'code_task', surface: 'code', mode: known ? mode : 'confirm', request: {
+      return requestWorkbenchLink(scope, { kind: 'code_task', surface: 'code',
+        mode: !known || input.schedule || (input.executionMode === 'goal' && !input.goalTokenBudget) ? 'confirm' : mode, request: {
         title: input.title, goal: input.goal, ...(input.acceptance ? { acceptance: input.acceptance } : {}),
-        workspaceRoot: root, mode: input.mode, isolation: input.isolation, report: input.report } })
+        workspaceRoot: root, mode: input.mode, isolation: input.isolation, report: input.report,
+        ...(input.executionMode ? { execution: { mode: input.executionMode,
+          ...(input.goalTokenBudget ? { goalTokenBudget: input.goalTokenBudget } : {}) } } : {}),
+        ...(input.schedule ? { schedule: input.schedule } : {}) } })
     }, { needsToolCall: true }),
     define('get_code_task', LinkInput, async (scope, args) => {
       assertWorkbenchCapability(scope, 'code-read')

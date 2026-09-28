@@ -2,7 +2,8 @@ import { z } from 'zod'
 import type { RoomRuntime } from '../../rooms/room-runtime.js'
 import { RoomIdSchema } from '../../contracts/rooms.js'
 import { ResolveWorkbenchLinkSchema, WorkbenchDirectorySchema, WorkbenchLinkStatusSchema } from '../../contracts/workbench-links.js'
-import { confirmWorkbenchLink, dismissWorkbenchLink, requestWorkbenchCancel, watchWorkbenchThread } from '../../workbench-bridge/actions.js'
+import { buildWorkbenchPlan, confirmWorkbenchLink, dismissWorkbenchLink, requestWorkbenchCancel, runNowWorkbenchLink,
+  setSeriesPaused, skipMissedWorkbenchLink, updateScheduledWorkbenchLink, watchWorkbenchThread } from '../../workbench-bridge/actions.js'
 import { listWorkbenchLinks, readWorkbenchLink } from '../../workbench-bridge/link-store.js'
 import type { Router, RouteContext } from '../router.js'
 import { readJsonBody } from '../read-json-body.js'
@@ -42,6 +43,18 @@ export function registerWorkbenchLinkRoutes(add: Add): void {
     ({ link: await readWorkbenchLink(rooms.deps.store, params.roomId, RoomIdSchema.parse(params.linkId)) }))
   add('POST', '/v1/rooms/:roomId/workbench-links/:linkId/confirm', async (rooms, request, { params }) =>
     ({ link: await confirmWorkbenchLink(rooms.workbench, params.roomId, RoomIdSchema.parse(params.linkId), await body(request)) }))
+  add('POST', '/v1/rooms/:roomId/workbench-links/:linkId/update', async (rooms, request, { params }) =>
+    ({ link: await updateScheduledWorkbenchLink(rooms.workbench, params.roomId, RoomIdSchema.parse(params.linkId), await body(request)) }))
+  add('POST', '/v1/rooms/:roomId/workbench-links/:linkId/run-now', async (rooms, request, { params }) =>
+    ({ link: await runNowWorkbenchLink(rooms.workbench, params.roomId, RoomIdSchema.parse(params.linkId), await body(request)) }))
+  add('POST', '/v1/rooms/:roomId/workbench-links/:linkId/pause', async (rooms, request, { params }) =>
+    ({ link: await setSeriesPaused(rooms.workbench, params.roomId, RoomIdSchema.parse(params.linkId), await body(request), true) }))
+  add('POST', '/v1/rooms/:roomId/workbench-links/:linkId/resume', async (rooms, request, { params }) =>
+    ({ link: await setSeriesPaused(rooms.workbench, params.roomId, RoomIdSchema.parse(params.linkId), await body(request), false) }))
+  add('POST', '/v1/rooms/:roomId/workbench-links/:linkId/build', async (rooms, request, { params }) =>
+    ({ link: await buildWorkbenchPlan(rooms.workbench, params.roomId, RoomIdSchema.parse(params.linkId), await body(request)) }))
+  add('POST', '/v1/rooms/:roomId/workbench-links/:linkId/skip', async (rooms, request, { params }) =>
+    ({ link: await skipMissedWorkbenchLink(rooms.workbench, params.roomId, RoomIdSchema.parse(params.linkId), await body(request)) }))
   add('POST', '/v1/rooms/:roomId/workbench-links/:linkId/dismiss', async (rooms, request, { params }) =>
     ({ link: await dismissWorkbenchLink(rooms.workbench, params.roomId, RoomIdSchema.parse(params.linkId), await body(request)) }))
   add('POST', '/v1/rooms/:roomId/workbench-links/:linkId/cancel', async (rooms, request, { params }) => {

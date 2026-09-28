@@ -58,7 +58,7 @@ describe('Room workbench task card', () => {
     await act(async () => { button(renderer!, 'Start')!.props.onClick(); await Promise.resolve() })
     expect(mocks.client.confirm).toHaveBeenCalledTimes(1)
     expect(mocks.client.confirm.mock.calls[0][0]).toMatchObject({ id: 'link-1', revision: 0 })
-    expect(mocks.client.confirm.mock.calls[0][1]).toBeUndefined()
+    expect(mocks.client.confirm.mock.calls[0][1]).toMatchObject({ title: 'Fix SSE reconnect', execution: { mode: 'direct' } })
     expect(text(renderer!)).toContain('Starting')
   })
 
@@ -69,10 +69,25 @@ describe('Room workbench task card', () => {
     await act(async () => { button(renderer!, 'Edit first')!.props.onClick() })
     const goal = renderer!.root.findByType('textarea')
     await act(async () => { goal.props.onChange({ target: { value: 'Reconnect with backoff' } }) })
-    const checkbox = renderer!.root.findAllByType('input').find((input) => input.props.type === 'checkbox')!
-    await act(async () => { checkbox.props.onChange({ target: { checked: true } }) })
+    const location = renderer!.root.findAllByType('select').find((select) =>
+      select.findAllByType('option').some((option) => option.props.value === 'worktree'))!
+    await act(async () => { location.props.onChange({ target: { value: 'worktree' } }) })
     await act(async () => { button(renderer!, 'Start')!.props.onClick(); await Promise.resolve() })
-    expect(mocks.client.confirm.mock.calls[0][1]).toEqual({ title: 'Fix SSE reconnect', goal: 'Reconnect with backoff', isolation: 'worktree' })
+    expect(mocks.client.confirm.mock.calls[0][1]).toMatchObject({ title: 'Fix SSE reconnect', goal: 'Reconnect with backoff', isolation: 'worktree' })
+  })
+
+  it('confirms an automatic Code mode with a one-time schedule from the card', async () => {
+    mocks.client.get.mockResolvedValue(link())
+    mocks.client.confirm.mockResolvedValue(link({ status: 'scheduled', revision: 1 }))
+    await mount()
+    await act(async () => { button(renderer!, 'Edit first')!.props.onClick() })
+    const selects = renderer!.root.findAllByType('select')
+    const mode = selects.find((select) => select.findAllByType('option').some((option) => option.props.value === 'auto'))!
+    const schedule = selects.find((select) => select.findAllByType('option').some((option) => option.props.value === 'once'))!
+    await act(async () => { mode.props.onChange({ target: { value: 'auto' } }) })
+    await act(async () => { schedule.props.onChange({ target: { value: 'once' } }) })
+    await act(async () => { button(renderer!, 'Schedule')!.props.onClick(); await Promise.resolve() })
+    expect(mocks.client.confirm.mock.calls[0][1]).toMatchObject({ execution: { mode: 'auto' }, schedule: { kind: 'once' } })
   })
 
   it('can be dismissed, and surfaces a conflict from a stale card', async () => {

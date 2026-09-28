@@ -42,6 +42,13 @@ export function stubServices() {
         const next = { ...threads.get(id)!, ...patch }
         threads.set(id, next)
         return next
+      },
+      setGoal: async (id: string, request: { objective: string; tokenBudget?: number | null }) => {
+        const now = new Date().toISOString()
+        const goal = { threadId: id, objective: request.objective, status: 'active' as const,
+          tokenBudget: request.tokenBudget ?? null, tokensUsed: 0, timeUsedSeconds: 0, createdAt: now, updatedAt: now }
+        threads.get(id)!.goal = goal
+        return goal
       }
     },
     turns: {

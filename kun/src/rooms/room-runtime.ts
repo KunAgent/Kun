@@ -225,6 +225,7 @@ export class RoomRuntime {
     }
     try {
       if (await reconcileWorkbench(this.workbench)) outcome.active = true
+      if (this.workbench.nextWakeAt !== undefined) outcome.nextWakeAt = Math.min(outcome.nextWakeAt ?? Infinity, this.workbench.nextWakeAt)
     } catch (error) {
       console.warn('[kun] workbench bridge:', error instanceof Error ? error.message : String(error))
       outcome.active = true

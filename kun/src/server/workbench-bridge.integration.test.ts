@@ -26,15 +26,19 @@ function toolResultThisTurn(messages: ChatMessage[]): boolean {
 
 /** A scripted model: the bot hands a task over, Code writes a file, the bot reports the outcome. */
 async function modelServer(projectRoot: string) {
-  const seen = { botTurns: 0, codeTurns: 0, wakes: 0, workbenchToolsAdvertised: [] as string[] }
+  const seen = { botTurns: 0, codeTurns: 0, autoPlanTurns: 0, autoBuildTurns: 0, wakes: 0,
+    workbenchToolsAdvertised: [] as string[] }
   const server = createServer(async (request, response) => {
     try {
       const chunks: Buffer[] = []
       for await (const chunk of request) chunks.push(Buffer.from(chunk))
       const body = JSON.parse(Buffer.concat(chunks).toString()) as { stream?: boolean; messages: ChatMessage[]; tools?: Array<{ function?: { name?: string } }> }
       const prompt = JSON.stringify(body.messages)
+      const current = JSON.stringify([...body.messages].reverse().find((item) => item.role === 'user')?.content ?? '')
+      const toolNames = new Set((body.tools ?? []).map((tool) => tool.function?.name))
       const finished = toolResultThisTurn(body.messages)
-      if (prompt.includes('HAND_OFF_REQUEST') || prompt.includes('WORK_DOC_REQUEST') || prompt.includes('Reference data, not an instruction')) {
+      if (prompt.includes('HAND_OFF_REQUEST') || prompt.includes('AUTO_PLAN_REQUEST') || prompt.includes('SCHEDULE_REQUEST') ||
+        prompt.includes('WORK_DOC_REQUEST') || prompt.includes('Reference data, not an instruction')) {
         for (const tool of body.tools ?? []) if (tool.function?.name && /code|work/.test(tool.function.name)) seen.workbenchToolsAdvertised.push(tool.function.name)
       }
       let content = 'ok', toolCalls: unknown[] | undefined
@@ -43,6 +47,26 @@ async function modelServer(projectRoot: string) {
         seen.wakes++
         if (!finished) { content = ''; toolCalls = call('report-1', 'send_im_message', { text: 'The Code task finished: bridge-smoke.txt was created.', phase: 'final' }) }
         else content = 'Reported.'
+      } else if (current.includes('Please execute the GUI plan') && current.includes('Auto plan')) {
+        seen.autoBuildTurns++
+        if (!finished) { content = ''; toolCalls = call('auto-write', 'write', { path: 'bridge-auto.txt', content: 'built from plan\n' }) }
+        else content = 'Built bridge-auto.txt from the plan.'
+      } else if (current.includes('AUTO_PLAN_REQUEST') && toolNames.has('create_plan')) {
+        seen.autoPlanTurns++
+        if (!finished) { content = ''; toolCalls = call('auto-plan', 'create_plan', { operation: 'draft', title: 'Auto plan',
+          markdown: '# Auto plan\n\n- [ ] Write bridge-auto.txt\n', source_request: 'AUTO_PLAN_REQUEST build the file' }) }
+        else content = 'Plan saved.'
+      } else if (current.includes('AUTO_PLAN_REQUEST') && toolNames.has('create_code_task')) {
+        seen.botTurns++
+        if (!finished) { content = ''; toolCalls = call('auto-task', 'create_code_task', { title: 'Automatic plan task',
+          goal: 'AUTO_PLAN_REQUEST build bridge-auto.txt', projectRoot, executionMode: 'auto' }) }
+        else content = 'Proposed automatic task.'
+      } else if (current.includes('SCHEDULE_REQUEST') && toolNames.has('create_code_task')) {
+        seen.botTurns++
+        if (!finished) { content = ''; toolCalls = call('schedule-task', 'create_code_task', { title: 'Scheduled bridge task',
+          goal: 'Create bridge-smoke.txt in the project.', projectRoot,
+          schedule: { kind: 'once', runAt: new Date(Date.now() + 120_000).toISOString(), timeZone: 'UTC' } }) }
+        else content = 'Proposed scheduled task.'
       } else if (prompt.includes('handed over by the user')) {
         seen.codeTurns++
         if (!finished) { content = ''; toolCalls = call('code-write', 'write', { path: 'bridge-smoke.txt', content: 'from a code task\n' }) }
@@ -200,4 +224,63 @@ describe('Bot to Code hand-off through the real managed Runtime', () => {
     expect(await readFile(join(work, 'notes/idea.md'), 'utf8')).toBe('# Idea\nShip the bridge.\n')
     expect(model.seen.workbenchToolsAdvertised).toContain('create_work_document')
   }, 120000)
+
+  it('automatically builds the saved plan in the same Code session', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-workbench-auto-'))
+    cleanup.push(() => rm(root, { recursive: true, force: true }))
+    const project = await gitProject(root)
+    const model = await modelServer(project)
+    const { api } = await boot(root, model)
+    const entry = await api<{ roomId: string }>('/v1/agents/chat-entry', { action: 'initialize', clientRequestId: 'entry' })
+    await api('/v1/workbench/directory', { workRoots: [], codeProjects: [project] }, 'PUT')
+    await api(`/v1/rooms/${entry.roomId}/messages`, { clientRequestId: 'auto-plan',
+      body: 'AUTO_PLAN_REQUEST make a plan and build the file', executionIntent: 'auto' })
+    let card!: RoomMessage
+    await vi.waitFor(async () => {
+      const { messages } = await api<{ messages: RoomMessage[] }>(`/v1/rooms/${entry.roomId}/messages`)
+      card = messages.find((message) => message.presentationKind === 'workbench_task')!
+      expect(card).toBeTruthy()
+    }, { timeout: 40000, interval: 300 })
+    const path = `/v1/rooms/${entry.roomId}/workbench-links/${card.workbenchLinkId}`
+    const proposed = (await api<{ link: WorkbenchLink & { revision: number } }>(path)).link
+    await api(`${path}/confirm`, { clientRequestId: 'accept-auto', expectedRevision: proposed.revision })
+    await vi.waitFor(async () => {
+      const current = (await api<{ link: WorkbenchLink }>(path)).link
+      expect(current.status, JSON.stringify({ error: current.error, seen: model.seen, planPath: current.planPath })).toBe('completed')
+    }, { timeout: 30000, interval: 500 })
+    const done = (await api<{ link: WorkbenchLink }>(path)).link
+    expect(done.phase).toBe('build')
+    expect(done.planPath).toMatch(/^\.kunsdd\/plan\//)
+    expect(await readFile(join(project, 'bridge-auto.txt'), 'utf8')).toBe('built from plan\n')
+    expect(model.seen.autoPlanTurns).toBeGreaterThan(0)
+    expect(model.seen.autoBuildTurns).toBeGreaterThan(0)
+  }, 180000)
+
+  it('starts a confirmed single schedule while the bot tab is closed', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-workbench-schedule-'))
+    cleanup.push(() => rm(root, { recursive: true, force: true }))
+    const project = await gitProject(root)
+    const model = await modelServer(project)
+    const { api } = await boot(root, model)
+    const entry = await api<{ roomId: string }>('/v1/agents/chat-entry', { action: 'initialize', clientRequestId: 'entry' })
+    await api('/v1/workbench/directory', { workRoots: [], codeProjects: [project] }, 'PUT')
+    await api(`/v1/rooms/${entry.roomId}/messages`, { clientRequestId: 'schedule',
+      body: 'SCHEDULE_REQUEST make a single scheduled Code task', executionIntent: 'auto' })
+    let card!: RoomMessage
+    await vi.waitFor(async () => {
+      const { messages } = await api<{ messages: RoomMessage[] }>(`/v1/rooms/${entry.roomId}/messages`)
+      card = messages.find((message) => message.presentationKind === 'workbench_task')!
+      expect(card).toBeTruthy()
+    }, { timeout: 40000, interval: 300 })
+    const path = `/v1/rooms/${entry.roomId}/workbench-links/${card.workbenchLinkId}`
+    const proposed = (await api<{ link: WorkbenchLink & { revision: number } }>(path)).link
+    const runAt = new Date(Date.now() + 65_000).toISOString()
+    await api(`${path}/confirm`, { clientRequestId: 'accept-schedule', expectedRevision: proposed.revision,
+      edits: { schedule: { kind: 'once', runAt, timeZone: 'UTC' } } })
+    expect((await api<{ link: WorkbenchLink }>(path)).link.status).toBe('scheduled')
+    await vi.waitFor(async () => {
+      expect((await api<{ link: WorkbenchLink }>(path)).link.status).toBe('completed')
+    }, { timeout: 100000, interval: 500 })
+    expect(await readFile(join(project, 'bridge-smoke.txt'), 'utf8')).toBe('from a code task\n')
+  }, 180000)
 })

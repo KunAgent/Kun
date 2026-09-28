@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { ParticipantAgentId } from './agent-identities.js'
 import { RoomIdSchema } from './rooms.js'
+import { TurnReasoningEffortSchema, TurnServiceTierSchema } from './turns.js'
+import { HarnessIdSchema, HarnessCredentialModeSchema } from './harness.js'
 
 const Timestamp = z.string().datetime({ offset: true })
 const ThreadId = z.string().min(1).max(256)
@@ -14,19 +16,21 @@ export const WORKBENCH_LIMITS = {
   maxChangedFiles: 50,
   maxSearchResults: 20,
   maxThreadReadChars: 6_000,
-  maxDocumentPageChars: 12_000
+  maxDocumentPageChars: 12_000,
+  maxScheduledPerAgent: 20,
+  maxSeriesPerAgent: 5
 } as const
 
-export const WorkbenchLinkKindSchema = z.enum(['code_task', 'work_task', 'work_document', 'work_edit', 'board_card', 'watch'])
+export const WorkbenchLinkKindSchema = z.enum(['code_task', 'work_task', 'work_document', 'work_edit', 'board_card', 'watch', 'schedule_series'])
 export const WorkbenchLinkSurfaceSchema = z.enum(['code', 'work'])
 export const WorkbenchLinkStatusSchema = z.enum([
   'awaiting_confirmation', 'queued', 'running', 'needs_attention',
-  'completed', 'failed', 'cancelled', 'dismissed', 'recovery_required'
+  'completed', 'failed', 'cancelled', 'dismissed', 'recovery_required', 'scheduled', 'missed', 'plan_ready', 'active', 'paused', 'ended'
 ])
 export type WorkbenchLinkKind = z.infer<typeof WorkbenchLinkKindSchema>
 export type WorkbenchLinkStatus = z.infer<typeof WorkbenchLinkStatusSchema>
 
-export const WORKBENCH_TERMINAL_STATUSES: readonly WorkbenchLinkStatus[] = ['completed', 'failed', 'cancelled', 'dismissed']
+export const WORKBENCH_TERMINAL_STATUSES: readonly WorkbenchLinkStatus[] = ['completed', 'failed', 'cancelled', 'dismissed', 'ended']
 export const WORKBENCH_ACTIVE_STATUSES: readonly WorkbenchLinkStatus[] = ['queued', 'running', 'needs_attention', 'recovery_required']
 export const isWorkbenchTerminal = (status: WorkbenchLinkStatus) => WORKBENCH_TERMINAL_STATUSES.includes(status)
 
@@ -42,6 +46,31 @@ export const WorkbenchEditSchema = z.object({
 }).strict()
 export type WorkbenchEdit = z.infer<typeof WorkbenchEditSchema>
 
+export const WorkbenchExecutionSchema = z.object({
+  mode: z.enum(['direct', 'plan', 'auto', 'goal']),
+  goalTokenBudget: z.number().int().positive().nullable().optional(),
+  model: z.object({
+    providerId: z.string().min(1).max(128), model: z.string().min(1).max(512),
+    accountId: z.string().min(1).max(128).optional(), harnessId: HarnessIdSchema.optional(),
+    credentialMode: HarnessCredentialModeSchema.optional(),
+    reasoningEffort: TurnReasoningEffortSchema.optional(), serviceTier: TurnServiceTierSchema.optional()
+  }).strict().optional(),
+  persona: z.object({ id: z.string().max(128), name: z.string().max(160), text: z.string().max(2000) }).strict().optional(),
+  permission: z.enum(['ask-for-approval', 'approve-for-me', 'full-access']).optional(),
+  orchestration: z.enum(['direct', 'graph']).optional()
+}).strict()
+export type WorkbenchExecution = z.infer<typeof WorkbenchExecutionSchema>
+
+export const WorkbenchScheduleSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('once'), runAt: Timestamp, timeZone: z.string().min(1).max(100) }).strict(),
+  z.object({ kind: z.literal('recurring'), every: z.enum(['day', 'weekday', 'week']),
+    weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7).optional(),
+    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), timeZone: z.string().min(1).max(100),
+    endsAt: Timestamp.optional(), maxRuns: z.number().int().min(1).max(1000).optional()
+  }).strict()
+])
+export type WorkbenchSchedule = z.infer<typeof WorkbenchScheduleSchema>
+
 export const WorkbenchRequestSchema = z.object({
   title: z.string().trim().min(1).max(160),
   goal: z.string().trim().max(8000).default(''),
@@ -53,7 +82,9 @@ export const WorkbenchRequestSchema = z.object({
   mode: z.enum(['agent', 'plan']).default('agent'),
   isolation: z.enum(['inherit', 'worktree']).default('inherit'),
   /** `silent` updates the card only; `final` also wakes the Agent with the outcome. */
-  report: z.enum(['final', 'silent']).default('final'),
+  report: z.enum(['final', 'silent', 'failure']).default('final'),
+  execution: WorkbenchExecutionSchema.optional(),
+  schedule: WorkbenchScheduleSchema.optional(),
   /** New document body, or the complete proposed content of an edit. */
   content: z.string().max(WORKBENCH_LIMITS.maxContentBytes).optional(),
   /** Hash of the document the edit was written against. */
@@ -90,7 +121,8 @@ export const WorkbenchOriginSchema = z.discriminatedUnion('kind', [
     /** True when the run answers a fresh user message, the only trigger `auto` may act on. */
     fresh: z.boolean()
   }).strict(),
-  z.object({ kind: z.literal('user'), action: z.enum(['watch', 'send_to_bot']) }).strict()
+  z.object({ kind: z.literal('user'), action: z.enum(['watch', 'send_to_bot']) }).strict(),
+  z.object({ kind: z.literal('series'), seriesId: RoomIdSchema, occurrence: z.number().int().positive() }).strict()
 ])
 
 export const WorkbenchLinkSchema = z.object({
@@ -121,6 +153,15 @@ export const WorkbenchLinkSchema = z.object({
   cancelRequested: z.boolean().optional(),
   /** Isolated worktree this task waits for or runs in. */
   taskWorkspaceId: z.string().min(1).max(256).optional(),
+  scheduledFor: Timestamp.optional(),
+  phase: z.enum(['plan', 'build']).optional(),
+  planPath: z.string().max(4096).optional(),
+  goal: z.object({ status: z.string(), tokensUsed: z.number().int().nonnegative(),
+    tokenBudget: z.number().int().positive().nullable().optional(), timeUsedSeconds: z.number().int().nonnegative() }).strict().optional(),
+  seriesId: RoomIdSchema.optional(),
+  occurrence: z.number().int().positive().optional(),
+  runCount: z.number().int().nonnegative().optional(),
+  recentRunIds: z.array(RoomIdSchema).max(50).optional(),
   /** The outcome wake was queued (or deliberately skipped) exactly once. */
   reported: z.boolean().optional(),
   error: z.string().max(2000).optional(),
@@ -143,7 +184,9 @@ export const ConfirmWorkbenchLinkSchema = z.object({
     acceptance: z.string().trim().max(2000).optional(),
     mode: z.enum(['agent', 'plan']).optional(),
     isolation: z.enum(['inherit', 'worktree']).optional(),
-    report: z.enum(['final', 'silent']).optional()
+    report: z.enum(['final', 'silent', 'failure']).optional(),
+    execution: WorkbenchExecutionSchema.optional(),
+    schedule: WorkbenchScheduleSchema.optional()
   }).strict().optional()
 }).strict()
 export type ConfirmWorkbenchLink = z.infer<typeof ConfirmWorkbenchLinkSchema>
