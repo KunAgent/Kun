@@ -67,6 +67,16 @@ export function AgentCenter({
     }
   }
 
+  // P4-10: `POST /v1/harnesses/:id/test` — a finished test may have moved
+  // the cached status (e.g. a completed login), so the list reloads after.
+  const test = async (harnessId: string, level: 'handshake' | 'trial') => {
+    const testHarness = getProvider().testHarness
+    if (!testHarness) throw new Error('harness test is not available')
+    const result = await testHarness(harnessId, { level })
+    await loadHarnesses(true)
+    return result
+  }
+
   const ordered = [...rows].sort((a, b) => {
     const order = settings.agentOrder
     const ai = order.indexOf(a.definition.id)
@@ -122,6 +132,7 @@ export function AgentCenter({
                   patchHarness({ defaultPermissionMode })
                 }}
                 onSetupCommand={onSetupCommand}
+                onTest={(level) => test(id, level)}
               />
             )
           })

@@ -291,7 +291,8 @@
     "setDefault": "设为默认",
     "isDefault": "默认",
     "specifyPath": "指定命令路径",
-    "docs": "文档"
+    "docs": "文档",
+    "trial": "试运行一轮"
   },
   "adeAgentTransport": {
     "nativeLoop": "Kun",
@@ -300,5 +301,14 @@
     "antigravityCli": "CLI",
     "acp": "ACP",
     "terminal": "终端"
+  },
+  "adeAgentTest": {
+    "detect": "检测",
+    "handshake": "握手",
+    "trial": "试运行",
+    "tokens": "消耗 {{count}} tokens",
+    "noHandshake": "该传输无握手协议",
+    "capSessionResume": "会话恢复",
+    "capImageInput": "图片输入"
   }
 }

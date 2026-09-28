@@ -1,7 +1,10 @@
 import { jsonResponse, type JsonResponse } from '../response.js'
+import { readJsonBody } from '../read-json-body.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { HarnessIdSchema, type HarnessStatus } from '../../contracts/harness.js'
+import { HarnessTestRequestSchema } from '../../contracts/harness-test.js'
+import { runHarnessTest } from '../../services/harness-test-service.js'
 import { exposableProvider, providerModelIds } from './model-gateway-core.js'
 import { legacyProviderKindFor } from '../../harness/harness-provider-kind.js'
 
@@ -104,6 +107,38 @@ export async function probeHarness(
   if (!definition) return ERRORS.notFound(`unknown harness: ${parsedId.data}`)
   const status = await harnesses.detector.status(definition.id, { force: true })
   return jsonResponse({ definition, status })
+}
+
+/**
+ * `POST /v1/harnesses/:id/test` (docs/ade/impl/p4 §3.5, P4-10): progressive
+ * detect → handshake → trial checks; the trial runs on a side thread that
+ * never appears in conversation lists and is deleted afterwards.
+ */
+export async function testHarness(
+  runtime: ServerRuntime,
+  request: Request,
+  params: Record<string, string>
+): Promise<JsonResponse> {
+  const harnesses = runtime.harnesses
+  if (!harnesses) return ERRORS.notFound('harness catalog is unavailable')
+  const parsedId = HarnessIdSchema.safeParse(params.id)
+  if (!parsedId.success) return ERRORS.validation('invalid harness id')
+  const definition = harnesses.catalog.get(parsedId.data)
+  if (!definition) return ERRORS.notFound(`unknown harness: ${parsedId.data}`)
+  const body = await readJsonBody(request)
+  if (!body.ok) return body.response
+  const parsed = HarnessTestRequestSchema.safeParse(body.value)
+  if (!parsed.success) return ERRORS.validation('invalid harness test body', parsed.error.issues)
+  if (
+    parsed.data.credentialMode &&
+    !definition.credentialModes.includes(parsed.data.credentialMode)
+  ) {
+    return ERRORS.validation(
+      `credentialMode ${parsed.data.credentialMode} is not supported by ${definition.id}`
+    )
+  }
+  const result = await runHarnessTest(runtime, definition, parsed.data)
+  return jsonResponse(result)
 }
 
 export async function listHarnessModels(

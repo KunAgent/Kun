@@ -40,6 +40,7 @@ import {
   KUN_HARNESSES_TEMPLATE,
   KUN_HARNESS_MODELS_TEMPLATE,
   KUN_HARNESS_PROBE_TEMPLATE,
+  KUN_HARNESS_TEST_TEMPLATE,
   KUN_ACTIVITY_TEMPLATE,
   KUN_ACTIVITY_EVENTS_TEMPLATE,
   KUN_ACTIVITY_FOREGROUND_TEMPLATE,
@@ -332,6 +333,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_HARNESSES_TEMPLATE, ['GET']),
   compileEndpoint(KUN_HARNESS_MODELS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_HARNESS_PROBE_TEMPLATE, ['POST']),
+  compileEndpoint(KUN_HARNESS_TEST_TEMPLATE, ['POST']),
   // ADE Mission Control attention feed + pending approvals (06 §9, P3-02).
   compileEndpoint(KUN_ACTIVITY_TEMPLATE, ['GET']),
   compileEndpoint(KUN_ACTIVITY_EVENTS_TEMPLATE, ['GET']),

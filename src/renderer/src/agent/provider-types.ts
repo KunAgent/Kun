@@ -332,6 +332,14 @@ export interface AgentProvider {
   probeHarness?(
     harnessId: string
   ): Promise<import('@shared/ade-harnesses').AdeHarnessRow>
+  /**
+   * Progressive connection test (p4 §3.5, P4-10): detect → handshake →
+   * optional trial turn. Trial consumes quota on the harness's credential.
+   */
+  testHarness?(
+    harnessId: string,
+    input: import('@shared/ade-harnesses').AdeHarnessTestRequest
+  ): Promise<import('@shared/ade-harnesses').AdeHarnessTestResult>
   /** Worker control: take-over / hand-back / stop / detach (09 §9). */
   controlTeamWorker?(
     workerId: string,

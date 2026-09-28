@@ -291,7 +291,8 @@
     "setDefault": "ตั้งเป็นค่าเริ่มต้น",
     "isDefault": "ค่าเริ่มต้น",
     "specifyPath": "ระบุพาธคำสั่ง",
-    "docs": "เอกสาร"
+    "docs": "เอกสาร",
+    "trial": "เรียกใช้เทิร์นทดลอง"
   },
   "adeAgentTransport": {
     "nativeLoop": "Kun",
@@ -300,5 +301,14 @@
     "antigravityCli": "CLI",
     "acp": "ACP",
     "terminal": "เทอร์มินัล"
+  },
+  "adeAgentTest": {
+    "detect": "ตรวจสอบ",
+    "handshake": "แฮนด์เชก",
+    "trial": "เทิร์นทดลอง",
+    "tokens": "ใช้ {{count}} โทเคน",
+    "noHandshake": "ไม่มีอินเทอร์เฟซแฮนด์เชก",
+    "capSessionResume": "กลับมาใช้เซสชัน",
+    "capImageInput": "ป้อนภาพ"
   }
 }

@@ -291,7 +291,8 @@
     "setDefault": "既定に設定",
     "isDefault": "既定",
     "specifyPath": "コマンドパスを指定",
-    "docs": "ドキュメント"
+    "docs": "ドキュメント",
+    "trial": "試行ターンを実行"
   },
   "adeAgentTransport": {
     "nativeLoop": "Kun",
@@ -300,5 +301,14 @@
     "antigravityCli": "CLI",
     "acp": "ACP",
     "terminal": "ターミナル"
+  },
+  "adeAgentTest": {
+    "detect": "検出",
+    "handshake": "ハンドシェイク",
+    "trial": "試行ターン",
+    "tokens": "{{count}} トークン使用",
+    "noHandshake": "ハンドシェイク面なし",
+    "capSessionResume": "セッション再開",
+    "capImageInput": "画像入力"
   }
 }

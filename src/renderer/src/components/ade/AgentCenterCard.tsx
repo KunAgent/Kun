@@ -1,6 +1,6 @@
 import { useState, type ReactElement } from 'react'
 import { ChevronDown, ExternalLink, RefreshCw, Terminal } from 'lucide-react'
-import type { AdeHarnessRow } from '@shared/ade-harnesses'
+import type { AdeHarnessRow, AdeHarnessTestResult } from '@shared/ade-harnesses'
 import type { KunHarnessSettingsV1 } from '@shared/app-settings'
 import {
   harnessUnavailableLabelKey,
@@ -67,7 +67,8 @@ export function AgentCenterCard({
   onRemoveCustom,
   onSetBinaryPath,
   onSetPermissionMode,
-  onSetupCommand
+  onSetupCommand,
+  onTest
 }: {
   row: AdeHarnessRow
   settings: KunHarnessSettingsV1
@@ -84,6 +85,12 @@ export function AgentCenterCard({
   onSetBinaryPath: (path: string) => void
   onSetPermissionMode: (modeId: string) => void
   onSetupCommand?: (harnessId: string, command: string, title: string) => void
+  /**
+   * P4-10: runs `POST /v1/harnesses/:id/test` at the requested depth.
+   * 'handshake' covers detect+handshake; 'trial' additionally runs one
+   * prompt through a real delegated turn (consumes the harness's quota).
+   */
+  onTest?: (level: 'handshake' | 'trial') => Promise<AdeHarnessTestResult>
 }): ReactElement {
   const { definition, status } = row
   const isKun = definition.id === 'kun'
@@ -92,16 +99,47 @@ export function AgentCenterCard({
   const [pathOpen, setPathOpen] = useState(false)
   const [reasonOpen, setReasonOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [testing, setTesting] = useState<false | 'handshake' | 'trial'>(false)
+  const [testResult, setTestResult] = useState<AdeHarnessTestResult | null>(null)
 
   const model = agentCardModel(row, {
     enabled,
     platform,
     isDefault: settings.defaultHarnessId === definition.id
   })
-  const busy = probing || model.state === 'detecting'
+  const busy = probing || testing !== false || model.state === 'detecting'
+
+  const runTest = async (level: 'handshake' | 'trial'): Promise<void> => {
+    if (!onTest) return
+    setTesting(level)
+    try {
+      setTestResult(await onTest(level))
+    } catch (error) {
+      setTestResult({
+        harnessId: definition.id,
+        transport: definition.transport,
+        level,
+        ok: false,
+        durationMs: 0,
+        detect: {
+          durationMs: 0,
+          ok: false,
+          status: {
+            ...status,
+            message: error instanceof Error ? error.message : String(error)
+          }
+        }
+      })
+    } finally {
+      setTesting(false)
+    }
+  }
 
   const runAction = (action: AgentCardAction): void => {
     switch (action.kind) {
+      case 'test':
+        void runTest('handshake')
+        break
       case 'command':
         if (onSetupCommand) {
           onSetupCommand(definition.id, action.command, definition.displayName)
@@ -155,8 +193,11 @@ export function AgentCenterCard({
       >
         {action.kind === 'command' ? <Terminal className="h-3.5 w-3.5" strokeWidth={1.8} /> : null}
         {action.kind === 'docs' ? <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.8} /> : null}
-        {action.kind === 'probe' ? (
-          <RefreshCw className={`h-3.5 w-3.5 ${probing ? 'animate-spin' : ''}`} strokeWidth={1.8} />
+        {action.kind === 'probe' || action.kind === 'test' ? (
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${probing || testing ? 'animate-spin' : ''}`}
+            strokeWidth={1.8}
+          />
         ) : null}
         {label}
       </button>
@@ -236,6 +277,14 @@ export function AgentCenterCard({
           ) : null}
         </div>
       ) : null}
+      {testResult ? (
+        <HarnessTestBlock
+          result={testResult}
+          busy={testing !== false}
+          t={t}
+          onTrial={onTest ? () => void runTest('trial') : undefined}
+        />
+      ) : null}
       {setupNote ? (
         <div className="mt-1 text-[11px] text-ds-faint">{setupNote}</div>
       ) : null}
@@ -299,6 +348,111 @@ export function AgentCenterCard({
           {tSettings('adeSettings.harnessRemoveCustom')}
         </button>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * P4-10 result block: one row per executed level (detect → handshake →
+ * trial), each with its own duration. The trial button stays a separate
+ * click because a real turn consumes the harness's quota (p4 §3.5).
+ */
+function HarnessTestBlock({
+  result,
+  busy,
+  t,
+  onTrial
+}: {
+  result: AdeHarnessTestResult
+  busy: boolean
+  t: T
+  onTrial?: () => void
+}): ReactElement {
+  const detectDetail = [
+    result.detect.status.resolvedCommand,
+    result.detect.status.version
+  ].filter(Boolean).join(' · ')
+  const handshake = result.handshake
+  const handshakeDetail = handshake
+    ? [
+        handshake.agent ? [handshake.agent.name, handshake.agent.version].filter(Boolean).join(' ') : '',
+        handshake.capabilities
+          ? [
+              handshake.capabilities.sessionResume ? t('adeAgentTest.capSessionResume') : '',
+              handshake.capabilities.imageInput ? t('adeAgentTest.capImageInput') : '',
+              handshake.capabilities.mcpTransports?.length
+                ? `MCP: ${handshake.capabilities.mcpTransports.join(', ')}`
+                : ''
+            ].filter(Boolean).join(' · ')
+          : '',
+        handshake.detail
+      ].filter(Boolean).join(' · ')
+    : ''
+  const trial = result.trial
+  return (
+    <div
+      className="mt-2 space-y-1 rounded-lg bg-ds-main/50 px-2.5 py-2 text-[11px] text-ds-muted"
+      data-test-result={result.harnessId}
+    >
+      <TestLevelRow
+        label={t('adeAgentTest.detect')}
+        ok={result.detect.ok}
+        durationMs={result.detect.durationMs}
+        detail={detectDetail || result.detect.status.message || ''}
+      />
+      {handshake ? (
+        <TestLevelRow
+          label={t('adeAgentTest.handshake')}
+          ok={handshake.ok}
+          durationMs={handshake.durationMs}
+          detail={handshake.supported ? handshakeDetail : t('adeAgentTest.noHandshake')}
+        />
+      ) : null}
+      {trial ? (
+        <TestLevelRow
+          label={t('adeAgentTest.trial')}
+          ok={trial.ok}
+          durationMs={trial.durationMs}
+          detail={[
+            trial.usage ? t('adeAgentTest.tokens', { count: trial.usage.totalTokens }) : '',
+            trial.error ?? ''
+          ].filter(Boolean).join(' · ')}
+        />
+      ) : null}
+      {result.level !== 'trial' && onTrial ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onTrial}
+          className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-ds-border-muted px-2.5 py-1 text-[11px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-45"
+        >
+          {busy ? <RefreshCw className="h-3 w-3 animate-spin" strokeWidth={1.8} /> : null}
+          {t('adeAgentAction.trial')}
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+function TestLevelRow({
+  label,
+  ok,
+  durationMs,
+  detail
+}: {
+  label: string
+  ok: boolean
+  durationMs: number
+  detail: string
+}): ReactElement {
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className={ok ? 'shrink-0 text-emerald-600 dark:text-emerald-400' : 'shrink-0 text-red-600 dark:text-red-400'}>
+        {ok ? '✓' : '✗'}
+      </span>
+      <span className="shrink-0 font-medium text-ds-muted">{label}</span>
+      <span className="shrink-0 text-ds-faint">{Math.round(durationMs)}ms</span>
+      {detail ? <span className="min-w-0 truncate text-ds-faint">{detail}</span> : null}
     </div>
   )
 }
