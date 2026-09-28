@@ -267,6 +267,7 @@ export abstract class AgentLoopBase {
       get turnLimits() { return opts.turnLimits },
       get finalAnswerOnlyStep() { return opts.finalAnswerOnlyStep },
       get graphHarnessSummary() { return opts.graphHarnessSummary },
+      get adeManagerContext() { return opts.adeManagerContext },
       modelRouting: this.modelRouting,
       budgetGate: this.budgetGate,
       goalTurns: this.goalTurns,

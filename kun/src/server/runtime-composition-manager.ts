@@ -5,6 +5,7 @@ import {
   type HarnessCapabilityStatuses
 } from '../contracts/harness-capabilities.js'
 import type { ManagerRuntimeDeps } from '../ade/manager-runtime.js'
+import { createManagerToolProvider } from '../adapters/tool/manager-tool-provider.js'
 import { ManagerRuntime } from '../ade/manager-runtime.js'
 import { ActivityHibernation } from '../services/activity-hibernation.js'
 import { createQuotaSnapshot } from '../ade/quota-snapshot.js'
@@ -255,4 +256,38 @@ export function wireAttributionObserver(
     dispatches: services.adeStores.dispatches,
     nowIso
   }))
+}
+
+/** ADE manager tool surface + workspace review wiring (09 §4, 10 §6). */
+export function registerAdeManagerTooling(input: {
+  registry: { registerProvider(provider: unknown): void }
+  managerRuntime: ManagerRuntime
+  services: RuntimeServices
+  harnessRuntimeMap: HarnessRuntimeMap
+  delegationRuntime?: DelegationRuntime
+  providerPool: {
+    providers: HarnessListDeps['providers']
+  }
+  core: RuntimeServices['model']['core']
+}): void {
+  input.registry.registerProvider(
+    createManagerToolProvider({
+      manager: input.managerRuntime,
+      harnessList: createHarnessListDeps({
+        services: input.services,
+        harnessRuntimeMap: input.harnessRuntimeMap,
+        listProfiles: () => input.delegationRuntime?.listProfiles() ?? [],
+        providers: input.providerPool.providers
+      }),
+      managerMayApprove: () =>
+        input.core.activeOptions.ade?.managerMayApprove === true,
+      race: input.managerRuntime.raceServiceDeps,
+      checks: input.managerRuntime.checkRunnerDeps
+    })
+  )
+  wireTaskWorkspaceChange(
+    input.core.taskWorkspaces,
+    input.managerRuntime,
+    input.services.adeStores.reviews
+  )
 }

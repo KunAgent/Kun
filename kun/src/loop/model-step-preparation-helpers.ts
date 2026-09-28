@@ -197,6 +197,55 @@ export async function graphHarnessContextBlock(
   return kunContextBlock('graph-harnesses', 'runtime', content)
 }
 
+/**
+ * P3-14: ADE manager turns (ade workspace, Kun harness, not a worker child)
+ * get a bounded runtime block with the delegation contract, live team state,
+ * and the harness routing menu. Worker threads carry parentThreadId and are
+ * excluded; external-harness managers skip the Kun-specific guidance.
+ */
+export async function adeManagerContextBlock(
+  thread:
+    | Pick<ThreadRecord, 'workspaceMode' | 'parentThreadId' | 'harnessId'>
+    | undefined,
+  threadId: string,
+  resolve?: (input: { threadId: string }) => Promise<string | undefined>
+): Promise<KunTurnContextBlock | null> {
+  if (
+    !resolve ||
+    !thread ||
+    thread.workspaceMode !== 'ade' ||
+    thread.parentThreadId ||
+    (thread.harnessId !== undefined && thread.harnessId !== 'kun')
+  ) {
+    return null
+  }
+  const content = (await resolve({ threadId }).catch(() => undefined)) ?? ''
+  return content ? kunContextBlock('ade-manager', 'runtime', content) : null
+}
+
+/**
+ * P1-25 + P3-14: planning-mode runtime blocks — the Graph harness menu while
+ * a plan is uncommitted and the bounded ADE manager block on manager turns.
+ */
+export async function planningTeamContextBlocks(
+  orchestration: Turn['orchestration'],
+  graphPlanCommitted: boolean,
+  thread:
+    | Pick<ThreadRecord, 'workspaceMode' | 'parentThreadId' | 'harnessId'>
+    | undefined,
+  threadId: string,
+  graphHarnessSummary?: () => Promise<string | undefined>,
+  adeManagerContext?: (input: { threadId: string }) => Promise<string | undefined>
+): Promise<KunTurnContextBlock[]> {
+  const [graph, ade] = await Promise.all([
+    graphHarnessContextBlock(orchestration, graphPlanCommitted, graphHarnessSummary),
+    adeManagerContextBlock(thread, threadId, adeManagerContext)
+  ])
+  return [graph, ade].filter(
+    (block): block is KunTurnContextBlock => block !== null
+  )
+}
+
 export function knowledgeBaseContextBlocks(
   thread: Pick<ThreadRecord, 'knowledgeBases'> | undefined
 ): KunTurnContextBlock[] {
