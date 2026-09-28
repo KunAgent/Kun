@@ -144,6 +144,7 @@ function makeRuntime(opts: {
   const taskWorkspaces = {
     create: vi.fn(async () => workspace),
     get: vi.fn(() => workspace),
+    onChange: vi.fn(() => () => {}),
     captureForDispatch: vi.fn(async () => ({
       record: workspace,
       stat: { changedFiles: 1, insertions: 3, deletions: 2 }
@@ -241,6 +242,39 @@ describe('ManagerRuntime.createWorker', () => {
     expect(runInput.childId).toBe(result.workerId)
     expect(runInput.clientRequestId).toBe(result.dispatchId)
     expect(result.userReport).toContain('fixer')
+  })
+
+  it('scopes the snapshot to the settled worktree path, not the provisional source root', async () => {
+    // Regression: `create` returns before the checkout exists — its `path`
+    // still points at the manager workspace. The snapshot must wait for
+    // settlement or the worker can write nowhere (09 §7.1).
+    const { runtime, runChild, taskWorkspaces } = makeRuntime()
+    taskWorkspaces.create.mockResolvedValue({ ...workspaceRecord('creating'), path: '/repo' })
+    taskWorkspaces.get.mockReturnValueOnce(workspaceRecord('ready'))
+    const result = await runtime.createWorker(managerCtx(), {
+      label: 'fixer', task: 'repair login redirect'
+    }, TOOL_CONTEXT)
+    expect(result.ok).toBe(true)
+    const worker = (await teams.get('thr_mgr'))!.workers[0]!
+    expect(worker.securitySnapshot.sandboxRoot).toBe('/repo/.worktrees/fix-login')
+    expect(worker.securitySnapshot.allowedWritePaths).toEqual(['/repo/.worktrees/fix-login'])
+    expect(runChild).toHaveBeenCalled()
+  })
+
+  it('refuses worker creation when the task workspace fails to materialize', async () => {
+    const { runtime, runChild, taskWorkspaces } = makeRuntime()
+    taskWorkspaces.create.mockResolvedValue({ ...workspaceRecord('creating'), path: '/repo' })
+    taskWorkspaces.get.mockReturnValueOnce({
+      ...workspaceRecord('failed'), lastError: 'source is not a git repository'
+    })
+    const result = await runtime.createWorker(managerCtx(), {
+      label: 'fixer', task: 'repair login redirect'
+    }, TOOL_CONTEXT)
+    expect(result.ok).toBe(false)
+    expect(result.refusal).toBe('workspace_unavailable')
+    expect(result.userReport).toContain('not a git repository')
+    expect((await teams.get('thr_mgr'))!.workers).toHaveLength(0)
+    expect(runChild).not.toHaveBeenCalled()
   })
 
   it('routes omitted-agent creates through the selector and persists its decision', async () => {
@@ -479,6 +513,10 @@ describe('ManagerRuntime.createWorker', () => {
 
   it('reports workspace-pending and delivers once the workspace is ready', async () => {
     const { runtime, taskWorkspaces, runChild } = makeRuntime({ workspaceState: 'creating' })
+    // createWorker settles the snapshot on the final path (first get → ready);
+    // the store can still report mid-creation state when the deliverer looks
+    // the workspace up.
+    taskWorkspaces.get.mockReturnValueOnce(workspaceRecord('ready'))
     const result = await runtime.createWorker(managerCtx(), {
       label: 'fixer', task: 'task'
     }, TOOL_CONTEXT)
