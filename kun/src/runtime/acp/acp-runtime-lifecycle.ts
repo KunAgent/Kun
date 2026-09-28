@@ -26,8 +26,14 @@ import type { AcpClientHost } from './acp-client-host.js'
 import type { AcpSessionManager, AcpSessionHandle } from './acp-session-manager.js'
 import { filterGoalContextsForGoalKey } from '../../loop/continuation-instructions.js'
 import { startAcpProcess, type AcpSpawnFn } from './acp-process.js'
-import { AcpError } from './acp-schema.js'
+import { AcpError, type AcpInitializeResult } from './acp-schema.js'
 import type { AcpDebugLog } from './acp-jsonrpc.js'
+import {
+  capabilitiesFromAcp,
+  type AcpSessionFacts
+} from './acp-capabilities.js'
+import { acpLegacyCapabilities } from './acp-runtime-support.js'
+import type { RuntimeEventRecorder } from '../../services/runtime-event-recorder.js'
 
 export type AcpLifecycleDeps = {
   binaryPath?: (harnessId: HarnessId) => string | undefined
@@ -239,4 +245,35 @@ export function delegatedPhase(
 ): 'portable' | 'resumed' | 'rebased' {
   if (preparation.resumed) return 'resumed'
   return preparation.rebaseReason ? 'rebased' : 'portable'
+}
+
+/** Record the `delegated_runtime` event for an ACP turn (phase + caps v2). */
+export async function recordAcpDelegatedRuntime(
+  events: Pick<RuntimeEventRecorder, 'record'>,
+  input: {
+    threadId: string
+    turnId: string
+    harnessId: HarnessId
+    preparation: DelegatedSessionPreparation
+    initResult: AcpInitializeResult | undefined
+    session: AcpSessionFacts
+    sandbox: 'host' | 'native' | 'none'
+  }
+): Promise<void> {
+  await events.record({
+    kind: 'delegated_runtime',
+    threadId: input.threadId,
+    turnId: input.turnId,
+    providerKind: 'acp',
+    providerId: input.harnessId,
+    harnessId: input.harnessId,
+    phase: delegatedPhase(input.preparation),
+    ...(input.preparation.rebaseReason
+      ? { reason: input.preparation.rebaseReason }
+      : {}),
+    capabilities: acpLegacyCapabilities(),
+    capabilitiesV2: capabilitiesFromAcp(input.initResult, input.session, {
+      sandbox: input.sandbox
+    })
+  })
 }

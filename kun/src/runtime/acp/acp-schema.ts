@@ -260,13 +260,14 @@ export const AcpPromptCapabilitiesSchema = MetaSchema.extend({
   embeddedContext: z.boolean().optional()
 })
 
+// v1 sends booleans (`{http: true}`); the v2 draft declares transports by
+// object presence (`{http: {}}`). Accept both so either dialect parses.
+const McpTransportFlagSchema = z.union([z.boolean(), MetaSchema])
+
 export const AcpAgentCapabilitiesSchema = MetaSchema.extend({
   loadSession: z.boolean().optional(),
   promptCapabilities: AcpPromptCapabilitiesSchema.optional(),
-  mcpCapabilities: MetaSchema.extend({
-    http: z.boolean().optional(),
-    sse: z.boolean().optional()
-  }).optional()
+  mcpCapabilities: MetaSchema.extend({ http: McpTransportFlagSchema.optional() }).optional()
 })
 
 export const AcpInitializeResultSchema = MetaSchema.extend({

@@ -12,6 +12,8 @@ import {
   createKunToolBridgeHost,
   type KunToolBridgeHost
 } from '../../harness/kun-tool-bridge-host.js'
+import { createWorkerCallbackToolProvider } from '../../adapters/tool/worker-callback-tool-provider.js'
+import type { WorkerCallbackService } from '../../services/worker-callback-service.js'
 import type { CapabilityToolSpec } from '../../adapters/tool/capability-registry.js'
 import type { ThreadRecord } from '../../contracts/threads.js'
 import type { ToolHost, ToolHostContext } from '../../ports/tool-host.js'
@@ -21,18 +23,31 @@ const NOW = '2026-01-01T00:00:00.000Z'
 
 type FixtureOptions = {
   runningTurn?: boolean
+  workerThread?: boolean
   catalog?: CapabilityToolSpec[]
   execute?: ToolHost['execute']
   approvalGate?: { request(approval: ApprovalRequest): Promise<'allow' | 'deny'> }
 }
 
-function makeThread(running: boolean): ThreadRecord {
+function makeThread(running: boolean, worker = false): ThreadRecord {
   return {
     id: 'thread_1',
     title: 'MCP test',
     workspace: '/workspace',
     model: 'm1',
     status: 'active',
+    ...(worker
+      ? {
+          executionUnit: {
+            kind: 'worker',
+            teamId: 'thr_mgr',
+            managerThreadId: 'thr_mgr',
+            label: 'fixer',
+            lifecycle: 'persistent',
+            control: 'manager'
+          }
+        }
+      : {}),
     turns: [
       {
         id: 'turn_1',
@@ -46,7 +61,7 @@ function makeThread(running: boolean): ThreadRecord {
 }
 
 function makeFixture(options: FixtureOptions = {}) {
-  const thread = makeThread(options.runningTurn ?? true)
+  const thread = makeThread(options.runningTurn ?? true, options.workerThread)
   const catalog = options.catalog ?? [
     {
       name: 'memory_search',
@@ -68,7 +83,17 @@ function makeFixture(options: FixtureOptions = {}) {
   const host = createKunToolBridgeHost({
     threadStore: { get: async (id: string) => (id === thread.id ? thread : null) } as never,
     sessionStore: {} as never,
-    registry: { listTools: () => catalog } as never,
+    registry: {
+      listTools: (context?: ToolHostContext) =>
+        catalog.filter((tool) => {
+          const gate = (
+            tool as unknown as {
+              shouldAdvertise?: (ctx: ToolHostContext) => boolean
+            }
+          ).shouldAdvertise
+          return !gate || gate(context as ToolHostContext)
+        })
+    } as never,
     toolHost,
     turns: { applyItem: async () => {}, updateItem: async () => {} } as never,
     events: { record: async () => undefined } as never,
@@ -283,6 +308,81 @@ describe('kun tools MCP route', () => {
     expect(body.result.content[0].text).toBe('decision:allow')
   })
 })
+
+  it('delivers a worker submit_result call to the callback service (P3-08)', async () => {
+    const calls: Array<{ threadId: string; args: unknown }> = []
+    const service = {
+      reportProgress: async () => ({ status: 'recorded' }),
+      askManager: async () => ({ status: 'answered' }),
+      readManagerContext: async () => ({ context: '' }),
+      submitResult: async (threadId: string, args: unknown) => {
+        calls.push({ threadId, args })
+        return { status: 'recorded' }
+      }
+    }
+    const provider = createWorkerCallbackToolProvider(
+      service as unknown as WorkerCallbackService
+    )
+    const { runtime, token } = makeFixture({
+      workerThread: true,
+      catalog: provider.tools as unknown as CapabilityToolSpec[],
+      execute: async (call, ctx) => {
+        const tool = provider.tools.find((entry) => entry.name === call.toolName)
+        const result = await (
+          tool as unknown as {
+            execute: (
+              args: Record<string, unknown>,
+              ctx: ToolHostContext
+            ) => Promise<{ output: unknown }>
+          }
+        ).execute((call.arguments ?? {}) as Record<string, unknown>, ctx)
+        return {
+          item: { kind: 'tool_result', output: result.output, isError: false },
+          approved: false
+        } as never
+      }
+    })
+
+    // The worker-gated tool is advertised to the MCP caller…
+    const listed = await post(runtime, rpc('tools/list'), token)
+    const tools = (await listed.json()).result.tools as Array<{ name: string }>
+    expect(tools.map((tool) => tool.name)).toContain('submit_result')
+
+    // …and tools/call lands on WorkerCallbackService with the worker thread.
+    const called = await post(
+      runtime,
+      rpc('tools/call', {
+        name: 'submit_result',
+        arguments: { summary: 'fixed the redirect', outcome: 'succeeded' }
+      }),
+      token
+    )
+    expect(called.status).toBe(200)
+    const content = (await called.json()).result.content as Array<{ text: string }>
+    expect(content[0].text).toContain('recorded')
+    expect(calls).toEqual([
+      {
+        threadId: 'thread_1',
+        args: { summary: 'fixed the redirect', outcome: 'succeeded' }
+      }
+    ])
+  })
+
+  it('hides worker callback tools from a non-worker thread', async () => {
+    const provider = createWorkerCallbackToolProvider({
+      reportProgress: async () => ({}),
+      askManager: async () => ({}),
+      readManagerContext: async () => ({}),
+      submitResult: async () => ({})
+    } as unknown as WorkerCallbackService)
+    const { runtime, token } = makeFixture({
+      workerThread: false,
+      catalog: provider.tools as unknown as CapabilityToolSpec[]
+    })
+    const listed = await post(runtime, rpc('tools/list'), token)
+    const tools = (await listed.json()).result.tools as Array<{ name: string }>
+    expect(tools.map((tool) => tool.name)).not.toContain('submit_result')
+  })
 
 describe('kgw token guard', () => {
   it('rejects kgw_ tokens outside their scope paths before routing', async () => {

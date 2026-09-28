@@ -123,6 +123,11 @@ export class HarnessTokenService {
     return revoked
   }
 
+  /** Revoke a single grant by id (turn-scoped expiry such as `kun-tools`). */
+  revokeGrant(grantId: string): boolean {
+    return this.grants.delete(grantId)
+  }
+
   /** Non-sensitive debug identity; token bytes are never exposed. */
   describe(token: string | null | undefined): string | null {
     if (!token?.startsWith(HARNESS_TOKEN_PREFIX)) return null

@@ -16,6 +16,8 @@ import { AcpConnectionPool } from './acp-connection-pool.js'
 import { AcpClientHost } from './acp-client-host.js'
 import { AcpSessionManager } from './acp-session-manager.js'
 import { AcpRuntime, type AcpRuntimeDeps } from './acp-runtime.js'
+import { KunToolsMcpProvider } from './kun-tools-mcp.js'
+import { HarnessTokenService } from '../../harness/harness-token-service.js'
 
 const FIXTURE_AGENT = fileURLToPath(
   new URL('./__fixtures__/fake-acp-agent.mjs', import.meta.url)
@@ -388,5 +390,91 @@ describe('AcpRuntime.runTurn', () => {
     expect(h.deltas.map((d) => d.delta).join('')).not.toContain('replayed turn')
     const delegated = h.recorded.filter((e) => e.kind === 'delegated_runtime')
     expect(delegated.at(-1)).toMatchObject({ phase: 'resumed' })
+  })
+
+  test('sends an http kun-tools descriptor and revokes the grant at turn end', async () => {
+    const tokens = new HarnessTokenService({ secret: Buffer.alloc(32, 9) })
+    const provider = new KunToolsMcpProvider({
+      tokens,
+      endpoint: () => 'http://127.0.0.1:18899',
+      command: () => ({ command: '/abs/kun', args: [] })
+    })
+    let verifiedMidTurn: unknown = 'unset'
+    let h: Harness
+    h = await makeHarness('basic-chat.json', {
+      deps: { kunToolsMcp: provider },
+      onDelta: () => {
+        // The session/new frame is journaled before prompt streaming starts.
+        const servers = h.requests('session/new')[0]?.params?.mcpServers as
+          | Array<{ headers?: Array<{ name: string; value: string }> }>
+          | undefined
+        const bearer = servers?.[0]?.headers
+          ?.find((header) => header.name === 'Authorization')
+          ?.value.slice('Bearer '.length)
+        verifiedMidTurn = bearer
+          ? tokens.verifyScope(bearer, 'kun-tools')?.threadId
+          : 'missing'
+      }
+    })
+    const outcome = await h.runtime.runTurn(
+      'thread_1',
+      'turn_1',
+      new AbortController().signal
+    )
+    expect(outcome).toBe('completed')
+    const servers = h.requests('session/new')[0]?.params?.mcpServers as Array<{
+      type: string
+      url: string
+      headers: Array<{ name: string; value: string }>
+    }>
+    expect(servers).toHaveLength(1)
+    expect(servers[0]).toMatchObject({
+      type: 'http',
+      url: 'http://127.0.0.1:18899/mcp/kun'
+    })
+    const token = servers[0].headers
+      .find((header) => header.name === 'Authorization')!
+      .value.slice('Bearer '.length)
+    expect(token.startsWith('kgw_')).toBe(true)
+    // Live while the turn streamed, revoked once the turn finished.
+    expect(verifiedMidTurn).toBe('thread_1')
+    expect(tokens.verify(token)).toBeNull()
+  })
+
+  test('falls back to a stdio kun-tools descriptor without http support', async () => {
+    const tokens = new HarnessTokenService({ secret: Buffer.alloc(32, 9) })
+    const provider = new KunToolsMcpProvider({
+      tokens,
+      endpoint: () => 'http://127.0.0.1:18899',
+      command: () => ({ command: '/abs/kun', args: ['/abs/serve-entry.js'] })
+    })
+    const h = await makeHarness('no-config.json', {
+      deps: { kunToolsMcp: provider }
+    })
+    const outcome = await h.runtime.runTurn(
+      'thread_1',
+      'turn_1',
+      new AbortController().signal
+    )
+    expect(outcome).toBe('completed')
+    const servers = h.requests('session/new')[0]?.params?.mcpServers as Array<{
+      type: string
+      command: string
+      args: string[]
+      env: Array<{ name: string; value: string }>
+    }>
+    expect(servers).toHaveLength(1)
+    const server = servers[0]
+    expect(server.type).toBe('stdio')
+    expect(server.command).toBe('/abs/kun')
+    expect(server.args).toEqual([
+      '/abs/serve-entry.js',
+      'mcp-bridge',
+      '--token-env',
+      'KUN_TOOLS_TOKEN'
+    ])
+    const token = server.env.find((e) => e.name === 'KUN_TOOLS_TOKEN')!.value
+    expect(token.startsWith('kgw_')).toBe(true)
+    expect(tokens.verify(token)).toBeNull()
   })
 })
