@@ -1,9 +1,16 @@
 /** Built-in remote apps that a Room Agent may request before configuration. */
-export const ROOM_APP_CATALOG = {
-  google_gmail: { name: 'Gmail', url: 'https://gmailmcp.googleapis.com/mcp/v1' },
-  google_drive: { name: 'Google Drive', url: 'https://drivemcp.googleapis.com/mcp/v1' },
-  google_calendar: { name: 'Google Calendar', url: 'https://calendarmcp.googleapis.com/mcp/v1' }
-} as const
+export const ROOM_APP_CATALOG: Readonly<Record<string, { name: string; url: string }>> = {}
+
+/** Previously suggested Google Workspace servers are unavailable to private Rooms. */
+export const HIDDEN_ROOM_GOOGLE_APP_IDS = [
+  'google_gmail', 'google_drive', 'google_calendar', 'google_chat', 'google_people',
+  'gmail', 'drive', 'calendar'
+] as const
+
+export function isHiddenRoomGoogleApp(value: string): boolean {
+  const id = value.trim().toLowerCase().replace(/^mcp:/, '')
+  return HIDDEN_ROOM_GOOGLE_APP_IDS.some((hidden) => hidden === id)
+}
 
 export function canonicalRoomAppId(value: string): string {
   const id = value.trim().toLowerCase()

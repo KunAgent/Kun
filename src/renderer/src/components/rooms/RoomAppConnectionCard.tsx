@@ -1,12 +1,10 @@
 import { useState } from 'react'
 import { Check, Loader2, PlugZap } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { ROOM_APP_CATALOG, type RoomMessage } from '@shared/rooms-api'
+import { ROOM_APP_CATALOG, isHiddenRoomGoogleApp, type RoomMessage } from '@shared/rooms-api'
 import { addRoomApp, authorizeRoomApp, listRoomApps } from './room-apps-client'
 import { roomRequestId, roomsRequest } from './rooms-client'
 import './rooms-app-connections.css'
-
-const googleSetupGuide = 'https://developers.google.com/workspace/guides/configure-mcp-servers'
 
 export function RoomAppConnectionCard({ message }: { message: RoomMessage }) {
   const { t } = useTranslation('common')
@@ -17,6 +15,7 @@ export function RoomAppConnectionCard({ message }: { message: RoomMessage }) {
   const connection = shown.appConnection
   if (!connection) return null
   const { serverId, status, resumed } = connection
+  const unavailable = isHiddenRoomGoogleApp(serverId)
   const builtIn = ROOM_APP_CATALOG[serverId as keyof typeof ROOM_APP_CATALOG]
   const name = builtIn?.name ?? serverId
   const act = async (action: 'complete' | 'skip') => {
@@ -24,6 +23,7 @@ export function RoomAppConnectionCard({ message }: { message: RoomMessage }) {
     setBusy(true); setError('')
     try {
       if (action === 'complete' && status === 'requested') {
+        if (unavailable) throw new Error(t('roomsAppNotConfigured'))
         const inventory = await listRoomApps()
         const configured = inventory.servers.find((server) => server.id === serverId)
         if (!configured) {
@@ -51,13 +51,11 @@ export function RoomAppConnectionCard({ message }: { message: RoomMessage }) {
       {done ? <small>{resumed ? t('roomsAppResuming') : t('roomsAppReadyToResume')}</small> :
         <small>{t('roomsAppSecureSignIn')}</small>}
       {error ? <p role="alert" className="rooms-app-connection-error">{error}</p> : null}
-      {error && builtIn ? <button type="button" className="rooms-app-connection-guide"
-        onClick={() => void window.kunGui.openExternal(googleSetupGuide)}>{t('roomsAppsGoogleGuide')}</button> : null}
       {!done ? <div className="rooms-app-connection-actions">
         <button type="button" disabled={busy} onClick={() => void act('skip')}>{t('roomsAppSkip')}</button>
-        <button type="button" className="is-primary" disabled={busy} onClick={() => void act('complete')}>
+        {!unavailable ? <button type="button" className="is-primary" disabled={busy} onClick={() => void act('complete')}>
           {busy ? <Loader2 size={14} className="animate-spin" /> : <PlugZap size={14} />}{t('roomsAppContinue')}
-        </button>
+        </button> : null}
       </div> : !resumed ? <button type="button" className="rooms-app-connection-resume" disabled={busy}
         onClick={() => void act(status === 'connected' ? 'complete' : 'skip')}>
         {busy ? <Loader2 size={14} className="animate-spin" /> : null}{t('roomsAppResumeTask')}

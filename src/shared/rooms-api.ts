@@ -22,7 +22,7 @@ export type {
   SendRoomMessage
 } from '../../kun/src/contracts/rooms'
 export type { RoomTask } from '../../kun/src/contracts/room-tasks'
-export { ROOM_APP_CATALOG } from '../../kun/src/contracts/room-app-catalog'
+export { ROOM_APP_CATALOG, isHiddenRoomGoogleApp } from '../../kun/src/contracts/room-app-catalog'
 export type {
   WorkbenchLink, WorkbenchLinkEntry, WorkbenchLinkKind, WorkbenchLinkStatus, WorkbenchRequest, WorkbenchResult,
   WorkbenchDirectory, ConfirmWorkbenchLink
