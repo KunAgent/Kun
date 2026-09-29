@@ -103,6 +103,40 @@ describe('provider-model-editor', () => {
     })
   })
 
+  it('keeps catalog pricing and service tiers when editing a chat model', () => {
+    const target = provider({
+      models: ['priced-model'],
+      modelProfiles: {
+        'priced-model': {
+          inputModalities: ['text'],
+          outputModalities: ['text'],
+          supportsToolCalling: true,
+          messageParts: ['text'],
+          pricing: {
+            inputUsdPerMillion: 0.15,
+            outputUsdPerMillion: 0.6,
+            cacheReadUsdPerMillion: 0.015
+          },
+          serviceTiers: ['priority']
+        }
+      }
+    })
+    const form = {
+      ...providerModelFormForExisting(target, 'chat', 'priced-model'),
+      modelId: 'renamed-model'
+    }
+    const next = applyProviderModelForm(target, form)
+    expect(next.modelProfiles['priced-model']).toBeUndefined()
+    expect(next.modelProfiles['renamed-model']).toMatchObject({
+      pricing: {
+        inputUsdPerMillion: 0.15,
+        outputUsdPerMillion: 0.6,
+        cacheReadUsdPerMillion: 0.015
+      },
+      serviceTiers: ['priority']
+    })
+  })
+
   it('renames a chat model and drops the previous profile entry', () => {
     const target = provider({
       models: ['old-name'],

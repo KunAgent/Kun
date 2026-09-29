@@ -346,6 +346,104 @@ describe('pending shared model connection catalogs', () => {
   })
 })
 
+describe('shared model profile metadata projection', () => {
+  it('keeps pricing and service tiers when projecting registry capabilities into profiles', () => {
+    const current = defaultModelProviderSettings()
+    const snapshot: SharedModelConnectionsSnapshot = {
+      schemaVersion: 1,
+      proxyRoutingVersion: 1,
+      revision: 2,
+      providers: [{
+        id: 'custom-provider-2',
+        accountId: 'account:custom-provider-2',
+        name: 'Custom Provider',
+        kind: 'http',
+        authType: 'api-key',
+        baseUrl: 'https://api.example.com/v1',
+        endpointFormat: 'chat_completions',
+        useProxy: false,
+        configured: true,
+        models: ['priced-model'],
+        modelCapabilities: {
+          'priced-model': {
+            id: 'priced-model',
+            inputModalities: ['text'],
+            outputModalities: ['text'],
+            supportsToolCalling: true,
+            messageParts: ['text'],
+            contextWindowTokens: 128_000,
+            pricing: {
+              inputUsdPerMillion: 0.15,
+              outputUsdPerMillion: 0.6,
+              cacheReadUsdPerMillion: 0.015
+            },
+            serviceTiers: ['priority']
+          }
+        }
+      }]
+    }
+
+    const projected = projectSharedModelConnections(current, snapshot)
+
+    expect(projected.provider.providers
+      .find((item) => item.id === 'custom-provider-2')
+      ?.modelProfiles['priced-model']).toMatchObject({
+        contextWindowTokens: 128_000,
+        pricing: {
+          inputUsdPerMillion: 0.15,
+          outputUsdPerMillion: 0.6,
+          cacheReadUsdPerMillion: 0.015
+        },
+        serviceTiers: ['priority']
+      })
+  })
+
+  it('keeps stored profile pricing when the projected capability omits it', () => {
+    const current = defaultModelProviderSettings()
+    current.providers.push({
+      ...current.providers[0]!,
+      id: 'custom-provider-2',
+      models: ['priced-model'],
+      modelProfiles: {
+        'priced-model': {
+          ...textModelProfile,
+          pricing: { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 },
+          serviceTiers: ['flex']
+        }
+      }
+    })
+    const snapshot: SharedModelConnectionsSnapshot = {
+      schemaVersion: 1,
+      proxyRoutingVersion: 1,
+      revision: 2,
+      providers: [{
+        id: 'custom-provider-2',
+        accountId: 'account:custom-provider-2',
+        name: 'Custom Provider',
+        kind: 'http',
+        authType: 'api-key',
+        baseUrl: 'https://api.example.com/v1',
+        endpointFormat: 'chat_completions',
+        useProxy: false,
+        configured: true,
+        models: ['priced-model'],
+        modelCapabilities: {
+          'priced-model': { id: 'priced-model', ...textModelProfile }
+        }
+      }]
+    }
+
+    const projected = projectSharedModelConnections(current, snapshot)
+
+    expect(projected.provider.providers
+      .find((item) => item.id === 'custom-provider-2')
+      ?.modelProfiles['priced-model']).toMatchObject({
+        pricing: { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 },
+        serviceTiers: ['flex']
+      })
+  })
+})
+
 describe('shared model connection credential replacement', () => {
   it('treats clearing an absent connection credential as already complete', async () => {
     const snapshot = { schemaVersion: 1 as const, proxyRoutingVersion: 1 as const, revision: 20, providers: [] }
