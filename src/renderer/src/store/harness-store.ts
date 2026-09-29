@@ -25,7 +25,12 @@ export type HarnessSessionSurface = {
 
 type HarnessStoreState = {
   rows: AdeHarnessRow[]
-  rowsLoaded: boolean
+  /**
+   * Timestamp of the last successful list response (P4-02): replaced the
+   * load-once `rowsLoaded` flag so callers can force a refresh while
+   * detection is still settling.
+   */
+  rowsLoadedAt?: number
   rowsLoading: boolean
   rowsError?: string
   models: Record<string, { models: string[]; loading: boolean; error?: string }>
@@ -44,27 +49,98 @@ type HarnessStoreState = {
 
 export const useHarnessStore = create<HarnessStoreState>(() => ({
   rows: [],
-  rowsLoaded: false,
   rowsLoading: false,
   models: {},
   providerGroups: {},
   sessions: {}
 }))
 
-export async function loadHarnesses(force = false): Promise<void> {
+/**
+ * P4-02: while any row still reports `detecting`, the store polls the
+ * catalog until detection settles or the budget expires — the first load
+ * usually lands mid-probe, and without this the sidebar/picker would pin
+ * the provisional `unknown` verdict forever.
+ */
+const DETECTING_POLL_MS = 2_000
+const DETECTING_POLL_BUDGET_MS = 30_000
+const LOAD_RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000]
+
+let pollTimer: ReturnType<typeof setTimeout> | null = null
+let pollWindowStart: number | null = null
+let retryCount = 0
+let pollGeneration = 0
+let now = (): number => Date.now()
+
+/** Test seam: vitest fake timers need a clock they can advance. */
+export function setHarnessStoreNow(next: () => number): void {
+  now = next
+}
+
+function anyRowDetecting(rows: AdeHarnessRow[]): boolean {
+  return rows.some(
+    (row) => row.status.detecting === true || row.status.installed === 'unknown'
+  )
+}
+
+function scheduleHarnessPoll(delayMs: number): void {
+  if (pollTimer) clearTimeout(pollTimer)
+  const generation = pollGeneration
+  pollTimer = setTimeout(() => {
+    pollTimer = null
+    if (pollGeneration !== generation) return
+    void loadHarnesses(true)
+  }, delayMs)
+}
+
+/** Exported so tests can reset the module-level poll/retry state. */
+export function resetHarnessPolling(): void {
+  pollGeneration += 1
+  pollWindowStart = null
+  retryCount = 0
+  if (pollTimer) {
+    clearTimeout(pollTimer)
+    pollTimer = null
+  }
+}
+
+export async function loadHarnesses(
+  force = false,
+  options?: { waitMs?: number }
+): Promise<void> {
   const provider = getProvider()
   if (!provider.listHarnesses) return
   const state = useHarnessStore.getState()
-  if (state.rowsLoading || (state.rowsLoaded && !force)) return
+  if (state.rowsLoading || (state.rowsLoadedAt !== undefined && !force)) return
   useHarnessStore.setState({ rowsLoading: true, rowsError: undefined })
   try {
-    const rows = await provider.listHarnesses()
-    useHarnessStore.setState({ rows, rowsLoaded: true, rowsLoading: false })
+    const rows = await provider.listHarnesses(options)
+    useHarnessStore.setState({ rows, rowsLoadedAt: now(), rowsLoading: false })
+    retryCount = 0
+    if (anyRowDetecting(rows)) {
+      if (pollWindowStart === null) pollWindowStart = now()
+      if (now() - pollWindowStart <= DETECTING_POLL_BUDGET_MS) {
+        scheduleHarnessPoll(DETECTING_POLL_MS)
+      } else {
+        resetHarnessPolling()
+      }
+    } else {
+      resetHarnessPolling()
+    }
   } catch (error) {
     useHarnessStore.setState({
       rowsLoading: false,
       rowsError: error instanceof Error ? error.message : String(error)
     })
+    // Backoff retry — a transient runtime hiccup used to stick forever.
+    if (pollWindowStart === null) pollWindowStart = now()
+    const elapsed = now() - pollWindowStart
+    if (elapsed <= DETECTING_POLL_BUDGET_MS) {
+      const delay = LOAD_RETRY_DELAYS_MS[Math.min(retryCount, LOAD_RETRY_DELAYS_MS.length - 1)]
+      retryCount += 1
+      scheduleHarnessPoll(delay)
+    } else {
+      resetHarnessPolling()
+    }
   }
 }
 
@@ -157,24 +233,92 @@ export function receiveHarnessSessionState(state: AdeHarnessSessionState): void 
   }))
 }
 
+/**
+ * Turn-serving rows (P4-13): `transport: 'terminal'` entries are interactive
+ * CLIs launched inside a Kun terminal tab — they never host a delegated turn,
+ * so every turn picker (composer, one-on-one, subagent profile) hides them.
+ */
+export function harnessRowRunsTurns(row: AdeHarnessRow): boolean {
+  return row.definition.transport !== 'terminal'
+}
+
 /** Harness availability for pickers: installed + handshake-ready + signed in. */
 export function harnessRowAvailable(row: AdeHarnessRow): boolean {
   const status = row.status
   if (row.definition.transport === 'native-loop') return true
   if (status.installed !== 'yes') return false
+  // P4-05: a version below the definition's minVersion cannot serve turns —
+  // surface it as unavailable instead of the previous dead "version too low"
+  // label branch.
+  if (status.versionSupported === false) return false
   // P3-11: a binary that fails the ACP initialize handshake is installed but
   // cannot serve turns — `status.message` carries the sanitized stderr.
   if (status.ready === 'no') return false
   return status.login !== 'signed-out'
 }
 
-/** User-facing unavailability reason (12 §7.2: 未安装 / 未登录 / 版本过低). */
-export function harnessRowUnavailableReason(row: AdeHarnessRow): string | null {
+/**
+ * Stable unavailability code for pickers (P4-05). Returns the 'detecting'
+ * sentinel while a probe is inflight or the verdict is still provisional;
+ * otherwise the wire `reasonCode` (falling back to field derivation for
+ * statuses that predate it). Consumers localize `adeHarnessUnavailable.*`
+ * and `adeHarnessNextStep.*` from this — never the raw message.
+ */
+export function harnessRowUnavailableCode(row: AdeHarnessRow): string | null {
+  if (row.status.detecting === true) return 'detecting'
   if (harnessRowAvailable(row)) return null
-  if (row.status.message?.trim()) return row.status.message.trim()
-  if (row.status.installed === 'no') return 'not installed'
-  if (row.status.installed === 'unknown') return 'detection pending'
-  if (row.status.login === 'signed-out') return 'signed out'
-  if (row.status.versionSupported === false) return 'version too low'
+  const status = row.status
+  if (status.reasonCode) return status.reasonCode
+  if (status.installed === 'no') return 'not_installed'
+  if (status.installed === 'yes') {
+    if (status.versionSupported === false) return 'version_too_low'
+    if (status.ready === 'no') return 'handshake_failed'
+    // `ready: 'unknown'` (an inconclusive ACP probe, P4-03) stays selectable:
+    // never a blocking code. `handshake_timeout` only arrives over the wire
+    // as an advisory for management surfaces.
+    if (status.login === 'signed-out') return 'signed_out'
+  }
+  // A settled `unknown` (the version probe failed and the P4-02 polling
+  // budget is spent) is unavailable — not "detecting" forever.
   return 'unavailable'
+}
+
+/** Raw diagnostic detail; render only inside a "view reason" disclosure. */
+export function harnessRowUnavailableDetail(row: AdeHarnessRow): string | null {
+  const message = row.status.message?.trim()
+  return message || null
+}
+
+/** i18n suffix per unavailable code for `adeHarnessUnavailable.*` labels. */
+export const HARNESS_UNAVAILABLE_LABEL_KEY: Record<string, string> = {
+  detecting: 'detecting',
+  not_installed: 'notInstalled',
+  adapter_missing: 'adapterMissing',
+  version_too_low: 'versionLow',
+  handshake_failed: 'handshakeFailed',
+  handshake_timeout: 'handshakeTimeout',
+  signed_out: 'signedOut',
+  disabled: 'disabled',
+  unavailable: 'unavailable'
+}
+
+/** i18n suffix per code for `adeHarnessNextStep.*` guidance; absent = none. */
+export const HARNESS_UNAVAILABLE_NEXT_STEP_KEY: Record<string, string | undefined> = {
+  not_installed: 'install',
+  adapter_missing: 'installAdapter',
+  version_too_low: 'upgrade',
+  handshake_failed: 'retry',
+  handshake_timeout: 'retry',
+  signed_out: 'login',
+  disabled: 'enable',
+  unavailable: 'retry'
+}
+
+export function harnessUnavailableLabelKey(code: string): string {
+  return `adeHarnessUnavailable.${HARNESS_UNAVAILABLE_LABEL_KEY[code] ?? 'unavailable'}`
+}
+
+export function harnessUnavailableNextStepKey(code: string): string | null {
+  const suffix = HARNESS_UNAVAILABLE_NEXT_STEP_KEY[code]
+  return suffix ? `adeHarnessNextStep.${suffix}` : null
 }

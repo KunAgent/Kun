@@ -203,8 +203,10 @@ export type KunRuntimeSettingsSyncStatusPayload = {
   state: 'idle' | 'syncing' | 'synced' | 'unavailable' | 'failed'
   generation: number
   message?: string
+  sections?: Record<string, RuntimeConfigRejectedSection>
   at: string
 }
+export type RuntimeConfigRejectedSection = { code: string; message: string }
 export type RuntimeRequestResult = { ok: boolean; status: number; body: string }
 export type GatewayCredentialStatus = { configured: boolean; createdAt?: string; rotatedAt?: string }
 export type GatewayCredentialResult = { ok: boolean; status: number; credential: GatewayCredentialStatus; copied?: boolean }
@@ -690,9 +692,7 @@ export type AntigravitySubscriptionModelCatalog = {
 
 export const UNREADABLE_CREDENTIAL_KEY_ERROR_CODE = 'credential_key_unreadable'
 
-export type CredentialRecoveryResetResult =
-  | { reset: false }
-  | { reset: true; backupPath: string; movedItems: string[] }
+export type CredentialRecoveryResetResult = { reset: false } | { reset: true; backupPath: string; movedItems: string[] }
 
 export type ModelProviderCredentialRevealResult = {
   providerId: string

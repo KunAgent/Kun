@@ -7,6 +7,7 @@ import {
   resolveModelProviderPresetSource,
   resolveProviderProxyUrl,
   type AppSettingsV1,
+  type KunHarnessDefaultsEntryV1,
   type KunRuntimeSettingsV1,
   type ModelProviderModelProfileV1,
   type ModelProviderProfileV1
@@ -191,6 +192,28 @@ const sortedRecord = (value: Record<string, string> | undefined): Record<string,
   )
 
 /**
+ * `defaults[harnessId]` (p4 §3.6): fixed field order inside each entry so
+ * identical settings serialize byte-identically.
+ */
+const sortedDefaultsRecord = (
+  value: Record<string, KunHarnessDefaultsEntryV1> | undefined
+): Record<string, KunHarnessDefaultsEntryV1> =>
+  Object.fromEntries(
+    Object.entries(value ?? {})
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([id, entry]) => [
+        id,
+        {
+          ...(entry.credentialMode ? { credentialMode: entry.credentialMode } : {}),
+          ...(entry.providerId ? { providerId: entry.providerId } : {}),
+          ...(entry.model ? { model: entry.model } : {}),
+          ...(entry.permissionMode ? { permissionMode: entry.permissionMode } : {}),
+          ...(entry.isolation ? { isolation: entry.isolation } : {})
+        }
+      ])
+  )
+
+/**
  * `harnesses` config section. Pure and byte-stable: arrays sort by id and
  * record keys sort alphabetically so identical settings never rewrite
  * config.json (a moving config would retrigger runtime syncs forever).
@@ -205,16 +228,31 @@ export function harnessesConfigForRuntime(
       displayName: entry.displayName,
       command: entry.command,
       args: [...entry.args],
-      env: sortedRecord(entry.env)
+      env: sortedRecord(entry.env),
+      secretEnv: [...(entry.secretEnv ?? [])]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((row) => ({ name: row.name, secretRef: row.secretRef }))
+    }))
+  const terminalAgents = [...(harnesses?.terminalAgents ?? [])]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((entry) => ({
+      id: entry.id,
+      displayName: entry.displayName,
+      command: entry.command,
+      args: [...entry.args],
+      ...(entry.taskFlag ? { taskFlag: entry.taskFlag } : {}),
+      ...(entry.resumeArgs?.length ? { resumeArgs: [...entry.resumeArgs] } : {}),
+      ...(entry.hooks ? { hooks: entry.hooks } : {})
     }))
   return {
     disabledIds: [...(harnesses?.disabledIds ?? [])].sort(),
     binaryPaths: sortedRecord(harnesses?.binaryPaths),
     custom,
-    defaultPermissionMode: sortedRecord(harnesses?.defaultPermissionMode),
+    defaults: sortedDefaultsRecord(harnesses?.defaults),
     defaultHarnessId: harnesses?.defaultHarnessId ?? 'kun',
     // Ordering is significant: the worker selector reads it as preference rank.
-    agentOrder: [...(harnesses?.agentOrder ?? [])]
+    agentOrder: [...(harnesses?.agentOrder ?? [])],
+    terminalAgents
   }
 }
 

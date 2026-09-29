@@ -598,11 +598,34 @@ export const kunRuntimePatchSchema = z.object({
       displayName: z.string().trim().min(1).max(128).optional(),
       command: z.string().trim().min(1).max(4_096),
       args: z.array(z.string().max(1_024)).max(32).optional(),
-      env: z.record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024)).optional()
+      env: z.record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024)).optional(),
+      secretEnv: z.array(z.object({
+        name: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
+        secretRef: z.string().trim().min(1).max(256)
+      }).strict()).max(32).optional()
     }).strict()).max(32).optional(),
+    defaults: z.record(z.string().trim().min(1).max(128), z.object({
+      credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
+      providerId: z.string().trim().min(1).max(128).optional(),
+      model: z.string().trim().min(1).max(512).optional(),
+      permissionMode: z.string().trim().min(1).max(64).optional(),
+      isolation: z.enum(['local', 'worktree']).optional()
+    }).strict()).optional(),
+    // Legacy pre-P4-11 shape; still accepted so old writers do not lose the
+    // value — normalize folds it into `defaults[*].permissionMode`.
     defaultPermissionMode: z.record(z.string().trim().min(1).max(128), z.string().min(1).max(64)).optional(),
     defaultHarnessId: z.string().trim().min(1).max(128).optional(),
-    agentOrder: z.array(z.string().trim().min(1).max(64)).max(16).optional()
+    agentOrder: z.array(z.string().trim().min(1).max(64)).max(16).optional(),
+    // Terminal-only agents for the "new agent tab" menu (p4 §3.8, P4-13).
+    terminalAgents: z.array(z.object({
+      id: z.string().trim().min(1).max(128),
+      displayName: z.string().trim().min(1).max(128).optional(),
+      command: z.string().trim().min(1).max(4_096),
+      args: z.array(z.string().max(1_024)).max(32).optional(),
+      taskFlag: z.string().trim().min(1).max(64).optional(),
+      resumeArgs: z.array(z.string().max(1_024)).max(32).optional(),
+      hooks: z.enum(['none', 'claude-settings']).optional()
+    }).strict()).max(32).optional()
   }).strict().optional(),
   ade: z.object({
     enabled: z.boolean().optional(),

@@ -1,9 +1,7 @@
 import { BrowserWindow } from 'electron'
 import {
   getKunRuntimeSettings,
-  MIN_KUN_LOCAL_PORT,
   resolveKunRuntimeSettings,
-  type AppSettingsPatch,
   type AppSettingsV1
 } from '../shared/app-settings'
 import type { KunRuntimeSettingsSyncStatusPayload } from '../shared/kun-gui-api'
@@ -27,8 +25,13 @@ import { managedKunHostCanAutoStart } from './managed-runtime-startup-policy'
 import { logError, logInfo, logWarn } from './logger'
 import {
   buildManagedRuntimeHotApplyBody,
-  classifyManagedRuntimeHotApplyResponse
+  classifyManagedRuntimeHotApplyResponse,
+  type ManagedRuntimeHotApplyResponse
 } from './runtime/kun-runtime-config-service'
+import {
+  LOCAL_GATEWAY_SECTION,
+  reconcileLocalGatewayCredential
+} from './runtime/local-gateway-credential'
 import {
   applyRuntimeSettingsRollback,
   runtimeProcessConfigChanged,
@@ -109,13 +112,14 @@ export function queueRuntimeSettingsApply(
   if (!runtimeSettingsIntents.isCurrent(generation)) return
 
   const reportCurrent = (
-    outcome: Pick<KunRuntimeSettingsSyncStatusPayload, 'state' | 'message'>
+    outcome: Pick<KunRuntimeSettingsSyncStatusPayload, 'state' | 'message' | 'sections'>
   ): void => {
     if (!runtimeSettingsIntents.isCurrent(generation)) return
     publishRuntimeSettingsSyncStatus({
       state: outcome.state,
       generation,
-      ...(outcome.message ? { message: outcome.message } : {})
+      ...(outcome.message ? { message: outcome.message } : {}),
+      ...(outcome.sections ? { sections: outcome.sections } : {})
     })
   }
 
@@ -145,23 +149,23 @@ export function queueRuntimeSettingsApply(
         if (outcome.state !== 'failed') mainState.settledRuntimeSettings = current
         reportCurrent(outcome)
       } else if (currentMode === 'hot' || kunRuntimeAdapter.isChildRunning()) {
-        let result = await applyManagedRuntimeSettingsHot(
+        let applyOutcome = await applyManagedRuntimeSettingsHot(
           current,
           'settings-apply',
           applyStillCurrent
         )
-        if (result === 'superseded') return
-        if (result === 'skipped' && managedKunHostCanAutoStart(current)) {
+        if (applyOutcome.result === 'superseded') return
+        if (applyOutcome.result === 'skipped' && managedKunHostCanAutoStart(current)) {
           await ensureKunRuntime(current)
           if (!applyStillCurrent()) return
-          result = await applyManagedRuntimeSettingsHot(
+          applyOutcome = await applyManagedRuntimeSettingsHot(
             current,
             'settings-apply',
             applyStillCurrent
           )
-          if (result === 'superseded') return
+          if (applyOutcome.result === 'superseded') return
         }
-        if (result === 'restart_required') {
+        if (applyOutcome.result === 'restart_required') {
           const outcome = await restartManagedRuntimeForSettingsChange(
             anchor,
             current,
@@ -170,13 +174,19 @@ export function queueRuntimeSettingsApply(
           )
           if (outcome.state !== 'failed') mainState.settledRuntimeSettings = current
           reportCurrent(outcome)
-        } else if (result === 'applied') {
+        } else if (applyOutcome.result === 'applied') {
           mainState.settledRuntimeSettings = current
-          reportCurrent({ state: 'synced' })
-        } else if (result === 'failed') {
+          reportCurrent({
+            state: 'synced',
+            ...(applyOutcome.message ? { message: applyOutcome.message } : {}),
+            ...(applyOutcome.sections ? { sections: applyOutcome.sections } : {})
+          })
+        } else if (applyOutcome.result === 'failed') {
           reportCurrent({
             state: 'failed',
-            message: 'Kun rejected the updated configuration; the existing Runtime was kept running.'
+            message: applyOutcome.message
+              ? `Kun rejected the updated configuration: ${applyOutcome.message}. The existing Runtime was kept running.`
+              : 'Kun rejected the updated configuration; the existing Runtime was kept running.'
           })
         } else {
           mainState.settledRuntimeSettings = current
@@ -237,21 +247,28 @@ export function queueRuntimeMcpConfigApply(settings: AppSettingsV1): void {
     publishRuntimeSettingsSyncStatus({
       state: outcome.state,
       generation: settingsGeneration,
-      ...(outcome.message ? { message: outcome.message } : {})
+      ...(outcome.message ? { message: outcome.message } : {}),
+      ...(outcome.sections ? { sections: outcome.sections } : {})
     })
   }
   runtimeSupervisor.enqueueSettingsApply(
     async () => {
       const current = settings
-      const result = await applyManagedRuntimeSettingsHot(current, 'mcp-config')
-      if (result === 'restart_required') {
+      const outcome = await applyManagedRuntimeSettingsHot(current, 'mcp-config')
+      if (outcome.result === 'restart_required') {
         reportSettingsOutcome(await restartManagedRuntimeForMcpConfigChange(current))
-      } else if (result === 'applied') {
-        reportSettingsOutcome({ state: 'synced' })
-      } else if (result === 'failed') {
+      } else if (outcome.result === 'applied') {
+        reportSettingsOutcome({
+          state: 'synced',
+          ...(outcome.message ? { message: outcome.message } : {}),
+          ...(outcome.sections ? { sections: outcome.sections } : {})
+        })
+      } else if (outcome.result === 'failed') {
         reportSettingsOutcome({
           state: 'failed',
-          message: 'Kun rejected the MCP configuration; the existing Runtime was kept running.'
+          message: outcome.message
+            ? `Kun rejected the MCP configuration: ${outcome.message}`
+            : 'Kun rejected the MCP configuration; the existing Runtime was kept running.'
         })
       } else {
         reportSettingsOutcome({ state: 'unavailable', message: 'Kun Runtime is not running.' })
@@ -271,105 +288,57 @@ export function queueRuntimeMcpConfigApply(settings: AppSettingsV1): void {
 }
 
 
-export function validateRuntimeSettingsForApply(next: AppSettingsV1): string | null {
-  const runtime = resolveKunRuntimeSettings(next)
-  if (!Number.isInteger(runtime.port) || runtime.port < MIN_KUN_LOCAL_PORT || runtime.port > 65_535) {
-    return `Kun port must be an integer between ${MIN_KUN_LOCAL_PORT} and 65535 (got ${String(runtime.port)})`
-  }
-  const baseUrl = (runtime.baseUrl ?? '').trim()
-  if (baseUrl) {
-    try {
-      const parsed = new URL(baseUrl)
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-        return `model base URL must use http(s): ${baseUrl}`
-      }
-    } catch {
-      return `model base URL is not a valid URL: ${baseUrl}`
-    }
-  }
-  return null
-}
-
-export function preserveRuntimeTokenForFullSettingsSnapshot(
-  prev: AppSettingsV1,
-  partial: AppSettingsPatch
-): AppSettingsPatch {
-  const incomingKun = partial.agents?.kun
-  if (!incomingKun || !isFullSettingsSnapshotPatch(partial)) return partial
-  if (typeof incomingKun.runtimeToken !== 'string' || incomingKun.runtimeToken.trim()) return partial
-
-  const currentToken = getKunRuntimeSettings(prev).runtimeToken.trim()
-  if (!currentToken) return partial
-
-  return {
-    ...partial,
-    agents: {
-      ...partial.agents,
-      kun: {
-        ...incomingKun,
-        runtimeToken: currentToken
-      }
-    }
-  }
-}
-
-function isFullSettingsSnapshotPatch(partial: AppSettingsPatch): boolean {
-  return partial.version !== undefined &&
-    partial.provider !== undefined &&
-    partial.agents?.kun !== undefined &&
-    partial.log !== undefined &&
-    partial.checkpointCleanup !== undefined &&
-    partial.notifications !== undefined &&
-    partial.appBehavior !== undefined &&
-    partial.keyboardShortcuts !== undefined &&
-    partial.write !== undefined &&
-    partial.claw !== undefined &&
-    partial.schedule !== undefined &&
-    partial.workflow !== undefined &&
-    partial.terminal !== undefined &&
-    partial.guiUpdate !== undefined
-}
-
-type ManagedRuntimeHotApplyResult =
-  | 'applied'
-  | 'skipped'
-  | 'superseded'
-  | 'restart_required'
-  | 'failed'
+type ManagedRuntimeHotApplyOutcome =
+  | { result: 'skipped' | 'superseded' }
+  | ManagedRuntimeHotApplyResponse
 type ManagedRuntimeSettingsApplyOutcome = Pick<
   KunRuntimeSettingsSyncStatusPayload,
-  'state' | 'message'
+  'state' | 'message' | 'sections'
 >
 
 export async function applyManagedRuntimeSettingsHot(
   settings: AppSettingsV1,
   source: string,
   shouldApply: () => boolean = () => true
-): Promise<ManagedRuntimeHotApplyResult> {
+): Promise<ManagedRuntimeHotApplyOutcome> {
   mainState.assertCanonicalRuntimeMigrationReady()
   await waitForKunStartupSettled()
-  if (!shouldApply()) return 'superseded'
+  if (!shouldApply()) return { result: 'superseded' }
   const adapter = kunRuntimeAdapter
-  if (!adapter.isChildRunning()) return 'skipped'
+  if (!adapter.isChildRunning()) return { result: 'skipped' }
 
-  const runtime = resolveKunRuntimeSettings(settings)
+  // P4-04: heal "gateway enabled but no independent key" before composing so
+  // a stale flag cannot veto unrelated hot-applied sections.
+  const gatewayReconcile = await reconcileLocalGatewayCredential(settings, source).catch(
+    (error): { outcome: 'unchanged' } => {
+      logWarn(source, 'Local model gateway credential reconcile failed before apply.', {
+        message: error instanceof Error ? error.message : String(error)
+      })
+      return { outcome: 'unchanged' }
+    }
+  )
+  if (!shouldApply()) return { result: 'superseded' }
+  const effectiveSettings =
+    gatewayReconcile.outcome === 'disabled' ? gatewayReconcile.settings : settings
+
+  const runtime = resolveKunRuntimeSettings(effectiveSettings)
   const dataDir = resolveKunDataDir(runtime)
   const config = await syncGuiManagedKunConfig(dataDir, runtime, {
     scheduleMcp: {
-      settings,
+      settings: effectiveSettings,
       launch: getClawScheduleMcpLaunchConfig()
     },
     builtinSkillsRoot: bundledSkillsDirectory()
   })
-  if (!shouldApply()) return 'superseded'
+  if (!shouldApply()) return { result: 'superseded' }
   const browserUseHost = await reconcileBrowserUseHostForRuntime(
-    settings,
+    effectiveSettings,
     shouldApply
   )
-  if (!browserUseHost.current || !shouldApply()) return 'superseded'
+  if (!browserUseHost.current || !shouldApply()) return { result: 'superseded' }
   const browserUseHostBinding = browserUseHost.binding
   const body = buildManagedRuntimeHotApplyBody(
-    settings,
+    effectiveSettings,
     config,
     browserUseHostBinding
       ? {
@@ -380,11 +349,11 @@ export async function applyManagedRuntimeSettingsHot(
       : null
   )
 
-  const headers = runtimeAuthHeaders(settings)
+  const headers = runtimeAuthHeaders(effectiveSettings)
   headers.set('content-type', 'application/json')
   try {
     const response = await fetch(
-      `${getRuntimeBaseUrlForSettings(settings)}/v1/runtime/config/apply`,
+      `${getRuntimeBaseUrlForSettings(effectiveSettings)}/v1/runtime/config/apply`,
       {
         method: 'POST',
         headers,
@@ -393,23 +362,39 @@ export async function applyManagedRuntimeSettingsHot(
       }
     )
     const text = await response.text()
-    if (!shouldApply()) return 'superseded'
+    if (!shouldApply()) return { result: 'superseded' }
     const outcome = classifyManagedRuntimeHotApplyResponse(response.status, response.ok, text)
     if (outcome.result === 'applied') {
-      noteRuntimeHealthy(source, settings)
-      return 'applied'
+      const sections =
+        gatewayReconcile.outcome === 'disabled'
+          ? {
+              ...(outcome.sections ?? {}),
+              [LOCAL_GATEWAY_SECTION]: {
+                code: 'gateway_disabled',
+                message: gatewayReconcile.message
+              }
+            }
+          : outcome.sections
+      noteRuntimeHealthy(source, effectiveSettings)
+      return {
+        result: 'applied',
+        message: sections
+          ? Object.values(sections).map((section) => section.message).join('; ')
+          : outcome.message,
+        ...(sections ? { sections } : {})
+      }
     }
     if (outcome.result === 'restart_required') {
       logWarn(source, `Kun hot config apply requested restart: ${outcome.message}`)
-      return 'restart_required'
+      return { result: 'restart_required', message: outcome.message }
     }
     logWarn(source, `Kun rejected hot config without restart: ${outcome.message}`)
-    return 'failed'
+    return { result: 'failed', message: outcome.message }
   } catch (error) {
-    if (!shouldApply()) return 'superseded'
+    if (!shouldApply()) return { result: 'superseded' }
     const message = error instanceof Error ? error.message : String(error)
     logWarn(source, `Kun hot config apply failed; falling back to restart: ${message}`)
-    return 'restart_required'
+    return { result: 'restart_required', message }
   }
 }
 

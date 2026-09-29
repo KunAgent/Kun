@@ -31,6 +31,7 @@ import {
 } from '../../loop/continuation-instructions.js'
 import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
 import { normalizeTurnLimits, type TurnLimitsConfig } from '../../loop/turn-limits.js'
+import { resolveHarnessSecretEnv } from '../../harness/harness-secret-env.js'
 import type { TurnRunOutcome } from '../../loop/turn-execution-types.js'
 import { buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.js'
 import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
@@ -110,61 +111,8 @@ export const ACP_CANCEL_SETTLE_MS = 5_000
 
 export type { AcpCredentialEnvInput }
 
-export interface AcpRuntimeDeps {
-  /** Harness catalog lookup for the frozen route's definition. */
-  catalog: { get(id: string): HarnessDefinition | undefined }
-  /** Settings `harnesses.binaryPaths` override for `launch.command`. */
-  binaryPath?: (harnessId: HarnessId) => string | undefined
-  threadStore: ThreadStore
-  sessionStore: SessionStore
-  turns: TurnService
-  events: RuntimeEventRecorder
-  ids: { next(prefix: string): string }
-  /** Immutable Kun/role prompt supplied by the owning runtime boundary. */
-  systemPrompt?: string
-  sessionCoordinator?: DelegatedSessionCoordinator
-  /** Serve-process-scoped singletons; tests may inject doubles. */
-  connectionPool?: AcpConnectionPool
-  clientHost?: AcpClientHost
-  sessionManager?: AcpSessionManager
-  spawn?: AcpSpawnFn
-  approvalGate?: ApprovalGate
-  approvalReview?: ApprovalReviewPort
-  /** Elicitation (P2-10): user_input gate / ask_manager bridges per turn. */
-  userInputGate?: UserInputGate
-  workerCallbacks?: Pick<WorkerCallbackService, 'askManager'>
-  /**
-   * Credential env for `kun-gateway`/`provider` modes (`native-login`
-   * receives none). Default: none — gateway bridging lands in P1-08.
-   */
-  credentialEnv?: (input: AcpCredentialEnvInput) => Promise<Record<string, string>>
-  /** Extra env keys to strip from the harness child beyond the shared denylist. */
-  stripEnv?: readonly string[]
-  attachmentStore?: AttachmentStore
-  /** Kun Tools MCP provider (P3-08): per-turn kun-tools grant + descriptor. */
-  kunToolsMcp?: KunToolsMcpProvider
-  taskWorkspaces?: TaskWorkspaceLister
-  deterministicHandoff?: boolean
-  /** Delegated read-only children deny mutation regardless of parent defaults. */
-  enforceReadOnly?: boolean
-  /** Narrower mediation roots for child/delegated scopes. */
-  allowedReadPaths?: readonly string[]
-  allowedWritePaths?: readonly string[]
-  allowUnattendedFullAccess?: boolean
-  defaultApprovalPolicy?: ApprovalPolicy
-  defaultSandboxMode?: SandboxMode
-  defaultApprovalReviewer?: ApprovalReviewer
-  turnLimits?: TurnLimitsConfig
-  /** Desktop Git snapshot gate awaited by the first mutating mediated call. */
-  awaitWorkspaceCheckpoint?: (
-    checkpointRequestId: string,
-    signal: AbortSignal
-  ) => Promise<string | null>
-  debugSink?: LlmDebugSink
-  nowIso?: () => string
-  debug?: AcpDebugLog
-  cancelSettleMs?: number
-}
+export type { AcpRuntimeDeps } from './acp-runtime-deps.js'
+import type { AcpRuntimeDeps } from './acp-runtime-deps.js'
 
 export class AcpRuntime implements DelegatedTurnRuntime {
   private readonly pool: AcpConnectionPool
@@ -289,9 +237,11 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     const credentialMode =
       turn.credentialMode ?? defaultCredentialMode(definition.id, definition)
     const accountId = actingModelRoute.accountId
+    // P4-11: `harnesses.defaults[id].permissionMode` is the user default a
+    // turn falls back to when nothing was requested explicitly.
     const permissionModeId = resolvePermissionMode(
       definition,
-      undefined,
+      this.deps.harnessDefaults?.(definition.id)?.permissionMode,
       isUnattendedTurn(turn),
       this.deps.allowUnattendedFullAccess === true
     )
@@ -321,6 +271,12 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         model: actingModelRoute.model,
         accountId
       })
+    // P4-12: `launch.secretEnv` refs resolve once per turn here for the
+    // mediated-terminal env; acquireAcpConnection resolves again for spawn.
+    const secretEnv = await resolveHarnessSecretEnv(
+      definition,
+      this.deps.resolveSecretEnv
+    )
     const poolKey = `${definition.id}:${credentialIdentity}`
     const limits = normalizeTurnLimits(this.deps.turnLimits)
 
@@ -332,6 +288,14 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       workspace,
       signal
     }).catch(async (error) => {
+      // A user abort is not a harness defect; everything else observed at
+      // launch outweighs any earlier probe verdict (P4-03).
+      if (!(error instanceof AcpError && error.code === 'request_aborted')) {
+        this.deps.onLaunchFailure?.(
+          definition.id,
+          error instanceof Error ? error.message : String(error)
+        )
+      }
       await this.failFromAcpError(threadId, turnId, error, true)
       return undefined
     })
@@ -522,7 +486,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       ),
       recordChange: (item) => this.deps.turns.applyItem(threadId, item),
       elicit: acpElicitForTurn(this.deps, thread, turn, signal),
-      terminalEnv: acpChildEnv(this.deps, definition, credentialEnv),
+      terminalEnv: acpChildEnv(this.deps, definition, credentialEnv, secretEnv),
       signal,
       nextId: (prefix) => this.deps.ids.next(prefix)
     }

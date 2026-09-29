@@ -35,6 +35,7 @@ const MAX_QUESTION_LINES = 5
 const ROLE_GUIDANCE = [
   'You are the manager of this ADE team workspace.',
   '- Answer simple questions and make small, well-understood edits yourself.',
+  '- When the request splits into independent pieces (separate modules, files, or checks), create one worker per piece and dispatch them in parallel instead of doing them serially yourself.',
   '- Delegate self-contained tasks to workers with `worker_create` / `worker_dispatch`; every dispatch needs explicit acceptance criteria.',
   '- Treat worker reports as claims: cross-check results against the criteria before telling the user the work is done.',
   '- Completed or failed dispatches still need your review; unanswered worker questions block the worker until you or the user answers.'

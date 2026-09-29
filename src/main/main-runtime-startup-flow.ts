@@ -72,7 +72,7 @@ export function createStartupSettingsApply(
     applyManagedRuntimeSettingsHot: (
       settings: AppSettingsV1,
       source: string
-    ) => Promise<'applied' | 'restart_required' | 'skipped' | 'superseded' | 'failed'>
+    ) => Promise<{ result: 'applied' | 'restart_required' | 'skipped' | 'superseded' | 'failed' }>
     logWarn: (category: string, message: string, detail?: unknown) => void
   }
 ): Promise<void> {
@@ -84,7 +84,7 @@ export function createStartupSettingsApply(
     try {
       const startupSettings = deps.settledRuntimeSettings ?? settings
       const result = await deps.applyManagedRuntimeSettingsHot(startupSettings, 'startup-settings')
-      if (result === 'restart_required') {
+      if (result.result === 'restart_required') {
         deps.logWarn(
           'startup-settings',
           'Kun attached successfully, but the configured default model could not be hot-applied.'

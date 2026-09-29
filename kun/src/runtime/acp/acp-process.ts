@@ -96,6 +96,8 @@ export async function startAcpProcess(input: {
   args?: readonly string[]
   /** Non-sensitive launch env from the harness definition. */
   env?: Record<string, string>
+  /** Resolved secretEnv values (P4-12); overrides plain env entries. */
+  secretEnv?: Record<string, string>
   /** Credential env from credential resolution (injected last, wins). */
   credentialEnv?: Record<string, string>
   /** Extra caller-specific strip keys beyond the shared denylist. */
@@ -111,7 +113,7 @@ export async function startAcpProcess(input: {
   const env = buildHarnessEnv({
     base: process.env,
     strip: input.stripEnv,
-    add: { ...input.env, ...input.credentialEnv }
+    add: { ...input.env, ...input.secretEnv, ...input.credentialEnv }
   })
   const child = await spawn(input.command, input.args ?? [], {
     env,

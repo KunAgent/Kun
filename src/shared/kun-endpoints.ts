@@ -243,13 +243,20 @@ export const KUN_ACTIVITY_EVENTS_PATH = '/v1/activity/events'
 export const KUN_ACTIVITY_EVENTS_TEMPLATE = '/v1/activity/events'
 export const KUN_ACTIVITY_FOREGROUND_PATH = '/v1/activity/foreground'
 export const KUN_APPROVALS_PATH = '/v1/approvals'
+export const KUN_ACTIVITY_FOREGROUND_TEMPLATE = '/v1/activity/foreground'
+export const KUN_ACTIVITY_UNIT_TEMPLATE = '/v1/activity/{id}/{action}'
 export const KUN_TASK_WORKSPACES_PATH = '/v1/task-workspaces'
+export const KUN_TASK_WORKSPACES_TEMPLATE = '/v1/task-workspaces'
+export const KUN_TASK_WORKSPACE_TEMPLATE = '/v1/task-workspaces/{id}'
 export function kunTaskWorkspacePath(workspaceId: string, suffix = ''): string {
   return `${KUN_TASK_WORKSPACES_PATH}/${encodeURIComponent(workspaceId)}${suffix}`
 }
 
 /** ADE line-level review comments (docs/ade/11 §4). */
 export const KUN_REVIEWS_PATH = '/v1/reviews'
+export const KUN_REVIEW_COMMENTS_TEMPLATE = '/v1/reviews/{id}/comments'
+export const KUN_REVIEW_COMMENT_TEMPLATE = '/v1/reviews/{id}/comments/{commentId}'
+export const KUN_REVIEW_SEND_TEMPLATE = '/v1/reviews/{id}/send'
 export function kunReviewsPath(workspaceId: string, suffix = ''): string {
   return `${KUN_REVIEWS_PATH}/${encodeURIComponent(workspaceId)}${suffix}`
 }
@@ -259,6 +266,12 @@ export function kunActivityUnitPath(unitId: string, action: 'ack' | 'dismiss' | 
 
 /** ADE team control surface (docs/ade/09 §9). */
 export const KUN_TEAMS_PATH = '/v1/teams'
+export const KUN_TEAM_BY_MANAGER_TEMPLATE = '/v1/teams/by-manager/{id}'
+export const KUN_TEAM_QUESTION_ANSWER_TEMPLATE = '/v1/teams/questions/{id}/answer'
+export const KUN_TEAM_WORKER_TEMPLATE = '/v1/teams/workers/{id}'
+export const KUN_TEAM_WORKER_ACTION_TEMPLATE = '/v1/teams/workers/{id}/{action}'
+export const KUN_TEAM_RACE_TEMPLATE = '/v1/teams/races/{id}'
+export const KUN_TEAM_RACE_ACTION_TEMPLATE = '/v1/teams/races/{id}/{action}'
 export function kunTeamByManagerPath(managerThreadId: string): string {
   return `${KUN_TEAMS_PATH}/by-manager/${encodeURIComponent(managerThreadId)}`
 }
@@ -285,6 +298,14 @@ export function kunTeamRaceActionPath(
 }
 
 export const KUN_HARNESSES_PATH = '/v1/harnesses'
+export const KUN_HARNESSES_TEMPLATE = '/v1/harnesses'
+export const KUN_HARNESS_MODELS_TEMPLATE = '/v1/harnesses/{id}/models'
+export const KUN_HARNESS_PROBE_TEMPLATE = '/v1/harnesses/{id}/probe'
+export const KUN_HARNESS_TEST_TEMPLATE = '/v1/harnesses/{id}/test'
+// P4-12: unsaved-definition handshake + credential-store secret refs.
+export const KUN_HARNESS_PROBE_DEFINITION_TEMPLATE = '/v1/harnesses/probe-definition'
+export const KUN_HARNESS_SECRETS_TEMPLATE = '/v1/harness-secrets'
+export const KUN_HARNESS_SECRET_TEMPLATE = '/v1/harness-secrets/{ref}'
 export function kunHarnessModelsPath(harnessId: string, credentialMode?: string): string {
   const base = `${KUN_HARNESSES_PATH}/${encodeURIComponent(harnessId)}/models`
   const mode = credentialMode?.trim()
@@ -485,6 +506,7 @@ export function kunThreadTrajectoryDetailPath(threadId: string, recordId: string
   return `${kunThreadTrajectoryPath(threadId)}/${encodeURIComponent(recordId)}/detail`
 }
 
+export const KUN_APPROVALS_TEMPLATE = '/v1/approvals'
 export const KUN_APPROVAL_TEMPLATE = '/v1/approvals/{id}'
 export function kunApprovalPath(approvalId: string): string {
   return `/v1/approvals/${encodeURIComponent(approvalId)}`

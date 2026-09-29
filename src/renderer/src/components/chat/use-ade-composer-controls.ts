@@ -5,7 +5,8 @@ import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { TaskWorkspacePrep } from '../../store/task-workspace-store'
 import { useChatStore } from '../../store/chat-store'
 import {
-  harnessRowAvailable,
+  harnessRowRunsTurns,
+  harnessRowUnavailableCode,
   loadHarnessModels,
   loadHarnessProviderGroups,
   loadHarnesses,
@@ -21,6 +22,7 @@ import {
   adeHarnessModelGroups,
   type AdeCredentialGroupLabels
 } from '../../lib/ade-composer-harness'
+import { useHarnessDefaults, harnessPermissionDefault } from '../../lib/harness-defaults'
 
 /**
  * ADE composer wiring (docs/ade/12 §7.2–7.4): harness catalog, per-harness
@@ -52,6 +54,7 @@ export function useAdeComposerControls(input: {
     provider: t('adeCredential.provider'),
     kunGateway: t('adeCredential.kunGateway')
   }), [t])
+  const harnessDefaults = useHarnessDefaults()
   const rows = useHarnessStore((state) => state.rows)
   const rowsLoading = useHarnessStore((state) => state.rowsLoading)
   const composerHarnessId = useChatStore((state) => state.composerHarnessId)
@@ -61,6 +64,7 @@ export function useAdeComposerControls(input: {
   const setComposerModel = useChatStore((state) => state.setComposerModel)
   const isolation = useChatStore((state) => state.composerIsolation)
   const setComposerIsolation = useChatStore((state) => state.setComposerIsolation)
+  const setComposerExecutionSettings = useChatStore((state) => state.setComposerExecutionSettings)
   const requestAdeThreadWorkspace = useChatStore((state) => state.requestAdeThreadWorkspace)
   const harnessId = effectiveHarnessId(composerHarnessId, threadHarnessId)
   const row = rows.find((entry) => entry.definition.id === harnessId)
@@ -74,7 +78,9 @@ export function useAdeComposerControls(input: {
   )
 
   useEffect(() => {
-    if (enabled) void loadHarnesses()
+    // P4-02: hold the first list briefly so mid-flight detections settle
+    // instead of pinning a provisional "unknown" verdict.
+    if (enabled) void loadHarnesses(true, { waitMs: 3_000 })
   }, [enabled])
   useEffect(() => {
     if (enabled && harnessId !== 'kun') void loadHarnessModels(harnessId)
@@ -152,27 +158,52 @@ export function useAdeComposerControls(input: {
 
   const selectHarness = (nextId: string, nextCredentialMode?: string): void => {
     const nextRow = rows.find((entry) => entry.definition.id === nextId)
-    const cred = nextCredentialMode?.trim() || defaultCredentialModeForRow(nextRow)
+    // P4-13: picker rows are filtered, but a stale persisted pick can still
+    // call in with a terminal-only id — it cannot host turns.
+    if (nextRow && !harnessRowRunsTurns(nextRow)) return
+    // P4-11: the configured per-harness defaults supply whatever the user
+    // did not pick explicitly on this switch.
+    const defaults = harnessDefaults[nextId]
+    const defaultCred = defaults?.credentialMode &&
+      nextRow?.definition.credentialModes.includes(defaults.credentialMode)
+      ? defaults.credentialMode
+      : undefined
+    const cred = nextCredentialMode?.trim() ||
+      defaultCred ||
+      defaultCredentialModeForRow(nextRow)
     setComposerHarness(nextId === 'kun' ? '' : nextId, nextId === 'kun' ? '' : cred)
     // A stale provider-catalog model id must not leak into the new harness —
-    // prefer its first advertised model, else clear so kun applies defaults.
+    // prefer the saved default, then its first advertised model, else clear
+    // so kun applies defaults.
     const models = nextId === 'kun'
       ? []
       : (useHarnessStore.getState().models[nextId]?.models ?? nextRow?.definition.staticModels ?? [])
-    setComposerModel(models[0] ?? '', '')
+    setComposerModel(
+      defaults?.model ?? models[0] ?? '',
+      cred === 'native-login' ? '' : defaults?.providerId ?? ''
+    )
+    if (defaults?.isolation) {
+      setComposerIsolation(
+        defaults.isolation,
+        defaults.isolation === 'worktree' ? { kind: 'default-branch' } : undefined
+      )
+    }
+    const permissionDefault = harnessPermissionDefault(nextRow?.definition, defaults)
+    if (permissionDefault) setComposerExecutionSettings(permissionDefault)
   }
 
   return {
     enabled,
-    rows,
+    // P4-13: terminal-only agents live in the catalog for the terminal menu
+    // and `harness_list`, but they cannot host turns — keep them out.
+    rows: rows.filter(harnessRowRunsTurns),
     rowsLoading,
     harnessId,
     credentialMode,
     harnessLabel,
     isNativeHarness,
-    rowUnavailableReason: (candidate: AdeHarnessRow): string | null =>
-      harnessRowAvailable(candidate) ? null : candidate.status.message ?? 'unavailable',
-    refreshRows: () => void loadHarnesses(true),
+    rowUnavailableCode: harnessRowUnavailableCode,
+    refreshRows: () => void loadHarnesses(true, { waitMs: 3_000 }),
     pickList,
     modelGroups,
     modelsLoading: modelCache?.loading === true,

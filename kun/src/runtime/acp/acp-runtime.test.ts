@@ -368,6 +368,29 @@ describe('AcpRuntime.runTurn', () => {
     expect(h.finished[0]?.error ?? '').not.toContain('sk-testsecret')
   })
 
+  test('a launch failure reports back through onLaunchFailure (P4-03)', async () => {
+    const failures: Array<{ harnessId: string; detail: string }> = []
+    const h = await makeHarness('basic-chat.json', {
+      deps: {
+        onLaunchFailure: (harnessId, detail) => {
+          failures.push({ harnessId, detail })
+        },
+        spawn: async () => {
+          throw new Error('ENOENT: binary vanished')
+        }
+      }
+    })
+    const outcome = await h.runtime.runTurn(
+      'thread_1',
+      'turn_1',
+      new AbortController().signal
+    )
+    expect(outcome).toBe('failed')
+    expect(failures).toHaveLength(1)
+    expect(failures[0]?.harnessId).toBe('fake-acp')
+    expect(failures[0]?.detail).toContain('ENOENT')
+  })
+
   test('a second turn resumes the bound session via session/load', async () => {
     const h = await makeHarness('resume.json')
     expect(

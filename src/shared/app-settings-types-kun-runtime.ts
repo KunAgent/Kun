@@ -354,6 +354,16 @@ export type KunPlanExecutionSettingsV1 = {
   useWorktreeByDefault: boolean
 }
 
+/**
+ * A `secretEnv` binding (docs/ade/impl/p4 §3.7, P4-12): settings only carry
+ * the opaque credential-store ref; the secret value resolves inside kun at
+ * spawn time and is never echoed to the UI or logs.
+ */
+export type KunHarnessSecretEnvEntryV1 = {
+  name: string
+  secretRef: string
+}
+
 /** User-defined custom (ACP) harness entry under agents.kun.harnesses.custom. */
 export type KunHarnessCustomEntryV1 = {
   id: string
@@ -361,6 +371,43 @@ export type KunHarnessCustomEntryV1 = {
   command: string
   args: string[]
   env: Record<string, string>
+  secretEnv?: KunHarnessSecretEnvEntryV1[]
+}
+
+/**
+ * Per-harness defaults (docs/ade/impl/p4 §3.6, P4-11): the composer, the
+ * one-to-one dialog, and the manager worker selector fall back to these
+ * when nothing was picked explicitly. Supersedes the legacy flat
+ * `defaultPermissionMode` map, which normalization folds into
+ * `defaults[id].permissionMode`.
+ */
+export type KunHarnessDefaultsEntryV1 = {
+  credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+  /** Provider connection id; meaningful for `provider`/`kun-gateway` only. */
+  providerId?: string
+  model?: string
+  /** A permissionModes[].id on the harness definition. */
+  permissionMode?: string
+  isolation?: 'local' | 'worktree'
+}
+
+/**
+ * Terminal-only agent (docs/ade/impl/p4 §3.8, P4-13): an interactive CLI
+ * launched inside a Kun terminal tab as a registered execution unit. It
+ * cannot host delegated turns — dispatch reaches it only through the
+ * `kun worker` callback, and only when the agent cooperates.
+ */
+export type KunTerminalAgentEntryV1 = {
+  id: string
+  displayName: string
+  command: string
+  args: string[]
+  /** Flag that carries the initial task (e.g. '-i'); absent appends positionally. */
+  taskFlag?: string
+  /** Args the launcher offers for "continue session" affordances. */
+  resumeArgs?: string[]
+  /** Managed-hook mechanism; 'none' (or absent) disables hook injection. */
+  hooks?: 'none' | 'claude-settings'
 }
 
 export type KunHarnessSettingsV1 = {
@@ -370,12 +417,18 @@ export type KunHarnessSettingsV1 = {
   binaryPaths: Record<string, string>
   /** User-defined ACP harnesses (id must not collide with builtins). */
   custom: KunHarnessCustomEntryV1[]
-  /** Per-harness default permission level (a permissionModes[].id). */
-  defaultPermissionMode: Record<string, string>
+  /** Per-harness defaults; the migrated home of `defaultPermissionMode`. */
+  defaults: Record<string, KunHarnessDefaultsEntryV1>
   /** Default harness for new one-to-one ADE conversations. */
   defaultHarnessId: string
   /** User preference order for ADE worker selection (10 §3.2 userPreference). */
   agentOrder: string[]
+  /**
+   * Interactive CLIs exposed in the terminal "new agent tab" menu (p4 §3.8).
+   * They join the harness catalog as `transport: 'terminal'` — visible to
+   * `harness_list` as terminal-only, never dispatchable as turn runtimes.
+   */
+  terminalAgents: KunTerminalAgentEntryV1[]
 }
 
 export type KunAdeSettingsV1 = {

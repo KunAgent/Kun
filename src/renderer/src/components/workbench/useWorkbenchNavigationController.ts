@@ -97,6 +97,10 @@ export type WorkbenchNavigationController = {
   startNewAdeOneOnOne: (input: {
     harnessId: string
     credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+    providerId?: string
+    model?: string
+    isolation?: 'local' | 'worktree'
+    permissionMode?: string
   }) => void
   startNewChatInWorkspace: (
     workspaceRoot: string,

@@ -315,8 +315,14 @@ export interface AgentProvider {
   getTeamWorker?(
     workerId: string
   ): Promise<{ team: import('@shared/ade-teams').AdeTeamRecord; worker: import('@shared/ade-teams').AdeTeamWorker } | null>
-  /** Harness catalog rows with cached detection status (01 §7, 12 §7.2). */
-  listHarnesses?(): Promise<import('@shared/ade-harnesses').AdeHarnessRow[]>
+  /**
+   * Harness catalog rows with cached detection status (01 §7, 12 §7.2).
+   * `waitMs` asks the runtime to hold the response until inflight
+   * detections settle or the budget elapses (P4-02).
+   */
+  listHarnesses?(options?: {
+    waitMs?: number
+  }): Promise<import('@shared/ade-harnesses').AdeHarnessRow[]>
   /** Models a harness accepts (01 §9): static, probed, or provider-derived. */
   listHarnessModels?(
     harnessId: string,
@@ -326,6 +332,24 @@ export interface AgentProvider {
   probeHarness?(
     harnessId: string
   ): Promise<import('@shared/ade-harnesses').AdeHarnessRow>
+  /**
+   * Progressive connection test (p4 §3.5, P4-10): detect → handshake →
+   * optional trial turn. Trial consumes quota on the harness's credential.
+   */
+  testHarness?(
+    harnessId: string,
+    input: import('@shared/ade-harnesses').AdeHarnessTestRequest
+  ): Promise<import('@shared/ade-harnesses').AdeHarnessTestResult>
+  /**
+   * Pre-save handshake for a custom ACP definition (p4 §3.7, P4-12).
+   */
+  probeHarnessDefinition?(
+    input: import('@shared/ade-harnesses').AdeHarnessProbeDefinitionRequest
+  ): Promise<import('@shared/ade-harnesses').AdeHarnessProbeDefinitionResult>
+  /** Store a `secretEnv` value; returns the opaque credential-store ref. */
+  storeHarnessSecret?(value: string): Promise<string>
+  /** Release a stored secret (e.g. when a secretEnv row is removed). */
+  deleteHarnessSecret?(secretRef: string): Promise<void>
   /** Worker control: take-over / hand-back / stop / detach (09 §9). */
   controlTeamWorker?(
     workerId: string,

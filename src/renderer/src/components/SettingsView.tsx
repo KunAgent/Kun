@@ -456,6 +456,7 @@ export function SettingsView(): ReactElement {
   const settingsSectionContext = {
     t,
     tCommon,
+    goBack,
     openStorageSettings: () => setCategory('storage'),
     settingsSection,
     form,

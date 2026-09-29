@@ -34,6 +34,39 @@ describe('normalizeKunHarnessSettings', () => {
     expect(normalized.defaultHarnessId).toBe('mine')
   })
 
+  // P4-12: secretEnv entries carry only opaque credential-store refs.
+  it('normalizes custom secretEnv rows and drops malformed ones', () => {
+    const normalized = normalizeKunHarnessSettings({
+      custom: [{
+        id: 'mine',
+        displayName: 'Mine',
+        command: '/bin/mine',
+        secretEnv: [
+          { name: 'GOOD_KEY', secretRef: 'cred_1' },
+          { name: 'lowercase', secretRef: 'cred_2' },   // invalid env name
+          { name: 'NO_REF', secretRef: '' },           // empty ref
+          { name: 'GOOD_KEY', secretRef: 'cred_9' },   // last write wins
+          'garbage',
+          { name: 'TOOLONG', secretRef: 'x'.repeat(300) }
+        ]
+      }]
+    })
+    expect(normalized.custom[0]?.secretEnv).toEqual([
+      { name: 'GOOD_KEY', secretRef: 'cred_9' }
+    ])
+  })
+
+  it('omits secretEnv when the entry has none (keeps settings lean)', () => {
+    const normalized = normalizeKunHarnessSettings({
+      custom: [
+        { id: 'a', displayName: 'A', command: '/bin/a', secretEnv: 'nope' },
+        { id: 'b', displayName: 'B', command: '/bin/b' }
+      ]
+    })
+    expect(normalized.custom[0]).not.toHaveProperty('secretEnv')
+    expect(normalized.custom[1]).not.toHaveProperty('secretEnv')
+  })
+
   it('merges patch fields over current', () => {
     const merged = mergeKunHarnessSettings(
       { ...defaultKunHarnessSettings(), disabledIds: ['cursor'] },
@@ -41,6 +74,146 @@ describe('normalizeKunHarnessSettings', () => {
     )
     expect(merged.disabledIds).toEqual(['cursor'])
     expect(merged.defaultHarnessId).toBe('antigravity')
+  })
+
+  it('normalizes defaults entries and drops garbage (P4-11)', () => {
+    const normalized = normalizeKunHarnessSettings({
+      defaults: {
+        'claude-code': {
+          credentialMode: 'kun-gateway',
+          providerId: ' deepseek ',
+          model: 'deepseek-chat',
+          permissionMode: 'plan',
+          isolation: 'worktree',
+          extra: 'dropped'
+        },
+        junk: { credentialMode: 'bogus', isolation: 'nope' },
+        bad: 'not-an-object'
+      }
+    })
+    expect(normalized.defaults).toEqual({
+      'claude-code': {
+        credentialMode: 'kun-gateway',
+        providerId: 'deepseek',
+        model: 'deepseek-chat',
+        permissionMode: 'plan',
+        isolation: 'worktree'
+      }
+    })
+  })
+
+  it('folds legacy defaultPermissionMode into defaults.permissionMode', () => {
+    const normalized = normalizeKunHarnessSettings({
+      defaultPermissionMode: { 'claude-code': 'plan', cursor: 'ask', '': 'x', nope: 5 }
+    })
+    expect('defaultPermissionMode' in normalized).toBe(false)
+    expect(normalized.defaults).toEqual({
+      'claude-code': { permissionMode: 'plan' },
+      cursor: { permissionMode: 'ask' }
+    })
+  })
+
+  it('explicit defaults.permissionMode wins over the legacy map', () => {
+    const normalized = normalizeKunHarnessSettings({
+      defaultPermissionMode: { 'claude-code': 'ask' },
+      defaults: { 'claude-code': { permissionMode: 'plan', model: 'x' } }
+    })
+    expect(normalized.defaults['claude-code']).toEqual({
+      model: 'x',
+      permissionMode: 'plan'
+    })
+  })
+
+  it('patch merge replaces the defaults map whole', () => {
+    // Like binaryPaths/custom, a `defaults` patch is the full desired map —
+    // omitting an entry deletes it. Callers (Agent Center) spread the current
+    // map before dispatching.
+    const current = normalizeKunHarnessSettings({
+      defaults: { 'claude-code': { model: 'a', isolation: 'worktree' } }
+    })
+    const merged = mergeKunHarnessSettings(current, {
+      defaults: { 'claude-code': { model: 'b' }, cursor: { credentialMode: 'provider' } }
+    })
+    expect(merged.defaults).toEqual({
+      'claude-code': { model: 'b' },
+      cursor: { credentialMode: 'provider' }
+    })
+  })
+
+  it('patch merge still accepts a legacy defaultPermissionMode write', () => {
+    const current = normalizeKunHarnessSettings({
+      defaults: { cursor: { model: 'composer-2' } }
+    })
+    const merged = mergeKunHarnessSettings(current, {
+      defaultPermissionMode: { 'claude-code': 'plan' }
+    })
+    // A direct legacy write seeds defaults while keeping existing entries.
+    expect(merged.defaults).toEqual({
+      cursor: { model: 'composer-2' },
+      'claude-code': { permissionMode: 'plan' }
+    })
+  })
+
+  it('legacy map alongside a defaults map still folds on load', () => {
+    // The settings-load path merges the raw `harnesses` object as a patch.
+    // A hand-edited or downgraded file can carry both shapes; the legacy
+    // map fills entries that lack their own permissionMode.
+    const merged = mergeKunHarnessSettings(defaultKunHarnessSettings(), {
+      defaults: {
+        cursor: { model: 'composer-2' },
+        'claude-code': { permissionMode: 'plan' }
+      },
+      defaultPermissionMode: { cursor: 'ask', 'claude-code': 'default' }
+    })
+    expect(merged.defaults).toEqual({
+      cursor: { model: 'composer-2', permissionMode: 'ask' },
+      'claude-code': { permissionMode: 'plan' }
+    })
+  })
+
+  // P4-13: terminalAgents join the catalog as `transport: 'terminal'` —
+  // interactive CLIs that never host delegated turns.
+  it('normalizes terminalAgents and drops collisions with builtin/custom ids', () => {
+    const normalized = normalizeKunHarnessSettings({
+      custom: [{ id: 'mine', displayName: 'Mine', command: '/bin/mine' }],
+      terminalAgents: [
+        {
+          id: 'zed-shell', displayName: ' Zed Shell ', command: ' /bin/zsh-agent ',
+          args: ['--tty', '', 'x'.repeat(2000)], taskFlag: '-i',
+          resumeArgs: ['--resume'], hooks: 'claude-settings'
+        },
+        { id: 'kun', displayName: 'Fake', command: '/bin/fake' },
+        { id: 'mine', displayName: 'Shadow', command: '/bin/shadow' },
+        { id: 'zed-shell', displayName: 'Dup', command: '/bin/dup' },
+        { id: 'no-cmd', displayName: 'No command' },
+        'garbage',
+        { id: 'quiet', command: '/bin/quiet', hooks: 'bogus-hook' }
+      ]
+    })
+    expect(normalized.terminalAgents).toEqual([
+      {
+        id: 'zed-shell',
+        displayName: 'Zed Shell',
+        command: '/bin/zsh-agent',
+        args: ['--tty'],
+        taskFlag: '-i',
+        resumeArgs: ['--resume'],
+        hooks: 'claude-settings'
+      },
+      { id: 'quiet', displayName: 'quiet', command: '/bin/quiet', args: [] }
+    ])
+  })
+
+  it('patch merge replaces terminalAgents whole', () => {
+    const current = normalizeKunHarnessSettings({
+      terminalAgents: [{ id: 'a', displayName: 'A', command: '/bin/a' }]
+    })
+    const merged = mergeKunHarnessSettings(current, {
+      terminalAgents: [{ id: 'b', displayName: 'B', command: '/bin/b', args: [] }]
+    })
+    expect(merged.terminalAgents.map((entry) => entry.id)).toEqual(['b'])
+    const untouched = mergeKunHarnessSettings(current, {})
+    expect(untouched.terminalAgents.map((entry) => entry.id)).toEqual(['a'])
   })
 })
 

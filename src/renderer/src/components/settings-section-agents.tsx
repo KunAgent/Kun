@@ -63,6 +63,8 @@ function panelForSettingsSection(section: unknown): AgentsSettingsPanel {
   if (section === 'permissions') return 'permissions'
   if (section === 'skill') return 'skills'
   if (section === 'mcp') return 'tools'
+  // P4-05: harness status guidance deep-links straight to the harnesses tab.
+  if (section === 'agentsHarnesses') return 'harnesses'
   return 'assistant'
 }
 

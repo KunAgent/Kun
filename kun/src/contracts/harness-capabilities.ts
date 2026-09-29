@@ -90,3 +90,16 @@ export function allSupportedStatuses(): HarnessCapabilityStatuses {
     HARNESS_CAPABILITY_KEYS.map((key) => [key, SUPPORTED])
   ) as HarnessCapabilityStatuses
 }
+
+/**
+ * Every capability unsupported — terminal-only agents (p4 §3.8) run inside a
+ * PTY and cannot host delegated turns at all.
+ */
+export function allUnsupportedStatuses(
+  reason: 'upstream' | 'not-implemented' | 'platform',
+  extra?: { messageKey?: string; message?: string }
+): HarnessCapabilityStatuses {
+  return Object.fromEntries(
+    HARNESS_CAPABILITY_KEYS.map((key) => [key, unsupported(reason, extra)])
+  ) as HarnessCapabilityStatuses
+}

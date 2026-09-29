@@ -41,6 +41,7 @@ import { CanvasReceiptRegistry } from '../services/canvas-receipt-registry.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
 import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
 import { HarnessRouter, HarnessRuntimeMap } from '../harness/harness-router.js'
+import { harnessDefaultsFor } from '../harness/harness-defaults.js'
 import { createKunToolBridgeHost } from '../harness/kun-tool-bridge-host.js'
 import { FileTeamStore } from '../ade/team-store.js'
 import { handleAdeThreadDeleted } from '../ade/team-lifecycle.js'
@@ -311,8 +312,8 @@ export async function createRuntimeAgentComposition(
     const acpRuntimeDeps: AcpRuntimeDeps = {
       catalog: services.harnesses.catalog,
       binaryPath: (harnessId) => core.activeOptions.harnesses?.binaryPaths?.[harnessId],
-      threadStore,
-      sessionStore,
+      harnessDefaults: (id) => harnessDefaultsFor(core.activeOptions.harnesses, id),
+      resolveSecretEnv: services.harnesses.resolveSecretEnv, threadStore, sessionStore,
       turns: turnService,
       events,
       ids,
@@ -321,19 +322,18 @@ export async function createRuntimeAgentComposition(
       connectionPool: core.acpConnectionPool,
       clientHost: core.acpClientHost,
       sessionManager: core.acpSessionManager,
-      approvalGate,
-      approvalReview: approvalReviewService,
+      approvalGate, approvalReview: approvalReviewService,
       userInputGate, workerCallbacks: services.workerCallbacks,
       kunToolsMcp: services.kunToolsMcp, credentialEnv: services.acpCredentialEnv,
       ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
       deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
       allowUnattendedFullAccess: input.options.ade?.allowUnattendedFullAccess === true,
-      defaultApprovalPolicy: input.options.approvalPolicy,
-      defaultSandboxMode: input.options.sandboxMode,
+      defaultApprovalPolicy: input.options.approvalPolicy, defaultSandboxMode: input.options.sandboxMode,
       defaultApprovalReviewer: input.options.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
       turnLimits: input.options.runtime?.turnLimits,
-      awaitWorkspaceCheckpoint: (id, sig) =>
-        waitForWorkspaceCheckpoint(core.activeOptions.dataDir, id, sig),
+      awaitWorkspaceCheckpoint: (id, sig) => waitForWorkspaceCheckpoint(core.activeOptions.dataDir, id, sig),
+      // P4-03: a real launch failure outweighs any earlier probe verdict.
+      onLaunchFailure: (id, detail) => services.harnesses.detector.recordLaunchFailure(id, detail),
       ...(llmDebug ? { debugSink: llmDebug } : {}),
       nowIso,
       ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
@@ -347,10 +347,9 @@ export async function createRuntimeAgentComposition(
   }
 
   const adeTeamStore = new FileTeamStore(core.activeOptions.dataDir, nowIso)
-  // The main turn abort signal already reaches foreground children. Detached
-  // children and background shells intentionally have independent lifetimes,
-  // so a destructive thread delete must cancel them explicitly before the
-  // lifecycle fence drains and removes the thread directory.
+  // The main turn abort signal already reaches foreground children; detached
+  // children and background shells keep independent lifetimes, so a destructive
+  // thread delete cancels them before the lifecycle fence drains the thread dir.
   core.stopThreadAuxiliaryWork = async (threadId) => {
     await graphRuntime.cancelThreadRuns(threadId)
     await Promise.allSettled([

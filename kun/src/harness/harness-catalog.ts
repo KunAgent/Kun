@@ -3,7 +3,15 @@ import {
   type HarnessDefinition,
   type HarnessId
 } from '../contracts/harness.js'
-import { ACP_DEFAULT_CAPABILITIES, BUILTIN_HARNESSES } from './builtin-harnesses.js'
+import {
+  allUnsupportedStatuses,
+  type HarnessCapabilities
+} from '../contracts/harness-capabilities.js'
+import {
+  ACP_DEFAULT_CAPABILITIES,
+  BUILTIN_HARNESSES,
+  CLAUDE_SETTINGS_HOOK_EVENTS
+} from './builtin-harnesses.js'
 
 export type CustomHarnessConfig = {
   id: string
@@ -11,19 +19,48 @@ export type CustomHarnessConfig = {
   command: string
   args: string[]
   env: Record<string, string>
+  /** Credential-store refs resolved into env at spawn (P4-12). */
+  secretEnv?: readonly { name: string; secretRef: string }[]
+}
+
+/**
+ * `harnesses.terminalAgents[]` config entry (p4 §3.8, P4-13): an interactive
+ * CLI that runs inside a Kun terminal tab, not a delegated turn runtime.
+ */
+export type TerminalAgentConfig = {
+  id: string
+  displayName: string
+  command: string
+  args: readonly string[]
+  taskFlag?: string
+  resumeArgs?: readonly string[]
+  hooks?: 'none' | 'claude-settings'
 }
 
 const CUSTOM_TRANSPORT = 'acp'
+const TERMINAL_TRANSPORT = 'terminal'
+
+/**
+ * Terminal agents host no turns: every capability is unavailable so
+ * `manager-worker` admission and `harness_list` mark them terminal-only.
+ */
+const TERMINAL_AGENT_CAPABILITIES: HarnessCapabilities = {
+  statuses: allUnsupportedStatuses('upstream', {
+    message: 'terminal-only agent; runs inside a Kun terminal tab'
+  }),
+  facts: { sandbox: 'none', usageReporting: 'none', compactionOwner: 'harness' }
+}
 
 /**
  * Read-only catalog of harness definitions: builtin entries merged with
- * user-defined ACP harnesses from config. Definitions colliding with a builtin
- * id are dropped.
+ * user-defined ACP harnesses and terminal agents from config. Definitions
+ * colliding with an earlier id are dropped (builtin > custom > terminal).
  */
 export class HarnessCatalog {
   constructor(
     private readonly deps: {
       custom: () => readonly CustomHarnessConfig[]
+      terminalAgents?: () => readonly TerminalAgentConfig[]
       /** User-disabled builtin harness ids; they stay visible but unadmittable. */
       disabled?: () => readonly HarnessId[]
     } = {
@@ -33,9 +70,18 @@ export class HarnessCatalog {
 
   list(): HarnessDefinition[] {
     const customs: HarnessDefinition[] = []
+    const taken = new Set(BUILTIN_HARNESSES.map((d) => d.id))
     for (const entry of this.deps.custom()) {
       const parsed = HarnessDefinitionSchema.safeParse(customToDefinition(entry))
-      if (parsed.success && !BUILTIN_HARNESSES.some((d) => d.id === parsed.data.id)) {
+      if (parsed.success && !taken.has(parsed.data.id)) {
+        taken.add(parsed.data.id)
+        customs.push(parsed.data)
+      }
+    }
+    for (const entry of this.deps.terminalAgents?.() ?? []) {
+      const parsed = HarnessDefinitionSchema.safeParse(terminalAgentToDefinition(entry))
+      if (parsed.success && !taken.has(parsed.data.id)) {
+        taken.add(parsed.data.id)
         customs.push(parsed.data)
       }
     }
@@ -55,7 +101,8 @@ export class HarnessCatalog {
   }
 }
 
-function customToDefinition(entry: CustomHarnessConfig): unknown {
+/** Build the catalog definition for a `harnesses.custom[]` entry (P4-12: also used by probe-definition). */
+export function customToDefinition(entry: CustomHarnessConfig): unknown {
   return {
     id: entry.id as HarnessId,
     displayName: entry.displayName,
@@ -65,7 +112,12 @@ function customToDefinition(entry: CustomHarnessConfig): unknown {
       aliases: [],
       versionArgs: ['--version']
     },
-    launch: { command: entry.command, args: entry.args, env: entry.env },
+    launch: {
+      command: entry.command,
+      args: entry.args,
+      env: entry.env,
+      secretEnv: entry.secretEnv ?? []
+    },
     credentialModes: ['native-login'],
     permissionModes: [
       { id: 'default', label: 'Ask', kunPermissionMode: 'ask-for-approval' },
@@ -74,6 +126,46 @@ function customToDefinition(entry: CustomHarnessConfig): unknown {
     modelSource: 'probe',
     staticModels: [],
     capabilities: ACP_DEFAULT_CAPABILITIES,
+    builtin: false
+  }
+}
+
+/**
+ * Build the catalog definition for a `harnesses.terminalAgents[]` entry.
+ * `detect.command` lets the detector prove existence; `terminal.argv` drives
+ * the PTY launch; a `claude-settings` opt-in turns managed hooks on.
+ */
+export function terminalAgentToDefinition(entry: TerminalAgentConfig): unknown {
+  return {
+    id: entry.id as HarnessId,
+    displayName: entry.displayName,
+    transport: TERMINAL_TRANSPORT,
+    detect: {
+      command: entry.command,
+      aliases: [],
+      versionArgs: ['--version']
+    },
+    terminal: {
+      argv: [...entry.args],
+      ...(entry.taskFlag ? { taskFlag: entry.taskFlag } : {}),
+      ...(entry.resumeArgs?.length ? { resumeArgs: [...entry.resumeArgs] } : {}),
+      ...(entry.hooks === 'claude-settings'
+        ? {
+            hooks: {
+              kind: 'claude-settings',
+              events: [...CLAUDE_SETTINGS_HOOK_EVENTS]
+            }
+          }
+        : {})
+    },
+    // No turn runtime consumes these; the schema still requires one entry.
+    credentialModes: ['native-login'],
+    permissionModes: [
+      { id: 'default', label: 'Ask', kunPermissionMode: 'ask-for-approval' }
+    ],
+    modelSource: 'static',
+    staticModels: [],
+    capabilities: TERMINAL_AGENT_CAPABILITIES,
     builtin: false
   }
 }

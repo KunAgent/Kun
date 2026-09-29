@@ -10,6 +10,45 @@
   "adeHandoffShow": "Показать бриф",
   "adeHandoffHide": "Скрыть бриф",
   "adeHandoffLoadError": "Не удалось восстановить бриф передачи",
+  "adeReadiness": {
+    "checking": "Проверка…",
+    "provider": {
+      "label": "Провайдер модели для менеджера",
+      "ready": "{{name}}",
+      "missing": "Нет доступного провайдера",
+      "action": "Настроить"
+    },
+    "agents": {
+      "label": "Готовые агенты",
+      "ready": "Готово: {{count}}",
+      "missing": "Нет готовых агентов",
+      "action": "Открыть центр агентов"
+    },
+    "gateway": {
+      "label": "Шлюз Kun",
+      "ready": "Включён",
+      "missing": "Выключен — harness не может обратиться к провайдерам",
+      "action": "Управление"
+    }
+  },
+  "adeHeroTitle": "Два способа делегировать работу",
+  "adeHeroManagerTitle": "Сессия менеджера",
+  "adeHeroManagerSub": "Менеджер планирует работу, параллельно запускает worker-ов и подводит итоги.",
+  "adeHeroManagerExample": "Например: «Разбей эту функцию на три независимые задачи и реализуй параллельно».",
+  "adeHeroOneOnOneTitle": "Сессия один на один",
+  "adeHeroOneOnOneSub": "Говорите напрямую с одним агентом — Kun, Claude Code или любым настроенным harness.",
+  "adeHeroOneOnOneExample": "Например: «Claude Code: проверь изменения в src/auth и перечисли риски».",
+  "adeOneOnOneDialog": {
+    "title": "Новая сессия один на один",
+    "agent": "Агент",
+    "credential": "Способ доступа",
+    "provider": "Провайдер",
+    "model": "Модель",
+    "start": "Начать сессию"
+  },
+  "adeDispatchable": "Можно направить: {{names}}",
+  "adeDispatchableNone": "Нет агентов для делегирования",
+  "adeDispatchableHint": "Агенты, которым менеджер может делегировать работу — управление в центре агентов",
   "workerUpdateNotice": {
     "title": "Обновления от воркеров"
   },
@@ -186,7 +225,11 @@
     "detecting": "Идёт проверка",
     "signedOut": "Не выполнен вход",
     "versionLow": "Версия слишком старая",
-    "unavailable": "Недоступно"
+    "unavailable": "Недоступно",
+    "adapterMissing": "Нет ACP-адаптера",
+    "handshakeFailed": "Ошибка подключения",
+    "handshakeTimeout": "Таймаут проверки",
+    "disabled": "Отключён"
   },
   "adeIsolation": {
     "title": "Изоляция",
@@ -259,5 +302,52 @@
   "adeGroupByProject": "Группировать по проекту",
   "adeGroupToggleHint": "Изменить группировку диалогов",
   "adeWorkerCount": "{{count}} исполнитель",
-  "adeWorkerCount_other": "исполнителей: {{count}}"
+  "adeWorkerCount_other": "исполнителей: {{count}}",
+  "adeHarnessNextStep": {
+    "install": "Установите и повторите",
+    "installAdapter": "Установите ACP-адаптер",
+    "upgrade": "Обновите и повторите",
+    "retry": "Повторить проверку",
+    "login": "Войдите и повторите",
+    "enable": "Включить в настройках"
+  },
+  "adeHarnessViewReason": "Показать причину",
+  "adeHarnessOpenSettings": "Открыть настройки",
+  "adeAgents": "Агенты",
+  "adeAgentCopied": "Команда скопирована — выполните её в терминале Kun",
+  "adeAgentCenter": {
+    "title": "Центр агентов",
+    "desc": "Установка, вход и управление агентами, которым Kun может делегировать работу."
+  },
+  "adeAgentAction": {
+    "install": "Установить",
+    "login": "Войти",
+    "installAdapter": "Установить адаптер",
+    "test": "Проверить подключение",
+    "retry": "Повторить проверку",
+    "enable": "Включить",
+    "disable": "Отключить",
+    "setDefault": "Сделать по умолчанию",
+    "isDefault": "По умолчанию",
+    "specifyPath": "Указать путь к команде",
+    "docs": "Документация",
+    "trial": "Пробный запуск"
+  },
+  "adeAgentTransport": {
+    "nativeLoop": "Kun",
+    "agentSdk": "Agent SDK",
+    "cursorSdk": "Cursor SDK",
+    "antigravityCli": "CLI",
+    "acp": "ACP",
+    "terminal": "Терминал"
+  },
+  "adeAgentTest": {
+    "detect": "Проверка",
+    "handshake": "Рукопожатие",
+    "trial": "Пробный ход",
+    "tokens": "Использовано токенов: {{count}}",
+    "noHandshake": "нет handshake-интерфейса",
+    "capSessionResume": "возобновление сессии",
+    "capImageInput": "ввод изображений"
+  }
 }
