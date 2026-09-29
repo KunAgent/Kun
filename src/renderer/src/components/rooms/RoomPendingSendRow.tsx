@@ -2,6 +2,7 @@ import { RotateCcw, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { RoomAvatar } from './RoomAvatar'
 import type { RoomPendingSend } from './useRoomPendingSends'
+import './rooms-experience.css'
 
 /**
  * Optimistic copy of the user's own message, shown at the bottom of the
@@ -29,7 +30,7 @@ export function RoomPendingSendRow({
           <strong>{t('roomsMyAvatar')}</strong>
           <span className="rooms-pending-status">
             {item.state === 'sending' ? t('roomsSend_pending') : null}
-            {item.state === 'sent' ? t('roomsReceipt_fallback') : null}
+            {item.state === 'sent' ? t('roomsSend_sent') : null}
             {item.state === 'steered' ? t('directSteered') : null}
           </span>
         </div>

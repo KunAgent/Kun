@@ -33,7 +33,8 @@ export function RoomMessageRow({
   onMember,
   onRun,
   onHandoff,
-  onOpenContent
+  onOpenContent,
+  continuation = false
 }: {
   message: RoomMessage
   room?: Room
@@ -50,6 +51,7 @@ export function RoomMessageRow({
   onRun?: (id: string) => void
   onHandoff?: (id: string) => void
   onOpenContent?: (reference: RoomContentReference, messageId?: string) => void
+  continuation?: boolean
 }) {
   const { t } = useTranslation('common')
   const [copied, setCopied] = useState(false)
@@ -87,9 +89,9 @@ export function RoomMessageRow({
     <article
       id={idPrefix + '-' + message.id}
       data-room-message-id={message.id}
-      className={`rooms-message-row rooms-message-${message.authorKind}`}
+      className={`rooms-message-row rooms-message-${message.authorKind}${continuation ? ' rooms-message-continuation' : ''}`}
     >
-      {!system ? (
+      {continuation ? <span className="rooms-message-avatar-spacer" aria-hidden="true" /> : !system ? (
         <RoomAvatar
           member={member}
           id={message.authorMemberId ?? message.authorKind}

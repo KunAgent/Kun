@@ -23,6 +23,7 @@ import {
   roomsRequest
 } from './rooms-client'
 import { RoomMessageRow } from './RoomMessageRow'
+import { roomMessageLayout } from './room-message-layout'
 import { roomButtonClass, roomFieldClass } from './RoomSettings'
 import './rooms-timeline.css'
 
@@ -46,7 +47,8 @@ export function RoomTimeline({
   onReplyThread,
   onOpenContent,
   afterMessages,
-  renderChoice
+  renderChoice,
+  hideEmpty = false
 }: {
   room: Room
   messages: RoomMessage[]
@@ -68,6 +70,7 @@ export function RoomTimeline({
   onOpenContent?: (reference: RoomContentReference, messageId?: string) => void
   afterMessages?: ReactNode
   renderChoice?: (message: RoomMessage) => ReactNode
+  hideEmpty?: boolean
 }) {
   const { t } = useTranslation('common')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -334,7 +337,7 @@ export function RoomTimeline({
     thread: (message: RoomMessage) => (actions.current.onReplyThread ?? actions.current.onReply ?? actions.current.reply)(message),
     viewReply: (id: string) => actions.current.viewReply(id)
   }), [])
-  const renderMessage = (message: RoomMessage) => (
+  const renderMessage = (message: RoomMessage, continuation: boolean) => (
     message.presentationKind === 'choice' && renderChoice ? renderChoice(message) : <StableMessageRow
       room={room}
       onOpenContent={onOpenContent}
@@ -356,6 +359,7 @@ export function RoomTimeline({
       onTask={stableActions.task}
       onViewReply={stableActions.viewReply}
       onMember={onMember ? stableActions.member : undefined}
+      continuation={continuation}
     />
   )
   return (
@@ -442,7 +446,7 @@ export function RoomTimeline({
             </button>
           </div>
         ) : null}
-        {!rows.length ? (
+        {!rows.length && (results || !hideEmpty) ? (
           <p className="rooms-timeline-empty">
             {t(
               searchBusy
@@ -453,31 +457,30 @@ export function RoomTimeline({
             )}
           </p>
         ) : null}
-        <div
-          ref={rowsRef}
-          style={
-            virtual
-              ? {
-                  paddingTop: rendered[0]?.start ?? 0,
-                  paddingBottom: Math.max(
-                    0,
-                    totalSize - (rendered.at(-1)?.end ?? 0)
-                  )
-                }
-              : undefined
-          }
-        >
-          {rendered.map((row) => (
-            <div
-              key={row.key}
-              data-index={row.index}
-              ref={virtual ? virtualizer.measureElement : undefined}
-              className="rooms-timeline-row"
-            >
-              {renderMessage(rows[row.index])}
-            </div>
-          ))}
-          {afterMessages}
+        <div ref={rowsRef}>
+          <div style={virtual ? {
+            paddingTop: rendered[0]?.start ?? 0,
+            paddingBottom: Math.max(0, totalSize - (rendered.at(-1)?.end ?? 0))
+          } : undefined}>
+            {rendered.map((row) => {
+              const layout = roomMessageLayout(rows[row.index - 1], rows[row.index])
+              return (
+                <div
+                  key={row.key}
+                  data-index={row.index}
+                  ref={virtual ? virtualizer.measureElement : undefined}
+                  className="rooms-timeline-row"
+                >
+                  {layout.newDay ?
+                    <div className="rooms-timeline-day" role="separator">
+                      {new Date(rows[row.index].createdAt).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </div> : null}
+                  {renderMessage(rows[row.index], layout.continuation)}
+                </div>
+              )
+            })}
+          </div>
+          {!results ? afterMessages : null}
         </div>
         {results && searchCursor ? (
           <button
@@ -564,7 +567,7 @@ export function RoomTimeline({
               {t('roomsClose')}
             </button>
           </div>
-          {renderMessage(focused)}
+          {renderMessage(focused, false)}
         </section>
       ) : null}
     </div>

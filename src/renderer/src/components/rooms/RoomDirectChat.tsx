@@ -74,7 +74,7 @@ export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile,
     </RoomPopover>
   </header>
 }
-export function RoomDirectProgress({ room, state, onRun, openRunId, onModels }: { room: Room; state: ReturnType<typeof useDirectChat>; onRun: (id: string) => void; openRunId?: string; onModels: () => void }) {
+export function RoomDirectProgress({ room, state, onRun, openRunId, onModels, activityInTimeline = false, gatesInTimeline = false }: { room: Room; state: ReturnType<typeof useDirectChat>; onRun: (id: string) => void; openRunId?: string; onModels: () => void; activityInTimeline?: boolean; gatesInTimeline?: boolean }) {
   const { t } = useTranslation('common')
   const [dismissed, setDismissed] = useState('')
   useEffect(() => setDismissed(''), [room.id])
@@ -88,9 +88,9 @@ export function RoomDirectProgress({ room, state, onRun, openRunId, onModels }: 
   if (!active && !(failed && failedKey !== dismissed) && !(state.error && errorKey !== dismissed) && !room.privateWorkspace) return null
   return <div className="direct-progress">
     {room.privateWorkspace ? <p className="direct-project"><FolderOpen size={13} /><span title={room.privateWorkspace}>{room.privateWorkspace.split('/').at(-1)}</span></p> : null}
-    {active ? <div className="direct-progress-line"><span className="rooms-typing-dots" aria-hidden="true"><span className="rooms-typing-dot" /><span className="rooms-typing-dot" /><span className="rooms-typing-dot" /></span><span role="status">{t(state.data?.approvals.length ? 'roomsState_needs_approval' : state.data?.userInputs.length ? 'roomsState_needs_input' : active.status === 'pending' ? 'directQueued' : active.status === 'recovery_required' ? 'directReconciling' : active.status === 'stopping' ? 'directStopping' : active.steer ? 'directSteered' : 'directResponding')}{queued ? ' · ' + t('directQueuedCount', { count: queued }) : ''}</span>
+    {active && !activityInTimeline ? <div className="direct-progress-line"><span className="rooms-typing-dots" aria-hidden="true"><span className="rooms-typing-dot" /><span className="rooms-typing-dot" /><span className="rooms-typing-dot" /></span><span role="status">{t(state.data?.approvals.length ? 'roomsState_needs_approval' : state.data?.userInputs.length ? 'roomsState_needs_input' : active.status === 'pending' ? 'directQueued' : active.status === 'recovery_required' ? 'directReconciling' : active.status === 'stopping' ? 'directStopping' : active.steer ? 'directSteered' : 'directResponding')}{queued ? ' · ' + t('directQueuedCount', { count: queued }) : ''}</span>
       {runId ? <button type="button" aria-pressed={openRunId === runId} className={openRunId === runId ? 'is-active' : ''} onClick={() => onRun(runId)}><PanelRightOpen size={14} />{t('roomsViewAgentSession')}</button> : null}</div> : null}
-    {state.data ? <RoomExecutionGates detail={{ ...state.data, userInputs: [] }} onUpdated={async () => state.refresh()} /> : null}
+    {state.data && !gatesInTimeline ? <RoomExecutionGates detail={{ ...state.data, userInputs: [] }} onUpdated={async () => state.refresh()} /> : null}
     {failed && failedKey !== dismissed ? <div className="direct-failed" role="status"><CircleAlert size={15} /><span>{failed.error || t(failed.status === 'cancelled' ? 'directStopped' : 'directFailed')}</span>
       <RoomNoticeDismiss onDismiss={() => setDismissed(failedKey)} />
       <span className="direct-failed-actions">
