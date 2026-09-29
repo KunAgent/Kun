@@ -8,6 +8,7 @@ import { RoomMessageBody } from './RoomMessageBody'
 import { RoomMessageRunButton } from './RoomMessageRunButton'
 import { RoomMessageInteractions } from './RoomMessageInteractions'
 import { RoomProposalCard } from './RoomProposalCard'
+import { RoomAppConnectionCard } from './RoomAppConnectionCard'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
 import './rooms-reminders.css'
 
@@ -144,7 +145,7 @@ export function RoomMessageRow({
               </span>
             </button>
           ) : null}
-          {message.presentationKind !== 'poll' && message.presentationKind !== 'reminder' && (message.presentationKind !== 'proposal' || !room) ? <RoomMessageBody
+          {message.presentationKind !== 'poll' && message.presentationKind !== 'reminder' && message.presentationKind !== 'app_connection' && (message.presentationKind !== 'proposal' || !room) ? <RoomMessageBody
             room={room}
             publicMessage={message.status !== 'streaming'}
             messageId={message.id}
@@ -163,6 +164,7 @@ export function RoomMessageRow({
             </div>
           </div> : null}
           {room && message.presentationKind === 'proposal' ? <RoomProposalCard room={room} message={message} /> : null}
+          {room && message.presentationKind === 'app_connection' ? <RoomAppConnectionCard message={message} /> : null}
           {room ? <RoomMessageInteractions room={room} message={message} onMember={onMember ? (id) => onMember(id, message.rootRequestId) : undefined} /> : null}
         </div>
         <div className="rooms-message-footer">

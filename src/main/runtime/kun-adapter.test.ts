@@ -125,6 +125,11 @@ describe('runtimeRequestViaHost', () => {
     )).toBe(40_000)
   })
 
+  it('keeps interactive MCP OAuth open through the browser callback window', () => {
+    expect(resolveRuntimeRequestTimeoutMs('/v1/mcp/oauth/google_gmail', 'POST')).toBe(180_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/mcp/oauth/google_gmail', 'GET')).toBe(15_000)
+  })
+
   it('keeps thread activity long polls alive beyond their server wait window', () => {
     expect(resolveRuntimeRequestTimeoutMs(
       '/v1/thread-activity/events?wait_ms=25000&cursor=cursor_1',

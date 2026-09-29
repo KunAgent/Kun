@@ -21,6 +21,7 @@ import { settleConversationRunOutcome } from './agent-direct-publication.js'
 import { withdrawRunProposals } from '../rooms/room-proposals.js'
 import { roomContinuationIsCurrent } from '../rooms/room-continuation-service.js'
 import { ROOM_REMINDER_TOOL_NAMES } from '../rooms/room-reminder-tools.js'
+import { ROOM_APP_TOOL_NAMES } from '../rooms/room-app-connection-tools.js'
 import { agentHistoryReferenceText, agentPrivateSystemPrompt, agentPrivateTurnInput, agentReminderWakeInput } from '../rooms/room-ax-surfaces.js'
 
 export function agentWorkspace(dataDir: string, agentId: string) { return join(dataDir, 'agents', 'workspaces', agentId) }
@@ -109,7 +110,7 @@ export class AgentDirectRunner {
           profilePrompt: profile?.systemPrompt, agentInstructions: member.agentInstructions, roleNotes: member.roleNotes })
       }, { id: request.threadId, relation: 'side', roomContext: { roomId: request.roomId, memberId: member.id,
         participantAgentId: member.participantAgentId, agentRevision: member.agentRevision, kind: 'conversation',
-        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...ROOM_REMINDER_TOOL_NAMES, ...AGENT_COLLABORATION_TOOLS])] : undefined,
+        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...ROOM_REMINDER_TOOL_NAMES, ...ROOM_APP_TOOL_NAMES, ...AGENT_COLLABORATION_TOOLS])] : undefined,
         blockedToolNames: policy.blocked,
         blockedProviderIds: limits?.blockedMcpServers ?? [], blockedSkillIds: limits?.blockedSkills ?? [], skillsEnabled: policy.skillsEnabled } })
     }
