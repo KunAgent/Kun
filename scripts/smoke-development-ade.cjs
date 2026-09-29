@@ -203,8 +203,36 @@ async function main() {
       return probe.status?.resolvedCommand === claudeStubUpdated
     }, 30_000, 'runtime receiving the harness command path update')
     await capture('4-harness-command-path-applied')
-    await page.locator('button[aria-label="Back"]').first().click()
+
+    // 3b) P4-09: an install/login card action prefills a fresh Kun terminal
+    //     (never auto-executes) and leaves Settings for the workbench. The
+    //     isolated HOME means every non-Claude builtin is either missing or
+    //     signed out, so at least one card carries a command action.
+    const catalog = await runtimeRequest(page, '/v1/harnesses', 'GET')
+    const cardLocators = await harnessPanel.locator('[data-agent-card]').all()
+    let setupCard = null
+    for (const card of cardLocators) {
+      for (const [name, kind] of [['Install adapter', 'adapter'], ['Install', 'install'], ['Sign in', 'login']]) {
+        const commandButton = card.getByRole('button', { name, exact: true })
+        if ((await commandButton.count()) > 0) {
+          setupCard = { card, button: commandButton.first(), kind }
+          break
+        }
+      }
+      if (setupCard) break
+    }
+    assert(setupCard, 'Expected at least one harness card with a setup command action')
+    const setupHarnessId = await setupCard.card.getAttribute('data-agent-card')
+    const setupRow = (catalog.harnesses ?? []).find((row) => row.definition.id === setupHarnessId)
+    const expectedCommand = expectedSetupCommand(setupRow?.definition, process.platform, setupCard.kind)
+    assert(expectedCommand, `No builtin setup command resolved for ${setupHarnessId} (${setupCard.kind})`)
+    await setupCard.button.click()
     await page.locator('[data-mission-control]').waitFor()
+    await page.locator('[data-terminal-open="true"]').waitFor()
+    await poll(async () => (await page.locator('.xterm-rows').innerText())
+      .includes(expectedCommand.command), 30_000,
+      `terminal showing the prefilled ${setupHarnessId} command`)
+    await capture('4b-setup-command-prefilled-terminal')
 
     // 4) A one-on-one thread with Claude Code shows the composer; its harness
     //    picker menu renders through a body portal, not inside the clipped
@@ -252,6 +280,7 @@ async function main() {
         'one-on-one picker refreshes while detection is inflight; installed harness selectable',
         'unavailable harness rows carry a localized reason plus a settings deep link',
         'settings command path hot-applies and re-probes through /v1/harnesses/:id/probe',
+        'setup command prefills a fresh terminal without executing and leaves Settings',
         'composer harness picker menu renders through a body portal',
         'Kun gateway model group exposes provider models'] }
     await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
@@ -368,6 +397,25 @@ async function poll(check, timeoutMs, description) {
     await new Promise((resolve) => setTimeout(resolve, 200))
   }
   throw new Error(`Timed out waiting for ${description}`)
+}
+
+// Mirrors agent-center-actions.ts: 'install' prefers an exact platform match
+// over 'any', 'login' is `command + args`, 'adapter' is setup.adapter.install.
+function expectedSetupCommand(definition, platform, kind) {
+  const setup = definition?.setup
+  if (!setup) return null
+  if (kind === 'login' && setup.login?.command) {
+    const args = (setup.login.args ?? []).join(' ').trim()
+    return { command: args ? `${setup.login.command} ${args}` : setup.login.command }
+  }
+  if (kind === 'adapter' && setup.adapter?.install) return { command: setup.adapter.install }
+  if (kind === 'install') {
+    const entries = setup.install ?? []
+    const picked = entries.find((entry) => entry.platform === platform)
+      ?? entries.find((entry) => entry.platform === 'any')
+    if (picked) return { command: picked.command }
+  }
+  return null
 }
 
 async function startModelFixture() {

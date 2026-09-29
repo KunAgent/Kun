@@ -10,7 +10,7 @@ import {
   saveThreadRightPanelExpansionRegistry
 } from '../lib/thread-right-panel-expansion'
 import { WORKSPACE_FILE_PREVIEW_EVENT, type WorkspaceFilePreviewDetail } from '../lib/workspace-file-preview'
-import { TERMINAL_OPEN_AT_EVENT } from './terminal/terminal-open'
+import { TERMINAL_OPEN_AT_EVENT, hasPendingTerminalRequest } from './terminal/terminal-open'
 import { isNarrowViewportNow, isRemoteWeb } from '../lib/remote-mobile'
 import {
   CODE_CANVAS_OPEN_REQUEST_EVENT,
@@ -564,7 +564,11 @@ export function useWorkbenchLayout({
   // "Open this worktree in a terminal" requests come from other surfaces
   // (e.g. the review result dialog); they only open the panel — the mounted
   // TerminalPanel drains the pending cwd itself (terminal-open.ts).
+  // P4-09: a setup prefill can be dispatched while a covering route
+  // (Settings) still hides the workbench; the pending request is checked on
+  // mount so the panel still opens once the workbench remounts.
   useEffect(() => {
+    if (hasPendingTerminalRequest()) setTerminalOpen(true)
     const onOpenAt = (): void => setTerminalOpen(true)
     window.addEventListener(TERMINAL_OPEN_AT_EVENT, onOpenAt)
     return () => window.removeEventListener(TERMINAL_OPEN_AT_EVENT, onOpenAt)

@@ -43,8 +43,8 @@ import { trajectoryUiState, useTrajectoryUiStore } from '../../store/trajectory-
 import { useTrajectoryData } from '../trajectory/useTrajectoryData'
 import { TrajectoryView } from '../trajectory/TrajectoryView'
 
-const TerminalPanel = lazy(() =>
-  import('../terminal/TerminalPanel').then((module) => ({ default: module.TerminalPanel }))
+const TerminalDrawer = lazy(() =>
+  import('../terminal/TerminalDrawer').then((module) => ({ default: module.TerminalDrawer }))
 )
 
 type FloatingComposerProps = ComponentProps<typeof FloatingComposer>
@@ -415,22 +415,14 @@ export function WorkbenchChatStage({
         </div>
       </div>
       {terminalOpen ? (
-        <div className="ds-no-drag relative z-[3] flex w-full shrink-0 flex-col px-0 pb-0">
-          <div
-            role="separator"
-            aria-orientation="horizontal"
-            className="relative z-20 h-1 shrink-0 cursor-row-resize bg-transparent transition hover:bg-ds-border-muted"
-            onPointerDown={onBeginTerminalResize}
+        <Suspense fallback={null}>
+          <TerminalDrawer
+            workspaceRoot={terminalWorkspaceRoot}
+            height={terminalHeight}
+            onBeginResize={onBeginTerminalResize}
+            onCollapse={onToggleTerminal}
           />
-          <Suspense fallback={<div className="ds-surface-strong h-full w-full" />}>
-            <TerminalPanel
-              workspaceRoot={terminalWorkspaceRoot}
-              height={terminalHeight}
-              className="w-full"
-              onCollapse={onToggleTerminal}
-            />
-          </Suspense>
-        </div>
+        </Suspense>
       ) : null}
     </section>
   )

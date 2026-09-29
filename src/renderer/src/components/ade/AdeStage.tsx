@@ -7,6 +7,9 @@ import {
 const AdeMissionControl = lazy(() =>
   import('./AdeMissionControl').then((module) => ({ default: module.AdeMissionControl }))
 )
+const TerminalDrawer = lazy(() =>
+  import('../terminal/TerminalDrawer').then((module) => ({ default: module.TerminalDrawer }))
+)
 
 export type AdeStageProps = {
   conversation: WorkbenchConversationStageProps
@@ -19,13 +22,41 @@ export type AdeStageProps = {
  * active thread the ADE home is Mission Control; SDD draft editing stays a
  * Code-only surface. The shared ActivityStore feed (06 §9) is app-owned in
  * AppShell while the ADE lab flag is on, so this stage only subscribes.
+ *
+ * P4-09: the agent home carries the shared terminal drawer too — harness
+ * install/login actions from the Agent Center open a prefilled local tab
+ * here, outside any conversation.
  */
 export function AdeStage({ conversation, activeThreadId }: AdeStageProps): ReactElement {
   if (!activeThreadId) {
+    const {
+      terminalOpen,
+      terminalHeight,
+      terminalWorkspaceRoot,
+      onBeginTerminalResize,
+      onToggleTerminal
+    } = conversation.chat
     return (
-      <Suspense fallback={<div className="h-full min-h-0 w-full bg-ds-main" aria-hidden />}>
-        <AdeMissionControl />
-      </Suspense>
+      <section
+        className="ds-chat-stage ds-drag relative isolate flex min-h-0 min-w-0 flex-1 flex-col"
+        data-terminal-open={terminalOpen ? 'true' : 'false'}
+      >
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <Suspense fallback={<div className="h-full min-h-0 w-full bg-ds-main" aria-hidden />}>
+            <AdeMissionControl />
+          </Suspense>
+        </div>
+        {terminalOpen ? (
+          <Suspense fallback={null}>
+            <TerminalDrawer
+              workspaceRoot={terminalWorkspaceRoot}
+              height={terminalHeight}
+              onBeginResize={onBeginTerminalResize}
+              onCollapse={onToggleTerminal}
+            />
+          </Suspense>
+        ) : null}
+      </section>
     )
   }
   return (
