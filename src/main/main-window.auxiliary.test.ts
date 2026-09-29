@@ -41,7 +41,10 @@ const electron = vi.hoisted(() => {
   }
 })
 
-vi.mock('electron', () => ({ BrowserWindow: electron.BrowserWindow }))
+vi.mock('electron', () => ({
+  app: { getAppPath: () => '/tmp/out/app' },
+  BrowserWindow: electron.BrowserWindow
+}))
 vi.mock('./main-app-context', () => ({
   __dirname: '/tmp/out/main',
   appEnvironment: { flavor: 'production' },

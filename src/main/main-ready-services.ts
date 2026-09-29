@@ -329,7 +329,7 @@ export async function initializeMainServices(input: {
     traceStartup('install webview guards:done')
     const extensionConsentTokens = new ExtensionConsentTokenService()
     mainState.protectedCredentialSurface = new ProtectedCredentialSurfaceController(
-      resolveNamedPreloadPath(__dirname, 'extension-protected-surface')
+      resolveNamedPreloadPath(app.getAppPath(), 'extension-protected-surface')
     )
     mainState.protectedCredentialSurface.register()
     const protectedExtensionActions = new ProtectedExtensionActionService(

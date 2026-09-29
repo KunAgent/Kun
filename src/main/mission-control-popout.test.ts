@@ -6,6 +6,9 @@ const electronState = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
+  app: {
+    getAppPath: () => '/app'
+  },
   ipcMain: {
     handle: (channel: string, handler: (event: unknown, payload: unknown) => unknown) => {
       electronState.handlers.set(channel, handler)
