@@ -155,7 +155,7 @@ export function useWorkbenchLayout({
     threadLoadingId,
     signal: latestAutoOpenDevPreviewSignal
   }))
-  const rightPanelMode = route === 'chat'
+  const rightPanelMode = route === 'chat' || route === 'ade'
     ? transientRightPanelMode ?? (codeRightTabs.expanded ? codeRightTabs.activeId : null)
     : null
   const rightPanelVisible = route === 'write'

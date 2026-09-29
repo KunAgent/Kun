@@ -69,16 +69,19 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
     if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
     setConnectPhoneSidebarOpen(false)
     setRoute('ade')
+    // P4-16: a fresh manager session opens with the Workers panel so the
+    // dispatched-agent view is visible from the first turn. The request is
+    // deferred until the thread lands in `adeThreads`; opening it earlier
+    // would trip the unavailable-tab cleanup before the session exists.
     void createThread({
       useWorktreePool,
       worktreeBranch,
       agentSurface: 'code',
       workspaceMode: 'ade',
       activationGuard: () => navigationIsCurrent(requestId)
+    }).then((threadId) => {
+      if (threadId) requestOpenWorkersPanel()
     })
-    // P4-16: a fresh manager session opens with the Workers panel so the
-    // dispatched-agent view is visible from the first turn.
-    requestOpenWorkersPanel()
     if (useWorktreePool) setUseWorktreePool(false)
   }, [
     activeSddDraft,

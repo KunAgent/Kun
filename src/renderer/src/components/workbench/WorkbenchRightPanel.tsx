@@ -155,7 +155,7 @@ export function WorkbenchRightPanel({
 }: WorkbenchRightPanelProps): ReactElement | null {
   const { t } = useTranslation('common')
   const remoteMobile = useRemoteMobileLayout()
-  if (route === 'chat' && rightPanelMode !== BUILTIN_RIGHT_PANEL_IDS.sddAi && code) {
+  if ((route === 'chat' || route === 'ade') && rightPanelMode !== BUILTIN_RIGHT_PANEL_IDS.sddAi && code) {
     const visibleCodeState = codeRightTabsForGraphVisibility(code.state, graphEnabled)
     if (
       (!visible && visibleCodeState.tabs.length === 0) ||
