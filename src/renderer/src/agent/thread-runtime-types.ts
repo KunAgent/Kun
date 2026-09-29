@@ -1,4 +1,5 @@
 import type { HarnessCapabilities } from '@shared/harness-capabilities'
+import type { AdeDelegatedTransport } from '@shared/ade-harnesses'
 
 /** Cumulative usage/cost for a Kun thread. */
 export type ThreadUsageSnapshot = {
@@ -61,7 +62,7 @@ export type RequestContextSnapshot = {
 export type DelegatedRuntimeState = {
   threadId: string
   turnId?: string
-  providerKind: 'agent-sdk' | 'cursor-sdk' | 'antigravity-cli' | 'acp'
+  providerKind: AdeDelegatedTransport
   providerId: string
   /** Explicit harness identity when the event carries it. */
   harnessId?: string

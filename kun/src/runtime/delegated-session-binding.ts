@@ -16,6 +16,8 @@ export type DelegatedProviderKind =
   | 'cursor-sdk'
   | 'antigravity-cli'
   | 'acp'
+  | 'codex-app-server'
+  | 'pi-rpc'
 export type DelegatedContinuationMode = 'native' | 'portable'
 
 export type DelegatedSessionRoute = {

@@ -207,7 +207,9 @@ export async function listHarnessModels(
           ? await harnesses.acpModels?.probe(definition)
           : definition.transport === 'agent-sdk'
             ? await harnesses.agentSdkModels?.probe(definition)
-            : undefined
+            : definition.transport === 'codex-app-server'
+              ? await harnesses.codexModels?.probe(definition)
+              : undefined
       if (probed && probed.length > 0) {
         return jsonResponse({ harnessId: definition.id, models: probed })
       }

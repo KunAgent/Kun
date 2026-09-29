@@ -203,7 +203,9 @@ function isParkedSession(value: unknown): value is ParkedSession {
       providerKind === 'agent-sdk' ||
       providerKind === 'cursor-sdk' ||
       providerKind === 'antigravity-cli' ||
-      providerKind === 'acp'
+      providerKind === 'acp' ||
+      providerKind === 'codex-app-server' ||
+      providerKind === 'pi-rpc'
     ) &&
     (continuationMode === 'native' || continuationMode === 'portable') &&
     boundedString(record.providerId) &&

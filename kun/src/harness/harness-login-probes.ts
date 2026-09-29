@@ -35,6 +35,8 @@ export async function probeHarnessLogin(
       return probeProviderCredential(deps, 'cursor-sdk')
     case 'antigravity':
       return probeAntigravityLogin(deps)
+    case 'pi':
+      return probePiLogin(deps)
     default:
       return def.transport === 'acp' || def.transport === 'terminal' ? 'unknown' : 'unknown'
   }
@@ -65,6 +67,25 @@ async function probeAntigravityLogin(deps: HarnessLoginProbeDeps): Promise<Harne
     deps.geminiCredentialsPath ?? join(home, '.gemini', 'oauth_creds.json')
   if (existsSync(geminiCredentials)) return 'signed-in'
   return bound === 'signed-out' ? 'unknown' : bound
+}
+
+/**
+ * Pi native login state = `~/.pi/agent/auth.json` exists and parses with at
+ * least one provider credential (P6-11, D2 — Kun never writes into pi's
+ * agent dir; the file is read-only probed).
+ */
+async function probePiLogin(deps: HarnessLoginProbeDeps): Promise<HarnessLoginState> {
+  const home = deps.homeDir ?? homedir()
+  const authPath = join(home, '.pi', 'agent', 'auth.json')
+  if (!existsSync(authPath)) return 'signed-out'
+  try {
+    const parsed = JSON.parse(await readFile(authPath, 'utf8'))
+    return parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0
+      ? 'signed-in'
+      : 'signed-out'
+  } catch {
+    return 'signed-out'
+  }
 }
 
 function probeProviderCredential(

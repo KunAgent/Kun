@@ -19,6 +19,8 @@ const TRANSPORT_LABEL_KEY: Record<string, string> = {
   'cursor-sdk': 'adeAgentTransport.cursorSdk',
   'antigravity-cli': 'adeAgentTransport.antigravityCli',
   acp: 'adeAgentTransport.acp',
+  'codex-app-server': 'adeAgentTransport.codexAppServer',
+  'pi-rpc': 'adeAgentTransport.piRpc',
   terminal: 'adeAgentTransport.terminal'
 }
 

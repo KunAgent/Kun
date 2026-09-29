@@ -20,6 +20,12 @@
 | [contracts.md](./contracts.md) | 汇总：HTTP 接口、事件、字段、设置、持久化文件、错误码 |
 | [p3-review-followup.md](./p3-review-followup.md) | 2026-09-28 实施复核（P0 ~ P2 已合入）：缺口、红测、实机验证记录与 P3 后续计划 |
 | [p4-usable-ade.md](./p4-usable-ade.md) | 2026-09-29 界面可用性诊断（选择器被裁剪、检测状态不刷新、设置热应用被拒）、harness 添加与配置设计、P4 修复计划 |
+| [p5-agent-setup-ui.md](./p5-agent-setup-ui.md) | 2026-09-29 参照 Cindy 与 ACP Registry / Terminal Auth 的 Agent 添加与配置界面优化：双栏 Agent 中心、添加向导、"模型来源"取代"凭据方式"、P5 计划 |
+| [p6-native-agent-adapters.md](./p6-native-agent-adapters.md) | 2026-09-29 参照 Cindy `BaseAgent` 分层：会话级统一适配抽象（`HarnessAgent` / `HarnessSession` / `HarnessTurnSink`）、Codex App Server 与 Pi RPC 原生适配器、红线修订依据、P6 计划（方向与决策篇） |
+| [p6a-session-codex.md](./p6a-session-codex.md) | 2026-09-29 P6 详细计划之一：P6-01~P6-08——共用会话层契约与文件清单、JSONL/JSON-RPC 传输、Codex 协议快照与映射表、网关、回退开关、真机验证矩阵 |
+| [p6b-pi-acceptance.md](./p6b-pi-acceptance.md) | 2026-09-29 P6 详细计划之二：P6-09~P6-13——Pi RPC 集成、`kun-pi-bridge` 扩展、网关与登录、验收矩阵、回退矩阵、Claude/Cursor 迁移评估 |
+| [pi-protocol-notes.md](./pi-protocol-notes.md) | P6-09 前置契约：Pi RPC 实机验证档案（帧格式、命令面、事件面、权限桥、网关 models.json） |
+| [p6-migration-evaluation.md](./p6-migration-evaluation.md) | P6-13 迁移评估：Claude Code / Cursor 不迁入 HarnessAgent 的结论与依据、遗留清理、原生适配器准入清单 |
 
 ## 2. 约定
 
@@ -127,6 +133,24 @@ P0 ~ P2 各项均已实施，随合并提交 `e779bf43a` 进入 `develop`；"状
 | P2-09 | Mission Control 弹出窗口 | 已合入 `813a6da30` |
 | P2-10 | ACP elicitation | 已合入 `0cf7b6892` |
 | P2-11 | 外部 harness 的计划构建 | 已合入 `822565728` |
+
+### P6 原生适配器（分支 `codex/ade-p6-native`，待合入）
+
+| ID | 名称 | 状态 / 提交 |
+| --- | --- | --- |
+| P6-01 | 文档与红线修订 | 已完成 |
+| P6-02 | `kun/src/session` 共用会话层（ACP 行为不变） | 已完成 `133025910` |
+| P6-03 | ACP 传输/进程/池收敛到 session 共用件 | 已完成 |
+| P6-04 | Codex 协议快照 + CodexClient | 已完成 |
+| P6-05 | CodexAgent/CodexSession + 事件/审批映射 | 已完成 |
+| P6-06 | Codex 网关接入（wireModel + stripEnv + CODEX_HOME） | 已完成 `eb8229d0c` |
+| P6-07 | 内置定义/检测/transportOverrides/UI 标签 + 运行时注册 | 已完成 `fb79ef145` |
+| P6-08 | Codex 默认切换 | **阻塞于 P6-12 真机矩阵**；当前默认仍是 `acp`，`transportOverrides.codex='codex-app-server'` 可显式启用 |
+| P6-09 | Pi RPC client/session/agent | 已完成 `9ee790fbf` |
+| P6-10 | `kun-pi-bridge` 扩展 + extension_ui → Kun 门 | 已完成 `9ee790fbf` |
+| P6-11 | Pi 网关 models.json / 登录探测 / handshake probe | 已完成 `9ee790fbf` |
+| P6-12 | 真机验收矩阵 | **手动门**：凭据项不可自动化；未过项阻塞默认启用，不阻塞代码合入 |
+| P6-13 | 治理收尾与迁移评估 | 已完成（见 [p6-migration-evaluation.md](./p6-migration-evaluation.md)） |
 
 ## 4. 关键路径
 

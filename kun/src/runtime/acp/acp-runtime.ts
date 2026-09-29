@@ -7,59 +7,23 @@
  * map the session/update stream onto the Kun timeline. Completion is decided
  * by the `session/prompt` result — worker self-reports never end a turn.
  */
-import {
-  goalContextTexts,
-  type UserTurnItem
-} from '../../contracts/items.js'
-import type {
-  HarnessDefinition,
-  HarnessId,
-  HarnessRoute
-} from '../../contracts/harness.js'
-import {
-  DEFAULT_APPROVAL_REVIEWER,
-  type ApprovalPolicy,
-  type ApprovalReviewer,
-  type SandboxMode
-} from '../../contracts/policy.js'
+import type { HarnessRoute } from '../../contracts/harness.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
 import type { ApprovalRequest } from '../../domain/approval.js'
 import { makeDelegatedAwaitApproval } from '../../ade/delegated-approval.js'
-import {
-  filterGoalContextsForGoalKey,
-  goalContextKey
-} from '../../loop/continuation-instructions.js'
 import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
-import { normalizeTurnLimits, type TurnLimitsConfig } from '../../loop/turn-limits.js'
-import { resolveHarnessSecretEnv } from '../../harness/harness-secret-env.js'
 import type { TurnRunOutcome } from '../../loop/turn-execution-types.js'
 import { buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.js'
-import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
-import { historyReferenceInstructions } from '../../prompt/history-reference-context.js'
-import type { SessionStore } from '../../ports/session-store.js'
-import type { ThreadStore } from '../../ports/thread-store.js'
-import type { UserInputGate } from '../../ports/user-input-gate.js'
-import type { WorkerCallbackService } from '../../services/worker-callback-service.js'
-import type { ApprovalGate } from '../../ports/approval-gate.js'
-import type { ApprovalReviewPort } from '../../ports/approval-review.js'
-import type { AttachmentStore } from '../../attachments/attachment-store.js'
-import type { RuntimeEventRecorder } from '../../services/runtime-event-recorder.js'
-import type { TurnService } from '../../services/turn-service.js'
-import type { LlmDebugSink } from '../../services/llm-debug-recorder.js'
 import {
   recordHandoffInjected,
-  resolveTurnHandoff,
-  type TaskWorkspaceLister
+  resolveTurnHandoff
 } from '../../handoff/turn-handoff.js'
-import { defaultCredentialMode } from '../../harness/resolve-turn-harness.js'
-import { resolvePermissionMode } from '../../harness/harness-admission.js'
-import { isUnattendedTurn } from '../../harness/usage-for-turn.js'
 import type {
   DelegatedRuntimeCapabilities,
   DelegatedTurnRuntime
 } from '../delegated-turn-runtime.js'
 import type { DelegatedSessionCoordinator } from '../delegated-session-binding.js'
-import { parkDelegatedGraphTurnAfterRecovery } from '../delegated-graph-turn-policy.js'
+import { resolveSessionTurnContext } from '../../session/session-turn-context.js'
 
 import {
   buildHistoryTranscript,
@@ -165,120 +129,44 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     turnId: string,
     signal: AbortSignal
   ): Promise<TurnRunOutcome> {
-    const thread = await this.deps.threadStore.get(threadId)
-    const turn = thread?.turns.find((candidate) => candidate.id === turnId)
-    if (!thread || !turn) {
-      return this.failTurn(threadId, turnId, 'no input for ACP delegated turn')
-    }
-    let items = await this.deps.sessionStore.loadItems(threadId)
-    const userItem = [...items]
-      .reverse()
-      .find(
-        (item): item is UserTurnItem =>
-          item.turnId === turnId && item.kind === 'user_message'
-      )
-    if (!userItem) {
-      return this.failTurn(threadId, turnId, 'no input for ACP delegated turn')
-    }
-    const harnessId = turn.harnessId ?? thread.harnessId
-    const definition = harnessId ? this.deps.catalog.get(harnessId) : undefined
-    if (!definition || definition.transport !== 'acp' || !definition.launch) {
-      return this.failTurn(
-        threadId,
-        turnId,
-        `harness route is not ACP-backed: ${harnessId ?? 'none'}`,
-        'route_unsupported'
-      )
-    }
-    if (turn.orchestration === 'graph') {
-      return this.failGraphTurn(threadId, turnId)
-    }
-    if (!this.deps.enforceReadOnly && thread.goal?.status === 'active') {
-      await this.deps.turns.ensureGoalContext(threadId, turnId, signal)
-      items = await this.deps.sessionStore.loadItems(threadId)
-    }
-    if (signal.aborted) {
-      await this.deps.turns.finishTurn({ threadId, turnId, status: 'aborted' })
-      return 'aborted'
-    }
-    const goalContextKeyForHistory = goalContextKey(
-      (await this.deps.threadStore.get(threadId))?.goal
-    )
-    items = filterGoalContextsForGoalKey(items, goalContextKeyForHistory)
-    const turnDynamicContext = projectTurnDynamicContext({
+    // P6-02: the protocol-agnostic front half (thread/turn/items, goal
+    // context, history, model route, credentials, permission mode) is shared
+    // with the native session transports via kun/src/session/.
+    const resolved = await resolveSessionTurnContext(this.deps, {
+      threadId,
       turnId,
-      persona: turn.persona,
-      items
+      signal,
+      transport: 'acp',
+      noInputMessage: 'no input for ACP delegated turn',
+      graphUnavailableMessage:
+        'Graph mode is unavailable for ACP harnesses because they cannot execute Kun structured Graph tools. Choose Kun or a tool-capable provider and continue the same planning draft.',
+      resolveCredentialContext: resolveAcpCredentialContext
     })
-    items = [...turnDynamicContext.historyItems]
-    const workspace = thread.workspace
-    const instructionBlocks = [
-      this.deps.systemPrompt?.trim(),
-      thread.systemPrompt?.trim(),
-      ...historyReferenceInstructions(thread),
-      ...turnDynamicContext.instructions
-    ].filter((value, index, all): value is string =>
-      Boolean(value) && all.indexOf(value) === index
-    )
-    const model =
-      turn.actingModelRoute?.model ?? turn.model ?? thread.model ?? undefined
-    const actingModelRoute = turn.actingModelRoute ?? {
-      model: model ?? 'default',
-      ...(turn.providerId ?? thread.providerId
-        ? { providerId: turn.providerId ?? thread.providerId }
-        : {}),
-      ...(turn.accountId ?? thread.accountId
-        ? { accountId: turn.accountId ?? thread.accountId }
-        : {})
-    }
-    if (!turn.actingModelRoute) {
-      await this.deps.turns.updateTurnMetadata(threadId, turnId, { actingModelRoute })
-    }
-    const credentialMode =
-      turn.credentialMode ?? defaultCredentialMode(definition.id, definition)
-    const accountId = actingModelRoute.accountId
-    // P4-11: `harnesses.defaults[id].permissionMode` is the user default a
-    // turn falls back to when nothing was requested explicitly.
-    const permissionModeId = resolvePermissionMode(
+    if (!resolved.ok) return resolved.outcome
+    const {
+      thread,
+      turn,
+      userItem,
       definition,
-      this.deps.harnessDefaults?.(definition.id)?.permissionMode,
-      isUnattendedTurn(turn),
-      this.deps.allowUnattendedFullAccess === true
-    )
-    const approvalPolicy =
-      this.deps.enforceReadOnly === true
-        ? 'never'
-        : turn.approvalPolicy ??
-          thread.approvalPolicy ??
-          this.deps.defaultApprovalPolicy
-    const sandboxMode =
-      this.deps.enforceReadOnly === true
-        ? 'read-only'
-        : turn.sandboxMode ?? thread.sandboxMode ?? this.deps.defaultSandboxMode
-    const approvalReviewer =
-      turn.approvalReviewer ??
-      thread.approvalReviewer ??
-      this.deps.defaultApprovalReviewer ??
-      DEFAULT_APPROVAL_REVIEWER
-
-    const { credentialIdentity, env: credentialEnv } =
-      await resolveAcpCredentialContext(this.deps.credentialEnv, {
-        definition,
-        credentialMode,
-        threadId,
-        turnId,
-        providerId: actingModelRoute.providerId,
-        model: actingModelRoute.model,
-        accountId
-      })
-    // P4-12: `launch.secretEnv` refs resolve once per turn here for the
-    // mediated-terminal env; acquireAcpConnection resolves again for spawn.
-    const secretEnv = await resolveHarnessSecretEnv(
-      definition,
-      this.deps.resolveSecretEnv
-    )
-    const poolKey = `${definition.id}:${credentialIdentity}`
-    const limits = normalizeTurnLimits(this.deps.turnLimits)
+      workspace,
+      instructionBlocks,
+      turnDynamicContext,
+      goalContextKeyForHistory,
+      model,
+      actingModelRoute,
+      permissionModeId,
+      approvalPolicy,
+      sandboxMode,
+      approvalReviewer,
+      credentialIdentity,
+      credentialEnv,
+      secretEnv,
+      poolKey,
+      limits,
+      intent,
+      redactedRequestValues
+    } = resolved.ctx
+    let items = resolved.ctx.items
 
     const lease = await acquireAcpConnection(this.deps, this.pool, this.host, this.sessions, {
       poolKey,
@@ -448,11 +336,11 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         events: this.deps.events
       },
       {
-        approvalPolicy: approvalPolicy ?? 'ask',
+        approvalPolicy: approvalPolicy ?? 'on-request',
         sandboxMode,
         approvalReviewer,
         actingModelRoute,
-        intent: turn.prompt || userMessageTextWithComposerContexts(userItem),
+        intent,
         signal
       }
     )
@@ -498,10 +386,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       harnessId: definition.id,
       model: model ?? 'default',
       prompt,
-      redactedRequestValues: [
-        ...goalContextTexts(items),
-        ...turnDynamicContext.privateValues
-      ],
+      redactedRequestValues,
       phase: delegatedPhase(preparation),
       preparationReason: preparation.rebaseReason
     })
@@ -620,22 +505,6 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       severity: 'error'
     })
     return 'failed'
-  }
-
-  private async failGraphTurn(
-    threadId: string,
-    turnId: string
-  ): Promise<TurnRunOutcome> {
-    const message =
-      'Graph mode is unavailable for ACP harnesses because they cannot execute Kun structured Graph tools. Choose Kun or a tool-capable provider and continue the same planning draft.'
-    const completion = await parkDelegatedGraphTurnAfterRecovery(this.deps.turns, {
-      threadId,
-      turnId
-    })
-    if (completion === 'suspended' || completion === 'suspended_pending_supervision') {
-      return completion
-    }
-    return this.failTurn(threadId, turnId, message, 'capability_missing')
   }
 
   private async failFromAcpError(

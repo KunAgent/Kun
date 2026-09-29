@@ -60,6 +60,7 @@ import type { HarnessCatalog } from '../../harness/harness-catalog.js'
 import type { HarnessDetector } from '../../harness/harness-detector.js'
 import type { AcpModelProbe } from '../../harness/acp-model-probe.js'
 import type { AgentSdkModelProbe } from '../../harness/agent-sdk-model-probe.js'
+import type { CodexModelProbe } from '../../harness/codex-model-probe.js'
 import type { HarnessDefinition, HarnessStatus } from '../../contracts/harness.js'
 import type {
   FileGraphWriteCoordinator,
@@ -262,6 +263,8 @@ export type ServerRuntime = {
     acpModels?: AcpModelProbe
     /** Agent SDK `supportedModels()` probing for `modelSource: 'probe'` harnesses. */
     agentSdkModels?: AgentSdkModelProbe
+    /** Codex app-server `model/list` probing (P6-07). */
+    codexModels?: CodexModelProbe
     /**
      * Spawn-free read of the freshest probed model list, dispatched by
      * transport; `undefined` means no fresh successful probe is cached.

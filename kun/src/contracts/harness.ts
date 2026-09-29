@@ -15,6 +15,8 @@ export const HarnessTransportSchema = z.enum([
   'cursor-sdk',
   'antigravity-cli',
   'acp',
+  'codex-app-server',
+  'pi-rpc',
   'terminal'
 ])
 export type HarnessTransport = z.infer<typeof HarnessTransportSchema>
@@ -98,63 +100,91 @@ export const HarnessSetupSchema = z
   .strict()
 export type HarnessSetup = z.infer<typeof HarnessSetupSchema>
 
+const HarnessDetectSchema = z
+  .object({
+    command: z.string().min(1).max(256),
+    aliases: z.array(z.string().min(1).max(256)).max(8).default([]),
+    versionArgs: z.array(z.string().max(64)).max(4).default(['--version']),
+    versionPattern: z.string().max(256).optional(),
+    minVersion: z.string().max(32).optional(),
+    /**
+     * When the primary command is absent, this fallback binary is
+     * resolved; if it IS present the harness is not "not installed" —
+     * it is an installed tool missing its adapter, and `message`
+     * carries the install guidance (P3-11, e.g. codex -> codex-acp).
+     */
+    adapterHint: z
+      .object({
+        command: z.string().min(1).max(256),
+        message: z.string().max(256)
+      })
+      .strict()
+      .optional()
+  })
+  .strict()
+
+const HarnessLaunchSchema = z
+  .object({
+    command: z.string().min(1).max(256),
+    args: z.array(z.string().max(1_024)).max(32).default([]),
+    /** Non-sensitive variables only; credentials are injected via credentialMode. */
+    env: z
+      .record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024))
+      .default({}),
+    /**
+     * Secret variables resolved from the credential store at spawn
+     * (docs/ade/impl/p4 §3.7, P4-12). Refs are opaque ids — the store
+     * value itself never enters config, logs, or wire payloads.
+     */
+    secretEnv: z
+      .array(
+        z
+          .object({
+            name: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
+            secretRef: z.string().min(1).max(256)
+          })
+          .strict()
+      )
+      .max(32)
+      .optional()
+  })
+  .strict()
+
 export const HarnessDefinitionSchema = z
   .object({
     id: HarnessIdSchema,
     displayName: z.string().min(1).max(64),
     transport: HarnessTransportSchema,
     /** Local detection; native-loop has none. */
-    detect: z
-      .object({
-        command: z.string().min(1).max(256),
-        aliases: z.array(z.string().min(1).max(256)).max(8).default([]),
-        versionArgs: z.array(z.string().max(64)).max(4).default(['--version']),
-        versionPattern: z.string().max(256).optional(),
-        minVersion: z.string().max(32).optional(),
-        /**
-         * When the primary command is absent, this fallback binary is
-         * resolved; if it IS present the harness is not "not installed" —
-         * it is an installed tool missing its adapter, and `message`
-         * carries the install guidance (P3-11, e.g. codex -> codex-acp).
-         */
-        adapterHint: z
+    detect: HarnessDetectSchema.optional(),
+    /** Launch command for acp / terminal transports; SDK transports decide internally. */
+    launch: HarnessLaunchSchema.optional(),
+    /**
+     * Alternate transport bindings (P6-07): when `harnesses.transportOverrides`
+     * selects one of these transports, the catalog emits the definition with
+     * that transport plus the variant's launch/detect/capabilities.
+     */
+    variants: z
+      .partialRecord(
+        HarnessTransportSchema,
+        z
           .object({
-            command: z.string().min(1).max(256),
-            message: z.string().max(256)
+            launch: HarnessLaunchSchema,
+            detect: HarnessDetectSchema.optional(),
+            capabilities: HarnessCapabilitiesSchema.optional(),
+            /** Overrides definition-level poolScope when this variant applies. */
+            poolScope: z.enum(['credential', 'workspace']).optional()
           })
           .strict()
-          .optional()
-      })
-      .strict()
+      )
       .optional(),
-    /** Launch command for acp / terminal transports; SDK transports decide internally. */
-    launch: z
-      .object({
-        command: z.string().min(1).max(256),
-        args: z.array(z.string().max(1_024)).max(32).default([]),
-        /** Non-sensitive variables only; credentials are injected via credentialMode. */
-        env: z
-          .record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024))
-          .default({}),
-        /**
-         * Secret variables resolved from the credential store at spawn
-         * (docs/ade/impl/p4 §3.7, P4-12). Refs are opaque ids — the store
-         * value itself never enters config, logs, or wire payloads.
-         */
-        secretEnv: z
-          .array(
-            z
-              .object({
-                name: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
-                secretRef: z.string().min(1).max(256)
-              })
-              .strict()
-          )
-          .max(32)
-          .optional()
-      })
-      .strict()
-      .optional(),
+    /**
+     * Process-pool scope for session transports (P6-09). `credential` (default)
+     * shares one spawned process per harness+credential; `workspace` keys the
+     * pool by workspace too — required when the process binds its cwd at spawn
+     * (pi rpc) and cannot re-target per session.
+     */
+    poolScope: z.enum(['credential', 'workspace']).optional(),
     /** Terminal (tier-0) launch details for PTY agents. */
     terminal: z
       .object({
@@ -180,6 +210,11 @@ export const HarnessDefinitionSchema = z
     staticModels: z.array(z.string().min(1).max(256)).max(64).default([]),
     /** Links to existing history-sources for "continue external session". */
     historySource: z.enum(['claude-code', 'codex', 'opencode']).optional(),
+    /**
+     * Pre-GA marker (P6-09): the catalog drops prerelease builtins unless the
+     * hidden `harnesses.experimentalIds` config names them.
+     */
+    prerelease: z.boolean().optional(),
     /** Static declaration; the runtime may narrow it further per version/login. */
     capabilities: HarnessCapabilitiesSchema,
     /** Present when the harness can run through the loopback model gateway. */

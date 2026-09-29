@@ -24,6 +24,8 @@ const SUITABILITY: Record<HarnessTransport, string> = {
   'cursor-sdk': 'delegated agent loop; runs its own tools in its own sandbox',
   'antigravity-cli': 'one-shot CLI tasks; no mid-turn steering or streaming',
   acp: 'external CLI agent over ACP; runs its own tools',
+  'codex-app-server': 'native codex app-server session; steer/fork/approvals',
+  'pi-rpc': 'pi agent over RPC; runs its own tools',
   terminal: 'interactive terminal agent'
 }
 

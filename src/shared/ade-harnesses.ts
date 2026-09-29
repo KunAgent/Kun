@@ -10,7 +10,26 @@ export type AdeHarnessTransport =
   | 'cursor-sdk'
   | 'antigravity-cli'
   | 'acp'
+  | 'codex-app-server'
+  | 'pi-rpc'
   | 'terminal'
+
+/**
+ * Transports that host delegated turns (P6-07): every transport except the
+ * built-in native loop and PTY `terminal`. Renderer wire types and event
+ * guards share this union instead of repeating it.
+ */
+export type AdeDelegatedTransport = Exclude<AdeHarnessTransport, 'native-loop' | 'terminal'>
+
+/** Runtime guard set mirroring `AdeDelegatedTransport` for wire validation. */
+export const ADE_DELEGATED_TRANSPORTS: ReadonlySet<string> = new Set<AdeDelegatedTransport>([
+  'agent-sdk',
+  'cursor-sdk',
+  'antigravity-cli',
+  'acp',
+  'codex-app-server',
+  'pi-rpc'
+])
 
 export type AdeHarnessCredentialMode = 'native-login' | 'provider' | 'kun-gateway'
 

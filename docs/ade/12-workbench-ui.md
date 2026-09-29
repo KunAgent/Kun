@@ -176,7 +176,7 @@ Kun 既有约束同时适用：
 
 | 分组 | 内容 |
 | --- | --- |
-| Agents | harness 列表（检测结果、登录、默认权限档、命令路径、启用开关）；自定义 ACP agent；agent 优先级顺序（10 §3.2）；worker profile 的 agent 与模型 |
+| Agents | harness 列表（检测结果、登录、默认权限档、命令路径、启用开关）；自定义 ACP agent；agent 优先级顺序（10 §3.2）；worker profile 的 agent 与模型。每张卡片显示接入方式标签（`Kun` / `Agent SDK` / `App Server` / `Pi RPC` / `ACP` / `终端`）；启用回退的 harness（如 `transportOverrides.codex='acp'`）必须明示"回退模式"，不允许静默 |
 | 工作区 | 默认隔离方式；用户级共享路径；setup / checks 命令批准记录；待复核分支清理（11 §7.3） |
 | 总管 | 开关（`agents.kun.ade.enabled`）；总管模型；worker 数量上限；预算；`managerMayApprove`；`allowUnattendedFullAccess`；休眠阈值；卡住阈值 |
 | 通知 | §8 |

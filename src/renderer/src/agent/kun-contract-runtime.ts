@@ -1,4 +1,5 @@
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
+import type { AdeDelegatedTransport } from '@shared/ade-harnesses'
 import type { CoreApprovalActionJson } from './kun-contract-approval'
 import type {
   CoreAttachmentDiagnosticsJson,
@@ -575,7 +576,7 @@ export type CoreRuntimeEventJson = {
   activeSkillIds?: string[]
   contextManagement?: 'kun-managed' | 'sdk-managed'
   nativeHistory?: 'known' | 'unknown' | 'none'
-  providerKind?: 'agent-sdk' | 'cursor-sdk' | 'antigravity-cli' | 'acp'
+  providerKind?: AdeDelegatedTransport
   phase?: 'portable' | 'resumed' | 'rebased' | 'preparing' | 'retrying' | 'succeeded' | 'failed'
   failureSummary?: string
   capabilities?: {
@@ -625,8 +626,7 @@ export type CoreRuntimeEventJson = {
   titleAuto?: boolean
   stage?:
     | 'setup' | 'pre_start' | 'post_start' | 'input_received' | 'input_cached'
-    | 'input_routed' | 'input_compressed' | 'input_remembered' | 'pre_send'
-    | 'post_send' | 'response_received'
+    | 'input_routed' | 'input_compressed' | 'input_remembered' | 'pre_send' | 'post_send' | 'response_received'
   label?: string
   code?: string
   details?: unknown

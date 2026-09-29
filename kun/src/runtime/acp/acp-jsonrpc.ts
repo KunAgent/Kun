@@ -13,6 +13,11 @@
  *   corrupts the stream can no longer be trusted.
  * - `exitPromise` (the process exit) rejects every pending request with
  *   `harness_crashed` plus a sanitized stderr tail.
+ *
+ * This is the strict JSON-RPC 2.0 dialect (`jsonrpc` envelope, fail-closed
+ * framing). The shared `session/jsonrpc-peer.ts` implements the bare
+ * `{id, method}` dialect used by app-server-style transports (Codex, Pi) —
+ * do not port one dialect onto the other.
  */
 import { StringDecoder } from 'node:string_decoder'
 import type { Readable, Writable } from 'node:stream'

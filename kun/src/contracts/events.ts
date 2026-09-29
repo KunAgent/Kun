@@ -456,7 +456,14 @@ export const DelegatedRuntimeCapabilitiesSchema = z.object({
 
 export const DelegatedRuntimeEvent = RuntimeEventBase.extend({
   kind: z.literal('delegated_runtime'),
-  providerKind: z.enum(['agent-sdk', 'cursor-sdk', 'antigravity-cli', 'acp']),
+  providerKind: z.enum([
+    'agent-sdk',
+    'cursor-sdk',
+    'antigravity-cli',
+    'acp',
+    'codex-app-server',
+    'pi-rpc'
+  ]),
   providerId: z.string().min(1),
   /** Explicit harness identity for the delegated turn (P0-04+). */
   harnessId: HarnessIdSchema.optional(),
