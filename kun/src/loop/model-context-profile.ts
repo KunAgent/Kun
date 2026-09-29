@@ -6,6 +6,7 @@ import type {
   ModelReasoningCapabilityMetadata
 } from '../contracts/capabilities.js'
 import type { ModelEndpointFormat } from '../contracts/model-endpoint-format.js'
+import { redactSecretText } from '../config/secret-redaction.js'
 
 export type ModelContextThresholds = {
   softThreshold: number
@@ -524,12 +525,39 @@ function mergeModelContextProfile(
       : DEEPSEEK_V4_HARD_THRESHOLD_RATIO,
     fallbackThreshold: current?.hardThreshold
   })
-  const contextWindowTokens =
+  let contextWindowTokens =
     configuredContextWindowTokens ?? Math.max(softThreshold ?? 0, hardThreshold ?? 0)
-  if (!contextWindowTokens || !softThreshold || !hardThreshold) {
+  let resolvedSoftThreshold = softThreshold
+  let resolvedHardThreshold = hardThreshold
+  if (!contextWindowTokens && softThreshold === undefined && hardThreshold === undefined) {
+    // A sparse provider profile (e.g. pricing or reasoning only) carries no
+    // capacity information at all. Mirror the DEFAULT_CONTEXT_WINDOW_TOKENS
+    // fallback used by modelCapabilitiesForModel instead of crashing serve
+    // startup; models with a smaller window must set contextWindowTokens
+    // explicitly.
+    console.warn(
+      `[kun] model context profile "${redactSecretText(canonicalModel)}" has no context ` +
+      `window or thresholds; assuming a ${DEFAULT_CONTEXT_WINDOW_TOKENS} token window. ` +
+      'Custom models with a smaller context window should configure contextWindowTokens explicitly.'
+    )
+    contextWindowTokens = DEFAULT_CONTEXT_WINDOW_TOKENS
+    resolvedSoftThreshold = thresholdFromWindow({
+      contextWindowTokens,
+      ratio: compaction.softRatio ?? input.softRatio,
+      fallbackRatio: DEEPSEEK_V4_SOFT_THRESHOLD_RATIO,
+      fallbackThreshold: undefined
+    })
+    resolvedHardThreshold = thresholdFromWindow({
+      contextWindowTokens,
+      ratio: compaction.hardRatio ?? input.hardRatio,
+      fallbackRatio: DEEPSEEK_V4_HARD_THRESHOLD_RATIO,
+      fallbackThreshold: undefined
+    })
+  }
+  if (!contextWindowTokens || !resolvedSoftThreshold || !resolvedHardThreshold) {
     throw new Error(`model context profile "${canonicalModel}" needs a context window or thresholds`)
   }
-  if (hardThreshold < softThreshold) {
+  if (resolvedHardThreshold < resolvedSoftThreshold) {
     throw new Error(`model context profile "${canonicalModel}" hard threshold must be >= soft threshold`)
   }
   const modelIds = uniqueModelIds([
@@ -548,8 +576,8 @@ function mergeModelContextProfile(
     modelIds,
     contextWindowTokens,
     ...(maxOutputTokens ? { maxOutputTokens } : {}),
-    softThreshold,
-    hardThreshold,
+    softThreshold: resolvedSoftThreshold,
+    hardThreshold: resolvedHardThreshold,
     inputModalities: uniqueModelCapabilityValues(input.inputModalities ?? current?.inputModalities ?? DEFAULT_MODEL_INPUT_MODALITIES),
     outputModalities: uniqueModelCapabilityValues(input.outputModalities ?? current?.outputModalities ?? DEFAULT_MODEL_OUTPUT_MODALITIES),
     supportsToolCalling: input.supportsToolCalling ?? current?.supportsToolCalling ?? true,
