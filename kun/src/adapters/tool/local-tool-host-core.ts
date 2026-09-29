@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { ToolHost, ToolHostContext, ToolHostResult, ToolCallLike } from '../../ports/tool-host.js'
+import type { ToolHost, ToolHostContext, ToolHostResult, ToolCallLike, ToolProviderPolicy } from '../../ports/tool-host.js'
 import type { ApprovalRequest } from '../../domain/approval.js'
 import { createApprovalActionEnvelope, createApprovalRequest, safeApprovalActionSummary } from '../../domain/approval.js'
 import type { TurnItem } from '../../contracts/items.js'
@@ -105,7 +105,7 @@ export class LocalToolHost implements ToolHost {
         throw context.abortSignal.reason ?? new Error('thread execution lease lost during renewal grace')
       }
     }
-    const sandboxBlock = sandboxBlockForTool(tool, context)
+    const sandboxBlock = sandboxBlockForTool(tool, context, provider)
     if (sandboxBlock) {
       return {
         item: this.errorToolResult(context, call, tool, sandboxBlock.message, sandboxBlock.code),
@@ -168,7 +168,7 @@ export class LocalToolHost implements ToolHost {
         approved: false
       }
     }
-    const runtimeBlock = this.runtimePolicyBlock(tool, activeCall, context)
+    const runtimeBlock = this.runtimePolicyBlock(tool, activeCall, context, provider)
     if (runtimeBlock) {
       return {
         item: this.errorToolResult(
@@ -199,10 +199,13 @@ export class LocalToolHost implements ToolHost {
     const externalPathApproval = externalWriteTargets.length > 0
     const workspaceCommandApproval =
       effectiveSandboxMode(context) === 'workspace-write' &&
-      isWorkspaceApprovalCommandTool({
+      (isWorkspaceApprovalCommandTool({
         name: activeCall.toolName,
         toolKind: activeCall.toolKind ?? tool.toolKind
-      })
+      }) || (
+        provider.kind === 'mcp' &&
+        (activeCall.toolKind ?? tool.toolKind) === 'command_execution'
+      ))
     let explicitApprovalRequired: boolean
     try {
       explicitApprovalRequired = typeof tool.requiresExplicitApproval === 'function'
@@ -240,7 +243,9 @@ export class LocalToolHost implements ToolHost {
       const approvalReason = externalPathApproval
         ? 'exact external workspace file write requires approval'
         : workspaceCommandApproval
-          ? 'host command execution from the workspace sandbox requires approval'
+          ? provider.kind === 'mcp'
+            ? 'MCP tool execution from the workspace sandbox requires approval'
+            : 'host command execution from the workspace sandbox requires approval'
           : explicitApprovalRequired
             ? tool.requiresApprovalInFullAccess === true
               ? 'this action requires an explicit user decision'
@@ -550,11 +555,13 @@ export class LocalToolHost implements ToolHost {
   private runtimePolicyBlock(
     tool: LocalTool,
     call: ToolCallLike,
-    context: ToolHostContext
+    context: ToolHostContext,
+    provider: Pick<ToolProviderPolicy, 'kind'>
   ): SandboxBlock | { code: 'approval_policy_blocked'; message: string } | null {
     const sandboxBlock = sandboxBlockForTool(
       { name: call.toolName, toolKind: call.toolKind ?? tool.toolKind },
-      context
+      context,
+      provider
     )
     if (sandboxBlock) return sandboxBlock
     if (this.isInteractiveGuiGateTool(call.toolName)) return null

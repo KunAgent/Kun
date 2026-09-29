@@ -9,7 +9,8 @@ import {
 import type {
   ApprovedExternalWriteTarget,
   ToolCallLike,
-  ToolHostContext
+  ToolHostContext,
+  ToolProviderKind
 } from '../../ports/tool-host.js'
 import type { LocalTool } from './local-tool-host.js'
 import {
@@ -119,15 +120,17 @@ export function effectiveSandboxMode(
 
 export function isToolAdvertisedInSandbox(
   tool: Pick<LocalTool, 'toolKind' | 'name'>,
-  context?: Pick<ToolHostContext, 'sandboxMode' | 'allowedReadPaths' | 'allowedWritePaths'>
+  context?: Pick<ToolHostContext, 'sandboxMode' | 'allowedReadPaths' | 'allowedWritePaths'>,
+  provider?: { kind: ToolProviderKind }
 ): boolean {
   if (!context) return true
-  return sandboxBlockForTool(tool, context) === null
+  return sandboxBlockForTool(tool, context, provider) === null
 }
 
 export function sandboxBlockForTool(
   tool: Pick<LocalTool, 'toolKind' | 'name'>,
-  context: Pick<ToolHostContext, 'sandboxMode' | 'allowedReadPaths' | 'allowedWritePaths'>
+  context: Pick<ToolHostContext, 'sandboxMode' | 'allowedReadPaths' | 'allowedWritePaths'>,
+  provider?: { kind: ToolProviderKind }
 ): SandboxBlock | null {
   const mode = effectiveSandboxMode(context)
   if (isInteractiveGuiGateTool(tool.name)) return null
@@ -157,11 +160,14 @@ export function sandboxBlockForTool(
   }
 
   if (tool.toolKind === 'command_execution') {
-    // The host shell itself is not path-confined. Workspace-write exposes only
-    // the built-in shell tools because LocalToolHost adds an unskippable
-    // per-command approval. Other process-backed tools retain the stricter
-    // sandbox boundary.
-    if (mode === 'workspace-write' && isWorkspaceApprovalCommandTool(tool)) return null
+    // The host shell itself is not path-confined. Workspace-write exposes the
+    // built-in shell tools and MCP-provided command tools because
+    // LocalToolHost adds an unskippable per-call approval for them. Other
+    // process-backed tools retain the stricter sandbox boundary.
+    if (
+      mode === 'workspace-write' &&
+      (isWorkspaceApprovalCommandTool(tool) || provider?.kind === 'mcp')
+    ) return null
     return {
       code: 'sandbox_command_blocked',
       message:
