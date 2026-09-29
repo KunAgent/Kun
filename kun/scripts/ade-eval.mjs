@@ -225,6 +225,11 @@ async function runAde(task) {
   const failed = dispatches.filter((d) => d.state === 'failed' || d.state === 'cancelled')
   notes.push(`workers=${workers.length} dispatches=${dispatches.length}` +
     (failed.length ? ` failed=${failed.length}` : ''))
+  // P4-16: parallel-shaped tasks carry an advisory worker floor; flag when
+  // the manager serially self-served work meant to be delegated.
+  if (task.expect?.minWorkers && workers.length < task.expect.minWorkers) {
+    notes.push(`under-dispatched: workers=${workers.length} < expected ${task.expect.minWorkers}`)
+  }
 
   // The user's lane (09 §7): merge each worker's task workspace back, then
   // verify the manager workspace — the same final state a single-Kun run

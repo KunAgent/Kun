@@ -46,6 +46,9 @@
     "model": "मॉडल",
     "start": "सत्र शुरू करें"
   },
+  "adeDispatchable": "सौंपे जा सकते हैं: {{names}}",
+  "adeDispatchableNone": "कोई सौंपने योग्य agent नहीं",
+  "adeDispatchableHint": "जिन agents को प्रबंधक काम सौंप सकता है — Agent सेंटर में प्रबंधित करें",
   "workerUpdateNotice": {
     "title": "वर्कर अपडेट"
   },

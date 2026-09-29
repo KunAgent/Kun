@@ -46,6 +46,9 @@
     "model": "モデル",
     "start": "セッションを開始"
   },
+  "adeDispatchable": "派遣可能: {{names}}",
+  "adeDispatchableNone": "派遣可能な agent がありません",
+  "adeDispatchableHint": "マネージャーが作業を委譲できる agent — Agent センターで管理",
   "workerUpdateNotice": {
     "title": "ワーカー更新"
   },

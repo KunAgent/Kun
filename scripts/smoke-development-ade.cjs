@@ -357,6 +357,15 @@ async function main() {
     await capture('6-model-gateway-group')
     await page.keyboard.press('Escape')
 
+    // 6) P4-16: a fresh manager session opens with the Workers panel and the
+    //    composer carries the dispatchable-agents label listing ready harnesses.
+    await page.getByRole('button', { name: 'Manager session', exact: true }).click()
+    await page.locator('[data-workers-panel]').waitFor()
+    const dispatchPill = page.locator('[data-dispatchable-agents-pill]')
+    await poll(async () => (await dispatchPill.innerText()).includes('Claude Code'),
+      30_000, 'dispatchable-agents pill listing the ready Claude Code harness')
+    await capture('7-manager-first-screen')
+
     assert.deepEqual(pageErrors, [], 'Renderer emitted an uncaught exception')
     result = { ok: true, platform: process.platform, arch: process.arch, pageErrors,
       modelFixture: modelFixture.snapshot(), screenshots,
@@ -370,7 +379,10 @@ async function main() {
         'setup command prefills a fresh terminal without executing and leaves Settings',
         'terminal agent joins the catalog and spawns from the new-tab menu',
         'composer harness picker menu renders through a body portal',
-        'Kun gateway model group exposes provider models'] }
+        'Kun gateway model group exposes provider models',
+        'readiness checklist renders on the ADE home',
+        'terminal-only agents stay out of the one-on-one picker',
+        'manager session opens with Workers panel and dispatchable-agents label'] }
     await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
   } catch (error) {
     await capture('failure').catch(() => undefined)

@@ -46,6 +46,9 @@
     "model": "모델",
     "start": "세션 시작"
   },
+  "adeDispatchable": "파견 가능: {{names}}",
+  "adeDispatchableNone": "파견 가능한 agent 없음",
+  "adeDispatchableHint": "매니저가 작업을 위임할 수 있는 agent — Agent 센터에서 관리",
   "workerUpdateNotice": {
     "title": "워커 업데이트"
   },

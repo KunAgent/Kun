@@ -46,6 +46,9 @@
     "model": "模型",
     "start": "开始会话"
   },
+  "adeDispatchable": "可派：{{names}}",
+  "adeDispatchableNone": "没有可派的 agent",
+  "adeDispatchableHint": "总管可以把任务派给这些 agent——在 Agent 中心管理",
   "workerUpdateNotice": {
     "title": "工作者更新"
   },

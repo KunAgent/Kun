@@ -46,6 +46,9 @@
     "model": "โมเดล",
     "start": "เริ่มเซสชัน"
   },
+  "adeDispatchable": "มอบหมายได้: {{names}}",
+  "adeDispatchableNone": "ไม่มี agent ที่มอบหมายได้",
+  "adeDispatchableHint": "agent ที่ผู้จัดการมอบหมายงานได้ — จัดการในศูนย์ Agent",
   "workerUpdateNotice": {
     "title": "อัปเดตจากวอร์กเกอร์"
   },
