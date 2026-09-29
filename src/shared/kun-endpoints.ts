@@ -242,6 +242,7 @@ export const KUN_ACTIVITY_TEMPLATE = '/v1/activity'
 export const KUN_ACTIVITY_EVENTS_PATH = '/v1/activity/events'
 export const KUN_ACTIVITY_EVENTS_TEMPLATE = '/v1/activity/events'
 export const KUN_ACTIVITY_FOREGROUND_PATH = '/v1/activity/foreground'
+export const KUN_APPROVALS_PATH = '/v1/approvals'
 export const KUN_TASK_WORKSPACES_PATH = '/v1/task-workspaces'
 export function kunTaskWorkspacePath(workspaceId: string, suffix = ''): string {
   return `${KUN_TASK_WORKSPACES_PATH}/${encodeURIComponent(workspaceId)}${suffix}`
