@@ -25,8 +25,11 @@ export type AcpDraftEmitterDeps = {
 }
 
 export class AcpDraftEmitter {
-  private textAccum = ''
-  private reasoningAccum = ''
+  // Keyed by item id so transports that stream several items per turn (Codex
+  // interleaves agentMessage/reasoning itemIds) never corrupt each other's
+  // offsets. ACP emits a single id per kind, so its behavior is unchanged.
+  private readonly textAccums = new Map<string, string>()
+  private readonly reasoningAccums = new Map<string, string>()
   private readonly materializedItems = new Set<string>()
 
   constructor(
@@ -49,18 +52,18 @@ export class AcpDraftEmitter {
           return
         }
         const textKind = draft.kind === 'assistant_text_delta'
-        const acc = textKind ? this.textAccum : this.reasoningAccum
+        const accums = textKind ? this.textAccums : this.reasoningAccums
+        const acc = accums.get(item.id) ?? ''
         if (draft.deltaOffset !== acc.length) {
           // Offsets are cumulative; a mismatch means a chunk was dropped or
           // replayed — surface it instead of corrupting the stored text.
           throw new Error(
-            `ACP assistant delta offset mismatch: expected ${acc.length}, ` +
-              `got ${String(draft.deltaOffset)}`
+            `Delegated assistant delta offset mismatch for ${item.id}: ` +
+              `expected ${acc.length}, got ${String(draft.deltaOffset)}`
           )
         }
         const next = acc + item.text
-        if (textKind) this.textAccum = next
-        else this.reasoningAccum = next
+        accums.set(item.id, next)
         const running =
           item.kind === 'assistant_reasoning' || !textKind
             ? makeAssistantReasoningItem({

@@ -143,6 +143,17 @@ export type HarnessUserInputRequest = {
   kind: 'select' | 'confirm' | 'input' | 'editor' | 'other'
   prompt: string
   options?: readonly { id: string; label: string }[]
+  /**
+   * Fully-shaped native questions (multi-question prompts like codex
+   * `item/tool/requestUserInput`); when present the sink asks them verbatim
+   * and answers come back keyed by `id`.
+   */
+  questions?: readonly {
+    header?: string
+    id: string
+    question: string
+    options?: readonly { label: string; description?: string }[]
+  }[]
   /** Free-form fields for item/tool/requestUserInput-shaped requests. */
   fields?: readonly Record<string, unknown>[]
 }

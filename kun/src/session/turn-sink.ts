@@ -61,8 +61,18 @@ export class KunTimelineTurnSink implements HarnessTurnSink {
   ): Promise<HarnessUserInputResponse> {
     const gate = this.deps.userInputGate
     if (!gate) return { cancelled: true }
-    const questions: UserInputQuestion[] =
-      request.kind === 'select' && request.options?.length
+    const questions: UserInputQuestion[] = request.questions?.length
+      ? request.questions.map((question) => ({
+          header: (question.header ?? request.prompt).slice(0, 120),
+          id: question.id,
+          question: question.question,
+          options:
+            question.options?.map((option) => ({
+              label: option.label,
+              description: option.description ?? ''
+            })) ?? []
+        }))
+      : request.kind === 'select' && request.options?.length
         ? request.options.map((option) => ({
             header: request.prompt.slice(0, 120),
             id: option.id,
