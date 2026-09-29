@@ -143,6 +143,8 @@ export const RoomMessageSchema = z.object({
   displayThreadRootId: RoomIdSchema.optional(),
   replyCount: z.number().int().nonnegative().optional(),
   presentationKind: z.enum(['poll', 'choice', 'setup', 'proposal', 'reminder', 'app_connection']).optional(),
+  /** Public delivery meaning; message status still tracks persistence/streaming. */
+  deliveryPhase: z.enum(['start', 'progress', 'final']).optional(),
   appConnection: z.object({
     serverId: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/),
     status: z.enum(['requested', 'connected', 'skipped']),

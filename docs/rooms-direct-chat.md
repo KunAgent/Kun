@@ -12,6 +12,30 @@ not establish how Grok Bot's cloud implementation works. Per-Agent main and
 lightweight model controls follow the local Cumora Agent editor's inheritance
 and independent-selection workflow.
 
+## Public response cadence
+
+Fresh user requests in a private Agent Room publish a visible response before
+business tools run. `send_im_message.phase` distinguishes `start`, `progress`
+and `final`; an omitted phase remains a legacy final reply. The message and
+Room run receipt commit together. A question, approval or app connection card
+is a visible wait state. A start or progress bubble cannot settle a user task
+without a later final result; an app-connection continuation requires a final
+result without another mechanical start notice. Reminders and internal wakes
+can remain silent when there is no user-facing change.
+
+The next model step requests a progress message after 30 seconds or six
+completed work tools since the last visible message, with a ten-second minimum
+gap. One long-running tool does not start a parallel model call; the activity
+row shows its safe category and locally computed elapsed time. The run records
+first response latency, and the selected renderer keeps a bounded in-memory
+commit-to-render sample for validation. Raw arguments, output and internal
+reasoning remain in the run inspector.
+
+The first-step tool filter is reinforced at dispatch: unadvertised work calls
+receive a persisted "not executed" result. Publication failures get at most
+two recovery steps before a visible failure. Existing conversations apply the
+new rule to their next user request; historical messages need no migration.
+
 ## Conversation workflow
 
 - The v3 entry marker records first positioning independently from the old

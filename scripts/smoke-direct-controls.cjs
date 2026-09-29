@@ -50,6 +50,8 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
     await poll(async () => (await request(page, `/v1/rooms/${roomId}/messages`)).messages.some((message) => message.originRunId === completed.runId && message.status === 'final'), 15000, 'public projection')
     const published = (await request(page, `/v1/rooms/${roomId}/messages`)).messages.find((message) => message.originRunId === completed.runId && message.status === 'final')
     await page.locator('#room-message-' + published.id).waitFor()
+    await poll(async () => !(await request(page, `/v1/rooms/${roomId}/direct`)).active &&
+      !(await page.locator('.rooms-agent-activity').count()), 15000, 'working row clears after completion')
     return completed
   }
   await send('你好，请用一句简短的中文回复。')
@@ -65,6 +67,18 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
   assert(composed.height < 110, 'Empty composer starts at one compact row')
   await send('CREATE_FILE：请直接用文件工具在当前工作目录创建 hello.txt，内容必须是 hello from Kun 加一个换行。完成后简短确认，不要只给出代码。')
   const created = await settle(entry.roomId, greeting.id)
+  const publishedWork = (await request(page, `/v1/rooms/${entry.roomId}/messages`)).messages
+    .filter((message) => message.originRunId === created.runId)
+  const start = publishedWork.find((message) => message.deliveryPhase === 'start')
+  const final = publishedWork.find((message) => message.deliveryPhase === 'final')
+  assert(start && final && start.messageSeq < final.messageSeq, 'Work shows a start bubble before its final result')
+  const createdRun = await request(page, `/v1/rooms/${entry.roomId}/runs/${created.runId}`)
+  assert(Number.isFinite(createdRun.run.firstResponseMs), 'The run records time to first public response')
+  const paintedStart = await page.evaluate(async (id) => {
+    const { roomResponseLatencySnapshot } = await import('/src/components/rooms/room-im-response-metrics.ts')
+    return roomResponseLatencySnapshot().find((item) => item.messageId === id)
+  }, start.id)
+  assert(Number.isFinite(paintedStart?.commitToRenderMs), 'The renderer records commit-to-render latency separately')
   const location = await request(page, `/v1/rooms/${entry.roomId}/direct`)
   assert.equal(await readFile(join(location.workspace.path, 'hello.txt'), 'utf8'), 'hello from Kun\n')
   await capture('03-file-created')
@@ -74,10 +88,22 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
   assert.equal(await readFile(join(location.workspace.path, 'hello.txt'), 'utf8'), 'updated by Kun\n')
   await page.getByRole('button', { name: 'More actions', exact: true }).click()
   await page.getByRole('button', { name: 'Conversation files', exact: true }).click()
-  await page.getByRole('dialog', { name: 'Conversation files', exact: true }).getByRole('button', { name: 'hello.txt', exact: true }).click()
+  await page.locator('.rooms-details-panel').getByRole('button', { name: 'hello.txt', exact: true }).click()
   await page.getByText('updated by Kun', { exact: false }).first().waitFor()
   await capture('04-updated-file-preview')
-  await page.getByRole('dialog', { name: 'Room details', exact: true }).getByRole('button', { name: 'Close', exact: true }).click()
+  await page.locator('.rooms-details-panel').getByRole('button', { name: 'Close', exact: true }).click()
+  if (process.argv.includes('--delivery-only')) {
+    await page.evaluate(async () => { const { applyTheme } = await import('/src/lib/apply-theme.ts'); applyTheme('dark') })
+    await capture('05-dark-delivery')
+    await resize(760, 780)
+    await page.waitForTimeout(200)
+    assert((await page.evaluate(() => window.innerWidth)) < 768, 'Exercise the narrow renderer layout')
+    await capture('06-narrow-delivery')
+    assert(await page.locator('[data-rooms-workspace]').evaluate((element) => element.scrollWidth <= element.clientWidth + 1))
+    return { userRequests, approvals, roomId: entry.roomId,
+      responseTiming: { firstResponseMs: createdRun.run.firstResponseMs, commitToRenderMs: paintedStart.commitToRenderMs },
+      assertions: ['first public response before work', 'final result after work', 'real file creation and modification', 'desktop, dark and narrow screenshots'] }
+  }
   await application.evaluate(({ dialog }, path) => {
     const original = dialog.showOpenDialog
     dialog.showOpenDialog = async (...args) => { dialog.showOpenDialog = original; return { canceled: false, filePaths: [path] } }
@@ -93,7 +119,7 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
   assert.equal((await request(page, `/v1/rooms/${entry.roomId}/tasks`)).tasks.length, 0)
   await capture('05-project-work')
   await page.locator('.direct-current-model').click()
-  const models = page.getByRole('dialog', { name: 'Model settings', exact: true })
+  const models = page.locator('.rooms-details-panel')
   await models.getByRole('combobox', { name: 'Main model', exact: true }).waitFor()
   await capture('06-model-settings')
   assert((await models.innerText()).includes('Effective'))
@@ -101,7 +127,7 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
   if (!real) {
     await page.getByRole('button', { name: 'New conversation', exact: true }).click()
     await capture('07-new-chat-picker')
-    await page.getByRole('button', { name: 'Create new agent', exact: true }).click()
+    await page.getByRole('button', { name: 'Define in chat', exact: true }).click()
     await poll(async () => (await page.locator('.direct-chat-title').innerText()).includes('New agent'), 15000, 'quick creation')
     assert.equal(await page.locator('.agent-profile-form').count(), 0, 'No creation form gates chat')
     const newAgent = (await request(page, '/v1/agents')).agents.find((agent) => agent.id !== entry.agentId)

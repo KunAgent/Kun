@@ -1,9 +1,10 @@
 import type { TFunction } from 'i18next'
+import { useEffect, useState } from 'react'
 import type { AgentDirectActivity, Room } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import './rooms-experience.css'
 
-type DirectData = Pick<AgentDirectActivity, 'active' | 'approvals' | 'userInputs'> | null | undefined
+type DirectData = Pick<AgentDirectActivity, 'active' | 'approvals' | 'userInputs' | 'activity'> | null | undefined
 
 export function directActivityLabelKey(data: DirectData, awaiting: boolean): string | null {
   const active = data?.active
@@ -14,6 +15,10 @@ export function directActivityLabelKey(data: DirectData, awaiting: boolean): str
   if (active.status === 'recovery_required') return 'directReconciling'
   if (active.status === 'stopping') return 'directStopping'
   if (active.steer) return 'directSteered'
+  if (data.activity?.kind === 'reading') return 'directReading'
+  if (data.activity?.kind === 'searching') return 'directSearching'
+  if (data.activity?.kind === 'command') return 'directRunningCommand'
+  if (data.activity?.kind === 'waiting_model') return 'directWaitingModel'
   return 'directResponding'
 }
 
@@ -32,7 +37,17 @@ export function groupActivity(room: Room, typingIds: string[], waitingIds: strin
 }
 
 /** Transient IM row, separate from persisted RoomMessage records. */
-export function RoomAgentActivity({ room, memberId, label }: { room: Room; memberId?: string; label: string }) {
+export function RoomAgentActivity({ room, memberId, label, startedAt }: {
+  room: Room; memberId?: string; label: string; startedAt?: string
+}) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    if (!startedAt) return
+    setNow(Date.now())
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [startedAt])
+  const elapsed = startedAt ? Math.max(0, Math.floor((now - Date.parse(startedAt)) / 1000)) : 0
   const member = room.members.find((item) => item.id === memberId)
     ?? room.members.find((item) => !item.removedAt && item.participantAgentId) ?? room.members[0]
   return <div className="rooms-agent-activity rooms-message-row rooms-message-member">
@@ -43,6 +58,7 @@ export function RoomAgentActivity({ room, memberId, label }: { room: Room; membe
           <span className="rooms-typing-dot" /><span className="rooms-typing-dot" /><span className="rooms-typing-dot" />
         </span>
         <span>{label}</span>
+        {elapsed >= 5 && Number.isFinite(elapsed) ? <small aria-hidden="true">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</small> : null}
       </div>
     </div>
   </div>

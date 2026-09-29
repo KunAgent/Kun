@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { ArrowUpRight, BellRing, Check, Copy, Pin, Reply } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomContentReference, RoomMember, RoomMessage, RoomTask } from '@shared/rooms-api'
@@ -11,6 +11,7 @@ import { RoomProposalCard } from './RoomProposalCard'
 import { RoomAppConnectionCard } from './RoomAppConnectionCard'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
 import './rooms-reminders.css'
+import { noteRoomMessageRendered } from './room-im-response-metrics'
 
 const roles = {
   coordinator: 'roomsCoordinator',
@@ -55,6 +56,7 @@ export function RoomMessageRow({
   continuation?: boolean
 }) {
   const { t } = useTranslation('common')
+  useLayoutEffect(() => { noteRoomMessageRendered(message) }, [message])
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState('')
   const [reactBusy, setReactBusy] = useState(false)

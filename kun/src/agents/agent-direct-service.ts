@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import type { RoomRuntime } from '../rooms/room-runtime.js'
 import type { Room } from '../contracts/rooms.js'
 import type { RoomRequestState } from '../rooms/room-runtime-types.js'
+import type { RoomRunRecord } from '../contracts/room-runs.js'
 import { RoomStoreConflictError } from '../rooms/room-store.js'
 import { roomFingerprint } from '../rooms/room-service.js'
 import { agentWorkspace } from './agent-direct-runner.js'
@@ -27,9 +28,31 @@ export async function directActivity(rooms: RoomRuntime, roomId: string) {
   const requests = rows.filter((row) => row.value.privateProtocol).map(requestSummary)
   const activeRow = activeRows.find((row) => row.value.privateProtocol)
   const active = activeRow ? requestSummary(activeRow) : undefined
+  const run = activeRow?.value.privateRunId
+    ? await rooms.deps.store.get<RoomRunRecord>('room_run', activeRow.value.privateRunId) : null
+  const items = active?.threadId && active?.turnId && rooms.deps.sessions.loadItemPage
+    ? (await rooms.deps.sessions.loadItemPage(active.threadId, { turnId: active.turnId,
+        maxItems: 32, maxBytes: 16_384 })).items : []
+  const settledCalls = new Set(items.filter((item) => item.kind === 'tool_result').map((item) => item.callId))
+  const runningTool = [...items].reverse().find((item) => item.kind === 'tool_call' && !settledCalls.has(item.callId))
+  const toolName = runningTool?.kind === 'tool_call' ? runningTool.toolName : ''
+  const lastActivityAt = items.at(-1)?.finishedAt ?? items.at(-1)?.createdAt ?? run?.value.startedAt
+  const workKind = /^(read|ls|glob|grep|repo_map|fast_context|web_fetch|paper_details)$/i.test(toolName) ? 'reading'
+    : /search|find|paper_citations|paper_search/i.test(toolName) ? 'searching'
+      : /bash|shell|exec|command|write|edit|patch/i.test(toolName) ? 'command' : 'waiting_model'
+  const activity = active ? {
+    kind: active.status === 'pending' ? 'queued' : active.status === 'stopping' ? 'stopping' :
+      active.status === 'recovery_required' ? 'failed' :
+        rooms.deps.approvals.pending(active.threadId ?? '').length || rooms.deps.inputs.pending(active.threadId ?? '').length
+          ? 'waiting_user' : workKind,
+    startedAt: runningTool?.createdAt ?? (workKind === 'waiting_model' ? lastActivityAt : undefined) ??
+      run?.value.startedAt ?? run?.value.createdAt,
+    lastActivityAt,
+    firstVisibleAt: run?.value.firstVisibleAt, lastVisibleAt: run?.value.lastVisibleAt
+  } : undefined
   const workspace = await privateWorkspace(rooms, room)
   // A merged request already folded into the running reply is not queued work.
-  return { requests, active, pendingCount: activeRows.filter((row) => row.value.privateProtocol && !row.value.steer).length, workspace,
+  return { requests, active, activity, pendingCount: activeRows.filter((row) => row.value.privateProtocol && !row.value.steer).length, workspace,
     approvals: active?.threadId ? rooms.deps.approvals.pending(active.threadId) : [],
     userInputs: active?.threadId ? rooms.deps.inputs.pending(active.threadId) : [] }
 }

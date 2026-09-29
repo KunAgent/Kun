@@ -366,7 +366,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
                   <RoomExecutionGates detail={{ approvals: direct.data.approvals, userInputs: [] }}
                     onUpdated={async () => { await direct.refresh(); await state.refresh() }} />
                 </div> : null}
-                {showActivity && activity ? <RoomAgentActivity room={room} memberId={activity.memberId} label={activity.label} /> : null}
+                {showActivity && activity ? <RoomAgentActivity room={room} memberId={activity.memberId} label={activity.label}
+                  startedAt={privateChat ? direct.data?.activity?.startedAt : undefined} /> : null}
               </>}
               renderChoice={(message) => <RoomChoiceCard input={choiceInputs.find((input) => input.id === message.clientRequestId)} title={message.body}
                 resolvedAnswer={choiceReplies[message.clientRequestId ?? '']}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { subscribeRoomEvents, roomEventsLive } from './useRoomEvents'
+import { noteRoomMessageCommitted } from './room-im-response-metrics'
 import type { Room, RoomMessage, RoomTask } from '@shared/rooms-api'
 import {
   readBrowserStorageItem,
@@ -216,6 +217,7 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
     const taskIds = new Set<string>()
     const unsubscribe = subscribeRoomEvents((event) => {
       if (event.roomId !== selectedId) return
+      noteRoomMessageCommitted(event)
       if (event.kind.startsWith('room.')) pending.add('room')
       if (event.kind.startsWith('rule.')) pending.add('rules')
       if (event.kind === 'message.created' || event.kind === 'message.presentation.created') pending.add('messages')

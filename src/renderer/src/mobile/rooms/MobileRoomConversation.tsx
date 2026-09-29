@@ -126,7 +126,8 @@ export function MobileRoomConversation(props: MobileRoomConversationProps) {
             item={item} onRetry={retry} onDismiss={pending.dismiss} />)}
           {room.conversationKind === 'user_agent' ? <MobileRoomPendingActions key={room.id}
             direct={direct} onUpdated={state.refresh} showInputs={false} /> : null}
-          {showActivity && activity ? <MobileRoomActivityBubble room={room} memberId={activity.memberId} label={activity.label} /> : null}
+          {showActivity && activity ? <MobileRoomActivityBubble room={room} memberId={activity.memberId} label={activity.label}
+            startedAt={room.conversationKind === 'user_agent' ? direct.data?.activity?.startedAt : undefined} /> : null}
         </>} />
       {room.conversationKind === 'agent_agent' ? <p className="kun-mobile-room-readonly">{t('agentsPairReadOnly')}</p> :
         <RoomComposer room={room} tasks={state.tasks} onSend={send} autoFocus={false}

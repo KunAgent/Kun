@@ -20,6 +20,7 @@ const MAX_IM_MESSAGE_ATTACHMENTS = 8
 
 const ImMessageInputSchema = z.object({
   text: z.string().max(MAX_IM_MESSAGE_TEXT_CHARS).default(''),
+  phase: z.enum(['start', 'progress', 'final']).default('final'),
   attachments: z.array(z.object({
     path: z.string().min(1).max(4096),
     fileName: z.string().max(300).optional()
@@ -100,6 +101,8 @@ export function roomImMessageTool(threads: ThreadStore): LocalTool {
           maxLength: MAX_IM_MESSAGE_TEXT_CHARS,
           description: 'Markdown message body shown in the chat bubble.'
         },
+        phase: { type: 'string', enum: ['start', 'progress', 'final'],
+          description: 'Private Room delivery phase. Use start before work, progress for a material update, final for the complete answer. Omit for legacy final replies.' },
         attachments: {
           type: 'array',
           maxItems: MAX_IM_MESSAGE_ATTACHMENTS,
@@ -162,6 +165,7 @@ export function roomImMessageTool(threads: ThreadStore): LocalTool {
           runId,
           itemId: context.activeToolCallId,
           body: text,
+          deliveryPhase: input.phase,
           memberId: room.memberId,
           createdAt: new Date().toISOString(),
           status: 'final',
@@ -173,6 +177,7 @@ export function roomImMessageTool(threads: ThreadStore): LocalTool {
             accepted: true,
             messageId,
             text,
+            phase: input.phase,
             files: files.map(fileOutput)
           }
         }
@@ -184,6 +189,7 @@ export function roomImMessageTool(threads: ThreadStore): LocalTool {
           output: {
             accepted: true,
             text,
+            phase: input.phase,
             files: files.map(fileOutput)
           }
         }

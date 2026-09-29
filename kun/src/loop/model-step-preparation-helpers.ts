@@ -1,7 +1,15 @@
 import type { ActingTurnModelRoute, Turn } from '../contracts/turns.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { TurnItem } from '../contracts/items.js'
-import type { ModelRouteTargetMetadata } from '../ports/model-client.js'
+import type { ModelRouteTargetMetadata, ModelToolSpec } from '../ports/model-client.js'
+import { GRAPH_DEFINE_PLAN_TOOL_NAME } from '../adapters/tool/graph-define-plan-tool.js'
+
+/** Graph planning exposes read-only discovery and structured input until its plan is committed. */
+export function graphPlanningStepTools(tools: readonly ModelToolSpec[], active: boolean): ModelToolSpec[] {
+  return active ? tools.filter((tool) =>
+    tool.name === GRAPH_DEFINE_PLAN_TOOL_NAME || tool.name === 'request_user_input' ||
+    tool.name === 'user_input' || tool.sideEffect === 'read-only') : [...tools]
+}
 import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../contracts/model-route-pool.js'
 import type { PptWorkflowScope } from '../ports/tool-host.js'
 import type {
