@@ -78,7 +78,7 @@ describe('provider delete action', () => {
     vi.unstubAllGlobals()
   })
 
-  it.each(['deepseek', 'opencode-free'])('deletes %s directly from the connection tab', async (id) => {
+  it.each(['deepseek'])('deletes %s directly from the connection tab', async (id) => {
     selectedId = id
     renderer = await renderProviders(context())
     await settle()
@@ -137,7 +137,7 @@ describe('provider delete action', () => {
   })
 
   it('renders an add-provider empty state after deleting the last provider', async () => {
-    provider = { ...provider, providers: [provider.providers[0]], excludedBuiltinProviderIds: ['opencode-free'] }
+    provider = { ...provider, providers: [provider.providers[0]] }
     registry = snapshot()
     renderer = await renderProviders(context())
     await settle()
@@ -163,7 +163,7 @@ describe('provider delete action', () => {
     const restored = update.mock.calls.find(([patch]) =>
       patch.provider?.providers?.some((item) => item.id === 'deepseek')
     )?.[0]
-    expect(restored?.provider?.excludedBuiltinProviderIds).toEqual(['opencode-free'])
+    expect(restored?.provider?.excludedBuiltinProviderIds).toEqual([])
     expect(mergeModelProviderSettings(provider, restored?.provider).providers.map((item) => item.id))
       .toEqual(['deepseek'])
   })

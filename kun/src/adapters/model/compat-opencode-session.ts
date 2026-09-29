@@ -11,8 +11,8 @@ export type OpenCodeProviderIdentity = {
  * per-session routing header (`x-opencode-session`) on every request. Identify
  * it from the stable preset source first, then from the exact host + path
  * boundary for manually configured official Go endpoints. Never use a loose
- * substring match: `opencode-free` and other `opencode.ai` paths must not be
- * misclassified.
+ * substring match: other `opencode.ai` paths such as `/zen/v1` must not be
+ * misclassified as Go.
  */
 export function isOpenCodeGo(input: OpenCodeProviderIdentity): boolean {
   if (input.presetSource === 'opencode-go') return true
@@ -24,26 +24,12 @@ export function isOpenCodeGo(input: OpenCodeProviderIdentity): boolean {
   return path === '/zen/go' || Boolean(path?.startsWith('/zen/go/'))
 }
 
-/**
- * OpenCode Free (anonymous zen/v1) now rejects chat requests without
- * `x-opencode-session` (`MissingSessionID`). Identify it from the stable
- * preset first, then from the official host + `/zen` or `/zen/vN` path.
- * `/zen/go` remains Go-only.
- */
-export function isOpenCodeFree(input: OpenCodeProviderIdentity): boolean {
-  if (input.presetSource === 'opencode-free') return true
-  const providerId = input.providerId?.trim().toLowerCase() ?? ''
-  if (/^opencode-free(?:-[0-9]+)?$/u.test(providerId)) return true
-  const path = officialOpenCodeZenPath(input.baseUrl)
-  return path === '/zen' || Boolean(path && /^\/zen\/v\d+$/u.test(path))
-}
-
 export function requiresOpenCodeSessionHeader(input: OpenCodeProviderIdentity): boolean {
-  return isOpenCodeGo(input) || isOpenCodeFree(input)
+  return isOpenCodeGo(input)
 }
 
 /**
- * Resolve the per-session routing id for OpenCode Go/Free. A real Kun thread
+ * Resolve the per-session routing id for OpenCode Go. A real Kun thread
  * id is propagated as-is; a non-session probe/inline completion that carries
  * no thread id gets a stable, request-local routing id.
  */

@@ -78,7 +78,6 @@ const PROFILE_MATCHES: Record<string, ModelsDevProviderMatch> = {
   'zai-coding-plan': catalogMatch('zai-coding-plan'),
   'kimi-code': catalogMatch('kimi-for-coding'),
   'opencode-go': catalogMatch('opencode-go'),
-  'opencode-free': catalogMatch('opencode'),
   'moonshot-cn': catalogMatch('moonshotai-cn'),
   'moonshot-global': catalogMatch('moonshotai'),
   xiaomi: catalogMatch('xiaomi'),

@@ -1,6 +1,5 @@
 export {
   OPENCODE_SESSION_HEADER,
-  isOpenCodeFree,
   isOpenCodeGo,
   openCodeSessionRuntimeHeaders,
   requiresOpenCodeSessionHeader,

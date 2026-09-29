@@ -88,26 +88,26 @@ describe('activeModelConnectionProviderId', () => {
     })
   })
 
-  it('projects an explicitly selected anonymous provider without a credential source', () => {
+  it('projects an explicitly selected provider catalog without a credential source', () => {
     expect(extensionAgentRunOptionsForOptions({
       host: '127.0.0.1',
       port: 0,
-      dataDir: '/tmp/kun-anonymous-model-options',
+      dataDir: '/tmp/kun-custom-model-options',
       runtimeToken: 'runtime-token',
       apiKey: '',
-      activeProviderId: 'opencode-free',
-      baseUrl: 'https://opencode.ai/zen/v1',
-      model: 'big-pickle',
+      activeProviderId: 'custom-http',
+      baseUrl: 'https://api.example.test/v1',
+      model: 'custom-model',
       approvalPolicy: 'on-request',
       sandboxMode: 'workspace-write',
       tokenEconomyMode: false,
       insecure: false,
       providers: {
-        'opencode-free': {
+        'custom-http': {
           apiKey: '',
-          baseUrl: 'https://opencode.ai/zen/v1',
-          models: ['big-pickle', 'minimax-m2.5-free'],
-          selectedModel: 'big-pickle'
+          baseUrl: 'https://api.example.test/v1',
+          models: ['custom-model', 'other-model'],
+          selectedModel: 'custom-model'
         },
         deepseek: {
           apiKey: 'must-not-leak',
@@ -116,10 +116,10 @@ describe('activeModelConnectionProviderId', () => {
         }
       }
     })).toMatchObject({
-      defaultModel: 'big-pickle',
+      defaultModel: 'custom-model',
       models: [
-        { id: 'big-pickle', selected: true },
-        { id: 'minimax-m2.5-free', selected: false }
+        { id: 'custom-model', selected: true },
+        { id: 'other-model', selected: false }
       ]
     })
   })

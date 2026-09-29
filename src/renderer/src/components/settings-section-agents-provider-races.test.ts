@@ -295,7 +295,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         provider: {
           ...settings,
           providers: [
-            ...settings.providers.filter((provider) => provider.id !== 'opencode-free'),
+            ...settings.providers,
             target
           ]
         },
