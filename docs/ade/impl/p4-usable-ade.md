@@ -293,7 +293,7 @@ setup?: {
 | 在本地网关配置有问题的情况下修改 harness 设置 | harness 改动生效，网关一项单独报错，并有"去修复"按钮 |
 | 总管会话派一个 Kun worker 和一个 Claude Code worker | 任务总控实时更新；完成后总管被唤醒并汇总 |
 
-**"ADE 可用"的门槛**：阶段 A 全部完成；P4-06 冒烟脚本通过；P4-17 清单全部通过，并把截图附在 PR 里。
+**"ADE 可用"的门槛**：阶段 A 全部完成；P4-06 冒烟脚本通过（`npm run smoke:development-ade`，需先 `npm run build`）；P4-17 清单全部通过，并把截图附在 PR 里。
 
 ### 顺序
 
