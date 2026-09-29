@@ -2,7 +2,7 @@ import type { Router } from '../router.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { authorize } from './route-auth.js'
 import { ERRORS } from './runtime-error.js'
-import { listHarnesses, listHarnessModels, probeHarness } from './harnesses.js'
+import { listHarnesses, listHarnessModels, probeHarness, testHarness } from './harnesses.js'
 
 export function registerHarnessRoutes(router: Router, runtime: ServerRuntime): void {
   router.add('GET', '/v1/harnesses', (request) => {
@@ -16,5 +16,9 @@ export function registerHarnessRoutes(router: Router, runtime: ServerRuntime): v
   router.add('GET', '/v1/harnesses/:id/models', (request, context) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return listHarnessModels(runtime, request, context.params)
+  })
+  router.add('POST', '/v1/harnesses/:id/test', (request, context) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return testHarness(runtime, request, context.params)
   })
 }

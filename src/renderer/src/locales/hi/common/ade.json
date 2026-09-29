@@ -291,7 +291,8 @@
     "setDefault": "डिफ़ॉल्ट बनाएँ",
     "isDefault": "डिफ़ॉल्ट",
     "specifyPath": "कमांड पथ बताएँ",
-    "docs": "दस्तावेज़"
+    "docs": "दस्तावेज़",
+    "trial": "परीक्षण टर्न चलाएँ"
   },
   "adeAgentTransport": {
     "nativeLoop": "Kun",
@@ -300,5 +301,14 @@
     "antigravityCli": "CLI",
     "acp": "ACP",
     "terminal": "टर्मिनल"
+  },
+  "adeAgentTest": {
+    "detect": "जाँच",
+    "handshake": "हैंडशेक",
+    "trial": "परीक्षण टर्न",
+    "tokens": "{{count}} टोकन उपयोग हुए",
+    "noHandshake": "हैंडशेक इंटरफ़ेस नहीं",
+    "capSessionResume": "सत्र पुनर्स्थापना",
+    "capImageInput": "छवि इनपुट"
   }
 }

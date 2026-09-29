@@ -282,5 +282,13 @@
   "adeAgentTransport.cursorSdk": "Cursor SDK",
   "adeAgentTransport.antigravityCli": "CLI",
   "adeAgentTransport.acp": "ACP",
-  "adeAgentTransport.terminal": "Terminal"
+  "adeAgentTransport.terminal": "Terminal",
+  "adeAgentAction.trial": "Run trial turn",
+  "adeAgentTest.detect": "Detect",
+  "adeAgentTest.handshake": "Handshake",
+  "adeAgentTest.trial": "Trial turn",
+  "adeAgentTest.tokens": "{{count}} tokens used",
+  "adeAgentTest.noHandshake": "no handshake surface",
+  "adeAgentTest.capSessionResume": "session resume",
+  "adeAgentTest.capImageInput": "image input"
 }

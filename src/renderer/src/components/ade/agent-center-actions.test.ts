@@ -110,7 +110,10 @@ describe('agentCardModel', () => {
       { enabled: true, platform: 'darwin', isDefault: false }
     )
     expect(advisory.reasonCode).toBe('handshake_timeout')
-    expect(advisory.primary.kind).toBe('probe')
+    expect(advisory.primary.kind).toBe('test')
+    expect(advisory.secondary.map((a) => a.kind)).toEqual(
+      expect.arrayContaining(['probe'])
+    )
   })
 
   it('ready rows offer test + setDefault + disable', () => {
@@ -118,7 +121,7 @@ describe('agentCardModel', () => {
       enabled: true, platform: 'darwin', isDefault: false
     })
     expect(model.state).toBe('ready')
-    expect(model.primary.kind).toBe('probe')
+    expect(model.primary.kind).toBe('test')
     expect(model.secondary.map((a) => a.kind)).toEqual(['setDefault', 'disable'])
   })
 

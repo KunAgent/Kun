@@ -126,6 +126,67 @@ export type AdeHarnessModels = {
   groups?: AdeHarnessProviderModelGroup[]
 }
 
+/** `POST /v1/harnesses/:id/test` request body (p4 §3.5, P4-10). */
+export type AdeHarnessTestRequest = {
+  level: 'detect' | 'handshake' | 'trial'
+  credentialMode?: AdeHarnessCredentialMode
+  providerId?: string
+  model?: string
+  timeoutMs?: number
+}
+
+/** One level's result inside a `testHarness` response. */
+export type AdeHarnessTestDetect = {
+  durationMs: number
+  ok: boolean
+  status: AdeHarnessStatus
+}
+
+export type AdeHarnessTestHandshake = {
+  durationMs: number
+  ok: boolean
+  /** False when the transport has no handshake surface at all. */
+  supported: boolean
+  protocol?: string
+  protocolVersion?: number
+  agent?: { name?: string; version?: string }
+  capabilities?: {
+    sessionResume?: boolean
+    imageInput?: boolean
+    mcpTransports?: string[]
+  }
+  authMethods?: { id: string; name?: string }[]
+  authRequired?: boolean
+  models?: string[]
+  detail?: string
+}
+
+export type AdeHarnessTestTrial = {
+  durationMs: number
+  ok: boolean
+  status: 'completed' | 'failed' | 'aborted'
+  error?: string
+  terminalCode?: string
+  usage?: {
+    totalTokens: number
+    promptTokens?: number
+    completionTokens?: number
+    model?: string
+    providerId?: string
+  }
+}
+
+export type AdeHarnessTestResult = {
+  harnessId: string
+  transport: string
+  level: 'detect' | 'handshake' | 'trial'
+  ok: boolean
+  durationMs: number
+  detect: AdeHarnessTestDetect
+  handshake?: AdeHarnessTestHandshake
+  trial?: AdeHarnessTestTrial
+}
+
 /** A native slash command the harness advertised (03 §7.3). */
 export type AdeHarnessCommand = {
   name: string

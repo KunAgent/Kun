@@ -291,7 +291,8 @@
     "setDefault": "Сделать по умолчанию",
     "isDefault": "По умолчанию",
     "specifyPath": "Указать путь к команде",
-    "docs": "Документация"
+    "docs": "Документация",
+    "trial": "Пробный запуск"
   },
   "adeAgentTransport": {
     "nativeLoop": "Kun",
@@ -300,5 +301,14 @@
     "antigravityCli": "CLI",
     "acp": "ACP",
     "terminal": "Терминал"
+  },
+  "adeAgentTest": {
+    "detect": "Проверка",
+    "handshake": "Рукопожатие",
+    "trial": "Пробный ход",
+    "tokens": "Использовано токенов: {{count}}",
+    "noHandshake": "нет handshake-интерфейса",
+    "capSessionResume": "возобновление сессии",
+    "capImageInput": "ввод изображений"
   }
 }

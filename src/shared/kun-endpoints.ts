@@ -295,6 +295,7 @@ export const KUN_HARNESSES_PATH = '/v1/harnesses'
 export const KUN_HARNESSES_TEMPLATE = '/v1/harnesses'
 export const KUN_HARNESS_MODELS_TEMPLATE = '/v1/harnesses/{id}/models'
 export const KUN_HARNESS_PROBE_TEMPLATE = '/v1/harnesses/{id}/probe'
+export const KUN_HARNESS_TEST_TEMPLATE = '/v1/harnesses/{id}/test'
 export function kunHarnessModelsPath(harnessId: string, credentialMode?: string): string {
   const base = `${KUN_HARNESSES_PATH}/${encodeURIComponent(harnessId)}/models`
   const mode = credentialMode?.trim()

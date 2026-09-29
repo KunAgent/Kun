@@ -366,4 +366,62 @@ describe('harness routes', () => {
     expect(row.status.detecting).toBe(true)
     release?.()
   })
+
+  // P4-10: POST /v1/harnesses/:id/test
+  it('requires runtime authentication for harness tests', async () => {
+    const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }))
+    const response = await dispatch(router, 'POST', '/v1/harnesses/kun/test')
+    expect(response.status).toBe(401)
+  })
+
+  it('returns 404 for tests on unknown harnesses', async () => {
+    const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }))
+    const request = new Request('http://127.0.0.1/v1/harnesses/nope/test', {
+      method: 'POST',
+      headers: { ...authed, 'content-type': 'application/json' },
+      body: JSON.stringify({ level: 'detect' })
+    })
+    const match = router.match('POST', new URL(request.url).pathname)
+    const result = await match!.handler(request, { params: match!.params })
+    const status = result instanceof Response ? result.status : result.status
+    expect(status).toBe(404)
+  })
+
+  it('rejects an invalid test body and an unsupported credential mode', async () => {
+    const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }))
+    const post = async (body: unknown) => {
+      const request = new Request('http://127.0.0.1/v1/harnesses/kun/test', {
+        method: 'POST',
+        headers: { ...authed, 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      const match = router.match('POST', new URL(request.url).pathname)
+      const result = await match!.handler(request, { params: match!.params })
+      return result instanceof Response ? result.status : result.status
+    }
+    expect(await post({})).toBe(400)
+    expect(await post({ level: 'nope' })).toBe(400)
+    // `kun-gateway` is not in kun's credentialModes list.
+    expect(await post({ level: 'detect', credentialMode: 'kun-gateway' })).toBe(400)
+  })
+
+  it('runs a detect-level test for an installed harness', async () => {
+    const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }))
+    const request = new Request('http://127.0.0.1/v1/harnesses/kun/test', {
+      method: 'POST',
+      headers: { ...authed, 'content-type': 'application/json' },
+      body: JSON.stringify({ level: 'detect' })
+    })
+    const match = router.match('POST', new URL(request.url).pathname)
+    const result = await match!.handler(request, { params: match!.params })
+    const status = result instanceof Response ? result.status : result.status
+    const body = JSON.parse(
+      result instanceof Response ? await result.text() : result.body
+    )
+    expect(status).toBe(200)
+    expect(body.level).toBe('detect')
+    expect(body.ok).toBe(true)
+    expect(body.detect.status.installed).toBe('yes')
+    expect(body.handshake).toBeUndefined()
+  })
 })

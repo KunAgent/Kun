@@ -291,7 +291,8 @@
     "setDefault": "기본으로 설정",
     "isDefault": "기본",
     "specifyPath": "명령 경로 지정",
-    "docs": "문서"
+    "docs": "문서",
+    "trial": "시험 턴 실행"
   },
   "adeAgentTransport": {
     "nativeLoop": "Kun",
@@ -300,5 +301,14 @@
     "antigravityCli": "CLI",
     "acp": "ACP",
     "terminal": "터미널"
+  },
+  "adeAgentTest": {
+    "detect": "감지",
+    "handshake": "핸드셰이크",
+    "trial": "시험 턴",
+    "tokens": "{{count}} 토큰 사용",
+    "noHandshake": "핸드셰이크 인터페이스 없음",
+    "capSessionResume": "세션 재개",
+    "capImageInput": "이미지 입력"
   }
 }

@@ -1,4 +1,9 @@
-import type { AdeHarnessModels, AdeHarnessRow } from '@shared/ade-harnesses'
+import type {
+  AdeHarnessModels,
+  AdeHarnessRow,
+  AdeHarnessTestRequest,
+  AdeHarnessTestResult
+} from '@shared/ade-harnesses'
 import { KUN_HARNESSES_PATH, kunHarnessModelsPath } from '@shared/kun-endpoints'
 import { runtimeErrorToError } from '@shared/runtime-error'
 import { rendererRuntimeClient } from './runtime-client'
@@ -65,6 +70,30 @@ export function createKunHarnessesClient() {
       return readRuntimeJson<AdeHarnessRow>(
         response.body,
         'runtime returned an invalid harness probe result'
+      )
+    },
+
+    /**
+     * Progressive connection test (p4 §3.5, P4-10): detect → handshake →
+     * optional trial turn on a hidden side thread. Trial consumes quota.
+     */
+    async testHarness(
+      harnessId: string,
+      input: AdeHarnessTestRequest
+    ): Promise<AdeHarnessTestResult> {
+      const response = await rendererRuntimeClient.runtimeRequest(
+        `${KUN_HARNESSES_PATH}/${encodeURIComponent(harnessId)}/test`,
+        'POST',
+        JSON.stringify(input)
+      )
+      if (!response.ok) {
+        throw runtimeErrorToError(
+          readRuntimeError(response.body, 'failed to test harness connection')
+        )
+      }
+      return readRuntimeJson<AdeHarnessTestResult>(
+        response.body,
+        'runtime returned an invalid harness test result'
       )
     }
   }

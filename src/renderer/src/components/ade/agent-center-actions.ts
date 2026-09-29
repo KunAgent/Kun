@@ -9,7 +9,7 @@ import { harnessRowUnavailableCode } from '../../store/harness-store'
 
 export type AgentCardAction =
   | { kind: 'command'; labelKey: string; command: string; note?: string }
-  | { kind: 'probe' | 'enable' | 'disable' | 'setDefault' | 'specifyPath' | 'reason'; labelKey: string }
+  | { kind: 'probe' | 'enable' | 'disable' | 'setDefault' | 'specifyPath' | 'reason' | 'test'; labelKey: string }
   | { kind: 'docs'; labelKey: string; url: string }
   | { kind: 'none' }
 
@@ -24,7 +24,7 @@ export type AgentCardModel = {
 
 const ACTION = {
   probe: { kind: 'probe', labelKey: 'adeAgentAction.retry' },
-  test: { kind: 'probe', labelKey: 'adeAgentAction.test' },
+  test: { kind: 'test', labelKey: 'adeAgentAction.test' },
   enable: { kind: 'enable', labelKey: 'adeAgentAction.enable' },
   disable: { kind: 'disable', labelKey: 'adeAgentAction.disable' },
   setDefault: { kind: 'setDefault', labelKey: 'adeAgentAction.setDefault' },
