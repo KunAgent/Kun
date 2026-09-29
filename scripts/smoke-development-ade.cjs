@@ -195,9 +195,9 @@ async function main() {
     const harnessPanel = page.locator('#agents-settings-panel-harnesses')
     await harnessPanel.waitFor()
     await capture('3-agent-harness-settings')
-    const claudeDetails = harnessPanel.locator('details').filter({ hasText: 'Claude Code' }).first()
-    await claudeDetails.locator('summary').click()
-    await claudeDetails.locator('input').first().fill(claudeStubUpdated)
+    const claudeCard = harnessPanel.locator('[data-agent-card="claude-code"]')
+    await claudeCard.locator('button[aria-expanded]').first().click()
+    await claudeCard.locator('input').first().fill(claudeStubUpdated)
     await poll(async () => {
       const probe = await runtimeRequest(page, '/v1/harnesses/claude-code/probe', 'POST')
       return probe.status?.resolvedCommand === claudeStubUpdated

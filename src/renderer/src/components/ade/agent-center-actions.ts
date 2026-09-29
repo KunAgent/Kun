@@ -1,0 +1,153 @@
+import type { AdeHarnessRow, AdeHarnessSetup } from '@shared/ade-harnesses'
+import { harnessRowUnavailableCode } from '../../store/harness-store'
+
+/**
+ * Agent Center card state + action table (docs/ade/impl/p4 §3.2, P4-08).
+ * Pure mapping from a harness row to the card's one primary action and its
+ * secondary actions — the card component only renders what this returns.
+ */
+
+export type AgentCardAction =
+  | { kind: 'command'; labelKey: string; command: string; note?: string }
+  | { kind: 'probe' | 'enable' | 'disable' | 'setDefault' | 'specifyPath' | 'reason'; labelKey: string }
+  | { kind: 'docs'; labelKey: string; url: string }
+  | { kind: 'none' }
+
+export type AgentCardModel = {
+  /** 'detecting' renders a spinner instead of actions. */
+  state: 'detecting' | 'ready' | 'unavailable' | 'disabled'
+  /** The wire/derived code when state is 'unavailable' (P4-05 reasons). */
+  reasonCode: string | null
+  primary: AgentCardAction
+  secondary: AgentCardAction[]
+}
+
+const ACTION = {
+  probe: { kind: 'probe', labelKey: 'adeAgentAction.retry' },
+  test: { kind: 'probe', labelKey: 'adeAgentAction.test' },
+  enable: { kind: 'enable', labelKey: 'adeAgentAction.enable' },
+  disable: { kind: 'disable', labelKey: 'adeAgentAction.disable' },
+  setDefault: { kind: 'setDefault', labelKey: 'adeAgentAction.setDefault' },
+  specifyPath: { kind: 'specifyPath', labelKey: 'adeAgentAction.specifyPath' },
+  reason: { kind: 'reason', labelKey: 'adeHarnessViewReason' },
+  none: { kind: 'none' }
+} as const satisfies Record<string, AgentCardAction>
+
+/** Install entries prefer an exact platform match over the 'any' fallback. */
+export function setupInstallCommand(
+  setup: AdeHarnessSetup | undefined,
+  platform: string
+): { command: string; note?: string } | null {
+  const entries = setup?.install ?? []
+  const exact = entries.find((entry) => entry.platform === platform)
+  const any = entries.find((entry) => entry.platform === 'any')
+  const picked = exact ?? any
+  return picked ? { command: picked.command, note: picked.note } : null
+}
+
+export function setupLoginCommand(
+  setup: AdeHarnessSetup | undefined
+): { command: string; note?: string } | null {
+  const login = setup?.login
+  if (!login) return null
+  const args = login.args.join(' ').trim()
+  return { command: args ? `${login.command} ${args}` : login.command, note: login.note }
+}
+
+function commandAction(
+  labelKey: string,
+  resolved: { command: string; note?: string } | null
+): AgentCardAction {
+  return resolved
+    ? { kind: 'command', labelKey, command: resolved.command, note: resolved.note }
+    : ACTION.none
+}
+
+/**
+ * §3.2 state table. `enabled` comes from harness settings; `platform` is the
+ * host `process.platform` mirror from the preload bridge.
+ */
+export function agentCardModel(
+  row: AdeHarnessRow,
+  options: { enabled: boolean; platform: string; isDefault: boolean }
+): AgentCardModel {
+  const { enabled, platform, isDefault } = options
+  const setup = row.definition.builtin ? row.definition.setup : undefined
+  const hasDetail = Boolean(row.status.message?.trim())
+
+  if (!enabled) {
+    return {
+      state: 'disabled',
+      reasonCode: 'disabled',
+      primary: ACTION.enable,
+      secondary: []
+    }
+  }
+
+  const code = harnessRowUnavailableCode(row)
+  if (code === 'detecting') {
+    return { state: 'detecting', reasonCode: null, primary: ACTION.none, secondary: [] }
+  }
+
+  if (code === null) {
+    // A settled row can still carry an advisory wire reasonCode (e.g. a
+    // handshake timeout under P4-03): surface it on the status line and
+    // offer retry without blocking the card.
+    const advisory = row.status.reasonCode ?? null
+    return {
+      state: 'ready',
+      reasonCode: advisory,
+      primary: ACTION.test,
+      secondary: [
+        ...(advisory ? [ACTION.probe] : []),
+        ...(isDefault || row.definition.id === 'kun' ? [] : [ACTION.setDefault]),
+        ...(row.definition.id === 'kun' ? [] : [ACTION.disable])
+      ]
+    }
+  }
+
+  const secondary: AgentCardAction[] = []
+  let primary: AgentCardAction = ACTION.none
+  switch (code) {
+    case 'not_installed':
+    case 'version_too_low': {
+      const install = commandAction('adeAgentAction.install', setupInstallCommand(setup, platform))
+      const docs = setup?.docsUrl
+        ? ({ kind: 'docs', labelKey: 'adeAgentAction.docs', url: setup.docsUrl } as const)
+        : null
+      primary = install.kind === 'command' ? install : docs ?? ACTION.probe
+      if (docs && install.kind === 'command') secondary.push(docs)
+      secondary.push(ACTION.specifyPath)
+      break
+    }
+    case 'adapter_missing': {
+      const adapter = setup?.adapter
+      primary = adapter
+        ? { kind: 'command', labelKey: 'adeAgentAction.installAdapter', command: adapter.install }
+        : setup?.docsUrl
+          ? { kind: 'docs', labelKey: 'adeAgentAction.docs', url: setup.docsUrl }
+          : ACTION.probe
+      secondary.push(ACTION.specifyPath)
+      break
+    }
+    case 'handshake_failed':
+      primary = hasDetail ? ACTION.reason : ACTION.probe
+      secondary.push(ACTION.probe)
+      if (!hasDetail) secondary.push(ACTION.specifyPath)
+      break
+    case 'handshake_timeout':
+      primary = ACTION.probe
+      break
+    case 'signed_out': {
+      const login = commandAction('adeAgentAction.login', setupLoginCommand(setup))
+      primary = login.kind === 'command' ? login : ACTION.probe
+      secondary.push(ACTION.probe)
+      break
+    }
+    default:
+      primary = ACTION.probe
+      break
+  }
+  if (hasDetail && primary.kind !== 'reason') secondary.push(ACTION.reason)
+  return { state: 'unavailable', reasonCode: code, primary, secondary }
+}

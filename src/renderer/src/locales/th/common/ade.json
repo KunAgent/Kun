@@ -273,5 +273,32 @@
     "enable": "เปิดในการตั้งค่า"
   },
   "adeHarnessViewReason": "ดูสาเหตุ",
-  "adeHarnessOpenSettings": "เปิดการตั้งค่า"
+  "adeHarnessOpenSettings": "เปิดการตั้งค่า",
+  "adeAgents": "เอเจนต์",
+  "adeAgentCopied": "คัดลอกคำสั่งแล้ว — เรียกใช้ในเทอร์มินัล Kun",
+  "adeAgentCenter": {
+    "title": "ศูนย์เอเจนต์",
+    "desc": "ติดตั้ง ลงชื่อเข้าใช้ และจัดการเอเจนต์ที่ Kun มอบหมายงานได้"
+  },
+  "adeAgentAction": {
+    "install": "ติดตั้ง",
+    "login": "ลงชื่อเข้าใช้",
+    "installAdapter": "ติดตั้งอะแดปเตอร์",
+    "test": "ทดสอบการเชื่อมต่อ",
+    "retry": "ตรวจจับอีกครั้ง",
+    "enable": "เปิดใช้",
+    "disable": "ปิดใช้",
+    "setDefault": "ตั้งเป็นค่าเริ่มต้น",
+    "isDefault": "ค่าเริ่มต้น",
+    "specifyPath": "ระบุพาธคำสั่ง",
+    "docs": "เอกสาร"
+  },
+  "adeAgentTransport": {
+    "nativeLoop": "Kun",
+    "agentSdk": "Agent SDK",
+    "cursorSdk": "Cursor SDK",
+    "antigravityCli": "CLI",
+    "acp": "ACP",
+    "terminal": "เทอร์มินัล"
+  }
 }

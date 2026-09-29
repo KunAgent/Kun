@@ -273,5 +273,32 @@
     "enable": "Включить в настройках"
   },
   "adeHarnessViewReason": "Показать причину",
-  "adeHarnessOpenSettings": "Открыть настройки"
+  "adeHarnessOpenSettings": "Открыть настройки",
+  "adeAgents": "Агенты",
+  "adeAgentCopied": "Команда скопирована — выполните её в терминале Kun",
+  "adeAgentCenter": {
+    "title": "Центр агентов",
+    "desc": "Установка, вход и управление агентами, которым Kun может делегировать работу."
+  },
+  "adeAgentAction": {
+    "install": "Установить",
+    "login": "Войти",
+    "installAdapter": "Установить адаптер",
+    "test": "Проверить подключение",
+    "retry": "Повторить проверку",
+    "enable": "Включить",
+    "disable": "Отключить",
+    "setDefault": "Сделать по умолчанию",
+    "isDefault": "По умолчанию",
+    "specifyPath": "Указать путь к команде",
+    "docs": "Документация"
+  },
+  "adeAgentTransport": {
+    "nativeLoop": "Kun",
+    "agentSdk": "Agent SDK",
+    "cursorSdk": "Cursor SDK",
+    "antigravityCli": "CLI",
+    "acp": "ACP",
+    "terminal": "Терминал"
+  }
 }
