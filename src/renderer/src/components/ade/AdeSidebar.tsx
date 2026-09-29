@@ -25,7 +25,10 @@ import { useChatStore, type SettingsRouteSection } from '../../store/chat-store'
 import { useActivityStore } from '../../store/activity-store'
 import { selectNeedsYouCount } from '../../store/activity-selectors'
 import {
-  harnessRowUnavailableReason,
+  harnessRowUnavailableCode,
+  harnessRowUnavailableDetail,
+  harnessUnavailableLabelKey,
+  harnessUnavailableNextStepKey,
   loadHarnesses,
   useHarnessStore
 } from '../../store/harness-store'
@@ -369,29 +372,67 @@ export function AdeSidebar({
               </p>
             ) : (
               harnessRows.map((row) => {
-                const reason = harnessRowUnavailableReason(row)
-                const reasonLabel =
-                  reason === 'detecting' ? t('adeHarnessUnavailable.detecting') : reason
+                // P4-05: stable reason code → localized label + next step,
+                // an Agent Center (settings) link, and the raw message behind
+                // a "view reason" disclosure instead of the row title.
+                const code = harnessRowUnavailableCode(row)
+                if (code === null) {
+                  return (
+                    <button
+                      key={row.definition.id}
+                      type="button"
+                      className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1 text-left text-[12.5px] text-ds-text hover:bg-ds-hover"
+                      onClick={() => {
+                        setOneOnOneOpen(false)
+                        onNewOneOnOne({
+                          harnessId: row.definition.id,
+                          credentialMode: row.definition.credentialModes[0]
+                        })
+                      }}
+                    >
+                      <span className="truncate">{row.definition.displayName}</span>
+                    </button>
+                  )
+                }
+                const label = t(harnessUnavailableLabelKey(code))
+                const nextStepKey = code !== 'detecting' ? harnessUnavailableNextStepKey(code) : null
+                const detail = harnessRowUnavailableDetail(row)
                 return (
-                  <button
+                  <div
                     key={row.definition.id}
-                    type="button"
-                    disabled={reason !== null}
-                    title={reasonLabel ?? undefined}
-                    className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1 text-left text-[12.5px] text-ds-text hover:bg-ds-hover disabled:cursor-not-allowed disabled:text-ds-faint"
-                    onClick={() => {
-                      setOneOnOneOpen(false)
-                      onNewOneOnOne({
-                        harnessId: row.definition.id,
-                        credentialMode: row.definition.credentialModes[0]
-                      })
-                    }}
+                    className="rounded-sm px-2 py-1"
+                    data-ade-agent-unavailable={row.definition.id}
                   >
-                    <span className="truncate">{row.definition.displayName}</span>
-                    {reasonLabel ? (
-                      <span className="shrink-0 text-[11px] text-ds-faint">{reasonLabel}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-[12.5px] text-ds-faint">
+                        {row.definition.displayName}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-ds-faint">{label}</span>
+                    </div>
+                    {nextStepKey || detail ? (
+                      <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-ds-faint">
+                        {nextStepKey ? <span className="truncate">{t(nextStepKey)}</span> : null}
+                        <button
+                          type="button"
+                          className="shrink-0 text-ds-accent hover:underline"
+                          onClick={() => {
+                            setOneOnOneOpen(false)
+                            onOpenSettings('agentsHarnesses')
+                          }}
+                        >
+                          {t('adeHarnessOpenSettings')}
+                        </button>
+                      </div>
                     ) : null}
-                  </button>
+                    {detail ? (
+                      <details className="mt-0.5 text-[11px] text-ds-faint">
+                        <summary className="cursor-pointer select-none">
+                          {t('adeHarnessViewReason')}
+                        </summary>
+                        <p className="mt-0.5 break-all">{detail}</p>
+                      </details>
+                    ) : null}
+                  </div>
                 )
               })
             )}

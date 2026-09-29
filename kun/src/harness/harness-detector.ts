@@ -1,6 +1,7 @@
 import semver from 'semver'
 import type { ChildProcess } from 'node:child_process'
 import type { HarnessDefinition, HarnessId, HarnessStatus } from '../contracts/harness.js'
+import { harnessStatusReasonCode } from '../contracts/harness.js'
 import {
   resolveExecutable as defaultResolveExecutable,
   spawnOwnedProcess,
@@ -161,6 +162,7 @@ export class HarnessDetector {
       }),
       harnessId: id,
       ready: 'no',
+      reasonCode: 'handshake_failed' as const,
       checkedAt: this.deps.nowIso(),
       message
     })
@@ -233,6 +235,7 @@ export class HarnessDetector {
         installed: 'no',
         login: 'unknown',
         checkedAt,
+        reasonCode: hint && hintPresent ? 'adapter_missing' : 'not_installed',
         message:
           hint && hintPresent
             ? hint.message
@@ -283,7 +286,7 @@ export class HarnessDetector {
         }
       }
     }
-    return this.store(id, {
+    const status: HarnessStatus = {
       harnessId: id,
       installed: 'yes',
       version: version.text || undefined,
@@ -293,7 +296,11 @@ export class HarnessDetector {
       resolvedCommand: command,
       checkedAt,
       ...(readyMessage ? { message: readyMessage.slice(0, 512) } : {})
-    })
+    }
+    // P4-05: stamp the stable reason code so clients localize a label and a
+    // next step instead of parsing `message` (which stays detail-only).
+    const reasonCode = harnessStatusReasonCode(status)
+    return this.store(id, reasonCode ? { ...status, reasonCode } : status)
   }
 
   private async resolveCommand(def: HarnessDefinition): Promise<string | undefined> {

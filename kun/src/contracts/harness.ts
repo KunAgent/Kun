@@ -143,6 +143,22 @@ export const HarnessRouteSchema = z
   .strict()
 export type HarnessRoute = z.infer<typeof HarnessRouteSchema>
 
+/**
+ * Stable machine-readable reason a harness is unavailable (P4-05). The
+ * detector sets it when it has extra context (e.g. `adapter_missing` vs
+ * `not_installed`); consumers may also derive it from the status fields.
+ */
+export const HarnessReasonCodeSchema = z.enum([
+  'disabled',
+  'not_installed',
+  'adapter_missing',
+  'version_too_low',
+  'handshake_failed',
+  'handshake_timeout',
+  'signed_out'
+])
+export type HarnessReasonCode = z.infer<typeof HarnessReasonCodeSchema>
+
 /** Detection result; metadata only, no credentials or other secrets. */
 export const HarnessStatusSchema = z
   .object({
@@ -165,7 +181,30 @@ export const HarnessStatusSchema = z
      * provisional `unknown` verdict as final.
      */
     detecting: z.boolean().optional(),
+    reasonCode: HarnessReasonCodeSchema.optional(),
     message: z.string().max(512).optional()
   })
   .strict()
 export type HarnessStatus = z.infer<typeof HarnessStatusSchema>
+
+/**
+ * Derive the stable unavailability reason from status fields (P4-05).
+ * Precedence follows the detection chain: a bad version is reported before a
+ * handshake failure, which precedes a sign-in problem. `adapter_missing`
+ * cannot be derived (it needs the fallback-binary check) — the detector sets
+ * it explicitly on `installed: 'no'` statuses.
+ */
+export function harnessStatusReasonCode(
+  status: Pick<HarnessStatus, 'installed' | 'versionSupported' | 'ready' | 'login'>
+): HarnessReasonCode | undefined {
+  if (status.installed === 'no') return 'not_installed'
+  if (status.installed !== 'yes') return undefined
+  if (status.versionSupported === false) return 'version_too_low'
+  if (status.ready === 'no') return 'handshake_failed'
+  // `signed_out` outranks the advisory `handshake_timeout` (P4-03 keeps an
+  // inconclusive probe selectable): when both hold, signing in is the
+  // actionable fix.
+  if (status.login === 'signed-out') return 'signed_out'
+  if (status.ready === 'unknown') return 'handshake_timeout'
+  return undefined
+}

@@ -5,7 +5,7 @@ import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { TaskWorkspacePrep } from '../../store/task-workspace-store'
 import { useChatStore } from '../../store/chat-store'
 import {
-  harnessRowUnavailableReason,
+  harnessRowUnavailableCode,
   loadHarnessModels,
   loadHarnessProviderGroups,
   loadHarnesses,
@@ -172,7 +172,7 @@ export function useAdeComposerControls(input: {
     credentialMode,
     harnessLabel,
     isNativeHarness,
-    rowUnavailableReason: harnessRowUnavailableReason,
+    rowUnavailableCode: harnessRowUnavailableCode,
     refreshRows: () => void loadHarnesses(true, { waitMs: 3_000 }),
     pickList,
     modelGroups,

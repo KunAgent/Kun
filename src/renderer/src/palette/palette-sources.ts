@@ -143,6 +143,7 @@ const SETTINGS_SECTION_LABEL_KEYS: Record<SettingsRouteSection, string> = {
   speak: 'mediaGeneration',
   speechToText: 'settingsNavSpeech',
   agents: 'settingsNavAssistant',
+  agentsHarnesses: 'adeSettings.harnessesTitle',
   laboratory: 'agentsQuickLaboratory',
   subagents: 'subagents',
   archives: 'settingsNavArchives',
