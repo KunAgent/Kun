@@ -158,7 +158,8 @@ export function MessageTimeline({
     activeThread ? [activeThread] : [],
     workspaceRoot
   )
-  const heroRoute: 'chat' | 'claw' = route === 'claw' ? 'claw' : 'chat'
+  const heroRoute: 'chat' | 'claw' | 'ade' =
+    route === 'claw' ? 'claw' : route === 'ade' || activeThread?.workspaceMode === 'ade' ? 'ade' : 'chat'
   const hasContent = blocks.length > 0 || live || liveReasoning
   const endRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null), contentRef = useRef<HTMLDivElement>(null)

@@ -12,6 +12,7 @@ import {
 import { resolveChatWelcomeTitle, type ClawImChannelV1 } from '@shared/app-settings'
 import { useChatWelcomeMessageSetting } from '../../lib/chat-welcome-message-settings'
 import { KunStateFigure } from './AnimatedWorkLogo'
+import { AdeReadinessCard } from '../ade/AdeReadinessCard'
 /**
  * Empty / hero states rendered by `MessageTimeline` when there is no
  * turn content yet. Lifted out of the timeline component so the main
@@ -219,6 +220,61 @@ function ChatEmptyHero({
   )
 }
 
+/**
+ * P4-14: an empty ADE thread leads with the readiness checklist and replaces
+ * the Code welcome copy with an explanation of the two ADE session kinds —
+ * the manager session that plans and dispatches workers, and the one-to-one
+ * session that runs a single chosen agent.
+ */
+function AdeSessionHero({
+  runtimeReady,
+  runtimeError,
+  onRetry,
+  onOpenSettings
+}: {
+  runtimeReady: boolean
+  runtimeError?: string | null
+  onRetry: () => void
+  onOpenSettings: () => void
+}): ReactElement {
+  const { t } = useTranslation('common')
+  return (
+    <div className="ds-no-drag flex w-full flex-col px-4 pb-6 pt-8 md:px-8">
+      <AdeReadinessCard />
+      <div className="ds-chat-content-max-width mx-auto mt-8 w-full rounded-[24px] border border-ds-border-muted bg-ds-card/78 px-6 py-7 shadow-[0_14px_36px_rgba(20,47,95,0.05)] backdrop-blur">
+        <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-ds-ink">
+          {t('adeHeroTitle')}
+        </h1>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-ds-border-muted/70 bg-ds-main/50 px-4 py-3.5">
+            <p className="text-[13px] font-semibold text-ds-ink">{t('adeHeroManagerTitle')}</p>
+            <p className="mt-1.5 text-[12px] leading-5 text-ds-muted">{t('adeHeroManagerSub')}</p>
+            <p className="mt-2 text-[11.5px] italic leading-5 text-ds-faint">
+              {t('adeHeroManagerExample')}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-ds-border-muted/70 bg-ds-main/50 px-4 py-3.5">
+            <p className="text-[13px] font-semibold text-ds-ink">{t('adeHeroOneOnOneTitle')}</p>
+            <p className="mt-1.5 text-[12px] leading-5 text-ds-muted">{t('adeHeroOneOnOneSub')}</p>
+            <p className="mt-2 text-[11.5px] italic leading-5 text-ds-faint">
+              {t('adeHeroOneOnOneExample')}
+            </p>
+          </div>
+        </div>
+        {!runtimeReady ? (
+          <div className="mt-4 flex justify-center">
+            <RuntimeHomeStatus
+              runtimeError={runtimeError}
+              onRetry={onRetry}
+              onOpenSettings={onOpenSettings}
+            />
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 export function MessageTimelineEmptyHero({
   route,
   ready,
@@ -230,7 +286,7 @@ export function MessageTimelineEmptyHero({
   onOpenSettings,
   onSelectSuggestion
 }: {
-  route: 'chat' | 'claw'
+  route: 'chat' | 'claw' | 'ade'
   ready: boolean
   hasWorkspace: boolean
   runtimeError?: string | null
@@ -280,6 +336,17 @@ export function MessageTimelineEmptyHero({
       <ClawEmptyHero
         channel={activeClawChannel}
         onSelectSuggestion={onSelectSuggestion}
+      />
+    )
+  }
+
+  if (route === 'ade') {
+    return (
+      <AdeSessionHero
+        runtimeReady={ready}
+        runtimeError={runtimeError}
+        onRetry={onRetry}
+        onOpenSettings={onOpenSettings}
       />
     )
   }

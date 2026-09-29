@@ -10,6 +10,34 @@
   "adeHandoffShow": "브리프 보기",
   "adeHandoffHide": "브리프 숨기기",
   "adeHandoffLoadError": "핸드오프 브리프를 다시 만들 수 없습니다",
+  "adeReadiness": {
+    "checking": "확인 중…",
+    "provider": {
+      "label": "매니저 모델 공급자",
+      "ready": "{{name}}",
+      "missing": "사용 가능한 공급자가 없습니다",
+      "action": "설정하기"
+    },
+    "agents": {
+      "label": "준비된 agent",
+      "ready": "{{count}}개 준비됨",
+      "missing": "준비된 agent가 없습니다",
+      "action": "Agent 센터 열기"
+    },
+    "gateway": {
+      "label": "Kun 게이트웨이",
+      "ready": "켜짐",
+      "missing": "꺼짐 — harness가 공급자에 연결할 수 없습니다",
+      "action": "관리하기"
+    }
+  },
+  "adeHeroTitle": "두 가지 작업 위임 방식",
+  "adeHeroManagerTitle": "매니저 세션",
+  "adeHeroManagerSub": "매니저가 작업을 분해하고 worker를 병렬로 파견한 뒤 결과를 취합합니다.",
+  "adeHeroManagerExample": "예: \"이 기능을 서로 독립적인 세 개의 작업으로 나눠서 병렬로 구현해 줘.\"",
+  "adeHeroOneOnOneTitle": "1:1 세션",
+  "adeHeroOneOnOneSub": "Kun, Claude Code 또는 구성된 어떤 harness든 단일 agent와 직접 대화합니다.",
+  "adeHeroOneOnOneExample": "예: \"Claude Code: src/auth 변경 사항을 리뷰하고 위험을 나열해 줘.\"",
   "workerUpdateNotice": {
     "title": "워커 업데이트"
   },

@@ -24,10 +24,10 @@ export function useRuntimeSettingsSyncStatus(active: boolean): KunRuntimeSetting
           .catch(() => undefined)
       }
     }
-    if (typeof window.kunGui.getRuntimeSettingsSyncStatus === 'function') {
+    if (typeof window.kunGui?.getRuntimeSettingsSyncStatus === 'function') {
       void window.kunGui.getRuntimeSettingsSyncStatus().then(handleStatus).catch(() => undefined)
     }
-    const unsubscribe = typeof window.kunGui.onRuntimeSettingsSyncStatus === 'function'
+    const unsubscribe = typeof window.kunGui?.onRuntimeSettingsSyncStatus === 'function'
       ? window.kunGui.onRuntimeSettingsSyncStatus(handleStatus)
       : undefined
     return () => {

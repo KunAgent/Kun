@@ -9,6 +9,7 @@ import { useChatStore } from '../../store/chat-store'
 import { getProvider } from '../../agent/registry'
 import { MissionColumn } from './MissionColumn'
 import { MissionToolbar } from './MissionToolbar'
+import { AdeReadinessCard } from '../ade/AdeReadinessCard'
 import { RaceCompareView } from '../review/RaceCompareView'
 import { useMissionLazyData } from './mission-lazy-data'
 import {
@@ -213,6 +214,9 @@ export function MissionControlView(): ReactElement {
           ) : null}
         </span>
       </div>
+      {/* P4-14: the readiness checklist anchors the ADE home; the popout
+          window keeps its lean board-only surface. */}
+      {popout ? null : <AdeReadinessCard />}
       <MissionToolbar
         filters={filters}
         projects={projects}
