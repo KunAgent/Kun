@@ -16,6 +16,7 @@
 - P0 ~ P2（P0-01 ~ P2-11）已全部实施：harness 路由与能力声明、ACP 运行时、MCP 与模型网关、总管/worker 编排、任务工作区、活动流与通知、交接与审查、Mission Control、终端 agent、赛马与检查、PR/CI 视图、休眠。逐项状态与实施提交见 [impl/README.md](./impl/README.md) 的 PR 总表（均随 `e779bf43a` 合入 `develop`）。
 - P3 复核（2026-09-28 起）修补了四条端到端链路的缺口并补齐实机验证：活动流提升到应用级、ADE composer 门控、ACP 真机握手与 wire 回放、Claude Code 经 kun-gateway 的 worker 链路、团队 token 预算、总管动态上下文、侧栏分组与嵌套 worker、终端 agent 的 `KUN_CLI` 环境与休眠恢复、手机端只读 Mission Control 与内联审批/作答。
 - 当前进展、实机验证记录与默认开启门槛见 [impl/p3-review-followup.md](./impl/p3-review-followup.md)。
+- 界面可用性问题、harness 的添加与配置方式，以及 P4 修复计划见 [impl/p4-usable-ade.md](./impl/p4-usable-ade.md)。
 
 ## 1. 目标
 
