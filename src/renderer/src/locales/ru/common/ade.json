@@ -38,6 +38,14 @@
   "adeHeroOneOnOneTitle": "Сессия один на один",
   "adeHeroOneOnOneSub": "Говорите напрямую с одним агентом — Kun, Claude Code или любым настроенным harness.",
   "adeHeroOneOnOneExample": "Например: «Claude Code: проверь изменения в src/auth и перечисли риски».",
+  "adeOneOnOneDialog": {
+    "title": "Новая сессия один на один",
+    "agent": "Агент",
+    "credential": "Способ доступа",
+    "provider": "Провайдер",
+    "model": "Модель",
+    "start": "Начать сессию"
+  },
   "workerUpdateNotice": {
     "title": "Обновления от воркеров"
   },

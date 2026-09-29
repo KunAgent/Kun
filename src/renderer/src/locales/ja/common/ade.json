@@ -38,6 +38,14 @@
   "adeHeroOneOnOneTitle": "1対1セッション",
   "adeHeroOneOnOneSub": "Kun、Claude Code、設定済みの任意 harness など、単一の agent と直接会話します。",
   "adeHeroOneOnOneExample": "例:「Claude Code: src/auth の変更をレビューしてリスクを列挙して」",
+  "adeOneOnOneDialog": {
+    "title": "新しい1対1セッション",
+    "agent": "エージェント",
+    "credential": "認証方式",
+    "provider": "プロバイダー",
+    "model": "モデル",
+    "start": "セッションを開始"
+  },
   "workerUpdateNotice": {
     "title": "ワーカー更新"
   },
