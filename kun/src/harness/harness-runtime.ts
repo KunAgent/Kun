@@ -7,6 +7,7 @@ import { HarnessDetector, spawnCaptured } from './harness-detector.js'
 import { probeHarnessLogin } from './harness-login-probes.js'
 import { AcpModelProbe } from './acp-model-probe.js'
 import { probeAcpReadiness } from './acp-readiness-probe.js'
+import { AcpReadinessStore, type AcpReadinessCacheView } from './acp-readiness-store.js'
 import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
 import { HarnessTokenService } from './harness-token-service.js'
 
@@ -54,13 +55,44 @@ export type HarnessRuntimeComposition = {
  * Settings overrides are read lazily on every detection pass so config
  * re-apply does not need to rebuild the detector.
  */
+/** P4-03: at most two ACP readiness probes run concurrently. */
+const ACP_PROBE_CONCURRENCY = 2
+
+function createLimiter(concurrency: number) {
+  let running = 0
+  const queue: Array<() => void> = []
+  const release = (): void => {
+    running -= 1
+    queue.shift()?.()
+  }
+  return <T>(task: () => Promise<T>): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      const start = (): void => {
+        running += 1
+        task().then(resolve, reject).finally(release)
+      }
+      if (running < concurrency) start()
+      else queue.push(start)
+    })
+}
+
 export function createHarnessComposition(
-  options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses'>
+  options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses' | 'dataDir'>
 ): HarnessRuntimeComposition {
   const catalog = new HarnessCatalog({
     custom: () => options().harnesses?.custom ?? [],
     disabled: () => options().harnesses?.disabledIds ?? []
   })
+  // P4-03: persist successful ACP handshakes for 24h so a restart does not
+  // re-probe every agent; parallel probes are capped at two.
+  const readinessCache: AcpReadinessCacheView | undefined = options().dataDir
+    ? new AcpReadinessStore({
+        dataDir: options().dataDir,
+        nowMs: () => Date.now(),
+        nowIso: () => new Date().toISOString()
+      })
+    : undefined
+  const probeLimit = createLimiter(ACP_PROBE_CONCURRENCY)
   const detector = new HarnessDetector({
     definitions: () => catalog.list(),
     overrides: () => {
@@ -72,7 +104,8 @@ export function createHarnessComposition(
     bundled: bundledRuntime,
     spawnCaptured,
     // P3-11: an ACP harness that versions fine can still fail initialize.
-    probeReady: (def, command) => probeAcpReadiness(def, command),
+    probeReady: (def, command) => probeLimit(() => probeAcpReadiness(def, command)),
+    ...(readinessCache ? { readinessCache } : {}),
     probeLogin: (def) =>
       probeHarnessLogin(def, {
         providers: () => (options().providers ?? {}) as Record<string, ServeProviderConfig>

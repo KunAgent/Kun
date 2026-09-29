@@ -92,11 +92,22 @@ export class HarnessDetector {
        * ACP initialize handshake after the version probe (P3-11). Only runs
        * for `transport: 'acp'` definitions with a resolved command; its
        * verdict lands on `status.ready` with a sanitized stderr summary.
+       * 'unknown' (P4-03) means the probe timed out — not a failure verdict.
        */
       probeReady?: (
         def: HarnessDefinition,
         command: string
-      ) => Promise<{ ready: 'yes' | 'no'; detail?: string }>
+      ) => Promise<{ ready: 'yes' | 'no' | 'unknown'; detail?: string }>
+      /**
+       * Persisted 24h readiness cache (P4-03): successful handshakes keyed
+       * by resolved command + version survive restarts; failures never
+       * enter the cache.
+       */
+      readinessCache?: {
+        get(id: HarnessId, command: string, version: string | undefined): Promise<'yes' | undefined>
+        set(id: HarnessId, command: string, version: string | undefined): Promise<void>
+        clear(id: HarnessId): Promise<void>
+      }
       probeLogin: (def: HarnessDefinition, command: string) => Promise<HarnessLoginState>
       nowMs: () => number
       nowIso: () => string
@@ -131,6 +142,28 @@ export class HarnessDetector {
   /** True while a detection pass is inflight for this harness. */
   detecting(id: HarnessId): boolean {
     return this.inflight.has(id)
+  }
+
+  /**
+   * A real turn launch failed after a probe said ready (P4-03): drop the
+   * persisted readiness entry and mark the cached status `ready: 'no'` so
+   * the UI reflects the observed failure until the next detection pass.
+   */
+  recordLaunchFailure(id: HarnessId, detail: string): void {
+    void this.deps.readinessCache?.clear(id).catch(() => undefined)
+    const cached = this.cache.get(id)
+    const message = detail.slice(0, 512)
+    this.store(id, {
+      ...(cached?.status ?? {
+        harnessId: id,
+        installed: 'unknown' as const,
+        login: 'unknown' as const
+      }),
+      harnessId: id,
+      ready: 'no',
+      checkedAt: this.deps.nowIso(),
+      message
+    })
   }
 
   /** Non-blocking snapshot: cached status or an optimistic unknown entry. */
@@ -229,12 +262,25 @@ export class HarnessDetector {
     let ready: HarnessStatus['ready']
     let readyMessage: string | undefined
     if (def.transport === 'acp' && command && this.deps.probeReady) {
-      const result = await this.deps
-        .probeReady(def, command)
-        .catch((error) => ({ ready: 'no' as const, detail: String(error) }))
-      ready = result.ready
-      if (result.ready === 'no') {
-        readyMessage = `ACP initialize failed: ${result.detail ?? 'no response'}`
+      const cached = await this.deps.readinessCache
+        ?.get(id, command, version.text || undefined)
+        .catch(() => undefined)
+      if (cached === 'yes') {
+        ready = 'yes'
+      } else {
+        const result = await this.deps
+          .probeReady(def, command)
+          .catch((error) => ({ ready: 'no' as const, detail: String(error) }))
+        ready = result.ready
+        if (result.ready === 'yes') {
+          await this.deps.readinessCache
+            ?.set(id, command, version.text || undefined)
+            .catch(() => undefined)
+        } else if (result.ready === 'no') {
+          readyMessage = `ACP initialize failed: ${result.detail ?? 'no response'}`
+        } else {
+          readyMessage = `ACP readiness probe inconclusive: ${result.detail ?? 'timeout'}`
+        }
       }
     }
     return this.store(id, {

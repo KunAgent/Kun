@@ -332,8 +332,9 @@ export async function createRuntimeAgentComposition(
       defaultSandboxMode: input.options.sandboxMode,
       defaultApprovalReviewer: input.options.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
       turnLimits: input.options.runtime?.turnLimits,
-      awaitWorkspaceCheckpoint: (id, sig) =>
-        waitForWorkspaceCheckpoint(core.activeOptions.dataDir, id, sig),
+      awaitWorkspaceCheckpoint: (id, sig) => waitForWorkspaceCheckpoint(core.activeOptions.dataDir, id, sig),
+      // P4-03: a real launch failure outweighs any earlier probe verdict.
+      onLaunchFailure: (id, detail) => services.harnesses.detector.recordLaunchFailure(id, detail),
       ...(llmDebug ? { debugSink: llmDebug } : {}),
       nowIso,
       ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
@@ -347,10 +348,9 @@ export async function createRuntimeAgentComposition(
   }
 
   const adeTeamStore = new FileTeamStore(core.activeOptions.dataDir, nowIso)
-  // The main turn abort signal already reaches foreground children. Detached
-  // children and background shells intentionally have independent lifetimes,
-  // so a destructive thread delete must cancel them explicitly before the
-  // lifecycle fence drains and removes the thread directory.
+  // The main turn abort signal already reaches foreground children; detached
+  // children and background shells keep independent lifetimes, so a destructive
+  // thread delete cancels them before the lifecycle fence drains the thread dir.
   core.stopThreadAuxiliaryWork = async (threadId) => {
     await graphRuntime.cancelThreadRuns(threadId)
     await Promise.allSettled([
