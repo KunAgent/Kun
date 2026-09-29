@@ -12,7 +12,10 @@ import type {
   HarnessRoute
 } from '../contracts/harness.js'
 import { delegatedCredentialIdentity } from '../runtime/delegated-session-binding.js'
-import { parseGatewayModelId } from '../harness/gateway-model-id.js'
+import {
+  formatGatewayModelId,
+  parseGatewayModelId
+} from '../harness/gateway-model-id.js'
 
 export type DelegatedCredentialEnvInput = {
   harnessId: HarnessId
@@ -44,7 +47,16 @@ export async function resolveDelegatedCredentialContext(
     model?: string
     accountId?: string
   }
-): Promise<{ credentialIdentity: string; env: Record<string, string> }> {
+): Promise<{
+  credentialIdentity: string
+  env: Record<string, string>
+  /**
+   * Model id the harness wire must send: under `kun-gateway` the route grant
+   * is scoped to `kun/<provider>/<model>`, and session transports without an
+   * adapter layer (codex app-server, pi rpc) have nothing else that pins it.
+   */
+  wireModel?: string
+}> {
   const { definition, credentialMode } = input
   const gatewayRoute =
     credentialMode === 'kun-gateway'
@@ -78,5 +90,12 @@ export async function resolveDelegatedCredentialContext(
     gateway: definition.gateway,
     accountId: input.accountId
   })
-  return { credentialIdentity, env }
+  const wireModel =
+    credentialMode === 'kun-gateway' &&
+    input.providerId &&
+    input.model &&
+    !gatewayRoute
+      ? formatGatewayModelId(input.providerId, input.model)
+      : undefined
+  return { credentialIdentity, env, ...(wireModel ? { wireModel } : {}) }
 }

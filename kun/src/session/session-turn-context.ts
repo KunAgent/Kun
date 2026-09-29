@@ -82,6 +82,12 @@ export type SessionTurnContext = {
   turnDynamicContext: TurnDynamicContext
   goalContextKeyForHistory: string | null | undefined
   model: string | undefined
+  /**
+   * Model id the harness wire must send: under `kun-gateway` the route grant
+   * is scoped to `kun/<provider>/<model>` — adapters send this, records keep
+   * `model`. Undefined = send `model` verbatim.
+   */
+  wireModel?: string
   actingModelRoute: ActingTurnModelRoute
   credentialMode: ReturnType<typeof defaultCredentialMode>
   accountId: string | undefined
@@ -119,7 +125,11 @@ export type ResolveSessionTurnContextInput = {
   resolveCredentialContext: (
     resolve: DelegatedCredentialResolver | undefined,
     input: DelegatedCredentialContextInput
-  ) => Promise<{ credentialIdentity: string; env: Record<string, string> }>
+  ) => Promise<{
+    credentialIdentity: string
+    env: Record<string, string>
+    wireModel?: string
+  }>
 }
 
 export type DelegatedCredentialContextInput = {
@@ -262,8 +272,11 @@ export async function resolveSessionTurnContext(
     deps.defaultApprovalReviewer ??
     DEFAULT_APPROVAL_REVIEWER
 
-  const { credentialIdentity, env: credentialEnv } =
-    await input.resolveCredentialContext(deps.credentialEnv, {
+  const {
+    credentialIdentity,
+    env: credentialEnv,
+    wireModel
+  } = await input.resolveCredentialContext(deps.credentialEnv, {
       definition,
       credentialMode,
       threadId,
@@ -290,6 +303,7 @@ export async function resolveSessionTurnContext(
       turnDynamicContext,
       goalContextKeyForHistory,
       model,
+      ...(wireModel ? { wireModel } : {}),
       actingModelRoute,
       credentialMode,
       accountId: actingModelRoute.accountId,

@@ -178,7 +178,16 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
           env: definition.launch?.env ?? {},
           secretEnv: ctx.secretEnv,
           credentialEnv: ctx.credentialEnv,
-          stripEnv: this.deps.stripEnv ?? [],
+          stripEnv: [
+            ...(this.deps.stripEnv ?? []),
+            // Gateway creds active → strip the keys the generated config
+            // replaces (same rule as acpStripEnv): without this, e.g. a real
+            // CODEX_HOME/OPENAI_API_KEY leaks in and silently bypasses the
+            // kun-gateway route.
+            ...(Object.keys(ctx.credentialEnv).length > 0
+              ? (definition.gateway?.stripEnv ?? [])
+              : [])
+          ],
           cwd: ctx.workspace,
           signal
         })
@@ -406,7 +415,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       turnId: ctx.turn.id,
       workspacePath: ctx.workspace,
       harnessId: ctx.definition.id,
-      model: ctx.model,
+      model: ctx.wireModel ?? ctx.model,
       permissionModeId: ctx.permissionModeId,
       reasoningEffort: ctx.turn.reasoningEffort,
       items: ctx.items,
@@ -456,7 +465,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       attachmentPaths: [],
       fileReferences: ctx.userItem.fileReferences ?? [],
       workspacePath: ctx.workspace,
-      model: ctx.model,
+      model: ctx.wireModel ?? ctx.model,
       reasoningEffort: ctx.turn.reasoningEffort,
       ...(handoffBrief ? { handoffBrief } : {}),
       historyTranscript:

@@ -41,7 +41,9 @@ function fakePeer() {
   }
 }
 
-function fakeProcess(exit?: Promise<never>): HarnessProcess {
+function fakeProcess(
+  exit?: Promise<{ code: number | null; signal: string | null }>
+): HarnessProcess {
   return {
     stdin: undefined,
     stdout: undefined,
@@ -52,7 +54,9 @@ function fakeProcess(exit?: Promise<never>): HarnessProcess {
   } as unknown as HarnessProcess
 }
 
-function newClient(exit?: Promise<never>) {
+function newClient(
+  exit?: Promise<{ code: number | null; signal: string | null }>
+) {
   const { peer, writes, emit } = fakePeer()
   const proc = fakeProcess(exit)
   const client = new CodexClient({ process: proc, peer })
@@ -74,7 +78,15 @@ function sessionInput(
   const preparation: DelegatedSessionPreparation = {
     threadId: 'kun-thread-1',
     generation: 1,
-    route: { providerKind: 'codex-app-server', providerId: 'codex', model: 'gpt-5' },
+    route: {
+      providerKind: 'codex-app-server',
+      providerId: 'codex',
+      model: 'gpt-5',
+      credentialIdentity: 'scrypt-v1:test',
+      workspace: '/repo',
+      capabilityFingerprint: 'fp',
+      continuationMode: 'native'
+    },
     priorHistoryDigest: '',
     resumed: false
   }
@@ -190,7 +202,12 @@ const COMPLETED_TURN = {
 // ---- CodexSession ------------------------------------------------------------
 
 describe('CodexSession', () => {
-  function setup(opts: { exit?: Promise<never>; resumed?: boolean } = {}) {
+  function setup(
+    opts: {
+      exit?: Promise<{ code: number | null; signal: string | null }>
+      resumed?: boolean
+    } = {}
+  ) {
     const { client, proc, writes, emit } = newClient(opts.exit)
     const { router, handlers } = makeRouter()
     // Without a CodexAgent, wire inbound requests to registered turn
