@@ -58,6 +58,12 @@ export type AdeHarnessStatus = {
   login: 'signed-in' | 'signed-out' | 'unknown' | 'not-required'
   resolvedCommand?: string
   checkedAt: string
+  /**
+   * True while a detection pass is inflight (P4-02): the provisional
+   * `unknown` verdicts above are not final, so clients poll instead of
+   * pinning the row disabled.
+   */
+  detecting?: boolean
   /** User-facing reason an entry is unavailable (01 §7.2 CapabilityStatus.message). */
   message?: string
 }

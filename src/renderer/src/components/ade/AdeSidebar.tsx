@@ -135,7 +135,9 @@ export function AdeSidebar({
   }, [])
 
   useEffect(() => {
-    if (oneOnOneOpen) void loadHarnesses()
+    // P4-02: every open force-refreshes; waitMs lets in-flight detection
+    // settle so external harnesses do not stick on a provisional unknown.
+    if (oneOnOneOpen) void loadHarnesses(true, { waitMs: 3_000 })
   }, [oneOnOneOpen])
 
   const busy = useChatStore((s) => s.busy)
@@ -368,12 +370,14 @@ export function AdeSidebar({
             ) : (
               harnessRows.map((row) => {
                 const reason = harnessRowUnavailableReason(row)
+                const reasonLabel =
+                  reason === 'detecting' ? t('adeHarnessUnavailable.detecting') : reason
                 return (
                   <button
                     key={row.definition.id}
                     type="button"
                     disabled={reason !== null}
-                    title={reason ?? undefined}
+                    title={reasonLabel ?? undefined}
                     className="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1 text-left text-[12.5px] text-ds-text hover:bg-ds-hover disabled:cursor-not-allowed disabled:text-ds-faint"
                     onClick={() => {
                       setOneOnOneOpen(false)
@@ -384,8 +388,8 @@ export function AdeSidebar({
                     }}
                   >
                     <span className="truncate">{row.definition.displayName}</span>
-                    {reason ? (
-                      <span className="shrink-0 text-[11px] text-ds-faint">{reason}</span>
+                    {reasonLabel ? (
+                      <span className="shrink-0 text-[11px] text-ds-faint">{reasonLabel}</span>
                     ) : null}
                   </button>
                 )

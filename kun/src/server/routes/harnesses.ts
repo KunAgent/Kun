@@ -1,15 +1,18 @@
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
-import { HarnessIdSchema } from '../../contracts/harness.js'
+import { HarnessIdSchema, type HarnessStatus } from '../../contracts/harness.js'
 import { exposableProvider, providerModelIds } from './model-gateway-core.js'
 import { legacyProviderKindFor } from '../../harness/harness-provider-kind.js'
 
 /**
- * `GET /v1/harnesses` — definitions plus cached detection status. Never blocks
- * on a probe: uncached harnesses report `installed: 'unknown'` and a detection
- * is kicked off in the background.
+ * `GET /v1/harnesses` — definitions plus detection status. With `wait_ms`
+ * the handler briefly waits for inflight detections before answering so a
+ * first-load client can show real verdicts instead of `unknown` forever
+ * (P4-02). Rows still mid-detect carry `status.detecting: true`.
  */
+const HARNESS_LIST_MAX_WAIT_MS = 30_000
+
 export async function listHarnesses(
   runtime: ServerRuntime,
   request: Request
@@ -18,19 +21,50 @@ export async function listHarnesses(
   if (!harnesses) return jsonResponse({ harnesses: [] })
   const url = new URL(request.url)
   const usage = url.searchParams.get('usage') ?? undefined
+  const waitMs = clampWaitMs(url.searchParams.get('wait_ms'))
   const list = harnesses.catalog.list()
+
+  // Start every detection up front so the wait window covers all of them.
+  const statuses = new Map(list.map((definition) => [
+    definition.id,
+    harnesses.detector.peek(definition.id)
+  ]))
+  if (waitMs > 0) {
+    const pending = list
+      .filter((definition) => {
+        const status = statuses.get(definition.id)
+        return status?.detecting === true || harnesses.detector.detecting(definition.id)
+      })
+      .map((definition) => harnesses.detector.status(definition.id).catch(() => undefined))
+    if (pending.length > 0) {
+      await Promise.race([
+        Promise.allSettled(pending),
+        new Promise((resolve) => setTimeout(resolve, waitMs))
+      ])
+      for (const definition of list) {
+        // Only the finished detections can land — awaiting `status` again
+        // here would defeat the wait cap.
+        const settled = harnesses.detector.cachedStatus(definition.id)
+        if (settled) statuses.set(definition.id, settled)
+      }
+    }
+  }
+
   const rows = await Promise.all(
     list.map(async (definition) => {
-      const status = harnesses.detector.peek(definition.id)
-      const row: Record<string, unknown> = {
-        definition,
-        status: status ?? {
-          harnessId: definition.id,
-          installed: 'unknown',
-          login: 'unknown',
-          checkedAt: runtime.nowIso()
-        }
+      const status = markDetecting(
+        // A fast-settling detection may already have replaced the
+        // optimistic peek placeholder — prefer the fresh cache.
+        harnesses.detector.cachedStatus(definition.id) ?? statuses.get(definition.id),
+        harnesses.detector.detecting(definition.id)
+      ) ?? {
+        harnessId: definition.id,
+        installed: 'unknown' as const,
+        login: 'unknown' as const,
+        checkedAt: runtime.nowIso(),
+        detecting: true
       }
+      const row: Record<string, unknown> = { definition, status }
       if (usage && runtime.harnessAdmission && status) {
         row.admission = await runtime
           .harnessAdmission({ definition, status, usage })
@@ -40,6 +74,21 @@ export async function listHarnesses(
     })
   )
   return jsonResponse({ harnesses: rows })
+}
+
+function clampWaitMs(raw: string | null): number {
+  const parsed = raw === null ? 0 : Number.parseInt(raw, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0
+  return Math.min(parsed, HARNESS_LIST_MAX_WAIT_MS)
+}
+
+function markDetecting(
+  status: HarnessStatus | undefined,
+  inflight: boolean
+): HarnessStatus | undefined {
+  if (!status) return status
+  if (!inflight && status.detecting !== true) return status
+  return { ...status, detecting: inflight }
 }
 
 export async function probeHarness(

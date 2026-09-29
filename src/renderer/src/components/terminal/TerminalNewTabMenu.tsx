@@ -33,7 +33,9 @@ export function TerminalNewTabMenu({
 }): ReactElement {
   const harnessRows = useHarnessStore((state) => state.rows)
   useEffect(() => {
-    if (onNewAgentTab) void loadHarnesses()
+    // P4-02: menu opens force a refresh so terminal agents do not stay on a
+    // provisional 'unknown' verdict from an in-flight detection.
+    if (onNewAgentTab) void loadHarnesses(true, { waitMs: 3_000 })
   }, [onNewAgentTab])
   const agentHarnesses = onNewAgentTab
     ? harnessRows.filter(

@@ -5,7 +5,7 @@ import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { TaskWorkspacePrep } from '../../store/task-workspace-store'
 import { useChatStore } from '../../store/chat-store'
 import {
-  harnessRowAvailable,
+  harnessRowUnavailableReason,
   loadHarnessModels,
   loadHarnessProviderGroups,
   loadHarnesses,
@@ -74,7 +74,9 @@ export function useAdeComposerControls(input: {
   )
 
   useEffect(() => {
-    if (enabled) void loadHarnesses()
+    // P4-02: hold the first list briefly so mid-flight detections settle
+    // instead of pinning a provisional "unknown" verdict.
+    if (enabled) void loadHarnesses(true, { waitMs: 3_000 })
   }, [enabled])
   useEffect(() => {
     if (enabled && harnessId !== 'kun') void loadHarnessModels(harnessId)
@@ -170,9 +172,8 @@ export function useAdeComposerControls(input: {
     credentialMode,
     harnessLabel,
     isNativeHarness,
-    rowUnavailableReason: (candidate: AdeHarnessRow): string | null =>
-      harnessRowAvailable(candidate) ? null : candidate.status.message ?? 'unavailable',
-    refreshRows: () => void loadHarnesses(true),
+    rowUnavailableReason: harnessRowUnavailableReason,
+    refreshRows: () => void loadHarnesses(true, { waitMs: 3_000 }),
     pickList,
     modelGroups,
     modelsLoading: modelCache?.loading === true,

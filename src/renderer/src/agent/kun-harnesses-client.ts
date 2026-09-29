@@ -5,13 +5,18 @@ import { rendererRuntimeClient } from './runtime-client'
 import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
 
 /**
- * Harness catalog client (docs/ade/01 §7, 12 §7.2). The catalog rows carry
- * cached detection status — `peek`, never a blocking probe.
+ * Harness catalog client (docs/ade/01 §7, 12 §7.2). Catalog rows carry
+ * cached detection status; `waitMs` asks the server to hold the response
+ * briefly so inflight detections can settle first (P4-02).
  */
 export function createKunHarnessesClient() {
   return {
-    async listHarnesses(): Promise<AdeHarnessRow[]> {
-      const response = await rendererRuntimeClient.runtimeRequest(KUN_HARNESSES_PATH, 'GET')
+    async listHarnesses(options?: { waitMs?: number }): Promise<AdeHarnessRow[]> {
+      const waitMs = options?.waitMs
+      const path = typeof waitMs === 'number' && waitMs > 0
+        ? `${KUN_HARNESSES_PATH}?wait_ms=${Math.floor(waitMs)}`
+        : KUN_HARNESSES_PATH
+      const response = await rendererRuntimeClient.runtimeRequest(path, 'GET')
       if (!response.ok) {
         throw runtimeErrorToError(
           readRuntimeError(response.body, 'failed to list harnesses')

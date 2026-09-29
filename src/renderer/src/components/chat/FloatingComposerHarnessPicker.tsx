@@ -125,12 +125,13 @@ export function FloatingComposerHarnessPicker({
           {rows.map((row) => {
             const id = row.definition.id
             const reason = harnessRowUnavailableReason(row)
+            const detecting = reason === 'detecting'
             const reasonText = reason == null
               ? null
-              : reason === 'not installed'
-                ? t('adeHarnessUnavailable.notInstalled')
-                : reason === 'detection pending'
-                  ? t('adeHarnessUnavailable.detecting')
+              : detecting
+                ? t('adeHarnessUnavailable.detecting')
+                : reason === 'not installed'
+                  ? t('adeHarnessUnavailable.notInstalled')
                   : reason === 'signed out'
                     ? t('adeHarnessUnavailable.signedOut')
                     : reason === 'version too low'
@@ -149,7 +150,11 @@ export function FloatingComposerHarnessPicker({
                 className={`flex w-full items-start gap-2 px-3 py-2 text-left text-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent ${selected ? 'bg-ds-subtle' : ''}`}
                 data-harness-id={id}
               >
-                <Bot className="mt-0.5 h-4 w-4 shrink-0 text-ds-muted" strokeWidth={1.75} />
+                {detecting ? (
+                  <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-ds-muted" strokeWidth={1.75} />
+                ) : (
+                  <Bot className="mt-0.5 h-4 w-4 shrink-0 text-ds-muted" strokeWidth={1.75} />
+                )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-ds-ink">
                     {row.definition.displayName}
