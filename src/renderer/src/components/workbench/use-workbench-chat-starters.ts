@@ -5,6 +5,9 @@
  * hook; every starter still guards activation with the navigation request id.
  */
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { useChatStore } from '../../store/chat-store'
+import { useHarnessStore } from '../../store/harness-store'
+import { harnessPermissionDefault } from '../../lib/harness-defaults'
 import type { ChatState } from '../../store/chat-store-types'
 
 export type WorkbenchChatStarterDeps = {
@@ -89,20 +92,37 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
   const startNewAdeOneOnOne = useCallback((input: {
     harnessId: string
     credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+    providerId?: string
+    model?: string
+    isolation?: 'local' | 'worktree'
+    permissionMode?: string
   }): void => {
     const requestId = beginNavigation()
     if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
     setConnectPhoneSidebarOpen(false)
     setRoute('ade')
+    // P4-11: the harness's default permission level maps onto the composer
+    // execution settings the new thread's first turn snapshots.
+    if (input.permissionMode) {
+      const definition = useHarnessStore.getState().rows
+        .find((row) => row.definition.id === input.harnessId)?.definition
+      const execution = harnessPermissionDefault(definition, {
+        permissionMode: input.permissionMode
+      })
+      if (execution) useChatStore.getState().setComposerExecutionSettings(execution)
+    }
     // 00 §5: a one-to-one thread isolates into a fresh worktree by default;
-    // the thread is pinned to the picked harness from creation.
+    // the thread is pinned to the picked harness from creation. P4-11: a
+    // configured `isolation: 'local'` default opts out of the worktree.
     void createThread({
-      useWorktreePool: true,
+      useWorktreePool: input.isolation !== 'local',
       worktreeBranch,
       agentSurface: 'code',
       workspaceMode: 'ade',
       harnessId: input.harnessId,
       credentialMode: input.credentialMode,
+      ...(input.providerId ? { providerId: input.providerId } : {}),
+      ...(input.model ? { model: input.model } : {}),
       activationGuard: () => navigationIsCurrent(requestId)
     })
   }, [

@@ -363,6 +363,23 @@ export type KunHarnessCustomEntryV1 = {
   env: Record<string, string>
 }
 
+/**
+ * Per-harness defaults (docs/ade/impl/p4 §3.6, P4-11): the composer, the
+ * one-to-one dialog, and the manager worker selector fall back to these
+ * when nothing was picked explicitly. Supersedes the legacy flat
+ * `defaultPermissionMode` map, which normalization folds into
+ * `defaults[id].permissionMode`.
+ */
+export type KunHarnessDefaultsEntryV1 = {
+  credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+  /** Provider connection id; meaningful for `provider`/`kun-gateway` only. */
+  providerId?: string
+  model?: string
+  /** A permissionModes[].id on the harness definition. */
+  permissionMode?: string
+  isolation?: 'local' | 'worktree'
+}
+
 export type KunHarnessSettingsV1 = {
   /** Builtin harnesses the user turned off; they stay out of pickers. */
   disabledIds: string[]
@@ -370,8 +387,8 @@ export type KunHarnessSettingsV1 = {
   binaryPaths: Record<string, string>
   /** User-defined ACP harnesses (id must not collide with builtins). */
   custom: KunHarnessCustomEntryV1[]
-  /** Per-harness default permission level (a permissionModes[].id). */
-  defaultPermissionMode: Record<string, string>
+  /** Per-harness defaults; the migrated home of `defaultPermissionMode`. */
+  defaults: Record<string, KunHarnessDefaultsEntryV1>
   /** Default harness for new one-to-one ADE conversations. */
   defaultHarnessId: string
   /** User preference order for ADE worker selection (10 §3.2 userPreference). */

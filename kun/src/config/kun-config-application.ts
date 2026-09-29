@@ -35,7 +35,7 @@ import {
   VideoGenCapabilityConfig,
   WebCapabilityConfig
 } from '../contracts/capabilities.js'
-import { HarnessIdSchema } from '../contracts/harness.js'
+import { HarnessIdSchema, HarnessCredentialModeSchema } from '../contracts/harness.js'
 import {
   DEFAULT_MODEL_ENDPOINT_FORMAT,
   MODEL_ENDPOINT_FORMATS,
@@ -395,6 +395,23 @@ export const HarnessCustomEntrySchema = z
   .strict()
 export type HarnessCustomEntry = z.infer<typeof HarnessCustomEntrySchema>
 
+/**
+ * Per-harness default selection (p4 §3.6): applied when a composer pick,
+ * one-to-one creation, or a `worker_create` pin does not specify the field.
+ */
+export const HarnessDefaultsEntrySchema = z
+  .object({
+    credentialMode: HarnessCredentialModeSchema.optional(),
+    /** Provider connection id; meaningful for `provider`/`kun-gateway`. */
+    providerId: z.string().min(1).max(128).optional(),
+    model: z.string().min(1).max(512).optional(),
+    /** A permissionModes[].id on the harness definition. */
+    permissionMode: z.string().min(1).max(64).optional(),
+    isolation: z.enum(['local', 'worktree']).optional()
+  })
+  .strict()
+export type HarnessDefaultsEntry = z.infer<typeof HarnessDefaultsEntrySchema>
+
 /** `harnesses` config section: per-harness enable/override settings. */
 export const HarnessesConfigSchema = z
   .object({
@@ -404,8 +421,13 @@ export const HarnessesConfigSchema = z
     binaryPaths: z.record(HarnessIdSchema, z.string().min(1).max(4_096)).default({}),
     /** User-defined ACP harnesses; ids colliding with builtins are dropped. */
     custom: z.array(HarnessCustomEntrySchema).max(32).default([]),
-    /** Per-harness default permission level (a permissionModes[].id). */
+    /**
+     * Legacy pre-P4-11 map; superseded by `defaults[*].permissionMode`.
+     * Still accepted so hand-written config files keep working.
+     */
     defaultPermissionMode: z.record(HarnessIdSchema, z.string().min(1).max(64)).default({}),
+    /** Per-harness defaults for credential/provider/model/permission/isolation. */
+    defaults: z.record(HarnessIdSchema, HarnessDefaultsEntrySchema).default({}),
     /** Default harness for new one-to-one ADE conversations. */
     defaultHarnessId: HarnessIdSchema.default('kun'),
     /** Ordered user preference for the ADE worker selector (10 §3.2). */

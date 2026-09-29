@@ -134,6 +134,7 @@ function makeRuntime(opts: {
   selector?: ManagerRuntimeDeps['selector']
   providerPool?: ManagerRuntimeDeps['providerPool']
   probedModels?: ManagerRuntimeDeps['probedModels']
+  harnessDefaults?: ManagerRuntimeDeps['harnessDefaults']
 } = {}) {
   const workspace = workspaceRecord(opts.workspaceState ?? 'ready')
   const runChild = vi.fn(opts.runChild ?? (async (input: { childId?: string }) =>
@@ -142,7 +143,7 @@ function makeRuntime(opts: {
     childRunRecord({ id: input.childId, resumeCount: 1 }))
   const delegation: DelivererDelegation = { runChild, resumeChild }
   const taskWorkspaces = {
-    create: vi.fn(async () => workspace),
+    create: vi.fn(async (_input: { isolation?: string }) => workspace),
     get: vi.fn(() => workspace),
     onChange: vi.fn(() => () => {}),
     captureForDispatch: vi.fn(async () => ({
@@ -189,6 +190,7 @@ function makeRuntime(opts: {
     teamLimits: opts.teamLimits,
     providerPool: opts.providerPool,
     probedModels: opts.probedModels,
+    harnessDefaults: opts.harnessDefaults,
     ...(opts.selector ? { selector: opts.selector } : {})
   })
   return { runtime, deliverer, runChild, resumeChild, taskWorkspaces, activity, turns, workspace }
@@ -456,6 +458,61 @@ describe('ManagerRuntime.createWorker', () => {
     expect(taskWorkspaces.create).not.toHaveBeenCalled()
   })
 
+  it('applies harnesses.defaults for isolation and permission on a pin (P4-11)', async () => {
+    const { runtime, taskWorkspaces } = makeRuntime({
+      // A natively-sandboxed harness so 'local' isolation is admissible.
+      capabilities: {
+        ...KUN_NATIVE_CAPABILITIES,
+        facts: { ...KUN_NATIVE_CAPABILITIES.facts, sandbox: 'native' }
+      },
+      harnessDefaults: (id) =>
+        id === 'claude-code'
+          ? { isolation: 'local', permissionMode: 'acceptEdits', model: 'claude-opus-5' }
+          : undefined
+    })
+    const result = await runtime.createWorker(
+      // Interactive so a full-access-mapped mode is admissible.
+      managerCtx({ authority: { kunPermissionMode: 'full-access', interactive: true } }),
+      { label: 'fixer', task: 'task', agent: { harnessId: 'claude-code' } },
+      TOOL_CONTEXT
+    )
+    expect(result.ok, JSON.stringify(result)).toBe(true)
+    // defaults.isolation='local' → the task workspace is still created but
+    // records a local (non-worktree) working directory.
+    expect(taskWorkspaces.create).toHaveBeenCalledTimes(1)
+    expect(taskWorkspaces.create.mock.calls[0]![0]).toMatchObject({ isolation: 'local' })
+    const worker = (await teams.get('thr_mgr'))!.workers[0]!
+    expect(worker.route.model).toBe('claude-opus-5')
+    // defaults.permissionMode='acceptEdits' survives the full-access
+    // authority clamp; without the default the fallback would be 'default'.
+    expect(worker.permissionMode).toBe('acceptEdits')
+    expect(result.permissionMode).toMatchObject({
+      effective: 'acceptEdits',
+      downgraded: false
+    })
+  })
+
+  it('explicit worker_create fields win over harnesses.defaults', async () => {
+    const { runtime, taskWorkspaces } = makeRuntime({
+      harnessDefaults: (id) =>
+        id === 'claude-code'
+          ? { isolation: 'local', permissionMode: 'acceptEdits', model: 'claude-opus-5' }
+          : undefined
+    })
+    const result = await runtime.createWorker(managerCtx(), {
+      label: 'fixer', task: 'task',
+      workspace: { isolation: 'worktree' },
+      permissionMode: 'default',
+      agent: { harnessId: 'claude-code', model: 'claude-sonnet-5' }
+    }, TOOL_CONTEXT)
+    expect(result.ok).toBe(true)
+    // Explicit worktree request beats the 'local' default.
+    expect(taskWorkspaces.create).toHaveBeenCalledTimes(1)
+    const worker = (await teams.get('thr_mgr'))!.workers[0]!
+    expect(worker.permissionMode).toBe('default')
+    expect(worker.route).toMatchObject({ model: 'claude-sonnet-5' })
+  })
+
   it('clamps a requested permission mode past the manager authority', async () => {
     const { runtime, runChild } = makeRuntime()
     const result = await runtime.createWorker(
@@ -566,10 +623,9 @@ describe('ManagerRuntime worker terminal handling', () => {
     return { ...helpers, result }
   }
 
-  it('completes the dispatch, stores the capture stat and enqueues a notice', async () => {
-    const { runtime, result } = await createAndDeliver()
-    const workerId = result.workerId!
-    const workerThread = createThreadRecord({
+  /** A delivered worker's own thread with one turn attached. */
+  function upsertWorkerThread(workerId: string, turn: Partial<Turn>) {
+    const record = createThreadRecord({
       id: workerId,
       title: 'worker',
       workspace: '/repo/.worktrees/fix-login',
@@ -581,10 +637,16 @@ describe('ManagerRuntime worker terminal handling', () => {
         label: 'fixer', lifecycle: 'persistent', control: 'manager'
       }
     })
-    workerThread.turns = [
-      turnRecord({ id: 'turn_w1', threadId: workerId, status: 'completed', clientRequestId: result.dispatchId })
-    ]
-    await threads.upsert(workerThread)
+    record.turns = [turnRecord({ id: 'turn_w1', threadId: workerId, ...turn })]
+    return threads.upsert(record)
+  }
+
+  it('completes the dispatch, stores the capture stat and enqueues a notice', async () => {
+    const { runtime, result } = await createAndDeliver()
+    const workerId = result.workerId!
+    await upsertWorkerThread(workerId, {
+      status: 'completed', clientRequestId: result.dispatchId
+    })
     await runtime.handleWorkerTurnTerminal(workerId, 'turn_w1', 'completed')
     const dispatch = await dispatches.get('thr_mgr', result.dispatchId!)
     expect(dispatch?.state).toBe('completed')
@@ -599,22 +661,9 @@ describe('ManagerRuntime worker terminal handling', () => {
 
   it('ignores user-originated worker turns that carry no dispatch', async () => {
     const { runtime, result } = await createAndDeliver()
-    const workerThread = createThreadRecord({
-      id: result.workerId!,
-      title: 'worker',
-      workspace: '/repo/.worktrees/fix-login',
-      model: 'model-x',
-      relation: 'side',
-      parentThreadId: 'thr_mgr',
-      executionUnit: {
-        kind: 'worker', teamId: 'thr_mgr', managerThreadId: 'thr_mgr',
-        label: 'fixer', lifecycle: 'persistent', control: 'manager'
-      }
+    await upsertWorkerThread(result.workerId!, {
+      id: 'turn_manual', status: 'completed'
     })
-    workerThread.turns = [
-      turnRecord({ id: 'turn_manual', threadId: result.workerId!, status: 'completed' })
-    ]
-    await threads.upsert(workerThread)
     await runtime.handleWorkerTurnTerminal(result.workerId!, 'turn_manual', 'completed')
     expect((await dispatches.get('thr_mgr', result.dispatchId!))?.state).toBe('accepted')
     expect(await notices.pending('thr_mgr')).toHaveLength(0)
@@ -623,22 +672,9 @@ describe('ManagerRuntime worker terminal handling', () => {
   it('backfills turnId on turn_started via the event observer', async () => {
     const { runtime, result } = await createAndDeliver()
     const workerId = result.workerId!
-    const workerThread = createThreadRecord({
-      id: workerId,
-      title: 'worker',
-      workspace: '/repo/.worktrees/fix-login',
-      model: 'model-x',
-      relation: 'side',
-      parentThreadId: 'thr_mgr',
-      executionUnit: {
-        kind: 'worker', teamId: 'thr_mgr', managerThreadId: 'thr_mgr',
-        label: 'fixer', lifecycle: 'persistent', control: 'manager'
-      }
+    await upsertWorkerThread(workerId, {
+      status: 'running', clientRequestId: result.dispatchId
     })
-    workerThread.turns = [
-      turnRecord({ id: 'turn_w1', threadId: workerId, status: 'running', clientRequestId: result.dispatchId })
-    ]
-    await threads.upsert(workerThread)
     // The delegate is sync fire-and-forget; drive the async backfill directly.
     await (runtime as unknown as {
       lifecycle: { backfillDispatchTurnId(t: string, id: string): Promise<void> }
@@ -651,22 +687,9 @@ describe('ManagerRuntime worker terminal handling', () => {
     const workerId = result.workerId!
     // Simulate crash: turn completed while the host was down, dispatch still
     // `accepted` without the terminal write.
-    const workerThread = createThreadRecord({
-      id: workerId,
-      title: 'worker',
-      workspace: '/repo/.worktrees/fix-login',
-      model: 'model-x',
-      relation: 'side',
-      parentThreadId: 'thr_mgr',
-      executionUnit: {
-        kind: 'worker', teamId: 'thr_mgr', managerThreadId: 'thr_mgr',
-        label: 'fixer', lifecycle: 'persistent', control: 'manager'
-      }
+    await upsertWorkerThread(workerId, {
+      status: 'completed', clientRequestId: result.dispatchId
     })
-    workerThread.turns = [
-      turnRecord({ id: 'turn_w1', threadId: workerId, status: 'completed', clientRequestId: result.dispatchId })
-    ]
-    await threads.upsert(workerThread)
     await runtime.reconcileOnStartup()
     const dispatch = await dispatches.get('thr_mgr', result.dispatchId!)
     expect(dispatch?.state).toBe('completed')

@@ -33,12 +33,18 @@ import type { AcpSpawnFn } from './acp-process.js'
 import type { AcpCredentialEnvInput } from './acp-runtime-support.js'
 import type { AcpDebugLog } from './acp-jsonrpc.js'
 import type { KunToolsMcpProvider } from './kun-tools-mcp.js'
+import type { HarnessDefaultsEntry } from '../../config/kun-config-application.js'
 
 export interface AcpRuntimeDeps {
   /** Harness catalog lookup for the frozen route's definition. */
   catalog: { get(id: string): HarnessDefinition | undefined }
   /** Settings `harnesses.binaryPaths` override for `launch.command`. */
   binaryPath?: (harnessId: HarnessId) => string | undefined
+  /**
+   * `agents.kun.harnesses.defaults` lookup (p4 §3.6, P4-11): supplies the
+   * default permission mode when the turn does not pin one.
+   */
+  harnessDefaults?: (harnessId: HarnessId) => HarnessDefaultsEntry | undefined
   threadStore: ThreadStore
   sessionStore: SessionStore
   turns: TurnService

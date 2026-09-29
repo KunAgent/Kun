@@ -41,6 +41,7 @@ import { CanvasReceiptRegistry } from '../services/canvas-receipt-registry.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
 import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
 import { HarnessRouter, HarnessRuntimeMap } from '../harness/harness-router.js'
+import { harnessDefaultsFor } from '../harness/harness-defaults.js'
 import { createKunToolBridgeHost } from '../harness/kun-tool-bridge-host.js'
 import { FileTeamStore } from '../ade/team-store.js'
 import { handleAdeThreadDeleted } from '../ade/team-lifecycle.js'
@@ -311,6 +312,7 @@ export async function createRuntimeAgentComposition(
     const acpRuntimeDeps: AcpRuntimeDeps = {
       catalog: services.harnesses.catalog,
       binaryPath: (harnessId) => core.activeOptions.harnesses?.binaryPaths?.[harnessId],
+      harnessDefaults: (id) => harnessDefaultsFor(core.activeOptions.harnesses, id),
       threadStore,
       sessionStore,
       turns: turnService,
@@ -321,15 +323,13 @@ export async function createRuntimeAgentComposition(
       connectionPool: core.acpConnectionPool,
       clientHost: core.acpClientHost,
       sessionManager: core.acpSessionManager,
-      approvalGate,
-      approvalReview: approvalReviewService,
+      approvalGate, approvalReview: approvalReviewService,
       userInputGate, workerCallbacks: services.workerCallbacks,
       kunToolsMcp: services.kunToolsMcp, credentialEnv: services.acpCredentialEnv,
       ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
       deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
       allowUnattendedFullAccess: input.options.ade?.allowUnattendedFullAccess === true,
-      defaultApprovalPolicy: input.options.approvalPolicy,
-      defaultSandboxMode: input.options.sandboxMode,
+      defaultApprovalPolicy: input.options.approvalPolicy, defaultSandboxMode: input.options.sandboxMode,
       defaultApprovalReviewer: input.options.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
       turnLimits: input.options.runtime?.turnLimits,
       awaitWorkspaceCheckpoint: (id, sig) => waitForWorkspaceCheckpoint(core.activeOptions.dataDir, id, sig),

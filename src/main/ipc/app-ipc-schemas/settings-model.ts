@@ -600,6 +600,15 @@ export const kunRuntimePatchSchema = z.object({
       args: z.array(z.string().max(1_024)).max(32).optional(),
       env: z.record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024)).optional()
     }).strict()).max(32).optional(),
+    defaults: z.record(z.string().trim().min(1).max(128), z.object({
+      credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
+      providerId: z.string().trim().min(1).max(128).optional(),
+      model: z.string().trim().min(1).max(512).optional(),
+      permissionMode: z.string().trim().min(1).max(64).optional(),
+      isolation: z.enum(['local', 'worktree']).optional()
+    }).strict()).optional(),
+    // Legacy pre-P4-11 shape; still accepted so old writers do not lose the
+    // value — normalize folds it into `defaults[*].permissionMode`.
     defaultPermissionMode: z.record(z.string().trim().min(1).max(128), z.string().min(1).max(64)).optional(),
     defaultHarnessId: z.string().trim().min(1).max(128).optional(),
     agentOrder: z.array(z.string().trim().min(1).max(64)).max(16).optional()

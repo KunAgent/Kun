@@ -1,6 +1,7 @@
 import type {
   KunAdeSettingsV1,
   KunHarnessCustomEntryV1,
+  KunHarnessDefaultsEntryV1,
   KunHarnessSettingsV1,
   KunWorktreeSettingsV1,
   KunWorktreeSharedPathV1
@@ -72,10 +73,68 @@ export function defaultKunHarnessSettings(): KunHarnessSettingsV1 {
     disabledIds: [],
     binaryPaths: {},
     custom: [],
-    defaultPermissionMode: {},
+    defaults: {},
     defaultHarnessId: 'kun',
     agentOrder: []
   }
+}
+
+const HARNESS_CREDENTIAL_MODES = new Set(['native-login', 'provider', 'kun-gateway'])
+const HARNESS_ISOLATION_MODES = new Set(['local', 'worktree'])
+
+/**
+ * `defaults[harnessId]` entries (p4 §3.6): every field optional; unknown
+ * enum values and empty strings drop individually so one bad field never
+ * discards a usable sibling. Entries left with no fields drop entirely.
+ */
+function normalizeHarnessDefaults(
+  value: unknown
+): Record<string, KunHarnessDefaultsEntryV1> {
+  if (!isRecord(value)) return {}
+  const out: Record<string, KunHarnessDefaultsEntryV1> = {}
+  for (const [rawId, rawEntry] of Object.entries(value)) {
+    const id = nonEmpty(rawId, 128)
+    if (!id || !isRecord(rawEntry)) continue
+    const entry: KunHarnessDefaultsEntryV1 = {}
+    if (
+      typeof rawEntry.credentialMode === 'string' &&
+      HARNESS_CREDENTIAL_MODES.has(rawEntry.credentialMode)
+    ) {
+      entry.credentialMode =
+        rawEntry.credentialMode as KunHarnessDefaultsEntryV1['credentialMode']
+    }
+    const providerId = nonEmpty(rawEntry.providerId, 128)
+    if (providerId) entry.providerId = providerId
+    const model = nonEmpty(rawEntry.model, 512)
+    if (model) entry.model = model
+    const permissionMode = nonEmpty(rawEntry.permissionMode, 64)
+    if (permissionMode) entry.permissionMode = permissionMode
+    if (
+      typeof rawEntry.isolation === 'string' &&
+      HARNESS_ISOLATION_MODES.has(rawEntry.isolation)
+    ) {
+      entry.isolation = rawEntry.isolation as KunHarnessDefaultsEntryV1['isolation']
+    }
+    if (Object.keys(entry).length > 0) out[id] = entry
+    if (Object.keys(out).length >= 64) break
+  }
+  return out
+}
+
+/**
+ * Pre-P4-11 `defaultPermissionMode[harnessId]` folds into
+ * `defaults[harnessId].permissionMode`; an explicit `defaults` entry wins.
+ */
+function foldLegacyPermissionModes(
+  defaults: Record<string, KunHarnessDefaultsEntryV1>,
+  legacy: unknown
+): Record<string, KunHarnessDefaultsEntryV1> {
+  const out = { ...defaults }
+  for (const [rawId, rawMode] of Object.entries(stringRecord(legacy))) {
+    const id = rawId.trim()
+    if (!out[id]?.permissionMode) out[id] = { ...out[id], permissionMode: rawMode }
+  }
+  return out
 }
 
 export function normalizeKunHarnessSettings(value: unknown): KunHarnessSettingsV1 {
@@ -109,7 +168,10 @@ export function normalizeKunHarnessSettings(value: unknown): KunHarnessSettingsV
     ),
     binaryPaths: stringRecord(input.binaryPaths),
     custom,
-    defaultPermissionMode: stringRecord(input.defaultPermissionMode),
+    defaults: foldLegacyPermissionModes(
+      normalizeHarnessDefaults(input.defaults),
+      input.defaultPermissionMode
+    ),
     defaultHarnessId: defaultHarnessId ?? defaults.defaultHarnessId,
     agentOrder: agentOrderList(input.agentOrder, builtinIds, custom)
   }
@@ -146,7 +208,26 @@ export function mergeKunHarnessSettings(
     disabledIds: patch.disabledIds ?? base.disabledIds,
     binaryPaths: patch.binaryPaths ?? base.binaryPaths,
     custom: patch.custom ?? base.custom,
-    defaultPermissionMode: patch.defaultPermissionMode ?? base.defaultPermissionMode,
+    // `defaults` replaces whole like the other records. A legacy
+    // `defaultPermissionMode` patch is a deliberate write, not a migration
+    // fold — it overrides permissionMode on matching entries.
+    defaults:
+      patch.defaults ??
+      (() => {
+        const out = { ...base.defaults }
+        for (const [id, mode] of Object.entries(
+          stringRecord(patch.defaultPermissionMode)
+        )) {
+          out[id] = { ...out[id], permissionMode: mode }
+        }
+        return out
+      })(),
+    // When `defaults` came from the patch (e.g. the raw settings file), a
+    // legacy map alongside it still folds into entries that lack
+    // permissionMode — normalize's fold is fill-only, explicit wins.
+    // With no `defaults` patch the legacy write already applied above.
+    defaultPermissionMode:
+      patch.defaults !== undefined ? patch.defaultPermissionMode : undefined,
     defaultHarnessId: patch.defaultHarnessId ?? base.defaultHarnessId,
     agentOrder: patch.agentOrder ?? base.agentOrder
   })

@@ -204,10 +204,16 @@ export function createThreadCreationActions(
             primaryAgentAvailableOnSurface(profile, requestedAgentSurface)
         )
         : undefined
-      const initialModel = personaProfile?.model?.trim() || runtime.model.trim()
-      const initialProviderId = personaProfile?.providerId?.trim() ||
-        (personaProfile?.model?.trim() ? '' : runtime.providerId.trim())
-      const initialSelectionSource = personaProfile ? 'user' as const : 'default' as const
+      // P4-11: explicit pins (harness defaults via the one-to-one pickers)
+      // outrank the persona/global defaults for the new thread's route.
+      const initialModel = options.model?.trim() ||
+        personaProfile?.model?.trim() || runtime.model.trim()
+      const initialProviderId = options.providerId?.trim() ||
+        personaProfile?.providerId?.trim() ||
+        ((personaProfile?.model?.trim() || options.model?.trim())
+          ? '' : runtime.providerId.trim())
+      const initialSelectionSource =
+        personaProfile || options.model?.trim() ? 'user' as const : 'default' as const
       // 对话会话:不绑定项目文件夹,在 conversationWorkspaceRoot 下自动创建
       // 一个时间戳子目录作为工作目录(主进程负责实际建目录)。
       if (options.conversation) {

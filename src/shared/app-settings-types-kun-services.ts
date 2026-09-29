@@ -22,6 +22,7 @@ import {
   KunFastContextSettingsV1,
   KunGraphSettingsPatchV1,
   KunHarnessCustomEntryV1,
+  KunHarnessDefaultsEntryV1,
   KunInstructionSettingsV1,
   KunLabSettingsPatchV1,
   KunPlanExecutionSettingsV1,
@@ -331,6 +332,11 @@ export type KunHarnessSettingsPatchV1 = {
   disabledIds?: string[]
   binaryPaths?: Record<string, string>
   custom?: KunHarnessCustomEntryV1[]
+  defaults?: Record<string, KunHarnessDefaultsEntryV1>
+  /**
+   * Legacy pre-P4-11 shape: merges into `defaults[*].permissionMode` for
+   * entries that lack one. New writers should send `defaults` only.
+   */
   defaultPermissionMode?: Record<string, string>
   defaultHarnessId?: string
   agentOrder?: string[]

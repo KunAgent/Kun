@@ -488,6 +488,9 @@ export type ChatState = {
      */
     harnessId?: string
     credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+    /** Explicit provider/model pins for the new thread (p4 §3.6 defaults). */
+    providerId?: string
+    model?: string
     /**
      * Optional subagent profile id to bind the new thread to. When set
      * and the profile mode is 'primary' or 'all', the agent's

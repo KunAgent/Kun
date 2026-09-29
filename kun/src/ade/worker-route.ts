@@ -5,6 +5,7 @@ import type {
   HarnessId,
   HarnessRoute
 } from '../contracts/harness.js'
+import type { HarnessDefaultsEntry } from '../config/kun-config-application.js'
 import type { HarnessCatalog } from '../harness/harness-catalog.js'
 import {
   formatGatewayModelId,
@@ -69,13 +70,19 @@ export async function resolveWorkerRoute(input: {
    * read). `undefined` falls back to the definition's static list.
    */
   probedModels?: (definition: HarnessDefinition) => string[] | undefined
+  /**
+   * `agents.kun.harnesses.defaults` lookup (p4 §3.6): fields the caller did
+   * not pin explicitly fall back to the configured per-harness defaults.
+   */
+  harnessDefaults?: (harnessId: HarnessId) => HarnessDefaultsEntry | undefined
   select?: () => Promise<WorkerRouteSelection | { error: string }>
 }): Promise<ResolvedWorkerRoute | { error: string }> {
   const requested = input.agent
   if (requested?.harnessId) {
     const def = input.catalog.get(requested.harnessId as HarnessId)
     if (!def) return { error: `unknown harness ${requested.harnessId}` }
-    const credentialMode = requested.credentialMode?.trim()
+    const defaults = input.harnessDefaults?.(def.id)
+    const credentialMode = requested.credentialMode?.trim() || defaults?.credentialMode
     if (credentialMode && !def.credentialModes.includes(credentialMode as HarnessCredentialMode)) {
       return {
         error: `credentialMode ${credentialMode} is not supported by harness ${def.id}`
@@ -83,9 +90,9 @@ export async function resolveWorkerRoute(input: {
     }
     const effectiveMode =
       (credentialMode as HarnessCredentialMode | undefined) ?? def.credentialModes[0]
-    const model = requested.model?.trim()
+    const model = requested.model?.trim() || defaults?.model?.trim()
     if (effectiveMode === 'kun-gateway' || effectiveMode === 'provider') {
-      return providerRoute(input, def, effectiveMode, model)
+      return providerRoute(input, def, effectiveMode, model, defaults)
     }
     // Native-login modes validate against the harness's own list: the last
     // cached probe result when the modelSource probes, else the static table.
@@ -106,8 +113,8 @@ export async function resolveWorkerRoute(input: {
       route: {
         harnessId: def.id,
         model: model || known[0] || fallbackModel || '',
-        ...(requested.providerId?.trim() || fallbackProvider
-          ? { providerId: requested.providerId?.trim() ?? fallbackProvider }
+        ...(requested.providerId?.trim() || defaults?.providerId || fallbackProvider
+          ? { providerId: requested.providerId?.trim() ?? defaults?.providerId ?? fallbackProvider }
           : {}),
         credentialMode: effectiveMode
       }
@@ -153,6 +160,7 @@ export async function resolveManagerWorkerRoute(
     ManagerRuntimeDeps,
     | 'threads' | 'catalog' | 'detector' | 'capabilitiesForRoute' | 'selector'
     | 'providerPool' | 'probedModels' | 'allowUnattendedFullAccess' | 'language'
+    | 'harnessDefaults'
   >,
   ctx: ManagerToolContext,
   input: WorkerCreateInput,
@@ -168,6 +176,7 @@ export async function resolveManagerWorkerRoute(
     agent: input.agent,
     providerPool: deps.providerPool,
     probedModels: deps.probedModels,
+    harnessDefaults: deps.harnessDefaults,
     ...(selector
       ? {
           select: () =>
@@ -223,12 +232,13 @@ async function providerRoute(
   },
   def: HarnessDefinition,
   mode: 'kun-gateway' | 'provider',
-  model: string | undefined
+  model: string | undefined,
+  defaults?: HarnessDefaultsEntry
 ): Promise<ResolvedWorkerRoute | { error: string }> {
   const direct = parseGatewayModelId(model)
   const managerProviderId = input.managerProviderId?.trim()
   const providerId = direct?.providerId ?? input.agent?.providerId?.trim()
-    ?? managerProviderId
+    ?? defaults?.providerId ?? managerProviderId
   const chosen = direct?.model ?? model
     ?? (providerId === managerProviderId ? input.managerModel?.trim() : undefined)
   // A gateway turn cannot form its kun/<provider>/<model> address without a
