@@ -43,6 +43,24 @@ export type AdeHarnessDefinition = {
     hooks?: { kind: string; events: string[] }
   }
   builtin: boolean
+  /**
+   * Install/login hints for the Agent Center (docs/ade/impl/p4 §3.3). Only
+   * builtin definitions carry them, and the UI only ever prefills these into
+   * a Kun terminal — nothing is executed automatically.
+   */
+  setup?: AdeHarnessSetup
+}
+
+export type AdeHarnessSetup = {
+  install?: {
+    platform: 'darwin' | 'linux' | 'win32' | 'any'
+    command: string
+    note?: string
+  }[]
+  login?: { command: string; args: string[]; note?: string }
+  docsUrl?: string
+  /** Adapter package when the CLI cannot serve the transport (codex-acp). */
+  adapter?: { command: string; install: string }
 }
 
 export type AdeHarnessStatus = {

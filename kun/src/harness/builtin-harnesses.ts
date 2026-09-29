@@ -176,6 +176,22 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
         'CLAUDE_CODE_USE_VERTEX'
       ]
     },
+    setup: {
+      install: [
+        { platform: 'any', command: 'npm install -g @anthropic-ai/claude-code' },
+        {
+          platform: 'darwin',
+          command: 'curl -fsSL https://claude.ai/install.sh | bash',
+          note: 'native installer (also works on Linux)'
+        }
+      ],
+      login: {
+        command: 'claude',
+        args: [],
+        note: 'type /login inside the Claude Code session'
+      },
+      docsUrl: 'https://docs.anthropic.com/en/docs/claude-code'
+    },
     builtin: true
   },
   {
@@ -205,6 +221,9 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     modelSource: 'provider',
     staticModels: [],
     capabilities: ANTIGRAVITY_CAPABILITIES,
+    // Antigravity ships inside the IDE download; there is no standalone
+    // package-manager install, so the card links out instead of prefilling.
+    setup: { docsUrl: 'https://antigravity.google' },
     builtin: true
   },
   {
@@ -227,6 +246,18 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     modelSource: 'probe',
     staticModels: [],
     capabilities: ACP_DEFAULT_CAPABILITIES,
+    setup: {
+      install: [
+        { platform: 'any', command: 'npm install -g @google/gemini-cli' },
+        { platform: 'darwin', command: 'brew install gemini-cli' }
+      ],
+      login: {
+        command: 'gemini',
+        args: ['auth', 'login'],
+        note: 'OAuth sign-in; /auth inside a session switches methods'
+      },
+      docsUrl: 'https://github.com/google-gemini/gemini-cli'
+    },
     builtin: true
   },
   {
@@ -271,6 +302,18 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
         'CODEX_HOME'
       ]
     },
+    setup: {
+      install: [
+        { platform: 'any', command: 'npm install -g @openai/codex' },
+        { platform: 'darwin', command: 'brew install --cask codex' }
+      ],
+      login: { command: 'codex', args: ['login'] },
+      adapter: {
+        command: 'codex-acp',
+        install: 'npm i -g @zed-industries/codex-acp'
+      },
+      docsUrl: 'https://github.com/openai/codex'
+    },
     builtin: true
   },
   {
@@ -308,6 +351,18 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
         'XAI_API_KEY',
         'OPENCODE_CONFIG'
       ]
+    },
+    setup: {
+      install: [
+        { platform: 'any', command: 'npm i -g opencode-ai' },
+        {
+          platform: 'darwin',
+          command: 'curl -fsSL https://opencode.ai/install | bash',
+          note: 'standalone installer (also works on Linux)'
+        }
+      ],
+      login: { command: 'opencode', args: ['auth', 'login'] },
+      docsUrl: 'https://opencode.ai/docs'
     },
     builtin: true
   }
