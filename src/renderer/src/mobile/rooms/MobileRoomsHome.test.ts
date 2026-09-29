@@ -2,7 +2,7 @@
 import { act, createElement, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RoomSidebarEntry } from '@shared/rooms-api'
+import type { AgentIdentity, RoomSidebarEntry } from '@shared/rooms-api'
 import { MobileRoomsHome, type MobileRoomsHomeProps } from './MobileRoomsHome'
 import { imListTime } from '../../lib/im-time'
 
@@ -29,15 +29,17 @@ const group = {
   latestMessageSeq: 5, readSeq: 3, attentionCount: 1
 } as unknown as RoomSidebarEntry
 const agent = {
-  id: 'agent-entry', agentId: 'kun', name: 'Kun', title: 'Assistant', kind: 'user_agent', pinned: false, archived: false,
+  id: 'agent-entry', roomId: 'kun-chat', agentId: 'kun', name: 'Kun', title: 'Assistant', kind: 'user_agent', pinned: false, archived: false,
   runningCount: 0, members: [],
   latestMessage: { authorLabelSnapshot: 'Kun', preview: 'Disk usage', createdAt: new Date().toISOString(), id: 'n', authorKind: 'agent', attachmentCount: 0 },
   latestMessageSeq: 300, readSeq: 0, attentionCount: 0
 } as unknown as RoomSidebarEntry
 function props(): MobileRoomsHomeProps {
   return {
-    rooms: [group, agent], search: '', filter: 'all', loading: false, error: '', hasMore: true,
-    onSearch: vi.fn(), onFilter: vi.fn(), onOpen: vi.fn(), onPin: vi.fn(), onSettings: vi.fn(), onArchive: vi.fn(),
+    rooms: [group, agent], agents: [{ id: 'kun', name: 'Kun', title: 'Assistant' } as AgentIdentity],
+    view: 'chats', deletedOnly: false, search: '', filter: 'all', loading: false, error: '', hasMore: true,
+    onSearch: vi.fn(), onFilter: vi.fn(), onOpen: vi.fn(), onOpenAgent: vi.fn(), onView: vi.fn(), onDeletedOnly: vi.fn(),
+    onPin: vi.fn(), onSettings: vi.fn(), onArchive: vi.fn(), onDelete: vi.fn(), onRestore: vi.fn(),
     onCreate: vi.fn(), onProfile: vi.fn(), onRetry: vi.fn(), onLoadMore: vi.fn()
   }
 }
@@ -75,16 +77,49 @@ describe('mobile Bot list', () => {
     act(() => { row.dispatchEvent(new MouseEvent('pointerup', { bubbles: true })); row.click() })
     expect(input.onOpen).toHaveBeenCalledTimes(1)
     expect(host.querySelector('.sheet')?.getAttribute('data-title')).toBe('Build team')
-    act(() => byText('roomsSidebarUnpin').click())
+    act(() => byText('roomsUnpinConversation').click())
     expect(input.onPin).toHaveBeenCalledWith(group)
     expect(host.querySelector('.sheet')).toBeNull()
   })
 
-  it('hides room settings for an agent that has no conversation yet', () => {
+  it('keeps chat actions separate from the Agent identity', () => {
     act(() => root.render(createElement(MobileRoomsHome, props())))
     act(() => { rows()[1]!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })) })
-    expect(host.querySelector('.sheet')?.textContent).not.toContain('roomsSettings')
-    expect(host.querySelector('.sheet')?.textContent).toContain('agentsArchive')
+    expect(host.querySelector('.sheet')?.textContent).toContain('roomsSettings')
+    expect(host.querySelector('.sheet')?.textContent).toContain('roomsArchiveConversation')
+    expect(host.querySelector('.sheet')?.textContent).toContain('roomsDeleteConversation')
+    expect(host.querySelector('.sheet')?.textContent).not.toContain('agentsArchive')
+  })
+
+  it('switches to Agent contacts and opens the chosen Agent', () => {
+    const input = props()
+    act(() => root.render(createElement(MobileRoomsHome, input)))
+    act(() => byText('agentsDirectory').click())
+    expect(input.onView).toHaveBeenCalledWith('agents')
+    act(() => root.render(createElement(MobileRoomsHome, { ...input, view: 'agents' })))
+    expect(rows()).toHaveLength(0)
+    act(() => host.querySelector<HTMLButtonElement>('.kun-mobile-agent-contacts button')!.click())
+    expect(input.onOpenAgent).toHaveBeenCalledWith('kun')
+    act(() => byText('roomsConversations').click())
+    expect(input.onView).toHaveBeenCalledWith('chats')
+  })
+
+  it('confirms deletion and offers restore in Recently deleted', () => {
+    vi.useFakeTimers()
+    const input = props()
+    act(() => root.render(createElement(MobileRoomsHome, input)))
+    act(() => byText('roomsRecentlyDeleted').click())
+    expect(input.onDeletedOnly).toHaveBeenCalledWith(true)
+    act(() => rows()[0]!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })))
+    act(() => byText('roomsDeleteConversation').click())
+    expect(input.onDelete).not.toHaveBeenCalled()
+    act(() => byText('roomsDeleteConversation').click())
+    expect(input.onDelete).toHaveBeenCalledWith(group)
+    act(() => root.render(createElement(MobileRoomsHome, { ...input, rooms: [{ ...group, deleted: true }], deletedOnly: true })))
+    act(() => vi.advanceTimersByTime(701))
+    act(() => rows()[0]!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })))
+    act(() => byText('roomsRestoreConversation').click())
+    expect(input.onRestore).toHaveBeenCalledWith(expect.objectContaining({ roomId: 'room', deleted: true }))
   })
 
   it('offers new chat, group chat and profile from the "+" menu', () => {

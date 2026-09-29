@@ -106,12 +106,25 @@ export class RoomService {
     const replay = await this.replay(key, body)
     if (replay) return replay as { room: Room }
     const old = await this.get(id)
-    const { clientRequestId: _request, expectedRevision, archived, repositories, avatar, ...patch } = body
+    const { clientRequestId: _request, expectedRevision, archived, deleted, repositories, avatar, ...patch } = body
     void _request
+    if (old.deletedAt && deleted !== false) throw new RoomStoreConflictError('restore the deleted conversation before editing it')
+    if (deleted === true && !old.deletedAt) {
+      const active = await Promise.all([
+        this.store.list('request', { roomId: id, status: ['pending', 'running', 'stopping', 'recovery_required'], limit: 1 }),
+        this.store.list('task', { roomId: id, status: ['queued', 'running', 'waiting_dependency', 'stopping', 'recovery_required'], limit: 1 }),
+        this.store.list('integration', { roomId: id, status: ['preparing', 'validating', 'recovery_required'], limit: 1 }),
+        this.store.list('room_run', { roomId: id, status: ['queued', 'running', 'recovery_required'], limit: 1 })
+      ])
+      if (active.some((rows) => rows.length)) throw new RoomStoreConflictError('stop or reconcile active work before deleting the conversation')
+    }
+    const now = new Date().toISOString()
     const next = { ...old, ...patch,
       ...(repositories ? { repositories: await this.repositories(repositories) } : {}),
-      ...(archived !== undefined ? { archivedAt: archived ? new Date().toISOString() : undefined } : {}),
-      revision: expectedRevision + 1, updatedAt: new Date().toISOString() }
+      ...(archived !== undefined ? { archivedAt: archived ? now : undefined } : {}),
+      ...(deleted !== undefined ? { deletedAt: deleted ? now : undefined,
+        archivedAt: deleted ? now : undefined } : {}),
+      revision: expectedRevision + 1, updatedAt: now }
     if (avatar === null) delete next.avatar
     else if (avatar !== undefined) next.avatar = avatar
     let room = RoomSchema.parse(next)

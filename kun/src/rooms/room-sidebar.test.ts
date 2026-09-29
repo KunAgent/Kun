@@ -6,6 +6,7 @@ import { SqliteRoomStore } from './room-store-sqlite.js'
 import { AgentIdentityService } from '../agents/agent-identity-service.js'
 import { RoomService } from './room-service.js'
 import { openAgentConversation, openAgentPairConversation } from '../agents/agent-conversations.js'
+import { roomActivitySummary } from './room-activity-summary.js'
 
 const resources: Array<{ store: SqliteRoomStore; dir: string }> = []
 async function fixture() {
@@ -17,21 +18,23 @@ async function fixture() {
   return { store, agents, service, a, b }
 }
 afterEach(async () => { for (const { store, dir } of resources.splice(0)) { await store.close(); await rm(dir, { recursive: true, force: true }) } })
-it('pages one union, preserves identity on opening a private chat, and excludes peer chats by default', async () => {
+it('lists conversations separately from agents and excludes peer chats by default', async () => {
   const { store, agents, service, a, b } = await fixture()
   await service.create({ clientRequestId: 'group', name: 'Team', members: [agents.asMember(a), agents.asMember(b)] })
+  await service.create({ clientRequestId: 'group-two', name: 'Second team', members: [agents.asMember(a), agents.asMember(b)] })
   await openAgentPairConversation(agents, service, a.id, b.id)
   const first = await store.sidebarPage({ limit: 1 })
   expect(first.nextCursor).toBeTruthy()
   const entries = [...first.entries]; let cursor = first.nextCursor
   while (cursor) { const page = await store.sidebarPage({ limit: 1, cursor }); entries.push(...page.entries); cursor = page.nextCursor }
-  expect(entries).toHaveLength(3)
-  expect(new Set(entries.map((entry) => entry.id)).size).toBe(3)
-  const before = entries.find((entry) => entry.agentId === a.id)!
-  expect(before.roomId).toBeUndefined()
+  expect(entries).toHaveLength(2)
+  expect(new Set(entries.map((entry) => entry.id)).size).toBe(2)
+  expect(entries.some((entry) => entry.agentId === a.id)).toBe(false)
   const opened = (await openAgentConversation(agents, service, a.id)).room
+  expect((await store.sidebarPage({})).entries.some((entry) => entry.roomId === opened.id)).toBe(false)
+  await service.send(opened.id, { clientRequestId: 'start-chat', body: 'Hello' })
   const after = (await store.sidebarPage({})).entries.find((entry) => entry.agentId === a.id)!
-  expect(after.id).toBe(before.id); expect(after.roomId).toBe(opened.id)
+  expect(after.roomId).toBe(opened.id)
   expect((await store.sidebarPage({ kind: 'agent_agent' })).entries).toHaveLength(1)
   await expect(store.sidebarPage({ search: 'different', cursor: first.nextCursor })).rejects.toThrow('scope')
 })
@@ -50,17 +53,19 @@ it('ignores streaming drafts and profile edits for recency while keeping unread 
   expect(unread.entries[0].latestMessage?.preview).toBe('Hello')
   await store.commit({ requestId: 'read', checks: [{ kind: 'read_state', id: direct.id, expectedRevision: null }], puts: [{ kind: 'read_state', id: direct.id, value: { seq: row!.seq } }] })
   expect((await store.sidebarPage({ unreadOnly: true })).entries).toEqual([])
-  await agents.update(a.id, { clientRequestId: 'archive', expectedRevision: a.revision, archived: true })
+  await agents.update(a.id, { clientRequestId: 'archive-agent', expectedRevision: a.revision, archived: true })
+  expect((await store.sidebarPage({})).entries[0].roomId).toBe(direct.id)
+  expect((await store.sidebarPage({ archivedOnly: true })).entries).toEqual([])
+  await service.update(direct.id, { clientRequestId: 'archive-chat', expectedRevision: direct.revision, archived: true })
   expect((await store.sidebarPage({ archivedOnly: true })).entries[0].agentId).toBe(a.id)
-  expect((await store.sidebarPage({})).entries).toHaveLength(1)
+  expect((await store.sidebarPage({})).entries).toHaveLength(0)
 })
-it('keeps a long paged catalog stable while an unloaded Agent gets its first private conversation', async () => {
-  const { store, agents, service } = await fixture()
-  for (let index = 0; index < 75; index++) await agents.create({ clientRequestId: 'bulk-' + index, name: 'Bulk ' + index })
+it('keeps a paged conversation list stable when a new Agent chat opens', async () => {
+  const { store, agents, service, a } = await fixture()
+  for (let index = 0; index < 25; index++) await service.create({ clientRequestId: 'group-' + index, name: 'Group ' + index })
   const first = await store.sidebarPage({ limit: 17 })
   const allBefore = await store.sidebarPage({ limit: 100 })
-  const tailAgent = allBefore.entries.at(-1)!.agentId!
-  await openAgentConversation(agents, service, tailAgent)
+  await openAgentConversation(agents, service, a.id)
   const entries = [...first.entries]; let cursor = first.nextCursor
   while (cursor) {
     const next = await store.sidebarPage({ limit: 17, cursor })
@@ -68,7 +73,7 @@ it('keeps a long paged catalog stable while an unloaded Agent gets its first pri
     entries.push(...next.entries); cursor = next.nextCursor
   }
   expect(entries.map((entry) => entry.id)).toEqual(allBefore.entries.map((entry) => entry.id))
-  expect(new Set(entries.map((entry) => entry.id)).size).toBe(77)
+  expect(new Set(entries.map((entry) => entry.id)).size).toBe(25)
 })
 it('retains queued work and integration attention, excluding cancelled integration failures', async () => {
   const { store, agents, service, a } = await fixture()
@@ -87,6 +92,64 @@ it('retains queued work and integration attention, excluding cancelled integrati
     puts: [{ kind: 'integration', id: 'integration', roomId: room.id, value: { taskId: 'done', status: 'failed', cancelRequested: true } }] })
   expect((await store.sidebarPage({ attentionOnly: true })).entries).toEqual([])
 })
+it('shows only the latest private request as needing attention', async () => {
+  const { store, agents, service, a } = await fixture()
+  const room = (await openAgentConversation(agents, service, a.id)).room
+  const put = async (id: string, status: string) => store.commit({ requestId: id,
+    checks: [{ kind: 'request', id, expectedRevision: null }],
+    puts: [{ kind: 'request', id, roomId: room.id, value: {
+      id, roomId: room.id, privateProtocol: 'direct-v1', status,
+      message: { body: id, attachmentIds: [] }
+    } }] })
+  const attention = async () => (await store.sidebarPage({})).entries.find((entry) => entry.roomId === room.id)?.attentionCount
+  await put('first-failure', 'failed')
+  expect(await attention()).toBe(1)
+  await put('later-success', 'completed')
+  expect(await attention()).toBeUndefined()
+  expect((await store.sidebarPage({ attentionOnly: true })).entries).toEqual([])
+  expect(await roomActivitySummary(store, room.id)).toMatchObject({ attentionCount: 0 })
+  const old = await store.list<{ currentAttentionRequest: number }>('request', { roomId: room.id, status: 'failed', summaryOnly: true })
+  expect(old[0].value.currentAttentionRequest).toBe(0)
+  await put('new-failure', 'failed')
+  expect(await attention()).toBe(1)
+  expect(await roomActivitySummary(store, room.id)).toMatchObject({ attentionCount: 1 })
+  expect((await store.sidebarPage({ attentionOnly: true })).entries[0].roomId).toBe(room.id)
+})
+it('moves only the conversation to Recently deleted and starts a fresh chat with the same Agent', async () => {
+  const { store, agents, service, a } = await fixture()
+  const original = (await openAgentConversation(agents, service, a.id)).room
+  await store.commit({ requestId: 'old-failure', checks: [{ kind: 'request', id: 'old-failure', expectedRevision: null }],
+    puts: [{ kind: 'request', id: 'old-failure', roomId: original.id, value: {
+      id: 'old-failure', privateProtocol: 'direct-v1', status: 'failed'
+    } }] })
+  expect(await roomActivitySummary(store, original.id)).toMatchObject({ attentionCount: 1 })
+  const deleted = (await service.update(original.id, { clientRequestId: 'delete-chat', expectedRevision: original.revision,
+    deleted: true })).room
+  expect(deleted.deletedAt).toBeTruthy()
+  expect((await store.sidebarPage({})).entries).toEqual([])
+  expect((await store.sidebarPage({ deletedOnly: true })).entries.map((entry) => entry.roomId)).toEqual([original.id])
+  expect((await store.listRooms({ conversationKind: 'user_agent' })).rooms).toEqual([])
+  expect(await roomActivitySummary(store, original.id)).toMatchObject({ attentionCount: 0 })
+  expect(await store.get('agent_identity', a.id)).not.toBeNull()
+  const fresh = (await openAgentConversation(agents, service, a.id)).room
+  expect(fresh.id).not.toBe(original.id)
+  expect((await store.sidebarPage({})).entries).toEqual([])
+  await service.send(fresh.id, { clientRequestId: 'start-fresh', body: 'New conversation' })
+  expect((await store.sidebarPage({})).entries.map((entry) => entry.roomId)).toEqual([fresh.id])
+  await service.update(original.id, { clientRequestId: 'restore-chat', expectedRevision: deleted.revision,
+    deleted: false })
+  expect((await store.sidebarPage({})).entries.map((entry) => entry.roomId)).toContain(original.id)
+  expect((await store.sidebarPage({ deletedOnly: true })).entries).toEqual([])
+})
+it('requires active work to stop before a conversation moves to Recently deleted', async () => {
+  const { store, agents, service, a } = await fixture()
+  const room = (await openAgentConversation(agents, service, a.id)).room
+  await store.commit({ requestId: 'running-request', checks: [{ kind: 'request', id: 'running-request', expectedRevision: null }],
+    puts: [{ kind: 'request', id: 'running-request', roomId: room.id, value: { status: 'running' } }] })
+  await expect(service.update(room.id, { clientRequestId: 'delete-busy', expectedRevision: room.revision, deleted: true }))
+    .rejects.toThrow('stop or reconcile active work')
+  expect((await store.sidebarPage({})).entries[0].roomId).toBe(room.id)
+})
 it('does not treat superseded peer requests or orphan integrations as attention', async () => {
   const { store, agents, service, a } = await fixture()
   const room = (await openAgentConversation(agents, service, a.id)).room
@@ -103,7 +166,7 @@ it('does not treat superseded peer requests or orphan integrations as attention'
     { kind: 'integration', id: 'orphan', roomId: room.id, value: { taskId: 'missing', status: 'ready' } }
   ] })
   expect((await store.sidebarPage({ attentionOnly: true })).entries).toEqual([])
-  expect((await store.sidebarPage({})).entries.find((entry) => entry.roomId === room.id)?.attentionCount).toBe(0)
+  expect((await store.sidebarPage({})).entries.find((entry) => entry.roomId === room.id)).toBeUndefined()
 })
 it('surfaces a group room avatar without replacing a private agent portrait', async () => {
   const { store, agents, service, a, b } = await fixture()
@@ -115,7 +178,8 @@ it('surfaces a group room avatar without replacing a private agent portrait', as
     members: [agents.asMember(agent), agents.asMember(b)],
     avatar: { kind: 'builtin', id: 'scientist' }
   })
-  await openAgentConversation(agents, service, agent.id)
+  const direct = (await openAgentConversation(agents, service, agent.id)).room
+  await service.send(direct.id, { clientRequestId: 'open-chat', body: 'Hello' })
   const entries = (await store.sidebarPage({})).entries
   expect(entries.find((entry) => entry.kind === 'group')?.avatar).toEqual({ kind: 'builtin', id: 'scientist' })
   expect(entries.find((entry) => entry.agentId === agent.id)?.avatar).toEqual({ kind: 'builtin', id: 'explorer' })

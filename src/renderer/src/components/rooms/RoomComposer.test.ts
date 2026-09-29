@@ -18,8 +18,19 @@ vi.mock('./RoomRichInput', async () => {
 })
 
 const upload = vi.hoisted(() => vi.fn())
+const metadataRequest = vi.hoisted(() => vi.fn())
+const imagePreview = vi.hoisted(() => vi.fn())
 vi.mock('../../lib/runtime-attachment', () => ({
   uploadRuntimeAttachment: upload
+}))
+vi.mock('./rooms-client', async (load) => ({
+  ...await load<typeof import('./rooms-client')>(),
+  roomsRequest: metadataRequest
+}))
+vi.mock('./room-composer-image-preview', () => ({
+  roomComposerImagePreview: imagePreview,
+  isRoomComposerImage: (name: string, mimeType?: string) =>
+    Boolean(mimeType?.startsWith('image/')) || /\.(png|jpe?g|webp|gif)$/i.test(name)
 }))
 const room = {
   id: 'room',
@@ -41,6 +52,9 @@ describe('RoomComposer', () => {
     upload
       .mockReset()
       .mockResolvedValue({ id: 'attachment', name: 'diagram.png' })
+    metadataRequest.mockReset()
+    imagePreview.mockReset().mockImplementation(async (file: File) => file.type.startsWith('image/')
+      ? { url: 'data:image/webp;base64,YQ==', transient: false } : undefined)
     vi.stubGlobal('window', {
       addEventListener: (name: string, fn: (event: Event) => void) =>
         listeners.set(name, fn),
@@ -54,6 +68,7 @@ describe('RoomComposer', () => {
   })
   afterEach(() => {
     if (renderer) act(() => renderer.unmount())
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
   const render = async (
@@ -141,8 +156,66 @@ describe('RoomComposer', () => {
         mimeType: 'image/png'
       })
     )
+    expect(renderer.root.findByType('img').props.src).toBe('data:image/webp;base64,YQ==')
+    expect(JSON.parse(stored.get('kun.rooms.draft.room')!).attachments[0].previewUrl)
+      .toBe('data:image/webp;base64,YQ==')
     await submit()
     expect(send.mock.calls[0][0].attachmentIds).toEqual(['attachment'])
+  })
+  it('restores an image thumbnail after a failed send and removes only the chosen attachment', async () => {
+    let id = 0
+    upload.mockImplementation(async (file: { name: string }) => ({ id: String(++id), name: file.name }))
+    const send = vi.fn().mockRejectedValue(new Error('Offline'))
+    await render(send)
+    await act(async () => renderer.root.findByProps({ type: 'file' }).props.onChange({
+      target: { files: [
+        { name: 'image.png', type: 'image/png' },
+        { name: 'notes.txt', type: 'text/plain' }
+      ] }
+    }))
+    await submit()
+    expect(renderer.root.findByType('img').props.src).toBe('data:image/webp;base64,YQ==')
+    act(() => renderer.unmount())
+    await render(send)
+    expect(renderer.root.findByType('img').props.src).toBe('data:image/webp;base64,YQ==')
+    act(() => renderer.root.findByProps({ title: 'image.png', className: 'rooms-composer-image-attachment' })
+      .findByType('button').props.onClick())
+    expect(renderer.root.findAllByType('img')).toHaveLength(0)
+    expect(renderer.root.findByProps({ title: 'notes.txt', className: 'rooms-composer-chip' })).toBeTruthy()
+    await submit()
+    expect(send.mock.calls[1][0].attachmentIds).toEqual(['2'])
+  })
+  it('restores a thumbnail for an image attached by an older draft', async () => {
+    stored.set('kun.rooms.draft.room', JSON.stringify({ body: '', attachments: [{ id: 'legacy', name: 'image.png' }] }))
+    metadataRequest.mockResolvedValue({ attachment: { textFallback: {
+      dataBase64: 'YQ==', mimeType: 'image/png'
+    } } })
+    await render(vi.fn().mockResolvedValue(undefined))
+    expect(metadataRequest).toHaveBeenCalledWith('/v1/attachments/legacy', 'GET', undefined, expect.anything())
+    expect(renderer.root.findByType('img').props.src).toBe('data:image/webp;base64,YQ==')
+    expect(JSON.parse(stored.get('kun.rooms.draft.room')!).attachments[0].previewUrl)
+      .toBe('data:image/webp;base64,YQ==')
+  })
+  it('releases temporary previews when an image is removed or sent without storing blob URLs', async () => {
+    let id = 0
+    upload.mockImplementation(async () => ({ id: String(++id), name: `image-${id}.png` }))
+    imagePreview.mockResolvedValue({ url: 'blob:preview', transient: true })
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    await act(async () => renderer.root.findByProps({ type: 'file' }).props.onChange({
+      target: { files: [
+        { name: 'one.png', type: 'image/png' },
+        { name: 'two.png', type: 'image/png' }
+      ] }
+    }))
+    act(() => renderer.root.findByProps({ title: 'image-1.png', className: 'rooms-composer-image-attachment' })
+      .findByType('button').props.onClick())
+    expect(revoke).toHaveBeenCalledTimes(1)
+    expect(stored.get('kun.rooms.draft.room')).not.toContain('blob:preview')
+    await submit()
+    expect(revoke).toHaveBeenCalledTimes(2)
+    expect(send.mock.calls[0][0].attachmentIds).toEqual(['2'])
   })
   it('continues a selected topic explicitly and starts a new topic after a successful send', async () => {
     const send = vi.fn().mockResolvedValue(undefined)
@@ -275,8 +348,8 @@ describe('RoomComposer', () => {
     expect(upload).toHaveBeenCalledTimes(20)
     act(() => renderer.root.findByProps({ 'aria-label': i18n.t('roomsAddContext') }).props.onClick())
     expect(renderer.root.findByProps({ 'aria-label': i18n.t('roomsAttach') }).props.disabled).toBe(true)
-    act(() => renderer.root.findByProps({ title: 'image-1.png', className: 'rooms-composer-chip' })
-      .props.onClick())
+    act(() => renderer.root.findByProps({ title: 'image-1.png', className: 'rooms-composer-image-attachment' })
+      .findByType('button').props.onClick())
     await submit()
     expect(send.mock.calls[0][0].attachmentIds).toHaveLength(19)
     expect(send.mock.calls[0][0].attachmentIds).not.toContain('1')

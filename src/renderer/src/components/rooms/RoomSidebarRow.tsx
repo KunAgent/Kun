@@ -6,20 +6,21 @@ import { imListTime } from '../../lib/im-time'
 import { RoomAvatar, RoomAvatarGroup } from './RoomAvatar'
 
 /** Conversation row: avatar, name + time, preview + unread count. */
-export function RoomSidebarRow({ entry, selected, onOpen, menu }: {
+export function RoomSidebarRow({ entry, selected, onOpen, menu, disabled = false }: {
   entry: RoomSidebarEntry
   selected: boolean
   onOpen: () => void
   menu: ReactNode
+  disabled?: boolean
 }) {
   const { t, i18n } = useTranslation('common')
   const latest = entry.latestMessage
   const time = latest ? imListTime(latest.createdAt, i18n.language) : ''
   const preview = latest ? (latest.authorKind === 'user' ? t('roomsSidebarYou') + ': ' : entry.kind !== 'user_agent' ? latest.authorLabelSnapshot + ': ' : '') +
     (latest.preview || (latest.attachmentCount ? t('roomsAttachmentSummary', { count: latest.attachmentCount }) : '')) : entry.title
-  const unread = Math.max(0, entry.latestMessageSeq - entry.readSeq)
+  const unread = entry.deleted ? 0 : Math.max(0, entry.latestMessageSeq - entry.readSeq)
   return <>
-    <button className="rooms-im-sidebar-open" aria-label={entry.name} aria-current={selected ? 'page' : undefined} onClick={onOpen}>
+    <button className="rooms-im-sidebar-open" aria-label={entry.name} aria-current={selected ? 'page' : undefined} disabled={disabled} onClick={onOpen}>
       <span className="rooms-im-sidebar-avatar">
         {entry.agentId ? <RoomAvatar avatar={entry.avatar} id={entry.agentId} label={entry.name} size={40} /> :
           <RoomAvatarGroup members={entry.members} avatar={entry.avatar} id={entry.roomId} label={entry.name} size={40} />}
@@ -29,9 +30,9 @@ export function RoomSidebarRow({ entry, selected, onOpen, menu }: {
         <span className="rooms-im-sidebar-name"><strong>{entry.name}</strong>
           {time ? <time dateTime={latest!.createdAt}>{time}</time> : null}</span>
         <span className="rooms-im-sidebar-preview">
-          {entry.attentionCount ? <b>[{t('roomsAttention')}]</b> : null}
+          {!entry.deleted && entry.attentionCount ? <b>[{t('roomsAttention')}]</b> : null}
           <small>{preview}</small>
-          {entry.pinned ? <Pin size={11} aria-label={t('roomsPin')} /> : null}
+          {entry.pinned ? <Pin size={11} aria-label={t('roomsPinConversation')} /> : null}
           {unread ? <span className="rooms-im-sidebar-badge" aria-label={`${t('roomsUnread')} ${unread}`}>{unread > 99 ? '99+' : unread}</span> : null}
         </span>
       </span>

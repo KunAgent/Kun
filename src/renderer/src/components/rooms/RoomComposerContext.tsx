@@ -1,8 +1,11 @@
 import { useEffect, useRef, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AtSign, File, FolderGit2, ListTodo, Reply, X } from 'lucide-react'
+import { AtSign, File, FolderGit2, Image, ListTodo, Reply, X } from 'lucide-react'
 import type { Room, RoomMember, RoomTask } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
+import { isRoomComposerImage } from './room-composer-image-preview'
+
+type ComposerAttachment = { id: string; name: string; mimeType?: string; previewUrl?: string }
 
 function ContextChip({ name, icon, onRemove }: {
   name: string
@@ -25,13 +28,13 @@ export function RoomComposerContext({
   room: Room
   tasks: RoomTask[]
   mentions: string[]
-  attachments: Array<{ id: string; name: string }>
+  attachments: ComposerAttachment[]
   taskId: string
   repositoryId: string
   replyToMessageId?: string
   replyBody?: string
   onMentions: (ids: string[]) => void
-  onAttachments: (attachments: Array<{ id: string; name: string }>) => void
+  onAttachments: (attachments: ComposerAttachment[]) => void
   onTask: () => void
   onRepository: () => void
   onClearReply: () => void
@@ -60,7 +63,20 @@ export function RoomComposerContext({
         {repositoryId ? <ContextChip icon={<FolderGit2 size={13} />}
           name={room.repositories.find((repository) => repository.id === repositoryId)?.displayName ?? repositoryId}
           onRemove={onRepository} /> : null}
-        {attachments.map((attachment) => (
+        {attachments.map((attachment) => isRoomComposerImage(attachment.name, attachment.mimeType) ? (
+          <div key={attachment.id} className="rooms-composer-image-attachment" title={attachment.name}>
+            <span className="rooms-composer-image-thumb">
+              {attachment.previewUrl && (/^data:image\/(?:webp|png|jpeg);base64,/.test(attachment.previewUrl) || attachment.previewUrl.startsWith('blob:'))
+                ? <img src={attachment.previewUrl} alt="" /> : <Image size={24} aria-hidden="true" />}
+              <button type="button" className="rooms-composer-image-remove"
+                aria-label={t('roomsRemoveContext', { name: attachment.name })}
+                onClick={() => onAttachments(attachments.filter((value) => value.id !== attachment.id))}>
+                <X size={14} aria-hidden="true" />
+              </button>
+            </span>
+            <span className="rooms-composer-image-name">{attachment.name}</span>
+          </div>
+        ) : (
           <ContextChip key={attachment.id} icon={<File size={13} />} name={attachment.name}
             onRemove={() => onAttachments(attachments.filter((value) => value.id !== attachment.id))} />
         ))}

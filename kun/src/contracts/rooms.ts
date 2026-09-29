@@ -79,6 +79,7 @@ export const RoomSchema = z.object({
   maxConcurrentTasks: z.number().int().min(1).max(2).default(2),
   pinned: z.boolean().default(false),
   archivedAt: Timestamp.optional(),
+  deletedAt: Timestamp.optional(),
   defaultMemberId: RoomIdSchema,
   members: z.array(RoomMemberSchema).min(1).max(100),
   repositories: z.array(RoomRepositorySchema).max(100),

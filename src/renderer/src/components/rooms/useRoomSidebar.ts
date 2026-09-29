@@ -6,7 +6,7 @@ import { subscribeRoomEvents, roomEventsLive } from './useRoomEvents'
 
 export function useRoomSidebar(query: RoomSidebarQuery, refreshKey = '') {
   const path = '/v1/rooms/sidebar?' + new URLSearchParams({ kind: query.kind ?? 'all', search: query.search ?? '',
-    archived_only: String(Boolean(query.archivedOnly)), unread_only: String(Boolean(query.unreadOnly)),
+    archived_only: String(Boolean(query.archivedOnly)), deleted_only: String(Boolean(query.deletedOnly)), unread_only: String(Boolean(query.unreadOnly)),
     attention_only: String(Boolean(query.attentionOnly)), ...(query.repositoryRoot ? { repository_root: query.repositoryRoot } : {}), limit: '40' })
   const [state, setState] = useState<RoomSidebarPage>({ entries: [] }), [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const [pages, setPages] = useState(1), [version, setVersion] = useState(0)
