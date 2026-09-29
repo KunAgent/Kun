@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { HarnessStatus } from '../../contracts/harness.js'
+import {
+  HarnessDefinitionSchema,
+  type HarnessDefinition,
+  type HarnessStatus
+} from '../../contracts/harness.js'
 import {
   BUILTIN_HARNESSES,
   KUN_NATIVE_CAPABILITIES
 } from '../../harness/builtin-harnesses.js'
+import { terminalAgentToDefinition } from '../../harness/harness-catalog.js'
 import {
   listHarnessesForManager,
   type HarnessListDeps,
@@ -136,5 +141,37 @@ describe('listHarnessesForManager', () => {
     expect(kun.ready).toBe(true)
     expect(kun.admission.managerWorker).toBe(true)
     expect(out.agents.every((entry) => entry.ready)).toBe(true)
+  })
+
+  it('P4-13: terminal agents are listed as terminal-only, never dispatchable', async () => {
+    const terminalDef = HarnessDefinitionSchema.parse(
+      terminalAgentToDefinition({
+        id: 'zed-shell',
+        displayName: 'Zed Shell',
+        command: '/bin/zsh-agent',
+        args: ['--tty'],
+        taskFlag: '-i',
+        hooks: 'claude-settings'
+      })
+    ) satisfies HarnessDefinition
+    const withTerminal = {
+      ...catalog,
+      list: () => [...BUILTIN_HARNESSES, terminalDef]
+    }
+    const out = await listHarnessesForManager(
+      deps({ catalog: withTerminal as never })
+    )
+    const entry = out.agents.find((agent) => agent.harnessId === 'zed-shell')!
+    expect(entry.terminalOnly).toBe(true)
+    expect(entry.ready).toBe(true)
+    expect(entry.models).toEqual([])
+    expect(entry.admission.managerWorker).toBe(false)
+    expect(entry.admission.missing).toEqual(
+      expect.arrayContaining(['abort', 'structuredStreaming'])
+    )
+    expect(entry.notes).toContain('terminal only')
+    // Turn-serving entries stay unmarked.
+    const claude = out.agents.find((agent) => agent.harnessId === 'claude-code')!
+    expect(claude.terminalOnly).toBeUndefined()
   })
 })

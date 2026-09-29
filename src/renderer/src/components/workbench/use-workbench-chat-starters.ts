@@ -97,6 +97,11 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
     isolation?: 'local' | 'worktree'
     permissionMode?: string
   }): void => {
+    const definition = useHarnessStore.getState().rows
+      .find((row) => row.definition.id === input.harnessId)?.definition
+    // P4-13: terminal-only agents cannot host turns; the menu lists are
+    // filtered, so this guards stale persisted picks like defaultHarnessId.
+    if (definition && definition.transport === 'terminal') return
     const requestId = beginNavigation()
     if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
     setConnectPhoneSidebarOpen(false)
@@ -104,8 +109,6 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
     // P4-11: the harness's default permission level maps onto the composer
     // execution settings the new thread's first turn snapshots.
     if (input.permissionMode) {
-      const definition = useHarnessStore.getState().rows
-        .find((row) => row.definition.id === input.harnessId)?.definition
       const execution = harnessPermissionDefault(definition, {
         permissionMode: input.permissionMode
       })

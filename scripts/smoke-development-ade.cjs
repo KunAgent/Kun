@@ -117,7 +117,17 @@ async function main() {
     settings.agents.kun.harnesses = {
       ...(settings.agents.kun.harnesses ?? {}),
       binaryPaths: { 'claude-code': claudeStub },
-      custom: [{ id: 'smoke-acp', displayName: 'Smoke ACP', command: acpStub, args: [], env: {} }]
+      custom: [{ id: 'smoke-acp', displayName: 'Smoke ACP', command: acpStub, args: [], env: {} }],
+      // P4-13: a configured terminal-only agent — the node binary always
+      // resolves, and no `--version` probe is required for `terminal` defs.
+      terminalAgents: [{
+        id: 'smoke-term',
+        displayName: 'Smoke Term',
+        command: process.execPath,
+        args: [],
+        taskFlag: '-e',
+        hooks: 'none'
+      }]
     }
     const allocatedPorts = new Set([runtimePort, rendererPort, new URL(modelFixture.baseUrl).port].map(Number))
     const nextPort = async () => {
@@ -277,6 +287,31 @@ async function main() {
       `terminal showing the prefilled ${setupHarnessId} command`)
     await capture('4b-setup-command-prefilled-terminal')
 
+    // 3d) P4-13: the seeded terminal agent joins the catalog as
+    //     `transport: 'terminal'` (installed without a version probe) and the
+    //     "new terminal tab" menu can spawn it as a registered unit.
+    await poll(async () => {
+      const list = await runtimeRequest(page, '/v1/harnesses', 'GET')
+      const row = (list.harnesses ?? []).find(
+        (entry) => entry.definition.id === 'smoke-term')
+      return row?.definition.transport === 'terminal' &&
+        row?.status.installed === 'yes'
+    }, 30_000, 'terminal agent reaching the runtime catalog as installed')
+    await page.getByRole('button', { name: 'New terminal tab', exact: true }).click()
+    const newTabMenu = page.locator('[role="menu"][aria-label="New terminal tab"]')
+    await newTabMenu.waitFor()
+    // The menuitem's accessible name joins title + subtitle ("Smoke Term\n" +
+    // "smoke-term"), so match non-exactly on the display name.
+    const termAgentItem = newTabMenu.getByRole('menuitem', { name: /^Smoke Term/u })
+    await termAgentItem.waitFor({ timeout: 30_000 })
+    await capture('4e-terminal-agent-menu')
+    await termAgentItem.click()
+    await page.getByRole('tab', { name: /Smoke Term/u }).waitFor({ timeout: 30_000 })
+    await poll(async () => (await page.locator('.xterm-rows').innerText())
+      .includes('Welcome to Node.js'), 30_000,
+      'terminal agent tab running the seeded node command')
+    await capture('4f-terminal-agent-tab')
+
     // 4) A one-on-one thread with Claude Code shows the composer; its harness
     //    picker menu renders through a body portal, not inside the clipped
     //    toolbar container (P4-01).
@@ -326,6 +361,7 @@ async function main() {
         'custom ACP definition probes before saving; secrets bind by ref only',
         'imported JSON definitions must be tested again before saving',
         'setup command prefills a fresh terminal without executing and leaves Settings',
+        'terminal agent joins the catalog and spawns from the new-tab menu',
         'composer harness picker menu renders through a body portal',
         'Kun gateway model group exposes provider models'] }
     await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')

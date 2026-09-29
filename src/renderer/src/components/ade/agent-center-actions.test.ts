@@ -141,6 +141,29 @@ describe('agentCardModel', () => {
     const model = agentCardModel(row, { enabled: true, platform: 'darwin', isDefault: false })
     expect(model.primary.kind).not.toBe('command')
   })
+
+  it('P4-13: a ready terminal agent offers no test/setDefault/disable', () => {
+    const row = makeRow({ builtin: false })
+    row.definition.transport = 'terminal'
+    const model = agentCardModel(row, {
+      enabled: true, platform: 'darwin', isDefault: false
+    })
+    expect(model.state).toBe('ready')
+    expect(model.primary.kind).toBe('none')
+    expect(model.secondary).toEqual([])
+  })
+
+  it('P4-13: a missing terminal agent still surfaces install-path actions', () => {
+    const row = makeRow({
+      builtin: false,
+      status: { installed: 'no', login: 'unknown', reasonCode: 'not_installed' }
+    })
+    row.definition.transport = 'terminal'
+    const model = agentCardModel(row, { enabled: true, platform: 'darwin', isDefault: false })
+    expect(model.state).toBe('unavailable')
+    expect(model.primary.kind).toBe('probe')
+    expect(model.secondary.map((a) => a.kind)).toContain('specifyPath')
+  })
 })
 
 describe('setupInstallCommand', () => {

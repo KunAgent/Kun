@@ -170,6 +170,51 @@ describe('normalizeKunHarnessSettings', () => {
       'claude-code': { permissionMode: 'plan' }
     })
   })
+
+  // P4-13: terminalAgents join the catalog as `transport: 'terminal'` —
+  // interactive CLIs that never host delegated turns.
+  it('normalizes terminalAgents and drops collisions with builtin/custom ids', () => {
+    const normalized = normalizeKunHarnessSettings({
+      custom: [{ id: 'mine', displayName: 'Mine', command: '/bin/mine' }],
+      terminalAgents: [
+        {
+          id: 'zed-shell', displayName: ' Zed Shell ', command: ' /bin/zsh-agent ',
+          args: ['--tty', '', 'x'.repeat(2000)], taskFlag: '-i',
+          resumeArgs: ['--resume'], hooks: 'claude-settings'
+        },
+        { id: 'kun', displayName: 'Fake', command: '/bin/fake' },
+        { id: 'mine', displayName: 'Shadow', command: '/bin/shadow' },
+        { id: 'zed-shell', displayName: 'Dup', command: '/bin/dup' },
+        { id: 'no-cmd', displayName: 'No command' },
+        'garbage',
+        { id: 'quiet', command: '/bin/quiet', hooks: 'bogus-hook' }
+      ]
+    })
+    expect(normalized.terminalAgents).toEqual([
+      {
+        id: 'zed-shell',
+        displayName: 'Zed Shell',
+        command: '/bin/zsh-agent',
+        args: ['--tty'],
+        taskFlag: '-i',
+        resumeArgs: ['--resume'],
+        hooks: 'claude-settings'
+      },
+      { id: 'quiet', displayName: 'quiet', command: '/bin/quiet', args: [] }
+    ])
+  })
+
+  it('patch merge replaces terminalAgents whole', () => {
+    const current = normalizeKunHarnessSettings({
+      terminalAgents: [{ id: 'a', displayName: 'A', command: '/bin/a' }]
+    })
+    const merged = mergeKunHarnessSettings(current, {
+      terminalAgents: [{ id: 'b', displayName: 'B', command: '/bin/b', args: [] }]
+    })
+    expect(merged.terminalAgents.map((entry) => entry.id)).toEqual(['b'])
+    const untouched = mergeKunHarnessSettings(current, {})
+    expect(untouched.terminalAgents.map((entry) => entry.id)).toEqual(['a'])
+  })
 })
 
 describe('normalizeKunAdeSettings', () => {

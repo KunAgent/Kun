@@ -615,7 +615,17 @@ export const kunRuntimePatchSchema = z.object({
     // value — normalize folds it into `defaults[*].permissionMode`.
     defaultPermissionMode: z.record(z.string().trim().min(1).max(128), z.string().min(1).max(64)).optional(),
     defaultHarnessId: z.string().trim().min(1).max(128).optional(),
-    agentOrder: z.array(z.string().trim().min(1).max(64)).max(16).optional()
+    agentOrder: z.array(z.string().trim().min(1).max(64)).max(16).optional(),
+    // Terminal-only agents for the "new agent tab" menu (p4 §3.8, P4-13).
+    terminalAgents: z.array(z.object({
+      id: z.string().trim().min(1).max(128),
+      displayName: z.string().trim().min(1).max(128).optional(),
+      command: z.string().trim().min(1).max(4_096),
+      args: z.array(z.string().max(1_024)).max(32).optional(),
+      taskFlag: z.string().trim().min(1).max(64).optional(),
+      resumeArgs: z.array(z.string().max(1_024)).max(32).optional(),
+      hooks: z.enum(['none', 'claude-settings']).optional()
+    }).strict()).max(32).optional()
   }).strict().optional(),
   ade: z.object({
     enabled: z.boolean().optional(),

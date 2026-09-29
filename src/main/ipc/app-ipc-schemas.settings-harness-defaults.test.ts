@@ -57,3 +57,46 @@ describe('app-ipc-schemas harnesses.defaults (P4-11)', () => {
     ).toThrow()
   })
 })
+
+describe('app-ipc-schemas harnesses.terminalAgents (P4-13)', () => {
+  const patch = (harnesses: unknown) => ({ agents: { kun: { harnesses } } })
+
+  it('accepts a full terminal agent entry', () => {
+    const parsed = settingsPatchSchema.parse(patch({
+      terminalAgents: [{
+        id: 'zed-shell',
+        displayName: 'Zed Shell',
+        command: '/bin/zsh-agent',
+        args: ['--tty'],
+        taskFlag: '-i',
+        resumeArgs: ['--resume'],
+        hooks: 'claude-settings'
+      }]
+    }))
+    expect(parsed.agents?.kun?.harnesses?.terminalAgents?.[0]).toEqual({
+      id: 'zed-shell',
+      displayName: 'Zed Shell',
+      command: '/bin/zsh-agent',
+      args: ['--tty'],
+      taskFlag: '-i',
+      resumeArgs: ['--resume'],
+      hooks: 'claude-settings'
+    })
+  })
+
+  it('rejects entries without a command and unknown hooks values', () => {
+    expect(() =>
+      settingsPatchSchema.parse(patch({ terminalAgents: [{ id: 'x' }] }))
+    ).toThrow()
+    expect(() =>
+      settingsPatchSchema.parse(patch({
+        terminalAgents: [{ id: 'x', command: '/bin/x', hooks: 'bogus' }]
+      }))
+    ).toThrow()
+    expect(() =>
+      settingsPatchSchema.parse(patch({
+        terminalAgents: [{ id: 'x', command: '/bin/x', mystery: true }]
+      }))
+    ).toThrow(/Unrecognized key/)
+  })
+})

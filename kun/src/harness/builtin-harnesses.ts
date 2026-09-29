@@ -15,6 +15,23 @@ export const KUN_NATIVE_CAPABILITIES: HarnessCapabilities = {
   facts: { sandbox: 'host', usageReporting: 'exact', compactionOwner: 'kun' }
 }
 
+/**
+ * The Claude Code settings.json hook surface (05 §6.2). Shared with custom
+ * terminal agents that opt into `hooks: 'claude-settings'` (p4 §3.8).
+ */
+export const CLAUDE_SETTINGS_HOOK_EVENTS = [
+  'SessionStart',
+  'UserPromptSubmit',
+  'PreToolUse',
+  'PostToolUse',
+  'PermissionRequest',
+  'Notification',
+  'Stop',
+  'SubagentStop',
+  'PreCompact',
+  'SessionEnd'
+] as const
+
 const claudeCodeStatuses: HarnessCapabilityStatuses = {
   ...allSupportedStatuses(),
   fork: up('agent sdk has no native session fork'),
@@ -146,18 +163,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
       resumeArgs: ['--continue'],
       hooks: {
         kind: 'claude-settings',
-        events: [
-          'SessionStart',
-          'UserPromptSubmit',
-          'PreToolUse',
-          'PostToolUse',
-          'PermissionRequest',
-          'Notification',
-          'Stop',
-          'SubagentStop',
-          'PreCompact',
-          'SessionEnd'
-        ]
+        events: [...CLAUDE_SETTINGS_HOOK_EVENTS]
       }
     },
     capabilities: CLAUDE_CODE_CAPABILITIES,

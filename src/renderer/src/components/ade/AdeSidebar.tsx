@@ -25,6 +25,7 @@ import { useChatStore, type SettingsRouteSection } from '../../store/chat-store'
 import { useActivityStore } from '../../store/activity-store'
 import { selectNeedsYouCount } from '../../store/activity-selectors'
 import {
+  harnessRowRunsTurns,
   harnessRowUnavailableCode,
   harnessRowUnavailableDetail,
   harnessUnavailableLabelKey,
@@ -152,7 +153,7 @@ export function AdeSidebar({
   const clearActiveThreadSelection = useChatStore((s) => s.clearActiveThreadSelection)
   const activityRows = useActivityStore((s) => s.rows)
   const needsYouCount = useActivityStore((s) => selectNeedsYouCount(s.rows))
-  const harnessRows = useHarnessStore((s) => s.rows)
+  const harnessRows = useHarnessStore((s) => s.rows).filter(harnessRowRunsTurns)
   const harnessLoading = useHarnessStore((s) => s.rowsLoading)
   const harnessDefaults = useHarnessDefaults()
   const watchTurnCompletion = useChatStore((s) => s.watchTurnCompletion)

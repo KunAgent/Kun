@@ -148,3 +148,16 @@ describe('harnessRowUnavailableCode (P4-05)', () => {
     expect(harnessRowUnavailableCode(row('a', { ready: 'yes' }))).toBeNull()
   })
 })
+
+describe('harnessRowRunsTurns (P4-13)', () => {
+  it('excludes terminal-only rows from turn pickers', async () => {
+    const { harnessRowRunsTurns } = await import('./harness-store')
+    const terminalRow = row('zed-shell')
+    terminalRow.definition.transport = 'terminal'
+    expect(harnessRowRunsTurns(terminalRow)).toBe(false)
+    expect(harnessRowRunsTurns(row('mine'))).toBe(true)
+    const kunRow = row('kun')
+    kunRow.definition.transport = 'native-loop'
+    expect(harnessRowRunsTurns(kunRow)).toBe(true)
+  })
+})
