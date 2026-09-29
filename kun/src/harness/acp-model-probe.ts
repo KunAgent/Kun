@@ -15,6 +15,10 @@ import {
   acpConfigOptionValues
 } from '../runtime/acp/acp-schema.js'
 import type { HarnessDefinition, HarnessId } from '../contracts/harness.js'
+import {
+  resolveHarnessSecretEnv,
+  type HarnessSecretRefResolver
+} from './harness-secret-env.js'
 
 export const ACP_MODEL_PROBE_CACHE_MS = 10 * 60 * 1_000
 const ACP_PROBE_SESSION_TIMEOUT_MS = 30_000
@@ -22,6 +26,8 @@ const ACP_PROBE_SESSION_TIMEOUT_MS = 30_000
 export type AcpModelProbeDeps = {
   /** Settings `harnesses.binaryPaths` override for `launch.command`. */
   binaryPath?: (harnessId: HarnessId) => string | undefined
+  /** Resolves `launch.secretEnv` refs so the probe sees the real env (P4-12). */
+  resolveSecretEnv?: HarnessSecretRefResolver
   spawn?: AcpSpawnFn
   nowMs?: () => number
   cacheMs?: number
@@ -83,10 +89,15 @@ export class AcpModelProbe {
     const command =
       this.deps.binaryPath?.(definition.id) ?? definition.launch?.command ?? ''
     if (!command) return []
+    const secretEnv = await resolveHarnessSecretEnv(
+      definition,
+      this.deps.resolveSecretEnv
+    )
     const process = await startAcpProcess({
       command,
       args: definition.launch?.args ?? [],
       env: definition.launch?.env ?? {},
+      secretEnv,
       // Probe sessions never receive credential env; the agent either starts
       // unauthenticated or reports auth requirements via initialize.
       cwd: tmpdir(),

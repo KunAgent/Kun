@@ -104,3 +104,45 @@ export const HarnessTestResponseSchema = z
   })
   .strict()
 export type HarnessTestResponse = z.infer<typeof HarnessTestResponseSchema>
+
+/**
+ * `POST /v1/harnesses/probe-definition` (docs/ade/impl/p4 §3.7, P4-12):
+ * handshake a custom ACP definition before it is saved. Mirrors the
+ * `harnesses.custom[]` entry shape minus `id` — the unsaved agent has no
+ * stable id yet, so `id` is optional and only used for log correlation.
+ */
+export const HarnessProbeDefinitionRequestSchema = z
+  .object({
+    id: z.string().trim().min(1).max(128).optional(),
+    displayName: z.string().trim().min(1).max(64),
+    command: z.string().trim().min(1).max(4_096),
+    args: z.array(z.string().max(1_024)).max(32).default([]),
+    env: z
+      .record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024))
+      .default({}),
+    secretEnv: z
+      .array(
+        z
+          .object({
+            name: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
+            secretRef: z.string().min(1).max(256)
+          })
+          .strict()
+      )
+      .max(32)
+      .default([])
+  })
+  .strict()
+export type HarnessProbeDefinitionRequest = z.infer<
+  typeof HarnessProbeDefinitionRequestSchema
+>
+
+/** `POST /v1/harness-secrets` request — stores a value, returns its ref. */
+export const HarnessSecretCreateRequestSchema = z
+  .object({
+    value: z.string().min(1).max(16_384)
+  })
+  .strict()
+export type HarnessSecretCreateRequest = z.infer<
+  typeof HarnessSecretCreateRequestSchema
+>

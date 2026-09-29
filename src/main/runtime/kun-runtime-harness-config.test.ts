@@ -33,7 +33,14 @@ describe('harness/ade settings bridge', () => {
         disabledIds: ['cursor', 'claude-code'],
         binaryPaths: { cursor: '/opt/cursor', 'claude-code': '/opt/claude' },
         custom: [
-          { id: 'zeta', displayName: 'Zeta', command: '/bin/zeta', args: ['--x'], env: { B: '2', A: '1' } },
+          {
+            id: 'zeta', displayName: 'Zeta', command: '/bin/zeta', args: ['--x'],
+            env: { B: '2', A: '1' },
+            secretEnv: [
+              { name: 'Z_KEY', secretRef: 'cred_z' },
+              { name: 'A_KEY', secretRef: 'cred_a' }
+            ]
+          },
           { id: 'alpha', displayName: 'Alpha', command: '/bin/alpha', args: [], env: {} }
         ],
         defaultPermissionMode: { cursor: 'ask', 'claude-code': 'default' },
@@ -64,7 +71,14 @@ describe('harness/ade settings bridge', () => {
         binaryPaths: { 'claude-code': '/opt/claude', cursor: '/opt/cursor' },
         custom: [
           { id: 'alpha', displayName: 'Alpha', command: '/bin/alpha', args: [], env: {} },
-          { id: 'zeta', displayName: 'Zeta', command: '/bin/zeta', args: ['--x'], env: { A: '1', B: '2' } }
+          {
+            id: 'zeta', displayName: 'Zeta', command: '/bin/zeta', args: ['--x'],
+            env: { A: '1', B: '2' },
+            secretEnv: [
+              { name: 'A_KEY', secretRef: 'cred_a' },
+              { name: 'Z_KEY', secretRef: 'cred_z' }
+            ]
+          }
         ],
         defaultPermissionMode: { 'claude-code': 'default', cursor: 'ask' },
         defaults: {
@@ -123,6 +137,15 @@ describe('harness/ade settings bridge', () => {
     expect(configA.ade).not.toHaveProperty('notifications')
     expect((configA.harnesses.custom as Array<{ id: string }>).map((c) => c.id))
       .toEqual(['alpha', 'zeta'])
+    // P4-12: secretEnv refs emit sorted by name; values never appear — the
+    // runtime config carries only opaque credential-store references.
+    const zeta = (configA.harnesses.custom as Array<Record<string, unknown>>)
+      .find((c) => c.id === 'zeta')
+    expect(zeta?.secretEnv).toEqual([
+      { name: 'A_KEY', secretRef: 'cred_a' },
+      { name: 'Z_KEY', secretRef: 'cred_z' }
+    ])
+    expect(JSON.stringify(configA)).not.toContain('api-key')
   })
 
   it('defaults missing sections to spec values', () => {

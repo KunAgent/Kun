@@ -340,6 +340,16 @@ export interface AgentProvider {
     harnessId: string,
     input: import('@shared/ade-harnesses').AdeHarnessTestRequest
   ): Promise<import('@shared/ade-harnesses').AdeHarnessTestResult>
+  /**
+   * Pre-save handshake for a custom ACP definition (p4 §3.7, P4-12).
+   */
+  probeHarnessDefinition?(
+    input: import('@shared/ade-harnesses').AdeHarnessProbeDefinitionRequest
+  ): Promise<import('@shared/ade-harnesses').AdeHarnessProbeDefinitionResult>
+  /** Store a `secretEnv` value; returns the opaque credential-store ref. */
+  storeHarnessSecret?(value: string): Promise<string>
+  /** Release a stored secret (e.g. when a secretEnv row is removed). */
+  deleteHarnessSecret?(secretRef: string): Promise<void>
   /** Worker control: take-over / hand-back / stop / detach (09 §9). */
   controlTeamWorker?(
     workerId: string,

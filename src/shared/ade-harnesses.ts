@@ -187,6 +187,22 @@ export type AdeHarnessTestResult = {
   trial?: AdeHarnessTestTrial
 }
 
+/**
+ * `POST /v1/harnesses/probe-definition` request (p4 §3.7, P4-12): handshake
+ * a custom ACP definition before it is saved into `harnesses.custom[]`.
+ */
+export type AdeHarnessProbeDefinitionRequest = {
+  id?: string
+  displayName: string
+  command: string
+  args?: string[]
+  env?: Record<string, string>
+  secretEnv?: { name: string; secretRef: string }[]
+}
+
+/** The probe-definition response is the handshake result itself. */
+export type AdeHarnessProbeDefinitionResult = AdeHarnessTestHandshake
+
 /** A native slash command the harness advertised (03 §7.3). */
 export type AdeHarnessCommand = {
   name: string

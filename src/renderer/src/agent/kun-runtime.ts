@@ -362,6 +362,9 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   readonly listHarnessModels = this.harnesses.listHarnessModels
   readonly probeHarness = this.harnesses.probeHarness
   readonly testHarness = this.harnesses.testHarness
+  readonly probeHarnessDefinition = this.harnesses.probeHarnessDefinition
+  readonly storeHarnessSecret = this.harnesses.storeHarnessSecret
+  readonly deleteHarnessSecret = this.harnesses.deleteHarnessSecret
 
   private readonly reviews = createKunReviewClient()
   readonly listReviewComments = this.reviews.listReviewComments

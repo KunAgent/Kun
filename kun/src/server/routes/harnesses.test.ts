@@ -1,3 +1,7 @@
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import { buildRouter } from './index.js'
 import type { ServerRuntime } from './server-runtime.js'
@@ -5,13 +9,42 @@ import { HarnessCatalog } from '../../harness/harness-catalog.js'
 import { HarnessDetector } from '../../harness/harness-detector.js'
 import type { HarnessDefinition } from '../../contracts/harness.js'
 import { allSupportedStatuses } from '../../contracts/harness-capabilities.js'
+import { harnessSecretRefResolver } from '../../harness/harness-secret-env.js'
 
 const TOKEN = 'harness-token'
+const FAKE_ACP_AGENT = fileURLToPath(
+  new URL('../../runtime/acp/__fixtures__/fake-acp-agent.mjs', import.meta.url)
+)
+const ACP_SCENARIOS = fileURLToPath(
+  new URL('../../runtime/acp/__fixtures__/scenarios/', import.meta.url)
+)
+
+type FakeCredentials = {
+  create: (payload: { apiKey?: string }) => Promise<string>
+  get: (ref: string) => Promise<{ apiKey?: string } | null>
+  delete: (ref: string) => Promise<void>
+}
+
+function fakeCredentials(seed: Record<string, { apiKey?: string }> = {}): FakeCredentials {
+  const store = new Map<string, { apiKey?: string }>(Object.entries(seed))
+  return {
+    create: async (payload) => {
+      const ref = `cred_${store.size + 1}`
+      store.set(ref, payload)
+      return ref
+    },
+    get: async (ref) => store.get(ref) ?? null,
+    delete: async (ref) => {
+      store.delete(ref)
+    }
+  }
+}
 
 function fakeRouter(
   spawn: (command: string) => { stdout: string; exitCode: number | null },
   defs?: HarnessDefinition[],
-  resolveExecutable?: (command: string) => Promise<string | undefined>
+  resolveExecutable?: (command: string) => Promise<string | undefined>,
+  credentials?: FakeCredentials
 ) {
   const catalog = new HarnessCatalog()
   if (defs) catalog.list = () => defs
@@ -32,7 +65,12 @@ function fakeRouter(
     runtimeToken: TOKEN,
     insecure: false,
     nowIso: () => '2026-01-01T00:00:00.000Z',
-    harnesses: { catalog, detector }
+    harnesses: {
+      catalog,
+      detector,
+      resolveSecretEnv: credentials ? harnessSecretRefResolver(credentials) : undefined
+    },
+    ...(credentials ? { extensionPlatform: { credentials } } : {})
   } as unknown as ServerRuntime)
 }
 
@@ -423,5 +461,145 @@ describe('harness routes', () => {
     expect(body.ok).toBe(true)
     expect(body.detect.status.installed).toBe('yes')
     expect(body.handshake).toBeUndefined()
+  })
+
+  // P4-12: POST /v1/harnesses/probe-definition + /v1/harness-secrets
+  async function postJson(
+    router: ReturnType<typeof buildRouter>,
+    path: string,
+    body: unknown
+  ): Promise<{ status: number; json: Record<string, unknown> }> {
+    const request = new Request(`http://127.0.0.1${path}`, {
+      method: 'POST',
+      headers: { ...authed, 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    const match = router.match('POST', new URL(request.url).pathname)
+    if (!match) throw new Error(`route not found: POST ${path}`)
+    const result = await match.handler(request, { params: match.params })
+    const text = result instanceof Response ? await result.text() : result.body
+    return {
+      status: result instanceof Response ? result.status : result.status,
+      json: JSON.parse(text)
+    }
+  }
+
+  it('requires runtime authentication for probe-definition and secrets', async () => {
+    const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }), undefined, undefined, fakeCredentials())
+    const request = (path: string, method: string) =>
+      new Request(`http://127.0.0.1${path}`, { method })
+    for (const [method, path] of [
+      ['POST', '/v1/harnesses/probe-definition'],
+      ['POST', '/v1/harness-secrets'],
+      ['DELETE', '/v1/harness-secrets/cred_1']
+    ] as const) {
+      const req = request(path, method)
+      const match = router.match(method, new URL(req.url).pathname)
+      const result = await match!.handler(req, { params: match!.params })
+      expect(result instanceof Response ? result.status : result.status).toBe(401)
+    }
+  })
+
+  it('rejects invalid probe-definition bodies', async () => {
+    const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }))
+    expect((await postJson(router, '/v1/harnesses/probe-definition', {})).status).toBe(400)
+    expect(
+      (await postJson(router, '/v1/harnesses/probe-definition', {
+        displayName: 'x', command: 'tool',
+        env: { 'lowercase': 'v' }
+      })).status
+    ).toBe(400)
+    expect(
+      (await postJson(router, '/v1/harnesses/probe-definition', {
+        displayName: 'x', command: 'tool',
+        secretEnv: [{ name: 'MY_KEY', secretRef: '' }]
+      })).status
+    ).toBe(400)
+  })
+
+  it('handshakes an unsaved ACP definition against the fixture agent', async () => {
+    const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }), undefined, undefined, fakeCredentials())
+    const { status, json } = await postJson(router, '/v1/harnesses/probe-definition', {
+      displayName: 'Probe Me',
+      command: process.execPath,
+      args: [FAKE_ACP_AGENT],
+      env: { FAKE_ACP_SCENARIO: `${ACP_SCENARIOS}basic-chat.json` }
+    })
+    expect(status).toBe(200)
+    expect(json.ok).toBe(true)
+    expect(json.agent).toMatchObject({ name: 'fake-acp-agent', version: '0.0.1' })
+    expect(json.durationMs).toBeGreaterThanOrEqual(0)
+  })
+
+  it('injects resolved secretEnv into the probed child env without leaking it', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kun-probe-def-'))
+    const outFile = join(dir, 'env-out.txt')
+    const credentials = fakeCredentials({ cred_secret: { apiKey: 's3cr3t-value' } })
+    const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }), undefined, undefined, credentials)
+    const { status, json } = await postJson(router, '/v1/harnesses/probe-definition', {
+      displayName: 'Secret Probe',
+      command: process.execPath,
+      args: [
+        '-e',
+        `require('fs').writeFileSync(${JSON.stringify(outFile)}, process.env.P4_SECRET ?? '')`
+      ],
+      secretEnv: [{ name: 'P4_SECRET', secretRef: 'cred_secret' }]
+    })
+    expect(status).toBe(200)
+    // The child exits without speaking ACP, so the handshake reports failure —
+    // but the secret still had to reach the child's env to be written out.
+    expect(readFileSync(outFile, 'utf8')).toBe('s3cr3t-value')
+    const wire = JSON.stringify(json)
+    expect(wire).not.toContain('s3cr3t-value')
+    expect(wire).not.toContain('cred_secret')
+  })
+
+  it('fails closed and names only the env var when a secret ref is unresolvable', async () => {
+    const credentials = fakeCredentials()
+    const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }), undefined, undefined, credentials)
+    const { json } = await postJson(router, '/v1/harnesses/probe-definition', {
+      displayName: 'Missing Secret',
+      command: process.execPath,
+      args: ['-e', 'process.exit(0)'],
+      secretEnv: [{ name: 'GONE_KEY', secretRef: 'cred_missing' }]
+    })
+    expect(json.ok).toBe(false)
+    const wire = JSON.stringify(json)
+    expect(wire).toContain('GONE_KEY')
+    expect(wire).not.toContain('cred_missing')
+  })
+
+  it('stores a secret and returns only its opaque ref; delete releases it', async () => {
+    const credentials = fakeCredentials()
+    const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }), undefined, undefined, credentials)
+    const { status, json } = await postJson(router, '/v1/harness-secrets', {
+      value: 'my-api-key'
+    })
+    expect(status).toBe(200)
+    expect(typeof json.secretRef).toBe('string')
+    expect(JSON.stringify(json)).not.toContain('my-api-key')
+    const ref = json.secretRef as string
+    expect(await credentials.get(ref)).toEqual({ apiKey: 'my-api-key' })
+
+    const del = new Request(`http://127.0.0.1/v1/harness-secrets/${ref}`, {
+      method: 'DELETE',
+      headers: authed
+    })
+    const match = router.match('DELETE', new URL(del.url).pathname)
+    const result = await match!.handler(del, { params: match!.params })
+    expect(result instanceof Response ? result.status : result.status).toBe(200)
+    expect(await credentials.get(ref)).toBeNull()
+  })
+
+  it('rejects an empty secret value and an oversized secret ref', async () => {
+    const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }), undefined, undefined, fakeCredentials())
+    expect((await postJson(router, '/v1/harness-secrets', { value: '' })).status).toBe(400)
+    const del = new Request(`http://127.0.0.1/v1/harness-secrets/${'x'.repeat(300)}`, {
+      method: 'DELETE',
+      headers: authed
+    })
+    const match = router.match('DELETE', new URL(del.url).pathname)
+    const result = await match!.handler(del, { params: match!.params })
+    expect(result instanceof Response ? result.status : result.status).toBe(400)
   })
 })

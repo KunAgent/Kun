@@ -10,6 +10,7 @@ import { probeAcpReadiness } from './acp-readiness-probe.js'
 import { AcpReadinessStore, type AcpReadinessCacheView } from './acp-readiness-store.js'
 import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
 import { HarnessTokenService } from './harness-token-service.js'
+import type { HarnessSecretRefResolver } from './harness-secret-env.js'
 
 const runtimeRequire = createRequire(import.meta.url)
 
@@ -48,6 +49,11 @@ export type HarnessRuntimeComposition = {
    * runtime is not serve-hosted (gateway credential mode fails fast).
    */
   gatewayEndpoint: { baseUrl?: string }
+  /**
+   * Resolves `launch.secretEnv` credential-store refs (P4-12); undefined when
+   * the runtime has no credential store. Exposed for `probe-definition`.
+   */
+  resolveSecretEnv?: HarnessSecretRefResolver
 }
 
 /**
@@ -77,7 +83,8 @@ function createLimiter(concurrency: number) {
 }
 
 export function createHarnessComposition(
-  options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses' | 'dataDir'>
+  options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses' | 'dataDir'>,
+  deps: { resolveSecretEnv?: HarnessSecretRefResolver } = {}
 ): HarnessRuntimeComposition {
   const catalog = new HarnessCatalog({
     custom: () => options().harnesses?.custom ?? [],
@@ -104,7 +111,10 @@ export function createHarnessComposition(
     bundled: bundledRuntime,
     spawnCaptured,
     // P3-11: an ACP harness that versions fine can still fail initialize.
-    probeReady: (def, command) => probeLimit(() => probeAcpReadiness(def, command)),
+    probeReady: (def, command) =>
+      probeLimit(() =>
+        probeAcpReadiness(def, command, { resolveSecretEnv: deps.resolveSecretEnv })
+      ),
     ...(readinessCache ? { readinessCache } : {}),
     probeLogin: (def) =>
       probeHarnessLogin(def, {
@@ -114,7 +124,8 @@ export function createHarnessComposition(
     nowIso: () => new Date().toISOString()
   })
   const acpModels = new AcpModelProbe({
-    binaryPath: (id) => options().harnesses?.binaryPaths?.[id]
+    binaryPath: (id) => options().harnesses?.binaryPaths?.[id],
+    resolveSecretEnv: deps.resolveSecretEnv
   })
   const agentSdkModels = new AgentSdkModelProbe({
     binaryPath: (id) =>
@@ -133,6 +144,7 @@ export function createHarnessComposition(
     agentSdkModels,
     probedModels,
     tokens: new HarnessTokenService(),
-    gatewayEndpoint: {}
+    gatewayEndpoint: {},
+    ...(deps.resolveSecretEnv ? { resolveSecretEnv: deps.resolveSecretEnv } : {})
   }
 }

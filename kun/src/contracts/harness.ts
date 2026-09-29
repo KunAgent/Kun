@@ -135,7 +135,23 @@ export const HarnessDefinitionSchema = z
         /** Non-sensitive variables only; credentials are injected via credentialMode. */
         env: z
           .record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024))
-          .default({})
+          .default({}),
+        /**
+         * Secret variables resolved from the credential store at spawn
+         * (docs/ade/impl/p4 §3.7, P4-12). Refs are opaque ids — the store
+         * value itself never enters config, logs, or wire payloads.
+         */
+        secretEnv: z
+          .array(
+            z
+              .object({
+                name: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
+                secretRef: z.string().min(1).max(256)
+              })
+              .strict()
+          )
+          .max(32)
+          .optional()
       })
       .strict()
       .optional(),

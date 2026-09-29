@@ -598,7 +598,11 @@ export const kunRuntimePatchSchema = z.object({
       displayName: z.string().trim().min(1).max(128).optional(),
       command: z.string().trim().min(1).max(4_096),
       args: z.array(z.string().max(1_024)).max(32).optional(),
-      env: z.record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024)).optional()
+      env: z.record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024)).optional(),
+      secretEnv: z.array(z.object({
+        name: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
+        secretRef: z.string().trim().min(1).max(256)
+      }).strict()).max(32).optional()
     }).strict()).max(32).optional(),
     defaults: z.record(z.string().trim().min(1).max(128), z.object({
       credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),

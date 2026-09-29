@@ -8,7 +8,7 @@ import { getProvider } from '../../agent/registry'
 import { loadHarnesses, useHarnessStore } from '../../store/harness-store'
 import { SettingsCard } from '../settings-controls'
 import { AgentCenterCard } from './AgentCenterCard'
-import { AgentCenterCustomForm } from './agent-center-custom-form'
+import { AgentCenterCustomForm, exportCustomEntry } from './agent-center-custom-form'
 
 export function harnessSettings(kun: KunRuntimeSettingsV1): KunHarnessSettingsV1 {
   return kun.harnesses ?? {
@@ -119,6 +119,10 @@ export function AgentCenter({
                 onSetDefault={() => patchHarness({ defaultHarnessId: id })}
                 onRemoveCustom={row.definition.builtin ? undefined : () =>
                   patchHarness({ custom: settings.custom.filter((entry) => entry.id !== id) })}
+                onExportCustom={row.definition.builtin ? undefined : () => {
+                  const entry = settings.custom.find((candidate) => candidate.id === id)
+                  if (entry) void exportCustomEntry(entry)
+                }}
                 onSetBinaryPath={(path) => {
                   const binaryPaths = { ...settings.binaryPaths }
                   if (path.trim()) binaryPaths[id] = path.trim()

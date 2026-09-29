@@ -204,7 +204,50 @@ async function main() {
     }, 30_000, 'runtime receiving the harness command path update')
     await capture('4-harness-command-path-applied')
 
-    // 3b) P4-09: an install/login card action prefills a fresh Kun terminal
+    // 3b) P4-12: a custom ACP definition must pass `probe-definition` before
+    //     it can be saved; a bound secret travels only as a credential-store
+    //     ref, and an imported JSON definition needs the same handshake.
+    const customForm = harnessPanel.locator('[data-agent-custom-form]')
+    await customForm.getByPlaceholder(/Display name/u).fill('Smoke Form Agent')
+    await customForm.getByPlaceholder(/Command path/u).fill(acpStub)
+    await customForm.getByPlaceholder('ENV_NAME').fill('SMOKE_KEY')
+    await customForm.getByPlaceholder('Secret value').fill('smoke-secret-value')
+    await customForm.getByRole('button', { name: 'Bind', exact: true }).click()
+    await customForm.locator('[data-secret-env-chip="SMOKE_KEY"]').waitFor()
+    const addButton = customForm.getByRole('button', { name: 'Add agent', exact: true })
+    assert(await addButton.isDisabled(), 'Add must stay disabled before a probe')
+    await customForm.getByRole('button', { name: 'Test connection', exact: true }).click()
+    await customForm.locator('[data-probe-result="ok"]').waitFor({ timeout: 60_000 })
+    await capture('4c-custom-acp-probe-ok')
+    await addButton.click()
+    await poll(async () => {
+      const list = await runtimeRequest(page, '/v1/harnesses', 'GET')
+      return (list.harnesses ?? []).some(
+        (row) => row.definition.id === 'custom-smoke-form-agent')
+    }, 30_000, 'saved custom agent reaching the runtime catalog')
+    await harnessPanel.locator('[data-agent-card="custom-smoke-form-agent"]').waitFor()
+
+    const importFile = join(temporaryRoot, 'import-agent.json')
+    await writeFile(importFile, JSON.stringify({
+      displayName: 'Imported Agent', command: acpStub, args: ['--acp']
+    }))
+    await customForm.locator('input[type="file"]').setInputFiles(importFile)
+    await poll(async () => (await customForm.getByPlaceholder(/Display name/u)
+      .inputValue()) === 'Imported Agent', 10_000, 'imported JSON filling the form')
+    assert(await addButton.isDisabled(),
+      'An imported definition must be tested again before saving')
+    await customForm.getByRole('button', { name: 'Test connection', exact: true }).click()
+    await customForm.locator('[data-probe-result="ok"]').waitFor({ timeout: 60_000 })
+    await addButton.click()
+    await poll(async () => {
+      const list = await runtimeRequest(page, '/v1/harnesses', 'GET')
+      return (list.harnesses ?? []).some(
+        (row) => row.definition.id === 'custom-imported-agent')
+    }, 30_000, 'imported custom agent reaching the runtime catalog')
+    await harnessPanel.locator('[data-agent-card="custom-imported-agent"]').waitFor()
+    await capture('4d-custom-acp-imported')
+
+    // 3c) P4-09: an install/login card action prefills a fresh Kun terminal
     //     (never auto-executes) and leaves Settings for the workbench. The
     //     isolated HOME means every non-Claude builtin is either missing or
     //     signed out, so at least one card carries a command action.
@@ -280,6 +323,8 @@ async function main() {
         'one-on-one picker refreshes while detection is inflight; installed harness selectable',
         'unavailable harness rows carry a localized reason plus a settings deep link',
         'settings command path hot-applies and re-probes through /v1/harnesses/:id/probe',
+        'custom ACP definition probes before saving; secrets bind by ref only',
+        'imported JSON definitions must be tested again before saving',
         'setup command prefills a fresh terminal without executing and leaves Settings',
         'composer harness picker menu renders through a body portal',
         'Kun gateway model group exposes provider models'] }
