@@ -24,7 +24,10 @@ async function fixture() {
   const service = new RoomService(store, () => {})
   const threads = new InMemoryThreadStore()
   bindRoomPeerStore(threads, store)
-  bindRoomAppAccess(threads, () => ({ servers: {}, statuses: {} }))
+  bindRoomAppAccess(threads, () => ({ servers: {
+    notion: { enabled: true, oauth: { enabled: true } },
+    google_gmail: { enabled: true, oauth: { enabled: true } }
+  }, statuses: {} }))
   const member = { id: 'agent-member', displayName: 'Bot', participantAgentId: 'agent-1',
     presetId: 'general', role: 'developer' as const, roleNotes: '', enabled: true,
     revision: 0, allowedRepositoryIds: [] }
@@ -54,18 +57,19 @@ async function fixture() {
 }
 
 describe('Room app connection cards', () => {
-  it('lists safe app identities and publishes one durable Gmail card', async () => {
+  it('omits Google and publishes one durable card for a configured app', async () => {
     const f = await fixture()
-    expect((await f.list.execute({}, f.context)).output).toMatchObject({ suggested: expect.arrayContaining([{ id: 'google_gmail', name: 'Gmail' }]) })
-    const first = await f.request.execute({ serverId: 'gmail', reason: 'I need Gmail to search your inbox.' }, f.context)
+    expect((await f.list.execute({}, f.context)).output).toMatchObject({ suggested: [],
+      configured: [expect.objectContaining({ id: 'notion' })] })
+    const first = await f.request.execute({ serverId: 'notion', reason: 'I need Notion to search your notes.' }, f.context)
     expect(first.isError).not.toBe(true)
     const id = (first.output as { messageId: string }).messageId
     const card = (await f.store.get<RoomMessage>('message', id))!.value
-    expect(card).toMatchObject({ presentationKind: 'app_connection', body: 'I need Gmail to search your inbox.',
-      appConnection: { serverId: 'google_gmail', status: 'requested', resumed: false }, originRunId: expect.any(String) })
-    const repeat = await f.request.execute({ serverId: 'gmail', reason: 'I need Gmail to search your inbox.' }, f.context)
+    expect(card).toMatchObject({ presentationKind: 'app_connection', body: 'I need Notion to search your notes.',
+      appConnection: { serverId: 'notion', status: 'requested', resumed: false }, originRunId: expect.any(String) })
+    const repeat = await f.request.execute({ serverId: 'notion', reason: 'I need Notion to search your notes.' }, f.context)
     expect((repeat.output as { messageId: string }).messageId).toBe(id)
-    const secondCall = await f.request.execute({ serverId: 'gmail', reason: 'Same app' }, { ...f.context, activeToolCallId: 'call-2' })
+    const secondCall = await f.request.execute({ serverId: 'notion', reason: 'Same app' }, { ...f.context, activeToolCallId: 'call-2' })
     expect((secondCall.output as { messageId: string }).messageId).toBe(id)
     expect(await f.store.list('message', { roomId: f.room.id })).toHaveLength(1)
     await setRoomAppConnectionStatus(f.store, f.room.id, id, 'connected')
@@ -77,11 +81,13 @@ describe('Room app connection cards', () => {
   it('rejects unknown apps, blocked apps and fabricated turn scope', async () => {
     const f = await fixture()
     expect((await f.request.execute({ serverId: 'unknown', reason: 'Need it' }, f.context)).isError).toBe(true)
-    expect((await f.request.execute({ serverId: 'gmail', reason: 'Need it' }, { ...f.context, turnId: 'wrong' })).isError).toBe(true)
-    const thread = (await f.threads.get('conv-thread'))!
-    thread.roomContext!.blockedProviderIds.push('mcp:google_gmail')
-    await f.threads.upsert(thread)
     expect((await f.request.execute({ serverId: 'gmail', reason: 'Need it' }, f.context)).isError).toBe(true)
+    expect((await f.request.execute({ serverId: 'google_drive', reason: 'Need it' }, f.context)).isError).toBe(true)
+    expect((await f.request.execute({ serverId: 'notion', reason: 'Need it' }, { ...f.context, turnId: 'wrong' })).isError).toBe(true)
+    const thread = (await f.threads.get('conv-thread'))!
+    thread.roomContext!.blockedProviderIds.push('mcp:notion')
+    await f.threads.upsert(thread)
+    expect((await f.request.execute({ serverId: 'notion', reason: 'Need it' }, f.context)).isError).toBe(true)
     expect(await f.store.list('message', { roomId: f.room.id })).toHaveLength(0)
   })
 })

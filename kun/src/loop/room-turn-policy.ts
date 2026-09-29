@@ -1,6 +1,7 @@
 import { AGENT_COLLABORATION_TOOLS } from '../agents/agent-handoff-tools.js'
 import { ROOM_REMINDER_TOOL_NAMES } from '../rooms/room-reminder-tools.js'
 import { ROOM_APP_TOOL_NAMES } from '../rooms/room-app-connection-tools.js'
+import { HIDDEN_ROOM_GOOGLE_APP_IDS } from '../contracts/room-app-catalog.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { ToolHostContext } from '../ports/tool-host.js'
 import { SUBAGENT_READ_ONLY_TOOL_NAMES } from '../contracts/capabilities-core.js'
@@ -12,7 +13,9 @@ export function mergeRoomDeniedIds(...lists: Array<readonly string[] | undefined
 
 export function roomBlockedProviders(thread: ThreadRecord): string[] {
   const ids = thread.roomContext?.blockedProviderIds ?? []
-  return mergeRoomDeniedIds(ids, ids.map((id) => id.startsWith('mcp:') ? id : `mcp:${id}`))
+  const hidden = thread.roomContext?.kind === 'conversation' && thread.roomContext.participantAgentId
+    ? HIDDEN_ROOM_GOOGLE_APP_IDS : []
+  return mergeRoomDeniedIds(ids, [...ids, ...hidden].map((id) => id.startsWith('mcp:') ? id : `mcp:${id}`))
 }
 
 /** Re-applied to both discovery and actual execution, never a model instruction. */

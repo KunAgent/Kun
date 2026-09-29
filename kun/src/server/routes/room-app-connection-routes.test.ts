@@ -10,6 +10,7 @@ import { RoomRunRecordSchema } from '../../contracts/room-runs.js'
 import { RoomService, putRoomDocument } from '../../rooms/room-service.js'
 import { SqliteRoomStore } from '../../rooms/room-store-sqlite.js'
 import { bindRoomContinuationDispatcher } from '../../rooms/room-continuation-dispatch.js'
+import { setRoomAppConnectionStatus } from '../../rooms/room-app-connections.js'
 import type { RoomRuntime } from '../../rooms/room-runtime.js'
 import type { RouteContext } from '../router.js'
 import type { ServerRuntime } from './server-runtime.js'
@@ -18,7 +19,7 @@ import { registerRoomAppConnectionRoutes } from './register-room-app-connection-
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close() })
 
-async function fixture() {
+async function fixture(serverId = 'notion') {
   const directory = await mkdtemp(join(tmpdir(), 'room-app-route-'))
   const store = new SqliteRoomStore({ path: join(directory, 'rooms.sqlite') })
   const service = new RoomService(store, () => {})
@@ -40,17 +41,17 @@ async function fixture() {
   await putRoomDocument(store, 'message', 'card-1', room.id, RoomMessageSchema.parse({
     id: 'card-1', roomId: room.id, messageSeq: 1, authorKind: 'member', authorMemberId: member.id,
     authorLabelSnapshot: 'Bot', originRunId: 'run-1', presentationKind: 'app_connection',
-    appConnection: { serverId: 'google_gmail', status: 'requested', resumed: false },
-    body: 'I need Gmail.', bodyRevision: 0, mentionMemberIds: [], attachmentIds: [],
+    appConnection: { serverId, status: 'requested', resumed: false },
+    body: 'I need an app.', bodyRevision: 0, mentionMemberIds: [], attachmentIds: [],
     status: 'final', createdAt: now
   }), null)
   const dispatch = vi.fn(async () => 'queued' as const)
   const unbind = bindRoomContinuationDispatcher(threads, dispatch)
   let authorized = false, connected = false
   const runtime = { mcpConfig: () => McpCapabilityConfig.parse({ enabled: true, servers: {
-    google_gmail: { transport: 'streamable-http', url: 'https://gmailmcp.googleapis.com/mcp/v1', trustScope: 'user', oauth: {} }
-  } }), mcpOAuth: async () => [{ serverId: 'google_gmail', status: authorized ? 'authorized' : 'empty' }],
-  toolDiagnostics: async () => ({ mcpServers: [{ id: 'google_gmail', status: connected ? 'connected' : 'authorization_required' }] }) } as unknown as ServerRuntime
+    [serverId]: { transport: 'streamable-http', url: 'https://example.com/mcp', trustScope: 'user', oauth: {} }
+  } }), mcpOAuth: async () => [{ serverId, status: authorized ? 'authorized' : 'empty' }],
+  toolDiagnostics: async () => ({ mcpServers: [{ id: serverId, status: connected ? 'connected' : 'authorization_required' }] }) } as unknown as ServerRuntime
   const handlers = new Map<string, (rooms: RoomRuntime, request: Request, context: RouteContext) => Promise<unknown> | unknown>()
   registerRoomAppConnectionRoutes((method, path, handler) => handlers.set(method + ' ' + path, handler), runtime)
   const rooms = { service, deps: { store, threadStore: threads }, exclusive: async (action: () => Promise<unknown>) => action() } as unknown as RoomRuntime
@@ -81,5 +82,21 @@ describe('Room app connection resolution', () => {
     const result = await f.call('skip') as { message: RoomMessage; resumed: boolean }
     expect(result.message.appConnection).toMatchObject({ status: 'skipped', resumed: true })
     expect(f.dispatch).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.stringContaining('skipped connecting') }))
+  })
+
+  it('blocks completion of historical Google cards but still lets the user skip', async () => {
+    const f = await fixture('google_gmail')
+    f.authorize(); f.connect()
+    await expect(f.call('complete')).rejects.toThrow('unavailable in private Rooms')
+    expect((await f.store.get<RoomMessage>('message', 'card-1'))!.value.appConnection?.status).toBe('requested')
+    expect((await f.call('skip') as { message: RoomMessage }).message.appConnection?.status).toBe('skipped')
+  })
+
+  it('resumes an already resolved Google card without offering its tools', async () => {
+    const f = await fixture('google_gmail')
+    await setRoomAppConnectionStatus(f.store, f.room.id, 'card-1', 'connected')
+    const result = await f.call('complete') as { message: RoomMessage }
+    expect(result.message.appConnection).toMatchObject({ status: 'connected', resumed: true })
+    expect(f.dispatch).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.stringContaining('unavailable') }))
   })
 })

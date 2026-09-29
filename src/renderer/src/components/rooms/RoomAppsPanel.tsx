@@ -1,12 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, ExternalLink, PlugZap, RefreshCw, X } from 'lucide-react'
+import { Check, PlugZap, RefreshCw, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { ROOM_APP_CATALOG } from '@shared/rooms-api'
 import { addRoomApp, authorizeRoomApp, listRoomApps, type RoomAppInventory } from './room-apps-client'
-
-const recommended = Object.entries(ROOM_APP_CATALOG).map(([id, app]) => ({ id, ...app }))
-
-const googleGuide = 'https://developers.google.com/workspace/guides/configure-mcp-servers'
 
 export function RoomAppsPanel({ onClose, onOpenPlugins }: { onClose: () => void; onOpenPlugins: () => void }) {
   const { t } = useTranslation('common')
@@ -67,7 +62,7 @@ export function RoomAppsPanel({ onClose, onOpenPlugins }: { onClose: () => void;
             const connected = status === 'connected'
             return <article key={server.id} className="space-y-2 rounded-xl border border-ds-border p-3">
               <div className="flex items-center gap-2">
-                <strong className="min-w-0 flex-1 truncate text-ds-ink">{recommended.find((item) => item.id === server.id)?.name ?? server.id}</strong>
+                <strong className="min-w-0 flex-1 truncate text-ds-ink">{server.id}</strong>
                 <span className={`text-xs ${connected ? 'text-green-600' : 'text-ds-muted'}`}>{connected ? <><Check size={12} className="inline" /> {t('pluginMcpRuntimeConnected')}</> : status === 'authorization_required' ? t('roomsAppsAuthRequired') : status === 'disabled' ? t('pluginMcpRuntimeDisabled') : status === 'reconnecting' ? t('roomsLoading') : status === 'not_connected' ? t('roomsAppsNotConnected') : t('pluginMcpRuntimeError')}</span>
               </div>
               <p className="break-all text-xs text-ds-muted">{server.target}</p>
@@ -77,16 +72,6 @@ export function RoomAppsPanel({ onClose, onOpenPlugins }: { onClose: () => void;
               </div>
             </article>
           })}
-        </section>
-        <section className="space-y-2">
-          <h3 className="font-semibold text-ds-ink">{t('roomsAppsRecommended')}</h3>
-          <p className="text-xs text-ds-muted">{t('roomsAppsGooglePrerequisite')}</p>
-          {recommended.filter((item) => !installed.has(item.id)).map((item) => <div key={item.id} className="flex items-center justify-between rounded-xl border border-ds-border p-3">
-            <span>{item.name}</span>
-            <button className="rounded-lg bg-ds-hover px-3 py-1.5 text-xs text-ds-ink" disabled={!!busy || !inventory}
-              onClick={() => void act(item.id, () => addRoomApp(item.id, item.url))}>{t('pluginOAuthInstall')}</button>
-          </div>)}
-          <button className="inline-flex items-center gap-1 text-xs text-ds-muted underline" onClick={() => void window.kunGui.openExternal(googleGuide)}>{t('roomsAppsGoogleGuide')} <ExternalLink size={12} /></button>
         </section>
         <section className="space-y-2">
           <h3 className="font-semibold text-ds-ink">{t('roomsAppsCustom')}</h3>

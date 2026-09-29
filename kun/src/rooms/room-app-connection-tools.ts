@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { LocalTool } from '../adapters/tool/local-tool-host.js'
 import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
-import { ROOM_APP_CATALOG, canonicalRoomAppId } from '../contracts/room-app-catalog.js'
+import { ROOM_APP_CATALOG, canonicalRoomAppId, isHiddenRoomGoogleApp } from '../contracts/room-app-catalog.js'
 import { RoomMessageSchema, type Room, type RoomMessage } from '../contracts/rooms.js'
 import type { RoomRunRecord } from '../contracts/room-runs.js'
 import { agentStableId } from '../agents/agent-identity-service.js'
@@ -46,7 +46,8 @@ export function roomAppConnectionTools(threads: ThreadStore): LocalTool[] {
           const access = accessBindings.get(threads)?.()
           if (!access) throw new Error('app connection inventory unavailable')
           return { output: { suggested: Object.entries(ROOM_APP_CATALOG).map(([id, app]) => ({ id, name: app.name })),
-            configured: Object.entries(access.servers).map(([id, server]) => ({ id, enabled: server.enabled,
+            configured: Object.entries(access.servers).filter(([id]) => !isHiddenRoomGoogleApp(id))
+              .map(([id, server]) => ({ id, enabled: server.enabled,
               oauth: Boolean(server.oauth && server.oauth.enabled !== false),
               status: access.statuses[id] ?? 'not_connected' })) } }
         } catch (error) { return fail(error) }
@@ -60,6 +61,7 @@ export function roomAppConnectionTools(threads: ThreadStore): LocalTool[] {
         try {
           const input = RequestInput.parse(args)
           const serverId = canonicalRoomAppId(input.serverId)
+          if (isHiddenRoomGoogleApp(serverId)) throw new Error('This app is unavailable in private Rooms')
           const access = accessBindings.get(threads)?.(), store = roomPeerStoreBinding(threads)
           if (!access || !store) throw new Error('app connection service unavailable')
           if (!Object.hasOwn(ROOM_APP_CATALOG, serverId) && !access.servers[serverId]) {
