@@ -10,10 +10,21 @@ import {
   PPT_AGENT_LOCAL_PROVIDER_ID,
   type TurnService
 } from './runtime-factory-dependencies.js'
+import { isDeepStrictEqual } from 'node:util'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import type { ContextWindowModeSource } from '../adapters/tool/context-window-tool-provider.js'
 import type { ContextWindowMode } from '../contracts/context-windows.js'
 import { resolveContextWindowMode } from '../loop/context-window-mode.js'
+
+/** An unrelated hot update must not be rejected for a pre-existing gateway setting. */
+export function localGatewayKeyRequiredForApply(
+  current: KunServeRuntimeOptions,
+  request: RuntimeConfigApplyRequest
+): boolean {
+  const requested = request.serve?.localModelGateway
+  return requested?.enabled === true &&
+    !isDeepStrictEqual(requested, current.localModelGateway)
+}
 
 export function mergeRuntimeConfigApplyOptions(
   current: KunServeRuntimeOptions,

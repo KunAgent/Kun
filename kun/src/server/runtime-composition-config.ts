@@ -57,6 +57,7 @@ import {
   builtinToolOptionsForOptions,
   contextWindowModeFor,
   llmDebugCaptureEnabled,
+  localGatewayKeyRequiredForApply,
   mergeRuntimeConfigApplyOptions,
   modelRequestCaptureDefaultEnabled,
   skillsConfigForRuntime,
@@ -275,7 +276,7 @@ export function createRuntimeConfigController(
 	      mergedOptions,
 	      legacyCredentialMigration
 	    )
-	    if (nextOptions.localModelGateway?.enabled && !gatewayCredentials.hasKey()) {
+	    if (localGatewayKeyRequiredForApply(activeOptions, request) && !gatewayCredentials.hasKey()) {
 	      return {
 	        ok: false,
 	        code: 'invalid_config',
