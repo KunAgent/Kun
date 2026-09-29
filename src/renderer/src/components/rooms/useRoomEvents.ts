@@ -28,7 +28,7 @@ type Event = {
   roomId: string
   kind: string
   createdAt?: string
-  payload?: { id?: string; taskId?: string }
+  payload?: { id?: string; taskId?: string; linkId?: string; status?: string }
 }
 const listeners = new Set<(event: Event) => void>()
 const badgeListeners = new Set<() => void>()
@@ -95,6 +95,7 @@ export function useRoomEvents() {
     let cursor = Number.isSafeInteger(savedCursor) && savedCursor >= 0 ? savedCursor : 0
     let queue: RoomNotificationQueue | undefined
     let refreshTimer: ReturnType<typeof setTimeout> | undefined
+    let threadRefreshTimer: ReturnType<typeof setTimeout> | undefined
     let fallback: ReturnType<typeof setInterval> | undefined
     const updateBadge = async () => {
       const result = await roomsRequest<{ attentionCount: number; items?: string[] }>(
@@ -146,6 +147,11 @@ export function useRoomEvents() {
       cursor = queue.cursor
       writeBrowserStorageItem('kun.rooms.eventCursor', String(cursor))
       listeners.forEach((listener) => listener(event))
+      // A bot-started Code session appears in the sidebar without the user opening Rooms.
+      if (event.kind === 'workbench.link.updated' && (event.payload?.status === 'queued' || event.payload?.status === 'running')) {
+        clearTimeout(threadRefreshTimer)
+        threadRefreshTimer = setTimeout(() => { void useChatStore.getState().refreshThreads().catch(() => undefined) }, 500)
+      }
       clearTimeout(refreshTimer)
       refreshTimer = setTimeout(() => { void updateBadge().catch(() => undefined) }, 300)
       await queue.drain(deliver)
@@ -236,6 +242,7 @@ export function useRoomEvents() {
       stopped = true
       live = false
       clearTimeout(refreshTimer)
+      clearTimeout(threadRefreshTimer)
       clearInterval(fallback)
       clearInterval(notificationRetry)
       offRoute()

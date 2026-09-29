@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { RoomThreadContextSchema } from './thread-room-context.js'
+import { ThreadWorkbenchOriginSchema } from './thread-workbench-origin.js'
 import { TurnSchema, TurnStatus } from './turns.js'
 import { HarnessIdSchema } from './harness.js'
 import { KnowledgeBaseMountsSchema } from './thread-knowledge.js'
@@ -312,6 +313,8 @@ export type DesignCloneOperation = z.infer<typeof DesignCloneOperationSchema>
 export const ThreadSchemaBase = z.object({
   /** Host-owned Rooms execution provenance and frozen capability ceiling. */
   roomContext: RoomThreadContextSchema.optional(),
+  /** Host-written: this Code/Work thread was started by a bot Agent. Never accepted from a request. */
+  workbenchOrigin: ThreadWorkbenchOriginSchema.optional(),
   /** Read-only external history; never part of the native session stream. */
   historyRefId: z.string().min(1).optional(),
   id: z.string().min(1),
@@ -464,6 +467,7 @@ export const ThreadSummarySchema = ThreadSchemaBase.pick({
   relation: true,
   parentThreadId: true,
   executionUnit: true,
+  workbenchOrigin: true,
   planBuildRunId: true,
   planBuildAdmissionFingerprint: true,
   planBuildAdmissionCapabilityHash: true,

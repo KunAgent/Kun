@@ -52,6 +52,7 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
     goal_json: thread.goal ? JSON.stringify(thread.goal) : null,
     todos_json: thread.todos ? JSON.stringify(thread.todos) : null,
     extension_metadata_json: thread.forkedFromTurnId || thread.historyRefId || thread.ownerExtensionId || thread.planBuildRunId
+      || thread.workbenchOrigin
       || thread.planBuildAdmissionFingerprint || thread.planBuildAdmissionCapabilityHash
       || thread.planBuildAdmissionFrozen !== undefined ? JSON.stringify({
       historyRefId: thread.historyRefId,
@@ -64,6 +65,7 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
       extensionBudget: thread.extensionBudget,
       toolCatalogEpoch: thread.toolCatalogEpoch,
       planBuildRunId: thread.planBuildRunId,
+      workbenchOrigin: thread.workbenchOrigin,
       planBuildAdmissionFingerprint: thread.planBuildAdmissionFingerprint,
       planBuildAdmissionCapabilityHash: thread.planBuildAdmissionCapabilityHash,
       planBuildAdmissionFrozen: thread.planBuildAdmissionFrozen
@@ -104,7 +106,7 @@ export function summaryFromRow(row: ThreadRow): ThreadSummary {
 
 type ExtensionThreadMetadata = Pick<ThreadRecord,
   'forkedFromTurnId' | 'historyRefId' | 'ownerExtensionId' | 'ownerExtensionVersion' | 'accountId' | 'extensionVisibility'
-  | 'extensionProfile' | 'extensionBudget' | 'toolCatalogEpoch' | 'planBuildRunId'
+  | 'extensionProfile' | 'extensionBudget' | 'toolCatalogEpoch' | 'planBuildRunId' | 'workbenchOrigin'
   | 'planBuildAdmissionFingerprint' | 'planBuildAdmissionCapabilityHash'
   | 'planBuildAdmissionFrozen'>
 

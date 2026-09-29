@@ -31,6 +31,7 @@ import { registerRoomInteractionRoutes } from './register-room-interaction-route
 import { registerRoomProposalRoutes } from './register-room-proposal-routes.js'
 import { registerRoomReminderRoutes } from './register-room-reminder-routes.js'
 import { registerRoomAppConnectionRoutes } from './register-room-app-connection-routes.js'
+import { registerWorkbenchLinkRoutes } from './register-workbench-link-routes.js'
 import type { RoomWorkspace } from '../../rooms/room-runtime-types.js'
 
 const PageSchema = z.object({
@@ -88,6 +89,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   registerRoomProposalRoutes(add)
   registerRoomReminderRoutes(add)
   registerRoomAppConnectionRoutes(add, runtime)
+  registerWorkbenchLinkRoutes(add)
   add('GET', '/v1/rooms/:roomId/topics', (rooms, request, context) => {
     const page = pagination(request)
     return rooms.peerTopics(context.params.roomId, page.limit, page.cursor)

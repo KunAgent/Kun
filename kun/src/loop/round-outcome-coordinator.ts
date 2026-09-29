@@ -18,7 +18,7 @@ import {
   type RoundOutcomeInput
 } from './round-outcome-state.js'
 import { SEND_IM_MESSAGE_TOOL_NAME } from '../rooms/room-im-message-tool.js'
-import { PRIVATE_PUBLICATION_TOOL_NAMES } from '../rooms/room-im-delivery.js'
+import { PRIVATE_PUBLICATION_TOOL_NAMES, isCardRequestTool } from '../rooms/room-im-delivery.js'
 
 export {
   GRAPH_CREATE_RUN_TOOL_NAME,
@@ -262,7 +262,7 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
         item.isError !== true && (item.toolName !== SEND_IM_MESSAGE_TOOL_NAME ||
           (typeof item.output === 'object' && item.output !== null &&
             (item.output as { accepted?: unknown }).accepted === true)) &&
-        (item.toolName !== 'request_app_connection' ||
+        (!isCardRequestTool(item.toolName) ||
           (typeof item.output === 'object' && item.output !== null &&
             (item.output as { requested?: unknown }).requested === true)))
       if (published) this.imPublicationRecoveryByTurn.delete(input.turnId)

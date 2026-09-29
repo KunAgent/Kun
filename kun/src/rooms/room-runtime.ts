@@ -33,6 +33,8 @@ import { bindRoomContinuationDispatcher } from './room-continuation-dispatch.js'
 import { enqueuePrivateContinuation } from './room-continuation-service.js'
 import { fireDueRoomReminders } from './room-reminders.js'
 import { bindRoomReminderWake } from './room-reminder-tools.js'
+import { WorkbenchBridge, bindWorkbenchBridge } from '../workbench-bridge/bridge.js'
+import { reconcileWorkbench } from '../workbench-bridge/reconcile.js'
 
 /** A tick reports whether live work remains and, when idle, the next scheduled wake time. */
 type RoomTickOutcome = { active: boolean; nextWakeAt?: number }
@@ -50,6 +52,8 @@ export class RoomRuntime {
   readonly product: RoomProductService
   readonly integrations: RoomIntegrationService
   readonly peers: RoomPeerRunner
+  /** Code/Work hand-offs for private Agents: tools, durable links and outcome delivery. */
+  readonly workbench: WorkbenchBridge
   private readonly direct: AgentDirectRunner
   private readonly requests: RoomRequestRunner
   private readonly tasks: RoomTaskRunner
@@ -92,6 +96,8 @@ export class RoomRuntime {
     bindRoomPeerStore(deps.threadStore, deps.store)
     bindRoomReminderWake(deps.threadStore, () => this.wake())
     bindImMessageService(deps.threadStore, this.executionService)
+    this.workbench = new WorkbenchBridge(deps, this.executionService, () => this.wake())
+    bindWorkbenchBridge(deps.threadStore, this.workbench)
     this.unbindContinuations = bindRoomContinuationDispatcher(deps.threadStore, (input) =>
       this.exclusive(async () => {
         if (this.stopped || !this.held()) throw new Error('Room continuation owner is temporarily unavailable')
@@ -215,6 +221,12 @@ export class RoomRuntime {
     } catch (error) {
       // A transient store failure retries at the active cadence like before.
       console.warn('[kun] room reminders:', error instanceof Error ? error.message : String(error))
+      outcome.active = true
+    }
+    try {
+      if (await reconcileWorkbench(this.workbench)) outcome.active = true
+    } catch (error) {
+      console.warn('[kun] workbench bridge:', error instanceof Error ? error.message : String(error))
       outcome.active = true
     }
     const requests = await this.deps.store.list<RoomRequestState>('request', {

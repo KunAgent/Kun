@@ -96,6 +96,7 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     parentThreadId: thread.parentThreadId,
     ...(thread.executionUnit ? { executionUnit: { ...thread.executionUnit } } : {}),
     ...(thread.roomContext ? { roomContext: thread.roomContext } : {}),
+    ...(thread.workbenchOrigin ? { workbenchOrigin: { ...thread.workbenchOrigin } } : {}),
     planBuildRunId: thread.planBuildRunId,
     forkedFromThreadId: thread.forkedFromThreadId,
     forkedFromTitle: thread.forkedFromTitle,

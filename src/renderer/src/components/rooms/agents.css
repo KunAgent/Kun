@@ -133,3 +133,5 @@
 .agent-handoff-detail h3 { font-weight: 600; margin: .7rem 0; }
 .agent-handoff-create { margin: .8rem 0; }
 .agent-handoff-create .agent-profile-form { padding: .75rem 0; }
+.agent-profile-workbench { display: grid; gap: 10px; padding: 12px 0; }
+.agent-profile-workbench select, .agent-profile-workbench input[type='number'] { max-width: 240px; }

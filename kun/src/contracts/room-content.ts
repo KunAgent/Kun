@@ -12,7 +12,11 @@ export const RoomContentReferenceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('repository_file'), repositoryId: Id, relativePath, titleSnapshot }).strict(),
   z.object({ kind: z.literal('task'), taskId: Id, titleSnapshot }).strict(),
   z.object({ kind: z.literal('delivery'), taskId: Id, deliveryId: Id, titleSnapshot }).strict(),
-  z.object({ kind: z.literal('board_card'), repositoryId: Id, cardId: Id, titleSnapshot }).strict()
+  z.object({ kind: z.literal('board_card'), repositoryId: Id, cardId: Id, titleSnapshot }).strict(),
+  /** One of the user's Code sessions, referenced from Code ("send to bot") or by an Agent that read it. */
+  z.object({ kind: z.literal('code_thread'), threadId: Id, turnId: Id.optional(), titleSnapshot }).strict(),
+  /** A document inside a registered Work workspace. */
+  z.object({ kind: z.literal('work_document'), workspaceRoot: z.string().min(1).max(4096), relativePath, titleSnapshot }).strict()
 ])
 export type RoomContentReference = z.infer<typeof RoomContentReferenceSchema>
 
@@ -42,7 +46,7 @@ export type RoomContentResult = {
   state: 'available' | 'unavailable'
   reason?: string
   title: string
-  kind?: 'image' | 'file' | 'audio' | 'video' | 'task' | 'delivery' | 'board_card'
+  kind?: 'image' | 'file' | 'audio' | 'video' | 'task' | 'delivery' | 'board_card' | 'code_thread' | 'work_document'
   description?: string
   mimeType?: string
   byteSize?: number

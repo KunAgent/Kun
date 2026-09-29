@@ -8,6 +8,16 @@ import type { RoomRunRecord } from '../contracts/room-runs.js'
 import type { RoomContinuation } from './room-continuation-dispatch.js'
 import type { RoomRequestState, RoomRuntimeDeps } from './room-runtime-types.js'
 
+/**
+ * The lightweight model is resolved from live settings each time a request is
+ * sent (it is written into the request snapshot after freezing), so it is not
+ * part of the authority a continuation must still match.
+ */
+const authoritySnapshot = (member: unknown): unknown => {
+  const { fastModelRef: _resolvedAtSend, ...rest } = JSON.parse(JSON.stringify(member)) as Record<string, unknown>
+  return rest
+}
+
 /** Re-evaluate authority both before queuing and before admitting a continuation. */
 async function sourceFor(deps: RoomRuntimeDeps, input: RoomContinuation) {
   const thread = await deps.threads.getMetadata(input.threadId)
@@ -16,7 +26,9 @@ async function sourceFor(deps: RoomRuntimeDeps, input: RoomContinuation) {
   const source = thread.turns.find((turn) => turn.id === input.sourceTurnId)
   if (!source?.clientRequestId || source.status === 'aborted') return null
   const sourceIndex = thread.turns.indexOf(source)
-  const background = input.kind === 'background_shell' || input.kind === 'background_subagent'
+  // A handed-over Code/Work task can outlive several user turns; its outcome is still owed to the user.
+  const reporting = input.kind === 'workbench_task'
+  const background = input.kind === 'background_shell' || input.kind === 'background_subagent' || reporting
   if (!background && sourceIndex !== thread.turns.length - 1) return null
   if (input.kind === 'goal' && (!['completed', 'failed'].includes(source.status) || thread.goal?.status !== 'active')) return null
   if (input.kind === 'restart' && source.status !== 'failed') return null
@@ -32,7 +44,7 @@ async function sourceFor(deps: RoomRuntimeDeps, input: RoomContinuation) {
     ['cancelled', 'stopping'].includes(root.value.status)) return null
   // Sibling completions may follow host continuations of the same user request,
   // but never a newer user turn or an unowned turn.
-  for (const later of thread.turns.slice(sourceIndex + 1)) {
+  for (const later of reporting ? [] : thread.turns.slice(sourceIndex + 1)) {
     if (!later.clientRequestId || later.status === 'aborted') return null
     const laterRun = await deps.store.get<RoomRunRecord>('room_run', roomRunId(scope.roomId, later.clientRequestId))
     if (!laterRun?.value.requestId || laterRun.value.threadId !== thread.id || laterRun.value.turnId !== later.id) return null
@@ -52,7 +64,7 @@ async function sourceFor(deps: RoomRuntimeDeps, input: RoomContinuation) {
   const original = base.value.roomSnapshot.members.find((member) => member.id === scope.memberId)
   if (!actor || !original || !actor.enabled || actor.removedAt || actor.participantAgentId !== scope.participantAgentId ||
     !isDeepStrictEqual(snapshot.privateExecutionPolicy, base.value.roomSnapshot.privateExecutionPolicy) ||
-    !isDeepStrictEqual(JSON.parse(JSON.stringify(actor)), JSON.parse(JSON.stringify(original)))) return null
+    !isDeepStrictEqual(authoritySnapshot(actor), authoritySnapshot(original))) return null
   return { thread, source, base, root, room, agent, snapshot }
 }
 

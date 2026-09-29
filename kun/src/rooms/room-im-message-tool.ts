@@ -13,6 +13,7 @@ import { roomRunId } from './room-run-recording.js'
 import { roomRunSegmentMessageId } from './room-run-segments.js'
 import { agentStableId } from '../agents/agent-identity-service.js'
 import { ROOM_AX_TOOL_DESCRIPTIONS } from './room-ax-surfaces.js'
+import { BotReferenceInputSchema, MAX_BOT_REFERENCES, resolveBotReferences } from '../workbench-bridge/references.js'
 
 export const SEND_IM_MESSAGE_TOOL_NAME = 'send_im_message'
 const MAX_IM_MESSAGE_TEXT_CHARS = 16_000
@@ -24,7 +25,8 @@ const ImMessageInputSchema = z.object({
   attachments: z.array(z.object({
     path: z.string().min(1).max(4096),
     fileName: z.string().max(300).optional()
-  }).strict()).max(MAX_IM_MESSAGE_ATTACHMENTS).default([])
+  }).strict()).max(MAX_IM_MESSAGE_ATTACHMENTS).default([]),
+  references: z.array(BotReferenceInputSchema).max(MAX_BOT_REFERENCES).default([])
 }).strict()
 
 type ResolvedImFile = {
@@ -116,6 +118,12 @@ export function roomImMessageTool(threads: ThreadStore): LocalTool {
             required: ['path'],
             additionalProperties: false
           }
+        },
+        references: {
+          type: 'array',
+          maxItems: MAX_BOT_REFERENCES,
+          description: 'Clickable cards for one of the user\'s Code sessions ({kind:"code_thread",threadId}) or Work documents ({kind:"work_document",workspaceRoot,relativePath}) you were allowed to read.',
+          items: { type: 'object', additionalProperties: true }
         }
       },
       additionalProperties: false
@@ -127,8 +135,8 @@ export function roomImMessageTool(threads: ThreadStore): LocalTool {
       }
       const input = parsed.data
       const text = input.text.trim().slice(0, MAX_IM_MESSAGE_TEXT_CHARS)
-      if (!text && input.attachments.length === 0) {
-        return { isError: true, output: { error: 'text or at least one attachment is required' } }
+      if (!text && input.attachments.length === 0 && input.references.length === 0) {
+        return { isError: true, output: { error: 'text, an attachment or a reference is required' } }
       }
       const thread = await (threads.getMetadata?.(context.threadId) ?? threads.get(context.threadId))
       const room = thread?.roomContext
@@ -153,12 +161,12 @@ export function roomImMessageTool(threads: ThreadStore): LocalTool {
           ? await service.store.get<RoomMessage>('message', run.value.triggerMessageId)
           : null
         const workspaceId = agentStableId('private-workspace', room.roomId, workspace)
-        const references: RoomContentReference[] = files.map((file) => ({
+        const references: RoomContentReference[] = [...files.map((file): RoomContentReference => ({
           kind: 'agent_file',
           workspaceId,
           relativePath: file.relativePath,
           titleSnapshot: file.fileName
-        }))
+        })), ...await resolveBotReferences(threads, room.participantAgentId, input.references)]
         const messageId = roomRunSegmentMessageId(runId, context.activeToolCallId)
         await service.publishSegment(room.roomId, {
           messageId,

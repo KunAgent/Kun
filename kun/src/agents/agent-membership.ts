@@ -45,7 +45,7 @@ export async function bindAgentMembers(directory: AgentIdentityService, room: Ro
     }
     const { modelRef: _modelRef, ...rest } = member
     members.push(RoomMemberSchema.parse({ ...rest, participantAgentId: id,
-      agentRevision: undefined, agentInstructions: undefined, presetSnapshot: undefined,
+      agentRevision: undefined, agentInstructions: undefined, presetSnapshot: undefined, workbenchPolicy: undefined,
       configuredReviewerAgentId: undefined, taskScopedMemory: undefined }))
   }
   return { room: RoomSchema.parse({ ...room, conversationKind: room.conversationKind ?? 'group',
@@ -69,6 +69,7 @@ export async function freezeAgentRoom(directory: AgentIdentityService, room: Roo
       enabled: member.enabled && !agent.archivedAt, agentRevision: agent.revision,
       presetId: agent.presetId, presetSnapshot: profile, agentInstructions: agent.instructions,
       configuredReviewerAgentId: agent.reviewerAgentId, fastModelRef: agent.fastModelRef,
+      workbenchPolicy: agent.workbench,
       modelRef: agent.modelRef,
       allowedRepositoryIds: repositories,
       defaultRepositoryId: repositories.includes(member.defaultRepositoryId ?? '') ? member.defaultRepositoryId : undefined,

@@ -1,4 +1,5 @@
 import type { TurnItem } from '../contracts/items.js'
+import { WORKBENCH_CARD_TOOL_NAMES } from '../contracts/workbench-policy.js'
 
 export type ImDeliveryPhase = 'start' | 'progress' | 'final'
 export type PrivateDeliveryGate = 'start' | 'progress' | 'none'
@@ -36,7 +37,7 @@ export function privateDeliveryState(items: readonly TurnItem[], turnId: string,
       published = true; waitingOnUser = false; lastVisibleAt = item.createdAt; workSinceVisible = 0
       continue
     }
-    if (item.toolName === 'request_app_connection' && item.isError !== true &&
+    if (isCardRequestTool(item.toolName) && item.isError !== true &&
       typeof item.output === 'object' && item.output !== null &&
       (item.output as { requested?: unknown }).requested === true) {
       published = true; waitingOnUser = true; lastVisibleAt = item.createdAt; workSinceVisible = 0
@@ -65,6 +66,10 @@ export function privateDeliveryState(items: readonly TurnItem[], turnId: string,
   }
 }
 
+/** Tools whose accepted result puts a durable card in front of the user (a visible wait state). */
+export const isCardRequestTool = (name: string) =>
+  name === 'request_app_connection' || (WORKBENCH_CARD_TOOL_NAMES as readonly string[]).includes(name)
+
 export const PRIVATE_PUBLICATION_TOOL_NAMES = [
-  'send_im_message', 'user_input', 'request_user_input', 'request_app_connection'
+  'send_im_message', 'user_input', 'request_user_input', 'request_app_connection', ...WORKBENCH_CARD_TOOL_NAMES
 ] as const
