@@ -63,6 +63,8 @@ export {
 } from './app-settings-provider-runtime'
 export {
   defaultModelRequestRetrySettings,
+  isRetiredOpenCodeFreeProvider,
+  isRetiredOpenCodeFreeProviderId,
   normalizeModelRequestRetrySettings
 } from './app-settings-provider-profiles'
 export {

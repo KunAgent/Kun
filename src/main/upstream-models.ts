@@ -12,6 +12,7 @@ import {
   projectExecutableModelRoutePools,
   resolveModelProviderPresetSource,
   resolveKunRuntimeSettings,
+  isRetiredOpenCodeFreeProvider,
   type AppSettingsV1,
   type ModelProviderModelProfileV1
 } from '../shared/app-settings'
@@ -96,7 +97,11 @@ export function modelListFromSharedConnections(
       credentialUnavailable ||
       typeof profile.id !== 'string' ||
       !profile.id.trim() ||
-      !Array.isArray(profile.models)
+      !Array.isArray(profile.models) ||
+      isRetiredOpenCodeFreeProvider({
+        id: profile.id,
+        presetSource: typeof profile.presetSource === 'string' ? profile.presetSource : undefined
+      })
     ) {
       return []
     }
