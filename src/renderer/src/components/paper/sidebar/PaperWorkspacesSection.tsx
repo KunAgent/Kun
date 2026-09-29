@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactElement } from 'react'
-import { ChevronRight, FolderOpen, Import, Loader2, MoreHorizontal, Plus, RotateCcw, Search, X } from 'lucide-react'
+import { ChevronRight, Folder, FolderOpen, Import, Loader2, MoreHorizontal, Plus, RotateCcw, Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore, writeBasenameFromPath } from '../../../write/write-workspace-store'
 import { normalizePath } from '../../../write/write-workspace-store-helpers'
@@ -190,9 +190,9 @@ export function PaperWorkspacesSection(): ReactElement {
               <div
                 role="button"
                 tabIndex={0}
-                onClick={() => setWorkspaceCollapsed(root, !expanded)}
+                onClick={() => setWorkspaceCollapsed(root, expanded)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') setWorkspaceCollapsed(root, !expanded)
+                  if (event.key === 'Enter') setWorkspaceCollapsed(root, expanded)
                 }}
                 onContextMenu={(event) => {
                   event.preventDefault()
@@ -205,16 +205,20 @@ export function PaperWorkspacesSection(): ReactElement {
                   className={`h-3 w-3 shrink-0 text-ds-faint transition-transform ${expanded ? 'rotate-90' : ''}`}
                   strokeWidth={2}
                 />
-                <FolderOpen className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-accent' : 'text-ds-muted'}`} strokeWidth={1.8} />
+                {expanded ? (
+                  <FolderOpen className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-accent' : 'text-ds-muted'}`} strokeWidth={1.8} />
+                ) : (
+                  <Folder className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-accent' : 'text-ds-muted'}`} strokeWidth={1.8} />
+                )}
                 <span className={`min-w-0 flex-1 truncate ${active ? 'font-medium text-ds-ink' : 'text-ds-muted group-hover/workspace:text-ds-ink'}`}>
                   {labels.get(root) ?? root}
                 </span>
                 <span className="shrink-0 text-[10.5px] tabular-nums text-ds-faint group-hover/workspace:invisible">
                   {slice?.status === 'loading' ? (
                     <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} />
-                  ) : (
-                    slice?.counts.total ?? 0
-                  )}
+                  ) : slice?.status === 'ready' ? (
+                    slice.counts.total
+                  ) : null}
                 </span>
                 <button
                   type="button"
