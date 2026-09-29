@@ -2,6 +2,8 @@ import type { WorkspaceEntry } from '@shared/workspace-file'
 import type { WriteDocumentSession, WorkWhiteboard } from '../../write/write-workspace-store-types'
 import type { MobileWorkResource } from './MobileWorkHome'
 import { workFileResourceKey, workWhiteboardResourceKey } from './work-resource-key'
+import { writeDirnameFromPath } from '../../write/write-workspace-store-helpers'
+import type { MobilePage } from '../navigation/mobile-page'
 
 type WorkListState = {
   workspaceRoot: string
@@ -50,4 +52,11 @@ export function mobileWorkResources(state: WorkListState, directory: string, sea
 export function resolveMobileWorkEntry(state: WorkListState, key: string): WorkspaceEntry | undefined {
   return Object.values(state.entriesByDir).flat().find((entry) =>
     workFileResourceKey(state.workspaceRoot, entry.path) === key)
+}
+
+export function mobileParentFolderPage(root: string, rootDirectory: string, directory: string): MobilePage {
+  const parent = writeDirnameFromPath(directory)
+  return parent && parent !== rootDirectory
+    ? { mode: 'work', kind: 'folder', folderKey: workFileResourceKey(root, parent) }
+    : { mode: 'work', kind: 'home' }
 }

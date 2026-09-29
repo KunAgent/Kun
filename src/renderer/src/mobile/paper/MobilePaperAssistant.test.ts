@@ -6,6 +6,7 @@ import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { useChatStore } from '../../store/chat-store'
 import { paperResourceKey } from './paper-resource-key'
 import { writeLastResearchSession } from '../../paper/paper-research-sessions'
+import { readPendingResearchSessions, rememberPendingResearchSession } from './mobile-paper-research-pending'
 
 vi.mock('../../components/chat/LazyMessageTimeline', () => ({ LazyMessageTimeline: () => null }))
 vi.mock('../chat/MobilePendingActions', () => ({ MobilePendingActions: () => null }))
@@ -83,6 +84,7 @@ describe('mobile paper assistant admission', () => {
   it('uses the selected research depth, sources and years only for the first turn', async () => {
     window.history.replaceState(null, '', '/?mode=work&mobile=discover')
     writeLastResearchSession(library, 'rs-research-1')
+    rememberPendingResearchSession(library, 'rs-research-1')
     await act(async () => root.render(createElement(MobilePaperAssistant, {
       root: library, unitDir: '', page: 0, quote: null, researchSessionId: 'rs-research-1',
       researchRequest: { depth: 'deep', sources: ['arxiv'], yearFrom: 2022, yearTo: 2025 },
@@ -90,6 +92,7 @@ describe('mobile paper assistant admission', () => {
     })))
     await type('研究问题'); await send()
     expect(sendMessage.mock.calls[0]?.[0]).toContain('[paper-research] depth=deep; sources=arxiv; years=2022-2025')
+    expect(readPendingResearchSessions(library)).toEqual([])
     sendMessage.mockClear()
     await act(async () => useChatStore.setState({ blocks: [{ id: 'u1', kind: 'user', text: '研究问题' }] as never }))
     await type('续问'); await send()

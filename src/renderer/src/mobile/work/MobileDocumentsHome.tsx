@@ -1,15 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import { useTranslation } from 'react-i18next'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { MobileSheet } from '../sheets/MobileSheet'
 import { MobileWorkHome, type MobileWorkResource } from './MobileWorkHome'
-import { mobileWorkResources, resolveMobileWorkEntry } from './mobile-work-resources'
+import { mobileParentFolderPage, mobileWorkResources, resolveMobileWorkEntry } from './mobile-work-resources'
 import { searchMobileWorkEntries } from './mobile-work-search'
 import { writeDirnameFromPath } from '../../write/write-workspace-store-helpers'
 import { workFileResourceKey, workWhiteboardResourceKey } from './work-resource-key'
 import { setMobileDocumentsWorkspaceRoot } from './mobile-documents-workspace'
 import { rememberMobileWorkRoute } from './mobile-work-resource-route'
+import { forgetMobileWorkRecent, readMobileWorkRecent, rememberMobileWorkRecent } from './mobile-work-recent'
 import type { MobilePage } from '../navigation/mobile-page'
 
 type Props = {
@@ -35,12 +36,23 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
   const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [working, setWorking] = useState(false)
+  const [storedRecent, setStoredRecent] = useState(() => readMobileWorkRecent(work.workspaceRoot))
   const folder = page.kind === 'folder' ? resolveMobileWorkEntry(work, page.folderKey) : undefined
   const directory = folder?.type === 'directory' ? folder.path : work.rootDirectory
   const query = search.trim()
   const matchingSearch = searchResults?.query === query ? searchResults : null
   const searchState = query ? { ...work, entriesByDir: { [work.rootDirectory]: matchingSearch?.entries ?? [] } } : work
   const { resources, recent } = mobileWorkResources(searchState, query ? work.rootDirectory : directory, search)
+  useEffect(() => setStoredRecent(readMobileWorkRecent(work.workspaceRoot)), [work.workspaceRoot])
+  const recentRows = useMemo(() => {
+    if (query || directory !== work.rootDirectory) return []
+    const saved: MobileWorkResource[] = storedRecent.filter((item) => item.root === work.workspaceRoot).map((item) => ({
+      key: workFileResourceKey(work.workspaceRoot, item.path), title: item.title, detail: item.path,
+      kind: 'document', status: work.documentsByPath[item.path]?.saveStatus ?? 'saved'
+    }))
+    return [...saved, ...recent].filter((item, index, items) =>
+      items.findIndex((candidate) => candidate.key === item.key) === index).slice(0, 5)
+  }, [storedRecent, recent, query, directory, work.rootDirectory, work.workspaceRoot, work.documentsByPath])
   useEffect(() => {
     if (!query || !work.workspaceRoot) { setSearchResults(null); setSearchLoading(false); return }
     let canceled = false
@@ -81,12 +93,20 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
   }
   const getEntry = (key: string): WorkspaceEntry | undefined => resolveMobileWorkEntry(work, key)
     ?? matchingSearch?.entries.find((entry) => workFileResourceKey(work.workspaceRoot, entry.path) === key)
+    ?? (() => {
+      const remembered = storedRecent.find((item) => item.root === work.workspaceRoot &&
+        workFileResourceKey(work.workspaceRoot, item.path) === key)
+      return remembered ? { name: remembered.title, path: remembered.path, type: 'file' as const,
+        ext: remembered.path.split('.').at(-1) ?? '' } : undefined
+    })()
   const openResource = async (resource: MobileWorkResource): Promise<void> => {
     const entry = getEntry(resource.key)
     try {
       if (entry && !resolveMobileWorkEntry(work, resource.key)) {
         await work.loadDirectory(work.workspaceRoot, writeDirnameFromPath(entry.path))
         if (!resolveMobileWorkEntry(useWriteWorkspaceStore.getState(), resource.key)) {
+          forgetMobileWorkRecent(work.workspaceRoot, entry.path)
+          setStoredRecent(readMobileWorkRecent(work.workspaceRoot))
           throw new Error(t('mobileWorkDocResourceLoadFailed'))
         }
       }
@@ -106,6 +126,10 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
         path: board.id, kind: 'whiteboard' })
       else if (entry) rememberMobileWorkRoute({ key: resource.key, root: work.workspaceRoot,
         path: entry.path, kind: 'document' })
+      if (entry?.type === 'file') {
+        rememberMobileWorkRecent(work.workspaceRoot, entry.path, entry.name)
+        setStoredRecent(readMobileWorkRecent(work.workspaceRoot))
+      }
       navigate({ mode: 'work', kind: 'resource', resourceKey: resource.key,
         view: board ? 'whiteboard' : 'read' })
     } catch (cause) {
@@ -138,6 +162,8 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
         closeSheet()
         rememberMobileWorkRoute({ key: workFileResourceKey(work.workspaceRoot, created), root: work.workspaceRoot,
           path: created, kind: 'document' })
+        rememberMobileWorkRecent(work.workspaceRoot, created, created.split(/[\\/]/).at(-1) ?? created)
+        setStoredRecent(readMobileWorkRecent(work.workspaceRoot))
         navigate({ mode: 'work', kind: 'resource', resourceKey: workFileResourceKey(work.workspaceRoot, created), view: 'edit' })
       }
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
@@ -160,11 +186,14 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
         const ok = board ? await work.renameWhiteboard(board.id, name.trim())
           : entry ? await work.renameEntry(work.workspaceRoot, entry.path, name.trim()) : null
         if (!ok) throw new Error(useWriteWorkspaceStore.getState().fileError ?? t('mobileWorkDocRenameFailed'))
+        if (entry?.type === 'file') forgetMobileWorkRecent(work.workspaceRoot, entry.path)
       } else {
         const ok = board ? await work.deleteWhiteboard(board.id)
           : entry ? await work.deleteEntry(work.workspaceRoot, entry.path) : false
         if (!ok) throw new Error(useWriteWorkspaceStore.getState().fileError ?? t('mobileWorkDocDeleteFailed'))
+        if (entry?.type === 'file') forgetMobileWorkRecent(work.workspaceRoot, entry.path)
       }
+      setStoredRecent(readMobileWorkRecent(work.workspaceRoot))
       if (query) setSearchRetry((value) => value + 1)
       closeSheet()
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
@@ -174,7 +203,7 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
   return <><MobileWorkHome workspaceLabel={directory && directory !== work.rootDirectory
       ? `${work.workspaceRoot.split(/[\\/]/).filter(Boolean).at(-1) ?? ''} / ${folder?.name ?? ''}`
       : work.workspaceRoot.split(/[\\/]/).filter(Boolean).at(-1) ?? t('writeWorkspace')}
-    resources={resources.slice(0, limit)} recent={recent} hasMore={resources.length > limit}
+    resources={resources.slice(0, limit)} recent={recentRows} hasMore={resources.length > limit}
     onLoadMore={() => setLimit((value) => value + 60)} search={search} onSearch={setSearch}
     loading={work.settingsLoading || Boolean(work.loadingDirs[directory]) || searchLoading}
     error={work.settingsError ?? work.treeError ?? searchError ?? ''}
@@ -186,7 +215,9 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
       status: { saved: t('mobileWorkDocSaved'), dirty: t('mobileWorkDocDirty'),
         saving: t('mobileWorkDocSaving'), error: t('mobileWorkDocError'), review: t('mobileWorkDocReview') } }}
     mode="documents" onMode={(mode) => { if (mode === 'papers') void canLeave().then((ok) => { if (ok) onPapers() }) }}
-    onBackFolder={page.kind === 'folder' ? () => navigate({ mode: 'work', kind: 'home' }) : undefined}
+    onBackFolder={page.kind === 'folder' ? () => {
+      navigate(mobileParentFolderPage(work.workspaceRoot, work.rootDirectory, directory))
+    } : undefined}
     onWorkspace={() => setSheet('workspace')} onCreate={() => setSheet('create')}
     onOpen={openResource}
     onMenu={(resource) => { setSelected(resource); setName(resource.title); setSheet('menu') }}
