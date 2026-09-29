@@ -56,6 +56,7 @@ export type WorkbenchStageRouterProps = {
   onToggleLeftSidebar: () => void
   onOpenThread: (threadId: string, turnId?: string) => Promise<void> | void
   onConnectWeixin?: () => void
+  onOpenPlugins?: () => void
   write: WriteStageProps
   conversation: WorkbenchConversationStageProps
   imageAnnotationHost: ReactNode
@@ -113,6 +114,7 @@ export function WorkbenchStageRouter({
   onToggleLeftSidebar,
   onOpenThread,
   onConnectWeixin = () => undefined,
+  onOpenPlugins = () => undefined,
   write,
   conversation,
   imageAnnotationHost,
@@ -129,7 +131,7 @@ export function WorkbenchStageRouter({
       <div className="ds-stage-route-host relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {normalizedRoute === 'rooms' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
-            <RoomsWorkspaceView onOpenThread={onOpenThread} />
+            <RoomsWorkspaceView onOpenThread={onOpenThread} onOpenPlugins={onOpenPlugins} />
           </Suspense>
         ) : normalizedRoute === 'extensions' ? (
           <Suspense fallback={<div className="h-full bg-ds-main" />}>

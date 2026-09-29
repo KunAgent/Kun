@@ -61,7 +61,7 @@ import {
 import { applyRuntimeConfig } from './runtime-config.js'
 import { listSkills } from './skills.js'
 import { authorizeMcpOAuth, clearMcpOAuth, mcpOAuthDiagnostics } from './mcp-oauth.js'
-import { deleteMcpConfig, listMcpConfig, patchMcpConfig, putMcpConfig } from './mcp-config.js'
+import { addRemoteMcpApp, deleteMcpConfig, listMcpConfig, patchMcpConfig, putMcpConfig } from './mcp-config.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { authorize } from './route-auth.js'
@@ -297,6 +297,10 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('GET', '/v1/mcp/config', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return listMcpConfig(runtime)
+  })
+  router.add('POST', '/v1/mcp/remote-apps/:id', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return addRemoteMcpApp(runtime, ctx.params.id, request)
   })
   router.add('PUT', '/v1/mcp/config/:id', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

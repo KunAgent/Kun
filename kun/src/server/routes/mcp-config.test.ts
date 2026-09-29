@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { McpCapabilityConfig } from '../../contracts/capabilities.js'
 import type { ServerRuntime } from './server-runtime.js'
 import {
+  addRemoteMcpApp,
   deleteMcpConfig,
   listMcpConfig,
   patchMcpConfig,
@@ -70,5 +71,25 @@ describe('MCP configuration routes', () => {
     await deleteMcpConfig(runtime, 'local')
     expect(config.servers.local).toBeUndefined()
     expect(setMcpServer).toHaveBeenCalledTimes(3)
+  })
+
+  it('only installs new HTTPS OAuth apps through the renderer route', async () => {
+    let config = McpCapabilityConfig.parse({ enabled: false, servers: {} })
+    const setMcpServer = vi.fn(async (id: string, server: unknown) => {
+      config = McpCapabilityConfig.parse({ enabled: true, servers: { ...config.servers, [id]: server } })
+      return { ok: true as const }
+    })
+    const runtime = { mcpConfig: () => config, setMcpServer } as unknown as ServerRuntime
+    const submit = (value: unknown) => addRemoteMcpApp(runtime, 'gmail', new Request('http://localhost', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(value)
+    }))
+    expect((await submit({ url: 'http://example.com/mcp' })).status).toBe(400)
+    expect((await submit({ url: 'https://example.com/mcp?token=secret' })).status).toBe(400)
+    expect((await submit({ url: 'https://example.com/mcp', command: 'sh' })).status).toBe(400)
+    expect(setMcpServer).not.toHaveBeenCalled()
+    expect((await submit({ url: 'https://example.com/mcp' })).status).toBe(200)
+    expect(config.servers.gmail).toMatchObject({ transport: 'streamable-http', trustScope: 'user', oauth: { enabled: true } })
+    expect((await submit({ url: 'https://another.example/mcp' })).status).toBe(409)
+    expect(setMcpServer).toHaveBeenCalledTimes(1)
   })
 })
