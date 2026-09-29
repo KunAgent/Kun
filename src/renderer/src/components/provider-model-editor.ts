@@ -8,12 +8,14 @@ import {
   MAX_MODEL_OUTPUT_TOKENS,
   MODEL_REASONING_EFFORTS,
   type ModelEndpointFormat,
+  type ModelProviderModelPricingV1,
   type ModelProviderModelProfileV1,
   type ModelProviderProfileV1,
   type ModelProviderReasoningCapabilityV1,
   type ModelReasoningEffort,
   type ModelReasoningRequestProtocol
 } from '@shared/app-settings'
+import { normalizeModelProviderPricing } from '@shared/app-settings-provider-capabilities'
 import {
   isComposerChatModelId,
   isImageGenerationModelId,
@@ -53,6 +55,12 @@ export type ProviderModelForm = {
   /** null means "not specified" — Kun falls back to its built-in default. */
   contextWindowTokens: number | null
   maxOutputTokens: number | null
+  /**
+   * Parsed pricing inputs. null means "no pricing" — all four inputs were
+   * left empty. Inside, a null field means "left empty" and NaN marks
+   * unparsable text, mirroring the context/max-output convention.
+   */
+  pricing: ProviderModelFormPricing | null
   visionInput: boolean
   supportsToolCalling: boolean
   reasoningEnabled: boolean
@@ -66,6 +74,14 @@ export type ProviderModelForm = {
   aliases: string[]
 }
 
+/** USD-per-1M-token prices entered in the model editor; null = empty, NaN = invalid text. */
+export type ProviderModelFormPricing = {
+  inputUsdPerMillion: number | null
+  outputUsdPerMillion: number | null
+  cacheReadUsdPerMillion: number | null
+  cacheWriteUsdPerMillion: number | null
+}
+
 export type ProviderModelFormError =
   | { code: 'missingId' }
   | { code: 'duplicate'; kind: ProviderModelKind }
@@ -73,6 +89,7 @@ export type ProviderModelFormError =
   | { code: 'contextWindowTooLarge'; maximum: number }
   | { code: 'invalidMaxOutput' }
   | { code: 'maxOutputTooLarge'; maximum: number }
+  | { code: 'invalidPricing' }
   | { code: 'noReasoningEfforts' }
 
 export type ProviderModelListEntry = {
@@ -111,6 +128,7 @@ export function newProviderModelForm(
     modelId: '',
     contextWindowTokens: kind === 'chat' ? 256_000 : null,
     maxOutputTokens: null,
+    pricing: null,
     visionInput: false,
     supportsToolCalling: true,
     reasoningEnabled: false,
@@ -140,6 +158,14 @@ export function providerModelFormForExisting(
     ...base,
     contextWindowTokens: profile.contextWindowTokens ?? null,
     maxOutputTokens: profile.maxOutputTokens ?? null,
+    pricing: profile.pricing
+      ? {
+          inputUsdPerMillion: profile.pricing.inputUsdPerMillion,
+          outputUsdPerMillion: profile.pricing.outputUsdPerMillion,
+          cacheReadUsdPerMillion: profile.pricing.cacheReadUsdPerMillion ?? null,
+          cacheWriteUsdPerMillion: profile.pricing.cacheWriteUsdPerMillion ?? null
+        }
+      : null,
     visionInput: profile.inputModalities.includes('image'),
     supportsToolCalling: profile.supportsToolCalling,
     reasoningEnabled: Boolean(profile.reasoning),
@@ -263,6 +289,9 @@ export function validateProviderModelForm(
     form.maxOutputTokens > MAX_MODEL_OUTPUT_TOKENS
   ) {
     errors.push({ code: 'maxOutputTooLarge', maximum: MAX_MODEL_OUTPUT_TOKENS })
+  }
+  if (form.pricing && !providerModelFormPricingValid(form.pricing)) {
+    errors.push({ code: 'invalidPricing' })
   }
   if (form.kind === 'chat' && form.reasoningEnabled && form.reasoningEfforts.length === 0) {
     errors.push({ code: 'noReasoningEfforts' })
@@ -433,16 +462,66 @@ export function parseContextWindowInput(raw: string): number | null {
   return tokens > 0 ? tokens : null
 }
 
+/**
+ * Accepts a plain USD-per-1M-tokens number like "0.15" or "1.5e-3" and
+ * tolerates a leading "$", commas and whitespace. Returns null for empty
+ * input and NaN for unparsable text so the form can distinguish "left
+ * blank" from "typed something invalid" (validation rejects NaN).
+ */
+export function parsePricingInput(raw: string): number | null {
+  const text = raw.trim().replace(/[$,\s]/g, '')
+  if (!text) return null
+  const value = Number(text)
+  return Number.isFinite(value) ? value : Number.NaN
+}
+
+/**
+ * Mirrors the runtime contract: input and output prices must both be
+ * finite non-negative numbers, while the cache prices stay optional.
+ */
+function providerModelFormPricingValid(pricing: ProviderModelFormPricing): boolean {
+  return (
+    isUsdPerMillionPrice(pricing.inputUsdPerMillion) &&
+    isUsdPerMillionPrice(pricing.outputUsdPerMillion) &&
+    (pricing.cacheReadUsdPerMillion === null ||
+      isUsdPerMillionPrice(pricing.cacheReadUsdPerMillion)) &&
+    (pricing.cacheWriteUsdPerMillion === null ||
+      isUsdPerMillionPrice(pricing.cacheWriteUsdPerMillion))
+  )
+}
+
+function isUsdPerMillionPrice(value: number | null): boolean {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
+function pricingFromForm(
+  pricing: ProviderModelFormPricing | null
+): ModelProviderModelPricingV1 | undefined {
+  if (!pricing) return undefined
+  return normalizeModelProviderPricing({
+    inputUsdPerMillion: pricing.inputUsdPerMillion ?? Number.NaN,
+    outputUsdPerMillion: pricing.outputUsdPerMillion ?? Number.NaN,
+    ...(pricing.cacheReadUsdPerMillion !== null
+      ? { cacheReadUsdPerMillion: pricing.cacheReadUsdPerMillion }
+      : {}),
+    ...(pricing.cacheWriteUsdPerMillion !== null
+      ? { cacheWriteUsdPerMillion: pricing.cacheWriteUsdPerMillion }
+      : {})
+  })
+}
+
 function chatProfileFromForm(
   provider: Pick<ModelProviderProfileV1, 'modelProfiles'>,
   form: ProviderModelForm
 ): ModelProviderModelProfileV1 {
   const aliases = normalizeAliases(form.aliases)
   // The form only covers part of the profile. Catalog metadata without an
-  // editor field (pricing, serviceTiers) is carried over from the stored
-  // profile so a routine edit cannot silently drop it. On a rename the
-  // previous entry lives under originalModelId.
+  // editor field (serviceTiers) is carried over from the stored profile so
+  // a routine edit cannot silently drop it; pricing is user-editable now,
+  // so it comes from the form instead. On a rename the previous entry
+  // lives under originalModelId.
   const previous = chatModelProfile(provider, form.originalModelId || form.modelId)
+  const pricing = pricingFromForm(form.pricing)
   return {
     ...(aliases.length > 0 ? { aliases } : {}),
     ...(form.contextWindowTokens && form.contextWindowTokens > 0
@@ -458,7 +537,7 @@ function chatProfileFromForm(
     ...(form.reasoningEnabled && form.reasoningEfforts.length > 0
       ? { reasoning: reasoningCapabilityFromForm(form) }
       : {}),
-    ...(previous?.pricing ? { pricing: { ...previous.pricing } } : {}),
+    ...(pricing ? { pricing } : {}),
     ...(previous?.serviceTiers?.length ? { serviceTiers: [...previous.serviceTiers] } : {}),
     ...(form.endpointFormat ? { endpointFormat: form.endpointFormat } : {}),
     ...(form.responsesMode ? { responsesMode: form.responsesMode } : {})
