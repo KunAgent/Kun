@@ -234,3 +234,23 @@ ADE 专属的不变量：
 | 10 选择与验收 | M | 额度数据的完整度 |
 | 11 审查 | L | 批注定位、diff 渲染性能 |
 | 12 UI | L | 视觉一致性、窄窗口 |
+
+## 10. 原生 harness 适配器准入清单（P6-13 定稿）
+
+新的原生 `HarnessAgent` 适配器（绕过 ACP、直连上游自有协议）必须同时满足：
+
+1. **上游是进程级协议**（stdio JSON-RPC / JSONL），不是库级 SDK。库级 SDK
+   （Claude Agent SDK、Cursor SDK）维持各自的深度 DelegatedTurnRuntime，
+   迁移评估见 `impl/p6-migration-evaluation.md`。
+2. **协议面覆盖会话生命周期**：起会话 / 收事件 / 审批应答 / 中断 /（可选）
+   resume 与 fork。缺的环节由该 harness 的官方扩展机制补齐（pi 用
+   extension + `extension_ui_request`，codex 用 app-server 原生审批请求）。
+3. **池化边界显式声明**（`poolScope`）：进程在 spawn 时绑死 cwd 的必须
+   `workspace` 级（pi）；可按会话重定向的默认 `credential` 级（codex）。
+4. **凭据纪律**：provider 密钥只经 credentialEnv + 生成的 0600 配置文件
+   （CODEX_HOME/config.toml、PI_CODING_AGENT_DIR/models.json），密钥本体
+   永不落盘；网关模式 `apiKey`/`env_key` 只写 env 引用名。
+5. **能力诚实**：capabilities 以实机验收矩阵（P6-12）为准；未验证的能力
+   标 `unsupported_*`，不靠 UI 文案硬凑。
+6. **默认不放量**：新适配器带 `prerelease` 标记，经
+   `harnesses.experimentalIds` 显式启用；验收矩阵通过后摘除。
