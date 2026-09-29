@@ -170,6 +170,17 @@ describe('Work tools', () => {
     expect(String(f.stub.calls.enqueued[0].request.prompt)).toContain('Document in focus: survey.md')
   })
 
+  it('requires confirmation for a scheduled Work task even under an auto policy', async () => {
+    const f = await fixture({ policy: { work: 'auto' } })
+    await workspace(f)
+    const runAt = new Date(Date.now() + 120_000).toISOString()
+    const requested = (await f.run('create_work_task', { title: 'Scheduled notes', goal: 'Write notes',
+      schedule: { kind: 'once', runAt, timeZone: 'UTC' } }, 'work-schedule')).output as { linkId: string }
+    expect((await link(f, requested.linkId)).value.status).toBe('awaiting_confirmation')
+    await accept(f, requested.linkId)
+    expect((await link(f, requested.linkId)).value.status).toBe('scheduled')
+  })
+
   it('adds a project board card after confirmation', async () => {
     const f = await fixture({ policy: { code: 'confirm' } })
     const project = await f.makeDirectory('project')

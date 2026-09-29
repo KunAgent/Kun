@@ -64,6 +64,8 @@ export type GuiPlanContext = {
   relativePath: string
   /** Stable plan id; matches `GuiPlanArtifact.id` on the GUI side. */
   planId: string
+  /** Keep the host-reserved path instead of deriving a new path from the model's title. */
+  fixedPath?: boolean
   /** Original user request that originated the plan turn. */
   sourceRequest?: string
   /** Display title for the plan. */

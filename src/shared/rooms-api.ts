@@ -25,7 +25,7 @@ export type { RoomTask } from '../../kun/src/contracts/room-tasks'
 export { ROOM_APP_CATALOG, isHiddenRoomGoogleApp } from '../../kun/src/contracts/room-app-catalog'
 export type {
   WorkbenchLink, WorkbenchLinkEntry, WorkbenchLinkKind, WorkbenchLinkStatus, WorkbenchRequest, WorkbenchResult,
-  WorkbenchDirectory, ConfirmWorkbenchLink
+  WorkbenchDirectory, ConfirmWorkbenchLink, WorkbenchExecution, WorkbenchSchedule
 } from '../../kun/src/contracts/workbench-links'
 export type { AgentWorkbenchPolicy } from '../../kun/src/contracts/workbench-policy'
 export type { ThreadWorkbenchOrigin } from '../../kun/src/contracts/thread-workbench-origin'

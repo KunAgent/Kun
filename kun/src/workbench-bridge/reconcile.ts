@@ -14,6 +14,9 @@ import { IMMEDIATE_KINDS, executeImmediateLink } from './execute-immediate.js'
 import { updateWorkbenchLink } from './link-store.js'
 import { summarizeTurnResult } from './result-summary.js'
 import { startTaskLink } from './start-task.js'
+import { executionMode } from './execution.js'
+import { admitBuildPhase, finishPlanPhase } from './reconcile-phases.js'
+import { reconcileSchedules } from './schedule.js'
 
 type Attention = z.infer<typeof WorkbenchAttentionSchema>
 const BOT_STEER_PREFIX = 'workbench-steer-'
@@ -74,9 +77,33 @@ async function reconcileTarget(bridge: WorkbenchBridge, row: RoomStoredDocument<
     return
   }
   const finishedAt = turn.finishedAt ?? new Date().toISOString()
+  if (turn.status === 'completed' && await finishPlanPhase(bridge, link, thread)) return
+  if (executionMode(link.request) === 'goal' && thread.goal) {
+    const goal = thread.goal
+    const snapshot = { status: goal.status, tokensUsed: goal.tokensUsed,
+      tokenBudget: goal.tokenBudget ?? null, timeUsedSeconds: goal.timeUsedSeconds }
+    if (goal.status === 'active') {
+      const continuation = [...thread.turns].reverse().find((item) => item.status === 'running' || item.status === 'queued')
+      if (link.status === 'running' && link.turnId === (continuation?.id ?? turn.id) &&
+        link.goal?.status === snapshot.status && link.goal.tokensUsed === snapshot.tokensUsed) return
+      await patch({ status: 'running', goal: snapshot, turnId: continuation?.id ?? turn.id })
+      return
+    }
+    const goalStatus: WorkbenchLinkStatus = goal.status === 'complete' ? 'completed' : goal.status === 'paused' ? 'cancelled' : 'needs_attention'
+    if (link.status === goalStatus && link.goal?.status === snapshot.status && link.goal.tokensUsed === snapshot.tokensUsed) return
+    const wakes = goalStatus !== 'cancelled' && link.origin.kind === 'tool' &&
+      (link.request.report === 'final' || goalStatus === 'needs_attention' && link.request.report === 'failure')
+    const result = goalStatus === 'completed' ? summarizeTurnResult(await bridge.deps.sessions.loadItems(thread.id), turn, finishedAt) : undefined
+    await patch({ status: goalStatus, goal: snapshot, turnId: turn.id,
+      ...(result ? { result } : {}), ...(wakes ? { reported: false } : {}),
+      ...(goalStatus === 'needs_attention' ? { error: `Goal stopped: ${goal.status}` } : {}) })
+    if (wakes) bridge.reportPending.add(link.id)
+    return
+  }
   const result = summarizeTurnResult(await bridge.deps.sessions.loadItems(thread.id), turn, finishedAt)
   const status: WorkbenchLinkStatus = turn.status === 'completed' ? 'completed' : turn.status === 'aborted' ? 'cancelled' : 'failed'
-  const wakes = status !== 'cancelled' && link.request.report === 'final' && (link.origin.kind === 'tool' || link.kind === 'watch')
+  const wakes = status !== 'cancelled' && (link.request.report === 'final' || status === 'failed' && link.request.report === 'failure') &&
+    (link.origin.kind === 'tool' || link.origin.kind === 'series' || link.kind === 'watch')
   await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ status, result, turnId: turn.id, userTookOver: took,
     attention: undefined, ...(status === 'failed' ? { error: clip(turn.error ?? 'The task failed.', 2000) } : {}),
     ...(wakes ? { reported: false } : {}) }))
@@ -92,6 +119,7 @@ async function reconcileLink(bridge: WorkbenchBridge, row: RoomStoredDocument<Wo
   if (link.kind === 'watch') return reconcileTarget(bridge, row)
   if (link.status === 'queued' && !link.turnId) {
     if (link.cancelRequested) return void await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ status: 'cancelled' }))
+    if (link.phase === 'build') return admitBuildPhase(bridge, link)
     return startTaskLink(bridge, row)
   }
   return reconcileTarget(bridge, row)
@@ -113,11 +141,14 @@ async function announceWatch(bridge: WorkbenchBridge, link: WorkbenchLink): Prom
 async function reportOutcome(bridge: WorkbenchBridge, row: RoomStoredDocument<WorkbenchLink>): Promise<void> {
   const link = row.value
   if (link.kind === 'watch') await announceWatch(bridge, link)
-  else if (link.origin.kind === 'tool' && link.originRunId) {
-    const run = await bridge.store.get<RoomRunRecord>('room_run', link.originRunId)
-    if (run?.value.threadId) {
+  else {
+    const parent = link.origin.kind === 'series' ? (await bridge.store.get<WorkbenchLink>('workbench_link', link.origin.seriesId))?.value : undefined
+    const originRunId = link.originRunId ?? parent?.originRunId
+    const sourceTurnId = link.origin.kind === 'tool' ? link.origin.turnId : parent?.origin.kind === 'tool' ? parent.origin.turnId : undefined
+    const run = originRunId ? await bridge.store.get<RoomRunRecord>('room_run', originRunId) : undefined
+    if (run?.value.threadId && sourceTurnId) {
       // Called from the tick, which already holds the room runtime's exclusive lane.
-      await enqueuePrivateContinuation(bridge.deps, { threadId: run.value.threadId, sourceTurnId: link.origin.turnId,
+      await enqueuePrivateContinuation(bridge.deps, { threadId: run.value.threadId, sourceTurnId,
         key: link.id, kind: 'workbench_task', prompt: outcomePrompt(link) })
     }
   }
@@ -127,7 +158,7 @@ async function reportOutcome(bridge: WorkbenchBridge, row: RoomStoredDocument<Wo
 async function flushReports(bridge: WorkbenchBridge): Promise<void> {
   if (!bridge.backlogLoaded) {
     bridge.backlogLoaded = true
-    const rows = await bridge.store.list<WorkbenchLink>('workbench_link', { status: ['completed', 'failed'], limit: 100, order: 'desc' })
+    const rows = await bridge.store.list<WorkbenchLink>('workbench_link', { status: ['completed', 'failed', 'needs_attention'], limit: 100, order: 'desc' })
     for (const row of rows) if (row.value.reported === false) bridge.reportPending.add(row.id)
   }
   for (const id of [...bridge.reportPending]) {
@@ -141,6 +172,7 @@ async function flushReports(bridge: WorkbenchBridge): Promise<void> {
 
 /** One reconciliation pass; true while any link still needs a look on the fast cadence. */
 export async function reconcileWorkbench(bridge: WorkbenchBridge): Promise<boolean> {
+  bridge.nextWakeAt = await reconcileSchedules(bridge)
   const rows = await bridge.store.list<WorkbenchLink>('workbench_link', {
     status: [...WORKBENCH_ACTIVE_STATUSES], limit: 200, order: 'asc' })
   for (const row of rows) {

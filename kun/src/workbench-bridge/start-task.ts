@@ -1,17 +1,24 @@
 import { agentStableId } from '../agents/agent-identity-service.js'
+import { kunToolPermissionModeSettings } from '../contracts/policy.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { WorkbenchLink } from '../contracts/workbench-links.js'
 import { TurnConflictError, ThreadClosingError } from '../services/turn-service.js'
 import type { RoomStoredDocument } from '../rooms/room-store.js'
 import type { WorkbenchBridge } from './bridge.js'
 import { updateWorkbenchLink } from './link-store.js'
+import { executionMode, planRelativePath, validateExecution } from './execution.js'
 
 /** Deterministic identities: a retry after a crash reaches the same thread and the same turn. */
 export const workbenchThreadId = (linkId: string) => agentStableId('workbench-thread', linkId)
 export const workbenchTurnKey = (linkId: string) => 'workbench-' + linkId
 
-const fail = (bridge: WorkbenchBridge, link: WorkbenchLink, error: string) =>
-  updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ status: 'failed', error: error.slice(0, 2000) }))
+const fail = async (bridge: WorkbenchBridge, link: WorkbenchLink, error: string) => {
+  const wakes = (link.origin.kind === 'tool' || link.origin.kind === 'series') &&
+    (link.request.report === 'final' || link.request.report === 'failure')
+  await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ status: 'failed', error: error.slice(0, 2000),
+    ...(wakes ? { reported: false } : {}) }))
+  if (wakes) bridge.reportPending.add(link.id)
+}
 
 /** First turn of a handed-over task, built by the host from the card the user accepted. */
 export function taskPrompt(link: WorkbenchLink, agentName: string): string {
@@ -42,16 +49,27 @@ export async function startTaskLink(bridge: WorkbenchBridge, row: RoomStoredDocu
   if ((code ? scope.policy.code === 'off' : scope.policy.work === 'off' || scope.policy.work === 'read')) {
     return void await fail(bridge, link, 'This Agent is no longer allowed to start tasks here.')
   }
+  if (!link.threadId) {
+    const occupied = (await bridge.store.list<WorkbenchLink>('workbench_link', {
+      participantAgentId: link.participantAgentId, status: ['queued', 'running', 'needs_attention', 'recovery_required'], limit: 100
+    })).filter((row) => row.id !== link.id && Boolean(row.value.threadId)).length
+    if (occupied >= scope.policy.maxActiveTasks) return
+  }
   const directory = await bridge.resolveDirectory(root)
   if (!directory) return void await fail(bridge, link, 'The project directory is no longer available.')
+  try { await validateExecution(bridge, link.roomId, link.request) } catch (error) {
+    return void await fail(bridge, link, error instanceof Error ? error.message : String(error))
+  }
   const threadId = link.threadId ?? workbenchThreadId(link.id)
   let thread = await bridge.deps.threads.getMetadata(threadId)
   if (!thread) {
-    const model = bridge.deps.model()
+    const model = link.request.execution?.model ?? bridge.deps.model()
+    const permission = link.request.execution?.permission
     thread = await bridge.deps.threads.create({
       title: link.request.title, titleAuto: false, workspace: directory, model: model.model,
       ...(model.providerId ? { providerId: model.providerId } : {}), ...(model.accountId ? { accountId: model.accountId } : {}),
-      agentSurface: code ? 'code' : 'write', mode: link.request.mode
+      ...(permission ? kunToolPermissionModeSettings(permission) : {}),
+      agentSurface: code ? 'code' : 'write', mode: executionMode(link.request) === 'plan' || executionMode(link.request) === 'auto' ? 'plan' : 'agent'
     }, { id: threadId, workbenchOrigin: { kind: 'bot', roomId: link.roomId, linkId: link.id,
       agentId: link.participantAgentId, agentName: scope.name, ...(link.messageId ? { messageId: link.messageId } : {}) } })
     const ceiling = await bridge.permissionCeiling(link.roomId, thread)
@@ -63,6 +81,13 @@ export async function startTaskLink(bridge: WorkbenchBridge, row: RoomStoredDocu
   }
   if (code && link.request.isolation === 'worktree' && !thread.taskWorkspaceId) {
     if (!await isolateInWorktree(bridge, link, thread, directory)) return
+    thread = await bridge.deps.threads.getMetadata(thread.id) ?? thread
+  }
+  if (executionMode(link.request) === 'goal' && !thread.goal) {
+    try { await bridge.deps.threads.setGoal(thread.id, { objective: link.request.goal,
+      tokenBudget: link.request.execution?.goalTokenBudget ?? null }) } catch (error) {
+      return void await fail(bridge, link, error instanceof Error ? error.message : String(error))
+    }
   }
   await admitFirstTurn(bridge, link, thread, scope.name)
 }
@@ -99,14 +124,26 @@ async function admitFirstTurn(bridge: WorkbenchBridge, link: WorkbenchLink, thre
       error: 'The task may have started but its session was not found. Open Code to check before retrying.' }))
     return
   }
+  const mode = executionMode(link.request)
+  const planPath = mode === 'plan' || mode === 'auto' ? link.planPath ?? planRelativePath(link) : undefined
+  if (planPath && !link.planPath) {
+    await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ planPath, phase: 'plan' }))
+  }
   await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ admissionAttempted: true, clientRequestId }))
-  const model = bridge.deps.model()
+  const model = link.request.execution?.model ?? bridge.deps.model()
   try {
     const admitted = await bridge.deps.turns.enqueueTurn({ threadId: thread.id, request: {
       prompt: taskPrompt(link, agentName), displayText: link.request.title.slice(0, 8000), clientRequestId,
       model: model.model, ...(model.providerId ? { providerId: model.providerId } : {}), ...(model.accountId ? { accountId: model.accountId } : {}),
-      clientSurface: 'gui', agentSurface: link.surface === 'code' ? 'code' : 'write', mode: link.request.mode,
-      orchestration: 'direct', attachmentIds: [], composerContexts: [], fileReferences: [], enqueueIfBusy: true } })
+      ...(link.request.execution?.model?.harnessId ? { harnessId: link.request.execution.model.harnessId } : {}),
+      ...(link.request.execution?.model?.credentialMode ? { credentialMode: link.request.execution.model.credentialMode } : {}),
+      ...(link.request.execution?.model?.reasoningEffort ? { reasoningEffort: link.request.execution.model.reasoningEffort } : {}),
+      ...(link.request.execution?.model?.serviceTier ? { serviceTier: link.request.execution.model.serviceTier } : {}),
+      ...(link.request.execution?.persona ? { persona: link.request.execution.persona.text } : {}),
+      clientSurface: 'gui', agentSurface: link.surface === 'code' ? 'code' : 'write', mode: mode === 'plan' || mode === 'auto' ? 'plan' : 'agent',
+      ...(planPath ? { guiPlan: { operation: 'draft' as const, fixedPath: true, workspaceRoot: thread.workspace, relativePath: planPath,
+        planId: `${thread.workspace}:${planPath}`, sourceRequest: link.request.goal, title: link.request.title } } : {}),
+      orchestration: link.request.execution?.orchestration ?? 'direct', attachmentIds: [], composerContexts: [], fileReferences: [], enqueueIfBusy: true } })
     await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ turnId: admitted.turnId, status: 'queued' }))
   } catch (error) {
     const known = error instanceof TurnConflictError || error instanceof ThreadClosingError
@@ -115,4 +152,3 @@ async function admitFirstTurn(bridge: WorkbenchBridge, link: WorkbenchLink, thre
     // Otherwise leave admissionAttempted set: the next tick reconciles this exact admission.
   }
 }
-

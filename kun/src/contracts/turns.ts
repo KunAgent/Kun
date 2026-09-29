@@ -86,7 +86,7 @@ export const GuiPlanContextSchema = z.object({
     .refine(isGuiPlanRelativePath, {
       message: 'relativePath must be a direct Markdown file under .kunsdd/plan'
     }),
-  planId: z.string().min(1),
+  planId: z.string().min(1), fixedPath: z.boolean().optional(),
   sourceRequest: z.string().optional(),
   title: z.string().optional()
 })

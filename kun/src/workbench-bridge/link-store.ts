@@ -12,7 +12,9 @@ import { RoomStoreConflictError, type RoomStore, type RoomStoreCommit, type Room
 export function workbenchLinkId(origin: WorkbenchLink['origin'], roomId: string, clientRequestId?: string): string {
   return origin.kind === 'tool'
     ? interactionId('workbench-link', origin.runId, origin.toolCallId)
-    : interactionId('workbench-link', roomId, origin.action, clientRequestId ?? '')
+    : origin.kind === 'series'
+      ? interactionId('workbench-series-run', origin.seriesId, origin.occurrence)
+      : interactionId('workbench-link', roomId, origin.action, clientRequestId ?? '')
 }
 
 const entry = (row: RoomStoredDocument<WorkbenchLink>): WorkbenchLinkEntry => ({ ...row.value, revision: row.revision })
@@ -55,7 +57,7 @@ export async function countRunLinks(store: RoomStore, roomId: string, runId: str
 
 export type CreateWorkbenchLinkInput = Pick<WorkbenchLink, 'roomId' | 'participantAgentId' | 'memberId' | 'kind' |
   'surface' | 'status' | 'origin' | 'request'> & Partial<Pick<WorkbenchLink, 'threadId' | 'turnId'>> &
-  { memberLabel: string; clientRequestId?: string }
+  Partial<Pick<WorkbenchLink, 'seriesId' | 'occurrence'>> & { memberLabel: string; clientRequestId?: string }
 
 /**
  * Stores the link and its timeline card in one transaction. A repeated call for

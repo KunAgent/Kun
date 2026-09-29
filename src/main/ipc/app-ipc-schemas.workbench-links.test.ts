@@ -7,7 +7,8 @@ describe('Room workbench link IPC boundary', () => {
       ['/v1/rooms/room-1/workbench-links?limit=50&status=running,needs_attention', 'GET'],
       ['/v1/rooms/room-1/workbench-links/link-1', 'GET'],
       ['/v1/rooms/room-1/workbench-links/watch', 'POST'],
-      ...['confirm', 'dismiss', 'cancel'].map((action) => [`/v1/rooms/room-1/workbench-links/link-1/${action}`, 'POST'])
+      ...['confirm', 'dismiss', 'cancel', 'update', 'run-now', 'pause', 'resume', 'build', 'skip']
+        .map((action) => [`/v1/rooms/room-1/workbench-links/link-1/${action}`, 'POST'])
     ] as const) {
       expect(runtimeRequestPayloadSchema.parse({ path, method, ...(method === 'POST' ? { body: '{}' } : {}) }).method, path).toBe(method)
     }

@@ -40,6 +40,7 @@ export class WorkbenchBridge {
   /** Finished links whose outcome still has to reach the Agent; rebuilt from the store after a restart. */
   readonly reportPending = new Set<string>()
   backlogLoaded = false
+  nextWakeAt?: number
   constructor(readonly deps: RoomRuntimeDeps, readonly service: RoomService, readonly wake: () => void) {
     this.directory = WorkbenchDirectoryService.forDataDir(deps.dataDir)
   }

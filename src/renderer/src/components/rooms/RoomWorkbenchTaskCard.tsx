@@ -5,18 +5,22 @@ import type { Room, RoomMessage, WorkbenchLinkEntry, WorkbenchLinkKind } from '@
 import { workbenchClient } from './workbench-client'
 import { openWorkbenchLinkTarget, workbenchOpenTarget } from './workbench-navigation'
 import { subscribeRoomEvents } from './useRoomEvents'
+import { initialWorkbenchTaskDraft, WorkbenchTaskOptions, type WorkbenchTaskDraft } from './WorkbenchTaskOptions'
+import { kunToolPermissionModeFromSettings } from '@shared/app-settings'
+import { WorkbenchSeriesRuns } from './WorkbenchSeriesRuns'
 import './rooms-workbench.css'
 
 const KIND_ICON: Record<WorkbenchLinkKind, typeof Code> = {
-  code_task: Code, work_task: FilePen, work_document: FilePlus, work_edit: FilePen, board_card: KanbanSquare, watch: Eye
+  code_task: Code, work_task: FilePen, work_document: FilePlus, work_edit: FilePen, board_card: KanbanSquare, watch: Eye,
+  schedule_series: Code
 }
 const KIND_LABEL: Record<WorkbenchLinkKind, string> = {
   code_task: 'roomsWorkbenchCode', work_task: 'roomsWorkbenchWorkTask', work_document: 'roomsWorkbenchDocument',
-  work_edit: 'roomsWorkbenchEdit', board_card: 'roomsWorkbenchBoard', watch: 'roomsWorkbenchWatch'
+  work_edit: 'roomsWorkbenchEdit', board_card: 'roomsWorkbenchBoard', watch: 'roomsWorkbenchWatch', schedule_series: 'roomsWorkbenchSeries'
 }
 const CONFIRM_LABEL: Record<WorkbenchLinkKind, string> = {
   code_task: 'roomsWorkbenchStart', work_task: 'roomsWorkbenchStart', work_document: 'roomsWorkbenchCreate',
-  work_edit: 'roomsWorkbenchApply', board_card: 'roomsWorkbenchAdd', watch: 'roomsWorkbenchStart'
+  work_edit: 'roomsWorkbenchApply', board_card: 'roomsWorkbenchAdd', watch: 'roomsWorkbenchStart', schedule_series: 'roomsWorkbenchStart'
 }
 const basename = (path?: string): string => path?.split(/[\\/]/).filter(Boolean).at(-1) ?? ''
 
@@ -33,7 +37,7 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState({ title: '', goal: '', worktree: false })
+  const [draft, setDraft] = useState<WorkbenchTaskDraft | null>(null)
   const busyRef = useRef(false)
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
@@ -79,16 +83,21 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
   const Icon = KIND_ICON[kind]
   const project = basename(request.workspaceRoot)
   const opens = workbenchOpenTarget(link)
-  const longRunning = kind === 'code_task' || kind === 'work_task'
+  const longRunning = kind === 'code_task' || kind === 'work_task' || kind === 'schedule_series'
+  const permissionCeiling = room.privateExecutionPolicy ? kunToolPermissionModeFromSettings(room.privateExecutionPolicy) : undefined
   const startEditing = () => {
-    setDraft({ title: request.title, goal: request.goal, worktree: request.isolation === 'worktree' })
+    setDraft(initialWorkbenchTaskDraft(request))
     setEditing(true)
   }
   const confirm = () => act(async () => {
-    const edits = editing ? { title: draft.title.trim() || request.title, goal: draft.goal.trim(),
-      ...(kind === 'code_task' ? { isolation: draft.worktree ? 'worktree' as const : 'inherit' as const } : {}) } : undefined
-    const next = await workbenchClient.confirm(link, edits)
+    const chosen = draft ?? initialWorkbenchTaskDraft(request)
+    const edits = { title: chosen.title.trim() || request.title, goal: chosen.goal.trim(),
+      ...(kind === 'code_task' || kind === 'schedule_series' ? { isolation: chosen.isolation } : {}),
+      execution: kind === 'work_task' ? { ...chosen.execution, mode: 'direct' as const, orchestration: 'direct' as const } : chosen.execution,
+      schedule: chosen.schedule, report: chosen.report }
+    const next = status === 'awaiting_confirmation' ? await workbenchClient.confirm(link, edits) : await workbenchClient.update(link, edits)
     setEditing(false)
+    setDraft(null)
     return next
   })
 
@@ -103,11 +112,11 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
         {t(`roomsWorkbenchStatus_${status}`)}
       </span>
     </header>
-    {editing ? <div className="rooms-workbench-edit">
+    {editing && draft ? <div className="rooms-workbench-edit">
       <label>{t('roomsWorkbenchTitleLabel')}<input value={draft.title} maxLength={160} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
       <label>{t('roomsWorkbenchGoalLabel')}<textarea rows={4} value={draft.goal} maxLength={8000} onChange={(event) => setDraft({ ...draft, goal: event.target.value })} /></label>
-      {kind === 'code_task' ? <label className="rooms-workbench-check"><input type="checkbox" checked={draft.worktree}
-        onChange={(event) => setDraft({ ...draft, worktree: event.target.checked })} />{t('roomsWorkbenchUseWorktree')}</label> : null}
+      <WorkbenchTaskOptions draft={draft} onChange={setDraft} editing onEdit={startEditing} code={kind === 'code_task' || kind === 'schedule_series'}
+        permissionCeiling={permissionCeiling} />
     </div> : <>
       <h4>{request.title}</h4>
       {request.goal && kind !== 'work_document' && kind !== 'work_edit' ? <p className="rooms-workbench-goal">{request.goal}</p> : null}
@@ -120,6 +129,9 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
         {kind === 'board_card' && request.board?.priority ? <span>{request.board.priority}</span> : null}
         {kind === 'board_card' && request.board?.category ? <span>{request.board.category}</span> : null}
       </div>
+      {(kind === 'code_task' || kind === 'work_task' || kind === 'schedule_series') && ['awaiting_confirmation', 'scheduled', 'active', 'paused'].includes(status) ?
+        <WorkbenchTaskOptions draft={initialWorkbenchTaskDraft(request)} onChange={setDraft} editing={false} onEdit={startEditing}
+          code={kind === 'code_task' || kind === 'schedule_series'} permissionCeiling={permissionCeiling} /> : null}
       {kind === 'work_document' && request.content ? <pre className="rooms-workbench-preview" aria-label={t('roomsWorkbenchPreview')}>{request.content.slice(0, 1200)}{request.content.length > 1200 ? '…' : ''}</pre> : null}
       {kind === 'board_card' && request.board?.description ? <p className="rooms-workbench-goal">{request.board.description}</p> : null}
       {kind === 'work_edit' ? <div className="rooms-workbench-edits">
@@ -141,6 +153,12 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
         `${command.command.slice(0, 60)}${command.exitCode === undefined ? '' : command.exitCode === 0 ? ' ✓' : ` ✗${command.exitCode}`}`).join(' · ')}</p> : null}
     </div> : null}
     {status === 'recovery_required' ? <p className="rooms-workbench-note">{link.error || t('roomsWorkbenchRecovery')}</p> : null}
+    {link.scheduledFor && ['scheduled', 'active', 'paused'].includes(status) ? <p className="rooms-workbench-note">
+      {t('roomsWorkbenchNextRun')}: {new Date(link.scheduledFor).toLocaleString()}</p> : null}
+    {status === 'plan_ready' && link.planPath ? <p className="rooms-workbench-note">{link.planPath}</p> : null}
+    {link.goal ? <p className="rooms-workbench-note">{t('roomsWorkbenchGoalProgress')}: {link.goal.status} · {link.goal.tokensUsed}
+      {link.goal.tokenBudget ? ` / ${link.goal.tokenBudget}` : ''} tokens</p> : null}
+    {kind === 'schedule_series' && link.recentRunIds?.length ? <WorkbenchSeriesRuns roomId={room.id} ids={link.recentRunIds} /> : null}
     {(status === 'failed') && link.error ? <p className="rooms-workbench-error" role="alert">{link.error}</p> : null}
     {error ? <p className="rooms-workbench-error" role="alert">{error}</p> : null}
     <div className="rooms-workbench-actions">
@@ -148,10 +166,22 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
         <button type="button" disabled={busy} onClick={() => void act(() => workbenchClient.dismiss(link))}>{t('roomsWorkbenchDismiss')}</button>
         {longRunning && !editing ? <button type="button" disabled={busy} onClick={startEditing}>{t('roomsWorkbenchEditBefore')}</button> : null}
         {editing ? <button type="button" disabled={busy} onClick={() => setEditing(false)}>{t('roomsWorkbenchCancelEdit')}</button> : null}
-        <button type="button" className="is-primary" disabled={busy || (editing && !draft.title.trim())} onClick={() => void confirm()}>
-          {busy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}{t(CONFIRM_LABEL[kind])}
+        <button type="button" className="is-primary" disabled={busy || (editing && !draft?.title.trim())} onClick={() => void confirm()}>
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}{draft?.schedule?.kind === 'recurring' ? t('roomsWorkbenchCreateSchedule') :
+            draft?.schedule?.kind === 'once' ? t('roomsWorkbenchSchedule') : t(CONFIRM_LABEL[kind])}
         </button>
       </> : null}
+      {['scheduled', 'active', 'paused', 'missed'].includes(status) ? <>
+        <button type="button" disabled={busy} onClick={() => void act(() => workbenchClient.runNow(link))}>{t('roomsWorkbenchRunNow')}</button>
+        {['scheduled', 'active', 'paused'].includes(status) && !editing ? <button type="button" disabled={busy} onClick={startEditing}>{t('roomsWorkbenchModify')}</button> : null}
+        {editing ? <><button type="button" disabled={busy} onClick={() => setEditing(false)}>{t('roomsWorkbenchCancelEdit')}</button>
+          <button type="button" className="is-primary" disabled={busy || !draft?.title.trim()} onClick={() => void confirm()}>{t('roomsWorkbenchSave')}</button></> : null}
+        {kind === 'schedule_series' ? <button type="button" disabled={busy} onClick={() => void act(() => status === 'paused' ? workbenchClient.resume(link) : workbenchClient.pause(link))}>
+          {t(status === 'paused' ? 'roomsWorkbenchResume' : 'roomsWorkbenchPause')}</button> : null}
+        {status === 'missed' ? <button type="button" disabled={busy} onClick={() => void act(() => workbenchClient.skip(link))}>{t('roomsWorkbenchSkip')}</button> : null}
+        <button type="button" disabled={busy} onClick={() => void act(() => workbenchClient.cancel(link))}>{t(kind === 'schedule_series' ? 'roomsWorkbenchEnd' : 'roomsWorkbenchStop')}</button>
+      </> : null}
+      {status === 'plan_ready' ? <button type="button" className="is-primary" disabled={busy} onClick={() => void act(() => workbenchClient.build(link))}>{t('roomsWorkbenchBuildPlan')}</button> : null}
       {(status === 'queued' || status === 'running' || status === 'needs_attention') && kind !== 'watch' && longRunning ? <button type="button" disabled={busy}
         onClick={() => void act(() => workbenchClient.cancel(link))}><CircleStop size={14} />{t('roomsWorkbenchStop')}</button> : null}
       {opens && status !== 'awaiting_confirmation' && status !== 'dismissed' ? <button type="button" className={status === 'needs_attention' ? 'is-primary' : ''}
