@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -50,7 +50,7 @@ function openMissionControlPopout(): void {
     autoHideMenuBar: true,
     show: false,
     webPreferences: {
-      preload: resolveNamedPreloadPath(__dirname, 'index'),
+      preload: resolveNamedPreloadPath(app.getAppPath(), 'index'),
       contextIsolation: true,
       sandbox: true,
       webviewTag: false,

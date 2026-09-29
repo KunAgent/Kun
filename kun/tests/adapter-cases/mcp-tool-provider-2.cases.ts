@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { mkdir, mkdtemp } from 'node:fs/promises'
 
@@ -34,6 +34,8 @@ import { REDACTED_SECRET } from '../../src/config/secret-redaction.js'
 import { KunCapabilitiesConfig, type McpServerConfig } from '../../src/contracts/capabilities.js'
 
 import type { ToolHostContext } from '../../src/ports/tool-host.js'
+
+import type { ApprovalRequest } from '../../src/domain/approval.js'
 
 function buildContext(workspace: string): ToolHostContext {
   return {
@@ -145,6 +147,65 @@ it('treats server-provided read-only hints as neither approval nor sandbox autho
       output: { code: 'sandbox_command_blocked' }
     })
     expect(calls).toBe(0)
+  })
+
+it('routes MCP command tools through the workspace-write approval path', async () => {
+    let calls = 0
+    const config = KunCapabilitiesConfig.parse({
+      mcp: {
+        enabled: true,
+        servers: {
+          github: { transport: 'stdio', command: 'node', trustScope: 'user' }
+        }
+      }
+    })
+    const client: McpClientLike = {
+      async listTools() {
+        return {
+          tools: [{ name: 'mutate', inputSchema: { type: 'object' } }]
+        }
+      },
+      async callTool() {
+        calls += 1
+        return { ok: true }
+      },
+      async close() {}
+    }
+    const built = await buildMcpToolProviders(config.mcp, { clientFactory: async () => client })
+    const host = new LocalToolHost({ registry: new CapabilityRegistry(built.providers) })
+    const awaitApproval = vi.fn(async (_approval: ApprovalRequest) => 'allow' as const)
+    const context = {
+      ...buildContext('/tmp/project'),
+      sandboxMode: 'workspace-write' as const,
+      awaitApproval
+    }
+
+    expect((await host.listTools(context)).map((candidate) => candidate.name)).toContain('mcp_github_mutate')
+
+    const allowed = await host.execute({
+      callId: 'mcp_allowed',
+      toolName: 'mcp_github_mutate',
+      arguments: {}
+    }, context)
+    expect(awaitApproval).toHaveBeenCalledOnce()
+    expect(awaitApproval.mock.calls[0]?.[0].action?.reason).toContain('MCP')
+    expect(calls).toBe(1)
+    expect(allowed.item).toMatchObject({ kind: 'tool_result', isError: false })
+
+    const denied = await host.execute({
+      callId: 'mcp_denied',
+      toolName: 'mcp_github_mutate',
+      arguments: {}
+    }, {
+      ...context,
+      awaitApproval: async () => 'deny' as const
+    })
+    expect(denied.item).toMatchObject({
+      kind: 'tool_result',
+      isError: true,
+      output: { code: 'approval_denied' }
+    })
+    expect(calls).toBe(1)
   })
 
 it('keeps blocked MCP servers out of the shared resource facade', async () => {
