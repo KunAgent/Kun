@@ -55,7 +55,7 @@ import { normalizeWritePaperModeSettings } from '../../shared/app-settings-paper
 import {
   BUILTIN_GITHUB_MCP_SERVER_ID,
   buildBuiltinGitHubMcpServer,
-  isBuiltinGitHubMcpServer
+  isBuiltinGitHubMcpServerOwnedByKun
 } from '../../shared/github-mcp'
 import { resolveCodexOAuthApiKey } from '../codex-auth'
 import {
@@ -156,9 +156,10 @@ export async function syncGuiManagedKunConfig(
   const capabilities = objectValue(existing?.capabilities)
   const mcp = objectValue(capabilities.mcp)
   const retainedMcpServers = stripGeneratedProjectMcpServers(objectValue(mcp.servers))
-  // Replace only the host-authored entry. A user-owned `github` id remains
-  // authoritative and never qualifies for Kun's ambient credential injection.
-  if (isBuiltinGitHubMcpServer(retainedMcpServers[BUILTIN_GITHUB_MCP_SERVER_ID])) {
+  // Replace only the host-authored entry. Use the stable ownership marker and
+  // transport identity here so legacy Kun entries missing githubPolicy are
+  // rebuilt instead of being mistaken for user-owned `github` servers.
+  if (isBuiltinGitHubMcpServerOwnedByKun(retainedMcpServers[BUILTIN_GITHUB_MCP_SERVER_ID])) {
     delete retainedMcpServers[BUILTIN_GITHUB_MCP_SERVER_ID]
   }
   const hasUserGitHubServer = [retainedMcpServers, importedMcpServers, projectMcpServers]
