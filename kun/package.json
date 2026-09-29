@@ -103,7 +103,7 @@
     "semver": "^7.8.5",
     "typescript": "5.9.3",
     "typescript-language-server": "5.3.0",
-    "undici": "^7.29.0",
+    "undici": "^7.29.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "yauzl": "^3.4.0",
     "yazl": "^3.3.1",
@@ -119,12 +119,12 @@
   },
   "overrides": {
     "@hono/node-server": "2.0.11",
-    "fast-uri": "3.1.6",
+    "fast-uri": "3.1.8",
     "hono": "4.13.5",
-    "ip-address": "10.4.0",
+    "ip-address": "10.7.2",
     "qs": "6.16.0",
     "@connectrpc/connect-node": {
-      "undici": "6.28.0"
+      "undici": "6.28.1"
     }
   }
 }
