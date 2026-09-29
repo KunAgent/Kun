@@ -78,6 +78,12 @@ export const HarnessesConfigSchema = z
     transportOverrides: z
       .record(HarnessIdSchema, HarnessTransportSchema)
       .default({}),
+    /**
+     * Hidden pre-GA opt-ins (P6-09): builtin harnesses declared `prerelease`
+     * stay out of the catalog unless their id is listed here. Removed once
+     * the P6-12 acceptance matrix lands.
+     */
+    experimentalIds: z.array(HarnessIdSchema).max(64).default([]),
     /** User-defined ACP harnesses; ids colliding with builtins are dropped. */
     custom: z.array(HarnessCustomEntrySchema).max(32).default([]),
     /**

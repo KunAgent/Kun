@@ -171,11 +171,20 @@ export const HarnessDefinitionSchema = z
           .object({
             launch: HarnessLaunchSchema,
             detect: HarnessDetectSchema.optional(),
-            capabilities: HarnessCapabilitiesSchema.optional()
+            capabilities: HarnessCapabilitiesSchema.optional(),
+            /** Overrides definition-level poolScope when this variant applies. */
+            poolScope: z.enum(['credential', 'workspace']).optional()
           })
           .strict()
       )
       .optional(),
+    /**
+     * Process-pool scope for session transports (P6-09). `credential` (default)
+     * shares one spawned process per harness+credential; `workspace` keys the
+     * pool by workspace too — required when the process binds its cwd at spawn
+     * (pi rpc) and cannot re-target per session.
+     */
+    poolScope: z.enum(['credential', 'workspace']).optional(),
     /** Terminal (tier-0) launch details for PTY agents. */
     terminal: z
       .object({
@@ -201,6 +210,11 @@ export const HarnessDefinitionSchema = z
     staticModels: z.array(z.string().min(1).max(256)).max(64).default([]),
     /** Links to existing history-sources for "continue external session". */
     historySource: z.enum(['claude-code', 'codex', 'opencode']).optional(),
+    /**
+     * Pre-GA marker (P6-09): the catalog drops prerelease builtins unless the
+     * hidden `harnesses.experimentalIds` config names them.
+     */
+    prerelease: z.boolean().optional(),
     /** Static declaration; the runtime may narrow it further per version/login. */
     capabilities: HarnessCapabilitiesSchema,
     /** Present when the harness can run through the loopback model gateway. */

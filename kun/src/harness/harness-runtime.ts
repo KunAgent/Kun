@@ -93,7 +93,8 @@ export function createHarnessComposition(
     custom: () => options().harnesses?.custom ?? [],
     terminalAgents: () => options().harnesses?.terminalAgents ?? [],
     disabled: () => options().harnesses?.disabledIds ?? [],
-    transportOverrides: () => options().harnesses?.transportOverrides ?? {}
+    transportOverrides: () => options().harnesses?.transportOverrides ?? {},
+    experimental: () => options().harnesses?.experimentalIds ?? []
   })
   // P4-03: persist successful ACP handshakes for 24h so a restart does not
   // re-probe every agent; parallel probes are capped at two.

@@ -14,6 +14,9 @@
  * - Codex (`codex-acp`): a generated `CODEX_HOME/config.toml` declares a
  *   `model_providers.kun` entry with `env_key` pointing at the token var
  *   and `wire_api = "responses"` (the `/v1/responses` gateway surface).
+ * - Pi (`pi --mode rpc`): a generated `PI_CODING_AGENT_DIR/models.json`
+ *   declares only the `kun` openai-completions provider; `apiKey` is pi's
+ *   `$NAME` env interpolation so the grant token stays env-only (P6-11).
  * - Gemini CLI is deferred: its gateway protocol is google-specific and Kun
  *   has no matching entry point yet.
  */
@@ -63,6 +66,32 @@ function opencodeConfig(
         }
       },
       model: `kun/${gatewayModelId}`
+    },
+    null,
+    2
+  )}\n`
+}
+
+/**
+ * Generated PI_CODING_AGENT_DIR/models.json (P6-11): a single `kun` provider
+ * on the openai-completions surface. `apiKey` is pi's `$NAME` env
+ * interpolation — the grant token only ever lives in the child env.
+ */
+function piModelsConfig(
+  baseUrl: string,
+  gatewayModelId: string,
+  tokenEnv: string
+): string {
+  return `${JSON.stringify(
+    {
+      providers: {
+        kun: {
+          baseUrl,
+          api: 'openai-completions',
+          apiKey: `\${${tokenEnv}}`,
+          models: [{ id: gatewayModelId, name: gatewayModelId }]
+        }
+      }
     },
     null,
     2
@@ -161,6 +190,12 @@ export function createAcpCredentialEnv(
           codexConfig(v1, gatewayModelId, gateway.env.token)
         )
         return { ...env, CODEX_HOME: dir }
+      case 'pi:openai-chat':
+        writeConfigFile(
+          join(dir, 'models.json'),
+          piModelsConfig(v1, gatewayModelId, gateway.env.token)
+        )
+        return { ...env, PI_CODING_AGENT_DIR: dir }
       default:
         throw new Error(
           `harness '${input.harnessId}' gateway protocol '${gateway.protocol}' has no config mapping`

@@ -11,6 +11,7 @@ import type {
 } from '../contracts/harness-test.js'
 import { collectSessionEventsOfKind } from '../adapters/session-event-query.js'
 import { probeAcpHandshake } from '../harness/acp-handshake-probe.js'
+import { probePiHandshake } from '../harness/pi-handshake-probe.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 
 /**
@@ -101,6 +102,10 @@ async function runHandshake(
   switch (definition.transport) {
     case 'acp':
       return probeAcpHandshake(definition, command, {
+        resolveSecretEnv: runtime.harnesses?.resolveSecretEnv
+      })
+    case 'pi-rpc':
+      return probePiHandshake(definition, command, {
         resolveSecretEnv: runtime.harnesses?.resolveSecretEnv
       })
     case 'agent-sdk': {

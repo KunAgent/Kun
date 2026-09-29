@@ -31,6 +31,7 @@ import { CanvasReceiptRegistry } from '../services/canvas-receipt-registry.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
 import { harnessDefaultsFor } from '../harness/harness-defaults.js'
 import { buildCodexAppServerDeps } from './runtime-composition-codex.js'
+import { buildPiRpcDeps } from './runtime-composition-pi.js'
 import type { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
 
 export type MainDelegatedRuntimeInput = {
@@ -225,6 +226,25 @@ export function buildMainDelegatedRuntime(
     // P6-07: native `codex app-server` transport on the shared session layer;
     // dep assembly lives in runtime-composition-codex.ts.
     codexAppServer: buildCodexAppServerDeps(input.options, services.harnesses, {
+      sessionCoordinator: delegatedSessions,
+      threadStore,
+      sessionStore,
+      turns: turnService,
+      events,
+      ids,
+      credentialEnv: services.acpCredentialEnv,
+      systemPrompt: prefix.systemPrompt,
+      approvalGate,
+      approvalReview: approvalReviewService,
+      userInputGate,
+      attachmentStore: input.attachmentStore,
+      taskWorkspaces: input.taskWorkspaces,
+      debugSink: llmDebug,
+      nowIso
+    }),
+    // P6-09/11: native `pi --mode rpc` transport on the shared session layer;
+    // dep assembly lives in runtime-composition-pi.ts.
+    piRpc: buildPiRpcDeps(input.options, services.harnesses, {
       sessionCoordinator: delegatedSessions,
       threadStore,
       sessionStore,

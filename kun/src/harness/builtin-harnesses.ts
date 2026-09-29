@@ -1,5 +1,6 @@
 import { KUN_TOOL_PERMISSION_MODES } from '../contracts/policy.js'
 import { CODEX_APP_SERVER_MIN_VERSION } from '../runtime/codex/codex-protocol.js'
+import { PI_MIN_VERSION } from '../runtime/pi/pi-protocol.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import {
   allSupportedStatuses,
@@ -144,6 +145,35 @@ export const CODEX_APP_SERVER_CAPABILITIES: HarnessCapabilities = {
 }
 
 export { CODEX_APP_SERVER_MIN_VERSION } from '../runtime/codex/codex-protocol.js'
+export { PI_MIN_VERSION } from '../runtime/pi/pi-protocol.js'
+
+/**
+ * Pi rpc (`pi --mode rpc`, P6-09): native session-file lifecycle
+ * (switch_session/fork), steer/follow_up, abort, get_state handshake,
+ * get_session_stats usage/context. Approvals ride the generated
+ * kun-pi-bridge extension's `tool_call` interception; Kun Tools MCP and
+ * mediated fs/terminal are not wired for this transport.
+ */
+export const PI_RPC_CAPABILITIES: HarnessCapabilities = {
+  statuses: {
+    ...allSupportedStatuses(),
+    // fork(entryId) covers branch-from-earlier-message semantics.
+    rewind: { supported: true },
+    switchModelMidSession: { supported: true },
+    // Bridge re-reads the permission file per tool_call.
+    setPermissionModeMidSession: { supported: true },
+    effort: { supported: true }, // set_thinking_level
+    planMode: todo(),
+    manualCompact: { supported: true },
+    kunTools: todo(), // Kun-tools MCP bridge not wired yet
+    fsMediated: up('pi writes files directly'),
+    terminalMediated: up('pi runs commands directly'),
+    nativeContextTelemetry: { supported: true }, // get_session_stats.contextUsage
+    nativeCommands: todo(),
+    modes: todo()
+  },
+  facts: { sandbox: 'native', usageReporting: 'exact', compactionOwner: 'harness' }
+}
 
 export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
   {
@@ -362,6 +392,69 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
       },
       docsUrl: 'https://github.com/openai/codex'
     },
+    builtin: true
+  },
+  {
+    id: 'pi',
+    displayName: 'Pi',
+    transport: 'pi-rpc',
+    // pi binds cwd at spawn and hosts one session per process — the shared
+    // pool must therefore key on workspace as well as credential (P6-09).
+    poolScope: 'workspace',
+    detect: {
+      command: 'pi',
+      aliases: [],
+      versionArgs: ['--version'],
+      minVersion: PI_MIN_VERSION
+    },
+    // `--mode rpc --no-extensions --extension <kun-pi-bridge>` are prepended
+    // by PiAgent.connect; launch args stay empty so config can't widen them.
+    launch: { command: 'pi', args: [], env: {} },
+    credentialModes: ['native-login', 'kun-gateway'],
+    permissionModes: [
+      { id: 'ask', label: 'Ask', kunPermissionMode: 'ask-for-approval' },
+      { id: 'auto', label: 'Auto', kunPermissionMode: 'approve-for-me' },
+      { id: 'bypass', label: 'Full access', kunPermissionMode: 'full-access' }
+    ],
+    modelSource: 'probe',
+    staticModels: [],
+    capabilities: PI_RPC_CAPABILITIES,
+    // Generated <PI_CODING_AGENT_DIR>/models.json declares a single `kun`
+    // provider on the openai-completions surface; the apiKey is a `$NAME`
+    // environment reference so the grant token never lands on disk (P6-11).
+    gateway: {
+      protocol: 'openai-chat',
+      env: { baseUrl: 'KUN_PI_GATEWAY_BASE', token: 'KUN_PI_GATEWAY_KEY' },
+      stripEnv: [
+        'ANTHROPIC_API_KEY',
+        'AZURE_OPENAI_API_KEY',
+        'DEEPSEEK_API_KEY',
+        'GEMINI_API_KEY',
+        'GOOGLE_API_KEY',
+        'GROQ_API_KEY',
+        'MISTRAL_API_KEY',
+        'OPENAI_API_KEY',
+        'OPENAI_BASE_URL',
+        'OPENAI_API_BASE',
+        'OPENROUTER_API_KEY',
+        'XAI_API_KEY',
+        'PI_CODING_AGENT_DIR'
+      ]
+    },
+    setup: {
+      install: [
+        {
+          platform: 'any',
+          command: 'npm install -g @earendil-works/pi-coding-agent'
+        }
+      ],
+      // Pi login is the interactive `/login` inside its own TUI.
+      login: { command: 'pi', args: [], note: 'Run /login inside pi' },
+      docsUrl: 'https://github.com/earendil-works/pi'
+    },
+    // Hidden until the P6-12 acceptance matrix passes; opt in via the hidden
+    // `harnesses.experimentalIds` config.
+    prerelease: true,
     builtin: true
   },
   {

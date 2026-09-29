@@ -314,7 +314,10 @@ export async function resolveSessionTurnContext(
       credentialIdentity,
       credentialEnv,
       secretEnv,
-      poolKey: `${definition.id}:${credentialIdentity}`,
+      poolKey:
+        definition.poolScope === 'workspace'
+          ? `${definition.id}:${credentialIdentity}:${workspace}`
+          : `${definition.id}:${credentialIdentity}`,
       limits: normalizeTurnLimits(deps.turnLimits),
       intent:
         turn.prompt || userMessageTextWithComposerContexts(userItem),

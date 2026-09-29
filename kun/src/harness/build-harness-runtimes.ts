@@ -33,6 +33,8 @@ export function buildHarnessRuntimes(input: {
   acp?: AcpRuntimeDeps | null
   /** P6-05/07: native `codex app-server` transport on the shared session layer. */
   codexAppServer?: SessionTurnRuntimeDeps | null
+  /** P6-09/11: native `pi --mode rpc` transport on the shared session layer. */
+  piRpc?: SessionTurnRuntimeDeps | null
 }): Partial<Record<HarnessTransport, DelegatedTurnRuntime>> {
   const map: Partial<Record<HarnessTransport, DelegatedTurnRuntime>> = {}
   if (input.agentSdk) map['agent-sdk'] = createAgentSdkRuntime(input.agentSdk)
@@ -41,6 +43,9 @@ export function buildHarnessRuntimes(input: {
   if (input.acp) map.acp = new AcpRuntime(input.acp)
   if (input.codexAppServer) {
     map['codex-app-server'] = new SessionTurnRuntime(input.codexAppServer)
+  }
+  if (input.piRpc) {
+    map['pi-rpc'] = new SessionTurnRuntime(input.piRpc)
   }
   return map
 }

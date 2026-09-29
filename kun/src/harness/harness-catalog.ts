@@ -58,7 +58,8 @@ function applyTransportOverride(
     transport: override,
     launch: variant.launch,
     ...(variant.detect ? { detect: variant.detect } : {}),
-    ...(variant.capabilities ? { capabilities: variant.capabilities } : {})
+    ...(variant.capabilities ? { capabilities: variant.capabilities } : {}),
+    ...(variant.poolScope ? { poolScope: variant.poolScope } : {})
   }
 }
 
@@ -91,6 +92,8 @@ export class HarnessCatalog {
        * ids/transports are ignored rather than breaking the catalog.
        */
       transportOverrides?: () => Readonly<Record<string, HarnessTransport>>
+      /** Pre-GA builtin ids explicitly opted into (harnesses.experimentalIds). */
+      experimental?: () => readonly string[]
     } = {
       custom: () => []
     }
@@ -114,9 +117,10 @@ export class HarnessCatalog {
       }
     }
     const overrides = this.deps.transportOverrides?.() ?? {}
+    const experimental = new Set(this.deps.experimental?.() ?? [])
     const builtins = BUILTIN_HARNESSES.map((def) =>
       applyTransportOverride(def, overrides[def.id])
-    )
+    ).filter((def) => !def.prerelease || experimental.has(def.id))
     return [...builtins, ...customs]
   }
 
