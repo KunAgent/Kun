@@ -47,6 +47,8 @@ export const HarnessTransportSchema = z.enum([
   'cursor-sdk',       // 现有 Cursor SDK 适配器
   'antigravity-cli',  // 现有 Antigravity CLI 适配器
   'acp',              // 通用 ACP 运行时（03）
+  'codex-app-server', // Codex 原生 App Server 协议（P6；impl/p6a）
+  'pi-rpc',           // Pi `--mode rpc` JSONL 协议（P6；impl/p6b）
   'terminal'          // 0 档：只在终端里跑，状态靠 hooks（05）
 ])
 
@@ -165,9 +167,9 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     credentialModes: ['native-login'], /* ... */
   },
   {
-    id: 'codex', displayName: 'Codex', transport: 'acp',
+    id: 'codex', displayName: 'Codex', transport: 'codex-app-server',
     detect: { command: 'codex' },
-    launch: { command: 'codex-acp', args: [], env: {} }, // 通过 ACP adapter；P2 评估 app-server 深度适配
+    launch: { command: 'codex', args: ['app-server'], env: {} }, // P6-07 起原生协议；`adeHarnesses.transportOverrides.codex='acp'` 回退到 codex-acp 适配器定义
     historySource: 'codex', /* ... */
   },
   { id: 'opencode', displayName: 'OpenCode', transport: 'acp',
@@ -182,6 +184,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
 - 具体的启动参数以实现时各 CLI 当前版本为准，**在 P1 开始前用真实二进制验证一遍**，不凭记忆写死。验证结果写进测试夹具（13 §5）。
 - 用户自定义 harness：只允许 `transport: 'acp'`，通过设置页添加（命令、参数、非敏感环境变量）。`builtin: false`。
 - 目录是**只读数据**，放在 kun 里；GUI 通过 `GET /v1/harnesses` 读取，不在 renderer 里再维护一份。
+- `transportOverrides`（kun-config `adeHarnesses` 段）：per-harness 把 transport 切到指定的兼容替代（当前唯一有意义的是 `codex → 'acp'`，作为 App Server 的显式回退）。回退只改变 transport 与启动参数，harnessId、能力声明口径与路由键不变；失败不自动切换，必须显式设置（见 impl/p6b §3）。
 
 ## 5. 检测：`kun/src/harness/harness-detector.ts`（新增）
 

@@ -98,7 +98,12 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
 5. Add settings only under `agents.kun`.
 6. New agent engines are added as harness definitions (`kun/src/harness/`) plus, when
    needed, a `DelegatedTurnRuntime` implementation. Prefer the generic ACP runtime;
-   a dedicated adapter needs a capability that ACP cannot provide.
+   a dedicated native adapter is allowed only where the capability gap exceeds what
+   ACP can express (session resume/fork, per-kind approvals, account/quota surface),
+   must implement the shared session contract (`kun/src/session/`), must stay behind
+   `kun serve`'s HTTP/SSE boundary, and must obey harness routing and governance.
+   The gap analysis and admission checklist live in `docs/ade/impl/p6-native-agent-adapters.md`
+   and `docs/ade/13-governance-rollout.md`.
 
 ## Agent-Managed Plan Worktrees
 

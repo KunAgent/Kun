@@ -11,6 +11,8 @@
 
 现有三个深度适配器（Claude SDK、Cursor SDK、Antigravity CLI）保持不变。
 
+> P6 更新：ACP 仍是通用委托运行时之一，但"会话停泊、审批桥、用量聚合、历史交接"等协议无关职责已上移到 `kun/src/session/`（`SessionTurnRuntime` + `HarnessAgent`/`HarnessSession`/`HarnessTurnSink`），Codex App Server 与 Pi RPC 两个原生适配器共享同一层（impl/p6a、p6b）。本章下文描述的是 ACP transport 自身的协议细节。
+
 ## 2. 协议速览（ACP protocolVersion 1，2026-09 查阅官方文档）
 
 实现时 pin 住协议版本，类型从官方 JSON schema / 官方 TypeScript SDK 生成，**不要手抄**。下表只用于设计。

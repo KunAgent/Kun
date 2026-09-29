@@ -19,6 +19,8 @@
 | native-loop | 原生工具注册表 | 原生事件 |
 | agent-sdk / cursor-sdk | 现有进程内工具桥（`sdk-tool-bridge.ts`、`cursor-sdk-tool-bridge.ts`） | 适配器事件 |
 | acp | Kun Tools MCP server（§3） | ACP `session/update` |
+| codex-app-server | Kun Tools MCP server（§3；app-server 支持 MCP server 配置，走同一份 MCP 面） | App Server `item/*`、`turn/*` 通知 |
+| pi-rpc | `kun-pi-bridge` 扩展（impl/p6b §1.2） | Pi RPC 事件流（`agent_settled` 收尾） |
 | terminal | `kun worker` CLI 回调（§5） | 托管 hooks（§6） |
 
 ## 2. Worker 工具
