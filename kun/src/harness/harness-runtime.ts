@@ -6,6 +6,7 @@ import { HarnessCatalog } from './harness-catalog.js'
 import { HarnessDetector, spawnCaptured } from './harness-detector.js'
 import { probeHarnessLogin } from './harness-login-probes.js'
 import { AcpModelProbe } from './acp-model-probe.js'
+import { CodexModelProbe } from './codex-model-probe.js'
 import { probeAcpReadiness } from './acp-readiness-probe.js'
 import { AcpReadinessStore, type AcpReadinessCacheView } from './acp-readiness-store.js'
 import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
@@ -36,6 +37,8 @@ export type HarnessRuntimeComposition = {
   acpModels: AcpModelProbe
   /** Agent SDK `supportedModels()` probing for `modelSource: 'probe'` harnesses. */
   agentSdkModels: AgentSdkModelProbe
+  /** Codex app-server `model/list` probing (P6-07). */
+  codexModels: CodexModelProbe
   /**
    * Spawn-free read of the freshest probed model list, dispatched by
    * transport; `undefined` means no fresh successful probe is cached.
@@ -89,7 +92,8 @@ export function createHarnessComposition(
   const catalog = new HarnessCatalog({
     custom: () => options().harnesses?.custom ?? [],
     terminalAgents: () => options().harnesses?.terminalAgents ?? [],
-    disabled: () => options().harnesses?.disabledIds ?? []
+    disabled: () => options().harnesses?.disabledIds ?? [],
+    transportOverrides: () => options().harnesses?.transportOverrides ?? {}
   })
   // P4-03: persist successful ACP handshakes for 24h so a restart does not
   // re-probe every agent; parallel probes are capped at two.
@@ -132,17 +136,24 @@ export function createHarnessComposition(
     binaryPath: (id) =>
       options().harnesses?.binaryPaths?.[id] ?? process.env.KUN_CLAUDE_BINARY
   })
+  const codexModels = new CodexModelProbe({
+    binaryPath: (id) => options().harnesses?.binaryPaths?.[id],
+    resolveSecretEnv: deps.resolveSecretEnv
+  })
   const probedModels = (definition: HarnessDefinition): string[] | undefined =>
     definition.transport === 'acp'
       ? acpModels.peek(definition)
       : definition.transport === 'agent-sdk'
         ? agentSdkModels.peek(definition)
-        : undefined
+        : definition.transport === 'codex-app-server'
+          ? codexModels.peek(definition)
+          : undefined
   return {
     catalog,
     detector,
     acpModels,
     agentSdkModels,
+    codexModels,
     probedModels,
     tokens: new HarnessTokenService(),
     gatewayEndpoint: {},

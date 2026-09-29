@@ -1,7 +1,8 @@
 import {
   HarnessDefinitionSchema,
   type HarnessDefinition,
-  type HarnessId
+  type HarnessId,
+  type HarnessTransport
 } from '../contracts/harness.js'
 import {
   allUnsupportedStatuses,
@@ -41,6 +42,27 @@ const CUSTOM_TRANSPORT = 'acp'
 const TERMINAL_TRANSPORT = 'terminal'
 
 /**
+ * Swap a builtin definition onto one of its declared `variants` when a
+ * transport override names it. Unknown transports (no matching variant) fall
+ * through untouched so a stale pin can never break the catalog.
+ */
+function applyTransportOverride(
+  def: HarnessDefinition,
+  override: HarnessTransport | undefined
+): HarnessDefinition {
+  if (!override || override === def.transport) return def
+  const variant = def.variants?.[override]
+  if (!variant) return def
+  return {
+    ...def,
+    transport: override,
+    launch: variant.launch,
+    ...(variant.detect ? { detect: variant.detect } : {}),
+    ...(variant.capabilities ? { capabilities: variant.capabilities } : {})
+  }
+}
+
+/**
  * Terminal agents host no turns: every capability is unavailable so
  * `manager-worker` admission and `harness_list` mark them terminal-only.
  */
@@ -63,6 +85,12 @@ export class HarnessCatalog {
       terminalAgents?: () => readonly TerminalAgentConfig[]
       /** User-disabled builtin harness ids; they stay visible but unadmittable. */
       disabled?: () => readonly HarnessId[]
+      /**
+       * P6-07 hidden transport pins: `{codex: 'acp'}` re-selects a declared
+       * variant while the default keeps moving (or stays pinned) — unknown
+       * ids/transports are ignored rather than breaking the catalog.
+       */
+      transportOverrides?: () => Readonly<Record<string, HarnessTransport>>
     } = {
       custom: () => []
     }
@@ -85,7 +113,11 @@ export class HarnessCatalog {
         customs.push(parsed.data)
       }
     }
-    return [...BUILTIN_HARNESSES, ...customs]
+    const overrides = this.deps.transportOverrides?.() ?? {}
+    const builtins = BUILTIN_HARNESSES.map((def) =>
+      applyTransportOverride(def, overrides[def.id])
+    )
+    return [...builtins, ...customs]
   }
 
   get(id: string): HarnessDefinition | undefined {

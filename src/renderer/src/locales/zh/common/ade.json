@@ -339,7 +339,9 @@
     "cursorSdk": "Cursor SDK",
     "antigravityCli": "CLI",
     "acp": "ACP",
-    "terminal": "终端"
+    "terminal": "终端",
+    "codexAppServer": "App Server",
+    "piRpc": "Pi RPC"
   },
   "adeAgentTest": {
     "detect": "检测",

@@ -17,7 +17,6 @@ import type {
 import { HarnessTransportError } from '../../session/harness-session.js'
 import { CodexClient, type CodexDebugLog } from './codex-client.js'
 import { CodexSession, type CodexRequestRouter } from './codex-session.js'
-import type { CodexModel } from './codex-protocol.js'
 
 export type CodexAgentOptions = {
   /** Test seam: pre-built client/process pair skips spawn + handshake. */
@@ -137,14 +136,7 @@ export class CodexAgent implements HarnessAgent {
   }
 
   async listModels(): Promise<string[]> {
-    const models: CodexModel[] = []
-    let cursor: string | undefined
-    for (;;) {
-      const page = await this.client.modelList({ cursor })
-      models.push(...page.models)
-      if (!page.nextCursor) return models.map((model) => model.id)
-      cursor = page.nextCursor
-    }
+    return this.client.listModelsFlat()
   }
 
   /** codex thread/read rate-limit snapshot for manager routing. */
@@ -265,3 +257,14 @@ export function makeCodexAgentFactory(options: {
     connect: (input) => CodexAgent.connect(input, options)
   }
 }
+
+/** Legacy capability flags for the delegated-runtime surface. */
+export const CODEX_APP_SERVER_LEGACY_CAPABILITIES = {
+  nativeResume: true,
+  structuredStreaming: true,
+  kunTools: false,
+  externalApproval: true,
+  liveSteering: true,
+  nativeContextTelemetry: true,
+  fork: true
+} as const

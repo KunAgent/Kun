@@ -1,4 +1,5 @@
 import { KUN_TOOL_PERMISSION_MODES } from '../contracts/policy.js'
+import { CODEX_APP_SERVER_MIN_VERSION } from '../runtime/codex/codex-protocol.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import {
   allSupportedStatuses,
@@ -117,6 +118,32 @@ export const ACP_DEFAULT_CAPABILITIES: HarnessCapabilities = {
   },
   facts: { sandbox: 'native', usageReporting: 'estimated', compactionOwner: 'harness' }
 }
+
+/**
+ * Codex app-server (`codex app-server`, P6): native thread/turn lifecycle,
+ * steer/interrupt, fork/rollback, approvals and requestUserInput. Kun Tools
+ * MCP and mediated fs/terminal are not wired for this transport yet.
+ */
+export const CODEX_APP_SERVER_CAPABILITIES: HarnessCapabilities = {
+  statuses: {
+    ...allSupportedStatuses(),
+    fork: { supported: true },
+    rewind: { supported: true },
+    sameTurnSteer: { supported: true },
+    switchModelMidSession: todo(),
+    manualCompact: { supported: true },
+    kunTools: todo(),
+    nativeToolInterception: { supported: true },
+    fsMediated: up('codex app-server writes files directly'),
+    terminalMediated: up('codex app-server runs commands directly'),
+    nativeContextTelemetry: { supported: true },
+    nativeCommands: todo(),
+    modes: todo()
+  },
+  facts: { sandbox: 'native', usageReporting: 'exact', compactionOwner: 'harness' }
+}
+
+export { CODEX_APP_SERVER_MIN_VERSION } from '../runtime/codex/codex-protocol.js'
 
 export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
   {
@@ -285,6 +312,21 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
       }
     },
     launch: { command: 'codex-acp', args: [], env: {} },
+    // P6-07: `harnesses.transportOverrides.codex = 'codex-app-server'` (or the
+    // P6-08 default flip) selects the native app-server transport — same
+    // `codex` binary, no adapter package, native thread/turn lifecycle.
+    variants: {
+      'codex-app-server': {
+        launch: { command: 'codex', args: ['app-server'], env: {} },
+        detect: {
+          command: 'codex',
+          aliases: [],
+          versionArgs: ['--version'],
+          minVersion: CODEX_APP_SERVER_MIN_VERSION
+        },
+        capabilities: CODEX_APP_SERVER_CAPABILITIES
+      }
+    },
     credentialModes: ['native-login', 'kun-gateway'],
     permissionModes: [
       // codex-acp adapter modes, strictest first.

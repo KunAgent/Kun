@@ -79,3 +79,38 @@ describe('terminalAgents catalog entries (P4-13)', () => {
     expect(catalog.get('kun')?.builtin).toBe(true)
   })
 })
+
+describe('transportOverrides (P6-07)', () => {
+  it('swaps codex onto its codex-app-server variant', () => {
+    const catalog = new HarnessCatalog({
+      custom: () => [],
+      transportOverrides: () => ({ codex: 'codex-app-server' })
+    })
+    const codex = catalog.get('codex')!
+    expect(codex.transport).toBe('codex-app-server')
+    expect(codex.launch?.command).toBe('codex')
+    expect(codex.launch?.args).toEqual(['app-server'])
+    expect(codex.detect?.command).toBe('codex')
+    expect(codex.detect?.minVersion).toBe('0.145.0')
+    expect(codex.capabilities.statuses.fork.supported).toBe(true)
+  })
+
+  it('keeps the default acp binding without an override', () => {
+    const codex = new HarnessCatalog({ custom: () => [] }).get('codex')!
+    expect(codex.transport).toBe('acp')
+    expect(codex.launch?.command).toBe('codex-acp')
+    expect(codex.detect?.adapterHint?.command).toBe('codex')
+  })
+
+  it('ignores unknown transports and unrelated ids', () => {
+    const catalog = new HarnessCatalog({
+      custom: () => [],
+      transportOverrides: () => ({
+        codex: 'terminal', // not a declared codex variant → unchanged
+        unknownharness: 'codex-app-server'
+      })
+    })
+    expect(catalog.get('codex')!.transport).toBe('acp')
+    expect(catalog.get('unknownharness')).toBeUndefined()
+  })
+})

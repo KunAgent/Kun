@@ -319,5 +319,7 @@
   "adeAgentTest.tokens": "{{count}} tokens used",
   "adeAgentTest.noHandshake": "no handshake surface",
   "adeAgentTest.capSessionResume": "session resume",
-  "adeAgentTest.capImageInput": "image input"
+  "adeAgentTest.capImageInput": "image input",
+  "adeAgentTransport.codexAppServer": "App Server",
+  "adeAgentTransport.piRpc": "Pi RPC"
 }

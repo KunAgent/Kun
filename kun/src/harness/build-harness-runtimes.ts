@@ -16,6 +16,10 @@ import {
   createCursorSdkRuntime,
   type CursorSdkRuntimeFactoryDeps
 } from '../runtime/cursor/cursor-sdk-runtime-factory.js'
+import {
+  SessionTurnRuntime,
+  type SessionTurnRuntimeDeps
+} from '../session/session-turn-runtime.js'
 
 /**
  * Shared transport map assembly used by the main runtime and by child/delegated
@@ -27,11 +31,16 @@ export function buildHarnessRuntimes(input: {
   antigravity?: AntigravityCliRuntimeDeps | null
   cursor?: CursorSdkRuntimeFactoryDeps | null
   acp?: AcpRuntimeDeps | null
+  /** P6-05/07: native `codex app-server` transport on the shared session layer. */
+  codexAppServer?: SessionTurnRuntimeDeps | null
 }): Partial<Record<HarnessTransport, DelegatedTurnRuntime>> {
   const map: Partial<Record<HarnessTransport, DelegatedTurnRuntime>> = {}
   if (input.agentSdk) map['agent-sdk'] = createAgentSdkRuntime(input.agentSdk)
   if (input.antigravity) map['antigravity-cli'] = new AntigravityCliRuntime(input.antigravity)
   if (input.cursor) map['cursor-sdk'] = createCursorSdkRuntime(input.cursor)
   if (input.acp) map.acp = new AcpRuntime(input.acp)
+  if (input.codexAppServer) {
+    map['codex-app-server'] = new SessionTurnRuntime(input.codexAppServer)
+  }
   return map
 }

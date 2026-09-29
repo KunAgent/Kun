@@ -34,6 +34,7 @@ import {
   isHarnessCapabilities,
   LEGACY_DERIVATION_BASE
 } from '@shared/harness-capabilities'
+import { ADE_DELEGATED_TRANSPORTS } from '@shared/ade-harnesses'
 import type { RuntimeProjectionAction } from './runtime-projection-actions'
 import { redactSecrets, redactSecretText } from '@shared/secret-redaction'
 import { applyClientUserMessageSourceMeta } from '@shared/background-shell-notice'
@@ -286,12 +287,8 @@ export function delegatedRuntimeFromCore(event: CoreRuntimeEventJson): Delegated
   if (
     !threadId ||
     !providerId ||
-    (
-      providerKind !== 'agent-sdk' &&
-      providerKind !== 'cursor-sdk' &&
-      providerKind !== 'antigravity-cli' &&
-      providerKind !== 'acp'
-    ) ||
+    !providerKind ||
+    !ADE_DELEGATED_TRANSPORTS.has(providerKind) ||
     (phase !== 'portable' && phase !== 'resumed' && phase !== 'rebased') ||
     !capabilities ||
     ![

@@ -236,6 +236,18 @@ export class CodexClient {
     }
   }
 
+  /** `model/list` flattened across pages. */
+  async listModelsFlat(): Promise<string[]> {
+    const models: string[] = []
+    let cursor: string | undefined
+    for (;;) {
+      const page = await this.modelList({ ...(cursor ? { cursor } : {}) })
+      models.push(...page.models.map((model) => model.id))
+      if (!page.nextCursor) return models
+      cursor = page.nextCursor
+    }
+  }
+
   async accountRead(): Promise<{
     requiresOpenaiAuth: boolean
     account: CodexAccount | undefined

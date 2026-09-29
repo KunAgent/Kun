@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { HarnessCredentialModeSchema, HarnessIdSchema } from '../contracts/harness.js'
+import {
+  HarnessCredentialModeSchema,
+  HarnessIdSchema,
+  HarnessTransportSchema
+} from '../contracts/harness.js'
 
 /** User-defined external harness entry (ACP/terminal transports launch it). */
 export const HarnessCustomEntrySchema = z
@@ -65,6 +69,15 @@ export const HarnessesConfigSchema = z
     disabledIds: z.array(HarnessIdSchema).max(64).default([]),
     /** Per-harness binary path overrides (settings override > bundled > PATH). */
     binaryPaths: z.record(HarnessIdSchema, z.string().min(1).max(4_096)).default({}),
+    /**
+     * Hidden per-harness transport pin (P6-07): maps a builtin harness id to
+     * one of its declared `variants` — e.g. `{codex: 'acp'}` keeps the ACP
+     * adapter while codex defaults to `codex-app-server`. Not user-facing;
+     * unknown ids/transports are ignored by the catalog.
+     */
+    transportOverrides: z
+      .record(HarnessIdSchema, HarnessTransportSchema)
+      .default({}),
     /** User-defined ACP harnesses; ids colliding with builtins are dropped. */
     custom: z.array(HarnessCustomEntrySchema).max(32).default([]),
     /**
