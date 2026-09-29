@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create as createRenderer, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import { PaperWorkspacesSection } from './PaperWorkspacesSection'
+import { PaperTree } from './PaperTree'
 import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { usePaperLibraryIndexStore } from '../../../paper/paper-library-index'
@@ -113,6 +114,66 @@ describe('PaperWorkspacesSection collapse', () => {
       .map((node) => node.children.map((child) => (typeof child === 'string' ? child : '')).join(''))
       .filter((text) => text.trim().length > 0)
     expect(badge).not.toContain('0')
+    await act(async () => {
+      tree.unmount()
+    })
+  })
+
+  it('toggles with Enter and Space like a native button', async () => {
+    seed([ROOT], [entry('OrcaLoca')])
+    let tree!: ReactTestRenderer
+    await act(async () => {
+      tree = createRenderer(createElement(PaperWorkspacesSection))
+    })
+    const keyDown = (key: string) =>
+      rootRow(tree, ROOT).props.onKeyDown({ key, preventDefault: () => undefined })
+
+    await act(async () => {
+      keyDown(' ')
+    })
+    expect(paperRowCount(tree)).toBe(0)
+
+    await act(async () => {
+      keyDown('Enter')
+    })
+    expect(paperRowCount(tree)).toBe(1)
+    await act(async () => {
+      tree.unmount()
+    })
+  })
+
+  it('keeps folder rows collapsible while filtering without touching persisted folds', async () => {
+    seed([ROOT], [])
+    const grouped = [
+      { ...entry('OrcaLoca'), group: 'Papers' },
+      { ...entry('Experts Rise'), group: 'Papers' }
+    ]
+    let tree!: ReactTestRenderer
+    const renderTree = (filter: string) =>
+      createElement(PaperTree, {
+        libraryRoot: ROOT,
+        entries: grouped,
+        groups: ['Papers'],
+        filter
+      })
+    await act(async () => {
+      tree = createRenderer(renderTree('orca'))
+    })
+    // Only the matching row is visible.
+    expect(paperRowCount(tree)).toBe(1)
+
+    const groupRow = () =>
+      tree.root.find((node) => node.type === 'button' && node.props.title === 'Papers')
+    await act(async () => {
+      groupRow().props.onClick()
+    })
+    expect(paperRowCount(tree)).toBe(0)
+
+    // Filter-session folds do not leak into the persisted collapse state.
+    await act(async () => {
+      tree.update(renderTree(''))
+    })
+    expect(paperRowCount(tree)).toBe(2)
     await act(async () => {
       tree.unmount()
     })
