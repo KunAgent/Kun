@@ -66,11 +66,20 @@ export async function probePiHandshake(
         .join(', ') || 'rpc channel answered'
     return { ok: true, supported: true, protocol: 'pi-rpc', detail }
   } catch (error) {
+    const stderr = process.sanitizedStderrTail()
+    const stderrLine =
+      stderr
+        .split('\n')
+        .map((line) => line.trim())
+        .find((line) => /error|EACCES|ENOENT|denied|failed/i.test(line)) ??
+      stderr.trim().split('\n').pop()
     return {
       ok: false,
       supported: true,
       protocol: 'pi-rpc',
-      detail: `get_state failed: ${errorMessage(error)}`
+      detail:
+        `get_state failed: ${errorMessage(error)}` +
+        (stderrLine ? ` — stderr: ${stderrLine.slice(0, 200)}` : '')
     }
   } finally {
     await client.close().catch(() => undefined)

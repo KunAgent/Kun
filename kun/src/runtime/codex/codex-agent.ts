@@ -4,6 +4,7 @@
  * `thread/*` methods; the agent routes inbound server requests (approvals,
  * user input) to the owning session by codex threadId.
  */
+import { tmpdir } from 'node:os'
 import { startHarnessProcess } from '../../session/harness-process.js'
 import type { HarnessProcess } from '../../session/harness-process.js'
 import type {
@@ -79,7 +80,12 @@ export class CodexAgent implements HarnessAgent {
       secretEnv: input.secretEnv,
       credentialEnv: input.credentialEnv,
       stripEnv: input.stripEnv,
-      cwd: input.cwd,
+      // Spawn cwd must outlive every pooled session: codex stats it while
+      // loading config on each thread/start, so a deleted per-thread
+      // workspace would poison the whole pooled process (EACCES/ENOENT
+      // "failed to load configuration"). Per-thread cwd is carried by
+      // thread/start params, not the process spawn.
+      cwd: tmpdir(),
       ...(input.spawn ? { spawn: input.spawn } : {})
     })
     const client =

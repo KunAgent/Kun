@@ -127,7 +127,9 @@ export class CodexClient {
       direction: 'out',
       summary: `${method} ${preview(params)}`
     })
-    return this.peer.request(method, params, options) as Promise<T>
+    // codex app-server rejects frames without a `params` member
+    // ("Invalid request: missing field `params`") — always send an object.
+    return this.peer.request(method, params ?? {}, options) as Promise<T>
   }
 
   /** Server → client response helper. */
@@ -309,7 +311,8 @@ const DEBUG_PREVIEW_CHARS = 2_048
 function preview(value: unknown): string {
   let serialized: string
   try {
-    serialized = JSON.stringify(value)
+    // JSON.stringify(undefined) returns undefined, not a string.
+    serialized = JSON.stringify(value) ?? ''
   } catch {
     return '[unserializable params]'
   }

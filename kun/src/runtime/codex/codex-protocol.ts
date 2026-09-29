@@ -141,6 +141,19 @@ export const CodexTurnStatusSchema = z.enum([
 ])
 export type CodexTurnStatus = z.infer<typeof CodexTurnStatusSchema>
 
+/**
+ * codex 0.145+ serializes `thread.status`/`turn.status` as `{type: <name>}`
+ * objects while older builds sent a bare string — normalize both to the name.
+ */
+const codexStatusString = (schema: z.ZodTypeAny) =>
+  z.preprocess(
+    (value) =>
+      value && typeof value === 'object' && 'type' in value
+        ? (value as { type: unknown }).type
+        : value,
+    schema
+  )
+
 export const CodexTurnErrorSchema = z
   .object({
     message: z.string(),
@@ -162,7 +175,7 @@ export type CodexThreadItem = z.infer<typeof CodexThreadItemSchema>
 export const CodexTurnSchema = z
   .object({
     id: z.string(),
-    status: CodexTurnStatusSchema,
+    status: codexStatusString(CodexTurnStatusSchema),
     items: z.array(CodexThreadItemSchema).default([]),
     error: CodexTurnErrorSchema.nullable().optional(),
     startedAt: z.number().nullable().optional(),
@@ -176,7 +189,7 @@ export const CodexThreadSchema = z
   .object({
     id: z.string(),
     sessionId: z.string().optional(),
-    status: z.string().optional(),
+    status: codexStatusString(z.string()).optional(),
     turns: z.array(CodexTurnSchema).optional(),
     preview: z.string().optional()
   })
