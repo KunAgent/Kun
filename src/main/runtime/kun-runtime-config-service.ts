@@ -111,9 +111,13 @@ import { atomicWriteFile } from '../atomic-json-file'
 
 export type ManagedRuntimeHotApplyResult = 'applied' | 'restart_required' | 'failed'
 
+export type ManagedRuntimeHotApplySection = { code: string; message: string }
+
 export type ManagedRuntimeHotApplyResponse = {
   result: ManagedRuntimeHotApplyResult
   message: string
+  /** Sections rejected while the rest of the apply committed (P4-04). */
+  sections?: Record<string, ManagedRuntimeHotApplySection>
 }
 
 export async function syncGuiManagedKunConfig(
@@ -483,7 +487,13 @@ export function classifyManagedRuntimeHotApplyResponse(
     return { result: 'restart_required', message: 'runtime does not support hot config apply' }
   }
   const parsed = parseResponseObject(text)
-  if (ok && parsed?.ok === true) return { result: 'applied', message: '' }
+  if (ok && parsed?.ok === true) {
+    const sections = parseRejectedSections(parsed.rejectedSections)
+    const message = sections
+      ? Object.values(sections).map((section) => section.message).join('; ')
+      : ''
+    return { result: 'applied', message, ...(sections ? { sections } : {}) }
+  }
   const message = String(parsed?.message ?? text).trim()
   if (parsed?.code === 'restart_required') {
     return { result: 'restart_required', message }
@@ -492,6 +502,19 @@ export function classifyManagedRuntimeHotApplyResponse(
     result: 'failed',
     message: message || `Kun hot config apply failed with HTTP ${status}`
   }
+}
+
+function parseRejectedSections(
+  value: unknown
+): Record<string, ManagedRuntimeHotApplySection> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const entries = Object.entries(value as Record<string, unknown>).flatMap(([section, raw]) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return []
+    const candidate = raw as { code?: unknown; message?: unknown }
+    if (typeof candidate.code !== 'string' || typeof candidate.message !== 'string') return []
+    return [[section, { code: candidate.code, message: candidate.message }]]
+  })
+  return entries.length ? Object.fromEntries(entries) : undefined
 }
 
 function parseResponseObject(text: string): Record<string, unknown> | null {

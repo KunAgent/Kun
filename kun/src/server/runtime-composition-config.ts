@@ -3,7 +3,6 @@ import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history
 import {
   join,
   isDeepStrictEqual,
-  isLoopbackHost,
   CapabilityRegistry,
   buildGoalLocalTools,
   buildTodoLocalTools,
@@ -43,6 +42,7 @@ import {
   buildPptAgentToolProvider,
   type RuntimeConfigApplyRequest,
   type RuntimeConfigApplyResponse,
+  type RuntimeConfigApplyRejectedSection,
   SkillRuntime,
   InstructionRuntime,
   resolveConfiguredHooks
@@ -57,6 +57,7 @@ import {
   builtinToolOptionsForOptions,
   contextWindowModeFor,
   llmDebugCaptureEnabled,
+  localModelGatewayApplyIssue,
   mergeRuntimeConfigApplyOptions,
   modelRequestCaptureDefaultEnabled,
   skillsConfigForRuntime,
@@ -275,20 +276,6 @@ export function createRuntimeConfigController(
 	      mergedOptions,
 	      legacyCredentialMigration
 	    )
-	    if (nextOptions.localModelGateway?.enabled && !gatewayCredentials.hasKey()) {
-	      return {
-	        ok: false,
-	        code: 'invalid_config',
-	        message: 'local model gateway requires an independent API key; ensure a key before enabling it'
-	      }
-	    }
-	    if (nextOptions.localModelGateway?.enabled && !isLoopbackHost(nextOptions.host)) {
-	      return {
-	        ok: false,
-	        code: 'invalid_config',
-	        message: 'local model gateway requires a loopback serve host'
-	      }
-	    }
 	    const nextSubagentsEnabled = nextOptions.capabilities?.subagents.enabled === true
 	    if (nextSubagentsEnabled && !delegationRuntime) {
 	      return {
@@ -319,6 +306,7 @@ export function createRuntimeConfigController(
 	    ])
 	    const stagedBrowserUseBinding = stageBrowserUseHostBinding(request)
 	    let stagedGenerationCommitted = false
+	    const rejectedSections: Record<string, RuntimeConfigApplyRejectedSection> = {}
 	    try {
 	    const nextInstructionRuntime = new InstructionRuntime(
 	      nextOptions.capabilities?.instructions
@@ -465,9 +453,17 @@ export function createRuntimeConfigController(
 	        providers: Object.fromEntries(materializedConnections.providers.entries()),
 	        modelProxyUrl: selected?.config.modelProxyUrl,
 	        routePools: materializedConnections.routePools,
-	        providerFailover: materializedConnections.failover,
-	        localModelGateway: materializedConnections.localModelGateway
+	        providerFailover: materializedConnections.failover
 	      }
+            }
+            // The Registry owns the gateway section even with zero providers.
+            nextOptions = { ...nextOptions, localModelGateway: materializedConnections.localModelGateway }
+            // Segmented gateway validation (P4-04): a missing key or
+            // non-loopback host rejects only the localModelGateway section.
+            const gatewayIssue = localModelGatewayApplyIssue(nextOptions, gatewayCredentials)
+            if (gatewayIssue) {
+              rejectedSections.localModelGateway = gatewayIssue
+              nextOptions = { ...nextOptions, localModelGateway: { ...nextOptions.localModelGateway!, enabled: false } }
             }
             await migrateLegacyProviderCredentials(nextOptions)
 	    const nextModelClients = buildModelClientRouterInput(
@@ -664,11 +660,17 @@ export function createRuntimeConfigController(
 	      console.warn('[kun] MCP background reconnect failed after config apply:', error)
 	    })
 	    void previousMcpProviders.close().catch(() => undefined)
-	    return { ok: true }
+	    return {
+	      ok: true,
+	      ...(Object.keys(rejectedSections).length ? { rejectedSections } : {})
+	    }
 	    } catch (error) {
 	      if (stagedGenerationCommitted) {
 	        console.warn('[kun] Runtime config post-commit reconciliation failed:', error)
-	        return { ok: true }
+	        return {
+	          ok: true,
+	          ...(Object.keys(rejectedSections).length ? { rejectedSections } : {})
+	        }
 	      }
 	      return {
 	        ok: false,

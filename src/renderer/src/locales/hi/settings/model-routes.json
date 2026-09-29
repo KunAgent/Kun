@@ -27,6 +27,12 @@
     "runtimeNotRunning": "Kun Runtime नहीं चल रहा है",
     "runtimeNotConnected": "Kun Runtime कनेक्ट नहीं है",
     "runtimeSyncing": "Kun Runtime से सिंक किया जा रहा है",
+    "gatewayFix": "ठीक करें",
+    "gatewayIssue": {
+      "gateway_key_missing": "लोकल गेटवे में स्वतंत्र API कुंजी नहीं है",
+      "gateway_non_loopback_host": "लोकल गेटवे के लिए loopback पता आवश्यक है",
+      "gateway_disabled": "लोकल गेटवे अपने आप बंद हो गया (API कुंजी बनाई नहीं जा सकी)"
+    },
     "runtimeWaitingForSync": "Kun Runtime सिंक की प्रतीक्षा की जा रही है",
     "tabsAria": "मॉडल मार्ग सेटिंग्स",
     "tabGateway": "गेटवे और API",

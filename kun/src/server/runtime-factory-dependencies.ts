@@ -253,7 +253,8 @@ export { RoutePoolTestService } from '../services/route-pool-test-service.js'
 export type { UsageEvent } from '../contracts/events.js'
 export type {
   RuntimeConfigApplyRequest,
-  RuntimeConfigApplyResponse
+  RuntimeConfigApplyResponse,
+  RuntimeConfigApplyRejectedSection
 } from '../contracts/runtime-config.js'
 export type { ModelConnectionConnectRequest } from '../contracts/model-connections.js'
 export {

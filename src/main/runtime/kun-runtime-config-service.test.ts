@@ -480,6 +480,30 @@ describe('Kun runtime config service', () => {
     })
   })
 
+  it('classifies a successful apply with rejected sections as applied', () => {
+    expect(classifyManagedRuntimeHotApplyResponse(200, true, JSON.stringify({
+      ok: true,
+      rejectedSections: {
+        localModelGateway: {
+          code: 'gateway_key_missing',
+          message: 'local model gateway requires an independent API key'
+        }
+      }
+    }))).toEqual({
+      result: 'applied',
+      message: 'local model gateway requires an independent API key',
+      sections: {
+        localModelGateway: {
+          code: 'gateway_key_missing',
+          message: 'local model gateway requires an independent API key'
+        }
+      }
+    })
+    expect(classifyManagedRuntimeHotApplyResponse(200, true, '{"ok":true,"rejectedSections":{"localModelGateway":{}}}')).toEqual({
+      result: 'applied', message: ''
+    })
+  })
+
   it('projects provider catalogs when callers pass appSettings without schedule MCP', async () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-config-providers-'))
     const base = normalizeAppSettings({} as AppSettingsV1)

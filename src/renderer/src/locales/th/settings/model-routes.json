@@ -27,6 +27,12 @@
     "runtimeNotRunning": "Kun Runtime ไม่ทำงาน",
     "runtimeNotConnected": "Kun Runtime ไม่ได้เชื่อมต่อ",
     "runtimeSyncing": "กำลังซิงค์กับ Kun Runtime",
+    "gatewayFix": "แก้ไข",
+    "gatewayIssue": {
+      "gateway_key_missing": "เกตเวย์ในเครื่องไม่มีคีย์ API แยก",
+      "gateway_non_loopback_host": "เกตเวย์ในเครื่องต้องใช้ที่อยู่ loopback",
+      "gateway_disabled": "เกตเวย์ในเครื่องถูกปิดอัตโนมัติ (สร้างคีย์ API ไม่ได้)"
+    },
     "runtimeWaitingForSync": "กำลังรอการซิงค์ Kun Runtime",
     "tabsAria": "การตั้งค่าเส้นทางจำลอง",
     "tabGateway": "เกตเวย์ & API",
