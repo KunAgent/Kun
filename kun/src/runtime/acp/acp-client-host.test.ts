@@ -246,8 +246,8 @@ describe('AcpClientHost', () => {
     })
     const created = await h.call<{ terminalId: string }>(ACP_CLIENT_METHODS.terminalCreate, {
       sessionId: 'sess-1',
-      command: '/bin/sh',
-      args: ['-c', 'printf "%0.sX" {1..2048}'],
+      command: process.execPath,
+      args: ['-e', "process.stdout.write('X'.repeat(2048))"],
       outputByteLimit: 16
     })
     await h.host.terminals.waitForExit(created.terminalId)
@@ -256,7 +256,7 @@ describe('AcpClientHost', () => {
       { sessionId: 'sess-1', terminalId: created.terminalId }
     )
     expect(out.truncated).toBe(true)
-    expect(out.output.length).toBeLessThanOrEqual(16)
+    expect(out.output).toBe('X'.repeat(16))
     expect(out.exitStatus?.exitCode).toBe(0)
     // cwd outside the workspace is rejected before any spawn.
     const escape = await h
