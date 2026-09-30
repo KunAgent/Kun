@@ -55,6 +55,7 @@
   "roomsReceipt_waiting": "已送达 · 等待 {{name}} 接收…",
   "roomsReceipt_fallback": "已送达，等待对方接收…",
   "roomsSend_pending": "发送中…",
+  "roomsSend_sent": "已发送",
   "roomsSend_failed": "发送失败",
   "roomsSend_retry": "重试",
   "roomsSend_dismiss": "放弃"

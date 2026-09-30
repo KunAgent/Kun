@@ -16,6 +16,7 @@ import type { ProjectAgentRegistry } from './project-agent-registry.js'
 import type { GraphRunStore } from './graph-run-store.js'
 import type { FileGraphWriteCoordinator } from './graph-write-coordinator.js'
 import type { GraphWorkerSessionRegistry } from './graph-worker-sessions.js'
+import type { RegisterUnit } from '../contracts/activity.js'
 
 export type GraphLeadDeliveryResult =
   | {
@@ -61,6 +62,8 @@ export type GraphSchedulerOptions = {
   mailbox: GraphMailbox
   writes: FileGraphWriteCoordinator
   workerSessions: GraphWorkerSessionRegistry
+  /** Mission-control activity rows for worker attempts (docs/ade/06 §4). */
+  activity?: Pick<{ register(unit: RegisterUnit): unknown }, 'register'>
   authorityForRun: (run: GraphRunV1) => Promise<GraphParentAuthority> | GraphParentAuthority
   artifactStore?: ArtifactStore
   verifyChecks?: (input: {

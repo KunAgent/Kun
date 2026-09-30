@@ -1,4 +1,6 @@
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
+import type { AdeDelegatedTransport } from '@shared/ade-harnesses'
+import type { CoreApprovalActionJson } from './kun-contract-approval'
 import type {
   CoreAttachmentDiagnosticsJson,
   CoreAttachmentMetadataJson,
@@ -154,6 +156,8 @@ export type CoreChildRunActivityJson = {
   updatedAt: string
 }
 
+export type CoreChildLauncher =
+  'delegate_task' | 'fast_context' | 'ppt_agent' | 'component_design' | 'graph' | 'manager-worker'
 export type CoreChildRuntimeMetadataJson = {
   parentThreadId: string
   parentTurnId: string
@@ -161,7 +165,7 @@ export type CoreChildRuntimeMetadataJson = {
   childLabel?: string
   childStatus: 'queued' | 'running' | 'completed' | 'failed' | 'aborted'
   childSeq: number
-  childLauncher?: 'delegate_task' | 'fast_context' | 'ppt_agent' | 'component_design' | 'graph'
+  childLauncher?: CoreChildLauncher
   childTerminationReason?: 'user_stop' | 'manual_stop' | 'runtime_restart' | 'child_error'
   resumable?: boolean
   resumeCount?: number
@@ -280,7 +284,7 @@ export type CoreTurnItemJson = {
   designProfile?: DesignTaskProfile
   designDocumentTarget?: DesignDocumentTarget
   designImagePlacementTarget?: DesignImagePlacementTarget
-  messageSource?: 'background_shell' | 'background_subagent' | 'graph_runtime' | 'subagent_resume' | 'design_continuation'
+  messageSource?: 'background_shell' | 'background_subagent' | 'graph_runtime' | 'subagent_resume' | 'design_continuation' | 'worker_update'
   toolName?: string
   callId?: string
   cancelRequestedAt?: string
@@ -391,10 +395,8 @@ export type CoreReviewOutputJson = {
 }
 
 /**
- * Structured plan metadata the renderer expects on a successful
- * `create_plan` tool result. Mirrors the Kun output contract
- * so the Workbench can reload the saved plan file and update the
- * Plan panel without parsing assistant prose.
+ * Structured plan metadata from a `create_plan` tool result; mirrors the Kun
+ * output contract so the Plan panel reloads without parsing assistant prose.
  */
 export type CorePlanToolResultJson = {
   summary?: string
@@ -466,11 +468,7 @@ export type CoreResumeSessionMetadataJson = {
   requiresIndependentDesignTarget: boolean
 }
 
-/**
- * Optional plan context attached to a start-turn request. Carries the
- * reserved plan id, workspace root, and relative path the Kun
- * should expose to the model via the `create_plan` tool.
- */
+/** Optional plan context on a start-turn request for the `create_plan` tool. */
 export type CoreStartTurnPlanContextJson = {
   operation: 'draft' | 'refine'
   workspaceRoot: string
@@ -519,18 +517,7 @@ export type CoreUsageSnapshotJson = {
   avgTokensPerSecond?: number | null
 }
 
-/** Bounded, redacted action data authored by the runtime for approval review. */
-export type CoreApprovalActionJson = {
-  version?: 1
-  kind?: 'command' | 'file' | 'network' | 'mcp' | 'external-effect' | 'unknown'
-  toolName?: string
-  arguments?: Record<string, unknown>
-  workspace?: string
-  cwd?: string
-  targets?: Array<{ kind: string; value: string }>
-  reason?: string
-  requiresUserDecision?: boolean
-}
+export type { CoreApprovalActionJson } from './kun-contract-approval'
 
 export type CoreRuntimeEventJson = {
   kind?: string
@@ -589,7 +576,7 @@ export type CoreRuntimeEventJson = {
   activeSkillIds?: string[]
   contextManagement?: 'kun-managed' | 'sdk-managed'
   nativeHistory?: 'known' | 'unknown' | 'none'
-  providerKind?: 'agent-sdk' | 'cursor-sdk' | 'antigravity-cli'
+  providerKind?: AdeDelegatedTransport
   phase?: 'portable' | 'resumed' | 'rebased' | 'preparing' | 'retrying' | 'succeeded' | 'failed'
   failureSummary?: string
   capabilities?: {
@@ -601,12 +588,34 @@ export type CoreRuntimeEventJson = {
     nativeContextTelemetry?: boolean
     fork?: boolean
   }
+  /** Explicit harness identity on delegated_runtime / harness_runtime events. */
+  harnessId?: string
+  /** harness_session_state: native commands + mode surface (docs/ade/03 §7.3). */
+  commands?: Array<{ name?: unknown; description?: unknown; inputHint?: unknown }>
+  configOptions?: Array<{ id?: unknown; name?: unknown; currentValue?: unknown }>
+  currentModeId?: string
+  /** task_workspace lifecycle/state transition on the owner thread (docs/ade/07 §5). */
+  taskWorkspace?: {
+    workspaceId?: string; unitId?: string; state?: string
+    progress?: { step?: string; percent?: number; message?: string }
+    setup?: { steps?: unknown[] }
+    workspace?: { path?: string; sourceRoot?: string; kind?: string; branch?: string }
+  }
+  /** handoff_injected: handoff provenance + brief stats (docs/ade/08). */
+  from?: { harnessName: string; model?: string }
+  to?: { harnessName: string; model?: string }
+  sinceTurnId?: string
+  stats?: { recentTurns?: number; digestLines?: number; files?: number; commands?: number; bytes?: number }
+  briefDigest?: string
+  /** Capability v2 snapshot; validated by isHarnessCapabilities before use. */
+  capabilitiesV2?: unknown
   status?: string | number
   /** turn_started: the effective routing and reasoning configuration. */
   accountId?: string
   reasoningEffort?: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'max'
   serviceTier?: 'priority'
-  mode?: 'agent' | 'plan'
+  /** turn_started uses 'agent' | 'plan'; handoff_injected uses 'full' | 'delta'. */
+  mode?: 'agent' | 'plan' | 'full' | 'delta'
   agentSurface?: 'code' | 'write' | 'design'
   threadAgentSurface?: 'code' | 'write' | 'design'
   designProfile?: DesignTaskProfile
@@ -616,17 +625,8 @@ export type CoreRuntimeEventJson = {
   /** thread_created / thread_updated: whether that title is auto/provisional. */
   titleAuto?: boolean
   stage?:
-    | 'setup'
-    | 'pre_start'
-    | 'post_start'
-    | 'input_received'
-    | 'input_cached'
-    | 'input_routed'
-    | 'input_compressed'
-    | 'input_remembered'
-    | 'pre_send'
-    | 'post_send'
-    | 'response_received'
+    | 'setup' | 'pre_start' | 'post_start' | 'input_received' | 'input_cached'
+    | 'input_routed' | 'input_compressed' | 'input_remembered' | 'pre_send' | 'post_send' | 'response_received'
   label?: string
   code?: string
   details?: unknown

@@ -486,7 +486,9 @@ function indexDocument(source: SubagentRoutingDocument): {
   const profile = source.profile
   const identity = [source.id, profile.name]
     .filter(Boolean).join(' ')
-  const description = profile.description ?? ''
+  const description = [profile.description ?? '', profile.delegationNotes ?? '']
+    .join(' ')
+    .trim()
   const routingTerms = source.routingTerms?.join(' ') ?? ''
   const tokens = [
     ...repeatTokens(tokenizeSubagentRoutingText(identity), 8),

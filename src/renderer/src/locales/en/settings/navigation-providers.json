@@ -420,6 +420,12 @@
     "runtimeNotRunning": "Kun Runtime not running",
     "runtimeNotConnected": "Kun Runtime not connected",
     "runtimeSyncing": "Syncing to Kun Runtime",
+    "gatewayFix": "Fix",
+    "gatewayIssue": {
+      "gateway_key_missing": "Local gateway is missing its independent API key",
+      "gateway_non_loopback_host": "Local gateway requires a loopback listen address",
+      "gateway_disabled": "Local gateway was turned off (could not create an API key)"
+    },
     "runtimeWaitingForSync": "Waiting for Kun Runtime sync",
     "tabsAria": "Model route settings",
     "tabGateway": "Gateway & API",

@@ -6,7 +6,7 @@ describe('normalizeWorkbenchRoute', () => {
     expect(normalizeWorkbenchRoute('design')).toBe('chat')
   })
 
-  it.each(['chat', 'rooms', 'write', 'plugins', 'extensions', 'board', 'schedule', 'workflow'])(
+  it.each(['chat', 'rooms', 'write', 'plugins', 'extensions', 'board', 'schedule', 'workflow', 'ade'])(
     'preserves the active %s route',
     (route) => {
       expect(normalizeWorkbenchRoute(route)).toBe(route)

@@ -26,6 +26,8 @@ export type CoreThreadSummaryJson = {
   title: string
   /** Durable product surface that owns the thread. Absent for legacy Code threads. */
   agentSurface?: 'code' | 'write' | 'design'
+  /** Owning workspace mode ('code' | 'ade'); absent counts as 'code'. */
+  workspaceMode?: 'code' | 'ade'
   /** Immutable Code/Design mode derived from the first accepted turn. */
   lockedTaskSurface?: 'code' | 'write' | 'design'
   designProfile?: DesignTaskProfile
@@ -58,10 +60,27 @@ export type CoreThreadSummaryJson = {
   modelRequestCaptureEnabled?: boolean
   pinned?: boolean
   providerId?: string
+  /** Explicit harness identity inherited by new turns (01 §4). */
+  harnessId?: string
+  /** Host-managed task workspace bound to this thread (07 §5). */
+  taskWorkspaceId?: string
   agentId?: string
   systemPrompt?: string
   relation?: 'primary' | 'fork' | 'side'
   parentThreadId?: string
+  /** Host-written ADE worker binding (09 §3.1); absent for normal threads. */
+  executionUnit?: {
+    kind: 'worker'
+    teamId: string
+    managerThreadId: string
+    label: string
+    role?: string
+    lifecycle: 'persistent' | 'ephemeral'
+    taskWorkspaceId?: string
+    control: 'manager' | 'user'
+  }
+  /** Host-written: a bot Agent started this Code/Work session on the user's behalf. */
+  workbenchOrigin?: { kind: 'bot'; roomId: string; linkId: string; agentId: string; agentName: string; messageId?: string }
   planBuildRunId?: string
   forkedFromThreadId?: string
   forkedFromTitle?: string
@@ -466,3 +485,4 @@ export type CoreRuntimeCapabilityManifestJson = {
 }
 
 export * from './kun-contract-runtime'
+export * from './kun-contract-approval'

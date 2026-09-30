@@ -56,6 +56,7 @@
     "smoke:development-session-summary": "node ./scripts/smoke-development-session-summary.cjs",
     "smoke:development-trajectory-layout": "node ./scripts/smoke-development-trajectory-layout.cjs",
     "smoke:development-composer-queue": "node ./scripts/smoke-development-composer-queue.cjs",
+    "smoke:development-ade": "node ./scripts/smoke-development-ade.cjs",
     "smoke:packaged-speak": "node ./scripts/smoke-packaged-speak.cjs",
     "smoke:development-speak": "node ./scripts/smoke-development-speak.cjs",
     "smoke:mini-window": "node ./scripts/smoke-mini-window.cjs",

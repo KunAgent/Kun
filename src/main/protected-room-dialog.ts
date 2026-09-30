@@ -1,7 +1,6 @@
 import { resolveNamedPreloadPath } from './main-paths'
 import { app, BrowserWindow } from 'electron'
 import { randomBytes } from 'node:crypto'
-import { join } from 'node:path'
 import { protectedRoomDialogHtml, type ProtectedRoomDialogContent } from './protected-room-dialog-html'
 
 /** A separate sandboxed surface, with no workbench bridge, extension scripts or shared session. */
@@ -14,7 +13,7 @@ export function showProtectedRoomDialog(parent: BrowserWindow, content: Protecte
     x: Math.round(bounds.x + (bounds.width - width) / 2), y: Math.round(bounds.y + (bounds.height - height) / 2),
     resizable: false, minimizable: false, maximizable: false, skipTaskbar: true,
     backgroundColor: content.dark ? '#181a1d' : '#f9fbfc',
-    webPreferences: { preload: resolveNamedPreloadPath(join(app.getAppPath(), 'out/main'), 'protected-room-dialog'), sandbox: true,
+    webPreferences: { preload: resolveNamedPreloadPath(app.getAppPath(), 'protected-room-dialog'), sandbox: true,
       contextIsolation: true, nodeIntegration: false, webviewTag: false, partition: 'kun-protected-' + nonce } })
   return new Promise((resolve, reject) => {
     let settled = false, checking = false

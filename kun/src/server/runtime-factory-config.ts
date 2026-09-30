@@ -10,10 +10,22 @@ import {
   PPT_AGENT_LOCAL_PROVIDER_ID,
   type TurnService
 } from './runtime-factory-dependencies.js'
+import { isDeepStrictEqual } from 'node:util'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
+import { isLoopbackHost } from './loopback-host.js'
 import type { ContextWindowModeSource } from '../adapters/tool/context-window-tool-provider.js'
 import type { ContextWindowMode } from '../contracts/context-windows.js'
 import { resolveContextWindowMode } from '../loop/context-window-mode.js'
+
+/** An unrelated hot update must not be rejected for a pre-existing gateway setting. */
+export function localGatewayKeyRequiredForApply(
+  current: KunServeRuntimeOptions,
+  request: RuntimeConfigApplyRequest
+): boolean {
+  const requested = request.serve?.localModelGateway
+  return requested?.enabled === true &&
+    !isDeepStrictEqual(requested, current.localModelGateway)
+}
 
 export function mergeRuntimeConfigApplyOptions(
   current: KunServeRuntimeOptions,
@@ -45,6 +57,8 @@ export function mergeRuntimeConfigApplyOptions(
     contextCompaction: request.contextCompaction ?? current.contextCompaction,
     runtime: request.runtime ?? current.runtime,
     graph: request.graph ?? current.graph,
+    harnesses: request.harnesses ?? current.harnesses,
+    ade: request.ade ?? current.ade,
     roles: request.roles ?? current.roles,
     fastContext: request.fastContext ?? current.fastContext,
     capabilities: request.capabilities ?? current.capabilities,
@@ -74,6 +88,31 @@ export function llmDebugCaptureEnabled(
   options: Pick<KunServeRuntimeOptions, 'runtime'>
 ): boolean {
   return options.runtime?.llmDebug?.enabled !== false
+}
+
+/**
+ * P4-04 segmented apply: the local model gateway is validated as its own
+ * section so a missing key or non-loopback host rejects only the gateway
+ * instead of vetoing every unrelated hot config update.
+ */
+export function localModelGatewayApplyIssue(
+  options: Pick<KunServeRuntimeOptions, 'localModelGateway' | 'host'>,
+  credentials: { hasKey(): boolean }
+): { code: string; message: string } | null {
+  if (!options.localModelGateway?.enabled) return null
+  if (!credentials.hasKey()) {
+    return {
+      code: 'gateway_key_missing',
+      message: 'local model gateway requires an independent API key; ensure a key before enabling it'
+    }
+  }
+  if (!isLoopbackHost(options.host)) {
+    return {
+      code: 'gateway_non_loopback_host',
+      message: 'local model gateway requires a loopback serve host'
+    }
+  }
+  return null
 }
 
 export function modelRequestCaptureDefaultEnabled(

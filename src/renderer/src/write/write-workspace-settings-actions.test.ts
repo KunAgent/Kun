@@ -28,6 +28,7 @@ function settingsFor(workspaceRoot: string): AppSettingsV1 {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   useWriteWorkspaceStore.setState({
     workspaceRoot: '',
     workspaceRoots: [],
@@ -79,6 +80,41 @@ describe('write workspace settings actions', () => {
     expect(initializeWorkspace).toHaveBeenCalledWith('/workspace/b')
     expect(useWriteWorkspaceStore.getState().workspaceRoots).toContain('/workspace/b')
     expect(useWriteWorkspaceStore.getState().workspaceRoots).not.toContain('/workspace/a')
+  })
+  it('loads mobile documents independently of the host paper mode without persisting a switch', async () => {
+    const settings = normalizeAppSettings({ write: {
+      defaultWorkspaceRoot: '/workspace/docs', activeWorkspaceRoot: '/workspace/library',
+      workspaces: ['/workspace/docs', '/workspace/library'],
+      paperMode: { enabled: true, activeLibrary: '/workspace/library', libraries: ['/workspace/library'] }
+    } } as AppSettingsV1)
+    vi.spyOn(rendererRuntimeClient, 'getSettings').mockResolvedValue(settings)
+    const setSettings = vi.spyOn(rendererRuntimeClient, 'setSettings')
+    const initializeWorkspace = vi.fn(async () => undefined)
+    useWriteWorkspaceStore.setState({ initializeWorkspace, workSurface: 'docs' })
+
+    await useWriteWorkspaceStore.getState().loadWriteSettings({ mobile: true })
+
+    expect(initializeWorkspace).toHaveBeenCalledWith('/workspace/docs')
+    expect(useWriteWorkspaceStore.getState().workSurface).toBe('docs')
+    expect(useWriteWorkspaceStore.getState().paperMode.enabled).toBe(true)
+    expect(setSettings).not.toHaveBeenCalled()
+  })
+
+  it('restores the phone-only workspace even while desktop paper mode stays enabled', async () => {
+    const settings = normalizeAppSettings({ write: {
+      defaultWorkspaceRoot: '/workspace/docs', activeWorkspaceRoot: '/workspace/library',
+      workspaces: ['/workspace/docs', '/workspace/other', '/workspace/library'],
+      paperMode: { enabled: true, activeLibrary: '/workspace/library', libraries: ['/workspace/library'] }
+    } } as AppSettingsV1)
+    vi.spyOn(rendererRuntimeClient, 'getSettings').mockResolvedValue(settings)
+    const initializeWorkspace = vi.fn(async () => undefined)
+    useWriteWorkspaceStore.setState({ initializeWorkspace })
+    vi.stubGlobal('window', { sessionStorage: { getItem: () => '/workspace/other' } })
+
+    await useWriteWorkspaceStore.getState().loadWriteSettings({ mobile: true })
+
+    expect(initializeWorkspace).toHaveBeenCalledWith('/workspace/other')
+    expect(useWriteWorkspaceStore.getState().paperMode.activeLibrary).toBe('/workspace/library')
   })
 })
 

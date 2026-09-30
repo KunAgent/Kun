@@ -468,5 +468,17 @@
   "paperImportFolderTooltip": "새 논문은 \"{{folder}}\"에 저장됩니다",
   "paperImportedToFolder": "\"{{folder}}\"(으)로 가져왔습니다",
   "paperImportIntoFolder": "이 폴더로 논문 가져오기",
-  "paperFolderEmpty": "빈 폴더"
+  "paperFolderEmpty": "빈 폴더",
+  "paperWorkspaces": "작업 공간",
+  "paperWorkspaceAdd": "작업 공간 추가",
+  "paperWorkspaceMenu": "작업 공간 작업",
+  "paperWorkspaceRemove": "작업 공간 제거",
+  "paperWorkspaceFilterTitle": "논문 필터링",
+  "paperWorkspaceFilterPlaceholder": "제목으로 필터링…",
+  "paperWorkspaceFilterEmpty": "일치하는 논문이 없습니다.",
+  "paperWorkspaceScanning": "인덱싱 중…",
+  "paperWorkspaceLoadError": "이 작업 공간을 인덱싱할 수 없습니다.",
+  "paperWorkspaceRetry": "다시 시도",
+  "paperSearchHistory": "검색 기록",
+  "paperSearchHistoryEmpty": "기록이 없습니다."
 }

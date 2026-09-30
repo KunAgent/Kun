@@ -6,6 +6,7 @@ import { createThreadSelectionActions } from './chat-store-thread-selection-acti
 import { createThreadQueueActions } from './chat-store-thread-queue-actions'
 import { createThreadSendActions } from './chat-store-thread-send-actions'
 import { createThreadReviewActions } from './chat-store-thread-review-actions'
+import { createPlanBuildActions } from './chat-store-plan-build'
 import type { StoreActionContext, ThreadActionRuntime } from './chat-store-thread-actions-support'
 import { cancelThreadRecovery } from './thread-recovery-coordinator'
 
@@ -13,7 +14,7 @@ type SseAbortRef = { current: AbortController | null }
 
 export function createThreadActions(
   context: { set: ChatStoreSet; get: ChatStoreGet; sseAbortRef: SseAbortRef }
-): Pick<ChatState, 'createThread' | 'createConversation' | 'recoverActiveTurn' | 'selectThread' | 'loadEarlierThreadHistory' | 'subscribeThreadEventsLive' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'restoreQueuedMessage' | 'reorderQueuedMessage' | 'guideQueuedMessage' | 'resumeQueuedTurns' | 'sendMessage' | 'reviewActiveThread'> {
+): Pick<ChatState, 'createThread' | 'createConversation' | 'recoverActiveTurn' | 'selectThread' | 'loadEarlierThreadHistory' | 'subscribeThreadEventsLive' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'restoreQueuedMessage' | 'reorderQueuedMessage' | 'guideQueuedMessage' | 'resumeQueuedTurns' | 'sendMessage' | 'dispatchExternalPlanBuild' | 'reviewActiveThread'> {
   const actionContext: StoreActionContext = context
   const runtime: ThreadActionRuntime = {
     threadSelectionGeneration: 0,
@@ -36,6 +37,7 @@ export function createThreadActions(
     ...createThreadSelectionActions(actionContext, runtime),
     ...createThreadQueueActions(actionContext, runtime),
     ...createThreadSendActions(actionContext, runtime),
-    ...createThreadReviewActions(actionContext, runtime)
+    ...createThreadReviewActions(actionContext, runtime),
+    ...createPlanBuildActions(actionContext, runtime)
   }
 }

@@ -412,7 +412,7 @@ export function useWorkbenchComposerSubmitController({
     void (async (): Promise<void> => {
       const v = input.trim()
       const attachmentScope = getAttachmentScope()
-      const attachments = route === 'chat' || route === 'write' ? composerAttachments : []
+      const attachments = route === 'chat' || route === 'ade' || route === 'write' ? composerAttachments : []
       const documentAttachments = attachments.filter((attachment) => attachment.kind === 'document')
       const attachmentIds = attachments.map((attachment) => attachment.id)
       const publicAttachments = stripTransientAttachmentFields(attachments)
@@ -605,7 +605,7 @@ export function useWorkbenchComposerSubmitController({
       if (!prepared) return
       setInput('')
       clearComposerAttachments(attachmentScope)
-      clearComposerFileReferences()
+      if (route === 'chat') clearComposerFileReferences()
       let outboundText = prepared.text
       let outboundDisplay = prepared.displayText
       let outboundGuiDesignCanvas = false, outboundGuiExcalidrawCanvas = false

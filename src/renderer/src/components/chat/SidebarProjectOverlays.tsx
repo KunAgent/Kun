@@ -2,8 +2,10 @@ import { useEffect, type FormEvent, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Archive,
+  Bot,
   ClipboardCopy,
   ExternalLink,
+  Eye,
   FolderPlus,
   MoveRight,
   PencilLine,
@@ -20,6 +22,8 @@ import { extraRootsForPrimary } from '../../lib/code-workspace-folder-sets'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import { useChatStore } from '../../store/chat-store'
+import { threadLooksRunning } from '../../store/chat-store-runtime-helpers'
+import { sendThreadToBot, watchThreadWithBot } from '../rooms/workbench-bridge-actions'
 import type { SidebarThreadWorktreeRecord } from './sidebar-project-selectors'
 import type { SidebarVirtualFolder } from './sidebar-folders'
 
@@ -371,6 +375,8 @@ export function ThreadContextMenu({
       <div className="my-1 h-px bg-ds-border-muted" />
       <MenuItem icon={<MoveRight className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarThreadMove')} disabled={moveDisabled} title={moveDisabledTitle} onClick={() => run(onMove)} />
       <MenuItem icon={<PencilLine className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarThreadRename')} disabled={busy} onClick={() => run(onRename)} />
+      <MenuItem icon={<Bot className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('roomsWorkbenchSendToBot')} disabled={busy} onClick={() => run(() => void sendThreadToBot(state.thread))} />
+      {threadLooksRunning(state.thread) && !archived ? <MenuItem icon={<Eye className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('roomsWorkbenchWatchSession')} disabled={busy} onClick={() => run(() => void watchThreadWithBot(state.thread))} /> : null}
       <MenuItem icon={<ScrollText className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('summarizeSession')} disabled={busy} onClick={() => run(onSummarize)} />
       <MenuItem icon={<Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarThreadPrune')} disabled={busy || archived} onClick={() => run(onPrune)} />
       <MenuItem

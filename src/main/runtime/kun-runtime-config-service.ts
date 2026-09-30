@@ -2,8 +2,10 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import {
+  AdeConfigSchema,
   ContextCompactionConfigSchema,
   GraphRuntimeConfigSchema,
+  HarnessesConfigSchema,
   KunConfigSchema,
   KunServeConfigSchema,
   LabConfigSchema,
@@ -53,7 +55,7 @@ import { normalizeWritePaperModeSettings } from '../../shared/app-settings-paper
 import {
   BUILTIN_GITHUB_MCP_SERVER_ID,
   buildBuiltinGitHubMcpServer,
-  isBuiltinGitHubMcpServer
+  isBuiltinGitHubMcpServerOwnedByKun
 } from '../../shared/github-mcp'
 import { resolveCodexOAuthApiKey } from '../codex-auth'
 import {
@@ -88,6 +90,8 @@ import {
   providersConfigForRuntime,
   routePoolsConfigForRuntime,
   rolesConfigForRuntime,
+  adeConfigForRuntime,
+  harnessesConfigForRuntime,
   storageConfigForRuntime,
   tokenEconomyConfigForRuntime,
   toolOutputLimitsConfigForRuntime
@@ -99,6 +103,7 @@ import {
 } from '../legacy-provider-settings-migration'
 import {
   approvedProjectMcpServers,
+  approvedWorktreeConfigs,
   stripGeneratedProjectMcpServers
 } from '../services/project-config-service'
 import { assertManagedKunDataDirIsCurrent } from '../kun-data-dir-paths'
@@ -106,9 +111,13 @@ import { atomicWriteFile } from '../atomic-json-file'
 
 export type ManagedRuntimeHotApplyResult = 'applied' | 'restart_required' | 'failed'
 
+export type ManagedRuntimeHotApplySection = { code: string; message: string }
+
 export type ManagedRuntimeHotApplyResponse = {
   result: ManagedRuntimeHotApplyResult
   message: string
+  /** Sections rejected while the rest of the apply committed (P4-04). */
+  sections?: Record<string, ManagedRuntimeHotApplySection>
 }
 
 export async function syncGuiManagedKunConfig(
@@ -140,13 +149,17 @@ export async function syncGuiManagedKunConfig(
   const projectMcpServers = appSettings
     ? await approvedProjectMcpServers(appSettings)
     : {}
+  const approvedWorktrees = appSettings
+    ? await approvedWorktreeConfigs(appSettings)
+    : []
   const serve = objectValue(existing?.serve)
   const capabilities = objectValue(existing?.capabilities)
   const mcp = objectValue(capabilities.mcp)
   const retainedMcpServers = stripGeneratedProjectMcpServers(objectValue(mcp.servers))
-  // Replace only the host-authored entry. A user-owned `github` id remains
-  // authoritative and never qualifies for Kun's ambient credential injection.
-  if (isBuiltinGitHubMcpServer(retainedMcpServers[BUILTIN_GITHUB_MCP_SERVER_ID])) {
+  // Replace only the host-authored entry. Use the stable ownership marker and
+  // transport identity here so legacy Kun entries missing githubPolicy are
+  // rebuilt instead of being mistaken for user-owned `github` servers.
+  if (isBuiltinGitHubMcpServerOwnedByKun(retainedMcpServers[BUILTIN_GITHUB_MCP_SERVER_ID])) {
     delete retainedMcpServers[BUILTIN_GITHUB_MCP_SERVER_ID]
   }
   const hasUserGitHubServer = [retainedMcpServers, importedMcpServers, projectMcpServers]
@@ -211,6 +224,11 @@ export async function syncGuiManagedKunConfig(
       runtime.llmDebug
     ),
     graph: graphConfigForRuntime(runtime.graph),
+    harnesses: harnessesConfigForRuntime(runtime.harnesses),
+    ade: adeConfigForRuntime(runtime.ade, {
+      approvedWorktreeConfigs: approvedWorktrees,
+      worktreeSharedPaths: runtime.worktrees?.sharedPaths ?? {}
+    }),
     quality: qualityConfigForRuntime(runtime.quality, objectValue(existing?.quality)),
     ...(Object.keys(roles).length ? { roles } : {}),
     fastContext: fastContextConfigForRuntime(runtime.fastContext),
@@ -384,6 +402,7 @@ type KunRuntimeConfigSettings = Pick<KunRuntimeSettingsV1,
   'videoGeneration' | 'computerUse' | 'browserUse' | 'modelProfiles' | 'memoryEnabled' |
   'memoryDistillationEnabled' | 'memoryDirectivesEnabled' |
   'instructions' | 'quality' | 'subagents' | 'graph' | 'fastContext' | 'lab' | 'githubMcp' | 'smallModel' |
+  'harnesses' | 'ade' | 'worktrees' |
   'smallModelProviderId' | 'smallModelAccountId' |
   'titleModel' | 'titleProviderId' | 'titleAccountId' |
   'summaryModel' | 'summaryProviderId' | 'summaryAccountId' |
@@ -469,7 +488,13 @@ export function classifyManagedRuntimeHotApplyResponse(
     return { result: 'restart_required', message: 'runtime does not support hot config apply' }
   }
   const parsed = parseResponseObject(text)
-  if (ok && parsed?.ok === true) return { result: 'applied', message: '' }
+  if (ok && parsed?.ok === true) {
+    const sections = parseRejectedSections(parsed.rejectedSections)
+    const message = sections
+      ? Object.values(sections).map((section) => section.message).join('; ')
+      : ''
+    return { result: 'applied', message, ...(sections ? { sections } : {}) }
+  }
   const message = String(parsed?.message ?? text).trim()
   if (parsed?.code === 'restart_required') {
     return { result: 'restart_required', message }
@@ -478,6 +503,19 @@ export function classifyManagedRuntimeHotApplyResponse(
     result: 'failed',
     message: message || `Kun hot config apply failed with HTTP ${status}`
   }
+}
+
+function parseRejectedSections(
+  value: unknown
+): Record<string, ManagedRuntimeHotApplySection> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const entries = Object.entries(value as Record<string, unknown>).flatMap(([section, raw]) => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return []
+    const candidate = raw as { code?: unknown; message?: unknown }
+    if (typeof candidate.code !== 'string' || typeof candidate.message !== 'string') return []
+    return [[section, { code: candidate.code, message: candidate.message }]]
+  })
+  return entries.length ? Object.fromEntries(entries) : undefined
 }
 
 function parseResponseObject(text: string): Record<string, unknown> | null {
@@ -509,6 +547,8 @@ function sanitizeKunConfigSections(
     contextCompaction: parseKunConfigSection(ContextCompactionConfigSchema, existing.contextCompaction),
     runtime: parseKunConfigSection(RuntimeTuningConfigSchema, existing.runtime),
     graph: parseKunConfigSection(GraphRuntimeConfigSchema, existing.graph),
+    harnesses: parseKunConfigSection(HarnessesConfigSchema, existing.harnesses),
+    ade: parseKunConfigSection(AdeConfigSchema, existing.ade),
     quality: parseKunConfigSection(QualityConfigSchema, existing.quality),
     ...('fastContext' in existing ? { fastContext: parseKunConfigSection(FastContextConfigSchema, existing.fastContext) } : {}),
     ...('lab' in existing ? { lab: parseKunConfigSection(LabConfigSchema, existing.lab) } : {}),

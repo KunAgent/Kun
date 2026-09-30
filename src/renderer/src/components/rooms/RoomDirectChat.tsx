@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, CircleAlert, FolderOpen, Menu, MoreHorizontal, PanelRight, PanelRightOpen, RotateCcw, Search, X } from 'lucide-react'
+import { WorkbenchActiveChip } from './WorkbenchActiveChip'
+import { ChevronDown, CircleAlert, FolderOpen, Menu, MoreHorizontal, PanelRight, PanelRightOpen, PlugZap, RotateCcw, Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room, RoomContentReference } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
@@ -40,9 +41,9 @@ export function RoomNoticeDismiss({ onDismiss }: { onDismiss: () => void }) {
   return <button type="button" className="rooms-notice-dismiss" aria-label={t('roomsDismissNotice')} title={t('roomsDismissNotice')}
     onClick={onDismiss}><X size={13} aria-hidden="true" /></button>
 }
-export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile, onModels, onFiles, onReminders, onReset, onConnect, onTasks, onSession, sessionOpen, sessionDisabled }: {
+export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile, onModels, onFiles, onReminders, onReset, onConnect, onApps, onTasks, onSession, sessionOpen, sessionDisabled }: {
   room: Room; models?: AgentModels | null; onSidebar: () => void; onSearch: () => void; onProfile: () => void; onModels: () => void
-  onFiles: () => void; onReminders: () => void; onReset: () => void; onConnect: () => void; onTasks: () => void
+  onFiles: () => void; onReminders: () => void; onReset: () => void; onConnect: () => void; onApps?: () => void; onTasks: () => void
   onSession: () => void; sessionOpen: boolean; sessionDisabled: boolean
 }) {
   const { t } = useTranslation('common')
@@ -55,7 +56,9 @@ export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile,
     <button className="rooms-icon-button rooms-sidebar-toggle" aria-label={t('roomsLabel')} onClick={onSidebar}><Menu size={19} /></button>
     <button className="direct-chat-title" onClick={onProfile}><RoomAvatar member={member} label={member.displayName} size={36} /><strong>{member.displayName}</strong></button>
     <button className="direct-current-model" aria-label={t('directModels')} onClick={onModels}><span title={modelLabel(current?.main)}>{modelLabel(current?.main)}</span><ChevronDown size={13} /></button>
+    <WorkbenchActiveChip roomId={room.id} />
     <div className="direct-header-spacer" />
+    {onApps ? <button className="rooms-icon-button" aria-label={t('roomsAppsTitle')} title={t('roomsAppsTitle')} onClick={onApps}><PlugZap size={18} /></button> : null}
     <button className="rooms-icon-button" aria-label={t('roomsSearchMessages')} onClick={onSearch}><Search size={18} /></button>
     <button type="button" className="rooms-icon-button" aria-label={t('roomsViewAgentSession')} title={t('roomsViewAgentSession')}
       aria-pressed={sessionOpen} disabled={sessionDisabled} onClick={onSession}><PanelRight size={18} /></button>
@@ -66,13 +69,14 @@ export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile,
         <button onClick={() => { close(); onFiles() }}>{t('directFiles')}</button>
         <button onClick={() => { close(); onReminders() }}>{t('roomsReminders')}</button>
         <button onClick={() => { close(); onConnect() }}>{t('directConnectProject')}</button>
+        {onApps ? <button onClick={() => { close(); onApps() }}>{t('roomsAppsTitle')}</button> : null}
         <button onClick={() => { close(); onReset() }}>{t('directNewContext')}</button>
         <button onClick={() => { close(); onTasks() }}>{t('roomsTasks')}</button>
       </div>}
     </RoomPopover>
   </header>
 }
-export function RoomDirectProgress({ room, state, onRun, openRunId, onModels }: { room: Room; state: ReturnType<typeof useDirectChat>; onRun: (id: string) => void; openRunId?: string; onModels: () => void }) {
+export function RoomDirectProgress({ room, state, onRun, openRunId, onModels, activityInTimeline = false, gatesInTimeline = false }: { room: Room; state: ReturnType<typeof useDirectChat>; onRun: (id: string) => void; openRunId?: string; onModels: () => void; activityInTimeline?: boolean; gatesInTimeline?: boolean }) {
   const { t } = useTranslation('common')
   const [dismissed, setDismissed] = useState('')
   useEffect(() => setDismissed(''), [room.id])
@@ -86,9 +90,9 @@ export function RoomDirectProgress({ room, state, onRun, openRunId, onModels }: 
   if (!active && !(failed && failedKey !== dismissed) && !(state.error && errorKey !== dismissed) && !room.privateWorkspace) return null
   return <div className="direct-progress">
     {room.privateWorkspace ? <p className="direct-project"><FolderOpen size={13} /><span title={room.privateWorkspace}>{room.privateWorkspace.split('/').at(-1)}</span></p> : null}
-    {active ? <div className="direct-progress-line"><span className="rooms-typing-dots" aria-hidden="true"><span className="rooms-typing-dot" /><span className="rooms-typing-dot" /><span className="rooms-typing-dot" /></span><span role="status">{t(state.data?.approvals.length ? 'roomsState_needs_approval' : state.data?.userInputs.length ? 'roomsState_needs_input' : active.status === 'pending' ? 'directQueued' : active.status === 'recovery_required' ? 'directReconciling' : active.status === 'stopping' ? 'directStopping' : active.steer ? 'directSteered' : 'directResponding')}{queued ? ' · ' + t('directQueuedCount', { count: queued }) : ''}</span>
+    {active && !activityInTimeline ? <div className="direct-progress-line"><span className="rooms-typing-dots" aria-hidden="true"><span className="rooms-typing-dot" /><span className="rooms-typing-dot" /><span className="rooms-typing-dot" /></span><span role="status">{t(state.data?.approvals.length ? 'roomsState_needs_approval' : state.data?.userInputs.length ? 'roomsState_needs_input' : active.status === 'pending' ? 'directQueued' : active.status === 'recovery_required' ? 'directReconciling' : active.status === 'stopping' ? 'directStopping' : active.steer ? 'directSteered' : 'directResponding')}{queued ? ' · ' + t('directQueuedCount', { count: queued }) : ''}</span>
       {runId ? <button type="button" aria-pressed={openRunId === runId} className={openRunId === runId ? 'is-active' : ''} onClick={() => onRun(runId)}><PanelRightOpen size={14} />{t('roomsViewAgentSession')}</button> : null}</div> : null}
-    {state.data ? <RoomExecutionGates detail={{ ...state.data, userInputs: [] }} onUpdated={async () => state.refresh()} /> : null}
+    {state.data && !gatesInTimeline ? <RoomExecutionGates detail={{ ...state.data, userInputs: [] }} onUpdated={async () => state.refresh()} /> : null}
     {failed && failedKey !== dismissed ? <div className="direct-failed" role="status"><CircleAlert size={15} /><span>{failed.error || t(failed.status === 'cancelled' ? 'directStopped' : 'directFailed')}</span>
       <RoomNoticeDismiss onDismiss={() => setDismissed(failedKey)} />
       <span className="direct-failed-actions">

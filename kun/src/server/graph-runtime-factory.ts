@@ -1,11 +1,12 @@
 import { join } from 'node:path'
 import { buildGraphModeLocalTools } from '../adapters/tool/graph-mode-tool-provider.js'
+import type { GraphPlanHarnessAdmission } from '../adapters/tool/graph-plan-admission.js'
 import { emitPlanningEvent } from '../adapters/tool/graph-define-plan-tool.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import type { ServiceManagerConnection } from '../manager/manager-client.js'
 import { ManagerRemoteGraphRunStore } from '../manager/remote-data-stores.js'
 import type { GraphRuntimeConfig } from '../config/kun-config.js'
-import type { GraphRunV1 } from '../contracts/graph.js'
+import type { GraphPlanningDraftV1, GraphRunV1 } from '../contracts/graph.js'
 import type { ThreadStatus } from '../contracts/threads.js'
 import type { DelegationRuntime } from '../delegation/delegation-runtime.js'
 import {
@@ -23,6 +24,7 @@ import {
   GraphRetentionService,
   GraphRunConflictError,
   GraphScheduler,
+  type GraphSchedulerOptions,
   GraphSupervisor,
   GraphWorkerSessionRegistry,
   graphPhysicalPathsEqual,
@@ -62,6 +64,7 @@ export type GraphRuntimeStartOptions = {
   }) => Promise<GraphLeadDeliveryResult | void>
   isLeadTurnActive?: (run: GraphRunV1) => boolean
   authorityForRun: (run: GraphRunV1) => Promise<GraphParentAuthority> | GraphParentAuthority
+  activity?: GraphSchedulerOptions['activity']
 }
 
 export class GraphRuntimeComposition {
@@ -74,6 +77,8 @@ export class GraphRuntimeComposition {
   readonly mailbox: GraphMailbox
   readonly assignments: GraphAssignmentResolver
   readonly workerSessions = new GraphWorkerSessionRegistry()
+  /** Harness services for plan-phase admission (P1-25), set during start. */
+  harnessAdmission?: GraphPlanHarnessAdmission
   readonly learning: GraphLearningService
   readonly retention: GraphRetentionService
   readonly toolsProvider
@@ -175,12 +180,8 @@ export class GraphRuntimeComposition {
           )
         }
       },
-      pauseActive: async (run) => {
-        await this.scheduler?.cancelRun(run.id, 'pause')
-      },
-      cancelActive: async (run) => {
-        await this.scheduler?.cancelRun(run.id, 'cancel')
-      },
+      pauseActive: async (run) => void await this.scheduler?.cancelRun(run.id, 'pause'),
+      cancelActive: async (run) => void await this.scheduler?.cancelRun(run.id, 'cancel'),
       resumeActive: (run) => this.scheduler?.resumeRun(run.id),
       onSteering: (run, steering) => this.supervisor?.signal({
         runId: run.id,
@@ -277,6 +278,7 @@ export class GraphRuntimeComposition {
             : undefined
         },
         config: options.config,
+        harnesses: () => this.harnessAdmission,
         enabled: () => options.config().enabled,
         signalSupervision: (input) => this.supervisor?.signal(input),
         nowIso: options.nowIso,
@@ -303,27 +305,25 @@ export class GraphRuntimeComposition {
       projectId: identity.projectId,
       goal: input.goal
     })
-    await emitPlanningEvent({
-      drafts: this.drafts,
-      events: this.options.runtimeEvents
-    }, draft, 'draft_created').catch((error) => {
-      console.warn(
-        `[kun] Graph draft_created projection failed for ${draft.id}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      )
-    })
-    await emitPlanningEvent({
-      drafts: this.drafts,
-      events: this.options.runtimeEvents
-    }, draft, 'inspection_started').catch((error) => {
-      console.warn(
-        `[kun] Graph inspection_started projection failed for ${draft.id}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      )
-    })
+    await this.emitPlanning(draft, 'draft_created')
+    await this.emitPlanning(draft, 'inspection_started')
     return planningLifecycle(draft)
+  }
+
+  private async emitPlanning(
+    draft: GraphPlanningDraftV1,
+    event: 'draft_created' | 'inspection_started'
+  ): Promise<void> {
+    await emitPlanningEvent({
+      drafts: this.drafts,
+      events: this.options.runtimeEvents
+    }, draft, event).catch((error) => {
+      console.warn(
+        `[kun] Graph ${event} projection failed for ${draft.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    })
   }
 
   async resolvePlanningDraft(input: {
@@ -546,6 +546,7 @@ export class GraphRuntimeComposition {
       mailbox: this.mailbox,
       writes: this.writes,
       workerSessions: this.workerSessions,
+      activity: options.activity,
       authorityForRun: options.authorityForRun,
       artifactStore: this.options.artifactStore,
       verifyChecks: createGraphCheckVerifier(),

@@ -126,6 +126,9 @@ export function createRefreshThreadsAction(
             limit: THREAD_LIST_FIRST_PAGE_SIZE,
             ...(get().showArchivedThreads ? { archivedOnly: true } : {}),
             includeSide: true,
+            // The workbench inventory is the Code listing; ADE threads live in
+            // `adeThreads` and never enter this list.
+            workspaceMode: 'code',
             lean: true
           })
           rawThreads = page.threads
@@ -134,18 +137,20 @@ export function createRefreshThreadsAction(
         } else {
           rawThreads = await p.listThreads({
             includeArchived: true,
-            includeSide: true
+            includeSide: true,
+            workspaceMode: 'code'
           })
         }
       } catch {
-        rawThreads = await p.listThreads()
+        rawThreads = await p.listThreads({ workspaceMode: 'code' })
       }
       rawThreads = rawThreads.filter((thread) => thread.relation !== 'side')
       if (pendingDesignDocumentClones().length > 0) {
         try {
           const lifecycleThreads = await p.listThreads({
             includeArchived: true,
-            includeSide: true
+            includeSide: true,
+            workspaceMode: 'code'
           })
           await reconcilePendingDesignDocumentClones({ threads: lifecycleThreads })
         } catch {

@@ -17,7 +17,9 @@ import {
   type ModelContextThresholds
 } from './model-context-profile.js'
 import {
+  activeTurnInstructionItem,
   aggressiveCompactionThreshold,
+  newestActiveTurnBatchStart,
   appendDigestMarker,
   buildCompactionSummary,
   extractSkillPins,
@@ -219,19 +221,40 @@ export class ContextCompactor {
     const activeContextIndex = history.findIndex(
       (item) => item.kind === 'model_context' && item.turnId === input.turnId
     )
+    // Oldest index the active turn may keep verbatim. Without an active-turn
+    // capsule there is nothing to protect beyond the caller's own boundary.
+    let activeTurnPin = -1
     if (activeContextIndex >= 0) {
-      let activeTurnStart = activeContextIndex
+      activeTurnPin = activeContextIndex
       for (let index = activeContextIndex - 1; index >= 0; index -= 1) {
         const item = history[index]
         if (item?.turnId === input.turnId && item.kind === 'user_message') {
-          activeTurnStart = index
+          activeTurnPin = index
           break
         }
       }
       tailStart = Math.min(
         tailStart,
-        activeTurnStart
+        activeTurnPin
       )
+    }
+    // A fold boundary pinned to the active turn makes one long running turn
+    // unreclaimable: after the first compaction folds the older turns the
+    // foldable prefix is nothing but the previous summary, so every later tool
+    // result accumulates until the request breaks the hard cap with
+    // `replacedTokens: 0`. In exactly that case, relax the pin to the newest
+    // complete batch group of the active turn, so its earlier completed
+    // dispatches become the foldable head while the newest interaction stays
+    // verbatim in the tail.
+    if (activeTurnPin >= 0 && tailStart > 0) {
+      const pinned = history.slice(0, tailStart)
+      const summariesOnly = pinned.every((item) => item.kind === 'compaction')
+      if (summariesOnly) {
+        const release = newestActiveTurnBatchStart(history, input.turnId, activeTurnPin)
+        if (release > tailStart && release < history.length) {
+          tailStart = repairTailStartForToolResults(history, release)
+        }
+      }
     }
     // Token-targeted tail: the item-count floor only sets the minimum.
     // When a configured budget exists, walk backwards over complete-turn
@@ -270,8 +293,18 @@ export class ContextCompactor {
         replacedTokens: 0
       }
     }
-    const head = history.slice(0, tailStart)
-    const tail = history.slice(tailStart)
+    let head = history.slice(0, tailStart)
+    let tail = history.slice(tailStart)
+    // The pinch above can pull the fold boundary past the active turn's own
+    // instruction so its completed dispatches become foldable head. That
+    // instruction is the request the model is still executing, so it is lifted
+    // back to the front of the retained tail instead of being demoted to
+    // summary text.
+    const liftedInstruction = activeTurnInstructionItem(history, input.turnId)
+    if (liftedInstruction && head.some((item) => item.id === liftedInstruction.id)) {
+      head = head.filter((item) => item.id !== liftedInstruction.id)
+      tail = [liftedInstruction, ...tail]
+    }
     // Re-summarizing only the previous summary cannot reclaim any conversation
     // history. Provider usage counters can remain above a threshold after a
     // successful compaction (notably when cached tokens are cumulative), which

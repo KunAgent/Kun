@@ -104,6 +104,21 @@ describe('remote allowlist shape', () => {
     }
   })
 
+  it('exposes only the mobile reader paper data plane', () => {
+    for (const channel of ['paper-library:list', 'paper:read-unit', 'paper:import',
+      'paper:cancel', 'paper-library:create-group', 'paper-library:move-to-group',
+      'paper-library:download-pdf', 'paper-reader:marks-read', 'paper-reader:marks-write',
+      'paper-discover:feed', 'paper-discover:arxiv-today', 'paper-discover:venue',
+      'paper-discover:venue-catalog']) {
+      expect(REMOTE_ALLOWED_INVOKE_CHANNELS.has(channel)).toBe(true)
+    }
+    for (const channel of ['paper-library:trash', 'paper:import-batch']) {
+      expect(REMOTE_ALLOWED_INVOKE_CHANNELS.has(channel)).toBe(false)
+    }
+    expect(REMOTE_ALLOWED_EVENT_CHANNELS.has('paper:progress')).toBe(true)
+    expect(REMOTE_BROADCAST_EVENT_CHANNELS.has('paper:progress')).toBe(false)
+  })
+
   it('scopes event and broadcast sets to non-overlapping purposes', () => {
     expect(REMOTE_ALLOWED_EVENT_CHANNELS.has('runtime:sse-event')).toBe(true)
     expect(REMOTE_BROADCAST_EVENT_CHANNELS.has('runtime:status')).toBe(true)

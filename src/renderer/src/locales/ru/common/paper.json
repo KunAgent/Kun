@@ -468,5 +468,17 @@
   "paperImportFolderTooltip": "Новые статьи сохраняются в «{{folder}}»",
   "paperImportedToFolder": "Импортировано в «{{folder}}»",
   "paperImportIntoFolder": "Импортировать статьи в эту папку",
-  "paperFolderEmpty": "Пустая папка"
+  "paperFolderEmpty": "Пустая папка",
+  "paperWorkspaces": "Рабочие области",
+  "paperWorkspaceAdd": "Добавить область",
+  "paperWorkspaceMenu": "Действия с областью",
+  "paperWorkspaceRemove": "Удалить область",
+  "paperWorkspaceFilterTitle": "Фильтр статей",
+  "paperWorkspaceFilterPlaceholder": "Фильтр по названию…",
+  "paperWorkspaceFilterEmpty": "Нет подходящих статей.",
+  "paperWorkspaceScanning": "Индексация…",
+  "paperWorkspaceLoadError": "Не удалось проиндексировать эту область.",
+  "paperWorkspaceRetry": "Повторить",
+  "paperSearchHistory": "История поиска",
+  "paperSearchHistoryEmpty": "Истории пока нет."
 }

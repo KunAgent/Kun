@@ -7,6 +7,7 @@ import {
   resolveModelProviderPresetSource,
   resolveProviderProxyUrl,
   type AppSettingsV1,
+  type KunHarnessDefaultsEntryV1,
   type KunRuntimeSettingsV1,
   type ModelProviderModelProfileV1,
   type ModelProviderProfileV1
@@ -183,6 +184,130 @@ export function toolOutputLimitsConfigForRuntime(
   limits: Pick<KunRuntimeSettingsV1, 'toolOutputLimits'>['toolOutputLimits'] | undefined
 ): Record<string, unknown> {
   return { maxLines: limits?.maxLines, maxBytes: limits?.maxBytes }
+}
+
+const sortedRecord = (value: Record<string, string> | undefined): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(value ?? {}).sort(([a], [b]) => a.localeCompare(b))
+  )
+
+/**
+ * `defaults[harnessId]` (p4 §3.6): fixed field order inside each entry so
+ * identical settings serialize byte-identically.
+ */
+const sortedDefaultsRecord = (
+  value: Record<string, KunHarnessDefaultsEntryV1> | undefined
+): Record<string, KunHarnessDefaultsEntryV1> =>
+  Object.fromEntries(
+    Object.entries(value ?? {})
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([id, entry]) => [
+        id,
+        {
+          ...(entry.credentialMode ? { credentialMode: entry.credentialMode } : {}),
+          ...(entry.providerId ? { providerId: entry.providerId } : {}),
+          ...(entry.model ? { model: entry.model } : {}),
+          ...(entry.permissionMode ? { permissionMode: entry.permissionMode } : {}),
+          ...(entry.isolation ? { isolation: entry.isolation } : {})
+        }
+      ])
+  )
+
+/**
+ * `harnesses` config section. Pure and byte-stable: arrays sort by id and
+ * record keys sort alphabetically so identical settings never rewrite
+ * config.json (a moving config would retrigger runtime syncs forever).
+ */
+export function harnessesConfigForRuntime(
+  harnesses: Pick<KunRuntimeSettingsV1, 'harnesses'>['harnesses'] | undefined
+): Record<string, unknown> {
+  const custom = [...(harnesses?.custom ?? [])]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((entry) => ({
+      id: entry.id,
+      displayName: entry.displayName,
+      command: entry.command,
+      args: [...entry.args],
+      env: sortedRecord(entry.env),
+      secretEnv: [...(entry.secretEnv ?? [])]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((row) => ({ name: row.name, secretRef: row.secretRef }))
+    }))
+  const terminalAgents = [...(harnesses?.terminalAgents ?? [])]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((entry) => ({
+      id: entry.id,
+      displayName: entry.displayName,
+      command: entry.command,
+      args: [...entry.args],
+      ...(entry.taskFlag ? { taskFlag: entry.taskFlag } : {}),
+      ...(entry.resumeArgs?.length ? { resumeArgs: [...entry.resumeArgs] } : {}),
+      ...(entry.hooks ? { hooks: entry.hooks } : {})
+    }))
+  return {
+    disabledIds: [...(harnesses?.disabledIds ?? [])].sort(),
+    binaryPaths: sortedRecord(harnesses?.binaryPaths),
+    custom,
+    defaults: sortedDefaultsRecord(harnesses?.defaults),
+    defaultHarnessId: harnesses?.defaultHarnessId ?? 'kun',
+    // Ordering is significant: the worker selector reads it as preference rank.
+    agentOrder: [...(harnesses?.agentOrder ?? [])],
+    terminalAgents
+  }
+}
+
+/**
+ * `ade` config section. The GUI-only `notifications` group is deliberately
+ * dropped; everything else maps 1:1 onto Kun's AdeConfigSchema with a fixed
+ * key order. `approvedWorktreeConfigs` entries are resolved from
+ * project-config grants by the caller (they need async file reads), and
+ * `worktreeSharedPaths` carries `agents.kun.worktrees.sharedPaths`.
+ */
+export function adeConfigForRuntime(
+  ade: Pick<KunRuntimeSettingsV1, 'ade'>['ade'] | undefined,
+  extras: {
+    approvedWorktreeConfigs?: Array<{ repoRoot: string; digest: string; worktree: unknown }>
+    worktreeSharedPaths?: Record<string, Array<{ path: string; mode: string }>>
+  } = {}
+): Record<string, unknown> {
+  const budget = ade?.budget &&
+    (ade.budget.softTokens !== undefined || ade.budget.hardTokens !== undefined)
+    ? {
+        ...(ade.budget.softTokens !== undefined ? { softTokens: ade.budget.softTokens } : {}),
+        ...(ade.budget.hardTokens !== undefined ? { hardTokens: ade.budget.hardTokens } : {})
+      }
+    : undefined
+  return {
+    enabled: ade?.enabled ?? false,
+    harnessRouter: ade?.harnessRouter ?? true,
+    deterministicHandoff: ade?.deterministicHandoff ?? true,
+    ...(ade?.managerModel?.providerId && ade.managerModel.model
+      ? {
+          managerModel: {
+            providerId: ade.managerModel.providerId,
+            model: ade.managerModel.model
+          }
+        }
+      : {}),
+    managerMayApprove: ade?.managerMayApprove ?? false,
+    allowUnattendedFullAccess: ade?.allowUnattendedFullAccess ?? false,
+    limits: {
+      softWorkers: ade?.limits.softWorkers ?? 4,
+      hardWorkers: ade?.limits.hardWorkers ?? 8
+    },
+    ...(budget ? { budget } : {}),
+    hibernation: {
+      enabled: ade?.hibernation.enabled ?? true,
+      idleMinutes: ade?.hibernation.idleMinutes ?? 30
+    },
+    stall: {
+      structuredMinutes: ade?.stall.structuredMinutes ?? 10,
+      terminalMinutes: ade?.stall.terminalMinutes ?? 20
+    },
+    approvedWorktreeConfigs: [...(extras.approvedWorktreeConfigs ?? [])]
+      .sort((a, b) => a.repoRoot.localeCompare(b.repoRoot)),
+    worktreeSharedPaths: extras.worktreeSharedPaths ?? {}
+  }
 }
 
 export function storageConfigForRuntime(

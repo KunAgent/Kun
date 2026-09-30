@@ -63,6 +63,19 @@ describe('send_im_message', () => {
     expect(run.publishedMessageId).toBe(output.messageId)
   })
 
+  it('persists delivery phase with the public message and its run receipt', async () => {
+    const f = await fixture()
+    const first = await f.tool.execute({ text: 'I will inspect the files.', phase: 'start' }, f.context)
+    const firstId = (first.output as { messageId: string }).messageId
+    expect((await f.store.get<RoomMessage>('message', firstId))?.value.deliveryPhase).toBe('start')
+    const second = await f.tool.execute({ text: 'The cause is clear.', phase: 'final' },
+      { ...f.context, activeToolCallId: 'call-final' })
+    expect((second.output as { phase: string }).phase).toBe('final')
+    const run = (await f.store.get<RoomRunRecord>('room_run', f.runId))?.value
+    expect(run).toMatchObject({ firstVisibleAt: expect.any(String), lastVisibleAt: expect.any(String),
+      lastDeliveryPhase: 'final', publishedMessageId: firstId })
+  })
+
   it('publishes an attachment-only bubble', async () => {
     const f = await fixture()
     await writeFile(join(f.workspace, 'report.pdf'), 'pdf')

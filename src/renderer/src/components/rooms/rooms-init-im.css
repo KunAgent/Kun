@@ -1,4 +1,15 @@
 .rooms-im-sidebar { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
+.rooms-im-sidebar-sections { display: flex; gap: 4px; padding: 8px 12px 4px; border-bottom: 1px solid var(--ds-border); }
+.rooms-im-sidebar-sections button { flex: 1; padding: 7px 8px; border-radius: 8px; color: var(--ds-text-muted); font-size: 13px; }
+.rooms-im-sidebar-sections button[aria-pressed='true'] { background: var(--ds-accent-soft); color: var(--ds-accent); font-weight: 600; }
+.rooms-im-sidebar-sections button:hover { background: var(--ds-surface-hover); }
+.rooms-im-sidebar > .agent-directory .rooms-sidebar-heading { padding: 10px 12px 4px; }
+.rooms-im-sidebar > .agent-directory .rooms-list-search { flex: 0 0 auto; margin: 0 12px; }
+.rooms-delete-confirm-copy { color: var(--ds-text-muted); line-height: 1.6; margin-bottom: 14px; }
+.rooms-delete-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.rooms-delete-confirm-actions button { padding: 8px 14px; border-radius: 8px; background: var(--ds-surface-hover); }
+.rooms-delete-confirm-actions button:last-child { background: var(--ds-danger); color: white; }
+.rooms-delete-confirm-actions button:disabled { opacity: .5; }
 .rooms-im-sidebar-toolbar { display: flex; align-items: center; gap: 2px; padding: 12px 8px 6px 12px; }
 .rooms-im-sidebar .rooms-list-search { flex: 1; min-width: 0; height: 32px; margin: 0 4px 0 0; padding: 0 10px; border-color: transparent; border-radius: 8px; background: var(--ds-surface-hover); }
 .rooms-im-sidebar .rooms-list-search:focus-within { border-color: var(--ds-focus-ring); background: var(--ds-surface-card); }
@@ -12,6 +23,7 @@
 .rooms-im-sidebar-row:hover { background: var(--ds-surface-hover); }
 .rooms-im-sidebar-row.is-selected { background: var(--ds-accent-soft); }
 .rooms-im-sidebar-open { display: flex; flex: 1; min-width: 0; align-items: center; gap: 10px; padding: 11px 10px; text-align: left; }
+.rooms-im-sidebar-open:disabled { cursor: default; opacity: .7; }
 .rooms-im-sidebar-avatar { position: relative; display: inline-flex; flex-shrink: 0; }
 .rooms-im-sidebar-running { position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 50%; background: var(--ds-success); box-shadow: 0 0 0 2px var(--ds-bg-sidebar); }
 .rooms-im-sidebar-copy { display: grid; gap: 4px; flex: 1; min-width: 0; }

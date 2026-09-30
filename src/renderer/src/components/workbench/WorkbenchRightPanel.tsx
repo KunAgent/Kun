@@ -37,6 +37,12 @@ import { X } from 'lucide-react'
 const ChangeInspector = lazy(() =>
   import('../ChangeInspector').then((module) => ({ default: module.ChangeInspector }))
 )
+const ReviewPanel = lazy(() =>
+  import('../review/ReviewPanel').then((module) => ({ default: module.ReviewPanel }))
+)
+const WorkersPanel = lazy(() =>
+  import('../workers/WorkersPanel').then((module) => ({ default: module.WorkersPanel }))
+)
 const DevBrowserPanel = lazy(() =>
   import('../DevBrowserPanel').then((module) => ({ default: module.DevBrowserPanel }))
 )
@@ -149,7 +155,7 @@ export function WorkbenchRightPanel({
 }: WorkbenchRightPanelProps): ReactElement | null {
   const { t } = useTranslation('common')
   const remoteMobile = useRemoteMobileLayout()
-  if (route === 'chat' && rightPanelMode !== BUILTIN_RIGHT_PANEL_IDS.sddAi && code) {
+  if ((route === 'chat' || route === 'ade') && rightPanelMode !== BUILTIN_RIGHT_PANEL_IDS.sddAi && code) {
     const visibleCodeState = codeRightTabsForGraphVisibility(code.state, graphEnabled)
     if (
       (!visible && visibleCodeState.tabs.length === 0) ||
@@ -298,6 +304,12 @@ function CodeRightPanelWorkspace({
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.changes) {
       return <ChangeInspector {...changes} className="h-full max-h-full w-full flex-col" />
+    }
+    if (id === BUILTIN_RIGHT_PANEL_IDS.review) {
+      return <ReviewPanel className="h-full max-h-full w-full" />
+    }
+    if (id === BUILTIN_RIGHT_PANEL_IDS.workers) {
+      return <WorkersPanel className="h-full max-h-full w-full" />
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.browser) {
       return (

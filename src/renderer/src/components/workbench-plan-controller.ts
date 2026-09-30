@@ -31,6 +31,11 @@ import type { RightPanelMode } from './chat/WorkbenchTopBar'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../extensions/contribution-ids'
 import type { GuiPlanMessageContext, SendMessageOverrides } from '../store/chat-store-types'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
+import { effectiveHarnessId } from '../lib/ade-composer-harness'
+import {
+  accountIdForComposerSelection,
+  readThreadComposerSelection
+} from '../store/chat-store-helpers'
 import { usePlanWorktreePreferenceStore } from '../plan/plan-worktree-preference-store'
 import { usePlanWorktreePreference } from '../plan/use-plan-worktree-preference'
 
@@ -391,14 +396,32 @@ export function useWorkbenchPlanController({
       return
     }
     const preference = usePlanWorktreePreferenceStore.getState().plans[plan.id]
+    // 07 §10: resolve the build harness before preparing the prompt — an
+    // external harness must skip the prompt-managed worktree protocol and run
+    // inside a host-managed task worktree instead.
+    const activePlanThread = chatState.activeThreadId
+      ? (chatState.threads.find((thread) => thread.id === chatState.activeThreadId) ??
+        (chatState.adeThreads ?? []).find((thread) => thread.id === chatState.activeThreadId))
+      : null
+    const buildHarnessId = effectiveHarnessId(
+      chatState.composerHarnessId,
+      activePlanThread?.harnessId
+    )
+    const externalBuild = buildHarnessId !== 'kun'
+    // Graph builds orchestrate workers through Kun manager tools, which are
+    // never exposed to external harnesses — refuse instead of downgrading.
+    if (externalBuild && orchestration === 'graph') {
+      setError(t('planBuildExternalGraphUnsupported'))
+      return
+    }
     try {
       const prepared = await preparePlanBuild({
         plan,
         content: snapshot.content,
         orchestration,
         graphEnabled: chatState.graphEnabled,
-        usePromptWorktree: orchestration === 'direct' && preference?.initialized === true &&
-          preference.usePromptWorktree,
+        usePromptWorktree: !externalBuild && orchestration === 'direct' &&
+          preference?.initialized === true && preference.usePromptWorktree,
         branchPrefix: preference?.branchPrefix ?? 'codex/',
         activeThreadId: chatState.activeThreadId,
         getPlanTodos: orchestration === 'direct'
@@ -410,6 +433,46 @@ export function useWorkbenchPlanController({
         getGitBranches: window.kunGui.getGitBranches
       })
       setComposerMode('agent')
+      if (externalBuild) {
+        // 07 §10 external path: dispatch to a fresh ADE thread bound to a
+        // host-managed worktree; the Review panel opens on settle. Reuse the
+        // composer's harness pick when set, else the thread's remembered
+        // selection for the pinned harness.
+        const remembered = chatState.activeThreadId
+          ? readThreadComposerSelection(chatState.activeThreadId)
+          : null
+        const rememberedForHarness = remembered?.harnessId === buildHarnessId ? remembered : null
+        const composerPicked = chatState.composerHarnessId.trim().length > 0
+        const buildModel = composerPicked
+          ? chatState.composerModel
+          : rememberedForHarness?.model ?? ''
+        const buildProviderId = composerPicked
+          ? chatState.composerProviderId
+          : rememberedForHarness?.providerId ?? ''
+        const dispatched = await chatState.dispatchExternalPlanBuild({
+          prompt: prepared.prompt,
+          displayText: `${t('planBuildDirect')}: ${plan.relativePath}`,
+          title: prepared.title,
+          workspaceRoot: prepared.workspaceRoot,
+          harnessId: buildHarnessId,
+          credentialMode: composerPicked
+            ? chatState.composerCredentialMode
+            : rememberedForHarness?.credentialMode ?? '',
+          model: buildModel,
+          providerId: buildProviderId,
+          ...(composerPicked
+            ? {
+                accountId: accountIdForComposerSelection(
+                  chatState.composerModelGroups,
+                  buildProviderId,
+                  buildModel
+                )
+              }
+            : {})
+        })
+        if (dispatched) await onPlanBuildStarted?.(plan)
+        return
+      }
       const displayText = prepared.prompt.includes('<prompt_managed_worktree_protocol>')
         ? t('planWorktreeBuildDisplay', { branch: prepared.displayText.match(/\((.+)\)$/)?.[1] ?? '', title: plan.featureName })
         : `${t(orchestration === 'graph' ? 'planBuildGraph' : 'planBuildDirect')}: ${plan.relativePath}`

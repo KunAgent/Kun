@@ -43,6 +43,7 @@ import { ContextWindowSettingsPanel } from './settings-section-lab-context-windo
 import { PptAgentSettingsPanel } from './settings-section-lab-ppt'
 import { AutoPlanBuildSettingsPanel } from './settings-section-lab-auto-plan-build'
 import { CodexReferenceBranchesSettingsPanel } from './settings-section-lab-codex-reference'
+import { AdeLabSettingsPanel } from './settings-section-lab-ade'
 import { ProjectBoardSettingsPanel } from './settings-section-lab-project-board'
 
 type LaboratorySettingsPanel =
@@ -55,6 +56,7 @@ type LaboratorySettingsPanel =
   | 'ppt'
   | 'projectBoard'
   | 'codexReferenceBranches'
+  | 'ade'
 
 export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
   const { t, form, kun, updateKun, selectControlClass, runtimeInfo } = ctx
@@ -105,7 +107,8 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           { id: 'graph', label: t('graphSettingsTitle'), icon: Workflow },
           { id: 'ppt', label: t('labPptTitle'), icon: Presentation },
           { id: 'codexReferenceBranches', label: t('labCodexReferenceBranchesTitle'), icon: Waypoints },
-          { id: 'projectBoard', label: t('labProjectBoardTitle'), icon: Columns3 }
+          { id: 'projectBoard', label: t('labProjectBoardTitle'), icon: Columns3 },
+          { id: 'ade', label: t('adeSettings.labTitle'), icon: Workflow }
         ]}
         value={activePanel}
         onChange={setActivePanel}
@@ -255,6 +258,16 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
           t={t}
           value={lab}
           onChange={(patch) => updateKun({ lab: patch })}
+        />
+      </SettingsTabPanel>
+      <SettingsTabPanel<LaboratorySettingsPanel>
+        baseId="laboratory-settings"
+        tabId="ade"
+        active={activePanel === 'ade'}
+        className="[&>div]:mt-0"
+      >
+        <AdeLabSettingsPanel
+          view={{ t, kun, updateKun, modelProviders }}
         />
       </SettingsTabPanel>
     </>

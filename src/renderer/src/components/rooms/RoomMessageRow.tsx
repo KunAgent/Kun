@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { ArrowUpRight, BellRing, Check, Copy, Pin, Reply } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomContentReference, RoomMember, RoomMessage, RoomTask } from '@shared/rooms-api'
@@ -8,8 +8,11 @@ import { RoomMessageBody } from './RoomMessageBody'
 import { RoomMessageRunButton } from './RoomMessageRunButton'
 import { RoomMessageInteractions } from './RoomMessageInteractions'
 import { RoomProposalCard } from './RoomProposalCard'
+import { RoomAppConnectionCard } from './RoomAppConnectionCard'
+import { RoomWorkbenchTaskCard } from './RoomWorkbenchTaskCard'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
 import './rooms-reminders.css'
+import { noteRoomMessageRendered } from './room-im-response-metrics'
 
 const roles = {
   coordinator: 'roomsCoordinator',
@@ -33,7 +36,8 @@ export function RoomMessageRow({
   onMember,
   onRun,
   onHandoff,
-  onOpenContent
+  onOpenContent,
+  continuation = false
 }: {
   message: RoomMessage
   room?: Room
@@ -50,8 +54,10 @@ export function RoomMessageRow({
   onRun?: (id: string) => void
   onHandoff?: (id: string) => void
   onOpenContent?: (reference: RoomContentReference, messageId?: string) => void
+  continuation?: boolean
 }) {
   const { t } = useTranslation('common')
+  useLayoutEffect(() => { noteRoomMessageRendered(message) }, [message])
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState('')
   const [reactBusy, setReactBusy] = useState(false)
@@ -87,9 +93,9 @@ export function RoomMessageRow({
     <article
       id={idPrefix + '-' + message.id}
       data-room-message-id={message.id}
-      className={`rooms-message-row rooms-message-${message.authorKind}`}
+      className={`rooms-message-row rooms-message-${message.authorKind}${continuation ? ' rooms-message-continuation' : ''}`}
     >
-      {!system ? (
+      {continuation ? <span className="rooms-message-avatar-spacer" aria-hidden="true" /> : !system ? (
         <RoomAvatar
           member={member}
           id={message.authorMemberId ?? message.authorKind}
@@ -142,7 +148,7 @@ export function RoomMessageRow({
               </span>
             </button>
           ) : null}
-          {message.presentationKind !== 'poll' && message.presentationKind !== 'reminder' && (message.presentationKind !== 'proposal' || !room) ? <RoomMessageBody
+          {message.presentationKind !== 'poll' && message.presentationKind !== 'reminder' && message.presentationKind !== 'app_connection' && (message.presentationKind !== 'workbench_task' || !room) && (message.presentationKind !== 'proposal' || !room) ? <RoomMessageBody
             room={room}
             publicMessage={message.status !== 'streaming'}
             messageId={message.id}
@@ -161,6 +167,8 @@ export function RoomMessageRow({
             </div>
           </div> : null}
           {room && message.presentationKind === 'proposal' ? <RoomProposalCard room={room} message={message} /> : null}
+          {room && message.presentationKind === 'app_connection' ? <RoomAppConnectionCard message={message} /> : null}
+          {room && message.presentationKind === 'workbench_task' ? <RoomWorkbenchTaskCard room={room} message={message} /> : null}
           {room ? <RoomMessageInteractions room={room} message={message} onMember={onMember ? (id) => onMember(id, message.rootRequestId) : undefined} /> : null}
         </div>
         <div className="rooms-message-footer">

@@ -17,10 +17,13 @@ import { appendAgentResponseBudget } from './agent-response-budget.js'
 import { AGENT_COLLABORATION_TOOLS } from './agent-handoff-tools.js'
 import { persistDirectChoiceMessages } from './agent-choice-messages.js'
 import { agentSetupConversationPolicy, agentSetupPending, isHiddenAgentSetupMessage } from './agent-setup.js'
+import { AGENT_SETUP_KICKOFF } from './agent-setup-prompt.js'
 import { settleConversationRunOutcome } from './agent-direct-publication.js'
 import { withdrawRunProposals } from '../rooms/room-proposals.js'
 import { roomContinuationIsCurrent } from '../rooms/room-continuation-service.js'
 import { ROOM_REMINDER_TOOL_NAMES } from '../rooms/room-reminder-tools.js'
+import { ROOM_APP_TOOL_NAMES } from '../rooms/room-app-connection-tools.js'
+import { WORKBENCH_TOOL_NAMES, resolveWorkbenchPolicy, workbenchToolNamesForPolicy } from '../contracts/workbench-policy.js'
 import { agentHistoryReferenceText, agentPrivateSystemPrompt, agentPrivateTurnInput, agentReminderWakeInput } from '../rooms/room-ax-surfaces.js'
 
 export function agentWorkspace(dataDir: string, agentId: string) { return join(dataDir, 'agents', 'workspaces', agentId) }
@@ -74,7 +77,7 @@ export class AgentDirectRunner {
       const agent = await this.deps.agentDirectory?.get(member.participantAgentId)
       const fingerprint = JSON.stringify([request.roomId, request.roomSnapshot.privateEpoch ?? 0, canonical,
         main.providerId, main.accountId, request.roomSnapshot.privateExecutionPolicy, member.presetId, member.agentInstructions,
-        profile, member.capabilityOverrides, agent?.setup?.status ?? 'completed'])
+        profile, member.capabilityOverrides, agent?.setup?.status ?? 'completed', resolveWorkbenchPolicy(agent?.workbench)])
       const threadId = agentStableId('agent-chat', createHash('sha256').update(fingerprint).digest('hex'))
       const prior = await this.deps.threads.getMetadata(threadId)
       const history = !prior ? await this.history(request) : ''
@@ -99,6 +102,8 @@ export class AgentDirectRunner {
       const limits = member.capabilityOverrides
       const agent = await this.deps.agentDirectory?.get(member.participantAgentId)
       const policy = agentSetupConversationPolicy(agentSetupPending(agent), profile, limits)
+      const workbench = agentSetupPending(agent) ? undefined : resolveWorkbenchPolicy(agent?.workbench)
+      const workbenchNames = workbench ? workbenchToolNamesForPolicy(workbench) : []
       thread = await this.deps.threads.create({ title: member.displayName, workspace: request.privateWorkspace!,
         ...request.privateModel!, agentId: member.presetId,
         mode: policy.sandboxMode === 'workspace-write' ? 'agent' : profile?.toolPolicy === 'readOnly' ? 'plan' : 'agent',
@@ -106,11 +111,13 @@ export class AgentDirectRunner {
         ...(request.roomSnapshot.privateExecutionPolicy ?? {}),
         sandboxMode: policy.sandboxMode ?? (profile?.toolPolicy === 'readOnly' ? 'read-only' : request.roomSnapshot.privateExecutionPolicy?.sandboxMode ?? 'workspace-write'),
         systemPrompt: agentPrivateSystemPrompt({
-          profilePrompt: profile?.systemPrompt, agentInstructions: member.agentInstructions, roleNotes: member.roleNotes })
+          profilePrompt: profile?.systemPrompt, agentInstructions: member.agentInstructions, roleNotes: member.roleNotes,
+          ...(workbench ? { workbench: { code: workbench.code !== 'off', work: workbench.work !== 'off' } } : {}) })
       }, { id: request.threadId, relation: 'side', roomContext: { roomId: request.roomId, memberId: member.id,
         participantAgentId: member.participantAgentId, agentRevision: member.agentRevision, kind: 'conversation',
-        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...ROOM_REMINDER_TOOL_NAMES, ...AGENT_COLLABORATION_TOOLS])] : undefined,
-        blockedToolNames: policy.blocked,
+        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...ROOM_REMINDER_TOOL_NAMES, ...ROOM_APP_TOOL_NAMES, ...AGENT_COLLABORATION_TOOLS, ...workbenchNames])] : undefined,
+        // Tools outside the Agent's workbench policy are hidden, not merely refused.
+        blockedToolNames: [...new Set([...(policy.blocked ?? []), ...WORKBENCH_TOOL_NAMES.filter((name) => !workbenchNames.includes(name))])],
         blockedProviderIds: limits?.blockedMcpServers ?? [], blockedSkillIds: limits?.blockedSkills ?? [], skillsEnabled: policy.skillsEnabled } })
     }
     if (thread.roomContext?.kind !== 'conversation' || thread.roomContext.roomId !== request.roomId || thread.roomContext.memberId !== member.id || thread.workspace !== request.privateWorkspace) throw new Error('Private conversation identity mismatch')
@@ -138,8 +145,14 @@ export class AgentDirectRunner {
       }
     }
     const prompt = await freezeAgentMemoryInput(this.deps, scoped, identity, request.privateInput!)
+    const freshUserRequest = !request.privateContinuation && !request.privateReminder && !request.handoffReturnId &&
+      request.message.body !== AGENT_SETUP_KICKOFF
     const run = await prepareRoomRun(this.deps, scoped, identity, prompt, request.message.attachmentIds, {
-      requestId: request.id, rootRequestId: request.rootRequestId, triggerMessageId: request.sourceMessageId, phase: 'conversation', ...request.privateModel })
+      requestId: request.id, rootRequestId: request.rootRequestId, triggerMessageId: request.sourceMessageId, phase: 'conversation',
+      communicationRequired: freshUserRequest,
+      finalResponseRequired: freshUserRequest || request.privateContinuation?.kind === 'app_connection' ||
+        request.privateContinuation?.kind === 'workbench_task',
+      ...request.privateModel })
     if (!turn) {
       if (run.admissionAttempted || request.admissionAttempted) return this.save(row, { ...request, privateRunId: run.id, status: 'recovery_required' })
       const budget: import('../rooms/room-store.js').RoomStoreCommit = { requestId: agentStableId('private-response-budget', request.id, identity) }

@@ -10,7 +10,7 @@ import {
 } from '../write/write-workspace-store'
 import { normalizePath } from '../write/write-workspace-store-helpers'
 import { usePaperModeStore } from './paper-mode-store'
-import { enterPaperMode } from './paper-mode-actions'
+import { enterPaperMode, PAPER_MODE_SWITCH_CANCELED, switchPaperLibrary } from './paper-mode-actions'
 import { applyPaperReaderLayout, readPaperReaderLayout } from './paper-reader-layout'
 import { paperImportParentDir, readImportFolder } from './paper-import-target'
 
@@ -79,8 +79,29 @@ export async function addPdfToPaperLibrary(input: {
  * PDF+NOTES split; metadata-only units open NOTES.md alone. Records
  * `lastOpenedAt` in the local library state and, when `autoMarkReading` is
  * enabled, flips unread units to `reading`.
+ *
+ * `libraryRoot` is the root of the tree the entry was clicked in. When it is
+ * not the mounted library the editor switches to that root first (saving
+ * dirty documents); a failed or cancelled save leaves the reader untouched.
  */
-export async function openLibraryEntry(entry: PaperLibraryEntry): Promise<void> {
+export async function openLibraryEntry(
+  entry: PaperLibraryEntry,
+  libraryRoot?: string,
+  t?: PaperTranslate
+): Promise<void> {
+  const requested = normalizePath(libraryRoot ?? '')
+  if (requested && requested !== normalizePath(useWriteWorkspaceStore.getState().workspaceRoot)) {
+    const switched = await switchPaperLibrary(requested)
+    if (!switched.ok) {
+      if (switched.message !== PAPER_MODE_SWITCH_CANCELED) {
+        paperNotice({
+          tone: 'error',
+          message: switched.message === 'save-failed' && t ? t('writePaperSaveFailed') : switched.message
+        })
+      }
+      return
+    }
+  }
   const store = useWriteWorkspaceStore.getState()
   const root = normalizePath(store.workspaceRoot)
   if (!root) return

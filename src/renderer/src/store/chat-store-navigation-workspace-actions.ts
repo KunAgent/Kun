@@ -3,9 +3,14 @@ import i18n from '../i18n'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
 import { formatRuntimeError } from '../lib/format-runtime-error'
 import { workspaceLabelFromPath } from '../lib/workspace-label'
+import { readThreadWorktreeRegistry } from '../lib/thread-worktree-registry'
+import { resolveProjectWorkspacePath } from '../lib/worktree-project-path'
 import {
+  isClawWorkspacePath,
   isConversationWorkspacePath,
-  normalizeWorkspaceRoot
+  isInternalDeepSeekGuiWorkspace,
+  normalizeWorkspaceRoot,
+  workspaceRootIdentityKey
 } from '../lib/workspace-path'
 import { withNativeDialog } from '../lib/native-dialog-activity'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
@@ -26,6 +31,8 @@ import {
 import { loadMoreThreads as loadMoreThreadsAction } from './chat-store-thread-pagination'
 import { isCodeThread } from './chat-store-runtime'
 import { createRefreshThreadsAction } from './chat-store-thread-refresh'
+import { threadWorkspacePreparing, useTaskWorkspaceStore } from './task-workspace-store'
+import { useReviewStore } from './review-store'
 
 type SseAbortRef = { current: AbortController | null }
 
@@ -37,7 +44,114 @@ type StoreActionContext = {
 
 export function createNavigationWorkspaceActions(
   { set, get, sseAbortRef }: StoreActionContext
-): Pick<ChatState, 'chooseWorkspace' | 'selectWorkspaceRoot' | 'clearWorkspace' | 'removeWorkspace' | 'refreshThreads' | 'loadMoreThreads' | 'setThreadSearch' | 'setShowArchivedThreads'> {
+): Pick<ChatState, 'chooseWorkspace' | 'selectWorkspaceRoot' | 'chooseAdeWorkspace' | 'selectAdeWorkspaceRoot' | 'setComposerIsolationForWorkspace' | 'clearWorkspace' | 'removeWorkspace' | 'refreshThreads' | 'loadMoreThreads' | 'setThreadSearch' | 'setShowArchivedThreads'> {
+  let adeSelectionPending = false
+
+  const adeSelectionBlocked = (state: ChatState): boolean =>
+    state.busy || state.queuedMessages.length > 0 ||
+    Boolean(state.threadLoadingId) || threadWorkspacePreparing(state.activeThreadId)
+
+  const currentAdeProjectRoot = (state: ChatState): string => {
+    if (!state.activeThreadId) return normalizeWorkspaceRoot(state.workspaceRoot)
+    const thread = state.adeThreads.find((item) => item.id === state.activeThreadId)
+    if (!thread) return normalizeWorkspaceRoot(state.workspaceRoot)
+    if (!thread.taskWorkspaceId) return normalizeWorkspaceRoot(thread.workspace)
+    const preparedSource = useTaskWorkspaceStore.getState().prepByThread[thread.id]?.sourceRoot
+    if (preparedSource) return normalizeWorkspaceRoot(preparedSource)
+    const boundSource = useReviewStore.getState().bindings[thread.id]?.sourceRoot
+    if (boundSource) return normalizeWorkspaceRoot(boundSource)
+    const worktrees = readThreadWorktreeRegistry().worktrees
+    return resolveProjectWorkspacePath(thread.workspace ?? '', {
+      threadWorktrees: worktrees,
+      candidateProjectPaths: state.codeWorkspaceRoots
+    })
+  }
+
+  const adeSelectionContext = () => {
+    const state = get()
+    return { route: state.route, activeThreadId: state.activeThreadId, workspaceRoot: state.workspaceRoot }
+  }
+
+  const contextIsCurrent = (context: ReturnType<typeof adeSelectionContext>): boolean => {
+    const state = get()
+    return state.route === 'ade' && state.route === context.route &&
+      state.activeThreadId === context.activeThreadId &&
+      state.workspaceRoot === context.workspaceRoot && !adeSelectionBlocked(state)
+  }
+
+  const applyAdeWorkspaceSelection = async (
+    workspacePath: string,
+    context: ReturnType<typeof adeSelectionContext>
+  ): Promise<string | null> => {
+    const normalized = normalizeWorkspaceRoot(workspacePath)
+    if (!contextIsCurrent(context)) return null
+    if (
+      !normalized ||
+      isConversationWorkspacePath(normalized, get().conversationWorkspaceRoot) ||
+      isInternalDeepSeekGuiWorkspace(normalized) || isClawWorkspacePath(normalized)
+    ) {
+      set({ error: i18n.t('common:adeWorkspaceInvalidProject', {
+        defaultValue: 'Choose a regular project folder outside Kun-managed directories.'
+      }) })
+      return null
+    }
+    // Re-selecting the current project must leave the draft's isolation,
+    // branch starting point, and any composer-local text untouched.
+    const state = get()
+    const sameSelectedProject = workspaceRootIdentityKey(state.workspaceRoot) ===
+      workspaceRootIdentityKey(normalized)
+    const sameActiveProject = workspaceRootIdentityKey(currentAdeProjectRoot(state)) ===
+      workspaceRootIdentityKey(normalized)
+    if (sameSelectedProject && sameActiveProject && !state.workspaceRootLocal) {
+      set({
+        error: null,
+        ...(state.activeThreadId ? {} : {
+          adeDraftOpen: true,
+          ...(!state.adeDraftOpen ? { adeDraftRevision: state.adeDraftRevision + 1 } : {})
+        })
+      })
+      return normalized
+    }
+    try {
+      const persistedSettings = await rendererRuntimeClient.setSettings({ workspaceRoot: normalized })
+      if (!contextIsCurrent(context)) return null
+      const persisted = normalizeWorkspaceRoot(persistedSettings.workspaceRoot) || normalized
+      const projectChanged = workspaceRootIdentityKey(currentAdeProjectRoot(state)) !==
+        workspaceRootIdentityKey(persisted)
+      const removedCodeWorkspaces = removedRegistryAfterRestore(persisted, get().removedCodeWorkspaces)
+      if (projectChanged) {
+        sseAbortRef.current?.abort()
+        sseAbortRef.current = null
+        clearBusyWatchdog()
+        resetBusyRecoveryAttempts()
+      }
+      set((current) => ({
+        ...(projectChanged ? clearedThreadSelection() : {}),
+        route: 'ade',
+        adeDraftOpen: projectChanged || !current.activeThreadId ? true : current.adeDraftOpen,
+        adeDraftRevision: projectChanged || (!current.activeThreadId && !current.adeDraftOpen)
+          ? current.adeDraftRevision + 1
+          : current.adeDraftRevision,
+        workspaceRoot: persisted,
+        workspaceRootLocal: false,
+        workspaceLabel: workspaceLabelFromPath(persisted),
+        codeWorkspaceRoots: rememberRootForRestore(
+          codeRootsAfterRemoval(current.codeWorkspaceRoots, removedCodeWorkspaces),
+          persisted
+        ),
+        removedCodeWorkspaces,
+        ...(projectChanged ? { extensionComposerContexts: [] } : {}),
+        ...(projectChanged ? { composerWorktreeStartFrom: undefined } : {}),
+        error: null
+      }))
+      void get().refreshThreads().catch(() => undefined)
+      return persisted
+    } catch (error) {
+      if (contextIsCurrent(context)) set({ error: formatRuntimeError(error) })
+      return null
+    }
+  }
+
   return {
   loadMoreThreads: (workspacePath) => loadMoreThreadsAction(workspacePath, set, get),
   chooseWorkspace: async ({ createThreadAfter = false, selectThreadAfter = true, persist = true } = {}) => {
@@ -174,6 +288,64 @@ export function createNavigationWorkspaceActions(
       set({ error: formatRuntimeError(e) })
       return null
     }
+  },
+
+  chooseAdeWorkspace: async () => {
+    if (adeSelectionPending) return null
+    adeSelectionPending = true
+    const context = adeSelectionContext()
+    try {
+      if (context.route !== 'ade') return null
+      if (get().runtimeConnection !== 'ready') {
+        set({ error: i18n.t('common:runtimeActionNeedsConnection') })
+        return null
+      }
+      if (adeSelectionBlocked(get())) {
+        set({ error: i18n.t('common:adeWorkspaceSwitchBusy', {
+          defaultValue: 'Wait for the current run, queued messages, or worktree preparation before changing projects.'
+        }) })
+        return null
+      }
+      if (typeof window.kunGui?.pickWorkspaceDirectory !== 'function') {
+        throw new Error(i18n.t('common:workspacePickerUnavailable'))
+      }
+      const picked = await withNativeDialog(() =>
+        window.kunGui.pickWorkspaceDirectory(context.workspaceRoot || undefined))
+      if (picked.canceled || !picked.path) return null
+      return await applyAdeWorkspaceSelection(picked.path, context)
+    } catch (error) {
+      if (contextIsCurrent(context)) set({ error: formatWorkspacePickerError(error) })
+      return null
+    } finally {
+      adeSelectionPending = false
+    }
+  },
+
+  selectAdeWorkspaceRoot: async (workspaceRoot) => {
+    if (adeSelectionPending) return null
+    adeSelectionPending = true
+    const context = adeSelectionContext()
+    try {
+      if (context.route !== 'ade') return null
+      if (get().runtimeConnection !== 'ready') {
+        set({ error: i18n.t('common:runtimeActionNeedsConnection') })
+        return null
+      }
+      if (adeSelectionBlocked(get())) {
+        set({ error: i18n.t('common:adeWorkspaceSwitchBusy', {
+          defaultValue: 'Wait for the current run, queued messages, or worktree preparation before changing projects.'
+        }) })
+        return null
+      }
+      return await applyAdeWorkspaceSelection(workspaceRoot, context)
+    } finally {
+      adeSelectionPending = false
+    }
+  },
+
+  setComposerIsolationForWorkspace: () => {
+    if (get().route !== 'ade' || get().activeThreadId) return
+    set({ composerIsolation: 'local', composerWorktreeStartFrom: undefined })
   },
 
   clearWorkspace: async () => {

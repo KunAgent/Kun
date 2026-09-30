@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react'
+import { useEffect, type ReactElement } from 'react'
 import { WorkbenchLeftSidebar } from './WorkbenchLeftSidebar'
 import { WorkbenchStageRouter } from './WorkbenchStageRouter'
 import { WriteAssistantStageContext } from '../write/WriteAssistantStageContext'
@@ -13,19 +13,22 @@ import { extensionWorkbenchClient } from '../../extensions/extension-workbench-c
 import { resolveCommandOpenView } from '../../extensions/ExtensionWorkbenchSurfaces'
 import { normalizeWorkbenchRoute } from './workbench-route'
 import { shouldShowSideSessionReturnBar } from './workbench-side-session-mode'
+import { ensureThreadBinding, useReviewStore } from '../../store/review-store'
+import { useActivityStore } from '../../store/activity-store'
+import { selectWorkerRowsForParent } from '../../store/activity-selectors'
 
 type Context = Record<string, any>
 
 export function WorkbenchContent({ context }: { context: Context }): ReactElement {
   const {
     shellRef, extensionHostContextMenus, activeExtensionCenterView, route, setWorkspaceContextMenu,
-    leftSidebarCollapsed, leftSidebarWidth, codeThreads, activeThreadId, sidebarView,
+    leftSidebarCollapsed, leftSidebarWidth, codeThreads, adeThreads, activeThreadId, adeDraftOpen, sidebarView,
     connectPhoneSidebarOpen, connectPhoneInitialTarget, activeExtensionLeftSidebar, extensionWorkspaceRoot,
     selectExtensionSurface, runtimeConnection, threadSearch, showArchivedThreads, focusModeEnabled,
     updateFocusMode, setThreadSearch, openThread, renameThread, pinThread, archiveThread,
-    deleteThread, startNewChat, startNewChatInWorkspace,
+    deleteThread, startNewChat, startNewAdeChat, startNewAdeOneOnOne, startNewChatInWorkspace,
     openSettings, openPluginsView, openExtensionsView, toggleTheme, toggleConnectPhone, openConnectWeixin,
-    openCodeMode, openWriteMode, openBoardView, openScheduleView, openWorkflowView,
+    openCodeMode, openAdeMode, openWriteMode, openBoardView, openScheduleView, openWorkflowView,
     startNewConversation, beginLeftResize, toggleLeftSidebar, busy,
     input, rightPanel, writeRuntimeBanner, setInput, sendWritePrompt, attachPaperComposerImage,
     conversationRuntimeBanner, activeSddDraft, rightPanelMode, toggleSddAssistantPanel,
@@ -49,6 +52,19 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
   } = context
   const normalizedRoute = normalizeWorkbenchRoute(route)
   const activeConversationThread = threads.find((thread: any) => thread.id === activeThreadId)
+  const reviewEnabled = useReviewStore((s) =>
+    activeThreadId ? Boolean(s.bindings[activeThreadId]) : false)
+  // 12 §6.1: the Workers rail button appears while worker rows exist under
+  // the active (manager) thread; the panel itself also self-disables.
+  const workersEnabled = useActivityStore((s) =>
+    Boolean(
+      activeConversationThread?.workspaceMode === 'ade' &&
+        activeThreadId &&
+        selectWorkerRowsForParent(s.rows, activeThreadId).length > 0
+    ))
+  useEffect(() => {
+    if (activeThreadId) void ensureThreadBinding(activeThreadId)
+  }, [activeThreadId])
   return (
     <div
       ref={shellRef}
@@ -83,6 +99,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         width={leftSidebarWidth}
         route={normalizedRoute}
         codeThreads={codeThreads}
+        adeThreads={adeThreads}
         activeThreadId={activeThreadId}
         sidebarView={sidebarView}
         connectPhoneSidebarOpen={connectPhoneSidebarOpen}
@@ -111,6 +128,9 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         onToggleTheme={toggleTheme}
         onToggleConnectPhone={toggleConnectPhone}
         onCodeOpen={openCodeMode}
+        onAdeOpen={openAdeMode}
+        onNewAdeChat={startNewAdeChat}
+        onNewAdeOneOnOne={startNewAdeOneOnOne}
         onWriteOpen={openWriteMode}
         onScheduleOpen={openScheduleView}
         onBoardOpen={openBoardView}
@@ -135,9 +155,11 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
       <WriteAssistantStageContext.Provider value={writeAssistantStageProps ?? null}>
       <WorkbenchStageRouter
         route={normalizedRoute}
+        adeDraftOpen={adeDraftOpen === true}
         leftSidebarCollapsed={leftSidebarCollapsed}
         onToggleLeftSidebar={toggleLeftSidebar}
         onOpenThread={openThread}
+        onOpenPlugins={openPluginsView}
         onConnectWeixin={openConnectWeixin}
         write={{
           runtimeBanner: writeRuntimeBanner,
@@ -252,6 +274,8 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
             planPanelEnabled: Boolean(activeGuiPlan),
             canvasEnabled: true,
             graphEnabled,
+            reviewEnabled,
+            workersEnabled,
             sideChatRunningCount: currentSideRunningCount,
             sideChatOpen: rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.sideConversations,
             sideChatEnabled: runtimeConnection === 'ready' && Boolean(activeThreadId),

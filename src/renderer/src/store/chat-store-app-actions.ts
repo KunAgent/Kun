@@ -9,13 +9,22 @@ import {
   readRemovedCodeWorkspaces
 } from '../lib/removed-code-workspaces'
 import type { ChatState, ChatStoreGet, ChatStoreSet, InitialSetupMode, PluginHostRoute, SettingsRouteSection } from './chat-store-types'
+import { getProvider } from '../agent/registry'
+import { currentCodeWorkspaceRoot } from './chat-store-current-workspace'
+import {
+  markThreadWorkspacePreparing,
+  markThreadWorkspacePrepFailed,
+  receiveTaskWorkspaceRecord
+} from './task-workspace-store'
 import type { ComposerPlanMode } from './chat-store-helpers'
 import {
   composerReasoningEffortForSelection,
+  persistComposerIsolation,
   persistComposerMode,
   persistComposerPersonaId,
   persistComposerProviderId,
   providerIdForComposerModel,
+  rememberThreadComposerHarness,
   rememberThreadComposerMode,
   rememberThreadComposerSelection,
   readStoredComposerProviderId
@@ -66,6 +75,9 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
   | 'setComposerExecutionSettings'
   | 'setComposerOrchestration'
   | 'setComposerModel'
+  | 'setComposerHarness'
+  | 'setComposerIsolation'
+  | 'requestAdeThreadWorkspace'
   | 'setComposerReasoningEffort'
   | 'setComposerFastMode'
   | 'setComposerAgentId'
@@ -143,7 +155,16 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       const state = get()
       const activeThreadId = state.activeThreadId
       if (activeThreadId) {
-        rememberThreadComposerSelection(activeThreadId, modelId, nextProviderId)
+        const harnessId = state.composerHarnessId?.trim() ?? ''
+        rememberThreadComposerSelection(
+          activeThreadId,
+          modelId,
+          nextProviderId,
+          'user',
+          harnessId
+            ? { harnessId, credentialMode: state.composerCredentialMode }
+            : undefined
+        )
       } else {
         persistComposerModel(modelId)
         persistComposerProviderId(nextProviderId)
@@ -171,6 +192,61 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
         void window.kunGui.saveSettingsSilent({
           agents: { kun: { model: trimmed, providerId: nextProviderId } }
         })
+      }
+    },
+
+    setComposerHarness: (harnessId, credentialMode) => {
+      const nextHarnessId = harnessId.trim()
+      const nextCredentialMode = credentialMode?.trim() ?? ''
+      const activeThreadId = get().activeThreadId
+      if (activeThreadId) {
+        rememberThreadComposerHarness(activeThreadId, nextHarnessId, nextCredentialMode)
+      }
+      set({
+        composerHarnessId: nextHarnessId,
+        composerCredentialMode: nextCredentialMode
+      })
+    },
+
+    setComposerIsolation: (isolation, startFrom) => {
+      // Persisted so the choice doubles as the default for new sessions
+      // (the Worktree settings "default isolation" row edits the same key).
+      persistComposerIsolation(isolation)
+      set({
+        composerIsolation: isolation,
+        composerWorktreeStartFrom: isolation === 'worktree' ? startFrom : undefined
+      })
+    },
+
+    requestAdeThreadWorkspace: async (threadId, startFrom) => {
+      const provider = getProvider()
+      if (!provider.createTaskWorkspace) return false
+      const thread = (get().threads.find((t) => t.id === threadId) ??
+        (get().adeThreads ?? []).find((t) => t.id === threadId))
+      if (thread?.taskWorkspaceId) return true
+      const sourceRoot = normalizeWorkspaceRoot(
+        thread?.workspace ?? currentCodeWorkspaceRoot(get(), await rendererRuntimeClient.getSettings())
+      )
+      if (!sourceRoot) {
+        set({ error: i18n.t('common:workspaceRequiredToCreateThread') })
+        return false
+      }
+      markThreadWorkspacePreparing(threadId, '')
+      try {
+        const created = await provider.createTaskWorkspace({
+          ownerThreadId: threadId,
+          sourceRoot,
+          isolation: 'worktree',
+          ...(startFrom ? { startFrom } : {})
+        })
+        receiveTaskWorkspaceRecord(created.record)
+        return true
+      } catch (error) {
+        markThreadWorkspacePrepFailed(
+          threadId,
+          error instanceof Error ? error.message : String(error)
+        )
+        return false
       }
     },
 

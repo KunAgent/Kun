@@ -1,0 +1,59 @@
+.rooms-workspace .rooms-message-bubble:has(.rooms-app-connection-card) {
+  width: min(520px, 100%);
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.rooms-app-connection-card {
+  overflow: hidden;
+  border: 1px solid var(--ds-border);
+  border-radius: 18px;
+  background: var(--ds-surface-card);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--ds-text) 7%, transparent);
+}
+.rooms-app-connection-hero {
+  display: grid;
+  height: 92px;
+  place-items: center;
+  background: var(--ds-surface-subtle);
+}
+.rooms-app-connection-icon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 15px;
+  background: var(--ds-surface-card);
+  color: var(--ds-accent);
+}
+.rooms-app-connection-content { padding: 16px; }
+.rooms-app-connection-content > strong { display: block; font-size: 15px; color: var(--ds-text); }
+.rooms-app-connection-content > p { margin: 5px 0 0; font-size: 13px; line-height: 1.5; color: var(--ds-text-muted); }
+.rooms-app-connection-content > small { display: block; margin-top: 8px; font-size: 11px; color: var(--ds-text-muted); }
+.rooms-app-connection-content .rooms-app-connection-error { color: #dc2626; }
+.rooms-app-connection-guide { margin-top: 6px; color: var(--ds-accent); font-size: 11px; text-decoration: underline; }
+.rooms-app-connection-actions { display: flex; gap: 8px; margin-top: 16px; }
+.rooms-app-connection-actions button {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  border: 1px solid var(--ds-border);
+  border-radius: 999px;
+  color: var(--ds-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.rooms-app-connection-actions button.is-primary { border-color: var(--ds-text); background: var(--ds-text); color: var(--ds-surface-card); }
+.rooms-app-connection-actions button:disabled, .rooms-app-connection-resume:disabled { opacity: .55; cursor: wait; }
+.rooms-app-connection-resume, .rooms-app-connection-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--ds-text);
+}

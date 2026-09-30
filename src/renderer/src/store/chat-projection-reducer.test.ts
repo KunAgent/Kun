@@ -32,6 +32,7 @@ const context = {
 function state(): ChatState {
   return {
     activeThreadId: 'thread_1',
+    adeThreads: [],
     blocks: [],
     liveReasoning: '',
     liveAssistant: '',

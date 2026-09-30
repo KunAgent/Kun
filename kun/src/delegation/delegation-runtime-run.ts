@@ -21,6 +21,8 @@ import {
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import type { UsageSnapshot } from '../contracts/usage.js'
 import type { TurnClientSurface } from '../contracts/turns.js'
+import type { HarnessCredentialMode, HarnessId } from '../contracts/harness.js'
+import type { ThreadExecutionUnit } from '../contracts/threads.js'
 import {
   ChildRunActivity,
   type ChildRunActivity as ChildRunActivityValue,
@@ -87,6 +89,12 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     prompt: string
     /** Exact active parent turn source forwarded by a first-class host. */
     source?: ChildSourceEnvelope
+    /**
+     * Host-owned idempotency key for the child turn start. Retried deliveries
+     * with the same key reattach to the already-admitted turn (manager
+     * dispatch exactly-once, 09 §5).
+     */
+    clientRequestId?: string
     /** Trusted host workflow control kept outside the child user message. */
     controlPrompt?: string
     pptWorkflowScope?: PptWorkflowScope
@@ -152,6 +160,21 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
      * after the parent turn finishes. Default: false (synchronous).
      */
     detach?: boolean
+    /**
+     * Host-allocated child thread id (ADE worker dispatch). The dispatch record
+     * is written before execution so the id must be chosen by the host, not by
+     * the id generator. Host-only; public tools never set it.
+     */
+    childId?: string
+    /** Frozen harness for the child thread and first turn (ADE worker route). */
+    harnessId?: HarnessId
+    /** Frozen credential mode for the first turn; later resumes use the thread pin. */
+    credentialMode?: HarnessCredentialMode
+    /**
+     * Host-only execution-unit metadata persisted on the created child thread
+     * (ADE worker identity). Never accepted from model-supplied input.
+     */
+    executionUnit?: ThreadExecutionUnit
     /**
      * Invoked once, as soon as the child id is allocated (before the child
      * finishes), so the caller can surface the id while the child is still
@@ -230,6 +253,10 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     const selection = resolveChildModelSelection({
       explicitModel: ephemeralAgentInheritsSessionSelection ? undefined : input.model,
       explicitProviderId: ephemeralAgentInheritsSessionSelection ? undefined : input.providerId,
+      // A pinned harnessId means the model/provider pair is a frozen route
+      // already validated by worker-route resolution; native-login harness
+      // models carry no Kun providerId by design.
+      allowUnpairedExplicitModel: input.harnessId != null,
       profileModel: ephemeralAgentInheritsSessionSelection ? undefined : profile?.model,
       profileProviderId: ephemeralAgentInheritsSessionSelection ? undefined : profile?.providerId,
       inheritedModel: input.inheritedModel,
@@ -292,7 +319,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     const clientSurface = input.guiDesignCanvas || input.guiExcalidrawCanvas ? 'gui' : input.clientSurface ?? 'api'
 
     const queuedAt = this.now()
-    const id = this.options.idGenerator?.() ?? `child_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+    const id = input.childId ?? this.options.idGenerator?.() ?? `child_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
     let record = ChildRunRecord.parse({
       id,
       parentThreadId: input.parentThreadId,
@@ -418,6 +445,10 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
         parentTurnId: input.parentTurnId,
         prompt: input.prompt,
         source,
+        clientRequestId: input.clientRequestId,
+        harnessId: input.harnessId,
+        credentialMode: input.credentialMode,
+        executionUnit: input.executionUnit,
         controlPrompt,
         pptWorkflowScope: input.pptWorkflowScope,
         signal: detachedController.signal
@@ -491,6 +522,10 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       parentTurnId: input.parentTurnId,
       prompt: input.prompt,
       source,
+      clientRequestId: input.clientRequestId,
+      harnessId: input.harnessId,
+      credentialMode: input.credentialMode,
+      executionUnit: input.executionUnit,
       controlPrompt,
       pptWorkflowScope: input.pptWorkflowScope,
       signal: controller.signal

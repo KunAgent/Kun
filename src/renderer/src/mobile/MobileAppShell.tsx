@@ -1,19 +1,22 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useChatStore } from '../store/chat-store'
+import { useActivityStore } from '../store/activity-store'
+import { selectNeedsYouCount } from '../store/activity-selectors'
+import { useAdeEnabled } from '../components/ade/use-ade-enabled'
 import { useRoomAttentionCount } from '../components/rooms/useRoomEvents'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { MobileModeNav } from './MobileModeNav'
 import { MobileCodeHome } from './screens/MobileCodeHome'
 import { MobileRoomsRoot } from './rooms/MobileRoomsRoot'
-import { MobileWorkHome, type MobileWorkResource } from './work/MobileWorkHome'
+import { MobileDocumentsHome } from './work/MobileDocumentsHome'
 import { useMobileNavigation, type MobileNavigationGuard } from './navigation/use-mobile-navigation'
 import { modeForWorkbenchRoute, workLeaveDecision, workbenchRouteForMode } from './mobile-mode-policy'
 import type { MobileMode, MobilePage } from './navigation/mobile-page'
 import type { RoomContentOpenTarget } from '@shared/rooms-api'
 import { openRoomContentTarget } from '../components/rooms/room-content-navigation'
-import { workFileResourceKey, workWhiteboardResourceKey } from './work/work-resource-key'
+import { workFileResourceKey } from './work/work-resource-key'
 import { useWorkBeforeUnloadGuard } from './use-work-before-unload-guard'
 import { useMobileViewport } from './use-mobile-viewport'
 import { MobileLoadingState } from './lib/MobileLoading'
@@ -37,13 +40,21 @@ const MobileRoomSettings = lazy(() => import('./rooms/MobileRoomSettings').then(
 const MobileWorkResourceScreen = lazy(() => import('./work/MobileWorkResourceScreen').then((module) => ({
   default: module.MobileWorkResourceScreen
 })))
+const MobilePaperHome = lazy(() => import('./paper/MobilePaperHome').then((module) => ({
+  default: module.MobilePaperHome
+})))
+const MobilePaperReader = lazy(() => import('./paper/MobilePaperReader').then((module) => ({
+  default: module.MobilePaperReader
+})))
+const MobilePaperDiscover = lazy(() => import('./paper/MobilePaperDiscover').then((module) => ({
+  default: module.MobilePaperDiscover
+})))
 const MobileSettingsScreen = lazy(() => import('./settings/MobileSettingsScreen').then((module) => ({
   default: module.MobileSettingsScreen
 })))
-
-function basename(value: string): string {
-  return value.replaceAll('\\', '/').split('/').filter(Boolean).at(-1) ?? value
-}
+const MobileAgentsHome = lazy(() => import('./agents/MobileAgentsHome').then((module) => ({
+  default: module.MobileAgentsHome
+})))
 
 function MobileUnavailable({ title, onBack }: { title: string; onBack: () => void }): ReactElement {
   return <section className="kun-mobile-unavailable"><h1>{title}</h1><p>This mobile workspace is still loading.</p>
@@ -59,8 +70,13 @@ export function MobileAppShell(): ReactElement {
     modeForWorkbenchRoute(useChatStore.getState().route)
   )
   const roomAttention = useRoomAttentionCount()
+  const { enabled: adeEnabled } = useAdeEnabled()
+  const agentsAttention = useActivityStore((s) =>
+    adeEnabled ? selectNeedsYouCount(s.rows) : 0)
   const [notice, setNotice] = useState('')
-  const [workSearch, setWorkSearch] = useState('')
+  const [paperUnsaved, setPaperUnsaved] = useState(false)
+  const [paperBusy, setPaperBusy] = useState(false)
+  const workSettingsLoaded = useRef(false)
   const navigationRequestRef = useRef(0)
   const chat = useChatStore(useShallow((state) => ({
     route: state.route, threads: state.threads, search: state.threadSearch,
@@ -74,18 +90,15 @@ export function MobileAppShell(): ReactElement {
     setRoute: state.setRoute
   })))
   const work = useWriteWorkspaceStore(useShallow((state) => ({
-    workspaceRoot: state.workspaceRoot, entriesByDir: state.entriesByDir,
-    documentsByPath: state.documentsByPath, whiteboards: state.whiteboards,
+    workspaceRoot: state.workspaceRoot, documentsByPath: state.documentsByPath,
     saveStatus: state.saveStatus, reviewActive: state.reviewActive,
     spreadsheetConflict: Object.values(state.documentsByPath)
       .some((document) => document.spreadsheetConflictPreview !== null),
-    settingsLoading: state.settingsLoading, error: state.settingsError ?? state.treeError ?? '',
-    openFile: state.openFile, openWhiteboard: state.openWhiteboard, saveAll: state.saveAllDocuments,
-    loadSettings: state.loadWriteSettings, initialize: state.initializeWorkspace
+    saveAll: state.saveAllDocuments, loadSettings: state.loadWriteSettings
   })))
 
   const { route: currentRoute, setRoute } = chat
-  const { initialize: initializeWork, loadSettings: loadWorkSettings, workspaceRoot: workRoot } = work
+  const loadWorkSettings = work.loadSettings
 
   // The desktop settings route is never rendered on the phone (AppShell
   // routes it here). Any path that requests it — the Work settings button, a
@@ -95,6 +108,10 @@ export function MobileAppShell(): ReactElement {
   // button restores the exact origin instead of the mode home.
   const settingsReturnRef = useRef<MobilePage | null>(null)
   const openSettingsPage = (from: MobilePage): void => {
+    if ((from.kind === 'paper' && paperUnsaved) || paperBusy) {
+      setNotice(t('mobileWorkDocSettingsBlocked'))
+      return
+    }
     settingsReturnRef.current = from
     navigate({ mode: from.mode, kind: 'settings' })
   }
@@ -107,38 +124,31 @@ export function MobileAppShell(): ReactElement {
     if (currentRoute !== target) setRoute(target)
   }, [currentRoute, navigate, page, setRoute])
   useEffect(() => {
-    if (page.mode !== 'work') return
-    void loadWorkSettings().then(() => workRoot ? initializeWork(workRoot) : undefined)
-  }, [initializeWork, loadWorkSettings, page.mode, workRoot])
-
-  const workResources = useMemo<MobileWorkResource[]>(() => {
-    const files = Object.values(work.entriesByDir).flat().filter((entry) => entry.type === 'file')
-    const documents = files.map((entry) => {
-      const document = work.documentsByPath[entry.path]
-      return { key: workFileResourceKey(work.workspaceRoot, entry.path), title: entry.name, detail: entry.path, kind: 'document' as const,
-        status: document?.pendingAgentReview ? 'review' as const : document?.saveStatus ?? 'saved' as const }
-    })
-    const boards = Object.values(work.whiteboards).map((board) => ({
-      key: workWhiteboardResourceKey(board.id), title: board.title, detail: 'Whiteboard', kind: 'whiteboard' as const,
-      status: board.phase === 'review' ? 'review' as const : 'saved' as const
-    }))
-    return [...documents, ...boards].filter((resource) =>
-      !workSearch.trim() || `${resource.title} ${resource.detail}`.toLowerCase().includes(workSearch.trim().toLowerCase())
-    )
-  }, [work.documentsByPath, work.entriesByDir, work.whiteboards, work.workspaceRoot, workSearch])
+    if (page.mode !== 'work' || workSettingsLoaded.current) return
+    workSettingsLoaded.current = true
+    void loadWorkSettings({ mobile: true })
+  }, [loadWorkSettings, page.mode])
 
   const leaveState = { saveStatus: work.saveStatus, conflict: work.spreadsheetConflict, reviewActive: work.reviewActive } as const
   useWorkBeforeUnloadGuard(page.mode === 'work', leaveState)
+  useEffect(() => {
+    if ((!paperUnsaved || page.kind !== 'paper') && !paperBusy) return
+    const warn = (event: BeforeUnloadEvent): void => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [paperUnsaved, paperBusy, page.kind])
 
   const canLeaveWork = async (): Promise<boolean> => {
+    if (paperBusy) { setNotice(t('mobileWorkDocLeaveBusy')); return false }
+    if (paperUnsaved) { setNotice(t('mobileWorkDocLeaveUnsaved')); return false }
     const decision = workLeaveDecision(leaveState)
     if (decision === 'resolve-conflict' || decision === 'confirm-discard') {
-      setNotice(decision === 'resolve-conflict' ? 'Resolve the document conflict before leaving Work.' : 'Finish or discard the current Work review before leaving.')
+      setNotice(decision === 'resolve-conflict' ? t('mobileWorkDocLeaveConflict') : t('mobileWorkDocLeaveReview'))
       return false
     }
-    if (decision === 'wait') { setNotice('Saving Work documents…'); return false }
+    if (decision === 'wait') { setNotice(t('mobileWorkDocLeaveSaving')); return false }
     if (decision === 'save' && work.workspaceRoot && !await work.saveAll(work.workspaceRoot)) {
-      setNotice('Work documents could not be saved.'); return false
+      setNotice(t('mobileWorkDocLeaveSaveFailed')); return false
     }
     return true
   }
@@ -146,6 +156,8 @@ export function MobileAppShell(): ReactElement {
     if (current.mode !== 'work') return true
     if (current.kind === 'resource' && next.mode === 'work' && next.kind === 'resource'
       && current.resourceKey === next.resourceKey) return true
+    if (current.kind === 'paper' && next.kind === 'paper' && next.paperKey === current.paperKey
+      && next.view === current.view) return true
     return canLeaveWork()
   }
 
@@ -215,6 +227,17 @@ export function MobileAppShell(): ReactElement {
       onBack={() => void leaveWorkResource()}
       onView={(view) => navigate({ mode: 'work', kind: 'resource', resourceKey: page.resourceKey, view }, true)}
       onSettings={() => openSettingsPage(page)} />
+  } else if (page.mode === 'work' && page.kind === 'paper') {
+    content = <MobilePaperReader paperKey={page.paperKey} view={page.view}
+      onBack={() => { void canLeaveWork().then((ok) => { if (ok) navigate({ mode: 'work', kind: 'home', surface: 'papers' }) }) }}
+      onView={(view) => navigate({ mode: 'work', kind: 'paper', paperKey: page.paperKey, view }, true)}
+      onSettings={() => openSettingsPage(page)} onUnsavedChange={setPaperUnsaved} />
+  } else if (page.mode === 'work' && page.kind === 'folder') {
+    content = <MobileDocumentsHome page={page} navigate={navigate} canLeave={canLeaveWork}
+      onPapers={() => navigate({ mode: 'work', kind: 'home', surface: 'papers' })} />
+  } else if (page.mode === 'work' && page.kind === 'discover') {
+    content = <MobilePaperDiscover onBack={() => { void canLeaveWork().then((ok) => { if (ok) navigate({ mode: 'work', kind: 'home', surface: 'papers' }) }) }}
+      onSettings={() => openSettingsPage(page)} onBusyChange={setPaperBusy} />
   } else if (page.kind === 'settings') {
     content = <MobileSettingsScreen onBack={() => {
       const origin = settingsReturnRef.current ?? { mode: page.mode, kind: 'home' } as MobilePage
@@ -225,25 +248,19 @@ export function MobileAppShell(): ReactElement {
     content = <MobileUnavailable title={page.kind} onBack={() => navigate({ mode: page.mode, kind: 'home' })} />
   } else if (page.mode === 'rooms') {
     content = <MobileRoomsRoot navigate={navigate} />
-  } else if (page.mode === 'work') {
-    content = <MobileWorkHome workspaceLabel={basename(work.workspaceRoot) || t('writeWorkspace')}
-      resources={workResources} search={workSearch} loading={work.settingsLoading} error={work.error}
-      labels={{ title: t('workspaceModeWorkLabel'), search: t('mobileSearch'), create: t('newChat'), more: t('mobileMore'),
-        empty: t('writeEmptyTitle'), loading: t('loading'), retry: t('mobileRetry') }}
-      onWorkspace={null} onSearch={setWorkSearch}
-      onOpen={(resource) => {
-        const path = Object.values(work.entriesByDir).flat().find((entry) =>
-          entry.type === 'file' && workFileResourceKey(work.workspaceRoot, entry.path) === resource.key
-        )?.path
-        const board = Object.values(work.whiteboards).find((entry) =>
-          workWhiteboardResourceKey(entry.id) === resource.key
-        )
-        if (board) work.openWhiteboard(board.id)
-        else if (path) void work.openFile(work.workspaceRoot, path)
-        navigate({ mode: 'work', kind: 'resource', resourceKey: resource.key,
-          view: resource.kind === 'whiteboard' ? 'whiteboard' : 'read' }) }}
-      onMenu={null} onCreate={null}
-      onRetry={() => work.workspaceRoot ? void work.initialize(work.workspaceRoot) : undefined} />
+  } else if (page.mode === 'agents') {
+    content = <MobileAgentsHome
+      onOpenThread={(threadId) => {
+        void chat.selectThread(threadId).then(() =>
+          navigate({ mode: 'code', kind: 'conversation', threadId }))
+      }}
+      onOpenSettings={() => openSettingsPage(page)} />
+  } else if (page.mode === 'work' && page.kind === 'home' && page.surface !== 'papers') {
+    content = <MobileDocumentsHome page={page} navigate={navigate} canLeave={canLeaveWork}
+      onPapers={() => navigate({ mode: 'work', kind: 'home', surface: 'papers' })} />
+  } else if (page.mode === 'work' && page.kind === 'home' && page.surface === 'papers') {
+    content = <MobilePaperHome navigate={navigate} onDocuments={() => { void canLeaveWork().then((ok) => { if (ok) navigate({ mode: 'work', kind: 'home' }) }) }}
+      onBusyChange={setPaperBusy} />
   } else {
     content = <MobileCodeHome onOpen={(threadId) => navigate({ mode: 'code', kind: 'conversation', threadId })}
       onOpenSettings={() => openSettingsPage(page)} />
@@ -252,8 +269,10 @@ export function MobileAppShell(): ReactElement {
   return <div className="kun-mobile-app" data-mobile-mode={page.mode}>
     {notice ? <div className="kun-mobile-notice" role="alert">{notice}</div> : null}
     <div className="kun-mobile-app-content"><Suspense fallback={<MobileLoadingState className="kun-mobile-page-loading" label={t('loading')} />}>{content}</Suspense></div>
-    {page.kind === 'home' ? <MobileModeNav active={page.mode} attentionCount={roomAttention}
-      labels={{ code: 'Code', rooms: t('roomsLabel'), work: t('workspaceModeWorkLabel') }}
+    {page.kind === 'home' ? <MobileModeNav active={page.mode}
+      attention={{ rooms: roomAttention, agents: agentsAttention }}
+      modes={adeEnabled ? ['code', 'rooms', 'work', 'agents'] : ['code', 'rooms', 'work']}
+      labels={{ code: 'Code', rooms: t('roomsLabel'), work: t('workspaceModeWorkLabel'), agents: t('missionControl') }}
       onSelect={(mode) => void selectMode(mode)} /> : null}
   </div>
 }

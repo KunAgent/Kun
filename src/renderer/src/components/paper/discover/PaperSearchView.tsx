@@ -24,6 +24,13 @@ import { usePaperStore } from '../../../write/paper/paper-store'
 import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 import { rendererRuntimeClient } from '../../../agent/runtime-client'
 import { PaperSearchResults } from './PaperSearchResults'
+import {
+  PaperQuickSearchRows,
+  PaperSearchRail,
+  PaperSearchRailClose,
+  usePaperSearchRail
+} from './PaperSearchHistoryPane'
+import layout from './PaperSearchLayout.module.css'
 
 const EXAMPLE_QUERIES = [
   'repository-level code agent',
@@ -37,7 +44,7 @@ const EXAMPLE_QUERIES = [
  * agent search with the `paper_search` tool.
  */
 export function PaperSearchView(): ReactElement {
-  const { t } = useTranslation('common')
+  const { t, i18n } = useTranslation('common')
   const workspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
   const discover = usePaperModeStore((s) => s.discover)
   const patchDiscover = usePaperModeStore((s) => s.patchDiscover)
@@ -50,6 +57,7 @@ export function PaperSearchView(): ReactElement {
   const [history, setHistory] = useState<PaperSearchHistoryEntry[]>(readSearchHistory)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const { railOpen, narrow, railRef, toggleRail, closeRail } = usePaperSearchRail(rootRef)
   const years = useMemo(
     () => ({ from: parseSearchYear(yearFrom), to: parseSearchYear(yearTo) }),
     [yearFrom, yearTo]
@@ -216,28 +224,36 @@ export function PaperSearchView(): ReactElement {
     setYearTo(next.yearTo)
   }
   const scopeChips = <PaperResearchScopeChips scope={scope} onChange={updateScope} showDepth={false} />
-  const headerActions = hasResult ? (
+  const headerActions = (
     <>
-      <PaperImportFolderPicker />
-      <PaperHeaderIconButton label={t('writePaperSearchSubscribe')} onClick={subscribeSearch}>
-        <BellPlus className="h-4 w-4" strokeWidth={1.8} />
+      {hasResult ? (
+        <>
+          <PaperImportFolderPicker />
+          <PaperHeaderIconButton label={t('writePaperSearchSubscribe')} onClick={subscribeSearch}>
+            <BellPlus className="h-4 w-4" strokeWidth={1.8} />
+          </PaperHeaderIconButton>
+          <button
+            type="button"
+            onClick={handOffToAgent}
+            title={t('writePaperSearchAgentHint')}
+            className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-[var(--ds-accent)]" strokeWidth={1.9} />
+            {t('paperResearchHandOff')}
+          </button>
+        </>
+      ) : null}
+      <PaperHeaderIconButton label={t('paperSearchHistory')} onClick={toggleRail} active={railOpen}>
+        <History className="h-4 w-4" strokeWidth={1.8} />
       </PaperHeaderIconButton>
-      <button
-        type="button"
-        onClick={handOffToAgent}
-        title={t('writePaperSearchAgentHint')}
-        className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-      >
-        <Sparkles className="h-3.5 w-3.5 text-[var(--ds-accent)]" strokeWidth={1.9} />
-        {t('paperResearchHandOff')}
-      </button>
     </>
-  ) : null
+  )
 
   return (
-    <div ref={rootRef} className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div ref={rootRef} className={layout.surface}>
       <PaperViewHeader leading={<PaperSearchTabs tab="direct" compact onChange={setTab} />} actions={headerActions} />
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className={layout.body} data-rail={railOpen ? 'open' : 'closed'}>
+        <div className={layout.stage}>
         {hasResult ? (
           <div className="mx-auto w-full max-w-[960px] px-6 pb-10 pt-5">
             <PaperQuickSearchBar
@@ -295,27 +311,6 @@ export function PaperSearchView(): ReactElement {
                 {discover.searchError}
               </p>
             ) : null}
-            {history.length ? (
-              <div className="mt-6">
-                <p className="mb-2 flex items-center justify-center gap-1 text-[11.5px] text-ds-faint">
-                  <History className="h-3 w-3" strokeWidth={1.8} />
-                  {t('writePaperSearchHistory')}
-                </p>
-                <div className="flex flex-wrap justify-center gap-1.5">
-                  {history.slice(0, 6).map((entry) => (
-                    <button
-                      key={`${entry.at}:${entry.query}`}
-                      type="button"
-                      title={new Date(entry.at).toLocaleString()}
-                      onClick={() => applyHistoryEntry(entry)}
-                      className="max-w-[260px] truncate rounded-full border border-ds-border-muted px-3 py-1 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-                    >
-                      {entry.query}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
             <div className="mt-4 flex flex-wrap justify-center gap-1.5">
               {EXAMPLE_QUERIES.map((example) => (
                 <button
@@ -330,6 +325,28 @@ export function PaperSearchView(): ReactElement {
             </div>
           </div>
         )}
+        </div>
+        {railOpen ? (
+          <PaperSearchRail
+            overlay={narrow}
+            railRef={railRef}
+            header={(
+              <>
+                <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-ds-ink">
+                  {t('writePaperSearchHistory')}
+                </span>
+                {narrow ? <PaperSearchRailClose onClose={closeRail} label={t('close')} /> : null}
+              </>
+            )}
+          >
+            <PaperQuickSearchRows
+              entries={history}
+              locale={i18n.language}
+              emptyLabel={t('paperSearchHistoryEmpty')}
+              onPick={applyHistoryEntry}
+            />
+          </PaperSearchRail>
+        ) : null}
       </div>
     </div>
   )

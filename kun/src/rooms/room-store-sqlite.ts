@@ -1,4 +1,4 @@
-import { roomAttentionPredicateSql, roomCurrentPeerRequestSql, roomIntegrationHasTaskSql } from './room-activity-predicates.js'
+import { roomAttentionPredicateSql, roomCurrentAttentionRequestSql, roomIntegrationHasTaskSql } from './room-activity-predicates.js'
 import { queryRoomSidebar } from './room-sidebar-sqlite.js'
 import type { RoomSidebarQuery } from '../contracts/room-sidebar.js'
 import { RoomRunRecordSchema } from '../contracts/room-runs.js'
@@ -140,8 +140,8 @@ export class SqliteRoomStore implements RoomStore {
     args.push(parsed.limit)
     const columns = parsed.activityOnly ? `seq,kind,id,room_id,task_id,revision,
       CASE kind WHEN 'task' THEN json_object('task',json_object('status',status,'requestId',json_extract(document,'$.task.requestId')))
-      WHEN 'request' THEN json_object('status',status,'currentPeerRequest',
-        CASE WHEN ${roomCurrentPeerRequestSql('room_documents')} THEN 1 ELSE 0 END)
+      WHEN 'request' THEN json_object('status',status,'currentAttentionRequest',
+        CASE WHEN ${roomCurrentAttentionRequestSql('room_documents')} THEN 1 ELSE 0 END)
       ELSE json_object('status',status,'taskId',json_extract(document,'$.taskId'),
         'requestId',(SELECT json_extract(t.document,'$.task.requestId') FROM room_documents t WHERE t.kind='task' AND t.id=room_documents.task_id),
         'attention',json_extract(document,'$.attention'), 'applyIntent',json_extract(document,'$.applyIntent'),
@@ -152,7 +152,7 @@ export class SqliteRoomStore implements RoomStore {
         'sourceMessageId',COALESCE(json_extract(document,'$.originalSourceMessageId'),json_extract(document,'$.sourceMessageId')),'error',json_extract(document,'$.error'),'clarification',json_extract(document,'$.clarification'),'continuation',json_extract(document,'$.continuation'),'contextState',json_extract(document,'$.contextState'),
         'rootRequestId',json_extract(document,'$.rootRequestId'),'peerLatestRequestId',json_extract(document,'$.peerLatestRequestId'),
         'collaborationProtocol',json_extract(document,'$.collaborationProtocol'),
-        'currentPeerRequest',CASE WHEN ${roomCurrentPeerRequestSql('room_documents')} THEN 1 ELSE 0 END)
+        'currentAttentionRequest',CASE WHEN ${roomCurrentAttentionRequestSql('room_documents')} THEN 1 ELSE 0 END)
       WHEN 'agent_memory_job' THEN json_remove(document,'$.snapshot')
       WHEN 'agent_handoff' THEN json_remove(document,'$.sources','$.recipientSnapshot.presetSnapshot','$.recipientSnapshot.agentInstructions','$.body','$.result')
       WHEN 'room_run' THEN json_set(document,'$.input',substr(COALESCE(json_extract(document,'$.input'),''),1,800))
@@ -204,6 +204,7 @@ export class SqliteRoomStore implements RoomStore {
           WHERE message.kind = 'message' AND message.room_id = room.id
           AND COALESCE(json_extract(message.document, '$.presentationKind'), '') <> 'setup'), 0) AS latest_message_seq
       FROM room_documents room WHERE room.kind = 'room' AND room.archived = ?
+      AND json_extract(room.document, '$.deletedAt') IS NULL
       AND instr(lower(COALESCE(json_extract(room.document, '$.name'), '')), lower(?)) > 0
       ${conditions.length ? 'AND ' + conditions.join(' AND ') : ''}
     ), ordered AS (

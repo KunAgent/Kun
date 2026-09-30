@@ -1,4 +1,4 @@
-import type { ReactElement, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { ReactElement } from 'react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -17,11 +17,15 @@ import { TERMINAL_DEFAULT_COLS, TERMINAL_DEFAULT_ROWS } from '@shared/terminal'
 import { defaultTerminalColors, type TerminalColorSettingsV1 } from '@shared/app-settings'
 import type { RemoteSshHost } from '@shared/remote-ssh'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
+import { getProvider } from '../../agent/registry'
+import { loadHarnesses } from '../../store/harness-store'
 import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
-import { terminalBackend } from './terminal-backend'
+import { terminalBackend, terminalTargetCreateExtras } from './terminal-backend'
+import { useTerminalOpenAt } from './terminal-open'
 import { terminalSessionIdForWorkspace, terminalWorkspaceSessionKey } from './terminal-session'
 import { TerminalTabContextMenu } from './TerminalTabContextMenu'
 import { TerminalNewTabMenu, type TerminalNewTabMenuAnchor } from './TerminalNewTabMenu'
+import { useTerminalTabActions } from './terminal-tab-actions'
 import {
   FIT_DEBOUNCE_MS,
   INITIAL_TAB_ID,
@@ -86,6 +90,8 @@ export function TerminalPanel({
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0]
   const [terminalColors, setTerminalColors] = useState<TerminalColorSettingsV1>(() => defaultTerminalColors())
   const terminalColorsRef = useRef(terminalColors)
+  // P4-09: ids of tabs whose setup command was already written into the PTY.
+  const prefilledTabsRef = useRef(new Set<string>())
 
   tabsRef.current = tabs
   activeTabIdRef.current = activeTabId
@@ -237,14 +243,31 @@ export function TerminalPanel({
       }
     })
 
-    // Stream PTY output → xterm.
+    // P4-09: a setup tab carries a builtin harness command that is written
+    // into the PTY input once (no Enter) so the user reviews it first.
+    const maybePrefill = (): void => {
+      if (!tab.prefill || prefilledTabsRef.current.has(tab.id) || !isCurrentAttach()) return
+      prefilledTabsRef.current.add(tab.id)
+      void backend.write({ sessionId, data: tab.prefill })
+    }
+
+    // Stream PTY output → xterm. The first output chunk also means the
+    // shell is up, so it is the safest moment to land a pending prefill.
     const offData = backend.onData((payload) => {
       if (payload.sessionId !== sessionId) return
       term.write(payload.data)
+      maybePrefill()
     })
     const offExit = backend.onExit((payload) => {
       if (payload.sessionId !== sessionId) return
       setExited(true)
+      // P4-09: a setup tab's PTY exiting (install/login finished or the
+      // user closed the shell) re-detects the harness it was created for.
+      if (tab.probeHarnessId) {
+        const harnessId = tab.probeHarnessId
+        void Promise.resolve(getProvider().probeHarness?.(harnessId))
+          .finally(() => { void loadHarnesses(true) })
+      }
     })
 
     // xterm input → PTY.
@@ -257,6 +280,7 @@ export function TerminalPanel({
 
     // Keep cols/rows in sync with the panel width.
     let resizeTimer: ReturnType<typeof setTimeout> | null = null
+    let prefillTimer: ReturnType<typeof setTimeout> | null = null
     const triggerFit = (): void => {
       if (resizeTimer) clearTimeout(resizeTimer)
       resizeTimer = setTimeout(() => {
@@ -284,9 +308,9 @@ export function TerminalPanel({
     try {
       let result = await backend.create({
         sessionId,
-        cwd: tab.target.kind === 'local' ? (workspaceRoot || undefined) : undefined,
         cols,
-        rows
+        rows,
+        ...terminalTargetCreateExtras(tab.target, workspaceRoot || undefined)
       })
       if (!result.ok && 'reason' in result && result.reason === 'hostKeyConfirmationRequired') {
         const accepted = window.confirm(`Trust SSH host key?\n\n${result.fingerprint}`)
@@ -311,6 +335,11 @@ export function TerminalPanel({
         })
       }
       setExited(false)
+      // P4-09 fallback: a fresh session that never echoes (silent shell
+      // startup) still receives its prefill; a re-attached session does not.
+      if (tab.prefill && !('replayed' in result && result.replayed)) {
+        prefillTimer = setTimeout(maybePrefill, 700)
+      }
     } catch (e) {
       if (!isCurrentAttach()) return
       setError(e instanceof Error ? e.message : String(e))
@@ -324,6 +353,7 @@ export function TerminalPanel({
       fitDisposable.dispose()
       resizeObserver.disconnect()
       if (resizeTimer) clearTimeout(resizeTimer)
+      if (prefillTimer) clearTimeout(prefillTimer)
     }
   }, [resolvePanelTheme, sessionIdForTab, workspaceRoot])
 
@@ -399,16 +429,15 @@ export function TerminalPanel({
     const tab: TerminalTab = {
       id: `tab-${Date.now().toString(36)}-${nextIndex}`,
       index: nextIndex,
-      target
+      target,
+      ...(target.kind === 'agent' ? { title: target.title } : {})
     }
     setTabs((current) => [...current, tab])
     setActiveTabId(tab.id)
     setNewTabMenuAnchor(null)
   }, [tabs.length])
 
-  const handleNewTab = useCallback(() => {
-    createTab({ kind: 'local' })
-  }, [createTab])
+  useTerminalOpenAt(tabsRef, setTabs, setActiveTabId)
 
   const toggleNewTabMenu = useCallback((): void => {
     setNewTabMenuAnchor((current) => {
@@ -418,97 +447,33 @@ export function TerminalPanel({
     })
   }, [])
 
-  const handleCloseTab = useCallback((tabId: string) => {
-    const closingIndex = tabs.findIndex((tab) => tab.id === tabId)
-    const closingTab = tabs[closingIndex]
-    if (closingIndex === -1 || !closingTab) return
-    void terminalBackend(closingTab.target).dispose(sessionIdForTab(closingTab))
-    setTabs((current) => {
-      if (current.length <= 1) return current
-      return current.filter((tab) => tab.id !== tabId)
-    })
-    if (activeTabId === tabId) {
-      const nextTab = tabs[closingIndex + 1] ?? tabs[closingIndex - 1] ?? tabs[0]
-      if (nextTab && nextTab.id !== tabId) setActiveTabId(nextTab.id)
-    }
-  }, [activeTabId, sessionIdForTab, tabs])
-
-  const openTabContextMenu = useCallback((event: ReactMouseEvent | ReactPointerEvent, tabId: string) => {
-    event.preventDefault()
-    event.stopPropagation()
-    const tabButton = tabButtonRefs.current[tabId]
-    const tabRect = tabButton?.getBoundingClientRect()
-    const pointerX = event.clientX > 0 ? event.clientX : (tabRect?.left ?? 0)
-    const pointerY = event.clientY > 0 ? event.clientY : (tabRect?.bottom ?? 0)
-    setActiveTabId(tabId)
-    setContextMenu({
-      tabId,
-      x: Math.min(Math.max(pointerX, 8), window.innerWidth - 220),
-      y: Math.min(Math.max(pointerY, 8), window.innerHeight - 132)
-    })
-  }, [])
-
-  const openActiveTabContextMenu = useCallback((event: ReactMouseEvent) => {
-    if (!activeTab) return
-    openTabContextMenu(event, activeTab.id)
-  }, [activeTab, openTabContextMenu])
-
-  const openTabContextMenuOnSecondaryPointer = useCallback((event: ReactPointerEvent, tabId: string) => {
-    if (event.button !== 2) return
-    openTabContextMenu(event, tabId)
-  }, [openTabContextMenu])
-
-  const openActiveTabContextMenuOnSecondaryPointer = useCallback((event: ReactPointerEvent) => {
-    if (!activeTab || event.button !== 2) return
-    openTabContextMenu(event, activeTab.id)
-  }, [activeTab, openTabContextMenu])
-
-  const startRenameTab = useCallback((tabId: string) => {
-    const tab = tabs.find((item) => item.id === tabId)
-    if (!tab) return
-    setContextMenu(null)
-    setRenamingTabId(tabId)
-    setRenameValue(getTabTitle(tab))
-  }, [getTabTitle, tabs])
-
-  const commitRenameTab = useCallback(() => {
-    if (!renamingTabId) return
-    const nextTitle = renameValue.trim()
-    setTabs((current) =>
-      current.map((tab) => (tab.id === renamingTabId ? { ...tab, title: nextTitle || undefined } : tab))
-    )
-    setRenamingTabId(null)
-    setRenameValue('')
-  }, [renameValue, renamingTabId])
-
-  const cancelRenameTab = useCallback(() => {
-    setRenamingTabId(null)
-    setRenameValue('')
-  }, [])
-
-  const handleCloseOtherTabs = useCallback((tabId: string) => {
-    const keptTab = tabs.find((tab) => tab.id === tabId)
-    if (!keptTab) return
-    for (const tab of tabs) {
-      if (tab.id !== tabId) void terminalBackend(tab.target).dispose(sessionIdForTab(tab))
-    }
-    setTabs([keptTab])
-    setActiveTabId(tabId)
-    setContextMenu(null)
-    if (renamingTabId && renamingTabId !== tabId) cancelRenameTab()
-  }, [cancelRenameTab, renamingTabId, sessionIdForTab, tabs])
-
-  const handleCloseAllTabs = useCallback(() => {
-    for (const tab of tabs) {
-      void terminalBackend(tab.target).dispose(sessionIdForTab(tab))
-    }
-    setContextMenu(null)
-    cancelRenameTab()
-    const next = initialTerminalTabState()
-    setTabs(next.tabs)
-    setActiveTabId(next.activeTabId)
-    onCollapse()
-  }, [cancelRenameTab, onCollapse, sessionIdForTab, tabs])
+  const {
+    handleCloseTab,
+    openTabContextMenu,
+    openActiveTabContextMenu,
+    openTabContextMenuOnSecondaryPointer,
+    openActiveTabContextMenuOnSecondaryPointer,
+    startRenameTab,
+    commitRenameTab,
+    cancelRenameTab,
+    handleCloseOtherTabs,
+    handleCloseAllTabs
+  } = useTerminalTabActions({
+    tabs,
+    activeTab,
+    activeTabId,
+    renamingTabId,
+    renameValue,
+    tabButtonRefs,
+    sessionIdForTab,
+    getTabTitle,
+    setTabs,
+    setActiveTabId,
+    setContextMenu,
+    setRenamingTabId,
+    setRenameValue,
+    onCollapse
+  })
 
   const handleRestart = useCallback(async () => {
     if (!activeTab) return
@@ -649,8 +614,10 @@ export function TerminalPanel({
             <TerminalNewTabMenu
               anchor={newTabMenuAnchor}
               remoteHosts={remoteHosts}
-              onNewLocalTab={handleNewTab}
+              onNewLocalTab={() => createTab({ kind: 'local' })}
               onNewSshTab={(host) => createTab({ kind: 'ssh', hostId: host.id, hostName: host.label })}
+              onNewAgentTab={(harness) =>
+                createTab({ kind: 'agent', harnessId: harness.definition.id, title: harness.definition.displayName })}
               t={t}
             />,
             document.body

@@ -14,7 +14,8 @@ import {
   type ExtensionAgentProfileSnapshot,
   type ExtensionRunBudget,
   type ExtensionThreadVisibility,
-  type ExtensionToolCatalogEpoch
+  type ExtensionToolCatalogEpoch,
+  type ThreadExecutionUnit
 } from '../contracts/threads.js'
 import type { DesignTaskProfile } from '../contracts/design-task-profile.js'
 import {
@@ -43,6 +44,7 @@ const LEGACY_WRITE_INTERACTION_AGREEMENT =
 
 export function createThreadRecord(input: {
   roomContext?: ThreadRecord['roomContext']
+  workbenchOrigin?: ThreadRecord['workbenchOrigin']
   historyRefId?: string
   id: string
   title: string
@@ -55,6 +57,9 @@ export function createThreadRecord(input: {
   designProfile?: DesignTaskProfile
   designCloneOperation?: DesignCloneOperation
   providerId?: string
+  harnessId?: string
+  workspaceMode?: 'code' | 'ade'
+  taskWorkspaceId?: string
   ownerExtensionId?: string
   ownerExtensionVersion?: string
   accountId?: string
@@ -75,6 +80,7 @@ export function createThreadRecord(input: {
   costBudgetWarningSent?: boolean
   relation?: ThreadRelation
   parentThreadId?: string
+  executionUnit?: ThreadExecutionUnit
   planBuildRunId?: string
   planBuildAdmissionFingerprint?: string
   planBuildAdmissionCapabilityHash?: string
@@ -106,6 +112,9 @@ export function createThreadRecord(input: {
     ...(input.designProfile ? { designProfile: input.designProfile } : {}),
     ...(input.designCloneOperation ? { designCloneOperation: input.designCloneOperation } : {}),
     ...(input.providerId ? { providerId: input.providerId } : {}),
+    ...(input.harnessId ? { harnessId: input.harnessId } : {}),
+    ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
+    ...(input.taskWorkspaceId ? { taskWorkspaceId: input.taskWorkspaceId } : {}),
     ...(input.ownerExtensionId ? { ownerExtensionId: input.ownerExtensionId } : {}),
     ...(input.ownerExtensionVersion ? { ownerExtensionVersion: input.ownerExtensionVersion } : {}),
     ...(input.accountId ? { accountId: input.accountId } : {}),
@@ -116,6 +125,7 @@ export function createThreadRecord(input: {
     ...(input.agentId ? { agentId: input.agentId } : {}),
     ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
     ...(input.roomContext ? { roomContext: input.roomContext } : {}),
+    ...(input.workbenchOrigin ? { workbenchOrigin: input.workbenchOrigin } : {}),
     mode: input.mode ?? 'agent',
     status: input.status ?? 'idle',
     approvalPolicy: input.approvalPolicy ?? DEFAULT_APPROVAL_POLICY,
@@ -127,6 +137,7 @@ export function createThreadRecord(input: {
     ...(input.costBudgetWarningSent !== undefined ? { costBudgetWarningSent: input.costBudgetWarningSent } : {}),
     relation: input.relation ?? 'primary',
     ...(input.parentThreadId ? { parentThreadId: input.parentThreadId } : {}),
+    ...(input.executionUnit ? { executionUnit: input.executionUnit } : {}),
     ...(input.planBuildRunId ? { planBuildRunId: input.planBuildRunId } : {}),
     ...(input.planBuildAdmissionFingerprint
       ? { planBuildAdmissionFingerprint: input.planBuildAdmissionFingerprint }
@@ -174,6 +185,9 @@ export function toThreadSummary(
     ...(thread.designProfile ? { designProfile: thread.designProfile } : {}),
     ...(thread.designCloneOperation ? { designCloneOperation: thread.designCloneOperation } : {}),
     ...(thread.providerId ? { providerId: thread.providerId } : {}),
+    ...(thread.harnessId ? { harnessId: thread.harnessId } : {}),
+    ...(thread.workspaceMode ? { workspaceMode: thread.workspaceMode } : {}),
+    ...(thread.taskWorkspaceId ? { taskWorkspaceId: thread.taskWorkspaceId } : {}),
     ...(thread.ownerExtensionId ? { ownerExtensionId: thread.ownerExtensionId } : {}),
     ...(thread.ownerExtensionVersion ? { ownerExtensionVersion: thread.ownerExtensionVersion } : {}),
     ...(thread.accountId ? { accountId: thread.accountId } : {}),
@@ -194,6 +208,8 @@ export function toThreadSummary(
     ...(thread.costBudgetWarningSent !== undefined ? { costBudgetWarningSent: thread.costBudgetWarningSent } : {}),
     relation: thread.relation ?? 'primary',
     ...(thread.parentThreadId ? { parentThreadId: thread.parentThreadId } : {}),
+    ...(thread.executionUnit ? { executionUnit: thread.executionUnit } : {}),
+    ...(thread.workbenchOrigin ? { workbenchOrigin: thread.workbenchOrigin } : {}),
     ...(thread.planBuildRunId ? { planBuildRunId: thread.planBuildRunId } : {}),
     ...(thread.planBuildAdmissionFingerprint
       ? { planBuildAdmissionFingerprint: thread.planBuildAdmissionFingerprint }

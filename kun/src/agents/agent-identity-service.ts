@@ -90,7 +90,7 @@ export class AgentIdentityService {
       ...(copy ? { title: copy.title, instructions: copy.instructions, defaultRole: copy.defaultRole,
         presetId: copy.presetId, avatar: input.avatar ?? copy.avatar, modelRef: copy.modelRef, fastModelRef: copy.fastModelRef,
         capabilityOverrides: copy.capabilityOverrides, allowedRepositoryRoots: copy.allowedRepositoryRoots,
-        reviewerAgentId: copy.reviewerAgentId, memory: copy.memory } : {}),
+        reviewerAgentId: copy.reviewerAgentId, workbench: copy.workbench, memory: copy.memory } : {}),
       id: 'agent-' + randomUUID(), schemaVersion: 1, revision: 0, createdAt: now, updatedAt: now,
       archivedAt: undefined, migratedFrom: undefined,
       setup: copy ? undefined : { status: 'completed' as const, startedAt: now, completedAt: now } })

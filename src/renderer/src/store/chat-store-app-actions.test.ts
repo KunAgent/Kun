@@ -63,6 +63,7 @@ function buildHarness(fetchModelsResult: FetchModelsResult): {
     composerMode: 'agent',
     composerModel: '',
     composerProviderId: '',
+    composerHarnessId: '',
     composerReasoningEffort: 'max',
     composerPickList: mergeComposerPickList(false, []),
     composerModelGroups: []

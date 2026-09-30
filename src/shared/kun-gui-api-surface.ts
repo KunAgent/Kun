@@ -634,11 +634,11 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   ) => Promise<WriteRichClipboardResult>
   onClawChannelActivity: (handler: (payload: ClawChannelActivityPayload) => void) => () => void
   onTrayAction: (handler: (payload: TrayActionPayload) => void) => () => void
+  missionControlTogglePopout: () => Promise<{ open: boolean }>
+  missionControlOpenThread: (threadId: string) => Promise<void>
   onRuntimeStatus: (handler: (payload: KunRuntimeStatusPayload) => void) => () => void
   onAppQuitting: (handler: () => void) => () => void
-  onRuntimeSettingsSyncStatus: (
-    handler: (payload: KunRuntimeSettingsSyncStatusPayload) => void
-  ) => () => void
+  onRuntimeSettingsSyncStatus: (handler: (payload: KunRuntimeSettingsSyncStatusPayload) => void) => () => void
   mirrorClawChannelMessage: (
     threadId: string,
     text: string,

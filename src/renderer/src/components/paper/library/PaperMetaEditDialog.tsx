@@ -64,9 +64,12 @@ function patchFromForm(before: Form, after: Form): PaperLibraryMetaPatch {
  */
 export function PaperMetaEditDialog({
   entry,
+  libraryRoot,
   onClose
 }: {
   entry: PaperLibraryEntry
+  /** Root of the library the entry lives in; defaults to the mounted root. */
+  libraryRoot?: string
   onClose: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
@@ -111,7 +114,7 @@ export function PaperMetaEditDialog({
       return
     }
     setSaving(true)
-    const ok = await updatePaperEntryMeta(entry, patch, t)
+    const ok = await updatePaperEntryMeta(entry, patch, t, libraryRoot)
     setSaving(false)
     if (ok) onClose()
   }

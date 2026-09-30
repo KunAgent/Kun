@@ -14,6 +14,7 @@ import { MobileSheet } from '../sheets/MobileSheet'
 import { MobileRoomPendingActions } from './MobileRoomPendingActions'
 import { useMessageActionReveal } from './use-message-action-reveal'
 import { MobileRoomActivityBubble, directActivityLabelKey, groupActivity } from './MobileRoomAgentActivity'
+import { otherUserInputAnswers, RoomChoiceCard, submitRoomUserInput } from '../../components/rooms/RoomChoiceCard'
 import { useRoomReplyAwaiting } from '../../components/rooms/use-room-reply-awaiting'
 import { useRoomTopics } from '../../components/rooms/useRoomTopics'
 import { roomRespondingMemberIds, roomWaitingMemberIds } from '../../components/rooms/room-receipt-helpers'
@@ -35,9 +36,11 @@ export function MobileRoomConversation(props: MobileRoomConversationProps) {
   const state = useRooms('group', false)
   const [content, setContent] = useState<{ reference: RoomContentReference; messageId?: string } | null>(null)
   const [dismissedError, setDismissedError] = useState('')
+  const [choiceReplies, setChoiceReplies] = useState<Record<string, string>>({})
   const messageActions = useMessageActionReveal()
   const room = state.room
   const direct = useDirectChat(room, state.refresh)
+  const choiceInputs = room?.conversationKind === 'user_agent' ? direct.data?.userInputs ?? [] : []
   const steeredIds = useMemo(() => new Set(
     (direct.data?.requests ?? [])
       .filter((entry) => entry.steer && ['pending', 'running', 'stopping'].includes(entry.status))
@@ -49,17 +52,27 @@ export function MobileRoomConversation(props: MobileRoomConversationProps) {
   const typingIds = useMemo(() => roomRespondingMemberIds(topicState.topics), [topicState.topics])
   const waitingIds = useMemo(() => roomWaitingMemberIds(topicState.topics), [topicState.topics])
   const awaiting = useRoomReplyAwaiting(Boolean(direct.data?.active) || typingIds.length > 0, state.messages)
-  const waitingForReply = awaiting.awaiting || pending.pending.some((item) => item.state !== 'failed')
+  const waitingForReply = awaiting.awaiting || pending.pending.some((item) => item.state === 'sent' || item.state === 'steered')
   const directKey = room?.conversationKind === 'user_agent' ? directActivityLabelKey(direct.data, waitingForReply) : null
   const activity = !room ? null : directKey ? { label: t(directKey), memberId: undefined }
     : room.conversationKind === 'group' ? groupActivity(room, typingIds, waitingIds, waitingForReply, t) : null
+  const showActivity = Boolean(activity && state.messages.at(-1)?.status !== 'streaming' &&
+    !choiceInputs.length && !direct.data?.approvals.length)
   const { select: selectRoom, selectedId } = state
   useEffect(() => {
     if (selectedId !== props.roomId) selectRoom(props.roomId)
   }, [props.roomId, selectRoom, selectedId])
   useEffect(() => setDismissedError(''), [props.roomId])
+  useEffect(() => setChoiceReplies({}), [props.roomId])
   const send = async (message: SendRoomMessage): Promise<void> => {
     if (!room) return
+    const choice = choiceInputs[0]
+    if (choice && message.body.trim()) {
+      await submitRoomUserInput(choice.id, { answers: otherUserInputAnswers(choice, message.body) })
+      setChoiceReplies((current) => ({ ...current, [choice.id]: message.body.trim() }))
+      await Promise.all([state.refresh(), direct.refresh()])
+      return
+    }
     pending.enqueue(message)
     try {
       await roomsClient.send(room.id, message)
@@ -100,13 +113,22 @@ export function MobileRoomConversation(props: MobileRoomConversationProps) {
         cursor={state.messageCursor} moreBusy={state.moreBusy} loadEarlier={state.loadEarlier}
         onPin={(message) => { void pin(message) }} onTask={props.onTask} jumpMessageId={null} onJumped={() => undefined}
         onRun={props.onRun} onReply={props.onReply}
+        hideEmpty={Boolean(choiceInputs.length || pending.pending.length || showActivity || direct.data?.approvals.length)}
         onOpenContent={(reference, messageId) => setContent({ reference, messageId })}
+        renderChoice={(message) => <RoomChoiceCard input={choiceInputs.find((input) => input.id === message.clientRequestId)}
+          resolvedAnswer={choiceReplies[message.clientRequestId ?? '']}
+          title={message.body} onUpdated={async () => { await direct.refresh(); await state.refresh() }} />}
         afterMessages={<>
+          {choiceInputs.filter((input) => !state.messages.some((message) => message.clientRequestId === input.id)).map((input) =>
+            <RoomChoiceCard key={input.id} input={input} resolvedAnswer={choiceReplies[input.id]}
+              onUpdated={async () => { await direct.refresh(); await state.refresh() }} />)}
           {pending.pending.map((item) => <RoomPendingSendRow key={item.clientRequestId}
             item={item} onRetry={retry} onDismiss={pending.dismiss} />)}
-          {activity ? <MobileRoomActivityBubble room={room} memberId={activity.memberId} label={activity.label} /> : null}
+          {room.conversationKind === 'user_agent' ? <MobileRoomPendingActions key={room.id}
+            direct={direct} onUpdated={state.refresh} showInputs={false} /> : null}
+          {showActivity && activity ? <MobileRoomActivityBubble room={room} memberId={activity.memberId} label={activity.label}
+            startedAt={room.conversationKind === 'user_agent' ? direct.data?.activity?.startedAt : undefined} /> : null}
         </>} />
-      {room.conversationKind === 'user_agent' ? <MobileRoomPendingActions key={room.id} direct={direct} onUpdated={state.refresh} /> : null}
       {room.conversationKind === 'agent_agent' ? <p className="kun-mobile-room-readonly">{t('agentsPairReadOnly')}</p> :
         <RoomComposer room={room} tasks={state.tasks} onSend={send} autoFocus={false}
           responding={Boolean(direct.data?.active)} onStop={() => void direct.act('stop')} />}

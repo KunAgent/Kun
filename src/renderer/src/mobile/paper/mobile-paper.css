@@ -1,0 +1,69 @@
+.kun-mobile-paper { display: flex; flex: 1; min-height: 0; min-width: 0; flex-direction: column; color: var(--ds-text); background: var(--ds-bg-main); }
+.kun-mobile-paper > header, .kun-mobile-paper-reader > header { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 8px 16px; padding-top: max(8px, env(safe-area-inset-top)); border-bottom: 1px solid var(--ds-border); }
+.kun-mobile-paper h1, .kun-mobile-paper-reader h1 { margin: 0; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 1.25rem; }
+.kun-mobile-paper button, .kun-mobile-paper-reader button { min-height: 44px; color: inherit; font: inherit; }
+.kun-mobile-paper > header button, .kun-mobile-paper-actions button { padding: 0 12px; border: 1px solid var(--ds-border); border-radius: 12px; background: var(--ds-surface-subtle); }
+.kun-mobile-paper-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 16px; }
+.kun-mobile-paper-actions > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.kun-mobile-paper-search { margin: 4px 16px 8px; }
+.kun-mobile-paper-filters { padding: 8px 16px; border-bottom: 1px solid var(--ds-border); }
+.kun-mobile-paper-filters summary { min-height: 44px; }
+.kun-mobile-paper-filters > div { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.kun-mobile-paper-list { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 8px 16px env(safe-area-inset-bottom); }
+.kun-mobile-paper-list ul { padding: 0; margin: 0; list-style: none; }
+.kun-mobile-paper-list li { display: flex; min-width: 0; border-bottom: 1px solid var(--ds-border); }
+.kun-mobile-paper-open { display: grid; min-width: 0; flex: 1; padding: 12px 0; gap: 4px; text-align: start; border: 0; background: transparent; }
+.kun-mobile-paper-open :is(strong, span, small) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kun-mobile-paper-open :is(span, small) { color: var(--ds-text-muted); font-size: .8125rem; }
+.kun-mobile-paper-more { width: 44px; flex-shrink: 0; border: 0; background: transparent; }
+.kun-mobile-paper-list > button { width: 100%; background: var(--ds-surface-subtle); border: 1px solid var(--ds-border); border-radius: 12px; }
+.kun-mobile-paper-reader { display: flex; flex: 1; min-height: 0; min-width: 0; flex-direction: column; color: var(--ds-text); background: var(--ds-bg-main); }
+.kun-mobile-paper-reader > nav, .kun-mobile-paper-reader-controls { display: flex; gap: 4px; flex-wrap: wrap; padding: 4px 12px; border-bottom: 1px solid var(--ds-border); }
+.kun-mobile-paper-reader > nav button, .kun-mobile-paper-reader-controls button { flex: 1; min-width: 44px; border: 0; border-radius: 10px; background: transparent; }
+.kun-mobile-paper-reader > nav [aria-current='page'] { background: var(--ds-surface-subtle); font-weight: 600; }
+.kun-mobile-paper-reader-body { min-width: 0; min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; padding: 8px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+.kun-mobile-paper-page { position: relative; width: max-content; margin-inline: auto; }
+.kun-mobile-paper-selection-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 12px; border-top: 1px solid var(--ds-border); }
+.kun-mobile-paper-selection-actions button { border: 1px solid var(--ds-border); border-radius: 10px; background: var(--ds-surface-subtle); }
+.kun-mobile-paper-open .kun-mobile-paper-abstract { white-space: normal; overflow: visible; font-size: .8125rem; line-height: 1.45; }
+.kun-mobile-paper-search button { border: 1px solid var(--ds-border); border-radius: 12px; background: var(--ds-surface-subtle); }
+.kun-mobile-paper-search :is(input, textarea) { min-height: 44px; width: 100%; font-size: max(1rem, 16px); }
+.kun-mobile-paper-filters label { display: flex; gap: 6px; align-items: center; min-height: 44px; }
+.kun-mobile-paper-filters input[type='checkbox'], .kun-mobile-paper-open input[type='checkbox'] { width: 20px; height: 20px; }
+.kun-mobile-paper-reader-controls label { display: flex; align-items: center; gap: 4px; min-height: 44px; }
+.kun-mobile-paper-reader-controls input { min-height: 40px; border: 1px solid var(--ds-border); border-radius: 8px; background: var(--ds-bg-main); color: var(--ds-text); font: inherit; }
+.kun-mobile-paper-reader-body textarea { box-sizing: border-box; width: 100%; min-height: 45vh; padding: 12px; border: 1px solid var(--ds-border); border-radius: 12px; background: var(--ds-bg-main); color: var(--ds-text); font: 1rem/1.5 ui-monospace, monospace; font-size: max(1rem, 16px); }
+.kun-mobile-paper-research { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; }
+.kun-mobile-paper-research > .kun-mobile-work-assistant { flex: none; min-height: 320px; height: min(52dvh, 480px); }
+.kun-mobile-paper-pool { min-width: 0; padding: 12px 16px max(12px, env(safe-area-inset-bottom)); }
+.kun-mobile-paper-pool h2 { margin: 0; font-size: 1rem; }
+.kun-mobile-paper-pool ul { list-style: none; padding: 0; max-height: 40dvh; overflow-y: auto; }
+.kun-mobile-paper-pool li { border-bottom: 1px solid var(--ds-border); }
+.kun-mobile-paper-pool li label { display: block; min-height: 44px; padding: 10px 0; overflow-wrap: anywhere; }
+.kun-mobile-paper-pool input[type='checkbox'] { width: 20px; height: 20px; }
+.kun-mobile-paper-pool > button { border: 1px solid var(--ds-border); border-radius: 12px; background: var(--ds-surface-subtle); }
+.kun-mobile-paper-mark-list { list-style: none; margin: 0; padding: 0; max-height: 55dvh; overflow-y: auto; }
+.kun-mobile-paper-mark-list li { padding: 12px 0; border-bottom: 1px solid var(--ds-border); overflow-wrap: anywhere; }
+.kun-mobile-paper-mark-list button { min-height: 44px; max-width: 100%; margin: 4px; border: 1px solid var(--ds-border); border-radius: 8px; background: var(--ds-surface-subtle); color: var(--ds-text); }
+.kun-mobile-paper-mark-list label { display: block; }
+.kun-mobile-paper-mark-list :is(textarea, select) { width: 100%; min-height: 44px; font-size: max(1rem, 16px); }
+.kun-mobile-paper-pdf-search { display: flex; align-items: end; gap: 8px; padding: 6px 12px; }
+.kun-mobile-paper-pdf-search label { flex: 1; min-width: 0; }
+.kun-mobile-paper-pdf-search input { box-sizing: border-box; width: 100%; min-height: 44px; font-size: max(1rem, 16px); }
+.kun-mobile-paper-pdf-search button, .kun-mobile-paper-outline button { min-height: 44px; border: 1px solid var(--ds-border); border-radius: 8px; background: var(--ds-surface-subtle); color: var(--ds-text); }
+.kun-mobile-paper-search-status { padding-inline: 12px; }
+.kun-mobile-paper-outline { padding: 0 12px; }
+.kun-mobile-paper-outline summary { min-height: 44px; }
+.kun-mobile-paper-outline ul { list-style: none; padding: 0; max-height: 30dvh; overflow-y: auto; }
+.kun-mobile-paper-outline button { width: 100%; text-align: left; overflow-wrap: anywhere; }
+.kun-mobile-paper-reader-body > button { min-height: 44px; border: 1px solid var(--ds-border); border-radius: 8px; background: var(--ds-surface-subtle); color: var(--ds-text); }
+.kun-mobile-paper-references { padding-left: 24px; }
+.kun-mobile-paper-references li { padding: 8px 0; border-bottom: 1px solid var(--ds-border); overflow-wrap: anywhere; }
+.kun-mobile-paper-year-scope { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 8px; padding: 8px 12px; }
+.kun-mobile-paper-year-scope label, .kun-mobile-paper-browse label { display: block; min-width: 0; }
+.kun-mobile-paper-year-scope :is(input, select), .kun-mobile-paper-browse :is(input, select) { box-sizing: border-box; width: 100%; min-height: 44px; font-size: max(1rem, 16px); }
+.kun-mobile-paper-browse { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 8px; overflow-y: auto; padding: 12px; }
+.kun-mobile-paper-browse :is(button, select) { min-height: 44px; }
+.kun-mobile-paper-browse .kun-mobile-paper-list { min-height: 0; overflow-y: auto; padding: 0; }
+.kun-mobile-paper-browse .kun-mobile-paper-list li { padding: 12px; border-bottom: 1px solid var(--ds-border); overflow-wrap: anywhere; }
+@media (max-width: 350px) { .kun-mobile-paper-filters > div { grid-template-columns: minmax(0, 1fr); } }

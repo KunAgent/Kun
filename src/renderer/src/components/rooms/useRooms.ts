@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { subscribeRoomEvents, roomEventsLive } from './useRoomEvents'
+import { noteRoomMessageCommitted } from './room-im-response-metrics'
 import type { Room, RoomMessage, RoomTask } from '@shared/rooms-api'
 import {
   readBrowserStorageItem,
@@ -154,6 +155,10 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
           Promise.all(taskIds.map((id) => roomsClient.task(selectedId, id, controller.signal)))
         ])
         if (controller.signal.aborted) return
+        if (detail?.room.deletedAt) {
+          select('')
+          return
+        }
         if (detail) setRoom((current) => !current || detail.room.revision >= current.revision ? detail.room : current)
         const incoming = [...(page?.messages ?? []), ...changedMessages.map((value) => value.message)]
         const loaded = new Map(messagesRef.current.map((message) => [message.id, message]))
@@ -212,6 +217,7 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
     const taskIds = new Set<string>()
     const unsubscribe = subscribeRoomEvents((event) => {
       if (event.roomId !== selectedId) return
+      noteRoomMessageCommitted(event)
       if (event.kind.startsWith('room.')) pending.add('room')
       if (event.kind.startsWith('rule.')) pending.add('rules')
       if (event.kind === 'message.created' || event.kind === 'message.presentation.created') pending.add('messages')
@@ -233,7 +239,7 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
       clearTimeout(timer)
       refreshRef.current = async () => undefined
     }
-  }, [selectedId])
+  }, [selectedId, select])
 
   const loadEarlier = async (): Promise<void> => {
     if (!messageCursor || moreBusy) return

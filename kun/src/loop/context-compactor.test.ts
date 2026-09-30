@@ -324,8 +324,12 @@ describe('ContextCompactor', () => {
     })
     const retainedIds = [...finalCalls, ...finalResults].map((item) => item.id)
 
+    // The newest parallel batch is retained whole. The request the turn is
+    // executing is lifted to the front of the tail, so it is never demoted to
+    // summary text while the batches before it are folded.
     expect(result.next.map((item) => item.id)).toEqual([
       result.summaryItem.id,
+      'item_user',
       ...retainedIds
     ])
     expect(repairModelHistoryItems([...result.next])).toEqual(result.next)
@@ -335,7 +339,7 @@ describe('ContextCompactor', () => {
       output: 'contents for call_final_c'
     })
     expect(result.summaryItem.kind === 'compaction' ? result.summaryItem.sourceItemIds : [])
-      .toEqual(history.slice(0, 4).map((item) => item.id))
+      .toEqual(history.slice(1, 4).map((item) => item.id))
   })
 
   it('cancels compaction when a retained tool result has no matching call', () => {

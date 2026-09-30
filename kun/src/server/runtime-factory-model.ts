@@ -343,6 +343,32 @@ export function cursorSdkProviderIdsForOptions(options: KunServeRuntimeOptions):
   return out
 }
 
+/**
+ * Provider-kind view used to infer a harness for legacy threads/turns and to
+ * freeze `harnessId` at admission. `defaultKind` follows the env-level runtime
+ * provider kind (KUN_RUNTIME_PROVIDER_KIND), not a provider id.
+ */
+export function providerKindsForOptions(
+  options: KunServeRuntimeOptions,
+  defaults: { defaultIsAgentSdk: boolean; defaultIsCursorSdk: boolean; defaultIsAntigravity: boolean }
+): {
+  byId: Record<string, ServeProviderConfig['kind'] | undefined>
+  defaultKind: NonNullable<ServeProviderConfig['kind']>
+} {
+  const byId: Record<string, ServeProviderConfig['kind'] | undefined> = {}
+  for (const [providerId, provider] of Object.entries(options.providers ?? {})) {
+    byId[providerId] = provider.kind ?? 'http'
+  }
+  const defaultKind: NonNullable<ServeProviderConfig['kind']> = defaults.defaultIsAgentSdk
+    ? 'agent-sdk'
+    : defaults.defaultIsCursorSdk
+      ? 'cursor-sdk'
+      : defaults.defaultIsAntigravity
+        ? 'antigravity-cli'
+        : 'http'
+  return { byId, defaultKind }
+}
+
 /** Provider engines that cannot enforce Kun room tools, approvals, or scoped writes. */
 export function roomUnsupportedProviderIdsForOptions(options: KunServeRuntimeOptions): Set<string> {
   // Cursor's custom tools do not replace its native filesystem/shell catalog.

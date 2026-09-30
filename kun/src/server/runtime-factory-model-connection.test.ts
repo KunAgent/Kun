@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   activeModelConnectionProviderId,
   extensionAgentRunOptionsForOptions
 } from './runtime-factory.js'
-import { modelConnectionSeedsForOptions } from './runtime-factory-model.js'
+import { modelConnectionSeedsForOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
+import { resolveModelContextProfile } from '../loop/model-context-profile.js'
 
 describe('activeModelConnectionProviderId', () => {
   const providers = {
@@ -155,5 +156,39 @@ describe('activeModelConnectionProviderId', () => {
         }
       }
     }).map((seed) => seed.id)).toEqual(['deepseek'])
+  })
+})
+
+describe('modelContextProfilesByProvider', () => {
+  it('does not throw for a provider model profile without capacity info', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const profilesByProvider = modelContextProfilesByProvider({
+        'custom-provider': {
+          apiKey: '',
+          baseUrl: 'https://api.example.com/v1',
+          models: ['sparse-model'],
+          modelProfiles: {
+            'sparse-model': {
+              pricing: { inputUsdPerMillion: 0.1, outputUsdPerMillion: 0.2 },
+              inputModalities: ['text'],
+              outputModalities: ['text'],
+              supportsToolCalling: true,
+              messageParts: ['text']
+            }
+          }
+        }
+      })
+
+      expect(resolveModelContextProfile('sparse-model', profilesByProvider.get('custom-provider')))
+        .toMatchObject({
+          contextWindowTokens: 256_000,
+          softThreshold: 192_000,
+          hardThreshold: 217_600,
+          pricing: { inputUsdPerMillion: 0.1, outputUsdPerMillion: 0.2 }
+        })
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

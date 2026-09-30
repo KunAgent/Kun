@@ -242,3 +242,42 @@ export function sanitizeAgentSdkError(error: unknown, oauthToken: string | undef
     : message
   return withoutKnownToken.replace(CLAUDE_CREDENTIAL_PATTERN, '[REDACTED]')
 }
+
+/**
+ * Record the `context_snapshot` telemetry for a delegated SDK turn start.
+ * `historyText` is the prompt-level history actually sent (handoff brief,
+ * portable transcript, or '' when the provider resumed natively).
+ */
+export async function recordAgentSdkContextSnapshot(input: {
+  ctx: SdkTurnContext
+  threadId: string
+  turnId: string
+  resumed: boolean
+  historyText: string
+  selectedKunTools: readonly BridgeableTool[]
+  record: (draft: RuntimeEventDraft) => Promise<unknown> | unknown
+  kunSystemPrompt: () => string
+}): Promise<void> {
+  const { ctx } = input
+  if (!ctx.contextProfile) return
+  const system = estimatedTokens([input.kunSystemPrompt(), ctx.threadPersona ?? ''].join('\n'))
+  const tools = estimatedTokens(JSON.stringify(input.selectedKunTools))
+  const skills = estimatedTokens((ctx.contextInstructions ?? []).join('\n'))
+  const messages = estimatedTokens([input.historyText, ctx.userText].join('\n'))
+  const other = (ctx.images?.length ?? 0) * 1_024
+  await input.record({
+    kind: 'context_snapshot',
+    threadId: input.threadId,
+    turnId: input.turnId,
+    model: ctx.model ?? 'claude-default',
+    providerId: ctx.sessionPreparation?.route.providerId ?? 'default',
+    stepIndex: 0,
+    ...ctx.contextProfile,
+    estimatedInputTokens: tools + system + skills + messages + other,
+    breakdown: { tools, system, skills, messages, other },
+    toolCount: input.selectedKunTools.length,
+    activeSkillIds: [...(ctx.activeSkillIds ?? [])],
+    contextManagement: 'sdk-managed',
+    nativeHistory: input.resumed ? 'unknown' : 'none'
+  })
+}

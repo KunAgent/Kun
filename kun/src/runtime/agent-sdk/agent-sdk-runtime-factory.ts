@@ -18,17 +18,6 @@ function loadAgentSdk(): Promise<SdkApi> {
   return sdkPromise
 }
 
-/**
- * Resolve the plan-tool context for a turn. When the turn carries a (non-stale)
- * GUI plan — the SDD "下一步"/Plan-mode flow — we must expose it so the kun
- * `create_plan` tool is BOTH advertised to the model and executable: its
- * `shouldAdvertise` and executor are gated on `guiPlan`/`threadMode === 'plan'`
- * (create-plan-tool.ts). Without this the model is told to call create_plan but
- * the tool was never bridged, so it writes the plan as prose and the GUI reports
- * "no matching create_plan result". Mirrors the native loop's candidate/stale
- * derivation (agent-loop.ts).
- */
-
 export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSdkRuntime {
   const context = createAgentSdkFactoryContext(deps)
   const runtimeDeps: SdkRuntimeDeps = {

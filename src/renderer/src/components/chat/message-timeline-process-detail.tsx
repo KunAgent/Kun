@@ -8,6 +8,7 @@ import { MessageBubble } from './message-timeline-bubbles'
 import {
   isBackgroundShellNoticeBlock,
   isBackgroundSubagentNoticeBlock,
+  isWorkerUpdateNoticeBlock,
   splitThink
 } from './message-timeline-turns'
 import {
@@ -25,6 +26,7 @@ import {
   summarizePaperToolBlock,
   type PaperToolDetail
 } from './paper-tool-process'
+import { HandoffBriefDetail } from './message-timeline-handoff-entry'
 
 export function toolNameForBlock(block: ToolBlock): string {
   const rawSummary = block.summary?.trim() ?? ''
@@ -60,6 +62,8 @@ export type ProcessDetail =
   | { kind: 'user_input' }
   | { kind: 'background_shell' }
   | { kind: 'background_subagent' }
+  | { kind: 'worker_update' }
+  | { kind: 'handoff' }
   | { kind: 'text'; text: string }
   | { kind: 'paper'; paper: PaperToolDetail }
 
@@ -371,9 +375,13 @@ export function getProcessDetail(block: ChatBlock, summaryText?: string): Proces
   }
   if (block.kind === 'approval') return { kind: 'approval' }
   if (block.kind === 'approval_review') return { kind: 'approval_review' }
+  // Handoff briefs are rebuilt on demand through the preview route instead of
+  // being persisted into the block, so the detail is just a fetch trigger.
+  if (block.kind === 'handoff') return { kind: 'handoff' }
   if (block.kind === 'user_input') return { kind: 'user_input' }
   if (isBackgroundShellNoticeBlock(block)) return { kind: 'background_shell' }
   if (isBackgroundSubagentNoticeBlock(block)) return { kind: 'background_subagent' }
+  if (isWorkerUpdateNoticeBlock(block)) return { kind: 'worker_update' }
   if (block.kind === 'system' && block.text.trim()) {
     if (block.detail?.trim()) return { kind: 'text', text: block.detail }
     // Short system messages already fit in the summary line — skip the
@@ -462,7 +470,15 @@ export function ProcessEntryDetail({
   if (detail.kind === 'user_input' && block.kind === 'user_input') {
     return <MessageBubble block={block} nested allowThreadActions={allowThreadActions} />
   }
-  if ((detail.kind === 'background_shell' || detail.kind === 'background_subagent') && block.kind === 'user') {
+  if (detail.kind === 'handoff' && block.kind === 'handoff') {
+    return <HandoffBriefDetail block={block} />
+  }
+  if (
+    (detail.kind === 'background_shell' ||
+      detail.kind === 'background_subagent' ||
+      detail.kind === 'worker_update') &&
+    block.kind === 'user'
+  ) {
     return <MessageBubble block={block} nested allowThreadActions={allowThreadActions} />
   }
   return null
@@ -487,6 +503,9 @@ export function describeProcessBlock(
   if (block.kind === 'user' && isBackgroundSubagentNoticeBlock(block)) {
     return block.meta?.displayText?.trim() || t('backgroundSubagentNotice.title', { defaultValue: 'Background subagent completed' })
   }
+  if (block.kind === 'user' && isWorkerUpdateNoticeBlock(block)) {
+    return block.meta?.displayText?.trim() || t('workerUpdateNotice.title', { defaultValue: 'Worker updates' })
+  }
   if (block.kind === 'compaction') {
     if (block.variant === 'window') return t('contextWindowSwitched')
     if (block.status === 'running') return t('compactionRunning')
@@ -507,6 +526,15 @@ export function describeProcessBlock(
         : t('compactionManualCompletedWithTokens', { tokens })
     }
     return block.auto === true ? t('compactionAutoCompleted') : t('compactionManualCompleted')
+  }
+  if (block.kind === 'handoff') {
+    return block.handoffMode === 'delta'
+      ? t('adeHandoffDelta', { agent: block.toHarnessName })
+      : t('adeHandoff', {
+          agent: block.toHarnessName,
+          turns: block.recentTurns,
+          files: block.files
+        })
   }
   if (block.kind === 'approval') {
     return block.summary || t('approvalTitle')

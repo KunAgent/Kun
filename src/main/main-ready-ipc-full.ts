@@ -13,6 +13,7 @@ import {
 import { preserveRedactedProviderCredentials } from './settings-credential-redaction'
 import { syncLoginItemSettings } from './desktop-behavior'
 import {
+  getKunRuntimeSettings,
   getModelProviderSettings,
   resolveTerminalColorMode,
   type AppSettingsPatch,
@@ -42,6 +43,8 @@ import { registerRuntimeSseIpc } from './runtime-sse-ipc'
 import { registerRemoteAccessIpc } from './remote/remote-ipc-handlers'
 import { RemoteAccessService } from './remote/remote-access-service'
 import { registerTerminalPtyIpc } from './terminal/terminal-pty-ipc'
+import { ensureKunCliLaunch } from './terminal/terminal-agent-cli-env'
+import { resolveKunExecutable } from './resolve-kun-binary'
 import { JsonRemoteSshHostStore } from './remote-ssh/host-store'
 import { RemoteSshKnownHostStore } from './remote-ssh/known-host-store'
 import { registerRemoteSshIpc } from './remote-ssh/register-remote-ssh-ipc'
@@ -89,14 +92,16 @@ import {
   shutdownServiceManagerAndWait
 } from './main-migrations'
 import {
-  preserveRuntimeTokenForFullSettingsSnapshot,
   queueRuntimeMcpConfigApply,
   queueRuntimeSettingsApply,
   reserveRuntimeSettingsApply,
   runtimeRequest,
-  runtimeRequestOnLease,
-  validateRuntimeSettingsForApply
+  runtimeRequestOnLease
 } from './main-runtime-settings'
+import {
+  preserveRuntimeTokenForFullSettingsSnapshot,
+  validateRuntimeSettingsForApply
+} from './main-runtime-settings-validate'
 import {
   ensureRuntime,
   restartGuiRuntime,
@@ -109,10 +114,12 @@ import {
   syncTray
 } from './main-tray'
 import type { MainServices } from './main-ready-services'
+import { registerMissionControlPopoutIpc } from './mission-control-popout'
 import { registerProviderMutationBarrierIpc } from './provider-mutation-barrier'
 
 export function registerMainIpc(services: MainServices): void {
   registerProviderMutationBarrierIpc(() => mainState.mainWindow)
+  registerMissionControlPopoutIpc(() => mainState.mainWindow)
   const {
     browserUseManager,
     credentialMigration,
@@ -559,7 +566,32 @@ export function registerMainIpc(services: MainServices): void {
       ipcMain,
       getMainWindow: () => mainState.mainWindow,
       logError,
-      getTerminalColorMode: async () => resolveTerminalColorMode(await mainState.store.load())
+      getTerminalColorMode: async () => resolveTerminalColorMode(await mainState.store.load()),
+      resolveKunCli: async () => {
+        const appRoot = app.isPackaged
+          ? app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked')
+          : app.getAppPath()
+        const runtime = getKunRuntimeSettings(await mainState.store.load())
+        return ensureKunCliLaunch({
+          isPackaged: app.isPackaged,
+          platform: process.platform,
+          resourcesPath: process.resourcesPath,
+          execDir: dirname(process.execPath),
+          shimDir: join(app.getPath('userData'), 'cli-bin'),
+          resolution: resolveKunExecutable(appRoot, runtime.binaryPath)
+        })
+      },
+      runtimeFetch: async (path, init = {}) => {
+        const settings = await mainState.store.load()
+        const ensured = await ensureRuntime(settings)
+        const requestSettings = ensured ?? settings
+        const headers = runtimeAuthHeaders(requestSettings)
+        const normalizedPath = path.startsWith('/') ? path : `/${path}`
+        return fetch(`${getRuntimeBaseUrlForSettings(requestSettings)}${normalizedPath}`, {
+          ...init,
+          headers
+        } as RequestInit)
+      }
     })
     const remoteSshDataDir = join(app.getPath('userData'), 'remote-ssh')
     mainState.remoteSshController = registerRemoteSshIpc({

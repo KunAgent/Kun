@@ -270,6 +270,21 @@ describe('ProviderModelImportDialog', () => {
     expect(html).toContain('Import 1')
   })
 
+  it('shows listed gpt-6 models without requiring matching models.dev entries', () => {
+    const html = render({
+      target: provider({ id: 'codex', name: 'ChatGPT subscription' }),
+      providerModelIds: ['gpt-6-sol', 'gpt-6-luna'],
+      catalogResult: catalog([
+        { id: 'gpt-6-sol', inputModalities: ['text'], outputModalities: ['text'] },
+        { id: 'gpt-6-unavailable', inputModalities: ['text'], outputModalities: ['text'] }
+      ], { matchMode: 'enrichment-only' })
+    })
+    expect(html).toContain('gpt-6-sol')
+    expect(html).toContain('gpt-6-luna')
+    expect(html).not.toContain('gpt-6-unavailable')
+    expect(html).toContain('Import 2')
+  })
+
   it('renders an empty state when neither source returned models', () => {
     const html = render()
     expect(html).toContain('No models available')

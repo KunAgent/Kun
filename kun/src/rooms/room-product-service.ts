@@ -44,11 +44,11 @@ export class RoomProductService {
   async requestPage(roomId: string, page: { limit?: number; cursor?: number; attentionOnly?: boolean } = {}) {
     await this.service.get(roomId)
     const limit = page.limit ?? 50
-    const rows = await this.service.store.list<RoomRequestState & { currentPeerRequest?: number }>(
+    const rows = await this.service.store.list<RoomRequestState & { currentAttentionRequest?: number }>(
       'request', { roomId, limit, beforeSeq: page.cursor, summaryOnly: true,
         ...(page.attentionOnly ? { status: [...ROOM_REQUEST_ATTENTION_STATUSES] } : {}) })
     const visible = page.attentionOnly
-      ? rows.filter((row) => isAttentionRequestStatus(row.value.status) && row.value.currentPeerRequest)
+      ? rows.filter((row) => isAttentionRequestStatus(row.value.status) && row.value.currentAttentionRequest)
       : rows
     const projection = await this.service.store.requestOutcomes?.({ roomId, requestIds: visible.map((row) => row.id), limit })
     const requests = await Promise.all(visible.map(async (row) => ({

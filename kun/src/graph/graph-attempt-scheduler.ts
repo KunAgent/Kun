@@ -25,6 +25,7 @@ import type {
   GraphSupervisionPort
 } from './graph-scheduler-types.js'
 import { graphWorkerSecuritySnapshot } from './graph-worker-security.js'
+import { bindGraphAttemptSession } from './graph-attempt-activity.js'
 import { resolveGraphAttemptAssignment } from './graph-attempt-routing.js'
 import { finalizeGraphWorkerResult } from './graph-worker-result-finalizer.js'
 import { GraphAttemptLeaseManager } from './graph-attempt-leases.js'
@@ -312,6 +313,8 @@ export abstract class GraphAttemptScheduler {
         inheritedProviderId: attempt.assignment.providerId,
         inheritedAccountId: attempt.assignment.accountId,
         inheritedReasoningEffort: attempt.assignment.reasoningEffort,
+        ...(attempt.assignment.harnessId ? { harnessId: attempt.assignment.harnessId } : {}),
+        ...(attempt.assignment.credentialMode ? { credentialMode: attempt.assignment.credentialMode } : {}),
         approvalPolicy: attempt.assignment.approvalPolicy,
         sandboxMode: attempt.assignment.sandboxMode,
         approvalReviewer: attempt.assignment.approvalReviewer,
@@ -345,11 +348,7 @@ export abstract class GraphAttemptScheduler {
         returnFormat: 'summary',
         onQueued: (childId) => {
           boundChildId = childId
-          this.options.workerSessions.bind(childId, {
-            runId: initialRun.id,
-            nodeId,
-            attemptId: attempt.id
-          })
+          bindGraphAttemptSession(this.options, initialRun, nodeId, attempt, childId)
         },
         onRunning: async (childId) => {
           await this.withRunQueue(initialRun.id, async () => {

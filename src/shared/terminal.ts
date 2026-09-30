@@ -19,6 +19,17 @@ export const TERMINAL_MAX_COLS = 500
 export const TERMINAL_MAX_ROWS = 200
 export const TERMINAL_MAIN_SESSION_ID = 'main'
 
+/** ADE terminal-agent launch request bundled onto `terminal:create` (05 §6.1). */
+export type TerminalAgentCreate = {
+  harnessId: string
+  title: string
+  /** Initial task text injected through the harness's argv/taskFlag. */
+  task?: string
+  taskWorkspaceId?: string
+  parentThreadId?: string
+  workspaceKind?: 'worktree' | 'local' | 'directory'
+}
+
 export type TerminalCreatePayload = {
   /** 稳定的 PTY 会话标识,渲染端会按工作区和标签页生成命名空间。 */
   sessionId: string
@@ -26,6 +37,7 @@ export type TerminalCreatePayload = {
   cwd?: string
   cols?: number
   rows?: number
+  agent?: TerminalAgentCreate
 }
 
 export type TerminalWritePayload = {
@@ -55,3 +67,20 @@ export type TerminalExitPayload = {
 export type TerminalCreateResult =
   | { ok: true; sessionId: string; replayed?: boolean }
   | { ok: false; message: string }
+
+/**
+ * Callback-channel appendix appended to a terminal agent's injected task
+ * (05 §5.3): the `kun worker` commands are the shell-facing twin of the
+ * worker callback tools. This text is turn input — it never enters any
+ * system prompt or user-global agent config.
+ */
+export const TERMINAL_AGENT_CALLBACK_APPENDIX = [
+  '',
+  '---',
+  'Reporting back to Kun (the bundled Kun CLI is `"$KUN_CLI"` — on Windows `%KUN_CLI%` — and also on PATH as `kun`; KUN_WORKER_* env vars are already set):',
+  '- `"$KUN_CLI" worker progress "<summary>" [--phase investigating|implementing|verifying|blocked]` — report progress.',
+  '- `"$KUN_CLI" worker ask "<question>" [--options a,b] [--timeout 600]` — ask the manager; blocks until answered.',
+  '- `"$KUN_CLI" worker context [--query "<text>"] [--limit 10]` — read earlier manager-thread context.',
+  '- `"$KUN_CLI" worker result --outcome <succeeded|partial|failed> --summary "<text>" [--files a,b] [--check name=status]` — submit the final report.',
+  'Ask/result/context require a manager dispatch; standalone runs support `progress`.'
+].join('\n')

@@ -17,6 +17,7 @@ import { useTimelineTurnTargetBlocks } from './thread-turn-target'
 import { useTimelineTurnNavigation } from './use-timeline-turn-navigation'
 import { useTimelineFindJump } from './use-timeline-find-jump'
 import { MessageTimelineEmptyHero, ThreadForkBanner, ThreadForkPoint } from './message-timeline-empty'
+import { WorkerControlBanner } from '../workers/WorkerControlBanner'
 import {
   activeTimelineTurnIndex,
   groupTurns,
@@ -124,6 +125,7 @@ export function MessageTimeline({
   const threadLoadingId = useChatStore((state) => state.threadLoadingId)
   const usageRefreshKey = useChatStore((state) => state.usageRefreshKey)
   const cancelToolCall = useChatStore((state) => state.cancelToolCall)
+  const chooseAdeWorkspace = useChatStore((state) => state.chooseAdeWorkspace)
   const turnUsage = useTurnUsageState(threadLoadingId === activeThreadId ? null : activeThreadId, usageRefreshKey)
   const handleCancelToolCall = useCallback(async (block: ToolBlock): Promise<boolean> => {
     if (!activeThreadId || !block.turnId) return false
@@ -157,7 +159,8 @@ export function MessageTimeline({
     activeThread ? [activeThread] : [],
     workspaceRoot
   )
-  const heroRoute: 'chat' | 'claw' = route === 'claw' ? 'claw' : 'chat'
+  const heroRoute: 'chat' | 'claw' | 'ade' =
+    route === 'claw' ? 'claw' : route === 'ade' || activeThread?.workspaceMode === 'ade' ? 'ade' : 'chat'
   const hasContent = blocks.length > 0 || live || liveReasoning
   const endRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null), contentRef = useRef<HTMLDivElement>(null)
@@ -394,10 +397,12 @@ export function MessageTimeline({
           <MessageTimelineEmptyHero
             route={heroRoute}
             ready={runtimeConnection === 'ready'}
-            hasWorkspace={!!workspaceRoot}
+            hasWorkspace={heroRoute === 'ade'
+              ? Boolean(activeThread?.workspace || workspaceRoot)
+              : Boolean(workspaceRoot)}
             runtimeError={runtimeError}
             activeClawChannel={activeClawChannel}
-            onPickWorkspace={() => void chooseWorkspace()}
+            onPickWorkspace={() => void (heroRoute === 'ade' ? chooseAdeWorkspace() : chooseWorkspace())}
             onRetry={onRetryConnection}
             onOpenSettings={onOpenSettings}
             onSelectSuggestion={onSelectSuggestion}
@@ -407,6 +412,9 @@ export function MessageTimeline({
 
         {activeThread?.forkedFromThreadId ? (
           <ThreadForkBanner parentTitle={forkedFromTitle} />
+        ) : null}
+        {activeThread?.workspaceMode === 'ade' && activeThread.executionUnit?.kind === 'worker' ? (
+          <WorkerControlBanner threadId={activeThread.id} />
         ) : null}
         {hasEarlierTurns ? (
           <div className="flex items-center justify-center">

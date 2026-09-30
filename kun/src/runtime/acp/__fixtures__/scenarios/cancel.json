@@ -1,0 +1,42 @@
+{
+  "sessionId": "sess-cancel",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": { "loadSession": false, "promptCapabilities": {} },
+    "authMethods": []
+  },
+  "turns": [
+    {
+      "promptIncludes": "slow",
+      "steps": [
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "Working" } } },
+        { "sleep": 30000 }
+      ],
+      "stopReason": "end_turn"
+    },
+    {
+      "steps": [
+        {
+          "clientRequest": {
+            "method": "session/request_permission",
+            "params": {
+              "toolCall": {
+                "toolCallId": "call-c1",
+                "title": "Delete file",
+                "kind": "delete",
+                "status": "pending"
+              },
+              "options": [
+                { "optionId": "allow", "name": "Allow", "kind": "allow_once" },
+                { "optionId": "reject", "name": "Reject", "kind": "reject_once" }
+              ]
+            }
+          }
+        },
+        { "sleep": 30000 }
+      ],
+      "stopReason": "end_turn"
+    }
+  ],
+  "onCancel": { "settle": "cancelled" }
+}

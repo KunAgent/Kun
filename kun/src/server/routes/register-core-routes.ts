@@ -12,7 +12,7 @@ import {
   routePoolStatus,
   testRoutePool
 } from './openai-model-gateway.js'
-import { gatewayMessages } from './openai-model-gateway-anthropic.js'
+import { gatewayCountTokens, gatewayMessages } from './anthropic-messages-gateway.js'
 import { registerExtensionManagementRoutes } from './extensions.js'
 import { registerExtensionPublicRoutes } from './extension-public.js'
 import {
@@ -61,11 +61,12 @@ import {
 import { applyRuntimeConfig } from './runtime-config.js'
 import { listSkills } from './skills.js'
 import { authorizeMcpOAuth, clearMcpOAuth, mcpOAuthDiagnostics } from './mcp-oauth.js'
-import { deleteMcpConfig, listMcpConfig, patchMcpConfig, putMcpConfig } from './mcp-config.js'
+import { addRemoteMcpApp, deleteMcpConfig, listMcpConfig, patchMcpConfig, putMcpConfig } from './mcp-config.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { authorize } from './route-auth.js'
 import { strictRuntimeTokenAuthorized } from './gateway-request-guard.js'
+import { handleKunToolsMcp } from './kun-tools-mcp.js'
 
 export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void {
   router.add('GET', '/health', () => healthJsonResponse())
@@ -73,6 +74,11 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('POST', '/v1/chat/completions', (request) => gatewayChatCompletions(runtime, request))
   router.add('POST', '/v1/responses', (request) => gatewayResponses(runtime, request))
   router.add('POST', '/v1/messages', (request) => gatewayMessages(runtime, request))
+  router.add('POST', '/v1/messages/count_tokens', (request) => gatewayCountTokens(runtime, request))
+  // Kun Tools MCP endpoint lives outside /v1 so harness-scoped kgw_ tokens
+  // never share the runtime-token authorization surface (docs/ade/05 §3.3).
+  router.add('POST', '/mcp/kun', (request) => handleKunToolsMcp(runtime, request))
+  router.add('GET', '/mcp/kun', (request) => handleKunToolsMcp(runtime, request))
   const strictGatewayAdmin = (request: Request) => strictRuntimeTokenAuthorized(request, runtime.runtimeToken)
   router.add('GET', '/v1/model-gateway/credential/status', (request) => {
     if (!strictGatewayAdmin(request)) return ERRORS.unauthorized()
@@ -291,6 +297,10 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('GET', '/v1/mcp/config', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return listMcpConfig(runtime)
+  })
+  router.add('POST', '/v1/mcp/remote-apps/:id', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return addRemoteMcpApp(runtime, ctx.params.id, request)
   })
   router.add('PUT', '/v1/mcp/config/:id', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

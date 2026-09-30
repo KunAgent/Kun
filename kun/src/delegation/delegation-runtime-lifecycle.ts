@@ -21,6 +21,7 @@ import {
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import type { UsageSnapshot } from '../contracts/usage.js'
 import type { TurnClientSurface } from '../contracts/turns.js'
+import type { HarnessCredentialMode, HarnessId } from '../contracts/harness.js'
 import {
   ChildRunActivity,
   type ChildRunActivity as ChildRunActivityValue,
@@ -120,6 +121,8 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     parentTurnId: string
     prompt: string
     source?: ChildSourceEnvelope
+    /** Host-owned idempotency key for the resumed turn start. */
+    clientRequestId?: string
     controlPrompt?: string
     pptWorkflowScope?: PptWorkflowScope
     expectedProfile?: string
@@ -134,6 +137,16 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     security?: ChildSecuritySnapshot
     /** Trusted deny-list for this resume execution only. */
     executionBlockedTools?: string[]
+    /** Host-pinned harness for the resumed turn (ADE worker dispatch route). */
+    harnessId?: HarnessId
+    /** Host-pinned credential mode for the resumed turn (e.g. `kun-gateway`). */
+    credentialMode?: HarnessCredentialMode
+    /**
+     * Run the resumed turn detached from the caller's signal (independent
+     * lifecycle). ADE worker dispatches rely on this so `resumeChild` resolves
+     * at queue-time instead of awaiting the worker's whole turn.
+     */
+    detach?: boolean
     signal: AbortSignal
     onQueued?: (childId: string, profile?: string, metadata?: ChildRunLifecycleMetadata) => Promise<void> | void
     onRunning?: (childId: string, profile?: string, metadata?: ChildRunLifecycleMetadata) => Promise<void> | void
@@ -155,6 +168,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     parentTurnId: string
     prompt: string
     source?: ChildSourceEnvelope
+    clientRequestId?: string
     controlPrompt?: string
     pptWorkflowScope?: PptWorkflowScope
     expectedProfile?: string
@@ -166,6 +180,9 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     proactive?: boolean
     security?: ChildSecuritySnapshot
     executionBlockedTools?: string[]
+    harnessId?: HarnessId
+    credentialMode?: HarnessCredentialMode
+    detach?: boolean
     signal: AbortSignal
     onQueued?: (childId: string, profile?: string, metadata?: ChildRunLifecycleMetadata) => Promise<void> | void
     onRunning?: (childId: string, profile?: string, metadata?: ChildRunLifecycleMetadata) => Promise<void> | void
@@ -238,7 +255,10 @@ export class DelegationRuntime extends DelegationRuntimeRun {
       )
       if (workflowIdentityError) throw new Error(workflowIdentityError)
     }
+    // ADE manager-worker runs persist no profile; an empty snapshot restores
+    // the same effective settings (no persona prompt, inherit tool policy).
     const profileSnapshot = previous.profileSnapshot
+      ?? (previous.launcher === 'manager-worker' ? SubagentProfileConfig.parse({}) : undefined)
     const storedSecurity = previous.security
     if (!profileSnapshot || !storedSecurity || !previous.workspace) {
       throw new Error(`child run ${input.childId} lacks a resumable security/profile snapshot`)
@@ -253,7 +273,7 @@ export class DelegationRuntime extends DelegationRuntimeRun {
     if (input.signal.aborted) throw new Error('child resume aborted before start')
 
     const queuedAt = this.now()
-    const preserveDetached = input.proactive === true && previous.detached === true
+    const preserveDetached = input.detach === true || (input.proactive === true && previous.detached === true)
     const record = ChildRunRecord.parse({
       ...previous,
       parentModelRoute: input.parentModelRoute ?? previous.parentModelRoute,
@@ -332,6 +352,9 @@ export class DelegationRuntime extends DelegationRuntimeRun {
       parentTurnId: input.parentTurnId,
       prompt: input.prompt,
       source,
+      clientRequestId: input.clientRequestId,
+      harnessId: input.harnessId,
+      credentialMode: input.credentialMode,
       controlPrompt,
       pptWorkflowScope: input.pptWorkflowScope,
       resumeChild: true,

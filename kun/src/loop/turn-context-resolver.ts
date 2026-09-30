@@ -196,6 +196,16 @@ export class TurnContextResolver {
       ...(input.turn.guiDesignArtifact ? { guiDesignArtifact: input.turn.guiDesignArtifact } : {}),
       ...(input.turn.imContext ? { imContext: true } : {}),
       modelCapabilities: input.modelCapabilities,
+      // Frozen at turn admission; the thread pin is the legacy fallback.
+      ...(input.turn.harnessId ?? input.thread.harnessId
+        ? { harnessId: input.turn.harnessId ?? input.thread.harnessId }
+        : {}),
+      // Thread-owned workspace mode; manager tools only advertise on 'ade'.
+      ...(input.thread.workspaceMode ? { workspaceMode: input.thread.workspaceMode } : {}),
+      // Worker threads expose the callback tools; all other threads hide them.
+      ...(input.thread.executionUnit?.kind
+        ? { executionUnitKind: input.thread.executionUnit.kind }
+        : {}),
       activeSkillIds: skillResolution.activeSkillIds,
       ...(allowedToolNames ? { allowedToolNames } : {}),
       ...(input.thread.toolCatalogEpoch

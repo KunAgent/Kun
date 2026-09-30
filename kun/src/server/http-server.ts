@@ -22,8 +22,16 @@ function isStreamingResponse(response: Response): boolean {
   return contentType.includes('text/event-stream')
 }
 
-export async function dispatchRequest(router: Router, request: Request): Promise<Response> {
+export async function dispatchRequest(
+  router: Router,
+  request: Request,
+  requestGuard?: (request: Request) => JsonResponse | null
+): Promise<Response> {
   const url = new URL(request.url)
+  // Harness-scoped kgw_ tokens are fenced before routing so a valid token can
+  // only ever reach the paths its scopes allow (docs/ade/05 §4).
+  const denied = requestGuard?.(request)
+  if (denied) return toResponse(denied)
   const match = router.match(request.method, url.pathname)
   if (!match) {
     return toResponse(jsonResponse(

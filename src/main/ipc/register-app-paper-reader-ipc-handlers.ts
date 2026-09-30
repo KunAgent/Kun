@@ -286,11 +286,11 @@ export function registerAppPaperReaderIpcHandlers(
           signal: job.signal,
           progress: (done, total) => job.progress('translate', `${done}/${total}`)
         })
-        finishPaperJob(request.requestId, result.ok ? 'done' : result.code === 'canceled' ? 'canceled' : 'error', result.ok ? undefined : result.message)
+        finishPaperJob(request.requestId, result.ok ? 'done' : result.code === 'canceled' ? 'canceled' : 'error', event.sender, job.signal, result.ok ? undefined : result.message)
         return result
       } catch (error) {
         logError?.('paper-reader', 'translate-document failed', error)
-        finishPaperJob(request.requestId, isPaperJobCanceled(job.signal, error) ? 'canceled' : 'error')
+        finishPaperJob(request.requestId, isPaperJobCanceled(job.signal, error) ? 'canceled' : 'error', event.sender, job.signal)
         return paperError<PaperTranslateDocumentResult>(error, 'io', 'Translation failed.')
       }
     }
@@ -401,11 +401,11 @@ export function registerAppPaperReaderIpcHandlers(
           throw new PaperUnitError('invalid-unit', 'Import folder must be inside the papers directory.')
         }
         const result = await importPaperBibtex(workspacePath, papersDirAbs, request.bibtex, job.signal, targetDirAbs)
-        finishPaperJob(request.requestId, 'done')
+        finishPaperJob(request.requestId, 'done', event.sender, job.signal)
         return { ok: true, ...result }
       } catch (error) {
         logError?.('paper-library', 'import-bibtex failed', error)
-        finishPaperJob(request.requestId, isPaperJobCanceled(job.signal, error) ? 'canceled' : 'error')
+        finishPaperJob(request.requestId, isPaperJobCanceled(job.signal, error) ? 'canceled' : 'error', event.sender, job.signal)
         if (job.signal.aborted) {
           return { ok: false, code: 'canceled', message: 'Import canceled.' }
         }

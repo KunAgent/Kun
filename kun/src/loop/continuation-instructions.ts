@@ -451,17 +451,26 @@ export function intersectAllowedToolNames(
  * threads created before the tool existed still learn the contract. A
  * positive `recoveryStep` switches to the bounded no-publication nudge.
  */
-export function conversationDeliveryInstruction(recoveryStep = 0, maxSteps = 0): string {
+export function conversationDeliveryInstruction(recoveryStep = 0, maxSteps = 0,
+  deliveryGate: 'start' | 'progress' | 'none' = 'none'): string {
   if (recoveryStep > 0) {
     return [
-      `You stopped without calling \`send_im_message\`, so the user saw nothing (recovery ${recoveryStep}/${maxSteps}).`,
+      `No user-visible reply was successfully published (recovery ${recoveryStep}/${maxSteps}).`,
       'Ordinary assistant text is internal and never reaches the user.',
-      'Call `send_im_message` now with the text and/or workspace file attachments the user should receive.'
+      deliveryGate === 'progress'
+        ? 'Call `send_im_message` with phase progress for a verified update, or phase final for the completed result.'
+        : 'Call `send_im_message` with phase start for a concrete next action, or phase final for a complete answer.'
     ].join(' ')
+  }
+  if (deliveryGate === 'start') {
+    return 'Respond to this user in their language before doing work. Call send_im_message with phase start and one concrete next action, or phase final for a complete answer. If you need the user to decide or connect an app, use the visible question or connection-card tool. Continue the task after a start message.'
+  }
+  if (deliveryGate === 'progress') {
+    return 'The user has not received an update during this long task. Call send_im_message with phase progress to report a verified finding and next action, or phase final if the work is complete. Avoid generic waiting notices; continue the task after progress.'
   }
   return [
     'This is an IM-style agent conversation. Your ordinary assistant text is internal working output the user never sees.',
-    'Publish every user-visible reply, status, question, or result with the `send_im_message` tool: text and/or workspace file attachments (images, documents, audio, video, or other files).',
+    'Publish every user-visible reply, status, question, or result with the `send_im_message` tool: text and/or workspace file attachments (images, documents, audio, video, or other files). Use phase start for an initial work update, progress for a material finding, and final for the complete answer.',
     'Each call creates one chat bubble. Do not repeat tool-published content in assistant text, and do not end the turn expecting your text to be shown.'
   ].join(' ')
 }

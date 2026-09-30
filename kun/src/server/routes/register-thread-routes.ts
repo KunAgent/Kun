@@ -50,7 +50,7 @@ import {
 } from './turns.js'
 import { startReview } from './review.js'
 import { buildEventStreamResponse, parseEventCursor } from './events.js'
-import { decideApproval } from './approvals.js'
+import { decideApproval, listPendingApprovals } from './approvals.js'
 import { resolveUserInput } from './user-inputs.js'
 import { receiveCanvasReceipt } from './canvas-receipts.js'
 import { getResumeSessionMetadata, resumeSession } from './sessions.js'
@@ -265,7 +265,10 @@ export function registerThreadRoutes(
       ({ threadId, turnId }) => {
         runtime.runTurn(threadId, turnId)
       },
-      () => runtime.graph?.config().enabled === true
+      () => runtime.graph?.config().enabled === true,
+      async (threadId, noticeIds) => {
+        await runtime.ade?.stores.notices.ack(threadId, noticeIds)
+      }
     )
   })
   router.add('POST', '/v1/threads/:id/rewind', async (request, ctx) => {
@@ -428,6 +431,11 @@ export function registerThreadRoutes(
       streamRegistry: runtime.eventStreamRegistry,
       sinceSeq
     })
+  })
+  router.add('GET', '/v1/approvals', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const threadId = new URL(request.url).searchParams.get('threadId')?.trim()
+    return listPendingApprovals(runtime.approvalGate, threadId || undefined)
   })
   router.add('GET', '/v1/approvals/:id', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

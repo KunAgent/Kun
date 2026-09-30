@@ -14,6 +14,7 @@ export const roomRunId = (roomId: string, clientRequestId: string, triage = fals
   'run-' + createHash('sha256').update(JSON.stringify([roomId, clientRequestId, triage])).digest('hex').slice(0, 40)
 export type RoomRunAdmission = Partial<Pick<RoomRunRecord,
   'phase' | 'requestId' | 'rootRequestId' | 'triggerMessageId' | 'contextId' | 'generation' |
+  'communicationRequired' | 'finalResponseRequired' |
   'attempt' | 'previousRunId' | 'integrationId' | 'integrationStage' | 'input' | 'model' | 'providerId' | 'accountId'>>
 
 async function retry<T>(work: () => Promise<T>): Promise<T> {
@@ -166,8 +167,16 @@ export async function attachRoomRunPublication(store: RoomStore, commit: RoomSto
     ? (terminal ? row.value.status === 'failed' ? 'failed' : row.value.status === 'cancelled' ? 'cancelled' : 'published' : row.value.outcome)
     : (message.status === 'streaming' ? row.value.outcome : message.status === 'failed' ? 'failed' : 'published')
   const publishedMessageId = segmented ? (row.value.publishedMessageId ?? message.id) : message.id
+  const visibleAt = message.createdAt
+  const trigger = !row.value.firstVisibleAt && row.value.triggerMessageId
+    ? await store.get<RoomMessage>('message', row.value.triggerMessageId) : null
+  const firstResponseMs = trigger?.roomId === message.roomId
+    ? Math.max(0, Date.parse(visibleAt) - Date.parse(trigger.value.createdAt)) : undefined
   commit.puts.push({ kind: 'room_run', id: runId, roomId: row.roomId, taskId: row.taskId,
-    value: { ...row.value, outcome, publishedMessageId, updatedAt: new Date().toISOString() } })
+    value: { ...row.value, outcome, publishedMessageId, updatedAt: new Date().toISOString(),
+      ...(visibleAt ? { firstVisibleAt: row.value.firstVisibleAt ?? visibleAt, lastVisibleAt: visibleAt,
+        ...(firstResponseMs !== undefined && Number.isFinite(firstResponseMs) ? { firstResponseMs } : {}),
+        ...(message.deliveryPhase ? { lastDeliveryPhase: message.deliveryPhase } : {}) } : {}) } })
   commit.events.push({ roomId: message.roomId, kind: 'room_run.updated', payload: { id: runId, memberId: row.value.memberId } })
 }
 

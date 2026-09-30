@@ -9,6 +9,7 @@ import {
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
 import { usePaperStore } from '../../../write/paper/paper-store'
 import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
+import { normalizePath } from '../../../write/write-workspace-store-helpers'
 import { interpretPaper } from '../../../write/paper/paper-actions'
 import { PaperTitleText } from '../PaperTitleText'
 import { pathInsidePaperUnit } from './PaperTree'
@@ -29,25 +30,34 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 /**
- * Single paper row inside the sidebar tree: reading-status dot + paper title
+ * Single paper row inside a workspace tree: reading-status dot + paper title
  * (never the unit directory name), with hover affordances for deep-read and
  * fetching the missing PDF. Right-click opens the shared paper row menu.
+ * `libraryRoot` is the row's own workspace — all actions run against it, and
+ * opening a row from another library switches the mounted root first.
  */
 export function PaperTreeRow({
   entry,
-  workspaceRoot,
+  libraryRoot,
   onMenu
 }: {
   entry: PaperLibraryEntry
-  workspaceRoot: string
-  onMenu: (entry: PaperLibraryEntry, x: number, y: number) => void
+  libraryRoot: string
+  onMenu: (entry: PaperLibraryEntry, x: number, y: number, libraryRoot: string) => void
 }): ReactElement {
   const { t } = useTranslation('common')
   const activeFilePath = useWriteWorkspaceStore((s) => s.activeFilePath)
-  const interpreting = usePaperStore(
-    (s) => s.pendingInterpretation?.unitDir === entry.unitDir
+  // Interpretation submits to the mounted library's composer, so the button
+  // only shows on rows of the active library.
+  const isActiveLibrary = useWriteWorkspaceStore(
+    (s) => normalizePath(s.workspaceRoot) === normalizePath(libraryRoot)
   )
-  const isActive = pathInsidePaperUnit(activeFilePath, workspaceRoot, entry.unitDir)
+  const interpreting = usePaperStore(
+    (s) =>
+      s.pendingInterpretation?.unitDir === entry.unitDir &&
+      normalizePath(s.pendingInterpretation.workspaceRoot) === normalizePath(libraryRoot)
+  )
+  const isActive = pathInsidePaperUnit(activeFilePath, libraryRoot, entry.unitDir)
   const progress = entry.pageCount
     ? Math.min(1, (entry.lastPage ?? 0) / entry.pageCount)
     : 0
@@ -59,7 +69,7 @@ export function PaperTreeRow({
     event.stopPropagation()
     const order: PaperReadingStatus[] = ['unread', 'reading', 'read']
     const next = order[(order.indexOf(status) + 1) % order.length]
-    await updatePaperEntryMeta(entry, { status: next }, t)
+    await updatePaperEntryMeta(entry, { status: next }, t, libraryRoot)
   }
 
   const interpret = async (event: MouseEvent): Promise<void> => {
@@ -67,7 +77,7 @@ export function PaperTreeRow({
     const bridge = usePaperModeStore.getState().composerBridge
     const settings = useWriteWorkspaceStore.getState().paperReading
     await interpretPaper({
-      workspaceRoot,
+      workspaceRoot: libraryRoot,
       settings,
       t,
       unitDir: entry.unitDir,
@@ -80,20 +90,24 @@ export function PaperTreeRow({
 
   const fetchPdf = async (event: MouseEvent): Promise<void> => {
     event.stopPropagation()
-    await downloadMissingPaperPdfs([entry], t)
+    await downloadMissingPaperPdfs([entry], t, libraryRoot)
   }
 
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={() => void openLibraryEntry(entry)}
+      onClick={() => void openLibraryEntry(entry, libraryRoot, t)}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') void openLibraryEntry(entry)
+        if (event.target !== event.currentTarget) return
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          void openLibraryEntry(entry, libraryRoot, t)
+        }
       }}
       onContextMenu={(event) => {
         event.preventDefault()
-        onMenu(entry, event.clientX, event.clientY)
+        onMenu(entry, event.clientX, event.clientY, libraryRoot)
       }}
       className={`group relative flex h-7 w-full cursor-default items-center gap-1.5 rounded-md pl-4 pr-1.5 text-[12px] transition ${
         isActive ? 'bg-[var(--ds-sidebar-row-active)] text-ds-ink' : 'text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
@@ -112,7 +126,7 @@ export function PaperTreeRow({
       <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
         {interpreting ? (
           <Loader2 className="h-3 w-3 animate-spin text-accent" strokeWidth={1.9} />
-        ) : entry.hasPdf && entry.interpretationCount === 0 ? (
+        ) : isActiveLibrary && entry.hasPdf && entry.interpretationCount === 0 ? (
           <button
             type="button"
             title={t('writePaperInterpret')}

@@ -61,6 +61,7 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     ...(thread.historyRefId ? { historyRefId: thread.historyRefId } : {}),
     title: thread.title?.trim() || thread.id.slice(0, 8),
     ...(thread.agentSurface ? { agentSurface: thread.agentSurface } : {}),
+    ...(thread.workspaceMode ? { workspaceMode: thread.workspaceMode } : {}),
     ...(thread.lockedTaskSurface ? { lockedTaskSurface: thread.lockedTaskSurface } : {}),
     ...(thread.designProfile
       ? { designProfile: cloneDesignTaskProfile(thread.designProfile) }
@@ -87,11 +88,15 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     archived: thread.status === 'archived',
     pinned: thread.pinned === true,
     ...(thread.providerId ? { providerId: thread.providerId } : {}),
+    ...(thread.harnessId ? { harnessId: thread.harnessId } : {}),
+    ...(thread.taskWorkspaceId ? { taskWorkspaceId: thread.taskWorkspaceId } : {}),
     ...(thread.agentId ? { agentId: thread.agentId } : {}),
     ...(thread.systemPrompt ? { systemPrompt: thread.systemPrompt } : {}),
     relation: thread.relation,
     parentThreadId: thread.parentThreadId,
+    ...(thread.executionUnit ? { executionUnit: { ...thread.executionUnit } } : {}),
     ...(thread.roomContext ? { roomContext: thread.roomContext } : {}),
+    ...(thread.workbenchOrigin ? { workbenchOrigin: { ...thread.workbenchOrigin } } : {}),
     planBuildRunId: thread.planBuildRunId,
     forkedFromThreadId: thread.forkedFromThreadId,
     forkedFromTitle: thread.forkedFromTitle,
@@ -488,7 +493,8 @@ export function applyRuntimeDisclosureMeta(
     item.messageSource === 'background_subagent' ||
     item.messageSource === 'graph_runtime' ||
     item.messageSource === 'subagent_resume' ||
-    item.messageSource === 'design_continuation'
+    item.messageSource === 'design_continuation' ||
+    item.messageSource === 'worker_update'
   ) {
     meta.messageSource = item.messageSource
   }

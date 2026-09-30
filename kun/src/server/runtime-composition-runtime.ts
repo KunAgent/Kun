@@ -13,8 +13,10 @@ import type { createRuntimeConfigController } from './runtime-composition-config
 import { bindRoomRuleStore } from '../rooms/room-rule-read-tool.js'
 import { bindRoomPeerStore } from '../rooms/room-peer-tools.js'
 import { bindImMessageService } from '../rooms/room-im-message-tool.js'
+import { bindRoomAppAccess } from '../rooms/room-app-connection-tools.js'
 import { bindAgentHandoffService } from '../agents/agent-handoff-tools.js'
 import { bindAgentSetupDirectory } from '../agents/agent-setup-tools.js'
+import { bindWorkbenchBridge } from '../workbench-bridge/bridge.js'
 import {
   persistRuntimeCapabilitySection,
   persistRuntimeMcpConfig,
@@ -54,6 +56,9 @@ export function createServerRuntimeComposition(
     agentObservability,
     events,
     threadActivity,
+    activityStore,
+    activityFacts,
+    taskWorkspaces,
     prefix,
     threadService,
     projectBoardService,
@@ -100,6 +105,7 @@ export function createServerRuntimeComposition(
     toolHost,
     extensionTools,
     canvasReceipts,
+    kunToolBridge,
     activeRuntimeRuns,
     runAgentTurn,
     runReview,
@@ -157,8 +163,15 @@ export function createServerRuntimeComposition(
   // retains the backing store. Bind both identities to the same room scope.
   bindRoomPeerStore(core.threadStore, roomComposition.rooms.deps.store)
   bindImMessageService(core.threadStore, roomComposition.rooms.service)
+  bindRoomAppAccess(core.threadStore, () => ({
+    servers: (config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG).mcp.servers,
+    statuses: Object.fromEntries(services.mcpProviders.diagnostics.map((item) => [item.id, item.status]))
+  }))
   bindAgentHandoffService(core.threadStore, roomComposition.rooms.handoffs)
   bindAgentSetupDirectory(core.threadStore, roomComposition.rooms.agents)
+  // The tool registry holds the lifecycle-fenced facade, which is a different identity from the room runtime's store.
+  bindWorkbenchBridge(core.threadStore, roomComposition.rooms.workbench)
+  roomComposition.rooms.workbench.attach({ taskWorkspaces, projectBoard: projectBoardService })
   return {
     threadService,
     historyReferences: core.historyReferences,
@@ -173,9 +186,27 @@ export function createServerRuntimeComposition(
     sessionStore,
     events,
     threadActivity,
+    activityStore,
+    activityFacts,
+    activityHibernation: agent.activityHibernation,
+    taskWorkspaces,
+    attribution: services.attribution,
+    changeRequests: services.changeRequests,
     eventStreamRegistry,
     llmDebug,
     canvasReceipts,
+    kunToolBridge,
+    harnessTokens: services.harnesses.tokens,
+    ade: {
+      stores: services.adeStores,
+      workerCallbacks: services.workerCallbacks,
+      terminalAgents: services.terminalAgents,
+      hookWriter: services.hookWriter,
+      manager: agent.managerRuntime,
+      deliverer: agent.dispatchDeliverer,
+      noticeCoordinator: agent.workerNoticeCoordinator,
+      races: agent.raceDeps
+    },
     liveCounters: () => ({
       inflight: inflight.size(),
       activeCaptures: llmDebug?.activeCaptureCount ?? 0
@@ -184,7 +215,25 @@ export function createServerRuntimeComposition(
       backgroundMaintenance.start()
       roomComposition.start()
     },
-    prepareForRequests: prepareUsageCarryover,
+    prepareForRequests: async () => {
+      await prepareUsageCarryover()
+      // Interrupted ask_manager waiters can never resolve after a restart;
+      // mark their persisted questions timed out before serving requests.
+      await services.workerCallbacks.reconcileAllTeams().catch(() => undefined)
+      // Terminal-agent units whose exit reports were lost with the last
+      // session come back as restoredUnconfirmed rows (05 §6.1).
+      await services.terminalAgents.restore().catch(() => undefined)
+      // Re-resolve dispatches stuck in delivering/uncertain before the crash
+      // (09 §5): found turns are adopted; missing ones redeliver idempotently.
+      await agent.managerRuntime.reconcileOnStartup().catch((error) => {
+        console.warn('[kun] ade dispatch reconciliation failed:', error)
+      })
+      // Restart replay (09 §6.2): notices still unacknowledged after the last
+      // run get one merged wake-up per manager thread.
+      await agent.workerNoticeCoordinator.replayPending().catch((error) => {
+        console.warn('[kun] ade worker-notice replay failed:', error)
+      })
+    },
     inspectThreadStore: () => services.threadStoreGuardian.run(),
     sessionGuardian: services.sessionGuardian,
     threadSnapshots: services.threadSnapshots,
@@ -248,6 +297,8 @@ export function createServerRuntimeComposition(
 	      jobs: extensionJobs,
 	      bundledSeedResults
 	    },
+	    harnesses: services.harnesses,
+	    providerConfigs: () => config.activeOptions.providers ?? {},
 	    modelClient,
 	    directModelClient,
 	    modelGateway: {
@@ -257,7 +308,8 @@ export function createServerRuntimeComposition(
 	      configuredPools: () => modelClient.configuredPools(),
 	      health: routeHealth,
 	      tests: routePoolTests,
-	      credentials: gatewayCredentials
+	      credentials: gatewayCredentials,
+	      modelCapabilities: core.modelCapabilities
 	    },
 	    modelConnections,
 	    modelConnectionOAuth,
@@ -458,6 +510,7 @@ export function createServerRuntimeComposition(
             shutdownLeases: async () => { await executionLeases?.shutdown() }
           })
         },
+        () => { agent.activityHibernation.stop() },
         async () => { await services.memoryDistillation.shutdown() },
         () => backgroundShellRuntime.shutdown(),
         () => extensionJobs.handleRuntimeShutdown(),

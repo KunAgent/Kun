@@ -24,10 +24,13 @@ export type ThreadComposerState = {
   composerModel: string
   composerProviderId: string
   composerReasoningEffort: ChatState['composerReasoningEffort']
+  /** ADE harness for the next turn; '' = inherit/provider inference (12 §7.2). */
+  composerHarnessId: string
+  composerCredentialMode: string
 }
 
 type ThreadLike = Pick<NormalizedThread, 'id' | 'model'> &
-  Partial<Pick<NormalizedThread, 'mode' | 'providerId'>>
+  Partial<Pick<NormalizedThread, 'mode' | 'providerId' | 'harnessId'>>
 
 export type ThreadComposerSelectionOptions = {
   hasUserMessages?: boolean
@@ -126,6 +129,7 @@ export function resolveThreadComposerState(
   const selection = threadComposerModelSelection(state, thread, options)
   const model = selection?.model ?? ''
   const providerId = selection?.providerId ?? ''
+  const stored = thread ? readThreadComposerSelection(thread.id) : null
   return {
     composerMode: composerModeForThread(
       thread && thread.mode !== undefined
@@ -139,7 +143,9 @@ export function resolveThreadComposerState(
       state.composerModelGroups,
       model,
       providerId
-    )
+    ),
+    composerHarnessId: stored?.harnessId ?? thread?.harnessId ?? '',
+    composerCredentialMode: stored?.credentialMode ?? ''
   }
 }
 

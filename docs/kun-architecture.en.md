@@ -121,7 +121,8 @@ or sub-agent scratch, keep “displayable” and “replayable to model” separ
 Renderer should only expose Kun. The UI sections listed below should be removed or
 kept removed:
 
-- Agent switcher: `AgentSwitcher` is no longer shown; `AGENT_CATALOG` only includes `kun`.
+- Agent switcher: no runtime-switching `AgentSwitcher` returns; the harness picker
+  chooses the per-turn engine (see `docs/ade/01-harness-routing.md`).
 - Top connection status + runtime diagnostics entry: runtime detection is no longer the
   user entrypoint.
 - Runtime insights / right panel: retain only `Changes`, `Preview`, `Plan`, and GUI workspace
@@ -129,7 +130,9 @@ kept removed:
 - Slash menu commands `/usage`, `/runtime`: these imply switchable runtimes and should be removed.
 - Settings provider selector: `Settings -> Agents` directly edits Kun config including:
   `binaryPath`, `port`, `autoStart`, `apiKey`, `baseUrl`, `runtimeToken`, `dataDir`,
-  `model`, `approvalPolicy`, `sandboxMode`, `insecure`.
+  `model`, `approvalPolicy`, `sandboxMode`, `insecure`. The Agents group may list
+  harnesses (detection, login, default permission mode); all of them execute inside
+  the Kun runtime.
 - Legacy painting/design starter cards stay removed. The first-class workspace
   entry points are Code and Work; Design is a task type in the Code workbench
   and uses its right whiteboard. Connect phone and automation keep their own routes.
@@ -290,6 +293,31 @@ Kun packages are organized by ports & adapters:
 Renderer should never implement agent business logic; it only maps HTTP client/SSE state
 and forwards results. When adding capability, add Kun tool or HTTP endpoint first,
 and only then add renderer wiring if needed (not both).
+
+## ADE: manager and workers
+
+Kun's Code mode can run as an ADE (Agentic Development Environment): one-to-one
+sessions may run on the Kun native loop or an external harness; a manager (the Kun
+native loop) can split tasks, dispatch workers, track progress, accept results, and
+report. The full design and implementation breakdown lives in
+[`docs/ade/README.md`](./ade/README.md). Invariants:
+
+- External agents enter only as a `DelegatedTurnRuntime` inside `kun serve`; the
+  GUI always talks to `kun serve`. The only exception is the terminal agent: its
+  PTY is held by the main process, but its state is reported through Kun's
+  ActivityStore.
+- A thread/turn's harness is frozen at admission; historical threads without a
+  `harnessId` infer it from provider kind and behave exactly as before.
+- A worker's effective permission is the intersection of the manager snapshot and
+  the requested harness level — never widened. Unattended paths never escalate.
+- Task workspaces (worktrees) are created, captured, and integrated by the host;
+  integration never touches uncommitted changes in the user's source checkout.
+- Handoff context is generated deterministically by code (`kun_handoff` brief),
+  not by model summarization; the immutable prefix in `docs/AGENTS.md` does not
+  change for ADE.
+- `agents.kun.ade.*` is the only settings surface; with `enabled` off no ADE UI
+  appears, and with `harnessRouter` off routing falls back to legacy provider
+  inference.
 
 ## Verification list
 

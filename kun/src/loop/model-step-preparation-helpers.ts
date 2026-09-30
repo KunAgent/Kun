@@ -1,7 +1,15 @@
 import type { ActingTurnModelRoute, Turn } from '../contracts/turns.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { TurnItem } from '../contracts/items.js'
-import type { ModelRouteTargetMetadata } from '../ports/model-client.js'
+import type { ModelRouteTargetMetadata, ModelToolSpec } from '../ports/model-client.js'
+import { GRAPH_DEFINE_PLAN_TOOL_NAME } from '../adapters/tool/graph-define-plan-tool.js'
+
+/** Graph planning exposes read-only discovery and structured input until its plan is committed. */
+export function graphPlanningStepTools(tools: readonly ModelToolSpec[], active: boolean): ModelToolSpec[] {
+  return active ? tools.filter((tool) =>
+    tool.name === GRAPH_DEFINE_PLAN_TOOL_NAME || tool.name === 'request_user_input' ||
+    tool.name === 'user_input' || tool.sideEffect === 'read-only') : [...tools]
+}
 import { LOCAL_MODEL_GATEWAY_PROVIDER_ID } from '../contracts/model-route-pool.js'
 import type { PptWorkflowScope } from '../ports/tool-host.js'
 import type {
@@ -180,6 +188,70 @@ export function kunContextBlock(
   content: string
 ): KunTurnContextBlock {
   return { kind, authority, content }
+}
+
+/**
+ * P1-25: while a Graph turn is still planning, the dynamic-context block
+ * listing the ready worker harnesses. Empty content is filtered downstream.
+ */
+export async function graphHarnessContextBlock(
+  orchestration: Turn['orchestration'],
+  planCommitted: boolean,
+  summary?: () => Promise<string | undefined>
+): Promise<KunTurnContextBlock> {
+  const content = orchestration === 'graph' && !planCommitted && summary
+    ? (await summary().catch(() => undefined)) ?? ''
+    : ''
+  return kunContextBlock('graph-harnesses', 'runtime', content)
+}
+
+/**
+ * P3-14: ADE manager turns (ade workspace, Kun harness, not a worker child)
+ * get a bounded runtime block with the delegation contract, live team state,
+ * and the harness routing menu. Worker threads carry parentThreadId and are
+ * excluded; external-harness managers skip the Kun-specific guidance.
+ */
+export async function adeManagerContextBlock(
+  thread:
+    | Pick<ThreadRecord, 'workspaceMode' | 'parentThreadId' | 'harnessId'>
+    | undefined,
+  threadId: string,
+  resolve?: (input: { threadId: string }) => Promise<string | undefined>
+): Promise<KunTurnContextBlock | null> {
+  if (
+    !resolve ||
+    !thread ||
+    thread.workspaceMode !== 'ade' ||
+    thread.parentThreadId ||
+    (thread.harnessId !== undefined && thread.harnessId !== 'kun')
+  ) {
+    return null
+  }
+  const content = (await resolve({ threadId }).catch(() => undefined)) ?? ''
+  return content ? kunContextBlock('ade-manager', 'runtime', content) : null
+}
+
+/**
+ * P1-25 + P3-14: planning-mode runtime blocks — the Graph harness menu while
+ * a plan is uncommitted and the bounded ADE manager block on manager turns.
+ */
+export async function planningTeamContextBlocks(
+  orchestration: Turn['orchestration'],
+  graphPlanCommitted: boolean,
+  thread:
+    | Pick<ThreadRecord, 'workspaceMode' | 'parentThreadId' | 'harnessId'>
+    | undefined,
+  threadId: string,
+  graphHarnessSummary?: () => Promise<string | undefined>,
+  adeManagerContext?: (input: { threadId: string }) => Promise<string | undefined>
+): Promise<KunTurnContextBlock[]> {
+  const [graph, ade] = await Promise.all([
+    graphHarnessContextBlock(orchestration, graphPlanCommitted, graphHarnessSummary),
+    adeManagerContextBlock(thread, threadId, adeManagerContext)
+  ])
+  return [graph, ade].filter(
+    (block): block is KunTurnContextBlock => block !== null
+  )
 }
 
 export function knowledgeBaseContextBlocks(

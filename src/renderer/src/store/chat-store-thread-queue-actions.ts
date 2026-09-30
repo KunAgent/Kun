@@ -4,6 +4,7 @@ import { fetchRuntimeQueuedTurnsBestEffort } from './queued-message-persistence'
 import { createClientTurnRequestId } from './chat-store-thread-actions-support'
 import { awaitQueueAdmission, queueAdmissionPending } from './queue-admission-fence'
 import type { ChatBlock, ReviewTarget } from '../agent/types'
+import { canSteer } from '../agent/harness-capability-ui'
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import {
@@ -513,7 +514,7 @@ export function createThreadQueueActions(
       !guidingGraphTurn &&
       delegated?.threadId === guidanceThreadId &&
       delegated.turnId === guidanceTurnId &&
-      delegated.capabilities.liveSteering === false
+      !canSteer(delegated)
     ) {
       set({ error: i18n.t('common:guideQueuedMessageUnsupported') })
       return false

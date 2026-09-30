@@ -143,6 +143,43 @@
 .rooms-composer-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rooms-composer-chip:hover:not(:disabled) { background: var(--ds-surface-hover); color: var(--ds-text); }
 
+.rooms-composer-image-attachment {
+  display: grid;
+  width: 82px;
+  min-width: 0;
+  gap: 3px;
+  color: var(--ds-text-muted);
+  text-align: left;
+  font-size: 11px;
+}
+.rooms-composer-image-thumb {
+  position: relative;
+  display: grid;
+  width: 82px;
+  height: 72px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--ds-chip-border);
+  border-radius: 9px;
+  background: var(--ds-chip-muted-bg);
+}
+.rooms-composer-image-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.rooms-composer-image-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  padding: 2px;
+  border-radius: 5px;
+  background: var(--ds-surface-card);
+  color: var(--ds-text);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+}
+.rooms-composer-image-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rooms-composer-image-remove:hover { background: var(--ds-surface-hover); }
+.rooms-composer-image-remove:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+
 .rooms-composer-reply {
   display: flex;
   min-width: 0;

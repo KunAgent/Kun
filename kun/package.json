@@ -80,6 +80,7 @@
     "dev": "tsc -p tsconfig.build.json --watch"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "1.4.0",
     "@anthropic-ai/claude-agent-sdk": "0.3.220",
     "@computer-use/nut-js": "^4.2.0",
     "@cursor/sdk": "1.0.24",
@@ -105,10 +106,10 @@
     "typescript-language-server": "5.3.0",
     "undici": "^7.29.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "yaml": "^2.9.0",
     "yauzl": "^3.4.0",
     "yazl": "^3.3.1",
-    "zod": "^4.4.3",
-    "yaml": "^2.9.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

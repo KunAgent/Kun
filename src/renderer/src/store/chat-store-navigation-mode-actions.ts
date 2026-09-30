@@ -151,7 +151,32 @@ let trayActionUnsubscribe: (() => void) | null = null
 
 export function createNavigationModeActions(
   { set, get, sseAbortRef }: StoreActionContext
-): Pick<ChatState, 'openCode' | 'openDesign' | 'clearActiveThreadSelection' | 'openWrite' | 'ensureWriteThreadForWorkspace' | 'createWriteThread' | 'selectWriteThread' | 'ensureDesignThreadForWorkspace' | 'createDesignThread'> {
+): Pick<ChatState, 'openCode' | 'openAde' | 'startAdeDraft' | 'openDesign' | 'clearActiveThreadSelection' | 'openWrite' | 'ensureWriteThreadForWorkspace' | 'createWriteThread' | 'selectWriteThread' | 'ensureDesignThreadForWorkspace' | 'createDesignThread'> {
+  const clearSelection = (patch: Partial<ChatState>): void => {
+    const state = get()
+    if (!state.activeThreadId && state.blocks.length === 0 && !state.busy) {
+      set(patch)
+      return
+    }
+    const nextWatch = { ...state.watchTurnCompletion }
+    if (state.activeThreadId && state.busy) {
+      nextWatch[state.activeThreadId] = true
+      watchTurnCompletionNotification(
+        state.activeThreadId,
+        Date.now(),
+        turnCompleteNotificationSource(state.activeThreadId, state)
+      )
+    }
+    sseAbortRef.current?.abort()
+    sseAbortRef.current = null
+    clearBusyWatchdog()
+    set({
+      ...clearedThreadSelection(),
+      watchTurnCompletion: nextWatch,
+      ...patch
+    })
+    syncTurnCompletionPoll(set, get)
+  }
   return {
   openCode: async (options) => {
     const activationAllowed = (): boolean => options?.activationGuard?.() !== false
@@ -241,15 +266,56 @@ export function createNavigationModeActions(
     syncTurnCompletionPoll(set, get)
   },
 
-  openDesign: () => {
-    // Standalone Design is a legacy route. Preserve the selected conversation
-    // and expose it through the shared Code workbench instead.
-    set({ route: 'chat' })
-  },
-
-  clearActiveThreadSelection: () => {
+  openAde: async (options) => {
+    const activationAllowed = (): boolean => options?.activationGuard?.() !== false
+    if (!activationAllowed()) return
     const state = get()
-    if (!state.activeThreadId && state.blocks.length === 0 && !state.busy) return
+    if (state.adeDraftOpen && !state.activeThreadId) {
+      if (activationAllowed()) set({ route: 'ade' })
+      return
+    }
+    const activeThread = state.activeThreadId
+      ? (state.adeThreads ?? []).find((thread) => thread.id === state.activeThreadId) ?? null
+      : null
+    // Stay put when the active session already belongs to ADE mode.
+    if (activeThread && activeThread.archived !== true) {
+      if (activationAllowed()) set({
+        route: 'ade',
+        adeDraftOpen: false,
+        ...(state.adeDraftOpen ? { adeDraftRevision: state.adeDraftRevision + 1 } : {})
+      })
+      return
+    }
+
+    // ADE 模式记忆与 Code 互相独立:优先恢复上次打开的 ADE 会话。
+    const rememberedId = state.lastAdeThreadId?.trim()
+    const rememberedThread = rememberedId
+      ? (state.adeThreads ?? []).find(
+          (thread) => thread.id === rememberedId && thread.archived !== true
+        ) ?? null
+      : null
+
+    if (!activationAllowed()) return
+    set({ route: 'ade' })
+    if (rememberedThread && state.runtimeConnection === 'ready') {
+      await get().selectThread(rememberedThread.id, {
+        selectionGuard: activationAllowed
+      })
+      return
+    }
+
+    const target = latestThread(
+      (state.adeThreads ?? []).filter((thread) => thread.archived !== true)
+    )
+    if (target && state.runtimeConnection === 'ready') {
+      await get().selectThread(target.id, { selectionGuard: activationAllowed })
+      return
+    }
+
+    if (!activationAllowed()) return
+    sseAbortRef.current?.abort()
+    sseAbortRef.current = null
+    clearBusyWatchdog()
     const nextWatch = { ...state.watchTurnCompletion }
     if (state.activeThreadId && state.busy) {
       nextWatch[state.activeThreadId] = true
@@ -259,14 +325,32 @@ export function createNavigationModeActions(
         turnCompleteNotificationSource(state.activeThreadId, state)
       )
     }
-    sseAbortRef.current?.abort()
-    sseAbortRef.current = null
-    clearBusyWatchdog()
     set({
       ...clearedThreadSelection(),
+      route: 'ade',
+      adeDraftOpen: false,
+      ...(state.adeDraftOpen ? { adeDraftRevision: state.adeDraftRevision + 1 } : {}),
       watchTurnCompletion: nextWatch
     })
     syncTurnCompletionPoll(set, get)
+  },
+
+  startAdeDraft: () => {
+    clearSelection({ route: 'ade', adeDraftOpen: true, adeDraftRevision: get().adeDraftRevision + 1 })
+  },
+
+  openDesign: () => {
+    // Standalone Design is a legacy route. Preserve the selected conversation
+    // and expose it through the shared Code workbench instead.
+    set({ route: 'chat' })
+  },
+
+  clearActiveThreadSelection: () => {
+    const state = get()
+    clearSelection({
+      adeDraftOpen: false,
+      ...(state.adeDraftOpen ? { adeDraftRevision: state.adeDraftRevision + 1 } : {})
+    })
   },
 
   openWrite: async (options) => {

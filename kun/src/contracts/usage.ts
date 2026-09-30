@@ -263,9 +263,13 @@ export const TurnUsageCountersSchema = z.object({
 }).strict()
 export type TurnUsageCounters = z.infer<typeof TurnUsageCountersSchema>
 
+export const UsageEventSourceSchema = z.enum(['native', 'harness-gateway', 'harness-reported'])
+export type UsageEventSource = z.infer<typeof UsageEventSourceSchema>
+
 export const TurnUsageBucketSchema = TurnUsageCountersSchema.extend({
   turn_id: z.string().min(1),
-  reference_price_breakdown: TurnUsageReferencePriceBreakdownSchema.nullable().optional()
+  reference_price_breakdown: TurnUsageReferencePriceBreakdownSchema.nullable().optional(),
+  sources: z.array(UsageEventSourceSchema).optional()
 }).strict()
 export type TurnUsageBucket = z.infer<typeof TurnUsageBucketSchema>
 

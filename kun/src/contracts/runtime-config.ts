@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import {
+  AdeConfigSchema,
   ContextCompactionConfigSchema,
   FastContextConfigSchema,
   GraphRuntimeConfigSchema,
+  HarnessesConfigSchema,
   KunServeConfigSchema,
   LabConfigSchema,
   ModelConfigSchema,
@@ -63,6 +65,8 @@ export const RuntimeConfigApplyRequest = z
     contextCompaction: ContextCompactionConfigSchema.optional(),
     runtime: RuntimeTuningConfigSchema.optional(),
     graph: GraphRuntimeConfigSchema.optional(),
+    harnesses: HarnessesConfigSchema.optional(),
+    ade: AdeConfigSchema.optional(),
     roles: RolesConfigSchema.optional(),
     fastContext: FastContextConfigSchema.optional(),
     capabilities: KunCapabilitiesConfig.optional(),
@@ -85,8 +89,21 @@ export const RuntimeConfigApplyRequest = z
     }
   })
 
+/**
+ * One config section whose requested state could not be applied while the
+ * rest of the request committed normally (P4-04 segmented apply). Sparse:
+ * only rejected sections appear; absent sections applied.
+ */
+export const RuntimeConfigApplyRejectedSection = z.object({
+  code: z.string().min(1),
+  message: z.string().min(1)
+}).strict()
+
 export const RuntimeConfigApplyResponse = z.discriminatedUnion('ok', [
-  z.object({ ok: z.literal(true) }).strict(),
+  z.object({
+    ok: z.literal(true),
+    rejectedSections: z.record(z.string(), RuntimeConfigApplyRejectedSection).optional()
+  }).strict(),
   z
     .object({
       ok: z.literal(false),
@@ -98,4 +115,5 @@ export const RuntimeConfigApplyResponse = z.discriminatedUnion('ok', [
 
 export type RuntimeConfigApplyRequest = z.infer<typeof RuntimeConfigApplyRequest>
 export type RuntimeConfigApplyResponse = z.infer<typeof RuntimeConfigApplyResponse>
+export type RuntimeConfigApplyRejectedSection = z.infer<typeof RuntimeConfigApplyRejectedSection>
 export type BrowserUseHostBinding = z.infer<typeof BrowserUseHostBinding>

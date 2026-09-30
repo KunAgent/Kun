@@ -41,7 +41,7 @@ export {
   skillRootShortLabel
 } from './plugin-marketplace-catalog'
 import { GitHubMcpAuthorizationDialog } from './GitHubMcpAuthorizationDialog'
-import { useGitHubMcpAuthorization } from './use-github-mcp-authorization'
+import { useGitHubMcpAuthorization, type GitHubMcpRuntimeCheck } from './use-github-mcp-authorization'
 import { PluginMarketplaceContent } from './PluginMarketplaceContent'
 import { runtimeOverlayErrorMessage } from './PluginMarketplaceRuntimePanels'
 import { RECOMMENDED_ITEMS, isSystemManagedMcpServerId, itemDescription, itemTitle, mcpMarketplaceItemsFromConfigAndDiagnostics, overlaySystemManagedMcpDiagnostics, recommendedMarketplaceItemsForMcpConfig, skillMarketplaceItemsFromDiscoveredSkills, skillNameLooksValid, skillRootOptionsFromRoots } from './plugin-marketplace-catalog'
@@ -147,17 +147,17 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
     })
   }, [activeKind, mcpLoaded, readMcpConfig])
 
-  const refreshMcpRuntimeOverlay = useCallback(async (): Promise<void> => {
+  const refreshMcpRuntimeOverlay = useCallback(async (): Promise<GitHubMcpRuntimeCheck | null> => {
     if (typeof window.kunGui?.runtimeRequest !== 'function') {
       setRuntimeInfo(null)
       setToolDiagnostics(null)
       setRuntimeOverlayError(t('pluginMcpRuntimeUnavailable'))
-      return
+      return null
     }
     const provider = getProvider()
     if (!provider.getRuntimeInfo && !provider.getToolDiagnostics) {
       setRuntimeOverlayError(t('pluginMcpRuntimeUnavailable'))
-      return
+      return null
     }
     setRuntimeOverlayLoading(true)
     setRuntimeOverlayError('')
@@ -176,6 +176,15 @@ export function PluginMarketplaceView({ leftSidebarCollapsed, onToggleLeftSideba
         .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
         .map((result) => runtimeOverlayErrorMessage(result.reason, t('pluginMcpRuntimeUnavailable')))
       if (errors.length > 0) setRuntimeOverlayError(errors[0] ?? t('pluginActionFailed'))
+      const github = diagnosticsResult.status === 'fulfilled'
+        ? diagnosticsResult.value?.mcpServers?.find((server) => server.id === BUILTIN_GITHUB_MCP_SERVER_ID)
+        : undefined
+      return github
+        ? {
+            status: typeof github.status === 'string' ? github.status : undefined,
+            lastError: typeof github.lastError === 'string' ? github.lastError : undefined
+          }
+        : null
     } finally {
       setRuntimeOverlayLoading(false)
     }

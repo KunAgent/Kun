@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Archive, ArchiveRestore, MessageSquarePlus, Pin, PinOff, Plus, Search, Settings, UserRound, Users } from 'lucide-react'
+import { Archive, ArchiveRestore, MessageSquarePlus, Pin, PinOff, Plus, Search, Settings, Trash2, UserRound, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { RoomSidebarEntry } from '@shared/rooms-api'
+import type { AgentIdentity, RoomSidebarEntry } from '@shared/rooms-api'
 import { RoomAvatar } from '../../components/rooms/RoomAvatar'
 import { MobileSheet } from '../sheets/MobileSheet'
 import { useLongPress } from '../lib/use-long-press'
@@ -12,6 +12,9 @@ import { MobileLoadingDots, MobileLoadingState } from '../lib/MobileLoading'
 export type MobileRoomsFilter = 'all' | 'unread' | 'attention'
 export type MobileRoomsHomeProps = {
   rooms: readonly RoomSidebarEntry[]
+  agents: readonly AgentIdentity[]
+  view: 'chats' | 'agents'
+  deletedOnly: boolean
   search: string
   filter: MobileRoomsFilter
   loading: boolean
@@ -20,9 +23,14 @@ export type MobileRoomsHomeProps = {
   onSearch: (value: string) => void
   onFilter: (filter: MobileRoomsFilter) => void
   onOpen: (entry: RoomSidebarEntry) => void
+  onOpenAgent: (id: string) => void
+  onView: (view: 'chats' | 'agents') => void
+  onDeletedOnly: (value: boolean) => void
   onPin: (entry: RoomSidebarEntry) => void
   onSettings: (entry: RoomSidebarEntry) => void
   onArchive: (entry: RoomSidebarEntry) => void
+  onDelete: (entry: RoomSidebarEntry) => void
+  onRestore: (entry: RoomSidebarEntry) => void
   onCreate: (kind: 'chat' | 'group') => void
   onProfile: () => void
   onRetry: () => void
@@ -32,11 +40,12 @@ export type MobileRoomsHomeProps = {
 const FILTER_LABELS = { all: 'roomsFilter_all', unread: 'roomsFilter_unread', attention: 'roomsFilter_attention' } as const
 
 export function MobileRoomsHome(props: MobileRoomsHomeProps) {
-  const { rooms, search, filter, loading, error, hasMore, onSearch, onFilter, onOpen, onCreate, onProfile,
+  const { rooms, agents, view, deletedOnly, search, filter, loading, error, hasMore, onSearch, onFilter, onOpen, onCreate, onProfile,
     onRetry, onLoadMore } = props
   const { t } = useTranslation('common')
   const [menuOpen, setMenuOpen] = useState(false)
   const [actionEntry, setActionEntry] = useState<RoomSidebarEntry | null>(null)
+  const [confirmEntry, setConfirmEntry] = useState<RoomSidebarEntry | null>(null)
   const longPress = useLongPress<RoomSidebarEntry>(setActionEntry)
   useEffect(() => {
     if (!menuOpen) return
@@ -56,7 +65,7 @@ export function MobileRoomsHome(props: MobileRoomsHomeProps) {
       <button type="button" className="kun-mobile-rooms-me" onClick={onProfile} aria-label={t('roomsMyAvatar')}>
         <RoomAvatar id="user" label={t('roomsMyAvatar')} size={32} />
       </button>
-      <h1>{t('roomsLabel')}</h1>
+      <h1>{t(view === 'agents' ? 'agentsDirectory' : 'roomsConversations')}</h1>
       <button type="button" onClick={() => setMenuOpen(!menuOpen)} aria-label={t('roomsSidebarNew')}
         aria-haspopup="menu" aria-expanded={menuOpen}><Plus aria-hidden /></button>
       {menuOpen ? <>
@@ -68,38 +77,64 @@ export function MobileRoomsHome(props: MobileRoomsHomeProps) {
             <Users size={20} aria-hidden />{t('directCreateGroup')}</button>
           <button type="button" role="menuitem" onClick={pick(onProfile)}>
             <UserRound size={20} aria-hidden />{t('roomsMyAvatar')}</button>
+          <button type="button" role="menuitem" onClick={pick(() => props.onDeletedOnly(!deletedOnly))}>
+            <Trash2 size={20} aria-hidden />{t(deletedOnly ? 'roomsConversations' : 'roomsRecentlyDeleted')}</button>
         </div>
       </> : null}
     </header>
+    <div className="kun-mobile-room-sections" role="group" aria-label={t('roomsConversations')}>
+      <button type="button" aria-pressed={view === 'chats'} onClick={() => props.onView('chats')}>{t('roomsConversations')}</button>
+      <button type="button" aria-pressed={view === 'agents'} onClick={() => props.onView('agents')}>{t('agentsDirectory')}</button>
+    </div>
     <label className="kun-mobile-rooms-search"><Search size={16} aria-hidden />
       <input type="search" value={search} onChange={(event) => onSearch(event.target.value)}
         placeholder={t('roomsUnifiedSearch')} aria-label={t('roomsUnifiedSearch')} />
     </label>
-    <div className="kun-mobile-room-filters" role="group" aria-label={t('roomsLabel')}>
+    {view === 'chats' ? <div className="kun-mobile-room-filters" role="group" aria-label={t('roomsLabel')}>
       {(['all', 'unread', 'attention'] as const).map((value) => <button key={value} type="button"
-        aria-pressed={filter === value} onClick={() => onFilter(value)}>{t(FILTER_LABELS[value])}</button>)}
-    </div>
+        aria-pressed={!deletedOnly && filter === value} onClick={() => { props.onDeletedOnly(false); onFilter(value) }}>{t(FILTER_LABELS[value])}</button>)}
+      <button type="button" aria-pressed={deletedOnly} onClick={() => props.onDeletedOnly(true)}>{t('roomsRecentlyDeleted')}</button>
+    </div> : null}
     <div className="kun-mobile-room-list" aria-busy={loading}>
       {error ? <div role="alert"><p>{error}</p>
         <button type="button" disabled={loading} onClick={onRetry}>{t('roomsRefresh')}</button></div> : null}
+      {view === 'agents' ? <>{!error && agents.length === 0 ? loading ? <MobileLoadingState label={t('roomsLoading')} />
+        : <p role="status" className="kun-mobile-rooms-empty">{search ? t('roomsSearchNoResults') : t('agentsEmpty')}</p> : null}
+      <ul className="kun-mobile-agent-contacts">{agents.map((agent) => <li key={agent.id}>
+        <button type="button" onClick={() => props.onOpenAgent(agent.id)}>
+          <RoomAvatar avatar={agent.avatar} id={agent.id} label={agent.name} size={40} />
+          <span><strong>{agent.name}</strong><small>{agent.title}</small></span>
+        </button></li>)}</ul></> : <>
       {!error && rooms.length === 0 ? loading ? <MobileLoadingState label={t('roomsLoading')} />
         : <p role="status" className="kun-mobile-rooms-empty">{search ? t('roomsSearchNoResults') : t('roomsEmpty')}</p> : null}
       <ul>{rooms.map((entry) => <MobileRoomRow key={entry.id} entry={entry}
-        pressHandlers={longPress(entry)} onOpen={() => onOpen(entry)} />)}</ul>
+        pressHandlers={longPress(entry)} onOpen={() => { if (!entry.deleted) onOpen(entry) }} />)}</ul>
+      </>}
       {hasMore ? <button type="button" className="kun-mobile-rooms-more" disabled={loading} onClick={onLoadMore}>
         {loading ? <MobileLoadingDots /> : t('roomsLoadMore')}</button> : null}
     </div>
     <MobileSheet open={Boolean(actionEntry)} title={actionName} closeLabel={t('close')} onClose={() => setActionEntry(null)}>
       {actionEntry ? <ul className="kun-mobile-action-list">
+        {actionEntry.deleted ? <li><button type="button" onClick={act(props.onRestore)}>
+          <ArchiveRestore size={18} aria-hidden />{t('roomsRestoreConversation')}</button></li> : <>
         <li><button type="button" onClick={act(props.onPin)}>
           {actionEntry.pinned ? <PinOff size={18} aria-hidden /> : <Pin size={18} aria-hidden />}
-          {t(actionEntry.pinned ? 'roomsSidebarUnpin' : 'roomsPin')}</button></li>
+          {t(actionEntry.pinned ? 'roomsUnpinConversation' : 'roomsPinConversation')}</button></li>
         {actionEntry.roomId ? <li><button type="button" onClick={act(props.onSettings)}>
           <Settings size={18} aria-hidden />{t('roomsSettings')}</button></li> : null}
         <li><button type="button" data-variant={actionEntry.archived ? undefined : 'danger'} onClick={act(props.onArchive)}>
           {actionEntry.archived ? <ArchiveRestore size={18} aria-hidden /> : <Archive size={18} aria-hidden />}
-          {t(actionEntry.archived ? 'agentsRestore' : actionEntry.agentId ? 'agentsArchive' : 'roomsArchive')}</button></li>
+          {t(actionEntry.archived ? 'roomsRestoreArchivedConversation' : 'roomsArchiveConversation')}</button></li>
+        <li><button type="button" data-variant="danger" onClick={() => { setConfirmEntry(actionEntry); setActionEntry(null) }}>
+          <Trash2 size={18} aria-hidden />{t('roomsDeleteConversation')}</button></li></>}
       </ul> : null}
+    </MobileSheet>
+    <MobileSheet open={Boolean(confirmEntry)} title={t('roomsDeleteConversation')} closeLabel={t('close')} onClose={() => setConfirmEntry(null)}>
+      {confirmEntry ? <div className="kun-mobile-delete-confirm">
+        <p>{t('roomsDeleteConversationHint', { name: confirmEntry.name })}</p>
+        <button type="button" onClick={() => setConfirmEntry(null)}>{t('roomsCancel')}</button>
+        <button type="button" data-variant="danger" onClick={() => { props.onDelete(confirmEntry); setConfirmEntry(null) }}>{t('roomsDeleteConversation')}</button>
+      </div> : null}
     </MobileSheet>
   </section>
 }

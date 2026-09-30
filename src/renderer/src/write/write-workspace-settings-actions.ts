@@ -4,6 +4,7 @@ import {
   resolveWriteInlineCompletionApiKey
 } from '@shared/app-settings'
 import { rendererRuntimeClient } from '../agent/runtime-client'
+import { mobileDocumentsWorkspaceRoot } from '../mobile/work/mobile-documents-workspace'
 import { prepareActiveWriteFileForNavigation } from './write-workspace-file-action-helpers'
 import type { WriteWorkspaceGet, WriteWorkspaceSet, WriteWorkspaceState } from './write-workspace-store-types'
 import {
@@ -95,7 +96,7 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
   let inflightLoad: Promise<void> | null = null
   let queuedLoad: Promise<void> | null = null
 
-  const runLoadWriteSettings = async (): Promise<void> => {
+  const runLoadWriteSettings = async (mobile = false): Promise<void> => {
     const generation = nextSettingsRequest()
     const inlineRevisionAtRequest = inlineCompletionSettingsRevision
     const inlineWritePendingAtRequest = pendingInlineCompletionWrites > 0
@@ -108,6 +109,19 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
         inlineRevisionAtRequest,
         inlineWritePendingAtRequest
       )
+      // The Remote phone owns its Work/Papers navigation locally. Never
+      // apply the host's persisted paper surface switch to that browser.
+      if (mobile) {
+        const root = mobileDocumentsWorkspaceRoot({
+          workspaces: write.workspaces,
+          activeWorkspaceRoot: write.activeWorkspaceRoot,
+          defaultWorkspaceRoot: write.defaultWorkspaceRoot,
+          paperModeEnabled: write.paperMode.enabled
+        })
+        await get().initializeWorkspace(root)
+        if (requestIsCurrent(generation)) set({ settingsLoading: false })
+        return
+      }
       // Paper mode re-roots the workspace at the active library; a same-root
       // surface switch must force a full reinit so the papers-namespaced
       // layout replaces the docs one (and vice versa).
@@ -146,15 +160,15 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
   }
 
   return {
-    loadWriteSettings: () => {
+    loadWriteSettings: (options) => {
       if (inflightLoad) {
         queuedLoad ??= inflightLoad.then(() => {
           queuedLoad = null
-          return get().loadWriteSettings()
+          return get().loadWriteSettings(options)
         })
         return queuedLoad
       }
-      inflightLoad = runLoadWriteSettings().finally(() => {
+      inflightLoad = runLoadWriteSettings(options?.mobile === true).finally(() => {
         inflightLoad = null
       })
       return inflightLoad

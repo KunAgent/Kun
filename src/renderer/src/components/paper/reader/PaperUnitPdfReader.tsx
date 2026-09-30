@@ -631,6 +631,7 @@ export function PaperUnitPdfReader({
         drawerOpen={drawerOpen}
         onToggleDrawer={() => setDrawerOpen((open) => !open)}
         onBackToLibrary={() => openPaperViewTab('library')}
+        onShowInfo={() => usePaperModeStore.getState().openInfoDrawer(unitRelDir)}
         layoutPreset={layoutPreset}
         onApplyLayout={applyLayout}
         immersive={immersive}

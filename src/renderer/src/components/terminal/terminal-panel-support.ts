@@ -13,6 +13,14 @@ export type TerminalTab = {
   index: number
   title?: string
   target: TerminalTarget
+  /**
+   * P4-09: command text written into the PTY input once, right after the
+   * fresh session is created — never on re-attach and never with a trailing
+   * Enter, so the user reviews and executes it themselves.
+   */
+  prefill?: string
+  /** P4-09: harness re-probed (`/v1/harnesses/:id/probe`) when this PTY exits. */
+  probeHarnessId?: string
 }
 
 export type TerminalTabContextMenu = {

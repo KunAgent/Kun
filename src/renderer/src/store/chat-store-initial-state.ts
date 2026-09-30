@@ -1,6 +1,7 @@
 import {
   mergeComposerPickList,
   readStoredComposerFastMode,
+  readStoredComposerIsolation,
   readStoredComposerPersonaId,
   readStoredComposerMode
 } from './chat-store-helpers'
@@ -62,6 +63,10 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     threadHasMoreHistory: false,
     threadHistoryLoading: false,
     lastCodeThreadId: null,
+    lastAdeThreadId: null,
+    adeDraftOpen: false,
+    adeDraftRevision: 0,
+    adeThreads: [],
     activeThreadRelation: null,
     activeThreadParentId: null,
     activeThreadGoal: null,
@@ -73,6 +78,7 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     usageRefreshKey: 0,
     lastContextSnapshot: null,
     lastDelegatedRuntimeState: null,
+    lastHarnessRuntimeState: null,
     lastTurnUsage: null,
     turnTimingMetrics: new Map(),
     busy: false,
@@ -96,6 +102,10 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     graphEnabled: false,
     composerModel: '',
     composerProviderId: '',
+    composerHarnessId: '',
+    composerCredentialMode: '',
+    composerIsolation: readStoredComposerIsolation(),
+    composerWorktreeStartFrom: undefined,
     composerReasoningEffort: 'max' as const,
     composerFastMode: readStoredComposerFastMode(),
     composerAgentId: '',

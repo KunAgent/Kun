@@ -7,6 +7,7 @@ import memory from './settings/memory.json'
 import migrationSystem from './settings/migration-system.json'
 import codePersonas from './settings/code-personas.json'
 import speak from './settings/speak.json'
+import ade from './settings/ade.json'
 
 const settings = {
   ...navigationProviders,
@@ -19,6 +20,7 @@ const settings = {
   ...codePersonas,
   guiUpdateErrFeedUnavailable: 'अभी कोई अपडेट स्रोत उपलब्ध नहीं है। बाद में फिर कोशिश करें या डाउनलोड पृष्ठ का उपयोग करें।',
   ...speak,
+  ...ade,
 }
 
 export default settings

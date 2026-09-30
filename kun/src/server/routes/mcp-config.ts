@@ -7,6 +7,7 @@ import { ERRORS } from './runtime-error.js'
 
 const ServerId = z.string().trim().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/u)
 const EnabledRequest = z.object({ enabled: z.boolean() }).strict()
+const RemoteAppRequest = z.object({ url: z.string().url() }).strict()
 
 export async function listMcpConfig(runtime: ServerRuntime): Promise<JsonResponse> {
   if (!runtime.mcpConfig) return ERRORS.unavailable('MCP configuration management is unavailable')
@@ -19,7 +20,7 @@ export async function listMcpConfig(runtime: ServerRuntime): Promise<JsonRespons
       transport: server.transport,
       target: safeTarget(server),
       trustScope: server.trustScope,
-      oauth: Boolean(server.oauth),
+      oauth: Boolean(server.oauth && server.oauth.enabled !== false),
       timeoutMs: server.timeoutMs
     }))
   })
@@ -38,6 +39,34 @@ export async function putMcpConfig(
   const parsed = McpServerConfig.safeParse(body.value)
   if (!parsed.success) return ERRORS.validation('invalid MCP server configuration', parsed.error.issues)
   const result = await runtime.setMcpServer(id.data, parsed.data)
+  if (!result.ok) return ERRORS.conflict(result.message)
+  return listMcpConfig(runtime)
+}
+
+/** Narrow user-action route: install an OAuth-capable HTTPS MCP app without
+ * exposing the general MCP configuration writer to the renderer. */
+export async function addRemoteMcpApp(
+  runtime: ServerRuntime,
+  serverId: string,
+  request: Request
+): Promise<JsonResponse | Response> {
+  if (!runtime.mcpConfig || !runtime.setMcpServer) return ERRORS.unavailable('MCP configuration management is unavailable')
+  const id = ServerId.safeParse(serverId)
+  if (!id.success) return ERRORS.validation('invalid MCP server id', id.error.issues)
+  if (runtime.mcpConfig().servers[id.data]) return ERRORS.conflict(`MCP server already exists: ${id.data}`)
+  const body = await readJsonBody(request)
+  if (!body.ok) return body.response
+  const parsed = RemoteAppRequest.safeParse(body.value)
+  if (!parsed.success) return ERRORS.validation('invalid remote app configuration', parsed.error.issues)
+  const url = new URL(parsed.data.url)
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
+    return ERRORS.validation('remote app URL must be HTTPS without embedded credentials, a query, or a fragment')
+  }
+  const server = McpServerConfig.parse({
+    enabled: true, transport: 'streamable-http', url: url.toString(), trustScope: 'user',
+    oauth: { enabled: true, scopes: [], callbackTimeoutMs: 120_000 }
+  })
+  const result = await runtime.setMcpServer(id.data, server)
   if (!result.ok) return ERRORS.conflict(result.message)
   return listMcpConfig(runtime)
 }

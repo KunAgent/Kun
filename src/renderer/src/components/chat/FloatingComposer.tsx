@@ -80,6 +80,8 @@ import {
   type ComposerReasoningEffort
 } from './FloatingComposerModelPicker'
 import { FloatingComposerAgentPicker } from './FloatingComposerAgentPicker'
+import { FloatingComposerHarnessPicker } from './FloatingComposerHarnessPicker'
+import { FloatingComposerIsolationPicker } from './FloatingComposerIsolationPicker'
 import { FloatingComposerUserInputPanel } from './FloatingComposerUserInputPanel'
 import { BackgroundShellOverlay } from './BackgroundShellOverlay'
 import {
@@ -110,8 +112,11 @@ import type { DesignComposerContext } from '../../design/design-composer-context
 import { useComposerFileMentions } from './use-composer-file-mentions'
 import { FloatingComposerFileMentionMenu } from './FloatingComposerFileMentionMenu'
 import { useComposerSlashCommandMenu } from './use-composer-slash-command-menu'
+import { useAdeComposerControls } from './use-ade-composer-controls'
 import { FloatingComposerSlashCommandMenu } from './FloatingComposerSlashCommandMenu'
 import { FloatingComposerTodoProgress } from './FloatingComposerTodoProgress'
+import { FloatingComposerWorkersPill } from './FloatingComposerWorkersPill'
+import { FloatingComposerDispatchableAgents } from './FloatingComposerDispatchableAgents'
 import { FloatingComposerGraphProgress } from './FloatingComposerGraphProgress'
 import { FloatingComposerAboveInputStack } from './FloatingComposerAboveInputStack'
 import {
@@ -267,10 +272,9 @@ export function FloatingComposer({
   // side conversations) provide their own blocks + resolver because their
   // compact route would otherwise be mistaken for a duplicate main composer.
   const userInputBlocks = userInputBlocksOverride ?? blocks
-  const hasThreadScopedUserInput =
-    userInputBlocksOverride !== undefined && onResolveUserInput !== undefined
   const canSurfaceUserInput =
-    hasThreadScopedUserInput || (!side && shouldSurfaceComposerUserInput(route, compact))
+    (userInputBlocksOverride !== undefined && onResolveUserInput !== undefined) ||
+    (!side && shouldSurfaceComposerUserInput(route, compact))
   const pendingUserInputBlock = useMemo<PendingUserInputBlock | null>(() => {
     if (!canSurfaceUserInput) return null
     // Only surface a request the live runtime is actively awaiting. A stale
@@ -333,22 +337,13 @@ export function FloatingComposer({
     hasActiveThread,
     hasConversationStarted
   })
-  const threadUsageState = useThreadUsageState(
-    activeThreadId,
+  const threadUsageState = useThreadUsageState(activeThreadId,
     showUsageHistoryFooter && Boolean(activeThreadId) && !hydratingActiveThread,
-    `${activeThreadId ?? ''}:${usageRefreshKey}`
-  )
+    `${activeThreadId ?? ''}:${usageRefreshKey}`)
   const threadUsage = threadUsageState.usage
-  /**
-   * Prefer the latest usage SSE event while a thread is active, then fall back
-   * to the persisted REST summary after reloads, thread switches, or missed
-   * events. Both paths carry provider-independent timing aggregates.
-   */
+  // Prefer the live usage SSE event; fall back to the REST summary after reloads.
   const liveThreadUsage = useChatStore((s) =>
-    s.lastTurnUsage && s.lastTurnUsage.threadId === s.activeThreadId
-      ? s.lastTurnUsage.snapshot
-      : null
-  )
+    s.lastTurnUsage?.threadId === s.activeThreadId ? s.lastTurnUsage.snapshot : null)
   const timingThreadUsage = liveThreadUsage ?? threadUsage
   const displayThreadUsage = mergeLiveThreadUsage(threadUsage, liveThreadUsage)
   const effectiveWorkspaceRoot = normalizeWorkspaceRoot(activeThreadWorkspace || workspaceRootOverride || workspaceRoot)
@@ -365,11 +360,8 @@ export function FloatingComposer({
   )
 
   const canEditComposer = !disabled && !hydratingActiveThread && (route === 'claw' ? clawHasInboundConversation : true)
-  const canCompose = !disabled && !hydratingActiveThread && runtimeReady && (
-    route === 'claw'
-      ? clawHasInboundConversation
-      : (hasActiveThread || !!effectiveWorkspaceRoot)
-  )
+  const canCompose = !disabled && !hydratingActiveThread && runtimeReady &&
+    (route === 'claw' ? clawHasInboundConversation : (hasActiveThread || !!effectiveWorkspaceRoot))
   // Code's split controls configure the next submission. The active turn has
   // already captured its model and reasoning effort, so busy must not lock them.
   const canChangeModel = canCompose && (modelControlVariant === 'split' || !busy)
@@ -402,20 +394,19 @@ export function FloatingComposer({
   const showGoalMenuOption = showCodeExecutionControls && route !== 'claw', canOpenGoalPanel = canCompose && showGoalMenuOption
   const canRunReview = canCompose && route !== 'claw' && Boolean(onReviewCommand)
   const canToggleWorktreeMode = canCompose && route !== 'claw' && Boolean(onToggleWorktreeMode)
-  const canOpenComposerMenu = showComposerMenuButton
-    && (canPickFileReference || canPickDesignReference || canPickLocalFileReference || canTogglePlanMode || canToggleAutoPlanBuildMode || showGraphMenuOption || canCreateNewThread || canOpenGoalPanel || canRunReview || (canCompose && Boolean(codeAgentPresets && onComposerPersonaChange)))
+  const canOpenComposerMenu = showComposerMenuButton && (canPickFileReference || canPickDesignReference || canPickLocalFileReference || canTogglePlanMode || canToggleAutoPlanBuildMode || showGraphMenuOption || canCreateNewThread || canOpenGoalPanel || canRunReview || (canCompose && Boolean(codeAgentPresets && onComposerPersonaChange)))
   const showToolbarStartControls = showComposerMenuButton
   const showExecutionSettingsPicker = showIntentToolbar
     && Boolean(executionSettings)
     && Boolean(onExecutionSettingsChange)
-  const stretchModelPicker =
-    compact && modelPickerMode === 'combobox' && !showToolbarStartControls && !hideModelPicker
+  const stretchModelPicker = compact && modelPickerMode === 'combobox' && !showToolbarStartControls && !hideModelPicker
   // Resolution reads i18n, so memoize per catalog identity rather than per render.
   const resolvedCodeAgentPresets = useMemo(
     () => (codeAgentPresets ?? []).map((preset) => resolveCodeAgentPreset(preset)),
     [codeAgentPresets]
   )
-  const draft = useComposerDraft({ input, canCompose: canEditComposer })
+  const noticeHoldThreadId = activeThread?.workspaceMode === 'ade' ? activeThread.id : null
+  const draft = useComposerDraft({ input, canCompose: canEditComposer, noticeHoldThreadId })
   const { focusComposer } = draft
   useEffect(() => {
     const onFocusRequest = (): void => focusComposer()
@@ -424,14 +415,22 @@ export function FloatingComposer({
   }, [focusComposer])
   const inputHistory = useComposerInputHistory()
   const slashQuery = getSlashQuery(input)
+  const adeComposerEnabled = route === 'ade' || activeThread?.workspaceMode === 'ade'
+  const adeComposer = useAdeComposerControls({
+    enabled: adeComposerEnabled === true,
+    activeThreadId, workspaceRoot: effectiveWorkspaceRoot,
+    threadHarnessId: activeThread?.harnessId,
+    threadTaskWorkspaceId: activeThread?.taskWorkspaceId,
+    threadHasUserMessages: hasConversationStarted,
+    hasConfiguredProvider: composerModelGroups.length > 0,
+    onComposerModelChange
+  })
   const [composerMenuOpen, setComposerMenuOpen] = useState(false)
   const [goalPanelOpen, setGoalPanelOpen] = useState(false)
   const [goalInputMode, setGoalInputMode] = useState(false)
   const [promptOptimizationBusy, setPromptOptimizationBusy] = useState(false)
   const [promptOptimizationError, setPromptOptimizationError] = useState<string | null>(null)
-  const onDismissPromptOptimizationError = useCallback((): void => {
-    setPromptOptimizationError(null)
-  }, [])
+  const onDismissPromptOptimizationError = useCallback((): void => setPromptOptimizationError(null), [])
   useEffect(() => {
     setGoalInputMode(false)
     setGoalPanelOpen(false)
@@ -470,6 +469,7 @@ export function FloatingComposer({
     hasReviewCommand: Boolean(onReviewCommand),
     skillCommands,
     disabledSkillIds,
+    harnessCommands: adeComposer.harnessCommands ?? undefined,
     onDismiss: () => setInput('')
   })
   const slashCommands = slashCommandMenu.commands
@@ -563,7 +563,7 @@ export function FloatingComposer({
       ? !canCompose || input.trim().length === 0
     : canSetGoalPanelDraft
       ? false
-    : !canSend
+    : !canSend || (adeComposerEnabled && !activeThreadId && adeComposer.isolation === 'worktree' && !adeComposer.worktreeGit.worktreeGitReady)
   const primaryActionLoading = !runtimeReady
   const primaryActionKind = resolveComposerPrimaryActionKind({
     busy,
@@ -655,20 +655,21 @@ export function FloatingComposer({
     ...composerActions,
     BackgroundShellOverlay, BarChart3, Bot, FileText, FloatingComposerAboveInputStack, FloatingComposerAgentPicker, FloatingComposerAttachments, FloatingComposerContextCapacity, FloatingComposerExecutionPicker,
     FloatingComposerApprovalPanel,
-    FloatingComposerFileMentionMenu, FloatingComposerGraphProgress, FloatingComposerModelPicker, FloatingComposerQueuedMessages, FloatingComposerSlashCommandMenu, FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker, FloatingComposerTodoProgress, FloatingComposerUsageHistory, FloatingComposerUserInputPanel,
+    FloatingComposerDispatchableAgents,
+    FloatingComposerFileMentionMenu, FloatingComposerGraphProgress, FloatingComposerHarnessPicker, FloatingComposerIsolationPicker, FloatingComposerModelPicker, FloatingComposerQueuedMessages, FloatingComposerSlashCommandMenu, FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker, FloatingComposerTodoProgress, FloatingComposerUsageHistory, FloatingComposerUserInputPanel, FloatingComposerWorkersPill,
     FloatingComposerActionMenu,
     Folder, GitBranchPicker, ImagePlus, ListTodo, Loader2, Mic, Monitor, Paperclip,
     PauseCircle, Pencil, PlayCircle, Plus, Puzzle, Send, Share2, Sparkles,
-    Square, Target, Trash2, TypeIcon, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThreadGoal,
-    activeThreadId, activeThreadTodos, attachmentUploadBusy, attachmentUploadEnabled, attachmentUploadError, attachments, busy, canChangeModel,
+    Square, Target, Trash2, TypeIcon, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThread,
+    activeThreadGoal, activeThreadId, activeThreadTodos, adeComposer, adeComposerEnabled, attachmentUploadBusy, attachmentUploadEnabled, attachmentUploadError, attachments, busy, canChangeModel,
     canCompose, canEditComposer, canOpenComposerMenu, canOpenGoalPanel, canOptimizePrompt, canPickAttachment, canPickDesignReference, canPickFileReference,
     canPickLocalFileReference, canSetGoalPanelDraft, canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode, canToggleWorktreeMode, clearActiveThreadGoal, compact, composerFastMode,
-    composerMenuButtonRef, composerMenuOpen, composerMenuPanelRef, composerShellRef, composerModel, composerModelGroups, composerPickList, composerProviderId, composerReasoningEffort,
+    composerMenuButtonRef, composerMenuOpen, composerMenuPanelRef, composerShellRef, composerModel, composerModelGroups: adeComposer.modelGroups ?? composerModelGroups, composerPickList: adeComposer.pickList ?? composerPickList, composerProviderId, composerReasoningEffort,
     contextChips, primaryCacheHitRate, currentTurnOrchestration, designTaskProfile, designProfileLocked, dictation, draft, effectiveWorkspaceRoot, executionSettings, executionSettingsApplying,
     fileInputRef, fileMentions, fileReferenceEnabled, fileReferences, filteredSlashCommands, footerHint, formatCompactNumber, formatCost,
     formatPercent, formatTps, formatTtftSeconds, goalBannerLabel, goalElapsedLabel, goalInputMode, goalMenuChecked, goalPanelOpen,
     goalPanelRef, graphEnabled, graphPlanningNeedsCorrection, hideModelPicker, highlightedSlashCommand, i18n, input, isComposerDirectoryReference,
-    imageGenerationEnabled, imageGenerationAvailable, imageGenerationReason, mode, modelControlVariant, modelPickerMode, onComposerFastModeChange, onComposerModelChange, onComposerReasoningEffortChange, onConfigureImageGeneration, onConfigureProviders, onDesignTaskProfileChange, onExecutionSettingsChange,
+    imageGenerationEnabled, imageGenerationAvailable, imageGenerationReason, mode, modelControlVariant, modelPickerMode, onComposerFastModeChange, onComposerModelChange: adeComposer.onModelChange ?? onComposerModelChange, onComposerReasoningEffortChange, onConfigureImageGeneration, onConfigureProviders, onDesignTaskProfileChange, onExecutionSettingsChange,
     onComposerPersonaChange, codeAgentPresets, composerPersonaId, resolvedCodeAgentPresets,
     onRestoreQueuedMessageToComposer,
     onReorderQueuedMessage: onReorderQueuedMessage ?? storeReorderQueuedMessage,

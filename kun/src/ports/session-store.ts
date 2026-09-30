@@ -22,6 +22,9 @@ export type SessionUsageRecord = {
   model?: string
   providerId?: string
   relation?: ThreadRelation
+  /** Origin of the record (docs/ade/04 §6); absent means native loop usage. */
+  source?: 'native' | 'harness-gateway' | 'harness-reported'
+  harnessId?: string
   completedAt: string
   usage: UsageSnapshot
   /** Worker-only marker: `usage` is cumulative and must be diffed in SQLite. */

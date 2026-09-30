@@ -16,6 +16,8 @@ export type UsageRow = {
   turn_id: string | null
   model: string | null
   provider_id: string | null
+  source?: string | null
+  harness_id?: string | null
   relation?: string | null
   usage_json: string
 }
@@ -42,6 +44,8 @@ export function usageRowFromEvent(event: RuntimeEvent & { kind: 'usage' }): Usag
     turn_id: event.turnId ?? null,
     model: event.model ?? null,
     provider_id: event.providerId ?? null,
+    source: event.source ?? null,
+    harness_id: event.harnessId ?? null,
     relation: null,
     usage_json: JSON.stringify(event.usage)
   }
@@ -62,6 +66,10 @@ export function usageRecordsFromRows(rows: UsageRow[]): SessionUsageRecord[] {
       ...(row.turn_id ? { turnId: row.turn_id } : {}),
       ...(row.model ? { model: row.model } : {}),
       ...(row.provider_id ? { providerId: row.provider_id } : {}),
+      ...(row.source === 'native' || row.source === 'harness-gateway' || row.source === 'harness-reported'
+        ? { source: row.source }
+        : {}),
+      ...(row.harness_id ? { harnessId: row.harness_id } : {}),
       ...(row.relation === 'primary' || row.relation === 'fork' || row.relation === 'side'
         ? { relation: row.relation }
         : {}),

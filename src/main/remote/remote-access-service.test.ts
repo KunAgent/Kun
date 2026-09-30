@@ -81,11 +81,14 @@ describe('RemoteAccessService port fallback', () => {
 describe('RemoteAccessService HTTP surface', () => {
   let service: RemoteAccessService
   let baseUrl = ''
+  let feedUrls = ['https://example.org/rss']
   const persistedPorts: number[] = []
 
   beforeAll(async () => {
     service = new RemoteAccessService({
-      getSettings: async () => makeSettings(),
+      getSettings: async () => ({ ...makeSettings(),
+        write: { paperMode: { discover: { feeds: feedUrls.map((url) => ({ id: url, title: url, url })) } } }
+      }) as AppSettingsV1,
       persistRemotePatch: async (patch) => {
         if (typeof patch.port === 'number') persistedPorts.push(patch.port)
       },
@@ -177,6 +180,58 @@ describe('RemoteAccessService HTTP surface', () => {
     expect(missingHandler.status).toBe(404)
   })
 
+  it('rejects arbitrary Remote feed URLs unless the host configured the subscription', async () => {
+    const cookie = await login()
+    const response = await fetch(`${baseUrl}/remote/invoke`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie,
+        'x-kun-remote-request': '1', 'x-kun-remote-client': 'feed-client' },
+      body: JSON.stringify({ channel: 'paper-discover:feed',
+        args: [{ url: 'https://127.0.0.1/private' }] })
+    })
+    expect(response.status).toBe(403)
+    expect((await response.json()).error).toContain('Only host-approved feeds')
+  })
+
+  it('does not let a Remote settings change authorize new feed targets mid-session', async () => {
+    feedUrls = [...feedUrls, 'https://attacker.example/rss']
+    try {
+      const cookie = await login()
+      const response = await fetch(`${baseUrl}/remote/invoke`, {
+        method: 'POST', headers: { 'content-type': 'application/json', cookie,
+          'x-kun-remote-request': '1', 'x-kun-remote-client': 'feed-client' },
+        body: JSON.stringify({ channel: 'paper-discover:feed', args: [{ url: 'https://attacker.example/rss' }] })
+      })
+      expect(response.status).toBe(403)
+      expect((await response.json()).error).toContain('Only host-approved feeds')
+    } finally { feedUrls = ['https://example.org/rss'] }
+  })
+
+  it('rejects browser attempts to register new feed targets through either settings channel', async () => {
+    const cookie = await login()
+    for (const channel of ['settings:set', 'settings:save-silent']) {
+      const response = await fetch(`${baseUrl}/remote/invoke`, {
+        method: 'POST', headers: { 'content-type': 'application/json', cookie,
+          'x-kun-remote-request': '1', 'x-kun-remote-client': 'feed-client' },
+        body: JSON.stringify({ channel, args: [{ write: { paperMode: { discover: {
+          feeds: [{ id: 'malicious', url: 'https://attacker.example/rss', title: 'Malicious' }]
+        } } } }] })
+      })
+      expect(response.status).toBe(403)
+      expect((await response.json()).error).toContain('Remote cannot change host feed subscriptions')
+    }
+  })
+
+  it('admits feed URLs configured on the host before Remote started', async () => {
+    const cookie = await login()
+    const response = await fetch(`${baseUrl}/remote/invoke`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie,
+        'x-kun-remote-request': '1', 'x-kun-remote-client': 'feed-client' },
+      body: JSON.stringify({ channel: 'paper-discover:feed', args: [{ url: 'https://example.org/rss' }] })
+    })
+    expect(response.status).not.toBe(403)
+  })
+
   it('streams workspace files to authenticated browsers within the workspace', async () => {
     const cookie = await login()
     const dir = await mkdtemp(join(tmpdir(), 'kun-remote-test-ws-'))
@@ -196,6 +251,27 @@ describe('RemoteAccessService HTTP surface', () => {
       headers: { cookie }
     })
     expect(noRoot.status).toBe(400)
+  })
+
+  it('streams authenticated PDF byte ranges without exposing another host path', async () => {
+    const cookie = await login()
+    const dir = await mkdtemp(join(tmpdir(), 'kun-remote-pdf-'))
+    await writeFile(join(dir, 'paper.pdf'), '%PDF-1.5', 'utf8')
+    const url = `${baseUrl}/remote/file-preview?workspaceRoot=${encodeURIComponent(dir)}&path=paper.pdf`
+    try {
+      const partial = await fetch(url, { headers: { cookie, Range: 'bytes=1-3' } })
+      expect(partial.status).toBe(206)
+      expect(partial.headers.get('content-range')).toBe('bytes 1-3/8')
+      expect(partial.headers.get('accept-ranges')).toBe('bytes')
+      expect(partial.headers.get('content-security-policy')).toBe('sandbox')
+      expect(await partial.text()).toBe('PDF')
+      const invalid = await fetch(url, { headers: { cookie, Range: 'bytes=8-12' } })
+      expect(invalid.status).toBe(416)
+      expect(invalid.headers.get('content-range')).toBe('bytes */8')
+      const all = await fetch(url, { headers: { cookie } })
+      expect(all.status).toBe(200)
+      expect(await all.text()).toBe('%PDF-1.5')
+    } finally { await rm(dir, { recursive: true, force: true }) }
   })
 
   it('sandboxes active preview content so scripts cannot reach remote control APIs', async () => {
@@ -219,6 +295,20 @@ describe('RemoteAccessService HTTP surface', () => {
     }
   })
 
+  it('rejects uploads without client and request headers', async () => {
+    const cookie = await login()
+    const payload = JSON.stringify({ name: 'paper.pdf', dataBase64: 'YQ==' })
+    const missingHeaders = await fetch(`${baseUrl}/remote/upload`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: payload
+    })
+    expect(missingHeaders.status).toBe(403)
+    const unauthenticated = await fetch(`${baseUrl}/remote/upload`, {
+      method: 'POST', headers: { 'content-type': 'application/json',
+        'x-kun-remote-request': '1', 'x-kun-remote-client': 'anonymous' }, body: payload
+    })
+    expect(unauthenticated.status).toBe(401)
+  })
+
   it('accepts uploads and stores them in a host temp directory', async () => {
     const cookie = await login()
     const response = await fetch(`${baseUrl}/remote/upload`, {
@@ -240,9 +330,36 @@ describe('RemoteAccessService HTTP surface', () => {
     await rm(dirname(body.path), { recursive: true, force: true })
   })
 
+  it('requires upload ownership before accepting a paper local path', async () => {
+    const cookie = await login()
+    const uploaded = await fetch(`${baseUrl}/remote/upload`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie,
+        'x-kun-remote-request': '1', 'x-kun-remote-client': 'paper-owner' },
+      body: JSON.stringify({ name: 'paper.pdf', dataBase64: Buffer.from('%PDF-1.4').toString('base64') })
+    })
+    expect(uploaded.status).toBe(200)
+    const { path } = await uploaded.json() as { path: string }
+    const invoke = (client: string, localPdfPath: string, session = cookie) => fetch(`${baseUrl}/remote/invoke`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: session,
+        'x-kun-remote-request': '1', 'x-kun-remote-client': client },
+      body: JSON.stringify({ channel: 'paper:import', args: [{
+        workspaceRoot: '/test', input: '', requestId: 'test-import', localPdfPath
+      }] })
+    })
+    expect((await invoke('paper-other', path)).status).toBe(403)
+    expect((await invoke('paper-owner', '/etc/hosts')).status).toBe(403)
+    const secondCookie = await login()
+    expect((await invoke('paper-owner', path, secondCookie)).status).toBe(403)
+    expect(await readFile(path, 'utf8')).toContain('%PDF')
+    await invoke('paper-owner', path)
+    await expect(readFile(path)).rejects.toThrow()
+  })
+
   it('opens the SSE event stream for authenticated clients', async () => {
     const cookie = await login()
-    const response = await fetch(`${baseUrl}/remote/events?client=test-client`, {
+    const response = await fetch(`${baseUrl}/remote/events?client=test-client-event`, {
       headers: { cookie }
     })
     expect(response.status).toBe(200)

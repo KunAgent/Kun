@@ -10,8 +10,9 @@ export function FloatingComposerStackView({
     BackgroundShellOverlay, FloatingComposerAboveInputStack, FloatingComposerActionMenu,
     FloatingComposerApprovalPanel,
     FloatingComposerFileMentionMenu, FloatingComposerGraphProgress, FloatingComposerQueuedMessages,
-    FloatingComposerSlashCommandMenu, FloatingComposerTodoProgress, FloatingComposerUserInputPanel,
-    PauseCircle, Pencil, PlayCircle, Target, Trash2, X, activeThreadGoal, activeThreadId, activeThreadTodos, applySlashCommand,
+    FloatingComposerDispatchableAgents,
+    FloatingComposerSlashCommandMenu, FloatingComposerTodoProgress, FloatingComposerUserInputPanel, FloatingComposerWorkersPill,
+    PauseCircle, Pencil, PlayCircle, Target, Trash2, X, activeThread, activeThreadGoal, activeThreadId, activeThreadTodos, adeComposerEnabled, applySlashCommand,
     busy, canOpenGoalPanel, canSetGoalPanelDraft, clearActiveThreadGoal, compact, composerMenuOpen,
     currentTurnOrchestration, draft, fileMentions, filteredSlashCommands, goalBannerLabel,
     goalElapsedLabel, goalPanelOpen, goalPanelRef, graphEnabled, highlightedSlashCommand,
@@ -43,6 +44,14 @@ export function FloatingComposerStackView({
         )}
         floatingStatuses={(
           <>
+            <FloatingComposerWorkersPill
+              threadId={activeThreadId}
+              enabled={adeComposerEnabled === true}
+            />
+            <FloatingComposerDispatchableAgents
+              thread={activeThread ?? null}
+              enabled={adeComposerEnabled === true}
+            />
             {showTodoProgress && activeThreadTodos ? (
               <FloatingComposerTodoProgress todos={activeThreadTodos} enabled={showGraphProgress} />
             ) : null}

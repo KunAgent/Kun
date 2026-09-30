@@ -7,12 +7,22 @@ import {
   type KeyboardEvent as ReactKeyboardEvent
 } from 'react'
 
+import { postWorkerNoticeHold } from '../../agent/ade-notices'
+
+const WORKER_NOTICE_HOLD_RENEW_MS = 30_000
+
 type UseComposerDraftOptions = {
   input: string
   canCompose: boolean
+  /**
+   * ADE manager thread id (09 §6.2): while the composer is focused with a
+   * non-empty draft, renew a server-side worker-notice hold every 30 s so a
+   * wake-up turn never interrupts typing; notices ride the user's send.
+   */
+  noticeHoldThreadId?: string | null
 }
 
-export function useComposerDraft({ input, canCompose }: UseComposerDraftOptions): {
+export function useComposerDraft({ input, canCompose, noticeHoldThreadId }: UseComposerDraftOptions): {
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
   focused: boolean
   focusComposer: () => void
@@ -66,6 +76,17 @@ export function useComposerDraft({ input, canCompose }: UseComposerDraftOptions)
   const focusComposer = useCallback(() => {
     window.requestAnimationFrame(() => textareaRef.current?.focus())
   }, [])
+
+  const hasDraft = input.trim().length > 0
+  useEffect(() => {
+    if (!noticeHoldThreadId || !focused || !hasDraft) return
+    void postWorkerNoticeHold(noticeHoldThreadId)
+    const interval = window.setInterval(
+      () => void postWorkerNoticeHold(noticeHoldThreadId),
+      WORKER_NOTICE_HOLD_RENEW_MS
+    )
+    return () => window.clearInterval(interval)
+  }, [noticeHoldThreadId, focused, hasDraft])
 
   return {
     textareaRef,

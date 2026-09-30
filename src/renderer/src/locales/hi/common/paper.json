@@ -468,5 +468,17 @@
   "paperImportFolderTooltip": "नए पेपर \"{{folder}}\" में रखे जाएँगे",
   "paperImportedToFolder": "\"{{folder}}\" में आयात किया गया",
   "paperImportIntoFolder": "इस फ़ोल्डर में पेपर आयात करें",
-  "paperFolderEmpty": "खाली फ़ोल्डर"
+  "paperFolderEmpty": "खाली फ़ोल्डर",
+  "paperWorkspaces": "कार्यस्थान",
+  "paperWorkspaceAdd": "कार्यस्थान जोड़ें",
+  "paperWorkspaceMenu": "कार्यस्थान क्रियाएँ",
+  "paperWorkspaceRemove": "कार्यस्थान हटाएँ",
+  "paperWorkspaceFilterTitle": "पेपर फ़िल्टर करें",
+  "paperWorkspaceFilterPlaceholder": "शीर्षक से फ़िल्टर करें…",
+  "paperWorkspaceFilterEmpty": "कोई पेपर मेल नहीं खाता।",
+  "paperWorkspaceScanning": "इंडेक्स हो रहा है…",
+  "paperWorkspaceLoadError": "इस कार्यस्थान को इंडेक्स नहीं किया जा सका।",
+  "paperWorkspaceRetry": "पुनः प्रयास",
+  "paperSearchHistory": "खोज इतिहास",
+  "paperSearchHistoryEmpty": "अभी कोई इतिहास नहीं।"
 }

@@ -107,7 +107,7 @@ describe('submitToRuntimeQueue', () => {
       provider: { sendUserMessage } as never,
       activeThreadId: 'thr_1', trimmedText: 'original', clientRequestId: 'switch-request',
       orchestration: 'direct', composerModel: 'test', composerProviderId: 'deepseek',
-      composerContexts: [], set, get, persistActiveQueuedMessages: vi.fn()
+      composerContexts: [], ackNoticeIds: undefined, set, get, persistActiveQueuedMessages: vi.fn()
     } as unknown as Parameters<typeof submitToRuntimeQueue>[0])
     expect(result).toBe(true)
     expect(state.queuedMessages).toEqual([{ id: 'other', text: 'other thread' }])
@@ -132,6 +132,8 @@ describe('submitToRuntimeQueue', () => {
       composerModel: 'deepseek-v4-pro',
       composerProviderId: 'deepseek',
       composerAccountId: 'account:deepseek',
+      composerHarnessId: '',
+      composerCredentialMode: '',
       userModelChip: undefined,
       displayText: undefined,
       reasoningEffort: undefined,
@@ -145,7 +147,7 @@ describe('submitToRuntimeQueue', () => {
       attachmentIds: ['att_1'],
       attachments: [attachment],
       fileReferences: undefined,
-      composerContexts: [],
+      composerContexts: [], ackNoticeIds: undefined,
       queued: undefined,
       overrides: undefined,
       set,
@@ -188,7 +190,7 @@ describe('submitToRuntimeQueue', () => {
       provider: { sendUserMessage } as never,
       activeThreadId: 'thr_1', trimmedText: 'hi', clientRequestId: 'req-local',
       orchestration: 'direct', composerModel: 'm', composerProviderId: 'p',
-      composerContexts: [], set, get, persistActiveQueuedMessages: vi.fn()
+      composerContexts: [], ackNoticeIds: undefined, set, get, persistActiveQueuedMessages: vi.fn()
     } as unknown as Parameters<typeof submitToRuntimeQueue>[0])
 
     expect(result).toBe(true)
@@ -221,6 +223,8 @@ describe('submitToRuntimeQueue', () => {
       composerModel: 'deepseek-v4-pro',
       composerProviderId: 'deepseek',
       composerAccountId: undefined,
+      composerHarnessId: '',
+      composerCredentialMode: '',
       userModelChip: undefined,
       displayText: undefined,
       reasoningEffort: undefined,
@@ -234,7 +238,7 @@ describe('submitToRuntimeQueue', () => {
       attachmentIds: ['att_1'],
       attachments: [attachment],
       fileReferences: undefined,
-      composerContexts: [],
+      composerContexts: [], ackNoticeIds: undefined,
       queued: undefined,
       overrides: undefined,
       set,

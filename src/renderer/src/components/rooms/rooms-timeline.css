@@ -18,6 +18,40 @@
 .rooms-timeline-row {
   padding-bottom: 0.8rem;
 }
+.rooms-timeline-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0.35rem 0 1rem;
+  color: var(--ds-text-muted);
+  font-size: 0.6875rem;
+}
+.rooms-message-avatar-spacer { flex: 0 0 2.375rem; width: 2.375rem; }
+.rooms-agent-activity { padding: 0.35rem 0 0.75rem; }
+.rooms-agent-activity-body {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.375rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.35rem 0.875rem 0.875rem;
+  background: var(--ds-surface-subtle);
+  color: var(--ds-text-muted);
+  font-size: 0.8125rem;
+}
+.rooms-timeline-gates { width: min(480px, calc(100% - 3.5rem)); margin: 8px 8px 16px 3.1rem; }
+.rooms-message-continuation .rooms-message-meta {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.rooms-timeline-row:has(.rooms-message-continuation) { padding-bottom: 0.3rem; }
 .rooms-timeline-search {
   display: flex;
   flex-shrink: 0;

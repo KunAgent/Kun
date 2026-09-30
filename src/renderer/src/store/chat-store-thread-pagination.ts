@@ -137,6 +137,9 @@ export function loadMoreThreads(
         ...(workspaces.length ? { workspaces } : {}),
         ...(mode === 'archived' ? { archivedOnly: true } : {}),
         includeSide: false,
+        // Code pagination is scoped to the code inventory; ADE threads live in
+        // `adeThreads` and never join this stream.
+        workspaceMode: 'code',
         lean: true
       })
       const visible = await filterThreadsForSidebar(

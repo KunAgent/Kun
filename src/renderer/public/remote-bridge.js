@@ -188,6 +188,29 @@
     cliInstallStatus: invokeRaw('cli-install:status'),
     cliInstallAction: function (action) { return invoke('cli-install:action', [action]) },
 
+    // Explicit Remote paper surface; unknown proxy methods are not capabilities.
+    paperLibraryList: invokePayload('paper-library:list'),
+    paperReadUnit: invokePayload('paper:read-unit'),
+    paperImport: invokePayload('paper:import'),
+    paperCancel: invokePayload('paper:cancel'),
+    paperImportBibtex: invokePayload('paper-library:import-bibtex'),
+    paperUpdateMeta: invokePayload('paper-library:update-meta'),
+    paperCreateGroup: invokePayload('paper-library:create-group'),
+    paperMoveToGroup: invokePayload('paper-library:move-to-group'),
+    paperDownloadPdf: invokePayload('paper-library:download-pdf'),
+    paperLocalStateRead: invokePayload('paper-library:local-state-read'),
+    paperLocalStateWrite: invokePayload('paper-library:local-state-write'),
+    paperMarksRead: invokePayload('paper-reader:marks-read'),
+    paperMarksWrite: invokePayload('paper-reader:marks-write'),
+    paperTranslateSelection: invokePayload('paper-reader:translate-selection'),
+    paperFetchReferences: invokePayload('paper-reader:references'),
+    paperSearch: invokePayload('paper-discover:search'),
+    paperFetchFeed: invokePayload('paper-discover:feed'),
+    paperArxivToday: invokePayload('paper-discover:arxiv-today'),
+    paperListVenue: invokePayload('paper-discover:venue'),
+    paperVenueCatalog: invokePayload('paper-discover:venue-catalog'),
+    onPaperProgress: on('paper:progress'),
+
     // Workspace selection + files. Native pickers open on the host machine.
     pickWorkspaceDirectory: function () {
       // Host pickers open on the Kun machine, out of reach for a remote user;

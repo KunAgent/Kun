@@ -278,6 +278,7 @@ Claude Code（agent-sdk transport）：
 
 - baseUrl 是 `kun serve` 的 loopback 地址（`http://127.0.0.1:<port>`），SDK 自己拼 `/v1/messages`。
 - Claude SDK 适配器需要新增"网关模式"：`sdk-options-builder.ts` 的 `buildScopedEnv` 在 `credentialMode === 'kun-gateway'` 时注入以上变量，并**跳过**写 `CLAUDE_CODE_OAUTH_TOKEN`；`resolveSdkModel` 对 `kun/` 前缀的模型不做 `isAnthropicModel` 回退。
+- Codex：harness 进程只读 Kun 生成的托管 `CODEX_HOME`（生成器见 `kun/src/acp/acp-kun-gateway-generator.ts`），`config.toml` 把 `model_provider` 指向网关的 `openai-responses` 入口，密钥写进托管目录（0700）或 env 引用；不碰用户主 `~/.codex`。P6 起 `codex-app-server` transport 与 ACP 适配器**复用同一生成器**（impl/p6a P6-06）。
 - 其他 harness 的变量名在接入时按其官方文档填写并测试，不预先写死。
 
 原则：

@@ -60,7 +60,7 @@ type PluginMarketplaceContentProps = {
   mcpRuntimeOverlay: McpMarketplaceOverlay
   runtimeOverlayLoading: boolean
   runtimeOverlayError: string
-  refreshMcpRuntimeOverlay: () => Promise<void>
+  refreshMcpRuntimeOverlay: () => Promise<unknown>
   customName: string
   setCustomName: Dispatch<SetStateAction<string>>
   customDescription: string

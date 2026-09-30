@@ -179,7 +179,7 @@ async function ensureTrayQuotaWindow(): Promise<BrowserWindow> {
     roundedCorners: true,
     ...resolveTrayQuotaWindowPlatformOptions(process.platform),
     webPreferences: {
-      preload: resolveNamedPreloadPath(__dirname, 'tray-quota'),
+      preload: resolveNamedPreloadPath(app.getAppPath(), 'tray-quota'),
       contextIsolation: true,
       sandbox: true
     }

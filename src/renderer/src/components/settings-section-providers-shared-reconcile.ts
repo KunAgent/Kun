@@ -12,6 +12,7 @@ import {
 import {
   modelProviderRequiresApiKey
 } from '@shared/app-settings-provider-core'
+import { normalizeModelProviderPricing } from '@shared/app-settings-provider-capabilities'
 import {
   type PendingSharedProviderCatalog,
   type PendingSharedProviderDeletion,
@@ -471,6 +472,8 @@ export function sharedModelProfiles(
       capability?.maxOutputTokens ?? previous?.maxOutputTokens,
       MAX_MODEL_OUTPUT_TOKENS
     )
+    const pricing = normalizeModelProviderPricing(capability?.pricing ?? previous?.pricing)
+    const serviceTiers = capability?.serviceTiers ?? previous?.serviceTiers
     return [model, {
       ...(previous?.aliases ? { aliases: [...previous.aliases] } : {}),
       inputModalities: capability?.inputModalities ?? previous?.inputModalities ?? ['text'],
@@ -482,6 +485,8 @@ export function sharedModelProfiles(
       ...(capability?.reasoning ?? previous?.reasoning
         ? { reasoning: capability?.reasoning ?? previous?.reasoning }
         : {}),
+      ...(pricing ? { pricing } : {}),
+      ...(serviceTiers?.length ? { serviceTiers: [...serviceTiers] } : {}),
       ...(capability?.endpointFormat ?? previous?.endpointFormat
         ? { endpointFormat: capability?.endpointFormat ?? previous?.endpointFormat }
         : {}),

@@ -1,3 +1,6 @@
+import type { HarnessCapabilities } from '@shared/harness-capabilities'
+import type { AdeDelegatedTransport } from '@shared/ade-harnesses'
+
 /** Cumulative usage/cost for a Kun thread. */
 export type ThreadUsageSnapshot = {
   inputTokens: number
@@ -59,8 +62,15 @@ export type RequestContextSnapshot = {
 export type DelegatedRuntimeState = {
   threadId: string
   turnId?: string
-  providerKind: 'agent-sdk' | 'cursor-sdk' | 'antigravity-cli'
+  providerKind: AdeDelegatedTransport
   providerId: string
+  /** Explicit harness identity when the event carries it. */
+  harnessId?: string
+  /**
+   * Capability v2 snapshot for the route. When absent on the wire it is
+   * derived from the legacy boolean bag so consumers can rely on it.
+   */
+  capabilitiesV2?: HarnessCapabilities
   phase: 'portable' | 'resumed' | 'rebased'
   reason?:
     | 'new'
@@ -77,4 +87,26 @@ export type DelegatedRuntimeState = {
     nativeContextTelemetry: boolean
     fork: boolean
   }
+}
+
+/** Native-loop analogue of DelegatedRuntimeState, from `harness_runtime` events. */
+export type HarnessRuntimeState = {
+  threadId: string
+  turnId?: string
+  harnessId: string
+  capabilitiesV2: HarnessCapabilities
+}
+
+/** `handoff_injected` event metadata (docs/ade/08 §4). */
+export type HandoffEventPayload = {
+  threadId: string
+  turnId?: string
+  reason: 'harness-switch' | 'rebase' | 'worker-dispatch' | 'context-overflow'
+  mode: 'full' | 'delta'
+  toHarnessName: string
+  toModel?: string
+  recentTurns: number
+  files: number
+  briefDigest: string
+  createdAt?: string
 }

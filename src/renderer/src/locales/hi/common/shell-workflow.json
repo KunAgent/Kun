@@ -38,6 +38,8 @@
   "code": "कोड",
   "write": "कार्य",
   "workspaceModeWorkLabel": "कार्य",
+  "workspaceModeAdeLabel": "ADE",
+  "workspaceModeAdeDescription": "एजेंट टीम का प्रबंधन",
   "workspaceModeCodeDescription": "बनाएँ, डीबग करें और रिलीज़ करें",
   "workspaceModeWorkDescription": "लिखें, व्यवस्थित करें और रोज़मर्रा के काम करें",
   "design": "डिज़ाइन",

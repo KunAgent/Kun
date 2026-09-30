@@ -1,0 +1,184 @@
+.kun-mobile-agents {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  color: var(--ds-text);
+  background: var(--ds-bg-main);
+  padding-top: env(safe-area-inset-top, 0px);
+  overflow-y: auto;
+}
+.kun-mobile-agents-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: var(--kun-mobile-header-h, 52px);
+  padding: 4px var(--kun-mobile-gutter, 16px);
+}
+.kun-mobile-agents-header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kun-mobile-agents-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: var(--kun-mobile-touch, 44px);
+  min-height: var(--kun-mobile-touch, 44px);
+  border: 0;
+  border-radius: 9999px;
+  color: inherit;
+  background: transparent;
+}
+.kun-mobile-agents-icon:active { background: var(--ds-surface-hover); }
+.kun-mobile-agents-feed {
+  margin: 0 var(--kun-mobile-gutter, 16px) 8px;
+  font-size: 13px;
+  color: var(--ds-text-tertiary);
+}
+.kun-mobile-agents-error {
+  margin: 0 var(--kun-mobile-gutter, 16px) 8px;
+  padding: 8px 12px;
+  border-radius: var(--kun-mobile-radius, 12px);
+  background: var(--ds-warning-soft);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.kun-mobile-agents-section { margin-bottom: 16px; }
+.kun-mobile-agents-section h2 {
+  margin: 8px var(--kun-mobile-gutter, 16px);
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ds-text-tertiary);
+}
+.kun-mobile-agents-card {
+  margin: 8px var(--kun-mobile-gutter, 16px);
+  padding: 12px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--kun-mobile-radius, 12px);
+  background: var(--ds-surface-subtle);
+}
+.kun-mobile-agents-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.kun-mobile-agents-card-title {
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kun-mobile-agents-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  color: var(--ds-warning);
+  background: var(--ds-warning-soft);
+}
+.kun-mobile-agents-card-detail {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ds-text-secondary);
+  overflow-wrap: anywhere;
+}
+.kun-mobile-agents-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.kun-mobile-agents-card-actions button,
+.kun-mobile-agents-answer button {
+  min-height: var(--kun-mobile-touch, 44px);
+  padding: 8px 16px;
+  border: 1px solid var(--ds-border);
+  border-radius: 9999px;
+  color: inherit;
+  background: transparent;
+}
+.kun-mobile-agents-card-actions button:active,
+.kun-mobile-agents-answer button:active { background: var(--ds-surface-hover); }
+.kun-mobile-agents-card-actions button:disabled,
+.kun-mobile-agents-answer button:disabled { opacity: 0.5; }
+.kun-mobile-agents-answer {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.kun-mobile-agents-answer input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--kun-mobile-touch, 44px);
+  padding: 0 12px;
+  border: 1px solid var(--ds-border);
+  border-radius: 9999px;
+  color: inherit;
+  background: transparent;
+}
+.kun-mobile-agents-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--kun-mobile-touch, 44px);
+  padding: 8px var(--kun-mobile-gutter, 16px) 8px 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: start;
+}
+.kun-mobile-agents-row:active { background: var(--ds-surface-hover); }
+.kun-mobile-agents-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--ds-text-tertiary);
+}
+.kun-mobile-agents-dot-needs-you { background: var(--ds-warning); }
+.kun-mobile-agents-dot-working { background: var(--ds-accent); }
+.kun-mobile-agents-dot-review { background: var(--ds-warning); }
+.kun-mobile-agents-dot-done { background: var(--ds-text-tertiary); }
+.kun-mobile-agents-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.kun-mobile-agents-row-title {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kun-mobile-agents-row-meta {
+  font-size: 12px;
+  color: var(--ds-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kun-mobile-agents-row-time {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--ds-text-tertiary);
+}
+.kun-mobile-agents-empty {
+  margin: 24px var(--kun-mobile-gutter, 16px);
+  font-size: 14px;
+  color: var(--ds-text-tertiary);
+}

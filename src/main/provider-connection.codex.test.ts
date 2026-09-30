@@ -26,6 +26,16 @@ describe('Codex discovery', () => {
     })
     expect(fetcher).toHaveBeenCalledTimes(1)
   })
+  it('passes through only listed gpt-6-sol and gpt-6-luna from the official catalog', async () => {
+    const result = await probeModelProvider(request, undefined, async () => new Response(JSON.stringify({
+      models: [
+        { slug: 'gpt-6-sol', visibility: 'list' },
+        { slug: 'gpt-6-luna', visibility: 'list', supported_in_api: false },
+        { slug: 'gpt-6-hidden', visibility: 'hide' }
+      ]
+    })))
+    expect(result).toMatchObject({ ok: true, modelIds: ['gpt-6-sol', 'gpt-6-luna'] })
+  })
   it.each([401, 403, 500])('reports HTTP %s instead of a successful static list', async (status) => {
     const result = await probeModelProvider(request, undefined,
       async () => new Response('unavailable', { status }))

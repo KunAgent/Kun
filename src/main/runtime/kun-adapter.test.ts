@@ -125,6 +125,11 @@ describe('runtimeRequestViaHost', () => {
     )).toBe(40_000)
   })
 
+  it('keeps interactive MCP OAuth open through the browser callback window', () => {
+    expect(resolveRuntimeRequestTimeoutMs('/v1/mcp/oauth/google_gmail', 'POST')).toBe(180_000)
+    expect(resolveRuntimeRequestTimeoutMs('/v1/mcp/oauth/google_gmail', 'GET')).toBe(15_000)
+  })
+
   it('keeps thread activity long polls alive beyond their server wait window', () => {
     expect(resolveRuntimeRequestTimeoutMs(
       '/v1/thread-activity/events?wait_ms=25000&cursor=cursor_1',
@@ -139,6 +144,17 @@ describe('runtimeRequestViaHost', () => {
       'GET',
       45_000
     )).toBe(45_000)
+  })
+
+  it('keeps execution-unit activity long polls alive beyond their wait window', () => {
+    expect(resolveRuntimeRequestTimeoutMs(
+      '/v1/activity/events?wait_ms=25000&cursor=cursor_1',
+      'GET'
+    )).toBe(30_000)
+    expect(resolveRuntimeRequestTimeoutMs(
+      '/v1/activity/events?wait_ms=0',
+      'GET'
+    )).toBe(15_000)
   })
 
   it('allows bounded thread timeline reads to finish cold storage scans', () => {

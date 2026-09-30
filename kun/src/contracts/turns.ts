@@ -23,6 +23,7 @@ import {
   DesignTaskProfileSchema
 } from './design-task-profile.js'
 import { WriteTurnContextSchema } from './write-turn-context.js'
+import { HarnessCredentialModeSchema, HarnessIdSchema } from './harness.js'
 
 export { TurnReasoningEffortSchema } from './turn-reasoning.js'
 export type { TurnReasoningEffort } from './turn-reasoning.js'
@@ -85,7 +86,7 @@ export const GuiPlanContextSchema = z.object({
     .refine(isGuiPlanRelativePath, {
       message: 'relativePath must be a direct Markdown file under .kunsdd/plan'
     }),
-  planId: z.string().min(1),
+  planId: z.string().min(1), fixedPath: z.boolean().optional(),
   sourceRequest: z.string().optional(),
   title: z.string().optional()
 })
@@ -199,6 +200,10 @@ export const TurnSchema = z.object({
   subagentResume: SubagentResumeRequestSchema.optional(),
   model: z.string().optional(),
   providerId: z.string().optional(),
+  /** Frozen harness identity; inferred at admission when absent on legacy records. */
+  harnessId: HarnessIdSchema.optional(),
+  /** Frozen credential mode for the frozen harness; defaults to the harness's first mode. */
+  credentialMode: HarnessCredentialModeSchema.optional(),
   accountId: z.string().min(1).optional(),
   /** First successfully resolved route; immutable for the remainder of this turn. */
   actingModelRoute: ActingTurnModelRouteSchema.optional(),
@@ -289,12 +294,10 @@ export const TurnSchema = z.object({
    * rejects calls to them instead of blocking on a GUI answer.
    */
   disableUserInput: z.boolean().optional(),
-  /**
-   * True when this turn originated from an IM bridge. Kun exposes
-   * IM-only tools such as outbound attachment delivery only for these
-   * turns.
-   */
+  /** IM-bridge turn; gates IM-only tools such as outbound attachment delivery. */
   imContext: z.boolean().optional(),
+  /** Managed plan build (07 §10): selects the `plan-build` admission usage. */
+  planBuild: z.boolean().optional(),
   /** Optional stable machine-readable reason for a terminal turn. */
   terminalCode: z.string().trim().min(1).max(128).optional(),
   /** Internal Manager-authored ownership-expiry provenance. */
@@ -318,6 +321,13 @@ export const StartTurnRequest = z.object({
   subagentResume: SubagentResumeRequestSchema.optional(),
   model: z.string().optional(),
   providerId: z.string().optional(),
+  /**
+   * Explicit harness override for this turn. Absent means "inherit the
+   * thread's harness (or infer from the provider for legacy records)".
+   */
+  harnessId: HarnessIdSchema.optional(),
+  /** Explicit credential mode; absent means "the harness's default". */
+  credentialMode: HarnessCredentialModeSchema.optional(),
   accountId: z.string().min(1).optional(),
   reasoningEffort: TurnReasoningEffortSchema.optional(),
   serviceTier: TurnServiceTierSchema.optional(),
@@ -363,6 +373,11 @@ export const StartTurnRequest = z.object({
       { message: 'composerContexts must not contain duplicate attachmentId values' }
     )
     .default([]),
+  /**
+   * ADE manager threads (09 §6.2): pending worker-notice ids attached via
+   * composerContexts, acked after admission. Request-scoped, not persisted.
+   */
+  ackNoticeIds: z.array(z.string().trim().min(1).max(256)).max(1_024).optional(),
   fileReferences: z.array(UserFileReferenceSchema).default([]),
   workspaceCheckpointId: z.string().min(1).optional(),
   workspaceCheckpointRequestId: z.string().min(1).optional(),
@@ -407,6 +422,8 @@ export const StartTurnRequest = z.object({
    * IM-only tool exposure separately from generic headless turns.
    */
   imContext: z.boolean().optional(),
+  /** External-harness plan build (07 §10): admission enforces the host worktree. */
+  planBuild: z.boolean().optional(),
   /**
    * When true and the thread already has an active turn, the request is
    * persisted as a queued turn instead of being rejected with a busy
