@@ -152,8 +152,7 @@ export function makeDelegatedAwaitApproval(
               if (settled) return
               settled = true
               cleanup()
-              const resolved = gate.get(approval.id)
-              resolve({ decision, reviewer: 'user', ...(resolved?.reason ? { reason: resolved.reason } : {}) })
+              resolve(requiresUserDecision ? { decision, reviewer: 'user' } : decision)
             },
             (error) => {
               if (settled) return
