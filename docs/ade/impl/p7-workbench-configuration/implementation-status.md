@@ -246,3 +246,15 @@ worker 写入根还保留父任务的目录上限：父若只允许 `src/generat
 - 相关 ESLint 无错误，完整行数门禁已通过；此前的行数基线限制随此次远端更新消除。
 - 整合后的真实 Electron 冒烟 19 条断言通过，renderer、HTTP、未处理异常及 stale fence 列表均为空。
   报告保存在 `dist/pull-develop-smoke/report.json`，仍使用隔离本机 fixture。
+
+## 默认 Agent 的模型目录初始化误判
+
+模型目录尚未返回时，初始空数组曾被当成供应商缺失，导致新 Code 草稿弹出默认 Kun 不可用，
+并把当前模型/来源清空。现区分 idle、loading、ready 和 error；只有目录完成后才判断配置缺失。
+加载或失败期间保留已保存选择，显示加载/暂不可用状态；自动默认路由尚未确定时暂缓发送，
+外部 Agent 默认身份保持明确，用户显式选择仍按原规则生效。
+
+- 定向模型/默认路由回归 6 文件、59 项通过；既有输入框与语言资源回归 3 文件、84 项通过。
+- Kun、Web 和 Node 类型检查通过；GUI 构建、相关 ESLint、完整行数门禁通过。
+- 编译后的隔离 Electron Agent 流程 6 条断言通过，renderer 异常为空；证据在 `dist/catalog-startup-smoke/`。
+- 此修复不修改已保存供应商或凭据，也不以本机配置状态声明真实上游模型请求已经通过。

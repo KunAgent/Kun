@@ -1,5 +1,7 @@
 {
   "composerModelsLoading": "Loading models…",
+  "composerModelsUnavailable": "Models unavailable",
+  "composerModelsUnavailableHint": "The model list could not be loaded. Your saved model sources are unchanged; try again shortly.",
   "composerAgentDefaultModel": "Agent default model",
   "composerAgentDefaultModelHint": "This Agent chooses its default model. Model choices will appear here when available.",
   "kunAgentRequiredForWorkflow": "Design, Graph and plan workflows require Kun Agent. Select Kun to continue.",

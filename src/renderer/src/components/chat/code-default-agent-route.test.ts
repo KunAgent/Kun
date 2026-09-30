@@ -30,9 +30,52 @@ const project = { project: { key: '/repo', sourcePath: '/repo', kind: 'git' as c
 const base = () => ({ ...useChatStore.getState(), activeThreadId: null, route: 'chat' as const,
   workspaceRoot: '/repo', composerRouteExplicitWorkspaceRoot: '', composerCollaborationEnabled: false,
   composerProjectCollaborationExplicitWorkspaceRoot: '', composerModelGroups: groups,
+  composerModelCatalogStatus: 'ready' as const,
   composerModel: 'deepseek-chat', composerProviderId: 'deepseek' })
 
 describe('new Code default Agent route', () => {
+  it('keeps a saved Kun selection while the initial model catalog is pending or failed', () => {
+    const defaults = { ...input, settings: { ...settings, model: 'step-5-preview',
+      providerId: 'stepfun-token-plan', harnesses: { ...settings.harnesses!, defaultHarnessId: 'kun' } } }
+    for (const status of ['idle', 'loading', 'error'] as const) {
+      const state = { ...base(), composerModelGroups: [], composerModelCatalogStatus: status,
+        composerModel: 'step-5-preview', composerProviderId: 'stepfun-token-plan' }
+      const patch = codeProjectDefaultsPatch(state, project, '/repo', defaults)
+      expect(patch.composerModel).toBeUndefined()
+      expect(patch.composerProviderId).toBeUndefined()
+      expect(patch.error).toBeUndefined()
+      expect(patch.composerProjectDefaults?.routeError).toBeTruthy()
+      expect(patch.composerProjectDefaults?.routeError).not.toContain('Default Agent')
+      expect(codeDefaultRouteError({ ...state, ...patch })).toBe(patch.composerProjectDefaults?.routeError)
+      expect({ ...state, ...patch }).toMatchObject({ composerModel: 'step-5-preview',
+        composerProviderId: 'stepfun-token-plan' })
+    }
+  })
+
+  it('pins a provider-backed external default while loading, without silently sending through Kun', () => {
+    const patch = codeProjectDefaultsPatch({ ...base(), composerModelGroups: [],
+      composerModelCatalogStatus: 'loading' }, project, '/repo', { ...input, settings: {
+        ...settings, harnesses: { ...settings.harnesses!, defaultHarnessId: 'cursor' }
+      } })
+    expect(patch).toMatchObject({ composerHarnessId: 'cursor', composerCredentialMode: 'provider' })
+    expect(patch.error).toBeUndefined()
+    expect(codeDefaultRouteError({ ...base(), ...patch })).toBeTruthy()
+  })
+
+  it('resolves a loaded catalog and still rejects a confirmed missing provider', () => {
+    const defaults = { ...input, settings: { ...settings,
+      harnesses: { ...settings.harnesses!, defaultHarnessId: 'kun' } } }
+    const pending = { ...base(), composerModelGroups: [], composerModelCatalogStatus: 'loading' as const }
+    const waiting = codeProjectDefaultsPatch(pending, project, '/repo', defaults)
+    const ready = { ...pending, ...waiting, composerModelGroups: groups, composerModelCatalogStatus: 'ready' as const }
+    expect(codeProjectDefaultsPatch(ready, project, '/repo', defaults)).toMatchObject({
+      composerProviderId: 'deepseek', composerModel: 'deepseek-chat'
+    })
+    const missing = codeProjectDefaultsPatch({ ...ready, composerModelGroups: [] }, project, '/repo', defaults)
+    expect(missing.composerProjectDefaults?.routeError).toBeTruthy()
+    expect(codeDefaultRouteError({ ...ready, ...missing })).toBe(missing.error)
+  })
+
   it('selects Codex native login and freezes the whole choice without carrying Kun credentials', () => {
     const patch = codeProjectDefaultsPatch(base(), project, '/repo', input)
     expect(patch).toMatchObject({ composerHarnessId: 'codex', composerCredentialMode: 'native-login',

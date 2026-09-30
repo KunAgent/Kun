@@ -117,6 +117,7 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     composerPersonaEnabled: true,
     composerPickList: mergeComposerPickList(false, []),
     composerModelGroups: [],
+    composerModelCatalogStatus: 'idle' as const,
     disabledSkillIds: [],
     codeAgentPresets: [],
     queuedMessages: [],

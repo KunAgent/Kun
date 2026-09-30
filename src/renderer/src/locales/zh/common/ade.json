@@ -1,5 +1,7 @@
 {
   "composerModelsLoading": "正在加载模型…",
+  "composerModelsUnavailable": "模型暂时不可用",
+  "composerModelsUnavailableHint": "模型列表未能加载，已保存的模型来源没有改变，请稍后重试。",
   "composerAgentDefaultModel": "Agent 默认模型",
   "composerAgentDefaultModelHint": "此 Agent 使用自身默认模型。可选模型可用后会显示在此处。",
   "kunAgentRequiredForWorkflow": "设计、Graph 和计划流程仅支持 Kun Agent，请切换到 Kun 后继续。",

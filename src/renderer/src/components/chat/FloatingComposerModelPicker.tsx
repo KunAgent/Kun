@@ -59,7 +59,7 @@ type Props = {
   composerProviderId?: string
   composerPickList: string[]
   composerModelGroups?: ModelProviderModelGroup[]
-  emptyModelState?: 'loading' | 'agent-default'
+  emptyModelState?: 'loading' | 'agent-default' | 'unavailable'
   canChangeModel: boolean
   controlVariant?: 'combined' | 'split'
   stretch?: boolean
@@ -134,7 +134,8 @@ export function FloatingComposerModelPicker({
   ) : null
   const currentModelProfile = modelProfileForSelection(providerMenuGroups, currentModel, selectedProviderId)
   const emptyModelMessage = emptyModelState && providerMenuGroups.length === 0
-    ? t(emptyModelState === 'loading' ? 'composerModelsLoading' : 'composerAgentDefaultModelHint') : undefined
+    ? t(emptyModelState === 'loading' ? 'composerModelsLoading'
+      : emptyModelState === 'unavailable' ? 'composerModelsUnavailableHint' : 'composerAgentDefaultModelHint') : undefined
   const needsProviderSetup = !emptyModelMessage && shouldShowProviderSetupPrompt(providerMenuGroups)
   const reasoningOptions = reasoningOptionsForModel(currentModelProfile)
   const reasoningEnabled =
@@ -163,6 +164,7 @@ export function FloatingComposerModelPicker({
   const modelMenuWidth = FLOATING_MENU_WIDTH
   const modelLabel = emptyModelMessage
     ? emptyModelState === 'loading' ? t('composerModelsLoading')
+      : emptyModelState === 'unavailable' ? t('composerModelsUnavailable')
       : currentModel && currentModel !== 'default' ? fullModelLabel(currentModel, t('autoLabel')) : t('composerAgentDefaultModel')
     : needsProviderSetup
     ? t('composerNoProvidersShort')

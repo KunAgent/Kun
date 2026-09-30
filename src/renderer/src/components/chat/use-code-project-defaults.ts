@@ -25,10 +25,16 @@ export function codeProjectDefaultsPatch(
   const userSelectedRoute = state.composerRouteExplicitWorkspaceRoot === projectPath
   const collaboration = state.composerProjectCollaborationExplicitWorkspaceRoot === projectPath
     ? state.composerCollaborationEnabled === true : snapshot.value.collaborationEnabled === true
-  const resolved = defaults && !route && !userSelectedRoute ? resolveCodeDefaultAgentRoute({
+  const defaultResult = defaults && !route && !userSelectedRoute ? resolveCodeDefaultAgentRoute({
     ...defaults, groups: state.composerModelGroups, currentModel: state.composerModel,
     currentProviderId: state.composerProviderId, collaboration
   }) : undefined
+  // An initial or failed catalog lookup is not evidence that saved providers
+  // disappeared. Keep the draft selection until a completed catalog can decide.
+  const waitingForCatalog = defaultResult?.error === 'provider' && state.composerModelCatalogStatus !== 'ready'
+  const resolved = waitingForCatalog ? undefined : defaultResult
+  const waitingMessage = waitingForCatalog ? i18n.t(state.composerModelCatalogStatus === 'error'
+    ? 'common:composerModelsUnavailableHint' : 'common:composerModelsLoading') : undefined
   const routeError = resolved?.error ? i18n.t('common:codeDefaultAgentUnavailable', {
     agent: defaults?.rows.find((row) => row.definition.id === resolved.route.harnessId)?.definition.displayName
       ?? resolved.route.harnessId,
@@ -45,9 +51,13 @@ export function codeProjectDefaultsPatch(
       workspaceRoot: projectPath,
       revision: snapshot.revision,
       value: snapshot.value,
-      ...(routeError ? { routeError } : {})
+      ...(routeError || waitingMessage ? { routeError: routeError ?? waitingMessage } : {})
     },
     ...(routeError ? { error: routeError } : previousError && state.error === previousError ? { error: null } : {}),
+    ...(waitingForCatalog && defaultResult ? {
+      composerHarnessId: defaultResult.route.harnessId,
+      composerCredentialMode: defaultResult.route.credentialMode
+    } : {}),
     ...(resolved ? {
       composerHarnessId: resolved.route.harnessId,
       composerCredentialMode: resolved.route.credentialMode,
@@ -95,6 +105,7 @@ export function useCodeProjectDefaults({
   const rows = useHarnessStore((state) => state.rows)
   const catalogLoaded = useHarnessStore((state) => state.rowsLoadedAt !== undefined)
   const groups = useChatStore((state) => state.composerModelGroups)
+  const modelCatalogStatus = useChatStore((state) => state.composerModelCatalogStatus)
   const draftCollaboration = useChatStore((state) => state.composerCollaborationEnabled)
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') return
@@ -136,5 +147,5 @@ export function useCodeProjectDefaults({
       // Older desktop/remote bridges retain the existing Code selection.
     })
     return () => { cancelled = true }
-  }, [enabled, activeThreadId, projectPath, draftRevision, refreshNonce, settings, rows, catalogLoaded, groups, draftCollaboration])
+  }, [enabled, activeThreadId, projectPath, draftRevision, refreshNonce, settings, rows, catalogLoaded, groups, modelCatalogStatus, draftCollaboration])
 }

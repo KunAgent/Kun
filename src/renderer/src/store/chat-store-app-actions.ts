@@ -327,6 +327,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
         return queuedComposerModelReload
       }
       if (typeof window.kunGui === 'undefined') return
+      set({ composerModelCatalogStatus: 'loading' })
       const task = (async () => {
         const [res, extensionProviders] = await Promise.all([
           window.kunGui.fetchUpstreamModels(),
@@ -416,10 +417,14 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
               selection.model,
               selection.providerId
             ),
-            composerModelGroups: groups
+            composerModelGroups: groups,
+            composerModelCatalogStatus: 'ready'
           }
         })
-      })().finally(() => {
+      })().catch((error) => {
+        set({ composerModelCatalogStatus: 'error' })
+        throw error
+      }).finally(() => {
         setComposerModelLoadPromise(null)
       })
       setComposerModelLoadPromise(task)

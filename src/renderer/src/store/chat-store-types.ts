@@ -310,6 +310,7 @@ export type ChatState = {
   composerFastMode: boolean
   composerPickList: string[]
   composerModelGroups: ModelProviderModelGroup[]
+  composerModelCatalogStatus: 'idle' | 'loading' | 'ready' | 'error'
   /**
    * Optional subagent profile id selected as the persona for the next new
    * thread / next-turn override. Empty = use the runtime default.

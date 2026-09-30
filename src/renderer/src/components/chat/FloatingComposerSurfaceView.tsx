@@ -50,9 +50,10 @@ export function FloatingComposerSurfaceView({
     worktreeBranch
   } = context
   const composerHarnessId = useChatStore((state) => state.composerHarnessId)
+  const modelCatalogStatus = useChatStore((state) => state.composerModelCatalogStatus)
   const kunComposer = adeComposerEnabled && !side && adeComposer?.harnessId === 'kun'
   const modelGroups: ModelProviderModelGroup[] = kunComposer ? composerModelGroups.filter(isKunModelProviderGroup) : composerModelGroups
-  const modelPickList = kunComposer && composerModelGroups.length
+  const modelPickList = kunComposer && (composerModelGroups.length || modelCatalogStatus !== 'ready')
     ? [...new Set(modelGroups.flatMap((group) => group.modelIds))] : composerPickList
   const externalAgent = adeComposerEnabled && !side && adeComposer?.harnessId !== 'kun' && Boolean(adeComposer)
   const documentQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'document-quote')
@@ -503,7 +504,9 @@ export function FloatingComposerSurfaceView({
                       composerPickList={modelPickList}
                       composerModelGroups={modelGroups}
                       emptyModelState={externalAgent && adeComposer?.credentialMode === 'native-login'
-                        ? adeComposer.modelsLoading ? 'loading' : 'agent-default' : undefined}
+                        ? adeComposer.modelsLoading ? 'loading' : 'agent-default'
+                        : kunComposer && modelCatalogStatus !== 'ready'
+                          ? modelCatalogStatus === 'error' ? 'unavailable' : 'loading' : undefined}
                       composerReasoningEffort={composerReasoningEffort}
                       composerFastMode={composerFastMode}
                       showProviderInModelLabel={showProviderInModelLabel}

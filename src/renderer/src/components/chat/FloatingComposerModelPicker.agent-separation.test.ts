@@ -24,8 +24,9 @@ afterEach(async () => {
 describe('Model picker after Agent selection moves to the mode control', () => {
   it.each([
     ['agent-default', 'Agent default model'],
-    ['loading', 'Loading models…']
-  ] as const)('shows the native Agent %s state without suggesting an HTTP provider', async (emptyModelState, label) => {
+    ['loading', 'Loading models…'],
+    ['unavailable', 'Models unavailable']
+  ] as const)('shows the %s catalog state without suggesting an HTTP provider', async (emptyModelState, label) => {
     const onConfigureProviders = vi.fn()
     await act(async () => root.render(createElement(FloatingComposerModelPicker, {
       compact: false, mode: 'select', controlVariant: 'split', composerModel: 'default', composerPickList: [],

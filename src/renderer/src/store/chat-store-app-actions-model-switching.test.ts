@@ -135,6 +135,36 @@ describe('chat-store app actions composer model loading', () => {
     vi.unstubAllGlobals()
   })
 
+  it('keeps the saved selection while loading and publishes catalog readiness with the groups', async () => {
+    const models: FetchModelsResult = { ok: true, modelIds: ['saved-model'],
+      modelGroups: [{ providerId: 'saved-provider', label: 'Saved', modelIds: ['saved-model'] }] }
+    const { state, actions, fetchUpstreamModels } = buildHarness(models)
+    state.composerModel = 'saved-model'
+    state.composerProviderId = 'saved-provider'
+    const waiting = deferred<FetchModelsResult>()
+    fetchUpstreamModels.mockReturnValueOnce(waiting.promise)
+    const load = actions.loadComposerModels()
+    expect(state).toMatchObject({ composerModelCatalogStatus: 'loading',
+      composerModel: 'saved-model', composerProviderId: 'saved-provider' })
+    waiting.resolve(models)
+    await load
+    expect(state).toMatchObject({ composerModelCatalogStatus: 'ready', composerModelGroups: models.modelGroups,
+      composerModel: 'saved-model', composerProviderId: 'saved-provider' })
+  })
+
+  it('distinguishes a confirmed empty catalog from a failed lookup', async () => {
+    const { state, actions, fetchUpstreamModels } = buildHarness({ ok: false, message: 'No configured providers' })
+    await actions.loadComposerModels()
+    expect(state).toMatchObject({ composerModelCatalogStatus: 'ready', composerModelGroups: [] })
+    state.composerProviderId = 'saved-provider'
+    state.composerModel = 'saved-model'
+    state.composerModelGroups = [{ providerId: 'saved-provider', label: 'Saved', modelIds: ['saved-model'] }]
+    fetchUpstreamModels.mockRejectedValueOnce(new Error('Connection interrupted'))
+    await expect(actions.loadComposerModels()).rejects.toThrow('Connection interrupted')
+    expect(state).toMatchObject({ composerModelCatalogStatus: 'error', composerProviderId: 'saved-provider',
+      composerModel: 'saved-model', composerModelGroups: [{ providerId: 'saved-provider' }] })
+  })
+
   it('clears Kun plan and Graph intent when choosing an external Agent without rewriting queued turns', () => {
     const harness = buildHarness({ ok: true, modelIds: [] })
     harness.state.composerMode = 'plan'
