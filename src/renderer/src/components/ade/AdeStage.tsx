@@ -14,12 +14,13 @@ const TerminalDrawer = lazy(() =>
 export type AdeStageProps = {
   conversation: WorkbenchConversationStageProps
   activeThreadId: string | null
+  adeDraftOpen: boolean
 }
 
 /**
  * ADE mode reuses the Code conversation stage (composer, timeline, right
  * panel host) through `mode="ade"` — it does not copy the chat UI. With no
- * active thread the ADE home is Mission Control; SDD draft editing stays a
+ * active thread or draft the ADE home is Mission Control; SDD editing stays a
  * Code-only surface. The shared ActivityStore feed (06 §9) is app-owned in
  * AppShell while the ADE lab flag is on, so this stage only subscribes.
  *
@@ -27,8 +28,8 @@ export type AdeStageProps = {
  * install/login actions from the Agent Center open a prefilled local tab
  * here, outside any conversation.
  */
-export function AdeStage({ conversation, activeThreadId }: AdeStageProps): ReactElement {
-  if (!activeThreadId) {
+export function AdeStage({ conversation, activeThreadId, adeDraftOpen }: AdeStageProps): ReactElement {
+  if (!activeThreadId && !adeDraftOpen) {
     const {
       terminalOpen,
       terminalHeight,

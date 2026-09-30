@@ -22,7 +22,7 @@ type Context = Record<string, any>
 export function WorkbenchContent({ context }: { context: Context }): ReactElement {
   const {
     shellRef, extensionHostContextMenus, activeExtensionCenterView, route, setWorkspaceContextMenu,
-    leftSidebarCollapsed, leftSidebarWidth, codeThreads, adeThreads, activeThreadId, sidebarView,
+    leftSidebarCollapsed, leftSidebarWidth, codeThreads, adeThreads, activeThreadId, adeDraftOpen, sidebarView,
     connectPhoneSidebarOpen, connectPhoneInitialTarget, activeExtensionLeftSidebar, extensionWorkspaceRoot,
     selectExtensionSurface, runtimeConnection, threadSearch, showArchivedThreads, focusModeEnabled,
     updateFocusMode, setThreadSearch, openThread, renameThread, pinThread, archiveThread,
@@ -155,6 +155,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
       <WriteAssistantStageContext.Provider value={writeAssistantStageProps ?? null}>
       <WorkbenchStageRouter
         route={normalizedRoute}
+        adeDraftOpen={adeDraftOpen === true}
         leftSidebarCollapsed={leftSidebarCollapsed}
         onToggleLeftSidebar={toggleLeftSidebar}
         onOpenThread={openThread}

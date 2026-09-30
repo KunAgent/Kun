@@ -14,7 +14,7 @@ type StoreActionContext = {
 }
 export function createNavigationActions(
   context: StoreActionContext
-): Pick<ChatState, 'openCode' | 'openAde' | 'openDesign' | 'clearActiveThreadSelection' | 'openWrite' | 'ensureWriteThreadForWorkspace' | 'createWriteThread' | 'selectWriteThread' | 'ensureDesignThreadForWorkspace' | 'createDesignThread' | 'probeRuntime' | 'boot' | 'chooseWorkspace' | 'selectWorkspaceRoot' | 'clearWorkspace' | 'removeWorkspace' | 'addWorkspaceFolder' | 'removeWorkspaceFolder' | 'refreshThreads' | 'refreshAdeThreads' | 'loadMoreThreads' | 'setThreadSearch' | 'setShowArchivedThreads'> {
+): Pick<ChatState, 'openCode' | 'openAde' | 'startAdeDraft' | 'openDesign' | 'clearActiveThreadSelection' | 'openWrite' | 'ensureWriteThreadForWorkspace' | 'createWriteThread' | 'selectWriteThread' | 'ensureDesignThreadForWorkspace' | 'createDesignThread' | 'probeRuntime' | 'boot' | 'chooseWorkspace' | 'selectWorkspaceRoot' | 'chooseAdeWorkspace' | 'selectAdeWorkspaceRoot' | 'setComposerIsolationForWorkspace' | 'clearWorkspace' | 'removeWorkspace' | 'addWorkspaceFolder' | 'removeWorkspaceFolder' | 'refreshThreads' | 'refreshAdeThreads' | 'loadMoreThreads' | 'setThreadSearch' | 'setShowArchivedThreads'> {
   return {
     ...createNavigationModeActions(context),
     ...createAdeActions(context),

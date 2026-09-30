@@ -17,6 +17,9 @@ type Props = {
   prep?: TaskWorkspacePrep
   /** Bound task-workspace id when the thread already has one. */
   boundWorkspaceId?: string
+  boundWorkspacePath?: string
+  showBoundLocal?: boolean
+  worktreeDisabledReason?: string
   onSelect: (value: 'local' | 'worktree') => void
   onRetryPrep?: () => void
 }
@@ -28,6 +31,9 @@ export function FloatingComposerIsolationPicker({
   value,
   prep,
   boundWorkspaceId,
+  boundWorkspacePath,
+  showBoundLocal = false,
+  worktreeDisabledReason,
   onSelect,
   onRetryPrep
 }: Props): ReactElement | null {
@@ -76,11 +82,13 @@ export function FloatingComposerIsolationPicker({
         <button
           key={option.id}
           type="button"
+          disabled={option.id === 'worktree' && Boolean(worktreeDisabledReason)}
+          title={option.id === 'worktree' ? worktreeDisabledReason : undefined}
           onClick={() => {
             onSelect(option.id)
             setOpen(false)
           }}
-          className={`flex w-full items-start gap-2 px-3 py-2 text-left text-sm transition hover:bg-ds-hover ${value === option.id ? 'bg-ds-subtle' : ''}`}
+          className={`flex w-full items-start gap-2 px-3 py-2 text-left text-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-50 ${value === option.id ? 'bg-ds-subtle' : ''}`}
           data-isolation={option.id}
         >
           {option.id === 'worktree' ? (
@@ -91,7 +99,7 @@ export function FloatingComposerIsolationPicker({
           <span className="min-w-0 flex-1">
             <span className="block truncate text-ds-ink">{option.title}</span>
             <span className="block truncate text-[11px] text-ds-faint">
-              {option.description}
+              {option.id === 'worktree' && worktreeDisabledReason ? worktreeDisabledReason : option.description}
             </span>
           </span>
         </button>
@@ -156,12 +164,21 @@ export function FloatingComposerIsolationPicker({
         <span
           className="inline-flex h-7 items-center gap-1.5 rounded-full border border-ds-border bg-ds-raised px-2 text-[11px] font-medium text-ds-muted"
           data-worktree-prep="ready"
-          title={prep?.path ?? boundWorkspaceId}
+          title={prep?.path ?? boundWorkspacePath ?? boundWorkspaceId}
         >
           <GitBranch className="h-3 w-3" strokeWidth={1.75} />
           <span className="max-w-[160px] truncate">
-            {(prep?.path ?? '').split('/').filter(Boolean).pop() ?? t('adeIsolation.worktree')}
+            {(prep?.path ?? boundWorkspacePath ?? '').split(/[/\\]/).filter(Boolean).pop() ?? t('adeIsolation.worktree')}
           </span>
+        </span>
+      ) : showBoundLocal ? (
+        <span
+          className="inline-flex h-7 items-center gap-1.5 rounded-full border border-ds-border bg-ds-raised px-2 text-[11px] font-medium text-ds-muted"
+          data-worktree-prep="local"
+          title={boundWorkspacePath || t('adeIsolation.localHint')}
+        >
+          <FolderGit2 className="h-3 w-3" strokeWidth={1.75} />
+          {t('adeIsolation.local')}
         </span>
       ) : null}
     </div>

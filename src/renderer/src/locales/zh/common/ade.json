@@ -44,7 +44,7 @@
     "credential": "凭据方式",
     "provider": "供应商",
     "model": "模型",
-    "start": "开始会话"
+    "start": "继续编写"
   },
   "adeDispatchable": "可派：{{names}}",
   "adeDispatchableNone": "没有可派的 agent",
@@ -240,6 +240,31 @@
     "preparing": "正在准备 worktree…",
     "prepFailed": "worktree 准备失败",
     "prepFailedRetry": "worktree 失败 — 重试"
+  },
+  "adeWorkspace": {
+    "title": "项目目录",
+    "switchHint": "选择其他项目并新建会话",
+    "loadingProject": "正在读取项目…",
+    "sourceUnavailable": "无法读取源项目；当前显示执行目录",
+    "executionPath": "执行目录：{{path}}",
+    "busyRunning": "当前任务结束后才能切换项目。",
+    "busyQueued": "清空待发送消息后才能切换项目。",
+    "busyPreparing": "worktree 准备结束后才能切换项目。"
+  },
+  "adeWorkspaceInvalidProject": "此目录不能作为项目使用。",
+  "adeWorkspaceSwitchBusy": "当前运行、待发送消息或 worktree 准备结束后才能切换项目。",
+  "adeWorktreeStart": {
+    "title": "Worktree 起点",
+    "defaultBranch": "默认分支",
+    "currentHead": "当前 HEAD",
+    "localBranch": "其他本地分支",
+    "searchBranch": "搜索分支",
+    "noBranches": "没有匹配的本地分支",
+    "checking": "正在检查 Git 仓库…",
+    "notGit": "此项目不是 Git 仓库，已改用本地目录。",
+    "checkFailed": "无法检查 Git 分支。",
+    "branchMissing": "所选分支已不存在，请重新选择起点。",
+    "retry": "重试 Git 检查"
   },
   "slashHarnessCommandFallback": "Harness 命令",
   "adeNotify": {

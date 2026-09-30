@@ -19,6 +19,8 @@ export type TaskWorkspacePrep = {
   state: TaskWorkspaceState
   progress?: { step?: string; percent?: number; message?: string }
   path?: string
+  /** Original project directory; `path` is the isolated execution directory. */
+  sourceRoot?: string
   /** Terminal creation error shown with a retry affordance. */
   error?: string
 }
@@ -91,7 +93,10 @@ export function receiveTaskWorkspaceRecord(record: TaskWorkspaceRecord): void {
       // A superseded workspace finished late — keep tracking the newer one.
       return {}
     }
-    if (existing && existing.state === 'ready' && record.workspaceId === existing.workspaceId) {
+    if (
+      existing && existing.state === 'ready' && record.workspaceId === existing.workspaceId &&
+      existing.sourceRoot
+    ) {
       return {}
     }
     return {
@@ -102,6 +107,7 @@ export function receiveTaskWorkspaceRecord(record: TaskWorkspaceRecord): void {
           ownerThreadId: threadId,
           state: record.state,
           ...(record.path ? { path: record.path } : {}),
+          ...(record.sourceRoot ? { sourceRoot: record.sourceRoot } : {}),
           ...(record.lastError ? { error: record.lastError } : {})
         }
       }
@@ -130,7 +136,8 @@ export function receiveTaskWorkspaceThreadEvent(ev: TaskWorkspaceThreadEvent): v
           ...(ev.progress ? { progress: ev.progress } : {}),
           ...(ev.workspace?.path ? { path: ev.workspace.path } : existing?.path
             ? { path: existing.path }
-            : {})
+            : {}),
+          ...(existing?.sourceRoot ? { sourceRoot: existing.sourceRoot } : {})
         }
       }
     }

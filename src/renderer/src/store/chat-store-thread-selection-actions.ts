@@ -192,6 +192,7 @@ export function createThreadSelectionActions(
       return
     }
     const selectionGeneration = beginThreadSelection(runtime, currentState.activeThreadId, id)
+    if (currentState.adeDraftOpen) set({ adeDraftOpen: false, adeDraftRevision: currentState.adeDraftRevision + 1 })
     const previousState = get()
     const prevId = previousState.activeThreadId
     const prevBusy = previousState.busy

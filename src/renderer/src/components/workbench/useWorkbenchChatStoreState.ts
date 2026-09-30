@@ -10,6 +10,7 @@ export function useWorkbenchChatStoreState() {
       threadSearch: s.threadSearch,
       showArchivedThreads: s.showArchivedThreads,
       activeThreadId: s.activeThreadId,
+      adeDraftOpen: s.adeDraftOpen,
       threadLoadingId: s.threadLoadingId,
       activeThreadRelation: s.activeThreadRelation,
       activeThreadParentId: s.activeThreadParentId,

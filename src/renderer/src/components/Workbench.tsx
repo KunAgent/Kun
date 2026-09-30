@@ -100,7 +100,7 @@ import { useWorkbenchGraphRuntimeState } from './workbench/useWorkbenchGraphRunt
 export function Workbench(): ReactElement {
   const { t, i18n } = useTranslation('common')
   const {
-    threads, adeThreads, threadSearch, showArchivedThreads, activeThreadId, threadLoadingId, activeThreadRelation,
+    threads, adeThreads, threadSearch, showArchivedThreads, activeThreadId, adeDraftOpen, threadLoadingId, activeThreadRelation,
     activeThreadParentId, selectThread, createThread, createConversation, blocks,
     liveReasoning, liveAssistant, error, runtimeErrorDetail, runtimeStatus, busy,
     currentTurnOrchestration,
@@ -641,7 +641,7 @@ export function Workbench(): ReactElement {
     {autoPlanBuildDialog}
     <WorkbenchContent context={{
     shellRef, extensionHostContextMenus, activeExtensionCenterView, route, setWorkspaceContextMenu,
-    leftSidebarCollapsed, leftSidebarWidth, codeThreads, adeThreads, activeThreadId, sidebarView,
+    leftSidebarCollapsed, leftSidebarWidth, codeThreads, adeThreads, activeThreadId, adeDraftOpen, sidebarView,
     connectPhoneSidebarOpen, connectPhoneInitialTarget, activeExtensionLeftSidebar, extensionWorkspaceRoot,
     selectExtensionSurface, runtimeConnection, threadSearch, showArchivedThreads, focusModeEnabled,
     updateFocusMode, setThreadSearch, openThread, renameThread, pinThread, archiveThread,

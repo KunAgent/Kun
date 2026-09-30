@@ -8,6 +8,8 @@ import { FloatingComposerContextChips } from './FloatingComposerContextChips'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 import { KnowledgeBasePicker } from './KnowledgeBasePicker'
 import { composerAgentPickerSurface } from '../../lib/subagent-profile-surface'
+import { AdeWorkspaceProjectPicker } from './AdeWorkspaceProjectPicker'
+import { AdeWorktreeStartPicker } from './AdeWorktreeStartPicker'
 
 export function FloatingComposerSurfaceView({
   context
@@ -20,7 +22,7 @@ export function FloatingComposerSurfaceView({
     FloatingComposerIsolationPicker, FloatingComposerModelPicker,
     FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker,
     Bot, Folder, GitBranchPicker, ListTodo, Loader2, Mic, Plus, Send, Share2, Sparkles,
-    Square, Target, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThreadGoal,
+    Square, Target, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThread, activeThreadGoal,
     activeThreadId, adeComposer, adeComposerEnabled, attachmentUploadEnabled, attachmentUploadError, attachments, busy,
     canChangeModel, canCompose, canEditComposer, canOpenComposerMenu, canOptimizePrompt,
     canToggleWorktreeMode, compact, composerFastMode, composerMenuButtonRef, composerMenuOpen, composerShellRef,
@@ -35,7 +37,7 @@ export function FloatingComposerSurfaceView({
     onComposerReasoningEffortChange, onConfigureImageGeneration, onConfigureProviders, onDesignTaskProfileChange, onExecutionSettingsChange, onInterrupt,
     onRemoveAttachment, onRemoveContextChip, onRemoveFileReference, onDismissPromptOptimizationError, onToggleWorktreeMode,
     onWorktreeBranchChange, openSettings, orchestration, placeholder, primaryActionDisabled,
-    primaryActionKind, primaryActionLabel, primaryActionLoading, promptOptimizationBusy, promptOptimizationError,
+    primaryActionKind, primaryActionLabel, primaryActionLoading, promptOptimizationBusy, promptOptimizationError, queuedMessages,
     promptOptimizationSettings, route, runningGraphTurn, runtimeReady, setGoalInputMode, showComposerMenuButton,
     showCodeExecutionControls, showExecutionSettingsPicker, showProviderInModelLabel, showToolbarStartControls,
     showVoiceDictation, showWorkspaceControls, side, stretchModelPicker, t, useWorktreePool,
@@ -49,6 +51,13 @@ export function FloatingComposerSurfaceView({
   const openContinueLocalSession = adeComposer?.continuation
     ? () => setContinueDialogOpen(true)
     : undefined
+  const adeWorkspaceDisabledReason = activeThreadId && busy
+    ? t('adeWorkspace.busyRunning')
+    : activeThreadId && queuedMessages?.length
+      ? t('adeWorkspace.busyQueued')
+      : activeThreadId && (adeComposer?.prep?.state === 'creating' || adeComposer?.prep?.state === 'setting-up')
+        ? t('adeWorkspace.busyPreparing')
+        : undefined
   return (
     <>
         {!compact && !emptyTaskLayout && taskSurface === 'design' && designTaskProfile ? (
@@ -65,6 +74,37 @@ export function FloatingComposerSurfaceView({
               onProfileChange={onDesignTaskProfileChange}
               onConfigureImageGeneration={onConfigureImageGeneration}
             />
+          </div>
+        ) : null}
+        {route === 'ade' && !compact && !side ? (
+          <div
+            className="ds-composer-workspace-controls ds-no-drag flex min-h-9 min-w-0 flex-wrap items-center gap-2 px-3 pb-1"
+            data-ade-workspace-controls
+          >
+            <AdeWorkspaceProjectPicker
+              workspaceRoot={effectiveWorkspaceRoot}
+              activeThreadId={activeThreadId}
+              threadWorkspaceRoot={activeThread?.workspace}
+              threadTaskWorkspaceId={activeThread?.taskWorkspaceId}
+              prep={adeComposer?.prep}
+              disabledReason={adeWorkspaceDisabledReason}
+            />
+            {!activeThreadId && adeComposer?.isolation === 'worktree' ? (
+              <AdeWorktreeStartPicker git={adeComposer.worktreeGit} />
+            ) : null}
+            {!activeThreadId && adeComposer?.isolation === 'worktree' &&
+              (adeComposer.worktreeGit.status === 'error' || !adeComposer.worktreeGit.selectedBranchValid) ? (
+              <span className="text-xs text-red-600 dark:text-red-300" role="alert">
+                {!adeComposer.worktreeGit.selectedBranchValid
+                  ? t('adeWorktreeStart.branchMissing')
+                  : adeComposer.worktreeGit.error || t('adeWorktreeStart.checkFailed')}
+              </span>
+            ) : null}
+            {!activeThreadId && adeComposer?.worktreeGit.status === 'not-git' ? (
+              <span className="text-xs text-amber-700 dark:text-amber-300" role="status">
+                {t('adeWorktreeStart.notGit')}
+              </span>
+            ) : null}
           </div>
         ) : null}
         {showWorkspaceControls ? (
@@ -398,7 +438,10 @@ export function FloatingComposerSurfaceView({
                       showPicker={!activeThreadId}
                       value={adeComposer.isolation}
                       prep={adeComposer.prep}
-                      boundWorkspacePath={adeComposer.boundWorkspaceId}
+                      boundWorkspaceId={adeComposer.boundWorkspaceId}
+                      boundWorkspacePath={activeThread?.workspace}
+                      showBoundLocal={Boolean(activeThreadId && !adeComposer.boundWorkspaceId)}
+                      worktreeDisabledReason={adeComposer.worktreeGit.status === 'not-git' ? t('adeWorktreeStart.notGit') : undefined}
                       onSelect={adeComposer.selectIsolation}
                       onRetryPrep={adeComposer.retryWorkspacePrep}
                     />

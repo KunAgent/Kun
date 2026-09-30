@@ -23,6 +23,7 @@ import {
   type AdeCredentialGroupLabels
 } from '../../lib/ade-composer-harness'
 import { useHarnessDefaults, harnessPermissionDefault } from '../../lib/harness-defaults'
+import { useAdeWorktreeGit } from './use-ade-worktree-git'
 
 /**
  * ADE composer wiring (docs/ade/12 §7.2–7.4): harness catalog, per-harness
@@ -32,6 +33,7 @@ import { useHarnessDefaults, harnessPermissionDefault } from '../../lib/harness-
 export function useAdeComposerControls(input: {
   enabled: boolean
   activeThreadId: string | null
+  workspaceRoot: string
   threadHarnessId: string | undefined
   threadTaskWorkspaceId: string | undefined
   threadHasUserMessages: boolean
@@ -42,6 +44,7 @@ export function useAdeComposerControls(input: {
   const {
     enabled,
     activeThreadId,
+    workspaceRoot,
     threadHarnessId,
     threadTaskWorkspaceId,
     threadHasUserMessages,
@@ -66,6 +69,7 @@ export function useAdeComposerControls(input: {
   const setComposerIsolation = useChatStore((state) => state.setComposerIsolation)
   const setComposerExecutionSettings = useChatStore((state) => state.setComposerExecutionSettings)
   const requestAdeThreadWorkspace = useChatStore((state) => state.requestAdeThreadWorkspace)
+  const worktreeGit = useAdeWorktreeGit({ enabled, activeThreadId, workspaceRoot })
   const harnessId = effectiveHarnessId(composerHarnessId, threadHarnessId)
   const row = rows.find((entry) => entry.definition.id === harnessId)
   const modelCache = useHarnessStore((state) => state.models[harnessId])
@@ -213,13 +217,15 @@ export function useAdeComposerControls(input: {
     selectHarness,
     continuation,
     isolation,
+    worktreeGit,
     selectIsolation: (next: 'local' | 'worktree'): void => {
+      if (next === 'worktree' && worktreeGit.status === 'not-git') return
       setComposerIsolation(next, next === 'worktree' ? { kind: 'default-branch' } : undefined)
     },
     prep: prep as TaskWorkspacePrep | undefined,
     boundWorkspaceId: threadTaskWorkspaceId?.trim() || prep?.workspaceId || undefined,
     retryWorkspacePrep: (): void => {
-      if (activeThreadId) void requestAdeThreadWorkspace(activeThreadId, { kind: 'default-branch' })
+      if (activeThreadId) void requestAdeThreadWorkspace(activeThreadId, worktreeGit.startFrom)
     }
   }
 }

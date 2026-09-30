@@ -15,7 +15,7 @@ const helpersMock = vi.hoisted(() => ({
   rememberTurnModel: vi.fn()
 }))
 const runtimeHelpersMock = vi.hoisted(() => ({
-  findReusableEmptyThreadId: vi.fn(async () => null),
+  findReusableEmptyThreadId: vi.fn(async (): Promise<string | null> => null),
   reconcileOptimisticUserBlock: vi.fn()
 }))
 const runtimeMock = vi.hoisted(() => ({
@@ -43,7 +43,8 @@ const schedulersMock = vi.hoisted(() => ({
   resetBusyRecoveryAttempts: vi.fn()
 }))
 const persistenceMock = vi.hoisted(() => ({
-  saveQueuedMessagesForThread: vi.fn()
+  saveQueuedMessagesForThread: vi.fn(),
+  queuedMessagesForThread: vi.fn(() => [])
 }))
 const registryMock = vi.hoisted(() => ({
   readDesignThreadRegistry: vi.fn(() => ({})),
@@ -73,6 +74,7 @@ vi.mock('./chat-store-send-prompt', () => ({
 }))
 
 import { performPreparedThreadSend } from './chat-store-thread-send-direct'
+import { captureAdeDraftSendSnapshot } from './chat-store-ade-send-snapshot'
 import type { PreparedThreadSend } from './chat-store-thread-send-direct-types'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import type { QueuedUserMessage } from './chat-store-message-types'
@@ -85,6 +87,9 @@ function buildHarness(initial?: Partial<ChatState>): {
 } {
   const state = {
     route: 'ade',
+    adeDraftOpen: true,
+    adeDraftRevision: 1,
+    workspaceRoot: '/repo',
     threads: [],
     adeThreads: [],
     blocks: [],
@@ -102,6 +107,7 @@ function buildHarness(initial?: Partial<ChatState>): {
     turnReasoningFirstAtByUserId: {},
     turnReasoningLastAtByUserId: {},
     refreshThreads: vi.fn(async () => undefined),
+    refreshAdeThreads: vi.fn(async () => undefined),
     error: null,
     ...initial
   } as unknown as ChatState
@@ -123,6 +129,7 @@ function inputFor(
 ): PreparedThreadSend {
   return {
     context: { set: harness.set, get: harness.get, sseAbortRef: { current: null } },
+    adeDraft: captureAdeDraftSendSnapshot(harness.state),
     runtime: {
       threadSelectionGeneration: 0,
       fenceThreadMutation: vi.fn(() => 1),
@@ -173,10 +180,56 @@ function inputFor(
 }
 
 beforeEach(() => {
+  vi.clearAllMocks()
+  vi.stubGlobal('window', { kunGui: {
+    getGitBranches: vi.fn(async () => ({
+      ok: true as const, repositoryRoot: '/repo', primaryRepositoryRoot: '/repo',
+      currentBranch: 'main', branches: [
+        { name: 'main', current: true }, { name: 'feature', current: false }
+      ], dirtyCount: 0
+    })),
+    logError: vi.fn(async () => undefined)
+  } })
   useTaskWorkspaceStore.setState({ prepByThread: {} })
 })
 
 describe('performPreparedThreadSend ADE worktree isolation', () => {
+  it('does not create a thread from Mission Control without opening a draft', async () => {
+    const { state, ...harness } = buildHarness({ adeDraftOpen: false })
+    const provider = { createThread: vi.fn() }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(false)
+    expect(provider.createThread).not.toHaveBeenCalled()
+    expect(state.blocks).toEqual([])
+  })
+
+  it('creates a fresh ADE thread even when a reusable Code thread exists', async () => {
+    const { state, ...harness } = buildHarness()
+    runtimeHelpersMock.findReusableEmptyThreadId.mockResolvedValueOnce('thr_code')
+    const provider = {
+      createThread: vi.fn(async () => ({ id: 'thr_ade', workspace: '/repo', workspaceMode: 'ade' })),
+      sendUserMessage: vi.fn(async () => ({ turnId: 'turn_1' }))
+    }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(true)
+    expect(runtimeHelpersMock.findReusableEmptyThreadId).not.toHaveBeenCalled()
+    expect(provider.createThread).toHaveBeenCalledWith(expect.objectContaining({ workspaceMode: 'ade' }))
+    expect(state.activeThreadId).toBe('thr_ade')
+    expect(state.adeDraftOpen).toBe(false)
+  })
+
+  it('creates a Kun manager draft without carrying a previous one-on-one harness', async () => {
+    const { state, ...harness } = buildHarness({ adeDraftOpen: true })
+    const provider = {
+      createThread: vi.fn(async () => ({ id: 'thr_manager', workspace: '/repo', workspaceMode: 'ade' })),
+      sendUserMessage: vi.fn(async () => ({ turnId: 'turn_1' }))
+    }
+    const input = inputFor({ state, ...harness }, provider as never)
+    input.composerHarnessId = ''
+    input.composerCredentialMode = ''
+    expect(await performPreparedThreadSend(input)).toBe(true)
+    expect(provider.createThread).toHaveBeenCalledWith(expect.not.objectContaining({ harnessId: 'claude-code' }))
+    expect(state.adeDraftOpen).toBe(false)
+  })
+
   it('queues the first send while the requested worktree is still preparing', async () => {
     const { state, ...harness } = buildHarness({ composerIsolation: 'worktree' })
     const provider = {
@@ -203,8 +256,9 @@ describe('performPreparedThreadSend ADE worktree isolation', () => {
     expect(provider.createThread).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceMode: 'ade', harnessId: 'claude-code' })
     )
+    expect(runtimeHelpersMock.findReusableEmptyThreadId).not.toHaveBeenCalled()
     expect(provider.createTaskWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ ownerThreadId: 'thr_new', isolation: 'worktree', sourceRoot: '/repo' })
+      expect.objectContaining({ ownerThreadId: 'thr_new', isolation: 'worktree', sourceRoot: '/repo', startFrom: { kind: 'default-branch' } })
     )
     // The turn is parked locally — the runtime must not see it yet.
     expect(provider.sendUserMessage).not.toHaveBeenCalled()
@@ -214,6 +268,208 @@ describe('performPreparedThreadSend ADE worktree isolation', () => {
       expect.objectContaining({ id: 'q_1', deliveryState: 'pending' })
     ])
     expect(threadWorkspacePreparing('thr_new')).toBe(true)
+  })
+
+  it.each([
+    { kind: 'current-head' as const },
+    { kind: 'branch' as const, name: 'feature' }
+  ])('forwards the chosen $kind start point without switching the source branch', async (startFrom) => {
+    const { state, ...harness } = buildHarness({
+      composerIsolation: 'worktree', composerWorktreeStartFrom: startFrom
+    })
+    const provider = {
+      createThread: vi.fn(async () => ({ id: 'thr_new', workspace: '/repo', workspaceMode: 'ade' })),
+      createTaskWorkspace: vi.fn(async () => ({ record: {
+        workspaceId: 'ws_1', ownerThreadId: 'thr_new', sourceRoot: '/repo',
+        isolation: 'worktree', state: 'creating'
+      } }))
+    }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(true)
+    expect(window.kunGui.getGitBranches).toHaveBeenCalledWith('/repo')
+    expect(provider.createTaskWorkspace).toHaveBeenCalledWith(expect.objectContaining({ startFrom }))
+  })
+
+  it('keeps the submitted worktree choice when the composer changes during settings loading', async () => {
+    const { state, ...harness } = buildHarness({ composerIsolation: 'worktree' })
+    const provider = {
+      createThread: vi.fn(async () => ({ id: 'thr_new', workspace: '/repo', workspaceMode: 'ade' })),
+      createTaskWorkspace: vi.fn(async () => ({ record: {
+        workspaceId: 'ws_1', ownerThreadId: 'thr_new', sourceRoot: '/repo',
+        isolation: 'worktree', state: 'creating'
+      } }))
+    }
+    const input = inputFor({ state, ...harness }, provider as never)
+    runtimeClientMock.getSettings.mockImplementationOnce(async () => {
+      state.composerIsolation = 'local'
+      state.composerWorktreeStartFrom = { kind: 'branch', name: 'feature' }
+      return { workspaceRoot: '/host' }
+    })
+    expect(await performPreparedThreadSend(input)).toBe(true)
+    expect(provider.createTaskWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      sourceRoot: '/repo', startFrom: { kind: 'default-branch' }
+    }))
+  })
+
+  it('rejects a local branch removed before submit without creating a thread', async () => {
+    const { state, ...harness } = buildHarness({
+      composerIsolation: 'worktree', composerWorktreeStartFrom: { kind: 'branch', name: 'gone' }
+    })
+    const provider = { createThread: vi.fn(), createTaskWorkspace: vi.fn() }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(false)
+    expect(provider.createThread).not.toHaveBeenCalled()
+    expect(state.error).toContain('gone')
+    expect(state.blocks).toEqual([])
+  })
+
+  it('does not silently send locally when worktree creation is unavailable', async () => {
+    const { state, ...harness } = buildHarness({ composerIsolation: 'worktree' })
+    const provider = { createThread: vi.fn(), sendUserMessage: vi.fn() }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(false)
+    expect(provider.createThread).not.toHaveBeenCalled()
+    expect(provider.sendUserMessage).not.toHaveBeenCalled()
+    expect(state.error).toContain('Worktree creation is unavailable')
+  })
+
+  it('ignores a Git result for a project changed while verification was pending', async () => {
+    const { state, ...harness } = buildHarness({ composerIsolation: 'worktree' })
+    let resolveGit!: (result: Awaited<ReturnType<typeof window.kunGui.getGitBranches>>) => void
+    vi.mocked(window.kunGui.getGitBranches).mockReturnValueOnce(new Promise((resolve) => {
+      resolveGit = resolve
+    }))
+    const provider = { createThread: vi.fn(), createTaskWorkspace: vi.fn() }
+    const send = performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))
+    await vi.waitFor(() => expect(window.kunGui.getGitBranches).toHaveBeenCalledWith('/repo'))
+    state.workspaceRoot = '/other'
+    resolveGit({
+      ok: true, repositoryRoot: '/repo', primaryRepositoryRoot: '/repo',
+      currentBranch: 'main', branches: [{ name: 'main', current: true }], dirtyCount: 0
+    })
+    expect(await send).toBe(false)
+    expect(provider.createThread).not.toHaveBeenCalled()
+    expect(state.blocks).toEqual([])
+  })
+
+  it('does not create a thread if the ADE draft closes during Git verification', async () => {
+    const { state, ...harness } = buildHarness({ composerIsolation: 'worktree' })
+    vi.mocked(window.kunGui.getGitBranches).mockImplementationOnce(async () => {
+      state.adeDraftOpen = false
+      return { ok: true, repositoryRoot: '/repo', primaryRepositoryRoot: '/repo',
+        currentBranch: 'main', branches: [{ name: 'main', current: true }], dirtyCount: 0 }
+    })
+    const provider = { createThread: vi.fn(), createTaskWorkspace: vi.fn() }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(false)
+    expect(provider.createThread).not.toHaveBeenCalled()
+    expect(state.adeDraftOpen).toBe(false)
+    expect(state.blocks).toEqual([])
+  })
+
+  it('does not bind an old send after the same ADE project is reopened as a new draft', async () => {
+    const { state, ...harness } = buildHarness({ composerIsolation: 'worktree' })
+    vi.mocked(window.kunGui.getGitBranches).mockImplementationOnce(async () => {
+      state.adeDraftOpen = false
+      state.adeDraftRevision += 1
+      state.adeDraftOpen = true
+      state.adeDraftRevision += 1
+      return { ok: true, repositoryRoot: '/repo', primaryRepositoryRoot: '/repo',
+        currentBranch: 'main', branches: [{ name: 'main', current: true }], dirtyCount: 0 }
+    })
+    const provider = { createThread: vi.fn(), createTaskWorkspace: vi.fn() }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(false)
+    expect(provider.createThread).not.toHaveBeenCalled()
+    expect(state.adeDraftOpen).toBe(true)
+    expect(state.adeDraftRevision).toBe(3)
+  })
+
+  it('keeps a failed worktree preparation retryable and does not send locally', async () => {
+    const { state, ...harness } = buildHarness({ composerIsolation: 'worktree' })
+    const provider = {
+      createThread: vi.fn(async () => ({ id: 'thr_new', workspace: '/repo', workspaceMode: 'ade' })),
+      createTaskWorkspace: vi.fn(async () => { throw new Error('worktree failed') }),
+      sendUserMessage: vi.fn()
+    }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(true)
+    expect(provider.sendUserMessage).not.toHaveBeenCalled()
+    expect(useTaskWorkspaceStore.getState().prepByThread.thr_new).toMatchObject({
+      state: 'failed', error: 'worktree failed'
+    })
+    expect(state.queuedMessages).toEqual([expect.objectContaining({ id: 'q_1', deliveryState: 'pending' })])
+  })
+
+  it('persists the pending turn to its own thread after navigation during preparation', async () => {
+    const { state, ...harness } = buildHarness({ composerIsolation: 'worktree' })
+    const provider = {
+      createThread: vi.fn(async () => ({ id: 'thr_new', workspace: '/repo', workspaceMode: 'ade' })),
+      createTaskWorkspace: vi.fn(async () => {
+        state.activeThreadId = 'thr_elsewhere'
+        return { record: { workspaceId: 'ws_1', ownerThreadId: 'thr_new', sourceRoot: '/repo',
+          isolation: 'worktree', state: 'creating' } }
+      })
+    }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(true)
+    expect(state.queuedMessages).toEqual([])
+    expect(persistenceMock.saveQueuedMessagesForThread).toHaveBeenCalledWith(
+      'thr_new', [expect.objectContaining({ id: 'q_1', deliveryState: 'pending' })]
+    )
+  })
+
+  it('does not fall back to the host setting when an ADE draft has no project', async () => {
+    const { state, ...harness } = buildHarness({ workspaceRoot: '' })
+    runtimeClientMock.getSettings.mockResolvedValueOnce({ workspaceRoot: '/host' })
+    const provider = { createThread: vi.fn() }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(false)
+    expect(provider.createThread).not.toHaveBeenCalled()
+  })
+
+  it('rejects a missing ADE project before creating a local thread', async () => {
+    const { state, ...harness } = buildHarness()
+    window.kunGui.workspaceDirectoryExists = vi.fn(async () => false)
+    const provider = { createThread: vi.fn() }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(false)
+    expect(provider.createThread).not.toHaveBeenCalled()
+    expect(state.error).toBeTruthy()
+  })
+
+  it('does not surface a stale Git error after the user navigates away', async () => {
+    const { state, ...harness } = buildHarness({ composerIsolation: 'worktree' })
+    vi.mocked(window.kunGui.getGitBranches).mockImplementationOnce(async () => {
+      state.route = 'chat'
+      state.workspaceRoot = '/elsewhere'
+      state.activeThreadId = 'thr_other'
+      state.currentTurnUserId = null
+      state.error = 'new view error'
+      throw new Error('old project Git failed')
+    })
+    const provider = { createThread: vi.fn(), createTaskWorkspace: vi.fn() }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(false)
+    expect(provider.createThread).not.toHaveBeenCalled()
+    expect(state.error).toBe('new view error')
+    expect(state.activeThreadId).toBe('thr_other')
+    expect(window.kunGui.logError).not.toHaveBeenCalled()
+  })
+
+  it('clears its optimistic turn if project selection changes during thread creation', async () => {
+    const { state, ...harness } = buildHarness()
+    const provider = { createThread: vi.fn(async () => {
+      state.workspaceRoot = '/other'
+      return { id: 'thr_new', workspace: '/repo', workspaceMode: 'ade' }
+    }) }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(false)
+    expect(state.activeThreadId).toBeNull()
+    expect(state.blocks).toEqual([])
+    expect(state.busy).toBe(false)
+    expect(state.refreshAdeThreads).toHaveBeenCalled()
+  })
+
+  it('does not activate an old thread when a same-project draft reopens during creation', async () => {
+    const { state, ...harness } = buildHarness()
+    const provider = { createThread: vi.fn(async () => {
+      state.adeDraftRevision += 2
+      return { id: 'thr_old', workspace: '/repo', workspaceMode: 'ade' }
+    }) }
+    expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(false)
+    expect(state.activeThreadId).toBeNull()
+    expect(state.adeDraftRevision).toBe(3)
+    expect(state.refreshAdeThreads).toHaveBeenCalled()
   })
 
   it('sends immediately when the session picked local isolation', async () => {

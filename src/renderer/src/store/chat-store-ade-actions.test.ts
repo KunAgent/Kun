@@ -65,6 +65,9 @@ function buildHarness(): {
   let state = {
     activeThreadId: null,
     adeThreads: [],
+    adeDraftOpen: false,
+    adeDraftRevision: 0,
+    blocks: [],
     busy: false,
     clawChannels: [],
     codeWorkspaceRoots: ['~/.kun/default_workspace'],
@@ -188,6 +191,7 @@ describe('ADE mode navigation actions', () => {
   it('openAde keeps an already active ADE thread selected', async () => {
     const harness = buildHarness()
     harness.state.activeThreadId = 'ade_a'
+    harness.state.adeDraftOpen = true
     harness.state.adeThreads = [
       thread({ id: 'ade_a', workspace: '/repo', workspaceMode: 'ade' })
     ]
@@ -197,6 +201,65 @@ describe('ADE mode navigation actions', () => {
     expect(harness.state.route).toBe('ade')
     expect(harness.selectThread).not.toHaveBeenCalled()
     expect(harness.state.activeThreadId).toBe('ade_a')
+    expect(harness.state.adeDraftOpen).toBe(false)
+    expect(harness.state.adeDraftRevision).toBe(1)
+  })
+
+  it('starts an ADE draft without creating or selecting a thread', () => {
+    const harness = buildHarness()
+    harness.state.route = 'ade'
+    harness.state.activeThreadId = 'ade_a'
+    harness.state.adeThreads = [thread({ id: 'ade_a', workspace: '/repo', workspaceMode: 'ade' })]
+    harness.state.blocks = [{ kind: 'assistant', id: 'old', text: 'previous' }]
+
+    harness.actions.startAdeDraft()
+
+    expect(harness.state.route).toBe('ade')
+    expect(harness.state.adeDraftOpen).toBe(true)
+    expect(harness.state.adeDraftRevision).toBe(1)
+    expect(harness.state.activeThreadId).toBeNull()
+    expect(harness.state.blocks).toEqual([])
+    expect(harness.selectThread).not.toHaveBeenCalled()
+  })
+
+  it('opens Mission Control from an empty ADE draft', () => {
+    const harness = buildHarness()
+    harness.state.route = 'ade'
+    harness.state.adeDraftOpen = true
+
+    harness.actions.clearActiveThreadSelection()
+
+    expect(harness.state.adeDraftOpen).toBe(false)
+    expect(harness.state.adeDraftRevision).toBe(1)
+    expect(harness.state.activeThreadId).toBeNull()
+  })
+
+  it('gives a reopened draft a new identity on the same project', () => {
+    const harness = buildHarness()
+    harness.state.route = 'ade'
+
+    harness.actions.startAdeDraft()
+    const firstRevision = harness.state.adeDraftRevision
+    harness.actions.clearActiveThreadSelection()
+    harness.actions.startAdeDraft()
+
+    expect(firstRevision).toBe(1)
+    expect(harness.state.adeDraftRevision).toBe(3)
+    expect(harness.state.adeDraftOpen).toBe(true)
+    expect(harness.state.workspaceRoot).toBe('~/.kun/default_workspace')
+  })
+
+  it('keeps a draft open instead of restoring a remembered thread', async () => {
+    const harness = buildHarness()
+    harness.state.adeDraftOpen = true
+    harness.state.lastAdeThreadId = 'ade_old'
+    harness.state.adeThreads = [thread({ id: 'ade_old', workspace: '/repo', workspaceMode: 'ade' })]
+
+    await harness.actions.openAde()
+
+    expect(harness.state.route).toBe('ade')
+    expect(harness.state.adeDraftOpen).toBe(true)
+    expect(harness.selectThread).not.toHaveBeenCalled()
   })
 
   it('openAde clears the selection when no ADE thread exists', async () => {

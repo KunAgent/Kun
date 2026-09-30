@@ -4,7 +4,7 @@ import type {
   TaskWorkspaceRecord
 } from '@shared/task-workspace'
 import type { QueuedUserMessage } from './chat-store-types'
-import { saveQueuedMessagesForThread } from './queued-message-persistence'
+import { queuedMessagesForThread, saveQueuedMessagesForThread } from './queued-message-persistence'
 import { buildThreadEventSink } from './chat-store-runtime'
 import { subscribeThreadEventsWithRecovery } from './chat-store-thread-action-helpers'
 import {
@@ -28,7 +28,7 @@ export async function prepareAdeThreadWorktree(args: {
   context: StoreActionContext
   submittedMessageForQueue: QueuedUserMessage
   persistActiveQueuedMessages: () => void
-  /** Overrides composerWorktreeStartFrom (e.g. plan builds pin current-head). */
+  /** Frozen at submission (plan builds pin current-head). */
   startFrom?: CreateTaskWorkspaceRequest['startFrom']
   label?: string
 }): Promise<TaskWorkspaceRecord | null> {
@@ -48,9 +48,7 @@ export async function prepareAdeThreadWorktree(args: {
       sourceRoot: workspaceRoot,
       isolation: 'worktree',
       ...(args.label?.trim() ? { label: args.label.trim() } : {}),
-      ...((args.startFrom ?? get().composerWorktreeStartFrom)
-        ? { startFrom: args.startFrom ?? get().composerWorktreeStartFrom! }
-        : {})
+      ...(args.startFrom ? { startFrom: args.startFrom } : {})
     })
     record = created.record
     receiveTaskWorkspaceRecord(created.record)
@@ -60,15 +58,15 @@ export async function prepareAdeThreadWorktree(args: {
       workspaceError instanceof Error ? workspaceError.message : String(workspaceError)
     )
   }
-  set((s: ChatState) => ({
-    busy: false,
-    busyUnconfirmed: false,
-    queuedMessages: upsertQueuedSubmission(s.queuedMessages, {
-      ...submittedMessageForQueue,
-      deliveryState: 'pending' as const
-    })
-  }))
-  saveQueuedMessagesForThread(threadId, get().queuedMessages)
-  args.persistActiveQueuedMessages()
+  const pending = { ...submittedMessageForQueue, deliveryState: 'pending' as const }
+  const active = get().activeThreadId === threadId
+  const queuedMessages = upsertQueuedSubmission(
+    active ? get().queuedMessages : queuedMessagesForThread(threadId), pending
+  )
+  if (active) {
+    set((_s: ChatState) => ({ busy: false, busyUnconfirmed: false, queuedMessages }))
+  }
+  saveQueuedMessagesForThread(threadId, queuedMessages)
+  if (active) args.persistActiveQueuedMessages()
   return record
 }

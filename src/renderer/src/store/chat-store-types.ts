@@ -189,6 +189,10 @@ export type ChatState = {
   lastCodeThreadId: string | null
   /** 最近一次在 ADE 工作台选中的会话;与 Code 的记忆互相独立。 */
   lastAdeThreadId: string | null
+  /** True while an unsent ADE new-session composer is visible. */
+  adeDraftOpen: boolean
+  /** Transient draft identity; late ADE sends must not activate a newer draft. */
+  adeDraftRevision: number
   /**
    * ADE-mode thread inventory (`workspace_mode=ade`), loaded beside the
    * code-only `threads` inventory. ADE threads never appear in `threads`, so
@@ -371,6 +375,8 @@ export type ChatState = {
   openCode: (options?: { activationGuard?: () => boolean }) => Promise<void>
   /** Enter the ADE workspace mode, restoring the last-open ADE thread. */
   openAde: (options?: { activationGuard?: () => boolean }) => Promise<void>
+  /** Show a fresh ADE composer without creating a runtime thread. */
+  startAdeDraft: () => void
   /** Reload the ADE-mode (`workspace_mode=ade`) thread inventory. */
   refreshAdeThreads: () => Promise<void>
   ensureWriteThreadForWorkspace: (workspaceRoot?: string, activeFilePath?: string) => Promise<string | null>
@@ -443,6 +449,12 @@ export type ChatState = {
     /** See `chooseWorkspace` — `false` skips the host settings write. */
     persist?: boolean
   }) => Promise<string | null>
+  /** ADE project switch: persist the shared root and enter a new ADE draft. */
+  selectAdeWorkspaceRoot: (workspaceRoot: string) => Promise<string | null>
+  /** ADE directory dialog; cancellation leaves the current session unchanged. */
+  chooseAdeWorkspace: () => Promise<string | null>
+  /** Session-only isolation fallback for a selected non-Git project. */
+  setComposerIsolationForWorkspace: (isolation: 'local') => void
   clearWorkspace: () => Promise<void>
   /**
    * Remove a sidebar project from the Code project list. Keeps threads,

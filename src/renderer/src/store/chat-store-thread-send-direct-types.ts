@@ -9,11 +9,13 @@ import type {
   StoreActionContext,
   ThreadActionRuntime
 } from './chat-store-thread-actions-support'
+import type { AdeDraftSendSnapshot } from './chat-store-ade-send-snapshot'
 
 export type PreparedThreadSend = {
   context: StoreActionContext
   runtime: ThreadActionRuntime
   provider: AgentProvider
+  adeDraft?: AdeDraftSendSnapshot
   trimmedText: string
   mode: Parameters<ChatState['sendMessage']>[1]
   overrides: Parameters<ChatState['sendMessage']>[2]

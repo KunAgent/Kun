@@ -1,7 +1,6 @@
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import i18n from '../i18n'
 import { describeRuntimeError, formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
-import { shouldAutoTitleThread } from '../lib/thread-title'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { currentCodeWorkspaceRoot } from './chat-store-current-workspace'
 import { saveQueuedMessagesForThread } from './queued-message-persistence'
@@ -50,6 +49,8 @@ import {
 } from './chat-store-thread-actions-support'
 import type { PreparedThreadSend } from './chat-store-thread-send-direct-types'
 import { emptyLiveProjection } from './chat-store-live-projection'
+import { adeDraftStillCurrent, cancelStaleAdeDraftSend, validateAdeDraftWorkspace } from './chat-store-ade-send-snapshot'
+import { createNewSendThread, shouldRenameReusedSendThread } from './chat-store-thread-send-create'
 
 /**
  * A queued message freezes the model captured when it was enqueued. Draining
@@ -74,7 +75,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     shouldRenameThreadAfterSend
   } = input
   const {
-    context,
+    context, adeDraft,
     runtime,
     provider: p,
     trimmedText,
@@ -115,6 +116,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     submittedMessageForQueue
   } = input
   const { set, get, sseAbortRef } = context
+  if (!activeThreadId && get().route === 'ade' && !adeDraft) return false
     const previous = capturePreSendSnapshot(get())
     resetBusyRecoveryAttempts()
     // Fence stale detail hydration before publishing the optimistic turn.
@@ -167,7 +169,10 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
     if (!activeThreadId) {
       try {
         const settings = await rendererRuntimeClient.getSettings()
-        const workspaceRoot = currentCodeWorkspaceRoot(get(), settings)
+        const workspaceRoot = adeDraft ? adeDraft.workspaceRoot : currentCodeWorkspaceRoot(get(), settings)
+        if (adeDraft && !adeDraftStillCurrent(get(), adeDraft)) {
+          return cancelStaleAdeDraftSend(context, previous, userBlockId, runtime.persistActiveQueuedMessages)
+        }
         if (!workspaceRoot) {
           set({
             ...preSendSnapshotPatch(previous),
@@ -176,38 +181,28 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           runtime.persistActiveQueuedMessages()
           return false
         }
-        const codeWorkspaceRoots = rememberCodeWorkspaceRoots(get().codeWorkspaceRoots, [workspaceRoot])
-        set({ codeWorkspaceRoots })
-        const reusableThreadId = await findReusableEmptyThreadId(
+        if (adeDraft && !(await validateAdeDraftWorkspace(
+          workspaceRoot, adeDraft, Boolean(p.createTaskWorkspace), () => adeDraftStillCurrent(get(), adeDraft)
+        ))) {
+          return cancelStaleAdeDraftSend(context, previous, userBlockId, runtime.persistActiveQueuedMessages)
+        }
+        const reusableThreadId = adeDraft ? null : await findReusableEmptyThreadId(
           get(),
           p,
           workspaceRoot,
           (thread) => isCodeThread(thread, get().clawChannels, undefined, readDesignThreadRegistry())
         )
-        const reusableThread = reusableThreadId
-          ? get().threads.find((thread) => thread.id === reusableThreadId) ?? null
+        shouldRenameThreadAfterSend = shouldRenameReusedSendThread(
+          get().threads, reusableThreadId, shouldAutoRenameForRoute
+        )
+        const adeSend = Boolean(adeDraft)
+        const createdThread = reusableThreadId == null
+          ? await createNewSendThread(p, input, workspaceRoot, adeSend)
           : null
-        shouldRenameThreadAfterSend =
-          shouldAutoRenameForRoute &&
-          reusableThreadId != null && shouldAutoTitleThread(reusableThread)
-        const adeSend = get().route === 'ade'
-        const createdThread =
-          reusableThreadId == null
-            ? await p.createThread({
-                workspace: workspaceRoot,
-                title: generatedTitle,
-                titleAuto: true,
-                ...(composerModel ? { model: composerModel } : {}),
-                ...(composerProviderId ? { providerId: composerProviderId } : {}),
-                ...(composerAccountId ? { accountId: composerAccountId } : {}),
-                ...(composerHarnessId ? { harnessId: composerHarnessId } : {}),
-                ...(composerCredentialMode ? { credentialMode: composerCredentialMode } : {}),
-                ...(adeSend ? { workspaceMode: 'ade' as const } : {}),
-                // Design is turn intent; workbench thread ownership stays Code.
-                agentSurface: requestedAgentSurface === 'write' ? 'write' : 'code',
-                mode: mode ?? 'agent'
-              })
-            : null
+        if (adeDraft && !adeDraftStillCurrent(get(), adeDraft)) {
+          if (createdThread) void get().refreshAdeThreads()
+          return cancelStaleAdeDraftSend(context, previous, userBlockId, runtime.persistActiveQueuedMessages)
+        }
         const threadId = reusableThreadId ?? createdThread?.id ?? null
         if (!threadId) {
           throw new Error('Failed to resolve target thread id.')
@@ -226,6 +221,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         }
         set((s) => ({
           activeThreadId: threadId,
+          ...(adeSend ? { adeDraftOpen: false } : {}),
           // Freshly created threads are always primary — clear any side-session
           // relation carried over from the previously active thread.
           activeThreadRelation: 'primary',
@@ -245,11 +241,12 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         void get().refreshThreads()
         // New-session worktree isolation: start async prep, subscribe for the
         // ready event, and park this submission in the local queue (12 §7.3).
-        if (adeSend && createdThread && get().composerIsolation === 'worktree' && p.createTaskWorkspace) {
+        if (adeDraft?.isolation === 'worktree' && createdThread) {
           await prepareAdeThreadWorktree({
             provider: p,
             threadId,
             workspaceRoot,
+            startFrom: adeDraft.startFrom,
             context,
             submittedMessageForQueue,
             persistActiveQueuedMessages: runtime.persistActiveQueuedMessages
@@ -257,6 +254,9 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           return true
         }
       } catch (e) {
+        if (adeDraft && !adeDraftStillCurrent(get(), adeDraft)) {
+          return cancelStaleAdeDraftSend(context, previous, userBlockId, runtime.persistActiveQueuedMessages)
+        }
         void window.kunGui.logError('create-thread', 'Failed to create thread', {
           message: e instanceof Error ? e.message : String(e)
         }).catch(() => undefined)

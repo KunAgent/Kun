@@ -2,14 +2,15 @@
  * New-conversation starters shared by Code and ADE sidebars. Extracted from
  * useWorkbenchNavigationController so the creation variants (plain, manager
  * session, harness-pinned one-to-one, workspace-picked) live in one cohesive
- * hook; every starter still guards activation with the navigation request id.
+ * hook. ADE starters open a local draft; Code starters guard async activation.
  */
-import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import { useChatStore } from '../../store/chat-store'
 import { useHarnessStore } from '../../store/harness-store'
 import { harnessPermissionDefault } from '../../lib/harness-defaults'
 import { requestOpenWorkersPanel } from '../chat/FloatingComposerWorkersPill'
 import type { ChatState } from '../../store/chat-store-types'
+import { readStoredComposerIsolation } from '../../store/chat-store-helpers'
 
 export type WorkbenchChatStarterDeps = {
   /** True while an SDD design draft is open — starters dismiss it first. */
@@ -38,6 +39,28 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
     useWorktreePool,
     worktreeBranch
   } = deps
+  const activeThreadId = useChatStore((s) => s.activeThreadId)
+  const adeDraftOpen = useChatStore((s) => s.adeDraftOpen)
+  const adeThreads = useChatStore((s) => s.adeThreads)
+  const route = useChatStore((s) => s.route)
+  const managerDraftPending = useRef<Set<string> | null>(null)
+
+  useEffect(() => {
+    const knownThreadIds = managerDraftPending.current
+    if (!knownThreadIds) return
+    if (route !== 'ade' || (!adeDraftOpen && !activeThreadId)) {
+      managerDraftPending.current = null
+      return
+    }
+    if (adeDraftOpen || !activeThreadId) return
+    if (knownThreadIds.has(activeThreadId)) {
+      managerDraftPending.current = null
+      return
+    }
+    if (!adeThreads.some((thread) => thread.id === activeThreadId)) return
+    managerDraftPending.current = null
+    requestOpenWorkersPanel()
+  }, [activeThreadId, adeDraftOpen, adeThreads, route])
 
   const startNewChat = useCallback((): void => {
     const requestId = beginNavigation()
@@ -65,35 +88,25 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
   ])
 
   const startNewAdeChat = useCallback((): void => {
-    const requestId = beginNavigation()
+    beginNavigation()
     if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
     setConnectPhoneSidebarOpen(false)
-    setRoute('ade')
-    // P4-16: a fresh manager session opens with the Workers panel so the
-    // dispatched-agent view is visible from the first turn. The request is
-    // deferred until the thread lands in `adeThreads`; opening it earlier
-    // would trip the unavailable-tab cleanup before the session exists.
-    void createThread({
-      useWorktreePool,
-      worktreeBranch,
-      agentSurface: 'code',
-      workspaceMode: 'ade',
-      activationGuard: () => navigationIsCurrent(requestId)
-    }).then((threadId) => {
-      if (threadId) requestOpenWorkersPanel()
-    })
-    if (useWorktreePool) setUseWorktreePool(false)
+    const state = useChatStore.getState()
+    managerDraftPending.current = new Set([
+      ...state.adeThreads.map((thread) => thread.id),
+      ...(state.activeThreadId ? [state.activeThreadId] : [])
+    ])
+    state.startAdeDraft()
+    state.setComposerHarness('', '')
+    // A prior one-to-one harness model must not leak into the Kun manager.
+    useChatStore.setState({ composerModel: '', composerProviderId: '' })
+    const isolation = readStoredComposerIsolation()
+    state.setComposerIsolation(isolation, isolation === 'worktree' ? { kind: 'default-branch' } : undefined)
   }, [
     activeSddDraft,
     beginNavigation,
-    createThread,
     dismissActiveSddDraft,
-    navigationIsCurrent,
-    setConnectPhoneSidebarOpen,
-    setRoute,
-    setUseWorktreePool,
-    useWorktreePool,
-    worktreeBranch
+    setConnectPhoneSidebarOpen
   ])
 
   const startNewAdeOneOnOne = useCallback((input: {
@@ -109,41 +122,32 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
     // P4-13: terminal-only agents cannot host turns; the menu lists are
     // filtered, so this guards stale persisted picks like defaultHarnessId.
     if (definition && definition.transport === 'terminal') return
-    const requestId = beginNavigation()
+    beginNavigation()
     if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
     setConnectPhoneSidebarOpen(false)
-    setRoute('ade')
+    managerDraftPending.current = null
+    const state = useChatStore.getState()
+    state.startAdeDraft()
+    state.setComposerHarness(input.harnessId, input.credentialMode ?? '')
+    useChatStore.setState({
+      composerModel: input.model?.trim() ?? '',
+      composerProviderId: input.providerId?.trim() ?? '',
+      composerIsolation: input.isolation ?? 'worktree',
+      composerWorktreeStartFrom: input.isolation === 'local' ? undefined : { kind: 'default-branch' }
+    })
     // P4-11: the harness's default permission level maps onto the composer
     // execution settings the new thread's first turn snapshots.
     if (input.permissionMode) {
       const execution = harnessPermissionDefault(definition, {
         permissionMode: input.permissionMode
       })
-      if (execution) useChatStore.getState().setComposerExecutionSettings(execution)
+      if (execution) state.setComposerExecutionSettings(execution)
     }
-    // 00 §5: a one-to-one thread isolates into a fresh worktree by default;
-    // the thread is pinned to the picked harness from creation. P4-11: a
-    // configured `isolation: 'local'` default opts out of the worktree.
-    void createThread({
-      useWorktreePool: input.isolation !== 'local',
-      worktreeBranch,
-      agentSurface: 'code',
-      workspaceMode: 'ade',
-      harnessId: input.harnessId,
-      credentialMode: input.credentialMode,
-      ...(input.providerId ? { providerId: input.providerId } : {}),
-      ...(input.model ? { model: input.model } : {}),
-      activationGuard: () => navigationIsCurrent(requestId)
-    })
   }, [
     activeSddDraft,
     beginNavigation,
-    createThread,
     dismissActiveSddDraft,
-    navigationIsCurrent,
-    setConnectPhoneSidebarOpen,
-    setRoute,
-    worktreeBranch
+    setConnectPhoneSidebarOpen
   ])
 
   const startNewChatInWorkspace = useCallback(async (

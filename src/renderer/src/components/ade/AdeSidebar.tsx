@@ -135,6 +135,7 @@ export function AdeSidebar({
   }, [])
 
   const busy = useChatStore((s) => s.busy)
+  const adeDraftOpen = useChatStore((s) => s.adeDraftOpen)
   const clearActiveThreadSelection = useChatStore((s) => s.clearActiveThreadSelection)
   const activityRows = useActivityStore((s) => s.rows)
   const needsYouCount = useActivityStore((s) => selectNeedsYouCount(s.rows))
@@ -361,7 +362,7 @@ export function AdeSidebar({
           icon={<LayoutGrid className="h-4 w-4" strokeWidth={1.75} />}
           label={t('missionControl')}
           onClick={clearActiveThreadSelection}
-          active={activeThreadId === null}
+          active={activeThreadId === null && !adeDraftOpen}
           trailing={
             needsYouCount > 0 ? (
               <span

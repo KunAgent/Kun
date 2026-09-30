@@ -52,6 +52,7 @@ type WriteStageProps = {
 
 export type WorkbenchStageRouterProps = {
   route: string
+  adeDraftOpen: boolean
   leftSidebarCollapsed: boolean
   onToggleLeftSidebar: () => void
   onOpenThread: (threadId: string, turnId?: string) => Promise<void> | void
@@ -110,6 +111,7 @@ function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
 
 export function WorkbenchStageRouter({
   route,
+  adeDraftOpen,
   leftSidebarCollapsed,
   onToggleLeftSidebar,
   onOpenThread,
@@ -177,7 +179,7 @@ export function WorkbenchStageRouter({
           </Suspense>
         ) : normalizedRoute === 'ade' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
-            <AdeStage conversation={conversation} activeThreadId={conversation.chat.activeThreadId} />
+            <AdeStage conversation={conversation} activeThreadId={conversation.chat.activeThreadId} adeDraftOpen={adeDraftOpen} />
           </Suspense>
         ) : normalizedRoute === 'write' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>

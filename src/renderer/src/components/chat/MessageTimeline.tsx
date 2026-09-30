@@ -125,6 +125,7 @@ export function MessageTimeline({
   const threadLoadingId = useChatStore((state) => state.threadLoadingId)
   const usageRefreshKey = useChatStore((state) => state.usageRefreshKey)
   const cancelToolCall = useChatStore((state) => state.cancelToolCall)
+  const chooseAdeWorkspace = useChatStore((state) => state.chooseAdeWorkspace)
   const turnUsage = useTurnUsageState(threadLoadingId === activeThreadId ? null : activeThreadId, usageRefreshKey)
   const handleCancelToolCall = useCallback(async (block: ToolBlock): Promise<boolean> => {
     if (!activeThreadId || !block.turnId) return false
@@ -396,10 +397,12 @@ export function MessageTimeline({
           <MessageTimelineEmptyHero
             route={heroRoute}
             ready={runtimeConnection === 'ready'}
-            hasWorkspace={!!workspaceRoot}
+            hasWorkspace={heroRoute === 'ade'
+              ? Boolean(activeThread?.workspace || workspaceRoot)
+              : Boolean(workspaceRoot)}
             runtimeError={runtimeError}
             activeClawChannel={activeClawChannel}
-            onPickWorkspace={() => void chooseWorkspace()}
+            onPickWorkspace={() => void (heroRoute === 'ade' ? chooseAdeWorkspace() : chooseWorkspace())}
             onRetry={onRetryConnection}
             onOpenSettings={onOpenSettings}
             onSelectSuggestion={onSelectSuggestion}

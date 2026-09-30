@@ -68,6 +68,8 @@ function buildHarness(): { actions: ReturnType<typeof createThreadActions>; stat
   let state: ChatState
   state = {
     activeThreadId: null,
+    adeDraftOpen: false,
+    adeDraftRevision: 0,
     blocks: [],
     busy: false,
     busyUnconfirmed: false,
@@ -161,6 +163,25 @@ describe('thread selection prewarm hydration', () => {
     ])
     await selecting
     expect(getThreadDetail).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes an ADE draft when an existing ADE thread is selected', async () => {
+    const getThreadDetail = vi.fn(async () => detail())
+    registryMock.getProvider.mockReturnValue({
+      getThreadDetail,
+      subscribeThreadEvents: vi.fn(async () => undefined)
+    })
+    const { actions, state } = buildHarness()
+    state.route = 'ade'
+    state.adeDraftOpen = true
+    state.adeDraftRevision = 4
+    state.adeThreads = [thread('ade-existing', { workspaceMode: 'ade' })]
+
+    await actions.selectThread('ade-existing')
+
+    expect(state.activeThreadId).toBe('ade-existing')
+    expect(state.adeDraftOpen).toBe(false)
+    expect(state.adeDraftRevision).toBe(5)
   })
 
   it('reuses an in-flight prewarm request when the thread is selected', async () => {

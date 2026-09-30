@@ -424,6 +424,7 @@ export function useFloatingComposerActions(
       draft.focusComposer()
       return
     }
+    if (primaryActionDisabled) return
     inputHistory.push(input)
     onSend()
   }

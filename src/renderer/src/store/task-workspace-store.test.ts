@@ -66,6 +66,7 @@ describe('task workspace prep tracking', () => {
       state: 'creating'
     })
     expect(useTaskWorkspaceStore.getState().prepByThread['thr_1']?.workspaceId).toBe('ws_1')
+    expect(useTaskWorkspaceStore.getState().prepByThread['thr_1']?.sourceRoot).toBe('/repo')
   })
 
   it('clears prep state on demand', () => {

@@ -176,6 +176,8 @@ import {
   type ThreadActionRuntime
 } from './chat-store-thread-actions-support'
 import { performPreparedThreadSend } from './chat-store-thread-send-direct'
+import { adeDraftStillCurrent, captureAdeDraftSendSnapshot } from './chat-store-ade-send-snapshot'
+import { resolveDirectSendComposerSelection } from './chat-store-send-composer-selection'
 import { submitToRuntimeQueue } from './chat-store-thread-send-enqueue'
 import { runtimePromptForSurface } from './chat-store-send-prompt'
 import { startWorkspaceCheckpointSnapshot } from './chat-store-thread-send-checkpoint'
@@ -225,6 +227,8 @@ export async function sendThreadMessage(
   overrides: Parameters<ChatState['sendMessage']>[2]
 ): Promise<boolean> {
   const { set, get } = context
+  const adeDraft = captureAdeDraftSendSnapshot(get())
+  if (get().route === 'ade' && !get().activeThreadId && !adeDraft) return false
     const trimmedText = text.trim()
     if (!trimmedText) return false
     const activeSyncThreadId = get().activeThreadId
@@ -297,15 +301,16 @@ export async function sendThreadMessage(
     if (get().route !== 'claw') {
       const state = get()
       const activeThread = state.threads.find((thread) => thread.id === state.activeThreadId) ?? null
-      let workspaceRoot = await resolveSendWorkspaceRoot(state, activeThread, writeContext, scopedWriteThread)
+      let workspaceRoot = adeDraft?.workspaceRoot ?? await resolveSendWorkspaceRoot(state, activeThread, writeContext, scopedWriteThread)
       if (!activeWriteContextIsValid()) return false
-      if (!workspaceRoot) {
+      if (!workspaceRoot && !adeDraft) {
         workspaceRoot = normalizeWorkspaceRoot((await rendererRuntimeClient.getSettings()).workspaceRoot)
         if (!activeWriteContextIsValid()) return false
       }
       if (workspaceRoot && !(await workspaceDirectoryExists(workspaceRoot))) {
+        if (adeDraft && !adeDraftStillCurrent(get(), adeDraft)) return false
         set({ error: workspaceMissingError() })
-        await showWorkspaceMissingDialog(workspaceRoot)
+        if (!adeDraft) await showWorkspaceMissingDialog(workspaceRoot)
         return false
       }
       if (!activeWriteContextIsValid()) return false
@@ -546,24 +551,9 @@ export async function sendThreadMessage(
       get().blocks.every((block) => block.kind !== 'user') &&
       shouldAutoTitleThread(activeThread)
     const threadSnap = get().threads.find((thread) => thread.id === activeThreadId)
-    const clawModel = activeClawChannel(get())?.model
-    const overrideModel = overrides?.model?.trim()
-    const composerModel =
-      queued?.model ?? overrideModel ?? (get().route === 'claw' && clawModel ? clawModel : get().composerModel.trim())
-    const composerProviderId =
-      queued?.providerId ?? overrides?.providerId?.trim() ?? fallbackComposerProviderIdForSend(get())
-    const composerAccountId =
-      queued?.accountId ??
-      overrides?.accountId?.trim() ??
-      accountIdForComposerSelection(get().composerModelGroups, composerProviderId, composerModel)
-    const { harnessId: composerHarnessId, credentialMode: composerCredentialMode } =
-      resolveSendHarnessSelection({
-        queued,
-        overrides,
-        adeEligible: threadSnap?.workspaceMode === 'ade' || (!activeThreadId && get().route === 'ade'),
-        composerHarnessId: get().composerHarnessId,
-        composerCredentialMode: get().composerCredentialMode
-      })
+    const { composerModel, composerProviderId, composerAccountId, composerHarnessId, composerCredentialMode } =
+      resolveDirectSendComposerSelection({ state: get(), queued, overrides, adeDraft,
+        adeEligible: threadSnap?.workspaceMode === 'ade' || Boolean(adeDraft) })
     const reasoningEffort = queued?.reasoningEffort ?? overrides?.reasoningEffort?.trim()
     const serviceTier =
       (queued?.serviceTier ?? overrides?.serviceTier) === 'priority'
@@ -583,7 +573,7 @@ export async function sendThreadMessage(
     // Freeze the composer execution settings at enqueue time so a queued
     // message keeps the approval/sandbox policy selected when it was submitted,
     // not whatever is global by the time the queue drains.
-    const composerExecutionSettings = get().composerExecutionSettings
+    const composerExecutionSettings = adeDraft ? adeDraft.composer.composerExecutionSettings : get().composerExecutionSettings
     const snapshotApprovalPolicy =
       queued?.approvalPolicy ?? overrides?.approvalPolicy ?? composerExecutionSettings?.approvalPolicy
     const snapshotSandboxMode =
@@ -636,6 +626,7 @@ export async function sendThreadMessage(
       context,
       runtime,
       provider: p,
+      adeDraft,
       trimmedText,
       mode,
       overrides,

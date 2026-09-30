@@ -418,7 +418,7 @@ export function FloatingComposer({
   const adeComposerEnabled = route === 'ade' || activeThread?.workspaceMode === 'ade'
   const adeComposer = useAdeComposerControls({
     enabled: adeComposerEnabled === true,
-    activeThreadId,
+    activeThreadId, workspaceRoot: effectiveWorkspaceRoot,
     threadHarnessId: activeThread?.harnessId,
     threadTaskWorkspaceId: activeThread?.taskWorkspaceId,
     threadHasUserMessages: hasConversationStarted,
@@ -563,7 +563,7 @@ export function FloatingComposer({
       ? !canCompose || input.trim().length === 0
     : canSetGoalPanelDraft
       ? false
-    : !canSend
+    : !canSend || (adeComposerEnabled && !activeThreadId && adeComposer.isolation === 'worktree' && !adeComposer.worktreeGit.worktreeGitReady)
   const primaryActionLoading = !runtimeReady
   const primaryActionKind = resolveComposerPrimaryActionKind({
     busy,

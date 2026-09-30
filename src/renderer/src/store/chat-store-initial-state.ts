@@ -64,6 +64,8 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     threadHistoryLoading: false,
     lastCodeThreadId: null,
     lastAdeThreadId: null,
+    adeDraftOpen: false,
+    adeDraftRevision: 0,
     adeThreads: [],
     activeThreadRelation: null,
     activeThreadParentId: null,

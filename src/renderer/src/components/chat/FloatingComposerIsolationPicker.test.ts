@@ -36,6 +36,9 @@ async function renderPicker(props: {
   value?: 'local' | 'worktree'
   prep?: TaskWorkspacePrep
   boundWorkspaceId?: string
+  boundWorkspacePath?: string
+  showBoundLocal?: boolean
+  worktreeDisabledReason?: string
   onSelect?: (value: 'local' | 'worktree') => void
   onRetryPrep?: () => void
 }): Promise<void> {
@@ -45,6 +48,9 @@ async function renderPicker(props: {
       value: props.value ?? 'local',
       prep: props.prep,
       boundWorkspaceId: props.boundWorkspaceId,
+      boundWorkspacePath: props.boundWorkspacePath,
+      showBoundLocal: props.showBoundLocal,
+      worktreeDisabledReason: props.worktreeDisabledReason,
       onSelect: props.onSelect ?? vi.fn(),
       onRetryPrep: props.onRetryPrep
     }))
@@ -98,5 +104,18 @@ describe('FloatingComposerIsolationPicker', () => {
     await renderPicker({ showPicker: false })
     expect(host.querySelector('[data-composer-isolation-picker]')).toBeNull()
     expect(host.querySelector('[data-worktree-prep="preparing"]')).toBeNull()
+  })
+
+  it('shows the bound local mode on an existing ADE session', async () => {
+    await renderPicker({ showPicker: false, showBoundLocal: true, boundWorkspacePath: '/repo/alpha' })
+    expect(host.querySelector('[data-worktree-prep="local"]')?.getAttribute('title')).toBe('/repo/alpha')
+  })
+
+  it('disables worktree choice for a non-Git project', async () => {
+    await renderPicker({ worktreeDisabledReason: 'Not a Git repository' })
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-composer-isolation-picker]')!.click())
+    const choice = document.body.querySelector<HTMLButtonElement>('[data-isolation="worktree"]')!
+    expect(choice.disabled).toBe(true)
+    expect(choice.textContent).toContain('Not a Git repository')
   })
 })

@@ -149,6 +149,7 @@ describe('legacy Design workbench navigation', () => {
   it('renders the Code conversation stage for the legacy Design route', () => {
     const html = renderToStaticMarkup(createElement(WorkbenchStageRouter, {
       route: 'design',
+      adeDraftOpen: false,
       leftSidebarCollapsed: false,
       onToggleLeftSidebar: noop,
       onOpenThread: noop,
