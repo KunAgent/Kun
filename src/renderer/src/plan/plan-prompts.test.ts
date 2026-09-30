@@ -153,12 +153,15 @@ describe('plan-prompts', () => {
     expect(prompt).toContain('using Graph orchestration')
   })
 
-  it('injects stable plan todos only for direct execution', () => {
+  it('preserves source plan IDs while routing direct execution through canonical tasks', () => {
     const todos = [{ id: 'todo_plan_1', content: 'Build board', status: 'in_progress' as const }]
     const direct = buildPlanBuildPrompt('.kunsdd/plan/demo.md', '# Demo', 'direct', undefined, todos)
     const graph = buildPlanBuildPrompt('.kunsdd/plan/demo.md', '# Demo', 'graph', undefined, todos)
     expect(direct).toContain('"id": "todo_plan_1"')
-    expect(direct).toContain('todo_list and todo_write')
+    expect(direct).toContain('task_list, task_get and task_update')
+    expect(direct).toContain('IDs and revisions')
+    expect(direct).toContain('succeeded only with verification evidence')
+    expect(direct).not.toMatch(/todo_list|todo_write|task_graph/)
     expect(graph).not.toContain('todo_plan_1')
   })
 

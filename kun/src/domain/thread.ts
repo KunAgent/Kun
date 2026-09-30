@@ -1,4 +1,5 @@
 import { isAbsolute, relative, resolve } from 'node:path'
+import { executionTasksAsTodos } from '../tasks/execution-task-state.js'
 import {
   MAX_THREAD_KNOWLEDGE_BASES,
   type KnowledgeBaseMount,
@@ -227,7 +228,8 @@ export function toThreadSummary(
     ...(thread.forkedFromTurnCount !== undefined ? { forkedFromTurnCount: thread.forkedFromTurnCount } : {}),
     ...(thread.forkedFromTurnId ? { forkedFromTurnId: thread.forkedFromTurnId } : {}),
     ...(thread.goal ? { goal: thread.goal } : {}),
-    ...(thread.todos ? { todos: thread.todos } : {}),
+    ...(thread.executionTasks ? { todos: executionTasksAsTodos(thread.id, thread.executionTasks) }
+      : thread.todos ? { todos: thread.todos } : {}),
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt
   }

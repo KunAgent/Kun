@@ -34,8 +34,7 @@ export const DEFAULT_SDK_BUILTIN_TOOLS: readonly string[] = [
   'Glob',
   'Grep',
   'WebSearch',
-  'WebFetch',
-  'TodoWrite'
+  'WebFetch'
 ]
 
 /**
@@ -43,7 +42,9 @@ export const DEFAULT_SDK_BUILTIN_TOOLS: readonly string[] = [
  * AskUserQuestion has no UI in this embedding (the model would ask and get no
  * answer); kun's own bridged `user_input` gate handles interactive questions.
  */
-export const DEFAULT_SDK_DISALLOWED_TOOLS: readonly string[] = ['AskUserQuestion']
+export const DEFAULT_SDK_DISALLOWED_TOOLS: readonly string[] = [
+  'AskUserQuestion', 'TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList'
+]
 
 const CLAUDE_OAUTH_TOKEN_PATTERN = /^sk-ant-oat[\w-]+$/
 

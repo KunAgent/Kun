@@ -10,6 +10,7 @@ import {
 } from '../../contracts/policy.js'
 import type { ThreadStoreListOptions } from '../../ports/thread-store.js'
 import { resolveThreadAgentSurface } from '../../domain/thread.js'
+import { executionTasksAsTodos } from '../../tasks/execution-task-state.js'
 
 export type ThreadRow = {
   id: string; title: string; workspace: string; model: string; mode: ThreadMode; status: ThreadStatus
@@ -50,7 +51,8 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
     forked_at: thread.forkedAt ?? null, forked_from_message_count: thread.forkedFromMessageCount ?? null,
     forked_from_turn_count: thread.forkedFromTurnCount ?? null,
     goal_json: thread.goal ? JSON.stringify(thread.goal) : null,
-    todos_json: thread.todos ? JSON.stringify(thread.todos) : null,
+    todos_json: thread.executionTasks ? JSON.stringify(executionTasksAsTodos(thread.id, thread.executionTasks))
+      : thread.todos ? JSON.stringify(thread.todos) : null,
     extension_metadata_json: thread.forkedFromTurnId || thread.historyRefId || thread.ownerExtensionId || thread.planBuildRunId
       || thread.workbenchOrigin
       || thread.planBuildAdmissionFingerprint || thread.planBuildAdmissionCapabilityHash
@@ -133,9 +135,9 @@ function parseJson<T>(raw: string | null): T | null {
   try { return JSON.parse(raw) as T } catch { return null }
 }
 
-function searchTextForThread(thread: Pick<ThreadRecord, 'id' | 'title' | 'workspace' | 'model' | 'mode' | 'forkedFromTitle' | 'forkedFromThreadId' | 'todos'>): string {
+function searchTextForThread(thread: Pick<ThreadRecord, 'id' | 'title' | 'workspace' | 'model' | 'mode' | 'forkedFromTitle' | 'forkedFromThreadId' | 'todos' | 'executionTasks'>): string {
   return [thread.id, thread.title, thread.workspace, thread.model, thread.mode, thread.forkedFromTitle,
-    thread.forkedFromThreadId, ...(thread.todos?.items.map((item) => item.content) ?? [])]
+    thread.forkedFromThreadId, ...(thread.executionTasks?.tasks.map((task) => task.title) ?? thread.todos?.items.map((item) => item.content) ?? [])]
     .filter(Boolean).join('\n').toLowerCase()
 }
 

@@ -401,6 +401,11 @@ export function kunThreadGoalPath(threadId: string): string {
 }
 
 export const KUN_THREAD_TODOS_TEMPLATE = '/v1/threads/{id}/todos'
+export const KUN_THREAD_TASKS_TEMPLATE = '/v1/threads/{id}/tasks'
+export const KUN_THREAD_TASK_TEMPLATE = '/v1/threads/{id}/tasks/{taskId}'
+export function kunThreadTaskPath(threadId: string, taskId: string): string {
+  return `${kunThreadPath(threadId)}/tasks/${encodeURIComponent(taskId)}`
+}
 export function kunThreadTodosPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/todos`
 }

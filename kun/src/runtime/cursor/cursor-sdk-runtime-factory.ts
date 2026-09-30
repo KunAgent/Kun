@@ -185,7 +185,7 @@ export function createCursorSdkRuntime(
       if (signal.aborted) {
         return { instructionBlocks: [], activeSkillIds: [], tools: [], customTools: {} }
       }
-      const todoInstruction = plan.planMode ? null : todoContinuationInstruction(thread.todos)
+      const todoInstruction = plan.planMode ? null : todoContinuationInstruction(thread.todos, thread.executionTasks)
       const graphHarnessInstruction =
         graphPolicy?.phase === 'planning'
           ? await deps.graphHarnessSummary?.().catch(() => undefined)

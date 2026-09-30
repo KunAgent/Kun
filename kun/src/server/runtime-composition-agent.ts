@@ -1,4 +1,5 @@
 import { QueuedTurnDispatcher } from './queued-turn-dispatcher.js'
+import { createExecutionTaskTurnSettledHook } from './execution-task-turn-settlement.js'
 import {
   createAgentSdkRuntime,
   AntigravityCliRuntime,
@@ -470,9 +471,9 @@ export async function createRuntimeAgentComposition(
 	    threadStore,
 	    runTurn: runAgentTurn
 	  })
-	  turnService.setTurnSettledHook((threadId, status) =>
-	    queuedTurnDispatcher.onTurnSettled(threadId, status)
-	  )
+	  turnService.setTurnSettledHook(createExecutionTaskTurnSettledHook(
+      threadService.executionTasks, queuedTurnDispatcher
+    ))
 	  // A queue commit may race the running turn's settlement; this trigger
 	  // covers the window where settle fired before the record was durable.
 	  turnService.setTurnQueuedHook((threadId) => queuedTurnDispatcher.requestDrain(threadId))

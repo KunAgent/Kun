@@ -1,4 +1,5 @@
 import type { ThreadRecord } from '../../contracts/threads.js'
+import { executionTasksAsTodos } from '../../tasks/execution-task-state.js'
 import type { Turn } from '../../contracts/turns.js'
 import {
   isPublicTurnItem,
@@ -216,9 +217,9 @@ export function hydrateThreadItemsFromSession(
 
 /** Defense in depth for every HTTP endpoint that returns a ThreadRecord. */
 export function projectPublicThreadRecord(thread: ThreadRecord): ThreadRecord {
-  const { revision: _revision, ...publicThread } = thread
+  const { revision: _revision, executionTasks, ...publicThread } = thread
   const turns = thread.turns.map(projectPublicTurn)
-  return { ...publicThread, turns }
+  return { ...publicThread, ...(executionTasks ? { todos: executionTasksAsTodos(thread.id, executionTasks) } : {}), turns }
 }
 
 const CHILD_BACKED_TOOL_NAMES = new Set(['delegate_task', 'fast_context'])

@@ -1,3 +1,4 @@
+import { updateExecutionTask } from './kun-runtime-execution-tasks'
 import type {
   AgentProvider,
   ChatBlock,
@@ -592,6 +593,12 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
       throw runtimeErrorToError({ code: 'unknown', message: 'set thread todos returned an invalid response' })
     }
     return todosFromCore(body.todos)
+  }
+
+  async updateThreadExecutionTask(threadId: string, taskId: string,
+    patch: Parameters<NonNullable<AgentProvider['updateThreadExecutionTask']>>[2]
+  ): Promise<NonNullable<NormalizedThread['todos']>> {
+    return updateExecutionTask(threadId, taskId, patch, (id) => this.getThreadTodos(id))
   }
 
   async syncThreadTodosFromPlan(

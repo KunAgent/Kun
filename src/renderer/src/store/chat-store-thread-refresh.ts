@@ -18,6 +18,7 @@ import { resolveProjectWorkspacePath } from '../lib/worktree-project-path'
 import { readThreadWorktreeRegistry } from '../lib/thread-worktree-registry'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
+import { threadTodosForProjection } from './thread-todo-projection'
 import {
   isClawThread,
   reconcileCodeWorkspaceRoots,
@@ -403,7 +404,8 @@ export function createRefreshThreadsAction(
           pageMode
         )
         return {
-          threads: firstPageHasMore ? mergeThreadPages(displayThreads, s.threads) : displayThreads,
+          threads: (firstPageHasMore ? mergeThreadPages(displayThreads, s.threads) : displayThreads)
+            .map((thread) => ({ ...thread, todos: threadTodosForProjection(s, thread.id, thread.todos) })),
           codeWorkspaceRoots,
           watchTurnCompletion: w,
           unreadThreadIds: u,

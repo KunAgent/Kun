@@ -23,8 +23,7 @@ import type { AgentSdkFactoryContext } from './agent-sdk-runtime-factory-context
 const SDK_ON_REQUEST_AUTO_ALLOWED_TOOLS = new Set([
   'Read',
   'Glob',
-  'Grep',
-  'TodoWrite'
+  'Grep'
 ])
 
 export function createAgentSdkToolRuntimeDeps(
@@ -43,6 +42,9 @@ export function createAgentSdkToolRuntimeDeps(
     },
 
     async decideToolApproval(threadId, turnId, toolName, input, signal): Promise<ToolApprovalDecision> {
+      if (['TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList'].includes(toolName)) {
+        return { allow: false, message: 'SDK-local task state is retired. Use the Kun task_create/task_update/task_get/task_list tools.' }
+      }
       // Bridged Kun tools perform their own per-tool policy check through the
       // LocalToolHost context above; asking here too would create two prompts.
       if (toolName.startsWith('mcp__kun__')) return { allow: true }
@@ -57,7 +59,7 @@ export function createAgentSdkToolRuntimeDeps(
         return { allow: false, message: 'tools are disabled for this turn (policy: never)' }
       }
       // `canUseTool` runs for every SDK-native tool. Preserve the same Kun
-      // boundary as LocalToolHost: bounded reads and internal todo state are
+      // boundary as LocalToolHost: bounded reads are
       // auto-allowed under on-request/suggest after decideSdkBuiltinSandbox has
       // validated their paths; writes, commands, and network calls still review.
       if (

@@ -283,30 +283,7 @@ export type ThreadGoal = {
   updatedAt: string
 }
 
-export type ThreadTodoStatus = 'pending' | 'in_progress' | 'completed'
-
-export type ThreadTodoSource = {
-  kind: 'plan'
-  planId: string
-  relativePath: string
-  ordinal: number
-  contentHash: string
-}
-
-export type ThreadTodoItem = {
-  id: string
-  content: string
-  status: ThreadTodoStatus
-  source?: ThreadTodoSource
-  createdAt: string
-  updatedAt: string
-}
-
-export type ThreadTodoList = {
-  threadId: string
-  items: ThreadTodoItem[]
-  updatedAt: string
-}
+export type { ThreadTodoStatus, ThreadTodoSource, ThreadTodoItem, ThreadTodoList } from './types-tasks'
 
 export type RuntimeConnectionStatus = 'idle' | 'checking' | 'ready' | 'offline'
 

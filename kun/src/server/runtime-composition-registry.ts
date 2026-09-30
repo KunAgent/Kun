@@ -6,7 +6,6 @@ import {
   createCursorSdkRuntime,
   composeDelegatedTurnRuntimes,
   buildGoalLocalTools,
-  buildTodoLocalTools,
   buildDelegationToolProviders,
   buildComponentDesignToolProviders,
   buildDiagramVisualizationToolProvider,
@@ -67,7 +66,6 @@ export function createRuntimeRegistry(
   } = model
   const {
     turnService,
-    taskGraphTool,
     childToolHost,
     defaultIsAgentSdk,
     defaultIsAntigravity,
@@ -193,8 +191,6 @@ export function createRuntimeRegistry(
           turns: child.turns,
           events: child.events,
           ids: child.ids,
-          setThreadTodos: (threadId, request) =>
-            child.threads.setTodosFromTool(threadId, request),
           ...(llmDebug ? { debugSink: llmDebug } : {}),
           ...(services.attachmentStore
             ? { attachmentStore: services.attachmentStore }
@@ -437,20 +433,6 @@ export function createRuntimeRegistry(
       enabled: true,
       available: true,
       tools: buildGoalLocalTools(threadService)
-    },
-    {
-      id: 'todo',
-      kind: 'built-in' as const,
-      enabled: true,
-      available: true,
-      tools: buildTodoLocalTools(threadService)
-    },
-    {
-      id: 'planning',
-      kind: 'built-in' as const,
-      enabled: true,
-      available: true,
-      tools: [taskGraphTool]
     },
     ...buildDelegationToolProviders(delegationRuntime, subagentRouter),
     ...buildFastContextToolProvider(

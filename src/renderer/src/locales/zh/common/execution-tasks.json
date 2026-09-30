@@ -1,0 +1,13 @@
+{
+  "executionTaskStatus": {
+    "pending": "待办",
+    "running": "执行中",
+    "waiting": "等待中",
+    "blocked": "受阻",
+    "paused": "已暂停",
+    "succeeded": "已完成",
+    "failed": "失败",
+    "cancelled": "已取消"
+  },
+  "executionTaskOwner": "负责人"
+}

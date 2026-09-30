@@ -1,8 +1,9 @@
 import type { TurnItem } from '../contracts/items.js'
 import type { ThreadGoal, ThreadTodoList } from '../contracts/threads.js'
+import type { ExecutionTaskState } from '../contracts/execution-tasks.js'
 import { CREATE_PLAN_TOOL_NAME } from '../adapters/tool/create-plan-tool.js'
 import { GET_GOAL_TOOL_NAME, UPDATE_GOAL_TOOL_NAME } from '../adapters/tool/goal-tools.js'
-import { TODO_LIST_TOOL_NAME, TODO_WRITE_TOOL_NAME } from '../adapters/tool/todo-tools.js'
+import { EXECUTION_TASK_TOOL_NAMES } from '../adapters/tool/execution-task-tools.js'
 import { computeShortHash } from './compaction-marker.js'
 
 export function goalContinuationInstruction(goal: ThreadGoal | undefined): string | null {
@@ -350,17 +351,20 @@ function charBigramCounts(text: string): Map<string, number> {
   return counts
 }
 
-export function todoContinuationInstruction(todos: ThreadTodoList | undefined): string | null {
-  const items = todos?.items ?? []
+export function todoContinuationInstruction(todos: ThreadTodoList | undefined, tasks?: ExecutionTaskState): string | null {
+  const items = tasks ? tasks.tasks.filter((task) => !['succeeded', 'cancelled'].includes(task.status)).map((task) => ({
+    content: `${task.title} (id=${task.id}, revision=${task.revision}, owner=${task.ownerThreadId})${task.reason ? `: ${task.reason}` : ''}`,
+    status: task.status, source: task.planSource
+  })) : todos?.items ?? []
   if (items.length === 0) return null
   const rows = items.slice(0, 50).map((item, index) => {
     const source = item.source?.kind === 'plan' ? ` source=plan:${item.source.relativePath}` : ''
     return `${index + 1}. [${item.status}] ${escapeXmlText(item.content)}${source}`
   })
   return [
-    'The current thread todo list is structured, user-visible progress state.',
-    'Use `todo_list` to inspect it and `todo_write` to replace the whole list when task state changes.',
-    'Keep at most one item in_progress. Plan-linked todos mirror Markdown checkboxes in the saved plan file.',
+    'This is a bounded progress projection; task_list and task_get provide canonical execution tasks and revisions.',
+    'Use task_create and task_update for atomic changes. Never replace the whole task list. Preserve owners and dependencies; completion requires evidence.',
+    'Saved plan checkboxes are a projection, not execution authority. Legacy in-progress records require explicit recovery. Task state does not start background work or complete a Goal.',
     '',
     '<thread_todos>',
     ...rows,
@@ -422,8 +426,7 @@ export function allowedToolNamesWithGuiStateTools(
     next.add(GET_GOAL_TOOL_NAME)
     next.add(UPDATE_GOAL_TOOL_NAME)
   }
-  next.add(TODO_LIST_TOOL_NAME)
-  next.add(TODO_WRITE_TOOL_NAME)
+  for (const name of EXECUTION_TASK_TOOL_NAMES) next.add(name)
   return [...next]
 }
 

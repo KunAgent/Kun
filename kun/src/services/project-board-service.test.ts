@@ -1,3 +1,4 @@
+import { todoContentHash } from '../shared/todos.js'
 import { mkdir, mkdtemp, realpath, rm, writeFile, readFile, readdir, stat } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
@@ -270,7 +271,7 @@ describe('ProjectBoardService', () => {
           planId: 'plan_bulk',
           relativePath: '.kunsdd/plan/demo.md',
           ordinal,
-          contentHash: String(ordinal)
+          contentHash: todoContentHash(content)
         },
         createdAt: '2026-08-31T00:00:00.000Z',
         updatedAt: '2026-08-31T00:00:00.000Z'
@@ -302,8 +303,9 @@ describe('ProjectBoardService', () => {
     expect(result.revision).toBe(withManual.revision + 1)
     expect(result.updatedCards).toHaveLength(3)
     expect(result.counts).toMatchObject({ total: 3, completed: 3 })
-    expect((await threads.get('thr_bulk'))?.todos?.items.every((item) =>
-      item.status === 'completed')).toBe(true)
+    expect((await threads.get('thr_bulk'))?.executionTasks?.tasks.every((item) =>
+      item.status === 'succeeded')).toBe(true)
+    expect((await threads.get('thr_bulk'))?.todos?.items.every((item) => item.status === 'pending')).toBe(true)
   })
 
   it('rejects multiple selected Plan todos from one thread entering in-progress', async () => {
@@ -385,7 +387,7 @@ describe('ProjectBoardService', () => {
           status: 'pending',
           source: {
             kind: 'plan', planId: `plan_${id}`, relativePath: '.kunsdd/plan/demo.md',
-            ordinal: 0, contentHash: id
+            ordinal: 0, contentHash: todoContentHash(id === 'ok' ? 'Build board API' : 'Failure')
           },
           createdAt: '2026-08-31T00:00:00.000Z',
           updatedAt: '2026-08-31T00:00:00.000Z'

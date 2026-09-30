@@ -589,7 +589,7 @@ describe('createAgentSdkRuntime turn context', () => {
     }))
   })
 
-  test.each(['Read', 'Glob', 'Grep', 'TodoWrite'])(
+  test.each(['Read', 'Glob', 'Grep'])(
     'does not review SDK-native safe tool %s under on-request policy',
     async (toolName) => {
       const approvalGate = new InMemoryApprovalGate()
