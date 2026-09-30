@@ -150,13 +150,43 @@ describe('HTTP server', () => {
     expect(await readJson(clearGoal)).toEqual({ cleared: true })
   })
 
-  it('sets, reads, and clears thread todos through the HTTP layer', async () => {
+  it('uses atomic tasks and rejects retired whole-list todo writes through the HTTP layer', async () => {
     const h = buildHarness()
     await h.threadService.create({
       workspace: '/tmp',
       model: 'deepseek-chat',
       mode: 'agent'
     }, { id: 'thr_todos', title: 'Todos' })
+
+    const request = (path: string, method = 'GET', body?: unknown) => dispatchRequest(
+      h.router,
+      new Request(`http://localhost/v1/threads/thr_todos/${path}`, {
+        method,
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) })
+      })
+    )
+    const create = await request('tasks', 'POST', { title: 'Wire API', clientRequestId: 'wire-api' })
+    expect(create.status).toBe(201)
+    const { task } = await readJson(create) as { task: { id: string; revision: number } }
+    const second = await request('tasks', 'POST', { title: 'Render panel', clientRequestId: 'render-panel' })
+    expect(second.status).toBe(201)
+    const { task: other } = await readJson(second) as { task: { id: string } }
+    const complete = {
+      status: 'succeeded', expectedRevision: task.revision, clientRequestId: 'verify-api',
+      evidence: [{ summary: 'HTTP contract verified' }]
+    }
+    const update = await request(`tasks/${task.id}`, 'PATCH', complete)
+    expect(update.status).toBe(200)
+    expect(await readJson(update)).toMatchObject({ task: { id: task.id, revision: 1, status: 'succeeded' } })
+    const replay = await request(`tasks/${task.id}`, 'PATCH', complete)
+    expect(replay.status).toBe(200)
+    expect(await readJson(replay)).toMatchObject({ replayed: true, task: { revision: 1 } })
+    const stale = await request(`tasks/${task.id}`, 'PATCH', {
+      title: 'Stale overwrite', expectedRevision: 0, clientRequestId: 'stale'
+    })
+    expect(stale.status).toBe(409)
+    expect(await readJson(stale)).toMatchObject({ code: 'conflict' })
 
     const setTodos = await dispatchRequest(
       h.router,
@@ -165,17 +195,13 @@ describe('HTTP server', () => {
         headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
         body: JSON.stringify({
           todos: [
-            { content: 'Wire API', status: 'completed' },
-            { content: 'Render panel', status: 'pending' }
+            { content: 'Replace all existing tasks', status: 'pending' }
           ]
         })
       })
     )
-    expect(setTodos.status).toBe(200)
-    const setBody = await readJson(setTodos) as { todos?: { items?: Array<{ content?: string; status?: string }> } }
-    expect(setBody.todos?.items).toEqual(expect.arrayContaining([
-      expect.objectContaining({ content: 'Wire API', status: 'completed' })
-    ]))
+    expect(setTodos.status).toBe(410)
+    expect(await readJson(setTodos)).toMatchObject({ code: 'tool_retired' })
 
     const readTodos = await dispatchRequest(
       h.router,
@@ -184,8 +210,11 @@ describe('HTTP server', () => {
       })
     )
     expect(readTodos.status).toBe(200)
-    const readBody = await readJson(readTodos) as { todos?: { items?: Array<{ content?: string }> } | null }
-    expect(readBody.todos?.items?.[0]?.content).toBe('Wire API')
+    const readBody = await readJson(readTodos) as { todos?: { items?: Array<{ content?: string; status?: string }> } | null }
+    expect(readBody.todos?.items).toMatchObject([
+      { content: 'Wire API', status: 'completed' },
+      { content: 'Render panel', status: 'pending' }
+    ])
 
     const clearTodos = await dispatchRequest(
       h.router,
@@ -194,8 +223,22 @@ describe('HTTP server', () => {
         headers: { authorization: 'Bearer tok-1' }
       })
     )
-    expect(clearTodos.status).toBe(200)
-    expect(await readJson(clearTodos)).toEqual({ cleared: true })
+    expect(clearTodos.status).toBe(410)
+    expect(await readJson(clearTodos)).toMatchObject({ code: 'tool_retired' })
+    const list = await request('tasks')
+    expect(list.status).toBe(200)
+    expect(await readJson(list)).toMatchObject({ tasks: [
+      { id: task.id, title: 'Wire API', status: 'succeeded', revision: 1 },
+      { id: other.id, title: 'Render panel', status: 'pending', revision: 0 }
+    ] })
+    const cancel = await request(`tasks/${other.id}`, 'PATCH', {
+      status: 'cancelled', expectedRevision: 0, clientRequestId: 'cancel-panel'
+    })
+    expect(cancel.status).toBe(200)
+    const readTask = await request(`tasks/${other.id}`)
+    expect(readTask.status).toBe(200)
+    expect(await readJson(readTask)).toMatchObject({ task: { id: other.id, status: 'cancelled', revision: 1 } })
+    expect((await h.threadStore.get('thr_todos'))?.todos).toBeUndefined()
   })
 
   it('filters thread lists for search, archives, and limits', async () => {
