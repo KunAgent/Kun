@@ -213,7 +213,7 @@ export function useFloatingComposerActions(
 
   const setGoalFromGoalInputMode = (): boolean => {
     const objective = input.trim()
-    if (!goalInputMode || objective.length === 0 || objective.startsWith('/')) return false
+    if (!canOpenGoalPanel || !goalInputMode || objective.length === 0 || objective.startsWith('/')) return false
     inputHistory.push(input)
     setInput('')
     setGoalInputMode(false)

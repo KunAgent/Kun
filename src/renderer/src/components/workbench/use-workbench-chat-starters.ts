@@ -4,11 +4,10 @@
  * session, harness-pinned one-to-one, workspace-picked) live in one cohesive
  * hook. ADE starters open a local draft; Code starters guard async activation.
  */
-import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { useChatStore } from '../../store/chat-store'
 import { useHarnessStore } from '../../store/harness-store'
 import { harnessPermissionDefault } from '../../lib/harness-defaults'
-import { requestOpenWorkersPanel } from '../chat/FloatingComposerWorkersPill'
 import type { ChatState } from '../../store/chat-store-types'
 import { readStoredComposerIsolation } from '../../store/chat-store-helpers'
 
@@ -39,29 +38,6 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
     useWorktreePool,
     worktreeBranch
   } = deps
-  const activeThreadId = useChatStore((s) => s.activeThreadId)
-  const adeDraftOpen = useChatStore((s) => s.adeDraftOpen)
-  const adeThreads = useChatStore((s) => s.adeThreads)
-  const route = useChatStore((s) => s.route)
-  const managerDraftPending = useRef<Set<string> | null>(null)
-
-  useEffect(() => {
-    const knownThreadIds = managerDraftPending.current
-    if (!knownThreadIds) return
-    if (route !== 'ade' || (!adeDraftOpen && !activeThreadId)) {
-      managerDraftPending.current = null
-      return
-    }
-    if (adeDraftOpen || !activeThreadId) return
-    if (knownThreadIds.has(activeThreadId)) {
-      managerDraftPending.current = null
-      return
-    }
-    if (!adeThreads.some((thread) => thread.id === activeThreadId)) return
-    managerDraftPending.current = null
-    requestOpenWorkersPanel()
-  }, [activeThreadId, adeDraftOpen, adeThreads, route])
-
   const startNewChat = useCallback((): void => {
     const requestId = beginNavigation()
     if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
@@ -92,14 +68,10 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
     if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
     setConnectPhoneSidebarOpen(false)
     const state = useChatStore.getState()
-    managerDraftPending.current = new Set([
-      ...state.adeThreads.map((thread) => thread.id),
-      ...(state.activeThreadId ? [state.activeThreadId] : [])
-    ])
     state.startAdeDraft()
-    state.setComposerHarness('', '')
+    state.setComposerHarness('kun', '')
     // A prior one-to-one harness model must not leak into the Kun manager.
-    useChatStore.setState({ composerModel: '', composerProviderId: '' })
+    useChatStore.setState({ composerModel: '', composerProviderId: '', composerCollaborationEnabled: true })
     const isolation = readStoredComposerIsolation()
     state.setComposerIsolation(isolation, isolation === 'worktree' ? { kind: 'default-branch' } : undefined)
   }, [
@@ -125,7 +97,6 @@ export function useWorkbenchChatStarters(deps: WorkbenchChatStarterDeps) {
     beginNavigation()
     if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
     setConnectPhoneSidebarOpen(false)
-    managerDraftPending.current = null
     const state = useChatStore.getState()
     state.startAdeDraft()
     state.setComposerHarness(input.harnessId, input.credentialMode ?? '')

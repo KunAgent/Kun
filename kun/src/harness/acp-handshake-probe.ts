@@ -20,10 +20,12 @@ import {
   type HarnessSecretRefResolver
 } from './harness-secret-env.js'
 import { ACP_READINESS_TIMEOUT_MS } from './acp-readiness-probe.js'
+import { raceProbeAbort } from './probe-abort.js'
 
 export type AcpHandshakeProbeDeps = {
   spawn?: AcpSpawnFn
   timeoutMs?: number
+  signal?: AbortSignal
   /** Resolves `launch.secretEnv` refs so the probe sees the real env (P4-12). */
   resolveSecretEnv?: HarnessSecretRefResolver
 }
@@ -45,8 +47,8 @@ export async function probeAcpHandshake(
     process = await startAcpProcess({
       command,
       args: definition.launch?.args ?? [],
-      // Same rule as the readiness probe: no credential env — the handshake
-      // reports install health, auth requirements surface via authMethods.
+      // Same rule as the readiness probe: no credential env. The handshake
+      // reports install health and available login methods, not account state.
       env: definition.launch?.env ?? {},
       secretEnv,
       cwd: tmpdir(),
@@ -65,7 +67,7 @@ export async function probeAcpHandshake(
   // sessionUnavailable reply instead of touching a real workspace.
   new AcpClientHost().attach(conn)
   try {
-    const init = await conn.initialize({ timeoutMs })
+    const init = await raceProbeAbort(conn.initialize({ timeoutMs }), deps.signal)
     const caps = init.agentCapabilities
     const mcpTransports = [
       ...(caps?.mcpCapabilities?.stdio ? ['stdio'] : []),
@@ -98,8 +100,7 @@ export async function probeAcpHandshake(
               ...(method.name ? { name: method.name } : {})
             }))
           }
-        : {}),
-      ...(conn.requiresAuthentication ? { authRequired: true } : {})
+        : {})
     }
   } catch (error) {
     const parts = [errorMessage(error)]

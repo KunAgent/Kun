@@ -47,13 +47,21 @@ export function createNavigationWorkspaceActions(
 ): Pick<ChatState, 'chooseWorkspace' | 'selectWorkspaceRoot' | 'chooseAdeWorkspace' | 'selectAdeWorkspaceRoot' | 'setComposerIsolationForWorkspace' | 'clearWorkspace' | 'removeWorkspace' | 'refreshThreads' | 'loadMoreThreads' | 'setThreadSearch' | 'setShowArchivedThreads'> {
   let adeSelectionPending = false
 
+  const isManagedContext = (state: ChatState): boolean => {
+    if (state.route === 'ade') return true
+    if (state.route !== 'chat') return false
+    const thread = [...state.threads, ...state.adeThreads].find((entry) => entry.id === state.activeThreadId)
+    return state.adeDraftOpen || Boolean(thread?.taskWorkspaceId) || thread?.workspaceMode === 'ade'
+  }
+
+
   const adeSelectionBlocked = (state: ChatState): boolean =>
     state.busy || state.queuedMessages.length > 0 ||
     Boolean(state.threadLoadingId) || threadWorkspacePreparing(state.activeThreadId)
 
   const currentAdeProjectRoot = (state: ChatState): string => {
     if (!state.activeThreadId) return normalizeWorkspaceRoot(state.workspaceRoot)
-    const thread = state.adeThreads.find((item) => item.id === state.activeThreadId)
+    const thread = [...state.threads, ...state.adeThreads].find((item) => item.id === state.activeThreadId)
     if (!thread) return normalizeWorkspaceRoot(state.workspaceRoot)
     if (!thread.taskWorkspaceId) return normalizeWorkspaceRoot(thread.workspace)
     const preparedSource = useTaskWorkspaceStore.getState().prepByThread[thread.id]?.sourceRoot
@@ -74,7 +82,7 @@ export function createNavigationWorkspaceActions(
 
   const contextIsCurrent = (context: ReturnType<typeof adeSelectionContext>): boolean => {
     const state = get()
-    return state.route === 'ade' && state.route === context.route &&
+    return isManagedContext(state) && state.route === context.route &&
       state.activeThreadId === context.activeThreadId &&
       state.workspaceRoot === context.workspaceRoot && !adeSelectionBlocked(state)
   }
@@ -127,7 +135,7 @@ export function createNavigationWorkspaceActions(
       }
       set((current) => ({
         ...(projectChanged ? clearedThreadSelection() : {}),
-        route: 'ade',
+        route: 'chat',
         adeDraftOpen: projectChanged || !current.activeThreadId ? true : current.adeDraftOpen,
         adeDraftRevision: projectChanged || (!current.activeThreadId && !current.adeDraftOpen)
           ? current.adeDraftRevision + 1
@@ -142,6 +150,11 @@ export function createNavigationWorkspaceActions(
         removedCodeWorkspaces,
         ...(projectChanged ? { extensionComposerContexts: [] } : {}),
         ...(projectChanged ? { composerWorktreeStartFrom: undefined } : {}),
+        ...(projectChanged ? {
+          composerProjectDefaults: null,
+          composerRouteExplicitWorkspaceRoot: '',
+          composerProjectCollaborationExplicitWorkspaceRoot: ''
+        } : {}),
         error: null
       }))
       void get().refreshThreads().catch(() => undefined)
@@ -295,7 +308,7 @@ export function createNavigationWorkspaceActions(
     adeSelectionPending = true
     const context = adeSelectionContext()
     try {
-      if (context.route !== 'ade') return null
+      if (!isManagedContext(get())) return null
       if (get().runtimeConnection !== 'ready') {
         set({ error: i18n.t('common:runtimeActionNeedsConnection') })
         return null
@@ -326,7 +339,7 @@ export function createNavigationWorkspaceActions(
     adeSelectionPending = true
     const context = adeSelectionContext()
     try {
-      if (context.route !== 'ade') return null
+      if (!isManagedContext(get())) return null
       if (get().runtimeConnection !== 'ready') {
         set({ error: i18n.t('common:runtimeActionNeedsConnection') })
         return null
@@ -344,7 +357,7 @@ export function createNavigationWorkspaceActions(
   },
 
   setComposerIsolationForWorkspace: () => {
-    if (get().route !== 'ade' || get().activeThreadId) return
+    if (!isManagedContext(get()) || get().activeThreadId) return
     set({ composerIsolation: 'local', composerWorktreeStartFrom: undefined })
   },
 

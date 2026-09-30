@@ -5,8 +5,9 @@ import i18n from '../../i18n'
 import { otherUserInputAnswers, RoomChoiceCard } from './RoomChoiceCard'
 import { RoomNewChat } from './RoomNewChat'
 import type { RoomUserInput } from './rooms-client'
+import type { AgentIdentity } from '@shared/rooms-api'
 
-const api = vi.hoisted(() => ({ request: vi.fn() }))
+const api = vi.hoisted(() => ({ request: vi.fn(), create: vi.fn(), agents: [] as AgentIdentity[] }))
 
 vi.mock('./RoomModal', () => ({
   RoomModal: ({ title, children }: { title: string; children: unknown }) =>
@@ -15,19 +16,25 @@ vi.mock('./RoomModal', () => ({
 vi.mock('./rooms-client', async (original) => ({
   ...(await original<typeof import('./rooms-client')>()),
   roomsRequest: api.request,
-  roomsClient: { create: vi.fn() }
+  roomsClient: { create: api.create }
 }))
 vi.mock('./agent-client', async (original) => ({
   ...(await original<typeof import('./agent-client')>()),
-  useAgentCatalog: () => ({ agents: [], cursor: undefined, more: async () => undefined, busy: false, error: '' }),
+  useAgentCatalog: () => ({ agents: api.agents, cursor: undefined, more: async () => undefined, busy: false, error: '' }),
   useAgentResource: () => ({ data: { templates: [] }, error: '', refresh: () => undefined })
 }))
 
 describe('new Agent dual-path setup UI', () => {
   let renderer: ReactTestRenderer
   beforeEach(async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
     await i18n.changeLanguage('en')
     api.request.mockReset().mockResolvedValue({ roomId: 'room-1' })
+    api.create.mockReset().mockResolvedValue({ room: { id: 'group-1' } })
+    api.agents = [
+      { id: 'agent-1', name: 'Developer', title: 'Builds', defaultRole: 'developer' },
+      { id: 'agent-2', name: 'Reviewer', title: 'Reviews', defaultRole: 'reviewer' }
+    ] as AgentIdentity[]
   })
   afterEach(() => { if (renderer) act(() => renderer.unmount()) })
 
@@ -44,6 +51,54 @@ describe('new Agent dual-path setup UI', () => {
     expect(onClose).toHaveBeenCalled()
     await act(async () => chat.props.onClick())
     expect(api.request).toHaveBeenCalledWith('/v1/agents/quick-create', 'POST', expect.objectContaining({ setupMode: 'chat' }))
+    expect(buttons.some((item) => item.children.includes('Group chat'))).toBe(true)
+  })
+
+  it('private selection opens an Agent directly and cannot create a group', async () => {
+    const onAgent = vi.fn(), onClose = vi.fn()
+    await act(async () => {
+      renderer = create(createElement(RoomNewChat, {
+        onClose, onOpen: vi.fn(), onAgent, selectionMode: 'private', initialGroup: true
+      }))
+    })
+    expect(renderer.root.findAllByType('button').some((item) => item.children.includes('Group chat'))).toBe(false)
+    expect(renderer.root.findAllByProps({ className: 'rooms-run-primary' })).toHaveLength(0)
+    const developer = renderer.root.findAllByType('button').find((item) =>
+      item.findAllByType('strong').some((label) => label.props.children === 'Developer'))!
+    await act(async () => developer.props.onClick())
+    expect(onAgent).toHaveBeenCalledWith('agent-1')
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(api.create).not.toHaveBeenCalled()
+  })
+
+  it('group selection hides private creation and starts only after selecting two Agents', async () => {
+    const onAgent = vi.fn(), onOpen = vi.fn(), onClose = vi.fn()
+    await act(async () => {
+      renderer = create(createElement(RoomNewChat, {
+        onClose, onOpen, onAgent, onFill: vi.fn(), selectionMode: 'group'
+      }))
+    })
+    const buttons = renderer.root.findAllByType('button')
+    expect(buttons.some((item) => item.children.includes('Define in chat'))).toBe(false)
+    expect(buttons.some((item) => item.children.includes('Fill in yourself'))).toBe(false)
+    expect(renderer.root.findAllByProps({ className: 'direct-template-toggle' })).toHaveLength(0)
+    const start = () => renderer.root.findByProps({ className: 'rooms-run-primary' })
+    expect(start().props.disabled).toBe(true)
+    const choice = (name: string) => renderer.root.findAllByType('button').find((item) =>
+      item.findAllByType('strong').some((label) => label.props.children === name))!
+    await act(async () => choice('Developer').props.onClick())
+    expect(start().props.disabled).toBe(true)
+    await act(async () => choice('Reviewer').props.onClick())
+    expect(start().props.disabled).toBe(false)
+    await act(async () => start().props.onClick())
+    expect(onAgent).not.toHaveBeenCalled()
+    expect(api.request).not.toHaveBeenCalled()
+    expect(api.create).toHaveBeenCalledWith(expect.objectContaining({
+      members: [expect.objectContaining({ participantAgentId: 'agent-1' }), expect.objectContaining({ participantAgentId: 'agent-2' })],
+      collaborationMode: 'peer'
+    }), expect.any(String))
+    expect(onOpen).toHaveBeenCalledWith('group-1')
+    expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('submits a Grok option, custom Other text, and close as cancelled', async () => {

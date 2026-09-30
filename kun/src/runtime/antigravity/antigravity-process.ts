@@ -2,6 +2,7 @@ import type { spawn, SpawnOptions } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import { shellSpawnEnv } from '../../adapters/tool/builtin-tool-utils.js'
 import { spawnOwnedProcess, stopOwnedProcess } from '../../process/owned-process.js'
+import { harnessExecutableEnv } from '../../harness/harness-executable-env.js'
 
 const MAX_STDOUT_BYTES = 8 * 1024 * 1024
 const MAX_STDERR_BYTES = 256 * 1024
@@ -16,7 +17,7 @@ export async function runAntigravityProcess(input: {
 }): Promise<string> {
   const options: SpawnOptions = {
     cwd: input.cwd,
-    env: shellSpawnEnv(),
+    env: harnessExecutableEnv(shellSpawnEnv()),
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: false
   }

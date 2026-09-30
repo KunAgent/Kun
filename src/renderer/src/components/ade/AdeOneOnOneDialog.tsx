@@ -14,6 +14,7 @@ import {
   useHarnessStore
 } from '../../store/harness-store'
 import type { SettingsRouteSection } from '../../store/chat-store-types'
+import { AgentIcon } from '../agent-icon'
 import { useHarnessDefaults } from '../../lib/harness-defaults'
 import {
   readAdeLastOneOnOnePick,
@@ -223,7 +224,10 @@ export function AdeOneOnOneDialog({
                           : 'text-ds-text hover:bg-ds-hover'
                     }`}
                   >
-                    <span className="truncate">{entry.definition.displayName}</span>
+                    <span className="flex min-w-0 items-center gap-2 truncate">
+                      <AgentIcon harnessId={id} size={16} />
+                      <span className="truncate">{entry.definition.displayName}</span>
+                    </span>
                     {unavailable ? (
                       <span className="shrink-0 text-[11px] text-ds-faint">
                         {t(harnessUnavailableLabelKey(unavailable))}

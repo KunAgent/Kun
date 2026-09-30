@@ -17,10 +17,11 @@
 - P3 复核（2026-09-28 起）修补了四条端到端链路的缺口并补齐实机验证：活动流提升到应用级、ADE composer 门控、ACP 真机握手与 wire 回放、Claude Code 经 kun-gateway 的 worker 链路、团队 token 预算、总管动态上下文、侧栏分组与嵌套 worker、终端 agent 的 `KUN_CLI` 环境与休眠恢复、手机端只读 Mission Control 与内联审批/作答。
 - 当前进展、实机验证记录与默认开启门槛见 [impl/p3-review-followup.md](./impl/p3-review-followup.md)。
 - 界面可用性问题、harness 的添加与配置方式，以及 P4 修复计划见 [impl/p4-usable-ade.md](./impl/p4-usable-ade.md)。
+- 2026-09-30 的完整交互与配置细化计划，以及用户反馈的 Agent 接入失败和品牌图标修复，见 [P7 实施入口](./impl/p7-workbench-configuration.md)；文档已编写，产品实现尚待按清单推进。
 
 ## 1. 目标
 
-新增一个独立的 **ADE 模式**（Agentic Development Environment），与 Work、Code、Bot 并列（2026-09-26 决策，见 [00-ade-mode.md](./00-ade-mode.md)）。Code 模式保持不变。ADE 模式里有两种使用方式，共用一个底座：
+2026-09-30 最新用户决策：将 **ADE 能力融合进现有 Code 工作台**，不再提供独立 ADE 页面或要求用户先选择模式。以 [14 Code 工作台融合](./14-code-workbench-integration.md) 为当前设计正本；[00 独立模式](./00-ade-mode.md) 保留为历史实现记录。统一页面按需提供以下能力：
 
 1. **一对一**：用户直接和某一个 agent 对话。这个 agent 可以是 Kun 原生 agent，也可以是 Claude Code、Codex、Gemini CLI、Cursor 等外部 agent。
 2. **总管模式**：用户对 Kun 原生 agent（总管）说话，总管负责拆任务、选 agent、派活、盯进度、验收、汇报；每个 worker 可以是任意 agent，各自在一个由宿主创建的 worktree 里工作。
@@ -71,8 +72,8 @@ Kun 的结构性优势：
 
 ```text
 Renderer（React + Zustand）
-  模式：Work / Code（不变）/ ADE（新）/ Bot
-  ADE：Mission Control / 一对一会话 / 总管会话 / Workers 轨道 / 审查面板
+  模式：Work / Code（融合 Agent 与协作能力）/ Bot
+  Code：现有对话 / 模型菜单中的 Agent / 按需协作轨道 / 扩展的改动面板
       |  window.kunGui.runtimeRequest / startSse / activity 长轮询
       v
 Preload -> Main（DesktopProcessStack、PTY、通知、Dock 角标）
@@ -120,7 +121,8 @@ kun serve
 
 | 文件 | 内容 | 阶段 |
 | --- | --- | --- |
-| [00-ade-mode.md](./00-ade-mode.md) | ADE 作为独立模式：边界、线程归属 `workspaceMode`、界面结构、P0-17 模式外壳（**优先于其它文档**） | P0 |
+| [00-ade-mode.md](./00-ade-mode.md) | 独立模式的历史实现：边界、`workspaceMode`、P0-17 外壳；2026-09-30 起由 14 取代其产品方向 | P0 |
+| [14-code-workbench-integration.md](./14-code-workbench-integration.md) | **当前设计正本**：Code 单页面融合、渐进式协作、既有设置复用、历史/准入/工作区迁移 | P7 |
 | [01-harness-routing.md](./01-harness-routing.md) | Harness 概念、目录、检测、路由、设置 | P0 |
 | [02-capabilities.md](./02-capabilities.md) | 能力声明 v2、准入矩阵、UI 降级契约 | P0 |
 | [03-acp-runtime.md](./03-acp-runtime.md) | ACP 通用接入运行时 | P1 |

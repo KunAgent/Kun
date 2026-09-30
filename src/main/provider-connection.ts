@@ -1,4 +1,5 @@
-import { session } from 'electron'
+import { resolveElectronSystemProxyUrl } from './electron-system-proxy'
+export { resolveElectronSystemProxyUrl } from './electron-system-proxy'
 import {
   isCustomModelEndpointFormat,
   normalizeModelEndpointFormat,
@@ -288,34 +289,6 @@ async function providerReachable(
   }
 }
 
-export async function resolveElectronSystemProxyUrl(url: string): Promise<string> {
-  try {
-    const rules = await session.defaultSession.resolveProxy(url)
-    for (const entry of rules.split(';')) {
-      const [kind = '', target = ''] = entry.trim().split(/\s+/, 2)
-      if (!target || kind.toUpperCase() === 'DIRECT') continue
-      const protocol = kind.toUpperCase() === 'HTTPS'
-        ? 'https:'
-        : kind.toUpperCase() === 'SOCKS' || kind.toUpperCase() === 'SOCKS5'
-          ? 'socks5:'
-          : kind.toUpperCase() === 'SOCKS4'
-            ? 'socks4:'
-            : kind.toUpperCase() === 'PROXY'
-              ? 'http:'
-              : ''
-      if (!protocol) continue
-      const candidate = new URL(`${protocol}//${target}`)
-      if (!candidate.hostname || !candidate.port) continue
-      return candidate.toString()
-    }
-  } catch (error) {
-    logWarn('provider-probe', 'Failed to resolve the desktop system proxy.', {
-      requestUrl: url,
-      message: describeProviderProbeError(error)
-    })
-  }
-  return ''
-}
 
 export function parseModelIds(body: string): string[] {
   if (body.length > MAX_MODEL_LIST_RESPONSE_BYTES) return []

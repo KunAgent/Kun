@@ -14,7 +14,7 @@ import { useCommandPaletteStore } from './palette-store'
  * navigate to. Settings owns no palette sources of its own, so the chord
  * returns to the route the user came from and opens the palette there.
  */
-export function useSettingsCommandPaletteShortcut(closeSettings: () => void): void {
+export function useSettingsCommandPaletteShortcut(closeSettings: () => boolean | void): void {
   const keyboardShortcuts = useKeyboardShortcutSettings()
   const shortcutPlatform = typeof window === 'undefined' ? undefined : window.kunGui?.platform
   const bindings = useMemo(
@@ -31,7 +31,7 @@ export function useSettingsCommandPaletteShortcut(closeSettings: () => void): vo
       })
       if (commandId !== 'command-palette') return
       event.preventDefault()
-      closeSettings()
+      if (closeSettings() === false) return
       openPalette()
     }
     window.addEventListener('keydown', onKeyDown, true)

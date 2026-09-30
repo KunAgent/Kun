@@ -112,6 +112,37 @@ function respondToLast(
 }
 
 describe('CodexClient', () => {
+  it('reads only the configured model from the native configuration response', async () => {
+    const { client, writes, emit } = newClient()
+    const model = client.configuredModel()
+    expect(writes.at(-1)).toMatchObject({ method: 'config/read', params: { includeLayers: false } })
+    respondToLast(writes, emit, { config: { model: 'native-choice', unrelatedCredential: 'not-projected' } })
+    expect(await model).toBe('native-choice')
+  })
+
+  it('keeps all visible model pages, canonical IDs and image metadata', async () => {
+    const { client, writes, emit } = newClient()
+    const row = (id: string, model: string, hidden = false) => ({ id, model, displayName: model,
+      description: '', isDefault: false, hidden, defaultReasoningEffort: 'medium', inputModalities: ['text', 'image'] })
+    const pending = client.listModels()
+    expect(writes.at(-1)).toMatchObject({ params: { includeHidden: false, limit: 100 } })
+    respondToLast(writes, emit, { data: [row('alias', 'first'), row('hidden', 'hidden', true)], nextCursor: 'next' })
+    for (let i = 0; i < 5; i++) await Promise.resolve()
+    expect(writes.at(-1)).toMatchObject({ params: { cursor: 'next' } })
+    respondToLast(writes, emit, { data: [row('duplicate', 'first'), row('second', 'second')], nextCursor: null })
+    expect(await pending).toMatchObject([{ model: 'first', inputModalities: ['text', 'image'] }, { model: 'second' }])
+  })
+
+  it('rejects looping model cursors instead of hanging discovery', async () => {
+    const { client, writes, emit } = newClient()
+    const pending = client.listModels()
+    const rejection = expect(pending).rejects.toThrow('repeated its cursor')
+    respondToLast(writes, emit, { data: [], nextCursor: 'same' })
+    for (let i = 0; i < 5; i++) await Promise.resolve()
+    respondToLast(writes, emit, { data: [], nextCursor: 'same' })
+    await rejection
+  })
+
   it('performs the initialize handshake then sends initialized', async () => {
     const { client, writes, emit } = newClient()
     const promise = client.initialize()

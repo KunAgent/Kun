@@ -48,8 +48,8 @@ describe('workbench bridge actions', () => {
   it('puts a Code session in the bot draft without sending anything, then opens the chat', async () => {
     await sendThreadToBot({ id: 'thread-1', title: 'Fix SSE' })
     expect(draft('room-recent')).toMatchObject({ body: '', references: [{ kind: 'code_thread', threadId: 'thread-1', titleSnapshot: 'Fix SSE' }] })
-    expect(mocks.storage.get('kun.rooms.selected')).toBe('room-recent')
-    expect(mocks.setRoute).toHaveBeenCalledWith('rooms')
+    expect(mocks.storage.get('kun.agentChats.selected')).toBe('room-recent')
+    expect(mocks.setRoute).toHaveBeenCalledWith('agent-chat')
     expect(mocks.roomsRequest).not.toHaveBeenCalled()
   })
 
@@ -84,7 +84,7 @@ describe('workbench bridge actions', () => {
     mocks.watch.mockResolvedValue({ id: 'link-1' })
     await watchThreadWithBot({ id: 'thread-1', title: 'Long job' })
     expect(mocks.watch).toHaveBeenCalledWith('room-recent', 'thread-1', 'Long job')
-    expect(mocks.flash).toHaveBeenCalledWith('The bot will let you know when this session finishes.')
+    expect(mocks.flash).toHaveBeenCalledWith('The Agent will let you know when this session finishes.')
     mocks.watch.mockRejectedValue(new Error('the session is not running'))
     await watchThreadWithBot({ id: 'thread-2', title: 'Idle' })
     expect(mocks.flash).toHaveBeenLastCalledWith('the session is not running', 'error')
@@ -94,7 +94,7 @@ describe('workbench bridge actions', () => {
     mocks.list.mockResolvedValue({ rooms: [] })
     mocks.roomsRequest.mockResolvedValue({})
     await sendThreadToBot({ id: 'thread-1', title: 'x' })
-    expect(mocks.flash).toHaveBeenCalledWith(expect.stringContaining('No bot conversation'), 'error')
+    expect(mocks.flash).toHaveBeenCalledWith(expect.stringContaining('No Agent conversation'), 'error')
     expect(mocks.setRoute).not.toHaveBeenCalled()
   })
 })

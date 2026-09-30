@@ -219,7 +219,8 @@ export async function createRuntimeAgentComposition(
   // P3-14: manager turns get delegation contract + team state + harness menu.
   const adeManagerContext = createAdeManagerContext({
     ...services.adeStores,
-    harnessSummary: graphHarnessSummary
+    harnessSummary: graphHarnessSummary,
+    canStartNewWork: () => core.activeOptions.ade?.enabled === true
   })
   const harnessRuntimeMap = new HarnessRuntimeMap(
     buildHarnessRuntimes(
@@ -301,7 +302,7 @@ export async function createRuntimeAgentComposition(
   const activityHibernation = createActivityHibernation({
     core, managerRuntime, catalog: services.harnesses.catalog
   })
-  registerAdeManagerTooling({
+  const managerToolProvider = registerAdeManagerTooling({
     registry: registryComposition.registry,
     managerRuntime,
     services,
@@ -517,6 +518,7 @@ export async function createRuntimeAgentComposition(
     runReview,
     queuedTurnDispatcher,
     managerRuntime,
+    managerToolProvider,
     activityHibernation,
     dispatchDeliverer,
     workerNoticeCoordinator,

@@ -92,6 +92,17 @@ async function dispatch(
 const authed = { authorization: `Bearer ${TOKEN}` }
 
 describe('harness routes', () => {
+  it('returns native model metadata beside the compatible flat model list', async () => {
+    const modelInfo = [{ id: 'gpt-native', inputModalities: ['text', 'image'], isDefault: true }]
+    const router = buildRouter({ runtimeToken: TOKEN, insecure: false,
+      harnesses: { catalog: new HarnessCatalog(), codexModels: {
+        probeCatalog: async () => ({ models: ['gpt-native'], modelInfo })
+      } } } as unknown as ServerRuntime)
+    const response = await dispatch(router, 'GET', '/v1/harnesses/codex/models', authed)
+    expect(response.status).toBe(200)
+    expect(JSON.parse(response.body)).toMatchObject({ models: ['gpt-native'], modelInfo })
+  })
+
   it('requires runtime authentication', async () => {
     const router = fakeRouter(() => ({ stdout: 'claude 1.2.3', exitCode: 0 }))
     expect((await dispatch(router, 'GET', '/v1/harnesses')).status).toBe(401)
@@ -121,8 +132,8 @@ describe('harness routes', () => {
 
   it('probe detects version and reports installed status', async () => {
     const router = fakeRouter((command) =>
-      command.endsWith('/antigravity')
-        ? { stdout: 'antigravity 2026.1.2', exitCode: 0 }
+      command.endsWith('/agy')
+        ? { stdout: 'agy 2026.1.2', exitCode: 0 }
         : { stdout: '', exitCode: 1 }
     )
     const response = await dispatch(router, 'POST', '/v1/harnesses/antigravity/probe', authed)
@@ -141,7 +152,7 @@ describe('harness routes', () => {
     )
     expect(antigravity.status.installed).toBe('yes')
     // And it stayed binary-resolved through the injected resolver.
-    expect(antigravity.status.resolvedCommand).toBe('/fake/bin/antigravity')
+    expect(antigravity.status.resolvedCommand).toBe('/fake/bin/agy')
   })
 
   it('bundled SDK transports probe as installed without a binary', async () => {
@@ -272,6 +283,27 @@ describe('harness routes', () => {
         models: ['deepseek-chat', 'deepseek-reasoner']
       }
     ])
+  })
+
+  it('binds Cursor provider mode to Cursor SDK accounts instead of HTTP gateway profiles', async () => {
+    const catalog = new HarnessCatalog()
+    const router = buildRouter({ runtimeToken: TOKEN, insecure: false,
+      nowIso: () => '2026-01-01T00:00:00.000Z', harnesses: { catalog },
+      modelConnections: { snapshot: async () => ({ providers: [
+        { id: 'cursor-account', name: 'Cursor account', kind: 'cursor-sdk', authType: 'subscription',
+          configured: true, credentialStatus: 'ready', models: ['composer-2'] },
+        { id: 'missing-cursor', name: 'Missing', kind: 'cursor-sdk', authType: 'subscription',
+          configured: true, credentialStatus: 'missing', models: ['auto'] },
+        { id: 'http', name: 'HTTP', kind: 'http', authType: 'api-key',
+          configured: true, credentialStatus: 'ready', models: ['deepseek-chat'] }
+      ] }) }
+    } as unknown as ServerRuntime)
+    const response = await dispatch(router, 'GET', '/v1/harnesses/cursor/models?credential_mode=provider', authed)
+    expect(response.status).toBe(200)
+    expect(JSON.parse(response.body).groups).toEqual([
+      { providerId: 'cursor-account', label: 'Cursor account', models: ['composer-2'] }
+    ])
+    expect((await dispatch(router, 'GET', '/v1/harnesses/cursor/models?credential_mode=kun-gateway', authed)).status).toBe(400)
   })
 
   it('serves probed agent-sdk models and falls back when the probe fails', async () => {

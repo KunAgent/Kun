@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentProvider } from '../agent/provider-types'
+import type { AgentProvider, ThreadListPage } from '../agent/provider-types'
 import type { NormalizedThread } from '../agent/types'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import {
@@ -49,13 +49,13 @@ describe('sidebar thread pagination', () => {
   })
 
   it('establishes a project cursor, advances it, and deduplicates repeated rows', async () => {
-    let resolveFirst!: (value: { threads: NormalizedThread[]; hasMore: boolean; nextCursor?: string }) => void
-    const first = new Promise<{ threads: NormalizedThread[]; hasMore: boolean; nextCursor?: string }>((resolve) => {
+    let resolveFirst!: (value: ThreadListPage) => void
+    const first = new Promise<ThreadListPage>((resolve) => {
       resolveFirst = resolve
     })
     const listThreadsPage = vi.fn()
       .mockReturnValueOnce(first)
-      .mockResolvedValueOnce({ threads: [thread('thread-2')], hasMore: false })
+      .mockResolvedValueOnce({ threads: [thread('thread-2')], hasMore: false, workbenchScopeApplied: true })
     registryMock.getProvider.mockReturnValue({
       listThreadsPage,
       getThreadDetail: vi.fn(async () => ({ blocks: [{ kind: 'user', id: 'u', text: 'ok' }] }))
@@ -68,7 +68,7 @@ describe('sidebar thread pagination', () => {
     const duplicate = loadMoreThreads('/project', h.set, h.get)
     expect(listThreadsPage).toHaveBeenCalledTimes(1)
     expect(listThreadsPage).toHaveBeenCalledWith(expect.not.objectContaining({ cursor: expect.anything() }))
-    resolveFirst({ threads: [thread('thread-1')], hasMore: true, nextCursor: 'project-cursor' })
+    resolveFirst({ threads: [thread('thread-1')], hasMore: true, nextCursor: 'project-cursor', workbenchScopeApplied: true })
     await Promise.all([request, duplicate])
     expect(h.state.threads).toHaveLength(1)
 
@@ -79,7 +79,7 @@ describe('sidebar thread pagination', () => {
   })
 
   it('uses archived-only scope and completes malformed hasMore pages without a cursor', async () => {
-    const listThreadsPage = vi.fn(async () => ({ threads: [], hasMore: true }))
+    const listThreadsPage = vi.fn(async () => ({ threads: [], hasMore: true, workbenchScopeApplied: true }))
     registryMock.getProvider.mockReturnValue({ listThreadsPage } as unknown as AgentProvider)
     const h = harness({
       workspaceKey: '/project', mode: 'archived', status: 'unknown', hasMore: true
@@ -92,5 +92,22 @@ describe('sidebar thread pagination', () => {
     expect(h.state.threadListCursorByWorkspace['/project']).toMatchObject({
       status: 'complete', hasMore: false
     })
+  })
+
+  it('does not treat an old runtime unscoped page as the complete unified history', async () => {
+    const ade = { ...thread('thread-2'), workspaceMode: 'ade' as const }
+    const listThreadsPage = vi.fn(async () => ({ threads: [thread('thread-1')], hasMore: false }))
+    const listThreads = vi.fn(async () => [thread('thread-1'), ade])
+    registryMock.getProvider.mockReturnValue({
+      listThreadsPage, listThreads,
+      getThreadDetail: vi.fn(async () => ({ blocks: [{ kind: 'user', id: 'u', text: 'ok' }] }))
+    } as unknown as AgentProvider)
+    const h = harness({ workspaceKey: '/project', mode: 'active', status: 'unknown', hasMore: true })
+
+    await loadMoreThreads('/project', h.set, h.get)
+
+    expect(listThreads).toHaveBeenCalledWith({ workspace: '/project', includeSide: false })
+    expect(h.state.threads.map((entry) => entry.id)).toEqual(['thread-2', 'thread-1'])
+    expect(h.state.threadListCursorByWorkspace['/project']).toMatchObject({ status: 'complete', hasMore: false })
   })
 })

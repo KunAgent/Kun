@@ -113,7 +113,7 @@
   "approvalExpired": "Срок действия истек, поскольку ход закончился",
   "approvalSubmitting": "Отправка решения…",
   "approvalFailed": "Запрос не выполнен",
-  "approvalNativeConfirmationCancelled": "Нативное подтверждение отменено. Повторите попытку.",
+  "approvalNativeConfirmationCancelled": "Подтверждение отменено. Действие всё ещё ожидает вашего решения.",
   "approvalReviewTitle": "Kun approval review",
   "approvalReviewInProgress": "Kun is reviewing this action…",
   "approvalReviewApproved": "Approved by Kun",

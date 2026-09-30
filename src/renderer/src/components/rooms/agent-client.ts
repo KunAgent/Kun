@@ -75,14 +75,17 @@ export function memberModelUnavailable(
     (!member.modelRef && preset?.available === false)
   )
 }
-export function useAgentResource<T>(path: string | null, active = true) {
-  const [data, setData] = useState<T | null>(null), [error, setError] = useState('')
+export function useAgentResource<T>(path: string | null, active = true, scopeKey: string | null = path) {
+  const scope = JSON.stringify([path, scopeKey])
+  const [snapshot, setSnapshot] = useState<{ scope: string; data: T | null; error: string }>(
+    () => ({ scope, data: null, error: '' })
+  )
   const [version, setVersion] = useState(0)
   const serial = useRef(0)
-  const previousPath = useRef<string | null>(null)
+  const previousScope = useRef<string | null>(null)
   useEffect(() => {
     const generation = ++serial.current
-    if (previousPath.current !== path) { setData(null); setError(''); previousPath.current = path }
+    if (previousScope.current !== scope) { setSnapshot({ scope, data: null, error: '' }); previousScope.current = scope }
     if (!path || !active) return
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -91,9 +94,13 @@ export function useAgentResource<T>(path: string | null, active = true) {
       const current = ++responseVersion
       try {
         const next = await roomsRequest<T>(path, 'GET', undefined, controller.signal)
-        if (!controller.signal.aborted && generation === serial.current && current === responseVersion) { setData(next); setError('') }
+        if (!controller.signal.aborted && generation === serial.current && current === responseVersion) {
+          setSnapshot({ scope, data: next, error: '' })
+        }
       } catch (cause) {
-        if (!controller.signal.aborted && generation === serial.current && current === responseVersion) setError(String(cause))
+        if (!controller.signal.aborted && generation === serial.current && current === responseVersion) {
+          setSnapshot((value) => ({ scope, data: value.scope === scope ? value.data : null, error: String(cause) }))
+        }
       }
     }
     void refresh()
@@ -103,8 +110,9 @@ export function useAgentResource<T>(path: string | null, active = true) {
     })
     const fallback = setInterval(() => void refresh(), path.endsWith('/direct') || path.includes('/items?') ? 1500 : 15000)
     return () => { controller.abort(); clearTimeout(timer); clearInterval(fallback); off() }
-  }, [path, active, version])
-  return { data, error, refresh: () => setVersion((value) => value + 1) }
+  }, [path, scope, active, version])
+  return { data: snapshot.scope === scope ? snapshot.data : null,
+    error: snapshot.scope === scope ? snapshot.error : '', refresh: () => setVersion((value) => value + 1) }
 }
 
 export function useRoomAgentModels(room: { members: RoomMember[]; revision?: number }) {

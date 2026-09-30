@@ -99,6 +99,7 @@ export type PaletteSourcesInput = {
 const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
   rooms: 'roomsLabel',
   chat: 'code',
+  'agent-chat': 'sidebarConversations',
   write: 'write',
   design: 'design',
   settings: 'settings',
@@ -114,6 +115,7 @@ const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
 const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
   rooms: MessageSquare,
   chat: Code2,
+  'agent-chat': MessageSquare,
   write: PencilLine,
   design: Palette,
   settings: Settings,
@@ -145,6 +147,7 @@ const SETTINGS_SECTION_LABEL_KEYS: Record<SettingsRouteSection, string> = {
   speechToText: 'settingsNavSpeech',
   agents: 'settingsNavAssistant',
   agentsHarnesses: 'adeSettings.harnessesTitle',
+  agentsCollaboration: 'adeSettings.collaborationTitle',
   laboratory: 'agentsQuickLaboratory',
   subagents: 'subagents',
   archives: 'settingsNavArchives',
@@ -258,6 +261,7 @@ function shortcutCommandEntries(input: PaletteSourcesInput): PaletteEntry[] {
 function routeEntries(input: PaletteSourcesInput): PaletteEntry[] {
   const { t } = input
   return (Object.keys(ROUTE_LABEL_KEYS) as AppRoute[])
+    .filter((route) => route !== 'agent-chat')
     .filter((route) => route !== 'board' || input.projectBoardEnabled === true)
     .filter((route) => route !== 'ade' || input.adeEnabled === true)
     .map((route) => {

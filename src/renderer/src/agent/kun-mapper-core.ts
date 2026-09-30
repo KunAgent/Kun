@@ -62,6 +62,8 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     title: thread.title?.trim() || thread.id.slice(0, 8),
     ...(thread.agentSurface ? { agentSurface: thread.agentSurface } : {}),
     ...(thread.workspaceMode ? { workspaceMode: thread.workspaceMode } : {}),
+    ...(thread.collaboration ? { collaboration: { ...thread.collaboration } } : {}),
+    ...(thread.executionConfig ? { executionConfig: { ...thread.executionConfig } } : {}),
     ...(thread.lockedTaskSurface ? { lockedTaskSurface: thread.lockedTaskSurface } : {}),
     ...(thread.designProfile
       ? { designProfile: cloneDesignTaskProfile(thread.designProfile) }

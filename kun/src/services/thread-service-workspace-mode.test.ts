@@ -105,6 +105,30 @@ describe('ThreadService workspace mode', () => {
     expect(UpdateThreadRequest.safeParse({ title: 'x' }).success).toBe(true)
   })
 
+  it('persists explicit collaboration through create, update, summary and fork', async () => {
+    const service = serviceWith()
+    const code = await service.create({
+      title: 'team task', workspace: '/repo', model: 'm', mode: 'agent',
+      harnessId: 'kun',
+      collaboration: { enabled: true }
+    })
+    expect(service.toSummary(code).collaboration).toEqual({ enabled: true, everEnabled: true })
+    expect((await service.fork(code.id)).collaboration).toEqual({ enabled: true, everEnabled: true })
+    const disabled = await service.update(code.id, { collaboration: { enabled: false } })
+    expect(disabled.collaboration).toEqual({ enabled: false, everEnabled: true })
+    expect((await service.listPage({ workbenchScope: 'code' })).threads.find((thread) => thread.id === code.id)?.collaboration)
+      .toEqual({ enabled: false, everEnabled: true })
+  })
+
+  it('refuses collaboration changes during a running turn', async () => {
+    const store = new InMemoryThreadStore()
+    const service = serviceWith(store)
+    const thread = await service.create({ title: 'team task', workspace: '/repo', model: 'm', mode: 'agent' })
+    await store.upsert({ ...thread, status: 'running' })
+    await expect(service.update(thread.id, { collaboration: { enabled: true } }))
+      .rejects.toThrow(/collaboration cannot be changed while the thread is running/)
+  })
+
   it('parses the workspace_mode list query and rejects unknown modes', () => {
     const ok = threadsRouteInternal.parseListThreadsOptions(
       new Request('http://kun.local/v1/threads?workspace_mode=ade')
@@ -115,9 +139,53 @@ describe('ThreadService workspace mode', () => {
     )
     expect(bad.ok).toBe(false)
   })
+
+  it('parses the combined workbench scope without changing legacy mode filters', () => {
+    const combined = threadsRouteInternal.parseListThreadsOptions(
+      new Request('http://kun.local/v1/threads?workbench_scope=code&limit=2&search=fix')
+    )
+    expect(combined).toEqual({ ok: true, options: expect.objectContaining({
+      workbenchScope: 'code', limit: 2, search: 'fix'
+    }) })
+    expect(threadsRouteInternal.parseListThreadsOptions(new Request(
+      'http://kun.local/v1/threads?workbench_scope=code&workspace_mode=ade'
+    )).ok).toBe(false)
+    expect(threadsRouteInternal.parseListThreadsOptions(new Request(
+      'http://kun.local/v1/threads?workbench_scope=write'
+    )).ok).toBe(false)
+  })
+
+  it('paginates one mixed Code/ADE inventory and excludes Work and children', async () => {
+    const service = serviceWith()
+    const first = await service.create({ title: 'fix A', workspace: '/repo', model: 'm', mode: 'agent' })
+    const second = await service.create({ title: 'fix B', workspace: '/repo', model: 'm', mode: 'agent', workspaceMode: 'ade' })
+    const third = await service.create({ title: 'fix C', workspace: '/repo', model: 'm', mode: 'agent' })
+    await service.create({ title: 'fix Work', workspace: '/repo', model: 'm', mode: 'agent', agentSurface: 'write' })
+    await service.fork(second.id, { relation: 'side', title: 'fix child' })
+    const options = { workbenchScope: 'code' as const, search: 'fix', limit: 2 }
+    const page1 = await service.listPage(options)
+    const page2 = await service.listPage({ ...options, cursor: page1.nextCursor })
+    expect(page1.total).toBe(3)
+    expect(page1.hasMore).toBe(true)
+    expect(page2.hasMore).toBe(false)
+    expect(page2.total).toBeUndefined()
+    expect([...page1.threads, ...page2.threads].map((thread) => thread.id).sort())
+      .toEqual([first.id, second.id, third.id].sort())
+    expect((await service.list({ workspaceMode: 'code' })).some((thread) => thread.id === second.id))
+      .toBe(false)
+  })
 })
 
 describe('ThreadService harnessId update (01 §8)', () => {
+  it('does not enable collaboration on an external main Agent without handoff', async () => {
+    const service = serviceWith()
+    const external = await service.create({
+      title: 'external', workspace: '/repo', model: 'm', mode: 'agent',
+      harnessId: 'claude-code'
+    })
+    await expect(service.update(external.id, { collaboration: { enabled: true } }))
+      .rejects.toThrow(/explicit Kun main Agent handoff/)
+  })
   it('rebinds the harness on an idle thread and records the update', async () => {
     const service = serviceWith()
     const thread = await service.create({
@@ -159,5 +227,11 @@ describe('manager tool advertisement', () => {
     expect(shouldAdvertiseManagerTools({ ...base, executionUnitKind: 'worker' })).toBe(false)
     // Room agents keep the Rooms member protocol.
     expect(shouldAdvertiseManagerTools({ ...base, roomAgent: true })).toBe(false)
+    expect(shouldAdvertiseManagerTools({ workspaceMode: 'code', collaborationEnabled: true, harnessId: 'kun' })).toBe(true)
+    expect(shouldAdvertiseManagerTools({ ...base, collaborationEnabled: false })).toBe(false)
+    expect(shouldAdvertiseManagerTools({ workspaceMode: 'code', collaborationEnabled: false, collaborationEverEnabled: true })).toBe(true)
+    expect(shouldAdvertiseManagerTools({ workspaceMode: 'code', collaborationEnabled: true, harnessId: 'claude-code' })).toBe(false)
+    expect(shouldAdvertiseManagerTools({ workspaceMode: 'code', collaborationEnabled: true, agentSurface: 'write' })).toBe(false)
+    expect(shouldAdvertiseManagerTools({ workspaceMode: 'code', collaborationEnabled: true, clientSurface: 'im' })).toBe(false)
   })
 })

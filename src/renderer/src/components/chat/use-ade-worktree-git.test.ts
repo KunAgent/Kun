@@ -63,7 +63,7 @@ describe('useAdeWorktreeGit', () => {
     expect(host.querySelector('span')?.getAttribute('data-ready')).toBe('true')
   })
 
-  it('falls back to local draft isolation for a non-Git project', async () => {
+  it('keeps the requested isolation visible and blocked for a non-Git project', async () => {
     const setLocal = vi.fn()
     useChatStore.setState({ setComposerIsolationForWorkspace: setLocal })
     Object.defineProperty(window, 'kunGui', {
@@ -74,7 +74,7 @@ describe('useAdeWorktreeGit', () => {
     })
     await act(async () => root.render(createElement(Probe, { path: '/plain' })))
     expect(host.querySelector('span')?.getAttribute('data-status')).toBe('not-git')
-    expect(setLocal).toHaveBeenCalledWith('local')
+    expect(setLocal).not.toHaveBeenCalled()
   })
 
   it('blocks a branch that has disappeared from the selected project', async () => {

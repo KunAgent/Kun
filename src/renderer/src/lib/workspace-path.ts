@@ -1,3 +1,5 @@
+import { isKunBranchWorktreePath, isKunTaskWorktreePath } from '@shared/kun-worktree-path'
+
 function normalizePathForMatch(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 }
@@ -45,6 +47,9 @@ export function workspaceRootScopeKey(path?: string): string {
 export function isInternalTemporaryWorkspace(path?: string): boolean {
   const trimmed = path?.trim() ?? ''
   if (!trimmed) return false
+  // A relocated/isolated HOME may itself live below the OS temporary root.
+  // Managed task execution directories remain durable task identities.
+  if (isKunBranchWorktreePath(trimmed) || isKunTaskWorktreePath(trimmed)) return false
   const normalized = normalizePathForMatch(trimmed)
   return (
     /\/deepseek-tui-updates\/tmp(?:\/|$)/.test(normalized)

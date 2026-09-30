@@ -1,3 +1,4 @@
+import { resolveTurnReviewRequests } from './review-composer-context.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import { enqueueTurnDurably, reconcilePendingQueueAdmissions } from './queue-admission.js'
 import type { TurnItem } from '../contracts/items.js'
@@ -23,10 +24,11 @@ import {
   fingerprintStartTurnRequest
 } from './turn-service-core.js'
 import {
-  defaultCredentialMode,
-  resolveAdmissionHarness
+  defaultCredentialMode
 } from '../harness/resolve-turn-harness.js'
 import { resolveDesignTurnAdmission } from './turn-service-design-admission.js'
+import { resolveSupportedAdmissionHarness } from './turn-harness-admission.js'
+import { submittedDesignTaskProfile } from '../domain/design-task-profile.js'
 
 export const QUEUE_CANCELLED_TURN_CODE = 'queue_cancelled'
 export const QUEUE_ADMISSION_FAILED_CODE = 'queue_admission_failed'
@@ -119,8 +121,15 @@ export const turnServiceQueueOperations = {
       request: input.request,
       turnId
     })
+    const turnHarnessId = resolveSupportedAdmissionHarness({
+      request: input.request, thread, effectiveSurface: designAdmission.effectiveSurface,
+      providerKinds: this['deps'].providerKinds?.()
+    })
     const composerContexts = ComposerContextAttachmentSchema.array().parse(
       input.request.composerContexts ?? []
+    )
+    const reviewRequests = await resolveTurnReviewRequests(
+      thread, composerContexts, this['deps'].resolveReviewRequests
     )
     const attachmentIds = [...new Set(
       (input.request.attachmentIds ?? []).map((id) => id.trim()).filter(Boolean)
@@ -142,20 +151,10 @@ export const turnServiceQueueOperations = {
     const requestedProviderId = firstNonBlank(input.request.providerId)
     const threadProviderId = firstNonBlank(thread.providerId)
     const turnProviderId = requestedProviderId ?? threadProviderId ?? 'default'
-    // Queued turns freeze the same route fields so a later admit cannot
-    // resolve a different harness than the one requested at enqueue time.
-    const providerKindsView = this['deps'].providerKinds?.() ?? {
-      byId: {},
-      defaultKind: 'http' as const
-    }
-    const turnHarnessId = resolveAdmissionHarness({
-      request: input.request,
-      thread,
-      turnProviderId,
-      providerKinds: providerKindsView
-    })
     const turnCredentialMode =
       input.request.credentialMode ??
+      (turnHarnessId === thread.executionConfig?.route.harnessId
+        ? thread.executionConfig.route.credentialMode : undefined) ??
       defaultCredentialMode(turnHarnessId, this['deps'].harnessCatalog?.get(turnHarnessId))
     const turnAccountId = firstNonBlank(input.request.accountId) ?? (
       !requestedProviderId || requestedProviderId === threadProviderId
@@ -174,6 +173,7 @@ export const turnServiceQueueOperations = {
       model: turnModel,
       providerId: turnProviderId,
       harnessId: turnHarnessId,
+      collaborationEnabled: thread.collaboration?.enabled ?? thread.workspaceMode === 'ade',
       credentialMode: turnCredentialMode,
       accountId: turnAccountId,
       reasoningEffort: input.request.reasoningEffort,
@@ -194,7 +194,7 @@ export const turnServiceQueueOperations = {
       writeContext: input.request.writeContext,
       persona: input.request.persona,
       guiDesignArtifact: input.request.guiDesignArtifact,
-      mode: input.request.mode,
+      mode: input.request.mode ?? thread.mode,
       orchestration: input.request.orchestration,
       disableUserInput: input.request.disableUserInput,
       imContext: input.request.imContext,
@@ -211,6 +211,7 @@ export const turnServiceQueueOperations = {
       messageSource: input.request.messageSource,
       attachmentIds,
       composerContexts,
+      reviewRequests,
       fileReferences: input.request.fileReferences ?? [],
       workspaceCheckpointId: input.request.workspaceCheckpointId,
       workspace: thread.workspace,
@@ -376,7 +377,7 @@ export const turnServiceQueueOperations = {
             composerContexts: candidate.composerContexts ?? [],
             fileReferences: [],
             ...(candidate.agentSurface ? { agentSurface: candidate.agentSurface } : {}),
-            ...(candidate.designProfile ? { designProfile: candidate.designProfile } : {}),
+            ...(candidate.designProfile ? { designProfile: submittedDesignTaskProfile(candidate.designProfile) } : {}),
             ...(candidate.designDocumentTarget
               ? { designDocumentTarget: candidate.designDocumentTarget }
               : {}),

@@ -1,7 +1,7 @@
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost } from './local-tool-host.js'
-import { shouldAdvertiseManagerTools } from '../../domain/manager-tools.js'
+import { shouldAdvertiseManagerTools, shouldAdvertiseNewManagerWork } from '../../domain/manager-tools.js'
 import type { ManagerRuntime, ManagerToolContext } from '../../ade/manager-runtime.js'
 import {
   listHarnessesForManager,
@@ -31,6 +31,8 @@ export type ManagerToolProviderDeps = {
   harnessList: HarnessListDeps
   /** `agents.kun.ade.managerMayApprove` — gates worker_approve (09 §6.5). */
   managerMayApprove?: () => boolean
+  /** Global admission switch. Existing teams retain read/stop/answer controls. */
+  canStartNewWork?: () => boolean
   /** Race store/services (10 §6); absent → worker_race tools hidden. */
   race?: RaceToolDeps
   /** Host check runner (10 §4.2); absent → workspace_run_checks hidden. */
@@ -59,6 +61,8 @@ export function createManagerToolProvider(
   deps: ManagerToolProviderDeps
 ): CapabilityToolProvider {
   const advertise = (context: ToolHostContext): boolean => shouldAdvertiseManagerTools(context)
+  const advertiseNewWork = (context: ToolHostContext): boolean =>
+    shouldAdvertiseNewManagerWork(context) && deps.canStartNewWork?.() !== false
   const managerCtx = (context: ToolHostContext): Promise<ManagerToolContext> =>
     deps.manager.toolContext({
       threadId: context.threadId,
@@ -139,7 +143,7 @@ export function createManagerToolProvider(
         },
         toolKind: 'tool_call',
         policy: 'auto',
-        shouldAdvertise: advertise,
+        shouldAdvertise: advertiseNewWork,
         execute: async (args, context) => {
           const ctx = await managerCtx(context)
           return { output: await workerCreate(deps.manager, ctx, args, context) }
@@ -205,7 +209,7 @@ export function createManagerToolProvider(
         },
         toolKind: 'tool_call',
         policy: 'auto',
-        shouldAdvertise: advertise,
+        shouldAdvertise: advertiseNewWork,
         execute: async (args, context) => {
           const ctx = await managerCtx(context)
           return { output: await workerCreateBatch(deps.manager, ctx, args, context) }
@@ -283,7 +287,7 @@ export function createManagerToolProvider(
         },
         toolKind: 'tool_call',
         policy: 'auto',
-        shouldAdvertise: advertise,
+        shouldAdvertise: advertiseNewWork,
         execute: async (args, context) => {
           const ctx = await managerCtx(context)
           return { output: await workerSend(deps.manager, ctx, args) }
@@ -479,7 +483,7 @@ export function createManagerToolProvider(
         },
         toolKind: 'tool_call',
         policy: 'auto',
-        shouldAdvertise: advertise,
+        shouldAdvertise: advertiseNewWork,
         execute: async (args, context) => {
           const ctx = await managerCtx(context)
           return { output: await reviewRequest(deps.manager, ctx, args, context) }
@@ -544,7 +548,7 @@ export function createManagerToolProvider(
         },
         toolKind: 'tool_call',
         policy: 'auto',
-        shouldAdvertise: (context) => advertise(context) && Boolean(deps.race),
+        shouldAdvertise: (context) => advertiseNewWork(context) && Boolean(deps.race),
         execute: async (args, context) => {
           const ctx = await managerCtx(context)
           return { output: await workerRace(deps.manager, deps.race!, ctx, args, context) }

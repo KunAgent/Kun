@@ -23,6 +23,8 @@ export function RoomDetailsDrawer({
   title,
   backLabel,
   frameKey,
+  embedded = false,
+  active = true,
   children
 }: {
   section: RoomDetailsSection
@@ -35,6 +37,8 @@ export function RoomDetailsDrawer({
   title?: string
   backLabel?: string
   frameKey?: number
+  embedded?: boolean
+  active?: boolean
   children: ReactNode
 }) {
   const { t } = useTranslation('common')
@@ -43,19 +47,24 @@ export function RoomDetailsDrawer({
   useEffect(() => setExpanded(false), [frameKey])
   const sideDocked = !expanded
   useEffect(() => {
+    if (!active) return
     const previous = document.activeElement as HTMLElement | null
     const element = panel.current
     element?.querySelector<HTMLButtonElement>('button')?.focus()
     return () => {
       if (previous?.isConnected && (element?.contains(document.activeElement) || document.activeElement === document.body)) previous.focus()
     }
-  }, [])
+  }, [active])
   return (
     <aside
       ref={panel}
-      role="dialog"
+      role={embedded ? 'region' : 'dialog'}
       aria-label={t('roomsRoomDetails')}
-      className={`rooms-details-panel absolute ${sideDocked ? 'inset-y-0 right-0 w-[min(560px,100%)]' : 'inset-0'} z-50 flex min-h-0 flex-col overflow-hidden border-l border-ds-border bg-ds-main shadow-xl xl:static xl:w-[400px] xl:shrink-0 xl:shadow-none`}
+      aria-hidden={!active || undefined}
+      inert={!active || undefined}
+      className={embedded
+        ? 'rooms-details-panel rooms-details-embedded relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-ds-main'
+        : `rooms-details-panel absolute ${sideDocked ? 'inset-y-0 right-0 w-[min(560px,100%)]' : 'inset-0'} z-50 flex min-h-0 flex-col overflow-hidden border-l border-ds-border bg-ds-main shadow-xl xl:static xl:w-[400px] xl:shrink-0 xl:shadow-none`}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.stopPropagation()
@@ -63,6 +72,7 @@ export function RoomDetailsDrawer({
         }
         if (
           event.key !== 'Tab' ||
+          embedded ||
           !window.matchMedia?.('(max-width: 1279px)').matches
         )
           return
@@ -82,7 +92,7 @@ export function RoomDetailsDrawer({
         }
       }}
     >
-      <RoomPanelResizeHandle side="detail" />
+      {!embedded ? <RoomPanelResizeHandle side="detail" /> : null}
       <header className="rooms-detail-titlebar flex items-center gap-2 border-b border-ds-border p-4">
         {taskOpen || runOpen || childOpen ? (
           <button
@@ -96,7 +106,7 @@ export function RoomDetailsDrawer({
         <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-ds-ink">
           {title ?? t(runOpen ? 'roomsRunDetails' : taskOpen ? 'roomsDetails' : 'roomsRoomDetails')}
         </h2>
-        <button
+        {!embedded ? <button
           type="button"
           className={`${roomButtonClass} xl:hidden`}
           aria-pressed={!expanded}
@@ -105,7 +115,7 @@ export function RoomDetailsDrawer({
           onClick={() => setExpanded((value) => !value)}
         >
           <PanelRight size={16} />
-        </button>
+        </button> : null}
         <button
           className={roomButtonClass}
           onClick={onClose}

@@ -59,6 +59,12 @@ export class HybridThreadIndexRepository {
       where.push("COALESCE(workspace_mode, 'code') = @workspaceMode")
       params.workspaceMode = options.workspaceMode
     }
+    if (options.workbenchScope === 'code') {
+      // ADE and Code share the same workbench. Work and hidden side/worker
+      // conversations remain outside its root inventory.
+      where.push("COALESCE(agent_surface, 'code') IN ('code', 'design')")
+      where.push("relation != 'side'")
+    }
     const search = options.search?.trim().toLowerCase()
     if (search) { where.push("search_text LIKE @search ESCAPE '\\'"); params.search = `%${escapeLike(search)}%` }
     return { where, params }
@@ -67,6 +73,11 @@ export class HybridThreadIndexRepository {
   find(threadId: string): ThreadRow | null {
     try { return (this.db.prepare('SELECT * FROM threads WHERE id = ?').get(threadId) as ThreadRow | undefined) ?? null }
     catch (error) { this.warn('find row', error); return null }
+  }
+
+  repairSummaryMetadata(threadId: string, previous: string | null, next: string | null): void {
+    this.db.prepare(`UPDATE threads SET extension_metadata_json = @next
+      WHERE id = @threadId AND extension_metadata_json IS @previous`).run({ threadId, previous, next })
   }
 
   repairPaths(threadId: string): void {

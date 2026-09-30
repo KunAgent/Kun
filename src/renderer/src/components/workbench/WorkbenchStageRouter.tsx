@@ -28,15 +28,14 @@ const PaperWorkspaceView = lazy(() =>
 const RoomsWorkspaceView = lazy(() =>
   import('../rooms/RoomsWorkspaceView').then((module) => ({ default: module.RoomsWorkspaceView }))
 )
+const AgentChatStage = lazy(() =>
+  import('../rooms/AgentChatStage').then((module) => ({ default: module.AgentChatStage }))
+)
 const ExtensionManagementCenter = lazy(() =>
   import('../../extensions/ExtensionManagementCenter').then((module) => ({
     default: module.ExtensionManagementCenter
   }))
 )
-const AdeStage = lazy(() =>
-  import('../ade/AdeStage').then((module) => ({ default: module.AdeStage }))
-)
-
 type WriteStageProps = {
   runtimeBanner: ReactNode
   leftSidebarCollapsed: boolean
@@ -111,7 +110,6 @@ function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
 
 export function WorkbenchStageRouter({
   route,
-  adeDraftOpen,
   leftSidebarCollapsed,
   onToggleLeftSidebar,
   onOpenThread,
@@ -131,7 +129,12 @@ export function WorkbenchStageRouter({
       }`}
     >
       <div className="ds-stage-route-host relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {normalizedRoute === 'rooms' ? (
+        {normalizedRoute === 'agent-chat' ? (
+          <Suspense fallback={<WorkbenchPaneFallback />}>
+            <AgentChatStage onOpenThread={onOpenThread} onOpenPlugins={onOpenPlugins}
+              onToggleLeftSidebar={onToggleLeftSidebar} />
+          </Suspense>
+        ) : normalizedRoute === 'rooms' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
             <RoomsWorkspaceView onOpenThread={onOpenThread} onOpenPlugins={onOpenPlugins} />
           </Suspense>
@@ -176,10 +179,6 @@ export function WorkbenchStageRouter({
               onToggleLeftSidebar={onToggleLeftSidebar}
               onOpenThread={onOpenThread}
             />
-          </Suspense>
-        ) : normalizedRoute === 'ade' ? (
-          <Suspense fallback={<WorkbenchPaneFallback />}>
-            <AdeStage conversation={conversation} activeThreadId={conversation.chat.activeThreadId} adeDraftOpen={adeDraftOpen} />
           </Suspense>
         ) : normalizedRoute === 'write' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>

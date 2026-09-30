@@ -27,7 +27,7 @@ import { ConnectPhoneSidebarPanel } from './ConnectPhoneView'
 import { SidebarAttentionPanel } from './SidebarAttentionPanel'
 import { SidebarProjectsSection } from './SidebarProjectsSection'
 import { registerSidebarDragAutoScroll } from './sidebar-drag-auto-scroll'
-import { SidebarConversationsSection } from './SidebarConversationsSection'
+import { SidebarAgentChatsSection } from './SidebarAgentChatsSection'
 import { SidebarProjectBoardsSection } from './SidebarProjectBoardsSection'
 import { CodexReferenceDialog } from '../../history-reference/CodexReferenceDialog'
 import { useCodexReferenceEnabled } from '../../history-reference/use-codex-reference-enabled'
@@ -402,7 +402,7 @@ export function Sidebar({
         onSearchQueryChange={onThreadSearchChange}
         t={t}
       />
-      <SidebarConversationsSection
+      <SidebarAgentChatsSection
         threads={threads}
         activeThreadId={activeThreadId}
         runtimeReady={runtimeReady}

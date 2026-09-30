@@ -660,6 +660,7 @@ export function buildThreadEventSink(
       receiveHarnessSessionState(state)
     },
     onTaskWorkspace: (event) => {
+      if (event.unitId) return // Worker workspaces are bound by the Manager, not the parent composer.
       // Workspace prep is owner-thread-scoped, not stream-scoped: a worktree
       // may finish preparing while the user already navigated away.
       receiveTaskWorkspaceThreadEvent(event)

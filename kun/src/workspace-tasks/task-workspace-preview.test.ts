@@ -109,12 +109,15 @@ describe('taskWorkspaceIntegratePreview', () => {
     await git(ws.path, ['add', '.'])
     await git(ws.path, ['commit', '-m', 'test: work'])
     const preview = await service.integratePreview(ws.workspaceId)
-    expect(preview).toEqual({
+    expect(preview).toMatchObject({
       canApplyPatch: true,
       canMergeBranch: true,
       hasUncommitted: false,
       hasRemote: true
     })
+    expect(preview.previewToken).toMatch(/^[a-f0-9]{64}$/)
+    expect(preview.sourceRevision?.completeness).toBe('complete')
+    expect(preview.targetRevision?.completeness).toBe('complete')
   })
 
   it('blocks apply-patch when the source HEAD moved; merge stays available', async () => {
@@ -193,6 +196,36 @@ describe('taskWorkspaceIntegratePreview', () => {
     expect(preview.hasUncommitted).toBe(true)
     // Uncommitted changes are still patch-integrable (capture stages them).
     expect(preview.canApplyPatch).toBe(true)
+  })
+
+  it('rejects a reviewed preview when either checkout changes before integration', async () => {
+    const { service } = await makeHarness()()
+    const repo = await makeRepo()
+    const ws = await makeWorkspace(service, repo)
+    await writeFile(join(ws.path, 'a.txt'), 'a reviewed change\n')
+    const preview = await service.integratePreview(ws.workspaceId)
+    expect(preview.previewToken).toBeTruthy()
+    await writeFile(join(repo, 'new-source.txt'), 'source changed\n')
+    await expect(service.integrate(ws.workspaceId, 'apply-patch', preview.previewToken))
+      .rejects.toThrow(/preview expired/)
+    expect((await workspaceGit(repo, ['status', '--porcelain'])).trim()).toContain('new-source.txt')
+
+    const refreshed = await service.integratePreview(ws.workspaceId)
+    await writeFile(join(ws.path, 'a.txt'), 'a changed again\n')
+    await expect(service.integrate(ws.workspaceId, 'apply-patch', refreshed.previewToken))
+      .rejects.toThrow(/preview expired/)
+  })
+
+  it('accepts a current preview token for apply-patch', async () => {
+    const { service } = await makeHarness()()
+    const repo = await makeRepo()
+    const ws = await makeWorkspace(service, repo)
+    await writeFile(join(ws.path, 'a.txt'), 'a reviewed change\n')
+    const preview = await service.integratePreview(ws.workspaceId)
+    expect(preview.canApplyPatch).toBe(true)
+    const result = await service.integrate(ws.workspaceId, 'apply-patch', preview.previewToken)
+    expect(result.outcome).toBe('applied')
+    expect(result.previewTokenValidated).toBe(true)
   })
 
   it('blocks both modes outside integrable states', async () => {

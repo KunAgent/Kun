@@ -12,6 +12,17 @@ export type BrowserStorageMutation = {
 type BrowserStorageMutationObserver = (mutation: BrowserStorageMutation) => void
 
 let mutationObserver: BrowserStorageMutationObserver | null = null
+const mutationListeners = new Set<BrowserStorageMutationObserver>()
+
+export function subscribeBrowserStorageMutations(observer: BrowserStorageMutationObserver): () => void {
+  mutationListeners.add(observer)
+  return () => { mutationListeners.delete(observer) }
+}
+
+function observeMutation(mutation: BrowserStorageMutation): void {
+  mutationObserver?.(mutation)
+  mutationListeners.forEach((listener) => listener(mutation))
+}
 
 export function setBrowserStorageMutationObserver(
   observer: BrowserStorageMutationObserver | null
@@ -20,18 +31,18 @@ export function setBrowserStorageMutationObserver(
 }
 
 function observedStorage(storage: BrowserStorageLike): BrowserStorageLike {
-  if (!mutationObserver) return storage
+  if (!mutationObserver && !mutationListeners.size) return storage
   return {
     getItem: (key) => storage.getItem(key),
     setItem: (key, value) => {
       storage.setItem(key, value)
-      mutationObserver?.({ key, value })
+      observeMutation({ key, value })
     },
     ...(storage.removeItem
       ? {
           removeItem: (key: string) => {
             storage.removeItem?.(key)
-            mutationObserver?.({ key, value: null })
+            observeMutation({ key, value: null })
           }
         }
       : {})

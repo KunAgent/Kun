@@ -1,3 +1,4 @@
+import { resolveNativeAgentNetworkSnapshot } from './runtime/native-agent-network'
 import { BrowserWindow } from 'electron'
 import {
   getKunRuntimeSettings,
@@ -350,6 +351,8 @@ export async function applyManagedRuntimeSettingsHot(
   )
 
   const headers = runtimeAuthHeaders(effectiveSettings)
+  body.nativeAgentNetwork = await resolveNativeAgentNetworkSnapshot()
+  if (!shouldApply()) return { result: 'superseded' }
   headers.set('content-type', 'application/json')
   try {
     const response = await fetch(

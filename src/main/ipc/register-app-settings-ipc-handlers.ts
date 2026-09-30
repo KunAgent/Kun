@@ -1,10 +1,10 @@
 import { showCoordinatedMessageBox } from '../native-message-box'
 import { roomProtectedControls } from './room-protected-controls'
-import { isRemoteClientSender } from '../remote/remote-sender'
+import { protectedApprovalControls } from './protected-approval-controls'
+import { protectedExecutionSettings } from './protected-execution-settings'
 import {
   app,
   clipboard,
-  dialog,
   ipcMain,
   shell,
   type BrowserWindow,
@@ -41,19 +41,8 @@ import {
   uploadRuntimeDocumentAttachment
 } from '../services/runtime-document-attachment-service'
 import {
-  createApprovalConsentToken,
-  KUN_APPROVAL_CONSENT_HEADER
-} from '../approval-consent'
-import {
   NativeDialogCoordinator
 } from '../native-dialog-coordinator'
-import {
-  KunExecutionSettingsConsentService,
-  executionSettingsEqual,
-  kunExecutionSettingsChange,
-  type KunExecutionSettingsConsentAction,
-  type KunExecutionSecuritySettings
-} from '../execution-settings-consent'
 import {
   resolveModelProviderProxyUrl
 } from '../../shared/app-settings'
@@ -85,17 +74,11 @@ import {
   geminiCliSubscriptionStatus
 } from '../gemini-cli-subscription'
 import type {
-  ProtectedRuntimeRequestLease,
   RegisterAppIpcHandlersOptions
 } from './app-ipc-handler-options'
 import {
-  approvalLogReference,
   assertTrustedWorkbenchSender,
-  dialogParentIsAvailable,
-  dialogParentState,
   parseIpcPayload,
-  revealDialogParent,
-  trustedWorkbenchSenderIsCurrent,
   withoutRendererPlaintextCredentials,
   withoutRendererProjectConfigGrants
 } from './app-ipc-handler-utils'
@@ -108,13 +91,11 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
     saveSettingsPatch,
     resetUnreadableCredentials,
     runtimeRequest,
-    acquireRuntimeRequestLease,
     getRuntimeSettingsSyncStatus,
     restartRuntime,
     restartKunServe,
     resolveSettingsConfigPath,
-    logError,
-    logInfo: logInfoHandler = () => undefined
+    logError
   } = options
   const runtimeRequestControllers = new Map<string, {
     ownerId: number
@@ -149,84 +130,7 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
     parent: BrowserWindow,
     messageBoxOptions: Electron.MessageBoxOptions
   ): Promise<Electron.MessageBoxReturnValue> => showCoordinatedMessageBox(nativeDialogs, parent, messageBoxOptions)
-  const executionSettingsConsents = new KunExecutionSettingsConsentService()
-  const approvalReviewSelectionLabel = (
-    selection: KunExecutionSecuritySettings['approvalReview']
-  ): string => selection.mode === 'fixed'
-    ? `fixed ${selection.providerId}/${selection.model}` : 'follow the acting turn'
-  const applyProtectedSettingsPatch = async (
-    event: Pick<IpcMainInvokeEvent, 'sender' | 'senderFrame'>,
-    partial: AppSettingsPatch,
-    persist: (patch: AppSettingsPatch) => Promise<AppSettingsV1>
-  ): Promise<AppSettingsV1> => {
-    const current = await store.load()
-    const change = kunExecutionSettingsChange(current, partial)
-    if (!change) return persist(partial)
-
-    assertTrustedWorkbenchSender(event, getMainWindow)
-    const parent = getMainWindow()
-    const senderFrame = event.senderFrame
-    if (!parent || parent.isDestroyed() || !senderFrame) {
-      throw new Error('Protected execution-settings window is unavailable.')
-    }
-    const confirmation = await showMainWindowMessageBox(parent, {
-      type: 'warning',
-      title: 'Change Kun execution permissions',
-      message: 'Apply this tool approval and sandbox configuration?',
-      detail: [
-        `Current approval policy: ${change.current.approvalPolicy}`,
-        `Current sandbox: ${change.current.sandboxMode}`,
-        `Current approval reviewer: ${change.current.approvalReviewer}`,
-        `Current approval review model: ${approvalReviewSelectionLabel(change.current.approvalReview)}`,
-        `New approval policy: ${change.next.approvalPolicy}`,
-        `New sandbox: ${change.next.sandboxMode}`,
-        `New approval reviewer: ${change.next.approvalReviewer}`,
-        `New approval review model: ${approvalReviewSelectionLabel(change.next.approvalReview)}`,
-        ...(change.next.approvalPolicy === 'auto' &&
-          change.next.sandboxMode === 'danger-full-access' &&
-          change.next.approvalReviewer === 'user'
-          ? [
-              '',
-              'Full access lets Kun access any local file, execute host commands, and use network-capable tools without Kun approval.'
-            ]
-          : []),
-        '',
-        'This protected native prompt cannot be confirmed by extension Webviews or Direct DOM content scripts.'
-      ].join('\n'),
-      buttons: ['Apply change', 'Cancel'],
-      defaultId: 1,
-      cancelId: 1,
-      noLink: true,
-      normalizeAccessKeys: true
-    })
-    if (confirmation.response !== 0) return current
-
-    // Fail closed if another settings write raced the native decision. The
-    // consent is for one exact transition, not whichever values are current
-    // when the dialog eventually closes.
-    const latest = await store.load()
-    const latestExecution = {
-      approvalPolicy: latest.agents.kun.approvalPolicy,
-      sandboxMode: latest.agents.kun.sandboxMode,
-      approvalReviewer: latest.agents.kun.approvalReviewer,
-      approvalReview: latest.agents.kun.approvalReview
-    }
-    if (!executionSettingsEqual(latestExecution, change.current)) {
-      throw new Error('Kun execution settings changed while confirmation was open; retry the change.')
-    }
-
-    const action: KunExecutionSettingsConsentAction = {
-      ...change,
-      senderId: event.sender.id,
-      senderProcessId: senderFrame.processId,
-      senderRoutingId: senderFrame.routingId
-    }
-    const consent = executionSettingsConsents.issue(action)
-    if (!executionSettingsConsents.consume(consent, action)) {
-      throw new Error('Protected execution-settings consent is invalid or expired.')
-    }
-    return persist(partial)
-  }
+  const applyProtectedSettingsPatch = protectedExecutionSettings(options, nativeDialogs)
   ipcMain.handle('settings:get', async (event) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     return withoutRendererPlaintextCredentials(await withRegistryCredentials(await store.load(), undefined, { refreshOAuth: false }))
@@ -509,128 +413,14 @@ export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOp
   })
 
   const decideRoomApproval = roomProtectedControls(options, nativeDialogs)
+  const decideApproval = protectedApprovalControls(options, nativeDialogs)
   ipcMain.handle('approval:decide', async (event, payload: unknown) => {
     assertTrustedWorkbenchSender(event, getMainWindow)
     options.assertRendererRuntimeReady()
     const request = parseIpcPayload('approval:decide', kunProtectedApprovalPayloadSchema, payload)
     if (request.source === 'policy' && request.decision === 'allow') throw new Error('Policy allow decisions are Runtime-owned.')
     if (request.presentation === 'room') return decideRoomApproval(event, request)
-    if (request.source === 'user') {
-      const parent = getMainWindow()
-      if (!parent || parent.isDestroyed()) throw new Error('Protected approval window is unavailable.')
-      const allow = request.decision === 'allow'
-      const approvalRef = approvalLogReference(request.approvalId)
-      const startedAt = Date.now()
-      let confirmation: Electron.MessageBoxReturnValue
-      try {
-        // Remote clients confirm in their own UI; their invoke is the consent.
-        confirmation = isRemoteClientSender(event.sender)
-          ? { response: 0, checkboxChecked: false }
-          : await nativeDialogs.run(parent.webContents, async () => {
-          if (parent.isDestroyed()) {
-            throw new Error('Protected approval window was closed before confirmation.')
-          }
-          const windowBeforeReveal = dialogParentState(parent)
-          revealDialogParent(parent)
-          logInfoHandler('approval', 'Opening protected native approval dialog.', {
-            approvalRef,
-            decision: request.decision,
-            platform: process.platform,
-            windowBeforeReveal,
-            windowAfterReveal: dialogParentState(parent)
-          })
-          return dialog.showMessageBox(parent, {
-            type: 'warning',
-            title: allow ? 'Approve tool action' : 'Deny tool action',
-            message: allow
-              ? 'Allow this pending Kun tool action once?'
-              : 'Deny this pending Kun tool action?',
-            detail: `Approval reference: ${approvalRef}\n\nThis protected native prompt cannot be controlled by extension Webviews or Direct DOM content scripts.`,
-            buttons: [allow ? 'Allow once' : 'Deny', 'Cancel'],
-            defaultId: 1,
-            cancelId: 1,
-            noLink: true,
-            normalizeAccessKeys: true
-          })
-        })
-      } catch (error) {
-        logError('approval', 'Protected native approval dialog failed.', {
-          approvalRef,
-          decision: request.decision,
-          durationMs: Date.now() - startedAt,
-          platform: process.platform,
-          window: dialogParentState(parent),
-          message: error instanceof Error ? error.message : String(error)
-        })
-        throw error
-      }
-      logInfoHandler('approval', 'Protected native approval dialog resolved.', {
-        approvalRef,
-        decision: request.decision,
-        response: confirmation.response,
-        confirmed: confirmation.response === 0,
-        durationMs: Date.now() - startedAt,
-        platform: process.platform,
-        window: dialogParentState(parent)
-      })
-      if (confirmation.response !== 0) return { confirmed: false as const }
-      if (!dialogParentIsAvailable(parent) || !trustedWorkbenchSenderIsCurrent(event, parent)) {
-        logInfoHandler('approval', 'Protected native approval confirmation was not submitted.', {
-          approvalRef,
-          decision: request.decision,
-          reason: 'parent_or_sender_unavailable_after_confirmation',
-          platform: process.platform,
-          window: dialogParentState(parent)
-        })
-        return { confirmed: false as const }
-      }
-    }
-
-    let lease: ProtectedRuntimeRequestLease
-    try {
-      lease = await acquireRuntimeRequestLease()
-    } catch (error) {
-      logError('approval', 'Protected approval Runtime lease acquisition failed.', {
-        approvalRef: approvalLogReference(request.approvalId),
-        decision: request.decision,
-        errorType: error instanceof Error ? error.name : typeof error
-      })
-      return {
-        confirmed: true as const,
-        response: {
-          ok: false,
-          status: 0,
-          body: JSON.stringify({
-            code: 'runtime_unhealthy',
-            message: 'Kun Runtime is unavailable. Retry after it finishes starting.'
-          })
-        }
-      }
-    }
-    const parent = getMainWindow()
-    if (!parent || !dialogParentIsAvailable(parent) || !trustedWorkbenchSenderIsCurrent(event, parent)) {
-      logInfoHandler('approval', 'Protected native approval confirmation was not submitted.', {
-        approvalRef: approvalLogReference(request.approvalId),
-        decision: request.decision,
-        reason: 'parent_or_sender_unavailable_after_runtime_ensure',
-        platform: process.platform,
-        ...(parent ? { window: dialogParentState(parent) } : {})
-      })
-      return { confirmed: false as const }
-    }
-    const consentToken = createApprovalConsentToken({
-      runtimeToken: lease.runtimeToken,
-      approvalId: request.approvalId,
-      decision: request.decision,
-      expiresAt: Date.now() + 30_000
-    })
-    const response = await lease.request(
-      `/v1/approvals/${encodeURIComponent(request.approvalId)}`,
-      'POST',
-      JSON.stringify({ decision: request.decision }),
-      { [KUN_APPROVAL_CONSENT_HEADER]: consentToken }
-    )
-    return { confirmed: true as const, response }
+    return decideApproval(event, request)
   })
 
   ipcMain.handle('runtime:restart', async (event) => {

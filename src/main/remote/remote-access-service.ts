@@ -1,3 +1,4 @@
+import { isProtectedWindowContents } from '../protected-window-contents'
 import http, { type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { createServer as createNetServer } from 'node:net'
 import { homedir, tmpdir } from 'node:os'
@@ -308,11 +309,12 @@ export class RemoteAccessService {
   }
 
   private patchWebContentsSend(contents: WebContents): void {
+    if (isProtectedWindowContents(contents)) return
     if (this.mirroredContents.has(contents)) return
     this.mirroredContents.add(contents)
     const originalSend = contents.send.bind(contents)
     contents.send = ((channel: string, ...args: unknown[]) => {
-      this.hub.broadcast(channel, args.length <= 1 ? args[0] : args)
+      if (!isProtectedWindowContents(contents)) this.hub.broadcast(channel, args.length <= 1 ? args[0] : args)
       return originalSend(channel, ...args)
     }) as typeof contents.send
   }

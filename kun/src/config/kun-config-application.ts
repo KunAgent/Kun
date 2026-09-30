@@ -401,6 +401,28 @@ export const AdeConfigSchema = z
   .object({
     /** Master switch; the ADE mode entry is gated on it. Default off. */
     enabled: z.boolean().default(false),
+    /** Main-owned local project defaults; keys are canonical source roots. */
+    projectDefaults: z.record(z.string().min(1).max(4_096), z.object({
+      route: z.object({
+        harnessId: z.string().regex(/^[a-z][a-z0-9-]{1,47}$/),
+        model: z.string().min(1).max(512),
+        providerId: z.string().min(1).max(128).optional(),
+        credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional()
+      }).strict().optional(),
+      collaborationEnabled: z.boolean().optional(),
+      managerModel: z.object({
+        providerId: z.string().min(1).max(128), model: z.string().min(1).max(512)
+      }).strict().optional(),
+      limits: z.object({
+        softWorkers: z.number().int().min(1).max(16),
+        hardWorkers: z.number().int().min(1).max(32)
+      }).strict().optional(),
+      budget: z.object({
+        softTokens: z.number().int().positive().optional(),
+        hardTokens: z.number().int().positive().optional()
+      }).strict().optional(),
+      isolation: z.enum(['worktree', 'local', 'directory']).optional()
+    }).strict()).refine((entries) => Object.keys(entries).length <= 64).default({}),
     /** New harness-aware turn routing; false falls back to provider inference. */
     harnessRouter: z.boolean().default(true),
     /** Deterministic handoff briefs; false restores the raw transcript tail. */

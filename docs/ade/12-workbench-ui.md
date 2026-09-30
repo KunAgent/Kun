@@ -1,5 +1,7 @@
 # 12 工作台 UI：Mission Control、轨道、一对一、通知
 
+> 2026-09-30：本文件记录早期 ADE 界面。用户已要求统一到 Code 工作台；页面、入口和历史迁移以 [14 Code 工作台融合](./14-code-workbench-integration.md) 为准，状态和执行底座继续复用。
+
 - 阶段：P1（Mission Control、Workers 轨道、agent 选择、通知）；P2（弹出窗口、手机端完整操作）
 - 依赖：01、02、06、09、10、11
 - 参考：多 agent 控制台的视觉与交互原则（仅作设计输入，命名与样式按 Kun 自己的体系）

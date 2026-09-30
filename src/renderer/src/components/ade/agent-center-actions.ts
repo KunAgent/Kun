@@ -1,5 +1,6 @@
 import type { AdeHarnessRow, AdeHarnessSetup } from '@shared/ade-harnesses'
 import { harnessRowUnavailableCode } from '../../store/harness-store'
+import { usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
 
 /**
  * Agent Center card state + action table (docs/ade/impl/p4 §3.2, P4-08).
@@ -8,8 +9,9 @@ import { harnessRowUnavailableCode } from '../../store/harness-store'
  */
 
 export type AgentCardAction =
+  | { kind: 'install'; labelKey: string; action: 'install' | 'adapter' }
   | { kind: 'command'; labelKey: string; command: string; note?: string }
-  | { kind: 'probe' | 'enable' | 'disable' | 'setDefault' | 'specifyPath' | 'reason' | 'test'; labelKey: string }
+  | { kind: 'probe' | 'enable' | 'disable' | 'setDefault' | 'specifyPath' | 'reason' | 'test' | 'configureProvider'; labelKey: string }
   | { kind: 'docs'; labelKey: string; url: string }
   | { kind: 'none' }
 
@@ -71,7 +73,7 @@ export function agentCardModel(
   row: AdeHarnessRow,
   options: { enabled: boolean; platform: string; isDefault: boolean }
 ): AgentCardModel {
-  const { enabled, platform, isDefault } = options
+  const { enabled, isDefault } = options
   const setup = row.definition.builtin ? row.definition.setup : undefined
   const hasDetail = Boolean(row.status.message?.trim())
 
@@ -88,6 +90,20 @@ export function agentCardModel(
   if (code === 'detecting') {
     return { state: 'detecting', reasonCode: null, primary: ACTION.none, secondary: [] }
   }
+
+  if (usesProviderOnlySdk(row)) {
+    return {
+      state: code ? 'unavailable' : 'ready',
+      reasonCode: code,
+      primary: { kind: 'configureProvider', labelKey: 'adeAgentAction.configureProvider' },
+      secondary: [ACTION.probe, ...(code || isDefault ? [] : [ACTION.setDefault]), ACTION.disable,
+        ...(hasDetail ? [ACTION.reason] : [])]
+    }
+  }
+
+  const unknownLogin = row.status.login === 'unknown' && row.status.installed === 'yes' &&
+    row.definition.credentialModes.includes('native-login') && setup?.login
+    ? commandAction('adeAgentAction.login', setupLoginCommand(setup)) : null
 
   if (code === null) {
     // A settled row can still carry an advisory wire reasonCode (e.g. a
@@ -109,6 +125,7 @@ export function agentCardModel(
       reasonCode: advisory,
       primary: ACTION.test,
       secondary: [
+        ...(unknownLogin ? [unknownLogin] : []),
         ...(advisory ? [ACTION.probe] : []),
         ...(isDefault || row.definition.id === 'kun' ? [] : [ACTION.setDefault]),
         ...(row.definition.id === 'kun' ? [] : [ACTION.disable])
@@ -121,19 +138,20 @@ export function agentCardModel(
   switch (code) {
     case 'not_installed':
     case 'version_too_low': {
-      const install = commandAction('adeAgentAction.install', setupInstallCommand(setup, platform))
+      const install: AgentCardAction = setup?.install?.length
+        ? { kind: 'install', labelKey: 'agentInstall.start', action: 'install' } : ACTION.none
       const docs = setup?.docsUrl
         ? ({ kind: 'docs', labelKey: 'adeAgentAction.docs', url: setup.docsUrl } as const)
         : null
-      primary = install.kind === 'command' ? install : docs ?? ACTION.probe
-      if (docs && install.kind === 'command') secondary.push(docs)
+      primary = install.kind === 'install' ? install : docs ?? ACTION.probe
+      if (docs && install.kind === 'install') secondary.push(docs)
       secondary.push(ACTION.specifyPath)
       break
     }
     case 'adapter_missing': {
       const adapter = setup?.adapter
       primary = adapter
-        ? { kind: 'command', labelKey: 'adeAgentAction.installAdapter', command: adapter.install }
+        ? { kind: 'install', labelKey: 'agentInstall.adapter', action: 'adapter' }
         : setup?.docsUrl
           ? { kind: 'docs', labelKey: 'adeAgentAction.docs', url: setup.docsUrl }
           : ACTION.probe

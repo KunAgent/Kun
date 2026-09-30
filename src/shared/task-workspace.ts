@@ -3,6 +3,7 @@
  * /v1/task-workspaces diff responses (docs/ade/11 §3). The wire shape is
  * owned by the kun contract; keep field names aligned.
  */
+import type { ReviewRevision } from './review-revision'
 
 export type TaskWorkspaceIsolation = 'worktree' | 'local' | 'directory'
 
@@ -63,6 +64,7 @@ export type TaskWorkspaceDiffFile = {
 export type TaskWorkspaceDiffListResponse = {
   files: TaskWorkspaceDiffFile[]
   headRevision?: string
+  revision?: ReviewRevision
 }
 
 export type TaskWorkspaceDiffFileResponse = TaskWorkspaceDiffFile & {
@@ -79,6 +81,10 @@ export type TaskWorkspaceIntegratePreview = {
   mergeBlockReason?: string
   hasUncommitted: boolean
   hasRemote: boolean
+  sourceRevision?: ReviewRevision
+  targetRevision?: ReviewRevision
+  targetBranchRevision?: string
+  previewToken?: string
 }
 
 export type TaskWorkspaceIntegratePreviewResponse = {
@@ -96,6 +102,7 @@ export type TaskWorkspaceIntegrateMode = 'apply-patch' | 'merge-branch'
 export type TaskWorkspaceIntegrateResponse = {
   record: TaskWorkspaceRecord
   outcome: TaskWorkspaceIntegrateOutcome
+  previewTokenValidated?: boolean
   reason?: string
   recovery?: string[]
 }

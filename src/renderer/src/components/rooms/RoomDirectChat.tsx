@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { WorkbenchActiveChip } from './WorkbenchActiveChip'
-import { ChevronDown, CircleAlert, FolderOpen, Menu, MoreHorizontal, PanelRight, PanelRightOpen, PlugZap, RotateCcw, Search, X } from 'lucide-react'
+import { ChevronDown, CircleAlert, FolderOpen, Menu, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, PlugZap, RotateCcw, Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room, RoomContentReference } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
@@ -12,7 +12,8 @@ import { modelLabel, type AgentModels } from './AgentModelSettings'
 import './rooms-direct.css'
 
 export function useDirectChat(room: Room | null, onUpdated: () => Promise<void>) {
-  const resource = useAgentResource<AgentDirectActivity>(room?.conversationKind === 'user_agent' ? roomPath(room.id) + '/direct' : null)
+  const resource = useAgentResource<AgentDirectActivity>(room?.conversationKind === 'user_agent' ? roomPath(room.id) + '/direct' : null,
+    true, room ? `${room.id}:${room.privateEpoch ?? 0}` : null)
   const [error, setError] = useState('')
   const scope = useRef(room?.id); scope.current = room?.id
   useEffect(() => setError(''), [room?.id])
@@ -41,10 +42,11 @@ export function RoomNoticeDismiss({ onDismiss }: { onDismiss: () => void }) {
   return <button type="button" className="rooms-notice-dismiss" aria-label={t('roomsDismissNotice')} title={t('roomsDismissNotice')}
     onClick={onDismiss}><X size={13} aria-hidden="true" /></button>
 }
-export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile, onModels, onFiles, onReminders, onReset, onConnect, onApps, onTasks, onSession, sessionOpen, sessionDisabled }: {
+export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile, onModels, onFiles, onReminders, onReset, onConnect, onApps, onTasks, onSession, sessionOpen, sessionDisabled, embedded = false, onToggleLeftSidebar }: {
   room: Room; models?: AgentModels | null; onSidebar: () => void; onSearch: () => void; onProfile: () => void; onModels: () => void
   onFiles: () => void; onReminders: () => void; onReset: () => void; onConnect: () => void; onApps?: () => void; onTasks: () => void
   onSession: () => void; sessionOpen: boolean; sessionDisabled: boolean
+  embedded?: boolean; onToggleLeftSidebar?: () => void
 }) {
   const { t } = useTranslation('common')
   const member = room.members[0]
@@ -53,9 +55,13 @@ export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile,
   )
   const current = models ?? loaded.data
   return <header className="rooms-main-titlebar rooms-header direct-header">
-    <button className="rooms-icon-button rooms-sidebar-toggle" aria-label={t('roomsLabel')} onClick={onSidebar}><Menu size={19} /></button>
+    {embedded ? <button className="rooms-icon-button" aria-label={t('sidebarToggle')} onClick={onToggleLeftSidebar}><PanelLeft size={18} /></button>
+      : <button className="rooms-icon-button rooms-sidebar-toggle" aria-label={t('roomsLabel')} onClick={onSidebar}><Menu size={19} /></button>}
     <button className="direct-chat-title" onClick={onProfile}><RoomAvatar member={member} label={member.displayName} size={36} /><strong>{member.displayName}</strong></button>
-    <button className="direct-current-model" aria-label={t('directModels')} onClick={onModels}><span title={modelLabel(current?.main)}>{modelLabel(current?.main)}</span><ChevronDown size={13} /></button>
+    {embedded ? <span className="rooms-private-badge">{t('agentPrivateChatLabel')}</span>
+      : <button className="direct-current-model" aria-label={t('directModels')} onClick={onModels}><span title={modelLabel(current?.main)}>{modelLabel(current?.main)}</span><ChevronDown size={13} /></button>}
+    {embedded ? <button className="direct-workspace-control" onClick={onConnect} title={room.privateWorkspace ?? t('agentPrivateWorkspace')}>
+      <FolderOpen size={14} /><span>{room.privateWorkspace?.replaceAll('\\', '/').split('/').at(-1) ?? t('agentPrivateWorkspace')}</span><ChevronDown size={12} /></button> : null}
     <WorkbenchActiveChip roomId={room.id} />
     <div className="direct-header-spacer" />
     {onApps ? <button className="rooms-icon-button" aria-label={t('roomsAppsTitle')} title={t('roomsAppsTitle')} onClick={onApps}><PlugZap size={18} /></button> : null}

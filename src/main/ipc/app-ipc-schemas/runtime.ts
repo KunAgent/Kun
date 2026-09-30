@@ -43,6 +43,8 @@ import {
   KUN_HARNESS_MODELS_TEMPLATE,
   KUN_HARNESS_PROBE_TEMPLATE,
   KUN_HARNESS_TEST_TEMPLATE,
+  KUN_HARNESS_INSTALL_TEMPLATE,
+  KUN_HARNESS_INSTALL_CANCEL_TEMPLATE,
   KUN_HARNESS_PROBE_DEFINITION_TEMPLATE,
   KUN_HARNESS_SECRETS_TEMPLATE,
   KUN_HARNESS_SECRET_TEMPLATE,
@@ -109,6 +111,7 @@ import {
   KUN_THREAD_STEER_TEMPLATE,
   KUN_THREAD_STATE_TEMPLATE,
   KUN_THREAD_SUMMARY_TEMPLATE,
+  KUN_THREAD_EXECUTION_CONFIG_TEMPLATE,
   KUN_THREAD_STATES_TEMPLATE,
   KUN_THREAD_TIMELINE_TEMPLATE,
   KUN_THREAD_TEMPLATE,
@@ -351,6 +354,8 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_HARNESS_MODELS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_HARNESS_PROBE_TEMPLATE, ['POST']),
   compileEndpoint(KUN_HARNESS_TEST_TEMPLATE, ['POST']),
+  compileEndpoint(KUN_HARNESS_INSTALL_TEMPLATE, ['GET', 'POST']),
+  compileEndpoint(KUN_HARNESS_INSTALL_CANCEL_TEMPLATE, ['POST']),
   compileEndpoint(KUN_HARNESS_PROBE_DEFINITION_TEMPLATE, ['POST']),
   compileEndpoint(KUN_HARNESS_SECRETS_TEMPLATE, ['POST']),
   compileEndpoint(KUN_HARNESS_SECRET_TEMPLATE, ['DELETE']),
@@ -365,7 +370,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   ...['diff', 'diff/file', 'attribution', 'integrate-preview'].map(
     (suffix) => compileEndpoint(`${KUN_TASK_WORKSPACE_TEMPLATE}/${suffix}`, ['GET'])),
   compileEndpoint(`${KUN_TASK_WORKSPACE_TEMPLATE}/change-request`, ['GET', 'POST']),
-  ...['integrate', 'discard', 'cleanup'].map((action) =>
+  ...['integrate', 'discard', 'cleanup', 'retry'].map((action) =>
     compileEndpoint(`${KUN_TASK_WORKSPACE_TEMPLATE}/${action}`, ['POST'])),
   compileEndpoint(KUN_REVIEW_COMMENTS_TEMPLATE, ['GET', 'POST']),
   compileEndpoint(KUN_REVIEW_COMMENT_TEMPLATE, ['PATCH']),
@@ -410,6 +415,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_THREAD_STATES_TEMPLATE, ['POST']),
   compileEndpoint(KUN_THREAD_STATE_TEMPLATE, ['GET']),
   compileEndpoint(KUN_THREAD_SUMMARY_TEMPLATE, ['GET']),
+  compileEndpoint(KUN_THREAD_EXECUTION_CONFIG_TEMPLATE, ['GET', 'PATCH']),
   compileEndpoint(KUN_THREAD_TIMELINE_TEMPLATE, ['GET']),
   compileEndpoint(KUN_THREAD_KNOWLEDGE_BASES_TEMPLATE, ['GET']),
   compileEndpoint(KUN_THREAD_KNOWLEDGE_BASE_REINDEX_TEMPLATE, ['POST']),

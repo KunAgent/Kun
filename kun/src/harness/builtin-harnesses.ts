@@ -275,7 +275,10 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     id: 'antigravity',
     displayName: 'Antigravity',
     transport: 'antigravity-cli',
-    detect: { command: 'antigravity', aliases: [], versionArgs: ['--version'] },
+    // The supported one-shot protocol is exposed by `agy`, matching the
+    // AntigravityCliRuntime launch command. The IDE launcher is not a turn
+    // protocol and must not be mistaken for a ready agent.
+    detect: { command: 'agy', aliases: [], versionArgs: ['--version'] },
     credentialModes: ['native-login'],
     permissionModes: [
       { id: 'default', label: 'Ask', kunPermissionMode: 'ask-for-approval' },
@@ -284,9 +287,15 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     modelSource: 'provider',
     staticModels: [],
     capabilities: ANTIGRAVITY_CAPABILITIES,
-    // Antigravity ships inside the IDE download; there is no standalone
-    // package-manager install, so the card links out instead of prefilling.
-    setup: { docsUrl: 'https://antigravity.google' },
+    setup: {
+      install: [
+        { platform: 'darwin', command: 'curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --skip-aliases' },
+        { platform: 'linux', command: 'curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --skip-aliases' },
+        { platform: 'win32', command: 'irm https://antigravity.google/cli/install.ps1 | iex' }
+      ],
+      login: { command: 'agy', args: [] },
+      docsUrl: 'https://antigravity.google/docs/cli/install/'
+    },
     builtin: true
   },
   {
@@ -326,40 +335,47 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
   {
     id: 'codex',
     displayName: 'Codex',
-    transport: 'acp',
-    // `codex acp` requires a TTY; ACP runs through the separate adapter binary.
+    transport: 'codex-app-server',
     detect: {
-      command: 'codex-acp',
+      command: 'codex',
       aliases: [],
       versionArgs: ['--version'],
-      // P3-11: codex present but codex-acp absent is "needs the adapter",
-      // not "not installed".
-      adapterHint: {
-        command: 'codex',
-        message:
-          'Codex CLI is installed but the ACP adapter codex-acp is missing — ' +
-          'install it (npm i -g @zed-industries/codex-acp) to use Codex as a Kun agent'
-      }
+      minVersion: CODEX_APP_SERVER_MIN_VERSION
     },
-    launch: { command: 'codex-acp', args: [], env: {} },
-    // P6-07: `harnesses.transportOverrides.codex = 'codex-app-server'` (or the
-    // P6-08 default flip) selects the native app-server transport — same
-    // `codex` binary, no adapter package, native thread/turn lifecycle.
+    launch: { command: 'codex', args: ['app-server'], env: {} },
+    // Explicit ACP remains for older configurations. It requires a separate
+    // adapter; default native app-server uses the installed Codex CLI itself.
     variants: {
-      'codex-app-server': {
-        launch: { command: 'codex', args: ['app-server'], env: {} },
+      acp: {
+        launch: { command: 'codex-acp', args: [], env: {} },
         detect: {
-          command: 'codex',
+          command: 'codex-acp',
           aliases: [],
           versionArgs: ['--version'],
-          minVersion: CODEX_APP_SERVER_MIN_VERSION
+          adapterHint: {
+            command: 'codex',
+            message: 'Codex ACP adapter codex-acp is missing'
+          }
         },
-        capabilities: CODEX_APP_SERVER_CAPABILITIES
+        capabilities: ACP_DEFAULT_CAPABILITIES,
+        setup: {
+          install: [
+            { platform: 'any', command: 'npm install -g @openai/codex' },
+            { platform: 'darwin', command: 'brew install --cask codex' }
+          ],
+          login: { command: 'codex', args: ['login'] },
+          adapter: {
+            command: 'codex-acp',
+            install: 'npm i -g @zed-industries/codex-acp'
+          },
+          docsUrl: 'https://github.com/openai/codex'
+        }
       }
     },
     credentialModes: ['native-login', 'kun-gateway'],
     permissionModes: [
-      // codex-acp adapter modes, strictest first.
+      // Product permission levels; Codex sandbox/approval policy is resolved
+      // by the per-turn permission and sandbox settings.
       { id: 'read-only', label: 'Read only', kunPermissionMode: 'ask-for-approval' },
       { id: 'auto', label: 'Auto', kunPermissionMode: 'full-access' },
       { id: 'full-access', label: 'Full access', kunPermissionMode: 'full-access' }
@@ -367,7 +383,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     modelSource: 'probe',
     staticModels: [],
     historySource: 'codex',
-    capabilities: ACP_DEFAULT_CAPABILITIES,
+    capabilities: CODEX_APP_SERVER_CAPABILITIES,
     // Generated CODEX_HOME/config.toml declares a `kun` responses provider
     // (verified against codex 0.145.0 via `codex doctor`, P3-10).
     gateway: {
@@ -386,10 +402,6 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
         { platform: 'darwin', command: 'brew install --cask codex' }
       ],
       login: { command: 'codex', args: ['login'] },
-      adapter: {
-        command: 'codex-acp',
-        install: 'npm i -g @zed-industries/codex-acp'
-      },
       docsUrl: 'https://github.com/openai/codex'
     },
     builtin: true
@@ -504,6 +516,38 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
       ],
       login: { command: 'opencode', args: ['auth', 'login'] },
       docsUrl: 'https://opencode.ai/docs'
+    },
+    builtin: true
+  },
+  {
+    id: 'devin',
+    displayName: 'Devin',
+    transport: 'acp',
+    // Official stdio transport: https://docs.devin.ai/cli/acp/zed
+    detect: { command: 'devin', aliases: [], versionArgs: ['--version'] },
+    launch: { command: 'devin', args: ['acp'], env: {} },
+    credentialModes: ['native-login'],
+    permissionModes: [
+      { id: 'normal', label: 'Ask', kunPermissionMode: 'ask-for-approval' },
+      { id: 'accept-edits', label: 'Accept edits', kunPermissionMode: 'full-access' },
+      { id: 'bypass', label: 'Full access', kunPermissionMode: 'full-access' }
+    ],
+    modelSource: 'probe',
+    staticModels: [],
+    capabilities: {
+      ...ACP_DEFAULT_CAPABILITIES,
+      // ACP alone does not enable Devin's optional OS sandbox.
+      facts: { sandbox: 'none', usageReporting: 'estimated', compactionOwner: 'harness' }
+    },
+    setup: {
+      install: [
+        { platform: 'darwin', command: 'brew install --cask devin-cli' },
+        { platform: 'darwin', command: 'curl -fsSL https://cli.devin.ai/install.sh | bash' },
+        { platform: 'linux', command: 'curl -fsSL https://cli.devin.ai/install.sh | bash' },
+        { platform: 'win32', command: 'irm https://static.devin.ai/cli/setup.ps1 | iex', note: 'Run in PowerShell' }
+      ],
+      login: { command: 'devin', args: ['auth', 'login'], note: 'Sign in with Devin CLI' },
+      docsUrl: 'https://docs.devin.ai/cli/acp/zed'
     },
     builtin: true
   }

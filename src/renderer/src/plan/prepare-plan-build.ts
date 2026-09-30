@@ -17,6 +17,8 @@ export async function preparePlanBuild(input: {
   orchestration: PlanBuildOrchestration
   graphEnabled: boolean
   usePromptWorktree: boolean
+  usePromptWorktreeExplicit?: boolean
+  workspaceAlreadyIsolated?: boolean
   branchPrefix: string
   activeThreadId: string | null
   getPlanTodos?: () => PromptPlanTodo[]
@@ -43,7 +45,8 @@ export async function preparePlanBuild(input: {
     input.getPlanTodos?.()
   )
   let displayText = `${input.orchestration === 'graph' ? 'Graph build' : 'Direct build'}: ${input.plan.relativePath}`
-  if (input.orchestration === 'direct' && input.usePromptWorktree) {
+  if (input.orchestration === 'direct' && input.usePromptWorktree &&
+    (!input.workspaceAlreadyIsolated || input.usePromptWorktreeExplicit)) {
     const branch = await input.getGitBranches(input.plan.workspaceRoot)
     if (!branch.ok) throw new Error(branch.message)
     const targetBranch = branch.currentBranch?.trim()

@@ -1,3 +1,5 @@
+import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
+import { existingTaskWorkspaceOwner } from './task-workspace-owner.js'
 import { realpath, stat } from 'node:fs/promises'
 import { createHash, randomBytes } from 'node:crypto'
 import { homedir } from 'node:os'
@@ -20,6 +22,7 @@ import {
   type WorkspaceIntegrationContext
 } from './task-workspace-integration.js'
 import { taskWorkspaceIntegratePreview } from './task-workspace-preview.js'
+import { captureIntegrateReviewRevisions } from './review-revision.js'
 import type { KunProjectWorktreeConfig } from '../config/project-config.js'
 import type {
   ApprovedSetupStep,
@@ -155,6 +158,8 @@ export class TaskWorkspaceService {
   }
 
   create(input: CreateTaskWorkspaceRequest, callerSignal?: AbortSignal): TaskWorkspaceRecord {
+    const existing = existingTaskWorkspaceOwner(this.list({ ownerThreadId: input.ownerThreadId }), input)
+    if (existing) return existing
     const now = this.nowIso()
     const record = this.options.store.insert({
       workspaceId: this.newId(),
@@ -328,18 +333,32 @@ export class TaskWorkspaceService {
    * panel may enable. Never stages, writes, or locks.
    */
   async integratePreview(workspaceId: string): Promise<TaskWorkspaceIntegratePreview> {
-    return taskWorkspaceIntegratePreview(
+    const preview = await taskWorkspaceIntegratePreview(
       { store: this.options.store, git: this.options.git },
       workspaceId
     )
+    const record = this.options.store.get(workspaceId)
+    if (!record || record.isolation !== 'worktree' ||
+        !['ready', 'captured', 'conflict'].includes(record.state)) return preview
+    const revisions = await captureIntegrateReviewRevisions(record)
+    if (revisions.previewToken) return { ...preview, ...revisions }
+    const reason = 'review revision is incomplete; refresh when both checkouts are stable'
+    return {
+      ...preview, ...revisions,
+      canApplyPatch: false,
+      applyBlockReason: preview.applyBlockReason ?? reason,
+      canMergeBranch: false,
+      mergeBlockReason: preview.mergeBlockReason ?? reason
+    }
   }
 
   /** Integrate into the source repository; serialized per repo (07 §8). */
   async integrate(
     workspaceId: string,
-    mode: 'apply-patch' | 'merge-branch' = 'apply-patch'
+    mode: 'apply-patch' | 'merge-branch' = 'apply-patch',
+    previewToken?: string
   ): Promise<TaskWorkspaceIntegrateResult> {
-    return integrateTaskWorkspace(this.integrationContext(), workspaceId, mode)
+    return integrateTaskWorkspace(this.integrationContext(), workspaceId, mode, previewToken)
   }
 
   /** Preview without confirm; force-removes worktree + branch with it. */
@@ -633,37 +652,39 @@ export class TaskWorkspaceService {
   }
 
   private emit(workspaceId: string): void {
-    const record = this.options.store.get(workspaceId)
-    if (!record) return
-    for (const listener of this.listeners) {
-      try {
-        listener(record)
-      } catch {
-        // listeners are best-effort
-      }
-    }
-    if (!this.options.events) return
-    try {
-      void Promise.resolve(this.options.events.record({
-        kind: 'task_workspace',
-        threadId: record.ownerThreadId,
-        taskWorkspace: {
-          workspaceId: record.workspaceId,
-          ...(record.unitId ? { unitId: record.unitId } : {}),
-          state: record.state,
-          ...(record.progress ? { progress: record.progress } : {}),
-          setup: record.setup,
-          workspace: {
-            path: record.path,
-            sourceRoot: record.sourceRoot,
-            kind: record.isolation,
-            ...(record.branch ? { branch: record.branch } : {})
-          }
+    runWithoutTurnMutationFence(() => {
+      const record = this.options.store.get(workspaceId)
+      if (!record) return
+      for (const listener of this.listeners) {
+        try {
+          listener(record)
+        } catch {
+          // listeners are best-effort
         }
-      })).catch(() => undefined)
-    } catch {
-      // event fan-out must never break workspace operations
-    }
+      }
+      if (!this.options.events) return
+      try {
+        void Promise.resolve(this.options.events.record({
+          kind: 'task_workspace',
+          threadId: record.ownerThreadId,
+          taskWorkspace: {
+            workspaceId: record.workspaceId,
+            ...(record.unitId ? { unitId: record.unitId } : {}),
+            state: record.state,
+            ...(record.progress ? { progress: record.progress } : {}),
+            setup: record.setup,
+            workspace: {
+              path: record.path,
+              sourceRoot: record.sourceRoot,
+              kind: record.isolation,
+              ...(record.branch ? { branch: record.branch } : {})
+            }
+          }
+        })).catch(() => undefined)
+      } catch {
+        // event fan-out must never break workspace operations
+      }
+    })
   }
 }
 

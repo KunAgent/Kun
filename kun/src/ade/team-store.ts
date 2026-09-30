@@ -48,6 +48,22 @@ export class FileTeamStore {
     return this.readFile(teamId)
   }
 
+  /** New task limits/budget take effect at the next controlled admission. */
+  async updatePolicy(teamId: string, limits: Partial<TeamLimits>, budget?: TeamRecord['budget']): Promise<TeamRecord | null> {
+    return withAdeTeamMutex(teamId, async () => {
+      const current = await this.readFile(teamId)
+      if (!current) return null
+      const next: TeamRecord = {
+        ...current,
+        limits: TeamLimitsSchema.parse(limits),
+        budget,
+        updatedAt: this.nowIso()
+      }
+      await this.writeFile(teamId, next)
+      return next
+    })
+  }
+
   async byManager(managerThreadId: string): Promise<TeamRecord | null> {
     return this.readFile(managerThreadId)
   }

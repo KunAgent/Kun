@@ -146,6 +146,8 @@ export function modelListFromSharedConnections(
     const configuredLabel = configuredProviderLabels.get(providerId.toLowerCase())?.trim()
     return [{
       providerId,
+      ...(['http', 'agent-sdk', 'cursor-sdk', 'antigravity-cli', 'gemini-cli-api', 'gemini-code-assist'].includes(String(profile.kind))
+        ? { kind: profile.kind as ModelProviderModelGroup['kind'] } : {}),
       ...(typeof profile.presetSource === 'string' && profile.presetSource.trim()
         ? { presetSource: profile.presetSource.trim() }
         : {}),
@@ -266,7 +268,7 @@ async function readConfiguredModelGroups(settings: AppSettingsV1): Promise<Model
     const presetSource = resolveModelProviderPresetSource(provider)?.preset.id
     groups.push({
       providerId: provider.id,
-      ...(presetSource ? { presetSource } : {}),
+      ...(provider.kind ? { kind: provider.kind } : {}),      ...(presetSource ? { presetSource } : {}),
       label: provider.name,
       modelIds,
       modelProfiles: provider.modelProfiles
@@ -329,6 +331,7 @@ function mergeModelGroups(groups: readonly ModelProviderModelGroup[]): ModelProv
     ])
     byProvider.set(providerId, {
       providerId,
+      ...(group.kind ?? existing?.kind ? { kind: group.kind ?? existing?.kind } : {}),
       ...(group.presetSource ?? existing?.presetSource
         ? { presetSource: group.presetSource ?? existing?.presetSource }
         : {}),

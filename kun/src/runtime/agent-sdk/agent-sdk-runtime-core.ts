@@ -289,7 +289,7 @@ export class AgentSdkRuntime {
             return this.deps.decideToolApproval(threadId, turnId, name, input, abort.signal)
           }),
           baseEnv: {
-            ...this.deps.baseEnv(),
+            ...this.deps.baseEnv({ gateway: Boolean(ctx.gateway) }),
             ...(ctx.claudeConfigDir ? { CLAUDE_CONFIG_DIR: ctx.claudeConfigDir } : {})
           },
           oauthToken: ctx.oauthToken,

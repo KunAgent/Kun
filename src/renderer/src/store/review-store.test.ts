@@ -195,6 +195,53 @@ describe('review-store', () => {
     expect(provider.pollActivity).not.toHaveBeenCalled()
     unwatchReviewWorkspace('tws_deadbeef')
   })
+
+  it('ignores capture metadata and old outcomes while work is running', async () => {
+    const row = (turnId: string, mainState: ActivityRow['mainState'], updatedAt: string) => ({
+      unitId: 'worker', turnId, mainState, lastOutcome: 'completed', updatedAt
+    } as ActivityRow)
+    provider.getActivitySnapshot.mockResolvedValue({ cursor: 'c0', rows: [row('old', 'done', '0')] })
+    const events = [
+      row('old', 'done', 'capture-only'),
+      row('new', 'working', 'started'),
+      row('new', 'working', 'tool-output'),
+      row('new', 'done', 'finished'),
+      row('new', 'done', 'captured'),
+      row('new', 'done', 'review-updated')
+    ]
+    for (const [index, event] of events.entries()) {
+      provider.pollActivity.mockResolvedValueOnce({ type: 'activity', cursor: `c${index + 1}`,
+        changes: [{ unitId: 'worker', row: event }] })
+    }
+    provider.pollActivity.mockImplementation((_cursor, _wait, signal) => new Promise((_resolve, reject) => {
+      signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+    }))
+    provider.getTaskWorkspaceDiff.mockResolvedValue({ files: [] })
+    provider.listReviewComments.mockResolvedValue({ comments: [], requests: [] })
+    watchReviewWorkspace('tws_deadbeef', record({ unitId: 'worker' }))
+    await vi.waitFor(() => expect(provider.pollActivity).toHaveBeenCalledTimes(events.length + 1))
+    unwatchReviewWorkspace('tws_deadbeef')
+    expect(provider.getTaskWorkspaceDiff).toHaveBeenCalledTimes(1)
+  })
+
+  it('watches an explicit workspace without a cached thread binding', async () => {
+    provider.getActivitySnapshot.mockResolvedValue({ cursor: 'c1', rows: [] })
+    provider.pollActivity
+      .mockResolvedValueOnce({
+        type: 'activity',
+        cursor: 'c2',
+        changes: [{ unitId: 'w-explicit', row: { mainState: 'done' } as ActivityRow }]
+      })
+      .mockImplementation((_cursor, _wait, signal) => new Promise((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+      }))
+    provider.getTaskWorkspaceDiff.mockResolvedValue({ files: [] })
+    provider.listReviewComments.mockResolvedValue({ comments: [], requests: [] })
+    watchReviewWorkspace('tws_deadbeef', record({ unitId: 'w-explicit' }))
+    await vi.waitFor(() => expect(provider.getTaskWorkspaceDiff).toHaveBeenCalledWith('tws_deadbeef'))
+    unwatchReviewWorkspace('tws_deadbeef')
+    expect(useReviewStore.getState().bindings).toEqual({})
+  })
 })
 
 const WS = 'tws_deadbeef'
@@ -307,6 +354,7 @@ describe('review comments', () => {
     expect(provider.sendReview.mock.calls[0][1]).toEqual({
       commentIds: ['rvc_synced01', 'rvc_sent0001'],
       target: { kind: 'manager' },
+      clientRequestId: expect.any(String),
       note: 'handle these'
     })
     expect(response?.request.round).toBe(1)
@@ -315,6 +363,24 @@ describe('review comments', () => {
     expect(ws.comments.find((c) => c.commentId === 'rvc_done0001')?.state).toBe('resolved')
     expect(ws.lastSent).toMatchObject({ round: 1, targetKind: 'manager' })
     expect(ws.requests).toHaveLength(1)
+  })
+
+  it('deduplicates a double click and retains the submission identity after an uncertain failure', async () => {
+    provider.listReviewComments.mockResolvedValue({ comments: [syncedComment()], requests: [] })
+    await loadReviewComments(WS)
+    provider.sendReview.mockRejectedValueOnce(new Error('connection lost'))
+    const first = sendReviewBatch(WS, { kind: 'worker', workerId: 'w1' }, 'retry safely')
+    const duplicate = sendReviewBatch(WS, { kind: 'worker', workerId: 'w1' }, 'retry safely')
+    expect(first).toBe(duplicate)
+    await Promise.all([first, duplicate])
+    const original = provider.sendReview.mock.calls[0][1].clientRequestId
+    provider.sendReview.mockResolvedValueOnce({ request: {
+      requestId: 'rvq_retry', round: 1, target: { kind: 'worker', workerId: 'w1' },
+      commentIds: ['rvc_synced01'], sentAt: '2026-01-02T00:00:00Z'
+    } })
+    await sendReviewBatch(WS, { kind: 'worker', workerId: 'w1' }, 'retry safely')
+    expect(provider.sendReview).toHaveBeenCalledTimes(2)
+    expect(provider.sendReview.mock.calls[1][1].clientRequestId).toBe(original)
   })
 
   it('reports send errors on the workspace', async () => {

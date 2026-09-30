@@ -1,0 +1,35 @@
+{
+  "sessionId": "legacy-model-session",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": { "loadSession": true },
+    "authMethods": []
+  },
+  "newSession": {
+    "models": {
+      "currentModelId": "legacy-default",
+      "availableModels": [
+        { "modelId": "legacy-default", "name": "Default" },
+        { "modelId": "legacy-alternative", "name": "Alternative" }
+      ]
+    },
+    "modes": {
+      "currentModeId": "bypass",
+      "availableModes": [{ "id": "normal" }, { "id": "bypass" }]
+    }
+  },
+  "loadSession": {
+    "models": {
+      "currentModelId": "legacy-default",
+      "availableModels": [
+        { "modelId": "legacy-default", "name": "Default" },
+        { "modelId": "legacy-alternative", "name": "Alternative" }
+      ]
+    },
+    "modes": {
+      "currentModeId": "bypass",
+      "availableModes": [{ "id": "normal" }, { "id": "bypass" }]
+    }
+  },
+  "turns": []
+}

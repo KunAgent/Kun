@@ -32,6 +32,10 @@ it('lists conversations separately from agents and excludes peer chats by defaul
   expect(entries.some((entry) => entry.agentId === a.id)).toBe(false)
   const opened = (await openAgentConversation(agents, service, a.id)).room
   expect((await store.sidebarPage({})).entries.some((entry) => entry.roomId === opened.id)).toBe(false)
+  // The dedicated Code private list must retain a newly opened, empty chat.
+  const privatePage = await store.sidebarPage({ kind: 'agents' })
+  expect(privatePage.entries.map((entry) => entry.roomId)).toEqual([opened.id])
+  expect(privatePage.entries[0]).toMatchObject({ agentId: a.id, pinned: false, latestMessageSeq: 0 })
   await service.send(opened.id, { clientRequestId: 'start-chat', body: 'Hello' })
   const after = (await store.sidebarPage({})).entries.find((entry) => entry.agentId === a.id)!
   expect(after.roomId).toBe(opened.id)

@@ -26,6 +26,7 @@ import type { ServerRuntime } from '../server/routes/server-runtime.js'
 /** Fixed trial prompt: cheap, deterministic, exercises streaming + finish. */
 export const HARNESS_TEST_PROMPT = 'Reply with exactly: ok'
 export const HARNESS_TEST_TIMEOUT_MS = 120_000
+const HARNESS_TEST_INTERRUPT_ACK_MS = 5_000
 
 type Runtime = Pick<
   ServerRuntime,
@@ -35,7 +36,8 @@ type Runtime = Pick<
 export async function runHarnessTest(
   runtime: Runtime,
   definition: HarnessDefinition,
-  input: HarnessTestRequest
+  input: HarnessTestRequest,
+  signal?: AbortSignal
 ): Promise<HarnessTestResponse> {
   const started = Date.now()
   const harnesses = runtime.harnesses!
@@ -54,13 +56,16 @@ export async function runHarnessTest(
     level: input.level,
     detect
   }
-  if (input.level === 'detect' || !detect.ok) {
-    return { ...base, ok: detect.ok, durationMs: Date.now() - started }
+  if (input.level === 'detect' || !detect.ok || signal?.aborted) {
+    return { ...base, ok: detect.ok && !signal?.aborted, durationMs: Date.now() - started }
   }
 
-  const handshake = await timed(() => runHandshake(runtime, definition, detect.status))
+  const handshake = await timed(() => runHandshake(runtime, definition, detect.status, signal))
   if (input.level === 'handshake') {
     return { ...base, handshake, ok: handshake.ok || !handshake.supported, durationMs: Date.now() - started }
+  }
+  if (signal?.aborted) {
+    return { ...base, handshake, ok: false, durationMs: Date.now() - started }
   }
 
   // Trial level needs a turn runner bound; embedded scaffolds leave
@@ -79,7 +84,7 @@ export async function runHarnessTest(
   if (handshake.supported && !handshake.ok) {
     return { ...base, handshake, ok: false, durationMs: Date.now() - started }
   }
-  const trial = await timed(() => runTrial(runtime, definition, input))
+  const trial = await timed(() => runTrial(runtime, definition, input, signal))
   return { ...base, handshake, trial, ok: trial.ok, durationMs: Date.now() - started }
 }
 
@@ -94,7 +99,8 @@ async function timed<T extends { durationMs: number }>(
 async function runHandshake(
   runtime: Runtime,
   definition: HarnessDefinition,
-  detectStatus: HarnessTestDetect['status']
+  detectStatus: HarnessTestDetect['status'],
+  signal?: AbortSignal
 ): Promise<Omit<HarnessTestHandshake, 'durationMs'>> {
   const command =
     typeof detectStatus.resolvedCommand === 'string' && detectStatus.resolvedCommand
@@ -103,11 +109,13 @@ async function runHandshake(
   switch (definition.transport) {
     case 'acp':
       return probeAcpHandshake(definition, command, {
-        resolveSecretEnv: runtime.harnesses?.resolveSecretEnv
+        resolveSecretEnv: runtime.harnesses?.resolveSecretEnv,
+        signal
       })
     case 'codex-app-server':
       return probeCodexHandshake(definition, command, {
-        resolveSecretEnv: runtime.harnesses?.resolveSecretEnv
+        resolveSecretEnv: runtime.harnesses?.resolveSecretEnv,
+        signal
       })
     case 'pi-rpc':
       return probePiHandshake(definition, command, {
@@ -133,7 +141,8 @@ async function runHandshake(
 async function runTrial(
   runtime: Runtime,
   definition: HarnessDefinition,
-  input: HarnessTestRequest
+  input: HarnessTestRequest,
+  signal?: AbortSignal
 ): Promise<Omit<HarnessTestTrial, 'durationMs'>> {
   const timeoutMs = input.timeoutMs ?? HARNESS_TEST_TIMEOUT_MS
   const workspace = await mkdtemp(join(tmpdir(), 'kun-harness-test-'))
@@ -143,7 +152,9 @@ async function runTrial(
     definition.staticModels[0] ??
     runtime.defaultModel
   let threadId: string | null = null
+  let cleanupDeferred = false
   try {
+    signal?.throwIfAborted()
     const thread = await runtime.threadService.create(
       {
         title: 'Harness connection test',
@@ -180,10 +191,29 @@ async function runTrial(
     if (running === undefined) {
       return { ok: false, status: 'failed', error: 'turn runner is not available in this runtime' }
     }
-    const outcome = await withTimeout(running, timeoutMs, async () => {
-      await runtime.turnService.interruptTurn({ threadId: thread.id, turnId }).catch(() => undefined)
-    })
+    const outcome = await withTimeout(running, timeoutMs, () =>
+      runtime.turnService.interruptTurn({ threadId: thread.id, turnId }).then(() => undefined), signal)
     const turn = await runtime.turnService.getTurn(thread.id, turnId)
+    const unsettled = !turn || !['completed', 'failed', 'aborted'].includes(turn.status)
+    if ((outcome === 'timeout_unconfirmed' || outcome === 'aborted') && unsettled) {
+      // A stuck harness may keep its process alive after the HTTP client is
+      // gone. Defer deletion until its owned turn actually settles; removing
+      // the workspace now would invalidate a still-running child process.
+      cleanupDeferred = true
+      void running.then(() => undefined, () => undefined)
+        .then(async () => {
+          await runtime.threadService.delete(thread.id).catch(() => undefined)
+          await rm(workspace, { recursive: true, force: true }).catch(() => undefined)
+        })
+      return {
+        ok: false,
+        status: 'failed',
+        error: outcome === 'timeout_unconfirmed'
+          ? `${signal?.aborted ? 'Trial cancelled' : 'Trial timed out'}; the interrupt was not acknowledged. The turn may still be running.`
+          : `${signal?.aborted ? 'Trial cancelled' : 'Trial timed out'}; the interrupt was acknowledged but the turn has not settled.`,
+        terminalCode: 'trial_timeout_unconfirmed'
+      }
+    }
     const raw = turn?.status ?? outcome ?? 'failed'
     const ok = raw === 'completed'
     const status =
@@ -209,10 +239,10 @@ async function runTrial(
       error: (error instanceof Error ? error.message : String(error)).slice(0, 400)
     }
   } finally {
-    if (threadId) {
+    if (threadId && !cleanupDeferred) {
       await runtime.threadService.delete(threadId).catch(() => undefined)
     }
-    await rm(workspace, { recursive: true, force: true }).catch(() => undefined)
+    if (!cleanupDeferred) await rm(workspace, { recursive: true, force: true }).catch(() => undefined)
   }
 }
 
@@ -235,24 +265,47 @@ async function trialUsage(
   }
 }
 
-async function withTimeout<T>(
+export async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
-  onTimeout: () => Promise<void>
-): Promise<T | 'aborted'> {
+  onTimeout: () => Promise<void>,
+  signal?: AbortSignal
+): Promise<T | 'aborted' | 'timeout_unconfirmed'> {
   let timer: ReturnType<typeof setTimeout> | null = null
+  let interruptTimer: ReturnType<typeof setTimeout> | null = null
+  let abortListener: (() => void) | null = null
+  let interrupting: Promise<'aborted' | 'timeout_unconfirmed'> | null = null
+  const interruptOnce = (): Promise<'aborted' | 'timeout_unconfirmed'> => {
+    if (interrupting) return interrupting
+    interrupting = (async () => {
+      const acknowledged = await Promise.race([
+        onTimeout().then(() => true).catch(() => false),
+        new Promise<false>((resolve) => {
+          interruptTimer = setTimeout(() => resolve(false), HARNESS_TEST_INTERRUPT_ACK_MS)
+        })
+      ])
+      return acknowledged ? 'aborted' : 'timeout_unconfirmed'
+    })()
+    return interrupting
+  }
   try {
     return await Promise.race([
       promise,
-      (async (): Promise<'aborted'> => {
+      (async (): Promise<'aborted' | 'timeout_unconfirmed'> => {
         await new Promise((resolve) => {
           timer = setTimeout(resolve, timeoutMs)
         })
-        await onTimeout().catch(() => undefined)
-        return 'aborted'
-      })()
+        return interruptOnce()
+      })(),
+      ...(signal ? [new Promise<'aborted' | 'timeout_unconfirmed'>((resolve) => {
+        abortListener = () => { void interruptOnce().then(resolve) }
+        if (signal.aborted) abortListener()
+        else signal.addEventListener('abort', abortListener, { once: true })
+      })] : [])
     ])
   } finally {
     if (timer) clearTimeout(timer)
+    if (interruptTimer) clearTimeout(interruptTimer)
+    if (signal && abortListener) signal.removeEventListener('abort', abortListener)
   }
 }

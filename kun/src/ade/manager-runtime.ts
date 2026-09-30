@@ -1,3 +1,5 @@
+import { workerWorkspaceSecurity } from './worker-security.js'
+import { newManagerWorkRefusal } from './new-work-admission.js'
 import { z } from 'zod'
 import type {
   DispatchRecord,
@@ -41,6 +43,7 @@ import { guiCreateWorker } from './manager-gui-worker.js'
 import { buildManagerToolContext, type ManagerToolContextInput } from './manager-tool-context.js'
 import { reportWorkerCreated, reportWorkerCreateBatch, reportLanguage } from './user-report.js'
 import { ManagerWorkerLifecycle } from './manager-worker-lifecycle.js'
+import { refreshWorkerReviewActivity } from './worker-review-activity.js'
 
 export type {
   ManagerRuntimeDeps,
@@ -76,7 +79,7 @@ export type WorkerCreateResult = {
   selection?: WorkerRecord['selection'] & { profileId?: string }
   permissionMode?: { requested?: string; effective: string; downgraded: boolean }
   admission?: AdmissionResult
-  refusal?: 'worker_limit' | 'admission' | 'escalation_declined' | 'invalid_agent' | 'workspace_unavailable' | 'budget_exceeded'
+  refusal?: 'worker_limit' | 'admission' | 'escalation_declined' | 'invalid_agent' | 'workspace_unavailable' | 'budget_exceeded' | 'collaboration_disabled'
   userReport: string
 }
 
@@ -106,6 +109,10 @@ export class ManagerRuntime {
     this.reviews = new ReviewRequests(deps)
     this.workspaces = new WorkspaceIntegrations(deps)
     this.lifecycle = new ManagerWorkerLifecycle(deps, this.teamControls, this.verdicts)
+  }
+
+  newWorkRefusal(managerThreadId: string, turnId?: string) {
+    return newManagerWorkRefusal(this.deps, managerThreadId, turnId)
   }
 
   /** Race tool/route deps (10 §6); undefined without a race store. */
@@ -168,7 +175,7 @@ export class ManagerRuntime {
     snapshot: ReturnType<typeof childSecurity>,
     workspacePath: string
   ): ReturnType<typeof childSecurity> {
-    return { ...snapshot, sandboxRoot: workspacePath, allowedWritePaths: [workspacePath] }
+    return workerWorkspaceSecurity(snapshot, workspacePath)
   }
 
   async createWorker(
@@ -179,6 +186,8 @@ export class ManagerRuntime {
   ): Promise<WorkerCreateResult> {
     const language = this.reportLanguage()
     const input = WorkerCreateInputSchema.parse(rawInput)
+    const refused = await this.newWorkRefusal(ctx.threadId, ctx.turnId)
+    if (refused) return refused
     if (!this.deps.delegation) {
       return {
         ok: false,
@@ -188,11 +197,18 @@ export class ManagerRuntime {
           : 'Worker not created: the delegation runtime is not enabled.'
       }
     }
-    const team = await this.deps.teams.ensure(
+    const managerThread = await this.deps.threads.get(ctx.threadId)
+    const execution = managerThread?.pendingExecutionConfig ?? managerThread?.executionConfig
+    const effectiveLimits = execution?.limits ?? this.deps.teamLimits?.()
+    const effectiveBudget = execution ? execution.budget : this.deps.teamBudgetPolicy?.()
+    let team = await this.deps.teams.ensure(
       ctx.threadId,
-      this.deps.teamLimits?.(),
-      this.deps.teamBudgetPolicy?.()
+      effectiveLimits,
+      effectiveBudget
     )
+    if (execution && effectiveLimits) {
+      team = await this.deps.teams.updatePolicy(ctx.threadId, effectiveLimits, effectiveBudget) ?? team
+    }
     const active = this.activeWorkers(team)
     if (active.length >= team.limits.hardWorkers) {
       return {
@@ -255,6 +271,7 @@ export class ManagerRuntime {
     const status = await this.deps.detector.status(route.harnessId)
     const admission = checkHarnessAdmission({
       usage: 'manager-worker',
+      credentialMode: route.credentialMode,
       harness: definition,
       effective,
       status,
@@ -370,7 +387,9 @@ export class ManagerRuntime {
       workspace: {
         path: tws?.path ?? ctx.workspace,
         kind: isolation === 'worktree' ? 'worktree' : isolation === 'directory' ? 'directory' : 'local'
-      }
+      },
+      reviewRequired: true,
+      reviewStatus: 'pending'
     })
     const dispatch: DispatchRecord = {
       dispatchId: this.deps.ids.next('dsp'),
@@ -542,12 +561,19 @@ export class ManagerRuntime {
    * `ready`, retry its queued dispatch; a `failed` workspace fails it.
    */
   async handleWorkspaceChange(record: TaskWorkspaceRecord): Promise<void> {
-    if (record.state !== 'ready' && record.state !== 'failed') return
+    if (!['ready', 'failed', 'captured', 'conflict', 'integrated'].includes(record.state)) return
     const teams = await this.deps.teams.list()
     for (const team of teams) {
       const worker = team.workers.find((entry) => entry.taskWorkspaceId === record.workspaceId)
       if (!worker) continue
-      await this.deps.deliverer.tryDeliverNext(team.teamId, worker.workerId)
+      if (record.state === 'ready' || record.state === 'failed') {
+        await this.deps.deliverer.tryDeliverNext(team.teamId, worker.workerId)
+      }
+      if (!worker.reviewOf && ['captured', 'conflict'].includes(record.state)) {
+        await refreshWorkerReviewActivity(
+          this.deps.dispatches, this.deps.activity, team.teamId, worker.workerId, record
+        )
+      }
     }
   }
 

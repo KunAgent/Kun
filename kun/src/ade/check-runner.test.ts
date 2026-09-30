@@ -163,6 +163,8 @@ describe('runWorkspaceChecks', () => {
       { name: 'selftest', status: 'passed', source: 'worker' },
       expect.objectContaining({ name: 'typecheck', status: 'passed', source: 'host' })
     ])
+    expect(dispatchRows[0]?.verdict?.checks.find((check) => check.name === 'typecheck')?.revision)
+      .toMatchObject({ completeness: 'incomplete' })
   })
 
   it('refuses when the workspace is not ready or checks are unapproved', async () => {

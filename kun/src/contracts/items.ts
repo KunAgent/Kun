@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ReviewOutputSchema, ReviewTargetSchema } from './review.js'
+import { MAX_REVIEW_REQUEST_CHARS, ReviewOutputSchema, ReviewTargetSchema } from './review.js'
 import { RuntimeErrorSeverity } from './errors.js'
 import {
   ComposerContextAttachmentSchema,
@@ -103,6 +103,13 @@ export const UserTurnItem = TurnItemBase.extend({
   messageSource: UserMessageSource.optional(),
   attachmentIds: z.array(z.string().min(1)).optional(),
   composerContexts: z.array(ComposerContextAttachmentSchema).max(MAX_COMPOSER_CONTEXT_ATTACHMENTS).optional(),
+  /** Host-resolved immutable review bodies; not accepted in StartTurnRequest. */
+  reviewRequests: z.array(z.object({
+    workspaceId: z.string().min(1).max(256),
+    requestId: z.string().regex(/^rvq_[a-z0-9]{8,32}$/),
+    title: z.string().max(240),
+    body: z.string().max(MAX_REVIEW_REQUEST_CHARS)
+  }).strict()).max(MAX_COMPOSER_CONTEXT_ATTACHMENTS).optional(),
   fileReferences: z.array(UserFileReferenceSchema).optional(),
   workspaceCheckpointId: z.string().min(1).optional(),
   /** Durable source workspace used to keep session-only Design resumes scoped. */

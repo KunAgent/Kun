@@ -1,3 +1,4 @@
+import { nativeAgentNetworkStatus } from '../../harness/native-agent-network.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
 import { ERRORS } from './runtime-error.js'
@@ -77,6 +78,7 @@ export async function listHarnesses(
         checkedAt: runtime.nowIso(),
         detecting: true
       }
+      Object.assign(status, nativeAgentNetworkStatus(definition))
       const row: Record<string, unknown> = { definition, status }
       if (usage && runtime.harnessAdmission && status) {
         row.admission = await runtime
@@ -116,7 +118,7 @@ export async function probeHarness(
   const definition = harnesses.catalog.get(parsedId.data)
   if (!definition) return ERRORS.notFound(`unknown harness: ${parsedId.data}`)
   const status = await harnesses.detector.status(definition.id, { force: true })
-  return jsonResponse({ definition, status })
+  return jsonResponse({ definition, status: { ...status, ...nativeAgentNetworkStatus(definition) } })
 }
 
 /**
@@ -147,7 +149,7 @@ export async function testHarness(
       `credentialMode ${parsed.data.credentialMode} is not supported by ${definition.id}`
     )
   }
-  const result = await runHarnessTest(runtime, definition, parsed.data)
+  const result = await runHarnessTest(runtime, definition, parsed.data, request.signal)
   return jsonResponse(result)
 }
 
@@ -165,18 +167,30 @@ export async function listHarnessModels(
 
   const url = new URL(request.url)
   const credentialMode = url.searchParams.get('credential_mode') ?? undefined
+  if (credentialMode && !definition.credentialModes.some((mode) => mode === credentialMode)) {
+    return ERRORS.validation(`credentialMode ${credentialMode} is not supported by ${definition.id}`)
+  }
 
-  // `provider`/`kun-gateway` modes route through configured providers, so the
-  // picker needs them grouped — and filtered to the exposable set the grant
-  // could actually address (04 §5.5). Native modes keep the flat list below.
+  // Cursor provider mode consumes its SDK account; gateway modes consume
+  // exposable HTTP profiles. Keep the displayed route identical to admission.
   if (credentialMode === 'provider' || credentialMode === 'kun-gateway') {
     const snapshot = await runtime.modelConnections?.snapshot().catch(() => undefined)
     const groups = (snapshot?.providers ?? [])
-      .filter(exposableProvider)
+      .filter((provider) => {
+        if (credentialMode === 'provider' && definition.transport === 'cursor-sdk') {
+          return provider.kind === 'cursor-sdk' && provider.configured &&
+            (!provider.credentialStatus || provider.credentialStatus === 'ready')
+        }
+        return exposableProvider(provider)
+      })
       .map((provider) => ({
         providerId: provider.id,
         label: provider.name,
-        models: providerModelIds(provider)
+        models: providerModelIds(provider),
+        ...(Object.keys(provider.modelCapabilities ?? {}).length ? { modelInfo: providerModelIds(provider).map((id) => ({ id,
+          ...(provider.modelCapabilities?.[id]?.inputModalities
+            ? { inputModalities: provider.modelCapabilities[id].inputModalities } : {})
+        })) } : {})
       }))
       .filter((group) => group.models.length > 0)
     return jsonResponse({ harnessId: definition.id, credentialMode, models: [], groups })
@@ -202,6 +216,10 @@ export async function listHarnessModels(
         models: providerModels(legacyProviderKindFor(definition.id))
       })
     case 'probe': {
+      if (definition.transport === 'codex-app-server' && harnesses.codexModels?.probeCatalog) {
+        const catalog = await harnesses.codexModels.probeCatalog(definition)
+        return jsonResponse({ harnessId: definition.id, ...catalog })
+      }
       const probed =
         definition.transport === 'acp'
           ? await harnesses.acpModels?.probe(definition)
@@ -256,7 +274,7 @@ export async function probeHarnessDefinition(
   const handshake = await probeAcpHandshake(
     definition,
     definition.launch?.command ?? '',
-    { resolveSecretEnv: harnesses.resolveSecretEnv }
+    { resolveSecretEnv: harnesses.resolveSecretEnv, signal: request.signal }
   )
   return jsonResponse({ ...handshake, durationMs: Date.now() - started })
 }
@@ -298,4 +316,3 @@ export async function deleteHarnessSecret(
   await credentials.delete(ref)
   return jsonResponse({ ok: true })
 }
-

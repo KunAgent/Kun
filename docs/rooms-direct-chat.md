@@ -2,8 +2,10 @@
 
 This supersedes the default-team onboarding flow documented in
 `rooms-init-im.md`. The previous team, conversations, tasks, avatars and memory
-remain readable; entering Rooms now idempotently adds only one general Kun
-Agent and its private conversation. Professional templates are opt-in.
+remain readable. Desktop Code Conversations idempotently adds one general Kun
+Agent and its private conversation; desktop Rooms lists groups. The phone keeps
+its existing chat entry. Professional templates are opt-in. See
+[Code conversations and Rooms](./code-agent-chats-and-rooms.md).
 
 The UX reference is the public Grok Bot demo at <https://x.ai/bot> and its
 creation/chat documentation at <https://docs.x.ai/grok-bot/bots>. The public demo

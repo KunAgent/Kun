@@ -81,7 +81,8 @@ import {
   buildHistoryTranscript,
   DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
 } from './sdk-context-assembler.js'
-import { shellSpawnEnv } from '../../adapters/tool/builtin-tool-utils.js'
+import { sdkProcessBaseEnv } from './sdk-process-environment.js'
+import { nativeAgentNetworkEnv } from '../../harness/native-agent-network.js'
 import type { TurnLimitsConfig } from '../../loop/turn-limits.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
 import { mkdir } from 'node:fs/promises'
@@ -223,9 +224,10 @@ export function createAgentSdkLifecycleRuntimeDeps(
 
     loadSdk,
     // The embedded SDK launches a separate agent process. Give it the same
-    // scrubbed base environment as native shell tools; buildScopedEnv adds the
-    // selected SDK OAuth credential explicitly when it is needed.
-    baseEnv: () => shellSpawnEnv(),
+    // scrubbed execution environment plus explicitly inherited proxy settings;
+    // buildScopedEnv adds only the selected SDK credential.
+    baseEnv: (options) => ({ ...sdkProcessBaseEnv(), ...(options?.gateway ? {} :
+      nativeAgentNetworkEnv(deps.harnessCatalog?.get('claude-code'))) }),
     kunSystemPrompt: () => deps.prefix.systemPrompt,
     nextId: (prefix) => deps.ids.next(prefix),
     getTurnLimits: () => deps.turnLimits,

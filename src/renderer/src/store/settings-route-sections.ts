@@ -17,6 +17,8 @@ export type SettingsRouteSection =
   | 'agents'
   /** Agents category, Harnesses sub-panel (P4-05 Agent Center deep link). */
   | 'agentsHarnesses'
+  /** Agents category, Collaboration defaults sub-panel. */
+  | 'agentsCollaboration'
   | 'laboratory'
   | 'subagents'
   | 'archives'

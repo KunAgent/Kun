@@ -10,6 +10,7 @@
 import type { ApprovalPolicy, SandboxMode } from '../../contracts/policy.js'
 import { isGatewayModelId } from '../../harness/gateway-model-id.js'
 import { buildHarnessEnv } from '../../harness/harness-env.js'
+import { withLoopbackProxyBypass } from './sdk-process-environment.js'
 import type {
   SdkCanUseTool,
   SdkMcpServerConfig,
@@ -92,7 +93,7 @@ export function buildScopedEnv(
 ): Record<string, string | undefined> {
   if (gateway) {
     return buildHarnessEnv({
-      base: baseEnv,
+      base: withLoopbackProxyBypass(baseEnv),
       strip: [...gateway.stripEnv, 'CLAUDE_CODE_OAUTH_TOKEN'],
       add: {
         [gateway.env.baseUrl]: gateway.baseUrl,

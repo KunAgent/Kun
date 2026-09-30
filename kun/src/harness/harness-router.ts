@@ -10,6 +10,7 @@ import type { ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
 import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
 import { checkHarnessAdmission } from './harness-admission.js'
+import { effectiveKunTurnIntent, isInternalGraphWorker, unsupportedKunTurnIntent } from './kun-turn-intent.js'
 import {
   effectiveCapabilitiesForRoute,
   roomAdjustedCapabilities
@@ -139,6 +140,10 @@ export class HarnessRouter {
       credentialMode:
         turn.credentialMode ?? defaultCredentialMode(harnessId, definition)
     }
+    const intentError = unsupportedKunTurnIntent(harnessId, effectiveKunTurnIntent(thread, turn), {
+      graphWorker: isInternalGraphWorker(thread, turn)
+    })
+    if (intentError) return { ok: false, error: new HarnessAdmissionError('route_unsupported', intentError) }
     const admissionError = this.deps.admission?.({ definition, thread, turn })
     if (admissionError) return { ok: false, error: admissionError }
     let runtime: DelegatedTurnRuntime | undefined
@@ -187,6 +192,7 @@ export class HarnessRouter {
     const boundWorkspaceId = thread.executionUnit?.taskWorkspaceId ?? thread.taskWorkspaceId
     const verdict = checkHarnessAdmission({
       usage,
+      credentialMode: route.credentialMode,
       harness: definition,
       effective,
       status: this.deps.status?.(harnessId) ?? {

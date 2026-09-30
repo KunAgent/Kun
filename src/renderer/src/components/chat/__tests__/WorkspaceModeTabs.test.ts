@@ -11,15 +11,9 @@ vi.mock('../../rooms/useRoomEvents', () => ({
   useRoomAttentionCount: () => attention.count
 }))
 
-const adeFlag = vi.hoisted(() => ({ enabled: false }))
-vi.mock('../../ade/use-ade-enabled', () => ({
-  useAdeEnabled: () => ({ enabled: adeFlag.enabled, loaded: true })
-}))
-
 describe('WorkspaceModeTabs', () => {
   beforeEach(async () => {
     attention.count = 0
-    adeFlag.enabled = false
     await i18n.changeLanguage('en')
   })
 
@@ -152,7 +146,7 @@ describe('WorkspaceModeTabs', () => {
     act(() => renderer.unmount())
   })
 
-  it('hides the ADE entry while agents.kun.ade.enabled is off', () => {
+  it('keeps the Code menu focused on work surfaces', () => {
     const { renderer } = renderInteractive()
     act(() => renderer.root.findByProps({ 'data-workspace-mode-trigger': true }).props.onClick())
 
@@ -164,21 +158,19 @@ describe('WorkspaceModeTabs', () => {
     act(() => renderer.unmount())
   })
 
-  it('shows the ADE entry between Code and Bot when the lab flag is on', () => {
-    adeFlag.enabled = true
+  it('projects legacy ADE sessions into the Code surface without a second mode', () => {
     const { componentProps, renderer } = renderInteractive()
     act(() => renderer.root.findByProps({ 'data-workspace-mode-trigger': true }).props.onClick())
 
     const options = renderer.root.findAllByProps({ role: 'menuitemradio' })
     expect(options.map((option) => option.props['data-workspace-mode'])).toEqual([
-      'write', 'chat', 'ade', 'rooms'
+      'write', 'chat', 'rooms'
     ])
-    act(() => options[2]?.props.onClick())
-    expect(componentProps.onAdeOpen).toHaveBeenCalledOnce()
+    expect(componentProps.onAdeOpen).not.toHaveBeenCalled()
     act(() => renderer.unmount())
     expect(
       renderToStaticMarkup(createElement(WorkspaceModeTabs, props('ade')))
-    ).toContain('data-workspace-mode="ade"')
+    ).toContain('data-workspace-mode="chat"')
   })
 
   it('keeps an ADE thread projected to Code while the flag is off', () => {

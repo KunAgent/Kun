@@ -21,6 +21,7 @@ import { getProvider } from '../../agent/registry'
 import { loadHarnesses } from '../../store/harness-store'
 import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
 import { terminalBackend, terminalTargetCreateExtras } from './terminal-backend'
+import { fitVisibleTerminal, resizeTerminalSession } from './terminal-dimensions'
 import { useTerminalOpenAt } from './terminal-open'
 import { terminalSessionIdForWorkspace, terminalWorkspaceSessionKey } from './terminal-session'
 import { TerminalTabContextMenu } from './TerminalTabContextMenu'
@@ -151,13 +152,10 @@ export function TerminalPanel({
 
   useLayoutEffect(() => {
     if (!active) return
-    window.requestAnimationFrame(() => {
-      try {
-        fitRef.current?.fit()
-      } catch {
-        /* wait for the visible panel to become measurable */
-      }
+    const frame = window.requestAnimationFrame(() => {
+      fitVisibleTerminal(containerRef.current, fitRef.current, termRef.current)
     })
+    return () => window.cancelAnimationFrame(frame)
   }, [active])
 
   useLayoutEffect(() => {
@@ -209,8 +207,8 @@ export function TerminalPanel({
     setError(null)
     setExited(false)
 
-    const cols = fitRef.current?.proposeDimensions()?.cols ?? TERMINAL_DEFAULT_COLS
-    const rows = fitRef.current?.proposeDimensions()?.rows ?? TERMINAL_DEFAULT_ROWS
+    const cols = TERMINAL_DEFAULT_COLS
+    const rows = TERMINAL_DEFAULT_ROWS
 
     const theme = resolvePanelTheme(terminalColorsRef.current)
     setTerminalBackground(theme.background)
@@ -236,11 +234,7 @@ export function TerminalPanel({
     // fit to the next frame so clientWidth is correct.
     requestAnimationFrame(() => {
       if (!isCurrentAttach()) return
-      try {
-        fit.fit()
-      } catch {
-        /* ignore until the element has a measurable size */
-      }
+      fitVisibleTerminal(container, fit, term)
     })
 
     // P4-09: a setup tab carries a builtin harness command that is written
@@ -285,21 +279,17 @@ export function TerminalPanel({
       if (resizeTimer) clearTimeout(resizeTimer)
       resizeTimer = setTimeout(() => {
         if (!isCurrentAttach()) return
-        try {
-          fit.fit()
-        } catch {
-          /* ignore */
-        }
+        fitVisibleTerminal(container, fit, term)
       }, FIT_DEBOUNCE_MS)
     }
     const resizeObserver = new ResizeObserver(triggerFit)
     resizeObserver.observe(container)
+    const onResizeError = (message: string): void => {
+      if (isCurrentAttach()) setError(message)
+    }
     const onDimensionChange = (dim: { cols: number; rows: number }): void => {
-      void backend.resize({
-        sessionId,
-        cols: dim.cols,
-        rows: dim.rows
-      })
+      if (!isCurrentAttach()) return
+      void resizeTerminalSession(backend.resize, sessionId, dim, onResizeError)
     }
     const fitDisposable = term.onResize(onDimensionChange)
 
@@ -326,14 +316,8 @@ export function TerminalPanel({
       }
       // After a successful (re)attach, reflect the latest fit so the PTY
       // matches the visible grid.
-      const dims = fit.proposeDimensions()
-      if (dims) {
-        void backend.resize({
-          sessionId,
-          cols: dims.cols,
-          rows: dims.rows
-        })
-      }
+      const dims = fitVisibleTerminal(container, fit, term)
+      await resizeTerminalSession(backend.resize, sessionId, dims, onResizeError)
       setExited(false)
       // P4-09 fallback: a fresh session that never echoes (silent shell
       // startup) still receives its prefill; a re-attached session does not.

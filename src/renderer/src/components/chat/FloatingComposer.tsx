@@ -4,11 +4,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent,
-  type ClipboardEvent as ReactClipboardEvent,
-  type DragEvent as ReactDragEvent,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
   type ReactElement
 } from 'react'
 import {
@@ -37,9 +32,6 @@ import {
   X
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
-import type { KunSpeechToTextSettingsV1 } from '@shared/app-settings'
-import { isSpeechToTextConfigured } from '@shared/speech-to-text'
 import type { AttachmentReference, ChatBlock, ReviewTarget } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import type { AppRoute } from '../../store/chat-store-types'
@@ -80,7 +72,6 @@ import {
   type ComposerReasoningEffort
 } from './FloatingComposerModelPicker'
 import { FloatingComposerAgentPicker } from './FloatingComposerAgentPicker'
-import { FloatingComposerHarnessPicker } from './FloatingComposerHarnessPicker'
 import { FloatingComposerIsolationPicker } from './FloatingComposerIsolationPicker'
 import { FloatingComposerUserInputPanel } from './FloatingComposerUserInputPanel'
 import { BackgroundShellOverlay } from './BackgroundShellOverlay'
@@ -113,6 +104,7 @@ import { useComposerFileMentions } from './use-composer-file-mentions'
 import { FloatingComposerFileMentionMenu } from './FloatingComposerFileMentionMenu'
 import { useComposerSlashCommandMenu } from './use-composer-slash-command-menu'
 import { useAdeComposerControls } from './use-ade-composer-controls'
+import { useCodeCollaboration } from './use-code-collaboration'
 import { FloatingComposerSlashCommandMenu } from './FloatingComposerSlashCommandMenu'
 import { FloatingComposerTodoProgress } from './FloatingComposerTodoProgress'
 import { FloatingComposerWorkersPill } from './FloatingComposerWorkersPill'
@@ -373,10 +365,21 @@ export function FloatingComposer({
   const canPickAttachment = canCompose && attachmentUploadEnabled && !attachmentUploadBusy
   const canPickFileReference = canCompose && fileReferenceEnabled && Boolean(effectiveWorkspaceRoot) && Boolean(onOpenFileReferencePicker)
   const canPickDesignReference = canCompose && fileReferenceEnabled && Boolean(onOpenDesignReferencePicker)
+  const adeComposerEnabled = !side &&
+    (route === 'chat' || route === 'ade' || activeThread?.workspaceMode === 'ade')
+  const adeComposer = useAdeComposerControls({
+    enabled: adeComposerEnabled === true,
+    activeThreadId, workspaceRoot: effectiveWorkspaceRoot,
+    threadHarnessId: activeThread?.harnessId,
+    threadTaskWorkspaceId: activeThread?.taskWorkspaceId,
+    threadHasUserMessages: hasConversationStarted,
+    hasConfiguredProvider: composerModelGroups.length > 0,
+    onComposerModelChange
+  })
   const canPickLocalFileReference = canCompose && fileReferenceEnabled && Boolean(onPickFileReferences)
   const canAddFileReference = canCompose && fileReferenceEnabled && Boolean(effectiveWorkspaceRoot) && Boolean(onAddFileReference)
   const showIntentToolbar = !compact && route === 'chat', showComposerMenuButton = showIntentToolbar
-  const showCodeExecutionControls = codeExecutionControlsAvailable(taskSurface)
+  const showCodeExecutionControls = adeComposer.harnessId === 'kun' && codeExecutionControlsAvailable(taskSurface)
   const showPlanMenuOption = showCodeExecutionControls && Boolean(onPlanCommand), canTogglePlanMode = canCompose && showPlanMenuOption
   const showAutoPlanBuildMenuOption = showPlanMenuOption && autoPlanBuildEnabled
   const canToggleAutoPlanBuildMode = canCompose && showAutoPlanBuildMenuOption
@@ -392,9 +395,9 @@ export function FloatingComposer({
     currentTurnOrchestration === 'graph' && !graphPlanningNeedsCorrection
   const canCreateNewThread = runtimeReady && route !== 'claw' && Boolean(effectiveWorkspaceRoot) && Boolean(onNewCommand)
   const showGoalMenuOption = showCodeExecutionControls && route !== 'claw', canOpenGoalPanel = canCompose && showGoalMenuOption
-  const canRunReview = canCompose && route !== 'claw' && Boolean(onReviewCommand)
-  const canToggleWorktreeMode = canCompose && route !== 'claw' && Boolean(onToggleWorktreeMode)
-  const canOpenComposerMenu = showComposerMenuButton && (canPickFileReference || canPickDesignReference || canPickLocalFileReference || canTogglePlanMode || canToggleAutoPlanBuildMode || showGraphMenuOption || canCreateNewThread || canOpenGoalPanel || canRunReview || (canCompose && Boolean(codeAgentPresets && onComposerPersonaChange)))
+  const canRunReview = adeComposer.harnessId === 'kun' && canCompose && route !== 'claw' && Boolean(onReviewCommand)
+  const canToggleWorktreeMode = canCompose && !activeThreadId && route !== 'claw' && Boolean(onToggleWorktreeMode)
+  const canOpenComposerMenu = showComposerMenuButton && (canPickFileReference || canPickDesignReference || canPickLocalFileReference || canTogglePlanMode || canToggleAutoPlanBuildMode || showGraphMenuOption || canCreateNewThread || canOpenGoalPanel || canRunReview || route === 'chat' || (canCompose && Boolean(codeAgentPresets && onComposerPersonaChange)))
   const showToolbarStartControls = showComposerMenuButton
   const showExecutionSettingsPicker = showIntentToolbar
     && Boolean(executionSettings)
@@ -415,15 +418,8 @@ export function FloatingComposer({
   }, [focusComposer])
   const inputHistory = useComposerInputHistory()
   const slashQuery = getSlashQuery(input)
-  const adeComposerEnabled = route === 'ade' || activeThread?.workspaceMode === 'ade'
-  const adeComposer = useAdeComposerControls({
-    enabled: adeComposerEnabled === true,
-    activeThreadId, workspaceRoot: effectiveWorkspaceRoot,
-    threadHarnessId: activeThread?.harnessId,
-    threadTaskWorkspaceId: activeThread?.taskWorkspaceId,
-    threadHasUserMessages: hasConversationStarted,
-    hasConfiguredProvider: composerModelGroups.length > 0,
-    onComposerModelChange
+  const collaboration = useCodeCollaboration({
+    activeThreadId, activeThread, harnessId: adeComposer.harnessId, busy
   })
   const [composerMenuOpen, setComposerMenuOpen] = useState(false)
   const [goalPanelOpen, setGoalPanelOpen] = useState(false)
@@ -434,7 +430,7 @@ export function FloatingComposer({
   useEffect(() => {
     setGoalInputMode(false)
     setGoalPanelOpen(false)
-  }, [activeThreadId, route])
+  }, [activeThreadId, route, adeComposer.harnessId])
   useEffect(() => {
     if (mode === 'plan' || mode === 'auto') setGoalInputMode(false)
   }, [mode])
@@ -466,7 +462,7 @@ export function FloatingComposer({
     hasPlanCommand: showPlanMenuOption,
     hasBtwCommand: Boolean(onBtwCommand),
     hideBtwCommand,
-    hasReviewCommand: Boolean(onReviewCommand),
+    hasReviewCommand: adeComposer.harnessId === 'kun' && Boolean(onReviewCommand),
     skillCommands,
     disabledSkillIds,
     harnessCommands: adeComposer.harnessCommands ?? undefined,
@@ -563,7 +559,8 @@ export function FloatingComposer({
       ? !canCompose || input.trim().length === 0
     : canSetGoalPanelDraft
       ? false
-    : !canSend || (adeComposerEnabled && !activeThreadId && adeComposer.isolation === 'worktree' && !adeComposer.worktreeGit.worktreeGitReady)
+    : !canSend || (route === 'ade' && adeComposerEnabled && !activeThreadId &&
+      adeComposer.isolation === 'worktree' && !adeComposer.worktreeGit.worktreeGitReady)
   const primaryActionLoading = !runtimeReady
   const primaryActionKind = resolveComposerPrimaryActionKind({
     busy,
@@ -639,7 +636,7 @@ export function FloatingComposer({
     hideBtwCommand, highlightedSlashCommand, input, inputHistory, isComposerSendHotkey,
     mode, onAddFileReference, onBtwCommand, onGuideQueuedMessage, onNewCommand, onOpenDesignReferencePicker,
     onOpenFileReferencePicker, onOrchestrationChange, onPasteClipboardImage, onPasteLongText,
-    onPickAttachments, onPickFileReferences, onPlanCommand, onReviewCommand, onSend,
+    onPickAttachments, onPickFileReferences, onPlanCommand, onReviewCommand: canRunReview ? onReviewCommand : undefined, onSend,
     orchestration, parseBtwCommand, parseCompactCommand, parseGoalCommand, parseNewCommand,
     parseResearchCommand, parseReviewCommand, parsedGoalCommand, primaryActionDisabled,
     queuedMessages,
@@ -656,7 +653,7 @@ export function FloatingComposer({
     BackgroundShellOverlay, BarChart3, Bot, FileText, FloatingComposerAboveInputStack, FloatingComposerAgentPicker, FloatingComposerAttachments, FloatingComposerContextCapacity, FloatingComposerExecutionPicker,
     FloatingComposerApprovalPanel,
     FloatingComposerDispatchableAgents,
-    FloatingComposerFileMentionMenu, FloatingComposerGraphProgress, FloatingComposerHarnessPicker, FloatingComposerIsolationPicker, FloatingComposerModelPicker, FloatingComposerQueuedMessages, FloatingComposerSlashCommandMenu, FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker, FloatingComposerTodoProgress, FloatingComposerUsageHistory, FloatingComposerUserInputPanel, FloatingComposerWorkersPill,
+    FloatingComposerFileMentionMenu, FloatingComposerGraphProgress, FloatingComposerIsolationPicker, FloatingComposerModelPicker, FloatingComposerQueuedMessages, FloatingComposerSlashCommandMenu, FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker, FloatingComposerTodoProgress, FloatingComposerUsageHistory, FloatingComposerUserInputPanel, FloatingComposerWorkersPill,
     FloatingComposerActionMenu,
     Folder, GitBranchPicker, ImagePlus, ListTodo, Loader2, Mic, Monitor, Paperclip,
     PauseCircle, Pencil, PlayCircle, Plus, Puzzle, Send, Share2, Sparkles,
@@ -665,6 +662,7 @@ export function FloatingComposer({
     canCompose, canEditComposer, canOpenComposerMenu, canOpenGoalPanel, canOptimizePrompt, canPickAttachment, canPickDesignReference, canPickFileReference,
     canPickLocalFileReference, canSetGoalPanelDraft, canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode, canToggleWorktreeMode, clearActiveThreadGoal, compact, composerFastMode,
     composerMenuButtonRef, composerMenuOpen, composerMenuPanelRef, composerShellRef, composerModel, composerModelGroups: adeComposer.modelGroups ?? composerModelGroups, composerPickList: adeComposer.pickList ?? composerPickList, composerProviderId, composerReasoningEffort,
+    ...collaboration,
     contextChips, primaryCacheHitRate, currentTurnOrchestration, designTaskProfile, designProfileLocked, dictation, draft, effectiveWorkspaceRoot, executionSettings, executionSettingsApplying,
     fileInputRef, fileMentions, fileReferenceEnabled, fileReferences, filteredSlashCommands, footerHint, formatCompactNumber, formatCost,
     formatPercent, formatTps, formatTtftSeconds, goalBannerLabel, goalElapsedLabel, goalInputMode, goalMenuChecked, goalPanelOpen,

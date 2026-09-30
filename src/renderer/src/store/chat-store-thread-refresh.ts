@@ -127,23 +127,32 @@ export function createRefreshThreadsAction(
             limit: THREAD_LIST_FIRST_PAGE_SIZE,
             ...(get().showArchivedThreads ? { archivedOnly: true } : {}),
             includeSide: true,
-            // The workbench inventory is the Code listing; ADE threads live in
-            // `adeThreads` and never enter this list.
-            workspaceMode: 'code',
+            // The Code workbench includes historical ADE roots in the same
+            // server-paginated inventory. Old workspace_mode filters stay narrow.
+            workbenchScope: 'code',
             lean: true
           })
-          rawThreads = page.threads
-          firstPageHasMore = page.hasMore
-          firstPageIndexStatus = page.indexStatus
+          if (page.workbenchScopeApplied === true) {
+            rawThreads = page.threads
+            firstPageHasMore = page.hasMore
+            firstPageIndexStatus = page.indexStatus
+          } else {
+            // Older runtimes can ignore an unknown filter and return an
+            // unscoped first page. Classify their complete inventory instead.
+            rawThreads = await p.listThreads({ includeArchived: true, includeSide: true })
+          }
         } else {
           rawThreads = await p.listThreads({
             includeArchived: true,
             includeSide: true,
-            workspaceMode: 'code'
+            workbenchScope: 'code'
           })
         }
       } catch {
-        rawThreads = await p.listThreads({ workspaceMode: 'code' })
+        // Older runtimes do not know workbench_scope. Fetch the complete
+        // legacy inventory before local classification so ADE history remains
+        // reachable, rather than merging two unrelated first-page cursors.
+        rawThreads = await p.listThreads({ includeArchived: true, includeSide: true })
       }
       rawThreads = rawThreads.filter((thread) => thread.relation !== 'side')
       if (pendingDesignDocumentClones().length > 0) {

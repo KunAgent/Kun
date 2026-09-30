@@ -69,6 +69,8 @@ export type ManagerRuntimeDeps = {
   nowIso: () => string
   /** Manager UI language for fixed-sentence reports (zh* → zh, else en). */
   language?: () => string | undefined
+  /** Live global switch; execution also checks the owning task policy and role. */
+  canStartNewWork?: () => boolean
   allowUnattendedFullAccess?: () => boolean
   teamLimits?: () => Partial<{ softWorkers: number; hardWorkers: number }> | undefined
   /** Delay before an ephemeral worker is released after completion (default 30s). */

@@ -271,6 +271,9 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         limit: options.limit ?? 500,
         ...(cursor ? { cursor } : {})
       })
+      if (options.workbenchScope && page.workbenchScopeApplied !== true) {
+        throw new Error('Kun runtime does not support the unified Code workbench query')
+      }
       threads.push(...page.threads)
       cursor = page.hasMore ? page.nextCursor : undefined
     } while (cursor)
@@ -287,6 +290,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       cursor: options.cursor,
       workspace: options.workspace,
       workspace_mode: options.workspaceMode,
+      workbench_scope: options.workbenchScope,
       lean: options.lean === true ? '1' : undefined
     })
     // Repeatable `workspaces` params carry the project's worktree roots; each
@@ -304,6 +308,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     }
     const body = readRuntimeJson<{
       threads: CoreThreadSummaryJson[]
+      workbenchScope?: 'code'
       nextCursor?: string
       hasMore?: boolean
       total?: number
@@ -314,6 +319,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     )
     return {
       threads: body.threads.map(threadFromCore),
+      ...(options.workbenchScope ? { workbenchScopeApplied: body.workbenchScope === options.workbenchScope } : {}),
       nextCursor: body.nextCursor,
       hasMore: body.hasMore === true,
       total: body.total,
@@ -335,6 +341,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   private readonly taskWorkspaces = createKunTaskWorkspaceClient()
   readonly listTaskWorkspaces = this.taskWorkspaces.listTaskWorkspaces
   readonly createTaskWorkspace = this.taskWorkspaces.createTaskWorkspace
+  readonly retryTaskWorkspace = this.taskWorkspaces.retryTaskWorkspace
   readonly getTaskWorkspaceDiff = this.taskWorkspaces.getTaskWorkspaceDiff
   readonly getTaskWorkspaceDiffFile = this.taskWorkspaces.getTaskWorkspaceDiffFile
   readonly getTaskWorkspaceAttribution = this.taskWorkspaces.getTaskWorkspaceAttribution
@@ -393,25 +400,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     return readRuntimeJson(response.body, 'runtime returned an invalid handoff preview')
   }
 
-  async createThread(input: {
-    workspace?: string
-    additionalWorkspaces?: string[]
-    title?: string
-    titleAuto?: boolean
-    mode?: KunThreadMode
-    agentSurface?: 'code' | 'write' | 'design'
-    workspaceMode?: 'code' | 'ade'
-    agentId?: string
-    providerId?: string
-    accountId?: string
-    model?: string
-    systemPrompt?: string
-    /** ADE harness binding for one-to-one threads (01 §4, 12 §7.2). */
-    harnessId?: string
-    credentialMode?: string
-    /** Bind a host-managed task workspace (07 §5); workspace must still be set. */
-    taskWorkspaceId?: string
-  }): Promise<NormalizedThread> {
+  async createThread(input: Parameters<AgentProvider['createThread']>[0]): Promise<NormalizedThread> {
     const settings = await rendererRuntimeClient.getSettings()
     const runtime = getKunRuntimeSettings(settings)
     const workspace = (input.workspace || settings.workspaceRoot || '').trim()
@@ -422,16 +411,18 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     // A harness thread on native login owns its model selection; the
     // provider-registry gate below only applies to gateway/provider routes.
     const harnessNativeLogin = Boolean(input.harnessId?.trim()) && input.credentialMode === 'native-login'
-    const requestedProviderId = harnessNativeLogin
+    const inheritWithoutProvider = input.routeIntent === 'inherit' && !input.providerId?.trim()
+    const requestedProviderId = harnessNativeLogin || inheritWithoutProvider
       ? undefined
       : input.providerId?.trim() || sharedDefault.providerId
     const requestedModel = input.model?.trim() ||
-      (requestedProviderId === sharedDefault.providerId ? sharedDefault.model : undefined)
+      (!harnessNativeLogin && !inheritWithoutProvider && requestedProviderId === sharedDefault.providerId
+        ? sharedDefault.model : undefined)
     const requestedProfile = sharedDefault.providers?.find((profile) =>
       profile.id === requestedProviderId
     )
     if (
-      !harnessNativeLogin &&
+      !harnessNativeLogin && !inheritWithoutProvider &&
       sharedDefault.registryAvailable &&
       (
         !requestedProviderId ||
@@ -456,9 +447,15 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         ...(input.titleAuto !== undefined ? { titleAuto: input.titleAuto } : {}),
         ...(input.agentSurface ? { agentSurface: input.agentSurface } : {}),
         ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
+        ...(input.collaboration ? { collaboration: input.collaboration } : {}),
+        ...(input.routeIntent ? { routeIntent: input.routeIntent } : {}),
+        ...(input.workspaceIsolation ? { workspaceIsolation: input.workspaceIsolation } : {}),
+        ...(input.projectDefaultsRevision
+          ? { projectDefaultsRevision: input.projectDefaultsRevision } : {}),
         ...(input.harnessId?.trim() ? { harnessId: input.harnessId.trim() } : {}),
+        ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
         ...(input.taskWorkspaceId?.trim() ? { taskWorkspaceId: input.taskWorkspaceId.trim() } : {}),
-        model: requestedModel || runtime.model,
+        model: requestedModel || (harnessNativeLogin ? 'default' : runtime.model),
         mode: normalizeThreadMode(input.mode),
         approvalPolicy: runtime.approvalPolicy,
         sandboxMode: runtime.sandboxMode,
@@ -467,8 +464,11 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         ...(requestedProviderId
           ? { providerId: requestedProviderId }
           : {}),
-        ...(input.accountId?.trim() || requestedProfile?.accountId || sharedDefault.accountId
-          ? { accountId: input.accountId?.trim() || requestedProfile?.accountId || sharedDefault.accountId }
+        ...(!harnessNativeLogin && !inheritWithoutProvider &&
+          (input.accountId?.trim() || requestedProfile?.accountId ||
+            (requestedProviderId === sharedDefault.providerId ? sharedDefault.accountId : undefined))
+          ? { accountId: input.accountId?.trim() || requestedProfile?.accountId ||
+              (requestedProviderId === sharedDefault.providerId ? sharedDefault.accountId : undefined) }
           : {}),
         ...(input.agentId?.trim() ? { agentId: input.agentId.trim() } : {}),
         ...(input.systemPrompt?.trim() ? { systemPrompt: input.systemPrompt.trim() } : {})

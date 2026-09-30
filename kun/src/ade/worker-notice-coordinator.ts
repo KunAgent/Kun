@@ -1,3 +1,4 @@
+import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
 import { createHash } from 'node:crypto'
 import type { WorkerNotice } from '../contracts/ade.js'
 import type { StartTurnResponse } from '../contracts/turns.js'
@@ -113,7 +114,7 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
 
   /** Serialize deliveries per manager so concurrent triggers share one pass. */
   private requestDelivery(managerThreadId: string): void {
-    const queued = (this.deliveries.get(managerThreadId) ?? Promise.resolve())
+    const queued = runWithoutTurnMutationFence(() => (this.deliveries.get(managerThreadId) ?? Promise.resolve())
       .then(() => this.deliverForManager(managerThreadId))
       .catch((error) => {
         console.warn(`[kun] ade worker-notice delivery failed for ${managerThreadId}:`, error)
@@ -122,7 +123,7 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
         if (this.deliveries.get(managerThreadId) === queued) {
           this.deliveries.delete(managerThreadId)
         }
-      })
+      }))
     this.deliveries.set(managerThreadId, queued)
   }
 
@@ -151,7 +152,8 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
       .digest('hex')
       .slice(0, 24)}`
     const rendered = renderWorkerUpdates(pending, this.options.language?.())
-    const route = this.options.managerModel?.() ?? {
+    const execution = thread.pendingExecutionConfig ?? thread.executionConfig
+    const route = execution ? execution.managerModel ?? execution.route : this.options.managerModel?.() ?? {
       providerId: thread.providerId,
       model: thread.model
     }

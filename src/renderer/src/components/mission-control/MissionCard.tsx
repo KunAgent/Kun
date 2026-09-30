@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { ActivityRow } from '@shared/activity-row'
 import type { AdeQuestionRecord } from '@shared/ade-teams'
 import { StatusDot } from '../activity/StatusDot'
+import { AgentIcon } from '../agent-icon'
 import { projectOfRow, rowHasChildren } from './mission-filters'
 import { formatRelativeTime } from '../../lib/format-relative-time'
 
@@ -98,6 +99,7 @@ export function MissionCard({
             {row.title || row.unitId}
           </span>
           <span className="shrink-0 rounded px-1 text-[9.5px] uppercase tracking-wide text-ds-faint">
+            <AgentIcon harnessId={row.harnessId} size={12} className="mr-1 align-middle" />
             {row.harnessId}
           </span>
           {expandable ? (
@@ -154,7 +156,7 @@ export function MissionCard({
             onClick={() => onOpen(row)}
             className="rounded-full border border-ds-border-muted px-2 py-0.5 text-[11px] text-ds-muted hover:bg-ds-subtle hover:text-ds-ink"
           >
-            {row.waitingReason === 'approval' || row.state === 'failed'
+            {row.waitingReason === 'approval'
               ? t('missionGoApprove')
               : t('missionOpen')}
           </button>

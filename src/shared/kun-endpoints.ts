@@ -302,6 +302,8 @@ export const KUN_HARNESSES_TEMPLATE = '/v1/harnesses'
 export const KUN_HARNESS_MODELS_TEMPLATE = '/v1/harnesses/{id}/models'
 export const KUN_HARNESS_PROBE_TEMPLATE = '/v1/harnesses/{id}/probe'
 export const KUN_HARNESS_TEST_TEMPLATE = '/v1/harnesses/{id}/test'
+export const KUN_HARNESS_INSTALL_TEMPLATE = '/v1/harnesses/{id}/install'
+export const KUN_HARNESS_INSTALL_CANCEL_TEMPLATE = '/v1/harnesses/{id}/install/cancel'
 // P4-12: unsaved-definition handshake + credential-store secret refs.
 export const KUN_HARNESS_PROBE_DEFINITION_TEMPLATE = '/v1/harnesses/probe-definition'
 export const KUN_HARNESS_SECRETS_TEMPLATE = '/v1/harness-secrets'
@@ -350,6 +352,11 @@ export function kunThreadPath(threadId: string): string {
 export const KUN_THREAD_SUMMARY_TEMPLATE = '/v1/threads/{id}/summary'
 export function kunThreadSummaryPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/summary`
+}
+
+export const KUN_THREAD_EXECUTION_CONFIG_TEMPLATE = '/v1/threads/{id}/execution-config'
+export function kunThreadExecutionConfigPath(threadId: string): string {
+  return `${kunThreadPath(threadId)}/execution-config`
 }
 
 export const KUN_THREAD_STATE_TEMPLATE = '/v1/threads/{id}/state'

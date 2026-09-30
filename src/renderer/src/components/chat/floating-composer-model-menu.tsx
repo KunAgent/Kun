@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import type { TFunction } from 'i18next'
 import { Brain, Gauge, Search } from 'lucide-react'
 import { modelSupportsImageInput } from '@shared/app-settings-provider-core'
-import { ProviderIcon } from '../provider-icon'
+import { ComposerModelSourceIcon } from './ComposerModelSourceIcon'
 import {
   UNGROUPED_MODEL_PROVIDER_ID,
   composerModelMenuItemSelected,
@@ -22,6 +22,7 @@ type ComposerModelMenuProps = {
   controlVariant: 'combined' | 'split'
   reasoningEnabled: boolean
   needsProviderSetup: boolean
+  emptyModelMessage?: string
   reasoningRowRef: RefObject<HTMLButtonElement | null>
   reasoningPanelOpen: boolean
   setActiveProviderId: Dispatch<SetStateAction<string | null>>
@@ -54,7 +55,7 @@ export function renderComposerModelMenu({
 }: ComposerModelMenuProps): ReactElement | null {
   const {
     menuOpen, canOpenModelControls, menuRef, menuStyle, controlVariant,
-    reasoningEnabled, needsProviderSetup, reasoningRowRef, reasoningPanelOpen,
+    reasoningEnabled, needsProviderSetup, emptyModelMessage, reasoningRowRef, reasoningPanelOpen,
     setActiveProviderId, setReasoningPanelOpen, t, currentReasoningLabel,
     providerMenuGroups, onConfigureProviders, setMenuOpen, selectedProviderId,
     currentModel, providerRowRefs, activeProviderId, submenuRef, submenuStyle,
@@ -99,7 +100,11 @@ export function renderComposerModelMenu({
             {t('composerModel')}
           </MenuSectionTitle>
           <div className="pr-0.5">
-            {needsProviderSetup ? (
+            {emptyModelMessage ? (
+              <p role="status" className="px-2.5 py-2 text-[12.5px] leading-5 text-ds-muted" data-model-catalog-empty>
+                {emptyModelMessage}
+              </p>
+            ) : needsProviderSetup ? (
               <div className="px-2.5 py-2">
                 <p className="text-[12.5px] leading-5 text-ds-muted">
                   {t('composerNoProviders')}
@@ -137,7 +142,7 @@ export function renderComposerModelMenu({
                     active={activeProviderId === group.providerId}
                     selected={selectedProviderId === group.providerId}
                     icon={(
-                      <ProviderIcon
+                      <ComposerModelSourceIcon
                         presetId={group.presetSource}
                         providerId={group.providerId}
                         className="h-4 w-4 text-ds-faint"
@@ -220,7 +225,7 @@ export function renderComposerModelMenu({
                     selected={selected}
                     title={id}
                     rightSlot={
-                      modelSupportsImageInput(targetProfile)
+                      !targetProfile ? null : modelSupportsImageInput(targetProfile)
                         ? <ModelCapabilityBadge kind="vision" label={t('composerModelVision')} />
                         : <ModelCapabilityBadge kind="text" label={t('composerModelTextOnly')} />
                     }

@@ -26,6 +26,7 @@
 | [p6b-pi-acceptance.md](./p6b-pi-acceptance.md) | 2026-09-29 P6 详细计划之二：P6-09~P6-13——Pi RPC 集成、`kun-pi-bridge` 扩展、网关与登录、验收矩阵、回退矩阵、Claude/Cursor 迁移评估 |
 | [pi-protocol-notes.md](./pi-protocol-notes.md) | P6-09 前置契约：Pi RPC 实机验证档案（帧格式、命令面、事件面、权限桥、网关 models.json） |
 | [p6-migration-evaluation.md](./p6-migration-evaluation.md) | P6-13 迁移评估：Claude Code / Cursor 不迁入 HarnessAgent 的结论与依据、遗留清理、原生适配器准入清单 |
+| [p7-workbench-configuration.md](./p7-workbench-configuration.md) | P7 Code 单页面融合计划：复用 Code UI、Agent 接入与图标、设置作用域、协作与验收；26 个批次、任务正本和 OpenSpec 入口，尚待实施 |
 
 ## 2. 约定
 

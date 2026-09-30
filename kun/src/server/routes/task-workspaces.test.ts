@@ -256,6 +256,7 @@ describe('task workspace routes', () => {
     )
     expect(integrated.status).toBe(200)
     expect((JSON.parse(integrated.body)).outcome).toBe('applied')
+    expect((JSON.parse(integrated.body)).previewTokenValidated).toBeUndefined()
     const cleaned = await request(
       'POST', `/v1/task-workspaces/${record.workspaceId}/cleanup`
     )
@@ -284,6 +285,9 @@ describe('task workspace routes', () => {
     expect(clean.status).toBe(200)
     const cleanPreview = (JSON.parse(clean.body)).preview
     expect(cleanPreview.canMergeBranch).toBe(true)
+    expect(cleanPreview.previewToken).toMatch(/^[a-f0-9]{64}$/)
+    expect(cleanPreview.sourceRevision?.completeness).toBe('complete')
+    expect(cleanPreview.targetRevision?.completeness).toBe('complete')
     expect(cleanPreview.hasUncommitted).toBe(false)
     // A clean worktree has nothing to apply.
     expect(cleanPreview.canApplyPatch).toBe(false)
@@ -302,6 +306,10 @@ describe('task workspace routes', () => {
     expect(movedPreview.applyBlockReason).toMatch(/HEAD changed/)
     expect(movedPreview.canMergeBranch).toBe(true)
     expect(movedPreview.hasUncommitted).toBe(true)
+    const stale = await request('POST', `/v1/task-workspaces/${record.workspaceId}/integrate`, {
+      mode: 'merge-branch', previewToken: cleanPreview.previewToken
+    })
+    expect(stale.status).toBe(409)
   })
 
   it('returns 409 with a damage preview for unconfirmed discard', async () => {
@@ -343,6 +351,9 @@ describe('task workspace routes', () => {
     const diff = await request('GET', `/v1/task-workspaces/${record.workspaceId}/diff`)
     expect(diff.status).toBe(200)
     const body = JSON.parse(diff.body)
+    expect(body.revision).toMatchObject({
+      completeness: 'complete', target: { kind: 'task-workspace', workspaceId: record.workspaceId }
+    })
     expect(body.headRevision).toMatch(/^[a-f0-9]{40}$/)
     expect(body.files).toHaveLength(2)
     const a = body.files.find((f: { path: string }) => f.path === 'a.txt')

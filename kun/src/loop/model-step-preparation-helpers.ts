@@ -206,28 +206,33 @@ export async function graphHarnessContextBlock(
 }
 
 /**
- * P3-14: ADE manager turns (ade workspace, Kun harness, not a worker child)
+ * P3-14: authorized manager turns (legacy ADE or explicit Code collaboration)
  * get a bounded runtime block with the delegation contract, live team state,
  * and the harness routing menu. Worker threads carry parentThreadId and are
  * excluded; external-harness managers skip the Kun-specific guidance.
  */
 export async function adeManagerContextBlock(
   thread:
-    | Pick<ThreadRecord, 'workspaceMode' | 'parentThreadId' | 'harnessId'>
+    | Pick<ThreadRecord, 'workspaceMode' | 'collaboration' | 'parentThreadId' | 'harnessId' | 'agentSurface' | 'executionUnit' | 'roomContext'>
     | undefined,
   threadId: string,
-  resolve?: (input: { threadId: string }) => Promise<string | undefined>
+  resolve?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>
 ): Promise<KunTurnContextBlock | null> {
+  const newWorkAllowed = thread?.collaboration?.enabled ?? thread?.workspaceMode === 'ade'
+  const controlsAllowed = newWorkAllowed || thread?.collaboration?.everEnabled === true
   if (
     !resolve ||
     !thread ||
-    thread.workspaceMode !== 'ade' ||
+    !controlsAllowed ||
     thread.parentThreadId ||
+    thread.executionUnit?.kind === 'worker' ||
+    thread.roomContext !== undefined ||
+    (thread.agentSurface !== undefined && thread.agentSurface !== 'code') ||
     (thread.harnessId !== undefined && thread.harnessId !== 'kun')
   ) {
     return null
   }
-  const content = (await resolve({ threadId }).catch(() => undefined)) ?? ''
+  const content = (await resolve({ threadId, newWorkAllowed }).catch(() => undefined)) ?? ''
   return content ? kunContextBlock('ade-manager', 'runtime', content) : null
 }
 
@@ -239,11 +244,11 @@ export async function planningTeamContextBlocks(
   orchestration: Turn['orchestration'],
   graphPlanCommitted: boolean,
   thread:
-    | Pick<ThreadRecord, 'workspaceMode' | 'parentThreadId' | 'harnessId'>
+    | Pick<ThreadRecord, 'workspaceMode' | 'collaboration' | 'parentThreadId' | 'harnessId' | 'agentSurface' | 'executionUnit' | 'roomContext'>
     | undefined,
   threadId: string,
   graphHarnessSummary?: () => Promise<string | undefined>,
-  adeManagerContext?: (input: { threadId: string }) => Promise<string | undefined>
+  adeManagerContext?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>
 ): Promise<KunTurnContextBlock[]> {
   const [graph, ade] = await Promise.all([
     graphHarnessContextBlock(orchestration, graphPlanCommitted, graphHarnessSummary),

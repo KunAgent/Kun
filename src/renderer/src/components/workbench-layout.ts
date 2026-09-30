@@ -252,6 +252,7 @@ export function useWorkbenchLayout({
   }, [terminalHeight])
 
   useEffect(() => {
+    if (route === 'rooms' || route === 'agent-chat') return
     const onPreview = (event: Event): void => {
       const detail = (event as CustomEvent<WorkspaceFilePreviewDetail>).detail
       if (!detail?.path) return
@@ -265,7 +266,7 @@ export function useWorkbenchLayout({
 
     window.addEventListener(WORKSPACE_FILE_PREVIEW_EVENT, onPreview)
     return () => window.removeEventListener(WORKSPACE_FILE_PREVIEW_EVENT, onPreview)
-  }, [ensureInitialCodePanelWidth, workspaceRoot])
+  }, [ensureInitialCodePanelWidth, workspaceRoot, route])
 
   useEffect(() => {
     const onCanvasOpenRequest = (event: Event): void => {

@@ -1,5 +1,6 @@
 import { buildGoogleWorkspaceToolProvider } from '../google-workspace/google-workspace-tools.js'
 import { GoogleWorkspaceService } from '../google-workspace/service.js'
+import { createReviewContextResolver } from '../services/review-composer-context.js'
 import { ManagerRemoteMemoryDistillationPendingStore } from '../manager/remote-memory-distillation-pending.js'
 import {
   join,
@@ -80,6 +81,8 @@ import {
 } from '../harness/hook-config-writer.js'
 import { FileTeamStore } from '../ade/team-store.js'
 import { FileDispatchStore } from '../ade/dispatch-store.js'
+import { reconcileWorkerReviewActivity } from '../ade/worker-review-activity.js'
+import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
 import { FileQuestionStore } from '../ade/question-store.js'
 import { FileWorkerNoticeStore } from '../ade/worker-notice-store.js'
 import { FileReviewStore } from '../ade/review-store.js'
@@ -204,6 +207,9 @@ export async function createRuntimeServices(
     usage: usageService,
     prefix,
     attachmentStore: () => attachmentStore,
+    resolveReviewRequests: (thread, contexts) => createReviewContextResolver({
+      reviews: adeStores.reviews, taskWorkspaces: core.taskWorkspaces
+    })(thread, contexts),
     writeDocumentGuard: createWriteDocumentGuard(),
     defaultModel: options.model,
     contextCompaction: options.contextCompaction,
@@ -481,9 +487,16 @@ export async function createRuntimeServices(
     dispatches: new FileDispatchStore(core.activeOptions.dataDir, nowIso),
     questions: new FileQuestionStore(core.activeOptions.dataDir, nowIso),
     notices: new FileWorkerNoticeStore(core.activeOptions.dataDir, nowIso),
-    reviews: new FileReviewStore(core.activeOptions.dataDir, nowIso, (p) => ids.next(p)),
+    reviews: new FileReviewStore(core.activeOptions.dataDir, nowIso, (p) => ids.next(p), async (id) => {
+      const workspace = core.taskWorkspaces.get(id)
+      if (!workspace) throw new Error('task workspace not found')
+      return captureReviewRevision(id, workspace.path)
+    }, artifactStore),
     races: new FileRaceStore(core.activeOptions.dataDir, nowIso)
   }
+  await reconcileWorkerReviewActivity(
+    adeStores.dispatches, core.activityStore, adeStores.teams, core.taskWorkspaces
+  )
   const attribution = new AttributionLedger(core.activeOptions.dataDir, nowIso)
   const changeRequests = new ChangeRequestService({
     taskWorkspaces: core.taskWorkspaces,

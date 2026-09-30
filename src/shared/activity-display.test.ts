@@ -42,29 +42,43 @@ describe('displayBucket', () => {
     expect(displayBucket(row({ state: 'done' }), NOW)).toBe('done')
   })
 
-  it('decays acknowledged done rows to idle after the decay window', () => {
+  it('keeps unresolved review visible after acknowledgement and dismissal', () => {
     expect(
       displayBucket(
         row({
           state: 'done',
           workspace: { kind: 'worktree' },
           acknowledgedAt: '2026-09-01T11:00:00.000Z',
-          stateSince: new Date(NOW - DONE_DECAY_MS - 1).toISOString()
-        }),
-        NOW
-      )
-    ).toBe('idle')
-    // Unacknowledged rows never decay.
-    expect(
-      displayBucket(
-        row({
-          state: 'done',
-          workspace: { kind: 'worktree' },
+          dismissedAt: '2026-09-01T11:30:00.000Z',
           stateSince: new Date(NOW - DONE_DECAY_MS - 1).toISOString()
         }),
         NOW
       )
     ).toBe('review')
+    expect(
+      displayBucket(
+        row({
+          state: 'done',
+          workspace: { kind: 'worktree' },
+          reviewStatus: 'stale',
+          acknowledgedAt: '2026-09-01T11:00:00.000Z'
+        }),
+        NOW
+      )
+    ).toBe('review')
+  })
+
+  it('moves explicitly resolved review and routine completion out of review', () => {
+    expect(displayBucket(row({ kind: 'worker', reviewStatus: 'passed' }), NOW)).toBe('done')
+    expect(displayBucket(row({ kind: 'worker', reviewStatus: 'waived' }), NOW)).toBe('done')
+    expect(displayBucket(row({ kind: 'worker', lastOutcome: 'cancelled' }), NOW)).toBe('done')
+    expect(displayBucket(row({ kind: 'worker', reviewRequired: false }), NOW)).toBe('done')
+    expect(displayBucket(row({ acknowledgedAt: '2026-09-01T11:30:00.000Z' }), NOW)).toBe('idle')
+  })
+
+  it('does not present unconfirmed restored state as current work', () => {
+    expect(displayBucket(row({ state: 'done', kind: 'worker', restoredUnconfirmed: true }), NOW)).toBe('idle')
+    expect(displayBucket(row({ state: 'waiting', restoredUnconfirmed: true }), NOW)).toBe('idle')
   })
 
   it('dismissed rows only resurface while working', () => {

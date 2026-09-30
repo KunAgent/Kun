@@ -10,6 +10,8 @@ import type { ManagerRuntimeDeps } from './manager-runtime.js'
 import { reconcileRaces } from './race.js'
 import type { TeamControls } from './team-controls.js'
 import type { QualityVerdicts } from './quality-verdict.js'
+import { refreshWorkerReviewActivity } from './worker-review-activity.js'
+import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
 
 /**
  * ADE worker lifecycle events (09 §5 turnId backfill, §6.1 terminal hook,
@@ -172,6 +174,12 @@ export class ManagerWorkerLifecycle {
           .then((result) => result.stat)
           .catch(() => undefined)
       : undefined
+    const workspace = worker.taskWorkspaceId && !worker.reviewOf
+      ? this.deps.taskWorkspaces?.get(worker.taskWorkspaceId)
+      : undefined
+    const revision = workspace
+      ? await captureReviewRevision(workspace.workspaceId, workspace.path)
+      : undefined
     const resultExcerpt = dispatch.workerReport
       ? undefined
       : await this.lastAssistantExcerpt(workerThreadId, turnId)
@@ -192,11 +200,22 @@ export class ManagerWorkerLifecycle {
         outcome,
         turnId: dispatch.turnId ?? turnId,
         ...(capture ? { capture } : {}),
+        ...(revision ? { revision } : {}),
+        ...(revision && dispatch.workerReport
+          ? { workerReport: { ...dispatch.workerReport, revision } }
+          : {}),
         ...(resultExcerpt ? { resultExcerpt } : {})
       },
       { expect: ['accepted'] }
     )
     if (!updated) return
+    if (!worker.reviewOf) {
+      await refreshWorkerReviewActivity(
+        this.deps.dispatches, this.deps.activity, team.teamId, worker.workerId, workspace
+      ).catch((error) => {
+        console.warn(`[kun] ade worker review projection failed for ${worker.workerId}:`, error)
+      })
+    }
     // A reviewer's submit_result merges into the reviewed dispatch's
     // verdict.checks (source 'reviewer'); status/decision stay untouched.
     if (worker.reviewOf && updated.workerReport) {
@@ -204,7 +223,8 @@ export class ManagerWorkerLifecycle {
         teamId: team.teamId,
         dispatchId: worker.reviewOf,
         reviewerWorkerId: worker.workerId,
-        report: updated.workerReport
+        report: updated.workerReport,
+        ...(updated.revision ? { revision: updated.revision } : {})
       }).catch((error) => {
         console.warn(`[kun] ade reviewer merge failed for ${worker.reviewOf}:`, error)
       })

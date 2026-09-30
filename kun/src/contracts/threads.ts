@@ -5,7 +5,7 @@ import { ThreadTodoListSchema, ThreadTodoSourceSchema, ThreadTodoStatus, MAX_THR
 export * from './thread-todos.js'
 import { ThreadWorkbenchOriginSchema } from './thread-workbench-origin.js'
 import { TurnSchema, TurnStatus } from './turns.js'
-import { HarnessIdSchema } from './harness.js'
+import { HarnessCredentialModeSchema, HarnessIdSchema } from './harness.js'
 import { KnowledgeBaseMountsSchema } from './thread-knowledge.js'
 import {
   ApprovalPolicySchema,
@@ -22,32 +22,20 @@ import {
 import { ThreadRetentionPolicySchema } from './thread-retention.js'
 import { ThreadIndexStatusInfoSchema } from './thread-index-status.js'
 import { ThreadTimelinePageSchema } from './thread-timeline.js'
+import {
+  ThreadExecutionUnitSchema,
+  DesignCloneOperationSchema,
+  ThreadCollaborationSchema,
+  ThreadCollaborationRequestSchema
+} from './thread-workbench.js'
+import { ThreadExecutionConfigSchema } from './thread-execution-config.js'
 export * from './thread-timeline.js'
 export * from './thread-knowledge.js'
+export * from './thread-workbench.js'
+export * from './thread-execution-config.js'
 
 export const ThreadStatus = z.enum(['idle', 'running', 'archived', 'deleted'])
 export type ThreadStatus = z.infer<typeof ThreadStatus>
-
-/**
- * ADE execution-unit identity persisted on a worker side thread (09 §3.1).
- * Host-written only — never exposed on `CreateThreadRequest`.
- */
-export const ThreadExecutionUnitSchema = z
-  .object({
-    kind: z.literal('worker'),
-    teamId: z.string().min(1),
-    managerThreadId: z.string().min(1),
-    label: z.string().min(1).max(64),
-    /** 'implementer' | 'reviewer' | 'tester' | ... free-form role text. */
-    role: z.string().max(64).optional(),
-    lifecycle: z.enum(['persistent', 'ephemeral']),
-    /** Host-managed task workspace (07) backing this worker's turns. */
-    taskWorkspaceId: z.string().min(1).optional(),
-    /** 'manager' while the manager drives; 'user' after a user takeover. */
-    control: z.enum(['manager', 'user'])
-  })
-  .strict()
-export type ThreadExecutionUnit = z.infer<typeof ThreadExecutionUnitSchema>
 
 export const THREAD_RUNTIME_STATE_SCHEMA_VERSION = 1
 
@@ -264,14 +252,6 @@ export const ExtensionThreadMetadataSchema = z.object({
 })
 export type ExtensionThreadMetadata = z.infer<typeof ExtensionThreadMetadataSchema>
 
-export const DesignCloneOperationSchema = z.object({
-  operationId: z.string().trim().min(1).max(160)
-    .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/),
-  kind: z.enum(['fork', 'resume']),
-  sourceId: z.string().trim().min(1).max(256)
-}).strict()
-export type DesignCloneOperation = z.infer<typeof DesignCloneOperationSchema>
-
 export const ThreadSchemaBase = z.object({
   /** Host-owned Rooms execution provenance and frozen capability ceiling. */
   roomContext: RoomThreadContextSchema.optional(),
@@ -306,6 +286,11 @@ export const ThreadSchemaBase = z.object({
   harnessId: HarnessIdSchema.optional(),
   /** Code vs ADE ownership, set at create and immutable; missing values count as `code`. */
   workspaceMode: z.enum(['code', 'ade']).optional(),
+  /** Explicit persistent-team admission; absent legacy ADE retains its prior policy. */
+  collaboration: ThreadCollaborationSchema.optional(),
+  /** Host-resolved task defaults and source information for new Code work. */
+  executionConfig: ThreadExecutionConfigSchema.optional(),
+  pendingExecutionConfig: ThreadExecutionConfigSchema.optional(),
   /** Host-managed task workspace bound to this thread (07 §5); counts as isolated (02 §6). */
   taskWorkspaceId: z.string().min(1).optional(),
   /** Stable owner derived from the authenticated Extension Host session. */
@@ -408,6 +393,8 @@ export const ThreadSummarySchema = ThreadSchemaBase.pick({
   providerId: true,
   harnessId: true,
   workspaceMode: true,
+  collaboration: true,
+  executionConfig: true,
   taskWorkspaceId: true,
   ownerExtensionId: true,
   ownerExtensionVersion: true,
@@ -480,11 +467,21 @@ export const CreateThreadRequest = z.object({
   providerId: z.string().optional(),
   /** Optional explicit harness identity inherited by new turns. */
   harnessId: HarnessIdSchema.optional(),
+  credentialMode: HarnessCredentialModeSchema.optional(),
   /**
    * Owning workspace mode ('code' | 'ade'). Written by the creating client;
    * absent and legacy threads count as 'code'.
    */
   workspaceMode: z.enum(['code', 'ade']).optional(),
+  /** Enables persistent Kun-managed collaboration for this new task. */
+  collaboration: ThreadCollaborationRequestSchema.optional(),
+  /** Explicit route selection wins over a project default; omission preserves legacy behavior. */
+  routeIntent: z.enum(['explicit', 'inherit']).optional(),
+  /** Explicit next-task workspace choice; the host allocates after create admission. */
+  workspaceIsolation: z.enum(['local', 'worktree']).optional(),
+  /** CAS of the displayed project defaults; omitted by legacy clients. */
+  projectDefaultsRevision: z.string().regex(/^ade-project-v1:[a-f0-9]{64}$/).optional(),
+  executionConfig: z.never().optional(),
   /** Bind a host-managed task workspace to this thread (07 §5). */
   taskWorkspaceId: z.string().min(1).optional(),
   /** Opaque core-managed account reference for the selected provider. */
@@ -602,6 +599,10 @@ export const UpdateThreadRequest = z
     taskWorkspaceId: z.string().min(1).optional(),
     /** Rebind the harness (01 §8); refused while the thread is running. */
     harnessId: HarnessIdSchema.optional(),
+    /** Effective on the next turn; updates are refused while a turn is running. */
+    collaboration: ThreadCollaborationRequestSchema.optional(),
+    executionConfig: z.never().optional(),
+    pendingExecutionConfig: z.never().optional(),
     additionalWorkspaces: z.array(z.string().min(1)).max(32).optional(),
     knowledgeBases: KnowledgeBaseMountsSchema.optional(),
     mode: ThreadMode.optional(),
@@ -627,6 +628,7 @@ export const UpdateThreadRequest = z
       value.workspace !== undefined ||
       value.taskWorkspaceId !== undefined ||
       value.harnessId !== undefined ||
+      value.collaboration !== undefined ||
       value.additionalWorkspaces !== undefined ||
       value.knowledgeBases !== undefined ||
       value.mode !== undefined ||
@@ -645,6 +647,8 @@ export type UpdateThreadRequest = z.infer<typeof UpdateThreadRequest>
 
 export const ListThreadsResponse = z.object({
   threads: z.array(ThreadSummarySchema),
+  /** Echo for clients negotiating the combined Code inventory. */
+  workbenchScope: z.literal('code').optional(),
   nextCursor: z.string().optional(),
   hasMore: z.boolean().optional(),
   total: z.number().int().nonnegative().optional(),

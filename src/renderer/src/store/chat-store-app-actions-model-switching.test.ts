@@ -135,6 +135,98 @@ describe('chat-store app actions composer model loading', () => {
     vi.unstubAllGlobals()
   })
 
+  it('does not replace a native Codex draft model with the Kun default during catalog refresh', async () => {
+    const { state, actions } = buildHarness({ ok: true, modelIds: ['step-5-preview'],
+      defaultModel: { providerId: 'stepfun', modelId: 'step-5-preview' },
+      modelGroups: [{ providerId: 'stepfun', label: 'StepFun', modelIds: ['step-5-preview'] }] })
+    state.composerHarnessId = 'codex'
+    state.composerCredentialMode = 'native-login'
+    state.composerModel = 'gpt-6.1-sol'
+    state.composerReasoningEffort = 'low'
+    state.composerProviderId = ''
+    await actions.loadComposerModels()
+    expect(state.composerModel).toBe('gpt-6.1-sol')
+    expect(state.composerProviderId).toBe('')
+    expect(state.composerHarnessId).toBe('codex')
+    expect(state.composerReasoningEffort).toBe('low')
+  })
+
+  it('keeps the saved selection while loading and publishes catalog readiness with the groups', async () => {
+    const models: FetchModelsResult = { ok: true, modelIds: ['saved-model'],
+      modelGroups: [{ providerId: 'saved-provider', label: 'Saved', modelIds: ['saved-model'] }] }
+    const { state, actions, fetchUpstreamModels } = buildHarness(models)
+    state.composerModel = 'saved-model'
+    state.composerProviderId = 'saved-provider'
+    const waiting = deferred<FetchModelsResult>()
+    fetchUpstreamModels.mockReturnValueOnce(waiting.promise)
+    const load = actions.loadComposerModels()
+    expect(state).toMatchObject({ composerModelCatalogStatus: 'loading',
+      composerModel: 'saved-model', composerProviderId: 'saved-provider' })
+    waiting.resolve(models)
+    await load
+    expect(state).toMatchObject({ composerModelCatalogStatus: 'ready', composerModelGroups: models.modelGroups,
+      composerModel: 'saved-model', composerProviderId: 'saved-provider' })
+  })
+
+  it('distinguishes a confirmed empty catalog from a failed lookup', async () => {
+    const { state, actions, fetchUpstreamModels } = buildHarness({ ok: false, message: 'No configured providers' })
+    await actions.loadComposerModels()
+    expect(state).toMatchObject({ composerModelCatalogStatus: 'ready', composerModelGroups: [] })
+    state.composerProviderId = 'saved-provider'
+    state.composerModel = 'saved-model'
+    state.composerModelGroups = [{ providerId: 'saved-provider', label: 'Saved', modelIds: ['saved-model'] }]
+    fetchUpstreamModels.mockRejectedValueOnce(new Error('Connection interrupted'))
+    await expect(actions.loadComposerModels()).rejects.toThrow('Connection interrupted')
+    expect(state).toMatchObject({ composerModelCatalogStatus: 'error', composerProviderId: 'saved-provider',
+      composerModel: 'saved-model', composerModelGroups: [{ providerId: 'saved-provider' }] })
+  })
+
+  it('clears Kun plan and Graph intent when choosing an external Agent without rewriting queued turns', () => {
+    const harness = buildHarness({ ok: true, modelIds: [] })
+    harness.state.composerMode = 'plan'
+    harness.state.composerOrchestration = 'graph'
+    const queued = [{ id: 'q', text: 'Design next', harnessId: 'kun', agentSurface: 'design' as const }]
+    harness.state.queuedMessages = queued
+    harness.actions.setComposerHarness('codex', 'native-login')
+    expect(harness.state).toMatchObject({ composerHarnessId: 'codex', composerMode: 'agent', composerOrchestration: 'direct' })
+    expect(harness.state.queuedMessages).toBe(queued)
+    expect(harness.state.queuedMessages[0].harnessId).toBe('kun')
+  })
+
+  it.each(['thread', 'provider'] as const)('clamps restored Kun execution modes for an unpinned %s Agent', (source) => {
+    const { state, actions } = buildHarness({ ok: true, modelIds: [] })
+    if (source === 'thread') {
+      state.activeThreadId = 'thread-agent'
+      state.threads = [{ id: 'thread-agent', harnessId: 'codex' }] as ChatState['threads']
+    } else {
+      state.composerProviderId = 'subscription'
+      state.composerModelGroups = [{ providerId: 'subscription', label: 'Native', kind: 'agent-sdk', modelIds: [] }]
+    }
+    actions.setComposerMode('auto')
+    actions.setComposerOrchestration('graph')
+    expect(state.composerMode).toBe('agent')
+    expect(state.composerOrchestration).toBe('direct')
+    actions.setComposerHarness('kun', 'provider')
+    actions.setComposerMode('plan')
+    actions.setComposerOrchestration('graph')
+    expect(state.composerMode).toBe('plan')
+    expect(state.composerOrchestration).toBe('graph')
+  })
+
+  it('keeps native model picks out of Kun defaults and honors an explicitly cleared provider', () => {
+    const harness = buildHarness({ ok: true, modelIds: [] })
+    harness.state.composerHarnessId = 'codex'
+    harness.state.composerCredentialMode = 'native-login'
+    harness.state.composerModelGroups = [{ providerId: 'http-provider', label: 'HTTP', modelIds: ['shared-model'] }]
+    harness.actions.setComposerModel('shared-model', '')
+    expect(harness.state.composerProviderId).toBe('')
+    expect(window.kunGui.saveSettingsSilent).not.toHaveBeenCalled()
+    expect(localStorage.getItem(COMPOSER_MODEL_STORAGE_KEY)).toBeNull()
+    harness.state.composerHarnessId = 'kun'
+    harness.actions.setComposerModel('shared-model')
+    expect(harness.state.composerProviderId).toBe('http-provider')
+  })
+
   it('allows switching a chat with image history from vision to text-only', () => {
     const { actions, state } = buildHarness({
       ok: true,

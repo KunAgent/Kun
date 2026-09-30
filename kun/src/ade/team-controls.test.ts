@@ -1,3 +1,6 @@
+import { resolveThreadExecutionConfig } from '../domain/thread-execution-config.js'
+import { createThreadRecord } from '../domain/thread.js'
+import { emptyUsageSnapshot } from '../contracts/usage.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeEvent } from '../contracts/events.js'
 import type { ToolHostContext } from '../ports/tool-host.js'
@@ -173,6 +176,28 @@ describe('guiDispatch', () => {
     const dispatch = (await stores.dispatches.list('thr_mgr'))[0]!
     expect(dispatch.workerId).toBe('wrk_1')
     expect(dispatch.task).toBe('review the diff')
+  })
+
+  it('applies pending task budgets to both GUI and manager dispatch admissions', async () => {
+    await seedWorker(stores)
+    const { teamControls, controls, delegation } = makeHarness(stores, {
+      usageForThread: () => ({ ...emptyUsageSnapshot(), totalTokens: 200 })
+    })
+    const snapshot = resolveThreadExecutionConfig({
+      request: { workspace: '/repo', model: 'test', mode: 'agent', harnessId: 'kun' },
+      global: { budget: { hardTokens: 100 } }, project: { collaborationEnabled: true }, nowIso: '2026-09-30T00:00:00.000Z'
+    }).snapshot
+    await stores.threads.upsert({
+      ...createThreadRecord({ id: 'thr_mgr', title: 'manager', workspace: '/repo', model: 'test' }),
+      pendingExecutionConfig: snapshot
+    })
+    expect(await teamControls.guiDispatch('wrk_1', { task: 'new GUI task' }))
+      .toMatchObject({ ok: false, refusal: 'budget_exceeded' })
+    expect(await controls.workerSend(managerCtx(), { workerId: 'wrk_1', task: 'new model task' }))
+      .toMatchObject({ ok: false, refusal: 'budget_exceeded' })
+    expect((await stores.teams.get('thr_mgr'))?.budget).toEqual({ hardTokens: 100 })
+    expect(await stores.dispatches.list('thr_mgr')).toHaveLength(0)
+    expect(delegation.runChild).not.toHaveBeenCalled()
   })
 
   it('refuses while the user holds control', async () => {
@@ -367,5 +392,35 @@ describe('tool provider gates', () => {
     expect(tool(false, 'worker_approve').shouldAdvertise?.(toolContext)).toBe(false)
     // Other tools are unaffected by the gate.
     expect(tool(false, 'dispatch_queue').shouldAdvertise?.(toolContext)).toBe(true)
+  })
+
+  it('retains existing-team controls when new collaboration admission is disabled', () => {
+    const disabled = createManagerToolProvider({
+      manager: { toolContext: vi.fn(async () => managerCtx()) } as unknown as ManagerRuntime,
+      harnessList: {} as never,
+      canStartNewWork: () => false
+    })
+    const allowed = (name: string) => disabled.tools.find((entry) => entry.name === name)?.shouldAdvertise?.(toolContext)
+    expect(allowed('worker_create')).toBe(false)
+    expect(allowed('worker_send')).toBe(false)
+    expect(allowed('review_request')).toBe(false)
+    expect(allowed('worker_status')).toBe(true)
+    expect(allowed('worker_stop')).toBe(true)
+    expect(allowed('worker_answer')).toBe(true)
+    expect(allowed('dispatch_cancel')).toBe(true)
+  })
+
+  it('admits explicitly enabled Code managers through the same tool gate', () => {
+    const context = { ...toolContext, workspaceMode: 'code' as const, collaborationEnabled: true }
+    expect(tool(false, 'worker_create').shouldAdvertise?.(context)).toBe(true)
+    expect(tool(false, 'worker_create').shouldAdvertise?.({ ...context, collaborationEnabled: false })).toBe(false)
+    expect(tool(false, 'worker_create').shouldAdvertise?.({ ...context, harnessId: 'claude-code' })).toBe(false)
+    const disabledWithExistingTeam = {
+      ...context,
+      collaborationEnabled: false,
+      collaborationEverEnabled: true
+    }
+    expect(tool(false, 'worker_create').shouldAdvertise?.(disabledWithExistingTeam)).toBe(false)
+    expect(tool(false, 'worker_stop').shouldAdvertise?.(disabledWithExistingTeam)).toBe(true)
   })
 })

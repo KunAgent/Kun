@@ -3,6 +3,7 @@
  * kun/src/contracts/review.ts (docs/ade/11 §4). Kun owns the schema; keep
  * field names aligned.
  */
+import type { ReviewRevision } from './review-revision'
 
 export type ReviewCommentAnchor = {
   lineText: string
@@ -27,6 +28,7 @@ export type ReviewComment = {
   state: ReviewCommentState
   /** True when reanchoring could not re-locate the line uniquely. */
   outdated: boolean
+  revision?: ReviewRevision
   sentInRequestId?: string
   author: 'user' | 'reviewer'
   createdAt: string
@@ -40,18 +42,33 @@ export type ReviewSendTarget =
 
 export type ReviewSendRecord = {
   requestId: string
+  workspaceId?: string
   round: number
   target: ReviewSendTarget
   commentIds: string[]
   note?: string
   outcomeRef?: string
   sentAt: string
+  revision?: ReviewRevision
+  clientRequestId?: string
+  requestHash?: string
+  dispatchId?: string
+  userReport?: string
+  title?: string
+  requestArtifactId?: string
+}
+
+export type ReviewSendReservation = Omit<ReviewSendRecord, 'sentAt'> & {
+  clientRequestId: string
+  requestHash: string
+  reservedAt: string
 }
 
 export type ReviewCommentFile = {
   workspaceId: string
   comments: ReviewComment[]
   requests: ReviewSendRecord[]
+  reservations?: ReviewSendReservation[]
 }
 
 export type CreateReviewCommentInput = {
@@ -72,6 +89,8 @@ export type SendReviewInput = {
   commentIds: string[]
   target: ReviewSendTarget
   note?: string
+  clientRequestId?: string
+  expectedRevision?: ReviewRevision
 }
 
 export type SendReviewResponse = {
@@ -79,5 +98,5 @@ export type SendReviewResponse = {
   dispatchId?: string
   workerId?: string
   userReport?: string
-  composerContext?: { kind: 'review_request'; title: string; body: string }
+  composerContext?: { kind: 'review_request'; title: string; body: string; workspaceId?: string; requestId?: string }
 }

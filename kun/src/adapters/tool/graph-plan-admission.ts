@@ -80,6 +80,7 @@ export async function checkGraphPlanHarnesses(input: {
     }
     const verdict = checkHarnessAdmission({
       usage: 'graph-worker',
+      credentialMode,
       harness: definition,
       effective,
       status: status ?? {

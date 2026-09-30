@@ -7,13 +7,14 @@ import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { roomRequestId, roomsClient, roomsRequest } from './rooms-client'
 import { workbenchClient } from './workbench-client'
 import { showWorkbenchFlash } from './workbench-flash'
+import { AGENT_CHAT_SELECTED_KEY, openAgentConversationRoom } from './agent-chat-navigation'
 
 const tr = (key: string, options?: Record<string, unknown>): string => i18n.t(key, { ns: 'common', ...options })
 
 /** The bot conversation new hand-offs go to: the selected private Agent chat, else the most recent one. */
 export async function resolveBotRoomId(): Promise<string | null> {
   const page = await roomsClient.list(false, undefined, undefined, '', { conversationKind: 'user_agent' })
-  const selected = readBrowserStorageItem('kun.rooms.selected')
+  const selected = readBrowserStorageItem(AGENT_CHAT_SELECTED_KEY) ?? readBrowserStorageItem('kun.rooms.selected')
   if (selected && page.rooms.some((room) => room.id === selected)) return selected
   if (page.rooms[0]) return page.rooms[0].id
   const entry = await roomsRequest<{ roomId?: string }>('/v1/agents/chat-entry', 'POST', { action: 'initialize', clientRequestId: roomRequestId() })
@@ -39,8 +40,7 @@ export async function sendReferencesToBot(input: { references: RoomContentRefere
     const body = [draft.body?.trim(), input.body?.trim()].filter(Boolean).join('\n\n')
     writeBrowserStorageItem(key, JSON.stringify({ mentions: [], taskId: '', repositoryId: '', intent: 'auto', attachments: [], requestId: '', fingerprint: '',
       ...draft, body, references: merged }))
-    writeBrowserStorageItem('kun.rooms.selected', roomId)
-    useChatStore.getState().setRoute('rooms')
+    openAgentConversationRoom(roomId)
   } catch (cause) {
     showWorkbenchFlash(cause instanceof Error ? cause.message : String(cause), 'error')
   }

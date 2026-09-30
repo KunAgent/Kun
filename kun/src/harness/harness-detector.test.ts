@@ -275,6 +275,50 @@ describe('HarnessDetector readiness (P3-11)', () => {
     expect(status.reasonCode).toBeUndefined()
   })
 
+  it('probes native Codex after finding its CLI, without an ACP adapter', async () => {
+    const codex = acpDef({
+      id: 'codex',
+      transport: 'codex-app-server',
+      detect: { command: 'codex', aliases: [], versionArgs: ['--version'] },
+      launch: { command: 'codex', args: ['app-server'], env: {} }
+    })
+    const probeReady = vi.fn(async () => ({ ready: 'yes' as const }))
+    const detector = makeDetector({
+      defs: [codex],
+      resolve: async (command) => command === 'codex' ? '/usr/bin/codex' : undefined,
+      probeReady
+    })
+    const status = await detector.status('codex', { force: true })
+    expect(status).toMatchObject({ installed: 'yes', ready: 'yes', resolvedCommand: '/usr/bin/codex' })
+    expect(probeReady).toHaveBeenCalledWith(codex, '/usr/bin/codex')
+  })
+
+  it('discards a late probe from an older launch definition', async () => {
+    const oldDef = acpDef({ launch: { command: 'opencode', args: ['acp'], env: {} } })
+    let definition = oldDef
+    let resolveOld: ((value: { ready: 'yes' }) => void) | undefined
+    const detector = new HarnessDetector({
+      definitions: () => [definition],
+      overrides: () => ({}),
+      spawnCaptured: async () => ({ stdout: '1.1.47', stderr: '', timedOut: false, exitCode: 0 }),
+      resolveExecutable: async (command) => `/usr/bin/${command}`,
+      probeReady: async (def) => def.launch?.args[0] === 'acp'
+        ? new Promise((resolve) => { resolveOld = resolve })
+        : { ready: 'no', detail: 'new configuration failed' },
+      probeLogin: async () => 'unknown',
+      nowMs: () => Date.now(),
+      nowIso: () => new Date().toISOString()
+    })
+    const oldProbe = detector.status('opencode')
+    await vi.waitFor(() => expect(resolveOld).toBeDefined())
+    definition = acpDef({ launch: { command: 'opencode', args: ['acp-new'], env: {} } })
+    const newStatus = await detector.status('opencode')
+    expect(newStatus.ready).toBe('no')
+    resolveOld!({ ready: 'yes' })
+    await oldProbe
+    expect(detector.cachedStatus('opencode')?.ready).toBe('no')
+  })
+
   it('P4-13: terminal agents skip the version probe entirely', async () => {
     // Interactive CLIs often ignore `--version` and wait on stdin — running
     // it would hang the 5s timeout and mask an installed agent.

@@ -58,3 +58,8 @@ export function resolveKunBranchWorktreeProjectPath(
   }
   return ''
 }
+
+/** Host-managed ADE/Code task worktrees use project-key/workspace-id directories. */
+export function isKunTaskWorktreePath(path: string): boolean {
+  return /(?:^|\/)\.kun\/worktrees\/tasks\/[^/]+\/[^/]+$/i.test(normalizePathForMatch(path.trim()))
+}

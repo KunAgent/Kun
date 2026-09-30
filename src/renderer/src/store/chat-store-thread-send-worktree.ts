@@ -4,13 +4,15 @@ import type {
   TaskWorkspaceRecord
 } from '@shared/task-workspace'
 import type { QueuedUserMessage } from './chat-store-types'
+import { bindReadyTaskWorkspace } from './chat-store-runtime-helpers'
 import { queuedMessagesForThread, saveQueuedMessagesForThread } from './queued-message-persistence'
 import { buildThreadEventSink } from './chat-store-runtime'
 import { subscribeThreadEventsWithRecovery } from './chat-store-thread-action-helpers'
 import {
   markThreadWorkspacePreparing,
   markThreadWorkspacePrepFailed,
-  receiveTaskWorkspaceRecord
+  receiveTaskWorkspaceRecord,
+  useTaskWorkspaceStore
 } from './task-workspace-store'
 import { upsertQueuedSubmission, type StoreActionContext } from './chat-store-thread-actions-support'
 import type { ChatState } from './chat-store-types'
@@ -68,5 +70,10 @@ export async function prepareAdeThreadWorktree(args: {
   }
   saveQueuedMessagesForThread(threadId, queuedMessages)
   if (active) args.persistActiveQueuedMessages()
+  const prep = useTaskWorkspaceStore.getState().prepByThread[threadId]
+  if (prep?.state === 'ready' && prep.path) {
+    await bindReadyTaskWorkspace({ threadId, workspaceId: prep.workspaceId, state: 'ready',
+      workspace: { path: prep.path } }, set, get)
+  }
   return record
 }

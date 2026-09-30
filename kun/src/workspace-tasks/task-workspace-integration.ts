@@ -6,6 +6,7 @@ import {
   workingTreeChangedFiles
 } from './workspace-git.js'
 import type { WorktreeLifecycle } from './worktree-lifecycle.js'
+import { captureIntegrateReviewRevisions } from './review-revision.js'
 import type { TaskWorkspaceStore } from './task-workspace-store.js'
 import {
   type PreservedBranchInfo,
@@ -40,6 +41,8 @@ export type WorkspaceIntegrationContext = {
 export type TaskWorkspaceIntegrateResult = {
   outcome: TaskWorkspaceIntegrateOutcome
   record: TaskWorkspaceRecord
+  /** Present only when a supplied preview token matched at execution time. */
+  previewTokenValidated?: boolean
   reason?: string
   recovery?: string[]
 }
@@ -170,7 +173,8 @@ export async function captureTaskWorkspace(
 export async function integrateTaskWorkspace(
   ctx: WorkspaceIntegrationContext,
   workspaceId: string,
-  mode: 'apply-patch' | 'merge-branch'
+  mode: 'apply-patch' | 'merge-branch',
+  previewToken?: string
 ): Promise<TaskWorkspaceIntegrateResult> {
   const record = requireRecord(ctx, workspaceId)
   requireWorktree(record)
@@ -181,10 +185,22 @@ export async function integrateTaskWorkspace(
   }
   const repoRoot = record.repositoryRoot as string
   return ctx.withRepoLock(repoRoot, () =>
-    ctx.withWriteContext(() =>
-      mode === 'apply-patch'
+    ctx.withWriteContext(async () => {
+      await assertPreviewToken(record, previewToken)
+      const result = mode === 'apply-patch'
         ? integrateApplyPatch(ctx, record)
-        : integrateMergeBranch(ctx, record)))
+        : integrateMergeBranch(ctx, record)
+      const settled = await result
+      return previewToken ? { ...settled, previewTokenValidated: true } : settled
+    }))
+}
+
+async function assertPreviewToken(record: TaskWorkspaceRecord, previewToken?: string): Promise<void> {
+  if (!previewToken) return
+  const current = await captureIntegrateReviewRevisions(record)
+  if (!current.previewToken || current.previewToken !== previewToken) {
+    throw new TaskWorkspaceConflictError('integration preview expired; refresh and review both checkouts again')
+  }
 }
 
 async function integrateApplyPatch(

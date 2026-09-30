@@ -208,6 +208,7 @@ async function buildCandidates(
       ])
       const admission = checkHarnessAdmission({
         usage: 'manager-worker',
+        credentialMode: candidate.route.credentialMode,
         harness: def,
         effective,
         status,

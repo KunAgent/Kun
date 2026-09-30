@@ -56,6 +56,10 @@ export function createToolDiscoveryContext(
     model: input.modelCapabilities,
     ...(input.harnessId ? { harnessId: input.harnessId } : {}),
     ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
+    ...(input.collaborationEnabled !== undefined
+      ? { collaborationEnabled: input.collaborationEnabled } : {}),
+    ...(input.collaborationEverEnabled !== undefined
+      ? { collaborationEverEnabled: input.collaborationEverEnabled } : {}),
     ...(input.executionUnitKind ? { executionUnitKind: input.executionUnitKind } : {}),
     actingModelRoute: input.actingModelRoute,
     activeSkillIds: input.activeSkillIds,

@@ -1,3 +1,5 @@
+import { bindReadyTaskWorkspace } from './chat-store-runtime-helpers'
+import { readThreadWorktreeRegistry } from '../lib/thread-worktree-registry'
 import type i18next from 'i18next'
 import type { AppSettingsV1, ModelReasoningEffort } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
@@ -14,7 +16,8 @@ import { currentCodeWorkspaceRoot } from './chat-store-current-workspace'
 import {
   markThreadWorkspacePreparing,
   markThreadWorkspacePrepFailed,
-  receiveTaskWorkspaceRecord
+  receiveTaskWorkspaceRecord,
+  useTaskWorkspaceStore
 } from './task-workspace-store'
 import type { ComposerPlanMode } from './chat-store-helpers'
 import {
@@ -34,6 +37,16 @@ import {
   resolveCatalogComposerSelection
 } from './chat-store-thread-composer-state'
 import { useProjectBoardStore } from '../project-board/project-board-store'
+import { effectiveHarnessId } from '../lib/ade-composer-harness'
+
+function composerUsesKunWorkflows(state: ChatState): boolean {
+  const thread = (state.threads ?? []).find((candidate) => candidate.id === state.activeThreadId) ??
+    state.adeThreads?.find((candidate) => candidate.id === state.activeThreadId)
+  const providerId = state.composerProviderId || thread?.providerId
+  const providerKind = (state.composerModelGroups ?? []).find((group) => group.providerId === providerId)?.kind
+  return effectiveHarnessId(state.composerHarnessId ?? '', thread?.harnessId, providerKind) === 'kun'
+}
+
 type CreateAppActionsOptions = {
   set: ChatStoreSet
   get: ChatStoreGet
@@ -133,27 +146,31 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
     setError: (message) => set({ error: message }),
 
     setComposerMode: (mode) => {
-      const activeThreadId = get().activeThreadId
+      const state = get()
+      const activeThreadId = state.activeThreadId
+      const nextMode = composerUsesKunWorkflows(state) ? mode : 'agent'
       if (activeThreadId) {
-        rememberThreadComposerMode(activeThreadId, mode)
+        rememberThreadComposerMode(activeThreadId, nextMode)
       } else {
-        persistComposerMode(mode)
+        persistComposerMode(nextMode)
       }
-      set({ composerMode: mode })
+      set({ composerMode: nextMode })
     },
 
     setComposerOrchestration: (mode) => {
-      set({ composerOrchestration: mode })
+      set({ composerOrchestration: composerUsesKunWorkflows(get()) ? mode : 'direct' })
     },
 
     setComposerExecutionSettings: (settings) => {
       set({ composerExecutionSettings: settings })
     },
 
-    setComposerModel: (modelId, providerId) => {
-      const nextProviderId = providerId?.trim() || providerIdForComposerModel(get().composerModelGroups, modelId)
+    setComposerModel: (modelId, providerId, source = 'user') => {
+      const nextProviderId = providerId === undefined
+        ? providerIdForComposerModel(get().composerModelGroups, modelId) : providerId.trim()
       const state = get()
       const activeThreadId = state.activeThreadId
+      const nativeSelection = Boolean(state.composerHarnessId && state.composerHarnessId !== 'kun')
       if (activeThreadId) {
         const harnessId = state.composerHarnessId?.trim() ?? ''
         rememberThreadComposerSelection(
@@ -165,13 +182,16 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
             ? { harnessId, credentialMode: state.composerCredentialMode }
             : undefined
         )
-      } else {
+      } else if (!nativeSelection) {
         persistComposerModel(modelId)
         persistComposerProviderId(nextProviderId)
       }
       set({
         composerModel: modelId,
         composerProviderId: nextProviderId,
+        ...(!activeThreadId && source === 'user'
+          ? { composerRouteExplicitWorkspaceRoot: normalizeWorkspaceRoot(state.workspaceRoot) }
+          : {}),
         composerReasoningEffort: composerReasoningEffortForSelection(
           state.composerModelGroups,
           modelId,
@@ -183,7 +203,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
         (group) => group.providerId === nextProviderId
       )?.extensionProvider
       if (
-        !activeThreadId &&
+        !activeThreadId && !nativeSelection &&
         !extensionProvider &&
         trimmed &&
         trimmed.toLowerCase() !== 'auto' &&
@@ -202,9 +222,18 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       if (activeThreadId) {
         rememberThreadComposerHarness(activeThreadId, nextHarnessId, nextCredentialMode)
       }
+      const externalAgent = Boolean(nextHarnessId && nextHarnessId !== 'kun')
+      if (externalAgent) {
+        if (activeThreadId) rememberThreadComposerMode(activeThreadId, 'agent')
+        else persistComposerMode('agent')
+      }
       set({
+        ...(externalAgent ? { composerMode: 'agent' as const, composerOrchestration: 'direct' as const } : {}),
         composerHarnessId: nextHarnessId,
-        composerCredentialMode: nextCredentialMode
+        composerCredentialMode: nextCredentialMode,
+        ...(!activeThreadId
+          ? { composerRouteExplicitWorkspaceRoot: normalizeWorkspaceRoot(get().workspaceRoot) }
+          : {})
       })
     },
 
@@ -214,6 +243,8 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       persistComposerIsolation(isolation)
       set({
         composerIsolation: isolation,
+        composerIsolationExplicitWorkspaceRoot: normalizeWorkspaceRoot(get().workspaceRoot),
+        adeDraftRevision: (get().adeDraftRevision ?? 0) + 1,
         composerWorktreeStartFrom: isolation === 'worktree' ? startFrom : undefined
       })
     },
@@ -223,7 +254,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       if (!provider.createTaskWorkspace) return false
       const thread = (get().threads.find((t) => t.id === threadId) ??
         (get().adeThreads ?? []).find((t) => t.id === threadId))
-      if (thread?.taskWorkspaceId) return true
+      if (thread?.taskWorkspaceId || readThreadWorktreeRegistry().worktrees[threadId]) return true
       const sourceRoot = normalizeWorkspaceRoot(
         thread?.workspace ?? currentCodeWorkspaceRoot(get(), await rendererRuntimeClient.getSettings())
       )
@@ -231,15 +262,22 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
         set({ error: i18n.t('common:workspaceRequiredToCreateThread') })
         return false
       }
-      markThreadWorkspacePreparing(threadId, '')
+      const previousPrep = useTaskWorkspaceStore.getState().prepByThread[threadId]
+      const retryId = previousPrep?.state === 'failed' ? previousPrep.workspaceId : ''
+      markThreadWorkspacePreparing(threadId, retryId)
       try {
-        const created = await provider.createTaskWorkspace({
+        if (retryId && !provider.retryTaskWorkspace) throw new Error('Workspace retry is unavailable.')
+        const created = retryId ? await provider.retryTaskWorkspace!(retryId) : await provider.createTaskWorkspace({
           ownerThreadId: threadId,
           sourceRoot,
           isolation: 'worktree',
           ...(startFrom ? { startFrom } : {})
         })
         receiveTaskWorkspaceRecord(created.record)
+        if (created.record.state === 'ready') {
+          await bindReadyTaskWorkspace({ threadId, workspaceId: created.record.workspaceId, state: 'ready',
+            workspace: { path: created.record.path } }, set, get)
+        }
         return true
       } catch (error) {
         markThreadWorkspacePrepFailed(
@@ -289,6 +327,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
         return queuedComposerModelReload
       }
       if (typeof window.kunGui === 'undefined') return
+      set({ composerModelCatalogStatus: 'loading' })
       const task = (async () => {
         const [res, extensionProviders] = await Promise.all([
           window.kunGui.fetchUpstreamModels(),
@@ -373,15 +412,20 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
             composerPickList: pick,
             composerModel: selection.model,
             composerProviderId: selection.providerId,
-            composerReasoningEffort: composerReasoningEffortForSelection(
+            composerReasoningEffort: state.composerHarnessId && state.composerHarnessId !== 'kun'
+              ? state.composerReasoningEffort : composerReasoningEffortForSelection(
               groups,
               selection.model,
               selection.providerId
             ),
-            composerModelGroups: groups
+            composerModelGroups: groups,
+            composerModelCatalogStatus: 'ready'
           }
         })
-      })().finally(() => {
+      })().catch((error) => {
+        set({ composerModelCatalogStatus: 'error' })
+        throw error
+      }).finally(() => {
         setComposerModelLoadPromise(null)
       })
       setComposerModelLoadPromise(task)

@@ -81,25 +81,26 @@ describe('terminalAgents catalog entries (P4-13)', () => {
 })
 
 describe('transportOverrides (P6-07)', () => {
-  it('swaps codex onto its codex-app-server variant', () => {
+  it('swaps codex onto its explicit ACP variant with matching setup', () => {
     const catalog = new HarnessCatalog({
       custom: () => [],
-      transportOverrides: () => ({ codex: 'codex-app-server' })
+      transportOverrides: () => ({ codex: 'acp' })
     })
     const codex = catalog.get('codex')!
-    expect(codex.transport).toBe('codex-app-server')
-    expect(codex.launch?.command).toBe('codex')
-    expect(codex.launch?.args).toEqual(['app-server'])
-    expect(codex.detect?.command).toBe('codex')
-    expect(codex.detect?.minVersion).toBe('0.145.0')
-    expect(codex.capabilities.statuses.fork.supported).toBe(true)
-  })
-
-  it('keeps the default acp binding without an override', () => {
-    const codex = new HarnessCatalog({ custom: () => [] }).get('codex')!
     expect(codex.transport).toBe('acp')
     expect(codex.launch?.command).toBe('codex-acp')
     expect(codex.detect?.adapterHint?.command).toBe('codex')
+    expect(codex.setup?.adapter?.command).toBe('codex-acp')
+    expect(codex.capabilities.statuses.fork.supported).toBe(false)
+  })
+
+  it('uses the native app-server by default without ACP guidance', () => {
+    const codex = new HarnessCatalog({ custom: () => [] }).get('codex')!
+    expect(codex.transport).toBe('codex-app-server')
+    expect(codex.launch?.command).toBe('codex')
+    expect(codex.launch?.args).toEqual(['app-server'])
+    expect(codex.detect?.minVersion).toBe('0.145.0')
+    expect(codex.setup?.adapter).toBeUndefined()
   })
 
   it('ignores unknown transports and unrelated ids', () => {
@@ -110,7 +111,7 @@ describe('transportOverrides (P6-07)', () => {
         unknownharness: 'codex-app-server'
       })
     })
-    expect(catalog.get('codex')!.transport).toBe('acp')
+    expect(catalog.get('codex')!.transport).toBe('codex-app-server')
     expect(catalog.get('unknownharness')).toBeUndefined()
   })
 })

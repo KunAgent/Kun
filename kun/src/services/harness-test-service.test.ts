@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
-import { runHarnessTest } from './harness-test-service.js'
+import { runHarnessTest, withTimeout } from './harness-test-service.js'
 import { ACP_DEFAULT_CAPABILITIES } from '../harness/builtin-harnesses.js'
 import type { HarnessDefinition, HarnessId, HarnessStatus } from '../contracts/harness.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
@@ -132,6 +132,19 @@ function runtimeWith(
 }
 
 describe('runHarnessTest', () => {
+  it('returns an unconfirmed timeout when a harness interrupt never acknowledges', async () => {
+    vi.useFakeTimers()
+    try {
+      const result = withTimeout(new Promise<never>(() => undefined), 100, () =>
+        new Promise<void>(() => undefined))
+      await vi.advanceTimersByTimeAsync(100)
+      await vi.advanceTimersByTimeAsync(5_000)
+      await expect(result).resolves.toBe('timeout_unconfirmed')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('detect level returns the fresh detection verdict', async () => {
     const definition = acpDefinition('basic-chat.json')
     const result = await runHarnessTest(
@@ -269,6 +282,22 @@ describe('runHarnessTest', () => {
       threadId: 'thr-test',
       turnId: 'turn-1'
     })
+    expect(fakes.threadService.delete).toHaveBeenCalledWith('thr-test')
+  })
+
+  it('cancels an active trial when its HTTP request aborts', async () => {
+    const fakes = trialFakes({ turnStatus: 'aborted' })
+    const definition = cliDefinition()
+    const controller = new AbortController()
+    const runtime = runtimeWith(definition, {
+      runTurn: () => new Promise(() => undefined)
+    } as unknown as ServerRuntime, fakes)
+    const trial = runHarnessTest(runtime, definition, { level: 'trial', timeoutMs: 120_000 }, controller.signal)
+    await vi.waitFor(() => expect(fakes.turnService.startTurn).toHaveBeenCalled())
+    controller.abort()
+    const result = await trial
+    expect(result.trial?.status).toBe('aborted')
+    expect(fakes.turnService.interruptTurn).toHaveBeenCalledWith({ threadId: 'thr-test', turnId: 'turn-1' })
     expect(fakes.threadService.delete).toHaveBeenCalledWith('thr-test')
   })
 

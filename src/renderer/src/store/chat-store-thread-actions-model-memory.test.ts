@@ -128,6 +128,23 @@ describe('thread send model memory', () => {
     vi.unstubAllGlobals()
   })
 
+  it.each([
+    { agentSurface: 'design' as const }, { guiDesignCanvas: true },
+    { guiDesignMode: true }, { orchestration: 'graph' as const }, { planBuild: true }
+  ])('blocks bypassed Kun product input before submitting to an external Agent: %j', async (intent) => {
+    const sendUserMessage = vi.fn()
+    registryMock.getProvider.mockReturnValue({ sendUserMessage })
+    stubRuntimeWindow()
+    const { actions, state } = buildHarness()
+    state.composerHarnessId = 'codex'
+    state.composerCredentialMode = 'native-login'
+    state.composerModel = 'native-model'
+    await expect(actions.sendMessage('Run this workflow', 'agent', intent)).resolves.toBe(false)
+    expect(sendUserMessage).not.toHaveBeenCalled()
+    expect(state.queuedMessages).toEqual([])
+    expect(state.error).toBeTruthy()
+  })
+
   it('does not let a drained queued message overwrite a newer user model selection', async () => {
     // A message enqueued while terra was selected keeps sending with terra,
     // but draining it after the user switched to k3 must not rewrite the
@@ -148,6 +165,10 @@ describe('thread send model memory', () => {
     state.route = 'chat'
     state.composerModel = 'k3'
     state.composerProviderId = 'test-provider'
+    state.composerHarnessId = 'codex'
+    state.composerCredentialMode = 'native-login'
+    state.graphEnabled = true
+    state.composerOrchestration = 'graph'
 
     const queued = {
       id: 'q-drain-1',
@@ -155,7 +176,8 @@ describe('thread send model memory', () => {
       mode: 'agent' as const,
       deliveryState: 'starting' as const,
       model: 'terra',
-      providerId: 'test-provider'
+      providerId: 'test-provider',
+      harnessId: 'kun'
     }
 
     await expect(actions.sendMessage(queued.text, queued.mode, { queued }))
@@ -164,7 +186,7 @@ describe('thread send model memory', () => {
     expect(sendUserMessage).toHaveBeenCalledWith(
       'thr_existing',
       queued.text,
-      expect.objectContaining({ model: 'terra' })
+      expect.objectContaining({ model: 'terra', harnessId: 'kun', orchestration: 'direct' })
     )
     expect(readStoredSelection()).toEqual({
       thr_existing: { model: 'k3', providerId: 'test-provider', source: 'user' }

@@ -22,6 +22,7 @@ import {
   writeBrowserStorageItem
 } from '../../lib/browser-storage'
 import { registerRemoteStreamResubscriber } from '../../lib/remote-stream-resubscribers'
+import { createRoomNotificationNavigator, isFocusedRoomConversation, type RoomNotificationTarget } from './room-notification-navigation'
 
 type Event = {
   seq: number
@@ -91,6 +92,8 @@ export function useRoomEvents() {
     if (!window.kunGui?.startSse) return
     const streamId = 'rooms-' + roomRequestId()
     let stopped = false
+    const notificationNavigation = createRoomNotificationNavigator({ isStopped: () => stopped,
+      onGroup: (roomId) => listeners.forEach((listener) => listener({ seq: cursor, roomId, kind: 'navigate' })) })
     const savedCursor = Number(readBrowserStorageItem('kun.rooms.eventCursor') ?? 0)
     let cursor = Number.isSafeInteger(savedCursor) && savedCursor >= 0 ? savedCursor : 0
     let queue: RoomNotificationQueue | undefined
@@ -136,7 +139,7 @@ export function useRoomEvents() {
       const { preference } = await roomsRequest<RoomPreferenceDetail>('/v1/rooms/' + encodeURIComponent(event.roomId) + '/preferences')
       if (stopped) throw new Error('room notification subscription stopped')
       if (roomNotificationSuppressed(preference, event.createdAt)) return roomNotificationsMuted(preference) ? notice.key : null
-      if (useChatStore.getState().route === 'rooms' && readBrowserStorageItem('kun.rooms.selected') === event.roomId && document.hasFocus()) return notice.key
+      if (isFocusedRoomConversation(event.roomId)) return notice.key
       const result = await window.kunGui.showTurnCompleteNotification({ roomId: event.roomId, threadId: notice.threadId,
         source: 'main-agent', title: 'Kun · ' + i18n.t('roomsLabel', { ns: 'common' }), body: notice.body.slice(0, 500) })
       if (!result.ok) throw new Error(result.message)
@@ -160,14 +163,8 @@ export function useRoomEvents() {
     void queue?.drain(deliver)
     const off = rendererRuntimeClient.onSseEvent((payload) => {
       if (payload.streamId === 'rooms-navigation') {
-        const event = payload.events[0] as { roomId?: string }
-        if (event.roomId) {
-          writeBrowserStorageItem('kun.rooms.selected', event.roomId)
-          useChatStore.getState().setRoute('rooms')
-          listeners.forEach((listener) =>
-            listener({ seq: cursor, roomId: event.roomId!, kind: 'navigate' })
-          )
-        }
+        const event = payload.events[0] as RoomNotificationTarget
+        if (event?.roomId) void notificationNavigation.open(event).catch(() => undefined)
       } else if (payload.streamId === streamId)
         for (const event of payload.events) void consume(event as Event)
     })
@@ -240,6 +237,7 @@ export function useRoomEvents() {
     }, 10000)
     return () => {
       stopped = true
+      notificationNavigation.dispose()
       live = false
       clearTimeout(refreshTimer)
       clearTimeout(threadRefreshTimer)

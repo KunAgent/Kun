@@ -147,7 +147,7 @@ async function makeHarness(scenarioFile: string, input: {
 
   let idSeq = 0
   const deps: AcpRuntimeDeps = {
-    catalog: { get: (id) => (id === 'fake-acp' ? definition : undefined) },
+    catalog: { get: (id) => (id === 'fake-acp' || id === definition.id ? definition : undefined) },
     threadStore: {
       get: async () => thread
     } as unknown as AcpRuntimeDeps['threadStore'],
@@ -622,7 +622,7 @@ describe('AcpRuntime.runTurn', () => {
       const configDir = mkdtempSync(join(tmpdir(), 'acp-gw-'))
       tempDirs.push(configDir)
       let spawnedEnv: Record<string, string | undefined> = {}
-      const h = await makeHarness('basic-chat.json', {
+      const h = await makeHarness('gateway-model.json', {
         turn: {
           credentialMode: 'kun-gateway',
           model: 'kun/deepseek/deepseek-chat'
@@ -652,6 +652,7 @@ describe('AcpRuntime.runTurn', () => {
         new AbortController().signal
       )
       expect(outcome).toBe('completed')
+      expect(h.requests('session/set_config_option')[0]?.params?.value).toBe('kun/deepseek/deepseek-chat')
       expect(spawnedEnv.KUN_GATEWAY_BASE_URL).toBe('http://127.0.0.1:18899/v1')
       expect(spawnedEnv.KUN_GATEWAY_TOKEN?.startsWith('kgw_')).toBe(true)
       expect(spawnedEnv.OPENCODE_CONFIG).toContain(configDir)
@@ -676,4 +677,19 @@ describe('AcpRuntime.runTurn', () => {
       h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)
     ).rejects.toThrow('serve-hosted')
   })
+})
+
+// authMethods describes login choices; an existing login can already serve turns.
+test('Devin delegates with advertised authentication and narrows the restored mode', async () => {
+  const definition = BUILTIN_HARNESSES.find((entry) => entry.id === 'devin')!
+  const h = await makeHarness('auth-advertised.json', {
+    definition: { id: definition.id, permissionModes: definition.permissionModes },
+    turn: { harnessId: 'devin' }, thread: { harnessId: 'devin' }
+  })
+  const outcome = await h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)
+  expect(outcome, JSON.stringify(h.finished)).toBe('completed')
+  expect(h.requests('authenticate')).toEqual([])
+  expect(h.requests('session/set_mode')[0]?.params?.modeId).toBe('normal')
+  expect(h.requests('session/prompt')).toHaveLength(1)
+  expect(h.deltas.map((entry) => entry.delta).join('')).toBe('Authenticated reply')
 })

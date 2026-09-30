@@ -599,8 +599,11 @@ Kun 的 Code 模式可以升级为 ADE（Agentic Development Environment）：�
   checkout 里的未提交改动。
 - 交接上下文由代码确定性生成（`kun_handoff` 简报），不靠模型摘要；
   `docs/AGENTS.md` 的不可变前缀不因 ADE 改变。
-- `agents.kun.ade.*` 是唯一设置入口；`enabled` 关闭时所有 ADE 界面不出现，
-  `harnessRouter` 关闭时回到旧的 provider 推断路径。
+- `agents.kun.ade.*` 保留为协作策略设置，日常入口在 Code 的模型菜单、加号菜单、
+  任务设置和原有助手设置内。关闭高级协作阻止新派工，历史任务及已有停止、审批、
+  回答入口保持可达；`harnessRouter` 关闭时保留旧 provider 推断路径。
+- Code 与历史 ADE 根任务使用统一服务端分页和搜索；旧 `ade` 路由重定向 Code，
+  原 thread ID 和持久字段保留。worker 预览与审查目标不修改主会话选择。
 
 ## 验证清单
 

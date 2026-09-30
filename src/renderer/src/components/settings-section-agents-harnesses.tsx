@@ -8,7 +8,7 @@ import { AgentCenter } from './ade/AgentCenter'
  * docs/ade/impl/p4 §3.2): the same cards the ADE sidebar entry opens, so
  * both surfaces stay identical.
  *
- * P4-09: install/login actions prefill the builtin harness's setup command
+ * Interactive login and the optional manual install fallback prefill the builtin setup command
  * into a fresh Kun terminal tab instead of running it — the user reviews
  * and executes it, and the harness is re-probed when that PTY exits. The
  * command only ever comes from builtin `setup` metadata

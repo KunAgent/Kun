@@ -63,6 +63,7 @@ import {
   trajectorySummaryResponse
 } from './trajectory.js'
 import { getThreadSummary } from './thread-summary.js'
+import { getThreadExecutionConfig, patchThreadExecutionConfig } from './thread-execution-config.js'
 import { threadActivityResponse } from './thread-activity.js'
 import { jsonResponse } from '../response.js'
 import { ERRORS } from './runtime-error.js'
@@ -118,6 +119,14 @@ export function registerThreadRoutes(
   router.add('GET', '/v1/threads/:id/summary', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return getThreadSummary(runtime.threadService, ctx.params.id, runtime.sessionStore)
+  })
+  router.add('GET', '/v1/threads/:id/execution-config', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return getThreadExecutionConfig(runtime.threadService, ctx.params.id)
+  })
+  router.add('PATCH', '/v1/threads/:id/execution-config', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return patchThreadExecutionConfig(runtime.threadService, ctx.params.id, request)
   })
   // This static suffix must be registered before `/:id`, because Router uses
   // first-match ordering for parameterized paths.

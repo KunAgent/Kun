@@ -267,7 +267,7 @@ export function LaboratorySettingsSection({ ctx }: { ctx: Record<string, any> })
         className="[&>div]:mt-0"
       >
         <AdeLabSettingsPanel
-          view={{ t, kun, updateKun, modelProviders }}
+          view={{ t, kun, updateKun }}
         />
       </SettingsTabPanel>
     </>

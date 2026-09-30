@@ -4,8 +4,14 @@
  * and closes it — the same spawn-free-then-cached contract as AcpModelProbe.
  */
 import { startHarnessProcess } from '../session/harness-process.js'
+import { statSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type { HarnessModelCatalog } from '../contracts/harness-models.js'
+import { codexMetadataProbeArgs, resolveCodexExecutable } from './codex-executable.js'
 import { CodexClient } from '../runtime/codex/codex-client.js'
 import type { HarnessDefinition, HarnessId } from '../contracts/harness.js'
+import { nativeAgentNetworkEnv, nativeAgentNetworkStatus } from './native-agent-network.js'
 import {
   resolveHarnessSecretEnv,
   type HarnessSecretRefResolver
@@ -26,73 +32,89 @@ export type CodexModelProbeDeps = {
 export class CodexModelProbe {
   private readonly cache = new Map<
     string,
-    { expiresAt: number; models: string[] }
+    { expiresAt: number; catalog: HarnessModelCatalog; command: string }
   >()
-  private readonly pending = new Map<string, Promise<string[]>>()
+  private readonly pending = new Map<string, Promise<HarnessModelCatalog>>()
 
   constructor(private readonly deps: CodexModelProbeDeps = {}) {}
 
   /** Spawn-free read; undefined when no fresh successful list is cached. */
   peek(definition: HarnessDefinition): string[] | undefined {
     const cached = this.cache.get(this.cacheKey(definition))
-    return cached && cached.expiresAt > this.nowMs() && cached.models.length > 0
-      ? cached.models
+    return cached && cached.expiresAt > this.nowMs() && cached.catalog.models.length > 0
+      ? cached.catalog.models
       : undefined
   }
 
-  /** Best-effort probe; never throws — failures cache briefly as []. */
   async probe(definition: HarnessDefinition): Promise<string[]> {
+    return (await this.probeCatalog(definition)).models
+  }
+
+  async probeCatalog(definition: HarnessDefinition): Promise<HarnessModelCatalog> {
+    const override = this.deps.binaryPath?.(definition.id)
+    const command = await resolveCodexExecutable(override ?? definition.launch?.command ?? '', Boolean(override))
     const key = this.cacheKey(definition)
     const cached = this.cache.get(key)
-    if (cached && cached.expiresAt > this.nowMs()) return cached.models
-    const inFlight = this.pending.get(key)
+    if (cached && cached.command === command && cached.expiresAt > this.nowMs()) return cached.catalog
+    const pendingKey = `${key}:${command}`
+    const inFlight = this.pending.get(pendingKey)
     if (inFlight) return inFlight
-    const task = this.probeUncached(definition)
-      .then((models) => {
-        this.cache.set(key, {
-          expiresAt:
-            this.nowMs() +
-            (this.deps.cacheMs ?? CODEX_MODEL_PROBE_CACHE_MS),
-          models
-        })
-        return models
-      })
-      .catch(() => {
-        this.cache.set(key, { expiresAt: this.nowMs() + 30_000, models: [] })
-        return [] as string[]
-      })
-      .finally(() => this.pending.delete(key))
-    this.pending.set(key, task)
+    const task = this.probeUncached(definition, command).then((catalog) => {
+      this.cache.set(key, { command, catalog,
+        expiresAt: this.nowMs() + (this.deps.cacheMs ?? CODEX_MODEL_PROBE_CACHE_MS) })
+      return catalog
+    }).catch(() => {
+      const catalog = { models: [], modelInfo: [] }
+      this.cache.set(key, { command, catalog, expiresAt: this.nowMs() + 30_000 })
+      return catalog
+    }).finally(() => this.pending.delete(pendingKey))
+    this.pending.set(pendingKey, task)
     return task
   }
 
-  private async probeUncached(
-    definition: HarnessDefinition
-  ): Promise<string[]> {
+  private async probeUncached(definition: HarnessDefinition, command: string): Promise<HarnessModelCatalog> {
     const launch = definition.launch
-    if (!launch?.command) return []
-    const secretEnv = await resolveHarnessSecretEnv(
-      definition,
-      this.deps.resolveSecretEnv
-    )
-    const proc = await startHarnessProcess({
-      command: this.deps.binaryPath?.(definition.id) ?? launch.command,
-      args: launch.args,
-      env: launch.env,
-      secretEnv,
-      cwd: undefined
-    })
+    if (!command || !launch) return { models: [], modelInfo: [] }
+    const secretEnv = await resolveHarnessSecretEnv(definition, this.deps.resolveSecretEnv)
+    const proc = await startHarnessProcess({ command, args: codexMetadataProbeArgs(launch.args),
+      env: { ...nativeAgentNetworkEnv(definition, process.env, secretEnv), ...launch.env },
+      secretEnv, cwd: tmpdir() })
     const client = new CodexClient({ process: proc })
     try {
       await withTimeout(client.initialize(), CODEX_PROBE_TIMEOUT_MS)
-      return await withTimeout(client.listModelsFlat(), CODEX_PROBE_TIMEOUT_MS)
-    } finally {
-      await proc.stop().catch(() => undefined)
-    }
+      const rows = await withTimeout(client.listModels(), CODEX_PROBE_TIMEOUT_MS)
+      const configured = await withTimeout(client.configuredModel(), CODEX_PROBE_TIMEOUT_MS).catch(() => undefined)
+      const defaultModel = configured && configured !== 'codex-auto-review' ? configured : undefined
+      const catalog: HarnessModelCatalog = { models: rows.map((row) => row.model), modelInfo: rows.map((row) => ({
+        id: row.model, displayName: row.displayName, description: row.description,
+        isDefault: defaultModel ? row.model === defaultModel : row.isDefault,
+        ...(row.inputModalities ? { inputModalities: row.inputModalities } : {}),
+        defaultReasoningEffort: row.defaultReasoningEffort,
+        reasoningEfforts: (row.supportedReasoningEfforts ?? []).flatMap((entry) => {
+          const effort = (entry as { reasoningEffort?: unknown })?.reasoningEffort
+          return typeof effort === 'string' ? [effort] : []
+        })
+      })) }
+      if (defaultModel && !catalog.models.includes(defaultModel)) {
+        catalog.models.push(defaultModel)
+        catalog.modelInfo.push({ id: defaultModel, isDefault: true })
+      }
+      return catalog
+    } finally { await proc.stop().catch(() => undefined) }
   }
 
   private cacheKey(definition: HarnessDefinition): string {
-    return `${definition.id}:${this.deps.binaryPath?.(definition.id) ?? ''}`
+    const home = definition.launch?.env?.CODEX_HOME ?? process.env.CODEX_HOME ?? join(homedir(), '.codex')
+    return JSON.stringify({
+      id: definition.id,
+      home,
+      auth: fileIdentity(join(home, 'auth.json')),
+      config: fileIdentity(join(home, 'config.toml')),
+      network: nativeAgentNetworkStatus(definition).networkFingerprint,
+      command: this.deps.binaryPath?.(definition.id) ?? definition.launch?.command,
+      args: definition.launch?.args,
+      env: definition.launch?.env
+    })
   }
 
   private nowMs(): number {
@@ -100,15 +122,17 @@ export class CodexModelProbe {
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error('codex probe timed out')),
-        ms
-      )
+function fileIdentity(path: string): string {
+  try { const value = statSync(path); return `${value.ino}:${value.size}:${value.mtimeMs}` }
+  catch { return 'absent' }
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([promise, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('codex probe timed out')), ms)
       timer.unref?.()
-    })
-  ])
+    })])
+  } finally { if (timer) clearTimeout(timer) }
 }

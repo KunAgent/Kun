@@ -71,6 +71,10 @@ export function createKunTaskWorkspaceClient() {
       )
     },
 
+    retryTaskWorkspace(workspaceId: string): Promise<TaskWorkspaceRecordResponse> {
+      return post(kunTaskWorkspacePath(workspaceId, '/retry'), {}, 'failed to retry task workspace')
+    },
+
     /** Per-file diff stats after a fresh capture (docs/ade/11 §3). */
     getTaskWorkspaceDiff(workspaceId: string): Promise<TaskWorkspaceDiffListResponse> {
       return get(
@@ -136,11 +140,12 @@ export function createKunTaskWorkspaceClient() {
     /** Integrate the worktree back into its source checkout (user action). */
     integrateTaskWorkspace(
       workspaceId: string,
-      mode: TaskWorkspaceIntegrateMode
+      mode: TaskWorkspaceIntegrateMode,
+      previewToken?: string
     ): Promise<TaskWorkspaceIntegrateResponse> {
       return post(
         kunTaskWorkspacePath(workspaceId, '/integrate'),
-        { mode },
+        { mode, ...(previewToken ? { previewToken } : {}) },
         'failed to integrate task workspace'
       )
     },
