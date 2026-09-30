@@ -22,7 +22,6 @@ import type {
 import {
   DEFAULT_IMAGE_GENERATION_PROTOCOL,
   DEFAULT_MODEL_PROVIDER_ID,
-  OPENCODE_FREE_PROVIDER_ID,
   DEFAULT_MUSIC_GENERATION_PROTOCOL,
   DEFAULT_SPEECH_TO_TEXT_PROTOCOL,
   DEFAULT_TEXT_TO_SPEECH_PROTOCOL,
@@ -338,7 +337,7 @@ export function modelProvidersSettingsPatch(input: {
   failover?: ModelProviderFailoverV1[]
 }): AppSettingsPatch {
   const defaultProvider = input.providers.find((item) => item.id === DEFAULT_MODEL_PROVIDER_ID)
-  const excludedBuiltinProviderIds = [DEFAULT_MODEL_PROVIDER_ID, OPENCODE_FREE_PROVIDER_ID]
+  const excludedBuiltinProviderIds = [DEFAULT_MODEL_PROVIDER_ID]
     .filter((id) => !input.providers.some((item) => item.id === id) &&
       (input.provider.excludedBuiltinProviderIds?.includes(id) ||
         input.provider.providers.some((item) => item.id === id)))

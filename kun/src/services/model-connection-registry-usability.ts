@@ -1,12 +1,9 @@
 import type { ProjectedCredentialHealth, StoredProfile } from './model-connection-registry-core.js'
 
-const OPENCODE_FREE_PROVIDER_ID = 'opencode-free'
-
 type ProviderIdentity = { id?: string; presetSource?: string }
 
-export function isAnonymousHttpProfile(profile: ProviderIdentity): boolean {
-  return profile.id === OPENCODE_FREE_PROVIDER_ID ||
-    profile.presetSource === OPENCODE_FREE_PROVIDER_ID
+export function isAnonymousHttpProfile(_profile: ProviderIdentity): boolean {
+  return false
 }
 
 export function isProfileUsable(

@@ -7,8 +7,6 @@ import type {
 } from '@shared/app-settings'
 import {
   DEFAULT_MODEL_PROVIDER_ID,
-  OPENCODE_FREE_MODEL_IDS,
-  OPENCODE_FREE_PROVIDER_ID,
   defaultModelRequestRetrySettings,
   defaultModelProviderSettings,
   listModelProviderReferences,
@@ -58,32 +56,6 @@ import {
 } from './shared-provider-mutation-coordinator'
 
 export { sharedModelConnectionHasUsableCredential } from '../lib/provider-credential-readiness'
-
-
-
-
-
-
-
-function isOpenCodeFreeProvider(provider: ModelProviderProfileV1): boolean {
-  return resolveModelProviderPresetSource(provider)?.preset.id === OPENCODE_FREE_PROVIDER_ID
-}
-
-const OPEN_CODE_ANONYMOUS_CHAT_MODELS = new Set<string>(OPENCODE_FREE_MODEL_IDS)
-
-export function catalogResultForProviderImport(
-  provider: ModelProviderProfileV1,
-  catalogResult: ModelsDevCatalogResult
-): ModelsDevCatalogResult {
-  return isOpenCodeFreeProvider(provider) && catalogResult.status === 'ok'
-    ? {
-        ...catalogResult,
-        models: catalogResult.models.filter((model) =>
-          model.free === true && OPEN_CODE_ANONYMOUS_CHAT_MODELS.has(model.id)
-        )
-      }
-    : catalogResult
-}
 
 export function useProviderLifecycleActions(scope: Record<string, any>): Record<string, any> {
   const deletionInFlight = useRef(false)
@@ -482,13 +454,11 @@ export function useProviderLifecycleActions(scope: Record<string, any>): Record<
     latencyMs?: number
     authoritative?: boolean
   }): void => {
-    const catalogResult = catalogResultForProviderImport(input.target, input.catalogResult)
+    const catalogResult = input.catalogResult
     const catalogOnlyIds = catalogResult.status === 'ok' && catalogResult.matchMode === 'catalog'
       ? catalogResult.models.map((model) => model.id)
       : []
-    const providerModelIds = isOpenCodeFreeProvider(input.target)
-      ? input.providerModelIds.filter((modelId) => catalogOnlyIds.some((id) => id.toLowerCase() === modelId.toLowerCase()))
-      : input.providerModelIds
+    const providerModelIds = input.providerModelIds
     const total = mergeProviderModelIds(providerModelIds, catalogOnlyIds).length
     const hasUsableEntries = providerModelIds.length > 0 || catalogOnlyIds.length > 0
     if (!hasUsableEntries) {

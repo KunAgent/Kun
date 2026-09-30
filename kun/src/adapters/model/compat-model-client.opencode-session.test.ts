@@ -7,7 +7,7 @@ function request(overrides: Partial<ModelRequest> = {}): ModelRequest {
   return {
     threadId: 'thread-opencode',
     turnId: 'turn-opencode',
-    model: 'big-pickle',
+    model: 'grok-4.5',
     systemPrompt: 'You are helpful.',
     prefix: [],
     history: [],
@@ -45,7 +45,7 @@ async function capturedSessionHeader(input: {
     presetSource: input.presetSource,
     baseUrl: input.baseUrl,
     apiKey: '',
-    model: 'big-pickle',
+    model: 'grok-4.5',
     endpointFormat: 'chat_completions',
     nonStreaming: true,
     fetchImpl: (async (_url, init) => {
@@ -60,17 +60,6 @@ async function capturedSessionHeader(input: {
 }
 
 describe('CompatModelClient OpenCode session header', () => {
-  it('sends x-opencode-session for OpenCode Free using the thread id', async () => {
-    const captured = await capturedSessionHeader({
-      providerId: 'opencode-free',
-      presetSource: 'opencode-free',
-      baseUrl: 'https://opencode.ai/zen/v1',
-      threadId: 'thr_free'
-    })
-    expect(captured.session).toBe('thr_free')
-    expect(captured.authorization).toBeNull()
-  })
-
   it('sends x-opencode-session for OpenCode Go', async () => {
     const captured = await capturedSessionHeader({
       providerId: 'opencode-go',

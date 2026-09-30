@@ -73,10 +73,7 @@ import {
   CHATGPT_SUBSCRIPTION_NAME,
   CHATGPT_SUBSCRIPTION_PROVIDER_ID,
   GEMINI_SUBSCRIPTION_MODEL_IDS,
-  OPENCODE_FREE_PROVIDER_ID,
   TOKEN_PLAN_PROVIDER_ID_SUFFIX,
-  getModelProviderPreset,
-  modelProviderPresetProfile,
   modelProviderTokenPlanProfile,
   resolveModelProviderPresetSource,
   type ModelProviderPreset
@@ -139,15 +136,12 @@ export const NON_TEXT_MODEL_PATTERN =
 
 export function defaultModelProviderSettings(): ModelProviderSettingsV1 {
   const defaultProvider = defaultModelProviderProfile('', DEFAULT_DEEPSEEK_BASE_URL)
-  const openCodeFreeProvider = modelProviderPresetProfile(
-    getModelProviderPreset(OPENCODE_FREE_PROVIDER_ID)!
-  )
   return {
     apiKey: defaultProvider.apiKey,
     baseUrl: defaultProvider.baseUrl,
     proxy: defaultNetworkProxySettings(),
     proxyRoutingVersion: PROVIDER_PROXY_ROUTING_VERSION,
-    providers: [defaultProvider, openCodeFreeProvider],
+    providers: [defaultProvider],
     routePools: [],
     localGateway: { enabled: false, name: 'Kun API', exposeProviderModels: false }
   }
@@ -163,7 +157,7 @@ export function normalizeModelProviderSettings(
   const legacyProxyRouting = input?.proxyRoutingVersion !== PROVIDER_PROXY_ROUTING_VERSION
   const missingUseProxy = legacyProxyRouting && proxy.enabled
   const rawProviders = Array.isArray(input?.providers) ? input.providers : []
-  const excludedBuiltinProviderIds = [DEFAULT_MODEL_PROVIDER_ID, OPENCODE_FREE_PROVIDER_ID]
+  const excludedBuiltinProviderIds = [DEFAULT_MODEL_PROVIDER_ID]
     .filter((id) => Array.isArray(input?.excludedBuiltinProviderIds) &&
       input.excludedBuiltinProviderIds.includes(id) &&
       !rawProviders.some((provider) => normalizeModelProviderId(provider?.id) === id))
@@ -172,15 +166,8 @@ export function normalizeModelProviderSettings(
     ...defaultModelProviderProfile(apiKey, baseUrl),
     useProxy: missingUseProxy
   }
-  const openCodeFreeProvider = modelProviderPresetProfile(
-    getModelProviderPreset(OPENCODE_FREE_PROVIDER_ID)!
-  )
-  openCodeFreeProvider.useProxy = missingUseProxy
   if (!excludedBuiltinProviderIds.includes(defaultProvider.id)) {
     providersById.set(defaultProvider.id, defaultProvider)
-  }
-  if (!excludedBuiltinProviderIds.includes(openCodeFreeProvider.id)) {
-    providersById.set(openCodeFreeProvider.id, openCodeFreeProvider)
   }
   for (const rawProvider of rawProviders) {
     const provider = normalizeModelProviderProfile(rawProvider, missingUseProxy)
@@ -464,9 +451,7 @@ export function modelProviderRequiresApiKey(
 
   const source = resolveModelProviderPresetSource(provider)
   if (
-    provider.id === OPENCODE_FREE_PROVIDER_ID ||
     source?.preset.id === 'litellm' ||
-    source?.preset.id === OPENCODE_FREE_PROVIDER_ID ||
     source?.preset.keyOptional === true
   ) return false
   // Loopback/LAN servers (LM Studio, vLLM, a local Ollama) normally serve
