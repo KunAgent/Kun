@@ -38,7 +38,7 @@ export function buildPlanBuildPrompt(
     }),
     '</plan_execution_context>',
     orchestration === 'direct' && planTodos?.length
-      ? 'Track execution with todo_list and todo_write. Reuse the stable todo IDs in plan_execution_context, replace the full list without deleting unrelated todos, mark a task in_progress before work, and completed only after verification.'
+      ? 'Track execution with task_list, task_get and task_update. Read the canonical task IDs and revisions, update only the current task, and preserve unrelated tasks. Mark running only during actual work and succeeded only with verification evidence. Legacy todo IDs are historical context; task_list resolves the migrated records.'
       : '',
     ...worktreeProtocol,
     normalizedPlan

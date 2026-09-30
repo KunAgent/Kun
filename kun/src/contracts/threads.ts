@@ -1,5 +1,8 @@
 import { z } from 'zod'
 import { RoomThreadContextSchema } from './thread-room-context.js'
+import { ExecutionTaskStateSchema } from './execution-tasks.js'
+import { ThreadTodoListSchema, ThreadTodoSourceSchema, ThreadTodoStatus, MAX_THREAD_TODOS, MAX_THREAD_TODO_CONTENT_CHARS } from './thread-todos.js'
+export * from './thread-todos.js'
 import { ThreadWorkbenchOriginSchema } from './thread-workbench-origin.js'
 import { TurnSchema, TurnStatus } from './turns.js'
 import { HarnessIdSchema } from './harness.js'
@@ -196,47 +199,6 @@ export const ThreadGoalSchema = z.object({
 })
 export type ThreadGoal = z.infer<typeof ThreadGoalSchema>
 
-export const ThreadTodoStatus = z.enum(['pending', 'in_progress', 'completed'])
-export type ThreadTodoStatus = z.infer<typeof ThreadTodoStatus>
-
-export const ThreadTodoSourceSchema = z.object({
-  kind: z.literal('plan'),
-  planId: z.string().min(1),
-  relativePath: z.string().min(1),
-  ordinal: z.number().int().nonnegative(),
-  contentHash: z.string().min(1)
-})
-export type ThreadTodoSource = z.infer<typeof ThreadTodoSourceSchema>
-
-export const MAX_THREAD_TODO_CONTENT_CHARS = 1_000
-export const MAX_THREAD_TODOS = 200
-
-export const ThreadTodoItemSchema = z.object({
-  id: z.string().min(1),
-  content: z.string().trim().min(1).max(MAX_THREAD_TODO_CONTENT_CHARS),
-  status: ThreadTodoStatus,
-  source: ThreadTodoSourceSchema.optional(),
-  createdAt: z.string(),
-  updatedAt: z.string()
-})
-export type ThreadTodoItem = z.infer<typeof ThreadTodoItemSchema>
-
-export const ThreadTodoListSchema = z.object({
-  threadId: z.string().min(1),
-  items: z.array(ThreadTodoItemSchema).max(MAX_THREAD_TODOS),
-  updatedAt: z.string()
-}).superRefine((value, ctx) => {
-  const inProgressCount = value.items.filter((item) => item.status === 'in_progress').length
-  if (inProgressCount > 1) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['items'],
-      message: 'at most one todo can be in_progress'
-    })
-  }
-})
-export type ThreadTodoList = z.infer<typeof ThreadTodoListSchema>
-
 /** Visibility of a thread created through the public Extension Agent API. */
 export const ExtensionThreadVisibilitySchema = z.enum(['private', 'workspace'])
 export type ExtensionThreadVisibility = z.infer<typeof ExtensionThreadVisibilitySchema>
@@ -403,6 +365,7 @@ export const ThreadSchemaBase = z.object({
   forkedFromTurnId: z.string().min(1).optional(),
   goal: ThreadGoalSchema.optional(),
   todos: ThreadTodoListSchema.optional(),
+  executionTasks: ExecutionTaskStateSchema.optional(),
   retentionPolicy: ThreadRetentionPolicySchema.optional(),
   /**
    * ISO timestamp of the last time this thread was auto-resumed after a

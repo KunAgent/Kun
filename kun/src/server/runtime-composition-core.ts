@@ -266,6 +266,7 @@ export async function createRuntimeCore(
   const acpClientHost = new AcpClientHost()
   const acpSessionManager = new AcpSessionManager({ coordinator: delegatedSessions })
   const threadService: ThreadService = new ThreadService({
+    legacyTaskGraphRoot: join(activeOptions.dataDir, 'task-graphs'),
     threadStore,
     deleteThreadStore: rawThreadStore,
     sessionStore,

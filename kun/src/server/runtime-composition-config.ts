@@ -5,7 +5,7 @@ import {
   isDeepStrictEqual,
   CapabilityRegistry,
   buildGoalLocalTools,
-  buildTodoLocalTools,
+  buildExecutionTaskLocalTools,
   buildDefaultLocalTools,
   createReadArtifactTool,
   buildMcpToolProviders,
@@ -121,7 +121,6 @@ export function createRuntimeConfigController(
     reviewService,
     pruneUnsentAttachments,
     designCanvasProvider,
-    taskGraphTool,
     childToolHost,
     defaultIsAntigravity,
     defaultIsCursorSdk
@@ -357,6 +356,7 @@ export function createRuntimeConfigController(
 	      nextSubagentConfig
 	    )
 	    const nextBaseToolProviders = [
+	      builtinProvider('execution-tasks', buildExecutionTaskLocalTools(threadService.executionTasks)),
 	      builtinProvider('builtin', withBackgroundShellTools(
 	        buildDefaultLocalTools({}, builtinToolOptionsForOptions(nextOptions)),
 	        nextOptions
@@ -390,8 +390,6 @@ export function createRuntimeConfigController(
 	      ...nextComputerUseProviders.providers,
 	      ...nextBrowserUseProviders.providers,
 	      builtinProvider('goal', buildGoalLocalTools(threadService)),
-	      builtinProvider('todo', buildTodoLocalTools(threadService)),
-	      builtinProvider('planning', [taskGraphTool]),
 	      ...buildDelegationToolProviders(nextDelegationRuntime, subagentRouter),
 	      ...buildFastContextToolProvider(
 	        nextDelegationRuntime,

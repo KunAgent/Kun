@@ -138,7 +138,7 @@ describe('buildToolPreferenceInstruction', () => {
       { name: 'read', description: 'Read a file' },
       { name: 'edit', description: 'Edit a file' },
       { name: 'bash', description: 'Run a shell command' },
-      { name: 'todo_write', description: 'Update todos' },
+      { name: 'task_update', description: 'Update one execution task' },
       { name: 'memory_create', description: 'Create memory' },
       { name: 'user_input', description: 'Ask the user' }
     ]
@@ -149,7 +149,8 @@ describe('buildToolPreferenceInstruction', () => {
     expect(instruction).toContain('Use `edit` for focused changes')
     expect(instruction).toContain('Use `write` only when creating or fully replacing')
     expect(instruction).toContain('`verify_changes`')
-    expect(instruction).toContain('`todo_write`')
+    expect(instruction).toContain('`task_update`')
+    expect(instruction).not.toContain('`todo_write`')
     expect(instruction).toContain('`memory_create`')
     expect(instruction).toContain('`user_input`')
     expect(instruction).not.toContain('`grep`')

@@ -98,7 +98,7 @@ import {
   writeWorkspaceForThreadId
 } from '../write/write-thread-registry'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
-import { useGraphStore } from '../graph/graph-store'
+import { threadTodosForProjection } from './thread-todo-projection'
 import {
   clearBusyWatchdog,
   resetBusyRecoveryAttempts,
@@ -282,7 +282,7 @@ export function createThreadSelectionActions(
         activeThreadRelation: cached.activeThreadRelation ?? 'primary',
         activeThreadParentId: cached.activeThreadParentId,
         activeThreadGoal: cached.activeThreadGoal,
-        activeThreadTodos: cached.activeThreadTodos,
+        activeThreadTodos: threadTodosForProjection(state, id, cached.activeThreadTodos),
         blocks: cached.blocks,
         lastSeq: cached.lastSeq,
         ...copyLiveProjection(cached),
@@ -471,7 +471,7 @@ export function createThreadSelectionActions(
         activeThreadRelation: threadRelation ?? 'primary',
         activeThreadParentId: threadParentId ?? null,
         activeThreadGoal: goal ?? null,
-        activeThreadTodos: todos ?? null,
+        activeThreadTodos: threadTodosForProjection(get(), id, todos),
         blocks,
         lastSeq: latestSeq,
         ...restoredLiveProjection(latestSeq, busy ? liveProjection : undefined),
@@ -637,7 +637,7 @@ export function createThreadSelectionActions(
       })
       set({
         activeThreadGoal: goal ?? null,
-        activeThreadTodos: todos ?? null,
+        activeThreadTodos: threadTodosForProjection(get(), targetThreadId, todos),
         threadLoadingId: busy && (hydratingTarget || get().threadLoadingId === targetThreadId)
           ? targetThreadId : null,
         threadHistoryCursor: historyCursor ?? null,

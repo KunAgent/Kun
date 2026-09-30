@@ -272,7 +272,7 @@ export function createAgentSdkTurnRuntimeDeps(
       const memoryBlocks = memoryContext.referenceBlocks
       const memoryIds = memoryContext.memories.map((memory) => memory.id)
 
-      const todoInstruction = planMode ? null : todoContinuationInstruction(thread.todos)
+      const todoInstruction = planMode ? null : todoContinuationInstruction(thread.todos, thread.executionTasks)
       if (instructionResolution || memoryContext.memories.length > 0 || memoryContext.directives.length > 0) {
         await deps.turns.updateTurnMetadata(threadId, turnId, {
           ...memoryInjectionMetadata({

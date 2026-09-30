@@ -81,6 +81,8 @@ export function extractWorkState(
     if (item.kind === 'tool_result') results.set(item.callId, item)
   }
   let todos: string[] = []
+  const executionTasks = new Map<string, { title: string; status: string }>()
+  let hasExecutionTasks = false
   let goal: string | undefined
   let plan: string | undefined
   for (const item of items) {
@@ -108,12 +110,25 @@ export function extractWorkState(
     if (item.kind === 'tool_result' && item.toolName === 'create_plan') {
       plan = planPathOf(item) ?? plan
     }
+    if (item.kind === 'tool_result' && !item.isError && ['task_create', 'task_update', 'task_get', 'task_list'].includes(item.toolName) &&
+      item.output && typeof item.output === 'object') {
+      const output = item.output as Record<string, unknown>
+      const candidates = Array.isArray(output.tasks) ? output.tasks : [output.task ?? output]
+      hasExecutionTasks = true
+      for (const candidate of candidates) {
+        if (!candidate || typeof candidate !== 'object') continue
+        const task = candidate as Record<string, unknown>
+        if (typeof task.id === 'string' && typeof task.title === 'string' && typeof task.status === 'string') {
+          executionTasks.set(task.id, { title: task.title, status: task.status })
+        }
+      }
+    }
   }
   for (const path of taskWorkspace?.changedFiles ?? []) files.add(path)
   return {
     files: [...files].sort(),
     commands: commands.slice(-MAX_TRACKED_COMMANDS),
-    todos,
+    todos: hasExecutionTasks ? [...executionTasks.values()].filter((task) => !['succeeded', 'cancelled'].includes(task.status)).map((task) => task.title) : todos,
     ...(goal ? { goal } : {}),
     ...(plan ? { plan } : {})
   }

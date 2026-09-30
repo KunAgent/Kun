@@ -13,8 +13,8 @@ import {
   PPT_AGENT_LOCAL_PROVIDER_ID,
   LocalToolHost,
   buildDefaultLocalTools,
+  buildExecutionTaskLocalTools,
   createReadArtifactTool,
-  createTaskGraphTool,
   buildMcpToolProviders,
   buildMemoryToolProviders,
   buildContextWindowToolProviders,
@@ -473,7 +473,6 @@ export async function createRuntimeServices(
     profileDir: join(core.activeOptions.dataDir, 'officecli-profile'),
     ...(officeCliRunner ? { runner: officeCliRunner } : {})
   })
-	  const taskGraphTool = createTaskGraphTool({ rootDir: join(core.activeOptions.dataDir, 'task-graphs') })
   const adeStores = {
     teams: new FileTeamStore(core.activeOptions.dataDir, nowIso),
     dispatches: new FileDispatchStore(core.activeOptions.dataDir, nowIso),
@@ -506,6 +505,8 @@ export async function createRuntimeServices(
   const hookWriter = (unitId: string, hooks: { kind: string; events: string[] }) =>
     writeHookConfig(core.activeOptions.dataDir, unitId, hooks, kunHookCommand())
 	  let baseToolProviders = [
+    { id: 'execution-tasks', kind: 'built-in' as const, enabled: true, available: true,
+      tools: buildExecutionTaskLocalTools(threadService.executionTasks) },
     {
       id: 'builtin',
       kind: 'built-in' as const,
@@ -605,7 +606,6 @@ export async function createRuntimeServices(
     memoryDistillation,
     designCanvasProvider,
     officeCliProviders,
-    taskGraphTool,
     childToolHost,
     adeStores,
     attribution,

@@ -25,7 +25,8 @@ const GOAL_RESUME_PROMPT = [
 
 const GOAL_NON_PROGRESS_TOOL_NAMES = new Set<string>([
   GET_GOAL_TOOL_NAME,
-  UPDATE_GOAL_TOOL_NAME
+  UPDATE_GOAL_TOOL_NAME,
+  'task_create', 'task_update', 'task_get', 'task_list'
 ])
 
 export type GoalElapsedTimer = Readonly<{

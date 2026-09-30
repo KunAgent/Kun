@@ -6,7 +6,7 @@ import type { SdkTurnContext } from './agent-sdk-runtime-contracts.js'
 const SDK_COMMAND_TOOLS = new Set(['Bash'])
 const SDK_WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
 const SDK_READ_PATH_TOOLS = new Set(['Read', 'Glob', 'Grep', 'NotebookRead'])
-const SDK_NON_PATH_TOOLS = new Set(['WebSearch', 'WebFetch', 'TodoWrite'])
+const SDK_NON_PATH_TOOLS = new Set(['WebSearch', 'WebFetch'])
 const KUN_BRIDGED_TOOL_PREFIX = 'mcp__kun__'
 
 export function decideSdkBuiltinSandbox(

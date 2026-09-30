@@ -162,7 +162,7 @@ export class TurnContextResolver {
       : null
     const activeTodoInstruction = planTurnActive
       ? null
-      : todoContinuationInstruction(input.thread.todos)
+      : todoContinuationInstruction(input.thread.todos, input.thread.executionTasks)
     const forcedAllowedToolNames = intersectAllowedToolNames(
       this.deps.forcedAllowedToolNames,
       input.mode.dedicatedSvgTurn ? SVG_ARTIFACT_ALLOWED_TOOL_NAMES : undefined

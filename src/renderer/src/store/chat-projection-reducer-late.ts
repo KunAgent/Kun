@@ -1,6 +1,7 @@
 import type { ChatBlock } from '../agent/types'
 import type { RuntimeProjectionAction } from '../agent/runtime-projection-actions'
 import type { ChatState } from './chat-store-types'
+import { threadTodosForProjection } from './thread-todo-projection'
 import type { ChatProjectionReducerContext } from './chat-projection-reducer'
 import {
   finalizeTurnTimingAt,
@@ -182,7 +183,9 @@ export function reduceLateChatProjection(
     case 'todos_changed': {
       const event = action.payload
       if (!event.threadId) return {}
-      const todos = event.cleared ? null : event.todos
+      const previous = threadTodosForProjection(state, event.threadId)
+      const todos = threadTodosForProjection(state, event.threadId, event.cleared ? null : event.todos)
+      if (todos === previous) return {}
       const updatedAt = todos?.updatedAt ?? event.createdAt ?? new Date(context.now).toISOString()
       const threads = state.threads.map((thread) =>
         thread.id === event.threadId ? { ...thread, todos, updatedAt } : thread
@@ -332,6 +335,7 @@ export function reduceLateChatProjection(
               : snapshot.threadStatus
           )
         : undefined
+      const canonicalTodos = threadTodosForProjection(state, snapshot.threadId, snapshot.todos)
       const statusUpdate = (
         list: ChatState['threads'],
         hasUpdate: boolean
@@ -351,13 +355,13 @@ export function reduceLateChatProjection(
         const canonical = next.map((thread) => {
           if (thread.id !== snapshot.threadId) return thread
           const goalMatches = snapshot.goal === undefined || thread.goal === snapshot.goal
-          const todosMatch = snapshot.todos === undefined || thread.todos === snapshot.todos
+          const todosMatch = snapshot.todos === undefined || thread.todos === canonicalTodos
           if (goalMatches && todosMatch) return thread
           changed = true
           return {
             ...thread,
             ...(snapshot.goal !== undefined ? { goal: snapshot.goal } : {}),
-            ...(snapshot.todos !== undefined ? { todos: snapshot.todos } : {})
+            ...(snapshot.todos !== undefined ? { todos: canonicalTodos } : {})
           }
         })
         return changed ? canonical : next
@@ -430,7 +434,7 @@ export function reduceLateChatProjection(
         activeThreadTodos:
           !snapshotTurnIsCurrent || snapshot.todos === undefined
             ? state.activeThreadTodos
-            : snapshot.todos,
+            : canonicalTodos,
         ...(threads !== state.threads ? { threads } : {}),
         ...(adeThreads !== state.adeThreads ? { adeThreads } : {}),
         error: context.clearRecoveringError(state.error)

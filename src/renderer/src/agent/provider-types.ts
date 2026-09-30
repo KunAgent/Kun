@@ -616,6 +616,8 @@ export interface AgentProvider {
   ): Promise<ThreadGoal>
   clearThreadGoal?(threadId: string): Promise<boolean>
   getThreadTodos?(threadId: string): Promise<ThreadTodoList | null>
+  updateThreadExecutionTask?(threadId: string, taskId: string,
+    patch: { expectedRevision: number; clientRequestId: string; status: ThreadTodoStatus }): Promise<ThreadTodoList>
   setThreadTodos?(
     threadId: string,
     todos: Array<{

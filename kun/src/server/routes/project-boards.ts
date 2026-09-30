@@ -20,6 +20,7 @@ import {
   type ProjectBoardService
 } from '../../services/project-board-service.js'
 import type { ThreadService } from '../../services/thread-service.js'
+import { ExecutionTaskError } from '../../services/execution-task-service.js'
 import { readJsonBody } from '../read-json-body.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { ERRORS } from './runtime-error.js'
@@ -163,6 +164,8 @@ export async function patchThreadTodoStatus(
     const todos = await threadService.patchTodoStatus(threadId, todoId, parsed.data.status)
     return jsonResponse(PatchThreadTodoResponseSchema.parse({ todos }))
   } catch (error) {
+    if (error instanceof ExecutionTaskError) return jsonResponse({ code: error.code, message: error.message },
+      error.code === 'not_found' ? 404 : error.code === 'forbidden' ? 403 : error.code === 'conflict' ? 409 : 400)
     const message = error instanceof Error ? error.message : String(error)
     if (/not found/i.test(message)) return ERRORS.notFound(message)
     if (/plan|path/i.test(message)) return ERRORS.validation(message)

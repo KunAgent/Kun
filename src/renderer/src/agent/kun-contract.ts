@@ -298,6 +298,10 @@ export type CoreThreadTodoItemJson = {
   id: string
   content: string
   status: CoreThreadTodoStatusJson
+  taskStatus?: 'pending' | 'running' | 'waiting' | 'blocked' | 'paused' | 'succeeded' | 'failed' | 'cancelled'
+  taskRevision?: number
+  ownerThreadId?: string
+  reason?: string
   source?: CoreThreadTodoSourceJson
   createdAt: string
   updatedAt: string
@@ -305,6 +309,7 @@ export type CoreThreadTodoItemJson = {
 
 export type CoreThreadTodoListJson = {
   threadId: string
+  revision?: number
   items: CoreThreadTodoItemJson[]
   updatedAt: string
 }

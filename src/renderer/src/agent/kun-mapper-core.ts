@@ -157,10 +157,15 @@ export function goalFromCore(goal: CoreThreadGoalJson): ThreadGoal {
 export function todosFromCore(todos: CoreThreadTodoListJson): ThreadTodoList {
   return {
     threadId: todos.threadId,
+    ...(todos.revision !== undefined ? { revision: todos.revision } : {}),
     items: (todos.items ?? []).map((item) => ({
       id: item.id,
       content: item.content,
       status: item.status,
+      ...(item.taskStatus ? { taskStatus: item.taskStatus } : {}),
+      ...(item.taskRevision !== undefined ? { taskRevision: item.taskRevision } : {}),
+      ...(item.ownerThreadId ? { ownerThreadId: item.ownerThreadId } : {}),
+      ...(item.reason ? { reason: item.reason } : {}),
       ...(item.source ? { source: { ...item.source } } : {}),
       createdAt: item.createdAt,
       updatedAt: item.updatedAt
