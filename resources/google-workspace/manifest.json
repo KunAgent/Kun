@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "version": "0.22.5",
+  "releaseTag": "v0.22.5",
+  "sourceCommit": "705fb0ecac6f4249679958f6325b809b63fdde17",
+  "sourceUrl": "https://github.com/googleworkspace/cli/tree/v0.22.5",
+  "releaseUrl": "https://github.com/googleworkspace/cli/releases/tag/v0.22.5",
+  "license": "Apache-2.0",
+  "assets": {
+    "darwin-arm64": {
+      "name": "google-workspace-cli-aarch64-apple-darwin.tar.gz",
+      "url": "https://github.com/googleworkspace/cli/releases/download/v0.22.5/google-workspace-cli-aarch64-apple-darwin.tar.gz",
+      "archiveType": "tar.gz",
+      "archiveSize": 6119841,
+      "archiveSha256": "1d2a9ffd5bc9b2c2c4b48630daf082fad13d9e57d741988a2c248eed562f7dac",
+      "executablePath": "./gws",
+      "size": 15371280,
+      "sha256": "0f27b8b0815bf09cdf95da48d3c604f05ceb8f16bf5c9f0ba355b1f957cdd47e"
+    },
+    "darwin-x64": {
+      "name": "google-workspace-cli-x86_64-apple-darwin.tar.gz",
+      "url": "https://github.com/googleworkspace/cli/releases/download/v0.22.5/google-workspace-cli-x86_64-apple-darwin.tar.gz",
+      "archiveType": "tar.gz",
+      "archiveSize": 6384868,
+      "archiveSha256": "51f9bd731404d4bba26c36e2e30dd68c56dccd1f834c01252cb0b14d6a6544b2",
+      "executablePath": "./gws",
+      "size": 16210932,
+      "sha256": "cfaf3c184ffe4ed4609cc6fbd75cc64ffa97b4cb7a71ceb7302ab8e89cd3f163"
+    },
+    "linux-arm64": {
+      "name": "google-workspace-cli-aarch64-unknown-linux-musl.tar.gz",
+      "url": "https://github.com/googleworkspace/cli/releases/download/v0.22.5/google-workspace-cli-aarch64-unknown-linux-musl.tar.gz",
+      "archiveType": "tar.gz",
+      "archiveSize": 6592310,
+      "archiveSha256": "e700fe63524932b10ec2130b47ece90aa850e66005fe52ccfc4cf8767bf9919a",
+      "executablePath": "./gws",
+      "size": 17074032,
+      "sha256": "8afdc49dc086b7f914a247bbb609f5e847b1f9ed804c85b1b55882485cf64b45"
+    },
+    "linux-x64": {
+      "name": "google-workspace-cli-x86_64-unknown-linux-musl.tar.gz",
+      "url": "https://github.com/googleworkspace/cli/releases/download/v0.22.5/google-workspace-cli-x86_64-unknown-linux-musl.tar.gz",
+      "archiveType": "tar.gz",
+      "archiveSize": 6876771,
+      "archiveSha256": "4db473dde4b1ab872e4ff35d769b0d4af1f1a6441a605e79d5cf8ada9c87e920",
+      "executablePath": "./gws",
+      "size": 18584104,
+      "sha256": "353a0ae62977fb0b6aa78653683f9516e3f906ade0a4459c844463eeedf9b364"
+    },
+    "win32-x64": {
+      "name": "google-workspace-cli-x86_64-pc-windows-msvc.zip",
+      "url": "https://github.com/googleworkspace/cli/releases/download/v0.22.5/google-workspace-cli-x86_64-pc-windows-msvc.zip",
+      "archiveType": "zip",
+      "archiveSize": 5882057,
+      "archiveSha256": "407705d695dc83d48b1c5f50d71b5aa64095bf6f17d5b439b2e9a373bbe67ec2",
+      "executablePath": "gws.exe",
+      "size": 16743424,
+      "sha256": "82ad48dd28564be969174aaef3e3f99816f959bf2519eeeb4ab77d84f9fa9c67"
+    }
+  }
+}

@@ -16,6 +16,7 @@ import {
   Palette,
   PencilLine,
   Puzzle,
+  Plug,
   RefreshCw,
   ServerCog,
   Settings,
@@ -31,6 +32,7 @@ import {
 export type SettingsCategory =
   | 'general'
   | 'providers'
+  | 'integrations'
   | 'write'
   | 'design'
   | 'mediaGeneration'
@@ -74,6 +76,7 @@ const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
     items: [
       { category: 'general', labelKey: 'general', icon: Globe },
       { category: 'providers', labelKey: 'providers', icon: ServerCog },
+      { category: 'integrations', labelKey: 'integrations', icon: Plug },
       { category: 'extensions', labelKey: 'extensions', icon: Puzzle, extensionOnly: true }
     ]
   },
@@ -150,6 +153,7 @@ const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
 const SETTINGS_CATEGORY_DESCRIPTION_KEYS: Record<SettingsCategory, string> = {
   general: 'subtitle',
   providers: 'providersDesc',
+  integrations: 'integrationsDesc',
   extensions: 'extensionsDesc',
   write: 'writeDesc',
   design: 'designDesc',

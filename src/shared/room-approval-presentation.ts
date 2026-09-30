@@ -6,7 +6,10 @@ export function roomApprovalPresentation(approval: RoomApprovalView) {
     action?.targets.find((target) => target.kind === 'command')?.value
   return { kind: action?.kind ?? 'unknown', tool: approval.toolName,
     workspace: action?.cwd ?? action?.workspace,
-    content: (command || (action && Object.keys(action.arguments).length ? JSON.stringify(action.arguments, null, 2) : undefined) || action?.targets.map((target) => target.value).join('\n') || approval.summary).slice(0, 12000),
+    // Google Workspace summaries contain the complete host-bounded write payload.
+    // Truncating here would hide recipients or content in both RoomApprovalCard
+    // and the final protected native confirmation dialog.
+    content: approval.toolName === 'google_workspace_call' ? approval.summary : (command || (action && Object.keys(action.arguments).length ? JSON.stringify(action.arguments, null, 2) : undefined) || action?.targets.map((target) => target.value).join('\n') || approval.summary).slice(0, 12000),
     details: action?.reason ?? approval.summary }
 }
 export const roomApprovalCopy = (zh: boolean) => zh ? {

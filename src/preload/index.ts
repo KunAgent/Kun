@@ -15,6 +15,7 @@ import { sanottsSpeechBridge } from './sanotts-speech-bridge'
 import { writeBridge } from './write-bridge'
 import { onIpcEvent } from './ipc-event'
 import { paperApi } from './paper-api'
+import { createGoogleWorkspacePreloadApi } from './google-workspace'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
 // The preload runs sandboxed (webPreferences.sandbox = true), so it cannot
 // require node built-ins like node:os. The home dir is passed in from the main
@@ -56,6 +57,7 @@ const api = {
     execute: (input) => ipcRenderer.invoke('runtime-data-recovery:execute', input)
   },
   dataMigration: createDataMigrationPreloadApi(),
+  googleWorkspace: createGoogleWorkspacePreloadApi(ipcRenderer),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   openSettingsConfigFile: () => ipcRenderer.invoke('settings:open-config-file'),
   revealModelProviderCredential: (providerId) =>

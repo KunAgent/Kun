@@ -1,3 +1,5 @@
+import { buildGoogleWorkspaceToolProvider } from '../google-workspace/google-workspace-tools.js'
+import { GoogleWorkspaceService } from '../google-workspace/service.js'
 import { ManagerRemoteMemoryDistillationPendingStore } from '../manager/remote-memory-distillation-pending.js'
 import {
   join,
@@ -100,6 +102,7 @@ import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
 ) {
+  const googleWorkspace = new GoogleWorkspaceService()
   const { core } = model
   const { options } = core
   const {
@@ -557,6 +560,7 @@ export async function createRuntimeServices(
     ...musicGenProviders.providers,
     ...videoGenProviders.providers,
     ...officeCliProviders,
+    ...buildGoogleWorkspaceToolProvider({ service: googleWorkspace }),
     pptAgentProvider,
     designCanvasProvider,
     // NOTE: computer_use is intentionally NOT in baseToolProviders — host
@@ -582,6 +586,7 @@ export async function createRuntimeServices(
   const defaultIsCursorSdk = process.env.KUN_RUNTIME_PROVIDER_KIND === 'cursor-sdk'
   return {
     model,
+    googleWorkspace,
     migrationMaintenance,
     executionLeases,
     turnService,

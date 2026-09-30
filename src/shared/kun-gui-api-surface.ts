@@ -25,6 +25,7 @@ import type {
   WorkflowRunResult,
   WorkflowRuntimeStatus
 } from './app-settings'
+import type { GoogleWorkspaceSurface } from './google-workspace'
 import type { DesktopTitleBarMode } from './desktop-title-bar'
 import type {
   BuiltinGitHubMcpAuthorizationConfirmation,
@@ -256,7 +257,7 @@ import {
   WorkspacePickResult
 } from './kun-gui-api-contracts'
 import type { KunGuiProviderApi } from './kun-gui-api-surface-provider'
-export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & {
+export type KunGuiApi = GoogleWorkspaceSurface & ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & {
   platform: string
   /** True only in the browser Remote build served by the Remote gateway. */
   isRemoteWeb?: boolean

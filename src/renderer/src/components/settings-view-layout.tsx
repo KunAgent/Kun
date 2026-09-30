@@ -7,6 +7,9 @@ import {
 } from './SettingsSidebar'
 import { settingsSaveIssueMessage } from './settings-save-error'
 
+const IntegrationsSettingsSection = lazy(() =>
+  import('./settings-section-integrations').then((module) => ({ default: module.IntegrationsSettingsSection }))
+)
 const ProvidersSettingsSection = lazy(() =>
   import('./settings-section-providers').then((module) => ({ default: module.ProvidersSettingsSection }))
 )
@@ -128,7 +131,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
                 {categoryDescription}
               </p>
             </div>
-            {category !== 'extensions' && category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall' ? <span
+            {category !== 'integrations' && category !== 'extensions' && category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall' ? <span
               title={saveStatus === 'error' && saveIssueSummary ? saveIssueSummary : undefined}
               className={`shrink-0 rounded-full px-3 py-1 text-[12px] font-medium ${
                 portError
@@ -152,7 +155,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
             </span> : null}
           </div> : null}
 
-          {category !== 'extensions' && category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall' && saveStatus === 'error' && saveError ? (
+          {category !== 'integrations' && category !== 'extensions' && category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall' && saveStatus === 'error' && saveError ? (
             <div
               role="alert"
               className="mb-5 rounded-[var(--ds-radius-card)] border border-red-200 bg-red-50 px-4 py-3 text-[13px] leading-5 text-red-800 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200"
@@ -186,6 +189,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
               />
             ) : null}
             <Suspense fallback={<SettingsSectionFallback />}>
+              {category === 'integrations' ? <IntegrationsSettingsSection /> : null}
               {category === 'providers' ? <ProvidersSettingsSection ctx={settingsSectionContext} /> : null}
               {category === 'write' ? <WriteSettingsSection ctx={settingsSectionContext} /> : null}
               {category === 'design' ? <DesignSettingsSection ctx={settingsSectionContext} /> : null}
@@ -213,7 +217,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
           </div>
         </div>
       </div>
-      {category !== 'extensions' && category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall' && saveStatus === 'error' && saveError ? (
+      {category !== 'integrations' && category !== 'extensions' && category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall' && saveStatus === 'error' && saveError ? (
         <div
           role="alert"
           className="ds-no-drag fixed bottom-6 right-8 z-30 flex max-w-[min(560px,calc(100vw-3rem))] items-center gap-3 rounded-2xl border border-red-300/70 bg-red-50/95 px-4 py-3 text-red-900 shadow-2xl shadow-red-950/10 backdrop-blur dark:border-red-500/30 dark:bg-red-950/90 dark:text-red-100"
