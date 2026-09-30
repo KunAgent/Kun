@@ -1,9 +1,9 @@
 import {
   GOOGLE_WORKSPACE_RUNTIME_PATH,
-  googleWorkspaceStatusSchema,
   type GoogleWorkspaceAction,
   type GoogleWorkspaceStatus
 } from '../shared/google-workspace'
+import { googleWorkspaceStatusSchema } from './google-workspace-schema'
 import type { RuntimeRequestResult } from '../shared/kun-gui-api'
 
 export type GoogleWorkspaceHostRequest = (
