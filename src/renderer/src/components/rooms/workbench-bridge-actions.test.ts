@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
+import { writeBrowserStorageItem } from '../../lib/browser-storage'
 
 const mocks = vi.hoisted(() => ({
   storage: new Map<string, string>(),
@@ -8,13 +9,27 @@ const mocks = vi.hoisted(() => ({
   watch: vi.fn(),
   setRoute: vi.fn(),
   flash: vi.fn(),
+  route: 'chat',
+  routeListeners: new Set<(state: { route: string }, previous: { route: string }) => void>(),
+  storageListeners: new Set<(mutation: { key: string }) => void>(),
+  dispatch: vi.fn(),
   workRoots: ['/work/notes', '/work']
 }))
 vi.mock('../../lib/browser-storage', () => ({
   readBrowserStorageItem: (key: string) => mocks.storage.get(key) ?? null,
-  writeBrowserStorageItem: (key: string, value: string) => { mocks.storage.set(key, value) }
+  writeBrowserStorageItem: (key: string, value: string) => {
+    mocks.storage.set(key, value); mocks.storageListeners.forEach((listener) => listener({ key }))
+  },
+  subscribeBrowserStorageMutations: (listener: (mutation: { key: string }) => void) => {
+    mocks.storageListeners.add(listener); return () => { mocks.storageListeners.delete(listener) }
+  }
 }))
-vi.mock('../../store/chat-store', () => ({ useChatStore: { getState: () => ({ setRoute: mocks.setRoute, codeWorkspaceRoots: [] }), subscribe: () => () => undefined } }))
+vi.mock('../../store/chat-store', () => ({ useChatStore: {
+  getState: () => ({ route: mocks.route, setRoute: mocks.setRoute, codeWorkspaceRoots: [] }),
+  subscribe: (listener: (state: { route: string }, previous: { route: string }) => void) => {
+    mocks.routeListeners.add(listener); return () => { mocks.routeListeners.delete(listener) }
+  }
+} }))
 vi.mock('../../write/write-workspace-store', () => ({ useWriteWorkspaceStore: {
   getState: () => ({ workspaceRoots: mocks.workRoots, defaultWorkspaceRoot: '' }), subscribe: () => () => undefined } }))
 vi.mock('./rooms-client', () => ({ roomsClient: { list: mocks.list }, roomsRequest: mocks.roomsRequest, roomRequestId: () => 'req-1' }))
@@ -24,14 +39,26 @@ vi.mock('./workbench-flash', () => ({ showWorkbenchFlash: mocks.flash }))
 import { resolveBotRoomId, sendBoardCardToBot, sendThreadToBot, sendWorkDocumentToBot, sendWorkFileToBot, watchThreadWithBot, workRelativePath } from './workbench-bridge-actions'
 
 const draft = (roomId: string) => JSON.parse(mocks.storage.get(`kun.rooms.draft.${roomId}`) ?? 'null')
+const changeRoute = (route: string) => {
+  const previous = { route: mocks.route }
+  mocks.route = route
+  mocks.routeListeners.forEach((listener) => listener({ route }, previous))
+}
 
 describe('workbench bridge actions', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en')
     mocks.storage.clear()
-    for (const mock of [mocks.list, mocks.roomsRequest, mocks.watch, mocks.setRoute, mocks.flash]) mock.mockReset()
+    mocks.route = 'chat'
+    for (const mock of [mocks.list, mocks.roomsRequest, mocks.watch, mocks.setRoute, mocks.flash, mocks.dispatch]) mock.mockReset()
+    vi.stubGlobal('window', { dispatchEvent: mocks.dispatch })
+    vi.stubGlobal('CustomEvent', class extends Event {
+      detail: unknown
+      constructor(type: string, options: { detail: unknown }) { super(type); this.detail = options.detail }
+    })
     mocks.list.mockResolvedValue({ rooms: [{ id: 'room-recent' }, { id: 'room-old' }] })
   })
+  afterEach(() => vi.unstubAllGlobals())
 
   it('picks the selected private chat, else the most recent, else the default entry', async () => {
     expect(await resolveBotRoomId()).toBe('room-recent')
@@ -51,6 +78,96 @@ describe('workbench bridge actions', () => {
     expect(mocks.storage.get('kun.agentChats.selected')).toBe('room-recent')
     expect(mocks.setRoute).toHaveBeenCalledWith('agent-chat')
     expect(mocks.roomsRequest).not.toHaveBeenCalled()
+  })
+  it('prefers the current private Rooms conversation over the Code Agent shortcut and keeps Rooms open', async () => {
+    mocks.route = 'rooms'
+    mocks.storage.set('kun.rooms.selected', 'room-old')
+    mocks.storage.set('kun.agentChats.selected', 'room-recent')
+    await sendThreadToBot({ id: 'thread', title: 'Review this' })
+    expect(draft('room-old').references).toEqual([{ kind: 'code_thread', threadId: 'thread', titleSnapshot: 'Review this' }])
+    expect(draft('room-recent')).toBeNull()
+    expect(mocks.storage.get('kun.rooms.selected')).toBe('room-old')
+    expect(mocks.storage.get('kun.agentChats.selected')).toBe('room-recent')
+    expect(mocks.setRoute).not.toHaveBeenCalled()
+    expect(mocks.dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'kun-room-open', detail: { roomId: 'room-old' } }))
+    expect(mocks.dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'kun-room-draft-updated', detail: { roomId: 'room-old' } }))
+  })
+  it('uses the selected Code Agent conversation as a Rooms group fallback without leaving Rooms', async () => {
+    mocks.route = 'rooms'
+    mocks.storage.set('kun.rooms.selected', 'group')
+    mocks.storage.set('kun.agentChats.selected', 'room-old')
+    await sendThreadToBot({ id: 'thread', title: 'Review this' })
+    expect(draft('room-old').references[0].threadId).toBe('thread')
+    expect(mocks.storage.get('kun.rooms.selected')).toBe('room-old')
+    expect(mocks.setRoute).not.toHaveBeenCalled()
+  })
+  it('uses the recent private room from a Rooms group when no Code shortcut is selected', async () => {
+    mocks.route = 'rooms'
+    mocks.storage.set('kun.rooms.selected', 'group')
+    await sendThreadToBot({ id: 'thread', title: 'Review this' })
+    expect(draft('room-recent').references[0].threadId).toBe('thread')
+    expect(mocks.storage.get('kun.rooms.selected')).toBe('room-recent')
+    expect(mocks.setRoute).not.toHaveBeenCalled()
+  })
+  it('continues the selected Code Agent shortcut from Work even when Rooms has another private chat', async () => {
+    mocks.route = 'write'
+    mocks.storage.set('kun.rooms.selected', 'room-old')
+    mocks.storage.set('kun.agentChats.selected', 'room-recent')
+    await sendWorkDocumentToBot({ workspaceRoot: '/work', relativePath: 'notes.md' })
+    expect(draft('room-recent').references[0].kind).toBe('work_document')
+    expect(draft('room-old')).toBeNull()
+    expect(mocks.setRoute).toHaveBeenCalledWith('agent-chat')
+  })
+  it('prepares the draft without replacing a later mode selection after the lookup', async () => {
+    let finish: (value: { rooms: Array<{ id: string }> }) => void = () => undefined
+    mocks.list.mockReturnValueOnce(new Promise((resolve) => { finish = resolve }))
+    const pending = sendThreadToBot({ id: 'thread', title: 'Review this' })
+    mocks.route = 'rooms'
+    finish({ rooms: [{ id: 'room-recent' }] })
+    await pending
+    expect(draft('room-recent').references[0].threadId).toBe('thread')
+    expect(mocks.setRoute).not.toHaveBeenCalled()
+    expect(mocks.dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'kun-room-open' }))
+  })
+  it('keeps a newer Rooms selection while preparing the original private draft', async () => {
+    mocks.route = 'rooms'
+    mocks.storage.set('kun.rooms.selected', 'room-old')
+    let finish: (value: { rooms: Array<{ id: string }> }) => void = () => undefined
+    mocks.list.mockReturnValueOnce(new Promise((resolve) => { finish = resolve }))
+    const pending = sendThreadToBot({ id: 'thread', title: 'Review this' })
+    mocks.storage.set('kun.rooms.selected', 'room-recent')
+    finish({ rooms: [{ id: 'room-recent' }, { id: 'room-old' }] })
+    await pending
+    expect(draft('room-old').references[0].threadId).toBe('thread')
+    expect(mocks.storage.get('kun.rooms.selected')).toBe('room-recent')
+    expect(mocks.dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'kun-room-open' }))
+  })
+  it('does not reopen the private chat after the user leaves and returns to Rooms', async () => {
+    mocks.route = 'rooms'
+    let finish: (value: { rooms: Array<{ id: string }> }) => void = () => undefined
+    mocks.list.mockReturnValueOnce(new Promise((resolve) => { finish = resolve }))
+    const pending = sendThreadToBot({ id: 'thread', title: 'Review this' })
+    changeRoute('write'); changeRoute('rooms')
+    finish({ rooms: [{ id: 'room-recent' }] })
+    await pending
+    expect(draft('room-recent').references[0].threadId).toBe('thread')
+    expect(mocks.storage.get('kun.rooms.selected')).toBeUndefined()
+    expect(mocks.dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'kun-room-open' }))
+    expect(mocks.storageListeners.size).toBe(0)
+  })
+  it('preserves a newer room selection even when the user returns to the original room', async () => {
+    mocks.route = 'rooms'
+    mocks.storage.set('kun.rooms.selected', 'room-old')
+    let finish: (value: { rooms: Array<{ id: string }> }) => void = () => undefined
+    mocks.list.mockReturnValueOnce(new Promise((resolve) => { finish = resolve }))
+    const pending = sendThreadToBot({ id: 'thread', title: 'Review this' })
+    writeBrowserStorageItem('kun.rooms.selected', 'room-recent')
+    writeBrowserStorageItem('kun.rooms.selected', 'room-old')
+    finish({ rooms: [{ id: 'room-old' }] })
+    await pending
+    expect(draft('room-old').references[0].threadId).toBe('thread')
+    expect(mocks.dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'kun-room-open' }))
+    expect(mocks.storageListeners.size).toBe(0)
   })
 
   it('keeps what the user was already typing and never duplicates a reference', async () => {

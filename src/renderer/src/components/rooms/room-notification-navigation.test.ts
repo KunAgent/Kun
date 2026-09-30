@@ -4,7 +4,7 @@ import { writeBrowserStorageItem } from '../../lib/browser-storage'
 const mocks = vi.hoisted(() => ({
   state: { route: 'chat', activeThreadId: null as string | null, workspaceRoot: '/code' },
   listeners: new Set<(state: { route: string; activeThreadId: string | null; workspaceRoot: string }, previous: { route: string; activeThreadId: string | null; workspaceRoot: string }) => void>(),
-  get: vi.fn(), private: vi.fn(), focus: vi.fn(() => true)
+  get: vi.fn(), private: vi.fn(), target: vi.fn(), focus: vi.fn(() => true)
 }))
 vi.mock('../../store/chat-store', () => ({ useChatStore: {
   getState: () => ({ ...mocks.state, setRoute: (route: string) => changeState({ route }) }),
@@ -13,7 +13,8 @@ vi.mock('../../store/chat-store', () => ({ useChatStore: {
   }
 } }))
 vi.mock('./rooms-client', () => ({ roomsClient: { get: mocks.get } }))
-vi.mock('./agent-chat-navigation', () => ({ openAgentConversationRoom: mocks.private }))
+vi.mock('./agent-chat-navigation', () => ({ openAgentConversationRoom: mocks.private,
+  useAgentChatNavigationStore: { setState: mocks.target } }))
 import { createRoomNotificationNavigator, isFocusedRoomConversation } from './room-notification-navigation'
 
 function changeState(patch: Partial<typeof mocks.state>) {
@@ -28,7 +29,7 @@ describe('native room notification navigation', () => {
   const onGroup = vi.fn()
   let navigator: ReturnType<typeof createRoomNotificationNavigator>
   beforeEach(() => {
-    storage.clear(); mocks.listeners.clear(); mocks.get.mockReset(); mocks.private.mockReset(); onGroup.mockReset()
+    storage.clear(); mocks.listeners.clear(); mocks.get.mockReset(); mocks.private.mockReset(); mocks.target.mockReset(); onGroup.mockReset()
     Object.assign(mocks.state, { route: 'chat', activeThreadId: 'task', workspaceRoot: '/code' })
     vi.stubGlobal('window', { localStorage: { getItem: (key: string) => storage.get(key) ?? null,
       setItem: (key: string, value: string) => storage.set(key, value) } })
@@ -50,6 +51,37 @@ describe('native room notification navigation', () => {
     expect(storage.get('kun.rooms.selected')).toBe('group')
     expect(onGroup).toHaveBeenCalledWith('group')
     expect(mocks.private).not.toHaveBeenCalled()
+  })
+  it('keeps a private notification in Rooms when Rooms is the current mode', async () => {
+    changeState({ route: 'rooms' })
+    writeBrowserStorageItem('kun.rooms.selected', 'group')
+    mocks.get.mockResolvedValue({ room: room('private', 'user_agent') })
+    await navigator.open({ roomId: 'private', runId: 'run', messageId: 'message' })
+    expect(mocks.state.route).toBe('rooms')
+    expect(storage.get('kun.rooms.selected')).toBe('private')
+    expect(onGroup).toHaveBeenCalledWith('private')
+    expect(mocks.target).toHaveBeenCalledWith({ target: { roomId: 'private', runId: 'run', messageId: 'message' } })
+    expect(mocks.private).not.toHaveBeenCalled()
+    expect(storage.get('kun.agentChats.selected')).toBeUndefined()
+  })
+  it('clears an old source target when opening a private Rooms notification without one', async () => {
+    changeState({ route: 'rooms' })
+    mocks.get.mockResolvedValue({ room: room('private', 'user_agent') })
+    await navigator.open({ roomId: 'private' })
+    expect(mocks.target).toHaveBeenCalledWith({ target: null })
+    expect(mocks.private).not.toHaveBeenCalled()
+  })
+  it('cancels a pending Rooms private notification after the user changes modes and returns', async () => {
+    changeState({ route: 'rooms' })
+    let finish: (value: { room: Room }) => void = () => undefined
+    mocks.get.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const pending = navigator.open({ roomId: 'private' })
+    changeState({ route: 'chat' }); changeState({ route: 'rooms' })
+    finish({ room: room('private', 'user_agent') })
+    await pending
+    expect(mocks.target).not.toHaveBeenCalled()
+    expect(mocks.private).not.toHaveBeenCalled()
+    expect(onGroup).not.toHaveBeenCalled()
   })
   it('lets a newer notification click supersede a pending lookup', async () => {
     let finish: (value: { room: Room }) => void = () => undefined

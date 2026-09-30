@@ -67,7 +67,7 @@
   "roomsWorkbenchSendToBot": "Send to Agent",
   "roomsWorkbenchWatchSession": "Tell me when it finishes",
   "roomsWorkbenchWatchStarted": "The Agent will let you know when this session finishes.",
-  "roomsWorkbenchNoBot": "No Agent conversation is available yet. Choose an Agent in Code Conversations.",
+  "roomsWorkbenchNoBot": "No Agent conversation is available yet. Choose an Agent to start a private chat.",
   "roomsWorkbenchNoWorkspace": "This file is not inside a Work workspace the Agent can see.",
   "roomsWorkbenchBoardCardLead": "Board card:",
   "roomsWorkbenchBoardToBot": "Hand to Agent",
