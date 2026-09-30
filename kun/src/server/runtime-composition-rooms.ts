@@ -44,6 +44,7 @@ export function createRuntimeRoomComposition(input: {
     profiles: () => mergeBuiltinSubagentProfiles(
       (input.options().capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG).subagents
     ).profiles,
+    waitForOwnership: (signal) => lease?.waitForOwnership(signal) ?? Promise.resolve(),
     assertOwnership: () => executionStore.assertOwnership()
   }, () => lease?.held ?? true, apiStore)
   let stopped = false
@@ -61,6 +62,7 @@ export function createRuntimeRoomComposition(input: {
     },
     async close(): Promise<void> {
       stopped = true
+      lease?.closeAdmission()
       await starting
       try { await rooms.close(); await ownedAgentMemory?.shutdown?.() } finally {
         try { await lease?.close() } finally { await localStore?.close() }

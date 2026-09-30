@@ -101,6 +101,54 @@ describe('new Agent dual-path setup UI', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
+  it('deduplicates repeated clicks while pending and retries the exact request after a lease failure', async () => {
+    let reject!: (error: Error) => void
+    api.request.mockImplementationOnce(() => new Promise((_resolve, no) => { reject = no }))
+    const onOpen = vi.fn(), onClose = vi.fn()
+    await act(async () => { renderer = create(createElement(RoomNewChat, { onClose, onOpen, onAgent: vi.fn() })) })
+    const chat = renderer.root.findAllByType('button').find((item) => item.children.includes('Define in chat'))!
+    act(() => { chat.props.onClick(); chat.props.onClick() })
+    expect(api.request).toHaveBeenCalledTimes(1)
+    expect(renderer.root.findByProps({ className: 'direct-new-chat' }).props['aria-busy']).toBe(true)
+    expect(renderer.root.findByProps({ className: 'direct-new-chat-status' }).props.role).toBe('status')
+    await act(async () => reject(new Error('room coordinator lease is not held')))
+    expect(onClose).not.toHaveBeenCalled()
+    expect(renderer.root.findByProps({ role: 'alert' }).findByType('p').props.children)
+      .toBe('The conversation service is starting or reconnecting. Wait a moment, then retry.')
+    const id = api.request.mock.calls[0][2].clientRequestId
+    await act(async () => renderer.root.findByProps({ role: 'alert' }).findByType('button').props.onClick())
+    expect(api.request).toHaveBeenCalledTimes(2)
+    expect(api.request.mock.calls[1][2].clientRequestId).toBe(id)
+    expect(onOpen).toHaveBeenCalledOnce()
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('keeps synchronous Agent-open errors recoverable', async () => {
+    const onAgent = vi.fn().mockImplementationOnce(() => { throw new Error('Connection unavailable') }).mockResolvedValue(undefined)
+    const onClose = vi.fn()
+    await act(async () => { renderer = create(createElement(RoomNewChat, { onClose, onOpen: vi.fn(), onAgent })) })
+    const developer = renderer.root.findAllByType('button').find((item) =>
+      item.findAllByType('strong').some((label) => label.props.children === 'Developer'))!
+    await act(async () => developer.props.onClick())
+    expect(renderer.root.findByProps({ role: 'alert' }).findByType('p').props.children).toBe('Connection unavailable')
+    expect(onClose).not.toHaveBeenCalled()
+    await act(async () => renderer.root.findByProps({ role: 'alert' }).findByType('button').props.onClick())
+    expect(onAgent).toHaveBeenCalledTimes(2)
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('does not reopen a conversation after its picker is unmounted', async () => {
+    let resolve!: (value: { roomId: string }) => void
+    api.request.mockImplementationOnce(() => new Promise((yes) => { resolve = yes }))
+    const onOpen = vi.fn(), onClose = vi.fn()
+    await act(async () => { renderer = create(createElement(RoomNewChat, { onClose, onOpen, onAgent: vi.fn() })) })
+    act(() => renderer.root.findAllByType('button').find((item) => item.children.includes('Define in chat'))!.props.onClick())
+    act(() => renderer.unmount())
+    await act(async () => resolve({ roomId: 'room-1' }))
+    expect(onOpen).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
   it('submits a Grok option, custom Other text, and close as cancelled', async () => {
     const input: RoomUserInput = {
       id: 'in_abc123',

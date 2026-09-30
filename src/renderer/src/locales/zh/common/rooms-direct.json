@@ -65,5 +65,8 @@
   "roomsReplyCount_other": "{{count}} 条回复",
   "directScopeUnsupported": "此连接尚不支持 Agent 的权限限制",
   "roomsContent_agent_file": "会话文件",
-  "directVerified": "已验证 · 最近成功于 {{date}}"
+  "directVerified": "已验证 · 最近成功于 {{date}}",
+  "directChooseModel": "选择模型",
+  "directPreparingChat": "正在打开会话…",
+  "directCoordinatorUnavailable": "会话服务正在启动或重新连接，请稍后重试。"
 }

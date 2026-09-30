@@ -65,5 +65,8 @@
   "roomsReplyCount_other": "{{count}} replies",
   "directScopeUnsupported": "Agent tool permissions unsupported",
   "roomsContent_agent_file": "Conversation file",
-  "directVerified": "Verified · last successful call {{date}}"
+  "directVerified": "Verified · last successful call {{date}}",
+  "directChooseModel": "Choose model",
+  "directPreparingChat": "Opening conversation…",
+  "directCoordinatorUnavailable": "The conversation service is starting or reconnecting. Wait a moment, then retry."
 }
