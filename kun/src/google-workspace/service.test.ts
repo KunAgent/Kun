@@ -160,3 +160,41 @@ describe('Google OAuth output framing', () => {
     await service.cancel()
   })
 })
+
+describe('failed cancellation fencing', () => {
+  it('fails closed until restart if process termination could not be confirmed', async () => {
+    const run = vi.fn<GoogleWorkspaceRunner>(async (_args, options) => await new Promise((_resolve, reject) => {
+      options?.signal?.addEventListener('abort', () => reject(new GoogleWorkspaceError('stop_failed')))
+    }))
+    const service = new GoogleWorkspaceService({ run })
+    service.login()
+    const status = await service.cancel()
+    expect(status.operation?.state).toBe('failed')
+    expect(status.binary.error).toContain('could not confirm')
+    expect(status.auth.state).toBe('error')
+    expect(() => service.login()).toThrow(/Restart Kun/)
+    await expect(service.call('drive.files.list', {})).rejects.toMatchObject({ code: 'stop_failed' })
+    await service.status(true)
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('status process termination fencing', () => {
+  it('returns a restart-required state and never retries an unconfirmed status process', async () => {
+    const run = vi.fn<GoogleWorkspaceRunner>(async () => { throw new GoogleWorkspaceError('stop_failed') })
+    const service = new GoogleWorkspaceService({ run })
+    expect((await service.status()).binary.error).toContain('Restart Kun')
+    await service.status(true)
+    expect(run).toHaveBeenCalledTimes(1)
+  })
+  it('fences the integration if a read canary cannot be stopped', async () => {
+    const service = new GoogleWorkspaceService({ run: async args => {
+      if (args[0] === 'gmail') throw new GoogleWorkspaceError('stop_failed')
+      return normalRun(args)
+    } })
+    service.test()
+    await vi.waitFor(() => expect(service.snapshot().operation?.state).toBe('failed'))
+    expect(service.snapshot().binary.error).toContain('Restart Kun')
+    expect(() => service.test()).toThrow(/Restart Kun/)
+  })
+})

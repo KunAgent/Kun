@@ -20,6 +20,7 @@ export class GoogleWorkspaceService {
   private pending?: Promise<void>
   private refresh?: Promise<void>
   private refreshedAt = 0
+  private stopFailed = false
   private authorization?: { authorizationUrl: string; operationId: string }
   private readonly activeCalls = new Set<AbortController>()
   private readonly activeCallSettlements = new Set<Promise<void>>()
@@ -30,7 +31,7 @@ export class GoogleWorkspaceService {
 
   snapshot(): GoogleWorkspaceStatus { return structuredClone(this.state) }
   async status(forceRefresh = false): Promise<GoogleWorkspaceStatus> {
-    if (!this.controller && (forceRefresh || Date.now() - this.refreshedAt > 30_000)) {
+    if (!this.stopFailed && !this.controller && (forceRefresh || Date.now() - this.refreshedAt > 30_000)) {
       this.refresh ??= this.refreshStatus().finally(() => { this.refresh = undefined })
       await this.refresh
     }
@@ -47,8 +48,13 @@ export class GoogleWorkspaceService {
       this.state.setup.required = this.state.auth.state === 'setup_required'
       if (this.state.auth.state !== 'connected') this.state.services = unknownServices()
     } catch (error) {
-      if (signal?.aborted) return
       const safe = safeError(error)
+      if (safe.code === 'stop_failed') {
+        this.failStop(safe)
+        if (signal) throw safe
+        return
+      }
+      if (signal?.aborted) return
       if (safe.code === 'missing_binary' || safe.code === 'version_mismatch') {
         this.state.binary = { available: false, error: safe.message }
       }
@@ -61,8 +67,10 @@ export class GoogleWorkspaceService {
       !this.controller?.signal.aborted ? { ...this.authorization } : {}
   }
   async setup(): Promise<GoogleWorkspaceStatus> {
+    if (this.stopFailed) throw new GoogleWorkspaceError('stop_failed')
     if (this.controller) throw new GoogleWorkspaceError('validation')
     await this.status()
+    if (this.stopFailed) throw new GoogleWorkspaceError('stop_failed')
     if (this.controller) throw new GoogleWorkspaceError('validation')
     this.state.operation = { id: randomUUID(), kind: 'setup', state: 'succeeded',
       message: 'Complete the OAuth setup yourself using these instructions, then choose Connect. The upstream interactive gcloud wizard is not run by Kun.' }
@@ -117,6 +125,10 @@ export class GoogleWorkspaceService {
           await this.run(call.argv, { signal, maxOutputBytes: 64 * 1024 })
           if (!signal.aborted) this.state.services[service] = { state: 'ready' }
         } catch (error) {
+          if (error instanceof GoogleWorkspaceError && error.code === 'stop_failed') {
+            this.failStop(error)
+            throw error
+          }
           if (!signal.aborted) this.state.services[service] = { state: 'error', message: safeError(error).message }
         }
       }
@@ -124,6 +136,7 @@ export class GoogleWorkspaceService {
     })
   }
   private start(kind: 'login' | 'logout' | 'test', execute: (signal: AbortSignal) => Promise<void>): GoogleWorkspaceStatus {
+    if (this.stopFailed) throw new GoogleWorkspaceError('stop_failed')
     if (this.controller || this.refresh || (kind === 'login' && this.activeCalls.size > 0)) throw new GoogleWorkspaceError('validation')
     const controller = new AbortController()
     this.controller = controller
@@ -133,7 +146,10 @@ export class GoogleWorkspaceService {
     this.pending = execute(controller.signal).then(() => {
       if (!controller.signal.aborted) this.state.operation = { ...operation, state: 'succeeded' }
     }, error => {
-      if (!controller.signal.aborted) this.state.operation = { ...operation, state: 'failed', message: safeError(error).message }
+      if (error instanceof GoogleWorkspaceError && error.code === 'stop_failed') {
+        this.failStop(error)
+        this.state.operation = { ...operation, state: 'failed', message: error.message }
+      } else if (!controller.signal.aborted) this.state.operation = { ...operation, state: 'failed', message: safeError(error).message }
     }).finally(() => {
       this.authorization = undefined
       if (this.controller === controller) this.controller = undefined
@@ -149,6 +165,18 @@ export class GoogleWorkspaceService {
     await this.pending
     return this.snapshot()
   }
+  private failStop(error: GoogleWorkspaceError): void {
+    if (this.stopFailed) return
+    this.stopFailed = true
+    this.authorization = undefined
+    this.controller?.abort()
+    for (const active of this.activeCalls) active.abort()
+    const operation = this.state.operation
+    if (operation?.state === 'running') this.state.operation = { ...operation, state: 'failed', message: error.message }
+    this.state.binary = { available: false, error: error.message }
+    this.state.auth = { state: 'error', scopes: [] }
+    this.state.services = unknownServices()
+  }
   async shutdown(): Promise<void> {
     for (const active of this.activeCalls) active.abort()
     await this.cancel()
@@ -156,10 +184,12 @@ export class GoogleWorkspaceService {
   }
   async call(method: string, params: Record<string, unknown>, body?: Record<string, unknown>, signal?: AbortSignal,
     grant?: GoogleWorkspaceApprovalGrant): Promise<unknown> {
+    if (this.stopFailed) throw new GoogleWorkspaceError('stop_failed')
     const validated = validateGoogleWorkspaceCall({ method, params, body })
     consumeGoogleWorkspaceApproval(grant, validated)
     if (this.controller) throw new GoogleWorkspaceError('validation')
     const status = await this.status()
+    if (this.stopFailed) throw new GoogleWorkspaceError('stop_failed')
     if (this.controller) throw new GoogleWorkspaceError('validation')
     if (status.auth.state !== 'connected' || !hasGoogleWorkspaceScopes(status.auth.scopes, validated.scopes)) {
       throw new GoogleWorkspaceError('authentication')
@@ -179,6 +209,7 @@ export class GoogleWorkspaceService {
         : result.stdout.length === 0 && ['calendar.events.delete', 'gmail.users.drafts.delete'].includes(validated.method)
           ? { status: 'success' } : parseJson(result.stdout)
     } catch (error) {
+      if (error instanceof GoogleWorkspaceError && error.code === 'stop_failed') this.failStop(error)
       if (validated.requiresApproval) {
         const unknown = safeError(error)
         unknown.unknownOutcome = true

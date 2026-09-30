@@ -6,12 +6,13 @@ import { spawnOwnedProcess, stopOwnedProcess } from '../process/owned-process.js
 import { resolveGoogleWorkspaceBinary, type GoogleWorkspaceBinary } from './binary.js'
 
 export type GoogleWorkspaceErrorCode = 'missing_binary' | 'version_mismatch' | 'cancelled' |
-  'timeout' | 'output_limit' | 'authentication' | 'validation' | 'permission' | 'not_found' | 'api' | 'process'
+  'timeout' | 'stop_failed' | 'output_limit' | 'authentication' | 'validation' | 'permission' | 'not_found' | 'api' | 'process'
 const messages: Record<GoogleWorkspaceErrorCode, string> = {
   missing_binary: 'The pinned Google Workspace binary is missing or failed integrity checks. Reinstall Kun or prepare the pinned development bundle.',
   version_mismatch: 'The Google Workspace binary version does not match this integration.',
   cancelled: 'Google Workspace operation cancelled. A submitted write may already have completed; inspect its state before retrying.',
   timeout: 'Google Workspace timed out. A submitted write may already have completed; inspect its state before retrying.',
+  stop_failed: 'Kun could not confirm that Google Workspace stopped. Restart Kun before reconnecting or making another Google Workspace request.',
   output_limit: 'Google Workspace output exceeded the safe limit. Narrow the query or choose a smaller file.',
   authentication: 'Google authentication failed. Check the integration setup and reconnect.',
   validation: 'Google Workspace rejected the validated request.',
@@ -102,12 +103,12 @@ async function execute(
         if (failure) reject(failure)
         else if (code !== 0) reject(new GoogleWorkspaceError(exitCodeCategory(code)))
         else accept(result)
-      }, () => reject(failure ?? new GoogleWorkspaceError('process')))
+      }, () => reject(new GoogleWorkspaceError('stop_failed')))
     }
     const fail = (code: GoogleWorkspaceErrorCode): void => {
       if (failure || settled) return
       failure = new GoogleWorkspaceError(code)
-      stopPromise = stop(child)
+      stopPromise = Promise.resolve().then(() => stop(child))
       // An injected or failed child can omit close. The owned stop still fences its tree.
       void stopPromise.then(() => finish(null), () => finish(null))
     }

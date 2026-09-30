@@ -92,3 +92,16 @@ describe('Google Workspace owned process boundary', () => {
     await expect(f.run(['drive', 'files', 'get'], { media: true })).rejects.toMatchObject({ code: 'process' })
   })
 })
+
+describe('unconfirmed process termination', () => {
+  it('does not report cancellation success when owned-process stop fails', async () => {
+    const child = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough() }) as unknown as ChildProcess
+    const run = createGoogleWorkspaceRunner({
+      resolveBinary: async () => ({ path: '/bundled/gws', version: '0.22.5' }),
+      spawn: async () => child,
+      stop: async () => { throw new Error('private process detail') }
+    })
+    await expect(run(['auth', 'login'], { timeoutMs: 10 })).rejects.toMatchObject({ code: 'stop_failed' })
+    await expect(run(['auth', 'login'], { timeoutMs: 10 })).rejects.not.toThrow(/private process detail/)
+  })
+})
