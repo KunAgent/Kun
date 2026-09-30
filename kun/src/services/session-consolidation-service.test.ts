@@ -1,10 +1,11 @@
-import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRecord as MemoryRecordSchema } from '../contracts/memory.js'
 import type { ThreadRecord, ThreadSummary } from '../contracts/threads.js'
 import type { TurnItem } from '../contracts/items.js'
+import type { ThreadStore } from '../ports/thread-store.js'
 import type { MemoryStore } from '../memory/memory-store.js'
 import type { ModelClient, ModelStreamChunk } from '../ports/model-client.js'
 import type { SessionStore } from '../ports/session-store.js'
@@ -12,6 +13,7 @@ import type { ThreadService } from './thread-service.js'
 import type { TurnService } from './turn-service-core.js'
 import { ConsolidationJobStore } from './consolidation-job-store.js'
 import { ConsolidationRecoveryStore } from './consolidation-recovery-store.js'
+import { FileThreadStore } from '../adapters/file/file-thread-store.js'
 import { SessionConsolidationService } from './session-consolidation-service.js'
 import { ThreadSnapshotStore } from './thread-snapshot-store.js'
 
@@ -121,8 +123,9 @@ function makeService(input: {
   deleteThread?: (threadId: string) => Promise<void>
   releasedArtifactOwners?: string[]
   jobStore?: ConsolidationJobStore
+  threadStore?: Pick<ThreadStore, 'list' | 'get' | 'getMetadata'>
 }): SessionConsolidationService {
-  const threadStore = makeThreadStore(input.records)
+  const threadStore = input.threadStore ?? makeThreadStore(input.records)
   const configState = input.configState ?? {
     tier: input.tier ?? 'tier-1',
     reclaimMode: input.reclaimMode ?? 'reclaim-now',
@@ -401,6 +404,51 @@ describe('SessionConsolidationService', () => {
     expect(deleteCalls.count).toBe(1)
     expect(pruneCalls.count).toBe(0)
     expect(releasedArtifactOwners).toEqual(['thread_1', 'turn_1'])
+  })
+
+  it('uses the real file thread store for Tier-2 deletion and recovery retention', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-consolidation-file-store-'))
+    roots.push(dataDir)
+    const clock = { now: NOW }
+    const fileStore = new FileThreadStore({ dataDir, now: () => new Date(clock.now) })
+    await fileStore.upsert(makeThread())
+    const threadDir = join(dataDir, 'threads', 'thread_1')
+    await writeFile(join(threadDir, 'messages.jsonl'), 'messages')
+    await writeFile(join(threadDir, 'metadata.jsonl'), 'metadata')
+    await writeFile(join(threadDir, 'events.jsonl'), 'events')
+    await writeFile(join(threadDir, 'session.json'), '{}')
+    const service = makeService({
+      dataDir,
+      records: new Map(),
+      threadStore: fileStore,
+      modelClient: modelClient({ count: 0 }),
+      memoryStore: makeMemoryStore({ count: 0 }, true),
+      pruneCalls: { count: 0 },
+      tier: 'tier-2',
+      reclaimMode: 'safe',
+      archiveTtlMs: 1_000,
+      nowIso: () => clock.now,
+      deleteThread: async (threadId) => { await fileStore.delete(threadId) }
+    })
+
+    const first = await service.runOnce()
+    const jobStore = new ConsolidationJobStore({ dataDir, nowIso: () => clock.now })
+    const [job] = await jobStore.list()
+    const recovery = new ConsolidationRecoveryStore(dataDir)
+    expect(first).toMatchObject({ completed: 0, pendingArchiveCleanup: 1, failures: [] })
+    expect(await fileStore.get('thread_1')).toBeNull()
+    await expect(stat(threadDir)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await recovery.verify(job!.id, 'thread_1')).toBe(true)
+    expect(await readFile(join(dataDir, 'consolidation-recovery', job!.id, 'messages.jsonl'), 'utf8')).toBe('messages')
+
+    clock.now = new Date(Date.parse(NOW) + 2_000).toISOString()
+    const second = await service.runOnce()
+    const completed = await jobStore.get(job!.id)
+    expect(second).toMatchObject({ completed: 1, failures: [] })
+    expect(completed?.status).toBe('completed')
+    expect(completed?.measuredBytes?.reclaimed).toBeGreaterThan(0)
+    expect(await recovery.list()).toHaveLength(0)
+    expect(await fileStore.list({ includeArchived: true, includeSide: true })).toEqual([])
   })
 
   it('refuses cleanup when a deleted thread id is recreated before the TTL expires', async () => {
