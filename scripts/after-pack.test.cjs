@@ -4,6 +4,7 @@ const assert = require('node:assert/strict')
 const { execFileSync } = require('node:child_process')
 const {
   chmodSync,
+  cpSync,
   existsSync,
   lstatSync,
   mkdtempSync,
@@ -138,6 +139,7 @@ function payloadFixture(t) {
     'Resources',
     'app.asar.unpacked'
   )
+  writeFixture(join(root, 'out', 'main', 'local-sanotts-worker-entry.js'), 'export {}')
   return { context, root }
 }
 
@@ -145,6 +147,52 @@ function writeFixture(path, contents = 'fixture') {
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, contents)
 }
+
+test('excludes gifwrap test images while preserving its licensed GIF runtime', async (t) => {
+  const { getMainFileMatchers } = require('app-builder-lib/out/fileMatcher')
+  const builderConfig = require('../electron-builder.config.cjs')
+  const projectDir = join(__dirname, '..')
+  const destination = mkdtempSync(join(tmpdir(), 'kun-gifwrap-payload-test-'))
+  t.after(() => rmSync(destination, { recursive: true, force: true }))
+  const [matcher] = getMainFileMatchers(projectDir, destination, (value) => value, {}, {
+    info: {
+      projectDir,
+      buildResourcesDir: 'build',
+      config: { ...builderConfig, files: [...builderConfig.files] },
+      isPrepackedAppAsar: false,
+      debugLogger: { isEnabled: false }
+    }
+  }, join(projectDir, 'dist'), false)
+  const filter = matcher.createFilter()
+  for (const name of ['gifwrap', 'image-q', 'omggif']) {
+    cpSync(
+      join(projectDir, 'kun', 'node_modules', name),
+      join(destination, 'kun', 'node_modules', name),
+      { recursive: true, filter: (path) => filter(path, statSync(path)) }
+    )
+  }
+  const source = join(projectDir, 'kun', 'node_modules', 'gifwrap')
+  const packed = join(destination, 'kun', 'node_modules', 'gifwrap')
+  assert.equal(existsSync(join(source, 'test', 'fixtures', 'nburling-public.gif')), true)
+  assert.equal(existsSync(join(packed, 'test')), false)
+  for (const relativePath of ['package.json', 'LICENSE', 'src/index.js', 'src/gifcodec.js']) {
+    assert.deepEqual(readFileSync(join(packed, relativePath)), readFileSync(join(source, relativePath)))
+  }
+  // Exercise the retained dependency in isolation, without source-tree fallback.
+  const { GifCodec, GifFrame, GifUtil } = require(packed)
+  const frames = [new GifFrame(2, 2, 0xff0000ff), new GifFrame(2, 2, 0x00000000)]
+  GifUtil.quantizeDekker(frames)
+  const codec = new GifCodec()
+  const encoded = await codec.encodeGif(frames)
+  const decoded = await codec.decodeGif(encoded.buffer)
+  assert.equal(decoded.frames.length, 2)
+  assert.equal(decoded.width, 2)
+  assert.equal(decoded.height, 2)
+  assert.equal(decoded.usesTransparency, true)
+  for (let index = 0; index < frames.length; index += 1) {
+    assert.deepEqual(decoded.frames[index].bitmap.data, frames[index].bitmap.data)
+  }
+})
 
 test('removes only regenerable or on-demand payload from packaged applications', (t) => {
   const { context, root } = payloadFixture(t)
