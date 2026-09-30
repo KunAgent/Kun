@@ -73,6 +73,7 @@ export function useAdeComposerControls(input: {
   const composerHarnessId = useChatStore((state) => state.composerHarnessId)
   const composerCredentialMode = useChatStore((state) => state.composerCredentialMode)
   const composerProviderId = useChatStore((state) => state.composerProviderId)
+  const composerModel = useChatStore((state) => state.composerModel)
   const setComposerHarness = useChatStore((state) => state.setComposerHarness)
   const setComposerModel = useChatStore((state) => state.setComposerModel)
   const isolation = useChatStore((state) => state.composerIsolation)
@@ -108,6 +109,13 @@ export function useAdeComposerControls(input: {
   const harnessLabel = row?.definition.displayName ?? harnessId
   const isNativeHarness = harnessId !== 'kun' &&
     Boolean(composerHarnessId.trim() || threadHarnessId?.trim())
+
+  useEffect(() => {
+    if (!enabled || harnessId !== 'devin' || credentialMode !== 'native-login' || modelCache?.loading ||
+      !composerModel || !modelCache?.models.includes(composerModel) || modelCache.detailsModel === composerModel ||
+      modelCache.modelInfo?.find((entry) => entry.id === composerModel)?.reasoningEfforts !== undefined) return
+    void loadHarnessModels(harnessId, false, composerModel)
+  }, [enabled, harnessId, credentialMode, composerModel, modelCache])
 
   useEffect(() => {
     if (!enabled || !isNativeHarness || credentialMode !== 'native-login' || modelCache?.loading) return

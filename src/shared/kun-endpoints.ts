@@ -308,10 +308,13 @@ export const KUN_HARNESS_INSTALL_CANCEL_TEMPLATE = '/v1/harnesses/{id}/install/c
 export const KUN_HARNESS_PROBE_DEFINITION_TEMPLATE = '/v1/harnesses/probe-definition'
 export const KUN_HARNESS_SECRETS_TEMPLATE = '/v1/harness-secrets'
 export const KUN_HARNESS_SECRET_TEMPLATE = '/v1/harness-secrets/{ref}'
-export function kunHarnessModelsPath(harnessId: string, credentialMode?: string): string {
+export function kunHarnessModelsPath(harnessId: string, credentialMode?: string, selectedModel?: string): string {
   const base = `${KUN_HARNESSES_PATH}/${encodeURIComponent(harnessId)}/models`
   const mode = credentialMode?.trim()
-  return mode ? `${base}?credential_mode=${encodeURIComponent(mode)}` : base
+  const query = new URLSearchParams()
+  if (mode) query.set('credential_mode', mode)
+  if (selectedModel) query.set('selected_model', selectedModel)
+  return query.size ? `${base}?${query}` : base
 }
 
 export const KUN_THREADS_PATH = '/v1/threads'

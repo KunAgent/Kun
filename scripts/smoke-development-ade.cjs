@@ -32,6 +32,7 @@ const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.c
 const { runAgentModeFlow, writeDevinAcpStub } = require('./smoke-development-agent-mode.cjs')
 const { runNativeModelFlow, writeCodexModelStub } = require('./smoke-development-native-models.cjs')
 const { writeInstallerFixture, runAgentInstallFlow } = require('./smoke-development-agent-install.cjs')
+const { writeDevinModelStub, runDevinModelFlow } = require('./smoke-development-devin-models.cjs')
 const { runProtectedApprovalFlow } = require('./smoke-development-protected-approval.cjs')
 const { runUnifiedCodeFlow } = require('./smoke-development-ade-flow.cjs')
 const { runUnifiedCodeVisuals } = require('./smoke-development-ade-visuals.cjs')
@@ -49,6 +50,7 @@ async function main() {
   const agentModeOnly = process.argv.includes('--agent-mode-only')
   const nativeModelOnly = process.argv.includes('--native-model-only')
   const installOnly = process.argv.includes('--install-only')
+  const devinModelsOnly = process.argv.includes('--devin-models-only')
   const protectedApprovalOnly = process.argv.includes('--protected-approval-only')
   const compiledRenderer = process.argv.includes('--compiled-renderer')
   const startedAt = new Date().toISOString()
@@ -140,7 +142,7 @@ async function main() {
     const claudeStubUpdated = await writeVersionStub(stubDir, 'claude-alt', '2.2.0')
     const oldGeminiStub = await writeVersionStub(stubDir, 'gemini-old', '0.0.1')
     const acpStub = await writeAcpStub(stubDir, 'smoke-acp')
-    const devinStub = await writeDevinAcpStub(stubDir)
+    const devinStub = devinModelsOnly ? await writeDevinModelStub(stubDir) : await writeDevinAcpStub(stubDir)
     const devinInstallTarget = installOnly ? await writeInstallerFixture(stubDir, devinStub) : undefined
     if (installOnly) isolatedEnvironment.PATH = `${stubDir}${require('node:path').delimiter}${isolatedEnvironment.PATH ?? ''}`
     const codexStub = nativeModelOnly ? await writeCodexModelStub(stubDir) : undefined
@@ -233,6 +235,8 @@ async function main() {
     let assertions
     if (protectedApprovalOnly) {
       assertions = await runProtectedApprovalFlow({ application: electronApplication, page, capture, poll, runtimeRequest })
+    } else if (devinModelsOnly) {
+      assertions = await runDevinModelFlow({ page, capture, poll, resize: (width, height) => resize(electronApplication, width, height) })
     } else if (installOnly) {
       assertions = await runAgentInstallFlow({ page, capture, poll, runtimeRequest })
     } else if (nativeModelOnly) {

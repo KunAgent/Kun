@@ -111,7 +111,24 @@ describe('Devin ACP integration', () => {
     expect(await new AcpModelProbe({ spawn: spawnFixture }).probe(f.definition)).toEqual(['legacy-model'])
   })
 
-  it('merges and deduplicates config and legacy models while ignoring malformed legacy entries', async () => {
+  it('queries selected model options without sending prompts or changing the native default', async () => {
+    const f = await fixtureDefinition({ newSession: { configOptions: [
+      { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'native-default', options: [
+        { value: 'native-default', name: 'Native Default' }, { value: 'selected-model', name: 'Selected Model' }
+      ] },
+      { id: 'effort', name: 'Effort', category: 'thought_level', type: 'select', currentValue: 'medium',
+        options: [{ value: 'medium', name: 'Medium' }, { value: 'high', name: 'High' }] }
+    ] } })
+    const result = await new AcpModelProbe({ spawn: spawnFixture }).probeCatalog(f.definition, 'selected-model')
+    expect(result.modelInfo).toMatchObject([{ id: 'native-default', isDefault: true },
+      { id: 'selected-model', displayName: 'Selected Model', reasoningEfforts: ['medium', 'high'] }])
+    const requests = (await f.journal()).filter((entry) => entry.dir === 'in').map((entry) => entry.frame)
+    expect(requests).toContainEqual(expect.objectContaining({ method: 'session/set_config_option',
+      params: expect.objectContaining({ value: 'selected-model' }) }))
+    expect(requests.some((entry) => entry.method === 'session/prompt')).toBe(false)
+  })
+
+  it('uses the modern selector order without mixing legacy model aliases', async () => {
     const f = await fixtureDefinition({ newSession: {
       configOptions: [{ id: 'model', name: 'Model', category: 'model', type: 'select',
         currentValue: 'shared', options: [{ group: 'Models', name: 'Models', options: [
@@ -121,7 +138,7 @@ describe('Devin ACP integration', () => {
         { modelId: 42 }, null, {}, { modelId: ' ' }] }
     } })
     expect(await new AcpModelProbe({ spawn: spawnFixture }).probe(f.definition))
-      .toEqual(['config-model', 'legacy-model', 'shared'])
+      .toEqual(['shared', 'config-model'])
   })
 
   it('reapplies the safe mode when resuming the same native session', async () => {

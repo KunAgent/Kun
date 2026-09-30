@@ -556,5 +556,10 @@
   "agentInstall.cancelled": "安装已取消",
   "agentInstall.details": "安装命令与日志",
   "agentInstall.unsupported": "当前平台暂无自动安装方式，请使用官方下载或指定已有命令路径。",
-  "agentInstall.missingCommand": "请先安装 {{command}}，然后重试。"
+  "agentInstall.missingCommand": "请先安装 {{command}}，然后重试。",
+  "devinModels.recent": "最近使用",
+  "devinModels.results": "搜索结果",
+  "devinModels.nativeOrder": "Devin 模型",
+  "devinModels.fusionCombinations": "Fusion 组合",
+  "devinModels.withCompanion": "搭配 {{model}}"
 }

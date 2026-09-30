@@ -216,6 +216,12 @@ export async function listHarnessModels(
         models: providerModels(legacyProviderKindFor(definition.id))
       })
     case 'probe': {
+      if (definition.transport === 'acp' && harnesses.acpModels?.probeCatalog) {
+        const selectedModel = url.searchParams.get('selected_model')?.trim() || undefined
+        if (selectedModel && selectedModel.length > 1024) return ERRORS.validation('invalid model id')
+        const catalog = await harnesses.acpModels.probeCatalog(definition, selectedModel)
+        return jsonResponse({ harnessId: definition.id, ...catalog })
+      }
       if (definition.transport === 'codex-app-server' && harnesses.codexModels?.probeCatalog) {
         const catalog = await harnesses.codexModels.probeCatalog(definition)
         return jsonResponse({ harnessId: definition.id, ...catalog })

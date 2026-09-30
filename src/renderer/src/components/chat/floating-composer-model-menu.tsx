@@ -4,6 +4,7 @@ import type { TFunction } from 'i18next'
 import { Brain, Gauge, Search } from 'lucide-react'
 import { modelSupportsImageInput } from '@shared/app-settings-provider-core'
 import { ComposerModelSourceIcon } from './ComposerModelSourceIcon'
+import { DevinModelList } from './DevinModelList'
 import {
   UNGROUPED_MODEL_PROVIDER_ID,
   composerModelMenuItemSelected,
@@ -149,7 +150,7 @@ export function renderComposerModelMenu({
                       />
                     )}
                     title={group.label}
-                    subtitle={selectedModel}
+                    subtitle={group.modelInfo?.[selectedModel]?.displayName ?? selectedModel}
                     onClick={() => {
                       setReasoningPanelOpen(false)
                       setActiveProviderId(group.providerId)
@@ -194,9 +195,19 @@ export function renderComposerModelMenu({
             ref={submenuRef}
             role="menu"
             aria-label={activeProviderGroup.label}
-            style={submenuStyle}
+            style={activeProviderGroup.nativeHarnessId === 'devin' ? { ...submenuStyle, overflow: 'hidden' } : submenuStyle}
             className="fixed z-[1001] overflow-y-auto rounded-xl border border-ds-border bg-white p-1.5 text-[13px] text-ds-muted shadow-[0_18px_48px_rgba(20,47,95,0.16)] dark:bg-ds-card"
           >
+            {activeProviderGroup.nativeHarnessId === 'devin' ? <DevinModelList
+              maxHeight={Number.parseFloat(String(submenuStyle.maxHeight)) || 440}
+              key={activeProviderGroup.providerId} group={activeProviderGroup} currentModel={currentModel} t={t}
+              currentReasoning={currentReasoning} reasoningOptions={reasoningOptions}
+              onReasoningChange={onComposerReasoningEffortChange}
+              onPick={(id) => {
+                onComposerModelChange(id, activeProviderGroup.providerId)
+                setReasoningPopoverOpen(false)
+                setMenuOpen(false)
+              }} /> : <>
             <div className="px-2.5 pb-1 pt-1 text-[11px] font-bold uppercase tracking-[0.08em] text-ds-faint">
               {t('composerModel')}
             </div>
@@ -223,7 +234,7 @@ export function renderComposerModelMenu({
                   <PickerRow
                     key={`${activeProviderGroup.providerId}:${id}`}
                     selected={selected}
-                    title={id}
+                    title={activeProviderGroup.modelInfo?.[id]?.displayName ?? id}
                     rightSlot={
                       !targetProfile ? null : modelSupportsImageInput(targetProfile)
                         ? <ModelCapabilityBadge kind="vision" label={t('composerModelVision')} />
@@ -247,6 +258,7 @@ export function renderComposerModelMenu({
                 {t('composerNoMatchingModels')}
               </div>
             )}
+            </>}
           </div>
         ) : null}
       </>

@@ -5,15 +5,19 @@ import type {
   AdeHarnessRow
 } from '@shared/ade-harnesses'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
-import type { ModelProviderModelProfileV1 } from '@shared/app-settings'
+import { MODEL_REASONING_EFFORTS, type ModelReasoningEffort, type ModelProviderModelProfileV1 } from '@shared/app-settings'
 import type { HarnessModelInfo } from '../../../../kun/src/contracts/harness-models'
 
-export function harnessModelProfiles(models: readonly HarnessModelInfo[] = []): Record<string, ModelProviderModelProfileV1> {
+export function harnessModelProfiles(models: readonly HarnessModelInfo[] = [], nativeReasoning = false): Record<string, ModelProviderModelProfileV1> {
   return Object.fromEntries(models.flatMap((model) => {
     if (!model.inputModalities) return []
     const inputModalities = model.inputModalities.filter((value): value is 'text' | 'image' => value === 'text' || value === 'image')
     return [[model.id, { inputModalities, outputModalities: ['text'], supportsToolCalling: true,
-      messageParts: inputModalities.includes('image') ? ['text', 'image_url', 'input_image'] : ['text'] } satisfies ModelProviderModelProfileV1]]
+      messageParts: inputModalities.includes('image') ? ['text', 'image_url', 'input_image'] : ['text'],
+      ...(nativeReasoning ? { reasoning: {
+        supportedEfforts: (model.reasoningEfforts ?? []).filter((effort): effort is ModelReasoningEffort => MODEL_REASONING_EFFORTS.includes(effort as ModelReasoningEffort)),
+        defaultEffort: MODEL_REASONING_EFFORTS.includes(model.defaultReasoningEffort as ModelReasoningEffort) ? model.defaultReasoningEffort as ModelReasoningEffort : 'auto' as const,
+        requestProtocol: 'none' as const } } : {}) } satisfies ModelProviderModelProfileV1]]
   }))
 }
 
@@ -104,7 +108,9 @@ export function adeHarnessModelGroups(input: {
         providerId: credentialGroupKey(mode),
         label: labelFor[mode],
         modelIds: [...models],
-        ...(input.modelInfo ? { modelProfiles: harnessModelProfiles(input.modelInfo) } : {})
+        ...(input.modelInfo ? { modelProfiles: harnessModelProfiles(input.modelInfo, row.definition.id === 'devin') } : {}),
+        ...(input.modelInfo ? { nativeHarnessId: row.definition.id,
+          modelInfo: Object.fromEntries(input.modelInfo.map((entry) => [entry.id, entry])) } : {})
       })
       continue
     }

@@ -137,7 +137,9 @@ export function FloatingComposerModelPicker({
     ? t(emptyModelState === 'loading' ? 'composerModelsLoading'
       : emptyModelState === 'unavailable' ? 'composerModelsUnavailableHint' : 'composerAgentDefaultModelHint') : undefined
   const needsProviderSetup = !emptyModelMessage && shouldShowProviderSetupPrompt(providerMenuGroups)
-  const reasoningOptions = reasoningOptionsForModel(currentModelProfile)
+  const nativeModel = selectedProviderGroup?.nativeHarnessId === 'devin' ? selectedProviderGroup.modelInfo?.[currentModel] : undefined
+  const reasoningOptions = reasoningOptionsForModel(currentModelProfile).filter((option) =>
+    selectedProviderGroup?.nativeHarnessId !== 'devin' || nativeModel?.reasoningEfforts?.includes(option.id))
   const reasoningEnabled =
     !needsProviderSetup && !emptyModelMessage && Boolean(onComposerReasoningEffortChange) && reasoningOptions.length > 0
   const fastModeState: ComposerFastModeState = onComposerFastModeChange
@@ -145,10 +147,12 @@ export function FloatingComposerModelPicker({
     : 'hidden'
   const showFastModeButton = fastModeState !== 'hidden'
   const fastModeEnabled = fastModeState === 'supported' && composerFastMode
-  const currentReasoning = normalizeComposerReasoningEffort(
+  const normalizedReasoning = normalizeComposerReasoningEffort(
     composerReasoningEffort,
     currentModelProfile
   )
+  const currentReasoning = reasoningOptions.some((option) => option.id === normalizedReasoning) ? normalizedReasoning
+    : reasoningOptions.find((option) => option.id === nativeModel?.defaultReasoningEffort)?.id ?? reasoningOptions[0]?.id ?? normalizedReasoning
   const currentReasoningLabel = t(reasoningLabelKey(currentReasoning))
   const reasoningRailEfforts = useMemo(
     () => orderComposerReasoningRailEfforts(reasoningOptions.map((option) => option.id)),
@@ -168,7 +172,7 @@ export function FloatingComposerModelPicker({
       : currentModel && currentModel !== 'default' ? fullModelLabel(currentModel, t('autoLabel')) : t('composerAgentDefaultModel')
     : needsProviderSetup
     ? t('composerNoProvidersShort')
-    : fullModelLabel(composerModel, t('autoLabel'))
+    : selectedProviderGroup?.modelInfo?.[currentModel]?.displayName ?? fullModelLabel(composerModel, t('autoLabel'))
   const splitModelLabel =
     showProviderInModelLabel && selectedProviderGroup?.label
       ? `${selectedProviderGroup.label} · ${modelLabel}`
@@ -177,7 +181,7 @@ export function FloatingComposerModelPicker({
   const activeProviderGroup =
     providerMenuGroups.find((group) => group.providerId === activeProviderId) ?? null
   const activeProviderModelIds = activeProviderGroup
-    ? filterComposerModelIds(activeProviderGroup.modelIds, modelFilter)
+    ? filterComposerModelIds(activeProviderGroup.modelIds, modelFilter, activeProviderGroup.modelInfo)
     : []
   const comboboxWidthClass = stretch
     ? 'min-w-0 flex-1 max-w-[min(284px,45vw)] overflow-hidden'
@@ -341,8 +345,10 @@ export function FloatingComposerModelPicker({
 
       setSubmenuPlacement(
         calculateFloatingSubmenuPlacement({
+          preferredWidth: activeProviderGroup?.nativeHarnessId === 'devin' && !reasoningPanelOpen ? 364 : undefined,
+          maximumHeight: activeProviderGroup?.nativeHarnessId === 'devin' && !reasoningPanelOpen ? 440 : undefined,
           anchorRect: row.getBoundingClientRect(),
-          submenuHeight:
+          submenuHeight: activeProviderGroup?.nativeHarnessId === 'devin' && !reasoningPanelOpen ? 440 :
             submenuRef.current?.offsetHeight
             || (reasoningPanelOpen
               ? estimatedReasoningSubmenuHeight(reasoningOptions.length)
