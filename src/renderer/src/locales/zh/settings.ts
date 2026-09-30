@@ -1,3 +1,4 @@
+import googleWorkspace from './settings/google-workspace.json'
 import navigationProviders from './settings/navigation-providers.json'
 import providerManagement from './settings/provider-management.json'
 import providerMediaMcp from './settings/provider-media-mcp.json'
@@ -9,6 +10,7 @@ import speak from './settings/speak.json'
 import ade from './settings/ade.json'
 
 const settings = {
+  ...googleWorkspace,
   ...navigationProviders,
   ...providerManagement,
   ...providerMediaMcp,

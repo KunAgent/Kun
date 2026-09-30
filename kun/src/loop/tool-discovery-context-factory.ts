@@ -84,9 +84,9 @@ export function createToolDiscoveryContext(
     ...(deps.fastContextTaskCount ? { fastContextTaskCount: deps.fastContextTaskCount } : {}),
     abortSignal: input.signal,
     // A tool schema lookup is not tool execution. Retain the existing inert
-    // approval callback so a provider cannot create a real approval request
-    // merely by enumerating its schemas.
-    awaitApproval: async () => 'allow',
+    // deny-closed callback so enumeration cannot mint execution authority or
+    // create a real approval request merely by inspecting schemas.
+    awaitApproval: async () => 'deny',
     ...(input.userInputDisabled
       ? {}
       : {

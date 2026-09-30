@@ -273,6 +273,20 @@ module.exports = {
       filter: ['**/*']
     },
     {
+      from: 'resources/google-workspace/current',
+      to: 'google-workspace',
+      filter: ['gws', 'gws.exe', 'selected.json']
+    },
+    {
+      from: 'resources/google-workspace/manifest.json',
+      to: 'google-workspace/manifest.json'
+    },
+    {
+      from: 'resources/google-workspace/legal',
+      to: 'google-workspace/legal',
+      filter: ['LICENSE', 'NOTICE', 'THIRD-PARTY-NOTICES.txt']
+    },
+    {
       from: 'resources/officecli/current',
       to: 'officecli',
       filter: ['officecli', 'officecli.exe', 'selected.json']
@@ -307,6 +321,7 @@ module.exports = {
   afterPack: './scripts/after-pack.cjs',
   afterSign: './scripts/mac-notarize.cjs',
   mac: {
+    sign: './scripts/sign-mac-google-workspace.cjs',
     // macOS stores Chromium locales in language-named .lproj directories.
     electronLanguages: chromiumMacLanguages,
     category: 'public.app-category.developer-tools',

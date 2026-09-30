@@ -5,6 +5,7 @@
 export type SettingsRouteSection =
   | 'general'
   | 'providers'
+  | 'integrations'
   | 'extensions'
   | 'write'
   | 'design'

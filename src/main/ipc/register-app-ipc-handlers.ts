@@ -1,7 +1,8 @@
-import { ipcMain } from 'electron'
+import { ipcMain, shell } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { registerBuiltinGitHubMcpAuthorizationIpc } from '../github-mcp-authorization-ipc'
+import { registerGoogleWorkspaceIpc } from '../google-workspace-ipc'
 import { ensureBundledSkills } from '../skill-bundled'
 import type { RegisterAppIpcHandlersOptions } from './app-ipc-handler-options'
 import { registerAppContentIpcHandlers } from './register-app-content-ipc-handlers'
@@ -25,6 +26,13 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     getMainWindow: options.getMainWindow,
     getSettings: () => options.store.load(),
     applySettingsPatch: options.applySettingsPatch
+  })
+  registerGoogleWorkspaceIpc({
+    ipcMain,
+    getMainWindow: options.getMainWindow,
+    request: options.runtimeRequest,
+    openExternal: (url) => shell.openExternal(url),
+    assertReady: options.assertRendererRuntimeReady
   })
   registerAppRuntimeIpcHandlers(options)
   registerAppWorkspaceIpcHandlers(options)

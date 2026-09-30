@@ -42,6 +42,9 @@ export const RuntimeInfoResponse = z
       packageRoot: z.string().min(1),
       dataRoot: z.string().min(1)
     }).strict().optional(),
+    integrations: z.object({
+      googleWorkspace: z.object({ experimental: z.literal(true), version: z.literal('0.22.5'), driveReadOnly: z.literal(true), authControl: z.literal('settings') }).strict()
+    }).strict().optional(),
     capabilities: RuntimeCapabilityManifest
   })
   .strict()

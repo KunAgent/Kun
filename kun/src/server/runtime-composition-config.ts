@@ -1,3 +1,4 @@
+import { buildGoogleWorkspaceToolProvider } from '../google-workspace/google-workspace-tools.js'
 import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
 import {
@@ -379,6 +380,7 @@ export function createRuntimeConfigController(
 	      ...nextMusicGenProviders.providers,
 	      ...nextVideoGenProviders.providers,
 	      ...nextOfficeCliProviders,
+      ...buildGoogleWorkspaceToolProvider({ service: services.googleWorkspace }),
       nextPptAgentProvider,
 	      designCanvasProvider
 	    ]

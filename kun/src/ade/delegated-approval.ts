@@ -74,7 +74,7 @@ export function makeDelegatedAwaitApproval(
       rejectRequested = reject
     })
 
-    return new Promise<'allow' | 'deny'>((resolve, reject) => {
+    return new Promise<'allow' | 'deny' | ApprovalResolution>((resolve, reject) => {
       let settled = false
       let expiredResolutionScheduled = false
       const cleanup = (): void => signal.removeEventListener('abort', onAbort)
@@ -152,7 +152,7 @@ export function makeDelegatedAwaitApproval(
               if (settled) return
               settled = true
               cleanup()
-              resolve(decision)
+              resolve(requiresUserDecision ? { decision, reviewer: 'user' } : decision)
             },
             (error) => {
               if (settled) return

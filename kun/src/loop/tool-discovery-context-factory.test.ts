@@ -54,7 +54,7 @@ describe('createToolDiscoveryContext', () => {
       id: 'approval_1', threadId: 'thread_1', turnId: 'turn_1', toolName: 'read', summary: 'Read file'
     })
 
-    await expect(context.awaitApproval(approval)).resolves.toBe('allow')
+    await expect(context.awaitApproval(approval)).resolves.toBe('deny')
     await expect(context.awaitUserInput?.({
       id: 'input_1', itemId: 'item_input_1', prompt: 'Continue?', questions: []
     })).resolves.toEqual({ status: 'submitted', answers: [] })
