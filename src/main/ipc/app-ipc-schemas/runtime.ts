@@ -49,7 +49,6 @@ import {
   KUN_ACTIVITY_TEMPLATE,
   KUN_ACTIVITY_EVENTS_TEMPLATE,
   KUN_ACTIVITY_FOREGROUND_TEMPLATE,
-  KUN_ACTIVITY_UNIT_TEMPLATE,
   KUN_APPROVALS_TEMPLATE,
   KUN_TASK_WORKSPACES_TEMPLATE,
   KUN_TASK_WORKSPACE_TEMPLATE,
@@ -357,7 +356,6 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_ACTIVITY_TEMPLATE, ['GET']),
   compileEndpoint(KUN_ACTIVITY_EVENTS_TEMPLATE, ['GET']),
   compileEndpoint(KUN_ACTIVITY_FOREGROUND_TEMPLATE, ['POST']),
-  compileEndpoint(KUN_ACTIVITY_UNIT_TEMPLATE, ['POST']),
   compileEndpoint(KUN_APPROVALS_TEMPLATE, ['GET']),
   // ADE task workspaces, review comments, and team controls (09 §9, 11 §4).
   compileEndpoint(KUN_TASK_WORKSPACES_TEMPLATE, ['GET', 'POST']),

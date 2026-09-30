@@ -1,10 +1,14 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../i18n'
 import type { ActivityRow } from '@shared/activity-row'
 import type { AdeTeamOverview } from '@shared/ade-teams'
+import type { AppSettingsV1 } from '@shared/app-settings'
 import { displayBucket } from '@shared/activity-display'
+import { rendererRuntimeClient } from '../../agent/runtime-client'
+import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
+import { coerceRendererSettings } from '../settings-utils'
 
 const provider = {
   listTaskWorkspaces: vi.fn(),
@@ -34,6 +38,19 @@ import { useActivityStore } from '../../store/activity-store'
 import { useChatStore } from '../../store/chat-store'
 
 let now = 0
+const renderers = new Set<ReactTestRenderer>()
+const unsubscribeSyncStatus = vi.fn()
+const bridge = {
+  getSettings: vi.fn(async () => coerceRendererSettings({} as AppSettingsV1)),
+  getRuntimeSettingsSyncStatus: vi.fn(async () => ({
+    state: 'synced' as const,
+    generation: 1,
+    at: '2026-01-01T00:00:00.000Z'
+  })),
+  onRuntimeSettingsSyncStatus: vi.fn(() => unsubscribeSyncStatus)
+}
+let addEventListener: ReturnType<typeof vi.fn>
+let removeEventListener: ReturnType<typeof vi.fn>
 
 function row(overrides: Partial<ActivityRow>): ActivityRow {
   const stateSince = new Date(now - 60_000).toISOString()
@@ -79,8 +96,14 @@ async function renderView(): Promise<ReactTestRenderer> {
   let renderer!: ReactTestRenderer
   await act(async () => {
     renderer = create(createElement(MissionControlView))
+    renderers.add(renderer)
   })
   return renderer
+}
+
+async function unmountView(renderer: ReactTestRenderer): Promise<void> {
+  await act(async () => renderer.unmount())
+  renderers.delete(renderer)
 }
 
 function columnOf(renderer: ReactTestRenderer, bucket: string) {
@@ -101,6 +124,12 @@ function cardTitles(renderer: ReactTestRenderer, bucket: string): string[] {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  rendererRuntimeClient.invalidateSettings()
+  const events = new EventTarget()
+  addEventListener = vi.fn(events.addEventListener.bind(events))
+  removeEventListener = vi.fn(events.removeEventListener.bind(events))
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  vi.stubGlobal('window', { kunGui: bridge, addEventListener, removeEventListener })
   popoutState.popout = false
   popoutState.canPopout = false
   popoutState.opened.length = 0
@@ -111,7 +140,31 @@ beforeEach(() => {
   useActivityStore.setState({ rows: {}, cursor: null, status: 'live' })
 })
 
+afterEach(async () => {
+  try {
+    for (const renderer of renderers) await unmountView(renderer)
+  } finally {
+    renderers.clear()
+    rendererRuntimeClient.invalidateSettings()
+    vi.unstubAllGlobals()
+  }
+})
+
 describe('MissionControlView', () => {
+  it('subscribes the readiness card to the bridge and cleans up on unmount', async () => {
+    const renderer = await renderView()
+    expect(renderer.root.findAll((n) => n.props['data-ade-readiness-card'] !== undefined)).toHaveLength(1)
+    expect(bridge.getSettings).toHaveBeenCalledTimes(1)
+    expect(bridge.getRuntimeSettingsSyncStatus).toHaveBeenCalledTimes(1)
+    expect(bridge.onRuntimeSettingsSyncStatus).toHaveBeenCalledTimes(1)
+    expect(addEventListener).toHaveBeenCalledWith(SETTINGS_CHANGED_EVENT, expect.any(Function))
+    const listener = addEventListener.mock.calls.find(([event]) => event === SETTINGS_CHANGED_EVENT)![1]
+
+    await unmountView(renderer)
+    expect(unsubscribeSyncStatus).toHaveBeenCalledTimes(1)
+    expect(removeEventListener).toHaveBeenCalledWith(SETTINGS_CHANGED_EVENT, listener)
+  })
+
   it('groups rows exactly like displayBucket', async () => {
     const seeded = [
       waiting('u1', 'Wait A'),
@@ -310,7 +363,7 @@ describe('MissionControlView', () => {
     expect(
       renderer.root.findAll((n) => n.props['aria-label'] === 'Pop out to window')
     ).toHaveLength(0)
-    await act(async () => renderer.unmount())
+    await unmountView(renderer)
 
     popoutState.canPopout = true
     renderer = await renderView()
