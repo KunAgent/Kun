@@ -109,6 +109,15 @@ export function useAdeComposerControls(input: {
   const isNativeHarness = harnessId !== 'kun' &&
     Boolean(composerHarnessId.trim() || threadHarnessId?.trim())
 
+  useEffect(() => {
+    if (!enabled || !isNativeHarness || credentialMode !== 'native-login' || modelCache?.loading) return
+    const state = useChatStore.getState()
+    if (state.activeThreadId !== activeThreadId || state.workspaceRoot !== workspaceRoot ||
+      state.composerHarnessId !== harnessId || state.composerModel) return
+    const model = modelCache?.modelInfo?.find((entry) => entry.isDefault)?.id ?? modelCache?.models[0]
+    if (model) setComposerModel(model, '', 'settings')
+  }, [enabled, isNativeHarness, credentialMode, modelCache, activeThreadId, workspaceRoot, harnessId, setComposerModel])
+
   // Provider/gateway credential modes need the exposable-provider groups.
   useEffect(() => {
     if (
@@ -149,11 +158,12 @@ export function useAdeComposerControls(input: {
     return adeHarnessModelGroups({
       row,
       models: modelCache?.models ?? [],
+      modelInfo: modelCache?.modelInfo,
       providerGroups: providerGroupCache?.groups ?? [],
       labels,
       hasConfiguredProvider
     })
-  }, [enabled, hasConfiguredProvider, isNativeHarness, labels, modelCache?.models, providerGroupCache?.groups, row])
+  }, [enabled, hasConfiguredProvider, isNativeHarness, labels, modelCache?.models, modelCache?.modelInfo, providerGroupCache?.groups, row])
   const pickList = modelGroups != null ? [...(modelCache?.models ?? [])] : null
 
   /** Sentinel group keys (`ade-cred:*`) route the pick through credentialMode. */
@@ -242,7 +252,8 @@ export function useAdeComposerControls(input: {
         void loadHarnessProviderGroups(nextId)
       }
     } else {
-      setComposerModel(defaults?.model ?? models[0] ?? '', cred === 'native-login' ? '' : defaults?.providerId ?? '')
+      const nativeDefault = useHarnessStore.getState().models[nextId]?.modelInfo?.find((entry) => entry.isDefault)?.id
+      setComposerModel(defaults?.model ?? nativeDefault ?? models[0] ?? '', cred === 'native-login' ? '' : defaults?.providerId ?? '')
     }
     if (managedDraft && defaults?.isolation) {
       setComposerIsolation(
@@ -266,7 +277,10 @@ export function useAdeComposerControls(input: {
     harnessLabel,
     isNativeHarness,
     rowUnavailableCode: harnessRowUnavailableCode,
-    refreshRows: () => void loadHarnesses(true, { waitMs: 3_000 }),
+    refreshRows: () => {
+      void loadHarnesses(true, { waitMs: 3_000 })
+      if (harnessId !== 'kun') void loadHarnessModels(harnessId)
+    },
     pickList,
     modelGroups,
     modelsLoading: modelCache?.loading === true,

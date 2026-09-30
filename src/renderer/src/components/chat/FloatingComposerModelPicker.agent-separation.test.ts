@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
 import { FloatingComposerModelPicker } from './FloatingComposerModelPicker'
+import { harnessModelProfiles } from '../../lib/ade-composer-harness'
 
 let host: HTMLDivElement
 let root: Root
@@ -22,6 +23,23 @@ afterEach(async () => {
 })
 
 describe('Model picker after Agent selection moves to the mode control', () => {
+  it('uses native image metadata and does not label unknown capabilities as text-only', async () => {
+    await act(async () => root.render(createElement(FloatingComposerModelPicker, {
+      compact: false, mode: 'select', composerModel: 'vision', composerPickList: ['vision', 'text', 'unknown'],
+      composerModelGroups: [{ providerId: 'ade-cred:native-login', label: 'Native sign-in',
+        modelIds: ['vision', 'text', 'unknown'], modelProfiles: harnessModelProfiles([
+          { id: 'vision', inputModalities: ['text', 'image'] }, { id: 'text', inputModalities: ['text'] }
+        ]) }], canChangeModel: true, onComposerModelChange: vi.fn()
+    })))
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!.click())
+    const source = [...document.querySelectorAll<HTMLButtonElement>('[role="menu"] button')]
+      .find((button) => button.textContent?.includes('Native sign-in'))!
+    await act(async () => source.click())
+    expect(document.querySelector('button[title="vision"]')?.textContent).toContain('Vision')
+    expect(document.querySelector('button[title="text"]')?.textContent).toContain('Text')
+    expect(document.querySelector('button[title="unknown"]')?.textContent).not.toContain('Text')
+  })
+
   it.each([
     ['agent-default', 'Agent default model'],
     ['loading', 'Loading models…'],

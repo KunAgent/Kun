@@ -41,10 +41,11 @@ function SharedModelConnectionsLifecycle(): null {
       if (disposed) return
       const current = useChatStore.getState()
       const currentWorkspace = normalizeWorkspaceRoot(current.workspaceRoot)
-      if (!current.activeThreadId && currentWorkspace && (
-        (current.composerProjectDefaults?.workspaceRoot === currentWorkspace &&
+      if (!current.activeThreadId && (
+        (Boolean(current.composerHarnessId) && current.composerHarnessId !== 'kun') ||
+        (currentWorkspace && ((current.composerProjectDefaults?.workspaceRoot === currentWorkspace &&
           Boolean(current.composerProjectDefaults.value.route)) ||
-        current.composerRouteExplicitWorkspaceRoot === currentWorkspace
+        current.composerRouteExplicitWorkspaceRoot === currentWorkspace))
       )) {
         lastAppliedRevision = snapshot.revision
         modelCatalogLoaded = true

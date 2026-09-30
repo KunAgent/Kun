@@ -16,6 +16,18 @@ const labels = {
   kunGateway: 'Kun gateway'
 }
 
+it('preserves native and gateway image capabilities without inventing unknown capabilities', () => {
+  const groups = adeHarnessModelGroups({ row: harnessRow(), labels, hasConfiguredProvider: true,
+    models: ['vision', 'text', 'unknown'], modelInfo: [{ id: 'vision', inputModalities: ['text', 'image'] },
+      { id: 'text', inputModalities: ['text'] }, { id: 'unknown' }],
+    providerGroups: [{ providerId: 'source', label: 'Source', models: ['vision'],
+      modelInfo: [{ id: 'vision', inputModalities: ['text', 'image'] }] }] })
+  expect(groups[0].modelProfiles?.vision.inputModalities).toContain('image')
+  expect(groups[0].modelProfiles?.text.inputModalities).toEqual(['text'])
+  expect(groups[0].modelProfiles?.unknown).toBeUndefined()
+  expect(groups[1].modelProfiles?.vision.inputModalities).toContain('image')
+})
+
 function harnessRow(overrides?: {
   id?: string
   credentialModes?: Array<'native-login' | 'provider' | 'kun-gateway'>

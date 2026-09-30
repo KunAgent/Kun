@@ -5,6 +5,17 @@ import type {
   AdeHarnessRow
 } from '@shared/ade-harnesses'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
+import type { ModelProviderModelProfileV1 } from '@shared/app-settings'
+import type { HarnessModelInfo } from '../../../../kun/src/contracts/harness-models'
+
+export function harnessModelProfiles(models: readonly HarnessModelInfo[] = []): Record<string, ModelProviderModelProfileV1> {
+  return Object.fromEntries(models.flatMap((model) => {
+    if (!model.inputModalities) return []
+    const inputModalities = model.inputModalities.filter((value): value is 'text' | 'image' => value === 'text' || value === 'image')
+    return [[model.id, { inputModalities, outputModalities: ['text'], supportsToolCalling: true,
+      messageParts: inputModalities.includes('image') ? ['text', 'image_url', 'input_image'] : ['text'] } satisfies ModelProviderModelProfileV1]]
+  }))
+}
 
 /**
  * ADE composer harness/model resolution (docs/ade/12 §7.2).
@@ -74,6 +85,7 @@ export type AdeCredentialGroupLabels = {
 export function adeHarnessModelGroups(input: {
   row: AdeHarnessRow | undefined
   models: readonly string[]
+  modelInfo?: readonly HarnessModelInfo[]
   providerGroups?: readonly AdeHarnessProviderModelGroup[]
   labels: AdeCredentialGroupLabels
   hasConfiguredProvider: boolean
@@ -91,7 +103,8 @@ export function adeHarnessModelGroups(input: {
       groups.push({
         providerId: credentialGroupKey(mode),
         label: labelFor[mode],
-        modelIds: [...models]
+        modelIds: [...models],
+        ...(input.modelInfo ? { modelProfiles: harnessModelProfiles(input.modelInfo) } : {})
       })
       continue
     }
@@ -101,7 +114,8 @@ export function adeHarnessModelGroups(input: {
       groups.push({
         providerId: `${credentialGroupKey(mode)}:${provider.providerId}`,
         label: `${labelFor[mode]} · ${provider.label}`,
-        modelIds: [...provider.models]
+        modelIds: [...provider.models],
+        ...(provider.modelInfo ? { modelProfiles: harnessModelProfiles(provider.modelInfo) } : {})
       })
     }
   }

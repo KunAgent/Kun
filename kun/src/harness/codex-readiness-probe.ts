@@ -8,6 +8,7 @@ import {
 } from './harness-secret-env.js'
 import type { AcpReadiness } from './acp-readiness-probe.js'
 import { nativeAgentNetworkEnv } from './native-agent-network.js'
+import { codexMetadataProbeArgs } from './codex-executable.js'
 
 /** A local protocol check; it does not start a thread or spend model quota. */
 export async function probeCodexReadiness(
@@ -20,7 +21,7 @@ export async function probeCodexReadiness(
     const secretEnv = await resolveHarnessSecretEnv(definition, options.resolveSecretEnv)
     process = await startHarnessProcess({
       command,
-      args: definition.launch?.args ?? ['app-server'],
+      args: codexMetadataProbeArgs(definition.launch?.args),
       env: { ...nativeAgentNetworkEnv(definition, globalThis.process.env, secretEnv), ...definition.launch?.env },
       secretEnv,
       cwd: tmpdir()

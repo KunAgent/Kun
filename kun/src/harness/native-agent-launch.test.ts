@@ -35,7 +35,7 @@ function protocolFixture(): ReturnType<typeof startHarnessProcess> {
       ? { account: null, requiresOpenaiAuth: false }
       : request.method === 'model/list'
         ? { data: [{ id: 'fixture', model: 'fixture', displayName: 'Fixture', description: '',
-          supportedReasoningEfforts: [], defaultReasoningEffort: 'medium', isDefault: true, hidden: false }] }
+          inputModalities: ['text', 'image'], supportedReasoningEfforts: [], defaultReasoningEffort: 'medium', isDefault: true, hidden: false }] }
         : { userAgent: 'fixture', codexHome: '/fixture', platformFamily: 'unix', platformOs: 'linux' }
     queueMicrotask(() => stdout.write(JSON.stringify({ id: request.id, result }) + '\n'))
   })
@@ -54,7 +54,10 @@ describe('native launch network parity without paid requests', () => {
     const definition = catalog().get('codex')!
     expect((await probeCodexReadiness(definition, '/fixture/codex')).ready).toBe('yes')
     expect((await probeCodexHandshake(definition, '/fixture/codex')).ok).toBe(true)
-    expect(await new CodexModelProbe().probe(definition)).toEqual(['fixture'])
+    const models = new CodexModelProbe({ binaryPath: () => '/fixture/codex' })
+    expect(await models.probe(definition)).toEqual(['fixture'])
+    expect(await models.probeCatalog(definition)).toMatchObject({ modelInfo: [{ id: 'fixture',
+      inputModalities: ['text', 'image'], isDefault: true }] })
     const agent = await CodexAgent.connect({ definition: { ...definition }, command: '/fixture/codex',
       args: ['app-server'], env: {}, secretEnv: {}, credentialEnv: {}, stripEnv: []
     } as unknown as HarnessAgentConnectInput)

@@ -10,6 +10,7 @@
  * ACP keeps its own proven `AcpRuntime`; this class is the common layer the
  * new native transports are built on (P6-13 evaluates migrating ACP onto it).
  */
+import { resolveCodexExecutable } from '../harness/codex-executable.js'
 import type { TurnItem } from '../contracts/items.js'
 import { filterGoalContextsForGoalKey } from '../loop/continuation-instructions.js'
 import type { HarnessTransport } from '../contracts/harness.js'
@@ -165,15 +166,17 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     if (!resolved.ok) return resolved.outcome
     const ctx = resolved.ctx
     const { definition } = ctx
+    const override = this.deps.binaryPath?.(definition.id)
+    const requestedCommand = override ?? definition.launch?.command ?? ''
+    const command = this.deps.transport === 'codex-app-server'
+      ? await resolveCodexExecutable(requestedCommand, Boolean(override)) : requestedCommand
+    const poolKey = this.deps.transport === 'codex-app-server' ? `${ctx.poolKey}:executable:${command}` : ctx.poolKey
 
     const lease = await this.pool
-      .acquire(ctx.poolKey, () =>
+      .acquire(poolKey, () =>
         this.deps.agentFactory.connect({
           definition,
-          command:
-            this.deps.binaryPath?.(definition.id) ??
-            definition.launch?.command ??
-            '',
+          command,
           args: definition.launch?.args ?? [],
           env: definition.launch?.env ?? {},
           secretEnv: ctx.secretEnv,
@@ -306,7 +309,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     const onAbort = (): void => {
       void session.interrupt().catch(() => undefined)
       interruptTimer = setTimeout(() => {
-        this.pool.markUnhealthy(ctx.poolKey)
+        this.pool.markUnhealthy(poolKey)
       }, this.deps.interruptSettleMs ?? SESSION_INTERRUPT_SETTLE_MS)
       interruptTimer.unref?.()
     }

@@ -258,3 +258,23 @@ worker 写入根还保留父任务的目录上限：父若只允许 `src/generat
 - Kun、Web 和 Node 类型检查通过；GUI 构建、相关 ESLint、完整行数门禁通过。
 - 编译后的隔离 Electron Agent 流程 6 条断言通过，renderer 异常为空；证据在 `dist/catalog-startup-smoke/`。
 - 此修复不修改已保存供应商或凭据，也不以本机配置状态声明真实上游模型请求已经通过。
+
+## 原生 Codex 模型目录与识图能力
+
+完成本地 Cindy / Orca 模型发现实现对照，方案和代码索引见
+[原生模型目录契约](../native-model-catalog.md)。模型 ID 列表之外保留原生输入模态、默认模型和推理档位，
+分页读取完整目录；能力未知不再显示为仅文本。原生图片能力同时用于菜单标签和附件判断。
+Kun 供应商目录刷新保留外部 Agent 的模型和推理档位。
+
+本机 PATH 的 Codex 0.145.0 只返回 4 个模型，已安装官方应用 CLI 0.159.2 返回 8 个图片模型。
+自动发现现在可选择较新的官方 CLI，检测、探测、实际会话保持一致；显式路径和包装脚本仍优先。
+没有升级全局 CLI、复制账号或改写用户供应商配置。
+
+- Kun 定向回归 7 文件、64 项通过，前端 8 文件、95 项通过。
+- 完整类型检查、追加 Kun 类型检查、完整构建、相关 ESLint 与行数门禁通过。
+- 编译产物的原生目录只读探测返回 8 个模型，全部声明图片输入，默认 `gpt-6.1-sol`；未执行付费推理。
+- 真实 Electron 加离线 RPC 夹具验证两页目录、8 条识图标签、默认值和选择保持，英文与中文 DPR 2 各 3 条断言通过。
+  报告分别在 `dist/native-model-catalog-smoke/` 和 `dist/native-model-catalog-zh-retry/`。
+- 既有 Kun Code/Design、Devin 模型选择与实际 ACP 回复回归 6 条断言通过，报告在 `dist/native-model-agent-regression/`。
+- 中文首次运行曾在 Agent 就绪探测超时，失败保留于 `dist/native-model-catalog-zh-smoke/`；独立重跑通过，
+  超时原因未确认，不将首次失败算作通过，也不据此声明跨平台或真实图片推理验证已完成。

@@ -92,6 +92,17 @@ async function dispatch(
 const authed = { authorization: `Bearer ${TOKEN}` }
 
 describe('harness routes', () => {
+  it('returns native model metadata beside the compatible flat model list', async () => {
+    const modelInfo = [{ id: 'gpt-native', inputModalities: ['text', 'image'], isDefault: true }]
+    const router = buildRouter({ runtimeToken: TOKEN, insecure: false,
+      harnesses: { catalog: new HarnessCatalog(), codexModels: {
+        probeCatalog: async () => ({ models: ['gpt-native'], modelInfo })
+      } } } as unknown as ServerRuntime)
+    const response = await dispatch(router, 'GET', '/v1/harnesses/codex/models', authed)
+    expect(response.status).toBe(200)
+    expect(JSON.parse(response.body)).toMatchObject({ models: ['gpt-native'], modelInfo })
+  })
+
   it('requires runtime authentication', async () => {
     const router = fakeRouter(() => ({ stdout: 'claude 1.2.3', exitCode: 0 }))
     expect((await dispatch(router, 'GET', '/v1/harnesses')).status).toBe(401)

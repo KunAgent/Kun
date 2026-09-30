@@ -135,6 +135,22 @@ describe('chat-store app actions composer model loading', () => {
     vi.unstubAllGlobals()
   })
 
+  it('does not replace a native Codex draft model with the Kun default during catalog refresh', async () => {
+    const { state, actions } = buildHarness({ ok: true, modelIds: ['step-5-preview'],
+      defaultModel: { providerId: 'stepfun', modelId: 'step-5-preview' },
+      modelGroups: [{ providerId: 'stepfun', label: 'StepFun', modelIds: ['step-5-preview'] }] })
+    state.composerHarnessId = 'codex'
+    state.composerCredentialMode = 'native-login'
+    state.composerModel = 'gpt-6.1-sol'
+    state.composerReasoningEffort = 'low'
+    state.composerProviderId = ''
+    await actions.loadComposerModels()
+    expect(state.composerModel).toBe('gpt-6.1-sol')
+    expect(state.composerProviderId).toBe('')
+    expect(state.composerHarnessId).toBe('codex')
+    expect(state.composerReasoningEffort).toBe('low')
+  })
+
   it('keeps the saved selection while loading and publishes catalog readiness with the groups', async () => {
     const models: FetchModelsResult = { ok: true, modelIds: ['saved-model'],
       modelGroups: [{ providerId: 'saved-provider', label: 'Saved', modelIds: ['saved-model'] }] }

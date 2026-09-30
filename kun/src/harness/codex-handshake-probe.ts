@@ -17,6 +17,7 @@ import {
 import { ACP_READINESS_TIMEOUT_MS } from './acp-readiness-probe.js'
 import { raceProbeAbort } from './probe-abort.js'
 import { nativeAgentNetworkEnv } from './native-agent-network.js'
+import { codexMetadataProbeArgs } from './codex-executable.js'
 
 export type CodexHandshakeProbeDeps = {
   spawn?: HarnessSpawnFn
@@ -43,7 +44,7 @@ export async function probeCodexHandshake(
     // app-server protocol; it never starts a thread or turn.
     process = await startHarnessProcess({
       command,
-      args: definition.launch?.args ?? ['app-server'],
+      args: codexMetadataProbeArgs(definition.launch?.args),
       env: { ...nativeAgentNetworkEnv(definition, globalThis.process.env, secretEnv), ...definition.launch?.env },
       secretEnv,
       cwd: tmpdir(),

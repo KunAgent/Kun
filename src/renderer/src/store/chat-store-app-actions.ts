@@ -412,7 +412,8 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
             composerPickList: pick,
             composerModel: selection.model,
             composerProviderId: selection.providerId,
-            composerReasoningEffort: composerReasoningEffortForSelection(
+            composerReasoningEffort: state.composerHarnessId && state.composerHarnessId !== 'kun'
+              ? state.composerReasoningEffort : composerReasoningEffortForSelection(
               groups,
               selection.model,
               selection.providerId

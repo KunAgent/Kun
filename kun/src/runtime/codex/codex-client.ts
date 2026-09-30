@@ -226,10 +226,12 @@ export class CodexClient {
   async modelList(input: {
     cursor?: string
     includeHidden?: boolean
+    limit?: number
   } = {}): Promise<{ models: CodexModel[]; nextCursor?: string }> {
     const raw = await this.request(CODEX_CLIENT_METHODS.modelList, {
       cursor: input.cursor ?? null,
-      includeHidden: input.includeHidden ?? null
+      includeHidden: input.includeHidden ?? false,
+      limit: input.limit ?? 100
     })
     const parsed = CodexModelListResponseSchema.parse(raw)
     return {
@@ -238,16 +240,32 @@ export class CodexClient {
     }
   }
 
-  /** `model/list` flattened across pages. */
-  async listModelsFlat(): Promise<string[]> {
-    const models: string[] = []
+  /** Keep native metadata and exhaust every visible page without looping on a bad cursor. */
+  async listModels(): Promise<CodexModel[]> {
+    const models = new Map<string, CodexModel>()
+    const seenCursors = new Set<string>()
     let cursor: string | undefined
-    for (;;) {
-      const page = await this.modelList({ ...(cursor ? { cursor } : {}) })
-      models.push(...page.models.map((model) => model.id))
-      if (!page.nextCursor) return models
+    for (let index = 0; index < 20; index++) {
+      const page = await this.modelList({ ...(cursor ? { cursor } : {}), includeHidden: false, limit: 100 })
+      for (const model of page.models) {
+        const id = model.model.trim() || model.id.trim()
+        if (id && !model.hidden && id !== 'codex-auto-review' && model.id !== 'codex-auto-review' && !models.has(id)) models.set(id, { ...model, model: id })
+      }
+      if (!page.nextCursor) return [...models.values()]
+      if (seenCursors.has(page.nextCursor)) throw new Error('Codex model catalog repeated its cursor')
+      seenCursors.add(page.nextCursor)
       cursor = page.nextCursor
     }
+    throw new Error('Codex model catalog exceeded the page limit')
+  }
+
+  async listModelsFlat(): Promise<string[]> {
+    return (await this.listModels()).map((model) => model.model)
+  }
+
+  async configuredModel(): Promise<string | undefined> {
+    const value = await this.request<{ config?: { model?: unknown } }>(CODEX_CLIENT_METHODS.configRead, { includeLayers: false })
+    return typeof value.config?.model === 'string' ? value.config.model.trim() || undefined : undefined
   }
 
   async accountRead(): Promise<{

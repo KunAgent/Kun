@@ -133,12 +133,14 @@ export type AdeHarnessProviderModelGroup = {
   providerId: string
   label: string
   models: string[]
+  modelInfo?: import('../../kun/src/contracts/harness-models').HarnessModelInfo[]
 }
 
 /** `GET /v1/harnesses/:id/models` response (01 §9). */
 export type AdeHarnessModels = {
   harnessId: string
   models: string[]
+  modelInfo?: import('../../kun/src/contracts/harness-models').HarnessModelInfo[]
   /**
    * Present when `credential_mode=provider|kun-gateway` was requested: the
    * gateway-exposable providers (04 §5.5 `exposableProvider`) with the model

@@ -10,6 +10,7 @@ import {
 } from '../process/owned-process.js'
 import type { HarnessLoginState } from './harness-login-probes.js'
 import { nativeAgentNetworkStatus } from './native-agent-network.js'
+import { resolveCodexExecutable } from './codex-executable.js'
 
 const VERSION_TIMEOUT_MS = 5_000
 const DEFAULT_TTL_MS = 60_000
@@ -350,8 +351,12 @@ export class HarnessDetector {
     if (override) {
       const resolved = await resolve(override)
       if (resolved) return resolved
+      if (def.transport === 'codex-app-server') return undefined
     }
     if (!def.detect) return undefined
+    if (!override && !this.deps.resolveExecutable && def.transport === 'codex-app-server' && def.detect.command === 'codex') {
+      return resolve(await resolveCodexExecutable())
+    }
     for (const candidate of [def.detect.command, ...(def.detect.aliases ?? [])]) {
       const resolved = await resolve(candidate)
       if (resolved) return resolved

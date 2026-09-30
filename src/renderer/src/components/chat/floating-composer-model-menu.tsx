@@ -225,7 +225,7 @@ export function renderComposerModelMenu({
                     selected={selected}
                     title={id}
                     rightSlot={
-                      modelSupportsImageInput(targetProfile)
+                      !targetProfile ? null : modelSupportsImageInput(targetProfile)
                         ? <ModelCapabilityBadge kind="vision" label={t('composerModelVision')} />
                         : <ModelCapabilityBadge kind="text" label={t('composerModelTextOnly')} />
                     }

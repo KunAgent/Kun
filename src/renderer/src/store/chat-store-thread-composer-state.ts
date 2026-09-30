@@ -153,6 +153,11 @@ export function resolveCatalogComposerSelection(
   state: ChatState,
   options: ThreadComposerSelectionOptions = {}
 ): ThreadComposerModelSelection {
+  // This registry describes Kun's model sources. Native/gateway Agent choices
+  // are owned by that Agent's catalog and must survive a background refresh.
+  if (state.composerHarnessId?.trim() && state.composerHarnessId !== 'kun') {
+    return { model: state.composerModel, providerId: state.composerProviderId }
+  }
   const activeThread = state.activeThreadId
     ? state.threads.find((thread) => thread.id === state.activeThreadId) ?? null
     : null

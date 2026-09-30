@@ -186,7 +186,11 @@ export async function listHarnessModels(
       .map((provider) => ({
         providerId: provider.id,
         label: provider.name,
-        models: providerModelIds(provider)
+        models: providerModelIds(provider),
+        ...(Object.keys(provider.modelCapabilities ?? {}).length ? { modelInfo: providerModelIds(provider).map((id) => ({ id,
+          ...(provider.modelCapabilities?.[id]?.inputModalities
+            ? { inputModalities: provider.modelCapabilities[id].inputModalities } : {})
+        })) } : {})
       }))
       .filter((group) => group.models.length > 0)
     return jsonResponse({ harnessId: definition.id, credentialMode, models: [], groups })
@@ -212,6 +216,10 @@ export async function listHarnessModels(
         models: providerModels(legacyProviderKindFor(definition.id))
       })
     case 'probe': {
+      if (definition.transport === 'codex-app-server' && harnesses.codexModels?.probeCatalog) {
+        const catalog = await harnesses.codexModels.probeCatalog(definition)
+        return jsonResponse({ harnessId: definition.id, ...catalog })
+      }
       const probed =
         definition.transport === 'acp'
           ? await harnesses.acpModels?.probe(definition)
