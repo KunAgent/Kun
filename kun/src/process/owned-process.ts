@@ -8,6 +8,7 @@ import {
   beginWindowsOwnedProcessShutdown,
   shutdownWindowsOwnedProcesses,
   resumeWindowsOwnedProcessAdmission,
+  resolveWindowsExecutablePath,
   spawnWindowsOwnedProcess,
   stopWindowsOwnedProcess
 } from './owned-process-windows.js'
@@ -153,6 +154,7 @@ export async function resolveExecutable(
   options: Pick<SpawnOptions, 'cwd' | 'env'> = {}
 ): Promise<string | undefined> {
   try {
+    if (process.platform === 'win32') return await resolveWindowsExecutablePath(command, options)
     return await resolveCommand(command, options)
   } catch {
     return undefined

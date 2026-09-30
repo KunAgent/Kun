@@ -10,6 +10,7 @@ import { AgentIcon } from '../agent-icon'
 import { setupInstallCommand, setupLoginCommand } from './agent-center-actions'
 import { AgentCenterCustomForm } from './agent-center-custom-form'
 import { AgentCenterTerminalForm } from './agent-center-terminal-form'
+import { AgentInstallControl } from './AgentInstallControl'
 
 const STATE_KEY = 'kun-agent-add-wizard-v1'
 const CHECK_TTL_MS = 10 * 60 * 1_000
@@ -254,6 +255,9 @@ export function AgentCenterAddWizard({
                     ? t('adeCredential.nativeLogin') : row.definition.credentialModes[0] === 'provider'
                       ? t('adeCredential.provider') : t('adeCredential.kunGateway')}</p>
                   <p className="text-[12px] text-ds-muted">{row.status.message ?? (harnessRowUnavailableCode(row) ? t('agentAdd.unverified') : t('agentAdd.checkPassed'))}</p>
+                  {row.definition.builtin && (row.definition.setup?.install?.length || row.definition.setup?.adapter) ? <AgentInstallControl
+                    key={row.definition.id} harnessId={row.definition.id} action={harnessRowUnavailableCode(row) === 'adapter_missing' ? 'adapter' : 'install'}
+                    needed={row.status.installed !== 'yes' || row.status.versionSupported === false} t={t} /> : null}
                   <div className="flex flex-wrap gap-2">
                     {row.definition.setup?.install ? <button type="button" onClick={() => setupCommand('install')} className={actionClass}>{t('agentAdd.installInTerminal')}</button> : null}
                     {row.definition.setup?.login ? <button type="button" onClick={() => setupCommand('login')} className={actionClass}>{t('agentAdd.loginInTerminal')}</button> : null}

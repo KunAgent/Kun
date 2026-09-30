@@ -9,6 +9,7 @@ import { usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
  */
 
 export type AgentCardAction =
+  | { kind: 'install'; labelKey: string; action: 'install' | 'adapter' }
   | { kind: 'command'; labelKey: string; command: string; note?: string }
   | { kind: 'probe' | 'enable' | 'disable' | 'setDefault' | 'specifyPath' | 'reason' | 'test' | 'configureProvider'; labelKey: string }
   | { kind: 'docs'; labelKey: string; url: string }
@@ -72,7 +73,7 @@ export function agentCardModel(
   row: AdeHarnessRow,
   options: { enabled: boolean; platform: string; isDefault: boolean }
 ): AgentCardModel {
-  const { enabled, platform, isDefault } = options
+  const { enabled, isDefault } = options
   const setup = row.definition.builtin ? row.definition.setup : undefined
   const hasDetail = Boolean(row.status.message?.trim())
 
@@ -137,19 +138,20 @@ export function agentCardModel(
   switch (code) {
     case 'not_installed':
     case 'version_too_low': {
-      const install = commandAction('adeAgentAction.install', setupInstallCommand(setup, platform))
+      const install: AgentCardAction = setup?.install?.length
+        ? { kind: 'install', labelKey: 'agentInstall.start', action: 'install' } : ACTION.none
       const docs = setup?.docsUrl
         ? ({ kind: 'docs', labelKey: 'adeAgentAction.docs', url: setup.docsUrl } as const)
         : null
-      primary = install.kind === 'command' ? install : docs ?? ACTION.probe
-      if (docs && install.kind === 'command') secondary.push(docs)
+      primary = install.kind === 'install' ? install : docs ?? ACTION.probe
+      if (docs && install.kind === 'install') secondary.push(docs)
       secondary.push(ACTION.specifyPath)
       break
     }
     case 'adapter_missing': {
       const adapter = setup?.adapter
       primary = adapter
-        ? { kind: 'command', labelKey: 'adeAgentAction.installAdapter', command: adapter.install }
+        ? { kind: 'install', labelKey: 'agentInstall.adapter', action: 'adapter' }
         : setup?.docsUrl
           ? { kind: 'docs', labelKey: 'adeAgentAction.docs', url: setup.docsUrl }
           : ACTION.probe

@@ -6,6 +6,9 @@ import {
 import { electronProxyRuleUrl, electronSystemProxyRules } from '../electron-system-proxy'
 
 const destinations = {
+  installer: ['https://registry.npmjs.org/', 'https://github.com/', 'https://cli.devin.ai/install.sh',
+    'https://static.devin.ai/', 'https://opencode.ai/install', 'https://claude.ai/install.sh',
+    'https://formulae.brew.sh/', 'https://ghcr.io/', 'https://antigravity.google/cli/install.sh', 'https://storage.googleapis.com/'],
   codex: ['https://chatgpt.com/backend-api/codex/responses', 'https://api.openai.com/v1/responses'],
   'claude-code': ['https://api.anthropic.com/v1/messages']
 } as const
@@ -48,7 +51,7 @@ export async function refreshNativeAgentNetworkBeforeProbe(
   method: string,
   send: (body: string) => Promise<{ ok: boolean; status: number }>
 ): Promise<void> {
-  if (method !== 'POST' || !/^\/v1\/harnesses\/(codex|claude-code)\/(probe|test)(?:\?|$)/u.test(path)) return
+  if (method !== 'POST' || !/^\/v1\/harnesses\/(?:(codex|claude-code)\/(probe|test)|[^/]+\/install)(?:\?|$)/u.test(path)) return
   // Test/old hosts without an Electron session have no desktop policy to refresh.
   const snapshot = await resolveNativeAgentNetworkSnapshot()
   const result = await send(JSON.stringify({ nativeAgentNetwork: snapshot }))

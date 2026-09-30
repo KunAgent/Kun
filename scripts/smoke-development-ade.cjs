@@ -31,6 +31,7 @@ const { developmentRendererEnvironment } = require('./development-renderer-envir
 const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
 const { runAgentModeFlow, writeDevinAcpStub } = require('./smoke-development-agent-mode.cjs')
 const { runNativeModelFlow, writeCodexModelStub } = require('./smoke-development-native-models.cjs')
+const { writeInstallerFixture, runAgentInstallFlow } = require('./smoke-development-agent-install.cjs')
 const { runProtectedApprovalFlow } = require('./smoke-development-protected-approval.cjs')
 const { runUnifiedCodeFlow } = require('./smoke-development-ade-flow.cjs')
 const { runUnifiedCodeVisuals } = require('./smoke-development-ade-visuals.cjs')
@@ -47,6 +48,7 @@ async function main() {
   const visualOnly = process.argv.includes('--visual-only')
   const agentModeOnly = process.argv.includes('--agent-mode-only')
   const nativeModelOnly = process.argv.includes('--native-model-only')
+  const installOnly = process.argv.includes('--install-only')
   const protectedApprovalOnly = process.argv.includes('--protected-approval-only')
   const compiledRenderer = process.argv.includes('--compiled-renderer')
   const startedAt = new Date().toISOString()
@@ -139,6 +141,8 @@ async function main() {
     const oldGeminiStub = await writeVersionStub(stubDir, 'gemini-old', '0.0.1')
     const acpStub = await writeAcpStub(stubDir, 'smoke-acp')
     const devinStub = await writeDevinAcpStub(stubDir)
+    const devinInstallTarget = installOnly ? await writeInstallerFixture(stubDir, devinStub) : undefined
+    if (installOnly) isolatedEnvironment.PATH = `${stubDir}${require('node:path').delimiter}${isolatedEnvironment.PATH ?? ''}`
     const codexStub = nativeModelOnly ? await writeCodexModelStub(stubDir) : undefined
     // Claude Code login detection reads ~/.claude/.credentials.json.
     await mkdir(join(home, '.claude'), { recursive: true })
@@ -160,7 +164,7 @@ async function main() {
       binaryPaths: {
         ...(codexStub ? { codex: codexStub } : {}),
         'claude-code': claudeStub,
-        devin: devinStub,
+        devin: devinInstallTarget ?? devinStub,
         // Force one repair path regardless of host-global CLI installations.
         'gemini-cli': oldGeminiStub
       },
@@ -229,6 +233,8 @@ async function main() {
     let assertions
     if (protectedApprovalOnly) {
       assertions = await runProtectedApprovalFlow({ application: electronApplication, page, capture, poll, runtimeRequest })
+    } else if (installOnly) {
+      assertions = await runAgentInstallFlow({ page, capture, poll, runtimeRequest })
     } else if (nativeModelOnly) {
       assertions = await runNativeModelFlow({ page, capture, poll })
     } else if (agentModeOnly) {

@@ -5,7 +5,7 @@ import type {
   KunRuntimeSettingsV1
 } from '@shared/app-settings'
 import { getProvider } from '../../agent/registry'
-import { loadHarnesses, useHarnessStore } from '../../store/harness-store'
+import { harnessUnavailableLabelKey, loadHarnesses, useHarnessStore } from '../../store/harness-store'
 import { SettingsCard } from '../settings-controls'
 import { AgentCenterCard } from './AgentCenterCard'
 import { agentCardModel } from './agent-center-actions'
@@ -27,9 +27,8 @@ export function harnessSettings(kun: KunRuntimeSettingsV1): KunHarnessSettingsV1
 
 /**
  * The Agent Center (docs/ade/impl/p4 §3.2, P4-08): one card per harness with
- * a state-driven primary action — install/sign-in commands are handed to
- * `onSetupCommand` (the Kun-terminal prefill lands in P4-09) or offered as a
- * copyable command until then. Rendered both from the ADE sidebar entry and
+ * a state-driven primary action. Install jobs stay in the card; interactive
+ * sign-in can use `onSetupCommand` for terminal prefill. Rendered both from the ADE sidebar entry and
  * from Settings → Agents → Agent harness so the two surfaces stay identical.
  */
 export function AgentCenter({
@@ -145,7 +144,7 @@ export function AgentCenter({
                     <span className="truncate">{row.definition.displayName}</span>
                   </span>
                   <span className="block truncate text-[11px] text-ds-faint">
-                    {tSettings(`adeSettings.agentState_${model.state}`)}
+                    {model.reasonCode ? t(harnessUnavailableLabelKey(model.reasonCode)) : tSettings(`adeSettings.agentState_${model.state}`)}
                   </span>
                 </button>
               })}

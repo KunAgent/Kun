@@ -82,12 +82,12 @@ describe('agentCardModel', () => {
     expect(model.primary.kind).toBe('enable')
   })
 
-  it('not_installed prefers the platform install command over any', () => {
+  it('not_installed delegates installer selection to the host on every renderer platform', () => {
     const row = makeRow({ status: { installed: 'no', login: 'unknown' }, setup: SETUP })
     const darwin = agentCardModel(row, { enabled: true, platform: 'darwin', isDefault: false })
-    expect(darwin.primary).toMatchObject({ kind: 'command', command: 'brew install x' })
+    expect(darwin.primary).toMatchObject({ kind: 'install', action: 'install' })
     const linux = agentCardModel(row, { enabled: true, platform: 'linux', isDefault: false })
-    expect(linux.primary).toMatchObject({ kind: 'command', command: 'npm i -g x' })
+    expect(linux.primary).toMatchObject({ kind: 'install', action: 'install' })
     expect(linux.secondary.map((a) => a.kind)).toContain('specifyPath')
   })
 
@@ -97,7 +97,7 @@ describe('agentCardModel', () => {
       setup: SETUP
     })
     const model = agentCardModel(row, { enabled: true, platform: 'linux', isDefault: false })
-    expect(model.primary).toMatchObject({ kind: 'command', command: 'npm i -g x-acp' })
+    expect(model.primary).toMatchObject({ kind: 'install', action: 'adapter' })
   })
 
   it('falls back to the docs link when no install command exists', () => {

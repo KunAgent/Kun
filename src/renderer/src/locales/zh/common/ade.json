@@ -541,5 +541,20 @@
     "credential": "已保存的认证来源不受支持",
     "provider": "已保存的模型来源缺失或不兼容",
     "model": "没有可用模型"
-  }
+  },
+  "agentInstall.title": "安装此 Agent",
+  "agentInstall.description": "在本机运行官方安装程序，完成后自动检测命令。",
+  "agentInstall.signInHint": "命令已安装。如有需要，请继续完成下方的登录或连接配置。",
+  "agentInstall.start": "一键安装",
+  "agentInstall.adapter": "一键安装适配器",
+  "agentInstall.retry": "重新安装",
+  "agentInstall.cancel": "取消安装",
+  "agentInstall.running": "正在安装…",
+  "agentInstall.verifying": "正在检查安装结果…",
+  "agentInstall.completed": "已安装",
+  "agentInstall.failed": "安装失败",
+  "agentInstall.cancelled": "安装已取消",
+  "agentInstall.details": "安装命令与日志",
+  "agentInstall.unsupported": "当前平台暂无自动安装方式，请使用官方下载或指定已有命令路径。",
+  "agentInstall.missingCommand": "请先安装 {{command}}，然后重试。"
 }

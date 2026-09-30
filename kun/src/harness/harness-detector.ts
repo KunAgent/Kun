@@ -11,6 +11,7 @@ import {
 import type { HarnessLoginState } from './harness-login-probes.js'
 import { nativeAgentNetworkStatus } from './native-agent-network.js'
 import { resolveCodexExecutable } from './codex-executable.js'
+import { harnessExecutableEnv } from './harness-executable-env.js'
 
 const VERSION_TIMEOUT_MS = 5_000
 const DEFAULT_TTL_MS = 60_000
@@ -346,7 +347,7 @@ export class HarnessDetector {
 
   private async resolveCommand(def: HarnessDefinition): Promise<string | undefined> {
 
-    const resolve = this.deps.resolveExecutable ?? defaultResolveExecutable
+    const resolve = this.deps.resolveExecutable ?? ((command: string) => defaultResolveExecutable(command, { env: harnessExecutableEnv() }))
     const override = this.deps.overrides()[def.id]?.binaryPath?.trim()
     if (override) {
       const resolved = await resolve(override)

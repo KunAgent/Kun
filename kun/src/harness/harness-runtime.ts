@@ -40,6 +40,7 @@ export type HarnessRuntimeComposition = {
   agentSdkModels: AgentSdkModelProbe
   /** Codex app-server `model/list` probing (P6-07). */
   codexModels: CodexModelProbe
+  installNetwork?: () => import('../contracts/native-agent-network.js').NativeAgentNetworkPolicy | undefined
   /**
    * Spawn-free read of the freshest probed model list, dispatched by
    * transport; `undefined` means no fresh successful probe is cached.
@@ -159,6 +160,7 @@ export function createHarnessComposition(
     acpModels,
     agentSdkModels,
     codexModels,
+    installNetwork: () => options().nativeAgentNetwork?.installer,
     probedModels,
     tokens: new HarnessTokenService(),
     gatewayEndpoint: {},

@@ -65,7 +65,8 @@ export type AdeHarnessDefinition = {
   /**
    * Install/login hints for the Agent Center (docs/ade/impl/p4 §3.3). Only
    * builtin definitions carry them, and the UI only ever prefills these into
-   * a Kun terminal — nothing is executed automatically.
+   * a Kun terminal for interactive login. Installation uses an explicit
+   * host-owned job selected from builtin metadata after the user clicks Install.
    */
   setup?: AdeHarnessSetup
 }

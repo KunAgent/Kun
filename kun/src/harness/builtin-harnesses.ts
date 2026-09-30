@@ -287,9 +287,15 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     modelSource: 'provider',
     staticModels: [],
     capabilities: ANTIGRAVITY_CAPABILITIES,
-    // Antigravity ships inside the IDE download; there is no standalone
-    // package-manager install, so the card links out instead of prefilling.
-    setup: { docsUrl: 'https://antigravity.google' },
+    setup: {
+      install: [
+        { platform: 'darwin', command: 'curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --skip-aliases' },
+        { platform: 'linux', command: 'curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --skip-aliases' },
+        { platform: 'win32', command: 'irm https://antigravity.google/cli/install.ps1 | iex' }
+      ],
+      login: { command: 'agy', args: [] },
+      docsUrl: 'https://antigravity.google/docs/cli/install/'
+    },
     builtin: true
   },
   {
@@ -536,6 +542,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
     setup: {
       install: [
         { platform: 'darwin', command: 'brew install --cask devin-cli' },
+        { platform: 'darwin', command: 'curl -fsSL https://cli.devin.ai/install.sh | bash' },
         { platform: 'linux', command: 'curl -fsSL https://cli.devin.ai/install.sh | bash' },
         { platform: 'win32', command: 'irm https://static.devin.ai/cli/setup.ps1 | iex', note: 'Run in PowerShell' }
       ],

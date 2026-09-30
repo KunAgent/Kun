@@ -278,3 +278,20 @@ Kun 供应商目录刷新保留外部 Agent 的模型和推理档位。
 - 既有 Kun Code/Design、Devin 模型选择与实际 ACP 回复回归 6 条断言通过，报告在 `dist/native-model-agent-regression/`。
 - 中文首次运行曾在 Agent 就绪探测超时，失败保留于 `dist/native-model-catalog-zh-smoke/`；独立重跑通过，
   超时原因未确认，不将首次失败算作通过，也不据此声明跨平台或真实图片推理验证已完成。
+
+## Agent 一键安装与 Paseo 对照
+
+参考 Paseo `4417d7c` 的 ACP 目录、provider 启动配置与可执行文件发现流程，详情见
+[Agent 安装与 Paseo 对照](../agent-installation.md)。本轮保持 Agent 接入入口和 Kun 单运行时，
+为缺失的内建 CLI/适配器增加宿主选择安装命令、卡片内进度/日志、取消、失败重试与完成复检。
+更新 Antigravity 官方独立 `agy` 安装方式，Devin 支持无 Homebrew 时的官方脚本回退；
+新增常见用户安装路径发现，Windows 检测与实际启动共用命令后缀查找。
+视觉核对发现旧主操作的 `bg-ds-accent` 无效，现改用真实主题色，避免白色按钮文字在透明背景上消失。
+
+- 安装 API 只接收内建 Agent 身份与动作，不接受任意命令；请求鉴权、严格 schema 和桌面 IPC 白名单均有覆盖。
+- Runtime/进程/路由定向回归共 71 项通过，Windows 原生 Job 集成 1 项在 macOS 跳过；前端/Main 定向回归 6 文件、91 项通过。
+- 完整类型检查、完整构建、改动文件 ESLint 通过；最后安装元数据调整另经 Kun 构建。
+- 中文 DPR 2 Electron 安装冒烟 4 条断言通过，覆盖首次失败、取消真实安装子进程、重试写入临时 CLI、
+  实际命令探测和 ACP 握手。报告在 `dist/agent-install-smoke/`，最终构建复核报告在 `dist/agent-install-final-smoke/`。
+- 主操作主题色修复另经正式 GUI 构建入口重建，颜色与安装链路复核在 `dist/agent-install-color-smoke/`。
+- 测试使用隔离目录和离线安装夹具，未实际安装或升级用户全局 Agent，未替用户登录或执行付费模型请求。

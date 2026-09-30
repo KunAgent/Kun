@@ -8,22 +8,23 @@ describe('desktop native Agent network policy', () => {
   it('uses known native destinations and preserves a uniform HTTP proxy', async () => {
     const resolver = vi.fn(async () => 'PROXY 127.0.0.1:7890; DIRECT')
     expect(await resolveNativeAgentNetworkSnapshot(resolver)).toEqual({
+      installer: { source: 'system', proxyUrl: 'http://127.0.0.1:7890/' },
       codex: { source: 'system', proxyUrl: 'http://127.0.0.1:7890/' },
       'claude-code': { source: 'system', proxyUrl: 'http://127.0.0.1:7890/' }
     })
-    expect(resolver.mock.calls).toHaveLength(3)
+    expect(resolver.mock.calls).toHaveLength(13)
   })
 
   it('refuses to flatten per-destination rules and leaves direct PAC first choices direct', async () => {
     expect(await resolveNativeAgentNetworkSnapshot(async (url) =>
       url.includes('chatgpt.com') ? 'PROXY 127.0.0.1:7890' : 'DIRECT; PROXY 127.0.0.1:7890'
-    )).toEqual({ codex: { source: 'explicit-required' }, 'claude-code': { source: 'direct' } })
+    )).toEqual({ installer: { source: 'direct' }, codex: { source: 'explicit-required' }, 'claude-code': { source: 'direct' } })
   })
 
   it.each(['SOCKS5 127.0.0.1:1080', 'PROXY user:secret@proxy.invalid:8080', 'INVALID'])(
   'does not guess unsupported or authenticated system policy: %s', async (rule) => {
     const snapshot = await resolveNativeAgentNetworkSnapshot(async () => rule)
-    expect(snapshot).toEqual({ codex: { source: 'explicit-required' },
+    expect(snapshot).toEqual({ installer: { source: 'explicit-required' }, codex: { source: 'explicit-required' },
       'claude-code': { source: 'explicit-required' } })
     expect(JSON.stringify(snapshot)).not.toContain('secret')
   })
@@ -44,7 +45,7 @@ describe('desktop native Agent network policy', () => {
     expect(send).not.toHaveBeenCalled()
     await refreshNativeAgentNetworkBeforeProbe('/v1/harnesses/codex/probe', 'POST', send)
     expect(JSON.parse(send.mock.calls[0]![0])).toEqual({ nativeAgentNetwork: {
-      codex: { source: 'direct' }, 'claude-code': { source: 'direct' }
+      installer: { source: 'direct' }, codex: { source: 'direct' }, 'claude-code': { source: 'direct' }
     } })
   })
 

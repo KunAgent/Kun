@@ -13,6 +13,7 @@ export const NativeAgentNetworkPolicy = z.discriminatedUnion('source', [
 
 /** Desktop-owned transient network policy; never part of persisted KunConfig. */
 export const NativeAgentNetworkSnapshot = z.object({
+  installer: NativeAgentNetworkPolicy.optional(),
   codex: NativeAgentNetworkPolicy.optional(),
   'claude-code': NativeAgentNetworkPolicy.optional()
 }).strict()

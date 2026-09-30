@@ -10,6 +10,7 @@ import { AgentIcon } from '../agent-icon'
 import { useChatStore } from '../../store/chat-store'
 import { usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
 import { SettingRow, Toggle } from '../settings-controls'
+import { AgentInstallControl } from './AgentInstallControl'
 import {
   agentCardModel,
   type AgentCardAction,
@@ -56,8 +57,8 @@ function statusLine(
 /**
  * One Agent Center card (docs/ade/impl/p4 §3.2, P4-08): status, credential
  * modes, the state-driven primary action, and secondary actions. Command
- * actions hand their command to `onSetupCommand` (terminal prefill, P4-09)
- * or copy it to the clipboard when no handler is wired yet.
+ * login actions hand their command to `onSetupCommand` (terminal prefill).
+ * Installation stays in the card and uses the host-owned installation API.
  */
 export function AgentCenterCard({
   row,
@@ -189,17 +190,18 @@ export function AgentCenterCard({
   }
 
   const actionButton = (action: AgentCardAction, primary: boolean): ReactElement | null => {
-    if (action.kind === 'none') return null
+    if (action.kind === 'none' || action.kind === 'install') return null
     const label = t(action.labelKey)
     return (
       <button
         key={`${action.kind}:${'command' in action ? action.command : ''}`}
         type="button"
+        data-agent-action={action.kind}
         disabled={busy && action.kind !== 'reason' && action.kind !== 'specifyPath'}
         onClick={() => runAction(action)}
         className={
           primary
-            ? 'inline-flex items-center gap-1.5 rounded-lg bg-ds-accent px-3 py-1.5 text-[12px] font-medium text-white transition hover:opacity-90 disabled:opacity-45'
+            ? 'inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[12px] font-medium text-white transition hover:opacity-90 disabled:opacity-45'
             : 'inline-flex items-center gap-1.5 rounded-lg border border-ds-border-muted px-2.5 py-1.5 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-45'
         }
       >
@@ -253,7 +255,7 @@ export function AgentCenterCard({
               </span>
             ))}
             {settings.defaultHarnessId === definition.id ? (
-              <span className="rounded-md bg-ds-accent/15 px-1.5 py-0.5 text-[10.5px] font-medium text-ds-accent">
+              <span className="rounded-md bg-accent-tint/15 px-1.5 py-0.5 text-[10.5px] font-medium text-accent">
                 {t('adeAgentAction.isDefault')}
               </span>
             ) : null}
@@ -282,6 +284,10 @@ export function AgentCenterCard({
         </div>
       </div>
 
+      {definition.builtin && (definition.setup?.install?.length || definition.setup?.adapter) ? (
+        <AgentInstallControl harnessId={definition.id} action={model.reasonCode === 'adapter_missing' ? 'adapter' : 'install'}
+          needed={model.primary.kind === 'install'} t={t} />
+      ) : null}
       {model.state !== 'detecting' && (model.primary.kind !== 'none' || model.secondary.length > 0) ? (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {actionButton(model.primary, true)}

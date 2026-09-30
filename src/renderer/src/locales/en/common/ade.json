@@ -507,5 +507,20 @@
     "credential": "the saved authentication source is unsupported",
     "provider": "the saved provider is missing or incompatible",
     "model": "no model is available"
-  }
+  },
+  "agentInstall.title": "Install this Agent",
+  "agentInstall.description": "Run the official installer on this computer, then check the command automatically.",
+  "agentInstall.signInHint": "The command is installed. Complete sign-in or connection setup below if needed.",
+  "agentInstall.start": "Install",
+  "agentInstall.adapter": "Install adapter",
+  "agentInstall.retry": "Retry installation",
+  "agentInstall.cancel": "Cancel",
+  "agentInstall.running": "Installing…",
+  "agentInstall.verifying": "Checking installation…",
+  "agentInstall.completed": "Installed",
+  "agentInstall.failed": "Installation failed",
+  "agentInstall.cancelled": "Installation cancelled",
+  "agentInstall.details": "Command and installation log",
+  "agentInstall.unsupported": "No automatic installer is available for this platform. Use the official download or specify an existing command path.",
+  "agentInstall.missingCommand": "Install {{command}} first, then retry."
 }
