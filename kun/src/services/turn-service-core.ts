@@ -83,6 +83,8 @@ export type TurnServiceDeps = {
   usage?: UsageService
   prefix?: ImmutablePrefix
   attachmentStore?: () => AttachmentStore | undefined
+  /** Resolve review references to immutable host-authored per-turn content. */
+  resolveReviewRequests?: import('./review-composer-context.js').ReviewContextResolver
   /** Verify a durable Write document reference at promotion; null means valid. */
   writeDocumentGuard?: (context: WriteTurnContext) => Promise<string | null>
   defaultModel?: string

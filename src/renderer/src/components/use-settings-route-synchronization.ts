@@ -142,6 +142,7 @@ export function useSettingsRouteSynchronization(scope: Record<string, any>): voi
       agents: agentsSectionRef.current,
       // 'agentsHarnesses' is a tab deep-link, not a scroll target.
       agentsHarnesses: null,
+      agentsCollaboration: null,
       skill: skillSectionRef.current,
       mcp: mcpSectionRef.current,
       permissions: permissionsSectionRef.current

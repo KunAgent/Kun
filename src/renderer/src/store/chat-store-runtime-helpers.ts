@@ -1,3 +1,5 @@
+import { markThreadWorkspacePrepFailed, useTaskWorkspaceStore } from './task-workspace-store'
+import { markThreadWorktree, saveThreadWorktreeRegistry } from '../lib/thread-worktree-registry'
 import type {
   ChatBlock,
   NormalizedThread,
@@ -289,6 +291,7 @@ export function collectAssistantTextForTurn(
 export function clearedThreadSelection(): Pick<
   ChatState,
   | 'activeThreadId'
+  | 'composerCollaborationEnabled'
   | 'threadLoadingId'
   | 'threadRefreshingId'
   | 'threadHistoryCursor'
@@ -324,6 +327,7 @@ export function clearedThreadSelection(): Pick<
 > {
   return {
     activeThreadId: null,
+    composerCollaborationEnabled: false,
     threadLoadingId: null,
     threadRefreshingId: null,
     threadHistoryCursor: null,
@@ -415,11 +419,21 @@ function threadHasUserMessage(blocks: ChatBlock[]): boolean {
 export async function bindReadyTaskWorkspace(
   event: TaskWorkspaceThreadEvent,
   set: (partial: Partial<ChatState> | ((state: ChatState) => Partial<ChatState>)) => void,
-  get: () => ChatState
+  get: () => ChatState,
+  stillCurrent: () => boolean = () => true
 ): Promise<void> {
+  if (!stillCurrent() || event.unitId) return
+  const thread = get().threads.find((item) => item.id === event.threadId) ??
+    get().adeThreads?.find((item) => item.id === event.threadId)
+  if (thread?.taskWorkspaceId && thread.taskWorkspaceId !== event.workspaceId) return
   const path = event.workspace?.path?.trim()
   if (!path) return
   try {
+    useTaskWorkspaceStore.setState((state) => {
+      const prep = state.prepByThread[event.threadId]
+      return prep ? { prepByThread: { ...state.prepByThread,
+        [event.threadId]: { ...prep, state: 'setting-up' as const } } } : {}
+    })
     const provider = getProvider()
     if (provider.bindThreadTaskWorkspace) {
       await provider.bindThreadTaskWorkspace(event.threadId, {
@@ -427,6 +441,13 @@ export async function bindReadyTaskWorkspace(
         workspace: path
       })
     }
+    const sourceRoot = useTaskWorkspaceStore.getState().prepByThread[event.threadId]?.sourceRoot
+    if (sourceRoot && normalizeWorkspaceRoot(sourceRoot) !== normalizeWorkspaceRoot(path)) {
+      saveThreadWorktreeRegistry(markThreadWorktree(event.threadId, {
+        projectPath: sourceRoot, worktreePath: path, branch: 'task-workspace'
+      }))
+    }
+    if (!stillCurrent()) return
     // Mid-session binds must refresh the review binding so the Review tab
     // appears without waiting for a thread re-selection.
     void ensureThreadBinding(event.threadId)
@@ -438,8 +459,15 @@ export async function bindReadyTaskWorkspace(
         ? { ...thread, taskWorkspaceId: event.workspaceId, workspace: path }
         : thread)
     }))
+    useTaskWorkspaceStore.setState((state) => {
+      const prep = state.prepByThread[event.threadId]
+      return prep ? { prepByThread: { ...state.prepByThread,
+        [event.threadId]: { ...prep, state: 'ready' as const } } } : {}
+    })
     if (get().activeThreadId === event.threadId) void get().drainQueuedMessages()
   } catch (error) {
+    markThreadWorkspacePrepFailed(event.threadId, error instanceof Error ? error.message : String(error))
+    if (!stillCurrent()) return
     set({ error: error instanceof Error ? error.message : String(error) })
   }
 }

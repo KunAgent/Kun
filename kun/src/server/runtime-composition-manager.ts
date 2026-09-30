@@ -158,6 +158,7 @@ export function createManagerRuntime(input: {
       harnessRuntimeMap
     ),
     language: () => Intl.DateTimeFormat().resolvedOptions().locale,
+    canStartNewWork: () => core.activeOptions.ade?.enabled === true,
     allowUnattendedFullAccess: () => core.activeOptions.ade?.allowUnattendedFullAccess === true,
     teamLimits: () => core.activeOptions.ade?.limits,
     teamBudgetPolicy: () => core.activeOptions.ade?.budget,
@@ -280,9 +281,8 @@ export function registerAdeManagerTooling(input: {
     providers: HarnessListDeps['providers']
   }
   core: RuntimeServices['model']['core']
-}): void {
-  input.registry.registerProvider(
-    createManagerToolProvider({
+}): ReturnType<typeof createManagerToolProvider> {
+  const provider = createManagerToolProvider({
       manager: input.managerRuntime,
       harnessList: createHarnessListDeps({
         services: input.services,
@@ -292,13 +292,15 @@ export function registerAdeManagerTooling(input: {
       }),
       managerMayApprove: () =>
         input.core.activeOptions.ade?.managerMayApprove === true,
+      canStartNewWork: () => input.core.activeOptions.ade?.enabled === true,
       race: input.managerRuntime.raceServiceDeps,
       checks: input.managerRuntime.checkRunnerDeps
     })
-  )
+  input.registry.registerProvider(provider)
   wireTaskWorkspaceChange(
     input.core.taskWorkspaces,
     input.managerRuntime,
     input.services.adeStores.reviews
   )
+  return provider
 }

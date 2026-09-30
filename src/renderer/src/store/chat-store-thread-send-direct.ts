@@ -13,13 +13,12 @@ import {
   rememberThreadComposerSelection,
   rememberTurnModel
 } from './chat-store-helpers'
-import { findReusableEmptyThreadId, reconcileOptimisticUserBlock } from './chat-store-runtime-helpers'
+import { reconcileOptimisticUserBlock } from './chat-store-runtime-helpers'
 import { prepareAdeThreadWorktree } from './chat-store-thread-send-worktree'
 import { clearBusyWatchdog, resetBusyRecoveryAttempts } from './chat-store-schedulers'
 import {
   armBusyWatchdog,
   buildThreadEventSink,
-  isCodeThread,
   looksLikeActiveTurnError,
   rememberPendingClawFeishuMirror,
   runtimeErrorDetail,
@@ -29,7 +28,6 @@ import {
 import { ensureRuntimeProviderForSend, subscribeThreadEventsWithRecovery } from './chat-store-thread-action-helpers'
 import { settleAcceptedTurnAfterNavigation } from './chat-store-thread-send-navigation'
 import { startWorkspaceCheckpointSnapshot } from './chat-store-thread-send-checkpoint'
-import { readDesignThreadRegistry } from '../design/design-thread-registry'
 import { mergeThreadDesignProfile } from '../design/design-locked-profile'
 import {
   executionSnapshotOverrides,
@@ -50,7 +48,11 @@ import {
 import type { PreparedThreadSend } from './chat-store-thread-send-direct-types'
 import { emptyLiveProjection } from './chat-store-live-projection'
 import { adeDraftStillCurrent, cancelStaleAdeDraftSend, validateAdeDraftWorkspace } from './chat-store-ade-send-snapshot'
-import { createNewSendThread, shouldRenameReusedSendThread } from './chat-store-thread-send-create'
+import { createNewSendThread, reusableThreadForSend, shouldRenameReusedSendThread } from './chat-store-thread-send-create'
+import {
+  isAdeProjectDefaultsStaleError,
+  requestAdeProjectDefaultsRefresh
+} from '../lib/ade-project-defaults-refresh'
 
 /**
  * A queued message freezes the model captured when it was enqueued. Draining
@@ -186,12 +188,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         ))) {
           return cancelStaleAdeDraftSend(context, previous, userBlockId, runtime.persistActiveQueuedMessages)
         }
-        const reusableThreadId = adeDraft ? null : await findReusableEmptyThreadId(
-          get(),
-          p,
-          workspaceRoot,
-          (thread) => isCodeThread(thread, get().clawChannels, undefined, readDesignThreadRegistry())
-        )
+        const reusableThreadId = await reusableThreadForSend(input, workspaceRoot)
         shouldRenameThreadAfterSend = shouldRenameReusedSendThread(
           get().threads, reusableThreadId, shouldAutoRenameForRoute
         )
@@ -221,6 +218,7 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
         }
         set((s) => ({
           activeThreadId: threadId,
+          composerCollaborationEnabled: false,
           ...(adeSend ? { adeDraftOpen: false } : {}),
           // Freshly created threads are always primary — clear any side-session
           // relation carried over from the previously active thread.
@@ -254,6 +252,9 @@ export async function performPreparedThreadSend(input: PreparedThreadSend): Prom
           return true
         }
       } catch (e) {
+        if (input.codeProjectRoute && isAdeProjectDefaultsStaleError(e)) {
+          requestAdeProjectDefaultsRefresh(input.codeProjectRoute.workspaceRoot)
+        }
         if (adeDraft && !adeDraftStillCurrent(get(), adeDraft)) {
           return cancelStaleAdeDraftSend(context, previous, userBlockId, runtime.persistActiveQueuedMessages)
         }

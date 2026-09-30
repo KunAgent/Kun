@@ -78,11 +78,6 @@ export class AcpConnection {
     return this.initResultValue
   }
 
-  /** The agent demands `authenticate` before usable sessions exist. */
-  get requiresAuthentication(): boolean {
-    return (this.initResultValue?.authMethods?.length ?? 0) > 0
-  }
-
   onExit(listener: (exit: AcpConnectionExit) => void): () => void {
     return this.rpc.onClose((error) => {
       void this.process.exit.then((info) =>

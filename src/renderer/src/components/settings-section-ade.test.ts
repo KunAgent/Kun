@@ -2,8 +2,13 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultKunRuntimeSettings } from '@shared/app-settings'
+import type {
+  AdeCollaborationSettingsMutation,
+  AdeCollaborationSettingsMutationResult
+} from '@shared/ade-collaboration-settings'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import { AdeLabSettingsPanel } from './settings-section-lab-ade'
+import { AgentsCollaborationSettingsPanel, collaborationApplyLabelKey } from './settings-section-agents-collaboration'
 import { AgentsHarnessesSettingsPanel } from './settings-section-agents-harnesses'
 import { WorktreeSettingsSection } from './settings-section-worktree'
 import { useHarnessStore } from '../store/harness-store'
@@ -19,7 +24,9 @@ vi.mock('../agent/registry', () => ({ getProvider: () => provider }))
 
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
-  provider.probeHarnessDefinition.mockReset()
+  provider.probeHarnessDefinition.mockReset().mockResolvedValue({
+    durationMs: 1, ok: true, supported: true, protocol: 'acp'
+  })
 })
 
 afterEach(() => {
@@ -70,57 +77,145 @@ function makeHarnessRow(id: string, builtin = true): AdeHarnessRow {
 }
 
 describe('AdeLabSettingsPanel', () => {
-  it('patches ade fields and keeps the new value on reopen', () => {
+  it('keeps only the feature gates in Laboratory', () => {
     const updateKun = vi.fn()
     const kun = defaultKunRuntimeSettings()
     let renderer: ReactTestRenderer
     act(() => {
       renderer = create(createElement(AdeLabSettingsPanel, {
-        view: { t, kun, updateKun, modelProviders: [] }
+        view: { t, kun, updateKun }
       }))
     })
     const switches = renderer!.root.findAllByProps({ role: 'switch' })
-    // Order: enabled, harnessRouter, deterministicHandoff, managerMayApprove, allowUnattendedFullAccess, hibernation
+    expect(switches).toHaveLength(3)
     act(() => switches[0].props.onClick())
     expect(updateKun).toHaveBeenCalledWith({ ade: { enabled: true } })
-    act(() => switches[3].props.onClick())
-    expect(updateKun).toHaveBeenCalledWith({ ade: { managerMayApprove: true } })
-
-    // "Reopen" with the saved value: the toggle must render checked.
-    const saved = { ...kun, ade: { ...kun.ade, enabled: true, managerMayApprove: true } }
+    const saved = { ...kun, ade: { ...kun.ade, enabled: true } }
     act(() => renderer!.unmount())
     act(() => {
       renderer = create(createElement(AdeLabSettingsPanel, {
-        view: { t, kun: saved, updateKun, modelProviders: [] }
+        view: { t, kun: saved, updateKun }
       }))
     })
     const reopened = renderer!.root.findAllByProps({ role: 'switch' })
-    expect(reopened[3].props['aria-checked']).toBe(true)
+    expect(reopened[0].props['aria-checked']).toBe(true)
     act(() => renderer!.unmount())
   })
 
-  it('patches numeric limits', () => {
-    const updateKun = vi.fn()
+})
+
+describe('AgentsCollaborationSettingsPanel', () => {
+  const revision = `ade-collaboration-v1:${'a'.repeat(64)}`
+  const savedRevision = `ade-collaboration-v1:${'b'.repeat(64)}`
+  it('ignores an older Runtime receipt and does not claim a newer generation is this save', () => {
+    const status = { state: 'synced' as const, at: '2026-09-30T00:00:00Z' }
+    expect(collaborationApplyLabelKey(4, { ...status, generation: 3 }))
+      .toBe('adeSettings.collaborationApply_syncing')
+    expect(collaborationApplyLabelKey(4, { ...status, generation: 4 }))
+      .toBe('adeSettings.collaborationApply_synced')
+    expect(collaborationApplyLabelKey(4, { ...status, generation: 5 }))
+      .toBe('adeSettings.collaborationApply_superseded')
+  })
+  async function renderPanel(saveRequest: (request: AdeCollaborationSettingsMutation) => Promise<AdeCollaborationSettingsMutationResult>) {
     const kun = {
       ...defaultKunRuntimeSettings(),
       ade: { ...defaultKunRuntimeSettings().ade, enabled: true }
     }
     let renderer: ReactTestRenderer
-    act(() => {
-      renderer = create(createElement(AdeLabSettingsPanel, {
-        view: { t, kun, updateKun, modelProviders: [] }
+    await act(async () => {
+      renderer = create(createElement(AgentsCollaborationSettingsPanel, {
+        view: {
+          t, kun, modelProviders: [], activePanel: 'collaboration',
+          load: async () => ({ value: kun.ade, revision }),
+          save: saveRequest
+        }
       }))
     })
-    const soft = renderer!.root.findByProps({ 'aria-label': 'adeSettings.softWorkers' })
-    act(() => soft.props.onChange({ target: { value: '6' } }))
-    expect(updateKun).toHaveBeenCalledWith({ ade: { limits: { softWorkers: 6 } } })
-    act(() => renderer!.unmount())
+    return renderer!
+  }
+
+  async function click(renderer: ReactTestRenderer, label: string): Promise<void> {
+    const button = renderer.root.findAllByType('button' as never)
+      .find((candidate) => instanceText(candidate).includes(label))!
+    await act(async () => button.props.onClick())
+  }
+
+  it('keeps partially edited numbers local and saves a valid pair together', async () => {
+    const saveRequest = vi.fn(async (request: AdeCollaborationSettingsMutation) => ({
+      ok: true as const, value: request.value, revision: savedRevision, generation: 4
+    }))
+    const renderer = await renderPanel(saveRequest)
+    const soft = renderer.root.findByProps({ 'aria-label': 'adeSettings.softWorkers' })
+    const hard = renderer.root.findByProps({ 'aria-label': 'adeSettings.hardWorkers' })
+    act(() => soft.props.onChange({ target: { value: '' } }))
+    expect(saveRequest).not.toHaveBeenCalled()
+    await click(renderer, 'adeSettings.collaborationSave')
+    expect(saveRequest).not.toHaveBeenCalled()
+    expect(renderer.root.findAllByProps({ role: 'alert' })).toHaveLength(1)
+    act(() => {
+      soft.props.onChange({ target: { value: '6' } })
+      hard.props.onChange({ target: { value: '8' } })
+    })
+    await click(renderer, 'adeSettings.collaborationSave')
+    expect(saveRequest).toHaveBeenCalledWith({
+      expectedRevision: revision,
+      value: expect.objectContaining({ limits: { softWorkers: 6, hardWorkers: 8 } })
+    })
+    act(() => renderer.unmount())
+  })
+
+  it('does not persist an incomplete manager route', async () => {
+    const saveRequest = vi.fn()
+    const renderer = await renderPanel(saveRequest)
+    const source = renderer.root.findByProps({ 'aria-label': 'adeSettings.managerModel' })
+    act(() => source.props.onChange({ target: { value: 'missing-provider' } }))
+    await click(renderer, 'adeSettings.collaborationSave')
+    expect(saveRequest).not.toHaveBeenCalled()
+    await click(renderer, 'adeSettings.collaborationDiscard')
+    act(() => renderer.unmount())
+  })
+
+  it('restores an unsaved draft after visiting another settings category', async () => {
+    const saveRequest = vi.fn()
+    let renderer = await renderPanel(saveRequest)
+    const soft = renderer.root.findByProps({ 'aria-label': 'adeSettings.softWorkers' })
+    act(() => soft.props.onChange({ target: { value: '5' } }))
+    act(() => renderer.unmount())
+    renderer = await renderPanel(saveRequest)
+    expect(renderer.root.findByProps({ 'aria-label': 'adeSettings.softWorkers' }).props.value).toBe('5')
+    expect(saveRequest).not.toHaveBeenCalled()
+    await click(renderer, 'adeSettings.collaborationDiscard')
+    act(() => renderer.unmount())
+  })
+
+  it('keeps the draft on a concurrent edit and requires an explicit rebase', async () => {
+    const baseValue = defaultKunRuntimeSettings().ade
+    const saveRequest = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false, kind: 'conflict', value: { ...baseValue, enabled: true }, revision: savedRevision
+      })
+      .mockImplementationOnce(async (request: AdeCollaborationSettingsMutation) => ({
+        ok: true, value: request.value, revision: `ade-collaboration-v1:${'c'.repeat(64)}`, generation: 5
+      }))
+    const renderer = await renderPanel(saveRequest)
+    act(() => renderer.root.findByProps({ 'aria-label': 'adeSettings.softWorkers' }).props
+      .onChange({ target: { value: '5' } }))
+    await click(renderer, 'adeSettings.collaborationSave')
+    expect(renderer.root.findByProps({ 'aria-label': 'adeSettings.softWorkers' }).props.value).toBe('5')
+    expect(renderer.root.findAllByProps({ role: 'alert' })).not.toHaveLength(0)
+    await click(renderer, 'adeSettings.collaborationReviewMine')
+    await click(renderer, 'adeSettings.collaborationSave')
+    expect(saveRequest).toHaveBeenLastCalledWith({
+      expectedRevision: savedRevision,
+      value: expect.objectContaining({ limits: { softWorkers: 5, hardWorkers: 8 } })
+    })
+    act(() => renderer.unmount())
   })
 })
 
 describe('AgentsHarnessesSettingsPanel', () => {
   afterEach(() => {
-    useHarnessStore.setState({ rows: [], rowsLoadedAt: undefined, rowsLoading: false })
+    useHarnessStore.setState({ rows: [], rowsLoadedAt: undefined, rowsLoading: false, settingsHarnessId: undefined })
   })
 
   function renderPanel(updateKun: ReturnType<typeof vi.fn>, kun = defaultKunRuntimeSettings()) {
@@ -139,10 +234,44 @@ describe('AgentsHarnessesSettingsPanel', () => {
       rowsLoadedAt: 1_000
     })
     const renderer = renderPanel(vi.fn())
+    const claudeListItem = renderer.root.findByProps({ 'data-agent-list-id': 'claude-code' })
+    act(() => claudeListItem.props.onClick())
     const text = instanceText(renderer.root)
     expect(text).toContain('claude-code display')
     expect(text).toContain('1.2.3')
     expect(text).toContain('adeSettings.harnessLoginSignedIn')
+    expect(renderer.root.findAllByProps({ 'data-agent-card': 'claude-code' })).toHaveLength(1)
+    const kunListItem = renderer.root.findAllByType('button' as never)
+      .find((button) => instanceText(button).includes('kun display'))!
+    act(() => kunListItem.props.onClick())
+    expect(kunListItem.props['aria-selected']).toBe(true)
+    expect(kunListItem.props['data-selected']).toBe(true)
+    expect(renderer.root.findAllByProps({ 'data-agent-card': 'claude-code' })).toHaveLength(0)
+    expect(renderer.root.findAllByProps({ 'data-agent-card': 'kun' })).toHaveLength(1)
+    act(() => renderer.unmount())
+  })
+
+  it('opens the requested Agent detail from a repair deep link', () => {
+    useHarnessStore.setState({
+      rows: [makeHarnessRow('kun'), makeHarnessRow('claude-code')],
+      rowsLoadedAt: 1_000,
+      settingsHarnessId: 'kun'
+    })
+    const renderer = renderPanel(vi.fn())
+    expect(renderer.root.findAllByProps({ 'data-agent-card': 'kun' })).toHaveLength(1)
+    expect(useHarnessStore.getState().settingsHarnessId).toBeUndefined()
+    act(() => renderer.unmount())
+  })
+
+  it('shows the selected Agent defaults immediately while keeping command override advanced', () => {
+    useHarnessStore.setState({ rows: [makeHarnessRow('kun'), makeHarnessRow('claude-code')], rowsLoadedAt: 1_000 })
+    const renderer = renderPanel(vi.fn())
+    expect(renderer.root.findAllByProps({ 'data-agent-detail-settings': true })).toHaveLength(1)
+    expect(renderer.root.findAllByProps({ 'data-agent-advanced-settings': true })).toHaveLength(0)
+    const advanced = renderer.root.findAllByType('button' as never)
+      .find((button) => button.props['aria-label'] === 'adeAgentAction.specifyPath')!
+    act(() => advanced.props.onClick())
+    expect(renderer.root.findAllByProps({ 'data-agent-advanced-settings': true })).toHaveLength(1)
     act(() => renderer.unmount())
   })
 
@@ -153,6 +282,7 @@ describe('AgentsHarnessesSettingsPanel', () => {
     })
     const updateKun = vi.fn()
     const renderer = renderPanel(updateKun)
+    act(() => renderer.root.findByProps({ 'data-agent-list-id': 'claude-code' }).props.onClick())
     // kun's row carries no toggle; the only switch is claude-code's enable.
     const switches = renderer.root.findAllByProps({ role: 'switch' })
     expect(switches).toHaveLength(1)
@@ -163,10 +293,12 @@ describe('AgentsHarnessesSettingsPanel', () => {
     act(() => renderer.unmount())
   })
 
-  it('adds a probed custom ACP agent with an empty secret binding list through updateKun', async () => {
+  it('adds a probed custom ACP agent with empty secret bindings through the add wizard and updateKun', async () => {
     useHarnessStore.setState({ rows: [makeHarnessRow('kun')], rowsLoadedAt: 1_000 })
     const updateKun = vi.fn()
     const renderer = renderPanel(updateKun)
+    await act(async () => renderer.root.findByProps({ 'data-agent-add-open': true }).props.onClick())
+    await act(async () => renderer.root.findByProps({ 'data-agent-add-custom': true }).props.onClick())
     const inputs = renderer.root.findAllByType('input' as never)
     const textarea = renderer.root.findByType('textarea' as never)
     act(() => {
@@ -183,12 +315,6 @@ describe('AgentsHarnessesSettingsPanel', () => {
       .find((b) => instanceText(b).includes('adeSettings.acpFormAdd'))!
     expect(addButton.props.disabled).toBe(true)
     expect(updateKun).not.toHaveBeenCalled()
-    provider.probeHarnessDefinition.mockResolvedValue({
-      durationMs: 1,
-      ok: true,
-      supported: true,
-      protocol: 'acp'
-    })
     const testButton = renderer.root
       .findAllByType('button' as never)
       .find((b) => instanceText(b).includes('adeSettings.acpFormTest'))!
@@ -200,9 +326,9 @@ describe('AgentsHarnessesSettingsPanel', () => {
       args: ['--acp', '--fast'],
       env: { TOKEN: 'abc' },
       secretEnv: []
-    })
+    }, { signal: expect.any(AbortSignal) })
     expect(addButton.props.disabled).toBe(false)
-    act(() => addButton.props.onClick())
+    await act(async () => addButton.props.onClick())
     expect(updateKun).toHaveBeenCalledWith({
       harnesses: expect.objectContaining({
         custom: [
@@ -235,6 +361,7 @@ describe('AgentsHarnessesSettingsPanel', () => {
       }
     }
     expect(saved.harnesses.custom[0].id).toBe('custom-my-agent')
+    expect(renderer.root.findAllByProps({ 'data-agent-add-finish': true })).toHaveLength(1)
     act(() => renderer.unmount())
   })
 })

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { makeToolResultItem } from '../domain/item.js'
 import {
   adeManagerContextBlock,
@@ -134,8 +134,28 @@ describe('adeManagerContextBlock (P3-14)', () => {
     expect(block?.content).toBe('manager context')
   })
 
+  it('includes the manager contract for explicitly enabled Code tasks', async () => {
+    const block = await adeManagerContextBlock(
+      { workspaceMode: 'code', collaboration: { enabled: true }, harnessId: 'kun' },
+      'thr_code_manager', resolve
+    )
+    expect(block?.kind).toBe('ade-manager')
+    expect(block?.content).toBe('manager context')
+  })
+
+  it('retains manager context for cleanup after Code collaboration is disabled', async () => {
+    const resolve = vi.fn(async () => 'existing team context')
+    const block = await adeManagerContextBlock(
+      { workspaceMode: 'code', collaboration: { enabled: false, everEnabled: true } },
+      'thr_code_manager', resolve
+    )
+    expect(block?.content).toBe('existing team context')
+    expect(resolve).toHaveBeenCalledWith({ threadId: 'thr_code_manager', newWorkAllowed: false })
+  })
+
   it.each<[string, Parameters<typeof adeManagerContextBlock>[0]]>([
     ['code workspace', { workspaceMode: 'code' }],
+    ['explicitly disabled ADE workspace', { workspaceMode: 'ade', collaboration: { enabled: false } }],
     ['worker child thread', { workspaceMode: 'ade', parentThreadId: 'thr_mgr' }],
     ['external harness', { workspaceMode: 'ade', harnessId: 'claude-code' }]
   ])('skips %s', async (_label, thread) => {

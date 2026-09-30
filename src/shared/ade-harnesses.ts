@@ -94,6 +94,9 @@ export type AdeHarnessStatus = {
   ready?: 'yes' | 'no' | 'unknown'
   login: 'signed-in' | 'signed-out' | 'unknown' | 'not-required'
   resolvedCommand?: string
+  /** Connection policy only; proxy addresses and credentials stay in the host. */
+  networkSource?: 'environment' | 'system' | 'direct' | 'explicit-required'
+  networkFingerprint?: string
   checkedAt: string
   /**
    * True while a detection pass is inflight (P4-02): the provisional

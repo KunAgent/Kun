@@ -11,6 +11,7 @@ export type AutoPlanScheduledSelection = {
 export type AutoPlanBuildSelection = {
   buildMode: 'direct' | 'scheduled'
   useWorktree: boolean
+  useWorktreeExplicit?: boolean
   scheduled?: AutoPlanScheduledSelection
 }
 
@@ -104,6 +105,7 @@ export function normalizeAutoPlanBuildIntent(value: unknown): AutoPlanBuildInten
     requestFingerprint: text(value.requestFingerprint),
     buildMode,
     useWorktree: value.useWorktree === true,
+    ...(value.useWorktreeExplicit === true ? { useWorktreeExplicit: true } : {}),
     ...(scheduled ? { scheduled } : {}),
     status,
     error: typeof value.error === 'string' ? value.error : '',
@@ -211,6 +213,7 @@ export function createAutoPlanBuildIntent(input: {
     requestFingerprint: autoPlanBuildRequestFingerprint(input.requestText ?? ''),
     buildMode: input.selection.buildMode,
     useWorktree: input.selection.useWorktree,
+    ...(input.selection.useWorktreeExplicit ? { useWorktreeExplicit: true } : {}),
     ...(input.selection.scheduled ? { scheduled: input.selection.scheduled } : {}),
     status: 'planning',
     error: '',

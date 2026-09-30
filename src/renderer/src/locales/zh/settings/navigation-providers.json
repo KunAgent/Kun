@@ -379,7 +379,7 @@
   "shortcutToggleMaximize": "最大化窗口",
   "shortcutToggleMaximizeDesc": "最大化或还原主窗口。",
   "kunProvider": "模型供应商",
-  "kunProviderDesc": "为 Agent 配置一个或多个 OpenAI 兼容供应商。每个供应商可以有自己的 API Key、服务地址和模型列表。",
+  "kunProviderDesc": "配置 Kun 的行为、接入编程 Agent 和协作默认值。模型账号与 API Key 在「模型来源」中管理。",
   "kunProviderSelectDesc": "从「供应商」里已有的配置中选择一个给 AI 助手使用。",
   "providersDesc": "API Key、服务地址、文本模型和图片能力统一在这里配置。AI 助手、办公和图片生成都会复用这些供应商。",
   "modelProviderOpenConfigFile": "打开配置文件",

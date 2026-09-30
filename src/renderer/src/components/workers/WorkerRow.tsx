@@ -1,7 +1,6 @@
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  Bot,
   CheckCircle2,
   Circle,
   ExternalLink,
@@ -13,6 +12,7 @@ import {
 } from 'lucide-react'
 import type { WorkerRowData } from './worker-row-data'
 import { StatusDot } from '../activity/StatusDot'
+import { AgentIcon } from '../agent-icon'
 
 /**
  * One row in the Workers panel (12 §6.1): label + agent/model + status +
@@ -21,6 +21,7 @@ import { StatusDot } from '../activity/StatusDot'
  */
 export function WorkerRow({
   row,
+  selected = false,
   busyAction,
   onOpen,
   onAnswer,
@@ -28,6 +29,7 @@ export function WorkerRow({
   onDetach
 }: {
   row: WorkerRowData
+  selected?: boolean
   busyAction: 'stop' | 'detach' | 'answer' | null
   onOpen: (workerId: string) => void
   onAnswer: (questionId: string, answer: string) => void
@@ -45,7 +47,8 @@ export function WorkerRow({
   return (
     <div
       data-worker-row={row.workerId}
-      className="rounded-xl border border-ds-border bg-ds-card px-3 py-2.5"
+      data-selected={selected || undefined}
+      className={`rounded-xl border bg-ds-card px-3 py-2.5 ${selected ? 'border-accent/50' : 'border-ds-border'}`}
     >
       <div className="flex min-w-0 items-center gap-2">
         {row.activityRow ? (
@@ -97,7 +100,7 @@ export function WorkerRow({
       <div className="mt-1 flex min-w-0 items-center gap-2 text-[11.5px] text-ds-faint">
         {row.harnessId ? (
           <span className="inline-flex min-w-0 items-center gap-1 truncate">
-            <Bot className="h-3 w-3 shrink-0" strokeWidth={1.9} aria-hidden />
+            <AgentIcon harnessId={row.harnessId} size={12} />
             <span className="truncate">{row.harnessId}{row.model ? ` · ${row.model}` : ''}</span>
           </span>
         ) : null}

@@ -17,6 +17,7 @@ import {
 } from '../../contracts/harness-capabilities.js'
 import { ACP_DEFAULT_CAPABILITIES } from '../../harness/builtin-harnesses.js'
 import { AcpError, type McpServer } from './acp-schema.js'
+import { isAcpAuthenticationRequired } from './acp-authentication.js'
 import {
   finishDelegatedTrace,
   startDelegatedTrace,
@@ -80,9 +81,18 @@ export function acpLegacyCapabilities(): DelegatedRuntimeCapabilities {
  */
 export function mapAcpFailure(
   error: unknown,
-  startup: boolean
+  startup: boolean,
+  harnessId?: string
 ): { code: string; message: string } {
   if (error instanceof AcpError) {
+    if (isAcpAuthenticationRequired(error)) {
+      return {
+        code: 'harness_not_ready',
+        message: harnessId === 'devin'
+          ? 'Devin CLI requires login. Run devin auth login in a terminal, then retry.'
+          : 'The agent requires login. Open Agent settings, sign in with its CLI, and retry.'
+      }
+    }
     switch (error.code) {
       case 'request_timeout':
         return startup

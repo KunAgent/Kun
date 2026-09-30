@@ -1,3 +1,4 @@
+import { nativeAgentNetworkLaunchEnvironment } from './runtime/native-agent-network'
 import { rememberManagerStartupInput } from './runtime/kun-startup-manager-recovery'
 import { desktopProcessStack } from './runtime/desktop-process-stack'
 import { app } from 'electron'
@@ -484,6 +485,7 @@ async function prepareKunLaunch(
   const paperSearch = normalizeWritePaperModeSettings(settings.write?.paperMode)
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    ...await nativeAgentNetworkLaunchEnvironment(),
     ...kunManagerLaunchEnvironment({
       manager: mainManagerBinding,
       controlDir: process.env.KUN_MANAGER_CONTROL_DIR?.trim() || defaultKunControlDir(),

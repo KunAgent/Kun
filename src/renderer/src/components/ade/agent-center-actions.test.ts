@@ -47,6 +47,23 @@ const SETUP = {
 }
 
 describe('agentCardModel', () => {
+  it('offers explicit Devin CLI sign-in when an installed ACP account is unconfirmed', () => {
+    const model = agentCardModel(makeRow({ id: 'devin', status: { login: 'unknown' },
+      credentialModes: ['native-login'], setup: { login: { command: 'devin', args: ['auth', 'login'] } }
+    }), { enabled: true, platform: 'darwin', isDefault: false })
+    expect(model.primary.kind).toBe('test')
+    expect(model.secondary).toContainEqual(expect.objectContaining({ kind: 'command', command: 'devin auth login' }))
+    expect(model.reasonCode).toBeNull()
+  })
+
+  it('configures the Cursor SDK provider instead of using a stale CLI login command', () => {
+    const row = makeRow({ id: 'cursor', credentialModes: ['provider'], status: { login: 'signed-out' }, setup: SETUP })
+    row.definition.transport = 'cursor-sdk'
+    const model = agentCardModel(row, { enabled: true, platform: 'darwin', isDefault: false })
+    expect(model.primary).toEqual({ kind: 'configureProvider', labelKey: 'adeAgentAction.configureProvider' })
+    expect(model.secondary.some((action) => action.kind === 'command' || action.kind === 'specifyPath')).toBe(false)
+  })
+
   it('detecting rows get no actions', () => {
     const model = agentCardModel(
       makeRow({ status: { installed: 'unknown', detecting: true } }),

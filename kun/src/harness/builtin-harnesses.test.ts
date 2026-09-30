@@ -70,9 +70,9 @@ describe('BUILTIN_HARNESSES', () => {
       command: 'gemini', args: ['auth', 'login']
     })
     expect(byId.get('codex')?.setup).toMatchObject({
-      login: { command: 'codex', args: ['login'] },
-      adapter: { command: 'codex-acp', install: 'npm i -g @zed-industries/codex-acp' }
+      login: { command: 'codex', args: ['login'] }
     })
+    expect(byId.get('codex')?.setup?.adapter).toBeUndefined()
     expect(byId.get('opencode')?.setup?.login).toMatchObject({
       command: 'opencode', args: ['auth', 'login']
     })

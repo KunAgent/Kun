@@ -13,6 +13,8 @@ import {
   BUILTIN_HARNESSES,
   CLAUDE_SETTINGS_HOOK_EVENTS
 } from './builtin-harnesses.js'
+import { bindNativeAgentNetwork } from './native-agent-network.js'
+import type { NativeAgentNetworkSnapshot } from '../contracts/native-agent-network.js'
 
 export type CustomHarnessConfig = {
   id: string
@@ -59,6 +61,7 @@ function applyTransportOverride(
     launch: variant.launch,
     ...(variant.detect ? { detect: variant.detect } : {}),
     ...(variant.capabilities ? { capabilities: variant.capabilities } : {}),
+    ...(variant.setup ? { setup: variant.setup } : {}),
     ...(variant.poolScope ? { poolScope: variant.poolScope } : {})
   }
 }
@@ -94,6 +97,7 @@ export class HarnessCatalog {
       transportOverrides?: () => Readonly<Record<string, HarnessTransport>>
       /** Pre-GA builtin ids explicitly opted into (harnesses.experimentalIds). */
       experimental?: () => readonly string[]
+      nativeAgentNetwork?: () => NativeAgentNetworkSnapshot | undefined
     } = {
       custom: () => []
     }
@@ -121,7 +125,8 @@ export class HarnessCatalog {
     const builtins = BUILTIN_HARNESSES.map((def) =>
       applyTransportOverride(def, overrides[def.id])
     ).filter((def) => !def.prerelease || experimental.has(def.id))
-    return [...builtins, ...customs]
+    return [...builtins, ...customs].map((definition) =>
+      bindNativeAgentNetwork(definition, this.deps.nativeAgentNetwork?.()))
   }
 
   get(id: string): HarnessDefinition | undefined {

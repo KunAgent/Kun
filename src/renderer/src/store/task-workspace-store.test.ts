@@ -7,6 +7,7 @@ import {
   receiveTaskWorkspaceRecord,
   receiveTaskWorkspaceThreadEvent,
   threadWorkspacePreparing,
+  threadWorkspaceBlocksSend,
   useTaskWorkspaceStore
 } from './task-workspace-store'
 
@@ -52,6 +53,7 @@ describe('task workspace prep tracking', () => {
   it('carries the failed state + error for the retry affordance', () => {
     markThreadWorkspacePreparing('thr_1', '')
     markThreadWorkspacePrepFailed('thr_1', 'git failed')
+    expect(threadWorkspaceBlocksSend('thr_1')).toBe(true)
     expect(threadWorkspacePreparing('thr_1')).toBe(false)
     const entry = useTaskWorkspaceStore.getState().prepByThread['thr_1']
     expect(entry?.state).toBe('failed')
@@ -79,4 +81,14 @@ describe('task workspace prep tracking', () => {
     expect(threadWorkspacePreparing(null)).toBe(false)
     expect(threadWorkspacePreparing('thr_other')).toBe(false)
   })
+  it('retains the source project when ready arrives before the create response', () => {
+    markThreadWorkspacePreparing('thr_1', '')
+    receiveTaskWorkspaceThreadEvent({ threadId: 'thr_1', workspaceId: 'ws_1', state: 'ready',
+      workspace: { path: '/task/worktree', sourceRoot: '/repo' } })
+    expect(useTaskWorkspaceStore.getState().prepByThread.thr_1.sourceRoot).toBe('/repo')
+    receiveTaskWorkspaceRecord(record('creating'))
+    expect(useTaskWorkspaceStore.getState().prepByThread.thr_1.state).toBe('ready')
+    expect(useTaskWorkspaceStore.getState().prepByThread.thr_1.path).toBe('/task/worktree')
+  })
+
 })

@@ -11,6 +11,7 @@ import {
 import type { ThreadStoreListOptions } from '../../ports/thread-store.js'
 import { resolveThreadAgentSurface } from '../../domain/thread.js'
 import { executionTasksAsTodos } from '../../tasks/execution-task-state.js'
+import { isCodeWorkbenchThread } from '../../domain/thread-list-query.js'
 
 export type ThreadRow = {
   id: string; title: string; workspace: string; model: string; mode: ThreadMode; status: ThreadStatus
@@ -53,10 +54,12 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
     goal_json: thread.goal ? JSON.stringify(thread.goal) : null,
     todos_json: thread.executionTasks ? JSON.stringify(executionTasksAsTodos(thread.id, thread.executionTasks))
       : thread.todos ? JSON.stringify(thread.todos) : null,
-    extension_metadata_json: thread.forkedFromTurnId || thread.historyRefId || thread.ownerExtensionId || thread.planBuildRunId
-      || thread.workbenchOrigin
-      || thread.planBuildAdmissionFingerprint || thread.planBuildAdmissionCapabilityHash
-      || thread.planBuildAdmissionFrozen !== undefined ? JSON.stringify({
+    extension_metadata_json: JSON.stringify({
+      summaryMetadataVersion: 1,
+      providerId: thread.providerId,
+      harnessId: thread.harnessId,
+      taskWorkspaceId: thread.taskWorkspaceId,
+      executionUnit: thread.executionUnit,
       historyRefId: thread.historyRefId,
       forkedFromTurnId: thread.forkedFromTurnId,
       ownerExtensionId: thread.ownerExtensionId,
@@ -67,11 +70,13 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
       extensionBudget: thread.extensionBudget,
       toolCatalogEpoch: thread.toolCatalogEpoch,
       planBuildRunId: thread.planBuildRunId,
+      collaboration: thread.collaboration,
+      executionConfig: thread.executionConfig,
       workbenchOrigin: thread.workbenchOrigin,
       planBuildAdmissionFingerprint: thread.planBuildAdmissionFingerprint,
       planBuildAdmissionCapabilityHash: thread.planBuildAdmissionCapabilityHash,
       planBuildAdmissionFrozen: thread.planBuildAdmissionFrozen
-    }) : null,
+    }),
     created_at: thread.createdAt, updated_at: thread.updatedAt,
     created_at_ms: isoToMillis(thread.createdAt), updated_at_ms: isoToMillis(thread.updatedAt),
     preview: record.preview || null, message_count: record.messageCount,
@@ -84,7 +89,8 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
 export function summaryFromRow(row: ThreadRow): ThreadSummary {
   const goal = parseJson<ThreadGoal>(row.goal_json)
   const todos = parseJson<ThreadTodoList>(row.todos_json)
-  const extension = parseJson<ExtensionThreadMetadata>(row.extension_metadata_json)
+  const { summaryMetadataVersion: _version, ...extension } =
+    parseJson<ExtensionThreadMetadata & { summaryMetadataVersion?: number }>(row.extension_metadata_json) ?? {}
   return {
     id: row.id, title: row.title, workspace: row.workspace, model: row.model, mode: row.mode,
     agentSurface: row.agent_surface ?? 'code',
@@ -107,10 +113,15 @@ export function summaryFromRow(row: ThreadRow): ThreadSummary {
 }
 
 type ExtensionThreadMetadata = Pick<ThreadRecord,
-  'forkedFromTurnId' | 'historyRefId' | 'ownerExtensionId' | 'ownerExtensionVersion' | 'accountId' | 'extensionVisibility'
+  'providerId' | 'harnessId' | 'taskWorkspaceId' | 'executionUnit' | 'forkedFromTurnId' | 'historyRefId' | 'ownerExtensionId' | 'ownerExtensionVersion' | 'accountId' | 'extensionVisibility'
   | 'extensionProfile' | 'extensionBudget' | 'toolCatalogEpoch' | 'planBuildRunId' | 'workbenchOrigin'
+  | 'collaboration' | 'executionConfig'
   | 'planBuildAdmissionFingerprint' | 'planBuildAdmissionCapabilityHash'
   | 'planBuildAdmissionFrozen'>
+
+export function needsSummaryMetadataRepair(row: ThreadRow): boolean {
+  return parseJson<{ summaryMetadataVersion?: number }>(row.extension_metadata_json)?.summaryMetadataVersion !== 1
+}
 
 export function filterThreadSummaries(summaries: ThreadSummary[], options: ThreadStoreListOptions): ThreadSummary[] {
   const query = options.search?.trim().toLowerCase()
@@ -126,6 +137,7 @@ export function filterThreadSummaries(summaries: ThreadSummary[], options: Threa
   if (options.workspaceMode) {
     out = out.filter((thread) => (thread.workspaceMode ?? 'code') === options.workspaceMode)
   }
+  if (options.workbenchScope === 'code') out = out.filter(isCodeWorkbenchThread)
   if (query) out = out.filter((thread) => searchTextForThread(thread).includes(query))
   return typeof options.limit === 'number' ? out.slice(0, options.limit) : out
 }

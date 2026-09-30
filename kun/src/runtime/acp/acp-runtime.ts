@@ -184,21 +184,11 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           error instanceof Error ? error.message : String(error)
         )
       }
-      await this.failFromAcpError(threadId, turnId, error, true)
+      await this.failFromAcpError(threadId, turnId, error, true, definition.id)
       return undefined
     })
     if (!lease) return 'failed'
     const conn = lease.connection
-    if (conn.requiresAuthentication) {
-      lease.release()
-      return this.failTurn(
-        threadId,
-        turnId,
-        `${definition.displayName} requires interactive login before Kun can delegate turns`,
-        'harness_not_ready'
-      )
-    }
-
     const mapper = new AcpEventMapper({
       threadId,
       turnId,
@@ -258,7 +248,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     } catch (error) {
       this.deps.kunToolsMcp?.revokeTurn(turnId)
       lease.release()
-      await this.failFromAcpError(threadId, turnId, error, true)
+      await this.failFromAcpError(threadId, turnId, error, true, definition.id)
       return 'failed'
     }
     // Protocol errors on this session's traffic fail the turn (§9).
@@ -481,7 +471,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         turnId,
         turnHandoff
       )
-      await this.failFromAcpError(threadId, turnId, error, false)
+      await this.failFromAcpError(threadId, turnId, error, false, definition.id)
       return 'failed'
     } finally {
       if (cancelTimer) clearTimeout(cancelTimer)
@@ -511,9 +501,10 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     threadId: string,
     turnId: string,
     error: unknown,
-    startup: boolean
+    startup: boolean,
+    harnessId?: string
   ): Promise<void> {
-    const mapped = mapAcpFailure(error, startup)
+    const mapped = mapAcpFailure(error, startup, harnessId)
     await this.deps.turns.finishTurn({
       threadId,
       turnId,

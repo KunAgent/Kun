@@ -1,3 +1,4 @@
+import { useCodeWorkspaceIntent } from './workbench/use-code-workspace-intent'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -144,8 +145,7 @@ export function Workbench(): ReactElement {
     attachExtensionComposerContext
   })
   const [input, setInput] = useState('')
-  const [useWorktreePool, setUseWorktreePool] = useState(false)
-  const [worktreeBranch, setWorktreeBranch] = useState('')
+  const { useWorktreePool, setUseWorktreePool, worktreeBranch, setWorktreeBranch } = useCodeWorkspaceIntent()
   const [connectPhoneSidebarOpen, setConnectPhoneSidebarOpen] = useState(false)
   const [connectPhoneInitialTarget, setConnectPhoneInitialTarget] = useState<'feishu' | 'lark' | 'weixin' | 'telegram'>('feishu')
   const taskActiveSkillWorkspace = threads.find(

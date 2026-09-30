@@ -1,5 +1,6 @@
 import type { IpcRenderer } from 'electron'
-import { GOOGLE_WORKSPACE_CHANNELS, type GoogleWorkspaceApi } from '../shared/google-workspace'
+import type { GoogleWorkspaceApi } from '../shared/google-workspace'
+import { GOOGLE_WORKSPACE_CHANNELS } from '../shared/google-workspace-channels'
 
 export function createGoogleWorkspacePreloadApi(ipcRenderer: IpcRenderer): GoogleWorkspaceApi {
   return {

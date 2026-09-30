@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import type { TaskWorkspaceRecord } from '../contracts/task-workspace.js'
 import { splitPatchByFile, type PatchFileSection } from './patch-split.js'
 import { workspaceGit } from './workspace-git.js'
+import type { ReviewRevision } from '../contracts/review-revision.js'
 
 /**
  * Review diff assembly (docs/ade/11 §3): the captured patch artifact is
@@ -25,6 +26,7 @@ export type TaskWorkspaceDiffFile = {
 export type TaskWorkspaceDiffList = {
   files: TaskWorkspaceDiffFile[]
   headRevision?: string
+  revision?: ReviewRevision
 }
 
 export type TaskWorkspaceDiffFileDetail = TaskWorkspaceDiffFile & {
@@ -45,7 +47,8 @@ async function patchFor(record: TaskWorkspaceRecord, artifacts: PatchReader): Pr
 
 export async function taskWorkspaceDiffList(
   record: TaskWorkspaceRecord,
-  artifacts: PatchReader
+  artifacts: PatchReader,
+  revision?: ReviewRevision
 ): Promise<TaskWorkspaceDiffList> {
   const sections = splitPatchByFile(await patchFor(record, artifacts))
   return {
@@ -53,7 +56,8 @@ export async function taskWorkspaceDiffList(
       ...section,
       tooLarge: bytes(patch) > DIFF_TEXT_LIMIT_BYTES
     })),
-    ...(record.headRevision ? { headRevision: record.headRevision } : {})
+    ...(record.headRevision ? { headRevision: record.headRevision } : {}),
+    ...(revision ? { revision } : {})
   }
 }
 

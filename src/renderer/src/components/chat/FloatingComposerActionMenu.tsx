@@ -25,7 +25,8 @@ import {
   Settings2,
   Share2,
   Target,
-  UserRound
+  UserRound,
+  Users
 } from 'lucide-react'
 import { LucideIconByName } from '../lucide-icon-by-name'
 import { bodyZoom } from '../../lib/body-zoom'
@@ -148,7 +149,7 @@ export function FloatingComposerActionMenu({
   context: FloatingComposerRenderContext
 }): ReactElement | null {
   const {
-    attachmentUploadBusy, attachmentUploadEnabled, canCompose, canOpenGoalPanel,
+    attachmentUploadBusy, attachmentUploadEnabled, busy, canCompose, canOpenGoalPanel,
     canPickAttachment, canPickDesignReference, canPickFileReference, canPickLocalFileReference,
     canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode, codeAgentPresets, composerMenuButtonRef,
     composerMenuOpen, composerMenuPanelRef, composerPersonaId, composerShellRef,
@@ -156,7 +157,8 @@ export function FloatingComposerActionMenu({
     handleFileReferenceMenuClick, handleGoalMenuClick, handleGraphToolbarClick,
     handleLocalFileReferenceMenuClick, handleAutoPlanBuildToolbarClick, handlePlanToolbarClick, mode, onComposerPersonaChange,
     onPickAttachments, openSettings, orchestration, resolvedCodeAgentPresets,
-    setComposerMenuOpen, showAutoPlanBuildMenuOption, showGoalMenuOption, showGraphMenuOption, showPlanMenuOption, t
+    setComposerMenuOpen, showAutoPlanBuildMenuOption, showGoalMenuOption, showGraphMenuOption, showPlanMenuOption, t,
+    collaborationAvailable, collaborationEnabled, collaborationBusy, collaborationError, toggleCollaboration
   } = context
   const [personaOpen, setPersonaOpen] = useState(false)
   const [style, setStyle] = useState<CSSProperties>({ visibility: 'hidden' })
@@ -372,6 +374,38 @@ export function FloatingComposerActionMenu({
           </span>
           <MenuSwitch checked={mode === 'agent' && orchestration === 'graph'} />
         </button>
+      ) : null}
+      {context.route === 'chat' && context.taskSurface === 'code' && !context.side ? (
+        <>
+          <div className="my-1 h-px bg-ds-border-muted/70" />
+          <button
+            role="menuitem"
+            tabIndex={-1}
+            type="button"
+            disabled={!canCompose || collaborationBusy || (collaborationAvailable && busy)}
+            onClick={() => {
+              close(false)
+              void toggleCollaboration()
+            }}
+            className={rowClass}
+            data-composer-collaboration-menu-item
+          >
+            <Users className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+            <span className="min-w-0 flex-1 truncate">
+              {!collaborationAvailable
+                ? t('codeCollaborationSetup')
+                : collaborationEnabled
+                  ? t('codeCollaborationDisable')
+                  : t('codeCollaborationEnable')}
+            </span>
+            {collaborationEnabled ? <Check className="h-3.5 w-3.5" strokeWidth={2} /> : null}
+          </button>
+          {collaborationError ? (
+            <p role="status" className="px-3 pb-1 text-[11px] text-ds-status-warning">
+              {collaborationError}
+            </p>
+          ) : null}
+        </>
       ) : null}
       {showGoalMenuOption ? (
         <button role="menuitem" tabIndex={-1} type="button" data-composer-goal-menu-item disabled={!canOpenGoalPanel} onClick={handleGoalMenuClick} className={rowClass}>

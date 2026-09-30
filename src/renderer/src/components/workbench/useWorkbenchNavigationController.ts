@@ -217,7 +217,7 @@ export function useWorkbenchNavigationController({
     if (route === 'board') return 'board'
     if (route === 'workflow') return 'workflow'
     if (route === 'write') return 'write'
-    if (route === 'ade') return 'ade'
+    if (route === 'ade') return 'chat'
     return 'chat'
   }, [pluginHostRoute, route])
 
@@ -241,10 +241,10 @@ export function useWorkbenchNavigationController({
       useThreadTurnTarget.setState({ target: null })
       const thread = threads.find((item) => item.id === id) ??
         adeThreads.find((item) => item.id === id) ?? null
-      // ADE 线程在自己的路由打开;它们不出现在 Code 列表,也不走 Design/SDD 分支。
+      // Historical ADE threads retain their identity and open in Code.
       if (thread?.workspaceMode === 'ade') {
         if (useSddDraftStore.getState().activeDraft) dismissActiveSddDraft({ closeAssistant: true })
-        setRoute('ade')
+        setRoute('chat')
         await selectThread(id, { selectionGuard: isCurrentRequest })
         return
       }

@@ -471,6 +471,12 @@ export abstract class RoundOutcomeRecoveryPhase extends RoundOutcomeRequiredTool
       ...(prepared.toolDiscoveryContext.workspaceMode
         ? { workspaceMode: prepared.toolDiscoveryContext.workspaceMode }
         : {}),
+      ...(prepared.toolDiscoveryContext.collaborationEnabled !== undefined
+        ? { collaborationEnabled: prepared.toolDiscoveryContext.collaborationEnabled }
+        : {}),
+      ...(prepared.toolDiscoveryContext.collaborationEverEnabled !== undefined
+        ? { collaborationEverEnabled: prepared.toolDiscoveryContext.collaborationEverEnabled }
+        : {}),
       ...(prepared.toolDiscoveryContext.executionUnitKind
         ? { executionUnitKind: prepared.toolDiscoveryContext.executionUnitKind }
         : {}),

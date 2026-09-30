@@ -24,6 +24,8 @@ export type HarnessSessionSurface = {
 }
 
 type HarnessStoreState = {
+  /** One-shot deep link from an Agent repair action into its settings detail. */
+  settingsHarnessId?: string
   rows: AdeHarnessRow[]
   /**
    * Timestamp of the last successful list response (P4-02): replaced the
@@ -54,6 +56,24 @@ export const useHarnessStore = create<HarnessStoreState>(() => ({
   providerGroups: {},
   sessions: {}
 }))
+
+/** Catalog facts relevant to model discovery; checkedAt is intentionally excluded. */
+export function harnessModelFingerprint(row: AdeHarnessRow | undefined): string {
+  if (!row) return 'unlisted'
+  return JSON.stringify({
+    transport: row.definition.transport,
+    credentialModes: row.definition.credentialModes,
+    modelSource: row.definition.modelSource,
+    staticModels: row.definition.staticModels,
+    login: row.status.login,
+    version: row.status.version,
+    command: row.status.resolvedCommand,
+    network: row.status.networkFingerprint
+  })
+}
+
+const modelRequestGeneration = new Map<string, number>()
+const generationFor = (id: string): number => modelRequestGeneration.get(id) ?? 0
 
 /**
  * P4-02: while any row still reports `detecting`, the store polls the
@@ -114,7 +134,18 @@ export async function loadHarnesses(
   useHarnessStore.setState({ rowsLoading: true, rowsError: undefined })
   try {
     const rows = await provider.listHarnesses(options)
-    useHarnessStore.setState({ rows, rowsLoadedAt: now(), rowsLoading: false })
+    const previous = useHarnessStore.getState()
+    const oldRows = new Map(previous.rows.map((row) => [row.definition.id, harnessModelFingerprint(row)]))
+    const newRows = new Map(rows.map((row) => [row.definition.id, harnessModelFingerprint(row)]))
+    const models = { ...previous.models }
+    const providerGroups = { ...previous.providerGroups }
+    for (const id of new Set([...oldRows.keys(), ...newRows.keys()])) {
+      if (oldRows.get(id) === newRows.get(id)) continue
+      modelRequestGeneration.set(id, generationFor(id) + 1)
+      delete models[id]
+      delete providerGroups[id]
+    }
+    useHarnessStore.setState({ rows, rowsLoadedAt: now(), rowsLoading: false, models, providerGroups })
     retryCount = 0
     if (anyRowDetecting(rows)) {
       if (pollWindowStart === null) pollWindowStart = now()
@@ -149,15 +180,18 @@ export async function loadHarnessModels(harnessId: string, force = false): Promi
   if (!provider.listHarnessModels) return
   const existing = useHarnessStore.getState().models[harnessId]
   if (existing?.loading || (existing && !existing.error && !force)) return
+  const generation = generationFor(harnessId)
   useHarnessStore.setState((state) => ({
     models: { ...state.models, [harnessId]: { models: existing?.models ?? [], loading: true } }
   }))
   try {
     const result = await provider.listHarnessModels(harnessId)
+    if (generation !== generationFor(harnessId)) return
     useHarnessStore.setState((state) => ({
       models: { ...state.models, [harnessId]: { models: result.models, loading: false } }
     }))
   } catch (error) {
+    if (generation !== generationFor(harnessId)) return
     useHarnessStore.setState((state) => ({
       models: {
         ...state.models,
@@ -180,6 +214,7 @@ export async function loadHarnessProviderGroups(
   if (!provider.listHarnessModels) return
   const existing = useHarnessStore.getState().providerGroups[harnessId]
   if (existing?.loading || (existing && !existing.error && !force)) return
+  const generation = generationFor(harnessId)
   useHarnessStore.setState((state) => ({
     providerGroups: {
       ...state.providerGroups,
@@ -187,7 +222,11 @@ export async function loadHarnessProviderGroups(
     }
   }))
   try {
-    const result = await provider.listHarnessModels(harnessId, 'kun-gateway')
+    const modes = useHarnessStore.getState().rows.find((row) => row.definition.id === harnessId)?.definition.credentialModes
+    const mode = modes?.includes('kun-gateway') ? 'kun-gateway'
+      : modes?.includes('provider') || harnessId === 'cursor' || harnessId === 'kun' ? 'provider' : 'kun-gateway'
+    const result = await provider.listHarnessModels(harnessId, mode)
+    if (generation !== generationFor(harnessId)) return
     useHarnessStore.setState((state) => ({
       providerGroups: {
         ...state.providerGroups,
@@ -195,6 +234,7 @@ export async function loadHarnessProviderGroups(
       }
     }))
   } catch (error) {
+    if (generation !== generationFor(harnessId)) return
     useHarnessStore.setState((state) => ({
       providerGroups: {
         ...state.providerGroups,

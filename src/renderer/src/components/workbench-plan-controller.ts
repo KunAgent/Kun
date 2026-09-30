@@ -1,3 +1,4 @@
+import { threadHasIsolatedWorkspace } from '../lib/thread-workspace-owner'
 import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ChatBlock, ThreadTodoList } from '../agent/types'
@@ -422,6 +423,8 @@ export function useWorkbenchPlanController({
         graphEnabled: chatState.graphEnabled,
         usePromptWorktree: !externalBuild && orchestration === 'direct' &&
           preference?.initialized === true && preference.usePromptWorktree,
+        workspaceAlreadyIsolated: threadHasIsolatedWorkspace(chatState, chatState.activeThreadId),
+        usePromptWorktreeExplicit: preference?.overridden,
         branchPrefix: preference?.branchPrefix ?? 'codex/',
         activeThreadId: chatState.activeThreadId,
         getPlanTodos: orchestration === 'direct'

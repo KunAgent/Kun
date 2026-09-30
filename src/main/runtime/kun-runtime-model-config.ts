@@ -279,6 +279,9 @@ export function adeConfigForRuntime(
     : undefined
   return {
     enabled: ade?.enabled ?? false,
+    ...(ade?.projectDefaults && Object.keys(ade.projectDefaults).length > 0
+      ? { projectDefaults: ade.projectDefaults }
+      : {}),
     harnessRouter: ade?.harnessRouter ?? true,
     deterministicHandoff: ade?.deterministicHandoff ?? true,
     ...(ade?.managerModel?.providerId && ade.managerModel.model

@@ -1,5 +1,10 @@
 import { z } from 'zod'
 import { TurnReasoningEffortSchema } from './turn-reasoning.js'
+import { ReviewRevisionSchema } from './review-revision.js'
+export * from './review-revision.js'
+
+// Covers 200 legal comments including 4 KiB paths, anchors and 4 KiB bodies.
+export const MAX_REVIEW_REQUEST_CHARS = 2_100_000
 
 export const ReviewLineRangeSchema = z.object({
   start: z.number().int().positive(),
@@ -122,6 +127,7 @@ export const ReviewCommentSchema = z
     state: z.enum(['draft', 'sent', 'resolved']),
     /** Re-anchoring failed after a capture; the comment still sends. */
     outdated: z.boolean().default(false),
+    revision: ReviewRevisionSchema.optional(),
     sentInRequestId: z.string().min(1).max(64).optional(),
     /** 'reviewer' comments originate from a cross-review agent (10 §5). */
     author: z.enum(['user', 'reviewer']),
@@ -175,7 +181,9 @@ export const SendReviewRequestSchema = z
     commentIds: z.array(ReviewCommentIdSchema).max(200),
     target: ReviewSendTargetSchema,
     /** Free-form note prepended to the rendered revision request. */
-    note: z.string().max(8_000).optional()
+    note: z.string().max(8_000).optional(),
+    clientRequestId: z.string().trim().min(1).max(256).optional(),
+    expectedRevision: ReviewRevisionSchema.optional()
   })
   .strict()
   .refine(
@@ -188,21 +196,49 @@ export type SendReviewRequest = z.infer<typeof SendReviewRequestSchema>
 export const ReviewSendRecordSchema = z
   .object({
     requestId: z.string().regex(/^rvq_[a-z0-9]{8,32}$/),
+    workspaceId: z.string().min(1).max(256).optional(),
     round: z.number().int().positive(),
     target: ReviewSendTargetSchema,
     commentIds: z.array(ReviewCommentIdSchema).max(200),
     note: z.string().max(8_000).optional(),
     /** Dispatch id (worker target) or new worker id (new-worker target). */
     outcomeRef: z.string().min(1).max(256).optional(),
-    sentAt: z.string().datetime()
+    sentAt: z.string().datetime(),
+    revision: ReviewRevisionSchema.optional(),
+    clientRequestId: z.string().min(1).max(256).optional(),
+    requestHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    dispatchId: z.string().min(1).max(256).optional(),
+    userReport: z.string().max(4_000).optional(),
+    title: z.string().max(240).optional(),
+    requestText: z.string().max(MAX_REVIEW_REQUEST_CHARS).optional(),
+    requestArtifactId: z.string().regex(/^art_[a-f0-9]{1,64}$/).optional()
   })
   .strict()
 export type ReviewSendRecord = z.infer<typeof ReviewSendRecordSchema>
 
+export const ReviewSendReservationSchema = z.object({
+  requestId: z.string().regex(/^rvq_[a-z0-9]{8,32}$/),
+  workspaceId: z.string().min(1).max(256),
+  clientRequestId: z.string().min(1).max(256),
+  requestHash: z.string().regex(/^[a-f0-9]{64}$/),
+  round: z.number().int().positive(),
+  target: ReviewSendTargetSchema,
+  commentIds: z.array(ReviewCommentIdSchema).max(200),
+  note: z.string().max(8_000).optional(),
+  revision: ReviewRevisionSchema.optional(),
+  title: z.string().max(240),
+  requestText: z.string().max(MAX_REVIEW_REQUEST_CHARS),
+  requestArtifactId: z.string().regex(/^art_[a-f0-9]{1,64}$/).optional(),
+  reservedAt: z.string().datetime()
+}).strict()
+export type ReviewSendReservation = z.infer<typeof ReviewSendReservationSchema>
+
 export const ReviewCommentFileSchema = z
   .object({
     comments: z.array(ReviewCommentSchema).max(2_000).default([]),
-    requests: z.array(ReviewSendRecordSchema).max(200).default([])
+    /** Read old files that crossed the former 200-row write limit; new writes stop at 200. */
+    requests: z.array(ReviewSendRecordSchema).max(256).default([]),
+    reservations: z.array(ReviewSendReservationSchema).max(200).default([])
   })
   .strict()
 export type ReviewCommentFile = z.infer<typeof ReviewCommentFileSchema>

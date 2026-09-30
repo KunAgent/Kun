@@ -67,6 +67,12 @@ describe('credential group key codec', () => {
 })
 
 describe('effectiveHarnessId', () => {
+  it('mirrors legacy provider-kind inference without overriding explicit Kun', () => {
+    expect(effectiveHarnessId('', undefined, 'agent-sdk')).toBe('claude-code')
+    expect(effectiveHarnessId('', undefined, 'cursor-sdk')).toBe('cursor')
+    expect(effectiveHarnessId('', undefined, 'gemini-cli-api')).toBe('kun')
+    expect(effectiveHarnessId('kun', 'claude-code', 'agent-sdk')).toBe('kun')
+  })
   it('prefers the composer selection, then the thread binding, then kun', () => {
     expect(effectiveHarnessId('cursor', 'claude-code')).toBe('cursor')
     expect(effectiveHarnessId('', 'claude-code')).toBe('claude-code')

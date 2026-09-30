@@ -37,6 +37,9 @@ export type NormalizedThread = {
   modelRequestCaptureEnabled?: boolean
   /** Owning workspace mode; absent counts as 'code'. Immutable after create. */
   workspaceMode?: 'code' | 'ade'
+  /** Persistent Kun-managed team policy; legacy ADE can omit it. */
+  collaboration?: { enabled: boolean; everEnabled?: boolean }
+  executionConfig?: import('@shared/ade-execution-config').AdeExecutionConfigSnapshot
   /** Optional provider id when this thread is pinned to a non-default provider. */
   providerId?: string
   /** Explicit harness identity inherited by new turns (01 §4). */

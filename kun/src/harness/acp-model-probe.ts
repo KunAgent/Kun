@@ -1,13 +1,14 @@
 /**
  * ACP model probing for `GET /v1/harnesses/:id/models` (docs/ade/03 §12.2).
  * Opens a throwaway connection, calls `session/new`, and reads the `model`
- * config option's value list — no prompt is ever sent, so the probe incurs
+ * config option's value list or legacy availableModels list. No prompt is sent, so the probe incurs
  * no model usage. Results are cached for ten minutes; concurrent probes for
  * the same harness share one in-flight request.
  */
 import { tmpdir } from 'node:os'
 import { AcpConnection } from '../runtime/acp/acp-connection.js'
 import { AcpClientHost } from '../runtime/acp/acp-client-host.js'
+import { parseAcpLegacyModels } from '../runtime/acp/acp-legacy-models.js'
 import { startAcpProcess, type AcpSpawnFn } from '../runtime/acp/acp-process.js'
 import {
   ACP_AGENT_METHODS,
@@ -98,8 +99,8 @@ export class AcpModelProbe {
       args: definition.launch?.args ?? [],
       env: definition.launch?.env ?? {},
       secretEnv,
-      // Probe sessions never receive credential env; the agent either starts
-      // unauthenticated or reports auth requirements via initialize.
+      // Probes use the CLI's existing login. Only session/new can establish
+      // that authentication is required; advertised authMethods cannot.
       cwd: tmpdir(),
       spawn: this.deps.spawn
     })
@@ -109,7 +110,6 @@ export class AcpModelProbe {
     new AcpClientHost().attach(conn)
     try {
       await conn.initialize()
-      if (conn.requiresAuthentication) return []
       const raw = await conn.rpc.request(
         ACP_AGENT_METHODS.sessionNew,
         { cwd: tmpdir(), mcpServers: [] },
@@ -122,6 +122,7 @@ export class AcpModelProbe {
         if (option.category !== 'model' || option.type !== 'select') continue
         for (const value of acpConfigOptionValues(option)) models.add(value)
       }
+      for (const value of parseAcpLegacyModels(parsed.data.models)?.availableModels ?? []) models.add(value)
       return [...models].sort()
     } finally {
       await conn.close().catch(() => undefined)
@@ -129,7 +130,12 @@ export class AcpModelProbe {
   }
 
   private cacheKey(definition: HarnessDefinition): string {
-    return `${definition.id}:${definition.launch?.command ?? ''}`
+    return JSON.stringify({
+      id: definition.id,
+      command: this.deps.binaryPath?.(definition.id) ?? definition.launch?.command,
+      args: definition.launch?.args,
+      env: definition.launch?.env
+    })
   }
 
   private nowMs(): number {

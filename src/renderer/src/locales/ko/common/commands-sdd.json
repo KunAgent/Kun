@@ -113,7 +113,7 @@
   "approvalExpired": "턴이 종료되었기 때문에 만료되었습니다.",
   "approvalSubmitting": "결정을 제출하는 중…",
   "approvalFailed": "요청 실패",
-  "approvalNativeConfirmationCancelled": "네이티브 확인이 취소되었습니다. 다시 시도하세요.",
+  "approvalNativeConfirmationCancelled": "확인이 취소되었습니다. 이 작업은 아직 결정을 기다리고 있습니다.",
   "approvalReviewTitle": "Kun approval review",
   "approvalReviewInProgress": "Kun is reviewing this action…",
   "approvalReviewApproved": "Approved by Kun",

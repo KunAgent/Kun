@@ -63,6 +63,12 @@ export function threadWorkspacePreparing(threadId: string | null | undefined): b
   return prep?.state === 'creating' || prep?.state === 'setting-up'
 }
 
+// A failed isolation request must never send the parked input in the source checkout.
+export function threadWorkspaceBlocksSend(threadId: string | null | undefined): boolean {
+  return threadWorkspacePreparing(threadId) || Boolean(threadId &&
+    useTaskWorkspaceStore.getState().prepByThread[threadId]?.state === 'failed')
+}
+
 /** Mark a create/prepare attempt failed; the composer shows retry. */
 export function markThreadWorkspacePrepFailed(threadId: string, error: string): void {
   const thread = threadId.trim()
@@ -81,12 +87,13 @@ export function markThreadWorkspacePrepFailed(threadId: string, error: string): 
 
 /** Seed prep state from a REST record (create response / retry). */
 export function receiveTaskWorkspaceRecord(record: TaskWorkspaceRecord): void {
+  if (record.unitId) return
   const threadId = record.ownerThreadId?.trim()
   if (!threadId) return
   useTaskWorkspaceStore.setState((state) => {
     const existing = state.prepByThread[threadId]
     if (
-      existing &&
+      existing?.workspaceId &&
       existing.workspaceId !== record.workspaceId &&
       (record.state === 'ready' || record.state === 'failed')
     ) {
@@ -117,6 +124,7 @@ export function receiveTaskWorkspaceRecord(record: TaskWorkspaceRecord): void {
 
 /** SSE entry for `task_workspace` events on the owner thread (07 §5). */
 export function receiveTaskWorkspaceThreadEvent(ev: TaskWorkspaceThreadEvent): void {
+  if (ev.unitId) return
   const threadId = ev.threadId.trim()
   const workspaceId = ev.workspaceId.trim()
   if (!threadId || !workspaceId) return
@@ -137,7 +145,8 @@ export function receiveTaskWorkspaceThreadEvent(ev: TaskWorkspaceThreadEvent): v
           ...(ev.workspace?.path ? { path: ev.workspace.path } : existing?.path
             ? { path: existing.path }
             : {}),
-          ...(existing?.sourceRoot ? { sourceRoot: existing.sourceRoot } : {})
+          ...(ev.workspace?.sourceRoot ? { sourceRoot: ev.workspace.sourceRoot }
+            : existing?.sourceRoot ? { sourceRoot: existing.sourceRoot } : {})
         }
       }
     }

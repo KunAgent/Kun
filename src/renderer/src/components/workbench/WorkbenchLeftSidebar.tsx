@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import type { SettingsRouteSection } from '../../store/chat-store'
 import type { ClawInstallTarget } from '../chat/SidebarClawDialogHelpers'
 import { Sidebar } from '../chat/Sidebar'
-import { AdeSidebar } from '../ade/AdeSidebar'
 import { WriteSidebar } from '../write/WriteSidebar'
 import { PaperSidebar } from '../paper/PaperSidebar'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
@@ -79,7 +78,6 @@ export function WorkbenchLeftSidebar({
   width,
   route,
   codeThreads,
-  adeThreads,
   activeThreadId,
   sidebarView,
   connectPhoneSidebarOpen,
@@ -108,9 +106,6 @@ export function WorkbenchLeftSidebar({
   onToggleTheme,
   onToggleConnectPhone,
   onCodeOpen,
-  onAdeOpen,
-  onNewAdeChat,
-  onNewAdeOneOnOne,
   onWriteOpen,
   onScheduleOpen,
   onBoardOpen,
@@ -142,30 +137,6 @@ export function WorkbenchLeftSidebar({
           contribution={extensionView}
           workspaceRoot={workspaceRoot}
           onClose={wrapCloseOpt(onCloseExtensionView)}
-        />
-      ) : normalizedRoute === 'ade' ? (
-        <AdeSidebar
-          threads={adeThreads}
-          activeThreadId={activeThreadId}
-          connectPhoneSidebarOpen={connectPhoneSidebarOpen}
-          runtimeReady={runtimeReady}
-          showArchivedThreads={showArchivedThreads}
-          focusModeEnabled={focusModeEnabled}
-          onFocusModeChange={onFocusModeChange}
-          onSelectThread={wrapClose(onSelectThread)}
-          onRenameThread={onRenameThread}
-          onPinThread={onPinThread}
-          onArchiveThread={onArchiveThread}
-          onDeleteThread={onDeleteThread}
-          onRestoreThread={onRestoreThread}
-          onNewChat={wrapClose(onNewAdeChat)}
-          onNewOneOnOne={wrapClose(onNewAdeOneOnOne)}
-          onOpenSettings={wrapClose(onOpenSettings)}
-          onToggleTheme={onToggleTheme}
-          onToggleConnectPhone={onToggleConnectPhone}
-          onCodeOpen={wrapClose(onCodeOpen)}
-          onWriteOpen={wrapClose(onWriteOpen)}
-          onAdeOpen={wrapClose(onAdeOpen)}
         />
       ) : normalizedRoute === 'write' ? (
         <Suspense fallback={<SidebarFallback />}>

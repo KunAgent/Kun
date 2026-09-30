@@ -2,6 +2,7 @@
  * Renderer-facing mirror of the /v1/teams surface (docs/ade/09 §9).
  * The wire shape is owned by kun/src/contracts/ade.ts; keep names aligned.
  */
+import type { ReviewRevision } from './review-revision'
 export type AdeHarnessRoute = {
   harnessId: string
   providerId?: string
@@ -56,6 +57,7 @@ export type AdeQualityCheck = {
   status: 'passed' | 'failed' | 'skipped'
   source: 'worker' | 'host' | 'reviewer'
   detail?: string
+  revision?: ReviewRevision
 }
 
 export type AdeQualityVerdict = {
@@ -64,6 +66,7 @@ export type AdeQualityVerdict = {
   checks?: AdeQualityCheck[]
   notes?: string
   decidedAt?: string
+  revision?: ReviewRevision
 }
 
 /** POST /v1/teams/workers/:workerId/run-checks (docs/ade/10 §4.2). */
@@ -90,6 +93,7 @@ export type AdeDispatchRecord = {
   state: 'pending' | 'delivering' | 'uncertain' | 'accepted' | 'completed' | 'failed' | 'cancelled'
   capture?: AdeDispatchCapture
   verdict?: AdeQualityVerdict
+  revision?: ReviewRevision
   createdAt: string
   updatedAt: string
 }

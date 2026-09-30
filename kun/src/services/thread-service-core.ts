@@ -62,6 +62,10 @@ import { threadServiceGoalsOperations } from './thread-service-goals-operations.
 import { threadServiceTodosOperations } from './thread-service-todos-operations.js'
 import { ExecutionTaskService } from './execution-task-service.js'
 import { threadServiceLifecycleOperations } from './thread-service-lifecycle-operations.js'
+import { threadServiceExecutionConfigOperations } from './thread-service-execution-config.js'
+import type { TaskExecutionConfigMutation, TaskExecutionConfigResponse } from '../contracts/thread-execution-config.js'
+export { matchesThreadSearch, threadStatusFromTurns } from './thread-service-query-helpers.js'
+import type { GlobalExecutionDefaults, ProjectExecutionDefaults } from '../domain/thread-execution-config.js'
 
 export type ThreadServiceOptions = {
   legacyTaskGraphRoot?: string
@@ -72,6 +76,12 @@ export type ThreadServiceOptions = {
   events: RuntimeEventRecorder
   ids: IdGenerator
   nowIso: () => string
+  projectSettings?: () => GlobalExecutionDefaults & {
+    projectDefaults?: Record<string, ProjectExecutionDefaults>
+    defaultRoute?: { model: string; providerId?: string; harnessId?: string }
+  }
+  projectSourceRoot?: (taskWorkspaceId: string) => string | undefined
+  hasActiveTeam?: (threadId: string) => Promise<boolean>
   defaultApprovalPolicy?: ApprovalPolicy
   defaultSandboxMode?: SandboxMode
   defaultApprovalReviewer?: ApprovalReviewer
@@ -140,6 +150,9 @@ export class ThreadService {
   private readonly events: RuntimeEventRecorder
   private readonly ids: IdGenerator
   private readonly nowIso: () => string
+  private readonly projectSettings?: ThreadServiceOptions['projectSettings']
+  private readonly projectSourceRoot?: ThreadServiceOptions['projectSourceRoot']
+  private readonly hasActiveTeam?: ThreadServiceOptions['hasActiveTeam']
   private defaultApprovalPolicy: ApprovalPolicy | undefined
   private defaultSandboxMode: SandboxMode | undefined
   private defaultApprovalReviewer: ApprovalReviewer | undefined
@@ -162,6 +175,9 @@ export class ThreadService {
     this.executionTasks = new ExecutionTaskService({ threadStore: options.threadStore,
       events: options.events, nowIso: options.nowIso, legacyRoot: options.legacyTaskGraphRoot,
       projectPlan: (thread, todos) => this.patchPlanMarkdownForTodoStatusChanges(thread, todos.items) })
+    this.projectSettings = options.projectSettings
+    this.projectSourceRoot = options.projectSourceRoot
+    this.hasActiveTeam = options.hasActiveTeam
     this.defaultApprovalPolicy = options.defaultApprovalPolicy
     this.defaultSandboxMode = options.defaultSandboxMode
     this.defaultApprovalReviewer = options.defaultApprovalReviewer
@@ -177,6 +193,8 @@ export class ThreadService {
 }
 
 export interface ThreadService {
+  getExecutionConfig(threadId: string): Promise<TaskExecutionConfigResponse | null>;
+  mutateExecutionConfig(threadId: string, mutation: TaskExecutionConfigMutation): Promise<TaskExecutionConfigResponse>;
   updateRuntimeDefaults(input: {
     approvalPolicy: ApprovalPolicy
     sandboxMode: SandboxMode
@@ -216,6 +234,7 @@ export interface ThreadService {
     taskWorkspaceId?: string
     /** Harness rebind for external-session continuation (01 §8). */
     harnessId?: string
+    collaboration?: ThreadRecord['collaboration']
     additionalWorkspaces?: string[]
     knowledgeBases?: KnowledgeBaseMount[]
     mode?: ThreadMode
@@ -261,7 +280,8 @@ installServiceOperations(
   threadServiceMetadataOperations,
   threadServiceGoalsOperations,
   threadServiceTodosOperations,
-  threadServiceLifecycleOperations
+  threadServiceLifecycleOperations,
+  threadServiceExecutionConfigOperations
 )
 
 
@@ -439,24 +459,6 @@ export function cloneSessionItemsForThread(input: {
     includedIds.add(item.id)
   }
   return result
-}
-
-export function matchesThreadSearch(thread: ThreadSummary, query: string): boolean {
-  return [
-    thread.id,
-    thread.title,
-    thread.workspace,
-    thread.model,
-    thread.mode,
-    thread.forkedFromTitle,
-    thread.forkedFromThreadId
-  ].some((value) => value?.toLowerCase().includes(query))
-}
-
-export function threadStatusFromTurns(turns: Turn[]): 'idle' | 'running' {
-  return turns.some((turn) => turn.status === 'queued' || turn.status === 'running')
-    ? 'running'
-    : 'idle'
 }
 
 export function rebuildTurnsFromItems(input: {

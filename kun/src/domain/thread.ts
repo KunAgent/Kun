@@ -60,6 +60,8 @@ export function createThreadRecord(input: {
   providerId?: string
   harnessId?: string
   workspaceMode?: 'code' | 'ade'
+  collaboration?: ThreadRecord['collaboration']
+  executionConfig?: ThreadRecord['executionConfig']
   taskWorkspaceId?: string
   ownerExtensionId?: string
   ownerExtensionVersion?: string
@@ -115,6 +117,8 @@ export function createThreadRecord(input: {
     ...(input.providerId ? { providerId: input.providerId } : {}),
     ...(input.harnessId ? { harnessId: input.harnessId } : {}),
     ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
+    ...(input.collaboration ? { collaboration: input.collaboration } : {}),
+    ...(input.executionConfig ? { executionConfig: input.executionConfig } : {}),
     ...(input.taskWorkspaceId ? { taskWorkspaceId: input.taskWorkspaceId } : {}),
     ...(input.ownerExtensionId ? { ownerExtensionId: input.ownerExtensionId } : {}),
     ...(input.ownerExtensionVersion ? { ownerExtensionVersion: input.ownerExtensionVersion } : {}),
@@ -188,6 +192,8 @@ export function toThreadSummary(
     ...(thread.providerId ? { providerId: thread.providerId } : {}),
     ...(thread.harnessId ? { harnessId: thread.harnessId } : {}),
     ...(thread.workspaceMode ? { workspaceMode: thread.workspaceMode } : {}),
+    ...(thread.collaboration ? { collaboration: thread.collaboration } : {}),
+    ...(thread.executionConfig ? { executionConfig: thread.executionConfig } : {}),
     ...(thread.taskWorkspaceId ? { taskWorkspaceId: thread.taskWorkspaceId } : {}),
     ...(thread.ownerExtensionId ? { ownerExtensionId: thread.ownerExtensionId } : {}),
     ...(thread.ownerExtensionVersion ? { ownerExtensionVersion: thread.ownerExtensionVersion } : {}),

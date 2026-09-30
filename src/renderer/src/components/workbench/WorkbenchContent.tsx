@@ -58,8 +58,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
   // the active (manager) thread; the panel itself also self-disables.
   const workersEnabled = useActivityStore((s) =>
     Boolean(
-      activeConversationThread?.workspaceMode === 'ade' &&
-        activeThreadId &&
+      activeThreadId &&
         selectWorkerRowsForParent(s.rows, activeThreadId).length > 0
     ))
   useEffect(() => {

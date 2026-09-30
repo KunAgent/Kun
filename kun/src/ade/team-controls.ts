@@ -1,3 +1,4 @@
+import { newManagerWorkRefusal } from './new-work-admission.js'
 import type {
   DispatchRecord,
   QuestionRecord,
@@ -265,6 +266,8 @@ export class TeamControls {
       }
     }
     const { team, worker } = found
+    const refused = await newManagerWorkRefusal(this.deps, team.managerThreadId)
+    if (refused) return refused
     if (worker.state !== 'active') {
       return {
         ok: false,
@@ -283,7 +286,7 @@ export class TeamControls {
           : 'The worker is under user control; send a normal message in its thread instead.'
       }
     }
-    const budgetRefusal = this.controls.budgetRefusal(team, language)
+    const budgetRefusal = await this.controls.budgetRefusal(team, language)
     if (budgetRefusal) return budgetRefusal
     const parentTurnId = (await this.deps.threads.get(team.managerThreadId).catch(() => null))
       ?.turns.at(-1)?.id ?? 'gui'

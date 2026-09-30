@@ -33,10 +33,6 @@ const ExtensionManagementCenter = lazy(() =>
     default: module.ExtensionManagementCenter
   }))
 )
-const AdeStage = lazy(() =>
-  import('../ade/AdeStage').then((module) => ({ default: module.AdeStage }))
-)
-
 type WriteStageProps = {
   runtimeBanner: ReactNode
   leftSidebarCollapsed: boolean
@@ -111,7 +107,6 @@ function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
 
 export function WorkbenchStageRouter({
   route,
-  adeDraftOpen,
   leftSidebarCollapsed,
   onToggleLeftSidebar,
   onOpenThread,
@@ -176,10 +171,6 @@ export function WorkbenchStageRouter({
               onToggleLeftSidebar={onToggleLeftSidebar}
               onOpenThread={onOpenThread}
             />
-          </Suspense>
-        ) : normalizedRoute === 'ade' ? (
-          <Suspense fallback={<WorkbenchPaneFallback />}>
-            <AdeStage conversation={conversation} activeThreadId={conversation.chat.activeThreadId} adeDraftOpen={adeDraftOpen} />
           </Suspense>
         ) : normalizedRoute === 'write' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>

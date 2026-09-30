@@ -6,6 +6,9 @@ import {
   harnessUnavailableLabelKey,
   harnessUnavailableNextStepKey
 } from '../../store/harness-store'
+import { AgentIcon } from '../agent-icon'
+import { useChatStore } from '../../store/chat-store'
+import { usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
 import { SettingRow, Toggle } from '../settings-controls'
 import {
   agentCardModel,
@@ -99,9 +102,10 @@ export function AgentCenterCard({
 }): ReactElement {
   const { definition, status } = row
   const isKun = definition.id === 'kun'
+  const providerOnly = usesProviderOnlySdk(row)
   const enabled = !settings.disabledIds.includes(definition.id)
   const custom = !definition.builtin
-  const [pathOpen, setPathOpen] = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [reasonOpen, setReasonOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [testing, setTesting] = useState<false | 'handshake' | 'trial'>(false)
@@ -142,6 +146,9 @@ export function AgentCenterCard({
 
   const runAction = (action: AgentCardAction): void => {
     switch (action.kind) {
+      case 'configureProvider':
+        useChatStore.getState().openSettings('providers')
+        break
       case 'test':
         void runTest('handshake')
         break
@@ -168,7 +175,7 @@ export function AgentCenterCard({
         onSetDefault()
         break
       case 'specifyPath':
-        setPathOpen((open) => !open)
+        setAdvancedOpen((open) => !open)
         break
       case 'reason':
         setReasonOpen((open) => !open)
@@ -216,6 +223,7 @@ export function AgentCenterCard({
   return (
     <div className="border-b border-ds-border-muted px-1 py-3 last:border-b-0" data-agent-card={definition.id}>
       <div className="flex items-start gap-3">
+        <AgentIcon harnessId={definition.id} size={20} className="mt-0.5 text-ds-muted" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-[13px] font-semibold text-ds-ink">
             <span className="truncate">{definition.displayName}</span>
@@ -232,7 +240,8 @@ export function AgentCenterCard({
             {model.state === 'detecting' ? (
               <RefreshCw className="h-3 w-3 shrink-0 animate-spin" strokeWidth={1.8} />
             ) : null}
-            <span className="truncate">{statusLine(model, status, t, tSettings)}</span>
+            <span className="truncate">{providerOnly && (model.reasonCode === 'signed_out' || model.reasonCode === null)
+              ? t('adeAgentAction.providerConnection') : statusLine(model, status, t, tSettings)}</span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1">
             {definition.credentialModes.map((mode) => (
@@ -258,18 +267,18 @@ export function AgentCenterCard({
               onChange={onToggleEnabled}
             />
           ) : null}
-          <button
+          {!providerOnly ? <button
             type="button"
             aria-label={t('adeAgentAction.specifyPath')}
-            aria-expanded={pathOpen}
-            onClick={() => setPathOpen((open) => !open)}
+            aria-expanded={advancedOpen}
+            onClick={() => setAdvancedOpen((open) => !open)}
             className="rounded-md p-1 text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
           >
             <ChevronDown
-              className={`h-4 w-4 transition ${pathOpen ? 'rotate-180' : ''}`}
+              className={`h-4 w-4 transition ${advancedOpen ? 'rotate-180' : ''}`}
               strokeWidth={1.8}
             />
-          </button>
+          </button> : null}
         </div>
       </div>
 
@@ -306,8 +315,49 @@ export function AgentCenterCard({
         </div>
       ) : null}
 
-      {pathOpen ? (
-        <div className="mt-2 space-y-3">
+      <div className="mt-3 space-y-3" data-agent-detail-settings>
+        {status.resolvedCommand && !providerOnly ? (
+          <div className="min-w-0 rounded-lg border border-ds-border-muted bg-ds-main/40 px-3 py-2 text-[11px] text-ds-muted" data-agent-connection-summary>
+            <span className="font-medium">{tSettings('adeSettings.harnessCommandPath')}: </span>
+            <span className="break-all font-mono">{status.resolvedCommand}</span>
+          </div>
+        ) : null}
+        {definition.permissionModes.length ? (
+          <SettingRow
+            title={tSettings('adeSettings.harnessPermissionMode')}
+            description={tSettings('adeSettings.harnessPermissionModeDesc')}
+            control={
+              <select
+                className="w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none"
+                value={settings.defaults[definition.id]?.permissionMode ?? ''}
+                onChange={(event) => onSetPermissionMode(event.target.value)}
+              >
+                <option value="">{tSettings('adeSettings.harnessPermissionModeDefault')}</option>
+                {definition.permissionModes.map((mode) => (
+                  <option key={mode.id} value={mode.id}>{mode.label}</option>
+                ))}
+              </select>
+            }
+          />
+        ) : null}
+      </div>
+
+      {advancedOpen && !providerOnly ? (
+        <div className="mt-2 space-y-3" data-agent-advanced-settings>
+          {status.networkSource ? <SettingRow
+            title={t('adeAgentNetwork.title')}
+            description={t(status.networkSource === 'explicit-required'
+              ? 'adeAgentNetwork.explicitHint' : 'adeAgentNetwork.hint')}
+            control={<div className="flex flex-wrap items-center justify-end gap-2 text-[12px]">
+              <span data-agent-network-source={status.networkSource} className="text-ds-muted">
+                {t(`adeAgentNetwork.${status.networkSource}`)}
+              </span>
+              <button type="button" disabled={busy} onClick={onProbe}
+                className="rounded-md border border-ds-border-muted px-2 py-1 text-ds-ink hover:bg-ds-hover disabled:opacity-50">
+                {t('adeAgentAction.retry')}
+              </button>
+            </div>}
+          /> : null}
           <SettingRow
             title={tSettings('adeSettings.harnessCommandPath')}
             description={status.resolvedCommand || tSettings('adeSettings.harnessCommandPathDesc')}
@@ -321,26 +371,6 @@ export function AgentCenterCard({
               />
             }
           />
-          {definition.permissionModes.length ? (
-            <SettingRow
-              title={tSettings('adeSettings.harnessPermissionMode')}
-              description={tSettings('adeSettings.harnessPermissionModeDesc')}
-              control={
-                <select
-                  className="w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none"
-                  value={settings.defaults[definition.id]?.permissionMode ?? ''}
-                  onChange={(event) => onSetPermissionMode(event.target.value)}
-                >
-                  <option value="">{tSettings('adeSettings.harnessPermissionModeDefault')}</option>
-                  {definition.permissionModes.map((mode) => (
-                    <option key={mode.id} value={mode.id}>
-                      {mode.label}
-                    </option>
-                  ))}
-                </select>
-              }
-            />
-          ) : null}
         </div>
       ) : null}
 

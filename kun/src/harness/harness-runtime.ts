@@ -8,6 +8,7 @@ import { probeHarnessLogin } from './harness-login-probes.js'
 import { AcpModelProbe } from './acp-model-probe.js'
 import { CodexModelProbe } from './codex-model-probe.js'
 import { probeAcpReadiness } from './acp-readiness-probe.js'
+import { probeCodexReadiness } from './codex-readiness-probe.js'
 import { AcpReadinessStore, type AcpReadinessCacheView } from './acp-readiness-store.js'
 import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
 import { HarnessTokenService } from './harness-token-service.js'
@@ -86,11 +87,12 @@ function createLimiter(concurrency: number) {
 }
 
 export function createHarnessComposition(
-  options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses' | 'dataDir'>,
+  options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses' | 'dataDir' | 'nativeAgentNetwork'>,
   deps: { resolveSecretEnv?: HarnessSecretRefResolver } = {}
 ): HarnessRuntimeComposition {
   const catalog = new HarnessCatalog({
     custom: () => options().harnesses?.custom ?? [],
+    nativeAgentNetwork: () => options().nativeAgentNetwork,
     terminalAgents: () => options().harnesses?.terminalAgents ?? [],
     disabled: () => options().harnesses?.disabledIds ?? [],
     transportOverrides: () => options().harnesses?.transportOverrides ?? {},
@@ -116,10 +118,12 @@ export function createHarnessComposition(
     },
     bundled: bundledRuntime,
     spawnCaptured,
-    // P3-11: an ACP harness that versions fine can still fail initialize.
+    // A versioned binary still has to answer its own protocol handshake.
     probeReady: (def, command) =>
       probeLimit(() =>
-        probeAcpReadiness(def, command, { resolveSecretEnv: deps.resolveSecretEnv })
+        def.transport === 'codex-app-server'
+          ? probeCodexReadiness(def, command, { resolveSecretEnv: deps.resolveSecretEnv })
+          : probeAcpReadiness(def, command, { resolveSecretEnv: deps.resolveSecretEnv })
       ),
     ...(readinessCache ? { readinessCache } : {}),
     probeLogin: (def) =>

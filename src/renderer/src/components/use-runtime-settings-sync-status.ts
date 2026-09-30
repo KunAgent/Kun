@@ -13,7 +13,7 @@ import { coerceRendererSettings } from './settings-utils'
 export function useRuntimeSettingsSyncStatus(active: boolean): KunRuntimeSettingsSyncStatusPayload | null {
   const [status, setStatus] = useState<KunRuntimeSettingsSyncStatusPayload | null>(null)
   useEffect(() => {
-    if (!active) return
+    if (!active || typeof window === 'undefined') return
     let mounted = true
     const handleStatus = (next: KunRuntimeSettingsSyncStatusPayload): void => {
       if (!mounted) return

@@ -5,8 +5,8 @@ import { getKunRuntimeSettings } from '../../../../shared/app-settings-kun-defau
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
 
-// ADE 模式入口仅由 agents.kun.ade.enabled 控制;关闭时已有 ADE 线程保留
-// 在服务端,只是不再出现在 Code/ADE 侧栏。
+// Global opt-in controls new collaboration; history and existing worker controls
+// remain reachable in Code when it is disabled.
 export function adeEnabledFromApp(settings: AppSettingsV1): boolean {
   return getKunRuntimeSettings(settings).ade.enabled
     ?? defaultKunAdeSettings().enabled
@@ -17,6 +17,10 @@ export function useAdeEnabled(): { enabled: boolean; loaded: boolean } {
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.kunGui?.getSettings !== 'function') {
+      setLoaded(true)
+      return
+    }
     let cancelled = false
     const apply = (settings: AppSettingsV1): void => {
       if (!cancelled) {

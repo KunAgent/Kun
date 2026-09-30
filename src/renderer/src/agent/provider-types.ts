@@ -82,6 +82,8 @@ export type ThreadListOptions = {
   workspaces?: string[]
   /** Filter by owning workspace mode; absent returns every mode. */
   workspaceMode?: 'code' | 'ade'
+  /** Unified Code workbench listing of Code and legacy ADE roots. */
+  workbenchScope?: 'code'
   lean?: boolean
 }
 
@@ -96,6 +98,8 @@ export type ThreadIndexStatusInfo = {
 /** Paginated sidebar thread listing result. */
 export type ThreadListPage = {
   threads: NormalizedThread[]
+  /** True only when the runtime acknowledged workbench_scope=code. */
+  workbenchScopeApplied?: boolean
   nextCursor?: string
   hasMore: boolean
   total?: number
@@ -262,6 +266,7 @@ export interface AgentProvider {
   createTaskWorkspace?(
     input: import('@shared/task-workspace').CreateTaskWorkspaceRequest
   ): Promise<import('@shared/task-workspace').TaskWorkspaceRecordResponse>
+  retryTaskWorkspace?(workspaceId: string): Promise<import('@shared/task-workspace').TaskWorkspaceRecordResponse>
   /** Per-file diff stats for the review panel (docs/ade/11 §3). */
   getTaskWorkspaceDiff?(
     workspaceId: string
@@ -290,7 +295,8 @@ export interface AgentProvider {
   ): Promise<import('@shared/task-workspace').TaskWorkspaceIntegratePreviewResponse>
   integrateTaskWorkspace?(
     workspaceId: string,
-    mode: import('@shared/task-workspace').TaskWorkspaceIntegrateMode
+    mode: import('@shared/task-workspace').TaskWorkspaceIntegrateMode,
+    previewToken?: string
   ): Promise<import('@shared/task-workspace').TaskWorkspaceIntegrateResponse>
   previewTaskWorkspaceDiscard?(
     workspaceId: string
@@ -338,13 +344,15 @@ export interface AgentProvider {
    */
   testHarness?(
     harnessId: string,
-    input: import('@shared/ade-harnesses').AdeHarnessTestRequest
+    input: import('@shared/ade-harnesses').AdeHarnessTestRequest,
+    options?: { signal?: AbortSignal }
   ): Promise<import('@shared/ade-harnesses').AdeHarnessTestResult>
   /**
    * Pre-save handshake for a custom ACP definition (p4 §3.7, P4-12).
    */
   probeHarnessDefinition?(
-    input: import('@shared/ade-harnesses').AdeHarnessProbeDefinitionRequest
+    input: import('@shared/ade-harnesses').AdeHarnessProbeDefinitionRequest,
+    options?: { signal?: AbortSignal }
   ): Promise<import('@shared/ade-harnesses').AdeHarnessProbeDefinitionResult>
   /** Store a `secretEnv` value; returns the opaque credential-store ref. */
   storeHarnessSecret?(value: string): Promise<string>
@@ -392,7 +400,7 @@ export interface AgentProvider {
     briefDigest: string
     recordedBriefDigest: string
   }>
-  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; workspaceMode?: 'code' | 'ade'; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string; additionalWorkspaces?: string[]; harnessId?: string; credentialMode?: string; taskWorkspaceId?: string }): Promise<NormalizedThread>
+  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentSurface?: 'code' | 'write' | 'design'; workspaceMode?: 'code' | 'ade'; collaboration?: { enabled: boolean }; routeIntent?: 'explicit' | 'inherit'; workspaceIsolation?: 'local' | 'worktree'; projectDefaultsRevision?: string; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string; additionalWorkspaces?: string[]; harnessId?: string; credentialMode?: string; taskWorkspaceId?: string }): Promise<NormalizedThread>
   getThreadDetail(threadId: string, options?: {
     before?: string
     turnId?: string
@@ -586,6 +594,7 @@ export interface AgentProvider {
    */
   renameThread(threadId: string, title: string, auto?: boolean): Promise<void>
   updateThreadWorkspace?(threadId: string, workspace: string): Promise<void>
+  updateThreadCollaboration?(threadId: string, enabled: boolean): Promise<NormalizedThread>
   /** Atomically bind a ready task workspace (07 §5): path + taskWorkspaceId. */
   bindThreadTaskWorkspace?(
     threadId: string,

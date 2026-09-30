@@ -43,9 +43,13 @@ export function credentialGroupFromKey(
 /** Resolve the harness a turn on this thread would use (store → thread → kun). */
 export function effectiveHarnessId(
   composerHarnessId: string,
-  threadHarnessId: string | undefined
+  threadHarnessId: string | undefined,
+  providerKind?: ModelProviderModelGroup['kind']
 ): string {
-  return composerHarnessId.trim() || threadHarnessId?.trim() || 'kun'
+  const legacy = providerKind === 'agent-sdk' ? 'claude-code'
+    : providerKind === 'cursor-sdk' ? 'cursor'
+      : providerKind === 'antigravity-cli' ? 'antigravity' : 'kun'
+  return composerHarnessId.trim() || threadHarnessId?.trim() || legacy
 }
 
 /** The native Kun loop keeps the provider-registry model groups untouched. */
@@ -132,8 +136,8 @@ export function harnessSlashCommandText(command: AdeHarnessCommand): string {
 
 /**
  * Resolve the harness/credential pair for one submission: a frozen queued or
- * explicit override wins, else the composer selection applies to ADE threads
- * (and ADE-route new sessions) only — Code sends never carry these fields.
+ * explicit override wins, else an eligible Code composer selection applies.
+ * An unpinned legacy Code send retains runtime provider-kind inference.
  */
 export function resolveSendHarnessSelection(args: {
   queued?: { harnessId?: string; credentialMode?: string } | undefined
@@ -142,11 +146,14 @@ export function resolveSendHarnessSelection(args: {
   composerHarnessId: string
   composerCredentialMode: string
 }): { harnessId: string; credentialMode: string } {
-  const harnessId = args.queued?.harnessId?.trim() || args.overrides?.harnessId?.trim() ||
-    (args.adeEligible ? args.composerHarnessId.trim() : '')
+  if (args.queued) {
+    return { harnessId: args.queued.harnessId?.trim() ?? '', credentialMode: args.queued.credentialMode?.trim() ?? '' }
+  }
+  const harnessId = args.overrides?.harnessId?.trim() ||
+    (args.adeEligible ? args.composerHarnessId?.trim() ?? '' : '')
   const credentialMode = harnessId
-    ? args.queued?.credentialMode?.trim() || args.overrides?.credentialMode?.trim() ||
-      args.composerCredentialMode.trim()
+    ? args.overrides?.credentialMode?.trim() ||
+      args.composerCredentialMode?.trim() || ''
     : ''
   return { harnessId, credentialMode }
 }

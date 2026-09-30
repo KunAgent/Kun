@@ -71,8 +71,12 @@ export const ThreadStoreListOptionsSchema: z.ZodType<ThreadStoreListOptions> = z
   cursor: z.string().min(1).optional(),
   workspace: z.string().optional(),
   workspaces: z.array(z.string()).max(64).optional(),
-  workspaceMode: z.enum(['code', 'ade']).optional()
-}).strict()
+  workspaceMode: z.enum(['code', 'ade']).optional(),
+  workbenchScope: z.literal('code').optional()
+}).strict().refine((options) => !options.workspaceMode || !options.workbenchScope, {
+  message: 'workspaceMode and workbenchScope cannot be combined',
+  path: ['workbenchScope']
+})
 
 export function finishedTurnStatus(status: string): FinishedTurnStatus | null {
   return status === 'completed' || status === 'failed' || status === 'aborted' ? status : null

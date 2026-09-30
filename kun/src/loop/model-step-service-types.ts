@@ -79,7 +79,7 @@ export type ModelStepServiceDeps = {
    * ADE manager turn context (P3-14): bounded per-turn block for
    * `workspaceMode === 'ade'` Kun-harness manager turns, never prefix.
    */
-  adeManagerContext?: (input: { threadId: string }) => Promise<string | undefined>
+  adeManagerContext?: (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined>
   awaitWorkspaceCheckpoint?: (
     checkpointRequestId: string,
     signal: AbortSignal

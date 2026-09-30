@@ -1,8 +1,9 @@
 import { useEffect, type ReactElement } from 'react'
-import { Bot, Server, TerminalSquare } from 'lucide-react'
+import { Server, TerminalSquare } from 'lucide-react'
 import type { RemoteSshHost } from '@shared/remote-ssh'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import { loadHarnesses, useHarnessStore } from '../../store/harness-store'
+import { AgentIcon } from '../agent-icon'
 
 export type TerminalNewTabMenuAnchor = {
   /** Viewport x of the anchor button's left edge. */
@@ -98,7 +99,7 @@ export function TerminalNewTabMenu({
               onClick={() => onNewAgentTab?.(row)}
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-ds-ink hover:bg-ds-hover"
             >
-              <Bot className="h-4 w-4 shrink-0" strokeWidth={1.8} />
+              <AgentIcon harnessId={row.definition.id} size={16} />
               <span className="min-w-0">
                 <span className="block truncate">{row.definition.displayName}</span>
                 <span className="block truncate text-[10px] text-ds-muted">

@@ -1,3 +1,4 @@
+import { restoreThreadWorkspaceOwner } from './restore-thread-workspace-owner'
 import { loadEarlierThreadHistory } from './chat-store-thread-history'
 import { codexReferenceRevision } from '../history-reference/codex-reference-state'
 import type { ChatBlock, ReviewTarget } from '../agent/types'
@@ -14,7 +15,6 @@ import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error
 import { describeRuntimeError, formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
 import {
   deriveThreadTitleFromPrompt,
-  getDefaultThreadTitle,
   shouldAutoTitleThread
 } from '../lib/thread-title'
 import { filterThreadsForSidebar } from '../lib/thread-sidebar-visibility'
@@ -39,7 +39,6 @@ import {
 import {
   buildClawRuntimePrompt,
   buildCodeRuntimePrompt,
-  getActiveAgentApiKey,
   getKunRuntimeSettings
 } from '@shared/app-settings'
 import type {
@@ -107,18 +106,14 @@ import {
 } from './chat-store-schedulers'
 import {
   armBusyWatchdog,
-  buildFollowupMessageFromUserInput,
   buildThreadEventSink,
   clearWatchedCompletionNotification,
   finalizeTurnTiming,
   flushLiveBlocks,
-  forkedMessageCount,
-  forkedTurnCount,
   isCodeSidebarThread,
   isCodeThread,
   latestThread,
   looksLikeActiveTurnError,
-  readActiveWriteWorkspace,
   readWriteWorkspaceRoots,
   rememberPendingClawFeishuMirror,
   runtimeErrorDetail,
@@ -314,6 +309,7 @@ export function createThreadSelectionActions(
       })
       subscribeThreadEventsWithRecovery(p, id, cached.lastSeq, sink, ac.signal, get)
       if (cached.busy) armBusyWatchdog(set, get)
+      if (!(await restoreThreadWorkspaceOwner(p, id, set, get, selectionStillCurrent))) return
       if (queuedMessages.length > 0) void get().drainQueuedMessages()
       if (!cached.busy) {
         void syncThreadAdditionalWorkspaces({
@@ -525,6 +521,7 @@ export function createThreadSelectionActions(
       if (busy) {
         armBusyWatchdog(set, get)
       }
+      if (!(await restoreThreadWorkspaceOwner(p, id, set, get, selectionStillCurrent))) return
       if (queuedMessages.length > 0) void get().drainQueuedMessages()
     } catch (e) {
       if (hydrationAbort.signal.aborted) return

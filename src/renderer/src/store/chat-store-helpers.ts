@@ -318,7 +318,7 @@ export function rememberThreadComposerHarness(
   map[thread] = {
     ...existing,
     harnessId: harnessId.trim(),
-    ...(credentialMode?.trim() ? { credentialMode: credentialMode.trim() } : {})
+    credentialMode: credentialMode?.trim() ?? ''
   }
   saveThreadComposerSelectionMap(map)
 }

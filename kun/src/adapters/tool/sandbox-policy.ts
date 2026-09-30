@@ -305,14 +305,13 @@ export function pathAllowedByScopes(
   const root = workspaceRoot(workspace)
   const target = isAbsolute(absolutePath) ? resolve(absolutePath) : resolve(root, absolutePath)
   if (!isPathInsideOrEqual(root, target)) return false
-  const relativePath = target === root
-    ? '.'
-    : target.slice(root.length + 1).replaceAll('\\', '/')
   return scopes.some((scope) => {
-    const normalized = scope.trim().replaceAll('\\', '/').replace(/^\.\/+/, '').replace(/\/+$/, '') || '.'
-    return normalized === '.' ||
-      relativePath === normalized ||
-      relativePath.startsWith(`${normalized}/`)
+    const normalized = scope.trim().replaceAll('\\', '/') || '.'
+    const boundary = isAbsolute(normalized) ? resolve(normalized) : resolve(root, normalized)
+    // Host-created workers freeze absolute workspace roots. Accept the same
+    // scope in either spelling, while never authorizing a root outside the
+    // worker workspace (including an absolute ancestor or a ../ escape).
+    return isPathInsideOrEqual(root, boundary) && isPathInsideOrEqual(boundary, target)
   })
 }
 

@@ -227,7 +227,7 @@ export interface SdkRuntimeDeps {
   /** Lazy-load the real `@anthropic-ai/claude-agent-sdk`. */
   loadSdk(): Promise<SdkApi>
   /** Base process env to scope for the Claude Code subprocess. */
-  baseEnv(): Record<string, string | undefined>
+  baseEnv(options?: { gateway?: boolean }): Record<string, string | undefined>
   /** The stable kun system prompt (persona) appended to the claude_code preset. */
   kunSystemPrompt(): string
   /** Monotonic id allocator for assistant items. */

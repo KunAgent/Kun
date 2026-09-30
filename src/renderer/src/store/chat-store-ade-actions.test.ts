@@ -91,8 +91,10 @@ function buildHarness(): {
     state = { ...state, ...update }
   }
   const get: ChatStoreGet = () => state
+  const actions = createNavigationActions({ set, get, sseAbortRef: { current: null } })
+  state.openCode = actions.openCode
   return {
-    actions: createNavigationActions({ set, get, sseAbortRef: { current: null } }),
+    actions,
     get state() {
       return state
     },
@@ -155,7 +157,7 @@ describe('ADE mode navigation actions', () => {
     expect(harness.state.lastAdeThreadId).toBeNull()
   })
 
-  it('openAde restores the remembered ADE thread and routes to ade', async () => {
+  it('opens a remembered legacy ADE thread in Code', async () => {
     const harness = buildHarness()
     harness.state.adeThreads = [
       thread({ id: 'ade_old', workspace: '/repo', workspaceMode: 'ade' }),
@@ -165,11 +167,11 @@ describe('ADE mode navigation actions', () => {
 
     await harness.actions.openAde()
 
-    expect(harness.state.route).toBe('ade')
+    expect(harness.state.route).toBe('chat')
     expect(harness.selectThread).toHaveBeenCalledWith('ade_old', expect.anything())
   })
 
-  it('openAde falls back to the latest ADE thread when nothing is remembered', async () => {
+  it('opens the latest legacy ADE thread in Code when no legacy selection is remembered', async () => {
     const harness = buildHarness()
     harness.state.adeThreads = [
       thread({ id: 'ade_old', workspace: '/repo', workspaceMode: 'ade' }),
@@ -184,7 +186,7 @@ describe('ADE mode navigation actions', () => {
 
     await harness.actions.openAde()
 
-    expect(harness.state.route).toBe('ade')
+    expect(harness.state.route).toBe('chat')
     expect(harness.selectThread).toHaveBeenCalledWith('ade_new', expect.anything())
   })
 
@@ -198,14 +200,14 @@ describe('ADE mode navigation actions', () => {
 
     await harness.actions.openAde()
 
-    expect(harness.state.route).toBe('ade')
+    expect(harness.state.route).toBe('chat')
     expect(harness.selectThread).not.toHaveBeenCalled()
     expect(harness.state.activeThreadId).toBe('ade_a')
     expect(harness.state.adeDraftOpen).toBe(false)
     expect(harness.state.adeDraftRevision).toBe(1)
   })
 
-  it('starts an ADE draft without creating or selecting a thread', () => {
+  it('projects a legacy ADE draft into Code without creating a thread', () => {
     const harness = buildHarness()
     harness.state.route = 'ade'
     harness.state.activeThreadId = 'ade_a'
@@ -214,7 +216,7 @@ describe('ADE mode navigation actions', () => {
 
     harness.actions.startAdeDraft()
 
-    expect(harness.state.route).toBe('ade')
+    expect(harness.state.route).toBe('chat')
     expect(harness.state.adeDraftOpen).toBe(true)
     expect(harness.state.adeDraftRevision).toBe(1)
     expect(harness.state.activeThreadId).toBeNull()
@@ -257,12 +259,12 @@ describe('ADE mode navigation actions', () => {
 
     await harness.actions.openAde()
 
-    expect(harness.state.route).toBe('ade')
+    expect(harness.state.route).toBe('chat')
     expect(harness.state.adeDraftOpen).toBe(true)
     expect(harness.selectThread).not.toHaveBeenCalled()
   })
 
-  it('openAde clears the selection when no ADE thread exists', async () => {
+  it('openAde preserves the current Code thread when no legacy selection exists', async () => {
     const harness = buildHarness()
     harness.state.activeThreadId = 'code_a'
     harness.state.threads = [thread({ id: 'code_a', workspace: '/repo' })]
@@ -270,9 +272,9 @@ describe('ADE mode navigation actions', () => {
 
     await harness.actions.openAde()
 
-    expect(harness.state.route).toBe('ade')
-    expect(harness.state.activeThreadId).toBeNull()
-    expect(harness.state.blocks).toEqual([])
+    expect(harness.state.route).toBe('chat')
+    expect(harness.state.activeThreadId).toBe('code_a')
+    expect(harness.state.blocks).toEqual([{ kind: 'user', id: 'u1', text: 'hi' }])
   })
 
   it('openCode ignores ADE memory and restores only the remembered Code thread', async () => {
@@ -290,7 +292,7 @@ describe('ADE mode navigation actions', () => {
     expect(harness.selectThread).toHaveBeenCalledWith('code_a', expect.anything())
   })
 
-  it('refreshThreads scopes the Code inventory to workspaceMode code', async () => {
+  it('refreshThreads scopes the Code inventory to the unified workbench', async () => {
     const provider = {
       listThreads: vi.fn(async () => [
         thread({ id: 'code_a', workspace: '/repo' })
@@ -304,7 +306,7 @@ describe('ADE mode navigation actions', () => {
     await harness.actions.refreshThreads()
 
     expect(provider.listThreads).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceMode: 'code' })
+      expect.objectContaining({ workbenchScope: 'code' })
     )
     expect(harness.state.threads.map((item) => item.id)).toEqual(['code_a'])
   })

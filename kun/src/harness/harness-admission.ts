@@ -4,6 +4,7 @@ import type {
   HarnessCapabilityKey
 } from '../contracts/harness-capabilities.js'
 import type { HarnessUsage } from './usage-for-turn.js'
+import { nativeAgentNetworkStatus } from './native-agent-network.js'
 
 /**
  * Admission matrix (02 §5.2): what each usage requires from a harness.
@@ -80,11 +81,17 @@ export function checkHarnessAdmission(input: {
   harness: HarnessDefinition
   effective: HarnessCapabilities
   status: HarnessStatus
+  credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
   workspace: { isolated: boolean }
   requestedPermissionMode?: string
   unattended: boolean
   allowUnattendedFullAccess: boolean
 }): AdmissionResult {
+  if ((input.credentialMode ?? input.harness.credentialModes[0]) === 'native-login' &&
+    nativeAgentNetworkStatus(input.harness).networkSource === 'explicit-required') {
+    return { ok: false, code: 'harness_not_ready', missing: [],
+      message: 'Native Agent system proxy rules require explicit proxy environment configuration. Open Agent connection settings and retry.' }
+  }
   if (
     input.harness.transport !== 'native-loop' &&
     (input.status.installed !== 'yes' || input.status.login === 'signed-out')

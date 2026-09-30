@@ -118,7 +118,7 @@
   "toolPermissionFullAccessDesc": "无需 Kun 审批即可访问任意本地文件、执行主机命令并使用可联网工具。",
   "permissionsBehaviorHint": "请求审批：由你决定需审批操作。替我审批：由所选审批模型在隔离审查调用中决定，相同风险边界且异常时默认拒绝。完全访问：绕过 Kun 审批并授予不受限的本地执行权限。",
   "approvalReviewModelTitle": "自动审批模型",
-  "approvalReviewModelDesc": "控制在“替我审批”模式下由哪个供应商和模型审查需审批操作。固定选择需原生确认，仅对新发起的审查生效。",
+  "approvalReviewModelDesc": "控制在“替我审批”模式下由哪个供应商和模型审查需审批操作。固定选择需确认，仅对新发起的审查生效。",
   "approvalReviewInherit": "跟随当前回合",
   "approvalReviewFixed": "使用固定模型",
   "approvalReviewProvider": "审批供应商",

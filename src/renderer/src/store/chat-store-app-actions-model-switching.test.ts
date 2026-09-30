@@ -135,6 +135,52 @@ describe('chat-store app actions composer model loading', () => {
     vi.unstubAllGlobals()
   })
 
+  it('clears Kun plan and Graph intent when choosing an external Agent without rewriting queued turns', () => {
+    const harness = buildHarness({ ok: true, modelIds: [] })
+    harness.state.composerMode = 'plan'
+    harness.state.composerOrchestration = 'graph'
+    const queued = [{ id: 'q', text: 'Design next', harnessId: 'kun', agentSurface: 'design' as const }]
+    harness.state.queuedMessages = queued
+    harness.actions.setComposerHarness('codex', 'native-login')
+    expect(harness.state).toMatchObject({ composerHarnessId: 'codex', composerMode: 'agent', composerOrchestration: 'direct' })
+    expect(harness.state.queuedMessages).toBe(queued)
+    expect(harness.state.queuedMessages[0].harnessId).toBe('kun')
+  })
+
+  it.each(['thread', 'provider'] as const)('clamps restored Kun execution modes for an unpinned %s Agent', (source) => {
+    const { state, actions } = buildHarness({ ok: true, modelIds: [] })
+    if (source === 'thread') {
+      state.activeThreadId = 'thread-agent'
+      state.threads = [{ id: 'thread-agent', harnessId: 'codex' }] as ChatState['threads']
+    } else {
+      state.composerProviderId = 'subscription'
+      state.composerModelGroups = [{ providerId: 'subscription', label: 'Native', kind: 'agent-sdk', modelIds: [] }]
+    }
+    actions.setComposerMode('auto')
+    actions.setComposerOrchestration('graph')
+    expect(state.composerMode).toBe('agent')
+    expect(state.composerOrchestration).toBe('direct')
+    actions.setComposerHarness('kun', 'provider')
+    actions.setComposerMode('plan')
+    actions.setComposerOrchestration('graph')
+    expect(state.composerMode).toBe('plan')
+    expect(state.composerOrchestration).toBe('graph')
+  })
+
+  it('keeps native model picks out of Kun defaults and honors an explicitly cleared provider', () => {
+    const harness = buildHarness({ ok: true, modelIds: [] })
+    harness.state.composerHarnessId = 'codex'
+    harness.state.composerCredentialMode = 'native-login'
+    harness.state.composerModelGroups = [{ providerId: 'http-provider', label: 'HTTP', modelIds: ['shared-model'] }]
+    harness.actions.setComposerModel('shared-model', '')
+    expect(harness.state.composerProviderId).toBe('')
+    expect(window.kunGui.saveSettingsSilent).not.toHaveBeenCalled()
+    expect(localStorage.getItem(COMPOSER_MODEL_STORAGE_KEY)).toBeNull()
+    harness.state.composerHarnessId = 'kun'
+    harness.actions.setComposerModel('shared-model')
+    expect(harness.state.composerProviderId).toBe('http-provider')
+  })
+
   it('allows switching a chat with image history from vision to text-only', () => {
     const { actions, state } = buildHarness({
       ok: true,

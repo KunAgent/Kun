@@ -141,7 +141,7 @@ describe('AcpConnection.initialize', () => {
     expect(init.protocolVersion).toBe(1)
     expect(init.agentCapabilities?.loadSession).toBe(true)
     expect(conn.initResult?.agentInfo?.name).toBe('fake-acp-agent')
-    expect(conn.requiresAuthentication).toBe(false)
+    expect(init.authMethods).toEqual([])
     const initRequests = requests('initialize')
     expect(initRequests).toHaveLength(1)
     expect(initRequests[0].params?.clientInfo).toMatchObject({ name: 'kun' })
@@ -164,6 +164,41 @@ describe('AcpConnection.initialize', () => {
 })
 
 describe('AcpSessionManager', () => {
+  test('selects a legacy model on create and resume without bypassing Devin permissions', async () => {
+    const { conn, requests } = await startFixture('legacy-models.json')
+    await conn.initialize()
+    const { manager } = makeManager()
+    const ctx = makeCtx({ harnessId: 'devin', model: 'legacy-alternative', permissionModeId: 'normal' })
+    const first = await manager.ensureSession(ctx, conn)
+    expect(first.models?.currentModelId).toBe('legacy-alternative')
+    await manager.commit(first, { committedItems: [userItem('turn_1', 'hi')], lastCommittedTurnId: 'turn_1' })
+    first.detach()
+    const resumed = await manager.ensureSession({ ...ctx, turnId: 'turn_2', items: [userItem('turn_1', 'hi')] }, conn)
+    expect(resumed.replayedHistory).toBe(false)
+    expect(resumed.models?.currentModelId).toBe('legacy-alternative')
+    expect(requests('session/set_model').map((entry) => entry.params)).toEqual([
+      { sessionId: first.sessionId, modelId: 'legacy-alternative' },
+      { sessionId: first.sessionId, modelId: 'legacy-alternative' }
+    ])
+    expect(requests('session/set_mode').map((entry) => entry.params?.modeId)).toEqual(['normal', 'normal'])
+    expect(requests('session/set_config_option')).toEqual([])
+    resumed.detach()
+    await conn.close()
+  })
+
+  test('rejects an unadvertised legacy model before a prompt or binding is accepted', async () => {
+    const { conn, requests } = await startFixture('legacy-models.json')
+    await conn.initialize()
+    const { manager, coordinator } = makeManager()
+    await expect(manager.ensureSession(makeCtx({ model: 'missing-model' }), conn))
+      .rejects.toMatchObject({ code: 'agent_error', message: expect.stringContaining('did not advertise') })
+    expect(requests('session/set_model')).toEqual([])
+    expect(requests('session/prompt')).toEqual([])
+    expect((await coordinator.store.load('thread_1'))?.nativeSessionId).toBeUndefined()
+    expect(conn.sessionThreadIds()).toEqual([])
+    await conn.close()
+  })
+
   test('session/new applies matching config options exactly', async () => {
     const { conn, journal } = await startFixture('basic-chat.json')
     await conn.initialize()
@@ -184,15 +219,14 @@ describe('AcpSessionManager', () => {
   test('a model value absent from the option list is never guessed', async () => {
     const { conn, journal } = await startFixture('basic-chat.json')
     await conn.initialize()
-    const { manager, debug } = makeManager()
-    await manager.ensureSession(
+    const { manager } = makeManager()
+    await expect(manager.ensureSession(
       makeCtx({ model: 'model-not-offered' }),
       conn
-    )
+    )).rejects.toMatchObject({ code: 'agent_error', message: expect.stringContaining('does not offer') })
     expect(
       journal().filter((entry) => entry.frame?.kind === 'configSet')
     ).toHaveLength(0)
-    expect(debug.some((line) => line.includes('no exact value'))).toBe(true)
     await conn.close()
   })
 

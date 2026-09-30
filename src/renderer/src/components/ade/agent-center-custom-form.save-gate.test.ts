@@ -110,7 +110,7 @@ describe('AgentCenterCustomForm test-before-save gating (P4-12)', () => {
         displayName: 'My Agent',
         command: '/bin/my-agent',
         id: 'custom-my-agent'
-      })
+      }), { signal: expect.any(AbortSignal) }
     )
     expect(buttonByText(root, 'adeSettings.acpFormAdd').props.disabled).toBe(false)
   })
@@ -138,6 +138,36 @@ describe('AgentCenterCustomForm test-before-save gating (P4-12)', () => {
         })
       })
     )
+  })
+
+  it('preserves an imported stable ID through probe and save', async () => {
+    const { root, updateKun } = render()
+    mocks.probeHarnessDefinition.mockResolvedValue(okProbe)
+    const fileInput = root.root.findAllByType('input' as never)
+      .find((input) => input.props.type === 'file')!
+    await act(async () => fileInput.props.onChange({ target: {
+      files: [{ text: async () => JSON.stringify({
+        id: 'custom-stable-id', displayName: 'Renamed Agent', command: '/bin/stable'
+      }) }],
+      value: 'custom.json'
+    } }))
+    await act(async () => buttonByText(root, 'adeSettings.acpFormTest').props.onClick())
+    expect(mocks.probeHarnessDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'custom-stable-id' }),
+      { signal: expect.any(AbortSignal) }
+    )
+    await act(async () => buttonByText(root, 'adeSettings.acpFormAdd').props.onClick())
+    expect(updateKun.mock.calls[0]?.[0].harnesses.custom[0].id).toBe('custom-stable-id')
+  })
+
+  it('submits a probed definition only once across rapid duplicate clicks', async () => {
+    const { root, updateKun } = render()
+    mocks.probeHarnessDefinition.mockResolvedValue(okProbe)
+    await fillBasics(root)
+    await act(async () => buttonByText(root, 'adeSettings.acpFormTest').props.onClick())
+    const save = buttonByText(root, 'adeSettings.acpFormAdd')
+    await act(async () => { save.props.onClick(); save.props.onClick() })
+    expect(updateKun).toHaveBeenCalledTimes(1)
   })
 
   it('blocks save on a failed probe until save-anyway is chosen', async () => {
@@ -177,6 +207,21 @@ describe('AgentCenterCustomForm test-before-save gating (P4-12)', () => {
     expect(buttonByText(root, 'adeSettings.acpFormAdd').props.disabled).toBe(true)
   })
 
+  it('aborts an in-flight definition probe when its command changes', async () => {
+    let resolveProbe!: (result: typeof okProbe) => void
+    mocks.probeHarnessDefinition.mockImplementation(() => new Promise((resolve) => { resolveProbe = resolve }))
+    const { root } = render()
+    await fillBasics(root)
+    await act(async () => buttonByText(root, 'adeSettings.acpFormTest').props.onClick())
+    const calls = mocks.probeHarnessDefinition.mock.calls as unknown as Array<[unknown, { signal: AbortSignal }]>
+    const signal = calls[0]![1].signal
+    expect(signal.aborted).toBe(false)
+    await act(async () => inputByPlaceholder(root, 'adeSettings.acpFormCommand').props.onChange({ target: { value: '/bin/changed-agent' } }))
+    expect(signal.aborted).toBe(true)
+    await act(async () => resolveProbe(okProbe))
+    expect(buttonByText(root, 'adeSettings.acpFormAdd').props.disabled).toBe(true)
+  })
+
   it('binds a secret into a secretEnv ref and never stores the raw value', async () => {
     const { root, updateKun } = render()
     mocks.probeHarnessDefinition.mockResolvedValue(okProbe)
@@ -200,7 +245,7 @@ describe('AgentCenterCustomForm test-before-save gating (P4-12)', () => {
     expect(mocks.probeHarnessDefinition).toHaveBeenCalledWith(
       expect.objectContaining({
         secretEnv: [{ name: 'MY_KEY', secretRef: 'cred_new' }]
-      })
+      }), { signal: expect.any(AbortSignal) }
     )
     // The probe request — and everything on the wire — carries the ref only.
     const payload = mocks.probeHarnessDefinition.mock.calls[0]?.[0]

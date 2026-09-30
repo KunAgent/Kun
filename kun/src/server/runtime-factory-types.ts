@@ -32,6 +32,7 @@ import type {
   ToolOutputLimitsConfig
 } from './runtime-factory-dependencies.js'
 import type { AdeConfig, HarnessesConfig } from '../config/kun-config-application.js'
+import type { NativeAgentNetworkSnapshot } from '../contracts/native-agent-network.js'
 
 export type KunServeRuntimeOptions = {
   host: string
@@ -76,6 +77,7 @@ export type KunServeRuntimeOptions = {
   quality?: QualityConfig
   /** `harnesses` config section (per-harness enable/path/custom entries). */
   harnesses?: HarnessesConfig
+  nativeAgentNetwork?: NativeAgentNetworkSnapshot
   /** `ade` config section (runtime-side ADE switches). */
   ade?: AdeConfig
   fastContext?: FastContextConfig

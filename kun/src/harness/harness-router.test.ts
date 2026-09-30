@@ -5,6 +5,7 @@ import type { ProviderKindsView } from './resolve-turn-harness.js'
 import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
+import { agentSdkCapabilities } from '../runtime/agent-sdk/agent-sdk-runtime-stream.js'
 
 const thread = (over: Partial<ThreadRecord> = {}): ThreadRecord =>
   ({ id: 't1', harnessId: undefined, model: 'kun-model', ...over }) as ThreadRecord
@@ -36,6 +37,42 @@ const makeRouter = (over: Partial<ConstructorParameters<typeof HarnessRouter>[0]
   })
 
 describe('HarnessRouter', () => {
+  it('blocks Kun canvas and Graph lead intent even when the external engine has Kun tools', () => {
+    const router = makeRouter({ runtimes: () => ({
+      'agent-sdk': stubRuntime({ capabilities: () => agentSdkCapabilities() })
+    }) })
+    for (const intent of [{ guiDesignCanvas: true }, { guiDesignMode: true }, { agentSurface: 'design' },
+      { orchestration: 'graph' },
+      { orchestration: 'graph', graphPlanningLifecycle: {} }]) {
+      const result = router.resolve(thread(), turn({ harnessId: 'claude-code', ...intent } as Partial<Turn>))
+      expect(result).toMatchObject({ ok: false, error: { code: 'route_unsupported' } })
+    }
+  })
+
+  it('retains ordinary external Agent and Graph worker capability routing', () => {
+    const router = makeRouter({ runtimes: () => ({
+      'agent-sdk': stubRuntime({ capabilities: () => agentSdkCapabilities() })
+    }) })
+    expect(router.resolve(thread(), turn({ harnessId: 'claude-code', agentSurface: 'code' })).ok).toBe(true)
+    expect(router.resolve(thread({ relation: 'side', parentThreadId: 'parent' }),
+      turn({ harnessId: 'claude-code', orchestration: 'graph' })).ok).toBe(true)
+  })
+
+  it('uses the frozen turn route for a Kun Design turn after the thread changes Agents', () => {
+    expect(makeRouter().resolve(thread({ harnessId: 'codex' }), turn({
+      harnessId: 'kun', agentSurface: 'design', guiDesignCanvas: true
+    })).ok).toBe(true)
+  })
+
+  it('checks inherited legacy Design and plan modes, while honoring explicit frozen agent mode', () => {
+    const router = makeRouter({ runtimes: () => ({ 'agent-sdk': stubRuntime() }) })
+    for (const inherited of [{ agentSurface: 'design' as const }, { mode: 'plan' as const }]) {
+      expect(router.resolve(thread(inherited), turn({ harnessId: 'claude-code' })))
+        .toMatchObject({ ok: false, error: { code: 'route_unsupported' } })
+    }
+    expect(router.resolve(thread({ mode: 'plan' }), turn({ harnessId: 'claude-code', mode: 'agent' })).ok).toBe(true)
+  })
+
   it('resolves the native loop without a delegated runtime', () => {
     const router = makeRouter()
     const result = router.resolve(thread(), turn({ providerId: 'default' }))

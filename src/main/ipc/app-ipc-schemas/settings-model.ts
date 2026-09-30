@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { AdeProjectDefaultsMapSchema } from '../../../shared/ade-project-defaults'
 import {
   APP_LOCALES,
   IMAGE_GENERATION_QUALITIES,
@@ -629,6 +630,7 @@ export const kunRuntimePatchSchema = z.object({
   }).strict().optional(),
   ade: z.object({
     enabled: z.boolean().optional(),
+    projectDefaults: AdeProjectDefaultsMapSchema.optional(),
     harnessRouter: z.boolean().optional(),
     deterministicHandoff: z.boolean().optional(),
     managerModel: z.object({

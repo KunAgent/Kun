@@ -1,7 +1,6 @@
 import {
   mergeComposerPickList,
   readStoredComposerFastMode,
-  readStoredComposerIsolation,
   readStoredComposerPersonaId,
   readStoredComposerMode
 } from './chat-store-helpers'
@@ -102,9 +101,14 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     graphEnabled: false,
     composerModel: '',
     composerProviderId: '',
+    composerProjectDefaults: null,
+    composerRouteExplicitWorkspaceRoot: '',
+    composerProjectCollaborationExplicitWorkspaceRoot: '',
     composerHarnessId: '',
+    composerCollaborationEnabled: false,
     composerCredentialMode: '',
-    composerIsolation: readStoredComposerIsolation(),
+    composerIsolation: 'local' as const,
+    composerIsolationExplicitWorkspaceRoot: '',
     composerWorktreeStartFrom: undefined,
     composerReasoningEffort: 'max' as const,
     composerFastMode: readStoredComposerFastMode(),

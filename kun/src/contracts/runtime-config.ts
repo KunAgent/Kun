@@ -15,6 +15,7 @@ import {
 } from '../config/kun-config.js'
 import { KunCapabilitiesConfig } from './capabilities.js'
 import { HooksConfigSchema } from '../hooks/hook-config.js'
+import { NativeAgentNetworkSnapshot } from './native-agent-network.js'
 
 const RuntimeConfigApplyServeConfig = KunServeConfigSchema.omit({
   host: true,
@@ -66,6 +67,7 @@ export const RuntimeConfigApplyRequest = z
     runtime: RuntimeTuningConfigSchema.optional(),
     graph: GraphRuntimeConfigSchema.optional(),
     harnesses: HarnessesConfigSchema.optional(),
+    nativeAgentNetwork: NativeAgentNetworkSnapshot.optional(),
     ade: AdeConfigSchema.optional(),
     roles: RolesConfigSchema.optional(),
     fastContext: FastContextConfigSchema.optional(),

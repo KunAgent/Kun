@@ -113,7 +113,7 @@
   "approvalExpired": "समाप्त हो गया क्योंकि बारी समाप्त हो गई",
   "approvalSubmitting": "निर्णय प्रस्तुत किया जा रहा है...",
   "approvalFailed": "अनुरोध विफल",
-  "approvalNativeConfirmationCancelled": "मूल पुष्टि रद्द कर दी गई। कृपया पुनः प्रयास करें।",
+  "approvalNativeConfirmationCancelled": "पुष्टि रद्द कर दी गई। यह कार्रवाई अभी भी आपके निर्णय की प्रतीक्षा कर रही है।",
   "approvalReviewTitle": "Kun approval review",
   "approvalReviewInProgress": "Kun is reviewing this action…",
   "approvalReviewApproved": "Approved by Kun",

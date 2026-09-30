@@ -158,6 +158,41 @@ describe('ReviewPrimaryAction', () => {
     expect(provider.getTaskWorkspaceIntegratePreview).toHaveBeenCalledWith('tws_1')
   })
 
+  it('submits the preview token that the user reviewed', async () => {
+    seed(preview({ previewToken: 'reviewed-content-token' }))
+    const renderer = await renderAction()
+    const merge = renderer.root.findAllByType('button' as never).find((b) => b.props['data-primary'])
+    await act(async () => merge!.props.onClick())
+    expect(provider.integrateTaskWorkspace).toHaveBeenCalledWith('tws_1', 'merge-branch', 'reviewed-content-token')
+  })
+
+  it('disables integration when the visible diff no longer matches its preview', async () => {
+    const revision = {
+      version: 1 as const, target: { kind: 'task-workspace' as const, workspaceId: 'tws_1' },
+      contentHash: 'before', completeness: 'complete' as const, fileCount: 1, capturedAt: '2026-09-30'
+    }
+    seed(preview({
+      sourceRevision: { ...revision, target: { kind: 'source-checkout', workspaceId: 'tws_1' } },
+      targetRevision: revision, previewToken: 'old-token'
+    }))
+    useReviewStore.setState((state) => ({ workspaces: {
+      ...state.workspaces, tws_1: { ...state.workspaces.tws_1, revision: { ...revision, contentHash: 'after' } }
+    } }))
+    const renderer = await renderAction()
+    expect(renderer.root.findAllByType('button' as never).find((b) => b.props['data-primary'])?.props.disabled).toBe(true)
+  })
+
+  it('does not downgrade a new runtime incomplete fingerprint to tokenless integration', async () => {
+    seed(preview({ targetRevision: {
+      version: 1, target: { kind: 'task-workspace', workspaceId: 'tws_1' },
+      completeness: 'incomplete', reason: 'file_too_large', fileCount: 1, capturedAt: '2026-09-30'
+    } }))
+    const renderer = await renderAction()
+    const merge = renderer.root.findAllByType('button' as never).find((b) => b.props['data-primary'])!
+    expect(merge.props.disabled).toBe(true)
+    expect(provider.integrateTaskWorkspace).not.toHaveBeenCalled()
+  })
+
   it('fetches the discard damage preview when the confirm opens', async () => {
     seed(preview())
     const renderer = await renderAction()

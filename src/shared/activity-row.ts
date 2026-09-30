@@ -30,6 +30,8 @@ export type ActivityRow = {
   waitingReason?: 'approval' | 'user_input' | 'question' | 'terminal_prompt'
   mainState: ActivityRollupState
   lastOutcome?: 'completed' | 'failed' | 'cancelled'
+  reviewRequired?: boolean
+  reviewStatus?: 'pending' | 'needs_changes' | 'passed' | 'waived' | 'rejected' | 'stale' | 'unknown'
   children: { working: number; waiting: number; done: number; failed: number }
   phase?: 'investigating' | 'implementing' | 'verifying' | 'blocked' | 'compacting'
   progressNote?: string

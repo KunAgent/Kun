@@ -224,6 +224,10 @@ export type ToolHostContext = {
    * 'code'.
    */
   workspaceMode?: 'code' | 'ade'
+  /** Thread policy snapshot; absent legacy ADE retains manager admission. */
+  collaborationEnabled?: boolean
+  /** Allows read/stop/answer controls after new delegation is disabled. */
+  collaborationEverEnabled?: boolean
   /**
    * Execution-unit classification for the owning thread. P0 has no worker
    * execution unit yet, so ADE workers leave this unset until task
@@ -260,14 +264,14 @@ export type ToolHostContext = {
   allowedToolNames?: readonly string[]
   /** Optional skill-id allow-list. When set, other skills are hidden and cannot be loaded. */
   allowedSkillIds?: readonly string[]
-  /** Workspace-relative read scopes captured at a delegated child boundary. */
+  /** Relative paths or host-minted absolute paths within the delegated workspace. */
   allowedReadPaths?: readonly string[]
   /**
    * When true and no delegated read scopes are set, file-read tools may resolve
    * paths outside the thread workspace. Writes and commands stay on sandboxMode.
    */
   allowHostReads?: boolean
-  /** Workspace-relative write scopes captured at a delegated child boundary. */
+  /** Relative paths or host-minted absolute paths within the delegated workspace. */
   allowedWritePaths?: readonly string[]
   /** Immutable artifact capability set captured at a delegated child boundary. */
   allowedArtifactIds?: readonly string[]

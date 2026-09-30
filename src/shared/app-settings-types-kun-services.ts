@@ -348,6 +348,8 @@ export type KunHarnessSettingsPatchV1 = {
 /** Patch shape for agents.kun.ade; nested objects merge field-wise. */
 export type KunAdeSettingsPatchV1 = {
   enabled?: boolean
+  /** Dedicated project mutation API writes this map; generic IPC does not. */
+  projectDefaults?: KunRuntimeSettingsV1['ade']['projectDefaults']
   harnessRouter?: boolean
   deterministicHandoff?: boolean
   managerModel?: { providerId?: string; model?: string }

@@ -8,6 +8,9 @@
 import { tmpdir } from 'node:os'
 import type { SdkApi } from '../runtime/agent-sdk/sdk-protocol.js'
 import type { HarnessDefinition, HarnessId } from '../contracts/harness.js'
+import { sdkProcessBaseEnv } from '../runtime/agent-sdk/sdk-process-environment.js'
+import { buildScopedEnv } from '../runtime/agent-sdk/sdk-options-builder.js'
+import { nativeAgentNetworkEnv, nativeAgentNetworkStatus } from './native-agent-network.js'
 
 export const AGENT_SDK_MODEL_PROBE_CACHE_MS = 10 * 60 * 1_000
 const AGENT_SDK_PROBE_TIMEOUT_MS = 10_000
@@ -89,6 +92,7 @@ export class AgentSdkModelProbe {
       prompt: emptyProbePrompt(),
       options: {
         cwd: tmpdir(),
+        env: buildScopedEnv({ ...sdkProcessBaseEnv(), ...nativeAgentNetworkEnv(definition) }),
         ...(this.deps.binaryPath?.(definition.id)
           ? { pathToClaudeCodeExecutable: this.deps.binaryPath(definition.id) }
           : {})
@@ -118,7 +122,7 @@ export class AgentSdkModelProbe {
   }
 
   private cacheKey(definition: HarnessDefinition): string {
-    return `${definition.id}:${this.deps.binaryPath?.(definition.id) ?? ''}`
+    return `${definition.id}:${this.deps.binaryPath?.(definition.id) ?? ''}:${nativeAgentNetworkStatus(definition).networkFingerprint}`
   }
 
   private nowMs(): number {

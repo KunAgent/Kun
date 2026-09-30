@@ -1,23 +1,30 @@
 import type { ToolHostContext } from '../ports/tool-host.js'
 
-/**
- * Manager (`worker_*`) tools exist only inside ADE mode: the owning thread's
- * `workspaceMode` must be 'ade', the turn must run on the native Kun loop
- * (external harnesses never manage workers), the thread must not itself be a
- * worker execution unit (no nested teams — workers use `delegate_task`), and
- * room agents are excluded (Rooms keep their own member protocol).
- *
- * This predicate is the single gate consulted by the manager tool provider
- * (P1) so the rule stays host-enforced and testable instead of prompt-level.
- */
+type ManagerToolAdmissionContext = Pick<
+  ToolHostContext,
+  'workspaceMode' | 'collaborationEnabled' | 'collaborationEverEnabled' |
+  'harnessId' | 'executionUnitKind' | 'roomAgent' | 'agentSurface' |
+  'clientSurface' | 'imContext'
+>
+
+/** Shared discovery and execution gate for existing-team controls. */
 export function shouldAdvertiseManagerTools(
-  context: Pick<
-    ToolHostContext,
-    'workspaceMode' | 'harnessId' | 'executionUnitKind' | 'roomAgent'
-  >
+  context: ManagerToolAdmissionContext
 ): boolean {
-  return context.workspaceMode === 'ade' &&
+  const collaborationAccess = context.collaborationEnabled === true ||
+    context.collaborationEverEnabled === true ||
+    (context.collaborationEnabled === undefined && context.workspaceMode === 'ade')
+  return collaborationAccess &&
     (context.harnessId ?? 'kun') === 'kun' &&
     context.executionUnitKind !== 'worker' &&
-    context.roomAgent !== true
+    context.roomAgent !== true &&
+    (context.agentSurface ?? 'code') === 'code' &&
+    context.clientSurface !== 'im' &&
+    context.imContext !== true
+}
+
+/** New workers and dispatches require the current task policy to allow them. */
+export function shouldAdvertiseNewManagerWork(context: ManagerToolAdmissionContext): boolean {
+  return shouldAdvertiseManagerTools(context) &&
+    (context.collaborationEnabled ?? context.workspaceMode === 'ade')
 }

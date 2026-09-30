@@ -15,6 +15,7 @@ import type {
   ApprovalReviewModelSelection
 } from '../../kun/src/contracts/approval-review-config.js'
 import type { KunGitHubMcpSettingsV1 } from './github-mcp-authorization'
+import type { AdeProjectDefaults } from './ade-project-defaults'
 
 import {
   KunContextCompactionSettingsV1,
@@ -434,6 +435,8 @@ export type KunHarnessSettingsV1 = {
 export type KunAdeSettingsV1 = {
   /** Master switch; shows the ADE mode entry. Default off (Lab). */
   enabled: boolean
+  /** Host-local defaults keyed by canonical source project path. */
+  projectDefaults: Record<string, AdeProjectDefaults>
   /** New harness-aware turn routing; false restores provider inference. */
   harnessRouter: boolean
   /** Deterministic handoff briefs; false restores the raw transcript tail. */

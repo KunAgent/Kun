@@ -26,6 +26,30 @@ function registerThread(store: ActivityStore, unitId: string, extra: Partial<Reg
   })
 }
 
+describe('activity review facts', () => {
+  it('does not mark an ordinary child as awaiting formal review', () => {
+    const store = makeStore()
+    const row = store.register({
+      unitId: 'child', kind: 'worker', threadId: 'child', parentThreadId: 'parent',
+      harnessId: 'kun', title: 'Child', workspace: { path: '/ws', kind: 'local' }
+    })
+    expect(row.reviewRequired).toBe(false)
+  })
+
+  it('keeps manager-dispatched quality facts separate from read acknowledgement', () => {
+    const store = makeStore()
+    store.register({
+      unitId: 'worker', kind: 'worker', threadId: 'worker', parentThreadId: 'parent',
+      harnessId: 'kun', title: 'Worker', workspace: { path: '/ws', kind: 'worktree' },
+      reviewRequired: true, reviewStatus: 'pending'
+    })
+    store.apply('worker', { acknowledgedAt: NOW, reviewStatus: 'passed' }, 'runtime')
+    expect(store.get('worker')).toMatchObject({
+      acknowledgedAt: NOW, reviewRequired: true, reviewStatus: 'passed'
+    })
+  })
+})
+
 describe('projectRuntimeEvent', () => {
   const projections: Array<[string, RuntimeEvent, Record<string, unknown>]> = [
     ['turn_queued', ev('turn_queued', 't1'), { mainState: 'initializing' }],

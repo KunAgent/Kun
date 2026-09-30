@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { HandMetal, Undo2, Users } from 'lucide-react'
 import type { AdeTeamWorker } from '@shared/ade-teams'
 import { getProvider } from '../../agent/registry'
+import { useChatStore } from '../../store/chat-store'
+import { requestOpenWorkersPanel } from '../chat/FloatingComposerWorkersPill'
 import { useActivityStore } from '../../store/activity-store'
 
 /**
@@ -18,6 +20,9 @@ export function WorkerControlBanner({
 }): ReactElement | null {
   const { t } = useTranslation('common')
   const [worker, setWorker] = useState<AdeTeamWorker | null>(null)
+  const [parentId, setParentId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const requestGeneration = useRef(0)
   const [resolved, setResolved] = useState(false)
   const [busy, setBusy] = useState(false)
   // Re-resolve when the worker row's control-relevant activity changes.
@@ -27,6 +32,7 @@ export function WorkerControlBanner({
   })
 
   const reload = useCallback(async (): Promise<void> => {
+    const request = ++requestGeneration.current
     const provider = getProvider()
     if (!provider.getTeamWorker) {
       setResolved(true)
@@ -34,29 +40,33 @@ export function WorkerControlBanner({
     }
     try {
       const found = await provider.getTeamWorker(threadId)
+      if (request !== requestGeneration.current) return
       setWorker(found?.worker ?? null)
+      setParentId(found?.team.managerThreadId ?? null)
     } catch {
-      setWorker(null)
+      if (request === requestGeneration.current) setWorker(null)
     } finally {
-      setResolved(true)
+      if (request === requestGeneration.current) setResolved(true)
     }
   }, [threadId])
 
   useEffect(() => {
     setResolved(false)
     void reload()
+    return () => { requestGeneration.current += 1 }
   }, [reload, rowStamp])
 
-  if (!resolved || !worker || worker.state !== 'active') return null
+  if (!resolved || !worker) return null
   const underUser = worker.control === 'user'
 
   const act = (action: 'take-over' | 'hand-back'): void => {
     const provider = getProvider()
     if (!provider.controlTeamWorker) return
     setBusy(true)
+    setError(null)
     void provider.controlTeamWorker(threadId, action)
       .then(reload)
-      .catch(() => undefined)
+      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
       .finally(() => setBusy(false))
   }
 
@@ -75,7 +85,15 @@ export function WorkerControlBanner({
           ? t('workerBannerUserControl', { label: worker.label })
           : t('workerBannerManaged', { label: worker.label })}
       </span>
-      <button
+      {parentId ? <button type="button" onClick={() => {
+        void useChatStore.getState().selectThread(parentId).then(() => {
+          if (useChatStore.getState().activeThreadId === parentId) requestOpenWorkersPanel()
+        }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))
+      }} className="shrink-0 rounded-full px-2 py-1 text-[11.5px] text-accent hover:bg-ds-hover">
+        {t('workerReturnToTask')}
+      </button> : null}
+      {error ? <span role="alert" className="max-w-48 truncate text-xs text-red-600" title={error}>{error}</span> : null}
+      {worker.state === 'active' ? <button
         type="button"
         disabled={busy}
         onClick={() => act(underUser ? 'hand-back' : 'take-over')}
@@ -87,7 +105,7 @@ export function WorkerControlBanner({
           <HandMetal className="h-3 w-3" strokeWidth={2} aria-hidden />
         )}
         {underUser ? t('workerBannerHandBack') : t('workerBannerTakeOver')}
-      </button>
+      </button> : null}
     </div>
   )
 }

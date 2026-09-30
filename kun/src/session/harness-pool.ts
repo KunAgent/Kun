@@ -27,6 +27,8 @@ export type HarnessAgentLease<T extends PooledAgent> = {
 type PoolEntry<T extends PooledAgent> = {
   agent: T
   refs: number
+  /** An aborted turn failed to settle; do not admit another session here. */
+  unhealthy: boolean
   idleTimer?: NodeJS.Timeout
   exitListeners: Set<(exit: PooledAgentExit) => void>
   /** Pool-initiated close — onExit listeners do not fire for it. */
@@ -67,11 +69,15 @@ export class HarnessAgentPool<T extends PooledAgent> {
     return () => entry.exitListeners.delete(listener)
   }
 
-  /** Drop the connection immediately (crash, protocol failure, cancel). */
+  /**
+   * Quarantine an unhealthy process. Close immediately with at most one
+   * active lease; otherwise preserve sibling turns and close after release.
+   */
   markUnhealthy(key: string): void {
     const entry = this.entries.get(key)
     if (!entry) return
-    void this.closeEntry(key, entry)
+    entry.unhealthy = true
+    if (entry.refs <= 1) void this.closeEntry(key, entry)
   }
 
   /**
@@ -100,7 +106,11 @@ export class HarnessAgentPool<T extends PooledAgent> {
     factory: () => Promise<T>
   ): Promise<HarnessAgentLease<T>> {
     const existing = this.entries.get(key)
-    if (existing && !existing.agent.closed && !existing.closing) {
+    if (existing?.unhealthy && existing.refs > 0) {
+      throw new Error(`harness process is draining after an interrupted turn: ${key}`)
+    }
+    if (existing?.unhealthy) await this.closeEntry(key, existing)
+    if (existing && !existing.unhealthy && !existing.agent.closed && !existing.closing) {
       existing.refs += 1
       this.clearIdle(existing)
       return this.lease(key, existing)
@@ -109,6 +119,7 @@ export class HarnessAgentPool<T extends PooledAgent> {
     const entry: PoolEntry<T> = {
       agent,
       refs: 1,
+      unhealthy: false,
       exitListeners: new Set(),
       closing: false
     }
@@ -128,6 +139,10 @@ export class HarnessAgentPool<T extends PooledAgent> {
         released = true
         entry.refs -= 1
         if (entry.refs > 0 || entry.closing) return
+        if (entry.unhealthy) {
+          void pool.closeEntry(key, entry)
+          return
+        }
         entry.idleTimer = setTimeout(() => {
           void pool.closeEntry(key, entry)
         }, pool.options.idleReleaseMs ?? HARNESS_POOL_IDLE_RELEASE_MS)

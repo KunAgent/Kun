@@ -6,6 +6,7 @@
 import { startHarnessProcess } from '../session/harness-process.js'
 import { CodexClient } from '../runtime/codex/codex-client.js'
 import type { HarnessDefinition, HarnessId } from '../contracts/harness.js'
+import { nativeAgentNetworkEnv, nativeAgentNetworkStatus } from './native-agent-network.js'
 import {
   resolveHarnessSecretEnv,
   type HarnessSecretRefResolver
@@ -78,7 +79,7 @@ export class CodexModelProbe {
     const proc = await startHarnessProcess({
       command: this.deps.binaryPath?.(definition.id) ?? launch.command,
       args: launch.args,
-      env: launch.env,
+      env: { ...nativeAgentNetworkEnv(definition, process.env, secretEnv), ...launch.env },
       secretEnv,
       cwd: undefined
     })
@@ -92,7 +93,13 @@ export class CodexModelProbe {
   }
 
   private cacheKey(definition: HarnessDefinition): string {
-    return `${definition.id}:${this.deps.binaryPath?.(definition.id) ?? ''}`
+    return JSON.stringify({
+      id: definition.id,
+      network: nativeAgentNetworkStatus(definition).networkFingerprint,
+      command: this.deps.binaryPath?.(definition.id) ?? definition.launch?.command,
+      args: definition.launch?.args,
+      env: definition.launch?.env
+    })
   }
 
   private nowMs(): number {

@@ -1,14 +1,6 @@
 import { z } from 'zod'
 
-export const GOOGLE_WORKSPACE_CHANNELS = {
-  status: 'google-workspace:status',
-  login: 'google-workspace:login',
-  setup: 'google-workspace:setup',
-  logout: 'google-workspace:logout',
-  test: 'google-workspace:test',
-  cancel: 'google-workspace:cancel',
-  openAuthorization: 'google-workspace:open-authorization'
-} as const
+export { GOOGLE_WORKSPACE_CHANNELS } from './google-workspace-channels'
 
 export const GOOGLE_WORKSPACE_RUNTIME_PATH = '/v1/integrations/google-workspace'
 export const GOOGLE_WORKSPACE_DOCUMENTATION_URL =

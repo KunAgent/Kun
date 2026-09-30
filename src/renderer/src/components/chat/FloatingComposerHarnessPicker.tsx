@@ -1,14 +1,15 @@
 import { useCallback, useId, useState, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { Bot, ChevronDown, History, Loader2 } from 'lucide-react'
+import { ChevronDown, History, Loader2, Settings2 } from 'lucide-react'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
+import { AgentIcon } from '../agent-icon'
+import { useChatStore } from '../../store/chat-store'
 import {
-  harnessRowUnavailableCode,
   harnessRowUnavailableDetail,
-  harnessUnavailableLabelKey,
-  harnessUnavailableNextStepKey
+  useHarnessStore
 } from '../../store/harness-store'
+import { harnessConnectionPresentation, usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
 import { useComposerPickerPopover } from './use-composer-picker-popover'
 
 const MENU_WIDTH = 288
@@ -84,6 +85,15 @@ export function FloatingComposerHarnessPicker({
     setOpen(false)
   }
 
+  const openAgentSettings = (row?: AdeHarnessRow): void => {
+    closeMenu()
+    if (row && usesProviderOnlySdk(row)) useChatStore.getState().openSettings('providers')
+    else {
+      if (row) useHarnessStore.setState({ settingsHarnessId: row.definition.id })
+      useChatStore.getState().openSettings('agentsHarnesses')
+    }
+  }
+
   const menu = open && typeof document !== 'undefined' ? (
     <div
       ref={menuRef}
@@ -131,42 +141,57 @@ export function FloatingComposerHarnessPicker({
             const id = row.definition.id
             // P4-05: stable reason code → localized label + next step; the
             // raw message stays in the title tooltip as the "reason detail".
-            const code = harnessRowUnavailableCode(row)
+            const { code, labelKey, nextStepKey, configureProvider } = harnessConnectionPresentation(row)
             const detecting = code === 'detecting'
-            const reasonText = code == null ? null : t(harnessUnavailableLabelKey(code))
-            const nextStepKey = code && !detecting ? harnessUnavailableNextStepKey(code) : null
+            const reasonText = labelKey ? t(labelKey) : null
             const nextStepText = nextStepKey ? t(nextStepKey) : null
             const detail = harnessRowUnavailableDetail(row)
             const reasonLine = [reasonText, nextStepText].filter(Boolean).join(' — ')
             const selected = id === harnessId
+            const credential = row.definition.credentialModes[0]
+            const credentialLabel = credential === 'native-login'
+              ? t('adeCredential.nativeLogin')
+              : credential === 'kun-gateway'
+                ? t('adeCredential.kunGateway')
+                : t('adeCredential.provider')
             return (
-              <button
+              <div
                 key={id}
-                type="button"
-                disabled={code != null}
-                onClick={() => pick(row)}
-                title={
-                  [reasonLine || row.definition.displayName, detail]
-                    .filter(Boolean)
-                    .join(' · ')
-                }
-                className={`flex w-full items-start gap-2 px-3 py-2 text-left text-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent ${selected ? 'bg-ds-subtle' : ''}`}
-                data-harness-id={id}
+                className={`flex items-center gap-1 pr-2 ${selected ? 'bg-ds-subtle' : ''}`}
+                title={[reasonLine || row.definition.displayName, detail].filter(Boolean).join(' · ')}
               >
-                {detecting ? (
-                  <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-ds-muted" strokeWidth={1.75} />
-                ) : (
-                  <Bot className="mt-0.5 h-4 w-4 shrink-0 text-ds-muted" strokeWidth={1.75} />
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-ds-ink">
-                    {row.definition.displayName}
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={code != null}
+                  onClick={() => pick(row)}
+                  className="flex min-w-0 flex-1 items-start gap-2 px-3 py-2 text-left text-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+                  data-harness-id={id}
+                >
+                  <AgentIcon harnessId={id} size={16} className="mt-0.5 text-ds-muted" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-ds-ink">{row.definition.displayName}</span>
+                    <span className="block truncate text-[11px] text-ds-faint">
+                      {reasonLine || credentialLabel}
+                    </span>
                   </span>
-                  <span className="block truncate text-[11px] text-ds-faint">
-                    {reasonLine || row.definition.credentialModes.join(' · ')}
-                  </span>
-                </span>
-              </button>
+                  {detecting ? (
+                    <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-ds-muted" strokeWidth={1.75} />
+                  ) : null}
+                </button>
+                {(code && !detecting) || configureProvider ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => openAgentSettings(row)}
+                    aria-label={configureProvider ? t('adeAgentAction.configureProvider') : `${row.definition.displayName} ${t('adeHarnessOpenSettings')}`}
+                    className="shrink-0 rounded-md p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-accent"
+                    data-harness-repair={id}
+                  >
+                    <Settings2 className="h-4 w-4" strokeWidth={1.75} />
+                  </button>
+                ) : null}
+              </div>
             )
           })}
           {onContinueLocalSession ? (
@@ -185,6 +210,16 @@ export function FloatingComposerHarnessPicker({
               </span>
             </button>
           ) : null}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => openAgentSettings()}
+            className="flex w-full items-center gap-2 border-t border-ds-border px-3 py-2 text-left text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+            data-harness-manage
+          >
+            <Settings2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            {t('adeHarnessOpenSettings')}
+          </button>
           <div className="border-t border-ds-border px-3 py-2 text-[11px] text-ds-faint">
             {t('adeHarnessPicker.nextTurnHint')}
           </div>
@@ -214,7 +249,7 @@ export function FloatingComposerHarnessPicker({
           aria-label={t('adeHarnessPicker.title')}
           data-composer-harness-picker
         >
-          <Bot className="h-3.5 w-3.5" strokeWidth={1.75} />
+          <AgentIcon harnessId={harnessId} size={14} />
           <span className="max-w-[120px] truncate">{harnessLabel}</span>
           {loading ? (
             <Loader2 className="h-3 w-3 animate-spin opacity-60" strokeWidth={1.75} />

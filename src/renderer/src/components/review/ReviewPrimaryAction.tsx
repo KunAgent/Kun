@@ -9,12 +9,14 @@ import type {
   TaskWorkspaceIntegrateResponse,
   TaskWorkspaceRecord
 } from '@shared/task-workspace'
+import { reviewRevisionValidity } from '@shared/review-revision'
 import type { AdeRunWorkerChecksResult } from '@shared/ade-teams'
 import { getProvider } from '../../agent/registry'
 import {
   discardWorkspace,
   integrateWorkspace,
   loadIntegratePreview,
+  loadWorkspaceDiff,
   useReviewStore
 } from '../../store/review-store'
 import { IntegrateResultDialog } from './IntegrateResultDialog'
@@ -45,6 +47,10 @@ export function ReviewPrimaryAction({
   const preview = review?.integratePreview
   const previewLoaded = review?.integratePreviewLoaded === true
   const pending = review?.actionPending
+  const previewArtifact = [preview?.sourceRevision, preview?.targetRevision].find((revision) =>
+    revision?.target.kind === 'task-workspace' && revision.target.workspaceId === workspaceId)
+  const previewStale = reviewRevisionValidity(previewArtifact, review?.revision) === 'stale'
+  const previewUnverified = Boolean((preview?.sourceRevision || preview?.targetRevision) && !preview?.previewToken)
   const [result, setResult] = useState<{
     mode: TaskWorkspaceIntegrateMode
     response: TaskWorkspaceIntegrateResponse
@@ -91,8 +97,8 @@ export function ReviewPrimaryAction({
       <button
         key={mode}
         type="button"
-        disabled={!enabled || pending === 'integrate'}
-        title={blockReason}
+        disabled={!enabled || previewStale || previewUnverified || review?.loading || pending === 'integrate'}
+        title={previewUnverified ? t('reviewVersionCheckRequired') : blockReason}
         onClick={() => runIntegrate(mode)}
         className={`inline-flex h-7 items-center gap-1.5 rounded-[7px] px-2.5 text-[11.5px] font-medium ${
           primary
@@ -113,7 +119,10 @@ export function ReviewPrimaryAction({
     if (!binding.unitId) return
     setChecksPending(true)
     void getProvider().runTeamWorkerChecks?.(binding.unitId)
-      .then(setChecks)
+      .then((value) => {
+        setChecks(value)
+        void loadWorkspaceDiff(workspaceId)
+      })
       .catch((error: unknown) => setChecks({
         ok: false,
         userReport: error instanceof Error ? error.message : String(error)
@@ -126,7 +135,7 @@ export function ReviewPrimaryAction({
       className="shrink-0 border-b border-ds-border-muted"
       data-testid="review-primary-action"
     >
-      <div className="flex items-center gap-2 px-3 py-1.5">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-1.5">
       {openRequest ? (
         <button
           type="button"
@@ -179,27 +188,32 @@ export function ReviewPrimaryAction({
       </button>
       </div>
 
+      {previewUnverified ? <p role="status" className="px-3 pb-2 text-[11px] text-ds-muted">{t('reviewVersionCheckRequired')}</p> : null}
+
       {checks ? (
         <div
           className="flex flex-wrap items-center gap-1.5 px-3 pb-1.5 text-[11px] text-ds-muted"
           data-testid="review-checks-result"
         >
           <span className="min-w-0 flex-1">{checks.userReport}</span>
-          {checks.checks?.map((check) => (
+          {checks.checks?.map((check) => {
+            const validity = reviewRevisionValidity(check.revision, review?.revision)
+            return (
             <span
               key={check.name}
               title={check.detail}
               className={`rounded-full px-1.5 py-0.5 ${
-                check.status === 'passed'
+                check.status === 'passed' && validity === 'current'
                   ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
                   : check.status === 'failed'
                     ? 'bg-red-500/15 text-red-600 dark:text-red-400'
                     : 'bg-ds-hover text-ds-faint'
               }`}
             >
-              {check.name}
+              {check.name} · {t(`reviewRevision_${validity}`)}
             </span>
-          ))}
+            )
+          })}
           <button
             type="button"
             onClick={() => setChecks(null)}

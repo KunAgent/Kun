@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { GitBranch, ListTree, Loader2, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import type { TaskWorkspaceRecord } from '@shared/task-workspace'
 import { useChatStore } from '../../store/chat-store'
 import {
   ensureThreadBinding,
@@ -16,6 +17,7 @@ import { ReviewFileTree } from './ReviewFileTree'
 import { ReviewDiffBlock } from './ReviewDiffBlock'
 import { ReviewPrimaryAction } from './ReviewPrimaryAction'
 import { ChangeRequestPanel } from './ChangeRequestPanel'
+import { ReviewRevisionSummary } from './ReviewRevisionSummary'
 import { ReviewSendMenu } from './ReviewSendMenu'
 
 /**
@@ -23,35 +25,46 @@ import { ReviewSendMenu } from './ReviewSendMenu'
  * directory file tree beside the per-file diff blocks. The primary action
  * row is reserved for P1-19's integrate controls.
  */
-export function ReviewPanel({ className }: { className?: string }): ReactElement {
+export function ReviewPanel({
+  className,
+  threadId,
+  workspace
+}: {
+  className?: string
+  threadId?: string
+  /** Explicit review target wins over the selected thread's binding. */
+  workspace?: TaskWorkspaceRecord
+}): ReactElement {
   const { t } = useTranslation('common')
   const activeThreadId = useChatStore((s) => s.activeThreadId)
-  const binding = useReviewStore((s) =>
-    activeThreadId ? s.bindings[activeThreadId] : undefined)
+  const targetThreadId = threadId ?? activeThreadId
+  const storedBinding = useReviewStore((s) =>
+    targetThreadId ? s.bindings[targetThreadId] : undefined)
+  const binding = workspace ?? storedBinding
   const workspaceId = binding?.workspaceId
   const review = useReviewStore((s) =>
     workspaceId ? s.workspaces[workspaceId] : undefined)
   const [treeOpen, setTreeOpen] = useState(true)
 
   useEffect(() => {
-    if (activeThreadId) void ensureThreadBinding(activeThreadId)
-  }, [activeThreadId])
+    if (!workspace && targetThreadId) void ensureThreadBinding(targetThreadId)
+  }, [targetThreadId, workspace])
 
   useEffect(() => {
-    if (workspaceId && !review?.files.length && !review?.loading) {
+    if (workspaceId && !review?.loaded && !review?.loading && !review?.error) {
       void loadWorkspaceDiff(workspaceId)
     }
     if (workspaceId && !review?.commentsLoaded) {
       void loadReviewComments(workspaceId)
     }
-  }, [workspaceId, review?.files.length, review?.loading, review?.commentsLoaded])
+  }, [workspaceId, review?.loaded, review?.loading, review?.error, review?.commentsLoaded])
 
   // Live refresh: settled work on the bound unit reloads the diff (11 §4.4).
   useEffect(() => {
     if (!workspaceId) return
-    watchReviewWorkspace(workspaceId)
+    watchReviewWorkspace(workspaceId, binding)
     return () => unwatchReviewWorkspace(workspaceId)
-  }, [workspaceId])
+  }, [workspaceId, binding])
 
   const viewMode = review?.viewMode ?? 'unified'
   const modeButton = (mode: ReviewViewMode, label: string): ReactElement => (
@@ -68,7 +81,7 @@ export function ReviewPanel({ className }: { className?: string }): ReactElement
   const shortSha = useMemo(() => binding?.baseRevision?.slice(0, 8), [binding?.baseRevision])
 
   return (
-    <div className={`flex h-full min-h-0 flex-col bg-ds-sidebar ${className ?? ''}`}>
+    <div className={`flex h-full min-h-0 flex-col bg-ds-sidebar ${className ?? ''}`} data-review-workspace-id={workspaceId}>
       <div className="flex h-10 shrink-0 items-center gap-2 border-b border-ds-border-muted px-3">
         <GitBranch className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />
         <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-ds-ink">
@@ -79,7 +92,7 @@ export function ReviewPanel({ className }: { className?: string }): ReactElement
         ) : null}
         {binding ? (
           <span className="shrink-0 rounded-full bg-ds-hover px-2 py-0.5 text-[10.5px] text-ds-muted">
-            {binding.state}
+            {t(`reviewWorkspaceState.${binding.state}`)}
           </span>
         ) : null}
         {binding ? <ReviewSendMenu binding={binding} /> : null}
@@ -109,7 +122,8 @@ export function ReviewPanel({ className }: { className?: string }): ReactElement
         </button>
       </div>
 
-      {binding ? <ReviewPrimaryAction binding={binding} /> : null}
+      {binding ? <ReviewRevisionSummary binding={binding} /> : null}
+      {binding ? <ReviewPrimaryAction key={workspaceId} binding={binding} /> : null}
       {binding ? <ChangeRequestPanel binding={binding} /> : null}
 
       {!binding ? (

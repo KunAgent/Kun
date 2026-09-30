@@ -34,6 +34,11 @@ export const ActivityWaitingReasonSchema = z.enum([
 ])
 export type ActivityWaitingReason = z.infer<typeof ActivityWaitingReasonSchema>
 
+export const ActivityReviewStatusSchema = z.enum([
+  'pending', 'needs_changes', 'passed', 'waived', 'rejected', 'stale', 'unknown'
+])
+export type ActivityReviewStatus = z.infer<typeof ActivityReviewStatusSchema>
+
 /** Who produced a row write; authority rules live in the ActivityStore. */
 export const ActivityProvenanceSchema = z.enum([
   'runtime',
@@ -81,6 +86,9 @@ export const ActivityRowSchema = z
     mainState: ActivityStateSchema,
     /** Result of the most recent finish; only set for done / idle rows. */
     lastOutcome: z.enum(['completed', 'failed', 'cancelled']).optional(),
+    /** Quality review is independent of execution and reading state. */
+    reviewRequired: z.boolean().optional(),
+    reviewStatus: ActivityReviewStatusSchema.optional(),
     children: ActivityChildrenSchema,
     phase: z
       .enum(['investigating', 'implementing', 'verifying', 'blocked', 'compacting'])
@@ -134,6 +142,8 @@ export const RegisterUnitSchema = z
     workspace: ActivityWorkspaceSchema,
     mainState: ActivityStateSchema.optional(),
     lastOutcome: z.enum(['completed', 'failed', 'cancelled']).optional(),
+    reviewRequired: z.boolean().optional(),
+    reviewStatus: ActivityReviewStatusSchema.optional(),
     waitingReason: ActivityWaitingReasonSchema.optional(),
     turnId: z.string().optional(),
     provenance: ActivityProvenanceSchema.optional(),

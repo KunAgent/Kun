@@ -172,6 +172,8 @@ export const HarnessDefinitionSchema = z
             launch: HarnessLaunchSchema,
             detect: HarnessDetectSchema.optional(),
             capabilities: HarnessCapabilitiesSchema.optional(),
+            /** Transport-specific setup guidance (for example an ACP adapter). */
+            setup: HarnessSetupSchema.optional(),
             /** Overrides definition-level poolScope when this variant applies. */
             poolScope: z.enum(['credential', 'workspace']).optional()
           })
@@ -273,6 +275,8 @@ export const HarnessStatusSchema = z
      * provisional `unknown` verdict as final.
      */
     detecting: z.boolean().optional(),
+    networkSource: z.enum(['environment', 'system', 'direct', 'explicit-required']).optional(),
+    networkFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     reasonCode: HarnessReasonCodeSchema.optional(),
     message: z.string().max(512).optional()
   })

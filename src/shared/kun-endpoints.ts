@@ -352,6 +352,11 @@ export function kunThreadSummaryPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/summary`
 }
 
+export const KUN_THREAD_EXECUTION_CONFIG_TEMPLATE = '/v1/threads/{id}/execution-config'
+export function kunThreadExecutionConfigPath(threadId: string): string {
+  return `${kunThreadPath(threadId)}/execution-config`
+}
+
 export const KUN_THREAD_STATE_TEMPLATE = '/v1/threads/{id}/state'
 export function kunThreadStatePath(threadId: string): string {
   return `${kunThreadPath(threadId)}/state`

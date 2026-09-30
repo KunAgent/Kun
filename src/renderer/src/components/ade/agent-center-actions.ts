@@ -1,5 +1,6 @@
 import type { AdeHarnessRow, AdeHarnessSetup } from '@shared/ade-harnesses'
 import { harnessRowUnavailableCode } from '../../store/harness-store'
+import { usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
 
 /**
  * Agent Center card state + action table (docs/ade/impl/p4 §3.2, P4-08).
@@ -9,7 +10,7 @@ import { harnessRowUnavailableCode } from '../../store/harness-store'
 
 export type AgentCardAction =
   | { kind: 'command'; labelKey: string; command: string; note?: string }
-  | { kind: 'probe' | 'enable' | 'disable' | 'setDefault' | 'specifyPath' | 'reason' | 'test'; labelKey: string }
+  | { kind: 'probe' | 'enable' | 'disable' | 'setDefault' | 'specifyPath' | 'reason' | 'test' | 'configureProvider'; labelKey: string }
   | { kind: 'docs'; labelKey: string; url: string }
   | { kind: 'none' }
 
@@ -89,6 +90,20 @@ export function agentCardModel(
     return { state: 'detecting', reasonCode: null, primary: ACTION.none, secondary: [] }
   }
 
+  if (usesProviderOnlySdk(row)) {
+    return {
+      state: code ? 'unavailable' : 'ready',
+      reasonCode: code,
+      primary: { kind: 'configureProvider', labelKey: 'adeAgentAction.configureProvider' },
+      secondary: [ACTION.probe, ...(code || isDefault ? [] : [ACTION.setDefault]), ACTION.disable,
+        ...(hasDetail ? [ACTION.reason] : [])]
+    }
+  }
+
+  const unknownLogin = row.status.login === 'unknown' && row.status.installed === 'yes' &&
+    row.definition.credentialModes.includes('native-login') && setup?.login
+    ? commandAction('adeAgentAction.login', setupLoginCommand(setup)) : null
+
   if (code === null) {
     // A settled row can still carry an advisory wire reasonCode (e.g. a
     // handshake timeout under P4-03): surface it on the status line and
@@ -109,6 +124,7 @@ export function agentCardModel(
       reasonCode: advisory,
       primary: ACTION.test,
       secondary: [
+        ...(unknownLogin ? [unknownLogin] : []),
         ...(advisory ? [ACTION.probe] : []),
         ...(isDefault || row.definition.id === 'kun' ? [] : [ACTION.setDefault]),
         ...(row.definition.id === 'kun' ? [] : [ACTION.disable])

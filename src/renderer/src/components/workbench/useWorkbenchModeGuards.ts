@@ -13,10 +13,7 @@ export function useWorkbenchModeGuards({
   runtimeConnection,
   projectBoardEnabled,
   projectBoardSettingsLoaded,
-  adeEnabled,
-  adeSettingsLoaded,
   setRoute,
-  refreshAdeThreads
 }: {
   routeRef: MutableRefObject<string>
   runtimeConnectionRef: MutableRefObject<RuntimeConnectionStatus>
@@ -32,13 +29,13 @@ export function useWorkbenchModeGuards({
   useEffect(() => {
     routeRef.current = route
     if (projectBoardSettingsLoaded && !projectBoardEnabled && route === 'board') setRoute('chat')
-    // ADE 关闭时回到 Code;已有 ADE 线程在服务端保留,不在 Code 列表出现。
-    if (adeSettingsLoaded && !adeEnabled && route === 'ade') setRoute('chat')
-    // ADE 清单独立刷新:进入 ADE 路由且开关开启时才拉取 workspace_mode=ade。
-    if (route === 'ade' && adeEnabled && runtimeConnection === 'ready') void refreshAdeThreads()
+    // Historical ADE links enter the same Code workbench. Refresh its unified
+    // inventory through the ordinary Code path; the old separate catalog is
+    // retained only for compatibility while existing clients still use it.
+    if (route === 'ade') setRoute('chat')
     runtimeConnectionRef.current = runtimeConnection
   }, [
-    projectBoardEnabled, projectBoardSettingsLoaded, adeEnabled, adeSettingsLoaded,
-    refreshAdeThreads, route, runtimeConnection, routeRef, runtimeConnectionRef, setRoute
+    projectBoardEnabled, projectBoardSettingsLoaded,
+    route, runtimeConnection, routeRef, runtimeConnectionRef, setRoute
   ])
 }

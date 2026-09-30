@@ -34,6 +34,14 @@ describe('AcpReadinessStore (P4-03)', () => {
     expect(await cache.get('other' as HarnessId, '/usr/bin/opencode', '1.1.47')).toBeUndefined()
   })
 
+  it('invalidates a successful handshake when the launch definition changes', async () => {
+    const cache = await store(() => 1_000)
+    await cache.set(ID, '/usr/bin/opencode', '1.1.47', 'first-plan')
+    expect(await cache.get(ID, '/usr/bin/opencode', '1.1.47', 'first-plan')).toBe('yes')
+    expect(await cache.get(ID, '/usr/bin/opencode', '1.1.47', 'second-plan')).toBeUndefined()
+    expect(await cache.get(ID, '/usr/bin/opencode', '1.1.47')).toBeUndefined()
+  })
+
   it('survives a reload from disk (restart path)', async () => {
     let now = 1_000
     const first = await store(() => now)

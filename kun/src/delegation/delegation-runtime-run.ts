@@ -1,3 +1,4 @@
+import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
 import { chmod, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -408,7 +409,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       const state: ChildExecutionState = { record, commits: Promise.resolve() }
       // Surface ChildRunExecutor's resolved fields via the closure shared with
       // the synchronous path. The same executor block runs inside executeChild.
-      const completion = this.executeChild({
+      const completion = runWithoutTurnMutationFence(() => this.executeChild({
         state,
         queuedAt,
         profileName,
@@ -452,7 +453,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
         controlPrompt,
         pptWorkflowScope: input.pptWorkflowScope,
         signal: detachedController.signal
-      })
+      }))
         .then((settled) => this.notifyDetachedChild(settled))
         .catch(() => undefined)
         .finally(() => {

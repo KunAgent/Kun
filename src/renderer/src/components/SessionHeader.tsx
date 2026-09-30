@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Activity, ChevronRight, CircleHelp, FileText, Folder, GitBranch, GitFork } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../store/chat-store'
@@ -7,8 +7,11 @@ import { hasLivePendingUserInput } from '../store/chat-store-runtime-helpers'
 import { formatRelativeTime } from '../lib/format-relative-time'
 import { GIT_BRANCH_STATUS_CHANGED_EVENT } from '../lib/git-branch-status-event'
 import { middleEllipsize } from '../lib/middle-ellipsize'
+import { readThreadWorktreeRegistry } from '../lib/thread-worktree-registry'
+import { resolveProjectWorkspacePath } from '../lib/worktree-project-path'
 import { workspaceLabelFromPath } from '../lib/workspace-label'
 import { SessionExportMenu } from './SessionExportMenu'
+import { TaskSettingsButton } from './workbench/TaskSettingsButton'
 import { WorkbenchSessionActions, WorkbenchOriginChip } from './rooms/WorkbenchSessionBits'
 import {
   formatCompactNumber,
@@ -133,9 +136,11 @@ export function SessionHeader({
 
   const active = threads.find((th) => th.id === activeThreadId)
   const activeWorkspaceRoot = active?.workspace?.trim() || workspaceRoot.trim()
-  const activeWorkspaceLabel = active?.workspace
-    ? workspaceLabelFromPath(active.workspace)
-    : workspaceLabel
+  const activeWorkspaceLabel = useMemo(() => active?.workspace
+    ? workspaceLabelFromPath(resolveProjectWorkspacePath(active.workspace, {
+        threadWorktrees: readThreadWorktreeRegistry().worktrees
+      }))
+    : workspaceLabel, [active, workspaceLabel])
   const [editing, setEditing] = useState(false)
   const [draftTitle, setDraftTitle] = useState('')
   // Usage stats are no longer shown in compact mode (the composer footer
@@ -181,6 +186,7 @@ export function SessionHeader({
   if (compact) {
     return (
       <div
+        data-active-thread-id={activeThreadId ?? undefined}
         className={`session-header-compact flex min-h-0 min-w-0 flex-1 items-center gap-2 text-left ${className}`}
       >
         {active ? (
@@ -188,7 +194,7 @@ export function SessionHeader({
             <div className="session-header-compact-identity flex min-w-0 flex-1 items-center gap-2">
               <span
                 className="session-header-compact-workspace inline-flex min-w-0 max-w-[min(36%,220px)] shrink items-center gap-1.5 text-[12px] font-medium leading-5 text-ds-faint"
-                title={activeWorkspaceLabel}
+                title={activeWorkspaceRoot}
               >
                 <Folder className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                 <span className="truncate">{activeWorkspaceLabel}</span>
@@ -248,6 +254,7 @@ export function SessionHeader({
               ) : null}
             </div>
             <WorkbenchSessionActions thread={active} running={busy} />
+            <TaskSettingsButton key={active.id} thread={active} />
             <SessionExportMenu
               title={active.title}
               blocks={blocks}
@@ -377,6 +384,7 @@ export function SessionHeader({
           <div className="mt-1 text-[13.5px] text-ds-faint">{t('sessionHeaderHint')}</div>
         </div>
       )}
+      {active ? <TaskSettingsButton key={active.id} thread={active} /> : null}
       {busy ? (
         hasLivePendingUserInput(blocks) ? (
           <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-500/25 px-3 py-1.5 text-[12.5px] font-semibold text-amber-950 motion-safe:animate-pulse dark:text-amber-100">

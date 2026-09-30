@@ -26,9 +26,11 @@ export async function buildReviewRequestAttachment(input: {
   const composer = input.response.composerContext
   if (!composer) return null
   const { request } = input.response
+  const taskWorkspaceId = request.workspaceId ?? composer.workspaceId
+  if (!taskWorkspaceId) throw new Error('Review response is missing its workspace reference; update the runtime and prepare the review again')
   const workspaceId = await sha256Hex(input.workspaceRoot.trim() || '__default__')
   const identity = await sha256Hex(
-    JSON.stringify({ workspace: request.target, requestId: request.requestId })
+    JSON.stringify({ workspace: request.workspaceId, requestId: request.requestId })
   )
   const clip = (value: string, max = 1_900) => Array.from(value).slice(0, max).join('')
   return ComposerContextAttachmentSchema.parse({
@@ -38,7 +40,7 @@ export async function buildReviewRequestAttachment(input: {
     summary: `${input.commentCount} review comment${input.commentCount === 1 ? '' : 's'}`,
     reference: {
       kind: 'review-request',
-      text: clip(composer.body),
+      workspaceId: taskWorkspaceId,
       requestId: request.requestId,
       round: request.round,
       commentIds: request.commentIds

@@ -94,7 +94,9 @@ function SettingsSectionFallback(): ReactElement {
 }
 
 export function SettingsViewLayout({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, workspaceRoot, extensionWorkspaceRoot, category, setCategory, saveStatus, saveError, saveIssue, writeDebugModalOpen, setWriteDebugModalOpen, writeCompletionDebugEntries, writeCompletionDebugSelectedId, setWriteCompletionDebugSelectedId, writeDebugLoading, writeDebugError, extensionSettingsService, extensionSettingsContributions, extensionSettingsAvailable, settingsScrollerRef, markAgentsSectionReady, categoryTitle, categoryDescription, loadWriteDebugEntries, portError, flushPendingSave, goBack, clearWriteDebugEntries, settingsSectionContext } = view
+  const { t, workspaceRoot, extensionWorkspaceRoot, category, setCategory, activeAgentsPanel, saveStatus, saveError, saveIssue, writeDebugModalOpen, setWriteDebugModalOpen, writeCompletionDebugEntries, writeCompletionDebugSelectedId, setWriteCompletionDebugSelectedId, writeDebugLoading, writeDebugError, extensionSettingsService, extensionSettingsContributions, extensionSettingsAvailable, settingsScrollerRef, markAgentsSectionReady, categoryTitle, categoryDescription, loadWriteDebugEntries, portError, flushPendingSave, goBack, clearWriteDebugEntries, settingsSectionContext } = view
+  const explicitSavePanel = category === 'agents' &&
+    (activeAgentsPanel === 'collaboration' || activeAgentsPanel === 'project')
   const saveIssueSummary = saveIssue?.kind === 'provider-model-limit'
     ? settingsSaveIssueMessage(saveIssue, t)
     : saveError
@@ -134,7 +136,9 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
             {category !== 'integrations' && category !== 'extensions' && category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall' ? <span
               title={saveStatus === 'error' && saveIssueSummary ? saveIssueSummary : undefined}
               className={`shrink-0 rounded-full px-3 py-1 text-[12px] font-medium ${
-                portError
+                explicitSavePanel
+                  ? 'bg-ds-subtle text-ds-muted'
+                  : portError
                   ? 'bg-amber-500/15 text-amber-700 dark:text-amber-200'
                   : saveStatus === 'saved'
                     ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200'
@@ -143,7 +147,9 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
                       : 'bg-ds-subtle text-ds-muted'
               }`}
             >
-              {portError
+              {explicitSavePanel
+                ? t('adeSettings.manualSaveHint')
+                : portError
                 ? t('autoApplyBlocked')
                 : saveStatus === 'saving'
                   ? t('applying')

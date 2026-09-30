@@ -30,6 +30,8 @@ export type ThreadStoreListOptions = {
    * stored value count as 'code'.
    */
   workspaceMode?: 'code' | 'ade'
+  /** Combined Code workbench inventory (legacy Code + ADE roots). */
+  workbenchScope?: 'code'
 }
 
 /**

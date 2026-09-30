@@ -207,7 +207,8 @@ describe('task workspace apply-patch integration', () => {
     const first = await makeWorkspace(service, repo, { label: 'first' })
     await commitInWorktree(first.path, 'a.txt', 'a from first\n')
     expect((await service.integrate(first.workspaceId, 'apply-patch')).outcome).toBe('applied')
-    const second = await makeWorkspace(service, repo, { label: 'second' })
+    const second = await makeWorkspace(service, repo, { ownerThreadId: 'thread-2', label: 'second' })
+    expect(second.workspaceId).not.toBe(first.workspaceId)
     await commitInWorktree(second.path, 'b.txt', 'b from second\n')
     const result = await service.integrate(second.workspaceId, 'apply-patch')
     expect(result.outcome).toBe('applied')
@@ -297,8 +298,9 @@ describe('task workspace merge-branch integration', () => {
     const { service } = await harness({ lifecycle: instrumented }).make()
     const repo = await makeRepo()
     const first = await makeWorkspace(service, repo, { label: 'one' })
-    const second = await makeWorkspace(service, repo, { label: 'two' })
+    const second = await makeWorkspace(service, repo, { ownerThreadId: 'thread-2', label: 'two' })
     await commitInWorktree(first.path, 'a.txt', 'a1\n')
+    expect(second.workspaceId).not.toBe(first.workspaceId)
     await commitInWorktree(second.path, 'b.txt', 'b2\n')
     const [a, b] = await Promise.all([
       service.integrate(first.workspaceId, 'apply-patch'),

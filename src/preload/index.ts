@@ -59,6 +59,8 @@ const api = {
   dataMigration: createDataMigrationPreloadApi(),
   googleWorkspace: createGoogleWorkspacePreloadApi(ipcRenderer),
   getSettings: () => ipcRenderer.invoke('settings:get'),
+  getAdeCollaborationSettings: () => ipcRenderer.invoke('settings:ade-collaboration:get'),
+  getAdeProjectDefaults: (request) => ipcRenderer.invoke('settings:ade-project-defaults:get', request),
   openSettingsConfigFile: () => ipcRenderer.invoke('settings:open-config-file'),
   revealModelProviderCredential: (providerId) =>
     ipcRenderer.invoke('model-provider:credential:reveal', { providerId }),
@@ -98,6 +100,9 @@ const api = {
     ipcRenderer.invoke('cursor-subscription:discover', { apiKey, providerId }),
   setSettings: (partial) =>
     ipcRenderer.invoke('settings:set', partial),
+  saveAdeCollaborationSettings: (request) =>
+    ipcRenderer.invoke('settings:ade-collaboration:save', request),
+  saveAdeProjectDefaults: (request) => ipcRenderer.invoke('settings:ade-project-defaults:save', request),
   saveSettingsSilent: (partial) =>
     ipcRenderer.invoke('settings:save-silent', partial),
   ...runtimeRequestPreloadApi,

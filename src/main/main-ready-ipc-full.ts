@@ -30,6 +30,10 @@ import {
   syncClawScheduleMcpConfig
 } from './claw-schedule-mcp-config'
 import { registerAppIpcHandlers } from './ipc/register-app-ipc-handlers'
+import { registerAdeCollaborationSettingsIpc } from './ipc/register-ade-collaboration-settings-ipc'
+import { createAdeCollaborationSettingsService } from './ade-collaboration-settings-service'
+import { registerAdeProjectDefaultsIpc } from './ipc/register-ade-project-defaults-ipc'
+import { createAdeProjectDefaultsService } from './ade-project-defaults-service'
 import { registerDevPreviewCaptureIpc } from './dev-preview-capture'
 import { DataMigrationController } from './data-migration/data-migration-controller'
 import { resolveDataMigrationFeatureEnabled } from './data-migration/feature-policy'
@@ -397,6 +401,30 @@ export function registerMainIpc(services: MainServices): void {
       logInfo,
       nativeDialogs: nativeDialogCoordinator,
       workspacePreviewProtocols
+    })
+    registerAdeCollaborationSettingsIpc({
+      getMainWindow: () => mainState.mainWindow,
+      service: createAdeCollaborationSettingsService({
+        store: mainState.store,
+        serializePersistence: (operation) => runtimeSettingsIntents.serializePersistence(operation),
+        onCommitted: (previous, saved) => {
+          const reservation = reserveRuntimeSettingsApply(previous, saved)
+          queueRuntimeSettingsApply(previous, saved, reservation, async () => undefined)
+          return reservation.generation
+        }
+      })
+    })
+    registerAdeProjectDefaultsIpc({
+      getMainWindow: () => mainState.mainWindow,
+      service: createAdeProjectDefaultsService({
+        store: mainState.store,
+        serializePersistence: (operation) => runtimeSettingsIntents.serializePersistence(operation),
+        onCommitted: (previous, saved) => {
+          const reservation = reserveRuntimeSettingsApply(previous, saved)
+          queueRuntimeSettingsApply(previous, saved, reservation, async () => undefined)
+          return reservation.generation
+        }
+      })
     })
     registerDevPreviewCaptureIpc({ getMainWindow: () => mainState.mainWindow })
     const disposeBrowserUseIpc = registerBrowserUseIpc({

@@ -8,6 +8,8 @@ import { BoundedLog } from '../workspace-tasks/setup-runner.js'
 import { spawnOwnedProcess, stopOwnedProcess } from '../process/owned-process.js'
 import { shellSpawnEnv } from '../adapters/tool/builtin-shell-utils.js'
 import { reportLanguage, type ReportLanguage } from './user-report.js'
+import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
+import { reviewRevisionValidity } from '../contracts/review-revision.js'
 
 /**
  * Host-originated quality checks (10 §4.2): the approved `worktree.checks`
@@ -79,6 +81,8 @@ export async function runWorkspaceChecks(
     return { ok: false, refusal: 'no_approved_checks', userReport: say(language, '没有已批准且匹配的检查命令。', 'No approved check commands match.') }
   }
 
+  const beforeRevision = await captureReviewRevision(workspace.workspaceId, workspace.path)
+
   const spawn = deps.spawn ?? spawnOwnedProcess
   const stop = deps.stop ?? stopOwnedProcess
   const now = deps.now ?? (() => Date.now())
@@ -116,6 +120,16 @@ export async function runWorkspaceChecks(
   }
 
   const logText = log.text()
+  const afterRevision = await captureReviewRevision(workspace.workspaceId, workspace.path)
+  const revision = reviewRevisionValidity(beforeRevision, afterRevision) === 'current'
+    ? afterRevision
+    : {
+        ...afterRevision,
+        contentHash: undefined,
+        completeness: 'incomplete' as const,
+        reason: 'concurrent_change' as const
+      }
+  for (const check of checks) check.revision = revision
   const stored = logText.trim() && deps.artifacts
     ? await deps.artifacts.put({
         content: logText,

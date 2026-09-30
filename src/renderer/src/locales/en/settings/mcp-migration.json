@@ -118,7 +118,7 @@
   "toolPermissionFullAccessDesc": "Runs without Kun approval and can access any local file, execute host commands, and use network-capable tools.",
   "permissionsBehaviorHint": "Ask for approval sends approval-worthy actions to you. Approve for me sends the same actions to an isolated reviewer using the configured review model and fails closed. Full access bypasses Kun approval and grants unrestricted local execution.",
   "approvalReviewModelTitle": "Automatic approval review model",
-  "approvalReviewModelDesc": "Controls which provider and model review approval-worthy actions in Approve for me mode. A fixed selection is confirmed natively and applies to newly started reviews only.",
+  "approvalReviewModelDesc": "Controls which provider and model review approval-worthy actions in Approve for me mode. A fixed selection requires confirmation and applies to newly started reviews only.",
   "approvalReviewInherit": "Follow the acting turn",
   "approvalReviewFixed": "Use a fixed model",
   "approvalReviewProvider": "Review provider",

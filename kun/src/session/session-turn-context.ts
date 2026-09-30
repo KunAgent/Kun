@@ -32,6 +32,7 @@ import {
 } from '../loop/continuation-instructions.js'
 import { normalizeTurnLimits, type TurnLimitsConfig } from '../loop/turn-limits.js'
 import { resolveHarnessSecretEnv } from '../harness/harness-secret-env.js'
+import { nativeAgentNetworkStatus } from '../harness/native-agent-network.js'
 import type { TurnRunOutcome } from '../loop/turn-execution-types.js'
 import {
   projectTurnDynamicContext,
@@ -142,6 +143,15 @@ export type DelegatedCredentialContextInput = {
   accountId?: string
 }
 
+export function modelForHarnessWire(
+  requestedModel: string | undefined,
+  credentialMode: HarnessCredentialMode
+): string | undefined {
+  return credentialMode === 'native-login' && requestedModel === 'default'
+    ? undefined
+    : requestedModel
+}
+
 /**
  * Shared context resolution. All failure branches finish the turn themselves
  * and return `{ok:false, outcome}` so callers stay a flat early-return.
@@ -234,8 +244,14 @@ export async function resolveSessionTurnContext(
   ].filter((value, index, all): value is string =>
     Boolean(value) && all.indexOf(value) === index
   )
-  const model =
+  const credentialMode =
+    turn.credentialMode ?? defaultCredentialMode(definition.id, definition)
+  const requestedModel =
     turn.actingModelRoute?.model ?? turn.model ?? thread.model ?? undefined
+  // `default` is the native-login sentinel for an Agent chosen before its
+  // model catalog loaded. Keep it in the durable route identity, but omit
+  // session/set_model and native thread/turn model overrides on the wire.
+  const model = modelForHarnessWire(requestedModel, credentialMode)
   const actingModelRoute: ActingTurnModelRoute = turn.actingModelRoute ?? {
     model: model ?? 'default',
     ...(turn.providerId ?? thread.providerId
@@ -248,8 +264,6 @@ export async function resolveSessionTurnContext(
   if (!turn.actingModelRoute) {
     await deps.turns.updateTurnMetadata(threadId, turnId, { actingModelRoute })
   }
-  const credentialMode =
-    turn.credentialMode ?? defaultCredentialMode(definition.id, definition)
   const permissionModeId = resolvePermissionMode(
     definition,
     deps.harnessDefaults?.(definition.id)?.permissionMode,
@@ -316,8 +330,8 @@ export async function resolveSessionTurnContext(
       secretEnv,
       poolKey:
         definition.poolScope === 'workspace'
-          ? `${definition.id}:${credentialIdentity}:${workspace}`
-          : `${definition.id}:${credentialIdentity}`,
+          ? `${definition.id}:${credentialIdentity}:${workspace}:${nativeAgentNetworkStatus(definition).networkFingerprint}`
+          : `${definition.id}:${credentialIdentity}:${nativeAgentNetworkStatus(definition).networkFingerprint}`,
       limits: normalizeTurnLimits(deps.turnLimits),
       intent:
         turn.prompt || userMessageTextWithComposerContexts(userItem),

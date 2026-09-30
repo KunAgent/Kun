@@ -1,3 +1,5 @@
+import { threadHasIsolatedWorkspace } from '../lib/thread-workspace-owner'
+import { useChatStore } from '../store/chat-store'
 import { useEffect } from 'react'
 import { DEFAULT_GIT_BRANCH_PREFIX, type AppSettingsV1 } from '@shared/app-settings'
 import { getKunRuntimeSettings } from '../../../shared/app-settings-kun-defaults'
@@ -23,6 +25,7 @@ export function usePlanWorktreePreference(
   plan: GuiPlanArtifact | null
 ): PlanWorktreePreference | undefined {
   const planId = plan?.id ?? ''
+  const isolated = useChatStore((state) => threadHasIsolatedWorkspace(state, plan?.threadId ?? state.activeThreadId))
   const preference = usePlanWorktreePreferenceStore((state) =>
     planId ? state.plans[planId] : undefined)
 
@@ -62,5 +65,6 @@ export function usePlanWorktreePreference(
     return () => { cancelled = true }
   }, [plan])
 
-  return preference
+  return preference && isolated && !preference.overridden
+    ? { ...preference, usePromptWorktree: false } : preference
 }
