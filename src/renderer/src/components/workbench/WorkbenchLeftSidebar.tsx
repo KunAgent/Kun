@@ -167,7 +167,7 @@ export function WorkbenchLeftSidebar({
       ) : (
         <Sidebar
           threads={codeThreads}
-          activeThreadId={activeThreadId}
+          activeThreadId={route === 'agent-chat' ? null : activeThreadId}
           activeView={sidebarView === 'ade' ? 'chat' : sidebarView}
           connectPhoneSidebarOpen={connectPhoneSidebarOpen}
           connectPhoneInitialTarget={connectPhoneInitialTarget}

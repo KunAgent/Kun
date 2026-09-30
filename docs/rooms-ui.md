@@ -1,5 +1,9 @@
 # Rooms conversation interface
 
+Desktop private Agent chats live in Code's Conversations section; Rooms retains
+group and Agent collaboration lists. Both use the Code right workbench components.
+See [Code conversations and Rooms](./code-agent-chats-and-rooms.md).
+
 The Rooms interface borrows Cumora's conversation hierarchy while using Kun's
 existing light and dark theme tokens. It does not change peer discussion,
 execution intent, approval, task recovery, or delivery protocols.

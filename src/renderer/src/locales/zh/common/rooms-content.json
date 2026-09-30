@@ -1,6 +1,6 @@
 {
   "roomsContent": "内容",
-  "roomsContentUnavailable": "内容不可用，或已不属于此 bot。",
+  "roomsContentUnavailable": "内容不可用，或已不属于此房间。",
   "roomsContentRetry": "重试",
   "roomsContentVersion": "固定版本",
   "roomsContentTruncated": "预览已截短，可打开来源查看其余内容。",
@@ -12,7 +12,7 @@
   "roomsContentLinkUnavailable": "链接预览暂不可用",
   "roomsContent_attachment": "附件",
   "roomsContent_repository_file": "仓库文件",
-  "roomsContent_task": "bot 任务",
+  "roomsContent_task": "房间任务",
   "roomsContent_delivery": "交付物",
   "roomsContent_board_card": "项目卡片",
   "roomsContentType": "内容类型",

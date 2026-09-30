@@ -8,11 +8,12 @@ const { startDirectModel } = require('./smoke-direct-model.cjs')
 const { exerciseDirectChat } = require('./smoke-direct-controls.cjs')
 const { exercisePinStream } = require('./smoke-rooms-pin-stream.cjs')
 const { exerciseRoomApprovals } = require('./smoke-room-approvals.cjs')
+const { exerciseAgentChatWorkbench, openAgentPrivateChat } = require('./smoke-agent-chat-workbench.cjs')
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
 const { existsSync } = require('node:fs')
-const { mkdir, mkdtemp, readFile, readdir, rm, writeFile } = require('node:fs/promises')
+const { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } = require('node:fs/promises')
 const { createServer } = require('node:http')
 const { tmpdir } = require('node:os')
 const { join, resolve } = require('node:path')
@@ -50,7 +51,7 @@ async function main() {
   assert(existsSync(electronPathFile), 'Electron binary is not installed; install dependencies before this offline smoke')
   const electronExecutable = join(electronPackage, 'dist', (await readFile(electronPathFile, 'utf8')).trim())
   assert(existsSync(electronExecutable), 'Electron executable is missing; install dependencies before this offline smoke')
-  const temporaryRoot = await mkdtemp(join(tmpdir(), 'kun-rooms-desktop-smoke-'))
+  const temporaryRoot = await realpath(await mkdtemp(join(tmpdir(), 'kun-rooms-desktop-smoke-')))
   const home = join(temporaryRoot, 'home')
   const profile = join(home, '.kun', 'data')
   const userData = join(temporaryRoot, 'electron-user-data')
@@ -142,9 +143,14 @@ async function main() {
     await page.waitForLoadState('domcontentloaded')
     await resize(electronApplication, 1360, 900)
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
-    const direct = await (process.argv.includes('--approvals') ? exerciseRoomApprovals : process.argv.includes('--pin-stream') ? exercisePinStream : exerciseDirectChat)({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
+    const exercise = process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
+      : process.argv.includes('--approvals') ? exerciseRoomApprovals
+        : process.argv.includes('--pin-stream') ? exercisePinStream : exerciseDirectChat
+    const direct = await exercise({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
       application: electronApplication, workspaceRoot, real: process.argv.includes('--real-model'),
       resize: (width, height) => resize(electronApplication, width, height), switchRooms: () => switchMode(page, 'rooms'),
+      switchCode: () => switchMode(page, 'chat'),
+      openPrivate: (name) => openAgentPrivateChat({ page, name, switchCode: () => switchMode(page, 'chat') }),
       approve: (ref) => installNativeConsentFixture(electronApplication, ref) })
     assert.deepEqual(pageErrors, [], 'Renderer uncaught exceptions')
     result = { ok: true, direct, model: modelFixture.snapshot(), pageErrors, screenshots }

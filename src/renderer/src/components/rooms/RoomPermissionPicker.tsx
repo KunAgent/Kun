@@ -6,7 +6,7 @@ import { useAgentResource } from './agent-client'
 import { roomPath, roomRequestId } from './rooms-client'
 import { FloatingComposerExecutionPicker, type ComposerExecutionSettings } from '../chat/FloatingComposerExecutionPicker'
 
-export function RoomPermissionPicker({ roomId }: { roomId: string }) {
+export function RoomPermissionPicker({ roomId, compact = false }: { roomId: string; compact?: boolean }) {
   const { t } = useTranslation('common')
   const resource = useAgentResource<RoomPermissionState>(roomPath(roomId) + '/direct/permissions')
   const [saved, setSaved] = useState<RoomPermissionState | null>(null)
@@ -22,10 +22,10 @@ export function RoomPermissionPicker({ roomId }: { roomId: string }) {
       resource.refresh()
     } catch (cause) { setError(String(cause)) } finally { setBusy(false) }
   }
-  return <div className="room-permission-picker">
+  return <div className={'room-permission-picker' + (compact ? ' is-compact' : '')}>
     {data ? <FloatingComposerExecutionPicker value={data.policy} applying={busy} onChange={(patch) => void update(patch)}
       disabledModes={data.fullAccessUnavailable ? { 'full-access': t('roomPermissionLimited') } : undefined} /> : <span>{t('roomsLoading')}</span>}
-    <span className="room-permission-scope" title={t('roomPermissionNext')}>{t('roomPermissionScope')}</span>
+    {!compact ? <span className="room-permission-scope" title={t('roomPermissionNext')}>{t('roomPermissionScope')}</span> : null}
     {error || resource.error ? <span role="alert" className="rooms-run-error">{error || resource.error}</span> : null}
   </div>
 }

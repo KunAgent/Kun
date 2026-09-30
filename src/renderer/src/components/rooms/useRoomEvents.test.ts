@@ -253,6 +253,18 @@ describe('Room integration notifications', () => {
       expect.objectContaining({ body: 'Task: Code integration · Ready' })
     )
   })
+  it('suppresses an Agent DM notification while that private chat has focus', async () => {
+    await mount()
+    harness.state.route = 'agent-chat'
+    harness.focus.mockReturnValue(true)
+    storage.set('kun.agentChats.selected', 'room')
+    await event(2)
+    expect(harness.notify).not.toHaveBeenCalled()
+    rows = [{ ...integration, approvals: [{ id: 'next-private-approval' }] }]
+    harness.focus.mockReturnValue(false)
+    await event(3)
+    expect(harness.notify).toHaveBeenCalledTimes(1)
+  })
   it('uses changed gate IDs for new task approvals rather than suppressing every approval in a delivery', () => {
     const first = taskRoomNotice({
       ...detail,

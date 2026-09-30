@@ -28,6 +28,9 @@ const PaperWorkspaceView = lazy(() =>
 const RoomsWorkspaceView = lazy(() =>
   import('../rooms/RoomsWorkspaceView').then((module) => ({ default: module.RoomsWorkspaceView }))
 )
+const AgentChatStage = lazy(() =>
+  import('../rooms/AgentChatStage').then((module) => ({ default: module.AgentChatStage }))
+)
 const ExtensionManagementCenter = lazy(() =>
   import('../../extensions/ExtensionManagementCenter').then((module) => ({
     default: module.ExtensionManagementCenter
@@ -126,7 +129,12 @@ export function WorkbenchStageRouter({
       }`}
     >
       <div className="ds-stage-route-host relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {normalizedRoute === 'rooms' ? (
+        {normalizedRoute === 'agent-chat' ? (
+          <Suspense fallback={<WorkbenchPaneFallback />}>
+            <AgentChatStage onOpenThread={onOpenThread} onOpenPlugins={onOpenPlugins}
+              onToggleLeftSidebar={onToggleLeftSidebar} />
+          </Suspense>
+        ) : normalizedRoute === 'rooms' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
             <RoomsWorkspaceView onOpenThread={onOpenThread} onOpenPlugins={onOpenPlugins} />
           </Suspense>
