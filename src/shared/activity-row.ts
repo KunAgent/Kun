@@ -17,6 +17,8 @@ export type ActivityRow = {
   unitId: string
   kind: ActivityUnitKind
   threadId: string
+  roomId?: string
+  metadataPending?: boolean
   parentThreadId?: string
   teamId?: string
   harnessId: string

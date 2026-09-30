@@ -77,6 +77,8 @@ export class ActivityStore implements RuntimeEventObserver {
       unitId: input.unitId,
       kind: input.kind,
       threadId: input.threadId,
+      ...(input.roomId ? { roomId: input.roomId } : {}),
+      ...(input.metadataPending ? { metadataPending: true } : {}),
       ...(input.parentThreadId ? { parentThreadId: input.parentThreadId } : {}),
       ...(input.teamId ? { teamId: input.teamId } : {}),
       harnessId: input.harnessId,
@@ -282,6 +284,7 @@ export class ActivityStore implements RuntimeEventObserver {
         unitId: record.id,
         kind: 'thread',
         threadId: record.id,
+        ...(record.roomContext?.kind === 'conversation' ? { roomId: record.roomContext.roomId } : {}),
         ...(record.parentThreadId ? { parentThreadId: record.parentThreadId } : {}),
         harnessId: record.harnessId ?? 'kun',
         title: record.title,
@@ -318,6 +321,7 @@ export class ActivityStore implements RuntimeEventObserver {
         unitId,
         kind: 'thread',
         threadId: event.threadId,
+        ...(this.options.threadMetadata ? { metadataPending: true } : {}),
         harnessId: 'kun',
         title: unitId,
         workspace: { path: '', kind: 'directory' }
@@ -331,6 +335,7 @@ export class ActivityStore implements RuntimeEventObserver {
         unitId,
         kind: 'worker',
         threadId: child.childId,
+        ...(this.options.threadMetadata ? { metadataPending: true } : {}),
         parentThreadId: child.parentThreadId,
         harnessId: 'kun',
         title: (child.childLabel ?? child.childId).slice(0, 200),
@@ -342,9 +347,12 @@ export class ActivityStore implements RuntimeEventObserver {
 
   private async fillMetadata(unitId: string, threadId: string): Promise<void> {
     const metadata = await this.options.threadMetadata?.(threadId).catch(() => null)
-    if (!metadata || !this.rows.has(unitId)) return
+    if (!this.rows.has(unitId)) return
+    if (!metadata) { this.apply(unitId, { metadataPending: undefined }, 'runtime'); return }
     this.apply(unitId, {
       title: metadata.title.slice(0, 200),
+      metadataPending: undefined,
+      ...(metadata.roomContext?.kind === 'conversation' ? { roomId: metadata.roomContext.roomId } : {}),
       workspace: {
         path: metadata.workspace,
         kind: metadata.forkedFromThreadId ? 'worktree' : 'local'

@@ -1,3 +1,4 @@
+import { RoomNotificationPreferenceSchema, roomNotificationsMuted } from '../contracts/room-experience.js'
 import { createHash } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { z } from 'zod'
@@ -49,6 +50,7 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
     WHERE r.kind='room'
   ), summaries AS (
     SELECT e.*,
+      (SELECT p.document FROM room_documents p WHERE p.kind='room_preference' AND p.id=e.room_id) AS notification_preference,
       COALESCE((SELECT m.seq FROM room_documents m WHERE m.kind='message' AND m.room_id=e.room_id
         AND COALESCE(json_extract(m.document,'$.status'),'final')<>'streaming'
         AND COALESCE(json_extract(m.document,'$.presentationKind'),'')<>'setup'
@@ -82,15 +84,16 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
     ...(cursor ? [cursor.pinned, cursor.activitySeq, cursor.id] : []), limit + 1) as Array<{
       stable_id: string; agent_document: string | null; agent_id: string | null; room_document: string | null; room_id: string | null
       conversation_kind: RoomSidebarEntry['kind']; name: string; title: string; archived: number; pinned: number; activity_seq: number
-      latest_message: string | null; message_seq: number; read_seq: number; running_count: number; attention_count: number; deleted: number
+      notification_preference: string | null; latest_message: string | null; message_seq: number; read_seq: number; running_count: number; attention_count: number; deleted: number
     }>
   const page = rows.slice(0, limit), last = page.at(-1)
   return { entries: page.map((row) => {
     const agent = row.agent_document ? AgentIdentitySchema.parse(JSON.parse(row.agent_document)) : undefined
     const room = row.room_document ? RoomSchema.parse(JSON.parse(row.room_document)) : undefined
+    const preference = row.notification_preference ? RoomNotificationPreferenceSchema.safeParse(JSON.parse(row.notification_preference)) : undefined
     const message = row.latest_message ? JSON.parse(row.latest_message) as RoomMessage : undefined
     return { id: row.stable_id, agentId: row.agent_id ?? undefined, roomId: row.room_id ?? undefined,
-      name: row.name, title: row.title,
+      name: row.name, title: row.title, notificationsMuted: preference?.success ? roomNotificationsMuted(preference.data) : false,
       avatar: agent?.avatar ?? (row.conversation_kind === 'user_agent' ? undefined : room?.avatar),
       kind: row.conversation_kind, members: room?.members ?? [],
       activitySeq: row.activity_seq, pinned: Boolean(row.pinned), archived: Boolean(row.archived), deleted: Boolean(row.deleted), latestMessageSeq: row.message_seq, readSeq: row.read_seq,

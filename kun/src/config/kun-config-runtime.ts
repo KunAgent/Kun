@@ -187,6 +187,8 @@ export const ContextCompactionConfigSchema = z
 
 export const RuntimeTuningConfigSchema = z
   .object({
+    /** Global Rooms task ceiling; per-room limits still apply. */
+    rooms: z.object({ maxConcurrentTasks: z.number().int().min(1).max(32).optional() }).strict().optional(),
     // Max idle gap (ms) between streaming chunks before a turn fails with
     // `stream_idle_timeout`. Local LLM servers prefilling a huge prompt can
     // stay silent well past the 45s default; `0` disables the guard entirely.

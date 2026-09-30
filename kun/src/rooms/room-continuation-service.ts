@@ -1,3 +1,5 @@
+import { resultFingerprint } from './room-result-inbox.js'
+import type { RoomResultInbox } from '../contracts/room-result-inbox.js'
 import { isDeepStrictEqual } from 'node:util'
 import { agentStableId } from '../agents/agent-identity-service.js'
 import { freezeAgentPermissions } from '../agents/agent-permission-snapshot.js'
@@ -42,9 +44,9 @@ async function sourceFor(deps: RoomRuntimeDeps, input: RoomContinuation) {
   const root = rootId === base.id ? base : await deps.store.get<RoomRequestState>('request', rootId)
   if (!root || root.roomId !== scope.roomId || root.value.cancellationRequested ||
     ['cancelled', 'stopping'].includes(root.value.status)) return null
-  // Sibling completions may follow host continuations of the same user request,
-  // but never a newer user turn or an unowned turn.
-  for (const later of reporting ? [] : thread.turns.slice(sourceIndex + 1)) {
+  // Results remain owed after new topics. Goal/restart actions remain tied to
+  // the latest root; background results retain their original authority below.
+  for (const later of background ? [] : thread.turns.slice(sourceIndex + 1)) {
     if (!later.clientRequestId || later.status === 'aborted') return null
     const laterRun = await deps.store.get<RoomRunRecord>('room_run', roomRunId(scope.roomId, later.clientRequestId))
     if (!laterRun?.value.requestId || laterRun.value.threadId !== thread.id || laterRun.value.turnId !== later.id) return null
@@ -80,15 +82,26 @@ export async function enqueuePrivateContinuation(deps: RoomRuntimeDeps, input: R
   await deps.assertOwnership()
   const id = agentStableId('private-continuation', input.threadId, input.sourceTurnId, input.kind, input.key)
   const existing = await deps.store.get<RoomRequestState>('request', id)
-  if (existing) return existing.value.cancellationRequested ? 'ignored' : 'queued'
+  if (existing) {
+    // Same callback key is an immutable result identity, never a prompt update.
+    if (existing.value.privateInput !== input.prompt) throw new Error('Continuation result identity was reused with different content')
+    return existing.value.cancellationRequested ? 'ignored' : 'queued'
+  }
   const current = await sourceFor(deps, input)
   if (!current) return 'ignored'
   const { thread, source, base, root, room, agent, snapshot } = current
+  const reporting = ['background_subagent', 'background_shell', 'workbench_task'].includes(input.kind)
+  const inboxId = reporting ? agentStableId('room-result', id) : undefined
+  const now = new Date().toISOString()
+  const result: RoomResultInbox | undefined = inboxId ? { id: inboxId, roomId: room.id,
+    participantAgentId: agent.id, rootRequestId: root.id, requestId: id, threadId: thread.id,
+    sourceTurnId: source.id, kind: input.kind as RoomResultInbox['kind'], prompt: input.prompt,
+    fingerprint: resultFingerprint(input.prompt), status: 'pending', receivedAt: now, updatedAt: now } : undefined
   const request: RoomRequestState = {
     id, roomId: room.id, rootRequestId: root.id, privateProtocol: 'direct-v1',
     privateInput: input.prompt, privateWorkspace: thread.workspace,
     privateModel: base.value.privateModel,
-    privateContinuation: { sourceTurnId: source.id, kind: input.kind,
+    privateContinuation: { sourceTurnId: source.id, kind: input.kind, ...(inboxId ? { inboxId } : {}),
       ...(input.kind === 'goal' ? { goalCreatedAt: thread.goal!.createdAt } : {}) },
     status: 'pending', threadId: thread.id, roomSnapshot: snapshot,
     message: { ...base.value.message, attachmentIds: [] }, sourceMessageId: base.value.sourceMessageId,
@@ -98,13 +111,16 @@ export async function enqueuePrivateContinuation(deps: RoomRuntimeDeps, input: R
     requestId: id,
     checks: [
       { kind: 'request', id, expectedRevision: null },
+      ...(inboxId ? [{ kind: 'room_result_inbox' as const, id: inboxId, expectedRevision: null }] : []),
       { kind: 'request', id: base.id, expectedRevision: base.revision },
       ...(root.id !== base.id ? [{ kind: 'request' as const, id: root.id, expectedRevision: root.revision }] : []),
       { kind: 'room', id: room.id, expectedRevision: room.revision },
       { kind: 'agent_identity', id: agent.id, expectedRevision: agent.revision }
     ],
-    puts: [{ kind: 'request', id, roomId: room.id, value: request }],
-    events: [{ roomId: room.id, kind: 'request.updated', payload: { id } }]
+    puts: [{ kind: 'request', id, roomId: room.id, value: request },
+      ...(result ? [{ kind: 'room_result_inbox' as const, id: result.id, roomId: room.id, value: result }] : [])],
+    events: [{ roomId: room.id, kind: 'request.updated', payload: { id } },
+      ...(inboxId ? [{ roomId: room.id, kind: 'room_result_inbox.updated', payload: { id: inboxId } }] : [])]
   })
   return 'queued'
 }

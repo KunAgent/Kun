@@ -15,6 +15,9 @@ export type ToolCallDispatcherInput = {
   context: ToolHostContext
   stormBreaker?: Pick<ToolStormBreaker, 'inspect'>
   onToolExecuted?: (toolName: string, result: ToolHostResult) => void
+  /** Host-owned budget guard between batches; pending calls still get results. */
+  canContinue?: () => boolean | Promise<boolean>
+  maxParallelCalls?: () => number
 }
 
 /**
@@ -73,6 +76,11 @@ export class ToolCallDispatcher {
 
     while (index < dispatch.calls.length) {
       if (dispatch.signal.aborted) return 'aborted'
+      if (input.canContinue && !await input.canContinue()) {
+        await this.suppressAll({ ...dispatch, calls: dispatch.calls.slice(index) },
+          'The active goal stopped because its outcome-progress budget was exhausted.')
+        return 'budget_exhausted'
+      }
       const call = dispatch.calls[index]
       if (!call) break
 
@@ -117,7 +125,8 @@ export class ToolCallDispatcher {
       const batch: ToolCallLike[] = [call]
       index += 1
       let suppressedAfterBatch: { call: ToolCallLike; reason?: string } | undefined
-      for (const next of parallelCandidates.calls.slice(1)) {
+      const batchLimit = Math.max(1, input.maxParallelCalls?.() ?? parallelCandidates.calls.length)
+      for (const next of parallelCandidates.calls.slice(1, batchLimit)) {
         const nextStorm = input.stormBreaker?.inspect(next)
         if (nextStorm?.suppress) {
           suppressedAfterBatch = { call: next, reason: nextStorm.reason }

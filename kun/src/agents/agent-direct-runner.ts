@@ -1,3 +1,5 @@
+import { AGENT_COMMITMENT_TOOLS, AGENT_ARTIFACT_TOOLS } from '../contracts/agent-work-tools.js'
+import { settleRoomResultInbox } from '../rooms/room-result-inbox.js'
 import { mkdir, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -31,7 +33,7 @@ export class AgentDirectRunner {
   constructor(private readonly deps: RoomRuntimeDeps, private readonly service: RoomService) {}
   /** Process-local record of steer attempts the target durably rejected, so a sealed turn is not retried every tick. */
   private readonly steerRejected = new Set<string>()
-  async tick(row: RoomStoredDocument<RoomRequestState>) {
+  async tick(row: RoomStoredDocument<RoomRequestState>, allowNewTurn = true) {
     let request = structuredClone(row.value)
     const member = request.roomSnapshot.members.find((item) => item.id === request.roomSnapshot.defaultMemberId)!
     if (!member.participantAgentId) throw new Error('Agent identity unavailable')
@@ -97,6 +99,7 @@ export class AgentDirectRunner {
     }
     let thread = await this.deps.threads.getMetadata(request.threadId)
     if (!thread) {
+      if (!allowNewTurn) return
       if (request.admissionAttempted) return this.save(row, { ...request, status: 'recovery_required', error: 'Original conversation is unavailable; do not resend this execution.' })
       const profile = member.presetSnapshot ?? this.deps.profiles()[member.presetId]
       const limits = member.capabilityOverrides
@@ -115,7 +118,7 @@ export class AgentDirectRunner {
           ...(workbench ? { workbench: { code: workbench.code !== 'off', work: workbench.work !== 'off' } } : {}) })
       }, { id: request.threadId, relation: 'side', roomContext: { roomId: request.roomId, memberId: member.id,
         participantAgentId: member.participantAgentId, agentRevision: member.agentRevision, kind: 'conversation',
-        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...ROOM_REMINDER_TOOL_NAMES, ...ROOM_APP_TOOL_NAMES, ...AGENT_COLLABORATION_TOOLS, ...workbenchNames])] : undefined,
+        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...ROOM_REMINDER_TOOL_NAMES, ...ROOM_APP_TOOL_NAMES, ...AGENT_COLLABORATION_TOOLS, ...AGENT_COMMITMENT_TOOLS, ...AGENT_ARTIFACT_TOOLS, ...workbenchNames])] : undefined,
         // Tools outside the Agent's workbench policy are hidden, not merely refused.
         blockedToolNames: [...new Set([...(policy.blocked ?? []), ...WORKBENCH_TOOL_NAMES.filter((name) => !workbenchNames.includes(name))])],
         blockedProviderIds: limits?.blockedMcpServers ?? [], blockedSkillIds: limits?.blockedSkills ?? [], skillsEnabled: policy.skillsEnabled } })
@@ -144,6 +147,8 @@ export class AgentDirectRunner {
         if (target) { await this.admitSteer(row, request, thread, scoped, identity, target); return }
       }
     }
+    // Busy lanes still admit steering, but never create a competing turn.
+    if (!turn && !allowNewTurn) return
     const prompt = await freezeAgentMemoryInput(this.deps, scoped, identity, request.privateInput!)
     const freshUserRequest = !request.privateContinuation && !request.privateReminder && !request.handoffReturnId &&
       request.message.body !== AGENT_SETUP_KICKOFF
@@ -327,8 +332,10 @@ export class AgentDirectRunner {
     await this.save(row, { ...request, admissionAttempted: false, status,
       error: status === 'failed' ? 'The response failed. Its partial output is retained; inspect the run or retry.' : undefined })
   }
-  private save(row: RoomStoredDocument<RoomRequestState>, value: RoomRequestState) {
-    if (JSON.stringify(row.value) === JSON.stringify(value)) return Promise.resolve()
-    return putRoomDocument(this.deps.store, 'request', row.id, row.roomId!, value, row)
+  private async save(row: RoomStoredDocument<RoomRequestState>, value: RoomRequestState) {
+    if (JSON.stringify(row.value) !== JSON.stringify(value)) {
+      await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!, value, row)
+    }
+    await settleRoomResultInbox(this.deps.store, value)
   }
 }

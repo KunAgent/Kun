@@ -112,7 +112,9 @@ export class SqliteRoomStore implements RoomStore {
       args.push(parsed.threadId, parsed.threadId)
     }
     if (parsed.search) {
-      if (kind === 'agent_identity') {
+      if (kind === 'agent_commitment' || kind === 'agent_artifact') {
+        clauses.push("instr(lower(COALESCE(json_extract(document,'$.objective'),'') || ' ' || COALESCE(json_extract(document,'$.title'),'') || ' ' || COALESCE(json_extract(document,'$.relativePath'),'') || ' ' || COALESCE(json_extract(document,'$.waitingOn'),'')),lower(?))>0"); args.push(parsed.search)
+      } else if (kind === 'agent_identity') {
         clauses.push("instr(lower(COALESCE(json_extract(document,'$.name'),'') || ' ' || COALESCE(json_extract(document,'$.title'),'')),lower(?))>0"); args.push(parsed.search)
       } else if (kind === 'room_run') {
         clauses.push("instr(lower(COALESCE(json_extract(document,'$.input'),'') || ' ' || COALESCE(json_extract(document,'$.memberLabel'),'') || ' ' || COALESCE(json_extract(document,'$.reason'),'') || ' ' || COALESCE(json_extract(document,'$.error'),'')),lower(?))>0")
@@ -318,8 +320,8 @@ export class SqliteRoomStore implements RoomStore {
         written.add(key)
         const current = db.prepare('SELECT * FROM room_documents WHERE kind = ? AND id = ?')
           .get(put.kind, put.id) as DocumentRow | undefined
-        if (current && ['delivery', 'review', 'artifact', 'rule_version', 'context', 'rule_bundle', 'request_input',
-          'peer_inbox', 'peer_publication', 'peer_metric'].includes(put.kind)) {
+        if (current && (['delivery', 'review', 'artifact', 'rule_version', 'context', 'rule_bundle', 'request_input',
+          'peer_inbox', 'peer_publication', 'peer_metric'].includes(put.kind) || put.kind === 'agent_artifact' && JSON.parse(current.document).status === 'version')) {
           throw new RoomStoreConflictError(`room ${put.kind} versions are immutable`, current.revision)
         }
         if (put.kind === 'room_run') {

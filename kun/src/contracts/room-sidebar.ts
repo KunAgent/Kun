@@ -14,6 +14,7 @@ export type RoomSidebarQuery = z.input<typeof RoomSidebarQuery>
 export type RoomSidebarEntry = {
   id: string; roomId?: string; agentId?: string; name: string; title: string; avatar?: RoomAvatarReference
   kind: 'user_agent' | 'group' | 'agent_agent'; members: RoomMember[]; pinned: boolean; archived: boolean; deleted: boolean
+  notificationsMuted?: boolean
   activitySeq?: number; latestMessage?: RoomLatestMessage; latestMessageSeq: number; readSeq: number; runningCount: number; attentionCount: number
 }
 export type RoomSidebarPage = { entries: RoomSidebarEntry[]; nextCursor?: string }

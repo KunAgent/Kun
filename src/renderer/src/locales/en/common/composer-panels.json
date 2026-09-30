@@ -1,4 +1,5 @@
 {
   "approvalInterruptTurn": "Cancel turn",
-  "approvalInterruptTurnHint": "Deny remaining approvals and stop the current turn"
+  "approvalInterruptTurnHint": "Deny remaining approvals and stop the current turn",
+  "queuedMessagesPersistenceFailed": "Could not save your queued messages. They remain in memory but may not survive a restart."
 }

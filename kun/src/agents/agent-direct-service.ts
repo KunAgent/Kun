@@ -1,5 +1,9 @@
+import { z } from 'zod'
+import { legacyAgentFiles } from './agent-legacy-files.js'
+import { AgentArtifactQuery } from '../contracts/agent-artifacts.js'
+import { artifactReference } from './agent-artifact-library.js'
 import { freezeAgentPermissions } from './agent-permission-snapshot.js'
-import { realpath, stat, readdir } from 'node:fs/promises'
+import { realpath, stat } from 'node:fs/promises'
 import { relative, isAbsolute } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { RoomRuntime } from '../rooms/room-runtime.js'
@@ -115,25 +119,18 @@ export async function controlDirectRequest(rooms: RoomRuntime, roomId: string, r
   rooms.wake()
   return { accepted: true }
 }
-export async function directFiles(rooms: RoomRuntime, roomId: string) {
+export async function directFiles(rooms: RoomRuntime, roomId: string, raw: unknown = {}) {
   const room = await rooms.service.get(roomId), workspace = await privateWorkspace(rooms, room)
-  const files: import('../contracts/room-content.js').RoomContentReference[] = []
-  const seen = new Set<string>()
-  const messages = await rooms.deps.store.list<import('../contracts/rooms.js').RoomMessage>('message', { roomId, limit: 200 })
-  for (const row of messages) {
-    for (const reference of row.value.references ?? []) {
-      if (reference.kind !== 'agent_file' || reference.workspaceId !== workspace.id || seen.has(reference.relativePath)) continue
-      seen.add(reference.relativePath)
-      files.push(reference)
-      if (files.length >= 100) return { files }
-    }
-  }
-  let entries
-  try { entries = await readdir(workspace.path, { withFileTypes: true }) } catch { return { files } }
-  for (const entry of entries.filter((entry) => entry.isFile() && !entry.name.startsWith('.')).slice(0, 100)) {
-    if (seen.has(entry.name)) continue
-    files.push({ kind: 'agent_file' as const, workspaceId: workspace.id, relativePath: entry.name, titleSnapshot: entry.name })
-    if (files.length >= 100) break
-  }
-  return { files }
+  const { legacy_cursor: legacyCursor, ...input } = AgentArtifactQuery.extend({
+    legacy_cursor: z.string().min(1).max(8192).optional()
+  }).strict().parse(raw)
+  if (legacyCursor) return legacyAgentFiles(rooms.deps.store, roomId, workspace, legacyCursor, input.search, input.limit)
+  const libraryPage = await rooms.artifactLibrary.list(room.members[0].participantAgentId!, input)
+  const files = libraryPage.artifacts.map(artifactReference)
+  // The legacy inventory has a separate bounded cursor. Older nested references
+  // and root files remain reachable; existing paths never masquerade as snapshots.
+  if (libraryPage.nextCursor || input.archived === 'true') return { files, nextCursor: libraryPage.nextCursor }
+  if (input.cursor) return { files, nextLegacyCursor: 'start' }
+  const legacy = await legacyAgentFiles(rooms.deps.store, roomId, workspace, 'start', input.search, input.limit)
+  return { files: [...files, ...legacy.files], nextLegacyCursor: legacy.nextLegacyCursor }
 }

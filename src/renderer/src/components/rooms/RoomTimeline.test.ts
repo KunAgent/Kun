@@ -78,6 +78,7 @@ describe('RoomTimeline conversation interactions', () => {
   let props: Parameters<typeof RoomTimeline>[0]
 
   beforeEach(async () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
     await i18n.changeLanguage('en')
     storage.clear()
     api.request
@@ -94,12 +95,14 @@ describe('RoomTimeline conversation interactions', () => {
         getItem: (key: string) => storage.get(key) ?? null,
         setItem: (key: string, value: string) => storage.set(key, value)
       },
-      dispatchEvent
+      getComputedStyle: () => ({ zoom: '1' }), innerWidth: 1200, innerHeight: 800,
+      dispatchEvent, addEventListener: vi.fn(), removeEventListener: vi.fn()
     })
     vi.stubGlobal('document', {
       hasFocus,
       activeElement: { focus, isConnected: true },
-      getElementById: () => ({ scrollIntoView })
+      getElementById: () => ({ scrollIntoView }),
+      addEventListener: vi.fn(), removeEventListener: vi.fn()
     })
     vi.stubGlobal('navigator', {
       clipboard: { writeText: vi.fn().mockResolvedValue(undefined) }
@@ -133,7 +136,7 @@ describe('RoomTimeline conversation interactions', () => {
           createNodeMock: (element) => {
             if ((element.props as { className?: string }).className === 'rooms-timeline-scroll')
               return scroller
-            return { focus, isConnected: true, querySelectorAll: () => [] }
+            return { focus, isConnected: true, querySelectorAll: () => [], querySelector: () => null, contains: () => false, getBoundingClientRect: () => ({ left: 0, top: 0, right: 100, bottom: 100, width: 100, height: 100 }) }
           }
         })
     })
@@ -169,7 +172,8 @@ describe('RoomTimeline conversation interactions', () => {
     expect(onMember).toHaveBeenCalledWith(member.id, 'topic')
     await act(async () => button('Copy message').props.onClick())
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Message one')
-    act(() => button('Pin as project agreement').props.onClick())
+    act(() => renderer.root.findByProps({ className: 'rooms-message-more' }).findAllByType('button')[0].props.onClick())
+    await act(async () => button('Pin as project agreement').props.onClick())
     expect(onPin).toHaveBeenCalledWith(props.messages[0])
     act(() => button('Reply').props.onClick())
     expect(dispatchEvent).toHaveBeenCalledWith(
@@ -216,11 +220,14 @@ describe('RoomTimeline conversation interactions', () => {
       act(() => article(id).findByProps({ className: 'rooms-message-task' }).props.onClick())
     }
     expect(onTask.mock.calls).toEqual([['task'], ['task'], ['task'], ['task']])
+    act(() => article('ordinary-historical-reply').findByProps({ className: 'rooms-message-more' }).findAllByType('button')[0].props.onClick())
     expect(article('ordinary-historical-reply').findAllByType(RoomMessageRunButton)).toHaveLength(1)
     api.request.mockClear().mockResolvedValue({ runId: 'historical-progress-run' })
+    act(() => article('progress-task-2').findByProps({ className: 'rooms-message-more' }).findAllByType('button')[0].props.onClick())
     await act(async () => article('progress-task-2').findByType(RoomMessageRunButton).findByType('button').props.onClick())
     expect(api.request).toHaveBeenCalledWith('/v1/rooms/room/messages/progress-task-2/run', 'GET', undefined, expect.any(AbortSignal))
     expect(onRun).toHaveBeenCalledWith('historical-progress-run')
+    act(() => article('recorded-task-reply').findByProps({ className: 'rooms-message-more' }).findAllByType('button')[0].props.onClick())
     act(() => article('recorded-task-reply').findByType(RoomMessageRunButton).findByType('button').props.onClick())
     expect(onRun).toHaveBeenLastCalledWith('exact-run')
     expect(api.request).toHaveBeenCalledTimes(1)
@@ -279,29 +286,25 @@ describe('RoomTimeline conversation interactions', () => {
     act(() => button('View original message').props.onClick())
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
     api.request.mockResolvedValue({
-      message: message('archived', 1, {
+      messages: [message('before', 0), message('archived', 1, {
         authorMemberId: 'removed',
         authorLabelSnapshot: 'Former member'
-      })
+      }), message('after', 2)]
     })
     await render({
       messages: [message('two', 2, { replyToMessageId: 'archived' })]
     })
     await act(async () => button('View original message').props.onClick())
     expect(api.request).toHaveBeenLastCalledWith(
-      '/v1/rooms/room/messages/archived'
-    )
-    const dialog = renderer.root.findByProps({ role: 'dialog' })
-    expect(
-      dialog
-        .findAllByType('strong')
-        .some((item) => item.children.includes('Former member'))
-    ).toBe(true)
-    expect(dialog.findAllByType(RoomAvatar)[0].props.onClick).toBeUndefined()
-    act(() =>
-      dialog.props.onKeyDown({ key: 'Escape', stopPropagation: vi.fn() })
+      '/v1/rooms/room/messages/archived/context', 'GET', undefined, expect.any(AbortSignal)
     )
     expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(0)
+    expect(renderer.root.findByProps({ id: 'room-message-before' })).toBeTruthy()
+    expect(renderer.root.findByProps({ id: 'room-message-after' })).toBeTruthy()
+    const target = renderer.root.findByProps({ 'data-timeline-id': 'archived' })
+    expect(target.props.className).toContain('is-message-target')
+    expect(target.findAllByType('strong').some((item) => item.children.includes('Former member'))).toBe(true)
+    expect(target.findAllByType(RoomAvatar)[0].props.onClick).toBeUndefined()
   })
 
   it('uses virtual scrolling only above 40 messages and respects background-window read conditions', async () => {
@@ -312,7 +315,7 @@ describe('RoomTimeline conversation interactions', () => {
       )
     })
     expect(renderer.root.findAllByType('article')).toHaveLength(40)
-    expect(api.request).not.toHaveBeenCalled()
+    expect(api.request.mock.calls.every((call) => call[1] !== 'POST')).toBe(true)
     await render({
       messages: Array.from({ length: 41 }, (_, index) =>
         message(String(index), index + 1)
@@ -322,6 +325,57 @@ describe('RoomTimeline conversation interactions', () => {
     expect(renderer.root.findAllByType('article')).toHaveLength(3)
     expect(api.scrollToIndex).toHaveBeenCalledWith(35, { align: 'center' })
     expect(props.onJumped).toHaveBeenCalled()
+  })
+
+  it('keeps the conversation visible during search and loads surrounding context on selection', async () => {
+    await render()
+    scroll(150)
+    vi.useFakeTimers()
+    api.request.mockImplementation(async (path: string) => path.includes('/search')
+      ? { messages: [message('match', 900)] }
+      : { messages: [message('before', 899), message('match', 900), message('after', 901)] })
+    await render({ searchOpen: true })
+    act(() => renderer.root.findByType('input').props.onChange({ target: { value: 'match' } }))
+    await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+    expect(renderer.root.findByProps({ id: 'room-message-one' })).toBeTruthy()
+    await act(async () => renderer.root.findByProps({ className: 'rooms-search-result' }).props.onClick())
+    expect(api.request).toHaveBeenCalledWith('/v1/rooms/room/messages/match/context', 'GET', undefined, expect.any(AbortSignal))
+    for (const id of ['one', 'before', 'match', 'after']) expect(renderer.root.findByProps({ id: 'room-message-' + id })).toBeTruthy()
+    expect(renderer.root.findByProps({ className: 'rooms-search-result' }).props['aria-pressed']).toBe(true)
+    expect(renderer.root.findByType('input').props.value).toBe('match')
+    expect(renderer.root.findByProps({ 'data-timeline-id': 'match' }).props.className).toContain('is-message-target')
+  })
+
+  it('restores the original latest position and follow mode after closing a selected search result', async () => {
+    await render()
+    vi.useFakeTimers()
+    api.request.mockImplementation(async (path: string) => path.includes('/search')
+      ? { messages: [message('match', 900)] }
+      : { messages: [message('before', 899), message('match', 900)] })
+    await render({ searchOpen: true })
+    act(() => renderer.root.findByType('input').props.onChange({ target: { value: 'match' } }))
+    await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+    await act(async () => renderer.root.findByProps({ className: 'rooms-search-result' }).props.onClick())
+    expect(renderer.root.findAllByProps({ className: 'rooms-timeline-latest' })).toHaveLength(1)
+    scroller.scrollTop = 120
+    await render({ searchOpen: false })
+    expect(scroller.scrollTop).toBe(scroller.scrollHeight)
+    expect(renderer.root.findAllByProps({ className: 'rooms-timeline-latest' })).toHaveLength(0)
+    scroller.scrollHeight = 1500
+    await render({ messages: [message('one'), message('new', 901)] })
+    expect(scroller.scrollTop).toBe(1500)
+  })
+
+  it('shows the server unread boundary and counts actual incoming messages despite global sequence gaps', async () => {
+    api.request.mockResolvedValue({ seq: 1, firstUnreadMessageId: 'unread' })
+    await render({ messages: [message('one', 1), message('unread', 1000)] })
+    expect(renderer.root.findByProps({ className: 'rooms-unread-boundary' }).children).toContain('Unread messages')
+    expect(button('Jump to first unread')).toBeTruthy()
+    expect(api.request.mock.calls.every((call) => call[1] !== 'POST')).toBe(true)
+    await render({ messages: [message('one', 1), message('unread', 1000), message('new', 9000)] })
+    expect(renderer.root.findByProps({ className: 'rooms-timeline-latest' }).children).toContain('2 new messages')
+    await act(async () => button('Back to latest messages').props.onClick())
+    expect(api.request).toHaveBeenCalledWith('/v1/rooms/room/read', 'POST', expect.objectContaining({ seq: 9000 }))
   })
 
   it('keeps same-role avatar identity stable after a rename and avoids nested interactive group buttons', async () => {

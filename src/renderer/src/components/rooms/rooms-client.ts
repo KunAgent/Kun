@@ -264,12 +264,18 @@ export const roomsClient = {
         ...(input.resultRef ? { resultRef: input.resultRef } : {})
       }
     ),
-  listRoomReminders: (roomId: string, status: 'scheduled' | 'all' = 'all', signal?: AbortSignal) =>
+  listRoomReminders: (roomId: string, status: 'scheduled' | 'paused' | 'all' = 'all', signal?: AbortSignal) =>
     roomsRequest<{ reminders: RoomReminderEntry[] }>(
       `${roomPath(roomId)}/reminders?status=${status}`,
       'GET',
       undefined,
       signal
+    ),
+  setRoomReminderPaused: (roomId: string, reminder: RoomReminderEntry, paused: boolean, clientRequestId = roomRequestId()) =>
+    roomsRequest<RoomReminderEntry>(
+      `${roomPath(roomId)}/reminders/${encodeURIComponent(reminder.reminderId)}/${paused ? 'pause' : 'resume'}`,
+      'POST',
+      { clientRequestId, expectedRevision: reminder.revision }
     ),
   cancelRoomReminder: (roomId: string, reminder: RoomReminderEntry, clientRequestId = roomRequestId()) =>
     roomsRequest<RoomReminderEntry>(

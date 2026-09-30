@@ -217,6 +217,61 @@ describe('RoomComposer', () => {
     expect(revoke).toHaveBeenCalledTimes(2)
     expect(send.mock.calls[0][0].attachmentIds).toEqual(['2'])
   })
+  it('keeps typing enabled during uploads, supports per-file cancellation, and ignores late responses', async () => {
+    let finish!: (value: { id: string; name: string }) => void
+    upload.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    await act(async () => renderer.root.findByProps({ type: 'file' }).props.onChange({
+      target: { files: [{ name: 'slow.png', type: 'image/png' }] }
+    }))
+    expect(renderer.root.findByType('fieldset').props.disabled).toBe(false)
+    input('Continue typing while upload runs')
+    await submit()
+    expect(send).not.toHaveBeenCalled()
+    act(() => renderer.root.findByProps({ 'aria-label': 'Cancel slow.png' }).props.onClick())
+    await act(async () => finish({ id: 'late', name: 'slow.png' }))
+    expect(JSON.parse(stored.get('kun.rooms.draft.room')!).attachments).toEqual([])
+    await submit()
+    expect(send.mock.calls[0][0]).toMatchObject({ body: 'Continue typing while upload runs', attachmentIds: [] })
+  })
+
+  it('keeps successful files when another upload fails and retries only the failed file', async () => {
+    upload.mockImplementation(async (file: { name: string }) => {
+      if (file.name === 'bad.txt') throw new Error('Offline')
+      return { id: 'good', name: file.name }
+    })
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    await act(async () => renderer.root.findByProps({ type: 'file' }).props.onChange({
+      target: { files: [{ name: 'good.txt', type: 'text/plain' }, { name: 'bad.txt', type: 'text/plain' }] }
+    }))
+    expect(JSON.parse(stored.get('kun.rooms.draft.room')!).attachments).toHaveLength(1)
+    expect(JSON.stringify(renderer.toJSON())).toContain('Offline')
+    upload.mockResolvedValue({ id: 'retried', name: 'bad.txt' })
+    await act(async () => renderer.root.findByProps({ 'aria-label': 'Retry bad.txt' }).props.onClick())
+    await submit()
+    expect(send.mock.calls[0][0].attachmentIds).toEqual(['good', 'retried'])
+    expect(send.mock.calls[0][1]).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'good', name: 'good.txt' })]))
+  })
+
+  it('discards in-flight uploads when leaving the room and keeps mention IDs unique', async () => {
+    let finish!: (value: { id: string; name: string }) => void
+    upload.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    await act(async () => renderer.root.findByProps({ type: 'file' }).props.onChange({
+      target: { files: [{ name: 'slow.txt', type: 'text/plain' }] }
+    }))
+    act(() => renderer.unmount())
+    await act(async () => finish({ id: 'late', name: 'slow.txt' }))
+    await render(send)
+    act(() => renderer.root.findByProps({ 'data-room-rich-input': true }).props.onChange({ body: 'hello', mentions: ['developer', 'developer'] }))
+    expect(JSON.parse(stored.get('kun.rooms.draft.room')!).attachments).toEqual([])
+    await submit()
+    expect(send.mock.calls[0][0].mentionMemberIds).toEqual(['developer'])
+  })
+
   it('continues a selected topic explicitly and starts a new topic after a successful send', async () => {
     const send = vi.fn().mockResolvedValue(undefined)
     await render(send)

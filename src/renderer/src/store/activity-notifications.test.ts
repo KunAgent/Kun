@@ -92,6 +92,22 @@ describe('startActivityNotifications', () => {
     expect(notify).toHaveBeenCalledTimes(1)
   })
 
+  it('defers pending metadata and lets Rooms own its final publication notifications', async () => {
+    const { notify, deps } = makeDeps()
+    startActivityNotifications(deps)
+    const waiting = makeRow({ state: 'waiting', metadataPending: true })
+    useActivityStore.setState({ rows: { 'unit-1': waiting } })
+    await flush()
+    expect(notify).not.toHaveBeenCalled()
+    useActivityStore.setState({ rows: { 'unit-1': { ...waiting, metadataPending: undefined, roomId: 'room' } } })
+    await flush()
+    expect(notify).not.toHaveBeenCalled()
+    useActivityStore.setState({ rows: { 'unit-1': waiting } })
+    useActivityStore.setState({ rows: { 'unit-1': { ...waiting, metadataPending: undefined } } })
+    await flush()
+    expect(notify).toHaveBeenCalledOnce()
+  })
+
   it('does not notify when the window is focused on that thread', async () => {
     vi.stubGlobal('document', {
       visibilityState: 'visible',

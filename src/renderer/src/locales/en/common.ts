@@ -1,3 +1,4 @@
+import roomsPolish from './common/rooms-polish.json'
 import roomsApproval from './common/rooms-approval.json'
 import roomsDirect from './common/rooms-direct.json'
 import roomsInitIm from './common/rooms-init-im.json'
@@ -48,6 +49,7 @@ const common = {
   ...roomsInteractions,
   ...roomsExperience,
   ...roomsContent,
+  ...roomsPolish,
   ...roomsWorkbench,
   queuedMessageEditAccountUnavailable: 'The original model account is unavailable or has changed. The queued message has been kept.',
   queuedMessageEditSteering: 'This message is being delivered as guidance; editing is temporarily unavailable.',

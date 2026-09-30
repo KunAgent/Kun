@@ -54,6 +54,7 @@ export function RoomPeerSummary({
     (paused
       ? t('roomsPeerPausedSummary', { count: paused })
       : t('roomsPeerQuiet'))
+  if (!loading && !running && !pending && !stopping && !blocked && !paused && !taskCounts?.runningCount && !taskCounts?.attentionCount) return null
   return (
     <div className="rooms-activity-summary">
       <button

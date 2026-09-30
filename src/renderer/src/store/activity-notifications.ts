@@ -56,6 +56,7 @@ export type ActivityNotificationDeps = {
     threadId?: string
     source: 'main-agent' | 'subagent'
     category: AdeActivityNotificationCategory
+    dedupeKey?: string
     title: string
     body: string
   }): void
@@ -85,7 +86,10 @@ async function maybeNotifyTransition(
   prev: ActivityRow | undefined,
   deps: ActivityNotificationDeps
 ): Promise<void> {
-  const category = activityNotificationCategory(row, prev)
+  // The Rooms queue follows actual visible publication and exact pending gates.
+  // Defer first transitions until metadata identifies that owner.
+  if (row.roomId || row.metadataPending) return
+  const category = activityNotificationCategory(row, prev?.metadataPending ? undefined : prev)
   if (!category) return
   // Consume the key before any gate: a transition the user watched live (or
   // chose to silence) must not fire later just because the row lingers.
@@ -95,6 +99,7 @@ async function maybeNotifyTransition(
   if (!(await deps.notificationsEnabled(category))) return
   deps.notify({
     threadId: row.threadId,
+    dedupeKey: 'activity:' + activityNotificationDedupeKey(row, category),
     source: row.kind === 'worker' ? 'subagent' : 'main-agent',
     category,
     title: i18n.t(`common:adeNotify.${category}Title`),

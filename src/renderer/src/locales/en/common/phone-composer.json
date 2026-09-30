@@ -696,6 +696,5 @@
   "autoPlanBuildDirectHint": "Start the build as soon as planning finishes",
   "autoPlanBuildUseWorktree": "Use an Agent-managed worktree",
   "autoPlanBuildUseOnce": "Use once",
-  "autoPlanBuildSaveDefault": "Set as default and continue",
-  "queuedMessagesPersistenceFailed": "Could not save your queued messages. They remain in memory but may not survive a restart."
+  "autoPlanBuildSaveDefault": "Set as default and continue"
 }

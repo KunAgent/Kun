@@ -1,3 +1,4 @@
+import { ROOM_GOAL_MAX_NO_PROGRESS_TOOLS, ROOM_GOAL_MAX_TIME_SECONDS, ROOM_GOAL_MAX_TOKENS } from './goal-execution-budget.js'
 import { describe, expect, it, vi } from 'vitest'
 import { InMemoryThreadStore } from '../adapters/in-memory-thread-store.js'
 import { createThreadRecord } from '../domain/thread.js'
@@ -107,6 +108,39 @@ describe('GoalTurnCoordinator', () => {
       expect.objectContaining({ kind: 'goal_updated', goal: expect.objectContaining({ timeUsedSeconds: 3 }) })
     ])
     expect(h.timers.filter((entry) => !entry.cancelled)).toHaveLength(0)
+  })
+
+  it('exposes only the uncharged active slice after a suspension', async () => {
+    const h = harness()
+    await h.threadStore.upsert(activeThread())
+    const first = await h.coordinator.begin(threadId)
+    h.setNowMs(5_000)
+    await h.coordinator.afterSuspended(threadId, first)
+    const goal = (await h.threadStore.get(threadId))!.goal!
+    expect(goal.timeUsedSeconds).toBe(4)
+    expect(h.coordinator.activeElapsedSeconds(threadId, goal)).toBeUndefined()
+    await h.coordinator.begin(threadId)
+    h.setNowMs(6_000)
+    expect(h.coordinator.activeElapsedSeconds(threadId, goal)).toBe(1)
+  })
+
+  it('parks interactive waits without exhausting the active-time budget, including overlapping gates', async () => {
+    const h = harness(), initial = activeThread()
+    await h.threadStore.upsert({ ...initial, roomContext: { roomId: 'room', memberId: 'member', kind: 'conversation',
+      blockedToolNames: [], blockedProviderIds: [], blockedSkillIds: [] } })
+    const timer = await h.coordinator.begin(threadId)
+    h.setNowMs(2_000)
+    const approvalAnswered = h.coordinator.pauseForUser(threadId)
+    const inputAnswered = h.coordinator.pauseForUser(threadId)
+    h.setNowMs(7_202_000)
+    approvalAnswered()
+    expect(h.coordinator.activeElapsedSeconds(threadId, initial.goal!)).toBe(1)
+    h.setNowMs(7_203_000)
+    inputAnswered()
+    inputAnswered() // settling a gate twice must not unpark another interval
+    h.setNowMs(7_204_000)
+    await h.coordinator.afterTerminal({ threadId, turnId, finalStatus: 'aborted', timer })
+    expect((await h.threadStore.get(threadId))?.goal).toMatchObject({ timeUsedSeconds: 2, status: 'active' })
   })
 
   it('does not charge elapsed time to a goal replaced during the turn', async () => {
@@ -278,4 +312,40 @@ describe('GoalTurnCoordinator', () => {
     await expect(raced.coordinator.resumeInterruptedGoals([{ threadId, turnId }])).resolves.toBe(0)
     expect(raced.startTurn).not.toHaveBeenCalled()
   })
+  it('blocks a private goal after successful tools produce no outcome evidence', async () => {
+    const h = harness()
+    await h.threadStore.upsert({ ...activeThread(), roomContext: {
+      roomId: 'room', memberId: 'member', kind: 'conversation',
+      blockedToolNames: [], blockedProviderIds: [], blockedSkillIds: []
+    } })
+    for (let i = 0; i < ROOM_GOAL_MAX_NO_PROGRESS_TOOLS; i++) {
+      h.coordinator.noteToolExecuted(turnId, i % 2 ? 'read' : 'exec_command', {
+        item: makeToolResultItem({ id: `result-${i}`, threadId, turnId, callId: `call-${i}`,
+          toolName: i % 2 ? 'read' : 'exec_command', output: { success: true, exitCode: 0 } }), approved: true
+      })
+    }
+    expect(h.coordinator.hasMadeProgress(turnId)).toBe(false)
+    expect(await h.coordinator.checkProgressBudget(threadId, turnId)).toBe(false)
+    expect((await h.threadStore.get(threadId))?.goal?.status).toBe('blocked')
+    await h.coordinator.afterTerminal({ threadId, turnId, finalStatus: 'completed', timer: null })
+    expect(h.timers.filter((entry) => !entry.cancelled)).toHaveLength(0)
+  })
+
+  it('enforces private goal token and active-time ceilings even with no configured token limit', async () => {
+    const roomContext = { roomId: 'room', memberId: 'member', kind: 'conversation' as const,
+      blockedToolNames: [], blockedProviderIds: [], blockedSkillIds: [] }
+    const h = harness(), initial = activeThread()
+    await h.threadStore.upsert({ ...initial, roomContext, goal: { ...initial.goal!, tokenBudget: null } })
+    await h.coordinator.recordUsage(threadId, ROOM_GOAL_MAX_TOKENS)
+    expect((await h.threadStore.get(threadId))?.goal?.status).toBe('usageLimited')
+
+    const timed = harness()
+    await timed.threadStore.upsert({ ...initial, roomContext, goal: { ...initial.goal!, tokenBudget: null } })
+    const timer = await timed.coordinator.begin(threadId)
+    timed.setNowMs(1_000 + ROOM_GOAL_MAX_TIME_SECONDS * 1_000)
+    await timed.coordinator.afterTerminal({ threadId, turnId, finalStatus: 'completed', timer })
+    expect((await timed.threadStore.get(threadId))?.goal?.status).toBe('budgetLimited')
+    expect(timed.timers.filter((entry) => !entry.cancelled)).toHaveLength(0)
+  })
+
 })

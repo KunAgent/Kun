@@ -1,4 +1,5 @@
-import type { ThreadRecord } from '../contracts/threads.js'
+import { goalBudgetMessage, goalBudgetStatus, isPrivateRoomGoal } from './goal-execution-budget.js'
+import type { ThreadGoal, ThreadRecord } from '../contracts/threads.js'
 import { makeErrorItem } from '../domain/item.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
@@ -12,6 +13,8 @@ export type TurnBudgetGateDeps = {
   events: Pick<RuntimeEventRecorder, 'record'>
   usage: Pick<UsageService, 'forThread'>
   nowIso: () => string
+  /** Current uncharged slice, excluding previously settled suspension slices. */
+  goalElapsedSeconds?: (threadId: string, goal: ThreadGoal) => number | undefined
 }
 
 export type ModelRequestReservation =
@@ -102,13 +105,14 @@ export class TurnBudgetGate {
     turnId: string,
     options: { reserveModelRequest?: boolean } = {}
   ): Promise<'allow' | 'blocked'> {
-    if (thread.goal?.status === 'usageLimited') {
+    const goalLimit = await this.checkGoalBudget(thread, turnId)
+    if (goalLimit) {
       await this.deps.events.record({
         kind: 'error',
         threadId,
         turnId,
-        message: `Goal token budget exhausted: ${thread.goal.tokensUsed} used of ${thread.goal.tokenBudget ?? 0}.`,
-        code: 'goal_token_budget_limited',
+        message: goalLimit.message,
+        code: goalLimit.status === 'budgetLimited' ? 'goal_time_budget_limited' : 'goal_token_budget_limited',
         severity: 'warning'
       })
       return 'blocked'
@@ -185,6 +189,47 @@ export class TurnBudgetGate {
       })
     }
     return this.reserveMainModelRequest(thread, threadId, turnId, options.reserveModelRequest !== false)
+  }
+
+  private async checkGoalBudget(thread: ThreadRecord, turnId: string): Promise<{
+    status: 'usageLimited' | 'budgetLimited'; message: string
+  } | null> {
+    const limited = (value: ThreadRecord) => {
+      const goal = value.goal
+      if (!goal) return null
+      let status = goalBudgetStatus(value, goal)
+      const turn = value.turns.find((entry) => entry.id === turnId)
+      if (status === 'active' && isPrivateRoomGoal(value) && turn?.status === 'running') {
+        // Include the current slice before dispatching another model request.
+        // The settled slice is charged durably by GoalTurnCoordinator.
+        const start = Math.max(Date.parse(turn.startedAt ?? turn.createdAt), Date.parse(goal.createdAt))
+        const elapsed = this.deps.goalElapsedSeconds?.(value.id, goal) ??
+          Math.max(0, Math.floor((Date.parse(this.deps.nowIso()) - start) / 1000))
+        if (Number.isFinite(elapsed)) status = goalBudgetStatus(value, {
+          ...goal, timeUsedSeconds: goal.timeUsedSeconds + elapsed
+        })
+      }
+      return status === 'usageLimited' || status === 'budgetLimited' ? status : null
+    }
+    const initial = limited(thread)
+    if (!initial) return null
+    const current = await withThreadStoreMutation(this.deps.threadStore, thread.id, async () => {
+      const latest = await this.deps.threadStore.get(thread.id)
+      if (!latest) return { thread, status: initial }
+      const status = limited(latest)
+      if (!status || !latest.goal) return null
+      if (latest.goal.status !== status) {
+        const updated = { ...latest, goal: { ...latest.goal, status, updatedAt: this.deps.nowIso() } }
+        await this.deps.threadStore.upsert(updated)
+        return { thread: updated, status, changed: true }
+      }
+      return { thread: latest, status }
+    })
+    if (!current) return null
+    if (current.changed && current.thread.goal) await this.deps.events.record({
+      kind: 'goal_updated', threadId: thread.id, goal: current.thread.goal
+    })
+    return { status: current.status, message: goalBudgetMessage(current.thread, current.status) }
   }
 
   /** Reserve an auxiliary model call without terminating the run when no slot remains. */

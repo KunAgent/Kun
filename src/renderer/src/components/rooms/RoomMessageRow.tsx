@@ -1,5 +1,6 @@
+import { RoomPopover } from './RoomPopover'
 import { useLayoutEffect, useState } from 'react'
-import { ArrowUpRight, BellRing, Check, Copy, Pin, Reply } from 'lucide-react'
+import { ArrowUpRight, BellRing, Check, Copy, MoreHorizontal, Pin, Reply } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomContentReference, RoomMember, RoomMessage, RoomTask } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
@@ -47,7 +48,7 @@ export function RoomMessageRow({
   referencedMessage?: RoomMessage
   onReply: (message: RoomMessage) => void
   onThread?: (message: RoomMessage) => void
-  onPin: (message: RoomMessage) => void
+  onPin: (message: RoomMessage) => void | Promise<boolean>
   onTask: (id: string) => void
   onViewReply: (id: string) => void
   onMember?: (id: string, rootRequestId?: string) => void
@@ -61,6 +62,14 @@ export function RoomMessageRow({
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState('')
   const [reactBusy, setReactBusy] = useState(false)
+  const [pinBusy, setPinBusy] = useState(false), [pinned, setPinned] = useState(false)
+  const pin = async () => {
+    if (pinBusy) return
+    setPinBusy(true); setCopyError('')
+    try { if (await onPin(message) === true) setPinned(true) }
+    catch (cause) { setCopyError(String(cause)) }
+    finally { setPinBusy(false) }
+  }
   const system = message.authorKind === 'system'
   const progressPrefix = message.taskId ? `progress-${message.taskId}-` : ''
   const legacyTaskProgress = Boolean(message.taskId &&
@@ -93,6 +102,17 @@ export function RoomMessageRow({
     <article
       id={idPrefix + '-' + message.id}
       data-room-message-id={message.id}
+      tabIndex={0}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        event.currentTarget.querySelector<HTMLButtonElement>('.rooms-message-more')?.click()
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10') {
+          event.preventDefault()
+          event.currentTarget.querySelector<HTMLButtonElement>('.rooms-message-more')?.click()
+        }
+      }}
       className={`rooms-message-row rooms-message-${message.authorKind}${continuation ? ' rooms-message-continuation' : ''}`}
     >
       {continuation ? <span className="rooms-message-avatar-spacer" aria-hidden="true" /> : !system ? (
@@ -117,9 +137,8 @@ export function RoomMessageRow({
             dateTime={message.createdAt}
             title={new Date(message.createdAt).toLocaleString()}
           >
-            {new Date(message.createdAt).toLocaleString([], {
-              month: 'short',
-              day: 'numeric',
+            {new Date(message.createdAt).toLocaleTimeString([], {
+              hourCycle: 'h23',
               hour: '2-digit',
               minute: '2-digit'
             })}
@@ -156,6 +175,7 @@ export function RoomMessageRow({
             onOpenContent={onOpenContent}
             onMember={onMember ? (id) => onMember(id, message.rootRequestId) : undefined}
             body={message.body}
+            collapsible={message.authorKind === 'member' && message.status !== 'streaming'}
             attachmentIds={message.attachmentIds}
           /> : null}
           {message.presentationKind === 'reminder' ? <div className="rooms-reminder-fired" role="note"
@@ -184,9 +204,10 @@ export function RoomMessageRow({
               <span>{task?.title ?? t('roomsDetails')}</span>
             </button>
           ) : null}
-          <div className="rooms-message-actions">
+          {continuation ? <time className="rooms-message-continuation-time" dateTime={message.createdAt}
+            title={new Date(message.createdAt).toLocaleString()}>{new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}</time> : null}
+          <div className="rooms-message-actions" role="toolbar" aria-label={t('roomsMoreActions')}>
             {room ? <RoomEmojiPicker reactions disabled={reactBusy || Boolean(room.archivedAt)} onChoose={(emoji) => void sendReaction(emoji)} /> : null}
-            {onRun && canInspectRun ? <RoomMessageRunButton compact message={message} onRun={onRun} /> : null}
             <button
               type="button"
               disabled={room?.conversationKind === 'agent_agent'}
@@ -205,16 +226,16 @@ export function RoomMessageRow({
             >
               {copied ? <Check size={14} /> : <Copy size={14} />}
             </button>
-            <button
-              type="button"
-              title={t('roomsPinMessage')}
-              aria-label={t('roomsPinMessage')}
-              onClick={() => onPin(message)}
-            >
-              <Pin size={14} />
-            </button>
+            <RoomPopover label={t('roomsMoreActions')} trigger={<MoreHorizontal size={14} />} className="rooms-message-more" align="end" width={230}>
+              {(close) => <div className="rooms-menu-list">
+                {onThread ? <button type="button" onClick={() => { close(); onThread(message) }}><Reply size={15} />{t('roomsOpenDiscussionThread')}</button> : null}
+                <button type="button" disabled={pinBusy || pinned} onClick={() => { close(); void pin() }}><Pin size={15} />{t(pinned ? 'roomsPinnedAsRule' : 'roomsPinMessage')}</button>
+                {onRun && canInspectRun ? <RoomMessageRunButton message={message} onRun={(id) => { close(); onRun(id) }} /> : null}
+              </div>}
+            </RoomPopover>
           </div>
         </div>
+        {pinned ? <p role="status" className="rooms-message-feedback">{t('roomsPinnedAsRule')}</p> : null}
         {copyError ? (
           <p role="alert" className="rooms-message-error">
             {copyError}

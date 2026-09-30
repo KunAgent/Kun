@@ -1,3 +1,4 @@
+import { updateRoomNotificationPreference } from './room-notification-preferences.js'
 import { afterEach, expect, it } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -183,4 +184,15 @@ it('surfaces a group room avatar without replacing a private agent portrait', as
   const entries = (await store.sidebarPage({})).entries
   expect(entries.find((entry) => entry.kind === 'group')?.avatar).toEqual({ kind: 'builtin', id: 'scientist' })
   expect(entries.find((entry) => entry.agentId === agent.id)?.avatar).toEqual({ kind: 'builtin', id: 'explorer' })
+})
+
+it('includes mute state without changing unread or attention semantics', async () => {
+  const { store, service } = await fixture()
+  const room = (await service.create({ clientRequestId: 'mute-room', name: 'Quiet room' })).room
+  await service.send(room.id, { clientRequestId: 'mute-message', body: 'Unseen message', executionIntent: 'discussion' })
+  await updateRoomNotificationPreference(store, room.id, { clientRequestId: 'mute', expectedRevision: null, mode: 'muted' })
+  const muted = (await store.sidebarPage({ unreadOnly: true })).entries.find((entry) => entry.roomId === room.id)
+  expect(muted?.notificationsMuted).toBe(true)
+  await updateRoomNotificationPreference(store, room.id, { clientRequestId: 'unmute', expectedRevision: 0, mode: 'all' })
+  expect((await store.sidebarPage({ unreadOnly: true })).entries.find((entry) => entry.roomId === room.id)?.notificationsMuted).toBe(false)
 })

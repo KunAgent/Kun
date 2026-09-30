@@ -123,7 +123,7 @@ describe('Peer discussion controls', () => {
     act(() => button('Current and past runs').props.onClick())
     expect(onMember).toHaveBeenCalledWith('dev', 'topic')
   })
-  it('shows a quiet empty summary without inventing members or available budget', async () => {
+  it('hides the idle discussion strip without inventing members or available budget', async () => {
     await act(async () => {
       renderer = create(
         createElement(RoomPeerSummary, {
@@ -133,7 +133,7 @@ describe('Peer discussion controls', () => {
         })
       )
     })
-    expect(JSON.stringify(renderer.toJSON())).toContain('Discussion is quiet')
+    expect(renderer.toJSON()).toBeNull()
     expect(JSON.stringify(renderer.toJSON())).not.toContain('32')
   })
   it('does not turn retained stopped or paused inboxes into active pending work', async () => {
@@ -208,7 +208,7 @@ describe('Peer discussion controls', () => {
       )
     })
     const text = JSON.stringify(renderer.toJSON())
-    expect(text).toContain('Discussion is quiet')
+    expect(renderer.toJSON()).toBeNull()
     expect(text).not.toContain('pending events')
     expect(text).not.toContain('responding or considering')
   })

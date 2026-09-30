@@ -40,6 +40,7 @@ Run \`kun\` without a command to open the inline terminal UI.
 
 Commands:
   serve [options]            Start the local HTTP/SSE runtime
+  host <start|stop|status>    Manage an opt-in independent persistent host
   run [options] <prompt>     Run one agent turn without the GUI
   chat [options]             Start a line-oriented terminal chat
   tui [options]              Open the inline terminal UI (same as bare kun)

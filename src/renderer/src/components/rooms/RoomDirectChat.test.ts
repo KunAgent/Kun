@@ -1,4 +1,4 @@
-import { createElement, type ReactNode } from 'react'
+import { createElement, useState, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
@@ -11,8 +11,12 @@ vi.mock('./agent-client', () => ({
 }))
 vi.mock('./RoomAvatar', () => ({ RoomAvatar: () => null }))
 vi.mock('./RoomPopover', () => ({
-  RoomPopover: ({ children }: { children: (close: () => void) => ReactNode }) =>
-    createElement('div', { 'data-testid': 'room-popover' }, children(() => undefined))
+  RoomPopover: ({ label, children }: { label: string; children: (close: () => void) => ReactNode }) => {
+    const [open, setOpen] = useState(false)
+    return createElement('div', { 'data-testid': 'room-popover' },
+      createElement('button', { 'aria-label': label, 'aria-expanded': open, onClick: () => setOpen(!open) }),
+      open ? children(() => setOpen(false)) : null)
+  }
 }))
 
 const room = {
@@ -64,20 +68,34 @@ describe('RoomDirectHeader session sidebar button', () => {
   })
 
   it('shows the supplied current model immediately', async () => {
+    const props = baseProps()
     await act(async () => {
       renderer = create(createElement(RoomDirectHeader, {
-        ...baseProps(),
+        ...props,
         models: { main: { providerId: 'kimi', model: 'kimi-code' } } as never
       }))
     })
-    expect(renderer.root.findByProps({ 'aria-label': 'Model settings' }).findByType('span').children).toEqual(['kimi-code'])
+    const more = () => renderer.root.findByProps({ 'aria-label': 'More actions' })
+    expect(more().props['aria-expanded']).toBe(false)
+    expect(renderer.root.findByProps({ className: 'direct-chat-title' }).findByType('small').children).toEqual(['kimi-code'])
+    await act(async () => { more().props.onClick() })
+    const modelSettings = renderer.root.findAllByType('button').find((button) => button.children.includes('Model settings'))!
+    await act(async () => { modelSettings.props.onClick() })
+    expect(props.onModels).toHaveBeenCalledTimes(1)
+    expect(more().props['aria-expanded']).toBe(false)
   })
 
   it('opens connected apps from a private Room header', async () => {
     const onApps = vi.fn()
     await act(async () => { renderer = create(createElement(RoomDirectHeader, { ...baseProps(), onApps })) })
-    await act(async () => { renderer.root.findByProps({ 'aria-label': 'Connected apps' }).props.onClick() })
+    const more = () => renderer.root.findByProps({ 'aria-label': 'More actions' })
+    const appButtons = () => renderer.root.findAllByType('button').filter((button) => button.children.includes('Connected apps'))
+    expect(appButtons()).toHaveLength(0)
+    await act(async () => { more().props.onClick() })
+    expect(appButtons()).toHaveLength(1)
+    await act(async () => { appButtons()[0].props.onClick() })
     expect(onApps).toHaveBeenCalledTimes(1)
+    expect(more().props['aria-expanded']).toBe(false)
   })
 })
 

@@ -10,11 +10,15 @@ export async function freezeAgentPermissions(directory: AgentIdentityService, ro
   if (room.privateWorkspace && agent.allowedRepositoryRoots && !agent.allowedRepositoryRoots.includes(room.privateWorkspace)) {
     throw new RoomStoreConflictError('Project is outside this Agent\'s allowed directories')
   }
-  const restricted = member.presetSnapshot?.toolPolicy === 'readOnly' || agent.allowedRepositoryRoots !== undefined
-  room.privateExecutionPolicy ??= kunToolPermissionModeSettings(restricted ? 'ask-for-approval' : 'full-access')
+  room.privateExecutionPolicy ??= defaultAgentExecutionPolicy()
   if (room.privateExecutionPolicy.sandboxMode === 'danger-full-access' &&
     (member.presetSnapshot?.toolPolicy === 'readOnly' || agent.allowedRepositoryRoots !== undefined)) {
     throw new RoomStoreConflictError('Agent limits changed. Choose a restricted permission mode before sending.')
   }
   return room
+}
+
+/** Missing legacy policy is absence of consent, never a full-access grant. */
+export function defaultAgentExecutionPolicy() {
+  return kunToolPermissionModeSettings('ask-for-approval')
 }

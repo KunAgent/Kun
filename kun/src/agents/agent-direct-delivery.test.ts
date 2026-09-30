@@ -32,6 +32,8 @@ async function runRequest(model: ModelClient) {
     profiles: () => ({}), assertOwnership: async () => {} }
   const runtime = new RoomRuntime(deps), runner = new AgentDirectRunner(deps, runtime.service)
   cleanup.push(async () => { await runtime.close(); await h.turns.interruptActiveTurns(); await store.close(); await rm(root, { recursive: true, force: true }) })
+  const approve = setInterval(() => { for (const item of h.approvalGate.pending()) h.approvalGate.decide(item.id, 'allow') }, 10)
+  cleanup.push(async () => { clearInterval(approve) })
   const created = await quickCreateAgent(runtime.agents, { clientRequestId: 'create' }, true)
   const sent = await runtime.service.send(created.roomId, { clientRequestId: 'request', body: 'Create hello.txt' })
   for (let i = 0; i < 12; i++) {

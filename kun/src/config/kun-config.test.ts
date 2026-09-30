@@ -183,3 +183,12 @@ describe('LabPptAgentConfigSchema', () => {
     expect(FastContextConfigSchema.parse({})).toEqual({ enabled: true, fast: false })
   })
 })
+
+describe('Rooms scheduler capacity', () => {
+  it('accepts a bounded global ceiling and rejects invalid ceilings', () => {
+    expect(RuntimeTuningConfigSchema.parse({ rooms: { maxConcurrentTasks: 4 } }).rooms?.maxConcurrentTasks).toBe(4)
+    for (const maxConcurrentTasks of [0, -1, 1.5, 33]) {
+      expect(RuntimeTuningConfigSchema.safeParse({ rooms: { maxConcurrentTasks } }).success).toBe(false)
+    }
+  })
+})

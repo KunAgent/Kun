@@ -49,6 +49,26 @@ describe('room message row actions', () => {
     expect(onReply).toHaveBeenCalledWith(threaded)
   })
 
+  it('keeps low-frequency actions in More and confirms only successful pin writes', async () => {
+    const onPin = vi.fn().mockResolvedValue(true)
+    await act(async () => { renderer = create(createElement(RoomMessageRow, { room, message, ...props, onPin })) })
+    expect(renderer!.root.findAllByProps({ 'aria-label': 'Pin as project agreement' })).toHaveLength(0)
+    await act(async () => renderer!.root.findAllByType('button').find((node) => node.props['aria-label'] === 'More actions')!.props.onClick())
+    const action = renderer!.root.findAllByType('button').find((node) => node.props.children?.some?.((child: unknown) => child === 'Pin as project agreement'))
+    expect(action).toBeDefined()
+    await act(async () => action!.props.onClick())
+    expect(onPin).toHaveBeenCalledWith(message)
+    expect(JSON.stringify(renderer!.toJSON())).toContain('Saved as a room rule')
+  })
+
+  it('uses compact HH:mm timestamps and retains the full date in a tooltip', async () => {
+    await act(async () => { renderer = create(createElement(RoomMessageRow, { room, message, ...props, continuation: true })) })
+    const times = renderer!.root.findAllByType('time')
+    expect(times[0].props.children).toMatch(/^\d{2}:\d{2}$/)
+    expect(times[0].props.title).toContain('2026')
+    expect(times.some((node) => node.props.className === 'rooms-message-continuation-time')).toBe(true)
+  })
+
   it('renders proposal presentation messages through RoomProposalCard instead of the body', async () => {
     const drafted = { ...message, presentationKind: 'proposal', proposalId: 'proposal-1' } as RoomMessage
     await act(async () => { renderer = create(createElement(RoomMessageRow, { room, message: drafted, ...props })) })

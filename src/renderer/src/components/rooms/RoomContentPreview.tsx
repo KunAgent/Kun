@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { RoomArtifactVersions } from './RoomArtifactVersions'
+import { RoomArtifactExport } from './RoomArtifactExport'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ExternalLink, Image } from 'lucide-react'
 import type { Room, RoomContentReference, RoomContentOpenTarget } from '@shared/rooms-api'
@@ -16,7 +18,12 @@ export function RoomContentPreview({ room, reference, messageId, onOpenTarget, o
 }) {
   const { t } = useTranslation('common')
   const [retry, setRetry] = useState(0), [expanded, setExpanded] = useState(false), [navigationError, setNavigationError] = useState('')
-  const { result, error, loading } = useRoomContent(room, reference, 'preview', true, messageId, retry)
+  const [selectedVersion, setSelectedVersion] = useState<number | undefined>()
+  useEffect(() => setSelectedVersion(undefined), [reference])
+  const currentReference = reference.kind === 'agent_file' && selectedVersion ? { ...reference, artifactVersion: selectedVersion } : reference
+  // Explicit version navigation is authorized by the artifact's Agent ownership, not a mismatched message snapshot.
+  const currentMessage = selectedVersion ? undefined : messageId
+  const { result, error, loading } = useRoomContent(room, currentReference, 'preview', true, currentMessage, retry)
   if (loading) return <p className="rooms-content-loading">{t('roomsLoading')}</p>
   if (error || result?.state !== 'available') return <section className="rooms-content-preview" role="status">
     <h3>{reference.titleSnapshot ?? t('roomsContentUnavailable')}</h3><p>{t('roomsContentUnavailable')}</p>
@@ -42,6 +49,8 @@ export function RoomContentPreview({ room, reference, messageId, onOpenTarget, o
       void Promise.resolve(onOpenTarget ? onOpenTarget(target) : target.kind === 'thread' ? onOpenCode?.(target.threadId, target.turnId) : undefined)
         .catch((cause) => setNavigationError(String(cause)))
     }}><ExternalLink size={14} />{t(target.kind === 'board' || target.kind === 'excalidraw_board' ? 'roomsContentOpenBoard' : target.kind === 'work_file' ? 'roomsContentOpenWork' : 'roomsContentOpenCode')}</button> : null}
+    <RoomArtifactVersions room={room} reference={currentReference} onVersion={setSelectedVersion} />
+    <RoomArtifactExport room={room} reference={currentReference} />
     {navigationError ? <p role="alert">{navigationError}</p> : null}
     {expanded && result.preview?.type === 'image' ? <RoomImageLightbox title={result.title} image={result.preview.image} onClose={() => setExpanded(false)} /> : null}
   </section>

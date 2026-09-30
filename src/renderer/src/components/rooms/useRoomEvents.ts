@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { RoomNotificationQueue } from './room-notification-queue'
+import { privateRoomNotice } from './room-private-notices'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { useChatStore } from '../../store/chat-store'
 import {
@@ -28,7 +29,7 @@ type Event = {
   roomId: string
   kind: string
   createdAt?: string
-  payload?: { id?: string; taskId?: string; linkId?: string; status?: string }
+  payload?: { id?: string; taskId?: string; linkId?: string; status?: string; threadId?: string; gateKind?: 'approval' | 'input'; occurredAt?: string }
 }
 const listeners = new Set<(event: Event) => void>()
 const badgeListeners = new Set<() => void>()
@@ -109,7 +110,9 @@ export function useRoomEvents() {
       const integrationEvent = event.kind.startsWith('integration.')
       let notice: { key: string; threadId: string; body: string } | null = null
       try {
-        if (event.kind.startsWith('request.')) {
+        if (event.kind.startsWith('message.') || event.kind === 'notification.requested') {
+          notice = await privateRoomNotice(event)
+        } else if (event.kind.startsWith('request.')) {
           const result = await roomsRequest<{ request: { id: string; status: string; threadId: string; continuation?: number; stepAttempt?: number; clarification?: string; error?: string; message: { body: string } } }>(
             '/v1/rooms/' + encodeURIComponent(event.roomId) + '/requests/' + encodeURIComponent(event.payload!.id!))
           const request = result.request
@@ -135,9 +138,10 @@ export function useRoomEvents() {
       if (!notice || known(notice.key)) return notice?.key ?? null
       const { preference } = await roomsRequest<RoomPreferenceDetail>('/v1/rooms/' + encodeURIComponent(event.roomId) + '/preferences')
       if (stopped) throw new Error('room notification subscription stopped')
-      if (roomNotificationSuppressed(preference, event.createdAt)) return roomNotificationsMuted(preference) ? notice.key : null
+      if (roomNotificationSuppressed(preference, event.payload?.occurredAt ?? event.createdAt)) return roomNotificationsMuted(preference) ? notice.key : null
       if (useChatStore.getState().route === 'rooms' && readBrowserStorageItem('kun.rooms.selected') === event.roomId && document.hasFocus()) return notice.key
       const result = await window.kunGui.showTurnCompleteNotification({ roomId: event.roomId, threadId: notice.threadId,
+        dedupeKey: 'room:' + event.roomId + ':' + notice.key,
         source: 'main-agent', title: 'Kun · ' + i18n.t('roomsLabel', { ns: 'common' }), body: notice.body.slice(0, 500) })
       if (!result.ok) throw new Error(result.message)
       return notice.key

@@ -1,5 +1,6 @@
-import { RotateCcw, X } from 'lucide-react'
+import { File, Image, RotateCcw, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { RoomLegacyAttachment } from './RoomLegacyAttachment'
 import { RoomAvatar } from './RoomAvatar'
 import type { RoomPendingSend } from './useRoomPendingSends'
 import './rooms-experience.css'
@@ -35,7 +36,21 @@ export function RoomPendingSendRow({
           </span>
         </div>
         <div className="rooms-message-bubble">
-          <p className="rooms-pending-body">{item.body}</p>
+          {item.body ? <p className="rooms-pending-body">{item.body}</p> : null}
+          {item.message.attachmentIds?.length ? <div className="rooms-message-attachments">
+            {item.message.attachmentIds.map((id) => {
+              const attachment = item.attachments?.find((entry) => entry.id === id)
+              if (!attachment) return <RoomLegacyAttachment key={id} id={id} />
+              const image = attachment.mimeType?.startsWith('image/')
+              return <div key={id} className={`rooms-content-card${image ? ' is-image' : ''}`}>
+                {image && attachment.previewUrl ? <div className="rooms-content-thumbnail"><img src={attachment.previewUrl} alt={attachment.name} /></div> : null}
+                <div className="rooms-content-card-label">{image ? <Image size={17} /> : <File size={17} />}
+                  <span><strong>{attachment.name}</strong><small>{t(item.state === 'failed' ? 'roomsSend_failed' : 'roomsSend_pending')}</small></span>
+                </div>
+              </div>
+            })}
+          </div> : null}
+          {item.message.references?.map((reference, index) => <p key={index} className="rooms-pending-reference">{reference.titleSnapshot}</p>)}
         </div>
         {item.state === 'failed' ? (
           <p className="rooms-pending-failed" role="alert">

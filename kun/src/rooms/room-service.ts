@@ -1,3 +1,4 @@
+import { defaultAgentExecutionPolicy } from '../agents/agent-permission-snapshot.js'
 import { freezeAgentPermissions } from '../agents/agent-permission-snapshot.js'
 import { prepareAgentTaskParticipants } from '../agents/agent-task-participants.js'
 import type { AgentIdentityService } from '../agents/agent-identity-service.js'
@@ -82,6 +83,7 @@ export class RoomService {
     const members = body.members ?? (this.agents ? await this.agents.defaultMembers(repositories.map((repo) => repo.id)) : defaultRoomMembers(repositories.map((repo) => repo.id)))
     let room = RoomSchema.parse({ schemaVersion: 1, id: internal?.id ?? roomId(),
       conversationKind: internal?.conversationKind ?? 'group', name: body.name,
+      ...(internal?.conversationKind === 'user_agent' ? { privateExecutionPolicy: defaultAgentExecutionPolicy() } : {}),
       description: body.description, ...(body.avatar ? { avatar: body.avatar } : {}),
       collaborationMode: body.collaborationMode ?? 'peer',
       maxConcurrentTasks: body.maxConcurrentTasks,
