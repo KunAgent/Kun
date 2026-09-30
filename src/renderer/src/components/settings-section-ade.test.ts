@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultKunRuntimeSettings } from '@shared/app-settings'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import { AdeLabSettingsPanel } from './settings-section-lab-ade'
@@ -10,6 +10,21 @@ import { useHarnessStore } from '../store/harness-store'
 import { useChatStore } from '../store/chat-store'
 import { readStoredComposerIsolation } from '../store/chat-store-helpers'
 import type { ReactTestInstance } from 'react-test-renderer'
+
+const provider = vi.hoisted(() => ({
+  probeHarnessDefinition: vi.fn()
+}))
+
+vi.mock('../agent/registry', () => ({ getProvider: () => provider }))
+
+beforeEach(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  provider.probeHarnessDefinition.mockReset()
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 const t = (key: string, options?: Record<string, unknown>): string =>
   options ? `${key}(${JSON.stringify(options)})` : key
@@ -148,7 +163,7 @@ describe('AgentsHarnessesSettingsPanel', () => {
     act(() => renderer.unmount())
   })
 
-  it('adds a custom ACP agent through updateKun', () => {
+  it('adds a probed custom ACP agent with an empty secret binding list through updateKun', async () => {
     useHarnessStore.setState({ rows: [makeHarnessRow('kun')], rowsLoadedAt: 1_000 })
     const updateKun = vi.fn()
     const renderer = renderPanel(updateKun)
@@ -166,6 +181,27 @@ describe('AgentsHarnessesSettingsPanel', () => {
     const addButton = renderer.root
       .findAllByType('button' as never)
       .find((b) => instanceText(b).includes('adeSettings.acpFormAdd'))!
+    expect(addButton.props.disabled).toBe(true)
+    expect(updateKun).not.toHaveBeenCalled()
+    provider.probeHarnessDefinition.mockResolvedValue({
+      durationMs: 1,
+      ok: true,
+      supported: true,
+      protocol: 'acp'
+    })
+    const testButton = renderer.root
+      .findAllByType('button' as never)
+      .find((b) => instanceText(b).includes('adeSettings.acpFormTest'))!
+    await act(async () => testButton.props.onClick())
+    expect(provider.probeHarnessDefinition).toHaveBeenCalledWith({
+      id: 'custom-my-agent',
+      displayName: 'My Agent',
+      command: '/usr/local/bin/my-agent',
+      args: ['--acp', '--fast'],
+      env: { TOKEN: 'abc' },
+      secretEnv: []
+    })
+    expect(addButton.props.disabled).toBe(false)
     act(() => addButton.props.onClick())
     expect(updateKun).toHaveBeenCalledWith({
       harnesses: expect.objectContaining({
@@ -175,7 +211,8 @@ describe('AgentsHarnessesSettingsPanel', () => {
             displayName: 'My Agent',
             command: '/usr/local/bin/my-agent',
             args: ['--acp', '--fast'],
-            env: { TOKEN: 'abc' }
+            env: { TOKEN: 'abc' },
+            secretEnv: []
           }
         ]
       })
@@ -191,7 +228,8 @@ describe('AgentsHarnessesSettingsPanel', () => {
             displayName: 'My Agent',
             command: '/usr/local/bin/my-agent',
             args: ['--acp', '--fast'],
-            env: { TOKEN: 'abc' }
+            env: { TOKEN: 'abc' },
+            secretEnv: []
           }
         ]
       }

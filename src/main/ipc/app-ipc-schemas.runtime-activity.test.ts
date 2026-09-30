@@ -32,6 +32,8 @@ describe('activity runtime request allowlist', () => {
       { path: KUN_ACTIVITY_FOREGROUND_PATH, method: 'GET' },
       { path: kunActivityUnitPath('u1', 'ack'), method: 'GET' },
       { path: `${KUN_ACTIVITY_PATH}/u1/unknown`, method: 'POST' },
+      { path: `${KUN_ACTIVITY_PATH}/u1/unknown?scope=all`, method: 'POST' },
+      { path: `${KUN_ACTIVITY_PATH}/hooks/ingest`, method: 'POST' },
       { path: `${KUN_ACTIVITY_PATH}/hooks`, method: 'POST' },
       { path: KUN_APPROVALS_PATH, method: 'POST' }
     ] as const

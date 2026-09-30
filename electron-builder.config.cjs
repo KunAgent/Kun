@@ -216,6 +216,10 @@ module.exports = {
     '!**/tsconfig*.json',
     '!**/README*',
     '!**/CHANGELOG*',
+    // Kun's node_modules is copied as app files, so electron-builder's normal
+    // dependency test exclusions do not apply. gifwrap's ~6 MiB of test images
+    // are not used by its src/ runtime; keep the runtime and LICENSE intact.
+    '!**/node_modules/gifwrap/test{,/**/*}',
     // Lark SDK ships an ESM (`es/`) build for bundlers alongside its CJS `main`
     // (`lib/`). The main process resolves `@larksuiteoapi/node-sdk` through
     // Node's `main` field, so the ESM copy is dead weight at runtime.

@@ -23,7 +23,7 @@ import {
 import { materializeLegacyProviderCredential } from './legacy-provider-credential-migration.js'
 import type { ExtensionCredentialStore } from './extension-credential-store.js'
 import { createProxyFetch } from '../adapters/model/proxy-fetch.js'
-import { type ModelConnectionRegistry, StoredProfileSchema, DeletedProfileTombstoneSchema, CredentialTransactionPreviousSchema, CredentialTransactionSchema, CredentialRefCleanupEntrySchema, RegistryDocumentSchema, type RegistryDocument, type StoredProfile, type CredentialTransaction, type PreparedCredentialSecret, type ModelConnectionSeed, type AuthenticatedModelConnectionInput, MODEL_CONNECTION_CREDENTIAL_SOURCE_PREFIX, isModelConnectionCredentialSourceId, modelConnectionCredentialSourceId, providerIdFromCredentialSource, ModelConnectionConflictError, type MaterializedModelConnections, type ProjectedCredentialHealth, credentialHealth, readLatestIfChanged, parseCredentialOperationToken, previousCredentialState, boundedCredentialHighWater, appendCredentialRefs, requireCredentialTransaction, credentialReferenceIsLive, processIsAlive, emptyDocument, configuredFallback, reconcileSeedProfile, sameStoredProfile, project, isProfileUsable, isAnonymousHttpProfile, mergeProjectedCapability, assertRevision, requireProfile, capabilitiesForModels, sameCapabilities, allocateId, normalizeProviderId, preparedCredentialSecretTimerKey, uniqueModels, sameModels, probeModels, modelsUrl } from './model-connection-registry-core.js'
+import { type ModelConnectionRegistry, StoredProfileSchema, DeletedProfileTombstoneSchema, CredentialTransactionPreviousSchema, CredentialTransactionSchema, CredentialRefCleanupEntrySchema, RegistryDocumentSchema, type RegistryDocument, type StoredProfile, type CredentialTransaction, type PreparedCredentialSecret, type ModelConnectionSeed, type AuthenticatedModelConnectionInput, MODEL_CONNECTION_CREDENTIAL_SOURCE_PREFIX, isModelConnectionCredentialSourceId, modelConnectionCredentialSourceId, providerIdFromCredentialSource, ModelConnectionConflictError, type MaterializedModelConnections, type ProjectedCredentialHealth, credentialHealth, readLatestIfChanged, parseCredentialOperationToken, previousCredentialState, boundedCredentialHighWater, appendCredentialRefs, requireCredentialTransaction, credentialReferenceIsLive, processIsAlive, emptyDocument, configuredFallback, reconcileSeedProfile, sameStoredProfile, project, isProfileUsable, isAnonymousHttpProfile, isRetiredOpenCodeFreeConnection, mergeProjectedCapability, assertRevision, requireProfile, capabilitiesForModels, sameCapabilities, allocateId, normalizeProviderId, preparedCredentialSecretTimerKey, uniqueModels, sameModels, probeModels, modelsUrl } from './model-connection-registry-core.js'
 import { repairRegistryModelCapabilityLimits } from './model-capability-limits.js'
 
 export const modelConnectionRegistryConnectionOperations = {
@@ -51,8 +51,12 @@ async initialize(this: ModelConnectionRegistry,
     current = await this['file'].read(emptyDocument)
     const newRegistry = Object.keys(current.profiles).length === 0 &&
       Object.keys(current.tombstones).length === 0
-    if (seed.length > 0) {
-      for (const input of seed) {
+    const liveSeeds = seed.filter((input) => !isRetiredOpenCodeFreeConnection({
+      id: input.id ?? input.name,
+      presetSource: input.presetSource
+    }))
+    if (liveSeeds.length > 0) {
+      for (const input of liveSeeds) {
         const credentialSourceId = input.credentialSourceId?.trim() || undefined
         const { credentialSourceId: _credentialSourceId, ...publicInput } = input
         const requestedUseProxy = publicInput.useProxy
@@ -130,6 +134,15 @@ async initialize(this: ModelConnectionRegistry,
         }
         current = await this['file'].read(emptyDocument)
       }
+    }
+    current = await this['file'].read(emptyDocument)
+    const retiredIds = Object.values(current.profiles)
+      .filter((profile) => isRetiredOpenCodeFreeConnection(profile))
+      .map((profile) => profile.id)
+    for (const providerId of retiredIds) {
+      current = await this['file'].read(emptyDocument)
+      if (!current.profiles[providerId]) continue
+      await this.delete(providerId, current.revision)
     }
     current = await this['file'].read(emptyDocument)
     if (repairRegistryModelCapabilityLimits(current)) {

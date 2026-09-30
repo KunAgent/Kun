@@ -14,6 +14,7 @@ let dataDir: string
 let teams: FileTeamStore
 let notices: FileWorkerNoticeStore
 let threads: InMemoryThreadStore
+const coordinators = new Set<WorkerNoticeCoordinator>()
 
 const NOW = '2026-09-26T00:00:00.000Z'
 const MANAGER = 'thr_mgr'
@@ -26,6 +27,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  for (const coordinator of coordinators) coordinator.clearManager(MANAGER)
+  coordinators.clear()
   vi.useRealTimers()
   await rm(dataDir, { recursive: true, force: true })
 })
@@ -98,6 +101,7 @@ function harness(input: { startImpl?: (call: StartCall) => Promise<StartTurnResp
     nowIso: () => NOW,
     language: () => 'en'
   })
+  coordinators.add(coordinator)
   return { coordinator, startTurn, runTurn }
 }
 
@@ -111,13 +115,40 @@ describe('WorkerNoticeCoordinator', () => {
     await coordinator.enqueue(notice('ntc_3'))
     await vi.advanceTimersByTimeAsync(3_000)
     await vi.waitFor(() => expect(startTurn).toHaveBeenCalledTimes(1))
+    await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
     const call = startTurn.mock.calls[0]![0] as { request: StartCall['request'] }
     expect(call.request.messageSource).toBe('worker_update')
     expect(call.request.prompt).toContain('<kun_worker_updates>')
     expect(call.request.prompt).toContain('dispatch ntc_1')
     expect(call.request.prompt).toContain('dispatch ntc_3')
     expect(runTurn).toHaveBeenCalledWith(MANAGER, 'turn_new')
-    expect(await notices.pending(MANAGER)).toHaveLength(0)
+  })
+
+  it('waits for durable acknowledgement after admission while a write is still pending', async () => {
+    vi.useFakeTimers()
+    await threads.upsert(managerThread())
+    const { coordinator, startTurn, runTurn } = harness()
+    const ack = notices.ack.bind(notices)
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    vi.spyOn(notices, 'ack').mockImplementation(async (...args) => {
+      await gate
+      return ack(...args)
+    })
+    try {
+      await coordinator.enqueue(notice('ntc_delayed_ack'))
+      await vi.advanceTimersByTimeAsync(3_000)
+      await vi.waitFor(() => expect(startTurn).toHaveBeenCalledTimes(1))
+      await vi.waitFor(() => expect(runTurn).toHaveBeenCalledTimes(1))
+      // Admission is observable before the durable ACK finishes. The old
+      // immediate empty-inbox assertion raced this real filesystem boundary.
+      expect(await notices.pending(MANAGER)).toHaveLength(1)
+      release()
+      await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
+      expect(startTurn).toHaveBeenCalledTimes(1)
+    } finally {
+      release()
+    }
   })
 
   it('derives a deterministic batch clientRequestId from the pending set', async () => {
@@ -141,6 +172,7 @@ describe('WorkerNoticeCoordinator', () => {
       nowIso: () => NOW,
       language: () => 'en'
     })
+    coordinators.add(secondCoordinator)
     await secondNotices.enqueue(notice('ntc_a'))
     await secondNotices.enqueue(notice('ntc_b'))
     await secondCoordinator.deliverForManager(MANAGER)
@@ -163,7 +195,7 @@ describe('WorkerNoticeCoordinator', () => {
     await threads.upsert(thread)
     await vi.advanceTimersByTimeAsync(2_000)
     await vi.waitFor(() => expect(startTurn).toHaveBeenCalledTimes(1))
-    expect(await notices.pending(MANAGER)).toHaveLength(0)
+    await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
   })
 
   it('defers while a composer hold is active, then delivers after it lapses', async () => {
@@ -179,6 +211,7 @@ describe('WorkerNoticeCoordinator', () => {
     expect(startTurn).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(60_000)
     await vi.waitFor(() => expect(startTurn).toHaveBeenCalledTimes(1))
+    await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
   })
 
   it('acks pending notices without a turn when the manager thread is gone', async () => {
@@ -208,7 +241,7 @@ describe('WorkerNoticeCoordinator', () => {
     expect(stored[0]?.lastError).toContain('manager busy')
     await vi.advanceTimersByTimeAsync(2_000)
     await vi.waitFor(() => expect(startTurn).toHaveBeenCalledTimes(2))
-    expect(await notices.pending(MANAGER)).toHaveLength(0)
+    await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
   })
 
   it('replays unacknowledged notices for every team after restart', async () => {
@@ -218,7 +251,7 @@ describe('WorkerNoticeCoordinator', () => {
     const { coordinator, startTurn } = harness()
     expect(await coordinator.replayPending()).toBe(1)
     await vi.waitFor(() => expect(startTurn).toHaveBeenCalledTimes(1))
-    expect(await notices.pending(MANAGER)).toHaveLength(0)
+    await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
   })
 
   it('keeps concurrent deliveries exactly-once via the shared batch key', async () => {
