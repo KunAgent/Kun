@@ -24,15 +24,19 @@ afterEach(async () => { for (const fn of cleanup.splice(0)) await fn() })
 async function fixture(outputPath = 'hello.txt', model?: ModelClient) {
   const root = await mkdtemp(join(tmpdir(), 'kun-direct-'))
   const seen: ModelRequest[] = []
+  // Model adapters may receive compacted/delta history; remember observed receipts.
+  const progress = new Map<string, { started: boolean; wrote: boolean; finished: boolean }>()
   const client: ModelClient = model ?? { provider: 'test', model: 'first', async *stream(request) {
     seen.push(request)
     const results = request.history.filter((item): item is Extract<typeof item, { kind: 'tool_result' }> =>
       item.turnId === request.turnId && item.kind === 'tool_result')
-    const started = results.some((item) => item.toolName === 'send_im_message' && item.isError !== true &&
+    const previous = progress.get(request.turnId)
+    const started = Boolean(previous?.started) || results.some((item) => item.toolName === 'send_im_message' && item.isError !== true &&
       (item.output as { phase?: string })?.phase === 'start')
-    const wrote = results.some((item) => item.toolName === 'write' && item.isError !== true)
-    const finished = results.some((item) => item.toolName === 'send_im_message' && item.isError !== true &&
+    const wrote = Boolean(previous?.wrote) || results.some((item) => item.toolName === 'write' && item.isError !== true)
+    const finished = Boolean(previous?.finished) || results.some((item) => item.toolName === 'send_im_message' && item.isError !== true &&
       (item.output as { phase?: string })?.phase === 'final')
+    progress.set(request.turnId, { started, wrote, finished })
     if (!started) yield { kind: 'tool_call_complete', callId: 'start-' + request.turnId, toolName: 'send_im_message',
       arguments: { text: 'I will create the requested file.', phase: 'start' } }
     else if (!wrote) yield { kind: 'tool_call_complete', callId: 'write-' + request.turnId, toolName: 'write', arguments: { path: outputPath, content: request.model === 'second' ? 'updated' : 'hello' } }
