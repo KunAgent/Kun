@@ -118,8 +118,12 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
       </span>
     </header>
     {editing && draft ? <div className="rooms-workbench-edit">
-      <label>{t('roomsWorkbenchTitleLabel')}<input value={draft.title} maxLength={160} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
-      <label>{t('roomsWorkbenchGoalLabel')}<textarea rows={4} value={draft.goal} maxLength={8000} onChange={(event) => setDraft({ ...draft, goal: event.target.value })} /></label>
+      <input className="rooms-workbench-title-input" value={draft.title} maxLength={160} aria-label={t('roomsWorkbenchTitleLabel')}
+        title={t('roomsWorkbenchTitleLabel')} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+      <textarea value={draft.goal} maxLength={8000} aria-label={t('roomsWorkbenchGoalLabel')} title={t('roomsWorkbenchGoalLabel')}
+        onChange={(event) => setDraft({ ...draft, goal: event.target.value })} />
+      {request.acceptance ? <div className="rooms-workbench-acceptance"><strong>{t('roomsWorkbenchAcceptance')}</strong>
+        <p>{plainText(request.acceptance)}</p></div> : null}
       <WorkbenchTaskOptions draft={draft} onChange={setDraft} editing onEdit={startEditing} code={kind === 'code_task' || kind === 'schedule_series'}
         permissionCeiling={permissionCeiling} />
     </div> : <>

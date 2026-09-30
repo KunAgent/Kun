@@ -69,9 +69,7 @@ describe('Room workbench task card', () => {
     await act(async () => { button(renderer!, 'Edit')!.props.onClick() })
     const goal = renderer!.root.findByType('textarea')
     await act(async () => { goal.props.onChange({ target: { value: 'Reconnect with backoff' } }) })
-    const location = renderer!.root.findAllByType('select').find((select) =>
-      select.findAllByType('option').some((option) => option.props.value === 'worktree'))!
-    await act(async () => { location.props.onChange({ target: { value: 'worktree' } }) })
+    await act(async () => { button(renderer!, 'Isolated worktree')!.props.onClick() })
     await act(async () => { button(renderer!, 'Start')!.props.onClick(); await Promise.resolve() })
     expect(mocks.client.confirm.mock.calls[0][1]).toMatchObject({ title: 'Fix SSE reconnect', goal: 'Reconnect with backoff', isolation: 'worktree' })
   })
@@ -81,11 +79,8 @@ describe('Room workbench task card', () => {
     mocks.client.confirm.mockResolvedValue(link({ status: 'scheduled', revision: 1 }))
     await mount()
     await act(async () => { button(renderer!, 'Edit')!.props.onClick() })
-    const selects = renderer!.root.findAllByType('select')
-    const mode = selects.find((select) => select.findAllByType('option').some((option) => option.props.value === 'auto'))!
-    const schedule = selects.find((select) => select.findAllByType('option').some((option) => option.props.value === 'once'))!
-    await act(async () => { mode.props.onChange({ target: { value: 'auto' } }) })
-    await act(async () => { schedule.props.onChange({ target: { value: 'once' } }) })
+    await act(async () => { button(renderer!, 'Plan then run')!.props.onClick() })
+    await act(async () => { button(renderer!, 'At a time')!.props.onClick() })
     await act(async () => { button(renderer!, 'Schedule')!.props.onClick(); await Promise.resolve() })
     expect(mocks.client.confirm.mock.calls[0][1]).toMatchObject({ execution: { mode: 'auto' }, schedule: { kind: 'once' } })
   })

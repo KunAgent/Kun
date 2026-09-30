@@ -107,7 +107,17 @@
 .rooms-workbench-result { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ds-border); }
 .rooms-workbench-files { font-size: 12px !important; }
 .rooms-workbench-error { margin: 8px 0 0; font-size: 12.5px; color: #dc2626; overflow-wrap: anywhere; }
-.rooms-workbench-edit { display: grid; gap: 10px; margin-top: 10px; }
+.rooms-workbench-edit { display: grid; gap: 8px; margin-top: 10px; }
+.rooms-workbench-title-input {
+  width: 100%; padding: 3px 0 6px; border: 0; border-bottom: 1px solid var(--ds-border); border-radius: 0;
+  background: transparent; color: var(--ds-text); font-size: 15px; font-weight: 600;
+}
+.rooms-workbench-title-input:focus { outline: none; border-bottom-color: var(--ds-accent); }
+.rooms-workbench-edit textarea {
+  width: 100%; min-height: 88px; max-height: 240px; padding: 8px 10px;
+  border: 1px solid var(--ds-border); border-radius: 10px;
+  background: var(--ds-surface-subtle); color: var(--ds-text); font-size: 13px; line-height: 1.55; resize: vertical;
+}
 .rooms-workbench-meta:empty { display: none; }
 .rooms-workbench-option-summary {
   display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 12px;
@@ -129,34 +139,42 @@
   border: 1px solid var(--ds-border); border-radius: 999px; padding: 4px 9px;
   background: var(--ds-surface-subtle); color: var(--ds-text); font-size: 11px;
 }
-.rooms-workbench-options, .rooms-workbench-schedule { display: grid; gap: 10px; }
-.rooms-workbench-options label, .rooms-workbench-schedule label, .rooms-workbench-model-picker {
-  display: grid; gap: 4px; font-size: 12px; color: var(--ds-text-muted);
+.rooms-workbench-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 8px; margin-top: 4px; }
+.rooms-workbench-field-span { grid-column: 1 / -1; }
+.rooms-workbench-field, .rooms-workbench-schedule-kind, .rooms-workbench-options > label {
+  display: grid; gap: 5px; align-content: start; font-size: 11.5px; font-weight: 500; color: var(--ds-text-muted);
 }
+.rooms-workbench-field > span, .rooms-workbench-schedule-kind > span { display: block; }
+.rooms-workbench-segments {
+  display: flex; flex-wrap: wrap; gap: 2px; padding: 2px;
+  border: 1px solid var(--ds-border); border-radius: 10px; background: var(--ds-surface-subtle);
+}
+.rooms-workbench-segments button {
+  flex: 1 1 auto; min-height: 28px; padding: 3px 10px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--ds-text-muted); font-size: 12px; font-weight: 500; white-space: nowrap;
+}
+.rooms-workbench-segments button:hover:not(:disabled) { color: var(--ds-text); }
+.rooms-workbench-segments button[aria-pressed='true'] {
+  background: var(--ds-surface-card); color: var(--ds-text); font-weight: 600;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--ds-text) 10%, transparent);
+}
+.rooms-workbench-segments button:disabled { opacity: .45; }
 .rooms-workbench-options select, .rooms-workbench-options input:not([type='checkbox']),
-.rooms-workbench-schedule select, .rooms-workbench-schedule input {
-  width: 100%; min-height: 34px; border: 1px solid var(--ds-border); border-radius: 8px;
-  background: var(--ds-surface-card); color: var(--ds-text); padding: 4px 8px;
+.rooms-workbench-schedule select, .rooms-workbench-schedule input:not([type='checkbox']) {
+  width: 100%; min-height: 30px; border: 1px solid var(--ds-border); border-radius: 8px;
+  background: var(--ds-surface-card); color: var(--ds-text); padding: 3px 8px; font-size: 12.5px;
 }
+.rooms-workbench-schedule { display: grid; gap: 8px; }
+.rooms-workbench-schedule label { display: grid; gap: 5px; font-size: 11.5px; font-weight: 500; color: var(--ds-text-muted); }
 .rooms-workbench-schedule-shortcuts, .rooms-workbench-weekdays { display: flex; flex-wrap: wrap; gap: 8px; }
 .rooms-workbench-weekdays label { display: flex; align-items: center; gap: 3px; }
 .rooms-workbench-weekdays input { width: auto !important; min-height: auto !important; }
 .rooms-workbench-series-runs { display: grid; gap: 3px; margin-top: 8px; font-size: 11px; color: var(--ds-text-muted); }
 .rooms-workbench-mobile-model { display: none; }
 @media (max-width: 600px) {
+  .rooms-workbench-options { grid-template-columns: 1fr; }
   .rooms-workbench-desktop-model { display: none; }
   .rooms-workbench-mobile-model { display: block; }
-}
-.rooms-workbench-edit label { display: grid; gap: 4px; font-size: 12px; color: var(--ds-text-muted); }
-.rooms-workbench-edit input:not([type='checkbox']), .rooms-workbench-edit textarea {
-  width: 100%;
-  padding: 7px 9px;
-  border: 1px solid var(--ds-border);
-  border-radius: 9px;
-  background: var(--ds-surface-card);
-  color: var(--ds-text);
-  font-size: 13px;
-  resize: vertical;
 }
 .rooms-workbench-check { display: flex !important; align-items: center; gap: 7px; }
 .rooms-workbench-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }

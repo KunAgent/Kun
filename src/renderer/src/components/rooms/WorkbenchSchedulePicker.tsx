@@ -15,14 +15,16 @@ export function WorkbenchSchedulePicker({ schedule, onChange }: {
   const { t } = useTranslation('common')
   const mode = schedule?.kind ?? 'now'
   const recurring = schedule?.kind === 'recurring' ? schedule : undefined
+  const setKind = (value: string) =>
+    onChange(value === 'once' ? { kind: 'once', runAt: nextHour(), timeZone: zone() } :
+      value === 'recurring' ? { kind: 'recurring', every: 'day', time: '09:00', timeZone: zone() } : undefined)
   return <div className="rooms-workbench-schedule">
-    <label>{t('roomsWorkbenchExecutionTime')}<select value={mode} onChange={(event) => {
-      const value = event.target.value
-      onChange(value === 'once' ? { kind: 'once', runAt: nextHour(), timeZone: zone() } :
-        value === 'recurring' ? { kind: 'recurring', every: 'day', time: '09:00', timeZone: zone() } : undefined)
-    }}>
-      <option value="now">{t('roomsWorkbenchNow')}</option><option value="once">{t('roomsWorkbenchOnce')}</option><option value="recurring">{t('roomsWorkbenchRecurring')}</option>
-    </select></label>
+    <div className="rooms-workbench-schedule-kind"><span>{t('roomsWorkbenchExecutionTime')}</span>
+      <div className="rooms-workbench-segments" role="group">
+        <button type="button" aria-pressed={mode === 'now'} onClick={() => setKind('now')}>{t('roomsWorkbenchNow')}</button>
+        <button type="button" aria-pressed={mode === 'once'} onClick={() => setKind('once')}>{t('roomsWorkbenchOnce')}</button>
+        <button type="button" aria-pressed={mode === 'recurring'} onClick={() => setKind('recurring')}>{t('roomsWorkbenchRecurring')}</button>
+      </div></div>
     {schedule?.kind === 'once' ? <>
       <label>{t('roomsWorkbenchRunAt')}<input type="datetime-local" value={localDateTime(schedule.runAt)}
         min={localDateTime(new Date(Date.now() + 60_000).toISOString())}
