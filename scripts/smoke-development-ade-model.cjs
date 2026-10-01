@@ -1,9 +1,10 @@
 'use strict'
 
 const { createServer } = require('node:http')
+const { roomsHarnessModelResponse } = require('./smoke-rooms-harness-fixture.cjs')
 
 /** Offline responses still exercise the real loop, tool admission, and worker host. */
-async function startModelFixture(model) {
+async function startModelFixture(model, options = {}) {
   const counters = { requests: 0, workerCreates: 0, workerWrites: 0, workerMessages: 0 }
   const observations = []
   const server = createServer(async (request, response) => {
@@ -32,7 +33,9 @@ async function startModelFixture(model) {
     let message = { role: 'assistant', content: 'Done.' }
     const call = (id, name, args) => ({ role: 'assistant', content: null,
       tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] })
-    if (text.includes('[ade-smoke-create-worker]') && supports('worker_create') && !completed('smoke-worker-create')) {
+    const rooms = options.workspaceRoot ? roomsHarnessModelResponse({ text, messages, supports, completed, call, workspaceRoot: options.workspaceRoot }) : null
+    if (rooms) message = rooms
+    else if (text.includes('[ade-smoke-create-worker]') && supports('worker_create') && !completed('smoke-worker-create')) {
       counters.workerCreates += 1
       message = call('smoke-worker-create', 'worker_create', {
         label: 'Smoke worker',

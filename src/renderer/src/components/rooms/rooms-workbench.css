@@ -6,6 +6,7 @@
   background: transparent;
 }
 .rooms-workbench-card {
+  --rooms-success-text: color-mix(in srgb, #16a34a 70%, var(--ds-text));
   overflow: hidden;
   border: 1px solid var(--ds-border);
   border-radius: 16px;
@@ -31,7 +32,7 @@
 .rooms-workbench-card[data-status='running'] .rooms-workbench-status,
 .rooms-workbench-card[data-status='queued'] .rooms-workbench-status { color: var(--ds-accent); }
 .rooms-workbench-card[data-status='needs_attention'] .rooms-workbench-status { color: #b45309; background: color-mix(in srgb, #f59e0b 16%, transparent); }
-.rooms-workbench-card[data-status='completed'] .rooms-workbench-status { color: #15803d; background: color-mix(in srgb, #22c55e 14%, transparent); }
+.rooms-workbench-card[data-status='completed'] .rooms-workbench-status { color: var(--rooms-success-text); background: color-mix(in srgb, #22c55e 14%, transparent); }
 .rooms-workbench-card[data-status='failed'] .rooms-workbench-status,
 .rooms-workbench-card[data-status='recovery_required'] .rooms-workbench-status { color: #dc2626; background: color-mix(in srgb, #ef4444 12%, transparent); }
 .rooms-workbench-card[data-status='dismissed'],
@@ -251,4 +252,41 @@
     z-index: 45;
     box-shadow: -12px 0 32px #00000012;
   }
+}
+
+/* A stable execution identity connects the conversation to its Code task. */
+.rooms-workbench-agent-identity {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  margin: 12px 0; padding: 10px 12px; border: 1px solid var(--ds-border);
+  border-radius: 12px; background: var(--ds-surface-subtle);
+}
+.rooms-workbench-agent-icon {
+  display: grid; place-items: center; flex: none; width: 34px; height: 34px;
+  border: 1px solid var(--ds-border); border-radius: 10px; background: var(--ds-surface-card);
+}
+.rooms-workbench-agent-copy { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.rooms-workbench-agent-copy strong { font-size: 13px; font-weight: 650; color: var(--ds-text); }
+.rooms-workbench-agent-copy > span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--ds-text-muted);
+}
+.rooms-workbench-agent-source { max-width: 42%; font-size: 11.5px; line-height: 1.4; color: var(--ds-text-muted); }
+.rooms-workbench-agent-picker {
+  display: grid; gap: 12px; min-width: 0; padding: 12px;
+  border: 1px solid var(--ds-border); border-radius: 12px; background: var(--ds-surface-subtle);
+}
+.rooms-workbench-agent-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rooms-workbench-agent-heading > span { font-size: 12px; color: var(--ds-text-muted); }
+.rooms-workbench-agent-hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ds-text-muted); }
+.rooms-workbench-agent-warning { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #b45309; }
+.rooms-workbench-agent-warning > svg { flex: none; }
+.rooms-workbench-agent-warning > span { flex: 1; }
+.rooms-workbench-agent-warning button { display: inline-flex; align-items: center; gap: 4px; color: var(--ds-accent); }
+@media (max-width: 600px) {
+  .rooms-workbench-agent-source { max-width: 34%; }
+  .rooms-workbench-agent-picker select { min-height: 40px; }
+  .rooms-workbench-agent-heading .ds-composer-harness-picker button { min-height: 36px; }
+}
+
+.rooms-workbench-result-copy[data-expanded='false'] {
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
 }

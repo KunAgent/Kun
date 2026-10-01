@@ -85,6 +85,13 @@ describe('Room workbench task card', () => {
     expect(mocks.client.confirm.mock.calls[0][1]).toMatchObject({ execution: { mode: 'auto' }, schedule: { kind: 'once' } })
   })
 
+  it('keeps the default permission ceiling visible before starting', async () => {
+    mocks.client.get.mockResolvedValue(link())
+    await mount()
+    await act(async () => { button(renderer!, 'Edit')!.props.onClick() })
+    expect(button(renderer!, 'Full access')!.props.disabled).toBe(true)
+  })
+
   it('can be dismissed, and surfaces a conflict from a stale card', async () => {
     mocks.client.get.mockResolvedValue(link())
     mocks.client.dismiss.mockRejectedValue(new Error('workbench link changed since it was read'))
@@ -117,6 +124,38 @@ describe('Room workbench task card', () => {
     expect(text(renderer!)).toContain('npm test')
     await act(async () => { button(renderer!, 'Open in Code')!.props.onClick(); await Promise.resolve() })
     expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ id: 'link-1', status: 'completed' }))
+  })
+
+  it('shows the stored final outcome rather than only a progress-like first line', async () => {
+    mocks.client.get.mockResolvedValue(link({ status: 'completed', result: {
+      summary: 'Checking the layout.', finalExcerpt: 'Checking the layout.\nFinished: the card is ready.',
+      changedFiles: [], commands: [], finishedAt: '2026-10-01T00:00:00.000Z' } }))
+    await mount()
+    expect(text(renderer!)).toContain('Finished: the card is ready.')
+  })
+
+  it('keeps the requested Agent visible through execution and completion', async () => {
+    const request = { ...link().request, execution: { mode: 'direct' as const,
+      model: { harnessId: 'codex', credentialMode: 'native-login' as const, model: 'gpt-fixture' } } }
+    mocks.client.get.mockResolvedValue(link({ request, status: 'running', threadId: 'thread-1' }))
+    await mount()
+    expect(text(renderer!)).toContain('gpt-fixture')
+    expect(renderer!.root.findByProps({ 'data-workbench-agent': 'codex' })).toBeTruthy()
+    mocks.client.get.mockResolvedValue(link({ request, status: 'completed', threadId: 'thread-1' }))
+    await act(async () => { emit({ roomId: 'room', kind: 'workbench.link.updated', payload: { linkId: 'link-1' } }) })
+    expect(renderer!.root.findByProps({ 'data-workbench-agent': 'codex' })).toBeTruthy()
+    expect(button(renderer!, 'Stop')).toBeUndefined()
+  })
+
+  it('cancel editing discards unsaved choices before starting', async () => {
+    mocks.client.get.mockResolvedValue(link())
+    mocks.client.confirm.mockResolvedValue(link({ status: 'queued', revision: 1 }))
+    await mount()
+    await act(async () => { button(renderer!, 'Edit')!.props.onClick() })
+    await act(async () => { renderer!.root.findByType('textarea').props.onChange({ target: { value: 'discard this draft' } }) })
+    await act(async () => { button(renderer!, 'Cancel')!.props.onClick() })
+    await act(async () => { button(renderer!, 'Start')!.props.onClick() })
+    expect(mocks.client.confirm.mock.calls[0][1].goal).toBe('Reconnect after a drop')
   })
 
   it('shows document previews and edit diffs as reviewable content', async () => {

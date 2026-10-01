@@ -1,13 +1,11 @@
 import type { WorkbenchExecution, WorkbenchRequest, WorkbenchSchedule } from '@shared/rooms-api'
 import { useChatStore } from '../../store/chat-store'
-import { FloatingComposerModelPicker, type ComposerReasoningEffort } from '../chat/FloatingComposerModelPicker'
-import { serviceTierForComposerSelection } from '../chat/composer-fast-mode'
-import { kunToolPermissionModeFromSettings } from '@shared/app-settings'
 import { WorkbenchSchedulePicker } from './WorkbenchSchedulePicker'
 import { useTranslation } from 'react-i18next'
 import { SlidersHorizontal } from 'lucide-react'
 import { resolveCodeAgentPreset } from '../chat/code-agent-presets'
-import { resolveComposerAssistantProviderId } from '../chat/composer-model-selection'
+import { WorkbenchTaskAgentPicker } from './WorkbenchTaskAgent'
+import { workbenchDisplayModel, workbenchExternalAgent } from './workbench-agent-selection'
 
 export type WorkbenchTaskDraft = {
   title: string
@@ -19,30 +17,14 @@ export type WorkbenchTaskDraft = {
 }
 
 export function initialWorkbenchTaskDraft(request: WorkbenchRequest): WorkbenchTaskDraft {
-  const state = useChatStore.getState()
-  const providerId = resolveComposerAssistantProviderId({ composerModelGroups: state.composerModelGroups,
-    model: state.composerModel, storedProviderId: state.composerProviderId })
-  const group = state.composerModelGroups.find((item) => item.providerId === providerId &&
-    item.modelIds.includes(state.composerModel))
-  const preset = state.codeAgentPresets.find((item) => item.id === state.composerPersonaId)
-  const model = request.execution?.model ?? (state.composerModel && providerId ? {
-    providerId, model: state.composerModel,
-    ...(group?.accountId ? { accountId: group.accountId } : {}),
-    ...(state.composerHarnessId ? { harnessId: state.composerHarnessId } : {}),
-    ...(['native-login', 'provider', 'kun-gateway'].includes(state.composerCredentialMode)
-      ? { credentialMode: state.composerCredentialMode as 'native-login' | 'provider' | 'kun-gateway' } : {}),
-    reasoningEffort: state.composerReasoningEffort,
-    ...(serviceTierForComposerSelection(state.composerFastMode, state.composerModelGroups,
-      state.composerModel, providerId) ? { serviceTier: 'priority' as const } : {})
-  } : undefined)
+  // A proposal is its own execution choice. The unrelated Code composer can
+  // change while this card is open; never borrow its Agent, model, or permission.
+  const model = request.execution?.model
   return { title: request.title, goal: request.goal, isolation: request.isolation,
     execution: { mode: request.execution?.mode ?? (request.mode === 'plan' ? 'plan' : 'direct'),
       ...request.execution, ...(model ? { model } : {}),
-      orchestration: request.execution?.orchestration ?? (state.graphEnabled ? state.composerOrchestration : 'direct'),
-      permission: request.execution?.permission ?? (state.composerExecutionSettings
-        ? kunToolPermissionModeFromSettings(state.composerExecutionSettings) : 'ask-for-approval'),
-      ...(request.execution?.persona ? {} : preset ? { persona: { id: preset.id,
-        name: resolveCodeAgentPreset(preset).name, text: resolveCodeAgentPreset(preset).persona.slice(0, 2000) } } : {}) },
+      orchestration: request.execution?.orchestration ?? 'direct',
+      permission: request.execution?.permission ?? 'ask-for-approval' },
     schedule: request.schedule, report: request.report }
 }
 
@@ -59,18 +41,18 @@ export function WorkbenchTaskOptions({ draft, onChange, editing, onEdit, code, p
   project?: string
 }) {
   const { t } = useTranslation('common')
-  const groups = useChatStore((state) => state.composerModelGroups)
-  const pickList = useChatStore((state) => state.composerPickList)
   const presets = useChatStore((state) => state.codeAgentPresets)
   const graphEnabled = useChatStore((state) => state.graphEnabled)
   const model = draft.execution.model
+  const external = code && workbenchExternalAgent(model)
   const changeExecution = (patch: Partial<WorkbenchExecution>) => onChange({ ...draft, execution: { ...draft.execution, ...patch } })
   const permission = draft.execution.permission ?? 'ask-for-approval'
-  // Summary row: always show mode / model / permission; the rest only when non-default.
+  // The identity above already shows the Code model; keep the option summary compact.
   const items: { label: string; tone?: 'warn' | 'strong' }[] = [
     ...(project ? [{ label: project, tone: 'strong' as const }] : []),
     { label: t(`roomsWorkbenchMode_${draft.execution.mode}`) },
-    { label: model ? `${model.model}${model.reasoningEffort && model.reasoningEffort !== 'auto' ? ` · ${model.reasoningEffort}` : ''}` : t('roomsWorkbenchRuntimeModel') },
+    ...(!code ? [{ label: model ? workbenchDisplayModel(model) : t('roomsWorkbenchRuntimeModel') }] : []),
+    ...(model?.reasoningEffort && model.reasoningEffort !== 'auto' ? [{ label: `${t('roomsWorkbenchReasoning')}: ${model.reasoningEffort}` }] : []),
     ...(draft.isolation === 'worktree' ? [{ label: t('roomsWorkbenchIsolated') }] : []),
     ...(draft.execution.persona?.name ? [{ label: `${t('roomsWorkbenchPersona')}: ${draft.execution.persona.name}` }] : []),
     ...(draft.schedule?.kind === 'once' ? [{ label: `${t('roomsWorkbenchOnce')} · ${new Date(draft.schedule.runAt).toLocaleString()}` }] :
@@ -86,38 +68,12 @@ export function WorkbenchTaskOptions({ draft, onChange, editing, onEdit, code, p
       {code ? <div className="rooms-workbench-field rooms-workbench-field-span"><span>{t('roomsWorkbenchExecutionMode')}</span>
         <div className="rooms-workbench-segments" role="group">
           {MODES.map((value) => <button type="button" key={value} aria-pressed={draft.execution.mode === value}
+            disabled={external && value !== 'direct'} title={external && value !== 'direct' ? t('roomsWorkbenchAgentDirectHint') : undefined}
             onClick={() => changeExecution({ mode: value })}>{t(`roomsWorkbenchMode_${value}`)}</button>)}
         </div></div> : null}
       {draft.execution.mode === 'goal' ? <label className="rooms-workbench-field rooms-workbench-field-span">{t('roomsWorkbenchTokenBudget')}<input type="number" min={1}
         value={draft.execution.goalTokenBudget ?? ''} onChange={(event) => changeExecution({ goalTokenBudget: event.target.value ? Number(event.target.value) : null })} /></label> : null}
-      <div className="rooms-workbench-field rooms-workbench-field-span"><span>{t('roomsWorkbenchModel')}</span>
-        <div className="rooms-workbench-desktop-model"><FloatingComposerModelPicker compact mode="select"
-          composerModel={model?.model ?? ''} composerProviderId={model?.providerId ?? ''} composerPickList={pickList}
-          composerModelGroups={groups} canChangeModel onComposerModelChange={(selected, providerId) => {
-            const group = groups.find((item) => item.providerId === providerId && item.modelIds.includes(selected))
-            if (!providerId) return
-            changeExecution({ model: { providerId, model: selected, ...(group?.accountId ? { accountId: group.accountId } : {}),
-              ...(model?.reasoningEffort ? { reasoningEffort: model.reasoningEffort } : {}) } })
-          }} composerReasoningEffort={model?.reasoningEffort} onComposerReasoningEffortChange={(effort: ComposerReasoningEffort) =>
-            model && changeExecution({ model: { ...model, reasoningEffort: effort } })}
-          composerFastMode={model?.serviceTier === 'priority'} onComposerFastModeChange={(enabled) =>
-            model && changeExecution({ model: { ...model, serviceTier: enabled ? 'priority' : undefined } })} /></div>
-        <select className="rooms-workbench-mobile-model" value={model ? `${model.providerId}/${model.model}` : ''}
-          onChange={(event) => { const [providerId, ...parts] = event.target.value.split('/'); const selected = parts.join('/')
-            const group = groups.find((item) => item.providerId === providerId)
-            changeExecution({ model: { providerId, model: selected, ...(group?.accountId ? { accountId: group.accountId } : {}) } }) }}>
-          <option value="">{t('roomsWorkbenchChooseModel')}</option>{groups.flatMap((group) => group.modelIds.map((id) =>
-            <option key={`${group.providerId}/${id}`} value={`${group.providerId}/${id}`}>{group.label} · {id}</option>))}
-        </select>
-        {model ? <div className="rooms-workbench-mobile-model">
-          <label>{t('roomsWorkbenchReasoning')}<select value={model.reasoningEffort ?? 'auto'} onChange={(event) =>
-            changeExecution({ model: { ...model, reasoningEffort: event.target.value as ComposerReasoningEffort } })}>
-            {['auto', 'off', 'low', 'medium', 'high', 'max'].map((effort) => <option value={effort} key={effort}>{effort}</option>)}
-          </select></label>
-          <label className="rooms-workbench-check"><input type="checkbox" checked={model.serviceTier === 'priority'} onChange={(event) =>
-            changeExecution({ model: { ...model, serviceTier: event.target.checked ? 'priority' : undefined } })} />{t('roomsWorkbenchFastMode')}</label>
-        </div> : null}
-      </div>
+      <WorkbenchTaskAgentPicker execution={draft.execution} code={code} onChange={(execution) => onChange({ ...draft, execution })} />
       <div className="rooms-workbench-field"><span>{t('roomsWorkbenchPermission')}</span>
         <div className="rooms-workbench-segments" role="group">
           {PERMISSIONS.map((value, index) => <button type="button" key={value} aria-pressed={permission === value}
@@ -135,7 +91,7 @@ export function WorkbenchTaskOptions({ draft, onChange, editing, onEdit, code, p
         const resolved = preset ? resolveCodeAgentPreset(preset) : undefined
         changeExecution({ persona: resolved ? { id: resolved.id, name: resolved.name, text: resolved.persona.slice(0, 2000) } : undefined })
       }}><option value="">{t('roomsWorkbenchNone')}</option>{presets.map((preset) => <option value={preset.id} key={preset.id}>{resolveCodeAgentPreset(preset).name}</option>)}</select></label>
-      {code && graphEnabled ? <div className="rooms-workbench-field"><span>{t('roomsWorkbenchOrchestration')}</span>
+      {code && graphEnabled && !external ? <div className="rooms-workbench-field"><span>{t('roomsWorkbenchOrchestration')}</span>
         <div className="rooms-workbench-segments" role="group">
           <button type="button" aria-pressed={(draft.execution.orchestration ?? 'direct') === 'direct'}
             onClick={() => changeExecution({ orchestration: 'direct' })}>{t('roomsWorkbenchMode_direct')}</button>

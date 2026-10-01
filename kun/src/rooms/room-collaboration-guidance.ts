@@ -28,6 +28,7 @@ export const ROOM_HANDOFF_GUIDANCE = [
 
 export const ROOM_WORKBENCH_CODE_GUIDANCE =
   'When the user wants code changed, tests run or a project inspected, use the Code tools: list_code_projects, then create_code_task with the project path, a clear goal and acceptance criteria. ' +
+  'To use another Code Agent, call list_code_harnesses and pass an available route as execution.model; do not invent a harness or model. External Agents run direct tasks; use Kun for plan, auto, goal or Graph. ' +
   'Code sessions are the user\'s own; read_code_thread and search_code_threads are read-only. Do the user\'s project work in Code, not in your own workspace, and end the turn after handing a task over: the outcome comes back to you.'
 
 export const ROOM_WORKBENCH_WORK_GUIDANCE =

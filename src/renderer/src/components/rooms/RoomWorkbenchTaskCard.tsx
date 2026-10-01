@@ -7,6 +7,8 @@ import { openWorkbenchLinkTarget, workbenchOpenTarget } from './workbench-naviga
 import { subscribeRoomEvents } from './useRoomEvents'
 import { initialWorkbenchTaskDraft, WorkbenchTaskOptions, type WorkbenchTaskDraft } from './WorkbenchTaskOptions'
 import { kunToolPermissionModeFromSettings } from '@shared/app-settings'
+import { WorkbenchTaskAgentIdentity } from './WorkbenchTaskAgent'
+import { workbenchModelComplete } from './workbench-agent-selection'
 import { WorkbenchSeriesRuns } from './WorkbenchSeriesRuns'
 import './rooms-workbench.css'
 
@@ -40,6 +42,7 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<WorkbenchTaskDraft | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const [resultExpanded, setResultExpanded] = useState(false)
   const busyRef = useRef(false)
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
@@ -86,8 +89,12 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
   const project = basename(request.workspaceRoot)
   const opens = workbenchOpenTarget(link)
   const longRunning = kind === 'code_task' || kind === 'work_task' || kind === 'schedule_series'
-  const permissionCeiling = room.privateExecutionPolicy ? kunToolPermissionModeFromSettings(room.privateExecutionPolicy) : undefined
+  const permissionCeiling = room.privateExecutionPolicy ? kunToolPermissionModeFromSettings(room.privateExecutionPolicy) : 'ask-for-approval'
+  const codeTask = kind === 'code_task' || kind === 'schedule_series'
+  const invalidDraft = editing && (!draft?.title.trim() || !workbenchModelComplete(draft?.execution.model))
   const showsOptions = longRunning && ['awaiting_confirmation', 'scheduled', 'active', 'paused'].includes(status)
+  const resultText = link.result?.finalExcerpt?.trim() || link.result?.summary || ''
+  const resultCollapsible = resultText.length > 450 || resultText.split('\n').length > 5
   const goal = request.goal && kind !== 'work_document' && kind !== 'work_edit' ? plainText(request.goal) : ''
   const collapsible = goal.length > 140 || (request.acceptance?.length ?? 0) > 60 || goal.split('\n').length > 3
   const startEditing = () => {
@@ -128,6 +135,7 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
         permissionCeiling={permissionCeiling} />
     </div> : <>
       <h4>{request.title}</h4>
+      {codeTask ? <WorkbenchTaskAgentIdentity model={request.execution?.model} /> : null}
       {goal || request.acceptance ? <div className="rooms-workbench-body" data-expanded={expanded || !collapsible}>
         {goal ? <p className="rooms-workbench-goal">{goal}</p> : null}
         {request.acceptance ? <div className="rooms-workbench-acceptance"><strong>{t('roomsWorkbenchAcceptance')}</strong>
@@ -160,7 +168,10 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
       <span><strong>{t(link.attention.kind === 'approval' ? 'roomsWorkbenchApproval' : 'roomsWorkbenchQuestion')}</strong> {link.attention.summary}</span>
     </p> : null}
     {status === 'completed' && link.result ? <div className="rooms-workbench-result">
-      {link.result.summary ? <p>{link.result.summary}</p> : null}
+      {resultText ? <p className="rooms-workbench-result-copy" data-expanded={resultExpanded || !resultCollapsible}>{resultText}</p> : null}
+      {resultCollapsible ? <button type="button" className="rooms-workbench-more" aria-expanded={resultExpanded}
+        onClick={() => setResultExpanded(!resultExpanded)}>{t(resultExpanded ? 'roomsWorkbenchShowLess' : 'roomsWorkbenchShowMore')}
+        <ChevronDown size={13} aria-hidden="true" /></button> : null}
       {link.result.changedFiles.length ? <p className="rooms-workbench-files" title={link.result.changedFiles.join('\n')}>
         {t('roomsWorkbenchFiles', { count: link.result.changedFiles.length })}: {link.result.changedFiles.slice(0, 4).join(', ')}{link.result.changedFiles.length > 4 ? '…' : ''}</p> : null}
       {link.result.commands.length ? <p className="rooms-workbench-files">{t('roomsWorkbenchCommands')}: {link.result.commands.slice(-3).map((command) =>
@@ -174,20 +185,21 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
       {link.goal.tokenBudget ? ` / ${link.goal.tokenBudget}` : ''} tokens</p> : null}
     {kind === 'schedule_series' && link.recentRunIds?.length ? <WorkbenchSeriesRuns roomId={room.id} ids={link.recentRunIds} /> : null}
     {(status === 'failed') && link.error ? <p className="rooms-workbench-error" role="alert">{link.error}</p> : null}
+    {editing && !workbenchModelComplete(draft?.execution.model) ? <p className="rooms-workbench-note" role="status">{t('roomsWorkbenchAgentChooseModel')}</p> : null}
     {error ? <p className="rooms-workbench-error" role="alert">{error}</p> : null}
     <div className="rooms-workbench-actions">
       {status === 'awaiting_confirmation' ? <>
         <button type="button" className="is-ghost" disabled={busy} onClick={() => void act(() => workbenchClient.dismiss(link))}>{t('roomsWorkbenchDismiss')}</button>
-        {editing ? <button type="button" disabled={busy} onClick={() => setEditing(false)}>{t('roomsWorkbenchCancelEdit')}</button> : null}
-        <button type="button" className="is-primary" disabled={busy || (editing && !draft?.title.trim())} onClick={() => void confirm()}>
+        {editing ? <button type="button" disabled={busy} onClick={() => { setEditing(false); setDraft(null) }}>{t('roomsWorkbenchCancelEdit')}</button> : null}
+        <button type="button" className="is-primary" disabled={busy || invalidDraft} onClick={() => void confirm()}>
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}{draft?.schedule?.kind === 'recurring' ? t('roomsWorkbenchCreateSchedule') :
             draft?.schedule?.kind === 'once' ? t('roomsWorkbenchSchedule') : t(CONFIRM_LABEL[kind])}
         </button>
       </> : null}
       {['scheduled', 'active', 'paused', 'missed'].includes(status) ? <>
         <button type="button" disabled={busy} onClick={() => void act(() => workbenchClient.runNow(link))}>{t('roomsWorkbenchRunNow')}</button>
-        {editing ? <><button type="button" disabled={busy} onClick={() => setEditing(false)}>{t('roomsWorkbenchCancelEdit')}</button>
-          <button type="button" className="is-primary" disabled={busy || !draft?.title.trim()} onClick={() => void confirm()}>{t('roomsWorkbenchSave')}</button></> : null}
+        {editing ? <><button type="button" disabled={busy} onClick={() => { setEditing(false); setDraft(null) }}>{t('roomsWorkbenchCancelEdit')}</button>
+          <button type="button" className="is-primary" disabled={busy || invalidDraft} onClick={() => void confirm()}>{t('roomsWorkbenchSave')}</button></> : null}
         {kind === 'schedule_series' ? <button type="button" disabled={busy} onClick={() => void act(() => status === 'paused' ? workbenchClient.resume(link) : workbenchClient.pause(link))}>
           {t(status === 'paused' ? 'roomsWorkbenchResume' : 'roomsWorkbenchPause')}</button> : null}
         {status === 'missed' ? <button type="button" disabled={busy} onClick={() => void act(() => workbenchClient.skip(link))}>{t('roomsWorkbenchSkip')}</button> : null}

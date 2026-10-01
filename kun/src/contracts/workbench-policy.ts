@@ -27,7 +27,7 @@ export function resolveWorkbenchPolicy(value: unknown): AgentWorkbenchPolicy {
 }
 
 /** Agent tool names by the capability that gates them. */
-export const WORKBENCH_READ_CODE_TOOLS = ['list_code_projects', 'search_code_threads', 'read_code_thread'] as const
+export const WORKBENCH_READ_CODE_TOOLS = ['list_code_projects', 'list_code_harnesses', 'search_code_threads', 'read_code_thread'] as const
 export const WORKBENCH_WRITE_CODE_TOOLS = ['create_code_task', 'get_code_task', 'message_code_task', 'stop_code_task', 'add_board_card'] as const
 export const WORKBENCH_READ_WORK_TOOLS = ['list_work_spaces', 'search_work_documents', 'read_work_document'] as const
 export const WORKBENCH_WRITE_WORK_TOOLS = ['create_work_document', 'propose_work_edit', 'create_work_task'] as const
