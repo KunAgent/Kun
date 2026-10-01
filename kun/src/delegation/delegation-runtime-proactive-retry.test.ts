@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SubagentsCapabilityConfig } from '../contracts/capabilities.js'
 import {
   ChildRunRecord,
@@ -9,6 +9,12 @@ import {
   FileDelegationStore,
   type ChildRunExecutor
 } from './delegation-runtime.js'
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((settle) => { resolve = settle })
+  return { promise, resolve }
+}
 
 function config(enabled = true) {
   return SubagentsCapabilityConfig.parse({
@@ -217,27 +223,55 @@ describe('DelegationRuntime proactive retry', () => {
   })
 
   it('keeps an originally detached child detached when proactively resumed', async () => {
-    const { dir, store, runtime } = await fixture({ record: failedRecord({ detached: true }) })
+    const executionStarted = deferred<Parameters<ChildRunExecutor>[0]>()
+    const releaseExecutor = deferred<void>()
+    const terminalPersisted = deferred<void>()
+    const parent = new AbortController()
+    const { dir, store, runtime } = await fixture({
+      record: failedRecord({ detached: true }),
+      executor: async (execution) => {
+        executionStarted.resolve(execution)
+        await releaseExecutor.promise
+        return { summary: 'review completed' }
+      }
+    })
+    const upsert = store.upsert.bind(store)
+    const persistence = vi.spyOn(store, 'upsert').mockImplementation(async (record) => {
+      await upsert(record)
+      if (record.status !== 'queued' && record.status !== 'running') terminalPersisted.resolve()
+    })
     try {
       const resumedPromise = runtime.resumeChild({
         childId: 'child_retry', parentThreadId: 'parent', parentTurnId: 'turn-2',
         prompt: 'retry in background', expectedResumeCount: 0,
         expectedLaunchers: ['delegate_task'], requireResumable: true,
-        proactive: true, signal: new AbortController().signal
+        proactive: true, signal: parent.signal
       })
       const queued = await resumedPromise
       expect(queued).toMatchObject({
         id: 'child_retry', status: 'queued', detached: true,
         resumeCount: 1, proactiveRetryCount: 1
       })
-      for (let attempt = 0; attempt < 20; attempt += 1) {
-        if ((await store.get('child_retry'))?.status === 'completed') break
-        await new Promise((resolve) => setTimeout(resolve, 5))
-      }
+      const execution = await executionStarted.promise
+      expect(execution).toMatchObject({ childId: 'child_retry', resumeChild: true })
+      parent.abort()
+      expect(execution.signal.aborted).toBe(false)
       await expect(store.get('child_retry')).resolves.toMatchObject({
-        id: 'child_retry', status: 'completed', detached: true
+        status: 'running', detached: true
+      })
+
+      releaseExecutor.resolve()
+      // Detached completion persists its durable handoff before the child record.
+      // Synchronize on the real terminal write instead of a filesystem time budget.
+      await terminalPersisted.promise
+      await expect(store.get('child_retry')).resolves.toMatchObject({
+        id: 'child_retry', status: 'completed', detached: true,
+        summary: 'review completed', resumeCount: 1, proactiveRetryCount: 1
       })
     } finally {
+      releaseExecutor.resolve()
+      await runtime.abortDetachedChildrenForThread('parent')
+      persistence.mockRestore()
       await rm(dir, { recursive: true, force: true })
     }
   })
