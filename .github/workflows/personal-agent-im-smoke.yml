@@ -9,6 +9,7 @@ on:
       - 'scripts/smoke-personal-agent-im.cjs'
       - 'scripts/smoke-development-direct-chat.cjs'
       - 'scripts/smoke-direct-model.cjs'
+      - 'scripts/smoke-direct-model.test.cjs'
       - '.github/workflows/personal-agent-im-smoke.yml'
 permissions:
   contents: read
@@ -29,6 +30,7 @@ jobs:
           node-version: '22.23.1'
           cache: npm
       - run: npm ci
+      - run: node --test scripts/smoke-direct-model.test.cjs
       - run: npm run build
       - run: npm run ensure:electron
       - name: Verify native proposal, explicit consent boundary and OS-protected fixture

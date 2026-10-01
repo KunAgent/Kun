@@ -29,6 +29,11 @@ async function exercisePersonalAgentIm({ page, request, poll, capture, openPriva
     const saved = messages.findLast((message) => message.appConnection?.serverId === 'im.' + provider)
     assert.equal(saved.appConnection.status, 'skipped')
     assert(!/deviceCode|appSecret|ownerId|qrcode/.test(JSON.stringify(saved)), 'Transcript contains only a proposal')
+    await poll(async () => {
+      const direct = await request(page, `/v1/rooms/${entry.roomId}/direct`)
+      assert(!direct.requests.some((item) => ['failed', 'recovery_required'].includes(item.status)), JSON.stringify(direct.requests))
+      return !direct.active && direct.requests.every((item) => item.status === 'completed')
+    }, 60000, provider + ' skip continuation completes before the next request')
     proofs.push(provider + ': real Agent proposal, no implicit registration, durable skip, native wide/narrow screenshots')
   }
   const storage = await application.evaluate(({ safeStorage }) => {
