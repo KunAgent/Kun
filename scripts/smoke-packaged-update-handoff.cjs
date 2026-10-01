@@ -3,6 +3,10 @@
 'use strict'
 
 const { assertPackagedPresetMode } = require('./smoke-packaged-manager-preset.cjs')
+const {
+  assertPackagedGoogleWorkspaceStatus,
+  assertPackagedPreloadBridge
+} = require('./smoke-packaged-preload.cjs')
 const { mkdir, mkdtemp, readFile, realpath, rm } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
 const { join, resolve } = require('node:path')
@@ -213,6 +217,9 @@ async function runPositiveScenario(input) {
       timeoutMs: input.timeoutMs
     })
     tracked.push(candidateDesktop)
+    await assertPackagedPreloadBridge({
+      desktop: candidateDesktop, debuggingPort, timeoutMs: input.timeoutMs
+    })
     const current = await waitForCurrentOwners({
       profile,
       candidateBuildId: input.candidateBuildId,
@@ -223,6 +230,9 @@ async function runPositiveScenario(input) {
     })
 
     if (input.scenario.autoStart) {
+      await assertPackagedGoogleWorkspaceStatus({
+        desktop: candidateDesktop, debuggingPort, timeoutMs: input.timeoutMs
+      })
       modelFixture.state.mode = 'complete'
       const listed = await runtimeJson(current.runtime, '/v1/threads?include_archived=true&include=side')
       if (!listed.threads?.some((thread) => thread.id === saved.id && thread.title === SAVED_THREAD_TITLE)) {

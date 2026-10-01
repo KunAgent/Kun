@@ -131,6 +131,8 @@ export type RoomRuntimeDeps = {
     client: import('../ports/model-client.js').ModelClient
     roles: () => import('../config/kun-config.js').RolesConfig | undefined
   }
+  /** Wait only before admitting a new API mutation, never while resuming side effects. */
+  waitForOwnership?: (signal?: AbortSignal) => Promise<void>
   assertOwnership: () => Promise<void>
   proveStopped?: (threadId: string, turnId?: string) => Promise<boolean>
   unsupportedProviderIds?: () => string[]

@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { rendererRuntimeClient } from '../../agent/runtime-client'
 import type { AdeProjectDefaultsSnapshot } from '@shared/ade-project-defaults'
 import type { AgentProvider } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { captureCodeProjectRouteSnapshot } from '../../store/chat-store-ade-send-snapshot'
 import { createNewSendThread } from '../../store/chat-store-thread-send-create'
 import type { PreparedThreadSend } from '../../store/chat-store-thread-send-direct-types'
-import { codeProjectDefaultsPatch } from './use-code-project-defaults'
+import { codeProjectDefaultsPatch, useCodeProjectDefaults } from './use-code-project-defaults'
 
 const revision = `ade-project-v1:${'a'.repeat(64)}`
 const snapshot: AdeProjectDefaultsSnapshot = {
@@ -69,5 +72,27 @@ describe('Code project route projection', () => {
     expect(captureCodeProjectRouteSnapshot({ ...state,
       composerProjectDefaults: { workspaceRoot: '/repo', revision, value: snapshot.value }
     })).toBeUndefined()
+  })
+})
+
+
+describe('Code project defaults bridge availability', () => {
+  it.each([undefined, { platform: 'darwin' }])('keeps the composer usable without a settings bridge (%j)', async (kunGui) => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    vi.stubGlobal('window', { kunGui, addEventListener: vi.fn(), removeEventListener: vi.fn() })
+    const settings = vi.spyOn(rendererRuntimeClient, 'getSettings')
+    let renderer: ReactTestRenderer | undefined
+    function Probe() {
+      useCodeProjectDefaults({ enabled: true, activeThreadId: null, workspaceRoot: '' })
+      return null
+    }
+    try {
+      await act(async () => { renderer = create(createElement(Probe)) })
+      expect(settings).not.toHaveBeenCalled()
+    } finally {
+      if (renderer) act(() => renderer!.unmount())
+      settings.mockRestore()
+      vi.unstubAllGlobals()
+    }
   })
 })

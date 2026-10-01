@@ -1,7 +1,7 @@
 import { RoomSidebar } from './RoomSidebar'
 import { useAgentChatEntry } from './useAgentChatEntry'
 import { RoomNewChat } from './RoomNewChat'
-import { AgentModelSettings, modelLabel, type AgentModels } from './AgentModelSettings'
+import { AgentModelSettings, type AgentModels } from './AgentModelSettings'
 import { useDirectChat, RoomDirectHeader, RoomDirectProgress, RoomDirectFiles, RoomNoticeDismiss } from './RoomDirectChat'
 import './rooms-direct.css'
 import { RoomUserAvatarEditor } from './RoomUserAvatarEditor'
@@ -24,6 +24,7 @@ import { WorkspaceModeTabs } from '../chat/WorkspaceModeTabs'
 import { useChatStore } from '../../store/chat-store'
 import { RoomSettings, roomButtonClass } from './RoomSettings'
 import { RoomComposer } from './RoomComposer'
+import { RoomComposerModelButton } from './RoomComposerModelButton'
 import { RoomHeader } from './RoomHeader'
 import { RoomMemberDetails } from './RoomMemberDetails'
 import { roomsClient } from './rooms-client'
@@ -455,8 +456,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             {room.conversationKind === 'agent_agent' ? <p className="agent-conversation-note">{t('agentsPairReadOnly')}</p> : <>
               <RoomComposer
                 compactControls={embeddedPrivate}
-                modelControl={privateChat && embeddedPrivate ? <button type="button" className="rooms-composer-model" aria-label={t('directModels')}
-                  onClick={() => drawer.open({ kind: 'models' })}>{modelLabel(agentModels.data?.main)}</button> : undefined}
+                modelControl={privateChat && embeddedPrivate ? <RoomComposerModelButton model={agentModels.data?.main}
+                  onClick={() => drawer.open({ kind: 'models' })} /> : undefined}
               key={room.id + '-composer'}
               room={room}
               tasks={state.tasks}
@@ -545,7 +546,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             cursor={state.taskCursor} moreBusy={state.moreBusy} loadMore={state.loadMoreTasks} />
         }} /> : null} />
       {appsOpen ? <RoomAppsPanel onClose={() => setAppsOpen(false)} onOpenPlugins={() => { setAppsOpen(false); onOpenPlugins() }} /> : null}
-      {newChatOpen ? <RoomNewChat selectionMode={embeddedPrivate ? 'private' : 'all'} onClose={() => setNewChatOpen(false)} onOpen={chooseRoom} onAgent={openAgent}
+      {newChatOpen ? <RoomNewChat selectionMode={embeddedPrivate ? 'private' : 'all'} onClose={() => setNewChatOpen(false)} onOpen={chooseRoom} onAgent={embeddedPrivate ? openAgentConversation : openAgent}
         onFill={() => drawer.open({ kind: 'agent' })} /> : null}
     </div>
   )

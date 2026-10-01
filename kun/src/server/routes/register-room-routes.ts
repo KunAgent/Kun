@@ -9,7 +9,7 @@ import { RoomRuleRequestSchema, RoomTaskActionSchema } from '../../contracts/roo
 import { RoomTaskStatusSchema } from '../../contracts/room-tasks.js'
 import type { RoomRuntime } from '../../rooms/room-runtime.js'
 import type { RoomTaskExecution } from '../../rooms/room-runtime-types.js'
-import { RoomStoreConflictError, RoomListOptionsSchema } from '../../rooms/room-store.js'
+import { RoomCoordinatorUnavailableError, RoomStoreConflictError, RoomListOptionsSchema } from '../../rooms/room-store.js'
 import { ServiceManagerHttpError, ServiceManagerTransportError } from '../../manager/usage-errors.js'
 import type { Router, RouteContext } from '../router.js'
 import { readJsonBody } from '../read-json-body.js'
@@ -59,11 +59,17 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     try {
       if (context.params.roomId) RoomIdSchema.parse(context.params.roomId)
       if (context.params.taskId) RoomIdSchema.parse(context.params.taskId)
+      // Readers remain available during recovery. Mutations wait for the registered
+      // coordinator before their first write; in-flight work keeps fail-closed fences.
+      if (method !== 'GET') await runtime.rooms.deps.waitForOwnership?.(request.signal)
       const result = await handle(runtime.rooms, request, context)
       return result instanceof Response ? result : jsonResponse(result)
     } catch (error) {
       if (error instanceof RoomBodyError) return error.response
       if (error instanceof z.ZodError) return ERRORS.validation('invalid room request', error.issues)
+      if (error instanceof RoomCoordinatorUnavailableError) return jsonResponse({
+        code: 'room_coordinator_unavailable', message: error.message
+      }, 503)
       if (error instanceof RoomStoreConflictError) return jsonResponse({ code: 'room_conflict',
         message: error.message, currentRevision: error.currentRevision }, 409)
       if (error instanceof ServiceManagerHttpError || error instanceof ServiceManagerTransportError) {

@@ -163,3 +163,11 @@ export class RoomStoreConflictError extends Error {
     this.name = 'RoomStoreConflictError'
   }
 }
+
+/** Readiness is retryable service availability, not a conflicting user edit. */
+export class RoomCoordinatorUnavailableError extends Error {
+  constructor() {
+    super('Conversation service is starting or reconnecting. Please try again in a moment.')
+    this.name = 'RoomCoordinatorUnavailableError'
+  }
+}
