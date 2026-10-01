@@ -1,6 +1,6 @@
 import type { RoomPendingAttachment } from './useRoomPendingSends'
 import { RoomPermissionPicker } from './RoomPermissionPicker'
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomTask, SendRoomMessage, RoomContentReference } from '@shared/rooms-api'
 import {
@@ -25,6 +25,7 @@ import { RoomContentReferencePicker, RoomContentReferenceChips } from './RoomCon
 import { RoomPollCreator } from './RoomPollCreator'
 import './rooms-interactions.css'
 import './rooms-composer.css'
+import { roomComposerFileReference, type RoomFileReferenceDetail } from './room-composer-file-reference'
 
 type Draft = {
   executionAgentId?: string
@@ -74,10 +75,12 @@ function RoomComposerEditor({
   draftId,
   replyTarget,
   topicChoices = [],
-  onSend, onStop, onConnectProject, onClearReply, responding, autoFocus = true, quickTools = false
+  onSend, onStop, onConnectProject, onClearReply, responding, autoFocus = true, quickTools = false, modelControl, compactControls = true
 }: {
   onStop?: () => void
   onClearReply?: () => void
+  modelControl?: ReactNode
+  compactControls?: boolean
   /** Show emoji / mention / attach / poll directly in the toolbar (desktop IM layout). */
   quickTools?: boolean
   onConnectProject?: () => void
@@ -99,6 +102,14 @@ function RoomComposerEditor({
     return { ...stored, body: missing.map((id) => roomMentionToken(id,
       room.members.find((member) => member.id === id)?.displayName ?? id)).join(' ') + (missing.length ? ' ' : '') + stored.body }
   })
+  useEffect(() => {
+    if (draftId) return
+    const refresh = (event: Event): void => {
+      if ((event as CustomEvent<{ roomId?: string }>).detail?.roomId === room.id) setDraft(readDraft(storageId))
+    }
+    window.addEventListener('kun-room-draft-updated', refresh)
+    return () => window.removeEventListener('kun-room-draft-updated', refresh)
+  }, [room.id, storageId, draftId])
   const draftRef = useRef(draft)
   draftRef.current = draft
   const [busy, setBusy] = useState(false)
@@ -154,6 +165,20 @@ function RoomComposerEditor({
       ...(!preview?.transient && preview ? { previewUrl: preview.url } : {}) }] }))
   })
   const uploading = uploads.uploading
+  useEffect(() => {
+    if (draftId) return
+    const addFile = (event: Event): void => {
+      const detail = (event as CustomEvent<RoomFileReferenceDetail>).detail
+      if (!detail || detail.roomId !== room.id) return
+      const reference = roomComposerFileReference(room, detail)
+      setDraft((current) => reference ? { ...current, references: [
+        ...current.references.filter((item) => JSON.stringify(item) !== JSON.stringify(reference)), reference
+      ].slice(-20) } : { ...current, body: [current.body, detail.reference.path].filter(Boolean).join('\n') })
+      editorRef.current?.focus()
+    }
+    window.addEventListener('kun-room-file-reference', addFile)
+    return () => window.removeEventListener('kun-room-file-reference', addFile)
+  }, [room, draftId])
   const storedImagesWithoutPreviews = useRef(draft.attachments.filter((attachment) =>
     isRoomComposerImage(attachment.name, attachment.mimeType) && !attachment.previewUrl))
   const releasePreview = (id: string): void => {
@@ -406,11 +431,17 @@ function RoomComposerEditor({
           onRepository={(repositoryId) => patch({ repositoryId })}
           onTopic={(id) => patch({ rootRequestId: id || undefined, replyToMessageId: undefined, replyBody: undefined })}
           onIntent={(intent) => patch({ intent })} onStop={onStop} responding={responding} onConnectProject={onConnectProject}
+          recipientLabel={sendMentions.length || room.collaborationMode === 'directed'
+            ? addressed.map((member) => member.displayName).join(', ') : t('roomsAllMembers')}
+          privateControls={compactControls && room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId
+            ? <RoomPermissionPicker roomId={room.id} compact /> : undefined}
+          modelControl={modelControl}
           references={<RoomContentReferencePicker showLabel room={room} tasks={tasks} references={draft.references}
             onChange={(references) => patch({ references })} disabled={disabled} />} quickTools={quickTools} />
         <p className="rooms-composer-shortcuts">{t('roomsComposerShortcuts', { defaultValue: 'Enter to send · Shift+Enter for a new line' })}</p>
       </fieldset>
-      {room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId ? <RoomPermissionPicker roomId={room.id} /> : null}
+      {!compactControls && room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId
+        ? <RoomPermissionPicker roomId={room.id} /> : null}
       {room.conversationKind !== 'user_agent' && !room.repositories.length ? (
         <p className="rooms-run-note">{t('roomsRepositoryRequiredHint')}</p>
       ) : null}

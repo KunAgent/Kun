@@ -2,13 +2,13 @@
 const assert = require('node:assert/strict')
 const { readFile, access } = require('node:fs/promises')
 const { join } = require('node:path')
-async function exerciseRoomApprovals({ page, application, request, poll, capture, fixture, workspaceRoot, resize, switchRooms }) {
+async function exerciseRoomApprovals({ page, application, request, poll, capture, fixture, workspaceRoot, resize, openPrivate }) {
   const globalPolicy = () => page.evaluate(async () => {
     const settings = (await window.kunGui.getSettings()).agents.kun
     return [settings.approvalPolicy, settings.sandboxMode, settings.approvalReviewer]
   })
   const before = await globalPolicy()
-  await switchRooms(); await page.locator('.room-permission-picker button').waitFor()
+  await openPrivate(); await page.locator('.room-permission-picker button').waitFor()
   const { roomId } = await request(page, '/v1/agents/chat-entry')
   const editor = () => page.locator('.rooms-rich-input')
   const mode = () => page.locator('.room-permission-picker button[data-permission-mode]')
@@ -81,7 +81,7 @@ async function exerciseRoomApprovals({ page, application, request, poll, capture
   assert.deepEqual(await globalPolicy(), before, 'Room choice must not change Code/global permissions')
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.locator('[data-workspace-mode-trigger]').first().waitFor()
-  if (!await page.locator('[data-rooms-workspace]').count()) await switchRooms()
+  await openPrivate()
   await mode().waitFor()
   await poll(async () => (await mode().getAttribute('data-permission-mode')) === 'full-access', 10000, 'persisted permission')
   await permission('ask-for-approval')

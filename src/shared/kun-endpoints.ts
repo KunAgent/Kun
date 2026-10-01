@@ -302,14 +302,19 @@ export const KUN_HARNESSES_TEMPLATE = '/v1/harnesses'
 export const KUN_HARNESS_MODELS_TEMPLATE = '/v1/harnesses/{id}/models'
 export const KUN_HARNESS_PROBE_TEMPLATE = '/v1/harnesses/{id}/probe'
 export const KUN_HARNESS_TEST_TEMPLATE = '/v1/harnesses/{id}/test'
+export const KUN_HARNESS_INSTALL_TEMPLATE = '/v1/harnesses/{id}/install'
+export const KUN_HARNESS_INSTALL_CANCEL_TEMPLATE = '/v1/harnesses/{id}/install/cancel'
 // P4-12: unsaved-definition handshake + credential-store secret refs.
 export const KUN_HARNESS_PROBE_DEFINITION_TEMPLATE = '/v1/harnesses/probe-definition'
 export const KUN_HARNESS_SECRETS_TEMPLATE = '/v1/harness-secrets'
 export const KUN_HARNESS_SECRET_TEMPLATE = '/v1/harness-secrets/{ref}'
-export function kunHarnessModelsPath(harnessId: string, credentialMode?: string): string {
+export function kunHarnessModelsPath(harnessId: string, credentialMode?: string, selectedModel?: string): string {
   const base = `${KUN_HARNESSES_PATH}/${encodeURIComponent(harnessId)}/models`
   const mode = credentialMode?.trim()
-  return mode ? `${base}?credential_mode=${encodeURIComponent(mode)}` : base
+  const query = new URLSearchParams()
+  if (mode) query.set('credential_mode', mode)
+  if (selectedModel) query.set('selected_model', selectedModel)
+  return query.size ? `${base}?${query}` : base
 }
 
 export const KUN_THREADS_PATH = '/v1/threads'
@@ -350,6 +355,11 @@ export function kunThreadPath(threadId: string): string {
 export const KUN_THREAD_SUMMARY_TEMPLATE = '/v1/threads/{id}/summary'
 export function kunThreadSummaryPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/summary`
+}
+
+export const KUN_THREAD_EXECUTION_CONFIG_TEMPLATE = '/v1/threads/{id}/execution-config'
+export function kunThreadExecutionConfigPath(threadId: string): string {
+  return `${kunThreadPath(threadId)}/execution-config`
 }
 
 export const KUN_THREAD_STATE_TEMPLATE = '/v1/threads/{id}/state'
@@ -401,6 +411,11 @@ export function kunThreadGoalPath(threadId: string): string {
 }
 
 export const KUN_THREAD_TODOS_TEMPLATE = '/v1/threads/{id}/todos'
+export const KUN_THREAD_TASKS_TEMPLATE = '/v1/threads/{id}/tasks'
+export const KUN_THREAD_TASK_TEMPLATE = '/v1/threads/{id}/tasks/{taskId}'
+export function kunThreadTaskPath(threadId: string, taskId: string): string {
+  return `${kunThreadPath(threadId)}/tasks/${encodeURIComponent(taskId)}`
+}
 export function kunThreadTodosPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/todos`
 }

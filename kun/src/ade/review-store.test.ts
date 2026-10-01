@@ -3,6 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { FileReviewStore } from './review-store.js'
+import { writeAdeJson } from './ade-file.js'
+import { adeReviewFile } from './ade-paths.js'
+import { InMemoryArtifactStore } from '../artifacts/artifact-store.js'
 
 const NOW = '2026-09-01T12:00:00.000Z'
 const dirs: string[] = []
@@ -30,6 +33,23 @@ afterEach(async () => {
 })
 
 describe('FileReviewStore', () => {
+  it('stores a host-generated revision with each new comment', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kun-reviews-'))
+    dirs.push(dir)
+    const revision = {
+      version: 1 as const,
+      target: { kind: 'task-workspace' as const, workspaceId: 'tws_1' },
+      contentHash: 'a'.repeat(64),
+      completeness: 'complete' as const,
+      fileCount: 1,
+      capturedAt: NOW
+    }
+    const store = new FileReviewStore(dir, () => NOW, nextId, async () => revision)
+    const comment = await store.create('tws_1', commentInput)
+    expect(comment.revision).toEqual(revision)
+    expect((await store.list('tws_1')).comments[0]?.revision).toEqual(revision)
+  })
+
   it('creates drafts, edits bodies, resolves, and marks sent', async () => {
     const store = await harness()
     const comment = await store.create('tws_1', commentInput)
@@ -96,4 +116,78 @@ describe('FileReviewStore', () => {
     const draft = await store.update('tws_1', comment.commentId, { state: 'draft' })
     expect(draft?.sentInRequestId).toBeUndefined()
   })
+
+  it('refuses the 201st round before side effects without corrupting prior history', async () => {
+    const store = await harness()
+    for (let round = 1; round <= 200; round += 1) {
+      await store.markSent('tws_1', {
+        requestId: store.nextRequestId(), round,
+        target: { kind: 'manager' }, commentIds: [], note: `round ${round}`, sentAt: NOW
+      })
+    }
+    const reserved = await store.reserveSend('tws_1', {
+      clientRequestId: 'overflow', requestHash: 'a'.repeat(64),
+      target: { kind: 'manager' }, commentIds: [], note: 'another round'
+    })
+    expect(reserved.kind).toBe('history_full')
+    await expect(store.markSent('tws_1', {
+      requestId: store.nextRequestId(), round: 201,
+      target: { kind: 'manager' }, commentIds: [], note: 'overflow', sentAt: NOW
+    })).rejects.toThrow(/history is full/)
+    const file = await store.list('tws_1')
+    expect(file.requests).toHaveLength(200)
+    expect(file.requests.at(-1)?.round).toBe(200)
+    expect(file.reservations).toHaveLength(0)
+  })
+
+  it('reads a legacy file with 201 sent rounds without discarding its history', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kun-reviews-'))
+    dirs.push(dir)
+    const requests = Array.from({ length: 201 }, (_, index) => ({
+      requestId: `rvq_${String(index + 1).padStart(8, '0')}`,
+      round: index + 1,
+      target: { kind: 'manager' as const },
+      commentIds: [],
+      sentAt: NOW
+    }))
+    await writeAdeJson(adeReviewFile(dir, 'tws_1'), { comments: [], requests })
+    const store = new FileReviewStore(dir, () => NOW, nextId)
+    expect((await store.list('tws_1')).requests).toHaveLength(201)
+    expect((await store.reserveSend('tws_1', {
+      clientRequestId: 'new', requestHash: 'a'.repeat(64),
+      target: { kind: 'manager' }, commentIds: [], note: 'new'
+    })).kind).toBe('history_full')
+    expect((await store.list('tws_1')).requests.at(-1)?.round).toBe(201)
+  })
+  it('preserves a large legal batch and uses a complete artifact for worker delivery', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kun-reviews-large-'))
+    dirs.push(dir)
+    const artifacts = new InMemoryArtifactStore()
+    const store = new FileReviewStore(dir, () => NOW, nextId, undefined, artifacts)
+    const first = await store.create('tws_large0001', commentInput)
+    const comments = Array.from({ length: 200 }, (_, index) => ({
+      ...first, commentId: `rvc_${String(index).padStart(8, '0')}`,
+      line: index + 1, body: 'B'.repeat(3_980) + ` LAST-${index}`,
+      anchor: { ...first.anchor, lineText: 'A'.repeat(2_000) }
+    }))
+    await writeAdeJson(adeReviewFile(dir, 'tws_large0001'), { comments, requests: [] })
+    const reserved = await store.reserveSend('tws_large0001', {
+      clientRequestId: 'large-batch', requestHash: 'a'.repeat(64),
+      commentIds: comments.map((comment) => comment.commentId),
+      target: { kind: 'worker', workerId: 'worker' }
+    })
+    expect(reserved.kind).toBe('reserved')
+    if (reserved.kind !== 'reserved') return
+    expect(reserved.reservation.requestText.length).toBeGreaterThan(1_048_576)
+    expect(await artifacts.get(reserved.reservation.requestArtifactId!))
+      .toBe(reserved.reservation.requestText)
+    const receipt = await store.completeSend('tws_large0001', reserved.reservation.requestId, { dispatchId: 'dispatch' })
+    await store.update('tws_large0001', comments[0].commentId, { body: 'later edit' })
+    const restored = new FileReviewStore(dir, () => NOW, nextId)
+    const sent = await restored.getSentRequest('tws_large0001', receipt.requestId)
+    expect(sent?.requestText).toBe(reserved.reservation.requestText)
+    expect(sent?.requestText).toContain('LAST-199')
+    expect(sent?.workspaceId).toBe('tws_large0001')
+  })
+
 })

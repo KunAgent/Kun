@@ -35,6 +35,7 @@ import {
   saveQueuedMessagesForThread
 } from './queued-message-persistence'
 import { invalidateThreadSnapshot } from './thread-snapshot-cache'
+import { applyTodosSnapshot } from './execution-task-actions'
 import { invalidatePendingTurnStarts } from './turn-start-fence'
 
 /**
@@ -170,27 +171,6 @@ function applyGoalSnapshot(
     adeThreads: (s.adeThreads ?? []).map((thread) =>
       thread.id === threadId
         ? { ...thread, goal, updatedAt: goal?.updatedAt ?? updatedAt }
-        : thread
-    )
-  }))
-}
-
-function applyTodosSnapshot(
-  set: ChatStoreSet,
-  threadId: string,
-  todos: ThreadTodoList | null,
-  updatedAt = new Date().toISOString()
-): void {
-  set((s) => ({
-    activeThreadTodos: s.activeThreadId === threadId ? todos : s.activeThreadTodos,
-    threads: s.threads.map((thread) =>
-      thread.id === threadId
-        ? { ...thread, todos, updatedAt: todos?.updatedAt ?? updatedAt }
-        : thread
-    ),
-    adeThreads: (s.adeThreads ?? []).map((thread) =>
-      thread.id === threadId
-        ? { ...thread, todos, updatedAt: todos?.updatedAt ?? updatedAt }
         : thread
     )
   }))
@@ -610,6 +590,28 @@ export function createMaintenanceMetadataActions(
       return false
     }
     const p = getProvider()
+    if (activeThreadTodos.revision !== undefined) {
+      const task = activeThreadTodos.items.find((item) => item.id === todoId)
+      if (!task || task.taskRevision === undefined || !p.updateThreadExecutionTask) {
+        set({ error: i18n.t('common:runtimeFeatureUnsupported') })
+        return false
+      }
+      try {
+        const todos = await p.updateThreadExecutionTask(activeThreadId, todoId, {
+          expectedRevision: task.taskRevision, clientRequestId: `ui:${todoId}:${task.taskRevision}:${status}`, status
+        })
+        applyTodosSnapshot(set, activeThreadId, todos)
+        return true
+      } catch (error) {
+        // Reload current state on CAS conflict; never retry by replacing the list.
+        try {
+          const latest = await p.getThreadTodos?.(activeThreadId)
+          if (latest) applyTodosSnapshot(set, activeThreadId, latest)
+        } catch { /* Preserve the original actionable error. */ }
+        set({ error: formatRuntimeError(error) })
+        return false
+      }
+    }
     if (typeof p.setThreadTodos !== 'function') {
       set({ error: i18n.t('common:runtimeFeatureUnsupported') })
       return false

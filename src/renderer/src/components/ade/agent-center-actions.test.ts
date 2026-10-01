@@ -47,6 +47,23 @@ const SETUP = {
 }
 
 describe('agentCardModel', () => {
+  it('offers explicit Devin CLI sign-in when an installed ACP account is unconfirmed', () => {
+    const model = agentCardModel(makeRow({ id: 'devin', status: { login: 'unknown' },
+      credentialModes: ['native-login'], setup: { login: { command: 'devin', args: ['auth', 'login'] } }
+    }), { enabled: true, platform: 'darwin', isDefault: false })
+    expect(model.primary.kind).toBe('test')
+    expect(model.secondary).toContainEqual(expect.objectContaining({ kind: 'command', command: 'devin auth login' }))
+    expect(model.reasonCode).toBeNull()
+  })
+
+  it('configures the Cursor SDK provider instead of using a stale CLI login command', () => {
+    const row = makeRow({ id: 'cursor', credentialModes: ['provider'], status: { login: 'signed-out' }, setup: SETUP })
+    row.definition.transport = 'cursor-sdk'
+    const model = agentCardModel(row, { enabled: true, platform: 'darwin', isDefault: false })
+    expect(model.primary).toEqual({ kind: 'configureProvider', labelKey: 'adeAgentAction.configureProvider' })
+    expect(model.secondary.some((action) => action.kind === 'command' || action.kind === 'specifyPath')).toBe(false)
+  })
+
   it('detecting rows get no actions', () => {
     const model = agentCardModel(
       makeRow({ status: { installed: 'unknown', detecting: true } }),
@@ -65,12 +82,12 @@ describe('agentCardModel', () => {
     expect(model.primary.kind).toBe('enable')
   })
 
-  it('not_installed prefers the platform install command over any', () => {
+  it('not_installed delegates installer selection to the host on every renderer platform', () => {
     const row = makeRow({ status: { installed: 'no', login: 'unknown' }, setup: SETUP })
     const darwin = agentCardModel(row, { enabled: true, platform: 'darwin', isDefault: false })
-    expect(darwin.primary).toMatchObject({ kind: 'command', command: 'brew install x' })
+    expect(darwin.primary).toMatchObject({ kind: 'install', action: 'install' })
     const linux = agentCardModel(row, { enabled: true, platform: 'linux', isDefault: false })
-    expect(linux.primary).toMatchObject({ kind: 'command', command: 'npm i -g x' })
+    expect(linux.primary).toMatchObject({ kind: 'install', action: 'install' })
     expect(linux.secondary.map((a) => a.kind)).toContain('specifyPath')
   })
 
@@ -80,7 +97,7 @@ describe('agentCardModel', () => {
       setup: SETUP
     })
     const model = agentCardModel(row, { enabled: true, platform: 'linux', isDefault: false })
-    expect(model.primary).toMatchObject({ kind: 'command', command: 'npm i -g x-acp' })
+    expect(model.primary).toMatchObject({ kind: 'install', action: 'adapter' })
   })
 
   it('falls back to the docs link when no install command exists', () => {

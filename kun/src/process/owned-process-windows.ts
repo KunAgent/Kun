@@ -47,7 +47,7 @@ async function buildLauncher(): Promise<string> {
   } finally { await rm(work, { recursive: true, force: true }) }
 }
 
-async function executablePath(command: string, options: SpawnOptions): Promise<string> {
+export async function resolveWindowsExecutablePath(command: string, options: SpawnOptions): Promise<string> {
   const environment = options.env ?? process.env
   const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === 'path')
   const paths = /[\\/]/u.test(command) || isAbsolute(command)
@@ -63,7 +63,7 @@ async function executablePath(command: string, options: SpawnOptions): Promise<s
 async function prepareWindowsLaunch(command: string, args: readonly string[], options: LaunchOptions, console = false) {
   if (stopping) throw new Error('Owned process admission is closed')
   if (options.shell) throw new Error('Owned commands must select an explicit shell executable')
-  let executable = await executablePath(command, options)
+  let executable = await resolveWindowsExecutablePath(command, options)
   let commandLine = [executable, ...args].map(quoteWindowsArgument).join(' ')
   if (/\.(?:cmd|bat)$/iu.test(executable)) {
     // Batch commands require cmd.exe; reject metacharacters instead of silently
@@ -72,7 +72,7 @@ async function prepareWindowsLaunch(command: string, args: readonly string[], op
       throw new Error('Use an executable or explicit shell for batch arguments containing shell metacharacters')
     }
     commandLine = `${quoteWindowsArgument(process.env.ComSpec ?? 'cmd.exe')} /d /s /c "${commandLine}"`
-    executable = await executablePath(process.env.ComSpec ?? 'cmd.exe', options)
+    executable = await resolveWindowsExecutablePath(process.env.ComSpec ?? 'cmd.exe', options)
   }
   const launcher = await (launcherBuild ??= buildLauncher().catch((error) => { launcherBuild = undefined; throw error }))
   if (stopping) throw new Error('Owned process admission is closed')

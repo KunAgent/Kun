@@ -15,6 +15,7 @@ import { sanottsSpeechBridge } from './sanotts-speech-bridge'
 import { writeBridge } from './write-bridge'
 import { onIpcEvent } from './ipc-event'
 import { paperApi } from './paper-api'
+import { createGoogleWorkspacePreloadApi } from './google-workspace'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
 // The preload runs sandboxed (webPreferences.sandbox = true), so it cannot
 // require node built-ins like node:os. The home dir is passed in from the main
@@ -56,7 +57,10 @@ const api = {
     execute: (input) => ipcRenderer.invoke('runtime-data-recovery:execute', input)
   },
   dataMigration: createDataMigrationPreloadApi(),
+  googleWorkspace: createGoogleWorkspacePreloadApi(ipcRenderer),
   getSettings: () => ipcRenderer.invoke('settings:get'),
+  getAdeCollaborationSettings: () => ipcRenderer.invoke('settings:ade-collaboration:get'),
+  getAdeProjectDefaults: (request) => ipcRenderer.invoke('settings:ade-project-defaults:get', request),
   openSettingsConfigFile: () => ipcRenderer.invoke('settings:open-config-file'),
   revealModelProviderCredential: (providerId) =>
     ipcRenderer.invoke('model-provider:credential:reveal', { providerId }),
@@ -96,6 +100,9 @@ const api = {
     ipcRenderer.invoke('cursor-subscription:discover', { apiKey, providerId }),
   setSettings: (partial) =>
     ipcRenderer.invoke('settings:set', partial),
+  saveAdeCollaborationSettings: (request) =>
+    ipcRenderer.invoke('settings:ade-collaboration:save', request),
+  saveAdeProjectDefaults: (request) => ipcRenderer.invoke('settings:ade-project-defaults:save', request),
   saveSettingsSilent: (partial) =>
     ipcRenderer.invoke('settings:save-silent', partial),
   ...runtimeRequestPreloadApi,

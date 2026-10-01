@@ -1,6 +1,6 @@
 {
   "roomsContent": "Content",
-  "roomsContentUnavailable": "Content is unavailable or no longer belongs to this bot.",
+  "roomsContentUnavailable": "Content is unavailable or no longer belongs to this room.",
   "roomsContentRetry": "Retry",
   "roomsContentVersion": "Pinned version",
   "roomsContentTruncated": "Preview is shortened. Open the source to read the rest.",
@@ -12,7 +12,7 @@
   "roomsContentLinkUnavailable": "Link preview unavailable",
   "roomsContent_attachment": "Attachment",
   "roomsContent_repository_file": "Repository file",
-  "roomsContent_task": "bot task",
+  "roomsContent_task": "Room task",
   "roomsContent_delivery": "Delivery",
   "roomsContent_board_card": "Project card",
   "roomsContentType": "Content type",

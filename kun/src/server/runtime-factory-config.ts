@@ -58,6 +58,7 @@ export function mergeRuntimeConfigApplyOptions(
     runtime: request.runtime ?? current.runtime,
     graph: request.graph ?? current.graph,
     harnesses: request.harnesses ?? current.harnesses,
+    nativeAgentNetwork: request.nativeAgentNetwork ?? current.nativeAgentNetwork,
     ade: request.ade ?? current.ade,
     roles: request.roles ?? current.roles,
     fastContext: request.fastContext ?? current.fastContext,

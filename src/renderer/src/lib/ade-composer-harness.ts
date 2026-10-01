@@ -5,6 +5,21 @@ import type {
   AdeHarnessRow
 } from '@shared/ade-harnesses'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
+import { MODEL_REASONING_EFFORTS, type ModelReasoningEffort, type ModelProviderModelProfileV1 } from '@shared/app-settings'
+import type { HarnessModelInfo } from '../../../../kun/src/contracts/harness-models'
+
+export function harnessModelProfiles(models: readonly HarnessModelInfo[] = [], nativeReasoning = false): Record<string, ModelProviderModelProfileV1> {
+  return Object.fromEntries(models.flatMap((model) => {
+    if (!model.inputModalities) return []
+    const inputModalities = model.inputModalities.filter((value): value is 'text' | 'image' => value === 'text' || value === 'image')
+    return [[model.id, { inputModalities, outputModalities: ['text'], supportsToolCalling: true,
+      messageParts: inputModalities.includes('image') ? ['text', 'image_url', 'input_image'] : ['text'],
+      ...(nativeReasoning ? { reasoning: {
+        supportedEfforts: (model.reasoningEfforts ?? []).filter((effort): effort is ModelReasoningEffort => MODEL_REASONING_EFFORTS.includes(effort as ModelReasoningEffort)),
+        defaultEffort: MODEL_REASONING_EFFORTS.includes(model.defaultReasoningEffort as ModelReasoningEffort) ? model.defaultReasoningEffort as ModelReasoningEffort : 'auto' as const,
+        requestProtocol: 'none' as const } } : {}) } satisfies ModelProviderModelProfileV1]]
+  }))
+}
 
 /**
  * ADE composer harness/model resolution (docs/ade/12 §7.2).
@@ -43,9 +58,13 @@ export function credentialGroupFromKey(
 /** Resolve the harness a turn on this thread would use (store → thread → kun). */
 export function effectiveHarnessId(
   composerHarnessId: string,
-  threadHarnessId: string | undefined
+  threadHarnessId: string | undefined,
+  providerKind?: ModelProviderModelGroup['kind']
 ): string {
-  return composerHarnessId.trim() || threadHarnessId?.trim() || 'kun'
+  const legacy = providerKind === 'agent-sdk' ? 'claude-code'
+    : providerKind === 'cursor-sdk' ? 'cursor'
+      : providerKind === 'antigravity-cli' ? 'antigravity' : 'kun'
+  return composerHarnessId.trim() || threadHarnessId?.trim() || legacy
 }
 
 /** The native Kun loop keeps the provider-registry model groups untouched. */
@@ -70,6 +89,7 @@ export type AdeCredentialGroupLabels = {
 export function adeHarnessModelGroups(input: {
   row: AdeHarnessRow | undefined
   models: readonly string[]
+  modelInfo?: readonly HarnessModelInfo[]
   providerGroups?: readonly AdeHarnessProviderModelGroup[]
   labels: AdeCredentialGroupLabels
   hasConfiguredProvider: boolean
@@ -87,7 +107,10 @@ export function adeHarnessModelGroups(input: {
       groups.push({
         providerId: credentialGroupKey(mode),
         label: labelFor[mode],
-        modelIds: [...models]
+        modelIds: [...models],
+        ...(input.modelInfo ? { modelProfiles: harnessModelProfiles(input.modelInfo, row.definition.id === 'devin') } : {}),
+        ...(input.modelInfo ? { nativeHarnessId: row.definition.id,
+          modelInfo: Object.fromEntries(input.modelInfo.map((entry) => [entry.id, entry])) } : {})
       })
       continue
     }
@@ -97,7 +120,8 @@ export function adeHarnessModelGroups(input: {
       groups.push({
         providerId: `${credentialGroupKey(mode)}:${provider.providerId}`,
         label: `${labelFor[mode]} · ${provider.label}`,
-        modelIds: [...provider.models]
+        modelIds: [...provider.models],
+        ...(provider.modelInfo ? { modelProfiles: harnessModelProfiles(provider.modelInfo) } : {})
       })
     }
   }
@@ -132,8 +156,8 @@ export function harnessSlashCommandText(command: AdeHarnessCommand): string {
 
 /**
  * Resolve the harness/credential pair for one submission: a frozen queued or
- * explicit override wins, else the composer selection applies to ADE threads
- * (and ADE-route new sessions) only — Code sends never carry these fields.
+ * explicit override wins, else an eligible Code composer selection applies.
+ * An unpinned legacy Code send retains runtime provider-kind inference.
  */
 export function resolveSendHarnessSelection(args: {
   queued?: { harnessId?: string; credentialMode?: string } | undefined
@@ -142,11 +166,14 @@ export function resolveSendHarnessSelection(args: {
   composerHarnessId: string
   composerCredentialMode: string
 }): { harnessId: string; credentialMode: string } {
-  const harnessId = args.queued?.harnessId?.trim() || args.overrides?.harnessId?.trim() ||
-    (args.adeEligible ? args.composerHarnessId.trim() : '')
+  if (args.queued) {
+    return { harnessId: args.queued.harnessId?.trim() ?? '', credentialMode: args.queued.credentialMode?.trim() ?? '' }
+  }
+  const harnessId = args.overrides?.harnessId?.trim() ||
+    (args.adeEligible ? args.composerHarnessId?.trim() ?? '' : '')
   const credentialMode = harnessId
-    ? args.queued?.credentialMode?.trim() || args.overrides?.credentialMode?.trim() ||
-      args.composerCredentialMode.trim()
+    ? args.overrides?.credentialMode?.trim() ||
+      args.composerCredentialMode?.trim() || ''
     : ''
   return { harnessId, credentialMode }
 }

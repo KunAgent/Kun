@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import type { SdkApi, SdkQueryResult } from '../runtime/agent-sdk/sdk-protocol.js'
@@ -24,6 +24,28 @@ const MODEL_ROWS = [
 ]
 
 describe('AgentSdkModelProbe', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('uses the native startup proxy environment without ambient runtime or provider credentials', async () => {
+    vi.stubEnv('HTTPS_PROXY', 'http://proxy.invalid:8080')
+    vi.stubEnv('https_proxy', 'http://lower.invalid:8081')
+    vi.stubEnv('NO_PROXY', 'private.test')
+    vi.stubEnv('KUN_RUNTIME_TOKEN', 'runtime-secret')
+    vi.stubEnv('ANTHROPIC_API_KEY', 'wrong-provider-key')
+    vi.stubEnv('DEEPSEEK_API_KEY', 'unrelated-key')
+    const query = vi.fn((_input: unknown) => ({ supportedModels: async () => MODEL_ROWS, close: vi.fn() }))
+    const probe = new AgentSdkModelProbe({ loadSdk: fakeSdk(query) })
+    await probe.probe(definition)
+    expect(query).toHaveBeenCalledWith(expect.objectContaining({ options: expect.objectContaining({
+      env: expect.objectContaining({ HTTPS_PROXY: 'http://proxy.invalid:8080',
+        https_proxy: 'http://lower.invalid:8081', NO_PROXY: 'private.test' })
+    }) }))
+    const env = (query.mock.calls[0]?.[0] as unknown as { options: { env: Record<string, string> } }).options.env
+    expect(env.KUN_RUNTIME_TOKEN).toBeUndefined()
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined()
+    expect(env.DEEPSEEK_API_KEY).toBeUndefined()
+  })
+
   it('returns canonical model ids from supportedModels()', async () => {
     const close = vi.fn()
     const probe = new AgentSdkModelProbe({

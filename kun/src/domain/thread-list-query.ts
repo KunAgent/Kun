@@ -12,6 +12,14 @@ export function compareThreadSummaries(left: ThreadSummary, right: ThreadSummary
   return threadUpdatedAtMs(right) - threadUpdatedAtMs(left) || right.id.localeCompare(left.id)
 }
 
+/** Code's combined root inventory includes legacy ADE conversations in place. */
+export function isCodeWorkbenchThread(thread: ThreadSummary): boolean {
+  const surface = thread.agentSurface ?? 'code'
+  return (surface === 'code' || surface === 'design') &&
+    (thread.relation ?? 'primary') !== 'side' &&
+    thread.executionUnit?.kind !== 'worker'
+}
+
 export function encodeThreadCursor(updatedAt: string, id: string): string {
   const updatedAtMs = Number.isFinite(Date.parse(updatedAt)) ? Date.parse(updatedAt) : 0
   return Buffer.from(JSON.stringify([updatedAtMs, id])).toString('base64url')
@@ -49,6 +57,7 @@ export function filterThreadSummaries(
   if (options.workspaceMode) {
     out = out.filter((thread) => (thread.workspaceMode ?? 'code') === options.workspaceMode)
   }
+  if (options.workbenchScope === 'code') out = out.filter(isCodeWorkbenchThread)
   if (query) out = out.filter((thread) => threadSearchText(thread).includes(query))
   return out.sort(compareThreadSummaries)
 }

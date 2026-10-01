@@ -11,11 +11,11 @@ const write = (content: string) => ({ callId: 'call', toolName: 'write', argumen
 describe('goal outcome evidence', () => {
   it('does not treat reads, searches, successful commands, bookkeeping or arbitrary success as progress', () => {
     const tracker = new GoalProgressEvidence()
-    for (const tool of ['read', 'grep', 'web_search', 'exec_command', 'get_goal', 'update_goal', 'create_goal', 'unknown']) {
+    for (const tool of ['read', 'grep', 'web_search', 'exec_command', 'get_goal', 'update_goal', 'create_goal', 'task_create', 'task_update', 'task_get', 'task_list', 'unknown']) {
       tracker.note('turn', tool, result(tool, { success: true, exitCode: 0, path: '/file.txt', content: 'new text' }))
     }
     expect(tracker.hasProgress('turn')).toBe(false)
-    expect(tracker.withoutProgress('turn')).toBe(8)
+    expect(tracker.withoutProgress('turn')).toBe(12)
   })
 
   it('recognizes new file contents and rejects repeated or alternating outputs across continuations', () => {

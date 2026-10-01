@@ -113,6 +113,7 @@ describe('ChangeRequestPanel', () => {
     await act(async () => sendBack!.props.onClick())
     expect(sendReview).toHaveBeenCalledWith('tws_cr00001', {
       commentIds: [],
+      clientRequestId: expect.any(String),
       target: { kind: 'worker', workerId: 'thr_w1' },
       note: expect.stringContaining('unit')
     })

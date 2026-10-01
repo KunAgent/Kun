@@ -48,10 +48,11 @@ export function createKunHarnessesClient() {
      */
     async listHarnessModels(
       harnessId: string,
-      credentialMode?: string
+      credentialMode?: string,
+      selectedModel?: string
     ): Promise<AdeHarnessModels> {
       const response = await rendererRuntimeClient.runtimeRequest(
-        kunHarnessModelsPath(harnessId, credentialMode), 'GET'
+        kunHarnessModelsPath(harnessId, credentialMode, selectedModel), 'GET'
       )
       if (!response.ok) {
         throw runtimeErrorToError(
@@ -86,12 +87,14 @@ export function createKunHarnessesClient() {
      */
     async testHarness(
       harnessId: string,
-      input: AdeHarnessTestRequest
+      input: AdeHarnessTestRequest,
+      options?: { signal?: AbortSignal }
     ): Promise<AdeHarnessTestResult> {
       const response = await rendererRuntimeClient.runtimeRequest(
         `${KUN_HARNESSES_PATH}/${encodeURIComponent(harnessId)}/test`,
         'POST',
-        JSON.stringify(input)
+        JSON.stringify(input),
+        options?.signal ? { signal: options.signal } : undefined
       )
       if (!response.ok) {
         throw runtimeErrorToError(
@@ -109,10 +112,12 @@ export function createKunHarnessesClient() {
      * Agent Center gates "save" on this so broken agents are caught early.
      */
     async probeHarnessDefinition(
-      input: AdeHarnessProbeDefinitionRequest
+      input: AdeHarnessProbeDefinitionRequest,
+      options?: { signal?: AbortSignal }
     ): Promise<AdeHarnessProbeDefinitionResult> {
       const response = await rendererRuntimeClient.runtimeRequest(
-        KUN_HARNESS_PROBE_DEFINITION_TEMPLATE, 'POST', JSON.stringify(input)
+        KUN_HARNESS_PROBE_DEFINITION_TEMPLATE, 'POST', JSON.stringify(input),
+        options?.signal ? { signal: options.signal } : undefined
       )
       if (!response.ok) {
         throw runtimeErrorToError(

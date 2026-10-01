@@ -35,3 +35,38 @@ it('falls back to main for background work only when no lightweight route is con
   const result = await agentModelOptions({ ...deps, peerModels: undefined }, agent)
   expect(result.fast).toEqual(result.main); expect(result.fastSource).toBe('main')
 })
+it('hides leftover OpenCode Free connections from bot inheritance and the picker', async () => {
+  const leftoverSnapshot = ModelConnectionSnapshotSchema.parse({
+    schemaVersion: 1, proxyRoutingVersion: 1, revision: 0,
+    defaultProviderId: 'opencode-free', defaultAccountId: 'account-free', defaultModel: 'big-pickle',
+    providers: [{
+      id: 'opencode-free', accountId: 'account-free', name: 'OpenCore Free', presetSource: 'opencode-free',
+      kind: 'http', authType: 'api-key', endpointFormat: 'chat_completions', useProxy: false,
+      configured: true, credentialStatus: 'ready', models: ['big-pickle', 'gpt-5-nano']
+    }, {
+      id: 'one', accountId: 'account-one', name: 'One', kind: 'http', authType: 'api-key',
+      endpointFormat: 'chat_completions', useProxy: false, configured: true, credentialStatus: 'ready',
+      models: ['main', 'other']
+    }, {
+      id: 'two', accountId: 'account-two', name: 'Two', kind: 'http', authType: 'api-key',
+      endpointFormat: 'chat_completions', useProxy: false, configured: true, credentialStatus: 'ready',
+      models: ['fast']
+    }, {
+      id: 'sdk', accountId: 'sdk-account', name: 'SDK', kind: 'agent-sdk', authType: 'subscription',
+      endpointFormat: 'chat_completions', useProxy: false, configured: true, credentialStatus: 'ready',
+      models: ['native']
+    }]
+  })
+  const leftoverDeps = {
+    ...deps,
+    model: () => ({ providerId: 'opencode-free', model: 'big-pickle' }),
+    modelSnapshot: async () => leftoverSnapshot
+  }
+  const leftover = await agentModelOptions(leftoverDeps, agent)
+  expect(leftover.options.map((item) => item.providerId)).not.toContain('opencode-free')
+  expect(leftover.options.some((item) => item.model === 'big-pickle')).toBe(false)
+  expect(leftover.inheritedMain).toEqual({ providerId: 'one', accountId: 'account-one', model: 'main' })
+  expect(leftover.main).toEqual({ providerId: 'one', accountId: 'account-one', model: 'main' })
+  await expect(assertAgentModel(leftoverDeps, { providerId: 'opencode-free', model: 'big-pickle' }))
+    .rejects.toThrow('unavailable')
+})

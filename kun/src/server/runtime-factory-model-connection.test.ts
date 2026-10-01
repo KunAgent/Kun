@@ -3,7 +3,7 @@ import {
   activeModelConnectionProviderId,
   extensionAgentRunOptionsForOptions
 } from './runtime-factory.js'
-import { modelContextProfilesByProvider } from './runtime-factory-model.js'
+import { modelConnectionSeedsForOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
 import { resolveModelContextProfile } from '../loop/model-context-profile.js'
 
 describe('activeModelConnectionProviderId', () => {
@@ -124,6 +124,38 @@ describe('activeModelConnectionProviderId', () => {
         { id: 'other-model', selected: false }
       ]
     })
+  })
+
+  it('does not seed leftover OpenCode Free connections', () => {
+    expect(modelConnectionSeedsForOptions({
+      host: '127.0.0.1',
+      port: 0,
+      dataDir: '/tmp/kun-model-seeds',
+      runtimeToken: 'runtime-token',
+      apiKey: '',
+      activeProviderId: 'opencode-free',
+      baseUrl: 'https://opencode.ai/zen/v1',
+      model: 'big-pickle',
+      approvalPolicy: 'on-request',
+      sandboxMode: 'workspace-write',
+      tokenEconomyMode: false,
+      insecure: false,
+      providers: {
+        'opencode-free': {
+          apiKey: '',
+          presetSource: 'opencode-free',
+          baseUrl: 'https://opencode.ai/zen/v1',
+          models: ['big-pickle', 'gpt-5-nano'],
+          selectedModel: 'big-pickle'
+        },
+        deepseek: {
+          apiKey: 'secret',
+          baseUrl: 'https://api.deepseek.com',
+          models: ['deepseek-chat'],
+          selectedModel: 'deepseek-chat'
+        }
+      }
+    }).map((seed) => seed.id)).toEqual(['deepseek'])
   })
 })
 

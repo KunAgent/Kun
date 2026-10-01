@@ -1,3 +1,4 @@
+import googleWorkspace from './settings/google-workspace.json'
 import navigationProviders from './settings/navigation-providers.json'
 import modelRoutes from './settings/model-routes.json'
 import providerManagement from './settings/provider-management.json'
@@ -10,6 +11,7 @@ import speak from './settings/speak.json'
 import ade from './settings/ade.json'
 
 const settings = {
+  ...googleWorkspace,
   ...navigationProviders,
   ...modelRoutes,
   ...providerManagement,

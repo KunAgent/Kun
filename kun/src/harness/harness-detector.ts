@@ -1,4 +1,5 @@
 import semver from 'semver'
+import { createHash } from 'node:crypto'
 import type { ChildProcess } from 'node:child_process'
 import type { HarnessDefinition, HarnessId, HarnessStatus } from '../contracts/harness.js'
 import { harnessStatusReasonCode } from '../contracts/harness.js'
@@ -8,6 +9,9 @@ import {
   stopOwnedProcess
 } from '../process/owned-process.js'
 import type { HarnessLoginState } from './harness-login-probes.js'
+import { nativeAgentNetworkStatus } from './native-agent-network.js'
+import { resolveCodexExecutable } from './codex-executable.js'
+import { harnessExecutableEnv } from './harness-executable-env.js'
 
 const VERSION_TIMEOUT_MS = 5_000
 const DEFAULT_TTL_MS = 60_000
@@ -72,8 +76,8 @@ function versionSupported(version: string | null, minVersion: string | undefined
 }
 
 export class HarnessDetector {
-  private readonly cache = new Map<HarnessId, { status: HarnessStatus; expiresAt: number }>()
-  private readonly inflight = new Map<HarnessId, Promise<HarnessStatus>>()
+  private readonly cache = new Map<HarnessId, { status: HarnessStatus; expiresAt: number; identity: string }>()
+  private readonly inflight = new Map<HarnessId, { identity: string; promise: Promise<HarnessStatus> }>()
 
   constructor(
     private readonly deps: {
@@ -90,8 +94,8 @@ export class HarnessDetector {
       /** Command resolution; injectable so tests avoid real PATH lookups. */
       resolveExecutable?: (command: string) => Promise<string | undefined>
       /**
-       * ACP initialize handshake after the version probe (P3-11). Only runs
-       * for `transport: 'acp'` definitions with a resolved command; its
+       * Protocol initialize handshake after the version probe. Runs for ACP
+       * and native Codex with a resolved command; its
        * verdict lands on `status.ready` with a sanitized stderr summary.
        * 'unknown' (P4-03) means the probe timed out — not a failure verdict.
        */
@@ -105,8 +109,8 @@ export class HarnessDetector {
        * enter the cache.
        */
       readinessCache?: {
-        get(id: HarnessId, command: string, version: string | undefined): Promise<'yes' | undefined>
-        set(id: HarnessId, command: string, version: string | undefined): Promise<void>
+        get(id: HarnessId, command: string, version: string | undefined, identity?: string): Promise<'yes' | undefined>
+        set(id: HarnessId, command: string, version: string | undefined, identity?: string): Promise<void>
         clear(id: HarnessId): Promise<void>
       }
       probeLogin: (def: HarnessDefinition, command: string) => Promise<HarnessLoginState>
@@ -117,16 +121,17 @@ export class HarnessDetector {
   ) {}
 
   async status(id: HarnessId, opts: { force?: boolean } = {}): Promise<HarnessStatus> {
+    const identity = this.identity(id)
     const cached = this.cache.get(id)
-    if (!opts.force && cached && cached.expiresAt > this.deps.nowMs()) return cached.status
+    if (!opts.force && cached && cached.identity === identity && cached.expiresAt > this.deps.nowMs()) return cached.status
     const pending = this.inflight.get(id)
-    if (pending) return pending
-    const run = this.detect(id)
-    this.inflight.set(id, run)
+    if (pending?.identity === identity) return pending.promise
+    const run = this.detect(id, identity)
+    this.inflight.set(id, { identity, promise: run })
     try {
       return await run
     } finally {
-      this.inflight.delete(id)
+      if (this.inflight.get(id)?.promise === run) this.inflight.delete(id)
     }
   }
 
@@ -137,12 +142,14 @@ export class HarnessDetector {
    */
   cachedStatus(id: HarnessId): HarnessStatus | undefined {
     const cached = this.cache.get(id)
-    return cached && cached.expiresAt > this.deps.nowMs() ? cached.status : undefined
+    return cached && cached.identity === this.identity(id) && cached.expiresAt > this.deps.nowMs()
+      ? cached.status
+      : undefined
   }
 
   /** True while a detection pass is inflight for this harness. */
   detecting(id: HarnessId): boolean {
-    return this.inflight.has(id)
+    return this.inflight.get(id)?.identity === this.identity(id)
   }
 
   /**
@@ -153,9 +160,10 @@ export class HarnessDetector {
   recordLaunchFailure(id: HarnessId, detail: string): void {
     void this.deps.readinessCache?.clear(id).catch(() => undefined)
     const cached = this.cache.get(id)
+    const current = cached?.identity === this.identity(id) ? cached.status : undefined
     const message = detail.slice(0, 512)
     this.store(id, {
-      ...(cached?.status ?? {
+      ...(current ?? {
         harnessId: id,
         installed: 'unknown' as const,
         login: 'unknown' as const
@@ -171,7 +179,7 @@ export class HarnessDetector {
   /** Non-blocking snapshot: cached status or an optimistic unknown entry. */
   peek(id: HarnessId): HarnessStatus | undefined {
     const cached = this.cache.get(id)
-    if (cached && cached.expiresAt > this.deps.nowMs()) return cached.status
+    if (cached && cached.identity === this.identity(id) && cached.expiresAt > this.deps.nowMs()) return cached.status
     void this.status(id).catch(() => undefined)
     return {
       harnessId: id,
@@ -182,19 +190,36 @@ export class HarnessDetector {
     }
   }
 
-  private store(id: HarnessId, status: HarnessStatus): HarnessStatus {
-    this.cache.set(id, {
-      status,
-      expiresAt: this.deps.nowMs() + (this.deps.ttlMs ?? DEFAULT_TTL_MS)
-    })
+  private store(id: HarnessId, status: HarnessStatus, identity = this.identity(id)): HarnessStatus {
+    // A settings edit can finish before an older probe. Return its result to
+    // that caller, but never let it replace the new configuration's verdict.
+    if (identity === this.identity(id)) {
+      this.cache.set(id, {
+        status,
+        identity,
+        expiresAt: this.deps.nowMs() + (this.deps.ttlMs ?? DEFAULT_TTL_MS)
+      })
+    }
     return status
   }
 
-  private async detect(id: HarnessId): Promise<HarnessStatus> {
+  private identity(id: HarnessId): string {
+    const def = this.deps.definitions().find((candidate) => candidate.id === id)
+    return JSON.stringify({
+      transport: def?.transport,
+      network: def ? nativeAgentNetworkStatus(def).networkFingerprint : undefined,
+      detect: def?.detect,
+      launch: def?.launch,
+      binaryPath: this.deps.overrides()[id]?.binaryPath?.trim()
+    })
+  }
+
+  private async detect(id: HarnessId, identity: string): Promise<HarnessStatus> {
+    const store = (status: HarnessStatus): HarnessStatus => this.store(id, status, identity)
     const def = this.deps.definitions().find((d) => d.id === id)
     const checkedAt = this.deps.nowIso()
     if (!def) {
-      return this.store(id, {
+      return store({
         harnessId: id,
         installed: 'unknown',
         login: 'unknown',
@@ -203,7 +228,7 @@ export class HarnessDetector {
       })
     }
     if (def.transport === 'native-loop') {
-      return this.store(id, {
+      return store({
         harnessId: id,
         installed: 'yes',
         login: 'not-required',
@@ -216,7 +241,7 @@ export class HarnessDetector {
       const login = await this.deps
         .probeLogin(def, def.id)
         .catch(() => 'unknown' as HarnessLoginState)
-      return this.store(id, { harnessId: id, installed: 'yes', login, checkedAt })
+      return store({ harnessId: id, installed: 'yes', login, checkedAt })
     }
     const bundled = this.deps.bundled?.(def)
     const command = bundled?.command ?? (await this.resolveCommand(def))
@@ -230,7 +255,7 @@ export class HarnessDetector {
             hint.command
           ).catch(() => undefined)
         : undefined
-      return this.store(id, {
+      return store({
         harnessId: id,
         installed: 'no',
         login: 'unknown',
@@ -249,7 +274,7 @@ export class HarnessDetector {
       const login = await this.deps
         .probeLogin(def, command ?? def.id)
         .catch(() => 'unknown' as HarnessLoginState)
-      return this.store(id, {
+      return store({
         harnessId: id,
         installed: 'yes',
         login,
@@ -265,7 +290,7 @@ export class HarnessDetector {
     const probeCommand = command ?? def.id
     if (version === undefined) {
       const login = await this.deps.probeLogin(def, probeCommand).catch(() => 'unknown' as HarnessLoginState)
-      return this.store(id, {
+      return store({
         harnessId: id,
         installed: 'unknown',
         login,
@@ -275,13 +300,15 @@ export class HarnessDetector {
       })
     }
     const login = await this.deps.probeLogin(def, probeCommand).catch(() => 'unknown' as HarnessLoginState)
-    // ACP harnesses also prove readiness: the binary answers `initialize`
-    // within the timeout, speaks a supported protocol, and stays alive.
+    // Protocol harnesses also prove readiness: a version response alone does
+    // not mean the agent can serve turns.
     let ready: HarnessStatus['ready']
     let readyMessage: string | undefined
-    if (def.transport === 'acp' && command && this.deps.probeReady) {
+    if ((def.transport === 'acp' || def.transport === 'codex-app-server') && command && this.deps.probeReady) {
+      const protocolLabel = def.transport === 'acp' ? 'ACP' : 'Codex app-server'
+      const readinessIdentity = createHash('sha256').update(identity).digest('hex')
       const cached = await this.deps.readinessCache
-        ?.get(id, command, version.text || undefined)
+        ?.get(id, command, version.text || undefined, readinessIdentity)
         .catch(() => undefined)
       if (cached === 'yes') {
         ready = 'yes'
@@ -292,12 +319,12 @@ export class HarnessDetector {
         ready = result.ready
         if (result.ready === 'yes') {
           await this.deps.readinessCache
-            ?.set(id, command, version.text || undefined)
+            ?.set(id, command, version.text || undefined, readinessIdentity)
             .catch(() => undefined)
         } else if (result.ready === 'no') {
-          readyMessage = `ACP initialize failed: ${result.detail ?? 'no response'}`
+          readyMessage = `${protocolLabel} initialize failed: ${result.detail ?? 'no response'}`
         } else {
-          readyMessage = `ACP readiness probe inconclusive: ${result.detail ?? 'timeout'}`
+          readyMessage = `${protocolLabel} readiness probe inconclusive: ${result.detail ?? 'timeout'}`
         }
       }
     }
@@ -315,18 +342,22 @@ export class HarnessDetector {
     // P4-05: stamp the stable reason code so clients localize a label and a
     // next step instead of parsing `message` (which stays detail-only).
     const reasonCode = harnessStatusReasonCode(status)
-    return this.store(id, reasonCode ? { ...status, reasonCode } : status)
+    return store(reasonCode ? { ...status, reasonCode } : status)
   }
 
   private async resolveCommand(def: HarnessDefinition): Promise<string | undefined> {
 
-    const resolve = this.deps.resolveExecutable ?? defaultResolveExecutable
+    const resolve = this.deps.resolveExecutable ?? ((command: string) => defaultResolveExecutable(command, { env: harnessExecutableEnv() }))
     const override = this.deps.overrides()[def.id]?.binaryPath?.trim()
     if (override) {
       const resolved = await resolve(override)
       if (resolved) return resolved
+      if (def.transport === 'codex-app-server') return undefined
     }
     if (!def.detect) return undefined
+    if (!override && !this.deps.resolveExecutable && def.transport === 'codex-app-server' && def.detect.command === 'codex') {
+      return resolve(await resolveCodexExecutable())
+    }
     for (const candidate of [def.detect.command, ...(def.detect.aliases ?? [])]) {
       const resolved = await resolve(candidate)
       if (resolved) return resolved

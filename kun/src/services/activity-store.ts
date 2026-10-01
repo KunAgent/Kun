@@ -86,6 +86,10 @@ export class ActivityStore implements RuntimeEventObserver {
       workspace: input.workspace,
       mainState,
       ...(input.lastOutcome ? { lastOutcome: input.lastOutcome } : {}),
+      ...(input.reviewRequired !== undefined
+        ? { reviewRequired: input.reviewRequired }
+        : input.kind !== 'thread' ? { reviewRequired: false } : {}),
+      ...(input.reviewStatus ? { reviewStatus: input.reviewStatus } : {}),
       ...(input.waitingReason ? { waitingReason: input.waitingReason } : {}),
       ...(input.turnId ? { turnId: input.turnId } : {}),
       children: { working: 0, waiting: 0, done: 0, failed: 0 },
@@ -282,10 +286,17 @@ export class ActivityStore implements RuntimeEventObserver {
       if (!patch.mainState) continue
       this.register({
         unitId: record.id,
-        kind: 'thread',
+        kind: record.executionUnit?.kind === 'worker' ? 'worker' : 'thread',
         threadId: record.id,
         ...(record.roomContext?.kind === 'conversation' ? { roomId: record.roomContext.roomId } : {}),
         ...(record.parentThreadId ? { parentThreadId: record.parentThreadId } : {}),
+        ...(record.executionUnit?.kind === 'worker'
+          ? {
+              teamId: record.executionUnit.teamId,
+              reviewRequired: true,
+              reviewStatus: 'pending' as const
+            }
+          : {}),
         harnessId: record.harnessId ?? 'kun',
         title: record.title,
         workspace: { path: record.workspace, kind: 'local' },
@@ -359,6 +370,10 @@ export class ActivityStore implements RuntimeEventObserver {
       },
       ...(metadata.harnessId ? { harnessId: metadata.harnessId } : {}),
       ...(metadata.parentThreadId ? { parentThreadId: metadata.parentThreadId } : {}),
+      ...(metadata.executionUnit?.kind === 'worker'
+        ? { reviewRequired: true, reviewStatus: 'pending' as const,
+            teamId: metadata.executionUnit.teamId }
+        : {}),
       ...(metadata.status === 'archived' ? { visibility: 'archived' as const } : {})
     }, 'runtime')
   }

@@ -15,7 +15,6 @@ import {
   Globe2,
   Gauge,
   GitBranch,
-  GitCompare,
   LockKeyhole,
   Loader2,
   MessageCircleMore,
@@ -357,7 +356,6 @@ export function WorkbenchSideRail({
   planPanelEnabled = false,
   canvasEnabled = false,
   graphEnabled = false,
-  reviewEnabled = false,
   workersEnabled = false,
   sideChatRunningCount = 0,
   sideChatOpen = false,
@@ -376,11 +374,6 @@ export function WorkbenchSideRail({
   const items = [
     ...(planPanelEnabled ? [{ mode: BUILTIN_RIGHT_PANEL_IDS.plan, label: t('rightPanelPlan'), icon: ClipboardList }] : []),
     { mode: BUILTIN_RIGHT_PANEL_IDS.changes, label: t('rightPanelChanges'), icon: FileEdit },
-    ...(reviewEnabled ? [{
-      mode: BUILTIN_RIGHT_PANEL_IDS.review,
-      label: t('rightPanelReview', { defaultValue: 'Review' }),
-      icon: GitCompare
-    }] : []),
     ...(workersEnabled ? [{
       mode: BUILTIN_RIGHT_PANEL_IDS.workers,
       label: t('rightPanelWorkers', { defaultValue: 'Workers' }),

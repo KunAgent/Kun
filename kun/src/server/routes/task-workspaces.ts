@@ -20,6 +20,7 @@ import {
   TaskWorkspaceConflictError,
   TaskWorkspaceDiscardPending
 } from '../../workspace-tasks/task-workspace-integration.js'
+import { captureReviewRevision } from '../../workspace-tasks/review-revision.js'
 
 /** Task-workspace HTTP handlers (docs/ade/07 §11). */
 
@@ -142,8 +143,13 @@ export async function taskWorkspaceDiffResponse(
 ): Promise<JsonResponse> {
   try {
     const record = await service.capture(workspaceId)
-    return jsonResponse(await taskWorkspaceDiffList(record, artifacts))
+    const revision = await captureReviewRevision(workspaceId, record.path)
+    return jsonResponse(await taskWorkspaceDiffList(record, artifacts, revision))
   } catch (error) {
+    console.warn('[kun] task workspace diff capture failed', {
+      workspaceId,
+      message: error instanceof Error ? error.message.slice(0, 2_048) : 'Unknown capture failure'
+    })
     return serviceError(error)
   }
 }
@@ -286,10 +292,11 @@ export async function integrateTaskWorkspaceResponse(
     return ERRORS.validation('invalid task workspace integrate request', parsed.error.issues)
   }
   try {
-    const result = await service.integrate(workspaceId, parsed.data.mode)
+    const result = await service.integrate(workspaceId, parsed.data.mode, parsed.data.previewToken)
     return jsonResponse({
       record: result.record,
       outcome: result.outcome,
+      ...(result.previewTokenValidated ? { previewTokenValidated: true } : {}),
       ...(result.reason ? { reason: result.reason } : {}),
       ...(result.recovery ? { recovery: result.recovery } : {})
     })

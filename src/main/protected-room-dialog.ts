@@ -1,42 +1,145 @@
 import { resolveNamedPreloadPath } from './main-paths'
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, screen, type WebFrameMain } from 'electron'
 import { randomBytes } from 'node:crypto'
 import { protectedRoomDialogHtml, type ProtectedRoomDialogContent } from './protected-room-dialog-html'
+import { markProtectedWindowContents } from './protected-window-contents'
 
-/** A separate sandboxed surface, with no workbench bridge, extension scripts or shared session. */
-export function showProtectedRoomDialog(parent: BrowserWindow, content: ProtectedRoomDialogContent, current?: () => Promise<boolean>): Promise<boolean> {
-  if (parent.isDestroyed()) return Promise.resolve(false)
-  const nonce = randomBytes(18).toString('hex')
+export const PROTECTED_DIALOG_TIMEOUT_MS = 5 * 60_000
+
+type FrameIdentity = { processId: number; routingId: number; url: string }
+function frameIdentity(frame: WebFrameMain): FrameIdentity {
+  return { processId: frame.processId, routingId: frame.routingId, url: frame.url }
+}
+function frameMatches(frame: WebFrameMain | null, identity: FrameIdentity): boolean {
+  return Boolean(frame && !frame.detached && frame.processId === identity.processId &&
+    frame.routingId === identity.routingId && frame.url === identity.url)
+}
+
+/** A dedicated Main-owned surface; no workbench bridge, extension scripts or shared session. */
+export function showProtectedRoomDialog(
+  parent: BrowserWindow,
+  content: ProtectedRoomDialogContent,
+  current?: () => Promise<boolean>
+): Promise<boolean> {
+  if (parent.isDestroyed() || parent.webContents.isDestroyed()) return Promise.resolve(false)
+  const parentFrame = frameIdentity(parent.webContents.mainFrame)
+  const nonce = randomBytes(24).toString('hex')
+  const documentUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(protectedRoomDialogHtml(content, nonce))
   const bounds = parent.getBounds()
-  const width = Math.min(560, Math.max(340, bounds.width - 48)), height = Math.min(470, Math.max(320, bounds.height - 48))
-  const view = new BrowserWindow({ parent, modal: true, frame: false, show: false, width, height,
-    x: Math.round(bounds.x + (bounds.width - width) / 2), y: Math.round(bounds.y + (bounds.height - height) / 2),
-    resizable: false, minimizable: false, maximizable: false, skipTaskbar: true,
-    backgroundColor: content.dark ? '#181a1d' : '#f9fbfc',
-    webPreferences: { preload: resolveNamedPreloadPath(app.getAppPath(), 'protected-room-dialog'), sandbox: true,
-      contextIsolation: true, nodeIntegration: false, webviewTag: false, partition: 'kun-protected-' + nonce } })
-  return new Promise((resolve, reject) => {
-    let settled = false, checking = false
-    const finish = (value: boolean, error?: Error) => { if (settled) return; settled = true; clearInterval(timer); parent.removeListener('closed', parentClosed); if (error) reject(error); else resolve(value); if (!view.isDestroyed()) view.close() }
-    const parentClosed = () => finish(false)
-    const timer = setInterval(() => {
-      if (!current || settled || checking) return
-      checking = true
-      void current().then((active) => { if (!active) finish(false) }, () => finish(false)).finally(() => { checking = false })
-    }, 1000)
-    timer.unref()
+  const area = screen.getDisplayMatching(bounds).workArea
+  const width = Math.max(1, Math.min(560, area.width - 32))
+  const preferredHeight = content.variant === 'notice' ? 320 : content.variant === 'confirmation' ? 360 : 500
+  const height = Math.max(1, Math.min(preferredHeight, area.height - 32))
+  const x = Math.round(Math.max(area.x, Math.min(bounds.x + (bounds.width - width) / 2, area.x + area.width - width)))
+  const y = Math.round(Math.max(area.y, Math.min(bounds.y + (bounds.height - height) / 2, area.y + area.height - height)))
+  const view = new BrowserWindow({
+    parent, modal: true, frame: false, show: false, width, height, x, y,
+    resizable: false, minimizable: false, maximizable: false, fullscreenable: false,
+    skipTaskbar: true, autoHideMenuBar: true,
+    backgroundColor: content.dark ? '#1a1a1a' : '#fafafa',
+    webPreferences: {
+      preload: resolveNamedPreloadPath(app.getAppPath(), 'protected-room-dialog'),
+      sandbox: true, contextIsolation: true, nodeIntegration: false,
+      nodeIntegrationInWorker: false, nodeIntegrationInSubFrames: false,
+      webSecurity: true, allowRunningInsecureContent: false, webviewTag: false,
+      devTools: false, partition: 'kun-protected-' + nonce
+    }
+  })
+  markProtectedWindowContents(view.webContents)
+  view.setMenu(null)
+  const session = view.webContents.session
+  session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
+  session.setPermissionCheckHandler(() => false)
+  // The document and its assets are entirely inline. A unique nonpersistent
+  // session prevents any workbench/extension resource handler from joining it.
+  session.webRequest.onBeforeRequest((details, callback) => {
+    callback({ cancel: details.url !== documentUrl || details.resourceType !== 'mainFrame' })
+  })
+
+  return new Promise((resolve) => {
+    let settled = false
+    let polling = false
+    let confirming = false
+    let initialNavigationStarted = false
+    let readyToShow = false
+    let loadedFrame: FrameIdentity | undefined
+    let generation = 0
+    const parentIsCurrent = (): boolean => !parent.isDestroyed() && !parent.webContents.isDestroyed() &&
+      frameMatches(parent.webContents.mainFrame, parentFrame)
+    const documentIsCurrent = (): boolean => !view.isDestroyed() && !view.webContents.isDestroyed() &&
+      Boolean(loadedFrame && frameMatches(view.webContents.mainFrame, loadedFrame)) &&
+      view.webContents.getURL() === documentUrl
+    const finish = (confirmed: boolean): void => {
+      if (settled) return
+      settled = true
+      clearInterval(pollTimer)
+      clearTimeout(timeout)
+      parent.removeListener('closed', parentClosed)
+      parent.webContents.removeListener('destroyed', parentClosed)
+      parent.webContents.removeListener('did-start-navigation', parentNavigation)
+      resolve(confirmed)
+      if (!view.isDestroyed()) view.destroy()
+    }
+    const parentClosed = (): void => finish(false)
+    const parentNavigation = (_event: unknown, _url: string, _inPlace: boolean, isMainFrame: boolean): void => {
+      if (isMainFrame) finish(false)
+    }
+    const pollTimer = setInterval(() => {
+      if (!current || settled || polling || confirming) return
+      polling = true
+      void Promise.resolve().then(current).then((active) => {
+        if (!active || !parentIsCurrent()) finish(false)
+      }, () => finish(false)).finally(() => { polling = false })
+    }, 1_000)
+    pollTimer.unref()
+    const timeout = setTimeout(() => finish(false), PROTECTED_DIALOG_TIMEOUT_MS)
+    timeout.unref()
     parent.once('closed', parentClosed)
-    view.on('closed', () => finish(false))
-    view.webContents.once('preload-error', (_event, _path, error) => finish(false, error))
+    parent.webContents.once('destroyed', parentClosed)
+    parent.webContents.on('did-start-navigation', parentNavigation)
+    view.once('closed', () => finish(false))
+    view.webContents.once('destroyed', () => finish(false))
+    view.webContents.once('preload-error', () => finish(false))
+    view.webContents.once('render-process-gone', () => finish(false))
+    view.webContents.on('did-fail-load', () => finish(false))
     view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-    view.webContents.on('will-navigate', (event) => event.preventDefault())
-    view.webContents.on('will-attach-webview', (event) => event.preventDefault())
-    view.webContents.on('ipc-message', (event, channel, value) => {
-      if (channel !== 'protected-room:confirm' || typeof value !== 'boolean' || view.isDestroyed() || parent.isDestroyed()) return
-      if (event.senderFrame?.processId !== view.webContents.mainFrame.processId || event.senderFrame?.routingId !== view.webContents.mainFrame.routingId) return
-      finish(value)
+    view.webContents.on('will-navigate', (event) => { event.preventDefault(); finish(false) })
+    view.webContents.on('will-redirect', (event) => { event.preventDefault(); finish(false) })
+    view.webContents.on('will-attach-webview', (event) => { event.preventDefault(); finish(false) })
+    view.webContents.on('did-start-navigation', (_event, url, inPlace, isMainFrame) => {
+      if (!isMainFrame) { finish(false); return }
+      generation += 1
+      if (initialNavigationStarted || loadedFrame || inPlace || url !== documentUrl) { finish(false); return }
+      initialNavigationStarted = true
     })
-    view.once('ready-to-show', () => { if (!settled) view.show() })
-    void view.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(protectedRoomDialogHtml(content, nonce))).catch((error) => finish(false, error))
+    view.webContents.on('did-finish-load', () => {
+      if (settled) return
+      if (loadedFrame || !parentIsCurrent() || view.webContents.getURL() !== documentUrl) { finish(false); return }
+      loadedFrame = frameIdentity(view.webContents.mainFrame)
+      if (readyToShow) view.show()
+    })
+    view.webContents.on('before-input-event', (_event, input) => {
+      if (input.type === 'keyDown' && input.key === 'Escape') finish(false)
+    })
+    view.webContents.on('ipc-message', (event, channel, payload: unknown) => {
+      if (settled || channel !== 'protected-room:confirm' || !payload || typeof payload !== 'object') return
+      const decision = payload as { confirmed?: unknown; nonce?: unknown }
+      if (typeof decision.confirmed !== 'boolean' || decision.nonce !== nonce ||
+        event.sender.id !== view.webContents.id || !loadedFrame ||
+        !frameMatches(event.senderFrame, loadedFrame) || !documentIsCurrent() || !parentIsCurrent()) return
+      if (!decision.confirmed) { finish(false); return }
+      if (confirming) return
+      confirming = true
+      const submittedGeneration = generation
+      void Promise.resolve().then(() => current?.() ?? true).then((active) => {
+        finish(active === true && generation === submittedGeneration && parentIsCurrent() && documentIsCurrent())
+      }, () => finish(false))
+    })
+    view.once('ready-to-show', () => {
+      readyToShow = true
+      if (!settled && loadedFrame && parentIsCurrent()) view.show()
+    })
+    if (!parentIsCurrent()) { finish(false); return }
+    void view.loadURL(documentUrl).catch(() => finish(false))
   })
 }

@@ -1,5 +1,6 @@
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { AgentProvider } from '../agent/types'
+import type { CodeProjectRouteSnapshot } from './chat-store-ade-send-snapshot'
 import type {
   ChatState,
   QueuedUserMessage,
@@ -45,6 +46,9 @@ export type PreparedThreadSend = {
   composerModel: string
   composerProviderId: string
   composerAccountId: string
+  composerCollaborationEnabled?: boolean
+  composerCollaborationExplicit?: boolean
+  codeProjectRoute?: CodeProjectRouteSnapshot
   composerHarnessId: string
   composerCredentialMode: string
   reasoningEffort: string | undefined

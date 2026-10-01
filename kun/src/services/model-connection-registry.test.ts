@@ -146,6 +146,57 @@ async function registry(
 }
 
 describe('ModelConnectionRegistry', () => {
+  it('retires leftover OpenCode Free connections and keeps other defaults', async () => {
+    const { dataDir, value } = await registry()
+    const remaining = await value.connect(deepseekConnection())
+    await value.connect({
+      expectedRevision: remaining.revision,
+      id: 'opencode-free',
+      name: 'OpenCore Free',
+      presetSource: 'opencode-free',
+      kind: 'http',
+      authType: 'api-key',
+      baseUrl: 'https://opencode.ai/zen/v1',
+      endpointFormat: 'chat_completions',
+      credential: 'stale-free-token',
+      models: ['big-pickle', 'gpt-5-nano'],
+      selectedModel: 'big-pickle',
+      probe: false,
+      select: true
+    })
+
+    const retired = await value.initialize([
+      deepseekConnection(),
+      {
+        expectedRevision: 0,
+        id: 'opencode-free',
+        name: 'OpenCore Free',
+        presetSource: 'opencode-free',
+        kind: 'http',
+        authType: 'api-key',
+        baseUrl: 'https://opencode.ai/zen/v1',
+        endpointFormat: 'chat_completions',
+        credential: 'stale-free-token',
+        models: ['big-pickle'],
+        selectedModel: 'big-pickle',
+        probe: false,
+        select: true
+      }
+    ])
+
+    expect(retired.providers.map((provider) => provider.id)).toEqual(['deepseek'])
+    expect(retired.defaultProviderId).toBe('deepseek')
+    expect(retired.defaultModel).toBe('deepseek-chat')
+    const stored = JSON.parse(await readFile(join(dataDir, 'model-connections.v1.json'), 'utf8')) as {
+      profiles: Record<string, unknown>
+      tombstones: Record<string, unknown>
+    }
+    expect(stored.profiles['opencode-free']).toBeUndefined()
+    expect(stored.tombstones['opencode-free']).toEqual(expect.objectContaining({
+      deletedRevision: expect.any(Number)
+    }))
+  })
+
   it('reconciles explicit gateway globals even after the registry already exists', async () => {
     const { value } = await registry()
     const connected = await value.connect(deepseekConnection())

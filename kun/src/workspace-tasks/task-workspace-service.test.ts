@@ -198,7 +198,7 @@ describe('TaskWorkspaceService', () => {
     const repo = join(root, 'repo')
     await initRepo(repo, { 'a.txt': 'a\n' })
     const first = service.create(input(repo))
-    const second = service.create(input(repo))
+    const second = service.create(input(repo, { ownerThreadId: 'other-task' }))
     const [a, b] = await Promise.all([
       waitState(service, first.workspaceId, ['ready', 'failed']),
       waitState(service, second.workspaceId, ['ready', 'failed'])

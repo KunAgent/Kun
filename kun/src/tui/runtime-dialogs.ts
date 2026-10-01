@@ -376,29 +376,39 @@ export class SkillsDialog implements Component, Focusable {
 
 export class ApprovalDialog implements Component, Focusable {
   private _focused = false
+  private detailOffset = 0
+  private totalLines = 0
+  private pageSize = 10
   constructor(
     private readonly controller: TuiController,
     private readonly toolName: string,
-    private readonly summary: string
+    private readonly summary: string,
+    private readonly height: () => number = () => 30
   ) {}
   get focused(): boolean { return this._focused }
   set focused(value: boolean) { this._focused = value }
   render(width: number): string[] {
     const workspace = this.controller.state.projection?.thread.workspace
+    const details = wrapText(stripTerminalControls(this.summary), Math.max(8, width - 4))
+    this.totalLines = details.length
+    this.pageSize = Math.max(4, this.height() - 17)
+    this.detailOffset = Math.min(this.detailOffset, Math.max(0, details.length - this.pageSize))
     return pageFrame({
       path: ['KUN', 'Approval required'],
-      right: 'Action required',
+      right: `${this.detailOffset + 1}-${Math.min(details.length, this.detailOffset + this.pageSize)}/${details.length}`,
       description: 'Review the requested action before Kun continues.',
       body: [
         sectionLabel('Request', width - 2),
         ` ${dim('Tool')}       ${bold(sanitizeTerminalText(this.toolName))}`,
         ...(workspace ? [` ${dim('Workspace')}  ${sanitizeTerminalText(workspace)}`] : []),
-        ` ${dim('Summary')}    ${sanitizeTerminalText(this.summary)}`,
+        ` ${dim('Complete action (scroll to review all content)')}`,
+        ...details.slice(this.detailOffset, this.detailOffset + this.pageSize).map((line) => ` ${line}`),
         '',
         selectionRow('Allow once', 'run this action now', width - 2, true),
         selectionRow('Deny', 'block this action', width - 2, false)
       ],
       footer: [
+        { key: 'Up/Down PgUp/PgDn', label: 'scroll' },
         { key: 'y', label: 'allow once', tone: 'warning' },
         { key: 'n', label: 'deny', tone: 'danger' }
       ],
@@ -406,7 +416,13 @@ export class ApprovalDialog implements Component, Focusable {
     })
   }
   handleInput(data: string): void {
-    if (data.toLowerCase() === 'y') void this.controller.decideApproval('allow')
+    if (matchesKey(data, 'up') || data === 'k') this.detailOffset = Math.max(0, this.detailOffset - 1)
+    else if (matchesKey(data, 'down') || data === 'j') this.detailOffset += 1
+    else if (matchesKey(data, 'pageUp')) this.detailOffset = Math.max(0, this.detailOffset - this.pageSize)
+    else if (matchesKey(data, 'pageDown')) this.detailOffset += this.pageSize
+    else if (matchesKey(data, 'home')) this.detailOffset = 0
+    else if (matchesKey(data, 'end')) this.detailOffset = Math.max(0, this.totalLines - this.pageSize)
+    else if (data.toLowerCase() === 'y') void this.controller.decideApproval('allow')
     else if (data.toLowerCase() === 'n') void this.controller.decideApproval('deny')
   }
   invalidate(): void {}

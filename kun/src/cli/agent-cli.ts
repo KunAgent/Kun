@@ -422,7 +422,12 @@ function buildExecContext(options: ServeOptions, workspace: string): ToolHostCon
     sandboxMode: options.sandboxMode,
     approvalReviewer: options.approvalReviewer,
     abortSignal: new AbortController().signal,
-    awaitApproval: async () => (options.approvalPolicy === 'auto' ? 'allow' : 'deny')
+    awaitApproval: async (approval) => {
+      if (approval.action?.requiresUserDecision || approval.action?.reviewerRequirement === 'user') {
+        return { decision: 'deny', reviewer: 'user', reason: 'This action needs interactive human approval; run it through the GUI or TUI.' }
+      }
+      return options.approvalPolicy === 'auto' ? 'allow' : 'deny'
+    }
   }
 }
 

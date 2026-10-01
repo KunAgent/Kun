@@ -48,6 +48,7 @@ function managerThread(): ThreadRecord {
   return createThreadRecord({
     id: 'thr_mgr',
     title: 'manager',
+    workspaceMode: 'ade',
     workspace: '/repo',
     model: 'model-x',
     providerId: 'prov-1'

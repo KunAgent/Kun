@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { readFile, realpath, writeFile } from 'node:fs/promises'
+import { cloneExecutionTaskState } from '../tasks/execution-task-state.js'
 import { isAbsolute, relative, resolve } from 'node:path'
 import type { ThreadStore, ThreadStoreListOptions } from '../ports/thread-store.js'
 import type { SessionStore } from '../ports/session-store.js'
@@ -245,6 +246,8 @@ async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {
         : {}),
       ...(current.providerId ? { providerId: current.providerId } : {}),
       ...(current.workspaceMode ? { workspaceMode: current.workspaceMode } : {}),
+      ...(current.collaboration ? { collaboration: current.collaboration } : {}),
+      ...(current.executionConfig ? { executionConfig: current.executionConfig } : {}),
       ...(current.accountId ? { accountId: current.accountId } : {}),
       ...(current.agentId ? { agentId: current.agentId } : {}),
       ...(current.systemPrompt ? { systemPrompt: current.systemPrompt } : {}),
@@ -274,6 +277,7 @@ async fork(this: ThreadService, threadId: string, options: ForkThreadOptions = {
     })
     const record: ThreadRecord = {
       ...fork,
+      ...(forkIncludesLatestTurn && current.executionTasks ? { executionTasks: cloneExecutionTaskState(current.executionTasks, forkId, now) } : {}),
       updatedAt: now,
       turns: clonedTurns
     }
@@ -527,6 +531,7 @@ async resumeSession(this: ThreadService,
     })
     const resumed: ThreadRecord = {
       ...record,
+      ...(sourceThread?.executionTasks ? { executionTasks: cloneExecutionTaskState(sourceThread.executionTasks, threadId, now) } : {}),
       updatedAt: now,
       turns: clonedTurns
     }

@@ -3,6 +3,7 @@ import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { installIssue781DocumentUsability } from './lib/issue-781-document-usability'
 import { subscribeModelConnectionWatch } from './lib/model-connection-watch'
 import { useChatStore } from './store/chat-store'
+import { normalizeWorkspaceRoot } from './lib/workspace-path'
 import { ensureCodexReferenceWatcher } from './history-reference/codex-reference-watcher'
 import { currentRemoteSurface } from './mobile/use-remote-surface'
 
@@ -38,6 +39,18 @@ function SharedModelConnectionsLifecycle(): null {
       const state = useChatStore.getState()
       await state.loadComposerModels()
       if (disposed) return
+      const current = useChatStore.getState()
+      const currentWorkspace = normalizeWorkspaceRoot(current.workspaceRoot)
+      if (!current.activeThreadId && (
+        (Boolean(current.composerHarnessId) && current.composerHarnessId !== 'kun') ||
+        (currentWorkspace && ((current.composerProjectDefaults?.workspaceRoot === currentWorkspace &&
+          Boolean(current.composerProjectDefaults.value.route)) ||
+        current.composerRouteExplicitWorkspaceRoot === currentWorkspace))
+      )) {
+        lastAppliedRevision = snapshot.revision
+        modelCatalogLoaded = true
+        return
+      }
       if (
         !useChatStore.getState().activeThreadId &&
         typeof snapshot.defaultProviderId === 'string' &&
@@ -49,7 +62,7 @@ function SharedModelConnectionsLifecycle(): null {
         const model = snapshot.defaultModel.trim()
         const providerId = snapshot.defaultProviderId.trim()
         if (latest.composerModel !== model || latest.composerProviderId !== providerId) {
-          latest.setComposerModel(model, providerId)
+          latest.setComposerModel(model, providerId, 'settings')
         }
       } else if (
         !useChatStore.getState().activeThreadId &&
@@ -62,7 +75,7 @@ function SharedModelConnectionsLifecycle(): null {
       ) {
         const latest = useChatStore.getState()
         if (latest.composerModel || latest.composerProviderId) {
-          latest.setComposerModel('', '')
+          latest.setComposerModel('', '', 'settings')
         }
       }
       lastAppliedRevision = snapshot.revision

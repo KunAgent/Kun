@@ -76,7 +76,7 @@ export {
   type AcpRuntimeDeps
 } from '../runtime/acp/acp-runtime-entry.js'
 export { buildGoalLocalTools } from '../adapters/tool/goal-tools.js'
-export { buildTodoLocalTools } from '../adapters/tool/todo-tools.js'
+export { buildExecutionTaskLocalTools } from '../adapters/tool/execution-task-tools.js'
 export { buildDesignCanvasLocalTools } from '../adapters/tool/design-canvas-tool.js'
 export { buildPptBoardLocalTools } from '../adapters/tool/ppt-board-tool.js'
 export { buildDesignMotionLocalTools } from '../adapters/tool/design-motion-tool.js'
@@ -90,7 +90,6 @@ export { ExtensionToolRegistry } from '../adapters/tool/extension-tool-provider.
 export { shutdownAllLspSessions } from '../adapters/tool/lsp-client.js'
 export { createReadArtifactTool } from '../adapters/tool/artifact-tool.js'
 export { FileArtifactStore, type ArtifactStore } from '../artifacts/artifact-store.js'
-export { createTaskGraphTool } from '../adapters/tool/task-graph-tool.js'
 export { buildMcpToolProviders } from '../adapters/tool/mcp-tool-provider.js'
 export { buildMemoryToolProviders } from '../adapters/tool/memory-tool-provider.js'
 export { KnowledgeBaseService } from '../knowledge/knowledge-base-service.js'

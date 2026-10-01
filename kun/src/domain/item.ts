@@ -2,7 +2,8 @@ import type {
   ToolCallProviderMetadata,
   ModelContextBlockState,
   TurnItem,
-  UserMessageSource
+  UserMessageSource,
+  UserTurnItem
 } from '../contracts/items.js'
 import type { ReviewOutput, ReviewTarget } from '../contracts/review.js'
 import type { UserInputQuestion } from '../ports/user-input-gate.js'
@@ -25,6 +26,7 @@ export function makeUserItem(input: {
   messageSource?: UserMessageSource
   attachmentIds?: string[]
   composerContexts?: ComposerContextAttachmentJson[]
+  reviewRequests?: UserTurnItem['reviewRequests']
   fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
   historyRefId?: string
   workspaceCheckpointId?: string
@@ -59,6 +61,7 @@ export function makeUserItem(input: {
     ...(input.messageSource ? { messageSource: input.messageSource } : {}),
     ...(attachmentIds?.length ? { attachmentIds } : {}),
     ...(input.composerContexts?.length ? { composerContexts: input.composerContexts } : {}),
+    ...(input.reviewRequests?.length ? { reviewRequests: input.reviewRequests } : {}),
     ...(fileReferences?.length ? { fileReferences } : {}),
     ...(input.historyRefId ? { historyRefId: input.historyRefId } : {}),
     ...(input.workspaceCheckpointId ? { workspaceCheckpointId: input.workspaceCheckpointId } : {}),

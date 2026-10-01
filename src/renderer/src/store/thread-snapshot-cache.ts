@@ -13,6 +13,7 @@ import {
   type LiveProjectionState
 } from './chat-store-live-projection'
 import { hydrateBlockModelLabels } from './chat-store-helpers'
+import { reconcileThreadTodos } from './thread-todo-projection'
 import {
   settlePendingRuntimeWorkAfterInterrupt,
   threadLooksRunning,
@@ -167,6 +168,7 @@ type ThreadFingerprintSource = Pick<
   | 'latestTurnStatus'
   | 'relation'
   | 'archived'
+  | 'todos'
 >
 
 export function threadSnapshotFingerprint(thread: ThreadFingerprintSource): string {
@@ -178,7 +180,8 @@ export function threadSnapshotFingerprint(thread: ThreadFingerprintSource): stri
     thread.latestTurnId ?? '',
     thread.latestTurnStatus?.trim().toLowerCase() ?? '',
     thread.relation ?? '',
-    thread.archived === true ? 'archived' : ''
+    thread.archived === true ? 'archived' : '',
+    String(thread.todos?.revision ?? '')
   ].join('\u0000')
 }
 
@@ -452,7 +455,7 @@ export function buildPrefetchedThreadSnapshot(
     activeThreadRelation: detail.relation ?? thread.relation ?? 'primary',
     activeThreadParentId: detail.parentThreadId ?? thread.parentThreadId ?? null,
     activeThreadGoal: detail.goal === undefined ? thread.goal ?? null : detail.goal,
-    activeThreadTodos: detail.todos === undefined ? thread.todos ?? null : detail.todos,
+    activeThreadTodos: reconcileThreadTodos(thread.todos, detail.todos),
     queuedMessages,
     payloadBytes: normalizedPayloadBytes(detail.payloadBytes)
   }

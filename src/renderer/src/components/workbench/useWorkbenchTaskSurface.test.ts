@@ -89,6 +89,54 @@ describe('workbench task mode', () => {
     expect(workbenchTaskSurfaceIsLocked({ lockedTaskSurface: 'code' })).toBe(false)
   })
 
+  it('keeps external Agent mode after leaving Design restores an older Kun plan and Graph draft', async () => {
+    const previous = useChatStore.getState()
+    const thread = codeThread({ id: 'external-surface-restore' })
+    const scope = workbenchTaskIntentScope(thread.id, '/workspace')
+    const queued = [{ id: 'queued-kun', text: 'Design next', harnessId: 'kun', agentSurface: 'design' as const }]
+    writeWorkbenchTaskIntent(scope, {
+      surface: 'design', profile: { outputMedium: 'html', target: 'web', preset: 'none' },
+      codeExecution: { mode: 'plan', orchestration: 'graph' }
+    })
+    useChatStore.setState({
+      activeThreadId: thread.id, threads: [thread], composerHarnessId: 'kun',
+      composerProviderId: '', composerModelGroups: [], composerMode: 'agent',
+      composerOrchestration: 'direct', queuedMessages: queued
+    })
+    let runtime: ReturnType<typeof useWorkbenchTaskSurface> | null = null
+    const Harness = () => {
+      runtime = useWorkbenchTaskSurface({
+        activeThreadId: thread.id, threads: [thread], workspaceRoot: '/workspace',
+        activeSkillWorkspace: '/workspace', createThread: vi.fn(async () => null),
+        deleteThread: vi.fn(async () => undefined),
+        setComposerMode: previous.setComposerMode,
+        setComposerOrchestration: previous.setComposerOrchestration
+      })
+      return null
+    }
+    let renderer!: ReactTestRenderer
+    try {
+      await act(async () => { renderer = create(createElement(Harness)) })
+      await act(async () => {
+        useChatStore.getState().setComposerHarness('codex', 'native-login')
+        runtime!.onTaskSurfaceChange('code')
+      })
+      expect(runtime!.taskSurface).toBe('code')
+      expect(useChatStore.getState()).toMatchObject({
+        composerHarnessId: 'codex', composerMode: 'agent', composerOrchestration: 'direct'
+      })
+      expect(useChatStore.getState().queuedMessages).toBe(queued)
+      expect(readWorkbenchTaskIntent(scope, '/workspace').codeExecution).toEqual({ mode: 'plan', orchestration: 'graph' })
+      useChatStore.getState().setComposerHarness('kun', 'provider')
+      useChatStore.getState().setComposerMode('plan')
+      useChatStore.getState().setComposerOrchestration('graph')
+      expect(useChatStore.getState()).toMatchObject({ composerMode: 'plan', composerOrchestration: 'graph' })
+    } finally {
+      await act(async () => { renderer?.unmount() })
+      useChatStore.setState(previous)
+    }
+  })
+
   it('does not inherit an empty-workspace Design draft into an existing thread', () => {
     writeWorkbenchTaskIntent(workbenchTaskIntentScope(null, '/workspace'), {
       surface: 'design',

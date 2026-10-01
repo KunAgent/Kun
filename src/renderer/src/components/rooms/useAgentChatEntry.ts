@@ -3,10 +3,11 @@ import type { AgentChatEntry } from '@shared/rooms-api'
 import { readBrowserStorageItem } from '../../lib/browser-storage'
 import { roomRequestId, roomsRequest } from './rooms-client'
 
-export function useAgentChatEntry(onOpen: (id: string) => void, navigationSerial: { current: number }) {
+export function useAgentChatEntry(onOpen: (id: string) => void, navigationSerial: { current: number }, enabled = true, autoOpen = true) {
   const open = useRef(onOpen); open.current = onOpen
   const [error, setError] = useState(''), [version, setVersion] = useState(0)
   useEffect(() => {
+    if (!enabled) return
     let active = true
     const initialSerial = navigationSerial.current
     const initialize = async () => {
@@ -18,12 +19,12 @@ export function useAgentChatEntry(onOpen: (id: string) => void, navigationSerial
         const draft = JSON.parse(readBrowserStorageItem('kun.rooms.draft.' + selected) ?? '{}')
         editing = Boolean(draft.body || draft.attachments?.length || draft.references?.length)
       } catch { /* Invalid old drafts do not prevent entering chat. */ }
-      if (!editing && initialSerial === navigationSerial.current) open.current(entry.roomId)
+      if (autoOpen && !editing && initialSerial === navigationSerial.current) open.current(entry.roomId)
       await roomsRequest('/v1/agents/chat-entry', 'POST', { action: 'seen', clientRequestId: roomRequestId() })
     }
     setError('')
     void initialize().catch((cause) => { if (active) setError(String(cause)) })
     return () => { active = false }
-  }, [version, navigationSerial])
+  }, [version, navigationSerial, enabled, autoOpen])
   return { error, retry: () => setVersion((value) => value + 1) }
 }

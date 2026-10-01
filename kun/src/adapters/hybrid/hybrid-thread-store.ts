@@ -1,3 +1,4 @@
+import { repairLegacySummaryMetadata } from './hybrid-thread-summary-repair.js'
 import { historyReferenceThreadIds, hasThreadHistoryReference } from './hybrid-thread-reference-lookup.js'
 import { mkdir, open, rm, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
@@ -483,6 +484,7 @@ export class HybridThreadStore implements ThreadStore {
 
   /** Reconcile legacy Work rows even if an older index cached a Code fallback. */
   private async ensureRowAgentSurface(row: ThreadRow): Promise<ThreadRow> {
+    row = await repairLegacySummaryMetadata(this, row)
     if (row.agent_surface !== null && (
       row.agent_surface !== 'code' || !legacyWorkThreadTitleMatches(row.title)
     )) return row

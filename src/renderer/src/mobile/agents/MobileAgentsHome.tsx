@@ -9,6 +9,7 @@ import { useMobileAdeAttention } from './use-mobile-ade-attention'
 import type { MobileAttentionItem } from './mobile-agents-attention'
 import { MobileLoadingState } from '../lib/MobileLoading'
 import { mobileRelativeTime } from '../lib/relative-time'
+import { AgentIcon } from '../../components/agent-icon'
 import './mobile-agents.css'
 
 /**
@@ -35,6 +36,7 @@ function ApprovalCard({ item, busy, onDecide }: {
   const { t } = useTranslation('common')
   return <article className="kun-mobile-agents-card">
     <header>
+      <AgentIcon harnessId={item.row.harnessId} size={16} />
       <span className="kun-mobile-agents-card-title">{item.row.title}</span>
       <span className="kun-mobile-agents-badge">{t('adeWaiting_approval')}</span>
     </header>
@@ -62,6 +64,7 @@ function QuestionCard({ item, busy, onAnswer }: {
   }
   return <article className="kun-mobile-agents-card">
     <header>
+      <AgentIcon harnessId={item.row.harnessId} size={16} />
       <span className="kun-mobile-agents-card-title">{item.row.title}</span>
       <span className="kun-mobile-agents-badge">{t('adeWaiting_question')}</span>
     </header>
@@ -92,6 +95,7 @@ function WaitCard({ item, onOpen }: {
   const { t } = useTranslation('common')
   return <article className="kun-mobile-agents-card">
     <header>
+      <AgentIcon harnessId={item.row.harnessId} size={16} />
       <span className="kun-mobile-agents-card-title">{item.row.title}</span>
       <span className="kun-mobile-agents-badge">{t(`adeWaiting_${item.reason}`)}</span>
     </header>
@@ -112,6 +116,7 @@ function RowLine({ row, depth, time, now, onOpen }: {
   return <button type="button" className="kun-mobile-agents-row" style={{ paddingInlineStart: 12 + depth * 16 }}
     onClick={() => onOpen(row.threadId)}>
     <span className={`kun-mobile-agents-dot kun-mobile-agents-dot-${displayBucket(row, now)}`} aria-hidden />
+    <AgentIcon harnessId={row.harnessId} size={16} />
     <span className="kun-mobile-agents-row-body">
       <span className="kun-mobile-agents-row-title">{row.title}</span>
       <span className="kun-mobile-agents-row-meta">

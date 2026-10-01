@@ -2,6 +2,9 @@ import { useState, type ReactElement } from 'react'
 import type { ComposerFileReference } from '../../lib/composer-file-references'
 import { CodexReferenceDialog } from '../../history-reference/CodexReferenceDialog'
 import { useChatStore } from '../../store/chat-store'
+import { useHarnessStore } from '../../store/harness-store'
+import { isKunModelProviderGroup } from '../../lib/kun-model-provider-groups'
+import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { ComposerInlineError } from './ComposerInlineError'
 import { FloatingComposerFooterView } from './FloatingComposerFooterView'
 import { FloatingComposerContextChips } from './FloatingComposerContextChips'
@@ -10,6 +13,7 @@ import { KnowledgeBasePicker } from './KnowledgeBasePicker'
 import { composerAgentPickerSurface } from '../../lib/subagent-profile-surface'
 import { AdeWorkspaceProjectPicker } from './AdeWorkspaceProjectPicker'
 import { AdeWorktreeStartPicker } from './AdeWorktreeStartPicker'
+import { FloatingComposerAgentModePicker } from './FloatingComposerAgentModePicker'
 
 export function FloatingComposerSurfaceView({
   context
@@ -18,12 +22,13 @@ export function FloatingComposerSurfaceView({
 }): ReactElement {
   const {
     FileText, FloatingComposerAgentPicker, FloatingComposerAttachments,
-    FloatingComposerContextCapacity, FloatingComposerExecutionPicker, FloatingComposerHarnessPicker,
+    FloatingComposerContextCapacity, FloatingComposerExecutionPicker,
     FloatingComposerIsolationPicker, FloatingComposerModelPicker,
     FloatingComposerTaskProfile, FloatingComposerTaskSurfacePicker,
     Bot, Folder, GitBranchPicker, ListTodo, Loader2, Mic, Plus, Send, Share2, Sparkles,
     Square, Target, VoiceRecordingStrip, WorkspaceProjectPicker, X, activeThread, activeThreadGoal,
     activeThreadId, adeComposer, adeComposerEnabled, attachmentUploadEnabled, attachmentUploadError, attachments, busy,
+    collaborationError, dismissCollaborationError,
     canChangeModel, canCompose, canEditComposer, canOpenComposerMenu, canOptimizePrompt,
     canToggleWorktreeMode, compact, composerFastMode, composerMenuButtonRef, composerMenuOpen, composerShellRef,
     composerModel, composerModelGroups, composerPickList, composerProviderId,
@@ -44,6 +49,13 @@ export function FloatingComposerSurfaceView({
     taskSurface, taskSurfaceLocked, emptyTaskLayout, onTaskSurfaceChange, onNewRequirement,
     worktreeBranch
   } = context
+  const composerHarnessId = useChatStore((state) => state.composerHarnessId)
+  const modelCatalogStatus = useChatStore((state) => state.composerModelCatalogStatus)
+  const kunComposer = adeComposerEnabled && !side && adeComposer?.harnessId === 'kun'
+  const modelGroups: ModelProviderModelGroup[] = kunComposer ? composerModelGroups.filter(isKunModelProviderGroup) : composerModelGroups
+  const modelPickList = kunComposer && (composerModelGroups.length || modelCatalogStatus !== 'ready')
+    ? [...new Set(modelGroups.flatMap((group) => group.modelIds))] : composerPickList
+  const externalAgent = adeComposerEnabled && !side && adeComposer?.harnessId !== 'kun' && Boolean(adeComposer)
   const documentQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'document-quote')
   // 01 §8: "continue local session" is offered only on a fresh thread when
   // the picked harness exposes a matching historySource + lab flag.
@@ -60,7 +72,7 @@ export function FloatingComposerSurfaceView({
         : undefined
   return (
     <>
-        {!compact && !emptyTaskLayout && taskSurface === 'design' && designTaskProfile ? (
+        {!compact && !emptyTaskLayout && !externalAgent && taskSurface === 'design' && designTaskProfile ? (
           <div className="ds-composer-task-controls ds-no-drag flex min-h-9 min-w-0 flex-wrap items-center gap-2 px-3 pb-1">
             <FloatingComposerTaskProfile
               surface="design"
@@ -76,7 +88,7 @@ export function FloatingComposerSurfaceView({
             />
           </div>
         ) : null}
-        {route === 'ade' && !compact && !side ? (
+        {adeComposer?.enabled && adeComposer.managedDraft && !compact && !side ? (
           <div
             className="ds-composer-workspace-controls ds-no-drag flex min-h-9 min-w-0 flex-wrap items-center gap-2 px-3 pb-1"
             data-ade-workspace-controls
@@ -107,7 +119,7 @@ export function FloatingComposerSurfaceView({
             ) : null}
           </div>
         ) : null}
-        {showWorkspaceControls ? (
+        {showWorkspaceControls && !adeComposer?.managedDraft ? (
           <div
             className="ds-composer-workspace-controls ds-no-drag flex min-h-9 min-w-0 flex-wrap items-center justify-between gap-2 px-3 pb-1"
             data-composer-workspace-controls
@@ -122,7 +134,7 @@ export function FloatingComposerSurfaceView({
                 onWorktreeBranchChange={onWorktreeBranchChange}
                 onToggleWorktreeMode={canToggleWorktreeMode ? onToggleWorktreeMode : undefined}
               />
-              {!compact && emptyTaskLayout && taskSurface === 'code' && onNewRequirement ? (
+              {!compact && emptyTaskLayout && !externalAgent && taskSurface === 'code' && onNewRequirement ? (
                 <button
                   type="button"
                   data-composer-new-requirement
@@ -134,7 +146,7 @@ export function FloatingComposerSurfaceView({
                 </button>
               ) : null}
             </div>
-            {!compact && emptyTaskLayout && taskSurface === 'design' && designTaskProfile ? (
+            {!compact && emptyTaskLayout && !externalAgent && taskSurface === 'design' && designTaskProfile ? (
               <FloatingComposerTaskProfile
                 surface="design"
                 locked={taskSurfaceLocked === true}
@@ -245,6 +257,13 @@ export function FloatingComposerSurfaceView({
               dismissLabel={t('composerDismissError')}
             />
           ) : null}
+          {collaborationError ? (
+            <ComposerInlineError
+              message={collaborationError}
+              onDismiss={dismissCollaborationError}
+              dismissLabel={t('composerDismissError')}
+            />
+          ) : null}
           {promptOptimizationError && onDismissPromptOptimizationError ? (
             <ComposerInlineError
               message={promptOptimizationError}
@@ -278,11 +297,40 @@ export function FloatingComposerSurfaceView({
                       <Plus className="h-5 w-5" strokeWidth={1.8} />
                     </button>
                     {taskSurface && onTaskSurfaceChange && !taskSurfaceLocked ? (
-                      <FloatingComposerTaskSurfacePicker
-                        surface={taskSurface}
-                        disabled={!canCompose || busy}
-                        onSurfaceChange={onTaskSurfaceChange}
-                      />
+                      adeComposerEnabled && !side && adeComposer ? (
+                        <FloatingComposerAgentModePicker
+                          surface={taskSurface}
+                          disabled={!canCompose || busy}
+                          controls={{
+                            contextKey: activeThreadId ?? effectiveWorkspaceRoot,
+                            harnessId: adeComposer.harnessId,
+                            harnessLabel: adeComposer.harnessLabel,
+                            rows: adeComposer.rows,
+                            loading: adeComposer.rowsLoading,
+                            needsConfirm: adeComposer.needsSwitchConfirm,
+                            onSelect: (harnessId, surface) => {
+                              if (harnessId !== adeComposer.harnessId) adeComposer.selectHarness(harnessId)
+                              else if (harnessId === 'kun' && !composerHarnessId) useChatStore.getState().setComposerHarness('kun', '')
+                              if (harnessId !== adeComposer.harnessId || surface !== taskSurface) onTaskSurfaceChange(surface)
+                            },
+                            onOpen: adeComposer.refreshRows,
+                            onManage: (harnessId, configureProvider) => {
+                              if (configureProvider) openSettings('providers')
+                              else {
+                                useHarnessStore.setState({ settingsHarnessId: harnessId ?? adeComposer.harnessId })
+                                openSettings('agentsHarnesses')
+                              }
+                            },
+                            onContinueLocalSession: openContinueLocalSession
+                          }}
+                        />
+                      ) : (
+                        <FloatingComposerTaskSurfacePicker
+                          surface={taskSurface}
+                          disabled={!canCompose || busy}
+                          onSurfaceChange={onTaskSurfaceChange}
+                        />
+                      )
                     ) : null}
                     {showCodeExecutionControls && mode === 'plan' ? (
                       <button
@@ -432,7 +480,8 @@ export function FloatingComposerSurfaceView({
                       selectedProviderId={composerProviderId}
                     />
                   )}
-                  {adeComposerEnabled === true && !side && adeComposer ? (
+                  {adeComposerEnabled === true && !side && adeComposer &&
+                    (adeComposer.managedDraft || adeComposer.boundWorkspaceId || adeComposer.prep) ? (
                     <FloatingComposerIsolationPicker
                       disabled={!canCompose || busy}
                       showPicker={!activeThreadId}
@@ -446,27 +495,18 @@ export function FloatingComposerSurfaceView({
                       onRetryPrep={adeComposer.retryWorkspacePrep}
                     />
                   ) : null}
-                  {adeComposerEnabled === true && !side && adeComposer ? (
-                    <FloatingComposerHarnessPicker
-                      disabled={!canCompose || busy}
-                      harnessId={adeComposer.harnessId}
-                      harnessLabel={adeComposer.harnessLabel}
-                      rows={adeComposer.rows}
-                      loading={adeComposer.rowsLoading}
-                      needsConfirm={adeComposer.needsSwitchConfirm}
-                      onContinueLocalSession={openContinueLocalSession}
-                      onOpen={adeComposer.refreshRows}
-                      onSelect={adeComposer.selectHarness}
-                    />
-                  ) : null}
                   {hideModelPicker ? null : (
                     <FloatingComposerModelPicker
                       compact={compact}
                       mode={modelPickerMode}
                       composerModel={composerModel}
                       composerProviderId={composerProviderId}
-                      composerPickList={composerPickList}
-                      composerModelGroups={composerModelGroups}
+                      composerPickList={modelPickList}
+                      composerModelGroups={modelGroups}
+                      emptyModelState={externalAgent && adeComposer?.credentialMode === 'native-login'
+                        ? adeComposer.modelsLoading ? 'loading' : 'agent-default'
+                        : kunComposer && modelCatalogStatus !== 'ready'
+                          ? modelCatalogStatus === 'error' ? 'unavailable' : 'loading' : undefined}
                       composerReasoningEffort={composerReasoningEffort}
                       composerFastMode={composerFastMode}
                       showProviderInModelLabel={showProviderInModelLabel}
@@ -479,7 +519,7 @@ export function FloatingComposerSurfaceView({
                       onConfigureProviders={onConfigureProviders}
                     />
                   )}
-                  {hideModelPicker || side ? null : (
+                  {hideModelPicker || side || externalAgent ? null : (
                     <FloatingComposerAgentPicker
                       compact={compact}
                       disabled={!canCompose || busy}

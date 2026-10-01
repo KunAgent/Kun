@@ -27,7 +27,6 @@ export function useAdeWorktreeGit({
   const isolation = useChatStore((s) => s.composerIsolation)
   const startFrom = useChatStore((s) => s.composerWorktreeStartFrom)
   const setComposerIsolation = useChatStore((s) => s.setComposerIsolation)
-  const setComposerIsolationForWorkspace = useChatStore((s) => s.setComposerIsolationForWorkspace)
   const [probe, setProbe] = useState<Probe>({ rootKey: '', status: 'idle' })
   const generation = useRef(0)
   const selectedRoot = useRef(rootKey)
@@ -72,11 +71,6 @@ export function useAdeWorktreeGit({
   }, [activeThreadId, check, enabled, root, rootKey])
 
   const current = probe.rootKey === rootKey ? probe : { rootKey, status: 'loading' as const }
-  useEffect(() => {
-    if (enabled && !activeThreadId && current.status === 'not-git' && isolation === 'worktree') {
-      setComposerIsolationForWorkspace('local')
-    }
-  }, [activeThreadId, current.status, enabled, isolation, setComposerIsolationForWorkspace])
 
   const selection = startFrom ?? { kind: 'default-branch' as const }
   const selectedBranchValid = selection.kind !== 'branch' || Boolean(

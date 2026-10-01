@@ -81,14 +81,18 @@ import {
   tokenEconomyConfigForOptions
 } from './runtime-factory-config.js'
 import { modelContextProfilesByProvider } from './runtime-factory-model.js'
+import { FileTeamStore } from '../ade/team-store.js'
 import { createPersistentStores } from './runtime-factory-storage.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import { HistoryReferenceService } from '../history/history-reference-service.js'
+import { consumeNativeAgentNetworkEnvironment } from '../contracts/native-agent-network.js'
 
 export async function createRuntimeCore(
   options: KunServeRuntimeOptions,
   dataDirLease: RuntimeDataDirLease | undefined
 ) {
+  const launchNetwork = consumeNativeAgentNetworkEnvironment(process.env)
+  options = { ...options, nativeAgentNetwork: options.nativeAgentNetwork ?? launchNetwork }
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
   let activeOptions: KunServeRuntimeOptions = { ...options }
   // Production replay reads the durable session store; nothing calls
@@ -265,13 +269,30 @@ export async function createRuntimeCore(
   const acpConnectionPool = new AcpConnectionPool()
   const acpClientHost = new AcpClientHost()
   const acpSessionManager = new AcpSessionManager({ coordinator: delegatedSessions })
+  const teamStoreForAdmission = new FileTeamStore(activeOptions.dataDir, nowIso)
   const threadService: ThreadService = new ThreadService({
+    legacyTaskGraphRoot: join(activeOptions.dataDir, 'task-graphs'),
     threadStore,
     deleteThreadStore: rawThreadStore,
     sessionStore,
     events,
     ids,
     nowIso,
+    projectSettings: () => ({
+      projectDefaults: activeOptions.ade?.projectDefaults ?? {},
+      defaultRoute: {
+        model: activeOptions.model,
+        ...(activeOptions.activeProviderId ? { providerId: activeOptions.activeProviderId } : {})
+      },
+      ...(activeOptions.ade?.managerModel ? { managerModel: activeOptions.ade.managerModel } : {}),
+      ...(activeOptions.ade?.limits ? { limits: activeOptions.ade.limits } : {}),
+      ...(activeOptions.ade?.budget ? { budget: activeOptions.ade.budget } : {})
+    }),
+    projectSourceRoot: (workspaceId) => taskWorkspaceStore.get(workspaceId)?.sourceRoot,
+    hasActiveTeam: async (threadId) => {
+      const team = await teamStoreForAdmission.get(threadId)
+      return team?.workers.some((worker) => worker.state === 'active') ?? false
+    },
     defaultApprovalPolicy: activeOptions.approvalPolicy,
     defaultSandboxMode: activeOptions.sandboxMode,
     defaultApprovalReviewer: activeOptions.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,

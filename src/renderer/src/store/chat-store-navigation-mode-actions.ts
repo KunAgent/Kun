@@ -267,76 +267,42 @@ export function createNavigationModeActions(
   },
 
   openAde: async (options) => {
-    const activationAllowed = (): boolean => options?.activationGuard?.() !== false
-    if (!activationAllowed()) return
+    if (options?.activationGuard?.() === false) return
     const state = get()
+    const legacyThreads = (state.adeThreads ?? []).filter((thread) => !thread.archived)
     if (state.adeDraftOpen && !state.activeThreadId) {
-      if (activationAllowed()) set({ route: 'ade' })
+      set({ route: 'chat' })
       return
     }
-    const activeThread = state.activeThreadId
-      ? (state.adeThreads ?? []).find((thread) => thread.id === state.activeThreadId) ?? null
-      : null
-    // Stay put when the active session already belongs to ADE mode.
-    if (activeThread && activeThread.archived !== true) {
-      if (activationAllowed()) set({
-        route: 'ade',
+    const active = legacyThreads.find((thread) => thread.id === state.activeThreadId)
+    const remembered = legacyThreads.find((thread) => thread.id === state.lastAdeThreadId)
+    const target = active ?? remembered ?? latestThread(legacyThreads)
+    if (target) {
+      set((current) => ({
+        route: 'chat',
         adeDraftOpen: false,
-        ...(state.adeDraftOpen ? { adeDraftRevision: state.adeDraftRevision + 1 } : {})
-      })
+        ...(current.adeDraftOpen ? { adeDraftRevision: current.adeDraftRevision + 1 } : {}),
+        threads: current.threads.some((thread) => thread.id === target.id)
+          ? current.threads : [target, ...current.threads],
+        lastCodeThreadId: target.id
+      }))
+      if (!active && state.runtimeConnection === 'ready') {
+        await get().selectThread(target.id, { selectionGuard: options?.activationGuard })
+      }
       return
     }
-
-    // ADE 模式记忆与 Code 互相独立:优先恢复上次打开的 ADE 会话。
-    const rememberedId = state.lastAdeThreadId?.trim()
-    const rememberedThread = rememberedId
-      ? (state.adeThreads ?? []).find(
-          (thread) => thread.id === rememberedId && thread.archived !== true
-        ) ?? null
-      : null
-
-    if (!activationAllowed()) return
-    set({ route: 'ade' })
-    if (rememberedThread && state.runtimeConnection === 'ready') {
-      await get().selectThread(rememberedThread.id, {
-        selectionGuard: activationAllowed
-      })
-      return
-    }
-
-    const target = latestThread(
-      (state.adeThreads ?? []).filter((thread) => thread.archived !== true)
-    )
-    if (target && state.runtimeConnection === 'ready') {
-      await get().selectThread(target.id, { selectionGuard: activationAllowed })
-      return
-    }
-
-    if (!activationAllowed()) return
-    sseAbortRef.current?.abort()
-    sseAbortRef.current = null
-    clearBusyWatchdog()
-    const nextWatch = { ...state.watchTurnCompletion }
-    if (state.activeThreadId && state.busy) {
-      nextWatch[state.activeThreadId] = true
-      watchTurnCompletionNotification(
-        state.activeThreadId,
-        Date.now(),
-        turnCompleteNotificationSource(state.activeThreadId, state)
-      )
-    }
-    set({
-      ...clearedThreadSelection(),
-      route: 'ade',
-      adeDraftOpen: false,
-      ...(state.adeDraftOpen ? { adeDraftRevision: state.adeDraftRevision + 1 } : {}),
-      watchTurnCompletion: nextWatch
-    })
-    syncTurnCompletionPoll(set, get)
+    // Old links keep their thread ids but use the ordinary Code fallback.
+    await get().openCode(options)
   },
 
   startAdeDraft: () => {
-    clearSelection({ route: 'ade', adeDraftOpen: true, adeDraftRevision: get().adeDraftRevision + 1 })
+    clearSelection({
+      route: 'chat', adeDraftOpen: true, adeDraftRevision: get().adeDraftRevision + 1,
+      composerCollaborationEnabled: false,
+      composerProjectDefaults: null,
+      composerRouteExplicitWorkspaceRoot: '',
+      composerProjectCollaborationExplicitWorkspaceRoot: ''
+    })
   },
 
   openDesign: () => {

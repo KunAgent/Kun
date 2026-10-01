@@ -69,7 +69,7 @@ afterEach(async () => {
 })
 
 describe('ADE chat starters', () => {
-  it('opens an unsent manager draft and opens Workers only after its thread exists', async () => {
+  it('opens an unsent manager draft without opening an empty collaboration panel', async () => {
     window.localStorage.setItem('kun.composerIsolation', 'worktree')
     const opened = vi.fn()
     window.addEventListener(OPEN_WORKERS_PANEL_EVENT, opened)
@@ -77,7 +77,7 @@ describe('ADE chat starters', () => {
       await act(async () => starters.startNewAdeChat())
       expect(startAdeDraft).toHaveBeenCalledTimes(1)
       expect(createThread).not.toHaveBeenCalled()
-      expect(setComposerHarness).toHaveBeenCalledWith('', '')
+      expect(setComposerHarness).toHaveBeenCalledWith('kun', '')
       expect(setComposerIsolation).toHaveBeenCalledWith('worktree', { kind: 'default-branch' })
       expect(useChatStore.getState().composerModel).toBe('')
       expect(opened).not.toHaveBeenCalled()
@@ -86,7 +86,7 @@ describe('ADE chat starters', () => {
         activeThreadId: 'created', adeDraftOpen: false,
         adeThreads: [{ id: 'created' } as ChatState['adeThreads'][number]]
       }))
-      expect(opened).toHaveBeenCalledTimes(1)
+      expect(opened).not.toHaveBeenCalled()
     } finally {
       window.removeEventListener(OPEN_WORKERS_PANEL_EVENT, opened)
     }

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ReviewRevisionSchema } from './review-revision.js'
 
 /** Host-managed task workspaces (docs/ade/07 §4). */
 
@@ -123,7 +124,9 @@ export type CreateTaskWorkspaceRequest = z.infer<typeof CreateTaskWorkspaceReque
 
 /** POST /v1/task-workspaces/:id/integrate request body. */
 export const IntegrateTaskWorkspaceRequestSchema = z.object({
-  mode: z.enum(['apply-patch', 'merge-branch']).default('apply-patch')
+  mode: z.enum(['apply-patch', 'merge-branch']).default('apply-patch'),
+  /** Optional for legacy callers; new UI passes the reviewed preview token. */
+  previewToken: z.string().regex(/^[a-f0-9]{64}$/).optional()
 }).strict()
 export type IntegrateTaskWorkspaceRequest = z.infer<typeof IntegrateTaskWorkspaceRequestSchema>
 
@@ -167,7 +170,11 @@ export const TaskWorkspaceIntegratePreviewSchema = z.object({
   canMergeBranch: z.boolean(),
   mergeBlockReason: z.string().max(2_048).optional(),
   hasUncommitted: z.boolean(),
-  hasRemote: z.boolean()
+  hasRemote: z.boolean(),
+  sourceRevision: ReviewRevisionSchema.optional(),
+  targetRevision: ReviewRevisionSchema.optional(),
+  targetBranchRevision: z.string().regex(/^[a-f0-9]{40,64}$/).optional(),
+  previewToken: z.string().regex(/^[a-f0-9]{64}$/).optional()
 }).strict()
 export type TaskWorkspaceIntegratePreview = z.infer<typeof TaskWorkspaceIntegratePreviewSchema>
 

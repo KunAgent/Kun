@@ -6,7 +6,7 @@ import type {
   UpdateReviewCommentInput
 } from '@shared/review-comment'
 import { kunReviewsPath } from '@shared/kun-endpoints'
-import { runtimeErrorToError } from '@shared/runtime-error'
+import { parseRuntimeErrorBody, runtimeErrorToError } from '@shared/runtime-error'
 import { rendererRuntimeClient } from './runtime-client'
 import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
 
@@ -66,13 +66,25 @@ export function createKunReviewClient() {
      * target returns a `composerContext` for the renderer to attach to the
      * manager thread's next message (11 §4.4).
      */
-    sendReview(
+    async sendReview(
       workspaceId: string,
       input: SendReviewInput,
       language?: string
     ): Promise<SendReviewResponse> {
       const suffix = `/send${language ? `?language=${encodeURIComponent(language)}` : ''}`
-      return call(workspaceId, suffix, 'POST', 'failed to send review comments', input)
+      try {
+        return await call(workspaceId, suffix, 'POST', 'failed to send review comments', input)
+      } catch (cause) {
+        const error = parseRuntimeErrorBody(cause instanceof Error ? cause.message : String(cause), '')
+        const issues = error.details
+        const oldSchema = error.code === 'validation_error' && Array.isArray(issues) && issues.length > 0 && issues.every((issue) =>
+          issue?.code === 'unrecognized_keys' && Array.isArray(issue.path) && issue.path.length === 0 &&
+          Array.isArray(issue.keys) && issue.keys.length > 0 && issue.keys.every((key: unknown) => key === 'clientRequestId' || key === 'expectedRevision'))
+        if (!oldSchema) throw cause
+        // A schema rejection is before effects; never fall back on timeout or an unknown outcome.
+        const legacy: SendReviewInput = { commentIds: input.commentIds, target: input.target, ...(input.note ? { note: input.note } : {}) }
+        return call(workspaceId, suffix, 'POST', 'failed to send review comments', legacy)
+      }
     }
   }
 }

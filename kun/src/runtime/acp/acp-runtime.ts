@@ -184,21 +184,11 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           error instanceof Error ? error.message : String(error)
         )
       }
-      await this.failFromAcpError(threadId, turnId, error, true)
+      await this.failFromAcpError(threadId, turnId, error, true, definition.id)
       return undefined
     })
     if (!lease) return 'failed'
     const conn = lease.connection
-    if (conn.requiresAuthentication) {
-      lease.release()
-      return this.failTurn(
-        threadId,
-        turnId,
-        `${definition.displayName} requires interactive login before Kun can delegate turns`,
-        'harness_not_ready'
-      )
-    }
-
     const mapper = new AcpEventMapper({
       threadId,
       turnId,
@@ -215,18 +205,25 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     )
     let emitQueue: Promise<void> = Promise.resolve()
     let streamError: AcpError | undefined
+    let rejectStream!: (error: AcpError) => void
+    const streamFailure = new Promise<never>((_resolve, reject) => { rejectStream = reject })
+    // Setup may emit notifications before the prompt wait is attached.
+    void streamFailure.catch(() => undefined)
+    const failStream = (error: unknown): void => {
+      if (streamError) return
+      streamError = error instanceof AcpError ? error : new AcpError('harness_protocol_error', String(error))
+      rejectStream(streamError)
+    }
     const sink = (update: SessionUpdate | { sessionUpdate: string }): void => {
+      if (streamError) return
       let drafts
       try {
         drafts = mapper.apply(update)
       } catch (error) {
-        streamError ??=
-          error instanceof AcpError
-            ? error
-            : new AcpError('harness_protocol_error', String(error))
+        failStream(error)
         return
       }
-      emitQueue = emitQueue.then(() => emitter.emitAll(drafts))
+      emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream)
     }
 
     const kunToolsServers = this.deps.kunToolsMcp?.servers({
@@ -258,13 +255,13 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     } catch (error) {
       this.deps.kunToolsMcp?.revokeTurn(turnId)
       lease.release()
-      await this.failFromAcpError(threadId, turnId, error, true)
+      await this.failFromAcpError(threadId, turnId, error, true, definition.id)
       return 'failed'
     }
     // Protocol errors on this session's traffic fail the turn (§9).
     const unsubscribeSessionErrors = conn.subscribeSession(session.sessionId, {
       onUpdate: () => undefined,
-      onError: (error: AcpError) => { streamError ??= error }
+      onError: failStream
     })
 
     const preparation = session.preparation
@@ -407,11 +404,12 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     else signal.addEventListener('abort', onAbort, { once: true })
 
     try {
-      const raw = await conn.rpc.request(
+      if (streamError) throw streamError
+      const raw = await Promise.race([conn.rpc.request(
         ACP_AGENT_METHODS.sessionPrompt,
         { sessionId: session.sessionId, prompt },
         { timeoutMs: limits.maxWallTimeMs }
-      )
+      ), streamFailure])
       promptSettled = true
       await emitQueue
       const parsed = AcpPromptResultSchema.safeParse(raw)
@@ -461,6 +459,10 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       return outcome
     } catch (error) {
       promptSettled = true
+      if (streamError) {
+        conn.rpc.notify(ACP_AGENT_METHODS.sessionCancel, { sessionId: session.sessionId })
+        this.pool.markUnhealthy(poolKey)
+      }
       await emitQueue.catch(() => undefined)
       await emitter.emitAll(mapper.flush()).catch(() => undefined)
       await finishAcpTrace(trace, { kind: 'error', error })
@@ -481,7 +483,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         turnId,
         turnHandoff
       )
-      await this.failFromAcpError(threadId, turnId, error, false)
+      await this.failFromAcpError(threadId, turnId, error, false, definition.id)
       return 'failed'
     } finally {
       if (cancelTimer) clearTimeout(cancelTimer)
@@ -511,9 +513,10 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     threadId: string,
     turnId: string,
     error: unknown,
-    startup: boolean
+    startup: boolean,
+    harnessId?: string
   ): Promise<void> {
-    const mapped = mapAcpFailure(error, startup)
+    const mapped = mapAcpFailure(error, startup, harnessId)
     await this.deps.turns.finishTurn({
       threadId,
       turnId,

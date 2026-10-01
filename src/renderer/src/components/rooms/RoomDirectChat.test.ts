@@ -85,6 +85,23 @@ describe('RoomDirectHeader session sidebar button', () => {
     expect(more().props['aria-expanded']).toBe(false)
   })
 
+  it('preserves embedded Agent Chat navigation and workspace controls beside the saved-files menu', async () => {
+    const props = baseProps(), onToggleLeftSidebar = vi.fn()
+    await act(async () => { renderer = create(createElement(RoomDirectHeader, {
+      ...props, room: { ...room, privateWorkspace: '/workspace/project' }, embedded: true, onToggleLeftSidebar,
+      models: { main: { providerId: 'kimi', model: 'kimi-code' } } as never
+    })) })
+    expect(renderer.root.findByProps({ className: 'direct-chat-title' }).findAllByType('small')).toHaveLength(0)
+    await act(async () => { renderer.root.findByProps({ 'aria-label': i18n.t('sidebarToggle', { ns: 'common' }) }).props.onClick() })
+    expect(onToggleLeftSidebar).toHaveBeenCalledOnce()
+    await act(async () => { renderer.root.findByProps({ className: 'direct-workspace-control' }).props.onClick() })
+    expect(props.onConnect).toHaveBeenCalledOnce()
+    await act(async () => { renderer.root.findByProps({ 'aria-label': 'More actions' }).props.onClick() })
+    const files = renderer.root.findAllByType('button').find((button) => button.children.includes(i18n.t('directFiles', { ns: 'common' })))!
+    await act(async () => { files.props.onClick() })
+    expect(props.onFiles).toHaveBeenCalledOnce()
+  })
+
   it('opens connected apps from a private Room header', async () => {
     const onApps = vi.fn()
     await act(async () => { renderer = create(createElement(RoomDirectHeader, { ...baseProps(), onApps })) })

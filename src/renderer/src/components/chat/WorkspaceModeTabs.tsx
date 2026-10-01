@@ -11,12 +11,10 @@ import {
   Check,
   ChevronDown,
   Code2,
-  MessagesSquare,
-  Network
+  MessagesSquare
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useRoomAttentionCount } from '../rooms/useRoomEvents'
-import { useAdeEnabled } from '../ade/use-ade-enabled'
 
 type Props = {
   activeView:
@@ -44,11 +42,6 @@ export function WorkspaceModeTabs({
   activeView,
   onCodeOpen,
   onWriteOpen,
-  onAdeOpen = () => {
-    void import('../../store/chat-store').then(({ useChatStore }) =>
-      useChatStore.getState().openAde()
-    )
-  },
   onRoomsOpen = () => {
     void import('../../store/chat-store').then(({ useChatStore }) =>
       useChatStore.getState().setRoute('rooms')
@@ -59,7 +52,6 @@ export function WorkspaceModeTabs({
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const roomAttention = useRoomAttentionCount()
-  const { enabled: adeEnabled } = useAdeEnabled()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -67,10 +59,9 @@ export function WorkspaceModeTabs({
   const pendingFocusIndexRef = useRef<number | null>(null)
   const menuId = useId()
   const selectedMode: WorkspaceMode =
-    activeView === 'write' || activeView === 'rooms' || (activeView === 'ade' && adeEnabled)
+    activeView === 'write' || activeView === 'rooms'
       ? activeView
       : 'chat'
-  // ADE 选项仅在实验室开关开启时出现;关闭后位置与顺序完全不变。
   const options = [
     {
       id: 'write' as const,
@@ -86,13 +77,6 @@ export function WorkspaceModeTabs({
       Icon: Code2,
       onSelect: onCodeOpen
     },
-    ...(adeEnabled ? [{
-      id: 'ade' as const,
-      label: t('workspaceModeAdeLabel'),
-      description: t('workspaceModeAdeDescription'),
-      Icon: Network,
-      onSelect: onAdeOpen
-    }] : []),
     {
       id: 'rooms' as const,
       label: t('roomsLabel'),
@@ -104,9 +88,7 @@ export function WorkspaceModeTabs({
   const selectedOption =
     options.find((option) => option.id === selectedMode) ?? options[0]
   const SelectedIcon = selectedOption.Icon
-  const modesAriaLabel = adeEnabled
-    ? `${t('code')} / ${t('workspaceModeWorkLabel')} / ${t('workspaceModeAdeLabel')} / ${t('roomsLabel')}`
-    : `${t('code')} / ${t('workspaceModeWorkLabel')} / ${t('roomsLabel')}`
+  const modesAriaLabel = `${t('code')} / ${t('workspaceModeWorkLabel')} / ${t('roomsLabel')}`
 
   useEffect(() => {
     setOpen(false)

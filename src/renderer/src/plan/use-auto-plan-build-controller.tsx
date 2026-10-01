@@ -1,3 +1,5 @@
+import { prepareIntentBuild } from './auto-plan-prepare-build'
+import { prepareAutomaticWorkspace } from './auto-plan-workspace'
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import type { AppSettingsV1 } from '@shared/app-settings'
 import { DEFAULT_GIT_BRANCH_PREFIX } from '@shared/app-settings'
@@ -15,14 +17,12 @@ import { emitRendererSettingsChanged } from '../lib/keyboard-shortcut-settings'
 import { AutoPlanBuildDialog } from '../components/plan/AutoPlanBuildDialog'
 import { GUI_PLAN_RELATIVE_DIR } from './plan-path'
 import { buildDraftGuiPlanTurnOverrides } from '../components/workbench-plan-controller'
-import { createGuiPlanArtifact, type GuiPlanArtifact } from './plan-store'
+import type { GuiPlanArtifact } from './plan-store'
 import {
   extractPlanMetadataFromBlock,
   guiPlanMetaMatchesArtifact,
   type GuiPlanToolMeta
 } from './plan-tool'
-import { preparePlanBuild } from './prepare-plan-build'
-import { usePlanWorktreePreferenceStore } from './plan-worktree-preference-store'
 import { useAutoPlanBuildSettingsState } from './use-auto-plan-build-settings'
 import {
   AutoPlanBuildRecoveryCoordinator,
@@ -212,27 +212,6 @@ async function existingPlanPaths(workspaceRoot: string): Promise<string[]> {
   }
 }
 
-async function loadPlan(meta: GuiPlanToolMeta, threadId: string): Promise<{
-  plan: GuiPlanArtifact
-  content: string
-}> {
-  const result = await window.kunGui.readWorkspaceFile({
-    workspaceRoot: meta.workspaceRoot,
-    path: meta.relativePath
-  })
-  if (!result.ok) throw new Error(result.message)
-  const base = createGuiPlanArtifact({
-    workspaceRoot: meta.workspaceRoot,
-    threadId,
-    relativePath: meta.relativePath,
-    absolutePath: meta.absolutePath ?? result.path,
-    sourceRequest: meta.sourceRequest ?? ''
-  })
-  return {
-    plan: meta.title?.trim() ? { ...base, featureName: meta.title.trim() } : base,
-    content: result.content
-  }
-}
 
 function scheduledTaskMatches(
   task: AppSettingsV1['schedule']['tasks'][number],
@@ -272,37 +251,6 @@ async function sendDirectBuild(
   })
 }
 
-async function prepareIntentBuild(
-  intent: AutoPlanBuildIntentV1,
-  meta: GuiPlanToolMeta
-): Promise<{ plan: GuiPlanArtifact; prompt: string; title: string; displayText: string }> {
-  const loaded = await loadPlan(meta, intent.threadId)
-  const preference = usePlanWorktreePreferenceStore.getState()
-  preference.initializePlan(intent.planId, intent.useWorktree, DEFAULT_GIT_BRANCH_PREFIX)
-  preference.setUsePromptWorktree(intent.planId, intent.useWorktree)
-  const settings = await rendererRuntimeClient.getSettings()
-  const prepared = await preparePlanBuild({
-    plan: loaded.plan,
-    content: loaded.content,
-    orchestration: 'direct',
-    graphEnabled: false,
-    usePromptWorktree: intent.useWorktree,
-    branchPrefix: settings.gitBranchPrefix || DEFAULT_GIT_BRANCH_PREFIX,
-    activeThreadId: intent.threadId,
-    save: async () => true,
-    currentPlanId: () => loaded.plan.id,
-    currentThreadId: () => intent.threadId,
-    getGitBranches: window.kunGui.getGitBranches
-  })
-  return {
-    plan: loaded.plan,
-    prompt: prepared.prompt,
-    title: prepared.title,
-    displayText: prepared.prompt.includes('<prompt_managed_worktree_protocol>')
-      ? `${loaded.plan.featureName} (${prepared.displayText.match(/\((.+)\)$/)?.[1] ?? ''})`
-      : `Direct build: ${loaded.plan.relativePath}`
-  }
-}
 
 async function dispatchIntent(
   intent: AutoPlanBuildIntentV1,
@@ -515,8 +463,8 @@ export function useAutoPlanBuildController({
     selection: AutoPlanBuildSelection
   ): Promise<boolean> => {
     const state = useChatStore.getState()
-    const sourceThreadId = state.activeThreadId?.trim() ?? ''
-    const targetWorkspace = normalizeWorkspaceRoot(
+    let sourceThreadId = state.activeThreadId?.trim() ?? ''
+    let targetWorkspace = normalizeWorkspaceRoot(
       pending.overrides?.workspaceRoot ||
       state.threads.find((thread) => thread.id === state.activeThreadId)?.workspace ||
       state.workspaceRoot ||
@@ -532,6 +480,9 @@ export function useAutoPlanBuildController({
     const releaseStartScope = acquireAutomaticStartScope(startScope)
     if (!releaseStartScope) return true
     try {
+      const preparedWorkspace = await prepareAutomaticWorkspace(targetWorkspace)
+      sourceThreadId = preparedWorkspace.threadId
+      targetWorkspace = preparedWorkspace.workspaceRoot
       if (sourceThreadId) {
         const existing = activeAutoPlanBuildIntent(sourceThreadId)
         if (existing?.status === 'needs_attention') removeAutoPlanBuildIntent(existing.id)
@@ -587,6 +538,9 @@ export function useAutoPlanBuildController({
       })
       requestAutomaticRecovery()
       return true
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error))
+      return false
     } finally {
       releaseStartScope()
     }

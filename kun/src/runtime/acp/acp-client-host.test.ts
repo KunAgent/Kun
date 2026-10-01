@@ -235,6 +235,34 @@ describe('AcpClientHost', () => {
     release?.()
   })
 
+  test.skipIf(process.platform === 'win32')('runs Devin whole-command requests through a shell after normal approval', async () => {
+    const h = await makeHarness()
+    h.ctx.terminalEnv = { ...process.env }
+    const command = "printf 'hello world' && printf '\\n'"
+    const created = await h.call<{ terminalId: string }>(ACP_CLIENT_METHODS.terminalCreate, {
+      sessionId: 'sess-1', command
+    })
+    try {
+      await h.host.terminals.waitForExit(created.terminalId)
+      const output = h.host.terminals.output(created.terminalId)
+      expect(output.output).toBe('hello world\n')
+      expect(output.exitStatus?.exitCode).toBe(0)
+      expect(h.approvals).toHaveLength(1)
+    } finally { await h.host.turnEnded('turn_1') }
+  })
+
+  test('does not execute a shell command when Kun denies its approval', async () => {
+    let spawned = false
+    const h = await makeHarness({ approve: async () => 'deny', spawnTerminal: async () => {
+      spawned = true
+      throw new Error('must not launch')
+    } })
+    await expect(h.call(ACP_CLIENT_METHODS.terminalCreate, {
+      sessionId: 'sess-1', command: 'echo denied && echo still-denied'
+    })).rejects.toThrow('rejected')
+    expect(spawned).toBe(false)
+  })
+
   test('terminal create enforces workspace cwd and output limits', async () => {
     const h = await makeHarness({
       approve: async () => 'allow',

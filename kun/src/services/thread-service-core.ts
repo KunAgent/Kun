@@ -60,9 +60,15 @@ import { installServiceOperations } from './service-operation-install.js'
 import { threadServiceMetadataOperations } from './thread-service-metadata-operations.js'
 import { threadServiceGoalsOperations } from './thread-service-goals-operations.js'
 import { threadServiceTodosOperations } from './thread-service-todos-operations.js'
+import { ExecutionTaskService } from './execution-task-service.js'
 import { threadServiceLifecycleOperations } from './thread-service-lifecycle-operations.js'
+import { threadServiceExecutionConfigOperations } from './thread-service-execution-config.js'
+import type { TaskExecutionConfigMutation, TaskExecutionConfigResponse } from '../contracts/thread-execution-config.js'
+export { matchesThreadSearch, threadStatusFromTurns } from './thread-service-query-helpers.js'
+import type { GlobalExecutionDefaults, ProjectExecutionDefaults } from '../domain/thread-execution-config.js'
 
 export type ThreadServiceOptions = {
+  legacyTaskGraphRoot?: string
   threadStore: ThreadStore
   /** Raw store used only after the lifecycle fence has been closed and drained. */
   deleteThreadStore?: ThreadStore
@@ -70,6 +76,12 @@ export type ThreadServiceOptions = {
   events: RuntimeEventRecorder
   ids: IdGenerator
   nowIso: () => string
+  projectSettings?: () => GlobalExecutionDefaults & {
+    projectDefaults?: Record<string, ProjectExecutionDefaults>
+    defaultRoute?: { model: string; providerId?: string; harnessId?: string }
+  }
+  projectSourceRoot?: (taskWorkspaceId: string) => string | undefined
+  hasActiveTeam?: (threadId: string) => Promise<boolean>
   defaultApprovalPolicy?: ApprovalPolicy
   defaultSandboxMode?: SandboxMode
   defaultApprovalReviewer?: ApprovalReviewer
@@ -128,7 +140,7 @@ export type SyncPlanTodosOptions = {
 }
 
 export class ThreadService {
-  declare private setTodosInternal: (typeof threadServiceTodosOperations)['setTodosInternal']
+  readonly executionTasks: ExecutionTaskService
   declare private withThreadMutation: (typeof threadServiceTodosOperations)['withThreadMutation']
   declare private patchPlanMarkdownForTodoStatusChanges: (typeof threadServiceTodosOperations)['patchPlanMarkdownForTodoStatusChanges']
 
@@ -138,6 +150,9 @@ export class ThreadService {
   private readonly events: RuntimeEventRecorder
   private readonly ids: IdGenerator
   private readonly nowIso: () => string
+  private readonly projectSettings?: ThreadServiceOptions['projectSettings']
+  private readonly projectSourceRoot?: ThreadServiceOptions['projectSourceRoot']
+  private readonly hasActiveTeam?: ThreadServiceOptions['hasActiveTeam']
   private defaultApprovalPolicy: ApprovalPolicy | undefined
   private defaultSandboxMode: SandboxMode | undefined
   private defaultApprovalReviewer: ApprovalReviewer | undefined
@@ -157,6 +172,12 @@ export class ThreadService {
     this.events = options.events
     this.ids = options.ids
     this.nowIso = options.nowIso
+    this.executionTasks = new ExecutionTaskService({ threadStore: options.threadStore,
+      events: options.events, nowIso: options.nowIso, legacyRoot: options.legacyTaskGraphRoot,
+      projectPlan: (thread, todos) => this.patchPlanMarkdownForTodoStatusChanges(thread, todos.items) })
+    this.projectSettings = options.projectSettings
+    this.projectSourceRoot = options.projectSourceRoot
+    this.hasActiveTeam = options.hasActiveTeam
     this.defaultApprovalPolicy = options.defaultApprovalPolicy
     this.defaultSandboxMode = options.defaultSandboxMode
     this.defaultApprovalReviewer = options.defaultApprovalReviewer
@@ -172,6 +193,8 @@ export class ThreadService {
 }
 
 export interface ThreadService {
+  getExecutionConfig(threadId: string): Promise<TaskExecutionConfigResponse | null>;
+  mutateExecutionConfig(threadId: string, mutation: TaskExecutionConfigMutation): Promise<TaskExecutionConfigResponse>;
   updateRuntimeDefaults(input: {
     approvalPolicy: ApprovalPolicy
     sandboxMode: SandboxMode
@@ -211,6 +234,7 @@ export interface ThreadService {
     taskWorkspaceId?: string
     /** Harness rebind for external-session continuation (01 §8). */
     harnessId?: string
+    collaboration?: ThreadRecord['collaboration']
     additionalWorkspaces?: string[]
     knowledgeBases?: KnowledgeBaseMount[]
     mode?: ThreadMode
@@ -256,7 +280,8 @@ installServiceOperations(
   threadServiceMetadataOperations,
   threadServiceGoalsOperations,
   threadServiceTodosOperations,
-  threadServiceLifecycleOperations
+  threadServiceLifecycleOperations,
+  threadServiceExecutionConfigOperations
 )
 
 
@@ -294,153 +319,7 @@ export function cloneTurnForThread(
   }
 }
 
-export function normalizeTodoItems(input: {
-  rawItems: SetThreadTodosRequest['todos']
-  existingItems: readonly ThreadTodoItem[]
-  now: string
-  ids: IdGenerator
-}): ThreadTodoItem[] {
-  const existingById = new Map(input.existingItems.map((item) => [item.id, item]))
-  const usedIds = new Set<string>()
-  let inProgressSeen = false
-  return input.rawItems.map((raw) => {
-    const content = normalizeTodoContent(raw.content)
-    if (!content) throw new Error('todo content is required')
-    const status = normalizeTodoStatus(raw.status)
-    if (status === 'in_progress') {
-      if (inProgressSeen) throw new Error('at most one todo can be in_progress')
-      inProgressSeen = true
-    }
-    const source = raw.source ? normalizeTodoSource(raw.source) : undefined
-    const requestedId = raw.id?.trim()
-    const existing =
-      (requestedId ? existingById.get(requestedId) : undefined) ??
-      findExistingTodoForRaw(input.existingItems, usedIds, { content, source })
-    const id = uniqueTodoId(requestedId || existing?.id || input.ids.next('todo'), usedIds, input.ids)
-    const changed =
-      !existing ||
-      existing.content !== content ||
-      existing.status !== status ||
-      !sameTodoSource(existing.source, source)
-    usedIds.add(id)
-    return {
-      id,
-      content,
-      status,
-      ...(source ? { source } : {}),
-      createdAt: existing?.createdAt ?? input.now,
-      updatedAt: changed ? input.now : existing.updatedAt
-    }
-  })
-}
-
-export function preserveToolTodoSources(
-  rawItems: SetThreadTodosRequest['todos'],
-  existingItems: readonly ThreadTodoItem[]
-): SetThreadTodosRequest['todos'] {
-  const existingById = new Map(existingItems.map((item) => [item.id, item]))
-  const usedIds = new Set<string>()
-  return rawItems.map((raw) => {
-    const content = normalizeTodoContent(raw.content)
-    const requestedId = raw.id?.trim()
-    let existing = requestedId ? existingById.get(requestedId) : undefined
-    if (!existing && !requestedId) {
-      const matches = existingItems.filter((item) =>
-        !usedIds.has(item.id) && normalizeTodoContent(item.content) === content
-      )
-      if (matches.length === 1) existing = matches[0]
-    }
-    if (existing) usedIds.add(existing.id)
-    if (
-      !existing?.source ||
-      normalizeTodoContent(existing.content) !== content
-    ) {
-      return raw
-    }
-    return {
-      ...raw,
-      id: requestedId || existing.id,
-      source: existing.source
-    }
-  })
-}
-
-export function normalizeTodoStatus(status: ThreadTodoStatus): ThreadTodoStatus {
-  if (status === 'pending' || status === 'in_progress' || status === 'completed') return status
-  throw new Error(`unsupported todo status: ${String(status)}`)
-}
-
-export function normalizeTodoSource(source: ThreadTodoSource): ThreadTodoSource {
-  if (source.kind !== 'plan') throw new Error(`unsupported todo source: ${String(source.kind)}`)
-  const relativePath = normalizePlanRelativePath(source.relativePath)
-  if (!isGuiPlanRelativePath(relativePath)) {
-    throw new Error(`invalid GUI plan relative path: ${source.relativePath}`)
-  }
-  return {
-    kind: 'plan',
-    planId: source.planId,
-    relativePath,
-    ordinal: source.ordinal,
-    contentHash: source.contentHash
-  }
-}
-
-export function findExistingTodoForRaw(
-  existingItems: readonly ThreadTodoItem[],
-  usedIds: ReadonlySet<string>,
-  raw: { content: string; source?: ThreadTodoSource }
-): ThreadTodoItem | undefined {
-  const candidates = existingItems.filter((item) => !usedIds.has(item.id))
-  if (raw.source) {
-    return (
-      candidates.find((item) => item.source && sameTodoSource(item.source, raw.source)) ??
-      candidates.find((item) =>
-        item.source?.kind === 'plan' &&
-        item.source.planId === raw.source?.planId &&
-        item.source.relativePath === raw.source.relativePath &&
-        item.source.contentHash === raw.source.contentHash
-      ) ??
-      candidates.find((item) =>
-        item.source?.kind === 'plan' &&
-        item.source.planId === raw.source?.planId &&
-        item.source.relativePath === raw.source.relativePath &&
-        item.source.ordinal === raw.source.ordinal
-      )
-    )
-  }
-  const hash = todoContentHash(raw.content)
-  return candidates.find((item) => !item.source && todoContentHash(item.content) === hash)
-}
-
-export function sameTodoSource(
-  first: ThreadTodoSource | undefined,
-  second: ThreadTodoSource | undefined
-): boolean {
-  if (!first || !second) return !first && !second
-  return (
-    first.kind === second.kind &&
-    first.planId === second.planId &&
-    first.relativePath === second.relativePath &&
-    first.ordinal === second.ordinal &&
-    first.contentHash === second.contentHash
-  )
-}
-
-export function uniqueTodoId(requested: string, usedIds: Set<string>, ids: IdGenerator): string {
-  let candidate = requested.trim()
-  while (!candidate || usedIds.has(candidate)) {
-    candidate = ids.next('todo')
-  }
-  return candidate
-}
-
-export function cloneTodoListForThread(todos: ThreadTodoList, threadId: string, now: string): ThreadTodoList {
-  return {
-    threadId,
-    items: todos.items.map((item) => ({ ...item })),
-    updatedAt: now
-  }
-}
+export { normalizeTodoItems, preserveToolTodoSources, normalizeTodoStatus, normalizeTodoSource, findExistingTodoForRaw, sameTodoSource, uniqueTodoId, cloneTodoListForThread } from './thread-todo-compatibility.js'
 
 export async function resolveWorkspaceRelativePath(workspace: string, relativePath: string): Promise<string> {
   const lexicalRoot = resolve(workspace)
@@ -580,24 +459,6 @@ export function cloneSessionItemsForThread(input: {
     includedIds.add(item.id)
   }
   return result
-}
-
-export function matchesThreadSearch(thread: ThreadSummary, query: string): boolean {
-  return [
-    thread.id,
-    thread.title,
-    thread.workspace,
-    thread.model,
-    thread.mode,
-    thread.forkedFromTitle,
-    thread.forkedFromThreadId
-  ].some((value) => value?.toLowerCase().includes(query))
-}
-
-export function threadStatusFromTurns(turns: Turn[]): 'idle' | 'running' {
-  return turns.some((turn) => turn.status === 'queued' || turn.status === 'running')
-    ? 'running'
-    : 'idle'
 }
 
 export function rebuildTurnsFromItems(input: {

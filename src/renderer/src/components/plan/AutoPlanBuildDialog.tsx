@@ -1,3 +1,4 @@
+import { threadHasIsolatedWorkspace } from '../../lib/thread-workspace-owner'
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { CalendarClock, GitBranch, Hammer, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -80,7 +81,9 @@ export function AutoPlanBuildDialog({
     defaults.scheduledDefaults.model || chat.composerModel
   ), [chat.composerModel, chat.composerProviderId, defaults.scheduledDefaults, providers])
   const [buildMode, setBuildMode] = useState(defaults.defaultBuildMode)
-  const [useWorktree, setUseWorktree] = useState(defaults.useWorktreeByDefault)
+  const [useWorktree, setUseWorktree] = useState(() => defaults.useWorktreeByDefault &&
+    !threadHasIsolatedWorkspace(useChatStore.getState(), useChatStore.getState().activeThreadId))
+  const [useWorktreeExplicit, setUseWorktreeExplicit] = useState(false)
   const [date, setDate] = useState(initialTime.date)
   const [time, setTime] = useState(initialTime.time)
   const [timeZone, setTimeZone] = useState(defaults.scheduledDefaults.timeZone || systemTimeZone())
@@ -136,6 +139,7 @@ export function AutoPlanBuildDialog({
     void onSubmit({
       buildMode,
       useWorktree,
+      ...(useWorktreeExplicit ? { useWorktreeExplicit: true } : {}),
       ...(buildMode === 'scheduled' && instant.ok
         ? {
             scheduled: {
@@ -181,7 +185,7 @@ export function AutoPlanBuildDialog({
         </fieldset>
 
         <label className="mt-4 flex items-start gap-3 rounded-xl border border-ds-border px-4 py-3">
-          <button type="button" role="switch" aria-checked={useWorktree} data-auto-plan-build-worktree onClick={() => setUseWorktree((current) => !current)} disabled={submitting} className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full ${useWorktree ? 'bg-accent' : 'bg-ds-faint'} disabled:opacity-45`}>
+          <button type="button" role="switch" aria-checked={useWorktree} data-auto-plan-build-worktree onClick={() => { setUseWorktreeExplicit(true); setUseWorktree((current) => !current) }} disabled={submitting} className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full ${useWorktree ? 'bg-accent' : 'bg-ds-faint'} disabled:opacity-45`}>
             <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${useWorktree ? 'translate-x-4' : ''}`} />
           </button>
           <span><strong className="flex items-center gap-1.5 text-[13px] text-ds-ink"><GitBranch className="h-3.5 w-3.5" />{t('autoPlanBuildUseWorktree')}</strong><small className="mt-0.5 block text-[11px] text-ds-muted">{t(useWorktree ? 'planWorktreePromptHint' : 'planWorktreeCurrentWorkspaceWarning')}</small></span>

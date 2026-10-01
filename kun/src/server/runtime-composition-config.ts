@@ -1,3 +1,4 @@
+import { buildGoogleWorkspaceToolProvider } from '../google-workspace/google-workspace-tools.js'
 import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
 import {
@@ -5,7 +6,7 @@ import {
   isDeepStrictEqual,
   CapabilityRegistry,
   buildGoalLocalTools,
-  buildTodoLocalTools,
+  buildExecutionTaskLocalTools,
   buildDefaultLocalTools,
   createReadArtifactTool,
   buildMcpToolProviders,
@@ -121,7 +122,6 @@ export function createRuntimeConfigController(
     reviewService,
     pruneUnsentAttachments,
     designCanvasProvider,
-    taskGraphTool,
     childToolHost,
     defaultIsAntigravity,
     defaultIsCursorSdk
@@ -357,6 +357,7 @@ export function createRuntimeConfigController(
 	      nextSubagentConfig
 	    )
 	    const nextBaseToolProviders = [
+	      builtinProvider('execution-tasks', buildExecutionTaskLocalTools(threadService.executionTasks)),
 	      builtinProvider('builtin', withBackgroundShellTools(
 	        buildDefaultLocalTools({}, builtinToolOptionsForOptions(nextOptions)),
 	        nextOptions
@@ -379,19 +380,19 @@ export function createRuntimeConfigController(
 	      ...nextMusicGenProviders.providers,
 	      ...nextVideoGenProviders.providers,
 	      ...nextOfficeCliProviders,
+      ...buildGoogleWorkspaceToolProvider({ service: services.googleWorkspace }),
       nextPptAgentProvider,
 	      designCanvasProvider
 	    ]
 	    const nextChildRegistry = new CapabilityRegistry(nextBaseToolProviders)
     const nextRegistry = new CapabilityRegistry([
+      agent.managerToolProvider,
       buildHistoryReferenceToolProvider(services.model.core.historyReferences),
       roomResultProvider(services.model.core.threadStore),
 	      ...nextBaseToolProviders,
 	      ...nextComputerUseProviders.providers,
 	      ...nextBrowserUseProviders.providers,
 	      builtinProvider('goal', buildGoalLocalTools(threadService)),
-	      builtinProvider('todo', buildTodoLocalTools(threadService)),
-	      builtinProvider('planning', [taskGraphTool]),
 	      ...buildDelegationToolProviders(nextDelegationRuntime, subagentRouter),
 	      ...buildFastContextToolProvider(
 	        nextDelegationRuntime,

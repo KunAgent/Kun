@@ -1,5 +1,7 @@
+import { resolveTurnReviewRequests } from './review-composer-context.js'
 import { createHash } from 'node:crypto'
 import { assertRoomTurnAdmission } from './room-thread-admission-policy.js'
+import { promotePendingExecutionConfig } from './thread-service-execution-config.js'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
 import type {
@@ -44,8 +46,7 @@ import { reserveExtensionModelRequest } from '../loop/turn-budget-gate.js'
 import { makeGoalContextItem, makeUserItem, makeErrorItem } from '../domain/item.js'
 import { appendTurnItem, createTurnRecord, finishTurn, replaceTurnItem, startTurn as startTurnRecord } from '../domain/turn.js'
 import {
-  defaultCredentialMode,
-  resolveAdmissionHarness
+  defaultCredentialMode
 } from '../harness/resolve-turn-harness.js'
 import { finalizeTurnItems } from '../domain/turn-item-finalization.js'
 import { resolveThreadAgentSurface, touchThread } from '../domain/thread.js'
@@ -64,6 +65,7 @@ import {
 } from '../loop/continuation-instructions.js'
 import { type TurnService, type TurnServiceDeps, TurnConflictError, TurnInProgressError, ThreadClosingError, TurnCapacityError, type TerminalTurnStatus, type TurnSettlement, type GraphLeadSuspensionResult, type GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction, isPendingQueuedAdmission } from './turn-service-core.js'
 import { resolveDesignTurnAdmission } from './turn-service-design-admission.js'
+import { resolveSupportedAdmissionHarness } from './turn-harness-admission.js'
 import {
   InternalTurnRuntimeContext,
   makeInternalTurnRuntimeContextSource
@@ -125,7 +127,7 @@ async startTurn(this: TurnService, input: {
         if (this['deps'].lifecycleFence?.isClosing(input.threadId)) {
           throw new ThreadClosingError(input.threadId)
         }
-        const thread = await this['deps'].threadStore.get(input.threadId)
+        let thread = await this['deps'].threadStore.get(input.threadId)
         if (!thread) throw new Error(`thread not found: ${input.threadId}`)
         await assertHistoryReferenceWorkspace(thread)
         assertRoomTurnAdmission(thread, input.request)
@@ -161,6 +163,7 @@ async startTurn(this: TurnService, input: {
         if (thread.turns.some((turn) => turn.status === 'queued' || turn.status === 'running')) {
           throw new TurnConflictError(`thread already has an active turn: ${input.threadId}`)
         }
+        thread = promotePendingExecutionConfig(thread)
         // Allocate only an in-memory id before admission. A rejected request
         // still has no turn record, item, or event to persist.
         const turnId = this['deps'].ids.next('turn')
@@ -168,6 +171,10 @@ async startTurn(this: TurnService, input: {
           thread,
           request: input.request,
           turnId
+        })
+        const turnHarnessId = resolveSupportedAdmissionHarness({
+          request: input.request, thread, effectiveSurface: designAdmission.effectiveSurface,
+          providerKinds: this['deps'].providerKinds?.()
         })
         if (!this['tryAdmitTurn'](turnId, input.threadId)) {
           throw new TurnCapacityError(this['maxConcurrentTurns'])
@@ -213,6 +220,9 @@ async startTurn(this: TurnService, input: {
           const composerContexts = ComposerContextAttachmentSchema.array().parse(
             input.request.composerContexts ?? []
           )
+          const reviewRequests = await resolveTurnReviewRequests(
+            thread, composerContexts, this['deps'].resolveReviewRequests
+          )
           const attachmentIds = [...new Set(
             (input.request.attachmentIds ?? []).map((id) => id.trim()).filter(Boolean)
           )]
@@ -252,20 +262,10 @@ async startTurn(this: TurnService, input: {
           // consumers. Persist the default alias explicitly so a selection
           // change after admission cannot move this already-running turn.
           const turnProviderId = requestedProviderId ?? threadProviderId ?? 'default'
-          // Freeze the harness alongside the provider: explicit request value,
-          // then the thread pin, then legacy provider-kind inference.
-          const providerKindsView = this['deps'].providerKinds?.() ?? {
-            byId: {},
-            defaultKind: 'http' as const
-          }
-          const turnHarnessId = resolveAdmissionHarness({
-            request: input.request,
-            thread,
-            turnProviderId,
-            providerKinds: providerKindsView
-          })
           const turnCredentialMode =
             input.request.credentialMode ??
+            (turnHarnessId === thread.executionConfig?.route.harnessId
+              ? thread.executionConfig.route.credentialMode : undefined) ??
             defaultCredentialMode(turnHarnessId, this['deps'].harnessCatalog?.get(turnHarnessId))
           const turnAccountId = firstNonBlank(input.request.accountId) ?? (
             !requestedProviderId || requestedProviderId === threadProviderId
@@ -284,6 +284,7 @@ async startTurn(this: TurnService, input: {
             model: turnModel,
             providerId: turnProviderId,
             harnessId: turnHarnessId,
+            collaborationEnabled: thread.collaboration?.enabled ?? thread.workspaceMode === 'ade',
             credentialMode: turnCredentialMode,
             accountId: turnAccountId,
             reasoningEffort: input.request.reasoningEffort,
@@ -303,7 +304,7 @@ async startTurn(this: TurnService, input: {
             designDocumentTarget: designAdmission.effectiveDocumentTarget,
             persona: input.request.persona,
             guiDesignArtifact: input.request.guiDesignArtifact,
-            mode: input.request.mode,
+            mode: input.request.mode ?? thread.mode,
             orchestration: input.request.orchestration,
             graphPlanningLifecycle,
             disableUserInput: input.request.disableUserInput,
@@ -324,6 +325,7 @@ async startTurn(this: TurnService, input: {
             messageSource: input.request.messageSource,
             attachmentIds,
             composerContexts,
+            reviewRequests,
             fileReferences: input.request.fileReferences ?? [],
             workspaceCheckpointId: input.request.workspaceCheckpointId,
             workspace: thread.workspace,

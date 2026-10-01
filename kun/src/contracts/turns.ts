@@ -24,6 +24,8 @@ import {
 } from './design-task-profile.js'
 import { WriteTurnContextSchema } from './write-turn-context.js'
 import { HarnessCredentialModeSchema, HarnessIdSchema } from './harness.js'
+import { ManagerLeaseSettlementSchema } from './turn-manager-lease.js'
+export * from './turn-manager-lease.js'
 
 export { TurnReasoningEffortSchema } from './turn-reasoning.js'
 export type { TurnReasoningEffort } from './turn-reasoning.js'
@@ -168,16 +170,6 @@ export const GraphPlanningLifecycleSchema = z.object({
 }).strict()
 export type GraphPlanningLifecycle = z.infer<typeof GraphPlanningLifecycleSchema>
 
-/** Manager-authored proof that an execution owner expired for this turn. */
-export const ManagerLeaseSettlementSchema = z.object({
-  code: z.literal('owner_lease_expired'),
-  ownerFlavor: z.enum(['production', 'development']),
-  ownerInstanceId: z.string().min(1).max(256),
-  fencingToken: z.number().int().positive(),
-  settledAt: z.string().datetime()
-}).strict()
-export type ManagerLeaseSettlement = z.infer<typeof ManagerLeaseSettlementSchema>
-
 export const TurnSchema = z.object({
   id: z.string().min(1),
   threadId: z.string().min(1),
@@ -202,6 +194,8 @@ export const TurnSchema = z.object({
   providerId: z.string().optional(),
   /** Frozen harness identity; inferred at admission when absent on legacy records. */
   harnessId: HarnessIdSchema.optional(),
+  /** Persistent-team permission captured at admission; pending task edits cannot widen this turn. */
+  collaborationEnabled: z.boolean().optional(),
   /** Frozen credential mode for the frozen harness; defaults to the harness's first mode. */
   credentialMode: HarnessCredentialModeSchema.optional(),
   accountId: z.string().min(1).optional(),

@@ -211,7 +211,7 @@ describe('performPreparedThreadSend ADE worktree isolation', () => {
     }
     expect(await performPreparedThreadSend(inputFor({ state, ...harness }, provider as never))).toBe(true)
     expect(runtimeHelpersMock.findReusableEmptyThreadId).not.toHaveBeenCalled()
-    expect(provider.createThread).toHaveBeenCalledWith(expect.objectContaining({ workspaceMode: 'ade' }))
+    expect(provider.createThread).toHaveBeenCalledWith(expect.objectContaining({ workspaceMode: 'code' }))
     expect(state.activeThreadId).toBe('thr_ade')
     expect(state.adeDraftOpen).toBe(false)
   })
@@ -228,6 +228,42 @@ describe('performPreparedThreadSend ADE worktree isolation', () => {
     expect(await performPreparedThreadSend(input)).toBe(true)
     expect(provider.createThread).toHaveBeenCalledWith(expect.not.objectContaining({ harnessId: 'claude-code' }))
     expect(state.adeDraftOpen).toBe(false)
+  })
+
+  it('freezes an opted-in Code draft into a fresh task without reusing an unrelated empty thread', async () => {
+    const { state, ...harness } = buildHarness({ route: 'chat', adeDraftOpen: false })
+    const provider = {
+      createThread: vi.fn(async () => ({ id: 'thr_collab', workspace: '/repo', collaboration: { enabled: true } })),
+      sendUserMessage: vi.fn(async () => ({ turnId: 'turn_1' }))
+    }
+    const input = inputFor({ state, ...harness }, provider as never)
+    input.adeDraft = undefined
+    input.composerHarnessId = 'kun'
+    input.composerCredentialMode = ''
+    input.composerCollaborationEnabled = true
+    expect(await performPreparedThreadSend(input)).toBe(true)
+    expect(runtimeHelpersMock.findReusableEmptyThreadId).not.toHaveBeenCalled()
+    expect(provider.createThread).toHaveBeenCalledWith(expect.objectContaining({
+      harnessId: 'kun', collaboration: { enabled: true }, agentSurface: 'code'
+    }))
+    expect(state.composerCollaborationEnabled).toBe(false)
+  })
+
+  it('freezes an explicit collaboration off choice instead of inheriting project on', async () => {
+    const { state, ...harness } = buildHarness({ route: 'chat', adeDraftOpen: false })
+    const provider = {
+      createThread: vi.fn(async () => ({ id: 'thr_off', workspace: '/repo', collaboration: { enabled: false } })),
+      sendUserMessage: vi.fn(async () => ({ turnId: 'turn_off' }))
+    }
+    const input = inputFor({ state, ...harness }, provider as never)
+    input.adeDraft = undefined
+    input.composerHarnessId = 'kun'
+    input.composerCredentialMode = ''
+    input.composerCollaborationEnabled = false
+    input.composerCollaborationExplicit = true
+    expect(await performPreparedThreadSend(input)).toBe(true)
+    expect(provider.createThread).toHaveBeenCalledWith(expect.objectContaining({ collaboration: { enabled: false } }))
+    expect(runtimeHelpersMock.findReusableEmptyThreadId).not.toHaveBeenCalled()
   })
 
   it('queues the first send while the requested worktree is still preparing', async () => {
@@ -254,7 +290,7 @@ describe('performPreparedThreadSend ADE worktree isolation', () => {
     )
     expect(result).toBe(true)
     expect(provider.createThread).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceMode: 'ade', harnessId: 'claude-code' })
+      expect.objectContaining({ workspaceMode: 'code', harnessId: 'claude-code' })
     )
     expect(runtimeHelpersMock.findReusableEmptyThreadId).not.toHaveBeenCalled()
     expect(provider.createTaskWorkspace).toHaveBeenCalledWith(
@@ -470,6 +506,34 @@ describe('performPreparedThreadSend ADE worktree isolation', () => {
     expect(state.activeThreadId).toBeNull()
     expect(state.adeDraftRevision).toBe(3)
     expect(state.refreshAdeThreads).toHaveBeenCalled()
+  })
+
+
+  it('freezes the Code Git launch choice and queues the first message behind one workspace', async () => {
+    const harness = buildHarness({ route: 'chat', adeDraftOpen: false, composerIsolation: 'worktree' })
+    const provider = {
+      createThread: vi.fn(async () => ({ id: 'thr_new', workspace: '/repo', workspaceMode: 'code' as const })),
+      createTaskWorkspace: vi.fn(async () => ({ record: { workspaceId: 'ws_1', ownerThreadId: 'thr_new',
+        sourceRoot: '/repo', isolation: 'worktree', state: 'creating' } })),
+      sendUserMessage: vi.fn()
+    }
+    expect(await performPreparedThreadSend(inputFor(harness, provider as never))).toBe(true)
+    expect(provider.createThread).toHaveBeenCalledWith(expect.objectContaining({ workspace: '/repo', workspaceIsolation: 'worktree' }))
+    expect(provider.createTaskWorkspace).toHaveBeenCalledTimes(1)
+    expect(provider.sendUserMessage).not.toHaveBeenCalled()
+    expect(harness.state.queuedMessages).toHaveLength(1)
+  })
+
+  it('does not allocate a workspace for an already-created empty Code task', async () => {
+    const harness = buildHarness({ route: 'chat', adeDraftOpen: false, composerIsolation: 'worktree',
+      activeThreadId: 'existing', threads: [{ id: 'existing', workspace: '/repo' } as never] })
+    const provider = { createThread: vi.fn(), createTaskWorkspace: vi.fn(),
+      sendUserMessage: vi.fn(async () => ({ turnId: 'turn_1' })) }
+    const input = inputFor(harness, provider as never)
+    input.activeThreadId = 'existing'
+    expect(await performPreparedThreadSend(input)).toBe(true)
+    expect(provider.createThread).not.toHaveBeenCalled()
+    expect(provider.createTaskWorkspace).not.toHaveBeenCalled()
   })
 
   it('sends immediately when the session picked local isolation', async () => {

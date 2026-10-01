@@ -171,7 +171,6 @@ export function buildMainDelegatedRuntime(
     turns: turnService,
     events,
     ids,
-    setThreadTodos: (t, r) => threadService.setTodosFromTool(t, r),
     ...(llmDebug ? { debugSink: llmDebug } : {}),
     approvalGate,
     approvalReview: approvalReviewService,

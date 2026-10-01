@@ -379,7 +379,7 @@
   "shortcutToggleMaximize": "Maximize window",
   "shortcutToggleMaximizeDesc": "Maximize or restore the main window.",
   "kunProvider": "Model provider",
-  "kunProviderDesc": "Configure one or more OpenAI-compatible providers for the Agent. Each provider can have its own API key, service URL, and model list.",
+  "kunProviderDesc": "Configure Kun behavior, connect coding Agents, and set collaboration defaults. Model accounts and API keys live under Providers.",
   "kunProviderSelectDesc": "Choose one of the configured providers from the Providers tab.",
   "providersDesc": "API keys, service URLs, text models, and image capabilities live here. Assistant, Work, and image generation reuse these profiles.",
   "modelProviderOpenConfigFile": "Open config file",

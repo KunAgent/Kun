@@ -5,7 +5,9 @@ import {
   ProjectBoardReadUnavailableError,
   type ProjectBoardService
 } from '../../services/project-board-service.js'
-import { getProjectBoardCard, patchProjectBoardCardStatuses } from './project-boards.js'
+import { ExecutionTaskError } from '../../services/execution-task-service.js'
+import type { ThreadService } from '../../services/thread-service.js'
+import { getProjectBoardCard, patchProjectBoardCardStatuses, patchThreadTodoStatus } from './project-boards.js'
 
 function request(body: unknown): Request {
   return new Request('http://localhost/v1/project-boards/cards/status', {
@@ -22,6 +24,18 @@ const validBody = {
   fromStatus: 'pending',
   status: 'completed'
 }
+
+describe('legacy todo status route execution-task errors', () => {
+  it.each([
+    ['execution_active', 400], ['invalid_transition', 400], ['conflict', 409], ['forbidden', 403], ['not_found', 404]
+  ] as const)('maps %s to HTTP %i instead of an internal error', async (code, status) => {
+    const patchTodoStatus = vi.fn().mockRejectedValue(new ExecutionTaskError(code, 'Task update rejected.'))
+    const response = await patchThreadTodoStatus({ patchTodoStatus } as unknown as ThreadService,
+      undefined, 'thread', 'task', request({ status: 'completed' }))
+    expect(response.status).toBe(status)
+    expect(JSON.parse((response as { body: string }).body)).toMatchObject({ code })
+  })
+})
 
 describe('exact project board card route', () => {
   it('returns one full projected identity and passes the exact prefixed ID to the service', async () => {

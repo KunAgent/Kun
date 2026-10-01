@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain, screen, shell, type BrowserWindowConstructorOptions } from 'electron'
 import { randomBytes } from 'node:crypto'
 import { logWarn } from '../logger'
+import { markProtectedWindowContents } from '../protected-window-contents'
 import {
   buildProtectedExtensionConsentDataUrl,
   type ProtectedExtensionConsentDocument
@@ -155,6 +156,7 @@ export class ProtectedCredentialSurfaceController {
       acceptFirstMouse: true,
       webPreferences
     })
+    markProtectedWindowContents(window.webContents)
     window.setMenu(null)
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     window.webContents.on('will-navigate', (event) => event.preventDefault())
@@ -375,6 +377,7 @@ export class ProtectedCredentialSurfaceController {
       acceptFirstMouse: true,
       webPreferences
     })
+    markProtectedWindowContents(window.webContents)
     window.setMenu(null)
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     window.webContents.on('will-navigate', (event) => event.preventDefault())

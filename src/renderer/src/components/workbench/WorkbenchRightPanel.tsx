@@ -37,8 +37,8 @@ import { X } from 'lucide-react'
 const ChangeInspector = lazy(() =>
   import('../ChangeInspector').then((module) => ({ default: module.ChangeInspector }))
 )
-const ReviewPanel = lazy(() =>
-  import('../review/ReviewPanel').then((module) => ({ default: module.ReviewPanel }))
+const CodeChangesPanel = lazy(() =>
+  import('../review/CodeChangesPanel').then((module) => ({ default: module.CodeChangesPanel }))
 )
 const WorkersPanel = lazy(() =>
   import('../workers/WorkersPanel').then((module) => ({ default: module.WorkersPanel }))
@@ -302,14 +302,11 @@ function CodeRightPanelWorkspace({
     if (id === BUILTIN_RIGHT_PANEL_IDS.subagents) {
       return <SubagentDetailPanel className="h-full max-h-full w-full" onCollapse={onCollapse} />
     }
-    if (id === BUILTIN_RIGHT_PANEL_IDS.changes) {
-      return <ChangeInspector {...changes} className="h-full max-h-full w-full flex-col" />
-    }
-    if (id === BUILTIN_RIGHT_PANEL_IDS.review) {
-      return <ReviewPanel className="h-full max-h-full w-full" />
+    if (id === BUILTIN_RIGHT_PANEL_IDS.changes || id === BUILTIN_RIGHT_PANEL_IDS.review) {
+      return <CodeChangesPanel active={visible && code.state.activeId === id} changes={changes} className="h-full max-h-full w-full" />
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.workers) {
-      return <WorkersPanel className="h-full max-h-full w-full" />
+      return <WorkersPanel active={visible && code.state.activeId === id} className="h-full max-h-full w-full" />
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.browser) {
       return (

@@ -8,6 +8,10 @@ export function useSettingsRouteSynchronization(scope: Record<string, any>): voi
       setCategory('general')
       return
     }
+    if (settingsSection === 'integrations') {
+      setCategory('integrations')
+      return
+    }
     if (settingsSection === 'providers') {
       setCategory('providers')
       return
@@ -105,6 +109,7 @@ export function useSettingsRouteSynchronization(scope: Record<string, any>): voi
     if (
       settingsSection === 'general' ||
       settingsSection === 'providers' ||
+      settingsSection === 'integrations' ||
       settingsSection === 'extensions' ||
       settingsSection === 'write' ||
       settingsSection === 'design' ||
@@ -131,12 +136,13 @@ export function useSettingsRouteSynchronization(scope: Record<string, any>): voi
     }
     if (!agentsSectionReady) return
     const refs: Record<
-      Exclude<SettingsRouteSection, 'general' | 'providers' | 'extensions' | 'write' | 'design' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'speak' | 'laboratory' | 'subagents' | 'archives' | 'worktree' | 'memory' | 'claw' | 'shortcuts' | 'easterEgg' | 'updates' | 'terminal' | 'debug' | 'storage' | 'dataMigration'>,
+      Exclude<SettingsRouteSection, 'general' | 'providers' | 'integrations' | 'extensions' | 'write' | 'design' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'speak' | 'laboratory' | 'subagents' | 'archives' | 'worktree' | 'memory' | 'claw' | 'shortcuts' | 'easterEgg' | 'updates' | 'terminal' | 'debug' | 'storage' | 'dataMigration'>,
       HTMLDivElement | null
     > = {
       agents: agentsSectionRef.current,
       // 'agentsHarnesses' is a tab deep-link, not a scroll target.
       agentsHarnesses: null,
+      agentsCollaboration: null,
       skill: skillSectionRef.current,
       mcp: mcpSectionRef.current,
       permissions: permissionsSectionRef.current

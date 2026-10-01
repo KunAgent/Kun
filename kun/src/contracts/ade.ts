@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { HarnessRouteSchema } from './harness.js'
 import { SUBAGENT_READ_ONLY_TOOL_NAMES } from './capabilities-core.js'
 import { ChildSecuritySnapshot } from '../delegation/delegation-runtime-contracts.js'
+import { ReviewRevisionSchema } from './review-revision.js'
 
 /**
  * ADE manager control-plane records. Every file shell is strict and carries
@@ -138,7 +139,8 @@ export const QualityCheckSchema = z
     name: z.string().min(1).max(128),
     status: z.enum(['passed', 'failed', 'skipped']),
     source: z.enum(['worker', 'host', 'reviewer']),
-    detail: z.string().max(2_000).optional()
+    detail: z.string().max(2_000).optional(),
+    revision: ReviewRevisionSchema.optional()
   })
   .strict()
 export type QualityCheck = z.infer<typeof QualityCheckSchema>
@@ -149,7 +151,8 @@ export const SupersededVerdictSchema = z
     status: z.enum(['passed', 'needs_changes', 'rejected', 'waived']),
     decidedBy: z.enum(['manager', 'user', 'reviewer']),
     notes: z.string().max(4_000).optional(),
-    decidedAt: z.string().optional()
+    decidedAt: z.string().optional(),
+    revision: ReviewRevisionSchema.optional()
   })
   .strict()
 export type SupersededVerdict = z.infer<typeof SupersededVerdictSchema>
@@ -162,6 +165,7 @@ export const QualityVerdictSchema = z
     checks: z.array(QualityCheckSchema).max(64).default([]),
     notes: z.string().max(4_000).optional(),
     decidedAt: z.string().optional(),
+    revision: ReviewRevisionSchema.optional(),
     /** Prior decided verdicts, newest first; the current verdict stays effective. */
     superseded: z.array(SupersededVerdictSchema).max(8).optional()
   })
@@ -176,7 +180,9 @@ export const WorkerReportSchema = z
     filesChanged: z.array(z.string().min(1)).max(256).optional(),
     checks: z.array(QualityCheckSchema.omit({ source: true })).max(64).optional(),
     risks: z.array(z.string().min(1)).max(32).optional(),
-    submittedAt: z.string()
+    submittedAt: z.string(),
+    /** Host-written revision captured when the worker turn settled. */
+    revision: ReviewRevisionSchema.optional()
   })
   .strict()
 export type WorkerReport = z.infer<typeof WorkerReportSchema>
@@ -210,6 +216,8 @@ export const DispatchRecordSchema = z
       .strict()
       .optional(),
     verdict: QualityVerdictSchema.optional(),
+    /** Target version for an ephemeral cross-review dispatch. */
+    revision: ReviewRevisionSchema.optional(),
     failureReason: z.string().max(4_000).optional(),
     createdAt: z.string(),
     updatedAt: z.string()

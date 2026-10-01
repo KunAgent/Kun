@@ -101,10 +101,14 @@ export function useAdeReadiness(): AdeReadinessCheck[] {
       const detail = (event as CustomEvent<AppSettingsV1>).detail
       if (detail) apply(detail)
     }
-    window.addEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged)
+    if (typeof window !== 'undefined') {
+      window.addEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged)
+    }
     return () => {
       cancelled = true
-      window.removeEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged)
+      if (typeof window !== 'undefined') {
+        window.removeEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged)
+      }
     }
   }, [])
 

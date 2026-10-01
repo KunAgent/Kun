@@ -1,4 +1,5 @@
 import roomsPolish from './common/rooms-polish.json'
+import executionTasks from './common/execution-tasks.json'
 import roomsApproval from './common/rooms-approval.json'
 import roomsDirect from './common/rooms-direct.json'
 import roomsInitIm from './common/rooms-init-im.json'
@@ -62,6 +63,7 @@ const common = {
   ...phoneComposer,
   ...composerFastMode,
   ...commandsSdd,
+  ...executionTasks,
   ...providerErrors,
   ...planBuild,
   ...sddFrameworks,

@@ -1,3 +1,4 @@
+import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
 import { chmod, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -318,10 +319,12 @@ export abstract class DelegationRuntimeBase {
 
   protected async recordChildEvent(record: ChildRunRecord): Promise<void> {
     const usage = record.usage
-    await this.options.events?.record({
+    const recordEvent = () => this.options.events?.record({
       kind: record.status === 'completed' ? 'turn_completed' : record.status === 'failed' ? 'turn_failed' : record.status === 'aborted' ? 'turn_aborted' : 'turn_started',
       threadId: record.parentThreadId,
-      turnId: record.parentTurnId,
+      // Detached progress belongs to the thread, not a write by the settled parent turn.
+      // The immutable parent association remains in child.parentTurnId below.
+      ...(record.detached ? {} : { turnId: record.parentTurnId }),
       status: record.status,
       text: record.summary ?? record.error,
       child: {
@@ -362,6 +365,8 @@ export abstract class DelegationRuntimeBase {
         ...(record.activity ? { activity: record.activity } : {})
       }
     })
+    if (record.detached) await runWithoutTurnMutationFence(recordEvent)
+    else await recordEvent()
   }
 
   protected nextChildSeq(childId: string): number {
@@ -403,7 +408,7 @@ export abstract class DelegationRuntimeBase {
   }
 
   protected async notifyDetachedChild(record: ChildRunRecord): Promise<void> {
-    await this.detachedHandoffs.deliverRecord(record)
+    await runWithoutTurnMutationFence(() => this.detachedHandoffs.deliverRecord(record))
   }
 
   async retryDetachedChildHandoffs(): Promise<number> {
@@ -471,7 +476,9 @@ export abstract class DelegationRuntimeBase {
       }))
       await notifyLifecycle(args.onRunning, record)
       unsubscribeActivity = this.options.eventBus?.subscribe(record.id, (event) => {
-        void this.projectChildActivity(args.state, event)
+        void this.projectChildActivity(args.state, event).catch((error) => {
+          console.warn(`[kun] child activity projection failed child=${args.state.record.id}:`, error)
+        })
       })
       usageBeforeRun = record.usage
       const executor: ChildRunExecutor = this.options.executor ?? defaultExecutor

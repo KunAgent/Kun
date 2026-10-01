@@ -81,7 +81,7 @@ describe('single Rooms drawer navigation stack', () => {
     const titles: Array<[RoomDrawerTarget, string]> = [
       [{ kind: 'files' }, 'Conversation files'],
       [{ kind: 'models' }, 'Model settings'],
-      [{ kind: 'settings' }, 'bot settings'],
+      [{ kind: 'settings' }, 'Room settings'],
       [{ kind: 'directory' }, 'Agents'],
       [{ kind: 'profile' }, 'My avatar']
     ]
@@ -89,6 +89,33 @@ describe('single Rooms drawer navigation stack', () => {
       act(() => navigation.open(target))
       expect(JSON.stringify(renderer.toJSON())).toContain(label)
     }
+  })
+  it('embeds details inside the shared workbench without a second modal or resize handle', async () => {
+    await act(async () => { renderer = create(createElement(Harness, { roomId: 'room' })) })
+    act(() => navigation.open({ kind: 'reply', messageId: 'root' }))
+    const frames = navigation.frames
+    act(() => renderer.update(createElement(RoomDrawerNavigation, {
+      frames, embedded: true, onBack: vi.fn(), onClose: vi.fn(), onSection: vi.fn(),
+      render: () => createElement(SavedPage, { name: 'embedded-reply' })
+    })))
+    expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(0)
+    expect(renderer.root.findAllByProps({ role: 'region' })).toHaveLength(1)
+    expect(renderer.root.findByProps({ role: 'region' }).props['aria-modal']).toBeUndefined()
+    expect(renderer.root.findAllByProps({ role: 'separator' })).toHaveLength(0)
+    expect(renderer.root.findAllByProps({ 'aria-label': 'Right sidebar' })).toHaveLength(0)
+  })
+  it('marks retained collaboration pages inactive while another workbench tab is selected', async () => {
+    await act(async () => { renderer = create(createElement(Harness, { roomId: 'room' })) })
+    act(() => navigation.open({ kind: 'run', runId: 'run' }))
+    const frames = navigation.frames
+    const props = { frames, embedded: true, onBack: vi.fn(), onClose: vi.fn(), onSection: vi.fn(),
+      render: (_target: RoomDrawerTarget, _key: number, active: boolean) => createElement('div', { 'data-run-active': active }) }
+    act(() => renderer.update(createElement(RoomDrawerNavigation, { ...props, active: false })))
+    expect(renderer.root.findByProps({ role: 'region' }).props.inert).toBe(true)
+    expect(renderer.root.findByProps({ 'data-run-active': false })).toBeDefined()
+    expect(renderer.root.findAllByProps({ 'data-active-drawer-page': 'true' })).toHaveLength(0)
+    act(() => renderer.update(createElement(RoomDrawerNavigation, { ...props, active: true })))
+    expect(renderer.root.findByProps({ 'data-run-active': true })).toBeDefined()
   })
   it('clears the old room stack and never resurrects it by switching back', async () => {
     await act(async () => { renderer = create(createElement(Harness, { roomId: 'room' })) })

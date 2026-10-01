@@ -26,6 +26,7 @@ export const CODEX_CLIENT_METHODS = {
   turnSteer: 'turn/steer',
   turnInterrupt: 'turn/interrupt',
   modelList: 'model/list',
+  configRead: 'config/read',
   accountRead: 'account/read',
   accountRateLimitsRead: 'account/rateLimits/read',
   accountLoginStart: 'account/login/start',

@@ -9,6 +9,11 @@ import type {
 import type { FileDispatchStore } from './dispatch-store.js'
 import type { FileTeamStore } from './team-store.js'
 import { reportLanguage } from './user-report.js'
+import type { ActivityStore } from '../services/activity-store.js'
+import { refreshWorkerReviewActivity } from './worker-review-activity.js'
+import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
+import type { ReviewRevision } from '../contracts/review-revision.js'
+import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
 
 /** `worker_verdict` input (10 §4.2): the manager records a quality decision. */
 export const WorkerVerdictInputSchema = z
@@ -30,8 +35,10 @@ export type VerdictResult = {
 }
 
 export type QualityVerdictDeps = {
-  teams: Pick<FileTeamStore, 'list'>
-  dispatches: Pick<FileDispatchStore, 'get' | 'mutate'>
+  teams: Pick<FileTeamStore, 'list' | 'get'>
+  dispatches: Pick<FileDispatchStore, 'get' | 'mutate' | 'listByWorker'>
+  activity?: Pick<ActivityStore, 'apply'>
+  taskWorkspaces?: Pick<TaskWorkspaceService, 'get'>
   nowIso: () => string
   language?: () => string | undefined
 }
@@ -105,6 +112,17 @@ export class QualityVerdicts {
     const language = this.language()
     const teamId = input.teamId ?? (await this.teamForDispatch(input.dispatchId))
     if (!teamId) return this.notFound(input.dispatchId)
+    const [team, dispatch] = await Promise.all([
+      this.deps.teams.get(teamId),
+      this.deps.dispatches.get(teamId, input.dispatchId)
+    ])
+    const worker = team?.workers.find((entry) => entry.workerId === dispatch?.workerId)
+    const workspace = worker?.taskWorkspaceId
+      ? this.deps.taskWorkspaces?.get(worker.taskWorkspaceId)
+      : undefined
+    const revision = workspace
+      ? await captureReviewRevision(workspace.workspaceId, workspace.path)
+      : undefined
     let locked = false
     const updated = await this.deps.dispatches.mutate(
       teamId,
@@ -124,6 +142,7 @@ export class QualityVerdicts {
               ? { reviewerWorkerId: existing.reviewerWorkerId }
               : {}),
             checks: existing?.checks ?? [],
+            ...(revision ? { revision } : {}),
             ...(input.notes ? { notes: input.notes } : {}),
             decidedAt: this.deps.nowIso(),
             ...(superseded?.length ? { superseded } : {})
@@ -141,6 +160,11 @@ export class QualityVerdicts {
       }
     }
     if (!updated?.verdict) return this.notFound(input.dispatchId)
+    await refreshWorkerReviewActivity(
+      this.deps.dispatches, this.deps.activity, teamId, updated.workerId, workspace
+    ).catch((error) => {
+      console.warn(`[kun] ade review activity projection failed for ${updated.workerId}:`, error)
+    })
     return {
       ok: true,
       dispatchId: input.dispatchId,
@@ -162,6 +186,7 @@ export class QualityVerdicts {
     dispatchId: string
     reviewerWorkerId: string
     report: WorkerReport
+    revision?: ReviewRevision
   }): Promise<QualityVerdict | undefined> {
     const updated = await this.deps.dispatches.mutate(
       input.teamId,
@@ -171,13 +196,15 @@ export class QualityVerdicts {
         const findings: QualityCheck[] = [
           ...(input.report.checks ?? []).map((check) => ({
             ...check,
-            source: 'reviewer' as const
+            source: 'reviewer' as const,
+            ...(input.revision ? { revision: input.revision } : {})
           })),
           ...(input.report.risks ?? []).map((risk) => ({
             name: 'risk',
             status: 'failed' as const,
             source: 'reviewer' as const,
-            detail: risk.slice(0, 2_000)
+            detail: risk.slice(0, 2_000),
+            ...(input.revision ? { revision: input.revision } : {})
           }))
         ]
         return {
@@ -189,6 +216,18 @@ export class QualityVerdicts {
         }
       }
     )
+    if (updated) {
+      const team = await this.deps.teams.get(input.teamId)
+      const worker = team?.workers.find((entry) => entry.workerId === updated.workerId)
+      const workspace = worker?.taskWorkspaceId
+        ? this.deps.taskWorkspaces?.get(worker.taskWorkspaceId)
+        : undefined
+      await refreshWorkerReviewActivity(
+        this.deps.dispatches, this.deps.activity, input.teamId, updated.workerId, workspace
+      ).catch((error) => {
+        console.warn(`[kun] ade review activity projection failed for ${updated.workerId}:`, error)
+      })
+    }
     return updated?.verdict
   }
 }
@@ -203,7 +242,8 @@ function previousDecision(existing: DispatchRecord['verdict']): SupersededVerdic
             status: existing.status as SupersededVerdict['status'],
             decidedBy: existing.decidedBy,
             ...(existing.notes ? { notes: existing.notes } : {}),
-            ...(existing.decidedAt ? { decidedAt: existing.decidedAt } : {})
+            ...(existing.decidedAt ? { decidedAt: existing.decidedAt } : {}),
+            ...(existing.revision ? { revision: existing.revision } : {})
           }
         ]
       : []

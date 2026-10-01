@@ -14,6 +14,9 @@ import type {
   TaskWorkspaceRecord
 } from '@shared/task-workspace'
 import { getProvider } from '../../agent/registry'
+import { useReviewStore } from '../../store/review-store'
+import { finishReviewSendAttempt, rejectReviewSendAttempt, reviewSendAttempt } from '../../store/review-send-attempt'
+import { formatRuntimeError } from '../../lib/format-runtime-error'
 
 const REFRESH_MS = 60_000
 
@@ -49,6 +52,7 @@ export function ChangeRequestPanel({
   const [status, setStatus] = useState<ChangeRequestStatus | null>(null)
   const [pending, setPending] = useState<'create' | string | null>(null)
   const [sendNote, setSendNote] = useState<string | null>(null)
+  const [sendError, setSendError] = useState<string | null>(null)
 
   const refresh = useCallback((): void => {
     const provider = getProvider()
@@ -94,18 +98,23 @@ export function ChangeRequestPanel({
     const provider = getProvider()
     if (!binding.unitId || !provider.sendReview) return
     setPending(check.name)
+    setSendError(null)
     const note = t('reviewCrCheckSendBackNote', {
       name: check.name,
       conclusion: check.conclusion ?? 'failure',
       number: request?.number ?? 0
     })
+    const target = { kind: 'worker' as const, workerId: binding.unitId }
+    const attemptKey = JSON.stringify([workspaceId, 'check', check.name])
+    const attempt = reviewSendAttempt(attemptKey, [], target, note, useReviewStore.getState().workspaces[workspaceId]?.revision)
     void provider.sendReview(workspaceId, {
       commentIds: [],
-      target: { kind: 'worker', workerId: binding.unitId },
+      target,
+      ...attempt,
       note
     })
-      .then(() => setSendNote(check.name))
-      .catch(() => undefined)
+      .then(() => { finishReviewSendAttempt(attemptKey); setSendNote(check.name) })
+      .catch((cause: unknown) => { rejectReviewSendAttempt(attemptKey, cause); setSendError(formatRuntimeError(cause)) })
       .finally(() => setPending(null))
   }
 
@@ -114,6 +123,7 @@ export function ChangeRequestPanel({
       className="shrink-0 border-b border-ds-border-muted px-3 py-1.5 text-[11.5px]"
       data-testid="change-request-panel"
     >
+      {sendError ? <p role="alert" className="mb-2 text-red-600 dark:text-red-300">{sendError}</p> : null}
       {request ? (
         <div className="flex items-center gap-2">
           <GitPullRequest className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />

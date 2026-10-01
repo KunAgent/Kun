@@ -12,6 +12,7 @@ import {
   projectExecutableModelRoutePools,
   resolveModelProviderPresetSource,
   resolveKunRuntimeSettings,
+  isRetiredOpenCodeFreeProvider,
   type AppSettingsV1,
   type ModelProviderModelProfileV1
 } from '../shared/app-settings'
@@ -96,7 +97,11 @@ export function modelListFromSharedConnections(
       credentialUnavailable ||
       typeof profile.id !== 'string' ||
       !profile.id.trim() ||
-      !Array.isArray(profile.models)
+      !Array.isArray(profile.models) ||
+      isRetiredOpenCodeFreeProvider({
+        id: profile.id,
+        presetSource: typeof profile.presetSource === 'string' ? profile.presetSource : undefined
+      })
     ) {
       return []
     }
@@ -141,6 +146,8 @@ export function modelListFromSharedConnections(
     const configuredLabel = configuredProviderLabels.get(providerId.toLowerCase())?.trim()
     return [{
       providerId,
+      ...(['http', 'agent-sdk', 'cursor-sdk', 'antigravity-cli', 'gemini-cli-api', 'gemini-code-assist'].includes(String(profile.kind))
+        ? { kind: profile.kind as ModelProviderModelGroup['kind'] } : {}),
       ...(typeof profile.presetSource === 'string' && profile.presetSource.trim()
         ? { presetSource: profile.presetSource.trim() }
         : {}),
@@ -261,7 +268,7 @@ async function readConfiguredModelGroups(settings: AppSettingsV1): Promise<Model
     const presetSource = resolveModelProviderPresetSource(provider)?.preset.id
     groups.push({
       providerId: provider.id,
-      ...(presetSource ? { presetSource } : {}),
+      ...(provider.kind ? { kind: provider.kind } : {}),      ...(presetSource ? { presetSource } : {}),
       label: provider.name,
       modelIds,
       modelProfiles: provider.modelProfiles
@@ -324,6 +331,7 @@ function mergeModelGroups(groups: readonly ModelProviderModelGroup[]): ModelProv
     ])
     byProvider.set(providerId, {
       providerId,
+      ...(group.kind ?? existing?.kind ? { kind: group.kind ?? existing?.kind } : {}),
       ...(group.presetSource ?? existing?.presetSource
         ? { presetSource: group.presetSource ?? existing?.presetSource }
         : {}),

@@ -110,6 +110,9 @@ vi.mock('./managed-runtime-startup-policy', () => ({
 vi.mock('./runtime/managed-runtime-idle', () => ({
   waitForRuntimeTurnsIdle: vi.fn(async () => 'idle')
 }))
+vi.mock('./runtime/native-agent-network', () => ({
+  resolveNativeAgentNetworkSnapshot: vi.fn(async () => ({ codex: { source: 'direct' } }))
+}))
 vi.mock('./runtime/kun-runtime-config-service', () => ({
   buildManagedRuntimeHotApplyBody: (
     settings: AppSettingsV1,
@@ -206,7 +209,8 @@ describe('Runtime settings generation ownership', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toEqual({
       browserEnabled: false,
-      browserUseHostBinding: null
+      browserUseHostBinding: null,
+      nativeAgentNetwork: { codex: { source: 'direct' } }
     })
     expect(harness.mainState.settledRuntimeSettings).toBe(s0)
   })

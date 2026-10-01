@@ -113,7 +113,7 @@
   "approvalExpired": "ターン終了のため期限切れ",
   "approvalSubmitting": "決定を送信中…",
   "approvalFailed": "リクエストが失敗しました",
-  "approvalNativeConfirmationCancelled": "ネイティブ確認がキャンセルされました。もう一度お試しください。",
+  "approvalNativeConfirmationCancelled": "確認をキャンセルしました。この操作はまだ判断待ちです。",
   "approvalReviewTitle": "Kun approval review",
   "approvalReviewInProgress": "Kun is reviewing this action…",
   "approvalReviewApproved": "Approved by Kun",

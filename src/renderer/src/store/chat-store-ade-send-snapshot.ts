@@ -15,9 +15,42 @@ export type AdeDraftSendSnapshot = {
     'composerHarnessId' | 'composerCredentialMode' | 'composerExecutionSettings'>
 }
 
+export type CodeProjectRouteSnapshot = {
+  workspaceRoot: string
+  routeIntent: 'inherit' | 'explicit'
+  projectDefaultsRevision: string
+}
+
+/** An inherited route is valid only after its exact project revision was shown in the draft. */
+export function captureCodeProjectRouteSnapshot(state: ChatState): CodeProjectRouteSnapshot | undefined {
+  if (state.route !== 'chat' || state.activeThreadId) return undefined
+  const workspaceRoot = normalizeWorkspaceRoot(state.workspaceRoot)
+  const project = state.composerProjectDefaults
+  if (!workspaceRoot || !project || project.workspaceRoot !== workspaceRoot) return undefined
+  return {
+    workspaceRoot,
+    routeIntent: state.composerRouteExplicitWorkspaceRoot === workspaceRoot ? 'explicit' : 'inherit',
+    projectDefaultsRevision: project.revision
+  }
+}
+
+/** Freeze the visible Code draft selection before workspace or thread preparation awaits. */
+export function captureCodeDraftComposer(state: ChatState): AdeDraftSendSnapshot['composer'] | undefined {
+  if (state.route !== 'chat' || state.activeThreadId) return undefined
+  return {
+    composerModel: state.composerModel,
+    composerProviderId: state.composerProviderId,
+    composerModelGroups: state.composerModelGroups,
+    composerHarnessId: state.composerHarnessId,
+    composerCredentialMode: state.composerCredentialMode,
+    composerExecutionSettings: state.composerExecutionSettings
+  }
+}
+
 /** Capture the draft's project and worktree choice before send-side awaits. */
 export function captureAdeDraftSendSnapshot(state: ChatState): AdeDraftSendSnapshot | undefined {
-  if (state.route !== 'ade' || state.activeThreadId || !state.adeDraftOpen) return undefined
+  if ((state.route !== 'ade' && state.route !== 'chat') || state.activeThreadId ||
+    (!state.adeDraftOpen && state.composerIsolation !== 'worktree')) return undefined
   return {
     workspaceRoot: normalizeWorkspaceRoot(state.workspaceRoot),
     draftOpen: state.adeDraftOpen,
@@ -37,7 +70,7 @@ export function captureAdeDraftSendSnapshot(state: ChatState): AdeDraftSendSnaps
 }
 
 export function adeDraftStillCurrent(state: ChatState, snapshot: AdeDraftSendSnapshot): boolean {
-  return state.route === 'ade' && !state.activeThreadId &&
+  return (state.route === 'ade' || state.route === 'chat') && !state.activeThreadId &&
     state.adeDraftOpen === snapshot.draftOpen &&
     state.adeDraftRevision === snapshot.draftRevision &&
     normalizeWorkspaceRoot(state.workspaceRoot) === snapshot.workspaceRoot

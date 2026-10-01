@@ -136,6 +136,9 @@ export type ToolTurnContextInput = {
   harnessId?: string
   /** Owning workspace mode of the turn's thread; copied verbatim. */
   workspaceMode?: 'code' | 'ade'
+  /** Explicit persistent-team authorization captured from the owning thread. */
+  collaborationEnabled?: boolean
+  collaborationEverEnabled?: boolean
   /** Worker execution-unit marker for future ADE task threads. */
   executionUnitKind?: 'worker'
   actingModelRoute?: ActingTurnModelRoute

@@ -8,7 +8,6 @@ import { ThreadStateLoadError } from './thread-state-error.js'
 import {
   createThread,
   clearThreadGoal,
-  clearThreadTodos,
   deleteThread,
   forkThread,
   getThreadGoal,
@@ -20,11 +19,11 @@ import {
   loadThreadRuntimeState,
   listThreads,
   setThreadGoal,
-  setThreadTodos,
   updateThread
 } from './threads.js'
 import { getQueuedTurns } from './thread-queued-turns.js'
 import { syncThreadTodosFromPlan } from './thread-todos-sync-plan.js'
+import { executionTaskRoute } from './execution-tasks.js'
 import { threadTimelineReadKey } from './thread-timeline-read-key.js'
 import { patchThreadTodoStatus } from './project-boards.js'
 import { deleteThreadsByWorkspace } from './threads-bulk-delete.js'
@@ -64,6 +63,7 @@ import {
   trajectorySummaryResponse
 } from './trajectory.js'
 import { getThreadSummary } from './thread-summary.js'
+import { getThreadExecutionConfig, patchThreadExecutionConfig } from './thread-execution-config.js'
 import { threadActivityResponse } from './thread-activity.js'
 import { jsonResponse } from '../response.js'
 import { ERRORS } from './runtime-error.js'
@@ -119,6 +119,14 @@ export function registerThreadRoutes(
   router.add('GET', '/v1/threads/:id/summary', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return getThreadSummary(runtime.threadService, ctx.params.id, runtime.sessionStore)
+  })
+  router.add('GET', '/v1/threads/:id/execution-config', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return getThreadExecutionConfig(runtime.threadService, ctx.params.id)
+  })
+  router.add('PATCH', '/v1/threads/:id/execution-config', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return patchThreadExecutionConfig(runtime.threadService, ctx.params.id, request)
   })
   // This static suffix must be registered before `/:id`, because Router uses
   // first-match ordering for parameterized paths.
@@ -231,9 +239,25 @@ export function registerThreadRoutes(
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return getThreadTodos(runtime.threadService, ctx.params.id)
   })
+  router.add('GET', '/v1/threads/:id/tasks', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return executionTaskRoute(runtime.threadService, ctx.params.id, request)
+  })
+  router.add('GET', '/v1/threads/:id/tasks/:taskId', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return executionTaskRoute(runtime.threadService, ctx.params.id, request, ctx.params.taskId)
+  })
+  router.add('POST', '/v1/threads/:id/tasks', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return executionTaskRoute(runtime.threadService, ctx.params.id, request)
+  })
+  router.add('PATCH', '/v1/threads/:id/tasks/:taskId', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return executionTaskRoute(runtime.threadService, ctx.params.id, request, ctx.params.taskId)
+  })
   router.add('POST', '/v1/threads/:id/todos', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
-    return setThreadTodos(runtime.threadService, ctx.params.id, request)
+    return jsonResponse({ code: 'tool_retired', message: 'Whole-list todo writes are retired. Use the execution task endpoints.' }, 410)
   })
   router.add('POST', '/v1/threads/:id/todos/sync-plan', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
@@ -251,7 +275,7 @@ export function registerThreadRoutes(
   })
   router.add('DELETE', '/v1/threads/:id/todos', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
-    return clearThreadTodos(runtime.threadService, ctx.params.id)
+    return jsonResponse({ code: 'tool_retired', message: 'Cancel individual execution tasks. Historical todo records are read-only.' }, 410)
   })
   router.add('POST', '/v1/threads/:id/turns', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

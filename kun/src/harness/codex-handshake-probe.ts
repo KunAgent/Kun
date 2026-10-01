@@ -15,10 +15,14 @@ import {
   type HarnessSecretRefResolver
 } from './harness-secret-env.js'
 import { ACP_READINESS_TIMEOUT_MS } from './acp-readiness-probe.js'
+import { raceProbeAbort } from './probe-abort.js'
+import { nativeAgentNetworkEnv } from './native-agent-network.js'
+import { codexMetadataProbeArgs } from './codex-executable.js'
 
 export type CodexHandshakeProbeDeps = {
   spawn?: HarnessSpawnFn
   timeoutMs?: number
+  signal?: AbortSignal
   resolveSecretEnv?: HarnessSecretRefResolver
 }
 
@@ -40,8 +44,8 @@ export async function probeCodexHandshake(
     // app-server protocol; it never starts a thread or turn.
     process = await startHarnessProcess({
       command,
-      args: definition.launch?.args ?? ['app-server'],
-      env: definition.launch?.env ?? {},
+      args: codexMetadataProbeArgs(definition.launch?.args),
+      env: { ...nativeAgentNetworkEnv(definition, globalThis.process.env, secretEnv), ...definition.launch?.env },
       secretEnv,
       cwd: tmpdir(),
       ...(deps.spawn ? { spawn: deps.spawn } : {})
@@ -56,10 +60,11 @@ export async function probeCodexHandshake(
   }
   const client = new CodexClient({ process })
   try {
-    const init = await withTimeout(client.initialize(), timeoutMs)
-    const account = await withTimeout(client.accountRead(), timeoutMs).catch(
+    const init = await raceProbeAbort(withTimeout(client.initialize(), timeoutMs), deps.signal)
+    const account = await raceProbeAbort(withTimeout(client.accountRead(), timeoutMs), deps.signal).catch(
       () => undefined
     )
+    deps.signal?.throwIfAborted()
     const login = account?.account
       ? account.account.type === 'chatgpt'
         ? `chatgpt${account.account.email ? ` ${account.account.email}` : ''}`

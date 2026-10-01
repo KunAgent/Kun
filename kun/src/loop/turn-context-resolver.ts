@@ -162,7 +162,7 @@ export class TurnContextResolver {
       : null
     const activeTodoInstruction = planTurnActive
       ? null
-      : todoContinuationInstruction(input.thread.todos)
+      : todoContinuationInstruction(input.thread.todos, input.thread.executionTasks)
     const forcedAllowedToolNames = intersectAllowedToolNames(
       this.deps.forcedAllowedToolNames,
       input.mode.dedicatedSvgTurn ? SVG_ARTIFACT_ALLOWED_TOOL_NAMES : undefined
@@ -177,6 +177,7 @@ export class TurnContextResolver {
       intersectAllowedToolNames(forcedAllowedToolNames, input.thread.roomContext?.allowedToolNames)
     )
     const userInputDisabled = input.turn.disableUserInput === true
+    const collaborationEnabled = input.turn.collaborationEnabled ?? input.thread.collaboration?.enabled
     const toolDiscoveryContext = applyRoomToolPolicy(createToolDiscoveryContext({
       threadId: input.threadId,
       turnId: input.turnId,
@@ -202,6 +203,11 @@ export class TurnContextResolver {
         : {}),
       // Thread-owned workspace mode; manager tools only advertise on 'ade'.
       ...(input.thread.workspaceMode ? { workspaceMode: input.thread.workspaceMode } : {}),
+      ...(collaborationEnabled !== undefined
+        ? { collaborationEnabled }
+        : {}),
+      ...(input.thread.collaboration?.everEnabled !== undefined
+        ? { collaborationEverEnabled: input.thread.collaboration.everEnabled } : {}),
       // Worker threads expose the callback tools; all other threads hide them.
       ...(input.thread.executionUnit?.kind
         ? { executionUnitKind: input.thread.executionUnit.kind }

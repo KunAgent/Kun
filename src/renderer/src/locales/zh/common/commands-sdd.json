@@ -114,7 +114,7 @@
   "approvalExpired": "当前任务已结束，此审批已过期",
   "approvalSubmitting": "正在提交选择…",
   "approvalFailed": "请求失败",
-  "approvalNativeConfirmationCancelled": "系统确认已取消，请重试。",
+  "approvalNativeConfirmationCancelled": "已取消确认，此操作仍等待你处理。",
   "approvalReviewTitle": "Kun 自动审批",
   "approvalReviewInProgress": "Kun 正在审查这项操作…",
   "approvalReviewApproved": "Kun 已允许",

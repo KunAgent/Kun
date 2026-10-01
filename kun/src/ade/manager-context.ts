@@ -1,7 +1,7 @@
 /**
  * ADE manager per-turn context (docs/ade/impl p3-review-followup P3-14):
  * a length-bounded dynamic-context block injected after the stable prefix
- * for `workspaceMode === 'ade'` manager turns on the Kun harness. It carries
+ * for authorized manager turns on the Kun harness. It carries
  * the delegation contract, live team state, and the harness routing menu —
  * per-turn facts that must never enter the immutable prefix.
  */
@@ -17,6 +17,8 @@ export type AdeManagerContextDeps = {
   questions: { listOpen(teamId: string): Promise<QuestionRecord[]> }
   /** Same ready-harness routing menu the Graph planner sees (P1-25). */
   harnessSummary: () => Promise<string | undefined>
+  /** New dispatch admission; existing-team guidance remains when disabled. */
+  canStartNewWork?: () => boolean
 }
 
 const OPEN_DISPATCH_STATES: ReadonlySet<DispatchRecord['state']> = new Set([
@@ -39,6 +41,13 @@ const ROLE_GUIDANCE = [
   '- Delegate self-contained tasks to workers with `worker_create` / `worker_dispatch`; every dispatch needs explicit acceptance criteria.',
   '- Treat worker reports as claims: cross-check results against the criteria before telling the user the work is done.',
   '- Completed or failed dispatches still need your review; unanswered worker questions block the worker until you or the user answers.'
+].join('\n')
+
+const EXISTING_TEAM_GUIDANCE = [
+  'Persistent collaboration is disabled for new work in this session.',
+  '- Review existing worker results and answer outstanding questions.',
+  '- You may inspect, stop, release, or cancel existing worker work.',
+  '- Do not create workers or dispatch new work until collaboration is enabled again.'
 ].join('\n')
 
 function workerLines(team: TeamRecord): string[] {
@@ -79,13 +88,14 @@ function questionLines(questions: readonly QuestionRecord[]): string[] {
 
 export function createAdeManagerContext(
   deps: AdeManagerContextDeps
-): (input: { threadId: string }) => Promise<string | undefined> {
-  return async ({ threadId }) => {
+): (input: { threadId: string; newWorkAllowed?: boolean }) => Promise<string | undefined> {
+  return async ({ threadId, newWorkAllowed }) => {
     const [team, harnessSummary] = await Promise.all([
       deps.teams.byManager(threadId).catch(() => null),
       deps.harnessSummary().catch(() => undefined)
     ])
-    const sections: string[] = [ROLE_GUIDANCE]
+    const canStartNewWork = newWorkAllowed !== false && deps.canStartNewWork?.() !== false
+    const sections: string[] = [canStartNewWork ? ROLE_GUIDANCE : EXISTING_TEAM_GUIDANCE]
     if (team && team.status === 'active') {
       const [dispatches, openQuestions] = await Promise.all([
         deps.dispatches.list(team.teamId).catch(() => [] as DispatchRecord[]),
@@ -103,7 +113,7 @@ export function createAdeManagerContext(
         `Open worker questions:`,
         ...(question.length ? question : ['- none'])
       )
-    } else {
+    } else if (canStartNewWork) {
       sections.push('No team exists yet; `worker_create` creates one lazily on first use.')
     }
     if (harnessSummary) sections.push(harnessSummary)

@@ -19,6 +19,7 @@ import {
 } from './runtime-factory-dependencies.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import { subscriptionBillingKind } from '../shared/subscription-billing.js'
+import { isRetiredOpenCodeFreeConnection } from '../services/model-connection-registry-usability.js'
 
 export async function hydrateLegacyCredentialOptions(
   options: KunServeRuntimeOptions,
@@ -514,7 +515,10 @@ export function modelConnectionSeedsForOptions(
         probe: false,
         select: false
       }))
-  ]
+  ].filter((seed) => !isRetiredOpenCodeFreeConnection({
+    id: seed.id,
+    presetSource: seed.presetSource
+  }))
 }
 
 export function uniqueModelCatalog(models: readonly (string | undefined)[]): string[] {

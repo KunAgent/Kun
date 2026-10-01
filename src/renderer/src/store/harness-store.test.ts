@@ -2,12 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import {
   loadHarnesses,
+  loadHarnessModels,
+  loadHarnessProviderGroups,
   resetHarnessPolling,
   useHarnessStore
 } from './harness-store'
 
 const provider = vi.hoisted(() => ({
-  listHarnesses: vi.fn()
+  listHarnesses: vi.fn(),
+  listHarnessModels: vi.fn()
 }))
 
 vi.mock('../agent/registry', () => ({
@@ -58,6 +61,7 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     provider.listHarnesses.mockReset()
+    provider.listHarnessModels.mockReset()
     resetStore()
     resetHarnessPolling()
   })
@@ -120,6 +124,91 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
     expect(callsAfterBudget).toBeGreaterThan(1)
     await vi.advanceTimersByTimeAsync(20_000)
     expect(provider.listHarnesses).toHaveBeenCalledTimes(callsAfterBudget)
+  })
+})
+
+describe('harness model cache identity', () => {
+  it('loads selected native details while preserving only previously learned reasoning facts', async () => {
+    useHarnessStore.setState({ models: { devin: { loading: false, models: ['first', 'second'],
+      loadedAt: Date.now(), modelInfo: [{ id: 'first', displayName: 'Old label', isDefault: true,
+        reasoningEfforts: ['medium', 'high'] }] } } })
+    provider.listHarnessModels.mockResolvedValue({ models: ['first', 'second'], modelInfo: [
+      { id: 'first', displayName: 'New label' }, { id: 'second', isDefault: true, reasoningEfforts: ['low'] }
+    ] })
+    await loadHarnessModels('devin', false, 'second')
+    expect(provider.listHarnessModels).toHaveBeenCalledWith('devin', undefined, 'second')
+    const cache = useHarnessStore.getState().models.devin
+    expect(cache.modelInfo?.[0]).toEqual({ id: 'first', displayName: 'New label',
+      reasoningEfforts: ['medium', 'high'], defaultReasoningEffort: undefined })
+    expect(cache.detailsModel).toBe('second')
+  })
+
+  beforeEach(() => {
+    resetStore()
+    resetHarnessPolling()
+    provider.listHarnesses.mockReset()
+    provider.listHarnessModels.mockReset()
+  })
+
+  it('invalidates model and gateway groups when the same harness changes transport', async () => {
+    const old = row('codex')
+    useHarnessStore.setState({ rows: [old] })
+    provider.listHarnessModels.mockImplementation(async (_id: string, mode?: string) =>
+      mode === 'kun-gateway' ? { groups: [{ providerId: 'old', label: 'Old', models: ['old'] }] } : { models: ['old'] })
+    await loadHarnessModels('codex')
+    await loadHarnessProviderGroups('codex')
+    expect(useHarnessStore.getState().models.codex?.models).toEqual(['old'])
+    const native = { ...old, definition: { ...old.definition, transport: 'codex-app-server' as const } }
+    provider.listHarnesses.mockResolvedValue([native])
+    await loadHarnesses(true)
+    expect(useHarnessStore.getState().models.codex).toBeUndefined()
+    expect(useHarnessStore.getState().providerGroups.codex).toBeUndefined()
+    provider.listHarnessModels.mockResolvedValue({ models: ['new'] })
+    await loadHarnessModels('codex')
+    expect(useHarnessStore.getState().models.codex?.models).toEqual(['new'])
+  })
+
+  it('does not let an old in-flight model response replace the new transport catalog', async () => {
+    const old = row('codex')
+    useHarnessStore.setState({ rows: [old] })
+    let resolveOld!: (value: { models: string[] }) => void
+    provider.listHarnessModels.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve }))
+      .mockResolvedValueOnce({ models: ['native-model'] })
+    const pending = loadHarnessModels('codex')
+    const native = { ...old, definition: { ...old.definition, transport: 'codex-app-server' as const } }
+    provider.listHarnesses.mockResolvedValue([native])
+    await loadHarnesses(true)
+    await loadHarnessModels('codex')
+    resolveOld({ models: ['stale-acp-model'] })
+    await pending
+    expect(useHarnessStore.getState().models.codex?.models).toEqual(['native-model'])
+  })
+
+  it('reloads models after the native network policy changes without exposing the proxy URL', async () => {
+    const old = row('codex', { networkSource: 'system', networkFingerprint: 'opaque-old' })
+    useHarnessStore.setState({ rows: [old], models: { codex: { models: ['cached'], loading: false } } })
+    provider.listHarnesses.mockResolvedValue([row('codex', { networkSource: 'system', networkFingerprint: 'opaque-new' })])
+    await loadHarnesses(true)
+    expect(useHarnessStore.getState().models.codex).toBeUndefined()
+    provider.listHarnessModels.mockResolvedValue({ models: ['refreshed'] })
+    await loadHarnessModels('codex')
+    expect(useHarnessStore.getState().models.codex?.models).toEqual(['refreshed'])
+  })
+
+  it('invalidates cached empty models when native sign-in changes', async () => {
+    const old = row('claude-code', { login: 'signed-out' })
+    useHarnessStore.setState({ rows: [old], models: { 'claude-code': { models: [], loading: false } } })
+    provider.listHarnesses.mockResolvedValue([row('claude-code', { login: 'signed-in' })])
+    await loadHarnesses(true)
+    expect(useHarnessStore.getState().models['claude-code']).toBeUndefined()
+  })
+
+  it('preserves a model cache through a volatile checkedAt refresh', async () => {
+    const old = row('codex')
+    useHarnessStore.setState({ rows: [old], models: { codex: { models: ['cached'], loading: false } } })
+    provider.listHarnesses.mockResolvedValue([{ ...old, status: { ...old.status, checkedAt: '2026-02-01T00:00:00.000Z' } }])
+    await loadHarnesses(true)
+    expect(useHarnessStore.getState().models.codex?.models).toEqual(['cached'])
   })
 })
 

@@ -31,6 +31,7 @@ import type {
   SandboxMode
 } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
+import type { AdeProjectDefaults } from '@shared/ade-project-defaults'
 import type {
   ExtensionComposerContextEvent,
   PendingComposerContextEvent
@@ -66,7 +67,7 @@ export type {
   SendMessageOverrides,
   WriteAssistantMessageContext
 }
-export type AppRoute = 'chat' | 'write' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow' | 'ade'
+export type AppRoute = 'chat' | 'agent-chat' | 'write' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow' | 'ade'
 export type ThreadCompletionOutcome = 'completed' | 'failed'
 export type CompletionAttentionRegistry = Record<string, ThreadCompletionOutcome | boolean>
 export type ScheduledThreadActivity = {
@@ -187,16 +188,15 @@ export type ChatState = {
   threadHistoryLoading: boolean
   /** 最近一次在 Code 工作台(chat 路由)选中的会话,供从设置/其他工作区/Connect Phone 返回时恢复。 */
   lastCodeThreadId: string | null
-  /** 最近一次在 ADE 工作台选中的会话;与 Code 的记忆互相独立。 */
+  /** 旧 ADE 会话的兼容记忆;打开时进入统一 Code 工作台。 */
   lastAdeThreadId: string | null
   /** True while an unsent ADE new-session composer is visible. */
   adeDraftOpen: boolean
   /** Transient draft identity; late ADE sends must not activate a newer draft. */
   adeDraftRevision: number
   /**
-   * ADE-mode thread inventory (`workspace_mode=ade`), loaded beside the
-   * code-only `threads` inventory. ADE threads never appear in `threads`, so
-   * every Code view keeps its previous behavior.
+   * Legacy ADE inventory (`workspace_mode=ade`) retained for old links.
+   * The unified Code `threads` inventory also includes these root tasks.
    */
   adeThreads: NormalizedThread[]
   /** Relationship of the active thread (e.g. `side` for a subagent's own session). */
@@ -283,12 +283,20 @@ export type ChatState = {
   graphEnabled: boolean
   composerModel: string
   composerProviderId: string
+  /** Project defaults actually loaded and displayed for this unsent Code task. */
+  composerProjectDefaults: { workspaceRoot: string; revision: string; value: AdeProjectDefaults; routeError?: string } | null
+  /** A user Agent/model pick for this workspace takes priority over project inheritance. */
+  composerRouteExplicitWorkspaceRoot: string
+  /** A user collaboration toggle takes priority over the project default. */
+  composerProjectCollaborationExplicitWorkspaceRoot: string
   composerReasoningEffort: ModelReasoningEffort
   /**
    * ADE harness id for the next turn/thread. Empty = thread/runtime default.
-   * Persisted per thread via `ThreadComposerSelection`; Code mode ignores it.
+   * Persisted per thread via `ThreadComposerSelection` in the Code workbench.
    */
   composerHarnessId: string
+  /** Explicit opt-in for the next new Code task, never inferred from its route. */
+  composerCollaborationEnabled: boolean
   /** Credential mode for the selected harness route (`native-login` or a provider id). */
   composerCredentialMode: string
   /**
@@ -296,11 +304,13 @@ export type ChatState = {
    * directly; 'worktree' asks the host to prepare a fresh task workspace.
    */
   composerIsolation: 'local' | 'worktree'
+  composerIsolationExplicitWorkspaceRoot: string
   composerWorktreeStartFrom?: import('@shared/task-workspace').TaskWorkspaceStartFrom
   /** User preference; effective only for eligible ChatGPT subscription models. */
   composerFastMode: boolean
   composerPickList: string[]
   composerModelGroups: ModelProviderModelGroup[]
+  composerModelCatalogStatus: 'idle' | 'loading' | 'ready' | 'error'
   /**
    * Optional subagent profile id selected as the persona for the next new
    * thread / next-turn override. Empty = use the runtime default.
@@ -344,7 +354,7 @@ export type ChatState = {
     approvalReviewer: ApprovalReviewer
   } | null) => void
   setComposerOrchestration: (mode: 'direct' | 'graph') => void
-  setComposerModel: (modelId: string, providerId?: string) => void
+  setComposerModel: (modelId: string, providerId?: string, source?: 'user' | 'settings') => void
   /**
    * ADE-only: switch the harness (and optional credential mode) used by the
    * next turn or next new thread. Confirmed switches on a non-empty thread

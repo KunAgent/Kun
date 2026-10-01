@@ -39,6 +39,7 @@ export function createTurnRecord(input: {
   model?: string
   providerId?: string
   harnessId?: string
+  collaborationEnabled?: boolean
   credentialMode?: HarnessCredentialMode
   accountId?: string
   actingModelRoute?: ActingTurnModelRoute
@@ -104,6 +105,8 @@ export function createTurnRecord(input: {
     ...(model ? { model } : {}),
     ...(providerId ? { providerId } : {}),
     ...(input.harnessId?.trim() ? { harnessId: input.harnessId.trim() } : {}),
+    ...(input.collaborationEnabled !== undefined
+      ? { collaborationEnabled: input.collaborationEnabled } : {}),
     ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
     ...(accountId ? { accountId } : {}),
     ...(input.actingModelRoute ? { actingModelRoute: { ...input.actingModelRoute } } : {}),

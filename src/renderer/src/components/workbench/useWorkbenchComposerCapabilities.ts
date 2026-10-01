@@ -6,6 +6,8 @@ import type { CoreRuntimeInfoJson } from '../../agent/kun-contract'
 import { resolveComposerContextWindowTokens } from '../../store/chat-store-helpers'
 import type { RightPanelMode } from '../chat/WorkbenchTopBar'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
+import { useChatStore } from '../../store/chat-store'
+import { useHarnessStore } from '../../store/harness-store'
 
 export type WorkbenchComposerCapabilitiesOptions = {
   route: string
@@ -97,6 +99,10 @@ export function useWorkbenchComposerCapabilities({
   composerModelGroups,
   runtimeInfo
 }: WorkbenchComposerCapabilitiesOptions): WorkbenchComposerCapabilities {
+  const harnessId = useChatStore((state) => state.composerHarnessId ||
+    state.threads.find((thread) => thread.id === state.activeThreadId)?.harnessId || 'kun')
+  const credentialMode = useChatStore((state) => state.composerCredentialMode)
+  const nativeModels = useHarnessStore((state) => state.models[harnessId]?.modelInfo)
   const selectedComposerModel =
     route === 'claw'
       ? activeClawModel ?? 'auto'
@@ -115,6 +121,11 @@ export function useWorkbenchComposerCapabilities({
           : ''
   const selectedModelSupportsImageInput = useMemo(() => {
     const selected = selectedComposerModel.trim()
+    if ((route === 'chat' || route === 'ade') && harnessId !== 'kun' && credentialMode === 'native-login') {
+      const model = !selected || selected === 'default' || selected === 'auto'
+        ? nativeModels?.find((entry) => entry.isDefault) : nativeModels?.find((entry) => entry.id === selected)
+      return model?.inputModalities?.includes('image') === true
+    }
     const runtimeModel = runtimeInfo?.capabilities.model
     if (!selected || selected.toLowerCase() === 'auto') {
       return runtimeModel?.inputModalities.includes('image') === true
@@ -129,7 +140,7 @@ export function useWorkbenchComposerCapabilities({
       return runtimeModel.inputModalities.includes('image')
     }
     return false
-  }, [composerModelGroups, runtimeInfo, selectedComposerModel, selectedComposerProviderId])
+  }, [composerModelGroups, runtimeInfo, selectedComposerModel, selectedComposerProviderId, route, harnessId, credentialMode, nativeModels])
   const selectedContextWindowTokens = useMemo(() => {
     return resolveComposerContextWindowTokens(
       composerModelGroups,

@@ -104,14 +104,7 @@ describe('ThreadService todos', () => {
         ['Add tests', 'completed']
       ])
 
-      const toggled = await service.setTodos('thr_todos', {
-        todos: synced.items.map((item) => ({
-          id: item.id,
-          content: item.content,
-          status: item.content === 'Build UI' ? 'completed' : item.status,
-          source: item.source
-        }))
-      })
+      const toggled = await service.patchTodoStatus('thr_todos', synced.items.find((item) => item.content === 'Build UI')!.id, 'completed')
       expect(toggled.items.find((item) => item.content === 'Build UI')?.status).toBe('completed')
       expect(await readFile(absolutePath, 'utf-8')).toContain('- [x] Build UI')
 
@@ -122,8 +115,8 @@ describe('ThreadService todos', () => {
         markdown: rewrittenMarkdown,
         mode: 'document_edit'
       })
-      expect(rewritten.items.find((item) => item.content === 'Build UI')).toBeUndefined()
-      expect(rewritten.items.find((item) => item.content === 'Add tests')?.status).toBe('pending')
+      expect(rewritten.items.find((item) => item.content === 'Build UI')?.status).toBe('completed')
+      expect(rewritten.items.find((item) => item.content === 'Add tests')?.status).toBe('completed')
 
       const events = await sessionStore.loadEventsSince('thr_todos', 0)
       expect(events.some((event) => event.kind === 'todos_updated')).toBe(true)
@@ -160,14 +153,7 @@ describe('ThreadService todos', () => {
       await rm(planDir, { recursive: true, force: true })
       await symlink(outside, planDir, 'dir')
 
-      await expect(service.setTodos('thr_todos_symlink', {
-        todos: synced.items.map((item) => ({
-          id: item.id,
-          content: item.content,
-          status: 'completed' as const,
-          source: item.source
-        }))
-      })).rejects.toThrow(/plan path escapes workspace/)
+      await expect(service.patchTodoStatus('thr_todos_symlink', synced.items[0]!.id, 'completed')).rejects.toThrow(/plan path escapes workspace/)
       await expect(readFile(outsidePlan, 'utf-8')).resolves.toBe(markdown)
     } finally {
       await rm(workspace, { recursive: true, force: true })

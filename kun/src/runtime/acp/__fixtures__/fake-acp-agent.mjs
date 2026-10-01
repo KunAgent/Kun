@@ -198,6 +198,10 @@ async function handleRequest(id, method, params) {
       respond(id, scenario.authenticate ?? {})
       return
     case 'session/new': {
+      if (scenario.newSession?.error) {
+        respondError(id, scenario.newSession.error.code, scenario.newSession.error.message)
+        return
+      }
       const sessionId = scenario.sessionId ?? `sess-${sessions.size + 1}`
       sessions.add(sessionId)
       respond(id, { sessionId, ...(scenario.newSession ?? {}) })
@@ -219,6 +223,7 @@ async function handleRequest(id, method, params) {
       await runPrompt(id, params)
       return
     case 'session/set_config_option':
+    case 'session/set_model':
     case 'session/set_mode':
       journal('event', { kind: 'configSet', method, params })
       respond(id, {})

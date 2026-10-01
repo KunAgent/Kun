@@ -34,8 +34,13 @@ const ListThreadsQuery = z.object({
    * stored value count as 'code'. An absent parameter returns every mode.
    */
   workspace_mode: z.enum(['code', 'ade']).optional(),
+  /** Unified Code workbench inventory; does not change workspace_mode semantics. */
+  workbench_scope: z.literal('code').optional(),
   /** Return the lean sidebar projection (omits heavy metadata blobs). */
   lean: BooleanQuery.optional()
+}).refine((query) => !query.workspace_mode || !query.workbench_scope, {
+  message: 'workspace_mode and workbench_scope cannot be combined',
+  path: ['workbench_scope']
 })
 
 export function parseListThreadsOptions(
@@ -66,6 +71,7 @@ export function parseListThreadsOptions(
       cursor: parsed.data.cursor,
       workspace: parsed.data.workspace,
       ...(parsed.data.workspace_mode ? { workspaceMode: parsed.data.workspace_mode } : {}),
+      ...(parsed.data.workbench_scope ? { workbenchScope: parsed.data.workbench_scope } : {}),
       ...(workspaces.length > 0 ? { workspaces } : {}),
       lean: parsed.data.lean === true
     }

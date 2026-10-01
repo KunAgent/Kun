@@ -1,3 +1,4 @@
+import { updateExecutionTask } from './kun-runtime-execution-tasks'
 import type {
   AgentProvider,
   ChatBlock,
@@ -103,6 +104,7 @@ import {
 } from './kun-mapper'
 import { rendererRuntimeClient } from './runtime-client'
 import type { ComposerContextAttachment } from '@kun/extension-api'
+import { updateKunThreadCollaboration } from './kun-runtime-collaboration'
 
 import {
   KunRuntimeProviderServices,
@@ -329,6 +331,10 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'update thread workspace failed'))
     }
+  }
+
+  async updateThreadCollaboration(threadId: string, enabled: boolean): Promise<NormalizedThread> {
+    return updateKunThreadCollaboration(threadId, enabled)
   }
 
   /** Bind a ready task workspace: workspace path + marker land atomically. */
@@ -592,6 +598,12 @@ export class KunRuntimeThreadServices extends KunRuntimeProviderServices {
       throw runtimeErrorToError({ code: 'unknown', message: 'set thread todos returned an invalid response' })
     }
     return todosFromCore(body.todos)
+  }
+
+  async updateThreadExecutionTask(threadId: string, taskId: string,
+    patch: Parameters<NonNullable<AgentProvider['updateThreadExecutionTask']>>[2]
+  ): Promise<NonNullable<NormalizedThread['todos']>> {
+    return updateExecutionTask(threadId, taskId, patch, (id) => this.getThreadTodos(id))
   }
 
   async syncThreadTodosFromPlan(

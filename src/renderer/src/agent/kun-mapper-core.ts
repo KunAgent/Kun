@@ -62,6 +62,8 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     title: thread.title?.trim() || thread.id.slice(0, 8),
     ...(thread.agentSurface ? { agentSurface: thread.agentSurface } : {}),
     ...(thread.workspaceMode ? { workspaceMode: thread.workspaceMode } : {}),
+    ...(thread.collaboration ? { collaboration: { ...thread.collaboration } } : {}),
+    ...(thread.executionConfig ? { executionConfig: { ...thread.executionConfig } } : {}),
     ...(thread.lockedTaskSurface ? { lockedTaskSurface: thread.lockedTaskSurface } : {}),
     ...(thread.designProfile
       ? { designProfile: cloneDesignTaskProfile(thread.designProfile) }
@@ -157,10 +159,15 @@ export function goalFromCore(goal: CoreThreadGoalJson): ThreadGoal {
 export function todosFromCore(todos: CoreThreadTodoListJson): ThreadTodoList {
   return {
     threadId: todos.threadId,
+    ...(todos.revision !== undefined ? { revision: todos.revision } : {}),
     items: (todos.items ?? []).map((item) => ({
       id: item.id,
       content: item.content,
       status: item.status,
+      ...(item.taskStatus ? { taskStatus: item.taskStatus } : {}),
+      ...(item.taskRevision !== undefined ? { taskRevision: item.taskRevision } : {}),
+      ...(item.ownerThreadId ? { ownerThreadId: item.ownerThreadId } : {}),
+      ...(item.reason ? { reason: item.reason } : {}),
       ...(item.source ? { source: { ...item.source } } : {}),
       createdAt: item.createdAt,
       updatedAt: item.updatedAt

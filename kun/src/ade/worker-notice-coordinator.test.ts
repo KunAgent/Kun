@@ -1,3 +1,4 @@
+import { resolveThreadExecutionConfig } from '../domain/thread-execution-config.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -271,4 +272,18 @@ describe('WorkerNoticeCoordinator', () => {
     expect(runTurn).toHaveBeenCalledTimes(1)
     expect(await notices.pending(MANAGER)).toHaveLength(0)
   })
+  it('uses the pending manager model at the next wake-up admission', async () => {
+    const snapshot = resolveThreadExecutionConfig({
+      request: { workspace: '/tmp/ws', model: 'new-route', mode: 'agent' },
+      global: { managerModel: { providerId: 'new-provider', model: 'new-manager' } }, nowIso: NOW
+    }).snapshot
+    await threads.upsert({ ...managerThread(), pendingExecutionConfig: snapshot })
+    const { coordinator, startTurn } = harness()
+    await coordinator.enqueue(notice('ntc_pending_route'))
+    await coordinator.deliverForManager(MANAGER)
+    expect(startTurn).toHaveBeenCalledWith(expect.objectContaining({
+      request: expect.objectContaining({ providerId: 'new-provider', model: 'new-manager' })
+    }), expect.anything())
+  })
+
 })

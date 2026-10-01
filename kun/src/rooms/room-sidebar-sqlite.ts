@@ -32,7 +32,8 @@ export function queryRoomSidebar(db: DatabaseSync, raw: RoomSidebarQuery): RoomS
   }
   if (input.unreadOnly) conditions.push('message_seq>read_seq')
   if (input.attentionOnly) conditions.push('attention_count>0')
-  if (!input.deletedOnly) conditions.push("(conversation_kind<>'user_agent' OR message_seq>0 OR pinned=1 OR running_count>0 OR attention_count>0)")
+  // Persisted private rooms remain conversations before the first message.
+  // Unused Agent identities never enter this room-based projection.
   const rows = db.prepare(`WITH entries AS (
     SELECT 'room:' || r.id AS stable_id,
       CASE WHEN json_extract(r.document,'$.conversationKind')='user_agent'

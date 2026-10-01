@@ -21,6 +21,7 @@ function harness() {
   const abort = vi.fn()
   let state = {
     route: 'ade',
+    threads: [],
     runtimeConnection: 'ready',
     activeThreadId: 'ade-a',
     adeDraftOpen: false,
@@ -73,14 +74,14 @@ describe('ADE project selection', () => {
     vi.unstubAllGlobals()
   })
 
-  it('persists a different project and enters an ADE draft without opening Code', async () => {
+  it('persists a different project and enters its managed draft in Code', async () => {
     const h = harness()
 
     const result = await h.actions.selectAdeWorkspaceRoot('/repo/b')
     expect([result, h.state.error]).toEqual(['/repo/b', null])
 
     expect(window.kunGui.setSettings).toHaveBeenCalledWith({ workspaceRoot: '/repo/b' })
-    expect(h.state.route).toBe('ade')
+    expect(h.state.route).toBe('chat')
     expect(h.state.activeThreadId).toBeNull()
     expect(h.state.adeDraftOpen).toBe(true)
     expect(h.state.adeDraftRevision).toBe(1)
@@ -163,7 +164,7 @@ describe('ADE project selection', () => {
     await expect(h.actions.chooseAdeWorkspace()).resolves.toBe('/repo/b')
 
     expect(h.state.workspaceRoot).toBe('/repo/b')
-    expect(h.state.route).toBe('ade')
+    expect(h.state.route).toBe('chat')
     expect(h.state.activeThreadId).toBeNull()
   })
 

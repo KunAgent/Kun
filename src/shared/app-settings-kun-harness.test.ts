@@ -11,6 +11,20 @@ import {
 } from './app-settings-kun-harness'
 
 describe('normalizeKunHarnessSettings', () => {
+  it('keeps Devin builtin settings and rejects a custom definition impersonating it', () => {
+    const normalized = normalizeKunHarnessSettings({
+      disabledIds: ['devin'],
+      defaultHarnessId: 'devin',
+      binaryPaths: { devin: '/opt/agents/devin' },
+      custom: [{ id: 'devin', displayName: 'Other', command: '/bin/other' }],
+      terminalAgents: [{ id: 'devin', displayName: 'Other', command: '/bin/other' }]
+    })
+    expect(normalized.disabledIds).toEqual(['devin'])
+    expect(normalized.defaultHarnessId).toBe('devin')
+    expect(normalized.binaryPaths).toEqual({ devin: '/opt/agents/devin' })
+    expect(normalized.custom).toEqual([])
+    expect(normalized.terminalAgents).toEqual([])
+  })
   it('returns defaults for missing/garbage input', () => {
     expect(normalizeKunHarnessSettings(undefined)).toEqual(defaultKunHarnessSettings())
     expect(normalizeKunHarnessSettings('junk')).toEqual(defaultKunHarnessSettings())

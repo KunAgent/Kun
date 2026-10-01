@@ -1,3 +1,5 @@
+import { newManagerWorkRefusal } from './new-work-admission.js'
+import { refreshTeamExecutionPolicy } from './team-execution-policy.js'
 import { isAbsolute, relative, resolve } from 'node:path'
 import { z } from 'zod'
 import {
@@ -153,6 +155,8 @@ export class ManagerControls {
   /** `worker_send` — refuse while the user holds control or the worker ended. */
   async workerSend(ctx: ManagerToolContext, rawInput: unknown): Promise<WorkerSendResult> {
     const input = WorkerSendInputSchema.parse(rawInput)
+    const refused = await newManagerWorkRefusal(this.deps, ctx.threadId, ctx.turnId)
+    if (refused) return refused
     const language = this.language()
     const team = await this.deps.teams.get(ctx.threadId)
     const worker = team?.workers.find((entry) => entry.workerId === input.workerId)
@@ -181,7 +185,7 @@ export class ManagerControls {
           : 'Not dispatched: the user has taken over this worker; wait for hand-back.'
       }
     }
-    const budgetRefusal = this.budgetRefusal(team, language)
+    const budgetRefusal = await this.budgetRefusal(team, language)
     if (budgetRefusal) return budgetRefusal
     const { dispatch, delivered } = await this.createDispatch({
       teamId: team.teamId,
@@ -627,10 +631,11 @@ export class ManagerControls {
   }
 
   /** P3-15 hard cap: refuse new work; first soft crossing sends one notice. */
-  budgetRefusal(
+  async budgetRefusal(
     team: TeamRecord,
     language: 'en' | 'zh'
-  ): { ok: false; refusal: 'budget_exceeded'; userReport: string } | null {
+  ): Promise<{ ok: false; refusal: 'budget_exceeded'; userReport: string } | null> {
+    team = await refreshTeamExecutionPolicy(this.deps, team)
     const check = this.deps.teamBudget?.check(team)
     this.notifyBudgetCheck(team, check)
     return budgetHardRefusal(check, language)

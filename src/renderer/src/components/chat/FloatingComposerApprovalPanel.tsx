@@ -102,6 +102,7 @@ export function FloatingComposerApprovalPanel({
           </div>
         ) : null}
         <div
+          tabIndex={0}
           className={`overflow-y-auto whitespace-pre-wrap break-words rounded-[10px] border border-ds-border-muted bg-ds-main/40 font-mono text-[12px] leading-5 text-ds-ink [overflow-wrap:anywhere] ${
             compact ? 'max-h-28 px-2.5 py-2' : 'max-h-40 px-3 py-2.5'
           }`}

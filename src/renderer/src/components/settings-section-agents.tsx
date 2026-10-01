@@ -31,6 +31,7 @@ import {
   SettingsTabs
 } from './settings-controls'
 import { AgentsAssistantSettingsPanel } from './settings-section-agents-assistant'
+import { AgentsCollaborationSettingsPanel } from './settings-section-agents-collaboration'
 import { AgentsHarnessesSettingsPanel } from './settings-section-agents-harnesses'
 import { AgentsPermissionsSettingsPanel } from './settings-section-agents-permissions'
 import { AgentsProjectSettingsPanel } from './settings-section-agents-project'
@@ -56,6 +57,7 @@ type AgentsSettingsPanel =
   | 'project'
   | 'runtime'
   | 'harnesses'
+  | 'collaboration'
 type PermissionsSettingsPanel = 'policy' | 'quality'
 type LaboratorySettingsPanel = 'computer' | 'browser' | 'graph' | 'explore' | 'ppt'
 
@@ -65,6 +67,7 @@ function panelForSettingsSection(section: unknown): AgentsSettingsPanel {
   if (section === 'mcp') return 'tools'
   // P4-05: harness status guidance deep-links straight to the harnesses tab.
   if (section === 'agentsHarnesses') return 'harnesses'
+  if (section === 'agentsCollaboration') return 'collaboration'
   return 'assistant'
 }
 
@@ -243,6 +246,9 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
       setActivePermissionsPanel('policy')
     }
   }, [ctx.settingsSection])
+  useEffect(() => {
+    ctx.onAgentsPanelChange?.(activePanel)
+  }, [activePanel, ctx.onAgentsPanelChange])
   useEffect(() => {
     let cancelled = false
     if (!tokenEconomy.enabled) {
@@ -492,12 +498,14 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                   { id: 'permissions', label: t('agentsQuickPermissions'), icon: ShieldCheck },
                   { id: 'skills', label: t('agentsQuickSkill'), icon: Sparkles },
                   { id: 'tools', label: t('agentsQuickMcp'), icon: Wrench },
-                  { id: 'project', label: t('projectConfigTitle'), icon: FolderOpen },
+                  { id: 'project', label: t('adeSettings.projectSettingsTitle'), icon: FolderOpen },
                   { id: 'runtime', label: t('kunAdvanced'), icon: Settings },
-                  { id: 'harnesses', label: t('adeSettings.harnessesTitle'), icon: Workflow }
+                  { id: 'harnesses', label: t('adeSettings.harnessesTitle'), icon: Bot },
+                  { id: 'collaboration', label: t('adeSettings.collaborationTitle'), icon: Workflow }
                 ]}
                 value={activePanel}
                 onChange={setActivePanel}
+                contentSized
               />
 
       <AgentsAssistantSettingsPanel view={view} />
@@ -506,6 +514,12 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
       <AgentsToolsSettingsPanels view={view} />
       <AgentsRuntimeSettingsPanel view={view} />
       <AgentsHarnessesSettingsPanel view={view} />
+      <AgentsCollaborationSettingsPanel view={{
+        t, kun, modelProviders, activePanel,
+        beforeSave: ctx.beforeAdeCollaborationSave,
+        onSaved: ctx.onAdeCollaborationSaved,
+        onDraftChange: ctx.onAdeCollaborationDraftChange
+      }} />
             </>
   )
 }

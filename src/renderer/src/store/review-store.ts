@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ActivityRow } from '@shared/activity-row'
+import type { ReviewRevision } from '@shared/review-revision'
 import type {
   CreateReviewCommentInput,
   ReviewComment,
@@ -16,6 +16,9 @@ import type {
   TaskWorkspaceRecord
 } from '@shared/task-workspace'
 import { getProvider } from '../agent/registry'
+import i18n from '../i18n'
+import { formatRuntimeError } from '../lib/format-runtime-error'
+import { finishReviewSendAttempt, rejectReviewSendAttempt, reviewSendAttempt } from './review-send-attempt'
 
 /**
  * Review-panel state (docs/ade/11 §3): which task workspace binds to each
@@ -37,6 +40,8 @@ export type ReviewFileEntry = {
 export type WorkspaceReview = {
   files: TaskWorkspaceDiffFile[]
   headRevision?: string
+  revision?: ReviewRevision
+  loaded?: boolean
   loading: boolean
   error?: string
   expandedPaths: Record<string, boolean>
@@ -119,20 +124,29 @@ export async function ensureThreadBinding(threadId: string): Promise<void> {
   }
 }
 
+const diffGenerations = new Map<string, number>()
+
 export async function loadWorkspaceDiff(workspaceId: string): Promise<void> {
   const provider = getProvider()
   if (!provider.getTaskWorkspaceDiff) return
+  const request = (diffGenerations.get(workspaceId) ?? 0) + 1
+  diffGenerations.set(workspaceId, request)
   useReviewStore.setState((s) => ({
     workspaces: patchWorkspace(s.workspaces, workspaceId, { loading: true, error: undefined })
   }))
   try {
-    const { files, headRevision } = await provider.getTaskWorkspaceDiff(workspaceId)
+    const { files, headRevision, revision } = await provider.getTaskWorkspaceDiff(workspaceId)
+    if (diffGenerations.get(workspaceId) !== request) return
     useReviewStore.setState((s) => {
       const current = s.workspaces[workspaceId]
       const next = patchWorkspace(s.workspaces, workspaceId, {
         files,
         loading: false,
-        ...(headRevision ? { headRevision } : {}),
+        loaded: true,
+        headRevision,
+        revision,
+        integratePreview: undefined,
+        integratePreviewLoaded: false,
         // A fresh capture invalidates every cached per-file payload; blocks
         // still expanded refetch lazily on render.
         details: {}
@@ -145,6 +159,7 @@ export async function loadWorkspaceDiff(workspaceId: string): Promise<void> {
       return { workspaces: next }
     })
   } catch (error) {
+    if (diffGenerations.get(workspaceId) !== request) return
     useReviewStore.setState((s) => ({
       workspaces: patchWorkspace(s.workspaces, workspaceId, {
         loading: false,
@@ -209,61 +224,7 @@ export function setReviewViewMode(workspaceId: string, viewMode: ReviewViewMode)
   }))
 }
 
-const SETTLED_MAIN_STATES: ReadonlySet<string> = new Set(['done', 'failed', 'idle', 'closed'])
-
-/** A row settles when the unit finished work (last outcome) or went quiet. */
-const settled = (row?: ActivityRow): boolean =>
-  Boolean(row && (row.lastOutcome || SETTLED_MAIN_STATES.has(row.mainState)))
-
-const watchControllers = new Map<string, AbortController>()
-
-/**
- * Auto-refresh the diff after the bound unit reports settled work via the
- * activity feed (11 §3/§4.4): a finished worker mutates the worktree, so the
- * panel reloads instead of showing a stale patch. No-ops without an activity
- * provider surface; manual refresh stays available.
- */
-export function watchReviewWorkspace(workspaceId: string): void {
-  if (watchControllers.has(workspaceId)) return
-  const binding = Object.values(useReviewStore.getState().bindings)
-    .find((record) => record?.workspaceId === workspaceId)
-  const unitId = binding?.unitId ?? binding?.ownerThreadId
-  const provider = getProvider()
-  const snapshot = provider.getActivitySnapshot?.bind(provider)
-  const poll = provider.pollActivity?.bind(provider)
-  if (!unitId || !snapshot || !poll) return
-  const controller = new AbortController()
-  watchControllers.set(workspaceId, controller)
-  void (async () => {
-    try {
-      let { cursor } = await snapshot({})
-      while (!controller.signal.aborted) {
-        const response = await poll(cursor, 30_000, controller.signal)
-        if (response.type === 'reset_required') {
-          cursor = (await snapshot({})).cursor
-          continue
-        }
-        cursor = response.cursor
-        if (controller.signal.aborted) break
-        if (response.changes.some((change) => change.unitId === unitId && settled(change.row))) {
-          // New capture: fresh diff + kun re-anchored comment positions (11 §4.3).
-          await Promise.all([loadWorkspaceDiff(workspaceId), loadReviewComments(workspaceId)])
-        }
-      }
-    } catch {
-      // Aborted or runtime offline: the panel's manual refresh covers this.
-    } finally {
-      if (watchControllers.get(workspaceId) === controller) {
-        watchControllers.delete(workspaceId)
-      }
-    }
-  })()
-}
-
-export function unwatchReviewWorkspace(workspaceId: string): void {
-  watchControllers.get(workspaceId)?.abort()
-  watchControllers.delete(workspaceId)
-}
+export { watchReviewWorkspace, unwatchReviewWorkspace } from './review-workspace-watch'
 
 /* ------------------------------------------------------------------ */
 /* Review comments (11 §4): local-first drafts debounced into kun.     */
@@ -499,28 +460,46 @@ export function pendingReviewComments(workspaceId: string): ReviewComment[] {
   return (ws?.comments ?? []).filter((c) => c.state !== 'resolved')
 }
 
-export async function sendReviewBatch(
+const reviewSends = new Map<string, Promise<SendReviewResponse | null>>()
+
+export function sendReviewBatch(
+  workspaceId: string, target: ReviewSendTarget, note?: string
+): Promise<SendReviewResponse | null> {
+  const pending = reviewSends.get(workspaceId)
+  if (pending) return pending
+  const request = performReviewSend(workspaceId, target, note).finally(() => reviewSends.delete(workspaceId))
+  reviewSends.set(workspaceId, request)
+  return request
+}
+
+async function performReviewSend(
   workspaceId: string,
   target: ReviewSendTarget,
   note?: string
 ): Promise<SendReviewResponse | null> {
   const provider = getProvider()
   if (!provider.sendReview) return null
-  await flushReviewDrafts(workspaceId)
-  const ids = pendingReviewComments(workspaceId)
-    .filter((c) => !isLocalCommentId(c.commentId))
-    .map((c) => c.commentId)
-  if (!ids.length) return null
   useReviewStore.setState((s) => ({
     workspaces: patchWorkspace(s.workspaces, workspaceId, { sending: true, sendError: undefined })
   }))
   try {
+    await flushReviewDrafts(workspaceId)
+    const pending = pendingReviewComments(workspaceId)
+    const current = useReviewStore.getState().workspaces[workspaceId]
+    if (pending.some((comment) => isLocalCommentId(comment.commentId)) || Object.keys(current?.dirtyComments ?? {}).length) {
+      throw new Error(i18n.t('common:reviewSaveBeforeSend'))
+    }
+    const ids = pending.map((comment) => comment.commentId)
+    if (!ids.length && !note?.trim()) return null
+    const attempt = reviewSendAttempt(workspaceId, pending, target, note, current?.revision)
     const language = typeof navigator !== 'undefined' ? navigator.language : undefined
     const response = await provider.sendReview(workspaceId, {
       commentIds: ids,
       target,
+      ...attempt,
       ...(note ? { note } : {})
     }, language)
+    finishReviewSendAttempt(workspaceId)
     const sentAt = new Date().toISOString()
     useReviewStore.setState((s) => {
       const ws = s.workspaces[workspaceId] ?? emptyWorkspaceReview()
@@ -532,7 +511,7 @@ export async function sendReviewBatch(
             sentIds.has(c.commentId)
               ? { ...c, state: 'sent' as const, sentInRequestId: response.request.requestId, updatedAt: sentAt }
               : c),
-          requests: [...ws.requests, response.request],
+          requests: [...ws.requests.filter((entry) => entry.requestId !== response.request.requestId), response.request],
           lastSent: {
             round: response.request.round,
             targetKind: target.kind,
@@ -543,13 +522,17 @@ export async function sendReviewBatch(
     })
     return response
   } catch (error) {
+    const stale = rejectReviewSendAttempt(workspaceId, error)
+    if (stale) void Promise.all([loadWorkspaceDiff(workspaceId), loadReviewComments(workspaceId)])
     useReviewStore.setState((s) => ({
       workspaces: patchWorkspace(s.workspaces, workspaceId, {
         sending: false,
-        sendError: error instanceof Error ? error.message : String(error)
+        sendError: stale ? i18n.t('common:reviewVersionChanged') : formatRuntimeError(error)
       })
     }))
     return null
+  } finally {
+    useReviewStore.setState((s) => ({ workspaces: patchWorkspace(s.workspaces, workspaceId, { sending: false }) }))
   }
 }
 
@@ -611,7 +594,10 @@ export async function integrateWorkspace(
     })
   }))
   try {
-    const response = await provider.integrateTaskWorkspace(workspaceId, mode)
+    const token = useReviewStore.getState().workspaces[workspaceId]?.integratePreview?.previewToken
+    const response = token
+      ? await provider.integrateTaskWorkspace(workspaceId, mode, token)
+      : await provider.integrateTaskWorkspace(workspaceId, mode)
     useReviewStore.setState((s) => ({
       bindings: patchBindingRecords(s.bindings, workspaceId, response.record),
       workspaces: patchWorkspace(s.workspaces, workspaceId, { actionPending: undefined })

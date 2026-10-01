@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { Download, Plus, Upload } from 'lucide-react'
 import type {
   KunHarnessCustomEntryV1,
@@ -14,6 +14,26 @@ type T = (key: string, options?: Record<string, unknown>) => string
 type ProbeStamp = { fingerprint: string; result: AdeHarnessProbeDefinitionResult }
 
 const ENV_NAME = /^[A-Z][A-Z0-9_]{0,63}$/
+const CUSTOM_DRAFT_KEY = 'kun-agent-custom-draft-v1'
+const AGENT_ID = /^[a-z][a-z0-9-]{1,47}$/
+
+type PersistedCustomDraft = {
+  id?: string
+  name?: string
+  command?: string
+  args?: string
+  env?: string
+  secretEnv?: KunHarnessSecretEnvEntryV1[]
+}
+
+function readCustomDraft(): PersistedCustomDraft {
+  if (typeof window === 'undefined') return {}
+  try {
+    return JSON.parse(window.sessionStorage.getItem(CUSTOM_DRAFT_KEY) ?? '{}') as PersistedCustomDraft
+  } catch {
+    return {}
+  }
+}
 
 export function customAgentId(displayName: string): string {
   return `custom-${displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'agent'}`
@@ -21,6 +41,7 @@ export function customAgentId(displayName: string): string {
 
 /** What the probe actually tested — stale once any field changes. */
 function fingerprintOf(
+  id: string,
   displayName: string,
   command: string,
   args: string[],
@@ -28,6 +49,7 @@ function fingerprintOf(
   secretEnv: KunHarnessSecretEnvEntryV1[]
 ): string {
   return JSON.stringify({
+    id,
     displayName,
     command,
     args,
@@ -84,7 +106,9 @@ export function parseCustomEntryJson(text: string): KunHarnessCustomEntryV1 | nu
       })
     : []
   return {
-    id: typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : customAgentId(entry.displayName),
+    id: typeof entry.id === 'string' && AGENT_ID.test(entry.id.trim())
+      ? entry.id.trim()
+      : customAgentId(entry.displayName),
     displayName: entry.displayName.trim(),
     command: entry.command.trim(),
     args: Array.isArray(entry.args)
@@ -103,17 +127,21 @@ export function parseCustomEntryJson(text: string): KunHarnessCustomEntryV1 | nu
 export function AgentCenterCustomForm({
   settings,
   updateKun,
-  t
+  t,
+  onSaved
 }: {
   settings: KunHarnessSettingsV1
   updateKun: (patch: { harnesses?: Partial<KunHarnessSettingsV1> }) => void
   t: T
+  onSaved?: (id: string, probe: AdeHarnessProbeDefinitionResult | null) => void
 }): ReactElement {
-  const [name, setName] = useState('')
-  const [command, setCommand] = useState('')
-  const [args, setArgs] = useState('')
-  const [env, setEnv] = useState('')
-  const [secretEnv, setSecretEnv] = useState<KunHarnessSecretEnvEntryV1[]>([])
+  const [initialDraft] = useState(readCustomDraft)
+  const [draftId, setDraftId] = useState(initialDraft.id ?? '')
+  const [name, setName] = useState(initialDraft.name ?? '')
+  const [command, setCommand] = useState(initialDraft.command ?? '')
+  const [args, setArgs] = useState(initialDraft.args ?? '')
+  const [env, setEnv] = useState(initialDraft.env ?? '')
+  const [secretEnv, setSecretEnv] = useState<KunHarnessSecretEnvEntryV1[]>(initialDraft.secretEnv ?? [])
   const [secretName, setSecretName] = useState('')
   const [secretValue, setSecretValue] = useState('')
   const [binding, setBinding] = useState(false)
@@ -122,18 +150,43 @@ export function AgentCenterCustomForm({
   const [saveAnyway, setSaveAnyway] = useState(false)
   const [error, setError] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
+  const probeGeneration = useRef(0)
+  const activeProbe = useRef<AbortController | null>(null)
+  const saveSubmitted = useRef(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      window.sessionStorage.setItem(CUSTOM_DRAFT_KEY, JSON.stringify({
+        id: draftId || undefined, name, command, args, env, secretEnv
+      } satisfies PersistedCustomDraft))
+    } catch {
+      // A blocked session store must not prevent editing the form.
+    }
+  }, [draftId, name, command, args, env, secretEnv])
+
+  useEffect(() => () => {
+    probeGeneration.current += 1
+    activeProbe.current?.abort()
+  }, [])
 
   const displayName = name.trim()
+  const effectiveId = draftId || customAgentId(displayName)
   const cmd = command.trim()
   const argList = args.trim() ? args.trim().split(/\s+/) : []
   const envRecord = parseEnvLines(env) ?? {}
-  const fingerprint = fingerprintOf(displayName, cmd, argList, envRecord, secretEnv)
+  const fingerprint = fingerprintOf(effectiveId, displayName, cmd, argList, envRecord, secretEnv)
   const probeFresh = probe?.fingerprint === fingerprint
   const canSave =
     displayName.length > 0 && cmd.length > 0 &&
     ((probeFresh && probe.result.ok) || (probeFresh && !probe.result.ok && saveAnyway))
 
   const invalidate = (): void => {
+    probeGeneration.current += 1
+    activeProbe.current?.abort()
+    activeProbe.current = null
+    saveSubmitted.current = false
+    setProbing(false)
     setSaveAnyway(false)
   }
 
@@ -153,29 +206,38 @@ export function AgentCenterCustomForm({
     }
     setError('')
     setProbing(true)
+    const generation = ++probeGeneration.current
+    activeProbe.current?.abort()
+    const controller = new AbortController()
+    activeProbe.current = controller
     try {
       const result = await probeDefinition({
-        id: customAgentId(displayName),
+        id: effectiveId,
         displayName,
         command: cmd,
         args: argList,
         env: envRecord,
         secretEnv
-      })
-      setProbe({ fingerprint, result })
-      setSaveAnyway(false)
+      }, { signal: controller.signal })
+      if (probeGeneration.current === generation) {
+        setProbe({ fingerprint, result })
+        setSaveAnyway(false)
+      }
     } catch (e) {
-      setProbe({
-        fingerprint,
-        result: {
-          durationMs: 0,
-          ok: false,
-          supported: true,
-          detail: e instanceof Error ? e.message : String(e)
-        }
-      })
+      if (probeGeneration.current === generation) {
+        setProbe({
+          fingerprint,
+          result: {
+            durationMs: 0,
+            ok: false,
+            supported: true,
+            detail: e instanceof Error ? e.message : String(e)
+          }
+        })
+      }
     } finally {
-      setProbing(false)
+      if (activeProbe.current === controller) activeProbe.current = null
+      if (probeGeneration.current === generation) setProbing(false)
     }
   }
 
@@ -223,6 +285,7 @@ export function AgentCenterCustomForm({
   }
 
   const save = (): void => {
+    if (saveSubmitted.current) return
     const parsedEnv = parseEnvLines(env)
     if (!displayName || !cmd) {
       setError(t('adeSettings.acpFormRequired'))
@@ -232,8 +295,10 @@ export function AgentCenterCustomForm({
       setError(t('adeSettings.acpFormEnvInvalid'))
       return
     }
-    const id = customAgentId(displayName)
-    if (settings.custom.some((e) => e.id === id)) {
+    const id = effectiveId
+    if (settings.custom.some((e) => e.id === id) ||
+      settings.terminalAgents.some((e) => e.id === id) ||
+      useHarnessStore.getState().rows.some((row) => row.definition.id === id)) {
       setError(t('adeSettings.acpFormDuplicate'))
       return
     }
@@ -245,7 +310,15 @@ export function AgentCenterCustomForm({
       env: parsedEnv,
       secretEnv
     }
-    updateKun({ harnesses: { ...settings, custom: [...settings.custom, entry] } })
+    saveSubmitted.current = true
+    try {
+      updateKun({ harnesses: { ...settings, custom: [...settings.custom, entry] } })
+      onSaved?.(id, probeFresh ? probe?.result ?? null : null)
+    } catch (cause) {
+      saveSubmitted.current = false
+      setError(cause instanceof Error ? cause.message : String(cause))
+      return
+    }
     // The card list renders the runtime catalog, not settings — the saved
     // entry reaches it through settings hot-apply, so poll until it lands.
     if (getProvider().listHarnesses) {
@@ -260,6 +333,7 @@ export function AgentCenterCustomForm({
       })()
     }
     setName('')
+    setDraftId('')
     setCommand('')
     setArgs('')
     setEnv('')
@@ -267,6 +341,9 @@ export function AgentCenterCustomForm({
     setProbe(null)
     setSaveAnyway(false)
     setError('')
+    if (typeof window !== 'undefined') {
+      try { window.sessionStorage.removeItem(CUSTOM_DRAFT_KEY) } catch { /* ignore */ }
+    }
   }
 
   const importJson = async (file: File): Promise<void> => {
@@ -276,6 +353,7 @@ export function AgentCenterCustomForm({
       return
     }
     setName(entry.displayName)
+    setDraftId(entry.id)
     setCommand(entry.command)
     setArgs(entry.args.join(' '))
     setEnv(

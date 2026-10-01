@@ -1,3 +1,4 @@
+import { registerGoogleWorkspaceRoutes } from './google-workspace.js'
 import { Router } from '../router.js'
 import { ApprovalConsentVerifier } from '../approval-consent.js'
 import type { ServerRuntime } from './server-runtime.js'
@@ -23,6 +24,7 @@ export function buildRouter(runtime: ServerRuntime): Router {
   const router = new Router()
   const approvalConsent = new ApprovalConsentVerifier(runtime.runtimeToken)
   registerCoreRoutes(router, runtime)
+  registerGoogleWorkspaceRoutes(router, runtime)
   registerHarnessRoutes(router, runtime)
   registerActivityRoutes(router, runtime)
   registerTaskWorkspaceRoutes(router, runtime)

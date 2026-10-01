@@ -1,3 +1,4 @@
+import { newManagerWorkRefusal } from './new-work-admission.js'
 import { z } from 'zod'
 import {
   ADE_WORKER_CALLBACK_TOOL_NAMES,
@@ -18,6 +19,7 @@ import { checkHarnessAdmission } from '../harness/harness-admission.js'
 import { clampPermission } from './permission-clamp.js'
 import { childSecurity } from '../adapters/tool/delegation-tool-context.js'
 import { reportLanguage } from './user-report.js'
+import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
 
 /** `review_request` input (10 §5): cross-review a worker's last dispatch. */
 export const ReviewRequestInputSchema = z
@@ -84,6 +86,8 @@ export class ReviewRequests {
   ): Promise<ReviewRequestResult> {
     const language = reportLanguage(this.deps.language?.())
     const input = ReviewRequestInputSchema.parse(rawInput)
+    const refused = await newManagerWorkRefusal(this.deps, ctx.threadId, ctx.turnId)
+    if (refused) return this.refuse('admission', refused.userReport)
     if (!this.deps.delegation) {
       return this.refuse('admission', language === 'zh'
         ? '无法发起审查：子代理运行时未启用。'
@@ -138,6 +142,7 @@ export class ReviewRequests {
     const status = await this.deps.detector.status(route.harnessId)
     const admission = checkHarnessAdmission({
       usage: 'manager-worker',
+      credentialMode: route.credentialMode,
       harness: definition,
       effective,
       status,
@@ -209,8 +214,12 @@ export class ReviewRequests {
       teamId: team.teamId,
       harnessId: route.harnessId,
       title: reviewer.label,
-      workspace: { path: workspacePath, kind: 'local' }
+      workspace: { path: workspacePath, kind: 'local' },
+      reviewRequired: false
     })
+    const reviewRevision = workspace
+      ? await captureReviewRevision(workspace.workspaceId, workspacePath)
+      : undefined
     const dispatch: DispatchRecord = {
       dispatchId: this.deps.ids.next('dsp'),
       teamId: team.teamId,
@@ -221,6 +230,7 @@ export class ReviewRequests {
       mode: 'queue',
       state: 'pending',
       verdict: { status: 'pending', checks: [] },
+      ...(reviewRevision ? { revision: reviewRevision } : {}),
       createdAt: now,
       updatedAt: now
     }

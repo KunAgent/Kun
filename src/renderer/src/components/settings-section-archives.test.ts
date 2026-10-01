@@ -32,6 +32,7 @@ const labels: Record<string, string> = {
   settingsGroupSystem: 'System',
   general: 'General',
   providers: 'Providers',
+  integrations: 'Integrations',
   write: 'Work',
   agents: 'AI assistant',
   subagents: 'Subagents',
@@ -130,11 +131,18 @@ describe('ArchivedThreadsSettingsSection', () => {
       t
     }))
 
+    const providersIndex = html.indexOf('data-settings-category="providers"')
+    const integrationsIndex = html.indexOf('data-settings-category="integrations"')
+    const workbenchIndex = html.indexOf('settings-nav-group-workbench')
     const agentsIndex = html.indexOf('AI assistant')
     const subagentsIndex = html.indexOf('Subagents')
     const archivesIndex = html.indexOf('Archived chats')
     const migrationIndex = html.indexOf('dataMigration')
     const permissionsIndex = html.indexOf('permissions')
+    expect(html).toContain('aria-label="Integrations"')
+    expect(providersIndex).toBeGreaterThanOrEqual(0)
+    expect(integrationsIndex).toBeGreaterThan(providersIndex)
+    expect(workbenchIndex).toBeGreaterThan(integrationsIndex)
     expect(agentsIndex).toBeGreaterThanOrEqual(0)
     expect(subagentsIndex).toBeGreaterThan(agentsIndex)
     expect(permissionsIndex).toBe(-1)
@@ -145,7 +153,7 @@ describe('ArchivedThreadsSettingsSection', () => {
     expect(html.indexOf('speechToText')).toBeGreaterThanOrEqual(0)
     expect(html).not.toContain('speakTitle')
     expect(html).not.toContain('settingsNavSpeak')
-    expect(html.match(/data-cursor-spotlight-target/g)?.length).toBe(21)
+    expect(html.match(/data-cursor-spotlight-target/g)?.length).toBe(22)
   })
 
   it('groups compact settings navigation without pushing the footer away', () => {

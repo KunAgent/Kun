@@ -11,9 +11,23 @@ import {
   SettingRow,
   SettingsCard
 } from './settings-controls'
+import { AdeProjectDefaultsPanel } from './settings-section-ade-project-defaults'
+
+const loadLocalProjectDefaults = async (projectPath: string) => {
+  if (typeof window === 'undefined' || typeof window.kunGui?.getAdeProjectDefaults !== 'function') {
+    throw new Error('Project defaults require a current desktop runtime.')
+  }
+  return window.kunGui.getAdeProjectDefaults({ projectPath })
+}
+const saveLocalProjectDefaults = async (request: Parameters<typeof window.kunGui.saveAdeProjectDefaults>[0]) => {
+  if (typeof window === 'undefined' || typeof window.kunGui?.saveAdeProjectDefaults !== 'function') {
+    throw new Error('Project defaults cannot be saved from this client.')
+  }
+  return window.kunGui.saveAdeProjectDefaults(request)
+}
 
 export function AgentsProjectSettingsPanel({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, kun, compactHomePath, activeProjectWorkspaceRoot, projectConfig, projectConfigText, setProjectConfigText, projectConfigLoading, projectConfigBusy, projectConfigNotice, loadProjectConfig, saveProjectConfig, setProjectConfigTrust, openProjectConfigDir, activePanel } = view
+  const { t, kun, form, compactHomePath, activeProjectWorkspaceRoot, projectConfig, projectConfigText, setProjectConfigText, projectConfigLoading, projectConfigBusy, projectConfigNotice, loadProjectConfig, saveProjectConfig, setProjectConfigTrust, openProjectConfigDir, activePanel } = view
   return (
     <>
               <div
@@ -22,6 +36,15 @@ export function AgentsProjectSettingsPanel({ view }: { view: Record<string, any>
                 aria-labelledby="agents-settings-tab-project"
                 className={activePanel === 'project' ? '' : 'hidden'}
               >
+                <AdeProjectDefaultsPanel
+                  t={t}
+                  projectPath={activeProjectWorkspaceRoot ?? ''}
+                  kun={kun}
+                  providers={form?.provider?.providers ?? []}
+                  load={loadLocalProjectDefaults}
+                  save={saveLocalProjectDefaults}
+                  onDraftChange={view.onAdeProjectDraftChange}
+                />
                 <SettingsCard title={t('projectConfigTitle')}>
                   <div className="space-y-3 px-3 py-4">
                     <InlineNoticeView notice={{ tone: 'info', message: t('projectConfigDescription') }} />

@@ -15,6 +15,8 @@ const CACHE_FILE = 'harness-readiness.json'
 type ReadinessEntry = {
   command: string
   version?: string
+  /** Hash of effective transport, args, env names/values, and binary override. */
+  identity?: string
   ready: 'yes'
   checkedAt: string
 }
@@ -23,9 +25,9 @@ type ReadinessFile = { version: 1; entries: Record<string, ReadinessEntry> }
 
 export type AcpReadinessCacheView = {
   /** 'yes' only when a fresh entry matches the resolved command+version. */
-  get(id: HarnessId, command: string, version: string | undefined): Promise<'yes' | undefined>
+  get(id: HarnessId, command: string, version: string | undefined, identity?: string): Promise<'yes' | undefined>
   /** Record a successful probe; resolves after the write lands. */
-  set(id: HarnessId, command: string, version: string | undefined): Promise<void>
+  set(id: HarnessId, command: string, version: string | undefined, identity?: string): Promise<void>
   /** Drop the entry — a real turn launch failure invalidates the cache. */
   clear(id: HarnessId): Promise<void>
 }
@@ -43,20 +45,21 @@ export class AcpReadinessStore implements AcpReadinessCacheView {
     }
   ) {}
 
-  async get(id: HarnessId, command: string, version: string | undefined): Promise<'yes' | undefined> {
+  async get(id: HarnessId, command: string, version: string | undefined, identity?: string): Promise<'yes' | undefined> {
     const entries = await this.loaded()
     const entry = entries[id]
-    if (!entry || entry.command !== command || entry.version !== version) return undefined
+    if (!entry || entry.command !== command || entry.version !== version || entry.identity !== identity) return undefined
     const age = this.deps.nowMs() - Date.parse(entry.checkedAt)
     if (!Number.isFinite(age) || age > ACP_READINESS_CACHE_TTL_MS) return undefined
     return 'yes'
   }
 
-  set(id: HarnessId, command: string, version: string | undefined): Promise<void> {
+  set(id: HarnessId, command: string, version: string | undefined, identity?: string): Promise<void> {
     return this.mutate((entries) => {
       entries[id] = {
         command,
         ...(version ? { version } : {}),
+        ...(identity ? { identity } : {}),
         ready: 'yes',
         checkedAt: this.deps.nowIso()
       }

@@ -33,8 +33,17 @@ import { modelConnectionRegistryCredentialRecoveryOperations } from './model-con
 import { upgradeRegistryProxyRouting } from './model-connection-registry-proxy.js'
 import { reconciledSeedIdentity } from './model-connection-registry-seed-support.js'
 import type { ModelConnectionRegistryOperations } from './model-connection-registry-operations-contract.js'
-import { isAnonymousHttpProfile, isProfileUsable } from './model-connection-registry-usability.js'
-export { configuredFallback, isAnonymousHttpProfile, isProfileUsable } from './model-connection-registry-usability.js'
+import {
+  isAnonymousHttpProfile,
+  isProfileUsable,
+  isRetiredOpenCodeFreeConnection
+} from './model-connection-registry-usability.js'
+export {
+  configuredFallback,
+  isAnonymousHttpProfile,
+  isProfileUsable,
+  isRetiredOpenCodeFreeConnection
+} from './model-connection-registry-usability.js'
 
 export const StoredProfileSchema = ModelConnectionSnapshotSchema.shape.providers.element.omit({
   credentialStatus: true,

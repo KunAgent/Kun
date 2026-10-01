@@ -130,18 +130,27 @@ export function loadMoreThreads(
         normalizedWorkspace,
         readThreadWorktreeRegistry().worktrees
       )
-      const page = await provider.listThreadsPage({
+      const scopedPage = await provider.listThreadsPage({
         ...(scope.nextCursor ? { cursor: scope.nextCursor } : {}),
         limit: THREAD_LIST_PAGE_SIZE,
         workspace: normalizedWorkspace,
         ...(workspaces.length ? { workspaces } : {}),
         ...(mode === 'archived' ? { archivedOnly: true } : {}),
         includeSide: false,
-        // Code pagination is scoped to the code inventory; ADE threads live in
-        // `adeThreads` and never join this stream.
-        workspaceMode: 'code',
+        workbenchScope: 'code',
         lean: true
       })
+      const page = scopedPage.workbenchScopeApplied === true ? scopedPage : {
+        threads: await provider.listThreads({
+          workspace: normalizedWorkspace,
+          ...(workspaces.length ? { workspaces } : {}),
+          ...(mode === 'archived' ? { archivedOnly: true } : {}),
+          includeSide: false
+        }),
+        hasMore: false,
+        nextCursor: undefined,
+        total: undefined
+      }
       const visible = await filterThreadsForSidebar(
         page.threads.map((thread) => ({
           ...thread,

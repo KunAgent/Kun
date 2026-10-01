@@ -17,6 +17,7 @@ import {
   type SpawnOwnedProcessOptions
 } from '../process/owned-process.js'
 import { buildHarnessEnv } from '../harness/harness-env.js'
+import { harnessExecutableEnv } from '../harness/harness-executable-env.js'
 import type { HarnessSpawnFn } from './harness-session.js'
 
 export const HARNESS_STDERR_TAIL_BYTES = 64 * 1024
@@ -110,7 +111,7 @@ export async function startHarnessProcess(input: {
     input.spawn ??
     ((command, args, options) => spawnOwnedProcess(command, args, options))
   const env = buildHarnessEnv({
-    base: process.env,
+    base: harnessExecutableEnv(),
     strip: input.stripEnv,
     add: { ...input.env, ...input.secretEnv, ...input.credentialEnv }
   })

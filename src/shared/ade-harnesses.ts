@@ -65,7 +65,8 @@ export type AdeHarnessDefinition = {
   /**
    * Install/login hints for the Agent Center (docs/ade/impl/p4 §3.3). Only
    * builtin definitions carry them, and the UI only ever prefills these into
-   * a Kun terminal — nothing is executed automatically.
+   * a Kun terminal for interactive login. Installation uses an explicit
+   * host-owned job selected from builtin metadata after the user clicks Install.
    */
   setup?: AdeHarnessSetup
 }
@@ -94,6 +95,9 @@ export type AdeHarnessStatus = {
   ready?: 'yes' | 'no' | 'unknown'
   login: 'signed-in' | 'signed-out' | 'unknown' | 'not-required'
   resolvedCommand?: string
+  /** Connection policy only; proxy addresses and credentials stay in the host. */
+  networkSource?: 'environment' | 'system' | 'direct' | 'explicit-required'
+  networkFingerprint?: string
   checkedAt: string
   /**
    * True while a detection pass is inflight (P4-02): the provisional
@@ -130,12 +134,14 @@ export type AdeHarnessProviderModelGroup = {
   providerId: string
   label: string
   models: string[]
+  modelInfo?: import('../../kun/src/contracts/harness-models').HarnessModelInfo[]
 }
 
 /** `GET /v1/harnesses/:id/models` response (01 §9). */
 export type AdeHarnessModels = {
   harnessId: string
   models: string[]
+  modelInfo?: import('../../kun/src/contracts/harness-models').HarnessModelInfo[]
   /**
    * Present when `credential_mode=provider|kun-gateway` was requested: the
    * gateway-exposable providers (04 §5.5 `exposableProvider`) with the model

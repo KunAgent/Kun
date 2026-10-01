@@ -13,8 +13,11 @@ const CONTEXT_PREAMBLE = [
  * visible user text clean while preserving exact per-turn metadata.
  */
 export function userMessageTextWithComposerContexts(
-  item: Pick<UserTurnItem, 'text' | 'composerContexts'>
+  item: Pick<UserTurnItem, 'text' | 'composerContexts' | 'reviewRequests'>
 ): string {
-  if (!item.composerContexts?.length) return item.text
-  return `${item.text}\n\n${CONTEXT_PREAMBLE}\n${JSON.stringify(item.composerContexts)}`
+  if (!item.composerContexts?.length && !item.reviewRequests?.length) return item.text
+  const payload = item.reviewRequests?.length
+    ? { contexts: item.composerContexts ?? [], completeReviewRequests: item.reviewRequests }
+    : item.composerContexts
+  return `${item.text}\n\n${CONTEXT_PREAMBLE}\n${JSON.stringify(payload)}`
 }

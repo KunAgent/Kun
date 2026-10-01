@@ -1,3 +1,4 @@
+import { todoContentHash } from '../shared/todos.js'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,7 +15,7 @@ const temporary: string[] = []
 afterEach(async () => Promise.all(temporary.splice(0).map((path) => rm(path, { recursive: true, force: true }))))
 
 describe('ThreadService.patchTodoStatus', () => {
-  it('atomically enforces one in-progress todo and updates Plan checkboxes', async () => {
+  it('rejects synthetic running status and updates canonical task Plan checkboxes', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'kun-todo-patch-'))
     temporary.push(workspace)
     await mkdir(join(workspace, '.kunsdd', 'plan'), { recursive: true })
@@ -35,23 +36,19 @@ describe('ThreadService.patchTodoStatus', () => {
       threadId: thread.id, updatedAt: nowIso(), items: [
         {
           id: 'first', content: 'First', status: 'in_progress',
-          source: { kind: 'plan', planId: 'plan', relativePath: '.kunsdd/plan/demo.md', ordinal: 0, contentHash: 'a' },
+          source: { kind: 'plan', planId: 'plan', relativePath: '.kunsdd/plan/demo.md', ordinal: 0, contentHash: todoContentHash('First') },
           createdAt: nowIso(), updatedAt: nowIso()
         },
         {
           id: 'second', content: 'Second', status: 'pending',
-          source: { kind: 'plan', planId: 'plan', relativePath: '.kunsdd/plan/demo.md', ordinal: 1, contentHash: 'b' },
+          source: { kind: 'plan', planId: 'plan', relativePath: '.kunsdd/plan/demo.md', ordinal: 1, contentHash: todoContentHash('Second') },
           createdAt: nowIso(), updatedAt: nowIso()
         }
       ]
     }
     await threadStore.upsert(thread)
 
-    const next = await service.patchTodoStatus('thr_1', 'second', 'in_progress')
-    expect(next.items.map(({ id, status }) => ({ id, status }))).toEqual([
-      { id: 'first', status: 'pending' },
-      { id: 'second', status: 'in_progress' }
-    ])
+    await expect(service.patchTodoStatus('thr_1', 'second', 'in_progress')).rejects.toThrow(/Running state/)
     await service.patchTodoStatus('thr_1', 'second', 'completed')
     expect(await readFile(planPath, 'utf8')).toBe('- [ ] First\n- [x] Second\n')
   })
@@ -85,14 +82,15 @@ describe('ThreadService.patchTodoStatus', () => {
           planId: 'plan',
           relativePath: '.kunsdd/plan/demo.md',
           ordinal,
-          contentHash: String(ordinal)
+          contentHash: todoContentHash(content)
         },
         createdAt: nowIso(),
         updatedAt: nowIso()
       }))
     }
     await threadStore.upsert(thread)
-    const upsert = vi.spyOn(threadStore, 'upsert')
+    await service.executionTasks.list(thread.id)
+    const upsert = vi.spyOn(threadStore, 'upsertIfRevision')
 
     const next = await service.patchTodoStatuses(
       thread.id,

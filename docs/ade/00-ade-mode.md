@@ -1,5 +1,9 @@
 # 00 ADE 作为独立模式
 
+> 2026-09-30 修订：用户已决定将 ADE 能力融合进 Code 的同一页面。
+> 最新设计以 [14 Code 工作台融合](./14-code-workbench-integration.md) 为准。
+> 下文保留为已实现结构的历史记录，独立页面、列表隔离和专属入口不再是后续目标。
+
 - 日期：2026-09-26
 - 决策：ADE 与 Code、Work、Bot（Rooms）并列，是**单独的工作区模式**，不再是 Code 模式里的增强。
 - 本文覆盖此前各文档中"在 Code 里加 harness 选择器 / Mission Control 放在 `board` 路由 / 总管工具在 Code 线程上广告"的说法；冲突时以本文为准。

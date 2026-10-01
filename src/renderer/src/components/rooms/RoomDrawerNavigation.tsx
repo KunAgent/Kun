@@ -56,34 +56,37 @@ export function useRoomDrawerNavigation(roomId: string | null) {
   return { frames, open, back, close, replaceTop, section: (section: RoomDetailsSection) => open({ kind: 'section', section }, true) }
 }
 
-export function RoomDrawerNavigation({ frames, onBack, onClose, onSection, render }: {
+export function RoomDrawerNavigation({ frames, onBack, onClose, onSection, render, embedded = false, active = true }: {
   frames: RoomDrawerFrame[]
   onBack: () => void
   onClose: () => void
   onSection: (section: RoomDetailsSection) => void
   render: (target: RoomDrawerTarget, key: number, active: boolean) => ReactNode
+  embedded?: boolean
+  active?: boolean
 }) {
   const { t } = useTranslation('common')
   const current = frames.at(-1)
   const panel = useRef<HTMLDivElement>(null)
   useEffect(() => {
+    if (!active) return
     panel.current?.querySelector<HTMLElement>('[data-active-drawer-page="true"] [data-drawer-focus], [data-active-drawer-page="true"] button')?.focus()
-  }, [current?.key])
+  }, [current?.key, active])
   if (!current) return null
   const section = [...frames].reverse().find((frame) => frame.target.kind === 'section')?.target
   const title = current.target.kind === 'handoffs' ? t('agentsHandoffs') : current.target.kind === 'agent' ? t(current.target.agentId ? 'agentsProfileAndMemory' : 'agentsCreate') : current.target.kind === 'reply' ? t('roomsReplyThreadTitle') : current.target.kind === 'content' ? t('roomsReplyContentTitle') : current.target.kind === 'run' ? t('roomsAgentSession') : current.target.kind === 'files' ? t('directFiles') : current.target.kind === 'models' ? t('directModels') : current.target.kind === 'reminders' ? t('roomsReminders') : current.target.kind === 'settings' ? t('roomsSettings') : current.target.kind === 'directory' ? t('agentsDirectory') : current.target.kind === 'profile' ? t('roomsMyAvatar') : undefined
-  return <RoomDetailsDrawer section={section?.kind === 'section' ? section.section : 'discussion'}
+  return <RoomDetailsDrawer embedded={embedded} active={active} section={section?.kind === 'section' ? section.section : 'discussion'}
     onSection={onSection} onClose={onClose} onBack={onBack} frameKey={current.key}
     taskOpen={current.target.kind === 'task'} runOpen={current.target.kind === 'run'}
     childOpen={current.target.kind !== 'section' || frames.length > 1}
     title={title} backLabel={t('roomsReplyBack')}>
     <div ref={panel} className="rooms-drawer-pages">
       {frames.map((frame) => {
-        const active = frame.key === current.key
+        const pageActive = active && frame.key === current.key
         return <div key={frame.key} className={`rooms-drawer-page${frame.target.kind === 'section' ? ' is-section' : ''}`}
-          data-active-drawer-page={active ? 'true' : 'false'} aria-hidden={!active ? true : undefined} inert={!active ? true : undefined}
-          style={!active ? { visibility: 'hidden', pointerEvents: 'none' } : undefined}>
-          {render(frame.target, frame.key, active)}
+          data-active-drawer-page={pageActive ? 'true' : 'false'} aria-hidden={!pageActive ? true : undefined} inert={!pageActive ? true : undefined}
+          style={!pageActive ? { visibility: 'hidden', pointerEvents: 'none' } : undefined}>
+          {render(frame.target, frame.key, pageActive)}
         </div>
       })}
     </div>

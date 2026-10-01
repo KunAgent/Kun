@@ -19,8 +19,8 @@ export type HarnessLoginProbeDeps = {
 
 /**
  * Login probes never trigger paid calls: they only read local state or a local
- * config binding. ACP agents answer with `unknown` here; the real login state
- * comes from the protocol handshake (authMethods) at session start.
+ * config binding. ACP agents answer with `unknown` here; session creation can
+ * report an authentication error. Initialize authMethods lists login choices.
  */
 export async function probeHarnessLogin(
   def: HarnessDefinition,

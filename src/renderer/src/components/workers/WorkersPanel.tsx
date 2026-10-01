@@ -8,6 +8,8 @@ import { selectWorkerRowsForParent } from '../../store/activity-selectors'
 import { getProvider } from '../../agent/registry'
 import { mergeWorkerRows, summarizeWorkerRows } from './worker-row-data'
 import { WorkerRow } from './WorkerRow'
+import { ensureWorkerView, selectWorkerPreview, updateWorkerViewDraft, useWorkerViewStore } from './worker-view-store'
+import { EMPTY_WORKER_DRAFT, WorkerInspector, type WorkerDraft } from './WorkerInspector'
 
 /**
  * Right-panel Workers surface (12 §6.1): team summary on top, one WorkerRow
@@ -15,72 +17,104 @@ import { WorkerRow } from './WorkerRow'
  * live ActivityStore rows; the overview refetches (debounced) whenever a
  * worker row's `updatedAt` advances so the panel tracks ongoing work.
  */
-export function WorkersPanel({ className }: { className?: string }): ReactElement {
+export function WorkersPanel({
+  className,
+  active = true,
+  managerThreadId: explicitManagerThreadId
+}: {
+  className?: string
+  active?: boolean
+  /** Lets the host retain the manager context while a worker is inspected. */
+  managerThreadId?: string
+}): ReactElement {
   const { t } = useTranslation('common')
   const activeThreadId = useChatStore((s) => s.activeThreadId)
+  const managerThreadId = explicitManagerThreadId ?? activeThreadId
+  const managerThreadRef = useRef(managerThreadId)
+  managerThreadRef.current = managerThreadId
   const selectThread = useChatStore((s) => s.selectThread)
   const activityRows = useActivityStore((s) => s.rows)
   const workerRows = useMemo(
-    () => (activeThreadId ? selectWorkerRowsForParent(activityRows, activeThreadId) : []),
-    [activityRows, activeThreadId]
+    () => (managerThreadId ? selectWorkerRowsForParent(activityRows, managerThreadId) : []),
+    [activityRows, managerThreadId]
   )
   const [overview, setOverview] = useState<AdeTeamOverview | null>(null)
+  const view = useWorkerViewStore((s) => managerThreadId ? s.managers[managerThreadId] : undefined)
+  const selectedWorkerId = view?.selectedWorkerId ?? null
+  const workerDrafts = view?.drafts ?? {}
   const [loadFailed, setLoadFailed] = useState(false)
   const [busy, setBusy] = useState<{ workerId: string; action: 'stop' | 'detach' | 'answer' } | null>(null)
+  const loadGeneration = useRef(0)
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const reload = useCallback(async (threadId: string): Promise<void> => {
+    const request = ++loadGeneration.current
     const provider = getProvider()
     if (!provider.getTeamOverview) return
     try {
-      setOverview(await provider.getTeamOverview(threadId))
+      const next = await provider.getTeamOverview(threadId)
+      if (managerThreadRef.current !== threadId || request !== loadGeneration.current) return
+      setOverview(next)
       setLoadFailed(false)
     } catch {
-      setLoadFailed(true)
+      if (managerThreadRef.current === threadId && request === loadGeneration.current) setLoadFailed(true)
     }
   }, [])
 
   useEffect(() => {
+    if (!active) return
     setOverview(null)
     setLoadFailed(false)
-    if (activeThreadId) void reload(activeThreadId)
-  }, [activeThreadId, reload])
+    if (managerThreadId) {
+      ensureWorkerView(managerThreadId)
+      void reload(managerThreadId)
+    }
+    return () => { loadGeneration.current += 1 }
+  }, [managerThreadId, active, reload])
 
   // Debounced refetch when worker activity rows move (09 §9: the panel must
   // reflect state changes without a manual refresh).
+  const hasOverview = overview !== null
   const rowStamp = workerRows.map((row) => `${row.unitId}:${row.updatedAt}`).join('|')
   useEffect(() => {
-    if (!activeThreadId || !overview) return
+    if (!active || !managerThreadId || !hasOverview) return
     if (refreshTimer.current) clearTimeout(refreshTimer.current)
-    refreshTimer.current = setTimeout(() => void reload(activeThreadId), 800)
+    refreshTimer.current = setTimeout(() => void reload(managerThreadId), 800)
     return () => {
       if (refreshTimer.current) clearTimeout(refreshTimer.current)
     }
-  }, [rowStamp, activeThreadId, overview, reload])
+  }, [rowStamp, managerThreadId, hasOverview, active, reload])
 
   const rows = useMemo(
     () => (overview ? mergeWorkerRows(overview, workerRows) : []),
     [overview, workerRows]
   )
   const summary = useMemo(() => summarizeWorkerRows(rows), [rows])
+  const selectedRow = rows.find((row) => row.workerId === selectedWorkerId)
 
   const runAction = useCallback(
     (workerId: string, action: 'stop' | 'detach', run: () => Promise<void>): void => {
       setBusy({ workerId, action })
       void run()
-        .then(() => (activeThreadId ? reload(activeThreadId) : undefined))
+        .then(() => (managerThreadId ? reload(managerThreadId) : undefined))
         .catch(() => setLoadFailed(true))
         .finally(() => setBusy(null))
     },
-    [activeThreadId, reload]
+    [managerThreadId, reload]
   )
 
   const onOpen = useCallback(
     (workerId: string) => {
-      void selectThread(workerId).catch(() => undefined)
+      if (managerThreadId) selectWorkerPreview(managerThreadId, workerId)
     },
-    [selectThread]
+    [managerThreadId]
   )
+  const onFullOpen = useCallback((workerId: string): void => {
+    void selectThread(workerId).catch(() => undefined)
+  }, [selectThread])
+  const updateWorkerDraft = useCallback((workerId: string, update: (current: WorkerDraft) => WorkerDraft): void => {
+    if (managerThreadId) updateWorkerViewDraft(managerThreadId, workerId, update)
+  }, [managerThreadId])
   const onStop = useCallback(
     (workerId: string) =>
       runAction(workerId, 'stop', async () => {
@@ -105,12 +139,14 @@ export function WorkersPanel({ className }: { className?: string }): ReactElemen
       if (!provider.answerTeamQuestion) return
       setBusy({ workerId: questionId, action: 'answer' })
       void provider.answerTeamQuestion(questionId, answer)
-        .then(() => (activeThreadId ? reload(activeThreadId) : undefined))
+        .then(() => (managerThreadId ? reload(managerThreadId) : undefined))
         .catch(() => setLoadFailed(true))
         .finally(() => setBusy(null))
     },
-    [activeThreadId, reload]
+    [managerThreadId, reload]
   )
+
+  if (!active) return <div className={className} data-workers-panel data-workers-inactive />
 
   return (
     <div className={`flex h-full min-h-0 min-w-0 flex-col ${className ?? ''}`} data-workers-panel>
@@ -151,11 +187,12 @@ export function WorkersPanel({ className }: { className?: string }): ReactElemen
           </span>
         ) : null}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <div className={`${selectedRow ? 'max-h-[45%] shrink-0' : 'min-h-0 flex-1'} overflow-y-auto px-3 py-3`}>
         {rows.map((row) => (
           <div key={row.workerId} className="mb-2">
             <WorkerRow
               row={row}
+              selected={row.workerId === selectedWorkerId}
               busyAction={
                 busy && (busy.workerId === row.workerId || busy.workerId === row.openQuestion?.questionId)
                   ? busy.action
@@ -184,6 +221,18 @@ export function WorkersPanel({ className }: { className?: string }): ReactElemen
           </p>
         ) : null}
       </div>
+      {active && selectedRow ? (
+        <WorkerInspector
+          key={selectedRow.workerId}
+          row={selectedRow}
+          draft={workerDrafts[selectedRow.workerId] ?? EMPTY_WORKER_DRAFT}
+          updateDraft={updateWorkerDraft}
+          onRefreshTeam={() => managerThreadId ? reload(managerThreadId) : Promise.resolve()}
+          onClose={() => managerThreadId && selectWorkerPreview(managerThreadId, null)}
+          onFullOpen={onFullOpen}
+          scrollPositions={view!.scrollPositions}
+        />
+      ) : null}
     </div>
   )
 }

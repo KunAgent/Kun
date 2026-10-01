@@ -1,25 +1,18 @@
 #!/usr/bin/env node
 'use strict'
 
-// ADE desktop smoke (docs/ade/impl/p4-usable-ade.md P4-06). Exercises the real
-// Electron renderer/preload/main/Runtime composition on an isolated data
-// directory: ADE enabled, the one-on-one harness picker refreshed through live
-// detection, unavailable rows carrying a localized reason plus a settings deep
-// link, a settings command-path edit hot-applying into `GET /v1/harnesses`, a
-// one-on-one thread created with a stub Claude binary, the composer harness
-// picker rendering through a body portal, and the Kun gateway model group
-// listing provider models. A stub `claude` binary and a stub newline-JSON-RPC
-// ACP agent make two harnesses resolve as installed; every model response is a
-// deterministic offline fixture.
-//   node scripts/smoke-development-ade.cjs [--timeout-ms 120000]
-// Screenshots and report.json land under dist/ade-desktop-smoke (the
-// --evidence directory) while the disposable roots are cleaned.
+// Unified Code + ADE desktop smoke on an isolated profile. Real Electron,
+// preload, main, and Kun runtime are exercised with offline model/Agent stubs.
+//   node scripts/smoke-development-ade.cjs [--compiled-renderer] [--timeout-ms 120000]
+// Screenshots and report.json land under dist/ade-desktop-smoke.
+// The worker fixture exercises cancel and allow in the real protected
+// application window; no gate, bridge confirmation, or consent token is mocked.
 
 const assert = require('node:assert/strict')
+const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
 const { existsSync } = require('node:fs')
 const { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } = require('node:fs/promises')
-const { createServer } = require('node:http')
 const { tmpdir } = require('node:os')
 const { join, resolve } = require('node:path')
 
@@ -36,6 +29,14 @@ const {
 } = require('./smoke-packaged-extension-desktop-process.cjs')
 const { developmentRendererEnvironment } = require('./development-renderer-environment.cjs')
 const { findWorkbenchWindow } = require('./smoke-packaged-video-editor-desktop.cjs')
+const { runAgentModeFlow, writeDevinAcpStub } = require('./smoke-development-agent-mode.cjs')
+const { runNativeModelFlow, writeCodexModelStub } = require('./smoke-development-native-models.cjs')
+const { writeInstallerFixture, runAgentInstallFlow } = require('./smoke-development-agent-install.cjs')
+const { writeDevinModelStub, runDevinModelFlow } = require('./smoke-development-devin-models.cjs')
+const { runProtectedApprovalFlow } = require('./smoke-development-protected-approval.cjs')
+const { runUnifiedCodeFlow } = require('./smoke-development-ade-flow.cjs')
+const { runUnifiedCodeVisuals } = require('./smoke-development-ade-visuals.cjs')
+const { startModelFixture } = require('./smoke-development-ade-model.cjs')
 
 const exec = promisify(execFile)
 const MODEL = 'deepseek-chat'
@@ -43,10 +44,33 @@ const MODEL = 'deepseek-chat'
 async function main() {
   const repositoryRoot = resolve(__dirname, '..')
   const timeoutMs = positiveIntegerArgument('--timeout-ms', 120_000)
+  const nativeApprovalTimeoutMs = positiveIntegerArgument('--native-approval-timeout-ms', 180_000)
   const keepDirs = process.argv.includes('--keep-dirs')
+  const visualOnly = process.argv.includes('--visual-only')
+  const agentModeOnly = process.argv.includes('--agent-mode-only')
+  const nativeModelOnly = process.argv.includes('--native-model-only')
+  const installOnly = process.argv.includes('--install-only')
+  const devinModelsOnly = process.argv.includes('--devin-models-only')
+  const protectedApprovalOnly = process.argv.includes('--protected-approval-only')
+  const compiledRenderer = process.argv.includes('--compiled-renderer')
+  const startedAt = new Date().toISOString()
+  const visualLocale = argumentValue('--locale') ?? 'en'
+  const visualTheme = argumentValue('--theme') ?? 'light'
+  const visualScale = positiveIntegerArgument('--scale', 1)
+  assert([1, 2].includes(visualScale), '--scale must be 1 or 2 for desktop visual coverage')
   const evidenceRoot = resolve(argumentValue('--evidence') ?? join(repositoryRoot, 'dist', 'ade-desktop-smoke'))
   for (const entry of ['out/main/index.js', 'kun/dist/cli/serve-entry.js']) {
     assert(existsSync(join(repositoryRoot, entry)), `Missing ${entry}; run npm run build first`)
+  }
+  const [mainBundle, rendererIndex, runtimeManifest] = await Promise.all([
+    readFile(join(repositoryRoot, 'out/main/index.js')),
+    readFile(join(repositoryRoot, 'out/renderer/index.html')),
+    readFile(join(repositoryRoot, 'kun/dist/runtime-build.json'), 'utf8')
+  ])
+  const build = {
+    mainEntrySha256: createHash('sha256').update(mainBundle).digest('hex'),
+    rendererIndexSha256: createHash('sha256').update(rendererIndex).digest('hex'),
+    runtimeBuildId: JSON.parse(runtimeManifest).buildId
   }
   const electronPackage = join(repositoryRoot, 'node_modules', 'electron')
   const electronPathFile = join(electronPackage, 'path.txt')
@@ -68,14 +92,28 @@ async function main() {
   let rendererOutput = '', electronOutput = ''
   const pageErrors = []
   const screenshots = []
-  const capture = async (name) => {
+  const layouts = []
+  const capture = async (name, surface = page) => {
     const path = join(evidenceRoot, `${name}.png`)
-    await page.screenshot({ path })
+    await surface.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    await surface.screenshot({ path, animations: 'disabled' })
+    const viewport = await surface.evaluate(() => ({
+      width: innerWidth, height: innerHeight, scale: devicePixelRatio,
+      documentWidth: document.documentElement.scrollWidth
+    }))
     screenshots.push(path)
+    layouts.push({ name, ...viewport })
   }
   try {
     await Promise.all([home, profile, userData, appData, localAppData, temporaryDirectory, evidenceRoot]
       .map((directory) => mkdir(directory, { recursive: true })))
+    await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify({
+      ok: false, status: 'running', startedAt, build, compiledRenderer, visualOnly, agentModeOnly, protectedApprovalOnly, locale: visualLocale, theme: visualTheme, scale: visualScale
+    }, null, 2) + '\n')
+    for (const name of ['failure.txt', 'failure-page.txt', 'failure.png', 'failure-runtime-fixture.json',
+      'failure-workbench-fixture.json', 'failure-workspaces-fixture.json']) {
+      await rm(join(evidenceRoot, name), { force: true })
+    }
     // The runtime records the realpath'd dataDir; macOS tmpdir symlinks /var.
     realProfile = await realpath(profile)
     const runtimePort = await availablePort()
@@ -84,6 +122,7 @@ async function main() {
     const isolatedEnvironment = developmentRendererEnvironment(createIsolatedEnvironment(process.env, {
       home, appData, localAppData, temporaryDirectory
     }), { rendererPort, temporaryRoot })
+    if (compiledRenderer) delete isolatedEnvironment.ELECTRON_RENDERER_URL
     isolatedEnvironment.NODE_ENV = 'development'
     const gitConfig = join(temporaryRoot, 'git-config')
     await writeFile(gitConfig, '')
@@ -101,22 +140,36 @@ async function main() {
     const stubDir = join(temporaryRoot, 'stubs')
     const claudeStub = await writeVersionStub(stubDir, 'claude', '2.1.0')
     const claudeStubUpdated = await writeVersionStub(stubDir, 'claude-alt', '2.2.0')
+    const oldGeminiStub = await writeVersionStub(stubDir, 'gemini-old', '0.0.1')
     const acpStub = await writeAcpStub(stubDir, 'smoke-acp')
+    const devinStub = devinModelsOnly ? await writeDevinModelStub(stubDir) : await writeDevinAcpStub(stubDir)
+    const devinInstallTarget = installOnly ? await writeInstallerFixture(stubDir, devinStub) : undefined
+    if (installOnly) isolatedEnvironment.PATH = `${stubDir}${require('node:path').delimiter}${isolatedEnvironment.PATH ?? ''}`
+    const codexStub = nativeModelOnly ? await writeCodexModelStub(stubDir) : undefined
     // Claude Code login detection reads ~/.claude/.credentials.json.
     await mkdir(join(home, '.claude'), { recursive: true })
     await writeFile(join(home, '.claude', '.credentials.json'),
       JSON.stringify({ claudeAiOauth: { accessToken: 'ade-smoke' } }))
 
-    modelFixture = await startModelFixture()
+    modelFixture = await startModelFixture(MODEL)
     const settings = { ...desktopSmokeSettings(runtimePort, workspaceRoot, realProfile),
-      locale: 'en', theme: 'light', initialSetupCompleted: true }
+      locale: visualLocale, theme: visualTheme, initialSetupCompleted: true }
     settings.agents.kun.baseUrl = modelFixture.baseUrl
     settings.agents.kun.apiKey = 'ade-desktop-offline-fixture'
     settings.agents.kun.model = MODEL
+    if (protectedApprovalOnly) Object.assign(settings.agents.kun, {
+      approvalPolicy: 'always', approvalReviewer: 'user', sandboxMode: 'workspace-write'
+    })
     settings.agents.kun.ade = { ...(settings.agents.kun.ade ?? {}), enabled: true }
     settings.agents.kun.harnesses = {
       ...(settings.agents.kun.harnesses ?? {}),
-      binaryPaths: { 'claude-code': claudeStub },
+      binaryPaths: {
+        ...(codexStub ? { codex: codexStub } : {}),
+        'claude-code': claudeStub,
+        devin: devinInstallTarget ?? devinStub,
+        // Force one repair path regardless of host-global CLI installations.
+        'gemini-cli': oldGeminiStub
+      },
       custom: [{ id: 'smoke-acp', displayName: 'Smoke ACP', command: acpStub, args: [], env: {} }],
       // P4-13: a configured terminal-only agent — the node binary always
       // resolves, and no `--version` probe is required for `terminal` defs.
@@ -144,21 +197,24 @@ async function main() {
         await mkdir(directory, { recursive: true })
         await writeFile(join(directory, 'kun-settings.json'), serializedSettings)
       }))
-    rendererProcess = spawn(process.execPath, [join(repositoryRoot, 'node_modules/vite/bin/vite.js'),
-      '--config', join(repositoryRoot, 'scripts/vite-development-renderer.config.mjs'), '--logLevel', 'warn'], {
-      cwd: repositoryRoot, env: isolatedEnvironment, detached: process.platform !== 'win32',
-      windowsHide: true, stdio: ['ignore', 'pipe', 'pipe']
-    })
-    for (const stream of [rendererProcess.stdout, rendererProcess.stderr]) {
-      stream.on('data', (chunk) => { rendererOutput = `${rendererOutput}${chunk}`.slice(-64 * 1024) })
+    if (!compiledRenderer) {
+      rendererProcess = spawn(process.execPath, [join(repositoryRoot, 'node_modules/vite/bin/vite.js'),
+        '--config', join(repositoryRoot, 'scripts/vite-development-renderer.config.mjs'), '--logLevel', 'warn'], {
+        cwd: repositoryRoot, env: isolatedEnvironment, detached: process.platform !== 'win32',
+        windowsHide: true, stdio: ['ignore', 'pipe', 'pipe']
+      })
+      for (const stream of [rendererProcess.stdout, rendererProcess.stderr]) {
+        stream.on('data', (chunk) => { rendererOutput = `${rendererOutput}${chunk}`.slice(-64 * 1024) })
+      }
+      await poll(async () => {
+        assert.equal(rendererProcess.exitCode, null, 'Development renderer exited')
+        try { return (await fetch(`http://127.0.0.1:${rendererPort}`, { signal: AbortSignal.timeout(1000) })).ok }
+        catch { return false }
+      }, timeoutMs, 'renderer server startup')
     }
-    await poll(async () => {
-      assert.equal(rendererProcess.exitCode, null, 'Development renderer exited')
-      try { return (await fetch(`http://127.0.0.1:${rendererPort}`, { signal: AbortSignal.timeout(1000) })).ok }
-      catch { return false }
-    }, timeoutMs, 'renderer server startup')
     electronApplication = await _electron.launch({
       executablePath: electronExecutable, args: [`--user-data-dir=${userData}`, '--no-first-run',
+        `--force-device-scale-factor=${visualScale}`,
         '--disable-background-networking', '--disable-component-update', '--disable-default-apps',
         ...platformDesktopArguments(process.platform), repositoryRoot],
       cwd: repositoryRoot, env: isolatedEnvironment, chromiumSandbox: true, timeout: timeoutMs
@@ -176,221 +232,60 @@ async function main() {
     await page.waitForLoadState('domcontentloaded', { timeout: 120_000 })
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
 
-    // 1) Enter ADE; Mission Control renders with the P4-14 readiness
-    //    checklist (provider / ready agents / Kun gateway) above the toolbar.
-    await switchMode(page, 'ade')
-    await page.locator('[data-mission-control]').waitFor()
-    await page.locator('[data-ade-readiness-card]').waitFor()
-    await capture('1-ade-home')
-
-    // 2) One-on-one dialog (P4-15) refreshes while detection runs (P4-02):
-    //    the stub Claude row turns selectable, the custom ACP stub completes
-    //    its handshake, and blocking rows stay disabled until an "Open
-    //    settings" deep link appears (P4-05).
-    await page.getByRole('button', { name: 'One-on-one', exact: true }).click()
-    const picker = page.locator('[data-ade-one-on-one-dialog]')
-    await picker.waitFor()
-    const claudeRow = picker.locator('[data-ade-one-on-one-agent="claude-code"]')
-    await claudeRow.waitFor()
-    await poll(async () => await claudeRow.isEnabled(), 60_000,
-      'Claude Code row becoming selectable')
-    const acpRow = picker.locator('[data-ade-one-on-one-agent="smoke-acp"]')
-    await acpRow.waitFor()
-    await poll(async () => await acpRow.isEnabled(), 60_000,
-      'Smoke ACP readiness handshake')
-    // A terminal agent never appears in the turn-serving list (P4-13).
-    assert.equal(await picker.locator('[data-ade-one-on-one-agent="smoke-term"]').count(), 0,
-      'Terminal-only agent must not appear in the one-on-one picker')
-    // A settled blocking row surfaces the single "Open settings" deep link.
-    const settingsLink = picker.getByRole('button', { name: 'Open settings', exact: true }).first()
-    await poll(async () => (await picker.getByRole('button', { name: 'Open settings', exact: true })
-      .count()) > 0, 60_000, 'unavailable harness row surfacing a settings link')
-    await capture('2-one-on-one-picker')
-
-    // 3) The deep link lands on Settings → Agents → Agent harness; changing a
-    //    command path hot-applies into the runtime's harness catalog.
-    await settingsLink.click()
-    const harnessPanel = page.locator('#agents-settings-panel-harnesses')
-    await harnessPanel.waitFor()
-    await capture('3-agent-harness-settings')
-    const claudeCard = harnessPanel.locator('[data-agent-card="claude-code"]')
-    await claudeCard.locator('button[aria-expanded]').first().click()
-    await claudeCard.locator('input').first().fill(claudeStubUpdated)
-    await poll(async () => {
-      const probe = await runtimeRequest(page, '/v1/harnesses/claude-code/probe', 'POST')
-      return probe.status?.resolvedCommand === claudeStubUpdated
-    }, 30_000, 'runtime receiving the harness command path update')
-    await capture('4-harness-command-path-applied')
-
-    // 3b) P4-12: a custom ACP definition must pass `probe-definition` before
-    //     it can be saved; a bound secret travels only as a credential-store
-    //     ref, and an imported JSON definition needs the same handshake.
-    const customForm = harnessPanel.locator('[data-agent-custom-form]')
-    await customForm.getByPlaceholder(/Display name/u).fill('Smoke Form Agent')
-    await customForm.getByPlaceholder(/Command path/u).fill(acpStub)
-    await customForm.getByPlaceholder('ENV_NAME').fill('SMOKE_KEY')
-    await customForm.getByPlaceholder('Secret value').fill('smoke-secret-value')
-    await customForm.getByRole('button', { name: 'Bind', exact: true }).click()
-    await customForm.locator('[data-secret-env-chip="SMOKE_KEY"]').waitFor()
-    const addButton = customForm.getByRole('button', { name: 'Add agent', exact: true })
-    assert(await addButton.isDisabled(), 'Add must stay disabled before a probe')
-    await customForm.getByRole('button', { name: 'Test connection', exact: true }).click()
-    await customForm.locator('[data-probe-result="ok"]').waitFor({ timeout: 60_000 })
-    await capture('4c-custom-acp-probe-ok')
-    await addButton.click()
-    await poll(async () => {
-      const list = await runtimeRequest(page, '/v1/harnesses', 'GET')
-      return (list.harnesses ?? []).some(
-        (row) => row.definition.id === 'custom-smoke-form-agent')
-    }, 30_000, 'saved custom agent reaching the runtime catalog')
-    await harnessPanel.locator('[data-agent-card="custom-smoke-form-agent"]').waitFor()
-
-    const importFile = join(temporaryRoot, 'import-agent.json')
-    await writeFile(importFile, JSON.stringify({
-      displayName: 'Imported Agent', command: acpStub, args: ['--acp']
-    }))
-    await customForm.locator('input[type="file"]').setInputFiles(importFile)
-    await poll(async () => (await customForm.getByPlaceholder(/Display name/u)
-      .inputValue()) === 'Imported Agent', 10_000, 'imported JSON filling the form')
-    assert(await addButton.isDisabled(),
-      'An imported definition must be tested again before saving')
-    await customForm.getByRole('button', { name: 'Test connection', exact: true }).click()
-    await customForm.locator('[data-probe-result="ok"]').waitFor({ timeout: 60_000 })
-    await addButton.click()
-    await poll(async () => {
-      const list = await runtimeRequest(page, '/v1/harnesses', 'GET')
-      return (list.harnesses ?? []).some(
-        (row) => row.definition.id === 'custom-imported-agent')
-    }, 30_000, 'imported custom agent reaching the runtime catalog')
-    await harnessPanel.locator('[data-agent-card="custom-imported-agent"]').waitFor()
-    await capture('4d-custom-acp-imported')
-
-    // 3c) P4-09: an install/login card action prefills a fresh Kun terminal
-    //     (never auto-executes) and leaves Settings for the workbench. The
-    //     isolated HOME means every non-Claude builtin is either missing or
-    //     signed out, so at least one card carries a command action.
-    const catalog = await runtimeRequest(page, '/v1/harnesses', 'GET')
-    const cardLocators = await harnessPanel.locator('[data-agent-card]').all()
-    let setupCard = null
-    for (const card of cardLocators) {
-      for (const [name, kind] of [['Install adapter', 'adapter'], ['Install', 'install'], ['Sign in', 'login']]) {
-        const commandButton = card.getByRole('button', { name, exact: true })
-        if ((await commandButton.count()) > 0) {
-          setupCard = { card, button: commandButton.first(), kind }
-          break
-        }
-      }
-      if (setupCard) break
+    let assertions
+    if (protectedApprovalOnly) {
+      assertions = await runProtectedApprovalFlow({ application: electronApplication, page, capture, poll, runtimeRequest })
+    } else if (devinModelsOnly) {
+      assertions = await runDevinModelFlow({ page, capture, poll, resize: (width, height) => resize(electronApplication, width, height) })
+    } else if (installOnly) {
+      assertions = await runAgentInstallFlow({ page, capture, poll, runtimeRequest })
+    } else if (nativeModelOnly) {
+      assertions = await runNativeModelFlow({ page, capture, poll })
+    } else if (agentModeOnly) {
+      assertions = await runAgentModeFlow({ page, capture, poll, runtimeRequest })
+    } else if (visualOnly) {
+      assertions = await runUnifiedCodeVisuals({ page, capture, poll, runtimeRequest,
+        resize: (width, height) => resize(electronApplication, width, height) })
+    } else {
+      assertions = await runUnifiedCodeFlow({
+        page, capture, poll, runtimeRequest, expectedSetupCommand,
+        claudeStubUpdated, acpStub, temporaryRoot, application: electronApplication, nativeApprovalTimeoutMs
+      })
     }
-    assert(setupCard, 'Expected at least one harness card with a setup command action')
-    const setupHarnessId = await setupCard.card.getAttribute('data-agent-card')
-    const setupRow = (catalog.harnesses ?? []).find((row) => row.definition.id === setupHarnessId)
-    const expectedCommand = expectedSetupCommand(setupRow?.definition, process.platform, setupCard.kind)
-    assert(expectedCommand, `No builtin setup command resolved for ${setupHarnessId} (${setupCard.kind})`)
-    await setupCard.button.click()
-    await page.locator('[data-mission-control]').waitFor()
-    await page.locator('[data-terminal-open="true"]').waitFor()
-    await poll(async () => (await page.locator('.xterm-rows').innerText())
-      .includes(expectedCommand.command), 30_000,
-      `terminal showing the prefilled ${setupHarnessId} command`)
-    await capture('4b-setup-command-prefilled-terminal')
 
-    // 3d) P4-13: the seeded terminal agent joins the catalog as
-    //     `transport: 'terminal'` (installed without a version probe) and the
-    //     "new terminal tab" menu can spawn it as a registered unit.
-    await poll(async () => {
-      const list = await runtimeRequest(page, '/v1/harnesses', 'GET')
-      const row = (list.harnesses ?? []).find(
-        (entry) => entry.definition.id === 'smoke-term')
-      return row?.definition.transport === 'terminal' &&
-        row?.status.installed === 'yes'
-    }, 30_000, 'terminal agent reaching the runtime catalog as installed')
-    await page.getByRole('button', { name: 'New terminal tab', exact: true }).click()
-    const newTabMenu = page.locator('[role="menu"][aria-label="New terminal tab"]')
-    await newTabMenu.waitFor()
-    // The menuitem's accessible name joins title + subtitle ("Smoke Term\n" +
-    // "smoke-term"), so match non-exactly on the display name.
-    const termAgentItem = newTabMenu.getByRole('menuitem', { name: /^Smoke Term/u })
-    await termAgentItem.waitFor({ timeout: 30_000 })
-    await capture('4e-terminal-agent-menu')
-    await termAgentItem.click()
-    await page.getByRole('tab', { name: /Smoke Term/u }).waitFor({ timeout: 30_000 })
-    await poll(async () => (await page.locator('.xterm-rows').innerText())
-      .includes('Welcome to Node.js'), 30_000,
-      'terminal agent tab running the seeded node command')
-    await capture('4f-terminal-agent-tab')
-
-    // 4) A one-on-one thread with Claude Code shows the composer; its harness
-    //    picker menu renders through a body portal, not inside the clipped
-    //    toolbar container (P4-01).
-    await page.getByRole('button', { name: 'One-on-one', exact: true }).click()
-    await picker.waitFor()
-    await claudeRow.click()
-    await picker.locator('[data-ade-one-on-one-start]').click()
-    const harnessTrigger = page.getByRole('button', { name: 'Harness', exact: true })
-    await harnessTrigger.waitFor({ timeout: 60_000 })
-    await harnessTrigger.click()
-    const menu = page.locator('[data-harness-picker-menu]')
-    await menu.waitFor()
-    assert(await menu.evaluate((node) => node.parentElement === document.body),
-      'Harness picker menu must render through a body portal')
-    await capture('5-composer-harness-picker')
-    await menu.locator('[data-harness-id="claude-code"]').click()
-
-    // 5) Model groups expose the Kun gateway route with provider models
-    //    (deterministic fixture provider seeded as the active connection).
-    const groups = await runtimeRequest(page,
-      '/v1/harnesses/claude-code/models?credential_mode=kun-gateway')
-    const gatewayGroup = (groups.groups ?? []).find((group) => group.providerId === 'deepseek')
-    assert(gatewayGroup, `Expected a DeepSeek gateway model group: ${JSON.stringify(groups)}`)
-    assert((gatewayGroup.models ?? []).length > 0,
-      `Expected provider models in the gateway group: ${JSON.stringify(gatewayGroup)}`)
-    const gatewayModel = gatewayGroup.models[0]
-    const escapeRe = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    await page.locator('.ds-composer-model-picker button[aria-haspopup="menu"]').first().click()
-    await page.getByText(/Kun gateway/iu).first().waitFor()
-    // Provider groups are submenu rows: hover opens the model flyout.
-    await page.getByRole('menuitem', {
-      name: new RegExp(`^Kun gateway · ${escapeRe(gatewayGroup.label)}`, 'u')
-    }).hover()
-    await page.getByRole('menuitemradio', {
-      name: new RegExp(`^${escapeRe(gatewayModel)}`, 'u')
-    }).waitFor()
-    await capture('6-model-gateway-group')
-    await page.keyboard.press('Escape')
-
-    // 6) P4-16: a fresh manager session opens with the Workers panel and the
-    //    composer carries the dispatchable-agents label listing ready harnesses.
-    await page.getByRole('button', { name: 'Manager session', exact: true }).click()
-    await page.locator('[data-workers-panel]').waitFor()
-    const dispatchPill = page.locator('[data-dispatchable-agents-pill]')
-    await poll(async () => (await dispatchPill.innerText()).includes('Claude Code'),
-      30_000, 'dispatchable-agents pill listing the ready Claude Code harness')
-    await capture('7-manager-first-screen')
-
+    const runtimeDiagnostics = await captureIsolatedLogs(temporaryRoot, evidenceRoot)
+    assert.deepEqual(runtimeDiagnostics.httpFailures, [], 'Runtime emitted an unexpected HTTP failure')
+    assert.deepEqual(runtimeDiagnostics.unhandledRejections, [], 'Runtime emitted an unhandled rejection')
+    assert.deepEqual(runtimeDiagnostics.staleTurnFences, [], 'Runtime emitted a stale turn fence rejection')
     assert.deepEqual(pageErrors, [], 'Renderer emitted an uncaught exception')
-    result = { ok: true, platform: process.platform, arch: process.arch, pageErrors,
+    result = { ok: true, status: 'passed', startedAt, build, completedAt: new Date().toISOString(),
+      renderer: compiledRenderer ? 'compiled' : 'development', visualOnly, agentModeOnly, nativeModelOnly, protectedApprovalOnly, locale: visualLocale, theme: visualTheme, scale: visualScale,
+      platform: process.platform, arch: process.arch, pageErrors, layouts, runtimeDiagnostics,
+      ...(keepDirs ? { retainedDirectories: { temporaryRoot, workspaceRoot } } : {}),
       modelFixture: modelFixture.snapshot(), screenshots,
-      assertions: [
-        'ADE enabled through isolated settings and entered through the Agents surface',
-        'one-on-one picker refreshes while detection is inflight; installed harness selectable',
-        'unavailable harness rows carry a localized reason plus a settings deep link',
-        'settings command path hot-applies and re-probes through /v1/harnesses/:id/probe',
-        'custom ACP definition probes before saving; secrets bind by ref only',
-        'imported JSON definitions must be tested again before saving',
-        'setup command prefills a fresh terminal without executing and leaves Settings',
-        'terminal agent joins the catalog and spawns from the new-tab menu',
-        'composer harness picker menu renders through a body portal',
-        'Kun gateway model group exposes provider models',
-        'readiness checklist renders on the ADE home',
-        'terminal-only agents stay out of the one-on-one picker',
-        'manager session opens with Workers panel and dispatchable-agents label'] }
-    await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
+      assertions }
   } catch (error) {
     await capture('failure').catch(() => undefined)
     await captureIsolatedLogs(temporaryRoot, evidenceRoot).catch(() => undefined)
     if (page) await writeFile(join(evidenceRoot, 'failure-page.txt'),
       await page.locator('body').innerText().catch(() => '')).catch(() => undefined)
+    if (page) {
+      const inventory = await runtimeRequest(page, '/v1/threads?limit=100').catch(() => null)
+      if (inventory) {
+        const threads = await Promise.all(inventory.threads.map((thread) =>
+          runtimeRequest(page, `/v1/threads/${thread.id}`).catch(() => null)))
+        await writeFile(join(evidenceRoot, 'failure-runtime-fixture.json'), JSON.stringify(threads, null, 2))
+          .catch(() => undefined)
+      }
+      for (const [name, path] of [
+        ['workbench', '/v1/threads?workbench_scope=code&limit=100'],
+        ['workspaces', '/v1/task-workspaces']
+      ]) {
+        const value = await runtimeRequest(page, path).catch((error) => ({ error: String(error) }))
+        await writeFile(join(evidenceRoot, `failure-${name}-fixture.json`), JSON.stringify(value, null, 2))
+          .catch(() => undefined)
+      }
+    }
     primaryError = new Error(`${error.stack ?? error}\nRenderer:\n${rendererOutput}\nElectron:\n${electronOutput}`)
     await writeFile(join(evidenceRoot, 'failure.txt'), primaryError.stack).catch(() => undefined)
   } finally {
@@ -422,6 +317,13 @@ async function main() {
     }
     if (errors.length) primaryError = new Error(`${primaryError?.stack ?? ''}\nCleanup failures: ${errors.join('; ')}`)
   }
+  if (primaryError) {
+    result = { ok: false, status: 'failed', startedAt, build, completedAt: new Date().toISOString(),
+      renderer: compiledRenderer ? 'compiled' : 'development', visualOnly, agentModeOnly, protectedApprovalOnly, locale: visualLocale, theme: visualTheme, scale: visualScale,
+      pageErrors, layouts, screenshots, modelFixture: modelFixture?.snapshot(), failure: primaryError.message,
+      ...(keepDirs ? { retainedDirectories: { temporaryRoot, workspaceRoot } } : {}) }
+  }
+  await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
   if (primaryError) throw primaryError
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
 }
@@ -460,13 +362,20 @@ rl.on('line', (line) => {
 }
 
 async function captureIsolatedLogs(root, destination) {
+  const diagnostics = { files: [], httpFailures: [], unhandledRejections: [], staleTurnFences: [] }
   for (const entry of await readdir(root, { withFileTypes: true, recursive: true }).catch(() => [])) {
     if (entry.isFile() && (entry.name === 'manager.log' || /^kun-.*\.log$/u.test(entry.name))) {
       const path = join(entry.parentPath ?? entry.path, entry.name)
       const name = path.slice(root.length + 1).replace(/[^A-Za-z0-9_.-]/g, '_')
-      await writeFile(join(destination, name), await readFile(path))
+      const contents = await readFile(path, 'utf8')
+      await writeFile(join(destination, name), contents)
+      diagnostics.files.push(name)
+      diagnostics.httpFailures.push(...contents.split('\n').filter((line) => line.includes('[kun-http] unexpected request failure')))
+      diagnostics.unhandledRejections.push(...contents.split('\n').filter((line) => line.includes('unhandledRejection')))
+      diagnostics.staleTurnFences.push(...contents.split('\n').filter((line) => line.includes('stale_turn_fence')))
     }
   }
+  return diagnostics
 }
 
 function runtimeRequest(page, path, method = 'GET', body) {
@@ -478,16 +387,10 @@ function runtimeRequest(page, path, method = 'GET', body) {
   }, { path, method, body })
 }
 
-async function switchMode(page, mode) {
-  await page.locator('[data-workspace-mode-trigger]').first().click()
-  await page.locator(`[role="menuitemradio"][data-workspace-mode="${mode}"]`).click()
-  await page.locator(`[data-workspace-mode-trigger][data-workspace-mode="${mode}"]`).first().waitFor()
-}
-
 function resize(application, width, height) {
   return application.evaluate(({ BrowserWindow }, bounds) => {
     const window = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed())
-    window?.setMinimumSize(480, 480)
+    window?.setMinimumSize(960, 640)
     window?.setBounds({ x: 20, y: 20, ...bounds })
   }, { width, height })
 }
@@ -518,35 +421,6 @@ function expectedSetupCommand(definition, platform, kind) {
     if (picked) return { command: picked.command }
   }
   return null
-}
-
-async function startModelFixture() {
-  const server = createServer((request, response) => {
-    if (request.method === 'GET' && /\/models(?:\?|$)/u.test(request.url ?? '')) {
-      response.writeHead(200, { 'content-type': 'application/json' })
-      response.end(JSON.stringify({ object: 'list', data: [{ id: MODEL, object: 'model' }] }))
-      return
-    }
-    if (request.method === 'POST' && /\/chat\/completions$/u.test(request.url ?? '')) {
-      response.writeHead(200, { 'content-type': 'application/json' })
-      response.end(JSON.stringify({ id: 'ade-smoke', object: 'chat.completion', created: 1,
-        model: MODEL, choices: [{ index: 0, message: { role: 'assistant', content: 'Done.' },
-          finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }))
-      return
-    }
-    response.writeHead(404)
-    response.end()
-  })
-  await new Promise((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', resolve)
-  })
-  const baseUrl = `http://127.0.0.1:${server.address().port}/v1`
-  return {
-    baseUrl,
-    snapshot: () => ({ baseUrl }),
-    close: () => new Promise((resolve) => server.close(resolve))
-  }
 }
 
 main().catch((error) => {

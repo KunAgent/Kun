@@ -25,6 +25,7 @@ import {
   normalizeComposerReasoningEffortMap,
   persistComposerReasoningEffort,
   readStoredComposerReasoningEffort,
+  rememberThreadComposerHarness,
   rememberThreadComposerMode,
   readThreadComposerMode,
   rememberThreadComposerSelection,
@@ -458,6 +459,15 @@ describe('chat-store Claw helpers', () => {
     ).toBe('agent')
     expect(composerModeForThread({ id: 'thread-b', mode: 'plan' }, null)).toBe('plan')
     expect(composerModeForThread({ id: 'thread-c', mode: 'agent' }, null)).toBe('agent')
+  })
+
+  it('clears native credentials when explicitly switching the persisted selection back to Kun', () => {
+    rememberThreadComposerSelection('thread-a', 'native-model', '', 'user', {
+      harnessId: 'codex', credentialMode: 'native-login'
+    })
+    rememberThreadComposerHarness('thread-a', 'kun', '')
+    expect(readThreadComposerSelection('thread-a')).toMatchObject({ harnessId: 'kun' })
+    expect(readThreadComposerSelection('thread-a')?.credentialMode).toBeUndefined()
   })
 
   it('persists composer model selections independently per thread', () => {

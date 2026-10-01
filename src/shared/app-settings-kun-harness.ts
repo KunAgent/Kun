@@ -12,6 +12,7 @@ import type {
   KunHarnessSettingsPatchV1,
   KunWorktreeSettingsPatchV1
 } from './app-settings-types-kun-services'
+import { normalizeAdeProjectDefaultsMap } from './ade-project-defaults'
 
 /**
  * Settings normalization for `agents.kun.harnesses` / `agents.kun.ade`
@@ -27,7 +28,8 @@ export const BUILTIN_HARNESS_IDS = [
   'antigravity',
   'gemini-cli',
   'codex',
-  'opencode'
+  'opencode',
+  'devin'
 ] as const
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -307,6 +309,7 @@ export function mergeKunHarnessSettings(
 export function defaultKunAdeSettings(): KunAdeSettingsV1 {
   return {
     enabled: false,
+    projectDefaults: {},
     harnessRouter: true,
     deterministicHandoff: true,
     managerMayApprove: false,
@@ -360,6 +363,7 @@ export function normalizeKunAdeSettings(value: unknown): KunAdeSettingsV1 {
   const notifications = isRecord(input.notifications) ? input.notifications : {}
   return {
     enabled: bool(input.enabled, defaults.enabled),
+    projectDefaults: normalizeAdeProjectDefaultsMap(input.projectDefaults),
     harnessRouter: bool(input.harnessRouter, defaults.harnessRouter),
     deterministicHandoff: bool(input.deterministicHandoff, defaults.deterministicHandoff),
     ...(managerModel?.providerId && managerModel.model
@@ -413,6 +417,7 @@ export function mergeKunAdeSettings(
     : base.managerModel
   return normalizeKunAdeSettings({
     enabled: patch.enabled ?? base.enabled,
+    projectDefaults: patch.projectDefaults ?? base.projectDefaults,
     harnessRouter: patch.harnessRouter ?? base.harnessRouter,
     deterministicHandoff: patch.deterministicHandoff ?? base.deterministicHandoff,
     ...(managerModelPatch ? { managerModel: managerModelPatch } : {}),

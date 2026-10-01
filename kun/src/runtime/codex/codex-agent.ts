@@ -5,6 +5,7 @@
  * user input) to the owning session by codex threadId.
  */
 import { tmpdir } from 'node:os'
+import { nativeAgentNetworkEnv } from '../../harness/native-agent-network.js'
 import { startHarnessProcess } from '../../session/harness-process.js'
 import type { HarnessProcess } from '../../session/harness-process.js'
 import type {
@@ -76,7 +77,7 @@ export class CodexAgent implements HarnessAgent {
     const proc = await startHarnessProcess({
       command: input.command,
       args,
-      env: input.env,
+      env: { ...nativeAgentNetworkEnv(input.definition, process.env, { ...input.env, ...input.secretEnv }), ...input.env },
       secretEnv: input.secretEnv,
       credentialEnv: input.credentialEnv,
       stripEnv: input.stripEnv,

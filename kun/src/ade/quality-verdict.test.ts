@@ -27,7 +27,7 @@ describe('QualityVerdicts.setVerdict', () => {
   it('records a manager verdict without touching execution state', async () => {
     const stores = await seeded()
     try {
-      const { verdicts } = makeHarness(stores)
+      const { verdicts, activity } = makeHarness(stores)
       const result = await verdicts.workerVerdict(managerCtx(), {
         dispatchId: 'dsp_done',
         status: 'needs_changes',
@@ -44,6 +44,13 @@ describe('QualityVerdicts.setVerdict', () => {
         checks: []
       })
       expect(dispatch?.verdict?.decidedAt).toBeTruthy()
+      expect(dispatch?.verdict?.revision).toMatchObject({
+        completeness: 'incomplete', reason: 'git_unavailable'
+      })
+      expect(activity.apply).toHaveBeenCalledWith('wrk_1', {
+        reviewRequired: true,
+        reviewStatus: 'needs_changes'
+      }, 'runtime')
     } finally {
       await teardownAdeStores(stores)
     }
@@ -68,7 +75,7 @@ describe('QualityVerdicts.setVerdict', () => {
       const verdict = result.verdict!
       expect(verdict).toMatchObject({ status: 'passed', decidedBy: 'user' })
       // Both decisions stay on record (10 §4.2).
-      expect(verdict.superseded).toEqual([
+      expect(verdict.superseded).toMatchObject([
         {
           status: 'needs_changes',
           decidedBy: 'manager',
@@ -76,6 +83,7 @@ describe('QualityVerdicts.setVerdict', () => {
           decidedAt: expect.any(String)
         }
       ])
+      expect(verdict.superseded?.[0]?.revision).toMatchObject({ completeness: 'incomplete' })
     } finally {
       await teardownAdeStores(stores)
     }

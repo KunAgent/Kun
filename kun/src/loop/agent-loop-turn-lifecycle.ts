@@ -4,6 +4,7 @@ import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
 import type { HarnessId } from '../contracts/harness.js'
 import type { HarnessCapabilities } from '../contracts/harness-capabilities.js'
 import { KUN_NATIVE_CAPABILITIES } from '../harness/builtin-harnesses.js'
+import { effectiveKunTurnIntent, isInternalGraphWorker, unsupportedKunTurnIntent } from '../harness/kun-turn-intent.js'
 import {
   isHostShutdownTurnSuspension,
   ownerLeaseExpiredTurnAbortFrom,
@@ -159,6 +160,18 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
       if (resolvedRuntime) {
         delegatedSdkRuntime = resolvedRuntime
         delegatedProviderId = providerId
+      }
+    }
+    // Keep the legacy provider dispatcher subject to the same product boundary.
+    if (delegatedSdkRuntime && owningThread && turnRecord) {
+      const intentError = unsupportedKunTurnIntent(turnHarnessId ?? 'external', effectiveKunTurnIntent(owningThread, turnRecord), {
+        graphWorker: isInternalGraphWorker(owningThread, turnRecord)
+      })
+      if (intentError) {
+        const settlement = await settle({ status: 'failed', error: intentError, code: 'route_unsupported' })
+        finalStatus = statusFromSettlement(settlement, 'failed')
+        finalError = errorFromSettlement(settlement)
+        return finalStatus
       }
     }
     // Native-loop turns emit the same harness identity event so clients can

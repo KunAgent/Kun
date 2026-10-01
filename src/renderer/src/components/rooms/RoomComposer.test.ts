@@ -96,6 +96,20 @@ describe('RoomComposer', () => {
     )
   }
 
+  it('refreshes a referenced draft in the already open conversation without affecting other rooms', async () => {
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    input('Existing message')
+    const references = [{ kind: 'code_thread', threadId: 'task', titleSnapshot: 'Task' }]
+    stored.set('kun.rooms.draft.room', JSON.stringify({ body: 'Existing message\nAdded context', references }))
+    act(() => listeners.get('kun-room-draft-updated')!({ detail: { roomId: 'other' } } as unknown as Event))
+    expect(renderer.root.findByType('textarea').props.value).toBe('Existing message')
+    act(() => listeners.get('kun-room-draft-updated')!({ detail: { roomId: 'room' } } as unknown as Event))
+    expect(renderer.root.findByType('textarea').props.value).toBe('Existing message\nAdded context')
+    await submit()
+    expect(send.mock.calls[0][0].references).toEqual(references)
+  })
+
   it('retains a failed send and reuses its request ID until content changes', async () => {
     const send = vi.fn().mockRejectedValue(new Error('Connection lost'))
     await render(send)
@@ -234,6 +248,24 @@ describe('RoomComposer', () => {
     expect(JSON.parse(stored.get('kun.rooms.draft.room')!).attachments).toEqual([])
     await submit()
     expect(send.mock.calls[0][0]).toMatchObject({ body: 'Continue typing while upload runs', attachmentIds: [] })
+  })
+
+  it('keeps Workbench file references and typed text when a concurrent upload completes', async () => {
+    let finish!: (value: { id: string; name: string }) => void
+    upload.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send, { room: { ...room, repositories: [{ ...room.repositories[0], canonicalRoot: '/workspace/App' }] } })
+    await act(async () => renderer.root.findByProps({ type: 'file' }).props.onChange({
+      target: { files: [{ name: 'slow.txt', type: 'text/plain' }] }
+    }))
+    input('Compare the two files')
+    act(() => listeners.get('kun-room-file-reference')!(new CustomEvent('kun-room-file-reference', { detail: {
+      roomId: room.id, reference: { type: 'file', path: '/workspace/App/readme.md', name: 'readme.md' }
+    } })))
+    await act(async () => finish({ id: 'uploaded', name: 'slow.txt' }))
+    await submit()
+    expect(send.mock.calls[0][0]).toMatchObject({ body: 'Compare the two files', attachmentIds: ['uploaded'],
+      references: [{ kind: 'repository_file', repositoryId: 'repo', relativePath: 'readme.md', titleSnapshot: 'readme.md' }] })
   })
 
   it('keeps successful files when another upload fails and retries only the failed file', async () => {

@@ -14,15 +14,19 @@ import {
   type RoomRule,
   type RoomListEntry
 } from './rooms-client'
+import { roomMatchesSelectionScope, type RoomSelectionScope } from './room-surface-selection'
 
-export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', listEnabled = true) {
+export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', listEnabled = true,
+  options: { selectionKey?: string; initialSelectedId?: string; scope?: RoomSelectionScope } = {}) {
+  const selectionKey = options.selectionKey ?? 'kun.rooms.selected'
+  const selectionScope = options.scope ?? 'all'
   const [rooms, setRooms] = useState<RoomListEntry[]>([])
   const [archived, setArchived] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'unread' | 'attention'>('all')
   const [repositoryRoot, setRepositoryRoot] = useState('')
   const [selectedId, setSelectedId] = useState(
-    readBrowserStorageItem('kun.rooms.selected') ?? ''
+    options.initialSelectedId ?? readBrowserStorageItem(selectionKey) ?? ''
   )
   const [room, setRoom] = useState<Room | null>(null)
   const [messages, setMessages] = useState<RoomMessage[]>([])
@@ -47,8 +51,8 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
 
   const select = useCallback((id: string): void => {
     setSelectedId(id)
-    writeBrowserStorageItem('kun.rooms.selected', id)
-  }, [])
+    writeBrowserStorageItem(selectionKey, id)
+  }, [selectionKey])
   const refreshList = useCallback(
     async (reset = false, changedIds?: string[]): Promise<void> => {
       if (!listEnabled) { setLoading(false); return }
@@ -155,7 +159,7 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
           Promise.all(taskIds.map((id) => roomsClient.task(selectedId, id, controller.signal)))
         ])
         if (controller.signal.aborted) return
-        if (detail?.room.deletedAt) {
+        if (detail && (detail.room.deletedAt || !roomMatchesSelectionScope(detail.room, selectionScope))) {
           select('')
           return
         }
@@ -239,7 +243,7 @@ export function useRooms(conversationKind: 'group' | 'agent_agent' = 'group', li
       clearTimeout(timer)
       refreshRef.current = async () => undefined
     }
-  }, [selectedId, select])
+  }, [selectedId, select, selectionScope])
 
   const loadEarlier = async (): Promise<void> => {
     if (!messageCursor || moreBusy) return

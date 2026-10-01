@@ -95,6 +95,9 @@ describe('FloatingComposerHarnessPicker', () => {
     expect(claude.disabled).toBe(false)
     expect(menu()!.textContent).toContain('Not installed')
     expect(menu()!.textContent).toContain('Signed out')
+    expect(menu()!.querySelector<HTMLButtonElement>('[data-harness-repair="cursor"]')?.disabled).toBe(false)
+    expect(menu()!.querySelector('[data-agent-icon="cursor"]')).toBeTruthy()
+    expect(menu()!.textContent).not.toContain('native-login')
   })
 
   it('selects immediately when no confirmation is needed', async () => {

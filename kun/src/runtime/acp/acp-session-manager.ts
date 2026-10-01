@@ -28,6 +28,9 @@ import {
   type McpServer,
   type SessionUpdate
 } from './acp-schema.js'
+import { applyDevinSessionPermission } from './devin-session-permissions.js'
+import { isAcpAuthenticationRequired } from './acp-authentication.js'
+import { AcpModelSelectionError, applyAcpSessionModel, parseAcpLegacyModels, type AcpLegacyModels } from './acp-legacy-models.js'
 
 /** Per-turn input the runtime hands to the session manager. */
 export type AcpSessionRequest = {
@@ -63,6 +66,7 @@ export type AcpSessionHandle = {
   /** Config options reported by session/new or session/load. */
   configOptions?: AcpConfigOption[] | null
   modes?: AcpSessionModes | null
+  models?: AcpLegacyModels
   /** Agent sent available_commands_update at least once (capability fact). */
   sawAvailableCommands?: boolean
   /** Detach the per-turn update sink registered via ensureSession. */
@@ -144,11 +148,22 @@ export class AcpSessionManager {
         }
         handle.configOptions = parsed.data.configOptions ?? handle.configOptions
         handle.modes = parsed.data.modes ?? handle.modes
+        handle.models = parseAcpLegacyModels(parsed.data.models)
         handle.phase = 'ready'
         conn.registerSession(handle.sessionId, ctx.threadId)
         await this.applyConfigOptions(conn, handle, ctx)
         return handle
       } catch (error) {
+        if (error instanceof AcpError && (
+          error.code === 'policy_denied' ||
+          error instanceof AcpModelSelectionError ||
+          isAcpAuthenticationRequired(error) ||
+          error.code === 'request_aborted'
+        )) {
+          unsubscribe()
+          conn.unregisterSession(handle.sessionId)
+          throw error
+        }
         this.debug(`session/load failed, rebasing to session/new: ${String(error)}`)
         unsubscribe()
         const rebased = await this.deps.coordinator.rejectResume(preparation)
@@ -187,25 +202,37 @@ export class AcpSessionManager {
       replayedHistory: true,
       configOptions: parsed.data.configOptions,
       modes: parsed.data.modes,
+      models: parseAcpLegacyModels(parsed.data.models),
       detach: () => unsubscribe()
     }
     conn.registerSession(handle.sessionId, ctx.threadId)
-    await this.applyConfigOptions(conn, handle, ctx)
+    try {
+      await this.applyConfigOptions(conn, handle, ctx)
+    } catch (error) {
+      unsubscribe()
+      conn.unregisterSession(handle.sessionId)
+      throw error
+    }
     return handle
   }
 
   /**
-   * Push model / thought_level / mode selections into session config options
-   * (§5.3). Values that have no exact match in the option's value list are
-   * never guessed — the agent keeps its default and a debug note is recorded.
+   * Model selections and Devin permission modes must be accepted before a
+   * prompt is sent. Other unmatched options retain the agent's default and
+   * record a debug note (§5.3).
    */
   async applyConfigOptions(
     conn: AcpConnection,
     session: AcpSessionHandle,
     ctx: AcpSessionRequest
   ): Promise<void> {
+    await applyAcpSessionModel(conn, session, ctx.model)
+    if (ctx.harnessId === 'devin') {
+      await applyDevinSessionPermission(conn, session, ctx.permissionModeId)
+    }
     const options = session.configOptions
     if (!options?.length) {
+      if (ctx.harnessId === 'devin') return
       // Legacy fallback: only the mode category existed before config options.
       const modeId = ctx.permissionModeId
       const modes = session.modes
@@ -228,15 +255,14 @@ export class AcpSessionManager {
         byCategory.set(option.category, option)
       }
     }
-    await this.setIfDifferent(conn, session, byCategory.get('model'), [
-      ...(ctx.model ? [ctx.model] : [])
-    ])
     await this.setIfDifferent(conn, session, byCategory.get('thought_level'), [
       ...(ctx.reasoningEffort ? effortCandidates(ctx.reasoningEffort) : [])
     ])
-    await this.setIfDifferent(conn, session, byCategory.get('mode'), [
-      ...(ctx.permissionModeId ? [ctx.permissionModeId] : [])
-    ])
+    if (ctx.harnessId !== 'devin') {
+      await this.setIfDifferent(conn, session, byCategory.get('mode'), [
+        ...(ctx.permissionModeId ? [ctx.permissionModeId] : [])
+      ])
+    }
   }
 
   private async setIfDifferent(

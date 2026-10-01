@@ -8,7 +8,6 @@ import type { RoomSearchHit, RoomSidebarEntry } from '@shared/rooms-api'
 import { useRoomSidebar } from './useRoomSidebar'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomSidebarRow } from './RoomSidebarRow'
-import { AgentDirectory } from './AgentDirectory'
 import { RoomPopover } from './RoomPopover'
 import { RoomListFilters } from './RoomManagementControls'
 import { RoomUnifiedSearch } from './RoomUnifiedSearch'
@@ -17,7 +16,8 @@ import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/brows
 import { RoomModal } from './RoomModal'
 
 type Kind = 'all' | 'agents' | 'group' | 'agent_agent'
-export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAgent, onDetails, onSearch,
+const MIXED_KIND_KEY = 'kun.rooms.sidebar.mixed-kind'
+export function RoomSidebar({ selectedRoomId, onSelect, onCreateAgent, onSearch,
   onProfile, onTeam, onManage, onActivity, onDeleted }: {
   selectedRoomId: string; onOpenAgent: (id: string) => void; onSelect: (id: string) => void
   onCreateAgent: () => void; onCreateGroup: () => void; onDetails: (id: string) => void
@@ -25,14 +25,11 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
   onActivity?: (entry: RoomSidebarEntry | undefined) => void; onDeleted: (id: string) => void
 }) {
   const { t } = useTranslation('common')
-  const [surface, setSurface] = useState<'chats' | 'agents'>(() =>
-    readBrowserStorageItem('kun.rooms.sidebar.surface') === 'agents' ? 'agents' : 'chats')
-  const showSurface = (value: 'chats' | 'agents') => {
-    setSurface(value)
-    writeBrowserStorageItem('kun.rooms.sidebar.surface', value)
-  }
   const [kind, setKind] = useState<Kind>(() => {
-    const old = readBrowserStorageItem('kun.rooms.sidebar.kind'); return old === 'agents' || old === 'group' || old === 'agent_agent' ? old : 'all'
+    // Old versions persisted a forced group-only value; explicit mixed-list
+    // filters have their own preference so first entry always shows all chats.
+    const saved = readBrowserStorageItem(MIXED_KIND_KEY)
+    return saved === 'agents' || saved === 'group' || saved === 'agent_agent' ? saved : 'all'
   })
   const [filter, setFilter] = useState<'all' | 'unread' | 'attention'>('all'), [archived, setArchived] = useState(false)
   const [deletedOnly, setDeletedOnly] = useState(false)
@@ -54,8 +51,8 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
     !entry.roomId || !hiddenRoomIds.has(entry.roomId)), [deletedOnly, page.entries, hiddenRoomIds])
   useEffect(() => {
     const first = entries[0]
-    if (surface === 'chats' && !deletedOnly && !selectedRoomId && first?.roomId) onSelect(first.roomId)
-  }, [surface, deletedOnly, selectedRoomId, entries, onSelect])
+    if (!deletedOnly && !selectedRoomId && first?.roomId) onSelect(first.roomId)
+  }, [deletedOnly, selectedRoomId, entries, onSelect])
   useEffect(() => { onActivity?.(entries.find((entry) => entry.roomId === selectedRoomId)) }, [entries, selectedRoomId, onActivity])
   const scroll = useRef<HTMLDivElement>(null)
   const rememberScroll = useRoomSidebarMotion(scroll, entries, JSON.stringify([kind, search, archived, deletedOnly, filter, repository]))
@@ -92,19 +89,13 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
     finally { setDeleting(false) }
   }
   return <div className="rooms-im-sidebar">
-    <div className="rooms-im-sidebar-sections" role="group" aria-label={t('roomsConversations')}>
-      <button type="button" aria-pressed={surface === 'chats'} onClick={() => showSurface('chats')}>{t('roomsConversations')}</button>
-      <button type="button" aria-pressed={surface === 'agents'} onClick={() => showSurface('agents')}>{t('agentsDirectory')}</button>
-    </div>
-    {surface === 'agents' ? <AgentDirectory onOpen={(id) => { showSurface('chats'); setDeletedOnly(false); onOpenAgent(id) }}
-      onDetails={onDetails} onCreate={() => { showSurface('chats'); setDeletedOnly(false); onCreateAgent() }} /> : <>
     <div className="rooms-im-sidebar-toolbar">
       <div className="rooms-list-search"><Search size={15} /><input value={search} onChange={(e) => { setSearch(e.target.value); setFullSearch(false) }}
         aria-label={t('roomsSidebarSearch')} placeholder={t('roomsSidebarSearch')} />{search ? <button aria-label={t('roomsClose')} onClick={() => setSearch('')}><X size={14} /></button> : null}</div>
       <button type="button" aria-label={t('roomsSidebarNew')} title={t('roomsSidebarNew')} className="rooms-icon-button rooms-im-sidebar-new" onClick={() => { setDeletedOnly(false); onCreateAgent() }}><Plus size={18} /></button>
       <RoomPopover label={t('roomsSidebarFilter')} trigger={<SlidersHorizontal size={16} />} className="rooms-icon-button" align="end" width={280}>
         {() => <div className="rooms-sidebar-filter-menu"><label>{t('roomsSidebarKind')}<select value={kind} onChange={(e) => {
-          const value = e.target.value as Kind; setKind(value); writeBrowserStorageItem('kun.rooms.sidebar.kind', value)
+          const value = e.target.value as Kind; setKind(value); writeBrowserStorageItem(MIXED_KIND_KEY, value)
         }}>{(['all', 'agents', 'group', 'agent_agent'] as const).map((value) => <option key={value} value={value}>{t('roomsSidebar_' + value)}</option>)}</select></label>
           <RoomListFilters filter={filter} archived={archived} repositoryRoot={repository} onRepository={setRepository}
             onFilter={(value) => { setDeletedOnly(false); setArchived(value === 'archived'); setFilter(value === 'archived' ? 'all' : value) }} />
@@ -118,7 +109,7 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
 
     </div>
     {kind !== 'all' || archived || repository || deletedOnly ? <button className="rooms-sidebar-active-filter" onClick={() => {
-      setKind('all'); setArchived(false); setDeletedOnly(false); setFilter('all'); setRepository(''); writeBrowserStorageItem('kun.rooms.sidebar.kind', 'all')
+      setKind('all'); setArchived(false); setDeletedOnly(false); setFilter('all'); setRepository(''); writeBrowserStorageItem(MIXED_KIND_KEY, 'all')
     }}>{t(deletedOnly ? 'roomsRecentlyDeleted' : 'roomsSidebar_' + kind)}{archived ? ' · ' + t('roomsArchivedConversations') : ''}{repository ? ' · ' + repository.split('/').at(-1) : ''}<X size={12} /></button> : null}
     {search.trim().length >= 2 ? <button className="rooms-sidebar-search-all" onClick={() => setFullSearch(!fullSearch)}>{t(fullSearch ? 'roomsSidebarChatsOnly' : 'roomsSidebarSearchAll')}</button> : null}
     {fullSearch && search.trim().length >= 2 ? <RoomUnifiedSearch query={search} repositoryRoot={repository} includeArchived={archived} onSelect={(hit) => { onSearch(hit); setSearch(''); setFullSearch(false) }} /> :
@@ -148,16 +139,14 @@ export function RoomSidebar({ selectedRoomId, onOpenAgent, onSelect, onCreateAge
         </div> : null}
       </div>}
     {page.error || actionError ? <div role="alert" className="rooms-run-error">{page.error || actionError}<button onClick={page.refresh}>{t('roomsRefresh')}</button></div> : null}
-    </>}
     <footer className="rooms-im-sidebar-footer"><button className="rooms-sidebar-self" aria-label={t('roomsMyAvatar')} onClick={onProfile}><RoomAvatar id="user" label={t('roomsMyAvatar')} size={30} /><span>{t('roomsSidebarYou')}</span></button>
       <RoomPopover label={t('roomsSidebarManage')} trigger={<Settings size={17} />} className="rooms-icon-button" align="end">
         {(close) => <div className="rooms-menu-list"><button onClick={() => { close(); onProfile() }}>{t('roomsMyAvatar')}</button>
           <button onClick={() => { close(); onManage() }}>{t('agentsDirectory')}</button><button onClick={() => { close(); onTeam() }}>{t('directTemplates')}</button>
-          <button onClick={() => { close(); showSurface('chats'); setDeletedOnly(false); setArchived(!archived) }}>{t(archived ? 'roomsActiveConversations' : 'roomsArchivedConversations')}</button>
+          <button onClick={() => { close(); setDeletedOnly(false); setArchived(!archived) }}>{t(archived ? 'roomsActiveConversations' : 'roomsArchivedConversations')}</button>
           <button onClick={() => {
-            close(); showSurface('chats'); setDeletedOnly(true); setArchived(false); setFilter('all')
-            setKind('all'); setSearch(''); setRepository(''); setFullSearch(false)
-            writeBrowserStorageItem('kun.rooms.sidebar.kind', 'all')
+            close(); setDeletedOnly(true); setArchived(false); setFilter('all')
+            setSearch(''); setRepository(''); setFullSearch(false)
           }}>{t('roomsRecentlyDeleted')}</button></div>}
       </RoomPopover>
     </footer>

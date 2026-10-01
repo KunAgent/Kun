@@ -1,18 +1,21 @@
 /**
  * ACP model probing for `GET /v1/harnesses/:id/models` (docs/ade/03 §12.2).
  * Opens a throwaway connection, calls `session/new`, and reads the `model`
- * config option's value list — no prompt is ever sent, so the probe incurs
+ * config option's value list or legacy availableModels list. No prompt is sent, so the probe incurs
  * no model usage. Results are cached for ten minutes; concurrent probes for
  * the same harness share one in-flight request.
  */
 import { tmpdir } from 'node:os'
 import { AcpConnection } from '../runtime/acp/acp-connection.js'
 import { AcpClientHost } from '../runtime/acp/acp-client-host.js'
+import { applyAcpSessionModel, parseAcpLegacyModels } from '../runtime/acp/acp-legacy-models.js'
+import type { HarnessModelCatalog } from '../contracts/harness-models.js'
+import { acpModelCatalog } from './acp-model-catalog.js'
 import { startAcpProcess, type AcpSpawnFn } from '../runtime/acp/acp-process.js'
 import {
   ACP_AGENT_METHODS,
   AcpNewSessionResultSchema,
-  acpConfigOptionValues
+  type AcpConfigOption
 } from '../runtime/acp/acp-schema.js'
 import type { HarnessDefinition, HarnessId } from '../contracts/harness.js'
 import {
@@ -36,9 +39,9 @@ export type AcpModelProbeDeps = {
 export class AcpModelProbe {
   private readonly cache = new Map<
     string,
-    { expiresAt: number; models: string[] }
+    { expiresAt: number; catalog: HarnessModelCatalog }
   >()
-  private readonly pending = new Map<string, Promise<string[]>>()
+  private readonly pending = new Map<string, Promise<HarnessModelCatalog>>()
 
   constructor(private readonly deps: AcpModelProbeDeps = {}) {}
 
@@ -53,30 +56,36 @@ export class AcpModelProbe {
    */
   peek(definition: HarnessDefinition): string[] | undefined {
     const cached = this.cache.get(this.cacheKey(definition))
-    return cached && cached.expiresAt > this.nowMs() && cached.models.length > 0
-      ? cached.models
+    return cached && cached.expiresAt > this.nowMs() && cached.catalog.models.length > 0
+      ? cached.catalog.models
       : undefined
   }
 
   async probe(definition: HarnessDefinition): Promise<string[]> {
-    const key = this.cacheKey(definition)
+    return (await this.probeCatalog(definition)).models
+  }
+
+  async probeCatalog(definition: HarnessDefinition, selectedModel?: string): Promise<HarnessModelCatalog> {
+    const key = this.cacheKey(definition, selectedModel)
     const cached = this.cache.get(key)
-    if (cached && cached.expiresAt > this.nowMs()) return cached.models
+    if (cached && cached.expiresAt > this.nowMs()) return cached.catalog
     const inFlight = this.pending.get(key)
     if (inFlight) return inFlight
-    const task = this.probeUncached(definition)
-      .then((models) => {
+    const task = this.probeUncached(definition, selectedModel)
+      .then((catalog) => {
+        if (this.cache.size >= 32) this.cache.delete(this.cache.keys().next().value!)
         this.cache.set(key, {
           expiresAt: this.nowMs() + (this.deps.cacheMs ?? ACP_MODEL_PROBE_CACHE_MS),
-          models
+          catalog
         })
-        return models
+        return catalog
       })
       .catch(() => {
         // A failed probe is cached briefly as empty so the route does not
         // hammer a broken binary on every poll.
-        this.cache.set(key, { expiresAt: this.nowMs() + 30_000, models: [] })
-        return [] as string[]
+        const catalog = { models: [], modelInfo: [] }
+        this.cache.set(key, { expiresAt: this.nowMs() + 30_000, catalog })
+        return catalog
       })
       .finally(() => {
         if (this.pending.get(key) === task) this.pending.delete(key)
@@ -85,10 +94,10 @@ export class AcpModelProbe {
     return task
   }
 
-  private async probeUncached(definition: HarnessDefinition): Promise<string[]> {
+  private async probeUncached(definition: HarnessDefinition, selectedModel?: string): Promise<HarnessModelCatalog> {
     const command =
       this.deps.binaryPath?.(definition.id) ?? definition.launch?.command ?? ''
-    if (!command) return []
+    if (!command) return { models: [], modelInfo: [] }
     const secretEnv = await resolveHarnessSecretEnv(
       definition,
       this.deps.resolveSecretEnv
@@ -98,8 +107,8 @@ export class AcpModelProbe {
       args: definition.launch?.args ?? [],
       env: definition.launch?.env ?? {},
       secretEnv,
-      // Probe sessions never receive credential env; the agent either starts
-      // unauthenticated or reports auth requirements via initialize.
+      // Probes use the CLI's existing login. Only session/new can establish
+      // that authentication is required; advertised authMethods cannot.
       cwd: tmpdir(),
       spawn: this.deps.spawn
     })
@@ -109,27 +118,39 @@ export class AcpModelProbe {
     new AcpClientHost().attach(conn)
     try {
       await conn.initialize()
-      if (conn.requiresAuthentication) return []
       const raw = await conn.rpc.request(
         ACP_AGENT_METHODS.sessionNew,
         { cwd: tmpdir(), mcpServers: [] },
         { timeoutMs: ACP_PROBE_SESSION_TIMEOUT_MS }
       )
       const parsed = AcpNewSessionResultSchema.safeParse(raw)
-      if (!parsed.success) return []
-      const models = new Set<string>()
-      for (const option of parsed.data.configOptions ?? []) {
-        if (option.category !== 'model' || option.type !== 'select') continue
-        for (const value of acpConfigOptionValues(option)) models.add(value)
-      }
-      return [...models].sort()
+      if (!parsed.success) return { models: [], modelInfo: [] }
+      const session = { ...parsed.data, models: parseAcpLegacyModels(parsed.data.models) }
+      const initial = acpModelCatalog({ harnessId: definition.id, ...parsed.data })
+      const off = conn.subscribeSession(session.sessionId, { onUpdate: (update) => {
+        if (update.sessionUpdate === 'config_option_update') {
+          session.configOptions = (update as { configOptions: AcpConfigOption[] }).configOptions
+        }
+      } })
+      try {
+        if (selectedModel) await applyAcpSessionModel(conn, session, selectedModel)
+        return acpModelCatalog({ harnessId: definition.id, configOptions: session.configOptions,
+          models: session.models ? { ...(parsed.data.models as object), currentModelId: session.models.currentModelId } : parsed.data.models,
+          defaultModel: initial.modelInfo.find((entry) => entry.isDefault)?.id })
+      } finally { off() }
     } finally {
       await conn.close().catch(() => undefined)
     }
   }
 
-  private cacheKey(definition: HarnessDefinition): string {
-    return `${definition.id}:${definition.launch?.command ?? ''}`
+  private cacheKey(definition: HarnessDefinition, selectedModel?: string): string {
+    return JSON.stringify({
+      id: definition.id,
+      ...(selectedModel ? { selectedModel } : {}),
+      command: this.deps.binaryPath?.(definition.id) ?? definition.launch?.command,
+      args: definition.launch?.args,
+      env: definition.launch?.env
+    })
   }
 
   private nowMs(): number {

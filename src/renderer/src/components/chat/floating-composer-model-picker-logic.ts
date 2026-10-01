@@ -51,6 +51,8 @@ export type ComposerModelMenuGroup = {
   label: string
   modelIds: string[]
   modelProfiles?: Record<string, ModelProviderModelProfileV1>
+  nativeHarnessId?: string
+  modelInfo?: ModelProviderModelGroup['modelInfo']
 }
 
 export const FLOATING_MENU_MARGIN = 12
@@ -137,11 +139,12 @@ export function buildComposerModelOptions(composerPickList: readonly string[]): 
 
 export function filterComposerModelIds(
   modelIds: readonly string[],
-  query: string
+  query: string,
+  modelInfo?: ComposerModelMenuGroup['modelInfo']
 ): string[] {
   const normalizedQuery = query.trim().toLowerCase()
   if (!normalizedQuery) return [...modelIds]
-  return modelIds.filter((id) => id.toLowerCase().includes(normalizedQuery))
+  return modelIds.filter((id) => `${id} ${modelInfo?.[id]?.displayName ?? ''}`.toLowerCase().includes(normalizedQuery))
 }
 
 export function shouldShowProviderSetupPrompt(groups: readonly ComposerModelMenuGroup[]): boolean {
@@ -257,12 +260,14 @@ export function calculateFloatingMenuPlacement({
   menuHeight,
   viewportHeight,
   viewportWidth,
+  preferredWidth = FLOATING_MENU_WIDTH,
   coordinateScale = 1
 }: {
   anchorRect: FloatingMenuAnchorRect
   menuHeight: number
   viewportHeight: number
   viewportWidth: number
+  preferredWidth?: number
   coordinateScale?: number
 }): FloatingMenuPlacement {
   const scale = Number.isFinite(coordinateScale) && coordinateScale > 0 ? coordinateScale : 1
@@ -277,7 +282,7 @@ export function calculateFloatingMenuPlacement({
     FLOATING_MENU_MIN_WIDTH,
     normalizedViewportWidth - FLOATING_MENU_MARGIN * 2
   )
-  const width = Math.min(FLOATING_MENU_WIDTH, viewportMaxWidth)
+  const width = Math.min(preferredWidth, viewportMaxWidth)
   const left = clamp(
     normalizedAnchorRect.right - width,
     FLOATING_MENU_MARGIN,
@@ -363,13 +368,17 @@ export function calculateFloatingSubmenuPlacement({
   submenuHeight,
   viewportHeight,
   viewportWidth,
-  coordinateScale = 1
+  coordinateScale = 1,
+  preferredWidth = FLOATING_SUBMENU_WIDTH,
+  maximumHeight = FLOATING_SUBMENU_MAX_HEIGHT
 }: {
   anchorRect: FloatingSubmenuAnchorRect
   submenuHeight: number
   viewportHeight: number
   viewportWidth: number
   coordinateScale?: number
+  preferredWidth?: number
+  maximumHeight?: number
 }): FloatingSubmenuPlacement {
   const scale = Number.isFinite(coordinateScale) && coordinateScale > 0 ? coordinateScale : 1
   const normalizedAnchorRect = {
@@ -384,7 +393,7 @@ export function calculateFloatingSubmenuPlacement({
     FLOATING_MENU_MIN_WIDTH,
     normalizedViewportWidth - FLOATING_MENU_MARGIN * 2
   )
-  const width = Math.min(FLOATING_SUBMENU_WIDTH, viewportMaxWidth)
+  const width = Math.min(preferredWidth, viewportMaxWidth)
   const spaceRight = normalizedViewportWidth - normalizedAnchorRect.right - FLOATING_MENU_MARGIN
   const spaceLeft = normalizedAnchorRect.left - FLOATING_MENU_MARGIN
   const openRight = spaceRight >= width + FLOATING_SUBMENU_GAP || spaceRight >= spaceLeft
@@ -398,7 +407,7 @@ export function calculateFloatingSubmenuPlacement({
   )
   const contentHeight = Math.max(submenuHeight, FLOATING_SUBMENU_MIN_HEIGHT)
   const maxHeight = Math.min(
-    FLOATING_SUBMENU_MAX_HEIGHT,
+    maximumHeight,
     Math.max(FLOATING_SUBMENU_MIN_HEIGHT, normalizedViewportHeight - FLOATING_MENU_MARGIN * 2)
   )
   const visibleHeight = Math.min(contentHeight, maxHeight)

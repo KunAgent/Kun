@@ -1,3 +1,4 @@
+import type { ModelProviderModelGroup } from './model-provider-model-group'
 import type {
   AppSettingsPatch,
   AppSettingsV1,
@@ -367,21 +368,7 @@ export type ModelProviderModelSelection = {
   modelId: string
 }
 
-export type ModelProviderModelGroup = {
-  providerId: string
-  /** Stable built-in preset identity; survives multi-account ids such as codex-2. */
-  presetSource?: string
-  label: string
-  modelIds: string[]
-  modelProfiles?: Record<string, ModelProviderModelProfileV1>
-  /** Opaque account reference used only for an acknowledged extension binding. */
-  accountId?: string
-  extensionProvider?: {
-    extensionId: string
-    extensionVersion: string
-    localProviderId: string
-  }
-}
+export type { ModelProviderModelGroup } from './model-provider-model-group'
 
 export type ModelProviderProbeRequest = {
   providerId: string

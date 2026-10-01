@@ -135,13 +135,24 @@ export function isRetiredOpenCodeFreeProviderId(id: string): boolean {
   return /^opencode-free(?:-[0-9]+)?$/u.test(id)
 }
 
+export function isRetiredOpenCodeFreeProvider(input: {
+  id?: string
+  presetSource?: string | { presetId?: string } | null
+}): boolean {
+  const id = typeof input.id === 'string' ? input.id.trim() : ''
+  if (id && isRetiredOpenCodeFreeProviderId(id)) return true
+  const presetId = typeof input.presetSource === 'string'
+    ? input.presetSource.trim()
+    : input.presetSource?.presetId?.trim() ?? ''
+  return presetId === 'opencode-free'
+}
+
 export function normalizeModelProviderProfile(
   input: ModelProviderProfilePatchV1 | undefined,
   missingUseProxy = false
 ): ModelProviderProfileV1 | null {
   const id = normalizeModelProviderId(input?.id)
-  if (!id || isRetiredOpenCodeFreeProviderId(id)) return null
-  if (input?.presetSource?.presetId === 'opencode-free') return null
+  if (!id || isRetiredOpenCodeFreeProvider({ id, presetSource: input?.presetSource })) return null
   const presetSource = normalizeModelProviderPresetSource(input, id)
   const resolvedPresetSource = presetSource
     ? resolveModelProviderPresetSource({ id, presetSource })

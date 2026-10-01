@@ -120,6 +120,17 @@ describe('createAdeManagerContext', () => {
     expect(block).toContain('No team exists yet')
   })
 
+  it('keeps existing-team guidance without suggesting new dispatches when disabled', async () => {
+    const block = await createAdeManagerContext({
+      ...makeDeps({ team: team({ workers: [worker()] }) }),
+      canStartNewWork: () => false
+    })({ threadId: 'thr_mgr' })
+    expect(block).toContain('disabled for new work')
+    expect(block).toContain('Workers (1)')
+    expect(block).not.toContain('No team exists yet')
+    expect(block).not.toContain('create one worker per piece')
+  })
+
   it('bounds the block length for large teams', async () => {
     const workers = Array.from({ length: 40 }, (_, i) =>
       worker({ workerId: `wrk_${i}`, label: `w${i}` }))

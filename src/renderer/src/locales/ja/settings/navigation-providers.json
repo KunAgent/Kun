@@ -379,7 +379,7 @@
   "shortcutToggleMaximize": "ウィンドウを最大化する",
   "shortcutToggleMaximizeDesc": "メインウィンドウを最大化または元に戻します。",
   "kunProvider": "モデルプロバイダー",
-  "kunProviderDesc": "エージェント用に 1 つ以上の OpenAI 互換プロバイダーを構成します。各プロバイダーは、独自の API キー、サービス URL、およびモデル リストを持つことができます。",
+  "kunProviderDesc": "Kun の動作、コーディングエージェントの接続、共同作業の既定値を設定します。モデルのアカウントと API キーは「プロバイダー」で管理します。",
   "kunProviderSelectDesc": "「プロバイダー」タブから構成済みプロバイダーの 1 つを選択します。",
   "providersDesc": "API キー、サービス URL、テキストモデル、画像機能をここで設定します。アシスタント、ワーク、画像生成でこれらのプロファイルを共有します。",
   "modelProviderOpenConfigFile": "Open config file",

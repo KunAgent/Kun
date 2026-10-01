@@ -228,3 +228,27 @@
 .rooms-workbench-chip-list span { grid-column: 1; font-size: 11px; color: var(--ds-text-muted); }
 .rooms-workbench-chip-list li[data-status='needs_attention'] span { color: #b45309; }
 .rooms-workbench-chip-list button { grid-column: 2; grid-row: 1 / span 2; font-size: 12px; font-weight: 600; color: var(--ds-accent); }
+
+.rooms-workspace .rooms-details-panel.rooms-details-embedded {
+  position: relative;
+  width: 100%;
+  border: 0;
+  box-shadow: none;
+}
+.rooms-details-embedded .rooms-detail-titlebar { padding: .75rem 1rem; }
+.rooms-workbench-right-panel { max-width: calc(100% - 2.5rem); }
+.rooms-workbench-empty-action {
+  border: 1px solid var(--ds-border);
+  border-radius: .625rem;
+  padding: .625rem 1rem;
+  color: var(--ds-text);
+  background: var(--ds-surface-card);
+}
+@media (max-width: 1099px) {
+  .rooms-workbench-right-panel {
+    position: absolute;
+    inset: 0 2.5rem 0 auto;
+    z-index: 45;
+    box-shadow: -12px 0 32px #00000012;
+  }
+}

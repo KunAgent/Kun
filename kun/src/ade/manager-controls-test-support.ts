@@ -57,6 +57,9 @@ export async function setupAdeStores(
     threads: new InMemoryThreadStore()
   }
   await stores.teams.ensure('thr_mgr', limits, budget)
+  await stores.threads.upsert(createThreadRecord({
+    id: 'thr_mgr', title: 'manager', workspace: '/repo', model: 'model-x', workspaceMode: 'ade'
+  }))
   return stores
 }
 

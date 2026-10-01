@@ -10,6 +10,7 @@
 import type { ApprovalPolicy, SandboxMode } from '../../contracts/policy.js'
 import { isGatewayModelId } from '../../harness/gateway-model-id.js'
 import { buildHarnessEnv } from '../../harness/harness-env.js'
+import { withLoopbackProxyBypass } from './sdk-process-environment.js'
 import type {
   SdkCanUseTool,
   SdkMcpServerConfig,
@@ -34,8 +35,7 @@ export const DEFAULT_SDK_BUILTIN_TOOLS: readonly string[] = [
   'Glob',
   'Grep',
   'WebSearch',
-  'WebFetch',
-  'TodoWrite'
+  'WebFetch'
 ]
 
 /**
@@ -43,7 +43,9 @@ export const DEFAULT_SDK_BUILTIN_TOOLS: readonly string[] = [
  * AskUserQuestion has no UI in this embedding (the model would ask and get no
  * answer); kun's own bridged `user_input` gate handles interactive questions.
  */
-export const DEFAULT_SDK_DISALLOWED_TOOLS: readonly string[] = ['AskUserQuestion']
+export const DEFAULT_SDK_DISALLOWED_TOOLS: readonly string[] = [
+  'AskUserQuestion', 'TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList'
+]
 
 const CLAUDE_OAUTH_TOKEN_PATTERN = /^sk-ant-oat[\w-]+$/
 
@@ -91,7 +93,7 @@ export function buildScopedEnv(
 ): Record<string, string | undefined> {
   if (gateway) {
     return buildHarnessEnv({
-      base: baseEnv,
+      base: withLoopbackProxyBypass(baseEnv),
       strip: [...gateway.stripEnv, 'CLAUDE_CODE_OAUTH_TOKEN'],
       add: {
         [gateway.env.baseUrl]: gateway.baseUrl,

@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { refreshNativeAgentNetworkBeforeProbe } from './native-agent-network'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -268,6 +269,8 @@ const DEFAULT_RUNTIME_POST_TIMEOUT_MS = 60_000
 const MCP_OAUTH_POST_TIMEOUT_MS = 180_000
 const THREAD_TIMELINE_GET_TIMEOUT_MS = 120_000
 const THREAD_SUMMARIZE_POST_TIMEOUT_MS = 120_000
+const HARNESS_PROBE_TIMEOUT_MS = 90_000
+const HARNESS_TEST_TIMEOUT_MS = 420_000
 const PROVIDER_QUOTA_GET_TIMEOUT_MS = 120_000
 const USAGE_HISTORY_GET_TIMEOUT_MS = 120_000
 const RUNTIME_EVENTS_TIMEOUT_MARGIN_MS = 5_000
@@ -323,6 +326,16 @@ export function resolveRuntimeRequestTimeoutMs(
   requestedTimeoutMs?: number
 ): number {
   if (requestedTimeoutMs !== undefined) return requestedTimeoutMs
+  const pathname = pathNorm.split('?')[0] ?? pathNorm
+  if (method === 'POST' && /^\/v1\/harnesses\/[^/]+\/test$/u.test(pathname)) {
+    // Trial can run for 300s, plus detection, handshake, interrupt and cleanup.
+    return HARNESS_TEST_TIMEOUT_MS
+  }
+  if ((method === 'POST' && (/^\/v1\/harnesses\/[^/]+\/probe$/u.test(pathname) ||
+    pathname === '/v1/harnesses/probe-definition')) ||
+    (method === 'GET' && /^\/v1\/harnesses\/[^/]+\/models$/u.test(pathname))) {
+    return HARNESS_PROBE_TIMEOUT_MS
+  }
   if (method === 'POST' && /^\/v1\/mcp\/oauth\/[A-Za-z0-9._-]+$/.test(pathNorm)) {
     return MCP_OAUTH_POST_TIMEOUT_MS
   }
@@ -367,6 +380,8 @@ export async function runtimeRequestViaHost(
   const method = (init.method ?? 'GET').toUpperCase()
   const lease = snapshotRuntimeRequestLease(requestSettings)
   const pathNorm = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`
+  await refreshNativeAgentNetworkBeforeProbe(pathNorm, method, (body) =>
+    fetchRuntimeRequest(lease, '/v1/runtime/config/apply', 'POST', { body, signal: init.signal }))
   try {
     return await fetchRuntimeRequest(lease, pathNorm, method, init)
   } catch (error) {
