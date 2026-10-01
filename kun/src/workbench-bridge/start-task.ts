@@ -5,6 +5,7 @@ import type { WorkbenchLink } from '../contracts/workbench-links.js'
 import { TurnConflictError, ThreadClosingError } from '../services/turn-service.js'
 import type { RoomStoredDocument } from '../rooms/room-store.js'
 import type { WorkbenchBridge } from './bridge.js'
+import { workbenchTurnSource } from './turn-source.js'
 import { updateWorkbenchLink } from './link-store.js'
 import { executionMode, planRelativePath, validateExecution } from './execution.js'
 
@@ -129,6 +130,11 @@ async function admitFirstTurn(bridge: WorkbenchBridge, link: WorkbenchLink, thre
   if (planPath && !link.planPath) {
     await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ planPath, phase: 'plan' }))
   }
+  let source: Awaited<ReturnType<typeof workbenchTurnSource>>
+  try { source = await workbenchTurnSource(bridge, link) } catch (error) {
+    await fail(bridge, link, error instanceof Error ? error.message : String(error))
+    return
+  }
   await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ admissionAttempted: true, clientRequestId }))
   const model = link.request.execution?.model ?? bridge.deps.model()
   try {
@@ -140,7 +146,7 @@ async function admitFirstTurn(bridge: WorkbenchBridge, link: WorkbenchLink, thre
       ...(link.request.execution?.model?.reasoningEffort ? { reasoningEffort: link.request.execution.model.reasoningEffort } : {}),
       ...(link.request.execution?.model?.serviceTier ? { serviceTier: link.request.execution.model.serviceTier } : {}),
       ...(link.request.execution?.persona ? { persona: link.request.execution.persona.text } : {}),
-      clientSurface: 'gui', agentSurface: link.surface === 'code' ? 'code' : 'write', mode: mode === 'plan' || mode === 'auto' ? 'plan' : 'agent',
+      ...source, agentSurface: link.surface === 'code' ? 'code' : 'write', mode: mode === 'plan' || mode === 'auto' ? 'plan' : 'agent',
       ...(planPath ? { guiPlan: { operation: 'draft' as const, fixedPath: true, workspaceRoot: thread.workspace, relativePath: planPath,
         planId: `${thread.workspace}:${planPath}`, sourceRequest: link.request.goal, title: link.request.title } } : {}),
       orchestration: link.request.execution?.orchestration ?? 'direct', attachmentIds: [], composerContexts: [], fileReferences: [], enqueueIfBusy: true } })
