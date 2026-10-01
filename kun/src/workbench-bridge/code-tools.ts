@@ -2,13 +2,14 @@ import { z } from 'zod'
 import type { ThreadStore } from '../ports/thread-store.js'
 import { LocalToolHost, type LocalTool } from '../adapters/tool/local-tool-host.js'
 import { agentStableId } from '../agents/agent-identity-service.js'
-import { WORKBENCH_LIMITS, WorkbenchScheduleSchema, type WorkbenchLink } from '../contracts/workbench-links.js'
+import { WORKBENCH_LIMITS, WorkbenchExecutionSchema, WorkbenchScheduleSchema, type WorkbenchLink } from '../contracts/workbench-links.js'
 import { resolveThreadAgentSurface } from '../domain/thread.js'
 import { ROOM_AX_TOOL_DESCRIPTIONS } from '../rooms/room-ax-surfaces.js'
 import { WorkbenchBridge } from './bridge.js'
 import { pathWithin } from './directory.js'
 import { requestWorkbenchCancel } from './actions.js'
 import { readWorkbenchLink } from './link-store.js'
+import { validateExecution } from './execution.js'
 import { previewThread } from './result-summary.js'
 import {
   advertiseWorkbenchTool, assertWorkbenchCapability, requestWorkbenchLink, workbenchFail, workbenchToolMeta, workbenchToolScope,
@@ -35,6 +36,7 @@ const CreateTaskInput = z.object({
   acceptance: z.string().trim().max(2000).optional(),
   projectRoot: z.string().min(1).max(4096),
   mode: z.enum(['agent', 'plan']).default('agent'),
+  execution: WorkbenchExecutionSchema.omit({ permission: true, persona: true }).optional(),
   executionMode: z.enum(['direct', 'plan', 'auto', 'goal']).optional(),
   goalTokenBudget: z.number().int().positive().nullable().optional(),
   schedule: WorkbenchScheduleSchema.optional(),
@@ -60,13 +62,13 @@ async function ownLink(scope: WorkbenchToolScope, linkId: string) {
 const linkView = (link: WorkbenchLink) => ({
   linkId: link.id, kind: link.kind, status: link.status, title: link.request.title, project: link.request.workspaceRoot,
   threadId: link.threadId, attention: link.attention, userTookOver: link.userTookOver === true,
-  result: link.result, error: link.error, updatedAt: link.updatedAt
+  execution: link.request.execution, result: link.result, error: link.error, updatedAt: link.updatedAt
 })
 
 /** Code-mode tools of a private Agent: read the user's Code sessions and hand work to Code. */
 export function workbenchCodeTools(threads: ThreadStore): LocalTool[] {
   const define = (name: keyof typeof ROOM_AX_TOOL_DESCRIPTIONS, input: z.ZodType,
-    run: (scope: WorkbenchToolScope, args: never, toolCallId: string) => Promise<{ output: unknown } | { isError: true; output: unknown }>,
+    run: (scope: WorkbenchToolScope, args: never, toolCallId: string, signal?: AbortSignal) => Promise<{ output: unknown } | { isError: true; output: unknown }>,
     options: { needsToolCall?: boolean } = {}) => LocalToolHost.defineTool({
     name, description: ROOM_AX_TOOL_DESCRIPTIONS[name], ...workbenchToolMeta, shouldAdvertise: advertiseWorkbenchTool,
     inputSchema: schema(input),
@@ -75,7 +77,7 @@ export function workbenchCodeTools(threads: ThreadStore): LocalTool[] {
         const parsed = input.safeParse(args)
         if (!parsed.success) return { isError: true, output: { error: `invalid ${name} input`, issues: parsed.error.issues } }
         const scope = await workbenchToolScope(threads, context, options)
-        return await run(scope, parsed.data as never, context.activeToolCallId ?? '')
+        return await run(scope, parsed.data as never, context.activeToolCallId ?? '', context.abortSignal)
       } catch (error) { return workbenchFail(error) }
     }
   })
@@ -84,6 +86,12 @@ export function workbenchCodeTools(threads: ThreadStore): LocalTool[] {
     WorkbenchBridge.withinAgentLimits(scope.agent, thread.workspace)
 
   return [
+    define('list_code_harnesses', z.object({}).strict(), async (scope, _args, _toolCallId, signal) => {
+      assertWorkbenchCapability(scope, 'code-read')
+      if (!scope.bridge.harnesses) throw new Error('Code Agent discovery is unavailable in this runtime')
+      return { output: { authority: REFERENCE, ...await scope.bridge.harnesses.list(signal),
+        note: 'Use an available model route as execution.model in create_code_task. Availability grants no permissions.' } }
+    }),
     define('list_code_projects', z.object({}).strict(), async (scope) => {
       assertWorkbenchCapability(scope, 'code-read')
       const projects = (await scope.bridge.knownCodeProjects(scope.agent)).slice(0, 30)
@@ -134,13 +142,21 @@ export function workbenchCodeTools(threads: ThreadStore): LocalTool[] {
       if (!WorkbenchBridge.withinAgentLimits(scope.agent, root)) throw new Error('That project is outside this Agent\'s allowed directories')
       // A directory the user never used in Code always needs their explicit confirmation.
       const known = (await scope.bridge.knownCodeProjects({})).some((project) => project.path === root)
-      return requestWorkbenchLink(scope, { kind: 'code_task', surface: 'code',
-        mode: !known || input.schedule || (input.executionMode === 'goal' && !input.goalTokenBudget) ? 'confirm' : mode, request: {
+      if (input.execution && input.executionMode && input.execution.mode !== input.executionMode) {
+        throw new Error('execution.mode and executionMode must match')
+      }
+      if (input.execution?.goalTokenBudget !== undefined && input.goalTokenBudget !== undefined &&
+        input.execution.goalTokenBudget !== input.goalTokenBudget) throw new Error('Goal token budgets must match')
+      const execution = input.execution ?? (input.executionMode ? { mode: input.executionMode,
+        ...(input.goalTokenBudget ? { goalTokenBudget: input.goalTokenBudget } : {}) } : undefined)
+      const request = await validateExecution(scope.bridge, scope.roomId, {
         title: input.title, goal: input.goal, ...(input.acceptance ? { acceptance: input.acceptance } : {}),
         workspaceRoot: root, mode: input.mode, isolation: input.isolation, report: input.report,
-        ...(input.executionMode ? { execution: { mode: input.executionMode,
-          ...(input.goalTokenBudget ? { goalTokenBudget: input.goalTokenBudget } : {}) } } : {}),
-        ...(input.schedule ? { schedule: input.schedule } : {}) } })
+        ...(execution ? { execution } : {}), ...(input.schedule ? { schedule: input.schedule } : {})
+      }, true)
+      return requestWorkbenchLink(scope, { kind: 'code_task', surface: 'code',
+        mode: !known || input.schedule || (request.execution?.mode === 'goal' && !request.execution.goalTokenBudget) ? 'confirm' : mode,
+        request })
     }, { needsToolCall: true }),
     define('get_code_task', LinkInput, async (scope, args) => {
       assertWorkbenchCapability(scope, 'code-read')

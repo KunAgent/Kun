@@ -1,0 +1,53 @@
+name: Rooms Agent visual smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/rooms-harness-smoke.yml'
+      - 'scripts/smoke-rooms-harness-*.cjs'
+      - 'scripts/smoke-development-ade*.cjs'
+      - 'kun/src/workbench-bridge/**'
+      - 'kun/src/contracts/workbench-*.ts'
+      - 'src/renderer/src/components/rooms/WorkbenchTask*'
+      - 'src/renderer/src/components/rooms/RoomWorkbenchTaskCard*'
+      - 'src/renderer/src/components/rooms/workbench-agent-*'
+      - 'src/renderer/src/components/rooms/rooms-workbench.css'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rooms-agent-visual-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  visual:
+    name: Real Electron Rooms-to-Agent flow
+    runs-on: macos-latest
+    timeout-minutes: 35
+    env:
+      NODE_OPTIONS: '--max-old-space-size=5120'
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            kun/package-lock.json
+      - name: Install existing dependencies
+        run: npm ci
+      - name: Build actual application
+        run: npm run build
+      - name: Exercise isolated offline Rooms and ACP flow
+        run: node scripts/smoke-development-ade.cjs --rooms-harness-only --evidence dist/rooms-agent-smoke
+      - name: Upload screenshots and verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rooms-agent-rendered-ui
+          path: dist/rooms-agent-smoke
+          if-no-files-found: warn
+          retention-days: 7

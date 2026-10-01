@@ -11,10 +11,12 @@ import type { RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
 import type { RoomService } from '../rooms/room-service.js'
 import type { RoomStore } from '../rooms/room-store.js'
 import type { TaskWorkspaceService } from '../workspace-tasks/task-workspace-service.js'
+import type { WorkbenchHarnessService } from './harnesses.js'
 import { WorkbenchDirectoryService, pathWithin } from './directory.js'
 
 export type WorkbenchExternalServices = {
   taskWorkspaces?: TaskWorkspaceService
+  harnesses?: WorkbenchHarnessService
   projectBoard?: ProjectBoardService
 }
 
@@ -48,6 +50,7 @@ export class WorkbenchBridge {
 
   attach(external: WorkbenchExternalServices): void { this.external = { ...this.external, ...external } }
   get taskWorkspaces(): TaskWorkspaceService | undefined { return this.external.taskWorkspaces }
+  get harnesses(): WorkbenchHarnessService | undefined { return this.external.harnesses }
   get projectBoard(): ProjectBoardService | undefined { return this.external.projectBoard }
   get store(): RoomStore { return this.deps.store }
 

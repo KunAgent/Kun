@@ -119,6 +119,30 @@ describe('Room workbench task card', () => {
     expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ id: 'link-1', status: 'completed' }))
   })
 
+  it('keeps the requested Agent visible through execution and completion', async () => {
+    const request = { ...link().request, execution: { mode: 'direct' as const,
+      model: { harnessId: 'codex', credentialMode: 'native-login' as const, model: 'gpt-fixture' } } }
+    mocks.client.get.mockResolvedValue(link({ request, status: 'running', threadId: 'thread-1' }))
+    await mount()
+    expect(text(renderer!)).toContain('gpt-fixture')
+    expect(renderer!.root.findByProps({ 'data-workbench-agent': 'codex' })).toBeTruthy()
+    mocks.client.get.mockResolvedValue(link({ request, status: 'completed', threadId: 'thread-1' }))
+    await act(async () => { emit({ roomId: 'room', kind: 'workbench.link.updated', payload: { linkId: 'link-1' } }) })
+    expect(renderer!.root.findByProps({ 'data-workbench-agent': 'codex' })).toBeTruthy()
+    expect(button(renderer!, 'Stop')).toBeUndefined()
+  })
+
+  it('cancel editing discards unsaved choices before starting', async () => {
+    mocks.client.get.mockResolvedValue(link())
+    mocks.client.confirm.mockResolvedValue(link({ status: 'queued', revision: 1 }))
+    await mount()
+    await act(async () => { button(renderer!, 'Edit')!.props.onClick() })
+    await act(async () => { renderer!.root.findByType('textarea').props.onChange({ target: { value: 'discard this draft' } }) })
+    await act(async () => { button(renderer!, 'Cancel')!.props.onClick() })
+    await act(async () => { button(renderer!, 'Start')!.props.onClick() })
+    expect(mocks.client.confirm.mock.calls[0][1].goal).toBe('Reconnect after a drop')
+  })
+
   it('shows document previews and edit diffs as reviewable content', async () => {
     mocks.client.get.mockResolvedValue(link({ kind: 'work_edit', surface: 'work', request: { title: 'Rename beta', goal: '', workspaceRoot: '/work',
       relativePath: 'doc.md', mode: 'agent', isolation: 'inherit', report: 'silent', edits: [{ oldText: 'beta', newText: 'BETA' }] } }))

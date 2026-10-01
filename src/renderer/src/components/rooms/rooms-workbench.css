@@ -252,3 +252,36 @@
     box-shadow: -12px 0 32px #00000012;
   }
 }
+
+/* A stable execution identity connects the conversation to its Code task. */
+.rooms-workbench-agent-identity {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  margin: 12px 0; padding: 10px 12px; border: 1px solid var(--ds-border);
+  border-radius: 12px; background: var(--ds-surface-subtle);
+}
+.rooms-workbench-agent-icon {
+  display: grid; place-items: center; flex: none; width: 34px; height: 34px;
+  border: 1px solid var(--ds-border); border-radius: 10px; background: var(--ds-surface-card);
+}
+.rooms-workbench-agent-copy { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.rooms-workbench-agent-copy strong { font-size: 13px; font-weight: 650; color: var(--ds-text); }
+.rooms-workbench-agent-copy > span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--ds-text-muted);
+}
+.rooms-workbench-agent-source { max-width: 42%; font-size: 11.5px; line-height: 1.4; color: var(--ds-text-muted); }
+.rooms-workbench-agent-picker {
+  display: grid; gap: 12px; min-width: 0; padding: 12px;
+  border: 1px solid var(--ds-border); border-radius: 12px; background: var(--ds-surface-subtle);
+}
+.rooms-workbench-agent-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rooms-workbench-agent-heading > span { font-size: 12px; color: var(--ds-text-muted); }
+.rooms-workbench-agent-hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ds-text-muted); }
+.rooms-workbench-agent-warning { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #b45309; }
+.rooms-workbench-agent-warning > svg { flex: none; }
+.rooms-workbench-agent-warning > span { flex: 1; }
+.rooms-workbench-agent-warning button { display: inline-flex; align-items: center; gap: 4px; color: var(--ds-accent); }
+@media (max-width: 600px) {
+  .rooms-workbench-agent-source { max-width: 34%; }
+  .rooms-workbench-agent-picker select { min-height: 40px; }
+  .rooms-workbench-agent-heading .ds-composer-harness-picker button { min-height: 36px; }
+}

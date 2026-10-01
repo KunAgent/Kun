@@ -30,7 +30,7 @@ export function outcomePrompt(link: WorkbenchLink): string {
     'Tell the user the outcome with send_im_message (phase "final"): what was done, which files changed, any checks that ran, and any caveat. ' +
       'If it failed or needs the user, say so plainly. Do not start another task unless the user asks.',
     JSON.stringify({ authority: 'reference_only', linkId: link.id, kind: link.kind, status: link.status, title: link.request.title,
-      project: link.request.workspaceRoot, error: link.error, userTookOver: link.userTookOver === true,
+      project: link.request.workspaceRoot, execution: link.request.execution, error: link.error, userTookOver: link.userTookOver === true,
       result: link.result && { summary: link.result.summary, finalExcerpt: link.result.finalExcerpt,
         changedFiles: link.result.changedFiles, commands: link.result.commands } })
   ].join('\n')

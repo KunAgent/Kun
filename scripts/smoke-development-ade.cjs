@@ -37,6 +37,8 @@ const { runProtectedApprovalFlow } = require('./smoke-development-protected-appr
 const { runUnifiedCodeFlow } = require('./smoke-development-ade-flow.cjs')
 const { runUnifiedCodeVisuals } = require('./smoke-development-ade-visuals.cjs')
 const { startModelFixture } = require('./smoke-development-ade-model.cjs')
+const { writeRoomsHarnessStub } = require('./smoke-rooms-harness-fixture.cjs')
+const { runRoomsHarnessFlow } = require('./smoke-rooms-harness-controls.cjs')
 
 const exec = promisify(execFile)
 const MODEL = 'deepseek-chat'
@@ -46,6 +48,7 @@ async function main() {
   const timeoutMs = positiveIntegerArgument('--timeout-ms', 120_000)
   const nativeApprovalTimeoutMs = positiveIntegerArgument('--native-approval-timeout-ms', 180_000)
   const keepDirs = process.argv.includes('--keep-dirs')
+  const roomsHarnessOnly = process.argv.includes('--rooms-harness-only')
   const visualOnly = process.argv.includes('--visual-only')
   const agentModeOnly = process.argv.includes('--agent-mode-only')
   const nativeModelOnly = process.argv.includes('--native-model-only')
@@ -78,6 +81,7 @@ async function main() {
   const electronExecutable = join(electronPackage, 'dist', (await readFile(electronPathFile, 'utf8')).trim())
   assert(existsSync(electronExecutable), 'Electron executable is missing; install dependencies before this offline smoke')
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'kun-ade-desktop-smoke-'))
+  const releaseFile = join(temporaryRoot, 'rooms-harness-release')
   const home = join(temporaryRoot, 'home')
   const profile = join(home, '.kun', 'data')
   const userData = join(temporaryRoot, 'electron-user-data')
@@ -108,7 +112,7 @@ async function main() {
     await Promise.all([home, profile, userData, appData, localAppData, temporaryDirectory, evidenceRoot]
       .map((directory) => mkdir(directory, { recursive: true })))
     await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify({
-      ok: false, status: 'running', startedAt, build, compiledRenderer, visualOnly, agentModeOnly, protectedApprovalOnly, locale: visualLocale, theme: visualTheme, scale: visualScale
+      ok: false, status: 'running', startedAt, build, compiledRenderer, visualOnly, agentModeOnly, roomsHarnessOnly, protectedApprovalOnly, locale: visualLocale, theme: visualTheme, scale: visualScale
     }, null, 2) + '\n')
     for (const name of ['failure.txt', 'failure-page.txt', 'failure.png', 'failure-runtime-fixture.json',
       'failure-workbench-fixture.json', 'failure-workspaces-fixture.json']) {
@@ -142,7 +146,7 @@ async function main() {
     const claudeStubUpdated = await writeVersionStub(stubDir, 'claude-alt', '2.2.0')
     const oldGeminiStub = await writeVersionStub(stubDir, 'gemini-old', '0.0.1')
     const acpStub = await writeAcpStub(stubDir, 'smoke-acp')
-    const devinStub = devinModelsOnly ? await writeDevinModelStub(stubDir) : await writeDevinAcpStub(stubDir)
+    const devinStub = roomsHarnessOnly ? await writeRoomsHarnessStub(stubDir, releaseFile) : devinModelsOnly ? await writeDevinModelStub(stubDir) : await writeDevinAcpStub(stubDir)
     const devinInstallTarget = installOnly ? await writeInstallerFixture(stubDir, devinStub) : undefined
     if (installOnly) isolatedEnvironment.PATH = `${stubDir}${require('node:path').delimiter}${isolatedEnvironment.PATH ?? ''}`
     const codexStub = nativeModelOnly ? await writeCodexModelStub(stubDir) : undefined
@@ -151,7 +155,7 @@ async function main() {
     await writeFile(join(home, '.claude', '.credentials.json'),
       JSON.stringify({ claudeAiOauth: { accessToken: 'ade-smoke' } }))
 
-    modelFixture = await startModelFixture(MODEL)
+    modelFixture = await startModelFixture(MODEL, roomsHarnessOnly ? { workspaceRoot } : {})
     const settings = { ...desktopSmokeSettings(runtimePort, workspaceRoot, realProfile),
       locale: visualLocale, theme: visualTheme, initialSetupCompleted: true }
     settings.agents.kun.baseUrl = modelFixture.baseUrl
@@ -233,7 +237,10 @@ async function main() {
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
 
     let assertions
-    if (protectedApprovalOnly) {
+    if (roomsHarnessOnly) {
+      assertions = await runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, workspaceRoot, releaseFile, modelFixture,
+        resize: (width, height) => resize(electronApplication, width, height) })
+    } else if (protectedApprovalOnly) {
       assertions = await runProtectedApprovalFlow({ application: electronApplication, page, capture, poll, runtimeRequest })
     } else if (devinModelsOnly) {
       assertions = await runDevinModelFlow({ page, capture, poll, resize: (width, height) => resize(electronApplication, width, height) })
@@ -259,7 +266,7 @@ async function main() {
     assert.deepEqual(runtimeDiagnostics.staleTurnFences, [], 'Runtime emitted a stale turn fence rejection')
     assert.deepEqual(pageErrors, [], 'Renderer emitted an uncaught exception')
     result = { ok: true, status: 'passed', startedAt, build, completedAt: new Date().toISOString(),
-      renderer: compiledRenderer ? 'compiled' : 'development', visualOnly, agentModeOnly, nativeModelOnly, protectedApprovalOnly, locale: visualLocale, theme: visualTheme, scale: visualScale,
+      renderer: compiledRenderer ? 'compiled' : 'development', visualOnly, agentModeOnly, nativeModelOnly, roomsHarnessOnly, protectedApprovalOnly, locale: visualLocale, theme: visualTheme, scale: visualScale,
       platform: process.platform, arch: process.arch, pageErrors, layouts, runtimeDiagnostics,
       ...(keepDirs ? { retainedDirectories: { temporaryRoot, workspaceRoot } } : {}),
       modelFixture: modelFixture.snapshot(), screenshots,
@@ -319,7 +326,7 @@ async function main() {
   }
   if (primaryError) {
     result = { ok: false, status: 'failed', startedAt, build, completedAt: new Date().toISOString(),
-      renderer: compiledRenderer ? 'compiled' : 'development', visualOnly, agentModeOnly, protectedApprovalOnly, locale: visualLocale, theme: visualTheme, scale: visualScale,
+      renderer: compiledRenderer ? 'compiled' : 'development', visualOnly, agentModeOnly, roomsHarnessOnly, protectedApprovalOnly, locale: visualLocale, theme: visualTheme, scale: visualScale,
       pageErrors, layouts, screenshots, modelFixture: modelFixture?.snapshot(), failure: primaryError.message,
       ...(keepDirs ? { retainedDirectories: { temporaryRoot, workspaceRoot } } : {}) }
   }
