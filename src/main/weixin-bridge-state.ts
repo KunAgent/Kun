@@ -76,7 +76,8 @@ export type WeixinMessageItem = {
 }
 
 export type WeixinMessage = {
-  message_id?: string
+  message_id?: string | number
+  group_id?: string
   message_type?: number
   from_user_id?: string
   create_time_ms?: number

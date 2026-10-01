@@ -142,6 +142,18 @@ describe('private Agent IM runtime boundary', () => {
     expect(later.messages.map((item) => item.id)).toEqual(['background-result'])
   })
 
+  it('announces native connection and task cards without exporting control data', async () => {
+    const f = await fixture(); await f.connect()
+    const sent = await f.send() as { requestId: string }
+    await putRoomDocument(f.store, 'message', 'remote-card', f.room.id, RoomMessageSchema.parse({ id: 'remote-card', roomId: f.room.id,
+      rootRequestId: sent.requestId, messageSeq: 1, authorKind: 'member', authorLabelSnapshot: 'Bot', mentionMemberIds: [], attachmentIds: [],
+      body: 'Internal card detail', presentationKind: 'app_connection', appConnection: { serverId: 'im.weixin', status: 'requested', resumed: false },
+      bodyRevision: 0, status: 'final', createdAt: new Date().toISOString() }), null)
+    const result = await f.call('im-connections/:connectionId/delivery', undefined, {}, '?cursor=0') as { messages: Array<{ text: string }> }
+    expect(result.messages[0].text).toContain('Open Kun')
+    expect(result.messages[0].text).not.toContain('Internal card detail')
+  })
+
   it('reports scan pagination separately from the filtered output count', async () => {
     const f = await fixture(); await f.connect()
     const now = new Date().toISOString()

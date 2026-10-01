@@ -84,11 +84,16 @@ export function registerRoomImConnectionRoutes(add: Add): void {
       afterSeq: cursor, order: 'asc', limit: 100 })
     const messages: Array<{ id: string; text: string; hasAttachments: boolean; seq: number }> = []
     for (const entry of rows) {
-      if (entry.value.authorKind !== 'member' || entry.value.status !== 'final' || entry.value.presentationKind || !entry.value.rootRequestId) continue
+      if (entry.value.authorKind !== 'member' || entry.value.status !== 'final' || !entry.value.rootRequestId) continue
       const root = await rooms.deps.store.get<RoomRequestState>('request', entry.value.rootRequestId)
       // Only replies owed to this IM connection can leave the desktop; GUI-only topics never do.
       if (!root || root.roomId !== params.roomId || root.value.imConnectionId !== params.connectionId) continue
-      messages.push({ id: entry.id, text: entry.value.body,
+      const presentation = entry.value.presentationKind
+      if (presentation === 'setup') continue
+      const text = presentation === 'app_connection'
+        ? 'Your Agent has a connection request. Open Kun to review it and continue official authorization; no new access has been granted.'
+        : presentation ? 'Your Agent has a task card or decision for you. Open this conversation in Kun to review it.' : entry.value.body
+      messages.push({ id: entry.id, text,
         hasAttachments: entry.value.attachmentIds.length > 0 || Boolean(entry.value.references?.length), seq: entry.seq })
     }
     const attention: string[] = []

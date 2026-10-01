@@ -257,8 +257,11 @@ export class PersonalAgentImService {
     await this.initialize()
     const connection = this.connections.find((item) => item.accountId === accountId && item.provider === 'weixin')
     if (!connection) return false
-    if (!connection.enabled || message.from_user_id !== connection.ownerId || !message.message_id) return true
-    await this.admit(connection, message.from_user_id, message.from_user_id, message.message_id, textFromItemList(message.item_list))
+    if (!connection.enabled || message.from_user_id !== connection.ownerId || message.group_id || message.message_type !== 1) return true
+    const messageId = typeof message.message_id === 'string' ? message.message_id.trim()
+      : Number.isSafeInteger(message.message_id) && Number(message.message_id) >= 0 ? String(message.message_id) : ''
+    if (!messageId) return true
+    await this.admit(connection, message.from_user_id, message.from_user_id, messageId, textFromItemList(message.item_list))
     return true
   }
   private async admit(connection: PersonalImConnection, senderId: string, chatId: string, messageId: string, text: string): Promise<void> {

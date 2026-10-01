@@ -185,6 +185,20 @@ describe('private Agent IM consent and sender boundary', () => {
     expect(f.feishu.sendText).not.toHaveBeenCalled()
   })
 
+  it('accepts official numeric WeChat message IDs, while rejecting groups, bot events and unsafe numeric identities', async () => {
+    const f = fixture({ provider: 'weixin' })
+    await f.connect(); f.runtimeRequest.mockClear()
+    for (const message of [
+      { message_id: 1024, message_type: 1, group_id: 'group-1' },
+      { message_id: 1024, message_type: 2 },
+      { message_id: Number.MAX_SAFE_INTEGER + 1, message_type: 1 }
+    ]) await f.service.weixinInbound({ ...message, from_user_id: 'owner' }, 'account1')
+    expect(f.runtimeRequest).not.toHaveBeenCalled()
+    await f.service.weixinInbound({ message_id: 1024, message_type: 1, from_user_id: 'owner' }, 'account1')
+    expect(f.runtimeRequest).toHaveBeenCalledWith(expect.anything(), expect.stringContaining('/messages'),
+      expect.objectContaining({ body: expect.stringContaining('"messageId":"1024"') }))
+  })
+
   it('binds official WeChat owner and never falls through a disconnected known account', async () => {
     const f = fixture({ provider: 'weixin' })
     await f.connect()
