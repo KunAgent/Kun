@@ -96,6 +96,23 @@ describe('RoomComposer', () => {
     )
   }
 
+  it('does not echo its own draft events and clears the acknowledged send', async () => {
+    const dispatched: Event[] = []
+    vi.stubGlobal('window', { ...window, dispatchEvent: (event: Event) => {
+      dispatched.push(event)
+      if (dispatched.length > 8) throw new Error('Draft update event loop')
+      listeners.get(event.type)?.(event)
+      return true
+    } })
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    input('Dispatch this task')
+    await submit()
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(renderer.root.findByType('textarea').props.value).toBe('')
+    expect(dispatched.length).toBeLessThanOrEqual(4)
+  })
+
   it('refreshes a referenced draft in the already open conversation without affecting other rooms', async () => {
     const send = vi.fn().mockResolvedValue(undefined)
     await render(send)
