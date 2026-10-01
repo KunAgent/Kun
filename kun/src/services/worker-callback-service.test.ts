@@ -95,6 +95,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
   await rm(dataDir, { recursive: true, force: true })
 })
 
@@ -180,6 +182,49 @@ describe('askManager', () => {
     ])
   })
 
+  it('returns an answer persisted before the notice finishes enqueueing', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const service = makeService()
+    service.setNoticeSink({
+      enqueue: async (notice) => {
+        const persisted = await notices.enqueue(notice)
+        await service.answerQuestion({
+          teamId: notice.teamId,
+          questionId: notice.questionId!,
+          answer: 'staging',
+          answeredBy: 'manager'
+        })
+        return persisted
+      }
+    })
+
+    await expect(service.askManager(
+      WORKER, { question: 'which env?' }, new AbortController().signal
+    )).resolves.toEqual({ status: 'answered', answer: 'staging', answeredBy: 'manager' })
+    // The answer must release the request without advancing its deadline.
+    expect(vi.getTimerCount()).toBe(0)
+    expect((await questions.get(MANAGER, 'q_1'))?.state).toBe('answered')
+  })
+
+  it.each(['timeout', 'cancelled'] as const)(
+    'honors %s persisted before waiter registration', async (state) => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      const service = makeService()
+      service.setNoticeSink({
+        enqueue: async (notice) => {
+          const persisted = await notices.enqueue(notice)
+          await questions.update(notice.teamId, notice.questionId!, { state })
+          return persisted
+        }
+      })
+
+      await expect(service.askManager(
+        WORKER, { question: 'still needed?' }, new AbortController().signal
+      )).resolves.toEqual({ status: state })
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+
   it('times out unanswered questions', async () => {
     const service = makeService()
     const result = await service.askManager(
@@ -201,6 +246,33 @@ describe('askManager', () => {
     abort.abort()
     await expect(pending).resolves.toEqual({ status: 'cancelled' })
     expect((await questions.get(MANAGER, 'q_1'))?.state).toBe('cancelled')
+  })
+
+  it('cancels while the initial durable-state reconciliation is still reading', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const service = makeService()
+    const abort = new AbortController()
+    let releaseRead!: () => void
+    const readAllowed = new Promise<void>((resolve) => { releaseRead = resolve })
+    const getQuestion = questions.get.bind(questions)
+    const readStarted = new Promise<void>((resolve) => {
+      vi.spyOn(questions, 'get').mockImplementationOnce(async (...args) => {
+        const record = await getQuestion(...args)
+        resolve()
+        await readAllowed
+        return record
+      })
+    })
+    const pending = service.askManager(WORKER, { question: 'still needed?' }, abort.signal)
+    await readStarted
+    abort.abort()
+    try {
+      await expect(pending).resolves.toEqual({ status: 'cancelled' })
+      expect(vi.getTimerCount()).toBe(0)
+      expect((await getQuestion(MANAGER, 'q_1'))?.state).toBe('cancelled')
+    } finally {
+      releaseRead()
+    }
   })
 
   it('startup reconciliation marks unanswered questions timed out', async () => {

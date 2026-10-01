@@ -250,6 +250,7 @@ export class WorkerCallbackService {
   ): Promise<AskManagerResult> {
     const questionId = question.questionId
     return new Promise<AskManagerResult>((resolve) => {
+      let settled = false
       const settleFromRecord = async (fallback: AskManagerResult): Promise<AskManagerResult> => {
         // If a terminal state beat this write (answer arrived first), honor it.
         const record = await this.deps.questions.get(teamId, questionId).catch(() => null)
@@ -266,6 +267,8 @@ export class WorkerCallbackService {
           .catch(() => settleFromRecord({ status: 'cancelled' }).then(finish))
       }
       const finish = (result: AskManagerResult): void => {
+        if (settled) return
+        settled = true
         const waiter = this.waiters.get(questionId)
         if (waiter) clearTimeout(waiter.timer)
         this.waiters.delete(questionId)
@@ -289,6 +292,16 @@ export class WorkerCallbackService {
         return
       }
       signal.addEventListener('abort', onAbort, { once: true })
+      // A manager can answer as soon as the question is persisted, including
+      // while its notice is still enqueueing. Register first, then reconcile
+      // durable state so an answer cannot fall between the read and waiter.
+      void this.deps.questions.get(teamId, questionId).then((record) => {
+        if (record?.state === 'answered' && record.answer !== undefined) {
+          finish({ status: 'answered', answer: record.answer, answeredBy: record.answeredBy ?? 'manager' })
+        } else if (record?.state === 'timeout' || record?.state === 'cancelled') {
+          finish({ status: record.state })
+        }
+      }).catch(() => undefined)
     })
   }
 

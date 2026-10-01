@@ -25,6 +25,8 @@ const WORKER = 'wrk_1'
 const dirs: string[] = []
 
 afterEach(async () => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
   while (dirs.length) await rm(dirs.pop()!, { recursive: true, force: true })
 })
 
@@ -229,33 +231,50 @@ describe('worker-callback routes', () => {
   })
 
   it('streams heartbeats while ask waits, then delivers the answer', async () => {
-    const { issue, ask, callbacks } = await harness()
+    const { issue, ask, callbacks, questions } = await harness()
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    let allowCreate!: () => void
+    const createAllowed = new Promise<void>((resolve) => { allowCreate = resolve })
+    const createQuestion = questions.create.bind(questions)
+    const questionReady = new Promise<void>((resolve) => {
+      vi.spyOn(questions, 'create').mockImplementationOnce(async (...args) => {
+        await createAllowed
+        const question = await createQuestion(...args)
+        resolve()
+        return question
+      })
+    })
     const token = issue(WORKER, ['worker-callback'])
     const response = await ask({ question: 'which env?', timeoutSeconds: 5 }, token)
     expect(response).toBeInstanceOf(Response)
     const stream = (response as Response).body!
     const reader = stream.getReader()
     const decoder = new TextDecoder()
-    let body = ''
-    const drain = (async () => {
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        body += decoder.decode(value)
-      }
-    })()
-    await vi.waitFor(async () => {
-      expect(body.length).toBeGreaterThan(0) // heartbeat whitespace arrived
-    })
-    await callbacks.answerQuestion({
+
+    // A heartbeat is transport liveness, even while question persistence is
+    // blocked. It cannot be used as the signal that the question is ready.
+    await vi.advanceTimersByTimeAsync(20)
+    const heartbeat = await reader.read()
+    expect(heartbeat.done).toBe(false)
+    let body = decoder.decode(heartbeat.value)
+    expect(body).toBe('\n')
+    expect(await questions.get(MANAGER, 'q_1')).toBeNull()
+    allowCreate()
+    await questionReady
+    await expect(callbacks.answerQuestion({
       teamId: MANAGER,
       questionId: 'q_1',
       answer: 'staging',
       answeredBy: 'manager'
-    })
-    await drain
+    })).resolves.toMatchObject({ state: 'answered', answer: 'staging' })
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      body += decoder.decode(value)
+    }
     const parsed = JSON.parse(body) as Record<string, unknown>
     expect(parsed).toMatchObject({ status: 'answered', answer: 'staging', answeredBy: 'manager' })
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('returns timeout status when the ask deadline passes', async () => {
