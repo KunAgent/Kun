@@ -103,7 +103,7 @@ export async function pollQRStatus(baseUrl: string, qrcode: string, signal?: Abo
 }
 
 export async function startWeixinLogin(params: JsonRecord): Promise<JsonRecord> {
-  if (params.protectCredentials === true) assertPersonalImSecretStorage()
+  if (params.protectCredentials === true) await assertPersonalImSecretStorage()
   readWeixinPackageInfo()
   purgeExpiredLogins()
   const force = params.force === true
@@ -240,7 +240,7 @@ export async function persistContextTokens(accountId: string): Promise<void> {
 export async function restoreContextTokens(accountId: string): Promise<void> {
   try {
     const parsed = await readJsonFile(contextTokensPath(accountId))
-    for (const [userId, token] of Object.entries(readProtectedWeixinContexts(parsed))) {
+    for (const [userId, token] of Object.entries(await readProtectedWeixinContexts(parsed))) {
       if (typeof token === 'string' && token) {
         const key = contextTokenKey(accountId, userId)
         if (!contextTokenStore.has(key)) contextTokenStore.set(key, token)

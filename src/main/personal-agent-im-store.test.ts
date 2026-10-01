@@ -3,8 +3,8 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ProtectedPersonalImStore, type PersonalImConnection } from './personal-agent-im-store'
-const protection = vi.hoisted(() => ({ assert: vi.fn(), seal: vi.fn((value: string) => Buffer.from(value).toString('base64')),
-  open: vi.fn((value: string) => Buffer.from(value, 'base64').toString()) }))
+const protection = vi.hoisted(() => ({ assert: vi.fn(), seal: vi.fn(async (value: string) => Buffer.from(value).toString('base64')),
+  open: vi.fn(async (value: string) => Buffer.from(value, 'base64').toString()) }))
 vi.mock('./personal-agent-im-secrets', () => ({ assertPersonalImSecretStorage: protection.assert,
   protectPersonalImSecret: protection.seal, unprotectPersonalImSecret: protection.open }))
 const cleanup: string[] = []
@@ -26,4 +26,15 @@ it('does not write anything when OS encryption fails', async () => {
   protection.seal.mockImplementationOnce(() => { throw new Error('OS store locked') })
   await expect(store.save([])).rejects.toThrow('OS store locked')
   await expect(readFile(file)).rejects.toMatchObject({ code: 'ENOENT' })
+})
+it('does not touch the credential file while the OS store is awaiting a response', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'kun-im-store-')); cleanup.push(directory)
+  const file = join(directory, 'im.enc'), store = new ProtectedPersonalImStore(file)
+  let release!: (value: string) => void
+  protection.seal.mockReturnValueOnce(new Promise((resolve) => { release = resolve }))
+  const saving = store.save([])
+  await expect(readFile(file)).rejects.toMatchObject({ code: 'ENOENT' })
+  release('encrypted-fixture')
+  await saving
+  expect(await readFile(file, 'utf8')).toBe('encrypted-fixture')
 })

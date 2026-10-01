@@ -15,21 +15,21 @@ export const PersonalImConnectionSchema = z.object({
 }).strict()
 export type PersonalImConnection = z.infer<typeof PersonalImConnectionSchema>
 export interface PersonalImStore {
-  assertAvailable(): void
+  assertAvailable(): Promise<void> | void
   load(): Promise<PersonalImConnection[]>
   save(value: PersonalImConnection[]): Promise<void>
 }
 export class ProtectedPersonalImStore implements PersonalImStore {
   constructor(private readonly path: string) {}
-  assertAvailable(): void { assertPersonalImSecretStorage() }
+  assertAvailable(): Promise<void> { return assertPersonalImSecretStorage() }
   async load(): Promise<PersonalImConnection[]> {
     let raw: string
     try { raw = await readFile(this.path, 'utf8') }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error }
-    return z.array(PersonalImConnectionSchema).parse(JSON.parse(unprotectPersonalImSecret(raw)))
+    return z.array(PersonalImConnectionSchema).parse(JSON.parse(await unprotectPersonalImSecret(raw)))
   }
   async save(value: PersonalImConnection[]): Promise<void> {
-    const protectedValue = protectPersonalImSecret(JSON.stringify(z.array(PersonalImConnectionSchema).parse(value)))
+    const protectedValue = await protectPersonalImSecret(JSON.stringify(z.array(PersonalImConnectionSchema).parse(value)))
     await mkdir(dirname(this.path), { recursive: true, mode: 0o700 })
     const temporary = this.path + '.' + randomUUID() + '.tmp'
     await writeFile(temporary, protectedValue, { mode: 0o600 })

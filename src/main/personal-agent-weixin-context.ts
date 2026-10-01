@@ -5,14 +5,14 @@ import { protectPersonalImSecret, unprotectPersonalImSecret } from './personal-a
 export async function protectedWeixinContextRecord(accountId: string, tokens: Record<string, string>): Promise<unknown> {
   const account = await loadWeixinAccountData(accountId)
   return account?.protectedToken
-    ? { schemaVersion: 1, protectedContextTokens: protectPersonalImSecret(JSON.stringify(tokens)) }
+    ? { schemaVersion: 1, protectedContextTokens: await protectPersonalImSecret(JSON.stringify(tokens)) }
     : tokens
 }
-export function readProtectedWeixinContexts(value: unknown): Record<string, unknown> {
+export async function readProtectedWeixinContexts(value: unknown): Promise<Record<string, unknown>> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   const record = value as Record<string, unknown>
   if (record.schemaVersion !== 1 || typeof record.protectedContextTokens !== 'string') return record
-  const decoded: unknown = JSON.parse(unprotectPersonalImSecret(record.protectedContextTokens))
+  const decoded: unknown = JSON.parse(await unprotectPersonalImSecret(record.protectedContextTokens))
   if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) throw new Error('Invalid protected WeChat context')
   return decoded as Record<string, unknown>
 }

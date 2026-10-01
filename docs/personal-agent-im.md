@@ -51,6 +51,11 @@ record is stored in an atomic encrypted envelope; new WeChat bot tokens are
 also OS-protected, including persisted reply-context tickets. Credentials are not exposed by the native IPC results,
 model tools, room cards, ordinary settings, or service diagnostic logs. Unlock
 failure blocks connection and can be retried after the OS store is unlocked.
+On macOS, bounded Electron asynchronous safeStorage calls keep the main thread
+responsive while Keychain asks for user interaction. An unavailable or timed-out
+store stops setup before official authorization begins. The Windows DPAPI and
+Linux backend checks keep their existing behavior. Existing encrypted records
+remain readable; plaintext is never accepted as a legacy credential envelope.
 
 The Main-process IPC handler checks the current trusted workbench sender.
 Registration/polling occurs only in that explicit setup flow. Cancellation,
@@ -90,10 +95,11 @@ offline model that invokes the real connection-card tool, captures native
 wide/narrow screenshots, verifies durable Skip, and checks safeStorage with a
 disposable string. It never clicks authorization or connects a real account.
 The OS probe runs separately from UI evidence and fails explicitly if blocked.
-In the unpackaged Electron macOS CI run, both native provider-card flows passed,
-but the real safeStorage probe timed out; credential-store verification remains
-open. Electron documents that its synchronous macOS API can wait for Keychain
-user interaction. The workflow never unlocks or creates keychains to bypass it.
+The earlier synchronous macOS probe timed out before encryption. The current
+probe uses the same asynchronous API as the macOS credential path, checks main
+thread responsiveness, and requires a real encrypted round trip. An unavailable
+store remains a failed verification. The workflow never unlocks or creates
+keychains to bypass user interaction.
 [Electron 43.1 safeStorage documentation](https://github.com/electron/electron/blob/v43.1.0/docs/api/safe-storage.md)
 Live platform authorization and real-message round trips require a user's
 explicit scan and were not performed as part of implementation.

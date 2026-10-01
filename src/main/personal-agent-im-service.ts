@@ -138,7 +138,7 @@ export class PersonalAgentImService {
         return await attempt.polling
       }
       if (connection?.enabled) return { status: 'connected', connectionId: connection.id }
-      this.deps.secureStore.assertAvailable()
+      await this.deps.secureStore.assertAvailable()
       if (connection?.pendingPairing) {
         await this.api(this.cardPath(connection.roomId, connection.cardId) + '/complete', { connectionId: connection.id, ownerId: connection.ownerId })
         connection.enabled = true; connection.pendingPairing = false

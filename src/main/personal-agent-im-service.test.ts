@@ -56,6 +56,18 @@ describe('private Agent IM consent and sender boundary', () => {
     expect((await f.service.handle({ ...f.request, action: 'start' })).status).toBe('error')
     expect(f.startFeishu).not.toHaveBeenCalled()
   })
+  it('waits for asynchronous OS protection and does not request a QR after shutdown', async () => {
+    const f = fixture()
+    let release!: () => void
+    vi.mocked(f.secureStore.assertAvailable).mockReturnValueOnce(new Promise<void>((resolve) => { release = resolve }))
+    const starting = f.service.handle({ ...f.request, action: 'start' })
+    await vi.waitFor(() => expect(f.secureStore.assertAvailable).toHaveBeenCalled())
+    expect(f.startFeishu).not.toHaveBeenCalled()
+    await f.service.stop()
+    release()
+    expect((await starting).status).toBe('error')
+    expect(f.startFeishu).not.toHaveBeenCalled()
+  })
   it('rejects a provider response without a verified scanning identity', async () => {
     const f = fixture()
     f.pollFeishu.mockResolvedValueOnce({ done: true, kind: 'feishu', appId: 'app1', appSecret: 'SECRET-APP', domain: 'feishu', ownerId: '' })
