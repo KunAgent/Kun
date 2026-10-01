@@ -251,16 +251,11 @@
 }
 
 /*
- * Keep the composer useful while split panes narrow it. Lower-priority actions
- * leave first, then verbose state controls collapse to their recognizable icon.
- * Container queries follow the composer itself, not the application window.
+ * Keep enabled actions reachable as split panes or display scaling narrow the
+ * composer. Collapse verbose labels first, then give the action group its own
+ * row instead of hiding voice dictation or prompt optimization. Queries use
+ * the composer's content width, not the window or its physical-pixel width.
  */
-@container (max-width: 760px) {
-  .ds-composer-optional-action {
-    display: none;
-  }
-}
-
 @container (max-width: 700px) {
   .ds-composer-mode-badge {
     gap: 0;
@@ -290,19 +285,19 @@
 
 @container (max-width: 640px) {
   .ds-composer-toolbar {
-    align-items: center;
-    flex-direction: row;
+    align-items: stretch;
+    flex-direction: column;
     flex-wrap: nowrap;
     gap: 0.375rem;
   }
 
   .ds-composer-toolbar > div {
-    width: auto;
+    width: 100%;
   }
 
   .ds-composer-toolbar-start {
     flex: 0 1 auto;
-    max-width: 44%;
+    max-width: 100%;
     min-width: 0;
   }
 
@@ -311,7 +306,7 @@
   }
 
   .ds-composer-toolbar-actions {
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-width: 0;
     justify-content: flex-end;
   }
@@ -341,10 +336,6 @@
 }
 
 @container (max-width: 420px) {
-  .ds-composer-toolbar-start {
-    max-width: 46%;
-  }
-
   .ds-composer-toolbar-actions .ds-composer-model-picker {
     max-width: min(180px, 40vw);
   }

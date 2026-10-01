@@ -1,0 +1,75 @@
+name: Composer scaled controls smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/composer-scaled-controls-smoke.yml'
+      - 'scripts/smoke-composer-scaled-controls.mjs'
+      - 'src/renderer/src/components/chat/**'
+      - 'src/renderer/src/styles/**'
+      - 'src/renderer/src/index.css'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: composer-scaled-controls-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-composer:
+    name: Windows composer at 150% scale
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            kun/package-lock.json
+
+      - name: Install dependencies and Electron
+        run: |
+          npm ci
+          npm run ensure:electron
+
+      - name: Extract pre-fix stylesheet when present
+        id: baseline
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --depth=1 origin "$BASE_SHA"
+          git show "$BASE_SHA:src/renderer/src/styles/base-shell/session-sidebar-shell.css" > "$RUNNER_TEMP/composer-baseline.css"
+          if grep -q '  .ds-composer-optional-action {' "$RUNNER_TEMP/composer-baseline.css"; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Reproduce hidden controls with the original stylesheet
+        if: steps.baseline.outputs.present == 'true'
+        env:
+          KUN_COMPOSER_BASELINE_CSS: ${{ runner.temp }}/composer-baseline.css
+          KUN_COMPOSER_EVIDENCE: dist/composer-scaled-controls/before
+        run: npm run smoke:composer-scaled-controls -- --expect-hidden
+
+      - name: Verify enabled controls and interactions at 150% scale
+        env:
+          KUN_COMPOSER_EVIDENCE: dist/composer-scaled-controls/after
+        run: npm run smoke:composer-scaled-controls
+
+      - name: Upload geometry and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-composer-scaled-controls
+          path: dist/composer-scaled-controls
+          if-no-files-found: warn
+          retention-days: 7
