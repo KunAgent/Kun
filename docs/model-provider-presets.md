@@ -35,6 +35,19 @@ make all of their models appear in the composer before credentials are set.
 
 ## Built-in Providers
 
+Cheaper Inference:
+
+- id: `cheaperinference`
+- base URL: `https://api.cheaperinference.com/v1`
+- endpoint format: OpenAI Chat Completions
+- models: imported on demand from the gateway `GET /models` endpoint
+- model ids: bare ids such as `gpt-5.4-mini`, `claude-sonnet-5`, or
+  `deepseek-v4-flash`
+- role: optional OpenAI-compatible gateway; one API key covers models from
+  several labs
+- behavior: direct providers remain the default; adding this preset does not
+  route existing providers through Cheaper Inference
+
 Opper:
 
 - id: `opper`
