@@ -4,7 +4,7 @@ import type { ThreadRecord } from '../contracts/threads.js'
 import type { WorkbenchLink } from '../contracts/workbench-links.js'
 import { TurnConflictError, ThreadClosingError } from '../services/turn-service.js'
 import type { RoomStoredDocument } from '../rooms/room-store.js'
-import type { WorkbenchBridge } from './bridge.js'
+import { WorkbenchBridge } from './bridge.js'
 import { workbenchTurnSource } from './turn-source.js'
 import { updateWorkbenchLink } from './link-store.js'
 import { executionMode, planRelativePath, validateExecution } from './execution.js'
@@ -39,7 +39,7 @@ export function taskPrompt(link: WorkbenchLink, agentName: string): string {
  * Every step is idempotent, so a restart continues where the last tick stopped.
  */
 export async function startTaskLink(bridge: WorkbenchBridge, row: RoomStoredDocument<WorkbenchLink>): Promise<void> {
-  const link = row.value
+  let link = row.value
   const root = link.request.workspaceRoot
   if (!root) return void await fail(bridge, link, 'The task has no project directory.')
   let scope
@@ -58,7 +58,14 @@ export async function startTaskLink(bridge: WorkbenchBridge, row: RoomStoredDocu
   }
   const directory = await bridge.resolveDirectory(root)
   if (!directory) return void await fail(bridge, link, 'The project directory is no longer available.')
-  try { await validateExecution(bridge, link.roomId, link.request) } catch (error) {
+  if (!WorkbenchBridge.withinAgentLimits(scope, directory)) return void await fail(bridge, link, 'The project is outside this Agent’s allowed directories.')
+  try {
+    const request = await validateExecution(bridge, link.roomId, link.request, code)
+    if (JSON.stringify(request) !== JSON.stringify(link.request)) {
+      await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ request }))
+      link = { ...link, request }
+    }
+  } catch (error) {
     return void await fail(bridge, link, error instanceof Error ? error.message : String(error))
   }
   const threadId = link.threadId ?? workbenchThreadId(link.id)
@@ -69,6 +76,9 @@ export async function startTaskLink(bridge: WorkbenchBridge, row: RoomStoredDocu
     thread = await bridge.deps.threads.create({
       title: link.request.title, titleAuto: false, workspace: directory, model: model.model,
       ...(model.providerId ? { providerId: model.providerId } : {}), ...(model.accountId ? { accountId: model.accountId } : {}),
+      ...(link.request.execution?.model?.harnessId ? { harnessId: link.request.execution.model.harnessId } : {}),
+      ...(link.request.execution?.model?.credentialMode ? { credentialMode: link.request.execution.model.credentialMode } : {}),
+      ...(code ? { collaboration: { enabled: false } } : {}),
       ...(permission ? kunToolPermissionModeSettings(permission) : {}),
       agentSurface: code ? 'code' : 'write', mode: executionMode(link.request) === 'plan' || executionMode(link.request) === 'auto' ? 'plan' : 'agent'
     }, { id: threadId, workbenchOrigin: { kind: 'bot', roomId: link.roomId, linkId: link.id,
@@ -90,6 +100,8 @@ export async function startTaskLink(bridge: WorkbenchBridge, row: RoomStoredDocu
       return void await fail(bridge, link, error instanceof Error ? error.message : String(error))
     }
   }
+  const ceiling = await bridge.permissionCeiling(link.roomId, thread)
+  if (ceiling) thread = await bridge.deps.threads.update(thread.id, ceiling)
   await admitFirstTurn(bridge, link, thread, scope.name)
 }
 

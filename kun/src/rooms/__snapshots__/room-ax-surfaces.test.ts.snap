@@ -231,7 +231,7 @@ exports[`room agent-visible surface registry > renders tool.commit_agent_setup :
 
 exports[`room agent-visible surface registry > renders tool.create_agent_commitment :: default 1`] = `"Record a durable outcome commitment across conversations, grounded in this user request. Set objective, acceptance, deadline, nextCheckAt and links to existing workbench tasks/threads/goals. This tracks work; it does not execute or schedule it and grants no permissions."`;
 
-exports[`room agent-visible surface registry > renders tool.create_code_task :: default 1`] = `"Hand a coding task to Code. It becomes a normal Code session the user can open and take over. Supply the project path from list_code_projects, a clear goal and acceptance criteria. You may suggest executionMode (direct, plan, auto, goal), a goalTokenBudget, or a schedule; only the user chooses the model, persona and permissions on the card. Scheduled tasks and unbudgeted goals always require confirmation. Otherwise the user's policy decides whether a confirmation card is shown. End the turn after calling it; the outcome is delivered when the task ends."`;
+exports[`room agent-visible surface registry > renders tool.create_code_task :: default 1`] = `"Hand a coding task to Code. It becomes a normal Code session the user can open and take over. Supply the project path from list_code_projects, a clear goal and acceptance criteria. Call list_code_harnesses to choose an available execution.model route; external Agents support direct tasks only, while Kun supports plan, auto, goal and Graph. You may suggest execution options or a schedule; persona and permissions remain user-controlled on the card. Scheduled tasks and unbudgeted goals always require confirmation. Otherwise the user's policy decides whether a confirmation card is shown. End the turn after calling it; the outcome is delivered when the task ends."`;
 
 exports[`room agent-visible surface registry > renders tool.create_work_document :: default 1`] = `"Create a new document in a Work workspace (never overwrites). The user confirms on a card that previews the content unless their policy allows creating it directly."`;
 
@@ -250,6 +250,8 @@ exports[`room agent-visible surface registry > renders tool.list_agent_artifact_
 exports[`room agent-visible surface registry > renders tool.list_agent_artifacts :: default 1`] = `"Search this Agent's durable delivered files across conversations, including nested paths and old runs. Results include stable identity, immutable version, hash and sourceRunId. Page with nextCursor."`;
 
 exports[`room agent-visible surface registry > renders tool.list_agent_commitments :: default 1`] = `"Find this Agent's durable commitments across its conversations. Filter status or search and use nextCursor for another page."`;
+
+exports[`room agent-visible surface registry > renders tool.list_code_harnesses :: default 1`] = `"Discover the Code Agents (harnesses) and model routes already configured in Code, with availability and supported task modes. Read-only; credentials and launch settings are never returned. Use a returned available route as execution.model in create_code_task."`;
 
 exports[`room agent-visible surface registry > renders tool.list_code_projects :: default 1`] = `"List the Code projects the user works in (path, name, recent activity). Use a returned path as projectRoot for create_code_task. Read-only."`;
 

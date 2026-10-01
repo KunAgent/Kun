@@ -42,7 +42,7 @@ export async function confirmWorkbenchLink(bridge: WorkbenchBridge, roomId: stri
   const replay = await replayDecision(bridge, roomId, linkId, 'confirm', input)
   if (replay) return replay
   const link = await readWorkbenchLink(bridge.store, roomId, linkId)
-  const request = WorkbenchRequestSchema.parse({ ...link.request, ...input.edits })
+  let request = WorkbenchRequestSchema.parse({ ...link.request, ...input.edits })
   if (input.edits?.execution && !(LONG_RUNNING as readonly string[]).includes(link.kind)) {
     throw new RoomStoreConflictError('Execution options are only available for tasks')
   }
@@ -50,7 +50,7 @@ export async function confirmWorkbenchLink(bridge: WorkbenchBridge, roomId: stri
   if (link.surface === 'work' && (['plan', 'auto', 'goal'].includes(executionMode(request)) || request.execution?.orchestration === 'graph')) {
     throw new RoomStoreConflictError('This mode requires a Code task')
   }
-  await validateExecution(bridge, roomId, request)
+  request = await validateExecution(bridge, roomId, request, link.kind === 'code_task' || link.kind === 'schedule_series')
   const scheduledFor = request.schedule ? firstScheduleAt(request.schedule) : undefined
   if (link.status === 'awaiting_confirmation' && (LONG_RUNNING as readonly string[]).includes(link.kind) && !request.schedule) {
     const scope = await bridge.agentScope(link.participantAgentId)
@@ -130,15 +130,15 @@ export async function updateScheduledWorkbenchLink(bridge: WorkbenchBridge, room
   if (replay) return replay
   const link = await readWorkbenchLink(bridge.store, roomId, linkId)
   if (!['scheduled', 'active', 'paused'].includes(link.status)) throw new RoomStoreConflictError('task is not scheduled', link.revision)
-  const request = WorkbenchRequestSchema.parse({ ...link.request, ...input.edits })
+  let request = WorkbenchRequestSchema.parse({ ...link.request, ...input.edits })
   if (!request.schedule || (link.kind === 'schedule_series') !== (request.schedule.kind === 'recurring')) {
     throw new RoomStoreConflictError('schedule kind cannot be changed')
   }
   if (link.surface === 'work' && (['plan', 'auto', 'goal'].includes(executionMode(request)) || request.execution?.orchestration === 'graph')) {
     throw new RoomStoreConflictError('This mode requires a Code task')
   }
-  await validateExecution(bridge, roomId, request)
-  const scheduledFor = firstScheduleAt(request.schedule)
+  request = await validateExecution(bridge, roomId, request, link.kind === 'code_task' || link.kind === 'schedule_series')
+  const scheduledFor = firstScheduleAt(request.schedule!)
   const result = await decide(bridge, roomId, linkId, 'update', input, (current) => {
     if (!['scheduled', 'active', 'paused'].includes(current.status)) throw new RoomStoreConflictError('task is not scheduled', current.revision)
     return { request, scheduledFor }

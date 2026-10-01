@@ -33,7 +33,7 @@ export async function admitBuildPhase(bridge: WorkbenchBridge, link: WorkbenchLi
   try {
     const scope = await bridge.agentScope(link.participantAgentId)
     if (scope.policy.code === 'off') throw new Error('This Agent is no longer allowed to start Code tasks.')
-    await validateExecution(bridge, link.roomId, link.request)
+    await validateExecution(bridge, link.roomId, link.request, true)
   } catch (error) {
     await failBuild(bridge, link, error instanceof Error ? error.message.slice(0, 2000) : String(error).slice(0, 2000))
     return
@@ -60,6 +60,8 @@ export async function admitBuildPhase(bridge: WorkbenchBridge, link: WorkbenchLi
     await failBuild(bridge, link, 'The saved plan is unavailable.')
     return
   }
+  const ceiling = await bridge.permissionCeiling(link.roomId, thread)
+  if (ceiling) await bridge.deps.threads.update(thread.id, ceiling)
   const model = link.request.execution?.model ?? bridge.deps.model()
   let source: Awaited<ReturnType<typeof workbenchTurnSource>>
   try { source = await workbenchTurnSource(bridge, link) } catch (error) {

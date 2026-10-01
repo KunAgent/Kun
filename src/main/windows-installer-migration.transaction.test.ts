@@ -1,12 +1,19 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { dirname, join, relative } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readInstallerUpdateTransaction } from './gui-updater-pending'
+
+// The transaction reader is given an explicit recoveryRoot. It must not load
+// Electron's binary-installing package entry or depend on a running GUI.
+vi.mock('electron', () => ({
+  app: { getPath: () => { throw new Error('Unexpected Electron app path in installer transaction test') } }
+}))
 
 const windowsOnly = process.platform === 'win32' ? describe : describe.skip
 const helper = join(process.cwd(), 'build/windows-installer-migration.ps1')
-const roots: string[] = []
+const roots: Array<{ root: string, artifactDirectory?: string }> = []
 const artifactRoot = process.env.KUN_INSTALLER_TEST_ARTIFACT_ROOT
 let fixtureIndex = 0
 
@@ -24,12 +31,12 @@ function payload(root: string, executable: string): void {
 
 function fixture(inPlace = false) {
   const fixtureName = `fixture-${String(++fixtureIndex).padStart(2, '0')}-${inPlace ? 'in-place' : 'rename'}`
-  const root = artifactRoot
-    ? join(artifactRoot, fixtureName)
-    : join(tmpdir(), `kun-installer-migration-smoke-${process.pid}-${fixtureName}`)
+  // Production failpoints deliberately require a real temporary test root.
+  // The CI artifact directory is only an output destination, never execution state.
+  const root = join(tmpdir(), `kun-installer-migration-smoke-${process.pid}-${fixtureName}`)
+  roots.push({ root, artifactDirectory: artifactRoot ? join(artifactRoot, fixtureName) : undefined })
   rmSync(root, { recursive: true, force: true })
   mkdirSync(root, { recursive: true })
-  if (!artifactRoot) roots.push(root)
   const source = join(root, inPlace ? 'Kun' : 'DeepSeek GUI')
   const target = inPlace ? source : join(root, 'Kun')
   const stage = `${target}.kun-stage`
@@ -67,7 +74,7 @@ function run(input: Fixture, action: Action, fault = '') {
     process.env.SystemRoot ?? 'C:\\Windows',
     'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'
   )
-  return spawnSync(powershell, [
+  const result = spawnSync(powershell, [
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', helper, '-Action', action,
     '-ResultPath', input.result(action)
   ], {
@@ -105,6 +112,10 @@ function run(input: Fixture, action: Action, fault = '') {
       KUN_INSTALLER_FAULT_POINT: fault
     }
   })
+  if (fault) {
+    expect(result.stderr, processSummary(result, action)).toContain(`KUN_INSTALLER_FAULT_INJECTION:${fault}`)
+  }
+  return result
 }
 
 function powershell(command: string): ReturnType<typeof spawnSync> {
@@ -166,6 +177,27 @@ function transaction(path: string): {
   }
 }
 
+function captureDiagnostics(root: string, destination: string): void {
+  const files = ['fixture-summary.json']
+  const recovery = join(root, 'recovery')
+  if (existsSync(recovery)) {
+    for (const name of readdirSync(recovery)) {
+      if (/^(diagnostic\.log|journal\.json|transaction\.json|abc-update\.json|result-[\w-]+\.txt)$/.test(name)) {
+        files.push(join('recovery', name))
+      }
+    }
+  }
+  rmSync(destination, { recursive: true, force: true })
+  for (const name of files) {
+    if (!existsSync(join(root, name))) continue
+    // The first case uses a GUID-like filename; CI's existing upload glob uses
+    // transaction.json, so normalize only the diagnostic copy, not the live state.
+    const output = join(destination, name === join('recovery', 'abc-update.json') ? join('recovery', 'transaction.json') : name)
+    mkdirSync(dirname(output), { recursive: true })
+    copyFileSync(join(root, name), output)
+  }
+}
+
 afterEach(() => {
   if (process.platform === 'win32') {
     spawnSync('powershell.exe', [
@@ -173,7 +205,34 @@ afterEach(() => {
       "Remove-Item -LiteralPath 'HKCU:\\Software\\KunInstallerTransactionTest' -Recurse -Force -ErrorAction SilentlyContinue"
     ])
   }
-  while (roots.length > 0) rmSync(roots.pop()!, { recursive: true, force: true })
+  while (roots.length > 0) {
+    const { root, artifactDirectory } = roots.pop()!
+    try {
+      if (artifactDirectory) captureDiagnostics(root, artifactDirectory)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }
+})
+
+describe('Windows transaction test diagnostics', () => {
+  it('executes beneath OS temp and exports only whitelisted evidence', () => {
+    const input = fixture()
+    expect(relative(tmpdir(), input.root)).not.toMatch(/^\.\./)
+    const recovery = join(input.root, 'recovery')
+    writeFileSync(join(recovery, 'abc-update.json'), '{"Phase":"rolled_back"}')
+    writeFileSync(join(recovery, 'diagnostic.log'), 'recovered')
+    writeFileSync(join(recovery, 'journal.json'), '{}')
+    writeFileSync(join(recovery, 'result-Prepare.txt'), '0')
+    writeFileSync(join(recovery, 'user-path.clixml'), 'private snapshot')
+    const output = join(input.root, 'exported-diagnostics')
+    captureDiagnostics(input.root, output)
+    expect(readdirSync(output).sort()).toEqual(['fixture-summary.json', 'recovery'])
+    expect(readdirSync(join(output, 'recovery')).sort()).toEqual([
+      'diagnostic.log', 'journal.json', 'result-Prepare.txt', 'transaction.json'
+    ])
+    expect(readFileSync(join(output, 'recovery', 'transaction.json'), 'utf8')).toBe('{"Phase":"rolled_back"}')
+  })
 })
 
 windowsOnly('Windows automatic update transaction', () => {
@@ -192,7 +251,6 @@ windowsOnly('Windows automatic update transaction', () => {
     payload(input.stage, 'Kun.exe')
     assertSucceeded(run(input, 'SwitchUpdatePayload'), 'SwitchUpdatePayload')
     const transactionPath = input.transaction
-    const { readInstallerUpdateTransaction } = await import('./gui-updater-pending')
     const rebuilt = await readInstallerUpdateTransaction(
       { oldVersion: '0.1.0', newVersion: '0.2.0' },
       { platform: 'win32', recoveryRoot: join(input.root, 'recovery') }
@@ -425,8 +483,12 @@ windowsOnly('Windows automatic update transaction', () => {
     assertSucceeded(run(input, 'Prepare'), 'Prepare')
     payload(input.stage, 'Kun.exe')
     assertSucceeded(run(input, 'SwitchUpdatePayload'), 'SwitchUpdatePayload')
-    assertExpectedFailure(run(input, 'UpdatePath', 'path.after_write'), 'UpdatePath')
-    assertSucceeded(run(input, 'RollbackUpdateTransaction'), 'RollbackUpdateTransaction')
+    try {
+      assertExpectedFailure(run(input, 'UpdatePath', 'path.after_write'), 'UpdatePath')
+    } finally {
+      // Even an unexpected injection/marker failure must restore the real user PATH.
+      assertSucceeded(run(input, 'RollbackUpdateTransaction'), 'RollbackUpdateTransaction')
+    }
     const current = spawnSync('powershell.exe', [
       '-NoProfile', '-Command', "[Environment]::GetEnvironmentVariable('Path','User')"
     ], { encoding: 'utf8' }).stdout.trim()
@@ -482,17 +544,25 @@ windowsOnly('Windows automatic update fault injection points', () => {
     expect(existsSync(input.target)).toBe(false)
   })
 
-  it('keeps the transaction rollback-capable after awaiting_health (cutover.after_awaiting_health)', () => {
-    const input = fixture()
-    assertSucceeded(run(input, 'Prepare'), 'Prepare')
-    payload(input.stage, 'Kun.exe')
-    assertSucceeded(run(input, 'SwitchUpdatePayload'), 'SwitchUpdatePayload')
-    primeCutoverMetadata(input)
-    const failed = run(input, 'ValidateCutover', 'cutover.after_awaiting_health')
-    assertExpectedFailure(failed, 'ValidateCutover')
-    expect(readTransaction(input).Phase).toBe('awaiting_health')
-    assertSucceeded(run(input, 'RecoverUpdateTransaction'), 'RecoverUpdateTransaction')
-    expect(readTransaction(input)).toMatchObject({ Phase: 'rolled_back', RollbackOutcome: 'succeeded' })
+  describe('awaiting-health recovery', () => {
+    let input: Fixture
+    // OS fixture setup has its own bounded clock. The recovery assertion keeps
+    // the existing 15s deadline instead of spending it on PowerShell/COM startup.
+    beforeEach(() => {
+      input = fixture()
+      assertSucceeded(run(input, 'Prepare'), 'Prepare')
+      payload(input.stage, 'Kun.exe')
+      assertSucceeded(run(input, 'SwitchUpdatePayload'), 'SwitchUpdatePayload')
+    }, 15_000)
+    beforeEach(() => primeCutoverMetadata(input), 15_000)
+
+    it('keeps the transaction rollback-capable after awaiting_health (cutover.after_awaiting_health)', () => {
+      const failed = run(input, 'ValidateCutover', 'cutover.after_awaiting_health')
+      assertExpectedFailure(failed, 'ValidateCutover')
+      expect(readTransaction(input).Phase).toBe('awaiting_health')
+      assertSucceeded(run(input, 'RecoverUpdateTransaction'), 'RecoverUpdateTransaction')
+      expect(readTransaction(input)).toMatchObject({ Phase: 'rolled_back', RollbackOutcome: 'succeeded' })
+    }, 15_000)
   })
 
   it('rolls back a transaction interrupted right before commit (commit.before_committed)', () => {

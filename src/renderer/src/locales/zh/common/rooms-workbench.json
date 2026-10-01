@@ -135,5 +135,11 @@
   "roomsWorkbenchDay_3": "三",
   "roomsWorkbenchDay_4": "四",
   "roomsWorkbenchDay_5": "五",
-  "roomsWorkbenchDay_6": "六"
+  "roomsWorkbenchDay_6": "六",
+  "roomsWorkbenchAgent": "执行 Agent",
+  "roomsWorkbenchAgentDirectHint": "此 Agent 直接执行任务；计划、目标模式与 Graph 由 Kun 执行。",
+  "roomsWorkbenchAgentLoadFailed": "暂时无法加载此 Agent 的模型。",
+  "roomsWorkbenchAgentRetry": "刷新",
+  "roomsWorkbenchAgentChooseModel": "请先为此 Agent 选择可用模型，再开始任务。",
+  "roomsWorkbenchAgentLoading": "正在加载 Agent 模型…"
 }

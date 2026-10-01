@@ -50,7 +50,7 @@ export const WorkbenchExecutionSchema = z.object({
   mode: z.enum(['direct', 'plan', 'auto', 'goal']),
   goalTokenBudget: z.number().int().positive().nullable().optional(),
   model: z.object({
-    providerId: z.string().min(1).max(128), model: z.string().min(1).max(512),
+    providerId: z.string().min(1).max(128).optional(), model: z.string().min(1).max(512),
     accountId: z.string().min(1).max(128).optional(), harnessId: HarnessIdSchema.optional(),
     credentialMode: HarnessCredentialModeSchema.optional(),
     reasoningEffort: TurnReasoningEffortSchema.optional(), serviceTier: TurnServiceTierSchema.optional()

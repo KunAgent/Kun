@@ -4,6 +4,7 @@ import { assertAgentModel } from '../agents/agent-models.js'
 import { kunToolPermissionModeSettings } from '../contracts/policy.js'
 import type { WorkbenchExecution, WorkbenchLink, WorkbenchRequest } from '../contracts/workbench-links.js'
 import type { WorkbenchBridge } from './bridge.js'
+import { parseGatewayModelId } from '../harness/gateway-model-id.js'
 import { buildPlanBuildPrompt } from '../shared/plan-build-prompt.js'
 
 export function executionMode(request: WorkbenchRequest): WorkbenchExecution['mode'] {
@@ -15,18 +16,26 @@ export function planRelativePath(link: WorkbenchLink): string {
   return `.kunsdd/plan/${slug}-${link.id.slice(-8).replace(/[^a-z0-9]/gi, '')}.md`
 }
 
-export async function validateExecution(bridge: WorkbenchBridge, roomId: string, request: WorkbenchRequest): Promise<void> {
+export async function validateExecution(bridge: WorkbenchBridge, roomId: string, request: WorkbenchRequest,
+  code = false): Promise<WorkbenchRequest> {
+  if (bridge.harnesses && code) {
+    const model = await bridge.harnesses.resolve(request)
+    request = { ...request, execution: { ...request.execution, mode: executionMode(request), model } }
+  } else if (request.execution?.model?.harnessId && request.execution.model.harnessId !== 'kun') {
+    throw new Error('Code Agent routing is unavailable in this runtime')
+  }
   const execution = request.execution
   if (execution?.model) {
-    await assertAgentModel(bridge.deps, execution.model)
+    if (!bridge.harnesses || !code) await assertAgentModel(bridge.deps, execution.model)
     const snapshot = await bridge.deps.modelSnapshot?.()
     const provider = snapshot?.providers.find((item) => item.id === execution.model?.providerId)
     const effort = execution.model.reasoningEffort
-    const supported = provider?.modelCapabilities?.[execution.model.model]?.reasoning?.supportedEfforts
+    const modelId = parseGatewayModelId(execution.model.model)?.model ?? execution.model.model
+    const supported = provider?.modelCapabilities?.[modelId]?.reasoning?.supportedEfforts
     if (effort && effort !== 'auto' && supported && !supported.includes(effort)) {
       throw new Error('The selected reasoning effort is unavailable for this model')
     }
-    const tiers = provider?.modelCapabilities?.[execution.model.model]?.serviceTiers
+    const tiers = provider?.modelCapabilities?.[modelId]?.serviceTiers
     if (execution.model.serviceTier && tiers && !tiers.includes(execution.model.serviceTier)) {
       throw new Error('Fast mode is unavailable for this model')
     }
@@ -36,6 +45,7 @@ export async function validateExecution(bridge: WorkbenchBridge, roomId: string,
   }
   if (execution?.mode === 'goal' && !request.goal.trim()) throw new Error('A goal is required for goal mode')
   if (execution?.goalTokenBudget && execution.mode !== 'goal') throw new Error('Token budgets require goal mode')
+  return request
 }
 
 /** The saved plan is embedded so execution still works when a worktree omits it. */

@@ -53,7 +53,7 @@ export type HarnessListOutput = {
 
 export type HarnessListDeps = {
   catalog: HarnessCatalog
-  detector: HarnessDetector
+  detector: Pick<HarnessDetector, 'status'>
   /** The composition-time runtime map; absent entries mean definition-only. */
   runtimes?: HarnessRuntimeMap
   /** Last successful model probe per harness (spawn-free); statics otherwise. */

@@ -135,5 +135,11 @@
   "roomsWorkbenchDay_3": "Wed",
   "roomsWorkbenchDay_4": "Thu",
   "roomsWorkbenchDay_5": "Fri",
-  "roomsWorkbenchDay_6": "Sat"
+  "roomsWorkbenchDay_6": "Sat",
+  "roomsWorkbenchAgent": "Execution agent",
+  "roomsWorkbenchAgentDirectHint": "This agent runs the task directly. Planning, goal mode and Graph use Kun.",
+  "roomsWorkbenchAgentLoadFailed": "Could not load this agent’s models.",
+  "roomsWorkbenchAgentRetry": "Refresh",
+  "roomsWorkbenchAgentChooseModel": "Choose an available model for this agent before starting.",
+  "roomsWorkbenchAgentLoading": "Loading agent models…"
 }
