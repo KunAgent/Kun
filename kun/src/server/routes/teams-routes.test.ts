@@ -36,16 +36,19 @@ async function harness(options: {
   withCoordinator?: boolean
   manager?: unknown
   withRaces?: boolean
+  nowMs?: () => number
 } = {}) {
+  const nowMs = options.nowMs ?? (() => Date.parse(NOW))
+  const nowIso = () => new Date(nowMs()).toISOString()
   const dataDir = await mkdtemp(join(tmpdir(), 'kun-teams-routes-'))
   tempDirs.push(dataDir)
-  const notices = new FileWorkerNoticeStore(dataDir, () => NOW)
+  const notices = new FileWorkerNoticeStore(dataDir, nowIso)
   const holdNotices = vi.fn((threadId: string, holdMs: number) => ({
-    heldUntil: new Date(Date.parse(NOW) + holdMs).toISOString()
+    heldUntil: new Date(nowMs() + holdMs).toISOString()
   }))
-  const races = new FileRaceStore(dataDir, () => NOW)
-  const dispatches = new FileDispatchStore(dataDir, () => NOW)
-  const teams = new FileTeamStore(dataDir, () => NOW)
+  const races = new FileRaceStore(dataDir, nowIso)
+  const dispatches = new FileDispatchStore(dataDir, nowIso)
+  const teams = new FileTeamStore(dataDir, nowIso)
   const discarded: string[] = []
   const router = new Router()
   registerTeamsRoutes(router, {
@@ -70,7 +73,8 @@ async function harness(options: {
                   return {}
                 }
               },
-              nowIso: () => NOW
+              nowIso,
+              nowMs
             }
           }
         : {})
@@ -372,6 +376,49 @@ describe('race routes', () => {
     expect(discarded).toEqual(['tws_lose'])
     expect(JSON.parse(dropped.body).discarded).toEqual([
       { dispatchId: 'dsp_2', workspaceId: 'tws_lose', ok: true }
+    ])
+  })
+
+  it('reconciles unfinished contenders at the exact deadline before deciding', async () => {
+    const race = raceRecord()
+    let nowMs = Date.parse(race.deadlineAt) - 1
+    const { races, dispatches, request } = await harness({
+      withRaces: true,
+      nowMs: () => nowMs
+    })
+    await races.create(race)
+    await dispatches.create(dispatch({ dispatchId: 'dsp_1', workerId: 'wrk_1' }))
+    await dispatches.create(dispatch({ dispatchId: 'dsp_2', workerId: 'wrk_2' }))
+
+    const running = await request('GET', '/v1/teams/races/race_1')
+    expect(running.status).toBe(200)
+    expect(JSON.parse(running.body)).toMatchObject({
+      race: { state: 'running' },
+      contenders: [{ timedOut: false }, { timedOut: false }]
+    })
+    const early = await request('POST', '/v1/teams/races/race_1/decide', {
+      winnerDispatchId: 'dsp_1'
+    })
+    expect(early.status).toBe(409)
+    expect(JSON.parse(early.body)).toMatchObject({
+      code: 'conflict', message: 'refused: race_not_ready'
+    })
+    expect((await races.get(MANAGER, race.raceId))?.state).toBe('running')
+
+    nowMs += 1
+    const decided = await request('POST', '/v1/teams/races/race_1/decide', {
+      winnerDispatchId: 'dsp_1'
+    })
+    expect(decided.status).toBe(200)
+    expect(JSON.parse(decided.body)).toMatchObject({
+      ok: true,
+      race: { state: 'decided', winnerDispatchId: 'dsp_1', notifiedAt: race.deadlineAt }
+    })
+    const comparison = await request('GET', '/v1/teams/races/race_1')
+    expect(comparison.status).toBe(200)
+    expect(JSON.parse(comparison.body).contenders).toEqual([
+      expect.objectContaining({ dispatchState: 'accepted', timedOut: true }),
+      expect.objectContaining({ dispatchState: 'accepted', timedOut: true })
     ])
   })
 
