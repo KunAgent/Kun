@@ -252,7 +252,7 @@
     "@hono/node-server": "2.0.11",
     "adm-zip": "0.6.0",
     "fast-uri": "3.1.8",
-    "hono": "4.13.5",
+    "hono": "4.13.7",
     "ip-address": "10.7.2",
     "js-yaml": "4.3.2",
     "node-gyp": {
