@@ -53,6 +53,8 @@ import {
 } from './main-app-context'
 import { runtimeShutdown } from './main-lifecycle'
 import { notifyApplicationQuitting } from './app-quit-signal'
+import { NotificationReceipts } from './notification-receipts'
+import { displayNotification } from './notification-display'
 
 export function revealMainWindow(): void {
   if (!mainState.mainWindow || mainState.mainWindow.isDestroyed()) {
@@ -350,7 +352,20 @@ function normalizeNotificationText(raw: string | undefined, fallback: string, ma
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value
 }
 
+let notificationReceipts: NotificationReceipts | undefined
 export async function showTurnCompleteNotification(
+  payload: TurnCompleteNotificationPayload
+): Promise<{ ok: true; shown: boolean; reason?: string } | { ok: false; message: string }> {
+  try {
+    if (!payload.dedupeKey) return await showNativeTurnCompleteNotification(payload)
+    notificationReceipts ??= new NotificationReceipts(join(app.getPath('userData'), 'notification-receipts.json'))
+    return await notificationReceipts.deliver(payload.dedupeKey, () => showNativeTurnCompleteNotification(payload))
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+async function showNativeTurnCompleteNotification(
   payload: TurnCompleteNotificationPayload
 ): Promise<{ ok: true; shown: boolean; reason?: string } | { ok: false; message: string }> {
   const settings = await mainState.store.load()
@@ -379,12 +394,17 @@ export async function showTurnCompleteNotification(
     })
     notification.on('click', () => {
       revealMainWindow()
-      if (payload.roomId) mainState.mainWindow?.webContents.send('runtime:sse-event', {
-        streamId: 'rooms-navigation', events: [{ kind: 'navigate', roomId: payload.roomId }]
-      })
+      const window = mainState.mainWindow
+      if (!payload.roomId || !window || window.isDestroyed()) return
+      const navigate = () => {
+        if (!window.isDestroyed()) window.webContents.send('runtime:sse-event', {
+          streamId: 'rooms-navigation', events: [{ kind: 'navigate', roomId: payload.roomId }]
+        })
+      }
+      if (window.webContents.isLoadingMainFrame()) window.webContents.once('did-finish-load', navigate)
+      else navigate()
     })
-    notification.show()
-    return { ok: true, shown: true }
+    return await displayNotification(notification)
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
     logError('notification', 'Failed to show turn completion notification', {

@@ -1,7 +1,8 @@
+import { readRoomRepositoryFile } from './room-file-content.js'
+export { readRoomRepositoryFile } from './room-file-content.js'
 import { privateWorkspace } from '../agents/agent-direct-service.js'
-import { constants } from 'node:fs'
-import { open, realpath, stat } from 'node:fs/promises'
-import { extname, isAbsolute, relative, resolve } from 'node:path'
+import { realpath } from 'node:fs/promises'
+import { extname, resolve } from 'node:path'
 import type { AttachmentMetadata } from '../contracts/attachments.js'
 import type { Room, RoomMessage, RoomRepository } from '../contracts/rooms.js'
 import type { RoomTaskExecution, RoomRequestState } from './room-runtime-types.js'
@@ -31,26 +32,6 @@ export async function assertRoomContentRepository(room: Room, repositoryId: stri
   const common = await realpath(await roomGit(root, ['rev-parse', '--path-format=absolute', '--git-common-dir']))
   if (common !== repository.gitCommonDir) throw new Error('repository_changed')
   return repository
-}
-function inside(root: string, path: string): boolean {
-  const pathWithin = relative(root, path)
-  return pathWithin !== '..' && !pathWithin.startsWith('../') && !isAbsolute(pathWithin)
-}
-export async function readRoomRepositoryFile(repository: Pick<RoomRepository, 'canonicalRoot'>, relativePath: string, maxBytes: number) {
-  const path = await realpath(resolve(repository.canonicalRoot, relativePath))
-  if (!inside(repository.canonicalRoot, path)) throw new Error('file_unauthorized')
-  const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
-  try {
-    const info = await handle.stat()
-    const observedPath = await realpath(resolve(repository.canonicalRoot, relativePath))
-    const observed = await stat(observedPath)
-    if (!inside(repository.canonicalRoot, observedPath) || info.dev !== observed.dev || info.ino !== observed.ino || !info.isFile()) {
-      throw new Error('file_changed')
-    }
-    const bytes = Buffer.alloc(Math.min(info.size, maxBytes))
-    const { bytesRead } = await handle.read(bytes, 0, bytes.length, 0)
-    return { data: bytes.subarray(0, bytesRead), size: info.size }
-  } finally { await handle.close() }
 }
 
 async function attachmentScope(runtime: ServerRuntime, room: Room, id: string, messageId?: string, allowDraft = false) {
@@ -123,7 +104,27 @@ export async function resolveRoomContent(runtime: ServerRuntime, room: Room, ref
   try {
     await assertReferenceSource(runtime, room, reference, messageId)
     const store = runtime.rooms!.deps.store
-    if (reference.kind === 'agent_file') {
+    if (reference.kind === 'agent_file' && reference.artifactId) {
+      if (!reference.artifactVersion) throw new Error('artifact_version_required')
+      const library = runtime.rooms!.artifactLibrary
+      const agentId = await library.agentForRoom(room.id)
+      const meta = await library.get(agentId, reference.artifactId, reference.artifactVersion)
+      if (meta.workspaceId !== reference.workspaceId || meta.relativePath !== reference.relativePath) throw new Error('artifact_reference_mismatch')
+      const imageFile = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(meta.mimeType)
+      const mediaKind = meta.mimeType.startsWith('audio/') ? 'audio' : meta.mimeType.startsWith('video/') ? 'video' : undefined
+      Object.assign(result, { title: meta.title, mimeType: meta.mimeType, byteSize: meta.byteSize,
+        kind: imageFile ? 'image' : mediaKind ?? 'file', version: String(meta.version),
+        description: `Version ${meta.version} · SHA-256 ${meta.sha256}` })
+      const data = mode === 'summary' || (imageFile || mediaKind) && meta.byteSize > MEDIA_PREVIEW_MAX_BYTES ? Buffer.alloc(0)
+        : (await library.read(agentId, reference.artifactId, reference.artifactVersion)).data
+      if (imageFile && mode === 'thumbnail' && data.length) result.thumbnail = await roomPreviewImage(data)
+      else if (imageFile && mode === 'preview' && data.length > 0 && data.length <= MEDIA_PREVIEW_MAX_BYTES) result.preview = {
+        type: 'image', image: { dataBase64: data.toString('base64'), mimeType: meta.mimeType, width: 1, height: 1 } }
+      else if (mediaKind && mode === 'preview' && data.length > 0 && data.length <= MEDIA_PREVIEW_MAX_BYTES) result.preview = {
+        type: 'media', dataBase64: data.toString('base64'), mimeType: meta.mimeType }
+      else if (mode === 'preview' && /^(text\/|application\/(json|xml))/.test(meta.mimeType)) result.preview = {
+        type: 'text', text: data.subarray(0, 64000).toString('utf8'), truncated: data.length > 64000 }
+    } else if (reference.kind === 'agent_file') {
       let workspace = await privateWorkspace(runtime.rooms!, room)
       if (workspace.id !== reference.workspaceId) workspace = await privateWorkspace(runtime.rooms!, { ...room, privateWorkspace: undefined })
       if (workspace.id !== reference.workspaceId) throw new Error('workspace_changed')

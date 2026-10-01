@@ -204,13 +204,13 @@ describe('ActivityStore', () => {
           title: 'Real title',
           workspace: '/real/ws',
           status: 'idle',
-          turns: []
+          turns: [], roomContext: { roomId: 'room', kind: 'conversation' }
         }) as never
     })
     store.record(ev('turn_started', 't1'))
     await vi.waitFor(() => {
       expect(store.get('t1')).toMatchObject({
-        title: 'Real title',
+        title: 'Real title', roomId: 'room', metadataPending: undefined,
         workspace: { path: '/real/ws', kind: 'local' }
       })
     })

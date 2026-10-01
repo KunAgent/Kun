@@ -6,9 +6,9 @@ import { RoomAvatarGroup } from './RoomAvatar'
 import { RoomPopover } from './RoomPopover'
 import { RoomAppearanceMenu, RoomNotificationMenu } from './RoomManagementControls'
 
-export function RoomHeader({ room, busy, searchOpen, onSidebar, onSearch, onDetails, onMembers, onSettings, onApps, onUpdate }: {
+export function RoomHeader({ room, busy, searchOpen, onSidebar, onSearch, onDetails, onMembers, onSettings, onApps, onHandoffs, onUpdate }: {
   room: Room | null; busy: boolean; searchOpen: boolean
-  onSidebar: () => void; onSearch: () => void; onDetails: () => void; onMembers: () => void; onSettings: () => void; onApps?: () => void
+  onSidebar: () => void; onSearch: () => void; onDetails: () => void; onMembers: () => void; onSettings: () => void; onApps?: () => void; onHandoffs?: () => void
   onUpdate: (patch: { name?: string; collaborationMode?: Room['collaborationMode']; pinned?: boolean; archived?: boolean }) => void
 }) {
   const { t } = useTranslation('common')
@@ -52,6 +52,12 @@ export function RoomHeader({ room, busy, searchOpen, onSidebar, onSearch, onDeta
       <div className="rooms-header-members" title={t('roomsMembers')}>
         <RoomAvatarGroup members={enabled} avatar={room.avatar} id={room.id} label={room.name} size={36} onClick={onMembers} />
       </div>
+      <button type="button" className="rooms-icon-button" aria-label={t('roomsSearchMessages')}
+        title={t('roomsSearchMessages')} aria-pressed={searchOpen} onClick={onSearch}><Search size={18} /></button>
+      <button type="button" className="rooms-icon-button" aria-label={t('roomsRoomDetails')}
+        title={t('roomsRoomDetails')} onClick={onDetails}><PanelRight size={18} /></button>
+      <RoomPopover label={t('roomsMoreActions')} trigger={<MoreHorizontal size={19} />} align="end" width={224} className="rooms-icon-button">
+        {(close) => <div className="rooms-menu-list">
       {room.conversationKind && room.conversationKind !== 'group' ? <span className="rooms-run-note">{t('agentsConversation_' + room.conversationKind)}</span> : <div className="rooms-mode-control">
         <select aria-label={t('roomsMode')} value={room.collaborationMode} disabled={busy}
           title={t(room.collaborationMode === 'peer' ? 'roomsPeer' : room.collaborationMode === 'directed' ? 'roomsDirected' : 'roomsAutonomous')}
@@ -62,15 +68,10 @@ export function RoomHeader({ room, busy, searchOpen, onSidebar, onSearch, onDeta
         </select>
         <ChevronDown size={12} aria-hidden="true" />
       </div>}
-      <button type="button" className="rooms-icon-button" aria-label={t('roomsSearchMessages')}
-        title={t('roomsSearchMessages')} aria-pressed={searchOpen} onClick={onSearch}><Search size={18} /></button>
-      {onApps ? <button type="button" className="rooms-icon-button" aria-label={t('roomsAppsTitle')} title={t('roomsAppsTitle')} onClick={onApps}><PlugZap size={18} /></button> : null}
-      <button type="button" className="rooms-icon-button" aria-label={t('roomsRoomDetails')}
-        title={t('roomsRoomDetails')} onClick={onDetails}><PanelRight size={18} /></button>
-      <RoomNotificationMenu roomId={room.id} />
-      <RoomAppearanceMenu />
-      <RoomPopover label={t('roomsMoreActions')} trigger={<MoreHorizontal size={19} />} align="end" width={224} className="rooms-icon-button">
-        {(close) => <div className="rooms-menu-list">
+          <RoomNotificationMenu roomId={room.id} inMenu />
+          <RoomAppearanceMenu inMenu />
+          {onApps ? <button type="button" onClick={() => { close(); onApps() }}><PlugZap size={16} />{t('roomsAppsTitle')}</button> : null}
+          {onHandoffs ? <button type="button" onClick={() => { close(); onHandoffs() }}>{t('agentsHandoffs')}</button> : null}
           <button type="button" disabled={busy} onClick={() => { close(); startEdit() }}><Pencil size={16} />{t('roomsRename')}</button>
           <button type="button" onClick={() => { close(); onSettings() }}><Settings size={16} />{t('roomsSettings')}</button>
           <button type="button" disabled={busy} onClick={() => { close(); onUpdate({ pinned: !room.pinned }) }}><Pin size={16} />{t(room.pinned ? 'roomsUnpin' : 'roomsPin')}</button>

@@ -1,3 +1,4 @@
+import type { RoomPendingAttachment } from './useRoomPendingSends'
 import { RoomPermissionPicker } from './RoomPermissionPicker'
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -6,7 +7,8 @@ import {
   readBrowserStorageItem,
   writeBrowserStorageItem
 } from '../../lib/browser-storage'
-import { uploadRuntimeAttachment } from '../../lib/runtime-attachment'
+import { useRoomAttachmentUploads } from './useRoomAttachmentUploads'
+import { RoomAttachmentUploads } from './RoomAttachmentUploads'
 import {
   roomRequestId,
   roomsClient,
@@ -73,9 +75,10 @@ function RoomComposerEditor({
   draftId,
   replyTarget,
   topicChoices = [],
-  onSend, onStop, onConnectProject, responding, autoFocus = true, quickTools = false, modelControl, compactControls = true
+  onSend, onStop, onConnectProject, onClearReply, responding, autoFocus = true, quickTools = false, modelControl, compactControls = true
 }: {
   onStop?: () => void
+  onClearReply?: () => void
   modelControl?: ReactNode
   compactControls?: boolean
   /** Show emoji / mention / attach / poll directly in the toolbar (desktop IM layout). */
@@ -88,7 +91,7 @@ function RoomComposerEditor({
   draftId?: string
   replyTarget?: { messageId: string; body: string; rootRequestId?: string }
   topicChoices?: Array<{ rootRequestId: string; title: string }>
-  onSend: (message: SendRoomMessage) => Promise<void>
+  onSend: (message: SendRoomMessage, attachments?: RoomPendingAttachment[]) => Promise<void>
 }): ReactElement {
   const { t } = useTranslation('common')
   const storageId = draftId ?? room.id
@@ -110,7 +113,6 @@ function RoomComposerEditor({
   const draftRef = useRef(draft)
   draftRef.current = draft
   const [busy, setBusy] = useState(false)
-  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [pollOpen, setPollOpen] = useState(false)
   const editorRef = useRef<RoomRichInputHandle>(null)
@@ -156,6 +158,13 @@ function RoomComposerEditor({
     : []
   const fileRef = useRef<HTMLInputElement>(null)
   const transientPreviews = useRef(new Map<string, string>())
+  const uploads = useRoomAttachmentUploads((attachment, file, preview) => {
+    if (preview?.transient) transientPreviews.current.set(attachment.id, preview.url)
+    setDraft((current) => ({ ...current, attachments: [...current.attachments, { id: attachment.id,
+      name: attachment.name, mimeType: attachment.mimeType || file.type,
+      ...(!preview?.transient && preview ? { previewUrl: preview.url } : {}) }] }))
+  })
+  const uploading = uploads.uploading
   useEffect(() => {
     if (draftId) return
     const addFile = (event: Event): void => {
@@ -310,15 +319,16 @@ function RoomComposerEditor({
       `kun.rooms.draft.${storageId}`,
       JSON.stringify(draft)
     )
+    window.dispatchEvent?.(new CustomEvent('kun-room-draft-updated', { detail: { roomId: storageId } }))
   }, [draft, storageId])
   const patch = (value: Partial<Draft>): void =>
-    setDraft((current) => ({ ...current, ...value }))
+    setDraft((current) => ({ ...current, ...value, ...(value.mentions ? { mentions: [...new Set(value.mentions)] } : {}) }))
 
   const submit = async (): Promise<void> => {
     if (
       busy ||
       unavailableMembers.length > 0 ||
-      uploading ||
+      uploads.hasPending() ||
       room.archivedAt ||
       (!draft.body.trim() && !draft.attachments.length && !draft.references.length)
     )
@@ -353,7 +363,8 @@ function RoomComposerEditor({
     setBusy(true)
     setError('')
     try {
-      await onSend({ ...content, clientRequestId: requestId })
+      await onSend({ ...content, clientRequestId: requestId }, draft.attachments.map((attachment) => ({ ...attachment,
+        previewUrl: attachment.previewUrl?.startsWith('data:image/') ? attachment.previewUrl : undefined })))
       for (const id of transientPreviews.current.keys()) releasePreview(id)
       setDraft(emptyDraft())
     } catch (cause) {
@@ -363,56 +374,13 @@ function RoomComposerEditor({
     }
   }
   const attach = async (files: FileList | null): Promise<void> => {
-    if (!files) return
-    setUploading(true)
-    setError('')
-    try {
-      for (const file of Array.from(files).slice(
-        0,
-        20 - draft.attachments.length
-      )) {
-        const preview = await roomComposerImagePreview(file)
-        let dataBase64 = ''
-        try {
-          const localFilePath = window.kunGui.getPathForFile(file)
-          if (!localFilePath) {
-            dataBase64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader()
-              reader.onload = () =>
-                resolve(String(reader.result).split(',')[1] ?? '')
-              reader.onerror = () => reject(reader.error)
-              reader.readAsDataURL(file)
-            })
-          }
-          const attachment = await uploadRuntimeAttachment({
-            name: file.name,
-            mimeType: file.type,
-            dataBase64,
-            localFilePath: localFilePath || undefined
-          })
-          if (preview?.transient) transientPreviews.current.set(attachment.id, preview.url)
-          setDraft((current) => ({
-            ...current,
-            attachments: [
-              ...current.attachments,
-              { id: attachment.id, name: attachment.name, mimeType: attachment.mimeType || file.type,
-                ...(!preview?.transient && preview ? { previewUrl: preview.url } : {}) }
-            ]
-          }))
-        } catch (cause) {
-          if (preview?.transient) URL.revokeObjectURL(preview.url)
-          throw cause
-        }
-      }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setUploading(false)
-      if (fileRef.current) fileRef.current.value = ''
-    }
+    if (!files || room.archivedAt || busy) return
+    const selected = Array.from(files)
+    if (fileRef.current) fileRef.current.value = ''
+    await uploads.add(selected, 20 - draftRef.current.attachments.length)
   }
 
-  const disabled = busy || uploading || Boolean(room.archivedAt)
+  const disabled = busy || Boolean(room.archivedAt)
   const topicTitle = topicChoices.find((topic) => topic.rootRequestId === rootRequestId)?.title
     ?? draft.replyBody ?? rootRequestId
 
@@ -439,7 +407,8 @@ function RoomComposerEditor({
           }}
           onTask={() => patch({ taskId: '' })}
           onRepository={() => patch({ repositoryId: '' })}
-          onClearReply={() => patch({ replyToMessageId: undefined, replyBody: undefined })} />
+          onClearReply={() => { patch({ replyToMessageId: undefined, replyBody: undefined, rootRequestId: undefined }); onClearReply?.() }} />
+        <RoomAttachmentUploads pending={uploads.pending} onCancel={uploads.cancel} onRetry={uploads.retry} />
         <RoomContentReferenceChips references={draft.references} onChange={(references) => patch({ references })} disabled={disabled} />
         <RoomRichInput ref={editorRef} room={room} value={draft.body} mentions={draft.mentions}
           disabled={disabled} placeholder={t('directPlaceholder', { name: room.name })} onChange={patch}
@@ -453,8 +422,8 @@ function RoomComposerEditor({
           topicTitle={topicTitle} topicChoices={topicChoices}
           showTopic={!draftId && (room.collaborationMode === 'peer' || Boolean(draft.rootRequestId))}
           intent={draft.intent} busy={busy} uploading={uploading} disabled={disabled}
-          attachmentLimit={draft.attachments.length >= 20}
-          canSend={unavailableMembers.length === 0 && Boolean(draft.body.trim() || draft.attachments.length || draft.references.length)}
+          attachmentLimit={draft.attachments.length + uploads.pending.length >= 20}
+          canSend={uploads.pending.length === 0 && unavailableMembers.length === 0 && Boolean(draft.body.trim() || draft.attachments.length || draft.references.length)}
           onAttach={() => fileRef.current?.click()}
           onMention={() => editorRef.current?.insertText('@')}
           onEmoji={(emoji) => { setTimeout(() => editorRef.current?.insertText(emoji), 0) }} onPoll={() => setPollOpen((value) => !value)}
@@ -469,6 +438,7 @@ function RoomComposerEditor({
           modelControl={modelControl}
           references={<RoomContentReferencePicker showLabel room={room} tasks={tasks} references={draft.references}
             onChange={(references) => patch({ references })} disabled={disabled} />} quickTools={quickTools} />
+        <p className="rooms-composer-shortcuts">{t('roomsComposerShortcuts', { defaultValue: 'Enter to send · Shift+Enter for a new line' })}</p>
       </fieldset>
       {!compactControls && room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId
         ? <RoomPermissionPicker roomId={room.id} /> : null}

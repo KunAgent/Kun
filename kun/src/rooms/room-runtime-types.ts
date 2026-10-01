@@ -23,6 +23,7 @@ export type RoomRequestState = {
     sourceTurnId: string
     kind: import('./room-continuation-dispatch.js').RoomContinuation['kind']
     goalCreatedAt?: string
+    inboxId?: string
   }
   /** Provenance of the durable reminder that woke this private request. */
   privateReminder?: import('../contracts/room-reminders.js').RoomPrivateReminder
@@ -107,6 +108,9 @@ export type RoomTaskExecution = {
   contextSnapshot?: RoomContextSnapshot
 }
 export type RoomRuntimeDeps = {
+  /** Global execution ceiling; per-room limits remain independently enforced. */
+  maxConcurrentTasks?: number
+  eventBus?: import('../ports/event-bus.js').EventBus
   discussionFairness?: import('../agents/agent-discussion-fairness.js').AgentDiscussionFairness
   agentDirectory?: import('../agents/agent-identity-service.js').AgentIdentityService
   agentHandoffs?: import('../agents/agent-handoff-service.js').AgentHandoffService

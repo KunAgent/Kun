@@ -56,6 +56,7 @@ import { bindRuntimeManagerDataPlane, connectInjectedServiceManager } from '../m
 import { shutdownOwnedProcesses } from '../process/owned-process.js'
 import { runManagerRetireCommand } from './manager-retire.js'
 import { runWorkerCallbackCommand } from './worker-callback-cli.js'
+import { runHostCommand } from './host-cli.js'
 
 export const KUN_READY_PREFIX = 'KUN_READY '
 // Replacement clients wait 15 seconds before escalating to a hard kill. Keep
@@ -422,6 +423,9 @@ export async function main(argv: readonly string[]): Promise<number> {
     executablePath: process.argv[1]
   })
   process.title = process.env.KUN_RUNTIME_FLAVOR === 'development' ? 'kun-dv' : 'kun'
+  if (argv[0] === 'host') return runHostCommand(argv.slice(1), {
+    stdout: process.stdout, stderr: process.stderr, env: process.env
+  })
   if (argv[0] === 'manager') return runManagerRetireCommand(argv.slice(1), {
     stdout: process.stdout, stderr: process.stderr, env: process.env
   })

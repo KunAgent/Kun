@@ -66,7 +66,7 @@ export function registerAgentChatRoutes(add: Add, runtime: ServerRuntime) {
     })
   })
   add('GET', '/v1/rooms/:roomId/direct', (rooms, _request, { params }) => directActivity(rooms, params.roomId))
-  add('GET', '/v1/rooms/:roomId/files', (rooms, _request, { params }) => directFiles(rooms, params.roomId))
+  add('GET', '/v1/rooms/:roomId/files', (rooms, request, { params }) => directFiles(rooms, params.roomId, Object.fromEntries(new URL(request.url).searchParams)))
   add('POST', '/v1/rooms/:roomId/direct/context', async (rooms, request, { params }) => {
     const input = z.object({ clientRequestId: Id, expectedRevision: z.number().int().nonnegative(),
       action: z.enum(['workspace', 'reset']), path: z.string().min(1).max(4096).nullable().optional() }).strict().parse(await body(request))

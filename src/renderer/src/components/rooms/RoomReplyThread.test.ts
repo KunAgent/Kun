@@ -67,7 +67,7 @@ describe('reply thread drawer', () => {
     expect(send).not.toHaveBeenCalled()
     const input = { clientRequestId: 'send', body: 'Follow up', rootRequestId: 'topic', executionIntent: 'discussion', mentionMemberIds: [], attachmentIds: [] } as SendRoomMessage
     await act(async () => composer.props.onSend(input))
-    expect(send).toHaveBeenCalledWith({ ...input, replyToMessageId: 'nested' })
+    expect(send).toHaveBeenCalledWith({ ...input, replyToMessageId: 'nested' }, undefined)
   })
 
   it('routes replies to the shared composer callback instead of rendering an embedded composer', async () => {

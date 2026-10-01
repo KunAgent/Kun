@@ -260,3 +260,42 @@ it('stopping the merged request interrupts the target turn', async () => {
   const b = await f.tick(second.requestId)
   expect(b.status).toBe('cancelled')
 })
+
+it('Runtime.start admits a second user message into a blocked live model turn', async () => {
+  let release!: () => void
+  let entered!: () => void
+  const blocked = new Promise<void>((resolve) => { release = resolve })
+  const started = new Promise<void>((resolve) => { entered = resolve })
+  const f = await fixture({ provider: 'test', model: 'first', async *stream() {
+    entered()
+    await blocked
+    yield { kind: 'tool_call_complete', callId: 'live-reply', toolName: 'send_im_message', arguments: { text: 'Noted.' } }
+    yield { kind: 'completed', stopReason: 'tool_calls' }
+  } })
+  const { QueuedTurnDispatcher } = await import('../server/queued-turn-dispatcher.js')
+  const dispatcher = new QueuedTurnDispatcher({ turns: f.h.turns, threadStore: f.h.threadStore,
+    runTurn: (threadId, turnId) => f.h.loop.runTurn(threadId, turnId) })
+  f.h.turns.setTurnQueuedHook((id) => dispatcher.requestDrain(id))
+  f.h.turns.setTurnSettledHook((id, status) => dispatcher.onTurnSettled(id, status))
+  const enqueue = vi.spyOn(f.h.turns, 'enqueueTurn')
+  f.runtime.start()
+  try {
+    const first = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'runtime-first', body: 'Start work' })
+    await started
+    const second = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'runtime-second', body: 'Use the updated requirement' })
+    await vi.waitFor(async () => {
+      const value = (await f.row(second.requestId)).value
+      expect(value.steer?.targetTurnId).toBe((await f.row(first.requestId)).value.turnId)
+      expect(value.steer?.targetTurnId).toBeTruthy()
+    }, { timeout: 8_000, interval: 25 })
+    expect(enqueue).toHaveBeenCalledTimes(1)
+    release()
+    await vi.waitFor(async () => expect((await f.row(second.requestId)).value.status).toBe('completed'), { timeout: 8_000 })
+    const firstRequest = (await f.row(first.requestId)).value
+    expect((await f.h.threads.getMetadata(firstRequest.threadId))?.turns).toHaveLength(1)
+  } finally {
+    release()
+    await f.runtime.close()
+    await dispatcher.dispose()
+  }
+}, 20_000)

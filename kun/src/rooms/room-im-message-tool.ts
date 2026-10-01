@@ -1,3 +1,4 @@
+import { agentArtifactLibraryBinding, artifactReference } from '../agents/agent-artifact-library.js'
 import { realpath } from 'node:fs/promises'
 import { z } from 'zod'
 import type { ThreadStore } from '../ports/thread-store.js'
@@ -161,13 +162,19 @@ export function roomImMessageTool(threads: ThreadStore): LocalTool {
           ? await service.store.get<RoomMessage>('message', run.value.triggerMessageId)
           : null
         const workspaceId = agentStableId('private-workspace', room.roomId, workspace)
-        const references: RoomContentReference[] = [...files.map((file): RoomContentReference => ({
-          kind: 'agent_file',
-          workspaceId,
-          relativePath: file.relativePath,
-          titleSnapshot: file.fileName
-        })), ...await resolveBotReferences(threads, room.participantAgentId, input.references)]
         const messageId = roomRunSegmentMessageId(runId, context.activeToolCallId)
+        const library = agentArtifactLibraryBinding(threads)
+        const fileReferences: RoomContentReference[] = []
+        for (const file of files) {
+          if (library?.available) {
+            const saved = await library.capture({ participantAgentId: room.participantAgentId, roomId: room.roomId,
+              sourceRunId: runId, sourceMessageId: messageId, requestId: messageId, workspaceRoot: workspace,
+              workspaceId, relativePath: file.relativePath, title: file.fileName })
+            fileReferences.push(artifactReference(saved))
+          } else fileReferences.push({ kind: 'agent_file', workspaceId, relativePath: file.relativePath, titleSnapshot: file.fileName })
+        }
+        const references: RoomContentReference[] = [...fileReferences,
+          ...await resolveBotReferences(threads, room.participantAgentId, input.references)]
         await service.publishSegment(room.roomId, {
           messageId,
           runId,

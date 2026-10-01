@@ -77,3 +77,26 @@
 
 .rooms-content-open-board { margin-top: 4px; width: 100%; padding: 6px 10px; border-radius: 8px; font-size: 12px; color: var(--ds-accent); background: var(--ds-surface-hover); }
 .rooms-content-open-board:hover, .rooms-content-open-board:focus-visible { filter: brightness(0.97); }
+/* A full viewport image viewer keeps original pixels and navigation together. */
+.rooms-lightbox-backdrop { justify-content: center; align-items: center; }
+.rooms-lightbox { width: min(1200px, 100%); height: min(900px, 100dvh); border: 1px solid var(--ds-border); border-radius: 12px; padding: 12px; }
+.rooms-lightbox-controls { display: flex; justify-content: center; align-items: center; gap: 6px; padding: 0 0 10px; flex-wrap: wrap; }
+.rooms-lightbox-controls button { min-width: 36px; min-height: 36px; border-radius: 6px; display: grid; place-items: center; }
+.rooms-lightbox-controls button:hover { background: var(--ds-surface-hover); }
+.rooms-lightbox-controls button:disabled { opacity: .4; }
+.rooms-lightbox-controls output { min-width: 52px; text-align: center; font-size: 12px; color: var(--ds-text-muted); }
+.rooms-lightbox-viewport { flex: 1; min-width: 0; min-height: 0; overflow: auto; cursor: grab; touch-action: none; background: var(--ds-surface-subtle); }
+.rooms-lightbox-viewport:active { cursor: grabbing; }
+.rooms-lightbox-canvas { display: flex; align-items: center; justify-content: center; }
+.rooms-lightbox-canvas img { max-width: none; max-height: none; flex-shrink: 0; object-fit: contain; user-select: none; }
+.rooms-lightbox-error { padding: 6px; color: var(--ds-danger); font-size: 12px; }
+.rooms-lightbox :is(button, a, [tabindex]):focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+.rooms-message-attachments:has(> .is-image ~ .is-image) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; max-width: 440px; }
+.rooms-message-attachments:has(> .is-image ~ .is-image) > .rooms-content-card { width: 100%; }
+.rooms-message-attachments:has(> .is-image ~ .is-image) .rooms-content-thumbnail { height: 140px; }
+.rooms-message-attachments:has(> .is-image ~ .is-image) .rooms-content-thumbnail img { object-fit: cover; }
+@media (max-width: 640px) {
+  .rooms-lightbox { width: 100%; height: 100dvh; border-radius: 0; padding: 8px; }
+  .rooms-lightbox :is(header button, header a, .rooms-lightbox-controls button) { min-width: 44px; min-height: 44px; }
+  .rooms-message-attachments:has(> .is-image ~ .is-image) .rooms-content-thumbnail { height: 110px; }
+}

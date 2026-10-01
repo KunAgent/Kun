@@ -1,3 +1,5 @@
+import { registerAgentWorkRoutes } from './register-agent-work-routes.js'
+import { registerRoomResultInboxRoutes } from './register-room-result-inbox-routes.js'
 import { registerRoomPermissionRoutes } from './register-room-permission-routes.js'
 import { registerAgentChatRoutes } from './register-agent-chat-routes.js'
 import { registerRoomProfileRoutes } from './register-room-profile-routes.js'
@@ -29,6 +31,7 @@ import { registerRoomReplyRoutes } from './register-room-reply-routes.js'
 import { registerRoomContentRoutes } from './register-room-content-routes.js'
 import { registerRoomInteractionRoutes } from './register-room-interaction-routes.js'
 import { registerRoomProposalRoutes } from './register-room-proposal-routes.js'
+import { registerRoomMessageContextRoutes } from './register-room-message-context-routes.js'
 import { registerRoomReminderRoutes } from './register-room-reminder-routes.js'
 import { registerRoomAppConnectionRoutes } from './register-room-app-connection-routes.js'
 import { registerWorkbenchLinkRoutes } from './register-workbench-link-routes.js'
@@ -83,6 +86,8 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
 
   registerRoomPermissionRoutes(add, runtime)
   registerAgentChatRoutes(add, runtime)
+  registerAgentWorkRoutes(add)
+  registerRoomResultInboxRoutes(add)
   registerRoomProfileRoutes(add, runtime)
   registerAgentIdentityRoutes(add)
   registerAgentHandoffRoutes(add)
@@ -94,6 +99,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   registerRoomInteractionRoutes(add)
   registerRoomProposalRoutes(add)
   registerRoomReminderRoutes(add)
+  registerRoomMessageContextRoutes(add)
   registerRoomAppConnectionRoutes(add, runtime)
   registerWorkbenchLinkRoutes(add)
   add('GET', '/v1/rooms/:roomId/topics', (rooms, request, context) => {
@@ -246,7 +252,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     rooms.product.recovery(context.params.roomId, context.params.taskId))
   add('POST', '/v1/rooms/:roomId/tasks/:taskId/recover', async (rooms, request, context) => {
     const input = await body(request)
-    try { return await rooms.exclusive(() => rooms.product.recover(context.params.roomId, context.params.taskId, input)) }
+    try { return await rooms.taskExclusive(context.params.taskId, () => rooms.product.recover(context.params.roomId, context.params.taskId, input)) }
     finally { rooms.wake() }
   })
   add('GET', '/v1/rooms/:roomId/tasks/:taskId/deliveries', (rooms, request, context) =>
@@ -286,20 +292,20 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   add('POST', '/v1/rooms/:roomId/tasks/:taskId/integrations', async (rooms, request, { params }) => {
     const input = await body(request)
     try {
-      return { integration: await rooms.exclusive(() => rooms.integrations.prepare(params.roomId, params.taskId, input)) }
+      return { integration: await rooms.taskExclusive(params.taskId, () => rooms.integrations.prepare(params.roomId, params.taskId, input)) }
     } finally { rooms.wake() }
   })
   for (const action of ['resolve', 'apply', 'cancel', 'open', 'validate']) add('POST', '/v1/rooms/:roomId/tasks/:taskId/integrations/:integrationId/' + action, async (rooms, request, { params }) => {
     const input = await body(request)
     try {
-      return { integration: await rooms.exclusive(() => rooms.integrations.action(params.roomId, params.taskId, params.integrationId, action, input)) }
+      return { integration: await rooms.taskExclusive(params.taskId, () => rooms.integrations.action(params.roomId, params.taskId, params.integrationId, action, input)) }
     } finally { rooms.wake() }
   })
   add('GET', '/v1/rooms/:roomId/tasks/:taskId/cleanup', (rooms, _request, { params }) =>
     roomCleanupPreview(rooms.deps, params.roomId, params.taskId))
   add('POST', '/v1/rooms/:roomId/tasks/:taskId/cleanup', async (rooms, request, { params }) => {
     const input = z.object({ clientRequestId: RoomIdSchema, expectedRevision: z.number().int().nonnegative(), token: z.string().regex(/^[a-f0-9]{64}$/) }).parse(await body(request))
-    return rooms.exclusive(() => cleanupRoomTask(rooms.deps, params.roomId, params.taskId, input))
+    return rooms.taskExclusive(params.taskId, () => cleanupRoomTask(rooms.deps, params.roomId, params.taskId, input))
   })
   add('PATCH', '/v1/rooms/:roomId/rules/:ruleId', async (rooms, request, context) => {
     const input = await body(request)
@@ -308,7 +314,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   add('POST', '/v1/rooms/:roomId/rules/:ruleId/adopt', async (rooms, request, { params }) => {
     const input = z.object({ taskId: RoomIdSchema, expectedTaskRevision: z.number().int().nonnegative(),
       version: z.number().int().positive(), clientRequestId: RoomIdSchema, body: z.string().max(64000).optional() }).strict().parse(await body(request))
-    return rooms.exclusive(() => rooms.product.adoptRule(params.roomId, params.ruleId, input))
+    return rooms.taskExclusive(input.taskId, () => rooms.product.adoptRule(params.roomId, params.ruleId, input))
   })
   add('GET', '/v1/rooms/:roomId/rules/:ruleId/versions', async (rooms, request, { params }) => {
     const rule = await rooms.service.store.get('rule', params.ruleId)

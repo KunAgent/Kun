@@ -4,7 +4,7 @@ import type { RouteContext } from '../router.js'
 import { readJsonBody } from '../read-json-body.js'
 import { RoomIdSchema } from '../../contracts/rooms.js'
 import { RoomStoreConflictError } from '../../rooms/room-store.js'
-import { cancelRoomReminder, listRoomReminders } from '../../rooms/room-reminders.js'
+import { cancelRoomReminder, listRoomReminders, updateRoomReminder } from '../../rooms/room-reminders.js'
 
 type Add = (method: string, path: string, handle: (rooms: RoomRuntime, request: Request, context: RouteContext) => Promise<unknown> | unknown) => void
 async function body(request: Request) {
@@ -28,7 +28,7 @@ async function privateRoom(rooms: RoomRuntime, roomId: string) {
  */
 export function registerRoomReminderRoutes(add: Add): void {
   add('GET', '/v1/rooms/:roomId/reminders', async (rooms, request, { params }) => {
-    const status = z.enum(['scheduled', 'all']).default('all')
+    const status = z.enum(['scheduled', 'paused', 'all']).default('all')
       .parse(new URL(request.url).searchParams.get('status') ?? undefined)
     await privateRoom(rooms, params.roomId)
     return { reminders: await listRoomReminders(rooms.deps.store, params.roomId, { status }) }
@@ -45,4 +45,16 @@ export function registerRoomReminderRoutes(add: Add): void {
           ...(input.expectedRevision !== undefined ? { expectedRevision: input.expectedRevision } : {}) }))
     } finally { rooms.wake() }
   })
+  for (const action of ['pause', 'resume'] as const) {
+    add('POST', `/v1/rooms/:roomId/reminders/:reminderId/${action}`, async (rooms, request, { params }) => {
+      const input = z.object({ clientRequestId: RoomIdSchema,
+        expectedRevision: z.number().int().nonnegative().optional() }).strict().parse(await body(request))
+      await privateRoom(rooms, params.roomId)
+      try {
+        return await rooms.exclusive(() => updateRoomReminder(rooms.deps.store, params.roomId,
+          RoomIdSchema.parse(params.reminderId), { ...input, paused: action === 'pause' }))
+      } finally { rooms.wake() }
+    })
+  }
+
 }

@@ -1,3 +1,4 @@
+import { useRoomOverlayLayout } from './useRoomViewport'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeft, PanelRight, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -43,6 +44,7 @@ export function RoomDetailsDrawer({
 }) {
   const { t } = useTranslation('common')
   const panel = useRef<HTMLElement>(null)
+  const overlay = useRoomOverlayLayout(panel)
   const [expanded, setExpanded] = useState(false)
   useEffect(() => setExpanded(false), [frameKey])
   const sideDocked = !expanded
@@ -60,6 +62,8 @@ export function RoomDetailsDrawer({
       ref={panel}
       role={embedded ? 'region' : 'dialog'}
       aria-label={t('roomsRoomDetails')}
+      aria-modal={!embedded && overlay || undefined}
+      data-expanded={!embedded && expanded || undefined}
       aria-hidden={!active || undefined}
       inert={!active || undefined}
       className={embedded
@@ -73,7 +77,7 @@ export function RoomDetailsDrawer({
         if (
           event.key !== 'Tab' ||
           embedded ||
-          !window.matchMedia?.('(max-width: 1279px)').matches
+          !overlay
         )
           return
         const controls = Array.from(
@@ -108,7 +112,7 @@ export function RoomDetailsDrawer({
         </h2>
         {!embedded ? <button
           type="button"
-          className={`${roomButtonClass} xl:hidden`}
+          className={`${roomButtonClass}${overlay ? '' : ' hidden'}`}
           aria-pressed={!expanded}
           aria-label={t('roomsRightSidebar')}
           title={t('roomsRightSidebar')}

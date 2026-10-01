@@ -43,7 +43,7 @@ import {
 import { RoomAgentActivity, directActivityLabelKey, groupActivity } from './RoomAgentActivity'
 import { useRoomReplyAwaiting } from './use-room-reply-awaiting'
 import { RoomPendingSendRow } from './RoomPendingSendRow'
-import { useRoomPendingSends } from './useRoomPendingSends'
+import { useRoomPendingSends, type RoomPendingAttachment } from './useRoomPendingSends'
 import { roomRespondingMemberIds, roomWaitingMemberIds } from './room-receipt-helpers'
 import { RoomRunInspector } from './RoomRunInspector'
 import { RoomDrawerNavigation, useRoomDrawerNavigation } from './RoomDrawerNavigation'
@@ -163,10 +163,16 @@ export function RoomsWorkspaceView({
       setBusy(false)
     }
   }
-  const pin = (message: RoomMessage): void => {
-    void perform(() =>
-      roomsClient.pinMessage(message.roomId, message.id, `pin-${message.id}`)
-    )
+  const pin = async (message: RoomMessage): Promise<boolean> => {
+    state.setError('')
+    try {
+      await roomsClient.pinMessage(message.roomId, message.id, `pin-${message.id}`)
+      await state.refresh()
+      return true
+    } catch (cause) {
+      state.setError(cause instanceof Error ? cause.message : String(cause))
+      return false
+    }
   }
   const chooseRoom = (id: string, target?: { runId?: string; messageId?: string }): void => {
     const serial = ++navigationSerial.current
@@ -257,7 +263,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
   const pendingSends = useRoomPendingSends(room?.id, messages, steeredSendIds)
   const replyAwaiting = useRoomReplyAwaiting(Boolean(direct.data?.active) || roomRespondingMemberIds(topicState.topics).length > 0, messages)
   const waitingForReply = pendingSends.pending.some((item) => item.state === 'sent' || item.state === 'steered') || replyAwaiting.awaiting
-  const send = async (message: SendRoomMessage): Promise<void> => {
+  const send = async (message: SendRoomMessage, attachments?: RoomPendingAttachment[]): Promise<void> => {
     if (!room) return
     const pending = choiceInputs[0]
     if (privateChat && pending && message.body.trim()) {
@@ -266,7 +272,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
       await Promise.all([state.refresh(), direct.refresh(), topicState.refresh()])
       return
     }
-    pendingSends.enqueue(message)
+    pendingSends.enqueue(message, attachments)
     try {
       await roomsClient.send(room.id, message)
       pendingSends.markSent(message.clientRequestId)
@@ -339,7 +345,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             onWriteOpen={openWork}
           />
           <button
-            className="text-ds-muted md:hidden"
+            className="text-ds-muted md:hidden rooms-sidebar-mobile-close"
             onClick={() => setSidebarOpen(false)}
             aria-label={t('roomsClose')}
           >
@@ -356,7 +362,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
       <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         {privateChat && room ? <RoomDirectHeader room={room} models={agentModels.data} onSidebar={() => setSidebarOpen(true)} onSearch={() => setSearchOpen(!searchOpen)}
           onProfile={() => drawer.open({ kind: 'agent', agentId: room.members[0].participantAgentId })} onModels={() => drawer.open({ kind: 'models' })}
-          onFiles={() => panel.openTab(BUILTIN_RIGHT_PANEL_IDS.files)} onReminders={() => drawer.open({ kind: 'reminders' })}
+          onFiles={() => drawer.open({ kind: 'files' })} onReminders={() => drawer.open({ kind: 'reminders' })}
           onReset={() => void direct.context('reset')} onConnect={() => void direct.context('workspace')}
           onApps={() => setAppsOpen(true)}
           onTasks={() => drawer.section('tasks')} onSession={toggleSession} sessionOpen={Boolean(openRunId)} sessionDisabled={!latestRunId}
@@ -365,6 +371,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           onSearch={() => setSearchOpen((value) => !value)}
           onApps={() => setAppsOpen(true)}
           onDetails={() => drawer.section('discussion')}
+          onHandoffs={() => drawer.open({ kind: 'handoffs' })}
           onMembers={() => drawer.section('members')}
           onSettings={() => drawer.open({ kind: 'settings' })}
           onUpdate={(patch) => { if (room) void perform(async () => {
@@ -410,8 +417,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
               onTasks={() => drawer.section('tasks')}
               taskCounts={sidebarActivity?.roomId === room.id ? sidebarActivity : undefined}
             />
-            <div className="agent-collaboration-strip"><button type="button" onClick={() => drawer.open({ kind: 'handoffs' })}>{t('agentsHandoffs')}</button>
-            </div></> : null}
+            {showActivity ? <div className="agent-collaboration-strip"><button type="button" onClick={() => drawer.open({ kind: 'handoffs' })}>{t('agentsHandoffs')}</button>
+            </div> : null}</> : null}
             {!messages.length && privateChat && !direct.data?.active && !choiceInputs.length && !pendingSends.pending.length && !waitingForReply ? <div className="direct-empty-chat"><h2>{t('directWelcome', { name: room.members[0].displayName })}</h2>
               <p>{t(setupPending ? 'directSetupWelcomeHint' : 'directWelcomeHint')}</p>
               {setupPending ? <button type="button" onClick={() => void skipSetup()}>{t('directSkipSetup')}</button> : null}
@@ -520,9 +527,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           if (target.kind === 'task') return <RoomDrawerTask key={key} roomId={room.id} taskId={target.taskId} tasks={state.tasks}
             onClose={drawer.back} onRun={openRun} onOpenThread={onOpenThread} onUpdated={() => void state.refresh()} />
           if (target.kind === 'reply') return <RoomReplyThread key={key} room={room} messageId={target.messageId} tasks={state.tasks} active={active}
-            onSend={send} onPin={pin} onTask={openTask} onRun={openRun} onMember={openMember} onOpenContent={openContent}
-            onReply={(message) => { drawer.close(); window.dispatchEvent(new CustomEvent('kun-room-reply',
-              { detail: { roomId: room.id, messageId: message.id, body: message.body, rootRequestId: message.rootRequestId } })) }} />
+            onSend={send} onPin={pin} onTask={openTask} onRun={openRun} onMember={openMember} onOpenContent={openContent} />
           if (target.kind === 'content') return <RoomContentPreview key={key} room={room} reference={target.reference} messageId={target.messageId}
             onOpenCode={onOpenThread} onOpenTarget={onOpenContentTarget ?? ((value) => openRoomContentTarget(value, onOpenThread, room.id,
               () => mounted.current && selectedRoomRef.current === room.id && panelScopeRef.current === panelScope && useChatStore.getState().route === surface))} />

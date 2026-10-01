@@ -287,13 +287,13 @@ describe('goal auto-resume (issue #370)', () => {
     const timer = makeCapturingTimer()
     let h: Harness
     let calls = 0
-    // A non-goal tool counts as real progress (unlike get_goal/update_goal).
+    // A concrete file diff counts as progress; arbitrary successful tools do not.
     const editTool = LocalToolHost.defineTool({
-      name: 'apply_edit',
+      name: 'edit',
       description: 'Apply a file edit',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       policy: 'auto',
-      execute: async () => ({ output: { ok: true } })
+      execute: async () => ({ output: { path: '/workspace/file.txt', patch: '@@ -1 +1 @@\n-old\n+new' } })
     })
     h = makeHarness(
       {
@@ -306,7 +306,7 @@ describe('goal auto-resume (issue #370)', () => {
             yield {
               kind: 'tool_call_complete',
               callId: 'call_edit',
-              toolName: 'apply_edit',
+              toolName: 'edit',
               arguments: {}
             }
             yield { kind: 'completed', stopReason: 'tool_calls' }
@@ -322,7 +322,7 @@ describe('goal auto-resume (issue #370)', () => {
         }
       },
       {
-        tools: [...buildDefaultLocalTools(), editTool, ...makeGoalTools(() => h)],
+        tools: [...buildDefaultLocalTools().filter((tool) => tool.name !== 'edit'), editTool, ...makeGoalTools(() => h)],
         goalResume: { setTimer: timer.setTimer }
       }
     )

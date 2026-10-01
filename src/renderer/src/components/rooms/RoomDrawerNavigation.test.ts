@@ -100,6 +100,7 @@ describe('single Rooms drawer navigation stack', () => {
     })))
     expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(0)
     expect(renderer.root.findAllByProps({ role: 'region' })).toHaveLength(1)
+    expect(renderer.root.findByProps({ role: 'region' }).props['aria-modal']).toBeUndefined()
     expect(renderer.root.findAllByProps({ role: 'separator' })).toHaveLength(0)
     expect(renderer.root.findAllByProps({ 'aria-label': 'Right sidebar' })).toHaveLength(0)
   })

@@ -4,7 +4,8 @@ import type { ThreadStore } from '../ports/thread-store.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import { withThreadStoreMutation } from '../services/thread-mutation-coordinator.js'
 import { TurnCapacityError, type TurnService } from '../services/turn-service.js'
-import { GET_GOAL_TOOL_NAME, UPDATE_GOAL_TOOL_NAME } from '../adapters/tool/goal-tools.js'
+import { GoalProgressEvidence } from './goal-progress-evidence.js'
+import { goalBudgetStatus, isPrivateRoomGoal, ROOM_GOAL_MAX_NO_PROGRESS_TOOLS } from './goal-execution-budget.js'
 import {
   GoalResumeCoordinator,
   DEFAULT_MAX_GOAL_RESUME_NO_PROGRESS_ATTEMPTS,
@@ -12,7 +13,7 @@ import {
 } from './goal-resume-coordinator.js'
 import type { TurnExecutionStatus, TurnRunOutcome } from './turn-execution-types.js'
 import { resolveTurnClientSurface } from './turn-context-resolver.js'
-import type { ToolHostResult } from '../ports/tool-host.js'
+import type { ToolCallLike, ToolHostResult } from '../ports/tool-host.js'
 import { launchContinuationTurn } from './continuation-turn-launch.js'
 import type { RestartRecoverySource } from './restart-recovery-source.js'
 import { dispatchRoomContinuation } from '../rooms/room-continuation-dispatch.js'
@@ -23,16 +24,11 @@ const GOAL_RESUME_PROMPT = [
   'Review the current state, pick up where the work left off, and keep going until the goal is genuinely achieved or blocked.'
 ].join(' ')
 
-const GOAL_NON_PROGRESS_TOOL_NAMES = new Set<string>([
-  GET_GOAL_TOOL_NAME,
-  UPDATE_GOAL_TOOL_NAME,
-  'task_create', 'task_update', 'task_get', 'task_list'
-])
-
 export type GoalElapsedTimer = Readonly<{
   startedAtMs: number
   createdAt: string
   objective: string
+  userWait?: { count: number; pausedMs: number; sinceMs?: number }
 }>
 
 export type GoalTurnCoordinatorOptions = Pick<
@@ -56,7 +52,8 @@ export type GoalTurnCoordinatorDeps = {
  * durable winner is known.
  */
 export class GoalTurnCoordinator {
-  private readonly madeProgressByTurn = new Set<string>()
+  private readonly progress = new GoalProgressEvidence()
+  private readonly elapsedByThread = new Map<string, GoalElapsedTimer>()
   private readonly resumeSuppressedByTurn = new Set<string>()
   private readonly restartSourceTurnByThread = new Map<string, string>()
   private readonly resume: GoalResumeCoordinator
@@ -83,6 +80,8 @@ export class GoalTurnCoordinator {
 
   shutdown(): void {
     this.resume.shutdown()
+    this.progress.clear()
+    this.elapsedByThread.clear()
     this.restartSourceTurnByThread.clear()
   }
 
@@ -100,11 +99,44 @@ export class GoalTurnCoordinator {
   async begin(threadId: string): Promise<GoalElapsedTimer | null> {
     const goal = (await this.deps.threadStore.get(threadId))?.goal
     if (!goal || goal.status !== 'active') return null
-    return {
+    this.progress.begin(threadId, goalResumeKey(threadId, goal))
+    const timer = {
       startedAtMs: this.deps.nowMs(),
       createdAt: goal.createdAt,
-      objective: goal.objective
+      objective: goal.objective,
+      userWait: { count: 0, pausedMs: 0 }
     }
+    this.elapsedByThread.set(threadId, timer)
+    return timer
+  }
+
+  activeElapsedSeconds(threadId: string, goal: ThreadGoal): number | undefined {
+    const timer = this.elapsedByThread.get(threadId)
+    if (!timer || timer.createdAt !== goal.createdAt || timer.objective !== goal.objective) return undefined
+    return this.elapsedSeconds(timer)
+  }
+
+  /** Parallel interactive gates share one parked interval. Automatic review
+   * still spends compute time and does not call this hook. */
+  pauseForUser(threadId: string): () => void {
+    const wait = this.elapsedByThread.get(threadId)?.userWait
+    if (!wait) return () => undefined
+    if (wait.count++ === 0) wait.sinceMs = this.deps.nowMs()
+    let resumed = false
+    return () => {
+      if (resumed) return
+      resumed = true
+      if (--wait.count === 0) {
+        wait.pausedMs += Math.max(0, this.deps.nowMs() - (wait.sinceMs ?? this.deps.nowMs()))
+        delete wait.sinceMs
+      }
+    }
+  }
+
+  private elapsedSeconds(timer: GoalElapsedTimer): number {
+    const now = this.deps.nowMs(), wait = timer.userWait
+    const parked = (wait?.pausedMs ?? 0) + (wait?.sinceMs === undefined ? 0 : Math.max(0, now - wait.sinceMs))
+    return Math.floor(Math.max(0, now - timer.startedAtMs - parked) / 1_000)
   }
 
   /** Account elapsed time and evaluate resume without letting one mask the other. */
@@ -127,18 +159,26 @@ export class GoalTurnCoordinator {
     await this.finishElapsedTimer(threadId, timer)
   }
 
-  noteToolExecuted(turnId: string, toolName: string, result: ToolHostResult): void {
-    if (
-      !GOAL_NON_PROGRESS_TOOL_NAMES.has(toolName) &&
-      result.item.kind === 'tool_result' &&
-      result.item.isError !== true
-    ) {
-      this.madeProgressByTurn.add(turnId)
-    }
+  noteToolExecuted(turnId: string, toolName: string, result: ToolHostResult, call?: ToolCallLike): void {
+    this.progress.note(turnId, toolName, result, call)
   }
 
   hasMadeProgress(turnId: string): boolean {
-    return this.madeProgressByTurn.has(turnId)
+    return this.progress.hasProgress(turnId)
+  }
+
+  remainingProgressCalls(turnId: string): number {
+    return Math.max(0, ROOM_GOAL_MAX_NO_PROGRESS_TOOLS - this.progress.withoutProgress(turnId))
+  }
+
+  async checkProgressBudget(threadId: string, turnId: string): Promise<boolean> {
+    if (this.progress.withoutProgress(turnId) < ROOM_GOAL_MAX_NO_PROGRESS_TOOLS) return true
+    const thread = await this.deps.threadStore.get(threadId)
+    if (!thread || !isPrivateRoomGoal(thread) || thread.goal?.status !== 'active') return true
+    this.suppressResume(turnId)
+    await this.transitionGoalStatus(threadId, turnId, 'blocked',
+      `Goal stopped after ${ROOM_GOAL_MAX_NO_PROGRESS_TOOLS} tool calls without new outcome evidence. Review the result before retrying.`)
+    return false
   }
 
   suppressResume(turnId: string): void {
@@ -146,7 +186,7 @@ export class GoalTurnCoordinator {
   }
 
   clearTurn(turnId: string): void {
-    this.madeProgressByTurn.delete(turnId)
+    this.progress.clearTurn(turnId)
     this.resumeSuppressedByTurn.delete(turnId)
   }
 
@@ -159,12 +199,7 @@ export class GoalTurnCoordinator {
       const next: ThreadGoal = {
         ...thread.goal,
         tokensUsed,
-        status:
-          thread.goal.tokenBudget !== undefined &&
-          thread.goal.tokenBudget !== null &&
-          tokensUsed >= thread.goal.tokenBudget
-            ? 'usageLimited'
-            : 'active',
+        status: goalBudgetStatus(thread, { ...thread.goal, tokensUsed }),
         updatedAt: this.deps.nowIso()
       }
       await this.deps.threadStore.upsert(touchThread({ ...thread, goal: next }, next.updatedAt))
@@ -179,9 +214,8 @@ export class GoalTurnCoordinator {
     timer: GoalElapsedTimer | null
   ): Promise<void> {
     if (!timer) return
-    const elapsedSeconds = Math.floor(
-      Math.max(0, this.deps.nowMs() - timer.startedAtMs) / 1000
-    )
+    if (this.elapsedByThread.get(threadId) === timer) this.elapsedByThread.delete(threadId)
+    const elapsedSeconds = this.elapsedSeconds(timer)
     if (elapsedSeconds <= 0) return
 
     const goal = await this.mutateThread(threadId, async (current) => {
@@ -196,6 +230,7 @@ export class GoalTurnCoordinator {
         timeUsedSeconds: (currentGoal.timeUsedSeconds ?? 0) + elapsedSeconds,
         updatedAt: now
       }
+      next.status = goalBudgetStatus(current, next)
       await this.deps.threadStore.upsert(touchThread({ ...current, goal: next }, now))
       return next
     })
@@ -212,6 +247,7 @@ export class GoalTurnCoordinator {
     const goal = thread?.goal
     if (!thread || thread.roomContext && thread.roomContext.kind !== 'conversation' || !goal || goal.status !== 'active') {
       this.resume.clear(threadId)
+      this.progress.clearGoal(threadId)
       return
     }
     const turn = thread.turns.find((candidate) => candidate.id === turnId)
@@ -224,14 +260,14 @@ export class GoalTurnCoordinator {
     const outcome = this.resume.noteGoalTurnSettled({
       threadId,
       goalKey: goalResumeKey(threadId, goal),
-      madeProgress: this.madeProgressByTurn.has(turnId)
+      madeProgress: this.progress.hasProgress(turnId)
     })
     if (outcome === 'exhausted') {
       await this.transitionGoalStatus(
         threadId,
         turnId,
         'blocked',
-        `Goal auto-resume stopped: ${DEFAULT_MAX_GOAL_RESUME_NO_PROGRESS_ATTEMPTS} consecutive attempts made no progress. Set the goal active again to retry.`
+        `Goal auto-resume stopped: ${this.deps.goalResume?.maxNoProgressAttempts ?? DEFAULT_MAX_GOAL_RESUME_NO_PROGRESS_ATTEMPTS} consecutive attempts made no progress. Set the goal active again to retry.`
       )
     }
   }

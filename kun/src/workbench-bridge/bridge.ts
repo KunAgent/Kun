@@ -1,3 +1,4 @@
+import { defaultAgentExecutionPolicy } from '../agents/agent-permission-snapshot.js'
 import { realpath, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import type { AgentIdentity } from '../contracts/agent-identities.js'
@@ -107,7 +108,7 @@ export class WorkbenchBridge {
       ? (await this.deps.store.get<AgentIdentity>('agent_identity', member.participantAgentId))?.value : undefined
     const restricted = member?.presetSnapshot?.toolPolicy === 'readOnly' || agent?.allowedRepositoryRoots !== undefined ||
       this.deps.profiles()[member?.presetId ?? '']?.toolPolicy === 'readOnly'
-    const agentPolicy = room?.privateExecutionPolicy ?? kunToolPermissionModeSettings(restricted ? 'ask-for-approval' : 'full-access')
+    const agentPolicy = restricted ? defaultAgentExecutionPolicy() : room?.privateExecutionPolicy ?? defaultAgentExecutionPolicy()
     const ceiling = kunToolPermissionModeFromSettings(agentPolicy)
     const current = kunToolPermissionModeFromSettings(threadDefaults)
     return RANK[current] > RANK[ceiling] ? kunToolPermissionModeSettings(ceiling) : undefined

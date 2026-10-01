@@ -73,6 +73,9 @@ export const ActivityRowSchema = z
     unitId: z.string().min(1).max(128),
     kind: ExecutionUnitKindSchema,
     threadId: z.string().min(1),
+    /** Rooms owns its private publication/attention notification delivery. */
+    roomId: z.string().min(1).optional(),
+    metadataPending: z.boolean().optional(),
     /** Parent thread for worker / side-chat / graph-attempt units. */
     parentThreadId: z.string().optional(),
     teamId: z.string().optional(),
@@ -135,6 +138,9 @@ export const RegisterUnitSchema = z
     unitId: z.string().min(1).max(128),
     kind: ExecutionUnitKindSchema,
     threadId: z.string().min(1),
+    /** Rooms owns its private publication/attention notification delivery. */
+    roomId: z.string().min(1).optional(),
+    metadataPending: z.boolean().optional(),
     parentThreadId: z.string().optional(),
     teamId: z.string().optional(),
     harnessId: HarnessIdSchema,

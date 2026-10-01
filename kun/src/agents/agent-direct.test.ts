@@ -50,6 +50,8 @@ async function fixture(outputPath = 'hello.txt', model?: ModelClient) {
     { id: 'builtin', kind: 'built-in', enabled: true, available: true, tools: defaultLocalTools },
     roomResultProvider(h.threadStore)
   ]) })
+  const approve = setInterval(() => { for (const pending of h.approvalGate.pending()) h.approvalGate.decide(pending.id, 'allow') }, 10)
+  cleanup.push(async () => { clearInterval(approve) })
   const store = new SqliteRoomStore({ path: join(root, 'rooms.sqlite') })
   const deps: RoomRuntimeDeps = { dataDir: root, store, threads: h.threads, threadStore: h.threadStore,
     turns: h.turns, sessions: h.sessionStore, approvals: h.approvalGate, inputs: h.userInputGate,
@@ -102,7 +104,12 @@ it('queues a scoped continuation before admission and publishes its exact run on
   expect((await f.advance(second.id)).status).toBe('completed')
   const newer = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'new-user', body: 'New task' })
   await f.advance(newer.requestId)
-  expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'completed-child-three' })).toBe('ignored')
+  expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'completed-child-three' })).toBe('queued')
+  const inbox = await f.store.list<import('../contracts/room-result-inbox.js').RoomResultInbox>('room_result_inbox', { roomId: f.created.roomId })
+  expect(inbox).toHaveLength(3)
+  expect(inbox.filter((row) => row.value.status === 'completed')).toHaveLength(2)
+  expect(inbox.find((row) => row.value.status === 'pending')?.value.rootRequestId).toBe(source.id)
+  await expect(enqueuePrivateContinuation(f.deps, { ...input, prompt: 'changed payload' })).rejects.toThrow('different content')
 })
 
 it('rejects stale or cross-thread continuation sources and rechecks authority before admission', async () => {
@@ -121,6 +128,8 @@ it('rejects stale or cross-thread continuation sources and rechecks authority be
   await f.runner.tick(continuation)
   expect((await f.store.get<RoomRequestState>('request', continuation.id))?.value.status).toBe('cancelled')
   expect(enqueue).not.toHaveBeenCalled()
+  const inbox = await f.store.list<{ status: string }>('room_result_inbox', { roomId: f.created.roomId })
+  expect(inbox[0].value.status).toBe('revoked')
   expect(await enqueuePrivateContinuation(f.deps, { ...input, key: 'child-two' })).toBe('ignored')
 })
 
@@ -281,7 +290,7 @@ it('freezes accepted permissions and applies full access only to the next privat
   const f = await fixture()
   const approvals = vi.spyOn(f.h.approvalGate, 'request')
   const state = await agentPermissions(f.runtime, f.created.roomId)
-  expect(state.mode).toBe('full-access')
+  expect(state.mode).toBe('ask-for-approval')
   await setAgentPermissions(f.runtime, f.created.roomId, { clientRequestId: 'restrict-first', expectedRevision: state.revision, mode: 'ask-for-approval' })
   const first = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'before-policy', body: 'Keep context: ALPHA. Create hello.txt.' })
   const restricted = await agentPermissions(f.runtime, f.created.roomId)
@@ -298,7 +307,7 @@ it('freezes accepted permissions and applies full access only to the next privat
   expect(approvals).toHaveBeenCalledTimes(1)
   expect(JSON.stringify(f.seen.filter((request) => request.threadId === b.threadId))).toContain('ALPHA')
   const other = await quickCreateAgent(f.runtime.agents, { clientRequestId: 'other-policy', setupMode: 'form' })
-  expect((await agentPermissions(f.runtime, other.roomId)).mode).toBe('full-access')
+  expect((await agentPermissions(f.runtime, other.roomId)).mode).toBe('ask-for-approval')
 })
 it('full access performs an explicitly selected external file write and respects later Agent directory limits', async () => {
   const outside = await mkdtemp(join(tmpdir(), 'kun-permission-external-'))

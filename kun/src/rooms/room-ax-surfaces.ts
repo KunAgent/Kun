@@ -185,6 +185,15 @@ export function roomPlaybookIndex(): Array<{ id: RoomPlaybookId; title: string; 
  * read from this map so the advertised text cannot drift from the registry.
  */
 export const ROOM_AX_TOOL_DESCRIPTIONS = {
+  list_agent_artifacts: 'Search this Agent\'s durable delivered files across conversations, including nested paths and old runs. Results include stable identity, immutable version, hash and sourceRunId. Page with nextCursor.',
+  list_agent_artifact_versions: 'List immutable saved versions of a delivered file. Prior versions survive workspace overwrite or deletion.',
+  read_agent_artifact: 'Read a bounded UTF-8 preview of an immutable artifact version. Binary results return metadata only. This accesses the Agent library, not arbitrary filesystem paths.',
+  create_agent_commitment: 'Record a durable outcome commitment across conversations, grounded in this user request. Set objective, acceptance, deadline, nextCheckAt and links to existing workbench tasks/threads/goals. This tracks work; it does not execute or schedule it and grants no permissions.',
+  list_agent_commitments: 'Find this Agent\'s durable commitments across its conversations. Filter status or search and use nextCursor for another page.',
+  get_agent_commitment: 'Read a durable commitment, its source authorization, existing execution links and acceptance evidence.',
+  update_agent_commitment: 'Update a commitment with the revision from its last read. Completion requires acceptanceEvidence. Record results and waitingOn honestly. This does not start, stop or authorize linked execution.',
+  cancel_agent_commitment: 'Cancel tracking of a commitment. Existing linked threads, goals, tasks or workbench jobs must be stopped through their own controls.',
+
   read_room_updates: 'Read bounded updates for your current room topic. This does not acknowledge messages or grant execution permission.',
   send_room_message: 'Submit one public reply, with optional member invitations, or skip:true if you have no new contribution. Finish the turn after submission. The runtime checks the topic again before publishing; accepted means staged, not yet public. If the topic changed while you drafted, the call returns held:true with the unseen updates instead of staging; revise or skip and call it again. This never creates execution tasks.',
   submit_room_plan: 'Submit the structured room decision for the current user request.',
@@ -201,14 +210,16 @@ export const ROOM_AX_TOOL_DESCRIPTIONS = {
   propose_room_action: 'Draft one structural room proposal as a card the user can adopt: pin an agreement, request an execution, ' +
     'add a member, or create a new agent. The proposal is only a draft; nothing is executed. The user reviews ' +
     'it in the timeline and confirms with their own authorization. Provide a short rationale the user can judge.',
-  schedule_reminder: 'Schedule a one-shot reminder for yourself in this private conversation. When it fires, you are woken here ' +
-    'and decide whether the user should see a follow-up. Provide delaySeconds or fireAt (exactly one), ' +
+  schedule_reminder: 'Schedule a one-off, recurring, or conditional reminder for yourself in this private conversation. When it fires, you are woken here ' +
+    'and decide whether the user should see a follow-up using current context. Recurrence supports interval/daily/weekly, with an explicit IANA timezone. ' +
+    'Optional room-idle or new-message triggers, quiet hours, expiry, occurrence limit and dedupKey bound the schedule. ' +
+    'Provide delaySeconds or fireAt (exactly one) for one-offs, ' +
     `${ROOM_REMINDER_LIMITS.minDelaySec} seconds to ${Math.floor(ROOM_REMINDER_LIMITS.maxDelaySec / 86400)} days out.`,
   list_reminders: 'List your own reminders in this private conversation. Defaults to scheduled only; ' +
-    'pass status "all" to include recently ended reminders.',
-  update_reminder: 'Update the note or fire time of one of your own scheduled reminders. ' +
-    'Only still-scheduled reminders can change; ended ones are immutable.',
-  cancel_reminder: 'Cancel one of your own scheduled reminders so it never fires.',
+    'pass status "paused" for paused schedules or "all" to include recently ended reminders.',
+  update_reminder: 'Update your own scheduled or paused reminder note, time, recurrence, timezone, trigger or quiet hours. ' +
+    'Set paused:true to pause or paused:false to resume. Ended reminders are immutable.',
+  cancel_reminder: 'Cancel one of your own scheduled or paused reminders so it never fires.',
   list_collaboration_agents: 'List up to 30 relevant Agents you may contact in this work: common group members or Agents explicitly designated by the user. This does not wake them.',
   send_agent_message: 'Request focused read-only assistance from another permitted Agent. Returns an accepted handoff handle, not a completed reply. Supply only necessary source message IDs. Continue useful work or finish your turn; the result returns asynchronously. Never resend an accepted handoff after a timeout. This cannot create or reassign code tasks. ' + ROOM_HANDOFF_GUIDANCE[0],
   get_agent_handoff: 'Read the state or bounded result of an existing handoff in your current work scope. No dispatch occurs. Do not repeatedly poll a pending handoff; finish the current turn so the result can wake a fresh response.',

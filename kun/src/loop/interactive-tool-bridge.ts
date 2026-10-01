@@ -26,6 +26,8 @@ export type InteractiveToolBridgeDeps = {
   sessionStore: SessionStore
   nowIso: () => string
   approvalReview?: ApprovalReviewPort
+  /** Park active-goal compute accounting while waiting on an actual user. */
+  pauseForUser?: (threadId: string) => () => void
 }
 
 export type AwaitToolApprovalInput = {
@@ -83,6 +85,7 @@ export class InteractiveToolBridge {
       })
     }
     const pending = this.deps.approvalGate.request(input.approval)
+    const resumeTimer = this.deps.pauseForUser?.(input.approval.threadId)
     return new Promise<ApprovalResolution>((resolve, reject) => {
       let settled = false
       let requested!: Promise<unknown>
@@ -171,10 +174,16 @@ export class InteractiveToolBridge {
           reject(error)
         }
       )
-    })
+    }).finally(() => resumeTimer?.())
   }
 
   async awaitUserInput(input: AwaitToolUserInputInput): Promise<UserInputResolution> {
+    const resumeTimer = this.deps.pauseForUser?.(input.threadId)
+    try { return await this.awaitUserInputWhileParked(input) }
+    finally { resumeTimer?.() }
+  }
+
+  private async awaitUserInputWhileParked(input: AwaitToolUserInputInput): Promise<UserInputResolution> {
     // Arm before the item/event becomes observable. An SSE subscriber can
     // submit synchronously while processing user_input_requested.
     const request: UserInputRequest = {

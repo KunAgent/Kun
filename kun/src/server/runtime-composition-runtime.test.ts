@@ -1,11 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { MemoryFeedbackRuntime } from '../memory/memory-feedback-runtime.js'
 import { createServerRuntimeComposition } from './runtime-composition-runtime.js'
 
 describe('server runtime composition', () => {
   it('exposes the composed memory feedback runtime to HTTP routes', () => {
     const memoryFeedback = {} as MemoryFeedbackRuntime
-    const services = looseObject({ memoryFeedback })
+    const addObserver = vi.fn()
+    const services = looseObject({ memoryFeedback, model: looseObject({ core: looseObject({ events: { addObserver } }) }) })
     const extensions = looseObject({
       agent: looseObject({ registryComposition: looseObject({ services }) })
     })
@@ -19,6 +20,8 @@ describe('server runtime composition', () => {
     const runtime = createServerRuntimeComposition(extensions as never, config as never)
 
     expect(runtime.memoryFeedback).toBe(memoryFeedback)
+    expect(addObserver).toHaveBeenCalledTimes(1)
+    expect(addObserver.mock.calls[0][0].constructor.name).toBe('RoomNotificationObserver')
   })
 })
 

@@ -231,12 +231,11 @@ describe('room scheduler idle backoff', () => {
     expect(tick).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(1)
     expect(tick).toHaveBeenCalledTimes(2)
-    // The fire pass reconciled work (the orphan expires as room_archived), so the
-    // following pass keeps the one-second active cadence before idling again.
+    // Expiring an orphan creates no runnable work; stay on the idle cadence.
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(tick).toHaveBeenCalledTimes(3)
+    expect(tick).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(999)
-    expect(tick).toHaveBeenCalledTimes(3)
+    expect(tick).toHaveBeenCalledTimes(2)
     expect((await f.store.get<{ status: string }>('room_reminder', 'rem-bound'))!.value.status).toBe('expired')
   })
 

@@ -1,3 +1,8 @@
+import { reconcileRoomNotificationGates } from './room-notification-observer.js'
+import { AgentCommitmentService } from '../agents/agent-commitment-service.js'
+import { AgentArtifactLibrary, bindAgentArtifactLibrary } from '../agents/agent-artifact-library.js'
+import { bindAgentCommitmentService } from '../agents/agent-commitment-tools.js'
+import { RoomTaskDueQueue } from './room-task-due-queue.js'
 import { AgentDirectRunner } from '../agents/agent-direct-runner.js'
 import { AgentDiscussionFairness } from '../agents/agent-discussion-fairness.js'
 import { AgentHandoffService } from '../agents/agent-handoff-service.js'
@@ -16,7 +21,7 @@ import { RoomRequestRunner } from './room-request-runner.js'
 import { RoomTaskRunner } from './room-task-runner.js'
 import { roomTaskAction } from './room-task-actions.js'
 import type { RoomRuntimeDeps, RoomRequestState, RoomTaskExecution, RoomWorkspace } from './room-runtime-types.js'
-import type { RoomStore, RoomStoredDocument, RoomListOptions } from './room-store.js'
+import type { RoomStore, RoomListOptions } from './room-store.js'
 import { roomTaskActivity } from './room-task-activity.js'
 import { RoomProductService } from './room-product-service.js'
 import { RoomIntegrationService } from './room-integration.js'
@@ -37,7 +42,7 @@ import { WorkbenchBridge, bindWorkbenchBridge } from '../workbench-bridge/bridge
 import { reconcileWorkbench } from '../workbench-bridge/reconcile.js'
 
 /** A tick reports whether live work remains and, when idle, the next scheduled wake time. */
-type RoomTickOutcome = { active: boolean; nextWakeAt?: number }
+type RoomTickOutcome = { active: boolean; nextWakeAt?: number; catchUp?: boolean }
 
 const ACTIVE_TICK_MS = 1_000
 const IDLE_TICK_MS = 15_000
@@ -48,6 +53,8 @@ export class RoomRuntime {
   readonly handoffs: AgentHandoffService
   private readonly handoffRunner: AgentHandoffRunner
   readonly agents: AgentIdentityService
+  readonly commitments: AgentCommitmentService
+  readonly artifactLibrary: AgentArtifactLibrary
   readonly service: RoomService
   readonly product: RoomProductService
   readonly integrations: RoomIntegrationService
@@ -56,6 +63,10 @@ export class RoomRuntime {
   readonly workbench: WorkbenchBridge
   private readonly direct: AgentDirectRunner
   private readonly requests: RoomRequestRunner
+  private readonly taskDue: RoomTaskDueQueue
+  private readonly taskSubscriptions = new Map<string, () => void>()
+  private readonly taskOccupied = new Map<string, boolean>()
+  private readonly taskActions = new Map<string, Promise<unknown>>()
   private readonly tasks: RoomTaskRunner
   private timer?: ReturnType<typeof setTimeout>
   private stopped = true
@@ -79,6 +90,10 @@ export class RoomRuntime {
     this.memoryCapture = new AgentMemoryCoordinator(deps)
     this.service = new RoomService(deps.store, () => this.wake())
     this.service.setAgentDirectory(this.agents)
+    this.commitments = new AgentCommitmentService(deps, this.agents)
+    this.artifactLibrary = new AgentArtifactLibrary(deps)
+    bindAgentCommitmentService(deps.threadStore, this.commitments)
+    bindAgentArtifactLibrary(deps.threadStore, this.artifactLibrary)
     deps.agentDirectory = this.agents
     this.executionService = new RoomService(deps.store, () => this.wake())
     this.executionService.setAgentDirectory(this.agents)
@@ -92,6 +107,7 @@ export class RoomRuntime {
     this.direct = new AgentDirectRunner(deps, this.executionService)
     this.requests = new RoomRequestRunner(deps, this.executionService)
     this.tasks = new RoomTaskRunner(deps, this.executionService)
+    this.taskDue = new RoomTaskDueQueue(deps.store)
     this.peers = new RoomPeerRunner(deps, () => this.wake())
     bindRoomPeerStore(deps.threadStore, deps.store)
     bindRoomReminderWake(deps.threadStore, () => this.wake())
@@ -120,7 +136,7 @@ export class RoomRuntime {
     this.timer.unref?.()
   }
   private runTick(): void {
-    this.inFlight = this.exclusive(() => this.tick()).catch((error) => {
+    this.inFlight = this.tick().catch((error) => {
       console.warn('[kun] room coordinator:', error instanceof Error ? error.message : String(error))
       const outcome: RoomTickOutcome = { active: true }
       return outcome
@@ -140,6 +156,8 @@ export class RoomRuntime {
    * a hot loop.
    */
   private nextDelay(outcome: RoomTickOutcome): number {
+    // Yield between bounded replay/bootstrap pages instead of waiting one second per page.
+    if (outcome.catchUp) return 10
     if (outcome.active) return ACTIVE_TICK_MS
     if (outcome.nextWakeAt === undefined) return IDLE_TICK_MS
     return Math.min(IDLE_TICK_MS, Math.max(ACTIVE_TICK_MS, outcome.nextWakeAt - Date.now()))
@@ -150,19 +168,30 @@ export class RoomRuntime {
     if (this.timer) clearTimeout(this.timer)
     this.timer = undefined
     await this.inFlight
+    for (const unsubscribe of this.taskSubscriptions.values()) unsubscribe()
+    this.taskSubscriptions.clear()
     await this.peers.close()
     await this.memoryCapture.close()
     await this.actionQueue.catch(() => undefined)
+    await Promise.allSettled(this.taskActions.values())
   }
   async action(roomId: string, id: string, action: string, input: unknown) {
-    const run = this.exclusive(async () => {
+    this.taskDue.invalidate(id)
+    const run = this.taskExclusive(id, async () => {
       const result = await roomTaskAction(this.deps, roomId, id, action, input)
       const row = await this.deps.store.get<RoomTaskExecution>('task', id)
       if (row) await this.product.summarizeRequests([row.value])
       return result
     })
-    try { return await run } finally { this.wake() }
+    try { return await run } finally { this.taskDue.invalidate(id); this.wake() }
   }
+  taskExclusive<T>(id: string, operation: () => Promise<T>): Promise<T> {
+    const run = (this.taskActions.get(id) ?? Promise.resolve()).catch(() => undefined).then(operation)
+    this.taskActions.set(id, run)
+    void run.finally(() => { if (this.taskActions.get(id) === run) this.taskActions.delete(id) }).catch(() => undefined)
+    return run
+  }
+  notifyThread(threadId: string) { this.taskDue.invalidateThread(threadId); this.wake() }
   exclusive<T>(operation: () => Promise<T>): Promise<T> {
     const run = this.actionQueue.catch(() => undefined).then(operation)
     this.actionQueue = run
@@ -209,13 +238,82 @@ export class RoomRuntime {
       nextCursor: rows.length === limit ? String(rows.at(-1)!.seq) : undefined }
   }
 
+  private async tickRequest(row: import('./room-store.js').RoomStoredDocument<RoomRequestState>, discussionBusy: Set<string>) {
+    const current = await this.deps.store.get<RoomRequestState>('request', row.id)
+    if (!current || current.revision !== row.revision) return
+      try {
+        if (row.value.handoffReturnId && !await this.handoffs.current(row.value.handoffReturnId)) {
+          await cancelSupersededRoomRequest(this.deps, row.id); return
+        }
+        if (!row.value.privateProtocol && row.value.collaborationProtocol === 'peer') {
+          if (await pendingPeerRoomAmendment(this.deps, row.value)) {
+            await this.requests.tick(row)
+            return
+          }
+          const topic = await this.peers.state.initialize(row.value)
+          if (!topic || topic.value.requestId !== row.id) {
+            await cancelSupersededRoomRequest(this.deps, row.id)
+            return
+          }
+          if (row.value.cancellationRequested) await this.peers.state.stop(topic.id)
+        }
+        const target = roomRequestDiscussionTarget(row.value)
+        const directPeerDiscussion = row.value.collaborationProtocol === 'peer' && row.value.message.executionIntent === 'discussion'
+        if (target && !target.turnId && !target.admissionAttempted && !row.value.cancellationRequested && !directPeerDiscussion) {
+          if (row.value.roomSnapshot.conversationKind === 'user_agent' && !(await this.agents.features()).identities) return
+          const key = row.value.roomId + ':' + target.memberId
+          const agent = await discussionAgentLane(this.deps, row.value.roomId, target.memberId, row.value.roomSnapshot)
+          if (agent) {
+            const identity = await this.deps.store.get<{ archivedAt?: string }>('agent_identity', agent.slice('agent:'.length))
+            if (!identity || identity.value.archivedAt) return
+          }
+          const priority = row.value.handoffReturnId ? 'peer' : 'user'
+          const busy = (agent && !this.deps.discussionFairness!.canStart(agent.slice('agent:'.length), priority)) ||
+            discussionBusy.has(key) || Boolean(agent && discussionBusy.has(agent)) ||
+            [...discussionBusy].filter((item) => item.startsWith(row.value.roomId + ':')).length >= 2
+          if (busy) {
+            // Plain user messages can steer the existing private turn without
+            // claiming another lane; the runner still checks exact authority.
+            if (row.value.privateProtocol) await this.direct.tick(row, false)
+            return
+          }
+          discussionBusy.add(key)
+          if (agent) { discussionBusy.add(agent); this.deps.discussionFairness!.started(agent.slice('agent:'.length), priority) }
+        }
+        if (row.value.privateProtocol) await this.direct.tick(row)
+        else await this.requests.tick(row)
+      } catch (error) {
+        if (error instanceof RoomContextPending) return
+        const current = await this.deps.store.get<RoomRequestState>('request', row.id)
+        if (!current || current.revision !== row.revision) return
+        const raw = error instanceof Error ? error.message : String(error)
+        const clarify = isRoomRouteReason(raw)
+        const message = clarify ? roomRouteMessage(raw) : raw
+        const dispatchedAmendment = await pendingPeerRoomAmendment(this.deps, row.value)
+        // Retry an interrupted admitted operation once; retain its receipt for an explicit retry after persistent failure.
+        const status = dispatchedAmendment ? row.value.status === 'recovery_required' ? 'needs_input' : 'recovery_required'
+          : clarify ? 'needs_input' : 'failed'
+        if (!row.value.privateProtocol) {
+          await this.executionService.append(row.roomId!, 'error-' + row.id, message,
+            clarify ? row.value.roomSnapshot.defaultMemberId : undefined)
+        }
+        await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!,
+          { ...row.value, status, error: message, ...(clarify ? { clarification: message } : {}) }, row)
+      }
+  }
+
   private async tick(): Promise<RoomTickOutcome> {
     if (!this.held()) return { active: false }
     await this.deps.assertOwnership()
     await this.agents.initialize()
     const outcome: RoomTickOutcome = { active: await this.memoryCapture.tick() }
+    try { await reconcileRoomNotificationGates(this.deps) }
+    catch (error) {
+      console.warn('[kun] room notification reconciliation:', error instanceof Error ? error.message : String(error))
+      outcome.active = true
+    }
     try {
-      const reminders = await fireDueRoomReminders(this.deps, this.service, new Date().toISOString())
+      const reminders = await this.exclusive(() => fireDueRoomReminders(this.deps, this.service, new Date().toISOString()))
       if (reminders.fired) outcome.active = true
       if (reminders.nextFireAt) outcome.nextWakeAt = Date.parse(reminders.nextFireAt)
     } catch (error) {
@@ -224,7 +322,7 @@ export class RoomRuntime {
       outcome.active = true
     }
     try {
-      if (await reconcileWorkbench(this.workbench)) outcome.active = true
+      if (await this.exclusive(() => reconcileWorkbench(this.workbench))) outcome.active = true
       if (this.workbench.nextWakeAt !== undefined) outcome.nextWakeAt = Math.min(outcome.nextWakeAt ?? Infinity, this.workbench.nextWakeAt)
     } catch (error) {
       console.warn('[kun] workbench bridge:', error instanceof Error ? error.message : String(error))
@@ -245,75 +343,27 @@ export class RoomRuntime {
         this.deps.discussionFairness!.waiting(actor.participantAgentId, row.value.handoffReturnId ? 'peer' : 'user')
       }
     }
-    if (await this.handoffRunner.tick(new Set(), false)) outcome.active = true
+    if (await this.exclusive(() => this.handoffRunner.tick(new Set(), false))) outcome.active = true
     const discussionBusy = new Set([...await roomDiscussionBusy(this.deps, true), ...await this.handoffRunner.busy()])
     for (const row of requests) {
       if (this.stopped) return { active: true }
-      try {
-        if (row.value.handoffReturnId && !await this.handoffs.current(row.value.handoffReturnId)) {
-          await cancelSupersededRoomRequest(this.deps, row.id); continue
-        }
-        if (!row.value.privateProtocol && row.value.collaborationProtocol === 'peer') {
-          if (await pendingPeerRoomAmendment(this.deps, row.value)) {
-            await this.requests.tick(row)
-            continue
-          }
-          const topic = await this.peers.state.initialize(row.value)
-          if (!topic || topic.value.requestId !== row.id) {
-            await cancelSupersededRoomRequest(this.deps, row.id)
-            continue
-          }
-          if (row.value.cancellationRequested) await this.peers.state.stop(topic.id)
-        }
-        const target = roomRequestDiscussionTarget(row.value)
-        const directPeerDiscussion = row.value.collaborationProtocol === 'peer' && row.value.message.executionIntent === 'discussion'
-        if (target && !target.turnId && !target.admissionAttempted && !row.value.cancellationRequested && !directPeerDiscussion) {
-          if (row.value.roomSnapshot.conversationKind === 'user_agent' && !(await this.agents.features()).identities) continue
-          const key = row.value.roomId + ':' + target.memberId
-          const agent = await discussionAgentLane(this.deps, row.value.roomId, target.memberId, row.value.roomSnapshot)
-          if (agent) {
-            const identity = await this.deps.store.get<{ archivedAt?: string }>('agent_identity', agent.slice('agent:'.length))
-            if (!identity || identity.value.archivedAt) continue
-          }
-          const priority = row.value.handoffReturnId ? 'peer' : 'user'
-          if (agent && !this.deps.discussionFairness!.canStart(agent.slice('agent:'.length), priority)) continue
-          if (discussionBusy.has(key) || Boolean(agent && discussionBusy.has(agent)) || [...discussionBusy].filter((item) => item.startsWith(row.value.roomId + ':')).length >= 2) continue
-          discussionBusy.add(key)
-          if (agent) { discussionBusy.add(agent); this.deps.discussionFairness!.started(agent.slice('agent:'.length), priority) }
-        }
-        if (row.value.privateProtocol) await this.direct.tick(row)
-        else await this.requests.tick(row)
-      } catch (error) {
-        if (error instanceof RoomContextPending) continue
-        const current = await this.deps.store.get<RoomRequestState>('request', row.id)
-        if (!current || current.revision !== row.revision) continue
-        const raw = error instanceof Error ? error.message : String(error)
-        const clarify = isRoomRouteReason(raw)
-        const message = clarify ? roomRouteMessage(raw) : raw
-        const dispatchedAmendment = await pendingPeerRoomAmendment(this.deps, row.value)
-        // Retry an interrupted admitted operation once; retain its receipt for an explicit retry after persistent failure.
-        const status = dispatchedAmendment ? row.value.status === 'recovery_required' ? 'needs_input' : 'recovery_required'
-          : clarify ? 'needs_input' : 'failed'
-        if (!row.value.privateProtocol) {
-          await this.executionService.append(row.roomId!, 'error-' + row.id, message,
-            clarify ? row.value.roomSnapshot.defaultMemberId : undefined)
-        }
-        await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!,
-          { ...row.value, status, error: message, ...(clarify ? { clarification: message } : {}) }, row)
-      }
+      await this.exclusive(() => this.tickRequest(row, discussionBusy))
     }
-    const taskRows: RoomStoredDocument<RoomTaskExecution>[] = []
-    for (;;) {
-      const page = await this.deps.store.list<RoomTaskExecution>('task', {
-        status: ['queued', 'waiting_dependency', 'running', 'needs_input', 'needs_approval', 'stopping', 'recovery_required'],
-        limit: 1000, order: 'asc', afterSeq: taskRows.at(-1)?.seq })
-      taskRows.push(...page)
-      if (page.length < 1000) break
+    const now = Date.now()
+    await this.taskDue.refresh(now)
+    const taskRows = this.taskDue.all()
+    const taskIds = new Set(taskRows.map((row) => row.id))
+    for (const id of this.taskOccupied.keys()) if (!taskIds.has(id)) this.taskOccupied.delete(id)
+    const dueTaskRows = this.taskDue.due(now)
+    const dueTaskIds = new Set(dueTaskRows.map((row) => row.id))
+    const taskThreads = new Set(taskRows.flatMap((row) => [row.value.task.executionThreadId, row.value.reviewThreadId].filter((id): id is string => Boolean(id))))
+    if (this.deps.eventBus) for (const id of taskThreads) {
+      if (!this.taskSubscriptions.has(id)) this.taskSubscriptions.set(id, this.deps.eventBus.subscribe(id, (event) => {
+        if (['approval_resolved', 'user_input_resolved', 'turn_completed', 'turn_failed', 'turn_aborted'].includes(event.kind)) this.notifyThread(id)
+      }))
     }
-    // Every scanned task status is unfinished lifecycle work: queued or waiting
-    // tasks need the next pass to start, and input/approval/recovery states are
-    // reconciled against their live turn only here.
-    if (taskRows.length) outcome.active = true
+    for (const [id, unsubscribe] of this.taskSubscriptions) if (!taskThreads.has(id)) { unsubscribe(); this.taskSubscriptions.delete(id) }
+    if (this.taskDue.backlogged) { outcome.active = true; outcome.catchUp = true }
     const activeTurn = (execution: RoomTaskExecution) => execution.task.stage === 'review' ?
       execution.completedReviewRunId === execution.reviewThreadId ? undefined : execution.reviewTurnId : execution.turnId
     const actingMember = (execution: RoomTaskExecution) => execution.task.stage === 'review' ?
@@ -350,23 +400,28 @@ export class RoomRuntime {
       const execution = row.value
       const uncertain = execution.task.status === 'recovery_required' ||
         (!activeTurn(execution) && execution.task.status !== 'waiting_dependency')
-      const isOccupied = uncertain ? (await roomTaskActivity(this.deps, execution)).state !== 'idle' :
-        Boolean(activeTurn(execution))
+      const isOccupied = uncertain ? (!dueTaskIds.has(row.id) && this.taskOccupied.has(row.id) ? this.taskOccupied.get(row.id)!
+        : (await roomTaskActivity(this.deps, execution)).state !== 'idle') : Boolean(activeTurn(execution))
+      this.taskOccupied.set(row.id, isOccupied)
       if (!isOccupied) continue
       occupied += 1
       claimRoom(row.roomId!)
       occupiedTasks.add(row.id)
       busyMembers.add(row.roomId + ':' + actingMember(execution))
     }
-    for (const row of taskRows) {
+    for (const row of dueTaskRows) {
       if (this.stopped) return { active: true }
       if (row.value.task.status === 'needs_input' && row.value.task.stage === 'review' &&
         row.value.completedReviewRunId && row.value.completedReviewRunId === row.value.reviewThreadId) continue
       const member = row.roomId + ':' + actingMember(row.value)
-      const canStart = occupied < 2 && !busyMembers.has(member) && await roomHasCapacity(row.roomId!)
+      const canStart = this.taskDue.ready && occupied < (this.deps.maxConcurrentTasks ?? 2) && !busyMembers.has(member) && await roomHasCapacity(row.roomId!)
       try {
-        await this.tasks.tick(row, canStart)
+        await this.taskExclusive(row.id, async () => {
+          const current = await this.deps.store.get<RoomTaskExecution>('task', row.id)
+          if (current) await this.tasks.tick(current, canStart)
+        })
       } catch (error) { await this.tasks.fail(row, error) }
+      this.taskDue.observed(await this.deps.store.get<RoomTaskExecution>('task', row.id) ?? row, now)
       if (canStart && !occupiedTasks.has(row.id)) {
         // Admission can succeed before saving its receipt fails. Reconcile the
         // original identity before allowing a later task to use this slot.
@@ -380,20 +435,25 @@ export class RoomRuntime {
         }
       }
     }
-    await this.product.summarizeRequests(taskRows.map((row) => row.value))
+    await this.product.summarizeRequests(dueTaskRows.map((row) => row.value))
     for (const row of integrations) {
       if (this.stopped) return { active: true }
       const member = integrationMembers.get(row.id)!
-      const allowStart = occupied < 2 && !busyMembers.has(member) && await roomHasCapacity(row.roomId!)
-      await this.integrations.tick(row, allowStart)
+      const allowStart = this.taskDue.ready && occupied < (this.deps.maxConcurrentTasks ?? 2) && !busyMembers.has(member) && await roomHasCapacity(row.roomId!)
+      await this.taskExclusive(row.value.taskId, async () => {
+        const current = await this.deps.store.get<typeof row.value>('integration', row.id)
+        if (current) await this.integrations.tick(current, allowStart)
+      })
       if (allowStart && !activeIntegrations.has(row.id)) {
         const current = await this.integrations.get(row.value.roomId, row.value.taskId, row.id)
         if (await this.integrations.activity(current.value) !== 'idle') { occupied++; claimRoom(row.roomId!); busyMembers.add(member) }
       }
     }
-    await deliverRoomPeerTaskProgress(this.deps, this.peers.state)
-    if (await this.peers.tick(new Set([...await roomDiscussionBusy(this.deps), ...await this.handoffRunner.busy()]))) outcome.active = true
-    if (await this.handoffRunner.tick(await roomDiscussionBusy(this.deps, true))) outcome.active = true
+    const nextTaskWake = this.taskDue.nextWakeAt
+    if (nextTaskWake !== undefined) outcome.nextWakeAt = Math.min(outcome.nextWakeAt ?? Infinity, nextTaskWake)
+    await this.exclusive(() => deliverRoomPeerTaskProgress(this.deps, this.peers.state))
+    if (await this.exclusive(async () => this.peers.tick(new Set([...await roomDiscussionBusy(this.deps), ...await this.handoffRunner.busy()])))) outcome.active = true
+    if (await this.exclusive(async () => this.handoffRunner.tick(await roomDiscussionBusy(this.deps, true)))) outcome.active = true
     return outcome
   }
 }

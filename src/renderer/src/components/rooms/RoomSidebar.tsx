@@ -1,3 +1,4 @@
+import './rooms-polish.css'
 import { useRoomSidebarMotion } from './useRoomSidebarMotion'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -105,14 +106,11 @@ export function RoomSidebar({ selectedRoomId, onSelect, onCreateAgent, onSearch,
       {(['all', 'unread', 'attention'] as const).map((value) => <button key={value} type="button"
         aria-pressed={!deletedOnly && !archived && filter === value}
         onClick={() => { setDeletedOnly(false); setArchived(false); setFilter(value) }}>{t('roomsFilter_' + value)}</button>)}
-      <button type="button" aria-pressed={deletedOnly} onClick={() => {
-        setDeletedOnly(true); setArchived(false); setFilter('all')
-        setSearch(''); setRepository(''); setFullSearch(false)
-      }}>{t('roomsRecentlyDeleted')}</button>
+
     </div>
-    {kind !== 'all' || archived || repository ? <button className="rooms-sidebar-active-filter" onClick={() => {
-      setKind('all'); setArchived(false); setFilter('all'); setRepository(''); writeBrowserStorageItem(MIXED_KIND_KEY, 'all')
-    }}>{t('roomsSidebar_' + kind)}{archived ? ' · ' + t('roomsArchivedConversations') : ''}{repository ? ' · ' + repository.split('/').at(-1) : ''}<X size={12} /></button> : null}
+    {kind !== 'all' || archived || repository || deletedOnly ? <button className="rooms-sidebar-active-filter" onClick={() => {
+      setKind('all'); setArchived(false); setDeletedOnly(false); setFilter('all'); setRepository(''); writeBrowserStorageItem(MIXED_KIND_KEY, 'all')
+    }}>{t(deletedOnly ? 'roomsRecentlyDeleted' : 'roomsSidebar_' + kind)}{archived ? ' · ' + t('roomsArchivedConversations') : ''}{repository ? ' · ' + repository.split('/').at(-1) : ''}<X size={12} /></button> : null}
     {search.trim().length >= 2 ? <button className="rooms-sidebar-search-all" onClick={() => setFullSearch(!fullSearch)}>{t(fullSearch ? 'roomsSidebarChatsOnly' : 'roomsSidebarSearchAll')}</button> : null}
     {fullSearch && search.trim().length >= 2 ? <RoomUnifiedSearch query={search} repositoryRoot={repository} includeArchived={archived} onSelect={(hit) => { onSearch(hit); setSearch(''); setFullSearch(false) }} /> :
       <div className="rooms-im-sidebar-list" ref={scroll} onScroll={rememberScroll} tabIndex={-1} aria-label={t('roomsConversations')}>
@@ -134,7 +132,11 @@ export function RoomSidebar({ selectedRoomId, onSelect, onCreateAgent, onSearch,
           </div>
         })}</div>
         {page.nextCursor ? <button className="rooms-sidebar-search-all" disabled={page.busy} onClick={page.more}>{t('roomsLoadMore')}</button> : null}
-        {!entries.length ? <p className="rooms-run-note">{t(page.busy ? 'roomsLoading' : 'roomsSearchNoResults')}</p> : null}
+        {!entries.length ? <div className="rooms-sidebar-empty" role="status">
+          {page.busy ? <><span className="rooms-skeleton" /><span className="rooms-skeleton" /><span className="rooms-skeleton" /><span className="sr-only">{t('roomsLoading')}</span></>
+            : <><p>{t(search ? 'roomsSearchNoResults' : deletedOnly ? 'roomsNoDeletedChats' : filter === 'unread' ? 'roomsNoUnreadChats' : filter === 'attention' ? 'roomsNoAttentionChats' : 'roomsNoConversations')}</p>
+              {!search && !deletedOnly && filter === 'all' ? <button type="button" onClick={onCreateAgent}>{t('roomsSidebarNew')}</button> : null}</>}
+        </div> : null}
       </div>}
     {page.error || actionError ? <div role="alert" className="rooms-run-error">{page.error || actionError}<button onClick={page.refresh}>{t('roomsRefresh')}</button></div> : null}
     <footer className="rooms-im-sidebar-footer"><button className="rooms-sidebar-self" aria-label={t('roomsMyAvatar')} onClick={onProfile}><RoomAvatar id="user" label={t('roomsMyAvatar')} size={30} /><span>{t('roomsSidebarYou')}</span></button>

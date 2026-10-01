@@ -118,6 +118,7 @@ export const appBadgeCountSchema = z.number().int().min(0).max(MAX_APP_BADGE_COU
 
 export const notificationPayloadSchema = z
   .object({
+    dedupeKey: optionalTrimmedString(1024),
     roomId: optionalTrimmedString(MAX_ID_LENGTH),
     threadId: optionalTrimmedString(MAX_ID_LENGTH),
     source: z.enum(['main-agent', 'subagent']),

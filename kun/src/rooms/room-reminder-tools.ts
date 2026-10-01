@@ -4,7 +4,7 @@ import type { ToolHostContext } from '../ports/tool-host.js'
 import type { RoomRunRecord } from '../contracts/room-runs.js'
 import type { Room } from '../contracts/rooms.js'
 import type { RoomRequestState } from './room-runtime-types.js'
-import { ROOM_REMINDER_LIMITS } from '../contracts/room-reminders.js'
+import { ROOM_REMINDER_LIMITS, RoomReminderOptionsShape } from '../contracts/room-reminders.js'
 import type { RoomStore } from './room-store.js'
 import { roomRunId } from './room-run-recording.js'
 import { roomPeerStoreBinding } from './room-peer-tools.js'
@@ -13,6 +13,7 @@ import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 import type { LocalTool } from '../adapters/tool/local-tool-host.js'
 import { cancelRoomReminder, createRoomReminder, listRoomReminders,
   reminderFireAt, remindersEnabled, updateRoomReminder } from './room-reminders.js'
+import { interactionId } from './room-interaction-store.js'
 import { ROOM_AX_TOOL_DESCRIPTIONS } from './room-ax-surfaces.js'
 
 export const SCHEDULE_REMINDER_TOOL_NAME = 'schedule_reminder'
@@ -30,15 +31,18 @@ const delayOrTime = {
 const ScheduleReminderInput = z.object({
   note: z.string().trim().min(1).max(1000),
   ...delayOrTime,
+  ...RoomReminderOptionsShape,
   anchorMessageId: z.string().min(1).max(256).optional()
 }).strict()
 const ListRemindersInput = z.object({
-  status: z.enum(['scheduled', 'all']).default('scheduled')
+  status: z.enum(['scheduled', 'paused', 'all']).default('scheduled')
 }).strict()
 const UpdateReminderInput = z.object({
   reminderId: z.string().min(1).max(256),
   note: z.string().trim().min(1).max(1000).optional(),
-  ...delayOrTime
+  ...delayOrTime,
+  ...RoomReminderOptionsShape,
+  paused: z.boolean().optional()
 }).strict()
 const CancelReminderInput = z.object({ reminderId: z.string().min(1).max(256) }).strict()
 
@@ -135,16 +139,19 @@ export function roomReminderTools(threads: ThreadStore): LocalTool[] {
           if (binding.chainDepth > ROOM_REMINDER_LIMITS.maxChainDepth) {
             throw new Error('reminder follow-up chain limit reached; act now instead of scheduling again')
           }
-          const fireAt = reminderFireAt(parsed.data, new Date())
+          const clientRequestId = agentStableId('reminder', binding.runId, context.activeToolCallId)
+          const prior = await binding.store.getRequest(interactionId('reminder-create', binding.roomId, clientRequestId))
+          const fireAt = (prior?.result as { fireAt?: string } | undefined)?.fireAt ?? reminderFireAt(parsed.data, new Date())
           const entry = await createRoomReminder(binding.store, {
-            clientRequestId: agentStableId('reminder', binding.runId, context.activeToolCallId),
+            clientRequestId,
             roomId: binding.roomId, participantAgentId: binding.participantAgentId, memberId: binding.memberId,
-            note: parsed.data.note, fireAt,
+            ...parsed.data, note: parsed.data.note, fireAt,
             anchorMessageId: parsed.data.anchorMessageId ?? binding.triggerMessageId,
             chainDepth: binding.chainDepth, createdByRunId: binding.runId })
           wakeReminderOwner(threads)
           return { output: { accepted: true, reminderId: entry.reminderId, fireAt: entry.fireAt,
-            note: 'One-shot reminder scheduled. It wakes only you when it fires.' } }
+            timezone: entry.timezone, recurrence: entry.recurrence, trigger: entry.trigger,
+            note: 'Reminder scheduled. It wakes only you while the app is running; check current context before responding.' } }
         } catch (error) { return fail(error) }
       }
     }),
@@ -182,9 +189,7 @@ export function roomReminderTools(threads: ThreadStore): LocalTool[] {
           }
           const entry = await updateRoomReminder(binding.store, binding.roomId, parsed.data.reminderId, {
             clientRequestId: agentStableId('reminder-update', binding.runId, context.activeToolCallId),
-            ...(parsed.data.note !== undefined ? { note: parsed.data.note } : {}),
-            ...(parsed.data.delaySeconds !== undefined ? { delaySeconds: parsed.data.delaySeconds } : {}),
-            ...(parsed.data.fireAt !== undefined ? { fireAt: parsed.data.fireAt } : {}) })
+            ...Object.fromEntries(Object.entries(parsed.data).filter(([key]) => key !== 'reminderId')) })
           wakeReminderOwner(threads)
           return { output: { accepted: true, reminderId: entry.reminderId, fireAt: entry.fireAt, status: entry.status } }
         } catch (error) { return fail(error) }

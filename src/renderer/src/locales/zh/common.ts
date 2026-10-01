@@ -1,3 +1,4 @@
+import roomsPolish from './common/rooms-polish.json'
 import executionTasks from './common/execution-tasks.json'
 import roomsApproval from './common/rooms-approval.json'
 import roomsDirect from './common/rooms-direct.json'
@@ -49,6 +50,7 @@ const common = {
   ...roomsInteractions,
   ...roomsExperience,
   ...roomsContent,
+  ...roomsPolish,
   ...roomsWorkbench,
   queuedMessageEditAccountUnavailable: '原模型账号不可用或已变更，消息已保留。请恢复原模型连接后重试。',
   queuedMessageEditSteering: '消息正在作为引导送达，暂时无法修改。',

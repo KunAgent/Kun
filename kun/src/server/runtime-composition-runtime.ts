@@ -1,3 +1,6 @@
+import { RoomNotificationObserver } from '../rooms/room-notification-observer.js'
+import { bindAgentCommitmentService } from '../agents/agent-commitment-tools.js'
+import { bindAgentArtifactLibrary } from '../agents/agent-artifact-library.js'
 import {
   KUN_SERVICE_VERSION,
   KUN_MANAGER_PROTOCOL_VERSION,
@@ -135,7 +138,7 @@ export function createServerRuntimeComposition(
   const { startedAt, rebuildCapabilities, applyConfig } = config
   const roomComposition = createRuntimeRoomComposition({
     options: () => config.activeOptions,
-    services: { threads: threadService, threadStore: stores.threadStore,
+    services: { threads: threadService, threadStore: stores.threadStore, eventBus,
       artifacts: artifactStore,
       memoryStore: services.memoryStore, memoryEnabled: () => config.activeOptions.capabilities?.memory?.enabled !== false,
       turns: turnService, sessions: sessionStore, approvals: approvalGate, inputs: userInputGate,
@@ -158,6 +161,9 @@ export function createServerRuntimeComposition(
           ['turn_completed', 'turn_failed', 'turn_aborted'].includes(event.kind))
       } }
   })
+  events.addObserver(new RoomNotificationObserver({ threadStore: stores.threadStore, store: roomComposition.rooms.deps.store }))
+  bindAgentCommitmentService(core.threadStore, roomComposition.rooms.commitments)
+  bindAgentArtifactLibrary(core.threadStore, roomComposition.rooms.artifactLibrary)
   bindRoomRuleStore(core.threadStore, roomComposition.rooms.service.store)
   // Tool providers bind to the lifecycle-fenced facade, while room admission
   // retains the backing store. Bind both identities to the same room scope.

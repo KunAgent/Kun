@@ -172,6 +172,9 @@ describe('fireDueRoomReminders', () => {
       authorKind: 'system', body: 'Check on the user request' })
     expect(wake?.value.sourceMessageId).toBe(message.id)
     expect(wake?.value.roomSnapshot.conversationKind).toBe('user_agent')
+    expect(wake?.value.roomSnapshot.privateExecutionPolicy).toMatchObject({
+      sandboxMode: 'workspace-write', approvalPolicy: 'on-request', approvalReviewer: 'user'
+    })
     // Replay (as after a restart) never duplicates effects.
     await fireDueRoomReminders(f.deps, f.service, now)
     await fireDueRoomReminders(f.deps, f.service, new Date(Date.now() + 1000).toISOString())
@@ -323,6 +326,26 @@ describe('reminder conversation tools', () => {
       .toMatchObject({ isError: true, output: { error: expect.stringContaining('own agent') } })
     expect(await byName('update_reminder').execute({ reminderId: foreign.reminderId, note: 'x' }, context))
       .toMatchObject({ isError: true })
+  })
+
+  it('exposes recurring schedules and pause/resume through the bound tools', async () => {
+    const f = await fixture()
+    const { tools, context } = await conversation(f)
+    const schedule = tools.find((tool) => tool.name === 'schedule_reminder')!
+    const update = tools.find((tool) => tool.name === 'update_reminder')!
+    const args = { note: 'Review current progress', timezone: 'Asia/Tokyo',
+      recurrence: { kind: 'daily', localTime: '09:00' },
+      trigger: { kind: 'room_idle', idleSeconds: 600 }, dedupKey: 'daily-review',
+      quietHours: { start: '22:00', end: '08:00' }, maxOccurrences: 5 }
+    const result = await schedule.execute(args, context)
+    expect(result).toMatchObject({ output: { accepted: true, timezone: 'Asia/Tokyo' } })
+    // Tool retries reuse the accepted timestamp, even if the wall clock moved.
+    expect(await schedule.execute(args, context)).toEqual(result)
+    const reminderId = (result.output as { reminderId: string }).reminderId
+    expect(await update.execute({ reminderId, paused: true }, { ...context, activeToolCallId: 'pause' }))
+      .toMatchObject({ output: { status: 'paused' } })
+    expect(await update.execute({ reminderId, paused: false }, { ...context, activeToolCallId: 'resume' }))
+      .toMatchObject({ output: { status: 'scheduled' } })
   })
 
   it('rejects scheduling beyond the follow-up chain depth and when the feature is off', async () => {

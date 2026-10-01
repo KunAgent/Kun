@@ -36,6 +36,7 @@ export function createRuntimeRoomComposition(input: {
     memoryStore: ownedAgentMemory ?? input.services.memoryStore,
     memoryEnabled: () => true,
     store: executionStore,
+    maxConcurrentTasks: options.runtime?.rooms?.maxConcurrentTasks,
     dataDir: options.dataDir,
     model: () => ({ model: input.options().model, providerId: activeModelConnectionProviderId(input.options()) }),
     // A bridge is insufficient unless the engine also gates its native tools.

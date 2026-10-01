@@ -2,17 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { Code, File, FileText, FolderGit2, Image, KanbanSquare, PackageCheck, ListTodo, ArrowUpRight, Music, Video } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomContentReference, RoomPreviewImage } from '@shared/rooms-api'
-import { useRoomContent, useRoomContentVisibility, roomContentPath, roomContentStatusKey } from './room-content-client'
+import { useRoomContent, useRoomContentVisibility, roomContentPath, roomContentStatusKey, roomContentKey } from './room-content-client'
 import { roomsRequest } from './rooms-client'
 import { RoomImageLightbox } from './RoomImageLightbox'
 import { useRoomExcalidrawStore } from './room-excalidraw-store'
 import './rooms-content.css'
 
 const icons = { agent_file: File, attachment: File, repository_file: FolderGit2, task: ListTodo, delivery: PackageCheck, board_card: KanbanSquare, code_thread: Code, work_document: FileText }
-export function RoomContentCard({ room, reference, messageId, onOpen }: {
+export function RoomContentCard({ room, reference, messageId, onOpen, gallery = [] }: {
   room: Room
   reference: RoomContentReference
   messageId?: string
+  gallery?: RoomContentReference[]
   onOpen?: (reference: RoomContentReference, messageId?: string) => void
 }) {
   const { t } = useTranslation('common')
@@ -23,6 +24,7 @@ export function RoomContentCard({ room, reference, messageId, onOpen }: {
   const mediaSource = media.result?.preview?.type === 'media'
     ? `data:${media.result.preview.mimeType};base64,${media.result.preview.dataBase64}` : ''
   const [fullImage, setFullImage] = useState<RoomPreviewImage | null>(null), [opening, setOpening] = useState(false), [openError, setOpenError] = useState('')
+  const [imageIndex, setImageIndex] = useState(0), [imageTitle, setImageTitle] = useState('')
   const request = useRef<AbortController | null>(null)
   const previewPath = roomContentPath(room.id, reference, 'preview', messageId)
   useEffect(() => {
@@ -44,7 +46,26 @@ export function RoomContentCard({ room, reference, messageId, onOpen }: {
       const preview = await roomsRequest<import('@shared/rooms-api').RoomContentResult>(previewPath, 'GET', undefined, controller.signal)
       if (controller.signal.aborted) return
       if (preview.state !== 'available' || preview.preview?.type !== 'image') throw new Error(t('roomsContentUnavailable'))
-      setFullImage(preview.preview.image)
+      setFullImage(preview.preview.image); setImageTitle(preview.title)
+      setImageIndex(Math.max(0, gallery.findIndex((item) => roomContentKey(item) === roomContentKey(reference))))
+    } catch (cause) { if (!controller.signal.aborted) setOpenError(String(cause)) }
+    finally { if (!controller.signal.aborted) setOpening(false) }
+  }
+  const navigate = async (direction: -1 | 1) => {
+    if (opening) return
+    request.current?.abort()
+    const controller = new AbortController(); request.current = controller
+    setOpening(true); setOpenError('')
+    try {
+      for (let index = imageIndex + direction; index >= 0 && index < gallery.length; index += direction) {
+        const preview = await roomsRequest<import('@shared/rooms-api').RoomContentResult>(
+          roomContentPath(room.id, gallery[index], 'preview', messageId), 'GET', undefined, controller.signal)
+        if (controller.signal.aborted) return
+        if (preview.state === 'available' && preview.preview?.type === 'image') {
+          setFullImage(preview.preview.image); setImageTitle(preview.title); setImageIndex(index); return
+        }
+      }
+      setOpenError(t('roomsImageNoMore'))
     } catch (cause) { if (!controller.signal.aborted) setOpenError(String(cause)) }
     finally { if (!controller.signal.aborted) setOpening(false) }
   }
@@ -68,6 +89,8 @@ export function RoomContentCard({ room, reference, messageId, onOpen }: {
           workspaceRoot: openBoardTarget.workspaceRoot })
         useRoomExcalidrawStore.getState().openBoard(room.id, openBoardTarget.boardId)
       }}>{t('roomsContentOpenBoard')}</button> : null}
-    {fullImage ? <RoomImageLightbox title={title} image={fullImage} onClose={() => setFullImage(null)} /> : null}
+    {fullImage ? <RoomImageLightbox title={imageTitle || title} image={fullImage} onClose={() => { request.current?.abort(); setFullImage(null); setOpening(false) }}
+      onPrevious={imageIndex > 0 ? () => void navigate(-1) : undefined} onNext={imageIndex < gallery.length - 1 ? () => void navigate(1) : undefined}
+      navigationBusy={opening} error={openError} /> : null}
   </div>
 }

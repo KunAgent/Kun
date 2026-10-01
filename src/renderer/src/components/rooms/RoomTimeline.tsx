@@ -1,581 +1,238 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
-import {
-  useCallback,
-  memo,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode
-} from 'react'
+import { useCallback, memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ArrowDown, Search, X } from 'lucide-react'
+import { ArrowDown } from 'lucide-react'
 import type { Room, RoomContentReference, RoomMessage, RoomTask } from '@shared/rooms-api'
-import {
-  readBrowserStorageItem,
-  writeBrowserStorageItem
-} from '../../lib/browser-storage'
-import {
-  mergeRoomMessages,
-  roomPath,
-  roomRequestId,
-  roomsRequest
-} from './rooms-client'
+import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/browser-storage'
+import { mergeRoomMessages, roomPath, roomRequestId, roomsRequest } from './rooms-client'
 import { RoomMessageRow } from './RoomMessageRow'
 import { roomMessageLayout } from './room-message-layout'
-import { roomButtonClass, roomFieldClass } from './RoomSettings'
+import { roomButtonClass } from './RoomSettings'
+import { RoomTimelineSearch } from './RoomTimelineSearch'
+import { captureTimelinePosition, restoreTimelinePosition, type RoomTimelinePosition } from './room-timeline-position'
 import './rooms-timeline.css'
+import './rooms-timeline-navigation.css'
 
-export function RoomTimeline({
-  room,
-  messages,
-  tasks,
-  cursor,
-  moreBusy,
-  loadEarlier,
-  onPin,
-  onTask,
-  jumpMessageId,
-  onJumped,
-  searchOpen = false,
-  onSearchClose,
-  onMember,
-  onRun,
-  onHandoff,
-  onReply,
-  onReplyThread,
-  onOpenContent,
-  afterMessages,
-  renderChoice,
-  hideEmpty = false
+export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarlier, onPin, onTask,
+  jumpMessageId, onJumped, searchOpen = false, onSearchClose, onMember, onRun, onHandoff, onReply,
+  onReplyThread, onOpenContent, afterMessages, renderChoice, hideEmpty = false
 }: {
-  room: Room
-  messages: RoomMessage[]
-  tasks: RoomTask[]
-  cursor: string | null
-  moreBusy: boolean
-  loadEarlier: () => Promise<void>
-  onPin: (message: RoomMessage) => void
-  onTask: (id: string) => void
-  jumpMessageId: string | null
-  onJumped: () => void
-  searchOpen?: boolean
-  onSearchClose?: () => void
-  onMember?: (id: string, rootRequestId?: string) => void
-  onRun?: (id: string) => void
-  onHandoff?: (id: string) => void
-  onReply?: (message: RoomMessage) => void
-  onReplyThread?: (message: RoomMessage) => void
+  room: Room; messages: RoomMessage[]; tasks: RoomTask[]; cursor: string | null; moreBusy: boolean
+  loadEarlier: () => Promise<void>; onPin: (message: RoomMessage) => void | Promise<boolean>; onTask: (id: string) => void
+  jumpMessageId: string | null; onJumped: () => void; searchOpen?: boolean; onSearchClose?: () => void
+  onMember?: (id: string, rootRequestId?: string) => void; onRun?: (id: string) => void; onHandoff?: (id: string) => void
+  onReply?: (message: RoomMessage) => void; onReplyThread?: (message: RoomMessage) => void
   onOpenContent?: (reference: RoomContentReference, messageId?: string) => void
-  afterMessages?: ReactNode
-  renderChoice?: (message: RoomMessage) => ReactNode
-  hideEmpty?: boolean
+  afterMessages?: ReactNode; renderChoice?: (message: RoomMessage) => ReactNode; hideEmpty?: boolean
 }) {
   const { t } = useTranslation('common')
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const rowsRef = useRef<HTMLDivElement>(null)
-  const atBottom = useRef(true)
-  const initialized = useRef(false)
-  const anchor = useRef<{
-    height: number
-    top: number
-    firstId?: string
-  } | null>(null)
-  const returnToLatest = useRef(false)
-  const wasSearching = useRef(false)
-  const [awayFromBottom, setAwayFromBottom] = useState(false)
-  const searchRef = useRef<HTMLInputElement>(null)
-  const dialogRef = useRef<HTMLElement>(null)
-  const closeDialogRef = useRef<HTMLButtonElement>(null)
-  const readSeq = useRef(
-    Number(readBrowserStorageItem(`kun.rooms.read.${room.id}`) ?? 0)
-  )
-  const readPending = useRef(0)
-  const [query, setQuery] = useState('')
-  const queryRef = useRef(query)
-  queryRef.current = query
-  const [results, setResults] = useState<RoomMessage[] | null>(null)
-  const [searchCursor, setSearchCursor] = useState<string | undefined>()
-  const [searchBusy, setSearchBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [focused, setFocused] = useState<RoomMessage | null>(null)
-  const dialogOpen = Boolean(focused)
-  const messageById = useMemo(
-    () => new Map(messages.map((message) => [message.id, message])),
-    [messages]
-  )
-  const rows = useMemo(() => results ?? messages, [results, messages])
+  const scrollRef = useRef<HTMLDivElement>(null), rowsRef = useRef<HTMLDivElement>(null)
+  const atBottom = useRef(true), initialized = useRef(false), readPending = useRef(0)
+  const readSeq = useRef(Number(readBrowserStorageItem(`kun.rooms.read.${room.id}`) ?? 0))
+  const seenSeq = useRef(readSeq.current)
+  const [baseline, setBaseline] = useState(readSeq.current), [readReady, setReadReady] = useState(false)
+  const [firstUnreadId, setFirstUnreadId] = useState<string>()
+  const [awayFromBottom, setAwayFromBottom] = useState(false), [error, setError] = useState('')
+  const [contextMessages, setContextMessages] = useState<RoomMessage[]>([])
+  const [selectedId, setSelectedId] = useState<string>(), [pendingJump, setPendingJump] = useState<string>()
+  const [contextBusy, setContextBusy] = useState(false)
+  const lookup = useRef<AbortController | null>(null)
+  const prepend = useRef<{ height: number; top: number; firstId?: string } | null>(null)
+  const savedPosition = useRef<RoomTimelinePosition | null>(null)
+  const searchPosition = useRef<RoomTimelinePosition | null>(null)
+  const searchWasOpen = useRef(false)
+  const restorePending = useRef<RoomTimelinePosition | null>(null)
+  const rows = useMemo(() => mergeRoomMessages(contextMessages, messages), [contextMessages, messages])
+  const messageById = useMemo(() => new Map(rows.map((message) => [message.id, message])), [rows])
   const virtual = rows.length > 40
-  const virtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 160,
-    overscan: 6,
-    getItemKey: (index) => rows[index].id
-  })
-  const rendered = virtual
-    ? virtualizer.getVirtualItems()
-    : rows.map((row, index) => ({ key: row.id, index, start: 0, end: 0 }))
+  const virtualizer = useVirtualizer({ count: rows.length, getScrollElement: () => scrollRef.current,
+    estimateSize: () => 160, overscan: 6, getItemKey: (index) => rows[index].id })
+  const rendered = virtual ? virtualizer.getVirtualItems() : rows.map((row, index) => ({ key: row.id, index, start: 0, end: 0 }))
   const totalSize = virtualizer.getTotalSize()
-  const markRead = useCallback(() => {
-    if (
-      searchOpen ||
-      results ||
-      focused ||
-      !document.hasFocus() ||
-      !atBottom.current
-    )
-      return
-    const seq = messages.filter((message) => message.status !== 'streaming').at(-1)?.messageSeq ?? 0
-    if (seq <= readSeq.current || seq <= readPending.current) return
-    readPending.current = seq
-    void roomsRequest<{ seq?: number; result?: { seq: number } }>(
-      roomPath(room.id) + '/read',
-      'POST',
-      {
-        seq,
-        clientRequestId: roomRequestId()
-      }
-    )
-      .then((result) => {
-        const confirmed = result.seq ?? result.result?.seq
-        if (!Number.isSafeInteger(confirmed)) return
-        readSeq.current = Math.max(readSeq.current, confirmed!)
-        writeBrowserStorageItem(
-          `kun.rooms.read.${room.id}`,
-          String(readSeq.current)
-        )
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        readPending.current = 0
-      })
-  }, [focused, messages, results, room.id, searchOpen])
+  const latestSeq = messages.filter((message) => message.status !== 'streaming').at(-1)?.messageSeq ?? 0
+  const newCount = messages.filter((message) => message.messageSeq > seenSeq.current && message.status !== 'streaming').length
+  const unreadIndex = rows.findIndex((message) => message.id === firstUnreadId || (baseline > 0 && message.messageSeq > baseline))
+
+  const loadContext = useCallback(async (id: string) => {
+    lookup.current?.abort()
+    const controller = new AbortController(); lookup.current = controller
+    setContextBusy(true); setError(''); atBottom.current = false; setAwayFromBottom(true)
+    try {
+      const page = await roomsRequest<{ messages: RoomMessage[] }>(
+        `${roomPath(room.id)}/messages/${encodeURIComponent(id)}/context`, 'GET', undefined, controller.signal)
+      if (controller.signal.aborted) return
+      if (!page.messages?.some((message) => message.id === id)) throw new Error(t('roomsMessageUnavailable', { defaultValue: 'Message is no longer available' }))
+      setContextMessages((current) => mergeRoomMessages(current, page.messages))
+      setSelectedId(id); setPendingJump(id)
+    } catch (cause) { if (!controller.signal.aborted) setError(String(cause)) }
+    finally { if (!controller.signal.aborted) setContextBusy(false) }
+  }, [room.id, t])
+  const jump = useCallback((id: string, surrounding = false) => {
+    lookup.current?.abort(); setContextBusy(false)
+    atBottom.current = false; setAwayFromBottom(true); setSelectedId(id)
+    if (surrounding || !messageById.has(id)) void loadContext(id)
+    else setPendingJump(id)
+  }, [loadContext, messageById])
+
   useEffect(() => {
-    if (!searchOpen) {
-      setQuery('')
-      setSearchBusy(false)
-      return
-    }
-    const previous = document.activeElement as HTMLElement | null
-    searchRef.current?.focus()
-    return () => {
-      if (previous?.isConnected) previous.focus()
-    }
-  }, [searchOpen])
-  useEffect(() => {
-    if (!dialogOpen) return
-    const previous = document.activeElement as HTMLElement | null
-    closeDialogRef.current?.focus()
-    return () => {
-      if (previous?.isConnected) previous.focus()
-    }
-  }, [dialogOpen])
-  useEffect(() => {
-    if (query.trim().length < 2) {
-      setResults(null)
-      setSearchCursor(undefined)
-      setSearchBusy(false)
-      setError('')
-      return
-    }
     const controller = new AbortController()
-    const timer = setTimeout(() => {
-      setSearchBusy(true)
-      void roomsRequest<{ messages: RoomMessage[]; nextCursor?: string }>(
-        `${roomPath(room.id)}/search?q=${encodeURIComponent(query.trim())}`,
-        'GET',
-        undefined,
-        controller.signal
-      )
-        .then((page) => {
-          if (!controller.signal.aborted) {
-            setResults(page.messages)
-            setSearchCursor(page.nextCursor)
-            setError('')
-          }
-        })
-        .catch((cause) => {
-          if (!controller.signal.aborted) setError(String(cause))
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setSearchBusy(false)
-        })
-    }, 250)
-    return () => {
-      controller.abort()
-      clearTimeout(timer)
+    try { savedPosition.current = JSON.parse(readBrowserStorageItem(`kun.rooms.anchor.${room.id}`) ?? 'null') } catch { /* legacy scroll below */ }
+    void roomsRequest<{ seq?: number; firstUnreadMessageId?: string }>(`${roomPath(room.id)}/read`, 'GET', undefined, controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return
+        const seq = Math.max(readSeq.current, result.seq ?? 0)
+        readSeq.current = seq; seenSeq.current = seq; setBaseline(seq)
+        setFirstUnreadId(result.firstUnreadMessageId)
+      }).catch(() => undefined).finally(() => { if (!controller.signal.aborted) setReadReady(true) })
+    return () => { controller.abort(); lookup.current?.abort() }
+  }, [room.id])
+  const markRead = useCallback(() => {
+    if (!readReady || searchOpen || contextBusy || pendingJump || !document.hasFocus() || !atBottom.current) return
+    if (latestSeq <= readSeq.current || latestSeq <= readPending.current) return
+    readPending.current = latestSeq
+    void roomsRequest<{ seq?: number; result?: { seq: number } }>(`${roomPath(room.id)}/read`, 'POST',
+      { seq: latestSeq, clientRequestId: roomRequestId() }).then((result) => {
+      const confirmed = result.seq ?? result.result?.seq
+      if (!Number.isSafeInteger(confirmed)) return
+      readSeq.current = Math.max(readSeq.current, confirmed!)
+      seenSeq.current = Math.max(seenSeq.current, confirmed!)
+      writeBrowserStorageItem(`kun.rooms.read.${room.id}`, String(readSeq.current))
+    }).catch(() => undefined).finally(() => { readPending.current = 0 })
+  }, [readReady, searchOpen, contextBusy, pendingJump, latestSeq, room.id])
+  useEffect(() => {
+    const scroller = scrollRef.current
+    if (!scroller) return
+    if (searchOpen && !searchWasOpen.current) {
+      searchPosition.current = captureTimelinePosition(scroller, atBottom.current)
+    } else if (!searchOpen && searchWasOpen.current && searchPosition.current) {
+      const saved = searchPosition.current
+      searchPosition.current = null
+      lookup.current?.abort(); setContextBusy(false); setPendingJump(undefined)
+      atBottom.current = saved.atBottom
+      setAwayFromBottom(!saved.atBottom)
+      restorePending.current = saved
+      if (restoreTimelinePosition(scroller, saved)) restorePending.current = null
+      else if (saved.messageId) jump(saved.messageId)
     }
-  }, [query, room.id])
+    searchWasOpen.current = searchOpen
+  }, [searchOpen, jump])
   useEffect(() => {
     if (typeof ResizeObserver === 'undefined' || !rowsRef.current) return
     const observer = new ResizeObserver(() => {
-      if (
-        atBottom.current &&
-        !results &&
-        !focused &&
-        !anchor.current &&
-        scrollRef.current
-      )
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      if (atBottom.current && !searchOpen && !prepend.current && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     })
     observer.observe(rowsRef.current)
     return () => observer.disconnect()
-  }, [focused, results])
+  }, [searchOpen])
   useLayoutEffect(() => {
     const scroller = scrollRef.current
-    if (!scroller || focused) return
-    if (results) {
-      wasSearching.current = true
-      return
-    }
-    if (returnToLatest.current) {
-      returnToLatest.current = false
-      wasSearching.current = false
-      atBottom.current = true
-      setAwayFromBottom(false)
-      scroller.scrollTop = scroller.scrollHeight
-    }
+    if (!scroller || !readReady) return
     if (!initialized.current) {
       initialized.current = true
-      const value = readBrowserStorageItem(`kun.rooms.scroll.${room.id}`)
-      scroller.scrollTop =
-        value === null ? scroller.scrollHeight : Number(value) || 0
-      atBottom.current =
-        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80
-      setAwayFromBottom(!atBottom.current)
-    } else if (wasSearching.current) {
-      wasSearching.current = false
-      const value = readBrowserStorageItem(`kun.rooms.scroll.${room.id}`)
-      scroller.scrollTop = atBottom.current
-        ? scroller.scrollHeight
-        : Number(value) || 0
-    } else if (anchor.current && anchor.current.firstId !== messages[0]?.id) {
-      scroller.scrollTop =
-        anchor.current.top + scroller.scrollHeight - anchor.current.height
-      anchor.current = null
-    } else if (atBottom.current) scroller.scrollTop = scroller.scrollHeight
+      const saved = savedPosition.current
+      if (saved) {
+        atBottom.current = saved.atBottom
+        setAwayFromBottom(!saved.atBottom)
+        if (!restoreTimelinePosition(scroller, saved) && saved.messageId) {
+          restorePending.current = saved
+          jump(saved.messageId)
+        }
+      } else if (firstUnreadId) jump(firstUnreadId)
+      else {
+        const top = readBrowserStorageItem(`kun.rooms.scroll.${room.id}`)
+        scroller.scrollTop = top === null ? scroller.scrollHeight : Number(top) || 0
+        atBottom.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80
+        setAwayFromBottom(!atBottom.current)
+      }
+    }
+    if (pendingJump) {
+      const index = rows.findIndex((message) => message.id === pendingJump)
+      if (index >= 0) {
+        if (virtual) virtualizer.scrollToIndex(index, { align: 'center' })
+        else document.getElementById('room-message-' + pendingJump)?.scrollIntoView({ block: 'center' })
+        if (restorePending.current && restoreTimelinePosition(scroller, restorePending.current)) restorePending.current = null
+        setPendingJump(undefined)
+      }
+    } else if (prepend.current && prepend.current.firstId !== messages[0]?.id) {
+      scroller.scrollTop = prepend.current.top + scroller.scrollHeight - prepend.current.height
+      prepend.current = null
+    } else if (atBottom.current && !searchOpen && !contextBusy) scroller.scrollTop = scroller.scrollHeight
+    if (restorePending.current && restoreTimelinePosition(scroller, restorePending.current)) restorePending.current = null
     markRead()
-  }, [focused, results, messages, room.id, markRead, awayFromBottom, totalSize])
+  }, [readReady, firstUnreadId, pendingJump, rows, messages, room.id, markRead, awayFromBottom, totalSize, virtual, virtualizer, jump, searchOpen, contextBusy])
   useEffect(() => {
     if (!jumpMessageId) return
-    const index = rows.findIndex((message) => message.id === jumpMessageId)
-    if (index >= 0) {
-      atBottom.current = false
-      setAwayFromBottom(true)
-      if (virtual) virtualizer.scrollToIndex(index, { align: 'center' })
-      else
-        document
-          .getElementById('room-message-' + jumpMessageId)
-          ?.scrollIntoView({ block: 'center' })
-      onJumped()
-      return
-    }
-    const controller = new AbortController()
-    void roomsRequest<{ message: RoomMessage }>(
-      `${roomPath(room.id)}/messages/${encodeURIComponent(jumpMessageId)}`,
-      'GET',
-      undefined,
-      controller.signal
-    )
-      .then((result) => {
-        if (!controller.signal.aborted) {
-          setFocused(result.message)
-          onJumped()
-        }
-      })
-      .catch((cause) => {
-        if (!controller.signal.aborted) {
-          setError(String(cause))
-          onJumped()
-        }
-      })
-    return () => controller.abort()
-  }, [jumpMessageId, onJumped, room.id, rows, virtual, virtualizer])
-  const reply = (message: RoomMessage) => {
-    setFocused(null)
-    window.dispatchEvent(
-      new CustomEvent('kun-room-reply', {
-        detail: {
-          roomId: room.id,
-          messageId: message.id,
-          body: message.body,
-          rootRequestId: message.rootRequestId
-        }
-      })
-    )
-  }
-  const viewReply = (id: string) => {
-    const index = rows.findIndex((message) => message.id === id)
-    if (index >= 0 && !focused) {
-      atBottom.current = false
-      setAwayFromBottom(true)
-      if (virtual) virtualizer.scrollToIndex(index, { align: 'center' })
-      else
-        document
-          .getElementById('room-message-' + id)
-          ?.scrollIntoView({ block: 'center' })
-      return
-    }
-    const loaded = messageById.get(id)
-    if (loaded) setFocused(loaded)
-    else
-      void roomsRequest<{ message: RoomMessage }>(
-        `${roomPath(room.id)}/messages/${encodeURIComponent(id)}`
-      )
-        .then((result) => setFocused(result.message))
-        .catch((cause) => setError(String(cause)))
-  }
-  const actions = useRef({ onRun, onReply, onReplyThread, reply, viewReply, onTask, onMember })
-  actions.current = { onRun, onReply, onReplyThread, reply, viewReply, onTask, onMember }
-  const stableActions = useMemo(() => ({
-    task: (id: string) => { setFocused(null); actions.current.onTask(id) },
-    member: (id: string, rootRequestId?: string) => { setFocused(null); actions.current.onMember?.(id, rootRequestId) },
-    run: (id: string) => { setFocused(null); actions.current.onRun?.(id) },
+    jump(jumpMessageId); onJumped()
+  }, [jumpMessageId, jump, onJumped])
+  const reply = (message: RoomMessage) => window.dispatchEvent(new CustomEvent('kun-room-reply', {
+    detail: { roomId: room.id, messageId: message.id, body: message.body, rootRequestId: message.rootRequestId } }))
+  const actions = useRef({ onRun, onReply, onReplyThread, reply, jump, onTask, onMember })
+  actions.current = { onRun, onReply, onReplyThread, reply, jump, onTask, onMember }
+  const stableActions = useMemo(() => ({ task: (id: string) => actions.current.onTask(id),
+    member: (id: string, rootRequestId?: string) => actions.current.onMember?.(id, rootRequestId),
+    run: (id: string) => actions.current.onRun?.(id),
     reply: (message: RoomMessage) => (actions.current.onReply ?? actions.current.reply)(message),
-    thread: (message: RoomMessage) => (actions.current.onReplyThread ?? actions.current.onReply ?? actions.current.reply)(message),
-    viewReply: (id: string) => actions.current.viewReply(id)
+    thread: (message: RoomMessage) => actions.current.onReplyThread?.(message),
+    viewReply: (id: string) => actions.current.jump(id)
   }), [])
-  const renderMessage = (message: RoomMessage, continuation: boolean) => (
-    message.presentationKind === 'choice' && renderChoice ? renderChoice(message) : <StableMessageRow
-      room={room}
-      onOpenContent={onOpenContent}
-      onHandoff={onHandoff}
-      onRun={onRun ? stableActions.run : undefined}
-      message={message}
-      member={room.members.find(
-        (member) => member.id === message.authorMemberId
-      )}
-      task={tasks.find((task) => task.id === message.taskId)}
-      referencedMessage={
-        message.replyToMessageId
-          ? messageById.get(message.replyToMessageId)
-          : undefined
-      }
-      onReply={stableActions.reply}
-      onThread={stableActions.thread}
-      onPin={onPin}
-      onTask={stableActions.task}
-      onViewReply={stableActions.viewReply}
-      onMember={onMember ? stableActions.member : undefined}
-      continuation={continuation}
-    />
-  )
-  return (
+  const renderMessage = (message: RoomMessage, continuation: boolean) => message.presentationKind === 'choice' && renderChoice
+    ? renderChoice(message) : <StableMessageRow room={room} message={message} continuation={continuation}
+      member={room.members.find((member) => member.id === message.authorMemberId)} task={tasks.find((task) => task.id === message.taskId)}
+      referencedMessage={message.replyToMessageId ? messageById.get(message.replyToMessageId) : undefined}
+      onOpenContent={onOpenContent} onHandoff={onHandoff} onRun={onRun ? stableActions.run : undefined}
+      onReply={stableActions.reply} onThread={onReplyThread ? stableActions.thread : undefined} onPin={onPin}
+      onTask={stableActions.task} onViewReply={stableActions.viewReply} onMember={onMember ? stableActions.member : undefined} />
+  return <div className="rooms-timeline-layout">
     <div className="rooms-timeline">
-      {searchOpen ? (
-        <div className="rooms-timeline-search">
-          <Search
-            size={16}
-            className="shrink-0 text-ds-muted"
-            aria-hidden="true"
-          />
-          <input
-            ref={searchRef}
-            aria-label={t('roomsSearchMessages')}
-            placeholder={t('roomsSearchMessages')}
-            className={roomFieldClass}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                event.stopPropagation()
-                setQuery('')
-                onSearchClose?.()
-              }
-            }}
-          />
-          <button
-            type="button"
-            className={roomButtonClass}
-            aria-label={t('roomsClose')}
-            onClick={() => {
-              setQuery('')
-              onSearchClose?.()
-            }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-      ) : null}
-      {error ? (
-        <p role="alert" className="px-4 text-xs text-red-500">
-          {error}
-        </p>
-      ) : null}
-      <div
-        ref={scrollRef}
-        className="rooms-timeline-scroll"
-        onScroll={(event) => {
-          const element = event.currentTarget
-          if (!results) {
-            atBottom.current =
-              element.scrollHeight - element.scrollTop - element.clientHeight <
-              80
-            setAwayFromBottom(!atBottom.current)
-            writeBrowserStorageItem(
-              `kun.rooms.scroll.${room.id}`,
-              String(element.scrollTop)
-            )
-          }
-          markRead()
-        }}
-        onFocus={markRead}
-      >
-        {!results && cursor ? (
-          <div className="rooms-timeline-older">
-            <button
-              className={roomButtonClass}
-              disabled={moreBusy}
-              onClick={() => {
-                const element = scrollRef.current
-                if (element)
-                  anchor.current = {
-                    height: element.scrollHeight,
-                    top: element.scrollTop,
-                    firstId: messages[0]?.id
-                  }
-                void loadEarlier().catch((cause) => {
-                  anchor.current = null
-                  setError(String(cause))
-                })
-              }}
-            >
-              {t(moreBusy ? 'roomsLoading' : 'roomsOlder')}
-            </button>
-          </div>
-        ) : null}
-        {!rows.length && (results || !hideEmpty) ? (
-          <p className="rooms-timeline-empty">
-            {t(
-              searchBusy
-                ? 'roomsLoading'
-                : results
-                  ? 'roomsNoResults'
-                  : 'roomsNoMessages'
-            )}
-          </p>
-        ) : null}
-        <div ref={rowsRef}>
-          <div style={virtual ? {
-            paddingTop: rendered[0]?.start ?? 0,
-            paddingBottom: Math.max(0, totalSize - (rendered.at(-1)?.end ?? 0))
-          } : undefined}>
-            {rendered.map((row) => {
-              const layout = roomMessageLayout(rows[row.index - 1], rows[row.index])
-              return (
-                <div
-                  key={row.key}
-                  data-index={row.index}
-                  ref={virtual ? virtualizer.measureElement : undefined}
-                  className="rooms-timeline-row"
-                >
-                  {layout.newDay ?
-                    <div className="rooms-timeline-day" role="separator">
-                      {new Date(rows[row.index].createdAt).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })}
-                    </div> : null}
-                  {renderMessage(rows[row.index], layout.continuation)}
-                </div>
-              )
-            })}
-          </div>
-          {!results ? afterMessages : null}
-        </div>
-        {results && searchCursor ? (
-          <button
-            className={roomButtonClass}
-            disabled={searchBusy}
-            onClick={() => {
-              setSearchBusy(true)
-              void roomsRequest<{
-                messages: RoomMessage[]
-                nextCursor?: string
-              }>(
-                `${roomPath(room.id)}/search?q=${encodeURIComponent(query.trim())}&cursor=${encodeURIComponent(searchCursor)}`
-              )
-                .then((page) => {
-                  if (queryRef.current !== query) return
-                  setResults((current) =>
-                    mergeRoomMessages(current ?? [], page.messages)
-                  )
-                  setSearchCursor(page.nextCursor)
-                })
-                .catch((cause) => {
-                  if (queryRef.current === query) setError(String(cause))
-                })
-                .finally(() => {
-                  if (queryRef.current === query) setSearchBusy(false)
-                })
-            }}
-          >
-            {t('roomsMoreResults')}
-          </button>
-        ) : null}
+      {error ? <p role="alert" className="rooms-message-error">{error}</p> : null}
+      {contextBusy ? <p role="status" className="rooms-run-note">{t('roomsLoading')}</p> : null}
+      {firstUnreadId && awayFromBottom ? <button type="button" className="rooms-first-unread" onClick={() => jump(firstUnreadId)}>
+        {t('roomsFirstUnread', { defaultValue: 'Jump to first unread' })}</button> : null}
+      <div ref={scrollRef} className="rooms-timeline-scroll" onScroll={(event) => {
+        const element = event.currentTarget
+        atBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80
+        setAwayFromBottom(!atBottom.current)
+        if (atBottom.current && !searchOpen) seenSeq.current = latestSeq
+        writeBrowserStorageItem(`kun.rooms.scroll.${room.id}`, String(element.scrollTop))
+        writeBrowserStorageItem(`kun.rooms.anchor.${room.id}`, JSON.stringify(captureTimelinePosition(element, atBottom.current)))
+        markRead()
+      }} onFocus={markRead}>
+        {cursor ? <div className="rooms-timeline-older"><button className={roomButtonClass} disabled={moreBusy} onClick={() => {
+          if (scrollRef.current) prepend.current = { height: scrollRef.current.scrollHeight, top: scrollRef.current.scrollTop, firstId: messages[0]?.id }
+          void loadEarlier().catch((cause) => { prepend.current = null; setError(String(cause)) })
+        }}>{t(moreBusy ? 'roomsLoading' : 'roomsOlder')}</button></div> : null}
+        {!rows.length && !hideEmpty ? <p className="rooms-timeline-empty">{t('roomsNoMessages')}</p> : null}
+        <div ref={rowsRef}><div style={virtual ? { paddingTop: rendered[0]?.start ?? 0,
+          paddingBottom: Math.max(0, totalSize - (rendered.at(-1)?.end ?? 0)) } : undefined}>
+          {rendered.map((row) => {
+            const message = rows[row.index], layout = roomMessageLayout(rows[row.index - 1], message)
+            return <div key={row.key} data-index={row.index} data-timeline-id={message.id}
+              ref={virtual ? virtualizer.measureElement : undefined}
+              className={`rooms-timeline-row${selectedId === message.id ? ' is-message-target' : ''}`}>
+              {layout.newDay ? <div className="rooms-timeline-day" role="separator">
+                {new Date(message.createdAt).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })}</div> : null}
+              {row.index === unreadIndex ? <div role="separator" className="rooms-unread-boundary">
+                {t('roomsUnreadBoundary', { defaultValue: 'Unread messages' })}</div> : null}
+              {renderMessage(message, layout.continuation)}
+            </div>
+          })}
+        </div>{afterMessages}</div>
       </div>
-      {awayFromBottom && !results && !focused ? (
-        <button
-          type="button"
-          className="rooms-timeline-latest"
-          onClick={() => {
-            returnToLatest.current = true
-            setAwayFromBottom(false)
-            setFocused(null)
-            setQuery('')
-            onSearchClose?.()
-          }}
-        >
-          <ArrowDown size={14} aria-hidden="true" />
-          {t('roomsLatestMessages')}
-        </button>
-      ) : null}
-      {focused ? (
-        <section
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label={t('roomsViewReply')}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') {
-              event.stopPropagation()
-              setFocused(null)
-            }
-            if (event.key === 'Tab') {
-              const controls = dialogRef.current?.querySelectorAll<HTMLElement>(
-                'button, a[href], input, [tabindex="0"]'
-              )
-              const first = controls?.[0]
-              const last = controls?.[controls.length - 1]
-              if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault()
-                last?.focus()
-              } else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault()
-                first?.focus()
-              }
-            }
-          }}
-          className="rooms-message-dialog"
-        >
-          <div className="rooms-message-dialog-header">
-            <span>{t('roomsReferencedMessage')}</span>
-            <button
-              ref={closeDialogRef}
-              className={roomButtonClass}
-              onClick={() => setFocused(null)}
-            >
-              {t('roomsClose')}
-            </button>
-          </div>
-          {renderMessage(focused, false)}
-        </section>
-      ) : null}
+      {awayFromBottom ? <button type="button" className="rooms-timeline-latest" aria-label={t('roomsLatestMessages')} onClick={() => {
+        lookup.current?.abort(); setContextBusy(false); setPendingJump(undefined); restorePending.current = null
+        atBottom.current = true; seenSeq.current = latestSeq; setAwayFromBottom(false)
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      }}><ArrowDown size={14} aria-hidden="true" />{newCount
+        ? t('roomsNewMessages', { count: newCount, defaultValue: '{{count}} new messages' }) : t('roomsLatestMessages')}</button> : null}
     </div>
-  )
+    {searchOpen ? <RoomTimelineSearch roomId={room.id} selectedId={selectedId} onSelect={(message) => jump(message.id, true)}
+      onClose={() => { lookup.current?.abort(); setContextBusy(false); setPendingJump(undefined); onSearchClose?.() }} /> : null}
+  </div>
 }
 
-// Handlers read current timeline state even when an unchanged historical row skips rendering.
 const StableMessageRow = memo(function StableMessageRow(props: Parameters<typeof RoomMessageRow>[0]) {
   return <RoomMessageRow {...props} />
-}, (a, b) => a.message === b.message && a.room === b.room && a.member === b.member && a.task === b.task && a.referencedMessage === b.referencedMessage &&
-  a.onPin === b.onPin && a.onTask === b.onTask && a.onMember === b.onMember && a.onOpenContent === b.onOpenContent && a.onHandoff === b.onHandoff && a.onReply === b.onReply && a.onThread === b.onThread && a.onRun === b.onRun && a.onViewReply === b.onViewReply)
+}, (a, b) => a.message === b.message && a.room === b.room && a.member === b.member && a.task === b.task &&
+  a.referencedMessage === b.referencedMessage && a.continuation === b.continuation && a.onPin === b.onPin && a.onTask === b.onTask &&
+  a.onMember === b.onMember && a.onOpenContent === b.onOpenContent && a.onHandoff === b.onHandoff &&
+  a.onReply === b.onReply && a.onThread === b.onThread && a.onRun === b.onRun && a.onViewReply === b.onViewReply)

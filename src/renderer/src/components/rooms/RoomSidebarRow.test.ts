@@ -36,12 +36,24 @@ beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 afterEach(() => { act(() => root.unmount()); host.remove() })
 
 describe('RoomSidebarRow', () => {
-  it('shows attention, author, pin, running dot and a capped unread count', () => {
+  it('shows attention, author, pin, running dot and a truthful unread dot', () => {
     act(() => root.render(createElement(RoomSidebarRow, { entry: group, selected: true, onOpen: vi.fn(), menu: null })))
-    expect(host.querySelector('.rooms-im-sidebar-preview')?.textContent).toBe('[roomsAttention]Kun: Done99+')
+    expect(host.querySelector('.rooms-im-sidebar-preview')?.textContent).toBe('[roomsAttention]Kun: Done')
     expect(host.querySelector('.rooms-im-sidebar-running')).not.toBeNull()
+    expect(host.querySelector('[aria-label="roomsUnread"]')).not.toBeNull()
     expect(host.querySelector('[aria-label="roomsPinConversation"]')).not.toBeNull()
     expect(host.querySelector('[aria-current="page"]')).not.toBeNull()
+  })
+
+  it('shows a local draft and mute marker and refreshes after composer edits', () => {
+    localStorage.setItem('kun.rooms.draft.room', JSON.stringify({ body: 'Unsent draft', attachments: [] }))
+    act(() => root.render(createElement(RoomSidebarRow, { entry: { ...group, notificationsMuted: true }, selected: false, onOpen: vi.fn(), menu: null })))
+    expect(host.querySelector('small')?.textContent).toContain('Unsent draft')
+    expect(host.querySelector('[aria-label="roomsNotificationsMuted"]')).not.toBeNull()
+    localStorage.setItem('kun.rooms.draft.room', JSON.stringify({ body: '', attachments: [] }))
+    act(() => window.dispatchEvent(new CustomEvent('kun-room-draft-updated', { detail: { roomId: 'room' } })))
+    expect(host.querySelector('small')?.textContent).toBe('Kun: Done')
+    localStorage.removeItem('kun.rooms.draft.room')
   })
 
   it('falls back to the agent title before the first message', () => {

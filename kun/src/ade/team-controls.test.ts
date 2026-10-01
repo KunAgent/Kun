@@ -70,11 +70,13 @@ describe('takeOverWorker', () => {
     lifecycle.handleRuntimeEvent({
       kind: 'turn_started', threadId: 'wrk_1', turnId: 'turn_user'
     } as RuntimeEvent)
+    // The event observer is fire-and-forget; control flips before the notice is persisted.
     await vi.waitFor(async () => {
       expect((await teamWorker()).control).toBe('user')
+      expect((await threadUnit())?.control).toBe('user')
+      const notices = await stores.notices.pending('thr_mgr')
+      expect(notices.map((entry) => entry.kind)).toEqual(['worker_taken_over'])
     })
-    expect((await threadUnit())?.control).toBe('user')
-    expect((await stores.notices.pending('thr_mgr'))[0]!.kind).toBe('worker_taken_over')
   })
 
   it('backfills the turnId when a dispatch turn starts instead', async () => {

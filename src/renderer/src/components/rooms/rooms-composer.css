@@ -262,6 +262,13 @@
 @media (prefers-reduced-motion: reduce) {
   .rooms-composer-surface { transition: none; }
 }
+.rooms-attachment-uploads { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 12px; }
+.rooms-attachment-upload { display: flex; align-items: center; gap: 6px; padding: 7px; border: 1px solid var(--ds-border); border-radius: 8px; font-size: 12px; min-width: 0; }
+.rooms-attachment-upload > span { min-width: 0; overflow-wrap: anywhere; }
+.rooms-attachment-upload [role=status] { display: flex; gap: 4px; align-items: center; color: var(--ds-muted); }
+.rooms-attachment-upload [role=alert] { color: var(--ds-danger); max-width: 200px; }
+.rooms-attachment-upload button { padding: 4px; }
+.rooms-composer-shortcuts { margin: 0 12px 5px; font-size: 10px; color: var(--ds-muted); }
 
 .rooms-composer-toolbar-start {
   display: flex;

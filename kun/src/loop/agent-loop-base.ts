@@ -153,7 +153,8 @@ export abstract class AgentLoopBase {
       turns: opts.turns,
       events: opts.events,
       usage: opts.usage,
-      nowIso: opts.nowIso
+      nowIso: opts.nowIso,
+      goalElapsedSeconds: (threadId, goal) => this.goalTurns.activeElapsedSeconds(threadId, goal)
     })
     const runContinuationTurn = opts.runContinuationTurn ?? (
       (threadId: string, turnId: string) => this.runTurn(threadId, turnId)
@@ -197,6 +198,7 @@ export abstract class AgentLoopBase {
       turns: opts.turns,
       sessionStore: opts.sessionStore,
       nowIso: opts.nowIso,
+      pauseForUser: (threadId) => this.goalTurns.pauseForUser(threadId),
       ...(opts.approvalReview ? { approvalReview: opts.approvalReview } : {})
     })
     this.toolExecution = new ToolExecutionService({
@@ -448,13 +450,18 @@ export abstract class AgentLoopBase {
       return 'budget_exhausted'
     }
     let executed = 0
+    const callsById = new Map(input.calls.map((call) => [call.callId, call]))
     const outcome = await this.toolCallDispatcher.dispatch({
       dispatch: input,
       context,
       stormBreaker: this.toolStormBreakers.get(input.turnId),
+      canContinue: () => this.goalTurns.checkProgressBudget(input.threadId, input.turnId),
+      ...(thread?.roomContext?.kind === 'conversation' && thread.goal?.status === 'active'
+        ? { maxParallelCalls: () => this.goalTurns.remainingProgressCalls(input.turnId) } : {}),
       onToolExecuted: (toolName, result) => {
         executed += 1
-        this.goalTurns.noteToolExecuted(input.turnId, toolName, result)
+        this.goalTurns.noteToolExecuted(input.turnId, toolName, result,
+          result.item.kind === 'tool_result' ? callsById.get(result.item.callId) : undefined)
       }
     })
     if (thread?.extensionBudget && executed > 0) {
@@ -462,6 +469,7 @@ export abstract class AgentLoopBase {
         extensionToolInvocations: used + executed
       })
     }
+    if (!await this.goalTurns.checkProgressBudget(input.threadId, input.turnId)) return 'budget_exhausted'
     return outcome
   }
 

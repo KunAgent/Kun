@@ -20,6 +20,7 @@ import { defaultEditLocalToolOperations, defaultWriteLocalToolOperations } from 
 import { parseEditInstructions, resolveWorkspacePath, withToolBoundary } from './builtin-tool-utils.js'
 import { assertCanWritePath, assertDelegatedWritePathPhysicalScope } from './sandbox-policy.js'
 import { resolvePathThroughSymlinks, sameFilesystemPath } from './workspace-path.js'
+import { fileWriteChanged } from './file-write-evidence.js'
 
 function approvedExternalTarget(
   absolutePath: string,
@@ -144,6 +145,7 @@ export function createWriteLocalTool(_options: WriteLocalToolOptions = {}): Loca
       await assertDelegatedWritePathPhysicalScope(absolutePath, context)
       return withFileMutationQueue(absolutePath, async () => {
         const externalTarget = approvedExternalTarget(absolutePath, context)
+        const changed = externalTarget ? undefined : await fileWriteChanged(absolutePath, content, context)
         if (externalTarget) {
           const handle = await openVerifiedExternalTarget(externalTarget, 'write', openExternalOp)
           try {
@@ -161,6 +163,7 @@ export function createWriteLocalTool(_options: WriteLocalToolOptions = {}): Loca
           output: {
             path: absolutePath,
             relative_path: relativePath,
+            ...(changed === undefined ? {} : { changed }),
             bytes_written: Buffer.byteLength(content, 'utf8')
           }
         }

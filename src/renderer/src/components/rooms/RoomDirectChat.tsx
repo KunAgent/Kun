@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { WorkbenchActiveChip } from './WorkbenchActiveChip'
-import { ChevronDown, CircleAlert, FolderOpen, Menu, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, PlugZap, RotateCcw, Search, X } from 'lucide-react'
+import { ChevronDown, CircleAlert, FolderOpen, Menu, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, RotateCcw, Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room, RoomContentReference } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
@@ -57,14 +57,12 @@ export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile,
   return <header className="rooms-main-titlebar rooms-header direct-header">
     {embedded ? <button className="rooms-icon-button" aria-label={t('sidebarToggle')} onClick={onToggleLeftSidebar}><PanelLeft size={18} /></button>
       : <button className="rooms-icon-button rooms-sidebar-toggle" aria-label={t('roomsLabel')} onClick={onSidebar}><Menu size={19} /></button>}
-    <button className="direct-chat-title" onClick={onProfile}><RoomAvatar member={member} label={member.displayName} size={36} /><strong>{member.displayName}</strong></button>
-    {embedded ? <span className="rooms-private-badge">{t('agentPrivateChatLabel')}</span>
-      : <button className="direct-current-model" aria-label={t('directModels')} onClick={onModels}><span title={modelLabel(current?.main)}>{modelLabel(current?.main)}</span><ChevronDown size={13} /></button>}
+    <button className="direct-chat-title" onClick={onProfile}><RoomAvatar member={member} label={member.displayName} size={36} /><span><strong>{member.displayName}</strong>{!embedded ? <small>{modelLabel(current?.main)}</small> : null}</span></button>
+    {embedded ? <span className="rooms-private-badge">{t('agentPrivateChatLabel')}</span> : null}
     {embedded ? <button className="direct-workspace-control" onClick={onConnect} title={room.privateWorkspace ?? t('agentPrivateWorkspace')}>
       <FolderOpen size={14} /><span>{room.privateWorkspace?.replaceAll('\\', '/').split('/').at(-1) ?? t('agentPrivateWorkspace')}</span><ChevronDown size={12} /></button> : null}
     <WorkbenchActiveChip roomId={room.id} />
     <div className="direct-header-spacer" />
-    {onApps ? <button className="rooms-icon-button" aria-label={t('roomsAppsTitle')} title={t('roomsAppsTitle')} onClick={onApps}><PlugZap size={18} /></button> : null}
     <button className="rooms-icon-button" aria-label={t('roomsSearchMessages')} onClick={onSearch}><Search size={18} /></button>
     <button type="button" className="rooms-icon-button" aria-label={t('roomsViewAgentSession')} title={t('roomsViewAgentSession')}
       aria-pressed={sessionOpen} disabled={sessionDisabled} onClick={onSession}><PanelRight size={18} /></button>
@@ -112,10 +110,24 @@ export function RoomDirectProgress({ room, state, onRun, openRunId, onModels, ac
 }
 export function RoomDirectFiles({ room, onOpen }: { room: Room; onOpen: (ref: RoomContentReference) => void }) {
   const { t } = useTranslation('common')
-  const resource = useAgentResource<{ files: RoomContentReference[] }>(roomPath(room.id) + '/files')
+  type Page = { files: RoomContentReference[]; nextCursor?: string; nextLegacyCursor?: string }
+  const [search, setSearch] = useState(''), [cursor, setCursor] = useState<string | undefined>()
+  const [prior, setPrior] = useState<RoomContentReference[]>([])
+  const [legacyCursor, setLegacyCursor] = useState<string>()
+  const path = roomPath(room.id) + '/files?limit=30&search=' + encodeURIComponent(search) + (cursor ? '&cursor=' + cursor : '') + (legacyCursor ? '&legacy_cursor=' + encodeURIComponent(legacyCursor) : '')
+  const resource = useAgentResource<Page>(path)
+  useEffect(() => { setCursor(undefined); setLegacyCursor(undefined); setPrior([]) }, [room.id, search])
+  const files = [...new Map([...prior, ...(resource.data?.files ?? [])].map((file) => [JSON.stringify(file), file])).values()]
   return <div className="direct-file-list min-h-0 flex-1 overflow-y-auto">
-    {resource.data?.files.map((file) => <button key={JSON.stringify(file)} onClick={() => onOpen(file)}><FolderOpen size={16} />{file.titleSnapshot}</button>)}
-    {!resource.data?.files.length ? <p>{t('directNoFiles')}</p> : null}
-    {resource.error ? <p role="alert">{resource.error}</p> : null}
+    <input aria-label={t('roomsArtifactSearch', { defaultValue: 'Search saved files' })} value={search}
+      placeholder={t('roomsArtifactSearch', { defaultValue: 'Search saved files' })} onChange={(event) => setSearch(event.target.value)} />
+    {files.map((file) => <button key={JSON.stringify(file)} onClick={() => onOpen(file)}><FolderOpen size={16} />{file.titleSnapshot}
+      {file.kind === 'agent_file' ? <small>{file.artifactVersion ? `v${file.artifactVersion}` : t('roomsArtifactLegacy', { defaultValue: 'Current workspace file' })}</small> : null}</button>)}
+    {!files.length ? <p>{t('directNoFiles')}</p> : null}
+    {resource.data?.nextCursor ? <button onClick={() => { setPrior(files); setCursor(resource.data!.nextCursor) }}>
+      {t('roomsArtifactMore', { defaultValue: 'Load more files' })}</button> : null}
+    {!resource.data?.nextCursor && resource.data?.nextLegacyCursor ? <button onClick={() => { setPrior(files); setCursor(undefined); setLegacyCursor(resource.data!.nextLegacyCursor) }}>
+      {t('roomsArtifactLegacyMore', { defaultValue: 'Search older workspace references' })}</button> : null}
+    {resource.error ? <p role="alert">{resource.error} <button onClick={resource.refresh}>{t('retry', { defaultValue: 'Retry' })}</button></p> : null}
   </div>
 }

@@ -1,3 +1,4 @@
+import { migrateAgentPermissions } from './agent-permission-migration.js'
 import { observeRoomRepository } from '../rooms/task-workspace-service.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { AgentIdentitySchema, CreateAgentRequest, UpdateAgentRequest, AgentPageQuery,
@@ -31,7 +32,7 @@ export class AgentIdentityService {
     return result.result
   }
   async initialize(): Promise<void> {
-    if (!this.initializing) this.initializing = this.migrate().catch((error) => { this.initializing = undefined; throw error })
+    if (!this.initializing) this.initializing = this.migrate().then(() => migrateAgentPermissions(this.store)).catch((error) => { this.initializing = undefined; throw error })
     return this.initializing
   }
   private async migrate(): Promise<void> {
