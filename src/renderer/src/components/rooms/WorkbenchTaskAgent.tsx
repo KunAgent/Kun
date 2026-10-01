@@ -62,7 +62,9 @@ export function WorkbenchTaskAgentPicker({ execution, onChange, code }: {
   const reasoningOptions = reasoningOptionsForModel(modelProfileForModel(selectedGroup, displayModel))
   const fastMode = composerFastModeState(groups, displayModel, workbenchModelGroup(execution.model))
   const unavailable = row ? harnessRowUnavailableCode(row) : external && !loading ? 'unavailable' : null
-  const error = rowsError || (external ? native?.error || providers?.error : undefined)
+  const hasNative = row?.definition.credentialModes.includes('native-login') === true
+  const hasProviders = row?.definition.credentialModes.some((mode) => mode !== 'native-login') === true
+  const error = rowsError || (external ? (hasNative ? native?.error : undefined) || (hasProviders ? providers?.error : undefined) : undefined)
 
   useEffect(() => { if (code) void loadHarnesses(false, { waitMs: 3_000 }) }, [code])
   useEffect(() => {
@@ -85,7 +87,8 @@ export function WorkbenchTaskAgentPicker({ execution, onChange, code }: {
 
   const refresh = () => {
     void loadHarnesses(true, { waitMs: 3_000 })
-    if (external) { void loadHarnessModels(id, true); void loadHarnessProviderGroups(id, true) }
+    if (external && hasNative) void loadHarnessModels(id, true)
+    if (external && hasProviders) void loadHarnessProviderGroups(id, true)
   }
   const selectAgent = (nextId: string) => {
     const next = rows.find((entry) => entry.definition.id === nextId)

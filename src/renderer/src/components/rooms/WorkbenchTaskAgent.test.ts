@@ -10,6 +10,13 @@ import { FloatingComposerHarnessPicker } from '../chat/FloatingComposerHarnessPi
 import { FloatingComposerModelPicker } from '../chat/FloatingComposerModelPicker'
 import { WorkbenchTaskAgentPicker } from './WorkbenchTaskAgent'
 
+const discovery = vi.hoisted(() => ({ rows: vi.fn().mockResolvedValue(undefined),
+  native: vi.fn().mockResolvedValue(undefined), providers: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('../../store/harness-store', async (load) => ({
+  ...await load<typeof import('../../store/harness-store')>(), loadHarnesses: discovery.rows,
+  loadHarnessModels: discovery.native, loadHarnessProviderGroups: discovery.providers
+}))
+
 const native: AdeHarnessRow = {
   definition: { id: 'codex', displayName: 'Codex', transport: 'codex-app-server', credentialModes: ['native-login'],
     permissionModes: [], modelSource: 'probe', staticModels: ['native-model'], builtin: true },
@@ -22,6 +29,7 @@ describe('Card-local Agent picker', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en')
     changed.mockReset()
+    Object.values(discovery).forEach((mock) => mock.mockClear())
     useHarnessStore.setState({ rows: [native], rowsLoading: false, rowsLoadedAt: Date.now(), rowsError: undefined,
       models: { codex: { models: ['native-model'], loading: false, loadedAt: Date.now() } }, providerGroups: {} })
   })
@@ -45,6 +53,15 @@ describe('Card-local Agent picker', () => {
     await mount({ mode: 'direct', model: { harnessId: 'codex', credentialMode: 'native-login', model: 'native-model' } })
     await act(async () => { renderer!.root.findByType(FloatingComposerModelPicker).props.onComposerModelChange('native-model', 'ade-cred:native-login') })
     expect(changed.mock.calls[0][0].model).toEqual({ harnessId: 'codex', credentialMode: 'native-login', model: 'native-model' })
+  })
+
+  it('refreshes only native catalogs for a native-only Agent and ignores irrelevant provider errors', async () => {
+    useHarnessStore.setState({ providerGroups: { codex: { groups: [], loading: false, error: 'unsupported gateway credential' } } })
+    await mount({ mode: 'direct', model: { harnessId: 'codex', credentialMode: 'native-login', model: 'native-model' } })
+    await act(async () => { renderer!.root.findByType(FloatingComposerHarnessPicker).props.onOpen() })
+    expect(discovery.native).toHaveBeenCalledWith('codex', true)
+    expect(discovery.providers).not.toHaveBeenCalled()
+    expect(renderer!.root.findAllByProps({ role: 'alert' })).toHaveLength(0)
   })
 
   it('refuses a stale unavailable selection instead of switching engines', async () => {
