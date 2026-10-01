@@ -33,11 +33,17 @@ jobs:
       - run: node --test scripts/smoke-direct-model.test.cjs
       - run: npm run build
       - run: npm run ensure:electron
-      - name: Verify native proposal, explicit consent boundary and OS-protected fixture
+      - name: Verify native proposals and explicit consent boundary
+        timeout-minutes: 8
         run: node scripts/smoke-development-direct-chat.cjs --personal-im-only --evidence dist/personal-agent-im-smoke
+      - name: Probe real OS safeStorage in a separate bounded launch
+        timeout-minutes: 4
+        run: node scripts/smoke-development-direct-chat.cjs --personal-im-storage-only --evidence dist/personal-agent-im-storage
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: personal-agent-im-native-evidence
-          path: dist/personal-agent-im-smoke
+          path: |
+            dist/personal-agent-im-smoke
+            dist/personal-agent-im-storage
           if-no-files-found: warn
