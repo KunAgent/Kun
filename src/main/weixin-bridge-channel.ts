@@ -1,3 +1,4 @@
+import { protectedWeixinContextRecord, readProtectedWeixinContexts } from './personal-agent-weixin-context'
 import { routePrivateAgentWeixin, officialWeixinApiUrl } from './personal-agent-weixin-boundary'
 import { assertPersonalImSecretStorage } from './personal-agent-im-secrets'
 import { randomUUID } from 'node:crypto'
@@ -233,13 +234,13 @@ export async function persistContextTokens(accountId: string): Promise<void> {
   for (const [key, value] of contextTokenStore) {
     if (key.startsWith(prefix)) tokens[key.slice(prefix.length)] = value
   }
-  await writeJsonIfChanged(contextTokensPath(accountId), tokens)
+  await writeJsonIfChanged(contextTokensPath(accountId), await protectedWeixinContextRecord(accountId, tokens))
 }
 
 export async function restoreContextTokens(accountId: string): Promise<void> {
   try {
     const parsed = await readJsonFile(contextTokensPath(accountId))
-    for (const [userId, token] of Object.entries(asRecord(parsed))) {
+    for (const [userId, token] of Object.entries(readProtectedWeixinContexts(parsed))) {
       if (typeof token === 'string' && token) {
         const key = contextTokenKey(accountId, userId)
         if (!contextTokenStore.has(key)) contextTokenStore.set(key, token)

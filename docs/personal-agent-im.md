@@ -48,7 +48,7 @@ setup failure requiring the user's action, never silently bypassed.
 New personal-Agent connections use Electron `safeStorage` with no plaintext
 fallback. Linux `basic_text` is rejected. The entire desktop connection
 record is stored in an atomic encrypted envelope; new WeChat bot tokens are
-also OS-protected. Credentials are not exposed by the native IPC results,
+also OS-protected, including persisted reply-context tickets. Credentials are not exposed by the native IPC results,
 model tools, room cards, ordinary settings, or service diagnostic logs. Unlock
 failure blocks connection and can be retried after the OS store is unlocked.
 
