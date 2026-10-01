@@ -170,23 +170,58 @@ export function RoomsWorkspaceView({
   }
   const chooseRoom = (id: string, target?: { runId?: string; messageId?: string }): void => {
     const serial = ++navigationSerial.current
-    const previousRoomId = selectedRoomRef.current
-    void roomsClient.get(id).then(({ room: selected }) => {
-      if (!mounted.current || serial !== navigationSerial.current || selectedRoomRef.current !== previousRoomId || useChatStore.getState().route !== surface) return
-      if (selected.conversationKind === 'user_agent') { openAgentConversationRoom(id, target); return }
+    if (!mounted.current || useChatStore.getState().route !== surface) return
+    if (!embeddedPrivate) {
       if (target) useAgentChatNavigationStore.setState({ target: { roomId: id, ...target } })
-      if (embeddedPrivate) { writeBrowserStorageItem('kun.rooms.selected', id); useChatStore.getState().setRoute('rooms'); return }
       state.select(id)
       drawer.close()
       setSidebarOpen(false)
       setAppsOpen(false)
       setJumpMessageId(null)
+      return
+    }
+    const previousRoomId = selectedRoomRef.current
+    void roomsClient.get(id).then(({ room: selected }) => {
+      if (!mounted.current || serial !== navigationSerial.current || selectedRoomRef.current !== previousRoomId || useChatStore.getState().route !== surface) return
+      if (selected.conversationKind === 'user_agent') { openAgentConversationRoom(id, target); return }
+      if (target) useAgentChatNavigationStore.setState({ target: { roomId: id, ...target } })
+      writeBrowserStorageItem('kun.rooms.selected', id)
+      useChatStore.getState().setRoute('rooms')
     }).catch((cause) => { if (serial === navigationSerial.current) state.setError(String(cause)) })
   }
   const openAgent = async (agentId: string) => {
-    try { await openAgentConversation(agentId) }
-    catch (cause) { if (useChatStore.getState().route === surface) state.setError(String(cause)) }
+    if (embeddedPrivate) {
+      try { await openAgentConversation(agentId) }
+      catch (cause) { if (mounted.current && useChatStore.getState().route === surface) state.setError(String(cause)) }
+      return
+    }
+    const serial = ++navigationSerial.current
+    const previousRoomId = selectedRoomRef.current
+    try {
+      const { room: selected } = await roomsRequest<{ room: Room }>(agentPath(agentId) + '/conversation', 'POST', {})
+      if (!mounted.current || serial !== navigationSerial.current || selectedRoomRef.current !== previousRoomId || useChatStore.getState().route !== surface) return
+      if (selected.conversationKind !== 'user_agent') throw new Error('Private conversation required')
+      state.select(selected.id)
+      drawer.close()
+      setSidebarOpen(false)
+      setAppsOpen(false)
+      setJumpMessageId(null)
+    } catch (cause) {
+      if (mounted.current && serial === navigationSerial.current && useChatStore.getState().route === surface) state.setError(String(cause))
+      throw cause
+    }
   }
+  const chooseRoomRef = useRef(chooseRoom)
+  chooseRoomRef.current = chooseRoom
+  useEffect(() => {
+    if (embeddedPrivate) return
+    const open = (event: Event): void => {
+      const id = (event as CustomEvent<{ roomId?: string }>).detail?.roomId
+      if (id && useChatStore.getState().route === 'rooms') chooseRoomRef.current(id)
+    }
+    window.addEventListener('kun-room-open', open)
+    return () => window.removeEventListener('kun-room-open', open)
+  }, [embeddedPrivate])
   useEffect(() => {
     if (navigationTarget && room?.id === navigationTarget.roomId) {
       if (navigationTarget.runId) drawer.open({ kind: 'run', runId: navigationTarget.runId })
@@ -311,7 +346,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             <X size={18} />
           </button>
         </div>
-        <RoomSidebar onActivity={receiveSidebarActivity} selectedRoomId={selectedId} onOpenAgent={(id) => void openAgent(id)} onSelect={chooseRoom}
+        <RoomSidebar onActivity={receiveSidebarActivity} selectedRoomId={selectedId} onOpenAgent={(id) => void openAgent(id).catch(() => undefined)} onSelect={chooseRoom}
           onDeleted={() => state.select('')}
           onCreateAgent={() => setNewChatOpen(true)} onCreateGroup={() => setNewChatOpen(true)}
           onDetails={(agentId) => drawer.open({ kind: 'agent', agentId })}
@@ -420,7 +455,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             {privateChat ? <RoomDirectProgress room={room} state={direct} onRun={openRun} openRunId={openRunId} onModels={() => drawer.open({ kind: 'models' })} activityInTimeline gatesInTimeline /> : null}
             {room.conversationKind === 'agent_agent' ? <p className="agent-conversation-note">{t('agentsPairReadOnly')}</p> : <>
               <RoomComposer
-                modelControl={privateChat ? <RoomComposerModelButton model={agentModels.data?.main}
+                compactControls={embeddedPrivate}
+                modelControl={privateChat && embeddedPrivate ? <RoomComposerModelButton model={agentModels.data?.main}
                   onClick={() => drawer.open({ kind: 'models' })} /> : undefined}
               key={room.id + '-composer'}
               room={room}
@@ -443,7 +479,7 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
               className={roomButtonClass}
               onClick={() => setNewChatOpen(true)}
             >
-              {t('roomsNew')}
+              {t('roomsSidebarNew')}
             </button>
           </div>
         )}
@@ -467,13 +503,13 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
           if (target.kind === 'agent') return <AgentDetails key={key} agentId={target.agentId} active={active}
             onSaved={(agent) => {
               void agentProfile.refresh()
-              if (!target.agentId) { if (embeddedPrivate) void openAgent(agent.id); else drawer.replaceTop({ kind: 'directory' }) }
+              if (!target.agentId) { void openAgent(agent.id).catch(() => undefined) }
               else { drawer.replaceTop({ kind: 'agent', agentId: agent.id }); void Promise.all([state.refresh(), direct.refresh()]) }
             }}
-            onOpen={(id) => void openAgent(id)} onConversation={chooseRoom}
+            onOpen={(id) => void openAgent(id).catch(() => undefined)} onConversation={chooseRoom}
             onRun={(roomId, runId) => chooseRoom(roomId, { runId })}
             onSource={(roomId, messageId) => chooseRoom(roomId, { messageId })} />
-          if (target.kind === 'directory') return <AgentDirectory key={key} onOpen={(id) => void openAgent(id)}
+          if (target.kind === 'directory') return <AgentDirectory key={key} onOpen={(id) => void openAgent(id).catch(() => undefined)}
             onDetails={(agentId) => drawer.open({ kind: 'agent', agentId })} onCreate={() => drawer.open({ kind: 'agent' })} />
           if (target.kind === 'profile') return <RoomUserAvatarEditor key={key} variant="panel" onClose={drawer.back} />
           if (!room) return null
@@ -503,14 +539,14 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
               onTask={openTask} onMessage={(id) => { setJumpMessageId(id); drawer.close() }} /></>
           if (target.section === 'members') return <RoomMemberDetails room={room} selectedMemberId={target.memberId ?? null}
             rootRequestId={target.rootRequestId} topics={topicState.topics.map((topic) => ({ rootRequestId: topic.rootRequestId, title: topic.title }))}
-            onOpenAgent={(id) => void openAgent(id)} onAgentDetails={(agentId) => drawer.open({ kind: 'agent', agentId })}
+            onOpenAgent={(id) => void openAgent(id).catch(() => undefined)} onAgentDetails={(agentId) => drawer.open({ kind: 'agent', agentId })}
             onSelectMember={(memberId) => drawer.open({ kind: 'section', section: 'members', memberId })} onRun={openRun}
             onUpdated={() => void state.refresh()} />
           return <RoomTaskStrip key={key} stacked room={room} tasks={state.tasks} selectedId={null} onTask={openTask}
             cursor={state.taskCursor} moreBusy={state.moreBusy} loadMore={state.loadMoreTasks} />
         }} /> : null} />
       {appsOpen ? <RoomAppsPanel onClose={() => setAppsOpen(false)} onOpenPlugins={() => { setAppsOpen(false); onOpenPlugins() }} /> : null}
-      {newChatOpen ? <RoomNewChat selectionMode={embeddedPrivate ? 'private' : 'group'} onClose={() => setNewChatOpen(false)} onOpen={chooseRoom} onAgent={openAgentConversation}
+      {newChatOpen ? <RoomNewChat selectionMode={embeddedPrivate ? 'private' : 'all'} onClose={() => setNewChatOpen(false)} onOpen={chooseRoom} onAgent={embeddedPrivate ? openAgentConversation : openAgent}
         onFill={() => drawer.open({ kind: 'agent' })} /> : null}
     </div>
   )

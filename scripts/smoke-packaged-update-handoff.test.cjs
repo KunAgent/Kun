@@ -4,7 +4,13 @@ const assert = require('node:assert/strict')
 const { EventEmitter, once } = require('node:events')
 const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
+const { runInNewContext } = require('node:vm')
 const test = require('node:test')
+const {
+  googleWorkspaceStatusProbe,
+  preloadBridgeProbe
+} = require('./smoke-packaged-preload.cjs')
+const { version: googleWorkspaceVersion } = require('../resources/google-workspace/manifest.json')
 const {
   NEGATIVE_SCENARIOS,
   POSITIVE_SCENARIOS,
@@ -274,4 +280,143 @@ test('linux desktop smoke keeps the sandbox on unless CI explicitly opts out', (
     if (previousActive === undefined) delete process.env.KUN_CI_NO_SANDBOX_ACTIVE
     else process.env.KUN_CI_NO_SANDBOX_ACTIVE = previousActive
   }
+})
+
+const GOOGLE_BRIDGE_METHODS = ['status', 'login', 'setup', 'logout', 'test', 'cancel', 'openAuthorization']
+
+function preloadFixture() {
+  const calls = []
+  const bridge = {
+    onProviderMutationFlushRequest: (handler) => {
+      assert.equal(typeof handler, 'function')
+      calls.push('subscribe')
+      return () => calls.push('unsubscribe')
+    },
+    googleWorkspace: Object.fromEntries(GOOGLE_BRIDGE_METHODS.map((method) => [method, () => {
+      throw new Error(`Unexpected Google action: ${method}`)
+    }])),
+    startup: { getState: async () => ({ phase: 'ready' }) }
+  }
+  return { bridge, calls }
+}
+
+function evaluateProbe(probe, bridge, readyState = 'complete', args = []) {
+  return runInNewContext(`(${probe.toString()})(...args)`, {
+    document: { readyState }, window: { kunGui: bridge }, args
+  })
+}
+
+function disconnectedGoogleStatus() {
+  return {
+    experimental: true,
+    binary: { available: true, version: googleWorkspaceVersion },
+    auth: { state: 'setup_required', scopes: [] },
+    services: { gmail: { state: 'unknown' }, calendar: { state: 'unknown' }, drive: { state: 'unknown' } }
+  }
+}
+
+test('packaged preload probe checks all seven methods and subscribes/unsubscribes without Google actions', () => {
+  const { bridge, calls } = preloadFixture()
+  const result = evaluateProbe(preloadBridgeProbe, bridge)
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+    bridge: 'kunGui', providerMutationSubscription: true, googleWorkspaceMethods: GOOGLE_BRIDGE_METHODS
+  })
+  assert.deepEqual(calls, ['subscribe', 'unsubscribe'])
+})
+
+test('packaged preload probe waits only for loading and then fails immediately on a missing bridge', () => {
+  assert.equal(evaluateProbe(preloadBridgeProbe, undefined, 'loading'), null)
+  for (const readyState of ['interactive', 'complete']) {
+    assert.throws(() => evaluateProbe(preloadBridgeProbe, undefined, readyState), /did not expose window\.kunGui/u)
+  }
+})
+
+test('packaged preload probe rejects each missing Google method and provider subscription', () => {
+  for (const method of GOOGLE_BRIDGE_METHODS) {
+    const { bridge, calls } = preloadFixture()
+    bridge.googleWorkspace[method] = undefined
+    assert.throws(() => evaluateProbe(preloadBridgeProbe, bridge), (error) => {
+      assert(error.message.includes(`missing googleWorkspace.${method}`))
+      return true
+    })
+    assert.deepEqual(calls, [])
+  }
+  const { bridge } = preloadFixture()
+  delete bridge.onProviderMutationFlushRequest
+  assert.throws(() => evaluateProbe(preloadBridgeProbe, bridge), /missing onProviderMutationFlushRequest/u)
+})
+
+test('packaged preload probe rejects a broken unsubscribe contract', () => {
+  const { bridge } = preloadFixture()
+  bridge.onProviderMutationFlushRequest = () => undefined
+  assert.throws(() => evaluateProbe(preloadBridgeProbe, bridge), /did not return an unsubscribe function/u)
+  bridge.onProviderMutationFlushRequest = () => () => { throw new Error('unsubscribe failed') }
+  assert.throws(() => evaluateProbe(preloadBridgeProbe, bridge), /unsubscribe failed/u)
+})
+
+test('packaged Google status probe makes only a status call after startup readiness', async () => {
+  for (const authState of ['disconnected', 'setup_required']) {
+    const { bridge, calls } = preloadFixture()
+    const status = disconnectedGoogleStatus()
+    status.auth.state = authState
+    bridge.googleWorkspace.status = async () => { calls.push('status'); return status }
+    bridge.startup.getState = async () => ({ phase: 'runtime_starting' })
+    const probe = () => evaluateProbe(googleWorkspaceStatusProbe, bridge, 'complete', [googleWorkspaceVersion])
+    assert.equal(await probe(), null)
+    assert.deepEqual(calls, [])
+    bridge.startup.getState = async () => ({ phase: 'ready' })
+    assert.deepEqual(JSON.parse(JSON.stringify(await probe())), {
+      authState, binaryVersion: googleWorkspaceVersion
+    })
+    assert.deepEqual(calls, ['status'])
+  }
+})
+
+test('packaged Google status probe rejects recovery, absent IPC, and status rejection', async () => {
+  const { bridge } = preloadFixture()
+  const probe = () => evaluateProbe(googleWorkspaceStatusProbe, bridge, 'complete', [googleWorkspaceVersion])
+  bridge.startup.getState = async () => ({ phase: 'recovery_required' })
+  await assert.rejects(probe(), /requires recovery/u)
+  bridge.startup.getState = undefined
+  await assert.rejects(probe(), /missing startup.getState/u)
+  bridge.startup.getState = async () => ({ phase: 'ready' })
+  bridge.googleWorkspace.status = undefined
+  await assert.rejects(probe(), /missing googleWorkspace.status/u)
+  bridge.googleWorkspace.status = async () => { throw new Error('IPC rejected') }
+  await assert.rejects(probe(), /IPC rejected/u)
+})
+
+test('packaged Google status probe rejects broken binaries, credentials, and account activity', async () => {
+  const changes = [
+    (status) => { status.experimental = false },
+    (status) => { status.binary.available = false },
+    (status) => { status.binary.version = 'wrong-version' },
+    (status) => { status.auth.state = 'connected' },
+    (status) => { status.auth.state = 'error' },
+    (status) => { status.auth.scopes = ['https://www.googleapis.com/auth/drive'] },
+    (status) => { delete status.auth.scopes },
+    (status) => { status.operation = { kind: 'login', state: 'running' } },
+    ...['gmail', 'calendar', 'drive'].map((service) => (status) => { status.services[service].state = 'ready' })
+  ]
+  for (const change of changes) {
+    const { bridge } = preloadFixture()
+    const status = disconnectedGoogleStatus()
+    change(status)
+    bridge.googleWorkspace.status = async () => status
+    await assert.rejects(
+      evaluateProbe(googleWorkspaceStatusProbe, bridge, 'complete', [googleWorkspaceVersion]),
+      /Packaged Google Workspace status/u
+    )
+  }
+})
+
+test('positive packaged startup gates the preload before discovery and checks Google only with auto-start on', () => {
+  const source = readFileSync(join(process.cwd(), 'scripts/smoke-packaged-update-handoff.cjs'), 'utf8')
+  const positive = source.slice(
+    source.indexOf('async function runPositiveScenario'), source.indexOf('async function runNegativeScenario')
+  )
+  assert(positive.indexOf('await assertPackagedPreloadBridge(') > positive.indexOf('tracked.push(candidateDesktop)'))
+  assert(positive.indexOf('await assertPackagedPreloadBridge(') < positive.indexOf('const current = await waitForCurrentOwners('))
+  assert.match(positive, /if \(input\.scenario\.autoStart\) \{\s*await assertPackagedGoogleWorkspaceStatus\(/u)
+  assert(positive.indexOf('await assertPackagedGoogleWorkspaceStatus(') < positive.indexOf('await assertChatRoundTrip('))
 })

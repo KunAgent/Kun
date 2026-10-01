@@ -233,6 +233,13 @@ module.exports = {
     '!**/node_modules/pdfjs-dist/build/**/*',
     '!**/node_modules/pdfjs-dist/web/**/*',
     '!**/node_modules/pdfjs-dist/**/*.min.mjs',
+    // SheetJS resolves its Node import/require exports to xlsx.mjs/xlsx.js.
+    // These prebuilt browser/ExtendScript copies are unused; keep both Node
+    // entries, the legacy codepage tables, Numbers data, and dist/LICENSE.
+    '!**/node_modules/xlsx/dist/xlsx.{core.min,full.min,mini.min,extendscript}.js',
+    // DOCX export requires html-to-docx's Node entry. Its two browser bundles
+    // duplicate the converter and are never loaded by the application.
+    '!**/node_modules/html-to-docx/dist/html-to-docx.browser{,.esm}.js',
     'packages/create-kun-extension/templates/**/*',
     // @computer-use/libnut-linux currently publishes an x86-64 libnut.node
     // even though its npm metadata also declares arm64. Keep that incompatible

@@ -522,5 +522,10 @@
   "agentInstall.cancelled": "Installation cancelled",
   "agentInstall.details": "Command and installation log",
   "agentInstall.unsupported": "No automatic installer is available for this platform. Use the official download or specify an existing command path.",
-  "agentInstall.missingCommand": "Install {{command}} first, then retry."
+  "agentInstall.missingCommand": "Install {{command}} first, then retry.",
+  "devinModels.recent": "Recently used",
+  "devinModels.results": "Search results",
+  "devinModels.nativeOrder": "Devin models",
+  "devinModels.fusionCombinations": "Fusion combinations",
+  "devinModels.withCompanion": "With {{model}}"
 }

@@ -128,6 +128,21 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
 })
 
 describe('harness model cache identity', () => {
+  it('loads selected native details while preserving only previously learned reasoning facts', async () => {
+    useHarnessStore.setState({ models: { devin: { loading: false, models: ['first', 'second'],
+      loadedAt: Date.now(), modelInfo: [{ id: 'first', displayName: 'Old label', isDefault: true,
+        reasoningEfforts: ['medium', 'high'] }] } } })
+    provider.listHarnessModels.mockResolvedValue({ models: ['first', 'second'], modelInfo: [
+      { id: 'first', displayName: 'New label' }, { id: 'second', isDefault: true, reasoningEfforts: ['low'] }
+    ] })
+    await loadHarnessModels('devin', false, 'second')
+    expect(provider.listHarnessModels).toHaveBeenCalledWith('devin', undefined, 'second')
+    const cache = useHarnessStore.getState().models.devin
+    expect(cache.modelInfo?.[0]).toEqual({ id: 'first', displayName: 'New label',
+      reasoningEfforts: ['medium', 'high'], defaultReasoningEffort: undefined })
+    expect(cache.detailsModel).toBe('second')
+  })
+
   beforeEach(() => {
     resetStore()
     resetHarnessPolling()

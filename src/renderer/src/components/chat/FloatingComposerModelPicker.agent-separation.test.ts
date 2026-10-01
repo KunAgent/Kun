@@ -23,6 +23,25 @@ afterEach(async () => {
 })
 
 describe('Model picker after Agent selection moves to the mode control', () => {
+  it('uses only advertised Devin reasoning options even when image capabilities are unknown', async () => {
+    const onReasoning = vi.fn()
+    await act(async () => root.render(createElement(FloatingComposerModelPicker, {
+      compact: false, mode: 'select', composerModel: 'native', composerPickList: ['native'],
+      composerModelGroups: [{ providerId: 'ade-cred:native-login', label: 'Native sign-in', nativeHarnessId: 'devin',
+        modelIds: ['native'], modelInfo: { native: { id: 'native', displayName: 'Native Model',
+          reasoningEfforts: ['medium', 'high'], defaultReasoningEffort: 'medium' } } }],
+      composerReasoningEffort: 'max', onComposerReasoningEffortChange: onReasoning,
+      canChangeModel: true, onComposerModelChange: vi.fn()
+    })))
+    expect(onReasoning).toHaveBeenCalledWith('medium')
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')!.click())
+    const source = [...document.querySelectorAll<HTMLButtonElement>('[role="menu"] button')]
+      .find((button) => button.textContent?.includes('Native sign-in'))!
+    await act(async () => source.click())
+    expect([...document.querySelectorAll<HTMLOptionElement>('[data-devin-model-list] select option')].map((option) => option.value))
+      .toEqual(['medium', 'high'])
+  })
+
   it('uses native image metadata and does not label unknown capabilities as text-only', async () => {
     await act(async () => root.render(createElement(FloatingComposerModelPicker, {
       compact: false, mode: 'select', composerModel: 'vision', composerPickList: ['vision', 'text', 'unknown'],

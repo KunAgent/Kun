@@ -96,6 +96,20 @@ describe('RoomComposer', () => {
     )
   }
 
+  it('refreshes a referenced draft in the already open conversation without affecting other rooms', async () => {
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send)
+    input('Existing message')
+    const references = [{ kind: 'code_thread', threadId: 'task', titleSnapshot: 'Task' }]
+    stored.set('kun.rooms.draft.room', JSON.stringify({ body: 'Existing message\nAdded context', references }))
+    act(() => listeners.get('kun-room-draft-updated')!({ detail: { roomId: 'other' } } as unknown as Event))
+    expect(renderer.root.findByType('textarea').props.value).toBe('Existing message')
+    act(() => listeners.get('kun-room-draft-updated')!({ detail: { roomId: 'room' } } as unknown as Event))
+    expect(renderer.root.findByType('textarea').props.value).toBe('Existing message\nAdded context')
+    await submit()
+    expect(send.mock.calls[0][0].references).toEqual(references)
+  })
+
   it('retains a failed send and reuses its request ID until content changes', async () => {
     const send = vi.fn().mockRejectedValue(new Error('Connection lost'))
     await render(send)

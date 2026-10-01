@@ -123,8 +123,11 @@ describe('new Agent dual-path setup UI', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('keeps synchronous Agent-open errors recoverable', async () => {
-    const onAgent = vi.fn().mockImplementationOnce(() => { throw new Error('Connection unavailable') }).mockResolvedValue(undefined)
+  it.each(['synchronous', 'asynchronous'])('keeps %s Agent-open errors recoverable', async (failure) => {
+    const onAgent = vi.fn().mockImplementationOnce(() => {
+      if (failure === 'asynchronous') return Promise.reject(new Error('Connection unavailable'))
+      throw new Error('Connection unavailable')
+    }).mockResolvedValue(undefined)
     const onClose = vi.fn()
     await act(async () => { renderer = create(createElement(RoomNewChat, { onClose, onOpen: vi.fn(), onAgent })) })
     const developer = renderer.root.findAllByType('button').find((item) =>

@@ -67,7 +67,7 @@
   "roomsWorkbenchSendToBot": "发给 Agent",
   "roomsWorkbenchWatchSession": "完成时提醒我",
   "roomsWorkbenchWatchStarted": "会话结束时 Agent 会通知你。",
-  "roomsWorkbenchNoBot": "还没有可用的 Agent 私聊，请先在 Code 的「对话」中选择一个 Agent。",
+  "roomsWorkbenchNoBot": "还没有可用的 Agent 私聊，请先选择一个 Agent 开始私聊。",
   "roomsWorkbenchNoWorkspace": "这个文件不在 Agent 可见的 Work 工作区内。",
   "roomsWorkbenchBoardCardLead": "看板卡片：",
   "roomsWorkbenchBoardToBot": "交给 Agent 安排",

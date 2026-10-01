@@ -7,6 +7,7 @@ export type HarnessModelInfo = {
   inputModalities?: string[]
   reasoningEfforts?: string[]
   defaultReasoningEffort?: string
+  category?: 'model' | 'fusion'
 }
 
 export type HarnessModelCatalog = { models: string[]; modelInfo: HarnessModelInfo[] }

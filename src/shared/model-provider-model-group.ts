@@ -9,6 +9,8 @@ export type ModelProviderModelGroup = {
   label: string
   modelIds: string[]
   modelProfiles?: Record<string, ModelProviderModelProfileV1>
+  nativeHarnessId?: string
+  modelInfo?: Record<string, import('../../kun/src/contracts/harness-models').HarnessModelInfo>
   /** Opaque account reference used only for an acknowledged extension binding. */
   accountId?: string
   extensionProvider?: {

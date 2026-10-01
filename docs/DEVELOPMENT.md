@@ -159,6 +159,23 @@ The repository Actions settings must allow `GITHUB_TOKEN` to write repository co
 
 The local `npm run release:mac` and `npm run release:win` commands remain available as manual fallback tools.
 
+### macOS arm64 package budgets
+
+`npm run check:package-size:mac:arm64` enforces 750 MiB for the unpacked app,
+280 MiB for an ad-hoc DMG, and 295 MiB for an ad-hoc ZIP. Official Developer ID
+signed and stapled packages use the existing 300 MiB DMG/ZIP ceilings when
+`MAC_SIGN=1`; their unpacked-app ceiling remains 750 MiB. Missing artifacts or
+even a one-byte overrun fail the check.
+
+The bundled Google Workspace CLI packages measured 272.8 MiB (DMG) and
+285.2 MiB (ZIP) in [the initial native build](https://github.com/KunAgent/Kun/actions/runs/36715624939).
+Removing unused browser bundles reduced those to 271.1 MiB and 283.5 MiB in
+[the verified repair build](https://github.com/KunAgent/Kun/actions/runs/36732246360).
+The revised ad-hoc ceilings leave about 3% headroom above the larger measured
+artifacts for normal package variation. Keep the component and largest-file
+reports when investigating further growth; these measurements are baselines,
+and every new build must still pass the enforced budgets and startup checks.
+
 ## Suggested Branch Naming
 
 Examples:
