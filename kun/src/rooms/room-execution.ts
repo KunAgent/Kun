@@ -103,9 +103,11 @@ export async function enqueueRoomTurn(deps: RoomRuntimeDeps, threadId: string,
   }
   prompt = await freezeAgentMemoryInput(deps, thread, clientRequestId, prompt)
   const run = await prepareRoomRun(deps, thread, clientRequestId, prompt, attachmentIds, runInput)
+  const sourceRequest = run.requestId ? await deps.store.get<import('./room-runtime-types.js').RoomRequestState>('request', run.requestId) : null
+  const clientSurface = sourceRequest?.value.clientSurface ?? 'gui'
   const existing = thread.turns.find((turn) => turn.clientRequestId === clientRequestId)
   const reuse = async (turn: NonNullable<typeof existing>): Promise<string> => {
-    if (turn.prompt !== prompt || JSON.stringify(turn.attachmentIds ?? []) !== JSON.stringify(attachmentIds)) {
+    if ((turn.clientSurface ?? 'gui') !== clientSurface || turn.prompt !== prompt || JSON.stringify(turn.attachmentIds ?? []) !== JSON.stringify(attachmentIds)) {
       throw new Error('room admission identity belongs to a different request')
     }
     await updateRoomRun(deps.store, run.id, { turnId: turn.id })
@@ -120,7 +122,7 @@ export async function enqueueRoomTurn(deps: RoomRuntimeDeps, threadId: string,
   await updateRoomRun(deps.store, run.id, { admissionAttempted: true })
   try {
     const admitted = await deps.turns.enqueueTurn({ threadId, request: {
-      prompt, clientRequestId, attachmentIds, clientSurface: 'gui', agentSurface: 'code',
+      prompt, clientRequestId, attachmentIds, clientSurface, agentSurface: 'code',
       mode: thread.mode, sandboxMode: thread.sandboxMode, enqueueIfBusy: true
     } })
     await updateRoomRun(deps.store, run.id, { turnId: admitted.turnId })

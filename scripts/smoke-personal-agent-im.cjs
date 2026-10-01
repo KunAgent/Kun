@@ -18,6 +18,7 @@ async function exercisePersonalAgentIm({ page, request, poll, capture, openPriva
     assert.equal(await card.locator('.rooms-im-qr').count(), 0, 'No QR request before explicit user action')
     for (const width of [1360, 960]) {
       await resize(width, 900)
+      await card.evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }))
       await capture('personal-im-' + provider + '-' + width)
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Native card does not overflow')
     }
