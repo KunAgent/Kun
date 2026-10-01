@@ -18,7 +18,9 @@ it('persists only the protected envelope and round-trips connection identity', a
   await store.save([connection])
   expect(protection.seal).toHaveBeenCalledWith(expect.stringContaining('super-secret-value'))
   expect(await readFile(file, 'utf8')).not.toContain('super-secret-value')
+  const encryptedBeforeRead = await readFile(file)
   expect(await store.load()).toEqual([connection])
+  expect(await readFile(file)).toEqual(encryptedBeforeRead)
 })
 it('does not write anything when OS encryption fails', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'kun-im-store-')); cleanup.push(directory)

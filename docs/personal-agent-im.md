@@ -97,7 +97,11 @@ disposable string. It never clicks authorization or connects a real account.
 The OS probe runs separately from UI evidence and fails explicitly if blocked.
 The earlier synchronous macOS probe timed out before encryption. The current
 probe uses the same asynchronous API as the macOS credential path, checks main
-thread responsiveness, and requires a real encrypted round trip. An unavailable
+thread responsiveness, and requires a real encrypted round trip. It also checks
+old synchronous ciphertext through async decryption, unchanged input bytes, and
+new async ciphertext through synchronous decryption using disposable strings.
+Existing credential files are never rewritten during reads. Real OS byte
+compatibility remains unverified until this native probe succeeds. An unavailable
 store remains a failed verification. The workflow never unlocks or creates
 keychains to bypass user interaction.
 [Electron 43.1 safeStorage documentation](https://github.com/electron/electron/blob/v43.1.0/docs/api/safe-storage.md)

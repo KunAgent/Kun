@@ -55,18 +55,28 @@ async function exercisePersonalAgentImStorage({ application }) {
   const availability = application.evaluate(({ safeStorage }) => safeStorage.isAsyncEncryptionAvailable())
   const responsive = await application.evaluate(() => new Promise((resolve) => setTimeout(() => resolve(true), 10)))
   assert(responsive, 'The Electron main thread remains responsive during Keychain initialization')
+  process.stdout.write('[personal-im-storage] Main thread responsive during OS provider initialization\n')
   const available = await availability
   process.stdout.write('[personal-im-storage] OS encryption availability: ' + available + '\n')
   assert(available, 'OS credential store is unavailable; real credential protection remains unverified')
   const storage = await application.evaluate(async ({ safeStorage }) => {
     const ciphertext = await safeStorage.encryptStringAsync('isolated-im-credential-fixture')
     const decoded = await safeStorage.decryptStringAsync(ciphertext)
+    // Migration evidence uses disposable bytes only, never an existing account.
+    // This runs only after the async OS provider has become available.
+    const legacyCiphertext = safeStorage.encryptString('isolated-im-legacy-fixture')
+    const legacyBefore = Buffer.from(legacyCiphertext)
+    const legacyDecoded = await safeStorage.decryptStringAsync(legacyCiphertext)
     return { available: true, roundTrip: decoded.result === 'isolated-im-credential-fixture',
       encrypted: !ciphertext.toString().includes('isolated-im-credential-fixture'),
+      legacyRoundTrip: legacyDecoded.result === 'isolated-im-legacy-fixture',
+      legacyBytesUnchanged: legacyCiphertext.equals(legacyBefore),
+      syncReadable: safeStorage.decryptString(ciphertext) === 'isolated-im-credential-fixture',
       syncCompatibleEnvelope: ['v10', 'v11'].includes(ciphertext.subarray(0, 3).toString('ascii')) }
   })
   process.stdout.write('[personal-im-storage] OS safeStorage fixture: ' + JSON.stringify(storage) + '\n')
   assert(storage.roundTrip); assert(storage.encrypted); assert(storage.syncCompatibleEnvelope)
+  assert(storage.legacyRoundTrip); assert(storage.legacyBytesUnchanged); assert(storage.syncReadable)
   return { storage, liveAuthorizationAttempted: false }
 }
 module.exports = { exercisePersonalAgentIm, exercisePersonalAgentImStorage }
