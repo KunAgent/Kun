@@ -41,6 +41,7 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   await page.keyboard.press('Escape')
   await menu.waitFor({ state: 'hidden' })
   await card.locator('button[aria-pressed="false"]:disabled').first().waitFor()
+  await card.locator('.rooms-workbench-agent-picker').scrollIntoViewIfNeeded()
   await capture('rooms-03-execution-options')
   // Cancel must discard local edits and the selection must stay on this card only.
   await card.getByRole('button', { name: /^(Cancel editing|Cancel|取消编辑)$/u }).click()
@@ -58,6 +59,7 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   await poll(async () => (await runtimeRequest(page, linkPath)).link.status === 'completed', 90_000, 'durable ACP result')
   await poll(async () => await card.getAttribute('data-status') === 'completed', 20_000, 'rendered result')
   await card.locator('.rooms-workbench-result').waitFor()
+  await poll(async () => (await card.locator('.rooms-workbench-result').innerText()).includes('离线验收完成'), 20_000, 'visible final outcome')
   await capture('rooms-06-task-result')
   const completed = (await runtimeRequest(page, linkPath)).link
   const thread = await runtimeRequest(page, `/v1/threads/${completed.threadId}`)

@@ -22,7 +22,7 @@ function harnessFixture(probeModels?: (definition: import('../contracts/harness.
   const statuses = new Map<string, HarnessStatus>(catalog.list().map((def) => [def.id, {
     harnessId: def.id, installed: 'yes', login: 'signed-in', checkedAt: '2026-10-01T00:00:00.000Z'
   }]))
-  const detector = { status: vi.fn(async (id: string) => statuses.get(id)!) } as HarnessDetector
+  const detector = { status: vi.fn(async (id: string) => statuses.get(id)!) } satisfies Pick<HarnessDetector, 'status'>
   const runtime = { handlesProvider: () => true, handlesRoute: () => true, capabilities: () => undefined,
     capabilitiesV2: () => ({ statuses: allSupportedStatuses(), facts: { sandbox: 'native', usageReporting: 'exact', compactionOwner: 'harness' } }),
     runTurn: async () => 'completed' } as unknown as DelegatedTurnRuntime

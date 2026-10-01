@@ -42,6 +42,7 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<WorkbenchTaskDraft | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const [resultExpanded, setResultExpanded] = useState(false)
   const busyRef = useRef(false)
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
@@ -92,6 +93,8 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
   const codeTask = kind === 'code_task' || kind === 'schedule_series'
   const invalidDraft = editing && (!draft?.title.trim() || !workbenchModelComplete(draft?.execution.model))
   const showsOptions = longRunning && ['awaiting_confirmation', 'scheduled', 'active', 'paused'].includes(status)
+  const resultText = link.result?.finalExcerpt?.trim() || link.result?.summary || ''
+  const resultCollapsible = resultText.length > 450 || resultText.split('\n').length > 5
   const goal = request.goal && kind !== 'work_document' && kind !== 'work_edit' ? plainText(request.goal) : ''
   const collapsible = goal.length > 140 || (request.acceptance?.length ?? 0) > 60 || goal.split('\n').length > 3
   const startEditing = () => {
@@ -165,7 +168,10 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
       <span><strong>{t(link.attention.kind === 'approval' ? 'roomsWorkbenchApproval' : 'roomsWorkbenchQuestion')}</strong> {link.attention.summary}</span>
     </p> : null}
     {status === 'completed' && link.result ? <div className="rooms-workbench-result">
-      {link.result.summary ? <p>{link.result.summary}</p> : null}
+      {resultText ? <p className="rooms-workbench-result-copy" data-expanded={resultExpanded || !resultCollapsible}>{resultText}</p> : null}
+      {resultCollapsible ? <button type="button" className="rooms-workbench-more" aria-expanded={resultExpanded}
+        onClick={() => setResultExpanded(!resultExpanded)}>{t(resultExpanded ? 'roomsWorkbenchShowLess' : 'roomsWorkbenchShowMore')}
+        <ChevronDown size={13} aria-hidden="true" /></button> : null}
       {link.result.changedFiles.length ? <p className="rooms-workbench-files" title={link.result.changedFiles.join('\n')}>
         {t('roomsWorkbenchFiles', { count: link.result.changedFiles.length })}: {link.result.changedFiles.slice(0, 4).join(', ')}{link.result.changedFiles.length > 4 ? '…' : ''}</p> : null}
       {link.result.commands.length ? <p className="rooms-workbench-files">{t('roomsWorkbenchCommands')}: {link.result.commands.slice(-3).map((command) =>

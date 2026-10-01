@@ -126,6 +126,14 @@ describe('Room workbench task card', () => {
     expect(mocks.open).toHaveBeenCalledWith(expect.objectContaining({ id: 'link-1', status: 'completed' }))
   })
 
+  it('shows the stored final outcome rather than only a progress-like first line', async () => {
+    mocks.client.get.mockResolvedValue(link({ status: 'completed', result: {
+      summary: 'Checking the layout.', finalExcerpt: 'Checking the layout.\nFinished: the card is ready.',
+      changedFiles: [], commands: [], finishedAt: '2026-10-01T00:00:00.000Z' } }))
+    await mount()
+    expect(text(renderer!)).toContain('Finished: the card is ready.')
+  })
+
   it('keeps the requested Agent visible through execution and completion', async () => {
     const request = { ...link().request, execution: { mode: 'direct' as const,
       model: { harnessId: 'codex', credentialMode: 'native-login' as const, model: 'gpt-fixture' } } }

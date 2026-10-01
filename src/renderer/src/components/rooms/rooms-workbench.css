@@ -6,6 +6,7 @@
   background: transparent;
 }
 .rooms-workbench-card {
+  --rooms-success-text: color-mix(in srgb, #16a34a 70%, var(--ds-text));
   overflow: hidden;
   border: 1px solid var(--ds-border);
   border-radius: 16px;
@@ -31,7 +32,7 @@
 .rooms-workbench-card[data-status='running'] .rooms-workbench-status,
 .rooms-workbench-card[data-status='queued'] .rooms-workbench-status { color: var(--ds-accent); }
 .rooms-workbench-card[data-status='needs_attention'] .rooms-workbench-status { color: #b45309; background: color-mix(in srgb, #f59e0b 16%, transparent); }
-.rooms-workbench-card[data-status='completed'] .rooms-workbench-status { color: #15803d; background: color-mix(in srgb, #22c55e 14%, transparent); }
+.rooms-workbench-card[data-status='completed'] .rooms-workbench-status { color: var(--rooms-success-text); background: color-mix(in srgb, #22c55e 14%, transparent); }
 .rooms-workbench-card[data-status='failed'] .rooms-workbench-status,
 .rooms-workbench-card[data-status='recovery_required'] .rooms-workbench-status { color: #dc2626; background: color-mix(in srgb, #ef4444 12%, transparent); }
 .rooms-workbench-card[data-status='dismissed'],
@@ -284,4 +285,8 @@
   .rooms-workbench-agent-source { max-width: 34%; }
   .rooms-workbench-agent-picker select { min-height: 40px; }
   .rooms-workbench-agent-heading .ds-composer-harness-picker button { min-height: 36px; }
+}
+
+.rooms-workbench-result-copy[data-expanded='false'] {
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
 }
