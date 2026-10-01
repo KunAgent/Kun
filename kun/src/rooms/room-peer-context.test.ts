@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { RoomMessage } from '../contracts/rooms.js'
+import { roomBaseContextBudget } from './room-context.js'
 import { RoomService } from './room-service.js'
 import { SqliteRoomStore } from './room-store-sqlite.js'
 import { RoomPeerStore } from './room-peer-state.js'
@@ -13,7 +14,7 @@ import type { RoomContextSnapshot } from '../contracts/rooms-product.js'
 
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close() })
-async function fixture(context?: Partial<RoomContextSnapshot>) {
+async function fixture(context?: Partial<RoomContextSnapshot>, model = 'deepseek-v4-pro') {
   const directory = await mkdtemp(join(tmpdir(), 'kun-peer-context-'))
   const store = new SqliteRoomStore({ path: join(directory, 'rooms.sqlite') })
   cleanup.push(async () => { await store.close(); await rm(directory, { recursive: true, force: true }) })
@@ -27,7 +28,7 @@ async function fixture(context?: Partial<RoomContextSnapshot>) {
   await store.commit({ requestId: contextId, checks: [{ kind: 'context', id: contextId, expectedRevision: null }],
     puts: [{ kind: 'context', id: contextId, roomId: room.id, value: { id: contextId, roomId: room.id,
       coveredSeq: 0, summary: '', messages: [], rules: [], truncated: false, ...context } }] })
-  const deps = { store, model: () => ({ model: 'fake' }), profiles: () => ({}) } as unknown as RoomRuntimeDeps
+  const deps = { store, model: () => ({ model }), profiles: () => ({}) } as unknown as RoomRuntimeDeps
   const member = room.members.find((value) => value.id === 'developer')!
   const put = async (id: string, body: string) => store.commit({ requestId: id,
     checks: [{ kind: 'message', id, expectedRevision: null }],
@@ -44,6 +45,19 @@ function parsedReference(prompt: string) {
 }
 
 describe('peer response context', () => {
+  it('uses a conservative budget for an unregistered model and retains the oldest pending update', async () => {
+    const f = await fixture(undefined, 'unknown-peer-model')
+    const request = (await f.store.get<RoomRequestState>('request', f.sent.requestId))!.value
+    expect(roomBaseContextBudget(f.deps, request)).toBe(8000)
+    const updates = (await f.peer.readUpdates(f.sent.requestId, 'developer'))!
+    const items = Array.from({ length: 12 }, (_, index) => ({ ...updates.items[0], id: 'unknown-' + index,
+      value: { ...updates.items[0].value, sourceId: 'source-' + index, body: 'u'.repeat(1500) } }))
+    const context = await prepareRoomPeerContext(f.deps, { ...updates, items }, f.member)
+    const reference = parsedReference(context.prompt).reference
+    expect(reference.updates[0].inboxId).toBe('unknown-0')
+    expect(reference.updates.length).toBeLessThan(12)
+  })
+
   it('appends the shared collaboration guidance after the standing rules and before the frozen input', async () => {
     const f = await fixture()
     const updates = (await f.peer.readUpdates(f.sent.requestId, 'developer'))!

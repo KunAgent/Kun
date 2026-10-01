@@ -168,7 +168,7 @@ describe('model provider settings', () => {
     expect(runtime.apiKey).toBe('sk-runtime-fallback')
   })
 
-  it('uses a 256k context window for custom provider models without explicit context metadata', () => {
+  it('uses a conservative 32k context window for custom provider models without explicit context metadata', () => {
     const state = settings()
     state.provider.providers = state.provider.providers.map((provider) =>
       provider.id === 'custom'
@@ -187,7 +187,7 @@ describe('model provider settings', () => {
     )
 
     expect(modelProviderModelProfilesForProvider(state, 'custom')['custom-model'].contextWindowTokens)
-      .toBe(256_000)
+      .toBe(32_000)
   })
 
   it('keeps same-id model profiles scoped to the selected provider', () => {

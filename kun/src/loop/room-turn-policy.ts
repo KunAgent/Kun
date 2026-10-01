@@ -1,3 +1,4 @@
+import { AGENT_HISTORY_TOOLS } from '../contracts/agent-work-tools.js'
 import { AGENT_COLLABORATION_TOOLS } from '../agents/agent-handoff-tools.js'
 import { ROOM_REMINDER_TOOL_NAMES } from '../rooms/room-reminder-tools.js'
 import { ROOM_APP_TOOL_NAMES } from '../rooms/room-app-connection-tools.js'
@@ -37,10 +38,11 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
   // One-shot reminders belong to private agent conversations only; execution
   // still re-checks the reminders feature flag like the proposal tool.
   const reminderTools = policy.kind === 'conversation' && policy.participantAgentId ? [...ROOM_REMINDER_TOOL_NAMES] : []
+  const historyTools = policy.kind === 'conversation' && policy.participantAgentId ? [...AGENT_HISTORY_TOOLS] : []
   const appTools = policy.kind === 'conversation' && policy.participantAgentId ? [...ROOM_APP_TOOL_NAMES] : []
   const intersected = intersectAllowedToolNames(context.allowedToolNames,
-    intersectAllowedToolNames(policy.allowedToolNames ? [...policy.allowedToolNames, 'read_room_rules', 'read_room_playbook', ...peerTools, ...agentTools, ...conversationTools, ...proposalTools, ...reminderTools, ...appTools] : undefined, policy.kind === 'coordination' ? ['submit_room_plan', 'read_room_rules', 'read_room_playbook', ...agentTools] :
-      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', 'read_room_playbook', ...peerTools, ...pollTools, ...agentTools, ...conversationTools, ...proposalTools, ...reminderTools, ...appTools, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
+    intersectAllowedToolNames(policy.allowedToolNames ? [...policy.allowedToolNames, 'read_room_rules', 'read_room_playbook', ...peerTools, ...agentTools, ...conversationTools, ...proposalTools, ...reminderTools, ...appTools, ...historyTools] : undefined, policy.kind === 'coordination' ? ['submit_room_plan', 'read_room_rules', 'read_room_playbook', ...agentTools] :
+      readOnly ? [...SUBAGENT_READ_ONLY_TOOL_NAMES, 'read_room_rules', 'read_room_playbook', ...peerTools, ...pollTools, ...agentTools, ...conversationTools, ...proposalTools, ...reminderTools, ...appTools, ...historyTools, ...(policy.kind === 'review' ? ['submit_room_review'] : [])] : undefined))
   // Replying is intrinsic to a conversation: a frozen setup or skill allow-list
   // must not drop the publication tool. Explicit blockedToolNames still wins
   // because it is enforced separately at resolution time.

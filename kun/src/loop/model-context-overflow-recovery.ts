@@ -78,7 +78,9 @@ export async function recoverModelContextOverflow(input: {
     recoveryDetail = 'the single compacted retry also exceeded the provider context window'
   }
 
-  const message = `${input.streamed.error.message}${recoveryDetail ? ` (${recoveryDetail})` : ''}`
+  const message = `${input.streamed.error.message}${recoveryDetail ? ` (${recoveryDetail})` : ''}. ` +
+    "Check the selected model's configured contextWindowTokens, shorten the current input or attachments, " +
+    'disable unused tools, or choose a larger-window model. Your saved conversation has not been deleted.'
   input.deps.rememberFailure(input.turnId, {
     error: message,
     code: input.streamed.error.code,

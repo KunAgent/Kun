@@ -1,3 +1,4 @@
+import { agentHistoryTool } from '../agents/agent-history-tool.js'
 import { agentCommitmentTools } from '../agents/agent-commitment-tools.js'
 import { agentArtifactTools } from '../agents/agent-artifact-tools.js'
 import { agentHandoffTools } from '../agents/agent-handoff-tools.js'
@@ -36,7 +37,7 @@ export function roomResultProvider(threads: ThreadStore): CapabilityToolProvider
   return {
     id: 'room-results', kind: 'built-in', enabled: true, available: true,
     effects: { network: false, externalWrite: false, processExecution: false, guiAutomation: false },
-    tools: [...agentCommitmentTools(threads), ...agentArtifactTools(threads), ...agentHandoffTools(threads), ...agentSetupTools(threads), roomRuleReadTool(threads), roomPlaybookTool(threads), roomPollVoteTool(threads, () => roomPeerStoreBinding(threads)), ...roomPeerTools(threads), roomImMessageTool(threads), roomProposalTool(threads), ...roomReminderTools(threads), ...roomAppConnectionTools(threads), ...workbenchCodeTools(threads), ...workbenchWorkTools(threads), ...[
+    tools: [agentHistoryTool(threads), ...agentCommitmentTools(threads), ...agentArtifactTools(threads), ...agentHandoffTools(threads), ...agentSetupTools(threads), roomRuleReadTool(threads), roomPlaybookTool(threads), roomPollVoteTool(threads, () => roomPeerStoreBinding(threads)), ...roomPeerTools(threads), roomImMessageTool(threads), roomProposalTool(threads), ...roomReminderTools(threads), ...roomAppConnectionTools(threads), ...workbenchCodeTools(threads), ...workbenchWorkTools(threads), ...[
       { name: 'submit_room_plan', kind: 'coordination', schema: RoomCoordinationPlanSchema,
         description: ROOM_AX_TOOL_DESCRIPTIONS.submit_room_plan },
       { name: 'submit_room_review', kind: 'review', schema: RoomReviewResultSchema,
