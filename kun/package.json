@@ -116,10 +116,12 @@
     "@types/semver": "^7.7.1",
     "@types/yauzl": "^3.4.0",
     "@types/yazl": "^3.3.1",
+    "selfsigned": "5.5.0",
     "vitest": "^4.1.7"
   },
   "overrides": {
     "@hono/node-server": "2.0.11",
+    "basic-ftp": "6.2.1",
     "fast-uri": "3.1.8",
     "hono": "4.13.7",
     "ip-address": "10.7.2",
