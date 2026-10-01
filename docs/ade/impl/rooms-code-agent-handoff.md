@@ -15,6 +15,9 @@ in Code and propose a task for one of them. This extends the existing
   and, for a provider-backed route, `providerId`. Native sign-in does not need a
   fabricated provider. The selected route is checked and persisted before a card
   can start; it is rechecked at confirmation and execution admission.
+- The host freezes GUI/IM provenance on each tool-origin handoff. IM tasks and
+  scheduled descendants keep IM and unattended admission restrictions, even after
+  a card is confirmed; a timestamp alone never grants GUI capability scope.
 - The model cannot set task permissions or a persona. The existing Agent Code
   policy controls confirmation, and the private conversation's execution policy
   remains an upper bound at admission. Selecting another Agent cannot widen it.

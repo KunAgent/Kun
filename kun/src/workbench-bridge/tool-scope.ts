@@ -92,7 +92,9 @@ export async function requestWorkbenchLink(scope: WorkbenchToolScope, input: {
   request: WorkbenchRequest
   mode: 'confirm' | 'auto'
 }) {
-  const origin = { kind: 'tool' as const, runId: scope.runId, toolCallId: scope.toolCallId, turnId: scope.turnId,
+  const sourceTurn = scope.thread.turns.find((turn) => turn.id === scope.turnId)
+  const clientSurface = sourceTurn?.clientSurface === 'im' || sourceTurn?.imContext === true ? 'im' as const : 'gui' as const
+  const origin = { kind: 'tool' as const, clientSurface, runId: scope.runId, toolCallId: scope.toolCallId, turnId: scope.turnId,
     ...(scope.requestId ? { requestId: scope.requestId } : {}), fresh: scope.fresh }
   const existing = await scope.store.get<WorkbenchLink>('workbench_link', workbenchLinkId(origin, scope.roomId))
   if (!existing) {

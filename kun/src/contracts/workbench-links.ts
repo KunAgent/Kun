@@ -117,6 +117,8 @@ export const WorkbenchAttentionSchema = z.object({
 export const WorkbenchOriginSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('tool'), runId: RoomIdSchema, toolCallId: z.string().min(1).max(256),
+    /** Host-frozen source; model arguments and card edits cannot change it. */
+    clientSurface: z.enum(['gui', 'im']).optional(),
     turnId: z.string().min(1).max(256), requestId: z.string().min(1).max(256).optional(),
     /** True when the run answers a fresh user message, the only trigger `auto` may act on. */
     fresh: z.boolean()

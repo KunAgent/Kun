@@ -29,6 +29,7 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   assert.equal(proposed.request.execution.model.harnessId, 'devin')
   assert(modelFixture.snapshot().observations.some((observation) => observation.tools.includes('list_code_harnesses')))
   await card.locator('[data-workbench-agent="devin"]').waitFor()
+  await poll(async () => !(await page.locator('.rooms-composer .rooms-rich-input').innerText()).trim(), 20_000, 'acknowledged composer cleared')
   await capture('rooms-01-agent-proposal')
 
   await card.locator('.rooms-workbench-option-summary').click()

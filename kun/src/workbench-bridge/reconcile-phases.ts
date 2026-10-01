@@ -4,6 +4,7 @@ import type { ThreadRecord } from '../contracts/threads.js'
 import type { WorkbenchLink } from '../contracts/workbench-links.js'
 import type { WorkbenchBridge } from './bridge.js'
 import { buildTaskPlanPrompt, executionMode, validateExecution } from './execution.js'
+import { workbenchTurnSource } from './turn-source.js'
 import { updateWorkbenchLink } from './link-store.js'
 
 export const buildTurnKey = (linkId: string) => `workbench-build-${linkId}`
@@ -62,6 +63,11 @@ export async function admitBuildPhase(bridge: WorkbenchBridge, link: WorkbenchLi
   const ceiling = await bridge.permissionCeiling(link.roomId, thread)
   if (ceiling) await bridge.deps.threads.update(thread.id, ceiling)
   const model = link.request.execution?.model ?? bridge.deps.model()
+  let source: Awaited<ReturnType<typeof workbenchTurnSource>>
+  try { source = await workbenchTurnSource(bridge, link) } catch (error) {
+    await failBuild(bridge, link, error instanceof Error ? error.message : String(error))
+    return
+  }
   await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ admissionAttempted: true, clientRequestId: key }))
   const admitted = await bridge.deps.turns.enqueueTurn({ threadId: thread.id, request: {
     prompt, displayText: `Build plan: ${link.planPath}`, clientRequestId: key,
@@ -71,7 +77,7 @@ export async function admitBuildPhase(bridge: WorkbenchBridge, link: WorkbenchLi
     ...(link.request.execution?.model?.reasoningEffort ? { reasoningEffort: link.request.execution.model.reasoningEffort } : {}),
     ...(link.request.execution?.model?.serviceTier ? { serviceTier: link.request.execution.model.serviceTier } : {}),
     ...(link.request.execution?.persona ? { persona: link.request.execution.persona.text } : {}),
-    clientSurface: 'gui', agentSurface: 'code', mode: 'agent', orchestration: link.request.execution?.orchestration ?? 'direct',
+    ...source, agentSurface: 'code', mode: 'agent', orchestration: link.request.execution?.orchestration ?? 'direct',
     attachmentIds: [], composerContexts: [], fileReferences: [], enqueueIfBusy: true
   } })
   await updateWorkbenchLink(bridge.store, link.roomId, link.id, () => ({ turnId: admitted.turnId, status: 'queued' }))

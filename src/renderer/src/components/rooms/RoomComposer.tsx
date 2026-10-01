@@ -105,7 +105,13 @@ function RoomComposerEditor({
   useEffect(() => {
     if (draftId) return
     const refresh = (event: Event): void => {
-      if ((event as CustomEvent<{ roomId?: string }>).detail?.roomId === room.id) setDraft(readDraft(storageId))
+      if ((event as CustomEvent<{ roomId?: string }>).detail?.roomId !== room.id) return
+      // This editor also publishes the event. Preserve object identity for an
+      // unchanged draft so its own storage notification cannot loop or restore sent text.
+      setDraft((current) => {
+        const next = readDraft(storageId)
+        return JSON.stringify(current) === JSON.stringify(next) ? current : next
+      })
     }
     window.addEventListener('kun-room-draft-updated', refresh)
     return () => window.removeEventListener('kun-room-draft-updated', refresh)

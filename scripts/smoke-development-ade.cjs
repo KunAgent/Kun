@@ -231,6 +231,9 @@ async function main() {
     page = await findWorkbenchWindow(electronApplication, timeoutMs)
     page.setDefaultTimeout(30_000)
     page.on('pageerror', (error) => pageErrors.push(error.message))
+    page.on('console', (message) => {
+      if (message.type() === 'error' && message.text().includes('Maximum update depth exceeded') && pageErrors.length < 10) pageErrors.push(message.text())
+    })
     // The smoke run uses a fresh vite cache each time, so the first module
     // graph transform can exceed the default 30s window on a busy machine.
     await page.waitForLoadState('domcontentloaded', { timeout: 120_000 })
