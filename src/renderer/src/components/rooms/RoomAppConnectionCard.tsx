@@ -1,3 +1,4 @@
+import { RoomImConnectionCard } from './RoomImConnectionCard'
 import { useState } from 'react'
 import { Check, Loader2, PlugZap } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -7,6 +8,11 @@ import { roomRequestId, roomsRequest } from './rooms-client'
 import './rooms-app-connections.css'
 
 export function RoomAppConnectionCard({ message }: { message: RoomMessage }) {
+  return message.appConnection?.serverId === 'im.feishu' || message.appConnection?.serverId === 'im.weixin'
+    ? <RoomImConnectionCard message={message} /> : <RoomMcpConnectionCard message={message} />
+}
+
+function RoomMcpConnectionCard({ message }: { message: RoomMessage }) {
   const { t } = useTranslation('common')
   const [updated, setUpdated] = useState<RoomMessage | null>(null)
   const [busy, setBusy] = useState(false)

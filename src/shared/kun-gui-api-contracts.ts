@@ -497,7 +497,7 @@ export type ClawImInstallQrResult =
   | { ok: false; message: string }
 
 export type ClawImInstallPollResult =
-  | { done: true; kind: 'feishu'; appId: string; appSecret: string; domain: string }
+  | { done: true; kind: 'feishu'; appId: string; appSecret: string; domain: string; ownerId?: string }
   | { done: true; kind: 'weixin'; accountId: string; sessionKey: string }
   | { done: false; error?: string }
 

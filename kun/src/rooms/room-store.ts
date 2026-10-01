@@ -7,7 +7,7 @@ import type { RoomReplyPage, RoomReplyPageInput } from '../contracts/room-replie
 import type { RoomRepositoryChoice, RoomSearchPage, RoomSearchQuery, RoomRunSummary, RoomRunSummaryQuery } from '../contracts/room-experience.js'
 
 export const RoomDocumentKindSchema = z.enum([
-  'room_result_inbox', 'agent_commitment', 'agent_artifact', 'agent_identity', 'agent_mapping', 'agent_bootstrap', 'agent_features', 'agent_handoff', 'agent_memory_job', 'agent_budget', 'agent_budget_claim',
+  'agent_im_connection', 'room_result_inbox', 'agent_commitment', 'agent_artifact', 'agent_identity', 'agent_mapping', 'agent_bootstrap', 'agent_features', 'agent_handoff', 'agent_memory_job', 'agent_budget', 'agent_budget_claim',
   'room', 'message', 'request', 'task', 'dispatch', 'attempt',
   'workspace', 'delivery', 'review', 'amendment', 'rule', 'artifact',
   'rule_version', 'context', 'summary', 'outcome', 'recovery', 'integration', 'read_state', 'cleanup', 'validation',

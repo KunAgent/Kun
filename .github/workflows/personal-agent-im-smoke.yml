@@ -1,0 +1,41 @@
+name: Personal Agent IM native smoke
+on:
+  pull_request:
+    paths:
+      - 'src/main/personal-agent-im*'
+      - 'src/renderer/src/components/rooms/RoomImConnectionCard*'
+      - 'kun/src/rooms/room-im-connections*'
+      - 'kun/src/server/routes/*room-im-connection*'
+      - 'scripts/smoke-personal-agent-im.cjs'
+      - 'scripts/smoke-development-direct-chat.cjs'
+      - 'scripts/smoke-direct-model.cjs'
+      - '.github/workflows/personal-agent-im-smoke.yml'
+permissions:
+  contents: read
+concurrency:
+  group: personal-agent-im-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  native-card:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run ensure:electron
+      - name: Verify native proposal, explicit consent boundary and OS-protected fixture
+        run: node scripts/smoke-development-direct-chat.cjs --personal-im-only --evidence dist/personal-agent-im-smoke
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: personal-agent-im-native-evidence
+          path: dist/personal-agent-im-smoke
+          if-no-files-found: warn

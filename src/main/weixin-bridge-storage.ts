@@ -1,3 +1,4 @@
+import { protectPersonalImSecret, unprotectPersonalImSecret } from './personal-agent-im-secrets'
 import { app } from 'electron'
 import { randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
@@ -357,7 +358,7 @@ export async function loadLegacyToken(): Promise<string | undefined> {
 
 export async function loadWeixinAccountData(accountId: string): Promise<WeixinAccountData | null> {
   const primary = await readAccountFile(accountPath(accountId))
-  if (primary) return primary
+  if (primary) return primary.protectedToken ? { ...primary, token: unprotectPersonalImSecret(primary.protectedToken) } : primary
   const rawId = deriveRawAccountId(accountId)
   if (rawId) {
     const compat = await readAccountFile(accountPath(rawId))
@@ -367,7 +368,7 @@ export async function loadWeixinAccountData(accountId: string): Promise<WeixinAc
   return legacyToken ? { token: legacyToken } : null
 }
 
-export async function saveWeixinAccount(accountId: string, update: WeixinAccountData): Promise<void> {
+export async function saveWeixinAccount(accountId: string, update: WeixinAccountData, protect = false): Promise<void> {
   await ensureStateDirs()
   const existing = await loadWeixinAccountData(accountId) ?? {}
   const token = update.token?.trim() || existing.token?.trim()
@@ -376,7 +377,7 @@ export async function saveWeixinAccount(accountId: string, update: WeixinAccount
     ? update.userId.trim() || undefined
     : existing.userId?.trim() || undefined
   await writeJsonIfChanged(accountPath(accountId), {
-    ...(token ? { token, savedAt: new Date().toISOString() } : {}),
+    ...(token ? { ...(protect || existing.protectedToken ? { protectedToken: protectPersonalImSecret(token) } : { token }), savedAt: new Date().toISOString() } : {}),
     ...(baseUrl ? { baseUrl } : {}),
     ...(userId ? { userId } : {})
   })

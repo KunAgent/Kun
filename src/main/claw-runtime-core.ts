@@ -18,6 +18,7 @@ export abstract class ClawRuntimeCore {
   protected abstract closeWebhook(forceConnections?: boolean): Promise<void>
   protected abstract handleFeishuMessage(channelId: string, message: NormalizedMessage): Promise<void>
   protected abstract resolveChannelWorkspaceRoot(settings: AppSettingsV1, channel?: ClawImChannelV1): string
+  readonly personalIm?: import('./personal-agent-im-service').PersonalAgentImService
   protected readonly deps: ClawRuntimeDeps
   protected server: Server | null = null
   protected serverKey = ''
@@ -37,6 +38,7 @@ export abstract class ClawRuntimeCore {
 
   constructor(deps: ClawRuntimeDeps) {
     this.deps = deps
+    this.personalIm = deps.createPersonalIm?.()
     this.feishuTransport = new FeishuTransportAdapter({
       logError: deps.logError,
       onMessage: (channelId, message) => this.trackLifecycleTask(
@@ -69,6 +71,7 @@ export abstract class ClawRuntimeCore {
 
   sync(settings: AppSettingsV1): void {
     if (this.stopController.signal.aborted) return
+    if (this.personalIm) this.trackLifecycleTask('Private Agent IM sync failed', this.personalIm.sync(settings))
     this.syncWebhook(settings)
     this.trackLifecycleTask('Feishu channel sync failed', this.feishuTransport.sync(settings))
     this.pruneWeixinWelcomeAttempts(settings)
@@ -163,6 +166,7 @@ export abstract class ClawRuntimeCore {
 
   async stop(): Promise<void> {
     this.stopController.abort()
+    await this.personalIm?.stop()
     void this.closeWebhook(true)
     await this.feishuTransport.stop()
     while (

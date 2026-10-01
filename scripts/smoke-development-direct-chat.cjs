@@ -4,6 +4,7 @@
 // Exercise the real Electron renderer/preload/main/Manager/Runtime composition.
 // All model responses are deterministic and offline. Application settings, data,
 // discovery/control files, Git repositories and processes belong to this run.
+const { exercisePersonalAgentIm } = require('./smoke-personal-agent-im.cjs')
 const { startDirectModel } = require('./smoke-direct-model.cjs')
 const { exerciseDirectChat } = require('./smoke-direct-controls.cjs')
 const { exercisePinStream } = require('./smoke-rooms-pin-stream.cjs')
@@ -143,7 +144,8 @@ async function main() {
     await page.waitForLoadState('domcontentloaded')
     await resize(electronApplication, 1360, 900)
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
-    const exercise = process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
+    const exercise = process.argv.includes('--personal-im-only') ? exercisePersonalAgentIm
+      : process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
       : process.argv.includes('--approvals') ? exerciseRoomApprovals
         : process.argv.includes('--pin-stream') ? exercisePinStream : exerciseDirectChat
     const direct = await exercise({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,

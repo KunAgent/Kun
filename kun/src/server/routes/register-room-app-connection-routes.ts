@@ -1,3 +1,4 @@
+import { isRoomImApp } from '../../rooms/room-app-connection-tools.js'
 import { z } from 'zod'
 import type { RoomRuntime } from '../../rooms/room-runtime.js'
 import type { RoomMessage } from '../../contracts/rooms.js'
@@ -28,6 +29,7 @@ export function registerRoomAppConnectionRoutes(add: Add, runtime: ServerRuntime
       const before = await roomAppConnectionMessage(rooms.deps.store, params.roomId, messageId)
       const serverId = before.row.value.appConnection!.serverId
       const hiddenGoogleApp = isHiddenRoomGoogleApp(serverId)
+      if (action === 'complete' && isRoomImApp(serverId)) throw new RoomStoreConflictError('Complete the official IM setup from the native connection card')
       if (action === 'complete') {
         if (hiddenGoogleApp && before.row.value.appConnection!.status === 'requested') {
           throw new RoomStoreConflictError('This app is unavailable in private Rooms; skip the connection to continue')

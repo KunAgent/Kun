@@ -516,6 +516,15 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
     }
   )
 
+  ipcMain.handle('personal-agent:im', async (event, payload: unknown) => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    const request = z.object({ action: z.enum(['start', 'poll', 'cancel', 'status', 'disconnect']),
+      roomId: z.string().min(1).max(128), cardId: z.string().min(1).max(128),
+      attemptId: z.string().uuid().optional(), isLark: z.boolean().optional() }).strict().parse(payload)
+    const service = getClawRuntime()?.personalIm
+    return service ? service.handle(request) : { status: 'error', message: 'Keep the Kun desktop open to connect IM' }
+  })
+
   ipcMain.handle(
     'claw:im-install:qrcode',
     async (_, payload: unknown) => {

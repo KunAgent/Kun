@@ -12,6 +12,9 @@ import { roomRunSegmentMessageId } from './room-run-segments.js'
 import type { RoomStoreCommit } from './room-store.js'
 import { ROOM_AX_TOOL_DESCRIPTIONS } from './room-ax-surfaces.js'
 
+export const ROOM_IM_APPS = { 'im.feishu': 'Feishu / Lark', 'im.weixin': 'WeChat (Tencent channel)' } as const
+export const isRoomImApp = (id: string): id is keyof typeof ROOM_IM_APPS => Object.hasOwn(ROOM_IM_APPS, id)
+
 export const LIST_ROOM_APPS_TOOL_NAME = 'list_room_apps'
 export const REQUEST_APP_CONNECTION_TOOL_NAME = 'request_app_connection'
 export const ROOM_APP_TOOL_NAMES = [LIST_ROOM_APPS_TOOL_NAME, REQUEST_APP_CONNECTION_TOOL_NAME] as const
@@ -45,7 +48,7 @@ export function roomAppConnectionTools(threads: ThreadStore): LocalTool[] {
           if (thread?.roomContext?.kind !== 'conversation') throw new Error('private Agent conversation required')
           const access = accessBindings.get(threads)?.()
           if (!access) throw new Error('app connection inventory unavailable')
-          return { output: { suggested: Object.entries(ROOM_APP_CATALOG).map(([id, app]) => ({ id, name: app.name })),
+          return { output: { messagingChannels: Object.entries(ROOM_IM_APPS).map(([id, name]) => ({ id, name, setup: 'official_qr', control: 'verified_owner_only' })), suggested: Object.entries(ROOM_APP_CATALOG).map(([id, app]) => ({ id, name: app.name })),
             configured: Object.entries(access.servers).filter(([id]) => !isHiddenRoomGoogleApp(id))
               .map(([id, server]) => ({ id, enabled: server.enabled,
               oauth: Boolean(server.oauth && server.oauth.enabled !== false),
@@ -64,7 +67,7 @@ export function roomAppConnectionTools(threads: ThreadStore): LocalTool[] {
           if (isHiddenRoomGoogleApp(serverId)) throw new Error('This app is unavailable in private Rooms')
           const access = accessBindings.get(threads)?.(), store = roomPeerStoreBinding(threads)
           if (!access || !store) throw new Error('app connection service unavailable')
-          if (!Object.hasOwn(ROOM_APP_CATALOG, serverId) && !access.servers[serverId]) {
+          if (!isRoomImApp(serverId) && !Object.hasOwn(ROOM_APP_CATALOG, serverId) && !access.servers[serverId]) {
             throw new Error('App is not in the built-in catalog or configured in Kun')
           }
           if (access.statuses[serverId] === 'connected') return { output: { connected: true, serverId } }
