@@ -85,6 +85,13 @@ describe('Room workbench task card', () => {
     expect(mocks.client.confirm.mock.calls[0][1]).toMatchObject({ execution: { mode: 'auto' }, schedule: { kind: 'once' } })
   })
 
+  it('keeps the default permission ceiling visible before starting', async () => {
+    mocks.client.get.mockResolvedValue(link())
+    await mount()
+    await act(async () => { button(renderer!, 'Edit')!.props.onClick() })
+    expect(button(renderer!, 'Full access')!.props.disabled).toBe(true)
+  })
+
   it('can be dismissed, and surfaces a conflict from a stale card', async () => {
     mocks.client.get.mockResolvedValue(link())
     mocks.client.dismiss.mockRejectedValue(new Error('workbench link changed since it was read'))

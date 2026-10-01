@@ -10,19 +10,22 @@ import { harnessDefaultsSnapshot } from '../../lib/harness-defaults'
 import { isKunModelProviderGroup } from '../../lib/kun-model-provider-groups'
 import { AgentIcon } from '../agent-icon'
 import { FloatingComposerHarnessPicker } from '../chat/FloatingComposerHarnessPicker'
+import { composerFastModeState } from '../chat/composer-fast-mode'
+import { modelProfileForModel, reasoningOptionsForModel, type ComposerReasoningEffort } from '../chat/floating-composer-model-picker-logic'
 import { FloatingComposerModelPicker } from '../chat/FloatingComposerModelPicker'
 import { selectWorkbenchAgent, selectWorkbenchModel, workbenchExternalAgent, workbenchHarnessId,
-  workbenchModelGroup, type WorkbenchModel } from './workbench-agent-selection'
+  workbenchModelGroup, workbenchDisplayModel, type WorkbenchModel } from './workbench-agent-selection'
 
 /** Read the persisted route even after completion; current composer state is irrelevant. */
 export function WorkbenchTaskAgentIdentity({ model }: { model?: WorkbenchModel }) {
   const { t } = useTranslation('common')
   const id = workbenchHarnessId(model)
+  useEffect(() => { void loadHarnesses(false, { waitMs: 3_000 }) }, [])
   const label = useHarnessStore((state) => state.rows.find((row) => row.definition.id === id)?.definition.displayName)
   return <div className="rooms-workbench-agent-identity" data-workbench-agent={id}>
     <span className="rooms-workbench-agent-icon"><AgentIcon harnessId={id} size={20} /></span>
     <span className="rooms-workbench-agent-copy"><strong>{label ?? (id === 'kun' ? 'Kun' : id)}</strong>
-      <span title={model?.model}>{model?.model || t('roomsWorkbenchRuntimeModel')}</span></span>
+      <span title={model?.model}>{workbenchDisplayModel(model) || t('roomsWorkbenchRuntimeModel')}</span></span>
     {model?.credentialMode ? <span className="rooms-workbench-agent-source">{t(model.credentialMode === 'native-login'
       ? 'adeCredential.nativeLogin' : model.credentialMode === 'kun-gateway' ? 'adeCredential.kunGateway' : 'adeCredential.provider')}</span> : null}
   </div>
@@ -54,6 +57,10 @@ export function WorkbenchTaskAgentPicker({ execution, onChange, code }: {
     kunGateway: t('adeCredential.kunGateway') }), [t])
   const groups = external ? adeHarnessModelGroups({ row, models: native?.models ?? [], modelInfo: native?.modelInfo,
     providerGroups: providers?.groups ?? [], labels, hasConfiguredProvider: true }) : baseGroups.filter(isKunModelProviderGroup)
+  const displayModel = workbenchDisplayModel(execution.model)
+  const selectedGroup = groups.find((group) => group.providerId === workbenchModelGroup(execution.model))
+  const reasoningOptions = reasoningOptionsForModel(modelProfileForModel(selectedGroup, displayModel))
+  const fastMode = composerFastModeState(groups, displayModel, workbenchModelGroup(execution.model))
   const unavailable = row ? harnessRowUnavailableCode(row) : external && !loading ? 'unavailable' : null
   const error = rowsError || (external ? native?.error || providers?.error : undefined)
 
@@ -107,19 +114,29 @@ export function WorkbenchTaskAgentPicker({ execution, onChange, code }: {
         onOpen={refresh} onSelect={selectAgent} /></div> : null}
     <div className="rooms-workbench-field"><span>{t('roomsWorkbenchModel')}</span>
       <div className="rooms-workbench-desktop-model"><FloatingComposerModelPicker compact mode="select"
-        composerModel={execution.model?.model ?? ''} composerProviderId={workbenchModelGroup(execution.model)}
+        composerModel={displayModel} composerProviderId={workbenchModelGroup(execution.model)}
         composerPickList={groups.flatMap((group) => group.modelIds)} composerModelGroups={groups}
         canChangeModel onComposerModelChange={selectModel} composerReasoningEffort={execution.model?.reasoningEffort}
         onComposerReasoningEffortChange={(reasoningEffort) => execution.model && onChange({ ...execution, model: { ...execution.model, reasoningEffort } })}
         composerFastMode={execution.model?.serviceTier === 'priority'} onComposerFastModeChange={(enabled) => execution.model &&
           onChange({ ...execution, model: { ...execution.model, serviceTier: enabled ? 'priority' : undefined } })} /></div>
       <select className="rooms-workbench-mobile-model" aria-label={t('roomsWorkbenchModel')}
-        value={JSON.stringify([workbenchModelGroup(execution.model), execution.model?.model ?? ''])}
+        value={JSON.stringify([workbenchModelGroup(execution.model), displayModel])}
         onChange={(event) => { const [group, model] = JSON.parse(event.target.value) as [string, string]; selectModel(model, group) }}>
         <option value={JSON.stringify(['', ''])} disabled>{t('roomsWorkbenchChooseModel')}</option>
         {groups.map((group) => <optgroup key={group.providerId} label={group.label}>{group.modelIds.map((model) =>
           <option key={model} value={JSON.stringify([group.providerId, model])}>{model}</option>)}</optgroup>)}
       </select>
+      {execution.model ? <div className="rooms-workbench-mobile-model">
+        <label>{t('roomsWorkbenchReasoning')}<select value={execution.model.reasoningEffort ?? 'auto'}
+          onChange={(event) => onChange({ ...execution, model: { ...execution.model!, reasoningEffort: event.target.value as ComposerReasoningEffort } })}>
+          {!reasoningOptions.some((option) => option.id === 'auto') ? <option value="auto">{t('composerReasoningAuto')}</option> : null}
+          {reasoningOptions.map((option) => <option key={option.id} value={option.id}>{t(option.labelKey)}</option>)}
+        </select></label>
+        {fastMode !== 'hidden' ? <label className="rooms-workbench-check"><input type="checkbox"
+          checked={execution.model.serviceTier === 'priority'} disabled={fastMode !== 'supported'} onChange={(event) =>
+            onChange({ ...execution, model: { ...execution.model!, serviceTier: event.target.checked ? 'priority' : undefined } })} />{t('roomsWorkbenchFastMode')}</label> : null}
+      </div> : null}
     </div>
     {external && (native?.loading || providers?.loading) ? <p className="rooms-workbench-agent-hint" role="status">{t('roomsWorkbenchAgentLoading')}</p> : null}
     {external ? <p className="rooms-workbench-agent-hint">{t('roomsWorkbenchAgentDirectHint')}</p> : null}

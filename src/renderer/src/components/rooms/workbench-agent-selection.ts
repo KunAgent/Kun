@@ -1,3 +1,4 @@
+import { parseGatewayModelId } from '../../../../../kun/src/harness/gateway-model-id'
 import type { WorkbenchExecution } from '@shared/rooms-api'
 import type { AdeHarnessRow, AdeHarnessProviderModelGroup } from '@shared/ade-harnesses'
 import type { KunHarnessDefaultsEntryV1 } from '@shared/app-settings-types-kun-runtime'
@@ -52,4 +53,11 @@ export function selectWorkbenchModel(previous: WorkbenchModel | undefined, model
 export function workbenchModelComplete(model?: WorkbenchModel): boolean {
   if (!model) return true // No override: the native runtime uses its configured model.
   return Boolean(model.model.trim() && (model.credentialMode === 'native-login' || model.providerId?.trim()))
+}
+
+/** Gateway addresses are an execution detail; model menus use the provider's original ID. */
+export function workbenchDisplayModel(model?: WorkbenchModel): string {
+  if (!model) return ''
+  const address = model.credentialMode === 'kun-gateway' ? parseGatewayModelId(model.model) : null
+  return address && address.providerId === model.providerId ? address.model : model.model
 }

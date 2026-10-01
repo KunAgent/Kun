@@ -107,6 +107,9 @@ export class WorkbenchHarnessService {
     const statuses = new Map<string, Promise<HarnessStatus>>()
     const status = (id: string) => {
       signal.throwIfAborted()
+      if (this.deps.catalog.isDisabled(id) || (id !== 'kun' && !this.deps.router.enabled())) return Promise.resolve({
+        harnessId: id, installed: 'unknown' as const, login: 'unknown' as const, checkedAt: '1970-01-01T00:00:00.000Z'
+      })
       if (!statuses.has(id)) statuses.set(id, abortable(this.deps.detector.status(id), signal))
       return statuses.get(id)!
     }
@@ -137,6 +140,7 @@ export class WorkbenchHarnessService {
         }
       }
       let reason = this.deps.catalog.isDisabled(agent.harnessId) ? 'Disabled in Code settings' :
+        agent.harnessId !== 'kun' && !this.deps.router.enabled() ? 'External Code Agent routing is disabled in settings' :
         agent.terminalOnly ? 'Terminal-only Agent' : !agent.ready ? availabilityReason(detected) : undefined
       const routes: Model[] = []
       for (const model of models.slice(0, 24)) {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import { initialWorkbenchTaskDraft } from './WorkbenchTaskOptions'
 import { useChatStore } from '../../store/chat-store'
-import { selectWorkbenchAgent, selectWorkbenchModel, workbenchModelComplete, workbenchModelGroup } from './workbench-agent-selection'
+import { selectWorkbenchAgent, selectWorkbenchModel, workbenchModelComplete, workbenchModelGroup, workbenchDisplayModel } from './workbench-agent-selection'
 
 const row = (id: string, modes: AdeHarnessRow['definition']['credentialModes']): AdeHarnessRow => ({
   definition: { id, credentialModes: modes, staticModels: [] }, status: { installed: 'yes' }
@@ -37,6 +37,12 @@ describe('Rooms card-local Agent selection', () => {
       harnessId: 'claude-code', model: 'sonnet', credentialMode: 'native-login' })
     expect(selectWorkbenchModel(current, 'new', 'ade-cred:kun-gateway:custom/provider')).toEqual({
       harnessId: 'claude-code', model: 'new', providerId: 'custom/provider', credentialMode: 'kun-gateway' })
+  })
+  it('displays gateway model IDs without losing the frozen execution address', () => {
+    const route = { harnessId: 'claude-code', credentialMode: 'kun-gateway' as const,
+      providerId: 'p1', model: 'kun/p1/vendor/model' }
+    expect(workbenchDisplayModel(route)).toBe('vendor/model')
+    expect(route.model).toBe('kun/p1/vendor/model')
   })
   it('does not borrow an unrelated Code composer route or permissions when confirming a proposal', () => {
     const old = useChatStore.getState()

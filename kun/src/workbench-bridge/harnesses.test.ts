@@ -22,7 +22,7 @@ function harnessFixture(probeModels?: (definition: import('../contracts/harness.
   const statuses = new Map<string, HarnessStatus>(catalog.list().map((def) => [def.id, {
     harnessId: def.id, installed: 'yes', login: 'signed-in', checkedAt: '2026-10-01T00:00:00.000Z'
   }]))
-  const detector = { status: async (id: string) => statuses.get(id)! } as HarnessDetector
+  const detector = { status: vi.fn(async (id: string) => statuses.get(id)!) } as HarnessDetector
   const runtime = { handlesProvider: () => true, handlesRoute: () => true, capabilities: () => undefined,
     capabilitiesV2: () => ({ statuses: allSupportedStatuses(), facts: { sandbox: 'native', usageReporting: 'exact', compactionOwner: 'harness' } }),
     runTurn: async () => 'completed' } as unknown as DelegatedTurnRuntime
@@ -46,7 +46,7 @@ function harnessFixture(probeModels?: (definition: import('../contracts/harness.
   const native = { harnessId: 'codex', credentialMode: 'native-login' as const, model: 'codex-test' }
   const request = (model = native): WorkbenchRequest => ({ title: 'Fix tests', goal: 'Make tests pass',
     mode: 'agent', isolation: 'inherit', report: 'silent', execution: { mode: 'direct', model } })
-  return { service, catalog, statuses, disabled, runtimes, snapshot, native, request, disableRouter: () => { routerEnabled = false } }
+  return { service, catalog, statuses, detector, disabled, runtimes, snapshot, native, request, disableRouter: () => { routerEnabled = false } }
 }
 async function fixture(options?: Parameters<typeof workbenchFixture>[0]) {
   const f = await workbenchFixture(options); open.push(f)
@@ -100,6 +100,8 @@ describe('Code harness discovery and validation', () => {
     h.disableRouter()
     await h.service.list()
     expect(probe).not.toHaveBeenCalled()
+    expect(h.detector.status).toHaveBeenCalledWith('kun')
+    expect(vi.mocked(h.detector.status).mock.calls.every(([id]) => id === 'kun')).toBe(true)
     const controller = new AbortController()
     controller.abort(new Error('discovery stopped'))
     await expect(h.service.list(controller.signal)).rejects.toThrow('discovery stopped')

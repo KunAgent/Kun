@@ -88,7 +88,7 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
   const project = basename(request.workspaceRoot)
   const opens = workbenchOpenTarget(link)
   const longRunning = kind === 'code_task' || kind === 'work_task' || kind === 'schedule_series'
-  const permissionCeiling = room.privateExecutionPolicy ? kunToolPermissionModeFromSettings(room.privateExecutionPolicy) : undefined
+  const permissionCeiling = room.privateExecutionPolicy ? kunToolPermissionModeFromSettings(room.privateExecutionPolicy) : 'ask-for-approval'
   const codeTask = kind === 'code_task' || kind === 'schedule_series'
   const invalidDraft = editing && (!draft?.title.trim() || !workbenchModelComplete(draft?.execution.model))
   const showsOptions = longRunning && ['awaiting_confirmation', 'scheduled', 'active', 'paused'].includes(status)

@@ -39,6 +39,8 @@ jobs:
             kun/package-lock.json
       - name: Install existing dependencies
         run: npm ci
+      - name: Install Electron binary for desktop smoke
+        run: npm run ensure:electron
       - name: Build actual application
         run: npm run build
       - name: Exercise isolated offline Rooms and ACP flow

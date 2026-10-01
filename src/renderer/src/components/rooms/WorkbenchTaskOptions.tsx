@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { SlidersHorizontal } from 'lucide-react'
 import { resolveCodeAgentPreset } from '../chat/code-agent-presets'
 import { WorkbenchTaskAgentPicker } from './WorkbenchTaskAgent'
-import { workbenchExternalAgent } from './workbench-agent-selection'
+import { workbenchDisplayModel, workbenchExternalAgent } from './workbench-agent-selection'
 
 export type WorkbenchTaskDraft = {
   title: string
@@ -47,11 +47,12 @@ export function WorkbenchTaskOptions({ draft, onChange, editing, onEdit, code, p
   const external = code && workbenchExternalAgent(model)
   const changeExecution = (patch: Partial<WorkbenchExecution>) => onChange({ ...draft, execution: { ...draft.execution, ...patch } })
   const permission = draft.execution.permission ?? 'ask-for-approval'
-  // Summary row: always show mode / model / permission; the rest only when non-default.
+  // The identity above already shows the Code model; keep the option summary compact.
   const items: { label: string; tone?: 'warn' | 'strong' }[] = [
     ...(project ? [{ label: project, tone: 'strong' as const }] : []),
     { label: t(`roomsWorkbenchMode_${draft.execution.mode}`) },
-    { label: model ? `${model.model}${model.reasoningEffort && model.reasoningEffort !== 'auto' ? ` · ${model.reasoningEffort}` : ''}` : t('roomsWorkbenchRuntimeModel') },
+    ...(!code ? [{ label: model ? workbenchDisplayModel(model) : t('roomsWorkbenchRuntimeModel') }] : []),
+    ...(model?.reasoningEffort && model.reasoningEffort !== 'auto' ? [{ label: `${t('roomsWorkbenchReasoning')}: ${model.reasoningEffort}` }] : []),
     ...(draft.isolation === 'worktree' ? [{ label: t('roomsWorkbenchIsolated') }] : []),
     ...(draft.execution.persona?.name ? [{ label: `${t('roomsWorkbenchPersona')}: ${draft.execution.persona.name}` }] : []),
     ...(draft.schedule?.kind === 'once' ? [{ label: `${t('roomsWorkbenchOnce')} · ${new Date(draft.schedule.runAt).toLocaleString()}` }] :
