@@ -82,7 +82,7 @@ async function runAgentModeFlow({ page, capture, poll, runtimeRequest }) {
   const nativeSource = page.getByRole('menuitem', { name: /Native sign-in|原生登录/u })
   await nativeSource.waitFor()
   await nativeSource.hover()
-  await page.getByRole('menuitemradio', { name: /^devin-fixture-alternative/u }).click()
+  await page.getByRole('menuitemradio', { name: /^Devin alternative model/u }).click()
   await model.locator('[data-model-source-icon="native-login"]').waitFor()
   assert.equal(await model.locator('[data-provider-icon="kun"]').count(), 0)
   await model.click()

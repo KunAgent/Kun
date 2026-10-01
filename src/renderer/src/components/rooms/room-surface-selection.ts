@@ -3,9 +3,7 @@ import type { Room } from '@shared/rooms-api'
 export type RoomSelectionScope = 'all' | 'private' | 'rooms'
 
 export function roomMatchesSelectionScope(room: Pick<Room, 'conversationKind'>, scope: RoomSelectionScope): boolean {
-  if (scope === 'all') return true
-  const privateChat = room.conversationKind === 'user_agent'
-  return scope === 'private' ? privateChat : !privateChat
+  return scope !== 'private' || room.conversationKind === 'user_agent'
 }
 
 export function roomWorkbenchScopeKey(selectedId: string, room: Room | null): string | null {

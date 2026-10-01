@@ -3,8 +3,10 @@
 This supersedes the default-team onboarding flow documented in
 `rooms-init-im.md`. The previous team, conversations, tasks, avatars and memory
 remain readable. Desktop Code Conversations idempotently adds one general Kun
-Agent and its private conversation; desktop Rooms lists groups. The phone keeps
-its existing chat entry. Professional templates are opt-in. See
+Agent and its private conversation. Rooms retains the former Bots IM interface
+and lists private Agent conversations alongside groups; Code Conversations is
+an additional private-chat entry. Both entries open the same room and history.
+The phone keeps its existing chat entry. Professional templates are opt-in. See
 [Code conversations and Rooms](./code-agent-chats-and-rooms.md).
 
 The UX reference is the public Grok Bot demo at <https://x.ai/bot> and its
@@ -44,6 +46,9 @@ new rule to their next user request; historical messages need no migration.
   five-person setup. Existing drafts and explicit navigation take precedence.
 - New creates a recipient chooser: existing Agent, group selection, a
   chat-defined Agent, a filled-in profile, or a professional template.
+  Rooms offers all of these through its IM sidebar. Code Conversations uses
+  the private recipient picker. Creating or opening a private Agent in Rooms
+  keeps the Rooms mode and conversation list visible.
   Identity and private room commit together. Chat definition starts a
   pending interview (`setup.status = pending`) with structured
   `user_input` cards and `commit_agent_setup`. Filling the profile, using
@@ -53,6 +58,12 @@ new rule to their next user request; historical messages need no migration.
 - Private headers show identity and the effective main model. Profile, memory,
   run history, files and context reset are in menus. Advanced policy controls
   stay collapsed; basic profile edits do not overwrite model or policy fields.
+- Code and Rooms privately address the same Agent room, with one message
+  history and draft. Editing its draft from either entry carries through to
+  the other. Project tasks and other rooms retain their own drafts.
+- Opening a private file updates the shared right panel without changing the
+  recipient or moving a Rooms conversation to Code. Explicit task links retain
+  their existing Code navigation behavior.
 - Enter sends; Shift+Enter inserts a line break. IME composition and mention
   acceptance take precedence. Cmd/Ctrl+Enter remains supported.
 - The composer starts at one line, grows to six and then scrolls. Attachments,
@@ -145,6 +156,10 @@ are updated. Storage and ownership remain in the single Kun Runtime and Manager.
   It creates and sends exclusively through the UI. Seven requests exercise file
   work, an actual switched-model response, cancellation while the model is active,
   drafts/reload, two model selections, themes and a narrow window.
+- `--workbench-only` checks the mixed Rooms IM list, existing private history
+  shared with Code, private and group creation from Rooms Add, recipient-safe
+  file previews and draft recovery across surfaces. It uses one offline greeting
+  to establish public history in its disposable profile.
 - Real acceptance used the existing configured `deepseek-v4-pro` connection with
   four user requests: greeting, file creation, continuous modification and project
   work. All passed, including actual file contents and approval UI. There were

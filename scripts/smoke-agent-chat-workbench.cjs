@@ -30,7 +30,7 @@ async function roomWorkbenchSnapshot(page) {
     const state = useChatStore.getState()
     return { route: state.route, activeThreadId: state.activeThreadId, workspaceRoot: state.workspaceRoot,
       privateRoomId: useAgentChatNavigationStore.getState().roomId,
-      groupRoomId: localStorage.getItem('kun.rooms.selected') }
+      roomsRoomId: localStorage.getItem('kun.rooms.selected') }
   })
 }
 
@@ -45,9 +45,41 @@ async function collapseRoomPanel(page) {
   await page.locator('[data-room-workbench-panel]').getByRole('button', { name: 'Collapse right sidebar', exact: true }).first().click()
 }
 
+async function waitRoomsConversation(page, poll, roomId, privateName) {
+  await poll(async () => {
+    const state = await roomWorkbenchSnapshot(page)
+    return state.route === 'rooms' && state.roomsRoomId === roomId
+  }, 15000, 'selected Rooms conversation ' + roomId)
+  const surface = page.locator('[data-room-surface="rooms"]')
+  await surface.waitFor()
+  if (privateName) await poll(async () =>
+    (await surface.locator('.direct-chat-title strong').innerText().catch(() => '')) === privateName,
+  15000, 'Rooms private recipient ' + privateName)
+  await surface.locator('.rooms-composer .rooms-rich-input').waitFor()
+}
+
+async function seedPrivateHistory({ page, request, poll, roomId }) {
+  const editor = page.locator('.rooms-composer .rooms-rich-input')
+  await editor.fill('Shared private conversation history fixture.')
+  await editor.press('Enter')
+  let completed
+  await poll(async () => {
+    const direct = await request(page, `/v1/rooms/${roomId}/direct`)
+    const current = direct.requests[0]
+    assert(!current || !['failed', 'recovery_required'].includes(current.status), JSON.stringify(current))
+    if (current?.status === 'completed') { completed = current; return true }
+    return false
+  }, 60000, 'offline private greeting establishes shared history')
+  await poll(async () => (await request(page, `/v1/rooms/${roomId}/messages`)).messages
+    .some((message) => message.originRunId === completed.runId && message.status === 'final'),
+  15000, 'private greeting public history')
+  return (await request(page, `/v1/rooms/${roomId}/messages`)).messages.map((message) => message.id)
+}
+
 async function exerciseAgentChatWorkbench({ page, request, poll, capture, fixture, workspaceRoot, openPrivate, switchRooms, switchCode }) {
   const projectDraft = 'Project task draft stays with the project.'
   const privateDraft = 'Private Agent draft stays with the recipient.'
+  const sharedPrivateDraft = privateDraft + ' Edited from Rooms.'
   const groupDraft = 'Group draft stays with the room.'
   const assertions = []
   await poll(() => page.evaluate(async () => {
@@ -85,6 +117,8 @@ async function exerciseAgentChatWorkbench({ page, request, poll, capture, fixtur
   assert.equal((await request(page, `/v1/rooms/${entry.roomId}/messages`)).messages.length, 0,
     'Empty private conversation visibility does not require a message')
   assertions.push('A freshly opened unsent and unpinned Agent conversation appears selected, with the project row unselected')
+  const historyIds = await seedPrivateHistory({ page, request, poll, roomId: entry.roomId })
+  assert(historyIds.length >= 2, 'The fixture establishes user and Agent messages for cross-surface history checks')
   const direct = await request(page, `/v1/rooms/${entry.roomId}/direct`)
   assert(direct.workspace.path && direct.workspace.path !== workspaceRoot, 'Unbound Agent has its own workspace')
   await mkdir(direct.workspace.path, { recursive: true })
@@ -118,25 +152,62 @@ async function exerciseAgentChatWorkbench({ page, request, poll, capture, fixtur
   assert.equal(await page.locator('[data-room-workbench-panel]:visible').count(), 0, 'Room previews do not leak between task selections')
   assertions.push('Project and private chat sidebar selections restore separate drafts and keep the original project scope')
 
-  const secondAgent = (await request(page, '/v1/agents', 'POST', {
-    clientRequestId: 'smoke-room-reviewer', name: 'Room reviewer fixture', instructions: 'Review the supplied fixture evidence.', defaultRole: 'reviewer'
-  })).agent
   await switchRooms()
   const sidebar = page.locator('.rooms-im-sidebar')
-  await sidebar.getByRole('button', { name: 'Group chat', exact: true }).click()
+  await sidebar.getByRole('button', { name: firstAgent.name, exact: true }).click()
+  await waitRoomsConversation(page, poll, entry.roomId, firstAgent.name)
+  await poll(async () => await editor().innerText() === privateDraft, 15000, 'Code draft restored in Rooms for the same DM')
+  assert.deepEqual((await request(page, `/v1/rooms/${entry.roomId}/messages`)).messages.map((message) => message.id), historyIds)
+  for (const id of historyIds) await page.locator('#room-message-' + id).waitFor()
+  await editor().fill(sharedPrivateDraft)
+  const roomsPrivateScope = await roomWorkbenchSnapshot(page)
+  assert.equal(roomsPrivateScope.route, 'rooms')
+  assert.equal(roomsPrivateScope.roomsRoomId, entry.roomId)
+  await previewRoomWorkspaceFile(page, 'private-evidence.txt', 'Private workspace evidence', poll)
+  assert.deepEqual(await roomWorkbenchSnapshot(page), roomsPrivateScope,
+    'Private file previews keep the Rooms route and recipient selected')
+  assert.equal(await editor().innerText(), sharedPrivateDraft)
+  await capture('workbench-03-rooms-private-preview')
+  await collapseRoomPanel(page)
+  assertions.push('Rooms opens the existing Code DM in its IM surface with identical room identity, message history and shared draft')
+
+  await sidebar.locator('.rooms-im-sidebar-new').click()
   await page.locator('.direct-new-chat').waitFor()
-  assert.equal(await page.locator('.direct-new-chat').getByRole('button', { name: 'Define in chat', exact: true }).count(), 0,
-    'Rooms picker creates only group rooms')
+  const picker = page.locator('.direct-new-chat')
+  assert.equal(await picker.getByRole('button', { name: 'Define in chat', exact: true }).count(), 1,
+    'Rooms picker offers private Agent creation')
+  assert.equal(await picker.getByRole('button', { name: 'Group chat', exact: true }).count(), 1,
+    'The same Rooms picker offers group creation')
+  await picker.getByRole('button', { name: 'Define in chat', exact: true }).click()
+  await picker.waitFor({ state: 'hidden' })
+  await poll(async () => {
+    const selected = (await roomWorkbenchSnapshot(page)).roomsRoomId
+    return Boolean(selected && selected !== entry.roomId)
+  }, 15000, 'new Rooms private conversation selected')
+  const secondPrivateId = (await roomWorkbenchSnapshot(page)).roomsRoomId
+  const secondPrivate = (await request(page, `/v1/rooms/${secondPrivateId}`)).room
+  assert.equal(secondPrivate.conversationKind, 'user_agent')
+  const secondAgent = (await request(page, '/v1/agents')).agents.find((agent) =>
+    agent.id === secondPrivate.members[0].participantAgentId)
+  assert(secondAgent)
+  await waitRoomsConversation(page, poll, secondPrivate.id, secondAgent.name)
+  assert.equal((await roomWorkbenchSnapshot(page)).route, 'rooms', 'Private creation stays in Rooms')
+  await capture('workbench-04-rooms-new-private-chat')
+  assertions.push('Rooms plus creates a new private Agent without leaving the IM mode')
+
+  await sidebar.locator('.rooms-im-sidebar-new').click()
+  await picker.waitFor()
+  await picker.getByRole('button', { name: 'Group chat', exact: true }).click()
   for (const name of [firstAgent.name, secondAgent.name]) {
     await page.locator('.direct-agent-choices button').filter({ hasText: name }).first().click()
   }
   await page.getByRole('button', { name: 'Start group (2 Agents)', exact: true }).click()
   await page.locator('.direct-new-chat').waitFor({ state: 'hidden' })
   await poll(async () => {
-    const selected = (await roomWorkbenchSnapshot(page)).groupRoomId
-    return Boolean(selected && selected !== entry.roomId)
+    const selected = (await roomWorkbenchSnapshot(page)).roomsRoomId
+    return Boolean(selected && selected !== secondPrivate.id)
   }, 15000, 'new group selection after asynchronous room-kind lookup')
-  const createdGroupId = (await roomWorkbenchSnapshot(page)).groupRoomId
+  const createdGroupId = (await roomWorkbenchSnapshot(page)).roomsRoomId
   assert(createdGroupId && createdGroupId !== entry.roomId)
   const initialGroup = (await request(page, `/v1/rooms/${createdGroupId}`)).room
   assert.equal(initialGroup.conversationKind, 'group')
@@ -147,15 +218,18 @@ async function exerciseAgentChatWorkbench({ page, request, poll, capture, fixtur
     repositories: [{ id: 'source', displayPath: workspaceRoot, displayName: 'Source repository' }]
   })).room
   await page.getByRole('heading', { name: new RegExp('^' + group.name) }).waitFor()
-  const listed = await request(page, '/v1/rooms/sidebar?kind=group')
-  assert(listed.entries.length > 0 && listed.entries.every((item) => item.kind === 'group'))
+  const listed = await request(page, '/v1/rooms/sidebar?kind=all')
+  assert(listed.entries.some((item) => item.roomId === entry.roomId && item.kind === 'user_agent'))
+  assert(listed.entries.some((item) => item.roomId === group.id && item.kind === 'group'))
+  await sidebar.locator('[data-sidebar-entry="room:' + group.id + '"]').waitFor()
+  await sidebar.locator('[data-sidebar-entry="room:' + entry.roomId + '"]').waitFor()
   const ids = await sidebar.locator('[data-sidebar-entry]').evaluateAll((elements) => elements.map((element) => element.dataset.sidebarEntry))
-  assert(ids.includes('room:' + group.id) && !ids.includes('room:' + entry.roomId), 'Rooms default list excludes private chats')
-  assert.equal(await page.locator('.sidebar-agent-chats').count(), 0, 'Rooms owns its own group navigation')
+  assert(ids.includes('room:' + group.id) && ids.includes('room:' + entry.roomId), 'Rooms default IM list contains private and group chats together')
+  assert.equal(await page.locator('.sidebar-agent-chats').count(), 0, 'Rooms uses its own IM navigation')
   await editor().fill(groupDraft)
   const groupScope = await roomWorkbenchSnapshot(page)
   assert.equal(groupScope.route, 'rooms')
-  assert.equal(groupScope.groupRoomId, group.id)
+  assert.equal(groupScope.roomsRoomId, group.id)
   await previewRoomWorkspaceFile(page, 'baseline.txt', 'baseline', poll)
   assert.deepEqual(await roomWorkbenchSnapshot(page), groupScope)
   assert.equal(await editor().innerText(), groupDraft)
@@ -165,30 +239,37 @@ async function exerciseAgentChatWorkbench({ page, request, poll, capture, fixtur
       () => { throw new Error('File preview attempted to open a Code task') }, roomId)
   }, { workspaceRoot, roomId: group.id })
   assert.deepEqual(await roomWorkbenchSnapshot(page), groupScope, 'A referenced group file keeps the room and sender selected')
-  await capture('workbench-03-rooms-group-preview')
+  await capture('workbench-05-rooms-group-preview')
   await collapseRoomPanel(page)
-  assertions.push('Rooms default list contains group rooms, and file-tree plus content-reference previews preserve the room sender and draft')
+  assertions.push('The same Rooms picker creates a group; private and group chats share the IM list, and group file previews preserve its sender and draft')
 
   await switchCode()
   await openPrivate(firstAgent.name)
-  assert.equal(await editor().innerText(), privateDraft)
+  assert.equal((await roomWorkbenchSnapshot(page)).privateRoomId, entry.roomId)
+  assert.equal(await editor().innerText(), sharedPrivateDraft)
+  assert.deepEqual((await request(page, `/v1/rooms/${entry.roomId}/messages`)).messages.map((message) => message.id), historyIds)
+  for (const id of historyIds) await page.locator('#room-message-' + id).waitFor()
   await switchRooms()
-  await editor().waitFor()
-  assert.equal((await roomWorkbenchSnapshot(page)).groupRoomId, group.id)
+  await waitRoomsConversation(page, poll, group.id)
   assert.equal(await editor().innerText(), groupDraft)
-  await capture('workbench-04-rooms-group-draft')
+  await sidebar.getByRole('button', { name: firstAgent.name, exact: true }).click()
+  await waitRoomsConversation(page, poll, entry.roomId, firstAgent.name)
+  assert.equal(await editor().innerText(), sharedPrivateDraft)
+  await capture('workbench-06-rooms-shared-private-history')
   await switchCode()
   await openPrivate(firstAgent.name)
-  assert.equal(await editor().innerText(), privateDraft)
+  assert.equal(await editor().innerText(), sharedPrivateDraft)
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.locator('[data-workspace-mode-trigger]').first().waitFor()
   await openPrivate(firstAgent.name)
-  assert.equal(await editor().innerText(), privateDraft)
+  assert.equal(await editor().innerText(), sharedPrivateDraft)
   assert.equal((await roomWorkbenchSnapshot(page)).workspaceRoot, workspaceRoot)
-  await capture('workbench-05-restored-code-private-chat')
-  assertions.push('Switching Rooms and Code plus reloading the app restores the correct private and group drafts')
-  assert.equal(fixture.snapshot().mainCalls, 0, 'Navigation, previews and fixture setup do not call a model')
+  await capture('workbench-07-restored-code-private-chat')
+  assertions.push('Code and Rooms open the same DM with identical history and shared draft; project and group drafts stay scoped and reload recovers the DM')
+  assert.equal(fixture.snapshot().real, false, 'This acceptance uses the isolated offline model fixture')
+  assert.equal(fixture.snapshot().blocked, 0)
   return { projectThreadId: project.id, privateRoomId: entry.roomId, groupRoomId: group.id,
+    roomsCreatedPrivateId: secondPrivate.id, sharedHistoryIds: historyIds, historyUserRequests: 1,
     privateWorkspace: direct.workspace.path, projectWorkspace: workspaceRoot, assertions }
 }
 

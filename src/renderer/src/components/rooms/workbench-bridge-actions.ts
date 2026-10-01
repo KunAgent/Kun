@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { RoomContentReference, WorkbenchDirectory } from '@shared/rooms-api'
 import i18n from '../../i18n'
-import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/browser-storage'
+import { readBrowserStorageItem, subscribeBrowserStorageMutations, writeBrowserStorageItem } from '../../lib/browser-storage'
 import { useChatStore } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { roomRequestId, roomsClient, roomsRequest } from './rooms-client'
@@ -11,11 +11,14 @@ import { AGENT_CHAT_SELECTED_KEY, openAgentConversationRoom } from './agent-chat
 
 const tr = (key: string, options?: Record<string, unknown>): string => i18n.t(key, { ns: 'common', ...options })
 
-/** The bot conversation new hand-offs go to: the selected private Agent chat, else the most recent one. */
-export async function resolveBotRoomId(): Promise<string | null> {
+/** Rooms prefers its current Agent DM; other surfaces prefer the Code Agent shortcut. */
+export async function resolveBotRoomId(route = useChatStore.getState().route): Promise<string | null> {
+  const roomsSelected = readBrowserStorageItem('kun.rooms.selected')
+  const codeSelected = readBrowserStorageItem(AGENT_CHAT_SELECTED_KEY)
   const page = await roomsClient.list(false, undefined, undefined, '', { conversationKind: 'user_agent' })
-  const selected = readBrowserStorageItem(AGENT_CHAT_SELECTED_KEY) ?? readBrowserStorageItem('kun.rooms.selected')
-  if (selected && page.rooms.some((room) => room.id === selected)) return selected
+  for (const selected of route === 'rooms' ? [roomsSelected, codeSelected] : [codeSelected, roomsSelected]) {
+    if (selected && page.rooms.some((room) => room.id === selected)) return selected
+  }
   if (page.rooms[0]) return page.rooms[0].id
   const entry = await roomsRequest<{ roomId?: string }>('/v1/agents/chat-entry', 'POST', { action: 'initialize', clientRequestId: roomRequestId() })
   return entry.roomId ?? null
@@ -29,8 +32,19 @@ const referenceKey = (reference: RoomContentReference): string => JSON.stringify
  * optional text land in the private chat's draft, and the user decides what to ask.
  */
 export async function sendReferencesToBot(input: { references: RoomContentReference[]; body?: string }): Promise<void> {
+  const route = useChatStore.getState().route
+  const selectionKeys = ['kun.rooms.selected', AGENT_CHAT_SELECTED_KEY]
+  const selections = selectionKeys.map(readBrowserStorageItem)
+  let navigated = false
+  const offRoute = useChatStore.subscribe((state, previous) => {
+    if (state.route !== previous.route || state.activeThreadId !== previous.activeThreadId ||
+      state.workspaceRoot !== previous.workspaceRoot) navigated = true
+  })
+  const offSelection = subscribeBrowserStorageMutations(({ key }) => {
+    if (selectionKeys.includes(key)) navigated = true
+  })
   try {
-    const roomId = await resolveBotRoomId()
+    const roomId = await resolveBotRoomId(route)
     if (!roomId) return showWorkbenchFlash(tr('roomsWorkbenchNoBot'), 'error')
     const key = `kun.rooms.draft.${roomId}`
     let draft: StoredDraft = {}
@@ -40,9 +54,17 @@ export async function sendReferencesToBot(input: { references: RoomContentRefere
     const body = [draft.body?.trim(), input.body?.trim()].filter(Boolean).join('\n\n')
     writeBrowserStorageItem(key, JSON.stringify({ mentions: [], taskId: '', repositoryId: '', intent: 'auto', attachments: [], requestId: '', fingerprint: '',
       ...draft, body, references: merged }))
-    openAgentConversationRoom(roomId)
+    window.dispatchEvent(new CustomEvent('kun-room-draft-updated', { detail: { roomId } }))
+    if (navigated || useChatStore.getState().route !== route ||
+      selectionKeys.some((key, index) => readBrowserStorageItem(key) !== selections[index])) return
+    if (route === 'rooms') {
+      writeBrowserStorageItem('kun.rooms.selected', roomId)
+      window.dispatchEvent(new CustomEvent('kun-room-open', { detail: { roomId } }))
+    } else openAgentConversationRoom(roomId)
   } catch (cause) {
     showWorkbenchFlash(cause instanceof Error ? cause.message : String(cause), 'error')
+  } finally {
+    offRoute(); offSelection()
   }
 }
 

@@ -205,18 +205,25 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     )
     let emitQueue: Promise<void> = Promise.resolve()
     let streamError: AcpError | undefined
+    let rejectStream!: (error: AcpError) => void
+    const streamFailure = new Promise<never>((_resolve, reject) => { rejectStream = reject })
+    // Setup may emit notifications before the prompt wait is attached.
+    void streamFailure.catch(() => undefined)
+    const failStream = (error: unknown): void => {
+      if (streamError) return
+      streamError = error instanceof AcpError ? error : new AcpError('harness_protocol_error', String(error))
+      rejectStream(streamError)
+    }
     const sink = (update: SessionUpdate | { sessionUpdate: string }): void => {
+      if (streamError) return
       let drafts
       try {
         drafts = mapper.apply(update)
       } catch (error) {
-        streamError ??=
-          error instanceof AcpError
-            ? error
-            : new AcpError('harness_protocol_error', String(error))
+        failStream(error)
         return
       }
-      emitQueue = emitQueue.then(() => emitter.emitAll(drafts))
+      emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream)
     }
 
     const kunToolsServers = this.deps.kunToolsMcp?.servers({
@@ -254,7 +261,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     // Protocol errors on this session's traffic fail the turn (§9).
     const unsubscribeSessionErrors = conn.subscribeSession(session.sessionId, {
       onUpdate: () => undefined,
-      onError: (error: AcpError) => { streamError ??= error }
+      onError: failStream
     })
 
     const preparation = session.preparation
@@ -397,11 +404,12 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     else signal.addEventListener('abort', onAbort, { once: true })
 
     try {
-      const raw = await conn.rpc.request(
+      if (streamError) throw streamError
+      const raw = await Promise.race([conn.rpc.request(
         ACP_AGENT_METHODS.sessionPrompt,
         { sessionId: session.sessionId, prompt },
         { timeoutMs: limits.maxWallTimeMs }
-      )
+      ), streamFailure])
       promptSettled = true
       await emitQueue
       const parsed = AcpPromptResultSchema.safeParse(raw)
@@ -451,6 +459,10 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       return outcome
     } catch (error) {
       promptSettled = true
+      if (streamError) {
+        conn.rpc.notify(ACP_AGENT_METHODS.sessionCancel, { sessionId: session.sessionId })
+        this.pool.markUnhealthy(poolKey)
+      }
       await emitQueue.catch(() => undefined)
       await emitter.emitAll(mapper.flush()).catch(() => undefined)
       await finishAcpTrace(trace, { kind: 'error', error })

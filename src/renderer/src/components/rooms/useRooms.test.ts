@@ -60,15 +60,30 @@ describe('Rooms view state', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
-  async function mount(): Promise<void> {
+  async function mount(options?: Parameters<typeof useRooms>[2]): Promise<void> {
     function Harness() {
-      state = useRooms()
+      state = useRooms('group', true, options)
       return null
     }
     await act(async () => {
       renderer = create(createElement(Harness))
     })
   }
+
+  it('loads private history in the Rooms surface without discarding the selected private room', async () => {
+    client.get.mockImplementation(async (id) => ({ room: { ...room, id, conversationKind: 'user_agent' } }))
+    await mount({ scope: 'rooms', initialSelectedId: 'private-room' })
+    expect(state.selectedId).toBe('private-room')
+    expect(state.room).toMatchObject({ id: 'private-room', conversationKind: 'user_agent' })
+    expect(state.messages.map((message) => message.id)).toEqual(['m2'])
+  })
+
+  it('still rejects group selection in the Code private-chat shortcut', async () => {
+    await mount({ scope: 'private', initialSelectedId: 'group-room' })
+    expect(state.selectedId).toBe('')
+    expect(state.room).toBeNull()
+    expect(state.messages).toEqual([])
+  })
 
   function pagedRooms() {
     const records = Array.from({ length: 101 }, (_, index) => ({ ...room, id: `room-${index}`,

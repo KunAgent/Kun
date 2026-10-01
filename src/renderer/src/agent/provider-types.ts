@@ -332,7 +332,8 @@ export interface AgentProvider {
   /** Models a harness accepts (01 §9): static, probed, or provider-derived. */
   listHarnessModels?(
     harnessId: string,
-    credentialMode?: string
+    credentialMode?: string,
+    selectedModel?: string
   ): Promise<import('@shared/ade-harnesses').AdeHarnessModels>
   /** Force fresh detection for one harness; returns the updated row. */
   probeHarness?(

@@ -73,10 +73,11 @@ function RoomComposerEditor({
   draftId,
   replyTarget,
   topicChoices = [],
-  onSend, onStop, onConnectProject, responding, autoFocus = true, quickTools = false, modelControl
+  onSend, onStop, onConnectProject, responding, autoFocus = true, quickTools = false, modelControl, compactControls = true
 }: {
   onStop?: () => void
   modelControl?: ReactNode
+  compactControls?: boolean
   /** Show emoji / mention / attach / poll directly in the toolbar (desktop IM layout). */
   quickTools?: boolean
   onConnectProject?: () => void
@@ -98,6 +99,14 @@ function RoomComposerEditor({
     return { ...stored, body: missing.map((id) => roomMentionToken(id,
       room.members.find((member) => member.id === id)?.displayName ?? id)).join(' ') + (missing.length ? ' ' : '') + stored.body }
   })
+  useEffect(() => {
+    if (draftId) return
+    const refresh = (event: Event): void => {
+      if ((event as CustomEvent<{ roomId?: string }>).detail?.roomId === room.id) setDraft(readDraft(storageId))
+    }
+    window.addEventListener('kun-room-draft-updated', refresh)
+    return () => window.removeEventListener('kun-room-draft-updated', refresh)
+  }, [room.id, storageId, draftId])
   const draftRef = useRef(draft)
   draftRef.current = draft
   const [busy, setBusy] = useState(false)
@@ -455,12 +464,14 @@ function RoomComposerEditor({
           onIntent={(intent) => patch({ intent })} onStop={onStop} responding={responding} onConnectProject={onConnectProject}
           recipientLabel={sendMentions.length || room.collaborationMode === 'directed'
             ? addressed.map((member) => member.displayName).join(', ') : t('roomsAllMembers')}
-          privateControls={room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId
+          privateControls={compactControls && room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId
             ? <RoomPermissionPicker roomId={room.id} compact /> : undefined}
           modelControl={modelControl}
           references={<RoomContentReferencePicker showLabel room={room} tasks={tasks} references={draft.references}
             onChange={(references) => patch({ references })} disabled={disabled} />} quickTools={quickTools} />
       </fieldset>
+      {!compactControls && room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId
+        ? <RoomPermissionPicker roomId={room.id} /> : null}
       {room.conversationKind !== 'user_agent' && !room.repositories.length ? (
         <p className="rooms-run-note">{t('roomsRepositoryRequiredHint')}</p>
       ) : null}

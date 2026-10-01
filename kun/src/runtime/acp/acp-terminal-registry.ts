@@ -10,6 +10,7 @@
 import type { ChildProcess } from 'node:child_process'
 import { spawnOwnedProcess, stopOwnedProcess } from '../../process/owned-process.js'
 import { ACP_RPC_ERROR, AcpError } from './acp-schema.js'
+import { resolveAcpTerminalCommand } from './acp-terminal-command.js'
 
 /** Default and ceiling for the per-terminal output ring. */
 export const ACP_TERMINAL_DEFAULT_BYTE_LIMIT = 256 * 1024
@@ -79,7 +80,10 @@ export class AcpTerminalRegistry {
       Math.max(1, Math.trunc(input.outputByteLimit ?? ACP_TERMINAL_DEFAULT_BYTE_LIMIT)),
       ACP_TERMINAL_MAX_BYTE_LIMIT
     )
-    const child = await this.spawn(input.command, input.args ?? [], {
+    const invocation = await resolveAcpTerminalCommand(input.command, input.args ?? [], {
+      cwd: input.cwd, env: input.env ?? {}
+    })
+    const child = await this.spawn(invocation.command, invocation.args, {
       cwd: input.cwd,
       env: input.env ?? {}
     })
@@ -117,6 +121,7 @@ export class AcpTerminalRegistry {
     }
     child.once('exit', onExit)
     child.once('error', () => onExit(null, null))
+    if (child.exitCode !== null && child.exitCode !== undefined) onExit(child.exitCode, child.signalCode)
     this.terminals.set(id, handle)
     exitPromise.catch(() => undefined)
     return { terminalId: id }

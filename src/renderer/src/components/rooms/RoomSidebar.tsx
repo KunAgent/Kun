@@ -14,8 +14,9 @@ import { setRoomSidebarEntryDeleted, toggleRoomSidebarEntryArchived } from './ro
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/browser-storage'
 import { RoomModal } from './RoomModal'
 
-type Kind = 'group' | 'agent_agent'
-export function RoomSidebar({ selectedRoomId, onSelect, onCreateGroup, onSearch,
+type Kind = 'all' | 'agents' | 'group' | 'agent_agent'
+const MIXED_KIND_KEY = 'kun.rooms.sidebar.mixed-kind'
+export function RoomSidebar({ selectedRoomId, onSelect, onCreateAgent, onSearch,
   onProfile, onTeam, onManage, onActivity, onDeleted }: {
   selectedRoomId: string; onOpenAgent: (id: string) => void; onSelect: (id: string) => void
   onCreateAgent: () => void; onCreateGroup: () => void; onDetails: (id: string) => void
@@ -24,7 +25,10 @@ export function RoomSidebar({ selectedRoomId, onSelect, onCreateGroup, onSearch,
 }) {
   const { t } = useTranslation('common')
   const [kind, setKind] = useState<Kind>(() => {
-    const old = readBrowserStorageItem('kun.rooms.sidebar.kind'); return old === 'agent_agent' ? old : 'group'
+    // Old versions persisted a forced group-only value; explicit mixed-list
+    // filters have their own preference so first entry always shows all chats.
+    const saved = readBrowserStorageItem(MIXED_KIND_KEY)
+    return saved === 'agents' || saved === 'group' || saved === 'agent_agent' ? saved : 'all'
   })
   const [filter, setFilter] = useState<'all' | 'unread' | 'attention'>('all'), [archived, setArchived] = useState(false)
   const [deletedOnly, setDeletedOnly] = useState(false)
@@ -84,18 +88,14 @@ export function RoomSidebar({ selectedRoomId, onSelect, onCreateGroup, onSearch,
     finally { setDeleting(false) }
   }
   return <div className="rooms-im-sidebar">
-    <div className="rooms-im-sidebar-sections" role="group" aria-label={t('roomsLabel')}>
-      <button type="button" aria-pressed={kind === 'group'} onClick={() => { setKind('group'); writeBrowserStorageItem('kun.rooms.sidebar.kind', 'group') }}>{t('roomsSidebar_group')}</button>
-      <button type="button" aria-pressed={kind === 'agent_agent'} onClick={() => { setKind('agent_agent'); writeBrowserStorageItem('kun.rooms.sidebar.kind', 'agent_agent') }}>{t('roomsSidebar_agent_agent')}</button>
-    </div>
     <div className="rooms-im-sidebar-toolbar">
       <div className="rooms-list-search"><Search size={15} /><input value={search} onChange={(e) => { setSearch(e.target.value); setFullSearch(false) }}
         aria-label={t('roomsSidebarSearch')} placeholder={t('roomsSidebarSearch')} />{search ? <button aria-label={t('roomsClose')} onClick={() => setSearch('')}><X size={14} /></button> : null}</div>
-      <button type="button" aria-label={t('directCreateGroup')} title={t('directCreateGroup')} className="rooms-icon-button rooms-im-sidebar-new" onClick={() => { setDeletedOnly(false); onCreateGroup() }}><Plus size={18} /></button>
+      <button type="button" aria-label={t('roomsSidebarNew')} title={t('roomsSidebarNew')} className="rooms-icon-button rooms-im-sidebar-new" onClick={() => { setDeletedOnly(false); onCreateAgent() }}><Plus size={18} /></button>
       <RoomPopover label={t('roomsSidebarFilter')} trigger={<SlidersHorizontal size={16} />} className="rooms-icon-button" align="end" width={280}>
         {() => <div className="rooms-sidebar-filter-menu"><label>{t('roomsSidebarKind')}<select value={kind} onChange={(e) => {
-          const value = e.target.value as Kind; setKind(value); writeBrowserStorageItem('kun.rooms.sidebar.kind', value)
-        }}>{(['group', 'agent_agent'] as const).map((value) => <option key={value} value={value}>{t('roomsSidebar_' + value)}</option>)}</select></label>
+          const value = e.target.value as Kind; setKind(value); writeBrowserStorageItem(MIXED_KIND_KEY, value)
+        }}>{(['all', 'agents', 'group', 'agent_agent'] as const).map((value) => <option key={value} value={value}>{t('roomsSidebar_' + value)}</option>)}</select></label>
           <RoomListFilters filter={filter} archived={archived} repositoryRoot={repository} onRepository={setRepository}
             onFilter={(value) => { setDeletedOnly(false); setArchived(value === 'archived'); setFilter(value === 'archived' ? 'all' : value) }} />
         </div>}
@@ -110,8 +110,8 @@ export function RoomSidebar({ selectedRoomId, onSelect, onCreateGroup, onSearch,
         setSearch(''); setRepository(''); setFullSearch(false)
       }}>{t('roomsRecentlyDeleted')}</button>
     </div>
-    {archived || repository ? <button className="rooms-sidebar-active-filter" onClick={() => {
-      setArchived(false); setFilter('all'); setRepository('')
+    {kind !== 'all' || archived || repository ? <button className="rooms-sidebar-active-filter" onClick={() => {
+      setKind('all'); setArchived(false); setFilter('all'); setRepository(''); writeBrowserStorageItem(MIXED_KIND_KEY, 'all')
     }}>{t('roomsSidebar_' + kind)}{archived ? ' · ' + t('roomsArchivedConversations') : ''}{repository ? ' · ' + repository.split('/').at(-1) : ''}<X size={12} /></button> : null}
     {search.trim().length >= 2 ? <button className="rooms-sidebar-search-all" onClick={() => setFullSearch(!fullSearch)}>{t(fullSearch ? 'roomsSidebarChatsOnly' : 'roomsSidebarSearchAll')}</button> : null}
     {fullSearch && search.trim().length >= 2 ? <RoomUnifiedSearch query={search} repositoryRoot={repository} includeArchived={archived} onSelect={(hit) => { onSearch(hit); setSearch(''); setFullSearch(false) }} /> :

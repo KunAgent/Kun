@@ -108,7 +108,7 @@ export function useCodeProjectDefaults({
   const modelCatalogStatus = useChatStore((state) => state.composerModelCatalogStatus)
   const draftCollaboration = useChatStore((state) => state.composerCollaborationEnabled)
   useEffect(() => {
-    if (!enabled || typeof window === 'undefined') return
+    if (!enabled || typeof window === 'undefined' || typeof window.kunGui?.getSettings !== 'function') return
     let cancelled = false
     let settingsChanged = false
     const apply = (value: AppSettingsV1): void => {

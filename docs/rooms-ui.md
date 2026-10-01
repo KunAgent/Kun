@@ -1,7 +1,9 @@
 # Rooms conversation interface
 
-Desktop private Agent chats live in Code's Conversations section; Rooms retains
-group and Agent collaboration lists. Both use the Code right workbench components.
+Rooms keeps the former Bots IM conversation interface. Its default list combines
+Agent private chats and group rooms, with filters and an Agent directory.
+Code's lower Conversations section offers another entry to the same private
+chats. Both use the Code right workbench components.
 See [Code conversations and Rooms](./code-agent-chats-and-rooms.md).
 
 The Rooms interface borrows Cumora's conversation hierarchy while using Kun's
@@ -10,10 +12,14 @@ execution intent, approval, task recovery, or delivery protocols.
 
 ## Conversation layout
 
-- A 320px conversation list shows local member avatars, a current message
-  preview, its timestamp, unread markers, and real activity counts.
-- The header contains the room name, members, collaboration mode, message
-  search, details, and a menu for room settings, pinning, and archival.
+- A resizable IM list shows local Agent or group avatars, a current message
+  preview, its timestamp, unread markers, and real activity counts. Private
+  and group conversations appear together in the default view.
+- Add opens one picker for an existing Agent, a new private Agent or a group.
+  A private selection keeps the Rooms sidebar and mode visible.
+- Private headers show the Agent identity and model, with profile, memory,
+  history, files and context actions. Group headers show the room name,
+  members, collaboration mode, search and room settings.
 - The 400px details panel opens on demand. Below 1280px it becomes an overlay;
   below 768px the conversation list also opens as an overlay.
 - Message authors remain left aligned. Static 38px avatars and historical
@@ -32,15 +38,21 @@ execution intent, approval, task recovery, or delivery protocols.
 ## Composer and details
 
 The composer grows from 40px to 200px before scrolling internally. Its toolbar
-contains attachments, member mentions, Add context, topic selection, execution
-intent, and Send. Task and repository selectors live in Add context; selected
-values appear as removable chips. Replies, files, and mentioned members share
-the area above the text input.
+contains attachments, emoji, Add context and Send. Private chats use a fixed
+Agent recipient, model and permission controls. Groups add member mentions,
+polls, topic selection and Auto/Discuss/Execute intent. Task and repository
+selectors live in Add context; selected values appear as removable chips.
+Replies, files, and mentioned members share the area above the text input.
 
-Enter inserts a newline; Cmd/Ctrl+Enter sends. Mention navigation takes keyboard
+Enter sends; Shift+Enter inserts a newline; Cmd/Ctrl+Enter also sends. Mention navigation takes keyboard
 priority, and composing text with an input method never accidentally sends.
 Failed sends retain their draft and request identity. The existing local-file
 attachment contract remains in use.
+
+Opening the same private chat from Code or Rooms uses its existing message
+history and draft. Switching between distinct rooms or project tasks restores
+their own drafts. Shared file and content-reference previews update the right
+panel while retaining the current recipient, conversation and workspace mode.
 
 Topic cards show their title, status, and stop/continue actions first. Member
 details and response counters are collapsed under Members and response budgets.
@@ -68,6 +80,7 @@ build, and the authored-file line limit. Then use the offline Electron fixture:
 ```sh
 node scripts/smoke-development-rooms.cjs --ui-only --evidence dist/rooms-ui-smoke
 node scripts/smoke-development-rooms.cjs --ui-visual --evidence dist/rooms-ui-full-smoke
+node scripts/smoke-development-direct-chat.cjs --workbench-only --evidence /tmp/kun-rooms-mixed-im-smoke
 ```
 
 The fixture uses isolated settings, a temporary Manager profile, synthetic

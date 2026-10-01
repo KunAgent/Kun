@@ -36,7 +36,7 @@ type HarnessStoreState = {
   rowsLoadedAt?: number
   rowsLoading: boolean
   rowsError?: string
-  models: Record<string, { models: string[]; modelInfo?: AdeHarnessModels['modelInfo']; loadedAt?: number; loading: boolean; error?: string }>
+  models: Record<string, { models: string[]; modelInfo?: AdeHarnessModels['modelInfo']; detailsModel?: string; loadedAt?: number; loading: boolean; error?: string }>
   /**
    * Provider-grouped models for `provider`/`kun-gateway` credential modes
    * (12 §7.2): the exposable providers each harness turn could address. The
@@ -176,20 +176,26 @@ export async function loadHarnesses(
   }
 }
 
-export async function loadHarnessModels(harnessId: string, force = false): Promise<void> {
+export async function loadHarnessModels(harnessId: string, force = false, selectedModel?: string): Promise<void> {
   const provider = getProvider()
   if (!provider.listHarnessModels) return
   const existing = useHarnessStore.getState().models[harnessId]
-  if (existing?.loading || (existing && !existing.error && !force && Date.now() - (existing.loadedAt ?? 0) < 60_000)) return
+  if (existing?.loading || (existing && !existing.error && !force &&
+    (!selectedModel || existing.detailsModel === selectedModel) && Date.now() - (existing.loadedAt ?? 0) < 60_000)) return
   const generation = generationFor(harnessId)
   useHarnessStore.setState((state) => ({
     models: { ...state.models, [harnessId]: { ...existing, models: existing?.models ?? [], loading: true } }
   }))
   try {
-    const result = await provider.listHarnessModels(harnessId)
+    const result = selectedModel ? await provider.listHarnessModels(harnessId, undefined, selectedModel) : await provider.listHarnessModels(harnessId)
+    if (selectedModel && !result.models.length) throw new Error('Native model details are temporarily unavailable')
     if (generation !== generationFor(harnessId)) return
     useHarnessStore.setState((state) => ({
-      models: { ...state.models, [harnessId]: { models: result.models, modelInfo: result.modelInfo,
+      models: { ...state.models, [harnessId]: { models: result.models, modelInfo: result.modelInfo?.map((entry) => {
+        const previous = existing?.modelInfo?.find((old) => old.id === entry.id)
+        return { ...(entry.reasoningEfforts === undefined && previous?.reasoningEfforts !== undefined
+          ? { reasoningEfforts: previous.reasoningEfforts, defaultReasoningEffort: previous.defaultReasoningEffort } : {}), ...entry }
+      }), detailsModel: selectedModel,
         loadedAt: Date.now(), loading: false } }
     }))
   } catch (error) {
@@ -200,6 +206,7 @@ export async function loadHarnessModels(harnessId: string, force = false): Promi
         [harnessId]: {
           models: existing?.models ?? [],
           modelInfo: existing?.modelInfo,
+          detailsModel: selectedModel,
           loading: false,
           error: error instanceof Error ? error.message : String(error)
         }

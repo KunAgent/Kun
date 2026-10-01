@@ -24,6 +24,7 @@ export function createRoomNotificationNavigator({ onGroup, isStopped }: {
     if (!target.roomId || isStopped()) return
     const currentSerial = serial
     const controller = new AbortController()
+    const stayInRooms = useChatStore.getState().route === 'rooms'
     const initialSelections = SELECTION_KEYS.map(readBrowserStorageItem)
     const offRoute = useChatStore.subscribe((state, previous) => {
       if (state.route !== previous.route || state.activeThreadId !== previous.activeThreadId ||
@@ -41,11 +42,16 @@ export function createRoomNotificationNavigator({ onGroup, isStopped }: {
       if (!current() || room.deletedAt || room.id !== target.roomId) return
       if (room.conversationKind === 'user_agent') {
         // Keep Agent navigation out of the module cycle through agent-client.
-        const { openAgentConversationRoom } = await import('./agent-chat-navigation')
+        const { openAgentConversationRoom, useAgentChatNavigationStore } = await import('./agent-chat-navigation')
         if (!current()) return
         offRoute(); offStorage()
-        openAgentConversationRoom(room.id, target.runId || target.messageId
-          ? { runId: target.runId, messageId: target.messageId } : undefined)
+        const navigationTarget = target.runId || target.messageId
+          ? { runId: target.runId, messageId: target.messageId } : undefined
+        if (stayInRooms) {
+          useAgentChatNavigationStore.setState({ target: navigationTarget ? { roomId: room.id, ...navigationTarget } : null })
+          writeBrowserStorageItem(SELECTION_KEYS[0], room.id)
+          onGroup(room.id)
+        } else openAgentConversationRoom(room.id, navigationTarget)
       } else {
         offRoute(); offStorage()
         writeBrowserStorageItem(SELECTION_KEYS[0], room.id)
