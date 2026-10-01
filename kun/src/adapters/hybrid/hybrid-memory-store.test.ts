@@ -156,6 +156,7 @@ describe('HybridMemoryStore', () => {
       await store.createWithId('mem_recover', {
         content: 'Recover indexed retrieval without restart', scope: 'workspace', workspace: '/workspace-a'
       })
+      await store.waitForBackfill()
 
       await expect(store.retrieve({ query: 'recover indexed', workspace: '/workspace-a', limit: 3 }))
         .resolves.toMatchObject([{ id: 'mem_recover' }])
@@ -194,6 +195,7 @@ describe('HybridMemoryStore', () => {
       await store.createWithId('mem_list_recover', {
         content: 'Recover indexed list without restart', scope: 'workspace', workspace: '/workspace-a'
       })
+      await store.waitForBackfill()
       await expect(store.list({ workspace: '/workspace-a' }))
         .resolves.toMatchObject([{ id: 'mem_list_recover' }])
       expect(await store.diagnostics()).toMatchObject({
