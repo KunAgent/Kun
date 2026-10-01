@@ -89,5 +89,11 @@ pagination, disconnect races, expired QR and explicit UI consent.
 offline model that invokes the real connection-card tool, captures native
 wide/narrow screenshots, verifies durable Skip, and checks safeStorage with a
 disposable string. It never clicks authorization or connects a real account.
+The OS probe runs separately from UI evidence and fails explicitly if blocked.
+In the unpackaged Electron macOS CI run, both native provider-card flows passed,
+but the real safeStorage probe timed out; credential-store verification remains
+open. Electron documents that its synchronous macOS API can wait for Keychain
+user interaction. The workflow never unlocks or creates keychains to bypass it.
+[Electron 43.1 safeStorage documentation](https://github.com/electron/electron/blob/v43.1.0/docs/api/safe-storage.md)
 Live platform authorization and real-message round trips require a user's
 explicit scan and were not performed as part of implementation.

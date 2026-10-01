@@ -13,7 +13,9 @@ async function exercisePersonalAgentIm({ page, request, poll, capture, openPriva
     await editor.press('Enter')
     await poll(async () => (await request(page, `/v1/rooms/${entry.roomId}/messages`)).messages
       .some((message) => message.appConnection?.serverId === 'im.' + provider), 60000, provider + ' proposal from actual Agent tool')
-    const card = page.locator('.rooms-im-connection-card').last()
+    // The durable tool result can arrive before React has rendered its card.
+    // Bind the provider identity instead of reusing the previous card's node.
+    const card = page.getByRole('region', { name: provider === 'feishu' ? 'Connect Feishu / Lark' : 'Connect WeChat', exact: true }).last()
     await card.waitFor()
     process.stdout.write('[personal-im-smoke] Capturing ' + provider + ' native card\n')
     assert((await card.innerText()).includes('verified scanning account'))
@@ -46,16 +48,19 @@ async function exercisePersonalAgentIm({ page, request, poll, capture, openPriva
 // Separate launch/evidence from UI smoke: an interactive OS keychain can block
 // this probe, but must not prevent retaining successful card screenshots.
 async function exercisePersonalAgentImStorage({ application }) {
+  const host = await application.evaluate(({ app }) => ({ ready: app.isReady(), processType: process.type, electron: process.versions.electron }))
+  process.stdout.write('[personal-im-storage] Main-process state: ' + JSON.stringify(host) + '\n')
+  assert(host.ready && host.processType === 'browser', 'Storage must run in the ready Electron main process')
   process.stdout.write('[personal-im-storage] Checking actual OS safeStorage\n')
+  const available = await application.evaluate(({ safeStorage }) => safeStorage.isEncryptionAvailable())
+  process.stdout.write('[personal-im-storage] OS encryption availability: ' + available + '\n')
+  assert(available, 'OS credential store is unavailable; real credential protection remains unverified')
   const storage = await application.evaluate(({ safeStorage }) => {
-    const available = safeStorage.isEncryptionAvailable()
-    if (!available) return { available: false, plaintextFallback: false }
     const ciphertext = safeStorage.encryptString('isolated-im-credential-fixture')
     return { available: true, roundTrip: safeStorage.decryptString(ciphertext) === 'isolated-im-credential-fixture',
       encrypted: !ciphertext.toString().includes('isolated-im-credential-fixture') }
   })
   process.stdout.write('[personal-im-storage] OS safeStorage fixture: ' + JSON.stringify(storage) + '\n')
-  assert(storage.available, 'OS credential store is unavailable; real credential protection remains unverified')
   assert(storage.roundTrip); assert(storage.encrypted)
   return { storage, liveAuthorizationAttempted: false }
 }

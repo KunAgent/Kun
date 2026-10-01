@@ -36,7 +36,16 @@ jobs:
       - name: Verify native proposals and explicit consent boundary
         timeout-minutes: 8
         run: node scripts/smoke-development-direct-chat.cjs --personal-im-only --evidence dist/personal-agent-im-smoke
+      - name: Inspect runner keychain configuration read-only
+        timeout-minutes: 1
+        run: |
+          security list-keychains -d user
+          security default-keychain -d user
+          security show-keychain-info || true
       - name: Probe real OS safeStorage in a separate bounded launch
+        # Diagnostic commands inspect only this disposable runner. Never unlock,
+        # create, replace or change the access policy of any keychain.
+        # A blocked probe remains a failed verification, not a mocked success.
         timeout-minutes: 4
         run: node scripts/smoke-development-direct-chat.cjs --personal-im-storage-only --evidence dist/personal-agent-im-storage
       - uses: actions/upload-artifact@v4
