@@ -10,6 +10,7 @@ import { _electron } from 'playwright-core'
 import { createServer, optimizeDeps } from 'vite'
 import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes, requiredPolishProblems } from './settings-ui-smoke-geometry.mjs'
 import { annotateSettingsTabs, scrollSettingsDetail } from './settings-ui-smoke-dom.mjs'
+import { captureReadySettingsDetail } from './settings-ui-smoke-detail.mjs'
 
 // Native offline renderer smoke; no app build, runtime, provider network or secrets.
 // node scripts/smoke-settings-ui.mjs [--baseline] [--quick] [--serve]
@@ -240,13 +241,19 @@ async function capture(category, panel, config) {
   if (detailKind) {
     const controlId = detailKind === 'general-switch'
       ? actual.controls.find(control => control.role === 'switch')?.id : null
-    const detail = await page.evaluate(scrollSettingsDetail, { kind: detailKind, controlId })
-    assert.ok(detail, `Scrolled detail target must exist: ${key} ${detailKind}`)
-    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
     const file = `${phase}-${key}-detail-${detailKind}.png`
-    const pixels = await captureNativeImage(file)
+    const result = await captureReadySettingsDetail({
+      position: () => page.evaluate(scrollSettingsDetail, { kind: detailKind, controlId }),
+      paintFrames: () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))),
+      wait: delay => page.waitForTimeout(delay), now: () => performance.now(),
+      read: () => page.evaluate(scrollSettingsDetail, { kind: detailKind, controlId, readOnly: true }),
+      capture: () => captureNativeImage(file)
+    })
+    const { detail, pixels, positionedDetail, timing } = result
     report.screenshots.push({ file, category, panel, ...config, native, pixels,
-      diagnostic: `Scrolled detail: ${detailKind}`, detail })
+      diagnostic: `Settled scrolled detail: ${detailKind}`, detail, positionedDetail, timing })
+    assert.ok(positionedDetail, `Scrolled detail target must exist: ${key} ${detailKind}`)
+    assert.ok(detail, `Settled detail target must exist: ${key} ${detailKind}`)
     if (phase === 'after') assert.ok(detail.fullyVisible,
       `Scrolled detail target must fit the final viewport: ${JSON.stringify(detail)}`)
   }

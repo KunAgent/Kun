@@ -37,14 +37,15 @@ export function annotateSettingsTabs(elements) {
   })
 }
 
-export function scrollSettingsDetail({ kind, controlId }) {
+export function scrollSettingsDetail({ kind, controlId, readOnly = false }) {
   const target = kind === 'general-switch'
     ? document.querySelector(`[data-settings-smoke-control="${controlId}"]`)
     : [...document.querySelectorAll('[role="tab"][id^="model-routes-settings-tab-"]')]
       .find(element => !element.closest('[hidden]') && element.getClientRects().length > 0)
       ?.closest('[role="tablist"]')
   if (!target) return null
-  target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })
+  // A readiness sample must read the settled position, never restart scrolling.
+  if (!readOnly) target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })
   const rect = element => {
     const { x, y, width, height, right, bottom } = element.getBoundingClientRect()
     return { x, y, width, height, right, bottom }
