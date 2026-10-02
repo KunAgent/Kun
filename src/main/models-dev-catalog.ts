@@ -1,5 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import {
   getModelProviderSettings,
   resolveModelProviderProxyUrl,
@@ -12,6 +11,7 @@ import type {
   ModelsDevCatalogSource
 } from '../shared/kun-gui-api'
 import { fetchWithOptionalProxy } from './proxy-fetch'
+import { atomicWriteFile } from './atomic-json-file'
 import {
   catalogSourceLabel,
   isRecord,
@@ -229,6 +229,7 @@ export class ModelsDevCatalogService {
   private inFlight: Promise<LoadedCatalog> | null = null
   private diskCachePath: string | null = null
   private diskLoaded = false
+  private diskPersist: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly fetcher: ModelsDevFetch = fetchWithOptionalProxy,
@@ -276,23 +277,21 @@ export class ModelsDevCatalogService {
     const path = this.diskCachePath
     const cache = this.cache
     if (!path || !cache) return
-    void (async () => {
-      try {
-        await mkdir(dirname(path), { recursive: true })
-        // Write-then-rename keeps readers from observing a torn cache file
-        // when a background refresh overlaps an earlier persist.
-        const tmp = `${path}.tmp`
-        await writeFile(tmp, JSON.stringify({
-          catalog: cache.catalog,
-          source: cache.source,
-          fetchedAt: cache.fetchedAt,
-          ...(cache.etag ? { etag: cache.etag } : {})
-        }), 'utf8')
-        await rename(tmp, path)
-      } catch {
+    const contents = JSON.stringify({
+      catalog: cache.catalog,
+      source: cache.source,
+      fetchedAt: cache.fetchedAt,
+      ...(cache.etag ? { etag: cache.etag } : {})
+    })
+    // Keep persistence off the fetch path, but publish snapshots in refresh
+    // order. A shared .tmp file can be truncated by the next background write;
+    // unique atomic files also protect readers from separate service instances.
+    this.diskPersist = this.diskPersist
+      .then(() => atomicWriteFile(path, contents))
+      .catch(() => {
         // Cache persistence is best-effort; never fail a catalog fetch on it.
-      }
-    })()
+        // Swallow this write's failure so the next snapshot can still commit.
+      })
   }
 
   async fetch(
