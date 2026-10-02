@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { privateExecutionBinding } from './agent-direct-execution.js'
 import { legacyAgentFiles } from './agent-legacy-files.js'
 import { AgentArtifactQuery } from '../contracts/agent-artifacts.js'
 import { artifactReference } from './agent-artifact-library.js'
@@ -55,8 +56,11 @@ export async function directActivity(rooms: RoomRuntime, roomId: string) {
     firstVisibleAt: run?.value.firstVisibleAt, lastVisibleAt: run?.value.lastVisibleAt
   } : undefined
   const workspace = await privateWorkspace(rooms, room)
+  const cancellingSteer = activeRows.some((row) => row.value.steer?.targetRunId === activeRow?.value.privateRunId &&
+    (row.value.cancellationRequested || row.value.status === 'stopping'))
+  const execution = cancellingSteer ? undefined : await privateExecutionBinding(rooms, room, activeRow)
   // A merged request already folded into the running reply is not queued work.
-  return { requests, active, activity, pendingCount: activeRows.filter((row) => row.value.privateProtocol && !row.value.steer).length, workspace,
+  return { requests, active, activity, ...(execution ? { execution } : {}), pendingCount: activeRows.filter((row) => row.value.privateProtocol && !row.value.steer).length, workspace,
     approvals: active?.threadId ? rooms.deps.approvals.pending(active.threadId) : [],
     userInputs: active?.threadId ? rooms.deps.inputs.pending(active.threadId) : [] }
 }

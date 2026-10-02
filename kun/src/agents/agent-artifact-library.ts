@@ -3,8 +3,9 @@ import { createHash } from 'node:crypto'
 import { extname } from 'node:path'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
-import type { Room } from '../contracts/rooms.js'
-import type { RoomContentReference } from '../contracts/room-content.js'
+import type { Room, RoomMessage } from '../contracts/rooms.js'
+import type { RoomRunRecord } from '../contracts/room-runs.js'
+import type { RoomArtifactSourceTarget, RoomContentReference } from '../contracts/room-content.js'
 import { AgentArtifactSchema, AgentArtifactVersionSchema, AgentArtifactQuery, AgentArtifactVersionQuery,
   type AgentArtifact, type AgentArtifactVersion } from '../contracts/agent-artifacts.js'
 import { readRoomRepositoryFile } from '../rooms/room-file-content.js'
@@ -49,6 +50,30 @@ export class AgentArtifactLibrary {
     if (!row || row.value.participantAgentId !== agentId || row.value.artifactId !== id) throw new Error('agent artifact not found')
     if (version !== undefined && row.value.version !== version) throw new Error('artifact version not found')
     return { ...row.value, revision: row.revision }
+  }
+
+  /** Resolve only this saved version's durable source in the caller's exact private conversation. */
+  async sourceTarget(roomId: string, meta: AgentArtifact | AgentArtifactVersion): Promise<RoomArtifactSourceTarget | undefined> {
+    if (meta.roomId !== roomId) return
+    const room = await this.deps.store.get<Room>('room', roomId)
+    const member = room?.value.members[0]
+    if (room?.value.id !== roomId || room.value.conversationKind !== 'user_agent' || room.value.deletedAt ||
+      member?.participantAgentId !== meta.participantAgentId) return
+    const source = await this.deps.store.get<RoomRunRecord>('room_run', meta.sourceRunId)
+    if (!source || source.roomId !== roomId || source.value.roomId !== roomId || source.value.id !== meta.sourceRunId ||
+      source.value.participantAgentId !== meta.participantAgentId || source.value.memberId !== member.id ||
+      source.value.phase !== 'conversation') return
+    const target: RoomArtifactSourceTarget = { roomId, participantAgentId: meta.participantAgentId, runId: source.id }
+    const messageId = meta.sourceMessageId ?? source.value.publishedMessageId
+    const message = messageId ? await this.deps.store.get<RoomMessage>('message', messageId) : undefined
+    // A corrupt/missing message must not prevent inspecting a correctly scoped saved run.
+    if (message?.roomId === roomId && message.value.roomId === roomId && message.value.id === messageId &&
+      message.value.authorKind === 'member' && message.value.authorMemberId === member.id &&
+      (!message.value.authorAgentId || message.value.authorAgentId === meta.participantAgentId) &&
+      message.value.originRunId === source.id && message.value.references?.some((ref) => ref.kind === 'agent_file' &&
+        ref.artifactId === meta.artifactId && ref.artifactVersion === meta.version &&
+        ref.workspaceId === meta.workspaceId && ref.relativePath === meta.relativePath)) target.messageId = messageId
+    return target
   }
 
   async list(agentId: string, raw: unknown = {}) {

@@ -37,6 +37,8 @@ async function roomWorkbenchSnapshot(page) {
 async function previewRoomWorkspaceFile(page, name, content, poll) {
   await page.locator('.rooms-workbench-rail').getByRole('button', { name: 'Files', exact: true }).click()
   const active = () => page.locator('[data-room-workbench-panel] [role="tabpanel"]:not([aria-hidden="true"])')
+  const workspaceTab = active().locator('.rooms-private-file-tabs').getByRole('button', { name: 'Workspace', exact: true })
+  if (await workspaceTab.count()) await workspaceTab.click()
   await active().getByRole('button', { name: new RegExp('^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).first().click()
   await poll(async () => (await active().innerText()).includes(content), 15000, 'shared preview for ' + name)
 }

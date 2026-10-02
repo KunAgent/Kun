@@ -1,0 +1,78 @@
+name: Personal Agent workspace native smoke
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/renderer/src/components/rooms/**'
+      - 'src/renderer/src/components/AgentBrowserPanel*'
+      - 'src/renderer/src/components/agent-browser-panel-lifecycle*'
+      - 'src/renderer/src/locales/*/common/rooms*'
+      - 'src/main/browser-use/**'
+      - 'src/preload/index.ts'
+      - 'src/shared/browser-use.ts'
+      - 'src/shared/kun-gui-api-surface.ts'
+      - 'src/shared/rooms-api.ts'
+      - 'kun/src/agents/agent-direct*'
+      - 'kun/src/agents/agent-artifact*'
+      - 'kun/src/contracts/room-content.ts'
+      - 'kun/src/rooms/room-content*'
+      - 'scripts/smoke-personal-agent-workspace*'
+      - 'scripts/smoke-development-direct-chat.cjs'
+      - 'scripts/smoke-agent-chat-workbench.cjs'
+      - 'scripts/smoke-direct-model*'
+      - 'scripts/personal-agent-workspace-workflow.test.cjs'
+      - 'docs/personal-agent-workspace.md'
+      - '.github/workflows/personal-agent-workspace-smoke.yml'
+permissions:
+  contents: read
+concurrency:
+  group: personal-agent-workspace-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-workspace:
+    name: Offline native workspace (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 50
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci
+      - name: Verify offline fixture and workflow contracts
+        run: node --test scripts/smoke-direct-model.test.cjs scripts/smoke-personal-agent-workspace.test.cjs scripts/personal-agent-workspace-workflow.test.cjs
+      - name: Verify persisted private execution and artifact authority
+        working-directory: kun
+        run: npx vitest run src/agents/agent-direct-execution.test.ts src/agents/agent-direct.test.ts src/agents/agent-artifact-source.test.ts
+      - name: Verify renderer and native browser authority boundaries
+        run: >-
+          npx vitest run src/main/browser-use/browser-use-manager.turn-binding.test.ts
+          src/main/browser-use/register-browser-use-ipc.test.ts
+          src/main/browser-use/network-policy.test.ts
+          src/renderer/src/components/AgentBrowserPanel.lifecycle.test.ts
+          src/renderer/src/components/rooms/RoomAgentBrowser.test.ts
+          src/renderer/src/components/rooms/RoomDirectFiles.test.ts
+          src/renderer/src/components/rooms/RoomContentPreview.test.ts
+      - name: Build actual application
+        run: npm run build
+      - name: Ensure native Electron binary
+        run: npm run ensure:electron
+      - name: Exercise real private workspace and exact-origin browser consent
+        timeout-minutes: 10
+        run: node scripts/smoke-development-direct-chat.cjs --personal-workspace-only --evidence dist/personal-agent-workspace-smoke
+      - name: Upload native screenshots and verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-agent-workspace-${{ matrix.os }}
+          path: dist/personal-agent-workspace-smoke
+          if-no-files-found: warn
+          retention-days: 14

@@ -20,5 +20,10 @@
   "roomsArtifactExport": "导出已保存版本",
   "roomsArtifactSearch": "搜索已保存文件",
   "roomsArtifactMore": "加载更多文件",
-  "roomsArtifactMoreVersions": "加载更早版本"
+  "roomsArtifactMoreVersions": "加载更早版本",
+  "roomsArtifactOpenSource": "查看来源对话",
+  "roomsArtifactSourceUnavailable": "来源对话不可用",
+  "roomsArtifactNoSearchResults": "没有匹配的文件",
+  "roomsArtifactSavedFiles": "已保存文件",
+  "roomsArtifactWorkspaceFiles": "工作区"
 }

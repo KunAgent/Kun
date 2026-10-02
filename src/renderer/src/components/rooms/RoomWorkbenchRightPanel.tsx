@@ -1,7 +1,7 @@
 import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
 import { FileEdit, Files, Globe2, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { Room, RoomMessage } from '@shared/rooms-api'
+import type { AgentDirectActivity, Room, RoomContentReference, RoomMessage } from '@shared/rooms-api'
 import type { ChatBlock } from '../../agent/types'
 import { chatBlockFromItem } from '../../agent/kun-mapper-events'
 import { BUILTIN_RIGHT_PANEL_IDS, type RightPanelContributionId } from '../../extensions/contribution-ids'
@@ -14,6 +14,8 @@ import { RoomPanelResizeHandle } from './RoomPanelResizeHandle'
 import { ROOM_COLLABORATION_TAB, type RoomWorkbenchPanel } from './useRoomWorkbenchPanel'
 import { useRoomRun } from './useRoomRun'
 import { presentRoomRunItems } from './room-run-presentation'
+import { RoomAgentBrowser } from './RoomAgentBrowser'
+import { RoomDirectFiles } from './RoomDirectChat'
 import './rooms-workbench.css'
 
 const WorkspaceFilePreviewPanel = lazy(() => import('../WorkspaceFilePreviewPanel').then((value) => ({ default: value.WorkspaceFilePreviewPanel })))
@@ -23,6 +25,12 @@ const ChangeInspector = lazy(() => import('../ChangeInspector').then((value) => 
 export type RoomWorkbenchRightPanelProps = {
   room: Room | null
   directWorkspace?: string
+  directActivity?: AgentDirectActivity | null
+  directError?: string
+  selectedRunId?: string
+  onRefreshDirect?: () => void
+  onCurrentBrowser?: () => void
+  onOpenContent?: (reference: RoomContentReference) => void
   runId?: string
   messages: RoomMessage[]
   collaboration: ReactNode
@@ -34,11 +42,13 @@ export type RoomWorkbenchRightPanelProps = {
 
 /** Both room surfaces use the Code file, browser and changes components. */
 export function RoomWorkbenchRightPanel({
-  room, directWorkspace, runId, messages, collaboration, panel,
+  room, directWorkspace, directActivity, directError, selectedRunId, onRefreshDirect, onCurrentBrowser, onOpenContent, runId, messages, collaboration, panel,
   onCollaborationOpen, onCollaborationClose, onAddReference
 }: RoomWorkbenchRightPanelProps) {
   const { t } = useTranslation('common')
   const preferences = useRoomPresentationPreferences()
+  const [privateFiles, setPrivateFiles] = useState<{ roomId?: string; workspace: boolean }>({ workspace: false })
+  const showSavedFiles = room?.conversationKind === 'user_agent' && !(privateFiles.roomId === room.id && privateFiles.workspace)
   const [fileView, setFileView] = useState<WorkbenchFileTreeSidePanelView>('workspace')
   const workspaceRoot = room?.conversationKind === 'user_agent'
     ? directWorkspace ?? room.privateWorkspace ?? ''
@@ -86,18 +96,28 @@ export function RoomWorkbenchRightPanel({
             <Suspense fallback={<div className="grid h-full place-content-center text-xs text-ds-muted">{t('roomsLoading')}</div>}>
               {id === ROOM_COLLABORATION_TAB ? collaboration ?? <div className="grid h-full place-content-center p-5 text-center text-xs text-ds-muted">
                 <button className="rooms-workbench-empty-action" onClick={onCollaborationOpen}>{t('roomsWorkbenchCollaboration', { defaultValue: 'Collaboration' })}</button>
-              </div> : id === BUILTIN_RIGHT_PANEL_IDS.files ? <WorkbenchFileTreeSidePanel
+              </div> : id === BUILTIN_RIGHT_PANEL_IDS.files ? <>
+                {room?.conversationKind === 'user_agent' ? <div className="rooms-private-file-tabs" role="group" aria-label={t('directFiles')}>
+                  <button type="button" aria-pressed={showSavedFiles} onClick={() => setPrivateFiles({ roomId: room.id, workspace: false })}>{t('roomsArtifactSavedFiles', { defaultValue: 'Saved files' })}</button>
+                  <button type="button" aria-pressed={!showSavedFiles} onClick={() => setPrivateFiles({ roomId: room.id, workspace: true })}>{t('roomsArtifactWorkspaceFiles', { defaultValue: 'Workspace' })}</button>
+                </div> : null}
+                {showSavedFiles && room ? <RoomDirectFiles key={room.id} room={room} onOpen={(reference) => onOpenContent?.(reference)} /> : <WorkbenchFileTreeSidePanel
                 key={room?.id} open embedded view={fileView} width={preferences.detailWidth}
                 workspaceRoot={workspaceRoot} extraWorkspaceRoots={extraRoots}
                 designWorkspaceRoot={workspaceRoot} designDocuments={[]}
                 selectedTarget={panel.fileTarget} onViewChange={setFileView}
                 onPreviewFile={(path, root) => panel.previewFile({ path, workspaceRoot: root ?? workspaceRoot })}
                 onAddReference={(reference) => onAddReference?.(reference)}
-              /> : id === BUILTIN_RIGHT_PANEL_IDS.file ? <WorkspaceFilePreviewPanel
+              />}
+              </> : id === BUILTIN_RIGHT_PANEL_IDS.file ? <WorkspaceFilePreviewPanel
                 target={panel.fileTarget} openTargets={panel.fileTargets} workspaceRoot={workspaceRoot}
                 className="h-full min-h-0 w-full" onSelectTarget={panel.previewFile} onCloseTarget={panel.closeFile}
                 onClose={() => close(id)} onToggleFileTree={() => open(BUILTIN_RIGHT_PANEL_IDS.files)}
-              /> : id === BUILTIN_RIGHT_PANEL_IDS.browser ? <DevBrowserPanel
+              /> : id === BUILTIN_RIGHT_PANEL_IDS.browser ? room?.conversationKind === 'user_agent' ? <RoomAgentBrowser
+                key={room.id} roomId={room.id} activity={directActivity} error={directError} active={active}
+                selectedRunId={selectedRunId} onRefresh={onRefreshDirect ?? (() => undefined)}
+                onCurrent={onCurrentBrowser ?? (() => undefined)}
+              /> : <DevBrowserPanel
                 key={room?.id} blocks={blocks} workspaceRoot={workspaceRoot}
                 activeThreadId={null} embedded className="h-full min-h-0 w-full" onCollapse={panel.collapse}
               /> : id === BUILTIN_RIGHT_PANEL_IDS.changes ? room && runId ? <RoomRunChanges
@@ -113,7 +133,7 @@ export function RoomWorkbenchRightPanel({
     </aside> : null}
     <nav aria-label={t('rightPanelTabs')} className="rooms-workbench-rail ds-no-drag flex w-10 shrink-0 flex-col items-center gap-2 border-l border-ds-border-muted bg-ds-sidebar py-3">
       {tools.map(({ id, label, icon: Icon }) => <button key={id} type="button"
-        className="rooms-icon-button" aria-label={label} title={label}
+        className="rooms-icon-button" data-room-tool={id === BUILTIN_RIGHT_PANEL_IDS.browser ? 'browser' : undefined} aria-label={label} title={label}
         aria-pressed={tabs.expanded && tabs.activeId === id}
         onClick={() => tabs.expanded && tabs.activeId === id ? panel.collapse() : open(id)}>
         <Icon size={17} strokeWidth={1.7} />

@@ -63,6 +63,7 @@ import { RoomExcalidrawPanel } from './RoomExcalidrawPanel'
 import { RoomAppsPanel } from './RoomAppsPanel'
 import { useRoomExcalidrawStore, roomExcalidrawBoard } from './room-excalidraw-store'
 import { RoomWorkbenchRightPanel } from './RoomWorkbenchRightPanel'
+import { RoomAgentBrowserStatus } from './RoomAgentBrowser'
 import { ROOM_COLLABORATION_TAB, useRoomWorkbenchPanel } from './useRoomWorkbenchPanel'
 import { AGENT_CHAT_SELECTED_KEY, openAgentConversation, openAgentConversationRoom, useAgentChatNavigationStore } from './agent-chat-navigation'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
@@ -126,6 +127,8 @@ export function RoomsWorkspaceView({
   } }), [drawerState, openCollaboration])
   const openDrawer = drawer.open
   const topFrameKey = drawer.frames.at(-1)?.key
+  const currentFrame = useRef(topFrameKey); currentFrame.current = topFrameKey
+  const currentPanel = useRef(panel.state); currentPanel.current = panel.state
   useEffect(() => { if (topFrameKey !== undefined) openCollaboration() }, [topFrameKey, openCollaboration])
   useEffect(() => {
     const open = () => openDrawer({ kind: 'profile' })
@@ -459,6 +462,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
                 resolvedAnswer={choiceReplies[message.clientRequestId ?? '']}
                 setupPending={setupPending} onUpdated={async () => { await direct.refresh(); await state.refresh() }} onSkipSetup={skipSetup} />}
             />}
+            {privateChat ? <RoomAgentBrowserStatus roomId={room.id} activity={direct.data} error={direct.error}
+              onOpen={() => { drawer.close(); panel.openTab(BUILTIN_RIGHT_PANEL_IDS.browser) }} /> : null}
             {privateChat ? <RoomDirectProgress room={room} state={direct} onRun={openRun} openRunId={openRunId} onModels={() => drawer.open({ kind: 'models' })} activityInTimeline gatesInTimeline /> : null}
             {room.conversationKind === 'agent_agent' ? <p className="agent-conversation-note">{t('agentsPairReadOnly')}</p> : <>
               <RoomComposer
@@ -496,6 +501,8 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
         onClose={() => useRoomExcalidrawStore.getState().closeBoard()} /> : null}
       </section>
       <RoomWorkbenchRightPanel room={room} directWorkspace={direct.data?.workspace.path}
+        directActivity={direct.data} directError={direct.error} selectedRunId={openRunId}
+        onRefreshDirect={direct.refresh} onCurrentBrowser={drawer.close} onOpenContent={openContent}
         runId={openRunId ?? latestRunId} messages={messages} panel={panel}
         onCollaborationOpen={() => privateChat && latestRunId ? openRun(latestRunId) : drawer.section('members')}
         onCollaborationClose={drawer.close}
@@ -528,9 +535,21 @@ const openRunId = topDrawerTarget?.kind === 'run' ? topDrawerTarget.runId : unde
             onClose={drawer.back} onRun={openRun} onOpenThread={onOpenThread} onUpdated={() => void state.refresh()} />
           if (target.kind === 'reply') return <RoomReplyThread key={key} room={room} messageId={target.messageId} tasks={state.tasks} active={active}
             onSend={send} onPin={pin} onTask={openTask} onRun={openRun} onMember={openMember} onOpenContent={openContent} />
-          if (target.kind === 'content') return <RoomContentPreview key={key} room={room} reference={target.reference} messageId={target.messageId}
-            onOpenCode={onOpenThread} onOpenTarget={onOpenContentTarget ?? ((value) => openRoomContentTarget(value, onOpenThread, room.id,
-              () => mounted.current && selectedRoomRef.current === room.id && panelScopeRef.current === panelScope && useChatStore.getState().route === surface))} />
+          if (target.kind === 'content') {
+            const isCurrent = () => mounted.current && selectedRoomRef.current === room.id && panelScopeRef.current === panelScope &&
+              currentFrame.current === key && currentPanel.current.expanded && currentPanel.current.activeId === ROOM_COLLABORATION_TAB &&
+              useChatStore.getState().route === surface
+            return <RoomContentPreview key={key} room={room} reference={target.reference} messageId={target.messageId}
+              onOpenCode={onOpenThread} onOpenTarget={(value) => {
+                if (!isCurrent()) return
+                return onOpenContentTarget ? onOpenContentTarget(value) : openRoomContentTarget(value, onOpenThread, room.id, isCurrent)
+              }} onOpenSource={(source) => {
+                if (!isCurrent() || room.conversationKind !== 'user_agent' || source.roomId !== room.id ||
+                  source.participantAgentId !== room.members[0]?.participantAgentId) return
+                if (source.messageId) { setJumpMessageId(source.messageId); drawer.close(); panel.collapse() }
+                else openRun(source.runId)
+              }} />
+          }
           if (target.kind === 'files') return <RoomDirectFiles key={key} room={room} onOpen={(reference) => openContent(reference)} />
           if (target.kind === 'reminders') return room ? <RoomReminderList key={key} room={room} active={active} /> : null
           if (target.kind === 'models') return agentId ? <AgentModelSettings key={key} agentId={agentId} room={room} variant="panel"

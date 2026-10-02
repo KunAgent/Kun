@@ -96,7 +96,7 @@ html[data-remote-surface='mobile'] .rooms-notice-dismiss { padding: 6px; }
 .direct-model-settings > .rooms-run-primary { display: block; margin: 20px 0 0 auto; }
 .direct-advanced { padding-top: 8px; }
 .direct-advanced > summary { cursor: pointer; color: var(--ds-text-muted); margin-bottom: 12px; }
-.direct-file-list { display: grid; padding: 8px 24px 24px; gap: 8px; }
+.direct-file-list { display: grid; align-content: start; padding: 8px 24px 24px; gap: 8px; }
 .direct-file-list button { display: flex; gap: 8px; padding: 10px; text-align: left; border-radius: 8px; background: var(--ds-surface-hover); }
 @media (max-width: 767px) {
   .rooms-workspace .rooms-composer { padding: 10px 12px 14px; }
@@ -146,3 +146,5 @@ html[data-remote-surface='mobile'] .rooms-notice-dismiss { padding: 6px; }
   background: var(--ds-surface-card); color: var(--ds-text); font-size: 12px;
 }
 .direct-new-chat-error button:hover:not(:disabled) { background: var(--ds-surface-hover); }
+
+.direct-file-page { display: grid; align-content: start; gap: 8px; }

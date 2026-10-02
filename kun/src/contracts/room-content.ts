@@ -41,6 +41,13 @@ export type RoomContentOpenTarget =
   | { kind: 'thread'; threadId: string; turnId?: string }
   | { kind: 'board'; workspaceRoot: string; cardId: string }
   | { kind: 'excalidraw_board'; workspaceRoot: string; boardId: string }
+/** A validated source in the current personal Agent conversation, never a raw thread redirect. */
+export type RoomArtifactSourceTarget = {
+  roomId: string
+  participantAgentId: string
+  runId: string
+  messageId?: string
+}
 export type RoomContentResult = {
   reference: RoomContentReference
   state: 'available' | 'unavailable'
@@ -57,6 +64,7 @@ export type RoomContentResult = {
   thumbnail?: RoomPreviewImage
   preview?: { type: 'text'; text: string; truncated: boolean } | { type: 'image'; image: RoomPreviewImage } |
     { type: 'media'; dataBase64: string; mimeType: string }
+  sourceTarget?: RoomArtifactSourceTarget
   openTarget?: RoomContentOpenTarget
 }
 export type RoomLinkPreview = {

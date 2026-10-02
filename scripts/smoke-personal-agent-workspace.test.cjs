@@ -1,0 +1,23 @@
+'use strict'
+const assert = require('node:assert/strict')
+const test = require('node:test')
+const { startWorkspaceBrowserPage } = require('./smoke-personal-agent-workspace.cjs')
+
+test('browser fixture serves one isolated loopback document without remote dependencies', async (t) => {
+  const fixture = await startWorkspaceBrowserPage()
+  t.after(() => fixture.close())
+  const url = new URL(fixture.url)
+  assert.equal(url.hostname, '127.0.0.1')
+  assert.equal(url.pathname, '/workspace-browser')
+  assert.deepEqual(fixture.snapshot(), { pageRequests: 0 })
+  const response = await fetch(fixture.url)
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.get('cache-control'), 'no-store')
+  assert.equal(response.headers.get('content-security-policy'), "default-src 'none'; style-src 'unsafe-inline'")
+  const body = await response.text()
+  assert.match(body, /Personal workspace browser evidence/)
+  assert.doesNotMatch(body, /<script|<iframe|<form|https?:\/\/|src=/i)
+  assert.equal((await fetch(new URL('/outside', fixture.url))).status, 404)
+  assert.equal((await fetch(fixture.url, { method: 'POST' })).status, 404)
+  assert.deepEqual(fixture.snapshot(), { pageRequests: 1 })
+})

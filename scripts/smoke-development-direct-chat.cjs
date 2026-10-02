@@ -5,6 +5,7 @@
 // All model responses are deterministic and offline. Application settings, data,
 // discovery/control files, Git repositories and processes belong to this run.
 const { exercisePersonalAgentIm, exercisePersonalAgentImStorage } = require('./smoke-personal-agent-im.cjs')
+const { exercisePersonalAgentWorkspace } = require('./smoke-personal-agent-workspace.cjs')
 const { startDirectModel } = require('./smoke-direct-model.cjs')
 const { exerciseDirectChat } = require('./smoke-direct-controls.cjs')
 const { exercisePinStream } = require('./smoke-rooms-pin-stream.cjs')
@@ -42,6 +43,8 @@ const VALIDATION_COMMAND = `node -e "console.log('rooms verification proof')"`
 
 async function main() {
   const repositoryRoot = resolve(__dirname, '..')
+  assert(!(process.argv.includes('--personal-workspace-only') && process.argv.includes('--real-model')),
+    'Personal workspace evidence must stay offline')
   const timeoutMs = positiveIntegerArgument('--timeout-ms', 180_000)
   const evidenceRoot = resolve(argumentValue('--evidence') ?? join(repositoryRoot, 'dist', 'rooms-direct-smoke'))
   for (const entry of ['out/main/index.js', 'kun/dist/cli/serve-entry.js']) {
@@ -66,9 +69,9 @@ async function main() {
   let rendererOutput = '', electronOutput = ''
   const pageErrors = []
   const screenshots = []
-  const capture = async (name) => {
+  const capture = async (name, surface = page) => {
     const path = join(evidenceRoot, `${name}.png`)
-    await page.screenshot({ path })
+    await surface.screenshot({ path })
     screenshots.push(path)
   }
   try {
@@ -99,6 +102,10 @@ async function main() {
     settings.agents.kun.baseUrl = modelFixture.baseUrl
     settings.agents.kun.apiKey = 'rooms-desktop-offline-fixture'
     settings.agents.kun.model = modelFixture.snapshot().model
+    if (process.argv.includes('--personal-workspace-only')) {
+      // Existing exact-origin local-development policy; public SSRF rules stay unchanged.
+      settings.agents.kun.browserUse = { ...settings.agents.kun.browserUse, enabled: true, mode: 'local-development' }
+    }
     const allocatedPorts = new Set([runtimePort, rendererPort, new URL(modelFixture.baseUrl).port].map(Number))
     const nextPort = async () => {
       let port
@@ -144,7 +151,8 @@ async function main() {
     await page.waitForLoadState('domcontentloaded')
     await resize(electronApplication, 1360, 900)
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
-    const exercise = process.argv.includes('--personal-im-storage-only') ? exercisePersonalAgentImStorage
+    const exercise = process.argv.includes('--personal-workspace-only') ? exercisePersonalAgentWorkspace
+      : process.argv.includes('--personal-im-storage-only') ? exercisePersonalAgentImStorage
       : process.argv.includes('--personal-im-only') ? exercisePersonalAgentIm
       : process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
       : process.argv.includes('--approvals') ? exerciseRoomApprovals
@@ -155,7 +163,9 @@ async function main() {
       switchCode: () => switchMode(page, 'chat'),
       openPrivate: (name) => openAgentPrivateChat({ page, name, switchCode: () => switchMode(page, 'chat') }),
       approve: (ref) => installNativeConsentFixture(electronApplication, ref) })
-    const direct = await (process.argv.includes('--personal-im-storage-only')
+    const direct = await (process.argv.includes('--personal-workspace-only')
+      ? withTimeout(exercised, 300_000, 'exercising the offline personal workspace')
+      : process.argv.includes('--personal-im-storage-only')
       ? withTimeout(exercised, 15_000, 'probing actual OS credential storage; verification blocked')
       : process.argv.includes('--personal-im-only') ? withTimeout(exercised, 180_000, 'exercising native IM cards') : exercised)
     assert.deepEqual(pageErrors, [], 'Renderer uncaught exceptions')

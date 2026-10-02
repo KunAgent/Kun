@@ -627,14 +627,14 @@ export type KunGuiApi = GoogleWorkspaceSurface & ExtensionIpcApi & RemoteSshApi 
   requestComputerUsePermission: (
     kind: ComputerUsePermissionKind
   ) => Promise<ComputerUsePermissions>
-  getBrowserUseState: (threadId: string) => Promise<BrowserUseViewState>
+  getBrowserUseState: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
   mountBrowserUse: (input: BrowserUseMountInput) => Promise<BrowserUseViewState>
   decideBrowserUseOrigin: (input: BrowserUseDecisionInput) => Promise<BrowserUseViewState>
   decideBrowserUseAction: (input: BrowserUseDecisionInput) => Promise<BrowserUseViewState>
   setBrowserUseControl: (input: BrowserUseControlInput) => Promise<BrowserUseViewState>
   navigateBrowserUse: (input: BrowserUseNavigationInput) => Promise<BrowserUseViewState>
-  stopBrowserUse: (threadId: string) => Promise<BrowserUseViewState>
-  clearBrowserUse: (threadId: string) => Promise<BrowserUseViewState>
+  stopBrowserUse: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
+  clearBrowserUse: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
   onBrowserUseState: (handler: (state: BrowserUseViewState) => void) => () => void
   showTurnCompleteNotification: (
     payload: TurnCompleteNotificationPayload
