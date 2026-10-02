@@ -160,7 +160,7 @@ describe('FloatingComposer capability controls', () => {
     })
   })
 
-  it('declares progressive container-width fallbacks for secondary toolbar controls', async () => {
+  it('keeps enabled composer actions available and gives narrow toolbars a second row', async () => {
     const nodeFs = 'node:fs/promises'
     const { readFile } = await import(/* @vite-ignore */ nodeFs)
     const [composerSource, css] = await Promise.all([
@@ -170,13 +170,32 @@ describe('FloatingComposer capability controls', () => {
 
     expect(composerSource).toContain('ds-composer-voice-action')
     expect(composerSource).toContain('ds-composer-prompt-optimize-action')
-    expect(css).toContain('@container (max-width: 760px)')
-    expect(css).toContain('.ds-composer-optional-action')
+    expect(css).not.toMatch(/\.ds-composer-optional-action\s*\{[^}]*display:\s*none/)
+    expect(css).toMatch(/@container \(max-width: 640px\)[\s\S]*?\.ds-composer-toolbar\s*\{[^}]*flex-direction:\s*column/s)
+    expect(css).toMatch(/\.ds-composer-toolbar > div\s*\{[^}]*width:\s*100%/s)
     expect(css).toContain('@container (max-width: 700px)')
     expect(css).toContain('.ds-composer-mode-label,')
     expect(css).toContain('.ds-composer-permission-label,')
     expect(css).toContain('.ds-composer-context-control,')
     expect(css).toContain('.ds-composer-agent-picker')
+  })
+
+  it('shows the issue #1364 local Whisper configuration without cloud credentials', () => {
+    const speechToText = {
+      enabled: true,
+      providerId: 'custom',
+      protocol: 'local-whisper' as const,
+      baseUrl: '',
+      apiKey: '',
+      model: 'whisper-small-q5_1',
+      localWhisperDownloadSource: 'hf-mirror' as const,
+      language: 'zh',
+      timeoutMs: 60_000
+    }
+
+    expect(shouldShowVoiceDictation(speechToText)).toBe(true)
+    expect(shouldShowVoiceDictation({ ...speechToText, enabled: false })).toBe(false)
+    expect(shouldShowVoiceDictation({ ...speechToText, model: '' })).toBe(false)
   })
 
   it('shows voice dictation for every runnable speech configuration', () => {
