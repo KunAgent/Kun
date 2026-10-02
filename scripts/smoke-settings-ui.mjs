@@ -10,6 +10,8 @@ import { _electron } from 'playwright-core'
 import { createServer, optimizeDeps } from 'vite'
 import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes, requiredPolishProblems } from './settings-ui-smoke-geometry.mjs'
 import { annotateSettingsTabs, scrollSettingsDetail } from './settings-ui-smoke-dom.mjs'
+import { assertFrozenSettingsProduction, captureSettingsPaintSequence } from './settings-ui-paint-probe.mjs'
+import { beginSettingsPaintProbe, sampleSettingsPaintProbe, endSettingsPaintProbe } from './settings-ui-paint-probe-dom.mjs'
 
 // Native offline renderer smoke; no app build, runtime, provider network or secrets.
 // node scripts/smoke-settings-ui.mjs [--baseline] [--quick] [--serve]
@@ -23,6 +25,7 @@ const evidence = resolve(process.env.KUN_SETTINGS_EVIDENCE || 'dist/settings-ui-
 // for its config and class discovery as well as Vite imports.
 process.chdir(sourceRoot)
 const phase = process.argv.includes('--baseline') ? 'before' : 'after'
+const paintProbe = process.argv.includes('--paint-probe')
 const temporary = await mkdtemp(join(tmpdir(), 'kun-settings-smoke-'))
 await mkdir(evidence, { recursive: true })
 const report = { phase, sourceRoot, nativePlatform: process.platform,
@@ -48,6 +51,14 @@ process.on('uncaughtExceptionMonitor', error => {
 let electron, page, server, cdp
 const nativePlatform = process.platform === 'darwin' ? 'darwin' : 'win32'
 try {
+  if (paintProbe) {
+    assert.equal(process.platform, 'darwin', 'This bounded diagnostic targets native macOS only')
+    assert.equal(phase, 'after', 'The probe diagnoses the frozen final production tree')
+    report.productionSource = assertFrozenSettingsProduction(sourceRoot)
+    report.paintProbe = { purpose: 'Record initial and delayed pixels; no paint pass is inferred from geometry',
+      coverage: 'Providers and nested model-route tabs; light/dark, 900px native width, 200% Electron zoom',
+      offsetsMs: [0, 250, 1000] }
+  }
   server = await fixtureServer()
   const optimized = await optimizeDeps(server.config, true, true)
   report.preoptimizedDependencies = Object.keys(optimized.optimized)
@@ -119,17 +130,32 @@ app.on('window-all-closed', () => app.quit())
   for (const theme of ['light', 'dark']) for (const size of sizes) for (const zoom of [1.25, 1.5, 2]) {
     configurations.push({ theme, ...size, zoom })
   }
-  for (const config of process.argv.includes('--quick') ? configurations.slice(0, 1) : configurations) {
+  const selectedConfigurations = paintProbe ? configurations.filter(config => config.name === 'small' && config.zoom === 2)
+    : process.argv.includes('--quick') ? configurations.slice(0, 1) : configurations
+  for (const config of selectedConfigurations) {
     await resize(config)
     await page.evaluate(theme => window.settingsFixture.theme(theme), config.theme)
-    for (const category of categories) {
+    // The full matrix leaves Providers between configurations. Preserve that
+    // real unmount/remount rather than carrying selected tabs into dark mode.
+    if (paintProbe) await openCategory('general')
+    for (const category of paintProbe ? ['providers'] : categories) {
       await openCategory(category)
       await inspectPanels(category, config)
     }
-    await actionStates(config)
+    if (!paintProbe) await actionStates(config)
   }
   assert.deepEqual(report.pageErrors, [], 'The actual SettingsView must render without renderer exceptions')
   assert.deepEqual(report.blockedRequests, [], 'Fixture must not attempt external network requests')
+  if (paintProbe) {
+    assert.equal(report.paintProbes?.length, 8, 'Both themes must capture all four real route tab states')
+    for (const theme of ['light', 'dark']) {
+      for (const suffix of ['provider-workspace-tab-routes', 'model-routes-settings-tab-models',
+        'model-routes-settings-tab-resilience', 'model-routes-settings-tab-monitoring']) {
+        assert.ok(report.paintProbes.some(probe => probe.theme === theme && probe.panel.endsWith(suffix)),
+          `Missing paint evidence for ${theme} ${suffix}`)
+      }
+    }
+  }
   if (phase === 'after') {
     report.requiredPolishFindings = requiredPolishProblems(report.layouts)
     assert.deepEqual(report.requiredPolishFindings, [], 'No overflow, reached-control clipping or undersized buttons may remain')
@@ -146,7 +172,8 @@ app.on('window-all-closed', () => app.quit())
     } else assert.equal(report.problems.length, 0,
       `${report.problems.length} settings geometry/accessibility problems; see report.json`)
   }
-  report.status = phase === 'before' ? 'recorded' : 'passed'
+  if (paintProbe) report.productionSourceAfter = assertFrozenSettingsProduction(sourceRoot)
+  report.status = paintProbe ? 'geometry-passed-paint-unclassified' : phase === 'before' ? 'recorded' : 'passed'
   console.log(`${phase}: ${report.layouts.length} native layouts; ${report.screenshots.length} real screenshots; ${report.problems.length} measured problems`)
 } catch (error) {
   report.status = 'failed'
@@ -217,6 +244,9 @@ async function openCategory(category) {
   await settled()
 }
 async function capture(category, panel, config) {
+  const probeThisPanel = paintProbe && category === 'providers'
+    && /provider-workspace-tab-routes|model-routes-settings-tab-/.test(panel)
+  const initialObservation = probeThisPanel ? await page.evaluate(beginSettingsPaintProbe) : null
   const actual = await measureSettings(page, cdp)
   const native = await electron.evaluate(({ BrowserWindow }) => {
     const window = BrowserWindow.getAllWindows()[0]
@@ -243,10 +273,37 @@ async function capture(category, panel, config) {
     const detail = await page.evaluate(scrollSettingsDetail, { kind: detailKind, controlId })
     assert.ok(detail, `Scrolled detail target must exist: ${key} ${detailKind}`)
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
-    const file = `${phase}-${key}-detail-${detailKind}.png`
-    const pixels = await captureNativeImage(file)
-    report.screenshots.push({ file, category, panel, ...config, native, pixels,
-      diagnostic: `Scrolled detail: ${detailKind}`, detail })
+    if (probeThisPanel) {
+      const probe = { key, category, panel, ...config, initialObservation, detail, frames: [] }
+      report.paintProbes ??= []
+      report.paintProbes.push(probe)
+      await captureSettingsPaintSequence({
+        now: () => performance.now(), wait: delay => page.waitForTimeout(delay),
+        // Keep the original first PNG ahead of extra DOM/style reads. Its
+        // existing pre-two-rAF geometry is retained with honest sample timing.
+        snapshot: label => label === 'before-0ms'
+          ? { label, existingDetail: detail, timing: 'Recorded before the existing two-rAF wait; no additional read before initial PNG' }
+          : page.evaluate(sampleSettingsPaintProbe, { label }),
+        capture: async offsetMs => {
+          const file = `${phase}-${key}-paint-${offsetMs}ms.png`
+          const pixels = await captureNativeImage(file)
+          report.screenshots.push({ file, category, panel, ...config, native, pixels,
+            diagnostic: `Unmodified native paint probe at requested offset ${offsetMs}ms`, detail })
+          return { file, pixels }
+        },
+        onFrame: async frame => {
+          probe.frames.push(frame)
+          await writeFile(join(evidence, `${key}-paint.json`), JSON.stringify(probe, null, 2))
+        }
+      })
+      probe.finalObservation = await page.evaluate(endSettingsPaintProbe)
+      await writeFile(join(evidence, `${key}-paint.json`), JSON.stringify(probe, null, 2))
+    } else {
+      const file = `${phase}-${key}-detail-${detailKind}.png`
+      const pixels = await captureNativeImage(file)
+      report.screenshots.push({ file, category, panel, ...config, native, pixels,
+        diagnostic: `Scrolled detail: ${detailKind}`, detail })
+    }
     if (phase === 'after') assert.ok(detail.fullyVisible,
       `Scrolled detail target must fit the final viewport: ${JSON.stringify(detail)}`)
   }
@@ -272,9 +329,15 @@ async function captureNativeImage(file) {
     const window = BrowserWindow.getAllWindows()[0]
     const contentBounds = window.getContentBounds()
     const displayScale = screen.getDisplayMatching(window.getBounds()).scaleFactor
+    const windowState = () => ({ visible: window.isVisible(), focused: window.isFocused(),
+      minimized: window.isMinimized(),
+      occluded: typeof window.isOccluded === 'function' ? window.isOccluded() : null })
+    const windowStateBefore = windowState()
+    const requestedAt = Date.now()
     const image = await window.webContents.capturePage()
     return { png: image.toPNG().toString('base64'), contentBounds, displayScale,
-      nativeImageSize: image.getSize(), zoom: window.webContents.getZoomFactor() }
+      nativeImageSize: image.getSize(), zoom: window.webContents.getZoomFactor(),
+      requestedAt, completedAt: Date.now(), windowStateBefore, windowStateAfter: windowState() }
   })
   const bytes = Buffer.from(capture.png, 'base64')
   const pixelSize = { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
