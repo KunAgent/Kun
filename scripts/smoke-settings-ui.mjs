@@ -7,8 +7,9 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { _electron } from 'playwright-core'
-import { createServer } from 'vite'
-import { geometryProblems, measureSettings, newGeometryProblems } from './settings-ui-smoke-geometry.mjs'
+import { createServer, optimizeDeps } from 'vite'
+import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes } from './settings-ui-smoke-geometry.mjs'
+import { annotateSettingsTabs } from './settings-ui-smoke-dom.mjs'
 
 // Native offline renderer smoke; no app build, runtime, provider network or secrets.
 // node scripts/smoke-settings-ui.mjs [--baseline] [--quick] [--serve]
@@ -48,6 +49,8 @@ let electron, page, server, cdp
 const nativePlatform = process.platform === 'darwin' ? 'darwin' : 'win32'
 try {
   server = await fixtureServer()
+  const optimized = await optimizeDeps(server.config, true, true)
+  report.preoptimizedDependencies = Object.keys(optimized.optimized)
   await server.listen()
   const url = `${server.resolvedUrls.local[0]}__settings?platform=${nativePlatform}`
   if (process.argv.includes('--serve')) {
@@ -129,7 +132,8 @@ app.on('window-all-closed', () => app.quit())
     const baseline = baselinePath ? JSON.parse(await readFile(baselinePath, 'utf8')) : null
     if (baseline) {
       assert.equal(baseline.status, 'recorded', 'Comparison requires a fully rendered baseline')
-      const regressions = newGeometryProblems(baseline.problems, report.problems)
+      const regressions = [...newGeometryProblems(baseline.problems, report.problems),
+        ...worsenedTargetSizes(baseline.layouts, report.layouts)]
       report.baselineComparison = { path: baselinePath, sourceRevision: baseline.sourceRevision,
         previousProblems: baseline.problems.length, regressions }
       assert.equal(report.baselineComparison.regressions.length, 0,
@@ -144,7 +148,7 @@ app.on('window-all-closed', () => app.quit())
   report.failure = error.stack || String(error)
   await writeFile(join(evidence, 'failure.txt'), report.failure)
   if (page && !page.isClosed()) {
-    await page.screenshot({ path: join(evidence, 'failure.png') }).catch(() => undefined)
+    await captureNativeImage('failure.png').catch(() => undefined)
     await writeFile(join(evidence, 'failure.html'), await page.content()).catch(() => undefined)
   }
   console.error(report.failure)
@@ -165,6 +169,9 @@ function revision(root) {
 async function fixtureServer() {
   return createServer({ configFile: false, root: sourceRoot,
     esbuild: { jsx: 'automatic' }, cacheDir: join(temporary, 'vite'),
+    optimizeDeps: { entries: [resolve(sourceRoot, 'src/renderer/src/components/SettingsUiSmokeFixture.tsx')],
+      include: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime',
+        'react-i18next', 'i18next', 'zustand', 'yaml', 'lucide-react'], holdUntilCrawlEnd: true },
     resolve: { alias: {
       '@renderer': resolve(sourceRoot, 'src/renderer/src'),
       '@shared': resolve(sourceRoot, 'src/shared'),
@@ -216,13 +223,35 @@ async function capture(category, panel, config) {
   const key = `${config.theme}-${config.name}-${Math.round(config.zoom * 100)}-${category}-${panel}`
     .replace(/[^a-zA-Z0-9_-]+/g, '-').slice(0, 200)
   const file = `${phase}-${key}.png`
-  await page.screenshot({ path: join(evidence, file) })
-  report.screenshots.push({ file, category, panel, ...config, native })
+  const pixels = await captureNativeImage(file)
+  report.screenshots.push({ file, category, panel, ...config, native, pixels })
   report.layouts.push({ key, category, panel, ...config, native, ...actual, problems })
   for (const problem of problems) report.problems.push({ key, problem })
   // Keep partial evidence when a later native crash or timeout prevents finish.
   await writeFile(join(evidence, 'progress.json'), JSON.stringify({ layouts: report.layouts.length,
     last: key, problems: report.problems.length, pageErrors: report.pageErrors }, null, 2))
+}
+async function captureNativeImage(file) {
+  const capture = await electron.evaluate(async ({ BrowserWindow, screen }) => {
+    const window = BrowserWindow.getAllWindows()[0]
+    const contentBounds = window.getContentBounds()
+    const displayScale = screen.getDisplayMatching(window.getBounds()).scaleFactor
+    const image = await window.webContents.capturePage()
+    return { png: image.toPNG().toString('base64'), contentBounds, displayScale,
+      nativeImageSize: image.getSize(), zoom: window.webContents.getZoomFactor() }
+  })
+  const bytes = Buffer.from(capture.png, 'base64')
+  const pixelSize = { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
+  const expected = { width: Math.round(capture.contentBounds.width * capture.displayScale),
+    height: Math.round(capture.contentBounds.height * capture.displayScale) }
+  await writeFile(join(evidence, file), bytes)
+  const { png: _png, ...metadata } = capture
+  const result = { ...metadata, pixelSize, expected, method: 'webContents.capturePage().toPNG()' }
+  report.nativeCaptures ??= []
+  report.nativeCaptures.push({ file, ...result })
+  assert.ok(Math.abs(pixelSize.width - expected.width) <= 1 && Math.abs(pixelSize.height - expected.height) <= 1,
+    `Native PNG must contain all content pixels: ${JSON.stringify(result)}`)
+  return result
 }
 async function inspectPanels(category, config) {
   const visitedTabs = new Set()
@@ -238,26 +267,15 @@ async function inspectPanels(category, config) {
       assert.ok(index < 120, 'Disclosure discovery must terminate')
       continue
     }
-    const tabs = await page.locator('[data-settings-category-view] [role="tab"]:visible').evaluateAll(elements => {
-      const occurrences = new Map()
-      return elements.map((element, index) => {
-        const name = element.textContent?.trim() ?? ''
-        const group = element.closest('[role="tablist"]')?.getAttribute('aria-label') ?? ''
-        const base = element.id || `${group}::${name}`
-        const count = (occurrences.get(base) ?? 0) + 1
-        occurrences.set(base, count)
-        element.setAttribute('data-settings-smoke-tab', String(index))
-        return { id: element.id, name, key: `${base}::${count}`, token: String(index),
-          selected: element.getAttribute('aria-selected') === 'true' }
-      })
-    })
+    const tabs = await page.locator('[data-settings-category-view] [role="tab"]:visible')
+      .evaluateAll(annotateSettingsTabs)
     for (const tab of tabs.filter(tab => tab.selected)) visitedTabs.add(tab.key)
     // Child tablists occur after their parent. Exhaust them before moving to
     // another parent so every discovered nested panel is actually rendered.
     const next = tabs.toReversed().find(tab => !visitedTabs.has(tab.key))
     if (next) {
       visitedTabs.add(next.key)
-      const target = page.locator(`[data-settings-smoke-tab="${next.token}"]`)
+      const target = page.locator(`[data-settings-smoke-tab="${next.token}"]:visible`)
       await target.click()
       await settled()
       await capture(category, `${++index}-${next.id || next.name}`, config)

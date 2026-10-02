@@ -41,6 +41,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -102,5 +104,27 @@ jobs:
         with:
           name: settings-ui-${{ matrix.os }}
           path: dist/settings-ui
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Prepare bounded review images and full measured reports
+        if: always()
+        run: node scripts/prepare-settings-ui-evidence.mjs
+
+      - name: Upload bounded native image review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: settings-ui-review-${{ matrix.os }}
+          path: dist/settings-ui-review
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload full compressed measured reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: settings-ui-reports-${{ matrix.os }}
+          path: dist/settings-ui-reports
           if-no-files-found: error
           retention-days: 14

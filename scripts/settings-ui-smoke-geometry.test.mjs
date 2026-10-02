@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
-import { geometryProblems, newGeometryProblems } from './settings-ui-smoke-geometry.mjs'
+import { geometryProblems, newGeometryProblems, worsenedTargetSizes } from './settings-ui-smoke-geometry.mjs'
+import { annotateSettingsControls, annotateSettingsTabs } from './settings-ui-smoke-dom.mjs'
+import { JSDOM } from 'jsdom'
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { spawnSync } from 'node:child_process'
+import { gunzipSync } from 'node:zlib'
 
 const control = (overrides = {}) => ({
   id: '1', semanticKey: 'appearance|Font scale|input|number||occurrence:1',
@@ -30,19 +38,81 @@ test('baseline multiset rejects extra duplicates and genuinely new problems', ()
     [{ ...old, key: 'dark-small-200-general-landing' }])
 })
 
-test('24px inline icon and switch exceptions do not hide undersized ordinary actions', () => {
+test('24px targets pass and smaller controls remain explicit findings', () => {
   const valid = { name: 'Toggle', tag: 'button', reached: { height: 24 } }
   assert.deepEqual(geometryProblems(measurement([control({ ...valid, role: 'switch' })])), [])
   assert.deepEqual(geometryProblems(measurement([control({ ...valid, settingsSize: 'inline-icon' })])), [])
-  assert.match(geometryProblems(measurement([control(valid)]))[0], /button height 24.00 < 28/)
+  assert.deepEqual(geometryProblems(measurement([control(valid)])), [])
+  assert.match(geometryProblems(measurement([control({ ...valid, reached: { height: 19.68 }, role: 'switch' })]))[0], /below 24/)
+  assert.deepEqual(geometryProblems(measurement([control({ ...valid, reached: { height: 26.24 },
+    normalizedHeight: 32, declaredTargetHeight: 32 })])), [])
+})
+
+test('improving an existing small target is not a new defect; worsening is', () => {
+  const layout = height => ({ key: 'same-layout', ...measurement([control({ name: 'Small', tag: 'button', reached: { height } })]) })
+  const before = layout(20), better = layout(23), worse = layout(18)
+  const problems = x => geometryProblems(x).map(problem => ({ key: x.key, problem }))
+  assert.deepEqual(newGeometryProblems(problems(before), problems(better)), [])
+  assert.deepEqual(worsenedTargetSizes([before], [better]), [])
+  assert.equal(worsenedTargetSizes([before], [worse]).length, 1)
+})
+
+test('new tab tokens cannot collide with retained hidden panels', () => {
+  const document = new JSDOM('<div hidden><button role="tab" data-settings-smoke-tab="0">Old</button></div><div role="tablist" aria-label="New"><button role="tab">Current</button></div>').window.document
+  const next = document.querySelector('div[role="tablist"] button')
+  const result = annotateSettingsTabs([next])
+  assert.equal(document.querySelectorAll('[data-settings-smoke-tab="0"]').length, 1)
+  assert.equal(result[0].key, 'New::Current::1')
+})
+
+test('closed disclosure controls are excluded despite positive layout boxes', () => {
+  const document = new JSDOM('<details><summary>More</summary><button>Hidden control</button></details>').window.document
+  const elements = [...document.querySelectorAll('summary,button')]
+  for (const element of elements) {
+    element.getClientRects = () => [{}]
+    element.getBoundingClientRect = () => ({ width: 32 })
+  }
+  annotateSettingsControls(elements)
+  assert.equal(elements[0].getAttribute('data-settings-smoke-rendered'), 'true')
+  assert.equal(elements[1].getAttribute('data-settings-smoke-rendered'), 'false')
+  document.querySelector('details').open = true
+  annotateSettingsControls(elements)
+  assert.equal(elements[1].getAttribute('data-settings-smoke-rendered'), 'true')
 })
 
 test('workflow keeps both native OSes, source baseline and failure evidence', () => {
   const workflow = readFileSync(new URL('../.github/workflows/settings-ui-smoke.yml', import.meta.url), 'utf8')
   assert.match(workflow, /os: \[windows-latest, macos-latest\]/)
   assert.match(workflow, /github\.event\.pull_request\.base\.sha/)
+  assert.match(workflow, /github\.event\.pull_request\.head\.sha/)
   assert.match(workflow, /9179a656e3b4236225cf098b00ccda932c55750d/)
   assert.match(workflow, /KUN_SETTINGS_SOURCE_ROOT: settings-ui-baseline/)
   assert.match(workflow, /KUN_SETTINGS_BASELINE_REPORT: dist\/settings-ui\/before\/report\.json/)
   assert.match(workflow, /if: always\(\)[\s\S]*actions\/upload-artifact/)
+  assert.match(workflow, /settings-ui-review-/)
+  assert.match(workflow, /settings-ui-reports-/)
+})
+
+test('review artifact stays bounded, retains pairs and preserves complete gzip reports', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'kun-settings-evidence-test-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const source = join(root, 'source')
+  const bytes = Buffer.alloc(1024 * 1024)
+  for (const phase of ['before', 'after']) {
+    await mkdir(join(source, phase), { recursive: true })
+    for (let i = 0; i < 13; i++) await writeFile(join(source, phase,
+      `${phase}-light-wide-125-category-${i}-landing.png`), bytes)
+    await writeFile(join(source, phase, 'report.json'), JSON.stringify({ phase, original: true }))
+  }
+  const result = spawnSync(process.execPath,
+    [fileURLToPath(new URL('./prepare-settings-ui-evidence.mjs', import.meta.url))],
+    { cwd: root, env: { ...process.env, KUN_SETTINGS_EVIDENCE: source }, encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr)
+  const manifest = JSON.parse(await readFile(join(root, 'dist/settings-ui-review/manifest.json'), 'utf8'))
+  assert.ok(manifest.copiedBytes <= 24 * 1024 * 1024)
+  assert.ok(manifest.omitted.length > 0)
+  assert.ok(manifest.included.every(group => group.matchedBeforeAfter && group.files.length === 2))
+  const report = JSON.parse(gunzipSync(await readFile(join(root,
+    'dist/settings-ui-reports/after/report.json.gz'))).toString())
+  assert.deepEqual(report, { phase: 'after', original: true })
 })

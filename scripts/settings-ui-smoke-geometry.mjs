@@ -1,14 +1,11 @@
 // Browser measurements, not screenshot inference. Chromium's accessibility tree
 // supplies computed names; DOM measurements supply actual layout and focus state.
+import { annotateSettingsControls } from './settings-ui-smoke-dom.mjs'
 export const CONTROL_SELECTOR = 'button,input:not([type="hidden"]),select,textarea,a[href],summary,[role="switch"],[role="button"],[role="checkbox"],[role="tab"]'
 
 export async function measureSettings(page, cdp) {
   await page.keyboard.press('Tab')
-  await page.evaluate(selector => {
-    document.querySelectorAll(selector).forEach((element, index) => {
-      element.setAttribute('data-settings-smoke-control', String(index))
-    })
-  }, CONTROL_SELECTOR)
+  await page.locator(CONTROL_SELECTOR).evaluateAll(annotateSettingsControls)
   const { root } = await cdp.send('DOM.getDocument', { depth: -1, pierce: true })
   const ids = new Map()
   const visit = node => {
@@ -31,16 +28,14 @@ export async function measureSettings(page, cdp) {
       const { x, y, width, height, right, bottom } = element.getBoundingClientRect()
       return { x, y, width, height, right, bottom }
     }
-    const shown = element => {
-      const style = getComputedStyle(element)
-      return !element.closest('[hidden],[inert],[aria-hidden="true"]') && style.display !== 'none'
-        && style.visibility !== 'hidden' && element.getClientRects().length > 0
-        && element.getBoundingClientRect().width > 0
-    }
-    const dialog = [...document.querySelectorAll('[role="dialog"]')].filter(shown).at(-1)
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .filter(element => !element.closest('[hidden]') && element.getClientRects().length > 0
+        && getComputedStyle(element).visibility !== 'hidden').at(-1)
     const elements = [...document.querySelectorAll(selector)]
-      .filter(element => shown(element) && (!dialog || dialog.contains(element)))
+      .filter(element => element.getAttribute('data-settings-smoke-rendered') === 'true'
+        && (!dialog || dialog.contains(element)))
     const original = elements.map(rect)
+    const appUiScale = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ds-ui-scale')) || 1
     const occurrences = new Map()
     const semanticKeys = elements.map(element => {
       const row = element.closest('.ds-setting-row')
@@ -92,6 +87,10 @@ export async function measureSettings(page, cdp) {
       const parentStyle = element.parentElement ? getComputedStyle(element.parentElement) : null
       const parentIndicator = parentStyle?.boxShadow && parentStyle.boxShadow !== 'none'
         && !parentStyle.boxShadow.includes('rgba(0, 0, 0, 0) 0px 0px 0px 0px')
+      const classes = element.getAttribute('class') ?? ''
+      const size = element.getAttribute('data-settings-size')
+        || classes.match(/ds-settings-button--(default|compact|inline-icon|icon)(?:\s|$)/)?.[1]
+      const declaredTargetHeight = size ? ({ default: 36, compact: 32, icon: 36, 'inline-icon': 24 })[size] : null
       return { id, semanticKey: semanticKeys[index], tag: element.tagName.toLowerCase(), type: element.getAttribute('type'),
         ...accessibility[id], text: element.textContent?.trim().slice(0, 120),
         className: element.getAttribute('class'), disabled,
@@ -99,6 +98,7 @@ export async function measureSettings(page, cdp) {
         busy: element.getAttribute('aria-busy') === 'true',
         destructive: /danger|red-/.test(element.getAttribute('class') ?? ''),
         original: original[index], reached: box, clipping, inside,
+        appUiScale, normalizedHeight: box.height / appUiScale, declaredTargetHeight,
         hittable: !!point && (element === point || element.contains(point)),
         tabIndex: element.tabIndex, focused, focusVisible: element.matches(':focus-visible'),
         focusIndicator: !!(ownIndicator || parentIndicator), focusStyle,
@@ -120,7 +120,8 @@ export async function measureSettings(page, cdp) {
     for (const element of document.querySelectorAll('.ds-settings-scroller,nav,[role="tablist"]')) {
       element.scrollTo?.({ top: 0, left: 0, behavior: 'instant' })
     }
-    return { dpr: devicePixelRatio, viewport: { width: innerWidth, height: innerHeight },
+    return { dpr: devicePixelRatio, appUiScale,
+      viewport: { width: innerWidth, height: innerHeight },
       horizontalOverflow, scrollerOverflow, controls, overlaps }
   }, { selector: CONTROL_SELECTOR, accessibility })
 }
@@ -138,9 +139,11 @@ export function geometryProblems(measurement) {
     if (!control.disabled && control.focusVisible && !control.focusIndicator) {
       problems.push(`${label}: no measured keyboard focus indicator`)
     }
-    const minHeight = control.settingsSize === 'inline-icon' || /ds-settings-button--inline-icon/.test(control.className ?? '') ? 24 : 28
-    if (control.tag === 'button' && control.role !== 'switch' && control.reached.height < minHeight) {
-      problems.push(`${label}: button height ${control.reached.height.toFixed(2)} < ${minHeight} CSS px`)
+    if (control.tag === 'button' && control.reached.height < 24) {
+      problems.push(`${label}: button height below 24 CSS px`)
+    }
+    if (control.declaredTargetHeight && control.normalizedHeight < control.declaredTargetHeight - 1) {
+      problems.push(`${label}: button smaller than declared normalized design target`)
     }
   }
   for (const pair of measurement.overlaps) problems.push(`controls overlap: ${pair.join(', ')}`)
@@ -159,4 +162,22 @@ export function newGeometryProblems(previousProblems, currentProblems) {
     previous.set(signature, remaining - 1)
     return false
   })
+}
+
+export function worsenedTargetSizes(previousLayouts, currentLayouts) {
+  const previous = new Map(previousLayouts.map(layout => [layout.key, layout]))
+  const findings = []
+  for (const layout of currentLayouts) {
+    const old = previous.get(layout.key)
+    if (!old) continue
+    const controls = new Map(old.controls.map(control => [control.semanticKey, control]))
+    for (const control of layout.controls) {
+      const before = controls.get(control.semanticKey)
+      if (!before || control.tag !== 'button' || control.reached.height >= 24
+        || control.reached.height >= before.reached.height - 1) continue
+      findings.push({ key: layout.key, problem: `${control.semanticKey}: undersized target became smaller`,
+        previousHeight: before.reached.height, currentHeight: control.reached.height })
+    }
+  }
+  return findings
 }
