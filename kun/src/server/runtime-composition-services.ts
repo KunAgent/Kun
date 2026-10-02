@@ -101,6 +101,9 @@ import { KunToolsMcpProvider } from '../runtime/acp/kun-tools-mcp.js'
 import { createAcpCredentialEnv } from '../runtime/acp/acp-credential-env.js'
 import { providerKindsForOptions } from './runtime-factory-model.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
+import { DEFAULT_KUN_CAPABILITIES_CONFIG } from '../contracts/capabilities.js'
+import { ConsolidationJobStore } from '../services/consolidation-job-store.js'
+import { SessionConsolidationService } from '../services/session-consolidation-service.js'
 
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
@@ -343,10 +346,16 @@ export async function createRuntimeServices(
   const pruneUnsentAttachments = async (store: AttachmentStore | undefined): Promise<void> => {
     if (store === attachmentStore) await maintenanceSlices.runAttachmentSlice()
   }
+  let sessionConsolidation!: SessionConsolidationService
   const backgroundMaintenance = createRuntimeBackgroundMaintenance({
     pruneAttachments: maintenanceSlices.runAttachmentSlice,
     inspectThreads: maintenanceSlices.runGuardianSlice,
     rebuildEventIndex: maintenanceSlices.runEventIndexSlice,
+    consolidateSessions: async () => {
+      await sessionConsolidation.runOnce()
+      return true
+    },
+    consolidationIntervalMs: core.activeOptions.capabilities?.memory?.consolidation?.scheduleIntervalMs,
     onError: (task, error) => {
       console.warn(`[kun] background ${task} failed:`, error)
     }
@@ -375,6 +384,32 @@ export async function createRuntimeServices(
     }
   })
   await memoryDistillation.ready()
+  const consolidationJobStore = new ConsolidationJobStore({
+    dataDir: core.activeOptions.dataDir,
+    nowIso
+  })
+  sessionConsolidation = new SessionConsolidationService({
+    config: () => core.activeOptions.capabilities?.memory?.consolidation ??
+      DEFAULT_KUN_CAPABILITIES_CONFIG.memory.consolidation,
+    dataDir: core.activeOptions.dataDir,
+    threadStore,
+    sessionStore,
+    threadService,
+    turnService,
+    snapshots: threadSnapshots,
+    jobStore: consolidationJobStore,
+    memoryStore: () => memoryStore,
+    modelClient: timedModelClient,
+    defaultModel: () => core.activeOptions.model,
+    roles: () => core.activeOptions.roles,
+    immutablePrefix: () => prefix,
+    nowIso,
+    artifactStore,
+    hasPendingInteractions: (threadId) =>
+      approvalGate.pending(threadId).length > 0 || userInputGate.pending(threadId).length > 0,
+    queueDurableCandidates: (threadId, turnId) =>
+      memoryDistillation.schedule({ threadId, turnId, status: 'completed' })
+  })
   const officeCliRunner = createConfiguredOfficeCliRunner({
     binaryPath: process.env.KUN_OFFICECLI_BINARY,
     profileDir: join(core.activeOptions.dataDir, 'officecli-profile')
@@ -622,6 +657,7 @@ export async function createRuntimeServices(
     migrationImportService,
     knowledgeBaseService,
     memoryDistillation,
+    sessionConsolidation,
     designCanvasProvider,
     officeCliProviders,
     childToolHost,
