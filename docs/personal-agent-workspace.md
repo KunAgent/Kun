@@ -34,7 +34,10 @@ run is read-only; switching back to the current browser is an explicit presentat
 
 Switching Agent, project, private context or task immediately drops prior scoped UI data.
 Old asynchronous reads, actions and native view cleanup cannot restore another task's
-browser state. Hiding the browser releases its supervision through the existing manager.
+browser state. Hiding the browser releases its supervision through the existing manager. The
+initial empty host participates in the existing supervision handshake before
+the first tab exists; consent overlays hide native page content while keeping
+the visible approval surface supervised.
 The renderer does not create an independent task or browser state machine.
 
 ## Delivered files
@@ -67,7 +70,8 @@ part of the offline verification.
 
 Focused unit coverage checks exact request/run/thread/turn ownership, scope changes,
 permission/epoch invalidation, IM exclusion from browser supervision, selected history,
-late reads/events/actions/mounts, turn-scoped main-process controls, artifact provenance
+late reads/events/actions/mounts, the first-tab Main/renderer supervision handshake,
+turn-scoped main-process controls, artifact provenance
 and search/list loading/error behavior. Unit fixtures explicitly separate runtime ownership
 from UI state presentation.
 

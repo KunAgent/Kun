@@ -17,6 +17,9 @@ on:
       - 'kun/src/contracts/room-content.ts'
       - 'kun/src/rooms/room-content*'
       - 'scripts/smoke-personal-agent-workspace*'
+      - 'scripts/smoke-personal-workspace-diagnostics.cjs'
+      - 'scripts/smoke-isolated-paths*'
+      - 'scripts/smoke-packaged-extension-desktop-runtime.cjs'
       - 'scripts/smoke-development-direct-chat.cjs'
       - 'scripts/smoke-agent-chat-workbench.cjs'
       - 'scripts/smoke-direct-model*'
@@ -48,7 +51,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Verify offline fixture and workflow contracts
-        run: node --test scripts/smoke-direct-model.test.cjs scripts/smoke-personal-agent-workspace.test.cjs scripts/personal-agent-workspace-workflow.test.cjs
+        run: node --test scripts/smoke-isolated-paths.test.cjs scripts/smoke-direct-model.test.cjs scripts/smoke-personal-agent-workspace.test.cjs scripts/personal-agent-workspace-workflow.test.cjs
       - name: Verify persisted private execution and artifact authority
         working-directory: kun
         run: npx vitest run src/agents/agent-direct-execution.test.ts src/agents/agent-direct.test.ts src/agents/agent-artifact-source.test.ts
@@ -58,6 +61,7 @@ jobs:
           src/main/browser-use/register-browser-use-ipc.test.ts
           src/main/browser-use/network-policy.test.ts
           src/renderer/src/components/AgentBrowserPanel.lifecycle.test.ts
+          src/renderer/src/components/AgentBrowserPanel.supervision.test.ts
           src/renderer/src/components/rooms/RoomAgentBrowser.test.ts
           src/renderer/src/components/rooms/RoomDirectFiles.test.ts
           src/renderer/src/components/rooms/RoomContentPreview.test.ts

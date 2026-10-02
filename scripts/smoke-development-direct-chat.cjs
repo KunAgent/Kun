@@ -69,6 +69,10 @@ async function main() {
   let rendererOutput = '', electronOutput = ''
   const pageErrors = []
   const screenshots = []
+  const recordDiagnostic = async (name, value) => {
+    assert(/^[a-z0-9-]+$/.test(name), 'Diagnostic name must stay within the evidence directory')
+    await writeFile(join(evidenceRoot, name + '.json'), JSON.stringify(value, null, 2) + '\n')
+  }
   const capture = async (name, surface = page) => {
     const path = join(evidenceRoot, `${name}.png`)
     await surface.screenshot({ path })
@@ -157,7 +161,7 @@ async function main() {
       : process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
       : process.argv.includes('--approvals') ? exerciseRoomApprovals
         : process.argv.includes('--pin-stream') ? exercisePinStream : exerciseDirectChat
-    const exercised = exercise({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
+    const exercised = exercise({ page, request: runtimeRequest, poll, capture, recordDiagnostic, fixture: modelFixture,
       application: electronApplication, workspaceRoot, real: process.argv.includes('--real-model'),
       resize: (width, height) => resize(electronApplication, width, height), switchRooms: () => switchMode(page, 'rooms'),
       switchCode: () => switchMode(page, 'chat'),

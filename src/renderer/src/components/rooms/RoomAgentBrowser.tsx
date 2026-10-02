@@ -83,6 +83,7 @@ export function RoomAgentBrowserStatus({ roomId, activity, error, onOpen }: {
         : state.lifecycle === 'stopped' ? text('浏览器已停止', 'Browser stopped')
           : state.lifecycle === 'error' || state.capabilityStatus === 'unavailable' ? text('浏览器需要处理', 'Browser needs attention')
             : state.lifecycle === 'loading' ? text('浏览器正在加载', 'Browser loading')
+            : !state.tabs.length ? text('等待浏览器页面', 'Waiting for a browser page')
               : text('Agent 正在使用浏览器', 'Agent browser is active')
   return <div className="rooms-agent-browser-status" data-room-browser-status data-run-id={execution.runId} role="status">
     <Globe2 size={14} /><span>{label}</span><button type="button" onClick={onOpen}>{text('打开浏览器', 'Open browser')}</button>

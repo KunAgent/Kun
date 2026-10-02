@@ -37,7 +37,13 @@ export function useAgentBrowserPanelLifecycle(
   const mountSync = useRef<(() => void) | undefined>(undefined)
   const visible = useRef(false)
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) ?? state.tabs[0]
-  const shouldShowPage = Boolean(activeTab && !state.pendingOriginConsent && !state.pendingActionConsent)
+  // The first origin needs a visible supervised host before Main can create a
+  // tab or request consent. Main publishes ready as it releases that mount
+  // waiter, so keep the empty host visible through ready/loading as well.
+  const awaitingFirstTab = state.lifecycle === 'mount-required' || state.lifecycle === 'ready' || state.lifecycle === 'loading'
+  const shouldShowPage = Boolean(
+    (activeTab || awaitingFirstTab) && !state.pendingOriginConsent && !state.pendingActionConsent
+  )
 
   const accept = useCallback((next: BrowserUseViewState): void => {
     if (!live.current || !threadId) return

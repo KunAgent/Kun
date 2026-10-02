@@ -4,6 +4,7 @@ const { createServer } = require('node:http')
 const { readFile, writeFile } = require('node:fs/promises')
 const { join } = require('node:path')
 const { roomWorkbenchSnapshot } = require('./smoke-agent-chat-workbench.cjs')
+const { collectWorkspaceFailureDiagnostics } = require('./smoke-personal-workspace-diagnostics.cjs')
 
 // The model and static loopback page are fixtures; the native restart confirmation
 // receives one exact, one-shot test response. Browser/tool consent stays real.
@@ -31,10 +32,11 @@ async function startWorkspaceBrowserPage() {
     close: () => { server.closeAllConnections(); return new Promise((resolve) => server.close(resolve)) } }
 }
 
-async function exercisePersonalAgentWorkspace({ page, request, poll, capture, fixture, application, resize, openPrivate, switchRooms }) {
+async function exercisePersonalAgentWorkspace({ page, request, poll, capture, recordDiagnostic, fixture, application, resize, openPrivate, switchRooms }) {
   assert.equal(fixture.snapshot().real, false, 'The workspace smoke must never use account credentials')
   const website = await startWorkspaceBrowserPage()
   const assertions = [], approvals = [], nativeBrowserEvidence = []
+  let diagnosticRoomId, diagnosticExecution
   const editor = () => page.locator('.rooms-composer .rooms-rich-input')
   const wrapper = () => page.locator('[data-room-agent-browser]:visible')
   const rail = () => page.locator('.rooms-workbench-rail')
@@ -110,6 +112,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, fi
     await openPrivate()
     const entry = await request(page, '/v1/agents/chat-entry')
     assert(entry.roomId && entry.agentId)
+    diagnosticRoomId = entry.roomId
     const firstAgent = (await request(page, '/v1/agents')).agents.find((value) => value.id === entry.agentId)
     assert(firstAgent)
     await openBrowser()
@@ -176,6 +179,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, fi
       if (data.execution?.turnId) { active = data.execution; return true }
       return false
     }, 30000, 'authoritative admitted private execution')
+    diagnosticExecution = active
     await assertLiveBinding(entry.roomId, active)
     await capture('workspace-08-active-before-browser')
     await page.getByRole('button', { name: 'Review and allow', exact: true }).first().waitFor()
@@ -281,6 +285,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, fi
       if (fixture.holding() && data.execution?.turnId) { restarting = data.execution; return true }
       return false
     }, 20000, 'held request admitted before Runtime restart')
+    diagnosticExecution = restarting
     await assertLiveBinding(entry.roomId, restarting)
     assert.notEqual(restarting.turnId, active.turnId, 'Continuous conversation has a fresh turn identity')
     assert.equal(await wrapper().getByRole('button', { name: 'Allow origin once', exact: true }).count(), 0)
@@ -337,6 +342,16 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, fi
         actual: ['Electron renderer/preload/main', 'Manager and Runtime', 'request/run/thread/turn admission',
           'protected tool consent', 'exact-origin browser consent and SSRF policy', 'sandboxed Browser Use WebContentsView',
           'saved artifact publication/search/preview/source', 'Runtime restart and renderer reload'] } }
+  } catch (error) {
+    try {
+      const diagnostic = await collectWorkspaceFailureDiagnostics({ page, request, roomId: diagnosticRoomId,
+        execution: diagnosticExecution, fixture, website })
+      await recordDiagnostic('workspace-failure-diagnostics', diagnostic)
+    } catch (diagnosticError) {
+      // Preserve the original assertion even when the renderer/runtime has gone.
+      process.stderr.write('Workspace diagnostic capture failed: ' + String(diagnosticError?.message ?? diagnosticError) + '\n')
+    }
+    throw error
   } finally { fixture.release(); await website.close() }
 }
 // Electron native dialogs are not renderer pages. Stub only this disposable

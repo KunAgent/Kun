@@ -197,6 +197,30 @@ describe('AgentBrowserPanel lifecycle fences', () => {
     expect(api.mountBrowserUse.mock.calls.some(([input]) => !(input as { supervisionActive?: boolean }).supervisionActive)).toBe(false)
   })
 
+  it('shows an empty host for first-tab supervision and only hides it for consent', async () => {
+    const { api, publish } = setup()
+    const initial = state('thread-1', '', {
+      lifecycle: 'mount-required', tabs: [], activeTabId: undefined, turnId: 'selected-turn'
+    })
+    api.getBrowserUseState.mockResolvedValueOnce(initial)
+    await render({ threadId: 'thread-1', expectedTurnId: 'selected-turn', active: true })
+    expect(api.mountBrowserUse).toHaveBeenLastCalledWith(expect.objectContaining({
+      expectedTurnId: 'selected-turn', visible: true, supervisionActive: true
+    }))
+    // Main publishes ready before its ensureSupervised continuation runs.
+    await act(async () => publish({ ...initial, lifecycle: 'ready', mounted: true, visible: true }))
+    expect(api.mountBrowserUse).toHaveBeenCalledTimes(1)
+    await act(async () => publish({ ...initial, lifecycle: 'waiting-origin-consent', pendingOriginConsent: {
+      id: 'origin-1234567890', sessionId: initial.sessionId!, threadId: 'thread-1',
+      origin: 'https://example.com', sanitizedUrl: 'https://example.com', mode: 'public',
+      createdAt: '2026-07-26T00:00:00.000Z'
+    } }))
+    expect(api.mountBrowserUse).toHaveBeenLastCalledWith(expect.objectContaining({
+      expectedTurnId: 'selected-turn', visible: false, supervisionActive: true
+    }))
+    expect(api.mountBrowserUse.mock.calls.some(([input]) => !(input as { supervisionActive?: boolean }).supervisionActive)).toBe(false)
+  })
+
   it('serializes repeated controls but keeps Stop able to preempt a pending operation', async () => {
     const { api } = setup()
     const navigation = deferred<BrowserUseViewState>()
