@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, FolderOpen, HardDrive, LoaderCircle, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -104,8 +105,8 @@ export function StorageRelocationSettingsSection(): React.JSX.Element {
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <span className="text-xs text-ds-muted">{t('storageRelocationUniqueSize')}: {formatBytes(status?.totalUniqueBytes ?? 0)}</span>
           <div className="flex gap-2">
-            {status?.state === 'relocated' ? <button type="button" className="secondary-button" disabled={busy} onClick={() => void restore()}><RotateCcw className="mr-2 inline h-4 w-4" />{t('storageRelocationRestore')}</button> : null}
-            <button type="button" className="primary-button" disabled={busy || !status?.enabled || status?.state === 'pending'} onClick={() => void choose()}>
+            {status?.state === 'relocated' ? <button className={settingsButtonClass()} type="button"  disabled={busy} onClick={() => void restore()}><RotateCcw className="mr-2 inline h-4 w-4" />{t('storageRelocationRestore')}</button> : null}
+            <button type="button" className={settingsButtonClass({ variant: 'primary' })} disabled={busy || !status?.enabled || status?.state === 'pending'} onClick={() => void choose()}>
               <FolderOpen className="mr-2 inline h-4 w-4" />{status?.state === 'relocated' ? t('storageRelocationChange') : t('storageRelocationChoose')}
             </button>
           </div>
@@ -159,7 +160,7 @@ function PreflightCard(props: {
       <ul className="mt-2 list-disc space-y-1 pl-5">{props.plan.activeWork.map((item) => <li key={item.id}>{item.label}{!item.interruptible ? ` · ${props.t('storageRelocationCannotStop')}` : ''}</li>)}</ul>
       <label className="mt-3 flex items-start gap-2"><input type="checkbox" checked={props.confirmed} onChange={(event) => props.onConfirmed(event.target.checked)} />{props.t('storageRelocationInterruptConfirm')}</label>
     </div> : null}
-    <div className="mt-5 flex justify-end gap-2"><button type="button" className="secondary-button" disabled={props.busy} onClick={props.onCancel}>{props.t('cancel')}</button><button type="button" className="primary-button" disabled={props.busy || (needsConfirmation && !props.confirmed) || props.plan.activeWork.some((item) => !item.interruptible)} onClick={props.onSchedule}>{props.t('storageRelocationStart')}</button></div>
+    <div className="mt-5 flex justify-end gap-2"><button className={settingsButtonClass()} type="button"  disabled={props.busy} onClick={props.onCancel}>{props.t('cancel')}</button><button type="button" className={settingsButtonClass({ variant: 'primary' })} disabled={props.busy || (needsConfirmation && !props.confirmed) || props.plan.activeWork.some((item) => !item.interruptible)} onClick={props.onSchedule}>{props.t('storageRelocationStart')}</button></div>
   </section>
 }
 

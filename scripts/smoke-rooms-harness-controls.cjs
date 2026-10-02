@@ -1,6 +1,7 @@
 'use strict'
 const assert = require('node:assert/strict')
 const { writeFile, rm } = require('node:fs/promises')
+const { assertRoomsHarnessDiscoveryOrder } = require('./smoke-rooms-harness-fixture.cjs')
 const { openAgentPrivateChat, roomWorkbenchSnapshot } = require('./smoke-agent-chat-workbench.cjs')
 
 /** Real rendered conversation -> catalog -> confirmation -> ACP -> durable result. */
@@ -27,7 +28,7 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   const proposed = links.find((link) => link.status === 'awaiting_confirmation')
   assert(proposed && !proposed.threadId, 'A proposal must not start an external task')
   assert.equal(proposed.request.execution.model.harnessId, 'devin')
-  assert(modelFixture.snapshot().observations.some((observation) => observation.tools.includes('list_code_harnesses')))
+  assertRoomsHarnessDiscoveryOrder(modelFixture.snapshot().observations)
   await card.locator('[data-workbench-agent="devin"]').waitFor()
   await poll(async () => !(await page.locator('.rooms-composer .rooms-rich-input').innerText()).trim(), 20_000, 'acknowledged composer cleared')
   await capture('rooms-01-agent-proposal')

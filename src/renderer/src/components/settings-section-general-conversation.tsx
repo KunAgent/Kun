@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { normalizeComposerSendKey } from '@shared/app-settings'
 import { defaultKunAdeSettings } from '@shared/app-settings-kun-harness'
 import type { AdeActivityNotificationCategory } from '@shared/kun-gui-notification-contracts'
@@ -123,7 +124,7 @@ export function GeneralConversationSettingsPanel({ view }: { view: Record<string
               <button
                 type="button"
                 onClick={openOnboardingPreview}
-                className="inline-flex w-fit items-center rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
+                className={settingsButtonClass({ className: 'w-fit' })}
               >
                 {t('onboardingPreviewOpen')}
               </button>

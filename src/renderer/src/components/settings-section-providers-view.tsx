@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import {
   DEFAULT_MODEL_PROVIDER_ID,
   isLocalModelProxyPort,
@@ -107,7 +108,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
               <button
                 type="button"
                 onClick={() => void openSettingsConfigFile()}
-                className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-ds-border bg-ds-card px-2.5 text-[12px] font-medium text-ds-ink transition hover:border-accent/35 hover:bg-ds-hover"
+                className={settingsButtonClass({ className: 'shrink-0 whitespace-nowrap' })}
               >
                 <FilePenLine className="h-3.5 w-3.5" strokeWidth={2} />
                 {t('modelProviderOpenConfigFile')}
@@ -119,7 +120,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                   aria-haspopup="dialog"
                   aria-expanded={addMenuOpen}
                   onClick={openAddProviderDialog}
-                  className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-ds-border bg-ds-card px-2.5 text-[12px] font-medium text-ds-ink transition hover:border-accent/35 hover:bg-ds-hover"
+                  className={settingsButtonClass({ className: 'shrink-0 whitespace-nowrap' })}
                 >
                   <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                   {t('modelProviderAdd')}
@@ -272,7 +273,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                               : t('autoApplyHint')}
                       </StatusPill>
                     ) : null}
-                    <button
+                    <button aria-busy={Boolean(probeBusy && activeProbe?.mode === 'fetch')} className={settingsButtonClass()}
                       type="button"
                       data-testid="provider-fetch-models"
                       disabled={probeBusy || activeProbeBlocked}
@@ -282,14 +283,13 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                           ? t('modelProviderInvalidUrl')
                           : t('modelProviderFetchModels')}
                       onClick={() => void runProbe(activeProvider, 'fetch')}
-                      className="inline-flex h-9 items-center gap-2 rounded-lg border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-ink transition hover:border-accent/35 hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-55"
                     >
                       {probeBusy && activeProbe?.mode === 'fetch'
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
                         : <Download className="h-3.5 w-3.5" strokeWidth={1.9} />}
                       {t('modelProviderFetchModels')}
                     </button>
-                    <button
+                    <button aria-busy={Boolean(probeBusy && activeProbe?.mode === 'test')} className={settingsButtonClass()}
                       type="button"
                       disabled={probeBusy || activeProbeBlocked}
                       title={activeMissingCredential
@@ -298,7 +298,6 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                           ? t('modelProviderInvalidUrl')
                           : undefined}
                       onClick={() => void runProbe(activeProvider, 'test')}
-                      className="inline-flex h-9 items-center gap-2 rounded-lg border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-ink transition hover:border-accent/35 hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-55"
                     >
                       {probeBusy && activeProbe?.mode === 'test'
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
@@ -312,7 +311,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                         disabled={Boolean(deletingProviderId)}
                         aria-busy={deletingProviderId === activeProvider.id}
                         onClick={() => void removeModelProvider(activeProvider.id)}
-                        className="inline-flex h-9 items-center gap-2 rounded-lg border border-red-200/70 bg-red-50 px-3 text-[12.5px] font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-55 dark:border-red-900/70 dark:bg-red-950/25 dark:text-red-200 dark:hover:bg-red-950/40"
+                        className={settingsButtonClass({ variant: 'danger' })}
                       >
                         {deletingProviderId === activeProvider.id
                           ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
@@ -361,17 +360,16 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                       </p>
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-2">
-                      <button
+                      <button className={settingsButtonClass()}
                         type="button"
                         onClick={cancelProviderDraft}
-                        className="inline-flex h-9 items-center rounded-full border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink"
                       >
                         {t('modelProviderDraftDiscard')}
                       </button>
                       <button
                         type="button"
                         onClick={commitProviderDraft}
-                        className="inline-flex h-9 items-center gap-2 rounded-full bg-accent px-4 text-[12.5px] font-semibold text-white shadow-sm transition hover:opacity-90"
+                        className={settingsButtonClass({ variant: 'primary' })}
                       >
                         <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                         {t('modelProviderDraftConfirm')}
@@ -388,7 +386,7 @@ export function ProvidersSettingsView({ view }: { view: Record<string, any> }): 
                 <button
                   type="button"
                   onClick={openAddProviderDialog}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-accent px-3 text-[13px] font-medium text-white"
+                  className={settingsButtonClass({ variant: 'primary' })}
                 >
                   <Plus className="h-4 w-4" strokeWidth={2} />
                   {t('modelProviderAdd')}

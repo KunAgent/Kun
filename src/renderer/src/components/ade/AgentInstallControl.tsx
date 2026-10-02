@@ -63,9 +63,9 @@ export function AgentInstallControl({ harnessId, action, needed, t }: {
         </div>
         <p className="mt-1 text-[11px] text-ds-faint">{t(job?.status === 'completed' ? 'agentInstall.signInHint' : 'agentInstall.description')}</p>
       </div>
-      {busy ? <button type="button" disabled={pending} onClick={() => void run('cancel')}
+      {busy ? <button aria-busy={pending} data-settings-action="secondary" data-settings-size="default" type="button" disabled={pending} onClick={() => void run('cancel')}
         className="rounded-lg border border-ds-border-muted px-3 py-1.5 text-[12px] text-ds-muted disabled:opacity-45">{t('agentInstall.cancel')}</button>
-        : needed || job?.status === 'failed' || job?.status === 'cancelled' ? <button type="button"
+        : needed || job?.status === 'failed' || job?.status === 'cancelled' ? <button aria-busy={pending} data-settings-action="primary" data-settings-size="default" type="button"
           disabled={!state?.plan?.available || pending} onClick={() => void run('start')}
           className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-[12px] font-medium text-white hover:opacity-90 disabled:opacity-45" data-agent-install-start>
           <Download size={14} />{t(job ? 'agentInstall.retry' : action === 'adapter' ? 'agentInstall.adapter' : 'agentInstall.start')}
@@ -74,7 +74,7 @@ export function AgentInstallControl({ harnessId, action, needed, t }: {
     {state && !state.plan ? <p className="mt-2 text-[11px] text-ds-muted">{t('agentInstall.unsupported')}</p> : null}
     {state?.plan?.missingCommand ? <p className="mt-2 text-[11px] text-amber-600">{t('agentInstall.missingCommand', { command: state.plan.missingCommand })}</p> : null}
     {error || job?.error ? <p className="mt-2 break-words text-[11px] text-red-600" role="alert">{error || job?.error}</p> : null}
-    {error ? <button type="button" onClick={() => setRevision((value) => value + 1)} className="mt-1 text-[11px] text-accent">{t('adeAgentAction.retry')}</button> : null}
+    {error ? <button data-settings-action="link" data-settings-size="compact" type="button" onClick={() => setRevision((value) => value + 1)} className="mt-1 text-[11px] text-accent">{t('adeAgentAction.retry')}</button> : null}
     {state?.plan || job ? <details className="mt-2 text-[11px] text-ds-muted">
       <summary className="cursor-pointer">{t('agentInstall.details')}</summary>
       <code className="mt-2 block break-all">{job?.command ?? state?.plan?.command}</code>

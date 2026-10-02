@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type {
   KunBrowserUseSettingsV1,
   ModelProviderProfileV1
@@ -332,23 +333,20 @@ function ComputerUsePermissionRow({ t }: { t: (key: string) => string }): ReactE
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            <button
+            <button className={settingsButtonClass()}
               type="button"
-              className="rounded-lg border border-ds-border-muted bg-ds-card px-2.5 py-1 text-[12px] font-medium text-ds-text hover:bg-ds-card-hover"
               onClick={() => request('accessibility')}
             >
               {t('computerUseGrantAccessibility')}
             </button>
-            <button
+            <button className={settingsButtonClass()}
               type="button"
-              className="rounded-lg border border-ds-border-muted bg-ds-card px-2.5 py-1 text-[12px] font-medium text-ds-text hover:bg-ds-card-hover"
               onClick={() => request('screenRecording')}
             >
               {t('computerUseGrantScreenRecording')}
             </button>
-            <button
+            <button className={settingsButtonClass()}
               type="button"
-              className="rounded-lg border border-ds-border-muted bg-ds-card px-2.5 py-1 text-[12px] font-medium text-ds-text hover:bg-ds-card-hover"
               onClick={refresh}
             >
               {t('computerUseRecheck')}

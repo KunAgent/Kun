@@ -129,7 +129,7 @@ export function ProviderExternalImportDialog({
             </h2>
             <p className="mt-1 text-[12.5px] text-ds-faint">{t('modelProviderImportDesc')}</p>
           </div>
-          <button
+          <button data-settings-action="ghost" data-settings-size="icon"
             type="button"
             aria-label={t('modelProviderImportCancel')}
             onClick={onClose}
@@ -221,14 +221,14 @@ export function ProviderExternalImportDialog({
             </span>
           )}
           <div className="flex shrink-0 items-center gap-2">
-            <button
+            <button data-settings-action="secondary" data-settings-size="default"
               type="button"
               onClick={onClose}
               className="inline-flex h-9 items-center rounded-full border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
             >
               {t('modelProviderImportCancel')}
             </button>
-            <button
+            <button aria-busy={importing} data-settings-action="primary" data-settings-size="default"
               type="button"
               disabled={importing || selected.size === 0}
               onClick={() => void commit()}

@@ -1,0 +1,127 @@
+/* Explicit settings-only actions. No host button, theme or permission behavior changes. */
+:is(.ds-settings-button, .ds-settings-surface [data-settings-action]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-inline-size: 2.25rem;
+  min-block-size: 2.25rem;
+  max-inline-size: 100%;
+  padding: 0.4375rem 0.875rem;
+  border: 1px solid var(--ds-border-strong);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-surface-card);
+  color: var(--ds-text);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: background-color var(--ds-duration-functional), border-color var(--ds-duration-functional), color var(--ds-duration-functional), opacity var(--ds-duration-functional);
+}
+
+:is(.ds-settings-button, .ds-settings-surface [data-settings-action]) > svg {
+  flex-shrink: 0;
+}
+
+:is(.ds-settings-button, .ds-settings-surface [data-settings-action]):hover:enabled {
+  border-color: color-mix(in srgb, var(--ds-text-muted) 55%, var(--ds-border));
+  background: var(--ds-surface-hover);
+}
+
+:is(.ds-settings-button--primary, .ds-settings-surface [data-settings-action='primary']) {
+  border-color: transparent;
+  background: var(--ds-control);
+  color: var(--ds-control-foreground);
+}
+
+:is(.ds-settings-button--primary, .ds-settings-surface [data-settings-action='primary']):hover:enabled {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--ds-control) 88%, var(--ds-surface-card));
+}
+
+:is(.ds-settings-button--ghost, .ds-settings-surface [data-settings-action='ghost']),
+:is(.ds-settings-button--link, .ds-settings-surface [data-settings-action='link']),
+:is(.ds-settings-button--danger-ghost, .ds-settings-surface [data-settings-action='danger-ghost']) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ds-text-muted);
+}
+
+:is(.ds-settings-button--link, .ds-settings-surface [data-settings-action='link']) {
+  color: var(--ds-text);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+:is(.ds-settings-button--danger, .ds-settings-surface [data-settings-action='danger']),
+:is(.ds-settings-button--danger-ghost, .ds-settings-surface [data-settings-action='danger-ghost']) {
+  color: color-mix(in srgb, var(--ds-danger) 78%, var(--ds-text));
+}
+
+:is(.ds-settings-button--danger, .ds-settings-surface [data-settings-action='danger']) {
+  border-color: color-mix(in srgb, var(--ds-danger) 40%, var(--ds-border));
+  background: var(--ds-danger-soft);
+}
+
+:is(.ds-settings-button--danger, .ds-settings-surface [data-settings-action='danger']):hover:enabled,
+:is(.ds-settings-button--danger-ghost, .ds-settings-surface [data-settings-action='danger-ghost']):hover:enabled {
+  border-color: color-mix(in srgb, var(--ds-danger) 78%, var(--ds-text));
+  background: var(--ds-danger-soft);
+}
+
+:is(.ds-settings-button--compact, .ds-settings-surface [data-settings-size='compact']) {
+  min-block-size: 2rem;
+  padding: 0.3125rem 0.625rem;
+  font-size: 0.75rem;
+}
+
+:is(.ds-settings-button--icon, .ds-settings-surface [data-settings-size='icon']) {
+  flex-shrink: 0;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  padding: 0.5rem;
+}
+
+:is(.ds-settings-button--inline-icon, .ds-settings-surface [data-settings-size='inline-icon']) {
+  flex-shrink: 0;
+  min-inline-size: 2rem;
+  min-block-size: 2rem;
+  inline-size: 2rem;
+  block-size: 2rem;
+  padding: 0.25rem;
+}
+
+:is(.ds-settings-button, .ds-settings-surface [data-settings-action]):focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+:is(.ds-settings-button, .ds-settings-surface [data-settings-action]):disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+:is(.ds-settings-button, .ds-settings-surface [data-settings-action])[aria-busy='true'] {
+  cursor: progress;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.ds-settings-button, .ds-settings-surface [data-settings-action]) { transition: none; }
+}
+
+@media (forced-colors: active) {
+  :is(.ds-settings-button, .ds-settings-surface [data-settings-action]) { border-color: ButtonText; }
+  :is(.ds-settings-button, .ds-settings-surface [data-settings-action]):disabled { color: GrayText; }
+  :is(.ds-settings-button, .ds-settings-surface [data-settings-action]):focus-visible { outline-color: Highlight; }
+}
+
+:is(.ds-settings-button, .ds-settings-surface [data-settings-action])[draggable='true'] {
+  cursor: grab;
+}
+
+:is(.ds-settings-button, .ds-settings-surface [data-settings-action])[draggable='true']:active {
+  cursor: grabbing;
+}

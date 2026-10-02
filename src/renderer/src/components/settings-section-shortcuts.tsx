@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Keyboard, RotateCcw, Search } from 'lucide-react'
@@ -149,7 +150,7 @@ export function KeyboardShortcutsSettingsSection({ ctx }: { ctx: Record<string, 
                 <button
                   type="button"
                   onClick={() => updateBinding(command.id, [])}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                  className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
                   aria-label={t('shortcutReset')}
                   title={t('shortcutReset')}
                 >

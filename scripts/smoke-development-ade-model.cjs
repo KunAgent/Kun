@@ -1,7 +1,7 @@
 'use strict'
 
 const { createServer } = require('node:http')
-const { roomsHarnessModelResponse } = require('./smoke-rooms-harness-fixture.cjs')
+const { roomsHarnessModelResponse, roomsHarnessDiscoveryRoute } = require('./smoke-rooms-harness-fixture.cjs')
 
 /** Offline responses still exercise the real loop, tool admission, and worker host. */
 async function startModelFixture(model, options = {}) {
@@ -25,11 +25,12 @@ async function startModelFixture(model, options = {}) {
       .map((entry) => typeof entry.content === 'string' ? entry.content : JSON.stringify(entry.content ?? '')).join('\n')
     const supports = (name) => (body.tools ?? []).some((tool) => tool.function?.name === name)
     const completed = (id) => messages.some((entry) => entry.tool_call_id === id)
-    observations.push({ model: body.model,
+    const observation = { model: body.model,
       tools: (body.tools ?? []).map((tool) => tool.function?.name).filter(Boolean),
       createMarker: text.includes('[ade-smoke-create-worker]'),
       workerMarker: text.includes('[ade-smoke-worker-file]'),
-      followupMarker: text.includes('[ade-smoke-worker-message]') })
+      followupMarker: text.includes('[ade-smoke-worker-message]') }
+    observations.push(observation)
     let message = { role: 'assistant', content: 'Done.' }
     const call = (id, name, args) => ({ role: 'assistant', content: null,
       tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] })
@@ -51,6 +52,8 @@ async function startModelFixture(model, options = {}) {
       counters.workerMessages += 1
       message.content = 'Worker follow-up received.'
     }
+    observation.responseTools = (message.tool_calls ?? []).map((tool) => tool.function.name)
+    observation.roomsHarnessDiscoverySucceeded = Boolean(roomsHarnessDiscoveryRoute(messages))
     response.writeHead(200, { 'content-type': 'application/json' })
     response.end(JSON.stringify({ id: 'ade-smoke', object: 'chat.completion', created: 1,
       model: body.model ?? model, choices: [{ index: 0, message,

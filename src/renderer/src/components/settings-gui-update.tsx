@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type { ReactElement } from 'react'
 import type { GuiUpdateInfo, GuiUpdateProgress } from '@shared/gui-update'
 import { AlertCircle, CheckCircle2, Download, Loader2, RefreshCw } from 'lucide-react'
@@ -117,21 +118,19 @@ export function GuiUpdateControl({
         </div>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <button
+        <button aria-busy={Boolean(checking)} className={settingsButtonClass()}
           type="button"
           onClick={() => void onCheck()}
           disabled={busy}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-55"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} strokeWidth={1.75} />
           {t('guiUpdateCheck')}
         </button>
         {canDownload || downloading ? (
-          <button
+          <button aria-busy={Boolean(downloading)} className={settingsButtonClass()}
             type="button"
             onClick={() => void onDownload()}
             disabled={!canDownload || busy}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-55"
           >
             {downloading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
@@ -142,11 +141,11 @@ export function GuiUpdateControl({
           </button>
         ) : null}
         {canInstall || installing ? (
-          <button
+          <button aria-busy={Boolean(installing)}
             type="button"
             onClick={() => void onInstall()}
             disabled={!canInstall || installing}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-ds-userbubble px-3 py-2 text-[13px] font-medium text-ds-userbubbleFg shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55"
+            className={settingsButtonClass({ variant: 'primary' })}
           >
             {installing ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
@@ -160,7 +159,7 @@ export function GuiUpdateControl({
           <button
             type="button"
             onClick={() => void window.kunGui.openExternal(releaseUrl).catch(() => undefined)}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-ds-userbubble px-3 py-2 text-[13px] font-medium text-ds-userbubbleFg shadow-sm transition hover:opacity-90"
+            className={settingsButtonClass({ variant: 'primary' })}
           >
             {t('guiUpdateOpenRelease')}
           </button>

@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import {
   CUSTOM_SPEECH_TO_TEXT_PROVIDER_ID,
   DEFAULT_SPEECH_TO_TEXT_PROTOCOL,
@@ -469,11 +470,11 @@ export function SpeechToTextSettingsSection({ ctx }: { ctx: Record<string, any> 
             description={t('speechToTextTestDesc')}
             control={
               <div className="flex w-full min-w-0 flex-col gap-2 md:max-w-md">
-                <button
+                <button aria-busy={Boolean(testState === 'busy')}
                   type="button"
                   disabled={testState === 'busy'}
                   onClick={() => void runSpeechTest()}
-                  className="inline-flex h-9 w-fit items-center gap-1.5 rounded-full border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
+                  className={settingsButtonClass({ className: 'w-fit' })}
                 >
                   {testState === 'busy'
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />

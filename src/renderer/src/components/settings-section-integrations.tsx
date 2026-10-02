@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { CalendarDays, ExternalLink, Files, LoaderCircle, Mail, Plug, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { GOOGLE_WORKSPACE_DOCUMENTATION_URL } from '@shared/google-workspace'
@@ -9,8 +10,7 @@ export function IntegrationsSettingsSection(): React.JSX.Element {
   const { status, loading, error, cancelling, refresh, run, cancel, busy } = useGoogleWorkspace(api)
   const connected = status?.auth.state === 'connected'
   const setupRequired = status?.setup?.required || status?.auth.state === 'setup_required'
-  const actionClass = 'rounded-xl border border-ds-border px-3 py-2 text-xs font-medium text-ds-ink transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-40'
-  const disconnect = (): void => {
+    const disconnect = (): void => {
     if (!window.confirm(t('googleWorkspaceDisconnectConfirm'))) return
     void run('logout')
   }
@@ -72,15 +72,15 @@ export function IntegrationsSettingsSection(): React.JSX.Element {
         {error ? <p role="alert" className="mt-3 text-xs text-red-700 dark:text-red-300">{t(error)}</p> : null}
 
         <div className="mt-5 flex flex-wrap gap-2">
-          <button type="button" className={actionClass} disabled={busy || loading || !status?.binary.available || Boolean(setupRequired)} onClick={() => void run('login')}>{t(connected ? 'googleWorkspaceReconnect' : 'googleWorkspaceConnect')}</button>
-          <button type="button" className={actionClass} disabled={busy || loading || !status?.binary.available} onClick={() => void run('setup')}>{t('googleWorkspaceSetup')}</button>
-          <button type="button" className={actionClass} disabled={busy || loading || !status?.binary.available || Boolean(setupRequired) || status?.auth.state === 'disconnected'} onClick={() => void run('test')}>{t('googleWorkspaceTest')}</button>
-          <button type="button" className={actionClass} disabled={busy || loading || !status?.binary.available || status?.auth.state === 'disconnected' || Boolean(setupRequired)} onClick={disconnect}>{t('googleWorkspaceDisconnect')}</button>
-          <button type="button" className={actionClass} disabled={busy || loading} onClick={() => void refresh()}><RefreshCw className="mr-1.5 inline h-3.5 w-3.5" />{t('googleWorkspaceRefresh')}</button>
-          {busy ? <button type="button" className={actionClass} disabled={cancelling} onClick={() => void cancel()}>{t(cancelling ? 'googleWorkspaceCancelling' : 'googleWorkspaceCancel')}</button> : null}
+          <button className={settingsButtonClass()} type="button"  disabled={busy || loading || !status?.binary.available || Boolean(setupRequired)} onClick={() => void run('login')}>{t(connected ? 'googleWorkspaceReconnect' : 'googleWorkspaceConnect')}</button>
+          <button className={settingsButtonClass()} type="button"  disabled={busy || loading || !status?.binary.available} onClick={() => void run('setup')}>{t('googleWorkspaceSetup')}</button>
+          <button className={settingsButtonClass()} type="button"  disabled={busy || loading || !status?.binary.available || Boolean(setupRequired) || status?.auth.state === 'disconnected'} onClick={() => void run('test')}>{t('googleWorkspaceTest')}</button>
+          <button type="button" className={settingsButtonClass({ variant: 'danger' })} disabled={busy || loading || !status?.binary.available || status?.auth.state === 'disconnected' || Boolean(setupRequired)} onClick={disconnect}>{t('googleWorkspaceDisconnect')}</button>
+          <button className={settingsButtonClass()} type="button"  disabled={busy || loading} onClick={() => void refresh()}><RefreshCw className="mr-1.5 inline h-3.5 w-3.5" />{t('googleWorkspaceRefresh')}</button>
+          {busy ? <button className={settingsButtonClass()} type="button"  disabled={cancelling} onClick={() => void cancel()}>{t(cancelling ? 'googleWorkspaceCancelling' : 'googleWorkspaceCancel')}</button> : null}
         </div>
       </>}
-      <button type="button" className="mt-4 inline-flex items-center gap-1.5 text-xs text-accent hover:underline" onClick={() => void window.kunGui.openExternal(GOOGLE_WORKSPACE_DOCUMENTATION_URL).catch(() => undefined)}><ExternalLink className="h-3.5 w-3.5" />{t('googleWorkspaceDocumentation')}</button>
+      <button type="button"  className={settingsButtonClass({ variant: 'link', className: 'mt-4' })} onClick={() => void window.kunGui.openExternal(GOOGLE_WORKSPACE_DOCUMENTATION_URL).catch(() => undefined)}><ExternalLink className="h-3.5 w-3.5" />{t('googleWorkspaceDocumentation')}</button>
     </section>
   )
 }

@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { DEFAULT_CURSOR_SPOTLIGHT_COLOR } from '@shared/app-settings'
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
 
@@ -106,7 +107,7 @@ export function HexColorControl({
           type="button"
           disabled={disabled || normalized === resetValue}
           onClick={() => onChange(resetValue)}
-          className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[12px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-50"
+          className={settingsButtonClass({ className: 'shrink-0' })}
         >
           {resetLabel}
         </button>

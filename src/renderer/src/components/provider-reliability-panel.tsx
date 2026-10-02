@@ -93,7 +93,7 @@ export function ProviderReliabilityPanel({
       <DetailSection
         title={t('modelProviderFailoverSection')}
         action={group ? undefined : (
-          <button
+          <button data-settings-action="primary" data-settings-size="default"
             type="button"
             onClick={createGroup}
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-ds-border bg-ds-card px-3 text-[12px] font-medium text-ds-ink transition hover:bg-ds-hover"
@@ -122,7 +122,7 @@ export function ProviderReliabilityPanel({
                   const oauthDisabled = hasOauthMembers
                     && (strategy === 'rotate' || strategy === 'least-used')
                   return (
-                    <button
+                    <button aria-label={oauthDisabled ? t('modelProviderFailoverOauthStrategyHint') : undefined}
                       key={strategy}
                       type="button"
                       aria-pressed={selected}
@@ -196,7 +196,7 @@ export function ProviderReliabilityPanel({
                           {t('modelProviderFailoverPrimary')}
                         </span>
                       ) : (
-                        <button
+                        <button data-settings-action="danger-ghost" data-settings-size="icon"
                           type="button"
                           aria-label={t('modelProviderFailoverAccountRemove')}
                           onClick={() => saveGroup({
@@ -306,7 +306,7 @@ export function ProviderReliabilityPanel({
                           {t('modelProviderFailoverInvalidFallback')}
                         </span>
                       ) : null}
-                      <button
+                      <button data-settings-action="danger-ghost" data-settings-size="icon"
                         type="button"
                         aria-label={t('modelProviderFailoverFallbackRemove')}
                         onClick={() => saveGroup({
@@ -322,7 +322,7 @@ export function ProviderReliabilityPanel({
                 })}
               </div>
               {fallbackCandidates.length > 0 ? (
-                <button
+                <button data-settings-action="secondary" data-settings-size="default"
                   type="button"
                   onClick={() => {
                     const candidate = fallbackCandidates[0]
@@ -345,7 +345,7 @@ export function ProviderReliabilityPanel({
             </div>
 
             {isRepresentative ? (
-              <button
+              <button data-settings-action="danger" data-settings-size="default"
                 type="button"
                 onClick={removeGroup}
                 className="w-fit text-[12px] font-medium text-red-600 underline-offset-2 transition hover:underline dark:text-red-300"

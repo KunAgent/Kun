@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type { ModelRoutePoolV1 } from '@shared/app-settings'
 import type { KunRuntimeSettingsSyncStatusPayload } from '@shared/kun-gui-api'
 import type { TFunction } from 'i18next'
@@ -31,7 +32,7 @@ export function EmptyRoutePoolState({ onAdd, t }: { onAdd: () => void; t: TFunct
         <button
           type="button"
           onClick={onAdd}
-          className="mt-4 inline-flex h-9 items-center gap-2 rounded-full bg-accent px-4 text-[12px] font-semibold text-white"
+           className={settingsButtonClass({ variant: 'primary', className: 'mt-4' })}
         >
           <Plus className="h-3.5 w-3.5" />
           {t('modelRoutes.addModel')}
@@ -80,7 +81,7 @@ export function LocalGatewayApiDialog({
             <h2 id="local-api-dialog-title" className="flex items-center gap-2 text-[16px] font-semibold text-ds-ink"><Code2 className="h-4 w-4 text-accent" />{t('modelRoutes.apiDialogTitle')}</h2>
             <p className="mt-1 text-[12px] text-ds-muted">{t('modelRoutes.apiDialogDesc')}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-ds-muted hover:bg-ds-hover hover:text-ds-ink" aria-label={t('modelRoutes.closeApiDocs')}><X className="h-4 w-4" /></button>
+          <button type="button" onClick={onClose} className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}  aria-label={t('modelRoutes.closeApiDocs')}><X className="h-4 w-4" /></button>
         </header>
 
         <div className="grid min-h-0 overflow-y-auto md:grid-cols-[196px_minmax(0,1fr)]">
@@ -107,7 +108,7 @@ export function LocalGatewayApiDialog({
             </div>
 
             <div className="mt-4 rounded-xl border border-ds-border bg-ds-main/45 p-3">
-              <div className="flex items-center justify-between gap-3"><span className="text-[11px] font-medium text-ds-muted">{t('modelRoutes.baseUrlLabel')}</span><button type="button" onClick={() => onCopy(baseUrl)} className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:opacity-80">{copied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}{copied ? t('modelRoutes.copied') : t('modelRoutes.copy')}</button></div>
+              <div className="flex items-center justify-between gap-3"><span className="text-[11px] font-medium text-ds-muted">{t('modelRoutes.baseUrlLabel')}</span><button className={settingsButtonClass()} type="button" onClick={() => onCopy(baseUrl)} >{copied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}{copied ? t('modelRoutes.copied') : t('modelRoutes.copy')}</button></div>
               <code className="mt-1.5 block break-all font-mono text-[12px] text-ds-ink">{baseUrl}</code>
             </div>
 

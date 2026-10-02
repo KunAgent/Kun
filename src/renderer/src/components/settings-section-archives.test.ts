@@ -121,6 +121,7 @@ describe('ArchivedThreadsSettingsSection', () => {
     expect(html).toContain('Move archived conversations into settings')
     expect(html).toContain('Restore')
     expect(html).toContain('Delete archived chat')
+    expect(html).toContain('aria-label="Search archived chats"')
   })
 
   it('keeps subagents between the AI assistant and archived chats without a standalone permissions tab', () => {

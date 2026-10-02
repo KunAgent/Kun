@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type { ReactElement } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import type {
@@ -403,7 +404,7 @@ export function AgentsCollaborationSettingsPanel({ view }: { view: Collaboration
         {conflict ? <div role="alert" className="mt-3 rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-[12px] text-ds-ink">
           <p>{t('adeSettings.collaborationConflict')}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <button type="button" className="underline" onClick={() => {
+            <button type="button" className={settingsButtonClass({ variant: 'link' })} onClick={() => {
               pendingCollaborationDraft = null
               setDraft(draftFrom(conflict.value))
               setSavedSnapshot(conflict)
@@ -411,7 +412,7 @@ export function AgentsCollaborationSettingsPanel({ view }: { view: Collaboration
               setDirty(false)
               setConflict(null)
             }}>{t('adeSettings.collaborationUseLatest')}</button>
-            <button type="button" className="underline" onClick={() => {
+            <button type="button" className={settingsButtonClass({ variant: 'link' })} onClick={() => {
               setSavedSnapshot(conflict)
               setRevision(conflict.revision)
               pendingCollaborationDraft = { draft, revision: conflict.revision }
@@ -426,9 +427,9 @@ export function AgentsCollaborationSettingsPanel({ view }: { view: Collaboration
             ? <span className="ml-1 break-words">{applyStatus.message}</span> : null}
         </p> : null}
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-ds-border-muted pt-4">
-          <button type="button" className="rounded-full border border-ds-border px-4 py-2 text-[12px] text-ds-muted"
+          <button className={settingsButtonClass()} type="button"
             disabled={!dirty || saving} onClick={discard}>{t('adeSettings.collaborationDiscard')}</button>
-          <button type="button" className="rounded-full bg-accent px-4 py-2 text-[12px] text-white disabled:opacity-50"
+          <button type="button" className={settingsButtonClass({ variant: 'primary' })}
             disabled={!dirty || !revision || saving} onClick={() => void save()}>{t('adeSettings.collaborationSave')}</button>
         </div>
       </SettingsCard>
