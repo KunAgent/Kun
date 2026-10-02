@@ -55,7 +55,7 @@ app.on('window-all-closed', () => app.quit())
       }
     }] })
   await server.listen()
-  await page.goto(`${server.resolvedUrls.local[0]}__room_voice`)
+  await page.goto(`${server.resolvedUrls.local[0]}__room_voice`, { timeout: 90_000 })
   await page.locator('.rooms-rich-input').waitFor({ timeout: 90_000 })
   if (expectMissing) {
     await page.waitForTimeout(500)
@@ -74,7 +74,7 @@ app.on('window-all-closed', () => app.quit())
             const rect = button.getBoundingClientRect()
             const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
             return { label: button.getAttribute('aria-label'), x: rect.x, right: rect.right,
-              width: rect.width, height: rect.height, hit: hit === button || button.contains(hit) }
+              y: rect.y, width: rect.width, height: rect.height, hit: hit === button || button.contains(hit) }
           })
           return { width: innerWidth, dpr: devicePixelRatio, scrollWidth: document.documentElement.scrollWidth,
             composerRight: bounds.right, buttons }
@@ -86,6 +86,7 @@ app.on('window-all-closed', () => app.quit())
           assert.ok(button.label && button.width >= 30 && button.height >= 30 && button.hit, 'visible, named, hit-testable controls')
           assert.ok(button.x >= 0 && button.right <= width + 1, 'control must remain within viewport')
         }
+        assert.ok(Math.abs(geometry.buttons[0].y - geometry.buttons[1].y) <= 2, 'mic and send stay on the same row')
         await screenshot(`enabled-${language}-${width}`)
       }
     }

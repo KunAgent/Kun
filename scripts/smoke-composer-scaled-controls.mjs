@@ -70,7 +70,8 @@ app.on('window-all-closed', () => app.quit())
       console.log(url)
       await new Promise(() => {})
     }
-    await page.goto(url)
+    // Cold Windows Vite transforms need the same budget as renderer readiness.
+    await page.goto(url, { timeout: 90_000 })
     await page.locator('.ds-composer-voice-action').waitFor({ state: 'attached', timeout: 90_000 })
     await page.locator('.ds-composer-prompt-optimize-action').waitFor({ state: 'attached' })
     for (const language of ['en', 'zh']) {
