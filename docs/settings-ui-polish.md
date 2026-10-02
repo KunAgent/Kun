@@ -263,3 +263,24 @@ The 4621 reports retain 24 repeated covered-center findings on gated ADE
 switches; their permission semantics are not changed or waived. The final native
 reports retain any remaining findings explicitly. No screenshot or runtime
 coverage claim should exceed the recorded evidence.
+
+## Combined-tree native verification
+
+Run `36984245747` passed on combined head `9f7dfe08` on both Windows and macOS.
+The stricter gate recorded no page/content overflow, reached-control clipping,
+undersized buttons, or new regressions. Each OS also captured 60 native scrolled
+details so the General switches and nested model-route strip are actually visible
+in the evidence; all detail targets fit their measured scrollport. The route
+strip intentionally scrolls horizontally in narrow windows, with every tab
+separately reachable. The two gated ADE switches retain their 24 repeated
+covered-center findings per OS; no permission behavior was changed.
+
+Combined validation also exposed an unchanged Rooms test-fixture ordering bug.
+Its offline model proposed a task during the publication-only phase, before
+successful catalog discovery. The fixture now sends its start phase, consumes
+the successful catalog route, and proves discovery precedes proposal. Twelve
+contract tests cover this order and malformed, missing or unavailable results;
+the native Rooms workflow runs them before its real application build. This is
+a test-fixture correction, not a production runtime or authorization change.
+The PR records final exact-head quality/package/native results and merge-tree
+verification after the prerequisite workspace PR lands.

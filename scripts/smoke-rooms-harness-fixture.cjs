@@ -1,4 +1,5 @@
 'use strict'
+const assert = require('node:assert/strict')
 const { chmod, mkdir, writeFile } = require('node:fs/promises')
 const { join } = require('node:path')
 
@@ -56,18 +57,48 @@ function roomsHarnessModelResponse({ text, messages, supports, completed, call, 
       ? call('rooms-harness-final', 'send_im_message', { phase: 'final', text: 'Devin 已完成任务，结果与执行记录见上方任务卡片。' })
       : { role: 'assistant', content: '已汇报任务结果。' }
   }
-  if (supports('list_code_harnesses') && !completed('rooms-harness-discover')) {
-    return call('rooms-harness-discover', 'list_code_harnesses', {})
+  // A fresh private turn initially exposes publication tools only. Publish a
+  // start message to open the work phase instead of proposing an invented route.
+  if (!completed('rooms-harness-discover')) {
+    if (supports('list_code_harnesses')) return call('rooms-harness-discover', 'list_code_harnesses', {})
+    if (supports('send_im_message') && !completed('rooms-harness-start')) {
+      return call('rooms-harness-start', 'send_im_message', { phase: 'start', text: '我先检查 Code 中可用的 Agent。' })
+    }
+    return { role: 'assistant', content: 'Waiting for Code Agent discovery tools.' }
   }
+  const model = roomsHarnessDiscoveryRoute(messages)
+  if (!model) return { role: 'assistant', content: 'Code Agent discovery did not return the available offline Devin route.' }
   if (supports('create_code_task') && !completed('rooms-harness-create')) {
     return call('rooms-harness-create', 'create_code_task', { title: '检查对话任务卡片布局',
       goal: '检查执行 Agent、模型与任务结果的展示。使用离线验收数据，不修改项目文件。',
       acceptance: '执行身份清晰；窄屏无横向溢出；结果回到原对话。', projectRoot: workspaceRoot,
-      execution: { mode: 'direct', model: { harnessId: 'devin', credentialMode: 'native-login', model: 'devin-fixture-model' } },
+      execution: { mode: 'direct', model },
       isolation: 'inherit', report: 'silent' })
   }
   return supports('send_im_message') && !completed('rooms-harness-proposed')
     ? call('rooms-harness-proposed', 'send_im_message', { phase: 'final', text: '已找到 Code 中可用的 Devin。确认任务卡片后即可开始，也可以修改执行 Agent。' })
     : { role: 'assistant', content: '任务已准备好。' }
 }
-module.exports = { writeRoomsHarnessStub, roomsHarnessModelResponse }
+/** Only a successful, paired discovery result can supply the proposal route. */
+function roomsHarnessDiscoveryRoute(messages) {
+  const callIndex = messages.findIndex((entry) => entry.role === 'assistant' &&
+    entry.tool_calls?.some((tool) => tool.id === 'rooms-harness-discover' && tool.function?.name === 'list_code_harnesses'))
+  if (callIndex < 0) return null
+  const result = messages.slice(callIndex + 1).find((entry) => entry.role === 'tool' && entry.tool_call_id === 'rooms-harness-discover')
+  try {
+    const output = JSON.parse(result?.content)
+    if (output?.error || output?.isError === true || output?.authority !== 'reference_only' || !Array.isArray(output.agents)) return null
+    const agent = output.agents.find((entry) => entry.harnessId === 'devin' && entry.available === true)
+    return agent?.models?.find((route) => route.harnessId === 'devin' && route.credentialMode === 'native-login' &&
+      route.model === 'devin-fixture-model') ?? null
+  } catch { return null }
+}
+
+/** Check the proposal-time request, not a later catalog observation that could hide a race. */
+function assertRoomsHarnessDiscoveryOrder(observations) {
+  const discovery = observations.findIndex((entry) => entry.responseTools?.includes('list_code_harnesses'))
+  const proposal = observations.findIndex((entry) => entry.responseTools?.includes('create_code_task'))
+  assert(discovery >= 0 && proposal > discovery && observations[proposal].roomsHarnessDiscoverySucceeded === true,
+    'Successful Code Agent discovery must precede the task proposal')
+}
+module.exports = { writeRoomsHarnessStub, roomsHarnessModelResponse, roomsHarnessDiscoveryRoute, assertRoomsHarnessDiscoveryOrder }
