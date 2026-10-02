@@ -269,8 +269,9 @@ coverage claim should exceed the recorded evidence.
 Run `36984245747` passed on combined head `9f7dfe08` on both Windows and macOS.
 The stricter gate recorded no page/content overflow, reached-control clipping,
 undersized buttons, or new regressions. Each OS also captured 60 native scrolled
-details so the General switches and nested model-route strip are actually visible
-in the evidence; all detail targets fit their measured scrollport. The route
+details exposing General switches and the nested model-route strip; all detail
+targets fit their measured scrollport. Some immediate Mac frames did not paint
+their tab contents despite these bounds, as investigated below. The route
 strip intentionally scrolls horizontally in narrow windows, with every tab
 separately reachable. The two gated ADE switches retain their 24 repeated
 covered-center findings per OS; no permission behavior was changed.
@@ -284,3 +285,34 @@ the native Rooms workflow runs them before its real application build. This is
 a test-fixture correction, not a production runtime or authorization change.
 The PR records final exact-head quality/package/native results and merge-tree
 verification after the prerequisite workspace PR lands.
+
+## Native capture readiness
+
+The exact-head `a8f9642c` matrix passed its strict geometry checks, but several
+immediate macOS narrow model-route detail PNGs intermittently omitted tab
+contents. A separate diagnostics-only branch preserved production `src`, `kun`
+and `packages` byte-for-byte and reproduced two blank initial frames in
+[probe run 36994128275](https://github.com/KunAgent/Kun/actions/runs/36994128275).
+Their delayed captures showed the labels; the first delayed and final captures
+were byte-identical for all eight light/dark route states. The two recovered
+frames began capture around 323ms and 331ms after the initial checkpoint.
+The requested offsets were 250ms and 1000ms; actual times were recorded rather
+than presented as exact requested delays.
+
+Immediately after each blank frame and throughout its delayed samples, DOM
+identity, text, descendant/ancestor styles, bounds and scroll chains remained
+stable. The window/document stayed visible and focused. Mutation evidence
+contained only scanner-marker attributes. This supports a delay-sensitive native
+paint/capture discrepancy under rapid programmatic scrolling, but does **not**
+distinguish capture lag from a brief on-screen compositor delay or claim that
+every transient rendering issue is fixed. All initial and delayed pixels remain
+in the [diagnostic artifact](https://github.com/KunAgent/Kun/actions/runs/36994128275/artifacts/11220358705).
+
+The normal smoke therefore retains its original positioning and two animation
+frames, waits a 400ms readiness checkpoint, then samples the target and bounds
+again without scrolling or changing styles before capturing unchanged native
+PNG bytes. Reports retain initial/fresh bounds and requested/measured timing.
+Missing or clipped samples do not discard their PNG; the existing assertions
+still fail. No geometry, accessible-name, focus or baseline gate is weakened,
+and the forensic observer library is not included in the main smoke. The final
+readiness change still requires its own exact-head native workflow result.

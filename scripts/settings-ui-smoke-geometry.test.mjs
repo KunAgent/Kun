@@ -3,6 +3,7 @@ import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes, requiredPolishProblems } from './settings-ui-smoke-geometry.mjs'
 import { annotateSettingsControls, annotateSettingsTabs, scrollSettingsDetail } from './settings-ui-smoke-dom.mjs'
+import { captureReadySettingsDetail, SETTINGS_DETAIL_SETTLE_MS } from './settings-ui-smoke-detail.mjs'
 import { JSDOM } from 'jsdom'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -90,13 +91,13 @@ test('scrolled detail targets the real switch and visible nested route tabs with
     t.after(() => descriptor ? Object.defineProperty(globalThis, key, descriptor) : delete globalThis[key])
   }
   t.after(() => window.close())
-  let lastTarget, lastOptions
-  window.HTMLElement.prototype.scrollIntoView = function (options) { lastTarget = this; lastOptions = options }
+  let lastTarget, lastOptions, scrollCount = 0, targetY = 200
+  window.HTMLElement.prototype.scrollIntoView = function (options) { lastTarget = this; lastOptions = options; scrollCount++ }
   window.HTMLElement.prototype.getClientRects = () => [{}]
   window.HTMLElement.prototype.getBoundingClientRect = function () {
     return this.classList.contains('ds-settings-scroller')
       ? { x: 0, y: 100, right: 900, bottom: 645, width: 900, height: 545 }
-      : { x: 50, y: 200, right: 350, bottom: 232, width: 300, height: 32 }
+      : { x: 50, y: targetY, right: 350, bottom: targetY + 32, width: 300, height: 32 }
   }
   const toggle = scrollSettingsDetail({ kind: 'general-switch', controlId: '7' })
   assert.equal(lastTarget.getAttribute('role'), 'switch')
@@ -109,7 +110,51 @@ test('scrolled detail targets the real switch and visible nested route tabs with
   assert.equal(routes.targetRole, 'tablist')
   assert.deepEqual(routes.tabs.map(tab => tab.id), ['model-routes-settings-tab-models'])
   assert.equal(routes.tabs[0].selected, true)
+  const html = document.documentElement.outerHTML
+  const scrolls = scrollCount
+  targetY = 250
+  const refreshed = scrollSettingsDetail({ kind: 'model-route-tabs', readOnly: true })
+  assert.equal(refreshed.bounds.y, 250, 'Fresh sampling observes the current target position')
+  assert.equal(refreshed.tabs[0].bounds.y, 250)
+  const refreshedSwitch = scrollSettingsDetail({ kind: 'general-switch', controlId: '7', readOnly: true })
+  assert.equal(refreshedSwitch.bounds.y, 250)
+  assert.equal(scrollCount, scrolls, 'A readiness read must not scroll again')
+  assert.equal(document.documentElement.outerHTML, html, 'A readiness read must not change DOM or styles')
   assert.equal(scrollSettingsDetail({ kind: 'general-switch', controlId: 'missing' }), null)
+})
+
+test('detail capture positions once, waits, takes a fresh read, then preserves native pixels', async () => {
+  let clock = 0, currentBounds = 'old'
+  const order = [], pixels = { file: 'unchanged-native.png' }
+  const result = await captureReadySettingsDetail({
+    now: () => clock,
+    position: async () => { order.push('position'); clock += 3; return { bounds: currentBounds } },
+    paintFrames: async () => { order.push('frames'); clock += 32 },
+    wait: async delay => { order.push(`wait:${delay}`); clock += delay + 7; currentBounds = 'fresh' },
+    read: async () => { order.push('read-only'); clock += 5; return { bounds: currentBounds, fullyVisible: true } },
+    capture: async () => { order.push('native-png'); clock += 10; return pixels }
+  })
+  assert.deepEqual(order, ['position', 'frames', `wait:${SETTINGS_DETAIL_SETTLE_MS}`, 'read-only', 'native-png'])
+  assert.equal(SETTINGS_DETAIL_SETTLE_MS, 400)
+  assert.equal(result.detail.bounds, 'fresh')
+  assert.equal(result.positionedDetail.bounds, 'old')
+  assert.equal(result.pixels, pixels)
+  assert.equal(result.timing.actualWaitMs, 407)
+  assert.equal(result.timing.sampleCompletedOffsetMs, result.timing.captureStartedOffsetMs)
+  assert.equal(result.timing.captureCompletedOffsetMs, 457)
+})
+
+test('a missing or clipped fresh detail does not discard the diagnostic native PNG', async () => {
+  for (const detail of [null, { fullyVisible: false }]) {
+    let captures = 0
+    const result = await captureReadySettingsDetail({ now: () => 0,
+      position: async () => ({}), paintFrames: async () => {}, wait: async () => {},
+      read: async () => detail, capture: async () => { captures++; return 'native bytes retained' }
+    })
+    assert.equal(captures, 1)
+    assert.equal(result.detail, detail)
+    assert.equal(result.pixels, 'native bytes retained')
+  }
 })
 
 test('overlap uses visible scrollport intersections and still detects painted overlaps', async t => {
@@ -176,6 +221,11 @@ test('workflow keeps both native OSes, source baseline and failure evidence', ()
   const fixture = readFileSync(new URL('../src/renderer/src/components/SettingsUiSmokeFixture.tsx', import.meta.url), 'utf8')
   assert.match(fixture, /height: '100%'/)
   assert.doesNotMatch(fixture, /height: '100vh'/)
+  const smoke = readFileSync(new URL('./smoke-settings-ui.mjs', import.meta.url), 'utf8')
+  assert.match(smoke, /readOnly: true/)
+  assert.match(smoke, /assert\.ok\(positionedDetail/)
+  assert.match(smoke, /assert\.ok\(detail,/)
+  assert.match(smoke, /assert\.ok\(detail\.fullyVisible/)
 })
 
 test('review artifact stays bounded, retains pairs and preserves complete gzip reports', async t => {
