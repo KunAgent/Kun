@@ -7,6 +7,8 @@ import {
   session,
   shell
 } from 'electron'
+import { PersonalAgentImService } from './personal-agent-im-service'
+import { ProtectedPersonalImStore } from './personal-agent-im-store'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import {
@@ -411,6 +413,8 @@ export async function initializeMainServices(input: {
         onInbound: (payload) => mainState.clawRuntime?.handleTelegramUpdate(payload)
       })
       mainState.clawRuntime = createClawRuntime({
+        createPersonalIm: () => new PersonalAgentImService({ store: mainState.store, runtimeRequest, logError,
+          sendWeixinBridgeMessage, secureStore: new ProtectedPersonalImStore(join(managerDataDir, 'personal-agent-im.enc')) }),
         store: mainState.store,
         runtimeRequest,
         logError,

@@ -173,7 +173,7 @@ export class AgentDirectRunner {
       await this.save(row, { ...request, privateRunId: run.id, admissionAttempted: true, status: 'running' })
       try {
         const admitted = await this.deps.turns.enqueueTurn({ threadId: thread.id, request: { prompt, clientRequestId: identity,
-          ...request.privateModel, attachmentIds: request.message.attachmentIds, clientSurface: 'gui', agentSurface: 'code',
+          ...request.privateModel, attachmentIds: request.message.attachmentIds, clientSurface: request.clientSurface ?? 'gui', agentSurface: 'code',
           displayText: request.message.body.slice(0, 8000),
           mode: thread.mode, sandboxMode: thread.sandboxMode, enqueueIfBusy: true } })
         await updateRoomRun(this.deps.store, run.id, { turnId: admitted.turnId })
@@ -232,11 +232,11 @@ export class AgentDirectRunner {
    * is implied by the deterministic thread identity plus the explicit checks here.
    */
   private async steerTarget(request: RoomRequestState, thread: ThreadRecord, member: RoomMember): Promise<Turn | undefined> {
-    if (request.privateContinuation || request.privateReminder || request.handoffReturnId ||
+    if (request.clientSurface === 'im' || request.privateContinuation || request.privateReminder || request.handoffReturnId ||
       request.message.attachmentIds.length || request.message.taskId) return
     const agent = await this.deps.agentDirectory?.get(member.participantAgentId!)
     if (!agent || agentSetupPending(agent)) return
-    return thread.turns.find((turn) => turn.status === 'running' &&
+    return thread.turns.find((turn) => turn.status === 'running' && (turn.clientSurface ?? 'gui') === (request.clientSurface ?? 'gui') &&
       turn.clientRequestId?.startsWith('private-') &&
       !this.steerRejected.has(request.id + ':' + turn.id) &&
       (!request.privateModel?.model || turn.model === request.privateModel.model) &&

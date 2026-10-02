@@ -78,6 +78,19 @@ describe('Room app connection cards', () => {
     await expect(setRoomAppConnectionStatus(f.store, f.room.id, id, 'skipped')).rejects.toThrow('already resolved')
   })
 
+  it('offers official IM setup as a proposal, without credentials or registration side effects', async () => {
+    const f = await fixture()
+    expect((await f.list.execute({}, f.context)).output).toMatchObject({ messagingChannels: [
+      expect.objectContaining({ id: 'im.feishu', control: 'verified_owner_only' }),
+      expect.objectContaining({ id: 'im.weixin', setup: 'official_qr' })] })
+    const result = await f.request.execute({ serverId: 'im.feishu', reason: 'Talk to me from your phone' }, f.context)
+    expect(result.isError).not.toBe(true)
+    const card = (await f.store.list<RoomMessage>('message', { roomId: f.room.id }))[0].value
+    expect(card.appConnection).toMatchObject({ serverId: 'im.feishu', status: 'requested' })
+    expect(JSON.stringify(card)).not.toMatch(/deviceCode|appSecret|ownerId|qrcode/)
+    expect(await f.store.list('agent_im_connection')).toHaveLength(0)
+  })
+
   it('rejects unknown apps, blocked apps and fabricated turn scope', async () => {
     const f = await fixture()
     expect((await f.request.execute({ serverId: 'unknown', reason: 'Need it' }, f.context)).isError).toBe(true)

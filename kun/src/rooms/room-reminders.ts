@@ -56,6 +56,8 @@ export async function createRoomReminder(store: RoomStore, input: RoomReminderOp
   anchorMessageId?: string
   chainDepth: number
   createdByRunId: string
+  clientSurface?: 'gui' | 'im'
+  imConnectionId?: string
 }): Promise<RoomReminderEntry> {
   const receipt = interactionId('reminder-create', input.roomId, input.clientRequestId)
   const fingerprint = interactionFingerprint(input)
@@ -83,6 +85,7 @@ export async function createRoomReminder(store: RoomStore, input: RoomReminderOp
       ? (await store.list('message', { roomId: input.roomId, limit: 1 }))[0]?.seq ?? 0 : undefined
     const reminder = RoomReminderSchema.parse({
       schemaVersion: 1, reminderId, roomId: input.roomId,
+      clientSurface: input.clientSurface, imConnectionId: input.imConnectionId,
       participantAgentId: input.participantAgentId, memberId: input.memberId,
       note: input.note, ...(input.anchorMessageId ? { anchorMessageId: input.anchorMessageId } : {}),
       ...options, triggerCursor: latest, occurrence: 0,

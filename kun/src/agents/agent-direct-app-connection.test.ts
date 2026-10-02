@@ -19,7 +19,7 @@ import { AgentDirectRunner } from './agent-direct-runner.js'
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close() })
 
-it('lets a private Agent publish an in-chat configured-app connection card during its turn', async () => {
+it.each(['gui', 'im'] as const)('lets a private Agent publish an in-chat connection card from %s without changing its surface', async (surface) => {
   const directory = await mkdtemp(join(tmpdir(), 'room-app-turn-'))
   const model: ModelClient = { provider: 'test', model: 'test', async *stream(request) {
     const requested = request.history.some((item) => item.kind === 'tool_result' && item.turnId === request.turnId &&
@@ -40,7 +40,7 @@ it('lets a private Agent publish an in-chat configured-app connection card durin
   cleanup.push(async () => { await runtime.close(); await h.turns.interruptActiveTurns(); await store.close();
     await rm(directory, { recursive: true, force: true }) })
   const created = await quickCreateAgent(runtime.agents, { clientRequestId: 'create-agent' }, true)
-  const sent = await runtime.service.send(created.roomId, { clientRequestId: 'ask-notion', body: 'Check Notion' })
+  const sent = await runtime.service.send(created.roomId, { clientRequestId: 'ask-notion', body: 'Check Notion' }, surface === 'im' ? { clientSurface: 'im', imConnectionId: 'paired-im' } : undefined)
   for (let step = 0; step < 12; step++) {
     const row = (await store.get<RoomRequestState>('request', sent.requestId))!
     if (['completed', 'failed'].includes(row.value.status)) break
@@ -60,10 +60,13 @@ it('lets a private Agent publish an in-chat configured-app connection card durin
   expect(cards[0].value.originRunId).toBeTruthy()
   expect((await store.get<RoomRequestState>('request', sent.requestId))?.value.status).toBe('completed')
   const run = (await store.get<RoomRunRecord>('room_run', cards[0].value.originRunId!))!.value
+  expect((await h.threads.getMetadata(run.threadId!))?.turns.find((turn) => turn.id === run.turnId)?.clientSurface).toBe(surface)
   const continuation = { threadId: run.threadId!, sourceTurnId: run.turnId!, kind: 'app_connection' as const,
     key: cards[0].id, prompt: 'Notion is connected. Continue the original task.' }
   expect(await enqueuePrivateContinuation(deps, continuation)).toBe('queued')
   expect(await enqueuePrivateContinuation(deps, continuation)).toBe('queued')
+  if (surface === 'im') expect((await store.list<RoomRequestState>('request', { roomId: created.roomId }))
+    .find((row) => row.value.privateContinuation)?.value).toMatchObject({ clientSurface: 'im', imConnectionId: 'paired-im' })
   expect((await store.list<RoomRequestState>('request', { roomId: created.roomId }))
     .filter((row) => row.value.privateContinuation?.kind === 'app_connection')).toHaveLength(1)
 })

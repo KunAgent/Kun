@@ -55,6 +55,8 @@ type ReminderBinding = {
   requestId?: string
   chainDepth: number
   triggerMessageId?: string
+  clientSurface?: 'gui' | 'im'
+  imConnectionId?: string
 }
 
 /**
@@ -101,6 +103,7 @@ async function reminderConversationBinding(threads: ThreadStore, context: ToolHo
   const request = run.value.requestId ? await store.get<RoomRequestState>('request', run.value.requestId) : null
   return { store, roomId: room.roomId, memberId: room.memberId, participantAgentId: room.participantAgentId,
     runId, requestId: run.value.requestId,
+    clientSurface: request?.value.clientSurface, imConnectionId: request?.value.imConnectionId,
     chainDepth: (request?.value.privateReminder?.chainDepth ?? -1) + 1,
     triggerMessageId: run.value.triggerMessageId }
 }
@@ -147,7 +150,8 @@ export function roomReminderTools(threads: ThreadStore): LocalTool[] {
             roomId: binding.roomId, participantAgentId: binding.participantAgentId, memberId: binding.memberId,
             ...parsed.data, note: parsed.data.note, fireAt,
             anchorMessageId: parsed.data.anchorMessageId ?? binding.triggerMessageId,
-            chainDepth: binding.chainDepth, createdByRunId: binding.runId })
+            chainDepth: binding.chainDepth, createdByRunId: binding.runId,
+            clientSurface: binding.clientSurface, imConnectionId: binding.imConnectionId })
           wakeReminderOwner(threads)
           return { output: { accepted: true, reminderId: entry.reminderId, fireAt: entry.fireAt,
             timezone: entry.timezone, recurrence: entry.recurrence, trigger: entry.trigger,

@@ -151,6 +151,7 @@ const api = {
   resolveWorkflowApproval: (token, decision) =>
     ipcRenderer.invoke('workflow:approval:resolve', { token, decision }),
   checkWorkflowCode: (language, code) => ipcRenderer.invoke('workflow:code:check', { language, code }),
+  personalAgentIm: (request) => ipcRenderer.invoke('personal-agent:im', request),
   startClawImInstallQr: (provider, options) =>
     ipcRenderer.invoke('claw:im-install:qrcode', { provider, isLark: options?.isLark }),
   pollClawImInstall: (provider, deviceCode) =>

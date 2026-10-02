@@ -101,6 +101,7 @@ export async function enqueuePrivateContinuation(deps: RoomRuntimeDeps, input: R
     id, roomId: room.id, rootRequestId: root.id, privateProtocol: 'direct-v1',
     privateInput: input.prompt, privateWorkspace: thread.workspace,
     privateModel: base.value.privateModel,
+    clientSurface: base.value.clientSurface, imConnectionId: base.value.imConnectionId,
     privateContinuation: { sourceTurnId: source.id, kind: input.kind, ...(inboxId ? { inboxId } : {}),
       ...(input.kind === 'goal' ? { goalCreatedAt: thread.goal!.createdAt } : {}) },
     status: 'pending', threadId: thread.id, roomSnapshot: snapshot,

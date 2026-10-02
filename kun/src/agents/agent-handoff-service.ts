@@ -158,7 +158,7 @@ export class AgentHandoffService {
       sourceRequestId: id, handoffId: id, messageSeq: 1, authorKind: 'member',
       authorMemberId: sender.id, authorAgentId: sender.id, authorLabelSnapshot: sender.name,
       body: input.body, bodyRevision: 0, mentionMemberIds: [recipient.id], attachmentIds: handoff.attachmentIds, status: 'final', createdAt: now })
-    const synthetic: RoomRequestState = { id, roomId: pair.room.id, rootRequestId: id, collaborationProtocol: 'peer', status: 'completed',
+    const synthetic: RoomRequestState = { clientSurface: request.value.clientSurface, imConnectionId: request.value.imConnectionId, id, roomId: pair.room.id, rootRequestId: id, collaborationProtocol: 'peer', status: 'completed',
       message: { clientRequestId: id, body: input.body, executionIntent: 'discussion', mentionMemberIds: [recipient.id], attachmentIds: handoff.attachmentIds },
       sourceMessageId: opening.id, roomSnapshot: frozen, threadId: handoff.threadId }
     const sourceChecks = []

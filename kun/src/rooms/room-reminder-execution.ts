@@ -111,6 +111,8 @@ async function fireRoomReminder(deps: RoomRuntimeDeps, service: RoomService,
     }
     throw error
   }
+  request.clientSurface = reminder.clientSurface
+  request.imConnectionId = reminder.imConnectionId
   const occurrence = (reminder.occurrence ?? 0) + 1
   const next = nextReminderOccurrence(reminder, now)
   const continueSchedule = next && (!reminder.maxOccurrences || occurrence < reminder.maxOccurrences) &&

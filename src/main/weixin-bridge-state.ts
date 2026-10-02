@@ -49,11 +49,13 @@ export type WeixinLoginSession = {
   qrcode: string
   qrcodeUrl: string
   startedAt: number
+  protectCredentials?: boolean
   currentApiBaseUrl?: string
 }
 
 export type WeixinAccountData = {
   token?: string
+  protectedToken?: string
   baseUrl?: string
   userId?: string
 }
@@ -74,7 +76,8 @@ export type WeixinMessageItem = {
 }
 
 export type WeixinMessage = {
-  message_id?: string
+  message_id?: string | number
+  group_id?: string
   message_type?: number
   from_user_id?: string
   create_time_ms?: number

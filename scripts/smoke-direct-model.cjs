@@ -34,7 +34,11 @@ async function startDirectModel({ real = false } = {}) {
       const chunks = []; for await (const chunk of request) chunks.push(chunk)
       const body = JSON.parse(Buffer.concat(chunks).toString())
       const messages = body.messages ?? []
-      const user = [...messages].reverse().find((item) => item.role === 'user' && JSON.stringify(item.content).includes('User message:'))
+      // A connection decision is a new host-owned continuation, not another
+      // copy of the earlier user request. Keep its tool history scoped to it.
+      const intentIndex = messages.findLastIndex((item) => item.role === 'user' &&
+        /User message:|The user (?:skipped connecting|connected) app im\./.test(JSON.stringify(item.content)))
+      const user = messages[intentIndex]
       const prompt = user ? JSON.stringify(user.content).split('User message:').at(-1).slice(0, 500) : undefined
       if (prompt) lastPrompt = prompt
       const count = (stats.byPrompt[lastPrompt] ?? 0) + 1
@@ -65,7 +69,6 @@ async function startDirectModel({ real = false } = {}) {
       const review = JSON.stringify(messages).includes('hostApprovalReason')
       if (review) stats.automaticReviews++
       const last = messages.at(-1)
-      const intentIndex = messages.findLastIndex((item) => item.role === 'user' && JSON.stringify(item.content).includes('User message:'))
       const afterIntent = messages.slice(intentIndex + 1)
       const calls = afterIntent.flatMap((item) => item.role === 'assistant' ? item.tool_calls ?? [] : [])
       const resultIds = new Set(afterIntent.filter((item) => item.role === 'tool').map((item) => item.tool_call_id))
@@ -84,7 +87,11 @@ async function startDirectModel({ real = false } = {}) {
         const command = external ? { path: Buffer.from(external[1], 'base64url').toString(), content: 'external verified\n' } : prompt.includes('PROJECT_FILE') ? { path: 'project-result.txt', content: 'project verified\n' } :
           prompt.includes('UPDATE_FILE') ? { path: 'hello.txt', content: 'updated by Kun\n' } :
           prompt.includes('CREATE_FILE') ? { path: 'hello.txt', content: 'hello from Kun\n' } : undefined
-        const outgoing = command
+        const outgoing = prompt.includes('IM_CONNECTION_SMOKE_')
+          ? !succeeded('request_app_connection') ? { name: 'request_app_connection', args: {
+            serverId: prompt.includes('IM_CONNECTION_SMOKE_weixin') ? 'im.weixin' : 'im.feishu',
+            reason: 'Continue our conversation from your phone using this same Agent.' } } : null
+          : command
           ? !started ? { name: 'send_im_message', args: { text: '我先检查任务并创建文件。', phase: 'start' } }
             : !wrote ? { name: 'write', args: command }
               : !finished ? { name: 'send_im_message', args: { text: '文件已完成，并保存在当前工作目录。', phase: 'final' } } : null

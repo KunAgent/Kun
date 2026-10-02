@@ -389,6 +389,7 @@ export type KunGuiApi = GoogleWorkspaceSurface & ExtensionIpcApi & RemoteSshApi 
   testWorkflowNode: (workflowId: string, nodeId: string, mockJson: string) => Promise<WorkflowNodeTestResult>
   resolveWorkflowApproval: (token: string, decision: WorkflowApprovalDecision) => Promise<{ ok: boolean }>
   checkWorkflowCode: (language: WorkflowCodeLanguage, code: string) => Promise<WorkflowCodeCheckResult>
+  personalAgentIm: (request: import('./personal-agent-im').PersonalAgentImRequest) => Promise<import('./personal-agent-im').PersonalAgentImResult>
   startClawImInstallQr: (
     provider: 'feishu' | 'weixin',
     options?: { isLark?: boolean }

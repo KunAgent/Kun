@@ -58,6 +58,15 @@ async function fixture() {
 }
 
 describe('room reminder scheduling', () => {
+  it('carries a host-bound IM origin into a later reminder wake', async () => {
+    const f = await fixture()
+    const entry = await f.reminder({ clientSurface: 'im', imConnectionId: 'paired-im', fireAt: new Date(Date.now() - 1000).toISOString() })
+    await fireDueRoomReminders(f.deps, f.service, new Date().toISOString())
+    const fired = await readRoomReminder(f.store, f.room.id, entry.reminderId)
+    const wake = (await f.store.list<RoomRequestState>('request', { roomId: f.room.id })).find((row) => row.id === fired.firedRequestId)
+    expect(wake?.value).toMatchObject({ clientSurface: 'im', imConnectionId: 'paired-im' })
+  })
+
   it('accepts exactly one of delaySeconds or fireAt within the allowed window', () => {
     const now = new Date()
     expect(reminderFireAt({ delaySeconds: 120 }, now)).toBe(new Date(now.getTime() + 120_000).toISOString())

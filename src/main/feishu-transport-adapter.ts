@@ -17,6 +17,7 @@ export type FeishuTransportAdapterDeps = {
   onMessage: (channelId: string, message: NormalizedMessage) => void | Promise<void>
   allowedFileDirs: (settings: AppSettingsV1, channel: ClawImChannelV1) => string[]
   createChannel?: typeof createLarkChannel
+  suppressSdkLogs?: boolean
 }
 
 /** Owns Feishu/Lark SDK connections; callers only coordinate normalized messages. */
@@ -189,6 +190,7 @@ export class FeishuTransportAdapter {
           appSecret,
           domain: domain === 'lark' ? Domain.Lark : Domain.Feishu,
           loggerLevel: LoggerLevel.warn,
+          ...(this.deps.suppressSdkLogs ? { logger: { error() {}, warn() {}, info() {}, debug() {}, trace() {} } } : {}),
           source: 'kun',
           transport: 'websocket',
           policy: { dmMode: 'open', requireMention: true, respondToMentionAll: true },

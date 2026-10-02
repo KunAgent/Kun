@@ -4,6 +4,7 @@
 // Exercise the real Electron renderer/preload/main/Manager/Runtime composition.
 // All model responses are deterministic and offline. Application settings, data,
 // discovery/control files, Git repositories and processes belong to this run.
+const { exercisePersonalAgentIm, exercisePersonalAgentImStorage } = require('./smoke-personal-agent-im.cjs')
 const { startDirectModel } = require('./smoke-direct-model.cjs')
 const { exerciseDirectChat } = require('./smoke-direct-controls.cjs')
 const { exercisePinStream } = require('./smoke-rooms-pin-stream.cjs')
@@ -143,15 +144,20 @@ async function main() {
     await page.waitForLoadState('domcontentloaded')
     await resize(electronApplication, 1360, 900)
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
-    const exercise = process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
+    const exercise = process.argv.includes('--personal-im-storage-only') ? exercisePersonalAgentImStorage
+      : process.argv.includes('--personal-im-only') ? exercisePersonalAgentIm
+      : process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
       : process.argv.includes('--approvals') ? exerciseRoomApprovals
         : process.argv.includes('--pin-stream') ? exercisePinStream : exerciseDirectChat
-    const direct = await exercise({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
+    const exercised = exercise({ page, request: runtimeRequest, poll, capture, fixture: modelFixture,
       application: electronApplication, workspaceRoot, real: process.argv.includes('--real-model'),
       resize: (width, height) => resize(electronApplication, width, height), switchRooms: () => switchMode(page, 'rooms'),
       switchCode: () => switchMode(page, 'chat'),
       openPrivate: (name) => openAgentPrivateChat({ page, name, switchCode: () => switchMode(page, 'chat') }),
       approve: (ref) => installNativeConsentFixture(electronApplication, ref) })
+    const direct = await (process.argv.includes('--personal-im-storage-only')
+      ? withTimeout(exercised, 15_000, 'probing actual OS credential storage; verification blocked')
+      : process.argv.includes('--personal-im-only') ? withTimeout(exercised, 180_000, 'exercising native IM cards') : exercised)
     assert.deepEqual(pageErrors, [], 'Renderer uncaught exceptions')
     result = { ok: true, direct, model: modelFixture.snapshot(), pageErrors, screenshots }
     await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')
@@ -170,10 +176,10 @@ async function main() {
     }
     let closing
     if (electronApplication) {
-      await electronApplication.evaluate(({ dialog }) => {
+      await withTimeout(electronApplication.evaluate(({ dialog }) => {
         const fixture = globalThis.__roomsSmokeNativeConsent
         if (fixture) dialog.showMessageBox = fixture.original
-      }).catch(() => undefined)
+      }), 3000, 'restoring native consent fixture').catch(() => undefined)
       closing = electronApplication.close()
       await withTimeout(closing, 3000, 'closing isolated Electron').catch(() => undefined)
     }

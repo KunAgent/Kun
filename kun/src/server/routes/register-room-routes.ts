@@ -33,6 +33,7 @@ import { registerRoomInteractionRoutes } from './register-room-interaction-route
 import { registerRoomProposalRoutes } from './register-room-proposal-routes.js'
 import { registerRoomMessageContextRoutes } from './register-room-message-context-routes.js'
 import { registerRoomReminderRoutes } from './register-room-reminder-routes.js'
+import { registerRoomImConnectionRoutes } from './register-room-im-connection-routes.js'
 import { registerRoomAppConnectionRoutes } from './register-room-app-connection-routes.js'
 import { registerWorkbenchLinkRoutes } from './register-workbench-link-routes.js'
 import type { RoomWorkspace } from '../../rooms/room-runtime-types.js'
@@ -101,6 +102,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   registerRoomReminderRoutes(add)
   registerRoomMessageContextRoutes(add)
   registerRoomAppConnectionRoutes(add, runtime)
+  registerRoomImConnectionRoutes(add)
   registerWorkbenchLinkRoutes(add)
   add('GET', '/v1/rooms/:roomId/topics', (rooms, request, context) => {
     const page = pagination(request)

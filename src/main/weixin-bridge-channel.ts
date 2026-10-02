@@ -1,3 +1,6 @@
+import { protectedWeixinContextRecord, readProtectedWeixinContexts } from './personal-agent-weixin-context'
+import { routePrivateAgentWeixin, officialWeixinApiUrl } from './personal-agent-weixin-boundary'
+import { assertPersonalImSecretStorage } from './personal-agent-im-secrets'
 import { randomUUID } from 'node:crypto'
 import { logError, logWarn } from './logger'
 import {
@@ -100,6 +103,7 @@ export async function pollQRStatus(baseUrl: string, qrcode: string, signal?: Abo
 }
 
 export async function startWeixinLogin(params: JsonRecord): Promise<JsonRecord> {
+  if (params.protectCredentials === true) await assertPersonalImSecretStorage()
   readWeixinPackageInfo()
   purgeExpiredLogins()
   const force = params.force === true
@@ -125,6 +129,7 @@ export async function startWeixinLogin(params: JsonRecord): Promise<JsonRecord> 
     sessionKey,
     qrcode,
     qrcodeUrl,
+    protectCredentials: params.protectCredentials === true,
     startedAt: Date.now(),
     currentApiBaseUrl: WEIXIN_API_BASE_URL
   })
@@ -156,6 +161,7 @@ export async function waitForWeixinLogin(params: JsonRecord): Promise<JsonRecord
       login.qrcode,
       signal
     )
+    if (login.protectCredentials && (activeLogins.get(sessionKey) !== login || !isLoginFresh(login))) return { connected: false }
     switch (recordString(status, 'status')) {
       case 'wait':
       case 'scaned':
@@ -182,7 +188,7 @@ export async function waitForWeixinLogin(params: JsonRecord): Promise<JsonRecord
         }
       case 'scaned_but_redirect': {
         const redirectHost = recordString(status, 'redirect_host')
-        if (redirectHost) login.currentApiBaseUrl = `https://${redirectHost}`
+        if (redirectHost) login.currentApiBaseUrl = login.protectCredentials ? officialWeixinApiUrl(`https://${redirectHost}`) : `https://${redirectHost}`
         break
       }
       case 'confirmed': {
@@ -193,10 +199,11 @@ export async function waitForWeixinLogin(params: JsonRecord): Promise<JsonRecord
           return { connected: false, message: '登录失败：服务器未返回完整账号信息。' }
         }
         const accountId = normalizeAccountId(rawAccountId)
-        const baseUrl = recordString(status, 'baseurl') || WEIXIN_API_BASE_URL
+        const returnedBaseUrl = recordString(status, 'baseurl') || WEIXIN_API_BASE_URL
+        const baseUrl = login.protectCredentials ? officialWeixinApiUrl(returnedBaseUrl) : returnedBaseUrl
         const userId = recordString(status, 'ilink_user_id')
-        await saveWeixinAccount(accountId, { token, baseUrl, userId })
-        await clearStaleAccountsForUserId(accountId, userId)
+        await saveWeixinAccount(accountId, { token, baseUrl, userId }, login.protectCredentials)
+        if (!login.protectCredentials) await clearStaleAccountsForUserId(accountId, userId)
         activeLogins.delete(sessionKey)
         return {
           connected: true,
@@ -210,6 +217,7 @@ export async function waitForWeixinLogin(params: JsonRecord): Promise<JsonRecord
     }
     await sleep(1_000, signal)
   }
+  if (login.protectCredentials && isLoginFresh(login)) return { pending: true }
   activeLogins.delete(sessionKey)
   return { connected: false, message: '登录超时，请重试。' }
 }
@@ -226,13 +234,13 @@ export async function persistContextTokens(accountId: string): Promise<void> {
   for (const [key, value] of contextTokenStore) {
     if (key.startsWith(prefix)) tokens[key.slice(prefix.length)] = value
   }
-  await writeJsonIfChanged(contextTokensPath(accountId), tokens)
+  await writeJsonIfChanged(contextTokensPath(accountId), await protectedWeixinContextRecord(accountId, tokens))
 }
 
 export async function restoreContextTokens(accountId: string): Promise<void> {
   try {
     const parsed = await readJsonFile(contextTokensPath(accountId))
-    for (const [userId, token] of Object.entries(asRecord(parsed))) {
+    for (const [userId, token] of Object.entries(await readProtectedWeixinContexts(parsed))) {
       if (typeof token === 'string' && token) {
         const key = contextTokenKey(accountId, userId)
         if (!contextTokenStore.has(key)) contextTokenStore.set(key, token)
@@ -487,6 +495,10 @@ export async function postToDeepSeekGuiWebhook(
   accountId: string,
   signal?: AbortSignal
 ): Promise<JsonRecord> {
+  if (await routePrivateAgentWeixin(message, accountId)) return { ok: true }
+  // A protected personal-Agent account must never fall back into legacy open routing after disconnect/restart.
+  const accountData = await loadWeixinAccountData(accountId)
+  if (accountData?.protectedToken) return { ok: true }
   const settings = await resolveRuntimeContext()
   const text = textFromItemList(message.item_list)
   if (!text) return { reply: 'Only text messages are supported right now.' }

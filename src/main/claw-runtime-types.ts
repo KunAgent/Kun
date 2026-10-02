@@ -18,6 +18,7 @@ export type RuntimeRequestFn = (
 ) => Promise<RuntimeRequestResult>
 
 export type ClawRuntimeDeps = {
+  createPersonalIm?: () => import('./personal-agent-im-service').PersonalAgentImService
   store: JsonSettingsStore
   runtimeRequest: RuntimeRequestFn
   logError: (category: string, message: string, detail?: unknown) => void

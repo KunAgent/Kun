@@ -151,11 +151,11 @@ export class RoomService {
     return saved.result as typeof result
   }
 
-  async send(id: string, input: unknown, internal?: { ruleAdoption: import('../contracts/rooms-product.js').RoomRule }): Promise<{ message: RoomMessage; requestId: string }> {
+  async send(id: string, input: unknown, internal?: { ruleAdoption?: import('../contracts/rooms-product.js').RoomRule; clientSurface?: 'im'; imConnectionId?: string }): Promise<{ message: RoomMessage; requestId: string }> {
     const body = SendRoomMessageSchema.parse(input)
     // Sharing a card alone supplies reference data, not an implementation goal.
     if (!body.body.trim() && body.references?.length && body.executionIntent === 'auto') body.executionIntent = 'discussion'
-    const identity = internal ? { ...body, ruleAdoption: internal.ruleAdoption } : body
+    const identity = internal ? { ...body, ...internal } : body
     const key = 'room-message:' + id + ':' + body.clientRequestId
     const replay = await this.replay(key, identity)
     if (replay) return replay as { message: RoomMessage; requestId: string }
@@ -209,7 +209,8 @@ export class RoomService {
             ...(protocol === 'peer' && !root ? { peerLatestRequestId: requestId } : {}) }),
           taskParticipants,
           ...(pollContext.invitation ? { pollInvitation: pollContext.invitation } : {}),
-          ...(internal ? { ruleAdoption: internal.ruleAdoption } : {})
+          ...(internal?.ruleAdoption ? { ruleAdoption: internal.ruleAdoption } : {}),
+          ...(internal?.clientSurface ? { clientSurface: internal.clientSurface, imConnectionId: internal.imConnectionId } : {})
         }
       : {
           taskParticipants, id: requestId, roomId: id, status: 'pending',
@@ -218,7 +219,8 @@ export class RoomService {
           message: body, sourceMessageId: message.id,
           ...(pollContext.invitation ? { pollInvitation: pollContext.invitation } : {}),
           roomSnapshot: root ? { ...room, collaborationMode: root.value.roomSnapshot.collaborationMode } : room,
-          threadId: 'room-discussion-' + roomId(), ...(internal ? { ruleAdoption: internal.ruleAdoption } : {}) }
+          threadId: 'room-discussion-' + roomId(), ...(internal?.ruleAdoption ? { ruleAdoption: internal.ruleAdoption } : {}),
+          ...(internal?.clientSurface ? { clientSurface: internal.clientSurface, imConnectionId: internal.imConnectionId } : {}) }
     const result = { message, requestId: request.id }
     const commit: RoomStoreCommit = { requestId: key, fingerprint: roomFingerprint(identity),
       checks: [{ kind: 'room', id, expectedRevision: room.revision },
