@@ -61,3 +61,19 @@ test('workspace harness keeps existing native sandbox and labels fixture boundar
   for (const label of ['Take control', 'Return to agent', 'Stop', 'Show current browser']) assert(smoke.includes(`name: '${label}', exact: true`), label)
   assert.doesNotMatch(smoke, /__.*Browser.*Fixture|BrowserUseViewState|Object\.defineProperty\(window, 'kunGui'/)
 })
+
+
+test('native workspace smoke uses ordinary collapse and reopen around overlay-covered composer controls', () => {
+  const smoke = source('scripts/smoke-personal-agent-workspace.cjs')
+  assert.match(smoke, /name: 'Collapse right sidebar', exact: true/)
+  assert.match(smoke, /collapsed browser is no longer visible/)
+  const stopped = smoke.indexOf("await capture('workspace-15b-browser-stopped')")
+  const collapse = smoke.indexOf('await collapseWorkspacePanel(active.threadId)', stopped)
+  const click = smoke.indexOf("name: 'Stop response', exact: true", collapse)
+  const cancelled = smoke.indexOf("'durable response cancellation'", click)
+  const reopen = smoke.indexOf('await openBrowser()', cancelled)
+  const detached = smoke.indexOf("await capture('workspace-16-stopped-browser-detached')", reopen)
+  assert(stopped >= 0 && collapse > stopped && click > collapse && cancelled > click && reopen > cancelled && detached > reopen)
+  assert.match(smoke, /const send = async \(text\) => \{[\s\S]*?await collapseWorkspacePanel\(\)[\s\S]*?await editor\(\)\.fill\(text\)/)
+  assert.doesNotMatch(smoke, /force:\s*true|dispatchEvent\(|evaluate\([^\n]*click/)
+})

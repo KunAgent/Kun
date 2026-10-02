@@ -41,7 +41,21 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
   const wrapper = () => page.locator('[data-room-agent-browser]:visible')
   const rail = () => page.locator('.rooms-workbench-rail')
   const activity = (id) => request(page, `/v1/rooms/${id}/direct`)
-  const send = async (text) => { await editor().fill(text); await editor().press('Enter') }
+  const collapseWorkspacePanel = async (threadId) => {
+    const panel = page.locator('[data-room-workbench-panel]:visible')
+    if (await panel.count()) {
+      await panel.getByRole('button', { name: 'Collapse right sidebar', exact: true }).first().click()
+      await panel.waitFor({ state: 'hidden' })
+    }
+    if (threadId) await poll(async () => !(await browserState(threadId)).visible, 15000, 'collapsed browser is no longer visible')
+  }
+  const send = async (text) => {
+    // At compact container widths the sidebar overlays composer controls.
+    // Follow the user's normal collapse/send/reopen flow; never force a click.
+    await collapseWorkspacePanel()
+    await editor().fill(text)
+    await editor().press('Enter')
+  }
   const openBrowser = async () => {
     if (!await wrapper().count()) await rail().locator('[data-room-tool="browser"]').click()
     await wrapper().waitFor()
@@ -195,6 +209,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
       return false
     }, 30000, 'authoritative admitted private execution')
     diagnosticExecution = active
+    await openBrowser()
     await assertLiveBinding(entry.roomId, active)
     await capture('workspace-08-active-before-browser')
     await page.getByRole('button', { name: 'Review and allow', exact: true }).first().waitFor()
@@ -218,7 +233,11 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     }, 45000, 'real browser open, visible mount and held model continuation')
     assert(website.snapshot().pageRequests > 0)
     await assertLiveBinding(entry.roomId, active)
+    await collapseWorkspacePanel(active.threadId)
     await editor().fill(draft)
+    await openBrowser()
+    await assertLiveBinding(entry.roomId, active)
+    await poll(async () => (await browserState(active.threadId)).visible, 15000, 'browser visible after composer draft edit')
     await capture('workspace-12-live-browser-workbench')
     await captureBrowserContents('workspace-13-real-browser-webcontents')
     await wrapper().getByRole('button', { name: 'Take control', exact: true }).click()
@@ -272,6 +291,8 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await poll(async () => (await browserState(active.threadId)).lifecycle === 'stopped', 15000, 'actual Browser Stop')
     assert.equal((await activity(entry.roomId)).execution?.turnId, active.turnId, 'Browser Stop retains the original request control')
     await capture('workspace-15b-browser-stopped')
+    await collapseWorkspacePanel(active.threadId)
+    await capture('workspace-15c-browser-collapsed-stop-response-visible')
     await page.getByRole('button', { name: 'Stop response', exact: true }).click()
     await poll(async () => {
       const data = await activity(entry.roomId)
@@ -282,6 +303,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
       const data = await activity(entry.roomId)
       return !data.active && data.requests.find((item) => item.runId === active.runId)?.status === 'cancelled'
     }, 20000, 'durable response cancellation')
+    await openBrowser()
     await poll(async () => ['idle', 'historical'].includes(await wrapper().getAttribute('data-state')), 15000, 'cancelled execution cannot supervise the old browser')
     assert.equal(await wrapper().locator('[data-browser-use-variant]').count(), 0)
     assert.equal((await browserState(active.threadId)).visible, false)
@@ -301,11 +323,15 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
       return false
     }, 20000, 'held request admitted before Runtime restart')
     diagnosticExecution = restarting
+    await openBrowser()
     await assertLiveBinding(entry.roomId, restarting)
     assert.notEqual(restarting.turnId, active.turnId, 'Continuous conversation has a fresh turn identity')
     assert.equal(await wrapper().getByRole('button', { name: 'Allow origin once', exact: true }).count(), 0)
     assert.equal((await browserState(restarting.threadId)).visible, false, 'The prior turn browser cannot become visible in a new turn')
+    await collapseWorkspacePanel(restarting.threadId)
     await editor().fill(draft)
+    await openBrowser()
+    await assertLiveBinding(entry.roomId, restarting)
     const beforeRestart = await activity(entry.roomId)
     const callsBeforeRestart = fixture.snapshot().mainCalls
     await capture('workspace-17-before-runtime-restart')
