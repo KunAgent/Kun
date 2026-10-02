@@ -82,6 +82,49 @@ function sidebarGeometryIssues(geometry, { docked = false } = {}) {
   return issues
 }
 
+async function readRecoveryToolbarGeometry(page, roomId) {
+  const progress = page.locator('[data-rooms-workspace][data-private-chat="true"][data-room-id=' +
+    JSON.stringify(roomId) + ']:visible .direct-progress')
+  await progress.getByRole('button', { name: 'Model settings', exact: true }).waitFor({ state: 'visible', timeout: 15000 })
+  return progress.evaluate((element) => {
+    const describe = (node) => {
+      if (!node) return null
+      const rect = node.getBoundingClientRect()
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, right: rect.right, bottom: rect.bottom,
+        clientWidth: node.clientWidth, scrollWidth: node.scrollWidth }
+    }
+    const notice = element.querySelector('.direct-failed'), toolbar = notice?.querySelector('.direct-failed-actions')
+    const workspace = element.closest('[data-rooms-workspace]')
+    return { roomId: workspace?.getAttribute('data-room-id'), viewport: { width: innerWidth, height: innerHeight },
+      workspace: describe(workspace), container: describe(element.parentElement), progress: describe(element),
+      notice: describe(notice), toolbar: describe(toolbar),
+      actions: [...(toolbar?.querySelectorAll('button') ?? [])].map((button) => ({
+        label: button.getAttribute('aria-label') || button.textContent?.trim(), rect: describe(button)
+      })) }
+  })
+}
+
+function recoveryToolbarGeometryIssues(geometry) {
+  const issues = [], containers = ['workspace', 'container', 'progress', 'notice', 'toolbar']
+  for (const key of containers) {
+    const rect = geometry[key]
+    if (!rect || rect.width <= 0 || rect.height <= 0) issues.push('Recovery ' + key + ' is not rendered')
+    else if (rect.scrollWidth > rect.clientWidth + 1) issues.push('Recovery ' + key + ' overflows horizontally')
+  }
+  if (!geometry.actions.length) issues.push('Recovery actions are missing')
+  for (const action of geometry.actions) {
+    const rect = action.rect
+    for (const key of [...containers, 'viewport']) {
+      const outer = key === 'viewport' ? { x: 0, y: 0, right: geometry.viewport.width, bottom: geometry.viewport.height } : geometry[key]
+      if (!rect || !outer || rect.width <= 0 || rect.height <= 0 || rect.x < outer.x - 1 || rect.y < outer.y - 1 ||
+        rect.right > outer.right + 1 || rect.bottom > outer.bottom + 1) {
+        issues.push('Recovery action outside ' + key + ': ' + action.label)
+      }
+    }
+  }
+  return issues
+}
+
 function nativeBrowserGeometryIssues({ host, native }) {
   const issues = []
   if (!host || !native?.bounds) return ['Native browser view or visible renderer host is missing']
@@ -149,13 +192,13 @@ function nativeViewportMatchesRequested(requested, actual) {
 }
 
 function createSidebarEvidence({ page, poll, capture, recordDiagnostic, resize }) {
-  const captures = [], drags = [], viewports = []
+  const captures = [], drags = [], viewports = [], recovery = []
   const record = async (name, selectors, strict) => {
     const geometry = await readSidebarGeometry(page, selectors)
     const issues = sidebarGeometryIssues(geometry, { docked: strict })
     await capture(name)
     captures.push({ name, mode: strict ? 'private-agent' : 'code-baseline', geometry, issues })
-    await recordDiagnostic('sidebar-comparison-geometry', { captures, drags, viewports })
+    await recordDiagnostic('sidebar-comparison-geometry', { captures, drags, viewports, recovery })
     if (strict) assert.deepEqual(issues, [], name + ': measured sidebar geometry')
     return geometry
   }
@@ -169,7 +212,7 @@ function createSidebarEvidence({ page, poll, capture, recordDiagnostic, resize }
       name: `sidebar-${mode}-pointer-resized`,
       capture: (name) => record(name, { ...selectors, surface }, mode !== 'code') })
     drags.push({ mode, ...result })
-    await recordDiagnostic('sidebar-comparison-geometry', { captures, drags, viewports })
+    await recordDiagnostic('sidebar-comparison-geometry', { captures, drags, viewports, recovery })
   }
   const resizeTo = async (width, height) => {
     const requested = { width, height }
@@ -182,8 +225,17 @@ function createSidebarEvidence({ page, poll, capture, recordDiagnostic, resize }
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
     const actual = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
     viewports.push({ requested, actual })
-    await recordDiagnostic('sidebar-comparison-geometry', { captures, drags, viewports })
+    await recordDiagnostic('sidebar-comparison-geometry', { captures, drags, viewports, recovery })
     assert(nativeViewportMatchesRequested(requested, actual), 'Native viewport remains within the requested bounds')
+  }
+  const recoveryCapture = async (name, roomId) => {
+    const geometry = await readRecoveryToolbarGeometry(page, roomId)
+    const issues = recoveryToolbarGeometryIssues(geometry)
+    await capture(name)
+    recovery.push({ name, geometry, issues })
+    await recordDiagnostic('sidebar-comparison-geometry', { captures, drags, viewports, recovery })
+    assert.equal(geometry.roomId, roomId, 'Recovery geometry belongs to the current private recipient')
+    assert.deepEqual(issues, [], name + ': recovery actions fit the current conversation')
   }
   const assertSharedChrome = () => {
     const baseline = captures.find((item) => item.name === 'sidebar-code-files-wide')?.geometry
@@ -193,8 +245,8 @@ function createSidebarEvidence({ page, poll, capture, recordDiagnostic, resize }
       assert(Math.abs(item.geometry.rail.width - baseline.rail.width) <= 1, item.name + ': Code tool rail width')
     }
   }
-  return { codeCapture, privateCapture, pointerResize, resizeTo, assertSharedChrome,
-    snapshot: () => ({ captures, drags, viewports }) }
+  return { codeCapture, privateCapture, pointerResize, resizeTo, recoveryCapture, assertSharedChrome,
+    snapshot: () => ({ captures, drags, viewports, recovery }) }
 }
 
 async function waitForCodeFileContents({ page, poll, preview, expected }) {
@@ -279,4 +331,4 @@ async function captureCodeSidebarBaseline({ page, workspaceRoot, fixture, poll, 
 
 module.exports = { captureCodeSidebarBaseline, createSidebarEvidence, dragSidebar, readSidebarGeometry, sidebarGeometryIssues,
   readNativeBrowserGeometry, nativeBrowserGeometryIssues, nativeViewportMatchesRequested,
-  waitForCodeFileContents, dismissCodeFileExplorer }
+  waitForCodeFileContents, dismissCodeFileExplorer, readRecoveryToolbarGeometry, recoveryToolbarGeometryIssues }

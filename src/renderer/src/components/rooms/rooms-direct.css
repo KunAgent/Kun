@@ -63,12 +63,12 @@
 html[data-remote-surface='mobile'] .rooms-notice-dismiss { padding: 6px; }
 .direct-failed > svg { flex-shrink: 0; color: var(--ds-danger); margin-top: 1px; }
 .direct-failed > span { flex: 1; min-width: 0; color: var(--ds-text); line-height: 1.45; overflow-wrap: anywhere; }
-.direct-failed-actions { display: flex; flex-basis: 100%; gap: 6px; padding-left: 23px; }
+.direct-failed > .direct-failed-actions { display: flex; flex: 1 1 100%; flex-wrap: wrap; min-width: 0; max-width: 100%; gap: 6px; padding-left: 23px; }
 .direct-failed-actions button {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 4px 10px; border: 1px solid var(--ds-border); border-radius: 999px;
   background: var(--ds-surface-card); color: var(--ds-text);
-  font-size: 11.5px; line-height: 1.35; white-space: nowrap;
+  max-width: 100%; font-size: 11.5px; line-height: 1.35; white-space: normal; overflow-wrap: anywhere;
 }
 .direct-failed-actions button:hover { background: var(--ds-surface-hover); }
 .direct-failed-actions button.is-active { color: var(--ds-accent, #4f46e5); border-color: color-mix(in srgb, var(--ds-accent, #4f46e5) 45%, var(--ds-border)); }

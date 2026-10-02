@@ -72,7 +72,7 @@ test('native workspace smoke uses ordinary collapse and reopen without forcing c
   const click = smoke.indexOf("name: 'Stop response', exact: true", collapse)
   const cancelled = smoke.indexOf("'durable response cancellation'", click)
   const reopen = smoke.indexOf('await openBrowser()', cancelled)
-  const detached = smoke.indexOf("await capture('workspace-16-stopped-browser-detached')", reopen)
+  const detached = smoke.indexOf("await sidebar.recoveryCapture('workspace-16-stopped-browser-detached', entry.roomId)", reopen)
   assert(stopped >= 0 && collapse > stopped && click > collapse && cancelled > click && reopen > cancelled && detached > reopen)
   assert.match(smoke, /const send = async \(text\) => \{[\s\S]*?await collapseWorkspacePanel\(\)[\s\S]*?await editor\(\)\.fill\(text\)/)
   assert.doesNotMatch(smoke, /force:\s*true|dispatchEvent\(|evaluate\([^\n]*click/)

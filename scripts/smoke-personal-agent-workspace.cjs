@@ -317,7 +317,10 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     const stoppedMessages = (await request(page, `/v1/rooms/${entry.roomId}/messages`)).messages
     assert(!stoppedMessages.some((message) => message.originRunId === active.runId && message.deliveryPhase === 'final'),
       'Stopping cannot publish a late final message from the held model response')
-    await capture('workspace-16-stopped-browser-detached')
+    await sidebar.recoveryCapture('workspace-16-stopped-browser-detached', entry.roomId)
+    await sidebar.resizeTo(760, 780)
+    await sidebar.recoveryCapture('workspace-16b-stopped-recovery-narrow', entry.roomId)
+    await sidebar.resizeTo(1360, 900)
     assertions.push('Switching Agent hides the original native view and files; stopping clears live browser authority without losing the draft')
 
     // A real, admitted response is interrupted by the explicit desktop Runtime
@@ -367,7 +370,11 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     assert.deepEqual(afterRestart.requests.map((item) => item.id), beforeRestart.requests.map((item) => item.id))
     assert.equal(fixture.snapshot().mainCalls, callsBeforeRestart, 'Runtime restart and renderer reload must not replay an interrupted request')
     assert(!(await browserState(restarting.threadId)).sessionId, 'Runtime restart destroys transient browser authority')
-    await capture('workspace-18-restart-recovery-no-replay')
+    await sidebar.recoveryCapture('workspace-18-restart-recovery-no-replay', entry.roomId)
+    await sidebar.resizeTo(760, 780)
+    await sidebar.recoveryCapture('workspace-18b-restart-recovery-narrow', entry.roomId)
+    await sidebar.resizeTo(1360, 900)
+    assert.equal(fixture.snapshot().mainCalls, callsBeforeRestart, 'Inspecting recovery controls must not replay the request')
     await openSavedFiles()
     await page.locator('.direct-file-list:visible').getByRole('button', { name: /workspace-evidence\.txt/ }).first().click()
     await poll(async () => (await page.locator('.rooms-content-preview:visible').innerText()).includes('Saved personal workspace artifact v1'), 15000, 'saved artifact survives real restart')
@@ -385,6 +392,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await capture('workspace-20-rooms-private-workspace')
     assertions.push('Rooms and Code expose the same private workspace without reviving a historical browser')
     sidebar.assertSharedChrome()
+    assertions.push('Stopped and restarted recovery actions remain inside their conversation without horizontal overflow at wide and narrow sizes')
     assertions.push('Actual Code and private Agent screenshots share tab-header and rail dimensions; native pointer drags and narrow-window geometry keep private controls unclipped')
     return { codeBaseline, sidebarComparison: sidebar.snapshot(), assertions, roomId: entry.roomId, otherRoomId, artifact, sourceMessageId: source.id, artifactRunId: artifactRun.runId,
       browserExecution: active, restartExecution: restarting, recoveryStatus: recovered.status, approvals,

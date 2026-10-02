@@ -337,3 +337,64 @@ test('measured selected Code-header tab must fit its strip; inactive and nested 
   place('active', bounds(760, 46, 180, 32))
   assert.deepEqual(sidebarGeometryIssues(await readSidebarGeometry(page, selectors), { docked: true }), [])
 })
+
+const { readRecoveryToolbarGeometry, recoveryToolbarGeometryIssues } = require('./smoke-personal-agent-workspace-sidebar.cjs')
+test('measured recovery actions catch clipped model settings and horizontal overflow within the exact private room', async (t) => {
+  const dom = new JSDOM('<div data-rooms-workspace data-private-chat="true" data-room-id="room-current" id="workspace">' +
+    '<section id="container"><div class="direct-progress" id="progress"><div class="direct-failed" id="notice">' +
+    '<span class="direct-failed-actions" id="toolbar"><button id="view">View Agent session</button>' +
+    '<button id="retry">Retry request</button><button id="models">Model settings</button></span></div></div></section></div>',
+  { runScripts: 'outside-only' })
+  t.after(() => dom.window.close())
+  Object.assign(dom.window, { innerWidth: 760, innerHeight: 677 })
+  const place = (id, rect) => {
+    const element = dom.window.document.getElementById(id)
+    element.getBoundingClientRect = () => ({ ...rect, left: rect.x, top: rect.y })
+    Object.defineProperties(element, { clientWidth: { value: rect.width, configurable: true },
+      scrollWidth: { value: rect.width, configurable: true } })
+  }
+  for (const [id, rect] of Object.entries({ workspace: bounds(180, 0, 580, 677), container: bounds(180, 0, 380, 677),
+    progress: bounds(180, 430, 380, 100), notice: bounds(192, 434, 356, 88), toolbar: bounds(210, 464, 325, 48),
+    view: bounds(210, 464, 130, 24), retry: bounds(350, 464, 95, 24), models: bounds(454, 464, 105, 24) })) place(id, rect)
+  const page = { locator: (selector) => {
+    assert.equal(selector, '[data-rooms-workspace][data-private-chat="true"][data-room-id="room-current"]:visible .direct-progress')
+    return { getByRole: (role, options) => {
+      assert.equal(role, 'button'); assert.deepEqual(options, { name: 'Model settings', exact: true })
+      return { waitFor: async (options) => assert.deepEqual(options, { state: 'visible', timeout: 15000 }) }
+    }, evaluate: async (operation) => dom.window.eval('(' + operation.toString() + ')')(dom.window.document.getElementById('progress')) }
+  } }
+  const clipped = await readRecoveryToolbarGeometry(page, 'room-current')
+  assert.equal(clipped.roomId, 'room-current')
+  assert(recoveryToolbarGeometryIssues(clipped).includes('Recovery action outside notice: Model settings'))
+  assert(recoveryToolbarGeometryIssues(clipped).includes('Recovery action outside toolbar: Model settings'))
+  place('models', bounds(210, 490, 105, 22))
+  assert.deepEqual(recoveryToolbarGeometryIssues(await readRecoveryToolbarGeometry(page, 'room-current')), [])
+  Object.defineProperty(dom.window.document.getElementById('progress'), 'scrollWidth', { value: 450 })
+  assert(recoveryToolbarGeometryIssues(await readRecoveryToolbarGeometry(page, 'room-current'))
+    .includes('Recovery progress overflows horizontally'))
+})
+
+test('native smoke measures stopped and restart recovery controls wide and narrow without retrying the request', () => {
+  const smoke = readFileSync(join(__dirname, 'smoke-personal-agent-workspace.cjs'), 'utf8')
+  for (const name of ['workspace-16-stopped-browser-detached', 'workspace-16b-stopped-recovery-narrow',
+    'workspace-18-restart-recovery-no-replay', 'workspace-18b-restart-recovery-narrow']) {
+    assert(smoke.includes(`await sidebar.recoveryCapture('${name}', entry.roomId)`))
+  }
+  assert.match(smoke, /Inspecting recovery controls must not replay the request/)
+  const helper = readFileSync(join(__dirname, 'smoke-personal-agent-workspace-sidebar.cjs'), 'utf8')
+  const recovery = helper.slice(helper.indexOf('async function readRecoveryToolbarGeometry'), helper.indexOf('function nativeBrowserGeometryIssues'))
+  assert.doesNotMatch(recovery, /\.click\(|dispatchEvent\(|force:/)
+})
+
+test('recovery action row wins span flex specificity and wraps labels within its container', () => {
+  const css = readFileSync(join(__dirname, '../src/renderer/src/components/rooms/rooms-direct.css'), 'utf8')
+  const row = css.match(/\.direct-failed\s*>\s*\.direct-failed-actions\s*\{([^}]+)\}/)?.[1]
+  assert(row, 'Action row must have greater specificity than .direct-failed > span')
+  assert.match(row, /flex:\s*1 1 100%/)
+  assert.match(row, /flex-wrap:\s*wrap/)
+  assert.match(row, /min-width:\s*0/)
+  assert.match(row, /max-width:\s*100%/)
+  const buttons = css.match(/\.direct-failed-actions button\s*\{([^}]+)\}/)?.[1]
+  assert.match(buttons, /white-space:\s*normal/)
+  assert.match(buttons, /overflow-wrap:\s*anywhere/)
+})
