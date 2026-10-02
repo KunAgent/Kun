@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process'
 import { _electron } from 'playwright-core'
 import { createServer, optimizeDeps } from 'vite'
 import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes, requiredPolishProblems } from './settings-ui-smoke-geometry.mjs'
-import { annotateSettingsTabs } from './settings-ui-smoke-dom.mjs'
+import { annotateSettingsTabs, scrollSettingsDetail } from './settings-ui-smoke-dom.mjs'
 
 // Native offline renderer smoke; no app build, runtime, provider network or secrets.
 // node scripts/smoke-settings-ui.mjs [--baseline] [--quick] [--serve]
@@ -232,6 +232,24 @@ async function capture(category, panel, config) {
   report.screenshots.push({ file, category, panel, ...config, native, pixels })
   report.layouts.push({ key, category, panel, ...config, native, ...actual, problems })
   for (const problem of problems) report.problems.push({ key, problem })
+  // Top-of-panel images cannot show nested routes or switches below the fold.
+  // Preserve an additional unchanged native frame at each requested detail.
+  const detailKind = category === 'general' && panel === 'landing' ? 'general-switch'
+    : category === 'providers' && /provider-workspace-tab-routes|model-routes-settings-tab-/.test(panel)
+      ? 'model-route-tabs' : null
+  if (detailKind) {
+    const controlId = detailKind === 'general-switch'
+      ? actual.controls.find(control => control.role === 'switch')?.id : null
+    const detail = await page.evaluate(scrollSettingsDetail, { kind: detailKind, controlId })
+    assert.ok(detail, `Scrolled detail target must exist: ${key} ${detailKind}`)
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    const file = `${phase}-${key}-detail-${detailKind}.png`
+    const pixels = await captureNativeImage(file)
+    report.screenshots.push({ file, category, panel, ...config, native, pixels,
+      diagnostic: `Scrolled detail: ${detailKind}`, detail })
+    if (phase === 'after') assert.ok(detail.fullyVisible,
+      `Scrolled detail target must fit the final viewport: ${JSON.stringify(detail)}`)
+  }
   // Preserve the actual obscured state for the measured Subagent Profiles
   // blocker. The normal image above deliberately shows the panel's top.
   const obscured = category === 'subagents' && panel.includes('tab-profiles')

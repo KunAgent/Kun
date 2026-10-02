@@ -28,6 +28,8 @@ async function startDirectModel({ real = false } = {}) {
   }
   const stats = { real, model: realModel ?? 'deepseek-chat', calls: 0, mainCalls: 0, backgroundCalls: 0, byPrompt: {}, models: {}, blocked: 0, automaticReviews: 0, benchmarkChunks: [] }
   let held = false, releaseHold = () => {}, lastPrompt = 'background'
+  const heldBrowserPrompts = new Set()
+  const hold = async () => { held = true; await new Promise((resolve) => { releaseHold = resolve }); held = false }
   const server = createServer(async (request, response) => {
     try {
       if (request.method === 'GET') { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ data: [{ id: realModel ?? 'deepseek-chat' }, { id: 'deepseek-reasoner' }] })); return }
@@ -64,7 +66,7 @@ async function startDirectModel({ real = false } = {}) {
         response.write('data: ' + JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }) + '\n\n')
         response.end('data: [DONE]\n\n'); return
       }
-      if (prompt?.includes('HOLD_RESPONSE') && !held) { held = true; await new Promise((resolve) => { releaseHold = resolve }); held = false }
+      if (prompt?.includes('HOLD_RESPONSE') && !held) await hold()
       const memory = JSON.stringify(messages).includes('agent_memory_capture')
       const review = JSON.stringify(messages).includes('hostApprovalReason')
       if (review) stats.automaticReviews++
@@ -80,21 +82,32 @@ async function startDirectModel({ real = false } = {}) {
       const started = succeeded('send_im_message', 'start')
       const wrote = succeeded('write')
       const finished = succeeded('send_im_message', 'final')
+      const browserUrl = /WORKSPACE_BROWSER_OPEN (http:\/\/127\.0\.0\.1:\d+\/workspace-browser)/.exec(prompt ?? '')?.[1]
+      if (browserUrl && !memory && !review && succeeded('browser_use') && !heldBrowserPrompts.has(prompt)) {
+        heldBrowserPrompts.add(prompt)
+        await hold()
+      }
       let content = review ? JSON.stringify({ decision: 'allow', riskLevel: 'low', rationale: 'Isolated fixture write requested by the user.' }) : memory ? '{"candidates":[]}' : prompt ? '你好！我可以帮你处理问题和文件。' : 'Private chat'
       let tool
       if (prompt && !memory && !review) {
         const external = /EXTERNAL_FILE_B64:([A-Za-z0-9_-]+)/.exec(prompt)
-        const command = external ? { path: Buffer.from(external[1], 'base64url').toString(), content: 'external verified\n' } : prompt.includes('PROJECT_FILE') ? { path: 'project-result.txt', content: 'project verified\n' } :
+        const artifact = prompt.includes('WORKSPACE_ARTIFACT')
+        const command = artifact ? { path: 'workspace-evidence.txt', content: 'Saved personal workspace artifact v1\n' } : external ? { path: Buffer.from(external[1], 'base64url').toString(), content: 'external verified\n' } : prompt.includes('PROJECT_FILE') ? { path: 'project-result.txt', content: 'project verified\n' } :
           prompt.includes('UPDATE_FILE') ? { path: 'hello.txt', content: 'updated by Kun\n' } :
           prompt.includes('CREATE_FILE') ? { path: 'hello.txt', content: 'hello from Kun\n' } : undefined
-        const outgoing = prompt.includes('IM_CONNECTION_SMOKE_')
+        const outgoing = browserUrl
+          ? !started ? { name: 'send_im_message', args: { text: 'Opening the isolated browser evidence page.', phase: 'start' } }
+            : !succeeded('browser_use') ? { name: 'browser_use', args: { action: 'open', url: browserUrl } }
+              : !finished ? { name: 'send_im_message', args: { text: 'Browser evidence inspected.', phase: 'final' } } : null
+          : prompt.includes('IM_CONNECTION_SMOKE_')
           ? !succeeded('request_app_connection') ? { name: 'request_app_connection', args: {
             serverId: prompt.includes('IM_CONNECTION_SMOKE_weixin') ? 'im.weixin' : 'im.feishu',
             reason: 'Continue our conversation from your phone using this same Agent.' } } : null
           : command
           ? !started ? { name: 'send_im_message', args: { text: '我先检查任务并创建文件。', phase: 'start' } }
             : !wrote ? { name: 'write', args: command }
-              : !finished ? { name: 'send_im_message', args: { text: '文件已完成，并保存在当前工作目录。', phase: 'final' } } : null
+              : !finished ? { name: 'send_im_message', args: { text: '文件已完成，并保存在当前工作目录。', phase: 'final',
+                ...(artifact ? { attachments: [{ path: 'workspace-evidence.txt' }] } : {}) } } : null
           : !finished ? { name: 'send_im_message', args: { text: content, phase: 'final' } } : null
         if (outgoing) tool = { id: 'call_' + stats.calls, type: 'function', function: { name: outgoing.name, arguments: JSON.stringify(outgoing.args) } }
       }

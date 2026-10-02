@@ -30,6 +30,7 @@ import {
   WorkbenchFileTreeSidePanel,
   type WorkbenchFileTreeSidePanelProps
 } from './WorkbenchFileTreeSidePanel'
+import { WorkbenchRightSidebar } from './WorkbenchRightSidebar'
 import { workbenchDividerClassName } from './workbench-divider'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 import { X } from 'lucide-react'
@@ -399,52 +400,39 @@ function CodeRightPanelWorkspace({
   }
 
   return (
-    <>
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        className={`${visible ? '' : 'hidden '}ds-workbench-divider ds-no-drag relative z-20 shrink-0 cursor-col-resize`}
-        onPointerDown={onBeginResize}
-      />
-      <div
-        data-workbench-right-panel
-        className={`${visible ? 'flex' : 'hidden'} ds-sidebar-surface h-full min-h-0 shrink-0 flex-col`}
-        style={{ width }}
-      >
-        <CodeRightPanelTabs
-          state={code.state}
-          domIdPrefix={domIdPrefix}
-          titles={titles}
-          sideConversationCount={code.sideConversationCount}
-          sideConversationRunningCount={code.sideConversationRunningCount}
-          extensionItems={code.extensionItems}
-          onActivate={code.onActivate}
-          onClose={code.onClose}
-          onNewSideConversation={code.onNewSideConversation}
-          onCollapse={onCollapse}
-        />
-        <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
-          <div className="ds-sidebar-surface-body relative min-h-0 flex-1">
-            {code.state.tabs.map((id) => {
-              const active = code.state.activeId === id
-              if (!visited.has(id) && !active) return null
-              const { tabId, panelId } = codeRightTabDomIds(domIdPrefix, id)
-              return (
-                <div
-                  key={id}
-                  id={panelId}
-                  role="tabpanel"
-                  aria-labelledby={tabId}
-                  hidden={!active}
-                  className="absolute inset-0 min-h-0 overflow-hidden"
-                >
-                  {renderPanel(id)}
-                </div>
-              )
-            })}
-          </div>
-        </Suspense>
-      </div>
-    </>
+    <WorkbenchRightSidebar visible={visible} width={width}
+      dividerProps={{ onPointerDown: onBeginResize }}
+      header={<CodeRightPanelTabs
+        state={code.state}
+        domIdPrefix={domIdPrefix}
+        titles={titles}
+        sideConversationCount={code.sideConversationCount}
+        sideConversationRunningCount={code.sideConversationRunningCount}
+        extensionItems={code.extensionItems}
+        onActivate={code.onActivate}
+        onClose={code.onClose}
+        onNewSideConversation={code.onNewSideConversation}
+        onCollapse={onCollapse}
+      />}>
+      <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
+        {code.state.tabs.map((id) => {
+          const active = code.state.activeId === id
+          if (!visited.has(id) && !active) return null
+          const { tabId, panelId } = codeRightTabDomIds(domIdPrefix, id)
+          return (
+            <div
+              key={id}
+              id={panelId}
+              role="tabpanel"
+              aria-labelledby={tabId}
+              hidden={!active}
+              className="absolute inset-0 min-h-0 overflow-hidden"
+            >
+              {renderPanel(id)}
+            </div>
+          )
+        })}
+      </Suspense>
+    </WorkbenchRightSidebar>
   )
 }

@@ -7,7 +7,7 @@ import { roomsRequest } from './rooms-client'
 
 type ExportPage = { version: number; fileName: string; mimeType: string; byteSize: number; sha256: string;
   offset: number; dataBase64: string; nextOffset?: number }
-export function RoomArtifactExport({ room, reference }: { room: Room; reference: RoomContentReference }) {
+export function RoomArtifactExport({ room, reference, compact = false }: { room: Room; reference: RoomContentReference; compact?: boolean }) {
   const { t } = useTranslation('common')
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
   const pending = useRef<AbortController | null>(null)
@@ -43,6 +43,9 @@ export function RoomArtifactExport({ room, reference }: { room: Room; reference:
     } catch (cause) { if (!controller.signal.aborted) setError(String(cause)) }
     finally { if (!controller.signal.aborted) setBusy(false) }
   }
-  return <div><button type="button" disabled={busy} onClick={() => void download()}><Download size={14} />
-    {t('roomsArtifactExport', { defaultValue: 'Export saved version' })}</button>{error ? <p role="alert">{error}</p> : null}</div>
+  const label = t('roomsArtifactExport', { defaultValue: 'Export saved version' })
+  return <div className={`rooms-artifact-export${compact ? ' is-compact' : ''}`}><button type="button" disabled={busy}
+    className={compact ? 'ds-code-sidebar-icon-button' : undefined} title={label} aria-label={label}
+    onClick={() => void download()}><Download size={compact ? 16 : 14} strokeWidth={1.75} />
+    {compact ? null : label}</button>{error ? <p role="alert">{error}</p> : null}</div>
 }

@@ -1,3 +1,4 @@
+import { directCancellationTarget } from './agent-direct-cancellation.js'
 import { freezeConversationBridge, acknowledgeConversationBridge } from './agent-conversation-history.js'
 import { AGENT_COMMITMENT_TOOLS, AGENT_ARTIFACT_TOOLS, AGENT_HISTORY_TOOLS } from '../contracts/agent-work-tools.js'
 import { settleRoomResultInbox } from '../rooms/room-result-inbox.js'
@@ -45,13 +46,21 @@ export class AgentDirectRunner {
       return
     }
     if (request.cancellationRequested) {
-      const thread = await this.deps.threads.getMetadata(request.threadId)
-      // A steered request has no turn of its own; cancelling it stops the response it merged into.
-      const turn = thread?.turns.find((item) => request.steer ? item.id === request.steer!.targetTurnId :
-        request.turnId ? item.id === request.turnId : item.clientRequestId === this.clientId(request))
+      let { thread, turn } = await directCancellationTarget(this.deps, request)
       if (turn && ['queued', 'running'].includes(turn.status)) {
-        await this.deps.turns.interruptTurn({ threadId: thread!.id, turnId: turn.id })
-        return this.save(row, { ...request, status: 'stopping', ...(request.steer ? {} : { turnId: turn.id }) })
+        try {
+          await this.deps.turns.interruptTurn({ threadId: thread!.id, turnId: turn.id })
+          return this.save(row, { ...request, status: 'stopping', ...(request.steer ? {} : { turnId: turn.id }) })
+        } catch (error) {
+          if (!(error instanceof TurnConflictError)) throw error
+          // The Stop API can finish this exact interrupt after our metadata read.
+          // Reconcile only a proven terminal target; never stop a newer turn.
+          const settled = await directCancellationTarget(this.deps, request)
+          if (settled.thread?.id !== thread!.id || settled.turn?.id !== turn.id ||
+            !['completed', 'failed', 'aborted'].includes(settled.turn.status)) throw error
+          thread = settled.thread
+          turn = settled.turn
+        }
       }
       if (request.steer) {
         if (turn) {

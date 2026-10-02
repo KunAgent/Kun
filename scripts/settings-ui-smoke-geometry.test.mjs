@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
 import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes, requiredPolishProblems } from './settings-ui-smoke-geometry.mjs'
-import { annotateSettingsControls, annotateSettingsTabs } from './settings-ui-smoke-dom.mjs'
+import { annotateSettingsControls, annotateSettingsTabs, scrollSettingsDetail } from './settings-ui-smoke-dom.mjs'
 import { JSDOM } from 'jsdom'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -78,6 +78,38 @@ test('closed disclosure controls are excluded despite positive layout boxes', ()
   document.querySelector('details').open = true
   annotateSettingsControls(elements)
   assert.equal(elements[1].getAttribute('data-settings-smoke-rendered'), 'true')
+})
+
+test('scrolled detail targets the real switch and visible nested route tabs with bounds', t => {
+  const window = new JSDOM('<div class="ds-settings-scroller"><button data-settings-smoke-control="7" role="switch" aria-label="Interactive effects"></button><div hidden role="tablist"><button role="tab" id="model-routes-settings-tab-old">Old</button></div><div role="tablist" aria-label="Model routing"><button role="tab" id="model-routes-settings-tab-models" aria-selected="true">Models</button></div></div>').window
+  const { document } = window
+  const globals = { document, innerWidth: 900, innerHeight: 645 }
+  for (const [key, value] of Object.entries(globals)) {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, key)
+    Object.defineProperty(globalThis, key, { configurable: true, value })
+    t.after(() => descriptor ? Object.defineProperty(globalThis, key, descriptor) : delete globalThis[key])
+  }
+  t.after(() => window.close())
+  let lastTarget, lastOptions
+  window.HTMLElement.prototype.scrollIntoView = function (options) { lastTarget = this; lastOptions = options }
+  window.HTMLElement.prototype.getClientRects = () => [{}]
+  window.HTMLElement.prototype.getBoundingClientRect = function () {
+    return this.classList.contains('ds-settings-scroller')
+      ? { x: 0, y: 100, right: 900, bottom: 645, width: 900, height: 545 }
+      : { x: 50, y: 200, right: 350, bottom: 232, width: 300, height: 32 }
+  }
+  const toggle = scrollSettingsDetail({ kind: 'general-switch', controlId: '7' })
+  assert.equal(lastTarget.getAttribute('role'), 'switch')
+  assert.deepEqual(lastOptions, { block: 'center', inline: 'nearest', behavior: 'instant' })
+  assert.equal(toggle.name, 'Interactive effects')
+  assert.equal(toggle.fullyVisible, true)
+  assert.equal(toggle.clip.y, 100)
+  const routes = scrollSettingsDetail({ kind: 'model-route-tabs' })
+  assert.equal(lastTarget.getAttribute('aria-label'), 'Model routing')
+  assert.equal(routes.targetRole, 'tablist')
+  assert.deepEqual(routes.tabs.map(tab => tab.id), ['model-routes-settings-tab-models'])
+  assert.equal(routes.tabs[0].selected, true)
+  assert.equal(scrollSettingsDetail({ kind: 'general-switch', controlId: 'missing' }), null)
 })
 
 test('overlap uses visible scrollport intersections and still detects painted overlaps', async t => {
@@ -157,6 +189,8 @@ test('review artifact stays bounded, retains pairs and preserves complete gzip r
       `${phase}-light-wide-125-category-${i}-landing.png`), bytes)
     await writeFile(join(source, phase, `${phase}-light-wide-150-subagents-3-subagent-settings-tab-profiles.png`), bytes)
     await writeFile(join(source, phase, `${phase}-light-small-200-providers-7-model-routes-settings-tab-monitoring.png`), bytes)
+    await writeFile(join(source, phase, `${phase}-light-wide-125-general-landing-detail-general-switch.png`), bytes)
+    await writeFile(join(source, phase, `${phase}-light-small-200-providers-7-model-routes-settings-tab-monitoring-detail-model-route-tabs.png`), bytes)
     await writeFile(join(source, phase, 'report.json'), JSON.stringify({ phase, original: true }))
   }
   const result = spawnSync(process.execPath,
@@ -169,6 +203,8 @@ test('review artifact stays bounded, retains pairs and preserves complete gzip r
   assert.ok(manifest.included.every(group => group.matchedBeforeAfter && group.files.length === 2))
   assert.ok(manifest.included.some(group => group.key.includes('subagent-settings-tab-profiles')))
   assert.ok(manifest.included.some(group => group.key.includes('model-routes-settings-tab-monitoring')))
+  assert.ok(manifest.included.some(group => group.key.endsWith('-detail-general-switch.png')))
+  assert.ok(manifest.included.some(group => group.key.endsWith('-detail-model-route-tabs.png')))
   const report = JSON.parse(gunzipSync(await readFile(join(root,
     'dist/settings-ui-reports/after/report.json.gz'))).toString())
   assert.deepEqual(report, { phase: 'after', original: true })

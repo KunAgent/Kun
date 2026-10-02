@@ -36,3 +36,30 @@ export function annotateSettingsTabs(elements) {
       selected: element.getAttribute('aria-selected') === 'true' }
   })
 }
+
+export function scrollSettingsDetail({ kind, controlId }) {
+  const target = kind === 'general-switch'
+    ? document.querySelector(`[data-settings-smoke-control="${controlId}"]`)
+    : [...document.querySelectorAll('[role="tab"][id^="model-routes-settings-tab-"]')]
+      .find(element => !element.closest('[hidden]') && element.getClientRects().length > 0)
+      ?.closest('[role="tablist"]')
+  if (!target) return null
+  target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })
+  const rect = element => {
+    const { x, y, width, height, right, bottom } = element.getBoundingClientRect()
+    return { x, y, width, height, right, bottom }
+  }
+  const bounds = rect(target)
+  const scroller = target.closest('.ds-settings-scroller')
+  const viewport = { x: 0, y: 0, right: innerWidth, bottom: innerHeight }
+  const scrollport = scroller ? rect(scroller) : viewport
+  const clip = { x: Math.max(0, scrollport.x), y: Math.max(0, scrollport.y),
+    right: Math.min(innerWidth, scrollport.right), bottom: Math.min(innerHeight, scrollport.bottom) }
+  return { kind, targetId: target.id, targetRole: target.getAttribute('role'), bounds,
+    name: target.getAttribute('aria-label'), viewport, clip,
+    fullyVisible: bounds.x >= clip.x - 1 && bounds.y >= clip.y - 1
+      && bounds.right <= clip.right + 1 && bounds.bottom <= clip.bottom + 1,
+    tabs: [...target.querySelectorAll('[role="tab"]')].map(tab => ({ id: tab.id,
+      name: tab.textContent?.trim(), selected: tab.getAttribute('aria-selected') === 'true', bounds: rect(tab) })),
+    scroll: scroller ? { top: scroller.scrollTop, left: scroller.scrollLeft } : null }
+}

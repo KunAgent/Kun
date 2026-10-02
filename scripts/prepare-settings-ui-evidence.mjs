@@ -43,6 +43,7 @@ for (const phase of ['before', 'after']) {
 }
 const priority = key => key === 'failure.png' || key.includes('-obstruction.png') ? -2
   : regressionKeys.has(key.replace(/\.png$/, '')) ? -1
+    : /-detail-general-switch\.png$|small-200-.*-detail-model-route-tabs\.png$/.test(key) ? -0.5
     : /subagents-.*tab-profiles|ssh-add-dialog|destructive-confirm|small-200-providers-.*(?:model-routes-settings-tab|provider-workspace-tab-routes)/.test(key) ? 0
   : /light-wide-125-.*-landing/.test(key) ? 1
     : /dark-wide-125-.*-landing/.test(key) ? 2

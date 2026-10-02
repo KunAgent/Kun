@@ -50,9 +50,3 @@
   .rooms-workspace[data-rooms-workspace] .rooms-header-members, .rooms-workspace[data-rooms-workspace] .direct-chat-title small { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .rooms-skeleton { animation: none; } }
-
-@container (max-width: 1439px) {
-  .rooms-workspace[data-rooms-workspace] .rooms-workbench-right-panel {
-    position: absolute; inset: 0 2.5rem 0 auto; z-index: 45; box-shadow: var(--ds-shadow-overlay);
-  }
-}

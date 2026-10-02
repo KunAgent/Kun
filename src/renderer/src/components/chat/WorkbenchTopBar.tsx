@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { EditorInfo } from '@shared/editor'
+import { WorkbenchSideRailSurface, sideRailButtonClass } from '../workbench/WorkbenchSideRail'
 import { WorkbenchGuiUpdateButton } from './WorkbenchGuiUpdateButton'
 import {
   Blocks,
@@ -86,17 +87,11 @@ type WorkbenchTopActionsProps = {
 }
 
 const TOPBAR_ICON_CLASS = 'h-4 w-4'
-const SIDE_RAIL_BUTTON_BASE =
-  'ds-side-rail-button inline-flex h-8 w-8 items-center justify-center rounded-[var(--ds-radius-control)] border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30'
 const SIDE_RAIL_BUTTON_ACTIVE = 'border-ds-border-strong bg-ds-card text-ds-ink'
 const SIDE_RAIL_BUTTON_IDLE =
   'border-transparent bg-transparent text-ds-faint opacity-90 hover:border-ds-border-muted hover:bg-ds-hover hover:text-ds-ink hover:opacity-100'
 const TOPBAR_ACTION_BUTTON_BASE =
   'ds-topbar-action-button inline-flex h-8 w-8 items-center justify-center rounded-[var(--ds-radius-control)] border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30'
-
-function sideRailButtonClass(active: boolean, extra?: string): string {
-  return `${SIDE_RAIL_BUTTON_BASE} ${active ? SIDE_RAIL_BUTTON_ACTIVE : SIDE_RAIL_BUTTON_IDLE}${extra ? ` ${extra}` : ''}`
-}
 
 function topbarActionButtonClass(active: boolean, extra?: string): string {
   return `${TOPBAR_ACTION_BUTTON_BASE} ${active ? SIDE_RAIL_BUTTON_ACTIVE : SIDE_RAIL_BUTTON_IDLE}${extra ? ` ${extra}` : ''}`
@@ -520,7 +515,7 @@ export function WorkbenchSideRail({
   }
 
   return (
-    <div className="ds-workbench-side-rail ds-sidebar-surface ds-no-drag flex h-full w-12 shrink-0 flex-col items-center gap-1.5 border-l border-ds-border-muted py-3">
+    <WorkbenchSideRailSurface>
       {onOpenSideChat ? (
         <button
           type="button"
@@ -669,6 +664,6 @@ export function WorkbenchSideRail({
           <Smartphone className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
         </button>
       ) : null}
-    </div>
+    </WorkbenchSideRailSurface>
   )
 }
