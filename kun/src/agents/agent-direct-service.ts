@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { stopDirectRequest } from './agent-direct-cancellation.js'
+import { privateExecutionBinding } from './agent-direct-execution.js'
 import { legacyAgentFiles } from './agent-legacy-files.js'
 import { AgentArtifactQuery } from '../contracts/agent-artifacts.js'
 import { artifactReference } from './agent-artifact-library.js'
@@ -55,8 +57,11 @@ export async function directActivity(rooms: RoomRuntime, roomId: string) {
     firstVisibleAt: run?.value.firstVisibleAt, lastVisibleAt: run?.value.lastVisibleAt
   } : undefined
   const workspace = await privateWorkspace(rooms, room)
+  const cancellingSteer = activeRows.some((row) => row.value.steer?.targetRunId === activeRow?.value.privateRunId &&
+    (row.value.cancellationRequested || row.value.status === 'stopping'))
+  const execution = cancellingSteer ? undefined : await privateExecutionBinding(rooms, room, activeRow)
   // A merged request already folded into the running reply is not queued work.
-  return { requests, active, activity, pendingCount: activeRows.filter((row) => row.value.privateProtocol && !row.value.steer).length, workspace,
+  return { requests, active, activity, ...(execution ? { execution } : {}), pendingCount: activeRows.filter((row) => row.value.privateProtocol && !row.value.steer).length, workspace,
     approvals: active?.threadId ? rooms.deps.approvals.pending(active.threadId) : [],
     userInputs: active?.threadId ? rooms.deps.inputs.pending(active.threadId) : [] }
 }
@@ -89,6 +94,7 @@ export async function updateDirectWorkspace(rooms: RoomRuntime, roomId: string, 
 }
 export async function controlDirectRequest(rooms: RoomRuntime, roomId: string, requestId: string,
   input: { action: 'stop' | 'retry'; clientRequestId: string; expectedRevision: number }) {
+  if (input.action === 'stop') return stopDirectRequest(rooms, roomId, requestId, { ...input, action: 'stop' })
   const store = rooms.deps.store, key = 'private-control:' + input.clientRequestId, fingerprint = roomFingerprint(input)
   const prior = await store.getRequest(key)
   if (prior) { if (prior.fingerprint !== fingerprint) throw new RoomStoreConflictError('request changed'); return prior.result }
@@ -97,25 +103,15 @@ export async function controlDirectRequest(rooms: RoomRuntime, roomId: string, r
   const value = row.value
   const thread = await rooms.deps.threads.getMetadata(value.threadId)
   const turn = thread?.turns.find((turn) => turn.clientRequestId === 'private-' + value.id + '-' + (value.stepAttempt ?? 0))
-  if (input.action === 'stop') {
-    if (input.expectedRevision > row.revision) throw new RoomStoreConflictError('request revision is ahead of the original execution')
-    if (['completed', 'failed', 'cancelled'].includes(value.status)) return { accepted: true, alreadyFinished: true }
-    // Internal admission/status transitions do not change the user's cancellation target.
-    // Serialize against the current record so a just-refreshed turn cannot reject Stop.
-    await store.commit({ requestId: key, fingerprint, checks: [{ kind: 'request', id: requestId, expectedRevision: row.revision }],
-      puts: [{ kind: 'request', id: requestId, roomId, value: { ...value, cancellationRequested: true, status: 'stopping' } }],
-      events: [{ roomId, kind: 'request.updated', payload: { id: requestId } }] })
-  } else {
-    if (!['failed', 'cancelled'].includes(value.status) || value.admissionAttempted && (!turn || ['queued', 'running'].includes(turn.status))) throw new RoomStoreConflictError('Reconcile the original execution before retrying')
-    const currentRoom = await rooms.service.get(roomId)
-    const id = 'request-' + randomUUID(), snapshot = await rooms.agents.freeze({ ...value.roomSnapshot, privateExecutionPolicy: currentRoom.privateExecutionPolicy })
-    await freezeAgentPermissions(rooms.agents, snapshot)
-    const request: RoomRequestState = { clientSurface: value.clientSurface, imConnectionId: value.imConnectionId, id, roomId, privateProtocol: 'direct-v1', status: 'pending', rootRequestId: id,
-      sourceMessageId: value.sourceMessageId, roomSnapshot: snapshot, message: value.message, threadId: 'private-pending-' + id }
-    await store.commit({ requestId: key, fingerprint, checks: [{ kind: 'request', id: requestId, expectedRevision: input.expectedRevision },
-      { kind: 'request', id, expectedRevision: null }], puts: [{ kind: 'request', id, roomId, value: request }],
-      events: [{ roomId, kind: 'request.updated', payload: { id } }], result: { id } })
-  }
+  if (!['failed', 'cancelled'].includes(value.status) || value.admissionAttempted && (!turn || ['queued', 'running'].includes(turn.status))) throw new RoomStoreConflictError('Reconcile the original execution before retrying')
+  const currentRoom = await rooms.service.get(roomId)
+  const id = 'request-' + randomUUID(), snapshot = await rooms.agents.freeze({ ...value.roomSnapshot, privateExecutionPolicy: currentRoom.privateExecutionPolicy })
+  await freezeAgentPermissions(rooms.agents, snapshot)
+  const request: RoomRequestState = { clientSurface: value.clientSurface, imConnectionId: value.imConnectionId, id, roomId, privateProtocol: 'direct-v1', status: 'pending', rootRequestId: id,
+    sourceMessageId: value.sourceMessageId, roomSnapshot: snapshot, message: value.message, threadId: 'private-pending-' + id }
+  await store.commit({ requestId: key, fingerprint, checks: [{ kind: 'request', id: requestId, expectedRevision: input.expectedRevision },
+    { kind: 'request', id, expectedRevision: null }], puts: [{ kind: 'request', id, roomId, value: request }],
+    events: [{ roomId, kind: 'request.updated', payload: { id } }], result: { id } })
   rooms.wake()
   return { accepted: true }
 }

@@ -1,9 +1,11 @@
 import { create } from 'zustand'
+import { CODE_PANEL_PREFERRED } from '../workbench-layout-storage'
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/browser-storage'
 
 type RoomPresentationPreferences = {
   listWidth: number
   detailWidth: number
+  workbenchWidth: number
   layout: 'bubble'
   autoLinkPreviews: boolean
 }
@@ -12,6 +14,7 @@ const clamp = (value: unknown, initial: number, min: number, max: number): numbe
   typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : initial
 function normalize(value: Partial<RoomPresentationPreferences>): RoomPresentationPreferences {
   return { listWidth: clamp(value.listWidth, 300, 240, 520), detailWidth: clamp(value.detailWidth, 400, 360, 640),
+    workbenchWidth: clamp(value.workbenchWidth, CODE_PANEL_PREFERRED, 280, Number.POSITIVE_INFINITY),
     layout: 'bubble', autoLinkPreviews: value.autoLinkPreviews !== false }
 }
 function initial(): RoomPresentationPreferences {

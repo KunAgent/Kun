@@ -1,9 +1,6 @@
 import {
-  useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
-  useState,
   type ReactElement
 } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -19,127 +16,57 @@ import {
   Square,
   Trash2
 } from 'lucide-react'
-import type { BrowserUseViewState } from '@shared/browser-use'
+import { useAgentBrowserPanelLifecycle } from './agent-browser-panel-lifecycle'
 
-function emptyState(): BrowserUseViewState {
-  return {
-    contractVersion: 1,
-    capabilityStatus: 'disabled',
-    lifecycle: 'closed',
-    controlOwner: 'agent',
-    visible: false,
-    mounted: false,
-    mode: 'public',
-    tabs: [],
-    updatedAt: new Date(0).toISOString()
-  }
-}
-
-export function AgentBrowserPanel({
-  threadId,
-  active,
-  onTitleChange,
-  variant = 'full'
-}: {
+type AgentBrowserPanelProps = {
   threadId: string | null
+  expectedTurnId?: string
   active: boolean
   onTitleChange?: (title: string) => void
   variant?: 'full' | 'pip'
-}): ReactElement {
+}
+
+export function AgentBrowserPanel(props: AgentBrowserPanelProps): ReactElement {
+  return <ScopedAgentBrowserPanel
+    key={JSON.stringify([props.threadId, props.expectedTurnId, props.active])}
+    {...props}
+    threadId={props.active ? props.threadId : null}
+  />
+}
+
+function ScopedAgentBrowserPanel({
+  threadId,
+  expectedTurnId,
+  onTitleChange,
+  variant = 'full'
+}: AgentBrowserPanelProps): ReactElement {
   const { t } = useTranslation('common')
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const [state, setState] = useState<BrowserUseViewState>(emptyState)
-  const [operationError, setOperationError] = useState<string>()
-  const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) ?? state.tabs[0]
-  const pendingConsent = state.pendingOriginConsent ?? state.pendingActionConsent
-  const compact = variant === 'pip'
-  const shouldMountView = Boolean(
-    threadId &&
-    active &&
-    state.sessionId &&
-    activeTab &&
-    !pendingConsent
+  const { state, operationError, pendingOperation, run } = useAgentBrowserPanelLifecycle(
+    threadId, expectedTurnId, hostRef
   )
-
-  useEffect(() => {
-    setState(emptyState())
-    setOperationError(undefined)
-    if (!threadId) return
-    let live = true
-    void window.kunGui.getBrowserUseState(threadId)
-      .then((next) => {
-        if (live) setState(next)
-      })
-      .catch((error) => {
-        if (live) setOperationError(error instanceof Error ? error.message : String(error))
-      })
-    const unsubscribe = window.kunGui.onBrowserUseState((next) => {
-      if (next.threadId === threadId) setState(next)
-    })
-    return () => {
-      live = false
-      unsubscribe()
-    }
-  }, [threadId])
-
-  const mount = useCallback(async (
-    visible: boolean,
-    supervisionActive = active
-  ): Promise<BrowserUseViewState | undefined> => {
-    const element = hostRef.current
-    if (!threadId || !element || !state.sessionId) return undefined
-    const rect = element.getBoundingClientRect()
-    const next = await window.kunGui.mountBrowserUse({
-      threadId,
-      visible,
-      supervisionActive,
-      bounds: {
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height
-      }
-    })
-    setState(next)
-    return next
-  }, [active, state.sessionId, threadId])
-
-  useLayoutEffect(() => {
-    const element = hostRef.current
-    if (!element || !threadId || !state.sessionId) return
-    let disposed = false
-    const sync = (): void => {
-      if (disposed) return
-      void mount(shouldMountView).catch((error) => {
-        if (!disposed) setOperationError(error instanceof Error ? error.message : String(error))
-      })
-    }
-    sync()
-    const observer = new ResizeObserver(sync)
-    observer.observe(element)
-    window.addEventListener('resize', sync)
-    return () => {
-      disposed = true
-      observer.disconnect()
-      window.removeEventListener('resize', sync)
-      void mount(false, false).catch(() => undefined)
-    }
-  }, [mount, shouldMountView, state.sessionId, threadId])
+  const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) ?? state.tabs[0]
+  const compact = variant === 'pip'
+  const busy = Boolean(pendingOperation)
+  const turnScope = expectedTurnId ? { expectedTurnId } : {}
 
   useEffect(() => {
     const title = activeTab?.title?.trim() || t('browserUseAgentMode')
     onTitleChange?.(title)
   }, [activeTab?.title, onTitleChange, t])
 
-  const run = async (
-    operation: () => Promise<BrowserUseViewState>
-  ): Promise<void> => {
-    setOperationError(undefined)
-    try {
-      setState(await operation())
-    } catch (error) {
-      setOperationError(error instanceof Error ? error.message : String(error))
-    }
+  const stop = (): void => {
+    if (!threadId) return
+    void run(() => expectedTurnId
+      ? window.kunGui.stopBrowserUse(threadId, expectedTurnId)
+      : window.kunGui.stopBrowserUse(threadId), true)
+  }
+
+  const clear = (): void => {
+    if (!threadId) return
+    void run(() => expectedTurnId
+      ? window.kunGui.clearBrowserUse(threadId, expectedTurnId)
+      : window.kunGui.clearBrowserUse(threadId))
   }
 
   const decideOrigin = (decision: 'allow-once' | 'deny'): void => {
@@ -147,6 +74,7 @@ export function AgentBrowserPanel({
     if (!threadId || !request) return
     void run(() => window.kunGui.decideBrowserUseOrigin({
       threadId,
+      ...turnScope,
       requestId: request.id,
       decision
     }))
@@ -157,6 +85,7 @@ export function AgentBrowserPanel({
     if (!threadId || !request) return
     void run(() => window.kunGui.decideBrowserUseAction({
       threadId,
+      ...turnScope,
       requestId: request.id,
       decision
     }))
@@ -164,13 +93,14 @@ export function AgentBrowserPanel({
 
   const navigate = (command: 'back' | 'forward' | 'reload'): void => {
     if (!threadId) return
-    void run(() => window.kunGui.navigateBrowserUse({ threadId, command }))
+    void run(() => window.kunGui.navigateBrowserUse({ threadId, ...turnScope, command }))
   }
 
   const toggleControl = (): void => {
     if (!threadId) return
     void run(() => window.kunGui.setBrowserUseControl({
       threadId,
+      ...turnScope,
       controlOwner: state.controlOwner === 'agent' ? 'manual' : 'agent'
     }))
   }
@@ -188,12 +118,12 @@ export function AgentBrowserPanel({
     >
       {!compact ? (
         <>
-          <div className="ds-sidebar-surface-chrome flex min-h-12 shrink-0 items-center gap-2 border-b border-ds-border-muted px-3">
+          <div className="ds-sidebar-surface-chrome flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-ds-border-muted px-3 py-2">
             <div className="flex shrink-0 items-center gap-1 rounded-full bg-ds-surface-subtle p-0.5 dark:bg-white/[0.08]">
               <button
                 type="button"
                 onClick={() => navigate('back')}
-                disabled={!activeTab?.canGoBack}
+                disabled={busy || !activeTab?.canGoBack}
                 aria-label={t('browserBack')}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ds-faint hover:bg-ds-hover disabled:opacity-30"
               >
@@ -202,7 +132,7 @@ export function AgentBrowserPanel({
               <button
                 type="button"
                 onClick={() => navigate('forward')}
-                disabled={!activeTab?.canGoForward}
+                disabled={busy || !activeTab?.canGoForward}
                 aria-label={t('browserForward')}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ds-faint hover:bg-ds-hover disabled:opacity-30"
               >
@@ -211,7 +141,7 @@ export function AgentBrowserPanel({
               <button
                 type="button"
                 onClick={() => navigate('reload')}
-                disabled={!activeTab}
+                disabled={busy || !activeTab}
                 aria-label={t('browserReload')}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ds-faint hover:bg-ds-hover disabled:opacity-30"
               >
@@ -221,7 +151,7 @@ export function AgentBrowserPanel({
               </button>
             </div>
 
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-28">
               <div className="truncate text-[12px] font-semibold text-ds-ink">
                 {activeTab?.title || t('browserUseWaitingForAgent')}
               </div>
@@ -252,11 +182,11 @@ export function AgentBrowserPanel({
                 })}
               </span>
             ) : null}
-            <div className="ml-auto flex items-center gap-1">
+            <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1">
               <button
                 type="button"
                 onClick={toggleControl}
-                disabled={!state.sessionId}
+                disabled={busy || !state.sessionId}
                 className="inline-flex h-7 items-center gap-1 rounded-md border border-ds-border-muted bg-ds-card px-2 text-[10.5px] font-semibold text-ds-muted hover:text-ds-ink disabled:opacity-35"
               >
                 {state.controlOwner === 'agent'
@@ -268,8 +198,8 @@ export function AgentBrowserPanel({
               </button>
               <button
                 type="button"
-                onClick={() => threadId && void run(() => window.kunGui.stopBrowserUse(threadId))}
-                disabled={!state.sessionId}
+                onClick={stop}
+                disabled={pendingOperation === 'stop' || !state.sessionId}
                 className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[10.5px] font-semibold text-red-600 hover:bg-red-500/10 disabled:opacity-35"
               >
                 <Square className="h-3 w-3" />
@@ -277,8 +207,8 @@ export function AgentBrowserPanel({
               </button>
               <button
                 type="button"
-                onClick={() => threadId && void run(() => window.kunGui.clearBrowserUse(threadId))}
-                disabled={!state.sessionId}
+                onClick={clear}
+                disabled={busy || !state.sessionId}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ds-faint hover:bg-red-500/10 hover:text-red-600 disabled:opacity-35"
                 aria-label={t('browserUseClear')}
                 title={t('browserUseClear')}
@@ -323,7 +253,8 @@ export function AgentBrowserPanel({
             action={threadId ? (
               <button
                 type="button"
-                onClick={() => void run(() => window.kunGui.clearBrowserUse(threadId))}
+                onClick={clear}
+                disabled={busy}
                 className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-md border border-red-500/30 px-3 text-[11px] font-semibold text-red-600 hover:bg-red-500/10 dark:text-red-300"
               >
                 <Square className="h-3 w-3" />
@@ -352,11 +283,11 @@ export function AgentBrowserPanel({
               <div className="mt-3 break-all rounded-lg bg-ds-surface-subtle px-3 py-2 font-mono text-[11px] text-ds-ink">
                 {state.pendingOriginConsent.origin}
               </div>
-              <div className="mt-4 flex justify-end gap-2">
-                <ConsentButton onClick={() => decideOrigin('deny')}>
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                <ConsentButton disabled={busy} onClick={() => decideOrigin('deny')}>
                   {t('browserUseDeny')}
                 </ConsentButton>
-                <ConsentButton primary onClick={() => decideOrigin('allow-once')}>
+                <ConsentButton primary disabled={busy} onClick={() => decideOrigin('allow-once')}>
                   {t('browserUseAllowOriginOnce')}
                 </ConsentButton>
               </div>
@@ -399,11 +330,11 @@ export function AgentBrowserPanel({
               <p className="mt-3 text-[10.5px] leading-5 text-ds-muted">
                 {t('browserUseActionConsentBody')}
               </p>
-              <div className="mt-4 flex justify-end gap-2">
-                <ConsentButton onClick={() => decideAction('deny')}>
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                <ConsentButton disabled={busy} onClick={() => decideAction('deny')}>
                   {t('browserUseDeny')}
                 </ConsentButton>
-                <ConsentButton primary onClick={() => decideAction('allow-once')}>
+                <ConsentButton primary disabled={busy} onClick={() => decideAction('allow-once')}>
                   {t('browserUseAllowOnce')}
                 </ConsentButton>
               </div>
@@ -443,17 +374,20 @@ function BrowserEmptyState({
 function ConsentButton({
   children,
   primary = false,
+  disabled = false,
   onClick
 }: {
   children: string
   primary?: boolean
+  disabled?: boolean
   onClick: () => void
 }): ReactElement {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex h-8 items-center rounded-lg px-3 text-[11px] font-semibold transition ${
+      disabled={disabled}
+      className={`inline-flex min-h-8 max-w-full items-center justify-center whitespace-normal break-words rounded-lg px-3 py-1.5 text-center text-[11px] font-semibold transition ${
         primary
           ? 'bg-accent text-white hover:brightness-105'
           : 'border border-ds-border-muted bg-ds-surface-subtle text-ds-muted hover:text-ds-ink'

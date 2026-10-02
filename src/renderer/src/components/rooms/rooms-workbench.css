@@ -237,21 +237,12 @@
   box-shadow: none;
 }
 .rooms-details-embedded .rooms-detail-titlebar { padding: .75rem 1rem; }
-.rooms-workbench-right-panel { max-width: calc(100% - 2.5rem); }
 .rooms-workbench-empty-action {
   border: 1px solid var(--ds-border);
   border-radius: .625rem;
   padding: .625rem 1rem;
   color: var(--ds-text);
   background: var(--ds-surface-card);
-}
-@media (max-width: 1099px) {
-  .rooms-workbench-right-panel {
-    position: absolute;
-    inset: 0 2.5rem 0 auto;
-    z-index: 45;
-    box-shadow: -12px 0 32px #00000012;
-  }
 }
 
 /* A stable execution identity connects the conversation to its Code task. */

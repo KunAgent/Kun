@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { WorkbenchActiveChip } from './WorkbenchActiveChip'
 import { ChevronDown, CircleAlert, FolderOpen, Menu, MoreHorizontal, PanelLeft, PanelRight, PanelRightOpen, RotateCcw, Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { AgentDirectActivity, Room, RoomContentReference } from '@shared/rooms-api'
+import type { AgentDirectActivity, Room } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomPopover } from './RoomPopover'
 import { RoomExecutionGates } from './RoomTaskGates'
@@ -34,7 +34,12 @@ export function useDirectChat(room: Room | null, onUpdated: () => Promise<void>)
       await onUpdated(); resource.refresh()
     } catch (cause) { if (scope.current === room.id) setError(String(cause)) }
   }
-  return { ...resource, error: error || resource.error, act, context }
+  const refresh = () => {
+    if (scope.current !== room?.id) return
+    setError('')
+    resource.refresh()
+  }
+  return { ...resource, error: error || resource.error, refresh, act, context }
 }
 /** Close affordance for transient bot notices; the dismissed identity stays hidden until the notice content changes. */
 export function RoomNoticeDismiss({ onDismiss }: { onDismiss: () => void }) {
@@ -108,26 +113,4 @@ export function RoomDirectProgress({ room, state, onRun, openRunId, onModels, ac
       <RoomNoticeDismiss onDismiss={() => setDismissed(errorKey)} /></p> : null}
   </div>
 }
-export function RoomDirectFiles({ room, onOpen }: { room: Room; onOpen: (ref: RoomContentReference) => void }) {
-  const { t } = useTranslation('common')
-  type Page = { files: RoomContentReference[]; nextCursor?: string; nextLegacyCursor?: string }
-  const [search, setSearch] = useState(''), [cursor, setCursor] = useState<string | undefined>()
-  const [prior, setPrior] = useState<RoomContentReference[]>([])
-  const [legacyCursor, setLegacyCursor] = useState<string>()
-  const path = roomPath(room.id) + '/files?limit=30&search=' + encodeURIComponent(search) + (cursor ? '&cursor=' + cursor : '') + (legacyCursor ? '&legacy_cursor=' + encodeURIComponent(legacyCursor) : '')
-  const resource = useAgentResource<Page>(path)
-  useEffect(() => { setCursor(undefined); setLegacyCursor(undefined); setPrior([]) }, [room.id, search])
-  const files = [...new Map([...prior, ...(resource.data?.files ?? [])].map((file) => [JSON.stringify(file), file])).values()]
-  return <div className="direct-file-list min-h-0 flex-1 overflow-y-auto">
-    <input aria-label={t('roomsArtifactSearch', { defaultValue: 'Search saved files' })} value={search}
-      placeholder={t('roomsArtifactSearch', { defaultValue: 'Search saved files' })} onChange={(event) => setSearch(event.target.value)} />
-    {files.map((file) => <button key={JSON.stringify(file)} onClick={() => onOpen(file)}><FolderOpen size={16} />{file.titleSnapshot}
-      {file.kind === 'agent_file' ? <small>{file.artifactVersion ? `v${file.artifactVersion}` : t('roomsArtifactLegacy', { defaultValue: 'Current workspace file' })}</small> : null}</button>)}
-    {!files.length ? <p>{t('directNoFiles')}</p> : null}
-    {resource.data?.nextCursor ? <button onClick={() => { setPrior(files); setCursor(resource.data!.nextCursor) }}>
-      {t('roomsArtifactMore', { defaultValue: 'Load more files' })}</button> : null}
-    {!resource.data?.nextCursor && resource.data?.nextLegacyCursor ? <button onClick={() => { setPrior(files); setCursor(undefined); setLegacyCursor(resource.data!.nextLegacyCursor) }}>
-      {t('roomsArtifactLegacyMore', { defaultValue: 'Search older workspace references' })}</button> : null}
-    {resource.error ? <p role="alert">{resource.error} <button onClick={resource.refresh}>{t('retry', { defaultValue: 'Retry' })}</button></p> : null}
-  </div>
-}
+export { RoomDirectFiles } from './RoomDirectFiles'

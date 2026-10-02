@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RoomContentReference } from '@shared/rooms-api'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
 import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
 import { ROOM_COLLABORATION_TAB, useRoomWorkbenchPanel } from './useRoomWorkbenchPanel'
@@ -45,4 +46,34 @@ describe('room workbench presentation scope', () => {
     act(() => renderer.update(createElement(Harness, { roomId: 'agent-a' })))
     expect(panel.fileTarget).toBeNull()
   })
+  it('shares the file workspace between saved content and local file previews', async () => {
+    await act(async () => { renderer = create(createElement(Harness, { roomId: 'agent-a' })) })
+    const reference = { kind: 'agent_file', artifactId: 'saved', artifactVersion: 2,
+      workspaceId: 'private-a', relativePath: 'report.md', titleSnapshot: 'Report' } as RoomContentReference
+    act(() => panel.previewContent(reference, 'message-1'))
+    expect(panel.state.tabs).toEqual([BUILTIN_RIGHT_PANEL_IDS.file])
+    expect(panel.contentTarget).toMatchObject({ reference, messageId: 'message-1' })
+    const firstKey = panel.contentTarget?.key
+    act(() => panel.previewFile({ path: '/private/a/local.md', workspaceRoot: '/private/a' }))
+    expect(panel.contentTarget).toBeNull()
+    act(() => panel.previewContent(reference))
+    expect(panel.fileTarget).toBeNull()
+    expect(panel.contentTarget?.key).not.toBe(firstKey)
+    act(() => panel.closeTab(BUILTIN_RIGHT_PANEL_IDS.file))
+    expect(panel.contentTarget).toBeNull()
+    expect(panel.fileTargets).toEqual([])
+  })
+  it('rejects saved-content callbacks from a previous room', async () => {
+    await act(async () => { renderer = create(createElement(Harness, { roomId: 'agent-a' })) })
+    const previous = panel
+    const reference = { kind: 'agent_file', artifactId: 'saved', artifactVersion: 1,
+      workspaceId: 'private-a', relativePath: 'report.md' } as RoomContentReference
+    act(() => panel.previewContent(reference))
+    act(() => renderer.update(createElement(Harness, { roomId: 'agent-b' })))
+    expect(panel.contentTarget).toBeNull()
+    act(() => previous.previewContent(reference))
+    expect(panel.contentTarget).toBeNull()
+    expect(panel.state.tabs).toEqual([])
+  })
+
 })

@@ -20,5 +20,13 @@
   "roomsArtifactExport": "Export saved version",
   "roomsArtifactSearch": "Search saved files",
   "roomsArtifactMore": "Load more files",
-  "roomsArtifactMoreVersions": "Load older versions"
+  "roomsArtifactMoreVersions": "Load older versions",
+  "roomsArtifactOpenSource": "View source conversation",
+  "roomsArtifactSourceUnavailable": "Source conversation unavailable",
+  "roomsArtifactNoSearchResults": "No files match your search",
+  "roomsArtifactSavedFiles": "Saved files",
+  "roomsArtifactWorkspaceFiles": "Workspace",
+  "roomsArtifactSnapshot": "Saved snapshot",
+  "roomsArtifactDetails": "File details",
+  "roomsArtifactClearSearch": "Clear file search"
 }

@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
+import { useChatStore } from '../../store/chat-store'
 import type { RightPanelMode } from '../chat/WorkbenchTopBar'
 import type { GeneratedDocumentCollection } from '../chat/generated-document-artifacts'
 import {
@@ -109,6 +110,7 @@ type HarnessProps = {
   activeThreadId: string | null
   rightPanelMode: RightPanelMode
   onSetRightPanelMode: (mode: RightPanelMode) => void
+  workspaceRoot?: string
 }
 
 let latestController: ReturnType<typeof useWorkbenchFileTreeController>
@@ -120,14 +122,16 @@ function emitWindowEvent(type: string, detail: unknown): void {
   }
 }
 
-function ControllerHarness({ activeThreadId, rightPanelMode, onSetRightPanelMode }: HarnessProps) {
+function ControllerHarness({
+  activeThreadId, rightPanelMode, onSetRightPanelMode, workspaceRoot = '/repo'
+}: HarnessProps) {
   const [filePreviewTarget, setFilePreviewTarget] = useState<WorkspaceFileTarget | null>(null)
   latestController = useWorkbenchFileTreeController({
     route: 'chat',
     threads: [],
     activeThreadId,
-    workspaceRoot: '/repo',
-    activeSkillWorkspace: '/repo',
+    workspaceRoot,
+    activeSkillWorkspace: workspaceRoot,
     rightPanelMode,
     filePreviewTarget,
     setFilePreviewTarget,
@@ -140,6 +144,18 @@ describe('useWorkbenchFileTreeController thread transitions', () => {
   let renderer: ReactTestRenderer
   let setRightPanelMode: Mock<(mode: RightPanelMode) => void>
   let storage: MemoryStorage
+  const originalFolderSets = useChatStore.getState().codeWorkspaceFolderSets
+
+  async function renderWorkspace(workspaceRoot: string): Promise<void> {
+    await act(async () => {
+      renderer.update(createElement(ControllerHarness, {
+        activeThreadId: 'thread-a',
+        rightPanelMode: BUILTIN_RIGHT_PANEL_IDS.files,
+        onSetRightPanelMode: setRightPanelMode,
+        workspaceRoot
+      }))
+    })
+  }
 
   beforeEach(async () => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -171,7 +187,112 @@ describe('useWorkbenchFileTreeController thread transitions', () => {
 
   afterEach(async () => {
     await act(async () => renderer.unmount())
+    useChatStore.setState({ codeWorkspaceFolderSets: originalFolderSets })
     vi.unstubAllGlobals()
+  })
+
+  it.each([
+    ['native path without an override', 'D:\\Code\\rooms with spaces\\baseline.txt', undefined],
+    ['forward path without an override', 'D:/Code/rooms with spaces/baseline.txt', undefined],
+    ['native override', 'baseline.txt', 'D:\\Code\\rooms with spaces'],
+    ['forward override', 'baseline.txt', 'D:/Code/rooms with spaces/']
+  ] as const)('opens a Windows sidebar file with %s using its original scoped root', async (
+    _label, path, workspaceRootOverride
+  ) => {
+    window.kunGui.platform = 'win32'
+    const workspaceRoot = 'D:\\Code\\rooms with spaces'
+    await renderWorkspace(workspaceRoot)
+
+    await act(async () => {
+      latestController.previewWorkspaceFileFromSidebar(path, workspaceRootOverride)
+    })
+
+    expect(latestController.openFilePreviewTargets).toEqual([{ path, workspaceRoot }])
+    expect(setRightPanelMode).toHaveBeenLastCalledWith(BUILTIN_RIGHT_PANEL_IDS.file)
+  })
+
+  it('opens an additional Windows folder using its authorized original root', async () => {
+    window.kunGui.platform = 'win32'
+    const workspaceRoot = 'D:\\Code\\primary'
+    const extraRoot = 'E:\\Shared Files'
+    await act(async () => {
+      useChatStore.setState({
+        codeWorkspaceFolderSets: {
+          version: 1,
+          sets: [{ primary: workspaceRoot, extraRoots: [extraRoot] }]
+        }
+      })
+    })
+    await renderWorkspace(workspaceRoot)
+
+    await act(async () => {
+      latestController.previewWorkspaceFileFromSidebar('E:\\Shared Files\\baseline.txt')
+      latestController.previewWorkspaceFileFromSidebar('other.txt', 'E:/Shared Files/')
+    })
+
+    expect(latestController.openFilePreviewTargets).toEqual([
+      { path: 'E:\\Shared Files\\baseline.txt', workspaceRoot: extraRoot },
+      { path: 'other.txt', workspaceRoot: extraRoot }
+    ])
+    expect(setRightPanelMode).toHaveBeenLastCalledWith(BUILTIN_RIGHT_PANEL_IDS.file)
+  })
+
+  it.each([
+    ['/repo', '/other'],
+    ['/repo', '/Repo'],
+    ['/repo', '/repo/../other'],
+    ['/repo', '/repo/./'],
+    ['/repo', '/repo/subdirectory'],
+    ['D:\\Code\\repo', 'D:/Code/other'],
+    ['D:\\Code\\repo', 'D:/Code/Repo'],
+    ['D:\\Code\\repo', 'D:/Code/repo/../other']
+  ])('rejects a sidebar override outside the exact scope %s: %s', async (root, override) => {
+    await renderWorkspace(root)
+    await act(async () => {
+      latestController.previewWorkspaceFileFromSidebar('baseline.txt', override)
+    })
+
+    expect(latestController.openFilePreviewTargets).toEqual([])
+    expect(setRightPanelMode).not.toHaveBeenCalledWith(BUILTIN_RIGHT_PANEL_IDS.file)
+  })
+
+  it('accepts a POSIX trailing separator without changing its case or stored root', async () => {
+    await renderWorkspace('/Repo/')
+    await act(async () => {
+      latestController.previewWorkspaceFileFromSidebar('/Repo/baseline.txt')
+    })
+
+    expect(latestController.openFilePreviewTargets).toEqual([
+      { path: '/Repo/baseline.txt', workspaceRoot: '/Repo/' }
+    ])
+  })
+
+  it('shares case-preserving root authorization with live Office previews', async () => {
+    window.kunGui.platform = 'win32'
+    const workspaceRoot = 'D:\\Code\\Repo'
+    await renderWorkspace(workspaceRoot)
+    await act(async () => {
+      for (const root of ['D:/Code/other', 'D:/Code/repo', 'D:/Code/Repo/../other']) {
+        emitWindowEvent('kun:live-office-preview', {
+          path: 'rejected.docx', workspaceRoot: root, turnId: root, phase: 'committed'
+        })
+      }
+    })
+    expect(latestController.openFilePreviewTargets).toEqual([])
+    expect(setRightPanelMode).not.toHaveBeenCalledWith(BUILTIN_RIGHT_PANEL_IDS.file)
+
+    await act(async () => {
+      emitWindowEvent('kun:live-office-preview', {
+        path: 'D:/Code/Repo/report.docx',
+        workspaceRoot: 'D:/Code/Repo/',
+        turnId: 'turn-windows',
+        phase: 'committed'
+      })
+    })
+    expect(latestController.openFilePreviewTargets).toEqual([
+      { path: 'report.docx', workspaceRoot }
+    ])
+    expect(setRightPanelMode).toHaveBeenLastCalledWith(BUILTIN_RIGHT_PANEL_IDS.file)
   })
 
   it('prunes hidden unpinned tabs across A -> null -> B without closing another panel', async () => {

@@ -115,6 +115,7 @@ export async function resolveRoomContent(runtime: ServerRuntime, room: Room, ref
       Object.assign(result, { title: meta.title, mimeType: meta.mimeType, byteSize: meta.byteSize,
         kind: imageFile ? 'image' : mediaKind ?? 'file', version: String(meta.version),
         description: `Version ${meta.version} · SHA-256 ${meta.sha256}` })
+      result.sourceTarget = await library.sourceTarget(room.id, meta)
       const data = mode === 'summary' || (imageFile || mediaKind) && meta.byteSize > MEDIA_PREVIEW_MAX_BYTES ? Buffer.alloc(0)
         : (await library.read(agentId, reference.artifactId, reference.artifactVersion)).data
       if (imageFile && mode === 'thumbnail' && data.length) result.thumbnail = await roomPreviewImage(data)

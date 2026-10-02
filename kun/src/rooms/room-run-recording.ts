@@ -1,3 +1,4 @@
+import { privatePublicationChecks } from '../agents/agent-direct-publication-guard.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { RoomRunRecordSchema, type RoomRunRecord } from '../contracts/room-runs.js'
 import type { ThreadRecord } from '../contracts/threads.js'
@@ -143,6 +144,8 @@ export async function attachRoomRunPublication(store: RoomStore, commit: RoomSto
     (row.value.taskId && row.value.taskId !== message.taskId)) {
     throw new Error('Message run provenance does not match its room and member')
   }
+  commit.checks ??= []
+  commit.checks.push(...await privatePublicationChecks(store, row.value))
   const segmented = Boolean(message.originItemId)
   if (segmented) {
     // Segmented publication allows one message per source item. Its identity must be

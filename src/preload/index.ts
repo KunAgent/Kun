@@ -475,8 +475,8 @@ const api = {
   getComputerUsePermissions: () => ipcRenderer.invoke('computer-use:permissions'),
   requestComputerUsePermission: (kind) =>
     ipcRenderer.invoke('computer-use:request-permission', kind),
-  getBrowserUseState: (threadId) =>
-    ipcRenderer.invoke('browser-use:state:get', { threadId }),
+  getBrowserUseState: (threadId, expectedTurnId) =>
+    ipcRenderer.invoke('browser-use:state:get', { threadId, expectedTurnId }),
   mountBrowserUse: (input) =>
     ipcRenderer.invoke('browser-use:mount', input),
   decideBrowserUseOrigin: (input) =>
@@ -487,10 +487,10 @@ const api = {
     ipcRenderer.invoke('browser-use:control', input),
   navigateBrowserUse: (input) =>
     ipcRenderer.invoke('browser-use:navigate', input),
-  stopBrowserUse: (threadId) =>
-    ipcRenderer.invoke('browser-use:stop', { threadId }),
-  clearBrowserUse: (threadId) =>
-    ipcRenderer.invoke('browser-use:clear', { threadId }),
+  stopBrowserUse: (threadId, expectedTurnId) =>
+    ipcRenderer.invoke('browser-use:stop', { threadId, expectedTurnId }),
+  clearBrowserUse: (threadId, expectedTurnId) =>
+    ipcRenderer.invoke('browser-use:clear', { threadId, expectedTurnId }),
   onBrowserUseState: (handler) => {
     const wrapped = (
       _: Electron.IpcRendererEvent,

@@ -22,7 +22,9 @@
 .rooms-content-card button:focus-visible,
 .rooms-content-preview button:focus-visible,
 .rooms-link-preview:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: -2px; }
-.rooms-content-preview { min-width: 0; display: grid; gap: 14px; color: var(--ds-text); }
+.rooms-content-preview { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 14px; color: var(--ds-text); }
+.rooms-drawer-page > .rooms-content-preview { padding: 16px; overflow-y: auto; min-height: 0; }
+.rooms-content-preview > * { min-width: 0; max-width: 100%; }
 .rooms-content-preview h3 { margin: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .rooms-content-preview p { font-size: 12px; color: var(--ds-text-muted); overflow-wrap: anywhere; }
 .rooms-content-preview > header { display: flex; gap: 8px; justify-content: space-between; align-items: baseline; }
@@ -33,8 +35,8 @@
 .rooms-content-image-preview { display: grid; gap: 8px; padding: 6px; border: 1px solid var(--ds-border); border-radius: 10px; }
 .rooms-content-image-preview img { max-width: 100%; max-height: 55vh; margin: auto; object-fit: contain; }
 .rooms-content-image-preview > span,
-.rooms-content-open { display: flex; align-items: center; gap: 6px; color: var(--ds-text-muted); font-size: 12px; }
-.rooms-content-open { justify-self: start; padding: 7px 10px; border: 1px solid var(--ds-border); border-radius: 8px; }
+.rooms-content-open, .rooms-artifact-source { display: flex; align-items: center; gap: 6px; color: var(--ds-text-muted); font-size: 12px; }
+.rooms-content-open, .rooms-artifact-source { justify-self: start; padding: 7px 10px; border: 1px solid var(--ds-border); border-radius: 8px; }
 .rooms-content-loading { padding: 14px; color: var(--ds-text-muted); font-size: 12px; }
 .rooms-lightbox-backdrop { position: fixed; inset: 0; z-index: 2000; display: flex; justify-content: flex-end; background: color-mix(in srgb, var(--ds-text) 45%, transparent); }
 .rooms-lightbox { display: flex; flex-direction: column; width: min(640px, 100%); height: 100%; padding: 12px; border-left: 1px solid var(--ds-border); background: var(--ds-surface-elevated); box-shadow: var(--ds-shadow-overlay); }
@@ -100,3 +102,37 @@
   .rooms-lightbox :is(header button, header a, .rooms-lightbox-controls button) { min-width: 44px; min-height: 44px; }
   .rooms-message-attachments:has(> .is-image ~ .is-image) .rooms-content-thumbnail { height: 110px; }
 }
+
+.rooms-artifact-source-unavailable { color: var(--ds-text-muted); font-size: 12px; }
+
+.rooms-artifact-versions label { display: grid; gap: 6px; font-size: 12px; color: var(--ds-text-muted); }
+.rooms-artifact-versions select { min-width: 0; width: 100%; padding: 8px 10px; border: 1px solid var(--ds-border); border-radius: 8px; background: var(--ds-surface-card); color: var(--ds-text); }
+.rooms-artifact-export button { display: inline-flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid var(--ds-border); border-radius: 8px; font-size: 12px; color: var(--ds-text-muted); }
+.rooms-artifact-export button:hover:not(:disabled) { background: var(--ds-surface-hover); }
+.rooms-artifact-export button:disabled { opacity: .5; cursor: wait; }
+
+/* Saved snapshots share the Code preview chrome, without mutable-file actions. */
+.rooms-content-preview.rooms-saved-file-preview { display: flex; flex: 1; flex-direction: column; height: 100%; min-height: 0; gap: 0; overflow: hidden; }
+.rooms-saved-file-title { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; }
+.rooms-saved-file-title h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.rooms-saved-file-title .ds-code-sidebar-file-badge { flex-shrink: 0; }
+.rooms-saved-file-controls { display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 8px 12px; border-bottom: 1px solid var(--ds-border-muted); color: var(--ds-text-muted); font-size: 11px; }
+.rooms-saved-file-controls > span { white-space: nowrap; }
+.rooms-artifact-versions.is-compact { flex: 0 1 220px; min-width: 0; max-width: 100%; }
+.rooms-artifact-versions.is-compact label { display: block; }
+.rooms-artifact-versions.is-compact select { height: 28px; padding: 3px 6px; border-radius: 6px; font-size: 11px; }
+.rooms-saved-file-body { min-height: 0; flex: 1; overflow: auto; background: var(--ds-code-sidebar-editor-bg); }
+.rooms-saved-file-body > :is(p, button) { margin: 12px; }
+.rooms-saved-file-body .rooms-content-document { min-height: 100%; padding: 16px; border: 0; border-radius: 0; background: transparent; }
+.rooms-saved-file-body .rooms-content-document pre { margin: 0; font-family: var(--ds-font-mono, monospace); font-size: 12px; line-height: 1.7; }
+.rooms-saved-file-body .rooms-content-image-preview { width: 100%; margin: 0; padding: 16px; border: 0; border-radius: 0; }
+.rooms-saved-file-details { flex-shrink: 0; max-height: 30%; overflow: auto; border-top: 1px solid var(--ds-border-muted); padding: 8px 12px; color: var(--ds-text-muted); font-size: 11px; }
+.rooms-saved-file-details summary { cursor: pointer; }
+.rooms-saved-file-details p { margin: 8px 0 0; font-family: var(--ds-font-mono, monospace); font-size: 11px; }
+.rooms-saved-file-preview .rooms-artifact-source.ds-code-sidebar-icon-button,
+.rooms-artifact-export.is-compact button.ds-code-sidebar-icon-button { padding: 0; border: 0; border-radius: 7px; }
+.rooms-artifact-export.is-compact { position: relative; }
+.rooms-artifact-export.is-compact > p { position: absolute; z-index: 2; top: 100%; right: 0; width: 240px; max-width: 70vw; padding: 10px; border: 1px solid var(--ds-border); border-radius: 8px; background: var(--ds-surface-card); box-shadow: var(--ds-shadow-overlay); }
+.rooms-content-unavailable { padding: 16px; color: var(--ds-text-muted); font-size: 12px; }
+.rooms-content-unavailable button { margin-top: 12px; padding: 6px 10px; border: 1px solid var(--ds-border); border-radius: 7px; }
+.rooms-saved-file-preview .ds-code-sidebar-icon-button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: -2px; }
