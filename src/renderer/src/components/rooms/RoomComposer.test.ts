@@ -4,12 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Room, RoomTask, SendRoomMessage } from '@shared/rooms-api'
 import i18n from '../../i18n'
 import { RoomComposer } from './RoomComposer'
+import { defaultKunRuntimeSettings } from '@shared/app-settings-kun-defaults'
+import { CUSTOM_SPEECH_TO_TEXT_PROVIDER_ID, type AppSettingsV1 } from '@shared/app-settings'
+import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
 
 vi.mock('./RoomRichInput', async () => {
   const React = await import('react')
   return { RoomRichInput: React.forwardRef((props: { value: string; mentions: string[];
     onChange: (value: { body: string; mentions: string[] }) => void; onSubmit: () => void }, ref) => {
-    React.useImperativeHandle(ref, () => ({ focus() {}, insertText(text: string) {
+    React.useImperativeHandle(ref, () => ({ focus() {}, cancelDictation() {}, appendDictation(text: string) {
+      props.onChange({ body: [props.value, text].filter(Boolean).join(' '), mentions: props.mentions })
+    }, insertText(text: string) {
       props.onChange({ body: props.value + text, mentions: props.mentions })
     } }))
     return React.createElement('room-rich-input', { ...props, 'data-room-rich-input': true }, React.createElement('textarea', { value: props.value,
@@ -95,6 +100,29 @@ describe('RoomComposer', () => {
         .props.onSubmit({ preventDefault: () => undefined })
     )
   }
+
+  it('shares Code speech settings and local Whisper credential policy in personal and group composers', async () => {
+    const runtime = defaultKunRuntimeSettings()
+    runtime.speechToText = { ...runtime.speechToText, enabled: true,
+      providerId: CUSTOM_SPEECH_TO_TEXT_PROVIDER_ID, protocol: 'local-whisper', model: 'whisper-small-q5_1', apiKey: '' }
+    const settings = { agents: { kun: runtime } } as AppSettingsV1
+    Object.assign(window.kunGui, { getSettings: async () => settings })
+    const send = vi.fn().mockResolvedValue(undefined)
+    await render(send, { room: { ...room, conversationKind: 'user_agent' } })
+    expect(renderer.root.findByProps({ 'aria-label': i18n.t('composerVoiceStart') }).props.disabled).toBe(false)
+    runtime.speechToText.enabled = false
+    act(() => listeners.get(SETTINGS_CHANGED_EVENT)!(new CustomEvent(SETTINGS_CHANGED_EVENT, { detail: settings })))
+    expect(renderer.root.findAllByProps({ 'aria-label': i18n.t('composerVoiceStart') })).toHaveLength(0)
+    runtime.speechToText.enabled = true
+    runtime.speechToText.protocol = 'openai-transcriptions'
+    act(() => listeners.get(SETTINGS_CHANGED_EVENT)!(new CustomEvent(SETTINGS_CHANGED_EVENT, { detail: settings })))
+    expect(renderer.root.findAllByProps({ 'aria-label': i18n.t('composerVoiceStart') })).toHaveLength(0)
+    runtime.speechToText.protocol = 'local-whisper'
+    act(() => listeners.get(SETTINGS_CHANGED_EVENT)!(new CustomEvent(SETTINGS_CHANGED_EVENT, { detail: settings })))
+    await act(async () => renderer.update(createElement(RoomComposer, { room: { ...room, archivedAt: '2026-10-02' }, tasks: [], onSend: send })))
+    expect(renderer.root.findByProps({ 'aria-label': i18n.t('composerVoiceStart') }).props.disabled).toBe(true)
+    expect(send).not.toHaveBeenCalled()
+  })
 
   it('does not echo its own draft events and clears the acknowledged send', async () => {
     const dispatched: Event[] = []
