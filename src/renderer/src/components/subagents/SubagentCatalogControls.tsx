@@ -342,6 +342,7 @@ export function ExtensionAgentsControl({
           <button
             type="button"
             role="switch"
+            data-settings-switch="compact"
             aria-checked={enabled}
             data-state={status}
             aria-label={t('subagentsPanel.extensionAgents.toggle', 'Toggle extension agents')}

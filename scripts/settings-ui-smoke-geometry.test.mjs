@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
-import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes } from './settings-ui-smoke-geometry.mjs'
+import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes, requiredPolishProblems } from './settings-ui-smoke-geometry.mjs'
 import { annotateSettingsControls, annotateSettingsTabs } from './settings-ui-smoke-dom.mjs'
 import { JSDOM } from 'jsdom'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
@@ -156,6 +156,7 @@ test('review artifact stays bounded, retains pairs and preserves complete gzip r
     for (let i = 0; i < 13; i++) await writeFile(join(source, phase,
       `${phase}-light-wide-125-category-${i}-landing.png`), bytes)
     await writeFile(join(source, phase, `${phase}-light-wide-150-subagents-3-subagent-settings-tab-profiles.png`), bytes)
+    await writeFile(join(source, phase, `${phase}-light-small-200-providers-7-model-routes-settings-tab-monitoring.png`), bytes)
     await writeFile(join(source, phase, 'report.json'), JSON.stringify({ phase, original: true }))
   }
   const result = spawnSync(process.execPath,
@@ -167,7 +168,19 @@ test('review artifact stays bounded, retains pairs and preserves complete gzip r
   assert.ok(manifest.omitted.length > 0)
   assert.ok(manifest.included.every(group => group.matchedBeforeAfter && group.files.length === 2))
   assert.ok(manifest.included.some(group => group.key.includes('subagent-settings-tab-profiles')))
+  assert.ok(manifest.included.some(group => group.key.includes('model-routes-settings-tab-monitoring')))
   const report = JSON.parse(gunzipSync(await readFile(join(root,
     'dist/settings-ui-reports/after/report.json.gz'))).toString())
   assert.deepEqual(report, { phase: 'after', original: true })
+})
+
+test('final polish fails for inherited overflow, clipping and small buttons too', () => {
+  const layout = { key: 'light-small-200-subagents-profiles', ...measurement([
+    control({ name: 'Toggle', tag: 'button', role: 'switch', reached: { height: 19.68 } }),
+    control({ name: 'Add', inside: false })
+  ]), scrollerOverflow: true }
+  assert.equal(requiredPolishProblems([layout]).length, 3)
+  assert.deepEqual(requiredPolishProblems([{ ...layout, scrollerOverflow: false,
+    controls: [control({ name: 'Toggle', tag: 'button', role: 'switch', reached: { height: 26.24 } })]
+  }]), [])
 })

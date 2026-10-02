@@ -27,9 +27,12 @@ without an explicit fixture.
   controls cover small utilities. Delete, revoke, disconnect, and removal
   actions receive danger styling; cancelling a workflow remains neutral
 - Buttons have a 36px default minimum target, a 32px compact minimum target,
-  a 36px square icon target, and a 24px inline-icon target for model-chip
+  a 36px square icon target, and a 32px inline-icon target for model-chip
   removal. Icons do not shrink, and long action labels
   may wrap instead of clipping
+- Switches keep their original visible track and thumb shape inside a scoped,
+  scale-aware hit area of at least 32 declared CSS px. The independent app UI
+  scale is accounted for so the rendered target stays above 24 CSS px
 - Selection cards, tabs, switches, color choices, shortcut capture, stepper
   segments, provider/model pickers, and dark code-copy controls keep their
   state-specific appearance. They receive a scoped focus/target baseline
@@ -203,7 +206,20 @@ The failed comparison was investigated rather than waived. The follow-up fixes:
   overlap regions rather than offscreen scroll-content bounds, while retaining
   strict reached/hit checks and recording the actual obstructing element
 
-These fixes require a new exact-head native pass. Raw repeated finding counts
+Both native platforms passed these fixes at `4621e339`, run `36977005146`.
+The complete quality job also passed typecheck, lint, all unit suites, and the
+unchanged production audit. The native matrix had zero new findings, accessible
+name failures, focus-indicator failures, measured overlaps, renderer exceptions,
+or external requests. The non-Settings style probe was unchanged.
+
+Inspecting the retained baseline findings identified two more narrow-grid
+constraints (Subagent Profiles and the model-route tab wrapper) and switch hit
+areas reduced by the app's independent 0.82 scale. The final follow-up clears
+those grid-item minimums and enlarges switch targets without enlarging their
+visible tracks. Native checks now require **zero** horizontal overflow,
+reached-control clipping, and sub-24px buttons even if the baseline also had the
+problem. These final changes require their own exact-head native pass; the PR
+records its result and artifact links. Raw repeated finding counts
 are not a visual quality score. Full reports and bounded paired review PNGs are
 retained as separate workflow artifacts, including unresolved findings.
 
@@ -215,25 +231,35 @@ sandbox workaround was attempted. The Windows/macOS workflow captures baseline
 and final production components with an isolated offline bridge at 125%, 150%
 and 200% Electron zoom, light/dark, wide/small native window bounds.
 
-The following starts as pending and must be updated from actual native evidence.
-Source review and passing React tests alone do not mark these complete.
+Verified native coverage at `4621e339` (final follow-up rerun tracked in the PR):
 
-- [ ] Open each available category at a regular desktop width; capture actual
-  title, control alignment, hierarchy, clipping, and scrolling
-- [ ] Visit every secondary tab, disclosure, and representative populated list
-  in Providers, Assistant, Laboratory, Subagents, Memory, and Work
-- [ ] Inspect light and dark themes, long labels/model names, and larger UI text
-- [ ] Inspect the compact navigation breakpoint and narrow category layout;
-  ensure selected category, Back, and conditional entries still work
-- [ ] Inspect imported provider dialogs, SSH dialog, profile dialog, Add Agent
-  portal, and Lucide picker portal in Settings
-- [ ] Verify the shared Agent Center and subagent panel outside Settings did not
-  pick up the new action styling
-- [ ] Tab through controls and activate with Enter/Space; check visible focus,
-  selected state, accessible names, Escape/Cancel and focus restoration
-- [ ] Inspect disabled/loading/error states without triggering real account,
-  permission, credential, deletion, uninstall, or migration side effects
-- [ ] Verify reduced-motion and forced-colors behavior where supported
-- [ ] Record platform-only or service-dependent states that were not exercised
+- [x] Every available category: Windows 23, macOS 22 (Storage is Windows-only),
+  with a safe declarative extension fixture for the conditional destination
+- [x] Every discovered primary/secondary tab and visible disclosure in the
+  fixture: 1,152 Windows and 1,140 macOS layouts per before/after phase
+- [x] Light/dark, wide/small windows, and 125%, 150%, 200% Electron zoom;
+  native PNG dimensions matched the actual OS-constrained content bounds
+- [x] Compact category navigation and the same conditional route inventory
+- [x] Computed accessibility names, focus indicator measurements, scroll reach,
+  center hit tests, overlap/clip diagnostics, and retained baseline findings
+- [x] Actual Lab, Subagents, SSH and Uninstall images inspected on both OSes;
+  disabled destructive confirmation retained, and SSH Add/Cancel exercised
+- [x] Update busy-state fixtures, SSH/uninstall focus/escape cancellation tests,
+  and shared Agent Center/subagent standalone behavior in React tests
+- [x] Shared non-Settings action style unchanged in the native CSS probe
 
-No screenshot or runtime coverage claim should exceed the recorded evidence.
+Source-reviewed or unit-covered only; not claimed as fully native-exercised:
+
+- [ ] Live provider credentials/sign-in, permissions, accounts, downloads,
+  microphone/native file pickers, migration execution or real uninstall
+- [ ] Every imported provider/profile/Add Agent/icon-picker dialog branch,
+  populated archive/memory/worktree mutations, and conditionally enabled UI
+- [ ] Every control's Enter/Space activation and real screen-reader output;
+  measured focus/name checks are not a complete accessibility conformance audit
+- [ ] Native forced-colors/reduced-motion modes and operating-system DPI
+  changes (the matrix uses Electron webContents zoom)
+
+The 4621 reports retain 24 repeated covered-center findings on gated ADE
+switches; their permission semantics are not changed or waived. The final native
+reports retain any remaining findings explicitly. No screenshot or runtime
+coverage claim should exceed the recorded evidence.

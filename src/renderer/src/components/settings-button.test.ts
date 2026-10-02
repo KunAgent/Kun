@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act, create } from 'react-test-renderer'
@@ -15,6 +16,8 @@ describe('settings action hierarchy', () => {
       }
     }
     expect(settingsButtonClass()).toBe('ds-settings-button ds-settings-button--secondary ds-settings-button--default')
+    const css = readFileSync(new URL('../styles/settings-buttons.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/inline-icon'\]\) \{[^}]*min-inline-size: 2rem;[^}]*min-block-size: 2rem;/)
   })
 
   it('keeps native button states, attributes, and trusted activation handlers intact', () => {
@@ -85,5 +88,32 @@ describe('compact settings navigation', () => {
     expect(routes).toHaveLength(23)
     act(() => select.props.onChange({ target: { value: 'memory' } }))
     expect(setCategory).toHaveBeenCalledWith('memory')
+  })
+})
+
+describe('settings switch target', () => {
+  it('scopes a scale-aware hit area around the original track and thumb', () => {
+    const css = readFileSync(new URL('../styles/settings-layout.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.ds-settings-surface :is\(\.ds-settings-toggle, \[data-settings-switch\]\) \{[^}]*min-block-size: max\(2rem, calc\(25px \/ var\(--ds-ui-scale, 1\)\)\);[^}]*background: transparent;/)
+    expect(css).toContain('--settings-switch-track-height: 1.25rem;')
+    expect(css).toContain('--settings-switch-track-height: 1.5rem;')
+    expect(css).toContain('margin-block-start: calc(-1 * var(--settings-switch-thumb-half));')
+  })
+
+  it('keeps checked and disabled activation semantics unchanged', () => {
+    const onChange = vi.fn()
+    let renderer!: ReturnType<typeof create>
+    act(() => { renderer = create(createElement(Toggle, { checked: false, onChange, ariaLabel: 'Setting' })) })
+    let button = renderer.root.findByType('button')
+    expect(button.props['aria-checked']).toBe(false)
+    act(() => button.props.onClick())
+    expect(onChange).toHaveBeenLastCalledWith(true)
+    act(() => renderer.update(createElement(Toggle, { checked: true, disabled: true, onChange, ariaLabel: 'Setting' })))
+    button = renderer.root.findByType('button')
+    expect(button.props['aria-checked']).toBe(true)
+    expect(button.props.disabled).toBe(true)
+    act(() => button.props.onClick())
+    expect(onChange).toHaveBeenCalledOnce()
+    act(() => renderer.unmount())
   })
 })

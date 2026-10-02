@@ -35,14 +35,15 @@ for (const phase of ['before', 'after']) {
       manifest.reports.push({ phase, file: `${file}.gz`, bytes: compressed.length })
       if (phase === 'after' && file === 'report.json') {
         const report = JSON.parse(await readFile(path, 'utf8'))
-        for (const finding of report.baselineComparison?.regressions ?? []) regressionKeys.add(finding.key)
+        for (const finding of [...(report.baselineComparison?.regressions ?? []),
+          ...(report.requiredPolishFindings ?? [])]) regressionKeys.add(finding.key)
       }
     }
   }
 }
 const priority = key => key === 'failure.png' || key.includes('-obstruction.png') ? -2
   : regressionKeys.has(key.replace(/\.png$/, '')) ? -1
-    : /subagents-.*tab-profiles|ssh-add-dialog|destructive-confirm/.test(key) ? 0
+    : /subagents-.*tab-profiles|ssh-add-dialog|destructive-confirm|small-200-providers-.*(?:model-routes-settings-tab|provider-workspace-tab-routes)/.test(key) ? 0
   : /light-wide-125-.*-landing/.test(key) ? 1
     : /dark-wide-125-.*-landing/.test(key) ? 2
       : /light-small-200-.*-landing/.test(key) ? 3

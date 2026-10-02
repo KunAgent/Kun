@@ -86,10 +86,10 @@
 
 :is(.ds-settings-button--inline-icon, .ds-settings-surface [data-settings-size='inline-icon']) {
   flex-shrink: 0;
-  min-inline-size: 1.5rem;
-  min-block-size: 1.5rem;
-  inline-size: 1.5rem;
-  block-size: 1.5rem;
+  min-inline-size: 2rem;
+  min-block-size: 2rem;
+  inline-size: 2rem;
+  block-size: 2rem;
   padding: 0.25rem;
 }
 

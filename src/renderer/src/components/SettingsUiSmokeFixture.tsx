@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client'
 import type { AppSettingsV1 } from '@shared/app-settings'
 import { ExtensionContributionsSchema } from '@kun/extension-api'
 import { SettingsView } from './SettingsView'
+import { Toggle } from './settings-controls'
 import { coerceRendererSettings } from './settings-utils'
 import { installSettingsSmokeHost } from './SettingsUiSmokeHost'
 import { useChatStore } from '../store/chat-store'
@@ -95,6 +96,7 @@ createRoot(document.getElementById('root')!).render(
     <aside aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0 }}>
       <button data-settings-smoke-external data-settings-action="secondary" type="button" tabIndex={-1}
         className="h-5 rounded-sm border px-1 text-[11px]">Non-settings control</button>
+      <div data-settings-smoke-external-switch><Toggle checked onChange={() => undefined} ariaLabel="Non-settings switch" /></div>
     </aside>
   </ExtensionSettingsServiceProvider>
 )

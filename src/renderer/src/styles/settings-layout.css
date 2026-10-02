@@ -222,12 +222,50 @@
   cursor: progress;
 }
 
-.ds-settings-surface .ds-settings-toggle {
-  min-block-size: 1.5rem;
+/* Keep the existing track/thumb shapes while enlarging the actual button,
+   including the app's independent UI scale (0.82 by default). */
+.ds-settings-surface :is(.ds-settings-toggle, [data-settings-switch]) {
+  --settings-switch-track-height: 1.25rem;
+  --settings-switch-thumb-half: 0.5rem;
+  --settings-switch-track-color: var(--ds-text-faint);
+  min-block-size: max(2rem, calc(25px / var(--ds-ui-scale, 1)));
+  background: transparent;
 }
 
-.ds-settings-surface .ds-settings-toggle > span {
-  top: 0.25rem;
+.ds-settings-surface .ds-settings-toggle[aria-checked='true'] {
+  --settings-switch-track-color: var(--ds-control);
+}
+
+.ds-settings-surface [data-settings-switch='compact'] {
+  --settings-switch-track-color: var(--ds-border);
+}
+
+.ds-settings-surface [data-settings-switch='large'] {
+  --settings-switch-track-height: 1.5rem;
+  --settings-switch-thumb-half: 0.625rem;
+  --settings-switch-track-color: var(--ds-card-muted);
+}
+
+.ds-settings-surface [data-settings-switch]:is([aria-checked='true'], [data-state='partial']) {
+  --settings-switch-track-color: var(--ds-accent);
+}
+
+.ds-settings-surface :is(.ds-settings-toggle, [data-settings-switch])::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  block-size: var(--settings-switch-track-height);
+  transform: translateY(-50%);
+  border-radius: inherit;
+  background: var(--settings-switch-track-color);
+  transition: background-color var(--ds-duration-functional);
+  pointer-events: none;
+}
+
+.ds-settings-surface :is(.ds-settings-toggle, [data-settings-switch]) > span {
+  top: 50%;
+  margin-block-start: calc(-1 * var(--settings-switch-thumb-half));
 }
 
 .ds-settings-surface :is(input, select, textarea) {
@@ -353,4 +391,16 @@
 .ds-settings-surface .ds-settings-tabs--wrap button > span {
   min-inline-size: 0;
   overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-settings-surface :is(.ds-settings-toggle, [data-settings-switch])::before {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .ds-settings-surface :is(.ds-settings-toggle, [data-settings-switch])::before {
+    border: 1px solid ButtonText;
+  }
 }

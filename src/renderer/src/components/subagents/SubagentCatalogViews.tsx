@@ -254,6 +254,7 @@ export function AgentDetailsPanel({
           <button
             type="button"
             role="switch"
+            data-settings-switch="large"
             aria-label={surfaceLabel(t, selectedSurface)}
             aria-checked={assigned}
             disabled={locked}

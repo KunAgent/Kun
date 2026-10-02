@@ -315,7 +315,7 @@ export function ModelRoutesSettings({
 
   return (
     <div className="grid content-start auto-rows-min gap-4 p-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-      <div className="lg:col-span-2">
+      <div className="min-w-0 lg:col-span-2">
         <SettingsSubTabs<ModelRouteSettingsTab>
           baseId="model-routes-settings"
           ariaLabel={t('modelRoutes.tabsAria')}

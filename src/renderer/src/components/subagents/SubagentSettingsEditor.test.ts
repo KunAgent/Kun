@@ -190,6 +190,9 @@ describe('SubagentSettingsEditor', () => {
     })
     expect(renderer.root.findByProps({ id: 'subagent-settings-panel-policy' }).props.hidden).toBe(true)
     expect(renderer.root.findByProps({ id: 'subagent-settings-panel-profiles' }).props.hidden).toBe(false)
+    const profilesPanel = renderer.root.findByProps({ id: 'subagent-settings-panel-profiles' })
+    const profilesSection = profilesPanel.findAllByType('section').find((section) => section.parent === profilesPanel)
+    expect(profilesSection?.props.className).toContain('min-w-0')
     expect(renderer.root.findByProps({ id: 'subagent-settings-panel-automatic' }).props.hidden).toBe(true)
 
     const researchChip = buttonWithText(renderer, 'Research')

@@ -61,6 +61,8 @@ describe('ModelRoutesSettings', () => {
       onChange: () => undefined
     }))
 
+    expect(html).toContain('<div class="min-w-0 lg:col-span-2">')
+
     for (const tabId of ['gateway', 'models', 'resilience', 'monitoring']) {
       expect(html).toContain(`id="model-routes-settings-tab-${tabId}"`)
       expect(html).toContain(`aria-controls="model-routes-settings-panel-${tabId}"`)

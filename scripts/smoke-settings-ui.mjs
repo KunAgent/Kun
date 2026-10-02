@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { _electron } from 'playwright-core'
 import { createServer, optimizeDeps } from 'vite'
-import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes } from './settings-ui-smoke-geometry.mjs'
+import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes, requiredPolishProblems } from './settings-ui-smoke-geometry.mjs'
 import { annotateSettingsTabs } from './settings-ui-smoke-dom.mjs'
 
 // Native offline renderer smoke; no app build, runtime, provider network or secrets.
@@ -92,10 +92,13 @@ app.on('window-all-closed', () => app.quit())
   await cdp.send('DOM.enable')
   report.fixture = await page.evaluate(() => window.settingsFixture.coverage)
   report.nonSettingsScope = await page.evaluate(() => {
-    const button = document.querySelector('[data-settings-smoke-external]')
+    const buttons = [...document.querySelectorAll('[data-settings-smoke-external],[data-settings-smoke-external-switch] button')]
     const properties = ['height', 'width', 'padding', 'fontSize', 'fontWeight', 'lineHeight',
       'borderRadius', 'backgroundColor', 'color', 'borderWidth']
-    const snapshot = () => Object.fromEntries(properties.map(key => [key, getComputedStyle(button)[key]]))
+    const snapshot = () => buttons.map(button => ({
+      control: Object.fromEntries(properties.map(key => [key, getComputedStyle(button)[key]])),
+      track: getComputedStyle(button, '::before').content
+    }))
     const enabled = snapshot()
     const sheets = [...document.querySelectorAll('style[data-vite-dev-id]')]
       .filter(element => /settings-(buttons|layout)\.css$/.test(element.dataset.viteDevId))
@@ -128,6 +131,8 @@ app.on('window-all-closed', () => app.quit())
   assert.deepEqual(report.pageErrors, [], 'The actual SettingsView must render without renderer exceptions')
   assert.deepEqual(report.blockedRequests, [], 'Fixture must not attempt external network requests')
   if (phase === 'after') {
+    report.requiredPolishFindings = requiredPolishProblems(report.layouts)
+    assert.deepEqual(report.requiredPolishFindings, [], 'No overflow, reached-control clipping or undersized buttons may remain')
     const baselinePath = process.env.KUN_SETTINGS_BASELINE_REPORT
     const baseline = baselinePath ? JSON.parse(await readFile(baselinePath, 'utf8')) : null
     if (baseline) {

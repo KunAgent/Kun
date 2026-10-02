@@ -121,7 +121,7 @@ export async function measureSettings(page, cdp) {
       const classes = element.getAttribute('class') ?? ''
       const size = element.getAttribute('data-settings-size')
         || classes.match(/ds-settings-button--(default|compact|inline-icon|icon)(?:\s|$)/)?.[1]
-      const declaredTargetHeight = size ? ({ default: 36, compact: 32, icon: 36, 'inline-icon': 24 })[size] : null
+      const declaredTargetHeight = size ? ({ default: 36, compact: 32, icon: 36, 'inline-icon': 32 })[size] : null
       const hittable = !!point && (element === point || element.contains(point))
       const coveringLayers = []
       if (!hittable && point) for (let ancestor = point; ancestor; ancestor = ancestor.parentElement) {
@@ -223,4 +223,13 @@ export function worsenedTargetSizes(previousLayouts, currentLayouts) {
     }
   }
   return findings
+}
+
+// The final polish closes these measured baseline defects, so they are hard
+// requirements even when the old UI had the same issue. Other inherited
+// findings remain in the complete baseline comparison and evidence report.
+export function requiredPolishProblems(layouts) {
+  return layouts.flatMap(layout => geometryProblems(layout)
+    .filter(problem => /horizontal overflow|clipped after scrolling|button height below 24/.test(problem))
+    .map(problem => ({ key: layout.key, problem })))
 }
