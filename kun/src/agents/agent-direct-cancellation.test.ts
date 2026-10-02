@@ -16,6 +16,7 @@ import { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
 import { RoomRuntime } from '../rooms/room-runtime.js'
 import { putRoomDocument, roomFingerprint } from '../rooms/room-service.js'
 import { quickCreateAgent } from './agent-chat-entry.js'
+import { TurnConflictError } from '../services/turn-service.js'
 import { AgentDirectRunner } from './agent-direct-runner.js'
 import { controlDirectRequest, directActivity } from './agent-direct-service.js'
 
@@ -275,3 +276,58 @@ it('replays an older unscoped Stop receipt only for the exact request recorded i
   expect(await controlDirectRequest(f.runtime, f.created.roomId, row.id, input)).toEqual({ accepted: true })
   expect(interrupt).toHaveBeenCalledWith({ threadId: f.request.threadId, turnId: f.request.turnId })
 })
+
+it('reconciles cancellation when the API interrupts after the runner read the still-running turn', async () => {
+  const f = await fixture()
+  const apiEntered = deferred(), apiHeld = deferred(), runnerEntered = deferred(), runnerHeld = deferred()
+  const interrupt = f.h.turns.interruptTurn.bind(f.h.turns)
+  let calls = 0
+  vi.spyOn(f.h.turns, 'interruptTurn').mockImplementation(async (input) => {
+    if (calls++ === 0) { apiEntered.resolve(); await apiHeld.promise }
+    else { runnerEntered.resolve(); await runnerHeld.promise }
+    return interrupt(input)
+  })
+  const stop = f.stop()
+  let tick: Promise<void> | undefined
+  try {
+    await apiEntered.promise
+    const stopping = await f.row()
+    expect(stopping.value.status).toBe('stopping')
+    // Exercise the real runtime error boundary that used to mark this request failed.
+    tick = f.runtime['tickRequest'](stopping, new Set())
+    await runnerEntered.promise
+    apiHeld.resolve(); await stop
+    expect((await f.h.threads.getMetadata(f.request.threadId))?.turns.find((turn) => turn.id === f.request.turnId)?.status).toBe('aborted')
+    runnerHeld.resolve(); await tick
+    expect((await f.row()).value.status).toBe('cancelled')
+    expect((await f.row()).value.error).toBeUndefined()
+    expect((await f.store.get<RoomRunRecord>('room_run', f.request.privateRunId!))?.value.outcome).toBe('cancelled')
+  } finally { apiHeld.resolve(); runnerHeld.resolve(); await stop; await tick }
+})
+
+it('reconciles stale running metadata for an aborted exact turn without interrupting newer work', async () => {
+  const f = await fixture()
+  const stale = (await f.h.threads.getMetadata(f.request.threadId))!
+  await f.stop()
+  const newer = await f.h.turns.enqueueTurn({ threadId: f.request.threadId,
+    request: { prompt: 'Newer independent work', clientRequestId: 'newer-work', enqueueIfBusy: true } })
+  await f.h.turns.startNextQueuedTurn(f.request.threadId)
+  vi.spyOn(f.h.threads, 'getMetadata').mockResolvedValueOnce(stale)
+  const interrupt = vi.spyOn(f.h.turns, 'interruptTurn')
+  await f.runtime['tickRequest'](await f.row(), new Set())
+  expect((await f.row()).value.status).toBe('cancelled')
+  expect(interrupt).toHaveBeenCalledExactlyOnceWith({ threadId: f.request.threadId, turnId: f.request.turnId })
+  expect((await f.h.threads.getMetadata(f.request.threadId))?.turns.find((turn) => turn.id === newer.turnId)?.status).toBe('running')
+  expect(f.h.turns.isTurnExecutionActive(newer.turnId)).toBe(true)
+})
+
+it.each([new Error('interrupt persistence failed'), new TurnConflictError('target is still active')])(
+  'preserves interruption errors without a proven terminal target: %s', async (error) => {
+    const f = await fixture(), row = await f.row()
+    await putRoomDocument(f.store, 'request', row.id, row.roomId!,
+      { ...row.value, cancellationRequested: true, status: 'stopping' }, row)
+    vi.spyOn(f.h.turns, 'interruptTurn').mockRejectedValueOnce(error)
+    await expect(f.runner.tick(await f.row())).rejects.toBe(error)
+    expect((await f.row()).value.status).toBe('stopping')
+    expect((await f.h.threads.getMetadata(f.request.threadId))?.turns.find((turn) => turn.id === f.request.turnId)?.status).toBe('running')
+  })

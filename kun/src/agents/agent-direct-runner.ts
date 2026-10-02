@@ -46,10 +46,21 @@ export class AgentDirectRunner {
       return
     }
     if (request.cancellationRequested) {
-      const { thread, turn } = await directCancellationTarget(this.deps, request)
+      let { thread, turn } = await directCancellationTarget(this.deps, request)
       if (turn && ['queued', 'running'].includes(turn.status)) {
-        await this.deps.turns.interruptTurn({ threadId: thread!.id, turnId: turn.id })
-        return this.save(row, { ...request, status: 'stopping', ...(request.steer ? {} : { turnId: turn.id }) })
+        try {
+          await this.deps.turns.interruptTurn({ threadId: thread!.id, turnId: turn.id })
+          return this.save(row, { ...request, status: 'stopping', ...(request.steer ? {} : { turnId: turn.id }) })
+        } catch (error) {
+          if (!(error instanceof TurnConflictError)) throw error
+          // The Stop API can finish this exact interrupt after our metadata read.
+          // Reconcile only a proven terminal target; never stop a newer turn.
+          const settled = await directCancellationTarget(this.deps, request)
+          if (settled.thread?.id !== thread!.id || settled.turn?.id !== turn.id ||
+            !['completed', 'failed', 'aborted'].includes(settled.turn.status)) throw error
+          thread = settled.thread
+          turn = settled.turn
+        }
       }
       if (request.steer) {
         if (turn) {
