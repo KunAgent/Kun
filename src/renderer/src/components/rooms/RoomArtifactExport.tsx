@@ -43,6 +43,6 @@ export function RoomArtifactExport({ room, reference }: { room: Room; reference:
     } catch (cause) { if (!controller.signal.aborted) setError(String(cause)) }
     finally { if (!controller.signal.aborted) setBusy(false) }
   }
-  return <div><button type="button" disabled={busy} onClick={() => void download()}><Download size={14} />
+  return <div className="rooms-artifact-export"><button type="button" disabled={busy} onClick={() => void download()}><Download size={14} />
     {t('roomsArtifactExport', { defaultValue: 'Export saved version' })}</button>{error ? <p role="alert">{error}</p> : null}</div>
 }

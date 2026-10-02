@@ -104,6 +104,19 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     assert(await page.locator('[data-rooms-workspace]').evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
       'Private workspace must not overflow horizontally')
   }
+  const assertArtifactLayout = async () => {
+    const geometry = await page.locator('.rooms-content-preview:visible').evaluate((element) => {
+      const rect = element.getBoundingClientRect()
+      return { padded: Number.parseFloat(getComputedStyle(element).paddingLeft) >= 12,
+        fits: element.scrollWidth <= element.clientWidth + 1,
+        controls: [...element.querySelectorAll('button, select')].map((control) => {
+          const box = control.getBoundingClientRect()
+          return box.width > 0 && box.left >= rect.left && box.right <= rect.right + 1
+        }) }
+    })
+    assert(geometry.padded && geometry.fits && geometry.controls.every(Boolean),
+      'Artifact preview and its source/version/export controls fit the padded panel')
+  }
   const openSavedFiles = async () => {
     await rail().getByRole('button', { name: 'Files', exact: true }).click()
     await page.locator('.direct-file-list:visible').waitFor()
@@ -155,9 +168,11 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     assert(!(await preview().innerText()).includes('Mutable working copy changed'))
     assert.deepEqual(await roomWorkbenchSnapshot(page), scope)
     assert.equal(await editor().innerText(), draft)
+    await assertArtifactLayout()
     await capture('workspace-05-saved-artifact-preview-wide')
     await resize(760, 780)
     await assertNoOverflow()
+    await assertArtifactLayout()
     await capture('workspace-06-saved-artifact-preview-narrow')
     await resize(1360, 900)
     await preview().getByRole('button', { name: 'View source conversation', exact: true }).click()

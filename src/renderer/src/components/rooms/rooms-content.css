@@ -22,7 +22,9 @@
 .rooms-content-card button:focus-visible,
 .rooms-content-preview button:focus-visible,
 .rooms-link-preview:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: -2px; }
-.rooms-content-preview { min-width: 0; display: grid; gap: 14px; color: var(--ds-text); }
+.rooms-content-preview { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 14px; color: var(--ds-text); }
+.rooms-drawer-page > .rooms-content-preview { padding: 16px; overflow-y: auto; min-height: 0; }
+.rooms-content-preview > * { min-width: 0; max-width: 100%; }
 .rooms-content-preview h3 { margin: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .rooms-content-preview p { font-size: 12px; color: var(--ds-text-muted); overflow-wrap: anywhere; }
 .rooms-content-preview > header { display: flex; gap: 8px; justify-content: space-between; align-items: baseline; }
@@ -102,3 +104,9 @@
 }
 
 .rooms-artifact-source-unavailable { color: var(--ds-text-muted); font-size: 12px; }
+
+.rooms-artifact-versions label { display: grid; gap: 6px; font-size: 12px; color: var(--ds-text-muted); }
+.rooms-artifact-versions select { min-width: 0; width: 100%; padding: 8px 10px; border: 1px solid var(--ds-border); border-radius: 8px; background: var(--ds-surface-card); color: var(--ds-text); }
+.rooms-artifact-export button { display: inline-flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid var(--ds-border); border-radius: 8px; font-size: 12px; color: var(--ds-text-muted); }
+.rooms-artifact-export button:hover:not(:disabled) { background: var(--ds-surface-hover); }
+.rooms-artifact-export button:disabled { opacity: .5; cursor: wait; }
