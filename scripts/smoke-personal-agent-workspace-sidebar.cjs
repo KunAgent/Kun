@@ -106,10 +106,11 @@ async function dragSidebar({ page, panel, handle, poll, capture, name }) {
   const before = await panel.boundingBox(), grip = await handle.boundingBox()
   assert(before && grip, 'A real sidebar and resize handle must be visible')
   // Shrink first, so the test does not depend on how much free width the host has.
+  const delta = 80
   const origin = { x: grip.x + grip.width / 2, y: grip.y + Math.min(grip.height / 2, 160) }
   await page.mouse.move(origin.x, origin.y)
   await page.mouse.down()
-  try { await page.mouse.move(origin.x + 80, origin.y, { steps: 8 }) }
+  try { await page.mouse.move(origin.x + delta, origin.y, { steps: 8 }) }
   finally { await page.mouse.up() }
   let after
   await poll(async () => {
@@ -121,21 +122,28 @@ async function dragSidebar({ page, panel, handle, poll, capture, name }) {
   assert(moved)
   await page.mouse.move(moved.x + moved.width / 2, origin.y)
   await page.mouse.down()
-  try { await page.mouse.move(moved.x + moved.width / 2 - (before.width - after.width), origin.y, { steps: 8 }) }
+  // CSS UI density scales measured bounds, but pointer handlers use input deltas.
+  // Reverse the same input distance rather than the scaled visual width change.
+  try { await page.mouse.move(moved.x + moved.width / 2 - delta, origin.y, { steps: 8 }) }
   finally { await page.mouse.up() }
   await poll(async () => Math.abs((await panel.boundingBox()).width - before.width) <= 2,
     5000, 'reverse pointer drag restores sidebar width')
-  return { before, after, restored: await panel.boundingBox(), input: 'native Playwright mouse pointer drag' }
+  return { before, after, restored: await panel.boundingBox(), pointerDelta: delta, input: 'native Playwright mouse pointer drag' }
+}
+
+function nativeViewportMatchesRequested(requested, actual) {
+  return Math.abs(actual.width - requested.width) <= 16 && actual.height > 0 && actual.height <= requested.height &&
+    (requested.width >= 768 || actual.width < 768)
 }
 
 function createSidebarEvidence({ page, poll, capture, recordDiagnostic, resize }) {
-  const captures = [], drags = []
+  const captures = [], drags = [], viewports = []
   const record = async (name, selectors, strict) => {
     const geometry = await readSidebarGeometry(page, selectors)
     const issues = sidebarGeometryIssues(geometry, { docked: strict })
     await capture(name)
     captures.push({ name, mode: strict ? 'private-agent' : 'code-baseline', geometry, issues })
-    await recordDiagnostic('sidebar-comparison-geometry', { captures, drags })
+    await recordDiagnostic('sidebar-comparison-geometry', { captures, drags, viewports })
     if (strict) assert.deepEqual(issues, [], name + ': measured sidebar geometry')
     return geometry
   }
@@ -149,16 +157,21 @@ function createSidebarEvidence({ page, poll, capture, recordDiagnostic, resize }
       name: `sidebar-${mode}-pointer-resized`,
       capture: (name) => record(name, { ...selectors, surface }, mode !== 'code') })
     drags.push({ mode, ...result })
-    await recordDiagnostic('sidebar-comparison-geometry', { captures, drags })
+    await recordDiagnostic('sidebar-comparison-geometry', { captures, drags, viewports })
   }
   const resizeTo = async (width, height) => {
+    const requested = { width, height }
     await resize(width, height)
-    await poll(async () => {
-      const current = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
-      return Math.abs(current.width - width) <= 16 && current.height > height - 80 && current.height <= height
-    }, 5000, 'native BrowserWindow reached requested dimensions')
-    // Allow the real ResizeObserver/layout effects two frames before measuring.
+    await poll(async () => nativeViewportMatchesRequested(requested,
+      await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))),
+    5000, 'native BrowserWindow reached requested width and a positive OS-bounded height')
+    // The OS may cap window height to its desktop. All clipping checks use the
+    // actual viewport below; narrow captures must still cross the real breakpoint.
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    const actual = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))
+    viewports.push({ requested, actual })
+    await recordDiagnostic('sidebar-comparison-geometry', { captures, drags, viewports })
+    assert(nativeViewportMatchesRequested(requested, actual), 'Native viewport remains within the requested bounds')
   }
   const assertSharedChrome = () => {
     const baseline = captures.find((item) => item.name === 'sidebar-code-files-wide')?.geometry
@@ -169,7 +182,7 @@ function createSidebarEvidence({ page, poll, capture, recordDiagnostic, resize }
     }
   }
   return { codeCapture, privateCapture, pointerResize, resizeTo, assertSharedChrome,
-    snapshot: () => ({ captures, drags }) }
+    snapshot: () => ({ captures, drags, viewports }) }
 }
 
 async function captureCodeSidebarBaseline({ page, workspaceRoot, fixture, poll, sidebar }) {
@@ -223,4 +236,4 @@ async function captureCodeSidebarBaseline({ page, workspaceRoot, fixture, poll, 
 }
 
 module.exports = { captureCodeSidebarBaseline, createSidebarEvidence, dragSidebar, readSidebarGeometry, sidebarGeometryIssues,
-  readNativeBrowserGeometry, nativeBrowserGeometryIssues }
+  readNativeBrowserGeometry, nativeBrowserGeometryIssues, nativeViewportMatchesRequested }

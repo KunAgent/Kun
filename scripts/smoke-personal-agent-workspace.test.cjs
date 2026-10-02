@@ -216,3 +216,48 @@ test('Rooms readiness surfaces the bounded wait failure without clicking or retr
   await assert.rejects(waitForPrivateRoomSurface(page, 'room-pending'), /Expected rendered room did not appear/)
   assert.equal(lookups, 1)
 })
+
+test('pointer resize reverses the original input at 0.82 UI density, not the scaled visual distance', async () => {
+  let cssWidth = 560, dragging = false, lastX = 0
+  const scale = 0.82, deltas = []
+  const page = { mouse: {
+    move: async (x) => {
+      if (dragging) { deltas.push(x - lastX); cssWidth -= x - lastX }
+      lastX = x
+    },
+    down: async () => { dragging = true }, up: async () => { dragging = false }
+  } }
+  const panel = { boundingBox: async () => bounds(1320 - cssWidth * scale, 0, cssWidth * scale, 677) }
+  const handle = { boundingBox: async () => bounds(1320 - (cssWidth + 9) * scale, 0, 9 * scale, 677) }
+  const result = await dragSidebar({ page, panel, handle,
+    poll: async (check) => assert(await check()), capture: async () => {}, name: 'scaled-pointer-resize' })
+  assert(Math.abs(result.before.width - 459.2) < 0.01)
+  assert(Math.abs(result.after.width - 393.6) < 0.01)
+  assert(Math.abs(result.restored.width - result.before.width) <= 2)
+  assert.deepEqual(deltas, [80, -80])
+})
+
+const { createSidebarEvidence } = require('./smoke-personal-agent-workspace-sidebar.cjs')
+test('native resize records actual narrow viewport when macOS clamps requested height to its desktop', async () => {
+  const records = [], requests = []
+  const actual = { width: 760, height: 677 }
+  const page = { evaluate: async (operation) => operation.toString().includes('requestAnimationFrame') ? undefined : actual }
+  const sidebar = createSidebarEvidence({ page, capture: async () => {},
+    poll: async (check) => assert(await check()), resize: async (...size) => requests.push(size),
+    recordDiagnostic: async (name, value) => records.push({ name, value: structuredClone(value) }) })
+  await sidebar.resizeTo(760, 780)
+  assert.deepEqual(requests, [[760, 780]])
+  assert.deepEqual(sidebar.snapshot().viewports, [{ requested: { width: 760, height: 780 }, actual }])
+  assert.deepEqual(records.at(-1).value.viewports, sidebar.snapshot().viewports)
+})
+
+const { nativeViewportMatchesRequested } = require('./smoke-personal-agent-workspace-sidebar.cjs')
+test('OS height allowance preserves actual narrow breakpoint, width and positive bounded viewport checks', () => {
+  const requested = { width: 760, height: 780 }
+  assert.equal(nativeViewportMatchesRequested(requested, { width: 760, height: 677 }), true)
+  assert.equal(nativeViewportMatchesRequested(requested, { width: 744, height: 677 }), true)
+  for (const actual of [{ width: 768, height: 677 }, { width: 760, height: 0 },
+    { width: 760, height: 781 }, { width: 1360, height: 677 }, { width: 760, height: NaN }]) {
+    assert.equal(nativeViewportMatchesRequested(requested, actual), false)
+  }
+})
