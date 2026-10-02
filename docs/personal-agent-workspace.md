@@ -57,7 +57,9 @@ thread mappings and compare-and-swap save semantics are preserved.
 ## Lifecycle and limits
 
 Loading, runtime errors with Retry, stopping and recovery states are distinct from a live
-browser. An unavailable authority read removes live controls until refreshed. Restart
+browser. Stop is durable before the exact original turn is interrupted. Source/root
+request revisions fence new chat and saved-artifact metadata publications, including
+merged-input cancellation; already committed messages and file versions remain intact. An unavailable authority read removes live controls until refreshed. Restart
 rebuilds execution identity from durable runtime records and browser state from the
 existing browser manager; it never replays a browser action just because the UI reopened.
 
@@ -70,6 +72,7 @@ part of the offline verification.
 
 Focused unit coverage checks exact request/run/thread/turn ownership, scope changes,
 permission/epoch invalidation, IM exclusion from browser supervision, selected history,
+held-model cancellation, raced publication/file-version commits, scoped Stop replay,
 late reads/events/actions/mounts, the first-tab Main/renderer supervision handshake,
 turn-scoped main-process controls, artifact provenance
 and search/list loading/error behavior. Unit fixtures explicitly separate runtime ownership

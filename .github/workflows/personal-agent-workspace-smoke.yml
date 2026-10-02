@@ -16,6 +16,7 @@ on:
       - 'kun/src/agents/agent-artifact*'
       - 'kun/src/contracts/room-content.ts'
       - 'kun/src/rooms/room-content*'
+      - 'kun/src/rooms/room-run-recording*'
       - 'scripts/smoke-personal-agent-workspace*'
       - 'scripts/smoke-personal-workspace-diagnostics.cjs'
       - 'scripts/smoke-isolated-paths*'
@@ -54,7 +55,7 @@ jobs:
         run: node --test scripts/smoke-isolated-paths.test.cjs scripts/smoke-direct-model.test.cjs scripts/smoke-personal-agent-workspace.test.cjs scripts/personal-agent-workspace-workflow.test.cjs
       - name: Verify persisted private execution and artifact authority
         working-directory: kun
-        run: npx vitest run src/agents/agent-direct-execution.test.ts src/agents/agent-direct.test.ts src/agents/agent-artifact-source.test.ts
+        run: npx vitest run src/agents/agent-direct-cancellation.test.ts src/agents/agent-direct-execution.test.ts src/agents/agent-direct.test.ts src/agents/agent-artifact-source.test.ts
       - name: Verify renderer and native browser authority boundaries
         run: >-
           npx vitest run src/main/browser-use/browser-use-manager.turn-binding.test.ts

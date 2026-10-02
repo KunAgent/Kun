@@ -1,3 +1,4 @@
+import { privatePublicationChecks } from './agent-direct-publication-guard.js'
 import { artifactId as contentId } from '../artifacts/artifact-summary.js'
 import { createHash } from 'node:crypto'
 import { extname } from 'node:path'
@@ -116,6 +117,14 @@ export class AgentArtifactLibrary {
         if (duplicate.fingerprint !== fingerprint) throw new RoomStoreConflictError('artifact capture changed')
         return AgentArtifactVersionSchema.parse(duplicate.result)
       }
+      const source = await this.deps.store.get<RoomRunRecord>('room_run', input.sourceRunId)
+      const publicationChecks = source ? await privatePublicationChecks(this.deps.store, source.value) : []
+      if (publicationChecks.length) {
+        if (source!.roomId !== input.roomId || source!.value.participantAgentId !== input.participantAgentId) {
+          throw new Error('Artifact source does not match its private conversation')
+        }
+        publicationChecks.push({ kind: 'room_run', id: source!.id, expectedRevision: source!.revision })
+      }
       const prior = await this.deps.store.get<AgentArtifact>('agent_artifact', id)
       const version = (prior?.value.version ?? 0) + 1, versionId = `${id}:v${version}`
       // Ordinary retention protects snapshots even if an interrupted metadata commit is retried.
@@ -135,7 +144,7 @@ export class AgentArtifactLibrary {
         mimeType, encoding: 'base64', status: 'version', createdAt: now })
       const latest = AgentArtifactSchema.parse({ ...value, id, status: 'active', retention: 'keep', updatedAt: now })
       await this.deps.store.commit({ requestId: receipt, fingerprint,
-        checks: [{ kind: 'agent_artifact', id, expectedRevision: prior?.revision ?? null },
+        checks: [...publicationChecks, { kind: 'agent_artifact', id, expectedRevision: prior?.revision ?? null },
           { kind: 'agent_artifact', id: versionId, expectedRevision: null }],
         puts: [{ kind: 'agent_artifact', id, roomId: input.roomId, value: latest },
           { kind: 'agent_artifact', id: versionId, roomId: input.roomId, taskId: id, value }],
