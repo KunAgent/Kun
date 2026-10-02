@@ -54,8 +54,10 @@ failure blocks connection and can be retried after the OS store is unlocked.
 On macOS, bounded Electron asynchronous safeStorage calls keep the main thread
 responsive while Keychain asks for user interaction. An unavailable or timed-out
 store stops setup before official authorization begins. The Windows DPAPI and
-Linux backend checks keep their existing behavior. Existing encrypted records
-remain readable; plaintext is never accepted as a legacy credential envelope.
+Linux backend checks keep their existing behavior. The existing encrypted-envelope
+format and read path are preserved, with mocked compatibility coverage; real
+macOS byte compatibility is pending the local probe below. Plaintext is never
+accepted as a legacy credential envelope.
 
 The Main-process IPC handler checks the current trusted workbench sender.
 Registration/polling occurs only in that explicit setup flow. Cancellation,
@@ -90,11 +92,17 @@ commands, cancellation during authorization, locked storage, restart cursors,
 late background answers, two connections on one Room, GUI-only topic privacy,
 pagination, disconnect races, expired QR and explicit UI consent.
 
-`personal-agent-im-smoke.yml` builds the real Electron app on macOS, runs an
-offline model that invokes the real connection-card tool, captures native
-wide/narrow screenshots, verifies durable Skip, and checks safeStorage with a
-disposable string. It never clicks authorization or connects a real account.
-The OS probe runs separately from UI evidence and fails explicitly if blocked.
+`personal-agent-im-smoke.yml` automatically runs the security/consent unit tests,
+builds the real Electron app on macOS, runs an offline model that invokes the real
+connection-card tool, captures native wide/narrow screenshots, and verifies durable
+Skip. It never clicks authorization or connects a real account. Ordinary PR runs
+explicitly report the real OS encryption/legacy-byte probe as **not run**, deferred
+to local interactive verification; a passing native-card job is not OS proof.
+
+The unchanged asserting OS probe is separate and opt-in. A manual workflow dispatch
+with `real_os_storage: true` requests it on the selected ref; the default is false.
+If an unattended runner cannot initialize Keychain, this manual job fails and keeps
+its failure evidence. It does not turn a blocked probe into success.
 The earlier synchronous macOS probe timed out before encryption. The current
 probe uses the same asynchronous API as the macOS credential path, checks main
 thread responsiveness, and requires a real encrypted round trip. It also checks
@@ -107,3 +115,33 @@ keychains to bypass user interaction.
 [Electron 43.1 safeStorage documentation](https://github.com/electron/electron/blob/v43.1.0/docs/api/safe-storage.md)
 Live platform authorization and real-message round trips require a user's
 explicit scan and were not performed as part of implementation.
+
+### Local interactive macOS check
+
+Use an interactive macOS desktop session with Node 22.23.1 or a supported newer
+Node version. From the repository root at the revision being verified, run:
+
+```bash
+npm ci
+npm run build
+npm run ensure:electron
+node scripts/smoke-development-direct-chat.cjs --personal-im-storage-only --evidence dist/personal-agent-im-storage-local
+```
+
+The script uses an isolated temporary app profile and disposable strings. It does
+not pair an IM account, inspect existing account secrets, rewrite credential files,
+or change Keychain settings. If macOS requests access, the user handles that prompt;
+do not unlock/create a keychain or alter its access policy to force this test through.
+
+A successful exit must produce `dist/personal-agent-im-storage-local/report.json`
+with `ok: true` and all of `direct.storage.available`, `roundTrip`, `encrypted`,
+`legacyRoundTrip`, `legacyBytesUnchanged`, `syncReadable`, and
+`syncCompatibleEnvelope` true. This verifies async encryption/decryption, old sync
+ciphertext through async decryption without changing its bytes, and new async
+ciphertext through sync decryption. Preserve the report with the tested commit SHA.
+
+The OS phase is bounded to 15 seconds. A timeout, unavailable store, failed assertion,
+or `failure.txt` means the check is blocked/failed, not passed. Address any OS prompt
+interactively before deciding to retry. This check remains unverified until a real
+successful report is obtained; it does not verify live provider authorization or
+message delivery.

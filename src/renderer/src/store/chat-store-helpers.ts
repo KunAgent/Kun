@@ -1,3 +1,4 @@
+import { DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS } from '@shared/app-settings-provider-core'
 import type { NormalizedThread } from '../agent/types'
 import { DEFAULT_COMPOSER_MODEL_IDS } from '@shared/default-composer-models'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
@@ -62,7 +63,7 @@ export const MAX_CODE_WORKSPACE_ROOTS = 30
 export const MAX_THREAD_COMPOSER_SELECTIONS = 500
 export const MAX_COMPOSER_REASONING_EFFORTS = 500
 export const MAX_TURN_MODEL_LABELS = 500
-export const DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS = 256_000
+export const DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS = DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS
 const LEGACY_COMPOSER_REASONING_EFFORTS: readonly ModelReasoningEffort[] = [
   'off',
   'low',

@@ -56,6 +56,12 @@ describe('contextThresholdsForModel safety cap', () => {
     expect(thresholds).toEqual(fallback)
   })
 
+  it('keeps explicit fallback thresholds while unknown defaults remain conservative', () => {
+    expect(contextThresholdsForModel('private-model')).toEqual({ softThreshold: 24_000, hardThreshold: 27_200 })
+    const declared = { softThreshold: 750_000, hardThreshold: 850_000 }
+    expect(contextThresholdsForModel('capacity-supplied-by-resolver', declared, [])).toEqual(declared)
+  })
+
   it('derives safe thresholds from a Gemini context-window-only profile', () => {
     const profiles = modelContextProfilesFromConfig({
       models: {
@@ -98,19 +104,19 @@ describe('sparse provider model profiles', () => {
         }
       })
 
-      // No window/thresholds configured -> the shared 256k assumption applies,
+      // No window/thresholds configured -> the conservative 32k fallback applies,
       // with thresholds derived at the standard 75%/85% ratios.
       expect(resolveModelContextProfile('my-private-model', profiles)).toMatchObject({
-        contextWindowTokens: 256_000,
-        softThreshold: 192_000,
-        hardThreshold: 217_600,
+        contextWindowTokens: 32_000,
+        softThreshold: 24_000,
+        hardThreshold: 27_200,
         pricing: { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 },
         reasoning: { requestProtocol: 'openai-chat-completions' }
       })
       expect(warn).toHaveBeenCalledOnce()
       expect(warn.mock.calls[0]?.[0]).toContain('my-private-model')
       expect(modelCapabilitiesForModel('my-private-model', profiles)).toMatchObject({
-        contextWindowTokens: 256_000,
+        contextWindowTokens: 32_000,
         pricing: { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 }
       })
     } finally {
@@ -190,7 +196,7 @@ describe('per-model endpointFormat', () => {
   it('omits endpointFormat for unknown models so they inherit the provider format', () => {
     const model = modelCapabilitiesForModel('unknown-model', [])
 
-    expect(model.contextWindowTokens).toBe(256_000)
+    expect(model.contextWindowTokens).toBe(32_000)
     expect(model.endpointFormat).toBeUndefined()
   })
 })

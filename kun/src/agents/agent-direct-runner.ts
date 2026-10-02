@@ -1,4 +1,5 @@
-import { AGENT_COMMITMENT_TOOLS, AGENT_ARTIFACT_TOOLS } from '../contracts/agent-work-tools.js'
+import { freezeConversationBridge, acknowledgeConversationBridge } from './agent-conversation-history.js'
+import { AGENT_COMMITMENT_TOOLS, AGENT_ARTIFACT_TOOLS, AGENT_HISTORY_TOOLS } from '../contracts/agent-work-tools.js'
 import { settleRoomResultInbox } from '../rooms/room-result-inbox.js'
 import { mkdir, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -18,7 +19,7 @@ import { agentStableId } from './agent-identity-service.js'
 import { appendAgentResponseBudget } from './agent-response-budget.js'
 import { AGENT_COLLABORATION_TOOLS } from './agent-handoff-tools.js'
 import { persistDirectChoiceMessages } from './agent-choice-messages.js'
-import { agentSetupConversationPolicy, agentSetupPending, isHiddenAgentSetupMessage } from './agent-setup.js'
+import { agentSetupConversationPolicy, agentSetupPending } from './agent-setup.js'
 import { AGENT_SETUP_KICKOFF } from './agent-setup-prompt.js'
 import { settleConversationRunOutcome } from './agent-direct-publication.js'
 import { withdrawRunProposals } from '../rooms/room-proposals.js'
@@ -26,7 +27,7 @@ import { roomContinuationIsCurrent } from '../rooms/room-continuation-service.js
 import { ROOM_REMINDER_TOOL_NAMES } from '../rooms/room-reminder-tools.js'
 import { ROOM_APP_TOOL_NAMES } from '../rooms/room-app-connection-tools.js'
 import { WORKBENCH_TOOL_NAMES, resolveWorkbenchPolicy, workbenchToolNamesForPolicy } from '../contracts/workbench-policy.js'
-import { agentHistoryReferenceText, agentPrivateSystemPrompt, agentPrivateTurnInput, agentReminderWakeInput } from '../rooms/room-ax-surfaces.js'
+import { agentPrivateSystemPrompt, agentPrivateTurnInput, agentReminderWakeInput } from '../rooms/room-ax-surfaces.js'
 
 export function agentWorkspace(dataDir: string, agentId: string) { return join(dataDir, 'agents', 'workspaces', agentId) }
 export class AgentDirectRunner {
@@ -81,12 +82,10 @@ export class AgentDirectRunner {
         main.providerId, main.accountId, request.roomSnapshot.privateExecutionPolicy, member.presetId, member.agentInstructions,
         profile, member.capabilityOverrides, agent?.setup?.status ?? 'completed', resolveWorkbenchPolicy(agent?.workbench)])
       const threadId = agentStableId('agent-chat', createHash('sha256').update(fingerprint).digest('hex'))
-      const prior = await this.deps.threads.getMetadata(threadId)
-      const history = !prior ? await this.history(request) : ''
       const reply = request.message.replyToMessageId ? await this.deps.store.get<RoomMessage>('message', request.message.replyToMessageId) : null
       const reminderInput = request.privateReminder ? await this.reminderWakeInput(request) : null
       const input = agentPrivateTurnInput({
-        history,
+        history: '',
         replyQuote: reply?.roomId === request.roomId ? 'The user explicitly replied to this earlier message (reference only): ' + reply.value.body.slice(0, 4000) : '',
         wakeInput: reminderInput ?? '',
         userBody: request.message.body,
@@ -118,7 +117,7 @@ export class AgentDirectRunner {
           ...(workbench ? { workbench: { code: workbench.code !== 'off', work: workbench.work !== 'off' } } : {}) })
       }, { id: request.threadId, relation: 'side', roomContext: { roomId: request.roomId, memberId: member.id,
         participantAgentId: member.participantAgentId, agentRevision: member.agentRevision, kind: 'conversation',
-        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...ROOM_REMINDER_TOOL_NAMES, ...ROOM_APP_TOOL_NAMES, ...AGENT_COLLABORATION_TOOLS, ...AGENT_COMMITMENT_TOOLS, ...AGENT_ARTIFACT_TOOLS, ...workbenchNames])] : undefined,
+        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...ROOM_REMINDER_TOOL_NAMES, ...ROOM_APP_TOOL_NAMES, ...AGENT_COLLABORATION_TOOLS, ...AGENT_COMMITMENT_TOOLS, ...AGENT_ARTIFACT_TOOLS, ...AGENT_HISTORY_TOOLS, ...workbenchNames])] : undefined,
         // Tools outside the Agent's workbench policy are hidden, not merely refused.
         blockedToolNames: [...new Set([...(policy.blocked ?? []), ...WORKBENCH_TOOL_NAMES.filter((name) => !workbenchNames.includes(name))])],
         blockedProviderIds: limits?.blockedMcpServers ?? [], blockedSkillIds: limits?.blockedSkills ?? [], skillsEnabled: policy.skillsEnabled } })
@@ -149,7 +148,13 @@ export class AgentDirectRunner {
     }
     // Busy lanes still admit steering, but never create a competing turn.
     if (!turn && !allowNewTurn) return
-    const prompt = await freezeAgentMemoryInput(this.deps, scoped, identity, request.privateInput!)
+    // The run snapshot, not its user-facing input preview, owns the exact
+    // admitted prompt. Recovery must not retrieve history or memory again.
+    const existingInput = await this.deps.store.get<{ prompt: string }>('context', roomRunId(request.roomId, identity) + '-input')
+    const bridged = existingInput ? existingInput.value.prompt :
+      await freezeConversationBridge(this.deps, request, scoped, identity, request.privateInput!)
+    if (bridged === null) return
+    const prompt = existingInput?.value.prompt ?? await freezeAgentMemoryInput(this.deps, scoped, identity, bridged)
     const freshUserRequest = !request.privateContinuation && !request.privateReminder && !request.handoffReturnId &&
       request.message.body !== AGENT_SETUP_KICKOFF
     const run = await prepareRoomRun(this.deps, scoped, identity, prompt, request.message.attachmentIds, {
@@ -172,6 +177,7 @@ export class AgentDirectRunner {
           displayText: request.message.body.slice(0, 8000),
           mode: thread.mode, sandboxMode: thread.sandboxMode, enqueueIfBusy: true } })
         await updateRoomRun(this.deps.store, run.id, { turnId: admitted.turnId })
+        await acknowledgeConversationBridge(this.deps, request, thread, identity)
         const current = (await this.deps.store.get<RoomRequestState>('request', request.id))!
         await this.save(current, { ...current.value, turnId: admitted.turnId })
       } catch (error) {
@@ -186,6 +192,7 @@ export class AgentDirectRunner {
     }
     if (request.turnId && request.turnId !== turn.id) throw new Error('Private turn identity changed')
     await updateRoomRun(this.deps.store, run.id, { turnId: turn.id })
+    if (!turn.admissionPending) await acknowledgeConversationBridge(this.deps, request, thread, identity)
     if (request.turnId !== turn.id || request.privateRunId !== run.id) {
       await this.save(row, { ...request, turnId: turn.id, privateRunId: run.id, status: 'running' }); return
     }
@@ -216,18 +223,6 @@ export class AgentDirectRunner {
     const anchorText = anchor && anchor.roomId === request.roomId ? anchor.value.body.slice(0, 1500) : ''
     return agentReminderWakeInput({ note: doc?.value.note ?? request.message.body,
       scheduledFor: reminder.scheduledFor, lateSeconds: reminder.lateSeconds, anchorText })
-  }
-  private async history(request: RoomRequestState) {
-    const rows = await this.deps.store.list<RoomMessage>('message', { roomId: request.roomId, limit: 30 })
-    const source = await this.deps.store.get('message', request.sourceMessageId)
-    const eligible = []
-    for (const row of rows) {
-      if (row.id === request.sourceMessageId || row.seq >= (source?.seq ?? Infinity) || row.value.status === 'streaming' || isHiddenAgentSetupMessage(row.value)) continue
-      const origin = row.value.sourceRequestId ? await this.deps.store.get<RoomRequestState>('request', row.value.sourceRequestId) : null
-      if ((origin?.value.roomSnapshot.privateEpoch ?? 0) !== (request.roomSnapshot.privateEpoch ?? 0)) continue
-      eligible.push({ author: row.value.authorLabelSnapshot, status: row.value.status, text: row.value.body.slice(0, 1500) })
-    }
-    return agentHistoryReferenceText(eligible.reverse())
   }
   /**
    * Eligible steering target: the thread's currently running conversation turn.

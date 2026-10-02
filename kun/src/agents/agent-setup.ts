@@ -1,4 +1,4 @@
-import { AGENT_COMMITMENT_TOOLS, AGENT_ARTIFACT_TOOLS } from '../contracts/agent-work-tools.js'
+import { AGENT_COMMITMENT_TOOLS, AGENT_ARTIFACT_TOOLS, AGENT_HISTORY_TOOLS } from '../contracts/agent-work-tools.js'
 import type { AgentIdentity } from '../contracts/agent-identities.js'
 import { RoomMessageSchema, SendRoomMessageSchema, type Room, type RoomMessage } from '../contracts/rooms.js'
 import { freezeAgentPermissions } from './agent-permission-snapshot.js'
@@ -16,7 +16,7 @@ import { RoomStoreConflictError } from '../rooms/room-store.js'
 
 export const AGENT_SETUP_ALLOWED_TOOLS = ['user_input', COMMIT_AGENT_SETUP_TOOL] as const
 export const AGENT_SETUP_BLOCKED_TOOLS = [
-  ...AGENT_COMMITMENT_TOOLS, ...AGENT_ARTIFACT_TOOLS, ...AGENT_COLLABORATION_TOOLS, 'read_room_rules', 'submit_room_plan', 'send_room_message', 'declare_room_checks'
+  ...AGENT_COMMITMENT_TOOLS, ...AGENT_ARTIFACT_TOOLS, ...AGENT_HISTORY_TOOLS, ...AGENT_COLLABORATION_TOOLS, 'read_room_rules', 'submit_room_plan', 'send_room_message', 'declare_room_checks'
 ] as const
 
 export function agentSetupPending(agent: Pick<AgentIdentity, 'setup'> | null | undefined): boolean {

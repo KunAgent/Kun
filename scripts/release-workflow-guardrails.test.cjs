@@ -181,3 +181,59 @@ test('PR installers retain source provenance for optional manual upgrade verific
   assert.ok(binding >= 0 && binding < upload)
   assert.ok(packaging[upload].with.path.includes('dist/pr-candidate-source.json'))
 })
+
+test('personal IM PRs retain automatic build, security contracts and native consent checks', () => {
+  const workflow = readWorkflow('personal-agent-im-smoke.yml')
+  assert.ok(workflow.on.pull_request)
+  for (const path of ['src/main/personal-agent-im*', 'src/main/personal-agent-weixin*',
+    'src/main/ipc/app-ipc-schemas.personal-im.test.ts',
+    'src/renderer/src/components/rooms/RoomImConnectionCard*',
+    'scripts/release-workflow-guardrails.test.cjs', '.github/workflows/personal-agent-im-smoke.yml']) {
+    assert.ok(workflow.on.pull_request.paths.includes(path), path)
+  }
+  const job = workflow.jobs['native-card']
+  assert.equal(job.if, undefined)
+  assert.equal(job['continue-on-error'], undefined)
+  assert.equal(job['runs-on'], 'macos-latest')
+  for (const step of job.steps) assert.equal(step['continue-on-error'], undefined)
+  const build = job.steps.find(step => step.run === 'npm run build')
+  const security = stepByName(job, 'Verify IM encryption, authority and consent contracts')
+  const ui = stepByName(job, 'Verify native proposals and explicit consent boundary')
+  for (const step of [build, security, ui]) { assert.ok(step); assert.equal(step.if, undefined) }
+  for (const file of ['personal-agent-im-secrets', 'personal-agent-im-store', 'personal-agent-im-service',
+    'personal-agent-weixin-boundary', 'personal-agent-weixin-context']) {
+    assert.ok(security.run.includes(`src/main/${file}.test.ts`), file)
+  }
+  assert.match(security.run, /app-ipc-schemas\.personal-im\.test\.ts/)
+  assert.match(security.run, /RoomImConnectionCard\.test\.ts/)
+  assert.match(ui.run, /--personal-im-only --evidence dist\/personal-agent-im-smoke$/)
+  assert.ok(job.steps.some(step => step.run?.includes('scripts/release-workflow-guardrails.test.cjs')))
+  const summary = stepByName(job, 'Record deferred interactive macOS verification')
+  assert.equal(summary.if, "always() && !(github.event_name == 'workflow_dispatch' && inputs.real_os_storage)")
+  assert.match(summary.run, /NOT RUN; deferred to local interactive validation/)
+  assert.match(summary.run, /GITHUB_STEP_SUMMARY/)
+  assert.ok(job.steps.some(step => step.uses === 'actions/upload-artifact@v4' && step.if === 'always()'))
+})
+
+test('real personal IM OS verification is explicit opt-in and retains failing assertions', () => {
+  const workflow = readWorkflow('personal-agent-im-smoke.yml')
+  const input = workflow.on.workflow_dispatch.inputs.real_os_storage
+  assert.equal(input.type, 'boolean')
+  assert.equal(input.default, false)
+  const job = workflow.jobs['os-storage']
+  assert.equal(job.if, "github.event_name == 'workflow_dispatch' && inputs.real_os_storage")
+  assert.equal(job.needs, 'native-card')
+  assert.equal(job['continue-on-error'], undefined)
+  for (const step of job.steps) assert.equal(step['continue-on-error'], undefined)
+  const probe = stepByName(job, 'Probe real OS safeStorage in a separate bounded launch')
+  assert.equal(probe.if, undefined)
+  assert.equal(probe.run, 'node scripts/smoke-development-direct-chat.cjs --personal-im-storage-only --evidence dist/personal-agent-im-storage')
+  const commands = job.steps.map(step => step.run ?? '').join('\n')
+  assert.doesNotMatch(commands, /security\s+(?:unlock-keychain|create-keychain|set-keychain|set-key-partition-list)/)
+  assert.ok(job.steps.some(step => step.uses === 'actions/upload-artifact@v4' && step.if === 'always()'))
+  const source = readFileSync(join(__dirname, 'smoke-personal-agent-im.cjs'), 'utf8')
+  for (const proof of ['roundTrip', 'encrypted', 'syncCompatibleEnvelope',
+    'legacyRoundTrip', 'legacyBytesUnchanged', 'syncReadable']) {
+    assert.ok(source.includes(`assert(storage.${proof})`), proof)
+  }
+})
