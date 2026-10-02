@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
-import { FileEdit, Files, Globe2, Users } from 'lucide-react'
+import { FileEdit, Folders, Globe2, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room, RoomContentReference, RoomMessage } from '@shared/rooms-api'
 import type { ChatBlock } from '../../agent/types'
@@ -9,8 +9,9 @@ import { CodeRightPanelTabs, codeRightTabDomIds } from '../workbench/CodeRightPa
 import { WorkbenchFileTreeSidePanel } from '../workbench/WorkbenchFileTreeSidePanel'
 import type { ChatFileTreeReference } from '../chat/ChatFileTreePanel'
 import type { WorkbenchFileTreeSidePanelView } from '../workbench/useWorkbenchFileTreeController'
-import { useRoomPresentationPreferences } from './room-presentation-preferences'
-import { RoomPanelResizeHandle } from './RoomPanelResizeHandle'
+import { WorkbenchRightSidebar } from '../workbench/WorkbenchRightSidebar'
+import { WorkbenchSideRailSurface, sideRailButtonClass } from '../workbench/WorkbenchSideRail'
+import { useRoomWorkbenchLayout } from './useRoomWorkbenchLayout'
 import { ROOM_COLLABORATION_TAB, type RoomWorkbenchPanel } from './useRoomWorkbenchPanel'
 import { useRoomRun } from './useRoomRun'
 import { presentRoomRunItems } from './room-run-presentation'
@@ -34,6 +35,9 @@ export type RoomWorkbenchRightPanelProps = {
   runId?: string
   messages: RoomMessage[]
   collaboration: ReactNode
+  collaborationTitle?: string
+  contentPreview?: ReactNode
+  contentPreviewTitle?: string
   panel: RoomWorkbenchPanel
   onCollaborationOpen: () => void
   onCollaborationClose?: () => void
@@ -43,10 +47,9 @@ export type RoomWorkbenchRightPanelProps = {
 /** Both room surfaces use the Code file, browser and changes components. */
 export function RoomWorkbenchRightPanel({
   room, directWorkspace, directActivity, directError, selectedRunId, onRefreshDirect, onCurrentBrowser, onOpenContent, runId, messages, collaboration, panel,
-  onCollaborationOpen, onCollaborationClose, onAddReference
+  onCollaborationOpen, onCollaborationClose, onAddReference, collaborationTitle, contentPreview, contentPreviewTitle
 }: RoomWorkbenchRightPanelProps) {
   const { t } = useTranslation('common')
-  const preferences = useRoomPresentationPreferences()
   const [privateFiles, setPrivateFiles] = useState<{ roomId?: string; workspace: boolean }>({ workspace: false })
   const showSavedFiles = room?.conversationKind === 'user_agent' && !(privateFiles.roomId === room.id && privateFiles.workspace)
   const [fileView, setFileView] = useState<WorkbenchFileTreeSidePanelView>('workspace')
@@ -61,6 +64,7 @@ export function RoomWorkbenchRightPanel({
   })), [messages])
   const prefix = `room-workbench-${room?.id ?? 'empty'}`
   const tabs = panel.state
+  const layout = useRoomWorkbenchLayout(tabs.expanded, room?.id ?? null)
   const open = (id: RightPanelContributionId) => {
     if (id === ROOM_COLLABORATION_TAB && !collaboration) onCollaborationOpen()
     panel.openTab(id)
@@ -70,46 +74,62 @@ export function RoomWorkbenchRightPanel({
     panel.closeTab(id)
   }
   const tools = [
-    { id: BUILTIN_RIGHT_PANEL_IDS.files, label: t('rightPanelFiles'), icon: Files },
-    { id: BUILTIN_RIGHT_PANEL_IDS.browser, label: t('rightPanelBrowserTool'), icon: Globe2 },
     { id: BUILTIN_RIGHT_PANEL_IDS.changes, label: t('rightPanelChanges'), icon: FileEdit },
-    { id: ROOM_COLLABORATION_TAB, label: t('roomsWorkbenchCollaboration', { defaultValue: 'Collaboration' }), icon: Users }
+    { id: BUILTIN_RIGHT_PANEL_IDS.browser, label: t('rightPanelBrowserTool'), icon: Globe2 },
+    { id: BUILTIN_RIGHT_PANEL_IDS.files, label: t('rightPanelFiles'), icon: Folders },
+    ...(room?.conversationKind === 'user_agent' ? [] : [{ id: ROOM_COLLABORATION_TAB,
+      label: t('roomsWorkbenchCollaboration', { defaultValue: 'Collaboration' }), icon: Users }])
   ]
+  const fileTitle = panel.contentTarget ? contentPreviewTitle ?? panel.contentTarget.reference.titleSnapshot
+    : panel.fileTarget?.path.replaceAll('\\', '/').split('/').at(-1)
+  const titles = {
+    [ROOM_COLLABORATION_TAB]: collaborationTitle ?? t(room?.conversationKind === 'user_agent' ? 'roomsAgentSession' : 'roomsWorkbenchCollaboration'),
+    [BUILTIN_RIGHT_PANEL_IDS.browser]: t('rightPanelBrowserTool'),
+    ...(fileTitle ? { [BUILTIN_RIGHT_PANEL_IDS.file]: fileTitle } : {})
+  }
   return <>
-    {tabs.tabs.length ? <aside
-      className={`rooms-workbench-right-panel ds-sidebar-surface ds-no-drag relative flex h-full min-h-0 shrink-0 flex-col border-l border-ds-border-muted ${tabs.expanded ? '' : 'hidden'}`}
-      style={{ width: preferences.detailWidth }} data-room-workbench-panel
-    >
-      <RoomPanelResizeHandle side="detail" />
-      <CodeRightPanelTabs state={tabs} domIdPrefix={prefix}
-        titles={{ [ROOM_COLLABORATION_TAB]: t('roomsWorkbenchCollaboration', { defaultValue: 'Collaboration' }) }}
+    {tabs.tabs.length ? <WorkbenchRightSidebar visible={tabs.expanded} width={layout.width}
+      className="rooms-workbench-right-panel" panelRef={layout.panelRef}
+      panelProps={{ 'data-room-workbench-panel': true }}
+      dividerProps={{ 'data-room-workbench-resize': true, tabIndex: 0,
+        'aria-label': t('roomsResizeDetails'), 'aria-valuenow': Math.round(layout.width),
+        'aria-valuemin': layout.min, 'aria-valuemax': layout.max, onPointerDown: layout.beginResize,
+        onKeyDown: (event) => {
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault()
+            layout.resize(layout.width + (event.key === 'ArrowLeft' ? 1 : -1) * (event.shiftKey ? 32 : 8))
+          } else if (event.key === 'Home' || event.key === 'End') {
+            event.preventDefault(); layout.resize(event.key === 'Home' ? layout.min : layout.max)
+          }
+        }
+      }}
+      header={<CodeRightPanelTabs state={tabs} domIdPrefix={prefix} titles={titles}
         sideConversationCount={0} sideConversationRunningCount={0} extensionItems={[]}
-        onActivate={open} onClose={close} onCollapse={panel.collapse} />
-      <div className="relative min-h-0 flex-1 overflow-hidden">
+        onActivate={open} onClose={close} onCollapse={panel.collapse} />}>
         {tabs.tabs.map((id) => {
           const active = tabs.expanded && id === tabs.activeId
           const dom = codeRightTabDomIds(prefix, id)
           return <div key={id} role="tabpanel" id={dom.panelId} aria-labelledby={dom.tabId}
             aria-hidden={!active || undefined} inert={!active || undefined}
-            className="absolute inset-0 flex min-h-0 flex-col"
+            className="absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden"
             style={!active ? { visibility: 'hidden', pointerEvents: 'none' } : undefined}>
             <Suspense fallback={<div className="grid h-full place-content-center text-xs text-ds-muted">{t('roomsLoading')}</div>}>
               {id === ROOM_COLLABORATION_TAB ? collaboration ?? <div className="grid h-full place-content-center p-5 text-center text-xs text-ds-muted">
-                <button className="rooms-workbench-empty-action" onClick={onCollaborationOpen}>{t('roomsWorkbenchCollaboration', { defaultValue: 'Collaboration' })}</button>
+                <button className="rooms-workbench-empty-action" onClick={onCollaborationOpen}>{titles[ROOM_COLLABORATION_TAB]}</button>
               </div> : id === BUILTIN_RIGHT_PANEL_IDS.files ? <>
                 {room?.conversationKind === 'user_agent' ? <div className="rooms-private-file-tabs" role="group" aria-label={t('directFiles')}>
                   <button type="button" aria-pressed={showSavedFiles} onClick={() => setPrivateFiles({ roomId: room.id, workspace: false })}>{t('roomsArtifactSavedFiles', { defaultValue: 'Saved files' })}</button>
                   <button type="button" aria-pressed={!showSavedFiles} onClick={() => setPrivateFiles({ roomId: room.id, workspace: true })}>{t('roomsArtifactWorkspaceFiles', { defaultValue: 'Workspace' })}</button>
                 </div> : null}
-                {showSavedFiles && room ? <RoomDirectFiles key={room.id} room={room} onOpen={(reference) => onOpenContent?.(reference)} /> : <WorkbenchFileTreeSidePanel
-                key={room?.id} open embedded view={fileView} width={preferences.detailWidth}
+                {showSavedFiles && room ? <RoomDirectFiles key={room.id} room={room} selectedReference={panel.contentTarget?.reference} onOpen={(reference) => onOpenContent?.(reference)} /> : <WorkbenchFileTreeSidePanel
+                key={room?.id} open embedded showViewTabs={room?.conversationKind !== 'user_agent'} view={room?.conversationKind === 'user_agent' ? 'workspace' : fileView} width={layout.width}
                 workspaceRoot={workspaceRoot} extraWorkspaceRoots={extraRoots}
                 designWorkspaceRoot={workspaceRoot} designDocuments={[]}
                 selectedTarget={panel.fileTarget} onViewChange={setFileView}
                 onPreviewFile={(path, root) => panel.previewFile({ path, workspaceRoot: root ?? workspaceRoot })}
                 onAddReference={(reference) => onAddReference?.(reference)}
               />}
-              </> : id === BUILTIN_RIGHT_PANEL_IDS.file ? <WorkspaceFilePreviewPanel
+              </> : id === BUILTIN_RIGHT_PANEL_IDS.file ? panel.contentTarget ? contentPreview : <WorkspaceFilePreviewPanel
                 target={panel.fileTarget} openTargets={panel.fileTargets} workspaceRoot={workspaceRoot}
                 className="h-full min-h-0 w-full" onSelectTarget={panel.previewFile} onCloseTarget={panel.closeFile}
                 onClose={() => close(id)} onToggleFileTree={() => open(BUILTIN_RIGHT_PANEL_IDS.files)}
@@ -129,16 +149,15 @@ export function RoomWorkbenchRightPanel({
             </Suspense>
           </div>
         })}
-      </div>
-    </aside> : null}
-    <nav aria-label={t('rightPanelTabs')} className="rooms-workbench-rail ds-no-drag flex w-10 shrink-0 flex-col items-center gap-2 border-l border-ds-border-muted bg-ds-sidebar py-3">
+    </WorkbenchRightSidebar> : null}
+    <WorkbenchSideRailSurface role="navigation" aria-label={t('rightPanelTabs')} className="rooms-workbench-rail">
       {tools.map(({ id, label, icon: Icon }) => <button key={id} type="button"
-        className="rooms-icon-button" data-room-tool={id === BUILTIN_RIGHT_PANEL_IDS.browser ? 'browser' : undefined} aria-label={label} title={label}
+        className={sideRailButtonClass(tabs.expanded && tabs.activeId === id)} data-room-tool={id === BUILTIN_RIGHT_PANEL_IDS.browser ? 'browser' : undefined} aria-label={label} data-tooltip={label}
         aria-pressed={tabs.expanded && tabs.activeId === id}
         onClick={() => tabs.expanded && tabs.activeId === id ? panel.collapse() : open(id)}>
-        <Icon size={17} strokeWidth={1.7} />
+        <Icon className="h-4 w-4" strokeWidth={1.75} />
       </button>)}
-    </nav>
+    </WorkbenchSideRailSurface>
   </>
 }
 

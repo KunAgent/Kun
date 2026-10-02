@@ -1,5 +1,4 @@
 .rooms-agent-browser { display: flex; flex: 1; min-height: 0; height: 100%; flex-direction: column; }
-.rooms-agent-browser > header { display: flex; align-items: center; gap: 8px; padding: 12px; font-size: 12px; border-bottom: 1px solid var(--ds-border-muted); }
 .rooms-agent-browser-live { flex: 1; min-height: 0; }
 .rooms-agent-browser-empty { display: flex; flex: 1; align-items: center; justify-content: center; flex-direction: column; gap: 14px; padding: 24px; text-align: center; color: var(--ds-text-muted); }
 .rooms-agent-browser-empty strong { font-size: 13px; }
@@ -8,8 +7,9 @@
 .rooms-agent-browser-status { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 8px 16px; padding: 9px 12px; border: 1px solid var(--ds-border-muted); border-radius: 10px; font-size: 12px; color: var(--ds-text-muted); }
 .rooms-agent-browser-status span { flex: 1; min-width: 120px; }
 .rooms-agent-browser-status button { padding: 3px 6px; border-radius: 5px; color: var(--ds-text); text-decoration: underline; text-underline-offset: 3px; }
-.rooms-private-file-tabs { display: flex; gap: 4px; padding: 8px 10px; border-bottom: 1px solid var(--ds-border-muted); }
-.rooms-private-file-tabs button { padding: 6px 10px; border-radius: 7px; font-size: 12px; color: var(--ds-text-muted); }
-.rooms-private-file-tabs button[aria-pressed="true"] { background: var(--ds-surface-hover); color: var(--ds-text); font-weight: 600; }
+.rooms-private-file-tabs { display: flex; flex-shrink: 0; gap: 4px; padding: 8px; border-bottom: 1px solid var(--ds-border-muted); }
+.rooms-private-file-tabs button { display: inline-flex; flex: 1; min-width: 0; height: 32px; align-items: center; justify-content: center; gap: 6px; padding: 0 8px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--ds-text-muted); }
+.rooms-private-file-tabs button:hover { background: var(--ds-surface-hover); color: var(--ds-text); }
+.rooms-private-file-tabs button[aria-pressed="true"] { background: var(--ds-surface-card); color: var(--ds-text); box-shadow: var(--ds-shadow-chip); }
 
 .rooms-agent-browser-empty button:focus-visible, .rooms-agent-browser-status button:focus-visible, .rooms-private-file-tabs button:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }

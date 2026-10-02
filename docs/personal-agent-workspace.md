@@ -14,6 +14,9 @@ without copying its code or replacing Kun's runtime, browser, artifact store or 
    and run. Keep existing file resolution, snapshots, versions, export and previews.
 4. Fence stale responses, task changes and unmount cleanup. Exercise the actual
    Electron UI with isolated offline model/browser fixtures and capture evidence.
+5. Share Code's actual sidebar frame, tab bar, tool rail and width constraints.
+   Open saved snapshots in the File tab with compact source/version/export controls,
+   and verify docked wide/narrow layouts against native Code-mode reference captures.
 
 ## Scope and ownership
 
@@ -48,6 +51,14 @@ selected immutable version and its recorded provenance; its source navigation is
 only after validating the private Room, Agent and source run/message. Missing, deleted,
 foreign or inconsistent sources have no active navigation control. Source links do not
 change permissions or infer ownership from titles, paths or model text.
+
+Saved files and workspace previews share the File tab, rather than nesting inside a
+Collaboration drawer. The sidebar is the same physical component used by Code, with
+its preferred width, tool rail and resize divider. It fits the available conversation
+stage without covering the composer. Pointer cancellation, room changes and unmount
+release the resize capture. Saved previews use the existing Code chrome tokens while
+retaining read-only snapshot resolution and provenance; mutable-file editing is not
+added to the artifact view.
 
 Open-file actions still go through the existing content resolver and workspace-file
 resolver. Versions remain snapshots: opening a previous version is not permission to
@@ -92,6 +103,11 @@ profile, deterministic loopback model and scoped local-development browser page.
 report records actual assertions and screenshot paths. These fixtures are not evidence
 of real external providers, user credentials or arbitrary websites working. A native
 sandbox or OS block is a failed/unrun verification, never a reason to disable protection.
+
+The same native run captures Code files, file preview and browser controls before the
+private Agent flow. Paired screenshots include wide and narrow windows, actual pointer
+resize/restore, measured header/rail parity and unclipped controls. Native browser child
+views are captured separately and their bounds are compared with the renderer host.
 
 Review the workflow report and tested commit alongside screenshots. Focused tests are not
 a substitute for the repository-wide lint, typecheck, test and build gates.

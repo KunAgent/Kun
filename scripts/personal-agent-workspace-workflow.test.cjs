@@ -63,7 +63,7 @@ test('workspace harness keeps existing native sandbox and labels fixture boundar
 })
 
 
-test('native workspace smoke uses ordinary collapse and reopen around overlay-covered composer controls', () => {
+test('native workspace smoke uses ordinary collapse and reopen without forcing composer controls', () => {
   const smoke = source('scripts/smoke-personal-agent-workspace.cjs')
   assert.match(smoke, /name: 'Collapse right sidebar', exact: true/)
   assert.match(smoke, /collapsed browser is no longer visible/)

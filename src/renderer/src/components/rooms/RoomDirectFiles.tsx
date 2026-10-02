@@ -1,26 +1,30 @@
 import { useState } from 'react'
-import { FolderOpen } from 'lucide-react'
+import { FileText, Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Room, RoomContentReference } from '@shared/rooms-api'
 import { useAgentResource } from './agent-client'
 import { roomPath } from './rooms-client'
 import { roomContentKey } from './room-content-client'
 
-type FileProps = { room: Room; onOpen: (reference: RoomContentReference) => void }
+type FileProps = { room: Room; onOpen: (reference: RoomContentReference) => void; selectedReference?: RoomContentReference }
 type FilePage = { files: RoomContentReference[]; nextCursor?: string; nextLegacyCursor?: string }
 export function RoomDirectFiles(props: FileProps) {
   return <RoomDirectFileSearch key={JSON.stringify([props.room.id, props.room.members[0]?.participantAgentId])} {...props} />
 }
-function RoomDirectFileSearch({ room, onOpen }: FileProps) {
+function RoomDirectFileSearch({ room, onOpen, selectedReference }: FileProps) {
   const { t } = useTranslation('common')
   const [search, setSearch] = useState('')
   return <div className="direct-file-list min-h-0 flex-1 overflow-y-auto">
-    <input aria-label={t('roomsArtifactSearch', { defaultValue: 'Search saved files' })} value={search}
-      placeholder={t('roomsArtifactSearch', { defaultValue: 'Search saved files' })} onChange={(event) => setSearch(event.target.value)} />
-    <RoomDirectFilePage key={search} room={room} onOpen={onOpen} search={search} />
+    <div className="direct-file-search"><Search size={14} aria-hidden="true" />
+      <input aria-label={t('roomsArtifactSearch', { defaultValue: 'Search saved files' })} value={search}
+        placeholder={t('roomsArtifactSearch', { defaultValue: 'Search saved files' })} onChange={(event) => setSearch(event.target.value)} />
+      {search ? <button type="button" className="ds-code-sidebar-icon-button" aria-label={t('roomsArtifactClearSearch', { defaultValue: 'Clear file search' })}
+        onClick={() => setSearch('')}><X size={13} /></button> : null}
+    </div>
+    <RoomDirectFilePage key={search} room={room} onOpen={onOpen} search={search} selectedReference={selectedReference} />
   </div>
 }
-function RoomDirectFilePage({ room, onOpen, search }: FileProps & { search: string }) {
+function RoomDirectFilePage({ room, onOpen, search, selectedReference }: FileProps & { search: string }) {
   const { t } = useTranslation('common')
   const [cursor, setCursor] = useState<string>(), [legacyCursor, setLegacyCursor] = useState<string>()
   const [prior, setPrior] = useState<RoomContentReference[]>([])
@@ -31,7 +35,10 @@ function RoomDirectFilePage({ room, onOpen, search }: FileProps & { search: stri
   const files = [...new Map([...prior, ...(resource.data?.files ?? [])].map((file) => [roomContentKey(file), file])).values()]
   const loading = !resource.data && !resource.error
   return <div className="direct-file-page" aria-busy={loading}>
-    {files.map((file) => <button type="button" key={roomContentKey(file)} onClick={() => onOpen(file)}><FolderOpen size={16} />{file.titleSnapshot}
+    {files.map((file) => <button type="button" className="direct-file-row" key={roomContentKey(file)}
+      aria-label={file.titleSnapshot} aria-pressed={selectedReference ? roomContentKey(selectedReference) === roomContentKey(file) : false}
+      title={file.titleSnapshot} onClick={() => onOpen(file)}><FileText size={15} strokeWidth={1.75} />
+      <span className="direct-file-name">{file.titleSnapshot}</span>
       {file.kind === 'agent_file' ? <small>{file.artifactVersion ? `v${file.artifactVersion}` : t('roomsArtifactLegacy', { defaultValue: 'Current workspace file' })}</small> : null}</button>)}
     {loading ? <p role="status">{t('roomsLoading')}</p> : null}
     {!loading && !resource.error && !files.length ? <p role="status">{search.trim()

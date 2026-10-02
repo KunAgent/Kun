@@ -5,6 +5,8 @@ const { readFile, writeFile } = require('node:fs/promises')
 const { join } = require('node:path')
 const { roomWorkbenchSnapshot } = require('./smoke-agent-chat-workbench.cjs')
 const { collectWorkspaceFailureDiagnostics } = require('./smoke-personal-workspace-diagnostics.cjs')
+const { captureCodeSidebarBaseline, createSidebarEvidence, readNativeBrowserGeometry,
+  nativeBrowserGeometryIssues } = require('./smoke-personal-agent-workspace-sidebar.cjs')
 
 // The model and static loopback page are fixtures; the native restart confirmation
 // receives one exact, one-shot test response. Browser/tool consent stays real.
@@ -32,10 +34,11 @@ async function startWorkspaceBrowserPage() {
     close: () => { server.closeAllConnections(); return new Promise((resolve) => server.close(resolve)) } }
 }
 
-async function exercisePersonalAgentWorkspace({ page, request, poll, capture, recordDiagnostic, fixture, application, resize, openPrivate, switchRooms }) {
+async function exercisePersonalAgentWorkspace({ page, request, poll, capture, recordDiagnostic, fixture, application, resize, openPrivate, switchRooms, workspaceRoot }) {
   assert.equal(fixture.snapshot().real, false, 'The workspace smoke must never use account credentials')
   const website = await startWorkspaceBrowserPage()
   const assertions = [], approvals = [], nativeBrowserEvidence = []
+  const sidebar = createSidebarEvidence({ page, poll, capture, recordDiagnostic, resize })
   let diagnosticRoomId, diagnosticExecution
   const editor = () => page.locator('.rooms-composer .rooms-rich-input')
   const wrapper = () => page.locator('[data-room-agent-browser]:visible')
@@ -50,8 +53,8 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     if (threadId) await poll(async () => !(await browserState(threadId)).visible, 15000, 'collapsed browser is no longer visible')
   }
   const send = async (text) => {
-    // At compact container widths the sidebar overlays composer controls.
-    // Follow the user's normal collapse/send/reopen flow; never force a click.
+    // Exercise the normal collapse/send/reopen flow without forcing a click.
+    // Geometry checks separately prove the docked sidebar leaves the composer clear.
     await collapseWorkspacePanel()
     await editor().fill(text)
     await editor().press('Enter')
@@ -92,6 +95,12 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     }
   }
   const captureBrowserContents = async (name) => {
+    let geometry
+    await poll(async () => {
+      geometry = await readNativeBrowserGeometry({ page, application, url: website.url })
+      return nativeBrowserGeometryIssues(geometry).length === 0
+    }, 15000, 'actual native browser bounds follow the visible renderer host')
+    await recordDiagnostic(name + '-geometry', geometry)
     let evidence
     await capture(name, { screenshot: async ({ path }) => {
       const result = await application.evaluate(async ({ webContents }, url) => {
@@ -104,7 +113,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
           png: (await contents.capturePage()).toPNG().toString('base64') }
       }, website.url)
       const { png, ...metadata } = result
-      evidence = metadata
+      evidence = { ...metadata, geometry }
       assert.equal(metadata.security.sandbox, true)
       assert.equal(metadata.security.nodeIntegration, false)
       assert.equal(metadata.security.contextIsolation, true)
@@ -118,24 +127,12 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     assert(await page.locator('[data-rooms-workspace]').evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
       'Private workspace must not overflow horizontally')
   }
-  const assertArtifactLayout = async () => {
-    const geometry = await page.locator('.rooms-content-preview:visible').evaluate((element) => {
-      const rect = element.getBoundingClientRect()
-      return { padded: Number.parseFloat(getComputedStyle(element).paddingLeft) >= 12,
-        fits: element.scrollWidth <= element.clientWidth + 1,
-        controls: [...element.querySelectorAll('button, select')].map((control) => {
-          const box = control.getBoundingClientRect()
-          return box.width > 0 && box.left >= rect.left && box.right <= rect.right + 1
-        }) }
-    })
-    assert(geometry.padded && geometry.fits && geometry.controls.every(Boolean),
-      'Artifact preview and its source/version/export controls fit the padded panel')
-  }
   const openSavedFiles = async () => {
     await rail().getByRole('button', { name: 'Files', exact: true }).click()
     await page.locator('.direct-file-list:visible').waitFor()
   }
   try {
+    const codeBaseline = await captureCodeSidebarBaseline({ page, workspaceRoot, fixture, poll, sidebar })
     await openPrivate()
     const entry = await request(page, '/v1/agents/chat-entry')
     assert(entry.roomId && entry.agentId)
@@ -146,7 +143,11 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await poll(async () => await wrapper().getAttribute('data-state') === 'idle', 15000, 'empty private browser')
     assert.equal(await wrapper().locator('[data-browser-use-variant]').count(), 0)
     assert.equal(fixture.snapshot().mainCalls, 0, 'Opening the private workspace does not invoke a model')
-    await capture('workspace-01-empty-browser-wide')
+    await sidebar.privateCapture('workspace-01-empty-browser-wide', '[data-room-agent-browser]')
+    await sidebar.pointerResize('private', '[data-room-agent-browser]')
+    await sidebar.resizeTo(760, 780)
+    await sidebar.privateCapture('sidebar-private-empty-browser-narrow', '[data-room-agent-browser]')
+    await sidebar.resizeTo(1360, 900)
     assertions.push('An empty Agent workspace opens a browser placeholder without binding an old Code task')
 
     await send('WORKSPACE_ARTIFACT Create workspace-evidence.txt and attach the saved file to your final reply.')
@@ -175,20 +176,21 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await savedFiles().getByRole('textbox', { name: 'Search saved files', exact: true }).fill('workspace-evidence')
     const saved = savedFiles().getByRole('button', { name: /workspace-evidence\.txt/ }).first()
     await saved.waitFor()
-    await capture('workspace-04-saved-artifact-search')
+    await sidebar.privateCapture('workspace-04-saved-artifact-search', '.direct-file-list')
+    await sidebar.resizeTo(760, 780)
+    await sidebar.privateCapture('sidebar-private-saved-files-narrow', '.direct-file-list')
+    await sidebar.resizeTo(1360, 900)
     await saved.click()
     const preview = () => page.locator('.rooms-content-preview:visible')
     await poll(async () => (await preview().innerText()).includes('Saved personal workspace artifact v1'), 15000, 'immutable artifact preview')
     assert(!(await preview().innerText()).includes('Mutable working copy changed'))
     assert.deepEqual(await roomWorkbenchSnapshot(page), scope)
     assert.equal(await editor().innerText(), draft)
-    await assertArtifactLayout()
-    await capture('workspace-05-saved-artifact-preview-wide')
-    await resize(760, 780)
+    await sidebar.privateCapture('workspace-05-saved-artifact-preview-wide', '.rooms-content-preview')
+    await sidebar.resizeTo(760, 780)
     await assertNoOverflow()
-    await assertArtifactLayout()
-    await capture('workspace-06-saved-artifact-preview-narrow')
-    await resize(1360, 900)
+    await sidebar.privateCapture('workspace-06-saved-artifact-preview-narrow', '.rooms-content-preview')
+    await sidebar.resizeTo(1360, 900)
     await preview().getByRole('button', { name: 'View source conversation', exact: true }).click()
     await poll(async () => page.locator('#room-message-' + source.id).evaluate((element) => {
       const rect = element.getBoundingClientRect()
@@ -220,11 +222,11 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     const pending = await browserState(active.threadId)
     assert.equal(pending.pendingOriginConsent?.origin, new URL(website.url).origin)
     assert.equal(pending.mode, 'local-development')
-    await capture('workspace-10-real-origin-consent-wide')
-    await resize(760, 780)
+    await sidebar.privateCapture('workspace-10-real-origin-consent-wide', '[data-room-agent-browser]')
+    await sidebar.resizeTo(760, 780)
     await assertNoOverflow()
-    await capture('workspace-11-real-origin-consent-narrow')
-    await resize(1360, 900)
+    await sidebar.privateCapture('workspace-11-real-origin-consent-narrow', '[data-room-agent-browser]')
+    await sidebar.resizeTo(1360, 900)
     await originButton.click()
     await poll(async () => {
       const state = await browserState(active.threadId)
@@ -238,11 +240,16 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await openBrowser()
     await assertLiveBinding(entry.roomId, active)
     await poll(async () => (await browserState(active.threadId)).visible, 15000, 'browser visible after composer draft edit')
-    await capture('workspace-12-live-browser-workbench')
+    await sidebar.privateCapture('workspace-12-live-browser-workbench', '[data-room-agent-browser]')
+    await sidebar.resizeTo(760, 780)
+    await sidebar.privateCapture('sidebar-private-live-browser-narrow', '[data-room-agent-browser]')
+    await captureBrowserContents('sidebar-private-live-browser-webcontents-narrow')
+    await sidebar.resizeTo(1360, 900)
+    await poll(async () => (await browserState(active.threadId)).visible, 15000, 'native browser stays visible after resizing')
     await captureBrowserContents('workspace-13-real-browser-webcontents')
     await wrapper().getByRole('button', { name: 'Take control', exact: true }).click()
     await poll(async () => (await browserState(active.threadId)).controlOwner === 'manual', 15000, 'actual browser manual takeover')
-    await capture('workspace-13b-manual-browser-control')
+    await sidebar.privateCapture('workspace-13b-manual-browser-control', '[data-room-agent-browser]')
     await wrapper().getByRole('button', { name: 'Return to agent', exact: true }).click()
     await poll(async () => (await browserState(active.threadId)).controlOwner === 'agent', 15000, 'actual browser control returned to Agent')
     assertions.push('Take control and Return to agent update the actual native browser manager ownership')
@@ -369,20 +376,24 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
 
     await switchRooms()
     await page.locator('.rooms-im-sidebar').getByRole('button', { name: firstAgent.name, exact: true }).click()
-    await poll(async () => (await roomWorkbenchSnapshot(page)).roomsRoomId === entry.roomId, 15000, 'same private workspace in Rooms')
+    await waitForPrivateRoomSurface(page, entry.roomId)
+    assert.equal((await roomWorkbenchSnapshot(page)).roomsRoomId, entry.roomId)
     await openBrowser()
     assert.equal(await wrapper().getAttribute('data-room-id'), entry.roomId)
     assert.equal(await wrapper().locator('[data-browser-use-variant]').count(), 0)
     assert.equal(await editor().innerText(), draft)
     await capture('workspace-20-rooms-private-workspace')
     assertions.push('Rooms and Code expose the same private workspace without reviving a historical browser')
-    return { assertions, roomId: entry.roomId, otherRoomId, artifact, sourceMessageId: source.id, artifactRunId: artifactRun.runId,
+    sidebar.assertSharedChrome()
+    assertions.push('Actual Code and private Agent screenshots share tab-header and rail dimensions; native pointer drags and narrow-window geometry keep private controls unclipped')
+    return { codeBaseline, sidebarComparison: sidebar.snapshot(), assertions, roomId: entry.roomId, otherRoomId, artifact, sourceMessageId: source.id, artifactRunId: artifactRun.runId,
       browserExecution: active, restartExecution: restarting, recoveryStatus: recovered.status, approvals,
       website: website.snapshot(), nativeBrowserEvidence,
       fixtureBoundary: { mocked: ['deterministic loopback model responses', 'static loopback browser page', 'one exact native Runtime restart confirmation response'],
         actual: ['Electron renderer/preload/main', 'Manager and Runtime', 'request/run/thread/turn admission',
           'protected tool consent', 'exact-origin browser consent and SSRF policy', 'sandboxed Browser Use WebContentsView',
-          'saved artifact publication/search/preview/source', 'Runtime restart and renderer reload'] } }
+          'saved artifact publication/search/preview/source', 'Code-mode baseline and private sidebar geometry',
+          'native pointer resize and BrowserWindow wide/narrow sizes', 'Runtime restart and renderer reload'] } }
   } catch (error) {
     try {
       const diagnostic = await collectWorkspaceFailureDiagnostics({ page, request, roomId: diagnosticRoomId,
@@ -426,4 +437,14 @@ async function restartOwnedRuntime(page, application) {
     })
   }
 }
-module.exports = { exercisePersonalAgentWorkspace, startWorkspaceBrowserPage }
+// Selection storage updates before Rooms has loaded and rendered its recipient.
+// Clicking the rail during that gap can be lost when the new room resets tabs.
+async function waitForPrivateRoomSurface(page, roomId) {
+  const surface = page.locator('[data-room-surface="rooms"][data-private-chat="true"][data-room-id=' + JSON.stringify(roomId) + ']')
+  const ready = { state: 'visible', timeout: 15000 }
+  await surface.waitFor(ready)
+  await surface.locator('.rooms-composer .rooms-rich-input').waitFor(ready)
+  await surface.locator('.rooms-workbench-rail [data-room-tool="browser"]').waitFor(ready)
+  return surface
+}
+module.exports = { exercisePersonalAgentWorkspace, startWorkspaceBrowserPage, waitForPrivateRoomSurface }

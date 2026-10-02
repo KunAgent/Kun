@@ -118,7 +118,7 @@ function ScopedAgentBrowserPanel({
     >
       {!compact ? (
         <>
-          <div className="ds-sidebar-surface-chrome flex min-h-12 shrink-0 items-center gap-2 border-b border-ds-border-muted px-3">
+          <div className="ds-sidebar-surface-chrome flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-ds-border-muted px-3 py-2">
             <div className="flex shrink-0 items-center gap-1 rounded-full bg-ds-surface-subtle p-0.5 dark:bg-white/[0.08]">
               <button
                 type="button"
@@ -151,7 +151,7 @@ function ScopedAgentBrowserPanel({
               </button>
             </div>
 
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-28">
               <div className="truncate text-[12px] font-semibold text-ds-ink">
                 {activeTab?.title || t('browserUseWaitingForAgent')}
               </div>
@@ -182,7 +182,7 @@ function ScopedAgentBrowserPanel({
                 })}
               </span>
             ) : null}
-            <div className="ml-auto flex items-center gap-1">
+            <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1">
               <button
                 type="button"
                 onClick={toggleControl}
@@ -283,7 +283,7 @@ function ScopedAgentBrowserPanel({
               <div className="mt-3 break-all rounded-lg bg-ds-surface-subtle px-3 py-2 font-mono text-[11px] text-ds-ink">
                 {state.pendingOriginConsent.origin}
               </div>
-              <div className="mt-4 flex justify-end gap-2">
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
                 <ConsentButton disabled={busy} onClick={() => decideOrigin('deny')}>
                   {t('browserUseDeny')}
                 </ConsentButton>
@@ -330,7 +330,7 @@ function ScopedAgentBrowserPanel({
               <p className="mt-3 text-[10.5px] leading-5 text-ds-muted">
                 {t('browserUseActionConsentBody')}
               </p>
-              <div className="mt-4 flex justify-end gap-2">
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
                 <ConsentButton disabled={busy} onClick={() => decideAction('deny')}>
                   {t('browserUseDeny')}
                 </ConsentButton>
@@ -387,7 +387,7 @@ function ConsentButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex h-8 items-center rounded-lg px-3 text-[11px] font-semibold transition ${
+      className={`inline-flex min-h-8 max-w-full items-center justify-center whitespace-normal break-words rounded-lg px-3 py-1.5 text-center text-[11px] font-semibold transition ${
         primary
           ? 'bg-accent text-white hover:brightness-105'
           : 'border border-ds-border-muted bg-ds-surface-subtle text-ds-muted hover:text-ds-ink'

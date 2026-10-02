@@ -16,7 +16,7 @@ beforeEach(() => { vi.clearAllMocks() })
 afterEach(() => { if (renderer) act(() => renderer.unmount()) })
 const text = () => JSON.stringify(renderer.toJSON())
 const search = () => renderer.root.findByType('input')
-const button = (label: string) => renderer.root.findAllByType('button').find((item) => item.children.includes(label))!
+const button = (label: string) => renderer.root.findAllByType('button').find((item) => item.children.includes(label) || item.props['aria-label'] === label)!
 
 it('distinguishes loading, empty library, and no matching search results', async () => {
   let finish!: (value: { files: RoomContentReference[] }) => void

@@ -97,3 +97,33 @@ it('keeps a saved snapshot usable when its source is unavailable', async () => {
   expect(text()).toContain('Saved contents'); expect(text()).toContain('roomsArtifactSourceUnavailable')
   expect(sourceButton()).toBeUndefined()
 })
+
+it('uses Code preview chrome and compact source controls in the workbench file tab', async () => {
+  const onFiles = vi.fn(), onOpenSource = vi.fn()
+  mocks.request.mockResolvedValue({ ...result(), description: 'Version 2 · SHA-256 · immutable-checksum' })
+  await act(async () => { renderer = create(createElement(RoomContentPreview, {
+    room, reference: reference(), variant: 'workbench', onFiles, onOpenSource
+  })) })
+  expect(renderer.root.findByType('section').props.className).toContain('ds-code-sidebar')
+  expect(renderer.root.findAllByProps({ className: 'ds-code-sidebar-topbar' })).toHaveLength(1)
+  const source = renderer.root.findByProps({ 'aria-label': 'roomsArtifactOpenSource' })
+  expect(source.props.className).toContain('ds-code-sidebar-icon-button')
+  await act(async () => { source.props.onClick() })
+  expect(onOpenSource).toHaveBeenCalledWith(result().sourceTarget)
+  await act(async () => { renderer.root.findByProps({ 'aria-label': 'rightPanelFiles' }).props.onClick() })
+  expect(onFiles).toHaveBeenCalledOnce()
+  const metadata = renderer.root.findByType('details')
+  expect(metadata.props.open).not.toBe(true)
+  expect(metadata.findByType('p').children.join('')).toContain('immutable-checksum')
+  expect(text()).toContain('Saved contents')
+})
+
+it('keeps the workbench file toolbar available during a scoped loading or retry state', async () => {
+  mocks.request.mockRejectedValueOnce(new Error('Temporary file error'))
+  await act(async () => { renderer = create(createElement(RoomContentPreview, {
+    room, reference: reference(), variant: 'workbench', onFiles: vi.fn()
+  })) })
+  expect(renderer.root.findByProps({ 'aria-label': 'rightPanelFiles' })).toBeDefined()
+  expect(text()).toContain('roomsContentRetry')
+  expect(renderer.root.findAllByProps({ 'aria-label': 'roomsArtifactOpenSource' })).toHaveLength(0)
+})

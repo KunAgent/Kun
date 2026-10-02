@@ -67,3 +67,152 @@ test('diagnostic redaction remains bounded and removes credentials nested in err
   assert.doesNotMatch(JSON.stringify(result), /hidden-value|abc.def-ghi|base64,secret/)
   assert(result.output.long.length < 17000)
 })
+
+const { dragSidebar, sidebarGeometryIssues } = require('./smoke-personal-agent-workspace-sidebar.cjs')
+const { readFileSync } = require('node:fs')
+const { join } = require('node:path')
+const bounds = (x, y, width, height) => ({ x, y, width, height, right: x + width, bottom: y + height })
+const layout = () => ({ viewport: { width: 1360, height: 860 }, panel: bounds(752, 40, 560, 820),
+  header: bounds(752, 40, 560, 44), surface: bounds(752, 84, 560, 776), rail: bounds(1312, 40, 48, 820),
+  composer: bounds(310, 700, 430, 140), controls: [{ label: 'Take control', clipped: false }],
+  selectedTabs: ['Preview'], panelContainsSurface: true, surfaceOverflow: false })
+
+test('sidebar geometry detects clipping, overlapping composer and content outside the Code-compatible shell', () => {
+  assert.deepEqual(sidebarGeometryIssues(layout(), { docked: true }), [])
+  const broken = layout()
+  broken.surface = bounds(752, 84, 620, 800)
+  broken.surfaceOverflow = true
+  broken.panelContainsSurface = false
+  broken.composer = bounds(310, 700, 800, 140)
+  broken.controls.push({ label: 'View source conversation', clipped: true })
+  broken.selectedTabs.push('Files')
+  assert.deepEqual(sidebarGeometryIssues(broken, { docked: true }), [
+    'surface extends outside the viewport', 'Active content is outside the shared right panel',
+    'Active content overflows horizontally', 'Docked panel covers the conversation composer',
+    'Clipped control: View source conversation', 'Exactly one shared header tab must be selected'
+  ])
+})
+
+test('sidebar geometry records a narrow Code reference issue without weakening strict private checks', () => {
+  const narrow = layout()
+  narrow.viewport.width = 760
+  const issues = sidebarGeometryIssues(narrow)
+  assert(issues.includes('panel extends outside the viewport'))
+  assert(issues.includes('rail extends outside the viewport'))
+  assert(!issues.includes('Docked panel covers the conversation composer'))
+  const source = readFileSync(join(__dirname, 'smoke-personal-agent-workspace-sidebar.cjs'), 'utf8')
+  assert.match(source, /if \(strict\) assert\.deepEqual\(issues, \[\]/)
+  assert.match(source, /strict \? 'private-agent' : 'code-baseline'/)
+  assert.match(source, /header\.height - baseline\.header\.height/)
+  assert.match(source, /rail\.width - baseline\.rail\.width/)
+})
+
+test('sidebar smoke uses real pointer input in both directions and captures the changed dimensions', async () => {
+  let width = 560, dragging = false, lastX = 0
+  const events = []
+  const page = { mouse: {
+    move: async (x, y, options) => {
+      events.push(['move', x, y, options?.steps])
+      if (dragging) width -= x - lastX
+      lastX = x
+    },
+    down: async () => { dragging = true; events.push(['down']) },
+    up: async () => { dragging = false; events.push(['up']) }
+  } }
+  const panel = { boundingBox: async () => bounds(1312 - width, 40, width, 820) }
+  const handle = { boundingBox: async () => bounds(1303 - width, 40, 9, 820) }
+  const result = await dragSidebar({ page, panel, handle,
+    poll: async (check) => assert(await check()), capture: async (name) => events.push(['capture', name, width]),
+    name: 'test-pointer-resized' })
+  assert.equal(result.before.width, 560)
+  assert.equal(result.after.width, 480)
+  assert.equal(result.restored.width, 560)
+  assert.deepEqual(events.filter(([kind]) => kind !== 'move'), [
+    ['down'], ['up'], ['capture', 'test-pointer-resized', 480], ['down'], ['up']
+  ])
+  assert.equal(events.filter((event) => event[3] === 8).length, 2)
+})
+
+test('sidebar smoke releases the pointer after a failed drag instead of leaving the native window stuck', async () => {
+  const events = []
+  let moves = 0
+  const page = { mouse: {
+    move: async () => { if (++moves === 2) throw new Error('native move failed') },
+    down: async () => events.push('down'), up: async () => events.push('up')
+  } }
+  const locator = { boundingBox: async () => bounds(400, 40, 560, 800) }
+  await assert.rejects(dragSidebar({ page, panel: locator, handle: locator, poll: async () => {}, capture: async () => {} }),
+    /native move failed/)
+  assert.deepEqual(events, ['down', 'up'])
+})
+
+test('native comparison captures actual Code components first and returns to the private runtime flow without faking UI', () => {
+  const helper = readFileSync(join(__dirname, 'smoke-personal-agent-workspace-sidebar.cjs'), 'utf8')
+  const smoke = readFileSync(join(__dirname, 'smoke-personal-agent-workspace.cjs'), 'utf8')
+  assert(smoke.indexOf('await captureCodeSidebarBaseline(') < smoke.indexOf('await openPrivate()'))
+  assert.match(helper, /createThread\(\{ workspaceRoot: root, forceNew: true \}\)/)
+  assert.match(helper, /name: 'Files', exact: true/)
+  assert.match(helper, /name: 'Preview', exact: true/)
+  assert.match(helper, /await file\.click\(\)/)
+  assert.match(helper, /Code reference screenshots must not invoke the model/)
+  assert.match(helper, /getBoundingClientRect\(\)/)
+  assert.match(helper, /getComputedStyle\(ancestor\)/)
+  for (const surface of ['files', 'file-preview', 'browser-controls']) {
+    for (const size of ['wide', 'narrow']) assert(helper.includes(`sidebar-code-${surface}-${size}`))
+  }
+  for (const name of ['sidebar-private-saved-files-narrow', 'workspace-06-saved-artifact-preview-narrow',
+    'workspace-11-real-origin-consent-narrow', 'sidebar-private-live-browser-narrow']) assert(smoke.includes(name))
+  assert.match(smoke, /sidebarComparison: sidebar\.snapshot\(\)/)
+  assert.doesNotMatch(helper, /force:\s*true|dispatchEvent\(|setContent\(|addStyleTag\(|setViewportSize\(|\.click\([^\n]*position/)
+})
+
+const { nativeBrowserGeometryIssues } = require('./smoke-personal-agent-workspace-sidebar.cjs')
+test('native WebContentsView geometry must track its renderer host and remain inside the real window', () => {
+  const value = { host: bounds(500.25, 130, 250, 570), native: { bounds: bounds(500, 130, 250, 570),
+    zoomFactor: 1, contentBounds: { width: 760, height: 760 } } }
+  assert.deepEqual(nativeBrowserGeometryIssues(value), [])
+  value.native.bounds.width = 280
+  assert.deepEqual(nativeBrowserGeometryIssues(value), [
+    'Native browser width differs from the renderer host', 'Native browser view is clipped by its window'
+  ])
+  assert.deepEqual(nativeBrowserGeometryIssues({ host: null, native: null }), [
+    'Native browser view or visible renderer host is missing'
+  ])
+})
+
+const { waitForPrivateRoomSurface } = require('./smoke-personal-agent-workspace.cjs')
+test('Rooms readiness waits for the rendered private recipient and its scoped controls before opening the sidebar', async () => {
+  const events = []
+  const root = '[data-room-surface="rooms"][data-private-chat="true"][data-room-id="room-current"]'
+  const makeLocator = (selector) => ({
+    waitFor: async (options) => events.push({ selector, options }),
+    locator: (child) => makeLocator(selector + ' ' + child)
+  })
+  const page = { locator: makeLocator }
+  await waitForPrivateRoomSurface(page, 'room-current')
+  assert.deepEqual(events, [root, root + ' .rooms-composer .rooms-rich-input',
+    root + ' .rooms-workbench-rail [data-room-tool="browser"]'].map((selector) => ({
+    selector, options: { state: 'visible', timeout: 15000 }
+  })))
+  const smoke = readFileSync(join(__dirname, 'smoke-personal-agent-workspace.cjs'), 'utf8')
+  const switchRoute = smoke.indexOf('    await switchRooms()')
+  const ready = smoke.indexOf('await waitForPrivateRoomSurface(page, entry.roomId)', switchRoute)
+  const open = smoke.indexOf('await openBrowser()', ready)
+  assert(switchRoute >= 0 && ready > switchRoute && open > ready)
+  assert.doesNotMatch(smoke.slice(switchRoute, ready), /roomsRoomId === entry\.roomId/)
+  const renderer = readFileSync(join(__dirname, '../src/renderer/src/components/rooms/RoomsWorkspaceView.tsx'), 'utf8')
+  assert.match(renderer, /data-room-id=\{room\?\.id\}/)
+})
+
+test('Rooms readiness surfaces the bounded wait failure without clicking or retrying another recipient', async () => {
+  let lookups = 0
+  const page = { locator: () => {
+    lookups++
+    return { waitFor: async (options) => {
+      assert.equal(options.timeout, 15000)
+      throw new Error('Expected rendered room did not appear')
+    } }
+  } }
+  await assert.rejects(waitForPrivateRoomSurface(page, 'room-pending'), /Expected rendered room did not appear/)
+  assert.equal(lookups, 1)
+})

@@ -6,6 +6,11 @@ on:
       - 'src/renderer/src/components/rooms/**'
       - 'src/renderer/src/components/AgentBrowserPanel*'
       - 'src/renderer/src/components/agent-browser-panel-lifecycle*'
+      - 'src/renderer/src/components/workbench/WorkbenchRight*'
+      - 'src/renderer/src/components/workbench/WorkbenchSideRail*'
+      - 'src/renderer/src/components/workbench/WorkbenchFileTreeSidePanel*'
+      - 'src/renderer/src/components/workbench/CodeRightPanelTabs*'
+      - 'src/renderer/src/components/chat/WorkbenchTopBar.tsx'
       - 'src/renderer/src/locales/*/common/rooms*'
       - 'src/main/browser-use/**'
       - 'src/preload/index.ts'
@@ -66,6 +71,12 @@ jobs:
           src/renderer/src/components/rooms/RoomAgentBrowser.test.ts
           src/renderer/src/components/rooms/RoomDirectFiles.test.ts
           src/renderer/src/components/rooms/RoomContentPreview.test.ts
+          src/renderer/src/components/rooms/RoomWorkbenchRightPanel.test.ts
+          src/renderer/src/components/rooms/useRoomWorkbenchPanel.test.ts
+          src/renderer/src/components/rooms/useRoomWorkbenchLayout.test.ts
+          src/renderer/src/components/rooms/room-workbench-layout.test.ts
+          src/renderer/src/components/workbench/CodeRightPanelTabs.test.ts
+          src/renderer/src/components/workbench/WorkbenchRightPanel.browser-use.test.ts
       - name: Build actual application
         run: npm run build
       - name: Ensure native Electron binary

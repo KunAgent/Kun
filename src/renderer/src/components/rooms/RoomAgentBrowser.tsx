@@ -32,9 +32,8 @@ export function RoomAgentBrowser({ roomId, activity, error, active, selectedRunI
   const idle = status === 'stopping' ? t('directStopping') : status === 'cancelled' ? t('directStopped')
     : status === 'failed' ? t('directFailed') : status === 'recovery_required' ? t('directReconciling')
       : status === 'pending' ? t('directQueued') : text('当前没有可监督的浏览器任务', 'No live browser task in this conversation')
-  return <section className="rooms-agent-browser" data-room-agent-browser data-state={state} data-room-id={roomId}
+  return <section className="rooms-agent-browser" aria-label={text('当前任务的浏览器', 'Current task browser')} data-room-agent-browser data-state={state} data-room-id={roomId}
     data-run-id={state === 'live' ? execution?.runId : undefined} data-thread-id={state === 'live' ? execution?.threadId : undefined} data-turn-id={state === 'live' ? execution?.turnId : undefined}>
-    <header><Globe2 size={15} /><strong>{text('当前任务的浏览器', 'Current task browser')}</strong></header>
     {state === 'live' && execution ? <div className="rooms-agent-browser-live">
       <AgentBrowserPanel key={`${roomId}:${execution.runId}:${execution.turnId}`} threadId={execution.threadId}
         expectedTurnId={execution.turnId} active={active} />
