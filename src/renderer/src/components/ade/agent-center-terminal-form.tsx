@@ -87,7 +87,7 @@ export function AgentCenterTerminalForm({
       <input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} placeholder={t('agentAdd.terminalName')} data-terminal-name />
       <div className="flex gap-2">
         <input className={`${inputClass} font-mono`} value={command} onChange={(event) => setCommand(event.target.value)} placeholder={t('agentAdd.terminalCommand')} data-terminal-command />
-        <button type="button" onClick={() => void window.kunGui?.pickLocalFiles?.().then((picked) => {
+        <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => void window.kunGui?.pickLocalFiles?.().then((picked) => {
           const path = picked?.paths?.[0]
           if (path) setCommand(path)
         })} className="shrink-0 rounded-lg border border-ds-border px-2 text-[11px] text-ds-muted hover:bg-ds-hover">
@@ -97,7 +97,7 @@ export function AgentCenterTerminalForm({
       <input className={`${inputClass} font-mono`} value={args} onChange={(event) => setArgs(event.target.value)} placeholder={t('agentAdd.terminalArgs')} data-terminal-args />
       <input className={`${inputClass} font-mono`} value={taskFlag} onChange={(event) => setTaskFlag(event.target.value)} placeholder={t('agentAdd.terminalTaskFlag')} data-terminal-task-flag />
       {error ? <p role="alert" className="text-[12px] text-ds-status-danger">{error}</p> : null}
-      <button type="button" disabled={!name.trim() || !command.trim()} onClick={save} className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-45" data-terminal-save>
+      <button data-settings-action="primary" data-settings-size="default" type="button" disabled={!name.trim() || !command.trim()} onClick={save} className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-45" data-terminal-save>
         {t('agentAdd.saveUnready')}
       </button>
     </div>

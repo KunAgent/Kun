@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { Check, Sparkles, X } from 'lucide-react'
 import type { ReactElement } from 'react'
 import { useState } from 'react'
@@ -78,11 +79,10 @@ export function MemoryCandidatesPanel(props: {
               ))}
             </div>
             <div className="mt-3 flex justify-end gap-2">
-              <button
+              <button className={settingsButtonClass()}
                 type="button"
                 disabled={busyId !== null}
                 onClick={() => void decide(entry, 'deny')}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border-muted px-3 py-1.5 text-[12px] font-semibold text-ds-muted transition hover:bg-ds-hover disabled:opacity-50"
               >
                 <X className="h-3.5 w-3.5" />
                 {props.t('memoryCandidateDeny')}
@@ -91,7 +91,7 @@ export function MemoryCandidatesPanel(props: {
                 type="button"
                 disabled={busyId !== null}
                 onClick={() => void decide(entry, 'allow')}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-ds-ink px-3 py-1.5 text-[12px] font-semibold text-ds-main transition hover:opacity-85 disabled:opacity-50"
+                className={settingsButtonClass({ variant: 'primary' })}
               >
                 <Check className="h-3.5 w-3.5" />
                 {props.t('memoryCandidateAllow')}

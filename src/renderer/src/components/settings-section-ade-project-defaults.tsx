@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import type { KunRuntimeSettingsV1, ModelProviderProfileV1 } from '@shared/app-settings'
 import { defaultKunAdeSettings } from '@shared/app-settings-kun-harness'
@@ -371,7 +372,7 @@ export function AdeProjectDefaultsPanel({
         {error ? <p role="alert" className="break-words pt-2 text-[12px] text-rose-600 dark:text-rose-300">{error}</p> : null}
         {conflict ? <div role="alert" className="mt-2 rounded-xl border border-amber-400/40 bg-amber-500/10 p-3 text-[12px] text-ds-ink">
           <p>{t('adeSettings.projectConflict')}</p>
-          <button type="button" className="mt-2 underline" onClick={() => {
+          <button type="button"  className={settingsButtonClass({ variant: 'link', className: 'mt-2' })} onClick={() => {
             setSnapshot(conflict)
             setConflict(null)
           }}>{t('adeSettings.projectRebase')}</button>
@@ -380,13 +381,13 @@ export function AdeProjectDefaultsPanel({
           {t('adeSettings.projectSaved')}
         </p> : null}
         <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-ds-border-muted pt-4">
-          <button type="button" className="rounded-full border border-ds-border px-3 py-2 text-[12px] text-ds-muted"
+          <button className={settingsButtonClass()} type="button"
             disabled={changed || saving || loading} onClick={refresh}>{t('projectConfigRefresh')}</button>
-          <button type="button" className="rounded-full border border-ds-border px-3 py-2 text-[12px] text-ds-muted"
+          <button className={settingsButtonClass()} type="button"
             disabled={!changed || saving} onClick={discard}>
             {t('adeSettings.collaborationDiscard')}
           </button>
-          <button type="button" className="rounded-full bg-accent px-3 py-2 text-[12px] text-white disabled:opacity-50"
+          <button type="button" className={settingsButtonClass({ variant: 'primary' })}
             disabled={!changed || saving || Boolean(conflict)} onClick={() => void submit()}>
             {t('adeSettings.collaborationSave')}
           </button>

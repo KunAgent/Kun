@@ -102,6 +102,7 @@ export type BrowserUseManagerOptions = {
 }
 
 export type BrowserMount = {
+  expectedTurnId?: string
   window: BrowserWindow
   bounds: Rectangle
   visible: boolean
@@ -607,4 +608,20 @@ export function auditDecision(
   if (decision === 'allow-once') return 'allowed'
   if (decision === 'deny') return 'denied'
   return decision
+}
+
+/** Empty read state never discloses another turn's session or consent requests. */
+export function defaultBrowserUseViewState(settings: KunBrowserUseSettingsV1, now: Date): BrowserUseViewState {
+  return {
+    contractVersion: 1,
+    capabilityStatus: settings.enabled ? 'available' : 'disabled',
+    ...(!settings.enabled ? { reason: 'Browser Use is disabled in Settings.' } : {}),
+    lifecycle: 'closed',
+    controlOwner: 'agent',
+    visible: false,
+    mounted: false,
+    mode: settings.mode,
+    tabs: [],
+    updatedAt: now.toISOString()
+  }
 }

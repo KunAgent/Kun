@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import {
   Ban,
   FolderOpen,
@@ -157,39 +158,36 @@ export function AgentsProjectSettingsPanel({ view }: { view: Record<string, any>
                         control={
                           <div className="flex w-full flex-col gap-3">
                             <div className="flex flex-wrap gap-2">
-                              <button
+                              <button aria-busy={Boolean(projectConfigBusy)}
                                 type="button"
                                 onClick={() => void saveProjectConfig?.()}
                                 disabled={projectConfigBusy || projectConfigLoading}
-                                className="inline-flex items-center gap-1.5 rounded-xl bg-ds-userbubble px-3 py-2 text-[13px] font-medium text-ds-userbubbleFg shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55"
+                                className={settingsButtonClass({ variant: 'primary' })}
                               >
                                 {projectConfigBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                                 {t('projectConfigSave')}
                               </button>
-                              <button
+                              <button aria-busy={Boolean(projectConfigLoading)} className={settingsButtonClass()}
                                 type="button"
                                 onClick={() => void loadProjectConfig?.()}
                                 disabled={projectConfigBusy || projectConfigLoading}
-                                className="inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-subtle disabled:opacity-55"
                               >
                                 <RefreshCw className={`h-3.5 w-3.5 ${projectConfigLoading ? 'animate-spin' : ''}`} />
                                 {t('projectConfigRefresh')}
                               </button>
-                              <button
+                              <button className={settingsButtonClass()}
                                 type="button"
                                 onClick={() => void openProjectConfigDir?.()}
                                 disabled={projectConfigBusy}
-                                className="inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-subtle disabled:opacity-55"
                               >
                                 <FolderOpen className="h-3.5 w-3.5" />
                                 {t('projectConfigOpenDir')}
                               </button>
                               {projectConfig?.trust !== 'trusted' ? (
-                                <button
+                                <button className={settingsButtonClass()}
                                   type="button"
                                   onClick={() => void setProjectConfigTrust?.(true)}
                                   disabled={projectConfigBusy || projectConfig?.status !== 'valid'}
-                                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/35 bg-emerald-500/10 px-3 py-2 text-[13px] font-medium text-emerald-700 transition hover:bg-emerald-500/15 disabled:opacity-55 dark:text-emerald-200"
                                 >
                                   <ShieldCheck className="h-3.5 w-3.5" />
                                   {projectConfig?.trust === 'stale' ? t('projectConfigReapprove') : t('projectConfigApprove')}
@@ -200,7 +198,7 @@ export function AgentsProjectSettingsPanel({ view }: { view: Record<string, any>
                                   type="button"
                                   onClick={() => void setProjectConfigTrust?.(false)}
                                   disabled={projectConfigBusy}
-                                  className="inline-flex items-center gap-1.5 rounded-xl border border-red-400/35 bg-red-500/10 px-3 py-2 text-[13px] font-medium text-red-700 transition hover:bg-red-500/15 disabled:opacity-55 dark:text-red-200"
+                                  className={settingsButtonClass({ variant: 'danger' })}
                                 >
                                   <Ban className="h-3.5 w-3.5" />
                                   {t('projectConfigRevoke')}

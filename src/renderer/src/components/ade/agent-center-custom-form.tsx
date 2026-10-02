@@ -381,7 +381,7 @@ export function AgentCenterCustomForm({
         <input className={`${inputClass} font-mono text-[12px]`} value={command} spellCheck={false}
           placeholder={t('adeSettings.acpFormCommand')}
           onChange={(e) => { setCommand(e.target.value); invalidate() }} />
-        <button
+        <button data-settings-action="secondary" data-settings-size="default"
           type="button"
           className={subButtonClass}
           onClick={() => {
@@ -414,7 +414,7 @@ export function AgentCenterCustomForm({
               className="inline-flex items-center gap-1.5 rounded-full border border-ds-border-muted px-2.5 py-1 text-[11px] font-mono text-ds-muted"
             >
               {row.name}
-              <button
+              <button data-settings-action="danger-ghost" data-settings-size="icon"
                 type="button"
                 className="text-ds-faint transition hover:text-red-500"
                 aria-label={`Remove ${row.name}`}
@@ -443,7 +443,7 @@ export function AgentCenterCustomForm({
           placeholder={t('adeSettings.acpFormSecretValue')}
           onChange={(e) => setSecretValue(e.target.value)}
         />
-        <button
+        <button aria-busy={binding} data-settings-action="secondary" data-settings-size="default"
           type="button"
           className={subButtonClass}
           disabled={binding || !secretName.trim() || !secretValue}
@@ -481,7 +481,7 @@ export function AgentCenterCustomForm({
       {error ? <div className="text-[12px] text-red-600 dark:text-red-400">{error}</div> : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
+        <button aria-busy={probing} data-settings-action="secondary" data-settings-size="default"
           type="button"
           className={subButtonClass}
           disabled={probing || !displayName || !cmd}
@@ -489,7 +489,7 @@ export function AgentCenterCustomForm({
         >
           {probing ? t('adeSettings.acpFormProbing') : t('adeSettings.acpFormTest')}
         </button>
-        <button
+        <button data-settings-action="primary" data-settings-size="default"
           type="button"
           onClick={save}
           disabled={!canSave}
@@ -499,7 +499,7 @@ export function AgentCenterCustomForm({
           {t('adeSettings.acpFormAdd')}
         </button>
         {probeFresh && probe && !probe.result.ok ? (
-          <button
+          <button data-settings-action="secondary" data-settings-size="default"
             type="button"
             className={subButtonClass}
             onClick={() => setSaveAnyway(true)}
@@ -507,7 +507,7 @@ export function AgentCenterCustomForm({
             {t('adeSettings.acpFormSaveAnyway')}
           </button>
         ) : null}
-        <button
+        <button data-settings-action="secondary" data-settings-size="default"
           type="button"
           className={subButtonClass}
           onClick={() => fileInput.current?.click()}

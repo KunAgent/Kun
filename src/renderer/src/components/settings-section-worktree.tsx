@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
 import { GitBranch, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
@@ -199,7 +200,7 @@ export function WorktreeSettingsSection({ ctx }: { ctx: Record<string, any> }): 
                   type="button"
                   aria-label={t('adeSettings.sharedPathRemove')}
                   onClick={() => setSharedPaths(sharedPaths.filter((_, i) => i !== index))}
-                  className="shrink-0 rounded-lg px-1.5 py-1 text-red-600 transition hover:bg-red-500/10"
+                    className={settingsButtonClass({ variant: 'danger-ghost', size: 'icon', className: 'shrink-0' })}
                 >
                   <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
                 </button>
@@ -238,7 +239,7 @@ export function WorktreeSettingsSection({ ctx }: { ctx: Record<string, any> }): 
                   ])
                   setDraftSharedPath('')
                 }}
-                className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-ds-border-muted px-2.5 py-2 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-45"
+                className={settingsButtonClass({ className: 'shrink-0' })}
               >
                 <Plus className="h-3.5 w-3.5" strokeWidth={1.8} />
                 {t('adeSettings.sharedPathAdd')}
@@ -293,11 +294,10 @@ export function WorktreeSettingsSection({ ctx }: { ctx: Record<string, any> }): 
                   {result?.ok ? compactHomePath(result.worktreeRoot) : '-'}
                 </div>
               </div>
-              <button
+              <button aria-busy={Boolean(loading)} className={settingsButtonClass()}
                 type="button"
                 onClick={() => void refresh()}
                 disabled={loading}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border-muted px-2.5 py-1.5 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-45"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} strokeWidth={1.8} />
                 {t('worktreeRefresh')}
@@ -337,11 +337,11 @@ export function WorktreeSettingsSection({ ctx }: { ctx: Record<string, any> }): 
                           </span>
                         </div>
                       </div>
-                      <button
+                      <button aria-busy={Boolean(busyPath === row.path)}
                         type="button"
                         onClick={() => void removeWorktree(row.path)}
                         disabled={busyPath === row.path}
-                        className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-medium text-red-600 transition hover:bg-red-500/10 disabled:opacity-45"
+                         className={settingsButtonClass({ variant: 'danger', className: 'shrink-0' })}
                       >
                         {busyPath === row.path ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.8} />

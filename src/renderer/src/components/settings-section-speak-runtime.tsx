@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { Download, Loader2, Square, Trash2 } from 'lucide-react'
 import type { ReactElement } from 'react'
 import {
@@ -189,20 +190,18 @@ function AssetCard(props: {
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         {state === 'downloading' && props.onCancel ? (
-          <button
+          <button className={settingsButtonClass()}
             type="button"
             onClick={props.onCancel}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border px-2.5 py-1 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
           >
             <Square className="h-3.5 w-3.5" strokeWidth={1.9} />
             {t('speakModelCancel')}
           </button>
         ) : (
-          <button
+          <button aria-busy={Boolean(props.busy)} className={settingsButtonClass()}
             type="button"
             disabled={props.busy || state === 'ready'}
             onClick={props.onDownload}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border px-2.5 py-1 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-55"
           >
             {props.busy ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
@@ -217,7 +216,7 @@ function AssetCard(props: {
             type="button"
             disabled={props.busy}
             onClick={props.onDelete}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border px-2.5 py-1 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-rose-500 disabled:cursor-not-allowed disabled:opacity-55"
+            className={settingsButtonClass({ variant: 'danger' })}
           >
             <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
             {t('speakModelDelete')}

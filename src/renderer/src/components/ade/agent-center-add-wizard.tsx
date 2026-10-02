@@ -64,7 +64,8 @@ export function AgentCenterAddWizard({
   updateKun,
   onSetupCommand,
   onSelectAgent,
-  onClose
+  onClose,
+  settingsSurface = false
 }: {
   rows: AdeHarnessRow[]
   settings: KunHarnessSettingsV1
@@ -72,6 +73,7 @@ export function AgentCenterAddWizard({
   onSetupCommand?: (harnessId: string, command: string, title: string) => void
   onSelectAgent: (id: string) => void
   onClose: () => void
+  settingsSurface?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
   const { t: tSettings } = useTranslation('settings')
@@ -207,16 +209,16 @@ export function AgentCenterAddWizard({
   const kindLabel = state.kind === 'custom' ? t('agentAdd.customAcp')
     : state.kind === 'terminal' ? t('agentAdd.terminal') : row?.definition.displayName ?? ''
   const content = (
-    <div role="dialog" aria-modal="true" aria-label={t('agentAdd.title')} data-agent-add-wizard className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-3 md:p-6">
+    <div role="dialog" aria-modal="true" aria-label={t('agentAdd.title')} data-agent-add-wizard className={`${settingsSurface ? 'ds-settings-surface ' : ''}fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-3 md:p-6`}>
       <div className="flex max-h-[min(90vh,760px)] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl border border-ds-border bg-ds-card shadow-2xl">
         <div className="flex shrink-0 items-center gap-2 border-b border-ds-border px-4 py-3">
           {state.step !== 'choose' ? (
-            <button type="button" onClick={() => update({ ...state, step: state.step === 'finish' ? 'connect' : 'choose' })} aria-label={t('agentAdd.back')} className="rounded-md p-1 text-ds-muted hover:bg-ds-hover">
+            <button data-settings-action="ghost" data-settings-size="icon" type="button" onClick={() => update({ ...state, step: state.step === 'finish' ? 'connect' : 'choose' })} aria-label={t('agentAdd.back')} className="rounded-md p-1 text-ds-muted hover:bg-ds-hover">
               <ArrowLeft className="h-4 w-4" />
             </button>
           ) : null}
           <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ds-ink">{t('agentAdd.title')}</h2>
-          <button type="button" onClick={close} aria-label={t('agentAdd.cancel')} data-agent-add-close className="rounded-md p-1 text-ds-muted hover:bg-ds-hover"><X className="h-4 w-4" /></button>
+          <button data-settings-action="ghost" data-settings-size="icon" type="button" onClick={close} aria-label={t('agentAdd.cancel')} data-agent-add-close className="rounded-md p-1 text-ds-muted hover:bg-ds-hover"><X className="h-4 w-4" /></button>
         </div>
         <div className="flex shrink-0 gap-2 border-b border-ds-border-muted px-4 py-2 text-[11px] text-ds-faint">
           {(['choose', 'connect', 'finish'] as const).map((step, index) => (
@@ -236,9 +238,9 @@ export function AgentCenterAddWizard({
                 )
               })}
               <div className="grid grid-cols-2 gap-2 border-t border-ds-border-muted pt-3">
-                <button type="button" onClick={() => choose('custom')} className={actionClass} data-agent-add-custom>{t('agentAdd.customAcp')}</button>
-                <button type="button" onClick={() => choose('terminal')} className={actionClass} data-agent-add-terminal>{t('agentAdd.terminal')}</button>
-                <button type="button" onClick={() => choose('custom')} className={actionClass} data-agent-add-import>{t('agentAdd.import')}</button>
+                <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => choose('custom')} className={actionClass} data-agent-add-custom>{t('agentAdd.customAcp')}</button>
+                <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => choose('terminal')} className={actionClass} data-agent-add-terminal>{t('agentAdd.terminal')}</button>
+                <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => choose('custom')} className={actionClass} data-agent-add-import>{t('agentAdd.import')}</button>
               </div>
             </div>
           ) : null}
@@ -259,14 +261,14 @@ export function AgentCenterAddWizard({
                     key={row.definition.id} harnessId={row.definition.id} action={harnessRowUnavailableCode(row) === 'adapter_missing' ? 'adapter' : 'install'}
                     needed={row.status.installed !== 'yes' || row.status.versionSupported === false} t={t} /> : null}
                   <div className="flex flex-wrap gap-2">
-                    {row.definition.setup?.install ? <button type="button" onClick={() => setupCommand('install')} className={actionClass}>{t('agentAdd.installInTerminal')}</button> : null}
-                    {row.definition.setup?.login ? <button type="button" onClick={() => setupCommand('login')} className={actionClass}>{t('agentAdd.loginInTerminal')}</button> : null}
-                    <button type="button" onClick={() => {
+                    {row.definition.setup?.install ? <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => setupCommand('install')} className={actionClass}>{t('agentAdd.installInTerminal')}</button> : null}
+                    {row.definition.setup?.login ? <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => setupCommand('login')} className={actionClass}>{t('agentAdd.loginInTerminal')}</button> : null}
+                    <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => {
                       onSelectAgent(row.definition.id)
                       close()
                     }} className={actionClass}>{t('agentAdd.openSettings')} <ExternalLink className="inline h-3 w-3" /></button>
                   </div>
-                  <button type="button" disabled={busy} onClick={() => void check('handshake')} className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-45" data-agent-add-check>
+                  <button aria-busy={busy} data-settings-action="primary" data-settings-size="default" type="button" disabled={busy} onClick={() => void check('handshake')} className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-45" data-agent-add-check>
                     {busy ? <Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> : null}{busy ? t('agentAdd.checking') : t('agentAdd.check')}
                   </button>
                 </>
@@ -283,9 +285,9 @@ export function AgentCenterAddWizard({
               {state.check?.detail ? <p role="alert" className="break-words text-[12px] text-ds-status-danger">{state.check.detail}</p> : null}
               <p className="text-[11px] text-ds-faint">{t('agentAdd.trialWarning')}</p>
               <div className="flex flex-wrap gap-2">
-                {state.kind === 'builtin' ? <button type="button" disabled={busy} onClick={() => void check('trial')} className={actionClass} data-agent-add-trial>{t('agentAdd.trial')}</button> : null}
-                <button type="button" onClick={() => void loadHarnesses(true)} className={actionClass}>{t('agentAdd.retry')}</button>
-                <button type="button" onClick={finish} className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white" data-agent-add-done>{t('agentAdd.done')}</button>
+                {state.kind === 'builtin' ? <button aria-busy={busy} data-settings-action="secondary" data-settings-size="default" type="button" disabled={busy} onClick={() => void check('trial')} className={actionClass} data-agent-add-trial>{t('agentAdd.trial')}</button> : null}
+                <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => void loadHarnesses(true)} className={actionClass}>{t('agentAdd.retry')}</button>
+                <button data-settings-action="primary" data-settings-size="default" type="button" onClick={finish} className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white" data-agent-add-done>{t('agentAdd.done')}</button>
               </div>
             </div>
           ) : null}

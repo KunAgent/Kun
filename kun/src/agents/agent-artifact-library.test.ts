@@ -87,6 +87,9 @@ it('send_im_message automatically captures versioned files, idempotently', async
   await tool.execute(args, f.context())
   expect((await f.library.list('agent-1')).artifacts).toHaveLength(1)
   expect((await f.library.list('agent-1')).artifacts[0].version).toBe(1)
+  const runtime = { rooms: { deps: f.deps, artifactLibrary: f.library } } as unknown as ServerRuntime
+  expect((await resolveRoomContent(runtime, f.room, message!.value.references![0], 'preview')).sourceTarget).toEqual({
+    roomId: f.room.id, participantAgentId: 'agent-1', runId: f.runId, messageId: message!.id })
 })
 
 

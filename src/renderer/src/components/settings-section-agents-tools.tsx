@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type {
   SkillRootListItem
 } from '@shared/kun-gui-api'
@@ -80,7 +81,7 @@ export function AgentsToolsSettingsPanels({ view }: { view: Record<string, any> 
                                 <button
                                   type="button"
                                   onClick={() => void openSkillRoot(root.path)}
-                                  className="rounded-lg p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                                  className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
                                   aria-label={t('skillsOpenRoot')}
                                   title={t('skillsOpenRoot')}
                                 >
@@ -155,7 +156,7 @@ export function AgentsToolsSettingsPanels({ view }: { view: Record<string, any> 
                           <button
                             type="button"
                             onClick={() => openPlugins()}
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-ds-userbubble px-3 py-2 text-[13px] font-medium text-ds-userbubbleFg shadow-sm transition hover:opacity-90"
+                            className={settingsButtonClass({ variant: 'primary' })}
                           >
                             <Settings className="h-4 w-4" />
                             {t('skillsOpenPlugins')}
@@ -366,30 +367,28 @@ export function AgentsToolsSettingsPanels({ view }: { view: Record<string, any> 
                     control={
                       <div className="flex w-full flex-col gap-3">
                         <div className="flex flex-wrap gap-2">
-                          <button
+                          <button aria-busy={Boolean(mcpBusy)}
                             type="button"
                             onClick={() => void saveMcpConfig()}
                             disabled={mcpBusy || mcpLoading}
-                            className="inline-flex items-center gap-1.5 rounded-xl bg-ds-userbubble px-3 py-2 text-[13px] font-medium text-ds-userbubbleFg shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55"
+                            className={settingsButtonClass({ variant: 'primary' })}
                           >
                             {mcpBusy ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
                             ) : null}
                             {t('mcpSave')}
                           </button>
-                          <button
+                          <button aria-busy={Boolean(mcpLoading)} className={settingsButtonClass()}
                             type="button"
                             onClick={() => void loadMcpConfig()}
                             disabled={mcpBusy || mcpLoading}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-55"
                           >
                             <RefreshCw className={`h-3.5 w-3.5 ${mcpLoading ? 'animate-spin' : ''}`} strokeWidth={1.75} />
                             {t('mcpReload')}
                           </button>
-                          <button
+                          <button className={settingsButtonClass()}
                             type="button"
                             onClick={() => void openMcpConfigDir()}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
                           >
                             <FolderOpen className="h-4 w-4" />
                             {t('mcpOpenDir')}

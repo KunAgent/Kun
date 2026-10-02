@@ -93,6 +93,7 @@ export const BrowserUseViewStateSchema = z.object({
   reason: z.string().max(1024).optional(),
   sessionId: z.string().min(16).max(256).optional(),
   threadId: z.string().min(1).max(256).optional(),
+  turnId: z.string().min(1).max(256).optional(),
   lifecycle: BrowserUseLifecycleSchema,
   controlOwner: BrowserUseControlOwnerSchema,
   visible: z.boolean(),
@@ -108,6 +109,7 @@ export const BrowserUseViewStateSchema = z.object({
 export type BrowserUseViewState = z.infer<typeof BrowserUseViewStateSchema>
 
 export const BrowserUseMountInputSchema = z.object({
+  expectedTurnId: z.string().min(1).max(256).optional(),
   threadId: z.string().min(1).max(256),
   visible: z.boolean(),
   supervisionActive: z.boolean(),
@@ -116,6 +118,7 @@ export const BrowserUseMountInputSchema = z.object({
 export type BrowserUseMountInput = z.infer<typeof BrowserUseMountInputSchema>
 
 export const BrowserUseDecisionInputSchema = z.object({
+  expectedTurnId: z.string().min(1).max(256).optional(),
   threadId: z.string().min(1).max(256),
   requestId: z.string().min(16).max(256),
   decision: z.enum(['allow-once', 'deny'])
@@ -123,17 +126,20 @@ export const BrowserUseDecisionInputSchema = z.object({
 export type BrowserUseDecisionInput = z.infer<typeof BrowserUseDecisionInputSchema>
 
 export const BrowserUseControlInputSchema = z.object({
+  expectedTurnId: z.string().min(1).max(256).optional(),
   threadId: z.string().min(1).max(256),
   controlOwner: BrowserUseControlOwnerSchema
 }).strict()
 export type BrowserUseControlInput = z.infer<typeof BrowserUseControlInputSchema>
 
 export const BrowserUseThreadInputSchema = z.object({
+  expectedTurnId: z.string().min(1).max(256).optional(),
   threadId: z.string().min(1).max(256)
 }).strict()
 export type BrowserUseThreadInput = z.infer<typeof BrowserUseThreadInputSchema>
 
 export const BrowserUseNavigationInputSchema = z.object({
+  expectedTurnId: z.string().min(1).max(256).optional(),
   threadId: z.string().min(1).max(256),
   command: z.enum(['back', 'forward', 'reload'])
 }).strict()

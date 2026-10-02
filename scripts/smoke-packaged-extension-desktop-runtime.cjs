@@ -13,6 +13,7 @@ const {
   PROCESS_OUTPUT_LIMIT
 } = require('./smoke-packaged-extension-desktop-constants.cjs')
 const processSupport = require('./smoke-packaged-extension-desktop-process.cjs')
+const { sameIsolatedDataDirectory, isVerifiedIsolatedKunCommand } = require('./smoke-isolated-paths.cjs')
 const {
   startNetworkCanary,
   evaluationValue,
@@ -57,7 +58,7 @@ async function stopIsolatedServiceManager(home, profile) {
   const discoveryPath = join(home, '.kun', 'control', 'manager.json')
   const owner = await readDiscoveryOwner(discoveryPath)
   if (!owner) return
-  if (resolve(owner.dataDir ?? '') !== resolve(profile)) {
+  if (!sameIsolatedDataDirectory(owner.dataDir, profile)) {
     throw new Error('Refusing to stop an isolated Kun Service Manager whose dataDir does not match the smoke profile')
   }
   try {
@@ -132,16 +133,6 @@ async function terminateVerifiedIsolatedProcess({ owner, kind, expectedDataDir }
   if (!await waitForPidExit(owner.pid, 2_000)) {
     throw new Error(`Verified isolated Kun ${kind} PID ${owner.pid} did not exit`)
   }
-}
-
-function isVerifiedIsolatedKunCommand({ command, kind, expectedDataDir, discoveryDataDir }) {
-  if (!command || !expectedDataDir) return false
-  if (kind === 'runtime') {
-    return command.includes('serve-entry.js') && command.includes(resolve(expectedDataDir))
-  }
-  return kind === 'manager' &&
-    command.includes('manager-entry.js') &&
-    resolve(discoveryDataDir ?? '') === resolve(expectedDataDir)
 }
 
 function processCommandLine(pid) {

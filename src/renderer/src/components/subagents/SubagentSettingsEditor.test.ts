@@ -178,6 +178,10 @@ describe('SubagentSettingsEditor', () => {
     const policyPanel = renderer.root.findByProps({ id: 'subagent-settings-panel-policy' })
     expect(policyPanel.props.hidden).toBe(false)
     expect(policyPanel.findAllByType('input').filter((input) => input.props.type === 'number')).toHaveLength(2)
+    expect(policyPanel.findAllByType('input').filter((input) => input.props.type === 'number')
+      .map((input) => input.props['aria-label'])).toEqual([
+      'Maximum parallel subagents', 'Maximum proactive retries'
+    ])
     expect(renderer.root.findByProps({ id: 'subagent-settings-panel-profiles' }).props.hidden).toBe(true)
     expect(renderer.root.findByProps({ id: 'subagent-settings-panel-automatic' }).props.hidden).toBe(true)
 
@@ -186,6 +190,9 @@ describe('SubagentSettingsEditor', () => {
     })
     expect(renderer.root.findByProps({ id: 'subagent-settings-panel-policy' }).props.hidden).toBe(true)
     expect(renderer.root.findByProps({ id: 'subagent-settings-panel-profiles' }).props.hidden).toBe(false)
+    const profilesPanel = renderer.root.findByProps({ id: 'subagent-settings-panel-profiles' })
+    const profilesSection = profilesPanel.findAllByType('section').find((section) => section.parent === profilesPanel)
+    expect(profilesSection?.props.className).toContain('min-w-0')
     expect(renderer.root.findByProps({ id: 'subagent-settings-panel-automatic' }).props.hidden).toBe(true)
 
     const researchChip = buttonWithText(renderer, 'Research')
@@ -472,6 +479,7 @@ describe('SubagentSettingsEditor', () => {
       .find((candidate) => candidate.props.disabled === true)!
     expect(inheritedSwitch.props['aria-checked']).toBe(true)
     expect(inheritedSwitch.props.disabled).toBe(true)
+    expect(inheritedSwitch.props['aria-label']).toBe('Work')
 
     const search = renderer.root.findAllByType('input').find((input) => input.props.type === 'search')
     await act(async () => search!.props.onChange({ target: { value: 'copy edit' } }))

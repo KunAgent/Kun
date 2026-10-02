@@ -5,8 +5,8 @@ import { agentPath, useAgentResource } from './agent-client'
 import { roomsRequest } from './rooms-client'
 
 type VersionPage = { versions: Array<{ version: number; createdAt: string }>; nextCursor?: string }
-export function RoomArtifactVersions({ room, reference, onVersion }: {
-  room: Room; reference: RoomContentReference; onVersion: (version: number) => void
+export function RoomArtifactVersions({ room, reference, onVersion, compact = false }: {
+  room: Room; reference: RoomContentReference; onVersion: (version: number) => void; compact?: boolean
 }) {
   const { t } = useTranslation('common')
   const file = reference.kind === 'agent_file' ? reference : undefined
@@ -30,7 +30,7 @@ export function RoomArtifactVersions({ room, reference, onVersion }: {
     } catch (cause) { if (!controller.signal.aborted && current.current === path) setError(String(cause)) }
     finally { if (!controller.signal.aborted && current.current === path) setBusy(false) }
   }
-  return <div className="rooms-artifact-versions"><label>{t('roomsContentVersion')}
+  return <div className={`rooms-artifact-versions${compact ? ' is-compact' : ''}`}><label><span className={compact ? 'sr-only' : undefined}>{t('roomsContentVersion')}</span>
     <select value={file.artifactVersion} onChange={(event) => onVersion(Number(event.target.value))}>
       {!versions.some((item) => item.version === file.artifactVersion) ? <option value={file.artifactVersion}>v{file.artifactVersion}</option> : null}
       {versions.map((item) => <option key={item.version} value={item.version}>v{item.version} · {new Date(item.createdAt).toLocaleString()}</option>)}

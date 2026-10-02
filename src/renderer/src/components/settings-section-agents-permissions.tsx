@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type {
   KunToolPermissionMode,
   ModelProviderProfileV1
@@ -301,11 +302,10 @@ export function AgentsPermissionsSettingsPanel({ view }: { view: Record<string, 
                           ? t('approvalReviewDataNotice')
                           : t('approvalReviewInactiveNotice')}
                       </span>
-                      <button
+                      <button className={settingsButtonClass()}
                         type="button"
                         disabled={!canApply}
                         onClick={(event) => runTrustedUserActivation(event, applySelection)}
-                        className="rounded-md border border-accent/45 px-3 py-1.5 text-[12.5px] font-medium text-accent transition hover:bg-accent/10 disabled:cursor-not-allowed disabled:border-ds-border-muted disabled:text-ds-muted"
                       >
                         {t('approvalReviewApply')}
                       </button>

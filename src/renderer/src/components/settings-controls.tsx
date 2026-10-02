@@ -1,5 +1,8 @@
 import {
   isValidElement,
+  cloneElement,
+  Children,
+  useId,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -23,6 +26,7 @@ export function SecretInput({
   onToggleVisibility,
   placeholder,
   autoComplete,
+  ariaLabel,
   invalid = false,
   toggleBusy = false,
   showLabel,
@@ -36,6 +40,7 @@ export function SecretInput({
   onToggleVisibility: () => void
   placeholder?: string
   autoComplete?: string
+  ariaLabel?: string
   invalid?: boolean
   toggleBusy?: boolean
   showLabel: string
@@ -53,6 +58,7 @@ export function SecretInput({
       <input
         type={visible ? 'text' : 'password'}
         autoComplete={autoComplete}
+        aria-label={ariaLabel}
         placeholder={placeholder}
         className="min-w-0 flex-1 bg-transparent px-3 py-2 text-[13px] text-ds-ink focus:outline-none"
         value={value}
@@ -173,7 +179,7 @@ function SettingsTabList<T extends string>({
           ? 'ds-settings-subtabs flex w-full min-w-0 items-center gap-1 overflow-x-auto rounded-full border border-ds-border-muted bg-ds-main/60 p-1'
           : `ds-settings-tabs grid w-full ${
               contentSized
-                ? 'grid-flow-row grid-cols-[repeat(auto-fit,minmax(9.5rem,max-content))] justify-start rounded-[22px]'
+                ? 'ds-settings-tabs--wrap grid-flow-row grid-cols-[repeat(auto-fit,minmax(9.5rem,max-content))] justify-start rounded-[22px]'
                 : 'grid-flow-col overflow-x-auto rounded-full auto-cols-[minmax(8rem,1fr)]'
             } gap-1 border border-ds-border bg-ds-main p-1`
       }
@@ -292,13 +298,15 @@ export function InlineNoticeView({
     // a full URL or a 300-char response body) wrapping inside the container
     // instead of forcing horizontal overflow that stretches the settings panel
     // — the success notice is short so the bug only ever showed on failure (#617).
-    <div className={`flex min-w-0 items-start gap-2 rounded-[var(--ds-radius-card)] border px-3 py-2 text-[12px] leading-5 ${className}`}>
+    <div className={`ds-settings-inline-notice flex min-w-0 items-start gap-2 rounded-[var(--ds-radius-card)] border px-3 py-2 text-[12px] leading-5 ${className}`}>
       <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{notice.message}</span>
       {notice.action || notice.copy ? (
         <span className="flex shrink-0 items-center gap-1.5">
           {notice.action ? (
             <button
               type="button"
+              data-settings-action="secondary"
+              data-settings-size="compact"
               className="rounded-md border border-current/20 px-2 py-0.5 font-medium transition hover:bg-current/10"
               onClick={notice.action.onClick}
             >
@@ -308,9 +316,11 @@ export function InlineNoticeView({
           {notice.copy ? (
             <button
               type="button"
+              data-settings-action="secondary"
+              data-settings-size="compact"
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-current/20 px-2 font-medium transition hover:bg-current/10"
               aria-label={copied ? notice.copy.copiedLabel : notice.copy.label}
               title={copied ? notice.copy.copiedLabel : notice.copy.label}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-current/20 px-2 font-medium transition hover:bg-current/10"
               onClick={() => {
                 if (!navigator.clipboard?.writeText) return
                 void navigator.clipboard.writeText(notice.copy?.text ?? notice.message).then(() => {
@@ -393,6 +403,28 @@ export function SettingRow({
   control: ReactNode
   wideControl?: boolean
 }): ReactElement {
+  const rowId = useId()
+  const titleId = `${rowId}-label`
+  const descriptionId = description ? `${rowId}-description` : undefined
+  const labelControl = (node: ReactNode): ReactNode => {
+    if (!isValidElement<Record<string, unknown>>(node)) return node
+    // Explicit labels and composite widget semantics always take precedence.
+    if (node.type === 'label') return node
+    if ([Toggle, ModelSelect, SecretInput].some((type) => node.type === type) && !node.props.ariaLabel) {
+      return cloneElement(node, { ariaLabel: title })
+    }
+    if (typeof node.type === 'string' && ['input', 'select', 'textarea'].includes(node.type)
+      && !node.props['aria-label'] && !node.props['aria-labelledby']) {
+      return cloneElement(node, {
+        'aria-labelledby': titleId,
+        'aria-describedby': node.props['aria-describedby'] ?? descriptionId
+      })
+    }
+    return node.props.children
+      ? cloneElement(node, {}, Children.map(node.props.children as ReactNode, labelControl))
+      : node
+  }
+  const labelledControl = labelControl(control)
   const compactControl =
     !wideControl
     && isValidElement(control)
@@ -400,6 +432,9 @@ export function SettingRow({
 
   return (
     <div
+      role="group"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
       className={`ds-setting-row flex gap-3 px-3 py-3.5 ${
         wideControl
           ? 'ds-setting-row--wide flex-col sm:gap-3.5'
@@ -407,9 +442,9 @@ export function SettingRow({
       }`}
     >
       <div className={`min-w-0 ${wideControl ? 'w-full max-w-none shrink-0' : 'flex-1'}`}>
-        <div className="text-[13px] font-medium text-ds-ink">{title}</div>
+        <div id={titleId} className="ds-setting-row-label text-[13px] font-medium text-ds-ink">{title}</div>
         {description ? (
-          <p className="mt-1 text-[12px] leading-[1.4] text-ds-muted">{description}</p>
+          <p id={descriptionId} className="mt-1 text-[12px] leading-[1.4] text-ds-muted">{description}</p>
         ) : null}
       </div>
       <div
@@ -421,7 +456,7 @@ export function SettingRow({
               : 'flex justify-end sm:max-w-[420px]'
         }`}
       >
-        {control}
+        {labelledControl}
       </div>
     </div>
   )
@@ -445,6 +480,7 @@ export function ModelSelect({
   customPlaceholder = '',
   disabled = false,
   selectClassName = '',
+  ariaLabel,
   onChange
 }: {
   value: string
@@ -456,6 +492,7 @@ export function ModelSelect({
   customPlaceholder?: string
   disabled?: boolean
   selectClassName?: string
+  ariaLabel?: string
   onChange: (model: string) => void
 }): ReactElement {
   const trimmed = value.trim()
@@ -481,6 +518,7 @@ export function ModelSelect({
     <div className="grid w-full min-w-0 gap-2">
       <select
         className={selectClassName}
+        aria-label={ariaLabel}
         value={selectValue}
         disabled={disabled}
         onChange={(e) => {
@@ -506,6 +544,7 @@ export function ModelSelect({
       {customActive ? (
         <input
           className="w-full min-w-0 rounded-full border border-ds-border bg-ds-card px-3 py-2 font-mono text-[13px] text-ds-ink focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/15"
+          aria-label={ariaLabel ? `${ariaLabel}: ${customLabel}` : undefined}
           value={customDraft}
           placeholder={customPlaceholder}
           spellCheck={false}
@@ -581,7 +620,7 @@ export function Toggle({
       onClick={() => {
         if (!disabled) onChange(!checked)
       }}
-      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
+      className={`ds-settings-toggle relative h-5 w-9 shrink-0 rounded-full transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 ${
         checked ? 'bg-[var(--ds-control)]' : 'bg-ds-faint'
       } ${disabled ? 'cursor-not-allowed opacity-60' : 'active:scale-[0.98]'}`}
     >

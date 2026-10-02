@@ -32,6 +32,7 @@ import {
   axProperties,
   axString,
   createBrowserUseView,
+  defaultBrowserUseViewState,
   isDisabledTarget,
   isNearViewport,
   isSensitiveTarget,
@@ -621,6 +622,7 @@ export abstract class BrowserUseManagerFoundation {
       capabilityStatus: 'available',
       sessionId: entry.id,
       threadId: entry.threadId,
+      turnId: entry.activeTurnId,
       lifecycle: entry.lifecycle,
       ...(entry.reason ? { reason: entry.reason } : {}),
       controlOwner: entry.controlOwner,
@@ -636,19 +638,7 @@ export abstract class BrowserUseManagerFoundation {
     }
   }
   protected defaultState(): BrowserUseViewState {
-    const settings = this.options.settings()
-    return {
-      contractVersion: 1,
-      capabilityStatus: settings.enabled ? 'available' : 'disabled',
-      ...(!settings.enabled ? { reason: 'Browser Use is disabled in Settings.' } : {}),
-      lifecycle: 'closed',
-      controlOwner: 'agent',
-      visible: false,
-      mounted: false,
-      mode: settings.mode,
-      tabs: [],
-      updatedAt: this.now().toISOString()
-    }
+    return defaultBrowserUseViewState(this.options.settings(), this.now())
   }
   protected publish(entry: BrowserSessionEntry): void {
     const state = this.state(entry)

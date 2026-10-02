@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import { Loader2, Play, Square, Volume2 } from 'lucide-react'
 import { isAppLocale } from '@shared/app-locales'
@@ -278,7 +279,7 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
                 type="button"
                 onClick={() => void onClearTracks()}
                 disabled={clearingTracks || ((trackUsage?.count ?? 0) === 0 && speakPhase === 'idle')}
-                className="shrink-0 rounded-lg border border-ds-border px-2 py-1 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-55"
+                 className={settingsButtonClass({ variant: 'danger', className: 'shrink-0' })}
               >
                 {t('speakStoredTracksClear')}
               </button>
@@ -357,7 +358,7 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
                 type="button"
                 onClick={() => updateSpeak({ speed: 1 })}
                 disabled={clampSpeakSpeed(speak.speed) === 1}
-                className="shrink-0 rounded-lg border border-ds-border px-2 py-1 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-55"
+                className={settingsButtonClass({ className: 'shrink-0' })}
               >
                 {t('speakSpeedReset')}
               </button>
@@ -378,12 +379,12 @@ export function LocalSpeechProviderSettings({ ctx }: { ctx: Record<string, any> 
                 aria-label={t('speakPreview')}
                 className="min-w-0 flex-1 rounded-lg border border-ds-border bg-ds-card px-2.5 py-1.5 text-[12.5px] text-ds-ink outline-none focus-visible:border-accent/60"
               />
-              <button
+              <button aria-busy={Boolean(previewing)}
                 type="button"
                 onClick={() => void onPreview()}
                 title={previewing ? t('speakPreviewStop') : t('speakPreviewPlay')}
                 aria-label={previewing ? t('speakPreviewStop') : t('speakPreviewPlay')}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-ds-border px-2.5 py-1.5 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                className={settingsButtonClass({ className: 'shrink-0' })}
               >
                 {previewing && speakPhase === 'speaking' ? (
                   <Square className="h-3.5 w-3.5" strokeWidth={1.9} />

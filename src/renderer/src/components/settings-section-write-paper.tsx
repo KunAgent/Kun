@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { useState, type ReactElement } from 'react'
 import { Loader2, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -21,8 +22,6 @@ const textInputClass =
   'w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent-tint/40 focus:outline-none focus:ring-1 focus:ring-accent-tint/30'
 const selectControlClass =
   'rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink shadow-sm focus:border-accent-tint/40 focus:outline-none focus:ring-1 focus:ring-accent-tint/30'
-const ghostButtonClass =
-  'inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover'
 
 /**
  * Write settings → paper reading tab (§6.7): papers directory, interpretation
@@ -256,9 +255,8 @@ export function WritePaperReadingSettingsPanel({
           <div className="text-[13px] font-semibold text-ds-ink">
             {t('writePaperTemplateLabel')}
           </div>
-          <button
+          <button className={settingsButtonClass()}
             type="button"
-            className={ghostButtonClass}
             onClick={() => update({ write: { paperReading: { interpretTemplate: '' } } })}
           >
             <RotateCcw className="h-4 w-4" strokeWidth={1.8} />
@@ -443,9 +441,8 @@ function PaperSearchSettingsCard({
                 </option>
               ))}
             </select>
-            <button
+            <button aria-busy={Boolean(testState.running)} className={settingsButtonClass()}
               type="button"
-              className={ghostButtonClass}
               disabled={testState.running}
               onClick={runTest}
             >
@@ -504,7 +501,7 @@ function SearchKeyInput({
         <button
           type="button"
           onClick={() => update({ [field]: '', clearCredentials: [...clears.filter((key) => key !== field), field] })}
-          className="h-7 shrink-0 rounded-md px-2 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+          className={settingsButtonClass({ className: 'shrink-0' })}
         >
           {t('writePaperSearchSettingsClearKey')}
         </button>

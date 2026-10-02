@@ -37,6 +37,8 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             kun/package-lock.json
+      - name: Test catalog discovery ordering
+        run: node --test scripts/smoke-rooms-harness-fixture.test.cjs
       - name: Install existing dependencies
         run: npm ci
       - name: Install Electron binary for desktop smoke

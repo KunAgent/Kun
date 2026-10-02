@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import {
   Ban,
   BrainCircuit,
@@ -114,19 +115,17 @@ export function MemoryRecordList({
           ))}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-          <button
+          <button className={settingsButtonClass()}
             type="button"
             onClick={onImport}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border-muted px-2.5 py-1.5 text-[12px] font-semibold text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
           >
             <Upload className="h-3.5 w-3.5" strokeWidth={2} />
             {t('memoryImport')}
           </button>
-          <button
+          <button className={settingsButtonClass()}
             type="button"
             onClick={onExport}
             disabled={exportBusy}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border-muted px-2.5 py-1.5 text-[12px] font-semibold text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Download className="h-3.5 w-3.5" strokeWidth={2} />
             {t('memoryExport')}
@@ -134,7 +133,7 @@ export function MemoryRecordList({
           <button
             type="button"
             onClick={onCreate}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-ds-ink px-2.5 py-1.5 text-[12px] font-semibold text-ds-main transition hover:opacity-85"
+            className={settingsButtonClass({ variant: 'primary' })}
           >
             <Plus className="h-3.5 w-3.5" strokeWidth={2} />
             {t('memoryCreate')}
@@ -207,7 +206,7 @@ export function MemoryRecordList({
                   <button
                     type="button"
                     onClick={() => onView(memory)}
-                    className="rounded-lg p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                    className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
                     aria-label={t('memoryDetails')}
                     title={t('memoryDetails')}
                   >
@@ -217,7 +216,7 @@ export function MemoryRecordList({
                     <button
                       type="button"
                       onClick={() => onSetDirective(memory, false)}
-                      className="rounded-lg p-1.5 text-emerald-600 transition hover:bg-ds-hover hover:text-ds-ink dark:text-emerald-400"
+                      className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
                       aria-label={t('memoryUnsetDirective')}
                       title={t('memoryUnsetDirective')}
                     >
@@ -228,7 +227,7 @@ export function MemoryRecordList({
                       type="button"
                       onClick={() => onSetDirective(memory, true)}
                       disabled={!canPromote}
-                      className="rounded-lg p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-40"
+                      className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
                       aria-label={t('memorySetDirective')}
                       title={
                         canPromote
@@ -243,7 +242,7 @@ export function MemoryRecordList({
                     <button
                       type="button"
                       onClick={() => onRestore(memory.id)}
-                      className="rounded-lg p-1.5 text-ds-muted transition hover:bg-emerald-500/10 hover:text-emerald-600"
+                      className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
                       aria-label={t('memoryRestore')}
                       title={t('memoryRestore')}
                     >
@@ -253,7 +252,7 @@ export function MemoryRecordList({
                     <button
                       type="button"
                       onClick={() => onDisable(memory.id)}
-                      className="rounded-lg p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                      className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
                       aria-label={t('memoryDisable')}
                       title={t('memoryDisable')}
                     >
@@ -263,7 +262,7 @@ export function MemoryRecordList({
                   <button
                     type="button"
                     onClick={() => onDelete(memory.id)}
-                    className="rounded-lg p-1.5 text-ds-muted transition hover:bg-red-500/10 hover:text-red-600"
+                    className={settingsButtonClass({ variant: 'danger-ghost', size: 'icon' })}
                     aria-label={t('memoryDelete')}
                     title={t('memoryDelete')}
                   >

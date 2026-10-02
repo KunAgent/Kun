@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { useState, type ReactElement } from 'react'
 import { ChevronDown, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -77,7 +78,7 @@ export function CodeAgentPresetsEditor({ presets, onChange }: Props): ReactEleme
                   e.stopPropagation()
                   onChange(presets.filter((item) => item.id !== preset.id))
                 }}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-ds-faint opacity-0 transition hover:bg-red-500/10 hover:text-red-600 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-accent/35 group-hover:opacity-100 dark:hover:text-red-300"
+                  className={settingsButtonClass({ variant: 'danger-ghost', size: 'icon', className: 'shrink-0' })}
               >
                 <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
               </button>
@@ -90,6 +91,7 @@ export function CodeAgentPresetsEditor({ presets, onChange }: Props): ReactEleme
               <div className="space-y-2 px-3.5 pb-3.5 pt-0.5">
                 <div className="flex items-center gap-2">
                   <LucideIconPicker
+                    settingsSurface
                     value={preset.icon}
                     ariaLabel={resolved.name}
                     onChange={(iconName) => patch(index, { icon: iconName })}
@@ -120,7 +122,7 @@ export function CodeAgentPresetsEditor({ presets, onChange }: Props): ReactEleme
         type="button"
         disabled={presets.length >= CODE_AGENT_PRESET_MAX_COUNT}
         onClick={addPersona}
-        className="flex w-full items-center justify-center gap-1.5 px-3.5 py-2.5 text-[12.5px] font-medium text-ds-muted transition-colors hover:bg-ds-hover/40 hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ds-accent/35 disabled:cursor-not-allowed disabled:opacity-50"
+        className={settingsButtonClass({ className: 'w-full' })}
       >
         <Plus className="h-3.5 w-3.5" strokeWidth={2} />
         {t('codeAgentPresetAdd')}

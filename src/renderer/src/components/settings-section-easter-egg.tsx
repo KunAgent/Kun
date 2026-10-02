@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 import { BookOpen, FolderPlus, Palette, Trash2 } from 'lucide-react'
@@ -114,7 +115,7 @@ function ModeCardButton({
           onClick={onRemove}
           title={removeLabel}
           aria-label={removeLabel}
-          className="absolute right-2 top-2 rounded-md p-1 text-ds-faint transition hover:bg-ds-danger-soft hover:text-ds-danger disabled:cursor-default disabled:opacity-50"
+            className={settingsButtonClass({ variant: 'danger-ghost', size: 'icon', className: 'absolute right-2 top-2' })}
         >
           <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
         </button>
@@ -217,11 +218,10 @@ export function EasterEggSettingsSection({ ctx }: { ctx: Record<string, any> }):
               <p className="text-[12.5px] leading-5 text-ds-faint">{t('uiPluginEmpty')}</p>
             ) : null}
             <div className="grid gap-2 sm:grid-cols-2">
-              <button
+              <button className={settingsButtonClass()}
                 type="button"
                 disabled={busy}
                 onClick={() => void handleInstall()}
-                className="inline-flex min-w-0 items-center justify-center gap-2 rounded-full bg-accent/12 px-4 py-2 text-[12.5px] font-medium leading-5 text-accent transition hover:bg-accent/18 disabled:opacity-60"
               >
                 <FolderPlus className="h-3.5 w-3.5" strokeWidth={1.8} />
                 <span className="min-w-0 whitespace-normal break-words text-center">{t('uiPluginInstall')}</span>

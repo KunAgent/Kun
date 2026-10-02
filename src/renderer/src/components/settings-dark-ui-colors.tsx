@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import {
   DEFAULT_DARK_UI_COLORS,
   type DarkUiColorsPatchV1,
@@ -61,11 +62,10 @@ export function DarkUiColorsSettingsCard({
               </div>
             </div>
             <div className="flex justify-end">
-              <button
+              <button className={settingsButtonClass()}
                 type="button"
                 disabled={isDefault}
                 onClick={() => onChange({ ...DEFAULT_DARK_UI_COLORS })}
-                className="rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[12px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t('darkUiColorsReset')}
               </button>

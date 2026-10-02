@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type { AppSettingsV1 } from '@shared/app-settings'
 import {
   APP_LOCALE_OPTIONS,
@@ -352,14 +353,14 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
                   <button
                     type="button"
                     onClick={resetWorkspaceToDefault}
-                    className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
+                    className={settingsButtonClass({ className: 'shrink-0' })}
                   >
                     {t('restoreWorkspaceDefault')}
                   </button>
                   <button
                     type="button"
                     onClick={() => void pickWorkspace()}
-                    className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
+                    className={settingsButtonClass({ className: 'shrink-0' })}
                   >
                     {t('browse')}
                   </button>
@@ -389,14 +390,14 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
                   <button
                     type="button"
                     onClick={resetConversationWorkspaceToDefault}
-                    className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
+                    className={settingsButtonClass({ className: 'shrink-0' })}
                   >
                     {t('restoreConversationWorkspaceDefault')}
                   </button>
                   <button
                     type="button"
                     onClick={() => void pickConversationWorkspace()}
-                    className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
+                    className={settingsButtonClass({ className: 'shrink-0' })}
                   >
                     {t('browse')}
                   </button>

@@ -193,7 +193,7 @@ export function AgentCenterCard({
     if (action.kind === 'none' || action.kind === 'install') return null
     const label = t(action.labelKey)
     return (
-      <button
+      <button aria-busy={Boolean((action.kind === 'probe' || action.kind === 'test') && (probing || testing))} data-settings-action={primary ? 'primary' : 'secondary'} data-settings-size="default"
         key={`${action.kind}:${'command' in action ? action.command : ''}`}
         type="button"
         data-agent-action={action.kind}
@@ -269,7 +269,7 @@ export function AgentCenterCard({
               onChange={onToggleEnabled}
             />
           ) : null}
-          {!providerOnly ? <button
+          {!providerOnly ? <button data-settings-action="ghost" data-settings-size="icon"
             type="button"
             aria-label={t('adeAgentAction.specifyPath')}
             aria-expanded={advancedOpen}
@@ -358,7 +358,7 @@ export function AgentCenterCard({
               <span data-agent-network-source={status.networkSource} className="text-ds-muted">
                 {t(`adeAgentNetwork.${status.networkSource}`)}
               </span>
-              <button type="button" disabled={busy} onClick={onProbe}
+              <button aria-busy={probing} data-settings-action="secondary" data-settings-size="default" type="button" disabled={busy} onClick={onProbe}
                 className="rounded-md border border-ds-border-muted px-2 py-1 text-ds-ink hover:bg-ds-hover disabled:opacity-50">
                 {t('adeAgentAction.retry')}
               </button>
@@ -383,7 +383,7 @@ export function AgentCenterCard({
       {custom ? (
         <div className="mt-2 flex items-center gap-1">
           {onExportCustom ? (
-            <button
+            <button data-settings-action="secondary" data-settings-size="default"
               type="button"
               onClick={onExportCustom}
               className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
@@ -392,7 +392,7 @@ export function AgentCenterCard({
             </button>
           ) : null}
           {onRemoveCustom ? (
-            <button
+            <button data-settings-action="danger" data-settings-size="default"
               type="button"
               onClick={onRemoveCustom}
               className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-medium text-red-600 transition hover:bg-red-500/10"
@@ -474,7 +474,7 @@ function HarnessTestBlock({
         />
       ) : null}
       {result.level !== 'trial' && onTrial ? (
-        <button
+        <button aria-busy={busy} data-settings-action="secondary" data-settings-size="default"
           type="button"
           disabled={busy}
           onClick={onTrial}

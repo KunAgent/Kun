@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import {
   Ban,
   RefreshCw,
@@ -473,11 +474,10 @@ export function AgentsRuntimeSettingsPanel({ view }: { view: Record<string, any>
                           ) : null}
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <button
+                          <button aria-busy={Boolean(runtimeDiagnosticsBusy)} className={settingsButtonClass()}
                             type="button"
                             onClick={() => void refreshKunDiagnostics()}
                             disabled={runtimeDiagnosticsBusy}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-55"
                           >
                             <RefreshCw className={`h-3.5 w-3.5 ${runtimeDiagnosticsBusy ? 'animate-spin' : ''}`} strokeWidth={1.75} />
                             {t('kunDiagnosticsRefresh')}
@@ -536,7 +536,7 @@ export function AgentsRuntimeSettingsPanel({ view }: { view: Record<string, any>
                                     <button
                                       type="button"
                                       onClick={() => void restoreMemoryRecord(memory.id)}
-                                      className="rounded-lg p-1.5 text-ds-muted transition hover:bg-emerald-500/10 hover:text-emerald-600"
+                                      className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
                                       aria-label={t('memoryRestore')}
                                       title={t('memoryRestore')}
                                     >
@@ -546,7 +546,7 @@ export function AgentsRuntimeSettingsPanel({ view }: { view: Record<string, any>
                                     <button
                                       type="button"
                                       onClick={() => void disableMemoryRecord(memory.id)}
-                                      className="rounded-lg p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                                      className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
                                       aria-label={t('kunMemoryDisable')}
                                       title={t('kunMemoryDisable')}
                                     >
@@ -556,7 +556,7 @@ export function AgentsRuntimeSettingsPanel({ view }: { view: Record<string, any>
                                   <button
                                     type="button"
                                     onClick={() => void deleteMemoryRecord(memory.id)}
-                                    className="rounded-lg p-1.5 text-ds-muted transition hover:bg-red-500/10 hover:text-red-600"
+                                    className={settingsButtonClass({ variant: 'danger-ghost', size: 'icon' })}
                                     aria-label={t('kunMemoryDelete')}
                                     title={t('kunMemoryDelete')}
                                   >

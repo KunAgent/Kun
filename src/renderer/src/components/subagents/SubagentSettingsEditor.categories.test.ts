@@ -108,6 +108,18 @@ describe('SubagentSettingsEditor', () => {
     mockRoute = 'chat'
   })
 
+  it('keeps Settings catalog filters in normal flow at short scaled heights', async () => {
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(SubagentSettingsEditor, {
+        kun: defaultKunRuntimeSettings(), onPatch: vi.fn(), variant: 'settings'
+      }))
+    })
+    const toolbar = renderer.root.findByProps({ 'data-testid': 'settings-subagent-catalog-toolbar' })
+    expect(toolbar.props.className).not.toMatch(/\bsticky\b/)
+    expect(toolbar.props.className).not.toMatch(/\btop-0\b/)
+  })
+
   it('batch-applies one model to every agent in a category, overwriting mixed overrides', async () => {
     const onPatch = vi.fn<(patch: KunRuntimeSettingsPatchV1) => void>()
     const kun = {

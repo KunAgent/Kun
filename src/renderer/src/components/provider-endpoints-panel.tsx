@@ -74,7 +74,7 @@ export function ProviderEndpointsPanel({
     <DetailSection
       title={t('modelProviderEndpointsSection')}
       action={
-        <button
+        <button aria-busy={detecting} data-settings-action="secondary" data-settings-size="default"
           type="button"
           disabled={detecting || !baseUrlValid}
           onClick={() => void detect()}
@@ -117,7 +117,7 @@ export function ProviderEndpointsPanel({
                   {entry.ok ? ` · ${entry.latencyMs}ms` : ''}
                 </span>
                 {isRecommended && detectResult.recommended !== provider.endpointFormat ? (
-                  <button
+                  <button data-settings-action="primary" data-settings-size="default"
                     type="button"
                     onClick={() => onChange({ endpointFormat: detectResult.recommended })}
                     className="ml-auto text-[12px] font-medium text-accent underline-offset-2 hover:underline"
