@@ -349,3 +349,28 @@
   .rooms-composer-recipient { max-width: 100px; }
   .rooms-composer-model { max-width: 220px; }
 }
+
+/* Voice is an essential control at every composer width, including high DPI. */
+.rooms-composer .rooms-composer-voice,
+.rooms-composer .rooms-voice-cancel {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  color: var(--ds-text-muted);
+  background: transparent;
+}
+.rooms-composer .rooms-composer-voice:hover,
+.rooms-composer .rooms-voice-cancel:hover { background: var(--ds-surface-hover); color: var(--ds-text); }
+.rooms-composer .rooms-composer-voice[aria-pressed='true'] { color: var(--ds-danger, #dc2626); }
+.rooms-composer .rooms-composer-voice:disabled { opacity: .6; }
+.rooms-composer .rooms-composer-voice:focus-visible,
+.rooms-composer .rooms-voice-cancel:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+.rooms-composer-surface > .rooms-voice-status { grid-column: 1 / -1; min-width: 0; padding: 4px; }
+.rooms-voice-progress { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.rooms-voice-progress > [role='status'] { font-size: 12px; color: var(--ds-text-muted); overflow-wrap: anywhere; }
+.rooms-voice-cancel { margin-left: auto; }

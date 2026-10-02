@@ -1,4 +1,5 @@
 import type { RoomPendingAttachment } from './useRoomPendingSends'
+import { RoomVoiceButton, RoomVoiceStatus, useRoomVoiceInput } from './RoomVoiceInput'
 import { RoomPermissionPicker } from './RoomPermissionPicker'
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -122,6 +123,7 @@ function RoomComposerEditor({
   const [error, setError] = useState('')
   const [pollOpen, setPollOpen] = useState(false)
   const editorRef = useRef<RoomRichInputHandle>(null)
+  const voice = useRoomVoiceInput(editorRef, busy || Boolean(room.archivedAt))
   useEffect(() => {
     if (!autoFocus) return
     const timer = setTimeout(() => editorRef.current?.focus(), 0)
@@ -332,7 +334,7 @@ function RoomComposerEditor({
 
   const submit = async (): Promise<void> => {
     if (
-      busy ||
+      busy || voice.status !== 'idle' || voice.insertionPending ||
       unavailableMembers.length > 0 ||
       uploads.hasPending() ||
       room.archivedAt ||
@@ -418,7 +420,9 @@ function RoomComposerEditor({
         <RoomContentReferenceChips references={draft.references} onChange={(references) => patch({ references })} disabled={disabled} />
         <RoomRichInput ref={editorRef} room={room} value={draft.body} mentions={draft.mentions}
           disabled={disabled} placeholder={t('directPlaceholder', { name: room.name })} onChange={patch}
+          onDictationPendingChange={voice.setInsertionPending}
           onSubmit={() => void submit()} onPasteFiles={(files) => void attach(files)} />
+        <RoomVoiceStatus voice={voice} />
         {pollOpen ? <RoomPollCreator roomId={room.id} replyToMessageId={replyToMessageId}
           onClose={() => setPollOpen(false)} /> : null}
         <input hidden multiple ref={fileRef} type="file"
@@ -429,7 +433,7 @@ function RoomComposerEditor({
           showTopic={!draftId && (room.collaborationMode === 'peer' || Boolean(draft.rootRequestId))}
           intent={draft.intent} busy={busy} uploading={uploading} disabled={disabled}
           attachmentLimit={draft.attachments.length + uploads.pending.length >= 20}
-          canSend={uploads.pending.length === 0 && unavailableMembers.length === 0 && Boolean(draft.body.trim() || draft.attachments.length || draft.references.length)}
+          canSend={voice.status === 'idle' && !voice.insertionPending && uploads.pending.length === 0 && unavailableMembers.length === 0 && Boolean(draft.body.trim() || draft.attachments.length || draft.references.length)}
           onAttach={() => fileRef.current?.click()}
           onMention={() => editorRef.current?.insertText('@')}
           onEmoji={(emoji) => { setTimeout(() => editorRef.current?.insertText(emoji), 0) }} onPoll={() => setPollOpen((value) => !value)}
@@ -442,6 +446,7 @@ function RoomComposerEditor({
           privateControls={compactControls && room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId
             ? <RoomPermissionPicker roomId={room.id} compact /> : undefined}
           modelControl={modelControl}
+          voiceControl={<RoomVoiceButton voice={voice} disabled={disabled} />}
           references={<RoomContentReferencePicker showLabel room={room} tasks={tasks} references={draft.references}
             onChange={(references) => patch({ references })} disabled={disabled} />} quickTools={quickTools} />
         <p className="rooms-composer-shortcuts">{t('roomsComposerShortcuts', { defaultValue: 'Enter to send · Shift+Enter for a new line' })}</p>
@@ -469,5 +474,5 @@ function RoomComposerEditor({
 
 
 export function RoomComposer(props: Parameters<typeof RoomComposerEditor>[0]): ReactElement {
-  return <RoomComposerEditor key={props.draftId ?? props.room.id} {...props} />
+  return <RoomComposerEditor key={`${props.room.id}:${props.draftId ?? ''}`} {...props} />
 }

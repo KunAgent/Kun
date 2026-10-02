@@ -16,7 +16,7 @@ import {
   providerHasUsableCredential
 } from '../../lib/provider-credential-readiness'
 
-export type VoiceDictationStatus = 'idle' | 'recording' | 'transcribing'
+export type VoiceDictationStatus = 'idle' | 'starting' | 'recording' | 'transcribing'
 
 /** What to do with the transcript once it lands: insert into the input, or send right away. */
 export type VoiceDictationIntent = 'insert' | 'send'
@@ -143,6 +143,8 @@ export function useVoiceDictation({
   start: () => void
   stop: (intent?: VoiceDictationIntent) => void
   toggle: () => void
+  /** Discard this capture/result; an already dispatched IPC request cannot be recalled. */
+  cancel: () => void
   /** Current microphone level (0..1) for waveform rendering. Safe to call every frame. */
   getLevel: () => number
 } {
@@ -161,6 +163,14 @@ export function useVoiceDictation({
   const startedAtRef = useRef(0)
   const onTextRef = useRef(onText)
   const mountedRef = useRef(true)
+  const sessionRef = useRef(0)
+  const statusRef = useRef<VoiceDictationStatus>('idle')
+  const updateStatus = useCallback((next: VoiceDictationStatus): void => {
+    statusRef.current = next
+    if (mountedRef.current) setStatus(next)
+  }, [])
+  const isCurrent = useCallback((session: number) =>
+    mountedRef.current && sessionRef.current === session, [])
 
   useEffect(() => {
     onTextRef.current = onText
@@ -211,110 +221,128 @@ export function useVoiceDictation({
     return Math.min(1, Math.sqrt(sumSquares / data.length) * 3)
   }, [])
 
+  const cancel = useCallback((): void => {
+    sessionRef.current += 1
+    const recorder = recorderRef.current
+    // Detach before stop: stop dispatches an asynchronous event, which must not
+    // send cancelled audio or release a newer recording's stream.
+    if (recorder) {
+      recorder.onstop = null
+      recorder.ondataavailable = null
+      if (recorder.state !== 'inactive') recorder.stop()
+    }
+    releaseStream()
+    updateStatus('idle')
+  }, [releaseStream, updateStatus])
+
   useEffect(() => {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
-      recorderRef.current?.stop()
-      releaseStream()
+      cancel()
       if (errorTimerRef.current != null) {
         window.clearTimeout(errorTimerRef.current)
         errorTimerRef.current = null
       }
     }
-  }, [releaseStream])
+  }, [cancel])
 
-  const transcribeBlob = useCallback(async (blob: Blob, durationMs: number, intent: VoiceDictationIntent): Promise<void> => {
+  const transcribeBlob = useCallback(async (blob: Blob, durationMs: number,
+    intent: VoiceDictationIntent, session: number): Promise<void> => {
     try {
+      if (!isCurrent(session)) return
       const wav = await encodeBlobAsWav(blob)
+      // Encoding is asynchronous too. Do not dispatch audio after cancellation
+      // or after navigating away from the composer that owns this capture.
+      if (!isCurrent(session)) return
       const result = await window.kunGui.transcribeSpeech({
         audioBase64: wav.base64,
         mimeType: 'audio/wav',
         durationMs: Math.min(durationMs, SPEECH_TRANSCRIPTION_MAX_DURATION_MS),
         ...(speechToText ? { speechToText } : {})
       })
-      if (!mountedRef.current) return
-      if (result.ok) {
-        onTextRef.current(result.text, intent)
-      } else {
-        showError(t('composerVoiceFailed', { message: result.message }))
-      }
+      if (!isCurrent(session)) return
+      if (result.ok) onTextRef.current(result.text, intent)
+      else showError(t('composerVoiceFailed', { message: result.message }))
     } catch (cause) {
-      if (mountedRef.current) {
+      if (isCurrent(session)) {
         showError(t('composerVoiceFailed', { message: cause instanceof Error ? cause.message : String(cause) }))
       }
     } finally {
-      if (mountedRef.current) setStatus('idle')
+      if (isCurrent(session)) updateStatus('idle')
     }
-  }, [showError, speechToText, t])
+  }, [isCurrent, showError, speechToText, t, updateStatus])
 
   const start = useCallback((): void => {
-    if (recorderRef.current) return
+    if (!mountedRef.current || statusRef.current !== 'idle') return
+    const session = ++sessionRef.current
+    updateStatus('starting')
     clearError()
     void (async () => {
-      let stream: MediaStream
+      let stream: MediaStream | undefined
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      } catch (cause) {
-        const denied = cause instanceof DOMException &&
-          (cause.name === 'NotAllowedError' || cause.name === 'SecurityError')
-        if (mountedRef.current) {
-          showError(denied
-            ? t('composerVoiceMicDenied')
-            : t('composerVoiceFailed', { message: cause instanceof Error ? cause.message : String(cause) }))
-        }
-        return
-      }
-      if (!mountedRef.current) {
-        stream.getTracks().forEach((track) => track.stop())
-        return
-      }
-      const mimeType = RECORDER_MIME_CANDIDATES.find((candidate) =>
-        MediaRecorder.isTypeSupported(candidate)
-      )
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
-      const chunks: Blob[] = []
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) chunks.push(event.data)
-      }
-      recorder.onstop = () => {
-        const durationMs = Date.now() - startedAtRef.current
-        const intent = stopIntentRef.current
-        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })
-        releaseStream()
-        if (!mountedRef.current) return
-        if (durationMs < MIN_RECORDING_MS || blob.size === 0) {
-          setStatus('idle')
-          showError(t('composerVoiceTooShort'))
+        if (!isCurrent(session)) {
+          stream.getTracks().forEach((track) => track.stop())
           return
         }
-        setStatus('transcribing')
-        void transcribeBlob(blob, durationMs, intent)
+        streamRef.current = stream
+        const mimeType = RECORDER_MIME_CANDIDATES.find((candidate) => MediaRecorder.isTypeSupported(candidate))
+        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+        recorderRef.current = recorder
+        const chunks: Blob[] = []
+        recorder.ondataavailable = (event) => {
+          if (isCurrent(session) && event.data.size > 0) chunks.push(event.data)
+        }
+        recorder.onstop = () => {
+          if (!isCurrent(session)) return
+          const durationMs = Date.now() - startedAtRef.current
+          const intent = stopIntentRef.current
+          const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })
+          releaseStream()
+          if (durationMs < MIN_RECORDING_MS || blob.size === 0) {
+            updateStatus('idle')
+            showError(t('composerVoiceTooShort'))
+            return
+          }
+          updateStatus('transcribing')
+          void transcribeBlob(blob, durationMs, intent, session)
+        }
+        recorder.onerror = () => {
+          if (!isCurrent(session)) return
+          cancel()
+          showError(t('composerVoiceFailed', { message: t('composerVoiceCaptureFailed') }))
+        }
+        try {
+          const audioContext = new AudioContext()
+          audioContextRef.current = audioContext
+          const analyser = audioContext.createAnalyser()
+          analyser.fftSize = 512
+          analyser.smoothingTimeConstant = 0.55
+          audioContext.createMediaStreamSource(stream).connect(analyser)
+          analyserRef.current = analyser
+          levelDataRef.current = new Uint8Array(new ArrayBuffer(analyser.fftSize))
+        } catch {
+          // The waveform is optional; a missing analyser must not block capture.
+        }
+        stopIntentRef.current = 'insert'
+        startedAtRef.current = Date.now()
+        setStartedAtMs(startedAtRef.current)
+        recorder.start()
+        updateStatus('recording')
+        maxDurationTimerRef.current = window.setTimeout(() => {
+          if (isCurrent(session) && recorder.state === 'recording') recorder.stop()
+        }, SPEECH_TRANSCRIPTION_MAX_DURATION_MS)
+      } catch (cause) {
+        if (!isCurrent(session)) return
+        cancel()
+        const denied = cause instanceof DOMException &&
+          (cause.name === 'NotAllowedError' || cause.name === 'SecurityError')
+        showError(denied ? t('composerVoiceMicDenied')
+          : t('composerVoiceFailed', { message: cause instanceof Error ? cause.message : String(cause) }))
       }
-      try {
-        const audioContext = new AudioContext()
-        const analyser = audioContext.createAnalyser()
-        analyser.fftSize = 512
-        analyser.smoothingTimeConstant = 0.55
-        audioContext.createMediaStreamSource(stream).connect(analyser)
-        audioContextRef.current = audioContext
-        analyserRef.current = analyser
-        levelDataRef.current = new Uint8Array(new ArrayBuffer(analyser.fftSize))
-      } catch {
-        // 波形只是视觉反馈,拿不到 analyser 也不影响录音本身。
-      }
-      streamRef.current = stream
-      recorderRef.current = recorder
-      stopIntentRef.current = 'insert'
-      startedAtRef.current = Date.now()
-      setStartedAtMs(startedAtRef.current)
-      recorder.start()
-      setStatus('recording')
-      maxDurationTimerRef.current = window.setTimeout(() => {
-        if (recorderRef.current?.state === 'recording') recorderRef.current.stop()
-      }, SPEECH_TRANSCRIPTION_MAX_DURATION_MS)
     })()
-  }, [clearError, releaseStream, showError, t, transcribeBlob])
+  }, [cancel, clearError, isCurrent, releaseStream, showError, t, transcribeBlob, updateStatus])
 
   const stop = useCallback((intent: VoiceDictationIntent = 'insert'): void => {
     if (recorderRef.current?.state === 'recording') {
@@ -324,14 +352,11 @@ export function useVoiceDictation({
   }, [])
 
   const toggle = useCallback((): void => {
-    if (status === 'recording') {
-      stop()
-    } else if (status === 'idle') {
-      start()
-    }
-  }, [start, status, stop])
+    if (statusRef.current === 'recording') stop()
+    else if (statusRef.current === 'idle') start()
+  }, [start, stop])
 
-  return { status, error, clearError, startedAtMs, start, stop, toggle, getLevel }
+  return { status, error, clearError, startedAtMs, start, stop, toggle, cancel, getLevel }
 }
 
 /**

@@ -8,7 +8,7 @@ import { RoomPopover } from './RoomPopover'
 export function RoomComposerToolbar({ room, tasks, taskId, repositoryId, rootRequestId, topicChoices,
   disabled, uploading, attachmentLimit, canSend, responding, onStop, onConnectProject, references,
   onAttach, onMention, onEmoji, onPoll, onTask, onRepository, onTopic, quickTools = false,
-  intent, onIntent, recipientLabel, privateControls, modelControl }: {
+  intent, onIntent, recipientLabel, privateControls, modelControl, voiceControl }: {
   room: Room; tasks: RoomTask[]; taskId: string; repositoryId: string; rootRequestId?: string; topicTitle?: string
   topicChoices: Array<{ rootRequestId: string; title: string }>; showTopic: boolean; intent: SendRoomMessage['executionIntent']
   busy: boolean; uploading: boolean; disabled: boolean; attachmentLimit: boolean; canSend: boolean
@@ -18,7 +18,7 @@ export function RoomComposerToolbar({ room, tasks, taskId, repositoryId, rootReq
   references?: ReactNode; responding?: boolean; onStop?: () => void; onConnectProject?: () => void
   /** Desktop IM layout: frequent tools sit in the toolbar and leave the "+" menu. */
   quickTools?: boolean
-  recipientLabel?: string; privateControls?: ReactNode; modelControl?: ReactNode
+  recipientLabel?: string; privateControls?: ReactNode; modelControl?: ReactNode; voiceControl?: ReactNode
 }): ReactElement {
   const { t } = useTranslation('common')
   const privateChat = room.conversationKind === 'user_agent'
@@ -63,6 +63,7 @@ export function RoomComposerToolbar({ room, tasks, taskId, repositoryId, rootReq
     </div>
     <div className="direct-send-controls">
       {privateChat ? modelControl : null}
+      {voiceControl}
       {uploading ? <LoaderCircle size={16} className="animate-spin" aria-label={t('roomsUploading')} /> : null}
       {responding && onStop ? <button type="button" className="rooms-composer-send direct-stop" aria-label={t('directStop')} title={t('directStop')} onClick={onStop}><Square size={15} fill="currentColor" /></button> : null}
       {canSend || !responding ? <button type="submit" className="rooms-composer-send" disabled={disabled || !canSend} aria-label={t('roomsSend')} title={t('directSendShortcut')}><ArrowUp size={19} /></button> : null}

@@ -1,0 +1,61 @@
+name: Room voice input smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/room-voice-input-smoke.yml'
+      - 'scripts/smoke-room-voice-input.mjs'
+      - 'src/renderer/src/components/rooms/**'
+      - 'src/renderer/src/components/chat/use-voice-dictation*'
+      - 'src/renderer/src/components/chat/VoiceRecordingStrip.tsx'
+      - 'src/renderer/src/locales/**/composer-panels.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: room-voice-input-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-voice:
+    name: Windows Agent voice input at 150% scale
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - name: Install dependencies and Electron
+        run: |
+          npm ci
+          npm run ensure:electron
+      - name: Extract original composer
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --depth=1 origin "$BASE_SHA"
+          git show "$BASE_SHA:src/renderer/src/components/rooms/RoomComposer.tsx" > "$RUNNER_TEMP/room-composer-before.tsx"
+      - name: Reproduce missing voice control on original composer
+        if: github.event_name == 'pull_request'
+        env:
+          KUN_VOICE_BASELINE_COMPOSER: ${{ runner.temp }}/room-composer-before.tsx
+          KUN_VOICE_EVIDENCE: dist/room-voice-input/before
+        run: node scripts/smoke-room-voice-input.mjs --expect-missing
+      - name: Verify offline native voice workflow
+        env:
+          KUN_VOICE_EVIDENCE: dist/room-voice-input/after
+        run: node scripts/smoke-room-voice-input.mjs
+      - name: Upload native screenshots and measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-room-voice-input
+          path: dist/room-voice-input
+          if-no-files-found: warn
+          retention-days: 7

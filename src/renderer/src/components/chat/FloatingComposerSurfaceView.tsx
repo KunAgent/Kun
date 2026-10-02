@@ -529,21 +529,21 @@ export function FloatingComposerSurfaceView({
                   {!side && showVoiceDictation ? (
                     <button
                       type="button"
-                      disabled={dictation.status === 'transcribing' || !canEditComposer}
+                      disabled={dictation.status !== 'idle' || !canEditComposer}
                       onClick={dictation.toggle}
                       className="ds-composer-optional-action ds-composer-voice-action ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
                       aria-label={
-                        dictation.status === 'transcribing'
-                          ? t('composerVoiceTranscribing')
+                        dictation.status === 'starting' ? t('composerVoicePreparing')
+                          : dictation.status === 'transcribing' ? t('composerVoiceTranscribing')
                           : t('composerVoiceStart')
                       }
                       title={
-                        dictation.status === 'transcribing'
-                          ? t('composerVoiceTranscribing')
+                        dictation.status === 'starting' ? t('composerVoicePreparing')
+                          : dictation.status === 'transcribing' ? t('composerVoiceTranscribing')
                           : t('composerVoiceStart')
                       }
                     >
-                      {dictation.status === 'transcribing' ? (
+                      {dictation.status !== 'idle' ? (
                         <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.2} />
                       ) : (
                         <Mic className="h-4 w-4" strokeWidth={2} />
