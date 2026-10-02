@@ -91,7 +91,7 @@ Object.assign(window, { settingsFixture: {
 } })
 createRoot(document.getElementById('root')!).render(
   <ExtensionSettingsServiceProvider service={service}>
-    <div style={{ width: '100%', height: '100vh', minWidth: 0 }}><SettingsView /></div>
+    <div style={{ width: '100%', height: '100%', minWidth: 0 }}><SettingsView /></div>
     <aside aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0 }}>
       <button data-settings-smoke-external data-settings-action="secondary" type="button" tabIndex={-1}
         className="h-5 rounded-sm border px-1 text-[11px]">Non-settings control</button>

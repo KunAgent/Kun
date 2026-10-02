@@ -339,3 +339,18 @@
   max-inline-size: 100%;
   flex-wrap: wrap;
 }
+
+/* Content-sized tabs must not let intrinsic long labels widen their grid tracks. */
+.ds-settings-surface .ds-settings-tabs--wrap {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+}
+
+.ds-settings-surface .ds-settings-tabs--wrap button {
+  min-inline-size: 0;
+  white-space: normal;
+}
+
+.ds-settings-surface .ds-settings-tabs--wrap button > span {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}

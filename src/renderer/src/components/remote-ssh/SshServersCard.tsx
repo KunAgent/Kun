@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react'
 import { KeyRound, Plus, Server, Trash2, X } from 'lucide-react'
 import type { RemoteSshAuth, RemoteSshHost, RemoteSshHostInput } from '@shared/remote-ssh'
@@ -85,8 +86,8 @@ export function SshServersCard({ t }: { t: (key: string, options?: Record<string
         ))}
       </div>
     </SettingsCard>
-      {editing ? <div ref={dialogRef}
-        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-6"
+      {editing ? createPortal(<div ref={dialogRef}
+        className="ds-settings-surface ds-no-drag fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-6"
         role="dialog" aria-modal="true"
         aria-label={editing === 'new' ? t('sshAddServer', { defaultValue: 'Add server' }) : t('sshEditServer', { defaultValue: 'Edit server' })}
         onKeyDown={(event) => {
@@ -104,7 +105,7 @@ export function SshServersCard({ t }: { t: (key: string, options?: Record<string
         <label className="col-span-2 text-[12px] text-ds-muted">Username<input required className={inputClass} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label>
         <label className="col-span-2 text-[12px] text-ds-muted">{t('sshAuthentication', { defaultValue: 'Authentication' })}<select className={inputClass} value={form.auth.type} onChange={(e) => setAuth(e.target.value === 'agent' ? { type: 'agent' } : { type: 'identityFile', identityFile: '' })}><option value="agent">ssh-agent</option><option value="identityFile">Identity file</option></select></label>
         {form.auth.type === 'identityFile' ? <label className="col-span-2 text-[12px] text-ds-muted">{t('sshIdentityFilePath', { defaultValue: 'Identity file path' })}<div className="flex gap-2"><input required className={inputClass} value={form.auth.identityFile} onChange={(e) => setAuth({ type: 'identityFile', identityFile: e.target.value })} placeholder="~/.ssh/id_ed25519" /><button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => void window.kunGui.pickRemoteSshIdentityFile().then((path) => { if (path) setAuth({ type: 'identityFile', identityFile: path }) })} className="shrink-0 rounded-lg border border-ds-border px-3 text-ds-ink hover:bg-ds-hover">{t('browse', { defaultValue: 'Browse' })}</button></div></label> : null}
-      </div><div className="mt-5 flex justify-end gap-2"><button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => setEditing(null)} className="rounded-full border border-ds-border px-4 py-2 text-[12px]">{t('cancel', { defaultValue: 'Cancel' })}</button><button aria-busy={busy === 'save'} data-settings-action="primary" data-settings-size="default" disabled={busy === 'save'} type="submit" className="rounded-full bg-ds-userbubble px-4 py-2 text-[12px] font-semibold text-ds-userbubbleFg disabled:opacity-50">{t('save', { defaultValue: 'Save' })}</button></div></form></div> : null}
+      </div><div className="mt-5 flex justify-end gap-2"><button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => setEditing(null)} className="rounded-full border border-ds-border px-4 py-2 text-[12px]">{t('cancel', { defaultValue: 'Cancel' })}</button><button aria-busy={busy === 'save'} data-settings-action="primary" data-settings-size="default" disabled={busy === 'save'} type="submit" className="rounded-full bg-ds-userbubble px-4 py-2 text-[12px] font-semibold text-ds-userbubbleFg disabled:opacity-50">{t('save', { defaultValue: 'Save' })}</button></div></form></div>, document.body) : null}
     </>
   )
 }

@@ -101,6 +101,7 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
                 description={tSettings('subagentsMaxParallelDesc')}
               >
                 <BoundedNumberInput
+                  ariaLabel={tSettings('subagentsMaxParallel')}
                   value={subagents.maxParallel ?? 256}
                   min={1}
                   max={256}
@@ -143,7 +144,7 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
             </button>
           </div>
 
-          <div className="sticky top-0 z-20 border-b border-ds-border-muted bg-ds-main/95 px-4 py-3 backdrop-blur-xl">
+          <div data-testid="settings-subagent-catalog-toolbar" className="border-b border-ds-border-muted bg-ds-main/95 px-4 py-3">
             <SurfaceTabs value={selectedSurface} onChange={setSelectedSurface} t={t} />
             <AgentCatalogToolbar
               query={catalogQuery}

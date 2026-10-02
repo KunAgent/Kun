@@ -25,9 +25,11 @@ it('keeps the SSH dialog outside the size-contained card and restores keyboard f
   const add = [...host.querySelectorAll('button')].find(button => button.textContent === 'Add server')!
   add.focus()
   await act(async () => { add.click() })
-  const dialog = host.querySelector<HTMLDivElement>('[role="dialog"]')!
+  const dialog = document.querySelector<HTMLDivElement>('[role="dialog"]')!
   expect(dialog.getAttribute('aria-label')).toBe('Add server')
   expect(dialog.closest('.ds-settings-card')).toBeNull()
+  expect(dialog.parentElement).toBe(document.body)
+  expect(dialog.classList.contains('ds-settings-surface')).toBe(true)
   expect(dialog.querySelector('form')?.className).toContain('overflow-y-auto')
   expect(document.activeElement).toBe(dialog.querySelector('input'))
   const controls = [...dialog.querySelectorAll<HTMLButtonElement>('button')]
@@ -43,6 +45,6 @@ it('keeps the SSH dialog outside the size-contained card and restores keyboard f
   await act(async () => {
     dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
   })
-  expect(host.querySelector('[role="dialog"]')).toBeNull()
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
   expect(document.activeElement).toBe(add)
 })

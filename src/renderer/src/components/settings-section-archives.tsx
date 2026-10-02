@@ -160,6 +160,7 @@ export function ArchivedThreadsSettingsSection({ ctx }: { ctx: Record<string, an
                 <Search className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.75} />
                 <input
                   type="search"
+                  aria-label={t('archivesSearchPlaceholder')}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={t('archivesSearchPlaceholder')}

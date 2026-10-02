@@ -227,6 +227,19 @@ async function capture(category, panel, config) {
   report.screenshots.push({ file, category, panel, ...config, native, pixels })
   report.layouts.push({ key, category, panel, ...config, native, ...actual, problems })
   for (const problem of problems) report.problems.push({ key, problem })
+  // Preserve the actual obscured state for the measured Subagent Profiles
+  // blocker. The normal image above deliberately shows the panel's top.
+  const obscured = category === 'subagents' && panel.includes('tab-profiles')
+    ? actual.controls.find(control => !control.disabled && control.inside && !control.hittable) : null
+  if (obscured) {
+    await page.locator(`[data-settings-smoke-control="${obscured.id}"]`).evaluate(element =>
+      element.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }))
+    const file = `${phase}-${key}-obstruction.png`
+    const pixels = await captureNativeImage(file)
+    report.screenshots.push({ file, category, panel, ...config, native, pixels,
+      diagnostic: 'Obscured Subagent Profiles control after ordinary centered scrolling',
+      control: obscured.semanticKey, hitTarget: obscured.hitTarget })
+  }
   // Keep partial evidence when a later native crash or timeout prevents finish.
   await writeFile(join(evidence, 'progress.json'), JSON.stringify({ layouts: report.layouts.length,
     last: key, problems: report.problems.length, pageErrors: report.pageErrors }, null, 2))

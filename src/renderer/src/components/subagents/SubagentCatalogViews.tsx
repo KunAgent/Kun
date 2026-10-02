@@ -254,6 +254,7 @@ export function AgentDetailsPanel({
           <button
             type="button"
             role="switch"
+            aria-label={surfaceLabel(t, selectedSurface)}
             aria-checked={assigned}
             disabled={locked}
             onClick={onToggleSurface}
@@ -393,11 +394,13 @@ export function EmptyCatalogState({
 }
 
 export function BoundedNumberInput({
+  ariaLabel,
   value,
   min,
   max,
   onCommit
 }: {
+  ariaLabel?: string
   value: number
   min: number
   max: number
@@ -418,6 +421,7 @@ export function BoundedNumberInput({
   return (
     <input
       type="number"
+      aria-label={ariaLabel}
       min={min}
       max={max}
       value={draft}

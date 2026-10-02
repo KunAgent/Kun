@@ -12,6 +12,7 @@ const budget = 24 * 1024 * 1024
 await rm(review, { recursive: true, force: true })
 await rm(reports, { recursive: true, force: true })
 const groups = new Map()
+const regressionKeys = new Set()
 const manifest = { budgetBytes: budget, copiedBytes: 0, included: [], omitted: [], reports: [] }
 for (const phase of ['before', 'after']) {
   const files = await readdir(join(source, phase)).catch(error => {
@@ -32,10 +33,16 @@ for (const phase of ['before', 'after']) {
       const compressed = gzipSync(await readFile(path))
       await writeFile(join(reports, phase, `${file}.gz`), compressed)
       manifest.reports.push({ phase, file: `${file}.gz`, bytes: compressed.length })
+      if (phase === 'after' && file === 'report.json') {
+        const report = JSON.parse(await readFile(path, 'utf8'))
+        for (const finding of report.baselineComparison?.regressions ?? []) regressionKeys.add(finding.key)
+      }
     }
   }
 }
-const priority = key => key === 'failure.png' ? 0
+const priority = key => key === 'failure.png' || key.includes('-obstruction.png') ? -2
+  : regressionKeys.has(key.replace(/\.png$/, '')) ? -1
+    : /subagents-.*tab-profiles|ssh-add-dialog|destructive-confirm/.test(key) ? 0
   : /light-wide-125-.*-landing/.test(key) ? 1
     : /dark-wide-125-.*-landing/.test(key) ? 2
       : /light-small-200-.*-landing/.test(key) ? 3

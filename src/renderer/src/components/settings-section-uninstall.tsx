@@ -1,5 +1,5 @@
 import { settingsButtonClass } from './settings-button'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, LoaderCircle, ShieldAlert, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -23,6 +23,13 @@ export function UninstallSettingsSection(): React.JSX.Element {
   const [error, setError] = useState('')
   const [uninstalling, setUninstalling] = useState(false)
   const api = window.kunGui.uninstall
+  const confirmRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!confirmOpen || typeof document === 'undefined') return
+    const previous = document.activeElement as HTMLElement | null
+    confirmRef.current?.querySelector<HTMLButtonElement>('[data-uninstall-cancel]')?.focus()
+    return () => { if (previous?.isConnected) previous.focus() }
+  }, [confirmOpen])
 
   const refresh = useCallback(async () => {
     try {
@@ -185,8 +192,24 @@ export function UninstallSettingsSection(): React.JSX.Element {
       ) : null}
 
       {confirmOpen ? (
-        <div className="ds-no-drag fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
-          <div className="w-[min(480px,94vw)] rounded-2xl border border-ds-border bg-ds-card shadow-[0_26px_80px_rgba(20,47,95,0.28)]">
+        <div ref={confirmRef} role="dialog" aria-modal="true" aria-label={t('uninstallConfirmTitle')}
+          style={{ margin: 0 }}
+          className="ds-no-drag fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && !busy) {
+              event.preventDefault()
+              event.stopPropagation()
+              cancelConfirm()
+              return
+            }
+            if (event.key !== 'Tab') return
+            const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled)')]
+            if (document.activeElement === (event.shiftKey ? controls[0] : controls.at(-1))) {
+              event.preventDefault()
+              ;(event.shiftKey ? controls.at(-1) : controls[0])?.focus()
+            }
+          }}>
+          <div className="max-h-[calc(100dvh-2rem)] w-[min(480px,94vw)] overflow-y-auto rounded-2xl border border-ds-border bg-ds-card shadow-[0_26px_80px_rgba(20,47,95,0.28)]">
             <div className="flex items-center gap-3 border-b border-ds-border-muted px-5 py-4">
               <div className="rounded-xl bg-red-500/10 p-2 text-red-600 dark:text-red-400">
                 <AlertTriangle className="h-5 w-5" />
@@ -221,7 +244,7 @@ export function UninstallSettingsSection(): React.JSX.Element {
                 />
               </div>
               <div className="flex justify-end gap-2">
-                <button className={settingsButtonClass()} type="button"  disabled={busy} onClick={cancelConfirm}>
+                <button data-uninstall-cancel className={settingsButtonClass()} type="button" disabled={busy} onClick={cancelConfirm}>
                   {t('uninstallConfirmCancel')}
                 </button>
                 <button aria-busy={Boolean(busy)}

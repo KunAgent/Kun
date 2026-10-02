@@ -28,6 +28,43 @@ export async function measureSettings(page, cdp) {
       const { x, y, width, height, right, bottom } = element.getBoundingClientRect()
       return { x, y, width, height, right, bottom }
     }
+    const clipFor = element => {
+      const clip = { x: 0, y: 0, right: innerWidth, bottom: innerHeight }
+      let viewportFixedRoot = null
+      for (let candidate = element; candidate; candidate = candidate.parentElement) {
+        if (getComputedStyle(candidate).position !== 'fixed') continue
+        let containingBlock = null
+        for (let ancestor = candidate.parentElement; ancestor; ancestor = ancestor.parentElement) {
+          const style = getComputedStyle(ancestor)
+          const transformed = [style.transform, style.perspective, style.filter, style.backdropFilter]
+            .some(value => value && value !== 'none')
+          if (transformed || /layout|paint|strict|content/.test(style.contain)
+            || /^(inline-size|size)$/.test(style.containerType)
+            || /transform|perspective|filter/.test(style.willChange)) {
+            containingBlock = ancestor
+            break
+          }
+        }
+        if (!containingBlock) viewportFixedRoot = candidate
+        break
+      }
+      if (viewportFixedRoot === element) return clip
+      for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+        const style = getComputedStyle(parent), bounds = rect(parent)
+        if (/(auto|scroll|hidden|clip)/.test(style.overflowX)) {
+          clip.x = Math.max(clip.x, bounds.x)
+          clip.right = Math.min(clip.right, bounds.right)
+        }
+        if (/(auto|scroll|hidden|clip)/.test(style.overflowY)) {
+          clip.y = Math.max(clip.y, bounds.y)
+          clip.bottom = Math.min(clip.bottom, bounds.bottom)
+        }
+        // A viewport-fixed subtree escapes unrelated ancestor scroll clips.
+        // Fixed descendants of a transformed/contained card do not escape it.
+        if (parent === viewportFixedRoot) break
+      }
+      return clip
+    }
     const dialog = [...document.querySelectorAll('[role="dialog"]')]
       .filter(element => !element.closest('[hidden]') && element.getClientRects().length > 0
         && getComputedStyle(element).visibility !== 'hidden').at(-1)
@@ -35,6 +72,11 @@ export async function measureSettings(page, cdp) {
       .filter(element => element.getAttribute('data-settings-smoke-rendered') === 'true'
         && (!dialog || dialog.contains(element)))
     const original = elements.map(rect)
+    const originalVisible = elements.map((element, index) => {
+      const clip = clipFor(element), box = original[index]
+      return { x: Math.max(box.x, clip.x), y: Math.max(box.y, clip.y),
+        right: Math.min(box.right, clip.right), bottom: Math.min(box.bottom, clip.bottom) }
+    })
     const appUiScale = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ds-ui-scale')) || 1
     const occurrences = new Map()
     const semanticKeys = elements.map(element => {
@@ -61,18 +103,7 @@ export async function measureSettings(page, cdp) {
       element.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' })
       const box = rect(element)
       const point = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
-      let clipping = { x: 0, y: 0, right: innerWidth, bottom: innerHeight }
-      for (let parent = element.parentElement; parent; parent = parent.parentElement) {
-        const style = getComputedStyle(parent), bounds = rect(parent)
-        if (/(auto|scroll|hidden|clip)/.test(style.overflowX)) {
-          clipping.x = Math.max(clipping.x, bounds.x)
-          clipping.right = Math.min(clipping.right, bounds.right)
-        }
-        if (/(auto|scroll|hidden|clip)/.test(style.overflowY)) {
-          clipping.y = Math.max(clipping.y, bounds.y)
-          clipping.bottom = Math.min(clipping.bottom, bounds.bottom)
-        }
-      }
+      const clipping = clipFor(element)
       const inside = box.x >= clipping.x - 1 && box.right <= clipping.right + 1
         && box.y >= clipping.y - 1 && box.bottom <= clipping.bottom + 1
       if (!disabled) element.focus({ preventScroll: true })
@@ -91,15 +122,25 @@ export async function measureSettings(page, cdp) {
       const size = element.getAttribute('data-settings-size')
         || classes.match(/ds-settings-button--(default|compact|inline-icon|icon)(?:\s|$)/)?.[1]
       const declaredTargetHeight = size ? ({ default: 36, compact: 32, icon: 36, 'inline-icon': 24 })[size] : null
+      const hittable = !!point && (element === point || element.contains(point))
+      const coveringLayers = []
+      if (!hittable && point) for (let ancestor = point; ancestor; ancestor = ancestor.parentElement) {
+        const style = getComputedStyle(ancestor)
+        if (style.position !== 'sticky' && style.position !== 'fixed') continue
+        coveringLayers.push({ tag: ancestor.tagName, className: ancestor.className,
+          position: style.position, zIndex: style.zIndex, bounds: rect(ancestor) })
+      }
       return { id, semanticKey: semanticKeys[index], tag: element.tagName.toLowerCase(), type: element.getAttribute('type'),
         ...accessibility[id], text: element.textContent?.trim().slice(0, 120),
         className: element.getAttribute('class'), disabled,
         settingsSize: element.getAttribute('data-settings-size'),
         busy: element.getAttribute('aria-busy') === 'true',
         destructive: /danger|red-/.test(element.getAttribute('class') ?? ''),
-        original: original[index], reached: box, clipping, inside,
+        original: original[index], originalVisible: originalVisible[index], reached: box, clipping, inside,
         appUiScale, normalizedHeight: box.height / appUiScale, declaredTargetHeight,
-        hittable: !!point && (element === point || element.contains(point)),
+        hittable, hitTarget: !hittable && point ? { tag: point.tagName,
+          className: point.getAttribute('class'), text: point.textContent?.trim().slice(0, 120),
+          bounds: rect(point), coveringLayers } : null,
         tabIndex: element.tabIndex, focused, focusVisible: element.matches(':focus-visible'),
         focusIndicator: !!(ownIndicator || parentIndicator), focusStyle,
         typography: { fontSize: style.fontSize, fontWeight: style.fontWeight,
@@ -109,7 +150,7 @@ export async function measureSettings(page, cdp) {
     const overlaps = []
     for (let i = 0; i < elements.length; i++) for (let j = i + 1; j < elements.length; j++) {
       if (elements[i].contains(elements[j]) || elements[j].contains(elements[i])) continue
-      const a = original[i], b = original[j]
+      const a = originalVisible[i], b = originalVisible[j]
       if (Math.min(a.right, b.right) - Math.max(a.x, b.x) > 1
         && Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y) > 1) overlaps.push([controls[i].semanticKey, controls[j].semanticKey].sort())
     }
@@ -122,6 +163,8 @@ export async function measureSettings(page, cdp) {
     }
     return { dpr: devicePixelRatio, appUiScale,
       viewport: { width: innerWidth, height: innerHeight },
+      surfaceBounds: rect(document.querySelector('.ds-settings-surface')),
+      fixtureRootBounds: rect(document.getElementById('root')),
       horizontalOverflow, scrollerOverflow, controls, overlaps }
   }, { selector: CONTROL_SELECTOR, accessibility })
 }

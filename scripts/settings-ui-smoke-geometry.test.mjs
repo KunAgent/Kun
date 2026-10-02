@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
-import { geometryProblems, newGeometryProblems, worsenedTargetSizes } from './settings-ui-smoke-geometry.mjs'
+import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes } from './settings-ui-smoke-geometry.mjs'
 import { annotateSettingsControls, annotateSettingsTabs } from './settings-ui-smoke-dom.mjs'
 import { JSDOM } from 'jsdom'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
@@ -80,6 +80,56 @@ test('closed disclosure controls are excluded despite positive layout boxes', ()
   assert.equal(elements[1].getAttribute('data-settings-smoke-rendered'), 'true')
 })
 
+test('overlap uses visible scrollport intersections and still detects painted overlaps', async t => {
+  const window = new JSDOM('<div id="root"><div class="ds-settings-surface"><nav><button id="nav">Navigation</button></nav><div class="ds-settings-scroller" style="overflow-x:hidden;overflow-y:hidden"><button id="clipped">Scrolled control</button></div></div></div>').window
+  const { document } = window
+  let navigationY = 0, scrolledY = 0
+  const bounds = (x, y, width, height) => ({ x, y, width, height, right: x + width, bottom: y + height })
+  window.HTMLElement.prototype.getBoundingClientRect = function () {
+    if (this.id === 'nav') return bounds(0, navigationY, 40, 40)
+    if (this.id === 'clipped') return bounds(0, scrolledY, 40, 40)
+    if (this.id === 'fixed-host') return bounds(0, 0, 20, 20)
+    if (this.id === 'fixed-control') return bounds(50, 50, 32, 32)
+    if (this.classList.contains('ds-settings-scroller')) return bounds(0, 40, 100, 60)
+    return bounds(0, 0, 100, 100)
+  }
+  window.HTMLElement.prototype.getClientRects = function () { return [this.getBoundingClientRect()] }
+  window.HTMLElement.prototype.scrollIntoView = function () { if (this.id === 'clipped') scrolledY = 50 }
+  document.elementFromPoint = (x, y) => [...document.querySelectorAll('button')].find(element => {
+    const box = element.getBoundingClientRect()
+    return x >= box.x && x <= box.right && y >= box.y && y <= box.bottom
+  }) ?? null
+  const globals = { document, getComputedStyle: window.getComputedStyle.bind(window),
+    innerWidth: 100, innerHeight: 100, devicePixelRatio: 1 }
+  for (const [key, value] of Object.entries(globals)) {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, key)
+    Object.defineProperty(globalThis, key, { configurable: true, value })
+    t.after(() => descriptor ? Object.defineProperty(globalThis, key, descriptor) : delete globalThis[key])
+  }
+  t.after(() => window.close())
+  const page = { keyboard: { press: async () => undefined },
+    locator: selector => ({ evaluateAll: async callback => callback([...document.querySelectorAll(selector)]) }),
+    evaluate: async (callback, args) => callback(args) }
+  const cdp = { send: async method => method === 'DOM.getDocument' ? { root: {} } : { nodes: [] } }
+  const clipped = await measureSettings(page, cdp)
+  assert.deepEqual(clipped.overlaps, [])
+  assert.equal(clipped.controls.find(control => control.id === '1').originalVisible.y, 40)
+  navigationY = 50
+  scrolledY = 50
+  const painted = await measureSettings(page, cdp)
+  assert.equal(painted.overlaps.length, 1)
+  const host = document.createElement('div')
+  host.id = 'fixed-host'
+  host.style.cssText = 'overflow-x:hidden;overflow-y:hidden'
+  host.innerHTML = '<div style="position:fixed"><button id="fixed-control">Floating</button></div>'
+  document.querySelector('.ds-settings-surface').append(host)
+  const escaped = await measureSettings(page, cdp)
+  assert.equal(escaped.controls.find(control => control.text === 'Floating').inside, true)
+  host.style.transform = 'translateX(0)'
+  const contained = await measureSettings(page, cdp)
+  assert.equal(contained.controls.find(control => control.text === 'Floating').inside, false)
+})
+
 test('workflow keeps both native OSes, source baseline and failure evidence', () => {
   const workflow = readFileSync(new URL('../.github/workflows/settings-ui-smoke.yml', import.meta.url), 'utf8')
   assert.match(workflow, /os: \[windows-latest, macos-latest\]/)
@@ -91,6 +141,9 @@ test('workflow keeps both native OSes, source baseline and failure evidence', ()
   assert.match(workflow, /if: always\(\)[\s\S]*actions\/upload-artifact/)
   assert.match(workflow, /settings-ui-review-/)
   assert.match(workflow, /settings-ui-reports-/)
+  const fixture = readFileSync(new URL('../src/renderer/src/components/SettingsUiSmokeFixture.tsx', import.meta.url), 'utf8')
+  assert.match(fixture, /height: '100%'/)
+  assert.doesNotMatch(fixture, /height: '100vh'/)
 })
 
 test('review artifact stays bounded, retains pairs and preserves complete gzip reports', async t => {
@@ -102,6 +155,7 @@ test('review artifact stays bounded, retains pairs and preserves complete gzip r
     await mkdir(join(source, phase), { recursive: true })
     for (let i = 0; i < 13; i++) await writeFile(join(source, phase,
       `${phase}-light-wide-125-category-${i}-landing.png`), bytes)
+    await writeFile(join(source, phase, `${phase}-light-wide-150-subagents-3-subagent-settings-tab-profiles.png`), bytes)
     await writeFile(join(source, phase, 'report.json'), JSON.stringify({ phase, original: true }))
   }
   const result = spawnSync(process.execPath,
@@ -112,6 +166,7 @@ test('review artifact stays bounded, retains pairs and preserves complete gzip r
   assert.ok(manifest.copiedBytes <= 24 * 1024 * 1024)
   assert.ok(manifest.omitted.length > 0)
   assert.ok(manifest.included.every(group => group.matchedBeforeAfter && group.files.length === 2))
+  assert.ok(manifest.included.some(group => group.key.includes('subagent-settings-tab-profiles')))
   const report = JSON.parse(gunzipSync(await readFile(join(root,
     'dist/settings-ui-reports/after/report.json.gz'))).toString())
   assert.deepEqual(report, { phase: 'after', original: true })

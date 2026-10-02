@@ -183,6 +183,30 @@ Covered suites:
 do not replace the final repository typecheck/build/test gates. Record those
 final results in the PR, including any baseline failure or unrun stage.
 
+## Findings from the first complete native matrix
+
+Native run `36973179078`, head `7473a959`, rendered 1,140 baseline and
+1,140 final layouts on macOS, and 1,152 baseline and 1,152 final layouts on
+Windows. Both platforms recorded no renderer exceptions or external requests.
+Native PNG dimensions matched the actual OS-constrained content bounds.
+
+The failed comparison was investigated rather than waived. The follow-up fixes:
+
+- Bound Laboratory's wrapping tab tracks so long labels cannot overlap
+- Keep Settings-only Subagent catalog filters in normal flow so they do not
+  obscure controls in short/high-scale viewports
+- Portal the SSH editor to the document body, preserving Settings-only styles
+  and avoiding sibling-spacing offsets or scroll-container clipping
+- Name the Uninstall confirmation as a modal, keep its cancel action reachable,
+  trap keyboard focus, and preserve both acknowledgement and typed-word gates
+- Match the fixture's height to the production root chain; compare painted
+  overlap regions rather than offscreen scroll-content bounds, while retaining
+  strict reached/hit checks and recording the actual obstructing element
+
+These fixes require a new exact-head native pass. Raw repeated finding counts
+are not a visual quality score. Full reports and bounded paired review PNGs are
+retained as separate workflow artifacts, including unresolved findings.
+
 ## Native/rendered verification checklist
 
 The cloud native launch stopped before a window because no X display was
