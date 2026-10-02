@@ -102,7 +102,7 @@ export function ProfileDialog({
               {PRESET_COLORS.map((c) => {
                 const selected = d.color === c
                 return (
-                  <button
+                  <button aria-label={`${t('agentsView.fColor', 'Color')}: ${c}`}
                     key={c}
                     type="button"
                     onClick={() => set('color', c)}
@@ -223,10 +223,10 @@ export function ProfileDialog({
           )}
         </div>
         <div className="flex justify-end gap-2 border-t border-ds-border px-4 py-3">
-          <button type="button" onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-ds-muted hover:text-ds-heading">
+          <button data-settings-action="secondary" data-settings-size="default" type="button" onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm text-ds-muted hover:text-ds-heading">
             {t('agentsView.cancel', 'Cancel')}
           </button>
-          <button
+          <button data-settings-action="primary" data-settings-size="default"
             type="button"
             onClick={() => onSave({ ...d, name: d.name.trim() || d.id })}
             className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-white hover:bg-accent/90"

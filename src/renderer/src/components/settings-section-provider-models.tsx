@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import {
   type ModelProviderProfileV1
 } from '@shared/app-settings'
@@ -264,10 +265,9 @@ export function ProviderModelsManager({
           {showListTools && visibleEntries.length > 0 ? (
             <div className="flex flex-wrap items-center justify-between gap-1.5">
               <div className="flex flex-wrap items-center gap-1.5">
-                <button
+                <button className={settingsButtonClass()}
                   type="button"
                   onClick={allVisibleSelected ? clearVisible : selectVisible}
-                  className="inline-flex h-7 items-center gap-1.5 rounded-full border border-ds-border bg-ds-card px-2.5 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
                 >
                   {allVisibleSelected
                     ? t('providerModelBatchClearVisible')
@@ -283,7 +283,7 @@ export function ProviderModelsManager({
                 <button
                   type="button"
                   onClick={deleteSelected}
-                  className="inline-flex h-7 items-center gap-1.5 rounded-full border border-red-300/70 bg-red-50/80 px-3 text-[12px] font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-800/60 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-900/40"
+                  className={settingsButtonClass({ variant: 'danger' })}
                 >
                   <Trash2 className="h-3 w-3" strokeWidth={2} />
                   {t('providerModelBatchDelete', { count: selected.size })}
@@ -366,7 +366,7 @@ export function ProviderModelsManager({
                           editorStateForExisting(provider, kind, modelId),
                           event.currentTarget
                         )}
-                        className="rounded-full p-1.5 text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+                        className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
                       >
                         <Pencil className="h-3.5 w-3.5" strokeWidth={1.9} />
                       </button>
@@ -374,7 +374,7 @@ export function ProviderModelsManager({
                         type="button"
                         aria-label={t('providerModelDeleteAction', { model: modelId })}
                         onClick={() => deleteModel(kind, modelId)}
-                        className="rounded-full p-1.5 text-ds-faint transition hover:bg-ds-hover hover:text-red-600 dark:hover:text-red-300"
+                        className={settingsButtonClass({ variant: 'danger-ghost', size: 'icon' })}
                       >
                         <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
                       </button>
@@ -395,7 +395,7 @@ export function ProviderModelsManager({
                   disabled={safePage === 0}
                   aria-label={t('providerModelPagePrev')}
                   onClick={() => setPage(Math.max(0, safePage - 1))}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-ds-border bg-ds-card text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-40"
+                  className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
                 >
                   <ChevronLeft className="h-3.5 w-3.5" strokeWidth={1.9} />
                 </button>
@@ -407,7 +407,7 @@ export function ProviderModelsManager({
                   disabled={safePage >= pageCount - 1}
                   aria-label={t('providerModelPageNext')}
                   onClick={() => setPage(Math.min(pageCount - 1, safePage + 1))}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-ds-border bg-ds-card text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-40"
+                  className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
                 >
                   <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.9} />
                 </button>
@@ -419,7 +419,7 @@ export function ProviderModelsManager({
       <button
         type="button"
         onClick={(event) => openEditor(editorStateForNew(provider), event.currentTarget)}
-        className="inline-flex h-9 w-fit items-center gap-2 rounded-full border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink"
+        className={settingsButtonClass({ className: 'w-fit' })}
       >
         <Plus className="h-3.5 w-3.5" strokeWidth={1.9} />
         {t('providerModelAdd')}

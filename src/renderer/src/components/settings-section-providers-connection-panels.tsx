@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type {
   ModelEndpointFormat,
   ModelProviderProfileV1
@@ -90,7 +91,7 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
         ? (zh ? `等待同步，将自动重试：${credentialRetry.lastError}` : `Waiting to sync; retrying automatically: ${credentialRetry.lastError}`)
         : (zh ? `保存失败：${credentialRetry.lastError}` : `Save failed: ${credentialRetry.lastError}`)}
       {credentialRetry.nextRetryAt === 0 ? (
-        <button type="button" className="ml-2 underline" onClick={() => {
+        <button type="button"  className={settingsButtonClass({ variant: 'link', className: 'ml-2' })} onClick={() => {
           void flushSharedProviderCredential(activeProvider.id).catch(() => undefined)
         }}>
           {zh ? '重试' : 'Retry'}
@@ -159,7 +160,7 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                         {activeCursorApiKeyUrl ? (
                           <button
                             type="button"
-                            className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-lg border border-accent/20 bg-accent/5 px-3 py-1.5 font-medium text-accent transition hover:bg-accent/10"
+                            className={settingsButtonClass({ className: 'w-fit shrink-0' })}
                             onClick={() => {
                               if (typeof window.kunGui?.openExternal !== 'function') return
                               void window.kunGui.openExternal(activeCursorApiKeyUrl).catch(() => undefined)
@@ -362,7 +363,7 @@ export function ProviderConnectionAdvancedPanels({ view }: { view: Record<string
                     {proxyState === 'inactive' || proxyState === 'invalid' ? (
                       <button
                         type="button"
-                        className="w-fit text-[12px] font-medium text-accent underline-offset-2 hover:underline"
+                         className={settingsButtonClass({ variant: 'link', className: 'w-fit' })}
                         onClick={() => setGlobalNetworkOpen(true)}
                       >
                         {t('modelProviderOpenGlobalProxy')}

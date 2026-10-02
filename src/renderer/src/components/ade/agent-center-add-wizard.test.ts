@@ -28,12 +28,12 @@ const codex: AdeHarnessRow = {
   }
 }
 
-function render() {
+function render(settingsSurface = false) {
   const onClose = vi.fn(), onSelectAgent = vi.fn(), updateKun = vi.fn()
   let root!: ReactTestRenderer
   act(() => {
     root = create(createElement(AgentCenterAddWizard, {
-      rows: [codex], settings, updateKun, onClose, onSelectAgent
+      rows: [codex], settings, updateKun, onClose, onSelectAgent, settingsSurface
     }))
   })
   return { root, onClose, onSelectAgent, updateKun }
@@ -45,6 +45,22 @@ beforeEach(() => {
 })
 
 describe('AgentCenterAddWizard', () => {
+  it('scopes polished portal actions only to its Settings host', () => {
+    const standalone = render()
+    expect(standalone.root.root.findByProps({ 'data-agent-add-wizard': true }).props.className)
+      .not.toContain('ds-settings-surface')
+    act(() => standalone.root.unmount())
+
+    const settingsWizard = render(true)
+    expect(settingsWizard.root.root.findByProps({ 'data-agent-add-wizard': true }).props.className)
+      .toContain('ds-settings-surface')
+    const close = settingsWizard.root.root.findByProps({ 'data-agent-add-close': true })
+    expect(close.props['data-settings-action']).toBe('ghost')
+    expect(close.props['data-settings-size']).toBe('icon')
+    expect(close.props.className).toBe('rounded-md p-1 text-ds-muted hover:bg-ds-hover')
+    act(() => settingsWizard.root.unmount())
+  })
+
   it('checks native login without requiring a gateway or trial turn', async () => {
     provider.testHarness.mockResolvedValue({
       harnessId: 'codex', transport: 'codex-app-server', level: 'handshake',

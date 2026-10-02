@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import {
   LOCAL_WHISPER_DOWNLOAD_SOURCES,
   LOCAL_WHISPER_MODELS,
@@ -176,11 +177,10 @@ export function SpeechToTextModelPanel({ view }: { view: Record<string, any> }):
                   </div>
                   {localWhisperNotice ? <InlineNoticeView notice={localWhisperNotice} /> : null}
                   <div className="flex flex-wrap gap-2">
-                    <button
+                    <button aria-busy={Boolean(localWhisperBusy === 'download')} className={settingsButtonClass()}
                       type="button"
                       disabled={localWhisperBusy !== 'idle' || localWhisperStatus?.state === 'ready' || localWhisperStatus?.state === 'downloading'}
                       onClick={() => void downloadLocalWhisper()}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-full border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {localWhisperBusy === 'download'
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
@@ -188,11 +188,10 @@ export function SpeechToTextModelPanel({ view }: { view: Record<string, any> }):
                       {t('speechToTextLocalModelDownload', { model: selectedLocalWhisperModel.shortName })}
                     </button>
                     {localWhisperStatus?.state === 'downloading' || localWhisperBusy === 'cancel' ? (
-                      <button
+                      <button aria-busy={Boolean(localWhisperBusy === 'cancel')} className={settingsButtonClass()}
                         type="button"
                         disabled={localWhisperBusy === 'cancel' || localWhisperBusy === 'delete'}
                         onClick={() => void cancelLocalWhisper()}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-full border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {localWhisperBusy === 'cancel'
                           ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
@@ -200,11 +199,11 @@ export function SpeechToTextModelPanel({ view }: { view: Record<string, any> }):
                         {t('speechToTextLocalModelCancel')}
                       </button>
                     ) : null}
-                    <button
+                    <button aria-busy={Boolean(localWhisperBusy === 'delete')}
                       type="button"
                       disabled={localWhisperBusy !== 'idle' || localWhisperStatus?.state !== 'ready'}
                       onClick={() => void deleteLocalWhisper()}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-full border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
+                      className={settingsButtonClass({ variant: 'danger' })}
                     >
                       {localWhisperBusy === 'delete'
                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />

@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import {
   MODEL_ENDPOINT_FORMATS,
   type ModelEndpointFormat,
@@ -88,7 +89,7 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                 type="button"
                 aria-label={t('providerModelCancel')}
                 onClick={closeEditor}
-                className="shrink-0 rounded-full p-1.5 text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+                  className={settingsButtonClass({ variant: 'ghost', size: 'icon', className: 'shrink-0' })}
               >
                 <X className="h-4 w-4" strokeWidth={1.9} />
               </button>
@@ -390,10 +391,9 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
             </div>
 
             <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-ds-border px-5 py-3">
-              <button
+              <button className={settingsButtonClass()}
                 type="button"
                 onClick={closeEditor}
-                className="inline-flex h-9 items-center rounded-full border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink"
               >
                 {t('providerModelCancel')}
               </button>
@@ -401,7 +401,7 @@ export function ProviderModelEditorDialog({ view }: { view: ProviderModelEditorD
                 type="button"
                 disabled={errors.length > 0}
                 onClick={saveEditor}
-                className="inline-flex h-9 items-center gap-2 rounded-full bg-accent px-4 text-[12.5px] font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className={settingsButtonClass({ variant: 'primary' })}
               >
                 {t('providerModelSave')}
               </button>

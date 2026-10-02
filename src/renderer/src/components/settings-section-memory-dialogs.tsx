@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import {
   MEMORY_IMPORT_PROFILE_PROMPT
 } from '@shared/memory-import-export'
@@ -82,7 +83,7 @@ export function MemoryImportDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+            className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
             aria-label={t('memoryClose')}
             title={t('memoryClose')}
           >
@@ -100,10 +101,9 @@ export function MemoryImportDialog({
                   </span>
                   <div className="text-[14px] font-semibold text-ds-ink">{t('memoryImportStepPrompt')}</div>
                 </div>
-                <button
+                <button className={settingsButtonClass()}
                   type="button"
                   onClick={() => void copyPrompt()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-ds-main px-3 py-2 text-[12px] font-semibold text-ds-ink transition hover:bg-ds-hover"
                 >
                   <Clipboard className="h-3.5 w-3.5" strokeWidth={1.8} />
                   {copied ? t('memoryImportCopied') : t('memoryImportCopy')}
@@ -182,10 +182,9 @@ export function MemoryImportDialog({
         </div>
 
         <div className="flex justify-end gap-2 border-t border-ds-border-muted px-5 py-4">
-          <button
+          <button className={settingsButtonClass()}
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-ds-border-muted px-4 py-2 text-[13px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
           >
             {t('memoryCancel')}
           </button>
@@ -193,7 +192,7 @@ export function MemoryImportDialog({
             type="button"
             onClick={onImport}
             disabled={busy || invalid || entries.length === 0 || (!portable && scope !== 'user' && !targetPath.trim())}
-            className="rounded-lg bg-ds-ink px-4 py-2 text-[13px] font-semibold text-ds-main transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45"
+            className={settingsButtonClass({ variant: 'primary' })}
           >
             {busy ? t('memoryImporting') : t('memoryImportAdd')}
           </button>
@@ -269,7 +268,7 @@ export function MemoryRecordDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+            className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
             aria-label={t('memoryClose')}
             title={t('memoryClose')}
           >
@@ -420,10 +419,9 @@ export function MemoryRecordDialog({
         </div>
 
         <div className="flex justify-end gap-2 border-t border-ds-border-muted px-4 py-3">
-          <button
+          <button className={settingsButtonClass()}
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
           >
             {editing ? t('memoryCancel') : t('memoryClose')}
           </button>
@@ -436,7 +434,7 @@ export function MemoryRecordDialog({
                 (draft.directive && draft.content.trim().length > 1000) ||
                 (dialog.mode === 'create' && draft.scope !== 'user' && !draft.targetPath.trim())
               }
-              className="rounded-lg bg-ds-ink px-3 py-1.5 text-[12px] font-semibold text-ds-main transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45"
+              className={settingsButtonClass({ variant: 'primary' })}
             >
               {t('memorySave')}
             </button>
@@ -445,19 +443,17 @@ export function MemoryRecordDialog({
               {!memory.disabledAt && !memory.deletedAt && !memory.supersededAt ? (
                 <>
                   {feedbackEnabled ? (
-                    <button
+                    <button className={settingsButtonClass()}
                       type="button"
                       onClick={() => onConfirm(memory)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 px-3 py-1.5 text-[12px] font-semibold text-emerald-700 transition hover:bg-emerald-500/10 dark:text-emerald-300"
                     >
                       <Check className="h-3.5 w-3.5" strokeWidth={1.8} />
                       {t('memoryConfirm')}
                     </button>
                   ) : null}
-                  <button
+                  <button className={settingsButtonClass()}
                     type="button"
                     onClick={() => onBeginCorrection(memory)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border-muted px-3 py-1.5 text-[12px] font-semibold text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
                   >
                     <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} />
                     {t('memoryCorrect')}
@@ -467,7 +463,7 @@ export function MemoryRecordDialog({
               <button
                 type="button"
                 onClick={() => onBeginEdit(memory)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-ds-ink px-3 py-1.5 text-[12px] font-semibold text-ds-main transition hover:opacity-85"
+                className={settingsButtonClass({ variant: 'primary' })}
               >
                 <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} />
                 {t('memoryEdit')}

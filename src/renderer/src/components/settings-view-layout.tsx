@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type { ComponentProps, ReactElement } from 'react'
 import { Suspense, lazy, useEffect } from 'react'
 import { ExtensionDeclarativeSettingsPane } from '../extensions/ExtensionDeclarativeSettingsPane'
@@ -126,7 +127,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
           }`}>
           {category !== 'providers' ? <div className="ds-settings-page-header flex items-start justify-between gap-5">
             <div className="min-w-0">
-              <h1 className="truncate text-[24px] font-medium leading-tight tracking-[-0.02em] text-ds-ink">
+              <h1 className="text-[24px] font-medium leading-tight tracking-[-0.02em] text-ds-ink">
                 {categoryTitle}
               </h1>
               <p className="mt-1.5 max-w-2xl text-[12px] leading-[1.4] text-ds-muted">
@@ -134,6 +135,8 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
               </p>
             </div>
             {category !== 'integrations' && category !== 'extensions' && category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall' ? <span
+              role="status"
+              aria-live="polite"
               title={saveStatus === 'error' && saveIssueSummary ? saveIssueSummary : undefined}
               className={`shrink-0 rounded-full px-3 py-1 text-[12px] font-medium ${
                 explicitSavePanel
@@ -169,7 +172,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
               <div>{saveIssueSummary}</div>
               {saveIssue?.kind === 'provider-model-limit' ? (
                 <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <button type="button" className="font-semibold underline underline-offset-2" onClick={viewProblemModel}>
+                  <button type="button" className={settingsButtonClass({ variant: 'link' })} onClick={viewProblemModel}>
                     {t('providerModelSaveViewProblem')}
                   </button>
                   <details className="text-[11px] opacity-80">
@@ -236,7 +239,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
           </div>
           <button
             type="button"
-            className="shrink-0 rounded-xl bg-red-600 px-3 py-2 text-[12px] font-semibold text-white shadow-sm transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+             className={settingsButtonClass({ variant: 'primary', className: 'shrink-0' })}
             disabled={saveIssue?.kind === 'provider-model-limit' ? false : Boolean(portError)}
             onClick={saveIssue?.kind === 'provider-model-limit'
               ? viewProblemModel

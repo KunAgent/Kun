@@ -31,6 +31,7 @@ export function AgentsHarnessesSettingsPanel({ view }: { view: Record<string, an
       className={activePanel === 'harnesses' ? '' : 'hidden'}
     >
       <AgentCenter
+        settingsSurface
         kun={kun}
         updateKun={updateKun}
         onSetupCommand={(harnessId, command, title) => {

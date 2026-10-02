@@ -205,9 +205,9 @@ export function SettingsSidebar({
 }): ReactElement {
   return (
     <aside className="ds-settings-sidebar ds-drag flex h-full min-h-0 w-[260px] shrink-0 flex-col bg-ds-sidebar">
-      <div className="shrink-0 px-5 pb-4 pt-5">
+      <div className="ds-settings-sidebar-header shrink-0 px-5 pb-4 pt-5">
         <div aria-hidden className="ds-titlebar-safe-block" />
-        <div className="flex items-center gap-2">
+        <div className="ds-settings-sidebar-heading flex items-center gap-2">
           <button
             type="button"
             aria-label={t('back')}
@@ -222,6 +222,25 @@ export function SettingsSidebar({
             {t('title')}
           </h1>
         </div>
+      </div>
+
+      <div className="ds-settings-compact-navigation ds-no-drag">
+        <select
+          aria-label={t('title')}
+          value={category}
+          onChange={(event) => setCategory(event.target.value as SettingsCategory)}
+        >
+          {SETTINGS_NAVIGATION_GROUPS.map((group) => (
+            <optgroup key={group.id} label={t(group.labelKey)}>
+              {group.items.filter((item) =>
+                (!item.extensionOnly || extensionSettingsAvailable) &&
+                (!item.windowsOnly || platform === 'win32')
+              ).map((item) => (
+                <option key={item.category} value={item.category}>{t(item.labelKey)}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
       </div>
 
       <nav
@@ -290,7 +309,7 @@ export function SettingsSidebar({
         })}
       </nav>
 
-      <div className="ds-no-drag shrink-0 border-t border-ds-border px-5 py-3.5">
+      <div className="ds-settings-sidebar-footer ds-no-drag shrink-0 border-t border-ds-border px-5 py-3.5">
         <div className="flex items-center gap-2">
           <div className="flex h-6 w-6 shrink-0 items-center justify-center text-ds-faint">
             <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.8} />

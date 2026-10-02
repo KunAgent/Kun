@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type { ModelProviderSettingsV1, ModelRoutePoolV1, ModelRouteStrategy } from '@shared/app-settings'
 import {
   DEFAULT_MODEL_ROUTE_FAILURE_POLICY,
@@ -391,10 +392,10 @@ export function ModelRoutesSettings({
           <span className={credential.configured ? 'text-[11px] font-medium text-emerald-700' : 'text-[11px] font-medium text-amber-700'}>
             API key: {credential.configured ? 'configured' : 'not configured'}
           </span>
-          <button type="button" disabled={credentialPending} onClick={() => void gatewayCredential.update('ensure')} className="rounded-full border border-ds-border px-2.5 py-1 text-[11px]">Create</button>
-          <button type="button" disabled={credentialPending || !credential.configured} onClick={() => void gatewayCredential.update('copy')} className="rounded-full border border-ds-border px-2.5 py-1 text-[11px]">Copy</button>
-          <button type="button" disabled={credentialPending} onClick={() => void gatewayCredential.update('rotate')} className="rounded-full border border-ds-border px-2.5 py-1 text-[11px]">Rotate</button>
-          <button type="button" disabled={credentialPending || !credential.configured} onClick={() => void gatewayCredential.update('revoke')} className="rounded-full border border-red-200 px-2.5 py-1 text-[11px] text-red-700">Revoke</button>
+          <button className={settingsButtonClass()} type="button" disabled={credentialPending} onClick={() => void gatewayCredential.update('ensure')} >Create</button>
+          <button className={settingsButtonClass()} type="button" disabled={credentialPending || !credential.configured} onClick={() => void gatewayCredential.update('copy')} >Copy</button>
+          <button className={settingsButtonClass()} type="button" disabled={credentialPending} onClick={() => void gatewayCredential.update('rotate')} >Rotate</button>
+          <button type="button" disabled={credentialPending || !credential.configured} onClick={() => void gatewayCredential.update('revoke')} className={settingsButtonClass({ variant: 'danger' })}>Revoke</button>
           <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
             saveStatus === 'error'
               ? 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-200'
@@ -412,7 +413,7 @@ export function ModelRoutesSettings({
                 : 'bg-ds-card text-ds-muted'
           }`}>{runtimeSyncLabel}</span>
           {saveStatus === 'error' && onRetrySave ? (
-            <button type="button" onClick={onRetrySave} className="rounded-full border border-red-200 px-2.5 py-1 text-[11px] font-medium text-red-700">
+            <button className={settingsButtonClass()} type="button" onClick={onRetrySave} >
               {t('modelRoutes.retrySave')}
             </button>
           ) : null}
@@ -423,13 +424,12 @@ export function ModelRoutesSettings({
             <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] text-amber-700" title={gatewaySectionIssue.message}>
               <span className="truncate">{gatewayIssueLabel}</span>
               {gatewayFixable ? (
-                <button
+                <button className={settingsButtonClass()}
                   type="button"
                   disabled={credentialPending}
                   onClick={() => void (gatewaySectionIssue?.code === 'gateway_disabled'
                     ? gatewayCredential.setEnabled(true)
                     : gatewayCredential.update('ensure'))}
-                  className="rounded-full border border-amber-300 px-2 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-500/10"
                 >{t('modelRoutes.gatewayFix')}</button>
               ) : null}
             </span>
@@ -448,7 +448,7 @@ export function ModelRoutesSettings({
             <p className="mt-1 text-[11px] text-ds-faint">{t('modelRoutes.apiCompatibilityDesc')}</p>
             <div className="mt-2 flex min-w-0 items-center gap-1.5 rounded-lg border border-ds-border bg-ds-main px-2.5 py-2">
               <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ds-ink" title={gatewayBaseUrl}>{gatewayBaseUrl}</span>
-              <button type="button" onClick={() => void copyGatewayText(gatewayBaseUrl, 'base-url')} className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-ds-muted hover:bg-ds-hover hover:text-ds-ink" aria-label={t('modelRoutes.copyLocalApiAddress')}>
+              <button type="button" onClick={() => void copyGatewayText(gatewayBaseUrl, 'base-url')} className={settingsButtonClass({ className: 'shrink-0' })} aria-label={t('modelRoutes.copyLocalApiAddress')}>
                 {copiedValue === 'base-url' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Clipboard className="h-3.5 w-3.5" />}
                 {copiedValue === 'base-url' ? t('modelRoutes.copied') : t('modelRoutes.copy')}
               </button>
@@ -460,11 +460,11 @@ export function ModelRoutesSettings({
             </div>
           </div>
           <div className="flex items-end gap-2 lg:flex-col lg:items-stretch lg:justify-center">
-            <button type="button" disabled={!sampleModelId} title={!sampleModelId ? t('modelRoutes.copyCurlUnavailable') : undefined} onClick={() => void copyGatewayText(curlExample, 'curl')} className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 text-[11.5px] font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45">
+            <button type="button" disabled={!sampleModelId} title={!sampleModelId ? t('modelRoutes.copyCurlUnavailable') : undefined} onClick={() => void copyGatewayText(curlExample, 'curl')} className={settingsButtonClass({ variant: 'primary' })}>
               {copiedValue === 'curl' ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
               {copiedValue === 'curl' ? t('modelRoutes.copied') : t('modelRoutes.copyCurl')}
             </button>
-            <button type="button" onClick={() => setApiDocsOpen((open) => !open)} className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-ds-border px-3 text-[11.5px] font-medium text-ds-muted hover:bg-ds-hover hover:text-ds-ink" aria-expanded={apiDocsOpen}>
+            <button className={settingsButtonClass()} type="button" onClick={() => setApiDocsOpen((open) => !open)}  aria-expanded={apiDocsOpen}>
               {t('modelRoutes.apiDocs')} <ChevronDown className={`h-3.5 w-3.5 transition-transform ${apiDocsOpen ? 'rotate-180' : ''}`} />
             </button>
           </div>
@@ -486,7 +486,7 @@ export function ModelRoutesSettings({
             <p className="mt-1 text-[12px] leading-5 text-ds-faint">{t('modelRoutes.choosePool')}</p>
           </div>
         </div>
-        <button type="button" onClick={addPool} className="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-accent text-[12.5px] font-semibold text-white">
+        <button type="button" onClick={addPool} className={settingsButtonClass({ variant: 'primary' })}>
           <Plus className="h-4 w-4" /> {t('modelRoutes.addModel')}
         </button>
         <div className="grid gap-2">
@@ -535,7 +535,7 @@ export function ModelRoutesSettings({
           <ModelRouteTargets settings={settings} pool={selected} metrics={status?.metrics} onUpdate={updatePool} t={t} />
 
               <div className="flex justify-end">
-                <button type="button" onClick={removePool} className="inline-flex items-center gap-2 rounded-full border border-red-200 px-3 py-2 text-[12px] text-red-600">
+                <button className={settingsButtonClass({ variant: 'danger' })} type="button" onClick={removePool} >
                   <Trash2 className="h-3.5 w-3.5" />
                   {t('modelRoutes.deleteModel')}
                 </button>
@@ -591,11 +591,10 @@ export function ModelRoutesSettings({
                 <h3 className="text-[13px] font-semibold text-ds-ink">{t('modelRoutes.routeValidation')}</h3>
                 <p className="mt-1 text-[11px] text-ds-faint">{t('modelRoutes.routeValidationDesc')}</p>
               </div>
-              <button
+              <button aria-busy={Boolean(startPending || activeTest)} className={settingsButtonClass()}
                 type="button"
                 disabled={startPending || activeTest || !runtimeReady}
                 onClick={() => void runTest()}
-                className="inline-flex h-9 items-center gap-2 rounded-full border border-accent px-4 text-[12px] font-medium text-accent disabled:opacity-40"
               >
                 {startPending || activeTest ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                 {testButtonLabel}

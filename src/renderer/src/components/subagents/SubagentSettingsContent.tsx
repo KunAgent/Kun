@@ -133,7 +133,7 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
               </div>
               <p className="mt-1 text-[13px] leading-5 text-ds-muted">{tSettings('subagentsDelegatableDesc')}</p>
             </div>
-            <button
+            <button data-settings-action="primary" data-settings-size="default"
               type="button"
               onClick={() => setDialog({ profile: newProfile(selectedSurface), isNew: true })}
               className="inline-flex items-center gap-2 rounded-xl bg-accent px-3 py-2 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-accent/90"
@@ -650,7 +650,7 @@ export function SubagentSettingsContent({ context }: { context: Context }): Reac
             total: catalogAgents.length
           })}
         </span>
-        <button
+        <button data-settings-action="primary" data-settings-size="default"
           type="button"
           onClick={() => setDialog({ profile: newProfile(panelSurface), isNew: true })}
           className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[9px] bg-accent px-3 py-2 text-[11.5px] font-semibold text-white transition hover:bg-accent/90"

@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type { ReactElement } from 'react'
 import type { WriteInlineCompletionDebugEntry } from '@shared/write-inline-completion'
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
@@ -59,15 +60,15 @@ export function WriteDebugLogModal({
             <p className="mt-1 text-[12.5px] text-ds-muted">{t('writeDebugLogModalDesc')}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <button type="button" onClick={onRefresh} disabled={loading} className="inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[12.5px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-50">
+            <button aria-busy={Boolean(loading)} className={settingsButtonClass()} type="button" onClick={onRefresh} disabled={loading} >
               {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} /> : <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.75} />}
               {t('writeInlineEditDebugRefresh')}
             </button>
-            <button type="button" onClick={onClear} disabled={loading || completionEntries.length === 0} className="inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[12.5px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="button" onClick={onClear} disabled={loading || completionEntries.length === 0} className={settingsButtonClass({ variant: 'danger' })}>
               <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
               {t('writeInlineEditDebugClear')}
             </button>
-            <button type="button" onClick={onClose} className="rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[12.5px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover">
+            <button className={settingsButtonClass()} type="button" onClick={onClose} >
               {t('close')}
             </button>
           </div>

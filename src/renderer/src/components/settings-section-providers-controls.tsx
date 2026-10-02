@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type {
   ModelProviderProfileV1
 } from '@shared/app-settings'
@@ -157,14 +158,13 @@ export function CapabilitySection({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button
+          <button className={settingsButtonClass()}
             type="button"
             disabled={!enabled}
             aria-expanded={enabled && expanded}
             aria-controls={`provider-capability-${capabilityId}`}
             aria-label={`${expanded ? collapseLabel : configureLabel}: ${title}`}
             onClick={() => onExpandedChange(!expanded)}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-ds-border bg-ds-card px-3 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-40"
           >
             <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={1.9} />
             {expanded ? collapseLabel : configureLabel}
@@ -271,7 +271,7 @@ export function ModelChipsInput({
             type="button"
             aria-label={removeLabel(model)}
             onClick={() => removeAt(index)}
-            className="rounded-full p-0.5 text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+            className={settingsButtonClass({ variant: 'ghost', size: 'inline-icon' })}
           >
             <X className="h-3 w-3" strokeWidth={2} />
           </button>

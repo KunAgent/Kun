@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react'
 import { KeyRound, Plus, Server, Trash2, X } from 'lucide-react'
 import type { RemoteSshAuth, RemoteSshHost, RemoteSshHostInput } from '@shared/remote-ssh'
 import { SettingsCard } from '../settings-controls'
@@ -13,6 +13,13 @@ export function SshServersCard({ t }: { t: (key: string, options?: Record<string
   const [form, setForm] = useState<RemoteSshHostInput>(EMPTY)
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!editing) return
+    const previous = document.activeElement as HTMLElement | null
+    dialogRef.current?.querySelector<HTMLInputElement>('input')?.focus()
+    return () => { if (previous?.isConnected) previous.focus() }
+  }, [editing])
   const refresh = (): void => { void window.kunGui.listRemoteSshHosts().then(setHosts) }
   useEffect(refresh, [])
 
@@ -59,30 +66,45 @@ export function SshServersCard({ t }: { t: (key: string, options?: Record<string
   const inputClass = 'w-full rounded-lg border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink outline-none focus:border-accent/50'
 
   return (
+    <>
     <SettingsCard title={t('sshServersTitle', { defaultValue: 'SSH servers' })}>
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-4">
           <p className="max-w-xl text-[12px] leading-5 text-ds-muted">{t('sshServersDescription', { defaultValue: 'Open remote shell tabs. Kun agents, files, and workspaces remain local.' })}</p>
-          <button type="button" onClick={() => open()} className="inline-flex items-center gap-2 rounded-full bg-ds-userbubble px-3 py-1.5 text-[12px] font-semibold text-ds-userbubbleFg"><Plus className="h-4 w-4" />{t('sshAddServer', { defaultValue: 'Add server' })}</button>
+          <button data-settings-action="primary" data-settings-size="default" type="button" onClick={() => open()} className="inline-flex items-center gap-2 rounded-full bg-ds-userbubble px-3 py-1.5 text-[12px] font-semibold text-ds-userbubbleFg"><Plus className="h-4 w-4" />{t('sshAddServer', { defaultValue: 'Add server' })}</button>
         </div>
         {message ? <p role="status" className="rounded-lg bg-ds-subtle px-3 py-2 text-[12px] text-ds-ink">{message}</p> : null}
         {hosts.length === 0 ? <p className="rounded-xl border border-dashed border-ds-border p-5 text-center text-[12px] text-ds-muted">{t('sshNoServers', { defaultValue: 'No SSH servers configured.' })}</p> : hosts.map((host) => (
           <div key={host.id} className="flex items-center gap-3 rounded-xl border border-ds-border px-4 py-3">
             <Server className="h-5 w-5 shrink-0 text-ds-muted" />
             <button type="button" onClick={() => open(host)} className="min-w-0 flex-1 text-left"><span className="block truncate text-[13px] font-semibold text-ds-ink">{host.label}</span><span className="block truncate font-mono text-[11px] text-ds-muted">{host.username}@{host.hostname}:{host.port} · {host.auth.type === 'agent' ? 'ssh-agent' : 'identity file'}</span></button>
-            <button type="button" disabled={busy === host.id} onClick={() => void connect(host)} className="rounded-full border border-ds-border px-3 py-1.5 text-[11px] font-medium text-ds-ink hover:bg-ds-hover disabled:opacity-50">{t('sshTestConnection', { defaultValue: 'Test' })}</button>
-            <button type="button" onClick={() => void window.kunGui.resetRemoteSshHostKey(host.id).then(() => setMessage(t('sshTrustReset', { defaultValue: 'Host trust reset.' })))} className="rounded-lg p-2 text-ds-muted hover:bg-ds-hover" title={t('sshResetTrust', { defaultValue: 'Reset host trust' })}><KeyRound className="h-4 w-4" /></button>
-            <button type="button" onClick={() => void remove(host)} className="rounded-lg p-2 text-ds-muted hover:bg-ds-dangerSoft hover:text-ds-danger" title={t('sshDeleteServer', { defaultValue: 'Delete server' })}><Trash2 className="h-4 w-4" /></button>
+            <button aria-busy={busy === host.id} data-settings-action="secondary" data-settings-size="compact" type="button" disabled={busy === host.id} onClick={() => void connect(host)} className="rounded-full border border-ds-border px-3 py-1.5 text-[11px] font-medium text-ds-ink hover:bg-ds-hover disabled:opacity-50">{t('sshTestConnection', { defaultValue: 'Test' })}</button>
+            <button data-settings-action="ghost" data-settings-size="icon" aria-label={t('sshResetTrust', { defaultValue: 'Reset host trust' })} type="button" onClick={() => void window.kunGui.resetRemoteSshHostKey(host.id).then(() => setMessage(t('sshTrustReset', { defaultValue: 'Host trust reset.' })))} className="rounded-lg p-2 text-ds-muted hover:bg-ds-hover" title={t('sshResetTrust', { defaultValue: 'Reset host trust' })}><KeyRound className="h-4 w-4" /></button>
+            <button data-settings-action="danger-ghost" data-settings-size="icon" aria-label={t('sshDeleteServer', { defaultValue: 'Delete server' })} type="button" onClick={() => void remove(host)} className="rounded-lg p-2 text-ds-muted hover:bg-ds-dangerSoft hover:text-ds-danger" title={t('sshDeleteServer', { defaultValue: 'Delete server' })}><Trash2 className="h-4 w-4" /></button>
           </div>
         ))}
       </div>
-      {editing ? <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-6" role="dialog" aria-modal="true"><form onSubmit={(event) => void submit(event)} className="w-full max-w-lg rounded-2xl border border-ds-border bg-ds-card p-5 shadow-2xl"><div className="mb-4 flex items-center justify-between"><h3 className="text-[16px] font-semibold text-ds-ink">{editing === 'new' ? t('sshAddServer', { defaultValue: 'Add server' }) : t('sshEditServer', { defaultValue: 'Edit server' })}</h3><button type="button" onClick={() => setEditing(null)} className="rounded-lg p-2 hover:bg-ds-hover"><X className="h-4 w-4" /></button></div><div className="grid grid-cols-2 gap-3">
+    </SettingsCard>
+      {editing ? <div ref={dialogRef}
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-6"
+        role="dialog" aria-modal="true"
+        aria-label={editing === 'new' ? t('sshAddServer', { defaultValue: 'Add server' }) : t('sshEditServer', { defaultValue: 'Edit server' })}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') { event.preventDefault(); setEditing(null); return }
+          if (event.key !== 'Tab') return
+          const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled)')]
+          const target = event.shiftKey ? controls.at(-1) : controls[0]
+          if (document.activeElement === (event.shiftKey ? controls[0] : controls.at(-1))) {
+            event.preventDefault()
+            target?.focus()
+          }
+        }}><form onSubmit={(event) => void submit(event)} className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-ds-border bg-ds-card p-5 shadow-2xl"><div className="mb-4 flex items-center justify-between"><h3 className="text-[16px] font-semibold text-ds-ink">{editing === 'new' ? t('sshAddServer', { defaultValue: 'Add server' }) : t('sshEditServer', { defaultValue: 'Edit server' })}</h3><button aria-label={t('close', { defaultValue: 'Close' })} data-settings-action="ghost" data-settings-size="icon" type="button" onClick={() => setEditing(null)} className="rounded-lg p-2 hover:bg-ds-hover"><X className="h-4 w-4" /></button></div><div className="grid grid-cols-2 gap-3">
         <label className="col-span-2 text-[12px] text-ds-muted">{t('sshName', { defaultValue: 'Name' })}<input required maxLength={120} className={inputClass} value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} /></label>
         <label className="text-[12px] text-ds-muted">Host<input required className={inputClass} value={form.hostname} onChange={(e) => setForm({ ...form, hostname: e.target.value })} /></label><label className="text-[12px] text-ds-muted">Port<input required type="number" min={1} max={65535} className={inputClass} value={form.port ?? 22} onChange={(e) => setForm({ ...form, port: Number(e.target.value) })} /></label>
         <label className="col-span-2 text-[12px] text-ds-muted">Username<input required className={inputClass} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label>
         <label className="col-span-2 text-[12px] text-ds-muted">{t('sshAuthentication', { defaultValue: 'Authentication' })}<select className={inputClass} value={form.auth.type} onChange={(e) => setAuth(e.target.value === 'agent' ? { type: 'agent' } : { type: 'identityFile', identityFile: '' })}><option value="agent">ssh-agent</option><option value="identityFile">Identity file</option></select></label>
-        {form.auth.type === 'identityFile' ? <label className="col-span-2 text-[12px] text-ds-muted">{t('sshIdentityFilePath', { defaultValue: 'Identity file path' })}<div className="flex gap-2"><input required className={inputClass} value={form.auth.identityFile} onChange={(e) => setAuth({ type: 'identityFile', identityFile: e.target.value })} placeholder="~/.ssh/id_ed25519" /><button type="button" onClick={() => void window.kunGui.pickRemoteSshIdentityFile().then((path) => { if (path) setAuth({ type: 'identityFile', identityFile: path }) })} className="shrink-0 rounded-lg border border-ds-border px-3 text-ds-ink hover:bg-ds-hover">{t('browse', { defaultValue: 'Browse' })}</button></div></label> : null}
-      </div><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setEditing(null)} className="rounded-full border border-ds-border px-4 py-2 text-[12px]">{t('cancel', { defaultValue: 'Cancel' })}</button><button disabled={busy === 'save'} type="submit" className="rounded-full bg-ds-userbubble px-4 py-2 text-[12px] font-semibold text-ds-userbubbleFg disabled:opacity-50">{t('save', { defaultValue: 'Save' })}</button></div></form></div> : null}
-    </SettingsCard>
+        {form.auth.type === 'identityFile' ? <label className="col-span-2 text-[12px] text-ds-muted">{t('sshIdentityFilePath', { defaultValue: 'Identity file path' })}<div className="flex gap-2"><input required className={inputClass} value={form.auth.identityFile} onChange={(e) => setAuth({ type: 'identityFile', identityFile: e.target.value })} placeholder="~/.ssh/id_ed25519" /><button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => void window.kunGui.pickRemoteSshIdentityFile().then((path) => { if (path) setAuth({ type: 'identityFile', identityFile: path }) })} className="shrink-0 rounded-lg border border-ds-border px-3 text-ds-ink hover:bg-ds-hover">{t('browse', { defaultValue: 'Browse' })}</button></div></label> : null}
+      </div><div className="mt-5 flex justify-end gap-2"><button data-settings-action="secondary" data-settings-size="default" type="button" onClick={() => setEditing(null)} className="rounded-full border border-ds-border px-4 py-2 text-[12px]">{t('cancel', { defaultValue: 'Cancel' })}</button><button aria-busy={busy === 'save'} data-settings-action="primary" data-settings-size="default" disabled={busy === 'save'} type="submit" className="rounded-full bg-ds-userbubble px-4 py-2 text-[12px] font-semibold text-ds-userbubbleFg disabled:opacity-50">{t('save', { defaultValue: 'Save' })}</button></div></form></div> : null}
+    </>
   )
 }

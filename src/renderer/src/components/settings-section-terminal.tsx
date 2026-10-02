@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { type ReactElement } from 'react'
 import { defaultTerminalColors, type TerminalColorSettingsV1 } from '@shared/app-settings'
 import { SettingsCard, SettingRow } from './settings-controls'
@@ -148,10 +149,9 @@ export function TerminalSettingsSection({ ctx }: { ctx: Record<string, any> }): 
             title={t('terminalColorReset')}
             description={t('terminalColorResetDesc')}
             control={
-              <button
+              <button className={settingsButtonClass()}
                 type="button"
                 onClick={() => updateColors(defaultTerminalColors())}
-                className="rounded-full border border-ds-border bg-ds-card px-3 py-1.5 text-[12px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink"
               >
                 {t('terminalColorResetButton')}
               </button>

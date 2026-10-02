@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type {
   ModelProviderPresetMode,
   ModelProviderProfileV1
@@ -266,7 +267,7 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
           </span>
         ) : null}
         {!isDraft ? (
-          <button
+          <button aria-busy={Boolean(itemFetchBusy)}
             type="button"
             data-testid={`provider-list-fetch-${item.id}`}
             aria-label={t('modelProviderFetchModels')}
@@ -276,7 +277,7 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
               event.stopPropagation()
               void runProbe(item, 'fetch')
             }}
-            className="ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ds-faint transition hover:bg-ds-card hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-45"
+              className={settingsButtonClass({ variant: 'ghost', size: 'icon', className: 'ml-1 shrink-0' })}
           >
             {itemFetchBusy
               ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
@@ -385,13 +386,12 @@ export function buildProvidersViewModel(scope: Record<string, any>): Record<stri
         </button>
         {familyExists && typeof refreshPresetProvider === 'function' ? (
           <div className="flex justify-end border-t border-ds-border-muted px-3 py-1.5">
-            <button
+            <button className={settingsButtonClass()}
               type="button"
               onClick={() => {
                 closeAddProviderDialog()
                 void refreshPresetProvider(entry.preset, entry.mode)
               }}
-              className="rounded-full px-2 py-0.5 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-accent"
             >
               {t('modelProviderPresetUpdateTag')}
             </button>

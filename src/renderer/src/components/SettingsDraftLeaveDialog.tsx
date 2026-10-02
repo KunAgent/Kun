@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type { ReactElement } from 'react'
 
 export function SettingsDraftLeaveDialog({
@@ -22,16 +23,16 @@ export function SettingsDraftLeaveDialog({
           {t('adeSettings.collaborationLeaveSaveFailed')}
         </p> : null}
         <div className="mt-5 flex flex-wrap justify-end gap-2">
-          <button type="button" autoFocus disabled={busy} onClick={() => onChoice('keep')}
-            className="rounded-full border border-ds-border px-3 py-2 text-[12px] text-ds-ink">
+          <button className={settingsButtonClass()} type="button" autoFocus disabled={busy} onClick={() => onChoice('keep')}
+            >
             {t('adeSettings.collaborationKeepEditing')}
           </button>
-          <button type="button" disabled={busy} onClick={() => onChoice('discard')}
-            className="rounded-full border border-ds-border px-3 py-2 text-[12px] text-ds-muted">
+          <button className={settingsButtonClass()} type="button" disabled={busy} onClick={() => onChoice('discard')}
+            >
             {t('adeSettings.collaborationDiscard')}
           </button>
           <button type="button" disabled={busy} onClick={() => onChoice('save')}
-            className="rounded-full bg-accent px-3 py-2 text-[12px] text-white disabled:opacity-50">
+            className={settingsButtonClass({ variant: 'primary' })}>
             {t('adeSettings.collaborationSave')}
           </button>
         </div>

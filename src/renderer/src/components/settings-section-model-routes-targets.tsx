@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type { ModelProviderSettingsV1, ModelRoutePoolV1, ModelRouteStrategy } from '@shared/app-settings'
 import { resolveModelRouteTargetReference } from '@shared/app-settings-provider-core'
 import type { TFunction } from 'i18next'
@@ -40,7 +41,7 @@ export function ModelRouteTargets({
           <h3 className="text-[13px] font-semibold text-ds-ink">{t('modelRoutes.routeTargets')}</h3>
           <p className="mt-1 text-[11px] text-ds-faint">{t('modelRoutes.routeTargetsHint')}</p>
         </div>
-        <button
+        <button className={settingsButtonClass()}
           type="button"
           disabled={providers.length === 0}
           title={providers.length === 0 ? t('modelRoutes.addTargetUnavailable') : undefined}
@@ -55,7 +56,6 @@ export function ModelRouteTargets({
               weight: 1
             }] })
           }}
-          className="inline-flex items-center gap-1 rounded-full border border-ds-border px-3 py-1.5 text-[12px] text-ds-muted disabled:cursor-not-allowed disabled:opacity-45"
         >
           <Plus className="h-3.5 w-3.5" /> {t('modelRoutes.addTarget')}
         </button>
@@ -73,7 +73,7 @@ export function ModelRouteTargets({
               onDrop={(event) => reorderTarget(event, index, pool, onUpdate)}
               className={`rounded-xl border bg-ds-card p-3 ${resolution.status === 'valid' ? 'border-ds-border' : 'border-amber-300/80'}`}
             >
-              <div className="grid items-start gap-3 md:grid-cols-[72px_minmax(0,1fr)_112px]">
+              <div className="grid items-start gap-3 md:grid-cols-[112px_minmax(0,1fr)_112px]">
                 <div className="flex items-center gap-1 pt-1">
                   <button
                     type="button"
@@ -81,12 +81,12 @@ export function ModelRouteTargets({
                     title={t('modelRoutes.reorderTarget')}
                     aria-label={t('modelRoutes.reorderTarget')}
                     onDragStart={(event) => event.dataTransfer.setData('text/route-target-index', String(index))}
-                    className="cursor-grab rounded p-1 text-ds-faint hover:bg-ds-hover"
+                    className={settingsButtonClass({ variant: 'ghost', size: 'icon' })}
                   ><GripVertical className="h-4 w-4" /></button>
                   <span className="grid h-6 w-6 place-items-center rounded-full bg-ds-main text-[11px] text-ds-muted">{index + 1}</span>
                   <div className="grid gap-0.5">
-                    <button type="button" disabled={index === 0} onClick={() => moveTarget(index, index - 1)} aria-label={t('modelRoutes.moveTargetUp')} className="text-ds-faint disabled:opacity-30"><ChevronUp className="h-3.5 w-3.5" /></button>
-                    <button type="button" disabled={index === pool.targets.length - 1} onClick={() => moveTarget(index, index + 1)} aria-label={t('modelRoutes.moveTargetDown')} className="text-ds-faint disabled:opacity-30"><ChevronDown className="h-3.5 w-3.5" /></button>
+                    <button type="button" disabled={index === 0} onClick={() => moveTarget(index, index - 1)} aria-label={t('modelRoutes.moveTargetUp')} className={settingsButtonClass({ variant: 'ghost', size: 'icon' })} ><ChevronUp className="h-3.5 w-3.5" /></button>
+                    <button type="button" disabled={index === pool.targets.length - 1} onClick={() => moveTarget(index, index + 1)} aria-label={t('modelRoutes.moveTargetDown')} className={settingsButtonClass({ variant: 'ghost', size: 'icon' })} ><ChevronDown className="h-3.5 w-3.5" /></button>
                   </div>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -106,7 +106,7 @@ export function ModelRouteTargets({
                 </div>
                 <div className="flex items-start justify-between gap-2 pt-1 text-[11px] text-ds-muted">
                   <div><span className="block text-ds-faint">{t('modelRoutes.targetHealth')}</span>{metric?.ewmaLatencyMs ? `${Math.round(metric.ewmaLatencyMs)} ms` : t('modelRoutes.notProbed')}<br /><span className="text-ds-faint">{metric ? t('modelRoutes.successCount', { successes: metric.successes, total: metric.successes + metric.failures }) : ''}</span></div>
-                  <button type="button" onClick={() => onUpdate({ targets: pool.targets.filter((item) => item.id !== target.id) })} aria-label={t('modelRoutes.deleteTarget')} className="rounded-full p-1.5 text-ds-faint hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                  <button type="button" onClick={() => onUpdate({ targets: pool.targets.filter((item) => item.id !== target.id) })} aria-label={t('modelRoutes.deleteTarget')} className={settingsButtonClass({ variant: 'danger-ghost', size: 'icon' })} ><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
               {pool.strategy !== 'weighted-round-robin' ? <p className="mt-2 text-[10.5px] text-ds-faint">{t('modelRoutes.weightInactive')}</p> : null}

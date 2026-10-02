@@ -177,7 +177,7 @@ export function ProviderModelImportDialog({
               })}
             </p>
           </div>
-          <button
+          <button data-settings-action="ghost" data-settings-size="icon"
             type="button"
             aria-label={t('providerModelImportCancel')}
             onClick={onCancel}
@@ -390,7 +390,7 @@ export function ProviderModelImportDialog({
 
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-ds-border px-5 py-3">
           <div className="flex flex-wrap items-center gap-1.5">
-            <button
+            <button data-settings-action="secondary" data-settings-size="compact"
               type="button"
               onClick={allVisibleSelected ? clearVisible : selectAllVisible}
               disabled={visibleEntries.length === 0}
@@ -411,7 +411,7 @@ export function ProviderModelImportDialog({
             ) : null}
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <button data-settings-action="secondary" data-settings-size="default"
               type="button"
               onClick={onCancel}
               disabled={submitting}
@@ -419,7 +419,7 @@ export function ProviderModelImportDialog({
             >
               {t('providerModelImportCancel')}
             </button>
-            <button
+            <button aria-busy={submitting} data-settings-action="primary" data-settings-size="default"
               type="button"
               onClick={() => void submit()}
               disabled={submitting || (totalSelected === 0 && existingMetadataCount === 0)}

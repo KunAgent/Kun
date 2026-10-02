@@ -1,0 +1,162 @@
+// Browser measurements, not screenshot inference. Chromium's accessibility tree
+// supplies computed names; DOM measurements supply actual layout and focus state.
+export const CONTROL_SELECTOR = 'button,input:not([type="hidden"]),select,textarea,a[href],summary,[role="switch"],[role="button"],[role="checkbox"],[role="tab"]'
+
+export async function measureSettings(page, cdp) {
+  await page.keyboard.press('Tab')
+  await page.evaluate(selector => {
+    document.querySelectorAll(selector).forEach((element, index) => {
+      element.setAttribute('data-settings-smoke-control', String(index))
+    })
+  }, CONTROL_SELECTOR)
+  const { root } = await cdp.send('DOM.getDocument', { depth: -1, pierce: true })
+  const ids = new Map()
+  const visit = node => {
+    const attributes = node.attributes ?? []
+    const offset = attributes.indexOf('data-settings-smoke-control')
+    if (offset >= 0) ids.set(node.backendNodeId, attributes[offset + 1])
+    for (const child of node.children ?? []) visit(child)
+    for (const child of node.shadowRoots ?? []) visit(child)
+  }
+  visit(root)
+  const { nodes } = await cdp.send('Accessibility.getFullAXTree')
+  const accessibility = {}
+  for (const node of nodes) {
+    const id = ids.get(node.backendDOMNodeId)
+    if (id === undefined || node.ignored) continue
+    accessibility[id] = { name: node.name?.value ?? '', role: node.role?.value ?? '' }
+  }
+  return page.evaluate(({ selector, accessibility }) => {
+    const rect = element => {
+      const { x, y, width, height, right, bottom } = element.getBoundingClientRect()
+      return { x, y, width, height, right, bottom }
+    }
+    const shown = element => {
+      const style = getComputedStyle(element)
+      return !element.closest('[hidden],[inert],[aria-hidden="true"]') && style.display !== 'none'
+        && style.visibility !== 'hidden' && element.getClientRects().length > 0
+        && element.getBoundingClientRect().width > 0
+    }
+    const dialog = [...document.querySelectorAll('[role="dialog"]')].filter(shown).at(-1)
+    const elements = [...document.querySelectorAll(selector)]
+      .filter(element => shown(element) && (!dialog || dialog.contains(element)))
+    const original = elements.map(rect)
+    const occurrences = new Map()
+    const semanticKeys = elements.map(element => {
+      const row = element.closest('.ds-setting-row')
+      const card = element.closest('.ds-settings-card,section,[role="dialog"]')
+      const panel = element.closest('[role="tabpanel"]')
+      const compact = text => (text ?? '').replace(/\s+/g, ' ').trim().slice(0, 180)
+      const context = compact(row?.firstElementChild?.textContent)
+        || compact(card?.querySelector('h2,h3,legend')?.textContent)
+        || compact(element.closest('nav')?.getAttribute('aria-label'))
+      // Do not use generated React IDs, numeric DOM indices, or newly supplied
+      // accessible labels: those change when an unrelated control is inserted.
+      const detail = compact(element.textContent) || compact(element.getAttribute('placeholder'))
+        || compact(element.getAttribute('title'))
+      const key = [panel?.getAttribute('aria-labelledby') ?? '', context,
+        element.tagName.toLowerCase(), element.getAttribute('type') ?? '', detail].join('|')
+      const ordinal = (occurrences.get(key) ?? 0) + 1
+      occurrences.set(key, ordinal)
+      return `${key}|occurrence:${ordinal}`
+    })
+    const controls = elements.map((element, index) => {
+      const id = element.getAttribute('data-settings-smoke-control')
+      const disabled = element.matches(':disabled,[aria-disabled="true"]')
+      element.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' })
+      const box = rect(element)
+      const point = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)
+      let clipping = { x: 0, y: 0, right: innerWidth, bottom: innerHeight }
+      for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+        const style = getComputedStyle(parent), bounds = rect(parent)
+        if (/(auto|scroll|hidden|clip)/.test(style.overflowX)) {
+          clipping.x = Math.max(clipping.x, bounds.x)
+          clipping.right = Math.min(clipping.right, bounds.right)
+        }
+        if (/(auto|scroll|hidden|clip)/.test(style.overflowY)) {
+          clipping.y = Math.max(clipping.y, bounds.y)
+          clipping.bottom = Math.min(clipping.bottom, bounds.bottom)
+        }
+      }
+      const inside = box.x >= clipping.x - 1 && box.right <= clipping.right + 1
+        && box.y >= clipping.y - 1 && box.bottom <= clipping.bottom + 1
+      if (!disabled) element.focus({ preventScroll: true })
+      const style = getComputedStyle(element)
+      const focused = !disabled && document.activeElement === element
+      const focusStyle = { outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth,
+        outlineColor: style.outlineColor, boxShadow: style.boxShadow }
+      const transparent = value => value === 'transparent' || /rgba\([^)]*,\s*0\)/.test(value)
+      const ownIndicator = (style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0
+        && !transparent(style.outlineColor)) || (style.boxShadow !== 'none'
+        && !/^((rgba\(0, 0, 0, 0\)|rgb\(0 0 0 \/ 0\)) 0px 0px 0px 0px,?\s*)+$/.test(style.boxShadow))
+      const parentStyle = element.parentElement ? getComputedStyle(element.parentElement) : null
+      const parentIndicator = parentStyle?.boxShadow && parentStyle.boxShadow !== 'none'
+        && !parentStyle.boxShadow.includes('rgba(0, 0, 0, 0) 0px 0px 0px 0px')
+      return { id, semanticKey: semanticKeys[index], tag: element.tagName.toLowerCase(), type: element.getAttribute('type'),
+        ...accessibility[id], text: element.textContent?.trim().slice(0, 120),
+        className: element.getAttribute('class'), disabled,
+        settingsSize: element.getAttribute('data-settings-size'),
+        busy: element.getAttribute('aria-busy') === 'true',
+        destructive: /danger|red-/.test(element.getAttribute('class') ?? ''),
+        original: original[index], reached: box, clipping, inside,
+        hittable: !!point && (element === point || element.contains(point)),
+        tabIndex: element.tabIndex, focused, focusVisible: element.matches(':focus-visible'),
+        focusIndicator: !!(ownIndicator || parentIndicator), focusStyle,
+        typography: { fontSize: style.fontSize, fontWeight: style.fontWeight,
+          lineHeight: style.lineHeight, padding: style.padding, borderRadius: style.borderRadius }
+      }
+    })
+    const overlaps = []
+    for (let i = 0; i < elements.length; i++) for (let j = i + 1; j < elements.length; j++) {
+      if (elements[i].contains(elements[j]) || elements[j].contains(elements[i])) continue
+      const a = original[i], b = original[j]
+      if (Math.min(a.right, b.right) - Math.max(a.x, b.x) > 1
+        && Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y) > 1) overlaps.push([controls[i].semanticKey, controls[j].semanticKey].sort())
+    }
+    const scroller = document.querySelector('.ds-settings-scroller')
+    const scrollerOverflow = scroller ? scroller.scrollWidth > scroller.clientWidth + 1 : false
+    const horizontalOverflow = document.documentElement.scrollWidth > innerWidth + 1
+    document.activeElement?.blur?.()
+    for (const element of document.querySelectorAll('.ds-settings-scroller,nav,[role="tablist"]')) {
+      element.scrollTo?.({ top: 0, left: 0, behavior: 'instant' })
+    }
+    return { dpr: devicePixelRatio, viewport: { width: innerWidth, height: innerHeight },
+      horizontalOverflow, scrollerOverflow, controls, overlaps }
+  }, { selector: CONTROL_SELECTOR, accessibility })
+}
+
+export function geometryProblems(measurement) {
+  const problems = []
+  if (measurement.horizontalOverflow) problems.push('document horizontal overflow')
+  if (measurement.scrollerOverflow) problems.push('settings content horizontal overflow')
+  for (const control of measurement.controls) {
+    const label = control.semanticKey
+    if (!control.name?.trim()) problems.push(`${label}: missing accessible name`)
+    if (!control.inside) problems.push(`${label}: clipped after scrolling into view`)
+    if (!control.disabled && !control.hittable) problems.push(`${label}: center is covered`)
+    if (!control.disabled && !control.focused) problems.push(`${label}: cannot focus`)
+    if (!control.disabled && control.focusVisible && !control.focusIndicator) {
+      problems.push(`${label}: no measured keyboard focus indicator`)
+    }
+    const minHeight = control.settingsSize === 'inline-icon' || /ds-settings-button--inline-icon/.test(control.className ?? '') ? 24 : 28
+    if (control.tag === 'button' && control.role !== 'switch' && control.reached.height < minHeight) {
+      problems.push(`${label}: button height ${control.reached.height.toFixed(2)} < ${minHeight} CSS px`)
+    }
+  }
+  for (const pair of measurement.overlaps) problems.push(`controls overlap: ${pair.join(', ')}`)
+  return problems
+}
+
+export function newGeometryProblems(previousProblems, currentProblems) {
+  const previous = new Map()
+  for (const { key, problem } of previousProblems) {
+    const signature = JSON.stringify([key, problem])
+    previous.set(signature, (previous.get(signature) ?? 0) + 1)
+  }
+  return currentProblems.filter(({ key, problem }) => {
+    const signature = JSON.stringify([key, problem]), remaining = previous.get(signature) ?? 0
+    if (!remaining) return true
+    previous.set(signature, remaining - 1)
+    return false
+  })
+}

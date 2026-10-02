@@ -104,7 +104,7 @@ export function ProviderQuickAddPanel({
               </p>
             </div>
           </div>
-          <button
+          <button data-settings-action="ghost" data-settings-size="icon"
             type="button"
             aria-label={t('modelProviderAddDialogCancel')}
             onClick={onClose}
@@ -125,7 +125,7 @@ export function ProviderQuickAddPanel({
                 ) : null}
               </span>
               {preset.apiKeyUrl ? (
-                <button
+                <button data-settings-action="link" data-settings-size="compact"
                   type="button"
                   onClick={() => void window.kunGui.openExternal(preset.apiKeyUrl)}
                   className="inline-flex items-center gap-1 text-[12px] font-medium text-accent underline-offset-2 hover:underline"
@@ -167,7 +167,7 @@ export function ProviderQuickAddPanel({
               </select>
             </label>
           ) : null}
-          <button
+          <button data-settings-action="ghost" data-settings-size="compact"
             type="button"
             aria-expanded={moreOpen}
             onClick={() => setMoreOpen((open) => !open)}
@@ -199,7 +199,7 @@ export function ProviderQuickAddPanel({
             </div>
           ) : null}
           {preset.docsUrl ? (
-            <button
+            <button data-settings-action="link" data-settings-size="compact"
               type="button"
               onClick={() => void window.kunGui.openExternal(preset.docsUrl)}
               className="inline-flex w-fit items-center gap-1 text-[12px] text-ds-faint underline-offset-2 transition hover:text-ds-muted hover:underline"
@@ -215,14 +215,14 @@ export function ProviderQuickAddPanel({
           ) : null}
         </div>
         <footer className="flex items-center justify-end gap-2 border-t border-ds-border px-5 py-3.5">
-          <button
+          <button data-settings-action="secondary" data-settings-size="default"
             type="button"
             onClick={onClose}
             className="inline-flex h-9 items-center rounded-full border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
           >
             {t('modelProviderAddDialogCancel')}
           </button>
-          <button
+          <button aria-busy={busy} data-settings-action="primary" data-settings-size="default"
             type="button"
             disabled={busy || keyMissing}
             onClick={() => void submit()}

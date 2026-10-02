@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type {
   ModelProviderProfileV1
 } from '@shared/app-settings'
@@ -86,9 +87,8 @@ export function AgentsAssistantSettingsPanel({ view }: { view: Record<string, an
                     title={t('kunResetDefaultModel')}
                     description={t('kunResetDefaultModelDesc', { model: DEFAULT_KUN_MODEL })}
                     control={
-                      <button
+                      <button className={settingsButtonClass()}
                         type="button"
-                        className="rounded-xl border border-ds-border bg-ds-main/60 px-3 py-2 text-[13px] font-medium text-ds-ink transition hover:border-accent/40 hover:bg-ds-main"
                         onClick={() => {
                           updateKun({ model: DEFAULT_KUN_MODEL })
                           persistComposerModel(DEFAULT_KUN_MODEL)
@@ -250,7 +250,7 @@ export function AgentsAssistantSettingsPanel({ view }: { view: Record<string, an
                           }}
                         />
                         {windowsStorageManagement ? (
-                          <button type="button" className="secondary-button shrink-0" onClick={openStorageSettings}>{t('storageRelocation')}</button>
+                          <button type="button" className={settingsButtonClass({ className: 'shrink-0' })} onClick={openStorageSettings}>{t('storageRelocation')}</button>
                         ) : null}
                       </div>
                     }

@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, LoaderCircle, ShieldAlert, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -151,9 +152,8 @@ export function UninstallSettingsSection(): React.JSX.Element {
               ? `${existingPaths.length} ${t('uninstallPathCountSuffix')}`
               : ''}
           </span>
-          <button
+          <button className={settingsButtonClass({ variant: 'danger' })}
             type="button"
-            className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!status || statusError !== '' || uninstalling}
             onClick={openConfirm}
           >
@@ -221,12 +221,12 @@ export function UninstallSettingsSection(): React.JSX.Element {
                 />
               </div>
               <div className="flex justify-end gap-2">
-                <button type="button" className="secondary-button" disabled={busy} onClick={cancelConfirm}>
+                <button className={settingsButtonClass()} type="button"  disabled={busy} onClick={cancelConfirm}>
                   {t('uninstallConfirmCancel')}
                 </button>
-                <button
+                <button aria-busy={Boolean(busy)}
                   type="button"
-                  className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={settingsButtonClass({ variant: 'danger' })}
                   disabled={!canConfirm}
                   onClick={() => void confirmUninstall()}
                 >

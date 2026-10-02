@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type { CliInstallAction, CliInstallStatus } from '@shared/cli-install'
 import {
   FolderOpen,
@@ -50,24 +51,22 @@ function CliCommandSettingsCard({ locale }: { locale: string }): ReactElement {
         wideControl
         control={
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            <button aria-busy={Boolean(busy)} className={settingsButtonClass()}
               type="button"
               disabled={busy || status?.state === 'installed' || status?.state === 'conflict'}
               onClick={() => act(status?.state === 'stale' ? 'repair' : 'install')}
-              className="rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink disabled:opacity-50"
             >
               {busy ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : null}
               {copy.primaryAction}
             </button>
-            <button
+            <button className={settingsButtonClass({ variant: 'danger' })}
               type="button"
               disabled={busy || status?.state === 'not-installed' || status?.state === 'conflict'}
               onClick={() => act('uninstall')}
-              className="rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-muted disabled:opacity-50"
             >
               {copy.removeAction}
             </button>
-            <button type="button" disabled={busy} onClick={refresh} className="p-2 text-ds-muted" title={zh ? '刷新' : 'Refresh'}>
+            <button className={settingsButtonClass({ variant: 'ghost', size: 'icon' })} type="button" disabled={busy} onClick={refresh} aria-label={zh ? '刷新' : 'Refresh'} title={zh ? '刷新' : 'Refresh'}>
               <RefreshCw className="h-4 w-4" />
             </button>
             {status?.commandPath ? <code className="break-all text-[11px] text-ds-faint">{status.commandPath}</code> : null}
@@ -240,9 +239,8 @@ export function GeneralDesktopSettingsPanel({ view }: { view: Record<string, any
                 ) : (
                   <span className="text-[13px] text-ds-faint">…</span>
                 )}
-                <button
+                <button className={settingsButtonClass()}
                   type="button"
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-1.5 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover disabled:opacity-50"
                   disabled={typeof window.kunGui?.openLogDir !== 'function'}
                   onClick={async () => {
                     if (typeof window.kunGui?.openLogDir !== 'function') return

@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type { ReactElement } from 'react'
 import { useState } from 'react'
 import { Bot, MessageSquare, Settings } from 'lucide-react'
@@ -193,14 +194,14 @@ export function ClawSettingsSection({ ctx }: { ctx: ClawSettingsContext }): Reac
                 <button
                   type="button"
                   onClick={resetClawWorkspaceToDefault}
-                  className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
+                  className={settingsButtonClass({ className: 'shrink-0' })}
                 >
                   {t('clawDefaultWorkspaceReset')}
                 </button>
                 <button
                   type="button"
                   onClick={() => void pickClawWorkspace()}
-                  className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
+                  className={settingsButtonClass({ className: 'shrink-0' })}
                 >
                   {t('browse')}
                 </button>

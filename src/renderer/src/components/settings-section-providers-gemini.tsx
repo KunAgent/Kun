@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import type {
   AntigravitySubscriptionModelCatalog
 } from '@shared/kun-gui-api'
@@ -158,16 +159,16 @@ export function GeminiSubscriptionSection({
       {state === 'missing' ? (
         <button
           type="button"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition hover:bg-accent/90"
+           className={settingsButtonClass({ variant: 'primary', className: 'w-full' })}
           onClick={() => void install()}
         >
           <Download className="h-4 w-4" strokeWidth={1.9} />
           {t('geminiCliInstall')}
         </button>
       ) : (
-        <button
+        <button aria-busy={Boolean(state === 'syncing')}
           type="button"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-ds-border bg-ds-card px-4 py-2 text-[13px] font-medium text-ds-ink transition hover:bg-ds-hover disabled:opacity-60"
+          className={settingsButtonClass({ className: 'w-full' })}
           onClick={() => void syncModels()}
           disabled={busy}
         >
@@ -267,18 +268,18 @@ export function GeminiCliApiSubscriptionSection({
         </p>
       ) : null}
       <div className="grid gap-2 sm:grid-cols-2">
-        <button
+        <button aria-busy={Boolean(checking)}
           type="button"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-ds-border bg-ds-card px-4 py-2 text-[13px] font-medium text-ds-ink transition hover:bg-ds-hover disabled:opacity-60"
+          className={settingsButtonClass({ className: 'w-full' })}
           onClick={() => void refresh()}
           disabled={checking}
         >
           {checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
           {t('geminiCliApiRecheck')}
         </button>
-        <button
+        <button aria-busy={Boolean(syncing)}
           type="button"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-ds-border bg-ds-card px-4 py-2 text-[13px] font-medium text-ds-ink transition hover:bg-ds-hover disabled:opacity-60"
+          className={settingsButtonClass({ className: 'w-full' })}
           onClick={() => void syncModels()}
           disabled={syncing}
         >

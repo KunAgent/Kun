@@ -34,11 +34,13 @@ export function harnessSettings(kun: KunRuntimeSettingsV1): KunHarnessSettingsV1
 export function AgentCenter({
   kun,
   updateKun,
-  onSetupCommand
+  onSetupCommand,
+  settingsSurface = false
 }: {
   kun: KunRuntimeSettingsV1
   updateKun: (patch: { harnesses?: Partial<KunHarnessSettingsV1> }) => void
   onSetupCommand?: (harnessId: string, command: string, title: string) => void
+  settingsSurface?: boolean
 }): ReactElement {
   // This surface mixes namespaces: adeAgent*/adeHarness*/adeCredential.*
   // live in `common`, the legacy adeSettings.* strings in `settings`. Both
@@ -109,7 +111,7 @@ export function AgentCenter({
       <SettingsCard title={t('adeAgentCenter.title')}>
         <div className="flex items-start justify-between gap-3 pb-2">
           <div className="text-[12px] text-ds-faint">{t('adeAgentCenter.desc')}</div>
-          <button type="button" onClick={() => setAddOpen(true)} className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white hover:opacity-90" data-agent-add-open>
+          <button data-settings-action="primary" data-settings-size="default" type="button" onClick={() => setAddOpen(true)} className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-[12px] font-semibold text-white hover:opacity-90" data-agent-add-open>
             {t('agentAdd.title')}
           </button>
         </div>
@@ -207,6 +209,7 @@ export function AgentCenter({
       </SettingsCard>
       {addOpen ? (
         <AgentCenterAddWizard
+          settingsSurface={settingsSurface}
           rows={rows}
           settings={settings}
           updateKun={updateKun}

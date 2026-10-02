@@ -158,7 +158,7 @@ export function CategoryBatchControls({
             {t('subagentsPanel.categoryConfigurationDesc', 'Apply the same defaults to every agent in this category')}
           </div>
         </div>
-        <button
+        <button data-settings-action="secondary" data-settings-size="compact"
           type="button"
           disabled={!hasOverrides}
           onClick={() => onReset(ids)}
@@ -275,7 +275,7 @@ export function CatalogPagination({
         })}
       </span>
       <div className="flex items-center gap-1.5">
-        <button
+        <button data-settings-action="ghost" data-settings-size="icon"
           type="button"
           disabled={page <= 1}
           onClick={() => onPageChange(Math.max(1, page - 1))}
@@ -285,7 +285,7 @@ export function CatalogPagination({
           <ChevronLeft className="h-3.5 w-3.5" />
         </button>
         <span className="min-w-12 text-center text-[11px] font-semibold text-ds-heading">{page}/{pageCount}</span>
-        <button
+        <button data-settings-action="ghost" data-settings-size="icon"
           type="button"
           disabled={page >= pageCount}
           onClick={() => onPageChange(Math.min(pageCount, page + 1))}
@@ -360,7 +360,7 @@ export function ExtensionAgentsControl({
         <span className="text-[10px] text-ds-faint">
           {t('subagentsPanel.extensionAgents.baseAlwaysAvailable', 'Base agents are always available')}
         </span>
-        <button
+        <button data-settings-action="secondary" data-settings-size="compact"
           type="button"
           onClick={() => onToggle(toggleTarget)}
           className="shrink-0 rounded-md px-1.5 py-1 text-[10px] font-semibold text-accent transition hover:bg-accent-soft"
@@ -415,7 +415,7 @@ export function AgentCatalogToolbar({
           }`}
         />
         {query ? (
-          <button
+          <button data-settings-action="ghost" data-settings-size="icon"
             type="button"
             onClick={() => onQueryChange('')}
             aria-label={t('subagentsPanel.clearSearch', 'Clear search')}

@@ -1,3 +1,4 @@
+import { settingsButtonClass } from './settings-button'
 import { WRITE_AGENT_PRESET_MAX_COUNT, type WriteAgentPresetV1 } from '@shared/app-settings'
 import { PencilLine, Plus, Trash2 } from 'lucide-react'
 import type { ReactElement } from 'react'
@@ -5,8 +6,6 @@ import { SettingRow, SettingsCard, SettingsTabPanel } from './settings-controls'
 
 const textInputClass =
   'w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30'
-const ghostButtonClass =
-  'inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover'
 
 export function WriteAgentPresetsSettingsPanel({ view }: { view: Record<string, any> }): ReactElement {
   const { t, agentPresets, updateAgentPresets, setWriteDebugModalOpen, loadWriteDebugEntries, activeTab } = view
@@ -56,7 +55,7 @@ export function WriteAgentPresetsSettingsPanel({ view }: { view: Record<string, 
                               />
                               <button
                                 type="button"
-                                className="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ds-faint transition hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-300"
+                                  className={settingsButtonClass({ variant: 'danger-ghost', size: 'icon', className: 'ml-auto shrink-0' })}
                                 title={t('writeAgentPresetRemove')}
                                 aria-label={t('writeAgentPresetRemove')}
                                 onClick={() =>
@@ -85,9 +84,8 @@ export function WriteAgentPresetsSettingsPanel({ view }: { view: Record<string, 
                     </div>
                   ) : null}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <button
+                    <button className={settingsButtonClass()}
                       type="button"
-                      className={ghostButtonClass}
                       disabled={agentPresets.length >= WRITE_AGENT_PRESET_MAX_COUNT}
                       onClick={() =>
                         updateAgentPresets([
@@ -108,13 +106,12 @@ export function WriteAgentPresetsSettingsPanel({ view }: { view: Record<string, 
                   title={t('writeDebugLogOpen')}
                   description={t('writeDebugLogDesc')}
                   control={
-                    <button
+                    <button className={settingsButtonClass()}
                       type="button"
                       onClick={() => {
                         setWriteDebugModalOpen(true)
                         void loadWriteDebugEntries()
                       }}
-                      className="inline-flex items-center gap-2 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
                     >
                       <PencilLine className="h-4 w-4" strokeWidth={1.75} />
                       {t('writeDebugLogOpenButton')}

@@ -1,0 +1,106 @@
+name: Native settings UI smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/settings-ui-smoke.yml'
+      - 'scripts/*settings-ui*'
+      - 'src/renderer/src/components/Settings*'
+      - 'src/renderer/src/components/settings-*'
+      - 'src/renderer/src/components/use-settings-*'
+      - 'src/renderer/src/components/ade/**'
+      - 'src/renderer/src/components/subagents/**'
+      - 'src/renderer/src/components/mcp/**'
+      - 'src/renderer/src/components/remote-ssh/**'
+      - 'src/renderer/src/components/provider-*'
+      - 'src/renderer/src/components/claude-subscription-section*'
+      - 'src/renderer/src/components/LucideIconPicker*'
+      - 'src/renderer/src/extensions/**'
+      - 'src/renderer/src/styles/**'
+      - 'src/renderer/src/index.css'
+      - 'src/shared/app-settings*'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: settings-ui-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-settings:
+    name: ${{ matrix.os }} settings, light/dark, 125/150/200%
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+
+      - name: Install dependencies and native Electron
+        run: |
+          npm ci
+          npm run ensure:electron
+
+      - name: Verify smoke identity and workflow contracts
+        run: node --test scripts/settings-ui-smoke-geometry.test.mjs
+
+      - name: Check out the verified pre-polish source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || '9179a656e3b4236225cf098b00ccda932c55750d' }}
+          path: settings-ui-baseline
+
+      - name: Add only the offline fixture to the baseline checkout
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { cpSync, symlinkSync } from 'node:fs'
+          import { resolve } from 'node:path'
+          const baseline = resolve('settings-ui-baseline')
+          symlinkSync(resolve('node_modules'), resolve(baseline, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir')
+          for (const file of ['SettingsUiSmokeFixture.tsx', 'SettingsUiSmokeHost.ts']) {
+            const relative = `src/renderer/src/components/${file}`
+            cpSync(relative, resolve(baseline, relative))
+          }
+          NODE
+
+      - name: Capture real baseline source and measurements
+        shell: bash
+        env:
+          DEBUG: pw:browser
+          KUN_SETTINGS_SOURCE_ROOT: settings-ui-baseline
+          KUN_SETTINGS_EVIDENCE: dist/settings-ui/before
+        run: |
+          mkdir -p dist/settings-ui/before
+          node scripts/smoke-settings-ui.mjs --baseline 2>&1 | tee dist/settings-ui/before/launch.log
+
+      - name: Verify real final source and capture screenshots
+        if: always()
+        shell: bash
+        env:
+          DEBUG: pw:browser
+          KUN_SETTINGS_EVIDENCE: dist/settings-ui/after
+          KUN_SETTINGS_BASELINE_REPORT: dist/settings-ui/before/report.json
+        run: |
+          mkdir -p dist/settings-ui/after
+          node scripts/smoke-settings-ui.mjs 2>&1 | tee dist/settings-ui/after/launch.log
+
+      - name: Upload native before/after screenshots and measured coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: settings-ui-${{ matrix.os }}
+          path: dist/settings-ui
+          if-no-files-found: error
+          retention-days: 14
