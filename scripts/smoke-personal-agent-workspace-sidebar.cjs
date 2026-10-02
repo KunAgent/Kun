@@ -6,7 +6,8 @@ const CODE = { panel: '[data-workbench-right-panel]', rail: '.ds-workbench-side-
 const PRIVATE = { panel: '[data-room-workbench-panel]', rail: '.rooms-workbench-rail', composer: '.rooms-composer' }
 
 // Read actual native renderer layout. Tab strips and vertically scrollable lists
-// may intentionally scroll; fixed toolbar controls must remain fully visible.
+// may intentionally scroll; the selected header tab and fixed toolbar controls
+// must remain fully visible.
 async function readSidebarGeometry(page, selectors) {
   return page.evaluate(({ panel: panelSelector, rail: railSelector, surface: surfaceSelector, composer: composerSelector }) => {
     const shown = (element) => {
@@ -41,11 +42,15 @@ async function readSidebarGeometry(page, selectors) {
       return [{ label: control.getAttribute('aria-label') || control.getAttribute('title') || control.textContent?.trim().slice(0, 120),
         rect: box(control), clipped: rect.left < left - 1 || rect.right > right + 1 || rect.top < top - 1 || rect.bottom > bottom + 1 }]
     })
-    const activeTabs = [...panel.querySelectorAll('[role="tab"][aria-selected="true"]')].filter(shown)
+    const activeTabs = header ? [...header.querySelectorAll('[role="tab"][aria-selected="true"]')].filter(shown) : []
+    const selectedHeaderTabs = activeTabs.map((tab) => ({
+      label: tab.getAttribute('aria-label') || tab.textContent?.trim(),
+      rect: box(tab), tablist: box(tab.closest('[role="tablist"]'))
+    }))
     return { viewport: { width: innerWidth, height: innerHeight }, panel: box(panel), rail: box(rail),
       header: box(header), surface: box(surface), composer: box(find(composerSelector)),
       surfaceOverflow: surface.scrollWidth > surface.clientWidth + 1, controls,
-      selectedTabs: activeTabs.map((tab) => tab.getAttribute('aria-label') || tab.textContent?.trim()),
+      selectedTabs: selectedHeaderTabs.map((tab) => tab.label), selectedHeaderTabs,
       panelContainsSurface: panel.contains(surface), panelPosition: getComputedStyle(panel).position }
   }, selectors)
 }
@@ -67,6 +72,13 @@ function sidebarGeometryIssues(geometry, { docked = false } = {}) {
   }
   for (const control of geometry.controls) if (control.clipped) issues.push('Clipped control: ' + control.label)
   if (geometry.selectedTabs.length !== 1) issues.push('Exactly one shared header tab must be selected')
+  for (const tab of geometry.selectedHeaderTabs) {
+    const { rect, tablist } = tab
+    if (!rect || !tablist || rect.x < tablist.x - 1 || rect.y < tablist.y - 1 ||
+      rect.right > tablist.right + 1 || rect.bottom > tablist.bottom + 1) {
+      issues.push('Selected header tab is clipped by its tablist: ' + tab.label)
+    }
+  }
   return issues
 }
 
@@ -185,6 +197,34 @@ function createSidebarEvidence({ page, poll, capture, recordDiagnostic, resize }
     snapshot: () => ({ captures, drags, viewports }) }
 }
 
+async function waitForCodeFileContents({ page, poll, preview, expected }) {
+  const content = page.locator(preview + ':visible .ds-file-preview-code-html pre code:visible')
+  const busy = page.locator(preview + ':visible').locator('.animate-spin:visible, [aria-busy="true"]:visible')
+  await poll(async () => await content.count() === 1 &&
+    (await content.innerText()).trim() === expected && await busy.count() === 0,
+  15000, 'actual loaded Code file content, without a loading indicator')
+}
+
+async function dismissCodeFileExplorer({ page, panel }) {
+  const explorer = panel.locator('.ds-file-preview-explorer:visible')
+  if (!await explorer.count()) return
+  const backdrop = panel.locator('.ds-file-preview-explorer-backdrop:visible')
+  if (await backdrop.count()) {
+    // The overlay intentionally blurs the preview. Click its uncovered right
+    // strip using observed bounds; its centre can be covered by the file tree.
+    const bounds = await backdrop.boundingBox(), tree = await explorer.boundingBox()
+    assert(bounds && tree)
+    const point = { x: bounds.x + bounds.width - 4, y: bounds.y + bounds.height / 2 }
+    assert(point.x > tree.x + tree.width, 'The file-tree backdrop has an uncovered dismissal area')
+    assert(await backdrop.evaluate((element, position) =>
+      document.elementFromPoint(position.x, position.y) === element, point), 'Backdrop receives the real pointer click')
+    await page.mouse.click(point.x, point.y)
+  } else {
+    await panel.getByRole('button', { name: 'Hide file tree', exact: true }).click()
+  }
+  await explorer.waitFor({ state: 'hidden', timeout: 15000 })
+}
+
 async function captureCodeSidebarBaseline({ page, workspaceRoot, fixture, poll, sidebar }) {
   assert.equal(fixture.snapshot().real, false, 'Code comparison uses only the disposable offline profile')
   const callsBefore = fixture.snapshot().mainCalls
@@ -213,8 +253,8 @@ async function captureCodeSidebarBaseline({ page, workspaceRoot, fixture, poll, 
   await sidebar.pointerResize('code', activePanel)
   await file.click()
   const preview = CODE.panel + ' .ds-code-sidebar'
-  await poll(async () => (await page.locator(preview + ':visible').innerText()).includes('baseline'),
-    15000, 'actual Code workspace file preview')
+  await waitForCodeFileContents({ page, poll, preview, expected: 'baseline' })
+  await dismissCodeFileExplorer({ page, panel })
   await sidebar.codeCapture('sidebar-code-file-preview-wide', preview)
   await rail.getByRole('button', { name: 'Preview', exact: true }).click()
   const browser = CODE.panel + ' [data-preview-width]'
@@ -225,6 +265,8 @@ async function captureCodeSidebarBaseline({ page, workspaceRoot, fixture, poll, 
   await panel.getByRole('tab', { name: 'Files', exact: true }).click()
   await sidebar.codeCapture('sidebar-code-files-narrow', activePanel)
   await file.click()
+  await waitForCodeFileContents({ page, poll, preview, expected: 'baseline' })
+  await dismissCodeFileExplorer({ page, panel })
   await sidebar.codeCapture('sidebar-code-file-preview-narrow', preview)
   await sidebar.resizeTo(1360, 900)
   await panel.getByRole('button', { name: 'Collapse right sidebar', exact: true }).first().click()
@@ -236,4 +278,5 @@ async function captureCodeSidebarBaseline({ page, workspaceRoot, fixture, poll, 
 }
 
 module.exports = { captureCodeSidebarBaseline, createSidebarEvidence, dragSidebar, readSidebarGeometry, sidebarGeometryIssues,
-  readNativeBrowserGeometry, nativeBrowserGeometryIssues, nativeViewportMatchesRequested }
+  readNativeBrowserGeometry, nativeBrowserGeometryIssues, nativeViewportMatchesRequested,
+  waitForCodeFileContents, dismissCodeFileExplorer }

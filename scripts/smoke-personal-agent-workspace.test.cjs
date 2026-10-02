@@ -75,7 +75,8 @@ const bounds = (x, y, width, height) => ({ x, y, width, height, right: x + width
 const layout = () => ({ viewport: { width: 1360, height: 860 }, panel: bounds(752, 40, 560, 820),
   header: bounds(752, 40, 560, 44), surface: bounds(752, 84, 560, 776), rail: bounds(1312, 40, 48, 820),
   composer: bounds(310, 700, 430, 140), controls: [{ label: 'Take control', clipped: false }],
-  selectedTabs: ['Preview'], panelContainsSurface: true, surfaceOverflow: false })
+  selectedTabs: ['Preview'], selectedHeaderTabs: [{ label: 'Preview', rect: bounds(760, 46, 130, 32),
+    tablist: bounds(760, 46, 500, 32) }], panelContainsSurface: true, surfaceOverflow: false })
 
 test('sidebar geometry detects clipping, overlapping composer and content outside the Code-compatible shell', () => {
   assert.deepEqual(sidebarGeometryIssues(layout(), { docked: true }), [])
@@ -260,4 +261,79 @@ test('OS height allowance preserves actual narrow breakpoint, width and positive
     { width: 760, height: 781 }, { width: 1360, height: 677 }, { width: 760, height: NaN }]) {
     assert.equal(nativeViewportMatchesRequested(requested, actual), false)
   }
+})
+
+const { waitForCodeFileContents, dismissCodeFileExplorer } = require('./smoke-personal-agent-workspace-sidebar.cjs')
+test('Code preview readiness requires exact rendered content and no busy indicator, rather than matching its filename', async () => {
+  const preview = '[data-workbench-right-panel] .ds-code-sidebar'
+  const states = [{ content: null, busy: 1 }, { content: 'baseline.txt', busy: 0 },
+    { content: 'baseline\n', busy: 1 }, { content: 'baseline\n', busy: 0 }]
+  let current = states[0]
+  const page = { locator: (selector) => {
+    if (selector === preview + ':visible .ds-file-preview-code-html pre code:visible') return {
+      count: async () => current.content === null ? 0 : 1,
+      innerText: async () => current.content
+    }
+    assert.equal(selector, preview + ':visible')
+    return { locator: (child) => {
+      assert.equal(child, '.animate-spin:visible, [aria-busy="true"]:visible')
+      return { count: async () => current.busy }
+    } }
+  } }
+  await waitForCodeFileContents({ page, preview, expected: 'baseline', poll: async (check, timeout) => {
+    assert.equal(timeout, 15000)
+    for (const state of states) { current = state; assert.equal(await check(), state === states.at(-1)) }
+  } })
+  const helper = readFileSync(join(__dirname, 'smoke-personal-agent-workspace-sidebar.cjs'), 'utf8')
+  assert.equal(helper.match(/await waitForCodeFileContents\(\{ page, poll, preview, expected: 'baseline' \}\)/g)?.length, 2)
+  assert.doesNotMatch(helper, /innerText\(\)\)\.includes\('baseline'\)/)
+  const body = readFileSync(join(__dirname, '../src/renderer/src/components/WorkspaceFilePreviewBody.tsx'), 'utf8')
+  assert.match(body, /className="ds-file-preview-code-html"/)
+  assert.match(body, /loading && !officeResult\?\.ok/)
+})
+
+test('Code preview dismisses the real explorer through its uncovered hit-tested backdrop before capture', async () => {
+  const events = []
+  const explorer = { count: async () => 1, boundingBox: async () => bounds(800, 40, 260, 620),
+    waitFor: async (options) => events.push(['hidden', options]) }
+  const backdrop = { count: async () => 1, boundingBox: async () => bounds(800, 40, 450, 620),
+    evaluate: async (_operation, point) => { events.push(['hit-test', point]); return true } }
+  const panel = { locator: (selector) => selector === '.ds-file-preview-explorer:visible' ? explorer : backdrop }
+  const page = { mouse: { click: async (x, y) => events.push(['click', x, y]) } }
+  await dismissCodeFileExplorer({ page, panel })
+  assert.deepEqual(events, [['hit-test', { x: 1246, y: 350 }], ['click', 1246, 350],
+    ['hidden', { state: 'hidden', timeout: 15000 }]])
+  const helper = readFileSync(join(__dirname, 'smoke-personal-agent-workspace-sidebar.cjs'), 'utf8')
+  for (const size of ['wide', 'narrow']) assert.match(helper, new RegExp(
+    "await waitForCodeFileContents[^\\n]+\\n  await dismissCodeFileExplorer[^\\n]+\\n  await sidebar.codeCapture\\('sidebar-code-file-preview-" + size))
+})
+
+const { readSidebarGeometry } = require('./smoke-personal-agent-workspace-sidebar.cjs')
+const { JSDOM } = require('jsdom')
+test('measured selected Code-header tab must fit its strip; inactive and nested file tabs remain exempt', async (t) => {
+  const dom = new JSDOM('<div id="panel"><div class="ds-code-right-tabs" id="header">' +
+    '<div role="tablist" id="strip"><button role="tab" aria-selected="false" id="inactive">Preview</button>' +
+    '<button role="tab" aria-selected="true" id="active">workspace-evidence.txt</button></div></div>' +
+    '<div id="surface"><div role="tablist"><button role="tab" aria-selected="true" id="nested">Nested file</button></div></div>' +
+    '</div><div id="rail"></div><div id="composer"></div>', { runScripts: 'outside-only' })
+  t.after(() => dom.window.close())
+  Object.assign(dom.window, { innerWidth: 1360, innerHeight: 860 })
+  const place = (id, rect) => {
+    dom.window.document.getElementById(id).getBoundingClientRect = () => ({ ...rect, left: rect.x, top: rect.y })
+  }
+  for (const [id, rect] of Object.entries({ panel: bounds(752, 40, 560, 820), header: bounds(752, 40, 560, 44),
+    strip: bounds(760, 46, 200, 32), surface: bounds(752, 84, 560, 776), rail: bounds(1312, 40, 48, 820),
+    composer: bounds(310, 700, 430, 140), active: bounds(966, 46, 180, 32),
+    inactive: bounds(600, 46, 130, 32), nested: bounds(1500, 100, 180, 32) })) place(id, rect)
+  const page = { evaluate: async (operation, args) => dom.window.eval('(' + operation.toString() + ')')(args) }
+  const selectors = { panel: '#panel', rail: '#rail', surface: '#surface', composer: '#composer' }
+  const clipped = await readSidebarGeometry(page, selectors)
+  assert.deepEqual([...clipped.selectedTabs], ['workspace-evidence.txt'])
+  assert.equal(clipped.selectedHeaderTabs[0].rect.x, 966)
+  assert.equal(clipped.selectedHeaderTabs[0].tablist.right, 960)
+  assert.deepEqual(sidebarGeometryIssues(clipped, { docked: true }), [
+    'Selected header tab is clipped by its tablist: workspace-evidence.txt'
+  ])
+  place('active', bounds(760, 46, 180, 32))
+  assert.deepEqual(sidebarGeometryIssues(await readSidebarGeometry(page, selectors), { docked: true }), [])
 })

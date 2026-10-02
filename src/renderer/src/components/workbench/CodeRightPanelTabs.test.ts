@@ -15,6 +15,39 @@ describe('CodeRightPanelTabs', () => {
     await i18n.changeLanguage('en')
   })
 
+  it('reveals the active file tab when the shared sidebar becomes narrow', () => {
+    const scroll = vi.fn(), disconnect = vi.fn(), observe = vi.fn()
+    let resize!: () => void
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) { resize = callback }
+      observe = observe
+      disconnect = disconnect
+    })
+    let state = openCodeRightTab(emptyCodeRightTabsState(), BUILTIN_RIGHT_PANEL_IDS.browser)
+    state = openCodeRightTab(state, BUILTIN_RIGHT_PANEL_IDS.file)
+    let renderer: ReactTestRenderer
+    try {
+      act(() => { renderer = create(createElement(CodeRightPanelTabs, {
+        state, domIdPrefix: 'narrow-tabs', titles: { [BUILTIN_RIGHT_PANEL_IDS.file]: 'long-saved-artifact-name.txt' },
+        sideConversationCount: 0, sideConversationRunningCount: 0, extensionItems: [],
+        onActivate: vi.fn(), onClose: vi.fn(), onCollapse: vi.fn()
+      }), { createNodeMock: (node) => (node.props as { role?: string }).role === 'tab'
+        ? { parentElement: { scrollIntoView: scroll } } : {} }) })
+      expect(scroll).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' })
+      expect(observe).toHaveBeenCalledOnce()
+      scroll.mockClear()
+      act(() => { resize() })
+      expect(scroll).toHaveBeenCalledOnce()
+      const tab = renderer!.root.findByProps({ role: 'tab', 'aria-label': 'long-saved-artifact-name.txt' })
+      expect(tab.parent!.props.style).toEqual({ minWidth: 'min(7rem, 100%)', maxWidth: 'min(15rem, 100%)' })
+      act(() => { renderer!.unmount() })
+      expect(disconnect).toHaveBeenCalledOnce()
+      scroll.mockClear()
+      act(() => { resize() })
+      expect(scroll).not.toHaveBeenCalled()
+    } finally { if (renderer!) act(() => renderer.unmount()); vi.unstubAllGlobals() }
+  })
+
   it('renders dynamic titles and activates tabs with Arrow/Home/End navigation', () => {
     let state = openCodeRightTab(emptyCodeRightTabsState(), BUILTIN_RIGHT_PANEL_IDS.browser)
     state = openCodeRightTab(state, BUILTIN_RIGHT_PANEL_IDS.file)

@@ -9,6 +9,7 @@ on:
       - 'src/renderer/src/components/workbench/WorkbenchRight*'
       - 'src/renderer/src/components/workbench/WorkbenchSideRail*'
       - 'src/renderer/src/components/workbench/WorkbenchFileTreeSidePanel*'
+      - 'src/renderer/src/components/workbench/useWorkbenchFileTreeController*'
       - 'src/renderer/src/components/workbench/CodeRightPanelTabs*'
       - 'src/renderer/src/components/chat/WorkbenchTopBar.tsx'
       - 'src/renderer/src/locales/*/common/rooms*'
@@ -77,6 +78,7 @@ jobs:
           src/renderer/src/components/rooms/room-workbench-layout.test.ts
           src/renderer/src/components/workbench/CodeRightPanelTabs.test.ts
           src/renderer/src/components/workbench/WorkbenchRightPanel.browser-use.test.ts
+          src/renderer/src/components/workbench/useWorkbenchFileTreeController.test.ts
       - name: Build actual application
         run: npm run build
       - name: Ensure native Electron binary
