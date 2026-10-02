@@ -140,7 +140,7 @@ export function createServerRuntimeComposition(
   const roomComposition = createRuntimeRoomComposition({
     options: () => config.activeOptions,
     services: { threads: threadService, threadStore: stores.threadStore, eventBus,
-      artifacts: artifactStore,
+      artifacts: artifactStore, modelCapabilities: core.modelCapabilities,
       memoryStore: services.memoryStore, memoryEnabled: () => config.activeOptions.capabilities?.memory?.enabled !== false,
       turns: turnService, sessions: sessionStore, approvals: approvalGate, inputs: userInputGate,
       runTurn: runAgentTurn,

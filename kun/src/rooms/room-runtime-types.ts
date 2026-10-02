@@ -129,6 +129,8 @@ export type RoomRuntimeDeps = {
   runTurn: (threadId: string, turnId: string) => Promise<unknown>
   dataDir: string
   model: () => { model: string; providerId?: string; accountId?: string }
+  /** Same provider-aware capacity resolver used by the native request composer. */
+  modelCapabilities?: (model: string, providerId?: string) => import('../contracts/capabilities.js').ModelCapabilityMetadata
   modelSnapshot?: () => Promise<import('../contracts/model-connections.js').ModelConnectionSnapshot>
   profiles: () => Record<string, SubagentProfileConfig>
   peerModels?: {

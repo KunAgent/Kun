@@ -7,7 +7,7 @@ import type { RoomReplyPage, RoomReplyPageInput } from '../contracts/room-replie
 import type { RoomRepositoryChoice, RoomSearchPage, RoomSearchQuery, RoomRunSummary, RoomRunSummaryQuery } from '../contracts/room-experience.js'
 
 export const RoomDocumentKindSchema = z.enum([
-  'room_result_inbox', 'agent_commitment', 'agent_artifact', 'agent_identity', 'agent_mapping', 'agent_bootstrap', 'agent_features', 'agent_handoff', 'agent_memory_job', 'agent_budget', 'agent_budget_claim',
+  'agent_conversation_preparation', 'agent_conversation_cursor', 'room_result_inbox', 'agent_commitment', 'agent_artifact', 'agent_identity', 'agent_mapping', 'agent_bootstrap', 'agent_features', 'agent_handoff', 'agent_memory_job', 'agent_budget', 'agent_budget_claim',
   'room', 'message', 'request', 'task', 'dispatch', 'attempt',
   'workspace', 'delivery', 'review', 'amendment', 'rule', 'artifact',
   'rule_version', 'context', 'summary', 'outcome', 'recovery', 'integration', 'read_state', 'cleanup', 'validation',
@@ -57,6 +57,8 @@ export const RoomStoreListOptionsSchema = z.object({
   status: z.union([z.string(), z.array(z.string()).max(30)]).optional(),
   limit: z.number().int().min(1).max(1000).default(50),
   beforeSeq: Seq.optional(),
+  /** Private-history admission boundary, including late publications from earlier requests. */
+  beforeSourceSeq: Seq.optional(),
   afterSeq: Seq.optional(),
   order: z.enum(['asc', 'desc']).default('desc'),
   includeArchived: z.boolean().default(false),

@@ -1,3 +1,4 @@
+import { putRoomDocument } from '../rooms/room-service.js'
 import { execFileSync } from 'node:child_process'
 import { setAgentPermissions, agentPermissions } from './agent-permissions.js'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -350,4 +351,115 @@ it('uses current confirmed permissions for a new retry while retaining the origi
   const retry = (await f.store.list<RoomRequestState>('request', { roomId: f.created.roomId }))[0]
   expect(retry.value.roomSnapshot.privateExecutionPolicy?.sandboxMode).toBe('danger-full-access')
   expect(retry.value.roomSnapshot.privateWorkspace).toBe(original.value.roomSnapshot.privateWorkspace)
+})
+
+// Cross-provider execution threads must converge on the product conversation.
+it('bridges B messages when returning to an existing A execution thread', async () => {
+  const f = await fixture()
+  const first = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'a1', body: 'ALPHA_GOAL Create hello.txt' })
+  const a = await f.advance(first.requestId)
+  let agent = await f.runtime.agents.get(f.created.agentId)
+  await f.runtime.agents.update(agent.id, { clientRequestId: 'to-b', expectedRevision: agent.revision,
+    modelRef: { model: 'second', providerId: 'other' } })
+  const middle = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'b1', body: 'BETA_DECISION Use a blue cover. Update that file.' })
+  const b = await f.advance(middle.requestId)
+  expect(b.threadId).not.toBe(a.threadId)
+  agent = await f.runtime.agents.get(f.created.agentId)
+  await f.runtime.agents.update(agent.id, { clientRequestId: 'to-a', expectedRevision: agent.revision,
+    modelRef: { model: 'first', providerId: 'test' } })
+  const last = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'a2', body: 'Continue with the agreed cover.' })
+  const resumed = await f.advance(last.requestId)
+  expect(resumed.threadId).toBe(a.threadId)
+  const input = f.seen.find((request) => request.turnId === resumed.turnId)!
+  expect(JSON.stringify(input.history)).toContain('BETA_DECISION Use a blue cover.')
+})
+
+
+it('replays a cross-provider bridge after a lost admission receipt without duplicate execution', async () => {
+  const f = await fixture()
+  await f.advance((await f.runtime.service.send(f.created.roomId, { clientRequestId: 'a', body: 'Initial goal' })).requestId)
+  let agent = await f.runtime.agents.get(f.created.agentId)
+  await f.runtime.agents.update(agent.id, { clientRequestId: 'b-route', expectedRevision: agent.revision,
+    modelRef: { model: 'second', providerId: 'other', accountId: 'b-account' } })
+  await f.advance((await f.runtime.service.send(f.created.roomId, { clientRequestId: 'b', body: 'DECISION_BLUE' })).requestId)
+  agent = await f.runtime.agents.get(f.created.agentId)
+  await f.runtime.agents.update(agent.id, { clientRequestId: 'a-route', expectedRevision: agent.revision,
+    modelRef: { model: 'first', providerId: 'test' } })
+  const original = f.h.turns.enqueueTurn.bind(f.h.turns)
+  const enqueue = vi.spyOn(f.h.turns, 'enqueueTurn').mockImplementationOnce(async (input) => {
+    await original(input); throw new Error('lost acknowledgement')
+  })
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'return-a', body: 'CURRENT_UNIQUE' })
+  for (let n = 0; n < 3; n++) await new AgentDirectRunner(f.deps, f.runtime.service).tick((await f.store.get<RoomRequestState>('request', sent.requestId))!)
+  const done = await f.advance(sent.requestId)
+  expect(done.status).toBe('completed'); expect(enqueue).toHaveBeenCalledTimes(1)
+  const request = f.seen.find((item) => item.turnId === done.turnId)!
+  const current = request.history.find((item) => item.kind === 'user_message' && item.turnId === done.turnId)
+  expect(current?.kind === 'user_message' && current.text).toContain('DECISION_BLUE')
+  expect(current?.kind === 'user_message' && current.text.match(/CURRENT_UNIQUE/g)).toHaveLength(1)
+  expect((await f.h.sessionStore.loadItems(done.threadId)).filter((item) => item.turnId === done.turnId && item.kind === 'tool_call' && item.toolName === 'write')).toHaveLength(1)
+})
+
+it('refreshes durable open commitments through repeated provider and account switches', async () => {
+  const f = await fixture()
+  const first = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'goal', body: 'KEEP_CRITICAL_COMMITMENT Create the file' })
+  const source = await f.advance(first.requestId)
+  await f.runtime.commitments.create(f.created.agentId, { clientRequestId: 'durable', sourceRoomId: f.created.roomId,
+    sourceMessageId: source.sourceMessageId, objective: 'KEEP_CRITICAL_COMMITMENT', acceptance: 'User confirms delivery' })
+  const threads = new Set<string>()
+  for (let n = 0; n < 12; n++) {
+    const agent = await f.runtime.agents.get(f.created.agentId)
+    await f.runtime.agents.update(agent.id, { clientRequestId: 'route-' + n, expectedRevision: agent.revision,
+      modelRef: { model: n % 2 ? 'first' : 'second', providerId: n % 3 ? 'test' : 'other', accountId: 'account-' + n % 2 } })
+    const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'turn-' + n, body: 'CURRENT_' + n + ' Continue the task' })
+    const done = await f.advance(sent.requestId); threads.add(done.threadId)
+    expect(done.status).toBe('completed')
+    const actual = f.seen.find((item) => item.turnId === done.turnId)!
+    const current = actual.history.find((item) => item.kind === 'user_message' && item.turnId === done.turnId)
+    expect(current?.kind === 'user_message' && current.text).toContain('KEEP_CRITICAL_COMMITMENT')
+  }
+  expect(threads.size).toBe(4)
+}, 30_000)
+
+
+it('cancels during resumable history preparation before any admission or side effect', async () => {
+  const f = await fixture()
+  for (let n = 0; n < 80; n++) await putRoomDocument(f.store, 'message', 'old-' + n, f.created.roomId,
+    { id: 'old-' + n, roomId: f.created.roomId, authorKind: 'user', authorLabelSnapshot: 'You', body: 'Older note ' + n,
+      messageSeq: n + 1, status: 'final', attachmentIds: [], mentionMemberIds: [], bodyRevision: 0, createdAt: new Date().toISOString() }, null)
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'cancel-scan', body: 'Create the file' })
+  for (let n = 0; n < 2; n++) await f.runner.tick((await f.store.get<RoomRequestState>('request', sent.requestId))!)
+  expect(await f.store.list('agent_conversation_preparation')).toHaveLength(1)
+  const before = (await f.store.get<RoomRequestState>('request', sent.requestId))!
+  expect(before.value.turnId).toBeUndefined()
+  await controlDirectRequest(f.runtime, f.created.roomId, sent.requestId,
+    { action: 'stop', clientRequestId: 'cancel', expectedRevision: before.revision })
+  await new AgentDirectRunner(f.deps, f.runtime.service).tick((await f.store.get<RoomRequestState>('request', sent.requestId))!)
+  expect((await f.store.get<RoomRequestState>('request', sent.requestId))!.value.status).toBe('cancelled')
+  expect(f.seen).toHaveLength(0)
+  expect(await f.store.list('agent_conversation_cursor')).toHaveLength(0)
+})
+
+
+it('does not acknowledge a recovered turn whose admission is still pending', async () => {
+  const f = await fixture()
+  const original = f.h.turns.enqueueTurn.bind(f.h.turns)
+  const enqueue = vi.spyOn(f.h.turns, 'enqueueTurn').mockImplementationOnce(async (input) => {
+    const admitted = await original(input)
+    const thread = (await f.h.threadStore.get(input.threadId))!
+    thread.turns.find((turn) => turn.id === admitted.turnId)!.admissionPending = true
+    await f.h.threadStore.upsert(thread)
+    throw new Error('admission commit receipt unavailable')
+  })
+  const sent = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'partial-admission', body: 'Create the file' })
+  for (let n = 0; n < 3; n++) await new AgentDirectRunner(f.deps, f.runtime.service).tick((await f.store.get<RoomRequestState>('request', sent.requestId))!)
+  expect(await f.store.list('agent_conversation_cursor')).toHaveLength(0)
+  expect(f.seen).toHaveLength(0)
+  const request = (await f.store.get<RoomRequestState>('request', sent.requestId))!.value
+  const thread = (await f.h.threadStore.get(request.threadId))!
+  delete thread.turns.find((turn) => turn.id === request.turnId)!.admissionPending
+  await f.h.threadStore.upsert(thread)
+  expect((await f.advance(sent.requestId)).status).toBe('completed')
+  expect(enqueue).toHaveBeenCalledTimes(1)
+  expect(await f.store.list('agent_conversation_cursor')).toHaveLength(1)
 })

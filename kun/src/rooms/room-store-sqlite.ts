@@ -131,6 +131,15 @@ export class SqliteRoomStore implements RoomStore {
       if (parsed.archivedOnly) clauses.push('archived = 1')
       else if (!parsed.includeArchived) clauses.push('archived = 0')
     }
+    if (parsed.beforeSourceSeq !== undefined) {
+      if (kind !== 'message') throw new Error('beforeSourceSeq requires message history')
+      clauses.push(`(CASE WHEN seq < ? THEN 1 ELSE EXISTS (
+        SELECT 1 FROM room_documents r JOIN room_documents m
+          ON m.kind = 'message' AND m.id = json_extract(r.document, '$.sourceMessageId')
+        WHERE r.kind = 'request' AND r.id = json_extract(room_documents.document, '$.sourceRequestId')
+          AND r.room_id = room_documents.room_id AND m.room_id = room_documents.room_id AND m.seq < ?) END)`)
+      args.push(parsed.beforeSourceSeq, parsed.beforeSourceSeq)
+    }
     if (parsed.beforeSeq !== undefined) { clauses.push('seq < ?'); args.push(parsed.beforeSeq) }
     if (parsed.afterSeq !== undefined) { clauses.push('seq > ?'); args.push(parsed.afterSeq) }
     if (parsed.status !== undefined) {

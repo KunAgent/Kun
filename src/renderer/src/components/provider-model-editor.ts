@@ -17,6 +17,7 @@ import {
 } from '@shared/app-settings'
 import { normalizeModelProviderPricing } from '@shared/app-settings-provider-capabilities'
 import {
+  DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS,
   isComposerChatModelId,
   isImageGenerationModelId,
   isMusicGenerationModelId,
@@ -126,7 +127,7 @@ export function newProviderModelForm(
     kind,
     originalModelId: '',
     modelId: '',
-    contextWindowTokens: kind === 'chat' ? 256_000 : null,
+    contextWindowTokens: kind === 'chat' ? DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS : null,
     maxOutputTokens: null,
     pricing: null,
     visionInput: false,

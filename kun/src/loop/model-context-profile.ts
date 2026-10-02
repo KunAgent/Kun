@@ -122,15 +122,14 @@ export type ProviderModelCapabilityInput = {
   model?: string
 }
 
-export const DEFAULT_CONTEXT_WINDOW_TOKENS = 256_000
+// Unknown capacity is not evidence of a large context window. Custom models
+// can override this conservative estimate with models.profiles.<id>.contextWindowTokens.
+// Models smaller than 32k still need an explicit profile; this is not a hard-fit guarantee.
+export const DEFAULT_CONTEXT_WINDOW_TOKENS = 32_000
 
 export const DEFAULT_CONTEXT_THRESHOLDS: ModelContextThresholds = {
-  // Fallback for models without a registered profile. These assume a
-  // reasonably large window (>=256k). A custom endpoint with a small
-  // window (e.g. 32k) should register a profile with explicit thresholds,
-  // otherwise it may exceed its window before the first compaction.
-  softThreshold: 192_000,
-  hardThreshold: 217_600
+  softThreshold: Math.floor(DEFAULT_CONTEXT_WINDOW_TOKENS * 0.75),
+  hardThreshold: Math.floor(DEFAULT_CONTEXT_WINDOW_TOKENS * 0.85)
 }
 
 const DEEPSEEK_V4_CONTEXT_WINDOW_TOKENS = 1_000_000
@@ -204,6 +203,9 @@ export function contextThresholdsForModel(
   profiles: readonly ModelContextProfile[] = MODEL_CONTEXT_PROFILES
 ): ModelContextThresholds {
   const profile = resolveModelContextProfile(model, profiles)
+  // Explicit compactor thresholds can be paired with a separately supplied
+  // model-capability resolver. The per-request hard cap still enforces the
+  // actual window; do not replace that declared policy with a 32k assumption.
   if (!profile) return fallback
   // Safety cap: never let thresholds exceed 75%/85% of the context
   // window, even if a config-provided model profile sets them higher
@@ -221,11 +223,18 @@ export function contextThresholdsForModel(
   }
 }
 
+const warnedUnknownWindows = new Set<string>()
 export function modelCapabilitiesForModel(
   model: string | undefined,
   profiles: readonly ModelContextProfile[] = MODEL_CONTEXT_PROFILES
 ): ModelCapabilityMetadata {
   const profile = resolveModelContextProfile(model, profiles)
+  if (!profile && model && !warnedUnknownWindows.has(model)) {
+    if (warnedUnknownWindows.size >= 128) warnedUnknownWindows.delete(warnedUnknownWindows.values().next().value!)
+    warnedUnknownWindows.add(model)
+    console.warn(`[kun] No context capacity registered for "${redactSecretText(model)}"; using a conservative ` +
+      `${DEFAULT_CONTEXT_WINDOW_TOKENS}-token estimate. Configure contextWindowTokens for the actual model, especially smaller windows.`)
+  }
   return {
     id: model?.trim() || profile?.canonicalModel || 'auto',
     inputModalities: [...(profile?.inputModalities ?? DEFAULT_MODEL_INPUT_MODALITIES)],
