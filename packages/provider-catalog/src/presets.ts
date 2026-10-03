@@ -374,6 +374,19 @@ export const PROVIDER_CATALOG = [
     credentialUrl: 'https://accounts.x.ai'
   },
   {
+    id: 'cheaperinference',
+    name: 'Cheaper Inference',
+    category: 'api',
+    kind: 'http',
+    authFlow: 'api-key',
+    authType: 'api-key',
+    baseUrl: 'https://api.cheaperinference.com/v1',
+    endpointFormat: 'chat_completions',
+    models: [],
+    docsUrl: 'https://cheaperinference.com/docs',
+    credentialUrl: 'https://cheaperinference.com/signup'
+  },
+  {
     id: 'opper',
     name: 'Opper',
     category: 'api',
