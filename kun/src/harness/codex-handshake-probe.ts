@@ -2,7 +2,8 @@
  * Codex app-server handshake probe for `POST /v1/harnesses/:id/test` (P6-07):
  * `codex app-server` speaks JSON-RPC over stdio; `initialize` proves the
  * channel is alive and returns the server userAgent. `account/read` adds the
- * login verdict without touching credentials — both calls are free.
+ * local account verdict. Optional `model/list` validates explicit model choices;
+ * no thread, turn, model prompt, or interactive login is requested.
  */
 import { tmpdir } from 'node:os'
 import { startHarnessProcess } from '../session/harness-process.js'
@@ -23,6 +24,9 @@ export type CodexHandshakeProbeDeps = {
   spawn?: HarnessSpawnFn
   timeoutMs?: number
   signal?: AbortSignal
+  /** Resolved selected-profile environment; injected last. */
+  env?: Record<string, string>
+  includeModels?: boolean
   resolveSecretEnv?: HarnessSecretRefResolver
 }
 
@@ -37,20 +41,31 @@ export async function probeCodexHandshake(
   deps: CodexHandshakeProbeDeps = {}
 ): Promise<Omit<HarnessTestHandshake, 'durationMs'>> {
   const timeoutMs = deps.timeoutMs ?? ACP_READINESS_TIMEOUT_MS
+  const signal = AbortSignal.any([
+    ...(deps.signal ? [deps.signal] : []), AbortSignal.timeout(timeoutMs)
+  ])
   let process
+  let pending: ReturnType<typeof startHarnessProcess> | undefined
   try {
-    const secretEnv = await resolveHarnessSecretEnv(definition, deps.resolveSecretEnv)
-    // No credential env: the handshake proves the binary speaks the
-    // app-server protocol; it never starts a thread or turn.
-    process = await startHarnessProcess({
+    signal.throwIfAborted()
+    const secretEnv = await raceProbeAbort(resolveHarnessSecretEnv(definition, deps.resolveSecretEnv), signal)
+    signal.throwIfAborted()
+    // Metadata only: this never starts a thread or a turn.
+    pending = startHarnessProcess({
+      signal,
       command,
       args: codexMetadataProbeArgs(definition.launch?.args),
-      env: { ...nativeAgentNetworkEnv(definition, globalThis.process.env, secretEnv), ...definition.launch?.env },
+      env: { ...nativeAgentNetworkEnv(definition, globalThis.process.env, { ...secretEnv, ...deps.env }), ...definition.launch?.env },
       secretEnv,
+      credentialEnv: deps.env,
       cwd: tmpdir(),
       ...(deps.spawn ? { spawn: deps.spawn } : {})
     })
+    process = await raceProbeAbort(pending, signal)
+    signal.throwIfAborted()
   } catch (error) {
+    // The launcher can settle after cancellation. Reclaim that late child too.
+    void pending?.then((child) => child.stop(0).catch(() => undefined), () => undefined)
     return {
       ok: false,
       supported: true,
@@ -60,23 +75,25 @@ export async function probeCodexHandshake(
   }
   const client = new CodexClient({ process })
   try {
-    const init = await raceProbeAbort(withTimeout(client.initialize(), timeoutMs), deps.signal)
-    const account = await raceProbeAbort(withTimeout(client.accountRead(), timeoutMs), deps.signal).catch(
+    const init = await raceProbeAbort(client.initialize(), signal)
+    signal.throwIfAborted()
+    const account = await raceProbeAbort(client.accountRead(), signal).catch(
       () => undefined
     )
-    deps.signal?.throwIfAborted()
-    const login = account?.account
-      ? account.account.type === 'chatgpt'
-        ? `chatgpt${account.account.email ? ` ${account.account.email}` : ''}`
-        : 'apiKey'
-      : account?.requiresOpenaiAuth
-        ? 'signed-out'
-        : 'no-account'
+    signal.throwIfAborted()
+    const authentication = account?.account?.type === 'chatgpt' ? 'verified'
+      : account?.account ? 'unverified'
+      : account?.requiresOpenaiAuth ? 'missing' : 'unverified'
+    const login = account?.account?.type ?? (authentication === 'missing' ? 'signed-out' : 'unknown')
+    const models = deps.includeModels ? await raceProbeAbort(client.listModelsFlat(), signal) : undefined
     const version = /^.*\/(\d+\.\d+\.\d+.*)$/.exec(init.userAgent)?.[1]
     return {
       ok: true,
       supported: true,
       protocol: 'codex-app-server',
+      authentication,
+      ...(models ? { models } : {}),
+      ...(account ? { authRequired: account.requiresOpenaiAuth && !account.account } : {}),
       agent: {
         name: 'codex',
         ...(version ? { version } : {})
@@ -96,16 +113,4 @@ export async function probeCodexHandshake(
   } finally {
     await client.close().catch(() => undefined)
   }
-}
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(
-        () => reject(new Error(`timed out after ${timeoutMs}ms`)),
-        timeoutMs
-      ).unref()
-    )
-  ])
 }

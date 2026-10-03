@@ -12,7 +12,8 @@ import {
   type AcpProcess,
   type AcpSpawnFn
 } from '../runtime/acp/acp-process.js'
-import { AcpError } from '../runtime/acp/acp-schema.js'
+import { ACP_AGENT_METHODS, AcpError, AcpNewSessionResultSchema } from '../runtime/acp/acp-schema.js'
+import { acpModelCatalog } from './acp-model-catalog.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import type { HarnessTestHandshake } from '../contracts/harness-test.js'
 import {
@@ -26,6 +27,10 @@ export type AcpHandshakeProbeDeps = {
   spawn?: AcpSpawnFn
   timeoutMs?: number
   signal?: AbortSignal
+  /** Resolved selected-profile environment; overrides definition secrets. */
+  env?: Record<string, string>
+  /** Optional local session metadata; never sends a prompt or authenticates. */
+  includeModels?: boolean
   /** Resolves `launch.secretEnv` refs so the probe sees the real env (P4-12). */
   resolveSecretEnv?: HarnessSecretRefResolver
 }
@@ -41,20 +46,32 @@ export async function probeAcpHandshake(
   deps: AcpHandshakeProbeDeps = {}
 ): Promise<Omit<HarnessTestHandshake, 'durationMs'>> {
   const timeoutMs = deps.timeoutMs ?? ACP_READINESS_TIMEOUT_MS
+  const signal = AbortSignal.any([
+    ...(deps.signal ? [deps.signal] : []), AbortSignal.timeout(timeoutMs)
+  ])
   let process: AcpProcess
+  let pending: ReturnType<typeof startAcpProcess> | undefined
   try {
-    const secretEnv = await resolveHarnessSecretEnv(definition, deps.resolveSecretEnv)
-    process = await startAcpProcess({
+    signal.throwIfAborted()
+    const secretEnv = await raceProbeAbort(resolveHarnessSecretEnv(definition, deps.resolveSecretEnv), signal)
+    signal.throwIfAborted()
+    pending = startAcpProcess({
+      harnessId: definition.id,
+      signal,
       command,
       args: definition.launch?.args ?? [],
-      // Same rule as the readiness probe: no credential env. The handshake
-      // reports install health and available login methods, not account state.
+      // Initialize reports protocol health, never authenticated account state.
       env: definition.launch?.env ?? {},
       secretEnv,
+      credentialEnv: deps.env,
       cwd: tmpdir(),
       spawn: deps.spawn
     })
+    process = await raceProbeAbort(pending, signal)
+    signal.throwIfAborted()
   } catch (error) {
+    // The launcher can settle after cancellation. Reclaim that late child too.
+    void pending?.then((child) => child.stop(0).catch(() => undefined), () => undefined)
     return {
       ok: false,
       supported: true,
@@ -67,7 +84,16 @@ export async function probeAcpHandshake(
   // sessionUnavailable reply instead of touching a real workspace.
   new AcpClientHost().attach(conn)
   try {
-    const init = await raceProbeAbort(conn.initialize({ timeoutMs }), deps.signal)
+    const init = await raceProbeAbort(conn.initialize({ timeoutMs }), signal)
+    signal.throwIfAborted()
+    let models: string[] | undefined
+    if (deps.includeModels) {
+      const raw = await raceProbeAbort(conn.rpc.request(ACP_AGENT_METHODS.sessionNew,
+        { cwd: tmpdir(), mcpServers: [] }, { timeoutMs }), signal)
+      signal.throwIfAborted()
+      const session = AcpNewSessionResultSchema.parse(raw)
+      models = acpModelCatalog({ harnessId: definition.id, ...session }).models
+    }
     const caps = init.agentCapabilities
     const mcpTransports = [
       ...(caps?.mcpCapabilities?.stdio ? ['stdio'] : []),
@@ -77,6 +103,8 @@ export async function probeAcpHandshake(
       ok: true,
       supported: true,
       protocol: 'acp',
+      authentication: 'unverified',
+      ...(models ? { models } : {}),
       protocolVersion: init.protocolVersion,
       ...(init.agentInfo?.name || init.agentInfo?.version
         ? {

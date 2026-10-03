@@ -4,6 +4,7 @@ import type {
   AdeHarnessProviderModelGroup,
   AdeHarnessRow
 } from '@shared/ade-harnesses'
+import { harnessProfileReady, readyHarnessProfiles } from '@shared/harness-enablement'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { MODEL_REASONING_EFFORTS, type ModelReasoningEffort, type ModelProviderModelProfileV1 } from '@shared/app-settings'
 import type { HarnessModelInfo } from '../../../../kun/src/contracts/harness-models'
@@ -104,9 +105,9 @@ export function adeHarnessModelGroups(input: {
   const groups: ModelProviderModelGroup[] = []
   for (const mode of row.definition.credentialModes) {
     if (mode === 'native-login') {
-      groups.push({
-        providerId: credentialGroupKey(mode),
-        label: labelFor[mode],
+      for (const profile of readyHarnessProfiles(row).filter((entry) => entry.credentialMode === mode)) groups.push({
+        providerId: profile.providerId ? `${credentialGroupKey(mode)}:${profile.providerId}` : credentialGroupKey(mode),
+        label: profile.providerId ? `${labelFor[mode]} · ${profile.providerId}` : labelFor[mode],
         modelIds: [...models],
         ...(input.modelInfo ? { modelProfiles: harnessModelProfiles(input.modelInfo, row.definition.id === 'devin') } : {}),
         ...(input.modelInfo ? { nativeHarnessId: row.definition.id,
@@ -116,7 +117,7 @@ export function adeHarnessModelGroups(input: {
     }
     if (!hasConfiguredProvider) continue
     for (const provider of providerGroups) {
-      if (provider.models.length === 0) continue
+      if (provider.models.length === 0 || !harnessProfileReady(row, { harnessId: row.definition.id, credentialMode: mode, providerId: provider.providerId })) continue
       groups.push({
         providerId: `${credentialGroupKey(mode)}:${provider.providerId}`,
         label: `${labelFor[mode]} · ${provider.label}`,

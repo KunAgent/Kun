@@ -4,17 +4,20 @@ import type {
   KunHarnessSettingsV1,
   KunRuntimeSettingsV1
 } from '@shared/app-settings'
+import { harnessProfileEnabled, selectedHarnessProfile } from '@shared/harness-enablement'
 import { getProvider } from '../../agent/registry'
-import { harnessUnavailableLabelKey, loadHarnesses, useHarnessStore } from '../../store/harness-store'
+import { applyHarnessEnablementSettings, harnessUnavailableLabelKey, loadHarnesses, useHarnessStore } from '../../store/harness-store'
 import { SettingsCard } from '../settings-controls'
 import { AgentCenterCard } from './AgentCenterCard'
 import { agentCardModel } from './agent-center-actions'
 import { exportCustomEntry } from './agent-center-custom-form'
 import { AgentCenterAddWizard } from './agent-center-add-wizard'
+import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
 import { AgentIcon } from '../agent-icon'
 
 export function harnessSettings(kun: KunRuntimeSettingsV1): KunHarnessSettingsV1 {
   return kun.harnesses ?? {
+    enabledProfiles: [],
     disabledIds: [],
     binaryPaths: {},
     custom: [],
@@ -34,10 +37,12 @@ export function harnessSettings(kun: KunRuntimeSettingsV1): KunHarnessSettingsV1
 export function AgentCenter({
   kun,
   updateKun,
+  beforeEnableCheck,
   onSetupCommand,
   settingsSurface = false
 }: {
   kun: KunRuntimeSettingsV1
+  beforeEnableCheck?: () => Promise<boolean>
   updateKun: (patch: { harnesses?: Partial<KunHarnessSettingsV1> }) => void
   onSetupCommand?: (harnessId: string, command: string, title: string) => void
   settingsSurface?: boolean
@@ -59,6 +64,11 @@ export function AgentCenter({
   useEffect(() => {
     // P4-02: always re-detect on open; waitMs lets an inflight pass settle.
     void loadHarnesses(true, { waitMs: 3_000 })
+    if (typeof window === 'undefined') return
+    const refresh = (): void => { void loadHarnesses(true) }
+    window.addEventListener(SETTINGS_CHANGED_EVENT, refresh)
+    const stop = window.kunGui?.onRuntimeSettingsSyncStatus?.((status) => { if (status.state === 'synced') refresh() })
+    return () => { window.removeEventListener(SETTINGS_CHANGED_EVENT, refresh); stop?.() }
   }, [])
 
   useEffect(() => {
@@ -68,6 +78,7 @@ export function AgentCenter({
   }, [settingsHarnessId])
 
   const patchHarness = (patch: Partial<KunHarnessSettingsV1>): void => {
+    applyHarnessEnablementSettings({ ...settings, ...patch }, Boolean(patch.binaryPaths || patch.defaults || patch.custom))
     updateKun({ harnesses: { ...settings, ...patch } })
   }
 
@@ -91,7 +102,7 @@ export function AgentCenter({
     return result
   }
 
-  const ordered = [...rows].sort((a, b) => {
+  const ordered = rows.filter((row) => row.definition.id !== 'gemini-cli' && row.definition.availability !== 'retired').sort((a, b) => {
     const order = settings.agentOrder
     const ai = order.indexOf(a.definition.id)
     const bi = order.indexOf(b.definition.id)
@@ -129,7 +140,7 @@ export function AgentCenter({
               {ordered.map((row) => {
                 const id = row.definition.id
                 const model = agentCardModel(row, {
-                  enabled: !settings.disabledIds.includes(id),
+                  enabled: id === 'kun' || harnessProfileEnabled(settings, selectedHarnessProfile(row, settings)),
                   platform,
                   isDefault: settings.defaultHarnessId === id
                 })
@@ -152,7 +163,7 @@ export function AgentCenter({
               })}
             </div>
             <div className="min-w-0">
-              {selectedRow ? [selectedRow].map((row) => {
+              {selectedRow && !addOpen ? [selectedRow].map((row) => {
             const id = row.definition.id
             return (
               <AgentCenterCard
@@ -163,11 +174,8 @@ export function AgentCenter({
                 platform={platform}
                 t={t}
                 tSettings={tSettings}
-                onToggleEnabled={(enabled) => patchHarness({
-                  disabledIds: enabled
-                    ? settings.disabledIds.filter((entry) => entry !== id)
-                    : [...new Set([...settings.disabledIds, id])]
-                })}
+                onPatchHarness={patchHarness}
+                beforeEnableCheck={beforeEnableCheck}
                 onProbe={() => void probe(id)}
                 onSetDefault={() => patchHarness({ defaultHarnessId: id })}
                 // P4-13: terminal agents are catalog rows too but live under

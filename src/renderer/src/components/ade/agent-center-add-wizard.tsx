@@ -47,13 +47,13 @@ function readState(): WizardState {
   }
 }
 
-function fingerprint(row: AdeHarnessRow | undefined, binaryPath: string | undefined): string {
+function fingerprint(row: AdeHarnessRow | undefined, binaryPath: string | undefined, defaults?: unknown): string {
   return JSON.stringify({
     id: row?.definition.id,
     transport: row?.definition.transport,
     command: row?.status.resolvedCommand,
     version: row?.status.version,
-    binaryPath
+    binaryPath, defaults
   })
 }
 
@@ -83,7 +83,7 @@ export function AgentCenterAddWizard({
   const generation = useRef(0)
   const activeCheck = useRef<AbortController | null>(null)
   const row = rows.find((candidate) => candidate.definition.id === state.selectedId)
-  const checkFingerprint = fingerprint(row, settings.binaryPaths[state.selectedId])
+  const checkFingerprint = fingerprint(row, settings.binaryPaths[state.selectedId], settings.defaults[state.selectedId])
   const checkFresh = Boolean(state.check && state.check.id === state.selectedId &&
     (state.kind !== 'builtin' || state.check.fingerprint === checkFingerprint) &&
     Date.now() - state.check.checkedAt < CHECK_TTL_MS)
@@ -93,6 +93,12 @@ export function AgentCenterAddWizard({
     try { window.sessionStorage.setItem(STATE_KEY, JSON.stringify(state)) }
     catch { /* The wizard still works when session storage is blocked. */ }
   }, [state])
+  useEffect(() => {
+    generation.current += 1
+    activeCheck.current?.abort()
+    activeCheck.current = null
+    setBusy(false)
+  }, [checkFingerprint])
   useEffect(() => () => {
     generation.current += 1
     activeCheck.current?.abort()
@@ -141,17 +147,20 @@ export function AgentCenterAddWizard({
     try {
       const result = await testHarness(currentId, {
         level,
-        credentialMode: row.definition.credentialModes[0]
+        credentialMode: settings.defaults[currentId]?.credentialMode ?? row.definition.credentialModes[0],
+        ...(settings.defaults[currentId]?.providerId ? { providerId: settings.defaults[currentId]!.providerId } : {}),
+        ...(settings.defaults[currentId]?.model ? { model: settings.defaults[currentId]!.model } : {}),
+        timeoutMs: 55_000
       }, { signal: controller.signal })
       if (generation.current !== currentGeneration) return
-      const detail = result.trial?.error ?? result.handshake?.detail ?? result.detect.status.message
+      const detail = result.readiness?.detail ?? result.trial?.error ?? result.handshake?.detail ?? result.detect.status.message
       setState({
         step: 'finish', kind: 'builtin', selectedId: currentId,
         check: {
           id: currentId,
           fingerprint: currentFingerprint,
           level,
-          ok: result.ok,
+          ok: result.ok && result.readiness?.usable === true,
           ...(detail ? { detail } : {}),
           durationMs: result.durationMs,
           checkedAt: Date.now()
@@ -228,7 +237,7 @@ export function AgentCenterAddWizard({
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {state.step === 'choose' ? (
             <div className="space-y-2" data-agent-add-choose>
-              {rows.filter((candidate) => candidate.definition.builtin && candidate.definition.id !== 'kun').map((candidate) => {
+              {rows.filter((candidate) => candidate.definition.builtin && candidate.definition.id !== 'kun' && candidate.definition.id !== 'gemini-cli' && candidate.definition.availability !== 'retired').map((candidate) => {
                 return (
                   <button key={candidate.definition.id} type="button" onClick={() => choose('builtin', candidate.definition.id)} data-agent-add-select={candidate.definition.id} className="flex w-full items-center gap-3 rounded-xl border border-ds-border px-3 py-2 text-left text-ds-ink hover:bg-ds-hover">
                     <AgentIcon harnessId={candidate.definition.id} size={20} />

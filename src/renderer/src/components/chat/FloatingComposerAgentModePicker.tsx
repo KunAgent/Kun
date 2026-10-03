@@ -6,7 +6,7 @@ import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import { AgentIcon } from '../agent-icon'
 import { bodyZoom } from '../../lib/body-zoom'
 import { harnessConnectionPresentation } from '../../lib/harness-connection-presentation'
-import { harnessRowUnavailableDetail } from '../../store/harness-store'
+import { harnessRowUnavailableDetail, harnessRowAvailable } from '../../store/harness-store'
 import {
   calculateTaskSurfaceMenuPlacement,
   type ComposerTaskSurface,
@@ -48,7 +48,7 @@ export function FloatingComposerAgentModePicker({
   const pendingFocus = useRef<'first' | 'last' | 'selected' | null>(null)
   const menuId = useId()
   const kunRow = controls.rows.find((row) => row.definition.id === 'kun')
-  const externalRows = controls.rows.filter((row) => row.definition.id !== 'kun')
+  const externalRows = controls.rows.filter((row) => row.definition.id !== 'kun' && harnessRowAvailable(row))
   const kun = controls.harnessId === 'kun'
   const surfaceLabel = t(surface === 'design' ? 'taskTypeDesign' : 'taskTypeCode')
   const triggerLabel = kun ? `Kun · ${surfaceLabel}` : controls.harnessLabel

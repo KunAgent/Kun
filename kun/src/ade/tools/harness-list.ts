@@ -6,6 +6,7 @@ import type { HarnessRuntimeMap } from '../../harness/harness-router.js'
 import { ADMISSION_RULES } from '../../harness/harness-admission.js'
 import { effectiveCapabilitiesForRoute } from '../../harness/effective-capabilities.js'
 import { formatGatewayModelId } from '../../harness/gateway-model-id.js'
+import { harnessProfileKey } from '../../harness/harness-readiness-profile.js'
 import { legacyProviderKindFor } from '../../harness/harness-provider-kind.js'
 
 export type HarnessListModel = {
@@ -53,6 +54,7 @@ export type HarnessListOutput = {
 
 export type HarnessListDeps = {
   catalog: HarnessCatalog
+  readiness?: Pick<import('../../harness/harness-readiness.js').HarnessReadinessService, 'readyProfiles' | 'warmProfiles'>
   detector: Pick<HarnessDetector, 'status'>
   /** The composition-time runtime map; absent entries mean definition-only. */
   runtimes?: HarnessRuntimeMap
@@ -86,12 +88,14 @@ export async function listHarnessesForManager(
   const rules = ADMISSION_RULES['manager-worker']
   const runtimeMap = deps.runtimes?.get() ?? {}
   const providers = await deps.providers?.().catch(() => undefined) ?? []
-  const agents = await Promise.all(deps.catalog.list().map(async (def) => {
+  const agents = await Promise.all(deps.catalog.list().filter((def) => !deps.catalog.isDisabled(def.id)).map(async (def) => {
     const terminalOnly = def.transport === 'terminal'
     const status = await deps.detector.status(def.id).catch(() => undefined)
+    deps.readiness?.warmProfiles(def.id)
+    const readyKeys = deps.readiness ? new Set((await deps.readiness.readyProfiles(def.id)).map(harnessProfileKey)) : undefined
     const ready = def.transport === 'native-loop'
       ? true
-      : status?.installed === 'yes' && status.login !== 'signed-out'
+      : status?.installed === 'yes' && status.login !== 'signed-out' && (!readyKeys || readyKeys.size > 0)
     const runtime = runtimeMap[def.transport]
     const effective: HarnessCapabilities = effectiveCapabilitiesForRoute(def, runtime, undefined)
     const missing = rules.required.filter((key) => !effective.statuses[key].supported)
@@ -106,6 +110,9 @@ export async function listHarnessesForManager(
       const probed = def.modelSource === 'probe' ? deps.probedModels?.(def) : undefined
       const native = probed && probed.length > 0 ? probed : def.staticModels
       models.push(...cap(native.map((model) => ({ model, credentialMode: 'native-login' as const }))))
+      for (const group of providers.filter((entry) => entry.kind === legacyProviderKindFor(def.id))) {
+        models.push(...cap(group.models.map((model) => ({ model, providerId: group.providerId, credentialMode: 'native-login' as const }))))
+      }
     }
     for (const mode of def.credentialModes) {
       if (mode === 'kun-gateway') {
@@ -143,7 +150,8 @@ export async function listHarnessesForManager(
             ?? (status?.installed === 'no' ? 'not installed'
               : status?.login === 'signed-out' ? 'signed out' : 'not ready')
       }),
-      models,
+      models: models.filter((model) => deps.catalog.isProfileEnabled({ harnessId: def.id, ...model }) &&
+        (def.id === 'kun' || !readyKeys || readyKeys.has(harnessProfileKey({ harnessId: def.id, ...model })))),
       ...(truncated > 0 ? { modelsTruncated: truncated } : {}),
       admission: {
         managerWorker: !terminalOnly && missing.length === 0,

@@ -108,6 +108,17 @@ describe('Kun workflow admission', () => {
     })
   })
 
+  it.each([false, true])('rejects explicit Kun with a native provider before persistence (enqueue %s)', async (enqueue) => {
+    const h = await createHarness()
+    if (enqueue) await h.turns.startTurn({ threadId: 'thread', request: { prompt: 'First task' } })
+    const before = await h.sessionStore.loadItems('thread')
+    await expect(h.turns.startTurn({ threadId: 'thread', request: {
+      prompt: 'Run a disabled subscription', harnessId: 'kun', providerId: 'subscription', enqueueIfBusy: enqueue
+    } })).rejects.toThrow('Kun Agent cannot use an external Agent provider')
+    expect((await h.threadStore.get('thread'))?.turns).toHaveLength(enqueue ? 1 : 0)
+    expect(await h.sessionStore.loadItems('thread')).toEqual(before)
+  })
+
   it('keeps a queued Kun Design route when the thread later selects an external Agent', async () => {
     const h = await createHarness('kun')
     const first = await h.turns.startTurn({ threadId: 'thread', request: { prompt: 'First' } })

@@ -1,3 +1,4 @@
+import { withHarnessReadiness } from '@shared/test-support/harness-readiness'
 import { describe, expect, it } from 'vitest'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
@@ -7,20 +8,20 @@ import { useChatStore } from '../../store/chat-store'
 import { captureCodeDraftComposer } from '../../store/chat-store-ade-send-snapshot'
 import { codeDefaultRouteError } from '../../store/chat-store-code-default-route'
 
-const codex = {
+const codex = withHarnessReadiness({
   definition: { builtin: true, id: 'codex', displayName: 'Codex', transport: 'codex-app-server',
     credentialModes: ['native-login'], modelSource: 'probe', staticModels: [], permissionModes: [] },
   status: { harnessId: 'codex', checkedAt: '2026-09-30T00:00:00Z', installed: 'yes', ready: 'yes', login: 'signed-in' }
-} as AdeHarnessRow
-const cursor = { ...codex, definition: { ...codex.definition, id: 'cursor', transport: 'cursor-sdk',
-  credentialModes: ['provider'] } } as AdeHarnessRow
+} as AdeHarnessRow)
+const cursor = withHarnessReadiness({ ...codex, definition: { ...codex.definition, id: 'cursor', transport: 'cursor-sdk',
+  credentialModes: ['provider'] } } as AdeHarnessRow)
 const groups: ModelProviderModelGroup[] = [
   { providerId: 'deepseek', label: 'DeepSeek', kind: 'http', modelIds: ['deepseek-chat'] },
   { providerId: 'cursor-account', label: 'Cursor', kind: 'cursor-sdk', modelIds: ['auto'] }
 ]
 const settings: CodeDefaultAgentSettings = {
   model: 'deepseek-chat', providerId: 'deepseek', harnesses: {
-    defaultHarnessId: 'codex', disabledIds: [], defaults: {}
+    defaultHarnessId: 'codex', disabledIds: [], defaults: {}, enabledProfiles: [...codex.enabledProfiles!, ...cursor.enabledProfiles!]
   }
 }
 const input = { settings, rows: [codex, cursor], catalogLoaded: true, groups,

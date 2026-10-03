@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
+import { withHarnessReadiness } from '@shared/test-support/harness-readiness'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import { initialWorkbenchTaskDraft } from './WorkbenchTaskOptions'
 import { useChatStore } from '../../store/chat-store'
 import { selectWorkbenchAgent, selectWorkbenchModel, workbenchModelComplete, workbenchModelGroup, workbenchDisplayModel } from './workbench-agent-selection'
 
-const row = (id: string, modes: AdeHarnessRow['definition']['credentialModes']): AdeHarnessRow => ({
+const row = (id: string, modes: AdeHarnessRow['definition']['credentialModes']): AdeHarnessRow => withHarnessReadiness({
   definition: { id, credentialModes: modes, staticModels: [] }, status: { installed: 'yes' }
-} as unknown as AdeHarnessRow)
+} as unknown as AdeHarnessRow, modes.map((credentialMode) => ({ harnessId: id, credentialMode,
+  ...(credentialMode !== 'native-login' ? { providerId: 'cursor-provider' } : {}) })))
 
 describe('Rooms card-local Agent selection', () => {
   it('never leaks a provider, account, reasoning or fast-mode choice into native sign-in', () => {

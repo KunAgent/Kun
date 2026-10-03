@@ -327,6 +327,7 @@ export interface AgentProvider {
    * detections settle or the budget elapses (P4-02).
    */
   listHarnesses?(options?: {
+    includeDisabled?: boolean
     waitMs?: number
   }): Promise<import('@shared/ade-harnesses').AdeHarnessRow[]>
   /** Models a harness accepts (01 §9): static, probed, or provider-derived. */

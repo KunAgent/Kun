@@ -51,7 +51,7 @@ export function buildCodexAppServerDeps(
   options: KunServeRuntimeOptions,
   harnesses: Pick<
     HarnessRuntimeComposition,
-    'catalog' | 'detector' | 'resolveSecretEnv'
+    'catalog' | 'detector' | 'resolveSecretEnv' | 'readiness'
   >,
   deps: CodexRuntimeSharedDeps
 ): SessionTurnRuntimeDeps {
@@ -62,6 +62,7 @@ export function buildCodexAppServerDeps(
     capabilities: CODEX_APP_SERVER_LEGACY_CAPABILITIES,
     capabilitiesV2: CODEX_APP_SERVER_CAPABILITIES,
     catalog: harnesses.catalog,
+    readiness: harnesses.readiness,
     binaryPath: (harnessId) => options.harnesses?.binaryPaths?.[harnessId],
     harnessDefaults: (id) => harnessDefaultsFor(options.harnesses, id),
     resolveSecretEnv: deps.resolveSecretEnv ?? harnesses.resolveSecretEnv,

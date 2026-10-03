@@ -212,6 +212,7 @@ export async function createRuntimeAgentComposition(
   // Graph planning harness menu (P1-25): shared by the native loop and the
   // delegated runtimes so the planner sees the same routing menu.
   const graphHarnessSummary = createGraphHarnessSummary({
+    readiness: services.harnesses.readiness,
     catalog: services.harnesses.catalog,
     detector: services.harnesses.detector,
     quota: createQuotaSnapshot({ list: () => model.providerQuotaService.list() })
@@ -244,6 +245,7 @@ export async function createRuntimeAgentComposition(
   const harnessRouter = new HarnessRouter({
     enabled: () => core.activeOptions.ade?.harnessRouter !== false,
     catalog: services.harnesses.catalog,
+    readiness: services.harnesses.readiness,
     runtimes: () => harnessRuntimeMap.get(),
     providerKinds: services.providerKinds,
     defaultModel: () => core.activeOptions.model,

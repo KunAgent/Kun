@@ -37,6 +37,7 @@ import type { HarnessDefaultsEntry } from '../../config/kun-config-application.j
 import type { HarnessSecretRefResolver } from '../../harness/harness-secret-env.js'
 
 export interface AcpRuntimeDeps {
+  readiness?: Pick<import('../../harness/harness-readiness.js').HarnessReadinessService, 'validateTurn' | 'commandForTurn'>
   /** Harness catalog lookup for the frozen route's definition. */
   catalog: { get(id: string): HarnessDefinition | undefined }
   /** Settings `harnesses.binaryPaths` override for `launch.command`. */

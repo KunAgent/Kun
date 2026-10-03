@@ -80,6 +80,7 @@ export function buildMainDelegatedRuntime(
     Object.entries(input.options.providers ?? {}).map(([id, provider]) => [id, { ...provider }])
   )
   const sdkRuntimeDeps: AgentSdkRuntimeFactoryDeps = {
+    readiness: services.harnesses.readiness,
     registry: input.registry,
     receipts: canvasReceipts,
     toolHost,
@@ -112,7 +113,7 @@ export function buildMainDelegatedRuntime(
     ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
     ...(input.memoryStore ? { memoryStore: input.memoryStore } : {}),
     ...(input.memoryFeedback ? { memoryFeedback: input.memoryFeedback } : {}),
-    ...(process.env.KUN_CLAUDE_BINARY ? { pathToClaudeCodeExecutable: process.env.KUN_CLAUDE_BINARY } : {}),
+    ...((input.options.harnesses?.binaryPaths?.['claude-code'] ?? process.env.KUN_CLAUDE_BINARY) ? { pathToClaudeCodeExecutable: input.options.harnesses?.binaryPaths?.['claude-code'] ?? process.env.KUN_CLAUDE_BINARY } : {}),
     sessionCoordinator: delegatedSessions,
     contextProfile: delegatedContextProfile,
     deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
@@ -128,13 +129,15 @@ export function buildMainDelegatedRuntime(
     ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
   }
   const antigravityRuntimeDeps: AntigravityCliRuntimeDeps = {
+    resolveCredentialSource: resolveLegacyRequestCredentials,
+    readiness: services.harnesses.readiness,
     providerConfigs,
     providerIds: new Set(antigravityProviderIdsForOptions(input.options)),
     defaultIsAntigravity,
     defaultModel: input.options.model,
     systemPrompt: prefix.systemPrompt,
     binaryPath:
-      process.env.KUN_ANTIGRAVITY_BINARY ??
+      input.options.harnesses?.binaryPaths?.antigravity ?? process.env.KUN_ANTIGRAVITY_BINARY ??
       resolveAntigravityCliCommand(core.activeOptions.dataDir)?.command,
     threadStore,
     sessionStore,
@@ -149,6 +152,7 @@ export function buildMainDelegatedRuntime(
     ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
   }
   const cursorRuntimeDeps: CursorSdkRuntimeFactoryDeps = {
+    readiness: services.harnesses.readiness,
     registry: input.registry,
     toolHost,
     receipts: canvasReceipts,
@@ -189,6 +193,7 @@ export function buildMainDelegatedRuntime(
     ...(input.taskWorkspaces ? { taskWorkspaces: input.taskWorkspaces } : {})
   }
   const acpRuntimeDeps: AcpRuntimeDeps = {
+    readiness: services.harnesses.readiness,
     catalog: services.harnesses.catalog,
     binaryPath: (harnessId) => core.activeOptions.harnesses?.binaryPaths?.[harnessId],
     harnessDefaults: (id) => harnessDefaultsFor(core.activeOptions.harnesses, id),

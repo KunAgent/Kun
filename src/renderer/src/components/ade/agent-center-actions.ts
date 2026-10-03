@@ -77,12 +77,20 @@ export function agentCardModel(
   const setup = row.definition.builtin ? row.definition.setup : undefined
   const hasDetail = Boolean(row.status.message?.trim())
 
-  if (!enabled) {
+  if (row.definition.transport === 'terminal' && row.status.installed === 'yes') {
+    return { state: 'ready', reasonCode: null, primary: ACTION.none, secondary: [] }
+  }
+
+  if (!enabled && row.definition.transport !== 'terminal') {
     return {
       state: 'disabled',
       reasonCode: 'disabled',
       primary: ACTION.enable,
-      secondary: []
+      secondary: [
+        ...(setup?.login ? [commandAction('adeAgentAction.login', setupLoginCommand(setup))] : []),
+        ...(usesProviderOnlySdk(row) ? [{ kind: 'configureProvider' as const, labelKey: 'adeAgentAction.configureProvider' }] : [ACTION.specifyPath]),
+        ...(setup?.docsUrl ? [{ kind: 'docs' as const, labelKey: 'adeAgentAction.docs', url: setup.docsUrl }] : [])
+      ]
     }
   }
 

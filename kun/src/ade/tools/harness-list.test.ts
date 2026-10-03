@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   HarnessDefinitionSchema,
   type HarnessDefinition,
+  type HarnessRoute,
   type HarnessStatus
 } from '../../contracts/harness.js'
 import {
@@ -20,7 +21,8 @@ const NOW = '2026-09-28T00:00:00.000Z'
 const catalog = {
   get: (id: string) => BUILTIN_HARNESSES.find((def) => def.id === id),
   list: () => BUILTIN_HARNESSES,
-  isDisabled: () => false
+  isDisabled: (id: string) => id === 'gemini-cli',
+  isProfileEnabled: (route: Pick<HarnessRoute, 'harnessId'>) => route.harnessId !== 'gemini-cli'
 }
 
 function readyStatus(harnessId: string): HarnessStatus {
@@ -43,6 +45,15 @@ function deps(overrides: Partial<HarnessListDeps> = {}): HarnessListDeps {
 }
 
 describe('listHarnessesForManager', () => {
+  it('does not expose any model from an unapproved credential profile', async () => {
+    const out = await listHarnessesForManager(deps({
+      catalog: { ...catalog, isProfileEnabled: (route: Pick<HarnessRoute, 'harnessId'>) => route.harnessId === 'kun' } as never,
+      providers: async () => [{ providerId: 'deepseek', kind: 'http', models: ['deepseek-chat'] }]
+    }))
+    expect(out.agents.filter((agent) => agent.harnessId !== 'kun').every((agent) => agent.models.length === 0)).toBe(true)
+    expect(out.agents.find((agent) => agent.harnessId === 'kun')!.models).toHaveLength(1)
+  })
+
   it('lists static models under native-login and gateway groups under kun-gateway', async () => {
     const providers: HarnessProviderModelGroup[] = [
       { providerId: 'deepseek', label: 'DeepSeek', kind: 'http', models: ['deepseek-chat'] },
@@ -79,9 +90,10 @@ describe('listHarnessesForManager', () => {
     expect(
       claude.models.filter((entry) => entry.credentialMode === 'native-login')
     ).toEqual([{ model: 'claude-probed-1', credentialMode: 'native-login' }])
-    const gemini = out.agents.find((entry) => entry.harnessId === 'gemini-cli')!
+    const opencode = out.agents.find((entry) => entry.harnessId === 'opencode')!
     // No static list and no probe cache: no model entries.
-    expect(gemini.models).toEqual([])
+    expect(opencode.models).toEqual([])
+    expect(out.agents.find((entry) => entry.harnessId === 'gemini-cli')).toBeUndefined()
   })
 
   it('caps each group at 8 models and reports the overflow', async () => {

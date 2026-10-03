@@ -3,6 +3,7 @@ import type { TurnItem } from '../../contracts/items.js'
 import type { ModelRequestTraceDelegated } from '../../contracts/model-request-trace.js'
 import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '../../contracts/policy.js'
 import type { ActingTurnModelRoute } from '../../contracts/turns.js'
+import type { HarnessRoute } from '../../contracts/harness.js'
 import type { HandoffInjectedEvent } from '../../contracts/events.js'
 import type { TurnHandoff } from '../../handoff/turn-handoff.js'
 import type { LlmDebugSink } from '../../services/llm-debug-recorder.js'
@@ -68,6 +69,8 @@ export interface SdkTurnContext {
   sandboxMode?: SandboxMode
   approvalReviewer?: ApprovalReviewer
   actingModelRoute?: ActingTurnModelRoute
+  /** Exact credential/profile/model route consumed by the SDK after resolution. */
+  harnessRoute?: HarnessRoute
   planMode?: boolean
   /** Dedicated artifact turns disable Claude Code's raw filesystem/shell tools. */
   allowSdkBuiltins?: boolean
@@ -165,6 +168,7 @@ export function userMessageStream(
 }
 
 export interface SdkRuntimeDeps {
+  readiness?: Pick<import('../../harness/harness-readiness.js').HarnessReadinessService, 'validateTurn'>
   /** True when this runtime owns the given provider (kind: 'agent-sdk'). */
   handlesProvider(providerId: string | undefined): boolean
   /** Resolve the turn's inputs; null aborts the turn early (e.g. no user text). */

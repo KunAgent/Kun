@@ -592,6 +592,11 @@ export const kunRuntimePatchSchema = z.object({
     useWorktreeByDefault: z.boolean().optional()
   }).strict().optional(),
   harnesses: z.object({
+    enabledProfiles: z.array(z.object({
+      harnessId: z.string().trim().regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
+      credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']),
+      providerId: z.string().trim().min(1).max(128).optional()
+    }).strict()).max(128).optional(),
     disabledIds: z.array(z.string().trim().min(1).max(128)).max(64).optional(),
     binaryPaths: z.record(z.string().trim().min(1).max(128), z.string().min(1).max(4_096)).optional(),
     custom: z.array(z.object({

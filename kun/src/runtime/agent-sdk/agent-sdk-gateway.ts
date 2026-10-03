@@ -43,8 +43,13 @@ export function resolveAgentSdkGatewayEnv(input: {
     throw new AgentSdkGatewayUnavailableError('the harness token service is not wired')
   }
   const roles = input.deps.roles?.()
-  const smallProviderId = roles?.smallModelProviderId?.trim() || input.providerId
-  const smallModel = roles?.smallModel?.trim() || input.model
+  // A role preference is not consent to another Agent credential profile.
+  // Keep helper requests inside the provider admitted for this turn. A small
+  // model from another provider cannot safely be addressed to this provider.
+  const smallProviderId = input.providerId
+  const configuredSmallProviderId = roles?.smallModelProviderId?.trim() || input.providerId
+  const smallModel = configuredSmallProviderId === input.providerId
+    ? roles?.smallModel?.trim() || input.model : input.model
   const routes: HarnessTokenRoute[] = [
     { providerId: input.providerId, model: input.model, role: 'main' }
   ]
@@ -52,12 +57,12 @@ export function resolveAgentSdkGatewayEnv(input: {
     routes.push({ providerId: smallProviderId, model: smallModel, role: 'small' })
   }
   // The grant id is deterministic on (harness, credentialIdentity, thread,
-  // scopes) — routes are not hashed in. Bind the routed pair into the identity
+  // scopes) — routes are not hashed in. Bind every route into the identity
   // so a later turn's grant can never widen a live token's route set.
   const token = input.deps.tokens.issue({
     threadId: input.threadId,
     harnessId: input.harnessId,
-    credentialIdentity: `kun-gateway:${input.providerId}/${input.model}`,
+    credentialIdentity: `kun-gateway:${JSON.stringify(routes)}`,
     scopes: ['gateway'],
     routes
   })

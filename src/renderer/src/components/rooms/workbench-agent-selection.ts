@@ -1,4 +1,5 @@
 import { parseGatewayModelId } from '../../../../../kun/src/harness/gateway-model-id'
+import { harnessProfileReady, readyHarnessProfiles } from '@shared/harness-enablement'
 import type { WorkbenchExecution } from '@shared/rooms-api'
 import type { AdeHarnessRow, AdeHarnessProviderModelGroup } from '@shared/ade-harnesses'
 import type { KunHarnessDefaultsEntryV1 } from '@shared/app-settings-types-kun-runtime'
@@ -20,12 +21,16 @@ export function selectWorkbenchAgent(input: {
 }): WorkbenchModel {
   const { row, defaults } = input
   const harnessId = row.definition.id
-  const credentialMode = defaults?.credentialMode && row.definition.credentialModes.includes(defaults.credentialMode)
-    ? defaults.credentialMode : row.definition.credentialModes[0]
+  const profiles = readyHarnessProfiles(row)
+  const profile = profiles.find((entry) => entry.credentialMode === defaults?.credentialMode && entry.providerId === defaults?.providerId) ?? profiles[0]
+  const credentialMode = profile?.credentialMode ?? (defaults?.credentialMode && row.definition.credentialModes.includes(defaults.credentialMode)
+    ? defaults.credentialMode : row.definition.credentialModes[0])
   if (credentialMode === 'native-login') return {
-    harnessId, credentialMode, model: defaults?.model || input.nativeDefault || input.nativeModels[0] || ''
+    harnessId, credentialMode, ...(profile?.providerId ? { providerId: profile.providerId } : {}), model: defaults?.model || input.nativeDefault || input.nativeModels[0] || ''
   }
-  const selected = selectHarnessProvider(input.providerGroups, defaults, input.previous ?? {})
+  const selected = selectHarnessProvider(input.providerGroups.filter((group) => harnessId === 'kun' ||
+    harnessProfileReady(row, { harnessId, credentialMode, providerId: group.providerId })),
+    profile?.providerId ? { ...defaults, providerId: profile.providerId } : defaults, input.previous ?? {})
   return { harnessId, credentialMode, model: selected.model,
     ...(selected.providerId ? { providerId: selected.providerId } : {}) }
 }
@@ -33,7 +38,7 @@ export function selectWorkbenchAgent(input: {
 export function workbenchModelGroup(model?: WorkbenchModel): string {
   if (!model || !workbenchExternalAgent(model)) return model?.providerId ?? ''
   const mode = model.credentialMode ?? 'native-login'
-  return mode === 'native-login' ? credentialGroupKey(mode)
+  return mode === 'native-login' && !model.providerId ? credentialGroupKey(mode)
     : `${credentialGroupKey(mode)}:${model.providerId ?? ''}`
 }
 
@@ -44,7 +49,7 @@ export function selectWorkbenchModel(previous: WorkbenchModel | undefined, model
   return {
     model, harnessId: workbenchHarnessId(previous),
     ...(credential ? { credentialMode: credential.mode,
-      ...(credential.mode !== 'native-login' && credential.providerId ? { providerId: credential.providerId } : {}) }
+      ...(credential.providerId ? { providerId: credential.providerId } : {}) }
       : { providerId: groupId, credentialMode: 'provider' as const }),
     ...(accountId ? { accountId } : {})
   }

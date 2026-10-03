@@ -104,6 +104,7 @@ import {
 } from '../delegated-graph-turn-policy.js'
 
 export interface AgentSdkRuntimeFactoryDeps {
+  readiness?: Pick<import('../../harness/harness-readiness.js').HarnessReadinessService, 'validateTurn'>
   registry: CapabilityRegistry
   /**
    * The canonical host boundary for bridged Kun tool execution. Serve always

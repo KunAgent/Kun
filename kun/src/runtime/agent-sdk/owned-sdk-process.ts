@@ -17,7 +17,7 @@ class OwnedSdkProcess extends EventEmitter implements SpawnedProcess {
   private resultSignal: NodeJS.Signals | null = null
   private finished = false
 
-  constructor(private readonly options: SpawnOptions) {
+  constructor(private readonly options: SpawnOptions, private readonly validateLaunch?: () => Promise<unknown>) {
     super()
     this.stdin.on('error', (error) => this.emit('error', error))
     this.stdout.on('error', (error) => this.emit('error', error))
@@ -41,7 +41,12 @@ class OwnedSdkProcess extends EventEmitter implements SpawnedProcess {
       cwd: this.options.cwd,
       env: this.options.env,
       stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true
+      windowsHide: true,
+      beforeLaunch: async () => {
+        await this.validateLaunch?.()
+        this.options.signal.throwIfAborted()
+        if (this.requestedSignal) throw new Error('SDK process launch was cancelled')
+      }
     })
     this.child = child
     child.on('error', (error) => this.emit('error', error))
@@ -82,4 +87,9 @@ class OwnedSdkProcess extends EventEmitter implements SpawnedProcess {
 
 export function spawnOwnedSdkProcess(options: SpawnOptions): SpawnedProcess {
   return new OwnedSdkProcess(options)
+}
+
+/** Keep per-turn readiness attached through the SDK's deferred process creation. */
+export function createOwnedSdkProcessSpawner(validateLaunch: () => Promise<unknown>): typeof spawnOwnedSdkProcess {
+  return (options) => new OwnedSdkProcess(options, validateLaunch)
 }

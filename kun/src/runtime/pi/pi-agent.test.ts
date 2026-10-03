@@ -95,11 +95,11 @@ function sessionInput(
   }
 }
 
-async function setup() {
+async function setup(input = CONNECT_INPUT) {
   const { transport, writes, emit } = fakeTransport()
   const proc = fakeProcess()
   const client = new PiClient(proc, { transport })
-  const agent = await PiAgent.connect(CONNECT_INPUT, { client, process: proc })
+  const agent = await PiAgent.connect(input, { client, process: proc })
   return { agent, client, writes, emit }
 }
 
@@ -211,4 +211,16 @@ describe('PiAgent', () => {
     const { agent } = await setup()
     expect(agent.sessionCapabilities().continuation).toBe('native')
   })
+})
+
+
+it('preserves the full direct-addressed model id under the generated Kun gateway provider', async () => {
+  const { agent, writes, emit } = await setup({ ...CONNECT_INPUT, credentialEnv: { PI_CODING_AGENT_DIR: '/isolated-pi-profile' } })
+  const pending = agent.startSession(sessionInput({ model: 'kun/deepseek/deepseek-chat' }))
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(writes.at(-1)).toMatchObject({ type: 'set_model', provider: 'kun', modelId: 'kun/deepseek/deepseek-chat' })
+  respond(writes, emit, {})
+  await new Promise((resolve) => setImmediate(resolve))
+  respond(writes, emit, { sessionFile: '/sessions/gateway.jsonl' })
+  await pending
 })

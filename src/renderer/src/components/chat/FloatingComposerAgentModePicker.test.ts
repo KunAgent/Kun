@@ -2,19 +2,20 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { withHarnessReadiness } from '@shared/test-support/harness-readiness'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import i18n from '../../i18n'
 import { FloatingComposerAgentModePicker, type ComposerAgentModeControls } from './FloatingComposerAgentModePicker'
 
 function row(id: string, displayName: string, installed: 'yes' | 'no' = 'yes'): AdeHarnessRow {
-  return {
+  return withHarnessReadiness({
     definition: {
       id, displayName, transport: id === 'kun' ? 'native-loop' : 'agent-sdk',
       credentialModes: ['native-login'], permissionModes: [],
       modelSource: 'static', staticModels: [], builtin: true
     },
     status: { harnessId: id, installed, login: 'signed-in', checkedAt: '2026-09-30T00:00:00Z' }
-  }
+  })
 }
 
 let host: HTMLDivElement
@@ -60,7 +61,7 @@ describe('Agent and Kun mode picker', () => {
     expect(trigger.textContent).toContain('Kun · Design')
     expect(controls.onOpen).toHaveBeenCalledOnce()
     expect(document.querySelectorAll('[data-agent-mode-group="kun"] [role="menuitemradio"]')).toHaveLength(2)
-    expect(document.querySelectorAll('[data-agent-mode-group="external"] [role="menuitemradio"]')).toHaveLength(3)
+    expect(document.querySelectorAll('[data-agent-mode-group="external"] [role="menuitemradio"]')).toHaveLength(2)
     expect(choice('kun-design').getAttribute('aria-checked')).toBe('true')
     expect(choice('claude-code').querySelector('[data-agent-icon="claude-code"]')).not.toBeNull()
     expect(choice('devin').disabled).toBe(false)
@@ -104,15 +105,13 @@ describe('Agent and Kun mode picker', () => {
     expect(controls.onSelect).toHaveBeenCalledExactlyOnceWith('kun', 'design')
   })
 
-  it('leaves unavailable Agents visible and opens their repair entry without selecting them', async () => {
+  it('hides disabled or unready Agents and keeps a settings repair entry', async () => {
     await open()
-    expect(choice('cursor').disabled).toBe(true)
-    await act(async () => choice('cursor').click())
+    expect(choice('cursor')).toBeNull()
+    expect(document.querySelector('[data-agent-mode-repair="cursor"]')).toBeNull()
     expect(controls.onSelect).not.toHaveBeenCalled()
-    const repair = document.querySelector<HTMLButtonElement>('[data-agent-mode-repair="cursor"]')!
-    expect(repair.disabled).toBe(false)
-    await act(async () => repair.click())
-    expect(controls.onManage).toHaveBeenCalledWith('cursor', false)
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-agent-mode-manage]')!.click())
+    expect(controls.onManage).toHaveBeenCalled()
     expect(document.querySelector('[data-agent-mode-menu]')).toBeNull()
   })
 
@@ -126,7 +125,7 @@ describe('Agent and Kun mode picker', () => {
     expect(document.activeElement).toBe(choice('kun-code'))
     await act(async () => choice('claude-code').focus())
     await act(async () => choice('claude-code').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })))
-    expect(document.activeElement).toBe(document.querySelector('[data-agent-mode-repair="cursor"]'))
+    expect(document.activeElement).toBe(choice('devin'))
     await act(async () => document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })))
     expect(document.querySelector('[data-agent-mode-menu]')).toBeNull()
   })

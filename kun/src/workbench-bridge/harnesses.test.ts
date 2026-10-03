@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { HarnessEnabledProfile } from '../config/kun-config-harnesses.js'
+import { BUILTIN_HARNESSES } from '../harness/builtin-harnesses.js'
 import type { HarnessStatus } from '../contracts/harness.js'
 import { ModelConnectionSnapshotSchema } from '../contracts/model-connections.js'
 import type { WorkbenchLink, WorkbenchRequest } from '../contracts/workbench-links.js'
@@ -18,7 +20,10 @@ afterEach(async () => { for (const f of open.splice(0)) await f.cleanup() })
 
 function harnessFixture(probeModels?: (definition: import('../contracts/harness.js').HarnessDefinition) => Promise<string[]>) {
   const disabled: string[] = []
-  const catalog = new HarnessCatalog({ custom: () => [], disabled: () => disabled })
+  const enabledProfiles: HarnessEnabledProfile[] = BUILTIN_HARNESSES.flatMap((definition) =>
+    definition.credentialModes.map((credentialMode) => ({ harnessId: definition.id, credentialMode,
+      ...(credentialMode !== 'native-login' ? { providerId: definition.id === 'cursor' ? 'cursor' : 'p1' } : {}) })))
+  const catalog = new HarnessCatalog({ custom: () => [], disabled: () => disabled, enabledProfiles: () => enabledProfiles })
   const statuses = new Map<string, HarnessStatus>(catalog.list().map((def) => [def.id, {
     harnessId: def.id, installed: 'yes', login: 'signed-in', checkedAt: '2026-10-01T00:00:00.000Z'
   }]))
@@ -28,7 +33,8 @@ function harnessFixture(probeModels?: (definition: import('../contracts/harness.
     runTurn: async () => 'completed' } as unknown as DelegatedTurnRuntime
   const runtimes = new HarnessRuntimeMap({ 'codex-app-server': runtime, 'agent-sdk': runtime, acp: runtime, 'cursor-sdk': runtime })
   let routerEnabled = true
-  const router = new HarnessRouter({ enabled: () => routerEnabled, catalog, runtimes: () => runtimes.get(),
+  const readiness = { configurationSignature: () => 'offline-fixture', prepareTurn: vi.fn(async () => undefined), releaseTurn: vi.fn() }
+  const router = new HarnessRouter({ enabled: () => routerEnabled, catalog, readiness, runtimes: () => runtimes.get(),
     providerKinds: () => ({ byId: { p1: 'http', cursor: 'cursor-sdk' }, defaultKind: 'http' }),
     defaultModel: () => 'test-model', status: (id) => statuses.get(id) })
   const snapshot = ModelConnectionSnapshotSchema.parse({ schemaVersion: 1, proxyRoutingVersion: 1, revision: 0,
@@ -46,7 +52,7 @@ function harnessFixture(probeModels?: (definition: import('../contracts/harness.
   const native = { harnessId: 'codex', credentialMode: 'native-login' as const, model: 'codex-test' }
   const request = (model = native): WorkbenchRequest => ({ title: 'Fix tests', goal: 'Make tests pass',
     mode: 'agent', isolation: 'inherit', report: 'silent', execution: { mode: 'direct', model } })
-  return { service, catalog, statuses, detector, disabled, runtimes, snapshot, native, request, disableRouter: () => { routerEnabled = false } }
+  return { service, catalog, statuses, detector, disabled, enabledProfiles, runtimes, snapshot, native, request, disableRouter: () => { routerEnabled = false } }
 }
 async function fixture(options?: Parameters<typeof workbenchFixture>[0]) {
   const f = await workbenchFixture(options); open.push(f)
@@ -69,15 +75,24 @@ async function fixture(options?: Parameters<typeof workbenchFixture>[0]) {
 }
 
 describe('Code harness discovery and validation', () => {
+  it('never discovers or dispatches an external Agent without explicit profile opt-in', async () => {
+    const h = harnessFixture()
+    h.enabledProfiles.splice(0)
+    expect((await h.service.list()).agents.map((agent) => agent.harnessId)).toEqual(['kun'])
+    await expect(h.service.resolve(h.request())).rejects.toThrow('disabled')
+    expect(h.detector.status.mock.calls.every(([id]) => id === 'kun')).toBe(true)
+  })
+
   it('uses live Code routes, excludes disabled, unavailable, incompatible and terminal engines', async () => {
     const h = harnessFixture()
     h.disabled.push('claude-code')
-    h.statuses.get('gemini-cli')!.installed = 'no'
+    h.statuses.get('opencode')!.installed = 'no'
     const { agents } = await h.service.list()
     expect(agents.find((agent) => agent.harnessId === 'codex')).toMatchObject({ available: true,
       models: expect.arrayContaining([h.native]), executionModes: ['direct'], orchestration: ['direct'] })
-    expect(agents.find((agent) => agent.harnessId === 'claude-code')).toMatchObject({ available: false, reason: 'Disabled in Code settings' })
-    expect(agents.find((agent) => agent.harnessId === 'gemini-cli')?.available).toBe(false)
+    expect(agents.find((agent) => agent.harnessId === 'claude-code')).toBeUndefined()
+    expect(agents.find((agent) => agent.harnessId === 'opencode')?.available).toBe(false)
+    expect(agents.find((agent) => agent.harnessId === 'gemini-cli')).toBeUndefined()
     expect(agents.find((agent) => agent.harnessId === 'kun')?.models).toEqual([
       { harnessId: 'kun', credentialMode: 'provider', providerId: 'p1', accountId: 'account-1', model: 'test-model' }
     ])

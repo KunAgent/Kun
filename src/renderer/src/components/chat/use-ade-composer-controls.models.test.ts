@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { withHarnessReadiness } from '@shared/test-support/harness-readiness'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 
 const fixture = vi.hoisted(() => ({
@@ -27,7 +28,7 @@ vi.mock('../../store/harness-store', () => ({
   useHarnessStore: Object.assign((selector: (state: typeof fixture.harnesses) => unknown) => selector(fixture.harnesses), {
     getState: () => fixture.harnesses
   }),
-  harnessRowRunsTurns: () => true, harnessRowUnavailableCode: () => null, harnessModelFingerprint: () => '',
+  harnessRowAvailable: () => true, harnessRowRunsTurns: () => true, harnessRowUnavailableCode: () => null, harnessModelFingerprint: () => '',
   loadHarnessModels: vi.fn(), loadHarnessProviderGroups: vi.fn(), loadHarnesses: vi.fn()
 }))
 vi.mock('../../store/task-workspace-store', () => ({ useTaskWorkspaceStore: () => undefined }))
@@ -72,9 +73,9 @@ describe('external Agent model discovery', () => {
       await act(async () => root.render(createElement(Probe)))
       expect(result.modelGroups).toEqual([])
       expect(result.pickList).toEqual([])
-      fixture.harnesses.rows = [{ definition: { id: 'claude-code', displayName: 'Claude Code', transport: 'agent-sdk',
+      fixture.harnesses.rows = [withHarnessReadiness({ definition: { id: 'claude-code', displayName: 'Claude Code', transport: 'agent-sdk',
         credentialModes: ['native-login'], permissionModes: [], modelSource: 'static', staticModels: [], builtin: true },
-        status: { harnessId: 'claude-code', installed: 'yes', login: 'signed-in', checkedAt: '' } }]
+        status: { harnessId: 'claude-code', installed: 'yes', login: 'signed-in', checkedAt: '' } })]
       fixture.harnesses.models = { 'claude-code': { models: ['sonnet'], loading: false } }
       await act(async () => root.render(createElement(Probe)))
       expect(result.modelGroups).toEqual([{ providerId: 'ade-cred:native-login', label: 'adeCredential.nativeLogin', modelIds: ['sonnet'] }])
@@ -98,9 +99,9 @@ describe('external Agent model discovery', () => {
       { providerId: 'provider-a', label: 'A', modelIds: ['model-a'] },
       { providerId: 'provider-b', label: 'B', modelIds: ['model-b', 'model-b-2'] }
     ]
-    fixture.harnesses.rows = [{ definition: { id: 'claude-code', displayName: 'Claude Code', transport: 'agent-sdk',
+    fixture.harnesses.rows = [withHarnessReadiness({ definition: { id: 'claude-code', displayName: 'Claude Code', transport: 'agent-sdk',
       credentialModes: ['native-login'], permissionModes: [], modelSource: 'static', staticModels: ['sonnet'], builtin: true },
-      status: { harnessId: 'claude-code', installed: 'yes', login: 'signed-in', checkedAt: '' } }]
+      status: { harnessId: 'claude-code', installed: 'yes', login: 'signed-in', checkedAt: '' } })]
     let result!: ReturnType<typeof useAdeComposerControls>
     function Probe() {
       result = useAdeComposerControls({ enabled: true, activeThreadId: fixture.chat.activeThreadId, workspaceRoot: '/repo',

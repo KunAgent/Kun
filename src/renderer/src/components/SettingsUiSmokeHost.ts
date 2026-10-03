@@ -17,6 +17,7 @@ import type { CoreMemoryDiagnosticsJson, CoreRuntimeInfoJson, CoreRuntimeToolDia
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { emitRendererSettingsChanged } from '../lib/keyboard-shortcut-settings'
 import { sharedCapabilitiesFromProvider } from './settings-section-providers-shared-payloads'
+import { createAgentEnablementSmokeRuntime } from './ade/agent-enablement-smoke-runtime'
 import { mergeSettings } from './settings-utils'
 
 export type SettingsSmokeCall = { name: string; args: unknown[] }
@@ -32,6 +33,7 @@ const response = (value: unknown, status = 200): RuntimeRequestResult => ({
 /** Synthetic renderer-only bridge. Never wraps or falls back to the real preload. */
 export function installSettingsSmokeHost(initialSettings: AppSettingsV1): {
   calls: SettingsSmokeCall[]
+  harnessRuntime: ReturnType<typeof createAgentEnablementSmokeRuntime>
   setBusy(name: string, busy: boolean): void
   setSettings(next: AppSettingsV1): void
   readonly settings: AppSettingsV1
@@ -43,6 +45,7 @@ export function installSettingsSmokeHost(initialSettings: AppSettingsV1): {
   const waiters = new Map<string, Set<() => void>>()
   const subscriptions = new Map<string, Set<(value: unknown) => void>>()
   const runtimeCancellations = new Map<string, () => void>()
+  const harnessRuntime = createAgentEnablementSmokeRuntime(() => getKunRuntimeSettings(settings).harnesses)
   let mcpContent = '{\n  "mcp": { "servers": {} }\n}\n'
   const projectConfigs = new Map<string, KunProjectConfigFileResult>()
   const projects = new Map<string, AdeProjectDefaultsSnapshot>()
@@ -172,9 +175,11 @@ export function installSettingsSmokeHost(initialSettings: AppSettingsV1): {
       localModelGateway: provider.localGateway
     }
   }
-  const runtimeRequest: KunGuiApi['runtimeRequest'] = stub('runtimeRequest', async (path, method = 'GET', _body, options) => {
+  const runtimeRequest: KunGuiApi['runtimeRequest'] = stub('runtimeRequest', async (path, method = 'GET', body, options) => {
     const url = new URL(path, 'http://smoke.invalid')
     await gate(`runtimeRequest:${url.pathname}`)
+    const harnessResponse = await harnessRuntime.request(path, method, body)
+    if (harnessResponse) return harnessResponse
     if (method !== 'GET') return response({ code: 'offline_fixture', message: OFFLINE }, 501)
     if (url.pathname === '/v1/model-connections/events') {
       // Respect long-poll semantics so the provider watcher cannot spin the UI.
@@ -435,7 +440,7 @@ export function installSettingsSmokeHost(initialSettings: AppSettingsV1): {
   Object.defineProperty(window, 'kunGui', { configurable: true, writable: true, value: bridge as KunGuiApi })
   rendererRuntimeClient.invalidateSettings()
   return {
-    calls,
+    calls, harnessRuntime,
     get settings() { return clone(settings) },
     setSettings(next) {
       settings = clone(next)

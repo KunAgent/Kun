@@ -4,6 +4,8 @@
  * resolution, image decoding, the ensure-once workspace checkpoint gate, and
  * the session-binding commit.
  */
+import { intersectCapabilities } from '../../harness/effective-capabilities.js'
+import type { HarnessCapabilities } from '../../contracts/harness-capabilities.js'
 import type { Turn } from '../../contracts/turns.js'
 import type {
   HarnessDefinition,
@@ -62,15 +64,18 @@ export async function acquireAcpConnection(
   sessions: AcpSessionManager,
   input: {
     poolKey: string
+    command?: string
     definition: HarnessDefinition
     credentialEnv: Record<string, string>
     identity: string
     workspace: string
     signal: AbortSignal
+    validateLaunch?: () => Promise<unknown>
   }
 ): Promise<AcpConnectionLease> {
-  return pool.acquire(input.poolKey, async () => {
-    const command =
+  await input.validateLaunch?.()
+  const lease = await pool.acquire(input.poolKey, async () => {
+    const command = input.command ??
       deps.binaryPath?.(input.definition.id) ?? input.definition.launch?.command ?? ''
     if (!command) {
       throw new Error(`harness ${input.definition.id} has no launch command`)
@@ -79,7 +84,11 @@ export async function acquireAcpConnection(
       input.definition,
       deps.resolveSecretEnv
     )
+    await input.validateLaunch?.()
+    input.signal.throwIfAborted()
     const process = await startAcpProcess({
+      harnessId: input.definition.id,
+      signal: input.signal, validateLaunch: input.validateLaunch,
       command,
       args: input.definition.launch?.args ?? [],
       env: input.definition.launch?.env ?? {},
@@ -113,7 +122,15 @@ export async function acquireAcpConnection(
       throw error
     }
     return conn
-  })
+  }, { signal: input.signal, validate: input.validateLaunch })
+  try {
+    await input.validateLaunch?.()
+    input.signal.throwIfAborted()
+    return lease
+  } catch (error) {
+    lease.release()
+    throw error
+  }
 }
 
 /**
@@ -284,11 +301,14 @@ export async function recordAcpDelegatedRuntime(
     turnId: string
     harnessId: HarnessId
     preparation: DelegatedSessionPreparation
+    declaredCapabilities?: HarnessCapabilities
     initResult: AcpInitializeResult | undefined
     session: AcpSessionFacts
     sandbox: 'host' | 'native' | 'none'
   }
 ): Promise<void> {
+  const reported = capabilitiesFromAcp(input.initResult, input.session, { sandbox: input.sandbox })
+  const capabilitiesV2 = input.declaredCapabilities ? intersectCapabilities(input.declaredCapabilities, reported) : reported
   await events.record({
     kind: 'delegated_runtime',
     threadId: input.threadId,
@@ -307,8 +327,6 @@ export async function recordAcpDelegatedRuntime(
         input.session.kunToolsDescriptor === 'http' ||
         input.session.kunToolsDescriptor === 'stdio'
     },
-    capabilitiesV2: capabilitiesFromAcp(input.initResult, input.session, {
-      sandbox: input.sandbox
-    })
+    capabilitiesV2
   })
 }

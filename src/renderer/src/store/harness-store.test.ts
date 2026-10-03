@@ -1,3 +1,4 @@
+import { withHarnessReadiness } from '@shared/test-support/harness-readiness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import {
@@ -21,7 +22,7 @@ function row(
   id: string,
   status: Partial<AdeHarnessRow['status']> = {}
 ): AdeHarnessRow {
-  return {
+  return withHarnessReadiness({
     definition: {
       id,
       displayName: id,
@@ -39,7 +40,7 @@ function row(
       checkedAt: '2026-01-01T00:00:00.000Z',
       ...status
     }
-  }
+  })
 }
 
 const detectingRow = (): AdeHarnessRow =>
@@ -74,7 +75,7 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
   it('passes waitMs through to the provider list request', async () => {
     provider.listHarnesses.mockResolvedValue([row('kun')])
     await loadHarnesses(true, { waitMs: 3_000 })
-    expect(provider.listHarnesses).toHaveBeenCalledWith({ waitMs: 3_000 })
+    expect(provider.listHarnesses).toHaveBeenCalledWith({ waitMs: 3_000, includeDisabled: true })
   })
 
   it('polls while a row is still detecting and stops once it settles', async () => {
@@ -230,9 +231,8 @@ describe('harnessRowUnavailableCode (P4-05)', () => {
     expect(
       harnessRowUnavailableCode(row('a', { ready: 'no', login: 'signed-out' }))
     ).toBe('handshake_failed')
-    // P4-03: an inconclusive handshake stays selectable — the wire
-    // `handshake_timeout` code is advisory for management surfaces only.
-    expect(harnessRowUnavailableCode(row('a', { ready: 'unknown' }))).toBeNull()
+    // Inconclusive protocol checks fail closed for new routes.
+    expect(harnessRowUnavailableCode(row('a', { ready: 'unknown' }))).toBe('readiness_required')
     expect(harnessRowUnavailableCode(row('a', { login: 'signed-out' }))).toBe('signed_out')
     expect(harnessRowUnavailableCode(row('a', { ready: 'yes' }))).toBeNull()
   })

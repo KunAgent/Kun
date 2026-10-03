@@ -101,6 +101,7 @@ export function createHarnessListDeps(input: {
 }): HarnessListDeps {
   return {
     catalog: input.services.harnesses.catalog,
+    readiness: input.services.harnesses.readiness,
     detector: input.services.harnesses.detector,
     runtimes: input.harnessRuntimeMap,
     probedModels: (definition) => input.services.harnesses.probedModels(definition),

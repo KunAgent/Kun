@@ -263,6 +263,8 @@ export interface SdkQueryResult extends AsyncIterableIterator<SdkMessage> {
   supportedModels?: () => Promise<
     Array<{ value?: string; resolvedModel?: string } & Record<string, unknown>>
   >
+  /** Prompt-free account control request; metadata is not a quota check. */
+  accountInfo?: () => Promise<{ email?: string; subscriptionType?: string; apiProvider?: string; apiKeySource?: string }>
   /** Terminate the spawned CLI process. */
   close?: () => void
 }

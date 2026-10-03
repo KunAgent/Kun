@@ -108,6 +108,7 @@ export function WorkbenchTaskAgentPicker({ execution, onChange, code }: {
     if (!groupId || !model) return
     pendingSelection.current = null
     const group = groups.find((entry) => entry.providerId === groupId)
+    if (!group || !group.modelIds.includes(model)) return
     onChange({ ...execution, model: selectWorkbenchModel(execution.model, model, groupId, group?.accountId) })
   }
   return <div className="rooms-workbench-agent-picker rooms-workbench-field-span">

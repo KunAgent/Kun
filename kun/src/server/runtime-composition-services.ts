@@ -173,6 +173,8 @@ export async function createRuntimeServices(
   const harnesses = createHarnessComposition(() => core.activeOptions, {
     // P4-12: custom-agent `secretEnv` refs resolve against the credential
     // store at spawn/probe time; values never reach config or logs.
+    revision: () => core.optionsRevision,
+    resolveProviderCredential: model.resolveLegacyRequestCredentials,
     resolveSecretEnv: harnessSecretRefResolver(model.extensionCredentials)
   })
   // Per-turn `kun-tools` grants + http/stdio MCP descriptors for ACP sessions

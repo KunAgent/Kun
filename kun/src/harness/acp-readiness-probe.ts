@@ -49,6 +49,7 @@ export async function probeAcpReadiness(
   try {
     const secretEnv = await resolveHarnessSecretEnv(definition, deps.resolveSecretEnv)
     process = await startAcpProcess({
+      harnessId: definition.id,
       command,
       args: definition.launch?.args ?? [],
       // No credential env: the handshake must reflect install health, not

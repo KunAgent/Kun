@@ -1,3 +1,4 @@
+import { harnessProfileEnabled, harnessProfileReady } from '@shared/harness-enablement'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { KunHarnessSettingsV1 } from '@shared/app-settings-types-kun-runtime'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
@@ -7,7 +8,7 @@ import { isKunModelProviderGroup } from '../../lib/kun-model-provider-groups'
 export type CodeDefaultAgentSettings = {
   model: string
   providerId?: string
-  harnesses?: Pick<KunHarnessSettingsV1, 'defaultHarnessId' | 'defaults' | 'disabledIds'>
+  harnesses?: Pick<KunHarnessSettingsV1, 'defaultHarnessId' | 'defaults' | 'disabledIds' | 'enabledProfiles'>
 }
 export type CodeDefaultAgentRoute = {
   harnessId: string
@@ -49,7 +50,9 @@ export function resolveCodeDefaultAgentRoute(input: {
   }
   if (credentialMode === 'native-login') {
     // Empty chooses the Agent's native default, never the Kun provider model.
-    return { route: { ...route, providerId: '' } }
+    if (!row || !harnessProfileReady(row, { harnessId, credentialMode: 'native-login', providerId: route.providerId || undefined }) ||
+      (settings.harnesses && !harnessProfileEnabled(settings.harnesses, { harnessId, credentialMode: 'native-login', providerId: route.providerId || undefined }))) return { route, error: 'disabled' }
+    return { route }
   }
   const candidates = groups.filter((group) =>
     harnessId === 'cursor' && credentialMode === 'provider'
@@ -66,5 +69,6 @@ export function resolveCodeDefaultAgentRoute(input: {
     (group.providerId === input.currentProviderId ? input.currentModel : '') ||
     (group.providerId === settings.providerId ? settings.model : '') || group.modelIds[0] || ''
   if (!model) return { route: { ...route, providerId: group.providerId }, error: 'model' }
+  if (harnessId !== 'kun' && (!row || !harnessProfileReady(row, { harnessId, credentialMode: credentialMode as 'provider' | 'kun-gateway', providerId: group.providerId }) || (settings.harnesses && !harnessProfileEnabled(settings.harnesses, { harnessId, credentialMode: credentialMode as 'provider' | 'kun-gateway', providerId: group.providerId })))) return { route, error: 'disabled' }
   return { route: { ...route, model, providerId: group.providerId } }
 }

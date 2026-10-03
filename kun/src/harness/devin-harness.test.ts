@@ -77,7 +77,7 @@ describe('Devin ACP integration', () => {
     expect(await detector.status('devin', { force: true })).toMatchObject({
       installed: 'yes', ready: 'no', reasonCode: 'handshake_failed'
     })
-    expect(probeReady).toHaveBeenCalledWith(definition, '/opt/agents/devin')
+    expect(probeReady).toHaveBeenCalledWith(definition, '/opt/agents/devin', { signal: expect.any(AbortSignal) })
   })
 
   it('does not claim OS isolation and requires an isolated workspace for workers', () => {

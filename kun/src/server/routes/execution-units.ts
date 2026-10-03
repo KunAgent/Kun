@@ -36,6 +36,7 @@ export type ExecutionUnitRouteDeps = {
   registry: TerminalAgentRegistry
   tokens: HarnessTokenService
   catalog: HarnessCatalog
+  readiness?: import('../../harness/harness-readiness.js').HarnessReadinessService
   /** Loopback base URL filled once the listener binds. */
   endpoint?: () => string | undefined
   /** Managed-hook config writer (05 §6.2); absent disables hook injection. */
@@ -63,6 +64,10 @@ export async function executionUnitCreateResponse(
       400
     )
   }
+  const route = { harnessId: body.harnessId, credentialMode: 'native-login' as const, model: 'default' }
+  if (!deps.catalog.isProfileEnabled(route) || !deps.readiness) return jsonResponse({ code: 'harness_unavailable', message: 'Test and enable this Agent profile before launching it' }, 409)
+  try { await deps.readiness.assertReady(route, request.signal) }
+  catch { return jsonResponse({ code: 'harness_not_ready', message: 'Agent profile is not ready; test it in settings' }, 409) }
   const record = await deps.registry.register({
     harnessId: body.harnessId,
     title: body.title,

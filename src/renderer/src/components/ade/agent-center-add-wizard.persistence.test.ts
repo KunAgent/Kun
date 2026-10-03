@@ -10,7 +10,7 @@ vi.mock('../../agent/registry', () => ({ getProvider: () => ({}) }))
 import { AgentCenterAddWizard } from './agent-center-add-wizard'
 
 const settings: KunHarnessSettingsV1 = {
-  disabledIds: [], binaryPaths: {}, custom: [], defaults: {},
+  enabledProfiles: [], disabledIds: [], binaryPaths: {}, custom: [], defaults: {},
   defaultHarnessId: 'kun', agentOrder: [], terminalAgents: []
 }
 

@@ -7,6 +7,7 @@ import { AgentIcon } from '../agent-icon'
 import { useChatStore } from '../../store/chat-store'
 import {
   harnessRowUnavailableDetail,
+  harnessRowAvailable,
   useHarnessStore
 } from '../../store/harness-store'
 import { harnessConnectionPresentation, usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
@@ -37,7 +38,7 @@ type Props = {
   onSelect: (harnessId: string) => void
 }
 
-/** ADE-only harness picker (12 §7.2); unavailable rows stay listed with a reason. */
+/** New-turn picker: only explicitly enabled profiles with current readiness are selectable. */
 export function FloatingComposerHarnessPicker({
   disabled = false,
   harnessId,
@@ -66,6 +67,7 @@ export function FloatingComposerHarnessPicker({
   })
 
   const pick = (row: AdeHarnessRow): void => {
+    if (!harnessRowAvailable(row)) return
     if (row.definition.id === harnessId) {
       closeMenu()
       return
@@ -79,7 +81,7 @@ export function FloatingComposerHarnessPicker({
   }
 
   const confirmSwitch = (): void => {
-    if (!pendingSwitch) return
+    if (!pendingSwitch || !rows.some((row) => row.definition.id === pendingSwitch.definition.id && harnessRowAvailable(row))) return
     onSelect(pendingSwitch.definition.id)
     setPendingSwitch(null)
     setOpen(false)
@@ -137,7 +139,7 @@ export function FloatingComposerHarnessPicker({
         </div>
       ) : (
         <>
-          {rows.map((row) => {
+          {rows.filter(harnessRowAvailable).map((row) => {
             const id = row.definition.id
             // P4-05: stable reason code → localized label + next step; the
             // raw message stays in the title tooltip as the "reason detail".

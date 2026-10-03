@@ -1,3 +1,4 @@
+import { withHarnessReadiness } from '@shared/test-support/harness-readiness'
 import { describe, expect, it } from 'vitest'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import {
@@ -14,11 +15,11 @@ function makeRow(overrides: {
   credentialModes?: AdeHarnessRow['definition']['credentialModes']
 } = {}): AdeHarnessRow {
   const id = overrides.id ?? 'claude-code'
-  return {
+  return withHarnessReadiness({
     definition: {
       id,
       displayName: id,
-      transport: 'acp',
+      transport: id === 'kun' ? 'native-loop' : 'acp',
       credentialModes: overrides.credentialModes ?? ['native-login'],
       permissionModes: [],
       modelSource: 'probe',
@@ -33,7 +34,7 @@ function makeRow(overrides: {
       checkedAt: '2026-01-01T00:00:00.000Z',
       ...overrides.status
     }
-  }
+  })
 }
 
 const SETUP = {
@@ -120,17 +121,15 @@ describe('agentCardModel', () => {
       makeRow({ status: { ready: 'unknown', login: 'signed-in' } }),
       { enabled: true, platform: 'darwin', isDefault: false }
     )
-    // ready:unknown alone stays selectable — no card-level blocking state.
-    expect(timeout.state).toBe('ready')
+    // Unknown protocol readiness can no longer admit a new route.
+    expect(timeout.state).toBe('unavailable')
     const advisory = agentCardModel(
       makeRow({ status: { ready: 'unknown', login: 'signed-in', reasonCode: 'handshake_timeout' } }),
       { enabled: true, platform: 'darwin', isDefault: false }
     )
     expect(advisory.reasonCode).toBe('handshake_timeout')
-    expect(advisory.primary.kind).toBe('test')
-    expect(advisory.secondary.map((a) => a.kind)).toEqual(
-      expect.arrayContaining(['probe'])
-    )
+    expect(advisory.primary.kind).toBe('probe')
+    expect(advisory.state).toBe('unavailable')
   })
 
   it('ready rows offer test + setDefault + disable', () => {

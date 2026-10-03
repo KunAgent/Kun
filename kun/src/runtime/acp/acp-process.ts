@@ -4,6 +4,7 @@
  * group / job object), bounded sanitized stderr capture, and shutdown fencing
  * are transport-agnostic. ACP keeps its names so call sites stay readable.
  */
+import { prepareDeepSeekHarnessLaunch } from '../../harness/deepseek-harness-launch.js'
 import {
   HarnessProcess,
   HARNESS_STDERR_TAIL_BYTES,
@@ -18,6 +19,9 @@ export type AcpSpawnFn = HarnessSpawnFn
 export type AcpProcess = HarnessProcess
 
 export async function startAcpProcess(input: {
+  harnessId?: string
+  signal?: AbortSignal
+  validateLaunch?: () => Promise<unknown>
   command: string
   args?: readonly string[]
   /** Non-sensitive launch env from the harness definition. */
@@ -33,5 +37,9 @@ export async function startAcpProcess(input: {
   spawn?: AcpSpawnFn
   stderrTailBytes?: number
 }): Promise<AcpProcess> {
-  return startHarnessProcess(input)
+  input.signal?.throwIfAborted()
+  const prepared = await prepareDeepSeekHarnessLaunch(input)
+  await input.validateLaunch?.()
+  input.signal?.throwIfAborted()
+  return startHarnessProcess(prepared)
 }

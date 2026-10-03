@@ -6,6 +6,7 @@ import type {
   AdeHarnessRow,
   AdeHarnessSessionState
 } from '@shared/ade-harnesses'
+import { harnessProfileKey, readyHarnessProfiles } from '@shared/harness-enablement'
 import { getProvider } from '../agent/registry'
 
 /**
@@ -86,10 +87,12 @@ const DETECTING_POLL_MS = 2_000
 const DETECTING_POLL_BUDGET_MS = 30_000
 const LOAD_RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000]
 
+let expiryTimer: ReturnType<typeof setTimeout> | null = null
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let pollWindowStart: number | null = null
 let retryCount = 0
 let pollGeneration = 0
+let catalogGeneration = 0
 let now = (): number => Date.now()
 
 /** Test seam: vitest fake timers need a clock they can advance. */
@@ -132,9 +135,11 @@ export async function loadHarnesses(
   if (!provider.listHarnesses) return
   const state = useHarnessStore.getState()
   if (state.rowsLoading || (state.rowsLoadedAt !== undefined && !force)) return
+  const requestGeneration = ++catalogGeneration
   useHarnessStore.setState({ rowsLoading: true, rowsError: undefined })
   try {
-    const rows = await provider.listHarnesses(options)
+    const rows = await provider.listHarnesses({ ...options, includeDisabled: true })
+    if (requestGeneration !== catalogGeneration) return
     const previous = useHarnessStore.getState()
     const oldRows = new Map(previous.rows.map((row) => [row.definition.id, harnessModelFingerprint(row)]))
     const newRows = new Map(rows.map((row) => [row.definition.id, harnessModelFingerprint(row)]))
@@ -146,6 +151,7 @@ export async function loadHarnesses(
       delete models[id]
       delete providerGroups[id]
     }
+    scheduleReadinessExpiry(rows)
     useHarnessStore.setState({ rows, rowsLoadedAt: now(), rowsLoading: false, models, providerGroups })
     retryCount = 0
     if (anyRowDetecting(rows)) {
@@ -159,6 +165,7 @@ export async function loadHarnesses(
       resetHarnessPolling()
     }
   } catch (error) {
+    if (requestGeneration !== catalogGeneration) return
     useHarnessStore.setState({
       rowsLoading: false,
       rowsError: error instanceof Error ? error.message : String(error)
@@ -294,17 +301,8 @@ export function harnessRowRunsTurns(row: AdeHarnessRow): boolean {
 
 /** Harness availability for pickers: installed + handshake-ready + signed in. */
 export function harnessRowAvailable(row: AdeHarnessRow): boolean {
-  const status = row.status
-  if (row.definition.transport === 'native-loop') return true
-  if (status.installed !== 'yes') return false
-  // P4-05: a version below the definition's minVersion cannot serve turns —
-  // surface it as unavailable instead of the previous dead "version too low"
-  // label branch.
-  if (status.versionSupported === false) return false
-  // P3-11: a binary that fails the ACP initialize handshake is installed but
-  // cannot serve turns — `status.message` carries the sanitized stderr.
-  if (status.ready === 'no') return false
-  return status.login !== 'signed-out'
+  if (row.definition.transport === 'native-loop') return row.definition.id === 'kun'
+  return harnessRowRunsTurns(row) && readyHarnessProfiles(row).length > 0
 }
 
 /**
@@ -318,19 +316,18 @@ export function harnessRowUnavailableCode(row: AdeHarnessRow): string | null {
   if (row.status.detecting === true) return 'detecting'
   if (harnessRowAvailable(row)) return null
   const status = row.status
-  if (status.reasonCode) return status.reasonCode
+  if (row.definition.id === 'gemini-cli' || row.definition.availability === 'retired') return 'disabled'
+  if (status.reasonCode && status.reasonCode !== 'disabled') return status.reasonCode
+  if (row.enabled !== true) return 'disabled'
   if (status.installed === 'no') return 'not_installed'
   if (status.installed === 'yes') {
     if (status.versionSupported === false) return 'version_too_low'
     if (status.ready === 'no') return 'handshake_failed'
-    // `ready: 'unknown'` (an inconclusive ACP probe, P4-03) stays selectable:
-    // never a blocking code. `handshake_timeout` only arrives over the wire
-    // as an advisory for management surfaces.
     if (status.login === 'signed-out') return 'signed_out'
   }
   // A settled `unknown` (the version probe failed and the P4-02 polling
   // budget is spent) is unavailable — not "detecting" forever.
-  return 'unavailable'
+  return 'readiness_required'
 }
 
 /** Raw diagnostic detail; render only inside a "view reason" disclosure. */
@@ -349,6 +346,10 @@ export const HARNESS_UNAVAILABLE_LABEL_KEY: Record<string, string> = {
   handshake_timeout: 'handshakeTimeout',
   signed_out: 'signedOut',
   disabled: 'disabled',
+  readiness_required: 'readinessRequired',
+  configuration_invalid: 'configurationInvalid',
+  credentials_missing: 'credentialsMissing',
+  authentication_unverified: 'authenticationUnverified',
   unavailable: 'unavailable'
 }
 
@@ -361,6 +362,10 @@ export const HARNESS_UNAVAILABLE_NEXT_STEP_KEY: Record<string, string | undefine
   handshake_timeout: 'retry',
   signed_out: 'login',
   disabled: 'enable',
+  readiness_required: 'enable',
+  configuration_invalid: 'configure',
+  credentials_missing: 'login',
+  authentication_unverified: 'login',
   unavailable: 'retry'
 }
 
@@ -371,4 +376,35 @@ export function harnessUnavailableLabelKey(code: string): string {
 export function harnessUnavailableNextStepKey(code: string): string | null {
   const suffix = HARNESS_UNAVAILABLE_NEXT_STEP_KEY[code]
   return suffix ? `adeHarnessNextStep.${suffix}` : null
+}
+
+/** Drop removed grants immediately; an in-flight older catalog cannot restore them. */
+export function applyHarnessEnablementSettings(settings: import('@shared/app-settings').KunHarnessSettingsV1,
+  invalidateReadiness = false): void {
+  catalogGeneration += 1
+  useHarnessStore.setState((state) => ({ rowsLoading: false, rows: state.rows.map((row) => {
+    if (row.definition.id === 'kun') return row
+    const enabledProfiles = settings.disabledIds.includes(row.definition.id) ? [] :
+      (settings.enabledProfiles ?? []).filter((entry) => entry.harnessId === row.definition.id)
+    return { ...row, enabled: enabledProfiles.length > 0, enabledProfiles,
+      readyProfiles: invalidateReadiness ? [] : (row.readyProfiles ?? []).filter((entry) =>
+        enabledProfiles.some((enabled) => harnessProfileKey(entry) === harnessProfileKey(enabled))) }
+  }) }))
+}
+
+/** Expiring proofs disappear even while a composer menu is left open. */
+function scheduleReadinessExpiry(rows: AdeHarnessRow[]): void {
+  if (expiryTimer) clearTimeout(expiryTimer)
+  expiryTimer = null
+  const expirations = rows.flatMap((row) => (row.readyProfiles ?? []).map((profile) => Date.parse(profile.expiresAt ?? '')))
+    .filter((expiration) => Number.isFinite(expiration) && expiration > Date.now())
+  if (!expirations.length) return
+  expiryTimer = setTimeout(() => {
+    expiryTimer = null
+    useHarnessStore.setState((state) => ({ rows: state.rows.map((row) => ({ ...row,
+      readyProfiles: (row.readyProfiles ?? []).filter((profile) => Date.parse(profile.expiresAt ?? '') > Date.now()) })) }))
+    scheduleReadinessExpiry(useHarnessStore.getState().rows)
+  }, Math.max(1, Math.min(...expirations) - Date.now() + 1))
+  // Catalog caches must not keep a non-browser test process alive.
+  if (typeof expiryTimer === 'object' && 'unref' in expiryTimer) expiryTimer.unref()
 }

@@ -8,7 +8,7 @@ import { promisify } from 'node:util'
 import { WINDOWS_OWNED_LAUNCHER_SOURCE } from './owned-process-windows-launcher.js'
 
 type StopOptions = { graceMs?: number; timeoutMs?: number }
-type LaunchOptions = SpawnOptions & { ownerLossGraceMs?: number }
+type LaunchOptions = SpawnOptions & { ownerLossGraceMs?: number; beforeLaunch?: () => Promise<unknown> }
 type Launch = { directory: string; stopPath: string; launcherPid: number; stop?: Promise<void> }
 const launches = new Map<ChildProcess, Launch>()
 const retired = new WeakSet<ChildProcess>()
@@ -89,12 +89,12 @@ async function prepareWindowsLaunch(command: string, args: readonly string[], op
       String(ownerPid), ownerBirth, String(options.ownerLossGraceMs ?? 20_000), console ? 'console' : 'pipe',
       Buffer.from(startPath).toString('base64')
     ]).join('\n'), { mode: 0o600 })
-  const { ownerLossGraceMs: _ownerLossGraceMs, ...spawnOptions } = options
+  const { ownerLossGraceMs: _ownerLossGraceMs, beforeLaunch, ...spawnOptions } = options
   const launcherOptions: SpawnOptions = {
     ...spawnOptions, shell: false, windowsVerbatimArguments: false, detached: false, windowsHide: true,
     env: { ...environment, KUN_OWNED_LAUNCH_CONFIG: configPath }
   }
-  return { launcher, launcherOptions, directory, statusPath, stopPath, startPath }
+  return { launcher, launcherOptions, directory, statusPath, stopPath, startPath, beforeLaunch }
 }
 
 async function bindWindowsLaunch(child: ChildProcess, prepared: Awaited<ReturnType<typeof prepareWindowsLaunch>>): Promise<ChildProcess> {
@@ -113,6 +113,8 @@ async function bindWindowsLaunch(child: ChildProcess, prepared: Awaited<ReturnTy
         // _handle still owns the launcher/Job lifetime, while callers and
         // Runtime discovery observe the real target process identity.
         Object.defineProperty(child, 'pid', { value: Number(status), configurable: true, enumerable: true })
+        await prepared.beforeLaunch?.()
+        if (stopping) throw new Error('Owned process admission closed during launch')
         // Do not await after releasing the gate: the caller installs its
         // listeners in the promise microtask before target I/O can be handled.
         writeFileSync(prepared.startPath, 'start', { mode: 0o600 })
@@ -146,9 +148,12 @@ async function bindWindowsLaunch(child: ChildProcess, prepared: Awaited<ReturnTy
 
 export async function spawnWindowsOwnedProcess(command: string, args: readonly string[], options: LaunchOptions): Promise<ChildProcess> {
   const prepared = await prepareWindowsLaunch(command, args, options)
-  if (stopping) {
+  try {
+    await prepared.beforeLaunch?.()
+    if (stopping) throw new Error('Owned process admission is closed')
+  } catch (error) {
     await rm(prepared.directory, { recursive: true, force: true })
-    throw new Error('Owned process admission is closed')
+    throw error
   }
   return bindWindowsLaunch(spawn(prepared.launcher, [], prepared.launcherOptions), prepared)
 }

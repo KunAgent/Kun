@@ -29,7 +29,12 @@ const stubRuntime = (over: Partial<DelegatedTurnRuntime> = {}): DelegatedTurnRun
 const makeRouter = (over: Partial<ConstructorParameters<typeof HarnessRouter>[0]> = {}) =>
   new HarnessRouter({
     enabled: () => true,
-    catalog: new HarnessCatalog(),
+    catalog: new HarnessCatalog({ custom: () => [], enabledProfiles: () => [
+      ...['claude-code', 'codex', 'antigravity', 'opencode', 'pi', 'devin'].map((harnessId) => ({ harnessId, credentialMode: 'native-login' as const })),
+      ...['sub', 'other'].map((providerId) => ({ harnessId: 'claude-code', credentialMode: 'native-login' as const, providerId })),
+      ...['default', 'cur-1'].map((providerId) => ({ harnessId: 'cursor', credentialMode: 'provider' as const, providerId }))
+    ] }),
+    readiness: { configurationSignature: () => 'fixture', prepareTurn: async () => undefined, releaseTurn: () => undefined },
     runtimes: () => ({}),
     providerKinds: () => kinds(),
     defaultModel: () => 'default-model',
@@ -85,6 +90,23 @@ describe('HarnessRouter', () => {
     }
   })
 
+  it.each(['agent-sdk', 'cursor-sdk', 'antigravity-cli'] as const)(
+    'rejects an explicit Kun route to an external %s provider even with the router flag off', (kind) => {
+      const router = makeRouter({ enabled: () => false,
+        catalog: new HarnessCatalog({ custom: () => [] }),
+        providerKinds: () => kinds({ byId: { subscription: kind }, defaultKind: kind }),
+        runtimes: () => ({ [kind]: stubRuntime() })
+      })
+      for (const providerId of ['subscription', 'default']) {
+        expect(router.resolve(thread(), turn({ harnessId: 'kun', providerId })))
+          .toMatchObject({ ok: false, error: { code: 'route_unsupported' } })
+        expect(router.resolve(thread(), turn({ harnessId: 'kun', providerId: 'http',
+          actingModelRoute: { providerId, model: 'native-model' } })))
+          .toMatchObject({ ok: false, error: { code: 'route_unsupported' } })
+      }
+    }
+  )
+
   it('prefers the frozen turn harness over thread and provider inference', () => {
     const runtime = stubRuntime({ handlesProvider: () => true })
     const router = makeRouter({ runtimes: () => ({ 'cursor-sdk': runtime }) })
@@ -95,7 +117,7 @@ describe('HarnessRouter', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.resolved.route.harnessId).toBe('cursor')
-      expect(result.runtime).toBe(runtime)
+      expect(result.runtime?.handlesProvider(undefined)).toBe(runtime.handlesProvider(undefined))
     }
   })
 
@@ -166,7 +188,7 @@ describe('HarnessRouter', () => {
     const router = makeRouter({ runtimes: () => ({ 'cursor-sdk': outer }) })
     const result = router.resolve(thread(), turn({ harnessId: 'cursor' as never }))
     expect(result.ok).toBe(true)
-    if (result.ok) expect(result.runtime).toBe(inner)
+    if (result.ok) expect(result.runtime?.handlesProvider(undefined)).toBe(inner.handlesProvider(undefined))
   })
 
   it('passes admission hook failures through', () => {
@@ -183,6 +205,19 @@ describe('HarnessRouter', () => {
     expect(router.resolve(thread(), turn({ harnessId: 'cursor' as never })).ok).toBe(false)
     map.replace({ 'cursor-sdk': stubRuntime() })
     expect(router.resolve(thread(), turn({ harnessId: 'cursor' as never })).ok).toBe(true)
+  })
+
+  it('fails closed without explicit opt-in even when router preference is off or provider inference selects an engine', () => {
+    const router = makeRouter({ enabled: () => false, catalog: new HarnessCatalog(),
+      runtimes: () => ({ 'agent-sdk': stubRuntime() }),
+      providerKinds: () => kinds({ defaultKind: 'agent-sdk' }) })
+    expect(router.resolve(thread(), turn())).toMatchObject({ ok: false, error: { code: 'harness_unavailable' } })
+    expect(router.resolve(thread(), turn({ harnessId: 'claude-code' }))).toMatchObject({ ok: false, error: { code: 'harness_unavailable' } })
+  })
+
+  it('fails closed when readiness composition is absent', () => {
+    const router = makeRouter({ readiness: undefined, runtimes: () => ({ 'agent-sdk': stubRuntime() }) })
+    expect(router.resolve(thread(), turn({ harnessId: 'claude-code' }))).toMatchObject({ ok: false, error: { code: 'harness_not_ready' } })
   })
 
   it('reports enabled state from the deps flag', () => {

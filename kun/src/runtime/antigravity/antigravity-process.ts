@@ -1,7 +1,7 @@
-import type { spawn, SpawnOptions } from 'node:child_process'
+import type { spawn } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 import { shellSpawnEnv } from '../../adapters/tool/builtin-tool-utils.js'
-import { spawnOwnedProcess, stopOwnedProcess } from '../../process/owned-process.js'
+import { spawnOwnedProcess, stopOwnedProcess, type SpawnOwnedProcessOptions } from '../../process/owned-process.js'
 import { harnessExecutableEnv } from '../../harness/harness-executable-env.js'
 
 const MAX_STDOUT_BYTES = 8 * 1024 * 1024
@@ -9,18 +9,27 @@ const MAX_STDERR_BYTES = 256 * 1024
 
 export async function runAntigravityProcess(input: {
   binaryPath: string
+  env?: Record<string, string>
   args: string[]
   cwd: string
   signal: AbortSignal
+  validateLaunch?: () => Promise<unknown>
   timeoutMs: number
   spawnFn?: typeof spawn
 }): Promise<string> {
-  const options: SpawnOptions = {
+  const beforeLaunch = async (): Promise<void> => {
+    input.signal.throwIfAborted()
+    await input.validateLaunch?.()
+    input.signal.throwIfAborted()
+  }
+  const options: SpawnOwnedProcessOptions = {
+    beforeLaunch,
     cwd: input.cwd,
-    env: harnessExecutableEnv(shellSpawnEnv()),
+    env: { ...harnessExecutableEnv(shellSpawnEnv()), ...input.env },
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: false
   }
+  await beforeLaunch()
   const child = input.spawnFn
     ? input.spawnFn(input.binaryPath, input.args, options)
     : await spawnOwnedProcess(input.binaryPath, input.args, options)

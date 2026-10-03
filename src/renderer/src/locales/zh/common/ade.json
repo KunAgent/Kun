@@ -250,7 +250,11 @@
     "adapterMissing": "缺 ACP 适配器",
     "handshakeFailed": "握手失败",
     "handshakeTimeout": "探测超时",
-    "disabled": "已停用"
+    "disabled": "已停用",
+    "readinessRequired": "需要检查就绪状态",
+    "configurationInvalid": "请检查连接配置",
+    "credentialsMissing": "缺少凭据",
+    "authenticationUnverified": "认证尚未确认"
   },
   "adeIsolation": {
     "title": "隔离方式",
@@ -355,7 +359,8 @@
     "upgrade": "升级后重试",
     "retry": "重试检测",
     "login": "登录后重试",
-    "enable": "在设置中启用"
+    "enable": "在设置中启用",
+    "configure": "配置供应商"
   },
   "adeHarnessViewReason": "查看原因",
   "adeHarnessOpenSettings": "去设置",
@@ -561,5 +566,40 @@
   "devinModels.results": "搜索结果",
   "devinModels.nativeOrder": "Devin 模型",
   "devinModels.fusionCombinations": "Fusion 组合",
-  "devinModels.withCompanion": "搭配 {{model}}"
+  "devinModels.withCompanion": "搭配 {{model}}",
+  "agentEnablement": {
+    "explanation": "请分别启用每个 Agent 及其连接配置。通过本地就绪检查后，才会出现在输入框中。",
+    "profile": "连接配置",
+    "provider": "模型供应商",
+    "model": "模型",
+    "modelHint": "修改模型或配置后，需要重新检查就绪状态。",
+    "nativeDefault": "Agent 默认模型",
+    "loadModels": "加载可用模型",
+    "enable": "检查并启用",
+    "disable": "停用此配置",
+    "cancel": "取消检查",
+    "checking": "正在检查就绪状态…",
+    "ready": "已启用且就绪",
+    "needsCheck": "已启用；需要检查就绪状态",
+    "disabled": "未启用",
+    "recheck": "重新检查",
+    "preview": "预览版",
+    "unavailable": "就绪检查暂不可用。请启动 Kun 运行时后重试。",
+    "chooseProvider": "选择供应商",
+    "failed": "无法确认就绪状态。请查看检查结果，修复配置后重试。",
+    "timeout": "检查超时。请确认命令及连接配置后重试。",
+    "cancelled": "已取消检查",
+    "settingsUnavailable": "配置尚未同步到运行时。请保存配置、检查运行时连接后重试。",
+    "authVerified": "Agent 已确认账号认证状态。",
+    "authUnverified": "可能已存在凭据或配置，但尚未验证账号认证状态。",
+    "quotaUnverified": "此检查不会发送试用提示词，也不会验证额度、计费或后续模型请求。",
+    "checks": {
+      "installation": "安装",
+      "configuration": "配置",
+      "credentials": "凭据",
+      "protocol": "协议就绪状态"
+    },
+    "nativeAccount": "原生账号配置",
+    "systemAccount": "系统 CLI 账号"
+  }
 }

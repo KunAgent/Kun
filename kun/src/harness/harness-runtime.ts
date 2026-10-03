@@ -1,3 +1,5 @@
+import { HarnessReadinessService } from './harness-readiness.js'
+import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import type { ServeProviderConfig } from '../config/kun-config-application.js'
@@ -6,10 +8,8 @@ import { HarnessCatalog } from './harness-catalog.js'
 import { HarnessDetector, spawnCaptured } from './harness-detector.js'
 import { probeHarnessLogin } from './harness-login-probes.js'
 import { AcpModelProbe } from './acp-model-probe.js'
+import { PiModelProbe } from './pi-model-probe.js'
 import { CodexModelProbe } from './codex-model-probe.js'
-import { probeAcpReadiness } from './acp-readiness-probe.js'
-import { probeCodexReadiness } from './codex-readiness-probe.js'
-import { AcpReadinessStore, type AcpReadinessCacheView } from './acp-readiness-store.js'
 import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
 import { HarnessTokenService } from './harness-token-service.js'
 import type { HarnessSecretRefResolver } from './harness-secret-env.js'
@@ -18,9 +18,11 @@ const runtimeRequire = createRequire(import.meta.url)
 
 function bundledClaudeCode(): { version?: string; command?: string } | undefined {
   try {
-    const pkgPath = runtimeRequire.resolve('@anthropic-ai/claude-agent-sdk/package.json')
+    const pkgPath = join(dirname(runtimeRequire.resolve('@anthropic-ai/claude-agent-sdk')), 'package.json')
     const version = (runtimeRequire(pkgPath) as { version?: string }).version
-    return { version }
+    let command: string | undefined
+    try { command = runtimeRequire.resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/${process.platform === 'win32' ? 'claude.exe' : 'claude'}`) } catch { /* SDK resolves its own platform package for model/account control requests. */ }
+    return { version, command }
   } catch {
     return undefined
   }
@@ -33,6 +35,7 @@ function bundledRuntime(def: HarnessDefinition): { version?: string; command?: s
 
 export type HarnessRuntimeComposition = {
   catalog: HarnessCatalog
+  readiness: HarnessReadinessService
   detector: HarnessDetector
   /** ACP `session/new` model probing for `modelSource: 'probe'` harnesses. */
   acpModels: AcpModelProbe
@@ -40,6 +43,7 @@ export type HarnessRuntimeComposition = {
   agentSdkModels: AgentSdkModelProbe
   /** Codex app-server `model/list` probing (P6-07). */
   codexModels: CodexModelProbe
+  piModels: PiModelProbe
   installNetwork?: () => import('../contracts/native-agent-network.js').NativeAgentNetworkPolicy | undefined
   /**
    * Spawn-free read of the freshest probed model list, dispatched by
@@ -66,71 +70,40 @@ export type HarnessRuntimeComposition = {
  * Settings overrides are read lazily on every detection pass so config
  * re-apply does not need to rebuild the detector.
  */
-/** P4-03: at most two ACP readiness probes run concurrently. */
-const ACP_PROBE_CONCURRENCY = 2
-
-function createLimiter(concurrency: number) {
-  let running = 0
-  const queue: Array<() => void> = []
-  const release = (): void => {
-    running -= 1
-    queue.shift()?.()
-  }
-  return <T>(task: () => Promise<T>): Promise<T> =>
-    new Promise<T>((resolve, reject) => {
-      const start = (): void => {
-        running += 1
-        task().then(resolve, reject).finally(release)
-      }
-      if (running < concurrency) start()
-      else queue.push(start)
-    })
-}
-
 export function createHarnessComposition(
-  options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses' | 'dataDir' | 'nativeAgentNetwork'>,
-  deps: { resolveSecretEnv?: HarnessSecretRefResolver } = {}
+  options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses' | 'dataDir' | 'nativeAgentNetwork' | 'apiKey' | 'baseUrl' | 'model' | 'credentialSourceId'>,
+  deps: { revision?: () => number; resolveSecretEnv?: HarnessSecretRefResolver; resolveProviderCredential?: (sourceId: string) => Promise<{ apiKey: string } | null> } = {}
 ): HarnessRuntimeComposition {
   const catalog = new HarnessCatalog({
     custom: () => options().harnesses?.custom ?? [],
     nativeAgentNetwork: () => options().nativeAgentNetwork,
     terminalAgents: () => options().harnesses?.terminalAgents ?? [],
+    enabledProfiles: () => options().harnesses?.enabledProfiles ?? [],
     disabled: () => options().harnesses?.disabledIds ?? [],
     transportOverrides: () => options().harnesses?.transportOverrides ?? {},
     experimental: () => options().harnesses?.experimentalIds ?? []
   })
-  // P4-03: persist successful ACP handshakes for 24h so a restart does not
-  // re-probe every agent; parallel probes are capped at two.
-  const readinessCache: AcpReadinessCacheView | undefined = options().dataDir
-    ? new AcpReadinessStore({
-        dataDir: options().dataDir,
-        nowMs: () => Date.now(),
-        nowIso: () => new Date().toISOString()
-      })
-    : undefined
-  const probeLimit = createLimiter(ACP_PROBE_CONCURRENCY)
   const detector = new HarnessDetector({
     definitions: () => catalog.list(),
     overrides: () => {
-      const binaryPaths = options().harnesses?.binaryPaths ?? {}
+      const binaryPaths = {
+        ...(process.env.KUN_CLAUDE_BINARY ? { 'claude-code': process.env.KUN_CLAUDE_BINARY } : {}),
+        ...(process.env.KUN_ANTIGRAVITY_BINARY ? { antigravity: process.env.KUN_ANTIGRAVITY_BINARY } : {}),
+        ...options().harnesses?.binaryPaths
+      }
       return Object.fromEntries(
         Object.entries(binaryPaths).map(([id, binaryPath]) => [id, { binaryPath }])
       )
     },
     bundled: bundledRuntime,
     spawnCaptured,
-    // A versioned binary still has to answer its own protocol handshake.
-    probeReady: (def, command) =>
-      probeLimit(() =>
-        def.transport === 'codex-app-server'
-          ? probeCodexReadiness(def, command, { resolveSecretEnv: deps.resolveSecretEnv })
-          : probeAcpReadiness(def, command, { resolveSecretEnv: deps.resolveSecretEnv })
-      ),
-    ...(readinessCache ? { readinessCache } : {}),
-    probeLogin: (def) =>
+    // Discovery is metadata-only. Explicit Check & enable owns protocol startup,
+    // so merely opening Agent settings cannot bootstrap a disabled agent.
+    probeLogin: (def, command, probeOptions) =>
       probeHarnessLogin(def, {
-        providers: () => (options().providers ?? {}) as Record<string, ServeProviderConfig>
-      }),
+        providers: () => (options().providers ?? {}) as Record<string, ServeProviderConfig>,
+        spawnCaptured, signal: probeOptions?.signal
+      }, command),
     nowMs: () => Date.now(),
     nowIso: () => new Date().toISOString()
   })
@@ -146,20 +119,27 @@ export function createHarnessComposition(
     binaryPath: (id) => options().harnesses?.binaryPaths?.[id],
     resolveSecretEnv: deps.resolveSecretEnv
   })
+  const piModels = new PiModelProbe({ binaryPath: (id) => options().harnesses?.binaryPaths?.[id], resolveSecretEnv: deps.resolveSecretEnv })
   const probedModels = (definition: HarnessDefinition): string[] | undefined =>
     definition.transport === 'acp'
       ? acpModels.peek(definition)
       : definition.transport === 'agent-sdk'
         ? agentSdkModels.peek(definition)
+        : definition.transport === 'pi-rpc' ? piModels.peek(definition)
         : definition.transport === 'codex-app-server'
           ? codexModels.peek(definition)
           : undefined
+  const readiness = new HarnessReadinessService({ options, catalog, detector, revision: deps.revision,
+    resolveSecretEnv: deps.resolveSecretEnv, resolveProviderCredential: deps.resolveProviderCredential,
+    sdkHandshake: (definition, env, signal) => agentSdkModels.probeReadiness(definition, env, signal) })
   return {
     catalog,
+    readiness,
     detector,
     acpModels,
     agentSdkModels,
     codexModels,
+    piModels,
     installNetwork: () => options().nativeAgentNetwork?.installer,
     probedModels,
     tokens: new HarnessTokenService(),

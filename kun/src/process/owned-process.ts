@@ -15,7 +15,12 @@ import {
 
 export type OwnedProcessStopOptions = { graceMs?: number; timeoutMs?: number }
 export type OwnedProcessShutdownOptions = OwnedProcessStopOptions & { exclude?: readonly ChildProcess[] }
-export type SpawnOwnedProcessOptions = SpawnOptions & { ownerLossGraceMs?: number; trackDescendants?: boolean }
+export type SpawnOwnedProcessOptions = SpawnOptions & {
+  ownerLossGraceMs?: number
+  trackDescendants?: boolean
+  /** Revalidate admission after preparation and before releasing executable code. */
+  beforeLaunch?: () => Promise<unknown>
+}
 type Guard = {
   child: ChildProcess
   scopeOwnerPid?: number
@@ -193,10 +198,11 @@ export async function spawnOwnedProcess(
   if (options.shell) throw new Error('Owned commands must select an explicit shell executable')
   const executable = await resolveCommand(command, options)
   const guard = await getGuard()
+  await options.beforeLaunch?.()
   if (stopping) throw new Error('Owned process admission is closed')
   const stdio = withLaunchPipe(options.stdio)
   const gateFd = stdio.length - 1
-  const { ownerLossGraceMs = 20_000, trackDescendants = true, ...spawnOptions } = options
+  const { ownerLossGraceMs = 20_000, trackDescendants = true, beforeLaunch, ...spawnOptions } = options
   const wrapper = `IFS= read -r kun_start <&${gateFd} || exit 125; [ "$kun_start" = start ] || exit 125; exec ${gateFd}<&-; exec "$@"`
   const child = spawn('/bin/sh', ['-c', wrapper, 'kun-owned', executable, ...args], {
     ...spawnOptions,
@@ -217,6 +223,7 @@ export async function spawnOwnedProcess(
       child.once('error', reject)
     })
     await guard.request({ type: 'register', pid: child.pid, ownerLossGraceMs, trackDescendants })
+    await beforeLaunch?.()
     if (stopping) throw new Error('Owned process admission closed during launch')
     gate?.end('start\n')
     return child

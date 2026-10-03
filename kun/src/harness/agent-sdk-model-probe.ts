@@ -5,8 +5,11 @@
  * Canonical `resolvedModel` ids are returned; results are cached for ten
  * minutes and concurrent probes share one in-flight request.
  */
+import { raceProbeAbort } from './probe-abort.js'
+import { spawnOwnedSdkProcess } from '../runtime/agent-sdk/owned-sdk-process.js'
 import { tmpdir } from 'node:os'
 import type { SdkApi } from '../runtime/agent-sdk/sdk-protocol.js'
+import type { HarnessTestHandshake } from '../contracts/harness-test.js'
 import type { HarnessDefinition, HarnessId } from '../contracts/harness.js'
 import { sdkProcessBaseEnv } from '../runtime/agent-sdk/sdk-process-environment.js'
 import { buildScopedEnv } from '../runtime/agent-sdk/sdk-options-builder.js'
@@ -86,26 +89,34 @@ export class AgentSdkModelProbe {
     return task
   }
 
-  private async probeUncached(definition: HarnessDefinition): Promise<string[]> {
-    const sdk = await (this.deps.loadSdk ?? loadAgentSdk)()
+  async probeReadiness(definition: HarnessDefinition, env: Record<string, string>, signal: AbortSignal): Promise<Omit<HarnessTestHandshake, 'durationMs'>> {
+    signal = AbortSignal.any([signal, AbortSignal.timeout(this.deps.timeoutMs ?? AGENT_SDK_PROBE_TIMEOUT_MS)])
+    let authentication: HarnessTestHandshake['authentication'] = 'unverified'
+    const models = await this.probeUncached(definition, env, signal, (account) => {
+      if (account?.apiProvider === 'firstParty' && Boolean(account.email || account.subscriptionType) && !account.apiKeySource) authentication = 'verified'
+    })
+    return { ok: models.length > 0, supported: true, protocol: 'agent-sdk', models, authentication }
+  }
+
+  private async probeUncached(definition: HarnessDefinition, env: Record<string, string> = {}, signal?: AbortSignal, accountResult?: (account: { email?: string; subscriptionType?: string; apiProvider?: string; apiKeySource?: string } | undefined) => void): Promise<string[]> {
+    signal = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(this.deps.timeoutMs ?? AGENT_SDK_PROBE_TIMEOUT_MS)])
+    signal.throwIfAborted()
+    const sdk = await raceProbeAbort((this.deps.loadSdk ?? loadAgentSdk)(), signal)
+    signal?.throwIfAborted()
     const query = sdk.query({
       prompt: emptyProbePrompt(),
       options: {
+        spawnClaudeCodeProcess: spawnOwnedSdkProcess,
         cwd: tmpdir(),
-        env: buildScopedEnv({ ...sdkProcessBaseEnv(), ...nativeAgentNetworkEnv(definition) }),
+        env: { ...buildScopedEnv({ ...sdkProcessBaseEnv(), ...nativeAgentNetworkEnv(definition) }), ...env },
         ...(this.deps.binaryPath?.(definition.id)
           ? { pathToClaudeCodeExecutable: this.deps.binaryPath(definition.id) }
           : {})
       }
     })
     try {
-      const timeoutMs = this.deps.timeoutMs ?? AGENT_SDK_PROBE_TIMEOUT_MS
-      const rows = await Promise.race([
-        Promise.resolve(query.supportedModels?.() ?? Promise.resolve([])),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('supportedModels timed out')), timeoutMs)
-        )
-      ])
+      const rows = await raceProbeAbort(query.supportedModels?.() ?? Promise.resolve([]), signal)
+      if (accountResult) accountResult(await raceProbeAbort(query.accountInfo?.() ?? Promise.resolve(undefined), signal))
       const models = new Set<string>()
       for (const row of (rows ?? []) as ProbeModelRow[]) {
         const id = row.resolvedModel ?? row.value

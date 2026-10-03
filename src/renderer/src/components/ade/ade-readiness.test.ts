@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { withHarnessReadiness } from '@shared/test-support/harness-readiness'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { KunRuntimeSettingsSyncStatusPayload } from '@shared/kun-gui-api'
 import {
@@ -74,7 +75,7 @@ function settings(overrides: {
 }
 
 function row(id: string, transport = 'acp'): AdeHarnessRow {
-  return {
+  return withHarnessReadiness({
     definition: {
       id,
       displayName: id,
@@ -91,7 +92,7 @@ function row(id: string, transport = 'acp'): AdeHarnessRow {
       login: 'signed-in',
       checkedAt: '2026-01-01T00:00:00.000Z'
     }
-  }
+  })
 }
 
 const base = {

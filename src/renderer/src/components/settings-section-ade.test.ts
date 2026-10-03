@@ -239,7 +239,7 @@ describe('AgentsHarnessesSettingsPanel', () => {
     const text = instanceText(renderer.root)
     expect(text).toContain('claude-code display')
     expect(text).toContain('1.2.3')
-    expect(text).toContain('adeSettings.harnessLoginSignedIn')
+    expect(text).toContain('agentEnablement.disabled')
     expect(renderer.root.findAllByProps({ 'data-agent-card': 'claude-code' })).toHaveLength(1)
     const kunListItem = renderer.root.findAllByType('button' as never)
       .find((button) => instanceText(button).includes('kun display'))!
@@ -275,20 +275,20 @@ describe('AgentsHarnessesSettingsPanel', () => {
     act(() => renderer.unmount())
   })
 
-  it('writes disabledIds when the enable switch toggles', () => {
+  it('removes only the selected profile when explicitly disabled', () => {
     useHarnessStore.setState({
       rows: [makeHarnessRow('kun'), makeHarnessRow('claude-code')],
       rowsLoadedAt: 1_000
     })
     const updateKun = vi.fn()
-    const renderer = renderPanel(updateKun)
+    const kun = defaultKunRuntimeSettings()
+    kun.harnesses.enabledProfiles = [{ harnessId: 'claude-code', credentialMode: 'native-login' }]
+    const renderer = renderPanel(updateKun, kun)
     act(() => renderer.root.findByProps({ 'data-agent-list-id': 'claude-code' }).props.onClick())
-    // kun's row carries no toggle; the only switch is claude-code's enable.
-    const switches = renderer.root.findAllByProps({ role: 'switch' })
-    expect(switches).toHaveLength(1)
-    act(() => switches[0].props.onClick())
+    const disable = renderer.root.findByProps({ 'data-agent-enable': true })
+    act(() => disable.props.onClick())
     expect(updateKun).toHaveBeenCalledWith({
-      harnesses: expect.objectContaining({ disabledIds: ['claude-code'] })
+      harnesses: expect.objectContaining({ enabledProfiles: [] })
     })
     act(() => renderer.unmount())
   })

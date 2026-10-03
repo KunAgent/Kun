@@ -11,6 +11,7 @@ import type {
   HarnessId,
   HarnessRoute
 } from '../contracts/harness.js'
+import { nativeHarnessCredentialEnv } from '../harness/harness-secret-env.js'
 import { delegatedCredentialIdentity } from '../runtime/delegated-session-binding.js'
 import {
   formatGatewayModelId,
@@ -72,7 +73,7 @@ export async function resolveDelegatedCredentialContext(
     accountId: input.accountId
   })
   if (credentialMode === 'native-login') {
-    return { credentialIdentity, env: {} }
+    return { credentialIdentity, env: nativeHarnessCredentialEnv(definition, { ...process.env, ...definition.launch?.env }) }
   }
   if (!resolve) {
     throw new Error(

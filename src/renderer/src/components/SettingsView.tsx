@@ -54,6 +54,7 @@ import {
   mergeSettings,
   splitSettingsList
 } from './settings-utils'
+import { cancelAgentEnablementChecks } from './ade/agent-enablement-cancellation'
 import { SettingsViewLayout } from './settings-view-layout'
 import { SettingsDraftLeaveDialog } from './SettingsDraftLeaveDialog'
 import { resolveSettingsDraftExit, type SettingsDraftController } from './settings-draft-navigation'
@@ -122,6 +123,7 @@ export function SettingsView(): ReactElement {
   const setCategory: Dispatch<SetStateAction<SettingsCategory>> = useCallback((action) => {
     const target = typeof action === 'function' ? action(category) : action
     if (target === category) return
+    cancelAgentEnablementChecks()
     if (hasPendingSettingsDraft()) {
       setPendingNavigation({ kind: 'category', target })
       return
@@ -286,6 +288,7 @@ export function SettingsView(): ReactElement {
     persistedSettingsRef, flushOnUnmountRef, settingsPlatform, settingsHomeDir
   })
   const guardedGoBack = (): void => {
+    cancelAgentEnablementChecks()
     if (hasPendingSettingsDraft()) {
       setPendingNavigation({ kind: 'back' })
       return
@@ -293,6 +296,7 @@ export function SettingsView(): ReactElement {
     goBack()
   }
   useSettingsCommandPaletteShortcut(() => {
+    cancelAgentEnablementChecks()
     if (hasPendingSettingsDraft()) {
       setPendingNavigation({ kind: 'palette' })
       return false
@@ -564,6 +568,7 @@ export function SettingsView(): ReactElement {
     saveIssue,
     retrySave: () => { void flushPendingSave() },
     beforeAdeCollaborationSave: flushPendingSave,
+    beforeAgentEnablementCheck: flushPendingSave,
     onAdeCollaborationSaved,
     onAdeCollaborationDraftChange,
     onAdeProjectDraftChange,

@@ -23,6 +23,7 @@ export function registerExecutionUnitRoutes(router: Router, runtime: ServerRunti
       registry,
       tokens,
       catalog,
+      readiness: runtime.harnesses?.readiness,
       endpoint: () => runtime.harnesses?.gatewayEndpoint?.baseUrl,
       hookWriter: runtime.ade?.hookWriter
     }

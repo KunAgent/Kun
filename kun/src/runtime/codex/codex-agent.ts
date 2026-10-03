@@ -75,6 +75,8 @@ export class CodexAgent implements HarnessAgent {
     const args = [...input.args]
     if (!args.includes('app-server')) args.unshift('app-server')
     const proc = await startHarnessProcess({
+      signal: input.signal,
+      validateLaunch: input.validateLaunch,
       command: input.command,
       args,
       env: { ...nativeAgentNetworkEnv(input.definition, process.env, { ...input.env, ...input.secretEnv }), ...input.env },

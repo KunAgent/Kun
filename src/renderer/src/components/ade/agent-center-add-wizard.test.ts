@@ -11,7 +11,7 @@ vi.mock('../../agent/registry', () => ({ getProvider: () => provider }))
 import { AgentCenterAddWizard } from './agent-center-add-wizard'
 
 const settings: KunHarnessSettingsV1 = {
-  disabledIds: [], binaryPaths: {}, custom: [], defaults: {},
+  enabledProfiles: [], disabledIds: [], binaryPaths: {}, custom: [], defaults: {},
   defaultHarnessId: 'kun', agentOrder: [], terminalAgents: []
 }
 
@@ -72,7 +72,7 @@ describe('AgentCenterAddWizard', () => {
     await act(async () => root.root.findByProps({ 'data-agent-add-select': 'codex' }).props.onClick())
     await act(async () => root.root.findByProps({ 'data-agent-add-check': true }).props.onClick())
     expect(provider.testHarness).toHaveBeenCalledWith('codex', {
-      level: 'handshake', credentialMode: 'native-login'
+      level: 'handshake', credentialMode: 'native-login', timeoutMs: 55_000
     }, { signal: expect.any(AbortSignal) })
     expect(root.root.findAllByProps({ 'data-agent-add-finish': true })).toHaveLength(1)
     expect(provider.testHarness).toHaveBeenCalledTimes(1)
@@ -106,6 +106,7 @@ describe('AgentCenterAddWizard', () => {
   it('marks a completed check stale when the executable override changes', async () => {
     provider.testHarness.mockResolvedValue({
       harnessId: 'codex', level: 'handshake', ok: true, durationMs: 1,
+      readiness: { usable: true },
       detect: { ok: true, durationMs: 1, status: codex.status }
     })
     const { root, onClose, onSelectAgent, updateKun } = render()
@@ -134,6 +135,7 @@ describe('AgentCenterAddWizard', () => {
     expect(signal.aborted).toBe(true)
     await act(async () => resolveCheck({
       harnessId: 'codex', level: 'handshake', ok: true, durationMs: 1,
+      readiness: { usable: true },
       detect: { ok: true, durationMs: 1, status: codex.status }
     }))
     expect(root.root.findAllByProps({ 'data-agent-add-finish': true })).toHaveLength(0)

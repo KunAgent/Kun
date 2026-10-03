@@ -1,3 +1,4 @@
+import { cursorTurnFailure } from './cursor-turn-failure.js'
 import type { Run, SDKAgent, SDKUserMessage } from '@cursor/sdk'
 import { goalContextTexts } from '../../contracts/items.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
@@ -26,7 +27,6 @@ import {
 } from './cursor-sdk-runtime-support.js'
 import {
   captureCursorMessage,
-  cursorAuthenticationFailureMessage,
   cursorRunError,
   cursorSdkCapabilities,
   estimateDelegatedTokens,
@@ -441,9 +441,11 @@ export async function runCursorSdkTurnOwned(
           })
           await recordHandoff()
           await recordContextSnapshot(false)
+          await deps.readiness?.validateTurn(threadId, turnId, signal)
           agent = await Promise.race([sdk.Agent.create(options), interrupted])
         }
       } else {
+        await deps.readiness?.validateTurn(threadId, turnId, signal)
         agent = await Promise.race([sdk.Agent.create(options), interrupted])
       }
       let attemptPrompt = prompt
@@ -654,14 +656,9 @@ export async function runCursorSdkTurnOwned(
       const abortedBeforeFailure = signal.aborted
       abortRuntime()
       cancelRun()
-      const code = timedOut ? 'turn_wall_time_limit' : cursorSdkErrorCode(error)
-      const message = timedOut
-        ? `Cursor SDK turn exceeded ${limits.maxWallTimeMs}ms wall time`
-        : code === 'cursor_sdk_authentication_failed' && authenticationRecoveryAttempted
-          ? cursorAuthenticationFailureMessage()
-          : sanitizeCursorSdkError(error, apiKey)
-      const safeTraceError = new Error(message)
-      safeTraceError.name = error instanceof Error ? error.name : 'CursorSdkError'
+      const { code, message, safeTraceError } = cursorTurnFailure(error, apiKey, {
+        timedOut, maxWallTimeMs: limits.maxWallTimeMs, authenticationRecoveryAttempted
+      })
       await finishCursorTrace(trace, { kind: 'error', error: safeTraceError })
       trace = undefined
       if (

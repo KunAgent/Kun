@@ -2,7 +2,7 @@ import { useEffect, useId, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AdeExecutionConfigSnapshot } from '@shared/ade-execution-config'
 import type { AdeProjectDefaults, AdeProjectDefaultField } from '@shared/ade-project-defaults'
-import { harnessRowRunsTurns, harnessModelFingerprint, loadHarnessModels, loadHarnessProviderGroups, loadHarnesses, useHarnessStore } from '../../store/harness-store'
+import { harnessRowAvailable, harnessRowRunsTurns, harnessModelFingerprint, loadHarnessModels, loadHarnessProviderGroups, loadHarnesses, useHarnessStore } from '../../store/harness-store'
 import { useChatStore } from '../../store/chat-store'
 import { isKunModelProviderGroup } from '../../lib/kun-model-provider-groups'
 import { AgentIcon } from '../agent-icon'
@@ -82,8 +82,8 @@ export function TaskSettingsFields({ value, effective, onChange, onRestore, rest
           const mode = next?.credentialModes[0] ?? 'provider'
           onChange('route', { harnessId: event.target.value, model: next?.staticModels?.[0] ?? '', credentialMode: mode })
         }}>
-          {!rows.some((row) => row.definition.id === harnessId) ? <option value={harnessId}>{harnessId}</option> : null}
-          {rows.filter(harnessRowRunsTurns).map((row) =>
+          {!rows.some((row) => row.definition.id === harnessId && harnessRowAvailable(row)) ? <option disabled value={harnessId}>{harnessId}</option> : null}
+          {rows.filter((entry) => harnessRowRunsTurns(entry) && harnessRowAvailable(entry)).map((row) =>
             <option key={row.definition.id} value={row.definition.id}>{row.definition.displayName}</option>)}
         </select>
       </label>

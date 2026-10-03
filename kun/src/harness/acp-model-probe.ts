@@ -103,6 +103,7 @@ export class AcpModelProbe {
       this.deps.resolveSecretEnv
     )
     const process = await startAcpProcess({
+      harnessId: definition.id,
       command,
       args: definition.launch?.args ?? [],
       env: definition.launch?.env ?? {},

@@ -27,6 +27,19 @@ const runtimeWith = (patch: Record<string, unknown>) => {
 }
 
 describe('harness/ade settings bridge', () => {
+  it('preserves exact enabled profiles through IPC validation, normalization and runtime projection', () => {
+    const profiles = [
+      { harnessId: 'claude-code', credentialMode: 'native-login', providerId: 'account-a' },
+      { harnessId: 'codex', credentialMode: 'kun-gateway', providerId: 'provider-a' }
+    ]
+    const parsed = kunRuntimePatchSchema.parse({ harnesses: { enabledProfiles: profiles } })
+    const runtime = runtimeWith(parsed)
+    expect(harnessesConfigForRuntime(runtime.harnesses).enabledProfiles).toEqual(profiles)
+    expect(kunRuntimePatchSchema.safeParse({ harnesses: { enabledProfiles: [
+      { harnessId: 'pi', credentialMode: 'other' }
+    ] } }).success).toBe(false)
+  })
+
   it('generates byte-identical config for identical settings regardless of order', () => {
     const a = runtimeWith({
       harnesses: {
@@ -189,6 +202,7 @@ describe('harness/ade settings bridge', () => {
       worktreeSharedPaths: {}
     })
     expect(harnessesConfigForRuntime(runtime.harnesses)).toEqual({
+      enabledProfiles: [],
       disabledIds: [],
       binaryPaths: {},
       custom: [],
