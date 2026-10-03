@@ -47,3 +47,46 @@ test('native regression checks cover interrupted flows and real zoom geometry', 
   assert.match(smoke, /measured.width >= 24 && measured.height >= 24/)
   assert.match(smoke, /assert.deepEqual\(report.pageErrors, \[\]/)
 })
+
+test('theme evidence verifies persisted state and actual production backgrounds', () => {
+  const fixture = source('src/renderer/src/components/ade/AgentEnablementSmokeFixture.tsx')
+  const host = source('src/renderer/src/components/SettingsUiSmokeHost.ts')
+  assert.match(fixture, /host\.setSettings\(\{ \.\.\.host\.settings, theme \}\)/)
+  assert.doesNotMatch(fixture, /classList\.toggle\('dark'/)
+  assert.match(host, /emitRendererSettingsChanged\(clone\(settings\)\)/)
+  assert.match(smoke, /await window\.agentEnablementFixture\.language\(language\)/)
+  assert.match(smoke, /await assertTheme\(theme\)/)
+  assert.match(smoke, /assert\.equal\(appearance\.savedTheme, theme/)
+  assert.match(smoke, /assert\.equal\(appearance\.renderedTheme, theme/)
+  assert.match(smoke, /getComputedStyle\(document\.querySelector\(selector\)\)\.backgroundColor/)
+  assert.match(smoke, /Math\.max\(\.\.\.rgb\) < 128 : Math\.min\(\.\.\.rgb\) > 192/)
+})
+
+test('high-zoom captures show fully reachable controls and report actual clamped dimensions', () => {
+  assert.match(smoke, /content: window\.getContentBounds\(\)/)
+  assert.match(smoke, /width: innerWidth, height: innerHeight/)
+  assert.match(smoke, /requestedContent: \{ width, height: 1000 \}, native, viewport, zoom, appearance/)
+  assert.match(smoke, /viewport\$\{viewport\.width\}x\$\{viewport\.height\}/)
+  assert.match(smoke, /\['profile', '\[data-agent-profile-mode\]'\], \['enable', '\[data-agent-enable\]'\]/)
+  assert.match(smoke, /const control = await measureControl\(panel\(\)\.locator\(selector\)\)/)
+  assert.doesNotMatch(smoke, /await panel\(\)\.scrollIntoViewIfNeeded\(\)/)
+  assert.match(smoke, /measured\.top >= -1 && measured\.bottom <= measured\.viewport\.height \+ 1 && measured\.hit/)
+  assert.match(smoke, /points\.every/)
+  assert.match(smoke, /report\.screenshotDetails\.push/)
+})
+
+test('both native platforms exercise the final process and pooled-session gate', () => {
+  for (const file of ['owned-process.admission.test.ts', 'harness-pool.admission.test.ts',
+    'session-turn-runtime.admission.test.ts', 'acp-runtime.admission.test.ts', 'owned-sdk-process.test.ts']) {
+    assert.ok(workflow.includes(file), file)
+  }
+  assert.match(workflow, /--maxWorkers=1/)
+})
+
+test('settings baseline copies the complete offline fixture without replacing production helpers', () => {
+  const baseline = source('.github/workflows/settings-ui-smoke.yml')
+  assert.ok(baseline.includes('ade/agent-enablement-smoke-runtime.ts'))
+  const host = source('src/renderer/src/components/ade/agent-enablement-smoke-runtime.ts')
+  assert.doesNotMatch(host, /from ['"]@shared\/harness-enablement['"]/)
+  assert.ok(baseline.includes('github.event.pull_request.base.sha'))
+})

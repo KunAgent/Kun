@@ -58,6 +58,11 @@ jobs:
           npm run ensure:electron
       - name: Verify offline smoke contracts
         run: node --test scripts/agent-enablement-smoke.test.mjs
+      - name: Verify native process and pooled-session admission
+        run: |
+          npm run build:extensions
+          node scripts/ensure-kun-install.cjs
+          npm --prefix kun test -- src/process/owned-process.admission.test.ts src/session/harness-pool.admission.test.ts src/session/session-turn-runtime.admission.test.ts src/runtime/acp/acp-runtime.admission.test.ts src/runtime/agent-sdk/owned-sdk-process.test.ts --maxWorkers=1
       - name: Verify native production components
         env:
           KUN_ENABLEMENT_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

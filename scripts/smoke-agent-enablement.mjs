@@ -20,7 +20,7 @@ const report = { sourceRevision: git('rev-parse', 'HEAD'), nativePlatform: proce
   sourceDiff: git('diff', '--name-only', 'HEAD', '--', 'src', 'kun', 'scripts', '.github/workflows'),
   fixture: 'Production SettingsView, persistence and composer picker; offline host readiness fixtures, no real authentication or quota validation',
   scaleMethod: 'Native Electron webContents.setZoomFactor; no CSS transform or DPR emulation',
-  started: new Date().toISOString(), assertions: [], screenshots: [], measurements: [],
+  started: new Date().toISOString(), assertions: [], screenshots: [], screenshotDetails: [], measurements: [], viewports: [],
   pageErrors: [], blockedRequests: [], status: 'running' }
 let electron, page, server
 try {
@@ -182,8 +182,8 @@ app.on('window-all-closed', () => app.quit())
   report.assertions.push('DeepSeek Preview becomes selectable while remote authentication and quota remain explicitly unverified')
 
   for (const language of ['en', 'zh']) for (const theme of ['light', 'dark']) {
-    await page.evaluate(({ language, theme }) => {
-      window.agentEnablementFixture.language(language)
+    await page.evaluate(async ({ language, theme }) => {
+      await window.agentEnablementFixture.language(language)
       window.agentEnablementFixture.theme(theme)
     }, { language, theme })
     for (const width of [900, 1280]) for (const zoom of [1, 1.5, 2]) {
@@ -193,33 +193,44 @@ app.on('window-all-closed', () => app.quit())
         window.webContents.setZoomFactor(zoom)
       }, { width, zoom })
       await settled()
-      const dimensions = await page.evaluate(() => ({ width: innerWidth,
+      const native = await electron.evaluate(({ BrowserWindow, screen }) => {
+        const window = BrowserWindow.getAllWindows()[0]
+        const bounds = window.getBounds()
+        const display = screen.getDisplayMatching(bounds)
+        return { content: window.getContentBounds(), window: bounds,
+          zoomFactor: window.webContents.getZoomFactor(), displayScaleFactor: display.scaleFactor,
+          workArea: display.workArea }
+      })
+      const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight,
         scrollWidth: document.documentElement.scrollWidth }))
-      assert.ok(dimensions.scrollWidth <= dimensions.width + 1, 'No horizontal page overflow at native zoom')
+      assert.equal(native.zoomFactor, zoom, 'The requested native zoom was applied')
+      assert.ok(Math.abs(viewport.width - native.content.width / zoom) <= 1 &&
+        Math.abs(viewport.height - native.content.height / zoom) <= 1,
+      'Reported CSS viewport matches the actual native content size and zoom')
+      assert.ok(viewport.scrollWidth <= viewport.width + 1, 'No horizontal page overflow at native zoom')
+      const appearance = await assertTheme(theme)
+      const layout = { language, theme, requestedContent: { width, height: 1000 }, native, viewport, zoom, appearance }
+      report.viewports.push(layout)
       const controls = panel().locator('button,input,select')
       for (let index = 0; index < await controls.count(); index++) {
         const control = controls.nth(index)
         if (!await control.isVisible()) continue
-        await control.scrollIntoViewIfNeeded()
-        const measured = await control.evaluate(element => {
-          const rect = element.getBoundingClientRect()
-          const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
-          const label = element.getAttribute('aria-label') || element.getAttribute('aria-labelledby') ||
-            element.labels?.[0]?.textContent || (element.tagName === 'BUTTON' ? element.textContent : '')
-          return { label, width: rect.width, height: rect.height, left: rect.left, right: rect.right,
-            viewport: innerWidth, hit: hit === element || element.contains(hit) }
-        })
-        assert.ok(measured.label?.trim(), 'Every visible form control has an accessible name')
-        assert.ok(measured.width >= 24 && measured.height >= 24, 'Every control has a usable click target')
-        assert.ok(measured.left >= -1 && measured.right <= measured.viewport + 1 && measured.hit,
-          'Controls are reachable, in the viewport and hit-testable')
-        report.measurements.push({ language, theme, width, zoom, ...measured })
+        const measured = await measureControl(control)
+        report.measurements.push({ language, theme, requestedWidth: width, zoom, ...measured })
       }
-      await panel().scrollIntoViewIfNeeded()
-      await screenshot(`layout-${language}-${theme}-${width}-${zoom}`)
+      // Native macOS can clamp the requested window height to the work area.
+      // Name evidence with the measured viewport and scroll each real control,
+      // not the oversized panel, so high-zoom captures show the tested action.
+      const label = `layout-${language}-${theme}-requested${width}x1000-viewport${viewport.width}x${viewport.height}-zoom${zoom}`
+      for (const [target, selector] of [['profile', '[data-agent-profile-mode]'], ['enable', '[data-agent-enable]']]) {
+        const control = await measureControl(panel().locator(selector))
+        await assertTheme(theme)
+        await screenshot(`${label}-${target}`, { ...layout, target, selector, control })
+      }
     }
   }
   report.assertions.push('English/Chinese light/dark narrow/wide controls remain named, reachable and unclipped at 100/150/200% native zoom')
+  report.assertions.push('Every layout verifies the saved and rendered theme plus opaque computed backgrounds; captures name the actual CSS viewport and show the profile and enablement controls')
   assert.deepEqual(report.pageErrors, [], 'Production components render without exceptions')
   assert.deepEqual(report.blockedRequests, [], 'Offline fixture must not attempt external network requests')
   report.status = 'passed'
@@ -252,7 +263,55 @@ async function pendingCheck() {
   await enable().click(); await state('checking')
   await page.waitForFunction(expected => window.agentEnablementFixture.snapshot().calls.tests === expected, previous + 1)
 }
-async function screenshot(name) { await page.screenshot({ path: join(evidence, `${name}.png`) }); report.screenshots.push(`${name}.png`) }
+async function assertTheme(theme) {
+  await page.waitForFunction(theme => document.documentElement.dataset.theme === theme, theme)
+  const appearance = await page.evaluate(async () => ({
+    savedTheme: (await window.kunGui.getSettings()).theme,
+    renderedTheme: document.documentElement.dataset.theme,
+    backgrounds: ['main', '.ds-settings-surface'].map(selector => ({ selector,
+      color: getComputedStyle(document.querySelector(selector)).backgroundColor }))
+  }))
+  assert.equal(appearance.savedTheme, theme, 'The host persisted the requested theme')
+  assert.equal(appearance.renderedTheme, theme, 'SettingsView applied the requested theme')
+  for (const background of appearance.backgrounds) {
+    const channels = background.color.match(/^rgba?\((\d+), (\d+), (\d+)(?:, ([\d.]+))?\)$/)
+    assert.ok(channels, `A measurable RGB background is required: ${background.selector} ${background.color}`)
+    assert.equal(Number(channels[4] ?? 1), 1, 'The measured background is opaque')
+    const rgb = channels.slice(1, 4).map(Number)
+    assert.ok(theme === 'dark' ? Math.max(...rgb) < 128 : Math.min(...rgb) > 192,
+      `The ${theme} screenshot must have an actual ${theme} background: ${background.selector} ${background.color}`)
+  }
+  return appearance
+}
+async function measureControl(control) {
+  await control.scrollIntoViewIfNeeded()
+  await settled()
+  const measured = await control.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    const centerX = rect.x + rect.width / 2, centerY = rect.y + rect.height / 2
+    const points = [[centerX, centerY], [centerX, rect.top + 2], [centerX, rect.bottom - 2],
+      [rect.left + 2, centerY], [rect.right - 2, centerY]]
+    const hit = points.every(([x, y]) => {
+      const target = document.elementFromPoint(x, y)
+      return target === element || element.contains(target)
+    })
+    const label = element.getAttribute('aria-label') || element.getAttribute('aria-labelledby') ||
+      element.labels?.[0]?.textContent || (element.tagName === 'BUTTON' ? element.textContent : '')
+    return { label, width: rect.width, height: rect.height, left: rect.left, right: rect.right,
+      top: rect.top, bottom: rect.bottom, viewport: { width: innerWidth, height: innerHeight }, hit }
+  })
+  assert.ok(measured.label?.trim(), 'Every visible form control has an accessible name')
+  assert.ok(measured.width >= 24 && measured.height >= 24, 'Every control has a usable click target')
+  assert.ok(measured.left >= -1 && measured.right <= measured.viewport.width + 1 &&
+    measured.top >= -1 && measured.bottom <= measured.viewport.height + 1 && measured.hit,
+  `Controls are fully reachable, in the viewport and hit-testable: ${JSON.stringify(measured)}`)
+  return measured
+}
+async function screenshot(name, details) {
+  await page.screenshot({ path: join(evidence, `${name}.png`) })
+  report.screenshots.push(`${name}.png`)
+  if (details) report.screenshotDetails.push({ file: `${name}.png`, ...details })
+}
 async function menuIds() {
   await page.locator('[data-agent-smoke-picker] button').first().click()
   await page.locator('[data-harness-picker-menu]').waitFor()

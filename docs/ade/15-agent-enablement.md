@@ -1,8 +1,8 @@
 # Explicit external-agent enablement
 
-This change is being implemented in a draft pull request. The contract below
-describes the acceptance criteria; it is not evidence that a real account or
-native application has passed validation.
+This contract describes explicit external-agent enablement and its acceptance
+criteria. Local readiness, offline UI evidence and real-account validation are
+separate forms of evidence.
 
 ## Product contract
 

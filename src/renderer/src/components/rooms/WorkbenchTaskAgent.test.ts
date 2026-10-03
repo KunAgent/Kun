@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { WorkbenchExecution } from '@shared/rooms-api'
+import { withHarnessReadiness } from '@shared/test-support/harness-readiness'
 import i18n from '../../i18n'
 import { useChatStore } from '../../store/chat-store'
 import { useHarnessStore, resetHarnessPolling } from '../../store/harness-store'
@@ -22,6 +23,7 @@ const native: AdeHarnessRow = {
     permissionModes: [], modelSource: 'probe', staticModels: ['native-model'], builtin: true },
   status: { harnessId: 'codex', installed: 'yes', login: 'signed-in', checkedAt: '2026-10-01T00:00:00Z' }
 }
+const nativeProfile = { harnessId: 'codex', credentialMode: 'native-login' as const }
 
 describe('Card-local Agent picker', () => {
   let renderer: ReactTestRenderer | undefined
@@ -30,7 +32,7 @@ describe('Card-local Agent picker', () => {
     await i18n.changeLanguage('en')
     changed.mockReset()
     Object.values(discovery).forEach((mock) => mock.mockClear())
-    useHarnessStore.setState({ rows: [native], rowsLoading: false, rowsLoadedAt: Date.now(), rowsError: undefined,
+    useHarnessStore.setState({ rows: [withHarnessReadiness(native, [nativeProfile])], rowsLoading: false, rowsLoadedAt: Date.now(), rowsError: undefined,
       models: { codex: { models: ['native-model'], loading: false, loadedAt: Date.now() } }, providerGroups: {} })
   })
   afterEach(() => { act(() => renderer?.unmount()); renderer = undefined; resetHarnessPolling() })
@@ -65,9 +67,22 @@ describe('Card-local Agent picker', () => {
   })
 
   it('refuses a stale unavailable selection instead of switching engines', async () => {
-    useHarnessStore.setState({ rows: [{ ...native, status: { ...native.status, login: 'signed-out' } }] })
+    useHarnessStore.setState({ rows: [withHarnessReadiness({ ...native,
+      status: { ...native.status, login: 'signed-out' } }, [nativeProfile])] })
     await mount({ mode: 'direct' })
     await act(async () => { renderer!.root.findByType(FloatingComposerHarnessPicker).props.onSelect('codex') })
     expect(changed).not.toHaveBeenCalled()
+  })
+
+  it.each(['default-disabled', 'missing-proof', 'expired-proof'])('refuses an installed Agent with %s', async (state) => {
+    useHarnessStore.setState({ rows: [state === 'default-disabled' ? native : {
+      ...withHarnessReadiness(native, [nativeProfile]),
+      readyProfiles: state === 'missing-proof' ? [] : [{ ...nativeProfile, expiresAt: '2000-01-01T00:00:00Z' }]
+    }] })
+    await mount({ mode: 'direct', model: { harnessId: 'codex', credentialMode: 'native-login', model: 'native-model' } })
+    await act(async () => { renderer!.root.findByType(FloatingComposerHarnessPicker).props.onSelect('codex') })
+    await act(async () => { renderer!.root.findByType(FloatingComposerModelPicker).props.onComposerModelChange('native-model', 'ade-cred:native-login') })
+    expect(changed).not.toHaveBeenCalled()
+    expect(renderer!.root.findAllByProps({ role: 'alert' })).toHaveLength(1)
   })
 })

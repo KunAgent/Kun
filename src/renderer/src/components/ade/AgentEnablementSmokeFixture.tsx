@@ -65,7 +65,11 @@ Object.assign(window, { agentEnablementFixture: {
   },
   reopen(): void { opened = true; useHarnessStore.setState({ settingsHarnessId: 'pi' }); refresh() },
   language: (language: string) => i18n.changeLanguage(language),
-  theme(theme: string): void { document.documentElement.classList.toggle('dark', theme === 'dark') },
+  theme(theme: 'light' | 'dark'): void {
+    // Use the saved host state and its renderer settings event. SettingsView
+    // applies data-theme itself, including after later saves and remounts.
+    host.setSettings({ ...host.settings, theme })
+  },
   snapshot: () => ({ calls: { tests: runtime.calls.tests, mutations: host.calls.filter((call) => call.name === 'setSettings').length },
     enabledProfiles: getKunRuntimeSettings(host.settings).harnesses.enabledProfiles,
     defaults: getKunRuntimeSettings(host.settings).harnesses.defaults })

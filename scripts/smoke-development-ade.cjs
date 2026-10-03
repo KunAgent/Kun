@@ -37,8 +37,8 @@ const { runProtectedApprovalFlow } = require('./smoke-development-protected-appr
 const { runUnifiedCodeFlow } = require('./smoke-development-ade-flow.cjs')
 const { runUnifiedCodeVisuals } = require('./smoke-development-ade-visuals.cjs')
 const { startModelFixture } = require('./smoke-development-ade-model.cjs')
-const { writeRoomsHarnessStub } = require('./smoke-rooms-harness-fixture.cjs')
-const { runRoomsHarnessFlow } = require('./smoke-rooms-harness-controls.cjs')
+const { writeRoomsHarnessStub, configureRoomsHarnessFixture } = require('./smoke-rooms-harness-fixture.cjs')
+const { runRoomsHarnessFlow, verifyRoomsHarnessReadiness } = require('./smoke-rooms-harness-controls.cjs')
 
 const exec = promisify(execFile)
 const MODEL = 'deepseek-chat'
@@ -92,6 +92,7 @@ async function main() {
   await mkdir(workspaceParent, { recursive: true })
   const workspaceRoot = await mkdtemp(join(workspaceParent, 'ade with spaces-'))
   let rendererProcess, electronApplication, electronProcess, page, modelFixture, result, primaryError
+  let roomsHarnessReadiness
   let realProfile = profile
   let rendererOutput = '', electronOutput = ''
   const pageErrors = []
@@ -186,6 +187,7 @@ async function main() {
         hooks: 'none'
       }]
     }
+    if (roomsHarnessOnly) configureRoomsHarnessFixture(settings, isolatedEnvironment)
     const allocatedPorts = new Set([runtimePort, rendererPort, new URL(modelFixture.baseUrl).port].map(Number))
     const nextPort = async () => {
       let port
@@ -241,6 +243,7 @@ async function main() {
 
     let assertions
     if (roomsHarnessOnly) {
+      roomsHarnessReadiness = await verifyRoomsHarnessReadiness({ page, poll, runtimeRequest })
       assertions = await runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, workspaceRoot, releaseFile, modelFixture,
         resize: (width, height) => resize(electronApplication, width, height) })
     } else if (protectedApprovalOnly) {
@@ -273,6 +276,7 @@ async function main() {
       platform: process.platform, arch: process.arch, pageErrors, layouts, runtimeDiagnostics,
       ...(keepDirs ? { retainedDirectories: { temporaryRoot, workspaceRoot } } : {}),
       modelFixture: modelFixture.snapshot(), screenshots,
+      ...(roomsHarnessReadiness ? { roomsHarnessReadiness } : {}),
       assertions }
   } catch (error) {
     await capture('failure').catch(() => undefined)
@@ -331,6 +335,7 @@ async function main() {
     result = { ok: false, status: 'failed', startedAt, build, completedAt: new Date().toISOString(),
       renderer: compiledRenderer ? 'compiled' : 'development', visualOnly, agentModeOnly, roomsHarnessOnly, protectedApprovalOnly, locale: visualLocale, theme: visualTheme, scale: visualScale,
       pageErrors, layouts, screenshots, modelFixture: modelFixture?.snapshot(), failure: primaryError.message,
+      ...(roomsHarnessReadiness ? { roomsHarnessReadiness } : {}),
       ...(keepDirs ? { retainedDirectories: { temporaryRoot, workspaceRoot } } : {}) }
   }
   await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify(result, null, 2) + '\n')

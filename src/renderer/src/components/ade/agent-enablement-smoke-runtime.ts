@@ -1,7 +1,14 @@
 import type { AdeHarnessRow, AdeHarnessTestRequest, AdeHarnessTestResult } from '@shared/ade-harnesses'
 import type { KunHarnessEnabledProfileV1, KunHarnessSettingsV1 } from '@shared/app-settings'
-import { harnessProfileKey } from '@shared/harness-enablement'
 import type { RuntimeRequestResult } from '@shared/kun-gui-api'
+
+// Fixture-only wire contract: baseline copies must not import or overwrite
+// production helpers that did not exist in the baseline checkout.
+const harnessProfileKey = (profile: KunHarnessEnabledProfileV1): string => JSON.stringify([
+  profile.harnessId, profile.credentialMode,
+  profile.credentialMode === 'native-login' && (!profile.providerId?.trim() || profile.providerId.trim() === 'default')
+    ? '' : profile.providerId?.trim() || 'default'
+])
 
 const fixtureRows: AdeHarnessRow[] = [
   ['kun', 'Kun', 'native-loop'], ['pi', 'Pi', 'pi-rpc'],

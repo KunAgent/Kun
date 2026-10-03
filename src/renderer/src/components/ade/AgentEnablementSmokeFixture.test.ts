@@ -64,3 +64,38 @@ it('runs the real settings check, composer gate and late-result cancellation wit
   fixture.reopen(); await state('disabled')
   await fixture.reset()
 }, 60_000)
+
+it('applies the saved theme through SettingsView and retains it after saves and reopening', async () => {
+  await import('./AgentEnablementSmokeFixture')
+  const fixture = (window as unknown as { agentEnablementFixture: {
+    reset(): Promise<void>; theme(value: 'light' | 'dark'): void; close(): void; reopen(): void
+    snapshot(): { defaults: Record<string, { model?: string }> }
+  } }).agentEnablementFixture
+  await fixture.reset()
+  await vi.waitFor(() => expect(document.querySelector('[data-agent-profile-model]')).toBeTruthy())
+  const changed = vi.fn()
+  window.addEventListener('kun:settings-changed', changed)
+  try {
+    fixture.theme('dark')
+    expect(changed).toHaveBeenCalledWith(expect.objectContaining({ detail: expect.objectContaining({ theme: 'dark' }) }))
+    await vi.waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'))
+    expect((await window.kunGui.getSettings()).theme).toBe('dark')
+    const model = document.querySelector<HTMLInputElement>('[data-agent-profile-model]')!
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(model, 'theme-persistence-model')
+    model.dispatchEvent(new Event('input', { bubbles: true }))
+    await vi.waitFor(() => expect(fixture.snapshot().defaults.pi.model).toBe('theme-persistence-model'))
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    expect((await window.kunGui.getSettings()).theme).toBe('dark')
+    fixture.close()
+    await vi.waitFor(() => expect(document.querySelector('[data-agent-enablement]')).toBeNull())
+    fixture.reopen()
+    await vi.waitFor(() => expect(document.querySelector('[data-agent-profile-model]')).toBeTruthy())
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    fixture.theme('light')
+    await vi.waitFor(() => expect(document.documentElement.dataset.theme).toBe('light'))
+    expect((await window.kunGui.getSettings()).theme).toBe('light')
+  } finally {
+    window.removeEventListener('kun:settings-changed', changed)
+    await fixture.reset()
+  }
+}, 30_000)
