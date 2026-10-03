@@ -62,9 +62,18 @@ export const HarnessTerminalAgentSchema = z
   }).strict()
 export type HarnessTerminalAgent = z.infer<typeof HarnessTerminalAgentSchema>
 
+export const HarnessEnabledProfileSchema = z.object({
+  harnessId: HarnessIdSchema,
+  credentialMode: HarnessCredentialModeSchema,
+  providerId: z.string().trim().min(1).max(128).optional()
+}).strict()
+export type HarnessEnabledProfile = z.infer<typeof HarnessEnabledProfileSchema>
+
 /** `harnesses` config section: per-harness enable/override settings. */
 export const HarnessesConfigSchema = z
   .object({
+    /** External engines require explicit opt-in for the exact credential profile. */
+    enabledProfiles: z.array(HarnessEnabledProfileSchema).max(128).default([]),
     /** Builtin harnesses the user turned off; they stay out of pickers. */
     disabledIds: z.array(HarnessIdSchema).max(64).default([]),
     /** Per-harness binary path overrides (settings override > bundled > PATH). */

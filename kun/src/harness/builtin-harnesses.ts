@@ -1,6 +1,7 @@
 import { KUN_TOOL_PERMISSION_MODES } from '../contracts/policy.js'
 import { CODEX_APP_SERVER_MIN_VERSION } from '../runtime/codex/codex-protocol.js'
 import { PI_MIN_VERSION } from '../runtime/pi/pi-protocol.js'
+import { DEEPSEEK_HARNESS_DEFINITION } from './deepseek-harness-definition.js'
 import type { HarnessDefinition } from '../contracts/harness.js'
 import {
   allSupportedStatuses,
@@ -176,6 +177,7 @@ export const PI_RPC_CAPABILITIES: HarnessCapabilities = {
 }
 
 export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
+  DEEPSEEK_HARNESS_DEFINITION,
   {
     id: 'kun',
     displayName: 'Kun',
@@ -301,6 +303,8 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
   {
     id: 'gemini-cli',
     displayName: 'Gemini CLI',
+    // Kept for persisted history; never offered or admitted for new work.
+    availability: 'retired',
     transport: 'acp',
     // `--acp` is the current flag; `--experimental-acp` still works on older
     // releases but is deprecated upstream (docs/ade/impl/p1 §P1-05).
@@ -464,9 +468,7 @@ export const BUILTIN_HARNESSES: readonly HarnessDefinition[] = [
       login: { command: 'pi', args: [], note: 'Run /login inside pi' },
       docsUrl: 'https://github.com/earendil-works/pi'
     },
-    // Hidden until the P6-12 acceptance matrix passes; opt in via the hidden
-    // `harnesses.experimentalIds` config.
-    prerelease: true,
+    availability: 'active',
     builtin: true
   },
   {
