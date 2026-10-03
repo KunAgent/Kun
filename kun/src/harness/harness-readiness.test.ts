@@ -124,6 +124,21 @@ it('keeps a default native opt-in from authorizing a named native account', asyn
   await expect(f.service.assertReady(named)).rejects.toThrow('disabled')
 })
 
+it('rejects an unrelated configured provider at native readiness even when its profile was opted in', async () => {
+  const f = await fixture()
+  const incompatible = { harnessId: 'codex', credentialMode: 'native-login' as const,
+    providerId: 'account-a', model: 'default' }
+  f.options.harnesses!.enabledProfiles = [incompatible]
+  const result = await f.service.test(f.catalog.get('codex')!, { level: 'handshake', ...incompatible })
+  expect(result.ok).toBe(false)
+  expect(result.readiness?.checks.find((check) => check.id === 'configuration')).toMatchObject({
+    ok: false, detail: 'Native login cannot use an unrelated provider profile'
+  })
+  await expect(f.service.assertReady(incompatible)).rejects.toThrow('unrelated provider profile')
+  expect(await f.service.readyProfiles('codex')).toEqual([])
+  expect(f.handshake).not.toHaveBeenCalled()
+})
+
 it('rejects an authoritative native model mismatch without sending a prompt', async () => {
   const f = await fixture()
   f.detector.status.mockResolvedValue({ harnessId: 'opencode', installed: 'yes', ready: 'yes', login: 'signed-in',

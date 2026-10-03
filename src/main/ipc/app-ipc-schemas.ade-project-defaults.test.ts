@@ -43,12 +43,29 @@ describe('project defaults across settings and runtime configuration boundaries'
     expect(KunConfigSchema.safeParse({ ade: { projectDefaults: bad } }).success).toBe(false)
   })
 
-  it('bounds project map size and rejects incompatible credential pairs at the IPC boundary', () => {
+  it('preserves a named native account reference across IPC and runtime configuration', () => {
+    const namedNative = { '/repo': {
+      route: { harnessId: 'claude-code', model: 'sonnet', credentialMode: 'native-login', providerId: 'claude-account' }
+    } }
+    const accepted = settingsPatchSchema.parse(patch(namedNative))
+    const normalized = applySettingsPatchToSnapshot(defaultSettings(), {
+      agents: { kun: { ade: { projectDefaults: accepted.agents?.kun?.ade?.projectDefaults } } }
+    })
+    expect(normalized.agents.kun.ade.projectDefaults).toEqual(namedNative)
+    const ade = adeConfigForRuntime(normalized.agents.kun.ade)
+    expect(RuntimeConfigApplyRequest.parse({ ade }).ade?.projectDefaults).toEqual(namedNative)
+    expect(KunConfigSchema.parse(JSON.parse(JSON.stringify({ ade }))).ade?.projectDefaults).toEqual(namedNative)
+  })
+
+  it('bounds project map size and requires account IDs for provider-backed routes at the IPC boundary', () => {
     const tooMany = Object.fromEntries(Array.from({ length: 65 }, (_, index) => [`/repo/${index}`, {}]))
     expect(settingsPatchSchema.safeParse(patch(tooMany)).success).toBe(false)
     expect(RuntimeConfigApplyRequest.safeParse({ ade: { projectDefaults: tooMany } }).success).toBe(false)
-    expect(settingsPatchSchema.safeParse(patch({ '/repo': {
-      route: { harnessId: 'codex', model: 'gpt-5', credentialMode: 'native-login', providerId: 'secret-provider' }
-    } })).success).toBe(false)
+    for (const credentialMode of ['provider', 'kun-gateway']) {
+      const missingProvider = { '/repo': {
+        route: { harnessId: 'codex', model: 'gpt-5', credentialMode }
+      } }
+      expect(settingsPatchSchema.safeParse(patch(missingProvider)).success).toBe(false)
+    }
   })
 })
