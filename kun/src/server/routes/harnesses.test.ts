@@ -95,7 +95,7 @@ describe('harness routes', () => {
   it('returns native model metadata beside the compatible flat model list', async () => {
     const modelInfo = [{ id: 'gpt-native', inputModalities: ['text', 'image'], isDefault: true }]
     const router = buildRouter({ runtimeToken: TOKEN, insecure: false,
-      harnesses: { catalog: new HarnessCatalog(), codexModels: {
+      harnesses: { catalog: new HarnessCatalog({ custom: () => [], enabledProfiles: () => [{ harnessId: 'codex', credentialMode: 'native-login' }] }), codexModels: {
         probeCatalog: async () => ({ models: ['gpt-native'], modelInfo })
       } } } as unknown as ServerRuntime)
     const response = await dispatch(router, 'GET', '/v1/harnesses/codex/models', authed)
@@ -110,10 +110,16 @@ describe('harness routes', () => {
     expect((await dispatch(router, 'GET', '/v1/harnesses/cursor/models')).status).toBe(401)
   })
 
+  it('hides all default-disabled external agents in ordinary discovery', async () => {
+    const router = fakeRouter(() => ({ stdout: 'tool 1.2.3', exitCode: 0 }))
+    const response = await dispatch(router, 'GET', '/v1/harnesses', authed)
+    expect(JSON.parse(response.body).harnesses.map((row: { definition: { id: string } }) => row.definition.id)).toEqual(['kun'])
+  })
+
   it('lists builtin harnesses without blocking on detection', async () => {
     const spawn = vi.fn((_command: string) => ({ stdout: 'tool 1.2.3', exitCode: 0 }))
     const router = fakeRouter(spawn)
-    const response = await dispatch(router, 'GET', '/v1/harnesses', authed)
+    const response = await dispatch(router, 'GET', '/v1/harnesses?include_disabled=true', authed)
     expect(response.status).toBe(200)
     const body = JSON.parse(response.body)
     const ids = body.harnesses.map((row: { definition: { id: string } }) => row.definition.id)
@@ -146,7 +152,7 @@ describe('harness routes', () => {
       login: 'not-required'
     })
     // The cached status now surfaces in list responses.
-    const list = await dispatch(router, 'GET', '/v1/harnesses', authed)
+    const list = await dispatch(router, 'GET', '/v1/harnesses?include_disabled=true', authed)
     const antigravity = JSON.parse(list.body).harnesses.find(
       (row: { definition: { id: string } }) => row.definition.id === 'antigravity'
     )
@@ -307,7 +313,7 @@ describe('harness routes', () => {
   })
 
   it('serves probed agent-sdk models and falls back when the probe fails', async () => {
-    const catalog = new HarnessCatalog()
+    const catalog = new HarnessCatalog({ custom: () => [], enabledProfiles: () => [{ harnessId: 'claude-code', credentialMode: 'native-login' }] })
     const detector = new HarnessDetector({
       definitions: () => catalog.list(),
       overrides: () => ({}),
@@ -390,7 +396,7 @@ describe('harness routes', () => {
             resolve({ stdout: 'fake 1.2.3', stderr: '', timedOut: false, exitCode: 0 })
         })
     )
-    const response = await dispatch(router, 'GET', '/v1/harnesses', authed)
+    const response = await dispatch(router, 'GET', '/v1/harnesses?include_disabled=true', authed)
     expect(response.status).toBe(200)
     const row = JSON.parse(response.body).harnesses[0]
     expect(row.status.installed).toBe('unknown')
@@ -407,7 +413,7 @@ describe('harness routes', () => {
             resolve({ stdout: 'fake 1.2.3', stderr: '', timedOut: false, exitCode: 0 })
         })
     )
-    const pending = dispatch(router, 'GET', '/v1/harnesses?wait_ms=5000', authed)
+    const pending = dispatch(router, 'GET', '/v1/harnesses?include_disabled=true&wait_ms=5000', authed)
     // Let peek() start the inflight detection before releasing it.
     await new Promise((resolve) => setTimeout(resolve, 10))
     release?.()
@@ -429,7 +435,7 @@ describe('harness routes', () => {
         })
     )
     const startedAt = Date.now()
-    const response = await dispatch(router, 'GET', '/v1/harnesses?wait_ms=50', authed)
+    const response = await dispatch(router, 'GET', '/v1/harnesses?include_disabled=true&wait_ms=50', authed)
     expect(Date.now() - startedAt).toBeLessThan(2_000)
     const row = JSON.parse(response.body).harnesses[0]
     expect(row.status.installed).toBe('unknown')

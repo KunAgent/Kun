@@ -72,13 +72,14 @@ export class PiAgent implements HarnessAgent {
     input: HarnessAgentConnectInput,
     options: PiAgentOptions = {}
   ): Promise<PiAgent> {
+    const gatewayProviderId = input.credentialEnv.PI_CODING_AGENT_DIR ? 'kun' : undefined
     if (options.client && options.process) {
       return new PiAgent(
         options.client,
         options.process,
         { protocolName: 'pi-rpc' },
         undefined,
-        undefined
+        gatewayProviderId
       )
     }
     const configDir = options.configDir?.() ?? input.cwd
@@ -100,6 +101,8 @@ export class PiAgent implements HarnessAgent {
       ...input.args
     ]
     const proc = await startHarnessProcess({
+      signal: input.signal,
+      validateLaunch: input.validateLaunch,
       command: input.command,
       args,
       env: { ...input.env, KUN_PI_PERMISSION_FILE: permissionFile },
@@ -115,9 +118,6 @@ export class PiAgent implements HarnessAgent {
       await client.getState()
       // The credential resolver injects PI_CODING_AGENT_DIR only under
       // kun-gateway — its generated models.json declares the `kun` provider.
-      const gatewayProviderId = input.credentialEnv.PI_CODING_AGENT_DIR
-        ? 'kun'
-        : undefined
       return new PiAgent(
         client,
         proc,
@@ -212,11 +212,11 @@ export class PiAgent implements HarnessAgent {
     // current model under native login (provider is unknowable here).
     if (input.model) {
       const slash = input.model.indexOf('/')
-      const provider =
+      const provider = this.gatewayProviderId ?? (
         slash > 0
           ? input.model.slice(0, slash)
-          : this.gatewayProviderId
-      const modelId = slash > 0 ? input.model.slice(slash + 1) : input.model
+          : undefined)
+      const modelId = this.gatewayProviderId ? input.model : slash > 0 ? input.model.slice(slash + 1) : input.model
       if (provider) {
         try {
           await this.client.setModel(provider, modelId)

@@ -55,6 +55,16 @@ function settings(): AppSettingsV1 {
   }
 }
 
+it('hot-applies exact agent opt-in without restarting away the readiness proof', () => {
+  const previous = settings()
+  const enabled: AppSettingsV1 = { ...previous, agents: { kun: { ...previous.agents.kun,
+    harnesses: { ...previous.agents.kun.harnesses,
+      enabledProfiles: [{ harnessId: 'pi', credentialMode: 'native-login' }] }
+  } } }
+  expect(runtimeSettingsApplyMode(previous, enabled)).toBe('hot')
+  expect(runtimeSettingsApplyMode(enabled, previous)).toBe('hot')
+})
+
 describe('runtimeRollbackTargetUnchanged', () => {
   it('ignores unrelated settings but rejects newer Runtime or provider intent', () => {
     const desired = settings()

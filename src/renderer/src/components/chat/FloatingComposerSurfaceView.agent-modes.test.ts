@@ -2,7 +2,9 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
+import { withHarnessReadiness } from '@shared/test-support/harness-readiness'
 import i18n from '../../i18n'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 import { FloatingComposerSurfaceView } from './FloatingComposerSurfaceView'
@@ -16,6 +18,12 @@ vi.mock('./KnowledgeBasePicker', () => ({ KnowledgeBasePicker: () => null }))
 vi.mock('../../history-reference/CodexReferenceDialog', () => ({ CodexReferenceDialog: () => null }))
 
 const empty = () => null
+const externalHarness: AdeHarnessRow = {
+  definition: { id: 'claude-code', displayName: 'Claude Code', transport: 'agent-sdk',
+    credentialModes: ['native-login'], permissionModes: [], modelSource: 'static', staticModels: [], builtin: true },
+  status: { harnessId: 'claude-code', installed: 'yes', login: 'signed-in', checkedAt: '' }
+}
+const externalProfile = { harnessId: 'claude-code', credentialMode: 'native-login' as const }
 let host: HTMLDivElement
 let root: Root
 let context: FloatingComposerRenderContext
@@ -91,9 +99,7 @@ describe('unified composer Agent control wiring', () => {
 
   it('selects the external Agent before clearing the Design surface and preserves the draft', async () => {
     context.taskSurface = 'design'
-    context.adeComposer.rows = [{ definition: { id: 'claude-code', displayName: 'Claude Code', transport: 'agent-sdk',
-      credentialModes: ['native-login'], permissionModes: [], modelSource: 'static', builtin: true },
-      status: { harnessId: 'claude-code', installed: 'yes', login: 'signed-in', checkedAt: '' } }]
+    context.adeComposer.rows = [withHarnessReadiness(externalHarness, [externalProfile])]
     await render()
     expect(host.querySelector('[data-design-task-profile]')).not.toBeNull()
     await act(async () => host.querySelector<HTMLButtonElement>('[data-agent-mode-trigger]')!.click())
@@ -101,6 +107,20 @@ describe('unified composer Agent control wiring', () => {
     expect(context.adeComposer.selectHarness).toHaveBeenCalledWith('claude-code')
     expect(context.onTaskSurfaceChange).toHaveBeenCalledWith('code')
     expect(context.adeComposer.selectHarness.mock.invocationCallOrder[0]).toBeLessThan(context.onTaskSurfaceChange.mock.invocationCallOrder[0])
+    expect(host.querySelector('textarea')?.value).toBe('Keep this draft')
+  })
+
+  it.each(['default-disabled', 'expired-proof'])('omits an installed external Agent with %s', async (state) => {
+    context.taskSurface = 'design'
+    context.adeComposer.rows = [state === 'default-disabled' ? externalHarness : {
+      ...withHarnessReadiness(externalHarness, [externalProfile]),
+      readyProfiles: [{ ...externalProfile, expiresAt: '2000-01-01T00:00:00Z' }]
+    }]
+    await render()
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-agent-mode-trigger]')!.click())
+    expect(document.querySelector('[data-agent-mode-option="claude-code"]')).toBeNull()
+    expect(context.adeComposer.selectHarness).not.toHaveBeenCalled()
+    expect(context.onTaskSurfaceChange).not.toHaveBeenCalled()
     expect(host.querySelector('textarea')?.value).toBe('Keep this draft')
   })
 

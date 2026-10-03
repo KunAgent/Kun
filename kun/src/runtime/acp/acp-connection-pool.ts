@@ -9,7 +9,8 @@
  */
 import {
   HarnessAgentPool,
-  HARNESS_POOL_IDLE_RELEASE_MS
+  HARNESS_POOL_IDLE_RELEASE_MS,
+  type HarnessPoolAdmission
 } from '../../session/harness-pool.js'
 import type { AcpConnection, AcpConnectionExit } from './acp-connection.js'
 
@@ -31,9 +32,10 @@ export class AcpConnectionPool {
 
   async acquire(
     key: string,
-    factory: () => Promise<AcpConnection>
+    factory: () => Promise<AcpConnection>,
+    admission?: HarnessPoolAdmission
   ): Promise<AcpConnectionLease> {
-    const lease = await this.pool.acquire(key, factory)
+    const lease = await this.pool.acquire(key, factory, admission)
     return {
       key: lease.key,
       connection: lease.agent,

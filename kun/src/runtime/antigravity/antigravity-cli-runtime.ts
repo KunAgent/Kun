@@ -55,6 +55,8 @@ const ANTIGRAVITY_MODEL_ID_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)+$/i
 const ANTIGRAVITY_MODEL_ID_MAX_LENGTH = 128
 
 export interface AntigravityCliRuntimeDeps {
+  readiness?: Pick<import('../../harness/harness-readiness.js').HarnessReadinessService, 'validateTurn'>
+  resolveCredentialSource?: (sourceId: string) => Promise<{ apiKey: string } | null>
   providerConfigs: Record<string, ServeProviderConfig>
   providerIds: ReadonlySet<string>
   defaultIsAntigravity: boolean
@@ -436,11 +438,17 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
     })
 
     try {
+      const credential = provider?.credentialSourceId
+        ? await this.deps.resolveCredentialSource?.(provider.credentialSourceId)
+        : provider?.apiKey ? { apiKey: provider.apiKey } : undefined
+      await this.deps.readiness?.validateTurn(threadId, turnId, signal)
       const output = await runAntigravityProcess({
         binaryPath,
+        ...(credential?.apiKey ? { env: { GEMINI_API_KEY: credential.apiKey } } : {}),
         args,
         cwd: thread.workspace,
         signal,
+        validateLaunch: () => this.deps.readiness?.validateTurn(threadId, turnId, signal) ?? Promise.resolve(),
         timeoutMs: limits.maxWallTimeMs,
         spawnFn: this.deps.spawnFn
       })

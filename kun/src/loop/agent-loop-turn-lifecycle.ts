@@ -135,7 +135,7 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
     let turnHarnessId: HarnessId | undefined
     let turnCapabilitiesV2: HarnessCapabilities | undefined
     const turnRecord = owningThread?.turns.find((candidate) => candidate.id === turnId)
-    if (this.opts.harnessRouter?.enabled() && owningThread && turnRecord) {
+    if (this.opts.harnessRouter && owningThread && turnRecord) {
       // Explicit harness routing: resolve synchronously before any further
       // await so a hot config swap cannot retarget this turn.
       const resolved = this.opts.harnessRouter.resolve(owningThread, turnRecord)
@@ -158,8 +158,8 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
       const resolvedRuntime = sdkRuntime.resolveProvider?.(providerId) ??
         (sdkRuntime.handlesProvider(providerId) ? sdkRuntime : undefined)
       if (resolvedRuntime) {
-        delegatedSdkRuntime = resolvedRuntime
-        delegatedProviderId = providerId
+        const settlement = await settle({ status: 'failed', error: 'External Agent readiness gate is unavailable', code: 'harness_not_ready' })
+        return statusFromSettlement(settlement, 'failed')
       }
     }
     // Keep the legacy provider dispatcher subject to the same product boundary.

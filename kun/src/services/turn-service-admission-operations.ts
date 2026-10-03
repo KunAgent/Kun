@@ -174,7 +174,7 @@ async startTurn(this: TurnService, input: {
         })
         const turnHarnessId = resolveSupportedAdmissionHarness({
           request: input.request, thread, effectiveSurface: designAdmission.effectiveSurface,
-          providerKinds: this['deps'].providerKinds?.()
+          providerKinds: this['deps'].providerKinds?.(), harnessCatalog: this['deps'].harnessCatalog
         })
         if (!this['tryAdmitTurn'](turnId, input.threadId)) {
           throw new TurnCapacityError(this['maxConcurrentTurns'])

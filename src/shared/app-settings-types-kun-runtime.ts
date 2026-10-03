@@ -411,7 +411,15 @@ export type KunTerminalAgentEntryV1 = {
   hooks?: 'none' | 'claude-settings'
 }
 
+export type KunHarnessEnabledProfileV1 = {
+  harnessId: string
+  credentialMode: 'native-login' | 'provider' | 'kun-gateway'
+  providerId?: string
+}
+
 export type KunHarnessSettingsV1 = {
+  /** Explicit opt-in for an exact agent/account route. Legacy settings default off. */
+  enabledProfiles: KunHarnessEnabledProfileV1[]
   /** Builtin harnesses the user turned off; they stay out of pickers. */
   disabledIds: string[]
   /** Per-harness local command path overrides. */

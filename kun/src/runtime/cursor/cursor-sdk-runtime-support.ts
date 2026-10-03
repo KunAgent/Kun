@@ -90,6 +90,7 @@ export interface CursorSdkApi {
 }
 
 export interface CursorSdkRuntimeDeps {
+  readiness?: Pick<import('../../harness/harness-readiness.js').HarnessReadinessService, 'validateTurn'>
   providerConfigs: Record<string, ServeProviderConfig>
   providerIds: ReadonlySet<string>
   defaultIsCursor: boolean

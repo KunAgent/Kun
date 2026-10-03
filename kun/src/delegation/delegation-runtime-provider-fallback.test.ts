@@ -1,3 +1,4 @@
+import { offlineAgentSdkHarness, offlineAgentProfileConfig } from '../../tests/helpers/offline-agent-sdk-harness.js'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -159,16 +160,16 @@ describe('automatic child provider fallback', () => {
       yield { kind: 'error', code: 'http_401', message: 'Unauthorized' }
     } }
     const nativeRun = vi.fn()
-    const executor = createChildAgentExecutor({ model,
+    const executor = createChildAgentExecutor({ model, ...offlineAgentProfileConfig(['parent-provider']),
       toolHost: new LocalToolHost({ tools: [] }), prefix: createImmutablePrefix({ systemPrompt: 'test' }), defaultModel: 'child-model',
-      createDelegatedRuntime: ({ turns, threadStore }) => ({ delegated: {
+      createDelegatedRuntime: ({ turns, threadStore }) => offlineAgentSdkHarness({
         handlesProvider: (id: string | undefined) => id === 'parent-provider', capabilities: () => undefined,
         async runTurn(threadId: string, turnId: string) {
           nativeRun((await threadStore.get(threadId))?.turns.at(-1))
           await turns.finishTurn({ threadId, turnId, status: 'completed' })
           return 'completed'
         }
-      } })
+      }, ['parent-provider'])
     })
     const { runtime } = await setup(executor)
     const record = await runtime.runChild(common())

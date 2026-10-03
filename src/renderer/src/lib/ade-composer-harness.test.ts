@@ -1,3 +1,4 @@
+import { withHarnessReadiness } from '@shared/test-support/harness-readiness'
 import { describe, expect, it } from 'vitest'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import {
@@ -32,7 +33,7 @@ function harnessRow(overrides?: {
   id?: string
   credentialModes?: Array<'native-login' | 'provider' | 'kun-gateway'>
 }): AdeHarnessRow {
-  return {
+  return withHarnessReadiness({
     definition: {
       id: overrides?.id ?? 'claude-code',
       displayName: 'Claude Code',
@@ -49,7 +50,7 @@ function harnessRow(overrides?: {
       login: 'signed-in',
       checkedAt: '2026-01-01T00:00:00Z'
     }
-  }
+  })
 }
 
 describe('credential group key codec', () => {

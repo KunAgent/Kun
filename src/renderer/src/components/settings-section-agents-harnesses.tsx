@@ -16,9 +16,10 @@ import { AgentCenter } from './ade/AgentCenter'
  * settings view is left first so the terminal is actually visible.
  */
 export function AgentsHarnessesSettingsPanel({ view }: { view: Record<string, any> }): ReactElement {
-  const { kun, updateKun, activePanel, goBack } = view as {
+  const { kun, updateKun, activePanel, goBack, beforeAgentEnablementCheck } = view as {
     kun: Parameters<typeof AgentCenter>[0]['kun']
     updateKun: Parameters<typeof AgentCenter>[0]['updateKun']
+    beforeAgentEnablementCheck?: () => Promise<boolean>
     activePanel: string
     goBack?: () => void
   }
@@ -30,10 +31,11 @@ export function AgentsHarnessesSettingsPanel({ view }: { view: Record<string, an
       aria-labelledby="agents-settings-tab-harnesses"
       className={activePanel === 'harnesses' ? '' : 'hidden'}
     >
-      <AgentCenter
+      {activePanel === 'harnesses' ? <AgentCenter
         settingsSurface
         kun={kun}
         updateKun={updateKun}
+        beforeEnableCheck={beforeAgentEnablementCheck}
         onSetupCommand={(harnessId, command, title) => {
           const definition = rows.find((row) => row.definition.id === harnessId)?.definition
           // Defence in depth: only builtin definitions may prefill commands.
@@ -45,7 +47,7 @@ export function AgentsHarnessesSettingsPanel({ view }: { view: Record<string, an
           })
           goBack?.()
         }}
-      />
+      /> : null}
     </div>
   )
 }

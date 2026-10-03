@@ -11,7 +11,7 @@ vi.mock('../../agent/registry', () => ({ getProvider: () => provider }))
 import { AgentCenterAddWizard } from './agent-center-add-wizard'
 
 const settings: KunHarnessSettingsV1 = {
-  disabledIds: [], binaryPaths: {}, custom: [], defaults: {},
+  enabledProfiles: [], disabledIds: [], binaryPaths: {}, custom: [], defaults: {},
   defaultHarnessId: 'kun', agentOrder: [], terminalAgents: []
 }
 
@@ -72,13 +72,34 @@ describe('AgentCenterAddWizard', () => {
     await act(async () => root.root.findByProps({ 'data-agent-add-select': 'codex' }).props.onClick())
     await act(async () => root.root.findByProps({ 'data-agent-add-check': true }).props.onClick())
     expect(provider.testHarness).toHaveBeenCalledWith('codex', {
-      level: 'handshake', credentialMode: 'native-login'
+      level: 'handshake', credentialMode: 'native-login', timeoutMs: 55_000
     }, { signal: expect.any(AbortSignal) })
     expect(root.root.findAllByProps({ 'data-agent-add-finish': true })).toHaveLength(1)
+    expect(root.root.findByProps({ 'data-agent-add-check-state': 'unverified' })).toBeTruthy()
     expect(provider.testHarness).toHaveBeenCalledTimes(1)
     await act(async () => root.root.findByProps({ 'data-agent-add-done': true }).props.onClick())
     expect(onSelectAgent).toHaveBeenCalledWith('codex')
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports an explicitly requested completed trial without treating it as profile enablement', async () => {
+    provider.testHarness.mockResolvedValueOnce({
+      harnessId: 'codex', level: 'handshake', ok: true, durationMs: 1,
+      readiness: { usable: true },
+      detect: { ok: true, durationMs: 1, status: codex.status }
+    }).mockResolvedValueOnce({
+      harnessId: 'codex', level: 'trial', ok: true, durationMs: 5,
+      detect: { ok: true, durationMs: 1, status: codex.status },
+      trial: { ok: true, status: 'completed', durationMs: 4 }
+    })
+    const { root, updateKun } = render()
+    await act(async () => root.root.findByProps({ 'data-agent-add-select': 'codex' }).props.onClick())
+    await act(async () => root.root.findByProps({ 'data-agent-add-check': true }).props.onClick())
+    await act(async () => root.root.findByProps({ 'data-agent-add-trial': true }).props.onClick())
+    expect(provider.testHarness.mock.calls[1]?.[1]).toMatchObject({ level: 'trial' })
+    expect(root.root.findByProps({ 'data-agent-add-check-state': 'passed' })).toBeTruthy()
+    expect(updateKun).not.toHaveBeenCalled()
+    act(() => root.unmount())
   })
 
   it('saves a terminal agent as terminal-only without claiming a handshake', async () => {
@@ -106,6 +127,7 @@ describe('AgentCenterAddWizard', () => {
   it('marks a completed check stale when the executable override changes', async () => {
     provider.testHarness.mockResolvedValue({
       harnessId: 'codex', level: 'handshake', ok: true, durationMs: 1,
+      readiness: { usable: true },
       detect: { ok: true, durationMs: 1, status: codex.status }
     })
     const { root, onClose, onSelectAgent, updateKun } = render()
@@ -134,6 +156,7 @@ describe('AgentCenterAddWizard', () => {
     expect(signal.aborted).toBe(true)
     await act(async () => resolveCheck({
       harnessId: 'codex', level: 'handshake', ok: true, durationMs: 1,
+      readiness: { usable: true },
       detect: { ok: true, durationMs: 1, status: codex.status }
     }))
     expect(root.root.findAllByProps({ 'data-agent-add-finish': true })).toHaveLength(0)

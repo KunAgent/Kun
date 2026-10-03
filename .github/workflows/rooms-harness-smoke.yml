@@ -7,6 +7,7 @@ on:
       - 'scripts/smoke-rooms-harness-*.cjs'
       - 'scripts/smoke-development-ade*.cjs'
       - 'kun/src/workbench-bridge/**'
+      - 'kun/src/harness/**'
       - 'kun/src/contracts/workbench-*.ts'
       - 'src/renderer/src/components/rooms/WorkbenchTask*'
       - 'src/renderer/src/components/rooms/RoomWorkbenchTaskCard*'
@@ -41,6 +42,8 @@ jobs:
         run: node --test scripts/smoke-rooms-harness-fixture.test.cjs
       - name: Install existing dependencies
         run: npm ci
+      - name: Verify real offline Agent consent and ACP readiness
+        run: npm --prefix kun test -- src/harness/rooms-harness-smoke.test.ts --maxWorkers=1
       - name: Install Electron binary for desktop smoke
         run: npm run ensure:electron
       - name: Build actual application

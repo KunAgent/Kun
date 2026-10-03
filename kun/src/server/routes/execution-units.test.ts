@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Router } from '../router.js'
 import type { JsonResponse } from '../response.js'
 import type { ServerRuntime } from './server-runtime.js'
@@ -24,11 +24,13 @@ afterEach(async () => {
   while (dirs.length) await rm(dirs.pop()!, { recursive: true, force: true })
 })
 
-async function harness() {
+async function harness(enabled = true) {
   const dataDir = await tempDir()
   const store = new ActivityStore({ nowIso: () => NOW })
   const tokens = new HarnessTokenService()
-  const catalog = new HarnessCatalog({ custom: () => [] })
+  const catalog = new HarnessCatalog({ custom: () => [], enabledProfiles: () => enabled
+    ? [{ harnessId: 'claude-code', credentialMode: 'native-login' }] : [] })
+  const readiness = { assertReady: vi.fn(async () => 'offline-fixture') }
   const registry = new TerminalAgentRegistry({
     dataDir,
     activity: store,
@@ -52,7 +54,7 @@ async function harness() {
     activityStore: store,
     ade: { terminalAgents: registry, hookWriter },
     harnessTokens: tokens,
-    harnesses: { catalog, gatewayEndpoint: { baseUrl: 'http://127.0.0.1:18899' } },
+    harnesses: { catalog, readiness, gatewayEndpoint: { baseUrl: 'http://127.0.0.1:18899' } },
     nowIso: () => NOW
   } as unknown as ServerRuntime)
   const request = async (
@@ -76,7 +78,7 @@ async function harness() {
     )) as JsonResponse
     return { status: response.status, body: JSON.parse(response.body) as Record<string, unknown> }
   }
-  return { store, tokens, registry, request }
+  return { store, tokens, registry, readiness, request }
 }
 
 const CREATE_BODY = {
@@ -88,6 +90,22 @@ const CREATE_BODY = {
 }
 
 describe('execution-unit routes', () => {
+  it('rejects terminal launch while its profile is disabled, without minting a unit', async () => {
+    const { request, readiness, store } = await harness(false)
+    const { status, body } = await request('POST', '/v1/execution-units', CREATE_BODY)
+    expect(status).toBe(409)
+    expect(body.code).toBe('harness_unavailable')
+    expect(readiness.assertReady).not.toHaveBeenCalled()
+    expect(store.get('tu_1')).toBeUndefined()
+  })
+
+  it('rejects an enabled terminal profile whose current readiness check fails', async () => {
+    const { request, readiness, store } = await harness()
+    readiness.assertReady.mockRejectedValueOnce(new Error('Credential changed'))
+    expect((await request('POST', '/v1/execution-units', CREATE_BODY)).status).toBe(409)
+    expect(store.get('tu_1')).toBeUndefined()
+  })
+
   it('registers a terminal agent and mints scoped tokens', async () => {
     const { store, tokens, request } = await harness()
     const { status, body } = await request('POST', '/v1/execution-units', CREATE_BODY)

@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { HarnessDetector } from './harness-detector.js'
 import { ACP_DEFAULT_CAPABILITIES } from './builtin-harnesses.js'
@@ -29,6 +32,7 @@ function acpDef(overrides: Partial<HarnessDefinition> = {}): HarnessDefinition {
 
 function makeDetector(input: {
   defs: HarnessDefinition[]
+  overrides?: Record<string, { binaryPath?: string }>
   resolve?: (command: string) => Promise<string | undefined>
   spawnCaptured?: (
     command: string,
@@ -48,7 +52,7 @@ function makeDetector(input: {
 }) {
   return new HarnessDetector({
     definitions: () => input.defs,
-    overrides: () => ({}),
+    overrides: () => input.overrides ?? {},
     spawnCaptured: input.spawnCaptured ?? (async () => ({
       stdout: 'opencode 1.1.47\n',
       stderr: '',
@@ -149,7 +153,7 @@ describe('HarnessDetector readiness (P3-11)', () => {
     expect(status.message).toContain('inconclusive')
   })
 
-  it('skips the probe on a fresh readiness-cache hit and records successes', async () => {
+  it('does not reuse persisted command/version-only readiness', async () => {
     const calls: string[] = []
     const stored: Array<{ id: string; command: string; version?: string }> = []
     const detector = makeDetector({
@@ -171,11 +175,11 @@ describe('HarnessDetector readiness (P3-11)', () => {
     })
     const status = await detector.status('opencode' as HarnessId, { force: true })
     expect(status.ready).toBe('yes')
-    expect(calls).toEqual(['get:/usr/bin/opencode@1.1.47'])
+    expect(calls).toEqual(['probe'])
     expect(stored).toEqual([])
   })
 
-  it('writes a successful probe into the readiness cache', async () => {
+  it('does not persist successful metadata as authoritative readiness', async () => {
     const stored: Array<{ id: string; command: string; version?: string }> = []
     const detector = makeDetector({
       defs: [acpDef()],
@@ -189,9 +193,7 @@ describe('HarnessDetector readiness (P3-11)', () => {
       probeReady: async () => ({ ready: 'yes' })
     })
     await detector.status('opencode' as HarnessId, { force: true })
-    expect(stored).toEqual([
-      { id: 'opencode', command: '/usr/bin/opencode', version: '1.1.47' }
-    ])
+    expect(stored).toEqual([])
   })
 
   it('does not cache a failed or inconclusive probe', async () => {
@@ -290,7 +292,7 @@ describe('HarnessDetector readiness (P3-11)', () => {
     })
     const status = await detector.status('codex', { force: true })
     expect(status).toMatchObject({ installed: 'yes', ready: 'yes', resolvedCommand: '/usr/bin/codex' })
-    expect(probeReady).toHaveBeenCalledWith(codex, '/usr/bin/codex')
+    expect(probeReady).toHaveBeenCalledWith(codex, '/usr/bin/codex', { signal: expect.any(AbortSignal) })
   })
 
   it('discards a late probe from an older launch definition', async () => {
@@ -349,5 +351,99 @@ describe('HarnessDetector readiness (P3-11)', () => {
     const status = await detector.status('opencode' as HarnessId, { force: true })
     expect(status.installed).toBe('no')
     expect(status.reasonCode).toBe('not_installed')
+  })
+})
+
+
+describe('safe current detection evidence', () => {
+  it.each([1, null])('does not accept a version printed by an unsuccessful process (%s)', async (exitCode) => {
+    const probeReady = vi.fn(async () => ({ ready: 'yes' as const }))
+    const detector = makeDetector({ defs: [acpDef()], probeReady,
+      spawnCaptured: async () => ({ stdout: 'opencode 1.1.47', stderr: 'failed', timedOut: false, exitCode }) })
+    expect(await detector.status('opencode')).toMatchObject({ installed: 'unknown' })
+    expect(probeReady).not.toHaveBeenCalled()
+  })
+
+  it('fails a broken explicit binary path without falling back to PATH', async () => {
+    const resolve = vi.fn(async (command: string) => command === '/broken' ? undefined : `/bin/${command}`)
+    const detector = makeDetector({ defs: [acpDef()], overrides: { opencode: { binaryPath: '/broken' } }, resolve })
+    expect(await detector.status('opencode')).toMatchObject({ installed: 'no', message: 'command not found: /broken' })
+    expect(resolve).toHaveBeenCalledExactlyOnceWith('/broken')
+  })
+
+  it.each([
+    ['0.2.0-rc.1', false], ['0.2.0-rc.2', true], ['0.2.0-rc.2+custom', false],
+    ['0.2.0-rc.3', false], ['0.2.0', false], ['0.3.0', false]
+  ])('enforces exact prerelease version %s', async (version, supported) => {
+    const probeReady = vi.fn(async () => ({ ready: 'yes' as const }))
+    const detector = makeDetector({ defs: [acpDef({ detect: {
+      command: 'fixture', aliases: [], versionArgs: ['--version'], exactVersion: '0.2.0-rc.2'
+    } })], probeReady,
+    spawnCaptured: async () => ({ stdout: `fixture ${version}`, stderr: '', timedOut: false, exitCode: 0 }) })
+    expect(await detector.status('opencode')).toMatchObject({ version, versionSupported: supported })
+    expect(probeReady).toHaveBeenCalledTimes(supported ? 1 : 0)
+  })
+
+  it('freshly probes repeated status requests even when version and definition are unchanged', async () => {
+    const probeReady = vi.fn().mockResolvedValueOnce({ ready: 'yes' }).mockResolvedValueOnce({ ready: 'no' })
+    const detector = makeDetector({ defs: [acpDef()], probeReady })
+    expect((await detector.status('opencode')).ready).toBe('yes')
+    expect((await detector.status('opencode')).ready).toBe('no')
+    expect(probeReady).toHaveBeenCalledTimes(2)
+  })
+
+  it('invalidates display snapshots when a binary is replaced without changing its path/version', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'detector-binary-'))
+    const binary = join(home, 'opencode')
+    try {
+      await writeFile(binary, 'version-one')
+      const detector = makeDetector({ defs: [acpDef()], resolve: async () => binary })
+      await detector.status('opencode')
+      expect(detector.cachedStatus('opencode')?.installed).toBe('yes')
+      await writeFile(binary, 'version-two-with-different-content')
+      expect(detector.cachedStatus('opencode')).toBeUndefined()
+    } finally { await rm(home, { recursive: true, force: true }) }
+  })
+
+  it('never reuses a snapshot with opaque secret references', async () => {
+    const detector = makeDetector({ defs: [acpDef({ launch: { command: 'opencode', args: ['acp'], env: {},
+      secretEnv: [{ name: 'API_KEY', secretRef: 'rotating-ref' }] } })] })
+    await detector.status('opencode')
+    expect(detector.cachedStatus('opencode')).toBeUndefined()
+  })
+
+  it('honors pre-aborted detection without resolving or spawning', async () => {
+    const resolve = vi.fn(async () => '/fixture')
+    const controller = new AbortController()
+    controller.abort(new Error('cancelled'))
+    const detector = makeDetector({ defs: [acpDef()], resolve })
+    await expect(detector.status('opencode', { signal: controller.signal })).rejects.toThrow('cancelled')
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
+  it('bounds a stalled resolver and prevents late version probes', async () => {
+    let finish!: (value: string) => void
+    const spawnCaptured = vi.fn(async () => ({ stdout: '1.0.0', stderr: '', timedOut: false, exitCode: 0 }))
+    const detector = makeDetector({ defs: [acpDef()], spawnCaptured,
+      resolve: () => new Promise((resolve) => { finish = resolve }) })
+    await expect(detector.status('opencode', { timeoutMs: 20 })).rejects.toThrow()
+    finish('/late/fixture')
+    await Promise.resolve()
+    expect(spawnCaptured).not.toHaveBeenCalled()
+    expect(detector.cachedStatus('opencode')).toBeUndefined()
+  })
+
+  it('does not publish a success after cancellation during readiness', async () => {
+    let finish!: (value: { ready: 'yes' }) => void
+    const controller = new AbortController()
+    const probeReady = vi.fn(() => new Promise<{ ready: 'yes' }>((resolve) => { finish = resolve }))
+    const detector = makeDetector({ defs: [acpDef()], probeReady })
+    const pending = detector.status('opencode', { signal: controller.signal })
+    await vi.waitFor(() => expect(probeReady).toHaveBeenCalled())
+    controller.abort(new Error('cancelled'))
+    await expect(pending).rejects.toThrow('cancelled')
+    finish({ ready: 'yes' })
+    await Promise.resolve()
+    expect(detector.cachedStatus('opencode')).toBeUndefined()
   })
 })

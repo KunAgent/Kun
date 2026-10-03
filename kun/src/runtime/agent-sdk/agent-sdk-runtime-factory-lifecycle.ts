@@ -116,6 +116,7 @@ export function createAgentSdkLifecycleRuntimeDeps(
 > {
   const { sessionIdsByTurn, sessionPreparationsByTurn, sessionGoalContextKeysByTurn, handoffBriefDigestsByTurn, skillTurnKey, nowIso, toolBridge, resolveImages } = context
   return {
+    readiness: deps.readiness,
     async recordEvent(draft): Promise<void> {
       await deps.events.record(draft)
     },

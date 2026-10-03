@@ -12,6 +12,7 @@ import type {
   KunHarnessSettingsPatchV1,
   KunWorktreeSettingsPatchV1
 } from './app-settings-types-kun-services'
+import { normalizeEnabledProfiles } from './harness-enablement'
 import { normalizeAdeProjectDefaultsMap } from './ade-project-defaults'
 
 /**
@@ -29,7 +30,9 @@ export const BUILTIN_HARNESS_IDS = [
   'gemini-cli',
   'codex',
   'opencode',
-  'devin'
+  'devin',
+  'pi',
+  'deepseek-harness'
 ] as const
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -95,6 +98,7 @@ const secretEnvList = (
 
 export function defaultKunHarnessSettings(): KunHarnessSettingsV1 {
   return {
+    enabledProfiles: [],
     disabledIds: [],
     binaryPaths: {},
     custom: [],
@@ -230,6 +234,7 @@ export function normalizeKunHarnessSettings(value: unknown): KunHarnessSettingsV
   }
   const defaultHarnessId = nonEmpty(input.defaultHarnessId, 128)
   return {
+    enabledProfiles: normalizeEnabledProfiles(input.enabledProfiles),
     // The native Kun loop is the host runtime itself; it cannot be disabled.
     disabledIds: stringList(input.disabledIds).filter(
       (id) => builtinIds.has(id) && id !== 'kun'
@@ -277,6 +282,7 @@ export function mergeKunHarnessSettings(
   const base = normalizeKunHarnessSettings(current)
   if (!patch) return base
   return normalizeKunHarnessSettings({
+    enabledProfiles: patch.enabledProfiles ?? base.enabledProfiles,
     disabledIds: patch.disabledIds ?? base.disabledIds,
     binaryPaths: patch.binaryPaths ?? base.binaryPaths,
     custom: patch.custom ?? base.custom,

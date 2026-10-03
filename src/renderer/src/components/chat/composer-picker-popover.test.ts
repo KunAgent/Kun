@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../i18n'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
+import { withHarnessReadiness } from '@shared/test-support/harness-readiness'
 import { FloatingComposerHarnessPicker } from './FloatingComposerHarnessPicker'
 import { FloatingComposerIsolationPicker } from './FloatingComposerIsolationPicker'
 import { FloatingComposerAgentPicker } from './FloatingComposerAgentPicker'
@@ -73,7 +74,8 @@ describe('composer picker popovers', () => {
       root.render(createElement(FloatingComposerHarnessPicker, {
         harnessId: 'kun',
         harnessLabel: 'Kun',
-        rows: [harnessRow('kun', 'Kun'), harnessRow('claude-code', 'Claude Code')],
+        rows: [harnessRow('kun', 'Kun'), withHarnessReadiness(harnessRow('claude-code', 'Claude Code'),
+          [{ harnessId: 'claude-code', credentialMode: 'native-login' }])],
         loading: false,
         needsConfirm: () => false,
         onSelect: vi.fn()

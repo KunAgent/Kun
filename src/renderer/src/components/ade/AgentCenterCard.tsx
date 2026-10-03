@@ -9,7 +9,9 @@ import {
 import { AgentIcon } from '../agent-icon'
 import { useChatStore } from '../../store/chat-store'
 import { usesProviderOnlySdk } from '../../lib/harness-connection-presentation'
-import { SettingRow, Toggle } from '../settings-controls'
+import { SettingRow } from '../settings-controls'
+import { harnessProfileEnabled, selectedHarnessProfile } from '@shared/harness-enablement'
+import { AgentEnablementPanel } from './AgentEnablementPanel'
 import { AgentInstallControl } from './AgentInstallControl'
 import {
   agentCardModel,
@@ -67,7 +69,8 @@ export function AgentCenterCard({
   platform,
   t,
   tSettings,
-  onToggleEnabled,
+  onPatchHarness,
+  beforeEnableCheck,
   onProbe,
   onSetDefault,
   onRemoveCustom,
@@ -85,7 +88,8 @@ export function AgentCenterCard({
   t: T
   /** settings-ns translator: the legacy adeSettings.* keys. */
   tSettings: T
-  onToggleEnabled: (enabled: boolean) => void
+  beforeEnableCheck?: () => Promise<boolean>
+  onPatchHarness: (patch: Partial<KunHarnessSettingsV1>) => void
   onProbe: () => void
   onSetDefault: () => void
   onRemoveCustom?: () => void
@@ -104,7 +108,7 @@ export function AgentCenterCard({
   const { definition, status } = row
   const isKun = definition.id === 'kun'
   const providerOnly = usesProviderOnlySdk(row)
-  const enabled = !settings.disabledIds.includes(definition.id)
+  const enabled = isKun || harnessProfileEnabled(settings, selectedHarnessProfile(row, settings))
   const custom = !definition.builtin
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [reasonOpen, setReasonOpen] = useState(false)
@@ -167,10 +171,7 @@ export function AgentCenterCard({
         onProbe()
         break
       case 'enable':
-        onToggleEnabled(true)
-        break
       case 'disable':
-        onToggleEnabled(false)
         break
       case 'setDefault':
         onSetDefault()
@@ -190,7 +191,7 @@ export function AgentCenterCard({
   }
 
   const actionButton = (action: AgentCardAction, primary: boolean): ReactElement | null => {
-    if (action.kind === 'none' || action.kind === 'install') return null
+    if (action.kind === 'none' || action.kind === 'install' || action.kind === 'enable' || action.kind === 'disable') return null
     const label = t(action.labelKey)
     return (
       <button aria-busy={Boolean((action.kind === 'probe' || action.kind === 'test') && (probing || testing))} data-settings-action={primary ? 'primary' : 'secondary'} data-settings-size="default"
@@ -229,6 +230,7 @@ export function AgentCenterCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-[13px] font-semibold text-ds-ink">
             <span className="truncate">{definition.displayName}</span>
+            {definition.availability === 'preview' ? <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-700">{t('agentEnablement.preview')}</span> : null}
             {status.version ? (
               <span className="shrink-0 rounded-md bg-ds-main/70 px-1.5 py-0.5 font-mono text-[11px] text-ds-muted">
                 {status.version}
@@ -262,13 +264,6 @@ export function AgentCenterCard({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {!isKun ? (
-            <Toggle
-              checked={enabled}
-              ariaLabel={`${definition.displayName} ${tSettings('adeSettings.harnessEnabled')}`}
-              onChange={onToggleEnabled}
-            />
-          ) : null}
           {!providerOnly ? <button data-settings-action="ghost" data-settings-size="icon"
             type="button"
             aria-label={t('adeAgentAction.specifyPath')}
@@ -284,9 +279,10 @@ export function AgentCenterCard({
         </div>
       </div>
 
+      {!isKun && definition.transport !== 'terminal' ? <AgentEnablementPanel row={row} settings={settings} patch={onPatchHarness} beforeCheck={beforeEnableCheck} /> : null}
       {definition.builtin && (definition.setup?.install?.length || definition.setup?.adapter) ? (
         <AgentInstallControl harnessId={definition.id} action={model.reasonCode === 'adapter_missing' ? 'adapter' : 'install'}
-          needed={model.primary.kind === 'install'} t={t} />
+          needed={status.installed !== 'yes' || status.versionSupported === false} t={t} />
       ) : null}
       {model.state !== 'detecting' && (model.primary.kind !== 'none' || model.secondary.length > 0) ? (
         <div className="mt-2 flex flex-wrap items-center gap-2">

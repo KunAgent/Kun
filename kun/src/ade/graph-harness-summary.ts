@@ -38,6 +38,7 @@ export type GraphHarnessSummaryDeps = {
     cachedStatus(id: HarnessId): HarnessStatus | undefined
     status(id: HarnessId): Promise<HarnessStatus>
   }
+  readiness?: Pick<import('../harness/harness-readiness.js').HarnessReadinessService, 'readyProfiles' | 'warmProfiles'>
   quota(): Promise<ProviderQuotaListResponse | null>
 }
 
@@ -51,6 +52,10 @@ export function createGraphHarnessSummary(
     const snapshot = await deps.quota().catch(() => null)
     const lines: string[] = []
     for (const definition of definitions) {
+      if (definition.id !== 'kun' && deps.readiness) {
+        deps.readiness.warmProfiles(definition.id)
+        if ((await deps.readiness.readyProfiles(definition.id)).length === 0) continue
+      }
       const status = readiness(deps, definition)
       if (status === undefined) continue
       lines.push(

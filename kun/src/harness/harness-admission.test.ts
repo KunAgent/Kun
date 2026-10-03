@@ -267,7 +267,12 @@ describe('rooms equivalence (room-execution matches current room admission)', ()
   const router = (runtimeCaps: () => ReturnType<typeof agentSdkCapabilities>, transport: 'agent-sdk' | 'cursor-sdk' | 'antigravity-cli') =>
     new HarnessRouter({
       enabled: () => true,
-      catalog: new HarnessCatalog(),
+      catalog: new HarnessCatalog({ custom: () => [], enabledProfiles: () => [
+        { harnessId: 'claude-code', credentialMode: 'native-login' },
+        { harnessId: 'antigravity', credentialMode: 'native-login' },
+        { harnessId: 'cursor', credentialMode: 'provider', providerId: 'default' }
+      ] }),
+      readiness: { configurationSignature: () => 'fixture', prepareTurn: async () => undefined, releaseTurn: () => undefined },
       runtimes: () => ({
         [transport]: {
           handlesProvider: () => true,
@@ -290,7 +295,7 @@ describe('rooms equivalence (room-execution matches current room admission)', ()
   it('rejects cursor and antigravity like today', () => {
     const cursor = router(() => cursorSdkCapabilities(true), 'cursor-sdk').resolve(
       roomThread,
-      { ...roomTurn, harnessId: 'cursor' } as Turn
+      { ...roomTurn, harnessId: 'cursor', providerId: 'default' } as Turn
     )
     expect(cursor.ok).toBe(false)
     const antigravity = router(antigravityCapabilities, 'antigravity-cli').resolve(

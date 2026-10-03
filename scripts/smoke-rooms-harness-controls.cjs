@@ -1,8 +1,29 @@
 'use strict'
 const assert = require('node:assert/strict')
 const { writeFile, rm } = require('node:fs/promises')
-const { assertRoomsHarnessDiscoveryOrder } = require('./smoke-rooms-harness-fixture.cjs')
+const { assertRoomsHarnessDiscoveryOrder, ROOMS_HARNESS_PROFILE, ROOMS_HARNESS_MODEL } = require('./smoke-rooms-harness-fixture.cjs')
 const { openAgentPrivateChat, roomWorkbenchSnapshot } = require('./smoke-agent-chat-workbench.cjs')
+
+/** Revalidate persisted fixture consent through the real local protocol path. */
+async function verifyRoomsHarnessReadiness({ page, poll, runtimeRequest }) {
+  const row = async () => (await runtimeRequest(page, '/v1/harnesses?usage=code'))
+    .harnesses.find((entry) => entry.definition.id === ROOMS_HARNESS_PROFILE.harnessId)
+  assert.deepEqual((await row())?.enabledProfiles, [ROOMS_HARNESS_PROFILE], 'Offline Devin profile must have explicit consent')
+  // Let startup revalidation finish before requesting a second check, so one
+  // real probe cannot supersede the other and invalidate its in-flight proof.
+  await poll(async () => !(await row())?.status.detecting, 60_000, 'offline Agent startup revalidation')
+  const result = await runtimeRequest(page, '/v1/harnesses/devin/test', 'POST', {
+    level: 'handshake', credentialMode: ROOMS_HARNESS_PROFILE.credentialMode, model: ROOMS_HARNESS_MODEL
+  })
+  assert.equal(result.readiness?.usable, true, JSON.stringify(result))
+  assert.equal(result.readiness.authentication, 'unverified', 'A fixture key must not claim verified remote authentication')
+  assert.equal(result.handshake?.protocol, 'acp')
+  assert.equal(result.handshake?.agent?.name, 'Devin offline fixture')
+  assert(result.handshake?.models?.includes(ROOMS_HARNESS_MODEL), 'The real ACP session must expose the pinned fixture model')
+  assert.equal(result.trial, undefined, 'Readiness must not run a model trial')
+  assert.deepEqual((await row()).readyProfiles.map(({ expiresAt: _expiresAt, ...profile }) => profile), [ROOMS_HARNESS_PROFILE])
+  return result
+}
 
 /** Real rendered conversation -> catalog -> confirmation -> ACP -> durable result. */
 async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize, workspaceRoot, releaseFile, modelFixture }) {
@@ -84,4 +105,4 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
     'Offline model/ACP fixtures only; no paid provider or real account execution and no project modifications'
   ]
 }
-module.exports = { runRoomsHarnessFlow }
+module.exports = { verifyRoomsHarnessReadiness, runRoomsHarnessFlow }

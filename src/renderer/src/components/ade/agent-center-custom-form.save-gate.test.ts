@@ -23,7 +23,7 @@ const t = (key: string, options?: Record<string, unknown>): string =>
 
 function settings(custom: KunHarnessSettingsV1['custom'] = []): KunHarnessSettingsV1 {
   return {
-    disabledIds: [],
+    enabledProfiles: [], disabledIds: [],
     binaryPaths: {},
     custom,
     defaults: {},

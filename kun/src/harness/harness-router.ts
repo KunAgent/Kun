@@ -68,6 +68,7 @@ export type HarnessRouterDeps = {
     get(id: string): HarnessDefinition | undefined
     /** User-disabled harness ids fail admission; absent means nothing disabled. */
     isDisabled?(id: HarnessId): boolean
+    isProfileEnabled?(route: HarnessRoute): boolean
   }
   /**
    * Live transport -> runtime view. A held reference must reflect hot
@@ -90,6 +91,7 @@ export type HarnessRouterDeps = {
    * host-created isolated worktree. Absent or unknown → not isolated.
    */
   taskWorkspaceIsolated?(workspaceId: string): boolean
+  readiness?: Pick<import('./harness-readiness.js').HarnessReadinessService, 'configurationSignature' | 'prepareTurn' | 'releaseTurn'>
   /** Optional extra admission hook. Absent means capability-only routing. */
   admission?(input: {
     definition: HarnessDefinition
@@ -113,7 +115,7 @@ export class HarnessRouter {
   resolve(thread: ThreadRecord, turn: Turn): HarnessResolveResult {
     const kinds = this.deps.providerKinds()
     const harnessId: HarnessId =
-      turn.harnessId ?? thread.harnessId ?? legacyHarnessForProvider(turn.providerId, kinds)
+      turn.harnessId ?? thread.harnessId ?? legacyHarnessForProvider(turn.actingModelRoute?.providerId ?? turn.providerId, kinds)
     const definition = this.deps.catalog.get(harnessId)
     if (!definition) {
       return {
@@ -135,10 +137,17 @@ export class HarnessRouter {
     }
     const route: HarnessRoute = {
       harnessId,
-      providerId: turn.providerId ?? undefined,
-      model: turn.model ?? thread.model ?? this.deps.defaultModel() ?? '',
+      providerId: turn.actingModelRoute?.providerId ?? turn.providerId ?? thread.providerId ?? undefined,
+      model: turn.actingModelRoute?.model ?? turn.model ?? thread.model ?? this.deps.defaultModel() ?? '',
       credentialMode:
         turn.credentialMode ?? defaultCredentialMode(harnessId, definition)
+    }
+    if (harnessId === 'kun' && legacyHarnessForProvider(route.providerId, kinds) !== 'kun') {
+      return { ok: false, error: new HarnessAdmissionError('route_unsupported',
+        'Kun Agent cannot use an external Agent provider. Select a Kun model connection or enable and select the external Agent profile.') }
+    }
+    if (harnessId !== 'kun' && this.deps.catalog.isProfileEnabled?.(route) !== true) {
+      return { ok: false, error: new HarnessAdmissionError('harness_unavailable', `Agent profile is disabled: ${harnessId}. Test and enable this profile in settings.`) }
     }
     const intentError = unsupportedKunTurnIntent(harnessId, effectiveKunTurnIntent(thread, turn), {
       graphWorker: isInternalGraphWorker(thread, turn)
@@ -173,6 +182,25 @@ export class HarnessRouter {
         }
       }
       runtime = transport.resolveProvider?.(route.providerId) ?? transport
+      const underlying = runtime
+      const readiness = this.deps.readiness
+      if (readiness) {
+        const signature = readiness.configurationSignature(route)
+        runtime = {
+          handlesProvider: (id) => underlying.handlesProvider(id),
+          capabilities: (id) => underlying.capabilities(id),
+          ...(underlying.capabilitiesV2 ? { capabilitiesV2: (id: string | undefined) => underlying.capabilitiesV2!(id) } : {}),
+          runTurn: async (threadId, turnId, signal, providerId) => {
+            try {
+              await readiness.prepareTurn(threadId, turnId, route, signature, signal)
+              return await underlying.runTurn(threadId, turnId, signal, providerId)
+            }
+            finally { readiness.releaseTurn(threadId, turnId) }
+          }
+        }
+      } else {
+        return { ok: false, error: new HarnessAdmissionError('harness_not_ready', 'Agent readiness service is unavailable') }
+      }
     }
     const usage = usageForTurn(thread, turn)
     let effective = effectiveCapabilitiesForRoute(definition, runtime, route.providerId)
@@ -195,7 +223,7 @@ export class HarnessRouter {
       credentialMode: route.credentialMode,
       harness: definition,
       effective,
-      status: this.deps.status?.(harnessId) ?? {
+      status: (() => { const status = this.deps.status?.(harnessId); return status && this.deps.readiness ? { ...status, login: 'unknown' as const } : status })() ?? {
         harnessId,
         installed: 'yes',
         login: 'unknown',

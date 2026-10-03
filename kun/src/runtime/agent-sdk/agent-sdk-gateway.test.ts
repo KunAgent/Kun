@@ -3,6 +3,7 @@ import { AgentSdkGatewayUnavailableError, AgentSdkRuntime } from './agent-sdk-ru
 import { createAgentSdkRuntime } from './agent-sdk-runtime-factory.js'
 import { resolveAgentSdkGatewayEnv } from './agent-sdk-gateway.js'
 import { HarnessTokenService } from '../../harness/harness-token-service.js'
+import { HarnessCatalog } from '../../harness/harness-catalog.js'
 import { BUILTIN_HARNESSES } from '../../harness/builtin-harnesses.js'
 import type { HarnessRoute } from '../../contracts/harness.js'
 import type { ThreadRecord } from '../../contracts/threads.js'
@@ -52,13 +53,13 @@ describe('resolveAgentSdkGatewayEnv', () => {
     expect(service.verifyScope(env.token, 'kun-tools')).toBeNull()
   })
 
-  test('adds the roles small model as a second route when it differs', () => {
+  test('adds the roles small model only within the admitted provider', () => {
     const service = tokens()
     const env = resolveAgentSdkGatewayEnv({
       deps: {
         tokens: service,
         baseUrl: () => 'http://127.0.0.1:18899',
-        roles: () => ({ smallModelProviderId: 'fast', smallModel: 'mini-1' }),
+        roles: () => ({ smallModelProviderId: 'anthropic-sub', smallModel: 'mini-1' }),
         gateway: () => GATEWAY_DEF.gateway
       },
       threadId: 'th',
@@ -66,10 +67,45 @@ describe('resolveAgentSdkGatewayEnv', () => {
       providerId: 'anthropic-sub',
       model: 'claude-sonnet-4-6'
     })
-    expect(env.smallModel).toBe('kun/fast/mini-1')
+    expect(env.smallModel).toBe('kun/anthropic-sub/mini-1')
     const grant = service.verifyScope(env.token, 'gateway')
     expect(grant?.routes).toHaveLength(2)
-    expect(grant?.routes[1]).toEqual({ providerId: 'fast', model: 'mini-1', role: 'small' })
+    expect(grant?.routes[1]).toEqual({ providerId: 'anthropic-sub', model: 'mini-1', role: 'small' })
+  })
+
+  test('cannot grant a second provider through the small-model role preference', () => {
+    const service = tokens()
+    const env = resolveAgentSdkGatewayEnv({
+      deps: {
+        tokens: service, baseUrl: () => 'http://127.0.0.1:18899',
+        roles: () => ({ smallModelProviderId: 'disabled-account', smallModel: 'mini-1' }),
+        gateway: () => GATEWAY_DEF.gateway
+      },
+      threadId: 'th', harnessId: 'claude-code', providerId: 'enabled-account', model: 'main-1'
+    })
+    expect(env.smallModel).toBe('kun/enabled-account/main-1')
+    expect(service.verifyScope(env.token, 'gateway')?.routes).toEqual([
+      { providerId: 'enabled-account', model: 'main-1', role: 'main' }
+    ])
+  })
+
+  test('changing only the small model cannot widen a prior live grant', () => {
+    const service = tokens()
+    const route = { threadId: 'th', harnessId: 'claude-code', providerId: 'p', model: 'main' }
+    const first = resolveAgentSdkGatewayEnv({ ...route, deps: {
+      tokens: service, baseUrl: () => 'http://x', gateway: () => GATEWAY_DEF.gateway,
+      roles: () => ({ smallModel: 'small-1' })
+    } })
+    const second = resolveAgentSdkGatewayEnv({ ...route, deps: {
+      tokens: service, baseUrl: () => 'http://x', gateway: () => GATEWAY_DEF.gateway,
+      roles: () => ({ smallModel: 'small-2' })
+    } })
+    expect(first.token).not.toBe(second.token)
+    expect(service.verifyScope(first.token, 'gateway')?.routes).toEqual([
+      { providerId: 'p', model: 'main', role: 'main' },
+      { providerId: 'p', model: 'small-1', role: 'small' }
+    ])
+    expect(service.verifyScope(second.token, 'gateway')?.routes[1]?.model).toBe('small-2')
   })
 
   test('reissue with a different model produces a different token bound to its own routes', () => {
@@ -197,6 +233,73 @@ describe('kun-gateway loadTurnContext', () => {
     ])
     // The grant token is registered for request-value redaction.
     expect(ctx?.redactedRequestValues).toContain(ctx?.gateway?.token)
+    expect(ctx?.harnessRoute).toEqual({ harnessId: 'claude-code', credentialMode: 'kun-gateway',
+      providerId: 'anthropic-sub', model: 'kun/anthropic-sub/claude-sonnet-4-6' })
+  })
+
+  test('an enabled main profile does not grant a disabled small-model profile', async () => {
+    const catalog = new HarnessCatalog({ custom: () => [], enabledProfiles: () => [
+      { harnessId: 'claude-code', credentialMode: 'kun-gateway', providerId: 'account-a' }
+    ] })
+    const thread = threadWith({ turns: [gatewayTurn({ providerId: 'account-a', model: 'kun/account-a/model-a' })] })
+    const tokens = new HarnessTokenService()
+    const runtime = createAgentSdkRuntime(factoryDeps({
+      threadStore: { get: async () => thread }, harnessCatalog: catalog, harnessTokens: tokens,
+      roles: () => ({ smallModelProviderId: 'account-b', smallModel: 'model-b' })
+    }))
+    const ctx = await contextOf(runtime)
+    expect(ctx?.gateway?.smallModel).toBe('kun/account-a/model-a')
+    expect(tokens.verifyScope(ctx?.gateway?.token, 'gateway')?.routes).toEqual([
+      { providerId: 'account-a', model: 'model-a', role: 'main' }
+    ])
+  })
+
+  test.each(['provider', 'acting route'])('rejects an encoded disabled provider before issuing a grant (%s)', async (source) => {
+    const catalog = new HarnessCatalog({ custom: () => [], enabledProfiles: () => [
+      { harnessId: 'claude-code', credentialMode: 'kun-gateway', providerId: 'account-a' }
+    ] })
+    const profile = { harnessId: 'claude-code', credentialMode: 'kun-gateway' as const, model: 'model-a' }
+    expect(catalog.isProfileEnabled({ ...profile, providerId: 'account-a' })).toBe(true)
+    expect(catalog.isProfileEnabled({ ...profile, providerId: 'account-b' })).toBe(false)
+    const thread = threadWith({ turns: [gatewayTurn({
+      providerId: source === 'provider' ? 'account-a' : 'account-b', model: 'kun/account-b/model-a',
+      ...(source === 'acting route' ? { actingModelRoute: { providerId: 'account-a', model: 'model-a' } } : {})
+    })] })
+    const tokens = new HarnessTokenService()
+    const issue = vi.spyOn(tokens, 'issue')
+    const runtime = createAgentSdkRuntime(factoryDeps({
+      threadStore: { get: async () => thread }, harnessCatalog: catalog, harnessTokens: tokens
+    }))
+    await expect(contextOf(runtime)).rejects.toThrow(/encoded model provider does not match/)
+    expect(issue).not.toHaveBeenCalled()
+  })
+
+  test('validates a resolved gateway route before granting it access', async () => {
+    const thread = threadWith({ turns: [gatewayTurn()] })
+    const tokens = new HarnessTokenService()
+    const issue = vi.spyOn(tokens, 'issue')
+    const validateTurn = vi.fn(async () => { throw new Error('Agent profile changed before launch') })
+    const runtime = createAgentSdkRuntime(factoryDeps({
+      threadStore: { get: async () => thread }, harnessTokens: tokens, readiness: { validateTurn }
+    }))
+    await expect(contextOf(runtime)).rejects.toThrow('Agent profile changed before launch')
+    expect(validateTurn).toHaveBeenCalledWith('th', 'tn', expect.any(AbortSignal), {
+      harnessId: 'claude-code', credentialMode: 'kun-gateway', providerId: 'anthropic-sub', model: 'claude-sonnet-4-6'
+    })
+    expect(issue).not.toHaveBeenCalled()
+  })
+
+  test('preserves native default without silently selecting the runtime default model', async () => {
+    const thread = threadWith({ providerId: undefined, model: 'default', turns: [gatewayTurn({
+      credentialMode: 'native-login', providerId: undefined, model: 'default'
+    })] })
+    const runtime = createAgentSdkRuntime(factoryDeps({
+      threadStore: { get: async () => thread }, defaultModel: 'claude-sonnet-4-6'
+    }))
+    const ctx = await contextOf(runtime)
+    expect(ctx?.model).toBeUndefined()
+    expect(ctx?.harnessRoute).toEqual({ harnessId: 'claude-code', credentialMode: 'native-login',
+      providerId: undefined, model: 'default' })
   })
 
   test('fails clearly when no serve endpoint is listening', async () => {
@@ -331,6 +434,30 @@ describe('AgentSdkRuntime gateway env + usage suppression', () => {
     expect(options.env?.ANTHROPIC_MODEL).toBe('kun/anthropic-sub/claude-sonnet-4-6')
     expect(options.env?.ANTHROPIC_API_KEY).toBeUndefined()
     expect(options.env?.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
+  })
+
+  test('revalidates the actual SDK profile immediately before query', async () => {
+    const actual: HarnessRoute = { harnessId: 'claude-code', credentialMode: 'kun-gateway',
+      providerId: 'account-b', model: 'kun/account-b/claude-sonnet-4-6' }
+    const query = vi.fn()
+    const validateTurn = vi.fn(async (_threadId: string, _turnId: string, _signal: AbortSignal, route: HarnessRoute | undefined) => {
+      if (route?.providerId !== 'account-a') throw new Error('Actual Agent profile does not match the checked launch route')
+      return 'fixture'
+    })
+    const { d } = deps({ readiness: { validateTurn }, loadSdk: async () => fakeSdk(STREAM, query),
+      loadTurnContext: async () => ({ ...gatewayContext(), harnessRoute: actual }) })
+    await expect(new AgentSdkRuntime(d).runTurn('th', 'tn', new AbortController().signal)).resolves.toBe('failed')
+    expect(validateTurn).toHaveBeenCalledWith('th', 'tn', expect.any(AbortSignal), actual)
+    expect(query).not.toHaveBeenCalled()
+  })
+
+  test('fails closed if an SDK context has no resolved profile for readiness', async () => {
+    const query = vi.fn()
+    const validateTurn = vi.fn(async () => 'fixture')
+    const { d } = deps({ readiness: { validateTurn }, loadSdk: async () => fakeSdk(STREAM, query) })
+    await expect(new AgentSdkRuntime(d).runTurn('th', 'tn', new AbortController().signal)).resolves.toBe('failed')
+    expect(validateTurn).not.toHaveBeenCalled()
+    expect(query).not.toHaveBeenCalled()
   })
 
   test('suppresses SDK usage drafts because the gateway already attributed usage', async () => {

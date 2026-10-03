@@ -47,6 +47,8 @@ export type AcpSessionRequest = {
   mcpServers?: McpServer[]
   /** Full item list; prior items are derived via priorItemsForDelegatedTurn. */
   items: readonly TurnItem[]
+  /** Revalidate after coordinator awaits and before starting/resuming a session. */
+  validateLaunch?: () => Promise<unknown>
 }
 
 export type AcpSessionHandle = {
@@ -130,6 +132,7 @@ export class AcpSessionManager {
         }
       })
       try {
+        await ctx.validateLaunch?.()
         const raw = await conn.rpc.request(
           ACP_AGENT_METHODS.sessionLoad,
           {
@@ -179,6 +182,7 @@ export class AcpSessionManager {
     preparation: DelegatedSessionPreparation,
     sink?: AcpSessionUpdateSink
   ): Promise<AcpSessionHandle> {
+    await ctx.validateLaunch?.()
     const raw = await conn.rpc.request(
       ACP_AGENT_METHODS.sessionNew,
       { cwd: ctx.workspacePath, mcpServers: ctx.mcpServers ?? [] },

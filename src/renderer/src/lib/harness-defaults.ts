@@ -10,6 +10,7 @@ import {
 import type { AdeHarnessDefinition } from '@shared/ade-harnesses'
 import { getKunRuntimeSettings } from '@shared/app-settings-kun-defaults'
 import { rendererRuntimeClient } from '../agent/runtime-client'
+import { applyHarnessEnablementSettings, loadHarnesses } from '../store/harness-store'
 import { SETTINGS_CHANGED_EVENT } from './keyboard-shortcut-settings'
 
 /**
@@ -70,12 +71,20 @@ export function useHarnessDefaults(): Record<string, KunHarnessDefaultsEntryV1> 
     }
     const onSettingsChanged = (event: Event): void => {
       const settings = (event as CustomEvent<AppSettingsV1>).detail
-      if (settings) apply(settings)
+      if (settings) {
+        apply(settings)
+        applyHarnessEnablementSettings(getKunRuntimeSettings(settings).harnesses, true)
+        void loadHarnesses(true)
+      }
     }
     window.addEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged)
+    const stopSync = window.kunGui?.onRuntimeSettingsSyncStatus?.((status) => {
+      if (status.state === 'synced') void loadHarnesses(true)
+    })
     return () => {
       cancelled = true
       window.removeEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged)
+      stopSync?.()
     }
   }, [])
 

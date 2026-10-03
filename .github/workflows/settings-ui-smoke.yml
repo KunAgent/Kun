@@ -71,7 +71,7 @@ jobs:
           import { resolve } from 'node:path'
           const baseline = resolve('settings-ui-baseline')
           symlinkSync(resolve('node_modules'), resolve(baseline, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir')
-          for (const file of ['SettingsUiSmokeFixture.tsx', 'SettingsUiSmokeHost.ts']) {
+          for (const file of ['SettingsUiSmokeFixture.tsx', 'SettingsUiSmokeHost.ts', 'ade/agent-enablement-smoke-runtime.ts']) {
             const relative = `src/renderer/src/components/${file}`
             cpSync(relative, resolve(baseline, relative))
           }

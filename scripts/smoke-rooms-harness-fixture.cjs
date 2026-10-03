@@ -3,12 +3,26 @@ const assert = require('node:assert/strict')
 const { chmod, mkdir, writeFile } = require('node:fs/promises')
 const { join } = require('node:path')
 
+const ROOMS_HARNESS_PROFILE = Object.freeze({ harnessId: 'devin', credentialMode: 'native-login' })
+const ROOMS_HARNESS_MODEL = 'devin-fixture-model'
+const ROOMS_HARNESS_KEY = 'rooms-offline-fixture-no-service-access'
+
+/** Consent for exactly the offline fixture; persisted consent is not readiness. */
+function configureRoomsHarnessFixture(settings, environment) {
+  settings.agents.kun.harnesses.enabledProfiles = [{ ...ROOMS_HARNESS_PROFILE }]
+  settings.agents.kun.harnesses.defaults = { ...settings.agents.kun.harnesses.defaults,
+    devin: { credentialMode: 'native-login', model: ROOMS_HARNESS_MODEL } }
+  // This sentinel belongs only to the local stub, never a real account/service.
+  environment.WINDSURF_API_KEY = ROOMS_HARNESS_KEY
+}
+
 /** Real ACP subprocess, deterministic offline output; no provider account or model request. */
-async function writeRoomsHarnessStub(root, releaseFile) {
+async function writeRoomsHarnessStub(root, releaseFile, auditFile) {
   await mkdir(root, { recursive: true })
   const path = join(root, 'rooms-devin-fixture')
   await writeFile(path, `#!${process.execPath}
 if (process.argv.includes('--version')) { console.log('Devin CLI 3000.11.3'); process.exit(0) }
+if (process.env.WINDSURF_API_KEY !== ${JSON.stringify(ROOMS_HARNESS_KEY)}) process.exit(3)
 const fs = require('node:fs')
 const send = (value) => process.stdout.write(JSON.stringify(value) + '\\n')
 const rl = require('node:readline').createInterface({ input: process.stdin })
@@ -16,6 +30,8 @@ let modelId = 'devin-fixture-model'
 rl.on('line', (line) => {
   let msg; try { msg = JSON.parse(line) } catch { return }
   if (msg.id === undefined) return
+  const auditFile = ${JSON.stringify(auditFile ?? null)}
+  if (auditFile) fs.appendFileSync(auditFile, JSON.stringify({ method: msg.method, pid: process.pid }) + '\\n')
   const reply = (result) => send({ jsonrpc: '2.0', id: msg.id, result })
   let result = {}
   if (msg.method === 'initialize') result = { protocolVersion: 1,
@@ -46,6 +62,11 @@ rl.on('line', (line) => {
 })
 `)
   await chmod(path, 0o755)
+  if (process.platform === 'win32') {
+    const launcher = `${path}.cmd`
+    await writeFile(launcher, `@echo off\r\n"${process.execPath}" "${path}" %*\r\n`)
+    return launcher
+  }
   return path
 }
 
@@ -101,4 +122,5 @@ function assertRoomsHarnessDiscoveryOrder(observations) {
   assert(discovery >= 0 && proposal > discovery && observations[proposal].roomsHarnessDiscoverySucceeded === true,
     'Successful Code Agent discovery must precede the task proposal')
 }
-module.exports = { writeRoomsHarnessStub, roomsHarnessModelResponse, roomsHarnessDiscoveryRoute, assertRoomsHarnessDiscoveryOrder }
+module.exports = { configureRoomsHarnessFixture, ROOMS_HARNESS_PROFILE, ROOMS_HARNESS_MODEL,
+  writeRoomsHarnessStub, roomsHarnessModelResponse, roomsHarnessDiscoveryRoute, assertRoomsHarnessDiscoveryOrder }

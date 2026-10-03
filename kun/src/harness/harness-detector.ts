@@ -1,5 +1,8 @@
 import semver from 'semver'
 import { createHash } from 'node:crypto'
+import { statSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import type { HarnessDefinition, HarnessId, HarnessStatus } from '../contracts/harness.js'
 import { harnessStatusReasonCode } from '../contracts/harness.js'
@@ -12,72 +15,95 @@ import type { HarnessLoginState } from './harness-login-probes.js'
 import { nativeAgentNetworkStatus } from './native-agent-network.js'
 import { resolveCodexExecutable } from './codex-executable.js'
 import { harnessExecutableEnv } from './harness-executable-env.js'
+import { prepareDeepSeekHarnessLaunch } from './deepseek-harness-launch.js'
+import { buildHarnessEnv } from './harness-env.js'
+import { raceProbeAbort } from './probe-abort.js'
+import { redactApprovalSensitiveText } from '../domain/approval.js'
 
 const VERSION_TIMEOUT_MS = 5_000
 const DEFAULT_TTL_MS = 60_000
-const DEFAULT_VERSION_PATTERN = /\d+\.\d+\.\d+/
+const DETECTION_TIMEOUT_MS = 45_000
+const DEFAULT_VERSION_PATTERN = /\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?/
 const MAX_CAPTURE_BYTES = 64 * 1024
 
+export type ProbeOptions = { signal?: AbortSignal; timeoutMs?: number }
+export type SpawnCapturedOptions = {
+  timeoutMs: number
+  signal?: AbortSignal
+  env?: Record<string, string | undefined>
+}
 export type SpawnCaptured = (
   command: string,
   args: readonly string[],
-  options: { timeoutMs: number }
+  options: SpawnCapturedOptions
 ) => Promise<{ stdout: string; stderr: string; timedOut: boolean; exitCode: number | null }>
 
-/** Default capture runner: the managed launcher, so detection follows process lifecycle rules. */
-export async function spawnCaptured(
-  command: string,
-  args: readonly string[],
-  options: { timeoutMs: number }
-): Promise<{ stdout: string; stderr: string; timedOut: boolean; exitCode: number | null }> {
-  let child: ChildProcess
-  try {
-    child = await spawnOwnedProcess(command, args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true
-    })
-  } catch (error) {
-    return { stdout: '', stderr: String(error), timedOut: false, exitCode: null }
-  }
+/** Bounded local metadata execution, including a launcher that resolves late. */
+export const spawnCaptured: SpawnCaptured = async (command, args, options) => {
+  const timeout = AbortSignal.timeout(options.timeoutMs)
+  const signal = AbortSignal.any([...(options.signal ? [options.signal] : []), timeout])
+  let child: ChildProcess | undefined
+  let pending: Promise<ChildProcess> | undefined
   let stdout = ''
   let stderr = ''
   let stdoutBytes = 0
   let stderrBytes = 0
-  child.stdout?.on('data', (chunk: Buffer) => {
-    if (stdoutBytes <= MAX_CAPTURE_BYTES) stdout += chunk.toString('utf8')
-    stdoutBytes += chunk.length
-  })
-  child.stderr?.on('data', (chunk: Buffer) => {
-    if (stderrBytes <= MAX_CAPTURE_BYTES) stderr += chunk.toString('utf8')
-    stderrBytes += chunk.length
-  })
-  const exit = new Promise<number | null>((resolveExit) => {
-    child.once('exit', (code) => resolveExit(code))
-    child.once('error', () => resolveExit(null))
-  })
-  const timedOut = await Promise.race([
-    exit.then(() => false),
-    new Promise<true>((resolveTimeout) => setTimeout(() => resolveTimeout(true), options.timeoutMs))
-  ])
-  if (timedOut) {
-    await stopOwnedProcess(child, { graceMs: 0 }).catch(() => undefined)
-    return { stdout, stderr, timedOut: true, exitCode: null }
+  try {
+    signal.throwIfAborted()
+    pending = spawnOwnedProcess(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+      env: buildHarnessEnv({ base: harnessExecutableEnv(), add: options.env })
+    })
+    child = await raceProbeAbort(pending, signal)
+    signal.throwIfAborted()
+    child.stdout?.on('data', (chunk: Buffer) => {
+      const retained = chunk.subarray(0, Math.max(0, MAX_CAPTURE_BYTES - stdoutBytes))
+      stdout += retained.toString('utf8')
+      stdoutBytes += retained.length
+    })
+    child.stderr?.on('data', (chunk: Buffer) => {
+      const retained = chunk.subarray(0, Math.max(0, MAX_CAPTURE_BYTES - stderrBytes))
+      stderr += retained.toString('utf8')
+      stderrBytes += retained.length
+    })
+    const process = child
+    const exit = new Promise<number | null>((resolveExit) => {
+      if (process.exitCode !== null || process.signalCode !== null) return resolveExit(process.exitCode)
+      process.once('exit', (code) => resolveExit(code))
+      process.once('error', () => resolveExit(null))
+    })
+    const exitCode = await raceProbeAbort(exit, signal)
+    signal.throwIfAborted()
+    return { stdout, stderr, timedOut: false, exitCode }
+  } catch (error) {
+    options.signal?.throwIfAborted()
+    return { stdout, stderr: stderr || redactApprovalSensitiveText(String(error)), timedOut: timeout.aborted, exitCode: null }
+  } finally {
+    if (child) await stopOwnedProcess(child, { graceMs: 0 }).catch(() => undefined)
+    else void pending?.then((late) => stopOwnedProcess(late, { graceMs: 0 }).catch(() => undefined), () => undefined)
   }
-  return { stdout, stderr, timedOut: false, exitCode: await exit }
 }
 
-function versionSupported(version: string | null, minVersion: string | undefined): boolean | undefined {
-  if (!version || !minVersion) return undefined
+function versionSupported(version: string | null, detect: HarnessDefinition['detect']): boolean | undefined {
+  if (!detect?.minVersion && !detect?.exactVersion) return undefined
+  if (!version) return false
   try {
-    return semver.gte(version, minVersion)
-  } catch {
-    return undefined
-  }
+    return detect.exactVersion ? version === detect.exactVersion : semver.gte(version, detect.minVersion!)
+  } catch { return false }
+}
+
+function fileIdentity(path: string | undefined): string | undefined {
+  if (!path) return undefined
+  try {
+    const stat = statSync(path, { bigint: true })
+    return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`
+  } catch { return 'missing' }
 }
 
 export class HarnessDetector {
-  private readonly cache = new Map<HarnessId, { status: HarnessStatus; expiresAt: number; identity: string }>()
-  private readonly inflight = new Map<HarnessId, { identity: string; promise: Promise<HarnessStatus> }>()
+  private readonly cache = new Map<HarnessId, { status: HarnessStatus; expiresAt: number; identity: string; binary?: string }>()
+  private readonly generations = new Map<HarnessId, number>()
+  private readonly inflight = new Map<HarnessId, { identity: string; promise: Promise<HarnessStatus>; signal?: AbortSignal }>()
 
   constructor(
     private readonly deps: {
@@ -101,36 +127,43 @@ export class HarnessDetector {
        */
       probeReady?: (
         def: HarnessDefinition,
-        command: string
+        command: string,
+        options?: ProbeOptions
       ) => Promise<{ ready: 'yes' | 'no' | 'unknown'; detail?: string }>
       /**
-       * Persisted 24h readiness cache (P4-03): successful handshakes keyed
-       * by resolved command + version survive restarts; failures never
-       * enter the cache.
+       * Legacy cache kept only for invalidation on launch failures. Success
+       * entries are no longer reused without current profile evidence.
        */
       readinessCache?: {
         get(id: HarnessId, command: string, version: string | undefined, identity?: string): Promise<'yes' | undefined>
         set(id: HarnessId, command: string, version: string | undefined, identity?: string): Promise<void>
         clear(id: HarnessId): Promise<void>
       }
-      probeLogin: (def: HarnessDefinition, command: string) => Promise<HarnessLoginState>
+      probeLogin: (def: HarnessDefinition, command: string, options?: ProbeOptions) => Promise<HarnessLoginState>
       nowMs: () => number
       nowIso: () => string
       ttlMs?: number
     }
   ) {}
 
-  async status(id: HarnessId, opts: { force?: boolean } = {}): Promise<HarnessStatus> {
+  async status(id: HarnessId, opts: ProbeOptions & { force?: boolean } = {}): Promise<HarnessStatus> {
+    opts.signal?.throwIfAborted()
     const identity = this.identity(id)
-    const cached = this.cache.get(id)
-    if (!opts.force && cached && cached.identity === identity && cached.expiresAt > this.deps.nowMs()) return cached.status
+    const cached = this.cachedStatus(id)
+    const def = this.deps.definitions().find((candidate) => candidate.id === id)
+    // External account/config/secret state can change independently of a
+    // version string. Only the embedded loop can reuse a detection verdict.
+    if (!opts.force && def?.transport === 'native-loop' && cached) return cached
     const pending = this.inflight.get(id)
-    if (pending?.identity === identity) return pending.promise
-    const run = this.detect(id, identity)
-    this.inflight.set(id, { identity, promise: run })
-    try {
-      return await run
-    } finally {
+    if (!opts.force && pending?.identity === identity && pending.signal === opts.signal) return pending.promise
+    const signal = AbortSignal.any([
+      ...(opts.signal ? [opts.signal] : []), AbortSignal.timeout(opts.timeoutMs ?? DETECTION_TIMEOUT_MS)
+    ])
+    const generation = (this.generations.get(id) ?? 0) + 1
+    this.generations.set(id, generation)
+    const run = raceProbeAbort(this.detect(id, identity, signal, generation), signal)
+    this.inflight.set(id, { identity, promise: run, signal: opts.signal })
+    try { return await run } finally {
       if (this.inflight.get(id)?.promise === run) this.inflight.delete(id)
     }
   }
@@ -142,7 +175,9 @@ export class HarnessDetector {
    */
   cachedStatus(id: HarnessId): HarnessStatus | undefined {
     const cached = this.cache.get(id)
-    return cached && cached.identity === this.identity(id) && cached.expiresAt > this.deps.nowMs()
+    const def = this.deps.definitions().find((candidate) => candidate.id === id)
+    return !def?.launch?.secretEnv?.length && cached && cached.identity === this.identity(id) &&
+      cached.binary === fileIdentity(cached.status.resolvedCommand) && cached.expiresAt > this.deps.nowMs()
       ? cached.status
       : undefined
   }
@@ -178,8 +213,8 @@ export class HarnessDetector {
 
   /** Non-blocking snapshot: cached status or an optimistic unknown entry. */
   peek(id: HarnessId): HarnessStatus | undefined {
-    const cached = this.cache.get(id)
-    if (cached && cached.identity === this.identity(id) && cached.expiresAt > this.deps.nowMs()) return cached.status
+    const cached = this.cachedStatus(id)
+    if (cached) return cached
     void this.status(id).catch(() => undefined)
     return {
       harnessId: id,
@@ -197,6 +232,7 @@ export class HarnessDetector {
       this.cache.set(id, {
         status,
         identity,
+        binary: fileIdentity(status.resolvedCommand),
         expiresAt: this.deps.nowMs() + (this.deps.ttlMs ?? DEFAULT_TTL_MS)
       })
     }
@@ -205,17 +241,32 @@ export class HarnessDetector {
 
   private identity(id: HarnessId): string {
     const def = this.deps.definitions().find((candidate) => candidate.id === id)
-    return JSON.stringify({
-      transport: def?.transport,
+    const home = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
+    const claude = process.env.CLAUDE_CONFIG_DIR ?? join(home, '.claude')
+    const codex = process.env.CODEX_HOME ?? join(home, '.codex')
+    const configPaths = [join(claude, '.credentials.json'), join(claude, 'settings.json'),
+      join(codex, 'auth.json'), join(codex, 'config.toml'),
+      join(home, '.config', 'opencode', 'opencode.json'), join(home, '.local', 'share', 'opencode', 'auth.json')]
+    return createHash('sha256').update(JSON.stringify({
+      definition: def,
       network: def ? nativeAgentNetworkStatus(def).networkFingerprint : undefined,
-      detect: def?.detect,
-      launch: def?.launch,
-      binaryPath: this.deps.overrides()[id]?.binaryPath?.trim()
-    })
+      binaryPath: this.deps.overrides()[id]?.binaryPath?.trim(),
+      environment: Object.entries(process.env).sort(([a], [b]) => a.localeCompare(b)),
+      files: configPaths.map((path) => [path, fileIdentity(path)])
+    })).digest('hex')
   }
 
-  private async detect(id: HarnessId, identity: string): Promise<HarnessStatus> {
-    const store = (status: HarnessStatus): HarnessStatus => this.store(id, status, identity)
+  private async detect(id: HarnessId, identity: string, signal: AbortSignal, generation: number): Promise<HarnessStatus> {
+    const wait = async <T>(operation: Promise<T>): Promise<T> => {
+      const result = await raceProbeAbort(operation, signal)
+      signal.throwIfAborted()
+      return result
+    }
+    const store = (status: HarnessStatus): HarnessStatus => {
+      signal.throwIfAborted()
+      return this.generations.get(id) === generation ? this.store(id, status, identity) : status
+    }
+    signal.throwIfAborted()
     const def = this.deps.definitions().find((d) => d.id === id)
     const checkedAt = this.deps.nowIso()
     if (!def) {
@@ -235,25 +286,24 @@ export class HarnessDetector {
         checkedAt
       })
     }
+    const override = this.deps.overrides()[id]?.binaryPath?.trim()
     // SDK transports are bundled with the app; without a detect section they
     // are always installed, and only the login probe matters.
-    if (!def.detect && def.transport !== 'acp' && def.transport !== 'terminal') {
-      const login = await this.deps
-        .probeLogin(def, def.id)
-        .catch(() => 'unknown' as HarnessLoginState)
+    if (!override && !def.detect && def.transport !== 'acp' && def.transport !== 'terminal') {
+      const login = await wait(this.deps.probeLogin(def, def.id, { signal }).catch(() => 'unknown' as HarnessLoginState))
       return store({ harnessId: id, installed: 'yes', login, checkedAt })
     }
-    const bundled = this.deps.bundled?.(def)
-    const command = bundled?.command ?? (await this.resolveCommand(def))
+    const bundled = override ? undefined : this.deps.bundled?.(def)
+    const command = bundled?.command ?? (await wait(this.resolveCommand(def, signal)))
     if (!command && !bundled) {
       // A fallback binary that resolves (e.g. `codex` when `codex-acp` is
       // absent) means an installed tool missing its ACP adapter — surface the
       // definition's install guidance instead of a bare "not found" (P3-11).
-      const hint = def.detect?.adapterHint
+      const hint = override ? undefined : def.detect?.adapterHint
       const hintPresent = hint
-        ? await (this.deps.resolveExecutable ?? defaultResolveExecutable)(
+        ? await wait((this.deps.resolveExecutable ?? defaultResolveExecutable)(
             hint.command
-          ).catch(() => undefined)
+          ).catch(() => undefined))
         : undefined
       return store({
         harnessId: id,
@@ -264,16 +314,14 @@ export class HarnessDetector {
         message:
           hint && hintPresent
             ? hint.message
-            : `command not found: ${def.detect?.command ?? def.id}`
+            : `command not found: ${override ?? def.detect?.command ?? def.id}`
       })
     }
     if (def.transport === 'terminal') {
       // Terminal agents (p4 §3.8): a resolved command is the whole verdict.
       // Many interactive CLIs ignore `--version` and wait on stdin instead —
       // probing would hang 5s and mask an installed agent as 'unknown'.
-      const login = await this.deps
-        .probeLogin(def, command ?? def.id)
-        .catch(() => 'unknown' as HarnessLoginState)
+      const login = await wait(this.deps.probeLogin(def, command ?? def.id, { signal }).catch(() => 'unknown' as HarnessLoginState))
       return store({
         harnessId: id,
         installed: 'yes',
@@ -285,11 +333,11 @@ export class HarnessDetector {
     const version = bundled?.version
       ? { text: bundled.version, semver: semver.valid(bundled.version) ? bundled.version : null }
       : command
-        ? await this.readVersion(def, command)
+        ? await wait(this.readVersion(def, command, signal))
         : undefined
     const probeCommand = command ?? def.id
     if (version === undefined) {
-      const login = await this.deps.probeLogin(def, probeCommand).catch(() => 'unknown' as HarnessLoginState)
+      const login = await wait(this.deps.probeLogin(def, probeCommand, { signal }).catch(() => 'unknown' as HarnessLoginState))
       return store({
         harnessId: id,
         installed: 'unknown',
@@ -299,40 +347,31 @@ export class HarnessDetector {
         message: 'version probe timed out or failed'
       })
     }
-    const login = await this.deps.probeLogin(def, probeCommand).catch(() => 'unknown' as HarnessLoginState)
+    const login = await wait(this.deps.probeLogin(def, probeCommand, { signal }).catch(() => 'unknown' as HarnessLoginState))
+    const supported = versionSupported(version.semver, def.detect)
     // Protocol harnesses also prove readiness: a version response alone does
     // not mean the agent can serve turns.
     let ready: HarnessStatus['ready']
     let readyMessage: string | undefined
-    if ((def.transport === 'acp' || def.transport === 'codex-app-server') && command && this.deps.probeReady) {
+    if (supported !== false && (def.transport === 'acp' || def.transport === 'codex-app-server') && command && this.deps.probeReady) {
       const protocolLabel = def.transport === 'acp' ? 'ACP' : 'Codex app-server'
-      const readinessIdentity = createHash('sha256').update(identity).digest('hex')
-      const cached = await this.deps.readinessCache
-        ?.get(id, command, version.text || undefined, readinessIdentity)
-        .catch(() => undefined)
-      if (cached === 'yes') {
-        ready = 'yes'
-      } else {
-        const result = await this.deps
-          .probeReady(def, command)
-          .catch((error) => ({ ready: 'no' as const, detail: String(error) }))
-        ready = result.ready
-        if (result.ready === 'yes') {
-          await this.deps.readinessCache
-            ?.set(id, command, version.text || undefined, readinessIdentity)
-            .catch(() => undefined)
-        } else if (result.ready === 'no') {
-          readyMessage = `${protocolLabel} initialize failed: ${result.detail ?? 'no response'}`
-        } else {
-          readyMessage = `${protocolLabel} readiness probe inconclusive: ${result.detail ?? 'timeout'}`
-        }
+      // The old persisted cache knew only command/version, so a replaced
+      // binary or rotated profile could reuse a success. Metadata is cheap;
+      // every external detection now establishes fresh protocol evidence.
+      const result = await wait(this.deps.probeReady(def, command, { signal })
+        .catch((error) => ({ ready: 'no' as const, detail: String(error) })))
+      ready = result.ready
+      if (result.ready === 'no') {
+        readyMessage = `${protocolLabel} initialize failed: ${result.detail ?? 'no response'}`
+      } else if (result.ready === 'unknown') {
+        readyMessage = `${protocolLabel} readiness probe inconclusive: ${result.detail ?? 'timeout'}`
       }
     }
     const status: HarnessStatus = {
       harnessId: id,
       installed: 'yes',
       version: version.text || undefined,
-      versionSupported: versionSupported(version.semver, def.detect?.minVersion),
+      versionSupported: supported,
       ...(ready ? { ready } : {}),
       login,
       resolvedCommand: command,
@@ -345,21 +384,23 @@ export class HarnessDetector {
     return store(reasonCode ? { ...status, reasonCode } : status)
   }
 
-  private async resolveCommand(def: HarnessDefinition): Promise<string | undefined> {
+  private async resolveCommand(def: HarnessDefinition, signal: AbortSignal): Promise<string | undefined> {
 
-    const resolve = this.deps.resolveExecutable ?? ((command: string) => defaultResolveExecutable(command, { env: harnessExecutableEnv() }))
+    const resolve = this.deps.resolveExecutable ?? ((command: string) => defaultResolveExecutable(command, { env: harnessExecutableEnv({ ...process.env, ...def.launch?.env }) }))
     const override = this.deps.overrides()[def.id]?.binaryPath?.trim()
     if (override) {
-      const resolved = await resolve(override)
-      if (resolved) return resolved
-      if (def.transport === 'codex-app-server') return undefined
+      const resolved = await raceProbeAbort(resolve(override), signal)
+      signal.throwIfAborted()
+      return resolved
     }
     if (!def.detect) return undefined
     if (!override && !this.deps.resolveExecutable && def.transport === 'codex-app-server' && def.detect.command === 'codex') {
-      return resolve(await resolveCodexExecutable())
+      return resolve(await raceProbeAbort(resolveCodexExecutable(), signal))
     }
     for (const candidate of [def.detect.command, ...(def.detect.aliases ?? [])]) {
-      const resolved = await resolve(candidate)
+      signal.throwIfAborted()
+      const resolved = await raceProbeAbort(resolve(candidate), signal)
+      signal.throwIfAborted()
       if (resolved) return resolved
     }
     return undefined
@@ -367,18 +408,24 @@ export class HarnessDetector {
 
   private async readVersion(
     def: HarnessDefinition,
-    command: string
+    command: string,
+    signal: AbortSignal
   ): Promise<{ text: string; semver: string | null } | undefined> {
     if (!def.detect) return undefined
     const pattern = def.detect.versionPattern
       ? new RegExp(def.detect.versionPattern)
       : DEFAULT_VERSION_PATTERN
+    const launch = await raceProbeAbort(prepareDeepSeekHarnessLaunch({
+      harnessId: def.id, command, args: def.detect.versionArgs ?? ['--version'], env: def.launch?.env
+    }), signal)
+    signal.throwIfAborted()
     const result = await this.deps
-      .spawnCaptured(command, def.detect.versionArgs ?? ['--version'], {
-        timeoutMs: VERSION_TIMEOUT_MS
+      .spawnCaptured(launch.command, launch.args, {
+        timeoutMs: VERSION_TIMEOUT_MS, signal, env: launch.env
       })
       .catch(() => undefined)
-    if (!result || result.timedOut) return undefined
+    signal.throwIfAborted()
+    if (!result || result.timedOut || result.exitCode !== 0) return undefined
     const firstLine = result.stdout.split('\n')[0]?.trim() ?? ''
     const match = firstLine.match(pattern) ?? result.stdout.match(pattern)
     const text = match?.[0]

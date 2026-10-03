@@ -167,11 +167,16 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     const ctx = resolved.ctx
     const { definition } = ctx
     const override = this.deps.binaryPath?.(definition.id)
-    const requestedCommand = override ?? definition.launch?.command ?? ''
+    const requestedCommand = this.deps.readiness?.commandForTurn(threadId, turnId) ?? override ?? definition.launch?.command ?? ''
     const command = this.deps.transport === 'codex-app-server'
       ? await resolveCodexExecutable(requestedCommand, Boolean(override)) : requestedCommand
     const poolKey = this.deps.transport === 'codex-app-server' ? `${ctx.poolKey}:executable:${command}` : ctx.poolKey
 
+    const validateLaunch = async (): Promise<void> => {
+      signal.throwIfAborted()
+      await this.deps.readiness?.validateTurn(threadId, turnId, signal)
+      signal.throwIfAborted()
+    }
     const lease = await this.pool
       .acquire(poolKey, () =>
         this.deps.agentFactory.connect({
@@ -192,11 +197,14 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
               : [])
           ],
           cwd: ctx.workspace,
-          signal
-        })
+          signal,
+          validateLaunch
+        }),
+        { signal, validate: validateLaunch }
       )
       .catch(async (error) => {
         if (
+          !signal.aborted &&
           !(
             error instanceof HarnessTransportError &&
             error.code === 'request_aborted'
@@ -207,10 +215,11 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
             error instanceof Error ? error.message : String(error)
           )
         }
-        await this.failFromError(threadId, turnId, error, true)
+        if (signal.aborted) await this.deps.turns.finishTurn({ threadId, turnId, status: 'aborted' })
+        else await this.failFromError(threadId, turnId, error, true)
         return undefined
       })
-    if (!lease) return 'failed'
+    if (!lease) return signal.aborted ? 'aborted' : 'failed'
     const agent = lease.agent
 
     if (agent.info.requiresAuthentication) {
@@ -225,9 +234,14 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
 
     let session: HarnessSession
     try {
+      await validateLaunch()
       session = await this.ensureSession(agent, ctx, signal)
     } catch (error) {
       lease.release()
+      if (signal.aborted) {
+        await this.deps.turns.finishTurn({ threadId, turnId, status: 'aborted' })
+        return 'aborted'
+      }
       await this.failFromError(threadId, turnId, error, true)
       return 'failed'
     }
@@ -317,6 +331,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     else signal.addEventListener('abort', onAbort, { once: true })
 
     try {
+      await validateLaunch()
       const result = await session.runTurn(input, sink, signal)
       await finishDelegatedTrace(
         trace,
@@ -425,12 +440,19 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       preparation,
       signal
     }
+    const validateSession = async (): Promise<void> => {
+      signal.throwIfAborted()
+      await this.deps.readiness?.validateTurn(ctx.thread.id, ctx.turn.id, signal)
+      signal.throwIfAborted()
+    }
+    await validateSession()
     if (preparation.resumed && preparation.nativeSessionId && agent.resumeSession) {
       try {
         return await agent.resumeSession(input)
       } catch (error) {
         this.debug(`native resume failed, rebasing: ${String(error)}`)
         const rebased = await coordinator.rejectResume(preparation)
+        await validateSession()
         return agent.startSession({ ...input, preparation: rebased })
       }
     }

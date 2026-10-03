@@ -31,7 +31,7 @@ import {
   goalContextKey
 } from '../loop/continuation-instructions.js'
 import { normalizeTurnLimits, type TurnLimitsConfig } from '../loop/turn-limits.js'
-import { resolveHarnessSecretEnv } from '../harness/harness-secret-env.js'
+import { nativeHarnessCredentialEnv, resolveHarnessSecretEnv } from '../harness/harness-secret-env.js'
 import { nativeAgentNetworkStatus } from '../harness/native-agent-network.js'
 import type { TurnRunOutcome } from '../loop/turn-execution-types.js'
 import {
@@ -56,6 +56,7 @@ import type {
 } from './delegated-credentials.js'
 
 export type SessionTurnContextDeps = {
+  readiness?: Pick<import('../harness/harness-readiness.js').HarnessReadinessService, 'validateTurn' | 'commandForTurn'>
   catalog: { get(id: string): HarnessDefinition | undefined }
   harnessDefaults?: (harnessId: HarnessId) => HarnessDefaultsEntry | undefined
   resolveSecretEnv?: HarnessSecretRefResolver
@@ -288,7 +289,7 @@ export async function resolveSessionTurnContext(
 
   const {
     credentialIdentity,
-    env: credentialEnv,
+    env: resolvedCredentialEnv,
     wireModel
   } = await input.resolveCredentialContext(deps.credentialEnv, {
       definition,
@@ -304,6 +305,12 @@ export async function resolveSessionTurnContext(
     deps.resolveSecretEnv
   )
 
+  const credentialEnv = credentialMode === 'native-login'
+    ? nativeHarnessCredentialEnv(definition, { ...process.env, ...definition.launch?.env, ...secretEnv })
+    : resolvedCredentialEnv
+  const readinessIdentity = await deps.readiness?.validateTurn(threadId, turnId, input.signal, {
+    harnessId: definition.id, credentialMode, providerId: actingModelRoute.providerId, model: actingModelRoute.model
+  })
   return {
     ok: true,
     ctx: {
@@ -330,8 +337,8 @@ export async function resolveSessionTurnContext(
       secretEnv,
       poolKey:
         definition.poolScope === 'workspace'
-          ? `${definition.id}:${credentialIdentity}:${workspace}:${nativeAgentNetworkStatus(definition).networkFingerprint}`
-          : `${definition.id}:${credentialIdentity}:${nativeAgentNetworkStatus(definition).networkFingerprint}`,
+          ? `${definition.id}:${credentialIdentity}:${workspace}:${nativeAgentNetworkStatus(definition).networkFingerprint}:${readinessIdentity ?? ''}`
+          : `${definition.id}:${credentialIdentity}:${nativeAgentNetworkStatus(definition).networkFingerprint}:${readinessIdentity ?? ''}`,
       limits: normalizeTurnLimits(deps.turnLimits),
       intent:
         turn.prompt || userMessageTextWithComposerContexts(userItem),

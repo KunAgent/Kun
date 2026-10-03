@@ -23,11 +23,12 @@ import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
  */
 export function createKunHarnessesClient() {
   return {
-    async listHarnesses(options?: { waitMs?: number }): Promise<AdeHarnessRow[]> {
+    async listHarnesses(options?: { waitMs?: number; includeDisabled?: boolean }): Promise<AdeHarnessRow[]> {
       const waitMs = options?.waitMs
-      const path = typeof waitMs === 'number' && waitMs > 0
-        ? `${KUN_HARNESSES_PATH}?wait_ms=${Math.floor(waitMs)}`
-        : KUN_HARNESSES_PATH
+      const query = new URLSearchParams()
+      if (typeof waitMs === 'number' && waitMs > 0) query.set('wait_ms', String(Math.floor(waitMs)))
+      if (options?.includeDisabled) query.set('include_disabled', 'true')
+      const path = `${KUN_HARNESSES_PATH}${query.size ? `?${query}` : ''}`
       const response = await rendererRuntimeClient.runtimeRequest(path, 'GET')
       if (!response.ok) {
         throw runtimeErrorToError(

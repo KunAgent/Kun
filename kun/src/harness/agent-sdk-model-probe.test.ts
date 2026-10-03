@@ -166,3 +166,39 @@ describe('AgentSdkModelProbe', () => {
     expect(calls).toBe(2)
   })
 })
+
+it('uses the selected native OAuth profile for prompt-free account evidence', async () => {
+  const close = vi.fn()
+  const accountInfo = vi.fn(async () => ({ apiProvider: 'firstParty', email: 'local@example.invalid', subscriptionType: 'max' }))
+  const query = vi.fn((_input: unknown) => ({ supportedModels: async () => MODEL_ROWS, accountInfo, close }))
+  const probe = new AgentSdkModelProbe({ loadSdk: fakeSdk(query) })
+  const result = await probe.probeReadiness(definition, { CLAUDE_CODE_OAUTH_TOKEN: 'selected-local-profile' }, new AbortController().signal)
+  expect(result.authentication).toBe('verified')
+  expect(result).not.toHaveProperty('email')
+  expect(query).toHaveBeenCalledWith(expect.objectContaining({ options: expect.objectContaining({
+    env: expect.objectContaining({ CLAUDE_CODE_OAUTH_TOKEN: 'selected-local-profile' })
+  }) }))
+  const input = query.mock.calls[0]![0] as { prompt: AsyncIterable<unknown> }
+  const prompts = []
+  for await (const value of input.prompt) prompts.push(value)
+  expect(prompts).toEqual([])
+  expect(close).toHaveBeenCalled()
+})
+
+it('does not classify API-key presence or an empty account reply as native OAuth verification', async () => {
+  for (const account of [{ apiProvider: 'firstParty', apiKeySource: 'env' }, {}]) {
+    const probe = new AgentSdkModelProbe({ loadSdk: fakeSdk(() => ({
+      supportedModels: async () => MODEL_ROWS, accountInfo: async () => account, close: vi.fn()
+    })) })
+    expect((await probe.probeReadiness(definition, {}, new AbortController().signal)).authentication).toBe('unverified')
+  }
+})
+
+it('bounds account metadata checks and closes the query on cancellation', async () => {
+  const close = vi.fn()
+  const probe = new AgentSdkModelProbe({ loadSdk: fakeSdk(() => ({
+    supportedModels: async () => MODEL_ROWS, accountInfo: async () => new Promise(() => {}), close
+  })), timeoutMs: 20 })
+  await expect(probe.probeReadiness(definition, {}, new AbortController().signal)).rejects.toThrow()
+  expect(close).toHaveBeenCalled()
+})

@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/room-voice-input-smoke.yml'
       - 'scripts/smoke-room-voice-input.mjs'
+      - 'scripts/room-voice-input-smoke.test.mjs'
       - 'src/renderer/src/components/rooms/**'
       - 'src/renderer/src/components/chat/use-voice-dictation*'
       - 'src/renderer/src/components/chat/VoiceRecordingStrip.tsx'
@@ -33,6 +34,8 @@ jobs:
         run: |
           npm ci
           npm run ensure:electron
+      - name: Verify baseline capture contract
+        run: node --test scripts/room-voice-input-smoke.test.mjs
       - name: Extract original composer
         if: github.event_name == 'pull_request'
         shell: bash
@@ -41,12 +44,12 @@ jobs:
         run: |
           git fetch --depth=1 origin "$BASE_SHA"
           git show "$BASE_SHA:src/renderer/src/components/rooms/RoomComposer.tsx" > "$RUNNER_TEMP/room-composer-before.tsx"
-      - name: Reproduce missing voice control on original composer
+      - name: Capture original composer voice control
         if: github.event_name == 'pull_request'
         env:
           KUN_VOICE_BASELINE_COMPOSER: ${{ runner.temp }}/room-composer-before.tsx
           KUN_VOICE_EVIDENCE: dist/room-voice-input/before
-        run: node scripts/smoke-room-voice-input.mjs --expect-missing
+        run: node scripts/smoke-room-voice-input.mjs --capture-baseline
       - name: Verify offline native voice workflow
         env:
           KUN_VOICE_EVIDENCE: dist/room-voice-input/after

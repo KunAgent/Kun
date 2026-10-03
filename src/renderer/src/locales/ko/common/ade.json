@@ -229,7 +229,11 @@
     "adapterMissing": "ACP 어댑터 없음",
     "handshakeFailed": "핸드셰이크 실패",
     "handshakeTimeout": "감지 시간 초과",
-    "disabled": "사용 안 함"
+    "disabled": "사용 안 함",
+    "readinessRequired": "Readiness check required",
+    "configurationInvalid": "Check connection settings",
+    "credentialsMissing": "Credentials missing",
+    "authenticationUnverified": "Authentication not confirmed"
   },
   "adeIsolation": {
     "title": "격리",
@@ -309,7 +313,8 @@
     "upgrade": "업그레이드 후 다시 시도",
     "retry": "감지 다시 시도",
     "login": "로그인 후 다시 시도",
-    "enable": "설정에서 사용"
+    "enable": "설정에서 사용",
+    "configure": "Configure the provider"
   },
   "adeHarnessViewReason": "원인 보기",
   "adeHarnessOpenSettings": "설정 열기",
@@ -351,5 +356,40 @@
     "noHandshake": "핸드셰이크 인터페이스 없음",
     "capSessionResume": "세션 재개",
     "capImageInput": "이미지 입력"
+  },
+  "agentEnablement": {
+    "explanation": "Enable each agent and connection separately. A local readiness check must pass before it appears in the composer.",
+    "profile": "Connection profile",
+    "provider": "Model provider",
+    "model": "Model",
+    "modelHint": "Changing the model or configuration requires a fresh readiness check.",
+    "nativeDefault": "Agent default",
+    "loadModels": "Load available models",
+    "enable": "Check and enable",
+    "disable": "Disable this profile",
+    "cancel": "Cancel check",
+    "checking": "Checking readiness…",
+    "ready": "Enabled and ready",
+    "needsCheck": "Enabled; readiness check required",
+    "disabled": "Disabled",
+    "recheck": "Check again",
+    "preview": "Preview",
+    "unavailable": "Readiness checks are unavailable. Start the Kun runtime and retry.",
+    "chooseProvider": "Choose a provider",
+    "failed": "Readiness could not be confirmed. Review the checks, fix the configuration, and retry.",
+    "timeout": "The check timed out. Confirm the command and connection settings, then retry.",
+    "cancelled": "Check cancelled",
+    "settingsUnavailable": "Settings have not reached the runtime. Save the settings, check the runtime connection, and retry.",
+    "authVerified": "Account authentication was confirmed by the agent.",
+    "authUnverified": "Credentials or configuration may be present; account authentication is not verified.",
+    "quotaUnverified": "This check does not send a trial prompt. Quota, billing and future model requests are not verified.",
+    "checks": {
+      "installation": "Installation",
+      "configuration": "Configuration",
+      "credentials": "Credentials",
+      "protocol": "Protocol readiness"
+    },
+    "nativeAccount": "Native account profile",
+    "systemAccount": "System CLI account"
   }
 }

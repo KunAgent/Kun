@@ -27,9 +27,14 @@ export function resolveDirectSendComposerSelection(input: {
       composerCredentialMode: state.composerCredentialMode
     })
   const nativeLogin = composerHarnessId !== 'kun' && composerCredentialMode === 'native-login'
-  const externalProvider = Boolean(composerHarnessId && composerHarnessId !== 'kun' && !nativeLogin)
-  const composerProviderId = nativeLogin ? '' : queued ? queued.providerId ?? '' : overrides?.providerId?.trim() ??
+  const externalProvider = Boolean(composerHarnessId && composerHarnessId !== 'kun')
+  // Native profiles can explicitly name an SDK account. Preserve that route,
+  // but never infer an HTTP provider by matching its model name.
+  const selectedProviderId = queued ? queued.providerId ?? '' : overrides?.providerId?.trim() ??
     (externalProvider ? state.composerProviderId.trim() : fallbackComposerProviderIdForSend(state))
+  // An omitted provider inherits the thread account at admission. Explicitly
+  // address the system profile while retaining the empty ID in UI state.
+  const composerProviderId = nativeLogin ? selectedProviderId || 'default' : selectedProviderId
   const composerAccountId = nativeLogin ? '' : queued ? queued.accountId ?? '' : overrides?.accountId?.trim() ??
     accountIdForComposerSelection(state.composerModelGroups, composerProviderId, composerModel)
   return { composerModel, composerProviderId, composerAccountId,

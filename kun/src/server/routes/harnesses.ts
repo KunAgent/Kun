@@ -36,8 +36,11 @@ export async function listHarnesses(
   const url = new URL(request.url)
   const usage = url.searchParams.get('usage') ?? undefined
   const waitMs = clampWaitMs(url.searchParams.get('wait_ms'))
-  const list = harnesses.catalog.list()
+  const includeDisabled = url.searchParams.get('include_disabled') === 'true'
+  const list = harnesses.catalog.list().filter((definition) => definition.availability !== 'retired' &&
+    (includeDisabled || !harnesses.catalog.isDisabled(definition.id)))
 
+  for (const definition of list) harnesses.readiness?.warmProfiles(definition.id)
   // Start every detection up front so the wait window covers all of them.
   const statuses = new Map(list.map((definition) => [
     definition.id,
@@ -70,7 +73,7 @@ export async function listHarnesses(
         // A fast-settling detection may already have replaced the
         // optimistic peek placeholder — prefer the fresh cache.
         harnesses.detector.cachedStatus(definition.id) ?? statuses.get(definition.id),
-        harnesses.detector.detecting(definition.id)
+        harnesses.detector.detecting(definition.id) || harnesses.readiness?.checking(definition.id) === true
       ) ?? {
         harnessId: definition.id,
         installed: 'unknown' as const,
@@ -79,7 +82,11 @@ export async function listHarnesses(
         detecting: true
       }
       Object.assign(status, nativeAgentNetworkStatus(definition))
-      const row: Record<string, unknown> = { definition, status }
+      const enabledProfiles = harnesses.catalog.enabledProfiles?.(definition.id) ?? []
+      const readyProfiles = await harnesses.readiness?.readyProfiles(definition.id) ?? []
+      harnesses.readiness?.warmProfiles(definition.id)
+      if (harnesses.readiness?.checking(definition.id)) status.detecting = true
+      const row: Record<string, unknown> = { definition, status, enabled: !harnesses.catalog.isDisabled(definition.id), enabledProfiles, readyProfiles }
       if (usage && runtime.harnessAdmission && status) {
         row.admission = await runtime
           .harnessAdmission({ definition, status, usage })
@@ -116,7 +123,7 @@ export async function probeHarness(
   const parsedId = HarnessIdSchema.safeParse(params.id)
   if (!parsedId.success) return ERRORS.validation('invalid harness id')
   const definition = harnesses.catalog.get(parsedId.data)
-  if (!definition) return ERRORS.notFound(`unknown harness: ${parsedId.data}`)
+  if (!definition || definition.availability === 'retired') return ERRORS.notFound(`unavailable harness: ${parsedId.data}`)
   const status = await harnesses.detector.status(definition.id, { force: true })
   return jsonResponse({ definition, status: { ...status, ...nativeAgentNetworkStatus(definition) } })
 }
@@ -136,7 +143,7 @@ export async function testHarness(
   const parsedId = HarnessIdSchema.safeParse(params.id)
   if (!parsedId.success) return ERRORS.validation('invalid harness id')
   const definition = harnesses.catalog.get(parsedId.data)
-  if (!definition) return ERRORS.notFound(`unknown harness: ${parsedId.data}`)
+  if (!definition || definition.availability === 'retired') return ERRORS.notFound(`unavailable harness: ${parsedId.data}`)
   const body = await readJsonBody(request)
   if (!body.ok) return body.response
   const parsed = HarnessTestRequestSchema.safeParse(body.value)
@@ -149,7 +156,15 @@ export async function testHarness(
       `credentialMode ${parsed.data.credentialMode} is not supported by ${definition.id}`
     )
   }
-  const result = await runHarnessTest(runtime, definition, parsed.data, request.signal)
+  // An explicitly requested live trial stays separate from Check & enable.
+  // It can run only after this exact profile was enabled and checked locally.
+  if (parsed.data.level === 'trial' && harnesses.readiness) {
+    try { await harnesses.readiness.assertReady(harnesses.readiness.route(definition, parsed.data), request.signal) }
+    catch { return jsonResponse({ code: 'harness_not_ready', message: 'Test and enable this exact profile before running a live trial' }, 409) }
+  }
+  const result = harnesses.readiness && parsed.data.level !== 'trial'
+    ? await harnesses.readiness.test(definition, parsed.data, request.signal)
+    : await runHarnessTest(runtime, definition, parsed.data, request.signal)
   return jsonResponse(result)
 }
 
@@ -163,7 +178,7 @@ export async function listHarnessModels(
   const parsedId = HarnessIdSchema.safeParse(params.id)
   if (!parsedId.success) return ERRORS.validation('invalid harness id')
   const definition = harnesses.catalog.get(parsedId.data)
-  if (!definition) return ERRORS.notFound(`unknown harness: ${parsedId.data}`)
+  if (!definition || definition.availability === 'retired') return ERRORS.notFound(`unavailable harness: ${parsedId.data}`)
 
   const url = new URL(request.url)
   const credentialMode = url.searchParams.get('credential_mode') ?? undefined
@@ -196,6 +211,11 @@ export async function listHarnessModels(
     return jsonResponse({ harnessId: definition.id, credentialMode, models: [], groups })
   }
 
+  if (definition.modelSource === 'probe' && harnesses.catalog.isDisabled(definition.id)) {
+    return jsonResponse({ harnessId: definition.id, models: harnesses.probedModels?.(definition) ?? definition.staticModels,
+      reason: 'check_required', message: 'Run Check & enable before loading native models' })
+  }
+
   const providerModels = (kind: string | undefined): string[] => {
     const providers = runtime.providerConfigs?.() ?? {}
     const models = new Set<string>()
@@ -216,6 +236,9 @@ export async function listHarnessModels(
         models: providerModels(legacyProviderKindFor(definition.id))
       })
     case 'probe': {
+      if (definition.transport === 'pi-rpc' && harnesses.piModels) {
+        return jsonResponse({ harnessId: definition.id, models: await harnesses.piModels.probe(definition, request.signal) })
+      }
       if (definition.transport === 'acp' && harnesses.acpModels?.probeCatalog) {
         const selectedModel = url.searchParams.get('selected_model')?.trim() || undefined
         if (selectedModel && selectedModel.length > 1024) return ERRORS.validation('invalid model id')

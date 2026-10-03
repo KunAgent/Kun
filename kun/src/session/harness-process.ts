@@ -92,6 +92,8 @@ export class HarnessProcess {
 }
 
 export async function startHarnessProcess(input: {
+  signal?: AbortSignal
+  validateLaunch?: () => Promise<unknown>
   command: string
   args?: readonly string[]
   /** Non-sensitive launch env from the harness definition. */
@@ -115,11 +117,23 @@ export async function startHarnessProcess(input: {
     strip: input.stripEnv,
     add: { ...input.env, ...input.secretEnv, ...input.credentialEnv }
   })
+  const beforeLaunch = async (): Promise<void> => {
+    input.signal?.throwIfAborted()
+    await input.validateLaunch?.()
+    input.signal?.throwIfAborted()
+  }
+  await beforeLaunch()
   const child = await spawn(input.command, input.args ?? [], {
+    beforeLaunch,
     env,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
     ...(input.cwd ? { cwd: input.cwd } : {})
   })
-  return new HarnessProcess(child, { stderrTailBytes: input.stderrTailBytes })
+  const process = new HarnessProcess(child, { stderrTailBytes: input.stderrTailBytes })
+  if (input.signal?.aborted) {
+    await process.stop().catch(() => undefined)
+    input.signal.throwIfAborted()
+  }
+  return process
 }

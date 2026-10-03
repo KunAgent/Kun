@@ -3,6 +3,7 @@ const assert = require('node:assert/strict')
 const test = require('node:test')
 const { roomsHarnessModelResponse, assertRoomsHarnessDiscoveryOrder } = require('./smoke-rooms-harness-fixture.cjs')
 const { startModelFixture } = require('./smoke-development-ade-model.cjs')
+const { configureRoomsHarnessFixture, ROOMS_HARNESS_PROFILE, ROOMS_HARNESS_MODEL } = require('./smoke-rooms-harness-fixture.cjs')
 
 const publicationTools = ['add_board_card', 'create_code_task', 'request_app_connection', 'send_im_message', 'user_input']
 const fullTools = [...publicationTools, 'list_code_harnesses']
@@ -23,6 +24,19 @@ function settle(messages, message, output = { accepted: true, phase: 'start' }) 
 }
 const toolName = (message) => message.tool_calls?.[0]?.function.name
 const args = (message) => JSON.parse(message.tool_calls[0].function.arguments)
+
+test('Rooms fixture seeds only explicit Devin consent, its exact model and an offline-only key', () => {
+  const harnesses = { binaryPaths: { devin: '/offline/stub' }, defaults: { other: { model: 'unchanged' } } }
+  const settings = { agents: { kun: { harnesses } } }
+  const environment = { HOME: '/offline/home', WINDSURF_API_KEY: 'do-not-inherit-real-credentials' }
+  configureRoomsHarnessFixture(settings, environment)
+  assert.deepEqual(harnesses.enabledProfiles, [ROOMS_HARNESS_PROFILE])
+  assert.deepEqual(harnesses.defaults.devin, { credentialMode: 'native-login', model: ROOMS_HARNESS_MODEL })
+  assert.deepEqual(harnesses.defaults.other, { model: 'unchanged' })
+  assert.equal(environment.WINDSURF_API_KEY, 'rooms-offline-fixture-no-service-access')
+  assert.equal(environment.HOME, '/offline/home')
+  assert.equal(harnesses.readyProfiles, undefined, 'Persisted settings must not invent readiness')
+})
 
 test('publication-only first step sends one start, then discovers before proposing', () => {
   const messages = user()

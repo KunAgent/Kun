@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { UserRound, X } from 'lucide-react'
+import { harnessProfileReady, readyHarnessProfiles } from '@shared/harness-enablement'
 import type { AdeHarnessCredentialMode, AdeHarnessRow } from '@shared/ade-harnesses'
 import {
   harnessRowAvailable,
@@ -57,7 +58,7 @@ export function AdeOneOnOneDialog({
   onClose: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
-  const rows = useHarnessStore((s) => s.rows).filter(harnessRowRunsTurns)
+  const rows = useHarnessStore((s) => s.rows).filter((entry) => harnessRowRunsTurns(entry) && harnessRowAvailable(entry))
   const rowsLoaded = useHarnessStore((s) => s.rowsLoadedAt !== undefined)
   const rowsLoading = useHarnessStore((s) => s.rowsLoading)
   const harnessDefaults = useHarnessDefaults()
@@ -96,9 +97,13 @@ export function AdeOneOnOneDialog({
       defaults: harnessDefaults[nextId],
       hint
     })
+    const nextRow = rows.find((entry) => entry.definition.id === nextId)
+    const readyProfiles = nextRow ? readyHarnessProfiles(nextRow) : []
+    const profile = readyProfiles.find((entry) => entry.credentialMode === resolved.credentialMode &&
+      (entry.providerId ?? '') === resolved.providerId) ?? readyProfiles[0]
     setHarnessId(nextId)
-    setCredentialMode(resolved.credentialMode)
-    setProviderId(resolved.providerId)
+    setCredentialMode(profile?.credentialMode ?? resolved.credentialMode)
+    setProviderId(profile?.providerId ?? (nextId === 'kun' ? resolved.providerId : ''))
     setModel(resolved.model)
     setIsolation(resolved.isolation)
   }
@@ -117,8 +122,9 @@ export function AdeOneOnOneDialog({
     harnessId ? s.providerGroups[harnessId]?.groups : undefined
   )
   const groupsWithModels = useMemo(
-    () => (providerGroups ?? []).filter((group) => group.models.length > 0),
-    [providerGroups]
+    () => (providerGroups ?? []).filter((group) => group.models.length > 0 && (row?.definition.id === 'kun' || Boolean(row &&
+      readyHarnessProfiles(row).some((profile) => profile.providerId === group.providerId && profile.credentialMode !== 'native-login')))),
+    [providerGroups, row]
   )
 
   // Credential modes the dialog offers: provider-routed modes need at least
@@ -126,16 +132,18 @@ export function AdeOneOnOneDialog({
   const credentialOptions = useMemo(
     () =>
       (row?.definition.credentialModes ?? []).filter(
-        (mode) => mode === 'native-login' || groupsWithModels.length > 0
+        (mode) => row?.definition.id === 'kun' || Boolean(row && readyHarnessProfiles(row).some((entry) => entry.credentialMode === mode))
       ),
-    [groupsWithModels.length, row]
+    [row]
   )
   const resolvedCred = credentialOptions.includes(credentialMode as AdeHarnessCredentialMode)
     ? credentialMode
     : credentialOptions[0] ?? ''
+  const nativeProfiles = row ? readyHarnessProfiles(row).filter((entry) => entry.credentialMode === 'native-login') : []
+  const selectedNativeProfile = nativeProfiles.find((entry) => (entry.providerId ?? '') === providerId) ?? nativeProfiles[0]
   const resolvedProviderId =
     resolvedCred === 'native-login'
-      ? ''
+      ? selectedNativeProfile?.providerId ?? ''
       : groupsWithModels.some((group) => group.providerId === providerId)
         ? providerId
         : groupsWithModels[0]?.providerId ?? ''
@@ -146,6 +154,7 @@ export function AdeOneOnOneDialog({
   const resolvedModel = modelOptions.includes(model) ? model : modelOptions[0] ?? ''
 
   const confirm = (): void => {
+    if (!row || !harnessProfileReady(row, { harnessId, credentialMode: resolvedCred as AdeHarnessCredentialMode, providerId: resolvedProviderId || undefined })) return
     const defaults = harnessDefaults[harnessId]
     const selection: AdeOneOnOneSelection = {
       harnessId,

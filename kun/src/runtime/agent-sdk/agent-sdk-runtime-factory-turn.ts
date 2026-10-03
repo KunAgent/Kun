@@ -115,6 +115,10 @@ export function createAgentSdkTurnRuntimeDeps(
       const gatewayMode = turn.credentialMode === 'kun-gateway'
       const rawModel = turn?.model || thread.model
       const gatewayAddress = gatewayMode ? parseGatewayModelId(rawModel) : null
+      const admittedProviderId = turn.actingModelRoute?.providerId?.trim() || requestedRouteProviderId || 'default'
+      if (gatewayAddress && gatewayAddress.providerId !== admittedProviderId) {
+        throw new AgentSdkGatewayUnavailableError('the encoded model provider does not match the selected Agent profile')
+      }
       const gatewayProviderId = gatewayMode
         ? gatewayAddress?.providerId ?? explicitRouteProviderId ??
           await deps.resolveDefaultProviderId?.().catch(() => undefined)
@@ -141,6 +145,9 @@ export function createAgentSdkTurnRuntimeDeps(
           }
         }
         const harnessId = turn.harnessId ?? 'claude-code'
+        await deps.readiness?.validateTurn(threadId, turnId, signal ?? new AbortController().signal, {
+          harnessId: 'claude-code', credentialMode: 'kun-gateway', providerId: gatewayProviderId, model: gatewayModelId
+        })
         gatewayEnv = resolveAgentSdkGatewayEnv({
           deps: {
             tokens: deps.harnessTokens,
@@ -156,9 +163,9 @@ export function createAgentSdkTurnRuntimeDeps(
       }
       const selectedModel = gatewayMode
         ? gatewayModelId
-        : resolveSdkModel(turn?.model || thread.model, deps.defaultModel)
+        : rawModel === 'default' ? undefined : resolveSdkModel(rawModel, deps.defaultModel)
       const actingModelRoute: ActingTurnModelRoute = turn.actingModelRoute ?? {
-        model: selectedModel ?? 'claude-default',
+        model: selectedModel ?? 'default',
         ...(gatewayProviderId
           ? { providerId: gatewayProviderId }
           : actingProviderId
@@ -180,7 +187,7 @@ export function createAgentSdkTurnRuntimeDeps(
         providerId: actingProviderId,
         baseUrl: providerCfg?.baseUrl
       })
-      const model = actingModelRoute.model
+      const model = !gatewayMode && actingModelRoute.model === 'default' ? undefined : actingModelRoute.model
       const approvalPolicy =
         turn.approvalPolicy ?? thread.approvalPolicy ?? deps.defaultApprovalPolicy
       const sandboxMode =
@@ -430,6 +437,10 @@ export function createAgentSdkTurnRuntimeDeps(
         sandboxMode,
         approvalReviewer,
         actingModelRoute,
+        harnessRoute: {
+          harnessId: 'claude-code', credentialMode: gatewayEnv ? 'kun-gateway' : 'native-login',
+          providerId: gatewayProviderId ?? actingProviderId, model: gatewayEnv?.model ?? model ?? 'default'
+        },
         planMode,
         allowSdkBuiltins:
           graphPolicy || thread.roomContext || planMode || turn?.guiDesignArtifact?.kind === 'svg'

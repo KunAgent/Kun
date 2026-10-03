@@ -2,6 +2,7 @@ import {
   HarnessDefinitionSchema,
   type HarnessDefinition,
   type HarnessId,
+  type HarnessCredentialMode,
   type HarnessTransport
 } from '../contracts/harness.js'
 import {
@@ -14,6 +15,7 @@ import {
   CLAUDE_SETTINGS_HOOK_EVENTS
 } from './builtin-harnesses.js'
 import { bindNativeAgentNetwork } from './native-agent-network.js'
+import type { HarnessEnabledProfile } from '../config/kun-config-harnesses.js'
 import type { NativeAgentNetworkSnapshot } from '../contracts/native-agent-network.js'
 
 export type CustomHarnessConfig = {
@@ -89,6 +91,8 @@ export class HarnessCatalog {
       terminalAgents?: () => readonly TerminalAgentConfig[]
       /** User-disabled builtin harness ids; they stay visible but unadmittable. */
       disabled?: () => readonly HarnessId[]
+      /** External profiles are opt-in; installed software is never consent. */
+      enabledProfiles?: () => readonly HarnessEnabledProfile[]
       /**
        * P6-07 hidden transport pins: `{codex: 'acp'}` re-selects a declared
        * variant while the default keeps moving (or stays pinned) — unknown
@@ -121,10 +125,9 @@ export class HarnessCatalog {
       }
     }
     const overrides = this.deps.transportOverrides?.() ?? {}
-    const experimental = new Set(this.deps.experimental?.() ?? [])
     const builtins = BUILTIN_HARNESSES.map((def) =>
       applyTransportOverride(def, overrides[def.id])
-    ).filter((def) => !def.prerelease || experimental.has(def.id))
+    )
     return [...builtins, ...customs].map((definition) =>
       bindNativeAgentNetwork(definition, this.deps.nativeAgentNetwork?.()))
   }
@@ -138,8 +141,43 @@ export class HarnessCatalog {
    * host runtime itself and can never be disabled through settings.
    */
   isDisabled(id: HarnessId): boolean {
-    return id !== 'kun' && (this.deps.disabled?.() ?? []).includes(id)
+    if (id === 'kun') return false
+    const definition = this.get(id)
+    return !definition || definition.availability === 'retired' ||
+      (this.deps.disabled?.() ?? []).includes(id) ||
+      !(this.deps.enabledProfiles?.() ?? []).some((profile) =>
+        profile.harnessId === id && definition.credentialModes.includes(profile.credentialMode) &&
+        (profile.credentialMode === 'native-login' || Boolean(profile.providerId?.trim())))
   }
+
+  /** Exact opt-ins for startup rechecks and settings; no credential values. */
+  enabledProfiles(id: HarnessId): HarnessEnabledProfile[] {
+    if (this.isDisabled(id)) return []
+    return (this.deps.enabledProfiles?.() ?? []).filter((profile) =>
+      profile.harnessId === id && this.isProfileEnabled(profile)).map((profile) => ({ ...profile }))
+  }
+
+  /** Picker candidates, without dropping definitions required to render history. */
+  listAvailable(): HarnessDefinition[] {
+    return this.list().filter((definition) => !this.isDisabled(definition.id))
+  }
+
+  /** A native login never grants access to a gateway or a different provider. */
+  isProfileEnabled(route: {
+    harnessId: HarnessId
+    credentialMode: HarnessCredentialMode
+    providerId?: string
+  }): boolean {
+    if (route.harnessId === 'kun') return route.credentialMode === 'provider'
+    if (this.isDisabled(route.harnessId)) return false
+    if (!this.get(route.harnessId)?.credentialModes.includes(route.credentialMode)) return false
+    return (this.deps.enabledProfiles?.() ?? []).some((profile) =>
+      profile.harnessId === route.harnessId && profile.credentialMode === route.credentialMode &&
+      (route.credentialMode === 'native-login'
+        ? (profile.providerId?.trim() || 'default') === (route.providerId?.trim() || 'default')
+        : (Boolean(route.providerId?.trim()) && profile.providerId?.trim() === route.providerId?.trim())))
+  }
+
 }
 
 /** Build the catalog definition for a `harnesses.custom[]` entry (P4-12: also used by probe-definition). */

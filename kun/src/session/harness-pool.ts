@@ -5,7 +5,21 @@
  * `idleReleaseMs`. An unexpected process exit evicts the entry and fires the
  * key's `onExit` listeners so hosted session bindings can be rebased.
  */
+import { raceProbeAbort } from '../harness/probe-abort.js'
+
 export const HARNESS_POOL_IDLE_RELEASE_MS = 10 * 60 * 1_000
+
+export type HarnessPoolAdmission = {
+  signal?: AbortSignal
+  /** Checked under the acquisition lock, including reuse after a pending connect. */
+  validate?: () => Promise<unknown>
+}
+
+async function validateAdmission(admission: HarnessPoolAdmission): Promise<void> {
+  admission.signal?.throwIfAborted()
+  await admission.validate?.()
+  admission.signal?.throwIfAborted()
+}
 
 export type PooledAgentExit = { code: number | null; signal: string | null }
 
@@ -45,16 +59,17 @@ export class HarnessAgentPool<T extends PooledAgent> {
 
   async acquire(
     key: string,
-    factory: () => Promise<T>
+    factory: () => Promise<T>,
+    admission: HarnessPoolAdmission = {}
   ): Promise<HarnessAgentLease<T>> {
+    admission.signal?.throwIfAborted()
     const inFlight = this.pending.get(key)
     if (inFlight) {
-      return inFlight.then(
-        () => this.acquire(key, factory),
-        () => this.acquire(key, factory)
-      )
+      // Cancellation must not leave a continuation that acquires/spawns later.
+      await raceProbeAbort(inFlight.catch(() => undefined), admission.signal)
+      return this.acquire(key, factory, admission)
     }
-    const task = this.acquireLocked(key, factory).finally(() => {
+    const task = this.acquireLocked(key, factory, admission).finally(() => {
       if (this.pending.get(key) === task) this.pending.delete(key)
     })
     this.pending.set(key, task)
@@ -103,19 +118,31 @@ export class HarnessAgentPool<T extends PooledAgent> {
 
   private async acquireLocked(
     key: string,
-    factory: () => Promise<T>
+    factory: () => Promise<T>,
+    admission: HarnessPoolAdmission
   ): Promise<HarnessAgentLease<T>> {
+    await validateAdmission(admission)
     const existing = this.entries.get(key)
     if (existing?.unhealthy && existing.refs > 0) {
       throw new Error(`harness process is draining after an interrupted turn: ${key}`)
     }
-    if (existing?.unhealthy) await this.closeEntry(key, existing)
+    if (existing?.unhealthy) {
+      await this.closeEntry(key, existing)
+      await validateAdmission(admission)
+    }
     if (existing && !existing.unhealthy && !existing.agent.closed && !existing.closing) {
       existing.refs += 1
       this.clearIdle(existing)
       return this.lease(key, existing)
     }
     const agent = await factory()
+    try {
+      await validateAdmission(admission)
+    } catch (error) {
+      // This process has no other leases. Never publish a stale connection.
+      await agent.close().catch(() => undefined)
+      throw error
+    }
     const entry: PoolEntry<T> = {
       agent,
       refs: 1,

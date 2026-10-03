@@ -179,12 +179,13 @@ export function createServerRuntimeComposition(
   // The tool registry holds the lifecycle-fenced facade, which is a different identity from the room runtime's store.
   bindWorkbenchBridge(core.threadStore, roomComposition.rooms.workbench)
   roomComposition.rooms.workbench.attach({ taskWorkspaces, projectBoard: projectBoardService,
-    harnesses: new WorkbenchHarnessService({ catalog: services.harnesses.catalog, detector: services.harnesses.detector,
+    harnesses: new WorkbenchHarnessService({ catalog: services.harnesses.catalog, detector: services.harnesses.detector, readiness: services.harnesses.readiness,
       runtimes: agent.harnessRuntimeMap, router: agent.harnessRouter,
       probedModels: (definition) => services.harnesses.probedModels(definition),
       probeModels: (definition) => definition.transport === 'acp' ? services.harnesses.acpModels.probe(definition)
         : definition.transport === 'agent-sdk' ? services.harnesses.agentSdkModels.probe(definition)
-          : definition.transport === 'codex-app-server' ? services.harnesses.codexModels.probe(definition) : Promise.resolve([]),
+          : definition.transport === 'codex-app-server' ? services.harnesses.codexModels.probe(definition)
+            : definition.transport === 'pi-rpc' ? services.harnesses.piModels.probe(definition) : Promise.resolve([]),
       snapshot: () => modelConnections.snapshot(), defaultModel: () => roomComposition.rooms.deps.model() }) })
   return {
     threadService,

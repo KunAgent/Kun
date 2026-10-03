@@ -11,13 +11,18 @@ import { createServer } from 'vite'
 // getUserMedia; actual MediaRecorder, WAV encoding, React and editor run unchanged.
 const require = createRequire(import.meta.url)
 const root = fileURLToPath(new URL('../', import.meta.url))
-const temporary = await mkdtemp(join(tmpdir(), 'kun-room-voice-'))
 const evidence = resolve(process.env.KUN_VOICE_EVIDENCE || 'dist/room-voice-input')
 const baseline = process.env.KUN_VOICE_BASELINE_COMPOSER
 const expectMissing = process.argv.includes('--expect-missing')
-assert.ok(!expectMissing || baseline, 'baseline requires the original RoomComposer source')
+const captureBaseline = process.argv.includes('--capture-baseline')
+const isBaseline = expectMissing || captureBaseline
+assert.ok(!(expectMissing && captureBaseline), 'choose baseline capture or strict missing-voice reproduction')
+assert.ok(!isBaseline || baseline, 'baseline requires the original RoomComposer source')
+assert.ok(isBaseline || !baseline, 'current-source verification must not receive a baseline composer')
+const temporary = await mkdtemp(join(tmpdir(), 'kun-room-voice-'))
 await mkdir(evidence, { recursive: true })
 let electron, page, server
+let baselineVoiceControlCount = null
 const errors = [], measurements = []
 try {
   const main = join(temporary, 'main.cjs')
@@ -44,7 +49,7 @@ app.on('window-all-closed', () => app.quit())
     resolve: { alias: { '@renderer': resolve(root, 'src/renderer/src'), '@shared': resolve(root, 'src/shared') } },
     server: { host: '127.0.0.1', port: 0 }, plugins: [{ name: 'room-voice-fixture', enforce: 'pre',
       async transform(_code, id) {
-        if (expectMissing && id.endsWith('/rooms/RoomComposer.tsx')) return readFile(baseline, 'utf8')
+        if (isBaseline && id.endsWith('/rooms/RoomComposer.tsx')) return readFile(baseline, 'utf8')
       },
       configureServer(vite) {
         vite.middlewares.use(async (request, response, next) => {
@@ -57,11 +62,12 @@ app.on('window-all-closed', () => app.quit())
   await server.listen()
   await page.goto(`${server.resolvedUrls.local[0]}__room_voice`, { timeout: 90_000 })
   await page.locator('.rooms-rich-input').waitFor({ timeout: 90_000 })
-  if (expectMissing) {
+  if (isBaseline) {
     await page.waitForTimeout(500)
-    assert.equal(await page.locator('.rooms-composer-voice').count(), 0)
-    await screenshot('before-missing-voice')
-    console.log('PASS: original personal Agent composer has no voice control with speech enabled')
+    baselineVoiceControlCount = await page.locator('.rooms-composer-voice').count()
+    if (expectMissing) assert.equal(baselineVoiceControlCount, 0)
+    await screenshot(baselineVoiceControlCount ? 'before-with-voice' : 'before-missing-voice')
+    console.log(`CAPTURE: original personal Agent composer has ${baselineVoiceControlCount} voice control(s) with speech enabled`)
   } else {
     await page.getByRole('button', { name: 'Voice input', exact: true }).waitFor()
     for (const language of ['en', 'zh']) {
@@ -160,7 +166,7 @@ app.on('window-all-closed', () => app.quit())
 } finally {
   await writeFile(join(evidence, 'report.json'), JSON.stringify({
     fixture: 'Native Electron production Rooms composer with synthetic audio and offline transcription; no physical mic or real Whisper validation',
-    baseline: expectMissing, measurements, errors
+    baseline: isBaseline, baselineVoiceControlCount, measurements, errors
   }, null, 2))
   await electron?.close(); await server?.close()
   await rm(temporary, { recursive: true, force: true })

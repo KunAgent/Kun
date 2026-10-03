@@ -91,7 +91,9 @@ export function createRuntimeRegistry(
           ...(llmDebug ? { debugSink: llmDebug } : {}),
           ids: child.ids,
           prefix: child.prefix,
+          readiness: services.harnesses.readiness,
           providerConfigs: core.activeOptions.providers ?? {},
+          pathToClaudeCodeExecutable: core.activeOptions.harnesses?.binaryPaths?.['claude-code'] ?? process.env.KUN_CLAUDE_BINARY,
           agentSdkProviderIds,
           defaultApprovalPolicy: core.activeOptions.approvalPolicy,
           defaultSandboxMode: core.activeOptions.sandboxMode,
@@ -152,13 +154,15 @@ export function createRuntimeRegistry(
       !child.allowedReadPaths &&
       !child.allowedWritePaths
       ? ({
+          readiness: services.harnesses.readiness,
           providerConfigs: core.activeOptions.providers ?? {},
           providerIds: antigravityProviderIds,
           defaultIsAntigravity,
+          resolveCredentialSource: model.resolveLegacyRequestCredentials,
           defaultModel: core.activeOptions.model,
           systemPrompt: child.prefix.systemPrompt,
           binaryPath:
-            process.env.KUN_ANTIGRAVITY_BINARY ??
+            core.activeOptions.harnesses?.binaryPaths?.antigravity ?? process.env.KUN_ANTIGRAVITY_BINARY ??
             resolveAntigravityCliCommand(core.activeOptions.dataDir)?.command,
           threadStore: child.threadStore,
           sessionStore: child.sessionStore,
@@ -177,6 +181,7 @@ export function createRuntimeRegistry(
       ? ({
           registry: services.childRegistry,
           toolHost: childToolHost,
+          readiness: services.harnesses.readiness,
           providerConfigs: core.activeOptions.providers ?? {},
           providerIds: cursorSdkProviderIds,
           defaultIsCursor: defaultIsCursorSdk,
@@ -234,6 +239,7 @@ export function createRuntimeRegistry(
     // narrow to the child's declared read/write boundary.
     acp: {
       catalog: services.harnesses.catalog,
+      readiness: services.harnesses.readiness,
       binaryPath: (harnessId: string) =>
         core.activeOptions.harnesses?.binaryPaths?.[harnessId],
       threadStore: child.threadStore,
@@ -275,6 +281,7 @@ export function createRuntimeRegistry(
     const childRouter = new HarnessRouter({
       enabled: () => core.activeOptions.ade?.harnessRouter !== false,
       catalog: services.harnesses.catalog,
+      readiness: services.harnesses.readiness,
       runtimes: () => childRuntimes,
       providerKinds: services.providerKinds,
       defaultModel: () => core.activeOptions.model,
@@ -302,6 +309,7 @@ export function createRuntimeRegistry(
 	        artifactStore,
 	        nowIso,
 	        executor: createChildAgentExecutor({
+            providerKinds: services.providerKinds, harnessCatalog: services.harnesses.catalog,
 	          model: timedModelClient,
 	          toolHost: childToolHost,
 	          prefix,

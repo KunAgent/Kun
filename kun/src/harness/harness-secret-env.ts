@@ -6,6 +6,7 @@
  * settings — this module only ever returns them into an in-memory env map.
  */
 import type { HarnessDefinition } from '../contracts/harness.js'
+import { resolveDeepSeekHarnessNativeKey } from './deepseek-harness-profile.js'
 import type { ExtensionCredentialStore } from '../services/extension-credential-store.js'
 
 /** Resolves an opaque credential-store reference to its secret value. */
@@ -65,4 +66,29 @@ export async function resolveHarnessSecretEnv(
     )
   }
   return env
+}
+
+/** Engine-specific ambient credentials allowed only for an explicitly chosen native profile. */
+export const NATIVE_HARNESS_CREDENTIAL_ENV_KEYS: Readonly<Record<string, readonly string[]>> = {
+  'deepseek-harness': ['DEEPSEEK_API_KEY'],
+  // Official ACP command reference documents WINDSURF_API_KEY, not DEVIN_API_KEY.
+  devin: ['WINDSURF_API_KEY'],
+  // These engines already support their own documented native key modes.
+  codex: ['OPENAI_API_KEY'], cursor: ['CURSOR_API_KEY'],
+  'claude-code': ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'],
+  antigravity: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_APPLICATION_CREDENTIALS']
+}
+
+/** Never call for kun-gateway: host provider keys must not bypass the gateway. */
+export function nativeHarnessCredentialEnv(
+  definition: Pick<HarnessDefinition, 'id'>,
+  base: Record<string, string | undefined> = process.env
+): Record<string, string> {
+  if (definition.id === 'deepseek-harness') {
+    const value = resolveDeepSeekHarnessNativeKey(base)
+    return value === undefined ? {} : { DEEPSEEK_API_KEY: value }
+  }
+  const allowed = new Set(NATIVE_HARNESS_CREDENTIAL_ENV_KEYS[definition.id] ?? [])
+  return Object.fromEntries(Object.entries(base).flatMap(([key, value]) =>
+    allowed.has(key.toUpperCase()) && value?.trim() ? [[key.toUpperCase(), value]] : []))
 }

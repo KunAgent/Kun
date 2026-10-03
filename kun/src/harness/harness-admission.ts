@@ -94,7 +94,8 @@ export function checkHarnessAdmission(input: {
   }
   if (
     input.harness.transport !== 'native-loop' &&
-    (input.status.installed !== 'yes' || input.status.login === 'signed-out')
+    (input.status.installed !== 'yes' || input.status.versionSupported === false || input.status.ready === 'no' ||
+      ((input.credentialMode ?? input.harness.credentialModes[0]) === 'native-login' && input.status.login === 'signed-out'))
   ) {
     return {
       ok: false,

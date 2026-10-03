@@ -330,6 +330,7 @@ export type KunTokenEconomySettingsPatchV1 = Partial<
 
 /** Patch shape for agents.kun.harnesses; arrays/records replace whole. */
 export type KunHarnessSettingsPatchV1 = {
+  enabledProfiles?: import('./app-settings-types-kun-runtime').KunHarnessEnabledProfileV1[]
   disabledIds?: string[]
   binaryPaths?: Record<string, string>
   custom?: KunHarnessCustomEntryV1[]

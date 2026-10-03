@@ -380,7 +380,7 @@ export class AgentSdkRuntime {
           ? userMessageStream(attemptText, ctx.images)
           : attemptText
         const options = buildOptions(remainingTurns)
-        options.spawnClaudeCodeProcess = spawnOwnedSdkProcess
+        options.spawnClaudeCodeProcess = createOwnedSdkProcessSpawner(() => this.deps.readiness?.validateTurn(threadId, turnId, abort.signal, ctx.harnessRoute) ?? Promise.resolve())
         mapper.beginQuery()
         let attemptFinalSeen = false
         let attemptMessageSeen = false
@@ -412,6 +412,8 @@ export class AgentSdkRuntime {
           }
         })
         try {
+          if (this.deps.readiness && !ctx.harnessRoute) throw new Error('Agent launch has no resolved SDK profile')
+          await this.deps.readiness?.validateTurn(threadId, turnId, abort.signal, ctx.harnessRoute)
           const stream = sdk.query({ prompt, options })
           activeStream = stream
           activeStreamInterrupted = false
@@ -694,4 +696,4 @@ export class AgentSdkRuntime {
     }
   }
 }
-import { spawnOwnedSdkProcess } from './owned-sdk-process.js'
+import { createOwnedSdkProcessSpawner } from './owned-sdk-process.js'

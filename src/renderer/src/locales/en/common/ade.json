@@ -527,5 +527,49 @@
   "devinModels.results": "Search results",
   "devinModels.nativeOrder": "Devin models",
   "devinModels.fusionCombinations": "Fusion combinations",
-  "devinModels.withCompanion": "With {{model}}"
+  "devinModels.withCompanion": "With {{model}}",
+  "agentEnablement": {
+    "explanation": "Enable each agent and connection separately. A local readiness check must pass before it appears in the composer.",
+    "profile": "Connection profile",
+    "provider": "Model provider",
+    "model": "Model",
+    "modelHint": "Changing the model or configuration requires a fresh readiness check.",
+    "nativeDefault": "Agent default",
+    "loadModels": "Load available models",
+    "enable": "Check and enable",
+    "disable": "Disable this profile",
+    "cancel": "Cancel check",
+    "checking": "Checking readiness…",
+    "ready": "Enabled and ready",
+    "needsCheck": "Enabled; readiness check required",
+    "disabled": "Disabled",
+    "recheck": "Check again",
+    "preview": "Preview",
+    "unavailable": "Readiness checks are unavailable. Start the Kun runtime and retry.",
+    "chooseProvider": "Choose a provider",
+    "failed": "Readiness could not be confirmed. Review the checks, fix the configuration, and retry.",
+    "timeout": "The check timed out. Confirm the command and connection settings, then retry.",
+    "cancelled": "Check cancelled",
+    "settingsUnavailable": "Settings have not reached the runtime. Save the settings, check the runtime connection, and retry.",
+    "authVerified": "Account authentication was confirmed by the agent.",
+    "authUnverified": "Credentials or configuration may be present; account authentication is not verified.",
+    "quotaUnverified": "This check does not send a trial prompt. Quota, billing and future model requests are not verified.",
+    "checks": {
+      "installation": "Installation",
+      "configuration": "Configuration",
+      "credentials": "Credentials",
+      "protocol": "Protocol readiness"
+    },
+    "nativeAccount": "Native account profile",
+    "systemAccount": "System CLI account"
+  },
+  "adeHarnessUnavailable": {
+    "readinessRequired": "Readiness check required",
+    "configurationInvalid": "Check connection settings",
+    "credentialsMissing": "Credentials missing",
+    "authenticationUnverified": "Authentication not confirmed"
+  },
+  "adeHarnessNextStep": {
+    "configure": "Configure the provider"
+  }
 }

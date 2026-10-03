@@ -115,3 +115,48 @@ describe('transportOverrides (P6-07)', () => {
     expect(catalog.get('unknownharness')).toBeUndefined()
   })
 })
+
+describe('explicit profile enablement', () => {
+  it('keeps definitions visible while defaulting every external profile off', () => {
+    const catalog = new HarnessCatalog()
+    expect(catalog.list().map((entry) => entry.id)).toContain('pi')
+    expect(catalog.listAvailable().map((entry) => entry.id)).toEqual(['kun'])
+    expect(catalog.isProfileEnabled({ harnessId: 'kun', credentialMode: 'provider' })).toBe(true)
+    expect(catalog.isProfileEnabled({ harnessId: 'codex', credentialMode: 'native-login' })).toBe(false)
+  })
+  it('requires the exact credential mode and gateway provider', () => {
+    const catalog = new HarnessCatalog({ custom: () => [], enabledProfiles: () => [
+      { harnessId: 'codex', credentialMode: 'native-login' },
+      { harnessId: 'claude-code', credentialMode: 'kun-gateway', providerId: 'deepseek' }
+    ] })
+    expect(catalog.isProfileEnabled({ harnessId: 'codex', credentialMode: 'native-login', providerId: 'legacy' })).toBe(false)
+    expect(catalog.isProfileEnabled({ harnessId: 'codex', credentialMode: 'native-login', providerId: 'default' })).toBe(true)
+    expect(catalog.isProfileEnabled({ harnessId: 'codex', credentialMode: 'kun-gateway', providerId: 'deepseek' })).toBe(false)
+    expect(catalog.isProfileEnabled({ harnessId: 'claude-code', credentialMode: 'kun-gateway', providerId: 'deepseek' })).toBe(true)
+    expect(catalog.isProfileEnabled({ harnessId: 'claude-code', credentialMode: 'kun-gateway', providerId: 'other' })).toBe(false)
+    expect(catalog.isProfileEnabled({ harnessId: 'claude-code', credentialMode: 'kun-gateway' })).toBe(false)
+    expect(catalog.enabledProfiles('codex')).toEqual([{ harnessId: 'codex', credentialMode: 'native-login' }])
+  })
+  it('cannot revive retired Gemini, disabled profiles, or unsupported credential modes', () => {
+    const catalog = new HarnessCatalog({ custom: () => [], disabled: () => ['codex'], enabledProfiles: () => [
+      { harnessId: 'gemini-cli', credentialMode: 'native-login' },
+      { harnessId: 'codex', credentialMode: 'native-login' },
+      { harnessId: 'deepseek-harness', credentialMode: 'kun-gateway', providerId: 'deepseek' }
+    ] })
+    expect(catalog.get('gemini-cli')?.availability).toBe('retired')
+    expect(catalog.isDisabled('gemini-cli')).toBe(true)
+    expect(catalog.isDisabled('codex')).toBe(true)
+    expect(catalog.isDisabled('deepseek-harness')).toBe(true)
+    expect(catalog.listAvailable().map((entry) => entry.id)).toEqual(['kun'])
+  })
+  it('promotes Pi and exposes the reviewed DeepSeek preview without hidden flags', () => {
+    const catalog = new HarnessCatalog({ custom: () => [], enabledProfiles: () => [
+      { harnessId: 'pi', credentialMode: 'native-login' },
+      { harnessId: 'deepseek-harness', credentialMode: 'native-login' }
+    ] })
+    expect(catalog.get('pi')?.availability).toBe('active')
+    expect(catalog.get('pi')?.prerelease).toBeUndefined()
+    expect(catalog.get('deepseek-harness')?.availability).toBe('preview')
+    expect(catalog.listAvailable().map((entry) => entry.id)).toEqual(expect.arrayContaining(['kun', 'pi', 'deepseek-harness']))
+  })
+})

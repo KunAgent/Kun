@@ -107,6 +107,7 @@ const HarnessDetectSchema = z
     versionArgs: z.array(z.string().max(64)).max(4).default(['--version']),
     versionPattern: z.string().max(256).optional(),
     minVersion: z.string().max(32).optional(),
+    exactVersion: z.string().max(64).optional(),
     /**
      * When the primary command is absent, this fallback binary is
      * resolved; if it IS present the harness is not "not installed" —
@@ -222,6 +223,7 @@ export const HarnessDefinitionSchema = z
     /** Present when the harness can run through the loopback model gateway. */
     gateway: HarnessGatewaySchema.optional(),
     setup: HarnessSetupSchema.optional(),
+    availability: z.enum(['active', 'preview', 'retired']).optional(),
     builtin: z.boolean()
   })
   .strict()

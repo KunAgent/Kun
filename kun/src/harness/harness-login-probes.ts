@@ -1,100 +1,123 @@
-import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { HarnessDefinition, HarnessStatus } from '../contracts/harness.js'
 import type { ServeProviderConfig } from '../config/kun-config-application.js'
+import type { SpawnCaptured } from './harness-detector.js'
+import { raceProbeAbort } from './probe-abort.js'
 
 export type HarnessLoginState = HarnessStatus['login']
 
 export type HarnessLoginProbeDeps = {
   /** Provider configs from the active runtime options (read-only). */
   providers: () => Record<string, Pick<ServeProviderConfig, 'kind' | 'credentialSourceId' | 'apiKey' | 'presetSource'>>
-  /** Claude Code credentials file; overridable in tests. */
   claudeCredentialsPath?: string
-  /** Gemini CLI OAuth credentials file (used by Antigravity); overridable in tests. */
+  /** Retained for compatibility; Gemini OAuth is not an agy credential. */
   geminiCredentialsPath?: string
   homeDir?: string
+  env?: Record<string, string | undefined>
+  signal?: AbortSignal
+  spawnCaptured?: SpawnCaptured
 }
 
-/**
- * Login probes never trigger paid calls: they only read local state or a local
- * config binding. ACP agents answer with `unknown` here; session creation can
- * report an authentication error. Initialize authMethods lists login choices.
- */
+/** Local metadata only. Credential presence never proves authentication. */
 export async function probeHarnessLogin(
   def: HarnessDefinition,
-  deps: HarnessLoginProbeDeps
+  deps: HarnessLoginProbeDeps,
+  command?: string
 ): Promise<HarnessLoginState> {
+  deps.signal?.throwIfAborted()
+  const env = { ...(deps.env ?? process.env), ...def.launch?.env }
+  let state: HarnessLoginState
   switch (def.id) {
-    case 'kun':
-      return 'not-required'
-    case 'claude-code':
-      return probeClaudeCodeLogin(deps)
-    case 'cursor':
-      return probeProviderCredential(deps, 'cursor-sdk')
-    case 'antigravity':
-      return probeAntigravityLogin(deps)
-    case 'pi':
-      return probePiLogin(deps)
-    default:
-      return def.transport === 'acp' || def.transport === 'terminal' ? 'unknown' : 'unknown'
-  }
-}
-
-async function probeClaudeCodeLogin(deps: HarnessLoginProbeDeps): Promise<HarnessLoginState> {
-  const home = deps.homeDir ?? homedir()
-  const credentialsPath = deps.claudeCredentialsPath ?? join(home, '.claude', '.credentials.json')
-  if (existsSync(credentialsPath)) {
-    try {
-      const parsed = JSON.parse(await readFile(credentialsPath, 'utf8'))
-      if (parsed && typeof parsed === 'object') return 'signed-in'
-    } catch {
-      // Unparseable credentials file is treated as not logged in.
+    case 'kun': return 'not-required'
+    case 'claude-code': state = await probeClaudeCodeLogin(deps, command, env); break
+    case 'cursor': state = probeProviderCredential(deps, 'cursor-sdk'); break
+    case 'antigravity': state = await probeAntigravityLogin(deps, env); break
+    case 'devin':
+    case 'windsurf':
+      // The documented Devin ACP key is WINDSURF_API_KEY. The unrelated
+      // Devin REST API key cannot authenticate this protocol.
+      state = def.transport !== 'acp' ? 'unknown'
+        : nonempty(env.WINDSURF_API_KEY) ? 'unknown' : 'signed-out'
+      break
+    case 'pi': {
+      const home = deps.homeDir ?? env.HOME ?? env.USERPROFILE ?? homedir()
+      const auth = await readObject(join(env.PI_CODING_AGENT_DIR ?? join(home, '.pi', 'agent'), 'auth.json'))
+      state = auth && Object.keys(auth).length > 0 ? 'unknown' : 'signed-out'
+      break
     }
-    return 'signed-out'
+    default: state = 'unknown'
   }
-  // On macOS the CLI stores credentials in the Keychain, which we deliberately
-  // do not read; report unknown so the UI can hint instead of claiming signed out.
-  return process.platform === 'darwin' ? 'unknown' : 'signed-out'
+  deps.signal?.throwIfAborted()
+  return state
 }
 
-async function probeAntigravityLogin(deps: HarnessLoginProbeDeps): Promise<HarnessLoginState> {
-  const bound = probeProviderCredential(deps, 'antigravity-cli')
-  if (bound === 'signed-in') return bound
-  const home = deps.homeDir ?? homedir()
-  const geminiCredentials =
-    deps.geminiCredentialsPath ?? join(home, '.gemini', 'oauth_creds.json')
-  if (existsSync(geminiCredentials)) return 'signed-in'
-  return bound === 'signed-out' ? 'unknown' : bound
+async function probeClaudeCodeLogin(
+  deps: HarnessLoginProbeDeps,
+  command: string | undefined,
+  env: Record<string, string | undefined>
+): Promise<HarnessLoginState> {
+  // `auth status` is a local account query, not login or inference. Empty,
+  // unsupported or malformed responses cannot establish a signed-in account.
+  if (command && deps.spawnCaptured) {
+    const result = await raceProbeAbort(deps.spawnCaptured(command, ['auth', 'status', '--json'], {
+      timeoutMs: 5_000, signal: deps.signal, env
+    }), deps.signal).catch(() => undefined)
+    deps.signal?.throwIfAborted()
+    if (result && !result.timedOut) {
+      try {
+        const account: unknown = JSON.parse(result.stdout)
+        if (account && typeof account === 'object' && 'loggedIn' in account) {
+          const details = account as Record<string, unknown>
+          const nativeOAuth = ['oauth', 'claude.ai', 'claude_ai'].includes(String(details.authMethod))
+          const accountEvidence = nonempty(details.email) || nonempty(details.subscriptionType)
+          if (account.loggedIn === true && result.exitCode === 0 && nativeOAuth && accountEvidence) return 'signed-in'
+          if (account.loggedIn === true) return 'unknown'
+          if (account.loggedIn === false) return 'signed-out'
+        }
+      } catch { /* Older CLIs can lack the JSON account surface. */ }
+    }
+  }
+  // OAuth files may be expired; macOS may use Keychain. No file, key or
+  // unsupported status command establishes authenticated native account state.
+  return 'unknown'
 }
 
-/**
- * Pi native login state = `~/.pi/agent/auth.json` exists and parses with at
- * least one provider credential (P6-11, D2 — Kun never writes into pi's
- * agent dir; the file is read-only probed).
- */
-async function probePiLogin(deps: HarnessLoginProbeDeps): Promise<HarnessLoginState> {
-  const home = deps.homeDir ?? homedir()
-  const authPath = join(home, '.pi', 'agent', 'auth.json')
-  if (!existsSync(authPath)) return 'signed-out'
+async function probeAntigravityLogin(
+  deps: HarnessLoginProbeDeps,
+  env: Record<string, string | undefined>
+): Promise<HarnessLoginState> {
+  if (probeProviderCredential(deps, 'antigravity-cli') === 'unknown' ||
+      nonempty(env.GOOGLE_API_KEY) || nonempty(env.GEMINI_API_KEY)) return 'unknown'
+  const home = deps.homeDir ?? env.HOME ?? env.USERPROFILE ?? homedir()
+  const adcPath = env.GOOGLE_APPLICATION_CREDENTIALS ?? join(
+    env.CLOUDSDK_CONFIG ?? join(home, '.config', 'gcloud'), 'application_default_credentials.json'
+  )
+  const adc = await readObject(adcPath)
+  return adc && (adc.type === 'authorized_user' || adc.type === 'service_account' || adc.type === 'external_account')
+    ? 'unknown' : 'signed-out'
+}
+
+function nonempty(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+async function readObject(path: string): Promise<Record<string, unknown> | undefined> {
   try {
-    const parsed = JSON.parse(await readFile(authPath, 'utf8'))
-    return parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0
-      ? 'signed-in'
-      : 'signed-out'
-  } catch {
-    return 'signed-out'
-  }
+    const parsed: unknown = JSON.parse(await readFile(path, 'utf8'))
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown> : undefined
+  } catch { return undefined }
 }
 
 function probeProviderCredential(
   deps: HarnessLoginProbeDeps,
   kind: ServeProviderConfig['kind']
 ): HarnessLoginState {
-  const providers = deps.providers()
-  const hasCredential = Object.values(providers).some(
-    (p) => p?.kind === kind && Boolean(p.credentialSourceId || p.apiKey)
+  const hasCredential = Object.values(deps.providers()).some(
+    (provider) => provider?.kind === kind &&
+      (nonempty(provider.credentialSourceId) || nonempty(provider.apiKey))
   )
-  return hasCredential ? 'signed-in' : 'signed-out'
+  return hasCredential ? 'unknown' : 'signed-out'
 }

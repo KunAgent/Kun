@@ -33,7 +33,6 @@ import type { ModelClient } from '../ports/model-client.js'
 import { RandomIdGenerator } from '../ports/id-generator.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
 import type { ApprovalReviewPort } from '../ports/approval-review.js'
-import type { PptWorkflowScope } from '../ports/tool-host.js'
 import {
   childDirectionBundle,
   childDeckArtifact,
@@ -43,7 +42,6 @@ import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { ToolHost } from '../ports/tool-host.js'
 import { findSessionEvent } from '../adapters/session-event-query.js'
-import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
 import type { SkillRuntime } from '../skills/skill-runtime.js'
 import type { InstructionRuntime } from '../instructions/instruction-runtime.js'
 import { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
@@ -68,39 +66,12 @@ import {
   FAST_CONTEXT_RECOVERABLE_LOOP_ERROR_CODES
 } from './child-agent-result-support.js'
 
-export type ChildDelegatedRuntimeFactory = (input: {
-  threads: ThreadService
-  turns: TurnService
-  sessionStore: SessionStore
-  threadStore: ThreadStore
-  events: RuntimeEventRecorder
-  ids: { next(prefix: string): string }
-  prefix: ImmutablePrefix
-  toolPolicy: 'readOnly' | 'inherit'
-  allowedModelProviderIds?: readonly string[]
-  allowedModelIds?: readonly string[]
-  allowedToolNames?: readonly string[]
-  allowedProviderIds?: readonly string[]
-  allowedSkillIds?: readonly string[]
-  allowedReadPaths?: readonly string[]
-  allowHostReads?: boolean
-  allowedWritePaths?: readonly string[]
-  allowedArtifactIds?: readonly string[]
-  blockedToolNames?: readonly string[]
-  blockedProviderIds?: readonly string[]
-  blockedSkillIds?: readonly string[]
-  skillsEnabled: boolean
-  instructionsEnabled: boolean
-  memoryEnabled: boolean
-  pptWorkflowScope?: PptWorkflowScope
-}) => {
-  /** Legacy provider-inference view (used when the harness router is off). */
-  delegated?: DelegatedTurnRuntime
-  /** Child-scoped harness router; shares the global catalog. */
-  router?: import('../harness/harness-router.js').HarnessRouter
-} | undefined
+export type { ChildDelegatedRuntimeFactory } from './child-delegated-runtime-factory.js'
+import type { ChildDelegatedRuntimeFactory } from './child-delegated-runtime-factory.js'
 
 export type ChildAgentExecutorOptions = {
+  providerKinds?: () => import('../harness/resolve-turn-harness.js').ProviderKindsView
+  harnessCatalog?: import('../services/turn-service-core.js').TurnServiceDeps['harnessCatalog']
   model: ModelClient
   toolHost: ToolHost
   prefix: ImmutablePrefix
@@ -197,6 +168,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       profilesForProvider: options.profilesForProvider
     })
     const turns = new TurnService({
+      ...(!input.fastContext ? { providerKinds: options.providerKinds, harnessCatalog: options.harnessCatalog } : {}),
       threadStore,
       sessionStore,
       events,

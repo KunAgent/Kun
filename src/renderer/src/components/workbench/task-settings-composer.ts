@@ -15,5 +15,5 @@ export function applySavedTaskRoute(threadId: string, before: Selection, result:
     Object.entries(before).some(([key, value]) => state[key as keyof Selection] !== value)) return
   const route = (result.pending ?? result.current).route
   state.setComposerHarness(route.harnessId ?? '', route.credentialMode ?? '')
-  state.setComposerModel(route.model, route.credentialMode === 'native-login' ? '' : route.providerId ?? '')
+  state.setComposerModel(route.model, route.providerId ?? '')
 }

@@ -94,6 +94,7 @@ export async function createRuntimeCore(
   const launchNetwork = consumeNativeAgentNetworkEnvironment(process.env)
   options = { ...options, nativeAgentNetwork: options.nativeAgentNetwork ?? launchNetwork }
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
+  let optionsRevision = 0
   let activeOptions: KunServeRuntimeOptions = { ...options }
   // Production replay reads the durable session store; nothing calls
   // snapshotSince on the live bus, so skip retaining a serialized tail.
@@ -509,7 +510,8 @@ export async function createRuntimeCore(
     registryModelCapabilities,
     delegatedContextProfile,
     get activeOptions() { return activeOptions },
-    set activeOptions(value: KunServeRuntimeOptions) { activeOptions = value },
+    set activeOptions(value: KunServeRuntimeOptions) { activeOptions = value; optionsRevision += 1 },
+    get optionsRevision() { return optionsRevision },
     get modelProfiles() { return modelProfiles },
     set modelProfiles(value: typeof modelProfiles) { modelProfiles = value },
     get providerModelProfiles() { return providerModelProfiles },

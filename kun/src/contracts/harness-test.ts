@@ -61,6 +61,7 @@ export const HarnessTestHandshakeSchema = z
       .array(z.object({ id: z.string(), name: z.string().optional() }).strict())
       .optional(),
     authRequired: z.boolean().optional(),
+    authentication: z.enum(['verified', 'unverified', 'missing']).optional(),
     /** SDK transports surface their supported model list as the handshake. */
     models: z.array(z.string()).optional(),
     detail: z.string().optional()
@@ -90,6 +91,20 @@ export const HarnessTestTrialSchema = z
   .strict()
 export type HarnessTestTrial = z.infer<typeof HarnessTestTrialSchema>
 
+export const HarnessReadinessSchema = z.object({
+  profileKey: z.string(),
+  usable: z.boolean(),
+  authentication: z.enum(['verified', 'unverified', 'missing']),
+  checks: z.array(z.object({
+    id: z.enum(['installation', 'configuration', 'credentials', 'protocol']),
+    ok: z.boolean(),
+    detail: z.string().optional()
+  }).strict()),
+  checkedAt: z.string().datetime(),
+  detail: z.string().optional()
+}).strict()
+export type HarnessReadiness = z.infer<typeof HarnessReadinessSchema>
+
 export const HarnessTestResponseSchema = z
   .object({
     harnessId: z.string(),
@@ -100,7 +115,8 @@ export const HarnessTestResponseSchema = z
     durationMs: z.number().nonnegative(),
     detect: HarnessTestDetectSchema,
     handshake: HarnessTestHandshakeSchema.optional(),
-    trial: HarnessTestTrialSchema.optional()
+    trial: HarnessTestTrialSchema.optional(),
+    readiness: HarnessReadinessSchema.optional()
   })
   .strict()
 export type HarnessTestResponse = z.infer<typeof HarnessTestResponseSchema>

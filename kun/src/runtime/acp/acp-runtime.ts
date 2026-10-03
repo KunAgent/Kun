@@ -171,6 +171,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     const lease = await acquireAcpConnection(this.deps, this.pool, this.host, this.sessions, {
       poolKey,
       definition,
+      command: this.deps.readiness?.commandForTurn(threadId, turnId),
+      validateLaunch: () => this.deps.readiness?.validateTurn(threadId, turnId, signal) ?? Promise.resolve(),
       credentialEnv,
       identity: credentialIdentity,
       workspace,
@@ -178,16 +180,17 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     }).catch(async (error) => {
       // A user abort is not a harness defect; everything else observed at
       // launch outweighs any earlier probe verdict (P4-03).
-      if (!(error instanceof AcpError && error.code === 'request_aborted')) {
+      if (!signal.aborted && !(error instanceof AcpError && error.code === 'request_aborted')) {
         this.deps.onLaunchFailure?.(
           definition.id,
           error instanceof Error ? error.message : String(error)
         )
       }
-      await this.failFromAcpError(threadId, turnId, error, true, definition.id)
+      if (signal.aborted) await this.deps.turns.finishTurn({ threadId, turnId, status: 'aborted' })
+      else await this.failFromAcpError(threadId, turnId, error, true, definition.id)
       return undefined
     })
-    if (!lease) return 'failed'
+    if (!lease) return signal.aborted ? 'aborted' : 'failed'
     const conn = lease.connection
     const mapper = new AcpEventMapper({
       threadId,
@@ -237,6 +240,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     }) ?? []
     let session: AcpSessionHandle
     try {
+      await this.deps.readiness?.validateTurn(threadId, turnId, signal)
+      signal.throwIfAborted()
       session = await this.sessions.ensureSession(
         {
           threadId,
@@ -247,7 +252,11 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           permissionModeId,
           reasoningEffort: turn.reasoningEffort,
           mcpServers: kunToolsServers,
-          items
+          items,
+          validateLaunch: async () => {
+            await this.deps.readiness?.validateTurn(threadId, turnId, signal)
+            signal.throwIfAborted()
+          }
         },
         conn,
         sink
@@ -255,6 +264,10 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     } catch (error) {
       this.deps.kunToolsMcp?.revokeTurn(turnId)
       lease.release()
+      if (signal.aborted) {
+        await this.deps.turns.finishTurn({ threadId, turnId, status: 'aborted' })
+        return 'aborted'
+      }
       await this.failFromAcpError(threadId, turnId, error, true, definition.id)
       return 'failed'
     }
@@ -287,6 +300,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       harnessId: definition.id,
       preparation,
       initResult: conn.initResult,
+      declaredCapabilities: definition.capabilities,
       session: {
         configOptions: session.configOptions,
         modes: session.modes,
@@ -404,6 +418,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     else signal.addEventListener('abort', onAbort, { once: true })
 
     try {
+      await this.deps.readiness?.validateTurn(threadId, turnId, signal)
+      signal.throwIfAborted()
       if (streamError) throw streamError
       const raw = await Promise.race([conn.rpc.request(
         ACP_AGENT_METHODS.sessionPrompt,

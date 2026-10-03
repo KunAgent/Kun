@@ -61,6 +61,7 @@ export type AdeHarnessDefinition = {
     resumeArgs?: string[]
     hooks?: { kind: string; events: string[] }
   }
+  availability?: 'active' | 'preview' | 'retired'
   builtin: boolean
   /**
    * Install/login hints for the Agent Center (docs/ade/impl/p4 §3.3). Only
@@ -116,6 +117,10 @@ export type AdeHarnessStatus = {
 
 export type AdeHarnessReasonCode =
   | 'disabled'
+  | 'readiness_required'
+  | 'configuration_invalid'
+  | 'credentials_missing'
+  | 'authentication_unverified'
   | 'not_installed'
   | 'adapter_missing'
   | 'version_too_low'
@@ -127,6 +132,9 @@ export type AdeHarnessReasonCode =
 export type AdeHarnessRow = {
   definition: AdeHarnessDefinition
   status: AdeHarnessStatus
+  enabled?: boolean
+  enabledProfiles?: import('./app-settings-types-kun-runtime').KunHarnessEnabledProfileV1[]
+  readyProfiles?: (import('./app-settings-types-kun-runtime').KunHarnessEnabledProfileV1 & { expiresAt?: string })[]
 }
 
 /** Per-provider model group for `provider`/`kun-gateway` credential modes. */
@@ -182,6 +190,7 @@ export type AdeHarnessTestHandshake = {
   }
   authMethods?: { id: string; name?: string }[]
   authRequired?: boolean
+  authentication?: 'verified' | 'unverified' | 'missing'
   models?: string[]
   detail?: string
 }
@@ -201,7 +210,17 @@ export type AdeHarnessTestTrial = {
   }
 }
 
+export type AdeHarnessReadiness = {
+  profileKey: string
+  usable: boolean
+  authentication: 'verified' | 'unverified' | 'missing'
+  checks: { id: 'installation' | 'configuration' | 'credentials' | 'protocol'; ok: boolean; detail?: string }[]
+  checkedAt: string
+  detail?: string
+}
+
 export type AdeHarnessTestResult = {
+  readiness?: AdeHarnessReadiness
   harnessId: string
   transport: string
   level: 'detect' | 'handshake' | 'trial'

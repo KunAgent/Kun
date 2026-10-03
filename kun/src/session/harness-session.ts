@@ -64,6 +64,8 @@ export type HarnessAgentConnectInput = {
   stripEnv: readonly string[]
   cwd: string
   signal: AbortSignal
+  /** Revalidate after asynchronous launch preparation, immediately before execution. */
+  validateLaunch?: () => Promise<unknown>
   spawn?: HarnessSpawnFn
 }
 

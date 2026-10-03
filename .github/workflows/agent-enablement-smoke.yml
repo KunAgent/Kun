@@ -1,0 +1,78 @@
+name: Native agent enablement smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/agent-enablement-smoke.yml'
+      - 'scripts/*agent-enablement*'
+      - 'src/renderer/src/components/ade/**'
+      - 'src/renderer/src/components/SettingsView.tsx'
+      - 'src/renderer/src/components/SettingsSidebar.tsx'
+      - 'src/renderer/src/components/SettingsUiSmokeHost.ts'
+      - 'src/renderer/src/components/settings-view-layout.tsx'
+      - 'src/renderer/src/components/settings-section-agents*'
+      - 'src/renderer/src/components/use-settings-persistence.ts'
+      - 'src/renderer/src/components/chat/*Harness*'
+      - 'src/renderer/src/store/harness-store*'
+      - 'src/renderer/src/lib/*harness*'
+      - 'src/shared/*harness*'
+      - 'src/shared/app-settings*'
+      - 'src/renderer/src/locales/**'
+      - 'kun/src/harness/**'
+      - 'kun/src/runtime/**'
+      - 'kun/src/session/**'
+      - 'kun/src/process/**'
+      - 'kun/src/contracts/harness*'
+      - 'kun/src/services/*harness*'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-enablement-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-enablement:
+    name: ${{ matrix.os }} explicit Agent enablement
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - name: Install dependencies and native Electron
+        run: |
+          npm ci
+          npm run ensure:electron
+      - name: Verify offline smoke contracts
+        run: node --test scripts/agent-enablement-smoke.test.mjs
+      - name: Verify native process and pooled-session admission
+        run: |
+          npm run build:extensions
+          node scripts/ensure-kun-install.cjs
+          npm --prefix kun test -- src/process/owned-process.admission.test.ts src/session/harness-pool.admission.test.ts src/session/session-turn-runtime.admission.test.ts src/runtime/acp/acp-runtime.admission.test.ts src/runtime/agent-sdk/owned-sdk-process.test.ts src/runtime/cursor/cursor-sdk-runtime.admission.test.ts src/harness/cursor-sdk-installation.test.ts src/harness/cursor-sdk-readiness.test.ts src/harness/harness-readiness-admission.test.ts --maxWorkers=1
+      - name: Verify native production components
+        env:
+          KUN_ENABLEMENT_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          KUN_ENABLEMENT_EVIDENCE: dist/agent-enablement
+        run: node scripts/smoke-agent-enablement.mjs
+      - name: Upload native screenshots and exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-enablement-${{ matrix.os }}
+          path: dist/agent-enablement
+          if-no-files-found: error
+          retention-days: 14
