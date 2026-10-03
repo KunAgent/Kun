@@ -20,8 +20,9 @@ const report = { sourceRevision: git('rev-parse', 'HEAD'), nativePlatform: proce
   sourceDiff: git('diff', '--name-only', 'HEAD', '--', 'src', 'kun', 'scripts', '.github/workflows'),
   fixture: 'Production SettingsView, persistence and composer picker; offline host readiness fixtures, no real authentication or quota validation',
   scaleMethod: 'Native Electron webContents.setZoomFactor; no CSS transform or DPR emulation',
+  captureMethod: 'Full native webContents.capturePage().toPNG(); PNG dimensions verified against native content and display scale',
   started: new Date().toISOString(), assertions: [], screenshots: [], screenshotDetails: [], measurements: [], viewports: [],
-  pageErrors: [], blockedRequests: [], status: 'running' }
+  nativeCaptures: [], pageErrors: [], blockedRequests: [], status: 'running' }
 let electron, page, server
 try {
   if (process.env.KUN_ENABLEMENT_EXPECTED_SHA) {
@@ -308,9 +309,40 @@ async function measureControl(control) {
   return measured
 }
 async function screenshot(name, details) {
-  await page.screenshot({ path: join(evidence, `${name}.png`) })
-  report.screenshots.push(`${name}.png`)
-  if (details) report.screenshotDetails.push({ file: `${name}.png`, ...details })
+  // Playwright's CSS-viewport clip can truncate native Electron zoom captures.
+  // Capture the whole native content surface without a rect, resize or editing.
+  const capture = await electron.evaluate(async ({ BrowserWindow, screen }) => {
+    const window = BrowserWindow.getAllWindows()[0]
+    const contentBounds = window.getContentBounds()
+    const displayScale = screen.getDisplayMatching(window.getBounds()).scaleFactor
+    const nativeImage = await window.webContents.capturePage()
+    return { png: nativeImage.toPNG().toString('base64'), contentBounds, displayScale,
+      nativeImageSize: nativeImage.getSize(), zoomFactor: window.webContents.getZoomFactor() }
+  })
+  const bytes = Buffer.from(capture.png, 'base64')
+  assert.ok(bytes.length >= 24 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) &&
+    bytes.toString('ascii', 12, 16) === 'IHDR', 'Native capture must contain a PNG image header')
+  const pixelSize = { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
+  const expectedPixelSize = { width: Math.round(capture.contentBounds.width * capture.displayScale),
+    height: Math.round(capture.contentBounds.height * capture.displayScale) }
+  const { png: _png, ...metadata } = capture
+  const pixels = { method: 'webContents.capturePage().toPNG()', ...metadata, pixelSize, expectedPixelSize }
+  const file = `${name}.png`
+  await writeFile(join(evidence, file), bytes)
+  report.screenshots.push(file)
+  report.nativeCaptures.push({ file, ...pixels })
+  if (details) report.screenshotDetails.push({ file, ...details, pixels })
+  assert.ok(Math.abs(pixelSize.width - expectedPixelSize.width) <= 1 &&
+    Math.abs(pixelSize.height - expectedPixelSize.height) <= 1,
+  `Native PNG must contain all content pixels: ${JSON.stringify(pixels)}`)
+  if (details?.control) {
+    assert.equal(capture.zoomFactor, details.zoom, 'Capture preserves the measured native zoom')
+    const scale = capture.zoomFactor * capture.displayScale
+    const control = details.control
+    assert.ok(control.left * scale >= -1 && control.right * scale <= pixelSize.width + 1 &&
+      control.top * scale >= -1 && control.bottom * scale <= pixelSize.height + 1,
+    'The full measured control must lie within the captured native PNG pixels')
+  }
 }
 async function menuIds() {
   await page.locator('[data-agent-smoke-picker] button').first().click()

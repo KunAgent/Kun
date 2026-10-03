@@ -160,7 +160,9 @@ export function AgentCenterAddWizard({
           id: currentId,
           fingerprint: currentFingerprint,
           level,
-          ok: result.ok && result.readiness?.usable === true,
+          ok: result.ok && (level === 'trial'
+            ? result.trial?.ok === true && result.trial.status === 'completed'
+            : result.readiness?.usable === true),
           ...(detail ? { detail } : {}),
           durationMs: result.durationMs,
           checkedAt: Date.now()

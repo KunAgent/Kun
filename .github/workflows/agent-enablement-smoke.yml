@@ -62,7 +62,7 @@ jobs:
         run: |
           npm run build:extensions
           node scripts/ensure-kun-install.cjs
-          npm --prefix kun test -- src/process/owned-process.admission.test.ts src/session/harness-pool.admission.test.ts src/session/session-turn-runtime.admission.test.ts src/runtime/acp/acp-runtime.admission.test.ts src/runtime/agent-sdk/owned-sdk-process.test.ts --maxWorkers=1
+          npm --prefix kun test -- src/process/owned-process.admission.test.ts src/session/harness-pool.admission.test.ts src/session/session-turn-runtime.admission.test.ts src/runtime/acp/acp-runtime.admission.test.ts src/runtime/agent-sdk/owned-sdk-process.test.ts src/runtime/cursor/cursor-sdk-runtime.admission.test.ts src/harness/cursor-sdk-installation.test.ts src/harness/cursor-sdk-readiness.test.ts src/harness/harness-readiness-admission.test.ts --maxWorkers=1
       - name: Verify native production components
         env:
           KUN_ENABLEMENT_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

@@ -559,6 +559,19 @@ describe('performPreparedThreadSend ADE worktree isolation', () => {
     )
   })
 
+  it.each(['default', 'named-native-account'])('forwards the explicit native profile %s to direct admission', async (providerId) => {
+    const harness = buildHarness({ composerIsolation: 'local', activeThreadId: 'existing',
+      threads: [{ id: 'existing', workspace: '/repo', providerId: 'previous-account' } as never] })
+    const provider = { sendUserMessage: vi.fn(async () => ({ turnId: 'turn_1' })) }
+    const input = inputFor(harness, provider as never)
+    input.activeThreadId = 'existing'
+    input.composerProviderId = providerId
+    expect(await performPreparedThreadSend(input)).toBe(true)
+    expect(provider.sendUserMessage).toHaveBeenCalledWith('existing', 'ship it', expect.objectContaining({
+      providerId, harnessId: 'claude-code', credentialMode: 'native-login'
+    }))
+  })
+
   it('forwards the frozen planBuild flag when a queued build row drains', async () => {
     const { state, ...harness } = buildHarness({
       composerIsolation: 'local',

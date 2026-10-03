@@ -4,12 +4,14 @@ import { createRoot } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { withHarnessReadiness } from '@shared/test-support/harness-readiness'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
+import type { KunHarnessDefaultsEntryV1 } from '@shared/app-settings'
 
 const fixture = vi.hoisted(() => ({
+  defaults: {} as Record<string, KunHarnessDefaultsEntryV1>,
   chat: {
     composerHarnessId: 'claude-code', composerCredentialMode: 'native-login', composerProviderId: '', composerModel: '',
     composerModelGroups: [{ providerId: 'kun-provider', label: 'Kun provider', modelIds: ['deepseek-chat'] }],
-    composerIsolation: 'local', adeDraftOpen: false, activeThreadId: null as string | null,
+    composerIsolation: 'local', adeDraftOpen: false, activeThreadId: null as string | null, workspaceRoot: '/repo',
     setComposerHarness: vi.fn(), setComposerModel: vi.fn(), setComposerIsolation: vi.fn(),
     setComposerExecutionSettings: vi.fn(), requestAdeThreadWorkspace: vi.fn()
   },
@@ -33,12 +35,13 @@ vi.mock('../../store/harness-store', () => ({
 }))
 vi.mock('../../store/task-workspace-store', () => ({ useTaskWorkspaceStore: () => undefined }))
 vi.mock('../../history-reference/use-codex-reference-enabled', () => ({ useCodexReferenceEnabled: () => false }))
-vi.mock('../../lib/harness-defaults', () => ({ useHarnessDefaults: () => ({}), harnessPermissionDefault: () => undefined }))
+vi.mock('../../lib/harness-defaults', () => ({ useHarnessDefaults: () => fixture.defaults, harnessPermissionDefault: () => undefined }))
 vi.mock('./use-ade-worktree-git', () => ({ useAdeWorktreeGit: () => ({ status: 'not-git' }) }))
 vi.mock('./use-code-project-defaults', () => ({ useCodeProjectDefaults: () => undefined }))
 import { useAdeComposerControls } from './use-ade-composer-controls'
 
 beforeEach(() => {
+  fixture.defaults = {}
   fixture.chat.composerHarnessId = 'claude-code'
   fixture.chat.composerCredentialMode = 'native-login'
   fixture.chat.composerProviderId = ''
@@ -58,6 +61,60 @@ beforeEach(() => {
 })
 
 describe('external Agent model discovery', () => {
+  it('preserves the selected native account when its default model arrives', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    fixture.chat.composerProviderId = 'native-account'
+    fixture.harnesses.rows = [withHarnessReadiness({ definition: { id: 'claude-code', displayName: 'Claude Code', transport: 'agent-sdk',
+      credentialModes: ['native-login'], permissionModes: [], modelSource: 'probe', staticModels: [], builtin: true },
+      status: { harnessId: 'claude-code', installed: 'yes', login: 'signed-in', checkedAt: '' } },
+    [{ harnessId: 'claude-code', credentialMode: 'native-login', providerId: 'native-account' }])]
+    fixture.harnesses.models = { 'claude-code': { models: ['sonnet'], loading: false } }
+    function Probe() {
+      useAdeComposerControls({ enabled: true, activeThreadId: null, workspaceRoot: '/repo',
+        threadHarnessId: undefined, threadTaskWorkspaceId: undefined, threadHasUserMessages: false,
+        hasConfiguredProvider: true })
+      return null
+    }
+    const root = createRoot(document.createElement('div'))
+    try {
+      await act(async () => root.render(createElement(Probe)))
+      expect(fixture.chat.setComposerModel).toHaveBeenCalledWith('sonnet', 'native-account', 'settings')
+    } finally {
+      await act(async () => root.unmount())
+      ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false
+    }
+  })
+
+  it('keeps the ready system-native profile when saved defaults name an unready account', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    fixture.chat.composerHarnessId = 'kun'
+    fixture.defaults['claude-code'] = { credentialMode: 'native-login', providerId: 'account-a' }
+    const systemProfile = { harnessId: 'claude-code', credentialMode: 'native-login' as const }
+    fixture.harnesses.rows = [withHarnessReadiness({ definition: { id: 'claude-code', displayName: 'Claude Code', transport: 'agent-sdk',
+      credentialModes: ['native-login', 'kun-gateway'], permissionModes: [], modelSource: 'probe', staticModels: ['sonnet'], builtin: true },
+      status: { harnessId: 'claude-code', installed: 'yes', login: 'signed-in', checkedAt: '' } }, [systemProfile])]
+    let result!: ReturnType<typeof useAdeComposerControls>
+    function Probe() {
+      result = useAdeComposerControls({ enabled: true, activeThreadId: null, workspaceRoot: '/repo',
+        threadHarnessId: undefined, threadTaskWorkspaceId: undefined, threadHasUserMessages: false,
+        hasConfiguredProvider: true })
+      return null
+    }
+    const root = createRoot(document.createElement('div'))
+    try {
+      await act(async () => root.render(createElement(Probe)))
+      await act(async () => result.selectHarness('claude-code'))
+      expect(fixture.chat.composerHarnessId).toBe('claude-code')
+      expect(fixture.chat.composerCredentialMode).toBe('native-login')
+      // The store's empty provider ID represents the unnamed system account.
+      expect(fixture.chat.composerProviderId).toBe('')
+      expect(fixture.chat.setComposerModel).toHaveBeenLastCalledWith('sonnet', '')
+    } finally {
+      await act(async () => root.unmount())
+      ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false
+    }
+  })
+
   it('never exposes the Kun model catalog while an external Agent row is missing', async () => {
     ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     let result!: ReturnType<typeof useAdeComposerControls>

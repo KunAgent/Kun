@@ -139,10 +139,11 @@ export function AdeOneOnOneDialog({
   const resolvedCred = credentialOptions.includes(credentialMode as AdeHarnessCredentialMode)
     ? credentialMode
     : credentialOptions[0] ?? ''
+  const nativeProfiles = row ? readyHarnessProfiles(row).filter((entry) => entry.credentialMode === 'native-login') : []
+  const selectedNativeProfile = nativeProfiles.find((entry) => (entry.providerId ?? '') === providerId) ?? nativeProfiles[0]
   const resolvedProviderId =
     resolvedCred === 'native-login'
-      ? (row ? readyHarnessProfiles(row).find((entry) => entry.credentialMode === 'native-login' && (entry.providerId ?? '') === providerId)?.providerId
-        ?? readyHarnessProfiles(row).find((entry) => entry.credentialMode === 'native-login')?.providerId ?? '' : '')
+      ? selectedNativeProfile?.providerId ?? ''
       : groupsWithModels.some((group) => group.providerId === providerId)
         ? providerId
         : groupsWithModels[0]?.providerId ?? ''

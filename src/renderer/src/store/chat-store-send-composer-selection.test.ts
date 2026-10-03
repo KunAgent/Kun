@@ -17,6 +17,36 @@ function draftState(overrides: Partial<ChatState> = {}): ChatState {
 }
 
 describe('ADE first-send composer selection', () => {
+  it.each(['current', 'queued', 'override', 'snapshot'] as const)('pins the system native sentinel from the %s route instead of inheriting a thread account', (source) => {
+    const state = draftState({ composerHarnessId: 'claude-code', composerCredentialMode: 'native-login',
+      composerModel: 'sonnet', composerProviderId: '' })
+    const queued = source === 'queued' ? { id: 'queued-system', text: 'queued', harnessId: 'claude-code',
+      credentialMode: 'native-login' as const, model: 'sonnet' } : undefined
+    const overrides = source === 'override' ? { harnessId: 'claude-code', credentialMode: 'native-login' as const,
+      providerId: '', model: 'sonnet' } : undefined
+    const adeDraft = source === 'snapshot' ? captureAdeDraftSendSnapshot(state) : undefined
+    const selection = resolveDirectSendComposerSelection({ state: source === 'snapshot' ? draftState() : state,
+      queued, overrides, adeEligible: true, adeDraft })
+    expect(selection).toMatchObject({ composerHarnessId: 'claude-code', composerCredentialMode: 'native-login',
+      composerProviderId: 'default', composerAccountId: '' })
+    expect(state.composerProviderId).toBe('')
+  })
+
+  it.each(['current', 'queued', 'override', 'snapshot'] as const)('preserves the named native account from the %s route', (source) => {
+    const state = draftState({ composerHarnessId: 'claude-code', composerCredentialMode: 'native-login',
+      composerModel: 'sonnet', composerProviderId: 'native-account' })
+    const queued = source === 'queued' ? { id: 'queued-native', text: 'queued', harnessId: 'claude-code',
+      credentialMode: 'native-login' as const, providerId: 'queued-native-account', model: 'sonnet' } : undefined
+    const overrides = source === 'override' ? { harnessId: 'claude-code', credentialMode: 'native-login' as const,
+      providerId: 'override-native-account', model: 'sonnet' } : undefined
+    const adeDraft = source === 'snapshot' ? captureAdeDraftSendSnapshot(state) : undefined
+    const selection = resolveDirectSendComposerSelection({ state: source === 'snapshot' ? draftState() : state,
+      queued, overrides, adeEligible: true, adeDraft })
+    expect(selection).toMatchObject({ composerHarnessId: 'claude-code', composerCredentialMode: 'native-login',
+      composerProviderId: source === 'queued' ? 'queued-native-account' : source === 'override' ? 'override-native-account' : 'native-account',
+      composerAccountId: '' })
+  })
+
   it('keeps the Kun manager selection submitted before async store changes', () => {
     const original = draftState()
     const adeDraft = captureAdeDraftSendSnapshot(original)
@@ -42,7 +72,7 @@ describe('ADE first-send composer selection', () => {
       state, queued: undefined, overrides: undefined, adeEligible: true, adeDraft: undefined
     })
     expect(selection).toMatchObject({ composerModel: 'shared-model', composerHarnessId: 'codex',
-      composerCredentialMode: 'native-login', composerProviderId: '', composerAccountId: '' })
+      composerCredentialMode: 'native-login', composerProviderId: 'default', composerAccountId: '' })
   })
 
   it('keeps a one-on-one harness, credential, provider, and model together', () => {

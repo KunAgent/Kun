@@ -8,6 +8,12 @@ beforeEach(() => useChatStore.setState({ activeThreadId: 'task', composerHarness
   composerProviderId: 'http', composerModel: 'old', setComposerHarness: vi.fn(), setComposerModel: vi.fn(),
   queuedMessages: [{ id: 'queued', text: 'already accepted', model: 'old' }] as never }))
 describe('saved task route projection', () => {
+  it('preserves an explicitly selected native account when projecting the saved route', () => {
+    const before = captureTaskComposerSelection()
+    applySavedTaskRoute('task', before, { ...saved, pending: { ...saved.pending!,
+      route: { harnessId: 'claude-code', model: 'sonnet', credentialMode: 'native-login', providerId: 'native-account' } } })
+    expect(useChatStore.getState().setComposerModel).toHaveBeenCalledWith('sonnet', 'native-account')
+  })
   it('projects the pending route and leaves admitted queue snapshots untouched', () => {
     const before = captureTaskComposerSelection()
     const queued = useChatStore.getState().queuedMessages

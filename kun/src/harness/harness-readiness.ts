@@ -14,6 +14,7 @@ import { raceProbeAbort } from './probe-abort.js'
 import { harnessProfile, harnessProfileKey, nativeHasKey,
   readinessFingerprint, readinessProvider, type ReadinessOptions } from './harness-readiness-profile.js'
 import { readinessProbeEnvironment } from './harness-readiness-env.js'
+import { probeCursorSdkReadiness } from './cursor-sdk-readiness.js'
 import { spawnCaptured } from './harness-detector.js'
 
 const PROOF_TTL_MS = 5 * 60_000
@@ -23,6 +24,7 @@ type Handshake = Omit<HarnessTestHandshake, 'durationMs'>
 type Snapshot = { definition: HarnessDefinition; route: HarnessRoute; secretEnv: Record<string, string>;
   env: Record<string, string>; identity: string; configured: boolean; hasKey: boolean; detail?: string }
 type Proof = { route: HarnessRoute; identity: string; command?: string; expires: number; result: HarnessTestResponse }
+const proofKey = (route: HarnessRoute): string => JSON.stringify([harnessProfileKey(route), route.model])
 
 export type HarnessReadinessDeps = {
   options(): ReadinessOptions
@@ -48,18 +50,29 @@ export class HarnessReadinessService {
   route(definition: HarnessDefinition, input: Pick<HarnessTestRequest, 'credentialMode' | 'providerId' | 'model'>): HarnessRoute {
     const defaults = this.deps.options().harnesses?.defaults?.[definition.id]
     const credentialMode = input.credentialMode ?? defaults?.credentialMode ?? definition.credentialModes[0]!
+    const providerId = input.providerId ?? (input.credentialMode === 'native-login' ? undefined : defaults?.providerId)
     return { harnessId: definition.id, credentialMode,
-      ...(input.providerId ?? defaults?.providerId ? { providerId: input.providerId ?? defaults?.providerId } : credentialMode !== 'native-login' ? { providerId: 'default' } : {}),
+      ...(providerId ? { providerId } : credentialMode !== 'native-login' ? { providerId: 'default' } : {}),
       model: input.model ?? defaults?.model ?? (credentialMode === 'native-login' ? 'default' : this.deps.options().model ?? '') }
   }
 
   async test(definition: HarnessDefinition, input: HarnessTestRequest, signal?: AbortSignal): Promise<HarnessTestResponse> {
-    const started = this.now()
     const route = this.route(definition, input)
+    this.invalidateProfile(harnessProfileKey(route))
+    return this.check(definition, route, input, signal)
+  }
+
+  private invalidateProfile(key: string): void {
+    this.generations.set(key, (this.generations.get(key) ?? 0) + 1)
+    for (const [candidate, proof] of this.proofs) {
+      if (harnessProfileKey(proof.route) === key) this.proofs.delete(candidate)
+    }
+  }
+
+  private async check(definition: HarnessDefinition, route: HarnessRoute, input: HarnessTestRequest, signal?: AbortSignal): Promise<HarnessTestResponse> {
+    const started = this.now()
     const key = harnessProfileKey(route)
-    const generation = (this.generations.get(key) ?? 0) + 1
-    this.generations.set(key, generation)
-    this.proofs.delete(key)
+    const generation = this.generations.get(key) ?? 0
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(new Error('Readiness check timed out')), Math.min(input.timeoutMs ?? DEFAULT_TIMEOUT_MS, 60_000))
     const bounded = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal
@@ -93,7 +106,8 @@ export class HarnessReadinessService {
       const credentials = definition.transport === 'native-loop' || snapshot.hasKey || (route.credentialMode === 'native-login' && nativeEvidence)
       checks.push({ id: 'credentials', ok: credentials, detail: nativeEvidence ? 'Local account status verified; quota not tested' :
         snapshot.hasKey ? 'Credential configured; authentication and quota not tested' : 'No verified local account or configured API credential' })
-      const protocol = definition.transport === 'native-loop' || (handshake?.ok === true && handshake.supported && (route.credentialMode !== 'native-login' || handshake.authRequired !== true))
+      const localSdk = definition.transport === 'cursor-sdk' && handshake?.protocol === 'cursor-sdk-local-api'
+      const protocol = definition.transport === 'native-loop' || (handshake?.ok === true && (handshake.supported || localSdk) && (route.credentialMode !== 'native-login' || handshake.authRequired !== true))
       const modelMatches = route.credentialMode !== 'native-login' || (handshake?.models === undefined
         ? route.model === 'default'
         : handshake.models.length > 0 && (route.model === 'default' || handshake.models.includes(route.model)))
@@ -101,7 +115,7 @@ export class HarnessReadinessService {
       bounded.throwIfAborted()
       const latest = await raceProbeAbort(this.snapshot(route, status.resolvedCommand), bounded)
       if (revision !== this.deps.revision?.() || latest.identity !== snapshot.identity ||
-        this.generations.get(key) !== generation || initialEnabled !== this.deps.catalog.isProfileEnabled(route)) {
+        (this.generations.get(key) ?? 0) !== generation || initialEnabled !== this.deps.catalog.isProfileEnabled(route)) {
         throw new Error('Configuration or credentials changed during the check; test again')
       }
       snapshot.identity = latest.identity
@@ -117,8 +131,19 @@ export class HarnessReadinessService {
     const result: HarnessTestResponse = { harnessId: definition.id, transport: definition.transport, level: input.level,
       ok: usable, durationMs: this.now() - started, detect: { durationMs: this.now() - started, ok: status.installed === 'yes', status },
       ...(handshake ? { handshake } : {}), readiness }
-    if (usable && snapshot && this.generations.get(key) === generation && !bounded.aborted) {
-      this.proofs.set(key, { route, identity: snapshot.identity, command: status.resolvedCommand, expires: this.now() + PROOF_TTL_MS, result })
+    // A failed fresh check revokes older evidence, including pending checks.
+    // Cancelling one caller alone must not revoke a different live admission.
+    if (!usable && !bounded.aborted && (this.generations.get(key) ?? 0) === generation) this.invalidateProfile(key)
+    if (usable && snapshot && (this.generations.get(key) ?? 0) === generation && !bounded.aborted) {
+      const existing = this.proofs.get(proofKey(route))
+      // A fresh admission must not replace a matching proof that another turn
+      // is validating. Different models retain independent launch evidence.
+      if (existing?.identity === snapshot.identity) {
+        existing.expires = this.now() + PROOF_TTL_MS
+        existing.result = result
+      } else {
+        this.proofs.set(proofKey(route), { route, identity: snapshot.identity, command: status.resolvedCommand, expires: this.now() + PROOF_TTL_MS, result })
+      }
     }
     return result
   }
@@ -127,14 +152,14 @@ export class HarnessReadinessService {
     const definition = this.deps.catalog.get(id)
     if (!definition || id === 'kun') return
     for (const profile of this.deps.catalog.enabledProfiles(id)) {
-      const route = this.route(definition, { ...profile, providerId: profile.providerId ?? 'default' })
+      const route = this.route(definition, profile)
       const key = harnessProfileKey(route)
       const signature = this.configurationSignature(route)
-      const proof = this.proofs.get(key)
-      if (proof && proof.expires <= this.now()) { this.proofs.delete(key); this.warmed.delete(key) }
-      if (this.proofs.has(key) || this.warming.has(key) || this.warmed.get(key) === signature) continue
+      const proof = this.proofs.get(proofKey(route))
+      if (proof && proof.expires <= this.now()) { this.proofs.delete(proofKey(route)); this.warmed.delete(key) }
+      if (this.proofs.has(proofKey(route)) || this.warming.has(key) || this.warmed.get(key) === signature) continue
       this.warmed.set(key, signature)
-      const pending = this.test(definition, { level: 'handshake', ...route })
+      const pending = this.check(definition, route, { level: 'handshake', ...route })
         .catch(() => undefined).finally(() => this.warming.delete(key))
       this.warming.set(key, pending)
     }
@@ -151,14 +176,17 @@ export class HarnessReadinessService {
       if (proof.expires <= this.now()) { this.proofs.delete(key); continue }
       if (!this.deps.catalog.isProfileEnabled(proof.route)) continue
       try {
-        if ((await raceProbeAbort(this.snapshot(proof.route, proof.command), signal)).identity !== proof.identity) { this.proofs.delete(key); this.warmed.delete(key); continue }
-        profiles.push({ ...harnessProfile(proof.route), expiresAt: new Date(proof.expires).toISOString() })
+        if ((await raceProbeAbort(this.snapshot(proof.route, proof.command), signal)).identity !== proof.identity) { this.proofs.delete(key); this.warmed.delete(harnessProfileKey(proof.route)); continue }
+        if (!profiles.some((profile) => harnessProfileKey(profile) === harnessProfileKey(proof.route))) {
+          profiles.push({ ...harnessProfile(proof.route), expiresAt: new Date(proof.expires).toISOString() })
+        }
       } catch { this.proofs.delete(key) }
     }
     return profiles
   }
 
   configurationSignature(route: HarnessRoute): string {
+    route = { ...harnessProfile(route), model: route.model }
     const definition = this.deps.catalog.get(route.harnessId)
     if (!definition) return 'missing'
     return `${this.deps.revision?.() ?? 0}:${readinessFingerprint({ options: this.deps.options(), definition, route, secretEnv: {} })}`
@@ -185,7 +213,7 @@ export class HarnessReadinessService {
   }
   commandForTurn(threadId: string, turnId: string): string | undefined {
     const launch = this.launches.get(`${threadId}:${turnId}`)
-    return launch ? this.proofs.get(harnessProfileKey(launch.route))?.command : undefined
+    return launch ? this.proofs.get(proofKey(launch.route))?.command : undefined
   }
   releaseTurn(threadId: string, turnId: string): void { this.launches.delete(`${threadId}:${turnId}`) }
 
@@ -195,12 +223,14 @@ export class HarnessReadinessService {
     if (!definition || definition.availability === 'retired' || !this.deps.catalog.isProfileEnabled(route)) {
       throw new Error(`Agent profile is disabled: ${route.harnessId}. Test and enable this profile in Agent settings.`)
     }
-    const result = await this.test(definition, { level: 'handshake', ...route }, signal)
+    // Explicit settings tests supersede old checks; turn admissions only
+    // observe that fence and cannot invalidate another unchanged turn.
+    const result = await this.check(definition, route, { level: 'handshake', ...route }, signal)
     signal?.throwIfAborted()
     if (!result.readiness?.usable || !this.deps.catalog.isProfileEnabled(route)) {
       throw new Error(result.readiness?.detail ?? result.readiness?.checks.find((check) => !check.ok)?.detail ?? 'Agent profile is not ready; test it in Agent settings')
     }
-    const proof = this.proofs.get(harnessProfileKey(route))
+    const proof = this.proofs.get(proofKey(route))
     if (!proof) throw new Error('Readiness check was superseded; retry')
     return proof.identity
   }
@@ -209,16 +239,17 @@ export class HarnessReadinessService {
   async validateProof(route: HarnessRoute, identity: string, signal?: AbortSignal): Promise<void> {
     signal = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(10_000)])
     signal.throwIfAborted()
-    const proof = this.proofs.get(harnessProfileKey(route))
+    const proof = this.proofs.get(proofKey(route))
     const revision = this.deps.revision?.()
     if (!this.deps.catalog.isProfileEnabled(route) || !proof || proof.identity !== identity ||
       (await raceProbeAbort(this.snapshot(route, proof.command), signal)).identity !== identity) throw new Error('Agent profile changed before launch; test it again')
     if (revision !== this.deps.revision?.() || !this.deps.catalog.isProfileEnabled(route) ||
-      this.proofs.get(harnessProfileKey(route)) !== proof) throw new Error('Agent profile changed during launch validation')
+      this.proofs.get(proofKey(route)) !== proof) throw new Error('Agent profile changed during launch validation')
     signal?.throwIfAborted()
   }
 
   private async snapshot(route: HarnessRoute, command?: string): Promise<Snapshot> {
+    route = { ...harnessProfile(route), model: route.model }
     const definition = this.deps.catalog.get(route.harnessId)
     if (!definition) throw new Error('Unknown harness')
     const options = this.deps.options()
@@ -293,6 +324,7 @@ export class HarnessReadinessService {
       case 'agent-sdk': {
         return await this.deps.sdkHandshake?.(definition, env, signal) ?? { ok: false, supported: true, protocol: 'agent-sdk' }
       }
+      case 'cursor-sdk': return probeCursorSdkReadiness(signal)
       case 'antigravity-cli': {
         const result = await spawnCaptured(command, ['models'], { timeoutMs: 10_000, signal, env })
         const models = [...new Set(result.stdout.match(/\b[a-z][a-z0-9]*(?:[-.][a-z0-9]+)+\b/gi) ?? [])]

@@ -75,9 +75,26 @@ test('high-zoom captures show fully reachable controls and report actual clamped
   assert.match(smoke, /report\.screenshotDetails\.push/)
 })
 
+test('native screenshots retain the full content pixels at every Electron zoom', () => {
+  assert.match(smoke, /await window\.webContents\.capturePage\(\)/)
+  assert.match(smoke, /nativeImage\.toPNG\(\)\.toString\('base64'\)/)
+  assert.doesNotMatch(smoke, /page\.screenshot\(|nativeImage\.resize\(|nativeImage\.crop\(/)
+  assert.match(smoke, /Buffer\.from\(capture\.png, 'base64'\)/)
+  assert.match(smoke, /bytes\.readUInt32BE\(16\)/)
+  assert.match(smoke, /bytes\.readUInt32BE\(20\)/)
+  assert.match(smoke, /Math\.round\(capture\.contentBounds\.width \* capture\.displayScale\)/)
+  assert.match(smoke, /Math\.round\(capture\.contentBounds\.height \* capture\.displayScale\)/)
+  assert.match(smoke, /await writeFile\(join\(evidence, file\), bytes\)/)
+  assert.match(smoke, /report\.nativeCaptures\.push\(\{ file, \.\.\.pixels \}\)/)
+  assert.match(smoke, /Math\.abs\(pixelSize\.height - expectedPixelSize\.height\) <= 1/)
+  assert.match(smoke, /control\.bottom \* scale <= pixelSize\.height \+ 1/)
+})
+
 test('both native platforms exercise the final process and pooled-session gate', () => {
   for (const file of ['owned-process.admission.test.ts', 'harness-pool.admission.test.ts',
-    'session-turn-runtime.admission.test.ts', 'acp-runtime.admission.test.ts', 'owned-sdk-process.test.ts']) {
+    'session-turn-runtime.admission.test.ts', 'acp-runtime.admission.test.ts', 'owned-sdk-process.test.ts',
+    'cursor-sdk-runtime.admission.test.ts', 'cursor-sdk-installation.test.ts',
+    'cursor-sdk-readiness.test.ts', 'harness-readiness-admission.test.ts']) {
     assert.ok(workflow.includes(file), file)
   }
   assert.match(workflow, /--maxWorkers=1/)

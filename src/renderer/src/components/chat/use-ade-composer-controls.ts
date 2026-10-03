@@ -125,7 +125,7 @@ export function useAdeComposerControls(input: {
     if (state.activeThreadId !== activeThreadId || state.workspaceRoot !== workspaceRoot ||
       state.composerHarnessId !== harnessId || state.composerModel) return
     const model = modelCache?.modelInfo?.find((entry) => entry.isDefault)?.id ?? modelCache?.models[0]
-    if (model) setComposerModel(model, '', 'settings')
+    if (model) setComposerModel(model, state.composerProviderId, 'settings')
   }, [enabled, isNativeHarness, credentialMode, modelCache, activeThreadId, workspaceRoot, harnessId, setComposerModel])
 
   // Provider/gateway credential modes need the exposable-provider groups.
@@ -269,7 +269,8 @@ export function useAdeComposerControls(input: {
       }
     } else {
       const nativeDefault = useHarnessStore.getState().models[nextId]?.modelInfo?.find((entry) => entry.isDefault)?.id
-      setComposerModel(defaults?.model ?? nativeDefault ?? models[0] ?? '', selectedProfile?.providerId ?? defaults?.providerId ?? '')
+      // An unnamed ready profile is the system account, not a missing default.
+      setComposerModel(defaults?.model ?? nativeDefault ?? models[0] ?? '', selectedProfile?.providerId ?? '')
     }
     if (managedDraft && defaults?.isolation) {
       setComposerIsolation(

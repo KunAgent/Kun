@@ -7,9 +7,6 @@ export const AdeProjectRouteSchema = z.object({
   providerId: z.string().trim().min(1).max(128).optional(),
   credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional()
 }).strict().superRefine((route, ctx) => {
-  if (route.credentialMode === 'native-login' && route.providerId) {
-    ctx.addIssue({ code: 'custom', path: ['providerId'], message: 'native login cannot pin a provider' })
-  }
   if ((route.credentialMode === 'provider' || route.credentialMode === 'kun-gateway') && !route.providerId) {
     ctx.addIssue({ code: 'custom', path: ['providerId'], message: 'provider route requires providerId' })
   }

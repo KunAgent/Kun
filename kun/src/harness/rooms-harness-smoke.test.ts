@@ -91,3 +91,23 @@ it('installed Rooms fixtures cannot become ready without consent or without the 
   expect(await f.harnesses.readiness.readyProfiles('devin')).toEqual([])
   expect(await f.methods()).toEqual([])
 }, 60_000)
+
+it('keeps real Devin admission valid across native default aliases and background revalidation', async () => {
+  const f = await fixture()
+  const native = { harnessId: 'devin', credentialMode: 'native-login' as const, model: 'devin-fixture-model' }
+  const accepted = { ...native, providerId: 'default' }
+  const readiness = f.harnesses.readiness
+  const signal = new AbortController().signal
+  expect(readiness.configurationSignature(accepted)).toBe(readiness.configurationSignature(native))
+  await Promise.all([
+    readiness.prepareTurn('rooms-native', 'turn', native, readiness.configurationSignature(native), signal),
+    readiness.prepareTurn('rooms-accepted', 'turn', accepted, readiness.configurationSignature(accepted), signal)
+  ])
+  readiness.warmProfiles('devin')
+  await vi.waitFor(() => expect(readiness.checking('devin')).toBe(false), { timeout: 30_000 })
+  await expect(readiness.validateTurn('rooms-native', 'turn', signal, accepted)).resolves.toMatch(/^[a-f0-9]{64}$/)
+  await expect(readiness.validateTurn('rooms-accepted', 'turn', signal, native)).resolves.toMatch(/^[a-f0-9]{64}$/)
+  expect(await readiness.readyProfiles('devin')).toHaveLength(1)
+  expect(await f.methods()).toContain('initialize')
+  expect(await f.methods()).not.toContain('session/prompt')
+}, 60_000)

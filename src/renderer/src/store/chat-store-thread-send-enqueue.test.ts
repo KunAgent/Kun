@@ -96,6 +96,23 @@ beforeEach(() => {
 })
 
 describe('submitToRuntimeQueue', () => {
+  it.each(['default', 'named-native-account'])('forwards the explicit native profile %s to queued admission', async (providerId) => {
+    const { state, set, get } = buildHarness()
+    const sendUserMessage = vi.fn(async () => ({ turnId: 'turn_new', userMessageItemId: 'user_new' }))
+    const result = await submitToRuntimeQueue({
+      provider: { sendUserMessage } as never,
+      activeThreadId: 'thr_1', trimmedText: 'hello', clientRequestId: 'native-request',
+      orchestration: 'direct', composerModel: 'sonnet', composerProviderId: providerId,
+      composerHarnessId: 'claude-code', composerCredentialMode: 'native-login',
+      composerContexts: [], ackNoticeIds: undefined, set, get, persistActiveQueuedMessages: vi.fn()
+    } as unknown as Parameters<typeof submitToRuntimeQueue>[0])
+    expect(result).toBe(true)
+    expect(sendUserMessage).toHaveBeenCalledWith('thr_1', 'hello', expect.objectContaining({
+      providerId, harnessId: 'claude-code', credentialMode: 'native-login'
+    }))
+    expect(state.queuedMessages[0]).toMatchObject({ providerId, harnessId: 'claude-code', credentialMode: 'native-login' })
+  })
+
   it('does not write a late admission into the newly selected thread', async () => {
     const { state, set, get } = buildHarness()
     const sendUserMessage = vi.fn(async () => {

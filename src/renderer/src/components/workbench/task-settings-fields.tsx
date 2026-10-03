@@ -2,6 +2,7 @@ import { useEffect, useId, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AdeExecutionConfigSnapshot } from '@shared/ade-execution-config'
 import type { AdeProjectDefaults, AdeProjectDefaultField } from '@shared/ade-project-defaults'
+import { harnessProfileReady, readyHarnessProfiles } from '@shared/harness-enablement'
 import { harnessRowAvailable, harnessRowRunsTurns, harnessModelFingerprint, loadHarnessModels, loadHarnessProviderGroups, loadHarnesses, useHarnessStore } from '../../store/harness-store'
 import { useChatStore } from '../../store/chat-store'
 import { isKunModelProviderGroup } from '../../lib/kun-model-provider-groups'
@@ -30,19 +31,22 @@ export function TaskSettingsFields({ value, effective, onChange, onRestore, rest
   const allGroups = useChatStore((s) => s.composerModelGroups)
   const kunGroups = allGroups.filter(isKunModelProviderGroup)
   const externalGroups = useHarnessStore((s) => s.providerGroups[harnessId]?.groups)
-  const groups = harnessId === 'kun' ? kunGroups : (externalGroups ?? []).map((group) => ({
-    providerId: group.providerId, label: group.label, modelIds: group.models
-  }))
   const row = rows.find((row) => row.definition.id === harnessId)
   const definition = row?.definition
   const fingerprint = harnessModelFingerprint(row)
-  const modes = definition?.credentialModes ?? (harnessId === 'kun' ? ['provider'] : ['native-login'])
-  const credentialMode = route.credentialMode ?? modes[0] ?? 'provider'
+  const profiles = row ? readyHarnessProfiles(row) : []
+  const modes = harnessId === 'kun' ? ['provider'] as const
+    : [...new Set(profiles.map((profile) => profile.credentialMode))]
+  const credentialMode = route.credentialMode ?? definition?.credentialModes[0] ?? 'provider'
   const providerId = route.providerId ?? ''
+  const nativeProfiles = profiles.filter((profile) => profile.credentialMode === 'native-login')
+  const groups = harnessId === 'kun' ? kunGroups : (externalGroups ?? [])
+    .filter((group) => profiles.some((profile) => profile.credentialMode === credentialMode && profile.providerId === group.providerId))
+    .map((group) => ({ providerId: group.providerId, label: group.label, modelIds: group.models }))
   const modelIds = credentialMode === 'native-login'
     ? models ?? definition?.staticModels ?? []
     : groups.find((group) => group.providerId === providerId)?.modelIds ?? []
-  useEffect(() => { void loadHarnesses() }, [])
+  useEffect(() => { void loadHarnesses(true) }, [])
   useEffect(() => { if (harnessId !== 'kun') void loadHarnessModels(harnessId) }, [harnessId])
   useEffect(() => {
     if (harnessId !== 'kun' && credentialMode !== 'native-login') void loadHarnessProviderGroups(harnessId, true)
@@ -69,7 +73,9 @@ export function TaskSettingsFields({ value, effective, onChange, onRestore, rest
   )
   const changeRoute = (patch: Partial<NonNullable<AdeProjectDefaults['route']>>): void => {
     const next = { ...route, harnessId, ...patch }
-    if ((next.credentialMode ?? credentialMode) === 'native-login') delete next.providerId
+    if (harnessId !== 'kun' && (!row || !harnessProfileReady(row, {
+      harnessId, credentialMode: next.credentialMode ?? credentialMode, providerId: next.providerId
+    }))) return
     onChange('route', next)
   }
 
@@ -78,9 +84,13 @@ export function TaskSettingsFields({ value, effective, onChange, onRestore, rest
       <label className="flex min-w-0 items-center gap-2">
         <AgentIcon harnessId={harnessId} size={20} />
         <select aria-label={t('taskSettings.agent')} className={fieldClass} value={harnessId} onChange={(event) => {
-          const next = rows.find((row) => row.definition.id === event.target.value)?.definition
-          const mode = next?.credentialModes[0] ?? 'provider'
-          onChange('route', { harnessId: event.target.value, model: next?.staticModels?.[0] ?? '', credentialMode: mode })
+          const next = rows.find((row) => row.definition.id === event.target.value)
+          if (!next || !harnessRowAvailable(next)) return
+          const profile = readyHarnessProfiles(next)[0]
+          const mode = profile?.credentialMode ?? 'provider'
+          onChange('route', { harnessId: next.definition.id,
+            model: mode === 'native-login' ? useHarnessStore.getState().models[next.definition.id]?.models[0] ?? next.definition.staticModels[0] ?? '' : '',
+            credentialMode: mode, ...(profile?.providerId ? { providerId: profile.providerId } : {}) })
         }}>
           {!rows.some((row) => row.definition.id === harnessId && harnessRowAvailable(row)) ? <option disabled value={harnessId}>{harnessId}</option> : null}
           {rows.filter((entry) => harnessRowRunsTurns(entry) && harnessRowAvailable(entry)).map((row) =>
@@ -89,13 +99,24 @@ export function TaskSettingsFields({ value, effective, onChange, onRestore, rest
       </label>
       <select aria-label={t('taskSettings.credential')} className={fieldClass} value={credentialMode} onChange={(event) => {
         const mode = event.target.value as NonNullable<AdeProjectDefaults['route']>['credentialMode']
-        changeRoute({ credentialMode: mode, providerId: mode === 'native-login' ? undefined : providerId || undefined, model: '' })
+        const profile = profiles.find((entry) => entry.credentialMode === mode && (entry.providerId ?? '') === providerId)
+          ?? profiles.find((entry) => entry.credentialMode === mode)
+        if (harnessId !== 'kun' && !profile) return
+        changeRoute({ credentialMode: mode, providerId: profile?.providerId ?? (harnessId === 'kun' ? providerId || undefined : undefined), model: '' })
       }}>
+        {!modes.some((mode) => mode === credentialMode) ? <option disabled value={credentialMode}>{t(`adeCredential.${credentialMode === 'native-login' ? 'nativeLogin' : credentialMode === 'kun-gateway' ? 'kunGateway' : 'provider'}`)}</option> : null}
         {modes.map((mode) => <option key={mode} value={mode}>{t(`adeCredential.${mode === 'native-login' ? 'nativeLogin' : mode === 'kun-gateway' ? 'kunGateway' : 'provider'}`)}</option>)}
       </select>
+      {credentialMode === 'native-login' ? <select aria-label={t('agentEnablement.nativeAccount')} className={fieldClass} value={providerId}
+        onChange={(event) => changeRoute({ providerId: event.target.value || undefined, model: '' })}>
+        {!nativeProfiles.some((profile) => (profile.providerId ?? '') === providerId) ? <option disabled value={providerId}>{providerId || t('agentEnablement.systemAccount')}</option> : null}
+        {nativeProfiles.map((profile) => <option key={profile.providerId ?? ''} value={profile.providerId ?? ''}>{profile.providerId
+          ? allGroups.find((group) => group.providerId === profile.providerId)?.label ?? profile.providerId : t('agentEnablement.systemAccount')}</option>)}
+      </select> : null}
       {credentialMode !== 'native-login' ? <select aria-label={t('taskSettings.provider')} className={fieldClass} value={providerId}
         onChange={(event) => changeRoute({ providerId: event.target.value || undefined, model: '' })}>
         <option value="">{t('taskSettings.selectProvider')}</option>
+        {providerId && !groups.some((group) => group.providerId === providerId) ? <option disabled value={providerId}>{providerId}</option> : null}
         {groups.map((group) => <option key={group.providerId} value={group.providerId}>{group.label}</option>)}
       </select> : null}
       <input aria-label={t('taskSettings.model')} className={fieldClass} value={route.model} list={`${id}-models`}

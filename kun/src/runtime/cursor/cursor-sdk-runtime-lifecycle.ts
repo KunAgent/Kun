@@ -403,6 +403,7 @@ export async function runCursorSdkTurnOwned(
       }
       attachIsolatedStore()
       if (resumeNativeSession && preparation?.nativeSessionId) {
+        await deps.readiness?.validateTurn(threadId, turnId, signal)
         try {
           agent = await Promise.race([
             sdk.Agent.resume(preparation.nativeSessionId, options),
@@ -483,6 +484,7 @@ export async function runCursorSdkTurnOwned(
         })
         let runAccepted = false
         try {
+          await deps.readiness?.validateTurn(threadId, turnId, signal)
           run = await Promise.race([
             agent.send(attemptMessage, {
               mode: options.mode,
@@ -602,6 +604,7 @@ export async function runCursorSdkTurnOwned(
           })
           const recoveryAgentId: string = agent.agentId
           await Promise.race([agent[Symbol.asyncDispose](), interrupted])
+          await deps.readiness?.validateTurn(threadId, turnId, signal)
           agent = await Promise.race([
             sdk.Agent.resume(recoveryAgentId, options),
             interrupted
