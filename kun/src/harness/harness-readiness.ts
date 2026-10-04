@@ -9,6 +9,7 @@ import { probeCodexHandshake } from './codex-handshake-probe.js'
 import { probePiHandshake } from './pi-handshake-probe.js'
 import { legacyProviderKindFor } from './harness-provider-kind.js'
 import { parseGatewayModelId } from './gateway-model-id.js'
+import { exposableProvider } from '../domain/model-gateway-export-policy.js'
 import { nativeAgentNetworkStatus } from './native-agent-network.js'
 import { raceProbeAbort } from './probe-abort.js'
 import { harnessProfile, harnessProfileKey, nativeHasKey,
@@ -276,11 +277,14 @@ export class HarnessReadinessService {
     if (route.credentialMode !== 'native-login') {
       hasKey = Boolean(apiKey)
       const gateway = route.credentialMode === 'kun-gateway'
-      const validProvider = Boolean(provider && (gateway ? ((provider.kind ?? 'http') === 'http' && (!provider.authType || provider.authType === 'api-key')) :
+      const validProvider = Boolean(provider && (gateway ? exposableProvider({
+        kind: provider.kind ?? 'http', authType: provider.authType ?? 'api-key',
+        configured: Boolean(apiKey), credentialStatus: apiKey ? 'ready' : 'missing'
+      }) :
         !legacyProviderKindFor(definition.id) || provider.kind === legacyProviderKindFor(definition.id)))
       configured &&= validProvider && Boolean(route.model) && (!gateway || Boolean(definition.gateway))
       const modelPool = [...(provider?.models ?? []), ...(provider?.selectedModel ? [provider.selectedModel] : [])]
-      if (modelPool.length && !modelPool.includes(parseGatewayModelId(route.model)?.model ?? route.model)) { configured = false; detail = 'Selected model is not in this provider profile' }
+      if ((gateway || modelPool.length) && !modelPool.includes(parseGatewayModelId(route.model)?.model ?? route.model)) { configured = false; detail = 'Selected model is not in this provider profile' }
       if (!validProvider) detail = 'Select a supported provider profile'
       // Protocol initialization must not consume the provider key or issue a gateway grant.
       // Its model route and credential are checked locally, independently of login.

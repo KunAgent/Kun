@@ -111,6 +111,20 @@ export type ModelRequest = {
    * out a provider backoff is pointless when the user asked to switch.
    */
   failover?: { alternatives: number }
+  /**
+   * Server-owned gateway export scope. Every attempt, including account-group
+   * fallbacks, must remain in this exact allowlist. Never populate from client
+   * JSON. Native harness/model requests omit this field.
+   */
+  gatewayRouting?: {
+    allowedTargets: ReadonlyArray<{ providerId: string; modelId: string }>
+    /** Captured router generation; checked synchronously at every dispatch. */
+    assertCurrent?: () => void
+    /** Recheck durable admission after asynchronous credential resolution. */
+    beforeDispatch?: () => Promise<void>
+    /** Shared physical HTTP-attempt budget, including protocol/auth retries. */
+    takeAttempt?: () => boolean
+  }
   /** Runtime-owned diagnostic run id used to correlate route-test progress. */
   routeTestId?: string
   /** Opaque account selection for custom/extension providers. Never a credential. */
@@ -261,6 +275,8 @@ export type ModelToolSpec = {
 export interface ModelClient {
   readonly provider: string
   readonly model: string
+  /** Captures a fail-closed generation proof for model gateway admission. */
+  gatewayDispatchGuard?(): () => void
   /**
    * True when the concrete provider/model target is selected only after the
    * stream starts (for example a failover route pool). Callers must not freeze

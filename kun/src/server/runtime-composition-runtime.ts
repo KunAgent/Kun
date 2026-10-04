@@ -87,6 +87,7 @@ export function createServerRuntimeComposition(
     officialProviderCli,
     officialProviderAuth,
     gatewayCredentials,
+    gatewayUsage,
     stopExtensionModelListener
   } = model
   const {
@@ -318,13 +319,14 @@ export function createServerRuntimeComposition(
 	    modelClient,
 	    directModelClient,
 	    modelGateway: {
-	      enabled: () => config.activeOptions.localModelGateway?.enabled === true && gatewayCredentials.hasKey(),
+	      enabled: () => config.activeOptions.localModelGateway?.enabled === true && gatewayCredentials.hasActiveCredentials(),
       exposeProviderModels: () => config.activeOptions.localModelGateway?.exposeProviderModels === true,
 	      pools: () => modelClient.routePools(),
 	      configuredPools: () => modelClient.configuredPools(),
 	      health: routeHealth,
 	      tests: routePoolTests,
 	      credentials: gatewayCredentials,
+	      usage: gatewayUsage,
 	      modelCapabilities: core.modelCapabilities
 	    },
 	    modelConnections,

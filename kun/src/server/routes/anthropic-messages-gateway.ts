@@ -1,12 +1,17 @@
 import { randomUUID } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import type { UsageSnapshot } from '../../contracts/usage.js'
 import type { HarnessTokenGrant } from '../../harness/harness-token-service.js'
 import type { ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { readJsonBody } from '../read-json-body.js'
-import { jsonResponse, type JsonResponse } from '../response.js'
+import type { JsonResponse } from '../response.js'
+import { gatewayJsonResponse as jsonResponse } from './gateway-json-response.js'
 import type { GatewayLease } from './gateway-request-guard.js'
 import type { ServerRuntime } from './server-runtime.js'
+import { beginGatewayUsage, wrapGatewayUsage, GatewayUsageError, type GatewayUsageRecorder, type GatewayUsageStream } from './gateway-usage.js'
+import { anthropicToChatInput } from './anthropic-gateway-input.js'
 import {
+  type GatewayAuth,
   acquireHarnessGrantLease,
   asRecord,
   authorizeGateway,
@@ -19,7 +24,6 @@ import {
   MAX_GATEWAY_BODY_BYTES,
   nextGatewayChunk,
   numberValue,
-  parseArguments,
   recordHarnessGatewayUsage,
   resolveGatewayModel,
   stringValue
@@ -56,14 +60,14 @@ function anthropicError(message: string, status: number): JsonResponse {
 function authorizeAnthropicGateway(
   runtime: ServerRuntime,
   request: Request
-): { grant?: HarnessTokenGrant } | JsonResponse {
+): { grant?: HarnessTokenGrant; auth: GatewayAuth } | JsonResponse {
   const verdict = authorizeGateway(runtime, request)
   if (!verdict.ok) {
     return verdict.reason === 'rate_limited'
       ? anthropicError('Gateway rate limit exceeded.', 429)
       : anthropicError('Invalid gateway API key.', 401)
   }
-  return { grant: verdict.auth.kind === 'harness' ? verdict.auth.grant : undefined }
+  return { auth: verdict.auth, grant: verdict.auth.kind === 'harness' ? verdict.auth.grant : undefined }
 }
 
 /** Per-grant concurrency/body limits replace the public guard's when a `kgw_` grant authorized the request. */
@@ -75,8 +79,8 @@ function anthropicStopReason(
   stopReason: 'stop' | 'tool_calls' | 'length' | 'error' | undefined,
   sawToolUse: boolean
 ): 'end_turn' | 'max_tokens' | 'tool_use' {
-  if (stopReason === 'tool_calls' || sawToolUse) return 'tool_use'
   if (stopReason === 'length') return 'max_tokens'
+  if (stopReason === 'tool_calls' || sawToolUse) return 'tool_use'
   return 'end_turn'
 }
 
@@ -106,23 +110,42 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
     return anthropicError(error instanceof Error ? error.message : String(error), 400)
   }
   const model = stringValue(input.model)
-  const resolved = model ? await resolveGatewayModel(runtime, model, grant) : null
+  let resolved: Awaited<ReturnType<typeof resolveGatewayModel>>
+  try {
+    resolved = model ? await resolveGatewayModel(runtime, model, grant) : null
+  } catch {
+    lease.release()
+    return anthropicError('Gateway model registry is unavailable.', 503)
+  }
   if (!resolved) {
     lease.release()
     return anthropicError(`The model '${model || '(missing)'}' does not exist.`, 404)
   }
   // Grant requests run under the grant's thread and the currently running
   // turn when one exists, so items and usage attribute to the real turn.
-  const turnId = grant ? await gatewayRunningTurnId(runtime, grant.threadId) : undefined
+  let turnId: string | undefined
+  try { turnId = grant ? await gatewayRunningTurnId(runtime, grant.threadId) : undefined } catch {
+    lease.release()
+    return anthropicError('Gateway thread attribution is unavailable.', 503)
+  }
   let modelRequest: ModelRequest
   try {
     modelRequest = makeModelRequest({ ...input, model: resolved.model }, lease.signal, resolved.providerId,
       grant ? { threadId: grant.threadId, turnId: turnId ?? `gateway_${grant.grantId}` } : undefined)
+    modelRequest.gatewayRouting = resolved.gatewayRouting
+    if (modelRequest.reasoningEffort === 'off') {
+      for (const target of resolved.gatewayRouting.allowedTargets) {
+        const reasoning = runtime.modelGateway?.modelCapabilities?.(target.modelId, target.providerId).reasoning
+        if (reasoning?.supportedEfforts && !reasoning.supportedEfforts.includes('off')) {
+          throw new Error(`The model '${target.modelId}' cannot disable thinking; choose a gateway route whose models support reasoning off`)
+        }
+      }
+    }
   } catch (error) {
     lease.release()
     return anthropicError(error instanceof Error ? error.message : String(error), 400)
   }
-  if (modelRequest.attachments?.length) {
+  if (modelRequest.attachments?.length || Object.keys(modelRequest.messageAttachments ?? {}).length) {
     // Anthropic returns a 400 when the model cannot consume image blocks;
     // mirror that instead of silently degrading them to text.
     const capabilities = runtime.modelGateway?.modelCapabilities?.(resolved.model, resolved.providerId)
@@ -131,18 +154,32 @@ export async function gatewayMessages(runtime: ServerRuntime, request: Request):
       return anthropicError(`The model '${resolved.model}' does not support image inputs.`, 400)
     }
   }
+  let recorder: GatewayUsageRecorder | undefined
+  try {
+    recorder = await beginGatewayUsage(runtime, gate.auth, request, model, resolved)
+    if (recorder) {
+      modelRequest = makeModelRequest({ ...input, model: resolved.model }, lease.signal, resolved.providerId, recorder.attribution)
+      modelRequest.gatewayRouting = resolved.gatewayRouting
+    }
+  } catch (error) {
+    lease.release()
+    return anthropicError(errorMessage(error), error instanceof GatewayUsageError ? error.status : 400)
+  }
   const attribute = grant
     ? (usage?: UsageSnapshot) => recordHarnessGatewayUsage(runtime, grant, resolved, usage, turnId)
     : undefined
   const stream = input.stream === true
   try {
-    const chunks = runtime.modelClient.stream(modelRequest)
+    const chunks = wrapGatewayUsage(runtime.modelClient.stream(modelRequest), recorder, {
+      timedOut: lease.timedOut, cancelled: () => lease.signal.aborted && !lease.timedOut()
+    })
     return stream
       ? anthropicStreamingResponse(chunks, model, lease, attribute)
       : anthropicNonStreamingResponse(chunks, model, lease, attribute)
   } catch (error) {
+    await recorder?.finish('failed').catch(() => undefined)
     lease.release()
-    return anthropicError(errorMessage(error), 502)
+    return anthropicError(errorMessage(error), error instanceof GatewayUsageError ? error.status : 502)
   }
 }
 
@@ -177,7 +214,8 @@ export async function gatewayCountTokens(runtime: ServerRuntime, request: Reques
       headers: {
         'content-type': 'application/json; charset=utf-8',
         'anthropic-version': '2023-06-01',
-        'x-kun-estimate': 'true'
+        'x-kun-estimate': 'true',
+        'cache-control': 'no-store'
       },
       body: JSON.stringify({ input_tokens: estimateModelRequestTokens(modelRequest) })
     }
@@ -190,158 +228,86 @@ export async function gatewayCountTokens(runtime: ServerRuntime, request: Reques
 
 type AnthropicBlock = Record<string, unknown>
 
-function anthropicToChatInput(input: Record<string, unknown>): Record<string, unknown> {
-  const messages: Record<string, unknown>[] = []
-  // tool_result blocks whose tool_use_id never appeared in a preceding
-  // tool_use block are orphans (malformed replayed history) and get dropped,
-  // matching the loop's orphan-result repair.
-  const seenToolUseIds = new Set<string>()
-  const systemParts: string[] = []
-  const system = input.system
-  if (typeof system === 'string' && system.trim()) systemParts.push(system)
-  else if (Array.isArray(system)) {
-    for (const block of system) {
-      const record = asRecord(block)
-      if (stringValue(record.type) === 'text') systemParts.push(stringValue(record.text))
-    }
-  }
-  if (systemParts.length > 0) messages.push({ role: 'system', content: systemParts.join('\n\n') })
-  for (const raw of Array.isArray(input.messages) ? input.messages : []) {
-    const message = asRecord(raw)
-    const role = stringValue(message.role)
-    const content = message.content
-    if (typeof content === 'string') {
-      messages.push({ role, content })
-      continue
-    }
-    if (!Array.isArray(content)) {
-      messages.push({ role, content: '' })
-      continue
-    }
-    const parts: AnthropicBlock[] = []
-    const toolCalls: Record<string, unknown>[] = []
-    for (const block of content) {
-      const record = asRecord(block)
-      const type = stringValue(record.type)
-      if (type === 'text') {
-        parts.push({ type: 'text', text: stringValue(record.text) })
-      } else if (type === 'image') {
-        const source = asRecord(record.source)
-        if (stringValue(source.type) === 'base64' && stringValue(source.data)) {
-          parts.push({
-            type: 'image_url',
-            image_url: { url: `data:${stringValue(source.media_type) || 'image/png'};base64,${stringValue(source.data)}` }
-          })
-        }
-      } else if (type === 'tool_use') {
-        const callId = stringValue(record.id) || `call_${toolCalls.length}`
-        seenToolUseIds.add(callId)
-        toolCalls.push({
-          id: callId,
-          type: 'function',
-          function: { name: stringValue(record.name) || 'unknown', arguments: JSON.stringify(record.input ?? {}) }
-        })
-      } else if (type === 'tool_result') {
-        const toolUseId = stringValue(record.tool_use_id)
-        if (!seenToolUseIds.has(toolUseId)) continue
-        const resultText = typeof record.content === 'string'
-          ? record.content
-          : (Array.isArray(record.content) ? record.content : [])
-            .map((entry) => stringValue(asRecord(entry).text))
-            .filter(Boolean)
-            .join('\n')
-        messages.push({ role: 'tool', tool_call_id: toolUseId, content: resultText })
-      }
-      // Other block kinds (thinking, redacted_thinking, document, server
-      // tool results, ...) are intentionally dropped, not rejected.
-    }
-    if (parts.length > 0 || toolCalls.length > 0) {
-      messages.push({
-        role,
-        content: parts,
-        ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {})
-      })
-    }
-  }
-  return {
-    model: input.model,
-    messages,
-    tools: input.tools,
-    stream: input.stream,
-    max_tokens: input.max_tokens,
-    temperature: input.temperature
-  }
-}
-
 function anthropicUsage(usage: unknown): Record<string, number> {
   const record = asRecord(usage)
   return {
-    input_tokens: numberValue(record.promptTokens) ?? 0,
-    output_tokens: numberValue(record.completionTokens) ?? 0
+    input_tokens: Math.max(0, (numberValue(record.promptTokens) ?? 0) - (numberValue(record.cacheHitTokens ?? record.cachedTokens) ?? 0) - (numberValue(record.cacheWriteTokens) ?? 0)),
+    output_tokens: numberValue(record.completionTokens) ?? 0,
+    ...(record.cacheHitTokens != null || record.cachedTokens != null ? { cache_read_input_tokens: numberValue(record.cacheHitTokens ?? record.cachedTokens) ?? 0 } : {}),
+    ...(record.cacheWriteTokens != null ? { cache_creation_input_tokens: numberValue(record.cacheWriteTokens) ?? 0 } : {})
   }
 }
 
-async function anthropicNonStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, model: string, lease: GatewayLease, attribute?: (usage?: UsageSnapshot) => Promise<void>): Promise<JsonResponse> {
+async function anthropicNonStreamingResponse(chunks: GatewayUsageStream, model: string, lease: GatewayLease, attribute?: (usage?: UsageSnapshot) => Promise<void>): Promise<JsonResponse> {
   let text = ''
-  let thinking = ''
   let usage: UsageSnapshot | undefined
   let stopReason: 'stop' | 'tool_calls' | 'length' | 'error' | undefined
   const content: AnthropicBlock[] = []
   const toolCalls: { id: string; name: string; input: unknown }[] = []
   const deltaToolCalls = new Map<string, { name: string; json: string }>()
+  const completedToolIds = new Set<string>()
   const iterator = chunks[Symbol.asyncIterator]()
   let completed = false
   try {
     for (;;) {
       const result = await nextGatewayChunk(iterator, lease.signal)
-      if (result.done) { completed = true; break }
+      if (result.done) { completed = true; throw new Error('Upstream stream ended without a completion marker') }
       const chunk = result.value
       if (chunk.kind === 'assistant_text_delta') text += chunk.text
-      else if (chunk.kind === 'assistant_reasoning_delta') thinking += chunk.text
+      else if (chunk.kind === 'assistant_reasoning_delta') throw new Error('Anthropic thinking output requires provider signatures and is not supported by the local gateway')
       else if (chunk.kind === 'tool_call_delta') {
+        if (completedToolIds.has(chunk.callId)) throw new Error(`Duplicate tool call '${chunk.callId}'`)
         const entry = deltaToolCalls.get(chunk.callId) ?? { name: chunk.toolName ?? '', json: '' }
+        if (entry.name && chunk.toolName && entry.name !== chunk.toolName) throw new Error(`Tool name changed for '${chunk.callId}'`)
         entry.name = chunk.toolName ?? entry.name
         entry.json += chunk.argumentsDelta ?? ''
         deltaToolCalls.set(chunk.callId, entry)
       }
       else if (chunk.kind === 'tool_call_complete') {
+        if (completedToolIds.has(chunk.callId)) throw new Error(`Duplicate tool call '${chunk.callId}'`)
+        const pending = deltaToolCalls.get(chunk.callId)
+        if (pending?.name && pending.name !== chunk.toolName) throw new Error(`Tool name changed for '${chunk.callId}'`)
+        if (pending?.json && !isDeepStrictEqual(validateToolJson(pending.json), chunk.arguments)) throw new Error(`Arguments changed for tool call '${chunk.callId}'`)
+        completedToolIds.add(chunk.callId)
         deltaToolCalls.delete(chunk.callId)
         toolCalls.push({ id: chunk.callId, name: chunk.toolName, input: chunk.arguments })
       }
+      else if (chunk.kind === 'image_generation_complete') throw new Error('Generated image output is not supported by the local gateway')
       else if (chunk.kind === 'usage') usage = chunk.usage
-      else if (chunk.kind === 'completed') stopReason = chunk.stopReason
-      else if (chunk.kind === 'error') return anthropicError(chunk.message, errorStatus(chunk))
+      else if (chunk.kind === 'completed') {
+        if (chunk.stopReason === 'error') throw new Error('Upstream generation ended with an error')
+        stopReason = chunk.stopReason
+        break
+      }
+      else if (chunk.kind === 'error') {
+        await chunks.finish('failed')
+        return anthropicError(chunk.message, errorStatus(chunk))
+      }
     }
+    for (const [callId, entry] of deltaToolCalls) {
+      if (!entry.name) throw new Error(`Missing name for tool call '${callId}'`)
+      toolCalls.push({ id: callId, name: entry.name, input: validateToolJson(entry.json) })
+    }
+    if (text) content.push({ type: 'text', text })
+    for (const call of toolCalls) content.push({ type: 'tool_use', id: call.id, name: call.name, input: call.input })
+    const response = jsonResponse({
+      id: `msg_${randomUUID()}`, type: 'message', role: 'assistant', model, content,
+      stop_reason: anthropicStopReason(stopReason, toolCalls.length > 0), stop_sequence: null, usage: anthropicUsage(usage)
+    })
+    response.headers['anthropic-version'] = '2023-06-01'
+    await chunks.finish('completed')
+    return response
   } catch (error) {
-    return anthropicError(lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error), lease.timedOut() ? 504 : 502)
+    await chunks.finish('failed').catch(() => undefined)
+    return anthropicError(lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error), lease.timedOut() ? 504 : error instanceof GatewayUsageError ? error.status : 502)
   } finally {
     if (!completed) await iterator.return?.().catch(() => undefined)
     await attribute?.(usage).catch(() => undefined)
     lease.release()
   }
-  for (const [callId, entry] of deltaToolCalls) {
-    toolCalls.push({ id: callId, name: entry.name || 'unknown', input: parseArguments(entry.json) })
-  }
-  if (thinking) content.push({ type: 'thinking', thinking, signature: '' })
-  if (text) content.push({ type: 'text', text })
-  for (const call of toolCalls) {
-    content.push({ type: 'tool_use', id: call.id, name: call.name, input: call.input })
-  }
-  const response = jsonResponse({
-    id: `msg_${randomUUID()}`,
-    type: 'message',
-    role: 'assistant',
-    model,
-    content,
-    stop_reason: anthropicStopReason(stopReason, toolCalls.length > 0),
-    stop_sequence: null,
-    usage: anthropicUsage(usage)
-  })
-  response.headers['anthropic-version'] = '2023-06-01'
-  return response
 }
 
-function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, model: string, lease: GatewayLease, attribute?: (usage?: UsageSnapshot) => Promise<void>): Response {
+function anthropicStreamingResponse(chunks: GatewayUsageStream, model: string, lease: GatewayLease, attribute?: (usage?: UsageSnapshot) => Promise<void>): Response {
   const encoder = new TextEncoder()
   const id = `msg_${randomUUID()}`
   const iterator = chunks[Symbol.asyncIterator]()
@@ -350,8 +316,9 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
   let iteratorClosed = false
   let attributed = false
   let blockIndex = 0
-  let openBlock: 'text' | 'thinking' | 'tool_use' | null = null
-  let openToolCallId = ''
+  let openBlock: 'text' | null = null
+  const pendingTools = new Map<string, { name: string; deltas: string[] }>()
+  const completedTools = new Set<string>()
   let usage: UsageSnapshot | undefined
   let sawToolUse = false
   let stopReason: 'stop' | 'tool_calls' | 'length' | 'error' | undefined
@@ -381,7 +348,23 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
     sendEvent(controller, 'content_block_stop', { type: 'content_block_stop', index: blockIndex })
     blockIndex += 1
     openBlock = null
-    openToolCallId = ''
+  }
+  const emitTool = (controller: ReadableStreamDefaultController<Uint8Array>, callId: string, name: string, deltas: string[]): void => {
+    if (completedTools.has(callId)) throw new Error(`Duplicate tool call '${callId}'`)
+    if (!name) throw new Error(`Missing name for tool call '${callId}'`)
+    closeOpenBlock(controller)
+    sendEvent(controller, 'content_block_start', {
+      type: 'content_block_start', index: blockIndex,
+      content_block: { type: 'tool_use', id: callId, name, input: {} }
+    })
+    for (const partial_json of deltas) {
+      if (partial_json) sendEvent(controller, 'content_block_delta', {
+        type: 'content_block_delta', index: blockIndex, delta: { type: 'input_json_delta', partial_json }
+      })
+    }
+    sendEvent(controller, 'content_block_stop', { type: 'content_block_stop', index: blockIndex++ })
+    completedTools.add(callId)
+    pendingTools.delete(callId)
   }
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -401,12 +384,23 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
         // chunks (usage) loop back for another read instead of returning.
         for (;;) {
         const result = await nextGatewayChunk(iterator, lease.signal)
-        const chunk = result.done ? { kind: 'completed' as const, stopReason: 'stop' as const } : result.value
-        if (result.done) iteratorClosed = true
-        if (chunk.kind === 'completed' || result.done) {
-          if (chunk.kind === 'completed') stopReason = chunk.stopReason
+        if (result.done) {
+          iteratorClosed = true
+          throw new Error('Upstream stream ended without a completion marker')
+        }
+        const chunk = result.value
+        if (chunk.kind === 'completed') {
+          if (chunk.kind === 'completed') {
+            if (chunk.stopReason === 'error') throw new Error('Upstream generation ended with an error')
+            stopReason = chunk.stopReason
+          }
+          for (const [callId, tool] of pendingTools) {
+            if (stopReason !== 'length') validateToolJson(tool.deltas.join(''))
+            emitTool(controller, callId, tool.name, tool.deltas)
+          }
           closeOpenBlock(controller)
           const parsedUsage = anthropicUsage(usage)
+          await chunks.finish('completed')
           sendEvent(controller, 'message_delta', {
             type: 'message_delta',
             delta: { stop_reason: anthropicStopReason(stopReason, sawToolUse), stop_sequence: null },
@@ -417,6 +411,7 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
           return
         }
         if (chunk.kind === 'error') {
+          await chunks.finish('failed')
           sendEvent(controller, 'error', { type: 'error', error: { type: 'api_error', message: chunk.message } })
           await finish(controller, true)
           return
@@ -440,64 +435,34 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
           })
           return
         }
-        if (chunk.kind === 'assistant_reasoning_delta') {
-          if (openBlock !== 'thinking') {
-            closeOpenBlock(controller)
-            sendEvent(controller, 'content_block_start', {
-              type: 'content_block_start', index: blockIndex,
-              content_block: { type: 'thinking', thinking: '' }
-            })
-            openBlock = 'thinking'
-          }
-          sendEvent(controller, 'content_block_delta', {
-            type: 'content_block_delta', index: blockIndex,
-            delta: { type: 'thinking_delta', thinking: chunk.text }
-          })
-          return
-        }
+        if (chunk.kind === 'assistant_reasoning_delta') throw new Error('Anthropic thinking output requires provider signatures and is not supported by the local gateway')
         if (chunk.kind === 'tool_call_delta') {
-          if (openBlock !== 'tool_use' || openToolCallId !== chunk.callId) {
-            closeOpenBlock(controller)
-            sendEvent(controller, 'content_block_start', {
-              type: 'content_block_start', index: blockIndex,
-              content_block: { type: 'tool_use', id: chunk.callId, name: chunk.toolName || 'unknown', input: {} }
-            })
-            openBlock = 'tool_use'
-            openToolCallId = chunk.callId
-          }
+          if (completedTools.has(chunk.callId)) throw new Error(`Duplicate tool call '${chunk.callId}'`)
+          const tool = pendingTools.get(chunk.callId) ?? { name: '', deltas: [] }
+          if (tool.name && chunk.toolName && tool.name !== chunk.toolName) throw new Error(`Tool name changed for '${chunk.callId}'`)
+          tool.name = chunk.toolName ?? tool.name
+          if (chunk.argumentsDelta) tool.deltas.push(chunk.argumentsDelta)
+          pendingTools.set(chunk.callId, tool)
           sawToolUse = true
-          if (chunk.argumentsDelta) {
-            sendEvent(controller, 'content_block_delta', {
-              type: 'content_block_delta', index: blockIndex,
-              delta: { type: 'input_json_delta', partial_json: chunk.argumentsDelta }
-            })
-          }
-          return
+          // Buffer interleaved tool calls independently. Anthropic clients expect
+          // each content block to close before the next block begins.
+          continue
         }
         if (chunk.kind === 'tool_call_complete') {
           sawToolUse = true
-          if (openBlock === 'tool_use' && openToolCallId === chunk.callId) {
-            // Arguments already streamed as input_json_delta chunks.
-            closeOpenBlock(controller)
-            return
-          }
-          // Providers that only emit complete calls fall back to a single
-          // input_json_delta carrying the full JSON arguments.
-          closeOpenBlock(controller)
-          sendEvent(controller, 'content_block_start', {
-            type: 'content_block_start', index: blockIndex,
-            content_block: { type: 'tool_use', id: chunk.callId, name: chunk.toolName, input: {} }
-          })
-          sendEvent(controller, 'content_block_delta', {
-            type: 'content_block_delta', index: blockIndex,
-            delta: { type: 'input_json_delta', partial_json: JSON.stringify(chunk.arguments) }
-          })
-          sendEvent(controller, 'content_block_stop', { type: 'content_block_stop', index: blockIndex })
-          blockIndex += 1
+          const tool = pendingTools.get(chunk.callId)
+          if (tool?.name && tool.name !== chunk.toolName) throw new Error(`Tool name changed for '${chunk.callId}'`)
+          const deltas = tool?.deltas.length ? [...tool.deltas] : [JSON.stringify(chunk.arguments)]
+          const joined = deltas.join('')
+          if (!isDeepStrictEqual(validateToolJson(joined), chunk.arguments)) throw new Error(`Arguments changed for tool call '${chunk.callId}'`)
+          emitTool(controller, chunk.callId, chunk.toolName, deltas)
+          return
         }
-        return
+        if (chunk.kind === 'image_generation_complete') throw new Error('Generated image output is not supported by the local gateway')
+        continue
         }
       } catch (error) {
+        await chunks.finish(cancelled ? 'cancelled' : 'failed').catch(() => undefined)
         if (!cancelled) {
           sendEvent(controller, 'error', { type: 'error', error: { type: 'api_error', message: lease.timedOut() ? 'Gateway request timed out.' : errorMessage(error) } })
         }
@@ -507,6 +472,7 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
     async cancel() {
       cancelled = true
       lease.cancel()
+      await chunks.finish('cancelled').catch(() => undefined)
       await closeIterator()
       if (!finished) {
         finished = true
@@ -515,5 +481,12 @@ function anthropicStreamingResponse(chunks: AsyncIterable<ModelStreamChunk>, mod
       }
     }
   })
-  return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache', connection: 'keep-alive', 'anthropic-version': '2023-06-01' } })
+  return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', connection: 'keep-alive', 'anthropic-version': '2023-06-01' } })
+}
+
+function validateToolJson(value: string): Record<string, unknown> {
+  let parsed: unknown
+  try { parsed = JSON.parse(value) } catch { throw new Error('Upstream tool arguments are not valid JSON') }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Upstream tool arguments must be an object')
+  return parsed as Record<string, unknown>
 }

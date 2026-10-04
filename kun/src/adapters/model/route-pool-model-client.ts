@@ -27,6 +27,8 @@ import {
 import type { FailoverGroupRouteState } from './route-pool-failover-groups.js'
 import { RoutePoolHealthStore } from './route-pool-health-store.js'
 import type { RuntimeHealth } from './route-pool-health-store.js'
+import { GatewayRouteChangedError, gatewayTargetMatches } from '../../domain/model-gateway-export-policy.js'
+import { GATEWAY_MAX_ROUTE_ATTEMPTS, withGatewayRoutingBudget } from './gateway-routing-budget.js'
 
 export { RoutePoolHealthStore } from './route-pool-health-store.js'
 export type {
@@ -107,7 +109,16 @@ export class RoutePoolModelClient implements ModelClient {
   }
 
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    return request.gatewayRouting
+      ? withGatewayRoutingBudget(request, (bounded) => this.streamRouted(bounded))
+      : this.streamRouted(request)
+  }
+
+  private streamRouted(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
     const routed = this.poolForRequest(request)
+    if (!routed && request.gatewayRouting && !gatewayAllowsTarget(request, {
+      providerId: request.providerId ?? '', modelId: request.model
+    })) return rejectedGatewayTarget()
     return routed ? this.streamPool(routed.pool, request, routed.group) : this.direct.stream(request)
   }
 
@@ -225,6 +236,7 @@ export class RoutePoolModelClient implements ModelClient {
   ): AsyncIterable<ModelStreamChunk> {
     let eligible = pool.targets.filter((target) =>
       target.enabled &&
+      gatewayAllowsTarget(request, target) &&
       this.targetAvailable(pool, target) &&
       targetSupportsRequest(target, request, this.capabilities))
     if (this.quotaLookup && eligible.length > 1) {
@@ -258,7 +270,9 @@ export class RoutePoolModelClient implements ModelClient {
       : this.orderTargets(pool, eligible)
     const failures: string[] = []
     let lastRejection: { providerId: string; modelId: string; reason?: string; message?: string } | undefined
-    for (const [index, target] of ordered.entries()) {
+    const attempts = request.gatewayRouting ? ordered.slice(0, GATEWAY_MAX_ROUTE_ATTEMPTS) : ordered
+    for (const [index, target] of attempts.entries()) {
+      request.abortSignal.throwIfAborted()
       if (index > 0 && lastRejection) {
         // Surface the in-flight switch so a slow failover is visible instead
         // of looking like a stalled request. Not route-attributed: the first
@@ -296,7 +310,7 @@ export class RoutePoolModelClient implements ModelClient {
             id: pool.id,
             targetProviderId: target.providerId
           },
-          failover: { alternatives: ordered.length - index - 1 }
+          failover: { alternatives: attempts.length - index - 1 }
         })) {
           if (chunk.kind === 'usage') usageTokens = chunk.usage.totalTokens
           if (chunk.kind === 'error') {
@@ -339,6 +353,13 @@ export class RoutePoolModelClient implements ModelClient {
           yield attributeRouteChunk(chunk, route)
         }
       } catch (error) {
+        // Cancellation/deadline is terminal and is not an upstream outage.
+        if (request.abortSignal.aborted) throw request.abortSignal.reason ?? error
+        if (error instanceof GatewayRouteChangedError) {
+          yield { kind: 'error', code: 'gateway_route_changed', message: error.message,
+            failure: { category: 'request', failoverAllowed: false } }
+          return
+        }
         failed = true
         const message = error instanceof Error ? error.message : String(error)
         const failure = withRouteFailure({ category: 'unavailable', failoverAllowed: true }, route)
@@ -399,7 +420,7 @@ export class RoutePoolModelClient implements ModelClient {
     yield {
       kind: 'error',
       message: `route pool ${pool.modelId} exhausted ${failures.length} target(s): ${failures.join(' | ').slice(0, 1_500)}`,
-      code: 'route_targets_exhausted',
+      code: attempts.length < ordered.length ? 'route_attempt_budget_exhausted' : 'route_targets_exhausted',
       failure: { category: 'unavailable', failoverAllowed: false, routePoolId: pool.id }
     }
   }
@@ -426,6 +447,15 @@ export class RoutePoolModelClient implements ModelClient {
     const first = wheel[cursor % wheel.length]
     return [first, ...targets.filter((target) => target.id !== first.id)]
   }
+}
+
+function gatewayAllowsTarget(request: ModelRequest, target: { providerId: string; modelId: string }): boolean {
+  return !request.gatewayRouting || request.gatewayRouting.allowedTargets.some((allowed) => gatewayTargetMatches(allowed, target))
+}
+
+async function* rejectedGatewayTarget(): AsyncIterable<ModelStreamChunk> {
+  yield { kind: 'error', code: 'gateway_route_not_allowed', message: 'Gateway route is not authorized.',
+    failure: { category: 'request', failoverAllowed: false } }
 }
 
 function shouldRouteRequest(

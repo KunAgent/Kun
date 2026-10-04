@@ -332,6 +332,8 @@ export type KunGuiApi = GoogleWorkspaceSurface & ExtensionIpcApi & RemoteSshApi 
   }>
   setSettings: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   saveSettingsSilent: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
+  gatewayLaunchProfile: (request: import('./gateway-launch-profile').GatewayLaunchProfileRequest) => Promise<import('./gateway-launch-profile').GatewayLaunchProfileResult>
+  gatewayClients: (request: import('./gateway-clients').GatewayClientAction) => Promise<import('./gateway-clients').GatewayClientResult>
   gatewayCredential: (action: 'status' | 'ensure' | 'copy' | 'rotate' | 'revoke') => Promise<GatewayCredentialResult>
   getRuntimeSettingsSyncStatus: () => Promise<KunRuntimeSettingsSyncStatusPayload>
   remoteAccessGetStatus: () => Promise<RemoteAccessStatus>

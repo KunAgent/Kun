@@ -8,13 +8,23 @@ const catalog = {
 }
 
 const POOL: Record<string, WorkerProviderPoolEntry> = {
-  deepseek: { kind: 'http', models: ['deepseek-chat', 'deepseek-reasoner'] },
+  deepseek: { kind: 'http', gatewayExportable: true, models: ['deepseek-chat', 'deepseek-reasoner'] },
   'cursor-prov': { kind: 'cursor-sdk', models: ['composer-2'] },
-  empty: { kind: 'http', models: [] }
+  empty: { kind: 'http', gatewayExportable: true, models: [] }
 }
 const providerPool = async (providerId: string) => POOL[providerId]
 
 describe('resolveWorkerRoute', () => {
+  it('rejects a gateway route without an explicit export eligibility proof', async () => {
+    for (const entry of [{ kind: 'http', models: ['model'] },
+      { kind: 'agent-sdk', gatewayExportable: false, models: ['model'] }]) {
+      const result = await resolveWorkerRoute({ catalog: catalog as never,
+        providerPool: async () => entry,
+        agent: { harnessId: 'claude-code', credentialMode: 'kun-gateway', providerId: 'key', model: 'model' } })
+      expect(result).toMatchObject({ error: expect.stringContaining('not eligible') })
+    }
+  })
+
   it('accepts a kun/<provider>/<model> route for kun-gateway and normalizes it', async () => {
     const resolved = await resolveWorkerRoute({
       catalog: catalog as never,

@@ -23,6 +23,18 @@ afterEach(async () => {
 })
 
 describe('Model picker after Agent selection moves to the mode control', () => {
+  it('constrains Claude gateway compatibility to reasoning off without changing native catalogs', async () => {
+    const onReasoning = vi.fn()
+    await act(async () => root.render(createElement(FloatingComposerModelPicker, {
+      compact: false, mode: 'select', composerModel: 'gateway-model', composerPickList: ['gateway-model'],
+      composerModelGroups: [{ providerId: 'ade-cred:kun-gateway:account', label: 'Kun gateway', modelIds: ['gateway-model'] }],
+      composerReasoningEffort: 'high', allowedReasoningEfforts: ['off'],
+      onComposerReasoningEffortChange: onReasoning, canChangeModel: true, onComposerModelChange: vi.fn()
+    })))
+    expect(onReasoning).toHaveBeenCalledWith('off')
+    expect(host.textContent).not.toContain('High')
+  })
+
   it('uses only advertised Devin reasoning options even when image capabilities are unknown', async () => {
     const onReasoning = vi.fn()
     await act(async () => root.render(createElement(FloatingComposerModelPicker, {

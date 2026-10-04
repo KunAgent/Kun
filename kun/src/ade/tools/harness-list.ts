@@ -20,6 +20,8 @@ export type HarnessProviderModelGroup = {
   providerId: string
   label?: string
   kind?: string
+  /** Explicit runtime export verdict; native model discovery ignores it. */
+  gatewayExportable?: boolean
   models: string[]
 }
 
@@ -116,7 +118,7 @@ export async function listHarnessesForManager(
     }
     for (const mode of def.credentialModes) {
       if (mode === 'kun-gateway') {
-        for (const group of providers) {
+        for (const group of providers.filter((entry) => entry.gatewayExportable === true)) {
           models.push(...cap(group.models.map((model) => ({
             model: formatGatewayModelId(group.providerId, model),
             providerId: group.providerId,

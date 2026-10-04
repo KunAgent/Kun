@@ -39,6 +39,7 @@ function runtime(modelClient: ModelClient = textModel(), inputModalities?: reado
     runtimeToken: 'gateway-test-token',
     insecure: false,
     modelClient,
+    modelConnections: { snapshot: async () => ({ providers: [{ id: 'provider', kind: 'http', authType: 'api-key', configured: true, credentialStatus: 'ready', models: ['real'] }] }) },
     modelGateway: {
       enabled: () => true,
       exposeProviderModels: () => false,
@@ -175,7 +176,7 @@ describe('anthropic-compatible gateway messages', () => {
     expect(toolResult).toMatchObject({ callId: 't1', output: 'file body' })
   })
 
-  it('drops thinking blocks and orphan tool_result blocks on input', async () => {
+  it('rejects thinking blocks instead of silently dropping them', async () => {
     const model = new ScriptedModel([
       { kind: 'assistant_text_delta', text: 'ok' },
       { kind: 'completed', stopReason: 'stop' }
@@ -193,9 +194,8 @@ describe('anthropic-compatible gateway messages', () => {
         ] }
       ]
     }))
-    expect(response.status).toBe(200)
-    const kinds = model.last!.history.map((item) => item.kind)
-    expect(kinds).toEqual(['assistant_text', 'user_message'])
+    expect(response.status).toBe(400)
+    expect(model.last).toBeUndefined()
   })
 
   it('rejects image inputs for models without vision support', async () => {
@@ -247,7 +247,7 @@ describe('anthropic-compatible gateway messages', () => {
     expect((delta?.data.delta as { stop_reason?: string })?.stop_reason).toBe('tool_use')
   })
 
-  it('streams reasoning as thinking content blocks', async () => {
+  it('rejects unsigned reasoning output rather than fabricating Anthropic signatures', async () => {
     const streamed = await gatewayMessages(
       runtime(new ScriptedModel([
         { kind: 'assistant_reasoning_delta', text: 'ponder' },
@@ -257,16 +257,10 @@ describe('anthropic-compatible gateway messages', () => {
       authorizedRequest({ model: 'local-model', messages: [{ role: 'user', content: 'hi' }], stream: true })
     ) as Response
     const events = sseEvents(await streamed.text())
-    const blocks = events
-      .filter((entry) => entry.event === 'content_block_start')
-      .map((entry) => (entry.data.content_block as { type?: string }).type)
-    expect(blocks).toEqual(['thinking', 'text'])
-    const thinkingDelta = events.find((entry) =>
-      entry.event === 'content_block_delta' &&
-      (entry.data.delta as { type?: string }).type === 'thinking_delta'
-    )
-    expect((thinkingDelta?.data.delta as { thinking?: string }).thinking).toBe('ponder')
+    expect(events.find((event) => event.event === 'error')?.data).toMatchObject({ error: { message: expect.stringContaining('signatures') } })
+    expect(events.some((event) => event.event === 'message_stop')).toBe(false)
   })
+
 })
 
 describe('anthropic count_tokens endpoint', () => {
@@ -329,7 +323,7 @@ describe('harness-grant gateway requests', () => {
     base.modelConnections = {
       snapshot: async () => ({
         providers: [
-          { id: 'anthropic-sub', kind: 'http', authType: 'subscription', configured: true, credentialStatus: 'ready', models: ['claude-sonnet-4-6'] }
+          { id: 'anthropic-key', kind: 'http', authType: 'api-key', configured: true, credentialStatus: 'ready', models: ['claude-sonnet-4-6'] }
         ]
       })
     }
@@ -348,7 +342,7 @@ describe('harness-grant gateway requests', () => {
     return tokens.issue({
       threadId: 'worker-thread',
       harnessId: 'claude-code',
-      credentialIdentity: 'kun-gateway:anthropic-sub/claude-sonnet-4-6',
+      credentialIdentity: 'kun-gateway:anthropic-key/claude-sonnet-4-6',
       scopes: ['gateway'],
       routes
     })
@@ -362,15 +356,15 @@ describe('harness-grant gateway requests', () => {
       { kind: 'completed', stopReason: 'stop' }
     ])
     const { base, usageEvents, records } = grantRuntime(model, tokens)
-    const token = issue(tokens, [{ providerId: 'anthropic-sub', model: 'claude-sonnet-4-6', role: 'main' }])
+    const token = issue(tokens, [{ providerId: 'anthropic-key', model: 'claude-sonnet-4-6', role: 'main' }])
 
     const response = await gatewayMessages(base, grantRequest({
-      model: 'kun/anthropic-sub/claude-sonnet-4-6',
+      model: 'kun/anthropic-key/claude-sonnet-4-6',
       messages: [{ role: 'user', content: 'hi' }]
     }, token))
     expect(response.status).toBe(200)
     // The request landed on the granted provider, not the route pool.
-    expect(model.last?.providerId).toBe('anthropic-sub')
+    expect(model.last?.providerId).toBe('anthropic-key')
     expect(model.last?.model).toBe('claude-sonnet-4-6')
     expect(model.last?.threadId).toBe('worker-thread')
     expect(model.last?.turnId).toBe('turn_live')
@@ -381,7 +375,7 @@ describe('harness-grant gateway requests', () => {
       threadId: 'worker-thread',
       turnId: 'turn_live',
       model: 'claude-sonnet-4-6',
-      providerId: 'anthropic-sub',
+      providerId: 'anthropic-key',
       source: 'harness-gateway',
       harnessId: 'claude-code'
     })
@@ -390,9 +384,9 @@ describe('harness-grant gateway requests', () => {
   it('rejects grant routes the token was not issued for', async () => {
     const tokens = new HarnessTokenService()
     const { base } = grantRuntime(new ScriptedModel([]), tokens)
-    const token = issue(tokens, [{ providerId: 'anthropic-sub', model: 'claude-sonnet-4-6', role: 'main' }])
+    const token = issue(tokens, [{ providerId: 'anthropic-key', model: 'claude-sonnet-4-6', role: 'main' }])
     const response = await gatewayMessages(base, grantRequest({
-      model: 'kun/anthropic-sub/claude-opus-4-8',
+      model: 'kun/anthropic-key/claude-opus-4-8',
       messages: [{ role: 'user', content: 'hi' }]
     }, token))
     expect(response.status).toBe(404)
@@ -412,7 +406,7 @@ describe('harness-grant gateway requests', () => {
     const tokens = new HarnessTokenService()
     const { base } = grantRuntime(new ScriptedModel([]), tokens)
     const response = await gatewayMessages(base, authorizedRequest({
-      model: 'kun/anthropic-sub/claude-sonnet-4-6',
+      model: 'kun/anthropic-key/claude-sonnet-4-6',
       messages: [{ role: 'user', content: 'hi' }]
     }))
     expect(response.status).toBe(404)
@@ -421,12 +415,12 @@ describe('harness-grant gateway requests', () => {
   it('lets a granted token count tokens on its own route', async () => {
     const tokens = new HarnessTokenService()
     const { base } = grantRuntime(new ScriptedModel([]), tokens)
-    const token = issue(tokens, [{ providerId: 'anthropic-sub', model: 'claude-sonnet-4-6', role: 'main' }])
+    const token = issue(tokens, [{ providerId: 'anthropic-key', model: 'claude-sonnet-4-6', role: 'main' }])
     const response = await gatewayCountTokens(base, new Request('http://localhost/v1/messages/count_tokens', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        model: 'kun/anthropic-sub/claude-sonnet-4-6',
+        model: 'kun/anthropic-key/claude-sonnet-4-6',
         messages: [{ role: 'user', content: 'count me' }]
       })
     }))

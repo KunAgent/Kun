@@ -81,7 +81,10 @@ export class HarnessTokenService {
       maxBodyBytes: input.maxBodyBytes ?? DEFAULT_HARNESS_TOKEN_MAX_BODY_BYTES,
       expiresAt: input.expiresAt ?? Number.MAX_SAFE_INTEGER
     }
-    this.grants.set(grantId, grant)
+    // Preserve the identity used by active request guards across deterministic reissue.
+    const existing = this.grants.get(grantId)
+    if (existing) Object.assign(existing, grant)
+    else this.grants.set(grantId, grant)
     return `${HARNESS_TOKEN_PREFIX}${grantId}.${hmacHex(this.secret, grantId)}`
   }
 

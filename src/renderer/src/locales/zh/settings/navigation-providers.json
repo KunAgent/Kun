@@ -445,7 +445,7 @@
     "localApi": "本地 API",
     "localApiEnabledLocalOnly": "已启用 · 仅本机访问",
     "disabled": "未启用",
-    "apiCompatibilityDesc": "兼容 OpenAI Chat Completions 与 Responses；公开模型 ID 由下方路由模型决定。",
+    "apiCompatibilityDesc": "兼容 OpenAI Chat Completions、Responses 和 Anthropic Messages；公开模型 ID 由下方路由模型决定。",
     "copyLocalApiAddress": "复制本地 API 地址",
     "copied": "已复制",
     "copy": "复制",
@@ -579,7 +579,11 @@
     "guideChatModelMissing": "模型不存在时返回 404（model_not_found）。",
     "exampleChatPrompt": "你好，Kun！",
     "exampleResponsesPrompt": "用一句话介绍 Kun 本地中转站",
-    "statusRequestFailed": "Kun Runtime 状态请求失败（{{status}}）"
+    "statusRequestFailed": "Kun Runtime 状态请求失败（{{status}}）",
+    "targetAccountModel": "账号 / 模型",
+    "targetUnavailable": "不可导出到网关",
+    "targetNativeOnly": "此账号仅支持原生 Agent，不能导出为通用模型 API。",
+    "stableAliasHint": "所有客户端保持同一个别名。切换账号或模型只影响新请求，正在执行的请求保持原路由。"
   },
   "modelProviderCompactSelect": "选择供应商",
   "modelProviderSearchPlaceholder": "搜索供应商…",

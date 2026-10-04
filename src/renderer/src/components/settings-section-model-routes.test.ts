@@ -240,8 +240,8 @@ describe('ModelRoutesSettings', () => {
     const html = renderToStaticMarkup(createElement(ModelRoutesSettings, { settings: draft, onChange: () => undefined }))
     expect(html).toContain('Kimi Code')
     expect(html).toContain('Kimi Code 2')
-    expect(html).toContain('value="kimi-code"')
-    expect(html).toContain('value="kimi-code-2"')
+    expect(html).toContain(`value="${JSON.stringify([first.id, first.models[0]]).replaceAll('"', '&quot;')}"`)
+    expect(html).toContain(`value="${JSON.stringify([second.id, second.models[0]]).replaceAll('"', '&quot;')}"`)
   })
 
   it('dispatches local API and route pool enable switches', async () => {

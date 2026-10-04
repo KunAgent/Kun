@@ -1,5 +1,6 @@
 import { settingsButtonClass } from './settings-button'
-import type { ModelProviderSettingsV1, ModelRoutePoolV1, ModelRouteStrategy } from '@shared/app-settings'
+import type { ModelProviderSettingsV1, ModelRoutePoolV1 } from '@shared/app-settings'
+import { modelProviderIsOauthOrDelegated } from '@shared/app-settings-provider-failover'
 import { resolveModelRouteTargetReference } from '@shared/app-settings-provider-core'
 import type { TFunction } from 'i18next'
 import { AlertTriangle, ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from 'lucide-react'
@@ -22,7 +23,7 @@ export function ModelRouteTargets({
   onUpdate: (patch: Partial<ModelRoutePoolV1>) => void
   t: TFunction
 }): ReactElement {
-  const providers = settings.providers.filter((provider) => provider.models.length > 0)
+  const providers = settings.providers.filter((provider) => provider.models.length > 0 && !modelProviderIsOauthOrDelegated(provider))
   const changeTarget = (targetId: string, patch: Partial<ModelRoutePoolV1['targets'][number]>): void => {
     onUpdate({ targets: pool.targets.map((target) => target.id === targetId ? { ...target, ...patch } : target) })
   }
@@ -61,17 +62,20 @@ export function ModelRouteTargets({
         </button>
       </div>
       {providers.length === 0 ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">{t('modelRoutes.addTargetUnavailable')}</p> : null}
+      <p className="text-[11px] text-ds-muted">{t('modelRoutes.stableAliasHint', { defaultValue: 'Clients keep the same alias. Account and model changes apply to new requests; in-flight requests keep their route.' })}</p>
       <div className="grid gap-2">
         {pool.targets.map((target, index) => {
           const resolution = resolveModelRouteTargetReference(target, settings.providers)
           const provider = resolution.provider
+          const nativeOnly = modelProviderIsOauthOrDelegated(provider)
+          const selection = JSON.stringify([target.providerId, target.modelId])
           const metric = metrics?.[`${pool.id}:${target.id}`]
           return (
             <article
               key={target.id}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => reorderTarget(event, index, pool, onUpdate)}
-              className={`rounded-xl border bg-ds-card p-3 ${resolution.status === 'valid' ? 'border-ds-border' : 'border-amber-300/80'}`}
+              className={`rounded-xl border bg-ds-card p-3 ${resolution.status === 'valid' && !nativeOnly ? 'border-ds-border' : 'border-amber-300/80'}`}
             >
               <div className="grid items-start gap-3 md:grid-cols-[112px_minmax(0,1fr)_112px]">
                 <div className="flex items-center gap-1 pt-1">
@@ -91,17 +95,25 @@ export function ModelRouteTargets({
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                   <Field label={t('modelRoutes.targetEnabled')}><Toggle checked={target.enabled} onChange={(enabled) => changeTarget(target.id, { enabled })} ariaLabel={t('modelRoutes.targetEnabled')} /></Field>
-                  <Field label={t('modelRoutes.targetProvider')}><select value={target.providerId} onChange={(event) => {
-                    const nextProvider = providers.find((candidate) => candidate.id === event.target.value)
-                    changeTarget(target.id, { providerId: event.target.value, modelId: nextProvider?.models[0] ?? '' })
-                  }} className={compactInputClass}>
-                    {resolution.status === 'provider-missing' ? <option value={target.providerId}>{t('modelRoutes.providerDeleted', { providerId: target.providerId })}</option> : null}
-                    {providers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                  </select></Field>
-                  <Field label={t('modelRoutes.targetModel')}><select value={target.modelId} onChange={(event) => changeTarget(target.id, { modelId: event.target.value })} className={compactInputClass}>
-                    {resolution.status !== 'valid' ? <option value={target.modelId}>{resolution.status === 'provider-missing' ? t('modelRoutes.originalModel', { modelId: target.modelId }) : t('modelRoutes.modelDeleted', { modelId: target.modelId })}</option> : null}
-                    {(provider?.models ?? []).map((model) => <option key={model} value={model}>{model}</option>)}
-                  </select></Field>
+                  <div className="sm:col-span-2">
+                    <Field label={t('modelRoutes.targetAccountModel', { defaultValue: 'Account / model' })}>
+                      <select value={selection} aria-label={t('modelRoutes.targetAccountModel', { defaultValue: 'Account / model' })}
+                        onChange={(event) => {
+                          const choice = providers.flatMap((item) => item.models.map((modelId) => ({ providerId: item.id, modelId })))
+                            .find((item) => JSON.stringify([item.providerId, item.modelId]) === event.target.value)
+                          if (choice) changeTarget(target.id, choice)
+                        }} className={compactInputClass}>
+                        {resolution.status !== 'valid' || nativeOnly ? <option value={selection} disabled>
+                          {resolution.status === 'provider-missing' ? t('modelRoutes.providerDeleted', { providerId: target.providerId }) : provider?.name ?? target.providerId} / {resolution.status === 'provider-missing' ? t('modelRoutes.originalModel', { modelId: target.modelId }) : resolution.status === 'model-missing' ? t('modelRoutes.modelDeleted', { modelId: target.modelId }) : target.modelId} ({t('modelRoutes.targetUnavailable', { defaultValue: 'unavailable for gateway' })})
+                        </option> : null}
+                        {providers.map((item) => <optgroup key={item.id} label={item.name}>
+                          {item.models.map((modelId) => <option key={modelId} value={JSON.stringify([item.id, modelId])}>
+                            {item.name} / {modelId}
+                          </option>)}
+                        </optgroup>)}
+                      </select>
+                    </Field>
+                  </div>
                   <Field label={t('modelRoutes.targetWeight')}><input type="number" min={1} max={100} disabled={pool.strategy !== 'weighted-round-robin'} title={pool.strategy === 'weighted-round-robin' ? undefined : t('modelRoutes.weightInactive')} value={target.weight} onChange={(event) => changeTarget(target.id, { weight: Number(event.target.value) || 1 })} className={compactInputClass} /></Field>
                 </div>
                 <div className="flex items-start justify-between gap-2 pt-1 text-[11px] text-ds-muted">
@@ -110,6 +122,7 @@ export function ModelRouteTargets({
                 </div>
               </div>
               {pool.strategy !== 'weighted-round-robin' ? <p className="mt-2 text-[10.5px] text-ds-faint">{t('modelRoutes.weightInactive')}</p> : null}
+              {nativeOnly ? <p className="mt-2 text-[11px] text-amber-700">{t('modelRoutes.targetNativeOnly', { defaultValue: 'This account is available only through its native Agent, not as a gateway model API.' })}</p> : null}
               {resolution.status !== 'valid' ? <p className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-700"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />{resolution.status === 'provider-missing' ? t('modelRoutes.providerMissingWarning', { providerId: target.providerId }) : t('modelRoutes.modelMissingWarning', { modelId: target.modelId, providerId: target.providerId })}</p> : null}
             </article>
           )

@@ -1,3 +1,5 @@
+import { registerGatewayLaunchProfileIpc } from './register-gateway-launch-profile-ipc'
+import { registerGatewayClientsIpc } from './register-gateway-clients-ipc'
 import { showCoordinatedMessageBox } from '../native-message-box'
 import { roomProtectedControls } from './room-protected-controls'
 import { protectedApprovalControls } from './protected-approval-controls'
@@ -84,6 +86,8 @@ import {
 } from './app-ipc-handler-utils'
 
 export function registerAppSettingsIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
+  registerGatewayClientsIpc(options)
+  registerGatewayLaunchProfileIpc(options)
   const {
     store,
     getMainWindow,

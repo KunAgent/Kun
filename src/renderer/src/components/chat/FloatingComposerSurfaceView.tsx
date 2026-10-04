@@ -507,6 +507,7 @@ export function FloatingComposerSurfaceView({
                         ? adeComposer.modelsLoading ? 'loading' : 'agent-default'
                         : kunComposer && modelCatalogStatus !== 'ready'
                           ? modelCatalogStatus === 'error' ? 'unavailable' : 'loading' : undefined}
+                      allowedReasoningEfforts={adeComposer?.harnessId === 'claude-code' && adeComposer.credentialMode === 'kun-gateway' ? ['off'] : undefined}
                       composerReasoningEffort={composerReasoningEffort}
                       composerFastMode={composerFastMode}
                       showProviderInModelLabel={showProviderInModelLabel}

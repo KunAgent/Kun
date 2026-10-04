@@ -181,7 +181,8 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       endpointFormat,
       attempt: ++attemptOrdinal,
       reason,
-      apiKey: credentials.apiKey
+      apiKey: credentials.apiKey,
+      ...(request.gatewayRouting ? { gatewayRouting: request.gatewayRouting } : {})
     })
     let result = await post(body, 'initial')
     let transportRetryAttempt = 0

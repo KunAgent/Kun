@@ -1,4 +1,12 @@
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
+import { GatewayRouteChangedError } from '../../domain/model-gateway-export-policy.js'
+
+export type ModelClientRouterInput = {
+  default: ModelClient
+  providers?: Map<string, ModelClient>
+  /** Trusted HTTP/API-key clients, pinned by object identity at construction. */
+  gatewayClients?: Map<string, ModelClient>
+}
 
 /**
  * Routes a streaming model request to a per-`providerId` `ModelClient`.
@@ -19,6 +27,8 @@ export class MultiProviderModelClient implements ModelClient {
 
   private default_: ModelClient
   private providers: Map<string, ModelClient>
+  private gatewayClients: Map<string, ModelClient>
+  private gatewayGeneration = {}
   private readonly turnPins = new Map<string, {
     client: ModelClient
     /** Pin identity: the provider id, or a routing selection (`kind:id`). */
@@ -28,15 +38,18 @@ export class MultiProviderModelClient implements ModelClient {
     touchedAt: number
   }>()
 
-  constructor(input: { default: ModelClient; providers?: Map<string, ModelClient> }) {
+  constructor(input: ModelClientRouterInput) {
     this.default_ = input.default
     this.providers = canonicalProviders(input.providers)
+    this.gatewayClients = canonicalProviders(input.gatewayClients)
     this.model = input.default.model
   }
 
-  replace(input: { default: ModelClient; providers?: Map<string, ModelClient> }): void {
+  replace(input: ModelClientRouterInput): void {
+    this.gatewayGeneration = {}
     this.default_ = input.default
     this.providers = canonicalProviders(input.providers)
+    this.gatewayClients = canonicalProviders(input.gatewayClients)
     this.model = input.default.model
   }
 
@@ -45,13 +58,21 @@ export class MultiProviderModelClient implements ModelClient {
     if (!id) throw new Error('model provider id is required')
     if (this.providers.has(id)) throw new Error(`model provider already registered: ${providerId}`)
     this.providers.set(id, client)
+    this.gatewayGeneration = {}
     return () => {
-      if (this.providers.get(id) === client) this.providers.delete(id)
+      if (this.providers.get(id) === client) { this.providers.delete(id); this.gatewayGeneration = {} }
     }
   }
 
   unregister(providerId: string): boolean {
-    return this.providers.delete(providerId.trim().toLowerCase())
+    const removed = this.providers.delete(providerId.trim().toLowerCase())
+    if (removed) this.gatewayGeneration = {}
+    return removed
+  }
+
+  gatewayDispatchGuard(): () => void {
+    const generation = this.gatewayGeneration
+    return () => { if (generation !== this.gatewayGeneration) throw new GatewayRouteChangedError() }
   }
 
   registeredProviderIds(): string[] {
@@ -72,6 +93,7 @@ export class MultiProviderModelClient implements ModelClient {
   }
 
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    request.gatewayRouting?.assertCurrent?.()
     const providerId = request.providerId?.trim().toLowerCase() || 'default'
     const selection = request.routeSelection
     // A declared routing selection pins the turn to the *selection*, not to
@@ -95,7 +117,13 @@ export class MultiProviderModelClient implements ModelClient {
     }
     // Routed requests re-resolve per attempt because each failover target is
     // a different provider client; unrouted requests keep the pinned client.
-    const client = pinned && !selection ? pinned.client : this.resolve(request.providerId)
+    // Gateway ids always address an explicit connection, including a profile
+    // literally named "default"; never borrow the ambient default credential.
+    const client = request.gatewayRouting ? this.providers.get(providerId)
+      : pinned && !selection ? pinned.client : this.resolve(request.providerId)
+    if (!client || (request.gatewayRouting && (!request.gatewayRouting.assertCurrent || this.gatewayClients.get(providerId) !== client))) {
+      throw new GatewayRouteChangedError()
+    }
     this.turnPins.set(request.turnId, {
       client,
       pinKey,

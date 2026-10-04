@@ -50,6 +50,7 @@ import {
 import { aggregateCodexProviderLocalCosts } from '../services/provider-local-cost.js'
 import { loadLiveUsageRemainders, loadUsageHistory } from '../services/usage-history.js'
 import { GatewayCredentialService } from '../services/gateway-credential-service.js'
+import { GatewayUsageService } from '../services/gateway-usage-service.js'
 import { createApprovalReviewModelContextResolver } from '../services/approval-review-context-resolver.js'
 
 export async function createRuntimeModelComposition(
@@ -621,6 +622,13 @@ export async function createRuntimeModelComposition(
     extensionCredentialKeyProvider.encryptor
   )
   await gatewayCredentials.initialize()
+  const gatewayUsage = new GatewayUsageService({
+    workspace: gatewayCredentials.directory,
+    threadService: core.threadService,
+    usageService: core.usageService,
+    events: core.events,
+    sessionStore: core.sessionStore
+  })
   const oauthEncryptor = hasMcpOAuth
     ? extensionCredentialKeyProvider.encryptor
     : undefined
@@ -663,6 +671,7 @@ export async function createRuntimeModelComposition(
     officialProviderAuth,
     stopExtensionModelListener,
     gatewayCredentials,
+    gatewayUsage,
     hasMcpOAuth,
     oauthEncryptor,
     get refreshModelConnectionDelegatedDeps() {

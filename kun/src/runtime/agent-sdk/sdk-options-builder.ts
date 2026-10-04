@@ -96,6 +96,8 @@ export function buildScopedEnv(
       base: withLoopbackProxyBypass(baseEnv),
       strip: [...gateway.stripEnv, 'CLAUDE_CODE_OAUTH_TOKEN'],
       add: {
+        MAX_THINKING_TOKENS: '0',
+        CLAUDE_CODE_EFFORT_LEVEL: 'unset',
         [gateway.env.baseUrl]: gateway.baseUrl,
         [gateway.env.token]: gateway.token,
         ...(gateway.env.model ? { [gateway.env.model]: gateway.model } : {}),
@@ -241,6 +243,9 @@ export interface AssembleSdkOptionsParams {
 }
 
 export function assembleSdkOptions(params: AssembleSdkOptionsParams): SdkQueryOptions {
+  if (params.gateway && params.reasoningEffort && params.reasoningEffort !== 'off') {
+    throw new Error('Claude gateway compatibility requires reasoning off; signed thinking is not supported.')
+  }
   const builtins = params.allowSdkBuiltins === false ? [] : DEFAULT_SDK_BUILTIN_TOOLS
   const fullAccess =
     params.approvalPolicy === 'auto' &&
@@ -273,7 +278,7 @@ export function assembleSdkOptions(params: AssembleSdkOptionsParams): SdkQueryOp
     // Only load kun-provided config; don't auto-absorb the host's ~/.claude.
     settingSources: params.settingSources ?? [],
     ...(params.model ? { model: params.model } : {}),
-    ...sdkReasoningOptions(params.reasoningEffort),
+    ...(params.gateway ? { thinking: { type: 'disabled' as const } } : sdkReasoningOptions(params.reasoningEffort)),
     ...(params.mcpServers ? { mcpServers: params.mcpServers } : {}),
     ...(params.canUseTool ? { canUseTool: params.canUseTool } : {}),
     ...(params.hooks ? { hooks: params.hooks } : {}),

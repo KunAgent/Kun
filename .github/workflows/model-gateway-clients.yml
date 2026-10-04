@@ -1,0 +1,55 @@
+name: Model gateway client conformance
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/model-gateway-clients.yml'
+      - 'scripts/smoke-model-gateway-clients*'
+      - 'kun/src/server/routes/*gateway*'
+      - 'kun/src/server/routes/gateway-*'
+      - 'kun/src/domain/model-gateway-*'
+      - 'kun/src/harness/gateway-*'
+      - 'kun/package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gateway-client-conformance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  official-clients:
+    name: Official clients against offline gateway
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - name: Install repository dependencies
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: npm ci
+      - name: Install pinned official Codex client in isolated test directory
+        run: npm install --prefix "$RUNNER_TEMP/gateway-clients" --no-audit --no-fund @openai/codex@0.160.0
+      - name: Check fixture safety and exercise real client protocols
+        shell: bash
+        run: |
+          node --test scripts/smoke-model-gateway-clients.test.mjs
+          mkdir -p gateway-client-evidence
+          CODEX_BINARY="$(find "$RUNNER_TEMP/gateway-clients/node_modules/@openai" -type f -path '*/bin/codex' | head -1)"
+          test -n "$CODEX_BINARY"
+          node scripts/smoke-model-gateway-clients.mjs --codex "$CODEX_BINARY" > gateway-client-evidence/report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: model-gateway-official-clients
+          path: gateway-client-evidence
+          if-no-files-found: warn
+          retention-days: 7

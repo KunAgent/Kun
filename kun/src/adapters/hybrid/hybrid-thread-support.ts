@@ -66,7 +66,7 @@ export function usageRecordsFromRows(rows: UsageRow[]): SessionUsageRecord[] {
       ...(row.turn_id ? { turnId: row.turn_id } : {}),
       ...(row.model ? { model: row.model } : {}),
       ...(row.provider_id ? { providerId: row.provider_id } : {}),
-      ...(row.source === 'native' || row.source === 'harness-gateway' || row.source === 'harness-reported'
+      ...(row.source === 'native' || row.source === 'harness-gateway' || row.source === 'harness-reported' || row.source === 'public-gateway'
         ? { source: row.source }
         : {}),
       ...(row.harness_id ? { harnessId: row.harness_id } : {}),
